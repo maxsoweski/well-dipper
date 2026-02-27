@@ -10,10 +10,17 @@ import * as THREE from 'three';
  * - main.js can still use planet.mesh.position etc.
  */
 export class Planet {
-  constructor(planetData) {
+  constructor(planetData, starInfo = null) {
     this.data = planetData;
     this.mesh = new THREE.Group();
     this._lightDir = new THREE.Vector3(...planetData.sunDirection).normalize();
+    this._lightDir2 = new THREE.Vector3(0, 0, 0); // second star (binary systems)
+
+    // Star color/brightness for dual lighting
+    this._starColor1 = starInfo?.color1 || [1, 1, 1];
+    this._starColor2 = starInfo?.color2 || [0, 0, 0];
+    this._starBrightness1 = starInfo?.brightness1 ?? 1.0;
+    this._starBrightness2 = starInfo?.brightness2 ?? 0.0;
 
     // Surface sphere
     this.surface = this._createSurface();
@@ -42,6 +49,11 @@ export class Planet {
         noiseScale: { value: d.noiseScale },
         noiseDetail: { value: d.noiseDetail },
         lightDir: { value: this._lightDir },
+        lightDir2: { value: this._lightDir2 },
+        starColor1: { value: new THREE.Vector3(...this._starColor1) },
+        starColor2: { value: new THREE.Vector3(...this._starColor2) },
+        starBrightness1: { value: this._starBrightness1 },
+        starBrightness2: { value: this._starBrightness2 },
         time: { value: 0 },
         planetType: { value: this._typeIndex() },
         planetRadius: { value: d.radius },
@@ -77,6 +89,11 @@ export class Planet {
         uniform float noiseScale;
         uniform float noiseDetail;
         uniform vec3 lightDir;
+        uniform vec3 lightDir2;
+        uniform vec3 starColor1;
+        uniform vec3 starColor2;
+        uniform float starBrightness1;
+        uniform float starBrightness2;
         uniform float time;
         uniform int planetType;
         uniform float planetRadius;
@@ -349,17 +366,23 @@ export class Planet {
             surfaceColor = mix(baseColor, accentColor, mixFactor);
           }
 
-          // ── Lighting ──
-          float diffuse = max(dot(vNormal, lightDir), 0.0);
-          float ambient = 0.0;
+          // ── Dual-star Lighting ──
+          float diff1 = max(dot(vNormal, lightDir), 0.0);
+          float diff2 = max(dot(vNormal, lightDir2), 0.0);
 
+          // Combined star-colored light (both stars contribute their color)
+          vec3 starLight = starColor1 * diff1 * starBrightness1
+                         + starColor2 * diff2 * starBrightness2;
+          // Total brightness (for effects that just need a scalar)
+          float diffuse = diff1 * starBrightness1 + diff2 * starBrightness2;
+
+          float ambient = 0.0;
           // Hot Jupiter: night side should still show faint thermal glow
           if (planetType == 6) {
             ambient = 0.02;
           }
 
-          float lighting = ambient + diffuse;
-          vec3 finalColor = surfaceColor * lighting;
+          vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
 
           // Hot Jupiter: add emissive glow that doesn't depend on light
           if (planetType == 6) {
@@ -408,6 +431,7 @@ export class Planet {
           }
 
           // ── Posterize with edge dithering ──
+          finalColor = min(finalColor, vec3(1.0));
           finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
 
           gl_FragColor = vec4(finalColor, 1.0);
@@ -443,11 +467,15 @@ export class Planet {
 
       vertexShader: /* glsl */ `
         varying vec3 vPos;
-        varying vec3 vWorldPos;
+        varying vec3 vRelWorldPos;
 
         void main() {
           vPos = position;
-          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          // Planet-relative world position: extract planet center from modelMatrix
+          // and subtract it so shadow math works regardless of orbital position
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vec3 planetCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          vRelWorldPos = worldPos.xyz - planetCenter;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -462,7 +490,7 @@ export class Planet {
         uniform float planetRadius;
 
         varying vec3 vPos;
-        varying vec3 vWorldPos;
+        varying vec3 vRelWorldPos;
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -502,9 +530,9 @@ export class Planet {
           // Fade at inner and outer edges
           alpha *= smoothstep(0.0, 0.08, t) * (1.0 - smoothstep(0.92, 1.0, t));
 
-          // Planet shadow on ring — use world-space position with world-space lightDir
-          float shadowDist = length(cross(vWorldPos, lightDir));
-          float behindPlanet = step(dot(vWorldPos, lightDir), 0.0);
+          // Planet shadow on ring — use planet-relative position with lightDir
+          float shadowDist = length(cross(vRelWorldPos, lightDir));
+          float behindPlanet = step(dot(vRelWorldPos, lightDir), 0.0);
           float inShadow = behindPlanet * (1.0 - smoothstep(planetRadius * 0.9, planetRadius * 1.1, shadowDist));
 
           float ringLight = 1.0 - inShadow;

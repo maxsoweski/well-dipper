@@ -113,12 +113,13 @@ export class PlanetGenerator {
   /**
    * Generate planet data from a seeded random instance.
    * @param {SeededRandom} rng - seeded random generator
-   * @param {number} orbitIndex - which orbit slot (0 = closest to star)
+   * @param {number} orbitRadius - orbital distance from star (scene units)
    * @param {number[]|null} sunDirection - [x,y,z] direction toward the star, or null for random
+   * @param {object|null} zones - { frostLine, hzInner, hzOuter, starType } for realistic distribution
    * @returns {object} planet data
    */
-  static generate(rng, orbitIndex, sunDirection = null) {
-    const type = this._pickType(rng, orbitIndex);
+  static generate(rng, orbitRadius, sunDirection = null, zones = null) {
+    const type = this._pickType(rng, orbitRadius, zones);
 
     // Size ranges by type — based on real exoplanet science
     // Scale: 1.0 ≈ Earth-like. Gas giants are 2-4x, rocky worlds 0.2-0.6x
@@ -260,7 +261,11 @@ export class PlanetGenerator {
       moonCount,
       noiseScale,
       noiseDetail: rng.range(0.3, 0.8),
-      rotationSpeed: rng.range(0.1, 0.5) * (rng.chance(0.15) ? -1 : 1),
+      // Eyeball planets are tidally locked — no rotation
+      // Hot Jupiters are also tidally locked
+      rotationSpeed: (type === 'eyeball' || type === 'hot-jupiter')
+        ? 0
+        : rng.range(0.1, 0.5) * (rng.chance(0.15) ? -1 : 1),
       axialTilt: rng.chance(0.1)
         ? rng.range(-1.5, 1.5)
         : rng.range(-0.5, 0.5),
@@ -269,46 +274,90 @@ export class PlanetGenerator {
   }
 
   /**
-   * Pick planet type based on orbit position.
-   * Inner orbits favor rocky/lava/hot-jupiter, outer favor gas/ice/sub-neptune.
+   * Pick planet type based on orbital distance relative to physical zones.
+   *
+   * Zones (from star outward):
+   * - Scorching: inside 0.3x habitable zone inner edge → lava, rocky, hot-jupiter
+   * - Inner: between scorching and habitable zone → rocky, venus, terrestrial
+   * - Habitable zone: → terrestrial, ocean, eyeball, sub-neptune
+   * - Transition: between habitable zone and frost line → sub-neptune, ice, gas-giant
+   * - Outer: beyond frost line → gas-giant, ice, sub-neptune
+   *
+   * M-dwarfs rarely have gas giants (~3% real rate). Eyeball planets
+   * are boosted around M/K stars (tidal locking in the close habitable zone).
    */
-  static _pickType(rng, orbitIndex) {
+  static _pickType(rng, orbitRadius, zones) {
     const roll = rng.float();
-    if (orbitIndex <= 1) {
-      // Inner orbits: rocky, lava, hot-jupiter, venus, terrestrial
-      if (roll < 0.18) return 'rocky';
-      if (roll < 0.32) return 'lava';
-      if (roll < 0.46) return 'terrestrial';
-      if (roll < 0.56) return 'hot-jupiter';
-      if (roll < 0.66) return 'venus';
-      if (roll < 0.76) return 'eyeball';
-      if (roll < 0.84) return 'ocean';
-      if (roll < 0.90) return 'carbon';
-      if (roll < 0.95) return 'gas-giant';
-      return 'sub-neptune';
-    } else if (orbitIndex <= 3) {
-      // Middle orbits: mixed — everything possible
-      if (roll < 0.14) return 'rocky';
-      if (roll < 0.28) return 'gas-giant';
-      if (roll < 0.40) return 'terrestrial';
-      if (roll < 0.50) return 'sub-neptune';
-      if (roll < 0.58) return 'ocean';
-      if (roll < 0.66) return 'ice';
-      if (roll < 0.74) return 'venus';
-      if (roll < 0.80) return 'eyeball';
-      if (roll < 0.86) return 'lava';
-      if (roll < 0.92) return 'carbon';
-      return 'hot-jupiter';
-    } else {
-      // Outer orbits: gas giants, ice, sub-neptune
-      if (roll < 0.28) return 'gas-giant';
-      if (roll < 0.48) return 'ice';
-      if (roll < 0.62) return 'sub-neptune';
-      if (roll < 0.74) return 'rocky';
-      if (roll < 0.82) return 'ocean';
-      if (roll < 0.88) return 'carbon';
-      if (roll < 0.94) return 'terrestrial';
+
+    // Fallback for standalone use without zones
+    if (!zones) {
+      if (roll < 0.2) return 'rocky';
+      if (roll < 0.4) return 'gas-giant';
+      if (roll < 0.55) return 'terrestrial';
+      if (roll < 0.65) return 'sub-neptune';
+      if (roll < 0.75) return 'ice';
+      if (roll < 0.85) return 'ocean';
       return 'venus';
     }
+
+    const { frostLine, hzInner, hzOuter, starType } = zones;
+
+    // ── Scorching zone: inside 0.3x habitable zone inner edge ──
+    if (orbitRadius < hzInner * 0.3) {
+      if (starType !== 'M' && rng.chance(0.07)) return 'hot-jupiter';
+      if (roll < 0.30) return 'lava';
+      if (roll < 0.52) return 'rocky';
+      if (roll < 0.68) return 'venus';
+      if (roll < 0.82) return 'carbon';
+      return 'rocky';
+    }
+
+    // ── Inner zone: between scorching and habitable zone ──
+    if (orbitRadius < hzInner) {
+      if (roll < 0.22) return 'rocky';
+      if (roll < 0.40) return 'venus';
+      if (roll < 0.55) return 'terrestrial';
+      if (roll < 0.65) return 'lava';
+      if (roll < 0.78) return 'sub-neptune';
+      if (roll < 0.88) return 'carbon';
+      return 'ocean';
+    }
+
+    // ── Habitable zone ──
+    if (orbitRadius < hzOuter) {
+      // M/K stars: habitable zone is close → tidal locking → eyeball planets
+      const eyeballBoost = (starType === 'M' || starType === 'K') ? 0.15 : 0.03;
+      if (roll < 0.22) return 'terrestrial';
+      if (roll < 0.38) return 'ocean';
+      if (roll < 0.38 + eyeballBoost) return 'eyeball';
+      if (roll < 0.58) return 'sub-neptune';
+      if (roll < 0.70) return 'rocky';
+      if (roll < 0.82) return 'venus';
+      return 'ice';
+    }
+
+    // ── Transition zone: between habitable zone and frost line ──
+    if (orbitRadius < frostLine) {
+      if (roll < 0.22) return 'sub-neptune';
+      if (roll < 0.40) return 'ice';
+      if (roll < 0.52) return 'rocky';
+      if (roll < 0.65) return 'gas-giant';
+      if (roll < 0.78) return 'ocean';
+      if (roll < 0.88) return 'terrestrial';
+      return 'carbon';
+    }
+
+    // ── Outer system: beyond frost line ──
+    // Gas giants peak at 1-3x frost line distance, then decline
+    // M-dwarfs rarely have gas giants (~3% real rate)
+    const frostRatio = orbitRadius / frostLine;
+    const gasBase = (starType === 'M') ? 0.08 : 0.28;
+    const gasBoost = (frostRatio < 3.0 && starType !== 'M') ? 0.12 : 0.0;
+    if (roll < gasBase + gasBoost) return 'gas-giant';
+    if (roll < 0.48) return 'ice';
+    if (roll < 0.65) return 'sub-neptune';
+    if (roll < 0.75) return 'rocky';
+    if (roll < 0.85) return 'ocean';
+    return 'carbon';
   }
 }

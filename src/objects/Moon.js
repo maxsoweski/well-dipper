@@ -7,16 +7,18 @@ import * as THREE from 'three';
  * Uses a simplified version of the planet shader — still has posterization
  * and dithering but fewer surface features (moons are small, don't need
  * as much detail).
+ *
+ * Supports dual-star lighting for binary systems.
  */
 export class Moon {
-  constructor(moonData, lightDir) {
+  constructor(moonData, lightDir, lightDir2 = null, starInfo = null) {
     this.data = moonData;
     this.orbitAngle = moonData.startAngle;
 
-    this.mesh = this._createMesh(lightDir);
+    this.mesh = this._createMesh(lightDir, lightDir2, starInfo);
   }
 
-  _createMesh(lightDir) {
+  _createMesh(lightDir, lightDir2, starInfo) {
     // Lower poly count than planets — moons are small, 3 subdivisions is plenty
     const geometry = new THREE.IcosahedronGeometry(this.data.radius, 3);
     const d = this.data;
@@ -30,6 +32,11 @@ export class Moon {
         accentColor: { value: new THREE.Vector3(...d.accentColor) },
         noiseScale: { value: d.noiseScale },
         lightDir: { value: lightDir },
+        lightDir2: { value: lightDir2 || new THREE.Vector3(0, 0, 0) },
+        starColor1: { value: new THREE.Vector3(...(starInfo?.color1 || [1, 1, 1])) },
+        starColor2: { value: new THREE.Vector3(...(starInfo?.color2 || [0, 0, 0])) },
+        starBrightness1: { value: starInfo?.brightness1 ?? 1.0 },
+        starBrightness2: { value: starInfo?.brightness2 ?? 0.0 },
         moonType: { value: typeIndex },
       },
 
@@ -50,6 +57,11 @@ export class Moon {
         uniform vec3 accentColor;
         uniform float noiseScale;
         uniform vec3 lightDir;
+        uniform vec3 lightDir2;
+        uniform vec3 starColor1;
+        uniform vec3 starColor2;
+        uniform float starBrightness1;
+        uniform float starBrightness2;
         uniform int moonType;
 
         varying vec3 vNormal;
@@ -169,27 +181,30 @@ export class Moon {
             surfaceColor = mix(baseColor, accentColor, detail);
           }
 
-          // Lighting
-          float diffuse = max(dot(vNormal, lightDir), 0.0);
+          // ── Dual-star Lighting ──
+          float diff1 = max(dot(vNormal, lightDir), 0.0);
+          float diff2 = max(dot(vNormal, lightDir2), 0.0);
 
-          // Airless bodies (rocky, captured) have a very sharp terminator
-          // — no atmosphere to scatter light into the shadow side
-          // Ice moons have a slightly softer edge (bright surface scatters more)
-          // Terrestrial moons have the softest (atmosphere)
+          // Type-specific terminator shaping (using primary star for shape)
+          // Airless bodies get sharp terminators, atmospheric ones get soft
           if (moonType == 0 || moonType == 1) {
-            // Sharp terminator: ramp from 0 to 1 in a narrow band
-            diffuse = smoothstep(-0.02, 0.08, dot(vNormal, lightDir));
+            diff1 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir));
+            diff2 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir2));
           } else if (moonType == 3) {
-            // Volcanic: sharp terminator but faint glow on dark side
-            float rawDiffuse = dot(vNormal, lightDir);
-            diffuse = smoothstep(-0.02, 0.08, rawDiffuse);
+            diff1 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir));
+            diff2 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir2));
           } else if (moonType == 4) {
-            // Terrestrial: softer terminator (has atmosphere)
-            diffuse = smoothstep(-0.1, 0.3, dot(vNormal, lightDir));
+            diff1 = smoothstep(-0.1, 0.3, dot(vNormal, lightDir));
+            diff2 = smoothstep(-0.1, 0.3, dot(vNormal, lightDir2));
           }
           // Ice (moonType 2) keeps the default smooth diffuse
 
-          vec3 finalColor = surfaceColor * diffuse;
+          // Combined star-colored light
+          vec3 starLight = starColor1 * diff1 * starBrightness1
+                         + starColor2 * diff2 * starBrightness2;
+          float diffuse = diff1 * starBrightness1 + diff2 * starBrightness2;
+
+          vec3 finalColor = surfaceColor * starLight;
 
           // Volcanic: faint glow on dark side from lava
           if (moonType == 3) {
@@ -198,6 +213,7 @@ export class Moon {
           }
 
           // Posterize
+          finalColor = min(finalColor, vec3(1.0));
           finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
 
           gl_FragColor = vec4(finalColor, 1.0);
