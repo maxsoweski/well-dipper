@@ -65,6 +65,15 @@ export class Planet {
         // Atmosphere
         atmosphereStrength: { value: d.atmosphere?.strength || 0.0 },
         atmosphereColor: { value: new THREE.Vector3(...(d.atmosphere?.color || [0.5, 0.5, 0.8])) },
+        // Shadow casters
+        starPos1: { value: new THREE.Vector3() },
+        starPos2: { value: new THREE.Vector3() },
+        shadowMoonCount: { value: 0 },
+        shadowMoonPos: { value: Array.from({ length: 6 }, () => new THREE.Vector3()) },
+        shadowMoonRadius: { value: new Float32Array(6) },
+        shadowPlanetCount: { value: 0 },
+        shadowPlanetPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
+        shadowPlanetRadius: { value: new Float32Array(2) },
       },
 
       vertexShader: /* glsl */ `
@@ -103,6 +112,17 @@ export class Planet {
         uniform float cloudScale;
         uniform float atmosphereStrength;
         uniform vec3 atmosphereColor;
+        // Shadow casters
+        uniform vec3 starPos1;
+        uniform vec3 starPos2;
+        const int MAX_SHADOW_MOONS = 6;
+        uniform int shadowMoonCount;
+        uniform vec3 shadowMoonPos[6];
+        uniform float shadowMoonRadius[6];
+        const int MAX_SHADOW_PLANETS = 2;
+        uniform int shadowPlanetCount;
+        uniform vec3 shadowPlanetPos[2];
+        uniform float shadowPlanetRadius[2];
 
         varying vec3 vNormal;
         varying vec3 vPosition;
@@ -196,6 +216,35 @@ export class Planet {
           float dither = bayerDither(fragCoord) - 0.5;
           vec3 dithered = color + dither * edgeWidth / levels;
           return floor(dithered * levels + 0.5) / levels;
+        }
+
+        // ── Ray-sphere shadow test ──
+        // Returns 0.0 (full shadow) to 1.0 (no shadow)
+        float sphereShadow(vec3 fragPos, vec3 starPosition, vec3 casterPos, float casterRadius) {
+          vec3 toStar = starPosition - fragPos;
+          float distToStar = length(toStar);
+          vec3 rayDir = toStar / distToStar;
+          vec3 oc = casterPos - fragPos;
+          float tca = dot(oc, rayDir);
+          if (tca < 0.0) return 1.0;
+          if (tca > distToStar) return 1.0;
+          float d2 = dot(oc, oc) - tca * tca;
+          if (d2 >= casterRadius * casterRadius * 1.3) return 1.0;
+          return smoothstep(casterRadius * 0.85, casterRadius * 1.15, sqrt(d2));
+        }
+
+        // Total shadow factor for one star from all casters
+        float totalShadow(vec3 fragPos, vec3 starPosition) {
+          float shadow = 1.0;
+          for (int i = 0; i < MAX_SHADOW_MOONS; i++) {
+            if (i >= shadowMoonCount) break;
+            shadow *= sphereShadow(fragPos, starPosition, shadowMoonPos[i], shadowMoonRadius[i]);
+          }
+          for (int i = 0; i < MAX_SHADOW_PLANETS; i++) {
+            if (i >= shadowPlanetCount) break;
+            shadow *= sphereShadow(fragPos, starPosition, shadowPlanetPos[i], shadowPlanetRadius[i]);
+          }
+          return shadow;
         }
 
         // ── Surface pattern based on planet type ──
@@ -366,20 +415,25 @@ export class Planet {
             surfaceColor = mix(baseColor, accentColor, mixFactor);
           }
 
-          // ── Dual-star Lighting ──
+          // ── Dual-star Lighting with Shadows ──
           float diff1 = max(dot(vNormal, lightDir), 0.0);
           float diff2 = max(dot(vNormal, lightDir2), 0.0);
 
-          // Combined star-colored light (both stars contribute their color)
-          vec3 starLight = starColor1 * diff1 * starBrightness1
-                         + starColor2 * diff2 * starBrightness2;
-          // Total brightness (for effects that just need a scalar)
-          float diffuse = diff1 * starBrightness1 + diff2 * starBrightness2;
+          // Shadow modulation per star (moons/planets blocking light)
+          float shadow1 = totalShadow(vWorldPos, starPos1);
+          float shadow2 = totalShadow(vWorldPos, starPos2);
 
-          float ambient = 0.0;
-          // Hot Jupiter: night side should still show faint thermal glow
+          // Combined star-colored light with shadows
+          vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1
+                         + starColor2 * diff2 * starBrightness2 * shadow2;
+          // Total brightness (for effects that just need a scalar)
+          float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
+
+          // Tiny ambient so dark sides show as silhouettes, not invisible black
+          float ambient = 0.02;
+          // Hot Jupiter: slightly more ambient from thermal glow
           if (planetType == 6) {
-            ambient = 0.02;
+            ambient = 0.04;
           }
 
           vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
@@ -404,7 +458,7 @@ export class Planet {
 
           // ── Cloud layer (animated) ──
           if (hasClouds > 0.5) {
-            float cloudSpeed = (planetType == 5 || planetType == 7) ? 0.016 : 0.05;
+            float cloudSpeed = (planetType == 5 || planetType == 7) ? 0.005 : 0.017;
             vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, time * cloudSpeed * 0.4, 0.0);
             float cn = snoise(cloudPos);
             cn += snoise(cloudPos * 2.0) * 0.4;
@@ -463,6 +517,10 @@ export class Planet {
         outerRadius: { value: outerR },
         lightDir: { value: this._lightDir },
         planetRadius: { value: d.radius },
+        // Moon-cleared gaps (shepherd moon effect)
+        moonGapCount: { value: 0 },
+        moonGapRadii: { value: new Float32Array(6) },
+        moonGapWidths: { value: new Float32Array(6) },
       },
 
       vertexShader: /* glsl */ `
@@ -488,6 +546,11 @@ export class Planet {
         uniform float outerRadius;
         uniform vec3 lightDir;
         uniform float planetRadius;
+        // Moon-cleared gaps
+        const int MAX_MOON_GAPS = 6;
+        uniform int moonGapCount;
+        uniform float moonGapRadii[6];
+        uniform float moonGapWidths[6];
 
         varying vec3 vPos;
         varying vec3 vRelWorldPos;
@@ -530,6 +593,13 @@ export class Planet {
           // Fade at inner and outer edges
           alpha *= smoothstep(0.0, 0.08, t) * (1.0 - smoothstep(0.92, 1.0, t));
 
+          // Moon-cleared gaps (shepherd moon effect — like Mimas creating the Cassini Division)
+          for (int i = 0; i < MAX_MOON_GAPS; i++) {
+            if (i >= moonGapCount) break;
+            float gapDist = abs(dist - moonGapRadii[i]);
+            alpha *= smoothstep(0.0, moonGapWidths[i], gapDist);
+          }
+
           // Planet shadow on ring — use planet-relative position with lightDir
           float shadowDist = length(cross(vRelWorldPos, lightDir));
           float behindPlanet = step(dot(vRelWorldPos, lightDir), 0.0);
@@ -537,10 +607,13 @@ export class Planet {
 
           float ringLight = 1.0 - inShadow;
           color *= ringLight;
-
-          color = posterize(color, 6.0, gl_FragCoord.xy, 0.4);
+          // Shadow also reduces opacity — prevents opaque black fragments
+          // from blocking objects behind the ring (like stars)
+          alpha *= mix(0.15, 1.0, ringLight);
 
           if (bayerDither(gl_FragCoord.xy) > alpha) discard;
+
+          color = posterize(color, 6.0, gl_FragCoord.xy, 0.4);
 
           gl_FragColor = vec4(color, 1.0);
         }
@@ -548,6 +621,30 @@ export class Planet {
     });
 
     return new THREE.Mesh(geometry, material);
+  }
+
+  /**
+   * Set ring gaps at moon orbital radii (shepherd moon effect).
+   * Call after creating moons, passing the moon data array.
+   */
+  setRingGaps(moonDataArray) {
+    if (!this.ring) return;
+    const innerR = this.data.radius * this.data.rings.innerRadius;
+    const outerR = this.data.radius * this.data.rings.outerRadius;
+    const mat = this.ring.material;
+    let gapCount = 0;
+
+    for (const moon of moonDataArray) {
+      if (gapCount >= 6) break;
+      // Check if moon orbits within the ring bounds
+      if (moon.orbitRadius >= innerR && moon.orbitRadius <= outerR) {
+        mat.uniforms.moonGapRadii.value[gapCount] = moon.orbitRadius;
+        // Gap width scales with moon size — larger moons clear wider gaps
+        mat.uniforms.moonGapWidths.value[gapCount] = moon.radius * 4;
+        gapCount++;
+      }
+    }
+    mat.uniforms.moonGapCount.value = gapCount;
   }
 
   /** Map type string to integer for the shader */

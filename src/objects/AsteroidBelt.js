@@ -34,22 +34,19 @@ export class AsteroidBelt {
   }
 
   /**
-   * Create a lumpy asteroid geometry by displacing icosahedron vertices.
-   * detail=1 gives 42 vertices (80 faces) — plenty for small rocks.
+   * Create a simple asteroid geometry.
+   * At retro resolution (1/3) these are pixel-sized, so detail=0 (20 faces) is plenty.
+   * Slight vertex displacement gives each shape variant a lumpy silhouette.
    */
   _createAsteroidGeometry(shapeIndex) {
-    const geo = new THREE.IcosahedronGeometry(1, 1);
+    const geo = new THREE.IcosahedronGeometry(1, 0);
     const pos = geo.attributes.position;
     const normal = new THREE.Vector3();
 
     for (let i = 0; i < pos.count; i++) {
       normal.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
-
-      // Deterministic displacement per vertex per shape variant
-      // Uses a simple hash to avoid needing a PRNG per geometry
       const hash = Math.abs(Math.sin(i * 127.1 + shapeIndex * 311.7) * 43758.5453) % 1;
-      const displacement = 0.7 + hash * 0.5; // range 0.7-1.2
-
+      const displacement = 0.75 + hash * 0.45;
       pos.setXYZ(i, normal.x * displacement, normal.y * displacement, normal.z * displacement);
     }
 
@@ -78,11 +75,14 @@ export class AsteroidBelt {
         varying vec3 vWorldPos;
 
         void main() {
-          // World-space normal (works correctly with InstancedMesh uniform scaling)
-          vNormal = normalize(mat3(modelMatrix) * normal);
+          // InstancedMesh: instanceMatrix holds per-asteroid position/rotation/scale
+          // modelMatrix is the container's world transform (identity in our case)
+          mat4 fullModelMatrix = modelMatrix * instanceMatrix;
+
+          vNormal = normalize(mat3(fullModelMatrix) * normal);
           vColor = instanceColor;
 
-          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vec4 worldPos = fullModelMatrix * vec4(position, 1.0);
           vWorldPos = worldPos.xyz;
           gl_Position = projectionMatrix * viewMatrix * worldPos;
         }
@@ -130,8 +130,9 @@ export class AsteroidBelt {
           float diff1 = smoothstep(-0.02, 0.08, dot(vNormal, toStar1)) * starBrightness1;
           float diff2 = smoothstep(-0.02, 0.08, dot(vNormal, toStar2)) * starBrightness2;
 
-          // Combined star-colored lighting
+          // Combined star-colored lighting (tiny ambient so unlit sides aren't invisible)
           vec3 starLight = starColor1 * diff1 + starColor2 * diff2;
+          starLight = max(starLight, vec3(0.03));
 
           vec3 finalColor = vColor * starLight;
           finalColor = min(finalColor, vec3(1.0));

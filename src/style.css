@@ -7,10 +7,18 @@
 body {
   overflow: hidden;
   background: #000;
+  touch-action: none;
+}
+
+html, body {
+  height: 100%;
+  height: 100dvh;
 }
 
 #canvas {
   display: block;
+  width: 100%;
+  height: 100%;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }

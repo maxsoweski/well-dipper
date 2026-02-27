@@ -26,6 +26,11 @@ export class Moon {
     // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic, 4=terrestrial
     const typeIndex = ['captured', 'rocky', 'ice', 'volcanic', 'terrestrial'].indexOf(d.type);
 
+    // Shadow uniforms — parent planet can eclipse starlight
+    this._shadowPlanetPos = new THREE.Vector3();
+    this._starPos1 = new THREE.Vector3();
+    this._starPos2 = new THREE.Vector3();
+
     const material = new THREE.ShaderMaterial({
       uniforms: {
         baseColor: { value: new THREE.Vector3(...d.baseColor) },
@@ -38,16 +43,22 @@ export class Moon {
         starBrightness1: { value: starInfo?.brightness1 ?? 1.0 },
         starBrightness2: { value: starInfo?.brightness2 ?? 0.0 },
         moonType: { value: typeIndex },
+        // Shadow: parent planet eclipsing starlight
+        shadowPlanetPos: { value: this._shadowPlanetPos },
+        shadowPlanetRadius: { value: 0.0 },
+        starPos1: { value: this._starPos1 },
+        starPos2: { value: this._starPos2 },
       },
 
       vertexShader: /* glsl */ `
         varying vec3 vNormal;
         varying vec3 vPosition;
+        varying vec3 vWorldPos;
 
         void main() {
-          // World-space normal so lighting is independent of camera
           vNormal = normalize(mat3(modelMatrix) * normal);
           vPosition = position;
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -63,9 +74,15 @@ export class Moon {
         uniform float starBrightness1;
         uniform float starBrightness2;
         uniform int moonType;
+        // Shadow uniforms
+        uniform vec3 shadowPlanetPos;
+        uniform float shadowPlanetRadius;
+        uniform vec3 starPos1;
+        uniform vec3 starPos2;
 
         varying vec3 vNormal;
         varying vec3 vPosition;
+        varying vec3 vWorldPos;
 
         // ── Simplex noise (same as Planet.js) ──
         vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -138,6 +155,21 @@ export class Moon {
           return floor(dithered * levels + 0.5) / levels;
         }
 
+        // Ray-sphere shadow test: is a sphere blocking the light from a star?
+        // Returns 0.0 (full shadow) to 1.0 (no shadow)
+        float sphereShadow(vec3 fragPos, vec3 starPosition, vec3 casterPos, float casterRadius) {
+          vec3 toStar = starPosition - fragPos;
+          float distToStar = length(toStar);
+          vec3 rayDir = toStar / distToStar;
+          vec3 oc = casterPos - fragPos;
+          float tca = dot(oc, rayDir);
+          if (tca < 0.0) return 1.0;        // caster behind fragment
+          if (tca > distToStar) return 1.0;  // caster beyond star
+          float d2 = dot(oc, oc) - tca * tca;
+          if (d2 >= casterRadius * casterRadius * 1.3) return 1.0;
+          return smoothstep(casterRadius * 0.85, casterRadius * 1.15, sqrt(d2));
+        }
+
         void main() {
           // Surface pattern by moon type
           float n = snoise(vPosition * noiseScale);
@@ -199,10 +231,15 @@ export class Moon {
           }
           // Ice (moonType 2) keeps the default smooth diffuse
 
-          // Combined star-colored light
-          vec3 starLight = starColor1 * diff1 * starBrightness1
-                         + starColor2 * diff2 * starBrightness2;
-          float diffuse = diff1 * starBrightness1 + diff2 * starBrightness2;
+          // Shadow from parent planet (eclipse)
+          float shadow1 = sphereShadow(vWorldPos, starPos1, shadowPlanetPos, shadowPlanetRadius);
+          float shadow2 = sphereShadow(vWorldPos, starPos2, shadowPlanetPos, shadowPlanetRadius);
+
+          // Combined star-colored light with shadow (tiny ambient so unlit sides aren't invisible)
+          vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1
+                         + starColor2 * diff2 * starBrightness2 * shadow2;
+          starLight = max(starLight, vec3(0.025));
+          float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
 
           vec3 finalColor = surfaceColor * starLight;
 
@@ -244,7 +281,7 @@ export class Moon {
     );
 
     // Slow self-rotation
-    this.mesh.rotation.y += 0.5 * (Math.PI / 180) * deltaTime;
+    this.mesh.rotation.y += 0.167 * (Math.PI / 180) * deltaTime;
   }
 
   addTo(scene) {

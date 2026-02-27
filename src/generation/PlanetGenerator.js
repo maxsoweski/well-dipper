@@ -265,7 +265,7 @@ export class PlanetGenerator {
       // Hot Jupiters are also tidally locked
       rotationSpeed: (type === 'eyeball' || type === 'hot-jupiter')
         ? 0
-        : rng.range(0.1, 0.5) * (rng.chance(0.15) ? -1 : 1),
+        : rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1),
       axialTilt: rng.chance(0.1)
         ? rng.range(-1.5, 1.5)
         : rng.range(-0.5, 0.5),

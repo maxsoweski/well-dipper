@@ -12,13 +12,14 @@
  * matching real asteroid populations.
  */
 export class AsteroidBeltGenerator {
+  // Mostly grey tones — real asteroids are dull grey rock
   static COLORS = [
-    [0.35, 0.28, 0.20],  // Brown
-    [0.30, 0.30, 0.32],  // Grey
-    [0.40, 0.32, 0.22],  // Tan
-    [0.25, 0.22, 0.20],  // Dark stone
-    [0.45, 0.38, 0.28],  // Sandy
-    [0.22, 0.20, 0.18],  // Charcoal
+    [0.40, 0.40, 0.42],  // Grey
+    [0.38, 0.38, 0.40],  // Cool grey
+    [0.42, 0.42, 0.44],  // Light grey
+    [0.35, 0.35, 0.37],  // Medium grey
+    [0.44, 0.43, 0.40],  // Warm grey (rare brownish tint)
+    [0.36, 0.36, 0.38],  // Steel grey
   ];
 
   /**
@@ -34,7 +35,7 @@ export class AsteroidBeltGenerator {
     const beltWidth = gapWidth * 0.3;     // half-width of the belt
     const thickness = beltWidth * 0.15;   // vertical scatter (thin disk)
 
-    const count = rng.int(80, 180);
+    const count = rng.int(250, 450);
     const asteroids = [];
 
     for (let i = 0; i < count; i++) {
@@ -42,10 +43,10 @@ export class AsteroidBeltGenerator {
       const r = gapCenter + rng.range(-beltWidth, beltWidth);
       const y = rng.range(-thickness, thickness);
 
-      // Power law size: many tiny rocks, few big boulders
-      // pow(t, 3) gives a nice long tail of mostly-small with rare large
+      // Power law size: mostly pixel-sized dust, very rarely a visible boulder
+      // t^6 means ~98% of asteroids are under 0.02 (single pixel at distance)
       const t = rng.float();
-      const size = 0.03 + Math.pow(t, 3) * 0.35;
+      const size = 0.012 + Math.pow(t, 6) * 0.06;
 
       // Slight per-asteroid color variation around a base tone
       const baseColor = rng.pick(this.COLORS);
@@ -60,7 +61,7 @@ export class AsteroidBeltGenerator {
       const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
 
       // Orbital speed: Kepler-ish with slight variation
-      const baseSpeed = 0.06 / Math.pow(r / innerOrbit, 1.5);
+      const baseSpeed = 0.02 / Math.pow(r / innerOrbit, 1.5);
       const orbitSpeed = baseSpeed * rng.range(0.85, 1.15);
 
       asteroids.push({
@@ -70,7 +71,7 @@ export class AsteroidBeltGenerator {
         size,
         color,
         tumbleAxis: [ax / len, ay / len, az / len],
-        tumbleSpeed: rng.range(0.2, 1.0),
+        tumbleSpeed: rng.range(0.07, 0.33),
         orbitSpeed,
         shapeIndex: rng.int(0, 3),
       });

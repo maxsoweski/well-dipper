@@ -37,7 +37,7 @@ export class CameraController {
     this.dragSensitivity = 0.003;
 
     // ── Auto-drift ──
-    this.autoRotateSpeed = 2;          // degrees per second
+    this.autoRotateSpeed = 0.67;        // degrees per second
     this.autoRotateActive = true;
 
     // ── Zoom (scroll wheel) ──
@@ -71,6 +71,7 @@ export class CameraController {
   }
 
   _setupListeners() {
+    // ── Mouse controls ──
     this.canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
         this.isDragging = true;
@@ -95,6 +96,63 @@ export class CameraController {
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       this.zoomSpeed += Math.sign(e.deltaY) * this.scrollSensitivity;
+    }, { passive: false });
+
+    // ── Touch controls ──
+    this._lastTouchX = 0;
+    this._lastTouchY = 0;
+    this._lastPinchDist = 0;
+    this._touchCount = 0;
+
+    this.canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      this._touchCount = e.touches.length;
+      if (e.touches.length === 1) {
+        this.isDragging = true;
+        this.autoRotateActive = false;
+        this._lastTouchX = e.touches[0].clientX;
+        this._lastTouchY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        this.isDragging = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        this._lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && this.isDragging) {
+        // Single finger: orbit
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        const dx = x - this._lastTouchX;
+        const dy = y - this._lastTouchY;
+        this.yaw -= dx * this.dragSensitivity;
+        this.pitch += dy * this.dragSensitivity;
+        const limit = (85 * Math.PI) / 180;
+        this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+        this._lastTouchX = x;
+        this._lastTouchY = y;
+      } else if (e.touches.length === 2) {
+        // Pinch: zoom
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (this._lastPinchDist > 0) {
+          const scale = this._lastPinchDist / dist;
+          this.distance *= scale;
+          this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, this.distance));
+        }
+        this._lastPinchDist = dist;
+      }
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      this.isDragging = false;
+      this._lastPinchDist = 0;
+      this._touchCount = e.touches.length;
     }, { passive: false });
   }
 

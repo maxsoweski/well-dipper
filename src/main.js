@@ -62,6 +62,10 @@ function spawnSystem() {
         moon.dispose();
         scene.remove(moon.mesh);
       }
+      for (const line of entry.moonOrbitLines) {
+        line.dispose();
+        scene.remove(line.mesh);
+      }
     }
     for (const line of system.orbitLines) {
       line.dispose();
@@ -104,11 +108,13 @@ function spawnSystem() {
     star.mesh.position.set(Math.cos(angle) * r1, 0, Math.sin(angle) * r1);
     star2.mesh.position.set(-Math.cos(angle) * r2, 0, -Math.sin(angle) * r2);
 
-    // Small orbit lines for the binary stars (always visible, subtle)
+    // Small orbit lines for the binary stars (hidden by default, toggled with 'O')
     const line1 = new OrbitLine(r1, 0x666644);
     line1.addTo(scene);
+    line1.mesh.visible = orbitsVisible;
     const line2 = new OrbitLine(r2, 0x666644);
     line2.addTo(scene);
+    line2.mesh.visible = orbitsVisible;
     starOrbitLines.push(line1, line2);
   }
 
@@ -126,13 +132,25 @@ function spawnSystem() {
     planet.mesh.position.set(px, 0, pz);
     planet.addTo(scene);
 
-    // Create moons (share planet's lightDir references + star info)
+    // Create moons + moon orbit lines (share planet's lightDir references + star info)
     const moons = [];
+    const moonOrbitLines = [];
     for (const moonData of entry.moons) {
       const moon = new Moon(moonData, planet._lightDir, planet._lightDir2, systemData.starInfo);
       moon.addTo(scene);
       moons.push(moon);
+
+      // Moon orbit line — centered on planet, tilted by inclination
+      const moonLine = new OrbitLine(moonData.orbitRadius, 0x333344);
+      moonLine.mesh.position.set(px, 0, pz);
+      moonLine.mesh.rotation.x = moonData.inclination;
+      moonLine.addTo(scene);
+      moonLine.mesh.visible = orbitsVisible;
+      moonOrbitLines.push(moonLine);
     }
+
+    // Carve ring gaps where moons orbit inside the ring (shepherd moon effect)
+    planet.setRingGaps(entry.moons);
 
     // Create orbit line (hidden by default)
     const orbitLine = new OrbitLine(entry.orbitRadius, 0x444444);
@@ -143,6 +161,7 @@ function spawnSystem() {
     planets.push({
       planet,
       moons,
+      moonOrbitLines,
       orbitRadius: entry.orbitRadius,
       orbitAngle: entry.orbitAngle,
       orbitSpeed: entry.orbitSpeed,
@@ -174,6 +193,12 @@ function spawnSystem() {
 
   // ── Build click target map ──
   clickTargets = new Map();
+  // Stars
+  clickTargets.set(star.surface, { type: 'star', starIndex: 0 });
+  if (star2) {
+    clickTargets.set(star2.surface, { type: 'star', starIndex: 1 });
+  }
+  // Planets and moons
   for (let i = 0; i < planets.length; i++) {
     const entry = planets[i];
     clickTargets.set(entry.planet.surface, { type: 'planet', planetIndex: i });
@@ -235,6 +260,7 @@ function spawnSystem() {
 function focusPlanet(index) {
   if (!system) return;
   focusMoonIndex = -1;
+  focusStarIndex = -1;
 
   if (index < 0 || index >= system.planets.length) {
     focusIndex = -1;
@@ -250,11 +276,39 @@ function focusPlanet(index) {
   }
 }
 
+/**
+ * Focus the camera on a star (0 = primary, 1 = secondary).
+ * Uses focusIndex = -2 to signal "tracking a star" (distinct from -1 = overview).
+ */
+let focusStarIndex = -1;
+
+function focusStar(starIdx) {
+  if (!system) return;
+  focusIndex = -2;       // special value: star focus
+  focusMoonIndex = -1;
+  focusStarIndex = starIdx;
+
+  const starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
+  // Cap camera distance so it stays well inside the innermost planet orbit.
+  // Without this, planets can pass between the camera and star, creating
+  // an ugly foreground blob.
+  const innerOrbit = system.planets[0].orbitRadius;
+  const idealDist = Math.max(starObj.data.radius * 6, 4);
+  const viewDist = Math.min(idealDist, innerOrbit * 0.4);
+  cameraController.focusOn(starObj.mesh.position, viewDist);
+  const label = system.isBinary
+    ? (starIdx === 0 ? 'primary star' : 'secondary star')
+    : 'star';
+  console.log(`Focus: ${label} (${starObj.data.type}-class)`);
+}
+
 // ── Animation Loop ──
 const timer = new THREE.Timer();
 // Pre-allocate reusable vectors
 const _sunDir = new THREE.Vector3();
 const _sunDir2 = new THREE.Vector3();
+const _star1Pos = new THREE.Vector3();
+const _star2Pos = new THREE.Vector3();
 
 function animate() {
   requestAnimationFrame(animate);
@@ -310,6 +364,63 @@ function animate() {
       for (const moon of entry.moons) {
         moon.update(deltaTime, entry.planet.mesh.position);
       }
+
+      // Moon orbit lines follow the parent planet
+      for (const line of entry.moonOrbitLines) {
+        line.mesh.position.set(px, 0, pz);
+      }
+    }
+
+    // ── Update shadow uniforms ──
+    // Star world positions for shadow ray computation
+    if (system.isBinary) {
+      _star1Pos.copy(system.star.mesh.position);
+      _star2Pos.copy(system.star2.mesh.position);
+    } else {
+      _star1Pos.set(0, 0, 0);
+      _star2Pos.set(0, 0, 0);
+    }
+
+    for (let i = 0; i < system.planets.length; i++) {
+      const entry = system.planets[i];
+      const pMat = entry.planet.surface.material;
+
+      // Pass star positions to planet shader
+      pMat.uniforms.starPos1.value.copy(_star1Pos);
+      pMat.uniforms.starPos2.value.copy(_star2Pos);
+
+      // Transit shadows: moons casting shadows on this planet
+      const moonCount = Math.min(entry.moons.length, 6);
+      pMat.uniforms.shadowMoonCount.value = moonCount;
+      for (let m = 0; m < moonCount; m++) {
+        pMat.uniforms.shadowMoonPos.value[m].copy(entry.moons[m].mesh.position);
+        pMat.uniforms.shadowMoonRadius.value[m] = entry.moons[m].data.radius;
+      }
+
+      // Planet-planet shadows: check immediate orbital neighbors
+      let shadowPlanetIdx = 0;
+      if (i > 0) {
+        const inner = system.planets[i - 1];
+        pMat.uniforms.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position);
+        pMat.uniforms.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius;
+        shadowPlanetIdx++;
+      }
+      if (i < system.planets.length - 1 && shadowPlanetIdx < 2) {
+        const outer = system.planets[i + 1];
+        pMat.uniforms.shadowPlanetPos.value[shadowPlanetIdx].copy(outer.planet.mesh.position);
+        pMat.uniforms.shadowPlanetRadius.value[shadowPlanetIdx] = outer.planet.data.radius;
+        shadowPlanetIdx++;
+      }
+      pMat.uniforms.shadowPlanetCount.value = shadowPlanetIdx;
+
+      // Moon eclipse shadows: planet eclipsing starlight from moons
+      for (const moon of entry.moons) {
+        const mMat = moon.mesh.material;
+        mMat.uniforms.shadowPlanetPos.value.copy(entry.planet.mesh.position);
+        mMat.uniforms.shadowPlanetRadius.value = entry.planet.data.radius;
+        mMat.uniforms.starPos1.value.copy(_star1Pos);
+        mMat.uniforms.starPos2.value.copy(_star2Pos);
+      }
     }
 
     // ── Update asteroid belts ──
@@ -322,7 +433,11 @@ function animate() {
     }
 
     // ── Camera tracking ──
-    if (focusIndex >= 0 && focusIndex < system.planets.length) {
+    if (focusIndex === -2 && focusStarIndex >= 0) {
+      // Tracking a star
+      const starObj = focusStarIndex === 1 && system.star2 ? system.star2 : system.star;
+      cameraController.trackTarget(starObj.mesh.position);
+    } else if (focusIndex >= 0 && focusIndex < system.planets.length) {
       const entry = system.planets[focusIndex];
       if (focusMoonIndex >= 0 && focusMoonIndex < entry.moons.length) {
         cameraController.trackTarget(entry.moons[focusMoonIndex].mesh.position);
@@ -363,6 +478,16 @@ window.addEventListener('keydown', (e) => {
     for (const line of system.orbitLines) {
       line.mesh.visible = orbitsVisible;
     }
+    if (system.starOrbitLines) {
+      for (const line of system.starOrbitLines) {
+        line.mesh.visible = orbitsVisible;
+      }
+    }
+    for (const entry of system.planets) {
+      for (const line of entry.moonOrbitLines) {
+        line.mesh.visible = orbitsVisible;
+      }
+    }
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
@@ -371,22 +496,12 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// ── Click-to-select ──
-canvas.addEventListener('mousedown', (e) => {
-  _mouseDown.x = e.clientX;
-  _mouseDown.y = e.clientY;
-});
-
-canvas.addEventListener('mouseup', (e) => {
-  if (e.button !== 0) return;
-  const dx = e.clientX - _mouseDown.x;
-  const dy = e.clientY - _mouseDown.y;
-  if (dx * dx + dy * dy > 25) return;
-
+// ── Click/tap-to-select ──
+function trySelect(clientX, clientY) {
   if (!system) return;
 
-  _mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  _mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  _mouse.x = (clientX / window.innerWidth) * 2 - 1;
+  _mouse.y = -(clientY / window.innerHeight) * 2 + 1;
 
   raycaster.setFromCamera(_mouse, camera);
 
@@ -398,7 +513,9 @@ canvas.addEventListener('mouseup', (e) => {
     const info = clickTargets.get(hit.object);
     if (!info) return;
 
-    if (info.type === 'planet') {
+    if (info.type === 'star') {
+      focusStar(info.starIndex);
+    } else if (info.type === 'planet') {
       focusPlanet(info.planetIndex);
     } else if (info.type === 'moon') {
       const entry = system.planets[info.planetIndex];
@@ -410,9 +527,59 @@ canvas.addEventListener('mouseup', (e) => {
       console.log(`Focus: moon ${info.moonIndex + 1} of planet ${info.planetIndex + 1} (${moon.data.type})`);
     }
   }
+}
+
+// Mouse click
+canvas.addEventListener('mousedown', (e) => {
+  _mouseDown.x = e.clientX;
+  _mouseDown.y = e.clientY;
 });
+
+canvas.addEventListener('mouseup', (e) => {
+  if (e.button !== 0) return;
+  const dx = e.clientX - _mouseDown.x;
+  const dy = e.clientY - _mouseDown.y;
+  if (dx * dx + dy * dy > 25) return;
+  trySelect(e.clientX, e.clientY);
+});
+
+// Touch tap (single tap = select, double tap = new system)
+let _lastTapTime = 0;
+const _touchStart = { x: 0, y: 0 };
+
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) {
+    _touchStart.x = e.touches[0].clientX;
+    _touchStart.y = e.touches[0].clientY;
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchend', (e) => {
+  if (e.changedTouches.length !== 1) return;
+  const touch = e.changedTouches[0];
+  const dx = touch.clientX - _touchStart.x;
+  const dy = touch.clientY - _touchStart.y;
+  // Only count as tap if finger didn't move much
+  if (dx * dx + dy * dy > 400) return;
+
+  const now = Date.now();
+  if (now - _lastTapTime < 350) {
+    // Double tap: new system
+    seedCounter++;
+    spawnSystem();
+    _lastTapTime = 0;
+  } else {
+    _lastTapTime = now;
+    // Single tap: select (use small delay to distinguish from double tap)
+    setTimeout(() => {
+      if (_lastTapTime !== 0 && Date.now() - _lastTapTime >= 300) {
+        trySelect(touch.clientX, touch.clientY);
+      }
+    }, 350);
+  }
+}, { passive: true });
 
 // ── Start ──
 animate();
 console.log('Well Dipper — Star System');
-console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=toggle orbits');
+console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=toggle orbits, Click/tap=select, Double-tap=new system, Pinch=zoom');

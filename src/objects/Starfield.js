@@ -73,6 +73,7 @@ export class Starfield {
 
     const material = new THREE.ShaderMaterial({
       transparent: true,
+      depthWrite: false, // Backdrop — should never block anything in front
       vertexColors: true,
 
       vertexShader: /* glsl */ `
