@@ -14,8 +14,8 @@ export const DitherShader = {
   uniforms: {
     tDiffuse: { value: null },       // The rendered scene texture (auto-set by EffectComposer)
     resolution: { value: null },      // Screen resolution in pixels
-    colorLevels: { value: 32.0 },     // 32 levels per channel = 15-bit color (5 bits × 3 channels)
-    ditherStrength: { value: 1.0 },   // 0 = no dithering, 1 = full dithering
+    colorLevels: { value: 12.0 },     // 12 levels per channel — visible color stepping
+    ditherStrength: { value: 1.5 },   // >1 = stronger dithering pattern
   },
 
   vertexShader: /* glsl */ `

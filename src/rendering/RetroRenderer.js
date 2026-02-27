@@ -1,61 +1,62 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { DitherShader } from './shaders/DitherPass.js';
 
 /**
- * RetroRenderer — wraps the Three.js renderer with a post-processing pipeline
- * that gives everything the PS1/Saturn retro look.
+ * RetroRenderer — renders at a scaled-down resolution for chunky pixels.
  *
- * Pipeline order:
- * 1. RenderPass: renders the scene normally at 320×240
- * 2. DitherPass: applies 8×8 Bayer dithering + posterization to 15-bit color
+ * Dithering is NOT done here as a screen-wide filter. Instead, each object
+ * (planets, stars, etc.) handles its own dithering in its fragment shader.
+ * This makes the dithering look like it's part of the object's texture
+ * rather than a flat overlay — much more authentic retro look.
  *
- * The low resolution (320×240) combined with CSS `image-rendering: pixelated`
- * handles the chunky pixel look. The dither pass handles the color reduction.
+ * The EffectComposer is kept in place for future effects (warp tunnel, etc.)
  */
 export class RetroRenderer {
   constructor(canvas, scene, camera) {
-    this.renderWidth = 640;
-    this.renderHeight = 480;
+    this.canvas = canvas;
+    this.camera = camera;
+    this.pixelScale = 3; // Each render pixel = 3×3 screen pixels
 
     // ── WebGL Renderer ──
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: false,  // Sharp pixels, no smoothing
+      antialias: false,
     });
-    this.renderer.setSize(this.renderWidth, this.renderHeight, false);
     this.renderer.setPixelRatio(1);
 
     // ── Post-Processing Pipeline ──
-    // EffectComposer chains multiple render passes together.
-    // Each pass processes the image from the previous pass.
     this.composer = new EffectComposer(this.renderer);
 
-    // Pass 1: Render the 3D scene normally
     const renderPass = new RenderPass(scene, camera);
     this.composer.addPass(renderPass);
 
-    // Pass 2: Dithering + posterization
-    this.ditherPass = new ShaderPass(DitherShader);
-    this.ditherPass.uniforms.resolution.value = new THREE.Vector2(
-      this.renderWidth,
-      this.renderHeight
-    );
-    this.composer.addPass(this.ditherPass);
+    // Future passes (warp tunnel, etc.) will be added here
+
+    this.resize();
   }
 
-  /**
-   * Render one frame through the full post-processing pipeline.
-   */
+  resize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const renderWidth = Math.ceil(width / this.pixelScale);
+    const renderHeight = Math.ceil(height / this.pixelScale);
+
+    this.renderer.setSize(renderWidth, renderHeight, false);
+    this.composer.setSize(renderWidth, renderHeight);
+
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+
+    this.canvas.style.width = width + 'px';
+    this.canvas.style.height = height + 'px';
+  }
+
   render() {
     this.composer.render();
   }
 
-  /**
-   * Clean up GPU resources.
-   */
   dispose() {
     this.renderer.dispose();
   }
