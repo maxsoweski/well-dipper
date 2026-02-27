@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 
 /**
- * Orbit camera controller — the camera always orbits around a target point
- * (the planet), like a satellite circling it.
+ * Orbit camera controller — orbits around a target point.
  *
- * 1. Auto-drift: camera slowly orbits on its own (screensaver mode).
- *    Stops permanently once you click-drag.
- * 2. Click-drag: orbit around the planet (yaw = horizontal, pitch = vertical).
- * 3. Scroll wheel: zoom in/out (change orbit distance).
+ * Supports two scales:
+ * 1. System overview: zoomed out to see all planets (~distance 100-400)
+ * 2. Planet focus: zoomed in on a single planet (~distance 3-15)
+ *
+ * Target switching is smoothly animated via lerp.
+ *
+ * Controls:
+ * - Click-drag: orbit around target (yaw/pitch)
+ * - Scroll wheel: zoom in/out
+ * - Auto-drift: slow rotation when idle (stops after first drag)
  */
 export class CameraController {
   constructor(camera, canvas) {
@@ -16,15 +21,16 @@ export class CameraController {
 
     // ── Target (what we orbit around) ──
     this.target = new THREE.Vector3(0, 0, 0);
+    this._targetGoal = new THREE.Vector3(0, 0, 0); // for smooth transitions
 
     // ── Orbit angles (spherical coordinates around target) ──
-    this.yaw = 0;           // horizontal angle
-    this.pitch = 0.15;      // slight upward view to start
+    this.yaw = 0;
+    this.pitch = 0.15;
 
     // ── Orbit distance ──
-    this.distance = 8;      // current distance from target
-    this.minDistance = 0.5;  // allow close-up views of planet surface
-    this.maxDistance = 30;
+    this.distance = 8;
+    this.minDistance = 0.5;
+    this.maxDistance = 2000;
 
     // ── Click-drag state ──
     this.isDragging = false;
@@ -32,12 +38,12 @@ export class CameraController {
 
     // ── Auto-drift ──
     this.autoRotateSpeed = 2;          // degrees per second
-    this.autoRotateActive = true;      // stops permanently after first drag
+    this.autoRotateActive = true;
 
     // ── Zoom (scroll wheel) ──
-    this.zoomSpeed = 0;                // current zoom velocity
-    this.zoomDamping = 0.88;           // friction
-    this.scrollSensitivity = 1.5;      // how much each scroll tick accelerates
+    this.zoomSpeed = 0;
+    this.zoomDamping = 0.88;
+    this.scrollSensitivity = 1.5;
 
     // ── Smoothing ──
     this.smoothedYaw = this.yaw;
@@ -45,13 +51,14 @@ export class CameraController {
     this.smoothedDistance = this.distance;
     this.smoothing = 0.08;
 
-    this._setupListeners();
+    // ── Target transition ──
+    this._transitioning = false;
+    this._transitionSpeed = 0.04; // lerp factor per frame at 60fps
 
-    // Set initial camera position so the first frame isn't inside the planet
+    this._setupListeners();
     this._applyOrbit();
   }
 
-  /** Position the camera from current smoothed orbit values and look at target */
   _applyOrbit() {
     const d = this.smoothedDistance;
     const cosPitch = Math.cos(this.smoothedPitch);
@@ -79,53 +86,92 @@ export class CameraController {
 
     window.addEventListener('mousemove', (e) => {
       if (!this.isDragging) return;
-
       this.yaw -= e.movementX * this.dragSensitivity;
       this.pitch += e.movementY * this.dragSensitivity;
-
-      // Clamp pitch so camera can't flip over the poles
       const limit = (85 * Math.PI) / 180;
       this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
     });
 
-    // Scroll wheel: zoom in/out
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      // Scroll up = zoom in (reduce distance)
       this.zoomSpeed += Math.sign(e.deltaY) * this.scrollSensitivity;
     }, { passive: false });
   }
 
   /**
-   * Set the orbit target (e.g., when spawning a new planet).
+   * Set the orbit target instantly (no animation).
    */
   setTarget(position) {
     this.target.copy(position);
+    this._targetGoal.copy(position);
+    this._transitioning = false;
   }
 
   /**
-   * Smoothly re-center on a new position (same as setTarget for orbit cam).
+   * Smoothly transition the orbit target to a new position.
+   * Also sets a comfortable viewing distance.
    */
-  centerOn(worldPosition) {
-    this.target.copy(worldPosition);
+  focusOn(position, viewDistance = 8) {
+    this._targetGoal.copy(position);
+    this.distance = viewDistance;
+    this._transitioning = true;
+  }
+
+  /**
+   * Update the target position for a moving object (called every frame).
+   * Unlike focusOn(), this doesn't touch zoom distance.
+   */
+  trackTarget(position) {
+    this._targetGoal.copy(position);
+    // Keep transitioning so the camera lerps toward the moving target
+    if (!this._transitioning) {
+      this._transitioning = true;
+    }
+  }
+
+  /**
+   * Zoom out to see the whole system (target the center).
+   */
+  viewSystem(systemRadius) {
+    this._targetGoal.set(0, 0, 0);
+    this.distance = systemRadius * 1.5;
+    this._transitioning = true;
   }
 
   update(deltaTime) {
-    // Auto-drift: slowly orbit around the target
+    // Auto-drift
     if (this.autoRotateActive && !this.isDragging) {
       this.yaw += this.autoRotateSpeed * (Math.PI / 180) * deltaTime;
     }
 
-    // Apply zoom velocity to distance
+    // Exponential zoom — scroll speed scales with current distance
+    // At distance 5, a tick moves you ~0.5. At distance 500, it moves you ~50.
     if (Math.abs(this.zoomSpeed) > 0.001) {
-      this.distance += this.zoomSpeed * deltaTime;
+      this.distance *= Math.exp(this.zoomSpeed * deltaTime * 0.3);
       this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, this.distance));
       this.zoomSpeed *= Math.pow(this.zoomDamping, deltaTime * 60);
     }
 
+    // Smooth target transition
+    if (this._transitioning) {
+      const factor = 1 - Math.pow(1 - this._transitionSpeed, deltaTime * 60);
+      this.target.lerp(this._targetGoal, factor);
+      // Snap when close enough
+      if (this.target.distanceTo(this._targetGoal) < 0.01) {
+        this.target.copy(this._targetGoal);
+        this._transitioning = false;
+      }
+    }
+
     // Smooth interpolation (frame-rate independent)
     const factor = 1 - Math.pow(1 - this.smoothing, deltaTime * 60);
-    this.smoothedYaw += (this.yaw - this.smoothedYaw) * factor;
+
+    // Yaw uses shortest-arc interpolation to avoid spinning the long way around
+    let yawDiff = this.yaw - this.smoothedYaw;
+    // Normalize to [-PI, PI]
+    yawDiff = yawDiff - Math.PI * 2 * Math.round(yawDiff / (Math.PI * 2));
+    this.smoothedYaw += yawDiff * factor;
+
     this.smoothedPitch += (this.pitch - this.smoothedPitch) * factor;
     this.smoothedDistance += (this.distance - this.smoothedDistance) * factor;
 

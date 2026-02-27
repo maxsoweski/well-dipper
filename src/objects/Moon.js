@@ -21,8 +21,8 @@ export class Moon {
     const geometry = new THREE.IcosahedronGeometry(this.data.radius, 3);
     const d = this.data;
 
-    // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic
-    const typeIndex = ['captured', 'rocky', 'ice', 'volcanic'].indexOf(d.type);
+    // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic, 4=terrestrial
+    const typeIndex = ['captured', 'rocky', 'ice', 'volcanic', 'terrestrial'].indexOf(d.type);
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
@@ -154,15 +154,48 @@ export class Moon {
             float frost = snoise(vPosition * noiseScale * 4.0);
             frost = pow(max(frost, 0.0), 3.0);
             surfaceColor += vec3(0.15, 0.12, 0.05) * frost;
+          } else if (moonType == 4) {
+            // Terrestrial: ocean + land like a mini-Earth
+            float continent = snoise(vPosition * noiseScale * 0.7);
+            continent += snoise(vPosition * noiseScale * 1.5) * 0.3;
+            continent += snoise(vPosition * noiseScale * 3.0) * 0.15;
+            float height = continent * 0.5 + 0.5;
+            float seaLevel = 0.48;
+            float landMask = step(seaLevel, height);
+            surfaceColor = mix(baseColor, accentColor, landMask);
           } else {
             // Captured: simple dark noisy surface
             float detail = n * 0.5 + 0.5;
             surfaceColor = mix(baseColor, accentColor, detail);
           }
 
-          // Lighting — same as planet (pure dark shadows)
+          // Lighting
           float diffuse = max(dot(vNormal, lightDir), 0.0);
+
+          // Airless bodies (rocky, captured) have a very sharp terminator
+          // — no atmosphere to scatter light into the shadow side
+          // Ice moons have a slightly softer edge (bright surface scatters more)
+          // Terrestrial moons have the softest (atmosphere)
+          if (moonType == 0 || moonType == 1) {
+            // Sharp terminator: ramp from 0 to 1 in a narrow band
+            diffuse = smoothstep(-0.02, 0.08, dot(vNormal, lightDir));
+          } else if (moonType == 3) {
+            // Volcanic: sharp terminator but faint glow on dark side
+            float rawDiffuse = dot(vNormal, lightDir);
+            diffuse = smoothstep(-0.02, 0.08, rawDiffuse);
+          } else if (moonType == 4) {
+            // Terrestrial: softer terminator (has atmosphere)
+            diffuse = smoothstep(-0.1, 0.3, dot(vNormal, lightDir));
+          }
+          // Ice (moonType 2) keeps the default smooth diffuse
+
           vec3 finalColor = surfaceColor * diffuse;
+
+          // Volcanic: faint glow on dark side from lava
+          if (moonType == 3) {
+            float nightGlow = max(-dot(vNormal, lightDir), 0.0);
+            finalColor += accentColor * nightGlow * 0.15;
+          }
 
           // Posterize
           finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);

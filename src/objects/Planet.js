@@ -542,6 +542,9 @@ export class Planet {
     const mat = this.surface.material;
     if (mat.uniforms.time) {
       mat.uniforms.time.value += deltaTime;
+      // Wrap to prevent float32 precision loss after hours of runtime
+      // 10000s is ~2.8 hours — noise patterns tile seamlessly at this scale
+      if (mat.uniforms.time.value > 10000) mat.uniforms.time.value -= 10000;
     }
   }
 

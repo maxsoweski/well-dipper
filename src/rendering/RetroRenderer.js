@@ -43,6 +43,10 @@ export class RetroRenderer {
     const renderWidth = Math.ceil(width / this.pixelScale);
     const renderHeight = Math.ceil(height / this.pixelScale);
 
+    // Dispose old render targets before creating new ones (prevents GPU memory leak)
+    if (this.composer.writeBuffer) this.composer.writeBuffer.dispose();
+    if (this.composer.readBuffer) this.composer.readBuffer.dispose();
+
     this.renderer.setSize(renderWidth, renderHeight, false);
     this.composer.setSize(renderWidth, renderHeight);
 

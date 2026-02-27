@@ -114,19 +114,27 @@ export class PlanetGenerator {
    * Generate planet data from a seeded random instance.
    * @param {SeededRandom} rng - seeded random generator
    * @param {number} orbitIndex - which orbit slot (0 = closest to star)
+   * @param {number[]|null} sunDirection - [x,y,z] direction toward the star, or null for random
    * @returns {object} planet data
    */
-  static generate(rng, orbitIndex) {
+  static generate(rng, orbitIndex, sunDirection = null) {
     const type = this._pickType(rng, orbitIndex);
 
-    // Size ranges by type
+    // Size ranges by type — based on real exoplanet science
+    // Scale: 1.0 ≈ Earth-like. Gas giants are 2-4x, rocky worlds 0.2-0.6x
+    // Real Jupiter is 11x Earth radius but we compress for visual balance
     const radiusRanges = {
-      'gas-giant': [1.2, 2.5],
-      'hot-jupiter': [1.3, 2.2],
-      'sub-neptune': [0.5, 0.9],
-      'eyeball': [0.4, 0.7],
-      'venus': [0.4, 0.7],
-      'carbon': [0.3, 0.6],
+      'rocky':        [0.2, 0.5],   // Mercury to Mars sized
+      'terrestrial':  [0.4, 0.8],   // Venus to super-Earth
+      'ocean':        [0.4, 0.9],   // Earth-like to large water worlds
+      'eyeball':      [0.4, 0.7],   // Tidally locked terrestrial
+      'venus':        [0.4, 0.7],   // Venus-like
+      'carbon':       [0.2, 0.5],   // Small, dense worlds
+      'lava':         [0.2, 0.6],   // Small hot worlds
+      'ice':          [0.3, 0.7],   // Icy bodies
+      'sub-neptune':  [0.7, 1.3],   // Mini-Neptunes
+      'gas-giant':    [1.8, 3.5],   // Jupiter/Saturn class
+      'hot-jupiter':  [1.5, 3.0],   // Inflated close-in giants
     };
     const radiusRange = radiusRanges[type] || [0.3, 0.9];
     const radius = rng.range(...radiusRange);
@@ -221,23 +229,25 @@ export class PlanetGenerator {
       };
     }
 
-    // Moons by type
+    // Moons by type — gas giants can have many (Jupiter has 95!)
     const maxMoonsByType = {
-      'gas-giant': 4, 'hot-jupiter': 0, 'sub-neptune': 2,
+      'gas-giant': 6, 'hot-jupiter': 0, 'sub-neptune': 3,
       'venus': 0, 'eyeball': 1, 'carbon': 1,
+      'terrestrial': 2, 'ocean': 1, 'rocky': 1,
     };
-    const maxMoons = maxMoonsByType[type] ?? 2;
+    const maxMoons = maxMoonsByType[type] ?? 1;
     const moonCount = rng.int(0, maxMoons);
 
-    // Randomized sun direction (simulates the star's position)
-    // Random point on unit sphere using spherical coordinates
-    const sunTheta = rng.range(0, Math.PI * 2);
-    const sunPhi = Math.acos(rng.range(-1, 1));
-    const sunDirection = [
-      Math.sin(sunPhi) * Math.cos(sunTheta),
-      Math.sin(sunPhi) * Math.sin(sunTheta),
-      Math.cos(sunPhi),
-    ];
+    // Sun direction: use provided direction (from system generator) or random fallback
+    if (!sunDirection) {
+      const sunTheta = rng.range(0, Math.PI * 2);
+      const sunPhi = Math.acos(rng.range(-1, 1));
+      sunDirection = [
+        Math.sin(sunPhi) * Math.cos(sunTheta),
+        Math.sin(sunPhi) * Math.sin(sunTheta),
+        Math.cos(sunPhi),
+      ];
+    }
 
     return {
       type,
