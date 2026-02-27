@@ -2,75 +2,71 @@ import './style.css';
 import * as THREE from 'three';
 import { Starfield } from './objects/Starfield.js';
 import { CameraController } from './camera/CameraController.js';
-
-// ── Renderer ──
-// We render at a low resolution (320x240) for the retro look,
-// then CSS scales it up to fill the browser window with crisp pixels.
-const RENDER_WIDTH = 320;
-const RENDER_HEIGHT = 240;
-
-const canvas = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: false, // No antialiasing — we want sharp, chunky pixels
-});
-renderer.setSize(RENDER_WIDTH, RENDER_HEIGHT, false); // false = don't set CSS size
-renderer.setPixelRatio(1); // Always 1:1 — no high-DPI scaling
+import { RetroRenderer } from './rendering/RetroRenderer.js';
 
 // ── Scene ──
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000); // Pure black void
 
 // ── Camera ──
-// 70-degree field of view gives a nice sense of depth without too much distortion.
-// Near/far clipping planes: 0.1 to 1000 units.
 const camera = new THREE.PerspectiveCamera(
-  70,
-  RENDER_WIDTH / RENDER_HEIGHT,
-  0.1,
-  1000
+  70,              // Field of view (degrees)
+  640 / 480,       // Aspect ratio (4:3)
+  0.1,             // Near clipping plane
+  1000             // Far clipping plane
 );
-camera.position.set(0, 0, 0); // Start at the origin
+camera.position.set(0, 0, 0);
+
+// ── Retro Renderer (320×240 + dithering + posterization) ──
+const canvas = document.getElementById('canvas');
+const retroRenderer = new RetroRenderer(canvas, scene, camera);
 
 // ── Starfield ──
 const starfield = new Starfield(3000, 500);
 starfield.addTo(scene);
 
+// ── Test cube — temporary, just to see the dithering on a surface ──
+// A gradient-colored cube makes the posterization/dithering visible.
+// Stars are too tiny to show the effect. This gets removed in Phase 3.
+const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+const cubeMaterial = new THREE.MeshStandardMaterial({
+  color: 0x4488cc,
+  roughness: 0.7,
+  metalness: 0.3,
+});
+const testCube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+testCube.position.set(0, 0, -8); // Place it in front of the camera
+scene.add(testCube);
+
+// ── Lights (needed for MeshStandardMaterial to be visible) ──
+const ambientLight = new THREE.AmbientLight(0x222244, 0.5); // Dim blue-ish fill
+const directionalLight = new THREE.DirectionalLight(0xffeedd, 1.0); // Warm key light
+directionalLight.position.set(5, 3, 5);
+scene.add(ambientLight);
+scene.add(directionalLight);
+
 // ── Camera Controller ──
 const cameraController = new CameraController(camera, canvas);
 
 // ── Animation Loop ──
-// Three.js calls this function every frame (~60fps).
-// `deltaTime` tells us how much real time passed since the last frame,
-// which keeps animations smooth regardless of framerate.
 const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
 
-  const deltaTime = clock.getDelta();
+  const deltaTime = Math.min(clock.getDelta(), 0.1);
 
-  // Update camera rotation from mouse input
+  // Slowly rotate the test cube so you can see dithering from different angles
+  testCube.rotation.x += 0.3 * deltaTime;
+  testCube.rotation.y += 0.5 * deltaTime;
+
   cameraController.update(deltaTime);
-
-  // Keep starfield centered on camera (it's a skybox)
   starfield.update(camera.position);
 
-  // Draw the frame
-  renderer.render(scene, camera);
+  // Render through the retro post-processing pipeline
+  retroRenderer.render();
 }
-
-// ── Handle Window Resize ──
-// The render resolution stays 320x240, but we need to update the CSS
-// so the canvas stretches to fill the window.
-function onResize() {
-  // Canvas CSS size fills the viewport (set in style.css)
-  // We don't change the render resolution — just let CSS scale it up
-  // The aspect ratio of the renderer stays fixed at 320:240 (4:3)
-}
-
-window.addEventListener('resize', onResize);
 
 // ── Start ──
 animate();
-console.log('Well Dipper — Phase 1: Hello Space');
+console.log('Well Dipper — Phase 2: The PS1 Filter');
