@@ -55,6 +55,12 @@ export class CameraController {
     this._transitioning = false;
     this._transitionSpeed = 0.04; // lerp factor per frame at 60fps
 
+    // ── Gyroscope ──
+    this.gyroEnabled = false;
+    this._prevAlpha = null;
+    this._prevBeta = null;
+    this._gyroSensitivity = 0.015; // radians per degree of device rotation
+
     this._setupListeners();
     this._applyOrbit();
   }
@@ -122,8 +128,8 @@ export class CameraController {
 
     this.canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      if (e.touches.length === 1 && this.isDragging) {
-        // Single finger: orbit
+      if (e.touches.length === 1 && this.isDragging && !this.gyroEnabled) {
+        // Single finger: orbit (disabled when gyro is active)
         const x = e.touches[0].clientX;
         const y = e.touches[0].clientY;
         const dx = x - this._lastTouchX;
@@ -154,6 +160,64 @@ export class CameraController {
       this._lastPinchDist = 0;
       this._touchCount = e.touches.length;
     }, { passive: false });
+
+    // ── Gyroscope ──
+    this._gyroHandler = (e) => {
+      if (!this.gyroEnabled) return;
+      if (e.alpha === null || e.beta === null) return;
+
+      if (this._prevAlpha !== null) {
+        // Alpha = compass heading (0-360), wraps around
+        let dAlpha = e.alpha - this._prevAlpha;
+        if (dAlpha > 180) dAlpha -= 360;
+        if (dAlpha < -180) dAlpha += 360;
+
+        // Beta = front-back tilt (-180 to 180)
+        let dBeta = e.beta - this._prevBeta;
+        if (dBeta > 180) dBeta -= 360;
+        if (dBeta < -180) dBeta += 360;
+
+        // Alpha → yaw (turning phone left/right), Beta → pitch (tilting up/down)
+        this.yaw -= dAlpha * this._gyroSensitivity;
+        this.pitch -= dBeta * this._gyroSensitivity;
+        const limit = (85 * Math.PI) / 180;
+        this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+      }
+
+      this._prevAlpha = e.alpha;
+      this._prevBeta = e.beta;
+    };
+  }
+
+  /**
+   * Enable gyroscope control. Returns a promise that resolves to true/false
+   * depending on whether permission was granted (needed on iOS 13+).
+   */
+  async enableGyro() {
+    // iOS 13+ requires permission from a user gesture
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm !== 'granted') return false;
+      } catch {
+        return false;
+      }
+    }
+
+    this.gyroEnabled = true;
+    this._prevAlpha = null;
+    this._prevBeta = null;
+    this.autoRotateActive = false;
+    window.addEventListener('deviceorientation', this._gyroHandler);
+    return true;
+  }
+
+  disableGyro() {
+    this.gyroEnabled = false;
+    this._prevAlpha = null;
+    this._prevBeta = null;
+    window.removeEventListener('deviceorientation', this._gyroHandler);
   }
 
   /**

@@ -302,6 +302,24 @@ function focusStar(starIdx) {
   console.log(`Focus: ${label} (${starObj.data.type}-class)`);
 }
 
+function toggleOrbits() {
+  if (!system) return;
+  orbitsVisible = !orbitsVisible;
+  for (const line of system.orbitLines) {
+    line.mesh.visible = orbitsVisible;
+  }
+  if (system.starOrbitLines) {
+    for (const line of system.starOrbitLines) {
+      line.mesh.visible = orbitsVisible;
+    }
+  }
+  for (const entry of system.planets) {
+    for (const line of entry.moonOrbitLines) {
+      line.mesh.visible = orbitsVisible;
+    }
+  }
+}
+
 // ── Animation Loop ──
 const timer = new THREE.Timer();
 // Pre-allocate reusable vectors
@@ -473,21 +491,7 @@ window.addEventListener('keydown', (e) => {
       focusPlanet((focusIndex + 1) % n);
     }
   } else if (e.code === 'KeyO') {
-    if (!system) return;
-    orbitsVisible = !orbitsVisible;
-    for (const line of system.orbitLines) {
-      line.mesh.visible = orbitsVisible;
-    }
-    if (system.starOrbitLines) {
-      for (const line of system.starOrbitLines) {
-        line.mesh.visible = orbitsVisible;
-      }
-    }
-    for (const entry of system.planets) {
-      for (const line of entry.moonOrbitLines) {
-        line.mesh.visible = orbitsVisible;
-      }
-    }
+    toggleOrbits();
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
@@ -578,6 +582,59 @@ canvas.addEventListener('touchend', (e) => {
     }, 350);
   }
 }, { passive: true });
+
+// ── Mobile Menu ──
+const mobileMenu = document.getElementById('mobile-menu');
+if (mobileMenu) {
+  const toggle = mobileMenu.querySelector('.mobile-menu-toggle');
+  const gyroBtn = mobileMenu.querySelector('[data-action="gyro"]');
+
+  toggle.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    mobileMenu.classList.toggle('open');
+  });
+
+  mobileMenu.querySelector('.mobile-menu-items').addEventListener('touchend', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = e.target.closest('button');
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    if (action === 'new') {
+      seedCounter++;
+      spawnSystem();
+    } else if (action === 'back') {
+      focusPlanet(-1);
+    } else if (action === 'prev') {
+      if (!system) return;
+      const n = system.planets.length;
+      focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
+    } else if (action === 'next') {
+      if (!system) return;
+      const n = system.planets.length;
+      focusPlanet((focusIndex + 1) % n);
+    } else if (action === 'orbits') {
+      toggleOrbits();
+      btn.classList.toggle('active', orbitsVisible);
+    } else if (action === 'gyro') {
+      if (cameraController.gyroEnabled) {
+        cameraController.disableGyro();
+        gyroBtn.classList.remove('active');
+      } else {
+        cameraController.enableGyro().then((ok) => {
+          if (ok) gyroBtn.classList.add('active');
+        });
+      }
+    }
+
+    // Close menu after action (except gyro/orbits toggles)
+    if (action !== 'orbits' && action !== 'gyro') {
+      mobileMenu.classList.remove('open');
+    }
+  });
+}
 
 // ── Start ──
 animate();

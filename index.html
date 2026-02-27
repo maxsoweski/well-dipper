@@ -7,6 +7,20 @@
   </head>
   <body>
     <canvas id="canvas"></canvas>
+
+    <!-- Mobile controls menu (hidden on desktop) -->
+    <div id="mobile-menu" class="mobile-menu">
+      <div class="mobile-menu-items">
+        <button data-action="gyro" title="Toggle gyroscope">&#x2B55;</button>
+        <button data-action="orbits" title="Toggle orbits">&#x25CE;</button>
+        <button data-action="prev" title="Previous planet">&#x25C0;</button>
+        <button data-action="next" title="Next planet">&#x25B6;</button>
+        <button data-action="back" title="System overview">&#x2190;</button>
+        <button data-action="new" title="New system">&#x21BB;</button>
+      </div>
+      <button class="mobile-menu-toggle" title="Menu">&#x2630;</button>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
