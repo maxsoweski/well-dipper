@@ -273,11 +273,13 @@ export class Moon {
     const angle = this.orbitAngle;
     const incl = this.data.inclination;
 
-    // Orbit in XZ plane, tilted by inclination
+    // Orbit in XZ plane, tilted by inclination.
+    // Must match OrbitLine's rotation.x = inclination, which applies a
+    // rotation matrix around X: y' = -sin(θ)·z, z' = cos(θ)·z
     this.mesh.position.set(
       parentPosition.x + Math.cos(angle) * r,
-      parentPosition.y + Math.sin(incl) * Math.sin(angle) * r,
-      parentPosition.z + Math.sin(angle) * r,
+      parentPosition.y - Math.sin(incl) * Math.sin(angle) * r,
+      parentPosition.z + Math.cos(incl) * Math.sin(angle) * r,
     );
 
     // Slow self-rotation

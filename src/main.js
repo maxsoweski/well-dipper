@@ -6,13 +6,16 @@ import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
+import { GravityWell } from './objects/GravityWell.js';
 import { CameraController } from './camera/CameraController.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 
 // ── Scene ──
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+// No scene.background — we need the scene render target to have alpha=0
+// where there are no objects, so the composite shader can show the starfield
+// behind empty space (but NOT behind dark shadows).
 
 // ── Camera ──
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 5000);
@@ -24,9 +27,19 @@ const retroRenderer = new RetroRenderer(canvas, scene, camera);
 // ── Camera Controller ──
 const cameraController = new CameraController(camera, canvas);
 
+// When free-look ends, clear focus so the camera stays orbiting whatever
+// point the user was looking at — not snapping back to the planet.
+cameraController.onFreeLookEnd = () => {
+  focusIndex = -1;
+  focusMoonIndex = -1;
+  focusStarIndex = -1;
+};
+
 // ── Starfield ──
-const starfield = new Starfield(3000, 500);
-starfield.addTo(scene);
+// Rendered at full resolution (via retroRenderer.starfieldScene) for tiny
+// crisp star points, separate from the low-res retro scene objects.
+const starfield = new Starfield(6000, 500);
+starfield.addTo(retroRenderer.starfieldScene);
 
 // ── System State ──
 let seedCounter = 0;
@@ -34,6 +47,8 @@ let system = null;
 let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
 let orbitsVisible = false;
+let gravityWellVisible = false;
+let gravityWell = null;
 
 // ── Click-to-select (raycasting) ──
 const raycaster = new THREE.Raycaster();
@@ -83,6 +98,13 @@ function spawnSystem() {
     }
   }
 
+  // ── Clean up old gravity well ──
+  if (gravityWell) {
+    gravityWell.removeFrom(scene);
+    gravityWell.dispose();
+    gravityWell = null;
+  }
+
   // ── Generate system data ──
   const seed = `system-${seedCounter}`;
   const systemData = StarSystemGenerator.generate(seed);
@@ -109,10 +131,10 @@ function spawnSystem() {
     star2.mesh.position.set(-Math.cos(angle) * r2, 0, -Math.sin(angle) * r2);
 
     // Small orbit lines for the binary stars (hidden by default, toggled with 'O')
-    const line1 = new OrbitLine(r1, 0x666644);
+    const line1 = new OrbitLine(r1, 0x00dd00);
     line1.addTo(scene);
     line1.mesh.visible = orbitsVisible;
-    const line2 = new OrbitLine(r2, 0x666644);
+    const line2 = new OrbitLine(r2, 0x00dd00);
     line2.addTo(scene);
     line2.mesh.visible = orbitsVisible;
     starOrbitLines.push(line1, line2);
@@ -141,7 +163,7 @@ function spawnSystem() {
       moons.push(moon);
 
       // Moon orbit line — centered on planet, tilted by inclination
-      const moonLine = new OrbitLine(moonData.orbitRadius, 0x333344);
+      const moonLine = new OrbitLine(moonData.orbitRadius, 0x00bb00);
       moonLine.mesh.position.set(px, 0, pz);
       moonLine.mesh.rotation.x = moonData.inclination;
       moonLine.addTo(scene);
@@ -153,7 +175,7 @@ function spawnSystem() {
     planet.setRingGaps(entry.moons);
 
     // Create orbit line (hidden by default)
-    const orbitLine = new OrbitLine(entry.orbitRadius, 0x444444);
+    const orbitLine = new OrbitLine(entry.orbitRadius, 0x00ff00);
     orbitLine.addTo(scene);
     orbitLine.mesh.visible = orbitsVisible;
     orbitLines.push(orbitLine);
@@ -174,6 +196,25 @@ function spawnSystem() {
     const belt = new AsteroidBelt(beltData, systemData.starInfo);
     belt.addTo(scene);
     asteroidBelts.push(belt);
+  }
+
+  // ── Create gravity well visualization ──
+  // Grid extent covers the whole system plus some padding
+  const outerOrbitRadius = systemData.planets.length > 0
+    ? systemData.planets[systemData.planets.length - 1].orbitRadius
+    : 50;
+  gravityWell = new GravityWell(outerOrbitRadius * 2.5, 150);
+  gravityWell.setStars(systemData.star, systemData.isBinary ? systemData.star2 : null);
+  gravityWell.setPlanets(planets);
+  // Set initial positions for the gravity well
+  if (systemData.isBinary) {
+    gravityWell.updateStarPositions(star.mesh.position, star2.mesh.position);
+  } else {
+    gravityWell.updateStarPositions(new THREE.Vector3(0, 0, 0), null);
+  }
+  gravityWell.updatePlanetPositions(planets);
+  if (gravityWellVisible) {
+    gravityWell.addTo(scene);
   }
 
   // ── Store system state ──
@@ -320,6 +361,17 @@ function toggleOrbits() {
   }
 }
 
+function toggleGravityWell() {
+  gravityWellVisible = !gravityWellVisible;
+  if (gravityWell) {
+    if (gravityWellVisible) {
+      gravityWell.addTo(scene);
+    } else {
+      gravityWell.removeFrom(scene);
+    }
+  }
+}
+
 // ── Animation Loop ──
 const timer = new THREE.Timer();
 // Pre-allocate reusable vectors
@@ -441,6 +493,18 @@ function animate() {
       }
     }
 
+    // ── Update gravity well positions (stars for binary orbits, planets every frame) ──
+    if (gravityWell && gravityWellVisible) {
+      if (system.isBinary) {
+        gravityWell.updateStarPositions(
+          system.star.mesh.position,
+          system.star2.mesh.position,
+        );
+      }
+      // Update planet positions every frame (they orbit the star)
+      gravityWell.updatePlanetPositions(system.planets);
+    }
+
     // ── Update asteroid belts ──
     for (const belt of system.asteroidBelts) {
       belt.update(deltaTime);
@@ -451,16 +515,20 @@ function animate() {
     }
 
     // ── Camera tracking ──
-    if (focusIndex === -2 && focusStarIndex >= 0) {
-      // Tracking a star
-      const starObj = focusStarIndex === 1 && system.star2 ? system.star2 : system.star;
-      cameraController.trackTarget(starObj.mesh.position);
-    } else if (focusIndex >= 0 && focusIndex < system.planets.length) {
-      const entry = system.planets[focusIndex];
-      if (focusMoonIndex >= 0 && focusMoonIndex < entry.moons.length) {
-        cameraController.trackTarget(entry.moons[focusMoonIndex].mesh.position);
-      } else {
-        cameraController.trackTarget(entry.planet.mesh.position);
+    // Skip tracking during free-look — the user is controlling the view
+    // direction manually, so trackTarget would fight with their input.
+    if (!cameraController.isFreeLooking) {
+      if (focusIndex === -2 && focusStarIndex >= 0) {
+        // Tracking a star
+        const starObj = focusStarIndex === 1 && system.star2 ? system.star2 : system.star;
+        cameraController.trackTarget(starObj.mesh.position);
+      } else if (focusIndex >= 0 && focusIndex < system.planets.length) {
+        const entry = system.planets[focusIndex];
+        if (focusMoonIndex >= 0 && focusMoonIndex < entry.moons.length) {
+          cameraController.trackTarget(entry.moons[focusMoonIndex].mesh.position);
+        } else {
+          cameraController.trackTarget(entry.planet.mesh.position);
+        }
       }
     }
   }
@@ -492,6 +560,8 @@ window.addEventListener('keydown', (e) => {
     }
   } else if (e.code === 'KeyO') {
     toggleOrbits();
+  } else if (e.code === 'KeyG') {
+    toggleGravityWell();
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
@@ -618,6 +688,9 @@ if (mobileMenu) {
     } else if (action === 'orbits') {
       toggleOrbits();
       btn.classList.toggle('active', orbitsVisible);
+    } else if (action === 'gravity') {
+      toggleGravityWell();
+      btn.classList.toggle('active', gravityWellVisible);
     } else if (action === 'gyro') {
       if (cameraController.gyroEnabled) {
         cameraController.disableGyro();
@@ -630,7 +703,7 @@ if (mobileMenu) {
     }
 
     // Close menu after action (except gyro/orbits toggles)
-    if (action !== 'orbits' && action !== 'gyro') {
+    if (action !== 'orbits' && action !== 'gravity' && action !== 'gyro') {
       mobileMenu.classList.remove('open');
     }
   });
@@ -639,4 +712,4 @@ if (mobileMenu) {
 // ── Start ──
 animate();
 console.log('Well Dipper — Star System');
-console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=toggle orbits, Click/tap=select, Double-tap=new system, Pinch=zoom');
+console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=orbits, G=gravity wells, Middle-click=free look, Click/tap=select');

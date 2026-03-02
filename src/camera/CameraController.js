@@ -10,7 +10,8 @@ import * as THREE from 'three';
  * Target switching is smoothly animated via lerp.
  *
  * Controls:
- * - Click-drag: orbit around target (yaw/pitch)
+ * - Left-click-drag: orbit around target (yaw/pitch)
+ * - Middle-click-drag: free-look (rotate view from fixed camera position)
  * - Scroll wheel: zoom in/out
  * - Auto-drift: slow rotation when idle (stops after first drag)
  */
@@ -55,6 +56,17 @@ export class CameraController {
     this._transitioning = false;
     this._transitionSpeed = 0.04; // lerp factor per frame at 60fps
 
+    // ── Free-look (middle mouse) ──
+    // When active, the camera stays in place and you rotate the view direction.
+    // Works by holding the camera position fixed and moving the orbit target.
+    this.isFreeLooking = false;
+    this._freeLookAnchor = new THREE.Vector3(); // camera pos when free-look started
+
+    // Callback fired when free-look ends (middle mouse released).
+    // main.js uses this to clear focus state so tracking doesn't resume
+    // and pull the camera back to the planet you were orbiting before.
+    this.onFreeLookEnd = null;
+
     // ── Gyroscope ──
     this.gyroEnabled = false;
     this._prevAlpha = null;
@@ -76,22 +88,81 @@ export class CameraController {
     this.camera.lookAt(this.target);
   }
 
+  /**
+   * During free-look: keep the camera at _freeLookAnchor while yaw/pitch change.
+   * Normally, camera = target + offset(yaw, pitch, distance).
+   * For free-look, we solve for target: target = camera - offset.
+   * This moves the orbit target so that the camera stays put.
+   */
+  _recomputeTargetForFreeLook() {
+    const d = this.smoothedDistance;
+    const cosPitch = Math.cos(this.pitch);
+
+    // offset = the vector from target to camera (same math as _applyOrbit)
+    const offsetX = d * Math.sin(this.yaw) * cosPitch;
+    const offsetY = d * Math.sin(this.pitch);
+    const offsetZ = d * Math.cos(this.yaw) * cosPitch;
+
+    // target = anchor - offset
+    this.target.set(
+      this._freeLookAnchor.x - offsetX,
+      this._freeLookAnchor.y - offsetY,
+      this._freeLookAnchor.z - offsetZ,
+    );
+    this._targetGoal.copy(this.target);
+    this._transitioning = false;
+
+    // Snap smoothed values so there's no lag during free-look
+    this.smoothedYaw = this.yaw;
+    this.smoothedPitch = this.pitch;
+  }
+
   _setupListeners() {
     // ── Mouse controls ──
     this.canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
+        // Left click: start orbiting
         this.isDragging = true;
         this.autoRotateActive = false;
+      } else if (e.button === 1) {
+        // Middle click: start free-look (rotate view from fixed position)
+        e.preventDefault();
+        this.isFreeLooking = true;
+        this.autoRotateActive = false;
+        this._freeLookAnchor.copy(this.camera.position);
       }
+    });
+
+    // Prevent browser default middle-click behavior (auto-scroll, paste menu)
+    this.canvas.addEventListener('auxclick', (e) => {
+      if (e.button === 1) e.preventDefault();
     });
 
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) {
         this.isDragging = false;
+      } else if (e.button === 1) {
+        this.isFreeLooking = false;
+        // Tell main.js to clear focus state so the camera stays here
+        // orbiting the point we were looking at, instead of snapping
+        // back to the planet we were focused on before free-look.
+        if (this.onFreeLookEnd) this.onFreeLookEnd();
       }
     });
 
     window.addEventListener('mousemove', (e) => {
+      if (this.isFreeLooking) {
+        // Free-look: adjust yaw/pitch, keep camera position fixed by
+        // recomputing the orbit target. This makes you "look around"
+        // from wherever the camera currently is.
+        this.yaw -= e.movementX * this.dragSensitivity;
+        this.pitch += e.movementY * this.dragSensitivity;
+        const limit = (85 * Math.PI) / 180;
+        this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+        this._recomputeTargetForFreeLook();
+        return;
+      }
+
       if (!this.isDragging) return;
       this.yaw -= e.movementX * this.dragSensitivity;
       this.pitch += e.movementY * this.dragSensitivity;

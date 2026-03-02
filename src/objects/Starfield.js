@@ -57,13 +57,15 @@ export class Starfield {
       }
     }
 
-    // Vary star sizes — most are small, a few are bigger
+    // Vary star sizes — most are small points, a few are bigger.
+    // These sizes are in pixels at FULL screen resolution (the starfield
+    // renders at full res, not the low retro res), so 2.0 = a 2×2 pixel point.
     const sizes = new Float32Array(this.count);
     for (let i = 0; i < this.count; i++) {
       const roll = Math.random();
-      if (roll < 0.01) sizes[i] = 5.0;       // 1% large
-      else if (roll < 0.04) sizes[i] = 3.0;  // 3% medium
-      else sizes[i] = 1.5;                    // 96% small
+      if (roll < 0.005) sizes[i] = 6.0;       // 0.5% large (pointed star shape)
+      else if (roll < 0.03) sizes[i] = 4.0;   // 2.5% medium
+      else sizes[i] = 2.0;                     // 97% small points
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -86,8 +88,9 @@ export class Starfield {
           vSize = aSize;
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mvPos;
-          // Large stars get a bigger quad so the pointed tips have room
-          gl_PointSize = aSize > 2.0 ? aSize * 2.0 : aSize;
+          // Large stars (6px) get a bigger quad so the pointed tips have room.
+          // Medium (4px) and small (2px) render at natural size.
+          gl_PointSize = aSize > 5.0 ? aSize * 2.0 : aSize;
         }
       `,
 
@@ -115,18 +118,18 @@ export class Starfield {
           vec2 center = gl_PointCoord - 0.5;
           float threshold = bayerDither(gl_FragCoord.xy);
 
-          // Small stars: circle (Euclidean distance)
-          // Large stars: pointed star shape (superellipse with p < 1)
+          // Small/medium stars: circle (Euclidean distance)
+          // Large stars (6px): pointed star shape (superellipse with p < 1)
           //   pow < 1 pinches the diagonals inward, exaggerating the 4 tips
           //   Regular diamond (Manhattan) would be p=1.0, we use 0.6 for pointier
           float dist;
-          if (vSize < 2.5) {
+          if (vSize < 5.0) {
             dist = length(center);
           } else {
             dist = pow(abs(center.x), 0.6) + pow(abs(center.y), 0.6);
           }
 
-          float edge = vSize < 2.5
+          float edge = vSize < 5.0
             ? smoothstep(0.3, 0.5, dist)
             : smoothstep(0.35, 0.55, dist);
           if (edge > threshold) discard;

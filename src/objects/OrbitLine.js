@@ -21,7 +21,7 @@ export class OrbitLine {
     const material = new THREE.LineBasicMaterial({
       color,
       transparent: true,
-      opacity: 0.12,
+      opacity: 0.8,
     });
 
     this.mesh = new THREE.Line(geometry, material);

@@ -38,14 +38,17 @@ export class StarSystemGenerator {
 
   // Visual properties per spectral class
   // luminosity is relative to Sol (G-type = 1.0)
+  // Star radii: all stars must be visually larger than the biggest gas giant (3.5)
+  // to correctly represent the massive density difference between stars and planets.
+  // Old values (0.5-2.5) allowed gas giants to dwarf M-class stars.
   static STAR_PROPERTIES = {
-    O: { color: [0.61, 0.69, 1.0],  radius: 2.5, temp: 40000, luminosity: 300000, planetRange: [2, 5] },
-    B: { color: [0.67, 0.75, 1.0],  radius: 2.0, temp: 20000, luminosity: 800,    planetRange: [2, 6] },
-    A: { color: [0.79, 0.84, 1.0],  radius: 1.6, temp: 8750,  luminosity: 20,     planetRange: [3, 6] },
-    F: { color: [0.97, 0.97, 1.0],  radius: 1.3, temp: 6750,  luminosity: 2.5,    planetRange: [4, 8] },
-    G: { color: [1.0, 0.96, 0.92],  radius: 1.1, temp: 5600,  luminosity: 1.0,    planetRange: [4, 8] },
-    K: { color: [1.0, 0.82, 0.63],  radius: 0.8, temp: 4450,  luminosity: 0.3,    planetRange: [3, 7] },
-    M: { color: [1.0, 0.80, 0.44],  radius: 0.5, temp: 3050,  luminosity: 0.04,   planetRange: [3, 6] },
+    O: { color: [0.61, 0.69, 1.0],  radius: 8.0, temp: 40000, luminosity: 300000, planetRange: [2, 5] },
+    B: { color: [0.67, 0.75, 1.0],  radius: 6.5, temp: 20000, luminosity: 800,    planetRange: [2, 6] },
+    A: { color: [0.79, 0.84, 1.0],  radius: 5.5, temp: 8750,  luminosity: 20,     planetRange: [3, 6] },
+    F: { color: [0.97, 0.97, 1.0],  radius: 5.0, temp: 6750,  luminosity: 2.5,    planetRange: [4, 8] },
+    G: { color: [1.0, 0.96, 0.92],  radius: 4.5, temp: 5600,  luminosity: 1.0,    planetRange: [4, 8] },
+    K: { color: [1.0, 0.82, 0.63],  radius: 4.2, temp: 4450,  luminosity: 0.3,    planetRange: [3, 7] },
+    M: { color: [1.0, 0.80, 0.44],  radius: 4.0, temp: 3050,  luminosity: 0.04,   planetRange: [3, 6] },
   };
 
   // Spectral class sequence (hot → cool) for deriving companion types
@@ -97,8 +100,9 @@ export class StarSystemGenerator {
         temp: secondaryProps.temp,
       };
 
-      // Binary separation: close enough to be visually dramatic
-      binarySeparation = rng.range(3, 8);
+      // Binary separation: close enough to be visually dramatic,
+      // but far enough that the two stars don't overlap
+      binarySeparation = rng.range(3, 8) + star.radius + star2.radius;
       // Orbit speed: closer = faster (Kepler's 3rd law)
       binaryOrbitSpeed = 0.05 / Math.pow(binarySeparation / 5, 1.5);
       binaryOrbitAngle = rng.range(0, Math.PI * 2);
@@ -112,7 +116,9 @@ export class StarSystemGenerator {
     const hzOuterAU = 1.37 * Math.sqrt(luminosity);
 
     // ── Orbital spacing ──
-    const baseDistance = rng.range(8, 15);
+    // Base distance scales with star radius so planets don't spawn
+    // inside larger stars. Star radius offset ensures comfortable gap.
+    const baseDistance = rng.range(8, 15) + star.radius * 2;
     // Binary systems: innermost planet must be outside both star orbits
     const minInnerOrbit = isBinary ? binarySeparation * 2.5 : 0;
     const adjustedBase = Math.max(baseDistance, minInnerOrbit);

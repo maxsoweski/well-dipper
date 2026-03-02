@@ -71,7 +71,7 @@ export class Star {
     });
 
     const sprite = new THREE.Sprite(material);
-    const glowScale = this.data.radius * 6;
+    const glowScale = this.data.radius * 3.5;
     sprite.scale.set(glowScale, glowScale, 1);
 
     return sprite;
