@@ -437,8 +437,9 @@ function populateQueueRefs() {
       const moon = entry.moons[stop.moonIndex];
       stop.bodyRef = moon.mesh;
       stop.bodyRadius = moon.data.radius;
-      // 3× radius → body fills ~50% of 70° FOV
-      stop.orbitDistance = moon.data.radius * 3;
+      // 3× radius, but enforce minimum so tiny moons aren't clipped
+      // by the camera's near plane (0.01) or invisible at retro resolution
+      stop.orbitDistance = Math.max(moon.data.radius * 3, 0.15);
     }
   }
 }

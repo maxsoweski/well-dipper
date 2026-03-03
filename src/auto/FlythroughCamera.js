@@ -54,6 +54,8 @@ export class FlythroughCamera {
     this.orbitDistPhase = 0;       // phase for distance breathing
     this.orbitElapsed = 0;
     this.orbitDuration = 15;       // seconds to orbit before tour advances
+    this._entryPitch = 0.15;       // camera pitch at orbit entry (for smooth blend)
+    this._entryDist = 10;          // camera distance at orbit entry (for smooth blend)
 
     // ── TRAVEL state ──
     this.travelElapsed = 0;
@@ -107,13 +109,28 @@ export class FlythroughCamera {
     this.orbitElapsed = 0;
     this.orbitDuration = duration || 15;
 
-    // Compute starting yaw from current camera position relative to body
+    // Compute ALL starting orbit parameters from camera's actual position.
+    // This prevents any snap at the slingshot → orbit transition — the orbit
+    // starts exactly where the camera is and smoothly evolves from there.
     const bodyPos = bodyRef.position;
     const dx = this.camera.position.x - bodyPos.x;
+    const dy = this.camera.position.y - bodyPos.y;
     const dz = this.camera.position.z - bodyPos.z;
+    const actualDist = Math.sqrt(dx * dx + dy * dy + dz * dz) || orbitDistance;
+
     this.orbitYaw = Math.atan2(dx, dz);
+    this._entryPitch = Math.asin(Math.max(-1, Math.min(1, dy / actualDist)));
+    this._entryDist = actualDist;
+    this.orbitPitch = this._entryPitch;
 
     this._randomizeOrbit();
+
+    // Phase-align pitch oscillation so it starts from the actual camera pitch
+    // (oscillation grows smoothly from entry value, no random jump)
+    const midPitch = (0.087 + 0.436) / 2;
+    const ampPitch = (0.436 - 0.087) / 2;
+    const pitchRatio = Math.max(-1, Math.min(1, (this._entryPitch - midPitch) / ampPitch));
+    this.orbitPitchPhase = Math.asin(pitchRatio);
 
     // After slingshot arrival, use capture direction for seamless orbit start
     if (this._arrivalOrbitDir !== null) {
@@ -264,57 +281,51 @@ export class FlythroughCamera {
 
     const bodyPos = this.bodyRef.position;
 
-    // ── Departure steering (last 5 seconds) ──
-    // Position camera roughly perpendicular to the A→B line so that
-    // the travel path to the next body is clean (doesn't clip through A).
-    const steerDuration = 5;
-    const steerStart = this.orbitDuration - steerDuration;
-    let steerBlend = 0;
-    let nextPos = null;
+    // ── Entry blend (first 2s): smooth transition from slingshot arrival ──
+    // Eases from the camera's actual arrival state (pitch, distance) into
+    // the target orbit parameters. Prevents any snap at the transition.
+    const entryDur = 2;
+    const entryFactor = this.orbitElapsed < entryDur
+      ? this._ease(this.orbitElapsed / entryDur)
+      : 1;
 
-    if (this.nextBodyRef && this.orbitElapsed > steerStart) {
-      nextPos = this.nextBodyRef.position;
-      const toNext = Math.atan2(
-        nextPos.x - bodyPos.x,
-        nextPos.z - bodyPos.z,
-      );
-      // Camera perpendicular to A→B line — pick the closer side
-      const option1 = toNext + Math.PI / 2;
-      const option2 = toNext - Math.PI / 2;
-      let diff1 = option1 - this.orbitYaw;
-      diff1 -= Math.PI * 2 * Math.round(diff1 / (Math.PI * 2));
-      let diff2 = option2 - this.orbitYaw;
-      diff2 -= Math.PI * 2 * Math.round(diff2 / (Math.PI * 2));
-      const targetYaw = Math.abs(diff1) < Math.abs(diff2) ? option1 : option2;
+    // Advance yaw — continuous, never reversed or interrupted.
+    // No departure steering that fights the orbit direction. The slingshot
+    // departure tangent is computed from whatever angle the camera is at
+    // when the orbit ends, so the orbit just orbits naturally.
+    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime;
 
-      const steerT = (this.orbitElapsed - steerStart) / steerDuration;
-      steerBlend = this._ease(steerT);
-
-      let yawDiff = targetYaw - this.orbitYaw;
-      yawDiff -= Math.PI * 2 * Math.round(yawDiff / (Math.PI * 2));
-      this.orbitYaw += yawDiff * steerBlend * deltaTime * 4;
-    }
-
-    // Advance yaw (reduce orbit speed during steering for smoother look)
-    const orbitSpeedFactor = 1 - steerBlend * 0.8;
-    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime * orbitSpeedFactor;
-
-    // Oscillate pitch between 5° and 25° (period ~12s)
+    // Pitch: blend from entry pitch to oscillating orbit pitch
     const minPitch = 0.087;   // 5°
     const maxPitch = 0.436;   // 25°
     const midPitch = (minPitch + maxPitch) / 2;
     const ampPitch = (maxPitch - minPitch) / 2;
-    this.orbitPitch = midPitch + ampPitch * Math.sin(this.orbitElapsed * 0.52 + this.orbitPitchPhase);
+    const oscPitch = midPitch + ampPitch * Math.sin(this.orbitElapsed * 0.52 + this.orbitPitchPhase);
+    this.orbitPitch = this._entryPitch + (oscPitch - this._entryPitch) * entryFactor;
 
-    // Subtle distance breathing: ±5% over 8s cycle
-    const breathe = 1 + 0.05 * Math.sin(this.orbitElapsed * 0.785 + this.orbitDistPhase);
-    let dist = this.orbitDistBase * breathe;
+    // Distance: blend from entry distance to breathing orbit distance
+    const breathe = 1 + 0.05 * entryFactor * Math.sin(this.orbitElapsed * 0.785 + this.orbitDistPhase);
+    let dist = this._entryDist + (this.orbitDistBase * breathe - this._entryDist) * entryFactor;
 
-    // ── Slingshot widening (last 2s of steering): orbit radius increases
-    // as if the camera is breaking free of the body's gravity ──
-    if (steerBlend > 0.6) {
-      const unwindT = (steerBlend - 0.6) / 0.4; // 0→1 over last 40% of steering
-      dist *= (1 + unwindT * 0.25); // up to 25% wider orbit
+    // ── Departure phase (last 5s): widening + lookAt shift ──
+    // The orbit continues uninterrupted — no yaw steering, no reversal.
+    // Only visual cues: orbit widens (breaking free) and lookAt shifts
+    // toward the next destination.
+    const departDur = 5;
+    const departStart = this.orbitDuration - departDur;
+    let departBlend = 0;
+    let nextPos = null;
+
+    if (this.nextBodyRef && this.orbitElapsed > departStart) {
+      nextPos = this.nextBodyRef.position;
+      const departT = (this.orbitElapsed - departStart) / departDur;
+      departBlend = this._ease(departT);
+    }
+
+    // Slingshot widening: orbit radius increases (breaking free of gravity)
+    if (departBlend > 0.5) {
+      const unwindT = (departBlend - 0.5) / 0.5; // 0→1 over last half
+      dist *= (1 + unwindT * 0.35); // up to 35% wider orbit
     }
 
     // Compute camera position (spherical orbit around body)
@@ -325,18 +336,16 @@ export class FlythroughCamera {
       bodyPos.z + dist * Math.cos(this.orbitYaw) * cosPitch,
     );
 
-    // ── LookAt: focus on the body (it fills the screen) ──
+    // ── LookAt ──
     // Last 3 seconds: gently shift lookAt toward next body so the current
-    // body slides to one side, hinting at the upcoming travel direction.
+    // body slides to one side, hinting at the upcoming slingshot direction.
     const shiftDuration = 3;
     const shiftStart = this.orbitDuration - shiftDuration;
 
     if (nextPos && this.orbitElapsed > shiftStart) {
       const shiftT = (this.orbitElapsed - shiftStart) / shiftDuration;
       const shiftBlend = this._ease(shiftT);
-      // Direction from body to next body
       _v3.copy(nextPos).sub(bodyPos).normalize();
-      // Shift lookAt: body slides off-center (angular shift ~15° at peak)
       _v2.copy(bodyPos).addScaledVector(_v3, this.orbitDistBase * shiftBlend * 0.3);
       this._applyFreeLookAndLookAt(_v2);
     } else {
