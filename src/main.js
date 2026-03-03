@@ -876,10 +876,11 @@ function animate() {
         // Arrived at next body — begin orbit
         const stop = autoNav.getCurrentStop();
         if (stop && stop.bodyRef) {
-          flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger);
-          // Set next body ref for departure steering
+          // Set next body ref BEFORE orbit so the orbit direction
+          // can be optimized for departure toward the next body
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+          flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger);
           // Update minimap focus with blink
           updateFocusFromStop(stop);
           if (systemMap) systemMap.triggerBlink();

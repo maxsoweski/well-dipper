@@ -152,10 +152,38 @@ export class FlythroughCamera {
     const pitchRatio = Math.max(-1, Math.min(1, (this._entryPitch - midPitch) / ampPitch));
     this.orbitPitchPhase = Math.asin(pitchRatio);
 
-    // After slingshot arrival, use capture direction for seamless orbit start
+    // After slingshot arrival, use capture direction as initial guess
     if (this._arrivalOrbitDir !== null) {
       this.orbitDirection = this._arrivalOrbitDir;
       this._arrivalOrbitDir = null;
+    }
+
+    // ── Choose orbit direction to prep for departure ──
+    // We already know the next body in the tour, so pick the direction
+    // whose departure tangent will point closest to it. This makes the
+    // slingshot launch feel natural — the orbit is already heading the
+    // right way when it's time to leave.
+    //
+    // The departure tangent heading for orbit direction d is:
+    //   yaw + yawSpeed * d * duration + d * π/2
+    // (tangent is 90° ahead of the radius in the orbit direction)
+    if (this.nextBodyRef) {
+      const nextPos = this.nextBodyRef.position;
+      const toNextAngle = Math.atan2(nextPos.x - bodyPos.x, nextPos.z - bodyPos.z);
+
+      const yawTravel = this.orbitYawSpeed * this.orbitDuration;
+      const tangentCW  = this.orbitYaw + yawTravel + Math.PI / 2;
+      const tangentCCW = this.orbitYaw - yawTravel - Math.PI / 2;
+
+      // Unsigned angular difference to target (normalized to [0, π])
+      const diffCW  = Math.abs(Math.atan2(
+        Math.sin(toNextAngle - tangentCW), Math.cos(toNextAngle - tangentCW),
+      ));
+      const diffCCW = Math.abs(Math.atan2(
+        Math.sin(toNextAngle - tangentCCW), Math.cos(toNextAngle - tangentCCW),
+      ));
+
+      this.orbitDirection = diffCW <= diffCCW ? 1 : -1;
     }
   }
 
