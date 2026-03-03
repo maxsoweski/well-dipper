@@ -68,6 +68,8 @@ export class AsteroidBelt {
       },
 
       vertexShader: /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
         attribute vec3 instanceColor;
 
         varying vec3 vNormal;
@@ -85,10 +87,12 @@ export class AsteroidBelt {
           vec4 worldPos = fullModelMatrix * vec4(position, 1.0);
           vWorldPos = worldPos.xyz;
           gl_Position = projectionMatrix * viewMatrix * worldPos;
+          #include <logdepthbuf_vertex>
         }
       `,
 
       fragmentShader: /* glsl */ `
+        #include <logdepthbuf_pars_fragment>
         uniform vec3 starPos1;
         uniform vec3 starPos2;
         uniform vec3 starColor1;
@@ -122,6 +126,7 @@ export class AsteroidBelt {
         }
 
         void main() {
+          #include <logdepthbuf_fragment>
           // Per-fragment lighting: compute direction to each star from this asteroid's position
           vec3 toStar1 = normalize(starPos1 - vWorldPos);
           vec3 toStar2 = normalize(starPos2 - vWorldPos);

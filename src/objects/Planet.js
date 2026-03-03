@@ -77,6 +77,8 @@ export class Planet {
       },
 
       vertexShader: /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
         varying vec3 vNormal;
         varying vec3 vPosition;
         varying vec3 vWorldPos;
@@ -89,10 +91,12 @@ export class Planet {
           vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;  // world space — for lighting
           vViewDir = cameraPosition - vWorldPos;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
         }
       `,
 
       fragmentShader: /* glsl */ `
+        #include <logdepthbuf_pars_fragment>
         uniform vec3 baseColor;
         uniform vec3 accentColor;
         uniform float noiseScale;
@@ -319,6 +323,7 @@ export class Planet {
         }
 
         void main() {
+          #include <logdepthbuf_fragment>
           float pattern = getSurfacePattern(vPosition);
 
           // ── Surface color (type-dependent) ──
@@ -524,6 +529,8 @@ export class Planet {
       },
 
       vertexShader: /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
         varying vec3 vPos;
         varying vec3 vRelWorldPos;
 
@@ -535,10 +542,12 @@ export class Planet {
           vec3 planetCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
           vRelWorldPos = worldPos.xyz - planetCenter;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
         }
       `,
 
       fragmentShader: /* glsl */ `
+        #include <logdepthbuf_pars_fragment>
         uniform vec3 ringColor1;
         uniform vec3 ringColor2;
         uniform float ringOpacity;
@@ -577,6 +586,7 @@ export class Planet {
         }
 
         void main() {
+          #include <logdepthbuf_fragment>
           float dist = length(vPos.xz);
           float t = (dist - innerRadius) / (outerRadius - innerRadius);
 

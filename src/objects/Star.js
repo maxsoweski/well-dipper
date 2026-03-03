@@ -11,8 +11,10 @@ import * as THREE from 'three';
  * are self-luminous, they don't need shading or normals.
  */
 export class Star {
-  constructor(starData) {
+  constructor(starData, renderRadius = null) {
     this.data = starData;
+    // renderRadius overrides data.radius for geometry sizing (scene-unit rendering)
+    this._renderRadius = renderRadius !== null ? renderRadius : starData.radius;
     this.mesh = new THREE.Group();
 
     // Emissive sphere — frustumCulled off to prevent edge-case culling
@@ -21,12 +23,13 @@ export class Star {
     this.mesh.add(this.surface);
 
     // Glow corona (billboard sprite)
+    this._baseGlowScale = this._renderRadius * 3.5;
     this.glow = this._createGlow();
     this.mesh.add(this.glow);
   }
 
   _createSurface() {
-    const geometry = new THREE.IcosahedronGeometry(this.data.radius, 4);
+    const geometry = new THREE.IcosahedronGeometry(this._renderRadius, 4);
     const [r, g, b] = this.data.color;
 
     // MeshBasicMaterial: flat color, no normals, no shading — just bright.
@@ -71,10 +74,28 @@ export class Star {
     });
 
     const sprite = new THREE.Sprite(material);
-    const glowScale = this.data.radius * 3.5;
-    sprite.scale.set(glowScale, glowScale, 1);
+    sprite.scale.set(this._baseGlowScale, this._baseGlowScale, 1);
 
     return sprite;
+  }
+
+  /**
+   * Update glow scale based on camera distance.
+   * At close range, glow is the normal corona (radius × 3.5).
+   * At far range, glow scales up to maintain a minimum angular size
+   * so the star is always visible as a bright point.
+   */
+  updateGlow(camera) {
+    const dist = camera.position.distanceTo(this.mesh.position);
+    // Maintain minimum angular size of ~0.015 radians (~0.85°)
+    // so the star is always visible as at least a few retro pixels
+    const minAngularSize = 0.015;
+    const distScale = dist * minAngularSize;
+    const scale = Math.max(this._baseGlowScale, distScale);
+    // Cap at 30% of distance to prevent overwhelming the view up close
+    const maxScale = dist * 0.3;
+    const finalScale = Math.min(scale, maxScale);
+    this.glow.scale.set(finalScale, finalScale, 1);
   }
 
   addTo(scene) {

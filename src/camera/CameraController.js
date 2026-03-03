@@ -30,8 +30,8 @@ export class CameraController {
 
     // ── Orbit distance ──
     this.distance = 8;
-    this.minDistance = 0.5;
-    this.maxDistance = 2000;
+    this.minDistance = 0.01;
+    this.maxDistance = 50000;
 
     // ── Click-drag state ──
     this.isDragging = false;
@@ -301,13 +301,23 @@ export class CameraController {
   }
 
   /**
-   * Smoothly transition the orbit target to a new position.
-   * Also sets a comfortable viewing distance.
+   * Focus on a new position at a comfortable viewing distance.
+   *
+   * "Teleport & zoom-in": snaps the target position instantly (no empty-space
+   * flight between planets thousands of units apart), but starts the camera
+   * 10x farther out. The log-space distance smoothing then zooms in over ~1s,
+   * giving a cinematic "arriving at a planet" feel.
    */
   focusOn(position, viewDistance = 8) {
     this._targetGoal.copy(position);
+    this.target.copy(position);
     this.distance = viewDistance;
-    this._transitioning = true;
+    // Start 10x farther out — planet is visible as a small dot, then zoom in.
+    // Log-space smoothing makes the zoom feel natural (~1s to settle).
+    this.smoothedDistance = viewDistance * 10;
+    // Kill residual scroll momentum so it doesn't fight the zoom-in
+    this.zoomSpeed = 0;
+    this._transitioning = false;
   }
 
   /**
@@ -315,20 +325,28 @@ export class CameraController {
    * Unlike focusOn(), this doesn't touch zoom distance.
    */
   trackTarget(position) {
+    // Snap both target and goal directly to the body's current position.
+    // At realistic scale, planets orbit at enormous linear velocities
+    // (angular_speed × orbitRadiusScene). A slow lerp (4% per frame) can
+    // never keep up — it creates a permanent offset between where the
+    // camera orbits and where the planet actually is. Direct copy keeps
+    // the camera locked on.
     this._targetGoal.copy(position);
-    // Keep transitioning so the camera lerps toward the moving target
-    if (!this._transitioning) {
-      this._transitioning = true;
-    }
+    this.target.copy(position);
+    this._transitioning = false;
   }
 
   /**
    * Zoom out to see the whole system (target the center).
+   * Snaps position and distance — orbit lines give immediate visual context.
    */
   viewSystem(systemRadius) {
     this._targetGoal.set(0, 0, 0);
+    this.target.set(0, 0, 0);
     this.distance = systemRadius * 1.5;
-    this._transitioning = true;
+    this.smoothedDistance = systemRadius * 1.5;
+    this.zoomSpeed = 0;
+    this._transitioning = false;
   }
 
   update(deltaTime) {
@@ -366,7 +384,13 @@ export class CameraController {
     this.smoothedYaw += yawDiff * factor;
 
     this.smoothedPitch += (this.pitch - this.smoothedPitch) * factor;
-    this.smoothedDistance += (this.distance - this.smoothedDistance) * factor;
+
+    // Distance uses log-space interpolation — perceptually linear zoom
+    // across huge scale changes (e.g., overview at 45000 → planet at 0.26).
+    // Linear lerp would spend 2+ seconds too far away to see anything.
+    const logSmoothed = Math.log(this.smoothedDistance);
+    const logTarget = Math.log(this.distance);
+    this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
 
     this._applyOrbit();
   }

@@ -1,5 +1,12 @@
+import { earthRadiiToScene, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleConstants.js';
+
 /**
  * MoonGenerator — produces data describing moons orbiting a planet.
+ *
+ * Moon orbit distances use realistic multiples of parent radius:
+ * - Close moons: 6-12x parent radius (Io at 5.9 Jupiter radii)
+ * - Mid moons: 12-30x parent radius (Europa at 9.4, Ganymede at 15)
+ * - Far moons: 30-60x parent radius (Earth's Moon at 60 Earth radii)
  *
  * Moon types:
  * - captured:     Tiny, dark, irregular (Phobos/Deimos). Very low albedo.
@@ -51,13 +58,42 @@ export class MoonGenerator {
     // Size: depends on moon type and parent planet
     // Gas giant moons can be much larger (Ganymede is bigger than Mercury)
     // Rocky planet moons are small (Earth's Moon is unusually large)
-    const radius = this._pickRadius(rng, type, planetData);
+    const moonRadiusData = this._pickRadius(rng, type, planetData);
 
     const palette = rng.pick(this.PALETTES[type]);
 
-    // Orbital distance: inner moons are closer, outer moons further
-    const baseOrbit = planetData.radius * (2.0 + moonIndex * 1.8);
-    const orbitRadius = baseOrbit + rng.range(-0.3, 0.5) * planetData.radius;
+    // ── Realistic orbit distance (in multiples of parent radius) ──
+    // Io: 5.9 Jupiter radii, Europa: 9.4, Ganymede: 15, Callisto: 26
+    // Earth's Moon: 60 Earth radii
+    // Captured moons orbit much further out (irregular orbits)
+    const orbitMultipliers = {
+      close: [6, 12],   // Io-like
+      mid:   [12, 30],  // Europa/Ganymede-like
+      far:   [30, 60],  // Moon/Callisto-like
+    };
+    let orbitZone;
+    if (type === 'captured') {
+      orbitZone = 'far';  // Captured moons are always distant
+    } else if (moonIndex === 0) {
+      orbitZone = 'close';
+    } else if (moonIndex <= 2) {
+      orbitZone = 'mid';
+    } else {
+      orbitZone = 'far';
+    }
+    const [minMult, maxMult] = orbitMultipliers[orbitZone];
+    // Spread each moon further out based on index within its zone
+    const zoneSpread = moonIndex * rng.range(3, 8);
+    const orbitMultiple = rng.range(minMult, maxMult) + zoneSpread;
+
+    // Physical orbit in Earth radii, then convert to scene units
+    const orbitRadiusEarth = planetData.radiusEarth * orbitMultiple;
+    const orbitRadiusScene = earthRadiiToScene(orbitRadiusEarth);
+
+    // Map orbit: use old exaggerated formula for backward compat
+    // (2-6x parent map radius, same spacing pattern as before)
+    const mapBaseOrbit = planetData.radius * (2.0 + moonIndex * 1.8);
+    const orbitRadius = mapBaseOrbit + rng.range(-0.3, 0.5) * planetData.radius;
 
     // Orbital speed: inner moons faster
     const orbitSpeed = rng.range(0.4, 0.83) / (1.0 + moonIndex * 0.6);
@@ -74,10 +110,16 @@ export class MoonGenerator {
 
     return {
       type,
-      radius,
+      // Physical units
+      radiusEarth: moonRadiusData.radiusEarth,
+      radiusScene: moonRadiusData.radiusScene,
+      orbitRadiusEarth,
+      orbitRadiusScene,
+      // Map/backward-compat units
+      radius: moonRadiusData.radius,
+      orbitRadius,
       baseColor: palette.base,
       accentColor: palette.accent,
-      orbitRadius,
       orbitSpeed: retrograde ? -orbitSpeed : orbitSpeed,
       inclination,
       startAngle,
@@ -85,39 +127,37 @@ export class MoonGenerator {
     };
   }
 
+  /**
+   * Returns { radiusEarth, radiusScene, radius (map) } for the moon.
+   * Fraction of parent, applied to both physical and map radii.
+   */
   static _pickRadius(rng, type, planetData) {
     const pType = planetData.type;
     const isGasGiant = pType === 'gas-giant' || pType === 'sub-neptune' || pType === 'hot-jupiter';
 
+    let fraction;
     if (type === 'terrestrial') {
-      // Large habitable moons — 8-15% of gas giant parent
-      return rng.range(0.08, 0.15) * planetData.radius;
-    }
-
-    if (type === 'captured') {
-      // Always tiny
-      return rng.range(0.02, 0.04) * planetData.radius;
-    }
-
-    if (isGasGiant) {
-      // Gas giant moons have much more size variety
-      // Ganymede/Titan: ~3.7% of Jupiter's radius, but we exaggerate for visibility
+      fraction = rng.range(0.08, 0.15);
+    } else if (type === 'captured') {
+      fraction = rng.range(0.02, 0.04);
+    } else if (isGasGiant) {
       if (rng.chance(0.2)) {
-        // Large moon (Ganymede/Titan scale) — 10-20% of parent
-        return rng.range(0.10, 0.20) * planetData.radius;
+        fraction = rng.range(0.10, 0.20);
+      } else {
+        fraction = rng.range(0.04, 0.10);
       }
-      // Medium moon — 4-10% of parent
-      return rng.range(0.04, 0.10) * planetData.radius;
+    } else if (rng.chance(0.12)) {
+      fraction = rng.range(0.15, 0.25);
+    } else {
+      fraction = rng.range(0.03, 0.08);
     }
 
-    // Rocky/terrestrial parent planets — moons are relatively smaller
-    // But occasionally large (Earth's Moon is ~27% of Earth's radius — unusually big)
-    if (rng.chance(0.12)) {
-      // Unusually large moon — 15-25% of parent
-      return rng.range(0.15, 0.25) * planetData.radius;
-    }
-    // Normal small moon — 3-8% of parent
-    return rng.range(0.03, 0.08) * planetData.radius;
+    const radiusEarth = fraction * planetData.radiusEarth;
+    return {
+      radiusEarth,
+      radiusScene: earthRadiiToScene(radiusEarth),
+      radius: fraction * planetData.radius,  // map units (backward compat)
+    };
   }
 
   /**

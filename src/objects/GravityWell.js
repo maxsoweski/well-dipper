@@ -131,7 +131,7 @@ export class GravityWell {
             displacement -= well * planetWellDepth;
           }
 
-          displacement = max(displacement, -100.0);
+          displacement = max(displacement, -circleRadius * 0.4);
 
           pos.y += displacement;
           vDepth = -displacement;
@@ -186,7 +186,8 @@ export class GravityWell {
           float dotMask = 1.0 - smoothstep(max(innerEdge, 0.0), outerEdge, dist);
 
           // Depth glow: deeper wells = brighter cyan-white
-          float depthGlow = smoothstep(0.0, 50.0, vDepth);
+          // Scale glow range with grid size (max depth = circleRadius * 0.4)
+          float depthGlow = smoothstep(0.0, circleRadius * 0.2, vDepth);
           vec3 color = mix(gridColor, vec3(0.3, 0.8, 1.0), depthGlow * 0.7);
 
           // Circular edge fadeout

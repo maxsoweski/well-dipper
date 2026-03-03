@@ -7,10 +7,12 @@ import * as THREE from 'three';
  * Scene objects (planets, stars, moons, etc.) render at LOW resolution
  * (pixelScale 3 = each render pixel covers 3×3 screen pixels).
  *
+ * An optional HUD layer (system map) renders at its own small resolution
+ * and gets composited into the bottom-right corner of the screen.
+ *
  * A composite pass blends them: black scene pixels (empty space) reveal
  * the high-res starfield behind them, while colored scene pixels take
- * priority. This creates natural depth separation — distant pinpoint
- * stars vs chunky retro foreground objects.
+ * priority. The HUD overlays on top with a subtle dark background.
  *
  * Dithering is NOT done here. Each object handles its own dithering
  * in its fragment shader for a more authentic retro look.
@@ -25,10 +27,17 @@ export class RetroRenderer {
     // Separate scene for the starfield (rendered at full resolution)
     this.starfieldScene = new THREE.Scene();
 
+    // HUD (system map) — set via setHud()
+    this._hudScene = null;
+    this._hudCamera = null;
+    this._hudSize = 192;   // HUD render target resolution (square)
+    this._hudFrac = 0.20;  // HUD width as fraction of screen width
+
     // ── WebGL Renderer ──
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: false,
+      logarithmicDepthBuffer: true,
     });
     this.renderer.setPixelRatio(1);
     this.renderer.autoClear = false; // We manage clearing per-pass
@@ -36,17 +45,27 @@ export class RetroRenderer {
     // Render targets (created in resize())
     this.bgTarget = null;    // Full-res starfield
     this.sceneTarget = null; // Low-res scene objects
+    this.hudTarget = null;   // Small HUD overlay
 
-    // ── Composite pass (blends starfield + scene) ──
+    // ── Composite pass (blends starfield + scene + HUD) ──
     this._setupComposite();
 
     this.resize();
   }
 
   /**
+   * Set the HUD scene and camera (e.g. SystemMap).
+   * @param {THREE.Scene} scene
+   * @param {THREE.Camera} camera
+   */
+  setHud(scene, camera) {
+    this._hudScene = scene;
+    this._hudCamera = camera;
+  }
+
+  /**
    * Build the fullscreen composite quad + shader.
-   * Samples both render targets and uses brightness to decide
-   * which layer to show at each pixel.
+   * Samples all render targets and composites them.
    */
   _setupComposite() {
     const geometry = new THREE.PlaneGeometry(2, 2);
@@ -55,6 +74,10 @@ export class RetroRenderer {
       uniforms: {
         bgTexture: { value: null },
         sceneTexture: { value: null },
+        hudTexture: { value: null },
+        hudRect: { value: new THREE.Vector4(0.78, 0.02, 0.20, 0.20) }, // x, y, w, h in UV
+        hudEnabled: { value: 0 },
+        resolution: { value: new THREE.Vector2(1, 1) },
       },
 
       vertexShader: /* glsl */ `
@@ -68,6 +91,10 @@ export class RetroRenderer {
       fragmentShader: /* glsl */ `
         uniform sampler2D bgTexture;
         uniform sampler2D sceneTexture;
+        uniform sampler2D hudTexture;
+        uniform vec4 hudRect;     // (x, y, w, h) in UV space
+        uniform float hudEnabled;
+        uniform vec2 resolution;
         varying vec2 vUv;
 
         void main() {
@@ -76,9 +103,31 @@ export class RetroRenderer {
 
           // Use alpha to decide what's "scene" vs "empty space".
           // Objects render with alpha=1 (even dark shadows), empty space has alpha=0.
-          // This prevents the starfield from bleeding through dark planet shadows
-          // (the old brightness-threshold approach treated dark pixels as empty).
-          gl_FragColor = vec4(mix(bg.rgb, scene.rgb, scene.a), 1.0);
+          vec3 result = mix(bg.rgb, scene.rgb, scene.a);
+
+          // ── HUD overlay ──
+          if (hudEnabled > 0.5) {
+            // Compute square HUD region in UV space, accounting for aspect ratio
+            float aspect = resolution.x / resolution.y;
+            float hudW = hudRect.z;                  // width in UV-x
+            float hudH = hudRect.w * aspect;         // height in UV-y (corrected to be square)
+            float hudX = hudRect.x;                  // left edge
+            float hudY = hudRect.y;                  // bottom edge
+
+            if (vUv.x > hudX && vUv.x < hudX + hudW &&
+                vUv.y > hudY && vUv.y < hudY + hudH) {
+              // Map screen UV to HUD texture UV
+              vec2 hudUV = (vUv - vec2(hudX, hudY)) / vec2(hudW, hudH);
+              vec4 hud = texture2D(hudTexture, hudUV);
+
+              // Semi-transparent dark background for readability
+              result = mix(result, vec3(0.0), 0.5);
+              // Blend HUD content on top
+              result = mix(result, hud.rgb, hud.a);
+            }
+          }
+
+          gl_FragColor = vec4(result, 1.0);
         }
       `,
 
@@ -105,6 +154,7 @@ export class RetroRenderer {
     // Dispose old render targets to prevent GPU memory leak
     if (this.bgTarget) this.bgTarget.dispose();
     if (this.sceneTarget) this.sceneTarget.dispose();
+    if (this.hudTarget) this.hudTarget.dispose();
 
     // Starfield target: full resolution for tiny crisp star points
     this.bgTarget = new THREE.WebGLRenderTarget(width, height, {
@@ -120,9 +170,18 @@ export class RetroRenderer {
       magFilter: THREE.NearestFilter,
     });
 
+    // HUD target: small square, NearestFilter for retro pixel look
+    this.hudTarget = new THREE.WebGLRenderTarget(this._hudSize, this._hudSize, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+    });
+
     // Update composite texture references
-    this._compositeMesh.material.uniforms.bgTexture.value = this.bgTarget.texture;
-    this._compositeMesh.material.uniforms.sceneTexture.value = this.sceneTarget.texture;
+    const u = this._compositeMesh.material.uniforms;
+    u.bgTexture.value = this.bgTarget.texture;
+    u.sceneTexture.value = this.sceneTarget.texture;
+    u.hudTexture.value = this.hudTarget.texture;
+    u.resolution.value.set(width, height);
 
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -149,7 +208,19 @@ export class RetroRenderer {
     r.clear();
     r.render(this.scene, this.camera);
 
-    // Pass 3: Composite both layers to screen
+    // Pass 3: HUD (system map) at small resolution
+    const u = this._compositeMesh.material.uniforms;
+    if (this._hudScene && this._hudCamera) {
+      r.setRenderTarget(this.hudTarget);
+      r.setClearColor(0x000000, 0);  // transparent black
+      r.clear();
+      r.render(this._hudScene, this._hudCamera);
+      u.hudEnabled.value = 1;
+    } else {
+      u.hudEnabled.value = 0;
+    }
+
+    // Pass 4: Composite all layers to screen
     r.setRenderTarget(null);
     r.clear();
     r.render(this._compositeScene, this._compositeCamera);
@@ -158,6 +229,7 @@ export class RetroRenderer {
   dispose() {
     if (this.bgTarget) this.bgTarget.dispose();
     if (this.sceneTarget) this.sceneTarget.dispose();
+    if (this.hudTarget) this.hudTarget.dispose();
     this._compositeMesh.geometry.dispose();
     this._compositeMesh.material.dispose();
     this.renderer.dispose();

@@ -1,8 +1,13 @@
+import { earthRadiiToScene } from '../core/ScaleConstants.js';
+
 /**
  * PlanetGenerator — produces data describing a single planet.
  *
  * This is pure data, no Three.js objects. The Planet.js renderer
  * takes this data and builds the actual 3D mesh.
+ *
+ * Radius ranges are in Earth radii (physical units).
+ * Output includes radiusEarth, radiusScene, and radius (map/backward-compat).
  *
  * Planet types:
  * - rocky:        Barren, cratered — Mars, Mercury, Moon
@@ -110,35 +115,59 @@ export class PlanetGenerator {
     },
   };
 
+  // Exaggerated radius ranges for the map (old visual values).
+  // Gas giants 1.8-3.5, rocky 0.2-0.5, etc. — these control what the
+  // planet looks like on the system map HUD and in the current renderer.
+  static MAP_RADIUS_RANGES = {
+    'rocky':        [0.2, 0.5],
+    'terrestrial':  [0.4, 0.8],
+    'ocean':        [0.4, 0.9],
+    'eyeball':      [0.4, 0.7],
+    'venus':        [0.4, 0.7],
+    'carbon':       [0.2, 0.5],
+    'lava':         [0.2, 0.6],
+    'ice':          [0.3, 0.7],
+    'sub-neptune':  [0.7, 1.3],
+    'gas-giant':    [1.8, 3.5],
+    'hot-jupiter':  [1.5, 3.0],
+  };
+
   /**
    * Generate planet data from a seeded random instance.
    * @param {SeededRandom} rng - seeded random generator
-   * @param {number} orbitRadius - orbital distance from star (scene units)
+   * @param {number} orbitRadiusAU - orbital distance from star in AU
    * @param {number[]|null} sunDirection - [x,y,z] direction toward the star, or null for random
-   * @param {object|null} zones - { frostLine, hzInner, hzOuter, starType } for realistic distribution
+   * @param {object|null} zones - { frostLine, hzInner, hzOuter, starType } in AU for realistic distribution
    * @returns {object} planet data
    */
-  static generate(rng, orbitRadius, sunDirection = null, zones = null) {
-    const type = this._pickType(rng, orbitRadius, zones);
+  static generate(rng, orbitRadiusAU, sunDirection = null, zones = null) {
+    const type = this._pickType(rng, orbitRadiusAU, zones);
 
-    // Size ranges by type — based on real exoplanet science
-    // Scale: 1.0 ≈ Earth-like. Gas giants are 2-4x, rocky worlds 0.2-0.6x
-    // Real Jupiter is 11x Earth radius but we compress for visual balance
-    const radiusRanges = {
-      'rocky':        [0.2, 0.5],   // Mercury to Mars sized
-      'terrestrial':  [0.4, 0.8],   // Venus to super-Earth
-      'ocean':        [0.4, 0.9],   // Earth-like to large water worlds
-      'eyeball':      [0.4, 0.7],   // Tidally locked terrestrial
-      'venus':        [0.4, 0.7],   // Venus-like
-      'carbon':       [0.2, 0.5],   // Small, dense worlds
-      'lava':         [0.2, 0.6],   // Small hot worlds
-      'ice':          [0.3, 0.7],   // Icy bodies
-      'sub-neptune':  [0.7, 1.3],   // Mini-Neptunes
-      'gas-giant':    [1.8, 3.5],   // Jupiter/Saturn class
-      'hot-jupiter':  [1.5, 3.0],   // Inflated close-in giants
+    // Size ranges in Earth radii — based on real exoplanet science.
+    // These are realistic physical sizes used for scene-scale rendering.
+    const radiusRangesEarth = {
+      'rocky':        [0.3, 0.8],    // Mercury (0.38) to Mars (0.53)
+      'terrestrial':  [0.8, 1.5],    // Venus (0.95) to super-Earth
+      'ocean':        [0.8, 1.8],    // Earth-like to large water worlds
+      'eyeball':      [0.8, 1.3],    // Tidally locked terrestrial
+      'venus':        [0.8, 1.2],    // Venus-like (0.95 real)
+      'carbon':       [0.4, 0.9],    // Small, dense worlds
+      'lava':         [0.3, 1.0],    // Small hot worlds
+      'ice':          [0.4, 1.2],    // Icy bodies
+      'sub-neptune':  [2.5, 4.0],    // Mini-Neptunes (Neptune = 3.88)
+      'gas-giant':    [6.0, 14.0],   // Jupiter (11.2) / Saturn (9.4)
+      'hot-jupiter':  [8.0, 16.0],   // Inflated close-in giants
     };
-    const radiusRange = radiusRanges[type] || [0.3, 0.9];
-    const radius = rng.range(...radiusRange);
+    const radiusRangeEarth = radiusRangesEarth[type] || [0.5, 1.5];
+    const radiusEarth = rng.range(...radiusRangeEarth);
+    const radiusScene = earthRadiiToScene(radiusEarth);
+
+    // Map radius: exaggerated for the system map HUD (old visual scale)
+    const mapRange = this.MAP_RADIUS_RANGES[type] || [0.3, 0.9];
+    // Map radius is a fraction between the mapRange, same as radiusEarth
+    // is within its range — this keeps them correlated.
+    const t = (radiusEarth - radiusRangeEarth[0]) / (radiusRangeEarth[1] - radiusRangeEarth[0]);
+    const radius = mapRange[0] + t * (mapRange[1] - mapRange[0]);
 
     // Pick a color palette for this type
     const palettes = this.PALETTES[type].colors;
@@ -252,6 +281,11 @@ export class PlanetGenerator {
 
     return {
       type,
+      // Physical unit — radius in Earth radii
+      radiusEarth,
+      // Scene unit — for realistic 3D rendering
+      radiusScene,
+      // Map unit — exaggerated (old visual values, backward compat)
       radius,
       baseColor: palette.base,
       accentColor: palette.accent,

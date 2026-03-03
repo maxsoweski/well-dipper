@@ -6,10 +6,12 @@ import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
-import { GravityWell } from './objects/GravityWell.js';
+import { Billboard, billboardColor } from './objects/Billboard.js';
+import { GravityWellMap } from './ui/GravityWellMap.js';
 import { CameraController } from './camera/CameraController.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
+import { SystemMap } from './ui/SystemMap.js';
 
 // ── Scene ──
 const scene = new THREE.Scene();
@@ -18,7 +20,7 @@ const scene = new THREE.Scene();
 // behind empty space (but NOT behind dark shadows).
 
 // ── Camera ──
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 5000);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 200000);
 
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
@@ -48,7 +50,9 @@ let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
 let orbitsVisible = false;
 let gravityWellVisible = false;
-let gravityWell = null;
+let gravityWell = null;        // GravityWellMap instance (contour minimap)
+let gravityWellPlanets = null; // lightweight position proxies for the well
+let systemMap = null;
 
 // ── Click-to-select (raycasting) ──
 const raycaster = new THREE.Raycaster();
@@ -73,9 +77,13 @@ function spawnSystem() {
     for (const entry of system.planets) {
       entry.planet.dispose();
       scene.remove(entry.planet.mesh);
-      for (const moon of entry.moons) {
-        moon.dispose();
-        scene.remove(moon.mesh);
+      entry.billboard.dispose();
+      entry.billboard.removeFrom(scene);
+      for (let m = 0; m < entry.moons.length; m++) {
+        entry.moons[m].dispose();
+        scene.remove(entry.moons[m].mesh);
+        entry.moonBillboards[m].dispose();
+        entry.moonBillboards[m].removeFrom(scene);
       }
       for (const line of entry.moonOrbitLines) {
         line.dispose();
@@ -98,31 +106,41 @@ function spawnSystem() {
     }
   }
 
+  // ── Clean up old system map ──
+  if (systemMap) {
+    systemMap.dispose();
+    systemMap = null;
+    retroRenderer.setHud(null, null);
+  }
+
   // ── Clean up old gravity well ──
   if (gravityWell) {
-    gravityWell.removeFrom(scene);
     gravityWell.dispose();
     gravityWell = null;
   }
+  gravityWellPlanets = null;
 
   // ── Generate system data ──
   const seed = `system-${seedCounter}`;
   const systemData = StarSystemGenerator.generate(seed);
 
   // ── Create star(s) ──
-  const star = new Star(systemData.star);
+  // Scene-unit star data: override radius with radiusScene for 3D rendering
+  const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene };
+  const star = new Star(sceneStarData);
   star.addTo(scene);
 
   let star2 = null;
   const starOrbitLines = [];
 
   if (systemData.isBinary) {
-    star2 = new Star(systemData.star2);
+    const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene };
+    star2 = new Star(sceneStarData2);
     star2.addTo(scene);
 
-    // Position binary stars at their starting positions
+    // Position binary stars at their starting positions (scene units)
     const q = systemData.binaryMassRatio;
-    const sep = systemData.binarySeparation;
+    const sep = systemData.binarySeparationScene;
     const r1 = sep * q / (1 + q);     // primary: closer to barycenter
     const r2 = sep * 1.0 / (1 + q);   // secondary: farther out
     const angle = systemData.binaryOrbitAngle;
@@ -147,20 +165,50 @@ function spawnSystem() {
   for (let i = 0; i < systemData.planets.length; i++) {
     const entry = systemData.planets[i];
 
-    // Create planet mesh (with star info for dual lighting)
-    const planet = new Planet(entry.planetData, systemData.starInfo);
-    const px = Math.cos(entry.orbitAngle) * entry.orbitRadius;
-    const pz = Math.sin(entry.orbitAngle) * entry.orbitRadius;
+    // Scene-unit planet data: override radius for 3D rendering.
+    // Scale noiseScale and cloudScale to compensate for smaller geometry —
+    // keeps the same visual texture patterns at realistic size.
+    const mapToSceneRatio = entry.planetData.radius / entry.planetData.radiusScene;
+    const scenePlanetData = {
+      ...entry.planetData,
+      radius: entry.planetData.radiusScene,
+      noiseScale: entry.planetData.noiseScale * mapToSceneRatio,
+      clouds: entry.planetData.clouds
+        ? { ...entry.planetData.clouds, scale: entry.planetData.clouds.scale * mapToSceneRatio }
+        : null,
+    };
+    const planet = new Planet(scenePlanetData, systemData.starInfo);
+    const px = Math.cos(entry.orbitAngle) * entry.orbitRadiusScene;
+    const pz = Math.sin(entry.orbitAngle) * entry.orbitRadiusScene;
     planet.mesh.position.set(px, 0, pz);
     planet.addTo(scene);
 
+    // Billboard indicator (shown when planet is sub-pixel at render resolution)
+    const billboard = new Billboard(billboardColor(scenePlanetData.baseColor));
+    billboard.addTo(scene);
+
+    // Scene-unit moon data: override radius and orbitRadius for 3D rendering.
+    // Scale noiseScale like planets — compensate for smaller geometry.
+    const sceneMoons = entry.moons.map(m => ({
+      ...m,
+      radius: m.radiusScene,
+      orbitRadius: m.orbitRadiusScene,
+      noiseScale: m.noiseScale * (m.radius / m.radiusScene),
+    }));
+
     // Create moons + moon orbit lines (share planet's lightDir references + star info)
     const moons = [];
+    const moonBillboards = [];
     const moonOrbitLines = [];
-    for (const moonData of entry.moons) {
+    for (const moonData of sceneMoons) {
       const moon = new Moon(moonData, planet._lightDir, planet._lightDir2, systemData.starInfo);
       moon.addTo(scene);
       moons.push(moon);
+
+      // Moon billboard (shown when moon is sub-pixel) — 1 render pixel (3 screen px)
+      const moonBb = new Billboard(billboardColor(moonData.baseColor), 1);
+      moonBb.addTo(scene);
+      moonBillboards.push(moonBb);
 
       // Moon orbit line — centered on planet, tilted by inclination
       const moonLine = new OrbitLine(moonData.orbitRadius, 0x00bb00);
@@ -172,50 +220,70 @@ function spawnSystem() {
     }
 
     // Carve ring gaps where moons orbit inside the ring (shepherd moon effect)
-    planet.setRingGaps(entry.moons);
+    planet.setRingGaps(sceneMoons);
 
-    // Create orbit line (hidden by default)
-    const orbitLine = new OrbitLine(entry.orbitRadius, 0x00ff00);
+    // Create orbit line (hidden by default) — scene-unit radius
+    const orbitLine = new OrbitLine(entry.orbitRadiusScene, 0x00ff00);
     orbitLine.addTo(scene);
     orbitLine.mesh.visible = orbitsVisible;
     orbitLines.push(orbitLine);
 
     planets.push({
       planet,
+      billboard,
       moons,
+      moonBillboards,
       moonOrbitLines,
-      orbitRadius: entry.orbitRadius,
+      orbitRadius: entry.orbitRadiusScene,
       orbitAngle: entry.orbitAngle,
       orbitSpeed: entry.orbitSpeed,
     });
   }
 
-  // ── Create asteroid belts ──
+  // ── Create asteroid belts (scene-unit positions) ──
   const asteroidBelts = [];
   for (const beltData of systemData.asteroidBelts) {
-    const belt = new AsteroidBelt(beltData, systemData.starInfo);
+    // Scale asteroid positions from map units to scene units
+    const beltScaleRatio = beltData.centerRadiusScene / beltData.centerRadius;
+    const sceneBeltData = {
+      ...beltData,
+      centerRadius: beltData.centerRadiusScene,
+      width: beltData.widthScene,
+      thickness: beltData.thicknessScene,
+      asteroids: beltData.asteroids.map(a => ({
+        ...a,
+        radius: a.radius * beltScaleRatio,
+        height: a.height * beltScaleRatio,
+        size: a.size * beltScaleRatio,
+      })),
+    };
+    const belt = new AsteroidBelt(sceneBeltData, systemData.starInfo);
     belt.addTo(scene);
     asteroidBelts.push(belt);
   }
 
-  // ── Create gravity well visualization ──
-  // Grid extent covers the whole system plus some padding
-  const outerOrbitRadius = systemData.planets.length > 0
-    ? systemData.planets[systemData.planets.length - 1].orbitRadius
-    : 50;
-  gravityWell = new GravityWell(outerOrbitRadius * 2.5, 150);
-  gravityWell.setStars(systemData.star, systemData.isBinary ? systemData.star2 : null);
-  gravityWell.setPlanets(planets);
-  // Set initial positions for the gravity well
-  if (systemData.isBinary) {
-    gravityWell.updateStarPositions(star.mesh.position, star2.mesh.position);
-  } else {
-    gravityWell.updateStarPositions(new THREE.Vector3(0, 0, 0), null);
-  }
-  gravityWell.updatePlanetPositions(planets);
-  if (gravityWellVisible) {
-    gravityWell.addTo(scene);
-  }
+  // ── Gravity well contour map (2D equipotential lines in HUD) ──
+  // Fragment-shader contour lines computed per-pixel from gravitational potential.
+  // Dense rings = deep well, sparse = shallow. Reads clearly at 192px HUD resolution.
+  // Uses map-unit coordinates (old exaggerated scale) for the physics.
+  const outerOrbitMap = systemData.planets[systemData.planets.length - 1].orbitRadius;
+  const wellExtent = outerOrbitMap * 1.5;
+  gravityWell = new GravityWellMap(wellExtent);
+
+  gravityWell.setStars(
+    { radius: systemData.star.radius },
+    systemData.isBinary ? { radius: systemData.star2.radius } : null,
+  );
+
+  // Lightweight planet proxies (same shape as GravityWell expects)
+  gravityWellPlanets = systemData.planets.map((p, i) => ({
+    planet: {
+      data: { radius: p.planetData.radius },
+      mesh: { position: new THREE.Vector3() },
+    },
+    orbitRadius: p.orbitRadius,
+  }));
+  gravityWell.setPlanets(gravityWellPlanets);
 
   // ── Store system state ──
   system = {
@@ -228,9 +296,18 @@ function spawnSystem() {
     isBinary: systemData.isBinary,
     binaryOrbitAngle: systemData.binaryOrbitAngle,
     binaryOrbitSpeed: systemData.binaryOrbitSpeed,
-    binarySeparation: systemData.binarySeparation,
+    binarySeparation: systemData.binarySeparationScene,
     binaryMassRatio: systemData.binaryMassRatio,
+    binarySeparationMap: systemData.binarySeparation, // map-unit sep for gravity well
   };
+
+  // ── System map HUD ──
+  systemMap = new SystemMap(systemData, system);
+  if (gravityWellVisible) {
+    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
+  } else {
+    retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  }
 
   // ── Build click target map ──
   clickTargets = new Map();
@@ -239,15 +316,17 @@ function spawnSystem() {
   if (star2) {
     clickTargets.set(star2.surface, { type: 'star', starIndex: 1 });
   }
-  // Planets and moons
+  // Planets and moons (both mesh and billboard sprite for LOD click coverage)
   for (let i = 0; i < planets.length; i++) {
     const entry = planets[i];
     clickTargets.set(entry.planet.surface, { type: 'planet', planetIndex: i });
     if (entry.planet.ring) {
       clickTargets.set(entry.planet.ring, { type: 'planet', planetIndex: i });
     }
+    clickTargets.set(entry.billboard.sprite, { type: 'planet', planetIndex: i });
     for (let m = 0; m < entry.moons.length; m++) {
       clickTargets.set(entry.moons[m].mesh, { type: 'moon', planetIndex: i, moonIndex: m });
+      clickTargets.set(entry.moonBillboards[m].sprite, { type: 'moon', planetIndex: i, moonIndex: m });
     }
   }
 
@@ -271,12 +350,12 @@ function spawnSystem() {
   focusIndex = heroIndex;
   if (heroMoonIndex >= 0) {
     const moon = hero.moons[heroMoonIndex];
-    const viewDist = Math.max(moon.data.radius * 8, 1.5);
+    const viewDist = moon.data.radius * 8;
     focusMoonIndex = heroMoonIndex;
     cameraController.distance = viewDist;
     cameraController.smoothedDistance = viewDist;
   } else {
-    const viewDist = Math.max(hero.planet.data.radius * 6, 4);
+    const viewDist = hero.planet.data.radius * 6;
     focusMoonIndex = -1;
     cameraController.distance = viewDist;
     cameraController.smoothedDistance = viewDist;
@@ -293,6 +372,19 @@ function spawnSystem() {
     ? `moon ${heroMoonIndex + 1} of planet ${heroIndex + 1}`
     : `planet ${heroIndex + 1}: ${hero.planet.data.type}`;
   console.log(`System "${seed}" — ${starDesc}, ${systemData.planets.length} planets${beltDesc} (featuring ${heroDesc})`);
+
+  // Phase 5A diagnostic: physical units sanity check
+  console.log(`  Star: ${systemData.star.radiusSolar.toFixed(2)} R☉ (${systemData.star.radiusScene.toFixed(2)} scene units)`);
+  if (systemData.star2) {
+    console.log(`  Star2: ${systemData.star2.radiusSolar.toFixed(2)} R☉, binary sep: ${systemData.binarySeparationAU.toFixed(3)} AU`);
+  }
+  for (let i = 0; i < systemData.planets.length; i++) {
+    const p = systemData.planets[i];
+    const moonDesc = p.moons.length > 0
+      ? ` (${p.moons.length} moon${p.moons.length > 1 ? 's' : ''})`
+      : '';
+    console.log(`  P${i + 1}: ${p.planetData.type} — ${p.planetData.radiusEarth.toFixed(2)} R⊕, orbit ${p.orbitRadiusAU.toFixed(2)} AU${moonDesc}`);
+  }
 }
 
 /**
@@ -311,7 +403,7 @@ function focusPlanet(index) {
   } else {
     focusIndex = index;
     const entry = system.planets[index];
-    const viewDist = Math.max(entry.planet.data.radius * 6, 4);
+    const viewDist = entry.planet.data.radius * 6;
     cameraController.focusOn(entry.planet.mesh.position, viewDist);
     console.log(`Focus: planet ${index + 1} (${entry.planet.data.type})`);
   }
@@ -334,7 +426,7 @@ function focusStar(starIdx) {
   // Without this, planets can pass between the camera and star, creating
   // an ugly foreground blob.
   const innerOrbit = system.planets[0].orbitRadius;
-  const idealDist = Math.max(starObj.data.radius * 6, 4);
+  const idealDist = starObj.data.radius * 6;
   const viewDist = Math.min(idealDist, innerOrbit * 0.4);
   cameraController.focusOn(starObj.mesh.position, viewDist);
   const label = system.isBinary
@@ -363,12 +455,11 @@ function toggleOrbits() {
 
 function toggleGravityWell() {
   gravityWellVisible = !gravityWellVisible;
-  if (gravityWell) {
-    if (gravityWellVisible) {
-      gravityWell.addTo(scene);
-    } else {
-      gravityWell.removeFrom(scene);
-    }
+  // Swap HUD between gravity well contour map and system map
+  if (gravityWellVisible && gravityWell) {
+    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
+  } else if (systemMap) {
+    retroRenderer.setHud(systemMap.scene, systemMap.camera);
   }
 }
 
@@ -493,17 +584,9 @@ function animate() {
       }
     }
 
-    // ── Update gravity well positions (stars for binary orbits, planets every frame) ──
-    if (gravityWell && gravityWellVisible) {
-      if (system.isBinary) {
-        gravityWell.updateStarPositions(
-          system.star.mesh.position,
-          system.star2.mesh.position,
-        );
-      }
-      // Update planet positions every frame (they orbit the star)
-      gravityWell.updatePlanetPositions(system.planets);
-    }
+    // ── Update star glow (distance-adaptive) ──
+    system.star.updateGlow(camera);
+    if (system.star2) system.star2.updateGlow(camera);
 
     // ── Update asteroid belts ──
     for (const belt of system.asteroidBelts) {
@@ -511,6 +594,65 @@ function animate() {
       // Update star positions for per-fragment lighting (binary)
       if (system.isBinary) {
         belt.updateStarPositions(system.star.mesh.position, system.star2.mesh.position);
+      }
+    }
+
+    // ── Update gravity well minimap positions (map-unit coords) ──
+    if (gravityWell && gravityWellVisible && gravityWellPlanets) {
+      // Sync planet positions from main system orbit angles → map-unit orbits
+      for (let i = 0; i < system.planets.length && i < gravityWellPlanets.length; i++) {
+        const angle = system.planets[i].orbitAngle;
+        const mapOrbit = gravityWellPlanets[i].orbitRadius;
+        gravityWellPlanets[i].planet.mesh.position.set(
+          Math.cos(angle) * mapOrbit, 0, Math.sin(angle) * mapOrbit,
+        );
+      }
+      gravityWell.updatePlanetPositions(gravityWellPlanets);
+
+      // Binary star positions in map units
+      if (system.isBinary) {
+        const q = system.binaryMassRatio;
+        const sep = system.binarySeparationMap;
+        const r1 = sep * q / (1 + q);
+        const r2 = sep * 1.0 / (1 + q);
+        const bAngle = system.binaryOrbitAngle;
+        _star1Pos.set(Math.cos(bAngle) * r1, 0, Math.sin(bAngle) * r1);
+        _star2Pos.set(-Math.cos(bAngle) * r2, 0, -Math.sin(bAngle) * r2);
+        gravityWell.updateStarPositions(_star1Pos, _star2Pos);
+      }
+    }
+
+    // ── LOD: billboard vs mesh ──
+    // When a body is too small to see at render resolution, hide the mesh
+    // and show a fixed-size billboard dot instead. This ensures planets
+    // and moons are always visible from any distance.
+    {
+      const fovRad = camera.fov * Math.PI / 180;
+      const renderHeight = window.innerHeight / retroRenderer.pixelScale;
+      const projScale = renderHeight / (2 * Math.tan(fovRad / 2));
+
+      for (const entry of system.planets) {
+        // Planet LOD
+        const pDist = camera.position.distanceTo(entry.planet.mesh.position);
+        const pPixels = (entry.planet.data.radius * 2) * projScale / pDist;
+        const pShowBillboard = pPixels < 3;
+        entry.planet.mesh.visible = !pShowBillboard;
+        entry.billboard.sprite.visible = pShowBillboard;
+        entry.billboard.sprite.position.copy(entry.planet.mesh.position);
+        entry.billboard.update(camera, retroRenderer.pixelScale);
+
+        // Moon LOD
+        for (let m = 0; m < entry.moons.length; m++) {
+          const moon = entry.moons[m];
+          const mDist = camera.position.distanceTo(moon.mesh.position);
+          const mPixels = (moon.data.radius * 2) * projScale / mDist;
+          const mShowBillboard = mPixels < 3;
+          moon.mesh.visible = !mShowBillboard;
+          const moonBb = entry.moonBillboards[m];
+          moonBb.sprite.visible = mShowBillboard;
+          moonBb.sprite.position.copy(moon.mesh.position);
+          moonBb.update(camera, retroRenderer.pixelScale);
+        }
       }
     }
 
@@ -535,6 +677,15 @@ function animate() {
 
   cameraController.update(deltaTime);
   starfield.update(camera.position);
+
+  // ── Update HUD ──
+  if (systemMap) {
+    systemMap.update(camera, cameraController.smoothedYaw, focusIndex);
+  }
+  if (gravityWell && gravityWellVisible) {
+    gravityWell.update(cameraController.smoothedYaw);
+  }
+
   retroRenderer.render();
 }
 
@@ -582,10 +733,15 @@ function trySelect(clientX, clientY) {
   const meshes = Array.from(clickTargets.keys());
   const hits = raycaster.intersectObjects(meshes, false);
 
-  if (hits.length > 0) {
-    const hit = hits[0];
+  // Find the first hit on a VISIBLE object.
+  // Both mesh and billboard are in clickTargets, but LOD hides one at a time.
+  // Also check parent visibility — planet meshes are inside a Group.
+  for (const hit of hits) {
+    if (!hit.object.visible) continue;
+    if (hit.object.parent && !hit.object.parent.visible) continue;
+
     const info = clickTargets.get(hit.object);
-    if (!info) return;
+    if (!info) continue;
 
     if (info.type === 'star') {
       focusStar(info.starIndex);
@@ -594,12 +750,13 @@ function trySelect(clientX, clientY) {
     } else if (info.type === 'moon') {
       const entry = system.planets[info.planetIndex];
       const moon = entry.moons[info.moonIndex];
-      const viewDist = Math.max(moon.data.radius * 8, 1.5);
+      const viewDist = moon.data.radius * 8;
       focusIndex = info.planetIndex;
       focusMoonIndex = info.moonIndex;
       cameraController.focusOn(moon.mesh.position, viewDist);
       console.log(`Focus: moon ${info.moonIndex + 1} of planet ${info.planetIndex + 1} (${moon.data.type})`);
     }
+    break; // only process the first valid hit
   }
 }
 

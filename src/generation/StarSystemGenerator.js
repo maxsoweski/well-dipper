@@ -2,6 +2,10 @@ import { SeededRandom } from './SeededRandom.js';
 import { PlanetGenerator } from './PlanetGenerator.js';
 import { MoonGenerator } from './MoonGenerator.js';
 import { AsteroidBeltGenerator } from './AsteroidBeltGenerator.js';
+import {
+  SOLAR_RADIUS_AU, EARTH_RADIUS_AU, AU_TO_SCENE,
+  solarRadiiToScene, earthRadiiToScene, auToScene,
+} from '../core/ScaleConstants.js';
 
 /**
  * StarSystemGenerator — produces data for an entire star system:
@@ -38,17 +42,17 @@ export class StarSystemGenerator {
 
   // Visual properties per spectral class
   // luminosity is relative to Sol (G-type = 1.0)
-  // Star radii: all stars must be visually larger than the biggest gas giant (3.5)
-  // to correctly represent the massive density difference between stars and planets.
-  // Old values (0.5-2.5) allowed gas giants to dwarf M-class stars.
+  // radiusSolar: realistic radius in solar radii (for physical calculations)
+  // mapRadius: exaggerated radius for the system map HUD (old visual values)
+  //   All mapRadius values > 3.5 so stars are visually larger than gas giants on the map.
   static STAR_PROPERTIES = {
-    O: { color: [0.61, 0.69, 1.0],  radius: 8.0, temp: 40000, luminosity: 300000, planetRange: [2, 5] },
-    B: { color: [0.67, 0.75, 1.0],  radius: 6.5, temp: 20000, luminosity: 800,    planetRange: [2, 6] },
-    A: { color: [0.79, 0.84, 1.0],  radius: 5.5, temp: 8750,  luminosity: 20,     planetRange: [3, 6] },
-    F: { color: [0.97, 0.97, 1.0],  radius: 5.0, temp: 6750,  luminosity: 2.5,    planetRange: [4, 8] },
-    G: { color: [1.0, 0.96, 0.92],  radius: 4.5, temp: 5600,  luminosity: 1.0,    planetRange: [4, 8] },
-    K: { color: [1.0, 0.82, 0.63],  radius: 4.2, temp: 4450,  luminosity: 0.3,    planetRange: [3, 7] },
-    M: { color: [1.0, 0.80, 0.44],  radius: 4.0, temp: 3050,  luminosity: 0.04,   planetRange: [3, 6] },
+    O: { color: [0.61, 0.69, 1.0],  radiusSolar: 12.0, mapRadius: 8.0, temp: 40000, luminosity: 300000, planetRange: [2, 5] },
+    B: { color: [0.67, 0.75, 1.0],  radiusSolar: 5.0,  mapRadius: 6.5, temp: 20000, luminosity: 800,    planetRange: [2, 6] },
+    A: { color: [0.79, 0.84, 1.0],  radiusSolar: 1.8,  mapRadius: 5.5, temp: 8750,  luminosity: 20,     planetRange: [3, 6] },
+    F: { color: [0.97, 0.97, 1.0],  radiusSolar: 1.3,  mapRadius: 5.0, temp: 6750,  luminosity: 2.5,    planetRange: [4, 8] },
+    G: { color: [1.0, 0.96, 0.92],  radiusSolar: 1.0,  mapRadius: 4.5, temp: 5600,  luminosity: 1.0,    planetRange: [4, 8] },
+    K: { color: [1.0, 0.82, 0.63],  radiusSolar: 0.7,  mapRadius: 4.2, temp: 4450,  luminosity: 0.3,    planetRange: [3, 7] },
+    M: { color: [1.0, 0.80, 0.44],  radiusSolar: 0.3,  mapRadius: 4.0, temp: 3050,  luminosity: 0.04,   planetRange: [3, 6] },
   };
 
   // Spectral class sequence (hot → cool) for deriving companion types
@@ -65,10 +69,18 @@ export class StarSystemGenerator {
     // ── Primary Star ──
     const starType = this._pickStarType(rng);
     const props = this.STAR_PROPERTIES[starType];
+    const starVariation = rng.range(0.85, 1.15);
+    const radiusSolarVaried = props.radiusSolar * starVariation;
     const star = {
       type: starType,
       color: [...props.color],
-      radius: props.radius * rng.range(0.85, 1.15),
+      // Physical unit — radius in solar radii
+      radiusSolar: radiusSolarVaried,
+      // Scene unit — for realistic 3D rendering (1 AU = 1000 scene units)
+      radiusScene: solarRadiiToScene(radiusSolarVaried),
+      // Map unit — exaggerated for system map HUD (old visual values)
+      // Uses same variation factor so map and scene star sizes correlate.
+      radius: props.mapRadius * starVariation,
       temp: props.temp,
     };
 
@@ -76,6 +88,8 @@ export class StarSystemGenerator {
     const isBinary = rng.chance(0.35);
     let star2 = null;
     let binarySeparation = 0;
+    let binarySeparationAU = 0;
+    let binarySeparationScene = 0;
     let binaryMassRatio = 0;
     let binaryOrbitSpeed = 0;
     let binaryOrbitAngle = 0;
@@ -92,16 +106,24 @@ export class StarSystemGenerator {
       // Derive secondary star type from mass ratio
       const secondaryType = this._deriveCompanionType(starType, binaryMassRatio, rng);
       const secondaryProps = this.STAR_PROPERTIES[secondaryType];
+      const s2Variation = rng.range(0.85, 1.15);
+      const s2RadiusSolar = secondaryProps.radiusSolar * s2Variation;
 
       star2 = {
         type: secondaryType,
         color: [...secondaryProps.color],
-        radius: secondaryProps.radius * rng.range(0.85, 1.15),
+        radiusSolar: s2RadiusSolar,
+        radiusScene: solarRadiiToScene(s2RadiusSolar),
+        radius: secondaryProps.mapRadius * s2Variation,
         temp: secondaryProps.temp,
       };
 
-      // Binary separation: close enough to be visually dramatic,
-      // but far enough that the two stars don't overlap
+      // Binary separation in AU: close binaries are 0.1-0.5 AU apart
+      // (enough to not overlap visually, with some variety)
+      const starSumAU = (star.radiusSolar + star2.radiusSolar) * SOLAR_RADIUS_AU;
+      binarySeparationAU = rng.range(0.05, 0.3) + starSumAU * 3;
+      binarySeparationScene = auToScene(binarySeparationAU);
+      // Map separation: use old visual formula for backward compat
       binarySeparation = rng.range(3, 8) + star.radius + star2.radius;
       // Orbit speed: closer = faster (Kepler's 3rd law)
       binaryOrbitSpeed = 0.05 / Math.pow(binarySeparation / 5, 1.5);
@@ -111,32 +133,38 @@ export class StarSystemGenerator {
     // ── Physical zones (frost line, habitable zone) ──
     // Scale with the square root of stellar luminosity
     const luminosity = props.luminosity;
-    const frostLineAU = 2.7 * Math.sqrt(luminosity);
+    // Frost line: 4.85√L AU (Hayashi line — where water ice can condense)
+    // Old value was 2.7√L which put the frost line too close to the star.
+    const frostLineAU = 4.85 * Math.sqrt(luminosity);
     const hzInnerAU = 0.95 * Math.sqrt(luminosity);
     const hzOuterAU = 1.37 * Math.sqrt(luminosity);
 
-    // ── Orbital spacing ──
-    // Base distance scales with star radius so planets don't spawn
-    // inside larger stars. Star radius offset ensures comfortable gap.
-    const baseDistance = rng.range(8, 15) + star.radius * 2;
-    // Binary systems: innermost planet must be outside both star orbits
-    const minInnerOrbit = isBinary ? binarySeparation * 2.5 : 0;
-    const adjustedBase = Math.max(baseDistance, minInnerOrbit);
+    // ── Orbital spacing (in AU) ──
+    // Innermost orbit: scales with luminosity so hot stars have planets
+    // further out (they'd be vaporized closer in).
+    // Range: ~0.15 AU (M-dwarf) to ~0.4 AU (G-type) to huge for O/B.
+    const innerOrbitAU = rng.range(0.3, 0.5) * Math.sqrt(Math.max(luminosity, 0.01));
+    // Binary systems: innermost planet must be outside binary orbits
+    // (~2.5x the binary separation for stability)
+    const minInnerOrbitAU = isBinary ? binarySeparationAU * 2.5 : 0;
+    const adjustedInnerAU = Math.max(innerOrbitAU, minInnerOrbitAU);
     const spacingFactor = rng.range(1.6, 2.2);
 
-    // Convert AU to scene units
-    // The innermost orbit scales with sqrt(luminosity) — hotter stars have
-    // planets further out in AU, but we compress to the same scene scale.
-    // This makes zone boundaries proportional for all star types; the
-    // per-zone probability tables handle star-type differentiation.
-    const innerOrbitAU = 0.4 * Math.sqrt(Math.max(luminosity, 0.01));
-    const sceneUnitsPerAU = adjustedBase / innerOrbitAU;
+    // Zones for type selection use AU directly now
     const zones = {
-      frostLine: frostLineAU * sceneUnitsPerAU,
-      hzInner: hzInnerAU * sceneUnitsPerAU,
-      hzOuter: hzOuterAU * sceneUnitsPerAU,
+      frostLine: frostLineAU,
+      hzInner: hzInnerAU,
+      hzOuter: hzOuterAU,
       starType,
     };
+
+    // ── Map-scale orbital spacing (exaggerated, for backward compat) ──
+    // These keep the old visual layout for the current map/rendering.
+    const mapBaseDistance = rng.range(8, 15) + star.radius * 2;
+    const minMapInnerOrbit = isBinary ? binarySeparation * 2.5 : 0;
+    const adjustedMapBase = Math.max(mapBaseDistance, minMapInnerOrbit);
+    // How many map-units per AU (maps the innermost AU orbit to the map base distance)
+    const mapUnitsPerAU = adjustedMapBase / adjustedInnerAU;
 
     // ── Star info for dual-lighting ──
     // Brightness uses compressed mass-luminosity relation: L ~ M^1.5
@@ -161,19 +189,24 @@ export class StarSystemGenerator {
     for (let i = 0; i < planetCount; i++) {
       const planetRng = rng.child(`planet-${i}`);
 
-      const orbitRadius = adjustedBase * Math.pow(spacingFactor, i);
+      // Orbit in AU (geometric progression — Titius-Bode-like)
+      const orbitRadiusAU = adjustedInnerAU * Math.pow(spacingFactor, i);
+      // Scene units (realistic) and map units (exaggerated)
+      const orbitRadiusScene = auToScene(orbitRadiusAU);
+      const orbitRadius = orbitRadiusAU * mapUnitsPerAU;  // map units (backward compat)
+
       const orbitAngle = planetRng.range(0, Math.PI * 2);
       // Kepler's 3rd law: period ∝ distance^1.5
-      const orbitSpeed = (0.02 / Math.pow(orbitRadius / adjustedBase, 1.5)) * planetRng.range(0.8, 1.2);
+      const orbitSpeed = (0.02 / Math.pow(orbitRadius / adjustedMapBase, 1.5)) * planetRng.range(0.8, 1.2);
 
-      // Planet position in world space (initial)
+      // Planet position in world space (initial) — using map coords for now
       const px = Math.cos(orbitAngle) * orbitRadius;
       const pz = Math.sin(orbitAngle) * orbitRadius;
       const dist = Math.sqrt(px * px + pz * pz);
       const sunDirection = [-px / dist, 0, -pz / dist];
 
-      // Generate planet using zone-based type selection
-      const planetData = PlanetGenerator.generate(planetRng, orbitRadius, sunDirection, zones);
+      // Generate planet using zone-based type selection (zones are in AU now)
+      const planetData = PlanetGenerator.generate(planetRng, orbitRadiusAU, sunDirection, zones);
 
       // Generate moons
       const moons = [];
@@ -186,6 +219,10 @@ export class StarSystemGenerator {
       planets.push({
         planetData,
         moons,
+        // Physical units
+        orbitRadiusAU,
+        orbitRadiusScene,
+        // Map/backward-compat units
         orbitRadius,
         orbitAngle,
         orbitSpeed,
@@ -199,9 +236,12 @@ export class StarSystemGenerator {
       const beltIndex = this._pickBeltLocation(rng, planets);
       if (beltIndex >= 0) {
         const beltRng = rng.child('main-belt');
+        // Pass both AU and map-unit orbits
+        const innerOrbitAU = planets[beltIndex].orbitRadiusAU;
+        const outerOrbitAU = planets[beltIndex + 1].orbitRadiusAU;
         const innerOrbit = planets[beltIndex].orbitRadius;
         const outerOrbit = planets[beltIndex + 1].orbitRadius;
-        const beltData = AsteroidBeltGenerator.generate(beltRng, innerOrbit, outerOrbit);
+        const beltData = AsteroidBeltGenerator.generate(beltRng, innerOrbit, outerOrbit, innerOrbitAU, outerOrbitAU);
         asteroidBelts.push(beltData);
       }
     }
@@ -210,6 +250,10 @@ export class StarSystemGenerator {
       star,
       star2,
       isBinary,
+      // Physical units
+      binarySeparationAU,
+      binarySeparationScene,
+      // Map/backward-compat units
       binarySeparation,
       binaryMassRatio,
       binaryOrbitSpeed,
@@ -218,6 +262,8 @@ export class StarSystemGenerator {
       asteroidBelts,
       starInfo,
       seed,
+      // Conversion factors (useful for consumers)
+      mapUnitsPerAU,
     };
   }
 
