@@ -28,6 +28,8 @@ const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
 const _v4 = new THREE.Vector3();
+const _v5 = new THREE.Vector3();
+const _v6 = new THREE.Vector3();
 
 export class FlythroughCamera {
   constructor(camera) {
@@ -65,6 +67,24 @@ export class FlythroughCamera {
     this.lookAtTarget = new THREE.Vector3();  // interpolated lookAt point
     this._departureTangent = new THREE.Vector3(); // slingshot release direction
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
+
+    // Departure blend state (spiral continuation → Hermite)
+    this._departYaw = 0;
+    this._departDist = 10;
+    this._departSpeedFactor = 1;
+    this._departPitch = 0.15;
+
+    // Arrival blend state (Hermite → pre-orbit)
+    this._arrivalComputed = false;
+    this._arrivalYaw = 0;
+    this._arrivalDist = 10;
+    this._arrivalPitch = 0.15;
+    this._arrivalCaptureDir = 1;
+    this._arrivalYawSpeed = 0.3;
+
+    // Current orbit frame state (saved each frame for departure snapshot)
+    this._currentDist = 10;
+    this._currentSpeedFactor = 1;
 
     // ── DESCEND state ──
     this.descendStart = new THREE.Vector3();
@@ -164,32 +184,14 @@ export class FlythroughCamera {
       -Math.sin(this.orbitYaw) * cosPitch,
     ).multiplyScalar(this.orbitDirection).normalize();
 
-    // Ensure the tangent has enough cross-component relative to the
-    // departure→destination direction. If it's too aligned (straight shot)
-    // or too opposed (U-turn), rotate it to guarantee visible curvature.
-    const destPos = nextBodyRef.position;
-    const toDestX = destPos.x - this.departurePos.x;
-    const toDestZ = destPos.z - this.departurePos.z;
-    const toDestLen = Math.sqrt(toDestX * toDestX + toDestZ * toDestZ) || 1;
-    const toDestNX = toDestX / toDestLen;
-    const toDestNZ = toDestZ / toDestLen;
+    // Snapshot departure spiral state so the blend can continue the orbit
+    // spiral forward in time from exactly where we left off.
+    this._departYaw = this.orbitYaw;
+    this._departDist = this._currentDist;
+    this._departSpeedFactor = this._currentSpeedFactor;
+    this._departPitch = this.orbitPitch;
 
-    // Cross product (2D) = how perpendicular the tangent is to the approach
-    const cross = this._departureTangent.x * toDestNZ - this._departureTangent.z * toDestNX;
-    // Dot product = how aligned
-    const dot = this._departureTangent.x * toDestNX + this._departureTangent.z * toDestNZ;
-
-    if (Math.abs(cross) < 0.3 || dot < -0.3) {
-      // Too straight or pointing backward — rotate 40° for slingshot curve
-      const rotAngle = (Math.PI / 4.5) * (cross >= 0 ? 1 : -1);
-      const cosR = Math.cos(rotAngle);
-      const sinR = Math.sin(rotAngle);
-      const rx = this._departureTangent.x * cosR - this._departureTangent.z * sinR;
-      const rz = this._departureTangent.x * sinR + this._departureTangent.z * cosR;
-      this._departureTangent.x = rx;
-      this._departureTangent.z = rz;
-    }
-
+    this._arrivalComputed = false; // computed on first frame of travel
     this.travelElapsed = 0;
     this.travelDuration = 10;
 
@@ -345,6 +347,10 @@ export class FlythroughCamera {
       dist *= (1 + unwindT * unwindT * 0.8); // quadratic, up to 80% wider
     }
 
+    // Save frame state for departure blend snapshot
+    this._currentDist = dist;
+    this._currentSpeedFactor = speedFactor;
+
     // Compute camera position (spherical orbit around body)
     const cosPitch = Math.cos(this.orbitPitch);
     this.camera.position.set(
@@ -397,6 +403,39 @@ export class FlythroughCamera {
     return out;
   }
 
+  /**
+   * Continue the departure orbit spiral forward in time.
+   * Used during the departure blend so the camera smoothly transitions
+   * from orbiting to slingshot — no direction change or speed snap.
+   */
+  _computeSpiralPos(elapsed, bodyPos, out) {
+    const yaw = this._departYaw
+      + this.orbitYawSpeed * this.orbitDirection * elapsed * this._departSpeedFactor;
+    const dist = this._departDist * (1 + elapsed * 0.15); // gradual widening
+    const cp = Math.cos(this._departPitch);
+    out.set(
+      bodyPos.x + dist * Math.sin(yaw) * cp,
+      bodyPos.y + dist * Math.sin(this._departPitch),
+      bodyPos.z + dist * Math.cos(yaw) * cp,
+    );
+  }
+
+  /**
+   * Compute where the arrival orbit would be if it had already started.
+   * Used during the arrival blend so the camera smoothly decelerates
+   * into orbit — no dead stop at the transition.
+   */
+  _computePreOrbitPos(elapsed, bodyPos, out) {
+    const yaw = this._arrivalYaw
+      + this._arrivalYawSpeed * this._arrivalCaptureDir * elapsed;
+    const cp = Math.cos(this._arrivalPitch);
+    out.set(
+      bodyPos.x + this._arrivalDist * Math.sin(yaw) * cp,
+      bodyPos.y + this._arrivalDist * Math.sin(this._arrivalPitch),
+      bodyPos.z + this._arrivalDist * Math.cos(yaw) * cp,
+    );
+  }
+
   _updateTravel(deltaTime) {
     this.travelElapsed += deltaTime;
     const t = Math.min(1, this.travelElapsed / this.travelDuration);
@@ -404,8 +443,6 @@ export class FlythroughCamera {
 
     // ── Destination: orbit entry point around next body ──
     // Recomputed each frame because the body is orbiting its parent.
-    // This makes the slingshot curve adapt to the moving target —
-    // like a real spacecraft adjusting trajectory to intercept.
     const nextPos = this._travelToBody.position;
     const approachDir = Math.atan2(
       nextPos.x - this.departurePos.x,
@@ -423,32 +460,33 @@ export class FlythroughCamera {
       nextPos.z + this._travelToOrbitDist * Math.cos(entryYaw) * cosPitch,
     );
 
-    // ── Hermite spline tangent vectors ──
-    // The tangent magnitude controls how "wide" the curve is.
-    // Longer journeys get wider curves — proportional to distance.
-    const travelDist = this.departurePos.distanceTo(_v1);
-    const tangentScale = travelDist * 0.4;
-
-    // Departure tangent: orbit tangent direction (slingshot release).
-    // The camera was flung from its orbit — this tangent defines the
-    // initial curve direction, creating the asymmetric slingshot shape.
-    _v2.copy(this._departureTangent).multiplyScalar(tangentScale);
-    // Slight upward arc at departure
-    _v2.y += travelDist * 0.04;
-
-    // Arrival tangent: orbit tangent at entry point (gravitational capture).
-    // The camera curves into orbit as if caught by the body's gravity.
+    // ── Cache arrival orbit state on first frame ──
+    // (Can't precompute in beginTravel because target body moves)
     const arrTanX = Math.cos(entryYaw) * cosPitch;
     const arrTanZ = -Math.sin(entryYaw) * cosPitch;
-
-    // Pick capture direction: orbit direction where the tangent aligns
-    // with the approach direction (camera arrives "with" the orbit flow,
-    // not against it — like a real gravitational capture).
     const appX = Math.sin(approachDir);
     const appZ = Math.cos(approachDir);
     const dotArr = arrTanX * appX + arrTanZ * appZ;
     const captureDir = dotArr > 0 ? 1 : -1;
 
+    if (!this._arrivalComputed) {
+      this._arrivalComputed = true;
+      this._arrivalYaw = entryYaw;
+      this._arrivalDist = this._travelToOrbitDist;
+      this._arrivalPitch = entryPitch;
+      this._arrivalCaptureDir = captureDir;
+      this._arrivalYawSpeed = 0.25 + Math.random() * 0.15;
+    }
+
+    // ── Hermite spline tangent vectors ──
+    const travelDist = this.departurePos.distanceTo(_v1);
+    const tangentScale = travelDist * 0.4;
+
+    // Departure tangent: pure orbit tangent (slingshot release)
+    _v2.copy(this._departureTangent).multiplyScalar(tangentScale);
+    _v2.y += travelDist * 0.04; // slight upward arc
+
+    // Arrival tangent: orbit tangent at entry (gravitational capture)
     _v3.set(
       arrTanX * captureDir * tangentScale,
       -travelDist * 0.03, // slight downward into orbital plane
@@ -456,12 +494,39 @@ export class FlythroughCamera {
     );
 
     // ── Evaluate slingshot curve ──
-    this._hermite(this.camera.position, this.departurePos, _v2, _v1, _v3, s);
+    this._hermite(_v6, this.departurePos, _v2, _v1, _v3, s);
+    // _v6 now holds the pure Hermite position
+
+    // Start with the Hermite position
+    this.camera.position.copy(_v6);
+
+    // ── Departure blend (first 1.5s): spiral → Hermite ──
+    // The orbit spiral continues forward while the Hermite curve ramps in.
+    // This eliminates the direction change and speed snap at departure.
+    const DEPART_BLEND = 1.5;
+    if (this.travelElapsed < DEPART_BLEND) {
+      const blend = this._ease(this.travelElapsed / DEPART_BLEND);
+      this._computeSpiralPos(this.travelElapsed, this._travelFromBody.position, _v5);
+      this.camera.position.lerpVectors(_v5, _v6, blend);
+    }
+
+    // ── Arrival blend (last 1.5s): Hermite → pre-orbit ──
+    // A pre-started orbit ramps in while the Hermite fades out.
+    // This eliminates the dead stop at arrival.
+    const ARRIVE_BLEND = 1.5;
+    const arriveStart = this.travelDuration - ARRIVE_BLEND;
+    if (this.travelElapsed > arriveStart) {
+      const blend = this._ease(
+        (this.travelElapsed - arriveStart) / ARRIVE_BLEND
+      );
+      const arriveElapsed = this.travelElapsed - arriveStart;
+      this._computePreOrbitPos(arriveElapsed, nextPos, _v5);
+      this.camera.position.lerp(_v5, blend);
+    }
 
     // ── LookAt ──
-    // First 20%: turn from departure view toward destination (watching
-    // the old body shrink behind us as we're flung away).
-    // Remaining 80%: lock onto destination (being drawn in by gravity).
+    // First 20%: turn from departure view toward destination
+    // Remaining 80%: lock onto destination
     if (t < 0.2) {
       const blend = this._ease(t / 0.2);
       _v4.copy(this.camera.position).addScaledVector(this.departureDir, 100);
@@ -473,8 +538,8 @@ export class FlythroughCamera {
 
     if (t >= 1) {
       // Store entry yaw and capture direction for seamless orbit start
-      this.orbitYaw = entryYaw;
-      this._arrivalOrbitDir = captureDir;
+      this.orbitYaw = this._arrivalYaw;
+      this._arrivalOrbitDir = this._arrivalCaptureDir;
       return { orbitComplete: false, travelComplete: true };
     }
 

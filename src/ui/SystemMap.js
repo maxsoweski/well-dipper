@@ -56,11 +56,20 @@ export class SystemMap {
       mapRadius: p.planetData.radius,
     }));
 
+    // ── Blink animation state ──
+    this._blinkTimer = -1;        // -1 = not blinking
+    this._blinkDuration = 0.9;    // total blink duration (3 blinks)
+
     // ── Build scene objects ──
     this._buildOrbitLines();
     this._buildBodyDots();
     this._buildCameraIndicator();
     this._buildFocusRing();
+  }
+
+  /** Trigger a 3-blink animation on the focus ring. */
+  triggerBlink() {
+    this._blinkTimer = 0;
   }
 
   // ── Orbit line circles (thin, dim) ──
@@ -157,8 +166,9 @@ export class SystemMap {
    * @param {THREE.PerspectiveCamera} mainCamera
    * @param {number} mainYaw — CameraController.smoothedYaw (radians)
    * @param {number} focusIndex — -1 = overview, 0+ = planet index
+   * @param {number} deltaTime — frame time in seconds (for blink animation)
    */
-  update(mainCamera, mainYaw, focusIndex) {
+  update(mainCamera, mainYaw, focusIndex, deltaTime) {
     const sys = this.systemState;
 
     // ── Update star positions ──
@@ -200,6 +210,18 @@ export class SystemMap {
       const dotSize = this.extent * (0.025 + t * 0.015);
       const ringSize = dotSize * 1.4;
       this._focusRing.scale.set(ringSize, 1, ringSize);
+
+      // Blink animation: 3 quick on/off flashes when transitioning
+      if (this._blinkTimer >= 0 && deltaTime) {
+        this._blinkTimer += deltaTime;
+        // 3 blinks in 0.9s → 3.33 Hz sine wave, visible when positive
+        const blink = Math.sin(this._blinkTimer * Math.PI * 2 * 3.33) > 0;
+        this._focusRing.visible = blink;
+        if (this._blinkTimer >= this._blinkDuration) {
+          this._blinkTimer = -1;
+          this._focusRing.visible = true;
+        }
+      }
     } else {
       this._focusRing.visible = false;
     }

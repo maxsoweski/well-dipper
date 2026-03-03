@@ -430,18 +430,38 @@ function populateQueueRefs() {
       const entry = system.planets[stop.planetIndex];
       stop.bodyRef = entry.planet.mesh;
       stop.bodyRadius = entry.planet.data.radius;
-      // 2.8× radius → body fills ~55% of 70° FOV
-      stop.orbitDistance = entry.planet.data.radius * 2.8;
+      // 2.4× radius → body fills ~60% of 70° FOV (closer, more detail)
+      stop.orbitDistance = entry.planet.data.radius * 2.4;
     } else if (stop.type === 'moon') {
       const entry = system.planets[stop.planetIndex];
       const moon = entry.moons[stop.moonIndex];
       stop.bodyRef = moon.mesh;
       stop.bodyRadius = moon.data.radius;
       // 2× radius fills ~65% of FOV — close enough to see detail.
-      // Minimum 0.06 keeps tiny moons above the near clip plane (0.01)
-      // and large enough to render at retro resolution.
-      stop.orbitDistance = Math.max(moon.data.radius * 2, 0.06);
+      // Minimum 0.03 keeps tiny moons visible above billboard threshold
+      // while getting close enough to show surface detail at retro resolution.
+      stop.orbitDistance = Math.max(moon.data.radius * 2, 0.03);
     }
+  }
+}
+
+/**
+ * Update focusIndex/focusMoonIndex/focusStarIndex from a queue stop.
+ * Keeps the minimap focus ring in sync during autopilot.
+ */
+function updateFocusFromStop(stop) {
+  if (stop.type === 'star') {
+    focusIndex = -2;
+    focusStarIndex = stop.starIndex;
+    focusMoonIndex = -1;
+  } else if (stop.type === 'planet') {
+    focusIndex = stop.planetIndex;
+    focusMoonIndex = -1;
+    focusStarIndex = -1;
+  } else if (stop.type === 'moon') {
+    focusIndex = stop.planetIndex; // minimap highlights parent planet
+    focusMoonIndex = stop.moonIndex;
+    focusStarIndex = -1;
   }
 }
 
@@ -847,6 +867,8 @@ function animate() {
           // Set next body ref for departure steering on the upcoming orbit
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+          // Update minimap focus to the body we're travelling toward
+          updateFocusFromStop(nextStop);
         }
       }
 
@@ -858,6 +880,9 @@ function animate() {
           // Set next body ref for departure steering
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+          // Update minimap focus with blink
+          updateFocusFromStop(stop);
+          if (systemMap) systemMap.triggerBlink();
         }
       }
     }
@@ -889,7 +914,7 @@ function animate() {
     ? Math.atan2(camera.position.x, camera.position.z)
     : cameraController.smoothedYaw;
   if (systemMap) {
-    systemMap.update(camera, hudYaw, focusIndex);
+    systemMap.update(camera, hudYaw, focusIndex, deltaTime);
   }
   if (gravityWell && gravityWellVisible) {
     gravityWell.update(hudYaw);
