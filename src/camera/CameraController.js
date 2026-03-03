@@ -67,6 +67,9 @@ export class CameraController {
     // and pull the camera back to the planet you were orbiting before.
     this.onFreeLookEnd = null;
 
+    // ── Bypass mode (for flythrough camera) ──
+    this.bypassed = false;
+
     // ── Gyroscope ──
     this.gyroEnabled = false;
     this._prevAlpha = null;
@@ -350,6 +353,8 @@ export class CameraController {
   }
 
   update(deltaTime) {
+    if (this.bypassed) return;
+
     // Auto-drift
     if (this.autoRotateActive && !this.isDragging) {
       this.yaw += this.autoRotateSpeed * (Math.PI / 180) * deltaTime;
@@ -393,5 +398,34 @@ export class CameraController {
     this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
 
     this._applyOrbit();
+  }
+
+  /**
+   * Reverse-compute orbit state from camera's current world position.
+   * Used for seamless handoff from flythrough back to manual orbit control.
+   */
+  restoreFromWorldState(targetPosition) {
+    this.bypassed = false;
+
+    this.target.copy(targetPosition);
+    this._targetGoal.copy(targetPosition);
+    this._transitioning = false;
+
+    // Compute spherical coords from camera's current position relative to target
+    const offset = this.camera.position.clone().sub(targetPosition);
+    const dist = offset.length();
+
+    const yaw = Math.atan2(offset.x, offset.z);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / dist)));
+
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.distance = dist;
+
+    // Snap smoothed values so there's no lerp jitter
+    this.smoothedYaw = yaw;
+    this.smoothedPitch = pitch;
+    this.smoothedDistance = dist;
+    this.zoomSpeed = 0;
   }
 }

@@ -13,6 +13,7 @@ import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
+import { FlythroughCamera } from './auto/FlythroughCamera.js';
 
 // ── Scene ──
 const scene = new THREE.Scene();
@@ -58,19 +59,14 @@ let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
 
-// ── Autopilot ──
+// ── Autopilot (cinematic flythrough) ──
 const autoNav = new AutoNavigator();
+const flythrough = new FlythroughCamera(camera);
 let idleTimer = 0;
 const IDLE_THRESHOLD = 20;
-let mouseFreeLookActive = false;
-let mouseFreeLookTimeout = null;
 
-autoNav.onFocusPlanet = (index) => focusPlanet(index);
-autoNav.onFocusStar = (index) => focusStar(index);
-autoNav.onFocusMoon = (pi, mi) => focusMoon(pi, mi);
-autoNav.onOverview = () => focusPlanet(-1);
 autoNav.onTourComplete = () => {
-  // Phase 6: loop. Phase 7 will replace with warp trigger.
+  // Phase 7 will replace with warp trigger. For now, loop.
 };
 
 // ── Click-to-select (raycasting) ──
@@ -85,9 +81,9 @@ spawnSystem();
  * Generate and display a full star system (single or binary).
  */
 function spawnSystem() {
-  // ── Reset autopilot ──
+  // ── Reset autopilot / flythrough ──
   const wasAutopilot = autoNav.isActive;
-  autoNav.stop();
+  stopFlythrough();
   idleTimer = 0;
 
   // ── Clean up old system ──
@@ -412,9 +408,134 @@ function spawnSystem() {
 
   // Restart autopilot with new system if it was active before
   if (wasAutopilot) {
-    autoNav.start(system);
-    cameraController.autoRotateActive = true;
+    startFlythrough();
   }
+}
+
+/**
+ * Populate body references on the autoNav queue.
+ * Each stop gets the Three.js mesh so FlythroughCamera can track it.
+ */
+function populateQueueRefs() {
+  for (const stop of autoNav.queue) {
+    if (stop.type === 'star') {
+      const starObj = stop.starIndex === 1 && system.star2 ? system.star2 : system.star;
+      stop.bodyRef = starObj.mesh;
+      stop.bodyRadius = starObj.data.radius;
+      // Cap orbit distance inside innermost planet orbit
+      const innerOrbit = system.planets[0].orbitRadius;
+      stop.orbitDistance = Math.min(starObj.data.radius * 4, innerOrbit * 0.4);
+    } else if (stop.type === 'planet') {
+      const entry = system.planets[stop.planetIndex];
+      stop.bodyRef = entry.planet.mesh;
+      stop.bodyRadius = entry.planet.data.radius;
+      stop.orbitDistance = entry.planet.data.radius * 6;
+    } else if (stop.type === 'moon') {
+      const entry = system.planets[stop.planetIndex];
+      const moon = entry.moons[stop.moonIndex];
+      stop.bodyRef = moon.mesh;
+      stop.bodyRadius = moon.data.radius;
+      stop.orbitDistance = moon.data.radius * 8;
+    }
+  }
+}
+
+/**
+ * Start the cinematic flythrough tour.
+ */
+function startFlythrough() {
+  if (!system) return;
+
+  autoNav.buildQueue(system);
+  populateQueueRefs();
+  autoNav.start();
+
+  // Set next body ref on first stop for departure steering
+  const nextStop = autoNav.getNextStop();
+  if (nextStop) flythrough.nextBodyRef = nextStop.bodyRef;
+
+  // Bypass manual camera — flythrough drives camera directly
+  cameraController.bypassed = true;
+
+  // Compute outer orbit radius for descend height
+  const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
+
+  // Begin descent from above the system
+  const firstStop = autoNav.getCurrentStop();
+  flythrough.beginDescend(
+    firstStop.bodyRef,
+    firstStop.orbitDistance,
+    firstStop.bodyRadius,
+    outerOrbit,
+  );
+  flythrough.orbitDuration = firstStop.linger;
+
+  console.log('Autopilot: on (flythrough)');
+}
+
+/**
+ * Stop the flythrough and hand camera back to manual orbit control.
+ */
+function stopFlythrough() {
+  if (!autoNav.isActive && !flythrough.active) return;
+
+  flythrough.stop();
+  autoNav.stop();
+
+  if (!system) {
+    cameraController.bypassed = false;
+    return;
+  }
+
+  // Find closest body to camera and restore orbit around it
+  const closest = findClosestBody();
+  if (closest) {
+    cameraController.restoreFromWorldState(closest.position);
+    focusIndex = closest.focusIndex;
+    focusMoonIndex = closest.moonIndex;
+    focusStarIndex = closest.starIndex;
+  } else {
+    cameraController.bypassed = false;
+  }
+
+  console.log('Autopilot: off');
+}
+
+/**
+ * Find the closest body to the camera for seamless handoff.
+ */
+function findClosestBody() {
+  if (!system) return null;
+
+  let closest = null;
+  let closestDist = Infinity;
+
+  const camPos = camera.position;
+
+  // Check stars
+  const checkBody = (position, focusIdx, moonIdx, starIdx) => {
+    const d = camPos.distanceTo(position);
+    if (d < closestDist) {
+      closestDist = d;
+      closest = { position, focusIndex: focusIdx, moonIndex: moonIdx, starIndex: starIdx };
+    }
+  };
+
+  checkBody(system.star.mesh.position, -2, -1, 0);
+  if (system.star2) {
+    checkBody(system.star2.mesh.position, -2, -1, 1);
+  }
+
+  // Check planets and moons
+  for (let i = 0; i < system.planets.length; i++) {
+    const entry = system.planets[i];
+    checkBody(entry.planet.mesh.position, i, -1, -1);
+    for (let m = 0; m < entry.moons.length; m++) {
+      checkBody(entry.moons[m].mesh.position, i, m, -1);
+    }
+  }
+
+  return closest;
 }
 
 /**
@@ -704,31 +825,43 @@ function animate() {
       }
     }
 
-    // ── Autopilot ──
+    // ── Autopilot (cinematic flythrough) ──
     if (!autoNav.isActive) {
       idleTimer += deltaTime;
       if (idleTimer >= IDLE_THRESHOLD) {
-        autoNav.start(system);
-        cameraController.autoRotateActive = true;
-        console.log('Autopilot: on (idle timeout)');
+        startFlythrough();
       }
-    } else {
-      autoNav.update(deltaTime);
-      // Dynamic camera motion (when user isn't free-looking)
-      if (!mouseFreeLookActive && !cameraController.isFreeLooking) {
-        const time = performance.now() / 1000;
-        cameraController.autoRotateSpeed = autoNav.getAutoRotateSpeed(time);
-        const targetPitch = autoNav.getTargetPitch(time);
-        cameraController.pitch += (targetPitch - cameraController.pitch) * 0.02 * deltaTime * 60;
+    } else if (flythrough.active) {
+      const result = flythrough.update(deltaTime);
+
+      if (result.orbitComplete) {
+        // Orbit finished — begin travel to next body
+        const nextStop = autoNav.advanceToNext();
+        if (nextStop && nextStop.bodyRef) {
+          flythrough.beginTravel(nextStop.bodyRef, nextStop.orbitDistance, nextStop.bodyRadius);
+          // Set next body ref for departure steering on the upcoming orbit
+          const upcoming = autoNav.getNextStop();
+          flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+        }
+      }
+
+      if (result.travelComplete) {
+        // Arrived at next body — begin orbit
+        const stop = autoNav.getCurrentStop();
+        if (stop && stop.bodyRef) {
+          flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger);
+          // Set next body ref for departure steering
+          const upcoming = autoNav.getNextStop();
+          flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+        }
       }
     }
 
-    // ── Camera tracking ──
-    // Skip tracking during free-look — the user is controlling the view
-    // direction manually, so trackTarget would fight with their input.
-    if (!cameraController.isFreeLooking) {
+    // ── Camera tracking (manual mode only) ──
+    // Skip during flythrough (camera is driven by FlythroughCamera)
+    // Skip during free-look (user controls the view)
+    if (!cameraController.bypassed && !cameraController.isFreeLooking) {
       if (focusIndex === -2 && focusStarIndex >= 0) {
-        // Tracking a star
         const starObj = focusStarIndex === 1 && system.star2 ? system.star2 : system.star;
         cameraController.trackTarget(starObj.mesh.position);
       } else if (focusIndex >= 0 && focusIndex < system.planets.length) {
@@ -746,11 +879,15 @@ function animate() {
   starfield.update(camera.position);
 
   // ── Update HUD ──
+  // During flythrough, compute yaw from camera position relative to origin
+  const hudYaw = cameraController.bypassed
+    ? Math.atan2(camera.position.x, camera.position.z)
+    : cameraController.smoothedYaw;
   if (systemMap) {
-    systemMap.update(camera, cameraController.smoothedYaw, focusIndex);
+    systemMap.update(camera, hudYaw, focusIndex);
   }
   if (gravityWell && gravityWellVisible) {
-    gravityWell.update(cameraController.smoothedYaw);
+    gravityWell.update(hudYaw);
   }
 
   retroRenderer.render();
@@ -764,13 +901,10 @@ window.addEventListener('keydown', (e) => {
   // A key: toggle autopilot
   if (e.code === 'KeyA') {
     if (autoNav.isActive) {
-      autoNav.stop();
-      console.log('Autopilot: off');
+      stopFlythrough();
     } else if (system) {
       idleTimer = 0;
-      autoNav.start(system);
-      cameraController.autoRotateActive = true;
-      console.log('Autopilot: on');
+      startFlythrough();
     }
     return;
   }
@@ -779,20 +913,34 @@ window.addEventListener('keydown', (e) => {
   if (autoNav.isActive) {
     if (e.code === 'Space') {
       e.preventDefault();
-      autoNav.stop();
+      stopFlythrough();
       seedCounter++;
       spawnSystem();
-    } else if (e.code === 'Escape' || e.code === 'Backquote') {
-      autoNav.jumpTo(0); // overview is first stop
     } else if (e.code === 'Tab') {
       e.preventDefault();
-      autoNav.advance(e.shiftKey ? -1 : 1);
+      // Jump tour forward/back — begin travel to the new stop
+      const stop = autoNav.advance(e.shiftKey ? -1 : 1);
+      if (stop && stop.bodyRef) {
+        flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+        const upcoming = autoNav.getNextStop();
+        flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+      }
     } else if (e.key === '1') {
-      autoNav.jumpToStar();
+      const stop = autoNav.jumpToStar();
+      if (stop && stop.bodyRef) {
+        flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+        const upcoming = autoNav.getNextStop();
+        flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+      }
     } else if (e.key >= '2' && e.key <= '9') {
       const planetIdx = parseInt(e.key) - 2;
       if (system && planetIdx < system.planets.length) {
-        autoNav.jumpToPlanet(planetIdx);
+        const stop = autoNav.jumpToPlanet(planetIdx);
+        if (stop && stop.bodyRef) {
+          flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+          const upcoming = autoNav.getNextStop();
+          flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+        }
       }
     }
     // O, G still work normally during autopilot
@@ -866,14 +1014,10 @@ function trySelect(clientX, clientY) {
 
 // Mouse free-look during autopilot + idle tracking
 canvas.addEventListener('mousemove', (e) => {
-  if (autoNav.isActive) {
-    // Free-look: rotate camera based on mouse delta
-    cameraController.yaw -= e.movementX * 0.003;
-    cameraController.pitch -= e.movementY * 0.002;
-    mouseFreeLookActive = true;
-    clearTimeout(mouseFreeLookTimeout);
-    mouseFreeLookTimeout = setTimeout(() => { mouseFreeLookActive = false; }, 1000);
-  } else {
+  if (autoNav.isActive && flythrough.active) {
+    // Free-look: rotate view slightly during flythrough
+    flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
+  } else if (!autoNav.isActive) {
     // Reset idle timer when not in autopilot
     idleTimer = 0;
   }
@@ -885,8 +1029,7 @@ canvas.addEventListener('mousedown', (e) => {
   _mouseDown.y = e.clientY;
   // Left-click drag turns off autopilot
   if (e.button === 0 && autoNav.isActive) {
-    autoNav.stop();
-    console.log('Autopilot: off (mouse drag)');
+    stopFlythrough();
   }
   if (!autoNav.isActive) idleTimer = 0;
 });
@@ -976,12 +1119,11 @@ if (mobileMenu) {
       btn.classList.toggle('active', gravityWellVisible);
     } else if (action === 'autonav') {
       if (autoNav.isActive) {
-        autoNav.stop();
+        stopFlythrough();
         btn.classList.remove('active');
       } else if (system) {
         idleTimer = 0;
-        autoNav.start(system);
-        cameraController.autoRotateActive = true;
+        startFlythrough();
         btn.classList.add('active');
       }
     } else if (action === 'gyro') {
