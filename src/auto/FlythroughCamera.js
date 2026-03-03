@@ -71,6 +71,7 @@ export class FlythroughCamera {
     this._arrivalTangentScaled = new THREE.Vector3(); // Hermite arrival tangent (scaled)
     this._hermiteStartPos = new THREE.Vector3();      // where escape spiral ends / Hermite begins
     this._escapeComplete = false;                     // has the escape spiral finished?
+    this._escapeDuration = 6;                         // dynamic, set per-travel
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
 
     // Departure blend state (spiral continuation → Hermite)
@@ -219,6 +220,12 @@ export class FlythroughCamera {
     // Sqrt scaling: doubling distance adds ~40% time. Feels natural.
     const dist = this.departurePos.distanceTo(nextBodyRef.position);
     this.travelDuration = Math.max(12, Math.min(25, 18 * Math.sqrt(dist / 500)));
+
+    // ── Dynamic escape duration ──
+    // Proportional to travel time (25%), clamped 4-7s. Longer trips get
+    // longer escape spirals so the camera has time to naturally widen its
+    // orbit and curve away from the body before the Hermite takes over.
+    this._escapeDuration = Math.max(4, Math.min(7, this.travelDuration * 0.25));
 
     // Pre-store current body for lookAt transition
     this._travelFromBody = this.bodyRef;
@@ -381,16 +388,16 @@ export class FlythroughCamera {
       ? this._ease(this.orbitElapsed / entryDur)
       : 1;
 
-    // ── Departure speed-up (last 7s) ──
-    // The orbit speeds up as the camera prepares to break free.
-    const departDur = 7;
+    // ── Departure speed-up (last 9s) ──
+    // The orbit visibly accelerates as the camera builds to escape velocity.
+    const departDur = 9;
     const departStart = this.orbitDuration - departDur;
     let speedFactor = 1;
 
     if (this.nextBodyRef && this.orbitElapsed > departStart) {
       const departT = (this.orbitElapsed - departStart) / departDur;
       const departBlend = this._ease(departT);
-      speedFactor = 1 + departBlend * 0.8; // gradual ramp to 80% faster
+      speedFactor = 1 + departBlend * 1.2; // ramp to 2.2× orbit speed (escape velocity)
     }
 
     // Advance yaw — continuous, same direction throughout.
@@ -479,14 +486,28 @@ export class FlythroughCamera {
   /**
    * Continue the departure orbit spiral forward in time.
    * Used during the escape phase — the camera continues its orbit with
-   * increasing speed and aggressive widening until it "breaks free."
+   * eased widening (slow at first, then accelerating) until it "breaks free."
+   * The easing makes the spiral unfurl naturally: tight at first, opening
+   * up as the camera gains escape velocity, then settling as it enters
+   * the transfer trajectory.
    */
   _computeSpiralPos(elapsed, bodyPos, out) {
-    // Speed increases during escape (building to escape velocity)
-    const accel = 1 + elapsed * 0.1;
+    const t = Math.min(1, elapsed / this._escapeDuration);
+    const easedT = this._ease(t);
+
+    // Angular acceleration: eased, reaches 1.3× at escape end.
+    // Combined with the 2.2× departure speed factor, the orbit
+    // visibly accelerates through the escape.
+    const accel = 1 + easedT * 0.3;
     const yaw = this._departYaw
       + this.orbitYawSpeed * this.orbitDirection * elapsed * this._departSpeedFactor * accel;
-    const dist = this._departDist * (1 + elapsed * 0.5); // aggressive widening
+
+    // Eased widening — orbit opens up slowly at first, then accelerates.
+    // Smootherstep has zero derivative at endpoints, so the widening
+    // starts gently (orbit barely changes) and the radial velocity
+    // returns to zero at escape end (smooth handoff to Hermite).
+    const dist = this._departDist * (1 + easedT * 2.0); // peaks at 3× distance
+
     const cp = Math.cos(this._departPitch);
     out.set(
       bodyPos.x + dist * Math.sin(yaw) * cp,
@@ -595,7 +616,7 @@ export class FlythroughCamera {
     // widening. The camera stays focused on the departing body as it
     // "breaks free" of gravity. No direction change — just the orbit
     // opening up until the camera escapes into the transfer curve.
-    const ESCAPE_DUR = 4.0;
+    const ESCAPE_DUR = this._escapeDuration;
     const hasEscape = !!this._travelFromBody;
 
     if (hasEscape && !this._escapeComplete) {
@@ -608,8 +629,9 @@ export class FlythroughCamera {
         this._escapeComplete = true;
         this._hermiteStartPos.copy(this.camera.position);
 
-        // Compute spiral tangent at escape end (orbit tangent at this yaw)
-        const accel = 1 + ESCAPE_DUR * 0.1;
+        // Compute spiral tangent at escape end (orbit tangent at this yaw).
+        // accel must match _computeSpiralPos at t=1: 1 + ease(1) * 0.3 = 1.3
+        const accel = 1.3;
         const escapeYaw = this._departYaw
           + this.orbitYawSpeed * this.orbitDirection * ESCAPE_DUR
           * this._departSpeedFactor * accel;
