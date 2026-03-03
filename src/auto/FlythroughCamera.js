@@ -128,6 +128,7 @@ export class FlythroughCamera {
     this.orbitDistBase = orbitDistance;
     this.orbitElapsed = 0;
     this.orbitDuration = duration || 15;
+    this._targetingSignaled = false;
 
     // Compute ALL starting orbit parameters from camera's actual position.
     // This prevents any snap at the slingshot → orbit transition — the orbit
@@ -152,22 +153,18 @@ export class FlythroughCamera {
     const pitchRatio = Math.max(-1, Math.min(1, (this._entryPitch - midPitch) / ampPitch));
     this.orbitPitchPhase = Math.asin(pitchRatio);
 
-    // After slingshot arrival, use capture direction as initial guess
+    // After slingshot arrival, use capture direction as the authoritative
+    // orbit direction. The travel phase chose the arrival edge to match
+    // the predicted optimal departure direction, so don't override it —
+    // overriding would cause a visible direction reversal at arrival.
     if (this._arrivalOrbitDir !== null) {
       this.orbitDirection = this._arrivalOrbitDir;
       this._arrivalOrbitDir = null;
     }
-
-    // ── Choose orbit direction to prep for departure ──
-    // We already know the next body in the tour, so pick the direction
-    // whose departure tangent will point closest to it. This makes the
-    // slingshot launch feel natural — the orbit is already heading the
-    // right way when it's time to leave.
-    //
-    // The departure tangent heading for orbit direction d is:
-    //   yaw + yawSpeed * d * duration + d * π/2
-    // (tangent is 90° ahead of the radius in the orbit direction)
-    if (this.nextBodyRef) {
+    // Only predict orbit direction from scratch when there's no slingshot
+    // arrival (e.g. after descend, or first orbit). When the slingshot
+    // chose an arrival side, that side IS the correct direction.
+    else if (this.nextBodyRef) {
       const nextPos = this.nextBodyRef.position;
       const toNextAngle = Math.atan2(nextPos.x - bodyPos.x, nextPos.z - bodyPos.z);
 
@@ -175,7 +172,6 @@ export class FlythroughCamera {
       const tangentCW  = this.orbitYaw + yawTravel + Math.PI / 2;
       const tangentCCW = this.orbitYaw - yawTravel - Math.PI / 2;
 
-      // Unsigned angular difference to target (normalized to [0, π])
       const diffCW  = Math.abs(Math.atan2(
         Math.sin(toNextAngle - tangentCW), Math.cos(toNextAngle - tangentCW),
       ));
@@ -212,6 +208,17 @@ export class FlythroughCamera {
       -Math.sin(this.orbitYaw) * cosPitch,
     ).multiplyScalar(this.orbitDirection).normalize();
 
+    // ── Prevent camera turnaround ──
+    // If the departure tangent points away from the destination, the Hermite
+    // curve would loop back on itself. Blend toward destination to prevent this.
+    _v1.subVectors(nextBodyRef.position, this.departurePos);
+    _v1.y = 0;
+    _v1.normalize();
+    const alignment = this._departureTangent.x * _v1.x + this._departureTangent.z * _v1.z;
+    if (alignment < 0.2) {
+      this._departureTangent.lerp(_v1, 0.5).normalize();
+    }
+
     // Snapshot departure spiral state so the blend can continue the orbit
     // spiral forward in time from exactly where we left off.
     this._departYaw = this.orbitYaw;
@@ -247,8 +254,17 @@ export class FlythroughCamera {
 
     // Departure tangent: camera forward direction (no orbit to derive from)
     this._departureTangent.copy(this.departureDir);
-    this._departureTangent.y = 0; // keep the curve in the horizontal plane
+    this._departureTangent.y = 0;
     this._departureTangent.normalize();
+
+    // If camera points away from destination, blend toward it to prevent loops
+    _v1.subVectors(nextBodyRef.position, this.departurePos);
+    _v1.y = 0;
+    _v1.normalize();
+    const alignment = this._departureTangent.x * _v1.x + this._departureTangent.z * _v1.z;
+    if (alignment < 0.2) {
+      this._departureTangent.lerp(_v1, 0.5).normalize();
+    }
 
     this._arrivalComputed = false;
     this.travelElapsed = 0;
@@ -304,10 +320,12 @@ export class FlythroughCamera {
 
   /**
    * Update camera position and lookAt. Call every frame.
-   * Returns { orbitComplete, travelComplete } to signal state changes.
+   * Returns { orbitComplete, travelComplete, targetingReady }.
+   * targetingReady fires once, 2s before orbit ends, to trigger
+   * the "now targeting" minimap animation.
    */
   update(deltaTime) {
-    if (!this.active) return { orbitComplete: false, travelComplete: false };
+    if (!this.active) return { orbitComplete: false, travelComplete: false, targetingReady: false };
 
     switch (this.state) {
       case State.DESCEND:
@@ -317,7 +335,7 @@ export class FlythroughCamera {
       case State.TRAVEL:
         return this._updateTravel(deltaTime);
     }
-    return { orbitComplete: false, travelComplete: false };
+    return { orbitComplete: false, travelComplete: false, targetingReady: false };
   }
 
   _updateDescend(deltaTime) {
@@ -434,8 +452,15 @@ export class FlythroughCamera {
       this._applyFreeLookAndLookAt(bodyPos);
     }
 
+    // "Now targeting" signal — fires once, 2s before orbit ends
+    let targetingReady = false;
+    if (!this._targetingSignaled && this.orbitElapsed >= this.orbitDuration - 2) {
+      this._targetingSignaled = true;
+      targetingReady = true;
+    }
+
     const orbitComplete = this.orbitElapsed >= this.orbitDuration;
-    return { orbitComplete, travelComplete: false };
+    return { orbitComplete, travelComplete: false, targetingReady };
   }
 
   /**
@@ -507,8 +532,37 @@ export class FlythroughCamera {
       nextPos.x - this.departurePos.x,
       nextPos.z - this.departurePos.z,
     );
-    // Enter from the side (90° offset from approach) for orbit-ready arrival
-    const entryYaw = approachDir + Math.PI / 2;
+    // Enter from the side (90° offset from approach) for orbit-ready arrival.
+    // Which side? If we know the next-next body, predict which orbit direction
+    // will be best for departing toward it, then arrive at the corresponding edge.
+    // approachDir - π/2 → captureDir = 1 (CW)
+    // approachDir + π/2 → captureDir = -1 (CCW)
+    let entryYaw;
+    if (this.nextBodyRef) {
+      const nnPos = this.nextBodyRef.position;
+      const toNextAngle = Math.atan2(nnPos.x - nextPos.x, nnPos.z - nextPos.z);
+
+      // Estimate orbit yaw travel (mid-range speed × typical linger)
+      const estYawTravel = 0.325 * 18; // ~5.85 rad ≈ 0.93 revolutions
+
+      // Departure tangent heading for CW vs CCW
+      const tangentCW  = approachDir + estYawTravel;
+      const tangentCCW = approachDir - estYawTravel;
+
+      // Pick direction whose departure tangent is closer to next-next body
+      const diffCW  = Math.abs(Math.atan2(
+        Math.sin(toNextAngle - tangentCW), Math.cos(toNextAngle - tangentCW),
+      ));
+      const diffCCW = Math.abs(Math.atan2(
+        Math.sin(toNextAngle - tangentCCW), Math.cos(toNextAngle - tangentCCW),
+      ));
+
+      entryYaw = diffCW <= diffCCW
+        ? approachDir - Math.PI / 2   // CW orbit → arrive at right edge
+        : approachDir + Math.PI / 2;  // CCW orbit → arrive at left edge
+    } else {
+      entryYaw = approachDir + Math.PI / 2;
+    }
     const entryPitch = 0.15;
     const cosPitch = Math.cos(entryPitch);
 

@@ -866,17 +866,23 @@ function animate() {
     } else if (flythrough.active) {
       const result = flythrough.update(deltaTime);
 
+      // "Now targeting" — 2s before orbit ends, blink the next target
+      if (result.targetingReady) {
+        const previewStop = autoNav.getNextStop();
+        if (previewStop) {
+          updateFocusFromStop(previewStop);
+          if (systemMap) systemMap.triggerBlink();
+        }
+      }
+
       if (result.orbitComplete) {
         // Orbit finished — begin travel to next body
         const nextStop = autoNav.advanceToNext();
         if (nextStop && nextStop.bodyRef) {
           flythrough.beginTravel(nextStop.bodyRef, nextStop.orbitDistance, nextStop.bodyRadius);
-          // Set next body ref for departure steering on the upcoming orbit
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-          // "Now targeting" — blink the NEXT body on minimap before we leave
           updateFocusFromStop(nextStop);
-          if (systemMap) systemMap.triggerBlink();
         }
       }
 

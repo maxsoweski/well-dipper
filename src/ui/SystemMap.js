@@ -58,7 +58,7 @@ export class SystemMap {
 
     // ── Blink animation state ──
     this._blinkTimer = -1;        // -1 = not blinking
-    this._blinkDuration = 0.9;    // total blink duration (3 blinks)
+    this._blinkDuration = 1.8;    // total blink duration (6 blinks)
 
     // ── Build scene objects ──
     this._buildOrbitLines();
