@@ -231,6 +231,37 @@ export class FlythroughCamera {
   }
 
   /**
+   * Begin travelling from an arbitrary camera position (no prior orbit).
+   * Used when engaging autopilot from anywhere — the departure tangent
+   * comes from the camera's current forward direction instead of orbit state.
+   * The departure blend is skipped since there's no orbit spiral to blend from.
+   */
+  beginTravelFrom(nextBodyRef, nextOrbitDistance, nextBodyRadius) {
+    this.active = true;
+    this.state = State.TRAVEL;
+    this.nextBodyRef = nextBodyRef;
+    this.nextOrbitDistance = nextOrbitDistance;
+
+    this.departurePos.copy(this.camera.position);
+    this.camera.getWorldDirection(this.departureDir);
+
+    // Departure tangent: camera forward direction (no orbit to derive from)
+    this._departureTangent.copy(this.departureDir);
+    this._departureTangent.y = 0; // keep the curve in the horizontal plane
+    this._departureTangent.normalize();
+
+    this._arrivalComputed = false;
+    this.travelElapsed = 0;
+    this.travelDuration = 10;
+
+    // No from-body — departure blend will be skipped in _updateTravel
+    this._travelFromBody = null;
+    this._travelToBody = nextBodyRef;
+    this._travelToRadius = nextBodyRadius;
+    this._travelToOrbitDist = nextOrbitDistance;
+  }
+
+  /**
    * Randomize orbit motion parameters for variety.
    */
   _randomizeOrbit() {
@@ -531,8 +562,9 @@ export class FlythroughCamera {
     // ── Departure blend (first 1.5s): spiral → Hermite ──
     // The orbit spiral continues forward while the Hermite curve ramps in.
     // This eliminates the direction change and speed snap at departure.
+    // Skipped when there's no from-body (e.g. autopilot engaged from anywhere).
     const DEPART_BLEND = 1.5;
-    if (this.travelElapsed < DEPART_BLEND) {
+    if (this._travelFromBody && this.travelElapsed < DEPART_BLEND) {
       const blend = this._ease(this.travelElapsed / DEPART_BLEND);
       this._computeSpiralPos(this.travelElapsed, this._travelFromBody.position, _v5);
       this.camera.position.lerpVectors(_v5, _v6, blend);

@@ -467,6 +467,8 @@ function updateFocusFromStop(stop) {
 
 /**
  * Start the cinematic flythrough tour.
+ * Engages from wherever the camera is — picks a random body and
+ * begins flying toward it. No teleport, no descend.
  */
 function startFlythrough() {
   if (!system) return;
@@ -475,25 +477,30 @@ function startFlythrough() {
   populateQueueRefs();
   autoNav.start();
 
-  // Set next body ref on first stop for departure steering
-  const nextStop = autoNav.getNextStop();
-  if (nextStop) flythrough.nextBodyRef = nextStop.bodyRef;
+  // Pick a random starting stop from the tour queue
+  const startIdx = Math.floor(Math.random() * autoNav.queue.length);
+  autoNav.currentIndex = startIdx;
+
+  const firstStop = autoNav.getCurrentStop();
+  if (!firstStop || !firstStop.bodyRef) return;
 
   // Bypass manual camera — flythrough drives camera directly
   cameraController.bypassed = true;
 
-  // Compute outer orbit radius for descend height
-  const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
+  // Set next body ref for the upcoming orbit's departure direction
+  const upcoming = autoNav.getNextStop();
+  flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
 
-  // Begin descent from above the system
-  const firstStop = autoNav.getCurrentStop();
-  flythrough.beginDescend(
+  // Begin travel from current camera position to the random body
+  flythrough.beginTravelFrom(
     firstStop.bodyRef,
     firstStop.orbitDistance,
     firstStop.bodyRadius,
-    outerOrbit,
   );
-  flythrough.orbitDuration = firstStop.linger;
+
+  // "Now targeting" — blink the destination on minimap
+  updateFocusFromStop(firstStop);
+  if (systemMap) systemMap.triggerBlink();
 
   console.log('Autopilot: on (flythrough)');
 }
@@ -867,8 +874,9 @@ function animate() {
           // Set next body ref for departure steering on the upcoming orbit
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-          // Update minimap focus to the body we're travelling toward
+          // "Now targeting" — blink the NEXT body on minimap before we leave
           updateFocusFromStop(nextStop);
+          if (systemMap) systemMap.triggerBlink();
         }
       }
 
@@ -881,9 +889,8 @@ function animate() {
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
           flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger);
-          // Update minimap focus with blink
+          // Show current body on minimap (no blink — we just arrived)
           updateFocusFromStop(stop);
-          if (systemMap) systemMap.triggerBlink();
         }
       }
     }
