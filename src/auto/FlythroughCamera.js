@@ -229,7 +229,7 @@ export class FlythroughCamera {
 
     this._arrivalComputed = false; // computed on first frame of travel
     this.travelElapsed = 0;
-    this.travelDuration = 10;
+    this.travelDuration = 15;
 
     // Pre-store current body for lookAt transition
     this._travelFromBody = this.bodyRef;
@@ -269,7 +269,7 @@ export class FlythroughCamera {
 
     this._arrivalComputed = false;
     this.travelElapsed = 0;
-    this.travelDuration = 10;
+    this.travelDuration = 15;
 
     // No from-body — departure blend will be skipped in _updateTravel
     this._travelFromBody = null;
@@ -283,7 +283,7 @@ export class FlythroughCamera {
    */
   _randomizeOrbit() {
     this.orbitDirection = Math.random() < 0.5 ? 1 : -1;
-    this.orbitYawSpeed = 0.25 + Math.random() * 0.15; // 0.25-0.4 rad/s
+    this.orbitYawSpeed = 0.35 + Math.random() * 0.15; // 0.35-0.50 rad/s
     this.orbitPitchPhase = Math.random() * Math.PI * 2;
     this.orbitDistPhase = Math.random() * Math.PI * 2;
 
@@ -302,20 +302,17 @@ export class FlythroughCamera {
   }
 
   /**
-   * Travel easing — carries orbital momentum into the slingshot.
-   *
-   * Unlike smootherstep (zero velocity at both ends), this starts with
-   * non-zero velocity (the camera is already moving from its orbit) and
-   * decelerates to zero at arrival (gravitational capture).
+   * Travel easing — gradual ramp-up, cruise, gradual deceleration.
    *
    * Cubic: e(t) = (v₀-2)t³ + (3-2v₀)t² + v₀t
    * v₀ = initial velocity factor (0 → smoothstep, higher → more momentum)
    *
-   * With v₀=0.4: starts at 40% of peak speed, peaks mid-flight, arrives at 0.
+   * With v₀=0.2: starts slow, ramps up to "cruise speed" mid-flight,
+   * then gradually decelerates toward destination (gravitational capture).
    */
   _travelEase(t) {
     t = Math.max(0, Math.min(1, t));
-    const v0 = 0.4;
+    const v0 = 0.2;
     return (v0 - 2) * t * t * t + (3 - 2 * v0) * t * t + v0 * t;
   }
 
@@ -379,31 +376,25 @@ export class FlythroughCamera {
 
     const bodyPos = this.bodyRef.position;
 
-    // ── Entry blend (first 2s): smooth transition from slingshot arrival ──
+    // ── Entry blend (first 2s): smooth transition from arrival ──
     const entryDur = 2;
     const entryFactor = this.orbitElapsed < entryDur
       ? this._ease(this.orbitElapsed / entryDur)
       : 1;
 
-    // ── Departure phase (last 5s) ──
-    // Computed BEFORE yaw so it can affect orbit speed.
-    // The orbit continues in the same direction — no steering, no reversal.
-    // The camera gradually speeds up and spirals outward (widening orbit),
-    // naturally breaking free of the body's gravity before the slingshot.
+    // ── Departure speed-up (last 5s) ──
+    // The orbit speeds up as the camera prepares to break free.
     const departDur = 5;
     const departStart = this.orbitDuration - departDur;
-    let departBlend = 0;
-    let nextPos = null;
+    let speedFactor = 1;
 
     if (this.nextBodyRef && this.orbitElapsed > departStart) {
-      nextPos = this.nextBodyRef.position;
       const departT = (this.orbitElapsed - departStart) / departDur;
-      departBlend = this._ease(departT);
+      const departBlend = this._ease(departT);
+      speedFactor = 1 + departBlend * departBlend * 0.6; // up to 60% faster
     }
 
     // Advance yaw — continuous, same direction throughout.
-    // During departure: gradually speed up (gravity assist acceleration).
-    const speedFactor = 1 + departBlend * departBlend * 0.6; // up to 60% faster
     this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime * speedFactor;
 
     // Pitch: blend from entry pitch to oscillating orbit pitch
@@ -418,12 +409,12 @@ export class FlythroughCamera {
     const breathe = 1 + 0.05 * entryFactor * Math.sin(this.orbitElapsed * 0.785 + this.orbitDistPhase);
     let dist = this._entryDist + (this.orbitDistBase * breathe - this._entryDist) * entryFactor;
 
-    // Slingshot spiral: orbit widens progressively (breaking free of gravity).
-    // Starts gentle at 30% of departure phase, accelerates quadratically.
-    if (departBlend > 0.3) {
-      const unwindT = (departBlend - 0.3) / 0.7; // 0→1 over last 70%
-      dist *= (1 + unwindT * unwindT * 0.8); // quadratic, up to 80% wider
-    }
+    // ── Progressive widening ──
+    // Each orbit is wider than the last — the camera gradually drifts to
+    // a higher orbit, like a spacecraft boosting outward. Quadratic curve
+    // means early orbits are close, later orbits widen faster.
+    const orbitProgress = this.orbitElapsed / this.orbitDuration;
+    dist *= (1 + orbitProgress * orbitProgress * 0.8); // up to 1.8× at end
 
     // Save frame state for departure blend snapshot
     this._currentDist = dist;
@@ -437,25 +428,14 @@ export class FlythroughCamera {
       bodyPos.z + dist * Math.cos(this.orbitYaw) * cosPitch,
     );
 
-    // ── LookAt ──
-    // Last 3 seconds: gently shift lookAt toward next body so the current
-    // body slides to one side, hinting at the upcoming slingshot direction.
-    const shiftDuration = 3;
-    const shiftStart = this.orbitDuration - shiftDuration;
+    // ── LookAt: always track the current body ──
+    // The camera stays focused here throughout the entire orbit.
+    // The turn toward the next body happens during the travel phase.
+    this._applyFreeLookAndLookAt(bodyPos);
 
-    if (nextPos && this.orbitElapsed > shiftStart) {
-      const shiftT = (this.orbitElapsed - shiftStart) / shiftDuration;
-      const shiftBlend = this._ease(shiftT);
-      _v3.copy(nextPos).sub(bodyPos).normalize();
-      _v2.copy(bodyPos).addScaledVector(_v3, this.orbitDistBase * shiftBlend * 0.3);
-      this._applyFreeLookAndLookAt(_v2);
-    } else {
-      this._applyFreeLookAndLookAt(bodyPos);
-    }
-
-    // "Now targeting" signal — fires once, 2s before orbit ends
+    // "Now targeting" signal — fires once, 4s before orbit ends
     let targetingReady = false;
-    if (!this._targetingSignaled && this.orbitElapsed >= this.orbitDuration - 2) {
+    if (!this._targetingSignaled && this.orbitElapsed >= this.orbitDuration - 4) {
       this._targetingSignaled = true;
       targetingReady = true;
     }
@@ -496,7 +476,7 @@ export class FlythroughCamera {
   _computeSpiralPos(elapsed, bodyPos, out) {
     const yaw = this._departYaw
       + this.orbitYawSpeed * this.orbitDirection * elapsed * this._departSpeedFactor;
-    const dist = this._departDist * (1 + elapsed * 0.15); // gradual widening
+    const dist = this._departDist * (1 + elapsed * 0.3); // widening continues from orbit
     const cp = Math.cos(this._departPitch);
     out.set(
       bodyPos.x + dist * Math.sin(yaw) * cp,
@@ -614,10 +594,10 @@ export class FlythroughCamera {
       this.camera.position.lerpVectors(_v5, _v6, blend);
     }
 
-    // ── Arrival blend (last 1.5s): straight line → pre-orbit ──
+    // ── Arrival blend (last 2.5s): straight line → pre-orbit ──
     // Gravitational capture: the straight cruise bends into orbit.
-    // A pre-started orbit ramps in as the straight path fades out.
-    const ARRIVE_BLEND = 1.5;
+    // Longer blend = more gradual, natural-feeling capture.
+    const ARRIVE_BLEND = 2.5;
     const arriveStart = this.travelDuration - ARRIVE_BLEND;
     if (this.travelElapsed > arriveStart) {
       const blend = this._ease(
@@ -629,14 +609,21 @@ export class FlythroughCamera {
     }
 
     // ── LookAt ──
-    // First 20%: turn from departure view toward destination
-    // Remaining 80%: lock onto destination
-    if (t < 0.2) {
-      const blend = this._ease(t / 0.2);
-      _v4.copy(this.camera.position).addScaledVector(this.departureDir, 100);
-      this.lookAtTarget.lerpVectors(_v4, nextPos, blend);
+    // Three phases, like looking out a spacecraft side window:
+    // 1) Watch the departing body recede into the distance
+    // 2) Gracefully turn the camera toward the destination
+    // 3) Watch the destination body grow larger as we approach
+    const fromBody = this._travelFromBody;
+    if (fromBody && t < 0.35) {
+      // Phase 1: watch departing body recede (first 35% ≈ 5s)
+      this._applyFreeLookAndLookAt(fromBody.position);
+    } else if (fromBody && t < 0.6) {
+      // Phase 2: graceful turn from departing body to destination (25% ≈ 3.75s)
+      const turnBlend = this._ease((t - 0.35) / 0.25);
+      this.lookAtTarget.lerpVectors(fromBody.position, nextPos, turnBlend);
       this._applyFreeLookAndLookAt(this.lookAtTarget);
     } else {
+      // Phase 3: watch destination approach (last 40% ≈ 6s)
       this._applyFreeLookAndLookAt(nextPos);
     }
 

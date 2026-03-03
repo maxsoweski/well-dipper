@@ -38,7 +38,7 @@ export class AutoNavigator {
       bodyRef: null,
       orbitDistance: 0,
       bodyRadius: 0,
-      linger: 17,
+      linger: 50,
     });
 
     if (system.isBinary && system.star2) {
@@ -48,7 +48,7 @@ export class AutoNavigator {
         bodyRef: null,
         orbitDistance: 0,
         bodyRadius: 0,
-        linger: 14,
+        linger: 40,
       });
     }
 
@@ -72,7 +72,7 @@ export class AutoNavigator {
           bodyRef: null,
           orbitDistance: 0,
           bodyRadius: 0,
-          linger: 13,
+          linger: 30,
         });
       }
     }
@@ -83,12 +83,12 @@ export class AutoNavigator {
    */
   _planetLinger(entry) {
     const data = entry.planet.data;
-    let base = 20;
+    let base = 45;
     if (data.type === 'gas-giant' || data.type === 'hot-jupiter' || data.type === 'sub-neptune') {
-      base += 3;
+      base += 5;
     }
     if (data.rings) {
-      base += 2;
+      base += 3;
     }
     return base;
   }
