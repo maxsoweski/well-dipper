@@ -72,6 +72,8 @@ export class FlythroughCamera {
     this._hermiteStartPos = new THREE.Vector3();      // where escape spiral ends / Hermite begins
     this._escapeComplete = false;                     // has the escape spiral finished?
     this._escapeDuration = 6;                         // dynamic, set per-travel
+    this._escapeWidening = 2.0;                       // dynamic, scales with trip distance
+    this._orbitStartYaw = 0;                          // yaw at orbit start (for revolution counting)
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
 
     // Departure blend state (spiral continuation → Hermite)
@@ -152,6 +154,14 @@ export class FlythroughCamera {
 
     this._randomizeOrbit();
 
+    // Override yaw speed to achieve exactly 3 revolutions with gradual
+    // speed ramp from 1× to 2.5× (smootherstep). Average speed factor is
+    // (1 + 2.5) / 2 = 1.75, so: speed = 3 × 2π / (duration × 1.75).
+    // The orbit starts slow and contemplative, then visibly accelerates
+    // as the camera builds to escape velocity.
+    this.orbitYawSpeed = 3 * 2 * Math.PI / (this.orbitDuration * 1.75);
+    this._orbitStartYaw = this.orbitYaw;
+
     // Phase-align pitch oscillation so it starts from the actual camera pitch
     // (oscillation grows smoothly from entry value, no random jump)
     const midPitch = (0.087 + 0.436) / 2;
@@ -174,9 +184,10 @@ export class FlythroughCamera {
       const nextPos = this.nextBodyRef.position;
       const toNextAngle = Math.atan2(nextPos.x - bodyPos.x, nextPos.z - bodyPos.z);
 
-      const yawTravel = this.orbitYawSpeed * this.orbitDuration;
-      const tangentCW  = this.orbitYaw + yawTravel + Math.PI / 2;
-      const tangentCCW = this.orbitYaw - yawTravel - Math.PI / 2;
+      // After 3 full revolutions the camera returns to its starting angle,
+      // so the departure tangent is perpendicular to the radius at orbitYaw.
+      const tangentCW  = this.orbitYaw + Math.PI / 2;
+      const tangentCCW = this.orbitYaw - Math.PI / 2;
 
       const diffCW  = Math.abs(Math.atan2(
         Math.sin(toNextAngle - tangentCW), Math.cos(toNextAngle - tangentCW),
@@ -222,10 +233,17 @@ export class FlythroughCamera {
     this.travelDuration = Math.max(12, Math.min(25, 18 * Math.sqrt(dist / 500)));
 
     // ── Dynamic escape duration ──
-    // Proportional to travel time (25%), clamped 4-7s. Longer trips get
-    // longer escape spirals so the camera has time to naturally widen its
-    // orbit and curve away from the body before the Hermite takes over.
-    this._escapeDuration = Math.max(4, Math.min(7, this.travelDuration * 0.25));
+    // Proportional to travel time (25%), clamped 3-7s. Short trips
+    // (planet → its own moon) get a quick escape; long interplanetary
+    // trips get more time to spiral away naturally.
+    this._escapeDuration = Math.max(3, Math.min(7, this.travelDuration * 0.25));
+
+    // ── Distance-scaled escape widening ──
+    // For short trips, the escape orbit shouldn't widen past ~35% of the
+    // trip distance — otherwise the camera spirals past the destination.
+    // For long trips, full widening (2×) gives a dramatic escape spiral.
+    const maxEscapeDist = dist * 0.35;
+    this._escapeWidening = Math.max(0.3, Math.min(2.0, maxEscapeDist / this._departDist - 1));
 
     // Pre-store current body for lookAt transition
     this._travelFromBody = this.bodyRef;
@@ -388,17 +406,12 @@ export class FlythroughCamera {
       ? this._ease(this.orbitElapsed / entryDur)
       : 1;
 
-    // ── Departure speed-up (last 9s) ──
-    // The orbit visibly accelerates as the camera builds to escape velocity.
-    const departDur = 9;
-    const departStart = this.orbitDuration - departDur;
-    let speedFactor = 1;
-
-    if (this.nextBodyRef && this.orbitElapsed > departStart) {
-      const departT = (this.orbitElapsed - departStart) / departDur;
-      const departBlend = this._ease(departT);
-      speedFactor = 1 + departBlend * 1.2; // ramp to 2.2× orbit speed (escape velocity)
-    }
+    // ── Gradual speed ramp (entire orbit) ──
+    // Speed increases from 1× to 2.5× across the full orbit, giving a
+    // visible "building to escape velocity" feel. The camera starts slow
+    // and contemplative, then accelerates smoothly toward departure.
+    const rampT = this._ease(Math.min(1, this.orbitElapsed / this.orbitDuration));
+    let speedFactor = 1 + rampT * 1.5; // 1× → 2.5× over the orbit
 
     // Advance yaw — continuous, same direction throughout.
     this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime * speedFactor;
@@ -416,18 +429,17 @@ export class FlythroughCamera {
     let dist = this._entryDist + (this.orbitDistBase * breathe - this._entryDist) * entryFactor;
 
     // ── Stepped orbit widening (discrete altitude raises) ──
-    // Stay close for the first 2.5 revolutions (survey pass), then step
-    // to a wider orbit (1.35×), then wider again (1.7×). Looks like a
-    // spacecraft performing discrete orbit-raising maneuvers.
-    const revolutionTime = (2 * Math.PI) / this.orbitYawSpeed;
-    const revolutions = this.orbitElapsed / revolutionTime;
+    // Track actual revolutions via accumulated yaw (not elapsed time,
+    // since orbit speed varies with the ramp). Close survey for 1.5
+    // revolutions, then step wider, then wider again approaching departure.
+    const revolutions = Math.abs(this.orbitYaw - this._orbitStartYaw) / (2 * Math.PI);
     let altMult;
-    if (revolutions < 2.5) {
+    if (revolutions < 1.5) {
       altMult = 1.0; // close survey orbits
-    } else if (revolutions < 3.5) {
-      altMult = 1.0 + this._ease(revolutions - 2.5) * 0.35; // step to 1.35×
+    } else if (revolutions < 2.5) {
+      altMult = 1.0 + this._ease(revolutions - 1.5) * 0.35; // step to 1.35×
     } else {
-      altMult = 1.35 + this._ease(Math.min(1, revolutions - 3.5)) * 0.35; // step to 1.7×
+      altMult = 1.35 + this._ease(Math.min(1, revolutions - 2.5)) * 0.35; // step to 1.7×
     }
     dist *= altMult;
 
@@ -506,7 +518,7 @@ export class FlythroughCamera {
     // Smootherstep has zero derivative at endpoints, so the widening
     // starts gently (orbit barely changes) and the radial velocity
     // returns to zero at escape end (smooth handoff to Hermite).
-    const dist = this._departDist * (1 + easedT * 2.0); // peaks at 3× distance
+    const dist = this._departDist * (1 + easedT * this._escapeWidening);
 
     const cp = Math.cos(this._departPitch);
     out.set(
