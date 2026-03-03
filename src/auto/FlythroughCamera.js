@@ -12,11 +12,12 @@ import * as THREE from 'three';
  * As the orbit nears its end, the orbit radius widens (breaking free of
  * gravity) and the lookAt shifts toward the next destination.
  *
- * Travel uses Hermite spline interpolation for curved slingshot paths.
- * The departure tangent follows the orbit tangent (camera is "flung" from
- * orbit), and the arrival tangent curves into the destination orbit
- * (camera is "captured" by gravity). This creates the asymmetric,
- * gravitational-looking curves of real spaceflight maneuvers.
+ * Travel uses straight-line paths between bodies — like real spaceflight,
+ * where spacecraft coast in straight lines between gravitational fields.
+ * At departure, the orbit spiral blends smoothly into the straight cruise.
+ * At arrival, the straight path blends into a pre-orbit position
+ * (gravitational capture). The camera stays focused on the destination
+ * body throughout, like looking out a side window.
  *
  * All transitions use smootherstep (quintic) easing for gentle ramp-up/down.
  */
@@ -591,31 +592,20 @@ export class FlythroughCamera {
       this._arrivalYawSpeed = 0.25 + Math.random() * 0.15;
     }
 
-    // ── Hermite spline tangent vectors ──
+    // ── Straight-line cruise ──
+    // Like real spaceflight: coast in a straight line between bodies.
+    // Curves only happen at the edges — departure spiral blend and
+    // arrival gravitational capture blend.
     const travelDist = this.departurePos.distanceTo(_v1);
-    const tangentScale = travelDist * 0.4;
+    _v6.lerpVectors(this.departurePos, _v1, s);
+    // Subtle vertical arc prevents perfectly flat travel
+    _v6.y += travelDist * 0.012 * Math.sin(t * Math.PI);
 
-    // Departure tangent: pure orbit tangent (slingshot release)
-    _v2.copy(this._departureTangent).multiplyScalar(tangentScale);
-    _v2.y += travelDist * 0.04; // slight upward arc
-
-    // Arrival tangent: orbit tangent at entry (gravitational capture)
-    _v3.set(
-      arrTanX * captureDir * tangentScale,
-      -travelDist * 0.03, // slight downward into orbital plane
-      arrTanZ * captureDir * tangentScale,
-    );
-
-    // ── Evaluate slingshot curve ──
-    this._hermite(_v6, this.departurePos, _v2, _v1, _v3, s);
-    // _v6 now holds the pure Hermite position
-
-    // Start with the Hermite position
     this.camera.position.copy(_v6);
 
-    // ── Departure blend (first 1.5s): spiral → Hermite ──
-    // The orbit spiral continues forward while the Hermite curve ramps in.
-    // This eliminates the direction change and speed snap at departure.
+    // ── Departure blend (first 1.5s): spiral → straight line ──
+    // The orbit spiral continues forward while the straight cruise ramps in.
+    // This creates the "breaking free of gravity" feeling at departure.
     // Skipped when there's no from-body (e.g. autopilot engaged from anywhere).
     const DEPART_BLEND = 1.5;
     if (this._travelFromBody && this.travelElapsed < DEPART_BLEND) {
@@ -624,9 +614,9 @@ export class FlythroughCamera {
       this.camera.position.lerpVectors(_v5, _v6, blend);
     }
 
-    // ── Arrival blend (last 1.5s): Hermite → pre-orbit ──
-    // A pre-started orbit ramps in while the Hermite fades out.
-    // This eliminates the dead stop at arrival.
+    // ── Arrival blend (last 1.5s): straight line → pre-orbit ──
+    // Gravitational capture: the straight cruise bends into orbit.
+    // A pre-started orbit ramps in as the straight path fades out.
     const ARRIVE_BLEND = 1.5;
     const arriveStart = this.travelDuration - ARRIVE_BLEND;
     if (this.travelElapsed > arriveStart) {
