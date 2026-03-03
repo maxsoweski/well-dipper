@@ -1012,26 +1012,39 @@ function trySelect(clientX, clientY) {
   }
 }
 
-// Mouse free-look during autopilot + idle tracking
+// Idle tracking — any mouse movement resets idle timer (but no free-look)
 canvas.addEventListener('mousemove', (e) => {
-  if (autoNav.isActive && flythrough.active) {
-    // Free-look: rotate view slightly during flythrough
-    flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
-  } else if (!autoNav.isActive) {
-    // Reset idle timer when not in autopilot
+  if (!autoNav.isActive) {
     idleTimer = 0;
   }
+  // Middle mouse free-look during flythrough
+  if (flythrough.active && _middleMouseDown) {
+    flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
+  }
 });
+
+// Middle mouse tracking for flythrough free-look
+let _middleMouseDown = false;
 
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
   _mouseDown.x = e.clientX;
   _mouseDown.y = e.clientY;
+  if (e.button === 1) {
+    _middleMouseDown = true;
+  }
   // Left-click drag turns off autopilot
   if (e.button === 0 && autoNav.isActive) {
     stopFlythrough();
   }
   if (!autoNav.isActive) idleTimer = 0;
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (e.button === 1) {
+    _middleMouseDown = false;
+    if (flythrough.active) flythrough.clearFreeLook();
+  }
 });
 
 canvas.addEventListener('mouseup', (e) => {

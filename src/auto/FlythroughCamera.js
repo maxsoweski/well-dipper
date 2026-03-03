@@ -5,11 +5,14 @@ import * as THREE from 'three';
  *
  * Three states:
  * - DESCEND: initial entry, camera flies from above the system down to first body
- * - ORBIT:   circle the current body with varying speed and pitch
- * - TRAVEL:  smooth flight from one body to the next (smoothstep easing)
+ * - ORBIT:   circle the current body, facing FORWARD (tangent to orbit path)
+ * - TRAVEL:  smooth flight from one body to the next
  *
- * Drives camera.position and camera.lookAt() directly each frame.
- * CameraController must be in bypass mode while this is active.
+ * During orbit the camera looks forward like a spaceship — the body is off to
+ * the side. Departure steering rotates the orbit until the next body "dawns"
+ * ahead, then travel continues forward toward it.
+ *
+ * All transitions use smootherstep (quintic) easing for gentle ramp-up/down.
  */
 
 const State = { DESCEND: 0, ORBIT: 1, TRAVEL: 2 };
@@ -57,10 +60,9 @@ export class FlythroughCamera {
     this.descendElapsed = 0;
     this.descendDuration = 10;
 
-    // ── Free-look offset (applied on top of computed position) ──
+    // ── Free-look offset (middle mouse only) ──
     this.freeLookYaw = 0;
     this.freeLookPitch = 0;
-    this.freeLookDecay = 0.95;  // per-second decay factor
   }
 
   /**
@@ -115,7 +117,7 @@ export class FlythroughCamera {
 
     this.departurePos.copy(this.camera.position);
 
-    // Store forward direction at departure for lookAt transition
+    // Store forward direction at departure for smooth lookAt blend
     this.camera.getWorldDirection(this.departureDir);
 
     this.travelElapsed = 0;
@@ -142,25 +144,21 @@ export class FlythroughCamera {
   }
 
   /**
-   * Smoothstep easing: smooth acceleration and deceleration.
-   * t: 0→1, returns 0→1 with ease-in-out
+   * Smootherstep easing (quintic, C2 continuous).
+   * Zero velocity AND zero acceleration at both endpoints —
+   * much gentler ramp-up/down than regular smoothstep.
    */
-  _smoothstep(t) {
+  _ease(t) {
     t = Math.max(0, Math.min(1, t));
-    return t * t * (3 - 2 * t);
+    return t * t * t * (t * (t * 6 - 15) + 10);
   }
 
   /**
    * Update camera position and lookAt. Call every frame.
-   * Returns an object { orbitComplete, travelComplete } to signal state changes.
+   * Returns { orbitComplete, travelComplete } to signal state changes.
    */
   update(deltaTime) {
     if (!this.active) return { orbitComplete: false, travelComplete: false };
-
-    // Decay free-look offset
-    const decay = Math.pow(this.freeLookDecay, deltaTime);
-    this.freeLookYaw *= decay;
-    this.freeLookPitch *= decay;
 
     switch (this.state) {
       case State.DESCEND:
@@ -176,7 +174,7 @@ export class FlythroughCamera {
   _updateDescend(deltaTime) {
     this.descendElapsed += deltaTime;
     const t = Math.min(1, this.descendElapsed / this.descendDuration);
-    const s = this._smoothstep(t);
+    const s = this._ease(t);
 
     // End position: orbit entry point around first body
     const bodyPos = this.bodyRef.position;
@@ -196,11 +194,8 @@ export class FlythroughCamera {
     // Arc: add height during middle of descent
     this.camera.position.y += this.descendStart.y * 0.3 * Math.sin(t * Math.PI);
 
-    // LookAt: blend from system center toward the body
-    _v2.set(0, 0, 0);
-    _v3.copy(bodyPos);
-    _v2.lerp(_v3, Math.min(1, s * 1.5)); // look at body earlier than arrival
-    this._applyFreeLookAndLookAt(_v2);
+    // Look at the body we're descending toward
+    this._applyFreeLookAndLookAt(bodyPos);
 
     if (t >= 1) {
       // Transition to orbit
@@ -216,8 +211,35 @@ export class FlythroughCamera {
 
     const bodyPos = this.bodyRef.position;
 
-    // Advance yaw
-    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime;
+    // ── Departure steering (last 5 seconds) ──
+    // Steer orbit yaw so the camera's forward (tangent) direction faces
+    // the next body. This makes the next body "dawn" into view ahead.
+    const steerDuration = 5;
+    const steerStart = this.orbitDuration - steerDuration;
+    let steerBlend = 0;
+
+    if (this.nextBodyRef && this.orbitElapsed > steerStart) {
+      const nextPos = this.nextBodyRef.position;
+      // Angle from current body to next body
+      const toNext = Math.atan2(
+        nextPos.x - bodyPos.x,
+        nextPos.z - bodyPos.z,
+      );
+      // Forward direction angle = yaw + π/2 * direction
+      // We want forward to face next body: yaw + π/2*dir = toNext
+      const targetYaw = toNext - (Math.PI / 2) * this.orbitDirection;
+
+      const steerT = (this.orbitElapsed - steerStart) / steerDuration;
+      steerBlend = this._ease(steerT);
+
+      let yawDiff = targetYaw - this.orbitYaw;
+      yawDiff = yawDiff - Math.PI * 2 * Math.round(yawDiff / (Math.PI * 2));
+      this.orbitYaw += yawDiff * steerBlend * deltaTime * 4;
+    }
+
+    // Advance yaw (reduce orbit speed during steering for smoother look)
+    const orbitSpeedFactor = 1 - steerBlend * 0.8;
+    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime * orbitSpeedFactor;
 
     // Oscillate pitch between 5° and 25° (period ~12s)
     const minPitch = 0.087;   // 5°
@@ -230,31 +252,7 @@ export class FlythroughCamera {
     const breathe = 1 + 0.05 * Math.sin(this.orbitElapsed * 0.785 + this.orbitDistPhase);
     const dist = this.orbitDistBase * breathe;
 
-    // Departure steering: last 3 seconds, steer yaw toward next body
-    let steering = false;
-    if (this.nextBodyRef && this.orbitElapsed > this.orbitDuration - 3) {
-      steering = true;
-      const nextPos = this.nextBodyRef.position;
-      // Angle from current body to next body
-      const toNext = Math.atan2(
-        nextPos.x - bodyPos.x,
-        nextPos.z - bodyPos.z,
-      );
-      // We want the next body on our horizon — camera looks at current body,
-      // so "horizon" is roughly 90° from the camera-to-body direction.
-      // Steer yaw so that toNext is about π/2 from our current yaw
-      const targetYaw = toNext + (Math.PI / 2) * this.orbitDirection;
-
-      // Blend toward target yaw over the 3 seconds
-      const steerT = (this.orbitElapsed - (this.orbitDuration - 3)) / 3;
-      const steerFactor = this._smoothstep(steerT) * 0.3; // gentle pull
-
-      let yawDiff = targetYaw - this.orbitYaw;
-      yawDiff = yawDiff - Math.PI * 2 * Math.round(yawDiff / (Math.PI * 2));
-      this.orbitYaw += yawDiff * steerFactor * deltaTime * 2;
-    }
-
-    // Compute camera position
+    // Compute camera position (spherical orbit around body)
     const cosPitch = Math.cos(this.orbitPitch);
     this.camera.position.set(
       bodyPos.x + dist * Math.sin(this.orbitYaw) * cosPitch,
@@ -262,7 +260,20 @@ export class FlythroughCamera {
       bodyPos.z + dist * Math.cos(this.orbitYaw) * cosPitch,
     );
 
-    this._applyFreeLookAndLookAt(bodyPos);
+    // ── Look FORWARD (tangent to orbit path) ──
+    // This is the spaceship feel: camera faces the direction of travel.
+    // The body is off to the side, visible at the edge of the FOV.
+    const forwardX = Math.cos(this.orbitYaw) * this.orbitDirection;
+    const forwardZ = -Math.sin(this.orbitYaw) * this.orbitDirection;
+    // Slight downward look based on orbit pitch (camera is elevated)
+    const forwardY = -Math.sin(this.orbitPitch) * 0.3;
+
+    _v2.set(
+      this.camera.position.x + forwardX * 100,
+      this.camera.position.y + forwardY * 100,
+      this.camera.position.z + forwardZ * 100,
+    );
+    this._applyFreeLookAndLookAt(_v2);
 
     const orbitComplete = this.orbitElapsed >= this.orbitDuration;
     return { orbitComplete, travelComplete: false };
@@ -271,7 +282,7 @@ export class FlythroughCamera {
   _updateTravel(deltaTime) {
     this.travelElapsed += deltaTime;
     const t = Math.min(1, this.travelElapsed / this.travelDuration);
-    const s = this._smoothstep(t);
+    const s = this._ease(t);
 
     // End position: orbit entry point around next body (recomputed each frame
     // because the body is orbiting its star)
@@ -299,21 +310,17 @@ export class FlythroughCamera {
     const travelDist = this.departurePos.distanceTo(_v1);
     this.camera.position.y += travelDist * 0.05 * Math.sin(t * Math.PI);
 
-    // LookAt transition:
-    // First 20%: look back at old body
-    // 20%-50%: smooth turn toward new body
-    // 50%+: locked on new body
-    if (this._travelFromBody) {
-      const fromPos = this._travelFromBody.position;
-      if (t < 0.2) {
-        this._applyFreeLookAndLookAt(fromPos);
-      } else if (t < 0.5) {
-        const blend = (t - 0.2) / 0.3; // 0→1 over the transition
-        this.lookAtTarget.lerpVectors(fromPos, nextPos, this._smoothstep(blend));
-        this._applyFreeLookAndLookAt(this.lookAtTarget);
-      } else {
-        this._applyFreeLookAndLookAt(nextPos);
-      }
+    // ── LookAt: always face forward ──
+    // First 10%: blend from departure forward direction to destination
+    // (handles any mismatch between orbit exit direction and destination)
+    // 10%+: locked on destination
+    if (t < 0.1) {
+      const blend = this._ease(t / 0.1);
+      // Point along departure direction
+      _v2.copy(this.camera.position).addScaledVector(this.departureDir, 100);
+      // Blend toward destination
+      this.lookAtTarget.lerpVectors(_v2, nextPos, blend);
+      this._applyFreeLookAndLookAt(this.lookAtTarget);
     } else {
       this._applyFreeLookAndLookAt(nextPos);
     }
@@ -355,14 +362,22 @@ export class FlythroughCamera {
   }
 
   /**
-   * Add free-look offset (from mouse movement during flythrough).
+   * Add free-look offset (from middle mouse drag during flythrough).
    */
   addFreeLook(dyaw, dpitch) {
     this.freeLookYaw += dyaw;
     this.freeLookPitch += dpitch;
     // Clamp
-    this.freeLookYaw = Math.max(-0.5, Math.min(0.5, this.freeLookYaw));
-    this.freeLookPitch = Math.max(-0.3, Math.min(0.3, this.freeLookPitch));
+    this.freeLookYaw = Math.max(-0.8, Math.min(0.8, this.freeLookYaw));
+    this.freeLookPitch = Math.max(-0.5, Math.min(0.5, this.freeLookPitch));
+  }
+
+  /**
+   * Clear free-look offset (when middle mouse released).
+   */
+  clearFreeLook() {
+    this.freeLookYaw = 0;
+    this.freeLookPitch = 0;
   }
 
   stop() {

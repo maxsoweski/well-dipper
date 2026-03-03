@@ -129,6 +129,8 @@ export class CameraController {
         this.autoRotateActive = false;
       } else if (e.button === 1) {
         // Middle click: start free-look (rotate view from fixed position)
+        // Skip during flythrough — FlythroughCamera handles its own free-look
+        if (this.bypassed) return;
         e.preventDefault();
         this.isFreeLooking = true;
         this.autoRotateActive = false;
