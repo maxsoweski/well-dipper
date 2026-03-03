@@ -5,12 +5,14 @@ import * as THREE from 'three';
  *
  * Three states:
  * - DESCEND: initial entry, camera flies from above the system down to first body
- * - ORBIT:   circle the current body, facing FORWARD (tangent to orbit path)
+ * - ORBIT:   circle the current body, looking AT it (body fills the screen)
  * - TRAVEL:  smooth flight from one body to the next
  *
- * During orbit the camera looks forward like a spaceship — the body is off to
- * the side. Departure steering rotates the orbit until the next body "dawns"
- * ahead, then travel continues forward toward it.
+ * During orbit the camera focuses on the body (fills 1/2-2/3 of FOV).
+ * In the last few seconds, the lookAt shifts slightly toward the next body
+ * (body slides to one side, hinting at the next destination). Departure
+ * steering positions the camera perpendicular to the A→B line for a clean
+ * travel path.
  *
  * All transitions use smootherstep (quintic) easing for gentle ramp-up/down.
  */
@@ -212,28 +214,33 @@ export class FlythroughCamera {
     const bodyPos = this.bodyRef.position;
 
     // ── Departure steering (last 5 seconds) ──
-    // Steer orbit yaw so the camera's forward (tangent) direction faces
-    // the next body. This makes the next body "dawn" into view ahead.
+    // Position camera roughly perpendicular to the A→B line so that
+    // the travel path to the next body is clean (doesn't clip through A).
     const steerDuration = 5;
     const steerStart = this.orbitDuration - steerDuration;
     let steerBlend = 0;
+    let nextPos = null;
 
     if (this.nextBodyRef && this.orbitElapsed > steerStart) {
-      const nextPos = this.nextBodyRef.position;
-      // Angle from current body to next body
+      nextPos = this.nextBodyRef.position;
       const toNext = Math.atan2(
         nextPos.x - bodyPos.x,
         nextPos.z - bodyPos.z,
       );
-      // Forward direction angle = yaw + π/2 * direction
-      // We want forward to face next body: yaw + π/2*dir = toNext
-      const targetYaw = toNext - (Math.PI / 2) * this.orbitDirection;
+      // Camera perpendicular to A→B line — pick the closer side
+      const option1 = toNext + Math.PI / 2;
+      const option2 = toNext - Math.PI / 2;
+      let diff1 = option1 - this.orbitYaw;
+      diff1 -= Math.PI * 2 * Math.round(diff1 / (Math.PI * 2));
+      let diff2 = option2 - this.orbitYaw;
+      diff2 -= Math.PI * 2 * Math.round(diff2 / (Math.PI * 2));
+      const targetYaw = Math.abs(diff1) < Math.abs(diff2) ? option1 : option2;
 
       const steerT = (this.orbitElapsed - steerStart) / steerDuration;
       steerBlend = this._ease(steerT);
 
       let yawDiff = targetYaw - this.orbitYaw;
-      yawDiff = yawDiff - Math.PI * 2 * Math.round(yawDiff / (Math.PI * 2));
+      yawDiff -= Math.PI * 2 * Math.round(yawDiff / (Math.PI * 2));
       this.orbitYaw += yawDiff * steerBlend * deltaTime * 4;
     }
 
@@ -260,20 +267,23 @@ export class FlythroughCamera {
       bodyPos.z + dist * Math.cos(this.orbitYaw) * cosPitch,
     );
 
-    // ── Look FORWARD (tangent to orbit path) ──
-    // This is the spaceship feel: camera faces the direction of travel.
-    // The body is off to the side, visible at the edge of the FOV.
-    const forwardX = Math.cos(this.orbitYaw) * this.orbitDirection;
-    const forwardZ = -Math.sin(this.orbitYaw) * this.orbitDirection;
-    // Slight downward look based on orbit pitch (camera is elevated)
-    const forwardY = -Math.sin(this.orbitPitch) * 0.3;
+    // ── LookAt: focus on the body (it fills the screen) ──
+    // Last 3 seconds: gently shift lookAt toward next body so the current
+    // body slides to one side, hinting at the upcoming travel direction.
+    const shiftDuration = 3;
+    const shiftStart = this.orbitDuration - shiftDuration;
 
-    _v2.set(
-      this.camera.position.x + forwardX * 100,
-      this.camera.position.y + forwardY * 100,
-      this.camera.position.z + forwardZ * 100,
-    );
-    this._applyFreeLookAndLookAt(_v2);
+    if (nextPos && this.orbitElapsed > shiftStart) {
+      const shiftT = (this.orbitElapsed - shiftStart) / shiftDuration;
+      const shiftBlend = this._ease(shiftT);
+      // Direction from body to next body
+      _v3.copy(nextPos).sub(bodyPos).normalize();
+      // Shift lookAt: body slides off-center (angular shift ~15° at peak)
+      _v2.copy(bodyPos).addScaledVector(_v3, this.orbitDistBase * shiftBlend * 0.3);
+      this._applyFreeLookAndLookAt(_v2);
+    } else {
+      this._applyFreeLookAndLookAt(bodyPos);
+    }
 
     const orbitComplete = this.orbitElapsed >= this.orbitDuration;
     return { orbitComplete, travelComplete: false };
@@ -310,13 +320,12 @@ export class FlythroughCamera {
     const travelDist = this.departurePos.distanceTo(_v1);
     this.camera.position.y += travelDist * 0.05 * Math.sin(t * Math.PI);
 
-    // ── LookAt: always face forward ──
-    // First 10%: blend from departure forward direction to destination
-    // (handles any mismatch between orbit exit direction and destination)
-    // 10%+: locked on destination
-    if (t < 0.1) {
-      const blend = this._ease(t / 0.1);
-      // Point along departure direction
+    // ── LookAt: blend from departure direction to destination ──
+    // The camera was looking at the old body — smoothly turn toward the
+    // new body over the first 25% of travel (~2.5 seconds).
+    if (t < 0.25) {
+      const blend = this._ease(t / 0.25);
+      // Point along departure direction (where camera was looking)
       _v2.copy(this.camera.position).addScaledVector(this.departureDir, 100);
       // Blend toward destination
       this.lookAtTarget.lerpVectors(_v2, nextPos, blend);

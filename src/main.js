@@ -422,20 +422,23 @@ function populateQueueRefs() {
       const starObj = stop.starIndex === 1 && system.star2 ? system.star2 : system.star;
       stop.bodyRef = starObj.mesh;
       stop.bodyRadius = starObj.data.radius;
-      // Cap orbit distance inside innermost planet orbit
+      // Close enough to fill ~50% of FOV, but stay outside glow corona (3.5×r)
+      // and inside innermost planet orbit
       const innerOrbit = system.planets[0].orbitRadius;
       stop.orbitDistance = Math.min(starObj.data.radius * 4, innerOrbit * 0.4);
     } else if (stop.type === 'planet') {
       const entry = system.planets[stop.planetIndex];
       stop.bodyRef = entry.planet.mesh;
       stop.bodyRadius = entry.planet.data.radius;
-      stop.orbitDistance = entry.planet.data.radius * 6;
+      // 2.8× radius → body fills ~55% of 70° FOV
+      stop.orbitDistance = entry.planet.data.radius * 2.8;
     } else if (stop.type === 'moon') {
       const entry = system.planets[stop.planetIndex];
       const moon = entry.moons[stop.moonIndex];
       stop.bodyRef = moon.mesh;
       stop.bodyRadius = moon.data.radius;
-      stop.orbitDistance = moon.data.radius * 8;
+      // 3× radius → body fills ~50% of 70° FOV
+      stop.orbitDistance = moon.data.radius * 3;
     }
   }
 }
