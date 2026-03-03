@@ -12,6 +12,7 @@ import { CameraController } from './camera/CameraController.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { SystemMap } from './ui/SystemMap.js';
+import { AutoNavigator } from './auto/AutoNavigator.js';
 
 // ── Scene ──
 const scene = new THREE.Scene();
@@ -31,10 +32,13 @@ const cameraController = new CameraController(camera, canvas);
 
 // When free-look ends, clear focus so the camera stays orbiting whatever
 // point the user was looking at — not snapping back to the planet.
+// Exception: during autopilot, the tour controls focus — don't clear it.
 cameraController.onFreeLookEnd = () => {
-  focusIndex = -1;
-  focusMoonIndex = -1;
-  focusStarIndex = -1;
+  if (!autoNav.isActive) {
+    focusIndex = -1;
+    focusMoonIndex = -1;
+    focusStarIndex = -1;
+  }
 };
 
 // ── Starfield ──
@@ -54,6 +58,21 @@ let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
 
+// ── Autopilot ──
+const autoNav = new AutoNavigator();
+let idleTimer = 0;
+const IDLE_THRESHOLD = 20;
+let mouseFreeLookActive = false;
+let mouseFreeLookTimeout = null;
+
+autoNav.onFocusPlanet = (index) => focusPlanet(index);
+autoNav.onFocusStar = (index) => focusStar(index);
+autoNav.onFocusMoon = (pi, mi) => focusMoon(pi, mi);
+autoNav.onOverview = () => focusPlanet(-1);
+autoNav.onTourComplete = () => {
+  // Phase 6: loop. Phase 7 will replace with warp trigger.
+};
+
 // ── Click-to-select (raycasting) ──
 const raycaster = new THREE.Raycaster();
 const _mouse = new THREE.Vector2();
@@ -66,6 +85,11 @@ spawnSystem();
  * Generate and display a full star system (single or binary).
  */
 function spawnSystem() {
+  // ── Reset autopilot ──
+  const wasAutopilot = autoNav.isActive;
+  autoNav.stop();
+  idleTimer = 0;
+
   // ── Clean up old system ──
   if (system) {
     system.star.dispose();
@@ -385,6 +409,12 @@ function spawnSystem() {
       : '';
     console.log(`  P${i + 1}: ${p.planetData.type} — ${p.planetData.radiusEarth.toFixed(2)} R⊕, orbit ${p.orbitRadiusAU.toFixed(2)} AU${moonDesc}`);
   }
+
+  // Restart autopilot with new system if it was active before
+  if (wasAutopilot) {
+    autoNav.start(system);
+    cameraController.autoRotateActive = true;
+  }
 }
 
 /**
@@ -433,6 +463,24 @@ function focusStar(starIdx) {
     ? (starIdx === 0 ? 'primary star' : 'secondary star')
     : 'star';
   console.log(`Focus: ${label} (${starObj.data.type}-class)`);
+}
+
+/**
+ * Focus the camera on a specific moon.
+ */
+function focusMoon(planetIndex, moonIndex) {
+  if (!system) return;
+  if (planetIndex < 0 || planetIndex >= system.planets.length) return;
+  const entry = system.planets[planetIndex];
+  if (moonIndex < 0 || moonIndex >= entry.moons.length) return;
+
+  const moon = entry.moons[moonIndex];
+  const viewDist = moon.data.radius * 8;
+  focusIndex = planetIndex;
+  focusMoonIndex = moonIndex;
+  focusStarIndex = -1;
+  cameraController.focusOn(moon.mesh.position, viewDist);
+  console.log(`Focus: moon ${moonIndex + 1} of planet ${planetIndex + 1} (${moon.data.type})`);
 }
 
 function toggleOrbits() {
@@ -656,6 +704,25 @@ function animate() {
       }
     }
 
+    // ── Autopilot ──
+    if (!autoNav.isActive) {
+      idleTimer += deltaTime;
+      if (idleTimer >= IDLE_THRESHOLD) {
+        autoNav.start(system);
+        cameraController.autoRotateActive = true;
+        console.log('Autopilot: on (idle timeout)');
+      }
+    } else {
+      autoNav.update(deltaTime);
+      // Dynamic camera motion (when user isn't free-looking)
+      if (!mouseFreeLookActive && !cameraController.isFreeLooking) {
+        const time = performance.now() / 1000;
+        cameraController.autoRotateSpeed = autoNav.getAutoRotateSpeed(time);
+        const targetPitch = autoNav.getTargetPitch(time);
+        cameraController.pitch += (targetPitch - cameraController.pitch) * 0.02 * deltaTime * 60;
+      }
+    }
+
     // ── Camera tracking ──
     // Skip tracking during free-look — the user is controlling the view
     // direction manually, so trackTarget would fight with their input.
@@ -694,6 +761,49 @@ window.addEventListener('resize', () => retroRenderer.resize());
 
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
+  // A key: toggle autopilot
+  if (e.code === 'KeyA') {
+    if (autoNav.isActive) {
+      autoNav.stop();
+      console.log('Autopilot: off');
+    } else if (system) {
+      idleTimer = 0;
+      autoNav.start(system);
+      cameraController.autoRotateActive = true;
+      console.log('Autopilot: on');
+    }
+    return;
+  }
+
+  // During autopilot, some keys redirect the tour instead of normal behavior
+  if (autoNav.isActive) {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      autoNav.stop();
+      seedCounter++;
+      spawnSystem();
+    } else if (e.code === 'Escape' || e.code === 'Backquote') {
+      autoNav.jumpTo(0); // overview is first stop
+    } else if (e.code === 'Tab') {
+      e.preventDefault();
+      autoNav.advance(e.shiftKey ? -1 : 1);
+    } else if (e.key === '1') {
+      autoNav.jumpToStar();
+    } else if (e.key >= '2' && e.key <= '9') {
+      const planetIdx = parseInt(e.key) - 2;
+      if (system && planetIdx < system.planets.length) {
+        autoNav.jumpToPlanet(planetIdx);
+      }
+    }
+    // O, G still work normally during autopilot
+    if (e.code === 'KeyO') toggleOrbits();
+    if (e.code === 'KeyG') toggleGravityWell();
+    return;
+  }
+
+  // Normal mode (autopilot off) — reset idle timer
+  idleTimer = 0;
+
   if (e.code === 'Space') {
     e.preventDefault();
     seedCounter++;
@@ -748,22 +858,37 @@ function trySelect(clientX, clientY) {
     } else if (info.type === 'planet') {
       focusPlanet(info.planetIndex);
     } else if (info.type === 'moon') {
-      const entry = system.planets[info.planetIndex];
-      const moon = entry.moons[info.moonIndex];
-      const viewDist = moon.data.radius * 8;
-      focusIndex = info.planetIndex;
-      focusMoonIndex = info.moonIndex;
-      cameraController.focusOn(moon.mesh.position, viewDist);
-      console.log(`Focus: moon ${info.moonIndex + 1} of planet ${info.planetIndex + 1} (${moon.data.type})`);
+      focusMoon(info.planetIndex, info.moonIndex);
     }
     break; // only process the first valid hit
   }
 }
 
+// Mouse free-look during autopilot + idle tracking
+canvas.addEventListener('mousemove', (e) => {
+  if (autoNav.isActive) {
+    // Free-look: rotate camera based on mouse delta
+    cameraController.yaw -= e.movementX * 0.003;
+    cameraController.pitch -= e.movementY * 0.002;
+    mouseFreeLookActive = true;
+    clearTimeout(mouseFreeLookTimeout);
+    mouseFreeLookTimeout = setTimeout(() => { mouseFreeLookActive = false; }, 1000);
+  } else {
+    // Reset idle timer when not in autopilot
+    idleTimer = 0;
+  }
+});
+
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
   _mouseDown.x = e.clientX;
   _mouseDown.y = e.clientY;
+  // Left-click drag turns off autopilot
+  if (e.button === 0 && autoNav.isActive) {
+    autoNav.stop();
+    console.log('Autopilot: off (mouse drag)');
+  }
+  if (!autoNav.isActive) idleTimer = 0;
 });
 
 canvas.addEventListener('mouseup', (e) => {
@@ -783,6 +908,7 @@ canvas.addEventListener('touchstart', (e) => {
     _touchStart.x = e.touches[0].clientX;
     _touchStart.y = e.touches[0].clientY;
   }
+  if (!autoNav.isActive) idleTimer = 0;
 }, { passive: true });
 
 canvas.addEventListener('touchend', (e) => {
@@ -848,6 +974,16 @@ if (mobileMenu) {
     } else if (action === 'gravity') {
       toggleGravityWell();
       btn.classList.toggle('active', gravityWellVisible);
+    } else if (action === 'autonav') {
+      if (autoNav.isActive) {
+        autoNav.stop();
+        btn.classList.remove('active');
+      } else if (system) {
+        idleTimer = 0;
+        autoNav.start(system);
+        cameraController.autoRotateActive = true;
+        btn.classList.add('active');
+      }
     } else if (action === 'gyro') {
       if (cameraController.gyroEnabled) {
         cameraController.disableGyro();
@@ -859,8 +995,8 @@ if (mobileMenu) {
       }
     }
 
-    // Close menu after action (except gyro/orbits toggles)
-    if (action !== 'orbits' && action !== 'gravity' && action !== 'gyro') {
+    // Close menu after action (except toggles)
+    if (action !== 'orbits' && action !== 'gravity' && action !== 'gyro' && action !== 'autonav') {
       mobileMenu.classList.remove('open');
     }
   });
@@ -869,4 +1005,4 @@ if (mobileMenu) {
 // ── Start ──
 animate();
 console.log('Well Dipper — Star System');
-console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=orbits, G=gravity wells, Middle-click=free look, Click/tap=select');
+console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=orbits, G=gravity wells, A=autopilot, Middle-click=free look, Click/tap=select');
