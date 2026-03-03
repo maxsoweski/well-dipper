@@ -430,17 +430,17 @@ function populateQueueRefs() {
       const entry = system.planets[stop.planetIndex];
       stop.bodyRef = entry.planet.mesh;
       stop.bodyRadius = entry.planet.data.radius;
-      // 2.4× radius → body fills ~60% of 70° FOV (closer, more detail)
-      stop.orbitDistance = entry.planet.data.radius * 2.4;
+      // 2.8× radius → body fills ~50% of 70° FOV (survey distance)
+      stop.orbitDistance = entry.planet.data.radius * 2.8;
     } else if (stop.type === 'moon') {
       const entry = system.planets[stop.planetIndex];
       const moon = entry.moons[stop.moonIndex];
       stop.bodyRef = moon.mesh;
       stop.bodyRadius = moon.data.radius;
-      // 2× radius fills ~65% of FOV — close enough to see detail.
-      // Minimum 0.03 keeps tiny moons visible above billboard threshold
+      // 2.4× radius fills ~55% of FOV — survey distance with detail.
+      // Minimum 0.04 keeps tiny moons visible above billboard threshold
       // while getting close enough to show surface detail at retro resolution.
-      stop.orbitDistance = Math.max(moon.data.radius * 2, 0.03);
+      stop.orbitDistance = Math.max(moon.data.radius * 2.4, 0.04);
     }
   }
 }
