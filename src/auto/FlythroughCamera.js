@@ -224,6 +224,24 @@ export class FlythroughCamera {
   }
 
   /**
+   * Travel easing — carries orbital momentum into the slingshot.
+   *
+   * Unlike smootherstep (zero velocity at both ends), this starts with
+   * non-zero velocity (the camera is already moving from its orbit) and
+   * decelerates to zero at arrival (gravitational capture).
+   *
+   * Cubic: e(t) = (v₀-2)t³ + (3-2v₀)t² + v₀t
+   * v₀ = initial velocity factor (0 → smoothstep, higher → more momentum)
+   *
+   * With v₀=0.4: starts at 40% of peak speed, peaks mid-flight, arrives at 0.
+   */
+  _travelEase(t) {
+    t = Math.max(0, Math.min(1, t));
+    const v0 = 0.4;
+    return (v0 - 2) * t * t * t + (3 - 2 * v0) * t * t + v0 * t;
+  }
+
+  /**
    * Update camera position and lookAt. Call every frame.
    * Returns { orbitComplete, travelComplete } to signal state changes.
    */
@@ -282,18 +300,31 @@ export class FlythroughCamera {
     const bodyPos = this.bodyRef.position;
 
     // ── Entry blend (first 2s): smooth transition from slingshot arrival ──
-    // Eases from the camera's actual arrival state (pitch, distance) into
-    // the target orbit parameters. Prevents any snap at the transition.
     const entryDur = 2;
     const entryFactor = this.orbitElapsed < entryDur
       ? this._ease(this.orbitElapsed / entryDur)
       : 1;
 
-    // Advance yaw — continuous, never reversed or interrupted.
-    // No departure steering that fights the orbit direction. The slingshot
-    // departure tangent is computed from whatever angle the camera is at
-    // when the orbit ends, so the orbit just orbits naturally.
-    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime;
+    // ── Departure phase (last 5s) ──
+    // Computed BEFORE yaw so it can affect orbit speed.
+    // The orbit continues in the same direction — no steering, no reversal.
+    // The camera gradually speeds up and spirals outward (widening orbit),
+    // naturally breaking free of the body's gravity before the slingshot.
+    const departDur = 5;
+    const departStart = this.orbitDuration - departDur;
+    let departBlend = 0;
+    let nextPos = null;
+
+    if (this.nextBodyRef && this.orbitElapsed > departStart) {
+      nextPos = this.nextBodyRef.position;
+      const departT = (this.orbitElapsed - departStart) / departDur;
+      departBlend = this._ease(departT);
+    }
+
+    // Advance yaw — continuous, same direction throughout.
+    // During departure: gradually speed up (gravity assist acceleration).
+    const speedFactor = 1 + departBlend * departBlend * 0.6; // up to 60% faster
+    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime * speedFactor;
 
     // Pitch: blend from entry pitch to oscillating orbit pitch
     const minPitch = 0.087;   // 5°
@@ -307,25 +338,11 @@ export class FlythroughCamera {
     const breathe = 1 + 0.05 * entryFactor * Math.sin(this.orbitElapsed * 0.785 + this.orbitDistPhase);
     let dist = this._entryDist + (this.orbitDistBase * breathe - this._entryDist) * entryFactor;
 
-    // ── Departure phase (last 5s): widening + lookAt shift ──
-    // The orbit continues uninterrupted — no yaw steering, no reversal.
-    // Only visual cues: orbit widens (breaking free) and lookAt shifts
-    // toward the next destination.
-    const departDur = 5;
-    const departStart = this.orbitDuration - departDur;
-    let departBlend = 0;
-    let nextPos = null;
-
-    if (this.nextBodyRef && this.orbitElapsed > departStart) {
-      nextPos = this.nextBodyRef.position;
-      const departT = (this.orbitElapsed - departStart) / departDur;
-      departBlend = this._ease(departT);
-    }
-
-    // Slingshot widening: orbit radius increases (breaking free of gravity)
-    if (departBlend > 0.5) {
-      const unwindT = (departBlend - 0.5) / 0.5; // 0→1 over last half
-      dist *= (1 + unwindT * 0.35); // up to 35% wider orbit
+    // Slingshot spiral: orbit widens progressively (breaking free of gravity).
+    // Starts gentle at 30% of departure phase, accelerates quadratically.
+    if (departBlend > 0.3) {
+      const unwindT = (departBlend - 0.3) / 0.7; // 0→1 over last 70%
+      dist *= (1 + unwindT * unwindT * 0.8); // quadratic, up to 80% wider
     }
 
     // Compute camera position (spherical orbit around body)
@@ -383,7 +400,7 @@ export class FlythroughCamera {
   _updateTravel(deltaTime) {
     this.travelElapsed += deltaTime;
     const t = Math.min(1, this.travelElapsed / this.travelDuration);
-    const s = this._ease(t);
+    const s = this._travelEase(t);
 
     // ── Destination: orbit entry point around next body ──
     // Recomputed each frame because the body is orbiting its parent.
