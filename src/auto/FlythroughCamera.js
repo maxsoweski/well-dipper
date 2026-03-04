@@ -9,8 +9,9 @@ import * as THREE from 'three';
  * - TRAVEL:  gravity-assist slingshot from one body to the next
  *
  * During orbit the camera focuses on the body (fills 1/2-2/3 of FOV).
- * Over 3 revolutions the orbit gradually accelerates (t² ease-in) and
- * widens, building toward escape velocity.
+ * It does 1 full revolution for survey, then continues just far enough
+ * to align the departure tangent with the transit path to the next body
+ * (total: 1.0-2.0 revolutions at constant speed).
  *
  * Travel uses curved Hermite spline paths — elliptical transfer orbits
  * tangent to both departure and arrival orbits, like Hohmann transfers.
@@ -120,6 +121,12 @@ export class FlythroughCamera {
 
   /**
    * Begin orbiting the current body.
+   *
+   * The orbit does 1 full revolution for survey, then continues just far
+   * enough to align the camera's tangent direction with the transit path
+   * to the next body. Total orbit: 1.0-2.0 revolutions at constant speed.
+   * This means the camera naturally peels off toward the next destination
+   * when the orbit ends — no direction change at departure.
    */
   beginOrbit(bodyRef, orbitDistance, bodyRadius, duration) {
     this.state = State.ORBIT;
@@ -147,14 +154,6 @@ export class FlythroughCamera {
 
     this._randomizeOrbit();
 
-    // Override yaw speed to achieve exactly 3 revolutions with gradual
-    // speed ramp from 1× to 2.5× (quadratic ease-in: t²). Ease-in means
-    // the speed is STILL accelerating at orbit end — no plateau before
-    // the escape, just one continuous buildup from survey to escape velocity.
-    // Average of (1 + t²×1.5) over [0,1] = 1 + 1.5/3 = 1.5.
-    this.orbitYawSpeed = 3 * 2 * Math.PI / (this.orbitDuration * 1.5);
-    this._orbitStartYaw = this.orbitYaw;
-
     // Phase-align pitch oscillation so it starts from the actual camera pitch
     // (oscillation grows smoothly from entry value, no random jump)
     const midPitch = (0.087 + 0.436) / 2;
@@ -162,35 +161,62 @@ export class FlythroughCamera {
     const pitchRatio = Math.max(-1, Math.min(1, (this._entryPitch - midPitch) / ampPitch));
     this.orbitPitchPhase = Math.asin(pitchRatio);
 
+    // ── Departure-aligned orbit ──
+    // If we know the next body, compute the yaw angle where our orbit
+    // tangent points toward it. The orbit does 1 full revolution (survey)
+    // plus whatever extra angle is needed to reach that departure yaw.
+    // This means the camera naturally faces the transit direction at the
+    // moment it leaves orbit — seamless departure, no direction change.
+    //
+    // Orbit tangent directions:
+    //   CW  (dir= 1): tangent angle = yaw + π/2
+    //   CCW (dir=-1): tangent angle = yaw - π/2
+    // So for tangent to point at targetAngle:
+    //   CW  departure yaw = targetAngle - π/2
+    //   CCW departure yaw = targetAngle + π/2
+
     // After slingshot arrival, use capture direction as the authoritative
-    // orbit direction. The travel phase chose the arrival edge to match
-    // the predicted optimal departure direction, so don't override it —
-    // overriding would cause a visible direction reversal at arrival.
-    if (this._arrivalOrbitDir !== null) {
+    // orbit direction — overriding would cause a visible direction reversal.
+    const directionForced = this._arrivalOrbitDir !== null;
+    if (directionForced) {
       this.orbitDirection = this._arrivalOrbitDir;
       this._arrivalOrbitDir = null;
     }
-    // Only predict orbit direction from scratch when there's no slingshot
-    // arrival (e.g. after descend, or first orbit). When the slingshot
-    // chose an arrival side, that side IS the correct direction.
-    else if (this.nextBodyRef) {
+
+    const TWO_PI = 2 * Math.PI;
+
+    if (this.nextBodyRef) {
       const nextPos = this.nextBodyRef.position;
-      const toNextAngle = Math.atan2(nextPos.x - bodyPos.x, nextPos.z - bodyPos.z);
+      const targetAngle = Math.atan2(nextPos.x - bodyPos.x, nextPos.z - bodyPos.z);
 
-      // After 3 full revolutions the camera returns to its starting angle,
-      // so the departure tangent is perpendicular to the radius at orbitYaw.
-      const tangentCW  = this.orbitYaw + Math.PI / 2;
-      const tangentCCW = this.orbitYaw - Math.PI / 2;
+      // Departure yaw where orbit tangent points toward next body
+      const departYawCW = targetAngle - Math.PI / 2;
+      const departYawCCW = targetAngle + Math.PI / 2;
 
-      const diffCW  = Math.abs(Math.atan2(
-        Math.sin(toNextAngle - tangentCW), Math.cos(toNextAngle - tangentCW),
-      ));
-      const diffCCW = Math.abs(Math.atan2(
-        Math.sin(toNextAngle - tangentCCW), Math.cos(toNextAngle - tangentCCW),
-      ));
+      // Extra yaw after 1 revolution to reach departure angle
+      let extraCW = ((departYawCW - this.orbitYaw) % TWO_PI + TWO_PI) % TWO_PI;
+      let extraCCW = ((this.orbitYaw - departYawCCW) % TWO_PI + TWO_PI) % TWO_PI;
 
-      this.orbitDirection = diffCW <= diffCCW ? 1 : -1;
+      if (directionForced) {
+        // Slingshot set the direction — compute speed for that direction
+        const extra = this.orbitDirection === 1 ? extraCW : extraCCW;
+        this.orbitYawSpeed = (TWO_PI + extra) / this.orbitDuration;
+      } else {
+        // Pick direction with fewer total revolutions
+        if (extraCW <= extraCCW) {
+          this.orbitDirection = 1;
+          this.orbitYawSpeed = (TWO_PI + extraCW) / this.orbitDuration;
+        } else {
+          this.orbitDirection = -1;
+          this.orbitYawSpeed = (TWO_PI + extraCCW) / this.orbitDuration;
+        }
+      }
+    } else {
+      // No next body known — do exactly 1 revolution
+      this.orbitYawSpeed = TWO_PI / this.orbitDuration;
     }
+
+    this._orbitStartYaw = this.orbitYaw;
   }
 
   /**
@@ -412,16 +438,10 @@ export class FlythroughCamera {
       ? this._ease(this.orbitElapsed / entryDur)
       : 1;
 
-    // ── Gradual speed ramp (entire orbit, ease-in) ──
-    // Quadratic ease-in (t²): starts slow, continuously accelerates,
-    // and is STILL speeding up when the escape phase begins — no plateau
-    // or sudden jump at the transition. One smooth curve from first
-    // survey orbit through escape velocity.
-    const rampT = Math.min(1, this.orbitElapsed / this.orbitDuration);
-    let speedFactor = 1 + rampT * rampT * 1.5; // ease-in: 1× → 2.5×
-
-    // Advance yaw — continuous, same direction throughout.
-    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime * speedFactor;
+    // ── Constant speed orbit ──
+    // Slow, relaxed pace — no acceleration. The orbit does ~1-2
+    // revolutions (aligned to departure angle) at constant speed.
+    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime;
 
     // Pitch: blend from entry pitch to oscillating orbit pitch
     const minPitch = 0.087;   // 5°
@@ -435,24 +455,19 @@ export class FlythroughCamera {
     const breathe = 1 + 0.05 * entryFactor * Math.sin(this.orbitElapsed * 0.785 + this.orbitDistPhase);
     let dist = this._entryDist + (this.orbitDistBase * breathe - this._entryDist) * entryFactor;
 
-    // ── Stepped orbit widening (discrete altitude raises) ──
-    // Track actual revolutions via accumulated yaw (not elapsed time,
-    // since orbit speed varies with the ramp). Close survey for 1.5
-    // revolutions, then step wider, then wider again approaching departure.
-    const revolutions = Math.abs(this.orbitYaw - this._orbitStartYaw) / (2 * Math.PI);
-    let altMult;
-    if (revolutions < 1.5) {
-      altMult = 1.0; // close survey orbits
-    } else if (revolutions < 2.5) {
-      altMult = 1.0 + this._ease(revolutions - 1.5) * 0.35; // step to 1.35×
-    } else {
-      altMult = 1.35 + this._ease(Math.min(1, revolutions - 2.5)) * 0.35; // step to 1.7×
+    // ── Gentle pull-out near departure ──
+    // In the last 25% of the orbit, ease the distance out to 1.25×.
+    // This gives a subtle "drifting away" feel before the Hermite takes
+    // over — the departure feels like a natural continuation of pulling out.
+    const orbitT = this.orbitElapsed / this.orbitDuration;
+    if (orbitT > 0.75) {
+      const pullT = (orbitT - 0.75) / 0.25; // 0→1 over last 25%
+      dist *= 1 + this._ease(pullT) * 0.25;  // up to 1.25× at departure
     }
-    dist *= altMult;
 
-    // Save frame state for departure blend snapshot
+    // Save frame state for departure velocity matching
     this._currentDist = dist;
-    this._currentSpeedFactor = speedFactor;
+    this._currentSpeedFactor = 1; // constant speed
 
     // Compute camera position (spherical orbit around body)
     const cosPitch = Math.cos(this.orbitPitch);
