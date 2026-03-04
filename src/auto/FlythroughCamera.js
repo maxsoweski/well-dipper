@@ -9,12 +9,13 @@ import * as THREE from 'three';
  * - TRAVEL:  gravity-assist slingshot from one body to the next
  *
  * During orbit the camera focuses on the body (fills 1/2-2/3 of FOV).
- * As the orbit nears its end, the orbit radius widens (breaking free of
- * gravity) and the lookAt shifts toward the next destination.
+ * Over 3 revolutions the orbit gradually accelerates (t² ease-in) and
+ * widens, building toward escape velocity.
  *
  * Travel uses curved Hermite spline paths — elliptical transfer orbits
  * tangent to both departure and arrival orbits, like Hohmann transfers.
- * At departure, the orbit spiral blends smoothly into the curved cruise.
+ * The Hermite's initial velocity (v₀) is matched to the orbit's exit
+ * speed, so the camera peels off tangentially with no speed change.
  * At arrival, the curved path blends into a pre-orbit position
  * (gravitational capture). The camera smoothly pans from watching the
  * departing body recede → gazing forward → watching the destination grow.
@@ -69,18 +70,10 @@ export class FlythroughCamera {
     this._departureTangent = new THREE.Vector3(); // slingshot release direction
     this._departTangentScaled = new THREE.Vector3(); // Hermite tangent (scaled by distance)
     this._arrivalTangentScaled = new THREE.Vector3(); // Hermite arrival tangent (scaled)
-    this._hermiteStartPos = new THREE.Vector3();      // where escape spiral ends / Hermite begins
-    this._escapeComplete = false;                     // has the escape spiral finished?
-    this._escapeDuration = 6;                         // dynamic, set per-travel
-    this._escapeWidening = 2.0;                       // dynamic, scales with trip distance
+    this._hermiteStartPos = new THREE.Vector3();      // Hermite curve start position (= departurePos)
     this._orbitStartYaw = 0;                          // yaw at orbit start (for revolution counting)
+    this._travelV0 = 0.2;                             // dynamic initial velocity for Hermite easing
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
-
-    // Departure blend state (spiral continuation → Hermite)
-    this._departYaw = 0;
-    this._departDist = 10;
-    this._departSpeedFactor = 1;
-    this._departPitch = 0.15;
 
     // Arrival blend state (Hermite → pre-orbit)
     this._arrivalComputed = false;
@@ -202,9 +195,9 @@ export class FlythroughCamera {
 
   /**
    * Begin travelling from current position to the next body.
-   * The escape phase (first 4s of travel) continues the orbit spiral with
-   * aggressive widening until the camera "breaks free." The Hermite transfer
-   * curve then picks up from wherever the spiral ends.
+   * The Hermite transfer curve starts directly from the orbit exit position
+   * with velocity-matched v₀ — the camera peels off the orbit tangentially
+   * at exactly the speed it was orbiting. No separate escape spiral.
    */
   beginTravel(nextBodyRef, nextOrbitDistance, nextBodyRadius) {
     this.state = State.TRAVEL;
@@ -216,60 +209,46 @@ export class FlythroughCamera {
     // Store forward direction at departure for smooth lookAt blend
     this.camera.getWorldDirection(this.departureDir);
 
-    // Snapshot departure spiral state so the escape phase can continue the
-    // orbit spiral forward in time from exactly where we left off.
-    this._departYaw = this.orbitYaw;
-    this._departDist = this._currentDist;
-    this._departSpeedFactor = this._currentSpeedFactor;
-    this._departPitch = this.orbitPitch;
-
-    this._arrivalComputed = false; // computed on first frame of travel
-    this._escapeComplete = false;  // escape spiral runs first
+    this._arrivalComputed = false;
+    this._hermiteStartPos.copy(this.departurePos);
     this.travelElapsed = 0;
 
     // ── Distance-based travel duration ──
-    // Sqrt scaling: doubling distance adds ~40% time. Feels natural.
     const dist = this.departurePos.distanceTo(nextBodyRef.position);
     this.travelDuration = Math.max(12, Math.min(25, 18 * Math.sqrt(dist / 500)));
 
+    // ── Departure tangent: orbit velocity direction at current yaw ──
+    // The tangent is perpendicular to the radius vector — exactly the
+    // direction the camera was moving when we left orbit.
+    const cp = Math.cos(this.orbitPitch);
+    this._departureTangent.set(
+      Math.cos(this.orbitYaw) * cp,
+      0,
+      -Math.sin(this.orbitYaw) * cp,
+    ).multiplyScalar(this.orbitDirection).normalize();
+
     // ── Short-trip detection (planet → nearby moon) ──
-    // If the destination is close (less than 5× our orbit radius), skip
-    // the escape spiral entirely — a widening orbit looks wrong when the
-    // destination is right there. Use a direct Hermite curve instead,
-    // with the tangent aimed mostly toward the destination.
-    if (dist < this._departDist * 5) {
-      this._escapeComplete = true;
-      this._escapeDuration = 0;
-      this._hermiteStartPos.copy(this.departurePos);
-
-      // Departure tangent: orbit velocity direction at current yaw
-      const cp = Math.cos(this._departPitch);
-      this._departureTangent.set(
-        Math.cos(this._departYaw) * cp,
-        0,
-        -Math.sin(this._departYaw) * cp,
-      ).multiplyScalar(this.orbitDirection).normalize();
-
-      // Blend orbit tangent toward destination so the curve aims at it
-      // instead of continuing the orbit circle away from the moon.
+    // Blend orbit tangent toward destination so the curve arcs directly
+    // at the moon instead of continuing away in the orbit circle.
+    const isShortTrip = dist < this._currentDist * 5;
+    if (isShortTrip) {
       _v1.subVectors(nextBodyRef.position, this.departurePos);
       _v1.y = 0;
       _v1.normalize();
       this._departureTangent.lerp(_v1, 0.6).normalize();
-
-      const tangentMag = dist * 0.5;
-      this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
-      this._departTangentScaled.y = tangentMag * 0.02;
-    } else {
-      // ── Dynamic escape duration ──
-      // Proportional to travel time (25%), clamped 3-7s.
-      this._escapeDuration = Math.max(3, Math.min(7, this.travelDuration * 0.25));
-
-      // ── Distance-scaled escape widening ──
-      // Cap at 35% of trip distance to avoid spiraling past destination.
-      const maxEscapeDist = dist * 0.35;
-      this._escapeWidening = Math.max(0.3, Math.min(2.0, maxEscapeDist / this._departDist - 1));
     }
+
+    // ── Scale departure tangent for Hermite curve ──
+    const tangentMag = dist * 0.6;
+    this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
+    this._departTangentScaled.y = tangentMag * 0.03;
+
+    // ── Velocity-matched v₀ ──
+    // The orbit exits at: orbitLinearSpeed = dist × yawSpeed × speedFactor
+    // The Hermite speed at t=0 is: |T₀| × v₀ / travelDuration
+    // Solve for v₀ so they match — continuous speed across the transition.
+    const orbitLinearSpeed = this._currentDist * this.orbitYawSpeed * this._currentSpeedFactor;
+    this._travelV0 = Math.min(2.5, orbitLinearSpeed * this.travelDuration / tangentMag);
 
     // Pre-store current body for lookAt transition
     this._travelFromBody = this.bodyRef;
@@ -314,14 +293,13 @@ export class FlythroughCamera {
     this._departTangentScaled.y = tangentMag * 0.03;
 
     this._arrivalComputed = false;
-    this._escapeComplete = true; // no orbit to escape from
-    this._hermiteStartPos.copy(this.departurePos); // Hermite starts here
+    this._hermiteStartPos.copy(this.departurePos);
+    this._travelV0 = 0.2; // slow start (no orbit speed to match)
     this.travelElapsed = 0;
 
     // ── Distance-based travel duration ──
     this.travelDuration = Math.max(12, Math.min(25, 18 * Math.sqrt(dist / 500)));
 
-    // No from-body — escape phase will be skipped in _updateTravel
     this._travelFromBody = null;
     this._travelToBody = nextBodyRef;
     this._travelToRadius = nextBodyRadius;
@@ -352,17 +330,19 @@ export class FlythroughCamera {
   }
 
   /**
-   * Travel easing — gradual ramp-up, cruise, gradual deceleration.
+   * Travel easing — velocity-matched departure, cruise, deceleration.
    *
    * Cubic: e(t) = (v₀-2)t³ + (3-2v₀)t² + v₀t
-   * v₀ = initial velocity factor (0 → smoothstep, higher → more momentum)
+   * v₀ = initial velocity factor, dynamically matched to orbit exit speed.
    *
-   * With v₀=0.2: starts slow, ramps up to "cruise speed" mid-flight,
-   * then gradually decelerates toward destination (gravitational capture).
+   * When departing from orbit, v₀ is computed so the Hermite starts at
+   * orbit speed (typically 0.4-0.8). The cubic naturally decelerates
+   * toward zero at t=1, where the arrival blend takes over.
+   * For beginTravelFrom (no prior orbit), v₀ defaults to 0.2 (slow start).
    */
   _travelEase(t) {
     t = Math.max(0, Math.min(1, t));
-    const v0 = 0.2;
+    const v0 = this._travelV0;
     return (v0 - 2) * t * t * t + (3 - 2 * v0) * t * t + v0 * t;
   }
 
@@ -523,39 +503,6 @@ export class FlythroughCamera {
   }
 
   /**
-   * Continue the departure orbit spiral forward in time.
-   * Used during the escape phase — the camera continues its orbit with
-   * eased widening (slow at first, then accelerating) until it "breaks free."
-   * The easing makes the spiral unfurl naturally: tight at first, opening
-   * up as the camera gains escape velocity, then settling as it enters
-   * the transfer trajectory.
-   */
-  _computeSpiralPos(elapsed, bodyPos, out) {
-    const t = Math.min(1, elapsed / this._escapeDuration);
-    const easedT = this._ease(t);
-
-    // Angular acceleration: eased, reaches 1.3× at escape end.
-    // Combined with the 2.5× departure speed factor, the orbit
-    // continues accelerating seamlessly through the escape.
-    const accel = 1 + easedT * 0.3;
-    const yaw = this._departYaw
-      + this.orbitYawSpeed * this.orbitDirection * elapsed * this._departSpeedFactor * accel;
-
-    // Eased widening — orbit opens up slowly at first, then accelerates.
-    // Smootherstep has zero derivative at endpoints, so the widening
-    // starts gently (orbit barely changes) and the radial velocity
-    // returns to zero at escape end (smooth handoff to Hermite).
-    const dist = this._departDist * (1 + easedT * this._escapeWidening);
-
-    const cp = Math.cos(this._departPitch);
-    out.set(
-      bodyPos.x + dist * Math.sin(yaw) * cp,
-      bodyPos.y + dist * Math.sin(this._departPitch),
-      bodyPos.z + dist * Math.cos(yaw) * cp,
-    );
-  }
-
-  /**
    * Compute where the arrival orbit would be if it had already started.
    * Used during the arrival blend so the camera smoothly decelerates
    * into orbit — no dead stop at the transition.
@@ -638,156 +585,86 @@ export class FlythroughCamera {
       this._arrivalCaptureDir = captureDir;
       this._arrivalYawSpeed = 0.25 + Math.random() * 0.15;
 
-      // For no-escape case, compute arrival tangent now (departure tangent
-      // was already set in beginTravelFrom).
-      if (this._escapeComplete) {
-        const remDist = this._hermiteStartPos.distanceTo(_v1);
-        const arrMag = remDist * 0.6;
-        this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
-          .multiplyScalar(captureDir).normalize()
-          .multiplyScalar(arrMag);
-        this._arrivalTangentScaled.y = arrMag * -0.03;
-      }
+      // Compute arrival tangent (departure tangent was set in beginTravel).
+      const remDist = this._hermiteStartPos.distanceTo(_v1);
+      const arrMag = remDist * 0.6;
+      this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
+        .multiplyScalar(captureDir).normalize()
+        .multiplyScalar(arrMag);
+      this._arrivalTangentScaled.y = arrMag * -0.03;
     }
 
-    // ── ESCAPE PHASE: widening spiral away from departing body ──
-    // The orbit continues naturally with increasing speed and aggressive
-    // widening. The camera stays focused on the departing body as it
-    // "breaks free" of gravity. No direction change — just the orbit
-    // opening up until the camera escapes into the transfer curve.
-    const ESCAPE_DUR = this._escapeDuration;
-    const hasEscape = !!this._travelFromBody;
+    // ── TRANSFER: velocity-matched Hermite curve ──
+    // The Hermite starts directly from the orbit exit position with v₀
+    // matched to the orbit speed. No escape spiral, no blending —
+    // the camera peels off tangentially and the cubic easing naturally
+    // decelerates from orbit speed to cruise.
+    const transferT = Math.min(1, this.travelElapsed / this.travelDuration);
+    const s = this._travelEase(transferT);
 
-    if (hasEscape && !this._escapeComplete) {
-      // Continue orbit spiral with increasing speed and widening
-      this._computeSpiralPos(this.travelElapsed, this._travelFromBody.position, _v6);
-      this.camera.position.copy(_v6);
+    this._hermite(
+      _v6, this._hermiteStartPos, this._departTangentScaled,
+      _v1, this._arrivalTangentScaled, s,
+    );
+    this.camera.position.copy(_v6);
 
-      // When escape phase ends, capture position and compute Hermite tangents
-      if (this.travelElapsed >= ESCAPE_DUR) {
-        this._escapeComplete = true;
-        this._hermiteStartPos.copy(this.camera.position);
-
-        // Compute spiral tangent at escape end (orbit tangent at this yaw).
-        // accel must match _computeSpiralPos at t=1: 1 + ease(1) * 0.3 = 1.3
-        const accel = 1.3;
-        const escapeYaw = this._departYaw
-          + this.orbitYawSpeed * this.orbitDirection * ESCAPE_DUR
-          * this._departSpeedFactor * accel;
-        const cp = Math.cos(this._departPitch);
-        this._departureTangent.set(
-          Math.cos(escapeYaw) * cp,
-          0,
-          -Math.sin(escapeYaw) * cp,
-        ).multiplyScalar(this.orbitDirection).normalize();
-
-        // Scale both tangents based on remaining distance
-        const remDist = this._hermiteStartPos.distanceTo(_v1);
-        const tangentMag = remDist * 0.6;
-        this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
-        this._departTangentScaled.y = tangentMag * 0.03;
-
-        this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
-          .multiplyScalar(captureDir).normalize()
-          .multiplyScalar(tangentMag);
-        this._arrivalTangentScaled.y = tangentMag * -0.03;
-      }
-
-      // LookAt during escape: watch departing body recede
-      this._applyFreeLookAndLookAt(this._travelFromBody.position);
-
-    } else {
-      // ── TRANSFER PHASE: Hermite curve from escape end to arrival ──
-      // The Hermite starts from wherever the escape spiral ended (or from
-      // departurePos if no escape). Tangent matches the spiral's direction
-      // at escape end, so there's no direction change — just a smooth
-      // transition from spiraling outward to curving toward destination.
-      const transferStart = hasEscape ? ESCAPE_DUR : 0;
-      const transferDur = this.travelDuration - transferStart;
-      const transferT = Math.min(1,
-        (this.travelElapsed - transferStart) / transferDur);
-      const s = this._travelEase(transferT);
-
-      this._hermite(
-        _v6, this._hermiteStartPos, this._departTangentScaled,
-        _v1, this._arrivalTangentScaled, s,
+    // ── Arrival blend (last 4.0s): Hermite curve → pre-orbit ──
+    // Gravitational capture: the curved cruise bends into orbit.
+    const ARRIVE_BLEND = 4.0;
+    const arriveStart = this.travelDuration - ARRIVE_BLEND;
+    if (this.travelElapsed > arriveStart) {
+      const blend = this._ease(
+        (this.travelElapsed - arriveStart) / ARRIVE_BLEND
       );
-      this.camera.position.copy(_v6);
-
-      // ── Departure blend (first 3s of Hermite): spiral → Hermite ──
-      // The escape spiral exits at high orbital speed but the Hermite
-      // cruise is much slower. Without this blend, there's a jarring
-      // speed drop when the Hermite takes over. By continuing the spiral
-      // forward and blending from it to the Hermite, the speed transitions
-      // gradually over 3 seconds instead of snapping.
-      if (hasEscape && this._travelFromBody && this._escapeDuration > 0) {
-        const DEPART_BLEND = 3.0;
-        const hermiteAge = this.travelElapsed - ESCAPE_DUR;
-        if (hermiteAge < DEPART_BLEND) {
-          const blend = this._ease(hermiteAge / DEPART_BLEND);
-          this._computeSpiralPos(this.travelElapsed, this._travelFromBody.position, _v5);
-          this.camera.position.lerpVectors(_v5, _v6, blend);
-        }
-      }
-
-      // ── Arrival blend (last 4.0s): Hermite curve → pre-orbit ──
-      // Gravitational capture: the curved cruise bends into orbit.
-      const ARRIVE_BLEND = 4.0;
-      const arriveStart = this.travelDuration - ARRIVE_BLEND;
-      if (this.travelElapsed > arriveStart) {
-        const blend = this._ease(
-          (this.travelElapsed - arriveStart) / ARRIVE_BLEND
-        );
-        const arriveElapsed = this.travelElapsed - arriveStart;
-        this._computePreOrbitPos(arriveElapsed, nextPos, _v5);
-        this.camera.position.lerp(_v5, blend);
-      }
-
-      // ── Smooth cinematic LookAt (weighted blend) ──
-      // Three targets blended with overlapping S-curves — no hard boundaries.
-      // Departing body → forward heading → arriving body.
-      const fromBody = this._travelFromBody;
-
-      // Weight: departing body (full at start of transfer, fades out by 35%)
-      const wDepart = fromBody
-        ? 1 - this._ease(Math.max(0, Math.min(1, transferT / 0.35)))
-        : 0;
-      // Weight: arriving body (fades in from 40% to 75%)
-      const wArrive = this._ease(
-        Math.max(0, Math.min(1, (transferT - 0.40) / 0.35)));
-      // Weight: forward heading (fills the gap — peaks mid-transfer)
-      const wHeading = Math.max(0, 1 - wDepart - wArrive);
-
-      // Compute forward heading target: sample slightly ahead on the Hermite
-      // curve and extend that direction to a distant point. Creates the
-      // sensation of gazing out the front window during coast.
-      const lookAheadT = Math.min(1, transferT + 0.05);
-      const sAhead = this._travelEase(lookAheadT);
-      this._hermite(
-        _v4, this._hermiteStartPos, this._departTangentScaled,
-        _v1, this._arrivalTangentScaled, sAhead,
-      );
-      _v3.subVectors(_v4, this.camera.position).normalize().multiplyScalar(1000);
-      _v3.add(this.camera.position);
-
-      // Weighted blend of the three targets
-      this.lookAtTarget.set(0, 0, 0);
-      if (fromBody && wDepart > 0.001) {
-        this.lookAtTarget.addScaledVector(fromBody.position, wDepart);
-      }
-      if (wHeading > 0.001) {
-        this.lookAtTarget.addScaledVector(_v3, wHeading);
-      }
-      if (wArrive > 0.001) {
-        this.lookAtTarget.addScaledVector(nextPos, wArrive);
-      }
-      const totalW = wDepart + wHeading + wArrive;
-      if (totalW > 0.001) {
-        this.lookAtTarget.divideScalar(totalW);
-      }
-
-      this._applyFreeLookAndLookAt(this.lookAtTarget);
+      const arriveElapsed = this.travelElapsed - arriveStart;
+      this._computePreOrbitPos(arriveElapsed, nextPos, _v5);
+      this.camera.position.lerp(_v5, blend);
     }
+
+    // ── Smooth cinematic LookAt (weighted blend) ──
+    // Three targets blended with overlapping S-curves — no hard boundaries.
+    // Departing body → forward heading → arriving body.
+    const fromBody = this._travelFromBody;
+
+    // Weight: departing body (full at start of transfer, fades out by 35%)
+    const wDepart = fromBody
+      ? 1 - this._ease(Math.max(0, Math.min(1, transferT / 0.35)))
+      : 0;
+    // Weight: arriving body (fades in from 40% to 75%)
+    const wArrive = this._ease(
+      Math.max(0, Math.min(1, (transferT - 0.40) / 0.35)));
+    // Weight: forward heading (fills the gap — peaks mid-transfer)
+    const wHeading = Math.max(0, 1 - wDepart - wArrive);
+
+    // Compute forward heading target: sample slightly ahead on the Hermite
+    // curve and extend that direction to a distant point. Creates the
+    // sensation of gazing out the front window during coast.
+    const lookAheadT = Math.min(1, transferT + 0.05);
+    const sAhead = this._travelEase(lookAheadT);
+    this._hermite(
+      _v4, this._hermiteStartPos, this._departTangentScaled,
+      _v1, this._arrivalTangentScaled, sAhead,
+    );
+    _v3.subVectors(_v4, this.camera.position).normalize().multiplyScalar(1000);
+    _v3.add(this.camera.position);
+
+    // Weighted blend of the three targets
+    this.lookAtTarget.set(0, 0, 0);
+    if (fromBody && wDepart > 0.001) {
+      this.lookAtTarget.addScaledVector(fromBody.position, wDepart);
+    }
+    if (wHeading > 0.001) {
+      this.lookAtTarget.addScaledVector(_v3, wHeading);
+    }
+    if (wArrive > 0.001) {
+      this.lookAtTarget.addScaledVector(nextPos, wArrive);
+    }
+    const totalW = wDepart + wHeading + wArrive;
+    if (totalW > 0.001) {
+      this.lookAtTarget.divideScalar(totalW);
+    }
+
+    this._applyFreeLookAndLookAt(this.lookAtTarget);
 
     if (t >= 1) {
       // Store entry yaw and capture direction for seamless orbit start
