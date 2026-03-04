@@ -232,18 +232,44 @@ export class FlythroughCamera {
     const dist = this.departurePos.distanceTo(nextBodyRef.position);
     this.travelDuration = Math.max(12, Math.min(25, 18 * Math.sqrt(dist / 500)));
 
-    // ── Dynamic escape duration ──
-    // Proportional to travel time (25%), clamped 3-7s. Short trips
-    // (planet → its own moon) get a quick escape; long interplanetary
-    // trips get more time to spiral away naturally.
-    this._escapeDuration = Math.max(3, Math.min(7, this.travelDuration * 0.25));
+    // ── Short-trip detection (planet → nearby moon) ──
+    // If the destination is close (less than 5× our orbit radius), skip
+    // the escape spiral entirely — a widening orbit looks wrong when the
+    // destination is right there. Use a direct Hermite curve instead,
+    // with the tangent aimed mostly toward the destination.
+    if (dist < this._departDist * 5) {
+      this._escapeComplete = true;
+      this._escapeDuration = 0;
+      this._hermiteStartPos.copy(this.departurePos);
 
-    // ── Distance-scaled escape widening ──
-    // For short trips, the escape orbit shouldn't widen past ~35% of the
-    // trip distance — otherwise the camera spirals past the destination.
-    // For long trips, full widening (2×) gives a dramatic escape spiral.
-    const maxEscapeDist = dist * 0.35;
-    this._escapeWidening = Math.max(0.3, Math.min(2.0, maxEscapeDist / this._departDist - 1));
+      // Departure tangent: orbit velocity direction at current yaw
+      const cp = Math.cos(this._departPitch);
+      this._departureTangent.set(
+        Math.cos(this._departYaw) * cp,
+        0,
+        -Math.sin(this._departYaw) * cp,
+      ).multiplyScalar(this.orbitDirection).normalize();
+
+      // Blend orbit tangent toward destination so the curve aims at it
+      // instead of continuing the orbit circle away from the moon.
+      _v1.subVectors(nextBodyRef.position, this.departurePos);
+      _v1.y = 0;
+      _v1.normalize();
+      this._departureTangent.lerp(_v1, 0.6).normalize();
+
+      const tangentMag = dist * 0.5;
+      this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
+      this._departTangentScaled.y = tangentMag * 0.02;
+    } else {
+      // ── Dynamic escape duration ──
+      // Proportional to travel time (25%), clamped 3-7s.
+      this._escapeDuration = Math.max(3, Math.min(7, this.travelDuration * 0.25));
+
+      // ── Distance-scaled escape widening ──
+      // Cap at 35% of trip distance to avoid spiraling past destination.
+      const maxEscapeDist = dist * 0.35;
+      this._escapeWidening = Math.max(0.3, Math.min(2.0, maxEscapeDist / this._departDist - 1));
+    }
 
     // Pre-store current body for lookAt transition
     this._travelFromBody = this.bodyRef;
@@ -687,6 +713,22 @@ export class FlythroughCamera {
         _v1, this._arrivalTangentScaled, s,
       );
       this.camera.position.copy(_v6);
+
+      // ── Departure blend (first 3s of Hermite): spiral → Hermite ──
+      // The escape spiral exits at high orbital speed but the Hermite
+      // cruise is much slower. Without this blend, there's a jarring
+      // speed drop when the Hermite takes over. By continuing the spiral
+      // forward and blending from it to the Hermite, the speed transitions
+      // gradually over 3 seconds instead of snapping.
+      if (hasEscape && this._travelFromBody && this._escapeDuration > 0) {
+        const DEPART_BLEND = 3.0;
+        const hermiteAge = this.travelElapsed - ESCAPE_DUR;
+        if (hermiteAge < DEPART_BLEND) {
+          const blend = this._ease(hermiteAge / DEPART_BLEND);
+          this._computeSpiralPos(this.travelElapsed, this._travelFromBody.position, _v5);
+          this.camera.position.lerpVectors(_v5, _v6, blend);
+        }
+      }
 
       // ── Arrival blend (last 4.0s): Hermite curve → pre-orbit ──
       // Gravitational capture: the curved cruise bends into orbit.
