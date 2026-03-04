@@ -1027,9 +1027,7 @@ window.addEventListener('keydown', (e) => {
   if (autoNav.isActive) {
     if (e.code === 'Space') {
       e.preventDefault();
-      stopFlythrough();
-      seedCounter++;
-      spawnSystem();
+      warpEffect.start();
     } else if (e.code === 'Tab') {
       e.preventDefault();
       // Jump tour forward/back — begin travel to the new stop
@@ -1068,8 +1066,11 @@ window.addEventListener('keydown', (e) => {
 
   if (e.code === 'Space') {
     e.preventDefault();
-    seedCounter++;
-    spawnSystem();
+    // Start autopilot if not already running, then trigger warp
+    if (!autoNav.isActive) {
+      startFlythrough();
+    }
+    warpEffect.start();
   } else if (e.code === 'Escape' || e.code === 'Backquote') {
     focusPlanet(-1);
   } else if (e.code === 'Tab') {
@@ -1191,9 +1192,9 @@ canvas.addEventListener('touchend', (e) => {
 
   const now = Date.now();
   if (now - _lastTapTime < 350) {
-    // Double tap: new system
-    seedCounter++;
-    spawnSystem();
+    // Double tap: warp to new system
+    if (!autoNav.isActive) startFlythrough();
+    warpEffect.start();
     _lastTapTime = 0;
   } else {
     _lastTapTime = now;
@@ -1226,8 +1227,8 @@ if (mobileMenu) {
 
     const action = btn.dataset.action;
     if (action === 'new') {
-      seedCounter++;
-      spawnSystem();
+      if (!autoNav.isActive) startFlythrough();
+      warpEffect.start();
     } else if (action === 'back') {
       focusPlanet(-1);
     } else if (action === 'prev') {
