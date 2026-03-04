@@ -14,6 +14,7 @@ import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
+import { WarpEffect } from './effects/WarpEffect.js';
 
 // ── Scene ──
 const scene = new THREE.Scene();
@@ -65,8 +66,22 @@ const flythrough = new FlythroughCamera(camera);
 let idleTimer = 0;
 const IDLE_THRESHOLD = 20;
 
+// ── Warp transition (system-to-system) ──
+const warpEffect = new WarpEffect();
+
+// When the tour visits every body, trigger warp to a new system
 autoNav.onTourComplete = () => {
-  // Phase 7 will replace with warp trigger. For now, loop.
+  warpEffect.start();
+};
+
+// System swap happens mid-hyperspace (invisible behind the tunnel effect)
+warpEffect.onSwapSystem = () => {
+  warpSwapSystem();
+};
+
+// When warp exit finishes, reveal the new system and restart autopilot
+warpEffect.onComplete = () => {
+  warpRevealSystem();
 };
 
 // ── Click-to-select (raycasting) ──
@@ -79,11 +94,15 @@ spawnSystem();
 
 /**
  * Generate and display a full star system (single or binary).
+ * @param {Object} options
+ * @param {boolean} options.forWarp  — if true, skip camera setup + flythrough start (warp handles that)
  */
-function spawnSystem() {
+function spawnSystem({ forWarp = false } = {}) {
   // ── Reset autopilot / flythrough ──
   const wasAutopilot = autoNav.isActive;
-  stopFlythrough();
+  if (!forWarp) {
+    stopFlythrough();
+  }
   idleTimer = 0;
 
   // ── Clean up old system ──
@@ -350,6 +369,31 @@ function spawnSystem() {
     }
   }
 
+  // ── Console log ──
+  const starDesc = systemData.isBinary
+    ? `${systemData.star.type}+${systemData.star2.type} binary`
+    : `${systemData.star.type}-class star`;
+  const beltDesc = systemData.asteroidBelts.length > 0
+    ? `, ${systemData.asteroidBelts[0].asteroids.length} asteroids`
+    : '';
+  console.log(`System "${seed}" — ${starDesc}, ${systemData.planets.length} planets${beltDesc}`);
+
+  // Phase 5A diagnostic: physical units sanity check
+  console.log(`  Star: ${systemData.star.radiusSolar.toFixed(2)} R☉ (${systemData.star.radiusScene.toFixed(2)} scene units)`);
+  if (systemData.star2) {
+    console.log(`  Star2: ${systemData.star2.radiusSolar.toFixed(2)} R☉, binary sep: ${systemData.binarySeparationAU.toFixed(3)} AU`);
+  }
+  for (let i = 0; i < systemData.planets.length; i++) {
+    const p = systemData.planets[i];
+    const moonDesc = p.moons.length > 0
+      ? ` (${p.moons.length} moon${p.moons.length > 1 ? 's' : ''})`
+      : '';
+    console.log(`  P${i + 1}: ${p.planetData.type} — ${p.planetData.radiusEarth.toFixed(2)} R⊕, orbit ${p.orbitRadiusAU.toFixed(2)} AU${moonDesc}`);
+  }
+
+  // ── During warp, skip camera setup — warpRevealSystem handles that ──
+  if (forWarp) return;
+
   // ── Opening shot: randomly focus a planet or moon ──
   const heroIndex = Math.floor(Math.random() * planets.length);
   const hero = planets[heroIndex];
@@ -379,31 +423,6 @@ function spawnSystem() {
     focusMoonIndex = -1;
     cameraController.distance = viewDist;
     cameraController.smoothedDistance = viewDist;
-  }
-
-  // ── Console log ──
-  const starDesc = systemData.isBinary
-    ? `${systemData.star.type}+${systemData.star2.type} binary`
-    : `${systemData.star.type}-class star`;
-  const beltDesc = systemData.asteroidBelts.length > 0
-    ? `, ${systemData.asteroidBelts[0].asteroids.length} asteroids`
-    : '';
-  const heroDesc = heroMoonIndex >= 0
-    ? `moon ${heroMoonIndex + 1} of planet ${heroIndex + 1}`
-    : `planet ${heroIndex + 1}: ${hero.planet.data.type}`;
-  console.log(`System "${seed}" — ${starDesc}, ${systemData.planets.length} planets${beltDesc} (featuring ${heroDesc})`);
-
-  // Phase 5A diagnostic: physical units sanity check
-  console.log(`  Star: ${systemData.star.radiusSolar.toFixed(2)} R☉ (${systemData.star.radiusScene.toFixed(2)} scene units)`);
-  if (systemData.star2) {
-    console.log(`  Star2: ${systemData.star2.radiusSolar.toFixed(2)} R☉, binary sep: ${systemData.binarySeparationAU.toFixed(3)} AU`);
-  }
-  for (let i = 0; i < systemData.planets.length; i++) {
-    const p = systemData.planets[i];
-    const moonDesc = p.moons.length > 0
-      ? ` (${p.moons.length} moon${p.moons.length > 1 ? 's' : ''})`
-      : '';
-    console.log(`  P${i + 1}: ${p.planetData.type} — ${p.planetData.radiusEarth.toFixed(2)} R⊕, orbit ${p.orbitRadiusAU.toFixed(2)} AU${moonDesc}`);
   }
 
   // Restart autopilot with new system if it was active before
@@ -531,6 +550,35 @@ function stopFlythrough() {
   }
 
   console.log('Autopilot: off');
+}
+
+/**
+ * Warp: dispose old system and generate a new one (hidden).
+ * Called mid-hyperspace when the tunnel effect hides everything.
+ */
+function warpSwapSystem() {
+  // Stop autopilot (don't restore camera — warp controls it)
+  flythrough.stop();
+  autoNav.stop();
+
+  // Generate a new system (cleanup old + create new, skip camera setup)
+  seedCounter++;
+  spawnSystem({ forWarp: true });
+
+  console.log('Warp: system swapped');
+}
+
+/**
+ * Warp: reveal the new system and start autopilot.
+ * Called when the warp exit phase finishes.
+ */
+function warpRevealSystem() {
+  // Start autopilot into the new system
+  if (system) {
+    cameraController.bypassed = true;
+    startFlythrough();
+  }
+  console.log('Warp: arrived at new system');
 }
 
 /**
@@ -857,8 +905,27 @@ function animate() {
       }
     }
 
+    // ── Warp transition ──
+    if (warpEffect.isActive) {
+      warpEffect.update(deltaTime);
+      starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness);
+      retroRenderer.setWarpUniforms(
+        warpEffect.sceneFade,
+        warpEffect.whiteFlash,
+        warpEffect.hyperPhase,
+        warpEffect.hyperTime,
+      );
+    } else {
+      // Reset warp uniforms when not warping
+      starfield.setWarpUniforms(0, 1);
+      retroRenderer.setWarpUniforms(0, 0, 0, 0);
+    }
+
     // ── Autopilot (cinematic flythrough) ──
-    if (!autoNav.isActive) {
+    // Skip idle timer during warp (don't start a new flythrough mid-warp)
+    if (warpEffect.isActive) {
+      // Warp is controlling the camera — do nothing
+    } else if (!autoNav.isActive) {
       idleTimer += deltaTime;
       if (idleTimer >= IDLE_THRESHOLD) {
         startFlythrough();
@@ -942,6 +1009,9 @@ window.addEventListener('resize', () => retroRenderer.resize());
 
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
+  // Block all input during warp transition (can't interrupt the sequence)
+  if (warpEffect.isActive) return;
+
   // A key: toggle autopilot
   if (e.code === 'KeyA') {
     if (autoNav.isActive) {
@@ -1025,7 +1095,7 @@ window.addEventListener('keydown', (e) => {
 
 // ── Click/tap-to-select ──
 function trySelect(clientX, clientY) {
-  if (!system) return;
+  if (!system || warpEffect.isActive) return;
 
   _mouse.x = (clientX / window.innerWidth) * 2 - 1;
   _mouse.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -1077,8 +1147,8 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.button === 1) {
     _middleMouseDown = true;
   }
-  // Left-click drag turns off autopilot
-  if (e.button === 0 && autoNav.isActive) {
+  // Left-click drag turns off autopilot (but not during warp)
+  if (e.button === 0 && autoNav.isActive && !warpEffect.isActive) {
     stopFlythrough();
   }
   if (!autoNav.isActive) idleTimer = 0;

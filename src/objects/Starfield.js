@@ -4,6 +4,10 @@ import * as THREE from 'three';
  * Creates a starfield — thousands of tiny points on a large sphere
  * surrounding the camera. The sphere moves WITH the camera so you
  * never fly past the stars (they're a backdrop, like a skybox).
+ *
+ * During warp transitions, the vertex shader can fold all stars
+ * toward screen center (creating a "slice" in space) and the
+ * fragment shader boosts brightness for the accumulation glow.
  */
 export class Starfield {
   constructor(count = 3000, radius = 500) {
@@ -78,8 +82,14 @@ export class Starfield {
       depthWrite: false, // Backdrop — should never block anything in front
       vertexColors: true,
 
+      uniforms: {
+        uFoldAmount: { value: 0.0 },     // 0 = normal, 1 = fully folded to center
+        uBrightness: { value: 1.0 },     // brightness multiplier (glow during fold)
+      },
+
       vertexShader: /* glsl */ `
         attribute float aSize;
+        uniform float uFoldAmount;
         varying vec3 vColor;
         varying float vSize;
 
@@ -88,6 +98,20 @@ export class Starfield {
           vSize = aSize;
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mvPos;
+
+          // ── Warp fold effect ──
+          // During warp, stars slide toward the vertical center line of the screen.
+          // Stars far from center move more; stars near center barely move.
+          // This creates a bright vertical "slice" — a rift in space.
+          if (uFoldAmount > 0.0) {
+            // Work in NDC (clip space / w)
+            float ndcX = gl_Position.x / gl_Position.w;
+            // Fold: compress X toward 0. Outer stars fold more.
+            float foldStrength = uFoldAmount * uFoldAmount; // ease-in for dramatic acceleration
+            float folded = ndcX * (1.0 - foldStrength);
+            gl_Position.x = folded * gl_Position.w;
+          }
+
           // Large stars (6px) get a bigger quad so the pointed tips have room.
           // Medium (4px) and small (2px) render at natural size.
           gl_PointSize = aSize > 5.0 ? aSize * 2.0 : aSize;
@@ -95,6 +119,7 @@ export class Starfield {
       `,
 
       fragmentShader: /* glsl */ `
+        uniform float uBrightness;
         varying vec3 vColor;
         varying float vSize;
 
@@ -134,7 +159,9 @@ export class Starfield {
             : smoothstep(0.35, 0.55, dist);
           if (edge > threshold) discard;
 
-          gl_FragColor = vec4(vColor, 1.0);
+          // Apply brightness boost during warp (stars accumulate as they fold)
+          vec3 col = vColor * uBrightness;
+          gl_FragColor = vec4(min(col, vec3(1.0)), 1.0);
         }
       `,
     });
@@ -148,6 +175,16 @@ export class Starfield {
    */
   update(cameraPosition) {
     this.mesh.position.copy(cameraPosition);
+  }
+
+  /**
+   * Set warp-related uniforms (called by main.js during warp).
+   * @param {number} foldAmount  0 = normal, 1 = fully folded to center
+   * @param {number} brightness  1 = normal, higher = brighter (glow during fold)
+   */
+  setWarpUniforms(foldAmount, brightness) {
+    this.mesh.material.uniforms.uFoldAmount.value = foldAmount;
+    this.mesh.material.uniforms.uBrightness.value = brightness;
   }
 
   /**

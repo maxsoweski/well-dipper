@@ -14,6 +14,11 @@ import * as THREE from 'three';
  * the high-res starfield behind them, while colored scene pixels take
  * priority. The HUD overlays on top with a subtle dark background.
  *
+ * During warp transitions, the composite shader handles:
+ * - Scene fade-out (sceneFade uniform)
+ * - White flash entering the "slice" (whiteFlash uniform)
+ * - Hyperspace tunnel streaks (hyperPhase + hyperTime uniforms)
+ *
  * Dithering is NOT done here. Each object handles its own dithering
  * in its fragment shader for a more authentic retro look.
  */
@@ -64,6 +69,21 @@ export class RetroRenderer {
   }
 
   /**
+   * Set warp-related uniforms (called by main.js during warp).
+   * @param {number} sceneFade    0 = scene visible, 1 = scene hidden
+   * @param {number} whiteFlash   0 = no flash, 1 = full white
+   * @param {number} hyperPhase   0 = no hyperspace, 1 = full hyperspace
+   * @param {number} hyperTime    elapsed time for hyperspace animation
+   */
+  setWarpUniforms(sceneFade, whiteFlash, hyperPhase, hyperTime) {
+    const u = this._compositeMesh.material.uniforms;
+    u.uSceneFade.value = sceneFade;
+    u.uWhiteFlash.value = whiteFlash;
+    u.uHyperPhase.value = hyperPhase;
+    u.uHyperTime.value = hyperTime;
+  }
+
+  /**
    * Build the fullscreen composite quad + shader.
    * Samples all render targets and composites them.
    */
@@ -78,6 +98,11 @@ export class RetroRenderer {
         hudRect: { value: new THREE.Vector4(0.78, 0.02, 0.20, 0.20) }, // x, y, w, h in UV
         hudEnabled: { value: 0 },
         resolution: { value: new THREE.Vector2(1, 1) },
+        // Warp uniforms
+        uSceneFade: { value: 0.0 },   // 0 = normal, 1 = scene hidden
+        uWhiteFlash: { value: 0.0 },  // 0 = normal, 1 = full white
+        uHyperPhase: { value: 0.0 },  // 0 = normal, 1 = hyperspace
+        uHyperTime: { value: 0.0 },   // elapsed seconds (drives animation)
       },
 
       vertexShader: /* glsl */ `
@@ -95,7 +120,57 @@ export class RetroRenderer {
         uniform vec4 hudRect;     // (x, y, w, h) in UV space
         uniform float hudEnabled;
         uniform vec2 resolution;
+        // Warp uniforms
+        uniform float uSceneFade;
+        uniform float uWhiteFlash;
+        uniform float uHyperPhase;
+        uniform float uHyperTime;
         varying vec2 vUv;
+
+        // ── Hyperspace tunnel effect ──
+        // Procedural speed lines flowing from edges toward center.
+        // Retro aesthetic: sharp lines, posterized colors, no smooth gradients.
+        vec3 hyperspace(vec2 uv, float time) {
+          // Center UV so (0,0) is screen center
+          vec2 centered = uv - 0.5;
+          float aspect = resolution.x / resolution.y;
+          centered.x *= aspect;
+
+          // Polar coordinates from center
+          float angle = atan(centered.y, centered.x);
+          float radius = length(centered);
+
+          // Tunnel effect: radial lines that "flow" inward
+          // Multiple frequency layers for depth
+          float line1 = sin(angle * 12.0 + time * 3.0 + radius * 20.0);
+          float line2 = sin(angle * 8.0 - time * 2.0 + radius * 15.0);
+          float line3 = sin(angle * 20.0 + time * 5.0 + radius * 30.0);
+
+          // Sharpen lines (posterize for retro look)
+          line1 = step(0.7, line1);
+          line2 = step(0.75, line2);
+          line3 = step(0.85, line3);
+
+          // Combine: brighter toward center (tunnel depth illusion)
+          float centerGlow = smoothstep(0.8, 0.0, radius);
+          float streaks = max(max(line1 * 0.5, line2 * 0.4), line3 * 0.3);
+
+          // Color palette: deep blue/purple base with white-blue streaks
+          vec3 base = vec3(0.02, 0.01, 0.06);  // near-black purple
+          vec3 streak = vec3(0.3, 0.5, 1.0);    // blue-white
+          vec3 glow = vec3(0.1, 0.15, 0.4);     // subtle center glow
+
+          vec3 col = base;
+          col += streak * streaks;
+          col += glow * centerGlow * 0.5;
+
+          // Occasional bright flashes (sparse white dots traveling inward)
+          float flash = sin(angle * 30.0 + time * 8.0) * sin(radius * 40.0 - time * 12.0);
+          flash = step(0.95, flash) * 0.8;
+          col += vec3(flash);
+
+          return col;
+        }
 
         void main() {
           vec4 bg = texture2D(bgTexture, vUv);
@@ -105,8 +180,15 @@ export class RetroRenderer {
           // Objects render with alpha=1 (even dark shadows), empty space has alpha=0.
           vec3 result = mix(bg.rgb, scene.rgb, scene.a);
 
-          // ── HUD overlay ──
-          if (hudEnabled > 0.5) {
+          // ── Warp: scene fade ──
+          // Fade scene objects toward black during warp fold
+          if (uSceneFade > 0.0) {
+            float fadeScene = scene.a * (1.0 - uSceneFade);
+            result = mix(bg.rgb, scene.rgb, fadeScene);
+          }
+
+          // ── HUD overlay (hidden during warp) ──
+          if (hudEnabled > 0.5 && uSceneFade < 0.5) {
             // Compute square HUD region in UV space, accounting for aspect ratio
             float aspect = resolution.x / resolution.y;
             float hudW = hudRect.z;                  // width in UV-x
@@ -125,6 +207,17 @@ export class RetroRenderer {
               // Blend HUD content on top
               result = mix(result, hud.rgb, hud.a);
             }
+          }
+
+          // ── Warp: hyperspace tunnel ──
+          if (uHyperPhase > 0.0) {
+            vec3 hyper = hyperspace(vUv, uHyperTime);
+            result = mix(result, hyper, uHyperPhase);
+          }
+
+          // ── Warp: white flash (entering the slice) ──
+          if (uWhiteFlash > 0.0) {
+            result = mix(result, vec3(1.0), uWhiteFlash);
           }
 
           gl_FragColor = vec4(result, 1.0);
