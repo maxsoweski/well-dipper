@@ -272,19 +272,15 @@ export class FlythroughCamera {
 
     if (isShortTrip) {
       // ── Short trip: direct path to nearby destination ──
-      // Point straight at the destination — no orbit tangent component.
-      // The orbit tangent is perpendicular to the radius, which can aim
-      // away from a nearby moon. Using it (even blended) causes the
-      // camera to blast into empty space before curving back.
-      _v1.subVectors(nextBodyRef.position, this.departurePos);
-      _v1.y = 0;
-      _v1.normalize();
+      // Point straight at the destination in full 3D — no Y zeroing.
+      // Moons can be above/below the orbital plane (inclined orbits),
+      // and flattening Y creates a visible horizontal-then-curve path.
+      _v1.subVectors(nextBodyRef.position, this.departurePos).normalize();
       this._departureTangent.copy(_v1);
 
       // Small tangent magnitude = nearly straight path (no wide arc)
       const tangentMag = dist * 0.25;
       this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
-      this._departTangentScaled.y = tangentMag * 0.02;
 
       // Moderate start speed (not matched to slow orbit — just comfortable)
       this._travelV0 = 0.8;
@@ -646,6 +642,7 @@ export class FlythroughCamera {
     const dotArr = arrTanX * appX + arrTanZ * appZ;
     const captureDir = dotArr > 0 ? 1 : -1;
 
+    // ── Arrival orbit state — computed once (random params stay stable) ──
     if (!this._arrivalComputed) {
       this._arrivalComputed = true;
       this._arrivalYaw = entryYaw;
@@ -653,25 +650,28 @@ export class FlythroughCamera {
       this._arrivalPitch = entryPitch;
       this._arrivalCaptureDir = captureDir;
       this._arrivalYawSpeed = 0.25 + Math.random() * 0.15;
+    }
 
-      // Compute arrival tangent (departure tangent was set in beginTravel).
-      const remDist = this._hermiteStartPos.distanceTo(_v1);
+    // ── Arrival tangent — recomputed each frame to track moving bodies ──
+    // Moons orbit their parent during travel, so a stale tangent causes
+    // the Hermite curve to distort as the endpoint drifts away from the
+    // tangent direction. Recomputing is cheap (a few vector ops).
+    const remDist = this._hermiteStartPos.distanceTo(_v1);
 
-      if (this._isShortTrip) {
-        // Short trip: arrive from approach direction (nearly straight path)
-        // instead of perpendicular orbit entry (which causes wide arcs).
-        const arrMag = remDist * 0.25;
-        this._arrivalTangentScaled.set(appX, 0, appZ).normalize()
-          .multiplyScalar(arrMag);
-        this._arrivalTangentScaled.y = arrMag * -0.02;
-      } else {
-        // Long trip: arrive tangent to orbit (graceful curved entry)
-        const arrMag = remDist * 0.6;
-        this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
-          .multiplyScalar(captureDir).normalize()
-          .multiplyScalar(arrMag);
-        this._arrivalTangentScaled.y = arrMag * -0.03;
-      }
+    if (this._isShortTrip) {
+      // Short trip: arrive from full 3D approach direction.
+      // Uses current start→endpoint direction so the tangent tracks
+      // the moon's actual position, not where it was at trip start.
+      const arrMag = remDist * 0.25;
+      _v3.subVectors(_v1, this._hermiteStartPos).normalize();
+      this._arrivalTangentScaled.copy(_v3).multiplyScalar(arrMag);
+    } else {
+      // Long trip: arrive tangent to orbit (graceful curved entry)
+      const arrMag = remDist * 0.6;
+      this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
+        .multiplyScalar(captureDir).normalize()
+        .multiplyScalar(arrMag);
+      this._arrivalTangentScaled.y = arrMag * -0.03;
     }
 
     // ── TRANSFER: velocity-matched Hermite curve ──
