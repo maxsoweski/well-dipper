@@ -641,9 +641,10 @@ export class FlythroughCamera {
     // Departing body → forward heading → arriving body.
     const fromBody = this._travelFromBody;
 
-    // Weight: departing body (full at start of transfer, fades out by 35%)
+    // Weight: departing body (full at start, fades out over 3 seconds)
+    const DEPART_LOOK_DUR = 3.0;
     const wDepart = fromBody
-      ? 1 - this._ease(Math.max(0, Math.min(1, transferT / 0.35)))
+      ? 1 - this._ease(Math.min(1, this.travelElapsed / DEPART_LOOK_DUR))
       : 0;
     // Weight: arriving body (fades in from 40% to 75%)
     const wArrive = this._ease(
