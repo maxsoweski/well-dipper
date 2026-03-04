@@ -565,6 +565,21 @@ function warpSwapSystem() {
   seedCounter++;
   spawnSystem({ forWarp: true });
 
+  // Position camera far from the new star, facing it.
+  // Camera will fly forward at 30 units/s through remaining hyper (~9s)
+  // and exit (~2s, decelerating), covering ~300 units total.
+  if (system) {
+    const star = system.star;
+    const starPos = star.mesh.position;
+    const innerOrbit = system.planets[0].orbitRadius;
+    const orbitDist = Math.min(star.data.radius * 4, innerOrbit * 0.4);
+    const travelDist = 300; // ~9s×30 + ~2s×15avg
+
+    // Place camera along +Z from star, facing toward it
+    camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist);
+    camera.lookAt(starPos);
+  }
+
   console.log('Warp: system swapped');
 }
 
@@ -573,11 +588,38 @@ function warpSwapSystem() {
  * Called when the warp exit phase finishes.
  */
 function warpRevealSystem() {
-  // Start autopilot into the new system
-  if (system) {
-    cameraController.bypassed = true;
-    startFlythrough();
+  if (!system) return;
+  cameraController.bypassed = true;
+
+  // Build the autopilot tour queue for the new system
+  autoNav.buildQueue(system);
+  populateQueueRefs();
+
+  // Find the star stop so we orbit it first (camera is already approaching it)
+  const starStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
+  autoNav.currentIndex = starStopIdx >= 0 ? starStopIdx : 0;
+  autoNav.start();
+
+  const starStop = autoNav.getCurrentStop();
+  if (starStop && starStop.bodyRef) {
+    // Set next body so orbit departure direction aligns toward it
+    const upcoming = autoNav.getNextStop();
+    flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+
+    // Begin orbiting the star directly — beginOrbit derives its initial
+    // yaw/pitch from the camera's current position, so the forward
+    // momentum smoothly curves into a circular orbit. No snap.
+    flythrough.beginOrbit(
+      starStop.bodyRef,
+      starStop.orbitDistance,
+      starStop.bodyRadius,
+      starStop.linger,
+    );
+
+    updateFocusFromStop(starStop);
+    if (systemMap) systemMap.triggerBlink();
   }
+
   console.log('Warp: arrived at new system');
 }
 

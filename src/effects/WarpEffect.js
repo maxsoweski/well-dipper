@@ -167,7 +167,7 @@ export class WarpEffect {
     this.foldAmount = 0;
     this.foldGlow = 0;
     this.starBrightness = 0;
-    this.cameraForwardSpeed = 0;
+    this.cameraForwardSpeed = 30;  // Maintain forward momentum through hyperspace
 
     // Fire system swap callback 1s into hyperspace
     if (!this._swapFired && this.elapsed >= 1.0) {
@@ -193,7 +193,7 @@ export class WarpEffect {
     this.starBrightness = t;
     this.foldAmount = 0;
     this.foldGlow = 0;
-    this.cameraForwardSpeed = 0;
+    this.cameraForwardSpeed = 30 * (1 - t);  // Decelerate toward the star
 
     // Scene stays hidden until near the end (new system reveal)
     this.sceneFade = 1 - this._ease(Math.max(0, (this.progress - 0.5) / 0.5));

@@ -145,7 +145,7 @@ export class RetroRenderer {
 
           // ── Tunnel depth (inverse radius = looking "into" the tunnel) ──
           float depth = 0.4 / (radius + 0.08);
-          float scrollZ = depth - time * 2.5;
+          float scrollZ = depth + time * 2.5;
 
           // ── Background: bright white center → blue-purple edges ──
           vec3 bgWhite = vec3(0.95, 0.95, 1.0);
@@ -153,14 +153,14 @@ export class RetroRenderer {
           vec3 bg = mix(bgWhite, bgEdge, smoothstep(0.0, 0.55, radius));
 
           // ── Concentric rings rushing outward (forward motion) ──
-          float ringPattern = fract(depth * 1.5 - time * 2.0);
+          float ringPattern = fract(depth * 1.5 + time * 2.0);
           float rings = step(0.88, ringPattern);
 
           // ── Hexagonal geometry: 6-fold symmetry ──
           // Creates geometric "walls" of the tunnel
           float hexAngle = mod(angle + 0.5236, 1.0472) - 0.5236; // pi/6 offset, pi/3 period
           float hexEdge = abs(sin(hexAngle * 3.0));
-          float hexDepth = fract(depth * 0.8 - time * 1.5);
+          float hexDepth = fract(depth * 0.8 + time * 1.5);
           float hexPattern = step(0.92, hexEdge) * step(0.75, hexDepth);
 
           // ── Diamond grid overlay (cross-hatching) ──
@@ -187,7 +187,7 @@ export class RetroRenderer {
           col = mix(col, vec3(1.0), centerBright);
 
           // ── Occasional flashes (particles rushing past) ──
-          float flash = sin(angle * 30.0 + time * 6.0) * sin(depth * 3.0 - time * 8.0);
+          float flash = sin(angle * 30.0 + time * 6.0) * sin(depth * 3.0 + time * 8.0);
           flash = step(0.96, flash);
           col += vec3(flash) * 0.5;
 
