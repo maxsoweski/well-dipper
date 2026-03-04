@@ -208,24 +208,25 @@ export class RetroRenderer {
             result = mix(bg.rgb, scene.rgb, fadeScene);
           }
 
-          // ── Fold glow: bright lens-shaped core at center ──
-          // Appears during fold phase, thickens at the vertical center.
-          // This is the glowing "entry point" the camera flies into.
+          // ── Fold glow: opaque white line at center that grows outward ──
+          // Starts as a razor-thin white slit, widens into a bright rift.
           if (uFoldGlow > 0.0) {
             float xDist = abs(vUv.x - 0.5);
 
             // Vertical falloff: thicker at screen center, thin at top/bottom
             float yCenter = 1.0 - abs(vUv.y - 0.5) * 2.0;
-            yCenter = pow(max(0.0, yCenter), 0.6);
+            yCenter = pow(max(0.0, yCenter), 0.5);
 
-            // Core width (wider at vertical center)
-            float coreWidth = uFoldGlow * 0.06 * (0.3 + yCenter * 0.7);
+            // Core width: grows quadratically from paper-thin to wide
+            float coreWidth = uFoldGlow * uFoldGlow * 0.15 * (0.2 + yCenter * 0.8);
 
-            // Sharp inner core + soft outer halo
-            float innerGlow = smoothstep(coreWidth, 0.0, xDist);
-            float outerGlow = smoothstep(coreWidth * 4.0, 0.0, xDist) * 0.3;
-            float glow = max(innerGlow, outerGlow) * uFoldGlow;
+            // Solid opaque white core (hard edge via step)
+            float core = step(xDist, coreWidth) * yCenter;
 
+            // Soft outer halo for glow bleeding
+            float halo = smoothstep(coreWidth * 3.0, coreWidth, xDist) * 0.35 * uFoldGlow;
+
+            float glow = max(core, halo);
             result = mix(result, vec3(1.0), glow);
           }
 

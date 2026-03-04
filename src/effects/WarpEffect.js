@@ -109,8 +109,8 @@ export class WarpEffect {
     // Fold glow: bright core appears after 30% progress, ramps to full
     this.foldGlow = this._ease(Math.max(0, (this.progress - 0.3) / 0.7));
 
-    // Camera accelerates forward (cubic ramp: barely moving → fast)
-    this.cameraForwardSpeed = 80 * this.progress * this.progress * this.progress;
+    // Camera accelerates forward (base speed + quadratic ramp so motion is visible early)
+    this.cameraForwardSpeed = 8 + 72 * this.progress * this.progress;
 
     // Transition to ENTER
     if (this.elapsed >= this.FOLD_DUR) {
@@ -153,7 +153,7 @@ export class WarpEffect {
       this.foldAmount = 0;
       this.foldGlow = 0;
       this.starBrightness = 0;
-      this.cameraForwardSpeed = 0;
+      this.cameraForwardSpeed = 30;  // Match hyper phase speed
     }
   }
 
@@ -189,13 +189,16 @@ export class WarpEffect {
     // Hyperspace fades out
     this.hyperPhase = 1 - t;
 
-    // Stars fade back in
-    this.starBrightness = t;
-    this.foldAmount = 0;
-    this.foldGlow = 0;
-    this.cameraForwardSpeed = 30 * (1 - t);  // Decelerate toward the star
+    // Stars unfold: reappear bright and folded, then expand outward
+    // (mirrors the fold phase in reverse)
+    this.foldAmount = 1 - t;         // 1→0: folded → unfolded
+    this.starBrightness = 1 + 2 * (1 - t);  // 3→1: bright → normal
+    this.foldGlow = 1 - t;           // 1→0: rift line shrinks away
 
-    // Scene stays hidden until near the end (new system reveal)
+    // Camera decelerates toward the star
+    this.cameraForwardSpeed = 30 * (1 - t);
+
+    // Scene reveals in second half (planets appear after stars unfold)
     this.sceneFade = 1 - this._ease(Math.max(0, (this.progress - 0.5) / 0.5));
 
     // Done
