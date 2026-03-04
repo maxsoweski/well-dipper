@@ -37,6 +37,9 @@ export class WarpEffect {
     this.exitReveal = 0;          // 0 = no opening, 1 = full opening (exit only)
     this.cameraForwardSpeed = 0;  // units/s to push camera forward during fold
 
+    // ── Rift direction (world-space, for future star selection) ──
+    this.riftDirection = null;  // THREE.Vector3 or null (null = camera forward)
+
     // ── Callbacks (set by main.js) ──
     this.onSwapSystem = null;  // called at start of hyperspace
     this.onComplete = null;    // called when exit finishes
@@ -49,9 +52,13 @@ export class WarpEffect {
     return this.state !== 'idle';
   }
 
-  /** Kick off the warp sequence. */
-  start() {
+  /**
+   * Kick off the warp sequence.
+   * @param {THREE.Vector3} [direction] — world-space rift direction (null = camera forward)
+   */
+  start(direction = null) {
     if (this.state !== 'idle') return;
+    this.riftDirection = direction ? direction.clone().normalize() : null;
     this.state = 'fold';
     this.elapsed = 0;
     this.progress = 0;
@@ -224,5 +231,6 @@ export class WarpEffect {
     this.foldGlow = 0;
     this.exitReveal = 0;
     this.cameraForwardSpeed = 0;
+    this.riftDirection = null;
   }
 }

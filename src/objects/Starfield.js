@@ -69,11 +69,13 @@ export class Starfield {
       uniforms: {
         uFoldAmount: { value: 0.0 },
         uBrightness: { value: 1.0 },
+        uRiftCenter: { value: new THREE.Vector2(0.0, 0.0) },  // NDC space (-1 to 1)
       },
 
       vertexShader: /* glsl */ `
         attribute float aSize;
         uniform float uFoldAmount;
+        uniform vec2 uRiftCenter;   // NDC space target point
         varying vec3 vColor;
         varying float vSize;
         varying float vStreakAmount;
@@ -85,21 +87,21 @@ export class Starfield {
           gl_Position = projectionMatrix * mvPos;
 
           // ── Warp fold + streak ──
-          // Stars slide toward the vertical center line (X → 0).
-          // The streak amount depends on how far the star is from center,
-          // so edge stars streak more and center stars barely move.
+          // Stars compress radially toward the rift center point.
+          // Edge stars streak more, center stars barely move.
           vStreakAmount = 0.0;
 
           if (uFoldAmount > 0.0) {
-            float ndcX = gl_Position.x / gl_Position.w;
-            float distFromCenter = abs(ndcX);
+            vec2 ndc = gl_Position.xy / gl_Position.w;
+            vec2 toCenter = ndc - uRiftCenter;
+            float distFromCenter = length(toCenter);
 
-            // Fold: compress X toward 0
+            // Fold: compress radially toward rift center
             float foldStrength = uFoldAmount * uFoldAmount;
-            float folded = ndcX * (1.0 - foldStrength);
-            gl_Position.x = folded * gl_Position.w;
+            vec2 folded = uRiftCenter + toCenter * (1.0 - foldStrength);
+            gl_Position.xy = folded * gl_Position.w;
 
-            // Streak: stronger for stars far from center
+            // Streak: stronger for stars far from rift center
             vStreakAmount = uFoldAmount * min(distFromCenter, 1.0);
           }
 
@@ -172,9 +174,12 @@ export class Starfield {
     this.mesh.position.copy(cameraPosition);
   }
 
-  setWarpUniforms(foldAmount, brightness) {
+  setWarpUniforms(foldAmount, brightness, riftCenterNDC) {
     this.mesh.material.uniforms.uFoldAmount.value = foldAmount;
     this.mesh.material.uniforms.uBrightness.value = brightness;
+    if (riftCenterNDC) {
+      this.mesh.material.uniforms.uRiftCenter.value.copy(riftCenterNDC);
+    }
   }
 
   addTo(scene) {

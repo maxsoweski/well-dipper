@@ -761,6 +761,12 @@ const _sunDir = new THREE.Vector3();
 const _sunDir2 = new THREE.Vector3();
 const _star1Pos = new THREE.Vector3();
 const _star2Pos = new THREE.Vector3();
+// Warp rift projection
+const _riftPoint = new THREE.Vector3();
+const _riftNDC = new THREE.Vector2();
+const _riftUV = new THREE.Vector2();
+const _targetQuat = new THREE.Quaternion();
+const _lookMatrix = new THREE.Matrix4();
 
 function animate() {
   requestAnimationFrame(animate);
@@ -950,7 +956,24 @@ function animate() {
     // ── Warp transition ──
     if (warpEffect.isActive) {
       warpEffect.update(deltaTime);
-      starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness);
+
+      // ── Determine rift direction (default: camera forward) ──
+      const riftDir = warpEffect.riftDirection || camera.getWorldDirection(_sunDir);
+
+      // ── Project rift direction to screen space ──
+      _riftPoint.copy(camera.position).addScaledVector(riftDir, 1000);
+      _riftPoint.project(camera);  // → NDC: x,y in [-1, 1]
+      _riftNDC.set(
+        Math.max(-1, Math.min(1, _riftPoint.x)),
+        Math.max(-1, Math.min(1, _riftPoint.y)),
+      );
+      _riftUV.set(
+        (_riftNDC.x + 1) / 2,   // NDC → UV
+        (_riftNDC.y + 1) / 2,
+      );
+
+      // ── Pass rift center + warp uniforms to shaders ──
+      starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness, _riftNDC);
       retroRenderer.setWarpUniforms(
         warpEffect.sceneFade,
         warpEffect.whiteFlash,
@@ -958,9 +981,19 @@ function animate() {
         warpEffect.hyperTime,
         warpEffect.foldGlow,
         warpEffect.exitReveal,
+        _riftUV,
       );
 
-      // Camera flies forward toward the fold during fold/enter phases
+      // ── Camera slerp: rotate to face the rift during fold/enter ──
+      if (warpEffect.state === 'fold' || warpEffect.state === 'enter') {
+        _riftPoint.copy(camera.position).addScaledVector(riftDir, 10);
+        _lookMatrix.lookAt(camera.position, _riftPoint, camera.up);
+        _targetQuat.setFromRotationMatrix(_lookMatrix);
+        const slerpFactor = 1 - Math.exp(-2.0 * deltaTime);
+        camera.quaternion.slerp(_targetQuat, slerpFactor);
+      }
+
+      // ── Camera forward movement ──
       if (warpEffect.cameraForwardSpeed > 0) {
         camera.getWorldDirection(_sunDir);
         camera.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);

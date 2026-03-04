@@ -77,8 +77,9 @@ export class RetroRenderer {
    * @param {number} hyperTime    elapsed time for hyperspace animation
    * @param {number} foldGlow     0 = no glow, 1 = full bright core
    * @param {number} exitReveal   0 = no opening, 1 = full opening (exit)
+   * @param {THREE.Vector2} [riftCenterUV] — rift center in UV space (0-1)
    */
-  setWarpUniforms(sceneFade, whiteFlash, hyperPhase, hyperTime, foldGlow, exitReveal) {
+  setWarpUniforms(sceneFade, whiteFlash, hyperPhase, hyperTime, foldGlow, exitReveal, riftCenterUV) {
     const u = this._compositeMesh.material.uniforms;
     u.uSceneFade.value = sceneFade;
     u.uWhiteFlash.value = whiteFlash;
@@ -86,6 +87,9 @@ export class RetroRenderer {
     u.uHyperTime.value = hyperTime;
     u.uFoldGlow.value = foldGlow;
     u.uExitReveal.value = exitReveal;
+    if (riftCenterUV) {
+      u.uRiftCenter.value.copy(riftCenterUV);
+    }
   }
 
   /**
@@ -110,6 +114,7 @@ export class RetroRenderer {
         uHyperTime: { value: 0.0 },
         uFoldGlow: { value: 0.0 },
         uExitReveal: { value: 0.0 },
+        uRiftCenter: { value: new THREE.Vector2(0.5, 0.5) },  // UV space (0 to 1)
       },
 
       vertexShader: /* glsl */ `
@@ -134,6 +139,7 @@ export class RetroRenderer {
         uniform float uHyperTime;
         uniform float uFoldGlow;
         uniform float uExitReveal;
+        uniform vec2 uRiftCenter;
         varying vec2 vUv;
 
         // ── Hyperspace tunnel (Star Fox 64 / No Man's Sky inspired) ──
@@ -212,23 +218,23 @@ export class RetroRenderer {
             result = mix(bg.rgb, scene.rgb, fadeScene);
           }
 
-          // ── Fold glow: opaque white line at center that grows outward ──
-          // Starts as a razor-thin white slit, widens into a bright rift.
+          // ── Fold glow: radial white disc at rift center that grows outward ──
+          // Starts as a tiny bright point, expands into a glowing disc.
+          // Centered on uRiftCenter so it follows the rift direction.
           if (uFoldGlow > 0.0) {
-            float xDist = abs(vUv.x - 0.5);
+            vec2 toRift = vUv - uRiftCenter;
+            float aspect = resolution.x / resolution.y;
+            toRift.x *= aspect;  // aspect correction so glow is circular
+            float dist = length(toRift);
 
-            // Vertical falloff: thicker at screen center, thin at top/bottom
-            float yCenter = 1.0 - abs(vUv.y - 0.5) * 2.0;
-            yCenter = pow(max(0.0, yCenter), 0.5);
+            // Core radius: grows quadratically from tiny dot to wide disc
+            float coreRadius = uFoldGlow * uFoldGlow * 0.12;
 
-            // Core width: grows quadratically from paper-thin to wide
-            float coreWidth = uFoldGlow * uFoldGlow * 0.15 * (0.2 + yCenter * 0.8);
-
-            // Solid opaque white core (hard edge via step)
-            float core = step(xDist, coreWidth) * yCenter;
+            // Solid opaque white core (hard edge)
+            float core = step(dist, coreRadius);
 
             // Soft outer halo for glow bleeding
-            float halo = smoothstep(coreWidth * 3.0, coreWidth, xDist) * 0.35 * uFoldGlow;
+            float halo = smoothstep(coreRadius * 3.0, coreRadius, dist) * 0.35 * uFoldGlow;
 
             float glow = max(core, halo);
             result = mix(result, vec3(1.0), glow);
@@ -257,25 +263,20 @@ export class RetroRenderer {
             vec3 hyper = hyperspace(vUv, uHyperTime);
             float hyperMask = uHyperPhase;
 
-            // Exit reveal: hyperspace tears open from center, revealing stars
+            // Exit reveal: hyperspace tears open from center, revealing stars.
+            // A dark circular opening grows from the rift center — no white edge,
+            // just a clean crack into the new starfield.
             if (uExitReveal > 0.0) {
-              float xDist = abs(vUv.x - 0.5);
-              float yCenter = 1.0 - abs(vUv.y - 0.5) * 2.0;
-              yCenter = pow(max(0.0, yCenter), 0.5);
+              vec2 toRift = vUv - uRiftCenter;
+              float aspect = resolution.x / resolution.y;
+              toRift.x *= aspect;
+              float dist = length(toRift);
 
-              // Opening grows from thin slit to full screen
-              // Starts as lens-shaped, becomes rectangular at full reveal
-              float shapeFactor = mix(0.2 + yCenter * 0.8, 1.0, uExitReveal * uExitReveal);
-              float openWidth = uExitReveal * uExitReveal * 0.65 * shapeFactor;
+              // Opening radius grows quadratically from tiny to full screen
+              float openRadius = uExitReveal * uExitReveal * 0.8;
 
-              // Hard edge: inside opening = no hyperspace, outside = full hyperspace
-              hyperMask *= smoothstep(openWidth * 0.85, openWidth, xDist);
-
-              // Bright white edge at the rift border
-              float edgeInner = smoothstep(openWidth * 0.7, openWidth * 0.9, xDist);
-              float edgeOuter = smoothstep(openWidth * 1.05, openWidth * 0.95, xDist);
-              float edge = edgeInner * edgeOuter;
-              result = mix(result, vec3(1.0), edge * 0.9);
+              // Inside opening = no hyperspace (starfield shows through)
+              hyperMask *= smoothstep(openRadius * 0.85, openRadius, dist);
             }
 
             result = mix(result, hyper, hyperMask);
