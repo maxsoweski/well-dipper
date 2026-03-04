@@ -914,11 +914,18 @@ function animate() {
         warpEffect.whiteFlash,
         warpEffect.hyperPhase,
         warpEffect.hyperTime,
+        warpEffect.foldGlow,
       );
+
+      // Camera flies forward toward the fold during fold/enter phases
+      if (warpEffect.cameraForwardSpeed > 0) {
+        camera.getWorldDirection(_sunDir);
+        camera.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
+      }
     } else {
       // Reset warp uniforms when not warping
       starfield.setWarpUniforms(0, 1);
-      retroRenderer.setWarpUniforms(0, 0, 0, 0);
+      retroRenderer.setWarpUniforms(0, 0, 0, 0, 0);
     }
 
     // ── Autopilot (cinematic flythrough) ──

@@ -15,9 +15,10 @@ import * as THREE from 'three';
  * priority. The HUD overlays on top with a subtle dark background.
  *
  * During warp transitions, the composite shader handles:
+ * - Fold glow (bright lens-shaped core at screen center)
  * - Scene fade-out (sceneFade uniform)
  * - White flash entering the "slice" (whiteFlash uniform)
- * - Hyperspace tunnel streaks (hyperPhase + hyperTime uniforms)
+ * - Hyperspace geometric tunnel (Star Fox 64 / NMS style)
  *
  * Dithering is NOT done here. Each object handles its own dithering
  * in its fragment shader for a more authentic retro look.
@@ -74,13 +75,15 @@ export class RetroRenderer {
    * @param {number} whiteFlash   0 = no flash, 1 = full white
    * @param {number} hyperPhase   0 = no hyperspace, 1 = full hyperspace
    * @param {number} hyperTime    elapsed time for hyperspace animation
+   * @param {number} foldGlow     0 = no glow, 1 = full bright core
    */
-  setWarpUniforms(sceneFade, whiteFlash, hyperPhase, hyperTime) {
+  setWarpUniforms(sceneFade, whiteFlash, hyperPhase, hyperTime, foldGlow) {
     const u = this._compositeMesh.material.uniforms;
     u.uSceneFade.value = sceneFade;
     u.uWhiteFlash.value = whiteFlash;
     u.uHyperPhase.value = hyperPhase;
     u.uHyperTime.value = hyperTime;
+    u.uFoldGlow.value = foldGlow;
   }
 
   /**
@@ -95,14 +98,15 @@ export class RetroRenderer {
         bgTexture: { value: null },
         sceneTexture: { value: null },
         hudTexture: { value: null },
-        hudRect: { value: new THREE.Vector4(0.78, 0.02, 0.20, 0.20) }, // x, y, w, h in UV
+        hudRect: { value: new THREE.Vector4(0.78, 0.02, 0.20, 0.20) },
         hudEnabled: { value: 0 },
         resolution: { value: new THREE.Vector2(1, 1) },
         // Warp uniforms
-        uSceneFade: { value: 0.0 },   // 0 = normal, 1 = scene hidden
-        uWhiteFlash: { value: 0.0 },  // 0 = normal, 1 = full white
-        uHyperPhase: { value: 0.0 },  // 0 = normal, 1 = hyperspace
-        uHyperTime: { value: 0.0 },   // elapsed seconds (drives animation)
+        uSceneFade: { value: 0.0 },
+        uWhiteFlash: { value: 0.0 },
+        uHyperPhase: { value: 0.0 },
+        uHyperTime: { value: 0.0 },
+        uFoldGlow: { value: 0.0 },
       },
 
       vertexShader: /* glsl */ `
@@ -117,7 +121,7 @@ export class RetroRenderer {
         uniform sampler2D bgTexture;
         uniform sampler2D sceneTexture;
         uniform sampler2D hudTexture;
-        uniform vec4 hudRect;     // (x, y, w, h) in UV space
+        uniform vec4 hudRect;
         uniform float hudEnabled;
         uniform vec2 resolution;
         // Warp uniforms
@@ -125,49 +129,67 @@ export class RetroRenderer {
         uniform float uWhiteFlash;
         uniform float uHyperPhase;
         uniform float uHyperTime;
+        uniform float uFoldGlow;
         varying vec2 vUv;
 
-        // ── Hyperspace tunnel effect ──
-        // Procedural speed lines flowing from edges toward center.
-        // Retro aesthetic: sharp lines, posterized colors, no smooth gradients.
+        // ── Hyperspace tunnel (Star Fox 64 / No Man's Sky inspired) ──
+        // Flying forward through a geometric tunnel surrounded by white light.
+        // Sharp posterized edges for retro aesthetic.
         vec3 hyperspace(vec2 uv, float time) {
-          // Center UV so (0,0) is screen center
           vec2 centered = uv - 0.5;
           float aspect = resolution.x / resolution.y;
           centered.x *= aspect;
 
-          // Polar coordinates from center
-          float angle = atan(centered.y, centered.x);
           float radius = length(centered);
+          float angle = atan(centered.y, centered.x);
 
-          // Tunnel effect: radial lines that "flow" inward
-          // Multiple frequency layers for depth
-          float line1 = sin(angle * 12.0 + time * 3.0 + radius * 20.0);
-          float line2 = sin(angle * 8.0 - time * 2.0 + radius * 15.0);
-          float line3 = sin(angle * 20.0 + time * 5.0 + radius * 30.0);
+          // ── Tunnel depth (inverse radius = looking "into" the tunnel) ──
+          float depth = 0.4 / (radius + 0.08);
+          float scrollZ = depth - time * 2.5;
 
-          // Sharpen lines (posterize for retro look)
-          line1 = step(0.7, line1);
-          line2 = step(0.75, line2);
-          line3 = step(0.85, line3);
+          // ── Background: bright white center → blue-purple edges ──
+          vec3 bgWhite = vec3(0.95, 0.95, 1.0);
+          vec3 bgEdge = vec3(0.12, 0.08, 0.25);
+          vec3 bg = mix(bgWhite, bgEdge, smoothstep(0.0, 0.55, radius));
 
-          // Combine: brighter toward center (tunnel depth illusion)
-          float centerGlow = smoothstep(0.8, 0.0, radius);
-          float streaks = max(max(line1 * 0.5, line2 * 0.4), line3 * 0.3);
+          // ── Concentric rings rushing outward (forward motion) ──
+          float ringPattern = fract(depth * 1.5 - time * 2.0);
+          float rings = step(0.88, ringPattern);
 
-          // Color palette: deep blue/purple base with white-blue streaks
-          vec3 base = vec3(0.02, 0.01, 0.06);  // near-black purple
-          vec3 streak = vec3(0.3, 0.5, 1.0);    // blue-white
-          vec3 glow = vec3(0.1, 0.15, 0.4);     // subtle center glow
+          // ── Hexagonal geometry: 6-fold symmetry ──
+          // Creates geometric "walls" of the tunnel
+          float hexAngle = mod(angle + 0.5236, 1.0472) - 0.5236; // pi/6 offset, pi/3 period
+          float hexEdge = abs(sin(hexAngle * 3.0));
+          float hexDepth = fract(depth * 0.8 - time * 1.5);
+          float hexPattern = step(0.92, hexEdge) * step(0.75, hexDepth);
 
-          vec3 col = base;
-          col += streak * streaks;
-          col += glow * centerGlow * 0.5;
+          // ── Diamond grid overlay (cross-hatching) ──
+          float grid1 = abs(sin(angle * 4.0 + scrollZ * 0.3));
+          float grid2 = abs(sin(angle * 4.0 - scrollZ * 0.3 + 1.57));
+          float diamonds = step(0.94, grid1) + step(0.94, grid2);
+          diamonds = min(diamonds, 1.0) * smoothstep(0.6, 0.15, radius);
 
-          // Occasional bright flashes (sparse white dots traveling inward)
-          float flash = sin(angle * 30.0 + time * 8.0) * sin(radius * 40.0 - time * 12.0);
-          flash = step(0.95, flash) * 0.8;
-          col += vec3(flash);
+          // ── Radial speed lines ──
+          float speedLine = abs(sin(angle * 24.0));
+          speedLine = step(0.97, speedLine) * smoothstep(0.5, 0.1, radius);
+
+          // ── Combine ──
+          vec3 geomColor = vec3(0.35, 0.45, 0.95);    // blue geometric lines
+          vec3 accentColor = vec3(0.6, 0.4, 0.9);     // purple accent
+          vec3 col = bg;
+          col = mix(col, geomColor, rings * 0.6);
+          col = mix(col, accentColor, hexPattern * 0.5);
+          col = mix(col, vec3(0.8, 0.85, 1.0), diamonds * 0.4);
+          col += vec3(speedLine) * 0.3;
+
+          // ── Bright vanishing point (center) ──
+          float centerBright = smoothstep(0.12, 0.0, radius);
+          col = mix(col, vec3(1.0), centerBright);
+
+          // ── Occasional flashes (particles rushing past) ──
+          float flash = sin(angle * 30.0 + time * 6.0) * sin(depth * 3.0 - time * 8.0);
+          flash = step(0.96, flash);
+          col += vec3(flash) * 0.5;
 
           return col;
         }
@@ -181,30 +203,46 @@ export class RetroRenderer {
           vec3 result = mix(bg.rgb, scene.rgb, scene.a);
 
           // ── Warp: scene fade ──
-          // Fade scene objects toward black during warp fold
           if (uSceneFade > 0.0) {
             float fadeScene = scene.a * (1.0 - uSceneFade);
             result = mix(bg.rgb, scene.rgb, fadeScene);
           }
 
+          // ── Fold glow: bright lens-shaped core at center ──
+          // Appears during fold phase, thickens at the vertical center.
+          // This is the glowing "entry point" the camera flies into.
+          if (uFoldGlow > 0.0) {
+            float xDist = abs(vUv.x - 0.5);
+
+            // Vertical falloff: thicker at screen center, thin at top/bottom
+            float yCenter = 1.0 - abs(vUv.y - 0.5) * 2.0;
+            yCenter = pow(max(0.0, yCenter), 0.6);
+
+            // Core width (wider at vertical center)
+            float coreWidth = uFoldGlow * 0.06 * (0.3 + yCenter * 0.7);
+
+            // Sharp inner core + soft outer halo
+            float innerGlow = smoothstep(coreWidth, 0.0, xDist);
+            float outerGlow = smoothstep(coreWidth * 4.0, 0.0, xDist) * 0.3;
+            float glow = max(innerGlow, outerGlow) * uFoldGlow;
+
+            result = mix(result, vec3(1.0), glow);
+          }
+
           // ── HUD overlay (hidden during warp) ──
-          if (hudEnabled > 0.5 && uSceneFade < 0.5) {
-            // Compute square HUD region in UV space, accounting for aspect ratio
+          if (hudEnabled > 0.5 && uSceneFade < 0.5 && uFoldGlow < 0.3) {
             float aspect = resolution.x / resolution.y;
-            float hudW = hudRect.z;                  // width in UV-x
-            float hudH = hudRect.w * aspect;         // height in UV-y (corrected to be square)
-            float hudX = hudRect.x;                  // left edge
-            float hudY = hudRect.y;                  // bottom edge
+            float hudW = hudRect.z;
+            float hudH = hudRect.w * aspect;
+            float hudX = hudRect.x;
+            float hudY = hudRect.y;
 
             if (vUv.x > hudX && vUv.x < hudX + hudW &&
                 vUv.y > hudY && vUv.y < hudY + hudH) {
-              // Map screen UV to HUD texture UV
               vec2 hudUV = (vUv - vec2(hudX, hudY)) / vec2(hudW, hudH);
               vec4 hud = texture2D(hudTexture, hudUV);
 
-              // Semi-transparent dark background for readability
               result = mix(result, vec3(0.0), 0.5);
-              // Blend HUD content on top
               result = mix(result, hud.rgb, hud.a);
             }
           }
@@ -241,35 +279,27 @@ export class RetroRenderer {
     const renderWidth = Math.ceil(width / this.pixelScale);
     const renderHeight = Math.ceil(height / this.pixelScale);
 
-    // Renderer at full resolution (composite outputs to screen at this size)
     this.renderer.setSize(width, height, false);
 
-    // Dispose old render targets to prevent GPU memory leak
     if (this.bgTarget) this.bgTarget.dispose();
     if (this.sceneTarget) this.sceneTarget.dispose();
     if (this.hudTarget) this.hudTarget.dispose();
 
-    // Starfield target: full resolution for tiny crisp star points
     this.bgTarget = new THREE.WebGLRenderTarget(width, height, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
     });
 
-    // Scene target: low resolution for chunky retro pixels.
-    // NearestFilter on magFilter means each low-res texel maps to a
-    // sharp block of screen pixels when sampled in the composite pass.
     this.sceneTarget = new THREE.WebGLRenderTarget(renderWidth, renderHeight, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
     });
 
-    // HUD target: small square, NearestFilter for retro pixel look
     this.hudTarget = new THREE.WebGLRenderTarget(this._hudSize, this._hudSize, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
     });
 
-    // Update composite texture references
     const u = this._compositeMesh.material.uniforms;
     u.bgTexture.value = this.bgTarget.texture;
     u.sceneTexture.value = this.sceneTarget.texture;
@@ -286,26 +316,23 @@ export class RetroRenderer {
   render() {
     const r = this.renderer;
 
-    // Pass 1: Starfield at full resolution (tiny crisp star points)
+    // Pass 1: Starfield at full resolution
     r.setRenderTarget(this.bgTarget);
-    r.setClearColor(0x000000, 1);  // opaque black background for stars
+    r.setClearColor(0x000000, 1);
     r.clear();
     r.render(this.starfieldScene, this.camera);
 
-    // Pass 2: Scene objects at low resolution (chunky retro pixels)
-    // Clear with transparent black (alpha=0) so empty pixels don't cover the starfield.
-    // Objects write alpha=1, empty space stays alpha=0 — the composite shader
-    // uses this alpha to decide starfield vs scene (not brightness, which fails on shadows).
+    // Pass 2: Scene objects at low resolution
     r.setRenderTarget(this.sceneTarget);
-    r.setClearColor(0x000000, 0);  // transparent black — key for alpha compositing
+    r.setClearColor(0x000000, 0);
     r.clear();
     r.render(this.scene, this.camera);
 
-    // Pass 3: HUD (system map) at small resolution
+    // Pass 3: HUD at small resolution
     const u = this._compositeMesh.material.uniforms;
     if (this._hudScene && this._hudCamera) {
       r.setRenderTarget(this.hudTarget);
-      r.setClearColor(0x000000, 0);  // transparent black
+      r.setClearColor(0x000000, 0);
       r.clear();
       r.render(this._hudScene, this._hudCamera);
       u.hudEnabled.value = 1;
