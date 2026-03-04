@@ -74,6 +74,7 @@ export class FlythroughCamera {
     this._hermiteStartPos = new THREE.Vector3();      // Hermite curve start position (= departurePos)
     this._orbitStartYaw = 0;                          // yaw at orbit start (for revolution counting)
     this._travelV0 = 0.2;                             // dynamic initial velocity for Hermite easing
+    this._isShortTrip = false;                          // planet↔moon nearby trip
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
 
     // Arrival blend state (Hermite → pre-orbit)
@@ -241,40 +242,52 @@ export class FlythroughCamera {
 
     // ── Distance-based travel duration ──
     const dist = this.departurePos.distanceTo(nextBodyRef.position);
-    this.travelDuration = Math.max(12, Math.min(25, 18 * Math.sqrt(dist / 500)));
+    const isNearby = dist < (this._currentDist || 10) * 5;
+    // Short hops (planet↔moon) get a shorter minimum travel time
+    const minDur = isNearby ? 6 : 12;
+    this.travelDuration = Math.max(minDur, Math.min(25, 18 * Math.sqrt(dist / 500)));
 
-    // ── Departure tangent: orbit velocity direction at current yaw ──
-    // The tangent is perpendicular to the radius vector — exactly the
-    // direction the camera was moving when we left orbit.
-    const cp = Math.cos(this.orbitPitch);
-    this._departureTangent.set(
-      Math.cos(this.orbitYaw) * cp,
-      0,
-      -Math.sin(this.orbitYaw) * cp,
-    ).multiplyScalar(this.orbitDirection).normalize();
-
-    // ── Short-trip detection (planet → nearby moon) ──
-    // Blend orbit tangent toward destination so the curve arcs directly
-    // at the moon instead of continuing away in the orbit circle.
+    // ── Short-trip detection (planet ↔ nearby moon) ──
     const isShortTrip = dist < this._currentDist * 5;
+    this._isShortTrip = isShortTrip;
+
     if (isShortTrip) {
+      // ── Short trip: direct path to nearby destination ──
+      // Point straight at the destination — no orbit tangent component.
+      // The orbit tangent is perpendicular to the radius, which can aim
+      // away from a nearby moon. Using it (even blended) causes the
+      // camera to blast into empty space before curving back.
       _v1.subVectors(nextBodyRef.position, this.departurePos);
       _v1.y = 0;
       _v1.normalize();
-      this._departureTangent.lerp(_v1, 0.6).normalize();
+      this._departureTangent.copy(_v1);
+
+      // Small tangent magnitude = nearly straight path (no wide arc)
+      const tangentMag = dist * 0.25;
+      this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
+      this._departTangentScaled.y = tangentMag * 0.02;
+
+      // Moderate start speed (not matched to slow orbit — just comfortable)
+      this._travelV0 = 0.8;
+    } else {
+      // ── Long trip: tangential departure with velocity matching ──
+      // The tangent is perpendicular to the radius vector — exactly the
+      // direction the camera was moving when we left orbit.
+      const cp = Math.cos(this.orbitPitch);
+      this._departureTangent.set(
+        Math.cos(this.orbitYaw) * cp,
+        0,
+        -Math.sin(this.orbitYaw) * cp,
+      ).multiplyScalar(this.orbitDirection).normalize();
+
+      const tangentMag = dist * 0.6;
+      this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
+      this._departTangentScaled.y = tangentMag * 0.03;
+
+      // Velocity-matched v₀: Hermite starts at orbit speed
+      const orbitLinearSpeed = this._currentDist * this.orbitYawSpeed * this._currentSpeedFactor;
+      this._travelV0 = Math.min(2.5, orbitLinearSpeed * this.travelDuration / tangentMag);
     }
-
-    // ── Scale departure tangent for Hermite curve ──
-    const tangentMag = dist * 0.6;
-    this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
-    this._departTangentScaled.y = tangentMag * 0.03;
-
-    // ── Velocity-matched v₀ ──
-    // The orbit exits at: orbitLinearSpeed = dist × yawSpeed × speedFactor
-    // The Hermite speed at t=0 is: |T₀| × v₀ / travelDuration
-    // Solve for v₀ so they match — continuous speed across the transition.
-    const orbitLinearSpeed = this._currentDist * this.orbitYawSpeed * this._currentSpeedFactor;
-    this._travelV0 = Math.min(2.5, orbitLinearSpeed * this.travelDuration / tangentMag);
 
     // Pre-store current body for lookAt transition
     this._travelFromBody = this.bodyRef;
@@ -602,11 +615,22 @@ export class FlythroughCamera {
 
       // Compute arrival tangent (departure tangent was set in beginTravel).
       const remDist = this._hermiteStartPos.distanceTo(_v1);
-      const arrMag = remDist * 0.6;
-      this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
-        .multiplyScalar(captureDir).normalize()
-        .multiplyScalar(arrMag);
-      this._arrivalTangentScaled.y = arrMag * -0.03;
+
+      if (this._isShortTrip) {
+        // Short trip: arrive from approach direction (nearly straight path)
+        // instead of perpendicular orbit entry (which causes wide arcs).
+        const arrMag = remDist * 0.25;
+        this._arrivalTangentScaled.set(appX, 0, appZ).normalize()
+          .multiplyScalar(arrMag);
+        this._arrivalTangentScaled.y = arrMag * -0.02;
+      } else {
+        // Long trip: arrive tangent to orbit (graceful curved entry)
+        const arrMag = remDist * 0.6;
+        this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
+          .multiplyScalar(captureDir).normalize()
+          .multiplyScalar(arrMag);
+        this._arrivalTangentScaled.y = arrMag * -0.03;
+      }
     }
 
     // ── TRANSFER: velocity-matched Hermite curve ──
