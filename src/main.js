@@ -957,6 +957,7 @@ function animate() {
         warpEffect.hyperPhase,
         warpEffect.hyperTime,
         warpEffect.foldGlow,
+        warpEffect.exitReveal,
       );
 
       // Camera flies forward toward the fold during fold/enter phases
@@ -967,7 +968,7 @@ function animate() {
     } else {
       // Reset warp uniforms when not warping
       starfield.setWarpUniforms(0, 1);
-      retroRenderer.setWarpUniforms(0, 0, 0, 0, 0);
+      retroRenderer.setWarpUniforms(0, 0, 0, 0, 0, 0);
     }
 
     // ── Autopilot (cinematic flythrough) ──

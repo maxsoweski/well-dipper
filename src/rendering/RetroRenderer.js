@@ -76,14 +76,16 @@ export class RetroRenderer {
    * @param {number} hyperPhase   0 = no hyperspace, 1 = full hyperspace
    * @param {number} hyperTime    elapsed time for hyperspace animation
    * @param {number} foldGlow     0 = no glow, 1 = full bright core
+   * @param {number} exitReveal   0 = no opening, 1 = full opening (exit)
    */
-  setWarpUniforms(sceneFade, whiteFlash, hyperPhase, hyperTime, foldGlow) {
+  setWarpUniforms(sceneFade, whiteFlash, hyperPhase, hyperTime, foldGlow, exitReveal) {
     const u = this._compositeMesh.material.uniforms;
     u.uSceneFade.value = sceneFade;
     u.uWhiteFlash.value = whiteFlash;
     u.uHyperPhase.value = hyperPhase;
     u.uHyperTime.value = hyperTime;
     u.uFoldGlow.value = foldGlow;
+    u.uExitReveal.value = exitReveal;
   }
 
   /**
@@ -107,6 +109,7 @@ export class RetroRenderer {
         uHyperPhase: { value: 0.0 },
         uHyperTime: { value: 0.0 },
         uFoldGlow: { value: 0.0 },
+        uExitReveal: { value: 0.0 },
       },
 
       vertexShader: /* glsl */ `
@@ -130,6 +133,7 @@ export class RetroRenderer {
         uniform float uHyperPhase;
         uniform float uHyperTime;
         uniform float uFoldGlow;
+        uniform float uExitReveal;
         varying vec2 vUv;
 
         // ── Hyperspace tunnel (Star Fox 64 / No Man's Sky inspired) ──
@@ -251,7 +255,30 @@ export class RetroRenderer {
           // ── Warp: hyperspace tunnel ──
           if (uHyperPhase > 0.0) {
             vec3 hyper = hyperspace(vUv, uHyperTime);
-            result = mix(result, hyper, uHyperPhase);
+            float hyperMask = uHyperPhase;
+
+            // Exit reveal: hyperspace tears open from center, revealing stars
+            if (uExitReveal > 0.0) {
+              float xDist = abs(vUv.x - 0.5);
+              float yCenter = 1.0 - abs(vUv.y - 0.5) * 2.0;
+              yCenter = pow(max(0.0, yCenter), 0.5);
+
+              // Opening grows from thin slit to full screen
+              // Starts as lens-shaped, becomes rectangular at full reveal
+              float shapeFactor = mix(0.2 + yCenter * 0.8, 1.0, uExitReveal * uExitReveal);
+              float openWidth = uExitReveal * uExitReveal * 0.65 * shapeFactor;
+
+              // Hard edge: inside opening = no hyperspace, outside = full hyperspace
+              hyperMask *= smoothstep(openWidth * 0.85, openWidth, xDist);
+
+              // Bright white edge at the rift border
+              float edgeInner = smoothstep(openWidth * 0.7, openWidth * 0.9, xDist);
+              float edgeOuter = smoothstep(openWidth * 1.05, openWidth * 0.95, xDist);
+              float edge = edgeInner * edgeOuter;
+              result = mix(result, vec3(1.0), edge * 0.9);
+            }
+
+            result = mix(result, hyper, hyperMask);
           }
 
           // ── Warp: white flash (entering the slice) ──

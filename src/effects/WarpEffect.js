@@ -34,6 +34,7 @@ export class WarpEffect {
     this.hyperPhase = 0;          // 0 = not in hyperspace, 1 = full hyperspace
     this.hyperTime = 0;           // accumulated time for hyperspace animation
     this.foldGlow = 0;            // 0 = no glow, 1 = full bright core at center
+    this.exitReveal = 0;          // 0 = no opening, 1 = full opening (exit only)
     this.cameraForwardSpeed = 0;  // units/s to push camera forward during fold
 
     // ── Callbacks (set by main.js) ──
@@ -106,8 +107,9 @@ export class WarpEffect {
     // Planets stay visible during fold — NO sceneFade
     this.sceneFade = 0;
 
-    // Fold glow: bright core appears after 30% progress, ramps to full
-    this.foldGlow = this._ease(Math.max(0, (this.progress - 0.3) / 0.7));
+    // Fold glow: thin rift line appears almost immediately, grows outward.
+    // Starts at 5% progress so camera "approaches" it for nearly the full fold.
+    this.foldGlow = this._ease(Math.max(0, (this.progress - 0.05) / 0.95));
 
     // Camera accelerates forward (base speed + quadratic ramp so motion is visible early)
     this.cameraForwardSpeed = 8 + 72 * this.progress * this.progress;
@@ -186,14 +188,17 @@ export class WarpEffect {
     this.progress = Math.min(1, this.elapsed / this.EXIT_DUR);
     const t = this._ease(this.progress);
 
-    // Hyperspace fades out
-    this.hyperPhase = 1 - t;
+    // Hyperspace stays full — the spatial mask (exitReveal) handles the opening.
+    // This avoids a uniform fade and instead "tears" the hyperspace open.
+    this.hyperPhase = 1;
 
-    // Stars unfold: reappear bright and folded, then expand outward
-    // (mirrors the fold phase in reverse)
+    // Exit reveal: a dark opening grows from center, revealing unfolding stars
+    this.exitReveal = t;             // 0→1: opening grows
+
+    // Stars unfold through the opening (mirrors fold in reverse)
     this.foldAmount = 1 - t;         // 1→0: folded → unfolded
     this.starBrightness = 1 + 2 * (1 - t);  // 3→1: bright → normal
-    this.foldGlow = 1 - t;           // 1→0: rift line shrinks away
+    this.foldGlow = 0;               // No white glow during exit (the opening edge handles it)
 
     // Camera decelerates toward the star
     this.cameraForwardSpeed = 30 * (1 - t);
@@ -217,6 +222,7 @@ export class WarpEffect {
     this.hyperPhase = 0;
     this.hyperTime = 0;
     this.foldGlow = 0;
+    this.exitReveal = 0;
     this.cameraForwardSpeed = 0;
   }
 }
