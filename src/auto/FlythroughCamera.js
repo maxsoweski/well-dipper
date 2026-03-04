@@ -76,6 +76,7 @@ export class FlythroughCamera {
     this._travelV0 = 0.2;                             // dynamic initial velocity for Hermite easing
     this._isShortTrip = false;                          // planet↔moon nearby trip
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
+    this._nearbyDeparture = false; // true when next body is nearby (skip stale departure alignment)
 
     // Arrival blend state (Hermite → pre-orbit)
     this._arrivalComputed = false;
@@ -188,33 +189,48 @@ export class FlythroughCamera {
 
     if (this.nextBodyRef) {
       const nextPos = this.nextBodyRef.position;
-      const targetAngle = Math.atan2(nextPos.x - bodyPos.x, nextPos.z - bodyPos.z);
+      const nextDist = bodyPos.distanceTo(nextPos);
 
-      // Departure yaw where orbit tangent points toward next body
-      const departYawCW = targetAngle - Math.PI / 2;
-      const departYawCCW = targetAngle + Math.PI / 2;
-
-      // Extra yaw after 1 revolution to reach departure angle
-      let extraCW = ((departYawCW - this.orbitYaw) % TWO_PI + TWO_PI) % TWO_PI;
-      let extraCCW = ((this.orbitYaw - departYawCCW) % TWO_PI + TWO_PI) % TWO_PI;
-
-      if (directionForced) {
-        // Slingshot set the direction — compute speed for that direction
-        const extra = this.orbitDirection === 1 ? extraCW : extraCCW;
-        this.orbitYawSpeed = (TWO_PI + extra) / this.orbitDuration;
+      if (nextDist < Math.max(this.orbitDistance * 5, 30)) {
+        // ── Nearby target (planet → moon, moon → moon) ──
+        // The moon orbits its parent during our orbit, so any departure
+        // alignment computed now would be stale by departure time.
+        // Instead: do 1 revolution at constant speed, and _updateOrbit
+        // will dynamically extend until the camera is on the moon's side.
+        this.orbitYawSpeed = TWO_PI / this.orbitDuration;
+        this._nearbyDeparture = true;
       } else {
-        // Pick direction with fewer total revolutions
-        if (extraCW <= extraCCW) {
-          this.orbitDirection = 1;
-          this.orbitYawSpeed = (TWO_PI + extraCW) / this.orbitDuration;
+        // ── Far target: departure-aligned orbit ──
+        const targetAngle = Math.atan2(nextPos.x - bodyPos.x, nextPos.z - bodyPos.z);
+
+        // Departure yaw where orbit tangent points toward next body
+        const departYawCW = targetAngle - Math.PI / 2;
+        const departYawCCW = targetAngle + Math.PI / 2;
+
+        // Extra yaw after 1 revolution to reach departure angle
+        let extraCW = ((departYawCW - this.orbitYaw) % TWO_PI + TWO_PI) % TWO_PI;
+        let extraCCW = ((this.orbitYaw - departYawCCW) % TWO_PI + TWO_PI) % TWO_PI;
+
+        if (directionForced) {
+          // Slingshot set the direction — compute speed for that direction
+          const extra = this.orbitDirection === 1 ? extraCW : extraCCW;
+          this.orbitYawSpeed = (TWO_PI + extra) / this.orbitDuration;
         } else {
-          this.orbitDirection = -1;
-          this.orbitYawSpeed = (TWO_PI + extraCCW) / this.orbitDuration;
+          // Pick direction with fewer total revolutions
+          if (extraCW <= extraCCW) {
+            this.orbitDirection = 1;
+            this.orbitYawSpeed = (TWO_PI + extraCW) / this.orbitDuration;
+          } else {
+            this.orbitDirection = -1;
+            this.orbitYawSpeed = (TWO_PI + extraCCW) / this.orbitDuration;
+          }
         }
+        this._nearbyDeparture = false;
       }
     } else {
       // No next body known — do exactly 1 revolution
       this.orbitYawSpeed = TWO_PI / this.orbitDuration;
+      this._nearbyDeparture = false;
     }
 
     this._orbitStartYaw = this.orbitYaw;
@@ -242,13 +258,15 @@ export class FlythroughCamera {
 
     // ── Distance-based travel duration ──
     const dist = this.departurePos.distanceTo(nextBodyRef.position);
-    const isNearby = dist < (this._currentDist || 10) * 5;
-    // Short hops (planet↔moon) get a shorter minimum travel time
+    // Short hops (planet↔moon, moon↔moon) get a shorter minimum travel time.
+    // The "30" floor catches moon→moon trips where _currentDist is tiny
+    // (moon camera orbit distances are only ~0.04-1.2 units).
+    const isNearby = dist < Math.max((this._currentDist || 10) * 5, 30);
     const minDur = isNearby ? 6 : 12;
     this.travelDuration = Math.max(minDur, Math.min(25, 18 * Math.sqrt(dist / 500)));
 
-    // ── Short-trip detection (planet ↔ nearby moon) ──
-    const isShortTrip = dist < this._currentDist * 5;
+    // ── Short-trip detection (planet ↔ moon, moon ↔ moon) ──
+    const isShortTrip = dist < Math.max(this._currentDist * 5, 30);
     this._isShortTrip = isShortTrip;
 
     if (isShortTrip) {
@@ -502,7 +520,32 @@ export class FlythroughCamera {
       targetingReady = true;
     }
 
-    const orbitComplete = this.orbitElapsed >= this.orbitDuration;
+    let orbitComplete = this.orbitElapsed >= this.orbitDuration;
+
+    // ── Dynamic departure gate for nearby targets ──
+    // For nearby targets (moons), the departure alignment computed at orbit
+    // start is stale because the moon moved during our orbit. Before allowing
+    // orbit completion, check that the camera is on the correct side of the
+    // body — within 90° of the next body's CURRENT direction. This prevents
+    // the travel path from going through the body.
+    // Cap extension at 1.5× base duration to prevent infinite orbits.
+    if (orbitComplete && this._nearbyDeparture && this.nextBodyRef
+        && this.orbitElapsed < this.orbitDuration * 1.5) {
+      const nextPos = this.nextBodyRef.position;
+      const moonAngle = Math.atan2(
+        nextPos.x - bodyPos.x,
+        nextPos.z - bodyPos.z,
+      );
+      const angDiff = Math.abs(Math.atan2(
+        Math.sin(this.orbitYaw - moonAngle),
+        Math.cos(this.orbitYaw - moonAngle),
+      ));
+      // If camera is more than 90° from the moon's direction, keep orbiting
+      if (angDiff > Math.PI / 2) {
+        orbitComplete = false;
+      }
+    }
+
     return { orbitComplete, travelComplete: false, targetingReady };
   }
 
@@ -665,8 +708,10 @@ export class FlythroughCamera {
     // Departing body → forward heading → arriving body.
     const fromBody = this._travelFromBody;
 
-    // Weight: departing body (full at start, fades out over 5 seconds)
-    const DEPART_LOOK_DUR = 5.0;
+    // Weight: departing body (full at start, fades out).
+    // Short trips get faster transition (2.5s) — a 6s trip shouldn't
+    // spend 5s looking backward at the departing body.
+    const DEPART_LOOK_DUR = this._isShortTrip ? 2.5 : 5.0;
     const wDepart = fromBody
       ? 1 - this._ease(Math.min(1, this.travelElapsed / DEPART_LOOK_DUR))
       : 0;
