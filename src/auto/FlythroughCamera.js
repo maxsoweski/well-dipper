@@ -155,11 +155,11 @@ export class FlythroughCamera {
     this._randomizeOrbit();
 
     // Override yaw speed to achieve exactly 3 revolutions with gradual
-    // speed ramp from 1× to 2.5× (smootherstep). Average speed factor is
-    // (1 + 2.5) / 2 = 1.75, so: speed = 3 × 2π / (duration × 1.75).
-    // The orbit starts slow and contemplative, then visibly accelerates
-    // as the camera builds to escape velocity.
-    this.orbitYawSpeed = 3 * 2 * Math.PI / (this.orbitDuration * 1.75);
+    // speed ramp from 1× to 2.5× (quadratic ease-in: t²). Ease-in means
+    // the speed is STILL accelerating at orbit end — no plateau before
+    // the escape, just one continuous buildup from survey to escape velocity.
+    // Average of (1 + t²×1.5) over [0,1] = 1 + 1.5/3 = 1.5.
+    this.orbitYawSpeed = 3 * 2 * Math.PI / (this.orbitDuration * 1.5);
     this._orbitStartYaw = this.orbitYaw;
 
     // Phase-align pitch oscillation so it starts from the actual camera pitch
@@ -406,12 +406,13 @@ export class FlythroughCamera {
       ? this._ease(this.orbitElapsed / entryDur)
       : 1;
 
-    // ── Gradual speed ramp (entire orbit) ──
-    // Speed increases from 1× to 2.5× across the full orbit, giving a
-    // visible "building to escape velocity" feel. The camera starts slow
-    // and contemplative, then accelerates smoothly toward departure.
-    const rampT = this._ease(Math.min(1, this.orbitElapsed / this.orbitDuration));
-    let speedFactor = 1 + rampT * 1.5; // 1× → 2.5× over the orbit
+    // ── Gradual speed ramp (entire orbit, ease-in) ──
+    // Quadratic ease-in (t²): starts slow, continuously accelerates,
+    // and is STILL speeding up when the escape phase begins — no plateau
+    // or sudden jump at the transition. One smooth curve from first
+    // survey orbit through escape velocity.
+    const rampT = Math.min(1, this.orbitElapsed / this.orbitDuration);
+    let speedFactor = 1 + rampT * rampT * 1.5; // ease-in: 1× → 2.5×
 
     // Advance yaw — continuous, same direction throughout.
     this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime * speedFactor;
@@ -508,8 +509,8 @@ export class FlythroughCamera {
     const easedT = this._ease(t);
 
     // Angular acceleration: eased, reaches 1.3× at escape end.
-    // Combined with the 2.2× departure speed factor, the orbit
-    // visibly accelerates through the escape.
+    // Combined with the 2.5× departure speed factor, the orbit
+    // continues accelerating seamlessly through the escape.
     const accel = 1 + easedT * 0.3;
     const yaw = this._departYaw
       + this.orbitYawSpeed * this.orbitDirection * elapsed * this._departSpeedFactor * accel;
