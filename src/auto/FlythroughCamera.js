@@ -641,8 +641,8 @@ export class FlythroughCamera {
     // Departing body → forward heading → arriving body.
     const fromBody = this._travelFromBody;
 
-    // Weight: departing body (full at start, fades out over 3 seconds)
-    const DEPART_LOOK_DUR = 3.0;
+    // Weight: departing body (full at start, fades out over 5 seconds)
+    const DEPART_LOOK_DUR = 5.0;
     const wDepart = fromBody
       ? 1 - this._ease(Math.min(1, this.travelElapsed / DEPART_LOOK_DUR))
       : 0;
@@ -652,33 +652,38 @@ export class FlythroughCamera {
     // Weight: forward heading (fills the gap — peaks mid-transfer)
     const wHeading = Math.max(0, 1 - wDepart - wArrive);
 
-    // Compute forward heading target: sample slightly ahead on the Hermite
-    // curve and extend that direction to a distant point. Creates the
-    // sensation of gazing out the front window during coast.
+    // Compute forward heading direction: sample slightly ahead on the
+    // Hermite curve to find which way the path is curving.
     const lookAheadT = Math.min(1, transferT + 0.05);
     const sAhead = this._travelEase(lookAheadT);
     this._hermite(
       _v4, this._hermiteStartPos, this._departTangentScaled,
       _v1, this._arrivalTangentScaled, sAhead,
     );
-    _v3.subVectors(_v4, this.camera.position).normalize().multiplyScalar(1000);
-    _v3.add(this.camera.position);
 
-    // Weighted blend of the three targets
+    // ── Direction-normalized lookAt blend ──
+    // Blend unit DIRECTIONS, not positions. The old code blended raw
+    // positions, but the forward heading was 1000 units away while the
+    // departing body was only ~15 units away. This meant the forward
+    // target completely dominated the blend, making the camera snap to
+    // looking forward instantly despite weighted transitions.
+    // By normalizing to unit directions first, the weights control the
+    // actual angular blend correctly.
     this.lookAtTarget.set(0, 0, 0);
     if (fromBody && wDepart > 0.001) {
-      this.lookAtTarget.addScaledVector(fromBody.position, wDepart);
+      _v2.subVectors(fromBody.position, this.camera.position).normalize();
+      this.lookAtTarget.addScaledVector(_v2, wDepart);
     }
     if (wHeading > 0.001) {
-      this.lookAtTarget.addScaledVector(_v3, wHeading);
+      _v2.subVectors(_v4, this.camera.position).normalize();
+      this.lookAtTarget.addScaledVector(_v2, wHeading);
     }
     if (wArrive > 0.001) {
-      this.lookAtTarget.addScaledVector(nextPos, wArrive);
+      _v2.subVectors(nextPos, this.camera.position).normalize();
+      this.lookAtTarget.addScaledVector(_v2, wArrive);
     }
-    const totalW = wDepart + wHeading + wArrive;
-    if (totalW > 0.001) {
-      this.lookAtTarget.divideScalar(totalW);
-    }
+    // Project blended direction back to a lookAt point
+    this.lookAtTarget.normalize().multiplyScalar(100).add(this.camera.position);
 
     this._applyFreeLookAndLookAt(this.lookAtTarget);
 
