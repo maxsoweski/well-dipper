@@ -6,22 +6,21 @@ import * as THREE from 'three';
  * Three states:
  * - DESCEND: initial entry, camera flies from above the system down to first body
  * - ORBIT:   circle the current body, looking AT it (body fills the screen)
- * - TRAVEL:  gravity-assist slingshot from one body to the next
+ * - TRAVEL:  Hermite spline path from one body to the next
  *
  * During orbit the camera focuses on the body (fills 1/2-2/3 of FOV).
  * It does 1 full revolution for survey, then continues just far enough
  * to align the departure tangent with the transit path to the next body
  * (total: 1.0-2.0 revolutions at constant speed).
  *
- * Travel uses curved Hermite spline paths — elliptical transfer orbits
- * tangent to both departure and arrival orbits, like Hohmann transfers.
- * The Hermite's initial velocity (v₀) is matched to the orbit's exit
- * speed, so the camera peels off tangentially with no speed change.
+ * Travel uses curved Hermite spline paths with double-smootherstep easing:
+ * the camera lingers near the departing body, rockets through the empty
+ * middle (where both objects are billboards), then decelerates gently
+ * as the destination grows. Short trips (planet↔moon) use full 3D
+ * tangents that recompute each frame to track orbiting moons.
  * At arrival, the curved path blends into a pre-orbit position
  * (gravitational capture). The camera smoothly pans from watching the
  * departing body recede → gazing forward → watching the destination grow.
- *
- * All transitions use smootherstep (quintic) easing for gentle ramp-up/down.
  */
 
 const State = { DESCEND: 0, ORBIT: 1, TRAVEL: 2 };
@@ -73,7 +72,6 @@ export class FlythroughCamera {
     this._arrivalTangentScaled = new THREE.Vector3(); // Hermite arrival tangent (scaled)
     this._hermiteStartPos = new THREE.Vector3();      // Hermite curve start position (= departurePos)
     this._orbitStartYaw = 0;                          // yaw at orbit start (for revolution counting)
-    this._travelV0 = 0.2;                             // dynamic initial velocity for Hermite easing
     this._isShortTrip = false;                          // planet↔moon nearby trip
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
     this._nearbyDeparture = false; // true when next body is nearby (skip stale departure alignment)
@@ -86,9 +84,8 @@ export class FlythroughCamera {
     this._arrivalCaptureDir = 1;
     this._arrivalYawSpeed = 0.3;
 
-    // Current orbit frame state (saved each frame for departure snapshot)
+    // Current orbit distance (saved each frame for short-trip detection)
     this._currentDist = 10;
-    this._currentSpeedFactor = 1;
 
     // ── DESCEND state ──
     this.descendStart = new THREE.Vector3();
@@ -238,9 +235,9 @@ export class FlythroughCamera {
 
   /**
    * Begin travelling from current position to the next body.
-   * The Hermite transfer curve starts directly from the orbit exit position
-   * with velocity-matched v₀ — the camera peels off the orbit tangentially
-   * at exactly the speed it was orbiting. No separate escape spiral.
+   * Long trips use tangential departure (perpendicular to orbit radius).
+   * Short trips (planet↔moon) use direct 3D path to the destination.
+   * Both use double-smootherstep easing for slow-fast-slow motion.
    */
   beginTravel(nextBodyRef, nextOrbitDistance, nextBodyRadius) {
     this.state = State.TRAVEL;
@@ -281,9 +278,6 @@ export class FlythroughCamera {
       // Small tangent magnitude = nearly straight path (no wide arc)
       const tangentMag = dist * 0.25;
       this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
-
-      // Moderate start speed (not matched to slow orbit — just comfortable)
-      this._travelV0 = 0.8;
     } else {
       // ── Long trip: tangential departure with velocity matching ──
       // The tangent is perpendicular to the radius vector — exactly the
@@ -298,10 +292,6 @@ export class FlythroughCamera {
       const tangentMag = dist * 0.6;
       this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
       this._departTangentScaled.y = tangentMag * 0.03;
-
-      // Velocity-matched v₀: Hermite starts at orbit speed
-      const orbitLinearSpeed = this._currentDist * this.orbitYawSpeed * this._currentSpeedFactor;
-      this._travelV0 = Math.min(2.5, orbitLinearSpeed * this.travelDuration / tangentMag);
     }
 
     // Pre-store current body for lookAt transition
@@ -348,7 +338,6 @@ export class FlythroughCamera {
 
     this._arrivalComputed = false;
     this._hermiteStartPos.copy(this.departurePos);
-    this._travelV0 = 0.2; // slow start (no orbit speed to match)
     this.travelElapsed = 0;
 
     // ── Distance-based travel duration ──
@@ -490,9 +479,8 @@ export class FlythroughCamera {
       dist *= 1 + this._ease(pullT) * 0.25;  // up to 1.25× at departure
     }
 
-    // Save frame state for departure velocity matching
+    // Save orbit distance for short-trip detection at departure
     this._currentDist = dist;
-    this._currentSpeedFactor = 1; // constant speed
 
     // Compute camera position (spherical orbit around body)
     const cosPitch = Math.cos(this.orbitPitch);
@@ -674,11 +662,9 @@ export class FlythroughCamera {
       this._arrivalTangentScaled.y = arrMag * -0.03;
     }
 
-    // ── TRANSFER: velocity-matched Hermite curve ──
-    // The Hermite starts directly from the orbit exit position with v₀
-    // matched to the orbit speed. No escape spiral, no blending —
-    // the camera peels off tangentially and the cubic easing naturally
-    // decelerates from orbit speed to cruise.
+    // ── TRANSFER: Hermite curve with double-smootherstep easing ──
+    // The camera lingers near departure (slow ramp-up), rockets through
+    // the empty middle, then decelerates near arrival (slow ramp-down).
     const transferT = Math.min(1, this.travelElapsed / this.travelDuration);
     const s = this._travelEase(transferT);
 
