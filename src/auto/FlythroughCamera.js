@@ -263,8 +263,8 @@ export class FlythroughCamera {
     // The "30" floor catches moon→moon trips where _currentDist is tiny
     // (moon camera orbit distances are only ~0.04-1.2 units).
     const isNearby = dist < Math.max((this._currentDist || 10) * 5, 30);
-    const minDur = isNearby ? 8 : 15;
-    this.travelDuration = Math.max(minDur, Math.min(30, 20 * Math.sqrt(dist / 500)));
+    const minDur = isNearby ? 4 : 8;
+    this.travelDuration = Math.max(minDur, Math.min(15, 10 * Math.sqrt(dist / 500)));
 
     // ── Short-trip detection (planet ↔ moon, moon ↔ moon) ──
     const isShortTrip = dist < Math.max(this._currentDist * 5, 30);
@@ -356,7 +356,7 @@ export class FlythroughCamera {
     this.travelElapsed = 0;
 
     // ── Distance-based travel duration ──
-    this.travelDuration = Math.max(15, Math.min(30, 20 * Math.sqrt(dist / 500)));
+    this.travelDuration = Math.max(8, Math.min(15, 10 * Math.sqrt(dist / 500)));
 
     this._travelFromBody = null;
     this._travelToBody = nextBodyRef;
@@ -390,14 +390,15 @@ export class FlythroughCamera {
   /**
    * Travel easing — slow departure, fast cruise, slow arrival.
    *
-   * Uses smootherstep (quintic) which has zero velocity at both endpoints.
-   * The camera lingers near the departing body, zips through the boring
-   * middle (where both objects are billboards), then decelerates gently
-   * as the destination grows.
+   * Double smootherstep: applies quintic easing twice for a much more
+   * pronounced slow-fast-slow profile. The camera barely moves for the
+   * first/last ~20% of travel time (lingering near each body), then
+   * rockets through the middle ~60% at high speed.
    */
   _travelEase(t) {
     t = Math.max(0, Math.min(1, t));
-    return this._ease(t);
+    const s = this._ease(t);
+    return this._ease(s);
   }
 
   /**
@@ -687,9 +688,9 @@ export class FlythroughCamera {
     );
     this.camera.position.copy(_v6);
 
-    // ── Arrival blend (last 5.0s): Hermite curve → pre-orbit ──
+    // ── Arrival blend (last 3.5s): Hermite curve → pre-orbit ──
     // Gravitational capture: the curved cruise bends into orbit.
-    const ARRIVE_BLEND = 5.0;
+    const ARRIVE_BLEND = 3.5;
     const arriveStart = this.travelDuration - ARRIVE_BLEND;
     if (this.travelElapsed > arriveStart) {
       const blend = this._ease(
@@ -708,7 +709,7 @@ export class FlythroughCamera {
     // Weight: departing body (full at start, fades out).
     // Longer look-back to match the slow departure easing — the camera
     // lingers near the body so we should keep looking at it longer.
-    const DEPART_LOOK_DUR = this._isShortTrip ? 4.0 : 7.0;
+    const DEPART_LOOK_DUR = this._isShortTrip ? 3.0 : 5.0;
     const wDepart = fromBody
       ? 1 - this._ease(Math.min(1, this.travelElapsed / DEPART_LOOK_DUR))
       : 0;
