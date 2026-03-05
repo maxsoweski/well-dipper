@@ -68,6 +68,7 @@ let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
 let orbitsVisible = false;
 let gravityWellVisible = false;
+let minimapVisible = true;         // M key toggles
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
@@ -183,6 +184,7 @@ const _mouse = new THREE.Vector2();
 const _orbitRaycaster = new THREE.Raycaster();
 let _orbitLineTargets = new Map(); // orbit line mesh → body info
 let _hoveredOrbitLine = null;      // currently hovered orbit line mesh
+let _lastOrbitHoverTime = 0;       // throttle timer for hover raycasting
 const _mouseDown = { x: 0, y: 0 };
 let clickTargets = new Map();
 
@@ -389,7 +391,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
             ? { ...moonData.planetData.clouds, scale: moonData.planetData.clouds.scale * pmRatio }
             : null,
         };
-        const planetMoon = new Planet(scenePMData, systemData.starInfo);
+        // Slightly dim planet-moons so they don't outshine regular moons
+        // (Planet.js uses smooth diffuse vs Moon.js's contrasty smoothstep)
+        const pmStarInfo = { ...systemData.starInfo, brightness1: systemData.starInfo.brightness1 * 0.7 };
+        if (pmStarInfo.brightness2) pmStarInfo.brightness2 *= 0.7;
+        const planetMoon = new Planet(scenePMData, pmStarInfo);
         moon = {
           mesh: planetMoon.mesh,
           data: { ...moonData, radius: moonData.radiusScene, orbitRadius: moonData.orbitRadiusScene },
@@ -505,8 +511,10 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   systemMap = new SystemMap(systemData, system);
   if (gravityWellVisible) {
     retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  } else {
+  } else if (minimapVisible) {
     retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  } else {
+    retroRenderer.setHud(null, null);
   }
 
   // ── Build click target map ──
@@ -820,7 +828,7 @@ function exitGallery() {
   if (systemMap) {
     if (gravityWellVisible && gravityWell) {
       retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-    } else {
+    } else if (minimapVisible) {
       retroRenderer.setHud(systemMap.scene, systemMap.camera);
     }
   }
@@ -1601,8 +1609,10 @@ function toggleGravityWell() {
   // Swap HUD between gravity well contour map and system map
   if (gravityWellVisible && gravityWell) {
     retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  } else if (systemMap) {
+  } else if (systemMap && minimapVisible) {
     retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  } else {
+    retroRenderer.setHud(null, null);
   }
 }
 
@@ -2174,6 +2184,17 @@ window.addEventListener('keydown', (e) => {
   // Block all input during warp transition or pre-warp turn
   if (warpEffect.isActive || warpTarget.turning) return;
 
+  // M key: toggle minimap
+  if (e.code === 'KeyM') {
+    minimapVisible = !minimapVisible;
+    if (minimapVisible && systemMap && !gravityWellVisible) {
+      retroRenderer.setHud(systemMap.scene, systemMap.camera);
+    } else if (!minimapVisible && !gravityWellVisible) {
+      retroRenderer.setHud(null, null);
+    }
+    return;
+  }
+
   // A key: toggle autopilot
   if (e.code === 'KeyA') {
     if (autoNav.isActive) {
@@ -2262,7 +2283,7 @@ function trySelect(clientX, clientY) {
 
   // 0. Check minimap click first (circular HUD region)
   // Any click inside the HUD circle is consumed — dead zone for star selection.
-  if (systemMap && !gravityWellVisible) {
+  if (systemMap && minimapVisible && !gravityWellVisible) {
     const uv = retroRenderer.getHudUV(clientX, clientY);
     if (uv) {
       // Inside the minimap circle — try to hit a body, but either way don't
@@ -2310,7 +2331,9 @@ function trySelect(clientX, clientY) {
 
   // 1b. Try orbit lines (distance-scaled threshold raycaster)
   if (_orbitLineTargets.size > 0) {
-    _orbitRaycaster.params.Line.threshold = Math.max(camera.position.length() * 0.004, 0.01);
+    const camDist2 = camera.position.length();
+    const pxW = (2 * camDist2 * Math.tan(camera.fov * Math.PI / 360)) / window.innerHeight;
+    _orbitRaycaster.params.Line.threshold = pxW * 8;
     _orbitRaycaster.setFromCamera(_mouse, camera);
     const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
     const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);
@@ -2407,13 +2430,17 @@ canvas.addEventListener('mousemove', (e) => {
     flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
   }
 
-  // ── Orbit line hover highlight ──
+  // ── Orbit line hover highlight (throttled to ~30 Hz) ──
   if (!system || warpEffect.isActive || galleryMode) return;
+  const now = performance.now();
+  if (now - _lastOrbitHoverTime < 33) return; // skip if < 33ms since last check
+  _lastOrbitHoverTime = now;
   const mx = (e.clientX / window.innerWidth) * 2 - 1;
   const my = -(e.clientY / window.innerHeight) * 2 + 1;
-  // Scale threshold with camera distance — ~0.4% of distance to system center.
-  // At 1000 units: threshold = 4 units. At 5 units (close to moon): threshold = 0.02.
-  _orbitRaycaster.params.Line.threshold = Math.max(camera.position.length() * 0.004, 0.01);
+  // Screen-pixel threshold: convert ~8px into world units at the orbit's depth.
+  const camDist = camera.position.length();
+  const pxWorld = (2 * camDist * Math.tan(camera.fov * Math.PI / 360)) / window.innerHeight;
+  _orbitRaycaster.params.Line.threshold = pxWorld * 8;
   _orbitRaycaster.setFromCamera({ x: mx, y: my }, camera);
   const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
   const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);
