@@ -157,10 +157,8 @@ export class RetroRenderer {
           float depth = 0.4 / (radius + 0.08);
           float scrollZ = depth + time * 2.5;
 
-          // ── Background: bright white center → blue-purple edges ──
-          vec3 bgWhite = vec3(0.95, 0.95, 1.0);
-          vec3 bgEdge = vec3(0.12, 0.08, 0.25);
-          vec3 bg = mix(bgWhite, bgEdge, smoothstep(0.0, 0.55, radius));
+          // ── Background: white throughout ──
+          vec3 bg = vec3(0.95, 0.93, 0.9);
 
           // ── Concentric rings rushing outward (forward motion) ──
           float ringPattern = fract(depth * 1.5 + time * 2.0);
@@ -184,13 +182,15 @@ export class RetroRenderer {
           speedLine = step(0.97, speedLine) * smoothstep(0.5, 0.1, radius);
 
           // ── Combine ──
-          vec3 geomColor = vec3(0.35, 0.45, 0.95);    // blue geometric lines
-          vec3 accentColor = vec3(0.6, 0.4, 0.9);     // purple accent
+          vec3 ringColor = vec3(0.85, 0.1, 0.1);      // red rings
+          vec3 yellowColor = vec3(1.0, 0.85, 0.0);     // yellow shapes
+          // Blink: shapes pulse on/off at ~3 Hz
+          float blink = step(0.3, fract(time * 3.0));
           vec3 col = bg;
-          col = mix(col, geomColor, rings * 0.6);
-          col = mix(col, accentColor, hexPattern * 0.5);
-          col = mix(col, vec3(0.8, 0.85, 1.0), diamonds * 0.4);
-          col += vec3(speedLine) * 0.3;
+          col = mix(col, ringColor, rings * 0.8);
+          col = mix(col, yellowColor, hexPattern * 0.7 * blink);
+          col = mix(col, yellowColor, diamonds * 0.6 * blink);
+          col += yellowColor * speedLine * 0.5 * blink;
 
           // ── Bright vanishing point (center) ──
           float centerBright = smoothstep(0.12, 0.0, radius);
@@ -199,7 +199,7 @@ export class RetroRenderer {
           // ── Occasional flashes (particles rushing past) ──
           float flash = sin(angle * 30.0 + time * 6.0) * sin(depth * 3.0 + time * 8.0);
           flash = step(0.96, flash);
-          col += vec3(flash) * 0.5;
+          col += yellowColor * flash * 0.6;
 
           return col;
         }
