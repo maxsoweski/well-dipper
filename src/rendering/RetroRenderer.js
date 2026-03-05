@@ -164,34 +164,16 @@ export class RetroRenderer {
           float ringWave = sin((depth * 1.5 + time * 2.0) * 6.2832);  // smooth sine wave
           float rings = ringWave * 0.5 + 0.5;  // 0→1 smooth oscillation
 
-          // Dither: ordered 4×4 Bayer pattern breaks up the smooth gradient
-          // into a stippled retro texture
-          vec2 screenPos = uv * resolution;
-          int px = int(mod(screenPos.x, 4.0));
-          int py = int(mod(screenPos.y, 4.0));
-          float bayer = 0.0;
-          // Bayer 4×4 thresholds (normalized 0-1)
-          if (px == 0) {
-            if (py == 0) bayer = 0.0;    else if (py == 1) bayer = 0.5;
-            else if (py == 2) bayer = 0.125; else bayer = 0.625;
-          } else if (px == 1) {
-            if (py == 0) bayer = 0.75;   else if (py == 1) bayer = 0.25;
-            else if (py == 2) bayer = 0.875; else bayer = 0.375;
-          } else if (px == 2) {
-            if (py == 0) bayer = 0.1875; else if (py == 1) bayer = 0.6875;
-            else if (py == 2) bayer = 0.0625; else bayer = 0.5625;
-          } else {
-            if (py == 0) bayer = 0.9375; else if (py == 1) bayer = 0.4375;
-            else if (py == 2) bayer = 0.8125; else bayer = 0.3125;
-          }
-          // Dithered ring intensity: compare smooth value against Bayer threshold
-          float ditheredRings = step(bayer, rings * 0.6);
+          // Dither: hash-based noise (no grid artifacts like Bayer)
+          vec2 screenPos = floor(uv * resolution);
+          float noise = fract(sin(dot(screenPos, vec2(12.9898, 78.233))) * 43758.5453);
+          float ditheredRings = step(noise, rings * 0.6);
 
           // ── Combine ──
-          // Rings alternate red/blue at ~3 Hz, blended softly into the background
+          // Rings alternate red/blue at ~1.5 Hz
           vec3 redColor = vec3(0.8, 0.15, 0.15);
           vec3 blueColor = vec3(0.15, 0.25, 0.85);
-          float ringBlink = step(0.5, fract(time * 3.0));
+          float ringBlink = step(0.5, fract(time * 1.5));
           vec3 ringColor = mix(redColor, blueColor, ringBlink);
           vec3 col = bg;
           col = mix(col, ringColor, ditheredRings * 0.25);
