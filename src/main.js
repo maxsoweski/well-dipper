@@ -179,14 +179,54 @@ warpEffect.onComplete = () => {
 // ── Click-to-select (raycasting) ──
 const raycaster = new THREE.Raycaster();
 const _mouse = new THREE.Vector2();
-// Separate raycaster for orbit lines — threshold is set dynamically
-// before each cast (scales with camera distance so picking works at any zoom).
-const _orbitRaycaster = new THREE.Raycaster();
-let _orbitLineTargets = new Map(); // orbit line mesh → body info
+let _orbitLineTargets = new Map(); // orbit line mesh → { type, planetIndex, moonIndex?, center, radius }
 let _hoveredOrbitLine = null;      // currently hovered orbit line mesh
-let _lastOrbitHoverTime = 0;       // throttle timer for hover raycasting
+let _lastOrbitHoverTime = 0;       // throttle timer for hover check
 const _mouseDown = { x: 0, y: 0 };
 let clickTargets = new Map();
+const _projVec = new THREE.Vector3(); // reusable for screen projection
+
+/**
+ * Screen-space orbit hit test.
+ * Projects each orbit's center to screen, computes the projected radius in pixels,
+ * then checks if the mouse cursor is within `thresholdPx` of the circle edge.
+ * Returns the closest match's info object, or null.
+ */
+function hitTestOrbits(clientX, clientY, thresholdPx = 4) {
+  if (_orbitLineTargets.size === 0) return null;
+  const hw = window.innerWidth * 0.5;
+  const hh = window.innerHeight * 0.5;
+  let best = null;
+  let bestDiff = thresholdPx;
+
+  for (const [mesh, info] of _orbitLineTargets) {
+    if (!mesh.visible) continue;
+    // Project orbit center to screen pixels
+    _projVec.copy(info.center).project(camera);
+    // Behind camera — skip
+    if (_projVec.z > 1) continue;
+    const cx = (_projVec.x * hw) + hw;
+    const cy = (-_projVec.y * hh) + hh;
+
+    // Project a point on the orbit rim (center + radius along X axis in world)
+    _projVec.set(info.center.x + info.radius, info.center.y, info.center.z).project(camera);
+    if (_projVec.z > 1) continue;
+    const rx = (_projVec.x * hw) + hw;
+    const ry = (-_projVec.y * hh) + hh;
+    const radiusPx = Math.hypot(rx - cx, ry - cy);
+
+    // Skip orbits that are too tiny or too huge on screen
+    if (radiusPx < 5 || radiusPx > 8000) continue;
+
+    const mouseDist = Math.hypot(clientX - cx, clientY - cy);
+    const diff = Math.abs(mouseDist - radiusPx);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = { info, mesh };
+    }
+  }
+  return best;
+}
 
 spawnSystem();
 
@@ -544,13 +584,21 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     }
   }
 
-  // Orbit lines — separate map (use wider raycaster threshold for picking)
+  // Orbit lines — store center + radius for screen-space hit testing
   _orbitLineTargets = new Map();
   for (let i = 0; i < planets.length; i++) {
-    _orbitLineTargets.set(orbitLines[i].mesh, { type: 'planet', planetIndex: i });
+    const olMesh = orbitLines[i].mesh;
+    _orbitLineTargets.set(olMesh, {
+      type: 'planet', planetIndex: i,
+      center: olMesh.position, radius: planets[i].orbitRadius,
+    });
     const entry = planets[i];
     for (let m = 0; m < entry.moonOrbitLines.length; m++) {
-      _orbitLineTargets.set(entry.moonOrbitLines[m].mesh, { type: 'moon', planetIndex: i, moonIndex: m });
+      const mlMesh = entry.moonOrbitLines[m].mesh;
+      _orbitLineTargets.set(mlMesh, {
+        type: 'moon', planetIndex: i, moonIndex: m,
+        center: mlMesh.position, radius: entry.moons[m].data.orbitRadius,
+      });
     }
   }
 
@@ -2329,25 +2377,15 @@ function trySelect(clientX, clientY) {
     return; // scene object hit — done
   }
 
-  // 1b. Try orbit lines (distance-scaled threshold raycaster)
-  if (_orbitLineTargets.size > 0) {
-    const camDist2 = camera.position.length();
-    const pxW = (2 * camDist2 * Math.tan(camera.fov * Math.PI / 360)) / window.innerHeight;
-    _orbitRaycaster.params.Line.threshold = pxW * 8;
-    _orbitRaycaster.setFromCamera(_mouse, camera);
-    const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
-    const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);
-    if (orbitHits.length > 0) {
-      const info = _orbitLineTargets.get(orbitHits[0].object);
-      if (info) {
-        if (info.type === 'planet') {
-          focusPlanet(info.planetIndex);
-        } else if (info.type === 'moon') {
-          focusMoon(info.planetIndex, info.moonIndex);
-        }
-        return;
-      }
+  // 1b. Try orbit lines (screen-space distance check)
+  const orbitHit = hitTestOrbits(clientX, clientY, 6);
+  if (orbitHit) {
+    if (orbitHit.info.type === 'planet') {
+      focusPlanet(orbitHit.info.planetIndex);
+    } else if (orbitHit.info.type === 'moon') {
+      focusMoon(orbitHit.info.planetIndex, orbitHit.info.moonIndex);
     }
+    return;
   }
 
   // 2. Distant deep sky (galaxy/globular): try selecting a particle as warp target
@@ -2430,22 +2468,14 @@ canvas.addEventListener('mousemove', (e) => {
     flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
   }
 
-  // ── Orbit line hover highlight (throttled to ~30 Hz) ──
+  // ── Orbit line hover highlight (screen-space, throttled to ~30 Hz) ──
   if (!system || warpEffect.isActive || galleryMode) return;
   const now = performance.now();
-  if (now - _lastOrbitHoverTime < 33) return; // skip if < 33ms since last check
+  if (now - _lastOrbitHoverTime < 33) return;
   _lastOrbitHoverTime = now;
-  const mx = (e.clientX / window.innerWidth) * 2 - 1;
-  const my = -(e.clientY / window.innerHeight) * 2 + 1;
-  // Screen-pixel threshold: convert ~8px into world units at the orbit's depth.
-  const camDist = camera.position.length();
-  const pxWorld = (2 * camDist * Math.tan(camera.fov * Math.PI / 360)) / window.innerHeight;
-  _orbitRaycaster.params.Line.threshold = pxWorld * 8;
-  _orbitRaycaster.setFromCamera({ x: mx, y: my }, camera);
-  const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
-  const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);
 
-  const newHover = orbitHits.length > 0 ? orbitHits[0].object : null;
+  const hit = hitTestOrbits(e.clientX, e.clientY, 4);
+  const newHover = hit ? hit.mesh : null;
   if (newHover !== _hoveredOrbitLine) {
     // Restore previous
     if (_hoveredOrbitLine) {
