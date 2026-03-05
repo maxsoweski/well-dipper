@@ -130,6 +130,17 @@ export class MoonGenerator {
       // Effective range = radius(map) × noiseScale, so scale inversely with radius.
       // Ensures even tiny moons get enough noise variation for craters/textures.
       noiseScale: Math.max(rng.range(3.0, 6.0), 2.5 / moonRadiusData.radius),
+      // Terrestrial moons have atmosphere + clouds (they support life!)
+      clouds: type === 'terrestrial' ? {
+        color: [0.92, 0.92, 0.95],
+        density: rng.range(0.3, 0.55),
+        scale: rng.range(2.5, 4.5),
+      } : null,
+      // Terrestrial moons have thin atmosphere rim glow
+      atmosphere: type === 'terrestrial' ? {
+        color: [0.4, 0.6, 1.0],
+        strength: rng.range(0.25, 0.5),
+      } : null,
     };
   }
 

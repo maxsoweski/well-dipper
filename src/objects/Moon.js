@@ -19,8 +19,9 @@ export class Moon {
   }
 
   _createMesh(lightDir, lightDir2, starInfo) {
-    // Lower poly count than planets — moons are small, 3 subdivisions is plenty
-    const geometry = new THREE.IcosahedronGeometry(this.data.radius, 3);
+    // Terrestrial moons get higher resolution (clouds + atmosphere need smoother rim)
+    const subdivisions = d.type === 'terrestrial' ? 4 : 3;
+    const geometry = new THREE.IcosahedronGeometry(this.data.radius, subdivisions);
     const d = this.data;
 
     // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic, 4=terrestrial
@@ -48,6 +49,15 @@ export class Moon {
         shadowPlanetRadius: { value: 0.0 },
         starPos1: { value: this._starPos1 },
         starPos2: { value: this._starPos2 },
+        // Clouds + atmosphere (terrestrial moons only)
+        time: { value: 0.0 },
+        hasClouds: { value: d.clouds ? 1.0 : 0.0 },
+        cloudColor: { value: new THREE.Vector3(...(d.clouds?.color || [1, 1, 1])) },
+        cloudDensity: { value: d.clouds?.density || 0.0 },
+        cloudScale: { value: d.clouds?.scale || 3.0 },
+        hasAtmosphere: { value: d.atmosphere ? 1.0 : 0.0 },
+        atmosphereColor: { value: new THREE.Vector3(...(d.atmosphere?.color || [0.4, 0.6, 1.0])) },
+        atmosphereStrength: { value: d.atmosphere?.strength || 0.0 },
       },
 
       vertexShader: /* glsl */ `
@@ -83,6 +93,15 @@ export class Moon {
         uniform float shadowPlanetRadius;
         uniform vec3 starPos1;
         uniform vec3 starPos2;
+        // Cloud + atmosphere uniforms (terrestrial moons)
+        uniform float time;
+        uniform float hasClouds;
+        uniform vec3 cloudColor;
+        uniform float cloudDensity;
+        uniform float cloudScale;
+        uniform float hasAtmosphere;
+        uniform vec3 atmosphereColor;
+        uniform float atmosphereStrength;
 
         varying vec3 vNormal;
         varying vec3 vPosition;
@@ -287,6 +306,27 @@ export class Moon {
             finalColor += accentColor * nightGlow * 0.15;
           }
 
+          // ── Cloud layer (terrestrial moons — animated) ──
+          if (hasClouds > 0.5) {
+            float cloudSpeed = 0.008;
+            vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, time * cloudSpeed * 0.3, 0.0);
+            float cn = snoise(cloudPos);
+            cn += snoise(cloudPos * 2.0) * 0.4;
+            cn += snoise(cloudPos * 4.0) * 0.2;
+            cn += snoise(cloudPos * 8.0) * 0.1;
+            float cloudMask = smoothstep(0.0, 0.2, cn) * cloudDensity;
+            float cloudLight = diffuse * 0.9;
+            finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+          }
+
+          // ── Atmosphere rim glow (terrestrial moons) ──
+          if (hasAtmosphere > 0.5) {
+            float rim = 1.0 - max(dot(vNormal, normalize(cameraPosition - vWorldPos)), 0.0);
+            rim = pow(rim, 2.5);
+            float rimLight = max(diffuse, 0.15);  // atmosphere scatters even on dark side
+            finalColor += atmosphereColor * rim * atmosphereStrength * rimLight;
+          }
+
           // Posterize — wider edgeWidth (0.6) than planets (0.4) so dithering
           // creates more visible transition bands, revealing surface detail
           finalColor = min(finalColor, vec3(1.0));
@@ -323,6 +363,11 @@ export class Moon {
 
     // Slow self-rotation
     this.mesh.rotation.y += 0.167 * (Math.PI / 180) * deltaTime;
+
+    // Animate clouds (terrestrial moons)
+    if (this.data.clouds) {
+      this.mesh.material.uniforms.time.value += deltaTime;
+    }
   }
 
   addTo(scene) {
