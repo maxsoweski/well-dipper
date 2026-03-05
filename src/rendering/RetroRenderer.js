@@ -93,6 +93,21 @@ export class RetroRenderer {
   }
 
   /**
+   * Set warp target bracket uniforms (called by main.js each frame).
+   * @param {THREE.Vector2} uv    — screen UV of selected star (0-1)
+   * @param {number} blink        — 0 or 1 (blink on/off)
+   * @param {number} size         — bracket size in pixels (0 = hidden)
+   */
+  setTargetUniforms(uv, blink, size) {
+    const u = this._compositeMesh.material.uniforms;
+    if (uv) {
+      u.uTargetUV.value.copy(uv);
+    }
+    u.uTargetBlink.value = blink;
+    u.uTargetSize.value = size;
+  }
+
+  /**
    * Build the fullscreen composite quad + shader.
    * Samples all render targets and composites them.
    */
@@ -115,6 +130,10 @@ export class RetroRenderer {
         uFoldGlow: { value: 0.0 },
         uExitReveal: { value: 0.0 },
         uRiftCenter: { value: new THREE.Vector2(0.5, 0.5) },  // UV space (0 to 1)
+        // Warp target selection brackets
+        uTargetUV: { value: new THREE.Vector2(0.5, 0.5) },    // UV of selected star
+        uTargetBlink: { value: 0.0 },                          // 0 = off, 1 = on
+        uTargetSize: { value: 0.0 },                           // bracket size in pixels
       },
 
       vertexShader: /* glsl */ `
@@ -140,6 +159,10 @@ export class RetroRenderer {
         uniform float uFoldGlow;
         uniform float uExitReveal;
         uniform vec2 uRiftCenter;
+        // Warp target brackets
+        uniform vec2 uTargetUV;
+        uniform float uTargetBlink;
+        uniform float uTargetSize;
         varying vec2 vUv;
 
         // ── Hyperspace tunnel (3D raymarched cylinder) ──
@@ -280,6 +303,45 @@ export class RetroRenderer {
 
               result = mix(result, vec3(0.0), 0.5);
               result = mix(result, hud.rgb, hud.a);
+            }
+          }
+
+          // ── Warp target selection brackets ──
+          // Green L-shaped corner brackets blink around the selected star.
+          // Rendered BEFORE hyperspace so they're hidden behind the tunnel.
+          if (uTargetBlink > 0.5 && uTargetSize > 0.0) {
+            vec2 targetScreen = uTargetUV * resolution;
+            vec2 fragScreen = floor(vUv * resolution);
+            vec2 diff = fragScreen - targetScreen;
+            float halfSize = uTargetSize * 0.5;
+            float armLen = uTargetSize * 0.3;
+            float thick = 2.0;
+
+            bool onBracket = false;
+
+            // Top-left corner (horizontal arm + vertical arm)
+            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + armLen
+                                   && diff.y >= halfSize - thick && diff.y < halfSize);
+            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + thick
+                                   && diff.y >= halfSize - armLen && diff.y < halfSize);
+            // Top-right corner
+            onBracket = onBracket || (diff.x > halfSize - armLen && diff.x <= halfSize
+                                   && diff.y >= halfSize - thick && diff.y < halfSize);
+            onBracket = onBracket || (diff.x > halfSize - thick && diff.x <= halfSize
+                                   && diff.y >= halfSize - armLen && diff.y < halfSize);
+            // Bottom-left corner
+            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + armLen
+                                   && diff.y >= -halfSize && diff.y < -halfSize + thick);
+            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + thick
+                                   && diff.y >= -halfSize && diff.y < -halfSize + armLen);
+            // Bottom-right corner
+            onBracket = onBracket || (diff.x > halfSize - armLen && diff.x <= halfSize
+                                   && diff.y >= -halfSize && diff.y < -halfSize + thick);
+            onBracket = onBracket || (diff.x > halfSize - thick && diff.x <= halfSize
+                                   && diff.y >= -halfSize && diff.y < -halfSize + armLen);
+
+            if (onBracket) {
+              result = vec3(0.0, 1.0, 0.0);
             }
           }
 

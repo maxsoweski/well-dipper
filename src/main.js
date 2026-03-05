@@ -70,9 +70,23 @@ const IDLE_THRESHOLD = 20;
 const warpEffect = new WarpEffect();
 let pendingSystemData = null; // pre-generated data cached during fold phase
 
-// When the tour visits every body, trigger warp to a new system
+// ── Warp target selection ──
+// Tracks which background star the user clicked (or auto-selected).
+// Direction is used when starting warp so the rift opens toward that star.
+const warpTarget = {
+  direction: null,   // THREE.Vector3 world-space direction, or null
+  blinkTimer: 0,     // accumulates time for 2 Hz blink
+  blinkOn: false,    // current blink state
+};
+
+// When the tour visits every body, auto-select a visible star and warp toward it.
+// Brackets blink for 1.5s so the viewer sees where we're going.
 autoNav.onTourComplete = () => {
-  warpEffect.start();
+  autoSelectWarpTarget();
+  setTimeout(() => {
+    warpEffect.start(warpTarget.direction);
+    warpTarget.direction = null;
+  }, 1500);
 };
 
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
@@ -109,7 +123,8 @@ spawnSystem();
  * @param {Object} options.systemData — pre-generated data from StarSystemGenerator (skips re-generation)
  */
 function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
-  // ── Reset autopilot / flythrough ──
+  // ── Reset state ──
+  warpTarget.direction = null;
   const wasAutopilot = autoNav.isActive;
   if (!forWarp) {
     stopFlythrough();
@@ -795,6 +810,10 @@ const _riftNDC = new THREE.Vector2();
 const _riftUV = new THREE.Vector2();
 const _targetQuat = new THREE.Quaternion();
 const _lookMatrix = new THREE.Matrix4();
+// Warp target projection
+const _starRayDir = new THREE.Vector3();
+const _targetScreenPos = new THREE.Vector3();
+const _targetUV = new THREE.Vector2();
 
 function animate() {
   requestAnimationFrame(animate);
@@ -981,6 +1000,31 @@ function animate() {
       }
     }
 
+    // ── Warp target brackets ──
+    // When a warp target is selected (and warp hasn't started yet),
+    // project it to screen and update the blinking bracket overlay.
+    if (warpTarget.direction && !warpEffect.isActive) {
+      warpTarget.blinkTimer += deltaTime;
+      // 2 Hz blink: multiply by 4 because floor(t*4)%2 toggles every 0.25s
+      warpTarget.blinkOn = Math.floor(warpTarget.blinkTimer * 4) % 2 === 0;
+
+      // Project target direction to screen UV
+      _targetScreenPos.copy(camera.position).addScaledVector(warpTarget.direction, 1000);
+      _targetScreenPos.project(camera);
+      _targetUV.set(
+        (_targetScreenPos.x + 1) / 2,
+        (_targetScreenPos.y + 1) / 2,
+      );
+
+      retroRenderer.setTargetUniforms(
+        _targetUV,
+        warpTarget.blinkOn ? 1 : 0,
+        20,
+      );
+    } else {
+      retroRenderer.setTargetUniforms(null, 0, 0);
+    }
+
     // ── Warp transition ──
     if (warpEffect.isActive) {
       warpEffect.update(deltaTime);
@@ -1138,7 +1182,8 @@ window.addEventListener('keydown', (e) => {
   if (autoNav.isActive) {
     if (e.code === 'Space') {
       e.preventDefault();
-      warpEffect.start();
+      warpEffect.start(warpTarget.direction);
+      warpTarget.direction = null;
     } else if (e.code === 'Tab') {
       e.preventDefault();
       // Jump tour forward/back — begin travel to the new stop
@@ -1181,7 +1226,8 @@ window.addEventListener('keydown', (e) => {
     if (!autoNav.isActive) {
       startFlythrough();
     }
-    warpEffect.start();
+    warpEffect.start(warpTarget.direction);
+    warpTarget.direction = null;
   } else if (e.code === 'Escape' || e.code === 'Backquote') {
     focusPlanet(-1);
   } else if (e.code === 'Tab') {
@@ -1214,6 +1260,7 @@ function trySelect(clientX, clientY) {
 
   raycaster.setFromCamera(_mouse, camera);
 
+  // 1. Try scene objects (planets, stars, moons)
   const meshes = Array.from(clickTargets.keys());
   const hits = raycaster.intersectObjects(meshes, false);
 
@@ -1234,7 +1281,37 @@ function trySelect(clientX, clientY) {
     } else if (info.type === 'moon') {
       focusMoon(info.planetIndex, info.moonIndex);
     }
-    break; // only process the first valid hit
+    return; // scene object hit — done
+  }
+
+  // 2. No scene object hit — try selecting a background star as warp target
+  trySelectWarpTarget(raycaster.ray.direction);
+}
+
+/**
+ * Select the nearest background starfield point as a warp target.
+ * Green brackets will blink around it; pressing Space warps toward it.
+ */
+function trySelectWarpTarget(rayDir) {
+  const dir = starfield.findNearestStar(rayDir);
+  if (!dir) return; // no star close enough to the click
+
+  warpTarget.direction = dir;
+  warpTarget.blinkTimer = 0;
+  warpTarget.blinkOn = true;
+}
+
+/**
+ * Auto-select a random visible star as warp target (screensaver mode).
+ * Picks from the forward hemisphere so the brackets appear on-screen.
+ */
+function autoSelectWarpTarget() {
+  camera.getWorldDirection(_starRayDir);
+  const dir = starfield.getRandomVisibleStar(_starRayDir);
+  if (dir) {
+    warpTarget.direction = dir;
+    warpTarget.blinkTimer = 0;
+    warpTarget.blinkOn = true;
   }
 }
 
@@ -1305,7 +1382,8 @@ canvas.addEventListener('touchend', (e) => {
   if (now - _lastTapTime < 350) {
     // Double tap: warp to new system
     if (!autoNav.isActive) startFlythrough();
-    warpEffect.start();
+    warpEffect.start(warpTarget.direction);
+    warpTarget.direction = null;
     _lastTapTime = 0;
   } else {
     _lastTapTime = now;
@@ -1339,7 +1417,8 @@ if (mobileMenu) {
     const action = btn.dataset.action;
     if (action === 'new') {
       if (!autoNav.isActive) startFlythrough();
-      warpEffect.start();
+      warpEffect.start(warpTarget.direction);
+      warpTarget.direction = null;
     } else if (action === 'back') {
       focusPlanet(-1);
     } else if (action === 'prev') {

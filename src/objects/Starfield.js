@@ -173,6 +173,62 @@ export class Starfield {
     }
   }
 
+  /**
+   * Find the nearest starfield point to a given ray direction.
+   * Uses angular distance (dot product) — returns the direction to the
+   * closest star within a 3° cone, or null if nothing's close enough.
+   *
+   * @param {THREE.Vector3} rayDirection — normalized world-space ray
+   * @returns {THREE.Vector3|null} — normalized direction to nearest star
+   */
+  findNearestStar(rayDirection) {
+    const positions = this.mesh.geometry.attributes.position.array;
+    const cosThreshold = Math.cos(3 * Math.PI / 180); // 3° cone
+    let bestDot = cosThreshold;
+    let bestDir = null;
+
+    const _dir = new THREE.Vector3();
+    for (let i = 0; i < this.count; i++) {
+      const i3 = i * 3;
+      // Star positions are relative to mesh center (which follows camera),
+      // so the position vector IS the direction from camera to star.
+      _dir.set(positions[i3], positions[i3 + 1], positions[i3 + 2]).normalize();
+      const dot = rayDirection.dot(_dir);
+      if (dot > bestDot) {
+        bestDot = dot;
+        bestDir = _dir.clone();
+      }
+    }
+    return bestDir;
+  }
+
+  /**
+   * Pick a random star visible in the forward hemisphere.
+   * Used for auto-selecting a warp target in screensaver mode.
+   *
+   * @param {THREE.Vector3} cameraForward — normalized camera forward direction
+   * @returns {THREE.Vector3|null} — normalized direction to a random visible star
+   */
+  getRandomVisibleStar(cameraForward) {
+    const positions = this.mesh.geometry.attributes.position.array;
+    const candidates = [];
+    const _dir = new THREE.Vector3();
+
+    for (let i = 0; i < this.count; i++) {
+      const i3 = i * 3;
+      _dir.set(positions[i3], positions[i3 + 1], positions[i3 + 2]).normalize();
+      // dot > 0.3 ≈ within ~72° of forward (roughly what's on screen)
+      if (cameraForward.dot(_dir) > 0.3) {
+        candidates.push(i);
+      }
+    }
+    if (candidates.length === 0) return null;
+
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const p = pick * 3;
+    return new THREE.Vector3(positions[p], positions[p + 1], positions[p + 2]).normalize();
+  }
+
   addTo(scene) {
     scene.add(this.mesh);
   }
