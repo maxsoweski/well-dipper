@@ -129,7 +129,7 @@ const GALLERY_TYPES = [
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
   'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
   'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
-  'moon', 'planet-moon',
+  'moon',
 ];
 let galleryMode = false;
 let gallerySeed = 1;
@@ -1099,40 +1099,6 @@ function gallerySpawn() {
       camera.position.set(0, 1, 10);
       camera.lookAt(0, 0, 0);
     }
-  }
-
-  // ── Planet-Moon (planet-class body shown as a moon) ──
-  else if (type === 'planet-moon') {
-    // Force a planet-moon by picking a random eligible type
-    const pmType = rng.pick(MoonGenerator.PLANET_MOON_TYPES);
-    const forcedPM = PlanetGenerator.generate(rng, 1.0, [0, 0, 1], null, pmType);
-    const scenePMData = {
-      ...forcedPM,
-      radius: forcedPM.radiusScene,
-      noiseScale: forcedPM.noiseScale * (forcedPM.radius / forcedPM.radiusScene),
-      clouds: forcedPM.clouds
-        ? { ...forcedPM.clouds, scale: forcedPM.clouds.scale * (forcedPM.radius / forcedPM.radiusScene) }
-        : null,
-    };
-    const planetMoon = new Planet(scenePMData, {
-      color1: [1.0, 0.98, 0.94],
-      brightness1: 1.5,
-      color2: [0, 0, 0],
-      brightness2: 0,
-    });
-    planetMoon._lightDir.set(0.5, 0.3, 0.8).normalize();
-    planetMoon.addTo(scene);
-    _galleryMeshes.push(planetMoon);
-
-    const r = scenePMData.radius;
-    camera.position.set(0, r * 0.3, r * 3);
-    camera.lookAt(0, 0, 0);
-
-    const features = [];
-    if (forcedPM.rings) features.push('rings');
-    if (forcedPM.clouds) features.push('clouds');
-    if (forcedPM.atmosphere) features.push('atmo');
-    infoText = `as-moon: ${pmType}  |  ${forcedPM.radiusEarth.toFixed(2)} R⊕  |  ${features.join(', ') || 'no extras'}`;
   }
 
   // Hand camera to orbit controller — user can drag to rotate, auto-rotates slowly
