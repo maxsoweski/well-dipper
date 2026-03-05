@@ -11,6 +11,8 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 import { CameraController } from './camera/CameraController.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
+import { PlanetGenerator } from './generation/PlanetGenerator.js';
+import { MoonGenerator } from './generation/MoonGenerator.js';
 import { DestinationPicker } from './generation/DestinationPicker.js';
 import { GalaxyGenerator } from './generation/GalaxyGenerator.js';
 import { NebulaGenerator } from './generation/NebulaGenerator.js';
@@ -108,16 +110,25 @@ let _forceNextDestType = null;
 const _heldKeys = new Set();
 
 // ── Debug Gallery Mode ──
-// Press D to enter/exit. Shows deep sky objects one at a time for evaluation.
+// Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
+// Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
 const GALLERY_TYPES = [
+  // Deep sky
   'spiral-galaxy', 'elliptical-galaxy',
   'emission-nebula', 'planetary-nebula',
   'globular-cluster', 'open-cluster',
+  // Star system objects
+  'star',
+  'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
+  'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
+  'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
+  'moon',
 ];
 let galleryMode = false;
 let gallerySeed = 1;
 let galleryTypeIdx = 0;
-let galleryObject = null;  // current Galaxy or Nebula instance
+let galleryObject = null;      // current Galaxy/Nebula instance (deep sky)
+let _galleryMeshes = [];       // Star/Planet/Moon meshes (star system objects)
 
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
@@ -589,12 +600,23 @@ function spawnDeepSky(data, destType, forWarp) {
 function enterGallery() {
   galleryMode = true;
   stopFlythrough();
+  _deepSkyLingerTimer = -1;
   warpTarget.direction = null;
 
-  // Hide current system
+  // Hide current system (all meshes)
   if (system) {
     if (system.type && system.type !== 'star-system') {
       if (system.destination) system.destination.removeFrom(scene);
+    } else {
+      // Hide star system objects
+      if (system.star) system.star.mesh.visible = false;
+      if (system.star2) system.star2.mesh.visible = false;
+      for (const entry of system.planets) {
+        entry.planet.mesh.visible = false;
+        if (entry.billboard) entry.billboard.mesh.visible = false;
+        for (const m of entry.moons) m.mesh.visible = false;
+      }
+      for (const line of system.orbitLines) line.mesh.visible = false;
     }
   }
 
@@ -610,61 +632,191 @@ function exitGallery() {
   galleryMode = false;
   document.getElementById('gallery-overlay').style.display = 'none';
 
-  // Clean up gallery object
-  if (galleryObject) {
-    galleryObject.removeFrom(scene);
-    galleryObject.dispose();
-    galleryObject = null;
-  }
+  // Clean up gallery objects
+  _galleryCleanup();
 
-  // Restore the current system's deep sky object if it exists
-  if (system && system.type && system.type !== 'star-system' && system.destination) {
-    system.destination.addTo(scene);
+  // Restore the current system
+  if (system) {
+    if (system.type && system.type !== 'star-system' && system.destination) {
+      system.destination.addTo(scene);
+    } else {
+      // Restore star system visibility
+      if (system.star) system.star.mesh.visible = true;
+      if (system.star2) system.star2.mesh.visible = true;
+      for (const entry of system.planets) {
+        entry.planet.mesh.visible = true;
+        if (entry.billboard) entry.billboard.mesh.visible = true;
+        for (const m of entry.moons) m.mesh.visible = true;
+      }
+      for (const line of system.orbitLines) {
+        line.mesh.visible = orbitsVisible;
+      }
+    }
   }
 
   cameraController.bypassed = false;
 }
 
-function gallerySpawn() {
-  // Clean up previous gallery object
+/** Clean up any gallery-spawned objects */
+function _galleryCleanup() {
   if (galleryObject) {
     galleryObject.removeFrom(scene);
     galleryObject.dispose();
     galleryObject = null;
   }
+  for (const obj of _galleryMeshes) {
+    scene.remove(obj.mesh || obj);
+    if (obj.dispose) obj.dispose();
+  }
+  _galleryMeshes = [];
+}
+
+function gallerySpawn() {
+  // Clean up previous gallery objects
+  _galleryCleanup();
 
   const type = GALLERY_TYPES[galleryTypeIdx];
   const seed = `gallery-${gallerySeed}`;
+  const rng = new SeededRandom(seed);
 
-  // Generate data
-  let data;
-  if (type.includes('galaxy')) {
-    data = GalaxyGenerator.generate(seed, type);
-  } else if (type.includes('nebula')) {
-    data = NebulaGenerator.generate(seed, type);
-  } else if (type.includes('cluster')) {
-    data = ClusterGenerator.generate(seed, type);
+  let infoText = '';
+
+  // ── Deep sky objects ──
+  if (type.includes('galaxy') || type.includes('nebula') || type.includes('cluster')) {
+    let data;
+    if (type.includes('galaxy')) {
+      data = GalaxyGenerator.generate(seed, type);
+    } else if (type.includes('nebula')) {
+      data = NebulaGenerator.generate(seed, type);
+    } else {
+      data = ClusterGenerator.generate(seed, type);
+    }
+
+    const isGalaxyOrCluster = type.includes('galaxy') || type.includes('cluster');
+    galleryObject = isGalaxyOrCluster ? new Galaxy(data) : new Nebula(data);
+    galleryObject.addTo(scene);
+
+    const radius = data.radius;
+    camera.position.set(0, radius * 0.5, radius * 2.5);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `${data.particleCount || data.starCount || '?'} particles  |  r=${radius.toFixed(0)}`;
   }
 
-  // Create renderer object
-  const isGalaxyOrCluster = type.includes('galaxy') || type.includes('cluster');
-  if (isGalaxyOrCluster) {
-    galleryObject = new Galaxy(data);
-  } else {
-    galleryObject = new Nebula(data);
-  }
-  galleryObject.addTo(scene);
+  // ── Star ──
+  else if (type === 'star') {
+    const systemData = StarSystemGenerator.generate(seed);
+    const starData = { ...systemData.star, radius: systemData.star.radiusScene };
+    const star = new Star(starData);
+    star.addTo(scene);
+    _galleryMeshes.push(star);
 
-  // Position camera to frame the object
-  const radius = data.radius;
-  const viewDist = radius * 2.5;
-  camera.position.set(0, viewDist * 0.2, viewDist);
-  camera.lookAt(0, 0, 0);
+    const r = starData.radius;
+    camera.position.set(0, r * 0.3, r * 3);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉`;
+  }
+
+  // ── Planet ──
+  else if (type.startsWith('planet-')) {
+    const planetType = type.replace('planet-', '');
+
+    // Generate planet data with forced type
+    const planetData = PlanetGenerator.generate(rng, 1.0, [0, 0, 1]);
+    planetData.type = planetType; // Override to force the specific type
+
+    // Re-generate with the forced type by creating a fresh planet from a full system seed
+    // This gives us realistic type-specific data (colors, clouds, atmosphere, etc.)
+    const fullRng = new SeededRandom(seed);
+    const forcedPlanet = PlanetGenerator.generate(fullRng, 1.0, [0, 0, 1], null, planetType);
+
+    // Scene-unit conversion
+    const mapToSceneRatio = forcedPlanet.radius / forcedPlanet.radiusScene;
+    const scenePlanetData = {
+      ...forcedPlanet,
+      radius: forcedPlanet.radiusScene,
+      noiseScale: forcedPlanet.noiseScale * mapToSceneRatio,
+      clouds: forcedPlanet.clouds
+        ? { ...forcedPlanet.clouds, scale: forcedPlanet.clouds.scale * mapToSceneRatio }
+        : null,
+    };
+
+    // Use a generic G-star for lighting
+    const starInfo = {
+      color1: [1.0, 0.96, 0.92],
+      brightness1: 1.0,
+      color2: [0, 0, 0],
+      brightness2: 0,
+    };
+
+    const planet = new Planet(scenePlanetData, starInfo);
+    planet._lightDir.set(0.5, 0.3, 0.8).normalize();
+    planet.addTo(scene);
+    _galleryMeshes.push(planet);
+
+    const r = scenePlanetData.radius;
+    camera.position.set(0, r * 0.3, r * 3);
+    camera.lookAt(0, 0, 0);
+
+    const features = [];
+    if (forcedPlanet.rings) features.push('rings');
+    if (forcedPlanet.clouds) features.push('clouds');
+    if (forcedPlanet.atmosphere) features.push('atmo');
+    infoText = `${forcedPlanet.radiusEarth.toFixed(2)} R⊕  |  ${features.join(', ') || 'no extras'}`;
+  }
+
+  // ── Moon ──
+  else if (type === 'moon') {
+    // Generate a system and pick a moon from it
+    const systemData = StarSystemGenerator.generate(seed);
+    // Find first planet with moons
+    let moonData = null;
+    let parentData = null;
+    for (const entry of systemData.planets) {
+      if (entry.moons.length > 0) {
+        moonData = entry.moons[0];
+        parentData = entry.planetData;
+        break;
+      }
+    }
+
+    if (moonData) {
+      const sceneMoonData = {
+        ...moonData,
+        radius: moonData.radiusScene,
+        orbitRadius: moonData.orbitRadiusScene,
+        noiseScale: moonData.noiseScale * (moonData.radius / moonData.radiusScene),
+      };
+
+      const lightDir = new THREE.Vector3(0.5, 0.3, 0.8).normalize();
+      const starInfo = {
+        color1: [1.0, 0.96, 0.92],
+        brightness1: 1.0,
+        color2: [0, 0, 0],
+        brightness2: 0,
+      };
+
+      const moon = new Moon(sceneMoonData, lightDir, null, starInfo);
+      moon.addTo(scene);
+      _galleryMeshes.push(moon);
+
+      const r = sceneMoonData.radius;
+      camera.position.set(0, r * 0.3, r * 3);
+      camera.lookAt(0, 0, 0);
+
+      infoText = `type: ${moonData.type}  |  ${moonData.radiusEarth.toFixed(3)} R⊕`;
+    } else {
+      infoText = 'no moons in this seed — try another';
+      camera.position.set(0, 1, 10);
+      camera.lookAt(0, 0, 0);
+    }
+  }
 
   // Update info overlay
   const label = type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const info = document.getElementById('gallery-info');
-  info.textContent = `${label}  |  seed: ${gallerySeed}  |  r=${radius.toFixed(0)}  |  ${data.particleCount || data.starCount || '?'} particles`;
+  info.textContent = `${label}  |  seed: ${gallerySeed}  |  ${infoText}`;
   console.log(`Gallery: ${label} (seed "${seed}")`);
 }
 
@@ -1087,10 +1239,27 @@ function animate() {
   timer.update();
   const deltaTime = Math.min(timer.getDelta(), 0.1);
 
-  // ── Gallery mode: simple auto-rotation, skip everything else ──
-  if (galleryMode && galleryObject) {
-    galleryObject.mesh.rotation.y += 0.15 * deltaTime;
-    galleryObject.update(deltaTime);
+  // ── Gallery mode: auto-rotation, skip everything else ──
+  if (galleryMode) {
+    // Rotate deep sky objects around their center
+    if (galleryObject) {
+      galleryObject.mesh.rotation.y += 0.15 * deltaTime;
+      galleryObject.update(deltaTime);
+    }
+    // Update star system objects — Planet.update() handles its own rotation,
+    // Stars need glow updates, so we orbit the camera slowly instead.
+    for (const obj of _galleryMeshes) {
+      if (obj.update) obj.update(deltaTime);
+      if (obj.updateGlow) obj.updateGlow(camera);  // Star glow scaling
+    }
+    // Orbit camera slowly around the gallery object for a nice view
+    if (_galleryMeshes.length > 0) {
+      const dist = camera.position.length();
+      const angle = Math.atan2(camera.position.x, camera.position.z) + 0.12 * deltaTime;
+      camera.position.x = Math.sin(angle) * dist;
+      camera.position.z = Math.cos(angle) * dist;
+      camera.lookAt(0, 0, 0);
+    }
     starfield.update(camera.position);
     retroRenderer.render();
     return;

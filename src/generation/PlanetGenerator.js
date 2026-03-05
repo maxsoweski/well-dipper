@@ -140,8 +140,8 @@ export class PlanetGenerator {
    * @param {object|null} zones - { frostLine, hzInner, hzOuter, starType } in AU for realistic distribution
    * @returns {object} planet data
    */
-  static generate(rng, orbitRadiusAU, sunDirection = null, zones = null) {
-    const type = this._pickType(rng, orbitRadiusAU, zones);
+  static generate(rng, orbitRadiusAU, sunDirection = null, zones = null, forceType = null) {
+    const type = forceType || this._pickType(rng, orbitRadiusAU, zones);
 
     // Size ranges in Earth radii — based on real exoplanet science.
     // These are realistic physical sizes used for scene-scale rendering.
