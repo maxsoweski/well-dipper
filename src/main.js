@@ -597,32 +597,44 @@ function spawnDeepSky(data, destType, forWarp) {
 // ── Debug Gallery ──────────────────────────────────────────────
 // Shows deep sky objects one at a time for evaluating procedural variation.
 
+/** Set visibility of every mesh in the current star system */
+function _setSystemVisible(visible) {
+  if (!system) return;
+
+  if (system.type && system.type !== 'star-system') {
+    // Deep sky destination
+    if (system.destination) {
+      if (visible) system.destination.addTo(scene);
+      else system.destination.removeFrom(scene);
+    }
+  } else {
+    // Star system: stars, planets, moons, billboards, orbit lines, asteroid belts
+    if (system.star) system.star.mesh.visible = visible;
+    if (system.star2) system.star2.mesh.visible = visible;
+    for (const entry of system.planets) {
+      entry.planet.mesh.visible = visible;
+      entry.billboard.sprite.visible = visible;
+      for (const m of entry.moons) m.mesh.visible = visible;
+      for (const bb of entry.moonBillboards) bb.sprite.visible = visible;
+      for (const ml of entry.moonOrbitLines) ml.mesh.visible = visible;
+    }
+    for (const line of system.orbitLines) line.mesh.visible = visible;
+    for (const line of (system.starOrbitLines || [])) line.mesh.visible = visible;
+    for (const belt of (system.asteroidBelts || [])) belt.mesh.visible = visible;
+  }
+}
+
 function enterGallery() {
   galleryMode = true;
   stopFlythrough();
   _deepSkyLingerTimer = -1;
   warpTarget.direction = null;
 
-  // Hide current system (all meshes)
-  if (system) {
-    if (system.type && system.type !== 'star-system') {
-      if (system.destination) system.destination.removeFrom(scene);
-    } else {
-      // Hide star system objects
-      if (system.star) system.star.mesh.visible = false;
-      if (system.star2) system.star2.mesh.visible = false;
-      for (const entry of system.planets) {
-        entry.planet.mesh.visible = false;
-        if (entry.billboard) entry.billboard.mesh.visible = false;
-        for (const m of entry.moons) m.mesh.visible = false;
-      }
-      for (const line of system.orbitLines) line.mesh.visible = false;
-    }
-  }
+  // Hide everything in the current system
+  _setSystemVisible(false);
 
-  // Hide HUD
+  // Hide HUD (system map / gravity well)
   retroRenderer.setHud(null, null);
-  cameraController.bypassed = true;
 
   document.getElementById('gallery-overlay').style.display = 'block';
   gallerySpawn();
@@ -635,22 +647,15 @@ function exitGallery() {
   // Clean up gallery objects
   _galleryCleanup();
 
-  // Restore the current system
-  if (system) {
-    if (system.type && system.type !== 'star-system' && system.destination) {
-      system.destination.addTo(scene);
+  // Restore everything in the current system
+  _setSystemVisible(true);
+
+  // Restore HUD
+  if (systemMap) {
+    if (gravityWellVisible && gravityWell) {
+      retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
     } else {
-      // Restore star system visibility
-      if (system.star) system.star.mesh.visible = true;
-      if (system.star2) system.star2.mesh.visible = true;
-      for (const entry of system.planets) {
-        entry.planet.mesh.visible = true;
-        if (entry.billboard) entry.billboard.mesh.visible = true;
-        for (const m of entry.moons) m.mesh.visible = true;
-      }
-      for (const line of system.orbitLines) {
-        line.mesh.visible = orbitsVisible;
-      }
+      retroRenderer.setHud(systemMap.scene, systemMap.camera);
     }
   }
 
@@ -722,14 +727,10 @@ function gallerySpawn() {
   else if (type.startsWith('planet-')) {
     const planetType = type.replace('planet-', '');
 
-    // Generate planet data with forced type
-    const planetData = PlanetGenerator.generate(rng, 1.0, [0, 0, 1]);
-    planetData.type = planetType; // Override to force the specific type
-
-    // Re-generate with the forced type by creating a fresh planet from a full system seed
-    // This gives us realistic type-specific data (colors, clouds, atmosphere, etc.)
-    const fullRng = new SeededRandom(seed);
-    const forcedPlanet = PlanetGenerator.generate(fullRng, 1.0, [0, 0, 1], null, planetType);
+    // Generate planet data with forced type — all visual properties (colors,
+    // clouds, atmosphere) are driven by the type, so this gives us exactly
+    // the kind of planet we want with seed-based variation.
+    const forcedPlanet = PlanetGenerator.generate(rng, 1.0, [0, 0, 1], null, planetType);
 
     // Scene-unit conversion
     const mapToSceneRatio = forcedPlanet.radius / forcedPlanet.radiusScene;
@@ -812,6 +813,9 @@ function gallerySpawn() {
       camera.lookAt(0, 0, 0);
     }
   }
+
+  // Hand camera to orbit controller — user can drag to rotate, auto-rotates slowly
+  cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
 
   // Update info overlay
   const label = type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1239,27 +1243,19 @@ function animate() {
   timer.update();
   const deltaTime = Math.min(timer.getDelta(), 0.1);
 
-  // ── Gallery mode: auto-rotation, skip everything else ──
+  // ── Gallery mode: update objects, camera controller handles orbit ──
   if (galleryMode) {
-    // Rotate deep sky objects around their center
+    // Update deep sky objects (internal animation)
     if (galleryObject) {
-      galleryObject.mesh.rotation.y += 0.15 * deltaTime;
       galleryObject.update(deltaTime);
     }
-    // Update star system objects — Planet.update() handles its own rotation,
-    // Stars need glow updates, so we orbit the camera slowly instead.
+    // Update star system objects (planet rotation, star glow, etc.)
     for (const obj of _galleryMeshes) {
       if (obj.update) obj.update(deltaTime);
-      if (obj.updateGlow) obj.updateGlow(camera);  // Star glow scaling
+      if (obj.updateGlow) obj.updateGlow(camera);
     }
-    // Orbit camera slowly around the gallery object for a nice view
-    if (_galleryMeshes.length > 0) {
-      const dist = camera.position.length();
-      const angle = Math.atan2(camera.position.x, camera.position.z) + 0.12 * deltaTime;
-      camera.position.x = Math.sin(angle) * dist;
-      camera.position.z = Math.cos(angle) * dist;
-      camera.lookAt(0, 0, 0);
-    }
+    // Camera controller handles both auto-rotation and manual drag orbit
+    cameraController.update(deltaTime);
     starfield.update(camera.position);
     retroRenderer.render();
     return;
