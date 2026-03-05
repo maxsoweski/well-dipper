@@ -1071,10 +1071,12 @@ function gallerySpawn() {
   // Hand camera to orbit controller — user can drag to rotate, auto-rotates slowly
   cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
 
-  // Update info overlay
+  // Update info overlay — always update even if something went wrong above
   const label = type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const overlay = document.getElementById('gallery-overlay');
   const info = document.getElementById('gallery-info');
-  info.textContent = `${label}  |  seed: ${gallerySeed}  |  ${infoText}`;
+  if (overlay) overlay.style.display = 'block'; // ensure visible
+  if (info) info.textContent = `${label}  |  seed: ${gallerySeed}  |  ${infoText}`;
   console.log(`Gallery: ${label} (seed "${seed}")`);
 }
 

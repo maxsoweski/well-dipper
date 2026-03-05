@@ -21,6 +21,10 @@ html, body {
   height: 100%;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  /* Explicit stacking: keep canvas below fixed overlays (gallery, etc.)
+     WebGL canvases can "punch through" positioned elements without this. */
+  position: relative;
+  z-index: 0;
 }
 
 /* ── Mobile Menu ── */

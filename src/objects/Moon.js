@@ -237,8 +237,15 @@ export class Moon {
           // Ice (moonType 2) keeps the default smooth diffuse
 
           // Shadow from parent planet (eclipse)
-          float shadow1 = sphereShadow(vWorldPos, starPos1, shadowPlanetPos, shadowPlanetRadius);
-          float shadow2 = sphereShadow(vWorldPos, starPos2, shadowPlanetPos, shadowPlanetRadius);
+          // Gate on shadowPlanetRadius > 0 to avoid degenerate case when shadow
+          // is not configured (e.g. gallery mode) — calling sphereShadow with all
+          // positions at (0,0,0) causes NaN from floating-point cancellation.
+          float shadow1 = 1.0;
+          float shadow2 = 1.0;
+          if (shadowPlanetRadius > 0.0) {
+            shadow1 = sphereShadow(vWorldPos, starPos1, shadowPlanetPos, shadowPlanetRadius);
+            shadow2 = sphereShadow(vWorldPos, starPos2, shadowPlanetPos, shadowPlanetRadius);
+          }
 
           // Combined star-colored light with shadow (tiny ambient so unlit sides aren't invisible)
           vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1
