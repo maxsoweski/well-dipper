@@ -133,11 +133,14 @@ export class WarpEffect {
     // Planets stay visible during fold — NO sceneFade
     this.sceneFade = 0;
 
-    // Pillar width tracks the fold — it's the visual result of space
-    // folding in, not an independent effect. Small gate so the pillar
-    // only appears once the nearest stars have actually converged.
-    const foldGate = Math.min(1, Math.max(0, (this.foldAmount - 0.03) / 0.07));
-    this.foldGlow = foldGate * this.foldAmount;
+    // Pillar width = fold frontier. Tracks where stars have been
+    // significantly consumed (localFold ≈ 0.5 in the starfield shader).
+    // No pillar until foldAmount > 0.175 — the nearest stars need to
+    // actually converge at center before any white light appears.
+    // frontier = (foldAmount - 0.175) / 0.7 matches the starfield's
+    // pullStart = horizontalDist * 0.7, pullEnd = pullStart + 0.35.
+    const frontier = Math.max(0, (this.foldAmount - 0.175) / 0.7);
+    this.foldGlow = Math.min(1, frontier);
 
     // Camera accelerates forward (base speed + quadratic ramp so motion is visible early)
     this.cameraForwardSpeed = 8 + 72 * this.progress * this.progress;

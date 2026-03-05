@@ -231,8 +231,9 @@ export class RetroRenderer {
           if (uFoldGlow > 0.0) {
             float xDist = abs(vUv.x - uRiftCenter.x);
 
-            // Pillar half-width: grows cubically — stays thin much longer, then swells.
-            float halfWidth = uFoldGlow * uFoldGlow * uFoldGlow * 0.55;
+            // Pillar half-width tracks fold frontier directly (JS handles gating).
+            // 0.5 = full screen half (UV center to edge), so foldGlow=1 covers all.
+            float halfWidth = uFoldGlow * 0.5;
 
             // Dithered edge (hash noise — consistent with hyperspace ring style)
             vec2 glowScreenPos = floor(vUv * resolution);
