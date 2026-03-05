@@ -99,13 +99,10 @@ export class WarpEffect {
         break;
     }
 
-    // Accumulate hyperspace animation time whenever the tunnel is visible.
-    // This starts during FOLD (when the portal opens and shows hyperspace
-    // through it) so the tunnel is already in motion before ENTER/HYPER.
-    // Continues through all warp phases for uninterrupted animation.
-    if (this.hyperPhase > 0 || this.foldGlow > 0) {
-      this.hyperTime += dt;
-    }
+    // Accumulate hyperspace animation time from the very start of warp.
+    // The tunnel needs to already be in motion when the portal first opens
+    // (~3.5s in), so we run the clock from frame 1.
+    this.hyperTime += dt;
 
     return this.state;
   }
@@ -142,8 +139,15 @@ export class WarpEffect {
     const frontier = Math.max(0, (this.foldAmount - 0.175) / 0.7);
     this.foldGlow = Math.min(1, frontier);
 
-    // Camera accelerates forward (base speed + quadratic ramp so motion is visible early)
-    this.cameraForwardSpeed = 8 + 72 * this.progress * this.progress;
+    // Camera waits for the portal to open (foldGlow > 0.25), then
+    // accelerates toward it. No movement while stars are still folding
+    // and there's nothing to fly into yet.
+    if (this.foldGlow > 0.25) {
+      const portalProgress = Math.min(1, (this.foldGlow - 0.25) / 0.75);
+      this.cameraForwardSpeed = 8 + 72 * portalProgress * portalProgress;
+    } else {
+      this.cameraForwardSpeed = 0;
+    }
 
     // Transition to ENTER
     if (this.elapsed >= this.FOLD_DUR) {
