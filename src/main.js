@@ -129,6 +129,7 @@ let gallerySeed = 1;
 let galleryTypeIdx = 0;
 let galleryObject = null;      // current Galaxy/Nebula instance (deep sky)
 let _galleryMeshes = [];       // Star/Planet/Moon meshes (star system objects)
+const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for gallery moons
 
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
@@ -1249,9 +1250,13 @@ function animate() {
     if (galleryObject) {
       galleryObject.update(deltaTime);
     }
-    // Update star system objects (planet rotation, star glow, etc.)
+    // Update star system objects (planet rotation, star glow, moon orbit, etc.)
     for (const obj of _galleryMeshes) {
-      if (obj.update) obj.update(deltaTime);
+      if (obj instanceof Moon) {
+        obj.update(deltaTime, _galleryOrigin);  // Moon needs parent position
+      } else if (obj.update) {
+        obj.update(deltaTime);
+      }
       if (obj.updateGlow) obj.updateGlow(camera);
     }
     // Camera controller handles both auto-rotation and manual drag orbit
