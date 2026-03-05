@@ -192,31 +192,40 @@ const _projVec = new THREE.Vector3(); // reusable for screen projection
  * and finds the closest point to the mouse. This handles perspective
  * distortion correctly (orbits look like ellipses from most angles).
  */
-const _ORBIT_SAMPLES = 24;
-function hitTestOrbits(clientX, clientY, thresholdPx = 6) {
+/**
+ * Screen-space orbit hit test.
+ * Reads actual vertex positions from orbit line geometry, applies the mesh's
+ * world transform, projects to screen, and finds closest point to mouse.
+ * Samples every Nth vertex to keep it fast (~24 samples per orbit).
+ */
+function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   if (_orbitLineTargets.size === 0) return null;
-  const hw = window.innerWidth * 0.5;
-  const hh = window.innerHeight * 0.5;
+  camera.updateMatrixWorld(true);
+
+  const rect = canvas.getBoundingClientRect();
+  const hw = rect.width * 0.5;
+  const hh = rect.height * 0.5;
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+
   let best = null;
   let bestDistSq = thresholdPx * thresholdPx;
 
   for (const [mesh, info] of _orbitLineTargets) {
     if (!mesh.visible) continue;
-    const r = info.radius;
-    const ox = info.center.x;
-    const oy = info.center.y;
-    const oz = info.center.z;
+    mesh.updateMatrixWorld(true);
+    const posAttr = mesh.geometry.getAttribute('position');
+    const stride = Math.max(1, Math.floor(posAttr.count / 24));
 
-    for (let i = 0; i < _ORBIT_SAMPLES; i++) {
-      const a = (i / _ORBIT_SAMPLES) * Math.PI * 2;
-      _projVec.set(ox + Math.cos(a) * r, oy, oz + Math.sin(a) * r);
+    for (let i = 0; i < posAttr.count; i += stride) {
+      _projVec.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+      _projVec.applyMatrix4(mesh.matrixWorld);
       _projVec.project(camera);
-      // Behind camera — skip this sample
       if (_projVec.z > 1) continue;
       const sx = (_projVec.x * hw) + hw;
       const sy = (-_projVec.y * hh) + hh;
-      const dx = clientX - sx;
-      const dy = clientY - sy;
+      const dx = localX - sx;
+      const dy = localY - sy;
       const d2 = dx * dx + dy * dy;
       if (d2 < bestDistSq) {
         bestDistSq = d2;
@@ -583,21 +592,13 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     }
   }
 
-  // Orbit lines — store center + radius for screen-space hit testing
+  // Orbit lines — register for screen-space hit testing
   _orbitLineTargets = new Map();
   for (let i = 0; i < planets.length; i++) {
-    const olMesh = orbitLines[i].mesh;
-    _orbitLineTargets.set(olMesh, {
-      type: 'planet', planetIndex: i,
-      center: olMesh.position, radius: planets[i].orbitRadius,
-    });
+    _orbitLineTargets.set(orbitLines[i].mesh, { type: 'planet', planetIndex: i });
     const entry = planets[i];
     for (let m = 0; m < entry.moonOrbitLines.length; m++) {
-      const mlMesh = entry.moonOrbitLines[m].mesh;
-      _orbitLineTargets.set(mlMesh, {
-        type: 'moon', planetIndex: i, moonIndex: m,
-        center: mlMesh.position, radius: entry.moons[m].data.orbitRadius,
-      });
+      _orbitLineTargets.set(entry.moonOrbitLines[m].mesh, { type: 'moon', planetIndex: i, moonIndex: m });
     }
   }
 
