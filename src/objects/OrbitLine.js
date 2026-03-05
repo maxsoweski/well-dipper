@@ -9,7 +9,7 @@ import * as THREE from 'three';
  * while planets are only 0.01-0.6 units — a fixed 128-segment polygon
  * would visibly miss the planet (the chord sags away from the arc).
  *
- * Formula: segments = max(128, √radius × 32)
+ * Formula: segments = max(128, ceil(√radius × 32))
  * Keeps the sagitta (max chord-to-arc gap) under ~0.005 scene units,
  * well within even the smallest rocky planet's radius (~0.013).
  */
