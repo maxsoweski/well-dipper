@@ -1016,12 +1016,12 @@ function animate() {
         _riftPoint.copy(camera.position).addScaledVector(warpTarget.direction, 10);
         _lookMatrix.lookAt(camera.position, _riftPoint, camera.up);
         _targetQuat.setFromRotationMatrix(_lookMatrix);
-        camera.quaternion.slerp(_targetQuat, 1 - Math.exp(-6.0 * deltaTime));
+        camera.quaternion.slerp(_targetQuat, 1 - Math.exp(-3.0 * deltaTime));
 
         // Check alignment — fire warp once centered (or after 1.5s timeout)
         camera.getWorldDirection(_starRayDir);
         const alignment = _starRayDir.dot(warpTarget.direction);
-        if (alignment > 0.999 || warpTarget.turnTimer > 1.5) {
+        if (alignment > 0.999 || warpTarget.turnTimer > 3.0) {
           const dir = warpTarget.direction;
           warpTarget.direction = null;
           warpTarget.turning = false;
@@ -1043,7 +1043,7 @@ function animate() {
         );
         retroRenderer.setTargetUniforms(
           _targetUV,
-          warpTarget.blinkOn ? 1 : 0,
+          warpTarget.blinkOn ? (warpTarget.turning ? 2 : 1) : 0,
           20,
         );
       } else {

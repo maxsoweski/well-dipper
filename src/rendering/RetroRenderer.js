@@ -308,39 +308,58 @@ export class RetroRenderer {
 
           // ── Warp target selection brackets ──
           // Green L-shaped corner brackets blink around the selected star.
+          // uTargetBlink > 1.5 = lock-on mode (solid square outline).
+          // uTargetBlink > 0.5 = normal blink mode (L-brackets).
           // Rendered BEFORE hyperspace so they're hidden behind the tunnel.
           if (uTargetBlink > 0.5 && uTargetSize > 0.0) {
             vec2 targetScreen = uTargetUV * resolution;
             vec2 fragScreen = floor(vUv * resolution);
             vec2 diff = fragScreen - targetScreen;
             float halfSize = uTargetSize * 0.5;
-            float armLen = uTargetSize * 0.3;
             float thick = 2.0;
 
-            bool onBracket = false;
+            bool onShape = false;
 
-            // Top-left corner (horizontal arm + vertical arm)
-            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + armLen
-                                   && diff.y >= halfSize - thick && diff.y < halfSize);
-            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + thick
-                                   && diff.y >= halfSize - armLen && diff.y < halfSize);
-            // Top-right corner
-            onBracket = onBracket || (diff.x > halfSize - armLen && diff.x <= halfSize
-                                   && diff.y >= halfSize - thick && diff.y < halfSize);
-            onBracket = onBracket || (diff.x > halfSize - thick && diff.x <= halfSize
-                                   && diff.y >= halfSize - armLen && diff.y < halfSize);
-            // Bottom-left corner
-            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + armLen
-                                   && diff.y >= -halfSize && diff.y < -halfSize + thick);
-            onBracket = onBracket || (diff.x >= -halfSize && diff.x < -halfSize + thick
-                                   && diff.y >= -halfSize && diff.y < -halfSize + armLen);
-            // Bottom-right corner
-            onBracket = onBracket || (diff.x > halfSize - armLen && diff.x <= halfSize
-                                   && diff.y >= -halfSize && diff.y < -halfSize + thick);
-            onBracket = onBracket || (diff.x > halfSize - thick && diff.x <= halfSize
-                                   && diff.y >= -halfSize && diff.y < -halfSize + armLen);
+            if (uTargetBlink > 1.5) {
+              // ── Lock-on: solid square outline (all 4 edges) ──
+              // Top edge
+              onShape = onShape || (diff.x >= -halfSize && diff.x <= halfSize
+                                 && diff.y >= halfSize - thick && diff.y < halfSize);
+              // Bottom edge
+              onShape = onShape || (diff.x >= -halfSize && diff.x <= halfSize
+                                 && diff.y >= -halfSize && diff.y < -halfSize + thick);
+              // Left edge
+              onShape = onShape || (diff.x >= -halfSize && diff.x < -halfSize + thick
+                                 && diff.y >= -halfSize && diff.y < halfSize);
+              // Right edge
+              onShape = onShape || (diff.x > halfSize - thick && diff.x <= halfSize
+                                 && diff.y >= -halfSize && diff.y < halfSize);
+            } else {
+              // ── Normal: L-shaped corner brackets ──
+              float armLen = uTargetSize * 0.3;
+              // Top-left corner (horizontal arm + vertical arm)
+              onShape = onShape || (diff.x >= -halfSize && diff.x < -halfSize + armLen
+                                 && diff.y >= halfSize - thick && diff.y < halfSize);
+              onShape = onShape || (diff.x >= -halfSize && diff.x < -halfSize + thick
+                                 && diff.y >= halfSize - armLen && diff.y < halfSize);
+              // Top-right corner
+              onShape = onShape || (diff.x > halfSize - armLen && diff.x <= halfSize
+                                 && diff.y >= halfSize - thick && diff.y < halfSize);
+              onShape = onShape || (diff.x > halfSize - thick && diff.x <= halfSize
+                                 && diff.y >= halfSize - armLen && diff.y < halfSize);
+              // Bottom-left corner
+              onShape = onShape || (diff.x >= -halfSize && diff.x < -halfSize + armLen
+                                 && diff.y >= -halfSize && diff.y < -halfSize + thick);
+              onShape = onShape || (diff.x >= -halfSize && diff.x < -halfSize + thick
+                                 && diff.y >= -halfSize && diff.y < -halfSize + armLen);
+              // Bottom-right corner
+              onShape = onShape || (diff.x > halfSize - armLen && diff.x <= halfSize
+                                 && diff.y >= -halfSize && diff.y < -halfSize + thick);
+              onShape = onShape || (diff.x > halfSize - thick && diff.x <= halfSize
+                                 && diff.y >= -halfSize && diff.y < -halfSize + armLen);
+            }
 
-            if (onBracket) {
+            if (onShape) {
               result = vec3(0.0, 1.0, 0.0);
             }
           }
