@@ -112,12 +112,12 @@ export class Starfield {
             gl_Position.xy = folded * gl_Position.w;
 
             // Streak: based on total distance from rift (all stars smear)
-            vStreakAmount = uFoldAmount * min(distFromCenter, 1.5);
+            vStreakAmount = uFoldAmount * min(distFromCenter, 2.0);
           }
 
           // Point size: base size × streak elongation factor
           float baseSize = aSize > 5.0 ? aSize * 2.0 : aSize;
-          float streakFactor = 1.0 + vStreakAmount * 10.0;
+          float streakFactor = 1.0 + vStreakAmount * 30.0;
           gl_PointSize = baseSize * streakFactor;
         }
       `,
@@ -159,7 +159,7 @@ export class Starfield {
               center.x * ca + center.y * sa,
               -center.x * sa + center.y * ca
             );
-            float sf = 1.0 + vStreakAmount * 10.0;
+            float sf = 1.0 + vStreakAmount * 30.0;
             dist = length(vec2(rotated.x, rotated.y * sf));
           } else {
             // ── Normal mode ──
