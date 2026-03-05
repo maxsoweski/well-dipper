@@ -79,6 +79,27 @@ export class AutoNavigator {
   }
 
   /**
+   * Build tour queue for a deep sky destination (galaxy, nebula, cluster).
+   * Each tour stop gets a dummy Object3D as bodyRef for the camera to orbit.
+   * @param {Array} tourStops — from generator data
+   * @param {Array} dummyRefs — matching Object3Ds positioned in the scene
+   */
+  buildDeepSkyQueue(tourStops, dummyRefs) {
+    this.queue = [];
+    for (let i = 0; i < tourStops.length; i++) {
+      const stop = tourStops[i];
+      this.queue.push({
+        type: 'deepsky-poi',
+        name: stop.name,
+        bodyRef: dummyRefs[i],
+        orbitDistance: stop.orbitDistance,
+        bodyRadius: stop.bodyRadius,
+        linger: stop.linger,
+      });
+    }
+  }
+
+  /**
    * Linger time for a planet. Gas giants and ringed planets get more.
    */
   _planetLinger(entry) {

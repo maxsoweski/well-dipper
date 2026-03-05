@@ -11,6 +11,13 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 import { CameraController } from './camera/CameraController.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
+import { DestinationPicker } from './generation/DestinationPicker.js';
+import { GalaxyGenerator } from './generation/GalaxyGenerator.js';
+import { NebulaGenerator } from './generation/NebulaGenerator.js';
+import { ClusterGenerator } from './generation/ClusterGenerator.js';
+import { Galaxy } from './objects/Galaxy.js';
+import { Nebula } from './objects/Nebula.js';
+import { SeededRandom } from './generation/SeededRandom.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
@@ -96,8 +103,20 @@ autoNav.onTourComplete = () => {
 warpEffect.onPrepareSystem = () => {
   seedCounter++;
   const seed = `system-${seedCounter}`;
-  pendingSystemData = StarSystemGenerator.generate(seed);
-  console.log(`Warp: pre-generated system "${seed}" during fold`);
+  const rng = new SeededRandom(seed);
+  const destType = DestinationPicker.pick(rng);
+
+  if (destType === 'star-system') {
+    pendingSystemData = StarSystemGenerator.generate(seed);
+  } else if (destType.includes('galaxy')) {
+    pendingSystemData = GalaxyGenerator.generate(seed, destType);
+  } else if (destType.includes('nebula')) {
+    pendingSystemData = NebulaGenerator.generate(seed, destType);
+  } else if (destType.includes('cluster')) {
+    pendingSystemData = ClusterGenerator.generate(seed, destType);
+  }
+  pendingSystemData._destType = destType;
+  console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold`);
 };
 
 // System swap at hyper start (tunnel is opaque, hides any GPU resource creation)
@@ -135,40 +154,55 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   // ── Clean up old system ──
   if (system) {
-    system.star.dispose();
-    scene.remove(system.star.mesh);
-    if (system.star2) {
-      system.star2.dispose();
-      scene.remove(system.star2.mesh);
-    }
-    for (const entry of system.planets) {
-      entry.planet.dispose();
-      scene.remove(entry.planet.mesh);
-      entry.billboard.dispose();
-      entry.billboard.removeFrom(scene);
-      for (let m = 0; m < entry.moons.length; m++) {
-        entry.moons[m].dispose();
-        scene.remove(entry.moons[m].mesh);
-        entry.moonBillboards[m].dispose();
-        entry.moonBillboards[m].removeFrom(scene);
+    if (system.type && system.type !== 'star-system') {
+      // Deep sky object: single destination object with dispose()
+      if (system.destination) {
+        system.destination.removeFrom(scene);
+        system.destination.dispose();
       }
-      for (const line of entry.moonOrbitLines) {
+      // Clean up dummy bodyRef objects used for tour stops
+      if (system._dummyRefs) {
+        for (const obj of system._dummyRefs) {
+          scene.remove(obj);
+        }
+      }
+    } else {
+      // Star system cleanup (existing code)
+      system.star.dispose();
+      scene.remove(system.star.mesh);
+      if (system.star2) {
+        system.star2.dispose();
+        scene.remove(system.star2.mesh);
+      }
+      for (const entry of system.planets) {
+        entry.planet.dispose();
+        scene.remove(entry.planet.mesh);
+        entry.billboard.dispose();
+        entry.billboard.removeFrom(scene);
+        for (let m = 0; m < entry.moons.length; m++) {
+          entry.moons[m].dispose();
+          scene.remove(entry.moons[m].mesh);
+          entry.moonBillboards[m].dispose();
+          entry.moonBillboards[m].removeFrom(scene);
+        }
+        for (const line of entry.moonOrbitLines) {
+          line.dispose();
+          scene.remove(line.mesh);
+        }
+      }
+      for (const line of system.orbitLines) {
         line.dispose();
         scene.remove(line.mesh);
       }
-    }
-    for (const line of system.orbitLines) {
-      line.dispose();
-      scene.remove(line.mesh);
-    }
-    for (const belt of system.asteroidBelts) {
-      belt.removeFrom(scene);
-      belt.dispose();
-    }
-    if (system.starOrbitLines) {
-      for (const line of system.starOrbitLines) {
-        line.dispose();
-        scene.remove(line.mesh);
+      for (const belt of system.asteroidBelts) {
+        belt.removeFrom(scene);
+        belt.dispose();
+      }
+      if (system.starOrbitLines) {
+        for (const line of system.starOrbitLines) {
+          line.dispose();
+          scene.remove(line.mesh);
+        }
       }
     }
   }
@@ -189,6 +223,14 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   // ── Generate system data (or use pre-generated data from warp prepare phase) ──
   const seed = `system-${seedCounter}`;
+  const destType = preGenData?._destType || 'star-system';
+
+  // Deep sky objects get their own spawn path
+  if (DestinationPicker.isDeepSky(destType)) {
+    spawnDeepSky(preGenData, destType, forWarp);
+    return;
+  }
+
   const systemData = preGenData || StarSystemGenerator.generate(seed);
 
   // ── Create star(s) ──
@@ -460,6 +502,66 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 }
 
 /**
+ * Spawn a deep sky destination (galaxy, nebula, or star cluster).
+ * Called from spawnSystem() when the destination type is not 'star-system'.
+ */
+function spawnDeepSky(data, destType, forWarp) {
+  let destination;
+  const isGalaxyOrCluster = destType.includes('galaxy') || destType.includes('cluster');
+
+  if (isGalaxyOrCluster) {
+    destination = new Galaxy(data);
+  } else {
+    destination = new Nebula(data);
+  }
+
+  destination.addTo(scene);
+
+  // Create dummy Object3Ds for tour stop bodyRefs
+  // (the camera orbits these like it orbits planets)
+  const dummyRefs = [];
+  for (const stop of data.tourStops) {
+    const obj = new THREE.Object3D();
+    obj.position.set(stop.position[0], stop.position[1], stop.position[2]);
+    scene.add(obj);
+    dummyRefs.push(obj);
+  }
+
+  // No click targets for deep sky (clicking empty sky still selects warp targets)
+  clickTargets = new Map();
+
+  // Store as current system
+  system = {
+    type: destType,
+    destination,
+    tourStops: data.tourStops,
+    _dummyRefs: dummyRefs,
+    // Star system fields (null/empty so existing code doesn't crash)
+    star: null,
+    star2: null,
+    planets: [],
+    orbitLines: [],
+    asteroidBelts: [],
+    starOrbitLines: null,
+    isBinary: false,
+  };
+
+  // Log what was created
+  const label = destType.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+  console.log(`Deep sky: ${label} (seed "${`system-${seedCounter}`}", ${data.particleCount || data.starCount || '?'} particles, r=${data.radius?.toFixed(0) || '?'})`);
+
+  // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
+  if (forWarp) return;
+
+  // Opening shot for non-warp spawn (rare — mainly for testing)
+  const firstStop = data.tourStops[0];
+  if (firstStop) {
+    camera.position.set(firstStop.position[0], firstStop.position[1], firstStop.position[2]);
+    camera.lookAt(0, 0, 0);
+  }
+}
+
+/**
  * Populate body references on the autoNav queue.
  * Each stop gets the Three.js mesh so FlythroughCamera can track it.
  */
@@ -488,6 +590,9 @@ function populateQueueRefs() {
       // Minimum 0.04 keeps tiny moons visible above billboard threshold
       // while getting close enough to show surface detail at retro resolution.
       stop.orbitDistance = Math.max(moon.data.radius * 2.4, 0.04);
+    } else if (stop.type === 'deepsky-poi') {
+      // Deep sky tour stop — bodyRef is the dummy Object3D created in spawnDeepSky
+      // orbitDistance and bodyRadius were set by buildDeepSkyQueue
     }
   }
 }
@@ -509,6 +614,11 @@ function updateFocusFromStop(stop) {
     focusIndex = stop.planetIndex; // minimap highlights parent planet
     focusMoonIndex = stop.moonIndex;
     focusStarIndex = -1;
+  } else if (stop.type === 'deepsky-poi') {
+    // Deep sky: no minimap focus (HUD is hidden)
+    focusIndex = -1;
+    focusMoonIndex = -1;
+    focusStarIndex = -1;
   }
 }
 
@@ -520,7 +630,11 @@ function updateFocusFromStop(stop) {
 function startFlythrough() {
   if (!system) return;
 
-  autoNav.buildQueue(system);
+  if (system.type && system.type !== 'star-system') {
+    autoNav.buildDeepSkyQueue(system.tourStops, system._dummyRefs);
+  } else {
+    autoNav.buildQueue(system);
+  }
   populateQueueRefs();
   autoNav.start();
 
@@ -595,26 +709,30 @@ function warpSwapSystem() {
   spawnSystem({ forWarp: true, systemData: pendingSystemData });
   pendingSystemData = null;
 
-  // Position camera so it ends up ~3 seconds of travel from the star when
-  // EXIT finishes. The post-warp flythrough then coasts the remaining distance
-  // and smoothly enters orbit — giving a "leftover momentum" feel.
+  // Position camera so it ends up approaching the first tour stop when
+  // EXIT finishes. The post-warp flythrough then coasts the remaining distance.
   if (system) {
-    const star = system.star;
-    const starPos = star.mesh.position;
-    const innerOrbit = system.planets[0].orbitRadius;
-    const orbitDist = Math.min(star.data.radius * 4, innerOrbit * 0.4);
-
     const speed = 30; // must match cameraForwardSpeed in HYPER/EXIT phases
     const hyperDist = speed * warpEffect.HYPER_DUR;          // 300
     const exitDist = speed * warpEffect.EXIT_DUR * 0.5;      // 30 (smootherstep integral)
     const coastDist = 60;                                     // 3s post-warp approach
     const travelDist = hyperDist + exitDist;                  // 330
 
-    // Place camera along +Z from star, facing toward it.
-    // After warp travel (330 units), camera is at orbitDist + coastDist from star.
-    // Flythrough covers coastDist in 3s, arriving at orbitDist → enters orbit.
-    camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
-    camera.lookAt(starPos);
+    if (system.type && system.type !== 'star-system') {
+      // Deep sky: approach from far along +Z toward the structure center
+      const orbitDist = system.tourStops[0]?.orbitDistance || system.destination.data.radius * 1.3;
+      camera.position.set(0, 2, travelDist + orbitDist + coastDist);
+      camera.lookAt(0, 0, 0);
+    } else {
+      // Star system: approach toward the star
+      const star = system.star;
+      const starPos = star.mesh.position;
+      const innerOrbit = system.planets[0].orbitRadius;
+      const orbitDist = Math.min(star.data.radius * 4, innerOrbit * 0.4);
+
+      camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
+      camera.lookAt(starPos);
+    }
   }
 
   console.log('Warp: system swapped');
@@ -634,38 +752,45 @@ function warpRevealSystem() {
   if (!system) return;
   cameraController.bypassed = true;
 
-  // Build the autopilot tour queue for the new system
-  autoNav.buildQueue(system);
+  // Build the autopilot tour queue for the new destination
+  if (system.type && system.type !== 'star-system') {
+    autoNav.buildDeepSkyQueue(system.tourStops, system._dummyRefs);
+  } else {
+    autoNav.buildQueue(system);
+  }
   populateQueueRefs();
 
-  // Find the star stop so we orbit it first (camera is already approaching it)
-  const starStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
-  autoNav.currentIndex = starStopIdx >= 0 ? starStopIdx : 0;
+  // Find the first stop (star for star systems, first POI for deep sky)
+  let firstStopIdx;
+  if (system.type && system.type !== 'star-system') {
+    firstStopIdx = 0; // deep sky: start at first tour stop
+  } else {
+    firstStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
+    if (firstStopIdx < 0) firstStopIdx = 0;
+  }
+  autoNav.currentIndex = firstStopIdx;
   autoNav.start();
 
-  const starStop = autoNav.getCurrentStop();
-  if (starStop && starStop.bodyRef) {
+  const firstStop = autoNav.getCurrentStop();
+  if (firstStop && firstStop.bodyRef) {
     // Set next body so orbit departure direction aligns toward it
     const upcoming = autoNav.getNextStop();
     flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
 
-    // Coast toward the star with leftover momentum (3s approach).
-    // The camera was already heading toward the star from the warp —
-    // beginTravelFrom captures the forward direction and rides a Hermite
-    // spline to the orbit entry point. When travel completes, the
-    // autopilot's travelComplete handler calls beginOrbit automatically.
+    // Coast toward the first stop with leftover momentum (3s approach).
     flythrough.beginTravelFrom(
-      starStop.bodyRef,
-      starStop.orbitDistance,
-      starStop.bodyRadius,
+      firstStop.bodyRef,
+      firstStop.orbitDistance,
+      firstStop.bodyRadius,
       { warpArrival: true },
     );
 
-    updateFocusFromStop(starStop);
+    updateFocusFromStop(firstStop);
     if (systemMap) systemMap.triggerBlink();
   }
 
-  console.log('Warp: coasting into new system');
+  const label = system.type === 'star-system' ? 'new system' : system.type.replace('-', ' ');
+  console.log(`Warp: coasting into ${label}`);
 }
 
 /**
@@ -673,6 +798,16 @@ function warpRevealSystem() {
  */
 function findClosestBody() {
   if (!system) return null;
+
+  // Deep sky destinations: orbit the center
+  if (system.type && system.type !== 'star-system') {
+    return {
+      position: new THREE.Vector3(0, 0, 0),
+      focusIndex: -1,
+      moonIndex: -1,
+      starIndex: -1,
+    };
+  }
 
   let closest = null;
   let closestDist = Infinity;
@@ -824,6 +959,14 @@ function animate() {
   const deltaTime = Math.min(timer.getDelta(), 0.1);
 
   if (system) {
+    // ── Deep sky destination update ──
+    if (system.type && system.type !== 'star-system') {
+      if (system.destination) system.destination.update(deltaTime);
+    }
+
+    // ── Star system updates (skip for deep sky) ──
+    if (!system.type || system.type === 'star-system') {
+
     // ── Binary star orbit ──
     if (system.isBinary) {
       system.binaryOrbitAngle += system.binaryOrbitSpeed * deltaTime;
@@ -1001,6 +1144,8 @@ function animate() {
         }
       }
     }
+
+    } // end star-system-only updates
 
     // ── Warp target brackets ──
     // When a warp target is selected (and warp hasn't started yet),

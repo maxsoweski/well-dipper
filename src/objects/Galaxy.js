@@ -1,0 +1,122 @@
+import * as THREE from 'three';
+
+/**
+ * Galaxy — renders galaxies and star clusters as a cloud of point sprites.
+ *
+ * Used for: spiral galaxies, elliptical galaxies, globular clusters, open clusters.
+ * All are fundamentally "lots of colored dots" with different spatial distributions.
+ *
+ * Uses THREE.Points with additive blending — where particles overlap (e.g. galaxy
+ * core), brightness accumulates naturally. This creates the bright-core, dim-edge
+ * look of real galaxies without any extra logic.
+ *
+ * Follows the same pattern as AsteroidBelt (data-driven, dispose(), addTo/removeFrom).
+ */
+export class Galaxy {
+  constructor(galaxyData) {
+    this.data = galaxyData;
+    this.mesh = new THREE.Group();
+
+    this._points = this._createPoints(galaxyData);
+    this.mesh.add(this._points);
+
+    // Apply viewing tilt (spiral/elliptical galaxies are tilted)
+    if (galaxyData.tiltX) this.mesh.rotation.x = galaxyData.tiltX;
+    if (galaxyData.tiltZ) this.mesh.rotation.z = galaxyData.tiltZ;
+  }
+
+  _createPoints(data) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
+    geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(data.colors, 3));
+    geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(data.sizes, 1));
+
+    const material = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+
+      uniforms: {
+        uTime: { value: 0 },
+      },
+
+      vertexShader: /* glsl */ `
+        attribute vec3 aColor;
+        attribute float aSize;
+        varying vec3 vColor;
+
+        void main() {
+          vColor = aColor;
+          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPos;
+
+          // Scale point size by distance (perspective)
+          float distScale = 300.0 / max(-mvPos.z, 1.0);
+          gl_PointSize = aSize * distScale;
+
+          // Clamp to reasonable range
+          gl_PointSize = clamp(gl_PointSize, 0.5, 32.0);
+        }
+      `,
+
+      fragmentShader: /* glsl */ `
+        varying vec3 vColor;
+
+        // 4×4 Bayer dithering (matches Starfield.js pattern)
+        float bayerDither(vec2 coord) {
+          vec2 p = mod(floor(coord), 4.0);
+          float t = 0.0;
+          if (p.y < 0.5) {
+            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+          } else if (p.y < 1.5) {
+            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+          } else if (p.y < 2.5) {
+            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+          } else {
+            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+          }
+          return t / 16.0;
+        }
+
+        void main() {
+          // Soft circular glow: each point is a fuzzy dot
+          float dist = length(gl_PointCoord - 0.5);
+          float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+
+          // Dithered edge for retro look
+          float threshold = bayerDither(gl_FragCoord.xy);
+          if (alpha < threshold * 0.8) discard;
+
+          // Additive blending handles the rest — overlapping dots brighten
+          gl_FragColor = vec4(vColor * alpha, alpha);
+        }
+      `,
+    });
+
+    return new THREE.Points(geometry, material);
+  }
+
+  /**
+   * Slow rotation for visual interest (called each frame).
+   * @param {number} deltaTime — seconds since last frame
+   */
+  update(deltaTime) {
+    // Gentle rotation — galaxies and clusters drift slowly
+    this.mesh.rotation.y += 0.003 * deltaTime;
+  }
+
+  addTo(scene) {
+    scene.add(this.mesh);
+  }
+
+  removeFrom(scene) {
+    scene.remove(this.mesh);
+  }
+
+  dispose() {
+    if (this._points) {
+      this._points.geometry.dispose();
+      this._points.material.dispose();
+    }
+  }
+}
