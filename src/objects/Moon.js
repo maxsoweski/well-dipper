@@ -19,10 +19,10 @@ export class Moon {
   }
 
   _createMesh(lightDir, lightDir2, starInfo) {
+    const d = this.data;
     // Terrestrial moons get higher resolution (clouds + atmosphere need smoother rim)
     const subdivisions = d.type === 'terrestrial' ? 4 : 3;
-    const geometry = new THREE.IcosahedronGeometry(this.data.radius, subdivisions);
-    const d = this.data;
+    const geometry = new THREE.IcosahedronGeometry(d.radius, subdivisions);
 
     // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic, 4=terrestrial
     const typeIndex = ['captured', 'rocky', 'ice', 'volcanic', 'terrestrial'].indexOf(d.type);
