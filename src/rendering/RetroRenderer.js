@@ -225,27 +225,49 @@ export class RetroRenderer {
             result = mix(bg.rgb, scene.rgb, fadeScene);
           }
 
-          // ── Fold glow: vertical white pillar at rift center that widens ──
-          // Starts as a thin white slit, widens to cover the entire FOV.
-          // Centered on uRiftCenter.x so it follows the rift direction.
+          // ── Fold portal: circular opening with chromatic aberration ──
+          // Space pinches into a central point; a portal opens with red/blue
+          // color fringing at its edge, growing as the fold consumes more space.
           if (uFoldGlow > 0.0) {
-            float xDist = abs(vUv.x - uRiftCenter.x);
+            vec2 toCenter = vUv - uRiftCenter;
+            float portalAspect = resolution.x / resolution.y;
+            vec2 aspectCorr = vec2(toCenter.x * portalAspect, toCenter.y);
+            float dist = length(aspectCorr);
 
-            // Pillar half-width tracks fold frontier directly (JS handles gating).
-            // 0.5 = full screen half (UV center to edge), so foldGlow=1 covers all.
-            float halfWidth = uFoldGlow * 0.5;
+            // Portal radius grows with fold frontier
+            float portalRadius = uFoldGlow * 0.45;
 
-            // Dithered edge (hash noise — consistent with hyperspace ring style)
-            vec2 glowScreenPos = floor(vUv * resolution);
-            float glowNoise = fract(sin(dot(glowScreenPos, vec2(12.9898, 78.233))) * 43758.5453);
+            // ── Chromatic aberration at portal edge ──
+            // Red channel pushed outward, blue inward — lens-like fringing
+            vec2 caDir = length(toCenter) > 0.001 ? normalize(toCenter) : vec2(0.0);
+            float caOffset = 0.012 * (1.0 + uFoldGlow);
+            float edgeProximity = 1.0 - smoothstep(0.0, 0.12, abs(dist - portalRadius));
+            float caStrength = edgeProximity * uFoldGlow;
 
-            // Gradient: 1.0 at center → 0.0 beyond pillar edge
-            float gradient = smoothstep(halfWidth + 0.08, halfWidth * 0.4, xDist);
+            if (caStrength > 0.01) {
+              vec2 uvR = vUv + caDir * caOffset;
+              vec2 uvB = vUv - caDir * caOffset;
 
-            // Dither threshold: scattered white pixels at edge, solid at core
-            float glow = step(glowNoise, gradient) * uFoldGlow;
+              // Re-composite at offset UVs for proper CA on full scene
+              vec4 bgR = texture2D(bgTexture, uvR);
+              vec4 scR = texture2D(sceneTexture, uvR);
+              vec4 bgB = texture2D(bgTexture, uvB);
+              vec4 scB = texture2D(sceneTexture, uvB);
 
-            result = mix(result, vec3(1.0), glow);
+              float rVal = mix(bgR.r, scR.r, scR.a);
+              float bVal = mix(bgB.b, scB.b, scB.a);
+
+              result = mix(result, vec3(rVal, result.g, bVal), caStrength * 0.8);
+            }
+
+            // ── Portal core: bright white with dithered edge ──
+            vec2 portalScreenPos = floor(vUv * resolution);
+            float portalNoise = fract(sin(dot(portalScreenPos, vec2(12.9898, 78.233))) * 43758.5453);
+            float portalGrad = smoothstep(portalRadius + 0.03, max(0.0, portalRadius - 0.02), dist);
+            float ditheredCore = step(portalNoise, portalGrad);
+
+            float portalGlow = ditheredCore * uFoldGlow;
+            result = mix(result, vec3(1.0), portalGlow);
           }
 
           // ── HUD overlay (hidden during warp) ──

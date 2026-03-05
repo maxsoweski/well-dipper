@@ -87,36 +87,32 @@ export class Starfield {
           gl_Position = projectionMatrix * mvPos;
 
           // ── Warp fold ──
-          // Stars get "pulled into" the rift: stars closest to the rift
-          // start moving first, outer stars follow as the fold deepens.
+          // Space pinches into a central point from all directions (360°).
+          // Stars closest to center fold first, outer stars follow.
           vStreakAmount = 0.0;
+          float convergeFactor = 1.0;
 
           if (uFoldAmount > 0.0) {
             vec2 ndc = gl_Position.xy / gl_Position.w;
             vec2 toCenter = ndc - uRiftCenter;
-            float horizontalDist = abs(toCenter.x);
+            float dist = length(toCenter);
 
             // Distance-based pull: close stars fold first, far stars later.
-            // pullStart = foldAmount threshold before this star begins moving.
-            float pullStart = horizontalDist * 0.7;
+            float pullStart = dist * 0.7;
             float pullEnd = pullStart + 0.35;
             float localFold = smoothstep(pullStart, pullEnd, uFoldAmount);
 
-            // Compress toward rift center
-            vec2 folded = uRiftCenter + vec2(
-              toCenter.x * (1.0 - localFold),
-              toCenter.y * (1.0 - localFold * 0.3)
-            );
+            // Compress radially toward center (360° pinch)
+            vec2 folded = uRiftCenter + toCenter * (1.0 - localFold);
             gl_Position.xy = folded * gl_Position.w;
 
-            // Streak: how far this star has traveled × its distance
-            vStreakAmount = localFold * min(horizontalDist, 1.0);
+            // Stars grow as they converge (accumulation glow)
+            convergeFactor = 1.0 + localFold * 3.0;
           }
 
-          // Point size: base size × streak elongation factor
+          // Point size: base size × convergence growth
           float baseSize = aSize > 5.0 ? aSize * 2.0 : aSize;
-          float streakFactor = 1.0 + vStreakAmount * 8.0;
-          gl_PointSize = baseSize * streakFactor;
+          gl_PointSize = baseSize * convergeFactor;
         }
       `,
 
