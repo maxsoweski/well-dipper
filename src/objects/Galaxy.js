@@ -105,6 +105,80 @@ export class Galaxy {
     this.mesh.rotation.y += 0.003 * deltaTime;
   }
 
+  /**
+   * Find the nearest particle to a ray direction (for click selection).
+   * Checks every 10th particle for performance.
+   *
+   * @param {THREE.Vector3} rayDirection — normalized ray from camera
+   * @param {THREE.Vector3} cameraPosition — camera world position
+   * @returns {THREE.Vector3|null} — normalized direction to nearest particle, or null
+   */
+  findNearestParticle(rayDirection, cameraPosition) {
+    const positions = this._points.geometry.attributes.position.array;
+    const count = this.data.particleCount || (positions.length / 3);
+    const cosThreshold = Math.cos(5 * Math.PI / 180); // 5° cone (wider than starfield — galaxy particles are bigger)
+    let bestDot = cosThreshold;
+    let bestDir = null;
+
+    const _dir = new THREE.Vector3();
+    const _worldPos = new THREE.Vector3();
+
+    for (let i = 0; i < count; i += 10) {
+      const i3 = i * 3;
+      // Transform particle position to world space (accounting for mesh rotation/position)
+      _worldPos.set(positions[i3], positions[i3 + 1], positions[i3 + 2]);
+      this.mesh.localToWorld(_worldPos);
+
+      // Direction from camera to particle
+      _dir.copy(_worldPos).sub(cameraPosition).normalize();
+
+      const dot = rayDirection.dot(_dir);
+      if (dot > bestDot) {
+        bestDot = dot;
+        bestDir = _dir.clone();
+      }
+    }
+    return bestDir;
+  }
+
+  /**
+   * Pick a random particle in the forward hemisphere.
+   * Used for auto-selecting a warp target from a distant galaxy/cluster.
+   *
+   * @param {THREE.Camera} camera — the camera
+   * @returns {THREE.Vector3|null} — normalized direction to a random particle
+   */
+  getRandomParticle(camera) {
+    const positions = this._points.geometry.attributes.position.array;
+    const count = this.data.particleCount || (positions.length / 3);
+    const cameraForward = new THREE.Vector3();
+    camera.getWorldDirection(cameraForward);
+
+    const candidates = [];
+    const _worldPos = new THREE.Vector3();
+    const _dir = new THREE.Vector3();
+
+    // Check every 20th particle for speed
+    for (let i = 0; i < count; i += 20) {
+      const i3 = i * 3;
+      _worldPos.set(positions[i3], positions[i3 + 1], positions[i3 + 2]);
+      this.mesh.localToWorld(_worldPos);
+
+      _dir.copy(_worldPos).sub(camera.position).normalize();
+      if (cameraForward.dot(_dir) > 0.3) {
+        candidates.push(i);
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const p = pick * 3;
+    _worldPos.set(positions[p], positions[p + 1], positions[p + 2]);
+    this.mesh.localToWorld(_worldPos);
+    return _worldPos.sub(camera.position).normalize();
+  }
+
   addTo(scene) {
     scene.add(this.mesh);
   }

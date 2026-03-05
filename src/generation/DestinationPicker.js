@@ -37,4 +37,14 @@ export class DestinationPicker {
   static isDeepSky(type) {
     return type !== 'star-system';
   }
+
+  /** Check if a deep sky type is navigable (fly inside, like a star system). */
+  static isNavigable(type) {
+    return type === 'emission-nebula' || type === 'planetary-nebula' || type === 'open-cluster';
+  }
+
+  /** Check if a deep sky type is distant-only (view from outside). */
+  static isDistant(type) {
+    return this.isDeepSky(type) && !this.isNavigable(type);
+  }
 }

@@ -100,6 +100,32 @@ export class AutoNavigator {
   }
 
   /**
+   * Build tour queue for a navigable deep sky (nebulae, open clusters).
+   * Tours between the stars — each star gets a tour stop.
+   * @param {Object} system — the system object (with star, star2, extraStars)
+   */
+  buildNavigableQueue(system) {
+    this.queue = [];
+
+    // Count all stars
+    const allStars = [system.star];
+    if (system.star2) allStars.push(system.star2);
+    if (system.extraStars) allStars.push(...system.extraStars);
+
+    // Each star gets a tour stop
+    for (let i = 0; i < allStars.length; i++) {
+      this.queue.push({
+        type: 'star',
+        starIndex: i,
+        bodyRef: null,       // populated by populateNavigableQueueRefs
+        orbitDistance: 0,
+        bodyRadius: 0,
+        linger: 30 + Math.random() * 10,  // 30-40s per star
+      });
+    }
+  }
+
+  /**
    * Linger time for a planet. Gas giants and ringed planets get more.
    */
   _planetLinger(entry) {

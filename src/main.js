@@ -19,6 +19,9 @@ import { NebulaGenerator } from './generation/NebulaGenerator.js';
 import { ClusterGenerator } from './generation/ClusterGenerator.js';
 import { Galaxy } from './objects/Galaxy.js';
 import { Nebula } from './objects/Nebula.js';
+import { VolumetricNebula } from './objects/VolumetricNebula.js';
+import { NavigableNebulaGenerator } from './generation/NavigableNebulaGenerator.js';
+import { NavigableClusterGenerator } from './generation/NavigableClusterGenerator.js';
 import { SeededRandom } from './generation/SeededRandom.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
@@ -113,10 +116,14 @@ const _heldKeys = new Set();
 // Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
 const GALLERY_TYPES = [
-  // Deep sky
+  // Deep sky (distant view)
   'spiral-galaxy', 'elliptical-galaxy',
   'emission-nebula', 'planetary-nebula',
   'globular-cluster', 'open-cluster',
+  // Deep sky (navigable — fly inside)
+  'volumetric-nebula-test',
+  'nav-planetary-nebula', 'nav-emission-nebula',
+  'nav-open-cluster',
   // Star system objects
   'star',
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
@@ -142,11 +149,16 @@ warpEffect.onPrepareSystem = () => {
 
   if (destType === 'star-system') {
     pendingSystemData = StarSystemGenerator.generate(seed);
+  } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
+    // Navigable nebulae — use the new volumetric generator
+    pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
+  } else if (destType === 'open-cluster') {
+    // Navigable open cluster — use the new cluster generator
+    pendingSystemData = NavigableClusterGenerator.generate(seed);
   } else if (destType.includes('galaxy')) {
     pendingSystemData = GalaxyGenerator.generate(seed, destType);
-  } else if (destType.includes('nebula')) {
-    pendingSystemData = NebulaGenerator.generate(seed, destType);
   } else if (destType.includes('cluster')) {
+    // globular-cluster — distant view
     pendingSystemData = ClusterGenerator.generate(seed, destType);
   }
   pendingSystemData._destType = destType;
@@ -189,10 +201,21 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Clean up old system ──
   if (system) {
     if (system.type && system.type !== 'star-system') {
-      // Deep sky object: single destination object with dispose()
+      // Deep sky object: destination renderer (Galaxy/Nebula/VolumetricNebula)
       if (system.destination) {
         system.destination.removeFrom(scene);
         system.destination.dispose();
+      }
+      // Navigable deep sky: gas cloud + extra stars
+      if (system.gasCloud) {
+        system.gasCloud.removeFrom(scene);
+        system.gasCloud.dispose();
+      }
+      if (system.extraStars) {
+        for (const s of system.extraStars) {
+          s.dispose();
+          scene.remove(s.mesh);
+        }
       }
       // Clean up dummy bodyRef objects used for tour stops
       if (system._dummyRefs) {
@@ -261,7 +284,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   // Deep sky objects get their own spawn path
   if (DestinationPicker.isDeepSky(destType)) {
-    spawnDeepSky(preGenData, destType, forWarp);
+    if (DestinationPicker.isNavigable(destType)) {
+      spawnNavigableDeepSky(preGenData, destType, forWarp);
+    } else {
+      spawnDeepSky(preGenData, destType, forWarp);
+    }
     return;
   }
 
@@ -595,6 +622,81 @@ function spawnDeepSky(data, destType, forWarp) {
   }
 }
 
+/**
+ * Spawn a navigable deep sky destination (planetary/emission nebula, open cluster).
+ * These are fly-inside-able, like star systems — multiple stars you can tour between,
+ * and optionally a VolumetricNebula gas cloud you can fly through.
+ */
+function spawnNavigableDeepSky(data, destType, forWarp) {
+  // ── Gas cloud (nebulae only) ──
+  let gasCloud = null;
+  if (data.gasCloud) {
+    gasCloud = new VolumetricNebula(data.gasCloud);
+    gasCloud.addTo(scene);
+  }
+
+  // ── Stars ──
+  const allStars = [];
+  const starInfo = {
+    color1: data.stars[0]?.color || [1, 1, 1],
+    brightness1: 1.0,
+    color2: data.stars.length > 1 ? data.stars[1].color : [0, 0, 0],
+    brightness2: data.stars.length > 1 ? 0.5 : 0,
+  };
+
+  for (const sData of data.stars) {
+    const renderR = sData.renderRadius || sData.radiusScene;
+    const starObj = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
+    starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
+    starObj.addTo(scene);
+    allStars.push(starObj);
+  }
+
+  // ── Click targets (all stars are clickable) ──
+  clickTargets = new Map();
+  for (let i = 0; i < allStars.length; i++) {
+    clickTargets.set(allStars[i].mesh, {
+      type: 'star',
+      starIndex: i,
+      label: `Star ${i + 1} (${data.stars[i].type})`,
+    });
+  }
+
+  // ── Build system object ──
+  // Shaped like a star system so autopilot/flythrough/selection code works
+  system = {
+    type: destType,
+    destination: null,     // no distant-view destination object
+    gasCloud,              // VolumetricNebula instance (or null for clusters)
+    extraStars: allStars.slice(1),  // all stars beyond the primary
+    star: allStars[0] || null,
+    star2: allStars[1] || null,
+    planets: [],
+    orbitLines: [],
+    asteroidBelts: [],
+    starOrbitLines: null,
+    isBinary: false,
+    _navigable: true,      // flag for navigable deep sky
+    _navRadius: data.radius,
+  };
+
+  const label = destType.replace(/-/g, ' ');
+  const starCount = allStars.length;
+  const gasInfo = gasCloud ? `, ${data.gasCloud.particleCount} gas particles` : '';
+  console.log(`Navigable deep sky: ${label} (${starCount} stars${gasInfo}, r=${data.radius.toFixed(0)})`);
+
+  // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
+  if (forWarp) return;
+
+  // Non-warp opening: position camera near first star
+  if (allStars[0]) {
+    const pos = allStars[0].mesh.position;
+    const r = allStars[0].data.radius;
+    camera.position.set(pos.x, pos.y + r * 0.3, pos.z + r * 4);
+    camera.lookAt(pos);
+  }
+}
+
 // ── Debug Gallery ──────────────────────────────────────────────
 // Shows deep sky objects one at a time for evaluating procedural variation.
 
@@ -603,10 +705,20 @@ function _setSystemVisible(visible) {
   if (!system) return;
 
   if (system.type && system.type !== 'star-system') {
-    // Deep sky destination
+    // Deep sky destination (distant view)
     if (system.destination) {
       if (visible) system.destination.addTo(scene);
       else system.destination.removeFrom(scene);
+    }
+    // Navigable deep sky: gas cloud + stars
+    if (system.gasCloud) {
+      if (visible) system.gasCloud.addTo(scene);
+      else system.gasCloud.removeFrom(scene);
+    }
+    if (system.star) system.star.mesh.visible = visible;
+    if (system.star2) system.star2.mesh.visible = visible;
+    if (system.extraStars) {
+      for (const s of system.extraStars) s.mesh.visible = visible;
     }
   } else {
     // Star system: stars, planets, moons, billboards, orbit lines, asteroid belts
@@ -677,6 +789,53 @@ function _galleryCleanup() {
   _galleryMeshes = [];
 }
 
+/**
+ * Generate test data for the VolumetricNebula gallery entry.
+ * Creates a simple spherical gas cloud to verify the renderer works
+ * from both outside and inside.
+ */
+function _generateVolumetricTestData(rng) {
+  const radius = 200;  // small for gallery viewing
+  const particleCount = 15000;
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+  const sizes = new Float32Array(particleCount);
+  const opacities = new Float32Array(particleCount);
+
+  // Color theme: pick H-alpha (red) or OIII (teal)
+  const isRedTheme = rng.chance(0.5);
+
+  for (let i = 0; i < particleCount; i++) {
+    // Spherical distribution, denser toward center
+    const r = radius * Math.pow(rng.float(), 0.5);  // sqrt bias → denser core
+    const theta = rng.range(0, 2 * Math.PI);
+    const phi = Math.acos(rng.range(-1, 1));
+
+    positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = r * Math.cos(phi);
+
+    // Colors: gradient from inner to outer
+    const normalizedR = r / radius;
+    if (isRedTheme) {
+      // Inner: bright pink, outer: dim red
+      colors[i * 3]     = rng.range(0.78, 1.0);
+      colors[i * 3 + 1] = rng.range(0.18, 0.40) * (1 - normalizedR * 0.5);
+      colors[i * 3 + 2] = rng.range(0.22, 0.48) * (1 - normalizedR * 0.5);
+    } else {
+      // Inner: bright teal, outer: dim blue-green
+      colors[i * 3]     = rng.range(0.18, 0.40) * (1 - normalizedR * 0.3);
+      colors[i * 3 + 1] = rng.range(0.60, 0.88);
+      colors[i * 3 + 2] = rng.range(0.55, 0.82);
+    }
+
+    sizes[i] = rng.range(3, 12);  // large for soft cloud look
+    opacities[i] = (1 - normalizedR) * rng.range(0.3, 0.8);  // denser near center
+  }
+
+  return { positions, colors, sizes, opacities, particleCount, radius };
+}
+
 function gallerySpawn() {
   // Clean up previous gallery objects
   _galleryCleanup();
@@ -687,8 +846,68 @@ function gallerySpawn() {
 
   let infoText = '';
 
-  // ── Deep sky objects ──
-  if (type.includes('galaxy') || type.includes('nebula') || type.includes('cluster')) {
+  // ── Volumetric nebula test (Points-based gas cloud) ──
+  if (type === 'volumetric-nebula-test') {
+    const testData = _generateVolumetricTestData(rng);
+    galleryObject = new VolumetricNebula(testData);
+    galleryObject.addTo(scene);
+
+    const radius = testData.radius;
+    camera.position.set(0, radius * 0.3, radius * 2);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `${testData.particleCount} particles  |  r=${radius.toFixed(0)}  |  scroll to fly inside`;
+  }
+
+  // ── Navigable nebulae (gas cloud + stars) ──
+  else if (type === 'nav-planetary-nebula' || type === 'nav-emission-nebula') {
+    const nebulaType = type === 'nav-planetary-nebula' ? 'planetary-nebula' : 'emission-nebula';
+    const data = NavigableNebulaGenerator.generate(seed, nebulaType);
+
+    // Gas cloud
+    galleryObject = new VolumetricNebula(data.gasCloud);
+    galleryObject.addTo(scene);
+
+    // Stars
+    const starInfo = { color1: [1, 1, 1], brightness1: 1, color2: [0, 0, 0], brightness2: 0 };
+    for (const sData of data.stars) {
+      const renderR = sData.renderRadius || sData.radiusScene;
+      const star = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
+      star.mesh.position.set(...sData.position);
+      star.addTo(scene);
+      _galleryMeshes.push(star);
+    }
+
+    const radius = data.radius;
+    camera.position.set(0, radius * 0.15, radius * 0.8);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `${nebulaType}  |  ${data.gasCloud.particleCount} gas + ${data.stars.length} stars  |  r=${radius.toFixed(0)}`;
+  }
+
+  // ── Navigable open cluster (stars only) ──
+  else if (type === 'nav-open-cluster') {
+    const data = NavigableClusterGenerator.generate(seed);
+
+    // Stars
+    const starInfo = { color1: [1, 1, 1], brightness1: 1, color2: [0, 0, 0], brightness2: 0 };
+    for (const sData of data.stars) {
+      const renderR = sData.renderRadius || sData.radiusScene;
+      const star = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
+      star.mesh.position.set(...sData.position);
+      star.addTo(scene);
+      _galleryMeshes.push(star);
+    }
+
+    const radius = data.radius;
+    camera.position.set(0, radius * 0.1, radius * 0.5);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `open-cluster  |  ${data.stars.length} stars  |  r=${radius.toFixed(0)}`;
+  }
+
+  // ── Deep sky objects (billboard/distant view) ──
+  else if (type.includes('galaxy') || type.includes('nebula') || type.includes('cluster')) {
     let data;
     if (type.includes('galaxy')) {
       data = GalaxyGenerator.generate(seed, type);
@@ -787,7 +1006,8 @@ function gallerySpawn() {
       const sceneMoonData = {
         ...moonData,
         radius: moonData.radiusScene,
-        orbitRadius: moonData.orbitRadiusScene,
+        orbitRadius: 0,       // Override: sit at origin for gallery viewing
+        orbitSpeed: 0,        // Don't orbit — stay still
         noiseScale: moonData.noiseScale * (moonData.radius / moonData.radiusScene),
       };
 
@@ -803,6 +1023,7 @@ function gallerySpawn() {
       moon.addTo(scene);
       _galleryMeshes.push(moon);
 
+      // Camera at 3x body radius — moon is at origin (orbitRadius=0)
       const r = sceneMoonData.radius;
       camera.position.set(0, r * 0.3, r * 3);
       camera.lookAt(0, 0, 0);
@@ -862,6 +1083,25 @@ function populateQueueRefs() {
 }
 
 /**
+ * Populate body references for navigable deep sky queue stops.
+ * Stars in navigable deep sky are stored in system.star, system.star2, system.extraStars.
+ */
+function populateNavigableQueueRefs() {
+  const allStars = [system.star];
+  if (system.star2) allStars.push(system.star2);
+  if (system.extraStars) allStars.push(...system.extraStars);
+
+  for (const stop of autoNav.queue) {
+    if (stop.type === 'star') {
+      const starObj = allStars[stop.starIndex] || allStars[0];
+      stop.bodyRef = starObj.mesh;
+      stop.bodyRadius = starObj.data.radius;
+      stop.orbitDistance = starObj.data.radius * 4;
+    }
+  }
+}
+
+/**
  * Update focusIndex/focusMoonIndex/focusStarIndex from a queue stop.
  * Keeps the minimap focus ring in sync during autopilot.
  */
@@ -894,8 +1134,12 @@ function updateFocusFromStop(stop) {
 function startFlythrough() {
   if (!system) return;
 
-  if (system.type && system.type !== 'star-system') {
-    // Deep sky: no autopilot, no orbiting. Static camera, timer warps away.
+  if (system._navigable) {
+    // Navigable deep sky: tour between stars (like star system)
+    autoNav.buildNavigableQueue(system);
+    populateNavigableQueueRefs();
+  } else if (system.type && system.type !== 'star-system') {
+    // Distant deep sky: no autopilot, no orbiting. Static camera, timer warps away.
     cameraController.bypassed = true;
     const radius = system.destination.data.radius;
     const viewDist = radius * 2.5;
@@ -904,10 +1148,10 @@ function startFlythrough() {
     _deepSkyLingerTimer = 15;
     console.log('Autopilot: deep sky — static view, 15s linger');
     return;
+  } else {
+    autoNav.buildQueue(system);
+    populateQueueRefs();
   }
-
-  autoNav.buildQueue(system);
-  populateQueueRefs();
   autoNav.start();
 
   // Pick a random starting stop from the tour queue
@@ -990,8 +1234,17 @@ function warpSwapSystem() {
     const coastDist = 60;                                     // 3s post-warp approach
     const travelDist = hyperDist + exitDist;                  // 330
 
-    if (system.type && system.type !== 'star-system') {
-      // Deep sky: approach from far along +Z toward the structure center
+    if (system._navigable) {
+      // Navigable deep sky: approach toward the primary star (same as star system)
+      const star = system.star;
+      if (star) {
+        const starPos = star.mesh.position;
+        const orbitDist = star.data.radius * 4;
+        camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
+        camera.lookAt(starPos);
+      }
+    } else if (system.type && system.type !== 'star-system') {
+      // Distant deep sky: approach from far along +Z toward the structure center
       const orbitDist = system.tourStops[0]?.orbitDistance || system.destination.data.radius * 1.3;
       camera.position.set(0, 2, travelDist + orbitDist + coastDist);
       camera.lookAt(0, 0, 0);
@@ -1024,10 +1277,10 @@ function warpRevealSystem() {
   if (!system) return;
   cameraController.bypassed = true;
 
-  // ── Deep sky: static contemplation view ──
-  // These objects are impossibly far away — no orbiting, no camera movement.
+  // ── Distant deep sky: static contemplation view ──
+  // Galaxies + globular clusters are impossibly far away — no orbiting, no camera movement.
   // Camera stays fixed at a viewing angle. Timer triggers the next warp.
-  if (system.type && system.type !== 'star-system' && system.destination) {
+  if (system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
     // Snap object back to origin (drifted with camera during warp)
     system.destination.mesh.position.set(0, 0, 0);
 
@@ -1035,9 +1288,6 @@ function warpRevealSystem() {
     flythrough.stop();
     autoNav.stop();
 
-    // Place camera at a fixed viewing position.
-    // Far enough that the object fills the view nicely, but close enough to see detail.
-    // Slight vertical offset gives an interesting angle (not dead-center).
     const radius = system.destination.data.radius;
     const viewDist = radius * 2.5;
     camera.position.set(0, viewDist * 0.15, viewDist);
@@ -1048,6 +1298,33 @@ function warpRevealSystem() {
 
     const label = system.type.replace(/-/g, ' ');
     console.log(`Warp: contemplating ${label} (static view, 15s)`);
+    return;
+  }
+
+  // ── Navigable deep sky: tour between stars (like a star system) ──
+  if (system._navigable) {
+    autoNav.buildNavigableQueue(system);
+    populateNavigableQueueRefs();
+    autoNav.currentIndex = 0;
+    autoNav.start();
+
+    const firstStop = autoNav.getCurrentStop();
+    if (firstStop && firstStop.bodyRef) {
+      const upcoming = autoNav.getNextStop();
+      flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+
+      flythrough.beginTravelFrom(
+        firstStop.bodyRef,
+        firstStop.orbitDistance,
+        firstStop.bodyRadius,
+        { warpArrival: true },
+      );
+
+      updateFocusFromStop(firstStop);
+    }
+
+    const label = system.type.replace(/-/g, ' ');
+    console.log(`Warp: touring ${label} (${autoNav.queue.length} stops)`);
     return;
   }
 
@@ -1160,13 +1437,22 @@ function focusStar(starIdx) {
   focusMoonIndex = -1;
   focusStarIndex = starIdx;
 
-  const starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
+  // For navigable deep sky, starIdx can go beyond 0/1 — check extraStars
+  let starObj;
+  if (system._navigable && system.extraStars && starIdx >= 2) {
+    starObj = system.extraStars[starIdx - 2] || system.star;
+  } else {
+    starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
+  }
+
   // Cap camera distance so it stays well inside the innermost planet orbit.
-  // Without this, planets can pass between the camera and star, creating
-  // an ugly foreground blob.
-  const innerOrbit = system.planets[0].orbitRadius;
+  // For navigable deep sky (no planets), just use a reasonable multiple of star radius.
   const idealDist = starObj.data.radius * 6;
-  const viewDist = Math.min(idealDist, innerOrbit * 0.4);
+  let viewDist = idealDist;
+  if (system.planets.length > 0) {
+    const innerOrbit = system.planets[0].orbitRadius;
+    viewDist = Math.min(idealDist, innerOrbit * 0.4);
+  }
   cameraController.focusOn(starObj.mesh.position, viewDist);
   const label = system.isBinary
     ? (starIdx === 0 ? 'primary star' : 'secondary star')
@@ -1270,6 +1556,16 @@ function animate() {
     // ── Deep sky destination update ──
     if (system.type && system.type !== 'star-system') {
       if (system.destination) system.destination.update(deltaTime);
+      // Navigable deep sky: update gas cloud + extra star glows
+      if (system.gasCloud) system.gasCloud.update(deltaTime);
+      if (system.extraStars) {
+        for (const s of system.extraStars) {
+          if (s.updateGlow) s.updateGlow(camera);
+        }
+      }
+      // Primary star glow needs updating too
+      if (system.star && system.star.updateGlow) system.star.updateGlow(camera);
+      if (system.star2 && system.star2.updateGlow) system.star2.updateGlow(camera);
     }
 
     // ── Star system updates (skip for deep sky) ──
@@ -1570,10 +1866,11 @@ function animate() {
         camera.getWorldDirection(_sunDir);
         camera.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
 
-        // Deep sky objects: move WITH camera during warp so there's no parallax.
+        // Distant deep sky objects: move WITH camera during warp so there's no parallax.
         // They're meant to appear impossibly far away — no visible relative motion.
+        // Navigable deep sky stays in place (like star systems — you fly INTO them).
         // warpRevealSystem() snaps everything to proper positions when warp completes.
-        if (system && system.type && system.type !== 'star-system' && system.destination) {
+        if (system && system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
           system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
           // Also move dummy bodyRef objects so tour stop positions stay consistent
           if (system._dummyRefs) {
@@ -1642,7 +1939,20 @@ function animate() {
       _deepSkyLingerTimer -= deltaTime;
       if (_deepSkyLingerTimer <= 0) {
         _deepSkyLingerTimer = -1;
-        autoSelectWarpTarget();
+        // For distant deep sky, try picking a particle from the galaxy/cluster first
+        let picked = false;
+        if (system && system.destination && system.destination.getRandomParticle) {
+          const dir = system.destination.getRandomParticle(camera);
+          if (dir) {
+            warpTarget.direction = dir;
+            warpTarget.blinkTimer = 0;
+            warpTarget.blinkOn = true;
+            picked = true;
+          }
+        }
+        if (!picked) {
+          autoSelectWarpTarget();
+        }
         setTimeout(() => beginWarpTurn(), 500);
       }
     }
@@ -1849,7 +2159,18 @@ function trySelect(clientX, clientY) {
     return; // scene object hit — done
   }
 
-  // 2. No scene object hit — try selecting a background star as warp target
+  // 2. Distant deep sky (galaxy/globular): try selecting a particle as warp target
+  if (system && system.destination && system.destination.findNearestParticle && !system._navigable) {
+    const dir = system.destination.findNearestParticle(raycaster.ray.direction, camera.position);
+    if (dir) {
+      warpTarget.direction = dir;
+      warpTarget.blinkTimer = 0;
+      warpTarget.blinkOn = true;
+      return;
+    }
+  }
+
+  // 3. No scene object or galaxy particle hit — try selecting a background star
   trySelectWarpTarget(raycaster.ray.direction);
 }
 
