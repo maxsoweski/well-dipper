@@ -79,6 +79,7 @@ const warpTarget = {
   blinkOn: false,    // current blink state
   turning: false,    // camera is rotating to face target before warp
   turnTimer: 0,      // seconds into the turn
+  lockBlinkFrames: 0, // frame counter for rapid lock-on blink
 };
 
 // When the tour visits every body, auto-select a visible star and warp toward it.
@@ -1010,7 +1011,15 @@ function animate() {
       // Brackets stay solid (no blink) = "target locked".
       if (warpTarget.turning) {
         warpTarget.turnTimer += deltaTime;
-        warpTarget.blinkOn = true; // solid brackets = locked on
+        warpTarget.lockBlinkFrames++;
+
+        // Rapid blink for first 4 cycles (2 frames on, 2 frames off = 16 frames)
+        // then solid square stays on
+        if (warpTarget.lockBlinkFrames <= 16) {
+          warpTarget.blinkOn = Math.floor((warpTarget.lockBlinkFrames - 1) / 2) % 2 === 0;
+        } else {
+          warpTarget.blinkOn = true;
+        }
 
         // Slerp camera to face the target
         _riftPoint.copy(camera.position).addScaledVector(warpTarget.direction, 10);
@@ -1359,6 +1368,7 @@ function beginWarpTurn() {
   cameraController.bypassed = true;
   warpTarget.turning = true;
   warpTarget.turnTimer = 0;
+  warpTarget.lockBlinkFrames = 0;
 }
 
 // Idle tracking — any mouse movement resets idle timer (but no free-look)
