@@ -372,13 +372,9 @@ export class RetroRenderer {
             // Edge width scales with radius so it starts from ~1 pixel
             // and grows outward — hard dithered mask (retro style).
             if (uFoldGlow > 0.25 && uExitReveal <= 0.0) {
-              vec2 pScreenPos = floor(vUv * resolution);
-              float pNoise = fract(sin(dot(pScreenPos, vec2(12.9898, 78.233))) * 43758.5453);
-
               // Proportional edge: thin when portal is small, wider as it grows
               float edgeW = portalRadius * 0.15;
-              float pGrad = smoothstep(portalRadius + edgeW, max(0.0, portalRadius - edgeW), portalDist);
-              float portalMask = step(pNoise, pGrad);
+              float portalMask = smoothstep(portalRadius + edgeW, max(0.0, portalRadius - edgeW), portalDist);
 
               hyperMask = max(hyperMask, portalMask);
             }

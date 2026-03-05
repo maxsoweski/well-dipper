@@ -758,6 +758,23 @@ function warpRevealSystem() {
   if (!system) return;
   cameraController.bypassed = true;
 
+  // Deep sky: snap object back to origin and reposition camera.
+  // During warp, the deep sky mesh drifted with the camera (no parallax),
+  // so now we reset to proper positions for the autopilot tour.
+  if (system.type && system.type !== 'star-system' && system.destination) {
+    system.destination.mesh.position.set(0, 0, 0);
+    // Reset dummy refs to their original tour stop positions
+    for (let i = 0; i < system.tourStops.length; i++) {
+      const stop = system.tourStops[i];
+      system._dummyRefs[i].position.set(stop.position[0], stop.position[1], stop.position[2]);
+    }
+    // Place camera at the first tour stop's orbit distance
+    const firstStop = system.tourStops[0];
+    const orbitDist = firstStop.orbitDistance;
+    camera.position.set(firstStop.position[0], firstStop.position[1] + 2, firstStop.position[2] + orbitDist);
+    camera.lookAt(firstStop.position[0], firstStop.position[1], firstStop.position[2]);
+  }
+
   // Build the autopilot tour queue for the new destination
   if (system.type && system.type !== 'star-system') {
     autoNav.buildDeepSkyQueue(system.tourStops, system._dummyRefs);
@@ -1257,6 +1274,19 @@ function animate() {
       if (warpEffect.cameraForwardSpeed > 0) {
         camera.getWorldDirection(_sunDir);
         camera.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
+
+        // Deep sky objects: move WITH camera during warp so there's no parallax.
+        // They're meant to appear impossibly far away — no visible relative motion.
+        // warpRevealSystem() snaps everything to proper positions when warp completes.
+        if (system && system.type && system.type !== 'star-system' && system.destination) {
+          system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
+          // Also move dummy bodyRef objects so tour stop positions stay consistent
+          if (system._dummyRefs) {
+            for (const ref of system._dummyRefs) {
+              ref.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
+            }
+          }
+        }
       }
     } else {
       // Reset warp uniforms when not warping
