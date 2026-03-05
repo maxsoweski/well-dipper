@@ -70,7 +70,8 @@ export class NavigableNebulaGenerator {
     }];
 
     // ── Gas cloud ──
-    const particleCount = rng.int(12000, 22000);
+    // More particles + bigger sizes so the shell is visually dense when flying through
+    const particleCount = rng.int(20000, 30000);
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
     const sizes = new Float32Array(particleCount);
@@ -80,29 +81,30 @@ export class NavigableNebulaGenerator {
     const innerPal = this.PALETTE['oiii'];
     const outerPal = this.PALETTE['h-alpha'];
 
+    // Shell thickness — particles concentrated in a thinner band = denser cloud
+    const shellThickness = radius * 0.06;  // 6% of radius (was ~12% before)
+
     for (let i = 0; i < particleCount; i++) {
       let x, y, z;
 
       if (isBipolar) {
         // Hourglass / bipolar shape
-        // Particles concentrated in two lobes along Y axis
         const lobe = rng.chance(0.5) ? 1 : -1;
         const t = rng.float();  // 0-1 along the lobe
-        const lobeR = radius * 0.4 * Math.sin(t * Math.PI);  // widest at middle of lobe
+        const lobeR = radius * 0.4 * Math.sin(t * Math.PI);
         const angle = rng.range(0, 2 * Math.PI);
 
-        x = lobeR * Math.cos(angle) + this._gaussian(rng) * radius * 0.05;
-        y = lobe * t * radius * 0.6 + this._gaussian(rng) * radius * 0.03;
-        z = lobeR * Math.sin(angle) + this._gaussian(rng) * radius * 0.05;
+        x = lobeR * Math.cos(angle) + this._gaussian(rng) * shellThickness;
+        y = lobe * t * radius * 0.6 + this._gaussian(rng) * shellThickness * 0.5;
+        z = lobeR * Math.sin(angle) + this._gaussian(rng) * shellThickness;
       } else {
-        // Ring / torus shape — particles in a ring in the XZ plane
+        // Ring / torus shape — tighter ring for denser appearance
         const ringAngle = rng.range(0, 2 * Math.PI);
-        const ringR = radius * rng.range(0.25, 0.65);
-        const spread = radius * 0.12;
+        const ringR = radius * rng.range(0.30, 0.55);
 
-        x = Math.cos(ringAngle) * ringR + this._gaussian(rng) * spread;
-        y = this._gaussian(rng) * spread * 0.4;
-        z = Math.sin(ringAngle) * ringR + this._gaussian(rng) * spread;
+        x = Math.cos(ringAngle) * ringR + this._gaussian(rng) * shellThickness;
+        y = this._gaussian(rng) * shellThickness * 0.4;
+        z = Math.sin(ringAngle) * ringR + this._gaussian(rng) * shellThickness;
       }
 
       positions[i * 3]     = x;
@@ -119,9 +121,9 @@ export class NavigableNebulaGenerator {
       colors[i * 3 + 1] = rng.range(pal.g[0], pal.g[1]);
       colors[i * 3 + 2] = rng.range(pal.b[0], pal.b[1]);
 
-      // Larger particles for soft cloud, some variation
-      sizes[i] = rng.range(40, 200);
-      // Denser near the shell, dimmer at edges
+      // Big particles — need overlap for cloud-like look when flying through
+      sizes[i] = rng.range(150, 600);
+      // Denser near the shell center
       opacities[i] = (0.3 + innerWeight * 0.5) * rng.range(0.4, 0.9);
     }
 
@@ -179,22 +181,26 @@ export class NavigableNebulaGenerator {
       });
     }
 
-    // ── Gas cloud: irregular 3D clumps ──
-    const particleCount = rng.int(18000, 30000);
+    // ── Gas cloud: tight 3D clumps for visual density ──
+    // Key insight: particles must overlap locally to create cloud-like appearance.
+    // Spreading them evenly across the huge radius makes them too sparse.
+    // Instead: tight clumps with large particles → dense clouds with dark gaps.
+    const particleCount = rng.int(25000, 40000);
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
     const sizes = new Float32Array(particleCount);
     const opacities = new Float32Array(particleCount);
 
-    // Create 3-6 sub-clumps for irregular shape
-    const clumpCount = rng.int(3, 6);
+    // Create 4-8 tight sub-clumps spread across the volume
+    const clumpCount = rng.int(4, 8);
     const clumps = [];
     for (let c = 0; c < clumpCount; c++) {
       clumps.push({
         x: this._gaussian(rng) * radius * 0.25,
         y: this._gaussian(rng) * radius * 0.12,
         z: this._gaussian(rng) * radius * 0.25,
-        spread: rng.range(0.15, 0.4) * radius,
+        // Tight spread: 3-8% of radius so particles overlap within each clump
+        spread: rng.range(0.03, 0.08) * radius,
       });
     }
 
@@ -223,8 +229,8 @@ export class NavigableNebulaGenerator {
       colors[i * 3 + 1] = rng.range(pal.g[0], pal.g[1]);
       colors[i * 3 + 2] = rng.range(pal.b[0], pal.b[1]);
 
-      // Larger particles for nebula gas, more variation
-      sizes[i] = rng.range(80, 400);
+      // Large particles for nebula gas — bigger = more overlap = denser clouds
+      sizes[i] = rng.range(200, 800);
       // Opacity: denser near clump centers
       const distFromClump = Math.sqrt(
         Math.pow(x - clump.x, 2) +

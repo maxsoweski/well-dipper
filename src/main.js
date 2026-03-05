@@ -862,59 +862,75 @@ function gallerySpawn() {
     infoText = `${testData.particleCount} particles  |  r=${radius.toFixed(0)}  |  scroll to fly inside`;
   }
 
-  // ── Navigable nebulae (gas cloud + stars) ──
+  // ── Navigable nebulae (gallery preview using beautiful billboard renderer) ──
+  // The VolumetricNebula (Points) renderer is used during actual warp fly-through.
+  // For gallery preview, we use the Nebula.js billboard renderer which looks far
+  // better — it creates wispy cloud structures via layered noise planes.
+  // We also embed the navigable Star objects (scaled to match) so you can see
+  // the stars you'd fly between during actual navigation.
   else if (type === 'nav-planetary-nebula' || type === 'nav-emission-nebula') {
     const nebulaType = type === 'nav-planetary-nebula' ? 'planetary-nebula' : 'emission-nebula';
-    const data = NavigableNebulaGenerator.generate(seed, nebulaType);
 
-    // Gas cloud
-    galleryObject = new VolumetricNebula(data.gasCloud);
+    // Billboard nebula at display scale (beautiful layered noise planes)
+    const billboardData = NebulaGenerator.generate(seed, nebulaType);
+    galleryObject = new Nebula(billboardData);
     galleryObject.addTo(scene);
 
-    // Stars — use exaggerated render radius so they're visible in the vast gas cloud
-    for (const sData of data.stars) {
-      // Render stars larger: at least 0.1% of nebula radius so they're visible
-      const minVisible = data.radius * 0.001;
-      const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
-      const star = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
-      star.mesh.position.set(...sData.position);
+    // Also generate navigable data for the star positions
+    const navData = NavigableNebulaGenerator.generate(seed, nebulaType);
+
+    // Scale navigable stars down to billboard scale and add them
+    const scaleFactor = billboardData.radius / navData.radius;
+    for (const sData of navData.stars) {
+      const scaledR = Math.max(billboardData.radius * 0.015, 1.5);
+      const star = new Star({ ...sData, radius: scaledR, color: sData.color }, scaledR);
+      star.mesh.position.set(
+        sData.position[0] * scaleFactor,
+        sData.position[1] * scaleFactor,
+        sData.position[2] * scaleFactor,
+      );
       star.addTo(scene);
       _galleryMeshes.push(star);
     }
 
-    // Position camera near the first star so we can see stars + gas up close
-    const s0 = data.stars[0];
-    const starPos = new THREE.Vector3(...s0.position);
-    const viewDist = data.radius * 0.08;  // Close enough to see gas particles
-    camera.position.set(starPos.x + viewDist * 0.3, starPos.y + viewDist * 0.2, starPos.z + viewDist);
-    camera.lookAt(starPos);
+    const radius = billboardData.radius;
+    camera.position.set(0, radius * 0.5, radius * 2.5);
+    camera.lookAt(0, 0, 0);
 
-    infoText = `${nebulaType}  |  ${data.gasCloud.particleCount} gas + ${data.stars.length} stars  |  r=${data.radius.toFixed(0)}`;
+    infoText = `${nebulaType} (navigable)  |  ${navData.stars.length} stars  |  r=${radius.toFixed(0)}`;
   }
 
-  // ── Navigable open cluster (stars only) ──
+  // ── Navigable open cluster (gallery preview using particle renderer) ──
+  // Same idea: use ClusterGenerator + Galaxy.js for the beautiful particle cloud,
+  // then overlay the actual navigable Star objects at matching scale.
   else if (type === 'nav-open-cluster') {
-    const data = NavigableClusterGenerator.generate(seed);
+    // Particle cloud at display scale (hundreds of particles = nice cluster shape)
+    const particleData = ClusterGenerator.generate(seed, 'open-cluster');
+    galleryObject = new Galaxy(particleData);
+    galleryObject.addTo(scene);
 
-    // Stars — use exaggerated render radius so they're visible across the cluster
-    for (const sData of data.stars) {
-      // At least 0.15% of cluster radius so stars are visible
-      const minVisible = data.radius * 0.0015;
-      const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
-      const star = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
-      star.mesh.position.set(...sData.position);
+    // Also generate navigable data for the star positions
+    const navData = NavigableClusterGenerator.generate(seed);
+
+    // Scale navigable stars down to particle-cloud scale and add them
+    const scaleFactor = particleData.radius / navData.radius;
+    for (const sData of navData.stars) {
+      const scaledR = Math.max(particleData.radius * 0.02, 2.0);
+      const star = new Star({ ...sData, radius: scaledR, color: sData.color }, scaledR);
+      star.mesh.position.set(
+        sData.position[0] * scaleFactor,
+        sData.position[1] * scaleFactor,
+        sData.position[2] * scaleFactor,
+      );
       star.addTo(scene);
       _galleryMeshes.push(star);
     }
 
-    // Position camera near the first star — the cluster is too vast to see from outside
-    const s0 = data.stars[0];
-    const starPos = new THREE.Vector3(...s0.position);
-    const viewDist = data.radius * 0.06;
-    camera.position.set(starPos.x + viewDist * 0.3, starPos.y + viewDist * 0.15, starPos.z + viewDist);
-    camera.lookAt(starPos);
+    const radius = particleData.radius;
+    camera.position.set(0, radius * 0.5, radius * 2.5);
+    camera.lookAt(0, 0, 0);
 
-    infoText = `open-cluster  |  ${data.stars.length} stars  |  r=${data.radius.toFixed(0)}`;
+    infoText = `open-cluster (navigable)  |  ${navData.stars.length} stars  |  r=${radius.toFixed(0)}`;
   }
 
   // ── Deep sky objects (billboard/distant view) ──
