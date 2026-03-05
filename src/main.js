@@ -215,9 +215,8 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
     if (!mesh.visible) continue;
     mesh.updateMatrixWorld(true);
     const posAttr = mesh.geometry.getAttribute('position');
-    const stride = Math.max(1, Math.floor(posAttr.count / 24));
 
-    for (let i = 0; i < posAttr.count; i += stride) {
+    for (let i = 0; i < posAttr.count; i++) {
       _projVec.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
       _projVec.applyMatrix4(mesh.matrixWorld);
       _projVec.project(camera);
@@ -2474,7 +2473,7 @@ canvas.addEventListener('mousemove', (e) => {
   if (now - _lastOrbitHoverTime < 33) return;
   _lastOrbitHoverTime = now;
 
-  const hit = hitTestOrbits(e.clientX, e.clientY, 4);
+  const hit = hitTestOrbits(e.clientX, e.clientY, 8);
   const newHover = hit ? hit.mesh : null;
   if (newHover !== _hoveredOrbitLine) {
     // Restore previous
