@@ -188,41 +188,40 @@ const _projVec = new THREE.Vector3(); // reusable for screen projection
 
 /**
  * Screen-space orbit hit test.
- * Projects each orbit's center to screen, computes the projected radius in pixels,
- * then checks if the mouse cursor is within `thresholdPx` of the circle edge.
- * Returns the closest match's info object, or null.
+ * Samples 24 points around each orbit, projects them to screen pixels,
+ * and finds the closest point to the mouse. This handles perspective
+ * distortion correctly (orbits look like ellipses from most angles).
  */
-function hitTestOrbits(clientX, clientY, thresholdPx = 4) {
+const _ORBIT_SAMPLES = 24;
+function hitTestOrbits(clientX, clientY, thresholdPx = 6) {
   if (_orbitLineTargets.size === 0) return null;
   const hw = window.innerWidth * 0.5;
   const hh = window.innerHeight * 0.5;
   let best = null;
-  let bestDiff = thresholdPx;
+  let bestDistSq = thresholdPx * thresholdPx;
 
   for (const [mesh, info] of _orbitLineTargets) {
     if (!mesh.visible) continue;
-    // Project orbit center to screen pixels
-    _projVec.copy(info.center).project(camera);
-    // Behind camera — skip
-    if (_projVec.z > 1) continue;
-    const cx = (_projVec.x * hw) + hw;
-    const cy = (-_projVec.y * hh) + hh;
+    const r = info.radius;
+    const ox = info.center.x;
+    const oy = info.center.y;
+    const oz = info.center.z;
 
-    // Project a point on the orbit rim (center + radius along X axis in world)
-    _projVec.set(info.center.x + info.radius, info.center.y, info.center.z).project(camera);
-    if (_projVec.z > 1) continue;
-    const rx = (_projVec.x * hw) + hw;
-    const ry = (-_projVec.y * hh) + hh;
-    const radiusPx = Math.hypot(rx - cx, ry - cy);
-
-    // Skip orbits that are too tiny or too huge on screen
-    if (radiusPx < 5 || radiusPx > 8000) continue;
-
-    const mouseDist = Math.hypot(clientX - cx, clientY - cy);
-    const diff = Math.abs(mouseDist - radiusPx);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = { info, mesh };
+    for (let i = 0; i < _ORBIT_SAMPLES; i++) {
+      const a = (i / _ORBIT_SAMPLES) * Math.PI * 2;
+      _projVec.set(ox + Math.cos(a) * r, oy, oz + Math.sin(a) * r);
+      _projVec.project(camera);
+      // Behind camera — skip this sample
+      if (_projVec.z > 1) continue;
+      const sx = (_projVec.x * hw) + hw;
+      const sy = (-_projVec.y * hh) + hh;
+      const dx = clientX - sx;
+      const dy = clientY - sy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestDistSq) {
+        bestDistSq = d2;
+        best = { info, mesh };
+      }
     }
   }
   return best;
