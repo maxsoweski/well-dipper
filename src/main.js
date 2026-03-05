@@ -178,6 +178,12 @@ warpEffect.onComplete = () => {
 // ── Click-to-select (raycasting) ──
 const raycaster = new THREE.Raycaster();
 const _mouse = new THREE.Vector2();
+// Separate raycaster for orbit lines — needs a much wider threshold
+// because THREE.Line is hair-thin and nearly impossible to click otherwise.
+const _orbitRaycaster = new THREE.Raycaster();
+_orbitRaycaster.params.Line.threshold = 0.5; // scene units — generous pick zone
+let _orbitLineTargets = new Map(); // orbit line mesh → body info
+let _hoveredOrbitLine = null;      // currently hovered orbit line mesh
 const _mouseDown = { x: 0, y: 0 };
 let clickTargets = new Map();
 
@@ -531,6 +537,16 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     }
   }
 
+  // Orbit lines — separate map (use wider raycaster threshold for picking)
+  _orbitLineTargets = new Map();
+  for (let i = 0; i < planets.length; i++) {
+    _orbitLineTargets.set(orbitLines[i].mesh, { type: 'planet', planetIndex: i });
+    const entry = planets[i];
+    for (let m = 0; m < entry.moonOrbitLines.length; m++) {
+      _orbitLineTargets.set(entry.moonOrbitLines[m].mesh, { type: 'moon', planetIndex: i, moonIndex: m });
+    }
+  }
+
   // ── Console log ──
   const starDesc = systemData.isBinary
     ? `${systemData.star.type}+${systemData.star2.type} binary`
@@ -621,6 +637,8 @@ function spawnDeepSky(data, destType, forWarp) {
 
   // No click targets for deep sky (clicking empty sky still selects warp targets)
   clickTargets = new Map();
+  _orbitLineTargets = new Map();
+  _hoveredOrbitLine = null;
 
   // Store as current system
   system = {
@@ -2288,6 +2306,24 @@ function trySelect(clientX, clientY) {
     return; // scene object hit — done
   }
 
+  // 1b. Try orbit lines (wider threshold raycaster)
+  if (_orbitLineTargets.size > 0) {
+    _orbitRaycaster.setFromCamera(_mouse, camera);
+    const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
+    const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);
+    if (orbitHits.length > 0) {
+      const info = _orbitLineTargets.get(orbitHits[0].object);
+      if (info) {
+        if (info.type === 'planet') {
+          focusPlanet(info.planetIndex);
+        } else if (info.type === 'moon') {
+          focusMoon(info.planetIndex, info.moonIndex);
+        }
+        return;
+      }
+    }
+  }
+
   // 2. Distant deep sky (galaxy/globular): try selecting a particle as warp target
   if (system && system.destination && system.destination.findNearestParticle && !system._navigable) {
     const dir = system.destination.findNearestParticle(raycaster.ray.direction, camera.position);
@@ -2366,6 +2402,38 @@ canvas.addEventListener('mousemove', (e) => {
   // Middle mouse free-look during flythrough
   if (flythrough.active && _middleMouseDown) {
     flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
+  }
+
+  // ── Orbit line hover highlight ──
+  if (!system || warpEffect.isActive || galleryMode) return;
+  const mx = (e.clientX / window.innerWidth) * 2 - 1;
+  const my = -(e.clientY / window.innerHeight) * 2 + 1;
+  _orbitRaycaster.setFromCamera({ x: mx, y: my }, camera);
+  const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
+  const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);
+
+  const newHover = orbitHits.length > 0 ? orbitHits[0].object : null;
+  if (newHover !== _hoveredOrbitLine) {
+    // Restore previous
+    if (_hoveredOrbitLine) {
+      _hoveredOrbitLine.material.opacity = _hoveredOrbitLine._origOpacity ?? 0.8;
+      _hoveredOrbitLine.material.color.copy(_hoveredOrbitLine._origColor);
+      _hoveredOrbitLine.material.needsUpdate = true;
+    }
+    // Highlight new
+    if (newHover) {
+      if (!newHover._origColor) {
+        newHover._origColor = newHover.material.color.clone();
+        newHover._origOpacity = newHover.material.opacity;
+      }
+      newHover.material.color.set(0x44ff44); // bright green
+      newHover.material.opacity = 1.0;
+      newHover.material.needsUpdate = true;
+      canvas.style.cursor = 'pointer';
+    } else {
+      canvas.style.cursor = '';
+    }
+    _hoveredOrbitLine = newHover;
   }
 });
 
