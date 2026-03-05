@@ -133,10 +133,11 @@ export class WarpEffect {
     // Planets stay visible during fold — NO sceneFade
     this.sceneFade = 0;
 
-    // Fold glow: the bright pillar appears AFTER stars have accumulated.
-    // Delayed to 25% progress so the pillar looks like a result of star
-    // light accreting at the center, not an independent effect.
-    this.foldGlow = this._ease(Math.max(0, (this.progress - 0.25) / 0.75));
+    // Pillar width tracks the fold — it's the visual result of space
+    // folding in, not an independent effect. Small gate so the pillar
+    // only appears once the nearest stars have actually converged.
+    const foldGate = Math.min(1, Math.max(0, (this.foldAmount - 0.03) / 0.07));
+    this.foldGlow = foldGate * this.foldAmount;
 
     // Camera accelerates forward (base speed + quadratic ramp so motion is visible early)
     this.cameraForwardSpeed = 8 + 72 * this.progress * this.progress;
@@ -218,25 +219,24 @@ export class WarpEffect {
     this.progress = Math.min(1, this.elapsed / this.EXIT_DUR);
     const t = this._ease(this.progress);
 
-    // Hyperspace stays full — the spatial mask (exitReveal) handles the opening.
-    // This avoids a uniform fade and instead "tears" the hyperspace open.
+    // Hyperspace stays full — the hole mask handles the reveal
     this.hyperPhase = 1;
 
-    // Exit reveal: ease-out quadratic (fast start, slow end) so the opening
-    // is visible immediately on frame 1 — no dead time at the start.
+    // Exit reveal: smoothstep easing (slow start = tiny pinhole, accelerates)
+    // Starts as ~1 pixel, opens into a portal we fly through
     const p = this.progress;
-    this.exitReveal = 1 - (1 - p) * (1 - p);  // ease-out: opens fast, decelerates
+    this.exitReveal = p * p * (3 - 2 * p);  // smoothstep: slow start + end
 
-    // Stars unfold through the opening (mirrors fold in reverse)
-    this.foldAmount = 1 - t;         // 1→0: folded → unfolded
-    this.starBrightness = 1 + 2 * (1 - t);  // 3→1: bright → normal
-    this.foldGlow = 0;               // No white glow during exit (the opening edge handles it)
+    // NO reverse fold — stars are normal, we see them through the hole
+    this.foldAmount = 0;
+    this.starBrightness = 1;
+    this.foldGlow = 0;
 
-    // Camera decelerates toward the star
+    // Camera decelerates as we approach the portal
     this.cameraForwardSpeed = 30 * (1 - t);
 
-    // Scene reveals in second half (planets appear after stars unfold)
-    this.sceneFade = 1 - this._ease(Math.max(0, (this.progress - 0.5) / 0.5));
+    // Scene reveals through the hole (starts earlier so planets are visible)
+    this.sceneFade = 1 - this._ease(Math.max(0, (this.progress - 0.3) / 0.7));
 
     // Done
     if (this.elapsed >= this.EXIT_DUR) {

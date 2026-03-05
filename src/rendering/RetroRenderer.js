@@ -142,45 +142,71 @@ export class RetroRenderer {
         uniform vec2 uRiftCenter;
         varying vec2 vUv;
 
-        // ── Hyperspace tunnel (Star Fox 64 / No Man's Sky inspired) ──
-        // Flying forward through a geometric tunnel surrounded by white light.
-        // Sharp posterized edges for retro aesthetic.
+        // ── Hyperspace tunnel (3D raymarched cylinder) ──
+        // Real 3D ray-cylinder intersection so the tunnel has true
+        // perspective depth. Future-proofed for freelook / rail-flying.
         vec3 hyperspace(vec2 uv, float time) {
+          // ── Ray setup: camera at origin looking down +Z ──
           vec2 centered = uv - 0.5;
           float aspect = resolution.x / resolution.y;
           centered.x *= aspect;
 
-          float radius = length(centered);
-          float angle = atan(centered.y, centered.x);
+          // Perspective ray (matches ~70° FOV)
+          vec3 rd = normalize(vec3(centered * 1.4, 1.0));
 
-          // ── Tunnel depth (inverse radius = looking "into" the tunnel) ──
-          float depth = 0.4 / (radius + 0.08);
-          float scrollZ = depth + time * 2.5;
+          // Tunnel parameters
+          float tunnelR = 4.0;        // Radius — big enough to feel enormous
+          float speed = time * 12.0;  // Forward scroll speed
+          float ringGap = 3.5;       // Spacing between ring planes
 
-          // ── Background: white throughout ──
           vec3 bg = vec3(0.95, 0.93, 0.9);
 
-          // ── Concentric rings: soft diffused bands rushing outward ──
-          float ringWave = sin((depth * 1.5 + time * 2.0) * 6.2832);  // smooth sine wave
-          float rings = ringWave * 0.5 + 0.5;  // 0→1 smooth oscillation
+          // ── Ray–cylinder intersection ──
+          // Infinite cylinder along Z, radius tunnelR, camera at center
+          float rdXY = length(rd.xy);
+          if (rdXY < 0.001) {
+            // Looking straight down the tunnel — vanishing point
+            return vec3(1.0);
+          }
+          float tWall = tunnelR / rdXY;
+          vec3 hitPos = rd * tWall;
+          float wallZ = hitPos.z;  // How far down tunnel the hit is
 
-          // Dither: hash-based noise (no grid artifacts like Bayer)
+          // ── Ring bands repeating along Z ──
+          float zWorld = wallZ + speed;
+          float cellPhase = fract(zWorld / ringGap);
+
+          // Narrow bright band within each repeating cell
+          float ringBand = smoothstep(0.0, 0.06, cellPhase)
+                         * (1.0 - smoothstep(0.12, 0.18, cellPhase));
+
+          // ── Depth perspective: near rings bold, distant rings fade ──
+          float depthFade = smoothstep(60.0, 4.0, wallZ);
+          float nearBoost = smoothstep(6.0, 3.0, wallZ);
+          float ringIntensity = ringBand * (depthFade * 0.6 + nearBoost * 0.4);
+
+          // ── Dithering (hash noise, no grid artifacts) ──
           vec2 screenPos = floor(uv * resolution);
           float noise = fract(sin(dot(screenPos, vec2(12.9898, 78.233))) * 43758.5453);
-          float ditheredRings = step(noise, rings * 0.6);
+          float ditheredRing = step(noise, ringIntensity * 0.8);
 
-          // ── Combine ──
-          // Rings alternate red/blue at ~0.75 Hz
+          // ── Color: red↔blue blink at 0.75 Hz ──
           vec3 redColor = vec3(0.8, 0.15, 0.15);
           vec3 blueColor = vec3(0.15, 0.25, 0.85);
           float ringBlink = step(0.5, fract(time * 0.75));
           vec3 ringColor = mix(redColor, blueColor, ringBlink);
-          vec3 col = bg;
-          col = mix(col, ringColor, ditheredRings * 0.25);
 
-          // ── Bright vanishing point (center) ──
-          float centerBright = smoothstep(0.12, 0.0, radius);
-          col = mix(col, vec3(1.0), centerBright);
+          // ── Wall depth shading: subtle darkening toward edges ──
+          float wallShade = 1.0 - rdXY * 0.3;
+
+          // ── Compose ──
+          vec3 col = bg * wallShade;
+          col = mix(col, ringColor, ditheredRing * 0.35);
+
+          // ── Vanishing point glow ──
+          float centerDist = length(centered);
+          float centerGlow = smoothstep(0.1, 0.0, centerDist);
+          col = mix(col, vec3(1.0), centerGlow);
 
           return col;
         }
@@ -244,21 +270,39 @@ export class RetroRenderer {
             vec3 hyper = hyperspace(vUv, uHyperTime);
             float hyperMask = uHyperPhase;
 
-            // Exit reveal: hyperspace tears open from center, revealing stars.
-            // A dark circular opening grows from the rift center — no white edge,
-            // just a clean crack into the new starfield.
+            // Exit reveal: a hole opens at the tunnel vanishing point.
+            // Starts as ~1 pixel, grows into a portal. The edge fizzes
+            // with dithered energy particles — crackling boundary between
+            // hyperspace and normal space.
             if (uExitReveal > 0.0) {
               vec2 toRift = vUv - uRiftCenter;
               float aspect = resolution.x / resolution.y;
               toRift.x *= aspect;
               float dist = length(toRift);
 
-              // Opening radius — JS sends ease-out curve (fast start),
-              // so use it linearly here for immediate visibility
-              float openRadius = uExitReveal * 0.9;
+              // Hole radius: starts near zero, opens up
+              float openRadius = uExitReveal * 0.85;
 
-              // Inside opening = no hyperspace (starfield shows through)
-              hyperMask *= smoothstep(openRadius * 0.85, openRadius, dist);
+              // ── Fizzing dithered edge ──
+              vec2 exitScreenPos = floor(vUv * resolution);
+              // Animated noise — makes the edge sparkle/fizz
+              float fizzNoise = fract(sin(dot(exitScreenPos, vec2(12.9898, 78.233)) + uHyperTime * 3.0) * 43758.5453);
+
+              // Edge band: wider fizz zone as hole gets bigger
+              float edgeWidth = max(0.02, openRadius * 0.2);
+
+              // Inside hole = see through. Edge = fizzing dither. Outside = hyperspace.
+              float fizzMask;
+              if (dist < openRadius) {
+                fizzMask = 0.0;
+              } else if (dist < openRadius + edgeWidth) {
+                float edgeFactor = (dist - openRadius) / edgeWidth;
+                fizzMask = step(fizzNoise, edgeFactor);
+              } else {
+                fizzMask = 1.0;
+              }
+
+              hyperMask *= fizzMask;
             }
 
             result = mix(result, hyper, hyperMask);
