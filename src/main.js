@@ -1424,16 +1424,13 @@ window.addEventListener('keydown', (e) => {
     toggleOrbits();
   } else if (e.code === 'KeyG') {
     toggleGravityWell();
-  } else if (e.code === 'F6') {
-    e.preventDefault();
+  } else if (e.key === ',') {
     _forceNextDestType = 'spiral-galaxy';
     console.log('Debug: next warp → spiral galaxy (press Space)');
-  } else if (e.code === 'F7') {
-    e.preventDefault();
+  } else if (e.key === '.') {
     _forceNextDestType = 'emission-nebula';
     console.log('Debug: next warp → emission nebula (press Space)');
-  } else if (e.code === 'F8') {
-    e.preventDefault();
+  } else if (e.key === '?') {
     _forceNextDestType = 'globular-cluster';
     console.log('Debug: next warp → globular cluster (press Space)');
   } else if (e.key >= '1' && e.key <= '9') {
