@@ -181,41 +181,67 @@ export class Moon {
           vec3 surfaceColor;
 
           if (moonType == 1) {
-            // Rocky: cratered look — light highlands + dark maria
-            float craters = snoise(vPosition * noiseScale * 2.0);
-            craters = pow(max(craters, 0.0), 2.0);
-            float maria = snoise(vPosition * noiseScale * 0.5);
-            float mariaMask = smoothstep(0.1, 0.3, maria);
+            // Rocky: cratered highlands + dark maria basins (like Earth's Moon)
+            // Multi-scale noise for FBM-like detail
+            float maria = snoise(vPosition * noiseScale * 0.5)
+                        + snoise(vPosition * noiseScale * 1.0) * 0.4;
+            float mariaMask = smoothstep(-0.2, 0.5, maria);
             surfaceColor = mix(accentColor, baseColor, mariaMask);
-            // Bright ray craters
-            surfaceColor += vec3(0.1) * craters;
+            // Bright ray craters (stronger impact)
+            float craters = snoise(vPosition * noiseScale * 2.5);
+            craters = pow(max(craters, 0.0), 1.5);
+            surfaceColor += vec3(0.18) * craters;
+            // Fine surface roughness
+            float rough = snoise(vPosition * noiseScale * 5.0) * 0.08;
+            surfaceColor += vec3(rough);
           } else if (moonType == 2) {
-            // Ice: white surface with colored crack lines
-            float cracks = 1.0 - abs(snoise(vPosition * noiseScale * 3.0));
-            cracks = pow(cracks, 5.0);
-            surfaceColor = mix(baseColor, accentColor, cracks);
+            // Ice: white/blue surface with dark crack networks
+            // Broader cracks (pow 3 not 5) + dual-scale fractures
+            float cracks1 = 1.0 - abs(snoise(vPosition * noiseScale * 3.0));
+            cracks1 = pow(cracks1, 3.0);
+            float cracks2 = 1.0 - abs(snoise(vPosition * noiseScale * 1.2));
+            cracks2 = pow(cracks2, 2.5) * 0.5;
+            float cracks = min(cracks1 + cracks2, 1.0);
+            // Surface variation between cracks (subtle terrain)
+            float terrain = snoise(vPosition * noiseScale * 0.6) * 0.15 + 0.5;
+            vec3 iceBase = baseColor * terrain + baseColor * (1.0 - terrain) * 0.85;
+            surfaceColor = mix(iceBase, accentColor, cracks);
           } else if (moonType == 3) {
-            // Volcanic: sulfur yellow with dark lava patches
+            // Volcanic: sulfur yellow with dark lava patches (Io-like)
             float lava = snoise(vPosition * noiseScale * 1.5);
-            float lavaMask = smoothstep(-0.1, 0.2, lava);
+            float lavaMask = smoothstep(-0.2, 0.3, lava);
             surfaceColor = mix(accentColor, baseColor, lavaMask);
-            // Bright sulfur frost around vents
+            // Bright sulfur frost around vents (stronger)
             float frost = snoise(vPosition * noiseScale * 4.0);
-            frost = pow(max(frost, 0.0), 3.0);
-            surfaceColor += vec3(0.15, 0.12, 0.05) * frost;
+            frost = pow(max(frost, 0.0), 2.0);
+            surfaceColor += vec3(0.22, 0.18, 0.06) * frost;
+            // Dark caldera spots
+            float caldera = snoise(vPosition * noiseScale * 6.0);
+            caldera = pow(max(-caldera, 0.0), 3.0);
+            surfaceColor -= vec3(0.12) * caldera;
           } else if (moonType == 4) {
             // Terrestrial: ocean + land like a mini-Earth
             float continent = snoise(vPosition * noiseScale * 0.7);
-            continent += snoise(vPosition * noiseScale * 1.5) * 0.3;
-            continent += snoise(vPosition * noiseScale * 3.0) * 0.15;
+            continent += snoise(vPosition * noiseScale * 1.5) * 0.35;
+            continent += snoise(vPosition * noiseScale * 3.0) * 0.18;
+            continent += snoise(vPosition * noiseScale * 6.0) * 0.08;
             float height = continent * 0.5 + 0.5;
             float seaLevel = 0.48;
-            float landMask = step(seaLevel, height);
+            // Soft coastline instead of hard step
+            float landMask = smoothstep(seaLevel - 0.02, seaLevel + 0.04, height);
             surfaceColor = mix(baseColor, accentColor, landMask);
+            // Shallow water shelf (lighter near coast)
+            float shelf = smoothstep(seaLevel - 0.12, seaLevel, height) * (1.0 - landMask);
+            surfaceColor += vec3(0.06, 0.08, 0.04) * shelf;
           } else {
-            // Captured: simple dark noisy surface
-            float detail = n * 0.5 + 0.5;
-            surfaceColor = mix(baseColor, accentColor, detail);
+            // Captured: dark, battered surface with multi-scale roughness
+            float detail = snoise(vPosition * noiseScale) * 0.4
+                         + snoise(vPosition * noiseScale * 2.5) * 0.3
+                         + snoise(vPosition * noiseScale * 5.0) * 0.15;
+            float mask = detail * 0.5 + 0.5;
+            // Stretch across full range so posterization has bands to work with
+            mask = smoothstep(0.2, 0.8, mask);
+            surfaceColor = mix(baseColor, accentColor, mask);
           }
 
           // ── Dual-star Lighting ──
@@ -261,9 +287,10 @@ export class Moon {
             finalColor += accentColor * nightGlow * 0.15;
           }
 
-          // Posterize
+          // Posterize — wider edgeWidth (0.6) than planets (0.4) so dithering
+          // creates more visible transition bands, revealing surface detail
           finalColor = min(finalColor, vec3(1.0));
-          finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+          finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.6);
 
           gl_FragColor = vec4(finalColor, 1.0);
         }

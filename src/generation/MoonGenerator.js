@@ -18,29 +18,32 @@ import { earthRadiiToScene, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleCo
 export class MoonGenerator {
   static TYPES = ['captured', 'rocky', 'ice', 'volcanic', 'terrestrial'];
 
+  // Color palettes: base and accent must differ by ≥0.2 per channel so surface
+  // detail survives 6-level posterization (each step = 1/6 ≈ 0.167).
   static PALETTES = {
     captured: [
-      { base: [0.2, 0.18, 0.16], accent: [0.3, 0.28, 0.25] },     // Dark gray-brown
-      { base: [0.15, 0.14, 0.13], accent: [0.25, 0.22, 0.2] },     // Charcoal
+      { base: [0.12, 0.10, 0.09], accent: [0.35, 0.30, 0.25] },    // Dark charcoal + warm gray
+      { base: [0.08, 0.08, 0.10], accent: [0.30, 0.25, 0.22] },    // Near-black + brown-gray
+      { base: [0.14, 0.12, 0.08], accent: [0.38, 0.28, 0.20] },    // Dark rusty + sandy
     ],
     rocky: [
-      { base: [0.45, 0.43, 0.42], accent: [0.6, 0.58, 0.55] },     // Moon-gray (light highlands)
-      { base: [0.3, 0.28, 0.27], accent: [0.5, 0.48, 0.45] },      // Darker rocky
-      { base: [0.25, 0.22, 0.2], accent: [0.42, 0.4, 0.38] },      // Brown-gray (Callisto)
+      { base: [0.55, 0.53, 0.50], accent: [0.22, 0.20, 0.18] },    // Light highlands + dark maria
+      { base: [0.50, 0.45, 0.42], accent: [0.18, 0.16, 0.15] },    // Moon-gray + deep shadow
+      { base: [0.48, 0.40, 0.35], accent: [0.20, 0.18, 0.16] },    // Brown highland + dark basin
     ],
     ice: [
-      { base: [0.75, 0.78, 0.82], accent: [0.5, 0.55, 0.65] },     // White-blue (Europa)
-      { base: [0.88, 0.88, 0.92], accent: [0.6, 0.65, 0.75] },      // Brilliant white (Enceladus)
-      { base: [0.6, 0.65, 0.7], accent: [0.4, 0.45, 0.55] },       // Blue-gray ice
+      { base: [0.85, 0.88, 0.92], accent: [0.30, 0.40, 0.55] },    // Bright ice + deep blue cracks
+      { base: [0.90, 0.90, 0.95], accent: [0.40, 0.50, 0.65] },    // Brilliant white + teal cracks
+      { base: [0.70, 0.75, 0.82], accent: [0.25, 0.35, 0.50] },    // Blue-gray ice + dark fissures
     ],
     volcanic: [
-      { base: [0.7, 0.6, 0.2], accent: [0.15, 0.12, 0.1] },       // Sulfur yellow + dark lava
-      { base: [0.75, 0.55, 0.15], accent: [0.2, 0.1, 0.08] },      // Orange-yellow + black
+      { base: [0.75, 0.65, 0.20], accent: [0.12, 0.08, 0.05] },    // Sulfur yellow + dark lava
+      { base: [0.80, 0.55, 0.12], accent: [0.15, 0.06, 0.04] },    // Orange-yellow + black lava
     ],
     terrestrial: [
-      { base: [0.1, 0.2, 0.5], accent: [0.2, 0.45, 0.2] },        // Blue ocean + green land
-      { base: [0.08, 0.18, 0.45], accent: [0.3, 0.5, 0.15] },      // Dark ocean + lush green
-      { base: [0.12, 0.25, 0.5], accent: [0.35, 0.35, 0.2] },      // Ocean + savanna
+      { base: [0.08, 0.15, 0.50], accent: [0.25, 0.50, 0.18] },    // Blue ocean + green land
+      { base: [0.06, 0.12, 0.45], accent: [0.35, 0.55, 0.12] },    // Dark ocean + lush green
+      { base: [0.10, 0.20, 0.48], accent: [0.40, 0.38, 0.15] },    // Ocean + savanna
     ],
   };
 
