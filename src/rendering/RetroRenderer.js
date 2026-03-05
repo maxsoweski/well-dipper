@@ -218,23 +218,21 @@ export class RetroRenderer {
             result = mix(bg.rgb, scene.rgb, fadeScene);
           }
 
-          // ── Fold glow: radial white disc at rift center that grows outward ──
-          // Starts as a tiny bright point, expands into a glowing disc.
-          // Centered on uRiftCenter so it follows the rift direction.
+          // ── Fold glow: vertical white pillar at rift center that widens ──
+          // Starts as a thin white slit, widens to cover the entire FOV.
+          // Centered on uRiftCenter.x so it follows the rift direction.
           if (uFoldGlow > 0.0) {
-            vec2 toRift = vUv - uRiftCenter;
-            float aspect = resolution.x / resolution.y;
-            toRift.x *= aspect;  // aspect correction so glow is circular
-            float dist = length(toRift);
+            float xDist = abs(vUv.x - uRiftCenter.x);
 
-            // Core radius: grows quadratically from tiny dot to wide disc
-            float coreRadius = uFoldGlow * uFoldGlow * 0.12;
+            // Pillar half-width: grows quadratically from paper-thin to full screen
+            // At uFoldGlow=1.0, halfWidth=0.55 which exceeds max xDist (0.5)
+            float halfWidth = uFoldGlow * uFoldGlow * 0.55;
 
             // Solid opaque white core (hard edge)
-            float core = step(dist, coreRadius);
+            float core = step(xDist, halfWidth);
 
-            // Soft outer halo for glow bleeding
-            float halo = smoothstep(coreRadius * 3.0, coreRadius, dist) * 0.35 * uFoldGlow;
+            // Soft outer halo for glow bleeding beyond the pillar edge
+            float halo = smoothstep(halfWidth + 0.15, halfWidth, xDist) * 0.3 * uFoldGlow;
 
             float glow = max(core, halo);
             result = mix(result, vec3(1.0), glow);
