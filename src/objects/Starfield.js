@@ -111,8 +111,11 @@ export class Starfield {
             );
             gl_Position.xy = folded * gl_Position.w;
 
-            // Streak: based on total distance from rift (all stars smear)
-            vStreakAmount = uFoldAmount * min(distFromCenter, 2.0);
+            // Streak: stars near the pillar smear much harder.
+            // proximityBoost ramps from 1× at the edges to 4× at the rift center.
+            float foldedDist = length(folded - uRiftCenter);
+            float proximityBoost = 1.0 + smoothstep(0.5, 0.0, foldedDist) * 3.0;
+            vStreakAmount = uFoldAmount * min(distFromCenter, 2.0) * proximityBoost;
           }
 
           // Point size: base size × streak elongation factor
