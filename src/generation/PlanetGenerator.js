@@ -337,61 +337,64 @@ export class PlanetGenerator {
     const { frostLine, hzInner, hzOuter, starType } = zones;
 
     // ── Scorching zone: inside 0.3x habitable zone inner edge ──
+    // Boosted hot-jupiters & carbon for more visual variety
     if (orbitRadius < hzInner * 0.3) {
-      if (starType !== 'M' && rng.chance(0.07)) return 'hot-jupiter';
-      if (roll < 0.30) return 'lava';
-      if (roll < 0.52) return 'rocky';
-      if (roll < 0.68) return 'venus';
-      if (roll < 0.82) return 'carbon';
+      if (starType !== 'M' && rng.chance(0.15)) return 'hot-jupiter';
+      if (roll < 0.28) return 'lava';
+      if (roll < 0.46) return 'rocky';
+      if (roll < 0.58) return 'venus';
+      if (roll < 0.76) return 'carbon';
       return 'rocky';
     }
 
     // ── Inner zone: between scorching and habitable zone ──
+    // More venus, lava, carbon for exotic variety
     if (orbitRadius < hzInner) {
-      if (roll < 0.22) return 'rocky';
-      if (roll < 0.40) return 'venus';
-      if (roll < 0.55) return 'terrestrial';
-      if (roll < 0.65) return 'lava';
-      if (roll < 0.78) return 'sub-neptune';
-      if (roll < 0.88) return 'carbon';
+      if (roll < 0.18) return 'rocky';
+      if (roll < 0.34) return 'venus';
+      if (roll < 0.46) return 'terrestrial';
+      if (roll < 0.58) return 'lava';
+      if (roll < 0.68) return 'sub-neptune';
+      if (roll < 0.80) return 'carbon';
       return 'ocean';
     }
 
     // ── Habitable zone ──
+    // Boosted eyeball, ocean, and terrestrial for visual interest
     if (orbitRadius < hzOuter) {
-      // M/K stars: habitable zone is close → tidal locking → eyeball planets
-      const eyeballBoost = (starType === 'M' || starType === 'K') ? 0.15 : 0.03;
-      if (roll < 0.22) return 'terrestrial';
+      // Eyeball planets: boosted for ALL star types, extra for M/K (tidal locking)
+      const eyeballBoost = (starType === 'M' || starType === 'K') ? 0.18 : 0.10;
+      if (roll < 0.20) return 'terrestrial';
       if (roll < 0.38) return 'ocean';
       if (roll < 0.38 + eyeballBoost) return 'eyeball';
-      if (roll < 0.58) return 'sub-neptune';
-      if (roll < 0.70) return 'rocky';
-      if (roll < 0.82) return 'venus';
+      if (roll < 0.55) return 'sub-neptune';
+      if (roll < 0.65) return 'rocky';
+      if (roll < 0.75) return 'venus';
       return 'ice';
     }
 
     // ── Transition zone: between habitable zone and frost line ──
+    // More gas giants and carbon for striking visuals
     if (orbitRadius < frostLine) {
-      if (roll < 0.22) return 'sub-neptune';
-      if (roll < 0.40) return 'ice';
-      if (roll < 0.52) return 'rocky';
-      if (roll < 0.65) return 'gas-giant';
-      if (roll < 0.78) return 'ocean';
-      if (roll < 0.88) return 'terrestrial';
+      if (roll < 0.18) return 'sub-neptune';
+      if (roll < 0.32) return 'ice';
+      if (roll < 0.40) return 'rocky';
+      if (roll < 0.58) return 'gas-giant';
+      if (roll < 0.70) return 'ocean';
+      if (roll < 0.82) return 'terrestrial';
       return 'carbon';
     }
 
     // ── Outer system: beyond frost line ──
-    // Gas giants peak at 1-3x frost line distance, then decline
-    // M-dwarfs rarely have gas giants (~3% real rate)
+    // Boosted gas giants for all star types (visually spectacular)
     const frostRatio = orbitRadius / frostLine;
-    const gasBase = (starType === 'M') ? 0.08 : 0.28;
+    const gasBase = (starType === 'M') ? 0.15 : 0.32;
     const gasBoost = (frostRatio < 3.0 && starType !== 'M') ? 0.12 : 0.0;
     if (roll < gasBase + gasBoost) return 'gas-giant';
     if (roll < 0.48) return 'ice';
-    if (roll < 0.65) return 'sub-neptune';
-    if (roll < 0.75) return 'rocky';
-    if (roll < 0.85) return 'ocean';
+    if (roll < 0.60) return 'sub-neptune';
+    if (roll < 0.70) return 'rocky';
+    if (roll < 0.82) return 'ocean';
     return 'carbon';
   }
 }

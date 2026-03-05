@@ -29,15 +29,18 @@ import {
  * with planets in P-type (circumbinary) orbits.
  */
 export class StarSystemGenerator {
-  // Cinematic weighting — boosts rare but visually interesting star types
+  // Cinematic weighting — heavily boosts rare but visually interesting star types.
+  // In reality M-dwarfs are 75%+ of all stars, but that's visually boring for a
+  // screensaver — most systems would look the same (dim red/orange + small planets).
+  // This distribution gives roughly equal chances of "cool" vs "warm" vs "hot" stars.
   static STAR_WEIGHTS = [
-    { type: 'M', weight: 0.30 },
-    { type: 'K', weight: 0.25 },
-    { type: 'G', weight: 0.18 },
-    { type: 'F', weight: 0.12 },
-    { type: 'A', weight: 0.08 },
-    { type: 'B', weight: 0.05 },
-    { type: 'O', weight: 0.02 },
+    { type: 'M', weight: 0.18 },  // Red dwarfs: still most common, but toned down
+    { type: 'K', weight: 0.20 },  // Orange: common, warm-toned systems
+    { type: 'G', weight: 0.20 },  // Yellow (Sun-like): familiar, good variety
+    { type: 'F', weight: 0.16 },  // White-yellow: bright, lots of planets
+    { type: 'A', weight: 0.13 },  // Blue-white: dramatic, bright
+    { type: 'B', weight: 0.08 },  // Blue: spectacular, massive
+    { type: 'O', weight: 0.05 },  // Blue giants: rare and stunning
   ];
 
   // Visual properties per spectral class

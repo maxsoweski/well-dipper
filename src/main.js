@@ -645,7 +645,10 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   };
 
   for (const sData of data.stars) {
-    const renderR = sData.renderRadius || sData.radiusScene;
+    // Navigable spaces are enormous (60K-500K radius) — stars must be exaggerated
+    // so they're visible while flying between them. Use at least 0.1% of space radius.
+    const minVisible = data.radius * 0.001;
+    const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
     const starObj = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
     starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
     starObj.addTo(scene);
@@ -868,42 +871,50 @@ function gallerySpawn() {
     galleryObject = new VolumetricNebula(data.gasCloud);
     galleryObject.addTo(scene);
 
-    // Stars
-    const starInfo = { color1: [1, 1, 1], brightness1: 1, color2: [0, 0, 0], brightness2: 0 };
+    // Stars — use exaggerated render radius so they're visible in the vast gas cloud
     for (const sData of data.stars) {
-      const renderR = sData.renderRadius || sData.radiusScene;
+      // Render stars larger: at least 0.1% of nebula radius so they're visible
+      const minVisible = data.radius * 0.001;
+      const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
       const star = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
       star.mesh.position.set(...sData.position);
       star.addTo(scene);
       _galleryMeshes.push(star);
     }
 
-    const radius = data.radius;
-    camera.position.set(0, radius * 0.15, radius * 0.8);
-    camera.lookAt(0, 0, 0);
+    // Position camera near the first star so we can see stars + gas up close
+    const s0 = data.stars[0];
+    const starPos = new THREE.Vector3(...s0.position);
+    const viewDist = data.radius * 0.08;  // Close enough to see gas particles
+    camera.position.set(starPos.x + viewDist * 0.3, starPos.y + viewDist * 0.2, starPos.z + viewDist);
+    camera.lookAt(starPos);
 
-    infoText = `${nebulaType}  |  ${data.gasCloud.particleCount} gas + ${data.stars.length} stars  |  r=${radius.toFixed(0)}`;
+    infoText = `${nebulaType}  |  ${data.gasCloud.particleCount} gas + ${data.stars.length} stars  |  r=${data.radius.toFixed(0)}`;
   }
 
   // ── Navigable open cluster (stars only) ──
   else if (type === 'nav-open-cluster') {
     const data = NavigableClusterGenerator.generate(seed);
 
-    // Stars
-    const starInfo = { color1: [1, 1, 1], brightness1: 1, color2: [0, 0, 0], brightness2: 0 };
+    // Stars — use exaggerated render radius so they're visible across the cluster
     for (const sData of data.stars) {
-      const renderR = sData.renderRadius || sData.radiusScene;
+      // At least 0.15% of cluster radius so stars are visible
+      const minVisible = data.radius * 0.0015;
+      const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
       const star = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
       star.mesh.position.set(...sData.position);
       star.addTo(scene);
       _galleryMeshes.push(star);
     }
 
-    const radius = data.radius;
-    camera.position.set(0, radius * 0.1, radius * 0.5);
-    camera.lookAt(0, 0, 0);
+    // Position camera near the first star — the cluster is too vast to see from outside
+    const s0 = data.stars[0];
+    const starPos = new THREE.Vector3(...s0.position);
+    const viewDist = data.radius * 0.06;
+    camera.position.set(starPos.x + viewDist * 0.3, starPos.y + viewDist * 0.15, starPos.z + viewDist);
+    camera.lookAt(starPos);
 
-    infoText = `open-cluster  |  ${data.stars.length} stars  |  r=${radius.toFixed(0)}`;
+    infoText = `open-cluster  |  ${data.stars.length} stars  |  r=${data.radius.toFixed(0)}`;
   }
 
   // ── Deep sky objects (billboard/distant view) ──
@@ -1003,12 +1014,12 @@ function gallerySpawn() {
     }
 
     if (moonData) {
-      const sceneMoonData = {
+      // Use map-unit radius (same scale the Moon class geometry expects).
+      // Only override orbit so it sits at origin for gallery viewing.
+      const galleryMoonData = {
         ...moonData,
-        radius: moonData.radiusScene,
-        orbitRadius: 0,       // Override: sit at origin for gallery viewing
+        orbitRadius: 0,       // Sit at origin — no orbit
         orbitSpeed: 0,        // Don't orbit — stay still
-        noiseScale: moonData.noiseScale * (moonData.radius / moonData.radiusScene),
       };
 
       const lightDir = new THREE.Vector3(0.5, 0.3, 0.8).normalize();
@@ -1019,12 +1030,12 @@ function gallerySpawn() {
         brightness2: 0,
       };
 
-      const moon = new Moon(sceneMoonData, lightDir, null, starInfo);
+      const moon = new Moon(galleryMoonData, lightDir, null, starInfo);
       moon.addTo(scene);
       _galleryMeshes.push(moon);
 
-      // Camera at 3x body radius — moon is at origin (orbitRadius=0)
-      const r = sceneMoonData.radius;
+      // Camera at 3x map-unit body radius
+      const r = galleryMoonData.radius;
       camera.position.set(0, r * 0.3, r * 3);
       camera.lookAt(0, 0, 0);
 
