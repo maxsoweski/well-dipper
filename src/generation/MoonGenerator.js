@@ -1,4 +1,5 @@
 import { earthRadiiToScene, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleConstants.js';
+import { PlanetGenerator } from './PlanetGenerator.js';
 
 /**
  * MoonGenerator — produces data describing moons orbiting a planet.
@@ -55,7 +56,21 @@ export class MoonGenerator {
    * @param {number} totalMoons - how many moons this planet has
    * @returns {object} moon data
    */
+  // Planet types that can appear as moons of large planets.
+  // NOT gas-giant (too massive), hot-jupiter (needs star proximity),
+  // lava (inner-system only), eyeball (tidal lock to star), carbon (keep rare).
+  static PLANET_MOON_TYPES = ['terrestrial', 'ocean', 'ice', 'rocky', 'venus', 'sub-neptune'];
+
   static generate(rng, planetData, moonIndex, totalMoons) {
+    // ── Planet-moon check: large planets can have planet-class moons ──
+    // Gas giants and sub-neptunes with 3+ moons, not the innermost slot
+    // (innermost is reserved for volcanic Io-like moons).
+    // ~15% chance per eligible slot.
+    const isLargeParent = planetData.type === 'gas-giant' || planetData.type === 'sub-neptune';
+    if (isLargeParent && moonIndex > 0 && totalMoons >= 3 && rng.chance(0.15)) {
+      return this._generatePlanetMoon(rng, planetData, moonIndex);
+    }
+
     const type = this._pickType(rng, planetData, moonIndex);
 
     // Size: depends on moon type and parent planet
@@ -174,6 +189,72 @@ export class MoonGenerator {
       radiusEarth,
       radiusScene: earthRadiiToScene(radiusEarth),
       radius: fraction * planetData.radius,  // map units (backward compat)
+    };
+  }
+
+  /**
+   * Generate a planet-class moon — uses PlanetGenerator for visuals
+   * but MoonGenerator for orbital parameters.
+   * Think Titan, Ganymede, or a captured mini-Neptune.
+   */
+  static _generatePlanetMoon(rng, planetData, moonIndex) {
+    // Pick a planet type appropriate for a moon
+    const planetType = rng.pick(this.PLANET_MOON_TYPES);
+
+    // Generate full planet data (orbit distance doesn't matter — we override it)
+    const pData = PlanetGenerator.generate(rng, 1.0, planetData.sunDirection, null, planetType);
+
+    // Moon radius: 10-25% of parent (these are big moons — Ganymede is 0.038× Jupiter)
+    const fraction = rng.range(0.10, 0.25);
+    const radiusEarth = fraction * planetData.radiusEarth;
+    const radiusScene = earthRadiiToScene(radiusEarth);
+    const radius = fraction * planetData.radius;
+
+    // Orbit: mid or far zone (planet-moons don't orbit super close)
+    const orbitZone = moonIndex <= 2 ? 'mid' : 'far';
+    const orbitRanges = { mid: [12, 30], far: [30, 60] };
+    const [minMult, maxMult] = orbitRanges[orbitZone];
+    const zoneSpread = moonIndex * rng.range(3, 8);
+    const orbitMultiple = rng.range(minMult, maxMult) + zoneSpread;
+
+    const orbitRadiusEarth = planetData.radiusEarth * orbitMultiple;
+    const orbitRadiusScene = earthRadiiToScene(orbitRadiusEarth);
+    const mapBaseOrbit = planetData.radius * (2.0 + moonIndex * 1.8);
+    const orbitRadius = mapBaseOrbit + rng.range(-0.3, 0.5) * planetData.radius;
+
+    const orbitSpeed = rng.range(0.3, 0.6) / (1.0 + moonIndex * 0.6);
+    const inclination = rng.range(-0.15, 0.15);
+    const startAngle = rng.range(0, Math.PI * 2);
+
+    // Override planet data with moon-appropriate radius
+    const scaledPlanetData = {
+      ...pData,
+      radiusEarth,
+      radiusScene,
+      radius,
+      // No moons of moons
+      moonCount: 0,
+    };
+
+    return {
+      type: planetType,
+      isPlanetMoon: true,
+      planetData: scaledPlanetData,
+      radiusEarth,
+      radiusScene,
+      orbitRadiusEarth,
+      orbitRadiusScene,
+      radius,
+      orbitRadius,
+      // Dummy colors for billboard fallback (use planet palette)
+      baseColor: pData.baseColor,
+      accentColor: pData.accentColor,
+      orbitSpeed,
+      inclination,
+      startAngle,
+      noiseScale: pData.noiseScale,
+      clouds: pData.clouds,
+      atmosphere: pData.atmosphere,
     };
   }
 

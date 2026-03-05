@@ -129,7 +129,7 @@ const GALLERY_TYPES = [
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
   'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
   'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
-  'moon',
+  'moon', 'planet-moon',
 ];
 let galleryMode = false;
 let gallerySeed = 1;
@@ -371,7 +371,32 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     const moonBillboards = [];
     const moonOrbitLines = [];
     for (const moonData of sceneMoons) {
-      const moon = new Moon(moonData, planet._lightDir, planet._lightDir2, systemData.starInfo);
+      let moon;
+      if (moonData.isPlanetMoon) {
+        // Planet-class moon: use full Planet renderer with a thin wrapper
+        // for orbital behavior (Planet.js has no built-in orbit logic).
+        const pmRatio = moonData.planetData.radius / moonData.planetData.radiusScene;
+        const scenePMData = {
+          ...moonData.planetData,
+          radius: moonData.planetData.radiusScene,
+          noiseScale: moonData.planetData.noiseScale * pmRatio,
+          clouds: moonData.planetData.clouds
+            ? { ...moonData.planetData.clouds, scale: moonData.planetData.clouds.scale * pmRatio }
+            : null,
+        };
+        const planetMoon = new Planet(scenePMData, systemData.starInfo);
+        moon = {
+          mesh: planetMoon.mesh,
+          data: { ...moonData, radius: moonData.radiusScene, orbitRadius: moonData.orbitRadiusScene },
+          isPlanetMoon: true,
+          planet: planetMoon,
+          orbitAngle: moonData.startAngle,
+          addTo(s) { s.add(planetMoon.mesh); },
+          dispose() { planetMoon.dispose(); },
+        };
+      } else {
+        moon = new Moon(moonData, planet._lightDir, planet._lightDir2, systemData.starInfo);
+      }
       moon.addTo(scene);
       moons.push(moon);
 
@@ -495,7 +520,13 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     }
     clickTargets.set(entry.billboard.sprite, { type: 'planet', planetIndex: i });
     for (let m = 0; m < entry.moons.length; m++) {
-      clickTargets.set(entry.moons[m].mesh, { type: 'moon', planetIndex: i, moonIndex: m });
+      const moonObj = entry.moons[m];
+      // Planet-moons use a Group (.mesh) — register the surface child for raycasting
+      const moonClickMesh = moonObj.isPlanetMoon ? moonObj.planet.surface : moonObj.mesh;
+      clickTargets.set(moonClickMesh, { type: 'moon', planetIndex: i, moonIndex: m });
+      if (moonObj.isPlanetMoon && moonObj.planet.ring) {
+        clickTargets.set(moonObj.planet.ring, { type: 'moon', planetIndex: i, moonIndex: m });
+      }
       clickTargets.set(entry.moonBillboards[m].sprite, { type: 'moon', planetIndex: i, moonIndex: m });
     }
   }
@@ -1068,6 +1099,40 @@ function gallerySpawn() {
       camera.position.set(0, 1, 10);
       camera.lookAt(0, 0, 0);
     }
+  }
+
+  // ── Planet-Moon (planet-class body shown as a moon) ──
+  else if (type === 'planet-moon') {
+    // Force a planet-moon by picking a random eligible type
+    const pmType = rng.pick(MoonGenerator.PLANET_MOON_TYPES);
+    const forcedPM = PlanetGenerator.generate(rng, 1.0, [0, 0, 1], null, pmType);
+    const scenePMData = {
+      ...forcedPM,
+      radius: forcedPM.radiusScene,
+      noiseScale: forcedPM.noiseScale * (forcedPM.radius / forcedPM.radiusScene),
+      clouds: forcedPM.clouds
+        ? { ...forcedPM.clouds, scale: forcedPM.clouds.scale * (forcedPM.radius / forcedPM.radiusScene) }
+        : null,
+    };
+    const planetMoon = new Planet(scenePMData, {
+      color1: [1.0, 0.98, 0.94],
+      brightness1: 1.5,
+      color2: [0, 0, 0],
+      brightness2: 0,
+    });
+    planetMoon._lightDir.set(0.5, 0.3, 0.8).normalize();
+    planetMoon.addTo(scene);
+    _galleryMeshes.push(planetMoon);
+
+    const r = scenePMData.radius;
+    camera.position.set(0, r * 0.3, r * 3);
+    camera.lookAt(0, 0, 0);
+
+    const features = [];
+    if (forcedPM.rings) features.push('rings');
+    if (forcedPM.clouds) features.push('clouds');
+    if (forcedPM.atmosphere) features.push('atmo');
+    infoText = `as-moon: ${pmType}  |  ${forcedPM.radiusEarth.toFixed(2)} R⊕  |  ${features.join(', ') || 'no extras'}`;
   }
 
   // Hand camera to orbit controller — user can drag to rotate, auto-rotates slowly
@@ -1668,7 +1733,26 @@ function animate() {
 
       // Moons orbit around the planet
       for (const moon of entry.moons) {
-        moon.update(deltaTime, entry.planet.mesh.position);
+        if (moon.isPlanetMoon) {
+          // Planet-class moons: handle orbital positioning externally
+          // (Planet.js has no orbit logic — Moon.js does it internally)
+          moon.orbitAngle += moon.data.orbitSpeed * deltaTime;
+          const r = moon.data.orbitRadius;
+          const angle = moon.orbitAngle;
+          const incl = moon.data.inclination || 0;
+          const pp = entry.planet.mesh.position;
+          moon.mesh.position.set(
+            pp.x + Math.cos(angle) * r,
+            pp.y - Math.sin(incl) * Math.sin(angle) * r,
+            pp.z + Math.cos(incl) * Math.sin(angle) * r,
+          );
+          // Sync light direction from parent planet
+          moon.planet._lightDir.copy(entry.planet._lightDir);
+          if (system.isBinary) moon.planet._lightDir2.copy(entry.planet._lightDir2);
+          moon.planet.update(deltaTime);
+        } else {
+          moon.update(deltaTime, entry.planet.mesh.position);
+        }
       }
 
       // Moon orbit lines follow the parent planet
@@ -1721,11 +1805,22 @@ function animate() {
 
       // Moon eclipse shadows: planet eclipsing starlight from moons
       for (const moon of entry.moons) {
-        const mMat = moon.mesh.material;
-        mMat.uniforms.shadowPlanetPos.value.copy(entry.planet.mesh.position);
-        mMat.uniforms.shadowPlanetRadius.value = entry.planet.data.radius;
-        mMat.uniforms.starPos1.value.copy(_star1Pos);
-        mMat.uniforms.starPos2.value.copy(_star2Pos);
+        if (moon.isPlanetMoon) {
+          // Planet-class moons use Planet.js shader — shadow uniforms on surface material
+          const pmMat = moon.planet.surface.material;
+          // Parent planet as shadow caster (reuse the planet-planet shadow slots)
+          pmMat.uniforms.shadowPlanetCount.value = 1;
+          pmMat.uniforms.shadowPlanetPos.value[0].copy(entry.planet.mesh.position);
+          pmMat.uniforms.shadowPlanetRadius.value[0] = entry.planet.data.radius;
+          pmMat.uniforms.starPos1.value.copy(_star1Pos);
+          pmMat.uniforms.starPos2.value.copy(_star2Pos);
+        } else {
+          const mMat = moon.mesh.material;
+          mMat.uniforms.shadowPlanetPos.value.copy(entry.planet.mesh.position);
+          mMat.uniforms.shadowPlanetRadius.value = entry.planet.data.radius;
+          mMat.uniforms.starPos1.value.copy(_star1Pos);
+          mMat.uniforms.starPos2.value.copy(_star2Pos);
+        }
       }
     }
 
