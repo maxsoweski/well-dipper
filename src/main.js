@@ -98,13 +98,18 @@ autoNav.onTourComplete = () => {
   }, 1500);
 };
 
+// Debug: force the next warp to a specific destination type.
+// Set via keyboard shortcuts (F6/F7/F8), cleared after use.
+let _forceNextDestType = null;
+
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
 warpEffect.onPrepareSystem = () => {
   seedCounter++;
   const seed = `system-${seedCounter}`;
   const rng = new SeededRandom(seed);
-  const destType = DestinationPicker.pick(rng);
+  const destType = _forceNextDestType || DestinationPicker.pick(rng);
+  _forceNextDestType = null; // clear after use
 
   if (destType === 'star-system') {
     pendingSystemData = StarSystemGenerator.generate(seed);
@@ -1419,6 +1424,18 @@ window.addEventListener('keydown', (e) => {
     toggleOrbits();
   } else if (e.code === 'KeyG') {
     toggleGravityWell();
+  } else if (e.code === 'F6') {
+    e.preventDefault();
+    _forceNextDestType = 'spiral-galaxy';
+    console.log('Debug: next warp → spiral galaxy (press Space)');
+  } else if (e.code === 'F7') {
+    e.preventDefault();
+    _forceNextDestType = 'emission-nebula';
+    console.log('Debug: next warp → emission nebula (press Space)');
+  } else if (e.code === 'F8') {
+    e.preventDefault();
+    _forceNextDestType = 'globular-cluster';
+    console.log('Debug: next warp → globular cluster (press Space)');
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
