@@ -578,15 +578,19 @@ function warpSwapSystem() {
   spawnSystem({ forWarp: true, systemData: pendingSystemData });
   pendingSystemData = null;
 
-  // Position camera far from the new star, facing it.
-  // Camera will fly forward at 30 units/s through remaining hyper (~9s)
-  // and exit (~2s, decelerating), covering ~300 units total.
+  // Position camera so it arrives at the star's orbit distance when EXIT ends.
+  // Speed is 30 units/s through HYPER (constant) and EXIT (decelerating via
+  // smootherstep, integral = 0.5 × max). Total travel = HYPER + EXIT distances.
   if (system) {
     const star = system.star;
     const starPos = star.mesh.position;
     const innerOrbit = system.planets[0].orbitRadius;
     const orbitDist = Math.min(star.data.radius * 4, innerOrbit * 0.4);
-    const travelDist = 300; // ~9s×30 + ~2s×15avg
+
+    const speed = 30; // must match cameraForwardSpeed in HYPER/EXIT phases
+    const hyperDist = speed * warpEffect.HYPER_DUR;          // 300
+    const exitDist = speed * warpEffect.EXIT_DUR * 0.5;      // 30 (smootherstep integral)
+    const travelDist = hyperDist + exitDist;                  // 330
 
     // Place camera along +Z from star, facing toward it
     camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist);
