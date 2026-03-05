@@ -225,30 +225,29 @@ export class RetroRenderer {
             result = mix(bg.rgb, scene.rgb, fadeScene);
           }
 
-          // ── Fold portal: circular opening with chromatic aberration ──
-          // Space pinches into a central point; a portal opens with red/blue
-          // color fringing at its edge, growing as the fold consumes more space.
+          // ── Fold portal: chromatic aberration at portal edge ──
+          // Space pinches into a central point; hyperspace is visible THROUGH
+          // the portal (rendered in the unified hyperspace block below).
+          // CA is applied here so it fringes the normal-space side of the edge.
+          float portalRadius = 0.0;
+          float portalDist = 0.0;
           if (uFoldGlow > 0.0) {
             vec2 toCenter = vUv - uRiftCenter;
             float portalAspect = resolution.x / resolution.y;
             vec2 aspectCorr = vec2(toCenter.x * portalAspect, toCenter.y);
-            float dist = length(aspectCorr);
-
-            // Portal radius grows with fold frontier
-            float portalRadius = uFoldGlow * 0.45;
+            portalDist = length(aspectCorr);
+            portalRadius = uFoldGlow * 0.45;
 
             // ── Chromatic aberration at portal edge ──
-            // Red channel pushed outward, blue inward — lens-like fringing
             vec2 caDir = length(toCenter) > 0.001 ? normalize(toCenter) : vec2(0.0);
             float caOffset = 0.012 * (1.0 + uFoldGlow);
-            float edgeProximity = 1.0 - smoothstep(0.0, 0.12, abs(dist - portalRadius));
+            float edgeProximity = 1.0 - smoothstep(0.0, 0.12, abs(portalDist - portalRadius));
             float caStrength = edgeProximity * uFoldGlow;
 
             if (caStrength > 0.01) {
               vec2 uvR = vUv + caDir * caOffset;
               vec2 uvB = vUv - caDir * caOffset;
 
-              // Re-composite at offset UVs for proper CA on full scene
               vec4 bgR = texture2D(bgTexture, uvR);
               vec4 scR = texture2D(sceneTexture, uvR);
               vec4 bgB = texture2D(bgTexture, uvB);
@@ -259,15 +258,6 @@ export class RetroRenderer {
 
               result = mix(result, vec3(rVal, result.g, bVal), caStrength * 0.8);
             }
-
-            // ── Portal core: bright white with dithered edge ──
-            vec2 portalScreenPos = floor(vUv * resolution);
-            float portalNoise = fract(sin(dot(portalScreenPos, vec2(12.9898, 78.233))) * 43758.5453);
-            float portalGrad = smoothstep(portalRadius + 0.03, max(0.0, portalRadius - 0.02), dist);
-            float ditheredCore = step(portalNoise, portalGrad);
-
-            float portalGlow = ditheredCore * uFoldGlow;
-            result = mix(result, vec3(1.0), portalGlow);
           }
 
           // ── HUD overlay (hidden during warp) ──
@@ -289,9 +279,27 @@ export class RetroRenderer {
           }
 
           // ── Warp: hyperspace tunnel ──
-          if (uHyperPhase > 0.0) {
+          // Renders whenever hyperspace is active (ENTER/HYPER/EXIT)
+          // OR when the fold portal is open (FOLD) — hyperspace is visible
+          // THROUGH the portal so you visually "fly into" it.
+          if (uHyperPhase > 0.0 || uFoldGlow > 0.0) {
             vec3 hyper = hyperspace(vUv, uHyperTime);
             float hyperMask = uHyperPhase;
+
+            // ── Fold portal mask: show hyperspace through the portal ──
+            // During FOLD, portalRadius/portalDist are set by the fold
+            // portal block above. Hyperspace peeks through with a
+            // dithered edge that matches the retro aesthetic.
+            if (uFoldGlow > 0.0 && uExitReveal <= 0.0) {
+              vec2 pScreenPos = floor(vUv * resolution);
+              float pNoise = fract(sin(dot(pScreenPos, vec2(12.9898, 78.233))) * 43758.5453);
+
+              // Gradient: fully visible at center, dithered fade at edge
+              float pGrad = smoothstep(portalRadius + 0.03, max(0.0, portalRadius - 0.02), portalDist);
+              float portalMask = step(pNoise, pGrad) * uFoldGlow;
+
+              hyperMask = max(hyperMask, portalMask);
+            }
 
             // Exit reveal: a hole opens at the tunnel vanishing point.
             // Starts as ~1 pixel, grows into a portal. The edge fizzes

@@ -100,10 +100,10 @@ export class WarpEffect {
     }
 
     // Accumulate hyperspace animation time whenever the tunnel is visible.
-    // This starts during ENTER (when hyperPhase first ramps above 0) so the
-    // tunnel is already in motion when the white flash fades and reveals it.
-    // Continues through HYPER and EXIT for uninterrupted animation.
-    if (this.hyperPhase > 0) {
+    // This starts during FOLD (when the portal opens and shows hyperspace
+    // through it) so the tunnel is already in motion before ENTER/HYPER.
+    // Continues through all warp phases for uninterrupted animation.
+    if (this.hyperPhase > 0 || this.foldGlow > 0) {
       this.hyperTime += dt;
     }
 
@@ -167,11 +167,12 @@ export class WarpEffect {
     // Camera decelerates
     this.cameraForwardSpeed = 80 * (1 - t);
 
-    // White flash peaks at ~50% then fades into hyperspace
+    // White flash: reduced peak since hyperspace is already visible
+    // through the fold portal — just a brief brightening, not a full whiteout.
     if (this.progress < 0.5) {
-      this.whiteFlash = this._ease(this.progress / 0.5);
+      this.whiteFlash = this._ease(this.progress / 0.5) * 0.3;
     } else {
-      this.whiteFlash = 1 - this._ease((this.progress - 0.5) / 0.5);
+      this.whiteFlash = (1 - this._ease((this.progress - 0.5) / 0.5)) * 0.3;
     }
 
     // Hyperspace fades in during second half
