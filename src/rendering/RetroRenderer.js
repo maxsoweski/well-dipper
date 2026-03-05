@@ -160,35 +160,41 @@ export class RetroRenderer {
           // ── Background: white throughout ──
           vec3 bg = vec3(0.95, 0.93, 0.9);
 
-          // ── Concentric rings rushing outward (forward motion) ──
-          float ringPattern = fract(depth * 1.5 + time * 2.0);
-          float rings = step(0.88, ringPattern);
+          // ── Concentric rings: soft diffused bands rushing outward ──
+          float ringWave = sin((depth * 1.5 + time * 2.0) * 6.2832);  // smooth sine wave
+          float rings = ringWave * 0.5 + 0.5;  // 0→1 smooth oscillation
 
-          // ── Hexagonal geometry: 6-fold symmetry ──
-          // Creates geometric "walls" of the tunnel
-          float hexAngle = mod(angle + 0.5236, 1.0472) - 0.5236; // pi/6 offset, pi/3 period
-          float hexEdge = abs(sin(hexAngle * 3.0));
-          float hexDepth = fract(depth * 0.8 + time * 1.5);
-          float hexPattern = step(0.92, hexEdge) * step(0.75, hexDepth);
-
-          // ── Diamond grid overlay (cross-hatching) ──
-          float grid1 = abs(sin(angle * 4.0 + scrollZ * 0.3));
-          float grid2 = abs(sin(angle * 4.0 - scrollZ * 0.3 + 1.57));
-          float diamonds = step(0.94, grid1) + step(0.94, grid2);
-          diamonds = min(diamonds, 1.0) * smoothstep(0.6, 0.15, radius);
-
-          // ── Radial speed lines ──
-          float speedLine = abs(sin(angle * 24.0));
-          speedLine = step(0.97, speedLine) * smoothstep(0.5, 0.1, radius);
+          // Dither: ordered 4×4 Bayer pattern breaks up the smooth gradient
+          // into a stippled retro texture
+          vec2 screenPos = uv * resolution;
+          int px = int(mod(screenPos.x, 4.0));
+          int py = int(mod(screenPos.y, 4.0));
+          float bayer = 0.0;
+          // Bayer 4×4 thresholds (normalized 0-1)
+          if (px == 0) {
+            if (py == 0) bayer = 0.0;    else if (py == 1) bayer = 0.5;
+            else if (py == 2) bayer = 0.125; else bayer = 0.625;
+          } else if (px == 1) {
+            if (py == 0) bayer = 0.75;   else if (py == 1) bayer = 0.25;
+            else if (py == 2) bayer = 0.875; else bayer = 0.375;
+          } else if (px == 2) {
+            if (py == 0) bayer = 0.1875; else if (py == 1) bayer = 0.6875;
+            else if (py == 2) bayer = 0.0625; else bayer = 0.5625;
+          } else {
+            if (py == 0) bayer = 0.9375; else if (py == 1) bayer = 0.4375;
+            else if (py == 2) bayer = 0.8125; else bayer = 0.3125;
+          }
+          // Dithered ring intensity: compare smooth value against Bayer threshold
+          float ditheredRings = step(bayer, rings * 0.6);
 
           // ── Combine ──
-          // Rings blink between red and blue at ~3 Hz
-          vec3 redColor = vec3(0.85, 0.1, 0.1);
-          vec3 blueColor = vec3(0.1, 0.2, 0.9);
+          // Rings alternate red/blue at ~3 Hz, blended softly into the background
+          vec3 redColor = vec3(0.8, 0.15, 0.15);
+          vec3 blueColor = vec3(0.15, 0.25, 0.85);
           float ringBlink = step(0.5, fract(time * 3.0));
           vec3 ringColor = mix(redColor, blueColor, ringBlink);
           vec3 col = bg;
-          col = mix(col, ringColor, rings * 0.8);
+          col = mix(col, ringColor, ditheredRings * 0.25);
 
           // ── Bright vanishing point (center) ──
           float centerBright = smoothstep(0.12, 0.0, radius);
