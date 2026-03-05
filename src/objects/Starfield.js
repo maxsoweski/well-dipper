@@ -97,11 +97,11 @@ export class Starfield {
             vec2 toCenter = ndc - uRiftCenter;
             float distFromCenter = length(toCenter);
 
-            // Fold: X compresses fully into the pillar, Y only 25%
-            float foldStrength = uFoldAmount * uFoldAmount;
+            // Fold: X compresses fully into the pillar, Y gently
+            // No extra squaring — foldAmount is already eased in WarpEffect
             vec2 folded = uRiftCenter + vec2(
-              toCenter.x * (1.0 - foldStrength),
-              toCenter.y * (1.0 - foldStrength * 0.25)
+              toCenter.x * (1.0 - uFoldAmount),
+              toCenter.y * (1.0 - uFoldAmount * 0.3)
             );
             gl_Position.xy = folded * gl_Position.w;
 

@@ -105,18 +105,20 @@ export class WarpEffect {
     this.progress = Math.min(1, this.elapsed / this.FOLD_DUR);
     const t = this._ease(this.progress);
 
-    // Stars fold inward smoothly
-    this.foldAmount = t;
+    // Stars fold inward — use progress² (not smootherstep) so it starts
+    // immediately and ramps up visibly. Stars should be moving from frame 1.
+    this.foldAmount = this.progress * this.progress;
 
-    // Stars get brighter as they compress (accumulation effect)
-    this.starBrightness = 1 + t * 2.0;  // up to 3x brightness
+    // Stars get much brighter as they compress (light accretes at center)
+    this.starBrightness = 1 + this.foldAmount * 4.0;  // up to 5x brightness
 
     // Planets stay visible during fold — NO sceneFade
     this.sceneFade = 0;
 
-    // Fold glow: thin rift line appears almost immediately, grows outward.
-    // Starts at 5% progress so camera "approaches" it for nearly the full fold.
-    this.foldGlow = this._ease(Math.max(0, (this.progress - 0.05) / 0.95));
+    // Fold glow: the bright pillar appears AFTER stars have accumulated.
+    // Delayed to 25% progress so the pillar looks like a result of star
+    // light accreting at the center, not an independent effect.
+    this.foldGlow = this._ease(Math.max(0, (this.progress - 0.25) / 0.75));
 
     // Camera accelerates forward (base speed + quadratic ramp so motion is visible early)
     this.cameraForwardSpeed = 8 + 72 * this.progress * this.progress;
