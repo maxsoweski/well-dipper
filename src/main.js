@@ -99,8 +99,9 @@ autoNav.onTourComplete = () => {
 };
 
 // Debug: force the next warp to a specific destination type.
-// Set via keyboard shortcuts (F6/F7/F8), cleared after use.
+// Hold comma/period/? while pressing Space to force galaxy/nebula/cluster.
 let _forceNextDestType = null;
+const _heldKeys = new Set();
 
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
@@ -1351,8 +1352,24 @@ window.addEventListener('resize', () => retroRenderer.resize());
 
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
+  _heldKeys.add(e.key);
+
   // Block all input during warp transition or pre-warp turn
   if (warpEffect.isActive || warpTarget.turning) return;
+
+  // Check for debug destination override (held key + Space)
+  if (e.code === 'Space') {
+    if (_heldKeys.has(',')) {
+      _forceNextDestType = 'spiral-galaxy';
+      console.log('Debug: warping → spiral galaxy');
+    } else if (_heldKeys.has('.')) {
+      _forceNextDestType = 'emission-nebula';
+      console.log('Debug: warping → emission nebula');
+    } else if (_heldKeys.has('?') || (_heldKeys.has('/') && e.shiftKey)) {
+      _forceNextDestType = 'globular-cluster';
+      console.log('Debug: warping → globular cluster');
+    }
+  }
 
   // A key: toggle autopilot
   if (e.code === 'KeyA') {
@@ -1424,21 +1441,16 @@ window.addEventListener('keydown', (e) => {
     toggleOrbits();
   } else if (e.code === 'KeyG') {
     toggleGravityWell();
-  } else if (e.key === ',') {
-    _forceNextDestType = 'spiral-galaxy';
-    console.log('Debug: next warp → spiral galaxy (press Space)');
-  } else if (e.key === '.') {
-    _forceNextDestType = 'emission-nebula';
-    console.log('Debug: next warp → emission nebula (press Space)');
-  } else if (e.key === '?') {
-    _forceNextDestType = 'globular-cluster';
-    console.log('Debug: next warp → globular cluster (press Space)');
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
       focusPlanet(idx);
     }
   }
+});
+
+window.addEventListener('keyup', (e) => {
+  _heldKeys.delete(e.key);
 });
 
 // ── Click/tap-to-select ──
