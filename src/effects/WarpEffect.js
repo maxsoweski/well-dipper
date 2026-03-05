@@ -139,15 +139,9 @@ export class WarpEffect {
     const frontier = Math.max(0, (this.foldAmount - 0.175) / 0.7);
     this.foldGlow = Math.min(1, frontier);
 
-    // Camera waits for the portal to open (foldGlow > 0.25), then
-    // accelerates toward it. No movement while stars are still folding
-    // and there's nothing to fly into yet.
-    if (this.foldGlow > 0.25) {
-      const portalProgress = Math.min(1, (this.foldGlow - 0.25) / 0.75);
-      this.cameraForwardSpeed = 8 + 72 * portalProgress * portalProgress;
-    } else {
-      this.cameraForwardSpeed = 0;
-    }
+    // No camera motion during fold — the portal comes to US.
+    // Stars fold inward and the portal grows; we stay stationary.
+    this.cameraForwardSpeed = 0;
 
     // Transition to ENTER
     if (this.elapsed >= this.FOLD_DUR) {
@@ -163,13 +157,19 @@ export class WarpEffect {
     // Keep stars fully folded, then fade them out
     this.foldAmount = 1;
     this.starBrightness = 3.0 * (1 - t);  // 3 → 0, stars disappear
-    this.foldGlow = 1;
 
-    // Scene objects fade as we fly past them into the slice
+    // Portal keeps growing to engulf the full screen.
+    // foldGlow 1→3 makes portalRadius go 0.375→1.375 (well past screen
+    // diagonal ~1.02), so the dithered portal mask covers everything
+    // before hyperPhase ramps up. No fade transition — just the portal
+    // swallowing the camera.
+    this.foldGlow = 1 + t * 2;
+
+    // Scene objects fade as the portal engulfs them
     this.sceneFade = this._ease(this.progress);
 
-    // Camera decelerates
-    this.cameraForwardSpeed = 80 * (1 - t);
+    // No camera motion — the portal coming to us IS the motion
+    this.cameraForwardSpeed = 0;
 
     // White flash: reduced peak since hyperspace is already visible
     // through the fold portal — just a brief brightening, not a full whiteout.
