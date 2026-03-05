@@ -79,6 +79,7 @@ export class Starfield {
         varying vec3 vColor;
         varying float vSize;
         varying float vStreakAmount;
+        varying vec2 vStreakDir;
 
         void main() {
           vColor = color;
@@ -91,27 +92,32 @@ export class Starfield {
           // X compression is strong (stars slide sideways into the slit),
           // Y compression is gentle (keeps the vertical spread visible).
           vStreakAmount = 0.0;
+          vStreakDir = vec2(1.0, 0.0);
 
           if (uFoldAmount > 0.0) {
             vec2 ndc = gl_Position.xy / gl_Position.w;
             vec2 toCenter = ndc - uRiftCenter;
             float distFromCenter = length(toCenter);
 
+            // Direction toward rift center (for directional streaking)
+            vStreakDir = distFromCenter > 0.001
+              ? normalize(uRiftCenter - ndc)
+              : vec2(1.0, 0.0);
+
             // Fold: X compresses fully into the pillar, Y gently
-            // No extra squaring — foldAmount is already eased in WarpEffect
             vec2 folded = uRiftCenter + vec2(
               toCenter.x * (1.0 - uFoldAmount),
               toCenter.y * (1.0 - uFoldAmount * 0.3)
             );
             gl_Position.xy = folded * gl_Position.w;
 
-            // Streak: based on horizontal distance (how far the star slides)
-            vStreakAmount = uFoldAmount * min(abs(toCenter.x), 1.0);
+            // Streak: based on total distance from rift (all stars smear)
+            vStreakAmount = uFoldAmount * min(distFromCenter, 1.5);
           }
 
           // Point size: base size × streak elongation factor
           float baseSize = aSize > 5.0 ? aSize * 2.0 : aSize;
-          float streakFactor = 1.0 + vStreakAmount * 5.0;
+          float streakFactor = 1.0 + vStreakAmount * 10.0;
           gl_PointSize = baseSize * streakFactor;
         }
       `,
@@ -121,6 +127,7 @@ export class Starfield {
         varying vec3 vColor;
         varying float vSize;
         varying float vStreakAmount;
+        varying vec2 vStreakDir;
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -144,10 +151,16 @@ export class Starfield {
           float dist;
           if (vStreakAmount > 0.01) {
             // ── Streak mode ──
-            // Elongate horizontally: scale Y up so the distance grows
-            // faster vertically → star becomes a wide horizontal line.
-            float sf = 1.0 + vStreakAmount * 5.0;
-            dist = length(vec2(center.x, center.y * sf));
+            // Rotate point coords so X aligns with rift direction,
+            // then squish perpendicular → star smears toward rift center.
+            float ca = vStreakDir.x;
+            float sa = vStreakDir.y;
+            vec2 rotated = vec2(
+              center.x * ca + center.y * sa,
+              -center.x * sa + center.y * ca
+            );
+            float sf = 1.0 + vStreakAmount * 10.0;
+            dist = length(vec2(rotated.x, rotated.y * sf));
           } else {
             // ── Normal mode ──
             if (vSize < 5.0) {

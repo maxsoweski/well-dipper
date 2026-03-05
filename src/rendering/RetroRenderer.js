@@ -170,10 +170,10 @@ export class RetroRenderer {
           float ditheredRings = step(noise, rings * 0.6);
 
           // ── Combine ──
-          // Rings alternate red/blue at ~1.5 Hz
+          // Rings alternate red/blue at ~0.75 Hz
           vec3 redColor = vec3(0.8, 0.15, 0.15);
           vec3 blueColor = vec3(0.15, 0.25, 0.85);
-          float ringBlink = step(0.5, fract(time * 1.5));
+          float ringBlink = step(0.5, fract(time * 0.75));
           vec3 ringColor = mix(redColor, blueColor, ringBlink);
           vec3 col = bg;
           col = mix(col, ringColor, ditheredRings * 0.25);
