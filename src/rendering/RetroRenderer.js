@@ -270,8 +270,9 @@ export class RetroRenderer {
               toRift.x *= aspect;
               float dist = length(toRift);
 
-              // Opening radius grows quadratically from tiny to full screen
-              float openRadius = uExitReveal * uExitReveal * 0.8;
+              // Opening radius — JS sends ease-out curve (fast start),
+              // so use it linearly here for immediate visibility
+              float openRadius = uExitReveal * 0.9;
 
               // Inside opening = no hyperspace (starfield shows through)
               hyperMask *= smoothstep(openRadius * 0.85, openRadius, dist);

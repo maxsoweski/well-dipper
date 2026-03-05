@@ -99,6 +99,14 @@ export class WarpEffect {
         break;
     }
 
+    // Accumulate hyperspace animation time whenever the tunnel is visible.
+    // This starts during ENTER (when hyperPhase first ramps above 0) so the
+    // tunnel is already in motion when the white flash fades and reveals it.
+    // Continues through HYPER and EXIT for uninterrupted animation.
+    if (this.hyperPhase > 0) {
+      this.hyperTime += dt;
+    }
+
     return this.state;
   }
 
@@ -180,7 +188,8 @@ export class WarpEffect {
 
   _updateHyper() {
     this.progress = Math.min(1, this.elapsed / this.HYPER_DUR);
-    this.hyperTime = this.elapsed;
+    // hyperTime is accumulated in update() — not set from elapsed here,
+    // because it needs to include time from the ENTER phase too.
 
     // Full hyperspace
     this.hyperPhase = 1;
@@ -213,8 +222,10 @@ export class WarpEffect {
     // This avoids a uniform fade and instead "tears" the hyperspace open.
     this.hyperPhase = 1;
 
-    // Exit reveal: a dark opening grows from center, revealing unfolding stars
-    this.exitReveal = t;             // 0→1: opening grows
+    // Exit reveal: ease-out quadratic (fast start, slow end) so the opening
+    // is visible immediately on frame 1 — no dead time at the start.
+    const p = this.progress;
+    this.exitReveal = 1 - (1 - p) * (1 - p);  // ease-out: opens fast, decelerates
 
     // Stars unfold through the opening (mirrors fold in reverse)
     this.foldAmount = 1 - t;         // 1→0: folded → unfolded
