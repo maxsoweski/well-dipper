@@ -98,6 +98,10 @@ autoNav.onTourComplete = () => {
   }, 1500);
 };
 
+// Deep sky contemplation: camera stays fixed, timer triggers next warp.
+// No autopilot, no orbiting — these objects are impossibly far away.
+let _deepSkyLingerTimer = -1; // -1 = not lingering, >=0 = counting down
+
 // Debug: force the next warp to a specific destination type.
 // Press comma/period/? then Space to force galaxy/nebula/cluster.
 let _forceNextDestType = null;
@@ -734,17 +738,18 @@ function startFlythrough() {
   if (!system) return;
 
   if (system.type && system.type !== 'star-system') {
-    // Deep sky: single distant orbit, then warp away
+    // Deep sky: no autopilot, no orbiting. Static camera, timer warps away.
+    cameraController.bypassed = true;
     const radius = system.destination.data.radius;
-    const viewDist = radius * 3.0;
-    system._dummyRefs[0].position.set(0, 0, 0);
-    autoNav.buildDeepSkyQueue(
-      [{ name: 'View', position: [0, 0, 0], orbitDistance: viewDist, bodyRadius: radius, linger: 20 }],
-      [system._dummyRefs[0]],
-    );
-  } else {
-    autoNav.buildQueue(system);
+    const viewDist = radius * 2.5;
+    camera.position.set(0, viewDist * 0.15, viewDist);
+    camera.lookAt(0, 0, 0);
+    _deepSkyLingerTimer = 15;
+    console.log('Autopilot: deep sky — static view, 15s linger');
+    return;
   }
+
+  autoNav.buildQueue(system);
   populateQueueRefs();
   autoNav.start();
 
@@ -862,42 +867,30 @@ function warpRevealSystem() {
   if (!system) return;
   cameraController.bypassed = true;
 
-  // ── Deep sky: distant contemplation view ──
-  // Object appears impossibly far away — single distant viewpoint,
-  // slow orbit, then warp away. No close-up fly-through.
+  // ── Deep sky: static contemplation view ──
+  // These objects are impossibly far away — no orbiting, no camera movement.
+  // Camera stays fixed at a viewing angle. Timer triggers the next warp.
   if (system.type && system.type !== 'star-system' && system.destination) {
     // Snap object back to origin (drifted with camera during warp)
     system.destination.mesh.position.set(0, 0, 0);
 
-    // Single distant viewpoint — object fills ~30% of screen
+    // No autopilot or flythrough — camera is completely static
+    flythrough.stop();
+    autoNav.stop();
+
+    // Place camera at a fixed viewing position.
+    // Far enough that the object fills the view nicely, but close enough to see detail.
+    // Slight vertical offset gives an interesting angle (not dead-center).
     const radius = system.destination.data.radius;
-    const viewDist = radius * 3.0;
-
-    // Reset first dummy ref to origin (used as orbit center)
-    system._dummyRefs[0].position.set(0, 0, 0);
-
-    // Position camera at a distant vantage point
+    const viewDist = radius * 2.5;
     camera.position.set(0, viewDist * 0.15, viewDist);
     camera.lookAt(0, 0, 0);
 
-    // Build a single-stop queue: orbit slowly at distance, then warp
-    autoNav.buildDeepSkyQueue(
-      [{ name: 'View', position: [0, 0, 0], orbitDistance: viewDist, bodyRadius: radius, linger: 20 }],
-      [system._dummyRefs[0]],
-    );
-    populateQueueRefs();
-    autoNav.currentIndex = 0;
-    autoNav.start();
+    // Start the contemplation timer — after 15s, auto-warp away
+    _deepSkyLingerTimer = 15;
 
-    const stop = autoNav.getCurrentStop();
-    if (stop && stop.bodyRef) {
-      flythrough.nextBodyRef = null; // no next stop — warp fires after this
-      flythrough.beginTravelFrom(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, { warpArrival: true });
-      updateFocusFromStop(stop);
-    }
-
-    const label = system.type.replace('-', ' ');
-    console.log(`Warp: contemplating ${label} from distance`);
+    const label = system.type.replace(/-/g, ' ');
+    console.log(`Warp: contemplating ${label} (static view, 15s)`);
     return;
   }
 
@@ -1373,8 +1366,18 @@ function animate() {
 
       // ── Pass rift center + warp uniforms to shaders ──
       starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness, _riftNDC);
+
+      // Deep sky objects: skip the scene fade-in during exit.
+      // The object is already in the scene (spawned during HYPER when tunnel was opaque).
+      // Setting sceneFade=0 means it's fully visible behind the tunnel mask —
+      // so when the exit hole opens, the object is revealed, not faded in.
+      let effectiveSceneFade = warpEffect.sceneFade;
+      if (warpEffect.state === 'exit' && system && system.type && system.type !== 'star-system') {
+        effectiveSceneFade = 0;
+      }
+
       retroRenderer.setWarpUniforms(
-        warpEffect.sceneFade,
+        effectiveSceneFade,
         warpEffect.whiteFlash,
         warpEffect.hyperPhase,
         warpEffect.hyperTime,
@@ -1460,6 +1463,17 @@ function animate() {
           // Show current body on minimap (no blink — we just arrived)
           updateFocusFromStop(stop);
         }
+      }
+    }
+
+    // ── Deep sky contemplation timer ──
+    // No autopilot — camera is static. After the timer, auto-warp away.
+    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning) {
+      _deepSkyLingerTimer -= deltaTime;
+      if (_deepSkyLingerTimer <= 0) {
+        _deepSkyLingerTimer = -1;
+        autoSelectWarpTarget();
+        setTimeout(() => beginWarpTurn(), 500);
       }
     }
 
@@ -1704,6 +1718,9 @@ function autoSelectWarpTarget() {
 function beginWarpTurn() {
   if (warpEffect.isActive) return;   // already warping
   if (warpTarget.turning) return;    // already turning
+
+  // Cancel deep sky linger timer (we're warping now)
+  _deepSkyLingerTimer = -1;
 
   if (!warpTarget.direction) {
     // No target — warp toward camera forward immediately
