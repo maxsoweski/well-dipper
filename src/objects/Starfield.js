@@ -78,6 +78,7 @@ export class Starfield {
         uniform vec2 uRiftCenter;   // NDC space target point
         varying vec3 vColor;
         varying float vSize;
+        varying float vConverge;
 
         void main() {
           vColor = color;
@@ -108,6 +109,8 @@ export class Starfield {
             convergeFactor = 1.0 + localFold * 3.0;
           }
 
+          vConverge = convergeFactor;
+
           // Point size: base size × convergence growth
           float baseSize = aSize > 5.0 ? aSize * 2.0 : aSize;
           gl_PointSize = baseSize * convergeFactor;
@@ -116,8 +119,10 @@ export class Starfield {
 
       fragmentShader: /* glsl */ `
         uniform float uBrightness;
+        uniform float uFoldAmount;
         varying vec3 vColor;
         varying float vSize;
+        varying float vConverge;
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -136,7 +141,6 @@ export class Starfield {
 
         void main() {
           vec2 center = gl_PointCoord - 0.5;
-          float threshold = bayerDither(gl_FragCoord.xy);
 
           // Star shape: small stars are round, large stars are diamond-ish
           float dist;
@@ -149,7 +153,15 @@ export class Starfield {
           float edge = vSize < 5.0
             ? smoothstep(0.3, 0.5, dist)
             : smoothstep(0.35, 0.55, dist);
-          if (edge > threshold) discard;
+
+          // During warp fold, ALL stars get brighter. The Bayer 4×4 dithering
+          // pattern has diagonal structure that becomes visible as organized
+          // bands of white dots across the entire screen. Fix: blend from
+          // dithered to smooth edges as fold progresses.
+          float threshold = bayerDither(gl_FragCoord.xy);
+          float foldSmooth = clamp(uFoldAmount * 2.0, 0.0, 1.0);
+          float cutoff = mix(threshold, 0.45, foldSmooth);
+          if (edge > cutoff) discard;
 
           // Brightness boost during warp (stars accumulate as they fold)
           vec3 col = vColor * uBrightness;

@@ -99,9 +99,21 @@ autoNav.onTourComplete = () => {
 };
 
 // Debug: force the next warp to a specific destination type.
-// Hold comma/period/? while pressing Space to force galaxy/nebula/cluster.
+// Press comma/period/? then Space to force galaxy/nebula/cluster.
 let _forceNextDestType = null;
 const _heldKeys = new Set();
+
+// ── Debug Gallery Mode ──
+// Press D to enter/exit. Shows deep sky objects one at a time for evaluation.
+const GALLERY_TYPES = [
+  'spiral-galaxy', 'elliptical-galaxy',
+  'emission-nebula', 'planetary-nebula',
+  'globular-cluster', 'open-cluster',
+];
+let galleryMode = false;
+let gallerySeed = 1;
+let galleryTypeIdx = 0;
+let galleryObject = null;  // current Galaxy or Nebula instance
 
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
@@ -567,6 +579,91 @@ function spawnDeepSky(data, destType, forWarp) {
   }
 }
 
+// ── Debug Gallery ──────────────────────────────────────────────
+// Shows deep sky objects one at a time for evaluating procedural variation.
+
+function enterGallery() {
+  galleryMode = true;
+  stopFlythrough();
+  warpTarget.direction = null;
+
+  // Hide current system
+  if (system) {
+    if (system.type && system.type !== 'star-system') {
+      if (system.destination) system.destination.removeFrom(scene);
+    }
+  }
+
+  // Hide HUD
+  retroRenderer.setHud(null, null);
+  cameraController.bypassed = true;
+
+  document.getElementById('gallery-overlay').style.display = 'block';
+  gallerySpawn();
+}
+
+function exitGallery() {
+  galleryMode = false;
+  document.getElementById('gallery-overlay').style.display = 'none';
+
+  // Clean up gallery object
+  if (galleryObject) {
+    galleryObject.removeFrom(scene);
+    galleryObject.dispose();
+    galleryObject = null;
+  }
+
+  // Restore the current system's deep sky object if it exists
+  if (system && system.type && system.type !== 'star-system' && system.destination) {
+    system.destination.addTo(scene);
+  }
+
+  cameraController.bypassed = false;
+}
+
+function gallerySpawn() {
+  // Clean up previous gallery object
+  if (galleryObject) {
+    galleryObject.removeFrom(scene);
+    galleryObject.dispose();
+    galleryObject = null;
+  }
+
+  const type = GALLERY_TYPES[galleryTypeIdx];
+  const seed = `gallery-${gallerySeed}`;
+
+  // Generate data
+  let data;
+  if (type.includes('galaxy')) {
+    data = GalaxyGenerator.generate(seed, type);
+  } else if (type.includes('nebula')) {
+    data = NebulaGenerator.generate(seed, type);
+  } else if (type.includes('cluster')) {
+    data = ClusterGenerator.generate(seed, type);
+  }
+
+  // Create renderer object
+  const isGalaxyOrCluster = type.includes('galaxy') || type.includes('cluster');
+  if (isGalaxyOrCluster) {
+    galleryObject = new Galaxy(data);
+  } else {
+    galleryObject = new Nebula(data);
+  }
+  galleryObject.addTo(scene);
+
+  // Position camera to frame the object
+  const radius = data.radius;
+  const viewDist = radius * 2.5;
+  camera.position.set(0, viewDist * 0.2, viewDist);
+  camera.lookAt(0, 0, 0);
+
+  // Update info overlay
+  const label = type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const info = document.getElementById('gallery-info');
+  info.textContent = `${label}  |  seed: ${gallerySeed}  |  r=${radius.toFixed(0)}  |  ${data.particleCount || data.starCount || '?'} particles`;
+  console.log(`Gallery: ${label} (seed "${seed}")`);
+}
+
 /**
  * Populate body references on the autoNav queue.
  * Each stop gets the Three.js mesh so FlythroughCamera can track it.
@@ -637,7 +734,14 @@ function startFlythrough() {
   if (!system) return;
 
   if (system.type && system.type !== 'star-system') {
-    autoNav.buildDeepSkyQueue(system.tourStops, system._dummyRefs);
+    // Deep sky: single distant orbit, then warp away
+    const radius = system.destination.data.radius;
+    const viewDist = radius * 3.0;
+    system._dummyRefs[0].position.set(0, 0, 0);
+    autoNav.buildDeepSkyQueue(
+      [{ name: 'View', position: [0, 0, 0], orbitDistance: viewDist, bodyRadius: radius, linger: 20 }],
+      [system._dummyRefs[0]],
+    );
   } else {
     autoNav.buildQueue(system);
   }
@@ -758,49 +862,59 @@ function warpRevealSystem() {
   if (!system) return;
   cameraController.bypassed = true;
 
-  // Deep sky: snap object back to origin and reposition camera.
-  // During warp, the deep sky mesh drifted with the camera (no parallax),
-  // so now we reset to proper positions for the autopilot tour.
+  // ── Deep sky: distant contemplation view ──
+  // Object appears impossibly far away — single distant viewpoint,
+  // slow orbit, then warp away. No close-up fly-through.
   if (system.type && system.type !== 'star-system' && system.destination) {
+    // Snap object back to origin (drifted with camera during warp)
     system.destination.mesh.position.set(0, 0, 0);
-    // Reset dummy refs to their original tour stop positions
-    for (let i = 0; i < system.tourStops.length; i++) {
-      const stop = system.tourStops[i];
-      system._dummyRefs[i].position.set(stop.position[0], stop.position[1], stop.position[2]);
+
+    // Single distant viewpoint — object fills ~30% of screen
+    const radius = system.destination.data.radius;
+    const viewDist = radius * 3.0;
+
+    // Reset first dummy ref to origin (used as orbit center)
+    system._dummyRefs[0].position.set(0, 0, 0);
+
+    // Position camera at a distant vantage point
+    camera.position.set(0, viewDist * 0.15, viewDist);
+    camera.lookAt(0, 0, 0);
+
+    // Build a single-stop queue: orbit slowly at distance, then warp
+    autoNav.buildDeepSkyQueue(
+      [{ name: 'View', position: [0, 0, 0], orbitDistance: viewDist, bodyRadius: radius, linger: 20 }],
+      [system._dummyRefs[0]],
+    );
+    populateQueueRefs();
+    autoNav.currentIndex = 0;
+    autoNav.start();
+
+    const stop = autoNav.getCurrentStop();
+    if (stop && stop.bodyRef) {
+      flythrough.nextBodyRef = null; // no next stop — warp fires after this
+      flythrough.beginTravelFrom(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, { warpArrival: true });
+      updateFocusFromStop(stop);
     }
-    // Place camera at the first tour stop's orbit distance
-    const firstStop = system.tourStops[0];
-    const orbitDist = firstStop.orbitDistance;
-    camera.position.set(firstStop.position[0], firstStop.position[1] + 2, firstStop.position[2] + orbitDist);
-    camera.lookAt(firstStop.position[0], firstStop.position[1], firstStop.position[2]);
+
+    const label = system.type.replace('-', ' ');
+    console.log(`Warp: contemplating ${label} from distance`);
+    return;
   }
 
-  // Build the autopilot tour queue for the new destination
-  if (system.type && system.type !== 'star-system') {
-    autoNav.buildDeepSkyQueue(system.tourStops, system._dummyRefs);
-  } else {
-    autoNav.buildQueue(system);
-  }
+  // ── Star system: normal reveal ──
+  autoNav.buildQueue(system);
   populateQueueRefs();
 
-  // Find the first stop (star for star systems, first POI for deep sky)
-  let firstStopIdx;
-  if (system.type && system.type !== 'star-system') {
-    firstStopIdx = 0; // deep sky: start at first tour stop
-  } else {
-    firstStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
-    if (firstStopIdx < 0) firstStopIdx = 0;
-  }
+  let firstStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
+  if (firstStopIdx < 0) firstStopIdx = 0;
   autoNav.currentIndex = firstStopIdx;
   autoNav.start();
 
   const firstStop = autoNav.getCurrentStop();
   if (firstStop && firstStop.bodyRef) {
-    // Set next body so orbit departure direction aligns toward it
     const upcoming = autoNav.getNextStop();
     flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
 
-    // Coast toward the first stop with leftover momentum (3s approach).
     flythrough.beginTravelFrom(
       firstStop.bodyRef,
       firstStop.orbitDistance,
@@ -812,8 +926,7 @@ function warpRevealSystem() {
     if (systemMap) systemMap.triggerBlink();
   }
 
-  const label = system.type === 'star-system' ? 'new system' : system.type.replace('-', ' ');
-  console.log(`Warp: coasting into ${label}`);
+  console.log('Warp: coasting into new system');
 }
 
 /**
@@ -980,6 +1093,15 @@ function animate() {
 
   timer.update();
   const deltaTime = Math.min(timer.getDelta(), 0.1);
+
+  // ── Gallery mode: simple auto-rotation, skip everything else ──
+  if (galleryMode && galleryObject) {
+    galleryObject.mesh.rotation.y += 0.15 * deltaTime;
+    galleryObject.update(deltaTime);
+    starfield.update(camera.position);
+    retroRenderer.render();
+    return;
+  }
 
   if (system) {
     // ── Deep sky destination update ──
@@ -1395,6 +1517,34 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === '/' || e.key === '?') {
     _forceNextDestType = 'globular-cluster';
     console.log('Debug: next warp → globular cluster');
+  }
+
+  // D key: toggle debug gallery (works even during warp)
+  if (e.code === 'KeyD') {
+    if (galleryMode) {
+      exitGallery();
+    } else {
+      enterGallery();
+    }
+    return;
+  }
+
+  // Gallery mode: arrow keys cycle types/seeds
+  if (galleryMode) {
+    if (e.code === 'ArrowRight') {
+      gallerySeed++;
+      gallerySpawn();
+    } else if (e.code === 'ArrowLeft') {
+      gallerySeed = Math.max(1, gallerySeed - 1);
+      gallerySpawn();
+    } else if (e.code === 'ArrowUp') {
+      galleryTypeIdx = (galleryTypeIdx + 1) % GALLERY_TYPES.length;
+      gallerySpawn();
+    } else if (e.code === 'ArrowDown') {
+      galleryTypeIdx = (galleryTypeIdx - 1 + GALLERY_TYPES.length) % GALLERY_TYPES.length;
+      gallerySpawn();
+    }
+    return;  // Block all other input in gallery mode
   }
 
   // Block all input during warp transition or pre-warp turn
