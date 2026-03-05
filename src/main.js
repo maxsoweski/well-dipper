@@ -77,15 +77,16 @@ const warpTarget = {
   direction: null,   // THREE.Vector3 world-space direction, or null
   blinkTimer: 0,     // accumulates time for 2 Hz blink
   blinkOn: false,    // current blink state
+  turning: false,    // camera is rotating to face target before warp
+  turnTimer: 0,      // seconds into the turn
 };
 
 // When the tour visits every body, auto-select a visible star and warp toward it.
-// Brackets blink for 1.5s so the viewer sees where we're going.
+// Brackets blink for 1.5s, then camera turns to face it, then warp fires.
 autoNav.onTourComplete = () => {
   autoSelectWarpTarget();
   setTimeout(() => {
-    warpEffect.start(warpTarget.direction);
-    warpTarget.direction = null;
+    beginWarpTurn();
   }, 1500);
 };
 
@@ -1004,23 +1005,50 @@ function animate() {
     // When a warp target is selected (and warp hasn't started yet),
     // project it to screen and update the blinking bracket overlay.
     if (warpTarget.direction && !warpEffect.isActive) {
-      warpTarget.blinkTimer += deltaTime;
-      // 2 Hz blink: multiply by 4 because floor(t*4)%2 toggles every 0.25s
-      warpTarget.blinkOn = Math.floor(warpTarget.blinkTimer * 4) % 2 === 0;
+      // ── Pre-warp camera turn ──
+      // Camera slerps to center the target on screen before warp fires.
+      // Brackets stay solid (no blink) = "target locked".
+      if (warpTarget.turning) {
+        warpTarget.turnTimer += deltaTime;
+        warpTarget.blinkOn = true; // solid brackets = locked on
 
-      // Project target direction to screen UV
-      _targetScreenPos.copy(camera.position).addScaledVector(warpTarget.direction, 1000);
-      _targetScreenPos.project(camera);
-      _targetUV.set(
-        (_targetScreenPos.x + 1) / 2,
-        (_targetScreenPos.y + 1) / 2,
-      );
+        // Slerp camera to face the target
+        _riftPoint.copy(camera.position).addScaledVector(warpTarget.direction, 10);
+        _lookMatrix.lookAt(camera.position, _riftPoint, camera.up);
+        _targetQuat.setFromRotationMatrix(_lookMatrix);
+        camera.quaternion.slerp(_targetQuat, 1 - Math.exp(-6.0 * deltaTime));
 
-      retroRenderer.setTargetUniforms(
-        _targetUV,
-        warpTarget.blinkOn ? 1 : 0,
-        20,
-      );
+        // Check alignment — fire warp once centered (or after 1.5s timeout)
+        camera.getWorldDirection(_starRayDir);
+        const alignment = _starRayDir.dot(warpTarget.direction);
+        if (alignment > 0.999 || warpTarget.turnTimer > 1.5) {
+          const dir = warpTarget.direction;
+          warpTarget.direction = null;
+          warpTarget.turning = false;
+          warpEffect.start(dir);
+        }
+      } else {
+        // Normal blink (no turn yet — waiting for Space press)
+        warpTarget.blinkTimer += deltaTime;
+        warpTarget.blinkOn = Math.floor(warpTarget.blinkTimer * 4) % 2 === 0;
+      }
+
+      // Project target to screen and update bracket overlay
+      if (warpTarget.direction) {
+        _targetScreenPos.copy(camera.position).addScaledVector(warpTarget.direction, 1000);
+        _targetScreenPos.project(camera);
+        _targetUV.set(
+          (_targetScreenPos.x + 1) / 2,
+          (_targetScreenPos.y + 1) / 2,
+        );
+        retroRenderer.setTargetUniforms(
+          _targetUV,
+          warpTarget.blinkOn ? 1 : 0,
+          20,
+        );
+      } else {
+        retroRenderer.setTargetUniforms(null, 0, 0);
+      }
     } else {
       retroRenderer.setTargetUniforms(null, 0, 0);
     }
@@ -1164,8 +1192,8 @@ window.addEventListener('resize', () => retroRenderer.resize());
 
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
-  // Block all input during warp transition (can't interrupt the sequence)
-  if (warpEffect.isActive) return;
+  // Block all input during warp transition or pre-warp turn
+  if (warpEffect.isActive || warpTarget.turning) return;
 
   // A key: toggle autopilot
   if (e.code === 'KeyA') {
@@ -1182,8 +1210,7 @@ window.addEventListener('keydown', (e) => {
   if (autoNav.isActive) {
     if (e.code === 'Space') {
       e.preventDefault();
-      warpEffect.start(warpTarget.direction);
-      warpTarget.direction = null;
+      beginWarpTurn();
     } else if (e.code === 'Tab') {
       e.preventDefault();
       // Jump tour forward/back — begin travel to the new stop
@@ -1222,12 +1249,7 @@ window.addEventListener('keydown', (e) => {
 
   if (e.code === 'Space') {
     e.preventDefault();
-    // Start autopilot if not already running, then trigger warp
-    if (!autoNav.isActive) {
-      startFlythrough();
-    }
-    warpEffect.start(warpTarget.direction);
-    warpTarget.direction = null;
+    beginWarpTurn();
   } else if (e.code === 'Escape' || e.code === 'Backquote') {
     focusPlanet(-1);
   } else if (e.code === 'Tab') {
@@ -1253,7 +1275,7 @@ window.addEventListener('keydown', (e) => {
 
 // ── Click/tap-to-select ──
 function trySelect(clientX, clientY) {
-  if (!system || warpEffect.isActive) return;
+  if (!system || warpEffect.isActive || warpTarget.turning) return;
 
   _mouse.x = (clientX / window.innerWidth) * 2 - 1;
   _mouse.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -1315,6 +1337,30 @@ function autoSelectWarpTarget() {
   }
 }
 
+/**
+ * Begin the pre-warp camera turn. If a warp target is selected,
+ * the camera slerps to face it first (brackets go solid = "locked on").
+ * Once aligned, the warp fires. If no target, warp starts immediately.
+ */
+function beginWarpTurn() {
+  if (warpEffect.isActive) return;   // already warping
+  if (warpTarget.turning) return;    // already turning
+
+  if (!warpTarget.direction) {
+    // No target — warp toward camera forward immediately
+    cameraController.bypassed = true;
+    warpEffect.start(null);
+    return;
+  }
+
+  // Stop flythrough camera — we're taking direct control for the turn.
+  // autoNav stays active (warpRevealSystem rebuilds it for the new system).
+  if (flythrough.active) flythrough.stop();
+  cameraController.bypassed = true;
+  warpTarget.turning = true;
+  warpTarget.turnTimer = 0;
+}
+
 // Idle tracking — any mouse movement resets idle timer (but no free-look)
 canvas.addEventListener('mousemove', (e) => {
   if (!autoNav.isActive) {
@@ -1336,8 +1382,8 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.button === 1) {
     _middleMouseDown = true;
   }
-  // Left-click drag turns off autopilot (but not during warp)
-  if (e.button === 0 && autoNav.isActive && !warpEffect.isActive) {
+  // Left-click drag turns off autopilot (but not during warp or turn)
+  if (e.button === 0 && autoNav.isActive && !warpEffect.isActive && !warpTarget.turning) {
     stopFlythrough();
   }
   if (!autoNav.isActive) idleTimer = 0;
@@ -1381,9 +1427,7 @@ canvas.addEventListener('touchend', (e) => {
   const now = Date.now();
   if (now - _lastTapTime < 350) {
     // Double tap: warp to new system
-    if (!autoNav.isActive) startFlythrough();
-    warpEffect.start(warpTarget.direction);
-    warpTarget.direction = null;
+    beginWarpTurn();
     _lastTapTime = 0;
   } else {
     _lastTapTime = now;
@@ -1416,9 +1460,7 @@ if (mobileMenu) {
 
     const action = btn.dataset.action;
     if (action === 'new') {
-      if (!autoNav.isActive) startFlythrough();
-      warpEffect.start(warpTarget.direction);
-      warpTarget.direction = null;
+      beginWarpTurn();
     } else if (action === 'back') {
       focusPlanet(-1);
     } else if (action === 'prev') {
