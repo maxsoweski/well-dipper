@@ -8,7 +8,7 @@
  *   2. ENTER  (~2s) — white flash as camera flies into the glowing core,
  *                      scene objects fade, hyperspace takes over.
  *   3. HYPER  (~10s) — geometric tunnel (Star Fox 64 / NMS style),
- *                       system swap happens 1s in.
+ *                       system swap happens immediately (data pre-generated during FOLD).
  *   4. EXIT   (~2s) — hyperspace fades, new starfield + system appear.
  *
  * This class only manages timing and uniform values.
@@ -41,10 +41,12 @@ export class WarpEffect {
     this.riftDirection = null;  // THREE.Vector3 or null (null = camera forward)
 
     // ── Callbacks (set by main.js) ──
-    this.onSwapSystem = null;  // called at start of hyperspace
-    this.onComplete = null;    // called when exit finishes
+    this.onPrepareSystem = null; // called at start of fold (pre-generate data)
+    this.onSwapSystem = null;    // called at start of hyperspace
+    this.onComplete = null;      // called when exit finishes
 
-    this._swapFired = false;   // ensure onSwapSystem fires only once
+    this._prepareFired = false;  // ensure onPrepareSystem fires only once
+    this._swapFired = false;     // ensure onSwapSystem fires only once
   }
 
   /** Is the warp currently active? */
@@ -62,6 +64,7 @@ export class WarpEffect {
     this.state = 'fold';
     this.elapsed = 0;
     this.progress = 0;
+    this._prepareFired = false;
     this._swapFired = false;
     this._resetUniforms();
   }
@@ -104,6 +107,13 @@ export class WarpEffect {
   _updateFold() {
     this.progress = Math.min(1, this.elapsed / this.FOLD_DUR);
     const t = this._ease(this.progress);
+
+    // Fire prepare callback on first frame — pre-generate next system data
+    // while stars are still on screen (cheap CPU work, no visual impact)
+    if (!this._prepareFired) {
+      this._prepareFired = true;
+      if (this.onPrepareSystem) this.onPrepareSystem();
+    }
 
     // Stars fold inward — use progress² (not smootherstep) so it starts
     // immediately and ramps up visibly. Stars should be moving from frame 1.
@@ -180,8 +190,10 @@ export class WarpEffect {
     this.starBrightness = 0;
     this.cameraForwardSpeed = 30;  // Maintain forward momentum through hyperspace
 
-    // Fire system swap callback 1s into hyperspace
-    if (!this._swapFired && this.elapsed >= 1.0) {
+    // Fire system swap immediately at HYPER start — the tunnel is fully
+    // opaque so any frame drop from GPU resource creation is invisible.
+    // System data was already pre-generated during FOLD (onPrepareSystem).
+    if (!this._swapFired) {
       this._swapFired = true;
       if (this.onSwapSystem) this.onSwapSystem();
     }

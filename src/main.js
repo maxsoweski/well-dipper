@@ -68,13 +68,23 @@ const IDLE_THRESHOLD = 20;
 
 // ── Warp transition (system-to-system) ──
 const warpEffect = new WarpEffect();
+let pendingSystemData = null; // pre-generated data cached during fold phase
 
 // When the tour visits every body, trigger warp to a new system
 autoNav.onTourComplete = () => {
   warpEffect.start();
 };
 
-// System swap happens mid-hyperspace (invisible behind the tunnel effect)
+// Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
+// By the time we need to create GPU resources (hyper start), data is ready.
+warpEffect.onPrepareSystem = () => {
+  seedCounter++;
+  const seed = `system-${seedCounter}`;
+  pendingSystemData = StarSystemGenerator.generate(seed);
+  console.log(`Warp: pre-generated system "${seed}" during fold`);
+};
+
+// System swap at hyper start (tunnel is opaque, hides any GPU resource creation)
 warpEffect.onSwapSystem = () => {
   warpSwapSystem();
 };
@@ -96,8 +106,9 @@ spawnSystem();
  * Generate and display a full star system (single or binary).
  * @param {Object} options
  * @param {boolean} options.forWarp  — if true, skip camera setup + flythrough start (warp handles that)
+ * @param {Object} options.systemData — pre-generated data from StarSystemGenerator (skips re-generation)
  */
-function spawnSystem({ forWarp = false } = {}) {
+function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Reset autopilot / flythrough ──
   const wasAutopilot = autoNav.isActive;
   if (!forWarp) {
@@ -159,9 +170,9 @@ function spawnSystem({ forWarp = false } = {}) {
   }
   gravityWellPlanets = null;
 
-  // ── Generate system data ──
+  // ── Generate system data (or use pre-generated data from warp prepare phase) ──
   const seed = `system-${seedCounter}`;
-  const systemData = StarSystemGenerator.generate(seed);
+  const systemData = preGenData || StarSystemGenerator.generate(seed);
 
   // ── Create star(s) ──
   // Scene-unit star data: override radius with radiusScene for 3D rendering
@@ -554,16 +565,18 @@ function stopFlythrough() {
 
 /**
  * Warp: dispose old system and generate a new one (hidden).
- * Called mid-hyperspace when the tunnel effect hides everything.
+ * Called at hyper start — tunnel is fully opaque, hides everything.
+ * System data was pre-generated during FOLD phase (onPrepareSystem).
  */
 function warpSwapSystem() {
   // Stop autopilot (don't restore camera — warp controls it)
   flythrough.stop();
   autoNav.stop();
 
-  // Generate a new system (cleanup old + create new, skip camera setup)
-  seedCounter++;
-  spawnSystem({ forWarp: true });
+  // Create new system using pre-generated data (GPU resource creation only).
+  // seedCounter was already incremented in onPrepareSystem.
+  spawnSystem({ forWarp: true, systemData: pendingSystemData });
+  pendingSystemData = null;
 
   // Position camera far from the new star, facing it.
   // Camera will fly forward at 30 units/s through remaining hyper (~9s)
