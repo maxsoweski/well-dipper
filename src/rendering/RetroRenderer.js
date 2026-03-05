@@ -236,7 +236,12 @@ export class RetroRenderer {
             float portalAspect = resolution.x / resolution.y;
             vec2 aspectCorr = vec2(toCenter.x * portalAspect, toCenter.y);
             portalDist = length(aspectCorr);
-            portalRadius = uFoldGlow * 0.45;
+            // Portal radius tracks the "fully consumed" fold frontier.
+            // In the starfield shader, a star at NDC distance d is fully
+            // folded when foldAmount >= d*0.7 + 0.35. Working through the
+            // foldGlow derivation: fullyConsumed_ndc = max(0, foldGlow - 0.25).
+            // Divide by 2 to convert NDC → UV vertical extent.
+            portalRadius = max(0.0, uFoldGlow - 0.25) * 0.5;
 
             // ── Chromatic aberration at portal edge ──
             vec2 caDir = length(toCenter) > 0.001 ? normalize(toCenter) : vec2(0.0);
