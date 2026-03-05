@@ -224,9 +224,9 @@ export class RetroRenderer {
           if (uFoldGlow > 0.0) {
             float xDist = abs(vUv.x - uRiftCenter.x);
 
-            // Pillar half-width: grows quadratically from paper-thin to full screen
+            // Pillar half-width: grows cubically — stays thin much longer, then swells.
             // At uFoldGlow=1.0, halfWidth=0.55 which exceeds max xDist (0.5)
-            float halfWidth = uFoldGlow * uFoldGlow * 0.55;
+            float halfWidth = uFoldGlow * uFoldGlow * uFoldGlow * 0.55;
 
             // Solid opaque white core (hard edge)
             float core = step(xDist, halfWidth);

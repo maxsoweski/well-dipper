@@ -87,8 +87,9 @@ export class Starfield {
           gl_Position = projectionMatrix * mvPos;
 
           // ── Warp fold + streak ──
-          // Stars compress radially toward the rift center point.
-          // Edge stars streak more, center stars barely move.
+          // Stars fold horizontally INTO the vertical rift pillar.
+          // X compression is strong (stars slide sideways into the slit),
+          // Y compression is gentle (keeps the vertical spread visible).
           vStreakAmount = 0.0;
 
           if (uFoldAmount > 0.0) {
@@ -96,13 +97,16 @@ export class Starfield {
             vec2 toCenter = ndc - uRiftCenter;
             float distFromCenter = length(toCenter);
 
-            // Fold: compress radially toward rift center
+            // Fold: X compresses fully into the pillar, Y only 25%
             float foldStrength = uFoldAmount * uFoldAmount;
-            vec2 folded = uRiftCenter + toCenter * (1.0 - foldStrength);
+            vec2 folded = uRiftCenter + vec2(
+              toCenter.x * (1.0 - foldStrength),
+              toCenter.y * (1.0 - foldStrength * 0.25)
+            );
             gl_Position.xy = folded * gl_Position.w;
 
-            // Streak: stronger for stars far from rift center
-            vStreakAmount = uFoldAmount * min(distFromCenter, 1.0);
+            // Streak: based on horizontal distance (how far the star slides)
+            vStreakAmount = uFoldAmount * min(abs(toCenter.x), 1.0);
           }
 
           // Point size: base size × streak elongation factor
