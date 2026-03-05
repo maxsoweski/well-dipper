@@ -208,11 +208,6 @@ export class RetroRenderer {
           float nearBoost = smoothstep(6.0, 3.0, wallZ);
           float ringIntensity = ringBand * (depthFade * 0.6 + nearBoost * 0.4);
 
-          // ── Dithering (hash noise, no grid artifacts) ──
-          vec2 screenPos = floor(uv * resolution);
-          float noise = fract(sin(dot(screenPos, vec2(12.9898, 78.233))) * 43758.5453);
-          float ditheredRing = step(noise, ringIntensity * 0.8);
-
           // ── Color: red↔blue blink at 0.75 Hz ──
           vec3 redColor = vec3(0.8, 0.15, 0.15);
           vec3 blueColor = vec3(0.15, 0.25, 0.85);
@@ -224,7 +219,7 @@ export class RetroRenderer {
 
           // ── Compose ──
           vec3 col = bg * wallShade;
-          col = mix(col, ringColor, ditheredRing * 0.35);
+          col = mix(col, ringColor, ringIntensity * 0.35);
 
           // ── Vanishing point glow ──
           float centerDist = length(centered);

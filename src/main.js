@@ -1354,22 +1354,21 @@ window.addEventListener('resize', () => retroRenderer.resize());
 window.addEventListener('keydown', (e) => {
   _heldKeys.add(e.key);
 
+  // Debug destination override: set at any time (even during warp).
+  // The forced type persists until the next onPrepareSystem call.
+  if (e.key === ',') {
+    _forceNextDestType = 'spiral-galaxy';
+    console.log('Debug: next warp → spiral galaxy');
+  } else if (e.key === '.' && !e.shiftKey) {
+    _forceNextDestType = 'emission-nebula';
+    console.log('Debug: next warp → emission nebula');
+  } else if (e.key === '/' || e.key === '?') {
+    _forceNextDestType = 'globular-cluster';
+    console.log('Debug: next warp → globular cluster');
+  }
+
   // Block all input during warp transition or pre-warp turn
   if (warpEffect.isActive || warpTarget.turning) return;
-
-  // Check for debug destination override (held key + Space)
-  if (e.code === 'Space') {
-    if (_heldKeys.has(',')) {
-      _forceNextDestType = 'spiral-galaxy';
-      console.log('Debug: warping → spiral galaxy');
-    } else if (_heldKeys.has('.')) {
-      _forceNextDestType = 'emission-nebula';
-      console.log('Debug: warping → emission nebula');
-    } else if (_heldKeys.has('?') || (_heldKeys.has('/') && e.shiftKey)) {
-      _forceNextDestType = 'globular-cluster';
-      console.log('Debug: warping → globular cluster');
-    }
-  }
 
   // A key: toggle autopilot
   if (e.code === 'KeyA') {
