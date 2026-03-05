@@ -143,13 +143,29 @@ export class SystemMap {
   }
 
   /**
-   * Create a simple Sprite for the map.
+   * Create a circular Sprite for the map.
+   * Uses a shared circle texture so dots appear round, not square.
    * @param {number[]} color — [r, g, b] in 0–1
    * @param {number} size — world size in map units
    */
   _makeSprite(color, size) {
+    if (!SystemMap._circleTexture) {
+      const s = 32;
+      const canvas = document.createElement('canvas');
+      canvas.width = s;
+      canvas.height = s;
+      const ctx = canvas.getContext('2d');
+      ctx.beginPath();
+      ctx.arc(s / 2, s / 2, s / 2 - 1, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      SystemMap._circleTexture = new THREE.CanvasTexture(canvas);
+      SystemMap._circleTexture.needsUpdate = true;
+    }
+
     const [r, g, b] = color;
     const mat = new THREE.SpriteMaterial({
+      map: SystemMap._circleTexture,
       color: new THREE.Color(r, g, b),
       depthWrite: false,
       depthTest: false,
@@ -237,6 +253,56 @@ export class SystemMap {
     this.camera.up.set(Math.sin(-mainYaw), 0, Math.cos(-mainYaw));
     this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Hit-test a click in HUD UV space (0-1) against map bodies.
+   * Returns { type: 'star'|'planet', starIndex?, planetIndex? } or null.
+   * @param {number} hudU — 0 (left) to 1 (right) within the HUD texture
+   * @param {number} hudV — 0 (bottom) to 1 (top) within the HUD texture
+   */
+  hitTest(hudU, hudV) {
+    // Convert HUD UV to world coordinates in the map scene.
+    // The orthographic camera maps [-extent, extent] to the HUD texture.
+    // But the camera also rotates with yaw, so we need to unproject properly.
+    //
+    // NDC: hudU → -1..+1 (left to right), hudV → -1..+1 (bottom to top)
+    const ndcX = hudU * 2 - 1;
+    const ndcY = hudV * 2 - 1;
+
+    // Unproject from NDC through the ortho camera to get world XZ
+    const worldPos = new THREE.Vector3(ndcX, ndcY, 0).unproject(this.camera);
+
+    // Find the closest body (star or planet) to this world position
+    const pickRadiusSq = (this.extent * 0.06) ** 2; // generous pick radius
+    let bestDist = pickRadiusSq;
+    let bestHit = null;
+
+    // Check stars
+    for (let s = 0; s < this._starSprites.length; s++) {
+      const sp = this._starSprites[s].position;
+      const dx = worldPos.x - sp.x;
+      const dz = worldPos.z - sp.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestDist) {
+        bestDist = d2;
+        bestHit = { type: 'star', starIndex: s };
+      }
+    }
+
+    // Check planets
+    for (let p = 0; p < this._planetSprites.length; p++) {
+      const sp = this._planetSprites[p].position;
+      const dx = worldPos.x - sp.x;
+      const dz = worldPos.z - sp.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestDist) {
+        bestDist = d2;
+        bestHit = { type: 'planet', planetIndex: p };
+      }
+    }
+
+    return bestHit;
   }
 
   dispose() {

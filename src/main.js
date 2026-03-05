@@ -2277,6 +2277,22 @@ window.addEventListener('keyup', (e) => {
 function trySelect(clientX, clientY) {
   if (!system || warpEffect.isActive || warpTarget.turning) return;
 
+  // 0. Check minimap click first (circular HUD region)
+  if (systemMap && !gravityWellVisible) {
+    const uv = retroRenderer.getHudUV(clientX, clientY);
+    if (uv) {
+      const hit = systemMap.hitTest(uv.u, uv.v);
+      if (hit) {
+        if (hit.type === 'star') {
+          focusStar(hit.starIndex);
+        } else if (hit.type === 'planet') {
+          focusPlanet(hit.planetIndex);
+        }
+        return;
+      }
+    }
+  }
+
   _mouse.x = (clientX / window.innerWidth) * 2 - 1;
   _mouse.y = -(clientY / window.innerHeight) * 2 + 1;
 

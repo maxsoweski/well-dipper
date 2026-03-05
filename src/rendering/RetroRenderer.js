@@ -70,6 +70,46 @@ export class RetroRenderer {
   }
 
   /**
+   * Convert a screen click to HUD texture UV, or null if outside the circular HUD.
+   * @param {number} clientX — mouse X in window pixels
+   * @param {number} clientY — mouse Y in window pixels
+   * @returns {{ u: number, v: number } | null}
+   */
+  getHudUV(clientX, clientY) {
+    if (!this._hudScene) return null;
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const aspect = w / h;
+
+    // Screen UV (0-1, origin bottom-left, matching shader vUv)
+    const uvX = clientX / w;
+    const uvY = 1 - clientY / h;
+
+    // HUD rect in UV space (same values as the shader uniform)
+    const hudX = 0.78;
+    const hudY = 0.02;
+    const hudW = 0.20;
+    const hudH = 0.20 * aspect;
+
+    // Circle test (matches shader logic)
+    const cx = hudX + hudW * 0.5;
+    const cy = hudY + hudH * 0.5;
+    const radius = hudW * 0.5;
+    let dx = uvX - cx;
+    let dy = uvY - cy;
+    dy *= (hudW / hudH);  // aspect correction to match shader
+    if (dx * dx + dy * dy >= radius * radius) return null;
+
+    // Convert to HUD texture UV (0-1 within the HUD rect)
+    const u = (uvX - hudX) / hudW;
+    const v = (uvY - hudY) / hudH;
+    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+
+    return { u, v };
+  }
+
+  /**
    * Set warp-related uniforms (called by main.js during warp).
    * @param {number} sceneFade    0 = scene visible, 1 = scene hidden
    * @param {number} whiteFlash   0 = no flash, 1 = full white
@@ -283,7 +323,7 @@ export class RetroRenderer {
             }
           }
 
-          // ── HUD overlay (hidden during warp) ──
+          // ── HUD overlay (circular, hidden during warp) ──
           if (hudEnabled > 0.5 && uSceneFade < 0.5 && uFoldGlow < 0.3) {
             float aspect = resolution.x / resolution.y;
             float hudW = hudRect.z;
@@ -291,13 +331,28 @@ export class RetroRenderer {
             float hudX = hudRect.x;
             float hudY = hudRect.y;
 
-            if (vUv.x > hudX && vUv.x < hudX + hudW &&
-                vUv.y > hudY && vUv.y < hudY + hudH) {
+            // Center of HUD region in UV space
+            vec2 hudCenter = vec2(hudX + hudW * 0.5, hudY + hudH * 0.5);
+            float hudRadius = hudW * 0.5;
+
+            // Normalized distance from center (aspect-corrected so it's a true circle)
+            vec2 delta = vUv - hudCenter;
+            delta.y *= (hudW / hudH);  // correct for non-square HUD region
+            float dist = length(delta);
+
+            if (dist < hudRadius) {
+              // Map UV within the bounding rect for texture sampling
               vec2 hudUV = (vUv - vec2(hudX, hudY)) / vec2(hudW, hudH);
               vec4 hud = texture2D(hudTexture, hudUV);
 
               result = mix(result, vec3(0.0), 0.5);
               result = mix(result, hud.rgb, hud.a);
+
+              // Thin border ring at the edge (1.5px)
+              float borderThick = 1.5 / resolution.x;
+              if (dist > hudRadius - borderThick) {
+                result = mix(result, vec3(0.15, 0.6, 0.15), 0.7);
+              }
             }
           }
 
