@@ -182,24 +182,17 @@ export class RetroRenderer {
           speedLine = step(0.97, speedLine) * smoothstep(0.5, 0.1, radius);
 
           // ── Combine ──
-          vec3 ringColor = vec3(0.85, 0.1, 0.1);      // red rings
-          vec3 yellowColor = vec3(1.0, 0.85, 0.0);     // yellow shapes
-          // Blink: shapes pulse on/off at ~3 Hz
-          float blink = step(0.3, fract(time * 3.0));
+          // Rings blink between red and blue at ~3 Hz
+          vec3 redColor = vec3(0.85, 0.1, 0.1);
+          vec3 blueColor = vec3(0.1, 0.2, 0.9);
+          float ringBlink = step(0.5, fract(time * 3.0));
+          vec3 ringColor = mix(redColor, blueColor, ringBlink);
           vec3 col = bg;
           col = mix(col, ringColor, rings * 0.8);
-          col = mix(col, yellowColor, hexPattern * 0.7 * blink);
-          col = mix(col, yellowColor, diamonds * 0.6 * blink);
-          col += yellowColor * speedLine * 0.5 * blink;
 
           // ── Bright vanishing point (center) ──
           float centerBright = smoothstep(0.12, 0.0, radius);
           col = mix(col, vec3(1.0), centerBright);
-
-          // ── Occasional flashes (particles rushing past) ──
-          float flash = sin(angle * 30.0 + time * 6.0) * sin(depth * 3.0 + time * 8.0);
-          flash = step(0.96, flash);
-          col += yellowColor * flash * 0.6;
 
           return col;
         }
