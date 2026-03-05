@@ -178,10 +178,9 @@ warpEffect.onComplete = () => {
 // ── Click-to-select (raycasting) ──
 const raycaster = new THREE.Raycaster();
 const _mouse = new THREE.Vector2();
-// Separate raycaster for orbit lines — needs a much wider threshold
-// because THREE.Line is hair-thin and nearly impossible to click otherwise.
+// Separate raycaster for orbit lines — threshold is set dynamically
+// before each cast (scales with camera distance so picking works at any zoom).
 const _orbitRaycaster = new THREE.Raycaster();
-_orbitRaycaster.params.Line.threshold = 0.5; // scene units — generous pick zone
 let _orbitLineTargets = new Map(); // orbit line mesh → body info
 let _hoveredOrbitLine = null;      // currently hovered orbit line mesh
 const _mouseDown = { x: 0, y: 0 };
@@ -2262,9 +2261,12 @@ function trySelect(clientX, clientY) {
   if (!system || warpEffect.isActive || warpTarget.turning) return;
 
   // 0. Check minimap click first (circular HUD region)
+  // Any click inside the HUD circle is consumed — dead zone for star selection.
   if (systemMap && !gravityWellVisible) {
     const uv = retroRenderer.getHudUV(clientX, clientY);
     if (uv) {
+      // Inside the minimap circle — try to hit a body, but either way don't
+      // let the click fall through to scene raycasting or warp star selection.
       const hit = systemMap.hitTest(uv.u, uv.v);
       if (hit) {
         if (hit.type === 'star') {
@@ -2272,8 +2274,8 @@ function trySelect(clientX, clientY) {
         } else if (hit.type === 'planet') {
           focusPlanet(hit.planetIndex);
         }
-        return;
       }
+      return; // always consume clicks inside the minimap
     }
   }
 
@@ -2306,8 +2308,9 @@ function trySelect(clientX, clientY) {
     return; // scene object hit — done
   }
 
-  // 1b. Try orbit lines (wider threshold raycaster)
+  // 1b. Try orbit lines (distance-scaled threshold raycaster)
   if (_orbitLineTargets.size > 0) {
+    _orbitRaycaster.params.Line.threshold = Math.max(camera.position.length() * 0.004, 0.01);
     _orbitRaycaster.setFromCamera(_mouse, camera);
     const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
     const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);
@@ -2408,6 +2411,9 @@ canvas.addEventListener('mousemove', (e) => {
   if (!system || warpEffect.isActive || galleryMode) return;
   const mx = (e.clientX / window.innerWidth) * 2 - 1;
   const my = -(e.clientY / window.innerHeight) * 2 + 1;
+  // Scale threshold with camera distance — ~0.4% of distance to system center.
+  // At 1000 units: threshold = 4 units. At 5 units (close to moon): threshold = 0.02.
+  _orbitRaycaster.params.Line.threshold = Math.max(camera.position.length() * 0.004, 0.01);
   _orbitRaycaster.setFromCamera({ x: mx, y: my }, camera);
   const orbitMeshes = Array.from(_orbitLineTargets.keys()).filter(m => m.visible);
   const orbitHits = _orbitRaycaster.intersectObjects(orbitMeshes, false);

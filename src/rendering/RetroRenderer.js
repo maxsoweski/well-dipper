@@ -348,10 +348,10 @@ export class RetroRenderer {
               result = mix(result, vec3(0.0), 0.5);
               result = mix(result, hud.rgb, hud.a);
 
-              // Thin border ring at the edge (1.5px)
-              float borderThick = 1.5 / resolution.x;
+              // Subtle border ring at the edge (1px, dim green)
+              float borderThick = 1.0 / resolution.x;
               if (dist > hudRadius - borderThick) {
-                result = mix(result, vec3(0.15, 0.6, 0.15), 0.7);
+                result = mix(result, vec3(0.08, 0.25, 0.08), 0.45);
               }
             }
           }
