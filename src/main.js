@@ -1022,10 +1022,15 @@ function gallerySpawn() {
         orbitSpeed: 0,        // Don't orbit — stay still
       };
 
-      const lightDir = new THREE.Vector3(0.5, 0.3, 0.8).normalize();
+      // Light from upper-right-front so the terminator is visible
+      const lightDir = new THREE.Vector3(0.6, 0.3, 0.7).normalize();
       const starInfo = {
-        color1: [1.0, 0.96, 0.92],
-        brightness1: 1.0,
+        color1: [1.0, 0.98, 0.94],
+        // Boost brightness for gallery — dark moon types (captured, rocky) are
+        // barely visible at normal brightness because posterization crushes
+        // their low base colors. In normal play, moons appear alongside bright
+        // stars and planets so this isn't an issue.
+        brightness1: 2.0,
         color2: [0, 0, 0],
         brightness2: 0,
       };
