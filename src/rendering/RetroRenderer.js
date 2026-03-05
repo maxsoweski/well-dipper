@@ -206,16 +206,18 @@ export class RetroRenderer {
             float xDist = abs(vUv.x - uRiftCenter.x);
 
             // Pillar half-width: grows cubically — stays thin much longer, then swells.
-            // At uFoldGlow=1.0, halfWidth=0.55 which exceeds max xDist (0.5)
             float halfWidth = uFoldGlow * uFoldGlow * uFoldGlow * 0.55;
 
-            // Solid opaque white core (hard edge)
-            float core = step(xDist, halfWidth);
+            // Dithered edge (hash noise — consistent with hyperspace ring style)
+            vec2 glowScreenPos = floor(vUv * resolution);
+            float glowNoise = fract(sin(dot(glowScreenPos, vec2(12.9898, 78.233))) * 43758.5453);
 
-            // Soft outer halo for glow bleeding beyond the pillar edge
-            float halo = smoothstep(halfWidth + 0.15, halfWidth, xDist) * 0.3 * uFoldGlow;
+            // Gradient: 1.0 at center → 0.0 beyond pillar edge
+            float gradient = smoothstep(halfWidth + 0.08, halfWidth * 0.4, xDist);
 
-            float glow = max(core, halo);
+            // Dither threshold: scattered white pixels at edge, solid at core
+            float glow = step(glowNoise, gradient) * uFoldGlow;
+
             result = mix(result, vec3(1.0), glow);
           }
 

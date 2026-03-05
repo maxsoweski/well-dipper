@@ -79,7 +79,6 @@ export class Starfield {
         varying vec3 vColor;
         varying float vSize;
         varying float vStreakAmount;
-        varying vec2 vStreakDir;
 
         void main() {
           vColor = color;
@@ -87,40 +86,36 @@ export class Starfield {
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mvPos;
 
-          // ── Warp fold + streak ──
-          // Stars fold horizontally INTO the vertical rift pillar.
-          // X compression is strong (stars slide sideways into the slit),
-          // Y compression is gentle (keeps the vertical spread visible).
+          // ── Warp fold ──
+          // Stars get "pulled into" the rift: stars closest to the rift
+          // start moving first, outer stars follow as the fold deepens.
           vStreakAmount = 0.0;
-          vStreakDir = vec2(1.0, 0.0);
 
           if (uFoldAmount > 0.0) {
             vec2 ndc = gl_Position.xy / gl_Position.w;
             vec2 toCenter = ndc - uRiftCenter;
-            float distFromCenter = length(toCenter);
+            float horizontalDist = abs(toCenter.x);
 
-            // Direction toward rift center (for directional streaking)
-            vStreakDir = distFromCenter > 0.001
-              ? normalize(uRiftCenter - ndc)
-              : vec2(1.0, 0.0);
+            // Distance-based pull: close stars fold first, far stars later.
+            // pullStart = foldAmount threshold before this star begins moving.
+            float pullStart = horizontalDist * 0.7;
+            float pullEnd = pullStart + 0.35;
+            float localFold = smoothstep(pullStart, pullEnd, uFoldAmount);
 
-            // Fold: X compresses fully into the pillar, Y gently
+            // Compress toward rift center
             vec2 folded = uRiftCenter + vec2(
-              toCenter.x * (1.0 - uFoldAmount),
-              toCenter.y * (1.0 - uFoldAmount * 0.3)
+              toCenter.x * (1.0 - localFold),
+              toCenter.y * (1.0 - localFold * 0.3)
             );
             gl_Position.xy = folded * gl_Position.w;
 
-            // Streak: stars near the pillar smear much harder.
-            // proximityBoost ramps from 1× at the edges to 4× at the rift center.
-            float foldedDist = length(folded - uRiftCenter);
-            float proximityBoost = 1.0 + smoothstep(0.5, 0.0, foldedDist) * 3.0;
-            vStreakAmount = uFoldAmount * min(distFromCenter, 2.0) * proximityBoost;
+            // Streak: how far this star has traveled × its distance
+            vStreakAmount = localFold * min(horizontalDist, 1.0);
           }
 
           // Point size: base size × streak elongation factor
           float baseSize = aSize > 5.0 ? aSize * 2.0 : aSize;
-          float streakFactor = 1.0 + vStreakAmount * 30.0;
+          float streakFactor = 1.0 + vStreakAmount * 8.0;
           gl_PointSize = baseSize * streakFactor;
         }
       `,
@@ -130,7 +125,6 @@ export class Starfield {
         varying vec3 vColor;
         varying float vSize;
         varying float vStreakAmount;
-        varying vec2 vStreakDir;
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -154,16 +148,9 @@ export class Starfield {
           float dist;
           if (vStreakAmount > 0.01) {
             // ── Streak mode ──
-            // Rotate point coords so X aligns with rift direction,
-            // then squish perpendicular → star smears toward rift center.
-            float ca = vStreakDir.x;
-            float sa = vStreakDir.y;
-            vec2 rotated = vec2(
-              center.x * ca + center.y * sa,
-              -center.x * sa + center.y * ca
-            );
-            float sf = 1.0 + vStreakAmount * 30.0;
-            dist = length(vec2(rotated.x, rotated.y * sf));
+            // Elongate horizontally: star stretches into the rift
+            float sf = 1.0 + vStreakAmount * 8.0;
+            dist = length(vec2(center.x, center.y * sf));
           } else {
             // ── Normal mode ──
             if (vSize < 5.0) {
