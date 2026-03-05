@@ -645,9 +645,11 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   };
 
   for (const sData of data.stars) {
-    // Navigable spaces are enormous (60K-500K radius) — stars must be exaggerated
-    // so they're visible while flying between them. Use at least 0.1% of space radius.
-    const minVisible = data.radius * 0.001;
+    // Stars in navigable spaces need slight exaggeration so they're visible as discs
+    // while flying between them, but NOT so large they look crowded.
+    // 0.03% of radius → ~60 units in a 200K cluster (real B-star is ~23 units).
+    // Still 2-3× real size but not the 10× that made them look stacked.
+    const minVisible = data.radius * 0.0003;
     const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
     const starObj = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
     starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
@@ -1125,12 +1127,28 @@ function populateNavigableQueueRefs() {
   if (system.star2) allStars.push(system.star2);
   if (system.extraStars) allStars.push(...system.extraStars);
 
+  // Compute nearest-neighbor distance for each star (for orbit distance scaling)
+  const nearestDist = allStars.map((s, i) => {
+    let minD = Infinity;
+    for (let j = 0; j < allStars.length; j++) {
+      if (i === j) continue;
+      const d = s.mesh.position.distanceTo(allStars[j].mesh.position);
+      if (d < minD) minD = d;
+    }
+    return minD;
+  });
+
   for (const stop of autoNav.queue) {
     if (stop.type === 'star') {
       const starObj = allStars[stop.starIndex] || allStars[0];
       stop.bodyRef = starObj.mesh;
+      // Overview stops keep their pre-set orbitDistance/bodyRadius
+      if (stop._isOverview) continue;
       stop.bodyRadius = starObj.data.radius;
-      stop.orbitDistance = starObj.data.radius * 4;
+      // Orbit at 15% of nearest-neighbor distance so you can see neighbors at scale,
+      // but at least 4× star radius (stay outside glow corona)
+      const nn = nearestDist[stop.starIndex] || starObj.data.radius * 8;
+      stop.orbitDistance = Math.max(starObj.data.radius * 4, nn * 0.15);
     }
   }
 }

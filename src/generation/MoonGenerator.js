@@ -126,7 +126,10 @@ export class MoonGenerator {
       orbitSpeed: retrograde ? -orbitSpeed : orbitSpeed,
       inclination,
       startAngle,
-      noiseScale: rng.range(3.0, 6.0),
+      // noiseScale must produce visible features: noise needs input range ≥2.0 units.
+      // Effective range = radius(map) × noiseScale, so scale inversely with radius.
+      // Ensures even tiny moons get enough noise variation for craters/textures.
+      noiseScale: Math.max(rng.range(3.0, 6.0), 2.5 / moonRadiusData.radius),
     };
   }
 

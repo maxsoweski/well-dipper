@@ -46,6 +46,9 @@ export class NavigableClusterGenerator {
     }
 
     // ── Stars: 5-20, assigned to clumps ──
+    // Minimum separation = 5% of radius — keeps stars visually distinct.
+    // For a 200K cluster that's 10,000 units (real B-star is ~23 units).
+    const minSep = radius * 0.05;
     const starCount = rng.int(5, 20);
     const stars = [];
 
@@ -59,9 +62,33 @@ export class NavigableClusterGenerator {
       // Assign to a random clump
       const clump = clumps[s % clumpCount];
 
-      const x = clump.x + this._gaussian(rng) * clump.spread;
-      const y = clump.y + this._gaussian(rng) * clump.spread * 0.3;
-      const z = clump.z + this._gaussian(rng) * clump.spread;
+      // Place star with rejection sampling to enforce minimum separation
+      let x, y, z;
+      let placed = false;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        x = clump.x + this._gaussian(rng) * clump.spread;
+        y = clump.y + this._gaussian(rng) * clump.spread * 0.3;
+        z = clump.z + this._gaussian(rng) * clump.spread;
+
+        // Check distance to all existing stars
+        let tooClose = false;
+        for (const existing of stars) {
+          const dx = x - existing.position[0];
+          const dy = y - existing.position[1];
+          const dz = z - existing.position[2];
+          if (dx * dx + dy * dy + dz * dz < minSep * minSep) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (!tooClose) { placed = true; break; }
+      }
+      // If all attempts failed, place it anyway (edge case with many stars)
+      if (!placed) {
+        x = clump.x + this._gaussian(rng) * clump.spread * 1.5;
+        y = clump.y + this._gaussian(rng) * clump.spread * 0.5;
+        z = clump.z + this._gaussian(rng) * clump.spread * 1.5;
+      }
 
       stars.push({
         type: sType,

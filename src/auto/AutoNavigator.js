@@ -112,6 +112,20 @@ export class AutoNavigator {
     if (system.star2) allStars.push(system.star2);
     if (system.extraStars) allStars.push(...system.extraStars);
 
+    // Overview stop: camera sees the whole cluster/nebula before diving in.
+    // Uses first star as anchor but orbits at 30% of the structure radius.
+    if (system._navRadius && allStars.length > 2) {
+      this.queue.push({
+        type: 'star',
+        starIndex: 0,
+        bodyRef: null,
+        orbitDistance: system._navRadius * 0.3,  // 30% of structure = overview
+        bodyRadius: system._navRadius * 0.05,    // prevents camera from getting too close
+        linger: 12 + Math.random() * 5,          // 12-17s overview
+        _isOverview: true,                        // flag for reference
+      });
+    }
+
     // Each star gets a tour stop
     for (let i = 0; i < allStars.length; i++) {
       this.queue.push({
