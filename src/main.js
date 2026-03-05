@@ -1028,8 +1028,8 @@ function animate() {
       }
     } else {
       // Reset warp uniforms when not warping
-      starfield.setWarpUniforms(0, 1);
-      retroRenderer.setWarpUniforms(0, 0, 0, 0, 0, 0);
+      starfield.setWarpUniforms(0, 1, null);
+      retroRenderer.setWarpUniforms(0, 0, 0, 0, 0, 0, null);
     }
 
     // ── Autopilot (cinematic flythrough) ──

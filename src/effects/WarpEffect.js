@@ -2,17 +2,17 @@
  * WarpEffect — manages the warp transition between star systems.
  *
  * Four phases:
- *   1. FOLD   (~6s) — stars streak inward toward screen center, forming a
- *                      bright vertical "slice". A glowing core thickens at
- *                      center. Camera pushes forward, planets fall behind.
- *   2. ENTER  (~2s) — white flash as camera flies into the glowing core,
- *                      scene objects fade, hyperspace takes over.
- *   3. HYPER  (~10s) — geometric tunnel (Star Fox 64 / NMS style),
- *                       system swap happens immediately (data pre-generated during FOLD).
- *   4. EXIT   (~2s) — hyperspace fades, new starfield + system appear.
+ *   1. FOLD   (~6s) — stars pinch radially toward center (360° fold).
+ *                      A portal opens where stars are consumed, showing
+ *                      hyperspace through it. Camera stays stationary.
+ *   2. ENTER  (~2s) — portal grows to engulf the full screen. Scene
+ *                      objects fade, stars disappear. No camera motion.
+ *   3. HYPER  (~10s) — 3D geometric tunnel (ray-cylinder intersection).
+ *                       System swap happens immediately (data pre-generated during FOLD).
+ *   4. EXIT   (~2s) — fizzing hole opens in tunnel, revealing new system.
  *
  * This class only manages timing and uniform values.
- * The actual visuals live in Starfield (fold/streak) and RetroRenderer (composite).
+ * The actual visuals live in Starfield (fold) and RetroRenderer (composite).
  */
 export class WarpEffect {
   constructor() {
@@ -30,12 +30,12 @@ export class WarpEffect {
     this.foldAmount = 0;          // 0 = normal, 1 = fully folded to center
     this.starBrightness = 1;      // brightness multiplier for stars (1 = normal)
     this.sceneFade = 0;           // 0 = scene visible, 1 = scene hidden
-    this.whiteFlash = 0;          // 0 = no flash, 1 = full white screen
+    this.whiteFlash = 0;          // reserved (unused — portal is the transition)
     this.hyperPhase = 0;          // 0 = not in hyperspace, 1 = full hyperspace
     this.hyperTime = 0;           // accumulated time for hyperspace animation
-    this.foldGlow = 0;            // 0 = no glow, 1 = full bright core at center
+    this.foldGlow = 0;            // 0 = no portal, >0.25 = portal visible, >1 during ENTER
     this.exitReveal = 0;          // 0 = no opening, 1 = full opening (exit only)
-    this.cameraForwardSpeed = 0;  // units/s to push camera forward during fold
+    this.cameraForwardSpeed = 0;  // units/s to push camera (HYPER/EXIT only)
 
     // ── Rift direction (world-space, for future star selection) ──
     this.riftDirection = null;  // THREE.Vector3 or null (null = camera forward)
@@ -130,12 +130,13 @@ export class WarpEffect {
     // Planets stay visible during fold — NO sceneFade
     this.sceneFade = 0;
 
-    // Pillar width = fold frontier. Tracks where stars have been
-    // significantly consumed (localFold ≈ 0.5 in the starfield shader).
-    // No pillar until foldAmount > 0.175 — the nearest stars need to
-    // actually converge at center before any white light appears.
+    // Portal frontier. Tracks where stars have been significantly
+    // consumed (localFold ≈ 0.5 in the starfield shader).
+    // No portal until foldAmount > 0.175 — nearest stars must converge
+    // before any opening appears. The shader adds a further gate at
+    // foldGlow > 0.25 so portalRadius only > 0 once stars are fully cleared.
     // frontier = (foldAmount - 0.175) / 0.7 matches the starfield's
-    // pullStart = horizontalDist * 0.7, pullEnd = pullStart + 0.35.
+    // pullStart = dist * 0.7, pullEnd = pullStart + 0.35.
     const frontier = Math.max(0, (this.foldAmount - 0.175) / 0.7);
     this.foldGlow = Math.min(1, frontier);
 

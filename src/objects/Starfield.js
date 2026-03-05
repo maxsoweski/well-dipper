@@ -6,8 +6,8 @@ import * as THREE from 'three';
  * never fly past the stars (they're a backdrop, like a skybox).
  *
  * During warp transitions:
- * - Vertex shader folds stars toward screen center (vertical "slice")
- * - Stars elongate into horizontal streaks as they slide toward the fold
+ * - Vertex shader pinches stars radially toward rift center (360° fold)
+ * - Close stars fold first, outer stars follow (distance-based pull)
  * - Fragment shader boosts brightness for the accumulation glow
  */
 export class Starfield {
@@ -78,7 +78,6 @@ export class Starfield {
         uniform vec2 uRiftCenter;   // NDC space target point
         varying vec3 vColor;
         varying float vSize;
-        varying float vStreakAmount;
 
         void main() {
           vColor = color;
@@ -89,7 +88,6 @@ export class Starfield {
           // ── Warp fold ──
           // Space pinches into a central point from all directions (360°).
           // Stars closest to center fold first, outer stars follow.
-          vStreakAmount = 0.0;
           float convergeFactor = 1.0;
 
           if (uFoldAmount > 0.0) {
@@ -120,7 +118,6 @@ export class Starfield {
         uniform float uBrightness;
         varying vec3 vColor;
         varying float vSize;
-        varying float vStreakAmount;
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -141,26 +138,17 @@ export class Starfield {
           vec2 center = gl_PointCoord - 0.5;
           float threshold = bayerDither(gl_FragCoord.xy);
 
+          // Star shape: small stars are round, large stars are diamond-ish
           float dist;
-          if (vStreakAmount > 0.01) {
-            // ── Streak mode ──
-            // Elongate horizontally: star stretches into the rift
-            float sf = 1.0 + vStreakAmount * 8.0;
-            dist = length(vec2(center.x, center.y * sf));
+          if (vSize < 5.0) {
+            dist = length(center);
           } else {
-            // ── Normal mode ──
-            if (vSize < 5.0) {
-              dist = length(center);
-            } else {
-              dist = pow(abs(center.x), 0.6) + pow(abs(center.y), 0.6);
-            }
+            dist = pow(abs(center.x), 0.6) + pow(abs(center.y), 0.6);
           }
 
-          float edge = vStreakAmount > 0.01
+          float edge = vSize < 5.0
             ? smoothstep(0.3, 0.5, dist)
-            : (vSize < 5.0
-              ? smoothstep(0.3, 0.5, dist)
-              : smoothstep(0.35, 0.55, dist));
+            : smoothstep(0.35, 0.55, dist);
           if (edge > threshold) discard;
 
           // Brightness boost during warp (stars accumulate as they fold)

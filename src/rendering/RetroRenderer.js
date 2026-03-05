@@ -15,10 +15,10 @@ import * as THREE from 'three';
  * priority. The HUD overlays on top with a subtle dark background.
  *
  * During warp transitions, the composite shader handles:
- * - Fold glow (bright lens-shaped core at screen center)
+ * - Fold portal (radial opening with chromatic aberration at edge)
  * - Scene fade-out (sceneFade uniform)
- * - White flash entering the "slice" (whiteFlash uniform)
- * - Hyperspace geometric tunnel (Star Fox 64 / NMS style)
+ * - Hyperspace 3D tunnel (ray-cylinder intersection, visible through portal)
+ * - Exit reveal (fizzing dithered hole opening in tunnel)
  *
  * Dithering is NOT done here. Each object handles its own dithering
  * in its fragment shader for a more authentic retro look.
@@ -343,11 +343,6 @@ export class RetroRenderer {
             }
 
             result = mix(result, hyper, hyperMask);
-          }
-
-          // ── Warp: white flash (entering the slice) ──
-          if (uWhiteFlash > 0.0) {
-            result = mix(result, vec3(1.0), uWhiteFlash);
           }
 
           gl_FragColor = vec4(result, 1.0);
