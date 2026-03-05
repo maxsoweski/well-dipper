@@ -578,9 +578,9 @@ function warpSwapSystem() {
   spawnSystem({ forWarp: true, systemData: pendingSystemData });
   pendingSystemData = null;
 
-  // Position camera so it arrives at the star's orbit distance when EXIT ends.
-  // Speed is 30 units/s through HYPER (constant) and EXIT (decelerating via
-  // smootherstep, integral = 0.5 × max). Total travel = HYPER + EXIT distances.
+  // Position camera so it ends up ~3 seconds of travel from the star when
+  // EXIT finishes. The post-warp flythrough then coasts the remaining distance
+  // and smoothly enters orbit — giving a "leftover momentum" feel.
   if (system) {
     const star = system.star;
     const starPos = star.mesh.position;
@@ -590,10 +590,13 @@ function warpSwapSystem() {
     const speed = 30; // must match cameraForwardSpeed in HYPER/EXIT phases
     const hyperDist = speed * warpEffect.HYPER_DUR;          // 300
     const exitDist = speed * warpEffect.EXIT_DUR * 0.5;      // 30 (smootherstep integral)
+    const coastDist = 60;                                     // 3s post-warp approach
     const travelDist = hyperDist + exitDist;                  // 330
 
-    // Place camera along +Z from star, facing toward it
-    camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist);
+    // Place camera along +Z from star, facing toward it.
+    // After warp travel (330 units), camera is at orbitDist + coastDist from star.
+    // Flythrough covers coastDist in 3s, arriving at orbitDist → enters orbit.
+    camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
     camera.lookAt(starPos);
   }
 
@@ -603,6 +606,12 @@ function warpSwapSystem() {
 /**
  * Warp: reveal the new system and start autopilot.
  * Called when the warp exit phase finishes.
+ *
+ * The camera is ~60 units from the star at this point, still heading toward it.
+ * beginTravelFrom (warpArrival mode) coasts forward for 3 seconds with
+ * ease-out easing — fast start (leftover momentum) decelerating into orbit.
+ * When travel completes, the autopilot loop (travelComplete handler) calls
+ * beginOrbit automatically.
  */
 function warpRevealSystem() {
   if (!system) return;
@@ -623,21 +632,23 @@ function warpRevealSystem() {
     const upcoming = autoNav.getNextStop();
     flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
 
-    // Begin orbiting the star directly — beginOrbit derives its initial
-    // yaw/pitch from the camera's current position, so the forward
-    // momentum smoothly curves into a circular orbit. No snap.
-    flythrough.beginOrbit(
+    // Coast toward the star with leftover momentum (3s approach).
+    // The camera was already heading toward the star from the warp —
+    // beginTravelFrom captures the forward direction and rides a Hermite
+    // spline to the orbit entry point. When travel completes, the
+    // autopilot's travelComplete handler calls beginOrbit automatically.
+    flythrough.beginTravelFrom(
       starStop.bodyRef,
       starStop.orbitDistance,
       starStop.bodyRadius,
-      starStop.linger,
+      { warpArrival: true },
     );
 
     updateFocusFromStop(starStop);
     if (systemMap) systemMap.triggerBlink();
   }
 
-  console.log('Warp: arrived at new system');
+  console.log('Warp: coasting into new system');
 }
 
 /**

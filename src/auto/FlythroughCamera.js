@@ -87,6 +87,9 @@ export class FlythroughCamera {
     // Current orbit distance (saved each frame for short-trip detection)
     this._currentDist = 10;
 
+    // Warp arrival mode (set by beginTravelFrom with warpArrival option)
+    this._warpArrival = false;
+
     // ── DESCEND state ──
     this.descendStart = new THREE.Vector3();
     this.descendElapsed = 0;
@@ -307,11 +310,12 @@ export class FlythroughCamera {
    * comes from the camera's current forward direction instead of orbit state.
    * The departure blend is skipped since there's no orbit spiral to blend from.
    */
-  beginTravelFrom(nextBodyRef, nextOrbitDistance, nextBodyRadius) {
+  beginTravelFrom(nextBodyRef, nextOrbitDistance, nextBodyRadius, options = {}) {
     this.active = true;
     this.state = State.TRAVEL;
     this.nextBodyRef = nextBodyRef;
     this.nextOrbitDistance = nextOrbitDistance;
+    this._warpArrival = options.warpArrival || false;
 
     this.departurePos.copy(this.camera.position);
     this.camera.getWorldDirection(this.departureDir);
@@ -340,8 +344,14 @@ export class FlythroughCamera {
     this._hermiteStartPos.copy(this.departurePos);
     this.travelElapsed = 0;
 
-    // ── Distance-based travel duration ──
-    this.travelDuration = Math.max(8, Math.min(15, 10 * Math.sqrt(dist / 500)));
+    // ── Travel duration ──
+    if (this._warpArrival) {
+      // Warp arrival: short 3s coast with leftover momentum feel
+      this.travelDuration = 3;
+    } else {
+      // Normal: distance-based duration
+      this.travelDuration = Math.max(8, Math.min(15, 10 * Math.sqrt(dist / 500)));
+    }
 
     this._travelFromBody = null;
     this._travelToBody = nextBodyRef;
@@ -662,11 +672,13 @@ export class FlythroughCamera {
       this._arrivalTangentScaled.y = arrMag * -0.03;
     }
 
-    // ── TRANSFER: Hermite curve with double-smootherstep easing ──
-    // The camera lingers near departure (slow ramp-up), rockets through
-    // the empty middle, then decelerates near arrival (slow ramp-down).
+    // ── TRANSFER: Hermite curve with easing ──
     const transferT = Math.min(1, this.travelElapsed / this.travelDuration);
-    const s = this._travelEase(transferT);
+    // Warp arrival: ease-out (starts fast = leftover momentum, decelerates into orbit).
+    // Normal travel: double-smootherstep (linger near bodies, rocket through the middle).
+    const s = this._warpArrival
+      ? 1 - (1 - transferT) * (1 - transferT)   // ease-out quadratic
+      : this._travelEase(transferT);
 
     this._hermite(
       _v6, this._hermiteStartPos, this._departTangentScaled,
@@ -699,9 +711,11 @@ export class FlythroughCamera {
     const wDepart = fromBody
       ? 1 - this._ease(Math.min(1, this.travelElapsed / DEPART_LOOK_DUR))
       : 0;
-    // Weight: arriving body (fades in from 35% to 70%)
-    const wArrive = this._ease(
-      Math.max(0, Math.min(1, (transferT - 0.35) / 0.35)));
+    // Weight: arriving body (fades in from 35% to 70%).
+    // Warp arrival: always look at the star (camera was already facing it).
+    const wArrive = this._warpArrival
+      ? 1
+      : this._ease(Math.max(0, Math.min(1, (transferT - 0.35) / 0.35)));
     // Weight: forward heading (fills the gap — peaks mid-transfer)
     const wHeading = Math.max(0, 1 - wDepart - wArrive);
 
