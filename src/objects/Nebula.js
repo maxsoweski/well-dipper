@@ -48,7 +48,7 @@ export class Nebula {
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
+        side: THREE.FrontSide,  // billboarded = always facing camera, no need for DoubleSide
 
         uniforms: {
           uColor: { value: new THREE.Color(layerData.color[0], layerData.color[1], layerData.color[2]) },
@@ -197,13 +197,21 @@ export class Nebula {
   }
 
   /**
-   * Update animation (slow gas drift).
+   * Update animation (slow gas drift) and billboard layers toward camera.
    * @param {number} deltaTime — seconds since last frame
+   * @param {THREE.Camera} [camera] — if provided, layers face the camera
    */
-  update(deltaTime) {
-    // Animate noise offset for slow gas drift
+  update(deltaTime, camera) {
     for (const layer of this._layers) {
       layer.material.uniforms.uTime.value += deltaTime;
+
+      // Billboard: make each layer always face the camera so the flat
+      // planes aren't obvious when you orbit around the nebula. Each
+      // layer keeps its own position offset (creating parallax depth),
+      // only the orientation matches the camera.
+      if (camera) {
+        layer.quaternion.copy(camera.quaternion);
+      }
     }
   }
 

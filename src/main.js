@@ -1726,7 +1726,7 @@ function animate() {
   if (galleryMode) {
     // Update deep sky objects (internal animation)
     if (galleryObject) {
-      galleryObject.update(deltaTime);
+      galleryObject.update(deltaTime, camera);
     }
     // Update star system objects (planet rotation, star glow, moon orbit, etc.)
     for (const obj of _galleryMeshes) {
@@ -1747,7 +1747,7 @@ function animate() {
   if (system) {
     // ── Deep sky destination update ──
     if (system.type && system.type !== 'star-system') {
-      if (system.destination) system.destination.update(deltaTime);
+      if (system.destination) system.destination.update(deltaTime, camera);
       // Navigable deep sky: update gas cloud + extra star glows
       if (system.gasCloud) system.gasCloud.update(deltaTime);
       if (system.extraStars) {
