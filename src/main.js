@@ -114,6 +114,7 @@ autoNav.onTourComplete = () => {
 // Deep sky contemplation: camera stays fixed, timer triggers next warp.
 // No autopilot, no orbiting — these objects are impossibly far away.
 let _deepSkyLingerTimer = -1; // -1 = not lingering, >=0 = counting down
+let _deepSkyDrift = null;     // { startPos, endPos, duration, elapsed } — momentum coast on arrival
 
 // Debug: force the next warp to a specific destination type.
 // Press comma/period/? then Space to force galaxy/nebula/cluster.
@@ -143,17 +144,17 @@ function dismissTitleScreen() {
   cameraController._transitionSpeed = 0.02; // slow, graceful transition
   // Zoom to the exact distance startFlythrough uses for distant deep sky
   const radius = system?.destination?.data?.radius || 200;
-  const flyViewDist = radius * 2.5;
+  const flyViewDist = radius * 1.25;
   cameraController.distance = flyViewDist;
   cameraController.zoomSpeed = 0;
 
-  // After the smooth transition settles, hand off to the static deep sky view.
-  // Don't call startFlythrough (it snaps camera). Just set bypassed + linger timer.
+  // After the smooth transition settles, hand off to free-look orbit or autopilot.
   setTimeout(() => {
     if (!system) return;
     const isDistantDeepSky = system.type && system.type !== 'star-system' && !system._navigable;
     if (isDistantDeepSky) {
-      cameraController.bypassed = true;
+      // Free-look orbit (not bypassed) — user can drag to look around
+      cameraController.autoRotateActive = true;
       _deepSkyLingerTimer = 15;
     } else if (!autoNav.isActive) {
       idleTimer = 0;
@@ -582,10 +583,13 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   // Deep sky objects get their own spawn path
   if (DestinationPicker.isDeepSky(destType)) {
-    cameraController.forceFreeLook = true;
     if (DestinationPicker.isNavigable(destType)) {
+      // Navigable deep sky: stars are clickable/orbitable — normal camera behavior
+      cameraController.forceFreeLook = false;
       spawnNavigableDeepSky(preGenData, destType, forWarp);
     } else {
+      // Non-navigable: distant view, free-look only (no orbit targets)
+      cameraController.forceFreeLook = true;
       spawnDeepSky(preGenData, destType, forWarp);
     }
     return;
@@ -1558,14 +1562,15 @@ function startFlythrough() {
     autoNav.buildNavigableQueue(system);
     populateNavigableQueueRefs();
   } else if (system.type && system.type !== 'star-system') {
-    // Distant deep sky: no autopilot, no orbiting. Static camera, timer warps away.
-    cameraController.bypassed = true;
+    // Distant deep sky: no autopilot, orbit around center with free-look.
     const radius = system.destination.data.radius;
-    const viewDist = radius * 2.5;
+    const viewDist = radius * 1.25;
     camera.position.set(0, viewDist * 0.15, viewDist);
     camera.lookAt(0, 0, 0);
+    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+    cameraController.autoRotateActive = true;
     _deepSkyLingerTimer = 15;
-    console.log('Autopilot: deep sky — static view, 15s linger');
+    console.log('Autopilot: deep sky — orbit view, 15s linger');
     return;
   } else {
     autoNav.buildQueue(system);
@@ -1663,9 +1668,13 @@ function warpSwapSystem() {
         camera.lookAt(starPos);
       }
     } else if (system.type && system.type !== 'star-system') {
-      // Distant deep sky: approach from far along +Z toward the structure center
-      const orbitDist = system.tourStops[0]?.orbitDistance || system.destination.data.radius * 1.3;
-      camera.position.set(0, 2, travelDist + orbitDist + coastDist);
+      // Distant deep sky: approach from far along +Z toward the structure center.
+      // Final viewing distance is radius * 1.25 — start further out so the
+      // momentum drift in warpRevealSystem has room to coast in.
+      const radius = system.destination.data.radius;
+      const finalDist = radius * 1.25;
+      const driftExtra = finalDist * 0.6; // extra distance consumed by drift
+      camera.position.set(0, 2, travelDist + finalDist + driftExtra);
       camera.lookAt(0, 0, 0);
     } else {
       // Star system: approach toward the star
@@ -1696,27 +1705,31 @@ function warpRevealSystem() {
   if (!system) return;
   cameraController.bypassed = true;
 
-  // ── Distant deep sky: static contemplation view ──
-  // Galaxies + globular clusters are impossibly far away — no orbiting, no camera movement.
-  // Camera stays fixed at a viewing angle. Timer triggers the next warp.
+  // ── Distant deep sky: contemplation view with momentum coast ──
+  // Galaxies + globular clusters — camera drifts in with decelerating momentum,
+  // then hands off to free-look orbit around the object.
   if (system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
     // Snap object back to origin (drifted with camera during warp)
     system.destination.mesh.position.set(0, 0, 0);
 
-    // No autopilot or flythrough — camera is completely static
     flythrough.stop();
     autoNav.stop();
 
     const radius = system.destination.data.radius;
-    const viewDist = radius * 2.5;
-    camera.position.set(0, viewDist * 0.15, viewDist);
-    camera.lookAt(0, 0, 0);
+    const viewDist = radius * 1.25; // 50% closer than before
+    const endPos = new THREE.Vector3(0, viewDist * 0.15, viewDist);
 
-    // Start the contemplation timer — after 15s, auto-warp away
-    _deepSkyLingerTimer = 15;
+    // Start momentum drift from current camera position toward final viewing position
+    _deepSkyDrift = {
+      startPos: camera.position.clone(),
+      endPos,
+      duration: 4,
+      elapsed: 0,
+    };
+    // Linger timer starts when drift completes (in animation loop)
 
     const label = system.type.replace(/-/g, ' ');
-    console.log(`Warp: contemplating ${label} (static view, 15s)`);
+    console.log(`Warp: coasting into ${label} (4s drift, then free-look)`);
     return;
   }
 
@@ -1781,7 +1794,26 @@ function warpRevealSystem() {
 function findClosestBody() {
   if (!system) return null;
 
-  // Deep sky destinations: orbit the center
+  // Navigable deep sky: find the closest star
+  if (system._navigable) {
+    const allStars = [system.star];
+    if (system.star2) allStars.push(system.star2);
+    if (system.extraStars) allStars.push(...system.extraStars);
+
+    let closest = null;
+    let closestDist = Infinity;
+    const camPos = camera.position;
+    for (let i = 0; i < allStars.length; i++) {
+      const d = camPos.distanceTo(allStars[i].mesh.position);
+      if (d < closestDist) {
+        closestDist = d;
+        closest = { position: allStars[i].mesh.position, focusIndex: -2, moonIndex: -1, starIndex: i };
+      }
+    }
+    return closest;
+  }
+
+  // Non-navigable deep sky: orbit the center
   if (system.type && system.type !== 'star-system') {
     return {
       position: new THREE.Vector3(0, 0, 0),
@@ -2440,8 +2472,28 @@ function animate() {
       }
     }
 
+    // ── Deep sky momentum drift (non-navigable warp arrival) ──
+    // Camera drifts from warp exit position toward final viewing distance.
+    // Ease-out quadratic: fast start (leftover warp momentum), slows to stop.
+    if (_deepSkyDrift && !warpEffect.isActive) {
+      _deepSkyDrift.elapsed += deltaTime;
+      const t = Math.min(1, _deepSkyDrift.elapsed / _deepSkyDrift.duration);
+      const s = 1 - (1 - t) * (1 - t); // ease-out quadratic
+      camera.position.lerpVectors(_deepSkyDrift.startPos, _deepSkyDrift.endPos, s);
+      camera.lookAt(0, 0, 0);
+      if (t >= 1) {
+        _deepSkyDrift = null;
+        // Hand camera to controller for free-look orbit
+        cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+        cameraController.autoRotateActive = true;
+        // Start contemplation timer now that drift is done
+        _deepSkyLingerTimer = 15;
+        console.log('Deep sky drift complete — free-look enabled, 15s linger');
+      }
+    }
+
     // ── Deep sky contemplation timer ──
-    // No autopilot — camera is static. After the timer, auto-warp away.
+    // After the timer, auto-warp away.
     // Paused during title screen (title has its own 30s dismiss timer).
     if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !titleScreenActive) {
       _deepSkyLingerTimer -= deltaTime;
@@ -2729,6 +2781,12 @@ function trySelect(clientX, clientY) {
     const info = clickTargets.get(hit.object);
     if (!info) continue;
 
+    // Stop autopilot when clicking a body (needed for navigable deep sky
+    // where forceFreeLook is off but flythrough may be driving the camera)
+    if (autoNav.isActive || flythrough.active) {
+      stopFlythrough();
+    }
+
     if (info.type === 'star') {
       focusStar(info.starIndex);
     } else if (info.type === 'planet') {
@@ -2873,6 +2931,13 @@ canvas.addEventListener('mousedown', (e) => {
   _mouseDown.y = e.clientY;
   if (e.button === 1) {
     _middleMouseDown = true;
+  }
+  // Cancel momentum drift on any click — hand camera to user immediately
+  if (_deepSkyDrift) {
+    _deepSkyDrift = null;
+    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+    cameraController.autoRotateActive = true;
+    _deepSkyLingerTimer = 15;
   }
   // Left-click drag turns off autopilot (but not during warp, turn, or deep sky free-look)
   if (e.button === 0 && autoNav.isActive && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
