@@ -250,12 +250,16 @@ export class RetroRenderer {
           // ── Depth perspective: near rings bold, distant rings fade ──
           float ringIntensity = ringBand * (1.0 - depthNorm * depthNorm);
 
-          // ── Color: alternating red/blue rings ──
-          vec3 redColor = vec3(0.8, 0.15, 0.15);
-          vec3 blueColor = vec3(0.15, 0.25, 0.85);
-          float ringIndex = floor(zWorld / ringGap);
-          float ringParity = mod(ringIndex, 2.0);
-          vec3 ringColor = mix(redColor, blueColor, ringParity);
+          // ── Color: rainbow spectrum along tunnel depth ──
+          // Hue cycles smoothly with position so the full spectrum
+          // stretches down the cone: red → orange → yellow → green → cyan → blue → violet
+          float hue = fract(zWorld / (ringGap * 7.0));  // full spectrum over 7 rings
+          // HSV→RGB (S=0.85, V=0.85 for vivid but not neon colors)
+          vec3 ringColor = 0.85 * mix(
+            vec3(1.0),
+            clamp(abs(mod(hue * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0),
+            0.85
+          );
 
           // ── Wall shading: bright near edges, dark toward cone apex ──
           // This is the key visual cue that reveals the cone shape.
