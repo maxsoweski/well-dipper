@@ -65,12 +65,12 @@ export class VolumetricNebula {
           gl_Position = projectionMatrix * mvPos;
 
           // Scale point size by distance — much larger than Galaxy.js
-          // for soft overlapping cloud look
-          float distScale = 800.0 / max(-mvPos.z, 1.0);
+          // for soft overlapping cloud look when inside the nebula
+          float distScale = 2000.0 / max(-mvPos.z, 1.0);
           gl_PointSize = aSize * distScale;
 
-          // Clamp to prevent huge quads up close or invisible far away
-          gl_PointSize = clamp(gl_PointSize, 0.5, 64.0);
+          // Large max clamp — particles should fill the view when close
+          gl_PointSize = clamp(gl_PointSize, 0.5, 512.0);
         }
       `,
 
@@ -99,9 +99,9 @@ export class VolumetricNebula {
           float dist = length(gl_PointCoord - 0.5);
           float alpha = (1.0 - smoothstep(0.0, 0.5, dist)) * vOpacity;
 
-          // Bayer dither on alpha edge — retro aesthetic
+          // Bayer dither on alpha edge — retro aesthetic (softer threshold to keep more gas visible)
           float threshold = bayerDither(gl_FragCoord.xy);
-          if (alpha < threshold * 0.5) discard;
+          if (alpha < threshold * 0.25) discard;
 
           // Additive blending — overlapping particles brighten naturally
           gl_FragColor = vec4(vColor * alpha, alpha);

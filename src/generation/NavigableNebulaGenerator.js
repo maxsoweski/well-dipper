@@ -121,10 +121,10 @@ export class NavigableNebulaGenerator {
       colors[i * 3 + 1] = rng.range(pal.g[0], pal.g[1]);
       colors[i * 3 + 2] = rng.range(pal.b[0], pal.b[1]);
 
-      // Big particles — need overlap for cloud-like look when flying through
-      sizes[i] = rng.range(150, 600);
-      // Denser near the shell center
-      opacities[i] = (0.3 + innerWeight * 0.5) * rng.range(0.4, 0.9);
+      // Large particles for dense cloud look when flying through
+      sizes[i] = rng.range(400, 1500);
+      // Denser near the shell center, higher base opacity
+      opacities[i] = (0.4 + innerWeight * 0.5) * rng.range(0.5, 1.0);
     }
 
     const gasCloud = { positions, colors, sizes, opacities, particleCount };
@@ -181,11 +181,12 @@ export class NavigableNebulaGenerator {
       });
     }
 
-    // ── Gas cloud: tight 3D clumps for visual density ──
-    // Key insight: particles must overlap locally to create cloud-like appearance.
-    // Spreading them evenly across the huge radius makes them too sparse.
-    // Instead: tight clumps with large particles → dense clouds with dark gaps.
-    const particleCount = rng.int(25000, 40000);
+    // ── Gas cloud: clumps + diffuse fill ──
+    // Tight clumps create bright regions; diffuse particles fill the gaps
+    // so you always see SOME gas no matter where the camera is.
+    const clumpParticles = rng.int(25000, 35000);
+    const diffuseParticles = rng.int(8000, 12000);
+    const particleCount = clumpParticles + diffuseParticles;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
     const sizes = new Float32Array(particleCount);
@@ -199,13 +200,13 @@ export class NavigableNebulaGenerator {
         x: this._gaussian(rng) * radius * 0.25,
         y: this._gaussian(rng) * radius * 0.12,
         z: this._gaussian(rng) * radius * 0.25,
-        // Tight spread: 3-8% of radius so particles overlap within each clump
-        spread: rng.range(0.03, 0.08) * radius,
+        // Spread: 5-12% of radius — wider clumps for better coverage
+        spread: rng.range(0.05, 0.12) * radius,
       });
     }
 
-    for (let i = 0; i < particleCount; i++) {
-      // Pick a random clump
+    // ── Clump particles: dense, bright gas ──
+    for (let i = 0; i < clumpParticles; i++) {
       const clump = clumps[i % clumpCount];
 
       const x = clump.x + this._gaussian(rng) * clump.spread;
@@ -229,16 +230,38 @@ export class NavigableNebulaGenerator {
       colors[i * 3 + 1] = rng.range(pal.g[0], pal.g[1]);
       colors[i * 3 + 2] = rng.range(pal.b[0], pal.b[1]);
 
-      // Large particles for nebula gas — bigger = more overlap = denser clouds
-      sizes[i] = rng.range(200, 800);
-      // Opacity: denser near clump centers
+      // Bigger particles for denser overlap
+      sizes[i] = rng.range(500, 2000);
+      // Higher opacity near clump centers
       const distFromClump = Math.sqrt(
         Math.pow(x - clump.x, 2) +
         Math.pow(y - clump.y, 2) +
         Math.pow(z - clump.z, 2)
       );
       const normalizedDist = Math.min(distFromClump / clump.spread, 1);
-      opacities[i] = (1 - normalizedDist * 0.6) * rng.range(0.3, 0.7);
+      opacities[i] = (1 - normalizedDist * 0.4) * rng.range(0.4, 0.9);
+    }
+
+    // ── Diffuse fill particles: sparse, dim, everywhere ──
+    // Creates a soft ambient glow so there's always visible gas
+    for (let i = clumpParticles; i < particleCount; i++) {
+      const r = radius * Math.cbrt(rng.float()) * 0.5; // sphere, concentrated toward center
+      const theta = rng.range(0, 2 * Math.PI);
+      const phi = Math.acos(rng.range(-1, 1));
+
+      positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.3; // flattened
+      positions[i * 3 + 2] = r * Math.cos(phi);
+
+      // Dim version of the theme color
+      const colorType = theme === 'h-alpha-dominant' ? 'h-alpha' : 'oiii';
+      const pal = this.PALETTE[colorType];
+      colors[i * 3]     = rng.range(pal.r[0], pal.r[1]) * 0.6;
+      colors[i * 3 + 1] = rng.range(pal.g[0], pal.g[1]) * 0.6;
+      colors[i * 3 + 2] = rng.range(pal.b[0], pal.b[1]) * 0.6;
+
+      sizes[i] = rng.range(600, 2500); // large for soft background glow
+      opacities[i] = rng.range(0.08, 0.2); // subtle
     }
 
     const gasCloud = { positions, colors, sizes, opacities, particleCount };
