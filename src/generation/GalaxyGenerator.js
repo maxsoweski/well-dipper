@@ -47,6 +47,13 @@ export class GalaxyGenerator {
     const colors = new Float32Array(totalParticles * 3);
     const sizes = new Float32Array(totalParticles);
 
+    // Per-arm length variation: each arm extends a different distance,
+    // breaking the clean circular outer edge.
+    const armLengths = [];
+    for (let a = 0; a < armCount; a++) {
+      armLengths.push(rng.range(0.8, 1.2));
+    }
+
     let idx = 0;
 
     // ── Arm particles ──
@@ -54,9 +61,20 @@ export class GalaxyGenerator {
       const arm = i % armCount;
       const armAngle = arm * (2 * Math.PI / armCount);
 
-      // Distance from center — pow(t, 0.6) concentrates toward center
+      // Distance from center — pow(t, 0.6) concentrates toward center.
+      // Each arm has its own max length so the outer edge is irregular.
       const t = rng.float();
-      const r = radius * Math.pow(t, 0.6);
+      const armRadius = radius * armLengths[arm];
+      let r = armRadius * Math.pow(t, 0.6);
+
+      // Outer edge scatter: particles beyond 60% of arm length get
+      // extra radial jitter — some trail further out, others fall short,
+      // creating a ragged natural silhouette instead of a clean disc.
+      const armFraction = r / armRadius;
+      if (armFraction > 0.6) {
+        const outerFactor = (armFraction - 0.6) / 0.4; // 0→1 over outer 40%
+        r += this._gaussian(rng) * outerFactor * radius * 0.12;
+      }
 
       // Logarithmic spiral spine angle
       let spineTheta = armAngle + Math.log(r / radius + 0.05) / armTightness;
@@ -68,13 +86,9 @@ export class GalaxyGenerator {
         spineTheta = spineTheta * (1 - barBlend) + barAngle * barBlend;
       }
 
-      // Gaussian scatter perpendicular to arm (wider at edge, ragged)
-      // Wider base scatter + occasional "straggler" particles that
-      // wander far from the arm spine, creating ragged natural edges.
-      const armWidth = (0.15 + 0.12 * (r / radius)) * radius;
-      const isStraggler = rng.chance(0.12); // 12% wander further from arm
-      const scatterMul = isStraggler ? rng.range(1.8, 3.0) : 1.0;
-      const scatter = this._gaussian(rng) * armWidth * scatterMul;
+      // Gaussian scatter perpendicular to arm (wider at edge)
+      const armWidth = (0.12 + 0.08 * (r / radius)) * radius;
+      const scatter = this._gaussian(rng) * armWidth;
       const theta = spineTheta + scatter / (r + 1);
 
       const x = r * Math.cos(theta);
