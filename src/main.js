@@ -267,29 +267,35 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
 {
   const titleSeed = `title-${Date.now()}`;
   const titleRng = new SeededRandom(titleSeed);
+  // Only use distant-view types so the object is visible as a whole showcase.
+  // Nebulae use NebulaGenerator (distant billboard), not NavigableNebulaGenerator.
+  // destType uses 'title-*-nebula' to avoid isNavigable() routing in spawnSystem.
   const deepSkyTypes = ['spiral-galaxy', 'elliptical-galaxy', 'emission-nebula',
                          'planetary-nebula', 'globular-cluster'];
   const titleType = deepSkyTypes[titleRng.int(0, deepSkyTypes.length - 1)];
   let titleData;
   if (titleType.includes('galaxy')) {
     titleData = GalaxyGenerator.generate(titleSeed, titleType);
+    titleData._destType = titleType;
   } else if (titleType === 'emission-nebula' || titleType === 'planetary-nebula') {
-    titleData = NavigableNebulaGenerator.generate(titleSeed, titleType);
+    titleData = NebulaGenerator.generate(titleSeed, titleType);
+    // Use a destType that won't match isNavigable() but still routes to Nebula class
+    titleData._destType = `title-${titleType}`;
   } else {
     titleData = ClusterGenerator.generate(titleSeed, titleType);
+    titleData._destType = titleType;
   }
-  titleData._destType = titleType;
   spawnSystem({ systemData: titleData });
 
   // Pull camera far back to show the full object as a showcase.
   // Galaxies get an angled view so you can see the spiral/elliptical structure.
   // Look target is shifted down so the object appears below-center (under the title).
   const r = titleData.radius || 200;
-  const lookTarget = new THREE.Vector3(0, -r * 0.3, 0);
+  const lookTarget = new THREE.Vector3(0, -r * 0.4, 0);
   if (titleType.includes('galaxy')) {
-    camera.position.set(r * 0.8, r * 1.5, r * 3.0);
+    camera.position.set(r * 0.7, r * 1.35, r * 2.7);
   } else {
-    camera.position.set(0, r * 0.6, r * 3.5);
+    camera.position.set(0, r * 0.55, r * 3.15);
   }
   camera.lookAt(lookTarget);
   cameraController.restoreFromWorldState(lookTarget);
