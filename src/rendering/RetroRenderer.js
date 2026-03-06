@@ -239,41 +239,37 @@ export class RetroRenderer {
           float maxZ = tunnelR / taper;  // cone apex distance (~27)
           float depthNorm = clamp(wallZ / maxZ, 0.0, 1.0);
 
-          // ── Ring bands repeating along Z ──
+          // ── Anaglyph 3D ring bands (red/cyan offset like old 3D glasses) ──
           float zWorld = wallZ + speed;
-          float cellPhase = fract(zWorld / ringGap);
+          float offset = 0.45;  // how far apart red and blue rings are
 
-          // Narrow bright band within each repeating cell
-          float ringBand = smoothstep(0.0, 0.06, cellPhase)
-                         * (1.0 - smoothstep(0.12, 0.18, cellPhase));
+          // Red channel ring band (shifted forward)
+          float redPhase = fract((zWorld + offset) / ringGap);
+          float redBand = smoothstep(0.0, 0.06, redPhase)
+                        * (1.0 - smoothstep(0.12, 0.18, redPhase));
 
-          // ── Depth perspective: near rings bold, distant rings fade ──
-          float ringIntensity = ringBand * (1.0 - depthNorm * depthNorm);
+          // Blue/cyan channel ring band (shifted backward)
+          float bluPhase = fract((zWorld - offset) / ringGap);
+          float bluBand = smoothstep(0.0, 0.06, bluPhase)
+                        * (1.0 - smoothstep(0.12, 0.18, bluPhase));
 
-          // ── Color: rainbow spectrum along tunnel depth ──
-          // Hue cycles smoothly with position so the full spectrum
-          // stretches down the cone: red → orange → yellow → green → cyan → blue → violet
-          float hue = fract(zWorld / (ringGap * 7.0));  // full spectrum over 7 rings
-          // HSV→RGB (S=0.85, V=0.85 for vivid but not neon colors)
-          vec3 ringColor = 0.85 * mix(
-            vec3(1.0),
-            clamp(abs(mod(hue * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0),
-            0.85
-          );
+          // Depth fade: rings fade toward the cone apex
+          float depthFade = 1.0 - depthNorm * depthNorm;
+          redBand *= depthFade;
+          bluBand *= depthFade;
 
           // ── Wall shading: bright near edges, dark toward cone apex ──
-          // This is the key visual cue that reveals the cone shape.
           vec3 nearColor = vec3(0.95, 0.93, 0.9);   // bright cream near camera
           vec3 farColor  = vec3(0.35, 0.33, 0.38);   // dark grey-purple at apex
-          float depthCurve = depthNorm * depthNorm;   // ease-in: darkens faster deep in
+          float depthCurve = depthNorm * depthNorm;
           vec3 wallColor = mix(nearColor, farColor, depthCurve);
-
-          // Slight edge darkening (vignette on the cone opening)
           wallColor *= 1.0 - rdXY * 0.15;
 
-          // ── Compose ──
+          // ── Compose: apply red and blue as separate channels ──
+          // Where they overlap → bright white/pink. Where they don't → pure color fringe.
           vec3 col = wallColor;
-          col = mix(col, ringColor, ringIntensity * 0.4);
+          col.r = mix(col.r, 0.9, redBand * 0.55);
+          col.gb = mix(col.gb, vec2(0.85, 0.9), bluBand * 0.55);
 
           // ── Vanishing point glow ──
           float centerDist = length(centered);
