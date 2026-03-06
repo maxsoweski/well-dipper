@@ -240,8 +240,10 @@ export class WarpEffect {
     // Camera decelerates as we approach the portal
     this.cameraForwardSpeed = 30 * (1 - t);
 
-    // Scene reveals through the hole (starts earlier so planets are visible)
-    this.sceneFade = 1 - this._ease(Math.max(0, (this.progress - 0.3) / 0.7));
+    // Scene is fully visible from the start — the exit hole mask controls
+    // what you see through. No fade needed; the star is immediately visible
+    // the moment the pinhole opens.
+    this.sceneFade = 0;
 
     // Done
     if (this.elapsed >= this.EXIT_DUR) {
