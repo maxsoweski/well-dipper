@@ -63,6 +63,8 @@ export class CameraController {
     this._freeLookAnchor = new THREE.Vector3(); // camera pos when free-look started
     this._freeLookTrackPos = new THREE.Vector3(); // last tracked body position
     this._freeLookTracking = false; // whether we're tracking a body during free-look
+    this._savedYaw = 0;   // orbit yaw before free-look (restored on exit)
+    this._savedPitch = 0; // orbit pitch before free-look (restored on exit)
 
     // Callback fired when free-look ends (middle mouse released).
     // main.js uses this to clear focus state so tracking doesn't resume
@@ -312,6 +314,11 @@ export class CameraController {
     this._freeLookAnchor.copy(this.camera.position);
     this._freeLookTracking = false;
     this.autoRotateActive = false;
+    // Save orbit angles so we can restore them on exit
+    this._savedYaw = this.yaw;
+    this._savedPitch = this.pitch;
+    // Immediately set up the free-look target so there's no jump on the first frame
+    this._recomputeTargetForFreeLook();
   }
 
   /**
@@ -323,6 +330,12 @@ export class CameraController {
   exitFreeLook(clearFocus = true) {
     this.isFreeLooking = false;
     this._freeLookTracking = false;
+    // Restore orbit angles so the camera returns to the same orbital position
+    // it was in before free-look started (no jump on exit)
+    this.yaw = this._savedYaw;
+    this.pitch = this._savedPitch;
+    this.smoothedYaw = this._savedYaw;
+    this.smoothedPitch = this._savedPitch;
     if (clearFocus && this.onFreeLookEnd) this.onFreeLookEnd();
   }
 

@@ -1680,6 +1680,41 @@ const _lookMatrix = new THREE.Matrix4();
 const _starRayDir = new THREE.Vector3();
 const _targetScreenPos = new THREE.Vector3();
 const _targetUV = new THREE.Vector2();
+const _toBody = new THREE.Vector3();
+
+/**
+ * Check if a warp target direction is occluded by any system body (star, planet, moon).
+ * Uses angular overlap: if the angle between the target direction and the direction
+ * to a body is less than the body's apparent angular radius, it's occluded.
+ */
+function isWarpTargetOccluded(targetDir) {
+  if (!system) return false;
+  const camPos = camera.position;
+  const bodies = [];
+
+  // Gather all bodies with position + radius
+  if (system.star) bodies.push({ pos: system.star.mesh.position, r: system.star._renderRadius });
+  if (system.star2) bodies.push({ pos: system.star2.mesh.position, r: system.star2._renderRadius });
+  for (const entry of system.planets) {
+    bodies.push({ pos: entry.planet.mesh.position, r: entry.planet.data.radius });
+    for (const moon of entry.moons) {
+      bodies.push({ pos: moon.mesh.position, r: moon.data.radius });
+    }
+  }
+
+  for (const { pos, r } of bodies) {
+    _toBody.subVectors(pos, camPos);
+    const dist = _toBody.length();
+    if (dist < 0.001) continue;
+    _toBody.divideScalar(dist);
+    const cosAngle = _toBody.dot(targetDir);
+    if (cosAngle <= 0) continue; // body is behind camera
+    const angularRadius = Math.atan2(r, dist);
+    const angle = Math.acos(Math.min(1, cosAngle));
+    if (angle < angularRadius) return true;
+  }
+  return false;
+}
 
 function animate() {
   requestAnimationFrame(animate);
@@ -1984,7 +2019,7 @@ function animate() {
       if (warpTarget.direction) {
         camera.getWorldDirection(_starRayDir);
         const facing = _starRayDir.dot(warpTarget.direction);
-        if (facing > 0) {
+        if (facing > 0 && !isWarpTargetOccluded(warpTarget.direction)) {
           _targetScreenPos.copy(camera.position).addScaledVector(warpTarget.direction, 1000);
           _targetScreenPos.project(camera);
           _targetUV.set(
