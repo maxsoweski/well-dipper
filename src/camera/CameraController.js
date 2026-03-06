@@ -74,6 +74,11 @@ export class CameraController {
     // ── Bypass mode (for flythrough camera) ──
     this.bypassed = false;
 
+    // When true, left-click drag acts as free-look instead of orbit
+    // (used for deep sky objects that are too large to orbit around)
+    this.forceFreeLook = false;
+    this._leftFreeLooking = false;
+
     // ── Gyroscope ──
     this.gyroEnabled = false;
     this._prevAlpha = null;
@@ -127,7 +132,12 @@ export class CameraController {
   _setupListeners() {
     // ── Mouse controls ──
     this.canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) {
+      if (e.button === 0 && this.forceFreeLook) {
+        // Left click in force-free-look mode (deep sky): act as free-look
+        if (this.bypassed) return;
+        this.enterFreeLook();
+        this._leftFreeLooking = true;
+      } else if (e.button === 0) {
         // Left click: start orbiting
         this.isDragging = true;
         this.autoRotateActive = false;
@@ -146,7 +156,10 @@ export class CameraController {
     });
 
     window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) {
+      if (e.button === 0 && this._leftFreeLooking) {
+        this._leftFreeLooking = false;
+        this.exitFreeLook(false);
+      } else if (e.button === 0) {
         this.isDragging = false;
       } else if (e.button === 1) {
         // End free-look and resume orbiting the same body.

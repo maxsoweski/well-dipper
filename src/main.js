@@ -582,6 +582,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   // Deep sky objects get their own spawn path
   if (DestinationPicker.isDeepSky(destType)) {
+    cameraController.forceFreeLook = true;
     if (DestinationPicker.isNavigable(destType)) {
       spawnNavigableDeepSky(preGenData, destType, forWarp);
     } else {
@@ -589,6 +590,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     }
     return;
   }
+
+  // Star systems: normal orbit camera
+  cameraController.forceFreeLook = false;
 
   const systemData = preGenData || StarSystemGenerator.generate(seed);
 
@@ -2821,8 +2825,9 @@ canvas.addEventListener('mousemove', (e) => {
   if (!autoNav.isActive) {
     idleTimer = 0;
   }
-  // Middle mouse free-look during flythrough
-  if (flythrough.active && _middleMouseDown) {
+  // Middle mouse (or left mouse in deep sky) free-look during flythrough
+  const freeLookDrag = _middleMouseDown || (cameraController.forceFreeLook && cameraController._leftFreeLooking);
+  if (flythrough.active && freeLookDrag) {
     flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
   }
 
@@ -2869,8 +2874,8 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.button === 1) {
     _middleMouseDown = true;
   }
-  // Left-click drag turns off autopilot (but not during warp or turn)
-  if (e.button === 0 && autoNav.isActive && !warpEffect.isActive && !warpTarget.turning) {
+  // Left-click drag turns off autopilot (but not during warp, turn, or deep sky free-look)
+  if (e.button === 0 && autoNav.isActive && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
     stopFlythrough();
   }
   if (!autoNav.isActive) idleTimer = 0;
@@ -2885,6 +2890,10 @@ window.addEventListener('mouseup', (e) => {
 
 canvas.addEventListener('mouseup', (e) => {
   if (e.button !== 0) return;
+  // Clear flythrough free-look if left-drag was acting as free-look (deep sky)
+  if (cameraController.forceFreeLook && flythrough.active) {
+    flythrough.clearFreeLook();
+  }
   const dx = e.clientX - _mouseDown.x;
   const dy = e.clientY - _mouseDown.y;
   if (dx * dx + dy * dy > 25) return;
