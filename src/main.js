@@ -128,6 +128,9 @@ function dismissTitleScreen() {
     setTimeout(() => { el.style.display = 'none'; }, 1000);
   }
 
+  // Restore normal auto-rotate speed
+  cameraController.autoRotateSpeed = 0.67;
+
   // Start autopilot so the camera tours the deep sky object
   if (system && !autoNav.isActive) {
     idleTimer = 0;
@@ -287,18 +290,18 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   }
   spawnSystem({ systemData: titleData });
 
-  // Pull camera far back to show the full object as a showcase.
-  // Galaxies get an angled view so you can see the spiral/elliptical structure.
-  // Look target is shifted down so the object appears below-center (under the title).
+  // Camera orbits around origin (object center).
+  // Pitch the camera above the object so it appears in the lower half of screen.
   const r = titleData.radius || 200;
-  const lookTarget = new THREE.Vector3(0, -r * 0.4, 0);
   if (titleType.includes('galaxy')) {
-    camera.position.set(r * 0.7, r * 1.35, r * 2.7);
+    camera.position.set(r * 0.6, r * 1.8, r * 2.2);
   } else {
-    camera.position.set(0, r * 0.55, r * 3.15);
+    camera.position.set(0, r * 1.6, r * 2.5);
   }
-  camera.lookAt(lookTarget);
-  cameraController.restoreFromWorldState(lookTarget);
+  camera.lookAt(0, 0, 0);
+  cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+  // Slow visible orbit for the title screen showcase
+  cameraController.autoRotateSpeed = 3.0;
 
   // Auto-dismiss title screen after 30 seconds
   _titleAutoTimer = setTimeout(() => {
