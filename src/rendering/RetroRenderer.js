@@ -245,13 +245,13 @@ export class RetroRenderer {
 
           // Red channel ring band (shifted forward)
           float redPhase = fract((zWorld + offset) / ringGap);
-          float redBand = smoothstep(0.0, 0.06, redPhase)
-                        * (1.0 - smoothstep(0.12, 0.18, redPhase));
+          float redBand = smoothstep(0.0, 0.08, redPhase)
+                        * (1.0 - smoothstep(0.35, 0.45, redPhase));
 
           // Blue/cyan channel ring band (shifted backward)
           float bluPhase = fract((zWorld - offset) / ringGap);
-          float bluBand = smoothstep(0.0, 0.06, bluPhase)
-                        * (1.0 - smoothstep(0.12, 0.18, bluPhase));
+          float bluBand = smoothstep(0.0, 0.08, bluPhase)
+                        * (1.0 - smoothstep(0.35, 0.45, bluPhase));
 
           // Depth fade: rings fade toward the cone apex
           float depthFade = 1.0 - depthNorm * depthNorm;
