@@ -128,14 +128,24 @@ function dismissTitleScreen() {
     setTimeout(() => { el.style.display = 'none'; }, 1000);
   }
 
-  // Restore normal auto-rotate speed
+  // Smooth zoom-out: transition orbit center back to origin (object center)
+  // and increase distance so the camera pulls back smoothly.
   cameraController.autoRotateSpeed = 0.67;
+  cameraController._targetGoal.set(0, 0, 0);
+  cameraController._transitioning = true;
+  cameraController._transitionSpeed = 0.03; // slow smooth transition
+  // Set target distance — log-space smoothing animates the zoom-out
+  const overviewDist = (system?.destination?.data?.radius || 200) * 1.3;
+  cameraController.distance = overviewDist;
+  cameraController.zoomSpeed = 0;
 
-  // Start autopilot so the camera tours the deep sky object
-  if (system && !autoNav.isActive) {
-    idleTimer = 0;
-    startFlythrough();
-  }
+  // Start autopilot after the zoom-out settles (~3s)
+  setTimeout(() => {
+    if (system && !autoNav.isActive) {
+      idleTimer = 0;
+      startFlythrough();
+    }
+  }, 3000);
 }
 
 function toggleKeybinds() {
@@ -297,7 +307,8 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   if (titleType.includes('galaxy')) {
     camera.position.set(r * 0.3, r * 0.9, r * 1.1);
   } else {
-    camera.position.set(0, r * 0.8, r * 1.25);
+    // ~35° viewing angle for nebulae/clusters (more sideways, less top-down)
+    camera.position.set(0, r * 0.45, r * 1.25);
   }
   camera.lookAt(orbitCenter);
   cameraController.restoreFromWorldState(orbitCenter);
