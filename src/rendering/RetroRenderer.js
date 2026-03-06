@@ -454,8 +454,9 @@ export class RetroRenderer {
               toRift.x *= aspect;
               float dist = length(toRift);
 
-              // Hole radius: starts near zero, opens up
-              float openRadius = uExitReveal * 0.85;
+              // Hole radius: starts near zero, opens past screen diagonal (~1.02)
+              // so the hole fully covers the screen including corners.
+              float openRadius = uExitReveal * 1.2;
 
               // ── Fizzing dithered edge ──
               vec2 exitScreenPos = floor(vUv * resolution);

@@ -176,8 +176,12 @@ export class WarpEffect {
     // No white flash — the portal IS the transition
     this.whiteFlash = 0;
 
-    // Hyperspace fades in during second half
-    this.hyperPhase = this._ease(Math.max(0, (this.progress - 0.3) / 0.7));
+    // NO hyperPhase ramp — the portal circle alone handles the transition.
+    // hyperPhase fading in globally created a visible mismatch: the portal
+    // covered ~80% of the screen, then the remaining corners faded in
+    // via a different (uniform blend) mechanism. Let the portal be the
+    // sole circular wipe; it reaches the corners at ~65% progress.
+    this.hyperPhase = 0;
 
     // Transition to HYPER
     if (this.elapsed >= this.ENTER_DUR) {
