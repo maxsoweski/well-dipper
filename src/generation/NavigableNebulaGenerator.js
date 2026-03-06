@@ -230,16 +230,16 @@ export class NavigableNebulaGenerator {
       colors[i * 3 + 1] = rng.range(pal.g[0], pal.g[1]);
       colors[i * 3 + 2] = rng.range(pal.b[0], pal.b[1]);
 
-      // Bigger particles for denser overlap
-      sizes[i] = rng.range(500, 2000);
-      // Higher opacity near clump centers
+      // Moderate particles — enough overlap for cloud look without overpowering
+      sizes[i] = rng.range(400, 1200);
+      // Opacity falls off from clump center
       const distFromClump = Math.sqrt(
         Math.pow(x - clump.x, 2) +
         Math.pow(y - clump.y, 2) +
         Math.pow(z - clump.z, 2)
       );
       const normalizedDist = Math.min(distFromClump / clump.spread, 1);
-      opacities[i] = (1 - normalizedDist * 0.4) * rng.range(0.4, 0.9);
+      opacities[i] = (1 - normalizedDist * 0.5) * rng.range(0.25, 0.6);
     }
 
     // ── Diffuse fill particles: sparse, dim, everywhere ──
@@ -260,8 +260,8 @@ export class NavigableNebulaGenerator {
       colors[i * 3 + 1] = rng.range(pal.g[0], pal.g[1]) * 0.6;
       colors[i * 3 + 2] = rng.range(pal.b[0], pal.b[1]) * 0.6;
 
-      sizes[i] = rng.range(600, 2500); // large for soft background glow
-      opacities[i] = rng.range(0.08, 0.2); // subtle
+      sizes[i] = rng.range(500, 1800); // large for soft background glow
+      opacities[i] = rng.range(0.04, 0.12); // subtle
     }
 
     const gasCloud = { positions, colors, sizes, opacities, particleCount };

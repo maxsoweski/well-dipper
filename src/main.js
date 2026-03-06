@@ -105,6 +105,10 @@ const warpTarget = {
 // When the tour visits every body, auto-select a visible star and warp toward it.
 // Brackets blink for 1.5s, then camera turns to face it, then warp fires.
 autoNav.onTourComplete = () => {
+  // Navigable deep sky (nebulae, open clusters): just loop the tour.
+  // The user can manually warp with Space when they want to leave.
+  if (system && system._navigable) return;
+
   autoSelectWarpTarget();
   setTimeout(() => {
     beginWarpTurn();
