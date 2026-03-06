@@ -1978,19 +1978,28 @@ function animate() {
         warpTarget.blinkOn = Math.floor(warpTarget.blinkTimer * 4) % 2 === 0;
       }
 
-      // Project target to screen and update bracket overlay
+      // Project target to screen and update bracket overlay.
+      // Hide brackets when the target is behind the camera — project() reflects
+      // behind-camera points to the opposite side of the screen, creating a ghost.
       if (warpTarget.direction) {
-        _targetScreenPos.copy(camera.position).addScaledVector(warpTarget.direction, 1000);
-        _targetScreenPos.project(camera);
-        _targetUV.set(
-          (_targetScreenPos.x + 1) / 2,
-          (_targetScreenPos.y + 1) / 2,
-        );
-        retroRenderer.setTargetUniforms(
-          _targetUV,
-          warpTarget.blinkOn ? (warpTarget.turning ? 2 : 1) : 0,
-          20,
-        );
+        camera.getWorldDirection(_starRayDir);
+        const facing = _starRayDir.dot(warpTarget.direction);
+        if (facing > 0) {
+          _targetScreenPos.copy(camera.position).addScaledVector(warpTarget.direction, 1000);
+          _targetScreenPos.project(camera);
+          _targetUV.set(
+            (_targetScreenPos.x + 1) / 2,
+            (_targetScreenPos.y + 1) / 2,
+          );
+          retroRenderer.setTargetUniforms(
+            _targetUV,
+            warpTarget.blinkOn ? (warpTarget.turning ? 2 : 1) : 0,
+            20,
+          );
+        } else {
+          // Target is behind camera — hide brackets
+          retroRenderer.setTargetUniforms(null, 0, 0);
+        }
       } else {
         retroRenderer.setTargetUniforms(null, 0, 0);
       }

@@ -147,8 +147,10 @@ export class CameraController {
       if (e.button === 0) {
         this.isDragging = false;
       } else if (e.button === 1) {
-        // End free-look and clear focus (camera stays where you were looking)
-        this.exitFreeLook(true);
+        // End free-look and resume orbiting the same body.
+        // With momentum tracking, the camera is still near the body,
+        // so clearing focus would make the body fly away.
+        this.exitFreeLook(false);
       }
     });
 
