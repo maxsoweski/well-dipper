@@ -250,11 +250,12 @@ export class RetroRenderer {
           // ── Depth perspective: near rings bold, distant rings fade ──
           float ringIntensity = ringBand * (1.0 - depthNorm * depthNorm);
 
-          // ── Color: red↔blue blink at 0.75 Hz ──
+          // ── Color: alternating red/blue rings ──
           vec3 redColor = vec3(0.8, 0.15, 0.15);
           vec3 blueColor = vec3(0.15, 0.25, 0.85);
-          float ringBlink = step(0.5, fract(time * 0.75));
-          vec3 ringColor = mix(redColor, blueColor, ringBlink);
+          float ringIndex = floor(zWorld / ringGap);
+          float ringParity = mod(ringIndex, 2.0);
+          vec3 ringColor = mix(redColor, blueColor, ringParity);
 
           // ── Wall shading: bright near edges, dark toward cone apex ──
           // This is the key visual cue that reveals the cone shape.
