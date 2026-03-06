@@ -218,20 +218,25 @@ export class RetroRenderer {
           vec3 rd = normalize(vec3(centered * 1.4, 1.0));
 
           // Tunnel parameters
-          float tunnelR = 4.0;        // Radius — big enough to feel enormous
+          float tunnelR = 4.0;        // Radius at camera (wide opening)
+          float taper = 0.05;         // Cone narrowing rate (0 = cylinder)
           float speed = time * 12.0;  // Forward scroll speed
           float ringGap = 3.5;       // Spacing between ring planes
 
           vec3 bg = vec3(0.95, 0.93, 0.9);
 
-          // ── Ray–cylinder intersection ──
-          // Infinite cylinder along Z, radius tunnelR, camera at center
+          // ── Ray–cone intersection ──
+          // Cone along Z, radius tunnelR at z=0, narrowing to a point.
+          // Cone equation: x² + y² = (R - taper*z)²
+          // Solving gives: t = R / (rdXY + taper * rd.z)
+          // When taper=0 this reduces to the original cylinder formula.
           float rdXY = length(rd.xy);
-          if (rdXY < 0.001) {
-            // Looking straight down the tunnel — vanishing point
+          float denom = rdXY + taper * rd.z;
+          if (denom < 0.001) {
+            // Looking straight down the cone — vanishing point
             return vec3(1.0);
           }
-          float tWall = tunnelR / rdXY;
+          float tWall = tunnelR / denom;
           vec3 hitPos = rd * tWall;
           float wallZ = hitPos.z;  // How far down tunnel the hit is
 
@@ -244,7 +249,8 @@ export class RetroRenderer {
                          * (1.0 - smoothstep(0.12, 0.18, cellPhase));
 
           // ── Depth perspective: near rings bold, distant rings fade ──
-          float depthFade = smoothstep(60.0, 4.0, wallZ);
+          // Cone pushes far-wall hits to z≈80 at center, z≈5 at edges.
+          float depthFade = smoothstep(80.0, 4.0, wallZ);
           float nearBoost = smoothstep(6.0, 3.0, wallZ);
           float ringIntensity = ringBand * (depthFade * 0.6 + nearBoost * 0.4);
 
@@ -254,8 +260,10 @@ export class RetroRenderer {
           float ringBlink = step(0.5, fract(time * 0.75));
           vec3 ringColor = mix(redColor, blueColor, ringBlink);
 
-          // ── Wall depth shading: subtle darkening toward edges ──
+          // ── Wall depth shading: darken toward edges + depth ──
           float wallShade = 1.0 - rdXY * 0.3;
+          // Extra darkening deep in the cone (enhances perspective)
+          wallShade *= mix(0.7, 1.0, smoothstep(60.0, 5.0, wallZ));
 
           // ── Compose ──
           vec3 col = bg * wallShade;
@@ -263,7 +271,7 @@ export class RetroRenderer {
 
           // ── Vanishing point glow ──
           float centerDist = length(centered);
-          float centerGlow = smoothstep(0.1, 0.0, centerDist);
+          float centerGlow = smoothstep(0.12, 0.0, centerDist);
           col = mix(col, vec3(1.0), centerGlow);
 
           return col;
