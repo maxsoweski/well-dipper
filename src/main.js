@@ -460,15 +460,15 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   const r = titleData.radius || 200;
   let orbitCenter;
   if (titleType.includes('galaxy')) {
-    orbitCenter = new THREE.Vector3(0, r * 0.35, 0);
-    camera.position.set(r * 0.3, r * 0.7, r * 1.1);
+    orbitCenter = new THREE.Vector3(0, r * 0.2, 0);
+    camera.position.set(r * 0.3, r * 0.55, r * 1.1);
   } else if (titleType.includes('nebula')) {
-    orbitCenter = new THREE.Vector3(0, r * 0.35, 0);
-    camera.position.set(0, r * 0.3, r * 1.25);
+    orbitCenter = new THREE.Vector3(0, r * 0.2, 0);
+    camera.position.set(0, r * 0.2, r * 1.25);
   } else {
-    // Clusters — keep as-is
-    orbitCenter = new THREE.Vector3(0, r * 0.6, 0);
-    camera.position.set(0, r * 0.45, r * 1.25);
+    // Clusters
+    orbitCenter = new THREE.Vector3(0, r * 0.4, 0);
+    camera.position.set(0, r * 0.35, r * 1.25);
   }
   camera.lookAt(orbitCenter);
   cameraController.restoreFromWorldState(orbitCenter);
