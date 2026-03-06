@@ -129,23 +129,30 @@ function dismissTitleScreen() {
   }
 
   // Smooth zoom-out: transition orbit center back to origin (object center)
-  // and increase distance so the camera pulls back smoothly.
+  // and zoom to the same distance startFlythrough would use, so there's no snap.
   cameraController.autoRotateSpeed = 0.67;
   cameraController._targetGoal.set(0, 0, 0);
   cameraController._transitioning = true;
-  cameraController._transitionSpeed = 0.03; // slow smooth transition
-  // Set target distance — log-space smoothing animates the zoom-out
-  const overviewDist = (system?.destination?.data?.radius || 200) * 1.3;
-  cameraController.distance = overviewDist;
+  cameraController._transitionSpeed = 0.02; // slow, graceful transition
+  // Zoom to the exact distance startFlythrough uses for distant deep sky
+  const radius = system?.destination?.data?.radius || 200;
+  const flyViewDist = radius * 2.5;
+  cameraController.distance = flyViewDist;
   cameraController.zoomSpeed = 0;
 
-  // Start autopilot after the zoom-out settles (~3s)
+  // After the smooth transition settles, hand off to the static deep sky view.
+  // Don't call startFlythrough (it snaps camera). Just set bypassed + linger timer.
   setTimeout(() => {
-    if (system && !autoNav.isActive) {
+    if (!system) return;
+    const isDistantDeepSky = system.type && system.type !== 'star-system' && !system._navigable;
+    if (isDistantDeepSky) {
+      cameraController.bypassed = true;
+      _deepSkyLingerTimer = 15;
+    } else if (!autoNav.isActive) {
       idleTimer = 0;
       startFlythrough();
     }
-  }, 3000);
+  }, 5000);
 }
 
 function toggleKeybinds() {
