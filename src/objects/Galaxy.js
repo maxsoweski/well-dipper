@@ -44,6 +44,8 @@ export class Galaxy {
         attribute vec3 aColor;
         attribute float aSize;
         varying vec3 vColor;
+        varying float vTwinkle;
+        uniform float uTime;
 
         void main() {
           vColor = aColor;
@@ -54,13 +56,20 @@ export class Galaxy {
           float distScale = 300.0 / max(-mvPos.z, 1.0);
           gl_PointSize = aSize * distScale;
 
-          // Clamp to reasonable range
-          gl_PointSize = clamp(gl_PointSize, 0.5, 32.0);
+          // Min 1.0px — sub-pixel particles cause aggressive blinking
+          // as they cross pixel boundaries during rotation
+          gl_PointSize = clamp(gl_PointSize, 1.0, 32.0);
+
+          // Slow per-particle twinkle: gentle brightness variation
+          // using position as a unique hash (each star twinkles independently)
+          float hash = fract(sin(dot(position.xz, vec2(12.9898, 78.233))) * 43758.5453);
+          vTwinkle = 0.85 + 0.15 * sin(uTime * (0.3 + hash * 0.4) + hash * 6.28);
         }
       `,
 
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
+        varying float vTwinkle;
 
         // 4×4 Bayer dithering (matches Starfield.js pattern)
         float bayerDither(vec2 coord) {
@@ -83,9 +92,13 @@ export class Galaxy {
           float dist = length(gl_PointCoord - 0.5);
           float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
 
-          // Dithered edge for retro look
+          // Apply slow twinkle
+          alpha *= vTwinkle;
+
+          // Gentler dithered edge — lower multiplier (0.4 vs 0.8)
+          // so fewer edge pixels pop in/out during rotation
           float threshold = bayerDither(gl_FragCoord.xy);
-          if (alpha < threshold * 0.8) discard;
+          if (alpha < threshold * 0.4) discard;
 
           // Additive blending handles the rest — overlapping dots brighten
           gl_FragColor = vec4(vColor * alpha, alpha);
@@ -103,6 +116,9 @@ export class Galaxy {
   update(deltaTime) {
     // Gentle rotation — galaxies and clusters drift slowly
     this.mesh.rotation.y += 0.003 * deltaTime;
+
+    // Advance twinkle clock
+    this._points.material.uniforms.uTime.value += deltaTime;
   }
 
   /**

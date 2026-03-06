@@ -68,9 +68,13 @@ export class GalaxyGenerator {
         spineTheta = spineTheta * (1 - barBlend) + barAngle * barBlend;
       }
 
-      // Gaussian scatter perpendicular to arm (wider at edge)
-      const armWidth = (0.12 + 0.08 * (r / radius)) * radius;
-      const scatter = this._gaussian(rng) * armWidth;
+      // Gaussian scatter perpendicular to arm (wider at edge, ragged)
+      // Wider base scatter + occasional "straggler" particles that
+      // wander far from the arm spine, creating ragged natural edges.
+      const armWidth = (0.15 + 0.12 * (r / radius)) * radius;
+      const isStraggler = rng.chance(0.12); // 12% wander further from arm
+      const scatterMul = isStraggler ? rng.range(1.8, 3.0) : 1.0;
+      const scatter = this._gaussian(rng) * armWidth * scatterMul;
       const theta = spineTheta + scatter / (r + 1);
 
       const x = r * Math.cos(theta);
@@ -81,23 +85,38 @@ export class GalaxyGenerator {
       positions[idx * 3 + 1] = y;
       positions[idx * 3 + 2] = z;
 
-      // Color: gradual transition from warm core to blue arms.
-      // Wide blend zone with per-particle randomness creates natural
-      // intermingling — no hard boundary between gold and blue.
+      // Color: gradual transition from warm core to blue arms, with
+      // warm/red old stars scattered throughout (real galaxies have mixed
+      // stellar populations everywhere, not just a clean blue-in-arms split).
       const normalizedR = r / radius;
       const isHII = rng.chance(0.02); // rare pink star-forming knots
+      const isOldRed = rng.chance(0.08); // red/orange old giants (everywhere)
+      const isWarmGold = rng.chance(0.06); // warm gold stars in arms
+
       if (isHII) {
         colors[idx * 3]     = rng.range(0.75, 0.9);
         colors[idx * 3 + 1] = rng.range(0.2, 0.35);
         colors[idx * 3 + 2] = rng.range(0.3, 0.45);
+      } else if (isOldRed) {
+        // Red/orange old giants — exist throughout the galaxy,
+        // creating subtle warm bands and streaks in the arms
+        const redness = rng.range(0.7, 1.0);
+        colors[idx * 3]     = redness;
+        colors[idx * 3 + 1] = redness * rng.range(0.35, 0.55);
+        colors[idx * 3 + 2] = redness * rng.range(0.15, 0.3);
+      } else if (isWarmGold) {
+        // Warm gold — like bulge stars but sprinkled through the arms
+        const warmth = rng.range(0.75, 0.95);
+        colors[idx * 3]     = warmth;
+        colors[idx * 3 + 1] = warmth * rng.range(0.65, 0.8);
+        colors[idx * 3 + 2] = warmth * rng.range(0.35, 0.55);
       } else {
-        // Blend zone: warm colors dominate near center, blue in arms.
-        // Per-particle jitter (±0.15) creates natural salt-and-pepper
-        // mixing so the transition looks organic, not like a ring.
+        // Majority: gradual warm→blue blend with wide transition zone.
+        // Per-particle jitter creates natural intermingling.
         const blendStart = bulgeSize * 0.3;
-        const blendEnd = bulgeSize + 0.2;
+        const blendEnd = bulgeSize + 0.3;
         const rawBlend = (normalizedR - blendStart) / (blendEnd - blendStart);
-        const blend = Math.max(0, Math.min(1, rawBlend + rng.range(-0.15, 0.15)));
+        const blend = Math.max(0, Math.min(1, rawBlend + rng.range(-0.18, 0.18)));
 
         // Generate both color palettes, then interpolate
         const warmth = rng.range(0.8, 1.0);
@@ -105,9 +124,10 @@ export class GalaxyGenerator {
         const wG = warmth * rng.range(0.7, 0.85);
         const wB = warmth * rng.range(0.4, 0.6);
 
-        const blue = rng.range(0.6, 1.0);
-        const aR = blue * rng.range(0.6, 0.8);
-        const aG = blue * rng.range(0.7, 0.9);
+        // Blue-white with more variation (not so uniform)
+        const blue = rng.range(0.5, 1.0);
+        const aR = blue * rng.range(0.5, 0.85);
+        const aG = blue * rng.range(0.6, 0.95);
         const aB = blue;
 
         colors[idx * 3]     = wR + (aR - wR) * blend;
