@@ -27,6 +27,11 @@ import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { WarpEffect } from './effects/WarpEffect.js';
+import { Settings } from './ui/Settings.js';
+import { BodyInfo } from './ui/BodyInfo.js';
+
+// ── User Settings (localStorage-backed) ──
+const settings = new Settings();
 
 // ── Scene ──
 const scene = new THREE.Scene();
@@ -58,7 +63,7 @@ cameraController.onFreeLookEnd = () => {
 // ── Starfield ──
 // Rendered at full resolution (via retroRenderer.starfieldScene) for tiny
 // crisp star points, separate from the low-res retro scene objects.
-const starfield = new Starfield(6000, 500);
+const starfield = new Starfield(settings.get('starDensity'), 500);
 starfield.addTo(retroRenderer.starfieldScene);
 
 // ── System State ──
@@ -66,18 +71,20 @@ let seedCounter = 0;
 let system = null;
 let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
-let orbitsVisible = false;
-let gravityWellVisible = false;
-let minimapVisible = true;         // M key toggles
+let orbitsVisible = settings.get('showOrbits');
+let gravityWellVisible = settings.get('showGravityWells');
+let minimapVisible = settings.get('showMinimap');
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
+
+// ── Body Info HUD ──
+const bodyInfo = new BodyInfo();
 
 // ── Autopilot (cinematic flythrough) ──
 const autoNav = new AutoNavigator();
 const flythrough = new FlythroughCamera(camera);
 let idleTimer = 0;
-const IDLE_THRESHOLD = 20;
 
 // ── Warp transition (system-to-system) ──
 const warpEffect = new WarpEffect();
@@ -130,7 +137,7 @@ function dismissTitleScreen() {
 
   // Smooth zoom-out: transition orbit center back to origin (object center)
   // and zoom to the same distance startFlythrough would use, so there's no snap.
-  cameraController.autoRotateSpeed = 0.67;
+  cameraController.autoRotateSpeed = settings.get('autoRotateSpeed');
   cameraController._targetGoal.set(0, 0, 0);
   cameraController._transitioning = true;
   cameraController._transitionSpeed = 0.02; // slow, graceful transition
@@ -159,6 +166,134 @@ function toggleKeybinds() {
   const el = document.getElementById('keybinds-overlay');
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
+
+// ── Settings Panel ──
+let _settingsOpen = false;
+
+function formatSettingValue(key, value) {
+  if (key === 'idleTimeout' || key === 'titleAutoDismiss') return `${value}s`;
+  if (key === 'deepSkyChance') return `${value}%`;
+  if (key === 'tourLingerMultiplier') return `${value.toFixed(1)}x`;
+  if (key === 'autoRotateSpeed') return `${value.toFixed(1)}`;
+  if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
+  if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
+  return String(value);
+}
+
+function populateSettingsUI() {
+  const el = document.getElementById('settings-overlay');
+  if (!el) return;
+  el.querySelectorAll('[data-setting]').forEach(input => {
+    const key = input.dataset.setting;
+    if (key === 'fullscreen') {
+      input.checked = !!document.fullscreenElement;
+      return;
+    }
+    const value = settings.get(key);
+    if (input.type === 'checkbox') {
+      input.checked = value;
+    } else {
+      input.value = value;
+      const label = input.nextElementSibling;
+      if (label?.classList.contains('setting-value')) {
+        label.textContent = formatSettingValue(key, value);
+      }
+    }
+  });
+}
+
+function toggleSettings() {
+  const el = document.getElementById('settings-overlay');
+  if (!el) return;
+  _settingsOpen = !_settingsOpen;
+  if (_settingsOpen) {
+    populateSettingsUI();
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function applySettingChange(key, value) {
+  switch (key) {
+    case 'pixelScale':
+      retroRenderer.pixelScale = value;
+      retroRenderer.resize();
+      break;
+    case 'autoRotateSpeed':
+      cameraController.autoRotateSpeed = value;
+      break;
+    case 'zoomSensitivity':
+      cameraController.scrollSensitivity = value;
+      break;
+    case 'showOrbits':
+      if (orbitsVisible !== value) toggleOrbits();
+      break;
+    case 'showMinimap':
+      minimapVisible = value;
+      if (minimapVisible && systemMap && !gravityWellVisible) {
+        retroRenderer.setHud(systemMap.scene, systemMap.camera);
+      } else if (!minimapVisible && !gravityWellVisible) {
+        retroRenderer.setHud(null, null);
+      }
+      break;
+    case 'showGravityWells':
+      if (gravityWellVisible !== value) toggleGravityWell();
+      break;
+    case 'fullscreen':
+      if (value && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if (!value && document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+      break;
+  }
+}
+
+// Settings input event delegation
+{
+  const settingsEl = document.getElementById('settings-overlay');
+  if (settingsEl) {
+    settingsEl.addEventListener('input', (e) => {
+      const input = e.target;
+      const key = input.dataset.setting;
+      if (!key) return;
+
+      if (key === 'fullscreen') {
+        applySettingChange(key, input.checked);
+        return;
+      }
+
+      const value = input.type === 'checkbox' ? input.checked : parseFloat(input.value);
+      settings.set(key, value);
+
+      // Update value label
+      const label = input.nextElementSibling;
+      if (label?.classList.contains('setting-value')) {
+        label.textContent = formatSettingValue(key, value);
+      }
+
+      applySettingChange(key, value);
+    });
+
+    // Reset button
+    settingsEl.querySelector('.settings-reset')?.addEventListener('click', () => {
+      settings.reset();
+      // Re-apply all defaults
+      retroRenderer.pixelScale = settings.get('pixelScale');
+      retroRenderer.resize();
+      cameraController.autoRotateSpeed = settings.get('autoRotateSpeed');
+      cameraController.scrollSensitivity = settings.get('zoomSensitivity');
+      populateSettingsUI();
+    });
+
+    // Update fullscreen checkbox when fullscreen state changes
+    document.addEventListener('fullscreenchange', () => {
+      const fsCheckbox = settingsEl.querySelector('[data-setting="fullscreen"]');
+      if (fsCheckbox) fsCheckbox.checked = !!document.fullscreenElement;
+    });
+  }
 }
 
 // ── Debug Gallery Mode ──
@@ -190,10 +325,23 @@ const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for galler
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
 warpEffect.onPrepareSystem = () => {
+  bodyInfo.hide();
   seedCounter++;
   const seed = `system-${seedCounter}`;
   const rng = new SeededRandom(seed);
-  const destType = _forceNextDestType || DestinationPicker.pick(rng);
+  // Use settings-based deep sky chance (overrides DestinationPicker's static weights)
+  let destType;
+  if (_forceNextDestType) {
+    destType = _forceNextDestType;
+  } else {
+    const dsChance = settings.get('deepSkyChance') / 100;
+    if (rng.float() >= dsChance) {
+      destType = 'star-system';
+    } else {
+      // Pick a deep sky subtype (re-roll excluding star-system)
+      destType = DestinationPicker.pickDeepSky(rng);
+    }
+  }
   _forceNextDestType = null; // clear after use
 
   if (destType === 'star-system') {
@@ -327,10 +475,10 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   // Slow visible orbit for the title screen showcase
   cameraController.autoRotateSpeed = 3.0;
 
-  // Auto-dismiss title screen after 30 seconds
+  // Auto-dismiss title screen after configured timeout
   _titleAutoTimer = setTimeout(() => {
     if (titleScreenActive) dismissTitleScreen();
-  }, 30000);
+  }, settings.get('titleAutoDismiss') * 1000);
 }
 
 /**
@@ -1361,19 +1509,35 @@ function updateFocusFromStop(stop) {
     focusIndex = -2;
     focusStarIndex = stop.starIndex;
     focusMoonIndex = -1;
+    // Show star info
+    let starObj;
+    if (system._navigable && system.extraStars && stop.starIndex >= 2) {
+      starObj = system.extraStars[stop.starIndex - 2] || system.star;
+    } else {
+      starObj = stop.starIndex === 1 && system.star2 ? system.star2 : system.star;
+    }
+    bodyInfo.showStar(starObj.data);
   } else if (stop.type === 'planet') {
     focusIndex = stop.planetIndex;
     focusMoonIndex = -1;
     focusStarIndex = -1;
+    if (system.planets[stop.planetIndex]) {
+      bodyInfo.showPlanet(system.planets[stop.planetIndex].planet.data, stop.planetIndex);
+    }
   } else if (stop.type === 'moon') {
     focusIndex = stop.planetIndex; // minimap highlights parent planet
     focusMoonIndex = stop.moonIndex;
     focusStarIndex = -1;
+    const entry = system.planets[stop.planetIndex];
+    if (entry && entry.moons[stop.moonIndex]) {
+      bodyInfo.showMoon(entry.moons[stop.moonIndex].data, stop.planetIndex);
+    }
   } else if (stop.type === 'deepsky-poi') {
     // Deep sky: no minimap focus (HUD is hidden)
     focusIndex = -1;
     focusMoonIndex = -1;
     focusStarIndex = -1;
+    bodyInfo.hide();
   }
 }
 
@@ -1666,12 +1830,14 @@ function focusPlanet(index) {
     focusIndex = -1;
     const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
     cameraController.viewSystem(outerOrbit);
+    bodyInfo.hide();
     console.log('System overview');
   } else {
     focusIndex = index;
     const entry = system.planets[index];
     const viewDist = entry.planet.data.radius * 6;
     cameraController.focusOn(entry.planet.mesh.position, viewDist);
+    bodyInfo.showPlanet(entry.planet.data, index);
     console.log(`Focus: planet ${index + 1} (${entry.planet.data.type})`);
   }
 }
@@ -1705,6 +1871,7 @@ function focusStar(starIdx) {
     viewDist = Math.min(idealDist, innerOrbit * 0.4);
   }
   cameraController.focusOn(starObj.mesh.position, viewDist);
+  bodyInfo.showStar(starObj.data);
   const label = system.isBinary
     ? (starIdx === 0 ? 'primary star' : 'secondary star')
     : 'star';
@@ -1726,6 +1893,7 @@ function focusMoon(planetIndex, moonIndex) {
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;
   cameraController.focusOn(moon.mesh.position, viewDist);
+  bodyInfo.showMoon(moon.data, planetIndex);
   console.log(`Focus: moon ${moonIndex + 1} of planet ${planetIndex + 1} (${moon.data.type})`);
 }
 
@@ -1744,6 +1912,14 @@ function toggleOrbits() {
     for (const line of entry.moonOrbitLines) {
       line.mesh.visible = orbitsVisible;
     }
+  }
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    document.documentElement.requestFullscreen().catch(() => {});
   }
 }
 
@@ -2219,7 +2395,7 @@ function animate() {
       // Warp or title screen is active — don't start autopilot
     } else if (!autoNav.isActive) {
       idleTimer += deltaTime;
-      if (idleTimer >= IDLE_THRESHOLD) {
+      if (idleTimer >= settings.get('idleTimeout')) {
         startFlythrough();
       }
     } else if (flythrough.active) {
@@ -2253,7 +2429,7 @@ function animate() {
           // can be optimized for departure toward the next body
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-          flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger);
+          flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger * settings.get('tourLingerMultiplier'));
           // Show current body on minimap (no blink — we just arrived)
           updateFocusFromStop(stop);
         }
@@ -2345,8 +2521,18 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Escape also closes keybinds overlay if open
+  // S key: toggle settings panel (works always except title screen)
+  if (e.code === 'KeyS' && !titleScreenActive) {
+    toggleSettings();
+    return;
+  }
+
+  // Escape closes keybinds or settings overlay if open
   if (e.code === 'Escape') {
+    if (_settingsOpen) {
+      toggleSettings();
+      return;
+    }
     const kb = document.getElementById('keybinds-overlay');
     if (kb && kb.style.display !== 'none') {
       kb.style.display = 'none';
@@ -2753,7 +2939,7 @@ window.addEventListener('touchstart', () => {
   } catch { /* not supported */ }
 }, { once: false, passive: true });
 
-// ── Mobile Menu ──
+// ── Mobile Menu (split-side fan-out) ──
 const mobileMenu = document.getElementById('mobile-menu');
 if (mobileMenu) {
   const toggle = mobileMenu.querySelector('.mobile-menu-toggle');
@@ -2765,7 +2951,8 @@ if (mobileMenu) {
     mobileMenu.classList.toggle('open');
   });
 
-  mobileMenu.querySelector('.mobile-menu-items').addEventListener('touchend', (e) => {
+  // Shared handler for both side groups
+  function handleMobileAction(e) {
     e.preventDefault();
     e.stopPropagation();
     const btn = e.target.closest('button');
@@ -2816,12 +3003,25 @@ if (mobileMenu) {
         retroRenderer.setHud(null, null);
       }
       btn.classList.toggle('active', minimapVisible);
+    } else if (action === 'fullscreen') {
+      toggleFullscreen();
+      btn.classList.toggle('active', !!document.fullscreenElement);
+    } else if (action === 'settings') {
+      toggleSettings();
     }
+    // Menu stays open — user closes it explicitly with the toggle button
+  }
 
-    // Close menu after action (except toggles)
-    if (action !== 'orbits' && action !== 'gravity' && action !== 'gyro' && action !== 'autonav' && action !== 'minimap') {
-      mobileMenu.classList.remove('open');
-    }
+  // Listen on both side groups
+  const leftGroup = mobileMenu.querySelector('.mobile-menu-left');
+  const rightGroup = mobileMenu.querySelector('.mobile-menu-right');
+  if (leftGroup) leftGroup.addEventListener('touchend', handleMobileAction);
+  if (rightGroup) rightGroup.addEventListener('touchend', handleMobileAction);
+
+  // Update fullscreen button state when fullscreen changes
+  document.addEventListener('fullscreenchange', () => {
+    const fsBtn = mobileMenu.querySelector('[data-action="fullscreen"]');
+    if (fsBtn) fsBtn.classList.toggle('active', !!document.fullscreenElement);
   });
 }
 

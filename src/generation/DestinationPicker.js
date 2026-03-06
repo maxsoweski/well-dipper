@@ -33,6 +33,24 @@ export class DestinationPicker {
     return 'star-system'; // fallback (rounding safety)
   }
 
+  /**
+   * Pick a deep sky subtype only (excludes star-system).
+   * Used when the caller has already decided this will be a deep sky warp.
+   * @param {SeededRandom} rng
+   * @returns {string} deep sky destination type
+   */
+  static pickDeepSky(rng) {
+    const dsWeights = this.WEIGHTS.filter(w => w.type !== 'star-system');
+    const total = dsWeights.reduce((s, w) => s + w.weight, 0);
+    const roll = rng.float() * total;
+    let cumulative = 0;
+    for (const entry of dsWeights) {
+      cumulative += entry.weight;
+      if (roll < cumulative) return entry.type;
+    }
+    return dsWeights[dsWeights.length - 1].type; // fallback
+  }
+
   /** Check if a destination type is a deep sky object (not a star system). */
   static isDeepSky(type) {
     return type !== 'star-system';

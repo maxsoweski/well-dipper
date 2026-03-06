@@ -32,10 +32,20 @@ export class SystemMap {
     const outerOrbit = systemData.planets[systemData.planets.length - 1].orbitRadius;
     this.extent = outerOrbit * 1.3;
 
-    // ── Orthographic camera — looks down -Y ──
+    // ── Orthographic camera — tilted ~35° from vertical ──
+    // Looking at the map from an angle gives a 3D perspective effect,
+    // like a holographic radar display tilted toward the viewer.
     const e = this.extent;
-    this.camera = new THREE.OrthographicCamera(-e, e, e, -e, 0.1, 100);
-    this.camera.position.set(0, 50, 0);
+    const tiltAngle = 35 * (Math.PI / 180);  // 35° from vertical
+    const camDist = 50;
+    this._tiltAngle = tiltAngle;
+    this._camDist = camDist;
+
+    // Wider frustum to account for foreshortened view at tilt angle
+    const hFrustum = e * 1.2;
+    const vFrustum = e * 1.6;  // taller to fit orbits that compress vertically
+    this.camera = new THREE.OrthographicCamera(-hFrustum, hFrustum, vFrustum, -vFrustum, 0.1, 200);
+    this.camera.position.set(0, camDist * Math.cos(tiltAngle), camDist * Math.sin(tiltAngle));
     this.camera.lookAt(0, 0, 0);
 
     // ── Star data ──
@@ -243,13 +253,20 @@ export class SystemMap {
     }
 
     // ── Rotate map camera to match player heading ──
-    // The main camera yaw rotates the map so the player's facing is "up"
-    const camDist = 50;
+    // Orbit camera around Y axis at the tilt angle, so the player's
+    // facing direction always points "up" on the tilted radar display.
+    const d = this._camDist;
+    const tilt = this._tiltAngle;
+    const cosT = Math.cos(tilt);
+    const sinT = Math.sin(tilt);
+    // Camera orbits at fixed height (cosT*d) and sweeps horizontally (sinT*d)
+    // in the direction opposite to the player's yaw.
     this.camera.position.set(
-      Math.sin(-mainYaw) * 0.001,   // tiny offset so lookAt isn't degenerate
-      camDist,
-      Math.cos(-mainYaw) * 0.001,
+      Math.sin(-mainYaw) * sinT * d,
+      cosT * d,
+      Math.cos(-mainYaw) * sinT * d,
     );
+    // "Up" direction follows the yaw so the map rotates with heading
     this.camera.up.set(Math.sin(-mainYaw), 0, Math.cos(-mainYaw));
     this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();

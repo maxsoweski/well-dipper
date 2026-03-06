@@ -40,10 +40,83 @@
           <span class="kb-key">SCROLL</span><span class="kb-desc">Zoom in / out</span>
           <span class="kb-key">ESC</span><span class="kb-desc">Unfocus / overview</span>
           <span class="kb-key">D</span><span class="kb-desc">Object gallery</span>
+          <span class="kb-key">S</span><span class="kb-desc">Settings</span>
           <span class="kb-key">K</span><span class="kb-desc">Toggle this overlay</span>
         </div>
         <p class="keybinds-dismiss">K or ESC to close</p>
       </div>
+    </div>
+
+    <!-- Settings panel (toggled with S key) -->
+    <div id="settings-overlay" style="display:none;">
+      <div class="settings-panel">
+        <h2>SETTINGS</h2>
+
+        <div class="settings-section">
+          <h3>VISUAL</h3>
+          <div class="settings-grid">
+            <label>Pixel Scale</label>
+            <input type="range" data-setting="pixelScale" min="1" max="5" step="1">
+            <span class="setting-value"></span>
+            <label>Star Density</label>
+            <input type="range" data-setting="starDensity" min="2000" max="10000" step="1000">
+            <span class="setting-value"></span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>SCREENSAVER</h3>
+          <div class="settings-grid">
+            <label>Idle Timeout</label>
+            <input type="range" data-setting="idleTimeout" min="5" max="60" step="5">
+            <span class="setting-value"></span>
+            <label>Tour Speed</label>
+            <input type="range" data-setting="tourLingerMultiplier" min="0.5" max="2.0" step="0.1">
+            <span class="setting-value"></span>
+            <label>Deep Sky Chance</label>
+            <input type="range" data-setting="deepSkyChance" min="0" max="50" step="5">
+            <span class="setting-value"></span>
+            <label>Title Timeout</label>
+            <input type="range" data-setting="titleAutoDismiss" min="10" max="60" step="5">
+            <span class="setting-value"></span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>DISPLAY</h3>
+          <div class="settings-grid settings-grid-toggle">
+            <label>Orbit Lines</label>
+            <input type="checkbox" data-setting="showOrbits">
+            <label>Minimap</label>
+            <input type="checkbox" data-setting="showMinimap">
+            <label>Gravity Wells</label>
+            <input type="checkbox" data-setting="showGravityWells">
+            <label>Fullscreen</label>
+            <input type="checkbox" data-setting="fullscreen">
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>CAMERA</h3>
+          <div class="settings-grid">
+            <label>Rotation Speed</label>
+            <input type="range" data-setting="autoRotateSpeed" min="0.1" max="3.0" step="0.1">
+            <span class="setting-value"></span>
+            <label>Zoom Sensitivity</label>
+            <input type="range" data-setting="zoomSensitivity" min="0.5" max="3.0" step="0.25">
+            <span class="setting-value"></span>
+          </div>
+        </div>
+
+        <button class="settings-reset">Reset Defaults</button>
+        <p class="settings-dismiss">S or ESC to close</p>
+      </div>
+    </div>
+
+    <!-- Body info popup (shown when selecting a planet/moon/star) -->
+    <div id="body-info" style="display:none;">
+      <div class="body-info-type"></div>
+      <div class="body-info-stats"></div>
     </div>
 
     <!-- Portrait overlay: shown on mobile when device is in portrait mode -->
@@ -60,20 +133,27 @@
       </div>
     </div>
 
-    <!-- Mobile controls menu (hidden on desktop) -->
+    <!-- Mobile controls (split-side fan-out, hidden on desktop) -->
     <div id="mobile-menu" class="mobile-menu">
-      <div class="mobile-menu-items">
-        <button data-action="autonav" title="Toggle autopilot">&#x25B7;</button>
-        <button data-action="gyro" title="Toggle free-look (gyro)">&#x2B55;</button>
-        <button data-action="minimap" title="Toggle minimap">&#x25A3;</button>
-        <button data-action="gravity" title="Toggle gravity wells">&#x25C9;</button>
-        <button data-action="orbits" title="Toggle orbits">&#x25CE;</button>
+      <!-- Left side: navigation -->
+      <div class="mobile-menu-left mobile-menu-group">
         <button data-action="prev" title="Previous planet">&#x25C0;</button>
         <button data-action="next" title="Next planet">&#x25B6;</button>
         <button data-action="back" title="System overview">&#x2190;</button>
         <button data-action="new" title="New system">&#x21BB;</button>
       </div>
+      <!-- Center toggle -->
       <button class="mobile-menu-toggle" title="Menu">&#x2630;</button>
+      <!-- Right side: toggles -->
+      <div class="mobile-menu-right mobile-menu-group">
+        <button data-action="autonav" title="Toggle autopilot">&#x25B7;</button>
+        <button data-action="gyro" title="Toggle gyroscope">&#x2B55;</button>
+        <button data-action="minimap" title="Toggle minimap">&#x25A3;</button>
+        <button data-action="gravity" title="Toggle gravity wells">&#x25C9;</button>
+        <button data-action="orbits" title="Toggle orbits">&#x25CE;</button>
+        <button data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
+        <button data-action="settings" title="Settings">&#x2699;</button>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>
