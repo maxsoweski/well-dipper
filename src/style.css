@@ -119,7 +119,8 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 8vh;
   pointer-events: none;
   transition: opacity 1s ease;
 }
@@ -133,10 +134,11 @@ html, body {
 }
 
 .title-name {
-  font-family: 'Nabla', system-ui;
-  font-variation-settings: 'EDPT' 130, 'EHLT' 10;
+  font-family: 'Pixelify Sans', system-ui;
+  font-weight: 700;
   font-size: clamp(36px, 8vw, 80px);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.35em;
+  color: #fff;
   margin: 0;
   line-height: 1.2;
 }

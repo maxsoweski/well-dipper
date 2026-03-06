@@ -281,6 +281,16 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   titleData._destType = titleType;
   spawnSystem({ systemData: titleData });
 
+  // Pull camera back to show the full object as a showcase.
+  // Galaxies get an angled view so you can see the spiral/elliptical structure.
+  const r = titleData.radius || 200;
+  if (titleType.includes('galaxy')) {
+    camera.position.set(r * 0.6, r * 1.0, r * 1.8);
+  } else {
+    camera.position.set(0, r * 0.4, r * 2.2);
+  }
+  camera.lookAt(0, 0, 0);
+
   // Auto-dismiss title screen after 30 seconds
   _titleAutoTimer = setTimeout(() => {
     if (titleScreenActive) dismissTitleScreen();
