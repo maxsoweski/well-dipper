@@ -8,6 +8,11 @@
   <body>
     <canvas id="canvas"></canvas>
 
+    <!-- Portrait overlay: shown on mobile when device is in portrait mode -->
+    <div id="portrait-overlay">
+      <div class="portrait-msg">&#x21BB;<br>Rotate your device</div>
+    </div>
+
     <!-- Debug gallery overlay (hidden by default) -->
     <div id="gallery-overlay" style="display:none; position:fixed; top:0; left:0; right:0; padding:16px; z-index:1000; pointer-events:none; font-family:monospace; color:#0f0; text-shadow:0 0 6px #000, 0 0 12px #000, 0 0 20px #000;">
       <div style="font-size:20px; font-weight:bold;">OBJECT GALLERY</div>
@@ -21,7 +26,8 @@
     <div id="mobile-menu" class="mobile-menu">
       <div class="mobile-menu-items">
         <button data-action="autonav" title="Toggle autopilot">&#x25B7;</button>
-        <button data-action="gyro" title="Toggle gyroscope">&#x2B55;</button>
+        <button data-action="gyro" title="Toggle free-look (gyro)">&#x2B55;</button>
+        <button data-action="minimap" title="Toggle minimap">&#x25A3;</button>
         <button data-action="gravity" title="Toggle gravity wells">&#x25C9;</button>
         <button data-action="orbits" title="Toggle orbits">&#x25CE;</button>
         <button data-action="prev" title="Previous planet">&#x25C0;</button>

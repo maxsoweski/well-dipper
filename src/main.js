@@ -2146,17 +2146,28 @@ function animate() {
 
     // ── Camera tracking (manual mode only) ──
     // Skip during flythrough (camera is driven by FlythroughCamera)
-    // Skip during free-look (user controls the view)
-    if (!cameraController.bypassed && !cameraController.isFreeLooking) {
+    if (!cameraController.bypassed) {
+      // Determine the tracked body's position (if any)
+      let trackPos = null;
       if (focusIndex === -2 && focusStarIndex >= 0) {
         const starObj = focusStarIndex === 1 && system.star2 ? system.star2 : system.star;
-        cameraController.trackTarget(starObj.mesh.position);
+        trackPos = starObj.mesh.position;
       } else if (focusIndex >= 0 && focusIndex < system.planets.length) {
         const entry = system.planets[focusIndex];
         if (focusMoonIndex >= 0 && focusMoonIndex < entry.moons.length) {
-          cameraController.trackTarget(entry.moons[focusMoonIndex].mesh.position);
+          trackPos = entry.moons[focusMoonIndex].mesh.position;
         } else {
-          cameraController.trackTarget(entry.planet.mesh.position);
+          trackPos = entry.planet.mesh.position;
+        }
+      }
+
+      if (trackPos) {
+        if (cameraController.isFreeLooking) {
+          // Free-look: move the camera anchor to follow the body's orbit
+          // so the system doesn't "fly past" the camera
+          cameraController.trackFreeLookAnchor(trackPos);
+        } else {
+          cameraController.trackTarget(trackPos);
         }
       }
     }
@@ -2567,6 +2578,17 @@ canvas.addEventListener('touchend', (e) => {
   }
 }, { passive: true });
 
+// ── Landscape orientation lock (mobile) ──
+// Request landscape on first touch. Fails silently on desktop/unsupported browsers.
+let _orientationLocked = false;
+window.addEventListener('touchstart', () => {
+  if (_orientationLocked) return;
+  _orientationLocked = true;
+  try {
+    screen.orientation.lock('landscape-primary').catch(() => {});
+  } catch { /* not supported */ }
+}, { once: false, passive: true });
+
 // ── Mobile Menu ──
 const mobileMenu = document.getElementById('mobile-menu');
 if (mobileMenu) {
@@ -2622,10 +2644,18 @@ if (mobileMenu) {
           if (ok) gyroBtn.classList.add('active');
         });
       }
+    } else if (action === 'minimap') {
+      minimapVisible = !minimapVisible;
+      if (minimapVisible && systemMap && !gravityWellVisible) {
+        retroRenderer.setHud(systemMap.scene, systemMap.camera);
+      } else if (!minimapVisible && !gravityWellVisible) {
+        retroRenderer.setHud(null, null);
+      }
+      btn.classList.toggle('active', minimapVisible);
     }
 
     // Close menu after action (except toggles)
-    if (action !== 'orbits' && action !== 'gravity' && action !== 'gyro' && action !== 'autonav') {
+    if (action !== 'orbits' && action !== 'gravity' && action !== 'gyro' && action !== 'autonav' && action !== 'minimap') {
       mobileMenu.classList.remove('open');
     }
   });

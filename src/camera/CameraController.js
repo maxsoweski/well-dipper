@@ -56,11 +56,13 @@ export class CameraController {
     this._transitioning = false;
     this._transitionSpeed = 0.04; // lerp factor per frame at 60fps
 
-    // ── Free-look (middle mouse) ──
+    // ── Free-look (middle mouse / gyro) ──
     // When active, the camera stays in place and you rotate the view direction.
     // Works by holding the camera position fixed and moving the orbit target.
     this.isFreeLooking = false;
     this._freeLookAnchor = new THREE.Vector3(); // camera pos when free-look started
+    this._freeLookTrackPos = new THREE.Vector3(); // last tracked body position
+    this._freeLookTracking = false; // whether we're tracking a body during free-look
 
     // Callback fired when free-look ends (middle mouse released).
     // main.js uses this to clear focus state so tracking doesn't resume
@@ -132,9 +134,7 @@ export class CameraController {
         // Skip during flythrough — FlythroughCamera handles its own free-look
         if (this.bypassed) return;
         e.preventDefault();
-        this.isFreeLooking = true;
-        this.autoRotateActive = false;
-        this._freeLookAnchor.copy(this.camera.position);
+        this.enterFreeLook();
       }
     });
 
@@ -147,11 +147,8 @@ export class CameraController {
       if (e.button === 0) {
         this.isDragging = false;
       } else if (e.button === 1) {
-        this.isFreeLooking = false;
-        // Tell main.js to clear focus state so the camera stays here
-        // orbiting the point we were looking at, instead of snapping
-        // back to the planet we were focused on before free-look.
-        if (this.onFreeLookEnd) this.onFreeLookEnd();
+        // End free-look and clear focus (camera stays where you were looking)
+        this.exitFreeLook(true);
       }
     });
 
@@ -258,6 +255,11 @@ export class CameraController {
         this.pitch -= dBeta * this._gyroSensitivity;
         const limit = (85 * Math.PI) / 180;
         this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+
+        // Gyro drives free-look: update the look direction from the anchor
+        if (this.isFreeLooking) {
+          this._recomputeTargetForFreeLook();
+        }
       }
 
       this._prevAlpha = e.alpha;
@@ -284,7 +286,8 @@ export class CameraController {
     this.gyroEnabled = true;
     this._prevAlpha = null;
     this._prevBeta = null;
-    this.autoRotateActive = false;
+    // Gyro activates free-look: look around by tilting the device
+    this.enterFreeLook();
     window.addEventListener('deviceorientation', this._gyroHandler);
     return true;
   }
@@ -294,6 +297,54 @@ export class CameraController {
     this._prevAlpha = null;
     this._prevBeta = null;
     window.removeEventListener('deviceorientation', this._gyroHandler);
+    // Resume orbiting the same body (don't clear focus)
+    this.exitFreeLook(false);
+  }
+
+  /**
+   * Enter free-look mode: anchor the camera at its current position.
+   * Yaw/pitch changes will rotate the view direction, not the orbit.
+   */
+  enterFreeLook() {
+    this.isFreeLooking = true;
+    this._freeLookAnchor.copy(this.camera.position);
+    this._freeLookTracking = false;
+    this.autoRotateActive = false;
+  }
+
+  /**
+   * Exit free-look mode and resume normal orbiting.
+   * @param {boolean} clearFocus - if true, fires onFreeLookEnd (clears focus
+   *   so camera stays where it was looking). If false (e.g., gyro off),
+   *   the camera resumes orbiting the previously focused body.
+   */
+  exitFreeLook(clearFocus = true) {
+    this.isFreeLooking = false;
+    this._freeLookTracking = false;
+    if (clearFocus && this.onFreeLookEnd) this.onFreeLookEnd();
+  }
+
+  /**
+   * During free-look, move the camera anchor to follow a tracked body's motion.
+   * Called every frame from main.js with the body's current world position.
+   * Without this, the system would "fly past" the camera because the anchor
+   * is fixed while the body keeps orbiting.
+   */
+  trackFreeLookAnchor(bodyPosition) {
+    if (!this.isFreeLooking) return;
+    if (!this._freeLookTracking) {
+      // First frame — just record position, no delta yet
+      this._freeLookTrackPos.copy(bodyPosition);
+      this._freeLookTracking = true;
+      return;
+    }
+    // Move anchor by the body's displacement since last frame
+    this._freeLookAnchor.x += bodyPosition.x - this._freeLookTrackPos.x;
+    this._freeLookAnchor.y += bodyPosition.y - this._freeLookTrackPos.y;
+    this._freeLookAnchor.z += bodyPosition.z - this._freeLookTrackPos.z;
+    this._freeLookTrackPos.copy(bodyPosition);
+    // Recompute look direction from updated anchor
+    this._recomputeTargetForFreeLook();
   }
 
   /**
