@@ -303,11 +303,16 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   // Orbit around a point ABOVE the object so the camera looks above center,
   // pushing the object into the lower portion of the screen.
   const r = titleData.radius || 200;
-  const orbitCenter = new THREE.Vector3(0, r * 0.6, 0);
+  let orbitCenter;
   if (titleType.includes('galaxy')) {
-    camera.position.set(r * 0.3, r * 0.9, r * 1.1);
+    orbitCenter = new THREE.Vector3(0, r * 0.35, 0);
+    camera.position.set(r * 0.3, r * 0.7, r * 1.1);
+  } else if (titleType.includes('nebula')) {
+    orbitCenter = new THREE.Vector3(0, r * 0.35, 0);
+    camera.position.set(0, r * 0.3, r * 1.25);
   } else {
-    // ~35° viewing angle for nebulae/clusters (more sideways, less top-down)
+    // Clusters — keep as-is
+    orbitCenter = new THREE.Vector3(0, r * 0.6, 0);
     camera.position.set(0, r * 0.45, r * 1.25);
   }
   camera.lookAt(orbitCenter);
