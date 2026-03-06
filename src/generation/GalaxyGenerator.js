@@ -81,25 +81,38 @@ export class GalaxyGenerator {
       positions[idx * 3 + 1] = y;
       positions[idx * 3 + 2] = z;
 
-      // Color: transition from warm core to blue arms
+      // Color: gradual transition from warm core to blue arms.
+      // Wide blend zone with per-particle randomness creates natural
+      // intermingling — no hard boundary between gold and blue.
       const normalizedR = r / radius;
       const isHII = rng.chance(0.02); // rare pink star-forming knots
       if (isHII) {
         colors[idx * 3]     = rng.range(0.75, 0.9);
         colors[idx * 3 + 1] = rng.range(0.2, 0.35);
         colors[idx * 3 + 2] = rng.range(0.3, 0.45);
-      } else if (normalizedR < bulgeSize) {
-        // Bulge zone: warm yellow-orange
-        const warmth = rng.range(0.8, 1.0);
-        colors[idx * 3]     = warmth;
-        colors[idx * 3 + 1] = warmth * rng.range(0.7, 0.85);
-        colors[idx * 3 + 2] = warmth * rng.range(0.4, 0.6);
       } else {
-        // Arms: blue-white with some variation
+        // Blend zone: warm colors dominate near center, blue in arms.
+        // Per-particle jitter (±0.15) creates natural salt-and-pepper
+        // mixing so the transition looks organic, not like a ring.
+        const blendStart = bulgeSize * 0.3;
+        const blendEnd = bulgeSize + 0.2;
+        const rawBlend = (normalizedR - blendStart) / (blendEnd - blendStart);
+        const blend = Math.max(0, Math.min(1, rawBlend + rng.range(-0.15, 0.15)));
+
+        // Generate both color palettes, then interpolate
+        const warmth = rng.range(0.8, 1.0);
+        const wR = warmth;
+        const wG = warmth * rng.range(0.7, 0.85);
+        const wB = warmth * rng.range(0.4, 0.6);
+
         const blue = rng.range(0.6, 1.0);
-        colors[idx * 3]     = blue * rng.range(0.6, 0.8);
-        colors[idx * 3 + 1] = blue * rng.range(0.7, 0.9);
-        colors[idx * 3 + 2] = blue;
+        const aR = blue * rng.range(0.6, 0.8);
+        const aG = blue * rng.range(0.7, 0.9);
+        const aB = blue;
+
+        colors[idx * 3]     = wR + (aR - wR) * blend;
+        colors[idx * 3 + 1] = wG + (aG - wG) * blend;
+        colors[idx * 3 + 2] = wB + (aB - wB) * blend;
       }
 
       // Size: mostly small, with rare brighter spots
