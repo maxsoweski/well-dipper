@@ -113,6 +113,34 @@ let _deepSkyLingerTimer = -1; // -1 = not lingering, >=0 = counting down
 let _forceNextDestType = null;
 const _heldKeys = new Set();
 
+// ── Title screen ──
+let titleScreenActive = true;
+let _titleAutoTimer = null;
+
+function dismissTitleScreen() {
+  if (!titleScreenActive) return;
+  titleScreenActive = false;
+  if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
+
+  const el = document.getElementById('title-screen');
+  if (el) {
+    el.classList.add('fading');
+    setTimeout(() => { el.style.display = 'none'; }, 1000);
+  }
+
+  // Start autopilot so the camera tours the deep sky object
+  if (system && !autoNav.isActive) {
+    idleTimer = 0;
+    startFlythrough();
+  }
+}
+
+function toggleKeybinds() {
+  const el = document.getElementById('keybinds-overlay');
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
+
 // ── Debug Gallery Mode ──
 // Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
@@ -235,7 +263,29 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   return best;
 }
 
-spawnSystem();
+// ── Title screen: spawn a random deep sky object as the backdrop ──
+{
+  const titleSeed = `title-${Date.now()}`;
+  const titleRng = new SeededRandom(titleSeed);
+  const deepSkyTypes = ['spiral-galaxy', 'elliptical-galaxy', 'emission-nebula',
+                         'planetary-nebula', 'globular-cluster'];
+  const titleType = deepSkyTypes[titleRng.int(0, deepSkyTypes.length - 1)];
+  let titleData;
+  if (titleType.includes('galaxy')) {
+    titleData = GalaxyGenerator.generate(titleSeed, titleType);
+  } else if (titleType === 'emission-nebula' || titleType === 'planetary-nebula') {
+    titleData = NavigableNebulaGenerator.generate(titleSeed, titleType);
+  } else {
+    titleData = ClusterGenerator.generate(titleSeed, titleType);
+  }
+  titleData._destType = titleType;
+  spawnSystem({ systemData: titleData });
+
+  // Auto-dismiss title screen after 30 seconds
+  _titleAutoTimer = setTimeout(() => {
+    if (titleScreenActive) dismissTitleScreen();
+  }, 30000);
+}
 
 /**
  * Generate and display a full star system (single or binary).
@@ -2118,9 +2168,9 @@ function animate() {
     }
 
     // ── Autopilot (cinematic flythrough) ──
-    // Skip idle timer during warp (don't start a new flythrough mid-warp)
-    if (warpEffect.isActive) {
-      // Warp is controlling the camera — do nothing
+    // Skip idle timer during warp or title screen (title has its own 30s timer)
+    if (warpEffect.isActive || titleScreenActive) {
+      // Warp or title screen is active — don't start autopilot
     } else if (!autoNav.isActive) {
       idleTimer += deltaTime;
       if (idleTimer >= IDLE_THRESHOLD) {
@@ -2166,7 +2216,8 @@ function animate() {
 
     // ── Deep sky contemplation timer ──
     // No autopilot — camera is static. After the timer, auto-warp away.
-    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning) {
+    // Paused during title screen (title has its own 30s dismiss timer).
+    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !titleScreenActive) {
       _deepSkyLingerTimer -= deltaTime;
       if (_deepSkyLingerTimer <= 0) {
         _deepSkyLingerTimer = -1;
@@ -2241,6 +2292,27 @@ window.addEventListener('resize', () => retroRenderer.resize());
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
   _heldKeys.add(e.key);
+
+  // K key: toggle keybinds overlay (works always — title, gameplay, warp)
+  if (e.code === 'KeyK') {
+    toggleKeybinds();
+    return;
+  }
+
+  // Escape also closes keybinds overlay if open
+  if (e.code === 'Escape') {
+    const kb = document.getElementById('keybinds-overlay');
+    if (kb && kb.style.display !== 'none') {
+      kb.style.display = 'none';
+      return;
+    }
+  }
+
+  // Title screen: any key dismisses (except K which we already handled)
+  if (titleScreenActive) {
+    dismissTitleScreen();
+    return; // don't pass the dismiss key through to gameplay
+  }
 
   // Debug destination override: set at any time (even during warp).
   // The forced type persists until the next onPrepareSystem call.
@@ -2559,6 +2631,7 @@ let _middleMouseDown = false;
 
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
+  if (titleScreenActive) { dismissTitleScreen(); return; }
   _mouseDown.x = e.clientX;
   _mouseDown.y = e.clientY;
   if (e.button === 1) {
@@ -2591,6 +2664,7 @@ let _lastTapTime = 0;
 const _touchStart = { x: 0, y: 0 };
 
 canvas.addEventListener('touchstart', (e) => {
+  if (titleScreenActive) { dismissTitleScreen(); return; }
   if (e.touches.length === 1) {
     _touchStart.x = e.touches[0].clientX;
     _touchStart.y = e.touches[0].clientY;

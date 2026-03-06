@@ -111,6 +111,110 @@ html, body {
   color: rgba(100, 180, 255, 0.9);
 }
 
+/* ── Title Screen ── */
+#title-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 1s ease;
+}
+
+#title-screen.fading {
+  opacity: 0;
+}
+
+.title-content {
+  text-align: center;
+}
+
+.title-name {
+  font-family: 'Nabla', system-ui;
+  font-variation-settings: 'EDPT' 130, 'EHLT' 10;
+  font-size: clamp(36px, 8vw, 80px);
+  letter-spacing: 0.08em;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.title-prompt {
+  font-family: 'DotGothic16', monospace;
+  color: #fff;
+  font-size: clamp(12px, 2vw, 18px);
+  margin-top: 24px;
+  letter-spacing: 0.15em;
+  animation: title-blink 2s ease-in-out infinite;
+}
+
+@keyframes title-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.title-keybind-hint {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  font-family: 'DotGothic16', monospace;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+/* ── Keybinds Overlay ── */
+#keybinds-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  pointer-events: auto;
+}
+
+.keybinds-panel {
+  font-family: 'DotGothic16', monospace;
+  color: #fff;
+  max-width: 420px;
+  width: 90%;
+}
+
+.keybinds-panel h2 {
+  font-size: 20px;
+  letter-spacing: 0.15em;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.keybinds-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  font-size: 14px;
+}
+
+.kb-key {
+  color: rgba(100, 180, 255, 0.9);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.kb-desc {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.keybinds-dismiss {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
 /* ── Portrait Overlay ── */
 /* Shown only on touch devices in portrait orientation */
 #portrait-overlay {
@@ -129,7 +233,7 @@ html, body {
   }
   .portrait-msg {
     color: rgba(255, 255, 255, 0.7);
-    font-family: monospace;
+    font-family: 'DotGothic16', monospace;
     font-size: 20px;
     text-align: center;
     line-height: 1.6;
