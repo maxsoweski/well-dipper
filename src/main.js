@@ -290,16 +290,17 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   }
   spawnSystem({ systemData: titleData });
 
-  // Camera orbits around origin (object center).
-  // Pitch the camera above the object so it appears in the lower half of screen.
+  // Orbit around a point ABOVE the object so the camera looks above center,
+  // pushing the object into the lower portion of the screen.
   const r = titleData.radius || 200;
+  const orbitCenter = new THREE.Vector3(0, r * 0.6, 0);
   if (titleType.includes('galaxy')) {
-    camera.position.set(r * 0.3, r * 2.0, r * 1.1);
+    camera.position.set(r * 0.3, r * 0.9, r * 1.1);
   } else {
-    camera.position.set(0, r * 1.8, r * 1.25);
+    camera.position.set(0, r * 0.8, r * 1.25);
   }
-  camera.lookAt(0, 0, 0);
-  cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+  camera.lookAt(orbitCenter);
+  cameraController.restoreFromWorldState(orbitCenter);
   // Slow visible orbit for the title screen showcase
   cameraController.autoRotateSpeed = 3.0;
 
