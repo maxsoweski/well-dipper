@@ -12,6 +12,7 @@ export class AutoNavigator {
     this.state = 'off';       // 'off' | 'active'
     this.queue = [];           // array of stop objects
     this.currentIndex = 0;     // which stop we're on
+    this._stopsVisited = 0;    // count of stops visited this tour cycle
 
     // Callbacks — set by main.js
     this.onTourComplete = null;
@@ -157,6 +158,7 @@ export class AutoNavigator {
   /** Start the tour from the beginning. */
   start() {
     this.currentIndex = 0;
+    this._stopsVisited = 0;
     this.state = 'active';
   }
 
@@ -165,6 +167,7 @@ export class AutoNavigator {
     this.state = 'off';
     this.queue = [];
     this.currentIndex = 0;
+    this._stopsVisited = 0;
   }
 
   /**
@@ -198,8 +201,13 @@ export class AutoNavigator {
   advanceToNext() {
     this.currentIndex++;
     if (this.currentIndex >= this.queue.length) {
+      this.currentIndex = 0; // wrap
+    }
+    this._stopsVisited++;
+    // Tour complete once we've visited every stop at least once
+    if (this._stopsVisited >= this.queue.length) {
+      this._stopsVisited = 0;
       if (this.onTourComplete) this.onTourComplete();
-      this.currentIndex = 0; // loop
     }
     return this.getCurrentStop();
   }
