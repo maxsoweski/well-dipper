@@ -146,37 +146,39 @@ export class SystemMap {
     }
   }
 
-  // ── Camera position indicator (bright white dot) ──
+  // ── Camera pointer (tiny arrow that moves with camera position and shows heading) ──
   _buildCameraIndicator() {
-    this._camIndicator = this._makeSprite([1.0, 1.0, 1.0], this.extent * 0.02);
-    this.scene.add(this._camIndicator);
+    // Small triangular pointer — points in the camera's facing direction.
+    // Moves around the map following the camera's XZ position in map-space.
+    const s = this.extent * 0.04; // pointer size
+    const shape = new THREE.Shape();
+    // Triangle pointing along +Z (forward)
+    shape.moveTo(0, s * 0.6);       // tip (front)
+    shape.lineTo(-s * 0.35, -s * 0.4);  // back-left
+    shape.lineTo(s * 0.35, -s * 0.4);   // back-right
+    shape.closePath();
 
-    // ── Compass arrow (shows camera heading in bottom-right of map) ──
-    // A small arrow that rotates to show which direction the camera faces.
-    const arrowLen = this.extent * 0.12;
-    const arrowGeo = new THREE.BufferGeometry();
-    // Arrow shape: line with two angled tips
-    const pts = [
-      // Shaft
-      new THREE.Vector3(0, 0, -arrowLen * 0.5),
-      new THREE.Vector3(0, 0, arrowLen * 0.5),
-      // Left tip
-      new THREE.Vector3(0, 0, arrowLen * 0.5),
-      new THREE.Vector3(-arrowLen * 0.2, 0, arrowLen * 0.25),
-      // Right tip
-      new THREE.Vector3(0, 0, arrowLen * 0.5),
-      new THREE.Vector3(arrowLen * 0.2, 0, arrowLen * 0.25),
-    ];
-    arrowGeo.setFromPoints(pts);
-    const arrowMat = new THREE.LineBasicMaterial({
-      color: 0x44ff44, transparent: true, opacity: 0.9,
-      depthWrite: false, depthTest: false,
+    const geo = new THREE.ShapeGeometry(shape);
+    // ShapeGeometry creates in XY plane — we need XZ plane.
+    // Rotate vertices: swap Y→Z so the triangle lies flat on the map.
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      pos.setXYZ(i, x, 0, -y); // -Y → +Z so tip points along -Z (up on map)
+    }
+    pos.needsUpdate = true;
+    geo.computeBoundingSphere();
+
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
     });
-    this._compassArrow = new THREE.LineSegments(arrowGeo, arrowMat);
-    this._compassArrow.renderOrder = 3; // on top of everything
-    // Position in bottom-right quadrant of the map
-    this._compassArrow.position.set(this.extent * 0.65, 0.3, this.extent * 0.65);
-    this.scene.add(this._compassArrow);
+    this._camPointer = new THREE.Mesh(geo, mat);
+    this._camPointer.renderOrder = 3; // on top of everything
+    this.scene.add(this._camPointer);
   }
 
   // ── Focus ring (highlight around focused body) ──
@@ -266,10 +268,12 @@ export class SystemMap {
       this._planetSprites[i].position.set(px, 0.1, pz);
     }
 
-    // ── Camera indicator (convert scene pos → map pos) ──
+    // ── Camera pointer (position + heading in one) ──
     const cx = mainCamera.position.x * this.sceneToMap;
     const cz = mainCamera.position.z * this.sceneToMap;
-    this._camIndicator.position.set(cx, 0.2, cz);
+    this._camPointer.position.set(cx, 0.3, cz);
+    // Rotate pointer to show camera heading (account for map rotation)
+    this._camPointer.rotation.y = -mainYaw - this._mapYaw;
 
     // ── Focus ring ──
     if (focusIndex >= 0 && focusIndex < this._planetSprites.length) {
@@ -298,13 +302,6 @@ export class SystemMap {
     } else {
       this._focusRing.visible = false;
     }
-
-    // ── Compass arrow — rotate to show camera heading ──
-    // Arrow points in the direction the camera is facing (yaw).
-    // Rotation around Y axis: yaw=0 means looking along -Z, so arrow
-    // should point along -Z (up on the map). Rotate by -yaw.
-    // Also account for map rotation so the compass stays world-relative.
-    this._compassArrow.rotation.y = -mainYaw - this._mapYaw;
 
     // ── Apply user-controlled map rotation ──
     // Orbit camera around Y at the tilt angle, rotated by _mapYaw.

@@ -3223,8 +3223,9 @@ canvas.addEventListener('mousemove', (e) => {
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
   }
 
-  // Minimap drag-to-rotate
+  // Minimap drag-to-rotate (pointer lock keeps cursor captured)
   if (_minimapDragging && systemMap) {
+    if (Math.abs(e.movementX) > 0) _minimapDidDrag = true;
     systemMap.rotate(-e.movementX * 0.008);
     return; // consume the move — don't orbit the camera
   }
@@ -3272,6 +3273,7 @@ let _middleMouseDown = false;
 
 // Minimap drag-to-rotate
 let _minimapDragging = false;
+let _minimapDidDrag = false; // true once mouse actually moves during minimap drag
 
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
@@ -3286,6 +3288,8 @@ canvas.addEventListener('mousedown', (e) => {
       _minimapDragging = true;
       // Prevent the camera controller from starting an orbit drag
       cameraController.isDragging = false;
+      // Request pointer lock so drag works even if mouse exits the window
+      canvas.requestPointerLock?.();
       return; // don't process further (don't stop autopilot, etc.)
     }
   }
@@ -3319,8 +3323,12 @@ canvas.addEventListener('wheel', () => {
 }, { passive: true });
 
 window.addEventListener('mouseup', (e) => {
-  if (e.button === 0) {
+  if (e.button === 0 && _minimapDragging) {
     _minimapDragging = false;
+    _minimapDidDrag = false;
+    if (document.pointerLockElement === canvas) {
+      document.exitPointerLock?.();
+    }
   }
   if (e.button === 1) {
     _middleMouseDown = false;
@@ -3333,13 +3341,17 @@ canvas.addEventListener('mouseup', (e) => {
 
   // End minimap drag
   if (_minimapDragging) {
-    const dx = e.clientX - _mouseDown.x;
-    const dy = e.clientY - _mouseDown.y;
     _minimapDragging = false;
-    // If it was just a click (not a drag), try selecting a body on the minimap
-    if (dx * dx + dy * dy <= 25) {
-      trySelect(e.clientX, e.clientY);
+    // Release pointer lock
+    if (document.pointerLockElement === canvas) {
+      document.exitPointerLock?.();
     }
+    // If it was just a click (not a drag), try selecting a body on the minimap
+    // With pointer lock, clientX/Y don't move, so use accumulated movementX
+    if (!_minimapDidDrag) {
+      trySelect(_mouseDown.x, _mouseDown.y);
+    }
+    _minimapDidDrag = false;
     return;
   }
 
