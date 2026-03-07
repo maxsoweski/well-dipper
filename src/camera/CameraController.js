@@ -399,6 +399,13 @@ export class CameraController {
     this.distance = viewDistance;
     // Kill residual scroll momentum so it doesn't fight the zoom-in
     this.zoomSpeed = 0;
+
+    // Reorient yaw so the camera approaches the new target face-on.
+    // Without this, the camera can end up "behind" the target during
+    // the transition, making it look like it's flying backwards.
+    const dx = this.camera.position.x - position.x;
+    const dz = this.camera.position.z - position.z;
+    this.yaw = Math.atan2(dx, dz);
   }
 
   /**

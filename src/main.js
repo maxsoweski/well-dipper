@@ -801,6 +801,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     } else {
       // Non-navigable: distant view, free-look only (no orbit targets)
       cameraController.forceFreeLook = true;
+      cameraController.autoRotateActive = true; // ensure auto-rotation for deep sky views
       spawnDeepSky(preGenData, destType, forWarp);
     }
     return;
@@ -1786,9 +1787,8 @@ function populateQueueRefs() {
       stop.bodyRef = moon.mesh;
       stop.bodyRadius = moon.data.radius;
       // 2.4× radius fills ~55% of FOV — survey distance with detail.
-      // Minimum 0.04 keeps tiny moons visible above billboard threshold
-      // while getting close enough to show surface detail at retro resolution.
-      stop.orbitDistance = Math.max(moon.data.radius * 2.4, 0.04);
+      // Minimum 0.15 keeps tiny moons visible and prevents near-plane clipping.
+      stop.orbitDistance = Math.max(moon.data.radius * 3.5, 0.15);
     } else if (stop.type === 'deepsky-poi') {
       // Deep sky tour stop — bodyRef is the dummy Object3D created in spawnDeepSky
       // orbitDistance and bodyRadius were set by buildDeepSkyQueue
@@ -2251,7 +2251,8 @@ function focusMoon(planetIndex, moonIndex) {
   if (moonIndex < 0 || moonIndex >= entry.moons.length) return;
 
   const moon = entry.moons[moonIndex];
-  const viewDist = moon.data.radius * 8;
+  // Ensure minimum view distance so tiny moons don't clip or fill the camera
+  const viewDist = Math.max(moon.data.radius * 8, 0.15);
   focusIndex = planetIndex;
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;

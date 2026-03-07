@@ -92,8 +92,8 @@ export class Star {
     const minAngularSize = 0.015;
     const distScale = dist * minAngularSize;
     const scale = Math.max(this._baseGlowScale, distScale);
-    // Cap at 50% of distance to prevent overwhelming the view up close
-    const maxScale = dist * 0.5;
+    // Cap at 20% of distance to prevent overwhelming the view up close
+    const maxScale = dist * 0.2;
     const finalScale = Math.min(scale, maxScale);
     this.glow.scale.set(finalScale, finalScale, 1);
   }
