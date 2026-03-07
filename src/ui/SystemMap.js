@@ -122,12 +122,12 @@ export class SystemMap {
       this._starSprites.push(s2Spr);
     }
 
-    // Planets: ~4-6% of extent, scaled by relative mass
+    // Planets: ~8-12% of extent, scaled by relative mass
     this._planetSprites = [];
     const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
     for (const p of this.planetMapData) {
       const t = p.mapRadius / maxMapRadius; // 0–1 relative size
-      const dotSize = e * (0.04 + t * 0.02); // 4%–6% of extent
+      const dotSize = e * (0.08 + t * 0.04); // 8%–12% of extent
       const spr = this._makeSprite(p.color, dotSize);
       this.scene.add(spr);
       this._planetSprites.push(spr);
@@ -136,8 +136,34 @@ export class SystemMap {
 
   // ── Camera position indicator (bright white dot) ──
   _buildCameraIndicator() {
-    this._camIndicator = this._makeSprite([1.0, 1.0, 1.0], this.extent * 0.015);
+    this._camIndicator = this._makeSprite([1.0, 1.0, 1.0], this.extent * 0.02);
     this.scene.add(this._camIndicator);
+
+    // ── Compass arrow (shows camera heading in bottom-right of map) ──
+    // A small arrow that rotates to show which direction the camera faces.
+    const arrowLen = this.extent * 0.12;
+    const arrowGeo = new THREE.BufferGeometry();
+    // Arrow shape: line with two angled tips
+    const pts = [
+      // Shaft
+      new THREE.Vector3(0, 0, -arrowLen * 0.5),
+      new THREE.Vector3(0, 0, arrowLen * 0.5),
+      // Left tip
+      new THREE.Vector3(0, 0, arrowLen * 0.5),
+      new THREE.Vector3(-arrowLen * 0.2, 0, arrowLen * 0.25),
+      // Right tip
+      new THREE.Vector3(0, 0, arrowLen * 0.5),
+      new THREE.Vector3(arrowLen * 0.2, 0, arrowLen * 0.25),
+    ];
+    arrowGeo.setFromPoints(pts);
+    const arrowMat = new THREE.LineBasicMaterial({
+      color: 0x44ff44, transparent: true, opacity: 0.9,
+      depthWrite: false, depthTest: false,
+    });
+    this._compassArrow = new THREE.LineSegments(arrowGeo, arrowMat);
+    // Position in bottom-right quadrant of the map
+    this._compassArrow.position.set(this.extent * 0.65, 0.3, this.extent * 0.65);
+    this.scene.add(this._compassArrow);
   }
 
   // ── Focus ring (highlight around focused body) ──
@@ -236,7 +262,7 @@ export class SystemMap {
       // Scale ring to be just larger than the planet dot
       const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
       const t = this.planetMapData[focusIndex].mapRadius / maxMapRadius;
-      const dotSize = this.extent * (0.04 + t * 0.02);
+      const dotSize = this.extent * (0.08 + t * 0.04);
       const ringSize = dotSize * 1.4;
       this._focusRing.scale.set(ringSize, 1, ringSize);
 
@@ -255,24 +281,11 @@ export class SystemMap {
       this._focusRing.visible = false;
     }
 
-    // ── Rotate map camera to match player heading ──
-    // Orbit camera around Y axis at the tilt angle, so the player's
-    // facing direction always points "up" on the tilted radar display.
-    const d = this._camDist;
-    const tilt = this._tiltAngle;
-    const cosT = Math.cos(tilt);
-    const sinT = Math.sin(tilt);
-    // Camera orbits at fixed height (cosT*d) and sweeps horizontally (sinT*d)
-    // in the direction opposite to the player's yaw.
-    this.camera.position.set(
-      Math.sin(-mainYaw) * sinT * d,
-      cosT * d,
-      Math.cos(-mainYaw) * sinT * d,
-    );
-    // "Up" direction follows the yaw so the map rotates with heading
-    this.camera.up.set(Math.sin(-mainYaw), 0, Math.cos(-mainYaw));
-    this.camera.lookAt(0, 0, 0);
-    this.camera.updateProjectionMatrix();
+    // ── Compass arrow — rotate to show camera heading ──
+    // Arrow points in the direction the camera is facing (yaw).
+    // Rotation around Y axis: yaw=0 means looking along -Z, so arrow
+    // should point along -Z (up on the map). Rotate by -yaw.
+    this._compassArrow.rotation.y = -mainYaw;
   }
 
   /**
@@ -294,7 +307,7 @@ export class SystemMap {
     const worldPos = new THREE.Vector3(ndcX, ndcY, 0).unproject(this.camera);
 
     // Find the closest body (star or planet) to this world position
-    const pickRadiusSq = (this.extent * 0.08) ** 2; // generous pick radius
+    const pickRadiusSq = (this.extent * 0.12) ** 2; // generous pick radius (matches larger dots)
     let bestDist = pickRadiusSq;
     let bestHit = null;
 

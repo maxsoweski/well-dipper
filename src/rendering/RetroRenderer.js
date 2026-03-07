@@ -36,8 +36,8 @@ export class RetroRenderer {
     // HUD (system map) — set via setHud()
     this._hudScene = null;
     this._hudCamera = null;
-    this._hudSize = 192;   // HUD render target resolution (square)
-    this._hudFrac = 0.15;  // HUD width as fraction of screen width
+    this._hudSize = 320;   // HUD render target resolution (square)
+    this._hudFrac = 0.255; // HUD width as fraction of screen width
 
     // ── WebGL Renderer ──
     this.renderer = new THREE.WebGLRenderer({
@@ -87,10 +87,10 @@ export class RetroRenderer {
     const uvY = 1 - clientY / h;
 
     // HUD rect in UV space (same values as the shader uniform)
-    const hudX = 0.83;
+    const hudX = 0.73;
     const hudY = 0.02;
-    const hudW = 0.15;
-    const hudH = 0.15 * aspect;
+    const hudW = 0.255;
+    const hudH = 0.255 * aspect;
 
     // Circle test (matches shader logic)
     const cx = hudX + hudW * 0.5;
@@ -168,7 +168,7 @@ export class RetroRenderer {
         bgTexture: { value: null },
         sceneTexture: { value: null },
         hudTexture: { value: null },
-        hudRect: { value: new THREE.Vector4(0.83, 0.02, 0.15, 0.15) },
+        hudRect: { value: new THREE.Vector4(0.73, 0.02, 0.255, 0.255) },
         hudEnabled: { value: 0 },
         resolution: { value: new THREE.Vector2(1, 1) },
         // Warp uniforms
