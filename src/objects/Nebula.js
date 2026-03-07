@@ -130,12 +130,28 @@ export class Nebula {
 
             float alpha = cloud * falloff * uOpacity;
 
-            // Soft alpha cutoff — no discard. With additive blending + depthTest off,
-            // discard caused flickering because screen-space dither patterns shift as
-            // the camera moves, popping pixels on/off between frames.
-            if (alpha < 0.01) discard;  // only discard fully transparent (GPU perf)
+            // 4×4 Bayer dithering for retro edge dissolution
+            vec2 p = mod(floor(gl_FragCoord.xy), 4.0);
+            float t = 0.0;
+            if (p.y < 0.5) {
+              t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+            } else if (p.y < 1.5) {
+              t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+            } else if (p.y < 2.5) {
+              t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+            } else {
+              t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+            }
+            float threshold = t / 16.0;
+            if (alpha < threshold * 0.5) discard;
 
-            gl_FragColor = vec4(uColor * alpha, alpha);
+            // Output alpha=1.0 so the compositor treats surviving pixels as
+            // fully opaque. This prevents starfield from flickering through
+            // overlap regions — the old alpha output caused the compositor's
+            // mix(starfield, scene, scene.a) to fluctuate as additive layer
+            // alphas shifted at low-res sampling. RGB stays premultiplied
+            // for correct brightness; dither handles the retro edge dissolve.
+            gl_FragColor = vec4(uColor * alpha, 1.0);
           }
         `,
       });
