@@ -82,7 +82,8 @@ export class SoundEngine {
   }
 
   // ── Helper: create an oscillator → gain → sfxGain ──
-  _osc(type, freq, duration) {
+  // delay = seconds before the oscillator starts (0 = now)
+  _osc(type, freq, duration, delay = 0) {
     const osc = this._ctx.createOscillator();
     const gain = this._ctx.createGain();
     osc.type = type;
@@ -90,9 +91,10 @@ export class SoundEngine {
     gain.gain.value = 0;
     osc.connect(gain);
     gain.connect(this._sfxGain);
-    osc.start(this._ctx.currentTime);
-    osc.stop(this._ctx.currentTime + duration);
-    return { osc, gain, t: this._ctx.currentTime };
+    const startAt = this._ctx.currentTime + delay;
+    osc.start(startAt);
+    osc.stop(startAt + duration);
+    return { osc, gain, t: startAt };
   }
 
   // ── Helper: white noise burst ──
@@ -158,23 +160,17 @@ export class SoundEngine {
       const a = this._osc('sine', 440, 0.15);
       a.gain.gain.setValueAtTime(0.2, a.t);
       a.gain.gain.exponentialRampToValueAtTime(0.001, a.t + 0.15);
-      const b = this._osc('sine', 660, 0.15);
-      b.osc.start(this._ctx.currentTime + 0.1);
-      b.osc.stop(this._ctx.currentTime + 0.25);
-      b.gain.gain.setValueAtTime(0, b.t);
-      b.gain.gain.setValueAtTime(0.2, b.t + 0.1);
-      b.gain.gain.exponentialRampToValueAtTime(0.001, b.t + 0.25);
+      const b = this._osc('sine', 660, 0.15, 0.1);
+      b.gain.gain.setValueAtTime(0.2, b.t);
+      b.gain.gain.exponentialRampToValueAtTime(0.001, b.t + 0.15);
     } else {
       // Falling two-tone
       const a = this._osc('sine', 660, 0.15);
       a.gain.gain.setValueAtTime(0.2, a.t);
       a.gain.gain.exponentialRampToValueAtTime(0.001, a.t + 0.15);
-      const b = this._osc('sine', 440, 0.15);
-      b.osc.start(this._ctx.currentTime + 0.1);
-      b.osc.stop(this._ctx.currentTime + 0.25);
-      b.gain.gain.setValueAtTime(0, b.t);
-      b.gain.gain.setValueAtTime(0.2, b.t + 0.1);
-      b.gain.gain.exponentialRampToValueAtTime(0.001, b.t + 0.25);
+      const b = this._osc('sine', 440, 0.15, 0.1);
+      b.gain.gain.setValueAtTime(0.2, b.t);
+      b.gain.gain.exponentialRampToValueAtTime(0.001, b.t + 0.15);
     }
   }
 
@@ -196,59 +192,88 @@ export class SoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
   }
 
-  /** Deep sub-bass rumble building (warp fold) */
+  /** Deep sub-bass rumble building — ominous, reality-tearing (warp fold) */
   _playWarpCharge() {
-    // Low rumble
-    const { osc, gain, t } = this._osc('sine', 40, 6.0);
-    osc.frequency.exponentialRampToValueAtTime(120, t + 5.5);
-    gain.gain.setValueAtTime(0.05, t);
-    gain.gain.linearRampToValueAtTime(0.3, t + 5.0);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 6.0);
+    const t = this._ctx.currentTime;
 
-    // Noise building
-    const n = this._noise(6.0);
+    // Deep sub-bass drone rising from gut-shaking low
+    const { osc: sub, gain: subG } = this._osc('sine', 30, 6.5);
+    sub.frequency.exponentialRampToValueAtTime(80, t + 5.0);
+    sub.frequency.exponentialRampToValueAtTime(150, t + 6.0);
+    subG.gain.setValueAtTime(0.08, t);
+    subG.gain.linearRampToValueAtTime(0.35, t + 5.5);
+    subG.gain.exponentialRampToValueAtTime(0.001, t + 6.5);
+
+    // Dissonant mid-range overtone (minor second interval — unsettling)
+    const { osc: mid, gain: midG } = this._osc('sawtooth', 55, 6.0);
+    mid.frequency.exponentialRampToValueAtTime(160, t + 5.5);
+    midG.gain.setValueAtTime(0.01, t);
+    midG.gain.linearRampToValueAtTime(0.12, t + 4.5);
+    midG.gain.exponentialRampToValueAtTime(0.001, t + 6.0);
+
+    // Filtered noise — growing roar (starts like distant wind, ends like tearing)
+    const n = this._noise(6.5);
     const filter = this._ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = 200;
-    filter.frequency.exponentialRampToValueAtTime(2000, t + 5.5);
+    filter.frequency.setValueAtTime(100, t);
+    filter.frequency.exponentialRampToValueAtTime(3000, t + 5.5);
+    filter.Q.value = 3;
+    n.source.disconnect();
+    n.source.connect(filter);
+    filter.connect(n.gain);
+    n.gain.gain.setValueAtTime(0.01, t);
+    n.gain.gain.linearRampToValueAtTime(0.2, t + 5.0);
+    n.gain.gain.exponentialRampToValueAtTime(0.001, t + 6.5);
+
+    // High dissonant whine (the "something is wrong" frequency)
+    const { osc: whine, gain: whineG } = this._osc('sine', 800, 5.0, 1.5);
+    const wt = t + 1.5;
+    whine.frequency.exponentialRampToValueAtTime(2200, wt + 4.5);
+    whineG.gain.setValueAtTime(0.001, wt);
+    whineG.gain.linearRampToValueAtTime(0.06, wt + 3.5);
+    whineG.gain.exponentialRampToValueAtTime(0.001, wt + 5.0);
+  }
+
+  /** Transition into hyperspace — no impact hit, just the rush taking over */
+  _playWarpEnter() {
+    // Intentionally empty — the hyperspace track handles this transition.
+    // The charge sound's tail carries through.
+  }
+
+  /** Warp exit — charge sound in reverse: high descending to low, fast */
+  _playWarpExit() {
+    const t = this._ctx.currentTime;
+
+    // Descending sub-bass (reverse of the charge's rise)
+    const { osc: sub, gain: subG } = this._osc('sine', 150, 2.0);
+    sub.frequency.exponentialRampToValueAtTime(30, t + 1.8);
+    subG.gain.setValueAtTime(0.3, t);
+    subG.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+
+    // Descending dissonant tone
+    const { osc: mid, gain: midG } = this._osc('sawtooth', 160, 1.5);
+    mid.frequency.exponentialRampToValueAtTime(40, t + 1.3);
+    midG.gain.setValueAtTime(0.1, t);
+    midG.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+
+    // Noise burst — fast decay (reality snapping back)
+    const n = this._noise(1.2);
+    const filter = this._ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(3000, t);
+    filter.frequency.exponentialRampToValueAtTime(100, t + 1.0);
     filter.Q.value = 2;
     n.source.disconnect();
     n.source.connect(filter);
     filter.connect(n.gain);
-    n.gain.gain.setValueAtTime(0.02, n.t);
-    n.gain.gain.linearRampToValueAtTime(0.15, n.t + 5.0);
-    n.gain.gain.exponentialRampToValueAtTime(0.001, n.t + 6.0);
-  }
+    n.gain.gain.setValueAtTime(0.18, t);
+    n.gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
 
-  /** Burst/punch into hyperspace */
-  _playWarpEnter() {
-    // Impact
-    const { osc, gain, t } = this._osc('sine', 80, 0.8);
-    osc.frequency.exponentialRampToValueAtTime(30, t + 0.8);
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
-
-    // Noise burst
-    const n = this._noise(0.4);
-    n.gain.gain.setValueAtTime(0.3, n.t);
-    n.gain.gain.exponentialRampToValueAtTime(0.001, n.t + 0.4);
-
-    // High ping
-    const h = this._osc('sine', 2400, 0.3);
-    h.gain.gain.setValueAtTime(0.15, h.t);
-    h.gain.gain.exponentialRampToValueAtTime(0.001, h.t + 0.3);
-  }
-
-  /** Deceleration whoosh on warp exit */
-  _playWarpExit() {
-    const { osc, gain, t } = this._osc('sine', 200, 1.5);
-    osc.frequency.exponentialRampToValueAtTime(60, t + 1.5);
-    gain.gain.setValueAtTime(0.25, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
-
-    const n = this._noise(1.0);
-    n.gain.gain.setValueAtTime(0.15, n.t);
-    n.gain.gain.exponentialRampToValueAtTime(0.001, n.t + 1.0);
+    // Descending whine (reverse of the charge whine, faster)
+    const { osc: whine, gain: whineG } = this._osc('sine', 2200, 1.0);
+    whine.frequency.exponentialRampToValueAtTime(400, t + 0.8);
+    whineG.gain.setValueAtTime(0.05, t);
+    whineG.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
   }
 
   /** Gentle chime when title screen dismisses */
