@@ -119,12 +119,12 @@ export class SystemMap {
       this._starSprites.push(s2Spr);
     }
 
-    // Planets: ~2.5-4% of extent, scaled by relative mass
+    // Planets: ~4-6% of extent, scaled by relative mass
     this._planetSprites = [];
     const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
     for (const p of this.planetMapData) {
       const t = p.mapRadius / maxMapRadius; // 0–1 relative size
-      const dotSize = e * (0.025 + t * 0.015); // 2.5%–4% of extent
+      const dotSize = e * (0.04 + t * 0.02); // 4%–6% of extent
       const spr = this._makeSprite(p.color, dotSize);
       this.scene.add(spr);
       this._planetSprites.push(spr);
@@ -233,7 +233,7 @@ export class SystemMap {
       // Scale ring to be just larger than the planet dot
       const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
       const t = this.planetMapData[focusIndex].mapRadius / maxMapRadius;
-      const dotSize = this.extent * (0.025 + t * 0.015);
+      const dotSize = this.extent * (0.04 + t * 0.02);
       const ringSize = dotSize * 1.4;
       this._focusRing.scale.set(ringSize, 1, ringSize);
 
@@ -291,7 +291,7 @@ export class SystemMap {
     const worldPos = new THREE.Vector3(ndcX, ndcY, 0).unproject(this.camera);
 
     // Find the closest body (star or planet) to this world position
-    const pickRadiusSq = (this.extent * 0.06) ** 2; // generous pick radius
+    const pickRadiusSq = (this.extent * 0.08) ** 2; // generous pick radius
     let bestDist = pickRadiusSq;
     let bestHit = null;
 

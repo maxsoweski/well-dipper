@@ -430,7 +430,6 @@ export class RetroRenderer {
               vec2 hudUV = (vUv - vec2(hudX, hudY)) / vec2(hudW, hudH);
               vec4 hud = texture2D(hudTexture, hudUV);
 
-              result = mix(result, vec3(0.0), 0.15);
               result = mix(result, hud.rgb, hud.a);
             }
           }

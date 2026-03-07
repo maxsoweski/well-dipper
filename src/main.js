@@ -2967,8 +2967,9 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Normal mode (autopilot off) — reset idle timer
+  // Normal mode (autopilot off) — reset idle timer and cancel auto-warp
   idleTimer = 0;
+  _deepSkyLingerTimer = -1;
 
   if (e.code === 'Space') {
     e.preventDefault();
@@ -3145,6 +3146,7 @@ function beginWarpTurn() {
 canvas.addEventListener('mousemove', (e) => {
   if (!autoNav.isActive) {
     idleTimer = 0;
+    _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
   }
   // Middle mouse (or left mouse in deep sky) free-look during flythrough
   const freeLookDrag = _middleMouseDown || (cameraController.forceFreeLook && cameraController._leftFreeLooking);
@@ -3206,8 +3208,19 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.button === 0 && autoNav.isActive && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
     stopFlythrough();
   }
-  if (!autoNav.isActive) idleTimer = 0;
+  if (!autoNav.isActive) {
+    idleTimer = 0;
+    _deepSkyLingerTimer = -1;
+  }
 });
+
+// Scroll wheel resets idle timer
+canvas.addEventListener('wheel', () => {
+  if (!autoNav.isActive) {
+    idleTimer = 0;
+    _deepSkyLingerTimer = -1;
+  }
+}, { passive: true });
 
 window.addEventListener('mouseup', (e) => {
   if (e.button === 1) {
