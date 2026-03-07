@@ -204,21 +204,12 @@ export class SystemMap {
     this.scene.add(this._camPointer);
   }
 
-  // ── Focus ring (highlight around focused body) ──
+  // ── Focus highlight (green dot rendered behind the planet dot = stroke effect) ──
   _buildFocusRing() {
-    const segments = 32;
-    const points = [];
-    for (let i = 0; i <= segments; i++) {
-      const a = (i / segments) * Math.PI * 2;
-      points.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)));
-    }
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({
-      color: 0x44ff44, transparent: true, opacity: 0.8,
-      depthWrite: false, depthTest: false,
-    });
-    this._focusRing = new THREE.Line(geo, mat);
-    this._focusRing.renderOrder = 2; // on top of dots
+    // Use the same circle texture as body dots, but green and slightly larger.
+    // Rendered BEHIND the planet sprite (renderOrder 0.5, between orbits and dots).
+    this._focusRing = this._makeSprite([0.27, 1.0, 0.27], 1); // size set dynamically
+    this._focusRing.renderOrder = 0.5; // behind planet dots (1), above orbits (0)
     this._focusRing.visible = false;
     this.scene.add(this._focusRing);
   }
@@ -304,12 +295,12 @@ export class SystemMap {
       this._focusRing.visible = true;
       this._focusRing.position.copy(planetSpr.position);
       this._focusRing.position.y = 0.05;
-      // Scale ring to tightly surround the planet dot (thin stroke effect)
+      // Size the highlight sprite slightly larger than the planet dot (stroke effect)
       const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
       const t = this.planetMapData[focusIndex].mapRadius / maxMapRadius;
       const dotSize = this.extent * (0.08 + t * 0.04);
-      const ringSize = dotSize * 0.65; // snug around the dot
-      this._focusRing.scale.set(ringSize, 1, ringSize);
+      const strokeSize = dotSize * 1.35; // slightly larger = visible green border
+      this._focusRing.scale.set(strokeSize, strokeSize, 1);
 
       // Blink animation: 3 quick on/off flashes when transitioning
       if (this._blinkTimer >= 0 && deltaTime) {
@@ -324,6 +315,18 @@ export class SystemMap {
       }
     } else {
       this._focusRing.visible = false;
+    }
+
+    // ── Highlight selected planet's orbit line in bright green ──
+    for (let i = 0; i < this.orbitMeshes.length; i++) {
+      const orb = this.orbitMeshes[i];
+      if (i === focusIndex) {
+        orb.material.color.setHex(0x44ff44);
+        orb.material.opacity = 1.0;
+      } else {
+        orb.material.color.setHex(0x226644);
+        orb.material.opacity = 1.0;
+      }
     }
 
     // ── Apply user-controlled map rotation ──
@@ -347,28 +350,24 @@ export class SystemMap {
    * @param {number} hudV — 0 (bottom) to 1 (top) within the HUD texture
    */
   hitTest(hudU, hudV) {
-    // Convert HUD UV to world coordinates in the map scene.
-    // The orthographic camera maps [-extent, extent] to the HUD texture.
-    // But the camera also rotates with yaw, so we need to unproject properly.
-    //
-    // NDC: hudU → -1..+1 (left to right), hudV → -1..+1 (bottom to top)
-    const ndcX = hudU * 2 - 1;
-    const ndcY = hudV * 2 - 1;
+    // Work in NDC space (screen coordinates) to avoid tilt/rotation issues.
+    // Project each body into NDC and compare against the click NDC.
+    const clickNDC = new THREE.Vector2(hudU * 2 - 1, hudV * 2 - 1);
 
-    // Unproject from NDC through the ortho camera to get world XZ
-    const worldPos = new THREE.Vector3(ndcX, ndcY, 0).unproject(this.camera);
-
-    // Find the closest body (star or planet) to this world position
-    const pickRadiusSq = (this.extent * 0.12) ** 2; // generous pick radius (matches larger dots)
+    // Pick radius in NDC units (fraction of the HUD texture)
+    const pickRadius = 0.2; // generous — ~10% of HUD width each side
+    const pickRadiusSq = pickRadius * pickRadius;
     let bestDist = pickRadiusSq;
     let bestHit = null;
 
+    const _proj = new THREE.Vector3();
+
     // Check stars
     for (let s = 0; s < this._starSprites.length; s++) {
-      const sp = this._starSprites[s].position;
-      const dx = worldPos.x - sp.x;
-      const dz = worldPos.z - sp.z;
-      const d2 = dx * dx + dz * dz;
+      _proj.copy(this._starSprites[s].position).project(this.camera);
+      const dx = clickNDC.x - _proj.x;
+      const dy = clickNDC.y - _proj.y;
+      const d2 = dx * dx + dy * dy;
       if (d2 < bestDist) {
         bestDist = d2;
         bestHit = { type: 'star', starIndex: s };
@@ -377,10 +376,10 @@ export class SystemMap {
 
     // Check planets
     for (let p = 0; p < this._planetSprites.length; p++) {
-      const sp = this._planetSprites[p].position;
-      const dx = worldPos.x - sp.x;
-      const dz = worldPos.z - sp.z;
-      const d2 = dx * dx + dz * dz;
+      _proj.copy(this._planetSprites[p].position).project(this.camera);
+      const dx = clickNDC.x - _proj.x;
+      const dy = clickNDC.y - _proj.y;
+      const d2 = dx * dx + dy * dy;
       if (d2 < bestDist) {
         bestDist = d2;
         bestHit = { type: 'planet', planetIndex: p };

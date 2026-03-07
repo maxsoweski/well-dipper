@@ -54,7 +54,7 @@ export class CameraController {
 
     // ── Target transition ──
     this._transitioning = false;
-    this._transitionSpeed = 0.04; // lerp factor per frame at 60fps
+    this._transitionSpeed = 0.06; // lerp factor per frame at 60fps (~1.5s to settle)
 
     // ── Free-look (middle mouse / gyro) ──
     // When active, the camera stays in place and you rotate the view direction.
@@ -406,15 +406,13 @@ export class CameraController {
    * Unlike focusOn(), this doesn't touch zoom distance.
    */
   trackTarget(position) {
-    // Snap both target and goal directly to the body's current position.
-    // At realistic scale, planets orbit at enormous linear velocities
-    // (angular_speed × orbitRadiusScene). A slow lerp (4% per frame) can
-    // never keep up — it creates a permanent offset between where the
-    // camera orbits and where the planet actually is. Direct copy keeps
-    // the camera locked on.
+    // Always update the goal to the body's current position (it orbits).
     this._targetGoal.copy(position);
-    this.target.copy(position);
-    this._transitioning = false;
+    // If we're mid-transition (smooth flight to a new body), let the
+    // lerp in update() handle movement — don't snap.
+    if (!this._transitioning) {
+      this.target.copy(position);
+    }
   }
 
   /**
