@@ -15,14 +15,12 @@ export class Nebula {
   constructor(nebulaData) {
     this.data = nebulaData;
     this.mesh = new THREE.Group();
+    this.billboard = true; // Set false for navigable (large-scale) nebulae
 
-    // Create cloud layers with explicit renderOrder to prevent flicker.
-    // Without this, Three.js re-sorts transparent objects each frame based on
-    // distance to camera, causing draw order to flip and dithered edges to pop.
+    // Create cloud layers
     this._layers = this._createLayers(nebulaData.layers);
-    for (let i = 0; i < this._layers.length; i++) {
-      this._layers[i].renderOrder = i;
-      this.mesh.add(this._layers[i]);
+    for (const layer of this._layers) {
+      this.mesh.add(layer);
     }
 
     // Create embedded star particles
@@ -130,7 +128,20 @@ export class Nebula {
 
             float alpha = cloud * falloff * uOpacity;
 
-            if (alpha < 0.01) discard;
+            // 4×4 Bayer dithering on alpha edge
+            vec2 p = mod(floor(gl_FragCoord.xy), 4.0);
+            float t = 0.0;
+            if (p.y < 0.5) {
+              t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+            } else if (p.y < 1.5) {
+              t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+            } else if (p.y < 2.5) {
+              t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+            } else {
+              t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+            }
+            float threshold = t / 16.0;
+            if (alpha < threshold * 0.5) discard;
 
             gl_FragColor = vec4(uColor * alpha, alpha);
           }
@@ -188,19 +199,21 @@ export class Nebula {
   }
 
   /**
-   * Update animation (slow gas drift) and billboard layers toward camera.
+   * Update animation (slow gas drift) and optionally billboard layers.
    * @param {number} deltaTime — seconds since last frame
-   * @param {THREE.Camera} [camera] — if provided, layers face the camera
+   * @param {THREE.Camera} [camera] — if provided and billboard=true, layers face camera
    */
   update(deltaTime, camera) {
     for (const layer of this._layers) {
       layer.material.uniforms.uTime.value += deltaTime;
 
-      // Billboard: make each layer always face the camera so the flat
-      // planes aren't obvious when you orbit around the nebula. Each
-      // layer keeps its own position offset (creating parallax depth),
-      // only the orientation matches the camera.
-      if (camera) {
+      // Billboard: make each layer face the camera so flat planes aren't
+      // obvious when orbiting. Only used for distant/gallery nebulae.
+      // Navigable nebulae skip this — at large scale the massive parallax
+      // between billboarded layers causes alpha overlap to fluctuate wildly
+      // as the camera moves, creating visible flicker in the compositor.
+      // Tilted layers decorrelate the overlap, reducing flicker.
+      if (this.billboard && camera) {
         layer.quaternion.copy(camera.quaternion);
       }
     }

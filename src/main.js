@@ -548,14 +548,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     if (system.type && system.type !== 'star-system') {
       // Deep sky object: destination renderer (Galaxy/Nebula/VolumetricNebula)
       if (system.destination) {
-        // Nebulae render in starfield scene (full res); galaxies/clusters in main scene
-        const destScene = system.destination instanceof Nebula ? retroRenderer.starfieldScene : scene;
-        system.destination.removeFrom(destScene);
+        system.destination.removeFrom(scene);
         system.destination.dispose();
       }
-      // Navigable deep sky: gas cloud (nebula billboard layers in starfield scene)
+      // Navigable deep sky: gas cloud + extra stars
       if (system.gasCloud) {
-        system.gasCloud.removeFrom(retroRenderer.starfieldScene);
+        system.gasCloud.removeFrom(scene);
         system.gasCloud.dispose();
       }
       if (system.extraStars) {
@@ -973,13 +971,11 @@ function spawnDeepSky(data, destType, forWarp) {
 
   if (isGalaxyOrCluster) {
     destination = new Galaxy(data);
-    destination.addTo(scene);
   } else {
     destination = new Nebula(data);
-    // Nebulae render in the starfield scene (full resolution) to avoid
-    // low-res temporal aliasing that causes layer overlap flickering.
-    destination.addTo(retroRenderer.starfieldScene);
   }
+
+  destination.addTo(scene);
 
   // Create dummy Object3Ds for tour stop bodyRefs
   // (the camera orbits these like it orbits planets)
@@ -1067,8 +1063,8 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     };
 
     gasCloud = new Nebula(scaledData);
-    // Render in starfield scene (full res) to avoid low-res flicker
-    gasCloud.addTo(retroRenderer.starfieldScene);
+    gasCloud.billboard = false; // At navigable scale, billboarding causes flicker
+    gasCloud.addTo(scene);
   }
 
   // ── Stars ──
@@ -1148,14 +1144,13 @@ function _setSystemVisible(visible) {
   if (system.type && system.type !== 'star-system') {
     // Deep sky destination (distant view)
     if (system.destination) {
-      const destScene = system.destination instanceof Nebula ? retroRenderer.starfieldScene : scene;
-      if (visible) system.destination.addTo(destScene);
-      else system.destination.removeFrom(destScene);
+      if (visible) system.destination.addTo(scene);
+      else system.destination.removeFrom(scene);
     }
-    // Navigable deep sky: gas cloud (nebula layers in starfield scene)
+    // Navigable deep sky: gas cloud + stars
     if (system.gasCloud) {
-      if (visible) system.gasCloud.addTo(retroRenderer.starfieldScene);
-      else system.gasCloud.removeFrom(retroRenderer.starfieldScene);
+      if (visible) system.gasCloud.addTo(scene);
+      else system.gasCloud.removeFrom(scene);
     }
     if (system.star) system.star.mesh.visible = visible;
     if (system.star2) system.star2.mesh.visible = visible;
