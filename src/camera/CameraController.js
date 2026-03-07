@@ -393,19 +393,24 @@ export class CameraController {
    * giving a cinematic "arriving at a planet" feel.
    */
   focusOn(position, viewDistance = 8) {
+    // Snap target and orbit angle immediately — the only thing that
+    // transitions smoothly is distance (log-space zoom-in).
+    // This avoids spiral paths where both orbit center and angle lerp
+    // simultaneously and never converge.
+    this.target.copy(position);
     this._targetGoal.copy(position);
-    // Smoothly transition the orbit target (don't snap)
-    this._transitioning = true;
-    this.distance = viewDistance;
-    // Kill residual scroll momentum so it doesn't fight the zoom-in
-    this.zoomSpeed = 0;
+    this._transitioning = false;
 
-    // Reorient yaw so the camera approaches the new target face-on.
-    // Without this, the camera can end up "behind" the target during
-    // the transition, making it look like it's flying backwards.
+    // Reorient yaw so the camera orbits from the same general direction
+    // it was viewing from — prevents jarring 180° snap.
     const dx = this.camera.position.x - position.x;
     const dz = this.camera.position.z - position.z;
     this.yaw = Math.atan2(dx, dz);
+    this.smoothedYaw = this.yaw;
+
+    this.distance = viewDistance;
+    // Kill residual scroll momentum so it doesn't fight the zoom-in
+    this.zoomSpeed = 0;
   }
 
   /**
@@ -427,8 +432,10 @@ export class CameraController {
    * Snaps position and distance — orbit lines give immediate visual context.
    */
   viewSystem(systemRadius) {
+    // Snap to system center (same approach as focusOn — no dual-lerp spiral)
+    this.target.set(0, 0, 0);
     this._targetGoal.set(0, 0, 0);
-    this._transitioning = true;
+    this._transitioning = false;
     this.distance = systemRadius * 1.5;
     this.zoomSpeed = 0;
   }

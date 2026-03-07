@@ -27,7 +27,7 @@ export class ClusterGenerator {
   // ── Globular Cluster ────────────────────────────────────────────
 
   static _generateGlobular(rng) {
-    const radius = rng.range(80, 180);        // total extent
+    const radius = rng.range(8000, 18000);    // large enough to be visually impressive
     const coreRadius = radius * rng.range(0.08, 0.15);  // dense core
     const tidalRadius = radius;               // where stars end
 
@@ -58,16 +58,17 @@ export class ClusterGenerator {
       colors[i * 3 + 2] = warmth * rng.range(0.4, 0.6);
 
       // Smaller in the dense core, slightly larger at edges (resolved stars)
+      // Sized for Galaxy shader distScale (300/z) at typical viewing distances
       const normalizedR = r / radius;
       sizes[i] = normalizedR < 0.3
-        ? rng.range(1.0, 2.0)
-        : rng.range(1.5, 3.5);
+        ? rng.range(25, 60)
+        : rng.range(40, 100);
     }
 
     const tourStops = [
-      { name: 'Overview',   position: [0, radius * 0.5, radius * 0.8], orbitDistance: radius * 1.5, bodyRadius: radius, linger: 40 },
-      { name: 'Core',       position: [0, 0, 0],                        orbitDistance: radius * 0.2, bodyRadius: coreRadius, linger: 35 },
-      { name: 'Through',    position: [0, 0, -radius * 0.6],            orbitDistance: radius * 0.8, bodyRadius: radius * 0.4, linger: 25 },
+      { name: 'Overview',   position: [0, radius * 0.3, radius * 0.6], orbitDistance: radius * 1.2, bodyRadius: radius, linger: 40 },
+      { name: 'Core',       position: [0, 0, 0],                        orbitDistance: radius * 0.15, bodyRadius: coreRadius, linger: 35 },
+      { name: 'Through',    position: [0, 0, -radius * 0.4],            orbitDistance: radius * 0.5, bodyRadius: radius * 0.3, linger: 25 },
     ];
 
     return {
@@ -86,7 +87,7 @@ export class ClusterGenerator {
   // ── Open Cluster ─────────────────────────────────────────────────
 
   static _generateOpen(rng) {
-    const radius = rng.range(40, 100);
+    const radius = rng.range(4000, 10000);
     const particleCount = rng.int(200, 800);
 
     const positions = new Float32Array(particleCount * 3);
@@ -128,7 +129,8 @@ export class ClusterGenerator {
       }
 
       // Varied sizes — some prominent stars dominate
-      sizes[i] = rng.chance(0.1) ? rng.range(3, 6) : rng.range(1.5, 3.0);
+      // Sized for Galaxy shader distScale (300/z) at typical viewing distances
+      sizes[i] = rng.chance(0.1) ? rng.range(30, 80) : rng.range(15, 40);
     }
 
     const tourStops = [

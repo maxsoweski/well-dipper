@@ -1339,11 +1339,13 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
   if (forWarp) return;
 
-  // Non-warp opening: position camera near first star
+  // Non-warp opening: position camera far enough to see the structure
   if (allStars[0]) {
     const pos = allStars[0].mesh.position;
-    const r = allStars[0].data.radius;
-    camera.position.set(pos.x, pos.y + r * 0.3, pos.z + r * 4);
+    // Use a fraction of the destination radius so you can see context,
+    // not just a single star's glow filling the screen
+    const viewDist = data.radius * 0.15;
+    camera.position.set(pos.x, pos.y + viewDist * 0.2, pos.z + viewDist);
     camera.lookAt(pos);
     // Sync CameraController so it doesn't override the camera position
     cameraController.restoreFromWorldState(pos.clone());
