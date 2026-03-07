@@ -430,6 +430,8 @@ export class RetroRenderer {
               vec2 hudUV = (vUv - vec2(hudX, hudY)) / vec2(hudW, hudH);
               vec4 hud = texture2D(hudTexture, hudUV);
 
+              // Dark tinted backdrop for contrast against starfield
+              result = mix(result, vec3(0.02, 0.04, 0.06), 0.7);
               result = mix(result, hud.rgb, hud.a);
             }
           }

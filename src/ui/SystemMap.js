@@ -94,7 +94,7 @@ export class SystemMap {
         points.push(new THREE.Vector3(Math.cos(a) * p.orbitRadius, 0, Math.sin(a) * p.orbitRadius));
       }
       const geo = new THREE.BufferGeometry().setFromPoints(points);
-      const mat = new THREE.LineBasicMaterial({ color: 0x338833, transparent: true, opacity: 0.7 });
+      const mat = new THREE.LineBasicMaterial({ color: 0x226644, transparent: true, opacity: 1.0 });
       const line = new THREE.Line(geo, mat);
       this.scene.add(line);
       this.orbitMeshes.push(line);
