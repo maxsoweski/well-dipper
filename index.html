@@ -43,6 +43,7 @@
           <span class="kb-key">ESC</span><span class="kb-desc">Unfocus / overview</span>
           <span class="kb-key">D</span><span class="kb-desc">Object gallery</span>
           <span class="kb-key">S</span><span class="kb-desc">Settings</span>
+          <span class="kb-key">T</span><span class="kb-desc">Sound test</span>
           <span class="kb-key">K</span><span class="kb-desc">Toggle this overlay</span>
         </div>
         <p class="keybinds-dismiss">K or ESC to close</p>
@@ -97,6 +98,36 @@
             <label>Fullscreen</label>
             <input type="checkbox" data-setting="fullscreen">
           </div>
+          <div class="settings-grid" style="margin-top: 8px;">
+            <label>Color Palette</label>
+            <select data-setting="colorPalette" class="setting-select">
+              <option value="0">Default</option>
+              <option value="1">Monochrome</option>
+              <option value="2">Amber CRT</option>
+              <option value="3">Green Phosphor</option>
+              <option value="4">Blue Phosphor</option>
+              <option value="5">Game Boy</option>
+              <option value="6">CGA</option>
+              <option value="7">Sepia</option>
+              <option value="8">Virtual Boy</option>
+              <option value="9">Inverted</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>AUDIO</h3>
+          <div class="settings-grid">
+            <label>Master Volume</label>
+            <input type="range" data-setting="masterVolume" min="0" max="1" step="0.05">
+            <span class="setting-value"></span>
+            <label>Music</label>
+            <input type="range" data-setting="musicVolume" min="0" max="1" step="0.05">
+            <span class="setting-value"></span>
+            <label>Sound Effects</label>
+            <input type="range" data-setting="sfxVolume" min="0" max="1" step="0.05">
+            <span class="setting-value"></span>
+          </div>
         </div>
 
         <div class="settings-section">
@@ -133,6 +164,27 @@
       <div id="gallery-info" style="font-size:14px; margin-top:4px;"></div>
       <div style="font-size:12px; margin-top:8px; color:#0a0;">
         ←/→ cycle seeds &nbsp; ↑/↓ cycle types &nbsp; drag to orbit &nbsp; D = exit
+      </div>
+    </div>
+
+    <!-- Sound test overlay (toggled with T key) -->
+    <div id="soundtest-overlay" style="display:none;">
+      <div class="soundtest-panel">
+        <button class="overlay-close" aria-label="Close">&times;</button>
+        <h2>SOUND TEST</h2>
+
+        <div class="soundtest-section">
+          <h3>SOUND EFFECTS</h3>
+          <div class="soundtest-grid" id="soundtest-sfx"></div>
+        </div>
+
+        <div class="soundtest-section">
+          <h3>MUSIC</h3>
+          <div class="soundtest-grid" id="soundtest-bgm"></div>
+          <button class="soundtest-stop-btn" id="soundtest-stop-music">Stop Music</button>
+        </div>
+
+        <p class="soundtest-dismiss">T or ESC to close</p>
       </div>
     </div>
 

@@ -26,6 +26,15 @@ const DEFAULTS = {
   // Camera
   autoRotateSpeed: 0.67,      // degrees/sec
   zoomSensitivity: 1.5,       // matches CameraController default
+
+  // Audio
+  masterVolume: 0.7,
+  musicVolume: 0.5,
+  sfxVolume: 0.7,
+
+  // Color palette (0=default, 1=mono, 2=amber, 3=green, 4=blue,
+  //   5=gameboy, 6=cga, 7=sepia, 8=virtualboy, 9=inverted)
+  colorPalette: 0,
 };
 
 export class Settings {

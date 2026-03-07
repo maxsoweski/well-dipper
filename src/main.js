@@ -29,9 +29,15 @@ import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
+import { SoundEngine } from './audio/SoundEngine.js';
+import { MusicManager } from './audio/MusicManager.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
+
+// ── Audio ──
+const soundEngine = new SoundEngine(settings);
+const musicManager = new MusicManager(soundEngine, settings);
 
 // ── Scene ──
 const scene = new THREE.Scene();
@@ -45,6 +51,7 @@ const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerH
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
 const retroRenderer = new RetroRenderer(canvas, scene, camera);
+retroRenderer.setColorPalette(settings.get('colorPalette'));
 
 // ── Camera Controller ──
 const cameraController = new CameraController(camera, canvas);
@@ -132,6 +139,8 @@ let _titleAutoTimer = null;
 function dismissTitleScreen() {
   if (!titleScreenActive) return;
   titleScreenActive = false;
+  soundEngine.play('titleDismiss');
+  musicManager.play('explore');
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
@@ -183,6 +192,8 @@ function formatSettingValue(key, value) {
   if (key === 'autoRotateSpeed') return `${value.toFixed(1)}`;
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
   if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
+  if (key === 'masterVolume' || key === 'musicVolume' || key === 'sfxVolume')
+    return `${Math.round(value * 100)}%`;
   return String(value);
 }
 
@@ -198,6 +209,8 @@ function populateSettingsUI() {
     const value = settings.get(key);
     if (input.type === 'checkbox') {
       input.checked = value;
+    } else if (input.tagName === 'SELECT') {
+      input.value = String(value);
     } else {
       input.value = value;
       const label = input.nextElementSibling;
@@ -212,6 +225,7 @@ function toggleSettings() {
   const el = document.getElementById('settings-overlay');
   if (!el) return;
   _settingsOpen = !_settingsOpen;
+  soundEngine.play('uiClick');
   if (_settingsOpen) {
     populateSettingsUI();
     el.style.display = 'flex';
@@ -253,6 +267,15 @@ function applySettingChange(key, value) {
         document.exitFullscreen();
       }
       break;
+    case 'colorPalette':
+      retroRenderer.setColorPalette(value);
+      break;
+    case 'masterVolume':
+    case 'musicVolume':
+    case 'sfxVolume':
+      soundEngine.updateVolumes();
+      musicManager.updateVolumes();
+      break;
   }
 }
 
@@ -260,7 +283,7 @@ function applySettingChange(key, value) {
 {
   const settingsEl = document.getElementById('settings-overlay');
   if (settingsEl) {
-    settingsEl.addEventListener('input', (e) => {
+    function handleSettingsInput(e) {
       const input = e.target;
       const key = input.dataset.setting;
       if (!key) return;
@@ -270,7 +293,14 @@ function applySettingChange(key, value) {
         return;
       }
 
-      const value = input.type === 'checkbox' ? input.checked : parseFloat(input.value);
+      let value;
+      if (input.type === 'checkbox') {
+        value = input.checked;
+      } else if (input.tagName === 'SELECT') {
+        value = parseInt(input.value, 10);
+      } else {
+        value = parseFloat(input.value);
+      }
       settings.set(key, value);
 
       // Update value label
@@ -280,7 +310,9 @@ function applySettingChange(key, value) {
       }
 
       applySettingChange(key, value);
-    });
+    }
+    settingsEl.addEventListener('input', handleSettingsInput);
+    settingsEl.addEventListener('change', handleSettingsInput);
 
     // Reset button
     settingsEl.querySelector('.settings-reset')?.addEventListener('click', () => {
@@ -288,8 +320,11 @@ function applySettingChange(key, value) {
       // Re-apply all defaults
       retroRenderer.pixelScale = settings.get('pixelScale');
       retroRenderer.resize();
+      retroRenderer.setColorPalette(settings.get('colorPalette'));
       cameraController.autoRotateSpeed = settings.get('autoRotateSpeed');
       cameraController.scrollSensitivity = settings.get('zoomSensitivity');
+      soundEngine.updateVolumes();
+      musicManager.updateVolumes();
       populateSettingsUI();
     });
 
@@ -326,6 +361,116 @@ function applySettingChange(key, value) {
   }
 }
 
+// ── Sound Test Mode ──
+// Press T to open/close. Buttons trigger each SFX and music track.
+let _soundTestOpen = false;
+let _soundTestPopulated = false;
+
+const SOUNDTEST_SFX = [
+  { name: 'select', label: 'Select' },
+  { name: 'cycle', label: 'Cycle' },
+  { name: 'newSystem', label: 'New System' },
+  { name: 'toggleOn', label: 'Toggle On' },
+  { name: 'toggleOff', label: 'Toggle Off' },
+  { name: 'autopilotOn', label: 'Autopilot On' },
+  { name: 'autopilotOff', label: 'Autopilot Off' },
+  { name: 'warpTarget', label: 'Warp Target' },
+  { name: 'warpLockOn', label: 'Warp Lock-On' },
+  { name: 'warpCharge', label: 'Warp Charge' },
+  { name: 'warpEnter', label: 'Warp Enter' },
+  { name: 'warpExit', label: 'Warp Exit' },
+  { name: 'titleDismiss', label: 'Title Dismiss' },
+  { name: 'uiClick', label: 'UI Click' },
+];
+
+const SOUNDTEST_BGM = [
+  { name: 'title', label: 'Title' },
+  { name: 'explore', label: 'Explore' },
+  { name: 'hyperspace', label: 'Hyperspace' },
+  { name: 'deepsky', label: 'Deep Sky' },
+  { name: 'warp-charge', label: 'Warp Charge (sting)' },
+  { name: 'arrival', label: 'Arrival (sting)' },
+];
+
+function populateSoundTest() {
+  if (_soundTestPopulated) return;
+  _soundTestPopulated = true;
+
+  const sfxGrid = document.getElementById('soundtest-sfx');
+  const bgmGrid = document.getElementById('soundtest-bgm');
+
+  // SFX buttons
+  for (const sfx of SOUNDTEST_SFX) {
+    const btn = document.createElement('button');
+    btn.className = 'soundtest-btn';
+    btn.textContent = sfx.label;
+    btn.addEventListener('click', () => {
+      soundEngine.play(sfx.name);
+    });
+    sfxGrid.appendChild(btn);
+  }
+
+  // BGM buttons
+  for (const track of SOUNDTEST_BGM) {
+    const btn = document.createElement('button');
+    btn.className = 'soundtest-btn';
+    btn.dataset.track = track.name;
+    btn.textContent = track.label;
+    btn.addEventListener('click', () => {
+      // Highlight active track
+      bgmGrid.querySelectorAll('.soundtest-btn').forEach(b => b.classList.remove('playing'));
+
+      const isOnce = track.name === 'warp-charge' || track.name === 'arrival';
+      if (isOnce) {
+        musicManager.playOnce(track.name);
+      } else {
+        btn.classList.add('playing');
+        musicManager.play(track.name, 0.5);
+      }
+    });
+    bgmGrid.appendChild(btn);
+  }
+
+  // Stop music button
+  document.getElementById('soundtest-stop-music')?.addEventListener('click', () => {
+    bgmGrid.querySelectorAll('.soundtest-btn').forEach(b => b.classList.remove('playing'));
+    musicManager.stop(0.5);
+  });
+}
+
+function toggleSoundTest() {
+  const el = document.getElementById('soundtest-overlay');
+  if (!el) return;
+  _soundTestOpen = !_soundTestOpen;
+  soundEngine.play('uiClick');
+  if (_soundTestOpen) {
+    populateSoundTest();
+    // Highlight currently playing track
+    const bgmGrid = document.getElementById('soundtest-bgm');
+    if (bgmGrid) {
+      bgmGrid.querySelectorAll('.soundtest-btn').forEach(b => {
+        b.classList.toggle('playing', b.dataset.track === musicManager.currentTrack);
+      });
+    }
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// Sound test close button + backdrop
+{
+  const soundTestEl = document.getElementById('soundtest-overlay');
+  if (soundTestEl) {
+    soundTestEl.querySelector('.overlay-close')?.addEventListener('click', () => {
+      toggleSoundTest();
+    });
+    soundTestEl.addEventListener('click', (e) => {
+      if (e.target === soundTestEl) toggleSoundTest();
+    });
+  }
+}
+
 // ── Debug Gallery Mode ──
 // Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
@@ -356,6 +501,8 @@ const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for galler
 // By the time we need to create GPU resources (hyper start), data is ready.
 warpEffect.onPrepareSystem = () => {
   bodyInfo.hide();
+  soundEngine.play('warpCharge');
+  musicManager.duck(0.15, 4.0);
   seedCounter++;
   const seed = `system-${seedCounter}`;
   const rng = new SeededRandom(seed);
@@ -395,11 +542,17 @@ warpEffect.onPrepareSystem = () => {
 
 // System swap at hyper start (tunnel is opaque, hides any GPU resource creation)
 warpEffect.onSwapSystem = () => {
+  soundEngine.play('warpEnter');
+  musicManager.play('hyperspace', 0.3);
   warpSwapSystem();
 };
 
 // When warp exit finishes, reveal the new system and restart autopilot
 warpEffect.onComplete = () => {
+  soundEngine.play('warpExit');
+  // Switch to explore or deepsky track based on destination type
+  const isDeepSky = system?.type && system.type !== 'star-system';
+  musicManager.play(isDeepSky ? 'deepsky' : 'explore', 2.0);
   warpRevealSystem();
 };
 
@@ -1648,6 +1801,7 @@ function updateFocusFromStop(stop) {
  */
 function startFlythrough() {
   if (!system) return;
+  soundEngine.play('autopilotOn');
 
   if (system._navigable) {
     // Navigable deep sky: tour between stars (like star system)
@@ -1703,6 +1857,7 @@ function startFlythrough() {
  */
 function stopFlythrough() {
   if (!autoNav.isActive && !flythrough.active) return;
+  soundEngine.play('autopilotOff');
 
   flythrough.stop();
   autoNav.stop();
@@ -1951,6 +2106,7 @@ function findClosestBody() {
  */
 function focusPlanet(index) {
   if (!system) return;
+  soundEngine.play('select');
   focusMoonIndex = -1;
   focusStarIndex = -1;
 
@@ -2011,6 +2167,7 @@ function focusStar(starIdx) {
  */
 function focusMoon(planetIndex, moonIndex) {
   if (!system) return;
+  soundEngine.play('select');
   if (planetIndex < 0 || planetIndex >= system.planets.length) return;
   const entry = system.planets[planetIndex];
   if (moonIndex < 0 || moonIndex >= entry.moons.length) return;
@@ -2028,6 +2185,7 @@ function focusMoon(planetIndex, moonIndex) {
 function toggleOrbits() {
   if (!system) return;
   orbitsVisible = !orbitsVisible;
+  soundEngine.play(orbitsVisible ? 'toggleOn' : 'toggleOff');
   for (const line of system.orbitLines) {
     line.mesh.visible = orbitsVisible;
   }
@@ -2053,6 +2211,7 @@ function toggleFullscreen() {
 
 function toggleGravityWell() {
   gravityWellVisible = !gravityWellVisible;
+  soundEngine.play(gravityWellVisible ? 'toggleOn' : 'toggleOff');
   // Swap HUD between gravity well contour map and system map
   if (gravityWellVisible && gravityWell) {
     retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
@@ -2675,8 +2834,18 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Escape closes keybinds or settings overlay if open
+  // T key: toggle sound test panel (works always except title screen)
+  if (e.code === 'KeyT' && !titleScreenActive) {
+    toggleSoundTest();
+    return;
+  }
+
+  // Escape closes keybinds, settings, or sound test overlay if open
   if (e.code === 'Escape') {
+    if (_soundTestOpen) {
+      toggleSoundTest();
+      return;
+    }
     if (_settingsOpen) {
       toggleSettings();
       return;
@@ -2923,6 +3092,7 @@ function trySelectWarpTarget(rayDir) {
   const dir = starfield.findNearestStar(rayDir);
   if (!dir) return; // no star close enough to the click
 
+  soundEngine.play('warpTarget');
   warpTarget.direction = dir;
   warpTarget.blinkTimer = 0;
   warpTarget.blinkOn = true;
@@ -2950,6 +3120,7 @@ function autoSelectWarpTarget() {
 function beginWarpTurn() {
   if (warpEffect.isActive) return;   // already warping
   if (warpTarget.turning) return;    // already turning
+  soundEngine.play('warpLockOn');
 
   // Cancel deep sky linger timer (we're warping now)
   _deepSkyLingerTimer = -1;

@@ -110,6 +110,15 @@ export class RetroRenderer {
   }
 
   /**
+   * Set the color palette mode.
+   * @param {number} palette  0=default, 1=mono, 2=amber, 3=green, 4=blue,
+   *   5=gameboy, 6=cga, 7=sepia, 8=virtualboy, 9=inverted
+   */
+  setColorPalette(palette) {
+    this._compositeMesh.material.uniforms.uColorPalette.value = palette;
+  }
+
+  /**
    * Set warp-related uniforms (called by main.js during warp).
    * @param {number} sceneFade    0 = scene visible, 1 = scene hidden
    * @param {number} whiteFlash   0 = no flash, 1 = full white
@@ -174,6 +183,9 @@ export class RetroRenderer {
         uTargetUV: { value: new THREE.Vector2(0.5, 0.5) },    // UV of selected star
         uTargetBlink: { value: 0.0 },                          // 0 = off, 1 = on
         uTargetSize: { value: 0.0 },                           // bracket size in pixels
+        // Color palette (0=default, 1=mono, 2=amber, 3=green, 4=blue,
+        //   5=gameboy, 6=cga, 7=sepia, 8=virtualboy, 9=inverted)
+        uColorPalette: { value: 0 },
       },
 
       vertexShader: /* glsl */ `
@@ -203,7 +215,70 @@ export class RetroRenderer {
         uniform vec2 uTargetUV;
         uniform float uTargetBlink;
         uniform float uTargetSize;
+        // Color palette
+        uniform int uColorPalette;
         varying vec2 vUv;
+
+        // ── Color palette remapping ──
+        // Converts final RGB to the selected palette. Applied as the very
+        // last step so it affects everything (scene, starfield, HUD, warp).
+        vec3 applyPalette(vec3 col, int palette) {
+          if (palette == 0) return col; // default — no remap
+
+          float lum = dot(col, vec3(0.299, 0.587, 0.114));
+
+          // 1: Monochrome
+          if (palette == 1) return vec3(lum);
+
+          // 2: Amber CRT
+          if (palette == 2) return vec3(lum * 1.0, lum * 0.69, lum * 0.0);
+
+          // 3: Green phosphor
+          if (palette == 3) return vec3(lum * 0.0, lum * 1.0, lum * 0.25);
+
+          // 4: Blue phosphor
+          if (palette == 4) return vec3(lum * 0.39, lum * 0.71, lum * 1.0);
+
+          // 5: Game Boy (4-shade green)
+          if (palette == 5) {
+            // 4 colors: darkest to lightest
+            vec3 c0 = vec3(0.06, 0.22, 0.06);  // near-black green
+            vec3 c1 = vec3(0.19, 0.38, 0.19);  // dark green
+            vec3 c2 = vec3(0.55, 0.67, 0.06);  // yellow-green
+            vec3 c3 = vec3(0.61, 0.74, 0.06);  // lightest
+            if (lum < 0.25) return mix(c0, c1, lum / 0.25);
+            if (lum < 0.50) return mix(c1, c2, (lum - 0.25) / 0.25);
+            return mix(c2, c3, clamp((lum - 0.5) / 0.5, 0.0, 1.0));
+          }
+
+          // 6: CGA (cyan/magenta/white/black)
+          if (palette == 6) {
+            vec3 c0 = vec3(0.0);                   // black
+            vec3 c1 = vec3(0.0, 1.0, 1.0);         // cyan
+            vec3 c2 = vec3(1.0, 0.33, 1.0);        // magenta
+            vec3 c3 = vec3(1.0);                    // white
+            if (lum < 0.25) return mix(c0, c1, lum / 0.25);
+            if (lum < 0.50) return mix(c1, c2, (lum - 0.25) / 0.25);
+            return mix(c2, c3, clamp((lum - 0.5) / 0.5, 0.0, 1.0));
+          }
+
+          // 7: Sepia
+          if (palette == 7) {
+            return vec3(
+              lum * 1.0,
+              lum * 0.78,
+              lum * 0.57
+            );
+          }
+
+          // 8: Virtual Boy (red + black)
+          if (palette == 8) return vec3(lum * 1.0, lum * 0.0, lum * 0.0);
+
+          // 9: Inverted
+          if (palette == 9) return vec3(1.0) - col;
+
+          return col;
+        }
 
         // ── Hyperspace tunnel (3D raymarched cylinder) ──
         // Real 3D ray-cylinder intersection so the tunnel has true
@@ -483,6 +558,7 @@ export class RetroRenderer {
             result = mix(result, hyper, hyperMask);
           }
 
+          result = applyPalette(result, uColorPalette);
           gl_FragColor = vec4(result, 1.0);
         }
       `,
