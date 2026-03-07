@@ -184,8 +184,9 @@ export class StarSystemGenerator {
     };
 
     // ── Planet count ──
+    // ~8% chance of an empty system (no planets — just a lonely star or binary)
     const [minPlanets, maxPlanets] = props.planetRange;
-    const planetCount = rng.int(minPlanets, maxPlanets);
+    const planetCount = rng.chance(0.08) ? 0 : rng.int(minPlanets, maxPlanets);
 
     // ── Generate planets ──
     const planets = [];

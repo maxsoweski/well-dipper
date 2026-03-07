@@ -37,15 +37,16 @@ export class SystemMap {
     // like a holographic radar display tilted toward the viewer.
     const e = this.extent;
     const tiltAngle = 35 * (Math.PI / 180);  // 35° from vertical
-    const camDist = 50;
+    // Camera must be far enough that ALL orbit geometry is in front of the near plane.
+    // At 35° tilt, orbit points on the camera's side can end up behind it if camDist is small.
+    const camDist = e * 2;
     this._tiltAngle = tiltAngle;
     this._camDist = camDist;
 
     // Wider frustum to account for foreshortened view at tilt angle
     const hFrustum = e * 1.2;
     const vFrustum = e * 1.6;  // taller to fit orbits that compress vertically
-    // Far plane must reach the outermost orbit geometry — orbits can be 600+ units
-    const farPlane = Math.max(200, e * 4);
+    const farPlane = camDist + e * 2;  // far enough to see everything through the tilted view
     this.camera = new THREE.OrthographicCamera(-hFrustum, hFrustum, vFrustum, -vFrustum, 0.1, farPlane);
     this.camera.position.set(0, camDist * Math.cos(tiltAngle), camDist * Math.sin(tiltAngle));
     this.camera.lookAt(0, 0, 0);

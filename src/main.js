@@ -976,24 +976,27 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // Fragment-shader contour lines computed per-pixel from gravitational potential.
   // Dense rings = deep well, sparse = shallow. Reads clearly at 192px HUD resolution.
   // Uses map-unit coordinates (old exaggerated scale) for the physics.
-  const outerOrbitMap = systemData.planets[systemData.planets.length - 1].orbitRadius;
-  const wellExtent = outerOrbitMap * 1.5;
-  gravityWell = new GravityWellMap(wellExtent);
+  // Only build if there are planets (empty systems skip the gravity well).
+  if (systemData.planets.length > 0) {
+    const outerOrbitMap = systemData.planets[systemData.planets.length - 1].orbitRadius;
+    const wellExtent = outerOrbitMap * 1.5;
+    gravityWell = new GravityWellMap(wellExtent);
 
-  gravityWell.setStars(
-    { radius: systemData.star.radius },
-    systemData.isBinary ? { radius: systemData.star2.radius } : null,
-  );
+    gravityWell.setStars(
+      { radius: systemData.star.radius },
+      systemData.isBinary ? { radius: systemData.star2.radius } : null,
+    );
 
-  // Lightweight planet proxies (same shape as GravityWell expects)
-  gravityWellPlanets = systemData.planets.map((p, i) => ({
-    planet: {
-      data: { radius: p.planetData.radius },
-      mesh: { position: new THREE.Vector3() },
-    },
-    orbitRadius: p.orbitRadius,
-  }));
-  gravityWell.setPlanets(gravityWellPlanets);
+    // Lightweight planet proxies (same shape as GravityWell expects)
+    gravityWellPlanets = systemData.planets.map((p, i) => ({
+      planet: {
+        data: { radius: p.planetData.radius },
+        mesh: { position: new THREE.Vector3() },
+      },
+      orbitRadius: p.orbitRadius,
+    }));
+    gravityWell.setPlanets(gravityWellPlanets);
+  }
 
   // ── Store system state ──
   system = {
@@ -1012,11 +1015,16 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   };
 
   // ── System map HUD ──
-  systemMap = new SystemMap(systemData, system);
-  if (gravityWellVisible) {
-    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  } else if (minimapVisible) {
-    retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  // Only create the system map if there are planets (empty systems have nothing to map)
+  if (systemData.planets.length > 0) {
+    systemMap = new SystemMap(systemData, system);
+    if (gravityWellVisible) {
+      retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
+    } else if (minimapVisible) {
+      retroRenderer.setHud(systemMap.scene, systemMap.camera);
+    } else {
+      retroRenderer.setHud(null, null);
+    }
   } else {
     retroRenderer.setHud(null, null);
   }
@@ -1083,35 +1091,51 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── During warp, skip camera setup — warpRevealSystem handles that ──
   if (forWarp) return;
 
-  // ── Opening shot: randomly focus a planet or moon ──
-  const heroIndex = Math.floor(Math.random() * planets.length);
-  const hero = planets[heroIndex];
+  // ── Opening shot ──
+  if (planets.length > 0) {
+    // Randomly focus a planet or moon
+    const heroIndex = Math.floor(Math.random() * planets.length);
+    const hero = planets[heroIndex];
 
-  let heroMoonIndex = -1;
-  if (hero.moons.length > 0 && Math.random() < 0.3) {
-    heroMoonIndex = Math.floor(Math.random() * hero.moons.length);
-  }
+    let heroMoonIndex = -1;
+    if (hero.moons.length > 0 && Math.random() < 0.3) {
+      heroMoonIndex = Math.floor(Math.random() * hero.moons.length);
+    }
 
-  const yawOffset = (Math.random() - 0.5) * 0.25;
-  cameraController.setTarget(hero.planet.mesh.position.clone());
-  cameraController.yaw = hero.orbitAngle + yawOffset;
-  cameraController.smoothedYaw = cameraController.yaw;
-  cameraController.pitch = 0.08 + Math.random() * 0.12;
-  cameraController.smoothedPitch = cameraController.pitch;
-  cameraController.autoRotateActive = true;
+    const yawOffset = (Math.random() - 0.5) * 0.25;
+    cameraController.setTarget(hero.planet.mesh.position.clone());
+    cameraController.yaw = hero.orbitAngle + yawOffset;
+    cameraController.smoothedYaw = cameraController.yaw;
+    cameraController.pitch = 0.08 + Math.random() * 0.12;
+    cameraController.smoothedPitch = cameraController.pitch;
+    cameraController.autoRotateActive = true;
 
-  focusIndex = heroIndex;
-  if (heroMoonIndex >= 0) {
-    const moon = hero.moons[heroMoonIndex];
-    const viewDist = moon.data.radius * 8;
-    focusMoonIndex = heroMoonIndex;
-    cameraController.distance = viewDist;
-    cameraController.smoothedDistance = viewDist;
+    focusIndex = heroIndex;
+    if (heroMoonIndex >= 0) {
+      const moon = hero.moons[heroMoonIndex];
+      const viewDist = moon.data.radius * 8;
+      focusMoonIndex = heroMoonIndex;
+      cameraController.distance = viewDist;
+      cameraController.smoothedDistance = viewDist;
+    } else {
+      const viewDist = hero.planet.data.radius * 6;
+      focusMoonIndex = -1;
+      cameraController.distance = viewDist;
+      cameraController.smoothedDistance = viewDist;
+    }
   } else {
-    const viewDist = hero.planet.data.radius * 6;
+    // Empty system — orbit the star
+    focusIndex = -1;
     focusMoonIndex = -1;
+    cameraController.setTarget(new THREE.Vector3(0, 0, 0));
+    cameraController.yaw = Math.random() * Math.PI * 2;
+    cameraController.smoothedYaw = cameraController.yaw;
+    cameraController.pitch = 0.1;
+    cameraController.smoothedPitch = cameraController.pitch;
+    const viewDist = star.data.radius * 6;
     cameraController.distance = viewDist;
     cameraController.smoothedDistance = viewDist;
+    cameraController.autoRotateActive = true;
   }
 
   // Restart autopilot with new system if it was active before
@@ -1300,6 +1324,37 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     camera.position.set(pos.x, pos.y + r * 0.3, pos.z + r * 4);
     camera.lookAt(pos);
   }
+}
+
+// ── Debug Instant Spawn ────────────────────────────────────────
+// Jump directly to any system type without warping (Shift+1 through Shift+7).
+// Generates data the same way the warp pipeline does, then calls spawnSystem.
+let _debugSeedCounter = 1000;
+
+function _debugSpawnType(destType) {
+  if (galleryMode) exitGallery();
+
+  _debugSeedCounter++;
+  const seed = `debug-${destType}-${_debugSeedCounter}`;
+  let preGenData;
+
+  if (destType === 'star-system') {
+    preGenData = StarSystemGenerator.generate(seed);
+  } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
+    preGenData = NavigableNebulaGenerator.generate(seed, destType);
+    preGenData._billboardData = NebulaGenerator.generate(seed, destType);
+  } else if (destType === 'open-cluster') {
+    preGenData = NavigableClusterGenerator.generate(seed);
+  } else if (destType.includes('galaxy')) {
+    preGenData = GalaxyGenerator.generate(seed, destType);
+  } else if (destType.includes('cluster')) {
+    preGenData = ClusterGenerator.generate(seed, destType);
+  }
+  preGenData._destType = destType;
+
+  seedCounter = _debugSeedCounter;
+  spawnSystem({ forWarp: false, systemData: preGenData });
+  console.log(`Debug spawn: ${destType} (seed "${seed}")`);
 }
 
 // ── Debug Gallery ──────────────────────────────────────────────
@@ -1693,8 +1748,8 @@ function populateQueueRefs() {
       stop.bodyRef = starObj.mesh;
       stop.bodyRadius = starObj.data.radius;
       // Close enough to fill ~50% of FOV, but stay outside glow corona (3.5×r)
-      // and inside innermost planet orbit
-      const innerOrbit = system.planets[0].orbitRadius;
+      // and inside innermost planet orbit (if any)
+      const innerOrbit = system.planets.length > 0 ? system.planets[0].orbitRadius : Infinity;
       stop.orbitDistance = Math.min(starObj.data.radius * 4, innerOrbit * 0.4);
     } else if (stop.type === 'planet') {
       const entry = system.planets[stop.planetIndex];
@@ -2874,6 +2929,25 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === '/' || e.key === '?') {
     _forceNextDestType = 'globular-cluster';
     console.log('Debug: next warp → globular cluster');
+  }
+
+  // Debug instant-spawn: Shift+1 through Shift+7 jump directly to a system type
+  // without warping. Each press generates a new random seed.
+  if (e.shiftKey && !warpEffect.isActive) {
+    const debugTypes = {
+      '!': 'star-system',         // Shift+1
+      '@': 'spiral-galaxy',       // Shift+2
+      '#': 'elliptical-galaxy',   // Shift+3
+      '$': 'emission-nebula',     // Shift+4
+      '%': 'planetary-nebula',    // Shift+5
+      '^': 'globular-cluster',    // Shift+6
+      '&': 'open-cluster',        // Shift+7
+    };
+    const destType = debugTypes[e.key];
+    if (destType) {
+      _debugSpawnType(destType);
+      return;
+    }
   }
 
   // D key: toggle debug gallery (works even during warp)
