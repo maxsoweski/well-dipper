@@ -538,6 +538,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Reset state ──
   warpTarget.direction = null;
   const wasAutopilot = autoNav.isActive;
+
+  // Reset camera far plane (may have been extended for navigable nebulae)
+  if (camera.far > 200000) {
+    camera.far = 200000;
+    camera.updateProjectionMatrix();
+  }
   if (!forWarp) {
     stopFlythrough();
   }
@@ -1063,8 +1069,17 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     };
 
     gasCloud = new Nebula(scaledData);
-    gasCloud.billboard = false; // At navigable scale, billboarding causes flicker
     gasCloud.addTo(scene);
+
+    // Extend camera far plane to fit the nebula — layers can be 2-3x radius
+    // in size, so vertices reach well beyond the default 200K far plane.
+    // Without this, most of each layer is frustum-clipped, and the clip
+    // boundary shifts with the camera, causing visible flicker.
+    const neededFar = data.radius * 4;
+    if (neededFar > camera.far) {
+      camera.far = neededFar;
+      camera.updateProjectionMatrix();
+    }
   }
 
   // ── Stars ──

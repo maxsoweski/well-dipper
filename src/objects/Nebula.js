@@ -15,7 +15,6 @@ export class Nebula {
   constructor(nebulaData) {
     this.data = nebulaData;
     this.mesh = new THREE.Group();
-    this.billboard = true; // Set false for navigable (large-scale) nebulae
 
     // Create cloud layers
     this._layers = this._createLayers(nebulaData.layers);
@@ -199,21 +198,19 @@ export class Nebula {
   }
 
   /**
-   * Update animation (slow gas drift) and optionally billboard layers.
+   * Update animation (slow gas drift) and billboard layers toward camera.
    * @param {number} deltaTime — seconds since last frame
-   * @param {THREE.Camera} [camera] — if provided and billboard=true, layers face camera
+   * @param {THREE.Camera} [camera] — if provided, layers face the camera
    */
   update(deltaTime, camera) {
     for (const layer of this._layers) {
       layer.material.uniforms.uTime.value += deltaTime;
 
-      // Billboard: make each layer face the camera so flat planes aren't
-      // obvious when orbiting. Only used for distant/gallery nebulae.
-      // Navigable nebulae skip this — at large scale the massive parallax
-      // between billboarded layers causes alpha overlap to fluctuate wildly
-      // as the camera moves, creating visible flicker in the compositor.
-      // Tilted layers decorrelate the overlap, reducing flicker.
-      if (this.billboard && camera) {
+      // Billboard: make each layer always face the camera so the flat
+      // planes aren't obvious when you orbit around the nebula. Each
+      // layer keeps its own position offset (creating parallax depth),
+      // only the orientation matches the camera.
+      if (camera) {
         layer.quaternion.copy(camera.quaternion);
       }
     }
