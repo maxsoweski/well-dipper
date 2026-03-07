@@ -512,9 +512,15 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   }, settings.get('titleAutoDismiss') * 1000);
 
   // Mobile fullscreen button on title screen
+  // Must use touchend (not click) — click fires too late on mobile, canvas touchstart
+  // dismisses the title screen first. Also requestFullscreen needs a direct user gesture.
   const fsBtn = document.getElementById('title-fullscreen-btn');
   if (fsBtn) {
-    fsBtn.addEventListener('click', (e) => {
+    fsBtn.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+    }, { passive: false });
+    fsBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       document.documentElement.requestFullscreen().catch(() => {});
       dismissTitleScreen();

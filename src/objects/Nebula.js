@@ -16,10 +16,13 @@ export class Nebula {
     this.data = nebulaData;
     this.mesh = new THREE.Group();
 
-    // Create cloud layers
+    // Create cloud layers with explicit renderOrder to prevent flicker.
+    // Without this, Three.js re-sorts transparent objects each frame based on
+    // distance to camera, causing draw order to flip and dithered edges to pop.
     this._layers = this._createLayers(nebulaData.layers);
-    for (const layer of this._layers) {
-      this.mesh.add(layer);
+    for (let i = 0; i < this._layers.length; i++) {
+      this._layers[i].renderOrder = i;
+      this.mesh.add(this._layers[i]);
     }
 
     // Create embedded star particles
@@ -127,20 +130,10 @@ export class Nebula {
 
             float alpha = cloud * falloff * uOpacity;
 
-            // 4×4 Bayer dithering on alpha edge
-            vec2 p = mod(floor(gl_FragCoord.xy), 4.0);
-            float t = 0.0;
-            if (p.y < 0.5) {
-              t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-            } else if (p.y < 1.5) {
-              t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-            } else if (p.y < 2.5) {
-              t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-            } else {
-              t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-            }
-            float threshold = t / 16.0;
-            if (alpha < threshold * 0.5) discard;
+            // Soft alpha cutoff — no discard. With additive blending + depthTest off,
+            // discard caused flickering because screen-space dither patterns shift as
+            // the camera moves, popping pixels on/off between frames.
+            if (alpha < 0.01) discard;  // only discard fully transparent (GPU perf)
 
             gl_FragColor = vec4(uColor * alpha, alpha);
           }
