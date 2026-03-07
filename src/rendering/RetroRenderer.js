@@ -430,8 +430,8 @@ export class RetroRenderer {
               vec2 hudUV = (vUv - vec2(hudX, hudY)) / vec2(hudW, hudH);
               vec4 hud = texture2D(hudTexture, hudUV);
 
-              // Dark backdrop for contrast against starfield
-              result = mix(result, vec3(0.0), 0.5);
+              // Backdrop is rendered inside the 3D map scene (tilted disc),
+              // so no flat backdrop needed here — just composite the HUD.
               result = mix(result, hud.rgb, hud.a);
             }
           }

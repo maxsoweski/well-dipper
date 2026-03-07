@@ -77,6 +77,7 @@ export class SystemMap {
     this._mapYaw = 0;  // rotation around Y axis in radians
 
     // ── Build scene objects ──
+    this._buildBackdrop();
     this._buildOrbitLines();
     this._buildBodyDots();
     this._buildCameraIndicator();
@@ -91,6 +92,27 @@ export class SystemMap {
   /** Rotate the map by a delta (radians). Called from mouse drag on minimap. */
   rotate(deltaYaw) {
     this._mapYaw += deltaYaw;
+  }
+
+  // ── Dark backdrop disc (matches the tilted perspective) ──
+  _buildBackdrop() {
+    const segments = 64;
+    const radius = this.extent * 1.15; // slightly larger than orbit area
+    const geo = new THREE.CircleGeometry(radius, segments);
+    // CircleGeometry is in XY plane — rotate to XZ (flat on the map)
+    geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    });
+    const disc = new THREE.Mesh(geo, mat);
+    disc.renderOrder = -1; // render behind everything
+    disc.position.y = -0.1; // just below the orbit plane
+    this.scene.add(disc);
   }
 
   // ── Orbit line circles (thin, dim) ──
@@ -148,9 +170,10 @@ export class SystemMap {
 
   // ── Camera pointer (tiny arrow that moves with camera position and shows heading) ──
   _buildCameraIndicator() {
-    // Small triangular pointer — points in the camera's facing direction.
+    // Triangular pointer — points in the camera's facing direction.
     // Moves around the map following the camera's XZ position in map-space.
-    const s = this.extent * 0.04; // pointer size
+    // Sized to match planet dots so it's clearly visible.
+    const s = this.extent * 0.08; // pointer size (matches planet dot scale)
     const shape = new THREE.Shape();
     // Triangle pointing along +Z (forward)
     shape.moveTo(0, s * 0.6);       // tip (front)
