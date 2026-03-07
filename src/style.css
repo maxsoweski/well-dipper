@@ -186,6 +186,64 @@ html, body {
   letter-spacing: 0.1em;
 }
 
+/* ── Overlay Close Button (used in settings + keybinds panels) ── */
+.overlay-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 22px;
+  line-height: 38px;
+  text-align: center;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.overlay-close:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Title Fullscreen Button (mobile only) ── */
+.title-fullscreen-btn {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .title-fullscreen-btn {
+    display: block;
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'DotGothic16', monospace;
+    font-size: 16px;
+    letter-spacing: 0.15em;
+    color: #fff;
+    background: rgba(100, 180, 255, 0.2);
+    border: 1px solid rgba(100, 180, 255, 0.5);
+    border-radius: 8px;
+    padding: 14px 28px;
+    cursor: pointer;
+    pointer-events: auto;
+    animation: title-blink 2s ease-in-out infinite;
+    z-index: 501;
+  }
+
+  .title-fullscreen-btn:active {
+    background: rgba(100, 180, 255, 0.4);
+  }
+
+  /* Hide keybind hint on mobile — not useful */
+  .title-keybind-hint {
+    display: none;
+  }
+}
+
 /* ── Keybinds Overlay ── */
 #keybinds-overlay {
   position: fixed;
@@ -199,6 +257,7 @@ html, body {
 }
 
 .keybinds-panel {
+  position: relative;
   font-family: 'DotGothic16', monospace;
   color: #fff;
   max-width: 420px;
@@ -250,6 +309,7 @@ html, body {
 }
 
 .settings-panel {
+  position: relative;
   font-family: 'DotGothic16', monospace;
   color: #fff;
   max-width: 380px;

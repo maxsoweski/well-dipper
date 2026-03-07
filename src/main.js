@@ -293,10 +293,35 @@ function applySettingChange(key, value) {
       populateSettingsUI();
     });
 
+    // Close button
+    settingsEl.querySelector('.overlay-close')?.addEventListener('click', () => {
+      toggleSettings();
+    });
+
+    // Tap backdrop to close
+    settingsEl.addEventListener('click', (e) => {
+      if (e.target === settingsEl) toggleSettings();
+    });
+
     // Update fullscreen checkbox when fullscreen state changes
     document.addEventListener('fullscreenchange', () => {
       const fsCheckbox = settingsEl.querySelector('[data-setting="fullscreen"]');
       if (fsCheckbox) fsCheckbox.checked = !!document.fullscreenElement;
+    });
+  }
+}
+
+// Keybinds close button
+{
+  const keybindsEl = document.getElementById('keybinds-overlay');
+  if (keybindsEl) {
+    keybindsEl.querySelector('.overlay-close')?.addEventListener('click', () => {
+      toggleKeybinds();
+    });
+
+    // Tap backdrop to close
+    keybindsEl.addEventListener('click', (e) => {
+      if (e.target === keybindsEl) toggleKeybinds();
     });
   }
 }
@@ -485,6 +510,16 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   _titleAutoTimer = setTimeout(() => {
     if (titleScreenActive) dismissTitleScreen();
   }, settings.get('titleAutoDismiss') * 1000);
+
+  // Mobile fullscreen button on title screen
+  const fsBtn = document.getElementById('title-fullscreen-btn');
+  if (fsBtn) {
+    fsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.documentElement.requestFullscreen().catch(() => {});
+      dismissTitleScreen();
+    });
+  }
 }
 
 /**

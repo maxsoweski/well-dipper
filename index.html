@@ -17,12 +17,14 @@
         <h1 class="title-name">WELL-DIPPER</h1>
         <p class="title-prompt">press any key to begin</p>
       </div>
+      <button id="title-fullscreen-btn" class="title-fullscreen-btn">&#x26F6; FULLSCREEN</button>
       <div class="title-keybind-hint">k &mdash; keybinds</div>
     </div>
 
     <!-- Keybinds overlay (toggled with K) -->
     <div id="keybinds-overlay" style="display:none;">
       <div class="keybinds-panel">
+        <button class="overlay-close" aria-label="Close">&times;</button>
         <h2>KEYBINDS</h2>
         <div class="keybinds-grid">
           <span class="kb-key">SPACE</span><span class="kb-desc">Warp to new system</span>
@@ -50,6 +52,7 @@
     <!-- Settings panel (toggled with S key) -->
     <div id="settings-overlay" style="display:none;">
       <div class="settings-panel">
+        <button class="overlay-close" aria-label="Close">&times;</button>
         <h2>SETTINGS</h2>
 
         <div class="settings-section">
