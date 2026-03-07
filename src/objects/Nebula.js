@@ -47,6 +47,7 @@ export class Nebula {
       const material = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
+        depthTest: false,  // additive layers don't need depth — prevents z-fighting flicker
         blending: THREE.AdditiveBlending,
         side: THREE.FrontSide,  // billboarded = always facing camera, no need for DoubleSide
 
