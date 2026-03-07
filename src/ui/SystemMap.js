@@ -73,6 +73,9 @@ export class SystemMap {
     this._blinkTimer = -1;        // -1 = not blinking
     this._blinkDuration = 1.8;    // total blink duration (6 blinks)
 
+    // ── User-controlled rotation (click-drag on minimap) ──
+    this._mapYaw = 0;  // rotation around Y axis in radians
+
     // ── Build scene objects ──
     this._buildOrbitLines();
     this._buildBodyDots();
@@ -83,6 +86,11 @@ export class SystemMap {
   /** Trigger a 3-blink animation on the focus ring. */
   triggerBlink() {
     this._blinkTimer = 0;
+  }
+
+  /** Rotate the map by a delta (radians). Called from mouse drag on minimap. */
+  rotate(deltaYaw) {
+    this._mapYaw += deltaYaw;
   }
 
   // ── Orbit line circles (thin, dim) ──
@@ -97,8 +105,12 @@ export class SystemMap {
         points.push(new THREE.Vector3(Math.cos(a) * p.orbitRadius, 0, Math.sin(a) * p.orbitRadius));
       }
       const geo = new THREE.BufferGeometry().setFromPoints(points);
-      const mat = new THREE.LineBasicMaterial({ color: 0x226644, transparent: true, opacity: 1.0 });
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x226644, transparent: true, opacity: 1.0,
+        depthWrite: false, depthTest: false,
+      });
       const line = new THREE.Line(geo, mat);
+      line.renderOrder = 0; // render first (behind everything)
       this.scene.add(line);
       this.orbitMeshes.push(line);
     }
@@ -161,6 +173,7 @@ export class SystemMap {
       depthWrite: false, depthTest: false,
     });
     this._compassArrow = new THREE.LineSegments(arrowGeo, arrowMat);
+    this._compassArrow.renderOrder = 3; // on top of everything
     // Position in bottom-right quadrant of the map
     this._compassArrow.position.set(this.extent * 0.65, 0.3, this.extent * 0.65);
     this.scene.add(this._compassArrow);
@@ -175,8 +188,12 @@ export class SystemMap {
       points.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)));
     }
     const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({ color: 0x44ff44, transparent: true, opacity: 0.8 });
+    const mat = new THREE.LineBasicMaterial({
+      color: 0x44ff44, transparent: true, opacity: 0.8,
+      depthWrite: false, depthTest: false,
+    });
     this._focusRing = new THREE.Line(geo, mat);
+    this._focusRing.renderOrder = 2; // on top of dots
     this._focusRing.visible = false;
     this.scene.add(this._focusRing);
   }
@@ -211,6 +228,7 @@ export class SystemMap {
     });
     const spr = new THREE.Sprite(mat);
     spr.scale.set(size, size, 1);
+    spr.renderOrder = 1; // render on top of orbit lines
     return spr;
   }
 
@@ -285,7 +303,21 @@ export class SystemMap {
     // Arrow points in the direction the camera is facing (yaw).
     // Rotation around Y axis: yaw=0 means looking along -Z, so arrow
     // should point along -Z (up on the map). Rotate by -yaw.
-    this._compassArrow.rotation.y = -mainYaw;
+    // Also account for map rotation so the compass stays world-relative.
+    this._compassArrow.rotation.y = -mainYaw - this._mapYaw;
+
+    // ── Apply user-controlled map rotation ──
+    // Orbit camera around Y at the tilt angle, rotated by _mapYaw.
+    const d = this._camDist;
+    const tilt = this._tiltAngle;
+    const cosT = Math.cos(tilt);
+    const sinT = Math.sin(tilt);
+    this.camera.position.set(
+      Math.sin(this._mapYaw) * sinT * d,
+      cosT * d,
+      Math.cos(this._mapYaw) * sinT * d,
+    );
+    this.camera.lookAt(0, 0, 0);
   }
 
   /**

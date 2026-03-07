@@ -3222,6 +3222,13 @@ canvas.addEventListener('mousemove', (e) => {
     idleTimer = 0;
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
   }
+
+  // Minimap drag-to-rotate
+  if (_minimapDragging && systemMap) {
+    systemMap.rotate(-e.movementX * 0.008);
+    return; // consume the move — don't orbit the camera
+  }
+
   // Middle mouse (or left mouse in deep sky) free-look during flythrough
   const freeLookDrag = _middleMouseDown || (cameraController.forceFreeLook && cameraController._leftFreeLooking);
   if (flythrough.active && freeLookDrag) {
@@ -3263,11 +3270,26 @@ canvas.addEventListener('mousemove', (e) => {
 // Middle mouse tracking for flythrough free-look
 let _middleMouseDown = false;
 
+// Minimap drag-to-rotate
+let _minimapDragging = false;
+
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
   if (titleScreenActive) { dismissTitleScreen(); return; }
   _mouseDown.x = e.clientX;
   _mouseDown.y = e.clientY;
+
+  // Check if clicking on the minimap — start a drag-to-rotate
+  if (e.button === 0 && systemMap && minimapVisible && !gravityWellVisible) {
+    const uv = retroRenderer.getHudUV(e.clientX, e.clientY);
+    if (uv) {
+      _minimapDragging = true;
+      // Prevent the camera controller from starting an orbit drag
+      cameraController.isDragging = false;
+      return; // don't process further (don't stop autopilot, etc.)
+    }
+  }
+
   if (e.button === 1) {
     _middleMouseDown = true;
   }
@@ -3297,6 +3319,9 @@ canvas.addEventListener('wheel', () => {
 }, { passive: true });
 
 window.addEventListener('mouseup', (e) => {
+  if (e.button === 0) {
+    _minimapDragging = false;
+  }
   if (e.button === 1) {
     _middleMouseDown = false;
     if (flythrough.active) flythrough.clearFreeLook();
@@ -3305,6 +3330,19 @@ window.addEventListener('mouseup', (e) => {
 
 canvas.addEventListener('mouseup', (e) => {
   if (e.button !== 0) return;
+
+  // End minimap drag
+  if (_minimapDragging) {
+    const dx = e.clientX - _mouseDown.x;
+    const dy = e.clientY - _mouseDown.y;
+    _minimapDragging = false;
+    // If it was just a click (not a drag), try selecting a body on the minimap
+    if (dx * dx + dy * dy <= 25) {
+      trySelect(e.clientX, e.clientY);
+    }
+    return;
+  }
+
   // Clear flythrough free-look if left-drag was acting as free-look (deep sky)
   if (cameraController.forceFreeLook && flythrough.active) {
     flythrough.clearFreeLook();
