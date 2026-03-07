@@ -44,7 +44,9 @@ export class SystemMap {
     // Wider frustum to account for foreshortened view at tilt angle
     const hFrustum = e * 1.2;
     const vFrustum = e * 1.6;  // taller to fit orbits that compress vertically
-    this.camera = new THREE.OrthographicCamera(-hFrustum, hFrustum, vFrustum, -vFrustum, 0.1, 200);
+    // Far plane must reach the outermost orbit geometry — orbits can be 600+ units
+    const farPlane = Math.max(200, e * 4);
+    this.camera = new THREE.OrthographicCamera(-hFrustum, hFrustum, vFrustum, -vFrustum, 0.1, farPlane);
     this.camera.position.set(0, camDist * Math.cos(tiltAngle), camDist * Math.sin(tiltAngle));
     this.camera.lookAt(0, 0, 0);
 
