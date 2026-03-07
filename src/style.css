@@ -508,17 +508,17 @@ html, body {
 /* ── Body Info Popup ── */
 #body-info {
   position: fixed;
-  top: 16px;
-  left: 16px;
+  top: 20px;
+  left: 20px;
   z-index: 90;
   font-family: 'DotGothic16', monospace;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(0, 180, 100, 0.3);
-  border-radius: 4px;
-  padding: 8px 12px;
-  max-width: 220px;
+  background: none;
+  border: none;
+  padding: 0;
+  max-width: 400px;
   pointer-events: none;
   transition: opacity 0.5s ease;
+  text-shadow: 0 0 8px #000, 0 0 16px #000, 0 0 24px #000;
 }
 
 #body-info.fading {
@@ -526,17 +526,34 @@ html, body {
 }
 
 .body-info-type {
-  color: rgba(0, 220, 130, 0.9);
-  font-size: 14px;
+  color: #00ff88;
+  font-size: 22px;
+  font-weight: bold;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.15em;
 }
 
 .body-info-stats {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-  margin-top: 3px;
-  line-height: 1.4;
+  color: rgba(0, 255, 136, 0.65);
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 2px;
+  letter-spacing: 0.08em;
+}
+
+.body-info-cursor {
+  color: #00ff88;
+  font-size: 22px;
+  animation: cursor-blink 0.6s step-end infinite;
+}
+
+.body-info-cursor.blinking {
+  display: inline;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 /* ── Portrait Overlay ── */

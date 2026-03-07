@@ -156,12 +156,14 @@ export class SystemMap {
       this._starSprites.push(s2Spr);
     }
 
-    // Planets: ~8-12% of extent, scaled by relative mass
+    // Planets: 4-14% of extent, scaled by map radius.
+    // Gas giants (mapRadius 1.5-3.5) end up ~3x the size of rocky worlds (0.2-0.5),
+    // giving a clear visual sense of each planet's physical scale.
     this._planetSprites = [];
     const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
     for (const p of this.planetMapData) {
       const t = p.mapRadius / maxMapRadius; // 0–1 relative size
-      const dotSize = e * (0.08 + t * 0.04); // 8%–12% of extent
+      const dotSize = e * (0.04 + t * 0.10); // 4%–14% of extent
       const spr = this._makeSprite(p.color, dotSize);
       this.scene.add(spr);
       this._planetSprites.push(spr);
@@ -298,7 +300,7 @@ export class SystemMap {
       // Size the highlight sprite slightly larger than the planet dot (stroke effect)
       const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
       const t = this.planetMapData[focusIndex].mapRadius / maxMapRadius;
-      const dotSize = this.extent * (0.08 + t * 0.04);
+      const dotSize = this.extent * (0.04 + t * 0.10);
       const strokeSize = dotSize * 1.35; // slightly larger = visible green border
       this._focusRing.scale.set(strokeSize, strokeSize, 1);
 

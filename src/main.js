@@ -741,8 +741,14 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
         entry.billboard.dispose();
         entry.billboard.removeFrom(scene);
         for (let m = 0; m < entry.moons.length; m++) {
-          entry.moons[m].dispose();
-          scene.remove(entry.moons[m].mesh);
+          const moonObj = entry.moons[m];
+          moonObj.dispose();
+          scene.remove(moonObj.mesh);
+          if (moonObj._clickProxy) {
+            scene.remove(moonObj._clickProxy);
+            moonObj._clickProxy.geometry.dispose();
+            moonObj._clickProxy.material.dispose();
+          }
           entry.moonBillboards[m].dispose();
           entry.moonBillboards[m].removeFrom(scene);
         }
@@ -1053,6 +1059,19 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
         clickTargets.set(moonObj.planet.ring, { type: 'moon', planetIndex: i, moonIndex: m });
       }
       clickTargets.set(entry.moonBillboards[m].sprite, { type: 'moon', planetIndex: i, moonIndex: m });
+
+      // Invisible click proxy — moons are tiny in scene units (0.004-0.05) so the
+      // raycaster often misses the actual geometry. This larger invisible sphere
+      // ensures clicks near a moon register as hits.
+      const moonR = moonObj.data.radius;
+      const proxyGeo = new THREE.SphereGeometry(moonR * 4, 8, 6);
+      const proxyMat = new THREE.MeshBasicMaterial({ visible: false });
+      const proxy = new THREE.Mesh(proxyGeo, proxyMat);
+      proxy.renderOrder = -999; // never drawn
+      moonObj.mesh.parent?.add(proxy) || scene.add(proxy);
+      // For regular moons, proxy moves with the moon each frame — we track it
+      moonObj._clickProxy = proxy;
+      clickTargets.set(proxy, { type: 'moon', planetIndex: i, moonIndex: m });
     }
   }
 
@@ -1203,6 +1222,8 @@ function spawnDeepSky(data, destType, forWarp) {
   if (firstStop) {
     camera.position.set(firstStop.position[0], firstStop.position[1], firstStop.position[2]);
     camera.lookAt(0, 0, 0);
+    // Sync CameraController so it doesn't override the camera position
+    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
   }
 }
 
@@ -1323,6 +1344,8 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     const r = allStars[0].data.radius;
     camera.position.set(pos.x, pos.y + r * 0.3, pos.z + r * 4);
     camera.lookAt(pos);
+    // Sync CameraController so it doesn't override the camera position
+    cameraController.restoreFromWorldState(pos.clone());
   }
 }
 
@@ -1621,7 +1644,7 @@ function gallerySpawn() {
     _galleryMeshes.push(star);
 
     const r = starData.radius;
-    camera.position.set(0, r * 0.3, r * 3);
+    camera.position.set(0, r * 0.5, r * 8);
     camera.lookAt(0, 0, 0);
 
     infoText = `type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉`;
@@ -2581,6 +2604,8 @@ function animate() {
           moonBb.sprite.visible = mShowBillboard;
           moonBb.sprite.position.copy(moon.mesh.position);
           moonBb.update(camera, retroRenderer.pixelScale);
+          // Keep click proxy in sync with moon position
+          if (moon._clickProxy) moon._clickProxy.position.copy(moon.mesh.position);
         }
       }
     }

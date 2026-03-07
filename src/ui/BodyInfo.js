@@ -1,8 +1,9 @@
 /**
- * BodyInfo — top-left HUD popup showing info about the selected body.
+ * BodyInfo — top-left HUD showing info about the selected body.
  *
- * Shows planet/moon/star type and key stats when a body is selected
- * (click or autopilot). Auto-hides after 5 seconds.
+ * Terminal-style typewriter effect: a blinking cursor writes text
+ * left-to-right, top-to-bottom. No border, no background — just
+ * big chunky bold letters punched onto the screen.
  */
 
 const PLANET_TYPE_NAMES = {
@@ -32,31 +33,40 @@ export class BodyInfo {
     this._el = document.getElementById('body-info');
     this._typeEl = this._el?.querySelector('.body-info-type');
     this._statsEl = this._el?.querySelector('.body-info-stats');
+    this._cursorEl = null;
     this._timer = null;
+    this._typewriterTimer = null;
+    this._blinkTimer = null;
+
+    // Typewriter state
+    this._fullType = '';
+    this._fullStats = '';
+    this._charIndex = 0;
+    this._typing = false;
+    this._charsPerTick = 1;
+    this._tickMs = 35; // milliseconds per character
+
+    // Create cursor element
+    if (this._el) {
+      this._cursorEl = document.createElement('span');
+      this._cursorEl.className = 'body-info-cursor';
+      this._cursorEl.textContent = '\u2588'; // full block character █
+      this._el.appendChild(this._cursorEl);
+    }
   }
 
-  /**
-   * Show info for a planet.
-   * @param {object} data — planet generation data (from planet.data)
-   * @param {number} index — planet index (0-based)
-   */
   showPlanet(data, index) {
     const typeName = PLANET_TYPE_NAMES[data.type] || data.type;
     const parts = [];
     if (data.radiusEarth != null) {
-      parts.push(`${data.radiusEarth.toFixed(1)} R\u2295`);  // R⊕
+      parts.push(`${data.radiusEarth.toFixed(1)} R\u2295`);
     }
     if (data.rings) parts.push('Rings');
     if (data.clouds) parts.push('Clouds');
     if (data.atmosphere) parts.push('Atmosphere');
-    this._show(typeName, parts.join(' \u00b7 '));  // middle dot separator
+    this._show(typeName, parts.join(' \u00b7 '));
   }
 
-  /**
-   * Show info for a moon.
-   * @param {object} data — moon generation data (from moon.data)
-   * @param {number} planetIndex — parent planet index
-   */
   showMoon(data, planetIndex) {
     const typeName = MOON_TYPE_NAMES[data.type] || data.type;
     const parts = [];
@@ -69,22 +79,20 @@ export class BodyInfo {
     this._show(typeName, parts.join(' \u00b7 '));
   }
 
-  /**
-   * Show info for a star.
-   * @param {object} data — star generation data (from star.data)
-   */
   showStar(data) {
     const typeName = `${data.type}-Class Star`;
     const parts = [];
     if (data.radiusSolar != null) {
-      parts.push(`${data.radiusSolar.toFixed(2)} R\u2609`);  // R☉
+      parts.push(`${data.radiusSolar.toFixed(2)} R\u2609`);
     }
     this._show(typeName, parts.join(' \u00b7 '));
   }
 
-  /** Hide immediately. */
   hide() {
     clearTimeout(this._timer);
+    clearInterval(this._typewriterTimer);
+    clearInterval(this._blinkTimer);
+    this._typing = false;
     if (this._el) {
       this._el.classList.remove('fading');
       this._el.style.display = 'none';
@@ -93,17 +101,60 @@ export class BodyInfo {
 
   _show(typeName, stats) {
     if (!this._el) return;
+
+    // Stop any running typewriter
     clearTimeout(this._timer);
+    clearInterval(this._typewriterTimer);
+    clearInterval(this._blinkTimer);
+
+    // Store full text, reset display
+    this._fullType = typeName.toUpperCase();
+    this._fullStats = stats;
+    this._charIndex = 0;
+    this._typing = true;
+
+    this._typeEl.textContent = '';
+    this._statsEl.textContent = '';
     this._el.style.display = 'block';
     this._el.classList.remove('fading');
-    this._typeEl.textContent = typeName;
-    this._statsEl.textContent = stats;
-    // Auto-hide after 5 seconds
-    this._timer = setTimeout(() => this._fadeOut(), 5000);
+
+    // Show cursor
+    if (this._cursorEl) {
+      this._cursorEl.style.display = 'inline';
+      this._cursorEl.classList.add('blinking');
+    }
+
+    // Type out characters one by one
+    const totalChars = this._fullType.length + this._fullStats.length;
+    this._typewriterTimer = setInterval(() => {
+      if (this._charIndex >= totalChars) {
+        // Typing complete — stop and start idle blink
+        clearInterval(this._typewriterTimer);
+        this._typing = false;
+        // Auto-hide after 4 seconds
+        this._timer = setTimeout(() => this._fadeOut(), 4000);
+        return;
+      }
+
+      // Type next character
+      if (this._charIndex < this._fullType.length) {
+        this._typeEl.textContent = this._fullType.substring(0, this._charIndex + 1);
+      } else {
+        // First line done, type second line
+        this._typeEl.textContent = this._fullType;
+        const statsIdx = this._charIndex - this._fullType.length;
+        this._statsEl.textContent = this._fullStats.substring(0, statsIdx + 1);
+      }
+      this._charIndex++;
+    }, this._tickMs);
   }
 
   _fadeOut() {
     if (!this._el) return;
+    // Hide cursor before fading
+    if (this._cursorEl) {
+      this._cursorEl.style.display = 'none';
+    }
     this._el.classList.add('fading');
     setTimeout(() => {
       if (this._el) this._el.style.display = 'none';
