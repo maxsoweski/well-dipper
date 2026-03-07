@@ -304,11 +304,11 @@ export class SystemMap {
       this._focusRing.visible = true;
       this._focusRing.position.copy(planetSpr.position);
       this._focusRing.position.y = 0.05;
-      // Scale ring to be just larger than the planet dot
+      // Scale ring to tightly surround the planet dot (thin stroke effect)
       const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
       const t = this.planetMapData[focusIndex].mapRadius / maxMapRadius;
       const dotSize = this.extent * (0.08 + t * 0.04);
-      const ringSize = dotSize * 1.4;
+      const ringSize = dotSize * 0.65; // snug around the dot
       this._focusRing.scale.set(ringSize, 1, ringSize);
 
       // Blink animation: 3 quick on/off flashes when transitioning

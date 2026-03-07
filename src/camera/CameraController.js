@@ -394,14 +394,11 @@ export class CameraController {
    */
   focusOn(position, viewDistance = 8) {
     this._targetGoal.copy(position);
-    this.target.copy(position);
+    // Smoothly transition the orbit target (don't snap)
+    this._transitioning = true;
     this.distance = viewDistance;
-    // Start 10x farther out — planet is visible as a small dot, then zoom in.
-    // Log-space smoothing makes the zoom feel natural (~1s to settle).
-    this.smoothedDistance = viewDistance * 10;
     // Kill residual scroll momentum so it doesn't fight the zoom-in
     this.zoomSpeed = 0;
-    this._transitioning = false;
   }
 
   /**
@@ -426,11 +423,9 @@ export class CameraController {
    */
   viewSystem(systemRadius) {
     this._targetGoal.set(0, 0, 0);
-    this.target.set(0, 0, 0);
+    this._transitioning = true;
     this.distance = systemRadius * 1.5;
-    this.smoothedDistance = systemRadius * 1.5;
     this.zoomSpeed = 0;
-    this._transitioning = false;
   }
 
   update(deltaTime) {

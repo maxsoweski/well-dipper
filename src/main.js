@@ -3088,10 +3088,29 @@ function trySelect(clientX, clientY) {
       // let the click fall through to scene raycasting or warp star selection.
       const hit = systemMap.hitTest(uv.u, uv.v);
       if (hit) {
-        if (hit.type === 'star') {
-          focusStar(hit.starIndex);
-        } else if (hit.type === 'planet') {
-          focusPlanet(hit.planetIndex);
+        if (autoNav.isActive) {
+          // During autopilot: queue the selected body as next destination
+          // (don't interrupt current orbit — autopilot will go there next)
+          if (hit.type === 'star') {
+            autoNav.jumpToStar();
+          } else if (hit.type === 'planet') {
+            autoNav.jumpToPlanet(hit.planetIndex);
+          }
+          // Update minimap focus ring to show the queued destination
+          if (hit.type === 'planet') {
+            focusIndex = hit.planetIndex;
+            focusMoonIndex = -1;
+            focusStarIndex = -1;
+          }
+          soundEngine.play('select');
+          if (systemMap) systemMap.triggerBlink();
+        } else {
+          // Manual mode: smoothly fly to the selected body
+          if (hit.type === 'star') {
+            focusStar(hit.starIndex);
+          } else if (hit.type === 'planet') {
+            focusPlanet(hit.planetIndex);
+          }
         }
       }
       return; // always consume clicks inside the minimap
