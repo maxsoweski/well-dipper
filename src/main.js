@@ -352,8 +352,9 @@ warpEffect.onPrepareSystem = () => {
   if (destType === 'star-system') {
     pendingSystemData = StarSystemGenerator.generate(seed);
   } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
-    // Navigable nebulae — use the new volumetric generator
+    // Navigable nebulae — nav generator for star positions, billboard generator for visuals
     pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
+    pendingSystemData._billboardData = NebulaGenerator.generate(seed, destType);
   } else if (destType === 'open-cluster') {
     // Navigable open cluster — use the new cluster generator
     pendingSystemData = NavigableClusterGenerator.generate(seed);
@@ -987,10 +988,40 @@ function spawnDeepSky(data, destType, forWarp) {
  * and optionally a VolumetricNebula gas cloud you can fly through.
  */
 function spawnNavigableDeepSky(data, destType, forWarp) {
-  // ── Gas cloud (nebulae only) ──
+  // ── Gas cloud (nebulae only — billboard layers scaled to navigable size) ──
   let gasCloud = null;
-  if (data.gasCloud) {
-    gasCloud = new VolumetricNebula(data.gasCloud);
+  if (data._billboardData) {
+    const bb = data._billboardData;
+    const scale = data.radius / bb.radius;
+
+    // Scale layer positions and sizes to navigable radius
+    const scaledLayers = bb.layers.map(l => ({
+      ...l,
+      position: [l.position[0] * scale, l.position[1] * scale, l.position[2] * scale],
+      size: l.size * scale,
+    }));
+
+    // Scale embedded star particle positions and sizes
+    const scaledStarPositions = new Float32Array(bb.starPositions.length);
+    const scaledStarSizes = new Float32Array(bb.starSizes.length);
+    for (let i = 0; i < bb.starCount; i++) {
+      scaledStarPositions[i * 3]     = bb.starPositions[i * 3] * scale;
+      scaledStarPositions[i * 3 + 1] = bb.starPositions[i * 3 + 1] * scale;
+      scaledStarPositions[i * 3 + 2] = bb.starPositions[i * 3 + 2] * scale;
+      scaledStarSizes[i] = bb.starSizes[i] * scale;
+    }
+
+    const scaledData = {
+      ...bb,
+      radius: data.radius,
+      layers: scaledLayers,
+      starPositions: scaledStarPositions,
+      starColors: bb.starColors,
+      starSizes: scaledStarSizes,
+      centralStar: null,  // navigable stars handle this — don't duplicate
+    };
+
+    gasCloud = new Nebula(scaledData);
     gasCloud.addTo(scene);
   }
 
@@ -1046,7 +1077,7 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
 
   const label = destType.replace(/-/g, ' ');
   const starCount = allStars.length;
-  const gasInfo = gasCloud ? `, ${data.gasCloud.particleCount} gas particles` : '';
+  const gasInfo = gasCloud ? `, ${data._billboardData?.layers?.length || 0} billboard layers` : '';
   console.log(`Navigable deep sky: ${label} (${starCount} stars${gasInfo}, r=${data.radius.toFixed(0)})`);
 
   // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
@@ -2061,7 +2092,7 @@ function animate() {
     if (system.type && system.type !== 'star-system') {
       if (system.destination) system.destination.update(deltaTime, camera);
       // Navigable deep sky: update gas cloud + extra star glows
-      if (system.gasCloud) system.gasCloud.update(deltaTime);
+      if (system.gasCloud) system.gasCloud.update(deltaTime, camera);
       if (system.extraStars) {
         for (const s of system.extraStars) {
           if (s.updateGlow) s.updateGlow(camera);
