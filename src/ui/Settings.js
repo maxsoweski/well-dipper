@@ -91,6 +91,11 @@ export class Settings {
             this._values[key] = saved[key];
           }
         }
+        // Migrate stale idleTimeout from old 20s default to new 300s default
+        if (saved.idleTimeout !== undefined && saved.idleTimeout < 60) {
+          this._values.idleTimeout = DEFAULTS.idleTimeout;
+          this._save();
+        }
       }
     } catch {
       // Corrupted or unavailable — use defaults

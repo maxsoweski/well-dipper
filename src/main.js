@@ -3337,6 +3337,11 @@ canvas.addEventListener('mousedown', (e) => {
       cameraController.isDragging = false;
       // Request pointer lock so drag works even if mouse exits the window
       canvas.requestPointerLock?.();
+      // Reset idle timer — minimap interaction counts as user activity
+      if (!autoNav.isActive) {
+        idleTimer = 0;
+        _deepSkyLingerTimer = -1;
+      }
       return; // don't process further (don't stop autopilot, etc.)
     }
   }

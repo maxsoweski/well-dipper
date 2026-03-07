@@ -408,6 +408,12 @@ export class CameraController {
     this.yaw = Math.atan2(dx, dz);
     this.smoothedYaw = this.yaw;
 
+    // Reset pitch to a gentle overhead angle so the planet is centered.
+    // Without this, a stale pitch from the previous view (e.g. 0.5 rad
+    // from looking down at a system overview) would offset the planet.
+    this.pitch = 0.15;
+    this.smoothedPitch = 0.15;
+
     this.distance = viewDistance;
     // Kill residual scroll momentum so it doesn't fight the zoom-in
     this.zoomSpeed = 0;

@@ -52,17 +52,20 @@ export class ClusterGenerator {
       positions[i * 3 + 2] = r * Math.cos(phi);
 
       // Warm yellow-orange palette (old Population II stars)
-      const warmth = rng.range(0.75, 1.0);
+      // Outer particles fade out to prevent additive-blending "shell" at edges
+      const normalizedR = r / radius;
+      const edgeFade = normalizedR < 0.5 ? 1.0 : Math.max(0.15, 1.0 - (normalizedR - 0.5) * 1.4);
+      const warmth = rng.range(0.75, 1.0) * edgeFade;
       colors[i * 3]     = warmth;
       colors[i * 3 + 1] = warmth * rng.range(0.7, 0.88);
       colors[i * 3 + 2] = warmth * rng.range(0.4, 0.6);
 
       // Smaller in the dense core, slightly larger at edges (resolved stars)
       // Sized for Galaxy shader distScale (300/z) at typical viewing distances
-      const normalizedR = r / radius;
+      // Edge particles also smaller to reduce shell visibility
       sizes[i] = normalizedR < 0.3
         ? rng.range(25, 60)
-        : rng.range(40, 100);
+        : rng.range(20, 60) * edgeFade;
     }
 
     const tourStops = [

@@ -214,6 +214,10 @@ export class Nebula {
         layer.quaternion.copy(camera.quaternion);
       }
     }
+    // Update central star glow so distance-based cap kicks in
+    if (this._centralStar && camera) {
+      this._centralStar.updateGlow(camera);
+    }
   }
 
   addTo(scene) {
