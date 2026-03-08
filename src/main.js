@@ -1395,11 +1395,11 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
       camera.lookAt(0, 0, 0);
       cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
     } else {
-      const pos = allStars[0].mesh.position;
-      const viewDist = data.radius * 0.15;
-      camera.position.set(pos.x, pos.y + viewDist * 0.2, pos.z + viewDist);
-      camera.lookAt(pos);
-      cameraController.restoreFromWorldState(pos.clone());
+      // Nebulae: start well outside so you see the whole structure
+      const viewDist = data.radius * 0.9;
+      camera.position.set(0, viewDist * 0.2, viewDist);
+      camera.lookAt(0, 0, 0);
+      cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
     }
   }
 }
@@ -2039,14 +2039,12 @@ function warpSwapSystem() {
     const travelDist = hyperDist + exitDist;                  // 330
 
     if (system._navigable) {
-      // Navigable deep sky: approach toward the primary star (same as star system)
-      const star = system.star;
-      if (star) {
-        const starPos = star.mesh.position;
-        const orbitDist = star.data.radius * 4;
-        camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
-        camera.lookAt(starPos);
-      }
+      // Navigable deep sky: approach from well outside the structure
+      // so you see the whole nebula/cluster on arrival, not the interior
+      const navRadius = system._navRadius || 100000;
+      const orbitDist = navRadius * 0.9;
+      camera.position.set(0, 2, travelDist + orbitDist + coastDist);
+      camera.lookAt(0, 0, 0);
     } else if (system.type && system.type !== 'star-system') {
       // Distant deep sky: approach from far along +Z toward the structure center.
       // Final viewing distance is radius * 1.25 — start further out so the

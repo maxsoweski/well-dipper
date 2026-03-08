@@ -120,7 +120,7 @@ export class AutoNavigator {
         type: 'star',
         starIndex: 0,
         bodyRef: null,
-        orbitDistance: system._navRadius * 0.3,  // 30% of structure = overview
+        orbitDistance: system._navRadius * 0.9,  // 90% of structure = overview (far enough to see the whole nebula/cluster)
         bodyRadius: system._navRadius * 0.05,    // prevents camera from getting too close
         linger: 12 + Math.random() * 5,          // 12-17s overview
         _isOverview: true,                        // flag for reference
