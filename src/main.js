@@ -825,7 +825,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Create star(s) ──
   // Scene-unit star data: override radius with radiusScene for 3D rendering
   const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene };
-  const star = new Star(sceneStarData);
+  const star = new StarFlare(sceneStarData);
   star.addTo(scene);
 
   let star2 = null;
@@ -833,7 +833,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   if (systemData.isBinary) {
     const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene };
-    star2 = new Star(sceneStarData2);
+    star2 = new StarFlare(sceneStarData2);
     star2.addTo(scene);
 
     // Position binary stars at their starting positions (scene units)
@@ -1344,7 +1344,7 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     if (isCluster) {
       color = color.map(c => Math.min(1.0, c * 1.3 + 0.15));
     }
-    const starObj = new Star({ ...sData, radius: renderR, color }, renderR);
+    const starObj = new StarFlare({ ...sData, radius: renderR, color }, renderR);
     starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
     starObj.addTo(scene);
     allStars.push(starObj);
@@ -2476,11 +2476,14 @@ function animate() {
       if (system.gasCloud) system.gasCloud.update(deltaTime, camera);
       if (system.extraStars) {
         for (const s of system.extraStars) {
+          if (s.update) s.update(deltaTime, camera);
           if (s.updateGlow) s.updateGlow(camera);
         }
       }
-      // Primary star glow needs updating too
+      // Primary star update + glow
+      if (system.star && system.star.update) system.star.update(deltaTime, camera);
       if (system.star && system.star.updateGlow) system.star.updateGlow(camera);
+      if (system.star2 && system.star2.update) system.star2.update(deltaTime, camera);
       if (system.star2 && system.star2.updateGlow) system.star2.updateGlow(camera);
     }
 
@@ -2623,9 +2626,13 @@ function animate() {
       }
     }
 
-    // ── Update star glow (distance-adaptive) ──
+    // ── Update stars (billboarding, LOD, glow) ──
+    if (system.star.update) system.star.update(deltaTime, camera);
     system.star.updateGlow(camera);
-    if (system.star2) system.star2.updateGlow(camera);
+    if (system.star2) {
+      if (system.star2.update) system.star2.update(deltaTime, camera);
+      system.star2.updateGlow(camera);
+    }
 
     // ── Update asteroid belts ──
     for (const belt of system.asteroidBelts) {

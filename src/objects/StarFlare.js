@@ -21,7 +21,11 @@ export class StarFlare {
     this._renderRadius = renderRadius !== null ? renderRadius : starData.radius;
     this.mesh = new THREE.Group();
 
-    this.surface = null;
+    // Invisible sphere for click raycasting (star systems register
+    // star.surface as a click target — needs to be a real mesh).
+    this.surface = this._createSurface();
+    this.surface.frustumCulled = false;
+    this.mesh.add(this.surface);
 
     // Diffraction spikes + glow + core (all in one shader billboard)
     this._flareDisc = this._createFlareDisc();
@@ -38,6 +42,14 @@ export class StarFlare {
     this._lastCamPos = new THREE.Vector3();
     this._camSpeed = 0;       // smoothed camera speed for brightness pulse
     this._screenAngle = 0;    // angle from screen center to star
+  }
+
+  _createSurface() {
+    const geometry = new THREE.IcosahedronGeometry(this._renderRadius, 2);
+    const material = new THREE.MeshBasicMaterial({
+      visible: false, // not rendered, only used for raycasting
+    });
+    return new THREE.Mesh(geometry, material);
   }
 
   _createBillboard() {
@@ -308,6 +320,8 @@ export class StarFlare {
   }
 
   dispose() {
+    this.surface.geometry.dispose();
+    this.surface.material.dispose();
     this._flareDisc.geometry.dispose();
     this._flareDisc.material.dispose();
     this._billboard.geometry.dispose();
