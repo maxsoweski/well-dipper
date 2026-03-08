@@ -87,7 +87,7 @@ export class StarFlare {
           // Circular discard for quad corners
           if (dist > uSize * 0.5) discard;
 
-          float spikeLen = uStarRadius * 13.0;
+          float spikeLen = uStarRadius * 6.5;
           vec3 color = vec3(0.0);
 
           // ── Star core + glow (no separate sphere mesh) ──
