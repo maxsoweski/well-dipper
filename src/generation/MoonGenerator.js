@@ -114,7 +114,8 @@ export class MoonGenerator {
     const orbitRadius = mapBaseOrbit + rng.range(-0.3, 0.5) * planetData.radius;
 
     // Orbital speed: inner moons faster
-    const orbitSpeed = rng.range(0.4, 0.83) / (1.0 + moonIndex * 0.6);
+    // Fastest inner moon ≈ 0.052 rad/s → ~2 min full orbit
+    const orbitSpeed = rng.range(0.025, 0.052) / (1.0 + moonIndex * 0.6);
 
     // Orbital inclination: regular moons ~0, captured moons can be tilted
     const inclination = type === 'captured'
@@ -222,7 +223,8 @@ export class MoonGenerator {
     const mapBaseOrbit = planetData.radius * (2.0 + moonIndex * 1.8);
     const orbitRadius = mapBaseOrbit + rng.range(-0.3, 0.5) * planetData.radius;
 
-    const orbitSpeed = rng.range(0.3, 0.6) / (1.0 + moonIndex * 0.6);
+    // Planet-moons orbit a bit slower than regular moons
+    const orbitSpeed = rng.range(0.019, 0.038) / (1.0 + moonIndex * 0.6);
     const inclination = rng.range(-0.15, 0.15);
     const startAngle = rng.range(0, Math.PI * 2);
 

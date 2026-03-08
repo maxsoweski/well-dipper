@@ -190,6 +190,7 @@ function formatSettingValue(key, value) {
   if (key === 'deepSkyChance') return `${value}%`;
   if (key === 'tourLingerMultiplier') return `${value.toFixed(1)}x`;
   if (key === 'autoRotateSpeed') return `${value.toFixed(1)}`;
+  if (key === 'orbitSpeedMultiplier') return `${value.toFixed(2)}x`;
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
   if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
   if (key === 'masterVolume' || key === 'musicVolume' || key === 'sfxVolume')
@@ -948,8 +949,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
       moon.addTo(scene);
       moons.push(moon);
 
-      // Moon billboard (shown when moon is sub-pixel) — 1 render pixel (3 screen px)
-      const moonBb = new Billboard(billboardColor(moonData.baseColor), 1);
+      // Moon billboard (shown when moon is sub-pixel) — 2 render pixels (6 screen px)
+      // Larger than background stars (1px) so moons stand out during approach
+      const moonBb = new Billboard(billboardColor(moonData.baseColor), 2);
       moonBb.addTo(scene);
       moonBillboards.push(moonBb);
 
@@ -1159,7 +1161,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     focusIndex = heroIndex;
     if (heroMoonIndex >= 0) {
       const moon = hero.moons[heroMoonIndex];
-      const viewDist = moon.data.radius * 8;
+      const viewDist = Math.max(moon.data.radius * 5, 0.08);
       focusMoonIndex = heroMoonIndex;
       cameraController.distance = viewDist;
       cameraController.smoothedDistance = viewDist;
@@ -1940,9 +1942,9 @@ function populateQueueRefs() {
       const moon = entry.moons[stop.moonIndex];
       stop.bodyRef = moon.mesh;
       stop.bodyRadius = moon.data.radius;
-      // 2.4× radius fills ~55% of FOV — survey distance with detail.
-      // Minimum 0.15 keeps tiny moons visible and prevents near-plane clipping.
-      stop.orbitDistance = Math.max(moon.data.radius * 3.5, 0.15);
+      // 3× radius fills ~60% of FOV — close enough to see surface detail.
+      // Minimum 0.06 keeps tiny moons visible without near-plane clipping.
+      stop.orbitDistance = Math.max(moon.data.radius * 3, 0.06);
     } else if (stop.type === 'deepsky-poi') {
       // Deep sky tour stop — bodyRef is the dummy Object3D created in spawnDeepSky
       // orbitDistance and bodyRadius were set by buildDeepSkyQueue
@@ -2403,8 +2405,8 @@ function focusMoon(planetIndex, moonIndex) {
   if (moonIndex < 0 || moonIndex >= entry.moons.length) return;
 
   const moon = entry.moons[moonIndex];
-  // Ensure minimum view distance so tiny moons don't clip or fill the camera
-  const viewDist = Math.max(moon.data.radius * 8, 0.15);
+  // Close enough to see the moon mesh (not just billboard), with a floor so we don't clip
+  const viewDist = Math.max(moon.data.radius * 5, 0.08);
   focusIndex = planetIndex;
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;
@@ -2560,9 +2562,12 @@ function animate() {
     // ── Star system updates (skip for deep sky) ──
     if (!system.type || system.type === 'star-system') {
 
+    // ── Orbit speed multiplier (from settings slider) ──
+    const orbitDt = deltaTime * settings.get('orbitSpeedMultiplier');
+
     // ── Binary star orbit ──
     if (system.isBinary) {
-      system.binaryOrbitAngle += system.binaryOrbitSpeed * deltaTime;
+      system.binaryOrbitAngle += system.binaryOrbitSpeed * orbitDt;
       const q = system.binaryMassRatio;
       const sep = system.binarySeparation;
       const r1 = sep * q / (1 + q);
@@ -2579,7 +2584,7 @@ function animate() {
 
     // ── Update each planet's orbit, position, and lighting ──
     for (const entry of system.planets) {
-      entry.orbitAngle += entry.orbitSpeed * deltaTime;
+      entry.orbitAngle += entry.orbitSpeed * orbitDt;
       const px = Math.cos(entry.orbitAngle) * entry.orbitRadius;
       const pz = Math.sin(entry.orbitAngle) * entry.orbitRadius;
       entry.planet.mesh.position.set(px, 0, pz);
@@ -2608,7 +2613,7 @@ function animate() {
         if (moon.isPlanetMoon) {
           // Planet-class moons: handle orbital positioning externally
           // (Planet.js has no orbit logic — Moon.js does it internally)
-          moon.orbitAngle += moon.data.orbitSpeed * deltaTime;
+          moon.orbitAngle += moon.data.orbitSpeed * orbitDt;
           const r = moon.data.orbitRadius;
           const angle = moon.orbitAngle;
           const incl = moon.data.inclination || 0;
@@ -2623,7 +2628,7 @@ function animate() {
           if (system.isBinary) moon.planet._lightDir2.copy(entry.planet._lightDir2);
           moon.planet.update(deltaTime);
         } else {
-          moon.update(deltaTime, entry.planet.mesh.position);
+          moon.update(orbitDt, entry.planet.mesh.position);
         }
       }
 
@@ -2706,7 +2711,7 @@ function animate() {
 
     // ── Update asteroid belts ──
     for (const belt of system.asteroidBelts) {
-      belt.update(deltaTime);
+      belt.update(orbitDt);
       // Update star positions for per-fragment lighting (binary)
       if (system.isBinary) {
         belt.updateStarPositions(system.star.mesh.position, system.star2.mesh.position);

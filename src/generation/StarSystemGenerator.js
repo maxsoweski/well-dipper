@@ -131,7 +131,7 @@ export class StarSystemGenerator {
       // Map separation: use old visual formula for backward compat
       binarySeparation = rng.range(3, 8) + star.radius + star2.radius;
       // Orbit speed: closer = faster (Kepler's 3rd law)
-      binaryOrbitSpeed = 0.05 / Math.pow(binarySeparation / 5, 1.5);
+      binaryOrbitSpeed = 0.003 / Math.pow(binarySeparation / 5, 1.5);
       binaryOrbitAngle = rng.range(0, Math.PI * 2);
     }
 
@@ -203,7 +203,7 @@ export class StarSystemGenerator {
 
       const orbitAngle = planetRng.range(0, Math.PI * 2);
       // Kepler's 3rd law: period ∝ distance^1.5
-      const orbitSpeed = (0.02 / Math.pow(orbitRadius / adjustedMapBase, 1.5)) * planetRng.range(0.8, 1.2);
+      const orbitSpeed = (0.00125 / Math.pow(orbitRadius / adjustedMapBase, 1.5)) * planetRng.range(0.8, 1.2);
 
       // Planet position in world space (initial) — using map coords for now
       const px = Math.cos(orbitAngle) * orbitRadius;

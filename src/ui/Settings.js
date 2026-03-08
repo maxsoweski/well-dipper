@@ -23,6 +23,9 @@ const DEFAULTS = {
   showMinimap: true,
   showGravityWells: false,
 
+  // Simulation
+  orbitSpeedMultiplier: 1.0,  // 1× = default, 0.25× = slow, 4× = fast
+
   // Camera
   autoRotateSpeed: 0.67,      // degrees/sec
   zoomSensitivity: 1.5,       // matches CameraController default

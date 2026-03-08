@@ -77,7 +77,7 @@ export class AsteroidBeltGenerator {
       const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
 
       // Orbital speed: Kepler-ish with slight variation
-      const baseSpeed = 0.02 / Math.pow(r / innerOrbit, 1.5);
+      const baseSpeed = 0.00125 / Math.pow(r / innerOrbit, 1.5);
       const orbitSpeed = baseSpeed * rng.range(0.85, 1.15);
 
       asteroids.push({
