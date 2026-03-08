@@ -482,7 +482,7 @@ const GALLERY_TYPES = [
   // Deep sky (navigable — fly inside)
   'volumetric-nebula-test',
   'nav-planetary-nebula', 'nav-emission-nebula',
-  'nav-open-cluster',
+  'nav-open-cluster', 'cluster-gas-test',
   // Star system objects
   'star-flare',
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
@@ -1668,6 +1668,33 @@ function gallerySpawn() {
     camera.lookAt(0, 0, 0);
 
     infoText = `open-cluster (navigable)  |  ${navData.stars.length} stars  |  r=${radius.toFixed(0)}`;
+  }
+
+  // ── Cluster gas test (navigable cluster with reflection nebulosity) ──
+  else if (type === 'cluster-gas-test') {
+    const navData = NavigableClusterGenerator.generate(seed);
+
+    // Gas cloud rendered as VolumetricNebula
+    if (navData.gasCloud) {
+      const gasObj = new VolumetricNebula(navData.gasCloud);
+      gasObj.addTo(scene);
+      galleryObject = gasObj;
+    }
+
+    // Stars
+    for (const sData of navData.stars) {
+      const renderR = sData.renderRadius || sData.radiusScene;
+      const starObj = new StarFlare({ ...sData, radius: renderR, color: sData.color }, renderR);
+      starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
+      starObj.addTo(scene);
+      _galleryMeshes.push(starObj);
+    }
+
+    const radius = navData.radius;
+    camera.position.set(0, radius * 0.3, radius * 1.5);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `cluster gas test  |  ${navData.stars.length} stars  |  gas: ${navData.gasCloud?.particleCount || 0} particles  |  r=${radius.toFixed(0)}`;
   }
 
   // ── Deep sky objects (billboard/distant view) ──

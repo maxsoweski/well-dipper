@@ -105,9 +105,14 @@ export class NavigableClusterGenerator {
       });
     }
 
+    // ── Gas cloud: reflection nebulosity around the star clumps ──
+    // Pleiades-style wispy gas concentrated around the brightest stars
+    const gasCloud = this._generateGasCloud(rng, radius, clumps, stars);
+
     return {
       type: 'open-cluster',
       _destType: 'open-cluster',
+      gasCloud,
       stars,
       planets: [],   // open clusters are too young for planets
       radius,
@@ -127,6 +132,120 @@ export class NavigableClusterGenerator {
       if (roll <= 0) return type;
     }
     return 'A';  // fallback
+  }
+
+  /**
+   * Generate ragged reflection nebulosity gas cloud data.
+   * Concentrated around star clumps with filamentary tendrils — not spherical.
+   */
+  static _generateGasCloud(rng, radius, clumps, stars) {
+    // Particles around star clumps + filamentary tendrils between them
+    const clumpParticles = 6000;
+    const tendrilParticles = 3000;
+    const diffuseParticles = 1000;
+    const particleCount = clumpParticles + tendrilParticles + diffuseParticles;
+
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+    const opacities = new Float32Array(particleCount);
+
+    // Reflection nebula palette: cool blue-white (starlight scattered by dust)
+    const palR = [0.45, 0.70];
+    const palG = [0.55, 0.78];
+    const palB = [0.80, 1.00];
+
+    let idx = 0;
+
+    // ── Clump gas: concentrated around each star sub-clump ──
+    // Each clump gets an irregular shape via per-clump stretch axes
+    for (let i = 0; i < clumpParticles; i++) {
+      const clump = clumps[i % clumps.length];
+
+      // Random stretch direction per clump (seeded by clump index)
+      // This makes each gas concentration elongated in a different direction
+      const stretchAngle = (i % clumps.length) * 1.618 * Math.PI;
+      const stretchFactor = 1.8;
+
+      let x = this._gaussian(rng) * clump.spread * 0.8;
+      let y = this._gaussian(rng) * clump.spread * 0.25;
+      let z = this._gaussian(rng) * clump.spread * 0.8;
+
+      // Stretch along the clump's unique direction
+      const cosA = Math.cos(stretchAngle);
+      const sinA = Math.sin(stretchAngle);
+      const rx = x * cosA - z * sinA;
+      const rz = x * sinA + z * cosA;
+      x = rx * stretchFactor;
+      z = rz;
+
+      // Rotate back
+      x = x * cosA + z * sinA;
+      z = -x * sinA + z * cosA;
+
+      positions[idx * 3]     = clump.x + x;
+      positions[idx * 3 + 1] = clump.y + y;
+      positions[idx * 3 + 2] = clump.z + z;
+
+      colors[idx * 3]     = rng.range(palR[0], palR[1]);
+      colors[idx * 3 + 1] = rng.range(palG[0], palG[1]);
+      colors[idx * 3 + 2] = rng.range(palB[0], palB[1]);
+
+      sizes[idx] = rng.range(400, 1200);
+      // Denser near clump center
+      const distFromClump = Math.sqrt(x * x + y * y + z * z);
+      const normDist = Math.min(distFromClump / (clump.spread * 1.5), 1);
+      opacities[idx] = (1 - normDist * 0.7) * rng.range(0.08, 0.25);
+      idx++;
+    }
+
+    // ── Tendrils: filaments connecting clumps ──
+    // Pick random clump pairs and scatter particles along the line between them
+    for (let i = 0; i < tendrilParticles; i++) {
+      const c1 = clumps[rng.int(0, clumps.length - 1)];
+      const c2 = clumps[rng.int(0, clumps.length - 1)];
+
+      // Lerp between the two clumps with Gaussian scatter perpendicular
+      const t = rng.float();
+      const baseX = c1.x + (c2.x - c1.x) * t;
+      const baseY = c1.y + (c2.y - c1.y) * t;
+      const baseZ = c1.z + (c2.z - c1.z) * t;
+
+      // Perpendicular scatter — thinner than clump gas
+      const scatter = radius * 0.06;
+      positions[idx * 3]     = baseX + this._gaussian(rng) * scatter;
+      positions[idx * 3 + 1] = baseY + this._gaussian(rng) * scatter * 0.3;
+      positions[idx * 3 + 2] = baseZ + this._gaussian(rng) * scatter;
+
+      colors[idx * 3]     = rng.range(palR[0], palR[1]) * 0.8;
+      colors[idx * 3 + 1] = rng.range(palG[0], palG[1]) * 0.8;
+      colors[idx * 3 + 2] = rng.range(palB[0], palB[1]) * 0.8;
+
+      sizes[idx] = rng.range(300, 900);
+      opacities[idx] = rng.range(0.03, 0.12);
+      idx++;
+    }
+
+    // ── Diffuse: sparse ambient particles across the volume ──
+    for (let i = 0; i < diffuseParticles; i++) {
+      const r = radius * Math.cbrt(rng.float()) * 0.4;
+      const theta = rng.range(0, 2 * Math.PI);
+      const phi = Math.acos(rng.range(-1, 1));
+
+      positions[idx * 3]     = r * Math.sin(phi) * Math.cos(theta);
+      positions[idx * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.25;
+      positions[idx * 3 + 2] = r * Math.cos(phi);
+
+      colors[idx * 3]     = rng.range(palR[0], palR[1]) * 0.6;
+      colors[idx * 3 + 1] = rng.range(palG[0], palG[1]) * 0.6;
+      colors[idx * 3 + 2] = rng.range(palB[0], palB[1]) * 0.6;
+
+      sizes[idx] = rng.range(500, 1500);
+      opacities[idx] = rng.range(0.02, 0.06);
+      idx++;
+    }
+
+    return { positions, colors, sizes, opacities, particleCount };
   }
 
   /** Box-Muller transform: two uniform randoms → one Gaussian (mean 0, std 1). */
