@@ -100,13 +100,15 @@ export class StarFlare {
           float spikeLen = uStarRadius * 13.0;
           vec3 color = vec3(0.0);
 
-          // ── Bloom glow around the star ──
-          // Bright additive glow that bridges the star surface into the spikes
-          float bloomRadius = uStarRadius * 2.5;
-          float bloomBright = exp(-dist / bloomRadius * 2.0) * 1.2;
-          // Only outside the star core (inside is covered by the sphere mesh)
+          // ── Star glow ──
+          // Strong radial glow that makes the star look luminous, not flat.
+          // Brighter and wider than before — visible bloom around the star.
+          float glowRadius = uStarRadius * 3.0;
+          float glowBright = exp(-dist / glowRadius * 1.5) * 1.5;
           float outsideStar = smoothstep(uStarRadius * 0.7, uStarRadius * 1.0, dist);
-          color += mix(vec3(1.0), uColor, 0.3) * bloomBright * outsideStar;
+          // Glow color: star color brightened toward white at the core
+          vec3 glowColor = mix(vec3(1.0), uColor, smoothstep(0.0, uStarRadius * 2.5, dist) * 0.6);
+          color += glowColor * glowBright * outsideStar;
 
           // 8 spikes: 4 angles, each goes both directions from center
           float angles[4];
@@ -142,18 +144,18 @@ export class StarFlare {
             float gPerp = perpDist;
             float bPerp = perpDist - chromOffset * spreadFactor;
 
-            // No innerFade gap — spikes start right from the center
             float rBright = spikeBrightness(rPerp, along, w);
             float gBright = spikeBrightness(gPerp, along, w);
             float bBright = spikeBrightness(bPerp, along, w);
 
-            // Near the base, blend toward white (all channels equal)
-            float whiteBlend = exp(-along * 4.0);
+            // Base color = star color (bright), transitions to rainbow further out
+            // Near center: star color for all channels (visually consistent with star)
+            // Further out: R/G/B channels separate into rainbow dispersion
+            float starBlend = exp(-along * 3.0); // 1.0 at base, fades out
 
-            // Star color tint (subtle)
-            vec3 tintedR = mix(vec3(1.0, 0.15, 0.05), vec3(1.0), whiteBlend);
-            vec3 tintedG = mix(vec3(0.1, 1.0, 0.15), vec3(1.0), whiteBlend);
-            vec3 tintedB = mix(vec3(0.1, 0.2, 1.0), vec3(1.0), whiteBlend);
+            vec3 tintedR = mix(vec3(1.0, 0.15, 0.05), uColor, starBlend);
+            vec3 tintedG = mix(vec3(0.1, 1.0, 0.15), uColor, starBlend);
+            vec3 tintedB = mix(vec3(0.1, 0.2, 1.0), uColor, starBlend);
 
             color += tintedR * rBright + tintedG * gBright + tintedB * bBright;
           }

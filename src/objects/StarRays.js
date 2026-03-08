@@ -6,6 +6,7 @@ import * as THREE from 'three';
  * 2D billboard effect: a flat disc of ray lines that always faces the camera.
  * Rays flow outward from the star, with irregular broken-up sections
  * animated via a custom shader. Same color as the star, additive blended.
+ * Star has a visible glow around it.
  */
 export class StarRays {
   constructor(starData, renderRadius = null) {
@@ -38,16 +39,22 @@ export class StarRays {
     const R = this._renderRadius;
     const [cr, cg, cb] = this.data.color;
 
-    // Large quad centered on the star — shader does the ray rendering
-    const size = R * 14;
-    const geometry = new THREE.PlaneGeometry(size, size);
+    // The ray disc (circular cutoff) is at rayDiscRadius.
+    // The quad must be LARGER than this so geometry doesn't clip before
+    // the circular discard can do its job. Diagonal of quad = size * sqrt(2),
+    // so size needs to be at least rayDiscRadius * 2 / sqrt(2) ≈ * 1.42.
+    // We use * 2 for plenty of margin.
+    const rayDiscRadius = R * 7;
+    const quadSize = rayDiscRadius * 2.5; // much bigger than the circle
+    const geometry = new THREE.PlaneGeometry(quadSize, quadSize);
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
         uColor: { value: new THREE.Vector3(cr, cg, cb) },
         uStarRadius: { value: R },
-        uSize: { value: size },
+        uDiscRadius: { value: rayDiscRadius },
+        uQuadSize: { value: quadSize },
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -60,7 +67,8 @@ export class StarRays {
         uniform float uTime;
         uniform vec3 uColor;
         uniform float uStarRadius;
-        uniform float uSize;
+        uniform float uDiscRadius;
+        uniform float uQuadSize;
         varying vec2 vUv;
 
         // Hash for pseudo-random per-ray variation
@@ -78,54 +86,64 @@ export class StarRays {
 
         void main() {
           // Center UV at origin, scale to world units
-          vec2 p = (vUv - 0.5) * uSize;
+          vec2 p = (vUv - 0.5) * uQuadSize;
           float dist = length(p);
           float angle = atan(p.y, p.x);
 
-          // Circular mask — discard outside the disc radius
-          if (dist > uSize * 0.5) discard;
+          // Perfect circular mask — hard cutoff at disc radius
+          if (dist > uDiscRadius) discard;
 
-          // Start rays right at the star surface — no gap
-          if (dist < uStarRadius * 0.85) discard;
+          vec3 color = vec3(0.0);
+          float alpha = 0.0;
 
-          // Quantize angle into ray slots — more rays = denser look
-          float rayCount = 80.0;
-          float rayAngle = angle / (2.0 * 3.14159265) * rayCount;
-          float rayIdx = floor(rayAngle + 0.5);
-          float rayFrac = abs(rayAngle - rayIdx); // distance from ray center
+          // ── Star glow ──
+          // Bright radial glow emanating from the star, makes it look luminous
+          float glowRadius = uStarRadius * 2.8;
+          float glowBright = exp(-dist / glowRadius * 2.0) * 1.0;
+          float outsideStar = smoothstep(uStarRadius * 0.7, uStarRadius * 1.0, dist);
+          color += uColor * glowBright * outsideStar;
+          alpha += glowBright * outsideStar;
 
-          // Thin ray lines — sharp falloff from center
-          float rayWidth = 0.35; // fraction of slot width
-          float rayAlpha = 1.0 - smoothstep(0.0, rayWidth, rayFrac);
+          // ── Rays ──
+          if (dist > uStarRadius * 0.85) {
+            // Quantize angle into ray slots — more rays = denser look
+            float rayCount = 80.0;
+            float rayAngle = angle / (2.0 * 3.14159265) * rayCount;
+            float rayIdx = floor(rayAngle + 0.5);
+            float rayFrac = abs(rayAngle - rayIdx); // distance from ray center
 
-          // Per-ray variation: different length, speed, phase
-          float rSeed = rayIdx * 127.1 + 311.7;
-          float rayLen = uStarRadius * (3.0 + hash(rSeed) * 4.0);
-          float raySpeed = 0.6 + hash(rSeed + 73.0) * 0.8;
-          float rayPhase = hash(rSeed + 191.0) * 6.28;
+            // Thin ray lines — sharp falloff from center
+            float rayWidth = 0.35; // fraction of slot width
+            float rayAlpha = 1.0 - smoothstep(0.0, rayWidth, rayFrac);
 
-          // Radial position normalized along this ray's length
-          // Start from the star surface (no gap)
-          float t = (dist - uStarRadius * 0.85) / rayLen;
+            // Per-ray variation: different length, speed, phase
+            float rSeed = rayIdx * 127.1 + 311.7;
+            float rayLen = uStarRadius * (3.0 + hash(rSeed) * 4.0);
+            float raySpeed = 0.6 + hash(rSeed + 73.0) * 0.8;
+            float rayPhase = hash(rSeed + 191.0) * 6.28;
 
-          // Hard cutoff: rays just disappear at their max length, no fade
-          if (t > 1.0 || t < 0.0) discard;
+            // Radial position normalized along this ray's length
+            float t = (dist - uStarRadius * 0.85) / rayLen;
 
-          // Flowing outward animation: noise pattern scrolls outward over time
-          // The noise creates irregular broken-up sections
-          float noiseCoord = t * 6.0 - uTime * raySpeed + rayPhase;
-          float breakup = noise1D(noiseCoord);
+            if (t <= 1.0 && t >= 0.0) {
+              // Flowing outward animation: noise creates irregular broken-up sections
+              float noiseCoord = t * 6.0 - uTime * raySpeed + rayPhase;
+              float breakup = noise1D(noiseCoord);
 
-          // Sharp threshold for broken segments (on/off feel)
-          float segmentAlpha = smoothstep(0.3, 0.5, breakup);
+              // Sharp threshold for broken segments (on/off feel)
+              float segmentAlpha = smoothstep(0.3, 0.5, breakup);
 
-          // Full brightness — nearly as bright as the star itself
-          // No distance fade, just the breakup pattern and hard cutoff
-          float alpha = rayAlpha * segmentAlpha * 0.9;
+              // Full brightness — nearly as bright as the star itself
+              float rayBright = rayAlpha * segmentAlpha * 0.9;
+              color += uColor * rayBright;
+              alpha += rayBright;
+            }
+          }
 
+          alpha = clamp(alpha, 0.0, 1.0);
           if (alpha < 0.01) discard;
 
-          gl_FragColor = vec4(uColor * 1.0, alpha);
+          gl_FragColor = vec4(color, alpha);
         }
       `,
       transparent: true,
@@ -148,7 +166,7 @@ export class StarRays {
   }
 
   updateGlow() {
-    // No glow sprite — rays are the visual effect
+    // No glow sprite — shader handles the glow
   }
 
   addTo(scene) {
