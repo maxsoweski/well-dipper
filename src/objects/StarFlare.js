@@ -101,11 +101,14 @@ export class StarFlare {
           vec3 color = vec3(0.0);
 
           // ── Star glow ──
-          // Radial glow in the star's own color — makes it look luminous.
+          // Bright bloom that covers the star's edge, making it too bright
+          // to see where the star ends and the glow begins.
+          // Renders OVER the star sphere (additive), not just outside it.
           float glowRadius = uStarRadius * 3.0;
           float glowBright = exp(-dist / glowRadius * 1.5) * 1.5;
-          float outsideStar = smoothstep(uStarRadius * 0.7, uStarRadius * 1.0, dist);
-          color += uColor * glowBright * outsideStar;
+          // Extra-bright wash right at the star edge to obliterate it
+          float edgeWash = exp(-pow((dist - uStarRadius) / (uStarRadius * 0.5), 2.0)) * 2.0;
+          color += uColor * (glowBright + edgeWash);
 
           // 8 spikes: 4 angles, each goes both directions from center
           float angles[4];
