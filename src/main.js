@@ -3054,12 +3054,18 @@ function animate() {
   cameraController.update(deltaTime);
 
   // ── Dynamic near clipping plane ──
-  // Scale near plane with camera distance so tiny moons don't clip.
-  // At orbit distance 0.01, near = 0.0001. At distance 100, near = 1.0.
-  // Clamped to [0.0001, 1.0] to avoid z-fighting at extremes.
-  const camDist = cameraController.smoothedDistance;
-  camera.near = Math.max(0.0001, Math.min(1.0, camDist * 0.01));
-  camera.updateProjectionMatrix();
+  // Scale near plane with camera distance to the nearest tracked body so
+  // tiny moons/planets don't clip when orbiting close. Works during both
+  // manual orbit (smoothedDistance) and flythrough (camera↔target distance).
+  {
+    let nearDist = cameraController.smoothedDistance;
+    // During flythrough, smoothedDistance may be stale — use actual camera-to-target
+    if (cameraController.bypassed && cameraController.target) {
+      nearDist = camera.position.distanceTo(cameraController.target);
+    }
+    camera.near = Math.max(0.0001, Math.min(1.0, nearDist * 0.01));
+    camera.updateProjectionMatrix();
+  }
 
   starfield.update(camera.position);
 

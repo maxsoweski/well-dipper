@@ -346,7 +346,8 @@ export class Moon {
    * @param {THREE.Vector3} parentPosition - the planet's world position
    */
   update(deltaTime, parentPosition) {
-    this.orbitAngle += this.data.orbitSpeed * (Math.PI / 180) * deltaTime;
+    // orbitSpeed is in rad/s (consistent with planet-moon path in main.js)
+    this.orbitAngle += this.data.orbitSpeed * deltaTime;
 
     const r = this.data.orbitRadius;
     const angle = this.orbitAngle;
