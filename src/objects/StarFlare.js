@@ -28,10 +28,12 @@ export class StarFlare {
 
     // Diffraction spikes + glow + core (all in one shader billboard)
     this._flareDisc = this._createFlareDisc();
+    this._flareDisc.frustumCulled = false;
     this.mesh.add(this._flareDisc);
 
-    // Distance billboard — small bright dot visible when the flare quad is too small
+    // Distance billboard — bright glow visible when the flare quad is too small
     this._billboard = this._createBillboard();
+    this._billboard.frustumCulled = false;
     this.mesh.add(this._billboard);
     this._billboard.visible = false;
 
