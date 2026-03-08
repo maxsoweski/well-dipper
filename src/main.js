@@ -624,7 +624,7 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   // Nebulae use NebulaGenerator (distant billboard), not NavigableNebulaGenerator.
   // destType uses 'title-*-nebula' to avoid isNavigable() routing in spawnSystem.
   const deepSkyTypes = ['spiral-galaxy', 'elliptical-galaxy', 'emission-nebula',
-                         'planetary-nebula', 'globular-cluster'];
+                         'planetary-nebula', 'globular-cluster', 'open-cluster'];
   const titleType = deepSkyTypes[titleRng.int(0, deepSkyTypes.length - 1)];
   let titleData;
   if (titleType.includes('galaxy')) {
@@ -633,6 +633,10 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   } else if (titleType === 'emission-nebula' || titleType === 'planetary-nebula') {
     titleData = NebulaGenerator.generate(titleSeed, titleType);
     // Use a destType that won't match isNavigable() but still routes to Nebula class
+    titleData._destType = `title-${titleType}`;
+  } else if (titleType === 'open-cluster') {
+    titleData = ClusterGenerator.generate(titleSeed, titleType);
+    // Prefix with 'title-' to avoid isNavigable() routing to spawnNavigableDeepSky
     titleData._destType = `title-${titleType}`;
   } else {
     titleData = ClusterGenerator.generate(titleSeed, titleType);
@@ -715,6 +719,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
       if (system.gasCloud) {
         system.gasCloud.removeFrom(scene);
         system.gasCloud.dispose();
+      }
+      // Deep sky gas overlay (open cluster reflection nebulosity)
+      if (system._deepSkyGas) {
+        system._deepSkyGas.removeFrom(scene);
+        system._deepSkyGas.dispose();
       }
       // Primary star (navigable deep sky sets system.star = allStars[0])
       // star2 is already in extraStars so it gets cleaned up below
@@ -1188,6 +1197,19 @@ function spawnDeepSky(data, destType, forWarp) {
 
   destination.addTo(scene);
 
+  // Open clusters with gas layers: add Nebula cloud overlay
+  let _deepSkyGas = null;
+  if (data.gasLayers && data.gasLayers.length > 0) {
+    const gasData = {
+      layers: data.gasLayers,
+      starPositions: new Float32Array(0),
+      starColors: new Float32Array(0),
+      starSizes: new Float32Array(0),
+    };
+    _deepSkyGas = new Nebula(gasData);
+    _deepSkyGas.addTo(scene);
+  }
+
   // Create dummy Object3Ds for tour stop bodyRefs
   // (the camera orbits these like it orbits planets)
   const dummyRefs = [];
@@ -1207,6 +1229,7 @@ function spawnDeepSky(data, destType, forWarp) {
   system = {
     type: destType,
     destination,
+    _deepSkyGas,
     tourStops: data.tourStops,
     _dummyRefs: dummyRefs,
     // Star system fields (null/empty so existing code doesn't crash)
@@ -1465,6 +1488,10 @@ function _setSystemVisible(visible) {
     if (system.gasCloud) {
       if (visible) system.gasCloud.addTo(scene);
       else system.gasCloud.removeFrom(scene);
+    }
+    if (system._deepSkyGas) {
+      if (visible) system._deepSkyGas.addTo(scene);
+      else system._deepSkyGas.removeFrom(scene);
     }
     if (system.star) system.star.mesh.visible = visible;
     if (system.star2) system.star2.mesh.visible = visible;
@@ -2482,6 +2509,7 @@ function animate() {
       if (system.destination) system.destination.update(deltaTime, camera);
       // Navigable deep sky: update gas cloud + extra star glows
       if (system.gasCloud) system.gasCloud.update(deltaTime, camera);
+      if (system._deepSkyGas) system._deepSkyGas.update(deltaTime, camera);
       if (system.extraStars) {
         for (const s of system.extraStars) {
           if (s.update) s.update(deltaTime, camera);
