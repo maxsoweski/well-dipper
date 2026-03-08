@@ -3,13 +3,15 @@ import * as THREE from 'three';
 /**
  * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
  *
- * Mimics real camera lens artifacts:
- * 1. Emissive sphere (core)
- * 2. 6 diffraction spikes — bright white at center, dispersing into rainbow
- *    spectrum toward the tips (like real lens flare chromatic aberration)
- * 3. Circular halo ring at ~3.5x radius (lens ghost)
+ * Based on real lens flare reference:
+ * - 8 spikes (4 pairs): vertical/horizontal are thickest, diagonals thinner
+ * - Blazing bright at base (nearly star brightness), fading outward
+ * - Rainbow chromatic aberration: R/G/B channels offset along each spike,
+ *   creating parallel color bands running the length of the spike
+ * - Bright highlight knots partway down each spike
+ * - Subtle circular halo ring
  *
- * All spike/halo elements billboard (face camera).
+ * All elements billboard (face camera).
  */
 export class StarFlare {
   constructor(starData, renderRadius = null) {
@@ -43,7 +45,7 @@ export class StarFlare {
     const [cr, cg, cb] = this.data.color;
 
     // Large quad — shader renders spikes + halo
-    const size = R * 28;
+    const size = R * 30;
     const geometry = new THREE.PlaneGeometry(size, size);
 
     const material = new THREE.ShaderMaterial({
@@ -67,81 +69,110 @@ export class StarFlare {
         uniform float uSize;
         varying vec2 vUv;
 
-        // Rainbow spectrum: maps 0-1 to visible light colors
-        vec3 spectrum(float t) {
-          // Peaking RGB channels at different positions for a natural rainbow
-          vec3 c;
-          c.r = smoothstep(0.0, 0.35, t) - smoothstep(0.65, 1.0, t);  // red-orange peak early
-          c.g = smoothstep(0.15, 0.5, t) - smoothstep(0.7, 1.0, t);   // green peaks middle
-          c.b = smoothstep(0.4, 0.75, t);                               // blue-violet peaks late
-          // Add some warm overlap for yellow/orange
-          c.r += smoothstep(0.1, 0.3, t) * (1.0 - smoothstep(0.3, 0.55, t)) * 0.5;
-          return clamp(c, 0.0, 1.0);
+        // Compute a single spike's contribution at a given point.
+        // Returns brightness (0-1) for this spike.
+        // perpDist: perpendicular distance from spike axis
+        // along: distance along the spike from center (0 at star, 1 at tip)
+        // spikeWidth: half-width of the spike at center
+        float spikeBrightness(float perpDist, float along, float spikeWidth) {
+          // Width tapers toward tip
+          float w = spikeWidth * (1.0 - along * 0.7);
+          float mask = smoothstep(w, w * 0.2, abs(perpDist));
+
+          // Brightness: very bright at base, fading outward
+          float falloff = exp(-along * 2.0) * 0.95;
+
+          // Highlight knots at ~30% and ~55% along
+          float knot1 = exp(-pow((along - 0.30) * 8.0, 2.0)) * 0.6;
+          float knot2 = exp(-pow((along - 0.55) * 10.0, 2.0)) * 0.35;
+          falloff += knot1 + knot2;
+
+          return mask * falloff;
         }
 
         void main() {
           vec2 p = (vUv - 0.5) * uSize;
           float dist = length(p);
-          float angle = atan(p.y, p.x);
 
-          float alpha = 0.0;
+          // Skip inside star
+          if (dist < uStarRadius * 0.9) discard;
+          float innerFade = smoothstep(uStarRadius * 0.9, uStarRadius * 1.4, dist);
+
+          float spikeLen = uStarRadius * 13.0;
           vec3 color = vec3(0.0);
 
-          // ── Diffraction spikes (6-pointed) ──
-          float spikeCount = 6.0;
-          for (float i = 0.0; i < 6.0; i++) {
-            float spikeAngle = i / spikeCount * 3.14159265;
-            // Distance from this spike's line (in both directions)
-            float diff = abs(sin(angle - spikeAngle));
+          // 8 spikes: 4 angles, each goes both directions from center
+          // Angles: 0 (horizontal), PI/2 (vertical), PI/4 (diagonal), 3PI/4 (diagonal)
+          // Horizontal/vertical are 4x thicker, diagonals 2x thicker (relative to old)
+          float angles[4];
+          angles[0] = 0.0;               // horizontal
+          angles[1] = 1.5707963;          // vertical (PI/2)
+          angles[2] = 0.7853982;          // diagonal (PI/4)
+          angles[3] = 2.3561945;          // diagonal (3PI/4)
 
-            // Spike width tapers: thick near star, thin far away
-            float spikeLen = uStarRadius * 12.0;
-            float t = clamp(dist / spikeLen, 0.0, 1.0);
-            float width = mix(0.04, 0.008, t);
+          float widths[4];
+          widths[0] = uStarRadius * 0.32; // horizontal — thick
+          widths[1] = uStarRadius * 0.32; // vertical — thick
+          widths[2] = uStarRadius * 0.16; // diagonal — half as thick
+          widths[3] = uStarRadius * 0.16; // diagonal — half as thick
 
-            float spikeMask = smoothstep(width, width * 0.3, diff);
+          for (int i = 0; i < 4; i++) {
+            float sa = angles[i];
+            vec2 axis = vec2(cos(sa), sin(sa));
+            vec2 perp = vec2(-sin(sa), cos(sa));
 
-            // Brightness falloff along spike length
-            float falloff = exp(-t * 2.5);
+            // Project point onto spike axis and perpendicular
+            float alongDist = dot(p, axis);  // signed distance along spike
+            float perpDist = dot(p, perp);   // signed distance perpendicular
 
-            // Skip inside star
-            float innerMask = smoothstep(uStarRadius * 0.8, uStarRadius * 1.3, dist);
+            float along = abs(alongDist) / spikeLen; // 0 at center, 1 at tip
+            if (along > 1.0) continue;
 
-            float spikeAlpha = spikeMask * falloff * innerMask;
+            float w = widths[i];
 
-            // Color: white/star-color near center, rainbow spectrum toward tips
-            // t=0 (center) -> star color, t=0.3+ -> rainbow dispersion
-            float spectrumBlend = smoothstep(0.15, 0.5, t);
+            // Chromatic aberration: offset R, G, B channels perpendicular to spike
+            // Each color sees the spike at a slightly different perpendicular position
+            // This creates parallel rainbow bands running along the spike length
+            float chromOffset = w * 0.6; // how far apart the color channels spread
+            // More spread further from center
+            float spreadFactor = smoothstep(0.05, 0.4, along);
 
-            // Each spike gets a slightly different spectrum offset for variety
-            float specOffset = i * 0.05;
-            // Map angular position across spike width to spectrum position
-            // This creates the rainbow spread — red on one edge, blue on the other
-            float spikeAngleDiff = sin(angle - spikeAngle); // signed, -1 to 1
-            float specPos = clamp(spikeAngleDiff / (width * 2.0) + 0.5 + specOffset, 0.0, 1.0);
+            float rPerp = perpDist + chromOffset * spreadFactor;
+            float gPerp = perpDist;
+            float bPerp = perpDist - chromOffset * spreadFactor;
 
-            vec3 rainbowColor = spectrum(specPos);
-            vec3 baseColor = mix(vec3(1.0), uColor, 0.3); // mostly white near center
-            vec3 spikeColor = mix(baseColor, rainbowColor * 1.3, spectrumBlend);
+            float rBright = spikeBrightness(rPerp, along, w) * innerFade;
+            float gBright = spikeBrightness(gPerp, along, w) * innerFade;
+            float bBright = spikeBrightness(bPerp, along, w) * innerFade;
 
-            color += spikeColor * spikeAlpha;
-            alpha += spikeAlpha;
+            // Near the base, blend toward white (all channels equal)
+            float whiteBlend = exp(-along * 4.0);
+
+            // Star color tint (subtle)
+            vec3 tintedR = mix(vec3(1.0, 0.15, 0.05), vec3(1.0), whiteBlend);
+            vec3 tintedG = mix(vec3(0.1, 1.0, 0.15), vec3(1.0), whiteBlend);
+            vec3 tintedB = mix(vec3(0.1, 0.2, 1.0), vec3(1.0), whiteBlend);
+
+            color += tintedR * rBright + tintedG * gBright + tintedB * bBright;
           }
 
           // ── Halo ring (lens ghost) ──
-          float haloRadius = uStarRadius * 3.5;
-          float haloWidth = uStarRadius * 0.4;
+          float haloRadius = uStarRadius * 4.0;
+          float haloWidth = uStarRadius * 0.35;
           float haloDist = abs(dist - haloRadius);
-          float haloAlpha = smoothstep(haloWidth, 0.0, haloDist) * 0.25;
-
-          // Halo gets subtle rainbow too
-          float haloSpecPos = (angle / 6.28318 + 0.5); // map angle to 0-1
-          vec3 haloColor = mix(uColor, spectrum(fract(haloSpecPos)) * 0.8, 0.4);
-
+          float haloAlpha = smoothstep(haloWidth, 0.0, haloDist) * 0.15;
+          // Subtle rainbow around the ring
+          float haloAngle = atan(p.y, p.x);
+          float haloHue = fract(haloAngle / 6.28318 + 0.5);
+          vec3 haloColor = vec3(
+            smoothstep(0.0, 0.33, haloHue) - smoothstep(0.66, 1.0, haloHue),
+            smoothstep(0.15, 0.5, haloHue) - smoothstep(0.7, 1.0, haloHue),
+            smoothstep(0.4, 0.75, haloHue)
+          );
+          haloColor = mix(uColor, haloColor, 0.5);
           color += haloColor * haloAlpha;
-          alpha += haloAlpha;
 
-          alpha = clamp(alpha, 0.0, 1.0);
+          float alpha = clamp(max(max(color.r, color.g), color.b), 0.0, 1.0);
           if (alpha < 0.01) discard;
 
           gl_FragColor = vec4(color, alpha);

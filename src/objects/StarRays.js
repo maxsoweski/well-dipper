@@ -103,6 +103,8 @@ export class StarRays {
 
           // Radial position normalized along this ray's length
           float t = (dist - uStarRadius) / rayLen;
+
+          // Hard cutoff: rays just disappear at their max length, no fade
           if (t > 1.0) discard;
 
           // Flowing outward animation: noise pattern scrolls outward over time
@@ -113,18 +115,16 @@ export class StarRays {
           // Sharp threshold for broken segments (on/off feel)
           float segmentAlpha = smoothstep(0.3, 0.5, breakup);
 
-          // Fade out toward the tip
-          float tipFade = 1.0 - t * t;
+          // Fade in from star surface (brief)
+          float innerFade = smoothstep(0.0, 0.05, t);
 
-          // Fade in from star surface
-          float innerFade = smoothstep(0.0, 0.08, t);
-
-          // Combine
-          float alpha = rayAlpha * segmentAlpha * tipFade * innerFade * 0.7;
+          // Full brightness — nearly as bright as the star itself
+          // No distance fade, just the breakup pattern and hard cutoff
+          float alpha = rayAlpha * segmentAlpha * innerFade * 0.9;
 
           if (alpha < 0.01) discard;
 
-          gl_FragColor = vec4(uColor, alpha);
+          gl_FragColor = vec4(uColor * 1.0, alpha);
         }
       `,
       transparent: true,
