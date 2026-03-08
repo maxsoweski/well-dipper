@@ -19,25 +19,15 @@ export class StarFlare {
     this._renderRadius = renderRadius !== null ? renderRadius : starData.radius;
     this.mesh = new THREE.Group();
 
-    // Emissive sphere
-    this.surface = this._createSurface();
-    this.surface.frustumCulled = false;
-    this.mesh.add(this.surface);
+    // No separate sphere mesh — the star core is rendered entirely in the
+    // flare shader so there's no hard geometry edge visible through the bloom.
+    this.surface = null;
 
-    // Diffraction spikes + halo (shader-based billboard)
+    // Diffraction spikes + glow + core (all in one shader billboard)
     this._flareDisc = this._createFlareDisc();
     this.mesh.add(this._flareDisc);
 
     this._time = 0;
-  }
-
-  _createSurface() {
-    const geometry = new THREE.IcosahedronGeometry(this._renderRadius, 4);
-    const [r, g, b] = this.data.color;
-    const material = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(r, g, b),
-    });
-    return new THREE.Mesh(geometry, material);
   }
 
   _createFlareDisc() {
@@ -100,15 +90,15 @@ export class StarFlare {
           float spikeLen = uStarRadius * 13.0;
           vec3 color = vec3(0.0);
 
-          // ── Star glow ──
-          // Bright bloom that covers the star's edge, making it too bright
-          // to see where the star ends and the glow begins.
-          // Renders OVER the star sphere (additive), not just outside it.
+          // ── Star core + glow (no separate sphere mesh) ──
+          // Solid bright core that smoothly bleeds into the glow — no hard edge.
+          // Inside the star radius: full brightness star color.
+          // At the edge: smooth falloff into the glow, so the boundary is invisible.
+          float coreBright = smoothstep(uStarRadius * 1.3, uStarRadius * 0.5, dist);
+          // Radial glow extending well past the core
           float glowRadius = uStarRadius * 3.0;
           float glowBright = exp(-dist / glowRadius * 1.5) * 1.5;
-          // Extra-bright wash right at the star edge to obliterate it
-          float edgeWash = exp(-pow((dist - uStarRadius) / (uStarRadius * 0.5), 2.0)) * 2.0;
-          color += uColor * (glowBright + edgeWash);
+          color += uColor * max(coreBright, glowBright);
 
           // 8 spikes: 4 angles, each goes both directions from center
           float angles[4];
@@ -215,8 +205,6 @@ export class StarFlare {
   }
 
   dispose() {
-    this.surface.geometry.dispose();
-    this.surface.material.dispose();
     this._flareDisc.geometry.dispose();
     this._flareDisc.material.dispose();
   }
