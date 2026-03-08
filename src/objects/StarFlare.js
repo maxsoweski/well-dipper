@@ -21,25 +21,18 @@ export class StarFlare {
     this._renderRadius = renderRadius !== null ? renderRadius : starData.radius;
     this.mesh = new THREE.Group();
 
-    // Opaque sphere — same as Star.js. Sits deep inside the flare shader's
-    // bright core zone (half radius) so it's invisible at close range.
-    // At extreme distance it guarantees at least one solid pixel.
-    this.surface = this._createSurface();
-    this.surface.frustumCulled = false;
-    this.mesh.add(this.surface);
+    this.surface = null;
 
     // Diffraction spikes + glow + core (all in one shader billboard)
     this._flareDisc = this._createFlareDisc();
     this._flareDisc.frustumCulled = false;
     this.mesh.add(this._flareDisc);
 
-    // Glow sprite — always visible, scales with distance (same as Star.js).
-    // At close range it's hidden behind the bright flare disc (additive).
-    // At distance it maintains minimum angular size so the star never vanishes.
-    this._baseGlowScale = this._renderRadius * 3.5;
-    this.glow = this._createGlow();
-    this.glow.frustumCulled = false;
-    this.mesh.add(this.glow);
+    // Distance billboard — opaque colored plane, hidden up close,
+    // toggled visible when the flare disc is too small to see.
+    this._billboard = this._createBillboard();
+    this.mesh.add(this._billboard);
+    this._billboard.visible = false;
 
     this._time = 0;
     this._lastCamPos = new THREE.Vector3();
@@ -47,49 +40,16 @@ export class StarFlare {
     this._screenAngle = 0;    // angle from screen center to star
   }
 
-  _createSurface() {
-    // Half-radius sphere — fully within the flare shader's bright core zone
-    // (coreBright = 1.0 at dist <= 0.5R), so it's invisible behind the flare.
-    const geometry = new THREE.IcosahedronGeometry(this._renderRadius * 0.5, 2);
+  _createBillboard() {
     const [r, g, b] = this.data.color;
+    const geometry = new THREE.PlaneGeometry(1, 1);
     const material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(r, g, b),
+      side: THREE.DoubleSide,
     });
-    return new THREE.Mesh(geometry, material);
-  }
-
-  _createGlow() {
-    // Procedural radial gradient — identical to Star.js
-    const size = 64;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const cx = size / 2;
-    const gradient = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-    gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.5)');
-    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.15)');
-    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.04)');
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
-
-    const [r, g, b] = this.data.color;
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      color: new THREE.Color(r, g, b),
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      depthWrite: false,
-    });
-
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(this._baseGlowScale, this._baseGlowScale, 1);
-    return sprite;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.frustumCulled = false;
+    return mesh;
   }
 
   _createFlareDisc() {
@@ -287,6 +247,21 @@ export class StarFlare {
       // Billboard: always face camera
       this._flareDisc.quaternion.copy(camera.quaternion);
 
+      // ── Distance LOD: swap flare disc for opaque billboard ──
+      const dist = camera.position.distanceTo(this.mesh.position);
+      const angularSize = (this._renderRadius * 30) / Math.max(dist, 0.001);
+      const pixelSize = angularSize * window.innerHeight * 0.5;
+      if (pixelSize < 12) {
+        this._flareDisc.visible = false;
+        this._billboard.visible = true;
+        const minSize = dist * 0.012;
+        this._billboard.scale.set(minSize, minSize, 1);
+        this._billboard.quaternion.copy(camera.quaternion);
+      } else {
+        this._flareDisc.visible = true;
+        this._billboard.visible = false;
+      }
+
       // ── Screen-position alignment ──
       // Project star world position to NDC (-1 to 1).
       // The angle from screen center to the star determines spike rotation.
@@ -324,18 +299,8 @@ export class StarFlare {
     }
   }
 
-  /**
-   * Scale glow based on camera distance — identical to Star.js.
-   * Maintains minimum angular size so the star is always visible.
-   */
-  updateGlow(camera) {
-    const dist = camera.position.distanceTo(this.mesh.position);
-    const minAngularSize = 0.015;
-    const distScale = dist * minAngularSize;
-    const scale = Math.max(this._baseGlowScale, distScale);
-    const maxScale = dist * 0.2;
-    const finalScale = Math.min(scale, maxScale);
-    this.glow.scale.set(finalScale, finalScale, 1);
+  updateGlow() {
+    // No glow sprite — billboard handles distance visibility
   }
 
   addTo(scene) {
@@ -343,11 +308,9 @@ export class StarFlare {
   }
 
   dispose() {
-    this.surface.geometry.dispose();
-    this.surface.material.dispose();
     this._flareDisc.geometry.dispose();
     this._flareDisc.material.dispose();
-    this.glow.material.map.dispose();
-    this.glow.material.dispose();
+    this._billboard.geometry.dispose();
+    this._billboard.material.dispose();
   }
 }
