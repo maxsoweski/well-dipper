@@ -101,14 +101,11 @@ export class StarFlare {
           vec3 color = vec3(0.0);
 
           // ── Star glow ──
-          // Strong radial glow that makes the star look luminous, not flat.
-          // Brighter and wider than before — visible bloom around the star.
+          // Radial glow in the star's own color — makes it look luminous.
           float glowRadius = uStarRadius * 3.0;
           float glowBright = exp(-dist / glowRadius * 1.5) * 1.5;
           float outsideStar = smoothstep(uStarRadius * 0.7, uStarRadius * 1.0, dist);
-          // Glow color: star color brightened toward white at the core
-          vec3 glowColor = mix(vec3(1.0), uColor, smoothstep(0.0, uStarRadius * 2.5, dist) * 0.6);
-          color += glowColor * glowBright * outsideStar;
+          color += uColor * glowBright * outsideStar;
 
           // 8 spikes: 4 angles, each goes both directions from center
           float angles[4];
@@ -148,16 +145,21 @@ export class StarFlare {
             float gBright = spikeBrightness(gPerp, along, w);
             float bBright = spikeBrightness(bPerp, along, w);
 
-            // Base color = star color (bright), transitions to rainbow further out
-            // Near center: star color for all channels (visually consistent with star)
-            // Further out: R/G/B channels separate into rainbow dispersion
-            float starBlend = exp(-along * 3.0); // 1.0 at base, fades out
+            // Near center: all channels show the star's color (no separation).
+            // Further out: R/G/B channels separate into rainbow dispersion.
+            // starBlend = 1 at base, 0 further out.
+            float starBlend = exp(-along * 3.5);
 
-            vec3 tintedR = mix(vec3(1.0, 0.15, 0.05), uColor, starBlend);
-            vec3 tintedG = mix(vec3(0.1, 1.0, 0.15), uColor, starBlend);
-            vec3 tintedB = mix(vec3(0.1, 0.2, 1.0), uColor, starBlend);
+            // Combined brightness when channels aren't separated
+            float combinedBright = (rBright + gBright + bBright) / 3.0;
 
-            color += tintedR * rBright + tintedG * gBright + tintedB * bBright;
+            // Rainbow channel colors (what you see when fully dispersed)
+            vec3 rainbowContrib = vec3(rBright, gBright, bBright);
+
+            // Star-colored contribution (what you see near the base)
+            vec3 starContrib = uColor * combinedBright;
+
+            color += mix(rainbowContrib, starContrib, starBlend);
           }
 
           // ── Halo ring (lens ghost) ──
