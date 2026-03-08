@@ -710,11 +710,18 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
         system.destination.removeFrom(scene);
         system.destination.dispose();
       }
-      // Navigable deep sky: gas cloud + extra stars
+      // Navigable deep sky: gas cloud + stars
       if (system.gasCloud) {
         system.gasCloud.removeFrom(scene);
         system.gasCloud.dispose();
       }
+      // Primary star (navigable deep sky sets system.star = allStars[0])
+      // star2 is already in extraStars so it gets cleaned up below
+      if (system.star) {
+        system.star.dispose();
+        scene.remove(system.star.mesh);
+      }
+      // Extra stars beyond primary (includes star2)
       if (system.extraStars) {
         for (const s of system.extraStars) {
           s.dispose();
@@ -1215,16 +1222,6 @@ function spawnDeepSky(data, destType, forWarp) {
   const label = destType.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
   console.log(`Deep sky: ${label} (seed "${`system-${seedCounter}`}", ${data.particleCount || data.starCount || '?'} particles, r=${data.radius?.toFixed(0) || '?'})`);
 
-  // DEBUG: dump all scene children to find mystery sphere
-  console.log(`[DEBUG] Scene children after spawnDeepSky:`);
-  scene.traverse((child) => {
-    if (child.isMesh || child.isPoints || child.isSprite) {
-      const geo = child.geometry ? `${child.geometry.type}(${child.geometry.parameters?.radius || '?'})` : 'no-geo';
-      const mat = child.material ? child.material.type : 'no-mat';
-      const pos = child.getWorldPosition(new THREE.Vector3());
-      console.log(`  ${child.type}: ${geo}, ${mat}, pos=(${pos.x.toFixed(0)},${pos.y.toFixed(0)},${pos.z.toFixed(0)}), visible=${child.visible}`);
-    }
-  });
 
   // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
   if (forWarp) return;
