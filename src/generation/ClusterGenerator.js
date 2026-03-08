@@ -166,7 +166,7 @@ export class ClusterGenerator {
           ],
           noiseSeed: [rng.float() * 100, rng.float() * 100],
           noiseScale: rng.range(2.0, 4.0),
-          opacity: rng.range(0.12, 0.30),
+          opacity: rng.range(0.30, 0.60),
         });
       }
     }

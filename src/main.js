@@ -1674,9 +1674,15 @@ function gallerySpawn() {
   else if (type === 'cluster-gas-test') {
     const navData = NavigableClusterGenerator.generate(seed);
 
-    // Gas cloud rendered as VolumetricNebula
-    if (navData.gasCloud) {
-      const gasObj = new VolumetricNebula(navData.gasCloud);
+    // Gas cloud rendered as Nebula cloud layers (2D noise planes)
+    if (navData.gasLayers && navData.gasLayers.length > 0) {
+      const gasData = {
+        layers: navData.gasLayers,
+        starPositions: new Float32Array(0),
+        starColors: new Float32Array(0),
+        starSizes: new Float32Array(0),
+      };
+      const gasObj = new Nebula(gasData);
       gasObj.addTo(scene);
       galleryObject = gasObj;
     }
@@ -1694,7 +1700,7 @@ function gallerySpawn() {
     camera.position.set(0, radius * 0.3, radius * 1.5);
     camera.lookAt(0, 0, 0);
 
-    infoText = `cluster gas test  |  ${navData.stars.length} stars  |  gas: ${navData.gasCloud?.particleCount || 0} particles  |  r=${radius.toFixed(0)}`;
+    infoText = `cluster gas test  |  ${navData.stars.length} stars  |  gas: ${navData.gasLayers?.length || 0} layers  |  r=${radius.toFixed(0)}`;
   }
 
   // ── Deep sky objects (billboard/distant view) ──

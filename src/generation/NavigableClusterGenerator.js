@@ -105,14 +105,14 @@ export class NavigableClusterGenerator {
       });
     }
 
-    // ── Gas cloud: reflection nebulosity around the star clumps ──
-    // Pleiades-style wispy gas concentrated around the brightest stars
-    const gasCloud = this._generateGasCloud(rng, radius, clumps, stars);
+    // ── Reflection nebulosity layers (Nebula-compatible cloud planes) ──
+    // Pleiades-style wispy gas concentrated around the star clumps
+    const gasLayers = this._generateGasLayers(rng, radius, clumps);
 
     return {
       type: 'open-cluster',
       _destType: 'open-cluster',
-      gasCloud,
+      gasLayers,
       stars,
       planets: [],   // open clusters are too young for planets
       radius,
@@ -135,8 +135,45 @@ export class NavigableClusterGenerator {
   }
 
   /**
-   * Generate ragged reflection nebulosity gas cloud data.
+   * Generate Nebula-compatible cloud layers for reflection nebulosity.
+   * Positioned around sub-clumps with blue-white colors, ragged placement.
+   */
+  static _generateGasLayers(rng, radius, clumps) {
+    const layers = [];
+    for (let c = 0; c < clumps.length; c++) {
+      const clump = clumps[c];
+      const layerCount = rng.int(2, 4);
+      for (let l = 0; l < layerCount; l++) {
+        layers.push({
+          position: [
+            clump.x + this._gaussian(rng) * clump.spread * 0.4,
+            clump.y + this._gaussian(rng) * clump.spread * 0.15,
+            clump.z + this._gaussian(rng) * clump.spread * 0.4,
+          ],
+          size: clump.spread * rng.range(1.0, 2.5),
+          rotation: [
+            rng.range(-0.5, 0.5),
+            rng.range(0, Math.PI * 2),
+            rng.range(-0.3, 0.3),
+          ],
+          color: [
+            rng.range(0.35, 0.58),
+            rng.range(0.50, 0.72),
+            rng.range(0.78, 1.0),
+          ],
+          noiseSeed: [rng.float() * 100, rng.float() * 100],
+          noiseScale: rng.range(2.0, 4.0),
+          opacity: rng.range(0.25, 0.55),
+        });
+      }
+    }
+    return layers;
+  }
+
+  /**
+   * Generate ragged reflection nebulosity gas cloud data (volumetric).
    * Concentrated around star clumps with filamentary tendrils — not spherical.
+   * Currently unused but kept for future experimentation.
    */
   static _generateGasCloud(rng, radius, clumps, stars) {
     // Particles around star clumps + filamentary tendrils between them
