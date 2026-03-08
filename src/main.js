@@ -1352,7 +1352,7 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   // ── Click targets (all stars are clickable) ──
   clickTargets = new Map();
   for (let i = 0; i < allStars.length; i++) {
-    clickTargets.set(allStars[i].mesh, {
+    clickTargets.set(allStars[i].surface, {
       type: 'star',
       starIndex: i,
       label: `Star ${i + 1} (${data.stars[i].type})`,
