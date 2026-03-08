@@ -7,6 +7,10 @@ import { solarRadiiToScene, earthRadiiToScene, auToScene } from '../core/ScaleCo
  * Uses the same data structures as StarSystemGenerator so spawnSystem()
  * can consume it directly.
  *
+ * Includes all 8 planets, 5 dwarf planets (Ceres, Pluto, Haumea,
+ * Makemake, Eris), all major moons, the asteroid belt, and the
+ * Kuiper belt.
+ *
  * Distances and sizes are real values; map units are scaled for the HUD.
  */
 
@@ -25,12 +29,12 @@ function mapPlanetRadius(type, radiusEarth) {
     'gas-giant':  [1.8, 3.5],
     'sub-neptune': [0.7, 1.3],
     ice:          [0.3, 0.7],
+    venus:        [0.4, 0.7],
   };
   const range = ranges[type] || [0.3, 0.9];
-  // Simple proportional mapping
   const earthRange = {
-    rocky: [0.3, 0.8], terrestrial: [0.8, 1.5], 'gas-giant': [6, 14],
-    'sub-neptune': [2.5, 4.0], ice: [0.4, 1.2],
+    rocky: [0.05, 0.8], terrestrial: [0.8, 1.5], 'gas-giant': [6, 14],
+    'sub-neptune': [2.5, 4.0], ice: [0.05, 1.2], venus: [0.8, 1.2],
   };
   const er = earthRange[type] || [0.5, 1.5];
   const t = Math.max(0, Math.min(1, (radiusEarth - er[0]) / (er[1] - er[0])));
@@ -38,16 +42,58 @@ function mapPlanetRadius(type, radiusEarth) {
 }
 
 // Orbital speed using Kepler's 3rd law, scaled to match the engine
-// The base 0.00125 matches StarSystemGenerator's scaled-down value
 function keplerSpeed(orbitMapRadius) {
   return 0.00125 / Math.pow(orbitMapRadius / MAP_BASE, 1.5);
 }
 
-// Moon orbital speed — scaled to match MoonGenerator's new values
-// Inner moons ~0.04 rad/s, outer moons slower
+// Moon orbital speed — scaled to match MoonGenerator's values
+// Inner moons fastest, outer moons slower
 function moonSpeed(index, total) {
   const base = 0.025 + (0.052 - 0.025) * (1 - index / Math.max(1, total - 1));
   return base / (1.0 + index * 0.4);
+}
+
+// Generate asteroid belt data
+function generateBelt(centerAU, widthAU, count, colorFn) {
+  const center = mapOrbit(centerAU);
+  const width = widthAU * MAP_UNITS_PER_AU;
+  const thickness = width * 0.05;
+
+  const asteroids = [];
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+    const r = center + (Math.random() - 0.5) * width;
+    const y = (Math.random() - 0.5) * thickness;
+    const size = Math.pow(Math.random(), 3) * 0.06 + 0.012;
+    const color = colorFn();
+
+    const ax = Math.random() - 0.5;
+    const ay = Math.random() - 0.5;
+    const az = Math.random() - 0.5;
+    const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+
+    const baseSpeed = 0.00125 / Math.pow(r / center, 1.5);
+    asteroids.push({
+      angle, radius: r, height: y, size, color,
+      tumbleAxis: [ax / len, ay / len, az / len],
+      tumbleSpeed: 0.07 + Math.random() * 0.26,
+      orbitSpeed: baseSpeed * (0.85 + Math.random() * 0.3),
+      shapeIndex: Math.floor(Math.random() * 4),
+    });
+  }
+
+  return {
+    centerRadius: center,
+    width: width / 2,
+    thickness,
+    centerRadiusAU: centerAU,
+    widthAU: widthAU / 2,
+    thicknessAU: widthAU * 0.05,
+    centerRadiusScene: auToScene(centerAU),
+    widthScene: auToScene(widthAU / 2),
+    thicknessScene: auToScene(widthAU * 0.05),
+    asteroids,
+  };
 }
 
 /**
@@ -60,14 +106,17 @@ export function generateSolarSystem() {
     color: [1.0, 0.96, 0.92],
     radiusSolar: 1.0,
     radiusScene: solarRadiiToScene(1.0),
-    radius: 4.5,          // map units
+    radius: 4.5,
     temp: 5778,
     luminosity: 1.0,
   };
 
-  // ── Planets ──
+  // ────────────────────────────────────────────────────────────────
+  // PLANETS & DWARF PLANETS (ordered by orbital distance)
+  // ────────────────────────────────────────────────────────────────
   const planetsRaw = [
-    // Mercury
+
+    // ── Mercury ──────────────────────────────────────────────────
     {
       type: 'rocky',
       radiusEarth: 0.383,
@@ -77,14 +126,13 @@ export function generateSolarSystem() {
       moonCount: 0,
       noiseScale: 4.0,
       noiseDetail: 0.6,
-      rotationSpeed: 0.04,   // very slow (59 Earth days)
-      axialTilt: 0.03,       // ~2°
-      rings: null,
-      clouds: null,
-      atmosphere: null,
+      rotationSpeed: 0.04,     // very slow (59 Earth days)
+      axialTilt: 0.03,         // ~2°
+      rings: null, clouds: null, atmosphere: null,
       moons: [],
     },
-    // Venus
+
+    // ── Venus ────────────────────────────────────────────────────
     {
       type: 'venus',
       radiusEarth: 0.95,
@@ -94,14 +142,15 @@ export function generateSolarSystem() {
       moonCount: 0,
       noiseScale: 2.0,
       noiseDetail: 0.3,
-      rotationSpeed: -0.01,  // retrograde, very slow
-      axialTilt: 3.1,        // ~177° (nearly upside down → 3.1 rad)
+      rotationSpeed: -0.01,    // retrograde, very slow
+      axialTilt: 3.1,          // ~177° (nearly upside down)
       rings: null,
       clouds: { color: [0.9, 0.82, 0.65], density: 0.7, scale: 2.5 },
       atmosphere: { color: [0.9, 0.8, 0.5], strength: 0.6 },
       moons: [],
     },
-    // Earth
+
+    // ── Earth ────────────────────────────────────────────────────
     {
       type: 'terrestrial',
       radiusEarth: 1.0,
@@ -112,23 +161,25 @@ export function generateSolarSystem() {
       noiseScale: 3.0,
       noiseDetail: 0.5,
       rotationSpeed: 0.1,
-      axialTilt: 0.41,       // 23.4°
+      axialTilt: 0.41,         // 23.4°
       rings: null,
       clouds: { color: [0.95, 0.95, 0.97], density: 0.45, scale: 3.0 },
       atmosphere: { color: [0.4, 0.6, 1.0], strength: 0.4 },
       moons: [
+        // The Moon
         {
           type: 'rocky',
           radiusEarth: 0.273,
-          orbitMultiple: 60,    // 60 Earth radii
+          orbitMultiple: 60,     // 60 Earth radii
           baseColor: [0.6, 0.58, 0.55],
           accentColor: [0.45, 0.43, 0.40],
           noiseScale: 4.0,
-          inclination: 0.09,    // ~5°
+          inclination: 0.09,     // ~5°
         },
       ],
     },
-    // Mars
+
+    // ── Mars ─────────────────────────────────────────────────────
     {
       type: 'rocky',
       radiusEarth: 0.532,
@@ -139,23 +190,24 @@ export function generateSolarSystem() {
       noiseScale: 3.5,
       noiseDetail: 0.55,
       rotationSpeed: 0.1,
-      axialTilt: 0.44,       // 25.2°
-      rings: null,
-      clouds: null,
+      axialTilt: 0.44,         // 25.2°
+      rings: null, clouds: null,
       atmosphere: { color: [0.8, 0.5, 0.3], strength: 0.15 },
       moons: [
+        // Phobos
         {
           type: 'captured',
-          radiusEarth: 0.0017,   // Phobos ~11km
-          orbitMultiple: 2.76,   // very close
+          radiusEarth: 0.0017,   // ~11 km
+          orbitMultiple: 2.76,
           baseColor: [0.35, 0.30, 0.28],
           accentColor: [0.28, 0.25, 0.22],
           noiseScale: 5.0,
           inclination: 0.02,
         },
+        // Deimos
         {
           type: 'captured',
-          radiusEarth: 0.001,    // Deimos ~6km
+          radiusEarth: 0.001,    // ~6 km
           orbitMultiple: 6.9,
           baseColor: [0.38, 0.33, 0.30],
           accentColor: [0.30, 0.27, 0.24],
@@ -164,22 +216,47 @@ export function generateSolarSystem() {
         },
       ],
     },
-    // Jupiter
+
+    // ── Ceres (dwarf planet in asteroid belt) ────────────────────
+    {
+      type: 'rocky',
+      radiusEarth: 0.074,        // 473 km radius
+      orbitAU: 2.768,
+      baseColor: [0.45, 0.42, 0.40],
+      accentColor: [0.38, 0.36, 0.34],
+      moonCount: 0,
+      noiseScale: 5.0,
+      noiseDetail: 0.5,
+      rotationSpeed: 0.11,       // 9.07 hours
+      axialTilt: 0.07,           // ~4°
+      rings: null, clouds: null, atmosphere: null,
+      moons: [],
+    },
+
+    // ── Jupiter ──────────────────────────────────────────────────
     {
       type: 'gas-giant',
       radiusEarth: 11.21,
       orbitAU: 5.203,
       baseColor: [0.75, 0.62, 0.48],
       accentColor: [0.60, 0.45, 0.32],
-      moonCount: 4,
+      moonCount: 5,
       noiseScale: 2.0,
       noiseDetail: 0.4,
-      rotationSpeed: 0.167,   // fastest spinner
-      axialTilt: 0.05,        // 3.1°
-      rings: null,            // Jupiter's ring is too faint to show
-      clouds: null,           // gas giant bands are in the base shader
-      atmosphere: null,
+      rotationSpeed: 0.167,     // fastest spinner (~10 hours)
+      axialTilt: 0.05,          // 3.1°
+      rings: null, clouds: null, atmosphere: null,
       moons: [
+        // Amalthea (inner shepherd)
+        {
+          type: 'captured',
+          radiusEarth: 0.013,    // ~84 km (irregular)
+          orbitMultiple: 2.54,   // 2.54 Jupiter radii
+          baseColor: [0.55, 0.30, 0.20],  // reddish — sulfur from Io
+          accentColor: [0.45, 0.25, 0.15],
+          noiseScale: 5.0,
+          inclination: 0.007,
+        },
         // Io
         {
           type: 'volcanic',
@@ -198,9 +275,9 @@ export function generateSolarSystem() {
           baseColor: [0.82, 0.80, 0.75],
           accentColor: [0.60, 0.55, 0.50],
           noiseScale: 5.0,
-          inclination: 0.01,
+          inclination: 0.008,
         },
-        // Ganymede
+        // Ganymede (largest moon in the solar system)
         {
           type: 'rocky',
           radiusEarth: 0.413,
@@ -222,35 +299,84 @@ export function generateSolarSystem() {
         },
       ],
     },
-    // Saturn
+
+    // ── Saturn ───────────────────────────────────────────────────
     {
       type: 'gas-giant',
       radiusEarth: 9.45,
       orbitAU: 9.537,
       baseColor: [0.82, 0.75, 0.58],
       accentColor: [0.72, 0.65, 0.50],
-      moonCount: 3,
+      moonCount: 9,
       noiseScale: 1.8,
       noiseDetail: 0.35,
       rotationSpeed: 0.155,
-      axialTilt: 0.47,        // 26.7°
+      axialTilt: 0.47,          // 26.7°
       rings: {
-        innerRadius: 1.24,    // D ring starts at 1.24 Saturn radii
-        outerRadius: 2.27,    // F ring extends to ~2.27 Saturn radii
+        innerRadius: 1.24,      // D ring inner edge
+        outerRadius: 2.27,      // F ring outer edge
         color1: [0.85, 0.78, 0.65],
         color2: [0.65, 0.58, 0.45],
         opacity: 0.7,
-        tiltX: 0,
-        tiltZ: 0,
+        tiltX: 0, tiltZ: 0,
       },
-      clouds: null,
-      atmosphere: null,
+      clouds: null, atmosphere: null,
       moons: [
-        // Titan
+        // Mimas ("Death Star" — huge Herschel crater)
+        {
+          type: 'ice',
+          radiusEarth: 0.031,    // 198 km
+          orbitMultiple: 3.08,
+          baseColor: [0.78, 0.76, 0.72],
+          accentColor: [0.65, 0.62, 0.58],
+          noiseScale: 5.0,
+          inclination: 0.03,
+        },
+        // Enceladus (bright white, geysers)
+        {
+          type: 'ice',
+          radiusEarth: 0.04,     // 252 km
+          orbitMultiple: 3.95,
+          baseColor: [0.95, 0.93, 0.90],
+          accentColor: [0.85, 0.83, 0.80],
+          noiseScale: 5.0,
+          inclination: 0.01,
+        },
+        // Tethys
+        {
+          type: 'ice',
+          radiusEarth: 0.083,    // 531 km
+          orbitMultiple: 4.89,
+          baseColor: [0.80, 0.78, 0.75],
+          accentColor: [0.68, 0.65, 0.62],
+          noiseScale: 4.5,
+          inclination: 0.02,
+        },
+        // Dione
+        {
+          type: 'ice',
+          radiusEarth: 0.088,    // 562 km
+          orbitMultiple: 6.26,
+          baseColor: [0.75, 0.73, 0.70],
+          accentColor: [0.60, 0.58, 0.55],
+          noiseScale: 4.0,
+          inclination: 0.005,
+        },
+        // Rhea (second largest Saturn moon)
+        {
+          type: 'ice',
+          radiusEarth: 0.12,     // 764 km
+          orbitMultiple: 8.74,
+          baseColor: [0.72, 0.70, 0.67],
+          accentColor: [0.58, 0.56, 0.52],
+          noiseScale: 3.8,
+          inclination: 0.006,
+        },
+        // Titan (planet-class moon — thick atmosphere)
         {
           isPlanetMoon: true,
-          type: 'venus',          // thick atmosphere like Venus
-          radiusFraction: 0.20,   // roughly Titan vs Saturn
+          type: 'venus',
+          radiusFraction: 0.20,
           orbitMultiple: 20.3,
           baseColor: [0.70, 0.55, 0.30],
           accentColor: [0.60, 0.48, 0.25],
@@ -259,100 +385,254 @@ export function generateSolarSystem() {
           clouds: { color: [0.75, 0.60, 0.35], density: 0.6, scale: 3.0 },
           atmosphere: { color: [0.7, 0.55, 0.3], strength: 0.5 },
         },
-        // Enceladus
+        // Hyperion (irregular, chaotic rotation)
         {
-          type: 'ice',
-          radiusEarth: 0.04,
-          orbitMultiple: 3.95,
-          baseColor: [0.92, 0.90, 0.88],
-          accentColor: [0.80, 0.78, 0.75],
+          type: 'captured',
+          radiusEarth: 0.021,    // ~135 km (irregular)
+          orbitMultiple: 24.6,
+          baseColor: [0.50, 0.45, 0.38],
+          accentColor: [0.40, 0.35, 0.28],
           noiseScale: 5.0,
           inclination: 0.01,
         },
-        // Mimas
+        // Iapetus (two-tone — dark leading, bright trailing)
         {
           type: 'ice',
-          radiusEarth: 0.031,
-          orbitMultiple: 3.08,
-          baseColor: [0.78, 0.76, 0.72],
-          accentColor: [0.65, 0.62, 0.58],
+          radiusEarth: 0.115,    // 735 km
+          orbitMultiple: 59.1,
+          baseColor: [0.25, 0.22, 0.20],   // dark hemisphere dominant
+          accentColor: [0.80, 0.78, 0.75], // bright hemisphere contrast
+          noiseScale: 3.0,
+          inclination: 0.27,     // ~15° — significant tilt
+        },
+        // Phoebe (retrograde captured moon, very dark)
+        {
+          type: 'captured',
+          radiusEarth: 0.017,    // 107 km
+          orbitMultiple: 215,    // very far out
+          baseColor: [0.22, 0.20, 0.18],
+          accentColor: [0.18, 0.16, 0.14],
           noiseScale: 5.0,
-          inclination: 0.03,
+          inclination: 2.94,     // ~175° — retrograde
+          retrograde: true,
         },
       ],
     },
-    // Uranus
+
+    // ── Uranus ───────────────────────────────────────────────────
     {
       type: 'sub-neptune',
       radiusEarth: 4.01,
       orbitAU: 19.19,
       baseColor: [0.55, 0.75, 0.80],
       accentColor: [0.60, 0.78, 0.82],
-      moonCount: 2,
+      moonCount: 5,
       noiseScale: 1.5,
       noiseDetail: 0.25,
-      rotationSpeed: -0.12,   // retrograde
-      axialTilt: 1.71,        // 97.8° — rolls on its side
+      rotationSpeed: -0.12,    // retrograde
+      axialTilt: 1.71,         // 97.8° — rolls on its side
       rings: {
         innerRadius: 1.6,
         outerRadius: 2.0,
         color1: [0.4, 0.45, 0.5],
         color2: [0.3, 0.35, 0.4],
-        opacity: 0.25,        // very faint
-        tiltX: 0,
-        tiltZ: 0,
+        opacity: 0.25,          // very faint
+        tiltX: 0, tiltZ: 0,
       },
       clouds: null,
       atmosphere: { color: [0.5, 0.75, 0.85], strength: 0.45 },
       moons: [
-        // Titania
+        // Miranda (bizarre patchwork terrain)
         {
           type: 'ice',
-          radiusEarth: 0.124,
-          orbitMultiple: 17.1,
-          baseColor: [0.60, 0.58, 0.55],
-          accentColor: [0.48, 0.46, 0.42],
-          noiseScale: 4.0,
-          inclination: 0.005,
-        },
-        // Miranda
-        {
-          type: 'ice',
-          radiusEarth: 0.037,
+          radiusEarth: 0.037,    // 236 km
           orbitMultiple: 5.08,
           baseColor: [0.65, 0.62, 0.58],
           accentColor: [0.50, 0.48, 0.44],
           noiseScale: 5.0,
           inclination: 0.07,
         },
+        // Ariel (brightest Uranian moon)
+        {
+          type: 'ice',
+          radiusEarth: 0.091,    // 579 km
+          orbitMultiple: 7.47,
+          baseColor: [0.70, 0.68, 0.65],
+          accentColor: [0.58, 0.55, 0.52],
+          noiseScale: 4.0,
+          inclination: 0.005,
+        },
+        // Umbriel (darkest Uranian moon)
+        {
+          type: 'ice',
+          radiusEarth: 0.092,    // 585 km
+          orbitMultiple: 10.4,
+          baseColor: [0.38, 0.36, 0.34],
+          accentColor: [0.30, 0.28, 0.26],
+          noiseScale: 4.0,
+          inclination: 0.006,
+        },
+        // Titania (largest Uranian moon)
+        {
+          type: 'ice',
+          radiusEarth: 0.124,    // 789 km
+          orbitMultiple: 17.1,
+          baseColor: [0.60, 0.58, 0.55],
+          accentColor: [0.48, 0.46, 0.42],
+          noiseScale: 4.0,
+          inclination: 0.005,
+        },
+        // Oberon (outermost major Uranian moon)
+        {
+          type: 'ice',
+          radiusEarth: 0.119,    // 761 km
+          orbitMultiple: 22.8,
+          baseColor: [0.48, 0.45, 0.42],
+          accentColor: [0.38, 0.35, 0.32],
+          noiseScale: 4.0,
+          inclination: 0.005,
+        },
       ],
     },
-    // Neptune
+
+    // ── Neptune ──────────────────────────────────────────────────
     {
       type: 'sub-neptune',
       radiusEarth: 3.88,
       orbitAU: 30.07,
       baseColor: [0.25, 0.40, 0.70],
       accentColor: [0.30, 0.48, 0.75],
-      moonCount: 1,
+      moonCount: 2,
       noiseScale: 1.8,
       noiseDetail: 0.3,
       rotationSpeed: 0.13,
-      axialTilt: 0.49,        // 28.3°
-      rings: null,
+      axialTilt: 0.49,          // 28.3°
+      rings: {
+        innerRadius: 1.7,
+        outerRadius: 2.5,
+        color1: [0.3, 0.33, 0.4],
+        color2: [0.2, 0.22, 0.28],
+        opacity: 0.12,           // extremely faint
+        tiltX: 0, tiltZ: 0,
+      },
       clouds: { color: [0.6, 0.7, 0.9], density: 0.25, scale: 2.0 },
       atmosphere: { color: [0.3, 0.5, 0.9], strength: 0.5 },
       moons: [
-        // Triton (retrograde captured moon)
+        // Proteus (irregularly shaped, dark)
+        {
+          type: 'captured',
+          radiusEarth: 0.033,    // 210 km
+          orbitMultiple: 4.75,
+          baseColor: [0.30, 0.28, 0.26],
+          accentColor: [0.25, 0.23, 0.20],
+          noiseScale: 5.0,
+          inclination: 0.01,
+        },
+        // Triton (retrograde captured, geologically active)
         {
           type: 'ice',
-          radiusEarth: 0.212,
+          radiusEarth: 0.212,    // 1353 km
           orbitMultiple: 14.3,
           baseColor: [0.72, 0.68, 0.62],
           accentColor: [0.55, 0.52, 0.48],
           noiseScale: 4.0,
-          inclination: -2.7,    // heavily inclined retrograde
+          inclination: 2.72,     // ~156° retrograde
           retrograde: true,
+        },
+      ],
+    },
+
+    // ── Pluto (dwarf planet + Charon binary) ─────────────────────
+    {
+      type: 'ice',
+      radiusEarth: 0.186,        // 1188 km
+      orbitAU: 39.48,
+      baseColor: [0.72, 0.62, 0.52],  // tan/pinkish
+      accentColor: [0.60, 0.50, 0.42],
+      moonCount: 1,
+      noiseScale: 4.5,
+      noiseDetail: 0.5,
+      rotationSpeed: -0.04,      // retrograde, 6.4 day period
+      axialTilt: 2.14,           // 122.5° — significantly tilted
+      rings: null, clouds: null,
+      atmosphere: { color: [0.5, 0.5, 0.6], strength: 0.1 },  // tenuous N2
+      moons: [
+        // Charon (binary companion — 1:8 mass ratio, tidally locked)
+        {
+          type: 'ice',
+          radiusEarth: 0.095,    // 606 km (half of Pluto!)
+          orbitMultiple: 17.0,   // ~17 Pluto radii
+          baseColor: [0.50, 0.48, 0.46],
+          accentColor: [0.40, 0.38, 0.35],
+          noiseScale: 4.5,
+          inclination: 0.0,      // coplanar with Pluto's equator
+        },
+      ],
+    },
+
+    // ── Haumea (dwarf planet — elongated, has ring) ──────────────
+    {
+      type: 'ice',
+      radiusEarth: 0.13,         // ~816 km mean radius (elongated)
+      orbitAU: 43.22,
+      baseColor: [0.85, 0.83, 0.80],  // very bright icy surface
+      accentColor: [0.72, 0.70, 0.68],
+      moonCount: 0,
+      noiseScale: 4.0,
+      noiseDetail: 0.4,
+      rotationSpeed: 0.25,       // incredibly fast — 3.9 hours!
+      axialTilt: 2.2,            // heavily tilted
+      rings: {
+        innerRadius: 1.85,       // ring at ~2287 km from center
+        outerRadius: 2.15,       // narrow ring, ~70 km wide
+        color1: [0.6, 0.58, 0.55],
+        color2: [0.5, 0.48, 0.45],
+        opacity: 0.3,
+        tiltX: 0, tiltZ: 0,
+      },
+      clouds: null, atmosphere: null,
+      moons: [],
+    },
+
+    // ── Makemake (dwarf planet — bright, reddish) ────────────────
+    {
+      type: 'ice',
+      radiusEarth: 0.112,        // ~715 km
+      orbitAU: 45.79,
+      baseColor: [0.78, 0.68, 0.58],  // reddish-brown tholins
+      accentColor: [0.65, 0.55, 0.48],
+      moonCount: 0,
+      noiseScale: 4.5,
+      noiseDetail: 0.45,
+      rotationSpeed: 0.06,       // 22.8 hours
+      axialTilt: 0.5,
+      rings: null, clouds: null, atmosphere: null,
+      moons: [],
+    },
+
+    // ── Eris (most massive dwarf planet) ─────────────────────────
+    {
+      type: 'ice',
+      radiusEarth: 0.182,        // 1163 km (nearly Pluto-sized)
+      orbitAU: 67.67,            // far out in the scattered disc
+      baseColor: [0.88, 0.86, 0.84],  // extremely bright, white
+      accentColor: [0.75, 0.73, 0.70],
+      moonCount: 1,
+      noiseScale: 4.0,
+      noiseDetail: 0.4,
+      rotationSpeed: 0.05,       // ~25.9 hours
+      axialTilt: 1.34,           // ~78°
+      rings: null, clouds: null, atmosphere: null,
+      moons: [
+        // Dysnomia
+        {
+          type: 'captured',
+          radiusEarth: 0.05,     // ~350 km (estimated)
+          orbitMultiple: 32,     // ~37,300 km from Eris
+          baseColor: [0.35, 0.33, 0.30],
+          accentColor: [0.28, 0.26, 0.23],
+          noiseScale: 5.0,
+          inclination: 0.61,     // ~35°
         },
       ],
     },
@@ -364,10 +644,8 @@ export function generateSolarSystem() {
     const mapRadius = mapPlanetRadius(p.type, p.radiusEarth);
     const orbitRadiusScene = auToScene(p.orbitAU);
     const orbitRadius = mapOrbit(p.orbitAU);
-    const orbitAngle = (i / planetsRaw.length) * Math.PI * 2 * 0.7 + 0.3;  // spread them out
+    const orbitAngle = (i / planetsRaw.length) * Math.PI * 2 * 0.7 + 0.3;
     const sunDir = [-Math.cos(orbitAngle), 0, -Math.sin(orbitAngle)];
-
-    const mapToSceneRatio = mapRadius / radiusScene;
 
     const planetData = {
       type: p.type,
@@ -390,7 +668,6 @@ export function generateSolarSystem() {
     // Build moons
     const moons = p.moons.map((m, mi) => {
       if (m.isPlanetMoon) {
-        // Planet-class moon (like Titan)
         const moonRadiusEarth = m.radiusFraction * p.radiusEarth;
         const moonRadiusScene = earthRadiiToScene(moonRadiusEarth);
         const moonMapRadius = m.radiusFraction * mapRadius;
@@ -473,55 +750,25 @@ export function generateSolarSystem() {
     };
   });
 
-  // ── Asteroid belt (between Mars and Jupiter) ──
-  const beltCenterAU = 2.7;
-  const beltWidthAU = 0.8;
-  const beltCenter = mapOrbit(beltCenterAU);
-  const beltWidth = beltWidthAU * MAP_UNITS_PER_AU;
-  const beltThickness = beltWidth * 0.05;
+  // ── Asteroid belts ──
 
-  const asteroids = [];
-  const asteroidCount = 350;
-  for (let i = 0; i < asteroidCount; i++) {
-    const angle = (i / asteroidCount) * Math.PI * 2 + Math.random() * 0.3;
-    const r = beltCenter + (Math.random() - 0.5) * beltWidth;
-    const y = (Math.random() - 0.5) * beltThickness;
-    const size = Math.pow(Math.random(), 3) * 0.06 + 0.012;
+  // Main belt (between Mars and Jupiter, 2.1-3.3 AU)
+  const mainBelt = generateBelt(2.7, 1.2, 400, () => {
     const grey = 0.35 + Math.random() * 0.25;
+    return [grey * 1.05, grey, grey * 0.95];
+  });
 
-    const ax = Math.random() - 0.5;
-    const ay = Math.random() - 0.5;
-    const az = Math.random() - 0.5;
-    const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+  // Kuiper belt (beyond Neptune, 30-50 AU)
+  // Wider, sparser, icier colors than the main belt
+  const kuiperBelt = generateBelt(40, 20, 350, () => {
+    const base = 0.4 + Math.random() * 0.3;
+    // Slight blue-grey tint (icy bodies)
+    return [base * 0.95, base, base * 1.05];
+  });
 
-    const baseSpeed = 0.00125 / Math.pow(r / beltCenter, 1.5);
-    asteroids.push({
-      angle,
-      radius: r,
-      height: y,
-      size,
-      color: [grey * 1.05, grey, grey * 0.95],
-      tumbleAxis: [ax / len, ay / len, az / len],
-      tumbleSpeed: 0.07 + Math.random() * 0.26,
-      orbitSpeed: baseSpeed * (0.85 + Math.random() * 0.3),
-      shapeIndex: Math.floor(Math.random() * 4),
-    });
-  }
+  const asteroidBelts = [mainBelt, kuiperBelt];
 
-  const asteroidBelts = [{
-    centerRadius: beltCenter,
-    width: beltWidth / 2,
-    thickness: beltThickness,
-    centerRadiusAU: beltCenterAU,
-    widthAU: beltWidthAU / 2,
-    thicknessAU: beltWidthAU * 0.05,
-    centerRadiusScene: auToScene(beltCenterAU),
-    widthScene: auToScene(beltWidthAU / 2),
-    thicknessScene: auToScene(beltWidthAU * 0.05),
-    asteroids,
-  }];
-
-  // ── Star info (for dual-lighting — solo star) ──
+  // ── Star info ──
   const starInfo = {
     color1: star.color,
     brightness1: 1.0,
