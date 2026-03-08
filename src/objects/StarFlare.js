@@ -251,7 +251,7 @@ export class StarFlare {
       const dist = camera.position.distanceTo(this.mesh.position);
       const angularSize = (this._renderRadius * 30) / Math.max(dist, 0.001);
       const pixelSize = angularSize * window.innerHeight * 0.5;
-      if (pixelSize < 12) {
+      if (pixelSize < 20) {
         this._flareDisc.visible = false;
         this._billboard.visible = true;
         const minSize = dist * 0.012;
