@@ -1483,6 +1483,7 @@ function enterGallery() {
   stopFlythrough();
   _deepSkyLingerTimer = -1;
   warpTarget.direction = null;
+  cameraController.forceFreeLook = false;
 
   // Hide everything in the current system
   _setSystemVisible(false);
