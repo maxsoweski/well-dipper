@@ -39,6 +39,15 @@ export class StarFlare {
     const R = this._renderRadius;
     const [cr, cg, cb] = this.data.color;
 
+    // Luminosity factor: maps the huge physical luminosity range (0.04 – 300,000)
+    // to a visual multiplier using log scale.
+    //   M-class (0.04) → ~0.45  — small, dim glow
+    //   G-class (1.0)  → ~0.70  — moderate (Sun-like baseline)
+    //   A-class (20)   → ~0.96  — bright
+    //   O-class (300K) → ~1.80  — huge, blazing flare
+    const rawLum = this.data.luminosity || 1.0;
+    const lumFactor = Math.max(0.35, Math.min(2.0, 0.7 + 0.2 * Math.log10(rawLum)));
+
     // Large quad — shader renders spikes + halo
     const size = R * 30;
     const geometry = new THREE.PlaneGeometry(size, size);
@@ -51,6 +60,7 @@ export class StarFlare {
         uSize: { value: size },
         uScreenAngle: { value: 0 },      // rotation from screen-center alignment
         uBrightPulse: { value: 1.0 },     // brightness multiplier from camera motion
+        uLumFactor: { value: lumFactor },  // luminosity-based glow/spike scaling
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -66,6 +76,7 @@ export class StarFlare {
         uniform float uSize;
         uniform float uScreenAngle;
         uniform float uBrightPulse;
+        uniform float uLumFactor;
         varying vec2 vUv;
 
         // 4x4 Bayer dithering threshold (matches Planet.js / rest of the game)
@@ -108,14 +119,14 @@ export class StarFlare {
 
           if (dist > uSize * 0.5) discard;
 
-          float mainSpikeLen = uStarRadius * 6.5;
-          float diagSpikeLen = uStarRadius * 3.25; // half the main length
+          float mainSpikeLen = uStarRadius * 6.5 * uLumFactor;
+          float diagSpikeLen = uStarRadius * 3.25 * uLumFactor;
           vec3 color = vec3(0.0);
 
-          // ── Star core + glow ──
+          // ── Star core + glow (scaled by luminosity) ──
           float coreBright = smoothstep(uStarRadius * 1.3, uStarRadius * 0.5, dist);
-          float glowRadius = uStarRadius * 3.0;
-          float glowBright = exp(-dist / glowRadius * 1.5) * 1.5;
+          float glowRadius = uStarRadius * 3.0 * uLumFactor;
+          float glowBright = exp(-dist / glowRadius * 1.5) * 1.5 * uLumFactor;
           color += uColor * max(coreBright, glowBright);
 
           // 8 spikes: 4 angles, each goes both directions

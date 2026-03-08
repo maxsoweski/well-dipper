@@ -1736,7 +1736,7 @@ function gallerySpawn() {
     camera.position.set(0, r * 0.5, r * 8);
     camera.lookAt(0, 0, 0);
 
-    infoText = `FLARE  |  type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉`;
+    infoText = `FLARE  |  type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉  |  L=${systemData.star.luminosity} L☉`;
   }
 
   // ── Planet ──

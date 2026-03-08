@@ -85,6 +85,7 @@ export class StarSystemGenerator {
       // Uses same variation factor so map and scene star sizes correlate.
       radius: props.mapRadius * starVariation,
       temp: props.temp,
+      luminosity: props.luminosity,
     };
 
     // ── Binary? (~35% of systems) ──
@@ -119,6 +120,7 @@ export class StarSystemGenerator {
         radiusScene: solarRadiiToScene(s2RadiusSolar),
         radius: secondaryProps.mapRadius * s2Variation,
         temp: secondaryProps.temp,
+        luminosity: secondaryProps.luminosity,
       };
 
       // Binary separation in AU: close binaries are 0.1-0.5 AU apart
