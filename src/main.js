@@ -1,7 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
 import { Starfield } from './objects/Starfield.js';
-import { Star } from './objects/Star.js';
 import { StarFlare } from './objects/StarFlare.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
@@ -485,7 +484,7 @@ const GALLERY_TYPES = [
   'nav-planetary-nebula', 'nav-emission-nebula',
   'nav-open-cluster',
   // Star system objects
-  'star', 'star-flare',
+  'star-flare',
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
   'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
   'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
@@ -1621,7 +1620,7 @@ function gallerySpawn() {
     const scaleFactor = billboardData.radius / navData.radius;
     for (const sData of navData.stars) {
       const scaledR = Math.max(billboardData.radius * 0.015, 1.5);
-      const star = new Star({ ...sData, radius: scaledR, color: sData.color }, scaledR);
+      const star = new StarFlare({ ...sData, radius: scaledR, color: sData.color }, scaledR);
       star.mesh.position.set(
         sData.position[0] * scaleFactor,
         sData.position[1] * scaleFactor,
@@ -1654,7 +1653,7 @@ function gallerySpawn() {
     const scaleFactor = particleData.radius / navData.radius;
     for (const sData of navData.stars) {
       const scaledR = Math.max(particleData.radius * 0.02, 2.0);
-      const star = new Star({ ...sData, radius: scaledR, color: sData.color }, scaledR);
+      const star = new StarFlare({ ...sData, radius: scaledR, color: sData.color }, scaledR);
       star.mesh.position.set(
         sData.position[0] * scaleFactor,
         sData.position[1] * scaleFactor,
@@ -1693,22 +1692,7 @@ function gallerySpawn() {
     infoText = `${data.particleCount || data.starCount || '?'} particles  |  r=${radius.toFixed(0)}`;
   }
 
-  // ── Star ──
-  else if (type === 'star') {
-    const systemData = StarSystemGenerator.generate(seed);
-    const starData = { ...systemData.star, radius: systemData.star.radiusScene };
-    const star = new Star(starData);
-    star.addTo(scene);
-    _galleryMeshes.push(star);
-
-    const r = starData.radius;
-    camera.position.set(0, r * 0.5, r * 8);
-    camera.lookAt(0, 0, 0);
-
-    infoText = `type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉`;
-  }
-
-  // ── Star with lens flare / diffraction spikes ──
+  // ── Star (lens flare / diffraction spikes) ──
   else if (type === 'star-flare') {
     const systemData = StarSystemGenerator.generate(seed);
     const starData = { ...systemData.star, radius: systemData.star.radiusScene };

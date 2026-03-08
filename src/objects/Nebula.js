@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Star } from './Star.js';
+import { StarFlare } from './StarFlare.js';
 
 /**
  * Nebula — renders nebulae as layered semi-transparent planes with noise shaders.
@@ -29,7 +29,7 @@ export class Nebula {
     // Create central white dwarf for planetary nebulae
     this._centralStar = null;
     if (nebulaData.centralStar) {
-      this._centralStar = new Star({
+      this._centralStar = new StarFlare({
         color: nebulaData.centralStar.color,
         radius: nebulaData.centralStar.radius,
         luminosity: nebulaData.centralStar.luminosity,
@@ -178,17 +178,46 @@ export class Nebula {
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mvPos;
           float distScale = 300.0 / max(-mvPos.z, 1.0);
-          gl_PointSize = clamp(aSize * distScale, 0.5, 32.0);
+          gl_PointSize = clamp(aSize * distScale, 0.5, 64.0);
         }
       `,
 
       fragmentShader: /* glsl */ `
         varying vec3 vColor;
 
+        // 4×4 Bayer dithering
+        float bayerDither(vec2 coord) {
+          vec2 p = mod(floor(coord), 4.0);
+          float t = 0.0;
+          if (p.y < 0.5) {
+            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+          } else if (p.y < 1.5) {
+            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+          } else if (p.y < 2.5) {
+            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+          } else {
+            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+          }
+          return t / 16.0;
+        }
+
         void main() {
-          float dist = length(gl_PointCoord - 0.5);
-          if (dist > 0.5) discard;
-          float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+          vec2 p = gl_PointCoord - 0.5;
+          float dist = length(p);
+
+          // Core glow
+          float alpha = 1.0 - smoothstep(0.0, 0.35, dist);
+
+          // Diffraction spikes: 4 spikes (horizontal + vertical)
+          float spikeH = exp(-abs(p.y) * 18.0) * exp(-abs(p.x) * 3.0);
+          float spikeV = exp(-abs(p.x) * 18.0) * exp(-abs(p.y) * 3.0);
+          float spikes = max(spikeH, spikeV) * 0.7;
+
+          alpha = max(alpha, spikes);
+
+          float threshold = bayerDither(gl_FragCoord.xy);
+          if (alpha < threshold * 0.4) discard;
+
           gl_FragColor = vec4(vColor * alpha, alpha);
         }
       `,
@@ -214,9 +243,9 @@ export class Nebula {
         layer.quaternion.copy(camera.quaternion);
       }
     }
-    // Update central star glow so distance-based cap kicks in
+    // Update central star (billboard LOD, brightness pulse)
     if (this._centralStar && camera) {
-      this._centralStar.updateGlow(camera);
+      this._centralStar.update(deltaTime, camera);
     }
   }
 

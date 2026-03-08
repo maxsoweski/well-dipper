@@ -31,6 +31,9 @@ export class Galaxy {
     geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(data.colors, 3));
     geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(data.sizes, 1));
 
+    // Clusters get diffraction spikes on their particles; galaxies stay as fuzzy dots
+    const spikeStars = !!data.spikeStars;
+
     const material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -58,7 +61,7 @@ export class Galaxy {
 
           // Min 1.0px — sub-pixel particles cause aggressive blinking
           // as they cross pixel boundaries during rotation
-          gl_PointSize = clamp(gl_PointSize, 1.0, 32.0);
+          gl_PointSize = clamp(gl_PointSize, 1.0, ${spikeStars ? '64.0' : '32.0'});
 
           // Slow per-particle twinkle: gentle brightness variation
           // using position as a unique hash (each star twinkles independently)
@@ -67,7 +70,50 @@ export class Galaxy {
         }
       `,
 
-      fragmentShader: /* glsl */ `
+      fragmentShader: spikeStars
+        ? /* glsl */ `
+        varying vec3 vColor;
+        varying float vTwinkle;
+
+        // 4×4 Bayer dithering
+        float bayerDither(vec2 coord) {
+          vec2 p = mod(floor(coord), 4.0);
+          float t = 0.0;
+          if (p.y < 0.5) {
+            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+          } else if (p.y < 1.5) {
+            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+          } else if (p.y < 2.5) {
+            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+          } else {
+            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+          }
+          return t / 16.0;
+        }
+
+        void main() {
+          vec2 p = gl_PointCoord - 0.5;
+          float dist = length(p);
+
+          // Core glow
+          float alpha = 1.0 - smoothstep(0.0, 0.35, dist);
+
+          // Diffraction spikes: 4 spikes (horizontal + vertical)
+          // Each spike is a thin strip along its axis
+          float spikeH = exp(-abs(p.y) * 18.0) * exp(-abs(p.x) * 3.0);
+          float spikeV = exp(-abs(p.x) * 18.0) * exp(-abs(p.y) * 3.0);
+          float spikes = max(spikeH, spikeV) * 0.7;
+
+          alpha = max(alpha, spikes);
+          alpha *= vTwinkle;
+
+          float threshold = bayerDither(gl_FragCoord.xy);
+          if (alpha < threshold * 0.4) discard;
+
+          gl_FragColor = vec4(vColor * alpha, alpha);
+        }
+      `
+        : /* glsl */ `
         varying vec3 vColor;
         varying float vTwinkle;
 

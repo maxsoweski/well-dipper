@@ -85,6 +85,7 @@ export class ClusterGenerator {
       radius,
       tiltX: 0,
       tiltZ: 0,
+      spikeStars: true,
       tourStops,
     };
   }
@@ -153,6 +154,7 @@ export class ClusterGenerator {
       radius,
       tiltX: 0,
       tiltZ: 0,
+      spikeStars: true,
       tourStops,
     };
   }
