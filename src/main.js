@@ -2,6 +2,8 @@ import './style.css';
 import * as THREE from 'three';
 import { Starfield } from './objects/Starfield.js';
 import { Star } from './objects/Star.js';
+import { StarRays } from './objects/StarRays.js';
+import { StarFlare } from './objects/StarFlare.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { OrbitLine } from './objects/OrbitLine.js';
@@ -484,7 +486,7 @@ const GALLERY_TYPES = [
   'nav-planetary-nebula', 'nav-emission-nebula',
   'nav-open-cluster',
   // Star system objects
-  'star',
+  'star', 'star-rays', 'star-flare',
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
   'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
   'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
@@ -1706,6 +1708,36 @@ function gallerySpawn() {
     infoText = `type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉`;
   }
 
+  // ── Star with radiating rays ──
+  else if (type === 'star-rays') {
+    const systemData = StarSystemGenerator.generate(seed);
+    const starData = { ...systemData.star, radius: systemData.star.radiusScene };
+    const star = new StarRays(starData);
+    star.addTo(scene);
+    _galleryMeshes.push(star);
+
+    const r = starData.radius;
+    camera.position.set(0, r * 0.5, r * 8);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `RAYS  |  type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉`;
+  }
+
+  // ── Star with lens flare / diffraction spikes ──
+  else if (type === 'star-flare') {
+    const systemData = StarSystemGenerator.generate(seed);
+    const starData = { ...systemData.star, radius: systemData.star.radiusScene };
+    const star = new StarFlare(starData);
+    star.addTo(scene);
+    _galleryMeshes.push(star);
+
+    const r = starData.radius;
+    camera.position.set(0, r * 0.5, r * 8);
+    camera.lookAt(0, 0, 0);
+
+    infoText = `FLARE  |  type ${systemData.star.type}  |  ${systemData.star.temp}K  |  r=${systemData.star.radiusSolar.toFixed(2)} R☉`;
+  }
+
   // ── Planet ──
   else if (type.startsWith('planet-')) {
     const planetType = type.replace('planet-', '');
@@ -2424,7 +2456,7 @@ function animate() {
       if (obj instanceof Moon) {
         obj.update(deltaTime, _galleryOrigin);  // Moon needs parent position
       } else if (obj.update) {
-        obj.update(deltaTime);
+        obj.update(deltaTime, camera);
       }
       if (obj.updateGlow) obj.updateGlow(camera);
     }
