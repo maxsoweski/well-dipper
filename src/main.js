@@ -2753,11 +2753,13 @@ function animate() {
       const renderHeight = window.innerHeight / retroRenderer.pixelScale;
       const projScale = renderHeight / (2 * Math.tan(fovRad / 2));
 
-      for (const entry of system.planets) {
-        // Planet LOD
+      for (let pi = 0; pi < system.planets.length; pi++) {
+        const entry = system.planets[pi];
+        // Planet LOD — always show mesh for focused planet
         const pDist = camera.position.distanceTo(entry.planet.mesh.position);
         const pPixels = (entry.planet.data.radius * 2) * projScale / pDist;
-        const pShowBillboard = pPixels < 3;
+        const isFocusedPlanet = (focusIndex === pi && focusMoonIndex < 0);
+        const pShowBillboard = !isFocusedPlanet && pPixels < 3;
         entry.planet.mesh.visible = !pShowBillboard;
         entry.billboard.sprite.visible = pShowBillboard;
         entry.billboard.sprite.position.copy(entry.planet.mesh.position);
@@ -2768,7 +2770,9 @@ function animate() {
           const moon = entry.moons[m];
           const mDist = camera.position.distanceTo(moon.mesh.position);
           const mPixels = (moon.data.radius * 2) * projScale / mDist;
-          const mShowBillboard = mPixels < 3;
+          // Always show mesh for the focused moon (never swap to billboard up close)
+          const isFocusedMoon = (focusIndex === pi && focusMoonIndex === m);
+          const mShowBillboard = !isFocusedMoon && mPixels < 3;
           moon.mesh.visible = !mShowBillboard;
           const moonBb = entry.moonBillboards[m];
           moonBb.sprite.visible = mShowBillboard;
@@ -3048,6 +3052,15 @@ function animate() {
   }
 
   cameraController.update(deltaTime);
+
+  // ── Dynamic near clipping plane ──
+  // Scale near plane with camera distance so tiny moons don't clip.
+  // At orbit distance 0.01, near = 0.0001. At distance 100, near = 1.0.
+  // Clamped to [0.0001, 1.0] to avoid z-fighting at extremes.
+  const camDist = cameraController.smoothedDistance;
+  camera.near = Math.max(0.0001, Math.min(1.0, camDist * 0.01));
+  camera.updateProjectionMatrix();
+
   starfield.update(camera.position);
 
   // ── Update HUD ──
