@@ -10,9 +10,8 @@ import * as THREE from 'three';
  * - Bright highlight knots partway down each spike
  * - Subtle circular halo ring
  * - Screen-position alignment: spike pattern rotates to point from screen center
+ *   toward the star (real lens flare behavior)
  * - Brightness pulses subtly when camera moves
- * - Bayer dithered edges matching the game's retro aesthetic
- * - Billboard fallback at distance so the star never disappears
  *
  * All elements billboard (face camera).
  */
@@ -28,32 +27,28 @@ export class StarFlare {
 
     // Diffraction spikes + glow + core (all in one shader billboard)
     this._flareDisc = this._createFlareDisc();
-    this._flareDisc.frustumCulled = false;
     this.mesh.add(this._flareDisc);
-
-    // Glow sprite — always visible, scales with distance so the star
-    // is always a bright colored point even when the flare quad is sub-pixel.
-    // Same approach as Star.js: additive glow behind the flare at close range,
-    // becomes the sole visible element at distance.
-    this._baseGlowScale = this._renderRadius * 3.5;
-    this.glow = this._createGlow();
-    this.glow.frustumCulled = false;
-    this.mesh.add(this.glow);
 
     this._time = 0;
     this._lastCamPos = new THREE.Vector3();
-    this._camSpeed = 0;
-    this._screenAngle = 0;
+    this._camSpeed = 0;       // smoothed camera speed for brightness pulse
+    this._screenAngle = 0;    // angle from screen center to star
   }
 
   _createFlareDisc() {
     const R = this._renderRadius;
     const [cr, cg, cb] = this.data.color;
 
-    // Luminosity factor: log-scale mapping
+    // Luminosity factor: maps the huge physical luminosity range (0.04 – 300,000)
+    // to a visual multiplier using log scale.
+    //   M-class (0.04) → ~0.45  — small, dim glow
+    //   G-class (1.0)  → ~0.70  — moderate (Sun-like baseline)
+    //   A-class (20)   → ~0.96  — bright
+    //   O-class (300K) → ~1.80  — huge, blazing flare
     const rawLum = this.data.luminosity || 1.0;
     const lumFactor = Math.max(0.55, Math.min(2.0, 0.7 + 0.2 * Math.log10(rawLum)));
 
+    // Large quad — shader renders spikes + halo
     const size = R * 30;
     const geometry = new THREE.PlaneGeometry(size, size);
 
@@ -63,9 +58,9 @@ export class StarFlare {
         uColor: { value: new THREE.Vector3(cr, cg, cb) },
         uStarRadius: { value: R },
         uSize: { value: size },
-        uScreenAngle: { value: 0 },
-        uBrightPulse: { value: 1.0 },
-        uLumFactor: { value: lumFactor },
+        uScreenAngle: { value: 0 },      // rotation from screen-center alignment
+        uBrightPulse: { value: 1.0 },     // brightness multiplier from camera motion
+        uLumFactor: { value: lumFactor },  // luminosity-based glow/spike scaling
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -84,6 +79,7 @@ export class StarFlare {
         uniform float uLumFactor;
         varying vec2 vUv;
 
+        // 4x4 Bayer dithering threshold (matches Planet.js / rest of the game)
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
           float t = 0.0;
@@ -99,10 +95,12 @@ export class StarFlare {
           return t / 16.0;
         }
 
+        // Compute a single spike's contribution at a given point.
         float spikeBrightness(float perpDist, float along, float spikeWidth) {
           float w = spikeWidth * (1.0 - along * 0.7);
           float mask = smoothstep(w, w * 0.2, abs(perpDist));
           float falloff = exp(-along * 2.0) * 0.95;
+          // Highlight knots at ~30% and ~55% along
           float knot1 = exp(-pow((along - 0.30) * 8.0, 2.0)) * 0.6;
           float knot2 = exp(-pow((along - 0.55) * 10.0, 2.0)) * 0.35;
           falloff += knot1 + knot2;
@@ -118,6 +116,7 @@ export class StarFlare {
           p = vec2(p.x * cs - p.y * sn, p.x * sn + p.y * cs);
 
           float dist = length(p);
+
           if (dist > uSize * 0.5) discard;
 
           float mainSpikeLen = uStarRadius * 6.5 * uLumFactor;
@@ -125,22 +124,12 @@ export class StarFlare {
           vec3 color = vec3(0.0);
 
           // ── Star core + glow ──
-          // Single smooth radial falloff from overexposed white center
-          // through star color to dim glow. No separate core/glow boundary.
-          // This prevents the "flat disc" artifact on warm-colored stars.
-          float r = dist / uStarRadius;
-
-          // Overexposed center: blows out to white, fading to star color further out.
-          // At r=0 brightness is ~2.5 (overexposed white), at r=1 it's ~1.0 (star color),
-          // beyond that it's the exponential glow tail.
-          float radialBright = exp(-r * 0.8) * 2.5 * max(uLumFactor, 0.7);
-
-          // Color: white at center → star color further out
-          // The overexposure (brightness > 1) naturally pushes toward white via additive blending
-          float whiteness = exp(-r * 1.2);
-          vec3 coreColor = mix(uColor, vec3(1.0), whiteness * 0.6);
-
-          color += coreColor * radialBright;
+          // Core and glow radius stay constant so the bloom always bridges
+          // smoothly into the spikes. Only glow brightness scales with luminosity.
+          float coreBright = smoothstep(uStarRadius * 1.3, uStarRadius * 0.5, dist);
+          float glowRadius = uStarRadius * 3.0;
+          float glowBright = exp(-dist / glowRadius * 1.5) * 1.5 * uLumFactor;
+          color += uColor * max(coreBright, glowBright);
 
           // 8 spikes: 4 angles, each goes both directions
           float angles[4];
@@ -212,7 +201,9 @@ export class StarFlare {
           // Apply brightness pulse from camera motion
           color *= uBrightPulse;
 
-          // Bayer dithered edges
+          // Dithered edges: use Bayer threshold against brightness to create
+          // stippled transparency at the edges of spikes, glow, and halo.
+          // This matches the retro dithered aesthetic of the rest of the game.
           float brightness = max(max(color.r, color.g), color.b);
           if (brightness < 0.01) discard;
           float dither = bayerDither(gl_FragCoord.xy);
@@ -230,45 +221,6 @@ export class StarFlare {
     return new THREE.Mesh(geometry, material);
   }
 
-  /**
-   * Always-on glow sprite — same as Star.js.
-   * At close range it's hidden behind the bright flare disc (additive).
-   * At distance it's the sole visible element, scaled to stay prominent.
-   */
-  _createGlow() {
-    const size = 64;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-
-    const cx = size / 2;
-    const gradient = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-    gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.5)');
-    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.15)');
-    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.04)');
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
-
-    const [r, g, b] = this.data.color;
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      color: new THREE.Color(r, g, b),
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      depthWrite: false,
-    });
-
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(this._baseGlowScale, this._baseGlowScale, 1);
-    return sprite;
-  }
-
   update(deltaTime, camera) {
     this._time += deltaTime;
     const uniforms = this._flareDisc.material.uniforms;
@@ -279,15 +231,21 @@ export class StarFlare {
       this._flareDisc.quaternion.copy(camera.quaternion);
 
       // ── Screen-position alignment ──
+      // Project star world position to NDC (-1 to 1).
+      // The angle from screen center to the star determines spike rotation.
       const starWorld = this.mesh.position;
       const projected = starWorld.clone().project(camera);
+      // projected.x, projected.y are in NDC (-1 to 1)
       const sx = projected.x;
       const sy = projected.y;
       const screenDist = Math.sqrt(sx * sx + sy * sy);
 
+      // Angle from screen center to star position
+      // Only rotate when star is noticeably off-center
       if (screenDist > 0.02) {
         this._screenAngle = Math.atan2(sy, sx);
       }
+      // Smooth the angle transition
       uniforms.uScreenAngle.value = this._screenAngle;
 
       // ── Brightness pulse from camera motion ──
@@ -298,27 +256,19 @@ export class StarFlare {
       const moveSpeed = Math.sqrt(dx * dx + dy * dy + dz * dz) / Math.max(deltaTime, 0.001);
       this._lastCamPos.copy(camPos);
 
+      // Smooth the speed value (exponential decay)
       this._camSpeed += (moveSpeed - this._camSpeed) * Math.min(1, deltaTime * 5);
 
+      // Map speed to brightness pulse: resting = 1.0, moving = up to 1.4
+      // Normalize by star radius so it works at any zoom level
       const normalizedSpeed = this._camSpeed / (this._renderRadius * 2);
       const pulse = 1.0 + Math.min(0.4, normalizedSpeed * 0.1);
       uniforms.uBrightPulse.value = pulse;
     }
   }
 
-  /**
-   * Scale glow based on camera distance — same as Star.js.
-   * Maintains minimum angular size so star is always visible.
-   */
-  updateGlow(camera) {
-    if (!camera) return;
-    const dist = camera.position.distanceTo(this.mesh.position);
-    const minAngularSize = 0.015;
-    const distScale = dist * minAngularSize;
-    const scale = Math.max(this._baseGlowScale, distScale);
-    const maxScale = dist * 0.2;
-    const finalScale = Math.min(scale, maxScale);
-    this.glow.scale.set(finalScale, finalScale, 1);
+  updateGlow() {
+    // No glow sprite — flare disc replaces it
   }
 
   addTo(scene) {
@@ -328,7 +278,5 @@ export class StarFlare {
   dispose() {
     this._flareDisc.geometry.dispose();
     this._flareDisc.material.dispose();
-    this.glow.material.map.dispose();
-    this.glow.material.dispose();
   }
 }
