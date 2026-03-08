@@ -41,7 +41,6 @@ export class StarFlare {
     this._time = 0;
     this._lastCamPos = new THREE.Vector3();
     this._camSpeed = 0;       // smoothed camera speed for brightness pulse
-    this._screenAngle = 0;    // angle from screen center to star
   }
 
   _createSurface() {
@@ -274,23 +273,9 @@ export class StarFlare {
         this._billboard.visible = false;
       }
 
-      // ── Screen-position alignment ──
-      // Project star world position to NDC (-1 to 1).
-      // The angle from screen center to the star determines spike rotation.
-      const starWorld = this.mesh.position;
-      const projected = starWorld.clone().project(camera);
-      // projected.x, projected.y are in NDC (-1 to 1)
-      const sx = projected.x;
-      const sy = projected.y;
-      const screenDist = Math.sqrt(sx * sx + sy * sy);
-
-      // Angle from screen center to star position
-      // Only rotate when star is noticeably off-center
-      if (screenDist > 0.02) {
-        this._screenAngle = Math.atan2(sy, sx);
-      }
-      // Smooth the angle transition
-      uniforms.uScreenAngle.value = this._screenAngle;
+      // Diffraction spikes have a fixed orientation — they're caused by
+      // the physical lens aperture, which is the same for all light sources.
+      // uScreenAngle stays at 0 (no per-star rotation).
 
       // ── Brightness pulse from camera motion ──
       const camPos = camera.position;
