@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 
 /**
- * StarFlare — star with lens diffraction spikes and a soft halo.
+ * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
  *
  * Mimics real camera lens artifacts:
  * 1. Emissive sphere (core)
- * 2. 4 or 6 diffraction spikes (long thin quads, additive blended)
- * 3. Circular halo ring at ~3x radius (lens flare ghost)
+ * 2. 6 diffraction spikes — bright white at center, dispersing into rainbow
+ *    spectrum toward the tips (like real lens flare chromatic aberration)
+ * 3. Circular halo ring at ~3.5x radius (lens ghost)
  *
- * All elements are billboard (face camera) for consistent look from any angle.
+ * All spike/halo elements billboard (face camera).
  */
 export class StarFlare {
   constructor(starData, renderRadius = null) {
@@ -21,14 +22,9 @@ export class StarFlare {
     this.surface.frustumCulled = false;
     this.mesh.add(this.surface);
 
-    // Diffraction spikes (billboard)
-    this._spikeGroup = new THREE.Group();
-    this._createSpikes();
-    this.mesh.add(this._spikeGroup);
-
-    // Halo ring (billboard)
-    this.halo = this._createHalo();
-    this.mesh.add(this.halo);
+    // Diffraction spikes + halo (shader-based billboard)
+    this._flareDisc = this._createFlareDisc();
+    this.mesh.add(this._flareDisc);
 
     this._time = 0;
   }
@@ -42,92 +38,116 @@ export class StarFlare {
     return new THREE.Mesh(geometry, material);
   }
 
-  _createSpikes() {
-    const R = this._renderRadius;
-    const [cr, cg, cb] = this.data.color;
-    const spikeCount = 6;  // 6-pointed star diffraction
-
-    // Each spike is a thin quad (two triangles) stretching from center outward
-    // We use a PlaneGeometry rotated and colored with a gradient via vertex colors
-    for (let i = 0; i < spikeCount; i++) {
-      const angle = (i / spikeCount) * Math.PI; // 0 to π (each spike goes both directions)
-
-      // Spike dimensions — long and thin
-      const length = R * 12;  // total length tip-to-tip
-      const width = R * 0.15; // narrow
-
-      const geometry = new THREE.PlaneGeometry(width, length, 1, 8);
-      const posAttr = geometry.getAttribute('position');
-      const colorAttr = new Float32Array(posAttr.count * 3);
-
-      // Color gradient: bright at center, fading toward tips
-      for (let v = 0; v < posAttr.count; v++) {
-        const vy = posAttr.getY(v); // ranges from -length/2 to +length/2
-        const distFromCenter = Math.abs(vy) / (length / 2);
-
-        // Exponential falloff from center
-        const brightness = Math.exp(-distFromCenter * 3.0);
-
-        // Taper width toward tips
-        const taper = 1.0 - distFromCenter * distFromCenter;
-        const vx = posAttr.getX(v);
-        posAttr.setX(v, vx * Math.max(0.1, taper));
-
-        // Color: white at center fading to star color at tips
-        const white = brightness * 0.6;
-        colorAttr[v * 3]     = Math.min(1, cr * brightness + white);
-        colorAttr[v * 3 + 1] = Math.min(1, cg * brightness + white);
-        colorAttr[v * 3 + 2] = Math.min(1, cb * brightness + white);
-      }
-
-      geometry.setAttribute('color', new THREE.BufferAttribute(colorAttr, 3));
-      posAttr.needsUpdate = true;
-
-      const material = new THREE.MeshBasicMaterial({
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-
-      const spike = new THREE.Mesh(geometry, material);
-      // Rotate spike around Z to create the star pattern
-      spike.rotation.z = angle;
-      this._spikeGroup.add(spike);
-    }
-  }
-
-  _createHalo() {
+  _createFlareDisc() {
     const R = this._renderRadius;
     const [cr, cg, cb] = this.data.color;
 
-    // Ring geometry — a thin torus-like ring
-    const haloRadius = R * 3.5;
-    const ringWidth = R * 0.3;
-    const segments = 64;
+    // Large quad — shader renders spikes + halo
+    const size = R * 28;
+    const geometry = new THREE.PlaneGeometry(size, size);
 
-    const geometry = new THREE.RingGeometry(
-      haloRadius - ringWidth / 2,
-      haloRadius + ringWidth / 2,
-      segments,
-    );
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new THREE.Vector3(cr, cg, cb) },
+        uStarRadius: { value: R },
+        uSize: { value: size },
+      },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        uniform float uTime;
+        uniform vec3 uColor;
+        uniform float uStarRadius;
+        uniform float uSize;
+        varying vec2 vUv;
 
-    // Vertex colors: subtle, mostly transparent feel via low color values
-    const posAttr = geometry.getAttribute('position');
-    const colorAttr = new Float32Array(posAttr.count * 3);
-    for (let v = 0; v < posAttr.count; v++) {
-      colorAttr[v * 3]     = cr * 0.4;
-      colorAttr[v * 3 + 1] = cg * 0.4;
-      colorAttr[v * 3 + 2] = cb * 0.4;
-    }
-    geometry.setAttribute('color', new THREE.BufferAttribute(colorAttr, 3));
+        // Rainbow spectrum: maps 0-1 to visible light colors
+        vec3 spectrum(float t) {
+          // Peaking RGB channels at different positions for a natural rainbow
+          vec3 c;
+          c.r = smoothstep(0.0, 0.35, t) - smoothstep(0.65, 1.0, t);  // red-orange peak early
+          c.g = smoothstep(0.15, 0.5, t) - smoothstep(0.7, 1.0, t);   // green peaks middle
+          c.b = smoothstep(0.4, 0.75, t);                               // blue-violet peaks late
+          // Add some warm overlap for yellow/orange
+          c.r += smoothstep(0.1, 0.3, t) * (1.0 - smoothstep(0.3, 0.55, t)) * 0.5;
+          return clamp(c, 0.0, 1.0);
+        }
 
-    const material = new THREE.MeshBasicMaterial({
-      vertexColors: true,
+        void main() {
+          vec2 p = (vUv - 0.5) * uSize;
+          float dist = length(p);
+          float angle = atan(p.y, p.x);
+
+          float alpha = 0.0;
+          vec3 color = vec3(0.0);
+
+          // ── Diffraction spikes (6-pointed) ──
+          float spikeCount = 6.0;
+          for (float i = 0.0; i < 6.0; i++) {
+            float spikeAngle = i / spikeCount * 3.14159265;
+            // Distance from this spike's line (in both directions)
+            float diff = abs(sin(angle - spikeAngle));
+
+            // Spike width tapers: thick near star, thin far away
+            float spikeLen = uStarRadius * 12.0;
+            float t = clamp(dist / spikeLen, 0.0, 1.0);
+            float width = mix(0.04, 0.008, t);
+
+            float spikeMask = smoothstep(width, width * 0.3, diff);
+
+            // Brightness falloff along spike length
+            float falloff = exp(-t * 2.5);
+
+            // Skip inside star
+            float innerMask = smoothstep(uStarRadius * 0.8, uStarRadius * 1.3, dist);
+
+            float spikeAlpha = spikeMask * falloff * innerMask;
+
+            // Color: white/star-color near center, rainbow spectrum toward tips
+            // t=0 (center) -> star color, t=0.3+ -> rainbow dispersion
+            float spectrumBlend = smoothstep(0.15, 0.5, t);
+
+            // Each spike gets a slightly different spectrum offset for variety
+            float specOffset = i * 0.05;
+            // Map angular position across spike width to spectrum position
+            // This creates the rainbow spread — red on one edge, blue on the other
+            float spikeAngleDiff = sin(angle - spikeAngle); // signed, -1 to 1
+            float specPos = clamp(spikeAngleDiff / (width * 2.0) + 0.5 + specOffset, 0.0, 1.0);
+
+            vec3 rainbowColor = spectrum(specPos);
+            vec3 baseColor = mix(vec3(1.0), uColor, 0.3); // mostly white near center
+            vec3 spikeColor = mix(baseColor, rainbowColor * 1.3, spectrumBlend);
+
+            color += spikeColor * spikeAlpha;
+            alpha += spikeAlpha;
+          }
+
+          // ── Halo ring (lens ghost) ──
+          float haloRadius = uStarRadius * 3.5;
+          float haloWidth = uStarRadius * 0.4;
+          float haloDist = abs(dist - haloRadius);
+          float haloAlpha = smoothstep(haloWidth, 0.0, haloDist) * 0.25;
+
+          // Halo gets subtle rainbow too
+          float haloSpecPos = (angle / 6.28318 + 0.5); // map angle to 0-1
+          vec3 haloColor = mix(uColor, spectrum(fract(haloSpecPos)) * 0.8, 0.4);
+
+          color += haloColor * haloAlpha;
+          alpha += haloAlpha;
+
+          alpha = clamp(alpha, 0.0, 1.0);
+          if (alpha < 0.01) discard;
+
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
       transparent: true,
-      opacity: 0.3,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
@@ -138,16 +158,16 @@ export class StarFlare {
 
   update(deltaTime, camera) {
     this._time += deltaTime;
+    this._flareDisc.material.uniforms.uTime.value = this._time;
 
-    // Billboard: spikes and halo always face camera
+    // Billboard: always face camera
     if (camera) {
-      this._spikeGroup.quaternion.copy(camera.quaternion);
-      this.halo.quaternion.copy(camera.quaternion);
+      this._flareDisc.quaternion.copy(camera.quaternion);
     }
   }
 
   updateGlow() {
-    // No glow sprite — spikes and halo replace it
+    // No glow sprite — flare disc replaces it
   }
 
   addTo(scene) {
@@ -157,11 +177,7 @@ export class StarFlare {
   dispose() {
     this.surface.geometry.dispose();
     this.surface.material.dispose();
-    for (const spike of this._spikeGroup.children) {
-      spike.geometry.dispose();
-      spike.material.dispose();
-    }
-    this.halo.geometry.dispose();
-    this.halo.material.dispose();
+    this._flareDisc.geometry.dispose();
+    this._flareDisc.material.dispose();
   }
 }

@@ -1,13 +1,11 @@
 import * as THREE from 'three';
 
 /**
- * StarRays — star with thin lines radiating outward in all directions.
+ * StarRays — star with animated lines radiating outward, always facing camera.
  *
- * Renders as:
- * 1. Emissive sphere (same as Star.js)
- * 2. Lines radiating from center, evenly distributed on a sphere
- *    Each ray is a thin line segment from the star surface outward.
- *    Rays have varying lengths and fade with distance from center.
+ * 2D billboard effect: a flat disc of ray lines that always faces the camera.
+ * Rays flow outward from the star, with irregular broken-up sections
+ * animated via a custom shader. Same color as the star, additive blended.
  */
 export class StarRays {
   constructor(starData, renderRadius = null) {
@@ -20,9 +18,9 @@ export class StarRays {
     this.surface.frustumCulled = false;
     this.mesh.add(this.surface);
 
-    // Radiating rays
-    this.rays = this._createRays();
-    this.mesh.add(this.rays);
+    // Animated ray disc (billboard shader)
+    this.rayDisc = this._createRayDisc();
+    this.mesh.add(this.rayDisc);
 
     this._time = 0;
   }
@@ -36,75 +34,116 @@ export class StarRays {
     return new THREE.Mesh(geometry, material);
   }
 
-  _createRays() {
+  _createRayDisc() {
     const R = this._renderRadius;
     const [cr, cg, cb] = this.data.color;
-    const rayCount = 120;
 
-    // Each ray = 2 vertices (inner + outer)
-    const positions = new Float32Array(rayCount * 2 * 3);
-    const colors = new Float32Array(rayCount * 2 * 3);
+    // Large quad centered on the star — shader does the ray rendering
+    const size = R * 14;
+    const geometry = new THREE.PlaneGeometry(size, size);
 
-    // Golden angle distribution for even sphere coverage
-    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new THREE.Vector3(cr, cg, cb) },
+        uStarRadius: { value: R },
+        uSize: { value: size },
+      },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        uniform float uTime;
+        uniform vec3 uColor;
+        uniform float uStarRadius;
+        uniform float uSize;
+        varying vec2 vUv;
 
-    for (let i = 0; i < rayCount; i++) {
-      // Fibonacci sphere point
-      const y = 1 - (2 * i) / (rayCount - 1);
-      const radiusAtY = Math.sqrt(1 - y * y);
-      const theta = goldenAngle * i;
-      const dx = radiusAtY * Math.cos(theta);
-      const dy = y;
-      const dz = radiusAtY * Math.sin(theta);
+        // Hash for pseudo-random per-ray variation
+        float hash(float n) {
+          return fract(sin(n) * 43758.5453);
+        }
 
-      // Vary ray length: 2-5x star radius
-      // Use a simple hash for per-ray variation
-      const hash = Math.abs(Math.sin(i * 127.1 + 311.7)) * 43758.5453 % 1;
-      const rayLen = R * (2.0 + hash * 3.0);
+        // 1D noise for irregular broken sections along each ray
+        float noise1D(float x) {
+          float i = floor(x);
+          float f = fract(x);
+          f = f * f * (3.0 - 2.0 * f); // smoothstep
+          return mix(hash(i), hash(i + 1.0), f);
+        }
 
-      const innerR = R * 1.05;  // start just outside surface
-      const outerR = innerR + rayLen;
+        void main() {
+          // Center UV at origin, scale to world units
+          vec2 p = (vUv - 0.5) * uSize;
+          float dist = length(p);
+          float angle = atan(p.y, p.x);
 
-      const idx = i * 6;
-      // Inner point
-      positions[idx]     = dx * innerR;
-      positions[idx + 1] = dy * innerR;
-      positions[idx + 2] = dz * innerR;
-      // Outer point
-      positions[idx + 3] = dx * outerR;
-      positions[idx + 4] = dy * outerR;
-      positions[idx + 5] = dz * outerR;
+          // Skip pixels inside the star sphere
+          if (dist < uStarRadius * 1.1) discard;
 
-      // Inner: bright star color
-      colors[idx]     = Math.min(1, cr + 0.3);
-      colors[idx + 1] = Math.min(1, cg + 0.3);
-      colors[idx + 2] = Math.min(1, cb + 0.3);
-      // Outer: faded toward star color
-      const fade = 0.15 + hash * 0.15;
-      colors[idx + 3] = cr * fade;
-      colors[idx + 4] = cg * fade;
-      colors[idx + 5] = cb * fade;
-    }
+          // Quantize angle into ray slots — more rays = denser look
+          float rayCount = 80.0;
+          float rayAngle = angle / (2.0 * 3.14159265) * rayCount;
+          float rayIdx = floor(rayAngle + 0.5);
+          float rayFrac = abs(rayAngle - rayIdx); // distance from ray center
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+          // Thin ray lines — sharp falloff from center
+          float rayWidth = 0.35; // fraction of slot width
+          float rayAlpha = 1.0 - smoothstep(0.0, rayWidth, rayFrac);
 
-    const material = new THREE.LineBasicMaterial({
-      vertexColors: true,
+          // Per-ray variation: different length, speed, phase
+          float rSeed = rayIdx * 127.1 + 311.7;
+          float rayLen = uStarRadius * (3.0 + hash(rSeed) * 4.0);
+          float raySpeed = 0.6 + hash(rSeed + 73.0) * 0.8;
+          float rayPhase = hash(rSeed + 191.0) * 6.28;
+
+          // Radial position normalized along this ray's length
+          float t = (dist - uStarRadius) / rayLen;
+          if (t > 1.0) discard;
+
+          // Flowing outward animation: noise pattern scrolls outward over time
+          // The noise creates irregular broken-up sections
+          float noiseCoord = t * 6.0 - uTime * raySpeed + rayPhase;
+          float breakup = noise1D(noiseCoord);
+
+          // Sharp threshold for broken segments (on/off feel)
+          float segmentAlpha = smoothstep(0.3, 0.5, breakup);
+
+          // Fade out toward the tip
+          float tipFade = 1.0 - t * t;
+
+          // Fade in from star surface
+          float innerFade = smoothstep(0.0, 0.08, t);
+
+          // Combine
+          float alpha = rayAlpha * segmentAlpha * tipFade * innerFade * 0.7;
+
+          if (alpha < 0.01) discard;
+
+          gl_FragColor = vec4(uColor, alpha);
+        }
+      `,
       transparent: true,
-      opacity: 0.7,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      side: THREE.DoubleSide,
     });
 
-    return new THREE.LineSegments(geometry, material);
+    return new THREE.Mesh(geometry, material);
   }
 
-  update(deltaTime) {
+  update(deltaTime, camera) {
     this._time += deltaTime;
-    // Slow rotation so rays catch different angles
-    this.rays.rotation.y = this._time * 0.03;
+    this.rayDisc.material.uniforms.uTime.value = this._time;
+
+    // Billboard: always face camera
+    if (camera) {
+      this.rayDisc.quaternion.copy(camera.quaternion);
+    }
   }
 
   updateGlow() {
@@ -118,7 +157,7 @@ export class StarRays {
   dispose() {
     this.surface.geometry.dispose();
     this.surface.material.dispose();
-    this.rays.geometry.dispose();
-    this.rays.material.dispose();
+    this.rayDisc.geometry.dispose();
+    this.rayDisc.material.dispose();
   }
 }
