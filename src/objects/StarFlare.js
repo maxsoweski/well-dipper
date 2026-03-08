@@ -31,11 +31,14 @@ export class StarFlare {
     this._flareDisc.frustumCulled = false;
     this.mesh.add(this._flareDisc);
 
-    // Distance billboard — bright glow visible when the flare quad is too small
-    this._billboard = this._createBillboard();
-    this._billboard.frustumCulled = false;
-    this.mesh.add(this._billboard);
-    this._billboard.visible = false;
+    // Glow sprite — always visible, scales with distance so the star
+    // is always a bright colored point even when the flare quad is sub-pixel.
+    // Same approach as Star.js: additive glow behind the flare at close range,
+    // becomes the sole visible element at distance.
+    this._baseGlowScale = this._renderRadius * 3.5;
+    this.glow = this._createGlow();
+    this.glow.frustumCulled = false;
+    this.mesh.add(this.glow);
 
     this._time = 0;
     this._lastCamPos = new THREE.Vector3();
@@ -228,18 +231,17 @@ export class StarFlare {
   }
 
   /**
-   * Billboard fallback — a small bright dot that stays visible at any distance.
-   * Uses a Sprite so Three.js auto-sizes it in screen space.
+   * Always-on glow sprite — same as Star.js.
+   * At close range it's hidden behind the bright flare disc (additive).
+   * At distance it's the sole visible element, scaled to stay prominent.
    */
-  _createBillboard() {
-    const [cr, cg, cb] = this.data.color;
-
-    // Procedural radial gradient — matches Star.js glow style
+  _createGlow() {
     const size = 64;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
+
     const cx = size / 2;
     const gradient = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
     gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
@@ -253,18 +255,17 @@ export class StarFlare {
     const texture = new THREE.CanvasTexture(canvas);
     texture.magFilter = THREE.NearestFilter;
 
+    const [r, g, b] = this.data.color;
     const material = new THREE.SpriteMaterial({
       map: texture,
-      color: new THREE.Color(cr, cg, cb),
+      color: new THREE.Color(r, g, b),
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
     });
 
     const sprite = new THREE.Sprite(material);
-    this._baseGlowScale = this._renderRadius * 3.5;
     sprite.scale.set(this._baseGlowScale, this._baseGlowScale, 1);
-
     return sprite;
   }
 
@@ -276,29 +277,6 @@ export class StarFlare {
     if (camera) {
       // Billboard: always face camera
       this._flareDisc.quaternion.copy(camera.quaternion);
-
-      // ── Distance LOD: swap between flare disc and billboard ──
-      const dist = camera.position.distanceTo(this.mesh.position);
-      // The flare quad is R*30 wide. At far distances it becomes sub-pixel.
-      // Switch to billboard when the quad would be smaller than ~10 pixels.
-      const angularSize = (this._renderRadius * 30) / Math.max(dist, 0.001);
-      const pixelSize = angularSize * window.innerHeight * 0.5;
-      if (pixelSize < 10) {
-        this._flareDisc.visible = false;
-        this._billboard.visible = true;
-      } else {
-        this._flareDisc.visible = true;
-        this._billboard.visible = false;
-      }
-
-      // Scale billboard to maintain minimum angular size (same as Star.js)
-      // so the star is always visible as a bright colored point
-      const minAngularSize = 0.015;
-      const distScale = dist * minAngularSize;
-      const scale = Math.max(this._baseGlowScale, distScale);
-      const maxScale = dist * 0.2;
-      const finalScale = Math.min(scale, maxScale);
-      this._billboard.scale.set(finalScale, finalScale, 1);
 
       // ── Screen-position alignment ──
       const starWorld = this.mesh.position;
@@ -328,8 +306,19 @@ export class StarFlare {
     }
   }
 
-  updateGlow() {
-    // No glow sprite — flare disc replaces it
+  /**
+   * Scale glow based on camera distance — same as Star.js.
+   * Maintains minimum angular size so star is always visible.
+   */
+  updateGlow(camera) {
+    if (!camera) return;
+    const dist = camera.position.distanceTo(this.mesh.position);
+    const minAngularSize = 0.015;
+    const distScale = dist * minAngularSize;
+    const scale = Math.max(this._baseGlowScale, distScale);
+    const maxScale = dist * 0.2;
+    const finalScale = Math.min(scale, maxScale);
+    this.glow.scale.set(finalScale, finalScale, 1);
   }
 
   addTo(scene) {
@@ -339,7 +328,7 @@ export class StarFlare {
   dispose() {
     this._flareDisc.geometry.dispose();
     this._flareDisc.material.dispose();
-    this._billboard.material.map.dispose();
-    this._billboard.material.dispose();
+    this.glow.material.map.dispose();
+    this.glow.material.dispose();
   }
 }
