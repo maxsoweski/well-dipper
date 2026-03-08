@@ -1281,6 +1281,15 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     }
   }
 
+  // ── Extend far plane for large navigable destinations ──
+  // Clusters can have radius 300K+ with stars scattered throughout.
+  // Without this, distant stars get frustum-clipped.
+  const neededFar = data.radius * 3;
+  if (neededFar > camera.far) {
+    camera.far = neededFar;
+    camera.updateProjectionMatrix();
+  }
+
   // ── Stars ──
   const allStars = [];
   const starInfo = {
@@ -1290,12 +1299,14 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     brightness2: data.stars.length > 1 ? 0.5 : 0,
   };
 
+  // Clusters need bigger stars so they're visible as bright discs at typical
+  // viewing distances (camera starts at 15% of radius away). Nebula stars
+  // need less exaggeration since the gas cloud provides visual context.
+  const isCluster = destType === 'open-cluster';
+  const minVisibleFrac = isCluster ? 0.001 : 0.0003;
+
   for (const sData of data.stars) {
-    // Stars in navigable spaces need slight exaggeration so they're visible as discs
-    // while flying between them, but NOT so large they look crowded.
-    // 0.03% of radius → ~60 units in a 200K cluster (real B-star is ~23 units).
-    // Still 2-3× real size but not the 10× that made them look stacked.
-    const minVisible = data.radius * 0.0003;
+    const minVisible = data.radius * minVisibleFrac;
     const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
     const starObj = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
     starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
@@ -1339,12 +1350,13 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
   if (forWarp) return;
 
-  // Non-warp opening: position camera far enough to see the structure
+  // Non-warp opening: position camera to see the first star with context
   if (allStars[0]) {
     const pos = allStars[0].mesh.position;
-    // Use a fraction of the destination radius so you can see context,
-    // not just a single star's glow filling the screen
-    const viewDist = data.radius * 0.15;
+    // Clusters: closer to the star so it's a prominent bright disc.
+    // Nebulae: further out so you see the gas cloud structure.
+    const viewFrac = isCluster ? 0.04 : 0.15;
+    const viewDist = data.radius * viewFrac;
     camera.position.set(pos.x, pos.y + viewDist * 0.2, pos.z + viewDist);
     camera.lookAt(pos);
     // Sync CameraController so it doesn't override the camera position

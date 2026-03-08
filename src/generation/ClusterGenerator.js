@@ -53,9 +53,11 @@ export class ClusterGenerator {
 
       // Warm yellow-orange palette (old Population II stars)
       // Outer particles fade out to prevent additive-blending "shell" at edges
+      // Core particles dim to prevent additive saturation → white-out sphere
       const normalizedR = r / radius;
       const edgeFade = normalizedR < 0.5 ? 1.0 : Math.max(0.15, 1.0 - (normalizedR - 0.5) * 1.4);
-      const warmth = rng.range(0.75, 1.0) * edgeFade;
+      const coreDim = normalizedR < 0.1 ? 0.3 + normalizedR * 7.0 : 1.0;
+      const warmth = rng.range(0.75, 1.0) * edgeFade * coreDim;
       colors[i * 3]     = warmth;
       colors[i * 3 + 1] = warmth * rng.range(0.7, 0.88);
       colors[i * 3 + 2] = warmth * rng.range(0.4, 0.6);
