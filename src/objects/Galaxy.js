@@ -63,7 +63,7 @@ export class Galaxy {
           // Slow per-particle twinkle: gentle brightness variation
           // using position as a unique hash (each star twinkles independently)
           float hash = fract(sin(dot(position.xz, vec2(12.9898, 78.233))) * 43758.5453);
-          vTwinkle = 0.85 + 0.15 * sin(uTime * (0.3 + hash * 0.4) + hash * 6.28);
+          vTwinkle = 0.9 + 0.1 * sin(uTime * (0.1 + hash * 0.15) + hash * 6.28);
         }
       `,
 

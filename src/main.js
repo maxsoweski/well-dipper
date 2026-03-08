@@ -1316,7 +1316,13 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   for (const sData of data.stars) {
     const minVisible = data.radius * minVisibleFrac;
     const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
-    const starObj = new Star({ ...sData, radius: renderR, color: sData.color }, renderR);
+    // Cluster stars: brighten colors toward white so they pop against black sky.
+    // Raw B/A star colors (0.67, 0.75, 1.0) look dim as flat discs.
+    let color = sData.color;
+    if (isCluster) {
+      color = color.map(c => Math.min(1.0, c * 1.3 + 0.15));
+    }
+    const starObj = new Star({ ...sData, radius: renderR, color }, renderR);
     starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
     starObj.addTo(scene);
     allStars.push(starObj);

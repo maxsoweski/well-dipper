@@ -120,22 +120,23 @@ export class ClusterGenerator {
       positions[i * 3 + 2] = clump.z + this._gaussian(rng) * clump.spread;
 
       // Blue-white colors (young stars), with occasional red giant
+      // Boosted toward white so they're visible against the black background
       if (rng.chance(0.08)) {
-        // Red giant
-        colors[i * 3]     = rng.range(0.8, 1.0);
-        colors[i * 3 + 1] = rng.range(0.4, 0.6);
-        colors[i * 3 + 2] = rng.range(0.2, 0.35);
+        // Red giant — bright warm
+        colors[i * 3]     = 1.0;
+        colors[i * 3 + 1] = rng.range(0.6, 0.8);
+        colors[i * 3 + 2] = rng.range(0.3, 0.5);
       } else {
-        // Blue-white
-        const blue = rng.range(0.7, 1.0);
-        colors[i * 3]     = blue * rng.range(0.7, 0.9);
-        colors[i * 3 + 1] = blue * rng.range(0.8, 0.95);
-        colors[i * 3 + 2] = blue;
+        // Blue-white — push toward bright white with a blue tint
+        const brightness = rng.range(0.85, 1.0);
+        colors[i * 3]     = brightness * rng.range(0.85, 1.0);
+        colors[i * 3 + 1] = brightness * rng.range(0.9, 1.0);
+        colors[i * 3 + 2] = brightness;
       }
 
       // Varied sizes — some prominent stars dominate
       // Sized for Galaxy shader distScale (300/z) at typical viewing distances
-      sizes[i] = rng.chance(0.1) ? rng.range(30, 80) : rng.range(15, 40);
+      sizes[i] = rng.chance(0.15) ? rng.range(40, 100) : rng.range(20, 50);
     }
 
     const tourStops = [
