@@ -110,8 +110,8 @@ export class StarFlare {
           float widths[4];
           widths[0] = uStarRadius * 0.32; // horizontal — thick
           widths[1] = uStarRadius * 0.32; // vertical — thick
-          widths[2] = uStarRadius * 0.16; // diagonal — half as thick
-          widths[3] = uStarRadius * 0.16; // diagonal — half as thick
+          widths[2] = uStarRadius * 0.08; // diagonal — quarter width
+          widths[3] = uStarRadius * 0.08; // diagonal — quarter width
 
           for (int i = 0; i < 4; i++) {
             float sa = angles[i];
@@ -127,7 +127,7 @@ export class StarFlare {
             float w = widths[i];
 
             // Chromatic aberration: R/G/B offset perpendicular to spike
-            float chromOffset = w * 0.6;
+            float chromOffset = w * 0.3;
             float spreadFactor = smoothstep(0.05, 0.4, along);
 
             float rPerp = perpDist + chromOffset * spreadFactor;
