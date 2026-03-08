@@ -1691,7 +1691,7 @@ function gallerySpawn() {
     }
 
     const radius = particleData.radius;
-    camera.position.set(0, radius * 0.5, radius * 2.5);
+    camera.position.set(0, radius * 0.25, radius * 1.25);
     camera.lookAt(0, 0, 0);
 
     infoText = `open-cluster (navigable)  |  ${navData.stars.length} stars  |  gas: ${navData.gasLayers?.length || 0} layers  |  r=${radius.toFixed(0)}`;
