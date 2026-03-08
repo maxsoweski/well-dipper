@@ -68,6 +68,22 @@ export class StarFlare {
         uniform float uBrightPulse;
         varying vec2 vUv;
 
+        // 4x4 Bayer dithering threshold (matches Planet.js / rest of the game)
+        float bayerDither(vec2 coord) {
+          vec2 p = mod(floor(coord), 4.0);
+          float t = 0.0;
+          if (p.y < 0.5) {
+            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+          } else if (p.y < 1.5) {
+            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+          } else if (p.y < 2.5) {
+            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+          } else {
+            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+          }
+          return t / 16.0;
+        }
+
         // Compute a single spike's contribution at a given point.
         float spikeBrightness(float perpDist, float along, float spikeWidth) {
           float w = spikeWidth * (1.0 - along * 0.7);
@@ -172,10 +188,15 @@ export class StarFlare {
           // Apply brightness pulse from camera motion
           color *= uBrightPulse;
 
-          float alpha = clamp(max(max(color.r, color.g), color.b), 0.0, 1.0);
-          if (alpha < 0.01) discard;
+          // Dithered edges: use Bayer threshold against brightness to create
+          // stippled transparency at the edges of spikes, glow, and halo.
+          // This matches the retro dithered aesthetic of the rest of the game.
+          float brightness = max(max(color.r, color.g), color.b);
+          if (brightness < 0.01) discard;
+          float dither = bayerDither(gl_FragCoord.xy);
+          if (dither > brightness) discard;
 
-          gl_FragColor = vec4(color, alpha);
+          gl_FragColor = vec4(color, 1.0);
         }
       `,
       transparent: true,
