@@ -21,18 +21,75 @@ export class StarFlare {
     this._renderRadius = renderRadius !== null ? renderRadius : starData.radius;
     this.mesh = new THREE.Group();
 
-    // No separate sphere mesh — the star core is rendered entirely in the
-    // flare shader so there's no hard geometry edge visible through the bloom.
-    this.surface = null;
+    // Opaque sphere — same as Star.js. Sits deep inside the flare shader's
+    // bright core zone (half radius) so it's invisible at close range.
+    // At extreme distance it guarantees at least one solid pixel.
+    this.surface = this._createSurface();
+    this.surface.frustumCulled = false;
+    this.mesh.add(this.surface);
 
     // Diffraction spikes + glow + core (all in one shader billboard)
     this._flareDisc = this._createFlareDisc();
+    this._flareDisc.frustumCulled = false;
     this.mesh.add(this._flareDisc);
+
+    // Glow sprite — always visible, scales with distance (same as Star.js).
+    // At close range it's hidden behind the bright flare disc (additive).
+    // At distance it maintains minimum angular size so the star never vanishes.
+    this._baseGlowScale = this._renderRadius * 3.5;
+    this.glow = this._createGlow();
+    this.glow.frustumCulled = false;
+    this.mesh.add(this.glow);
 
     this._time = 0;
     this._lastCamPos = new THREE.Vector3();
     this._camSpeed = 0;       // smoothed camera speed for brightness pulse
     this._screenAngle = 0;    // angle from screen center to star
+  }
+
+  _createSurface() {
+    // Half-radius sphere — fully within the flare shader's bright core zone
+    // (coreBright = 1.0 at dist <= 0.5R), so it's invisible behind the flare.
+    const geometry = new THREE.IcosahedronGeometry(this._renderRadius * 0.5, 2);
+    const [r, g, b] = this.data.color;
+    const material = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(r, g, b),
+    });
+    return new THREE.Mesh(geometry, material);
+  }
+
+  _createGlow() {
+    // Procedural radial gradient — identical to Star.js
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const cx = size / 2;
+    const gradient = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.5)');
+    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.15)');
+    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.04)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.NearestFilter;
+
+    const [r, g, b] = this.data.color;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      color: new THREE.Color(r, g, b),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
+
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(this._baseGlowScale, this._baseGlowScale, 1);
+    return sprite;
   }
 
   _createFlareDisc() {
@@ -267,8 +324,18 @@ export class StarFlare {
     }
   }
 
-  updateGlow() {
-    // No glow sprite — flare disc replaces it
+  /**
+   * Scale glow based on camera distance — identical to Star.js.
+   * Maintains minimum angular size so the star is always visible.
+   */
+  updateGlow(camera) {
+    const dist = camera.position.distanceTo(this.mesh.position);
+    const minAngularSize = 0.015;
+    const distScale = dist * minAngularSize;
+    const scale = Math.max(this._baseGlowScale, distScale);
+    const maxScale = dist * 0.2;
+    const finalScale = Math.min(scale, maxScale);
+    this.glow.scale.set(finalScale, finalScale, 1);
   }
 
   addTo(scene) {
@@ -276,7 +343,11 @@ export class StarFlare {
   }
 
   dispose() {
+    this.surface.geometry.dispose();
+    this.surface.material.dispose();
     this._flareDisc.geometry.dispose();
     this._flareDisc.material.dispose();
+    this.glow.material.map.dispose();
+    this.glow.material.dispose();
   }
 }
