@@ -94,16 +94,21 @@ export class StarFlare {
           vec2 p = (vUv - 0.5) * uSize;
           float dist = length(p);
 
-          // Skip inside star
-          if (dist < uStarRadius * 0.9) discard;
-          float innerFade = smoothstep(uStarRadius * 0.9, uStarRadius * 1.4, dist);
+          // Circular discard for quad corners
+          if (dist > uSize * 0.5) discard;
 
           float spikeLen = uStarRadius * 13.0;
           vec3 color = vec3(0.0);
 
+          // ── Bloom glow around the star ──
+          // Bright additive glow that bridges the star surface into the spikes
+          float bloomRadius = uStarRadius * 2.5;
+          float bloomBright = exp(-dist / bloomRadius * 2.0) * 1.2;
+          // Only outside the star core (inside is covered by the sphere mesh)
+          float outsideStar = smoothstep(uStarRadius * 0.7, uStarRadius * 1.0, dist);
+          color += mix(vec3(1.0), uColor, 0.3) * bloomBright * outsideStar;
+
           // 8 spikes: 4 angles, each goes both directions from center
-          // Angles: 0 (horizontal), PI/2 (vertical), PI/4 (diagonal), 3PI/4 (diagonal)
-          // Horizontal/vertical are 4x thicker, diagonals 2x thicker (relative to old)
           float angles[4];
           angles[0] = 0.0;               // horizontal
           angles[1] = 1.5707963;          // vertical (PI/2)
@@ -121,29 +126,26 @@ export class StarFlare {
             vec2 axis = vec2(cos(sa), sin(sa));
             vec2 perp = vec2(-sin(sa), cos(sa));
 
-            // Project point onto spike axis and perpendicular
-            float alongDist = dot(p, axis);  // signed distance along spike
-            float perpDist = dot(p, perp);   // signed distance perpendicular
+            float alongDist = dot(p, axis);
+            float perpDist = dot(p, perp);
 
-            float along = abs(alongDist) / spikeLen; // 0 at center, 1 at tip
+            float along = abs(alongDist) / spikeLen;
             if (along > 1.0) continue;
 
             float w = widths[i];
 
-            // Chromatic aberration: offset R, G, B channels perpendicular to spike
-            // Each color sees the spike at a slightly different perpendicular position
-            // This creates parallel rainbow bands running along the spike length
-            float chromOffset = w * 0.6; // how far apart the color channels spread
-            // More spread further from center
+            // Chromatic aberration: R/G/B offset perpendicular to spike
+            float chromOffset = w * 0.6;
             float spreadFactor = smoothstep(0.05, 0.4, along);
 
             float rPerp = perpDist + chromOffset * spreadFactor;
             float gPerp = perpDist;
             float bPerp = perpDist - chromOffset * spreadFactor;
 
-            float rBright = spikeBrightness(rPerp, along, w) * innerFade;
-            float gBright = spikeBrightness(gPerp, along, w) * innerFade;
-            float bBright = spikeBrightness(bPerp, along, w) * innerFade;
+            // No innerFade gap — spikes start right from the center
+            float rBright = spikeBrightness(rPerp, along, w);
+            float gBright = spikeBrightness(gPerp, along, w);
+            float bBright = spikeBrightness(bPerp, along, w);
 
             // Near the base, blend toward white (all channels equal)
             float whiteBlend = exp(-along * 4.0);

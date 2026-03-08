@@ -82,8 +82,11 @@ export class StarRays {
           float dist = length(p);
           float angle = atan(p.y, p.x);
 
-          // Skip pixels inside the star sphere
-          if (dist < uStarRadius * 1.1) discard;
+          // Circular mask — discard outside the disc radius
+          if (dist > uSize * 0.5) discard;
+
+          // Start rays right at the star surface — no gap
+          if (dist < uStarRadius * 0.85) discard;
 
           // Quantize angle into ray slots — more rays = denser look
           float rayCount = 80.0;
@@ -102,10 +105,11 @@ export class StarRays {
           float rayPhase = hash(rSeed + 191.0) * 6.28;
 
           // Radial position normalized along this ray's length
-          float t = (dist - uStarRadius) / rayLen;
+          // Start from the star surface (no gap)
+          float t = (dist - uStarRadius * 0.85) / rayLen;
 
           // Hard cutoff: rays just disappear at their max length, no fade
-          if (t > 1.0) discard;
+          if (t > 1.0 || t < 0.0) discard;
 
           // Flowing outward animation: noise pattern scrolls outward over time
           // The noise creates irregular broken-up sections
@@ -115,12 +119,9 @@ export class StarRays {
           // Sharp threshold for broken segments (on/off feel)
           float segmentAlpha = smoothstep(0.3, 0.5, breakup);
 
-          // Fade in from star surface (brief)
-          float innerFade = smoothstep(0.0, 0.05, t);
-
           // Full brightness — nearly as bright as the star itself
           // No distance fade, just the breakup pattern and hard cutoff
-          float alpha = rayAlpha * segmentAlpha * innerFade * 0.9;
+          float alpha = rayAlpha * segmentAlpha * 0.9;
 
           if (alpha < 0.01) discard;
 
