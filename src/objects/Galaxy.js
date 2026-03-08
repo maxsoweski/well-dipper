@@ -95,14 +95,13 @@ export class Galaxy {
           vec2 p = gl_PointCoord - 0.5;
           float dist = length(p);
 
-          // Core glow
-          float alpha = 1.0 - smoothstep(0.0, 0.35, dist);
+          // Core glow — same radius as original fuzzy dot
+          float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
 
           // Diffraction spikes: 4 spikes (horizontal + vertical)
-          // Each spike is a thin strip along its axis
-          float spikeH = exp(-abs(p.y) * 18.0) * exp(-abs(p.x) * 3.0);
-          float spikeV = exp(-abs(p.x) * 18.0) * exp(-abs(p.y) * 3.0);
-          float spikes = max(spikeH, spikeV) * 0.7;
+          float spikeH = exp(-abs(p.y) * 14.0) * exp(-abs(p.x) * 2.5);
+          float spikeV = exp(-abs(p.x) * 14.0) * exp(-abs(p.y) * 2.5);
+          float spikes = max(spikeH, spikeV) * 0.9;
 
           alpha = max(alpha, spikes);
           alpha *= vTwinkle;
