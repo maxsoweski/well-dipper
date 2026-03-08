@@ -144,17 +144,20 @@ export class NavigableClusterGenerator {
       const clump = clumps[c];
       const layerCount = rng.int(2, 4);
       for (let l = 0; l < layerCount; l++) {
+        // Scatter layers well beyond the clump center for ragged coverage
+        const offsetScale = clump.spread * 0.6;
         layers.push({
           position: [
-            clump.x + this._gaussian(rng) * clump.spread * 0.4,
-            clump.y + this._gaussian(rng) * clump.spread * 0.15,
-            clump.z + this._gaussian(rng) * clump.spread * 0.4,
+            clump.x + this._gaussian(rng) * offsetScale,
+            clump.y + this._gaussian(rng) * offsetScale * 0.2,
+            clump.z + this._gaussian(rng) * offsetScale,
           ],
-          size: clump.spread * rng.range(1.0, 2.5),
+          // Varied sizes — some large diffuse wisps, some tight patches
+          size: clump.spread * rng.range(0.6, 2.0),
           rotation: [
-            rng.range(-0.5, 0.5),
+            rng.range(-0.6, 0.6),
             rng.range(0, Math.PI * 2),
-            rng.range(-0.3, 0.3),
+            rng.range(-0.4, 0.4),
           ],
           color: [
             rng.range(0.35, 0.58),
@@ -162,8 +165,9 @@ export class NavigableClusterGenerator {
             rng.range(0.78, 1.0),
           ],
           noiseSeed: [rng.float() * 100, rng.float() * 100],
-          noiseScale: rng.range(2.0, 4.0),
-          opacity: rng.range(0.25, 0.55),
+          // High noise scale = fine detail = wispier, more holes
+          noiseScale: rng.range(3.5, 6.0),
+          opacity: rng.range(0.20, 0.50),
         });
       }
     }

@@ -1671,33 +1671,49 @@ function gallerySpawn() {
   }
 
   // ── Cluster gas test (navigable cluster with reflection nebulosity) ──
+  // Same star sizing as nav-open-cluster, plus gas cloud layers
   else if (type === 'cluster-gas-test') {
+    const particleData = ClusterGenerator.generate(seed, 'open-cluster');
     const navData = NavigableClusterGenerator.generate(seed);
+    const scaleFactor = particleData.radius / navData.radius;
 
-    // Gas cloud rendered as Nebula cloud layers (2D noise planes)
+    // Particle cloud (same as nav-open-cluster)
+    galleryObject = new Galaxy(particleData);
+    galleryObject.addTo(scene);
+
+    // Gas cloud layers — scale positions to match particle cloud
     if (navData.gasLayers && navData.gasLayers.length > 0) {
+      const scaledLayers = navData.gasLayers.map(l => ({
+        ...l,
+        position: [l.position[0] * scaleFactor, l.position[1] * scaleFactor, l.position[2] * scaleFactor],
+        size: l.size * scaleFactor,
+      }));
       const gasData = {
-        layers: navData.gasLayers,
+        layers: scaledLayers,
         starPositions: new Float32Array(0),
         starColors: new Float32Array(0),
         starSizes: new Float32Array(0),
       };
       const gasObj = new Nebula(gasData);
       gasObj.addTo(scene);
-      galleryObject = gasObj;
+      _galleryMeshes.push(gasObj);
     }
 
-    // Stars
+    // Stars (same sizing as nav-open-cluster)
     for (const sData of navData.stars) {
-      const renderR = sData.renderRadius || sData.radiusScene;
-      const starObj = new StarFlare({ ...sData, radius: renderR, color: sData.color }, renderR);
-      starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
-      starObj.addTo(scene);
-      _galleryMeshes.push(starObj);
+      const scaledR = Math.max(particleData.radius * 0.02, 2.0);
+      const star = new StarFlare({ ...sData, radius: scaledR, color: sData.color }, scaledR);
+      star.mesh.position.set(
+        sData.position[0] * scaleFactor,
+        sData.position[1] * scaleFactor,
+        sData.position[2] * scaleFactor,
+      );
+      star.addTo(scene);
+      _galleryMeshes.push(star);
     }
 
-    const radius = navData.radius;
-    camera.position.set(0, radius * 0.3, radius * 1.5);
+    const radius = particleData.radius;
+    camera.position.set(0, radius * 0.5, radius * 2.5);
     camera.lookAt(0, 0, 0);
 
     infoText = `cluster gas test  |  ${navData.stars.length} stars  |  gas: ${navData.gasLayers?.length || 0} layers  |  r=${radius.toFixed(0)}`;

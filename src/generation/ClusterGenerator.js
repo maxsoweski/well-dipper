@@ -145,19 +145,20 @@ export class ClusterGenerator {
     const gasLayers = [];
     for (let c = 0; c < clumpCount; c++) {
       const clump = clumps[c];
-      const layerCount = rng.int(1, 3);
+      const layerCount = rng.int(2, 3);
       for (let l = 0; l < layerCount; l++) {
+        const offsetScale = clump.spread * 0.5;
         gasLayers.push({
           position: [
-            clump.x + this._gaussian(rng) * clump.spread * 0.3,
-            clump.y + this._gaussian(rng) * clump.spread * 0.15,
-            clump.z + this._gaussian(rng) * clump.spread * 0.3,
+            clump.x + this._gaussian(rng) * offsetScale,
+            clump.y + this._gaussian(rng) * offsetScale * 0.2,
+            clump.z + this._gaussian(rng) * offsetScale,
           ],
-          size: clump.spread * rng.range(0.8, 1.8),
+          size: clump.spread * rng.range(0.6, 1.8),
           rotation: [
-            rng.range(-0.4, 0.4),
+            rng.range(-0.6, 0.6),
             rng.range(0, Math.PI * 2),
-            rng.range(-0.3, 0.3),
+            rng.range(-0.4, 0.4),
           ],
           color: [
             rng.range(0.35, 0.58),
@@ -165,8 +166,9 @@ export class ClusterGenerator {
             rng.range(0.78, 1.0),
           ],
           noiseSeed: [rng.float() * 100, rng.float() * 100],
-          noiseScale: rng.range(2.0, 4.0),
-          opacity: rng.range(0.30, 0.60),
+          // High noise scale for wispy, irregular shapes
+          noiseScale: rng.range(3.5, 6.0),
+          opacity: rng.range(0.25, 0.55),
         });
       }
     }
