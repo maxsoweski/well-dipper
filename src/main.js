@@ -1311,7 +1311,7 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   // viewing distances. Nebula stars need less exaggeration since the gas
   // cloud provides visual context.
   const isCluster = destType === 'open-cluster';
-  const minVisibleFrac = isCluster ? 0.002 : 0.0003;
+  const minVisibleFrac = isCluster ? 0.006 : 0.0003;
 
   for (const sData of data.stars) {
     const minVisible = data.radius * minVisibleFrac;
@@ -1358,17 +1358,23 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
   if (forWarp) return;
 
-  // Non-warp opening: position camera to see the first star with context
+  // Non-warp opening: position camera to see the structure
   if (allStars[0]) {
-    const pos = allStars[0].mesh.position;
-    // Clusters: closer to the star so it's a prominent bright disc.
-    // Nebulae: further out so you see the gas cloud structure.
-    const viewFrac = isCluster ? 0.04 : 0.15;
-    const viewDist = data.radius * viewFrac;
-    camera.position.set(pos.x, pos.y + viewDist * 0.2, pos.z + viewDist);
-    camera.lookAt(pos);
-    // Sync CameraController so it doesn't override the camera position
-    cameraController.restoreFromWorldState(pos.clone());
+    // Clusters: pull back to see the whole cluster (like the gallery view).
+    // Nebulae: closer, since the gas cloud provides visual context.
+    if (isCluster) {
+      // Orbit the cluster center, not a single star
+      const viewDist = data.radius * 0.6;
+      camera.position.set(0, viewDist * 0.3, viewDist);
+      camera.lookAt(0, 0, 0);
+      cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+    } else {
+      const pos = allStars[0].mesh.position;
+      const viewDist = data.radius * 0.15;
+      camera.position.set(pos.x, pos.y + viewDist * 0.2, pos.z + viewDist);
+      camera.lookAt(pos);
+      cameraController.restoreFromWorldState(pos.clone());
+    }
   }
 }
 
