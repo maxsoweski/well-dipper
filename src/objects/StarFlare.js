@@ -4,12 +4,14 @@ import * as THREE from 'three';
  * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
  *
  * Based on real lens flare reference:
- * - 8 spikes (4 pairs): vertical/horizontal are thickest, diagonals thinner
+ * - 8 spikes (4 pairs): vertical/horizontal are thickest, diagonals thinner/shorter
  * - Blazing bright at base (nearly star brightness), fading outward
- * - Rainbow chromatic aberration: R/G/B channels offset along each spike,
- *   creating parallel color bands running the length of the spike
+ * - Rainbow chromatic aberration: R/G/B channels offset along each spike
  * - Bright highlight knots partway down each spike
  * - Subtle circular halo ring
+ * - Screen-position alignment: spike pattern rotates to point from screen center
+ *   toward the star (real lens flare behavior)
+ * - Brightness pulses subtly when camera moves
  *
  * All elements billboard (face camera).
  */
@@ -28,6 +30,9 @@ export class StarFlare {
     this.mesh.add(this._flareDisc);
 
     this._time = 0;
+    this._lastCamPos = new THREE.Vector3();
+    this._camSpeed = 0;       // smoothed camera speed for brightness pulse
+    this._screenAngle = 0;    // angle from screen center to star
   }
 
   _createFlareDisc() {
@@ -44,6 +49,8 @@ export class StarFlare {
         uColor: { value: new THREE.Vector3(cr, cg, cb) },
         uStarRadius: { value: R },
         uSize: { value: size },
+        uScreenAngle: { value: 0 },      // rotation from screen-center alignment
+        uBrightPulse: { value: 1.0 },     // brightness multiplier from camera motion
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -57,61 +64,62 @@ export class StarFlare {
         uniform vec3 uColor;
         uniform float uStarRadius;
         uniform float uSize;
+        uniform float uScreenAngle;
+        uniform float uBrightPulse;
         varying vec2 vUv;
 
         // Compute a single spike's contribution at a given point.
-        // Returns brightness (0-1) for this spike.
-        // perpDist: perpendicular distance from spike axis
-        // along: distance along the spike from center (0 at star, 1 at tip)
-        // spikeWidth: half-width of the spike at center
         float spikeBrightness(float perpDist, float along, float spikeWidth) {
-          // Width tapers toward tip
           float w = spikeWidth * (1.0 - along * 0.7);
           float mask = smoothstep(w, w * 0.2, abs(perpDist));
-
-          // Brightness: very bright at base, fading outward
           float falloff = exp(-along * 2.0) * 0.95;
-
           // Highlight knots at ~30% and ~55% along
           float knot1 = exp(-pow((along - 0.30) * 8.0, 2.0)) * 0.6;
           float knot2 = exp(-pow((along - 0.55) * 10.0, 2.0)) * 0.35;
           falloff += knot1 + knot2;
-
           return mask * falloff;
         }
 
         void main() {
           vec2 p = (vUv - 0.5) * uSize;
+
+          // Rotate the whole pattern by the screen-center angle
+          float cs = cos(uScreenAngle);
+          float sn = sin(uScreenAngle);
+          p = vec2(p.x * cs - p.y * sn, p.x * sn + p.y * cs);
+
           float dist = length(p);
 
-          // Circular discard for quad corners
           if (dist > uSize * 0.5) discard;
 
-          float spikeLen = uStarRadius * 6.5;
+          float mainSpikeLen = uStarRadius * 6.5;
+          float diagSpikeLen = uStarRadius * 3.25; // half the main length
           vec3 color = vec3(0.0);
 
-          // ── Star core + glow (no separate sphere mesh) ──
-          // Solid bright core that smoothly bleeds into the glow — no hard edge.
-          // Inside the star radius: full brightness star color.
-          // At the edge: smooth falloff into the glow, so the boundary is invisible.
+          // ── Star core + glow ──
           float coreBright = smoothstep(uStarRadius * 1.3, uStarRadius * 0.5, dist);
-          // Radial glow extending well past the core
           float glowRadius = uStarRadius * 3.0;
           float glowBright = exp(-dist / glowRadius * 1.5) * 1.5;
           color += uColor * max(coreBright, glowBright);
 
-          // 8 spikes: 4 angles, each goes both directions from center
+          // 8 spikes: 4 angles, each goes both directions
           float angles[4];
-          angles[0] = 0.0;               // horizontal
-          angles[1] = 1.5707963;          // vertical (PI/2)
-          angles[2] = 0.7853982;          // diagonal (PI/4)
-          angles[3] = 2.3561945;          // diagonal (3PI/4)
+          angles[0] = 0.0;
+          angles[1] = 1.5707963;
+          angles[2] = 0.7853982;
+          angles[3] = 2.3561945;
 
           float widths[4];
-          widths[0] = uStarRadius * 0.32; // horizontal — thick
-          widths[1] = uStarRadius * 0.32; // vertical — thick
-          widths[2] = uStarRadius * 0.08; // diagonal — quarter width
-          widths[3] = uStarRadius * 0.08; // diagonal — quarter width
+          widths[0] = uStarRadius * 0.32;
+          widths[1] = uStarRadius * 0.32;
+          widths[2] = uStarRadius * 0.08;
+          widths[3] = uStarRadius * 0.08;
+
+          float lengths[4];
+          lengths[0] = mainSpikeLen;
+          lengths[1] = mainSpikeLen;
+          lengths[2] = diagSpikeLen;
+          lengths[3] = diagSpikeLen;
 
           for (int i = 0; i < 4; i++) {
             float sa = angles[i];
@@ -121,12 +129,12 @@ export class StarFlare {
             float alongDist = dot(p, axis);
             float perpDist = dot(p, perp);
 
-            float along = abs(alongDist) / spikeLen;
+            float sLen = lengths[i];
+            float along = abs(alongDist) / sLen;
             if (along > 1.0) continue;
 
             float w = widths[i];
 
-            // Chromatic aberration: R/G/B offset perpendicular to spike
             float chromOffset = w * 0.3;
             float spreadFactor = smoothstep(0.05, 0.4, along);
 
@@ -138,18 +146,9 @@ export class StarFlare {
             float gBright = spikeBrightness(gPerp, along, w);
             float bBright = spikeBrightness(bPerp, along, w);
 
-            // Near center: all channels show the star's color (no separation).
-            // Further out: R/G/B channels separate into rainbow dispersion.
-            // starBlend = 1 at base, 0 further out.
             float starBlend = exp(-along * 3.5);
-
-            // Combined brightness when channels aren't separated
             float combinedBright = (rBright + gBright + bBright) / 3.0;
-
-            // Rainbow channel colors (what you see when fully dispersed)
             vec3 rainbowContrib = vec3(rBright, gBright, bBright);
-
-            // Star-colored contribution (what you see near the base)
             vec3 starContrib = uColor * combinedBright;
 
             color += mix(rainbowContrib, starContrib, starBlend);
@@ -160,7 +159,6 @@ export class StarFlare {
           float haloWidth = uStarRadius * 0.35;
           float haloDist = abs(dist - haloRadius);
           float haloAlpha = smoothstep(haloWidth, 0.0, haloDist) * 0.15;
-          // Subtle rainbow around the ring
           float haloAngle = atan(p.y, p.x);
           float haloHue = fract(haloAngle / 6.28318 + 0.5);
           vec3 haloColor = vec3(
@@ -170,6 +168,9 @@ export class StarFlare {
           );
           haloColor = mix(uColor, haloColor, 0.5);
           color += haloColor * haloAlpha;
+
+          // Apply brightness pulse from camera motion
+          color *= uBrightPulse;
 
           float alpha = clamp(max(max(color.r, color.g), color.b), 0.0, 1.0);
           if (alpha < 0.01) discard;
@@ -188,11 +189,47 @@ export class StarFlare {
 
   update(deltaTime, camera) {
     this._time += deltaTime;
-    this._flareDisc.material.uniforms.uTime.value = this._time;
+    const uniforms = this._flareDisc.material.uniforms;
+    uniforms.uTime.value = this._time;
 
-    // Billboard: always face camera
     if (camera) {
+      // Billboard: always face camera
       this._flareDisc.quaternion.copy(camera.quaternion);
+
+      // ── Screen-position alignment ──
+      // Project star world position to NDC (-1 to 1).
+      // The angle from screen center to the star determines spike rotation.
+      const starWorld = this.mesh.position;
+      const projected = starWorld.clone().project(camera);
+      // projected.x, projected.y are in NDC (-1 to 1)
+      const sx = projected.x;
+      const sy = projected.y;
+      const screenDist = Math.sqrt(sx * sx + sy * sy);
+
+      // Angle from screen center to star position
+      // Only rotate when star is noticeably off-center
+      if (screenDist > 0.02) {
+        this._screenAngle = Math.atan2(sy, sx);
+      }
+      // Smooth the angle transition
+      uniforms.uScreenAngle.value = this._screenAngle;
+
+      // ── Brightness pulse from camera motion ──
+      const camPos = camera.position;
+      const dx = camPos.x - this._lastCamPos.x;
+      const dy = camPos.y - this._lastCamPos.y;
+      const dz = camPos.z - this._lastCamPos.z;
+      const moveSpeed = Math.sqrt(dx * dx + dy * dy + dz * dz) / Math.max(deltaTime, 0.001);
+      this._lastCamPos.copy(camPos);
+
+      // Smooth the speed value (exponential decay)
+      this._camSpeed += (moveSpeed - this._camSpeed) * Math.min(1, deltaTime * 5);
+
+      // Map speed to brightness pulse: resting = 1.0, moving = up to 1.4
+      // Normalize by star radius so it works at any zoom level
+      const normalizedSpeed = this._camSpeed / (this._renderRadius * 2);
+      const pulse = 1.0 + Math.min(0.4, normalizedSpeed * 0.1);
+      uniforms.uBrightPulse.value = pulse;
     }
   }
 
