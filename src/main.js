@@ -636,6 +636,8 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
     titleData._destType = `title-${titleType}`;
   } else if (titleType === 'open-cluster') {
     titleData = ClusterGenerator.generate(titleSeed, titleType);
+    // Attach navigable star data for StarFlare overlay
+    titleData._navStars = NavigableClusterGenerator.generate(titleSeed);
     // Prefix with 'title-' to avoid isNavigable() routing to spawnNavigableDeepSky
     titleData._destType = `title-${titleType}`;
   } else {
@@ -724,6 +726,13 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
       if (system._deepSkyGas) {
         system._deepSkyGas.removeFrom(scene);
         system._deepSkyGas.dispose();
+      }
+      // Deep sky StarFlare overlays (open cluster title screen stars)
+      if (system._deepSkyStars) {
+        for (const s of system._deepSkyStars) {
+          scene.remove(s.mesh);
+          s.dispose();
+        }
       }
       // Primary star (navigable deep sky sets system.star = allStars[0])
       // star2 is already in extraStars so it gets cleaned up below
@@ -1210,6 +1219,24 @@ function spawnDeepSky(data, destType, forWarp) {
     _deepSkyGas.addTo(scene);
   }
 
+  // Open clusters with navigable star data: overlay StarFlare objects
+  const _deepSkyStars = [];
+  if (data._navStars) {
+    const navData = data._navStars;
+    const scaleFactor = data.radius / navData.radius;
+    for (const sData of navData.stars) {
+      const scaledR = Math.max(data.radius * 0.02, 2.0);
+      const star = new StarFlare({ ...sData, radius: scaledR, color: sData.color }, scaledR);
+      star.mesh.position.set(
+        sData.position[0] * scaleFactor,
+        sData.position[1] * scaleFactor,
+        sData.position[2] * scaleFactor,
+      );
+      star.addTo(scene);
+      _deepSkyStars.push(star);
+    }
+  }
+
   // Create dummy Object3Ds for tour stop bodyRefs
   // (the camera orbits these like it orbits planets)
   const dummyRefs = [];
@@ -1230,6 +1257,7 @@ function spawnDeepSky(data, destType, forWarp) {
     type: destType,
     destination,
     _deepSkyGas,
+    _deepSkyStars,
     tourStops: data.tourStops,
     _dummyRefs: dummyRefs,
     // Star system fields (null/empty so existing code doesn't crash)
@@ -1492,6 +1520,9 @@ function _setSystemVisible(visible) {
     if (system._deepSkyGas) {
       if (visible) system._deepSkyGas.addTo(scene);
       else system._deepSkyGas.removeFrom(scene);
+    }
+    if (system._deepSkyStars) {
+      for (const s of system._deepSkyStars) s.mesh.visible = visible;
     }
     if (system.star) system.star.mesh.visible = visible;
     if (system.star2) system.star2.mesh.visible = visible;
@@ -2510,6 +2541,9 @@ function animate() {
       // Navigable deep sky: update gas cloud + extra star glows
       if (system.gasCloud) system.gasCloud.update(deltaTime, camera);
       if (system._deepSkyGas) system._deepSkyGas.update(deltaTime, camera);
+      if (system._deepSkyStars) {
+        for (const s of system._deepSkyStars) s.update(deltaTime, camera);
+      }
       if (system.extraStars) {
         for (const s of system.extraStars) {
           if (s.update) s.update(deltaTime, camera);
