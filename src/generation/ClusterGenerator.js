@@ -140,6 +140,37 @@ export class ClusterGenerator {
       sizes[i] = rng.chance(0.15) ? rng.range(40, 100) : rng.range(20, 50);
     }
 
+    // ── Reflection nebulosity layers (Pleiades-style wispy gas) ──
+    // Positioned around sub-clumps, blue-white, low opacity
+    const gasLayers = [];
+    for (let c = 0; c < clumpCount; c++) {
+      const clump = clumps[c];
+      const layerCount = rng.int(1, 3);
+      for (let l = 0; l < layerCount; l++) {
+        gasLayers.push({
+          position: [
+            clump.x + this._gaussian(rng) * clump.spread * 0.3,
+            clump.y + this._gaussian(rng) * clump.spread * 0.15,
+            clump.z + this._gaussian(rng) * clump.spread * 0.3,
+          ],
+          size: clump.spread * rng.range(0.8, 1.8),
+          rotation: [
+            rng.range(-0.4, 0.4),
+            rng.range(0, Math.PI * 2),
+            rng.range(-0.3, 0.3),
+          ],
+          color: [
+            rng.range(0.35, 0.58),
+            rng.range(0.50, 0.72),
+            rng.range(0.78, 1.0),
+          ],
+          noiseSeed: [rng.float() * 100, rng.float() * 100],
+          noiseScale: rng.range(2.0, 4.0),
+          opacity: rng.range(0.12, 0.30),
+        });
+      }
+    }
+
     const tourStops = [
       { name: 'Overview', position: [0, radius * 0.3, radius * 0.5], orbitDistance: radius * 1.3, bodyRadius: radius, linger: 35 },
       { name: 'Center',   position: [0, 0, 0],                        orbitDistance: radius * 0.4, bodyRadius: radius * 0.3, linger: 30 },
@@ -155,6 +186,7 @@ export class ClusterGenerator {
       tiltX: 0,
       tiltZ: 0,
       spikeStars: true,
+      gasLayers,
       tourStops,
     };
   }

@@ -195,7 +195,7 @@ export class NavigableClusterGenerator {
       // Denser near clump center
       const distFromClump = Math.sqrt(x * x + y * y + z * z);
       const normDist = Math.min(distFromClump / (clump.spread * 1.5), 1);
-      opacities[idx] = (1 - normDist * 0.7) * rng.range(0.08, 0.25);
+      opacities[idx] = (1 - normDist * 0.7) * rng.range(0.03, 0.10);
       idx++;
     }
 
@@ -222,7 +222,7 @@ export class NavigableClusterGenerator {
       colors[idx * 3 + 2] = rng.range(palB[0], palB[1]) * 0.8;
 
       sizes[idx] = rng.range(300, 900);
-      opacities[idx] = rng.range(0.03, 0.12);
+      opacities[idx] = rng.range(0.02, 0.06);
       idx++;
     }
 
@@ -241,7 +241,7 @@ export class NavigableClusterGenerator {
       colors[idx * 3 + 2] = rng.range(palB[0], palB[1]) * 0.6;
 
       sizes[idx] = rng.range(500, 1500);
-      opacities[idx] = rng.range(0.02, 0.06);
+      opacities[idx] = rng.range(0.01, 0.03);
       idx++;
     }
 

@@ -1712,6 +1712,19 @@ function gallerySpawn() {
     galleryObject = isGalaxyOrCluster ? new Galaxy(data) : new Nebula(data);
     galleryObject.addTo(scene);
 
+    // Open clusters with reflection nebulosity: add gas cloud layers
+    if (data.gasLayers && data.gasLayers.length > 0) {
+      const gasData = {
+        layers: data.gasLayers,
+        starPositions: new Float32Array(0),
+        starColors: new Float32Array(0),
+        starSizes: new Float32Array(0),
+      };
+      const gasNebula = new Nebula(gasData);
+      gasNebula.addTo(scene);
+      _galleryMeshes.push(gasNebula);
+    }
+
     const radius = data.radius;
     camera.position.set(0, radius * 0.5, radius * 2.5);
     camera.lookAt(0, 0, 0);
