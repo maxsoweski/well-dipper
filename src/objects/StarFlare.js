@@ -46,7 +46,7 @@ export class StarFlare {
     //   A-class (20)   → ~0.96  — bright
     //   O-class (300K) → ~1.80  — huge, blazing flare
     const rawLum = this.data.luminosity || 1.0;
-    const lumFactor = Math.max(0.35, Math.min(2.0, 0.7 + 0.2 * Math.log10(rawLum)));
+    const lumFactor = Math.max(0.55, Math.min(2.0, 0.7 + 0.2 * Math.log10(rawLum)));
 
     // Large quad — shader renders spikes + halo
     const size = R * 30;
@@ -123,9 +123,11 @@ export class StarFlare {
           float diagSpikeLen = uStarRadius * 3.25 * uLumFactor;
           vec3 color = vec3(0.0);
 
-          // ── Star core + glow (scaled by luminosity) ──
+          // ── Star core + glow ──
+          // Core and glow radius stay constant so the bloom always bridges
+          // smoothly into the spikes. Only glow brightness scales with luminosity.
           float coreBright = smoothstep(uStarRadius * 1.3, uStarRadius * 0.5, dist);
-          float glowRadius = uStarRadius * 3.0 * uLumFactor;
+          float glowRadius = uStarRadius * 3.0;
           float glowBright = exp(-dist / glowRadius * 1.5) * 1.5 * uLumFactor;
           color += uColor * max(coreBright, glowBright);
 
