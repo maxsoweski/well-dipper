@@ -1300,10 +1300,10 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   };
 
   // Clusters need bigger stars so they're visible as bright discs at typical
-  // viewing distances (camera starts at 15% of radius away). Nebula stars
-  // need less exaggeration since the gas cloud provides visual context.
+  // viewing distances. Nebula stars need less exaggeration since the gas
+  // cloud provides visual context.
   const isCluster = destType === 'open-cluster';
-  const minVisibleFrac = isCluster ? 0.001 : 0.0003;
+  const minVisibleFrac = isCluster ? 0.002 : 0.0003;
 
   for (const sData of data.stars) {
     const minVisible = data.radius * minVisibleFrac;

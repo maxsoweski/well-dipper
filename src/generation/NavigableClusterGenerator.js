@@ -31,7 +31,7 @@ export class NavigableClusterGenerator {
    */
   static generate(seed) {
     const rng = new SeededRandom(seed);
-    const radius = rng.range(120000, 300000);  // 4-8x star system size
+    const radius = rng.range(8000, 20000);  // comparable to a star system
 
     // ── Create sub-clumps for irregular shape ──
     const clumpCount = rng.int(2, 5);
@@ -47,7 +47,7 @@ export class NavigableClusterGenerator {
 
     // ── Stars: 5-20, assigned to clumps ──
     // Minimum separation = 5% of radius — keeps stars visually distinct.
-    // For a 200K cluster that's 10,000 units (real B-star is ~23 units).
+    // For a 15K cluster that's 750 units apart.
     const minSep = radius * 0.05;
     const starCount = rng.int(5, 20);
     const stars = [];
