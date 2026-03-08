@@ -22,6 +22,7 @@ import { Nebula } from './objects/Nebula.js';
 import { VolumetricNebula } from './objects/VolumetricNebula.js';
 import { NavigableNebulaGenerator } from './generation/NavigableNebulaGenerator.js';
 import { NavigableClusterGenerator } from './generation/NavigableClusterGenerator.js';
+import { generateSolarSystem } from './generation/SolarSystemData.js';
 import { SeededRandom } from './generation/SeededRandom.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
@@ -3140,6 +3141,16 @@ window.addEventListener('keydown', (e) => {
     const destType = debugTypes[e.key];
     if (destType) {
       _debugSpawnType(destType);
+      return;
+    }
+
+    // Shift+0 → secret Solar System mode
+    if (e.key === ')') {
+      if (galleryMode) exitGallery();
+      const solData = generateSolarSystem();
+      solData._destType = 'star-system';
+      spawnSystem({ forWarp: false, systemData: solData });
+      console.log('Secret mode: Solar System');
       return;
     }
   }
