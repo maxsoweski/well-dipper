@@ -232,17 +232,18 @@ export class StarFlare {
   _createBillboard() {
     const [cr, cg, cb] = this.data.color;
 
-    // Small procedural circle texture
-    const size = 16;
+    // Procedural radial gradient — matches Star.js glow style
+    const size = 64;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
     const cx = size / 2;
     const gradient = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
-    gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.2)');
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.5)');
+    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.15)');
+    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.04)');
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
@@ -259,8 +260,8 @@ export class StarFlare {
     });
 
     const sprite = new THREE.Sprite(material);
-    // Base scale — will be adjusted in update() based on distance
-    sprite.scale.set(this._renderRadius * 3, this._renderRadius * 3, 1);
+    this._baseGlowScale = this._renderRadius * 3.5;
+    sprite.scale.set(this._baseGlowScale, this._baseGlowScale, 1);
 
     return sprite;
   }
@@ -283,14 +284,19 @@ export class StarFlare {
       if (pixelSize < 10) {
         this._flareDisc.visible = false;
         this._billboard.visible = true;
-        // Scale billboard to maintain minimum visible size
-        const minAngular = 0.015;
-        const billboardScale = Math.max(this._renderRadius * 3, dist * minAngular);
-        this._billboard.scale.set(billboardScale, billboardScale, 1);
       } else {
         this._flareDisc.visible = true;
         this._billboard.visible = false;
       }
+
+      // Scale billboard to maintain minimum angular size (same as Star.js)
+      // so the star is always visible as a bright colored point
+      const minAngularSize = 0.015;
+      const distScale = dist * minAngularSize;
+      const scale = Math.max(this._baseGlowScale, distScale);
+      const maxScale = dist * 0.2;
+      const finalScale = Math.min(scale, maxScale);
+      this._billboard.scale.set(finalScale, finalScale, 1);
 
       // ── Screen-position alignment ──
       const starWorld = this.mesh.position;
