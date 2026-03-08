@@ -528,8 +528,9 @@ warpEffect.onPrepareSystem = () => {
     pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
     pendingSystemData._billboardData = NebulaGenerator.generate(seed, destType);
   } else if (destType === 'open-cluster') {
-    // Navigable open cluster — use the new cluster generator
+    // Navigable open cluster — nav generator for star positions, particle cloud for visuals
     pendingSystemData = NavigableClusterGenerator.generate(seed);
+    pendingSystemData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
   } else if (destType.includes('galaxy')) {
     pendingSystemData = GalaxyGenerator.generate(seed, destType);
   } else if (destType.includes('cluster')) {
@@ -1289,9 +1290,28 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     }
   }
 
+  // ── Cluster particle cloud (open clusters — adds ambient star particles) ──
+  let clusterCloud = null;
+  if (data._clusterParticles) {
+    const cp = data._clusterParticles;
+    // Scale particle positions to match navigable radius
+    const scale = data.radius / cp.radius;
+    const scaledPositions = new Float32Array(cp.positions.length);
+    for (let i = 0; i < cp.particleCount; i++) {
+      scaledPositions[i * 3]     = cp.positions[i * 3] * scale;
+      scaledPositions[i * 3 + 1] = cp.positions[i * 3 + 1] * scale;
+      scaledPositions[i * 3 + 2] = cp.positions[i * 3 + 2] * scale;
+    }
+    const scaledSizes = new Float32Array(cp.sizes.length);
+    for (let i = 0; i < cp.particleCount; i++) {
+      scaledSizes[i] = cp.sizes[i] * scale;
+    }
+    const scaledData = { ...cp, positions: scaledPositions, sizes: scaledSizes, radius: data.radius };
+    clusterCloud = new Galaxy(scaledData);
+    clusterCloud.addTo(scene);
+  }
+
   // ── Extend far plane for large navigable destinations ──
-  // Clusters can have radius 300K+ with stars scattered throughout.
-  // Without this, distant stars get frustum-clipped.
   const neededFar = data.radius * 3;
   if (neededFar > camera.far) {
     camera.far = neededFar;
@@ -1342,8 +1362,8 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
   // Shaped like a star system so autopilot/flythrough/selection code works
   system = {
     type: destType,
-    destination: null,     // no distant-view destination object
-    gasCloud,              // VolumetricNebula instance (or null for clusters)
+    destination: clusterCloud,  // Galaxy particle cloud (open clusters) or null
+    gasCloud,              // Nebula billboard instance (nebulae) or null
     extraStars: allStars.slice(1),  // all stars beyond the primary
     star: allStars[0] || null,
     star2: allStars[1] || null,
@@ -1403,6 +1423,7 @@ function _debugSpawnType(destType) {
     preGenData._billboardData = NebulaGenerator.generate(seed, destType);
   } else if (destType === 'open-cluster') {
     preGenData = NavigableClusterGenerator.generate(seed);
+    preGenData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
   } else if (destType.includes('galaxy')) {
     preGenData = GalaxyGenerator.generate(seed, destType);
   } else if (destType.includes('cluster')) {
