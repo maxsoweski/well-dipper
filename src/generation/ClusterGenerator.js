@@ -140,36 +140,61 @@ export class ClusterGenerator {
       sizes[i] = rng.chance(0.15) ? rng.range(40, 100) : rng.range(20, 50);
     }
 
-    // ── Reflection nebulosity layers (Pleiades-style wispy gas) ──
-    // Positioned around sub-clumps, blue-white, low opacity
+    // ── Reflection nebulosity layers (wispy gas around star clumps) ──
+    // Color palette — same variety as navigable clusters
+    const gasPalettes = {
+      reflection: { r: [0.35, 0.58], g: [0.50, 0.72], b: [0.78, 1.0]  },
+      'h-alpha':  { r: [0.78, 1.0],  g: [0.18, 0.40], b: [0.22, 0.48] },
+      warm:       { r: [0.80, 1.0],  g: [0.55, 0.75], b: [0.30, 0.50] },
+    };
+    const palKeys = Object.keys(gasPalettes);
+    const colorRoll = rng.float();
+    let gasPal;
+    let isMixed = false;
+    if (colorRoll < 0.50) gasPal = gasPalettes.reflection;
+    else if (colorRoll < 0.75) gasPal = gasPalettes['h-alpha'];
+    else if (colorRoll < 0.90) gasPal = gasPalettes.warm;
+    else isMixed = true;
+
+    // Density: 10% none, 30% light, 40% moderate, 20% heavy
+    const densityRoll = rng.float();
+    let layerRange;
+    if (densityRoll < 0.10) layerRange = null;
+    else if (densityRoll < 0.40) layerRange = [1, 2];
+    else if (densityRoll < 0.80) layerRange = [2, 4];
+    else layerRange = [4, 6];
+
     const gasLayers = [];
-    for (let c = 0; c < clumpCount; c++) {
-      const clump = clumps[c];
-      const layerCount = rng.int(2, 3);
-      for (let l = 0; l < layerCount; l++) {
-        const offsetScale = clump.spread * 0.5;
-        gasLayers.push({
-          position: [
-            clump.x + this._gaussian(rng) * offsetScale,
-            clump.y + this._gaussian(rng) * offsetScale * 0.2,
-            clump.z + this._gaussian(rng) * offsetScale,
-          ],
-          size: clump.spread * rng.range(0.6, 1.8),
-          rotation: [
-            rng.range(-0.6, 0.6),
-            rng.range(0, Math.PI * 2),
-            rng.range(-0.4, 0.4),
-          ],
-          color: [
-            rng.range(0.35, 0.58),
-            rng.range(0.50, 0.72),
-            rng.range(0.78, 1.0),
-          ],
-          noiseSeed: [rng.float() * 100, rng.float() * 100],
-          // High noise scale for wispy, irregular shapes
-          noiseScale: rng.range(3.5, 6.0),
-          opacity: rng.range(0.25, 0.55),
-        });
+    if (layerRange) {
+      const palValues = Object.values(gasPalettes);
+      for (let c = 0; c < clumpCount; c++) {
+        const clump = clumps[c];
+        const layerCount = rng.int(layerRange[0], layerRange[1]);
+        for (let l = 0; l < layerCount; l++) {
+          const pal = isMixed ? palValues[rng.int(0, palValues.length - 1)] : gasPal;
+          const offsetScale = clump.spread * 0.5;
+          gasLayers.push({
+            position: [
+              clump.x + this._gaussian(rng) * offsetScale,
+              clump.y + this._gaussian(rng) * offsetScale * 0.2,
+              clump.z + this._gaussian(rng) * offsetScale,
+            ],
+            size: clump.spread * rng.range(0.6, 1.8),
+            rotation: [
+              rng.range(-0.6, 0.6),
+              rng.range(0, Math.PI * 2),
+              rng.range(-0.4, 0.4),
+            ],
+            color: [
+              rng.range(pal.r[0], pal.r[1]),
+              rng.range(pal.g[0], pal.g[1]),
+              rng.range(pal.b[0], pal.b[1]),
+            ],
+            noiseSeed: [rng.float() * 100, rng.float() * 100],
+            noiseScale: rng.range(3.5, 6.0),
+            opacity: rng.range(0.25, 0.55),
+          });
+        }
       }
     }
 

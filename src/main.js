@@ -478,11 +478,11 @@ const GALLERY_TYPES = [
   // Deep sky (distant view)
   'spiral-galaxy', 'elliptical-galaxy',
   'emission-nebula', 'planetary-nebula',
-  'globular-cluster', 'open-cluster',
+  'globular-cluster',
   // Deep sky (navigable — fly inside)
   'volumetric-nebula-test',
   'nav-planetary-nebula', 'nav-emission-nebula',
-  'nav-open-cluster', 'cluster-gas-test',
+  'nav-open-cluster',
   // Star system objects
   'star-flare',
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
@@ -1290,6 +1290,18 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
     }
   }
 
+  // ── Cluster gas layers (open clusters — reflection nebulosity) ──
+  if (!gasCloud && data.gasLayers && data.gasLayers.length > 0) {
+    const gasData = {
+      layers: data.gasLayers,
+      starPositions: new Float32Array(0),
+      starColors: new Float32Array(0),
+      starSizes: new Float32Array(0),
+    };
+    gasCloud = new Nebula(gasData);
+    gasCloud.addTo(scene);
+  }
+
   // ── Cluster particle cloud (open clusters — adds ambient star particles) ──
   let clusterCloud = null;
   if (data._clusterParticles) {
@@ -1637,42 +1649,8 @@ function gallerySpawn() {
     infoText = `${nebulaType} (navigable)  |  ${navData.stars.length} stars  |  r=${radius.toFixed(0)}`;
   }
 
-  // ── Navigable open cluster (gallery preview using particle renderer) ──
-  // Same idea: use ClusterGenerator + Galaxy.js for the beautiful particle cloud,
-  // then overlay the actual navigable Star objects at matching scale.
+  // ── Navigable open cluster (particle cloud + gas layers + stars) ──
   else if (type === 'nav-open-cluster') {
-    // Particle cloud at display scale (hundreds of particles = nice cluster shape)
-    const particleData = ClusterGenerator.generate(seed, 'open-cluster');
-    galleryObject = new Galaxy(particleData);
-    galleryObject.addTo(scene);
-
-    // Also generate navigable data for the star positions
-    const navData = NavigableClusterGenerator.generate(seed);
-
-    // Scale navigable stars down to particle-cloud scale and add them
-    const scaleFactor = particleData.radius / navData.radius;
-    for (const sData of navData.stars) {
-      const scaledR = Math.max(particleData.radius * 0.02, 2.0);
-      const star = new StarFlare({ ...sData, radius: scaledR, color: sData.color }, scaledR);
-      star.mesh.position.set(
-        sData.position[0] * scaleFactor,
-        sData.position[1] * scaleFactor,
-        sData.position[2] * scaleFactor,
-      );
-      star.addTo(scene);
-      _galleryMeshes.push(star);
-    }
-
-    const radius = particleData.radius;
-    camera.position.set(0, radius * 0.5, radius * 2.5);
-    camera.lookAt(0, 0, 0);
-
-    infoText = `open-cluster (navigable)  |  ${navData.stars.length} stars  |  r=${radius.toFixed(0)}`;
-  }
-
-  // ── Cluster gas test (navigable cluster with reflection nebulosity) ──
-  // Same star sizing as nav-open-cluster, plus gas cloud layers
-  else if (type === 'cluster-gas-test') {
     const particleData = ClusterGenerator.generate(seed, 'open-cluster');
     const navData = NavigableClusterGenerator.generate(seed);
     const scaleFactor = particleData.radius / navData.radius;
@@ -1716,7 +1694,7 @@ function gallerySpawn() {
     camera.position.set(0, radius * 0.5, radius * 2.5);
     camera.lookAt(0, 0, 0);
 
-    infoText = `cluster gas test  |  ${navData.stars.length} stars  |  gas: ${navData.gasLayers?.length || 0} layers  |  r=${radius.toFixed(0)}`;
+    infoText = `open-cluster (navigable)  |  ${navData.stars.length} stars  |  gas: ${navData.gasLayers?.length || 0} layers  |  r=${radius.toFixed(0)}`;
   }
 
   // ── Deep sky objects (billboard/distant view) ──
