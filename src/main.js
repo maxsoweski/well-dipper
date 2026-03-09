@@ -3060,12 +3060,14 @@ function animate() {
 
   // ── Dynamic near clipping plane ──
   // Scale near plane with camera distance to the nearest tracked body so
-  // tiny moons/planets don't clip when orbiting close. Works during both
-  // manual orbit (smoothedDistance) and flythrough (camera↔target distance).
+  // tiny moons/planets don't clip when orbiting close. During flythrough,
+  // use the actual body being orbited (not stale cameraController.target).
   {
     let nearDist = cameraController.smoothedDistance;
-    // During flythrough, smoothedDistance may be stale — use actual camera-to-target
-    if (cameraController.bypassed && cameraController.target) {
+    if (flythrough.active && flythrough.bodyRef) {
+      // Use the real body the flythrough is orbiting
+      nearDist = camera.position.distanceTo(flythrough.bodyRef.position);
+    } else if (cameraController.bypassed && cameraController.target) {
       nearDist = camera.position.distanceTo(cameraController.target);
     }
     camera.near = Math.max(0.0001, Math.min(1.0, nearDist * 0.01));
@@ -3317,15 +3319,22 @@ function trySelect(clientX, clientY) {
       // let the click fall through to scene raycasting or warp star selection.
       const hit = systemMap.hitTest(uv.u, uv.v);
       if (hit) {
-        if (autoNav.isActive) {
-          // During autopilot: queue the selected body as next destination
-          // (don't interrupt current orbit — autopilot will go there next)
+        if (autoNav.isActive && flythrough.active) {
+          // During autopilot: jump to the selected body and immediately
+          // begin travel (interrupt current orbit/travel).
+          let stop = null;
           if (hit.type === 'star') {
-            autoNav.jumpToStar();
+            stop = autoNav.jumpToStar();
           } else if (hit.type === 'planet') {
-            autoNav.jumpToPlanet(hit.planetIndex);
+            stop = autoNav.jumpToPlanet(hit.planetIndex);
           }
-          // Update minimap focus ring to show the queued destination
+          if (stop && stop.bodyRef) {
+            flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+            const upcoming = autoNav.getNextStop();
+            flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+            updateFocusFromStop(stop);
+          }
+          // Update minimap focus ring
           if (hit.type === 'planet') {
             focusIndex = hit.planetIndex;
             focusMoonIndex = -1;
