@@ -67,11 +67,17 @@ export class CameraController {
     this._savedPitch = 0; // orbit pitch before free-look (restored on exit)
 
     // ── Return-to-orbit (after free-look with focused body) ──
-    // Camera keeps its free-look direction, then slowly turns back to face the body.
+    // Phase 1 (delay): camera keeps free-look direction, follows body motion.
+    // Phase 2 (turn): camera stays in place, slerps rotation to face the body.
+    // Phase 3: hand back to orbit system via restoreFromWorldState.
     this._returningToOrbit = false;
     this._returnDelay = 0;          // seconds before the turn-back starts
+    this._returnTurning = false;    // true during the slerp phase
     this._returnTrackPos = new THREE.Vector3(); // body position tracking during return
     this._returnTracking = false;
+    this._returnLookTarget = new THREE.Vector3(); // where the body is (for slerp)
+    this._returnMatrix = new THREE.Matrix4();
+    this._returnQuat = new THREE.Quaternion();
 
     // Callback fired when free-look ends without a focused body.
     // main.js uses this to clear focus state.
@@ -150,11 +156,13 @@ export class CameraController {
         // Left click: start orbiting
         this.isDragging = true;
         this.autoRotateActive = false;
-        // Cancel return-to-orbit if user takes manual control
+        // Cancel return-to-orbit if user takes manual control —
+        // recompute orbit from current camera state so there's no jump
         if (this._returningToOrbit) {
           this._returningToOrbit = false;
+          this._returnTurning = false;
           this._returnTracking = false;
-          this._transitioning = false;
+          this.restoreFromWorldState(this._returnLookTarget);
         }
       } else if (e.button === 1) {
         // Middle click: start free-look (rotate view from fixed position)
@@ -369,13 +377,11 @@ export class CameraController {
     this.smoothedPitch = this.pitch;
 
     if (resumeOrbit) {
-      // Start the return-to-orbit sequence: 2s delay, then slow turn-back
+      // Start the return-to-orbit sequence: 2s delay, then slow slerp turn-back
       this._returningToOrbit = true;
       this._returnDelay = 2.0;
+      this._returnTurning = false;
       this._returnTracking = false;
-      // Prevent trackTarget from snapping target during the return
-      this._transitioning = true;
-      this._targetGoal.copy(this.target); // freeze for now; trackTarget will update goal
     } else {
       this._targetGoal.copy(this.target);
       this._transitioning = false;
@@ -461,18 +467,20 @@ export class CameraController {
     this._targetGoal.copy(position);
 
     if (this._returningToOrbit) {
-      // During return-to-orbit: move camera with the body so it doesn't drift away.
-      // Apply the body's frame-to-frame displacement to the orbit target.
+      // During return-to-orbit: move camera position with the body so it
+      // doesn't drift away. Also track the body position for the slerp target.
+      this._returnLookTarget.copy(position);
       if (!this._returnTracking) {
         this._returnTrackPos.copy(position);
         this._returnTracking = true;
       } else {
+        // Apply body's frame-to-frame displacement to camera position
         const dx = position.x - this._returnTrackPos.x;
         const dy = position.y - this._returnTrackPos.y;
         const dz = position.z - this._returnTrackPos.z;
-        this.target.x += dx;
-        this.target.y += dy;
-        this.target.z += dz;
+        this.camera.position.x += dx;
+        this.camera.position.y += dy;
+        this.camera.position.z += dz;
         this._returnTrackPos.copy(position);
       }
     } else if (!this._transitioning) {
@@ -511,30 +519,51 @@ export class CameraController {
       this.zoomSpeed *= Math.pow(this.zoomDamping, deltaTime * 60);
     }
 
-    // ── Return-to-orbit timer ──
-    // After free-look with a focused body: wait 2s, then slowly turn back.
+    // ── Return-to-orbit: slerp camera rotation toward the body ──
     if (this._returningToOrbit) {
       if (this._returnDelay > 0) {
+        // Phase 1: delay — camera keeps free-look direction, follows body motion
         this._returnDelay -= deltaTime;
         if (this._returnDelay <= 0) {
-          // Delay elapsed — start the slow turn-back
-          this._transitionSpeed = 0.025; // slow, cinematic return
+          this._returnTurning = true; // start phase 2
         }
       }
+
+      if (this._returnTurning) {
+        // Phase 2: slerp camera rotation to face the body
+        // Compute the quaternion that would look at the body from current position
+        this._returnMatrix.lookAt(this.camera.position, this._returnLookTarget, this.camera.up);
+        this._returnQuat.setFromRotationMatrix(this._returnMatrix);
+
+        // Slerp toward it
+        const slerpSpeed = 1 - Math.exp(-1.5 * deltaTime); // smooth, ~1.5s to settle
+        this.camera.quaternion.slerp(this._returnQuat, slerpSpeed);
+
+        // Check if we're close enough to facing the body (dot product ≈ 1)
+        const dot = this.camera.quaternion.dot(this._returnQuat);
+        if (dot > 0.9995) {
+          // Phase 3: hand back to orbit system
+          this._returningToOrbit = false;
+          this._returnTurning = false;
+          this._returnTracking = false;
+          this.restoreFromWorldState(this._returnLookTarget);
+        }
+      }
+
+      // During return-to-orbit, skip normal orbit computation
+      // (camera position is managed by trackTarget body-following,
+      //  camera rotation is managed by the slerp above or kept as-is during delay)
+      return;
     }
 
     // Smooth target transition
     if (this._transitioning) {
-      // During return-to-orbit delay, freeze transition (speed stays at initial value)
-      const speed = (this._returningToOrbit && this._returnDelay > 0) ? 0 : this._transitionSpeed;
-      const factor = speed === 0 ? 0 : (1 - Math.pow(1 - speed, deltaTime * 60));
+      const factor = 1 - Math.pow(1 - this._transitionSpeed, deltaTime * 60);
       this.target.lerp(this._targetGoal, factor);
       // Snap when close enough
       if (this.target.distanceTo(this._targetGoal) < 0.01) {
         this.target.copy(this._targetGoal);
         this._transitioning = false;
-        this._returningToOrbit = false;
-        this._returnTracking = false;
       }
     }
 
