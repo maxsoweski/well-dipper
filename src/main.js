@@ -2753,13 +2753,17 @@ function animate() {
       const renderHeight = window.innerHeight / retroRenderer.pixelScale;
       const projScale = renderHeight / (2 * Math.tan(fovRad / 2));
 
+      // During flythrough, protect the body being orbited from billboarding
+      const flythroughBody = flythrough.active ? flythrough.bodyRef : null;
+
       for (let pi = 0; pi < system.planets.length; pi++) {
         const entry = system.planets[pi];
-        // Planet LOD — always show mesh for focused planet
+        // Planet LOD — always show mesh for focused or flythrough-orbited planet
         const pDist = camera.position.distanceTo(entry.planet.mesh.position);
         const pPixels = (entry.planet.data.radius * 2) * projScale / pDist;
         const isFocusedPlanet = (focusIndex === pi && focusMoonIndex < 0);
-        const pShowBillboard = !isFocusedPlanet && pPixels < 3;
+        const isFlythroughTarget = (flythroughBody === entry.planet.mesh || flythroughBody === entry.planet.surface);
+        const pShowBillboard = !isFocusedPlanet && !isFlythroughTarget && pPixels < 3;
         entry.planet.mesh.visible = !pShowBillboard;
         entry.billboard.sprite.visible = pShowBillboard;
         entry.billboard.sprite.position.copy(entry.planet.mesh.position);
@@ -2772,7 +2776,8 @@ function animate() {
           const mPixels = (moon.data.radius * 2) * projScale / mDist;
           // Always show mesh for the focused moon (never swap to billboard up close)
           const isFocusedMoon = (focusIndex === pi && focusMoonIndex === m);
-          const mShowBillboard = !isFocusedMoon && mPixels < 3;
+          const isMoonFlythroughTarget = (flythroughBody === moon.mesh);
+          const mShowBillboard = !isFocusedMoon && !isMoonFlythroughTarget && mPixels < 3;
           moon.mesh.visible = !mShowBillboard;
           const moonBb = entry.moonBillboards[m];
           moonBb.sprite.visible = mShowBillboard;
