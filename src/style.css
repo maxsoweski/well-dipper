@@ -141,6 +141,7 @@ html, body {
   justify-content: center;
   pointer-events: none;
   transition: opacity 1s ease;
+  mix-blend-mode: difference;
 }
 
 #title-screen.fading {
@@ -149,7 +150,6 @@ html, body {
 
 .title-content {
   text-align: center;
-  mix-blend-mode: difference;
 }
 
 .title-name {
