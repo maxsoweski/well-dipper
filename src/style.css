@@ -200,7 +200,7 @@ html, body {
   letter-spacing: 0.15em;
   margin-right: -0.15em;
   opacity: 0;
-  animation: title-prompt-in 1.5s ease-out 6.5s forwards, title-blink 4s ease-in-out 8s infinite;
+  animation: title-prompt-in 1.5s ease-out 6s forwards, title-blink 4s ease-in-out 7.5s infinite;
   text-shadow:
     -1px -1px 0 rgba(0,0,0,0.7),  1px -1px 0 rgba(0,0,0,0.7),
     -1px  1px 0 rgba(0,0,0,0.7),  1px  1px 0 rgba(0,0,0,0.7),
