@@ -182,7 +182,7 @@ html, body {
   font-family: 'DotGothic16', monospace;
   color: #fff;
   font-size: clamp(12px, 2vw, 18px);
-  margin-top: 24px;
+  margin-top: 8px;
   letter-spacing: 0.15em;
   margin-right: -0.15em;
   animation: title-blink 4s ease-in-out infinite;
