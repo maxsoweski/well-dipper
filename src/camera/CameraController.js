@@ -347,11 +347,30 @@ export class CameraController {
    * Yaw/pitch changes will rotate the view direction, not the orbit.
    */
   enterFreeLook() {
+    // If we're mid-return-to-orbit, cancel it cleanly —
+    // recompute orbit angles from current camera state first
+    if (this._returningToOrbit) {
+      this._returningToOrbit = false;
+      this._returnTurning = false;
+      this._returnTracking = false;
+      // Recompute orbit state so free-look has correct yaw/pitch/distance
+      // relative to the body we were returning to
+      const offset = this.camera.position.clone().sub(this._returnLookTarget);
+      const dist = offset.length();
+      this.yaw = Math.atan2(offset.x, offset.z);
+      this.pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / dist)));
+      this.smoothedYaw = this.yaw;
+      this.smoothedPitch = this.pitch;
+      this.distance = dist;
+      this.smoothedDistance = dist;
+      this.target.copy(this._returnLookTarget);
+      this._targetGoal.copy(this._returnLookTarget);
+    }
+
     this.isFreeLooking = true;
     this._freeLookAnchor.copy(this.camera.position);
     this._freeLookTracking = false;
     this.autoRotateActive = false;
-    // Save orbit angles so we can restore them on exit
     this._savedYaw = this.yaw;
     this._savedPitch = this.pitch;
     // Immediately set up the free-look target so there's no jump on the first frame
