@@ -348,23 +348,29 @@ export class CameraController {
    */
   enterFreeLook() {
     // If we're mid-return-to-orbit, cancel it cleanly —
-    // recompute orbit angles from current camera state first
+    // derive yaw/pitch from the camera's CURRENT look direction so the
+    // view stays wherever it is (don't snap to facing the body).
     if (this._returningToOrbit) {
       this._returningToOrbit = false;
       this._returnTurning = false;
       this._returnTracking = false;
-      // Recompute orbit state so free-look has correct yaw/pitch/distance
-      // relative to the body we were returning to
-      const offset = this.camera.position.clone().sub(this._returnLookTarget);
-      const dist = offset.length();
-      this.yaw = Math.atan2(offset.x, offset.z);
-      this.pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / dist)));
+
+      // Extract yaw/pitch from current camera forward direction
+      const fwd = new THREE.Vector3();
+      this.camera.getWorldDirection(fwd);
+      // In orbit: forward = (-sin(yaw)*cos(pitch), -sin(pitch), -cos(yaw)*cos(pitch))
+      this.pitch = Math.asin(Math.max(-1, Math.min(1, -fwd.y)));
+      const cp = Math.cos(this.pitch);
+      if (Math.abs(cp) > 0.001) {
+        this.yaw = Math.atan2(-fwd.x / cp, -fwd.z / cp);
+      }
       this.smoothedYaw = this.yaw;
       this.smoothedPitch = this.pitch;
+
+      // Keep distance from the body
+      const dist = this.camera.position.distanceTo(this._returnLookTarget);
       this.distance = dist;
       this.smoothedDistance = dist;
-      this.target.copy(this._returnLookTarget);
-      this._targetGoal.copy(this._returnLookTarget);
     }
 
     this.isFreeLooking = true;
