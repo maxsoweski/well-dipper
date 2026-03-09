@@ -149,6 +149,7 @@ html, body {
 
 .title-content {
   text-align: center;
+  mix-blend-mode: difference;
 }
 
 .title-name {
