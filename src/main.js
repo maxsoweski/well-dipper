@@ -648,20 +648,19 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   }
   spawnSystem({ systemData: titleData });
 
-  // Orbit around a point ABOVE the object so the camera looks above center,
-  // pushing the object into the lower portion of the screen.
+  // Orbit around the object center so it sits behind the centered title text.
   const r = titleData.radius || 200;
   let orbitCenter;
   if (titleType.includes('galaxy')) {
-    orbitCenter = new THREE.Vector3(0, r * 0.2, 0);
-    camera.position.set(r * 0.3, r * 0.55, r * 1.1);
+    orbitCenter = new THREE.Vector3(0, 0, 0);
+    camera.position.set(r * 0.3, r * 0.15, r * 1.1);
   } else if (titleType.includes('nebula')) {
-    orbitCenter = new THREE.Vector3(0, r * 0.2, 0);
-    camera.position.set(0, r * 0.2, r * 1.25);
+    orbitCenter = new THREE.Vector3(0, 0, 0);
+    camera.position.set(0, 0, r * 1.25);
   } else {
     // Clusters
-    orbitCenter = new THREE.Vector3(0, r * 0.4, 0);
-    camera.position.set(0, r * 0.35, r * 1.25);
+    orbitCenter = new THREE.Vector3(0, 0, 0);
+    camera.position.set(0, 0, r * 1.25);
   }
   camera.lookAt(orbitCenter);
   cameraController.restoreFromWorldState(orbitCenter);
