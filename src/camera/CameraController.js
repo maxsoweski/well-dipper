@@ -158,14 +158,13 @@ export class CameraController {
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0 && this._leftFreeLooking) {
         this._leftFreeLooking = false;
-        this.exitFreeLook(false);
+        this.exitFreeLook(true);
       } else if (e.button === 0) {
         this.isDragging = false;
       } else if (e.button === 1) {
-        // End free-look and resume orbiting the same body.
-        // With momentum tracking, the camera is still near the body,
-        // so clearing focus would make the body fly away.
-        this.exitFreeLook(false);
+        // End free-look — keep looking in the current direction.
+        // Clear focus so trackTarget doesn't pull the camera back.
+        this.exitFreeLook(true);
       }
     });
 
@@ -314,8 +313,7 @@ export class CameraController {
     this._prevAlpha = null;
     this._prevBeta = null;
     window.removeEventListener('deviceorientation', this._gyroHandler);
-    // Resume orbiting the same body (don't clear focus)
-    this.exitFreeLook(false);
+    this.exitFreeLook(true);
   }
 
   /**
@@ -343,12 +341,13 @@ export class CameraController {
   exitFreeLook(clearFocus = true) {
     this.isFreeLooking = false;
     this._freeLookTracking = false;
-    // Restore orbit angles so the camera returns to the same orbital position
-    // it was in before free-look started (no jump on exit)
-    this.yaw = this._savedYaw;
-    this.pitch = this._savedPitch;
-    this.smoothedYaw = this._savedYaw;
-    this.smoothedPitch = this._savedPitch;
+    // Keep the current look direction — don't snap back to the pre-free-look view.
+    // The target was already updated by _recomputeTargetForFreeLook, so the camera
+    // will continue orbiting around wherever it's now pointing.
+    this._targetGoal.copy(this.target);
+    this._transitioning = false;
+    this.smoothedYaw = this.yaw;
+    this.smoothedPitch = this.pitch;
     if (clearFocus && this.onFreeLookEnd) this.onFreeLookEnd();
   }
 
