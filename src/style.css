@@ -141,12 +141,12 @@ html, body {
   justify-content: center;
   pointer-events: none;
   transition: opacity 1s ease;
-  animation: title-fade-in 3s ease-out forwards;
+  animation: title-fade-in 4s ease-out forwards;
 }
 
 @keyframes title-fade-in {
   0% { background: #000; }
-  60% { background: #000; }
+  62% { background: #000; }
   100% { background: transparent; }
 }
 
@@ -200,7 +200,7 @@ html, body {
   letter-spacing: 0.15em;
   margin-right: -0.15em;
   opacity: 0;
-  animation: title-prompt-in 1.5s ease-out 6s forwards, title-blink 4s ease-in-out 7.5s infinite;
+  animation: title-prompt-in 1.5s ease-out 6.5s forwards, title-blink 4s ease-in-out 8s infinite;
   text-shadow:
     -1px -1px 0 rgba(0,0,0,0.7),  1px -1px 0 rgba(0,0,0,0.7),
     -1px  1px 0 rgba(0,0,0,0.7),  1px  1px 0 rgba(0,0,0,0.7),
