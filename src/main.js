@@ -140,7 +140,7 @@ let _titleAutoTimer = null;
 function dismissTitleScreen() {
   if (!titleScreenActive) return;
   titleScreenActive = false;
-  soundEngine.play('titleIntro');
+  soundEngine.play('titleDismiss');
   musicManager.play('explore');
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
@@ -666,6 +666,10 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   cameraController.restoreFromWorldState(orbitCenter);
   // Slow visible orbit for the title screen showcase
   cameraController.autoRotateSpeed = 3.0;
+
+  // Try to play cinematic rumble during fade-in (may be blocked by browser
+  // autoplay policy — will be silent until first user gesture on strict browsers)
+  soundEngine.play('titleIntro');
 
   // Auto-dismiss title screen after configured timeout
   _titleAutoTimer = setTimeout(() => {
