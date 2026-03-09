@@ -160,6 +160,7 @@ html, body {
   color: #fff;
   margin: 0;
   line-height: 1.2;
+  padding-right: 0.35em; /* offset trailing letter-spacing so right edge aligns */
 }
 
 .title-prompt {
@@ -168,7 +169,8 @@ html, body {
   font-size: clamp(12px, 2vw, 18px);
   margin-top: 24px;
   letter-spacing: 0.15em;
-  animation: title-blink 2s ease-in-out infinite;
+  text-align: right;
+  animation: title-blink 4s ease-in-out infinite;
 }
 
 @keyframes title-blink {
