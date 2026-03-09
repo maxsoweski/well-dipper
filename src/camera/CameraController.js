@@ -66,10 +66,19 @@ export class CameraController {
     this._savedYaw = 0;   // orbit yaw before free-look (restored on exit)
     this._savedPitch = 0; // orbit pitch before free-look (restored on exit)
 
-    // Callback fired when free-look ends (middle mouse released).
-    // main.js uses this to clear focus state so tracking doesn't resume
-    // and pull the camera back to the planet you were orbiting before.
+    // ── Return-to-orbit (after free-look with focused body) ──
+    // Camera keeps its free-look direction, then slowly turns back to face the body.
+    this._returningToOrbit = false;
+    this._returnDelay = 0;          // seconds before the turn-back starts
+    this._returnTrackPos = new THREE.Vector3(); // body position tracking during return
+    this._returnTracking = false;
+
+    // Callback fired when free-look ends without a focused body.
+    // main.js uses this to clear focus state.
     this.onFreeLookEnd = null;
+    // Callback that returns true if a body is currently focused.
+    // Used to decide whether to resume orbit or clear focus on free-look exit.
+    this.hasFocusedBody = null;
 
     // ── Bypass mode (for flythrough camera) ──
     this.bypassed = false;
@@ -141,6 +150,12 @@ export class CameraController {
         // Left click: start orbiting
         this.isDragging = true;
         this.autoRotateActive = false;
+        // Cancel return-to-orbit if user takes manual control
+        if (this._returningToOrbit) {
+          this._returningToOrbit = false;
+          this._returnTracking = false;
+          this._transitioning = false;
+        }
       } else if (e.button === 1) {
         // Middle click: start free-look (rotate view from fixed position)
         // Skip during flythrough — FlythroughCamera handles its own free-look
@@ -158,13 +173,15 @@ export class CameraController {
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0 && this._leftFreeLooking) {
         this._leftFreeLooking = false;
-        this.exitFreeLook(true);
+        const hasFocus = this.hasFocusedBody ? this.hasFocusedBody() : false;
+        this.exitFreeLook(hasFocus);
       } else if (e.button === 0) {
         this.isDragging = false;
       } else if (e.button === 1) {
-        // End free-look — keep looking in the current direction.
-        // Clear focus so trackTarget doesn't pull the camera back.
-        this.exitFreeLook(true);
+        // End free-look: if a body is focused, slowly return to orbiting it.
+        // Otherwise, clear focus and stay looking in the current direction.
+        const hasFocus = this.hasFocusedBody ? this.hasFocusedBody() : false;
+        this.exitFreeLook(hasFocus);
       }
     });
 
@@ -313,7 +330,8 @@ export class CameraController {
     this._prevAlpha = null;
     this._prevBeta = null;
     window.removeEventListener('deviceorientation', this._gyroHandler);
-    this.exitFreeLook(true);
+    const hasFocus = this.hasFocusedBody ? this.hasFocusedBody() : false;
+    this.exitFreeLook(hasFocus);
   }
 
   /**
@@ -338,17 +356,31 @@ export class CameraController {
    *   so camera stays where it was looking). If false (e.g., gyro off),
    *   the camera resumes orbiting the previously focused body.
    */
-  exitFreeLook(clearFocus = true) {
+  /**
+   * Exit free-look mode.
+   * @param {boolean} resumeOrbit - true = slowly return to orbiting the focused body
+   *                                false = stay looking wherever, clear focus
+   */
+  exitFreeLook(resumeOrbit = false) {
     this.isFreeLooking = false;
     this._freeLookTracking = false;
-    // Keep the current look direction — don't snap back to the pre-free-look view.
-    // The target was already updated by _recomputeTargetForFreeLook, so the camera
-    // will continue orbiting around wherever it's now pointing.
-    this._targetGoal.copy(this.target);
-    this._transitioning = false;
+    // Keep current look direction (don't snap)
     this.smoothedYaw = this.yaw;
     this.smoothedPitch = this.pitch;
-    if (clearFocus && this.onFreeLookEnd) this.onFreeLookEnd();
+
+    if (resumeOrbit) {
+      // Start the return-to-orbit sequence: 2s delay, then slow turn-back
+      this._returningToOrbit = true;
+      this._returnDelay = 2.0;
+      this._returnTracking = false;
+      // Prevent trackTarget from snapping target during the return
+      this._transitioning = true;
+      this._targetGoal.copy(this.target); // freeze for now; trackTarget will update goal
+    } else {
+      this._targetGoal.copy(this.target);
+      this._transitioning = false;
+      if (this.onFreeLookEnd) this.onFreeLookEnd();
+    }
   }
 
   /**
@@ -381,6 +413,7 @@ export class CameraController {
     this.target.copy(position);
     this._targetGoal.copy(position);
     this._transitioning = false;
+    this._returningToOrbit = false;
   }
 
   /**
@@ -399,6 +432,7 @@ export class CameraController {
     this.target.copy(position);
     this._targetGoal.copy(position);
     this._transitioning = false;
+    this._returningToOrbit = false;
 
     // Reorient yaw so the camera orbits from the same general direction
     // it was viewing from — prevents jarring 180° snap.
@@ -425,9 +459,24 @@ export class CameraController {
   trackTarget(position) {
     // Always update the goal to the body's current position (it orbits).
     this._targetGoal.copy(position);
-    // If we're mid-transition (smooth flight to a new body), let the
-    // lerp in update() handle movement — don't snap.
-    if (!this._transitioning) {
+
+    if (this._returningToOrbit) {
+      // During return-to-orbit: move camera with the body so it doesn't drift away.
+      // Apply the body's frame-to-frame displacement to the orbit target.
+      if (!this._returnTracking) {
+        this._returnTrackPos.copy(position);
+        this._returnTracking = true;
+      } else {
+        const dx = position.x - this._returnTrackPos.x;
+        const dy = position.y - this._returnTrackPos.y;
+        const dz = position.z - this._returnTrackPos.z;
+        this.target.x += dx;
+        this.target.y += dy;
+        this.target.z += dz;
+        this._returnTrackPos.copy(position);
+      }
+    } else if (!this._transitioning) {
+      // Normal: snap target to body
       this.target.copy(position);
     }
   }
@@ -441,6 +490,7 @@ export class CameraController {
     this.target.set(0, 0, 0);
     this._targetGoal.set(0, 0, 0);
     this._transitioning = false;
+    this._returningToOrbit = false;
     this.distance = systemRadius * 1.5;
     this.zoomSpeed = 0;
   }
@@ -461,14 +511,30 @@ export class CameraController {
       this.zoomSpeed *= Math.pow(this.zoomDamping, deltaTime * 60);
     }
 
+    // ── Return-to-orbit timer ──
+    // After free-look with a focused body: wait 2s, then slowly turn back.
+    if (this._returningToOrbit) {
+      if (this._returnDelay > 0) {
+        this._returnDelay -= deltaTime;
+        if (this._returnDelay <= 0) {
+          // Delay elapsed — start the slow turn-back
+          this._transitionSpeed = 0.025; // slow, cinematic return
+        }
+      }
+    }
+
     // Smooth target transition
     if (this._transitioning) {
-      const factor = 1 - Math.pow(1 - this._transitionSpeed, deltaTime * 60);
+      // During return-to-orbit delay, freeze transition (speed stays at initial value)
+      const speed = (this._returningToOrbit && this._returnDelay > 0) ? 0 : this._transitionSpeed;
+      const factor = speed === 0 ? 0 : (1 - Math.pow(1 - speed, deltaTime * 60));
       this.target.lerp(this._targetGoal, factor);
       // Snap when close enough
       if (this.target.distanceTo(this._targetGoal) < 0.01) {
         this.target.copy(this._targetGoal);
         this._transitioning = false;
+        this._returningToOrbit = false;
+        this._returnTracking = false;
       }
     }
 
