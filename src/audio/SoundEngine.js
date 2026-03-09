@@ -76,6 +76,7 @@ export class SoundEngine {
       case 'warpCharge': this._playWarpCharge(); break;
       case 'warpEnter': this._playWarpEnter(); break;
       case 'warpExit': this._playWarpExit(); break;
+      case 'titleIntro': this._playTitleIntro(); break;
       case 'titleDismiss': this._playTitleDismiss(); break;
       case 'uiClick': this._playUIClick(); break;
     }
@@ -274,6 +275,34 @@ export class SoundEngine {
     whine.frequency.exponentialRampToValueAtTime(400, t + 0.8);
     whineG.gain.setValueAtTime(0.05, t);
     whineG.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+  }
+
+  /** Deep rumble that swells as the title screen fades in from black */
+  _playTitleIntro() {
+    const t = this._ctx.currentTime;
+
+    // Deep sub-bass drone — felt more than heard
+    const { osc: sub, gain: subG } = this._osc('sine', 28, 4.0);
+    sub.frequency.linearRampToValueAtTime(45, t + 3.5);
+    subG.gain.setValueAtTime(0.001, t);
+    subG.gain.linearRampToValueAtTime(0.25, t + 2.0);
+    subG.gain.linearRampToValueAtTime(0.15, t + 3.0);
+    subG.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
+
+    // Filtered noise — distant rumble texture
+    const n = this._noise(3.5);
+    const filter = this._ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(80, t);
+    filter.frequency.linearRampToValueAtTime(200, t + 2.5);
+    filter.frequency.linearRampToValueAtTime(60, t + 3.5);
+    filter.Q.value = 1;
+    n.source.disconnect();
+    n.source.connect(filter);
+    filter.connect(n.gain);
+    n.gain.gain.setValueAtTime(0.001, t);
+    n.gain.gain.linearRampToValueAtTime(0.12, t + 1.8);
+    n.gain.gain.exponentialRampToValueAtTime(0.001, t + 3.5);
   }
 
   /** Gentle chime when title screen dismisses */

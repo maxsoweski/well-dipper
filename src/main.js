@@ -140,7 +140,7 @@ let _titleAutoTimer = null;
 function dismissTitleScreen() {
   if (!titleScreenActive) return;
   titleScreenActive = false;
-  soundEngine.play('titleDismiss');
+  soundEngine.play('titleIntro');
   musicManager.play('explore');
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
