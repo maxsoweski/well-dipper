@@ -57,11 +57,34 @@ retroRenderer.setColorPalette(settings.get('colorPalette'));
 // ── Camera Controller ──
 const cameraController = new CameraController(camera, canvas);
 
-// When free-look ends, clear focus so the camera stays orbiting whatever
-// point the user was looking at — not snapping back to the planet.
-// Exception: during autopilot, the tour controls focus — don't clear it.
+// When free-look ends, seamlessly resume orbit around the focused body
+// (if any). restoreFromWorldState recomputes orbit angles from the camera's
+// current position so there's no snap. If nothing is focused (title screen,
+// deep sky), clear focus so the camera stays where it was looking.
 cameraController.onFreeLookEnd = () => {
-  if (!autoNav.isActive) {
+  if (autoNav.isActive) return; // autopilot controls focus
+
+  // Find the focused body's position (same logic as camera tracking)
+  let bodyPos = null;
+  if (system) {
+    if (focusIndex === -2 && focusStarIndex >= 0) {
+      const starObj = focusStarIndex === 1 && system.star2 ? system.star2 : system.star;
+      bodyPos = starObj.mesh.position;
+    } else if (focusIndex >= 0 && system.planets && focusIndex < system.planets.length) {
+      const entry = system.planets[focusIndex];
+      if (focusMoonIndex >= 0 && focusMoonIndex < entry.moons.length) {
+        bodyPos = entry.moons[focusMoonIndex].mesh.position;
+      } else {
+        bodyPos = entry.planet.mesh.position;
+      }
+    }
+  }
+
+  if (bodyPos) {
+    // Resume orbit from current camera position around the body
+    cameraController.restoreFromWorldState(bodyPos);
+  } else {
+    // No focused body — clear focus, stay where we are
     focusIndex = -1;
     focusMoonIndex = -1;
     focusStarIndex = -1;
