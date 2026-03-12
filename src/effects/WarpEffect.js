@@ -2,14 +2,14 @@
  * WarpEffect — manages the warp transition between star systems.
  *
  * Four phases:
- *   1. FOLD   (~6s) — stars pinch radially toward center (360° fold).
+ *   1. FOLD   (~4s) — stars pinch radially toward center (360° fold).
  *                      A portal opens where stars are consumed, showing
  *                      hyperspace through it. Camera stays stationary.
- *   2. ENTER  (~2s) — portal grows to engulf the full screen. Scene
+ *   2. ENTER  (~1.5s) — portal grows to engulf the full screen. Scene
  *                      objects fade, stars disappear. No camera motion.
- *   3. HYPER  (~10s) — 3D geometric tunnel (ray-cylinder intersection).
+ *   3. HYPER  (~3s) — 3D geometric tunnel (ray-cylinder intersection).
  *                       System swap happens immediately (data pre-generated during FOLD).
- *   4. EXIT   (~2s) — fizzing hole opens in tunnel, revealing new system.
+ *   4. EXIT   (~1.5s) — fizzing hole opens in tunnel, revealing new system.
  *
  * This class only manages timing and uniform values.
  * The actual visuals live in Starfield (fold) and RetroRenderer (composite).
@@ -21,10 +21,10 @@ export class WarpEffect {
     this.progress = 0;     // 0→1 within current phase
 
     // Phase durations (seconds)
-    this.FOLD_DUR = 6.0;
-    this.ENTER_DUR = 2.0;
-    this.HYPER_DUR = 10.0;
-    this.EXIT_DUR = 2.0;
+    this.FOLD_DUR = 4.0;
+    this.ENTER_DUR = 1.5;
+    this.HYPER_DUR = 3.0;
+    this.EXIT_DUR = 1.5;
 
     // ── Uniform values (read by Starfield + RetroRenderer each frame) ──
     this.foldAmount = 0;          // 0 = normal, 1 = fully folded to center
@@ -192,7 +192,7 @@ export class WarpEffect {
       this.foldAmount = 0;
       this.foldGlow = 0;
       this.starBrightness = 0;
-      this.cameraForwardSpeed = 30;  // Match hyper phase speed
+      this.cameraForwardSpeed = 80;  // Match hyper phase speed
     }
   }
 
@@ -207,7 +207,7 @@ export class WarpEffect {
     this.foldAmount = 0;
     this.foldGlow = 0;
     this.starBrightness = 0;
-    this.cameraForwardSpeed = 30;  // Maintain forward momentum through hyperspace
+    this.cameraForwardSpeed = 80;  // Maintain forward momentum through hyperspace
 
     // Fire system swap immediately at HYPER start — the tunnel is fully
     // opaque so any frame drop from GPU resource creation is invisible.
@@ -242,7 +242,7 @@ export class WarpEffect {
     this.foldGlow = 0;
 
     // Camera decelerates as we approach the portal
-    this.cameraForwardSpeed = 30 * (1 - t);
+    this.cameraForwardSpeed = 80 * (1 - t);
 
     // Scene is fully visible from the start — the exit hole mask controls
     // what you see through. No fade needed; the star is immediately visible

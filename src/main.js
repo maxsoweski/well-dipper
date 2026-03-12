@@ -2160,9 +2160,9 @@ function warpSwapSystem() {
   // Position camera so it ends up approaching the first tour stop when
   // EXIT finishes. The post-warp flythrough then coasts the remaining distance.
   if (system) {
-    const speed = 30; // must match cameraForwardSpeed in HYPER/EXIT phases
-    const hyperDist = speed * warpEffect.HYPER_DUR;          // 300
-    const exitDist = speed * warpEffect.EXIT_DUR * 0.5;      // 30 (smootherstep integral)
+    const speed = 80; // must match cameraForwardSpeed in HYPER/EXIT phases
+    const hyperDist = speed * warpEffect.HYPER_DUR;          // 240
+    const exitDist = speed * warpEffect.EXIT_DUR * 0.5;      // 60 (smootherstep integral)
     const coastDist = 60;                                     // 3s post-warp approach
     const travelDist = hyperDist + exitDist;                  // 330
 
