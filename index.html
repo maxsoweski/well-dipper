@@ -199,26 +199,26 @@
       </div>
     </div>
 
-    <!-- Mobile controls (split-side fan-out, hidden on desktop) -->
-    <div id="mobile-menu" class="mobile-menu">
-      <!-- Left side: navigation -->
-      <div class="mobile-menu-left mobile-menu-group">
+    <!-- Mobile controls: Bottom dock + FAB speed dial (hidden on desktop) -->
+    <div id="mobile-controls">
+      <!-- Bottom dock: always-visible navigation -->
+      <div class="mobile-dock">
         <button data-action="prev" title="Previous planet">&#x25C0;</button>
+        <button data-action="back" title="System overview">&#x2B1C;</button>
         <button data-action="next" title="Next planet">&#x25B6;</button>
-        <button data-action="back" title="System overview">&#x2190;</button>
         <button data-action="new" title="New system">&#x21BB;</button>
       </div>
-      <!-- Center toggle -->
-      <button class="mobile-menu-toggle" title="Menu">&#x2630;</button>
-      <!-- Right side: toggles -->
-      <div class="mobile-menu-right mobile-menu-group">
-        <button data-action="autonav" title="Toggle autopilot">&#x25B7;</button>
-        <button data-action="gyro" title="Toggle gyroscope">&#x2B55;</button>
-        <button data-action="minimap" title="Toggle minimap">&#x25A3;</button>
-        <button data-action="gravity" title="Toggle gravity wells">&#x25C9;</button>
-        <button data-action="orbits" title="Toggle orbits">&#x25CE;</button>
-        <button data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
-        <button data-action="settings" title="Settings">&#x2699;</button>
+      <!-- FAB: opens speed dial -->
+      <button class="mobile-fab" title="Menu" aria-label="Toggle menu">&#x2699;</button>
+      <!-- Speed dial: toggle buttons (radial burst) -->
+      <div class="mobile-speed-dial">
+        <button class="speed-dial-btn" data-action="autonav" title="Autopilot">&#x25B7;</button>
+        <button class="speed-dial-btn" data-action="gyro" title="Gyroscope">&#x2B55;</button>
+        <button class="speed-dial-btn" data-action="minimap" title="Minimap">&#x25A3;</button>
+        <button class="speed-dial-btn" data-action="gravity" title="Gravity wells">&#x25C9;</button>
+        <button class="speed-dial-btn" data-action="orbits" title="Orbits">&#x25CE;</button>
+        <button class="speed-dial-btn" data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
+        <button class="speed-dial-btn" data-action="settings" title="Settings">&#x2630;</button>
       </div>
     </div>
 

@@ -55,8 +55,9 @@ export class BodyInfo {
     }
   }
 
-  showPlanet(data, index) {
+  showPlanet(data, index, name) {
     const typeName = PLANET_TYPE_NAMES[data.type] || data.type;
+    const title = name ? `${name} \u2014 ${typeName}` : typeName;
     const parts = [];
     if (data.radiusEarth != null) {
       parts.push(`${data.radiusEarth.toFixed(1)} R\u2295`);
@@ -64,28 +65,29 @@ export class BodyInfo {
     if (data.rings) parts.push('Rings');
     if (data.clouds) parts.push('Clouds');
     if (data.atmosphere) parts.push('Atmosphere');
-    this._show(typeName, parts.join(' \u00b7 '));
+    this._show(title, parts.join(' \u00b7 '));
   }
 
-  showMoon(data, planetIndex) {
+  showMoon(data, planetIndex, name) {
     const typeName = MOON_TYPE_NAMES[data.type] || data.type;
+    const title = name ? `${name} \u2014 ${typeName}` : typeName;
     const parts = [];
     if (data.radiusEarth != null) {
       parts.push(`${data.radiusEarth.toFixed(2)} R\u2295`);
     }
-    parts.push(`Moon of Planet ${planetIndex + 1}`);
     if (data.clouds) parts.push('Clouds');
     if (data.atmosphere) parts.push('Atmo');
-    this._show(typeName, parts.join(' \u00b7 '));
+    this._show(title, parts.join(' \u00b7 '));
   }
 
-  showStar(data) {
+  showStar(data, name) {
     const typeName = `${data.type}-Class Star`;
+    const title = name ? `${name} \u2014 ${typeName}` : typeName;
     const parts = [];
     if (data.radiusSolar != null) {
       parts.push(`${data.radiusSolar.toFixed(2)} R\u2609`);
     }
-    this._show(typeName, parts.join(' \u00b7 '));
+    this._show(title, parts.join(' \u00b7 '));
   }
 
   hide() {

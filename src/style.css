@@ -27,107 +27,149 @@ html, body {
   z-index: 0;
 }
 
-/* ── Mobile Menu (split-side fan-out) ── */
-.mobile-menu {
+/* ── Mobile Controls: Bottom Dock + FAB Speed Dial ── */
+#mobile-controls {
   display: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (pointer: coarse) {
+  #mobile-controls { display: block; }
+}
+
+/* ── Bottom Dock: always-visible nav buttons ── */
+.mobile-dock {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 100;
-  user-select: none;
-  -webkit-user-select: none;
-  pointer-events: none;
-}
-
-@media (pointer: coarse) {
-  .mobile-menu { display: block; }
-}
-
-.mobile-menu-toggle {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(0, 0, 0, 0.5);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 22px;
-  line-height: 52px;
-  text-align: center;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  pointer-events: auto;
-  z-index: 101;
-  transition: background 0.2s;
-}
-
-.mobile-menu-toggle:active {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.mobile-menu-group {
-  position: fixed;
-  bottom: 20px;
+  z-index: 95;
+  height: 56px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
   pointer-events: none;
-  opacity: 0;
-  transition: transform 0.3s ease, opacity 0.25s ease;
 }
 
-.mobile-menu-left {
-  left: 16px;
-  align-items: flex-start;
-  transform: translateX(-60px);
-}
-
-.mobile-menu-right {
-  right: 16px;
-  align-items: flex-end;
-  transform: translateX(60px);
-}
-
-.mobile-menu.open .mobile-menu-left {
-  transform: translateX(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.mobile-menu.open .mobile-menu-right {
-  transform: translateX(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.mobile-menu-group button {
+.mobile-dock button {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.5);
-  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.65);
   font-size: 18px;
   line-height: 44px;
   text-align: center;
   cursor: pointer;
+  pointer-events: auto;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  transition: background 0.2s;
+  transition: all 0.15s;
 }
 
-.mobile-menu-group button:active {
+.mobile-dock button:active {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(0.92);
+}
+
+/* ── FAB: Floating Action Button ── */
+.mobile-fab {
+  position: fixed;
+  bottom: 64px;
+  right: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(100, 180, 255, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(100, 180, 255, 0.8);
+  font-size: 20px;
+  line-height: 48px;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 101;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 16px rgba(100, 180, 255, 0.08);
+}
+
+.mobile-fab:active {
+  transform: scale(0.93);
+}
+
+.mobile-fab.open {
+  transform: rotate(45deg);
+  border-color: rgba(100, 180, 255, 0.6);
+  color: rgba(100, 180, 255, 1);
+  box-shadow: 0 0 24px rgba(100, 180, 255, 0.15);
+}
+
+/* ── Speed Dial: arc of buttons above FAB ── */
+.mobile-speed-dial {
+  position: fixed;
+  bottom: 64px;
+  right: 16px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.speed-dial-btn {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 16px;
+  line-height: 40px;
+  text-align: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.3);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.speed-dial-btn:active {
   background: rgba(255, 255, 255, 0.15);
 }
 
-.mobile-menu-group button.active {
+.speed-dial-btn.active {
   border-color: rgba(100, 180, 255, 0.6);
   color: rgba(100, 180, 255, 0.9);
+}
+
+/* Position buttons in an arc going up and left from the FAB */
+/* Btn 1: directly above */
+.speed-dial-btn:nth-child(1) { right: 4px; bottom: 56px; transition-delay: 0s; }
+/* Btn 2: above-left */
+.speed-dial-btn:nth-child(2) { right: 4px; bottom: 104px; transition-delay: 0.03s; }
+/* Btn 3 */
+.speed-dial-btn:nth-child(3) { right: 4px; bottom: 152px; transition-delay: 0.06s; }
+/* Btn 4 */
+.speed-dial-btn:nth-child(4) { right: 4px; bottom: 200px; transition-delay: 0.09s; }
+/* Btn 5 */
+.speed-dial-btn:nth-child(5) { right: 4px; bottom: 248px; transition-delay: 0.12s; }
+/* Btn 6 */
+.speed-dial-btn:nth-child(6) { right: 4px; bottom: 296px; transition-delay: 0.15s; }
+/* Btn 7 */
+.speed-dial-btn:nth-child(7) { right: 4px; bottom: 344px; transition-delay: 0.18s; }
+
+/* Open state: reveal buttons */
+.mobile-fab.open ~ .mobile-speed-dial .speed-dial-btn {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
 }
 
 /* ── Title Screen ── */
@@ -603,51 +645,8 @@ html, body {
   50% { opacity: 0; }
 }
 
-/* ── Portrait Mode: mobile menu adapts to narrow screens ── */
+/* ── Portrait Mode: smaller text, tighter panels ── */
 @media (pointer: coarse) and (orientation: portrait) {
-  /* Switch from vertical columns to horizontal rows above the toggle */
-  .mobile-menu-group {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px;
-    bottom: 80px; /* above the toggle button */
-    max-width: 70vw;
-  }
-
-  .mobile-menu-left {
-    left: 8px;
-    align-items: flex-end;
-    transform: translateY(40px);
-    justify-content: flex-start;
-  }
-
-  .mobile-menu-right {
-    right: 8px;
-    align-items: flex-end;
-    transform: translateY(40px);
-    justify-content: flex-end;
-  }
-
-  .mobile-menu.open .mobile-menu-left {
-    transform: translateY(0);
-  }
-
-  .mobile-menu.open .mobile-menu-right {
-    transform: translateY(0);
-  }
-
-  .mobile-menu-group button {
-    width: 40px;
-    height: 40px;
-    font-size: 16px;
-    line-height: 40px;
-  }
-
-  .mobile-menu-toggle {
-    bottom: 16px;
-  }
-
-  /* Body info: smaller text, tighter placement */
   #body-info {
     top: 12px;
     left: 12px;
@@ -662,7 +661,6 @@ html, body {
     font-size: 12px;
   }
 
-  /* Settings/keybinds: ensure full-width on narrow screens */
   .settings-panel,
   .keybinds-panel {
     max-width: 95vw;

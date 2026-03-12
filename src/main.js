@@ -32,6 +32,7 @@ import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { SoundEngine } from './audio/SoundEngine.js';
 import { MusicManager } from './audio/MusicManager.js';
+import { generateSystemNames } from './generation/NameGenerator.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -851,6 +852,13 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   const systemData = preGenData || StarSystemGenerator.generate(seed);
 
+  // ── Generate names for star system ──
+  let systemNames = null;
+  if (!systemData._navigable) {
+    const nameRng = new SeededRandom(seed);
+    systemNames = generateSystemNames(nameRng, systemData);
+  }
+
   // ── Create star(s) ──
   // Scene-unit star data: override radius with radiusScene for 3D rendering
   const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene };
@@ -1059,6 +1067,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     binarySeparation: systemData.binarySeparationScene,
     binaryMassRatio: systemData.binaryMassRatio,
     binarySeparationMap: systemData.binarySeparation, // map-unit sep for gravity well
+    names: systemNames, // generated names for system/star/planets/moons
   };
 
   // ── System map HUD ──
@@ -1133,7 +1142,8 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   const beltDesc = systemData.asteroidBelts.length > 0
     ? `, ${systemData.asteroidBelts[0].asteroids.length} asteroids`
     : '';
-  console.log(`System "${seed}" — ${starDesc}, ${systemData.planets.length} planets${beltDesc}`);
+  const sysLabel = systemNames ? `"${systemNames.system}"` : `"${seed}"`;
+  console.log(`System ${sysLabel} (seed: ${seed}) — ${starDesc}, ${systemData.planets.length} planets${beltDesc}`);
 
   // Phase 5A diagnostic: physical units sanity check
   console.log(`  Star: ${systemData.star.radiusSolar.toFixed(2)} R☉ (${systemData.star.radiusScene.toFixed(2)} scene units)`);
@@ -2015,13 +2025,17 @@ function updateFocusFromStop(stop) {
     } else {
       starObj = stop.starIndex === 1 && system.star2 ? system.star2 : system.star;
     }
-    bodyInfo.showStar(starObj.data);
+    const starName = system.names
+      ? (stop.starIndex === 1 ? system.names.star2 : system.names.star)
+      : null;
+    bodyInfo.showStar(starObj.data, starName);
   } else if (stop.type === 'planet') {
     focusIndex = stop.planetIndex;
     focusMoonIndex = -1;
     focusStarIndex = -1;
     if (system.planets[stop.planetIndex]) {
-      bodyInfo.showPlanet(system.planets[stop.planetIndex].planet.data, stop.planetIndex);
+      const pName = system.names?.planets?.[stop.planetIndex]?.name ?? null;
+      bodyInfo.showPlanet(system.planets[stop.planetIndex].planet.data, stop.planetIndex, pName);
     }
   } else if (stop.type === 'moon') {
     focusIndex = stop.planetIndex; // minimap highlights parent planet
@@ -2029,7 +2043,8 @@ function updateFocusFromStop(stop) {
     focusStarIndex = -1;
     const entry = system.planets[stop.planetIndex];
     if (entry && entry.moons[stop.moonIndex]) {
-      bodyInfo.showMoon(entry.moons[stop.moonIndex].data, stop.planetIndex);
+      const mName = system.names?.planets?.[stop.planetIndex]?.moons?.[stop.moonIndex] ?? null;
+      bodyInfo.showMoon(entry.moons[stop.moonIndex].data, stop.planetIndex, mName);
     }
   } else if (stop.type === 'deepsky-poi') {
     // Deep sky: no minimap focus (HUD is hidden)
@@ -2365,8 +2380,9 @@ function focusPlanet(index) {
     const entry = system.planets[index];
     const viewDist = entry.planet.data.radius * 6;
     cameraController.focusOn(entry.planet.mesh.position, viewDist);
-    bodyInfo.showPlanet(entry.planet.data, index);
-    console.log(`Focus: planet ${index + 1} (${entry.planet.data.type})`);
+    const pName = system.names?.planets?.[index]?.name ?? null;
+    bodyInfo.showPlanet(entry.planet.data, index, pName);
+    console.log(`Focus: planet ${index + 1} ${pName || ''} (${entry.planet.data.type})`);
   }
 }
 
@@ -2399,11 +2415,14 @@ function focusStar(starIdx) {
     viewDist = Math.min(idealDist, innerOrbit * 0.4);
   }
   cameraController.focusOn(starObj.mesh.position, viewDist);
-  bodyInfo.showStar(starObj.data);
+  const sName = system.names
+    ? (starIdx === 1 ? system.names.star2 : system.names.star)
+    : null;
+  bodyInfo.showStar(starObj.data, sName);
   const label = system.isBinary
     ? (starIdx === 0 ? 'primary star' : 'secondary star')
     : 'star';
-  console.log(`Focus: ${label} (${starObj.data.type}-class)`);
+  console.log(`Focus: ${label} ${sName || ''} (${starObj.data.type}-class)`);
 }
 
 /**
@@ -2423,8 +2442,9 @@ function focusMoon(planetIndex, moonIndex) {
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;
   cameraController.focusOn(moon.mesh.position, viewDist);
-  bodyInfo.showMoon(moon.data, planetIndex);
-  console.log(`Focus: moon ${moonIndex + 1} of planet ${planetIndex + 1} (${moon.data.type})`);
+  const mName = system.names?.planets?.[planetIndex]?.moons?.[moonIndex] ?? null;
+  bodyInfo.showMoon(moon.data, planetIndex, mName);
+  console.log(`Focus: moon ${moonIndex + 1} ${mName || ''} of planet ${planetIndex + 1} (${moon.data.type})`);
 }
 
 function toggleOrbits() {
@@ -3698,24 +3718,32 @@ window.addEventListener('touchstart', () => {
   } catch { /* not supported */ }
 }, { once: false, passive: true });
 
-// ── Mobile Menu (split-side fan-out) ──
-const mobileMenu = document.getElementById('mobile-menu');
-if (mobileMenu) {
-  const toggle = mobileMenu.querySelector('.mobile-menu-toggle');
-  const gyroBtn = mobileMenu.querySelector('[data-action="gyro"]');
+// ── Mobile Controls (bottom dock + FAB speed dial) ──
+const mobileControls = document.getElementById('mobile-controls');
+if (mobileControls) {
+  const fab = mobileControls.querySelector('.mobile-fab');
+  const gyroBtn = mobileControls.querySelector('[data-action="gyro"]');
 
-  toggle.addEventListener('touchend', (e) => {
+  // FAB toggle
+  fab.addEventListener('touchend', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    mobileMenu.classList.toggle('open');
+    fab.classList.toggle('open');
   });
 
-  // Shared handler for both side groups
+  // Close speed dial when tapping outside
+  document.addEventListener('touchstart', (e) => {
+    if (!fab.classList.contains('open')) return;
+    if (e.target.closest('.mobile-fab') || e.target.closest('.mobile-speed-dial')) return;
+    fab.classList.remove('open');
+  });
+
+  // Shared handler for dock and speed dial buttons
   function handleMobileAction(e) {
     e.preventDefault();
     e.stopPropagation();
     const btn = e.target.closest('button');
-    if (!btn) return;
+    if (!btn || btn === fab) return;
 
     const action = btn.dataset.action;
     if (action === 'new') {
@@ -3767,19 +3795,19 @@ if (mobileMenu) {
       btn.classList.toggle('active', !!document.fullscreenElement);
     } else if (action === 'settings') {
       toggleSettings();
+      fab.classList.remove('open'); // close speed dial when opening settings
     }
-    // Menu stays open — user closes it explicitly with the toggle button
   }
 
-  // Listen on both side groups
-  const leftGroup = mobileMenu.querySelector('.mobile-menu-left');
-  const rightGroup = mobileMenu.querySelector('.mobile-menu-right');
-  if (leftGroup) leftGroup.addEventListener('touchend', handleMobileAction);
-  if (rightGroup) rightGroup.addEventListener('touchend', handleMobileAction);
+  // Listen on dock and speed dial
+  const dock = mobileControls.querySelector('.mobile-dock');
+  const speedDial = mobileControls.querySelector('.mobile-speed-dial');
+  if (dock) dock.addEventListener('touchend', handleMobileAction);
+  if (speedDial) speedDial.addEventListener('touchend', handleMobileAction);
 
   // Update fullscreen button state when fullscreen changes
   document.addEventListener('fullscreenchange', () => {
-    const fsBtn = mobileMenu.querySelector('[data-action="fullscreen"]');
+    const fsBtn = mobileControls.querySelector('[data-action="fullscreen"]');
     if (fsBtn) fsBtn.classList.toggle('active', !!document.fullscreenElement);
   });
 }
