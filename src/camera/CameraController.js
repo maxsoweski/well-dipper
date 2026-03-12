@@ -276,24 +276,45 @@ export class CameraController {
     }, { passive: false });
 
     // ── Gyroscope ──
+    this._prevGamma = null;
     this._gyroHandler = (e) => {
       if (!this.gyroEnabled) return;
       if (e.alpha === null || e.beta === null) return;
 
       if (this._prevAlpha !== null) {
-        // Alpha = compass heading (0-360), wraps around
+        // Raw deltas from device orientation
         let dAlpha = e.alpha - this._prevAlpha;
         if (dAlpha > 180) dAlpha -= 360;
         if (dAlpha < -180) dAlpha += 360;
 
-        // Beta = front-back tilt (-180 to 180)
         let dBeta = e.beta - this._prevBeta;
         if (dBeta > 180) dBeta -= 360;
         if (dBeta < -180) dBeta += 360;
 
-        // Alpha → yaw (turning phone left/right), Beta → pitch (tilting up/down)
-        this.yaw -= dAlpha * this._gyroSensitivity;
-        this.pitch -= dBeta * this._gyroSensitivity;
+        let dGamma = (e.gamma || 0) - (this._prevGamma || 0);
+        if (dGamma > 90) dGamma -= 180;
+        if (dGamma < -90) dGamma += 180;
+
+        // Account for screen orientation:
+        // In portrait (0°), left-right tilt is gamma, not alpha.
+        // In landscape (90°/270°), alpha works as expected.
+        const angle = window.screen?.orientation?.angle ?? 0;
+        let dYaw, dPitch;
+
+        if (angle === 0 || angle === 180) {
+          // Portrait: gamma → yaw, beta → pitch
+          const sign = angle === 0 ? 1 : -1;
+          dYaw = -dGamma * sign;
+          dPitch = -dBeta * sign;
+        } else {
+          // Landscape: alpha → yaw, beta → pitch
+          const sign = angle === 90 ? 1 : -1;
+          dYaw = -dAlpha * sign;
+          dPitch = -dBeta * sign;
+        }
+
+        this.yaw += dYaw * this._gyroSensitivity;
+        this.pitch += dPitch * this._gyroSensitivity;
         const limit = (85 * Math.PI) / 180;
         this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
 
@@ -305,6 +326,7 @@ export class CameraController {
 
       this._prevAlpha = e.alpha;
       this._prevBeta = e.beta;
+      this._prevGamma = e.gamma;
     };
   }
 
@@ -327,6 +349,7 @@ export class CameraController {
     this.gyroEnabled = true;
     this._prevAlpha = null;
     this._prevBeta = null;
+    this._prevGamma = null;
     // Gyro activates free-look: look around by tilting the device
     this.enterFreeLook();
     window.addEventListener('deviceorientation', this._gyroHandler);
@@ -337,6 +360,7 @@ export class CameraController {
     this.gyroEnabled = false;
     this._prevAlpha = null;
     this._prevBeta = null;
+    this._prevGamma = null;
     window.removeEventListener('deviceorientation', this._gyroHandler);
     const hasFocus = this.hasFocusedBody ? this.hasFocusedBody() : false;
     this.exitFreeLook(hasFocus);

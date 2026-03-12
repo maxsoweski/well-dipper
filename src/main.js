@@ -89,7 +89,9 @@ let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
 let orbitsVisible = settings.get('showOrbits');
 let gravityWellVisible = settings.get('showGravityWells');
-let minimapVisible = settings.get('showMinimap');
+// Default minimap off on mobile (too small to be useful, overlaps controls)
+const _isMobile = 'ontouchstart' in window;
+let minimapVisible = _isMobile ? false : settings.get('showMinimap');
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
