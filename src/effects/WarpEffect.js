@@ -157,8 +157,9 @@ export class WarpEffect {
 
     // Keep stars fully folded, then fade them out.
     // Start at 5.0 to match FOLD end (1 + 1.0*4.0 = 5), no brightness jump.
+    // Use linear progress — eased 't' has a slow start that creates a visual pause.
     this.foldAmount = 1;
-    this.starBrightness = 5.0 * (1 - t);  // 5 → 0, continuous from FOLD
+    this.starBrightness = 5.0 * (1 - this.progress);  // 5 → 0, continuous from FOLD
 
     // Portal keeps growing to engulf the full screen.
     // Uses LINEAR progress (not eased t) to avoid the smootherstep's
@@ -168,7 +169,9 @@ export class WarpEffect {
     this.foldGlow = 1 + this.progress * 2;
 
     // Scene objects fade as the portal engulfs them
-    this.sceneFade = this._ease(this.progress);
+    // Use linear progress (not eased) — smootherstep's slow start
+    // creates a visible pause where nothing seems to happen.
+    this.sceneFade = this.progress;
 
     // No camera motion — the portal coming to us IS the motion
     this.cameraForwardSpeed = 0;
@@ -209,10 +212,11 @@ export class WarpEffect {
     this.starBrightness = 0;
     this.cameraForwardSpeed = 80;  // Maintain forward momentum through hyperspace
 
-    // Fire system swap immediately at HYPER start — the tunnel is fully
-    // opaque so any frame drop from GPU resource creation is invisible.
+    // Fire system swap after a few frames of HYPER — give the tunnel
+    // time to render so the GPU stall from mesh/shader creation is hidden
+    // behind an already-visible tunnel (not a half-transitioned screen).
     // System data was already pre-generated during FOLD (onPrepareSystem).
-    if (!this._swapFired) {
+    if (!this._swapFired && this.elapsed > 0.15) {
       this._swapFired = true;
       if (this.onSwapSystem) this.onSwapSystem();
     }
@@ -231,10 +235,10 @@ export class WarpEffect {
     // Hyperspace stays full — the hole mask handles the reveal
     this.hyperPhase = 1;
 
-    // Exit reveal: smoothstep easing (slow start = tiny pinhole, accelerates)
-    // Starts as ~1 pixel, opens into a portal we fly through
-    const p = this.progress;
-    this.exitReveal = p * p * (3 - 2 * p);  // smoothstep: slow start + end
+    // Exit reveal: ease-out (fast start, slow finish) — the hole should
+    // crack open immediately, not sit as a tiny pinhole for half a second.
+    // sqrt gives a strong ease-out curve: fast open → gradual completion.
+    this.exitReveal = Math.sqrt(this.progress);
 
     // NO reverse fold — stars are normal, we see them through the hole
     this.foldAmount = 0;
