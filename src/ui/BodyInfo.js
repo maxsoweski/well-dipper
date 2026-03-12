@@ -44,14 +44,13 @@ export class BodyInfo {
     this._charIndex = 0;
     this._typing = false;
     this._charsPerTick = 1;
-    this._tickMs = 35; // milliseconds per character
+    this._tickMs = 55; // milliseconds per character (slower, more deliberate)
 
-    // Create cursor element
+    // Create cursor element (moves between _typeEl and _statsEl as typing progresses)
     if (this._el) {
       this._cursorEl = document.createElement('span');
       this._cursorEl.className = 'body-info-cursor';
       this._cursorEl.textContent = '\u2588'; // full block character █
-      this._el.appendChild(this._cursorEl);
     }
   }
 
@@ -120,10 +119,11 @@ export class BodyInfo {
     this._el.style.display = 'block';
     this._el.classList.remove('fading');
 
-    // Show cursor
+    // Show cursor inline with the first text element
     if (this._cursorEl) {
       this._cursorEl.style.display = 'inline';
       this._cursorEl.classList.add('blinking');
+      this._typeEl.appendChild(this._cursorEl);
     }
 
     // Type out characters one by one
@@ -138,14 +138,19 @@ export class BodyInfo {
         return;
       }
 
-      // Type next character
+      // Type next character, keeping cursor immediately after the last character
       if (this._charIndex < this._fullType.length) {
+        // Typing first line — set text, then re-append cursor (keeps it at the end)
         this._typeEl.textContent = this._fullType.substring(0, this._charIndex + 1);
+        this._typeEl.appendChild(this._cursorEl);
       } else {
-        // First line done, type second line
-        this._typeEl.textContent = this._fullType;
+        // First line done — move cursor to stats element
+        if (this._charIndex === this._fullType.length) {
+          this._typeEl.textContent = this._fullType;
+        }
         const statsIdx = this._charIndex - this._fullType.length;
         this._statsEl.textContent = this._fullStats.substring(0, statsIdx + 1);
+        this._statsEl.appendChild(this._cursorEl);
       }
       this._charIndex++;
     }, this._tickMs);

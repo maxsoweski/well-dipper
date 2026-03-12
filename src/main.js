@@ -512,10 +512,17 @@ const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for galler
 
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
+// Also clean up the old system here so GC pressure happens during FOLD
+// (lots of visual activity to mask any hitch), not during ENTER.
 warpEffect.onPrepareSystem = () => {
   bodyInfo.hide();
   soundEngine.play('warpCharge');
   musicManager.duck(0.15, 4.0);
+
+  // Dispose old system early — during FOLD while stars are folding.
+  // This prevents GC from triggering mid-ENTER (visible portal pause).
+  _disposeCurrentSystem();
+
   seedCounter++;
   const seed = `system-${seedCounter}`;
   const rng = new SeededRandom(seed);
@@ -703,6 +710,107 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
 }
 
 /**
+ * Dispose the current system's GPU resources and scene objects.
+ * Called separately during warp FOLD phase so GC happens while
+ * stars are folding (masking any hitch), not during portal expansion.
+ */
+function _disposeCurrentSystem() {
+  if (!system) return;
+
+  if (system.type && system.type !== 'star-system') {
+    if (system.destination) {
+      system.destination.removeFrom(scene);
+      system.destination.dispose();
+    }
+    if (system.gasCloud) {
+      system.gasCloud.removeFrom(scene);
+      system.gasCloud.dispose();
+    }
+    if (system._deepSkyGas) {
+      system._deepSkyGas.removeFrom(scene);
+      system._deepSkyGas.dispose();
+    }
+    if (system._deepSkyStars) {
+      for (const s of system._deepSkyStars) {
+        scene.remove(s.mesh);
+        s.dispose();
+      }
+    }
+    if (system.star) {
+      system.star.dispose();
+      scene.remove(system.star.mesh);
+    }
+    if (system.extraStars) {
+      for (const s of system.extraStars) {
+        s.dispose();
+        scene.remove(s.mesh);
+      }
+    }
+    if (system._dummyRefs) {
+      for (const obj of system._dummyRefs) {
+        scene.remove(obj);
+      }
+    }
+  } else {
+    system.star.dispose();
+    scene.remove(system.star.mesh);
+    if (system.star2) {
+      system.star2.dispose();
+      scene.remove(system.star2.mesh);
+    }
+    for (const entry of system.planets) {
+      entry.planet.dispose();
+      scene.remove(entry.planet.mesh);
+      entry.billboard.dispose();
+      entry.billboard.removeFrom(scene);
+      for (let m = 0; m < entry.moons.length; m++) {
+        const moonObj = entry.moons[m];
+        moonObj.dispose();
+        scene.remove(moonObj.mesh);
+        if (moonObj._clickProxy) {
+          scene.remove(moonObj._clickProxy);
+          moonObj._clickProxy.geometry.dispose();
+          moonObj._clickProxy.material.dispose();
+        }
+        entry.moonBillboards[m].dispose();
+        entry.moonBillboards[m].removeFrom(scene);
+      }
+      for (const line of entry.moonOrbitLines) {
+        line.dispose();
+        scene.remove(line.mesh);
+      }
+    }
+    for (const line of system.orbitLines) {
+      line.dispose();
+      scene.remove(line.mesh);
+    }
+    for (const belt of system.asteroidBelts) {
+      belt.removeFrom(scene);
+      belt.dispose();
+    }
+    if (system.starOrbitLines) {
+      for (const line of system.starOrbitLines) {
+        line.dispose();
+        scene.remove(line.mesh);
+      }
+    }
+  }
+  system = null;
+
+  if (systemMap) {
+    systemMap.dispose();
+    systemMap = null;
+    retroRenderer.setHud(null, null);
+  }
+  if (gravityWell) {
+    gravityWell.dispose();
+    gravityWell = null;
+  }
+  gravityWellPlanets = null;
+  clickTargets = new Map();
+}
+
+/**
  * Generate and display a full star system (single or binary).
  * @param {Object} options
  * @param {boolean} options.forWarp  — if true, skip camera setup + flythrough start (warp handles that)
@@ -723,110 +831,10 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   }
   idleTimer = 0;
 
-  // ── Clean up old system ──
+  // ── Clean up old system (skip if already disposed during warp FOLD) ──
   if (system) {
-    if (system.type && system.type !== 'star-system') {
-      // Deep sky object: destination renderer (Galaxy/Nebula/VolumetricNebula)
-      if (system.destination) {
-        system.destination.removeFrom(scene);
-        system.destination.dispose();
-      }
-      // Navigable deep sky: gas cloud + stars
-      if (system.gasCloud) {
-        system.gasCloud.removeFrom(scene);
-        system.gasCloud.dispose();
-      }
-      // Deep sky gas overlay (open cluster reflection nebulosity)
-      if (system._deepSkyGas) {
-        system._deepSkyGas.removeFrom(scene);
-        system._deepSkyGas.dispose();
-      }
-      // Deep sky StarFlare overlays (open cluster title screen stars)
-      if (system._deepSkyStars) {
-        for (const s of system._deepSkyStars) {
-          scene.remove(s.mesh);
-          s.dispose();
-        }
-      }
-      // Primary star (navigable deep sky sets system.star = allStars[0])
-      // star2 is already in extraStars so it gets cleaned up below
-      if (system.star) {
-        system.star.dispose();
-        scene.remove(system.star.mesh);
-      }
-      // Extra stars beyond primary (includes star2)
-      if (system.extraStars) {
-        for (const s of system.extraStars) {
-          s.dispose();
-          scene.remove(s.mesh);
-        }
-      }
-      // Clean up dummy bodyRef objects used for tour stops
-      if (system._dummyRefs) {
-        for (const obj of system._dummyRefs) {
-          scene.remove(obj);
-        }
-      }
-    } else {
-      // Star system cleanup (existing code)
-      system.star.dispose();
-      scene.remove(system.star.mesh);
-      if (system.star2) {
-        system.star2.dispose();
-        scene.remove(system.star2.mesh);
-      }
-      for (const entry of system.planets) {
-        entry.planet.dispose();
-        scene.remove(entry.planet.mesh);
-        entry.billboard.dispose();
-        entry.billboard.removeFrom(scene);
-        for (let m = 0; m < entry.moons.length; m++) {
-          const moonObj = entry.moons[m];
-          moonObj.dispose();
-          scene.remove(moonObj.mesh);
-          if (moonObj._clickProxy) {
-            scene.remove(moonObj._clickProxy);
-            moonObj._clickProxy.geometry.dispose();
-            moonObj._clickProxy.material.dispose();
-          }
-          entry.moonBillboards[m].dispose();
-          entry.moonBillboards[m].removeFrom(scene);
-        }
-        for (const line of entry.moonOrbitLines) {
-          line.dispose();
-          scene.remove(line.mesh);
-        }
-      }
-      for (const line of system.orbitLines) {
-        line.dispose();
-        scene.remove(line.mesh);
-      }
-      for (const belt of system.asteroidBelts) {
-        belt.removeFrom(scene);
-        belt.dispose();
-      }
-      if (system.starOrbitLines) {
-        for (const line of system.starOrbitLines) {
-          line.dispose();
-          scene.remove(line.mesh);
-        }
-      }
-    }
+    _disposeCurrentSystem();
   }
-
-  // ── Clean up old system map ──
-  if (systemMap) {
-    systemMap.dispose();
-    systemMap = null;
-    retroRenderer.setHud(null, null);
-  }
-
-  // ── Clean up old gravity well ──
-  if (gravityWell) {
-    gravityWell.dispose();
-    gravityWell = null;
-  }
-  gravityWellPlanets = null;
 
   // ── Generate system data (or use pre-generated data from warp prepare phase) ──
   const seed = `system-${seedCounter}`;
