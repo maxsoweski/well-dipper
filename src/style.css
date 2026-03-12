@@ -603,32 +603,69 @@ html, body {
   50% { opacity: 0; }
 }
 
-/* ── Portrait Overlay ── */
-/* Shown only on touch devices in portrait orientation */
-#portrait-overlay {
-  display: none;
-}
-
+/* ── Portrait Mode: mobile menu adapts to narrow screens ── */
 @media (pointer: coarse) and (orientation: portrait) {
-  #portrait-overlay {
-    display: flex;
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background: rgba(0, 0, 0, 0.85);
-    align-items: center;
-    justify-content: center;
+  /* Switch from vertical columns to horizontal rows above the toggle */
+  .mobile-menu-group {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    bottom: 80px; /* above the toggle button */
+    max-width: 70vw;
   }
-  .portrait-msg {
-    color: rgba(255, 255, 255, 0.7);
-    font-family: 'DotGothic16', monospace;
-    font-size: 20px;
-    text-align: center;
-    line-height: 1.6;
+
+  .mobile-menu-left {
+    left: 8px;
+    align-items: flex-end;
+    transform: translateY(40px);
+    justify-content: flex-start;
   }
-  .portrait-msg::before {
-    display: block;
-    font-size: 48px;
-    margin-bottom: 12px;
+
+  .mobile-menu-right {
+    right: 8px;
+    align-items: flex-end;
+    transform: translateY(40px);
+    justify-content: flex-end;
+  }
+
+  .mobile-menu.open .mobile-menu-left {
+    transform: translateY(0);
+  }
+
+  .mobile-menu.open .mobile-menu-right {
+    transform: translateY(0);
+  }
+
+  .mobile-menu-group button {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+    line-height: 40px;
+  }
+
+  .mobile-menu-toggle {
+    bottom: 16px;
+  }
+
+  /* Body info: smaller text, tighter placement */
+  #body-info {
+    top: 12px;
+    left: 12px;
+    max-width: 70vw;
+  }
+
+  .body-info-type {
+    font-size: 16px;
+  }
+
+  .body-info-stats {
+    font-size: 12px;
+  }
+
+  /* Settings/keybinds: ensure full-width on narrow screens */
+  .settings-panel,
+  .keybinds-panel {
+    max-width: 95vw;
+    max-height: 80vh;
   }
 }

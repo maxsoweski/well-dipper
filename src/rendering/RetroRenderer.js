@@ -86,11 +86,12 @@ export class RetroRenderer {
     const uvX = clientX / w;
     const uvY = 1 - clientY / h;
 
-    // HUD rect in UV space (same values as the shader uniform)
-    const hudX = 0.73;
-    const hudY = 0.02;
-    const hudW = 0.255;
-    const hudH = 0.255 * aspect;
+    // HUD rect in UV space (read from the dynamic shader uniform)
+    const rect = this._compositeMesh.material.uniforms.hudRect.value;
+    const hudX = rect.x;
+    const hudY = rect.y;
+    const hudW = rect.z;
+    const hudH = rect.w * aspect;
 
     // Circle test (matches shader logic)
     const cx = hudX + hudW * 0.5;
@@ -601,6 +602,19 @@ export class RetroRenderer {
     u.sceneTexture.value = this.sceneTarget.texture;
     u.hudTexture.value = this.hudTarget.texture;
     u.resolution.value.set(width, height);
+
+    // Adjust HUD position/size based on orientation
+    const isPortrait = height > width;
+    const isMobile = 'ontouchstart' in window;
+    if (isPortrait && isMobile) {
+      // Portrait mobile: smaller HUD in top-right to avoid mobile menu overlap
+      this._hudFrac = 0.35;
+      u.hudRect.value.set(0.62, 0.55, 0.35, 0.35);
+    } else {
+      // Landscape / desktop: normal bottom-right position
+      this._hudFrac = 0.255;
+      u.hudRect.value.set(0.73, 0.02, 0.255, 0.255);
+    }
 
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
