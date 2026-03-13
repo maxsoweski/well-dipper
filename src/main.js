@@ -1882,6 +1882,11 @@ function gallerySpawn() {
     cameraController.pitch = 0.1;          // slight upward tilt
     cameraController.smoothedPitch = 0.1;
     cameraController.smoothedYaw = cameraController.yaw;
+    cameraController._returningToOrbit = false;
+    cameraController.isFreeLooking = false;
+    cameraController.forceFreeLook = false;
+    // Expose debug info
+    console.log(`[GALLERY] r=${r.toFixed(5)}, dist=${cameraController.distance.toFixed(5)}, target=(${cameraController.target.x.toFixed(3)},${cameraController.target.y.toFixed(3)},${cameraController.target.z.toFixed(3)}), cam=(${camera.position.x.toFixed(3)},${camera.position.y.toFixed(3)},${camera.position.z.toFixed(3)}), near=${camera.near}, bypassed=${cameraController.bypassed}, returning=${cameraController._returningToOrbit}`);
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');
@@ -3146,6 +3151,15 @@ function animate() {
   }
 
   cameraController.update(deltaTime);
+
+  // Debug: log camera state once per gallery spawn
+  if (galleryMode && !window.__galleryLogged) {
+    window.__galleryLogged = true;
+    setTimeout(() => {
+      console.log(`[GALLERY-FRAME] cam=(${camera.position.x.toFixed(5)},${camera.position.y.toFixed(5)},${camera.position.z.toFixed(5)}), near=${camera.near.toFixed(6)}, smoothDist=${cameraController.smoothedDistance.toFixed(5)}, target=(${cameraController.target.x.toFixed(3)},${cameraController.target.y.toFixed(3)},${cameraController.target.z.toFixed(3)})`);
+      window.__galleryLogged = false;
+    }, 500);
+  }
 
   // ── Dynamic near clipping plane ──
   // Scale near plane with camera distance to the nearest tracked body so
