@@ -2874,7 +2874,6 @@ function animate() {
           const dir = warpTarget.direction;
           warpTarget.direction = null;
           warpTarget.turning = false;
-          console.log(`Warp start: dir=${dir ? dir.toArray().map(v=>v.toFixed(2)) : 'NULL'}`);
           warpEffect.start(dir);
         }
       } else {
@@ -3001,9 +3000,6 @@ function animate() {
         if (system && system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
           const flyingPast = warpEffect.riftDirection !== null;
           const dsFactor = flyingPast ? 0.5 : 0.92;
-          if (warpEffect.state === 'fold' && warpEffect.progress < 0.02) {
-            console.log(`DS move: type=${system.type} flyingPast=${flyingPast} speed=${warpEffect.cameraForwardSpeed.toFixed(1)} dsFactor=${dsFactor} meshPos=${system.destination.mesh.position.toArray().map(v=>v.toFixed(1))}`);
-          }
           system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * dsFactor * deltaTime);
           if (system._dummyRefs) {
             for (const ref of system._dummyRefs) {
@@ -3559,7 +3555,6 @@ function beginWarpTurn() {
 
   if (!warpTarget.direction) {
     // No target — warp toward camera forward immediately
-    console.log('beginWarpTurn: NO target direction — starting with null');
     cameraController.bypassed = true;
     warpEffect.start(null);
     return;

@@ -60,13 +60,14 @@ export class WarpEffect {
    */
   start(direction = null) {
     if (this.state !== 'idle') return;
-    this.riftDirection = direction ? direction.clone().normalize() : null;
     this.state = 'fold';
     this.elapsed = 0;
     this.progress = 0;
     this._prepareFired = false;
     this._swapFired = false;
     this._resetUniforms();
+    // Set riftDirection AFTER _resetUniforms (which clears it)
+    this.riftDirection = direction ? direction.clone().normalize() : null;
   }
 
   /** Smootherstep easing (slow start + end). */
