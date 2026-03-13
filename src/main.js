@@ -1584,6 +1584,7 @@ function enterGallery() {
   stopFlythrough();
   _deepSkyLingerTimer = -1;
   warpTarget.direction = null;
+  cameraController.bypassed = false;
   cameraController.forceFreeLook = false;
 
   // Hide everything in the current system
@@ -1885,6 +1886,9 @@ function gallerySpawn() {
     cameraController._returningToOrbit = false;
     cameraController.isFreeLooking = false;
     cameraController.forceFreeLook = false;
+    // Explicitly position camera — don't rely on next update() cycle
+    camera.position.set(0, r * 0.3, r * 3);
+    camera.lookAt(0, 0, 0);
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');

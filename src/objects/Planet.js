@@ -251,6 +251,24 @@ export class Planet {
           return shadow;
         }
 
+        // ── Hex grid helper for triplanar mapping ──
+        // Returns vec3(border, cellHash, edgeDist) for a 2D hex grid
+        vec3 hexGrid(vec2 p) {
+          // Pointy-top hex: two offset rectangular grids
+          const vec2 s = vec2(1.7320508, 1.0); // sqrt(3), 1
+          vec2 a = mod(p, s) - s * 0.5;
+          vec2 b = mod(p + s * 0.5, s) - s * 0.5;
+          // Pick the closer center
+          bool useA = dot(a, a) < dot(b, b);
+          vec2 gv = useA ? a : b;
+          vec2 id = p - gv;
+          // Hex edge distance (pointy-top)
+          float edgeDist = 0.5 - max(dot(abs(gv), vec2(0.5, 0.86602540)), abs(gv.y));
+          float cellHash = fract(sin(dot(floor(id * 2.0 + 0.5), vec2(127.1, 311.7))) * 43758.5453);
+          float border = 1.0 - smoothstep(0.0, 0.06, edgeDist);
+          return vec3(border, cellHash, edgeDist);
+        }
+
         // ── Surface pattern based on planet type ──
         float getSurfacePattern(vec3 pos) {
           float n = snoise(pos * noiseScale);
@@ -318,18 +336,21 @@ export class Planet {
             float haze = snoise(pos * noiseScale * 0.7) * 0.08;
             n = 0.5 + bands + haze;
           } else if (planetType == 11) {
-            // Hex: tessellated hexagonal plates with bright borders
-            vec2 hexPos = vec2(pos.x, pos.y + pos.z * 0.5) * noiseScale * 3.0;
-            vec2 a = vec2(hexPos.x, hexPos.y * 1.1547);
-            vec2 f = fract(a) - 0.5;
-            vec2 f2 = fract(a + 0.5) - 0.5;
-            float d1 = length(f);
-            float d2 = length(f2);
-            float hexDist = min(d1, d2);
-            vec2 cellId = (d1 < d2) ? floor(a) : floor(a + 0.5);
-            float cellHash = fract(sin(dot(cellId, vec2(127.1, 311.7))) * 43758.5453);
-            float border = smoothstep(0.42, 0.45, hexDist);
-            n = cellHash * 0.6 + border * 0.4;
+            // Hex: tessellated hexagonal plates (triplanar projection)
+            float scale = noiseScale * 5.0;
+            vec3 an = abs(normalize(pos));
+            // Triplanar blend weights — sharp falloff to avoid seam blending
+            vec3 w = pow(an, vec3(8.0));
+            w /= (w.x + w.y + w.z);
+            // Hex grid on each projection plane
+            vec3 hYZ = hexGrid(pos.yz * scale);
+            vec3 hXZ = hexGrid(pos.xz * scale);
+            vec3 hXY = hexGrid(pos.xy * scale);
+            // Blend: border and cellHash
+            float border = hYZ.x * w.x + hXZ.x * w.y + hXY.x * w.z;
+            float cellHash = hYZ.y * w.x + hXZ.y * w.y + hXY.y * w.z;
+            // Encode: cell shading in low range, border in high range
+            n = cellHash * 0.5 + border * 0.5;
           } else if (planetType == 12) {
             // Shattered: wide blue-white fracture lines on dark rock
             float crack1 = 1.0 - abs(snoise(pos * noiseScale * 1.5));
@@ -488,9 +509,9 @@ export class Planet {
             surfaceColor = mix(baseColor, accentColor, val);
           } else if (planetType == 11) {
             // Hex: cell interior varies per cell, borders are bright accent
-            float border = smoothstep(0.55, 0.65, pattern);
-            float cellShade = pattern - border * 0.4;
-            surfaceColor = mix(baseColor, baseColor * 1.4, cellShade);
+            float border = smoothstep(0.4, 0.55, pattern);
+            float cellShade = pattern * 2.0 * (1.0 - border); // extract cell hash
+            surfaceColor = mix(baseColor * 0.7, baseColor * 1.3, cellShade);
             surfaceColor = mix(surfaceColor, accentColor, border);
           } else if (planetType == 12) {
             // Shattered: dark rock with glowing cool-colored fracture lines
