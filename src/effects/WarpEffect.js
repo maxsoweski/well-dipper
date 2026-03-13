@@ -127,8 +127,10 @@ export class WarpEffect {
     // Stars get much brighter as they compress (light accretes at center)
     this.starBrightness = 1 + this.foldAmount * 4.0;  // up to 5x brightness
 
-    // Planets stay visible during fold — NO sceneFade
-    this.sceneFade = 0;
+    // Scene objects visible early, start fading in last 30% of fold
+    // as camera accelerates past them. Objects ahead fly past naturally;
+    // this fade catches anything to the sides or behind.
+    this.sceneFade = Math.max(0, (this.progress - 0.7) / 0.3);  // 0→1 over last 30%
 
     // Portal frontier. Tracks where stars have been significantly
     // consumed (localFold ≈ 0.5 in the starfield shader).
@@ -140,9 +142,10 @@ export class WarpEffect {
     const frontier = Math.max(0, (this.foldAmount - 0.175) / 0.7);
     this.foldGlow = Math.min(1, frontier);
 
-    // No camera motion during fold — the portal comes to US.
-    // Stars fold inward and the portal grows; we stay stationary.
-    this.cameraForwardSpeed = 0;
+    // Camera accelerates forward during fold — we fly toward the portal,
+    // passing scene objects (planets, stars) along the way. Starts gentle,
+    // ramps up with progress² so early fold is mostly star-folding visual.
+    this.cameraForwardSpeed = this.progress * this.progress * 40;  // 0 → 40
 
     // Transition to ENTER
     if (this.elapsed >= this.FOLD_DUR) {
@@ -168,13 +171,11 @@ export class WarpEffect {
     // diagonal ~1.02). No fade — the portal swallows the camera.
     this.foldGlow = 1 + this.progress * 2;
 
-    // Scene objects fade as the portal engulfs them
-    // Use linear progress (not eased) — smootherstep's slow start
-    // creates a visible pause where nothing seems to happen.
-    this.sceneFade = this.progress;
+    // Scene fully faded (camera already past them from FOLD acceleration)
+    this.sceneFade = 1;
 
-    // No camera motion — the portal coming to us IS the motion
-    this.cameraForwardSpeed = 0;
+    // Camera continues accelerating into the portal — 40 → 80
+    this.cameraForwardSpeed = 40 + this.progress * 40;
 
     // No white flash — the portal IS the transition
     this.whiteFlash = 0;

@@ -521,10 +521,8 @@ warpEffect.onPrepareSystem = () => {
   soundEngine.play('warpCharge');
   musicManager.duck(0.15, 4.0);
 
-  // Hide old system from scene early — during FOLD while stars are folding.
-  // Removes meshes from Three.js scene (fast, no GC) so the renderer
-  // isn't processing them. Full disposal happens in spawnSystem() during HYPER.
-  _hideCurrentSystem();
+  // Keep system visible during FOLD — camera flies past objects.
+  // _hideCurrentSystem() is called later when ENTER starts (see animation loop).
 
   seedCounter++;
   const seed = `system-${seedCounter}`;
@@ -2169,10 +2167,15 @@ function warpSwapSystem() {
   // EXIT finishes. The post-warp flythrough then coasts the remaining distance.
   if (system) {
     const speed = 80; // must match cameraForwardSpeed in HYPER/EXIT phases
-    const hyperDist = speed * warpEffect.HYPER_DUR;          // 240
-    const exitDist = speed * warpEffect.EXIT_DUR * 0.5;      // 60 (smootherstep integral)
+    // Camera now moves during all phases:
+    // FOLD: progress²×40 over 4s ≈ 53 units
+    // ENTER: (40 + progress×40) over 1.5s ≈ 90 units
+    const foldDist = 53;
+    const enterDist = 90;
+    const hyperDist = speed * warpEffect.HYPER_DUR;           // 240
+    const exitDist = speed * warpEffect.EXIT_DUR * 0.5;       // 80 (sqrt integral)
     const coastDist = 60;                                     // 3s post-warp approach
-    const travelDist = hyperDist + exitDist;                  // 330
+    const travelDist = foldDist + enterDist + hyperDist + exitDist;  // ~463
 
     if (system._navigable) {
       // Navigable deep sky: approach from well outside the structure
@@ -2908,7 +2911,14 @@ function animate() {
 
     // ── Warp transition ──
     if (warpEffect.isActive) {
+      const prevState = warpEffect.state;
       warpEffect.update(deltaTime);
+
+      // Hide system objects when ENTER starts — they're behind the camera
+      // by now (camera flew past them during FOLD) or will fade quickly.
+      if (prevState === 'fold' && warpEffect.state === 'enter') {
+        _hideCurrentSystem();
+      }
 
       // ── Determine rift direction (default: camera forward) ──
       const riftDir = warpEffect.riftDirection || camera.getWorldDirection(_sunDir);
