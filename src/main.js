@@ -503,6 +503,7 @@ const GALLERY_TYPES = [
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
   'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
   'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
+  'planet-hex', 'planet-shattered', 'planet-crystal', 'planet-fungal', 'planet-machine',
   'moon',
 ];
 let galleryMode = false;

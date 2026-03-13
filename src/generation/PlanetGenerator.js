@@ -21,11 +21,19 @@ import { earthRadiiToScene } from '../core/ScaleConstants.js';
  * - venus:        Featureless thick cloud blanket — cream/yellow
  * - carbon:       Near-black with diamond glints — exotic, dark
  * - sub-neptune:  Pale hazy mini-Neptune — most common real planet type
+ *
+ * Exotic types (gallery/debug only for now):
+ * - hex:          Tessellated hexagonal plates — synthetic, alien construct
+ * - shattered:    Dark rock with wide blue-white fracture lines — breaking apart
+ * - crystal:      Angular Voronoi facets — gemstone colors, refractive highlights
+ * - fungal:       Dark surface with bioluminescent glow-spot clusters
+ * - machine:      Rigid rectangular grid — dark metal with glowing circuit traces
  */
 export class PlanetGenerator {
   static TYPES = [
     'rocky', 'gas-giant', 'ice', 'lava', 'ocean', 'terrestrial',
     'hot-jupiter', 'eyeball', 'venus', 'carbon', 'sub-neptune',
+    'hex', 'shattered', 'crystal', 'fungal', 'machine',
   ];
 
   static PALETTES = {
@@ -125,6 +133,46 @@ export class PlanetGenerator {
         { base: [0.25, 0.4, 0.5], accent: [0.4, 0.55, 0.6] },       // Teal haze
       ],
     },
+    hex: {
+      colors: [
+        { base: [0.05, 0.15, 0.25], accent: [0.2, 0.7, 0.8] },      // Dark teal + bright cyan
+        { base: [0.08, 0.12, 0.2], accent: [0.3, 0.6, 0.9] },       // Navy + electric blue
+        { base: [0.06, 0.18, 0.22], accent: [0.1, 0.8, 0.7] },      // Deep teal + aqua
+        { base: [0.1, 0.1, 0.2], accent: [0.4, 0.5, 0.9] },         // Indigo + periwinkle
+      ],
+    },
+    shattered: {
+      colors: [
+        { base: [0.08, 0.06, 0.1], accent: [0.4, 0.5, 0.95] },      // Dark + blue-white cracks
+        { base: [0.1, 0.07, 0.12], accent: [0.5, 0.3, 0.9] },       // Dark + violet cracks
+        { base: [0.06, 0.06, 0.08], accent: [0.3, 0.6, 0.85] },     // Near-black + cyan cracks
+        { base: [0.07, 0.05, 0.1], accent: [0.6, 0.4, 0.95] },      // Dark + lavender cracks
+      ],
+    },
+    crystal: {
+      colors: [
+        { base: [0.25, 0.1, 0.3], accent: [0.7, 0.3, 0.8] },       // Deep purple + magenta
+        { base: [0.15, 0.08, 0.25], accent: [0.8, 0.4, 0.9] },      // Violet + bright pink
+        { base: [0.2, 0.12, 0.28], accent: [0.6, 0.2, 0.7] },       // Plum + amethyst
+        { base: [0.18, 0.1, 0.22], accent: [0.9, 0.6, 0.95] },      // Dark + light pink crystal
+      ],
+    },
+    fungal: {
+      colors: [
+        { base: [0.08, 0.15, 0.1], accent: [0.1, 0.8, 0.7] },      // Dark green + cyan glow
+        { base: [0.06, 0.12, 0.12], accent: [0.8, 0.2, 0.6] },      // Dark teal + pink glow
+        { base: [0.1, 0.1, 0.06], accent: [0.2, 0.9, 0.4] },        // Brown-green + green glow
+        { base: [0.05, 0.1, 0.1], accent: [0.3, 0.7, 0.9] },        // Dark teal + blue glow
+      ],
+    },
+    machine: {
+      colors: [
+        { base: [0.1, 0.1, 0.12], accent: [0.8, 0.6, 0.1] },       // Dark metal + amber glow
+        { base: [0.08, 0.1, 0.08], accent: [0.2, 0.8, 0.3] },       // Dark metal + green glow
+        { base: [0.12, 0.1, 0.1], accent: [0.9, 0.5, 0.15] },       // Gunmetal + orange glow
+        { base: [0.08, 0.08, 0.1], accent: [0.3, 0.7, 0.9] },       // Dark steel + cyan glow
+      ],
+    },
   };
 
   // Exaggerated radius ranges for the map (old visual values).
@@ -142,6 +190,11 @@ export class PlanetGenerator {
     'sub-neptune':  [0.7, 1.3],
     'gas-giant':    [1.8, 3.5],
     'hot-jupiter':  [1.5, 3.0],
+    'hex':          [0.2, 0.5],
+    'shattered':    [0.3, 0.7],
+    'crystal':      [0.15, 0.45],
+    'fungal':       [0.3, 0.8],
+    'machine':      [0.4, 0.9],
   };
 
   /**
@@ -169,6 +222,11 @@ export class PlanetGenerator {
       'sub-neptune':  [2.5, 4.0],    // Mini-Neptunes (Neptune = 3.88)
       'gas-giant':    [6.0, 14.0],   // Jupiter (11.2) / Saturn (9.4)
       'hot-jupiter':  [8.0, 16.0],   // Inflated close-in giants
+      'hex':          [0.4, 0.9],    // Small artificial construct
+      'shattered':    [0.5, 1.2],    // Medium fractured world
+      'crystal':      [0.3, 0.8],    // Small crystalline body
+      'fungal':       [0.6, 1.3],    // Medium bio world
+      'machine':      [0.8, 1.5],    // Medium artificial world
     };
     const radiusRangeEarth = radiusRangesEarth[type] || [0.5, 1.5];
     const radiusEarth = rng.range(...radiusRangeEarth);
@@ -200,6 +258,8 @@ export class PlanetGenerator {
       'terrestrial': 0.18, 'ocean': 0.05, 'lava': 0.03,
       'hot-jupiter': 0.08, 'sub-neptune': 0.15,
       'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.05,
+      'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
+      'fungal': 0.0, 'machine': 0.0,
     };
     const hasRings = rng.chance(ringChance[type] || 0.02);
     let rings = null;
@@ -221,6 +281,8 @@ export class PlanetGenerator {
       'rocky': 0.1, 'ice': 0.15, 'lava': 0.2,
       'hot-jupiter': 0.0, 'sub-neptune': 0.0, 'venus': 0.0,
       'eyeball': 0.6, 'carbon': 0.3,
+      'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
+      'fungal': 0.0, 'machine': 0.0,
     };
     const hasClouds = rng.chance(cloudChance[type] || 0);
     let clouds = null;
@@ -242,6 +304,8 @@ export class PlanetGenerator {
       'rocky': 0.15, 'ice': 0.3, 'lava': 0.4,
       'hot-jupiter': 1.0, 'sub-neptune': 1.0, 'venus': 1.0,
       'eyeball': 0.8, 'carbon': 0.5,
+      'hex': 0.5, 'shattered': 0.3, 'crystal': 0.2,
+      'fungal': 0.7, 'machine': 0.0,
     };
     const hasAtmosphere = rng.chance(atmosphereChance[type] || 0);
     let atmosphere = null;
@@ -258,6 +322,10 @@ export class PlanetGenerator {
         'venus': [0.7, 0.6, 0.3],
         'eyeball': [0.3, 0.5, 0.85],
         'carbon': [0.4, 0.3, 0.15],
+        'hex': [0.1, 0.6, 0.7],
+        'shattered': [0.3, 0.3, 0.8],
+        'crystal': [0.5, 0.2, 0.6],
+        'fungal': [0.15, 0.5, 0.4],
       };
       const atmoStrengths = {
         'sub-neptune': [0.4, 0.8],  // Thick haze — defining feature
@@ -276,6 +344,8 @@ export class PlanetGenerator {
       'gas-giant': 6, 'hot-jupiter': 0, 'sub-neptune': 3,
       'venus': 0, 'eyeball': 1, 'carbon': 1,
       'terrestrial': 2, 'ocean': 1, 'rocky': 1,
+      'hex': 0, 'shattered': 1, 'crystal': 0,
+      'fungal': 2, 'machine': 0,
     };
     const maxMoons = maxMoonsByType[type] ?? 1;
     const moonCount = rng.int(0, maxMoons);

@@ -317,6 +317,78 @@ export class Planet {
             float bands = sin(lat * 3.0) * 0.1 + sin(lat * 6.0) * 0.05;
             float haze = snoise(pos * noiseScale * 0.7) * 0.08;
             n = 0.5 + bands + haze;
+          } else if (planetType == 11) {
+            // Hex: tessellated hexagonal plates with bright borders
+            vec2 hexPos = vec2(pos.x, pos.y + pos.z * 0.5) * noiseScale * 3.0;
+            vec2 a = vec2(hexPos.x, hexPos.y * 1.1547);
+            vec2 f = fract(a) - 0.5;
+            vec2 f2 = fract(a + 0.5) - 0.5;
+            float d1 = length(f);
+            float d2 = length(f2);
+            float hexDist = min(d1, d2);
+            vec2 cellId = (d1 < d2) ? floor(a) : floor(a + 0.5);
+            float cellHash = fract(sin(dot(cellId, vec2(127.1, 311.7))) * 43758.5453);
+            float border = smoothstep(0.42, 0.45, hexDist);
+            n = cellHash * 0.6 + border * 0.4;
+          } else if (planetType == 12) {
+            // Shattered: wide blue-white fracture lines on dark rock
+            float crack1 = 1.0 - abs(snoise(pos * noiseScale * 1.5));
+            float crack2 = 1.0 - abs(snoise(pos * noiseScale * 0.7 + vec3(50.0)));
+            crack1 = pow(crack1, 1.5);
+            crack2 = pow(crack2, 1.5);
+            float cracks = max(crack1, crack2 * 0.8);
+            float node = crack1 * crack2;
+            node = pow(node, 0.8);
+            n = cracks + node * 0.5;
+          } else if (planetType == 13) {
+            // Crystal: angular Voronoi facets with gemstone coloring
+            vec3 scaledPos = pos * noiseScale * 2.5;
+            vec3 cellBase = floor(scaledPos);
+            float minDist = 10.0;
+            float cellValue = 0.0;
+            for (int dx = -1; dx <= 1; dx++) {
+              for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                  vec3 neighbor = cellBase + vec3(float(dx), float(dy), float(dz));
+                  vec3 point = neighbor + fract(sin(vec3(
+                    dot(neighbor, vec3(127.1, 311.7, 74.7)),
+                    dot(neighbor, vec3(269.5, 183.3, 246.1)),
+                    dot(neighbor, vec3(113.5, 271.9, 124.6))
+                  )) * 43758.5453) * 0.8 + 0.1;
+                  float d = length(scaledPos - point);
+                  if (d < minDist) {
+                    minDist = d;
+                    cellValue = fract(sin(dot(neighbor, vec3(43.34, 85.17, 67.89))) * 4758.5);
+                  }
+                }
+              }
+            }
+            n = cellValue;
+          } else if (planetType == 14) {
+            // Fungal: dark base with bioluminescent glow-spot clusters
+            float terrain = snoise(pos * noiseScale) * 0.3 + 0.3;
+            float spots1 = snoise(pos * noiseScale * 4.0);
+            float spots2 = snoise(pos * noiseScale * 6.0 + vec3(100.0));
+            float clusterMask = snoise(pos * noiseScale * 0.8) * 0.5 + 0.5;
+            clusterMask = smoothstep(0.3, 0.7, clusterMask);
+            float glow = max(spots1, spots2);
+            glow = pow(max(glow, 0.0), 3.0) * clusterMask;
+            n = terrain + glow * 1.5;
+          } else if (planetType == 15) {
+            // Machine: rectangular circuit grid with lit/dark cells
+            vec3 gridPos = pos * noiseScale * 4.0;
+            vec3 f = fract(gridPos);
+            float lineX = min(f.x, 1.0 - f.x);
+            float lineY = min(f.y, 1.0 - f.y);
+            float lineZ = min(f.z, 1.0 - f.z);
+            float line = min(min(lineX, lineY), lineZ);
+            float grid = 1.0 - smoothstep(0.0, 0.06, line);
+            float secondLine = min(max(lineX, lineY), max(min(lineX, lineY), lineZ));
+            float intersection = grid * (1.0 - smoothstep(0.0, 0.06, secondLine));
+            vec3 cellId = floor(gridPos);
+            float cellHash = fract(sin(dot(cellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+            float cellLit = step(0.55, cellHash);
+            n = grid * 0.7 + intersection * 0.3 + cellLit * 0.15;
           }
 
           return n;
@@ -414,6 +486,36 @@ export class Planet {
             // Sub-Neptune: smooth, muted, hazy blend
             float val = pattern;
             surfaceColor = mix(baseColor, accentColor, val);
+          } else if (planetType == 11) {
+            // Hex: cell interior varies per cell, borders are bright accent
+            float border = smoothstep(0.55, 0.65, pattern);
+            float cellShade = pattern - border * 0.4;
+            surfaceColor = mix(baseColor, baseColor * 1.4, cellShade);
+            surfaceColor = mix(surfaceColor, accentColor, border);
+          } else if (planetType == 12) {
+            // Shattered: dark rock with glowing cool-colored fracture lines
+            float crackIntensity = smoothstep(0.2, 0.6, pattern);
+            surfaceColor = mix(baseColor, accentColor, crackIntensity);
+            float hotCrack = smoothstep(0.7, 0.9, pattern);
+            surfaceColor += vec3(0.5, 0.5, 0.6) * hotCrack;
+          } else if (planetType == 13) {
+            // Crystal: flat-shaded facets with bright gemstone highlights
+            float facetShade = pattern;
+            surfaceColor = mix(baseColor, accentColor, facetShade);
+            float highlight = smoothstep(0.8, 0.95, facetShade);
+            surfaceColor += vec3(0.6, 0.5, 0.7) * highlight;
+          } else if (planetType == 14) {
+            // Fungal: dark terrain with bright bioluminescent glow spots
+            float terrain = clamp(pattern, 0.0, 0.5);
+            float glowAmount = max(pattern - 0.5, 0.0) * 2.0;
+            surfaceColor = mix(baseColor * 0.8, baseColor, terrain * 2.0);
+            surfaceColor += accentColor * glowAmount;
+          } else if (planetType == 15) {
+            // Machine: dark metallic base with glowing grid lines
+            float gridLine = smoothstep(0.3, 0.5, pattern);
+            surfaceColor = mix(baseColor, accentColor, gridLine);
+            float bright = smoothstep(0.7, 0.9, pattern);
+            surfaceColor += accentColor * 0.5 * bright;
           } else {
             // Default: smooth blend between base and accent (rocky, ocean, ice, lava)
             float mixFactor = smoothstep(0.3, 0.7, pattern * 0.5 + 0.5);
@@ -440,6 +542,10 @@ export class Planet {
           if (planetType == 6) {
             ambient = 0.04;
           }
+          // Emissive exotic types: slightly more ambient
+          if (planetType == 12 || planetType == 14 || planetType == 15) {
+            ambient = 0.04;
+          }
 
           vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
 
@@ -459,6 +565,38 @@ export class Planet {
             crystal = pow(max(crystal, 0.0), 8.0);
             float glint = smoothstep(0.85, 0.95, crystal * 0.6 + 0.4 + snoise(vPosition * noiseScale) * 0.15);
             finalColor += vec3(0.5, 0.55, 0.6) * glint * 0.3;
+          }
+
+          // Shattered: fracture lines glow on dark side
+          if (planetType == 12) {
+            float crack1 = 1.0 - abs(snoise(vPosition * noiseScale * 1.5));
+            float crack2 = 1.0 - abs(snoise(vPosition * noiseScale * 0.7 + vec3(50.0)));
+            float crackGlow = max(pow(crack1, 1.5), pow(crack2, 1.5) * 0.8);
+            finalColor += accentColor * crackGlow * 0.25;
+          }
+
+          // Fungal: bioluminescent spots glow in darkness
+          if (planetType == 14) {
+            float spots1 = snoise(vPosition * noiseScale * 4.0);
+            float spots2 = snoise(vPosition * noiseScale * 6.0 + vec3(100.0));
+            float clusterMask = smoothstep(0.3, 0.7, snoise(vPosition * noiseScale * 0.8) * 0.5 + 0.5);
+            float emGlow = pow(max(max(spots1, spots2), 0.0), 3.0) * clusterMask;
+            finalColor += accentColor * emGlow * 0.35;
+          }
+
+          // Machine: grid lines glow like city lights
+          if (planetType == 15) {
+            vec3 gridPos = vPosition * noiseScale * 4.0;
+            vec3 gf = fract(gridPos);
+            float glX = min(gf.x, 1.0 - gf.x);
+            float glY = min(gf.y, 1.0 - gf.y);
+            float glZ = min(gf.z, 1.0 - gf.z);
+            float gLine = min(min(glX, glY), glZ);
+            float emGrid = 1.0 - smoothstep(0.0, 0.06, gLine);
+            vec3 gCellId = floor(gridPos);
+            float gCellHash = fract(sin(dot(gCellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+            float gCellLit = step(0.55, gCellHash);
+            finalColor += accentColor * (emGrid * 0.2 + gCellLit * 0.08);
           }
 
           // ── Cloud layer (animated) ──
@@ -662,6 +800,7 @@ export class Planet {
     const types = [
       'rocky', 'gas-giant', 'ice', 'lava', 'ocean', 'terrestrial',
       'hot-jupiter', 'eyeball', 'venus', 'carbon', 'sub-neptune',
+      'hex', 'shattered', 'crystal', 'fungal', 'machine',
     ];
     return types.indexOf(this.data.type);
   }
