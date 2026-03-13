@@ -49,7 +49,6 @@ const scene = new THREE.Scene();
 
 // ── Camera ──
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 200000);
-window.__camera = camera;  // DEBUG: expose for testing
 
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
@@ -58,7 +57,6 @@ retroRenderer.setColorPalette(settings.get('colorPalette'));
 
 // ── Camera Controller ──
 const cameraController = new CameraController(camera, canvas);
-window.__camCtrl = cameraController;  // DEBUG: expose for testing
 
 // When free-look ends without a focused body (title screen, deep sky),
 // clear focus so the camera stays where it was looking.
@@ -1887,8 +1885,6 @@ function gallerySpawn() {
     cameraController._returningToOrbit = false;
     cameraController.isFreeLooking = false;
     cameraController.forceFreeLook = false;
-    // Expose debug info
-    console.log(`[GALLERY] r=${r.toFixed(5)}, dist=${cameraController.distance.toFixed(5)}, target=(${cameraController.target.x.toFixed(3)},${cameraController.target.y.toFixed(3)},${cameraController.target.z.toFixed(3)}), cam=(${camera.position.x.toFixed(3)},${camera.position.y.toFixed(3)},${camera.position.z.toFixed(3)}), near=${camera.near}, bypassed=${cameraController.bypassed}, returning=${cameraController._returningToOrbit}`);
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');
@@ -2594,6 +2590,9 @@ function animate() {
     }
     // Camera controller handles both auto-rotation and manual drag orbit
     cameraController.update(deltaTime);
+    // Dynamic near-plane — same formula as the main render loop
+    camera.near = Math.max(0.0001, Math.min(1.0, cameraController.smoothedDistance * 0.01));
+    camera.updateProjectionMatrix();
     starfield.update(camera.position);
     retroRenderer.render();
     return;
@@ -3153,15 +3152,6 @@ function animate() {
   }
 
   cameraController.update(deltaTime);
-
-  // Debug: log camera state once per gallery spawn
-  if (galleryMode && !window.__galleryLogged) {
-    window.__galleryLogged = true;
-    setTimeout(() => {
-      console.log(`[GALLERY-FRAME] cam=(${camera.position.x.toFixed(5)},${camera.position.y.toFixed(5)},${camera.position.z.toFixed(5)}), near=${camera.near.toFixed(6)}, smoothDist=${cameraController.smoothedDistance.toFixed(5)}, target=(${cameraController.target.x.toFixed(3)},${cameraController.target.y.toFixed(3)},${cameraController.target.z.toFixed(3)})`);
-      window.__galleryLogged = false;
-    }, 500);
-  }
 
   // ── Dynamic near clipping plane ──
   // Scale near plane with camera distance to the nearest tracked body so
