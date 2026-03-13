@@ -1505,30 +1505,35 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
 let _debugSeedCounter = 1000;
 
 function _debugSpawnType(destType) {
-  if (galleryMode) exitGallery();
+  try {
+    if (galleryMode) exitGallery();
 
-  _debugSeedCounter++;
-  const seed = `debug-${destType}-${_debugSeedCounter}`;
-  let preGenData;
+    _debugSeedCounter++;
+    const seed = `debug-${destType}-${_debugSeedCounter}`;
+    let preGenData;
 
-  if (destType === 'star-system') {
-    preGenData = StarSystemGenerator.generate(seed);
-  } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
-    preGenData = NavigableNebulaGenerator.generate(seed, destType);
-    preGenData._billboardData = NebulaGenerator.generate(seed, destType);
-  } else if (destType === 'open-cluster') {
-    preGenData = NavigableClusterGenerator.generate(seed);
-    preGenData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
-  } else if (destType.includes('galaxy')) {
-    preGenData = GalaxyGenerator.generate(seed, destType);
-  } else if (destType.includes('cluster')) {
-    preGenData = ClusterGenerator.generate(seed, destType);
+    if (destType === 'star-system') {
+      preGenData = StarSystemGenerator.generate(seed);
+    } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
+      preGenData = NavigableNebulaGenerator.generate(seed, destType);
+      preGenData._billboardData = NebulaGenerator.generate(seed, destType);
+    } else if (destType === 'open-cluster') {
+      preGenData = NavigableClusterGenerator.generate(seed);
+      preGenData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
+    } else if (destType.includes('galaxy')) {
+      preGenData = GalaxyGenerator.generate(seed, destType);
+    } else if (destType.includes('cluster')) {
+      preGenData = ClusterGenerator.generate(seed, destType);
+    }
+    preGenData._destType = destType;
+
+    seedCounter = _debugSeedCounter;
+    console.log(`Debug spawn: attempting ${destType} (seed "${seed}")`);
+    spawnSystem({ forWarp: false, systemData: preGenData });
+    console.log(`Debug spawn: ${destType} complete`);
+  } catch (err) {
+    console.error(`Debug spawn FAILED: ${destType}`, err);
   }
-  preGenData._destType = destType;
-
-  seedCounter = _debugSeedCounter;
-  spawnSystem({ forWarp: false, systemData: preGenData });
-  console.log(`Debug spawn: ${destType} (seed "${seed}")`);
 }
 
 // ── Debug Gallery ──────────────────────────────────────────────
