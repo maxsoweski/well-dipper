@@ -757,12 +757,8 @@ function _hideCurrentSystem() {
       for (const line of system.starOrbitLines) scene.remove(line.mesh);
     }
   }
-  // HUD cleanup (lightweight)
-  if (systemMap) {
-    systemMap.dispose();
-    systemMap = null;
-    retroRenderer.setHud(null, null);
-  }
+  // Hide HUD (don't dispose yet — that happens in spawnSystem during HYPER)
+  retroRenderer.setHud(null, null);
   clickTargets = new Map();
 }
 
@@ -792,6 +788,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Clean up old system ──
   // Meshes were already removed from scene during FOLD (_hideCurrentSystem),
   // but we still need to dispose GPU resources (textures, geometries, materials).
+  // SystemMap disposal moved here from _hideCurrentSystem to avoid GC during FOLD.
+  if (systemMap) {
+    systemMap.dispose();
+    systemMap = null;
+  }
   if (system) {
     if (system.type && system.type !== 'star-system') {
       if (system.destination) system.destination.dispose();

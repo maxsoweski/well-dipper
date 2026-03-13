@@ -24,7 +24,7 @@ export class WarpEffect {
     this.FOLD_DUR = 4.0;
     this.ENTER_DUR = 1.5;
     this.HYPER_DUR = 3.0;
-    this.EXIT_DUR = 1.5;
+    this.EXIT_DUR = 2.0;
 
     // ── Uniform values (read by Starfield + RetroRenderer each frame) ──
     this.foldAmount = 0;          // 0 = normal, 1 = fully folded to center

@@ -500,7 +500,6 @@ export class RetroRenderer {
           // OR when the fold portal is open (FOLD) — hyperspace is visible
           // THROUGH the portal so you visually "fly into" it.
           if (uHyperPhase > 0.0 || uFoldGlow > 0.0) {
-            vec3 hyper = hyperspace(vUv, uHyperTime);
             float hyperMask = uHyperPhase;
 
             // ── Fold portal mask: show hyperspace through the portal ──
@@ -551,7 +550,14 @@ export class RetroRenderer {
               hyperMask *= fizzMask;
             }
 
-            result = mix(result, hyper, hyperMask);
+            // Only compute the expensive hyperspace tunnel for pixels that
+            // actually show it. During FOLD/ENTER the portal is a small circle
+            // — computing ray-cone math for every pixel wastes GPU time and
+            // can cause visible hitches as the portal grows.
+            if (hyperMask > 0.01) {
+              vec3 hyper = hyperspace(vUv, uHyperTime);
+              result = mix(result, hyper, hyperMask);
+            }
           }
 
           result = applyPalette(result, uColorPalette);
