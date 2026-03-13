@@ -1872,11 +1872,16 @@ function gallerySpawn() {
     _galleryMeshes.push(planet);
 
     const r = scenePlanetData.radius;
+    // Point orbit controller at the origin (where gallery planet lives)
+    // and set distance so the near-plane calculation works correctly.
+    cameraController.target.set(0, 0, 0);
+    cameraController.distance = r * 3;
+    cameraController.smoothedDistance = r * 3;
+    cameraController.pitch = 0.1;          // slight upward tilt
+    cameraController.smoothedPitch = 0.1;
+    cameraController.smoothedYaw = cameraController.yaw;
     camera.position.set(0, r * 0.3, r * 3);
     camera.lookAt(0, 0, 0);
-    // Update smoothedDistance so the render loop's dynamic near-plane
-    // calculation doesn't clip small scene-scale planets
-    cameraController.smoothedDistance = r * 3;
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');
