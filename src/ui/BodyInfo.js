@@ -50,7 +50,7 @@ export class BodyInfo {
     if (this._el) {
       this._cursorEl = document.createElement('span');
       this._cursorEl.className = 'body-info-cursor';
-      this._cursorEl.textContent = '\u2588'; // full block character █
+      this._cursorEl.textContent = '\u258C'; // left half block character ▌
     }
   }
 
