@@ -251,21 +251,23 @@ export class Planet {
           return shadow;
         }
 
-        // ── Hex grid helper for triplanar mapping ──
-        // Returns vec3(border, cellHash, edgeDist) for a 2D hex grid
+        // ── Hex grid helper ──
+        // Flat-top hex grid on a proper triangular lattice.
+        // s = vec2(1, sqrt(3)) so ALL six neighbors are distance 1.0 apart.
+        // Returns vec3(border, cellHash, edgeDist).
         vec3 hexGrid(vec2 p) {
-          // Pointy-top hex: two offset rectangular grids
-          const vec2 s = vec2(1.7320508, 1.0); // sqrt(3), 1
+          const vec2 s = vec2(1.0, 1.7320508); // 1, sqrt(3)
           vec2 a = mod(p, s) - s * 0.5;
-          vec2 b = mod(p + s * 0.5, s) - s * 0.5;
-          // Pick the closer center
+          vec2 b = mod(p - s * 0.5, s) - s * 0.5;
+          // Pick the closer hex center
           bool useA = dot(a, a) < dot(b, b);
           vec2 gv = useA ? a : b;
           vec2 id = p - gv;
-          // Hex edge distance (pointy-top)
-          float edgeDist = 0.5 - max(dot(abs(gv), vec2(0.5, 0.86602540)), abs(gv.y));
+          // Flat-top hex SDF — inradius = 0.5
+          // max of: distance to flat side (|gv.x|) and distance to angled sides
+          float edgeDist = 0.5 - max(abs(gv.x), dot(abs(gv), vec2(0.5, 0.86602540)));
           float cellHash = fract(sin(dot(floor(id * 2.0 + 0.5), vec2(127.1, 311.7))) * 43758.5453);
-          float border = 1.0 - smoothstep(0.0, 0.06, edgeDist);
+          float border = 1.0 - smoothstep(0.0, 0.05, edgeDist);
           return vec3(border, cellHash, edgeDist);
         }
 
