@@ -2474,10 +2474,12 @@ function toggleOrbits() {
 }
 
 function toggleFullscreen() {
-  if (document.fullscreenElement) {
-    document.exitFullscreen();
+  const el = document.documentElement;
+  const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (isFs) {
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
   } else {
-    document.documentElement.requestFullscreen().catch(() => {});
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch(() => {});
   }
 }
 
@@ -3697,6 +3699,13 @@ canvas.addEventListener('touchstart', (e) => {
     _touchStart.x = e.touches[0].clientX;
     _touchStart.y = e.touches[0].clientY;
   }
+  // Stop autopilot on tap (matches mousedown behavior for desktop)
+  if (autoNav.isActive && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
+    stopFlythrough();
+    // Update the speed dial button state
+    const autonBtn = mobileControls?.querySelector('[data-action="autonav"]');
+    if (autonBtn) autonBtn.classList.remove('active');
+  }
   if (!autoNav.isActive) idleTimer = 0;
 }, { passive: true });
 
@@ -3809,7 +3818,7 @@ if (mobileControls) {
       btn.classList.toggle('active', minimapVisible);
     } else if (action === 'fullscreen') {
       toggleFullscreen();
-      btn.classList.toggle('active', !!document.fullscreenElement);
+      // State updated by fullscreenchange listener
     } else if (action === 'settings') {
       toggleSettings();
       fab.classList.remove('open'); // close speed dial when opening settings
@@ -3823,10 +3832,13 @@ if (mobileControls) {
   if (speedDial) speedDial.addEventListener('touchend', handleMobileAction);
 
   // Update fullscreen button state when fullscreen changes
-  document.addEventListener('fullscreenchange', () => {
+  const onFsChange = () => {
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     const fsBtn = mobileControls.querySelector('[data-action="fullscreen"]');
-    if (fsBtn) fsBtn.classList.toggle('active', !!document.fullscreenElement);
-  });
+    if (fsBtn) fsBtn.classList.toggle('active', isFs);
+  };
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
 }
 
 // ── Start ──
