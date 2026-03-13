@@ -2916,8 +2916,20 @@ function animate() {
 
       // Hide system objects when ENTER starts — they're behind the camera
       // by now (camera flew past them during FOLD) or will fade quickly.
+      // Exception: distant deep sky (galaxies, globular clusters) stay visible
+      // through ENTER — they're ahead of you, growing on screen. Hidden at HYPER start.
       if (prevState === 'fold' && warpEffect.state === 'enter') {
-        _hideCurrentSystem();
+        const isDistantDeepSky = system && system.type && system.type !== 'star-system' && !system._navigable;
+        if (!isDistantDeepSky) {
+          _hideCurrentSystem();
+        }
+      }
+      if (prevState === 'enter' && warpEffect.state === 'hyper') {
+        // Catch any remaining objects (distant deep sky) — tunnel is now opaque
+        const isDistantDeepSky = system && system.type && system.type !== 'star-system' && !system._navigable;
+        if (isDistantDeepSky) {
+          _hideCurrentSystem();
+        }
       }
 
       // ── Determine rift direction (default: camera forward) ──
@@ -2938,11 +2950,14 @@ function animate() {
       // ── Pass rift center + warp uniforms to shaders ──
       starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness, _riftNDC);
 
-      // Deep sky objects: skip the scene fade-in during exit.
-      // The object is already in the scene (spawned during HYPER when tunnel was opaque).
-      // Setting sceneFade=0 means it's fully visible behind the tunnel mask —
-      // so when the exit hole opens, the object is revealed, not faded in.
+      // Deep sky objects: override sceneFade in certain phases.
+      // - During FOLD/ENTER for distant deep sky: keep visible (growing on screen)
+      // - During EXIT for all deep sky: keep visible (revealed through exit hole)
       let effectiveSceneFade = warpEffect.sceneFade;
+      const isDistantDS = system && system.type && system.type !== 'star-system' && !system._navigable;
+      if (isDistantDS && (warpEffect.state === 'fold' || warpEffect.state === 'enter')) {
+        effectiveSceneFade = 0;
+      }
       if (warpEffect.state === 'exit' && system && system.type && system.type !== 'star-system') {
         effectiveSceneFade = 0;
       }
@@ -2971,16 +2986,19 @@ function animate() {
         camera.getWorldDirection(_sunDir);
         camera.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
 
-        // Distant deep sky objects: move WITH camera during warp so there's no parallax.
-        // They're meant to appear impossibly far away — no visible relative motion.
-        // Navigable deep sky stays in place (like star systems — you fly INTO them).
-        // warpRevealSystem() snaps everything to proper positions when warp completes.
+        // Deep sky objects during warp:
+        // - Distant (galaxies, globular clusters): move at 92% of camera speed
+        //   so there's a slow closing distance — the galaxy grows subtly on screen
+        //   as if you're flying toward one of its stars. warpRevealSystem() snaps
+        //   to final position when warp completes.
+        // - Navigable (nebulae, open clusters): stay fixed — camera flies past them
+        //   like star system objects.
         if (system && system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
-          system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
-          // Also move dummy bodyRef objects so tour stop positions stay consistent
+          const approachFactor = 0.92; // < 1.0 = slowly closing distance
+          system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * approachFactor * deltaTime);
           if (system._dummyRefs) {
             for (const ref of system._dummyRefs) {
-              ref.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
+              ref.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * approachFactor * deltaTime);
             }
           }
         }
