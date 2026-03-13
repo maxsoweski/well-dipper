@@ -49,7 +49,6 @@ const scene = new THREE.Scene();
 
 // ── Camera ──
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 200000);
-window.__camera = camera; // DEBUG
 
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
@@ -58,7 +57,6 @@ retroRenderer.setColorPalette(settings.get('colorPalette'));
 
 // ── Camera Controller ──
 const cameraController = new CameraController(camera, canvas);
-window.__camCtrl = cameraController; // DEBUG
 
 // When free-look ends without a focused body (title screen, deep sky),
 // clear focus so the camera stays where it was looking.
