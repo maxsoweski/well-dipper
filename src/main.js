@@ -3000,6 +3000,9 @@ function animate() {
         if (system && system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
           const flyingPast = warpEffect.riftDirection !== null;
           const dsFactor = flyingPast ? 0.5 : 0.92;
+          if (warpEffect.state === 'fold' && warpEffect.progress < 0.02) {
+            console.log(`DS move: type=${system.type} flyingPast=${flyingPast} speed=${warpEffect.cameraForwardSpeed.toFixed(1)} dsFactor=${dsFactor} meshPos=${system.destination.mesh.position.toArray().map(v=>v.toFixed(1))}`);
+          }
           system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * dsFactor * deltaTime);
           if (system._dummyRefs) {
             for (const ref of system._dummyRefs) {
