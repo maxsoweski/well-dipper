@@ -786,7 +786,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Clean up old system ──
   // Meshes were already removed from scene during FOLD (_hideCurrentSystem),
   // but we still need to dispose GPU resources (textures, geometries, materials).
-  // SystemMap disposal moved here from _hideCurrentSystem to avoid GC during FOLD.
+  // Safety net: ensure meshes are removed from scene. Usually done at FOLD→ENTER
+  // transition, but can be missed if a frame skips states (e.g., tab backgrounded).
+  _hideCurrentSystem();
   if (systemMap) {
     systemMap.dispose();
     systemMap = null;
