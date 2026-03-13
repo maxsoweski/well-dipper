@@ -1874,6 +1874,9 @@ function gallerySpawn() {
     const r = scenePlanetData.radius;
     camera.position.set(0, r * 0.3, r * 3);
     camera.lookAt(0, 0, 0);
+    // Update smoothedDistance so the render loop's dynamic near-plane
+    // calculation doesn't clip small scene-scale planets
+    cameraController.smoothedDistance = r * 3;
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');
