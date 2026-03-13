@@ -1875,13 +1875,13 @@ function gallerySpawn() {
     // Point orbit controller at the origin (where gallery planet lives)
     // and set distance so the near-plane calculation works correctly.
     cameraController.target.set(0, 0, 0);
+    cameraController._targetGoal.set(0, 0, 0);
+    cameraController._transitioning = false;
     cameraController.distance = r * 3;
     cameraController.smoothedDistance = r * 3;
     cameraController.pitch = 0.1;          // slight upward tilt
     cameraController.smoothedPitch = 0.1;
     cameraController.smoothedYaw = cameraController.yaw;
-    camera.position.set(0, r * 0.3, r * 3);
-    camera.lookAt(0, 0, 0);
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');
@@ -3117,7 +3117,8 @@ function animate() {
 
     // ── Camera tracking (manual mode only) ──
     // Skip during flythrough (camera is driven by FlythroughCamera)
-    if (!cameraController.bypassed) {
+    // Skip during gallery mode (camera orbits the gallery object at origin)
+    if (!cameraController.bypassed && !galleryMode) {
       // Determine the tracked body's position (if any)
       let trackPos = null;
       if (focusIndex === -2 && focusStarIndex >= 0) {
