@@ -2874,6 +2874,7 @@ function animate() {
           const dir = warpTarget.direction;
           warpTarget.direction = null;
           warpTarget.turning = false;
+          console.log(`Warp start: dir=${dir ? dir.toArray().map(v=>v.toFixed(2)) : 'NULL'}`);
           warpEffect.start(dir);
         }
       } else {
@@ -3558,6 +3559,7 @@ function beginWarpTurn() {
 
   if (!warpTarget.direction) {
     // No target — warp toward camera forward immediately
+    console.log('beginWarpTurn: NO target direction — starting with null');
     cameraController.bypassed = true;
     warpEffect.start(null);
     return;
