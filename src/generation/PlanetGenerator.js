@@ -28,12 +28,15 @@ import { earthRadiiToScene } from '../core/ScaleConstants.js';
  * - crystal:      Angular Voronoi facets — gemstone colors, refractive highlights
  * - fungal:       Dark surface with bioluminescent glow-spot clusters
  * - machine:      Rigid rectangular grid — dark metal with glowing circuit traces
+ * - city-lights:  Earth-like terrestrial with city lights visible on night side
+ * - ecumenopolis: Coruscant-like mega-city — entire surface covered in urban sprawl
  */
 export class PlanetGenerator {
   static TYPES = [
     'rocky', 'gas-giant', 'ice', 'lava', 'ocean', 'terrestrial',
     'hot-jupiter', 'eyeball', 'venus', 'carbon', 'sub-neptune',
     'hex', 'shattered', 'crystal', 'fungal', 'machine',
+    'city-lights', 'ecumenopolis',
   ];
 
   static PALETTES = {
@@ -173,6 +176,24 @@ export class PlanetGenerator {
         { base: [0.08, 0.08, 0.1], accent: [0.3, 0.7, 0.9] },       // Dark steel + cyan glow
       ],
     },
+    'city-lights': {
+      // Same as terrestrial — ocean + land — but accent is city-light color for night side
+      colors: [
+        { base: [0.1, 0.2, 0.5], accent: [0.2, 0.45, 0.2] },       // Blue ocean + green land
+        { base: [0.08, 0.18, 0.45], accent: [0.3, 0.5, 0.15] },     // Dark ocean + lush green
+        { base: [0.12, 0.25, 0.5], accent: [0.35, 0.35, 0.2] },     // Ocean + savanna
+        { base: [0.05, 0.15, 0.35], accent: [0.15, 0.35, 0.15] },   // Deep ocean + dark forest
+      ],
+    },
+    ecumenopolis: {
+      // Gray/steel urban surface — accent is the warm city glow
+      colors: [
+        { base: [0.18, 0.17, 0.2], accent: [0.9, 0.7, 0.3] },      // Steel gray + warm amber
+        { base: [0.15, 0.15, 0.18], accent: [0.95, 0.8, 0.4] },     // Dark gray + golden light
+        { base: [0.2, 0.18, 0.16], accent: [0.85, 0.6, 0.25] },     // Warm gray + orange glow
+        { base: [0.12, 0.13, 0.17], accent: [0.8, 0.75, 0.5] },     // Blue-gray + pale gold
+      ],
+    },
   };
 
   // Exaggerated radius ranges for the map (old visual values).
@@ -195,6 +216,8 @@ export class PlanetGenerator {
     'crystal':      [0.15, 0.45],
     'fungal':       [0.3, 0.8],
     'machine':      [0.4, 0.9],
+    'city-lights':  [0.4, 0.8],
+    'ecumenopolis': [0.4, 0.8],
   };
 
   /**
@@ -227,6 +250,8 @@ export class PlanetGenerator {
       'crystal':      [0.3, 0.8],    // Small crystalline body
       'fungal':       [0.6, 1.3],    // Medium bio world
       'machine':      [0.8, 1.5],    // Medium artificial world
+      'city-lights':  [0.8, 1.5],    // Earth-like with civilization
+      'ecumenopolis': [0.9, 1.8],    // Mega-city, often super-Earth sized
     };
     const radiusRangeEarth = radiusRangesEarth[type] || [0.5, 1.5];
     const radiusEarth = rng.range(...radiusRangeEarth);
@@ -260,6 +285,7 @@ export class PlanetGenerator {
       'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.05,
       'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
       'fungal': 0.0, 'machine': 0.0,
+      'city-lights': 0.1, 'ecumenopolis': 0.05,
     };
     const hasRings = rng.chance(ringChance[type] || 0.02);
     let rings = null;
@@ -283,6 +309,7 @@ export class PlanetGenerator {
       'eyeball': 0.6, 'carbon': 0.3,
       'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
       'fungal': 0.0, 'machine': 0.0,
+      'city-lights': 0.75, 'ecumenopolis': 0.15,
     };
     const hasClouds = rng.chance(cloudChance[type] || 0);
     let clouds = null;
@@ -306,6 +333,7 @@ export class PlanetGenerator {
       'eyeball': 0.8, 'carbon': 0.5,
       'hex': 0.5, 'shattered': 0.3, 'crystal': 0.2,
       'fungal': 0.7, 'machine': 0.0,
+      'city-lights': 0.9, 'ecumenopolis': 0.7,
     };
     const hasAtmosphere = rng.chance(atmosphereChance[type] || 0);
     let atmosphere = null;
@@ -326,6 +354,8 @@ export class PlanetGenerator {
         'shattered': [0.3, 0.3, 0.8],
         'crystal': [0.5, 0.2, 0.6],
         'fungal': [0.15, 0.5, 0.4],
+        'city-lights': [0.3, 0.5, 0.9],
+        'ecumenopolis': [0.5, 0.45, 0.35],
       };
       const atmoStrengths = {
         'sub-neptune': [0.4, 0.8],  // Thick haze — defining feature
@@ -346,6 +376,7 @@ export class PlanetGenerator {
       'terrestrial': 2, 'ocean': 1, 'rocky': 1,
       'hex': 0, 'shattered': 1, 'crystal': 0,
       'fungal': 2, 'machine': 0,
+      'city-lights': 2, 'ecumenopolis': 2,
     };
     const maxMoons = maxMoonsByType[type] ?? 1;
     const moonCount = rng.int(0, maxMoons);

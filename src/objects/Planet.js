@@ -414,6 +414,34 @@ export class Planet {
             float cellHash = fract(sin(dot(cellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
             float cellLit = step(0.55, cellHash);
             n = grid * 0.7 + intersection * 0.3 + cellLit * 0.15;
+          } else if (planetType == 16) {
+            // City-lights: same continent shapes as terrestrial
+            float continent = snoise(pos * noiseScale * 0.7);
+            continent += snoise(pos * noiseScale * 1.5) * 0.3;
+            continent += snoise(pos * noiseScale * 3.0) * 0.15;
+            continent += snoise(pos * noiseScale * 6.0) * 0.08;
+            n = continent;
+          } else if (planetType == 17) {
+            // Ecumenopolis: fine city-block grid covering the whole surface
+            // Multiple scales of grid for that layered urban look
+            vec3 gridPos1 = pos * noiseScale * 6.0;
+            vec3 f1 = fract(gridPos1);
+            float lx1 = min(f1.x, 1.0 - f1.x);
+            float ly1 = min(f1.y, 1.0 - f1.y);
+            float lz1 = min(f1.z, 1.0 - f1.z);
+            float grid1 = 1.0 - smoothstep(0.0, 0.04, min(min(lx1, ly1), lz1));
+            // Coarser district-level grid
+            vec3 gridPos2 = pos * noiseScale * 1.5;
+            vec3 f2 = fract(gridPos2);
+            float lx2 = min(f2.x, 1.0 - f2.x);
+            float ly2 = min(f2.y, 1.0 - f2.y);
+            float lz2 = min(f2.z, 1.0 - f2.z);
+            float grid2 = 1.0 - smoothstep(0.0, 0.06, min(min(lx2, ly2), lz2));
+            // Cell brightness variation (districts have different density)
+            vec3 cellId = floor(gridPos2);
+            float district = fract(sin(dot(cellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+            // Combine: fine grid + district grid + district variation
+            n = grid1 * 0.5 + grid2 * 0.3 + district * 0.2;
           }
 
           return n;
@@ -541,6 +569,25 @@ export class Planet {
             surfaceColor = mix(baseColor, accentColor, gridLine);
             float bright = smoothstep(0.7, 0.9, pattern);
             surfaceColor += accentColor * 0.5 * bright;
+          } else if (planetType == 16) {
+            // City-lights: same land/ocean coloring as terrestrial (type 5)
+            float height = pattern * 0.5 + 0.5;
+            float seaLevel = 0.45;
+            float landMask = step(seaLevel, height);
+            vec3 deepOcean = baseColor * 0.7;
+            float oceanDepth = smoothstep(seaLevel - 0.25, seaLevel, height);
+            vec3 ocean = mix(deepOcean, baseColor, oceanDepth);
+            float landHeight = smoothstep(seaLevel, seaLevel + 0.3, height);
+            vec3 highland = accentColor * 0.6 + vec3(0.15, 0.12, 0.08);
+            vec3 land = mix(accentColor, highland, landHeight);
+            surfaceColor = mix(ocean, land, landMask);
+          } else if (planetType == 17) {
+            // Ecumenopolis: steel/concrete surface with warm-toned districts
+            float gridLine = smoothstep(0.3, 0.45, pattern);
+            float district = clamp(pattern * 1.5, 0.0, 1.0);
+            // Base is gray urban sprawl, accent tints brighter districts
+            surfaceColor = mix(baseColor * 0.8, baseColor * 1.2, district);
+            surfaceColor = mix(surfaceColor, baseColor * 1.5, gridLine * 0.4);
           } else {
             // Default: smooth blend between base and accent (rocky, ocean, ice, lava)
             float mixFactor = smoothstep(0.3, 0.7, pattern * 0.5 + 0.5);
@@ -568,7 +615,7 @@ export class Planet {
             ambient = 0.04;
           }
           // Emissive exotic types: slightly more ambient
-          if (planetType == 12 || planetType == 14 || planetType == 15) {
+          if (planetType == 12 || planetType == 14 || planetType == 15 || planetType == 16 || planetType == 17) {
             ambient = 0.04;
           }
 
@@ -624,9 +671,47 @@ export class Planet {
             finalColor += accentColor * (emGrid * 0.2 + gCellLit * 0.08);
           }
 
+          // City-lights: scattered warm lights on night-side land masses
+          if (planetType == 16) {
+            float nightMask = 1.0 - smoothstep(0.0, 0.15, diffuse);
+            // Continent mask (same as surface pattern)
+            float continent = snoise(vPosition * noiseScale * 0.7);
+            continent += snoise(vPosition * noiseScale * 1.5) * 0.3;
+            continent += snoise(vPosition * noiseScale * 3.0) * 0.15;
+            float landMask = step(0.45, continent * 0.5 + 0.5);
+            // City clusters — high-freq noise for individual lights
+            float cities = snoise(vPosition * noiseScale * 8.0);
+            cities += snoise(vPosition * noiseScale * 16.0) * 0.5;
+            float cityMask = smoothstep(0.2, 0.6, cities) * landMask;
+            // Coastal concentration — brighter near coastlines
+            float coastDist = abs(continent * 0.5 + 0.5 - 0.45);
+            float coastBoost = 1.0 + smoothstep(0.15, 0.0, coastDist) * 0.8;
+            vec3 cityColor = vec3(0.95, 0.75, 0.3); // warm amber
+            finalColor += cityColor * cityMask * coastBoost * nightMask * 0.3;
+          }
+
+          // Ecumenopolis: entire surface glows on night side
+          if (planetType == 17) {
+            float nightMask = 1.0 - smoothstep(0.0, 0.15, diffuse);
+            // Fine city grid glow
+            vec3 gp = vPosition * noiseScale * 6.0;
+            vec3 gf2 = fract(gp);
+            float glx = min(gf2.x, 1.0 - gf2.x);
+            float gly = min(gf2.y, 1.0 - gf2.y);
+            float glz = min(gf2.z, 1.0 - gf2.z);
+            float cityGrid = 1.0 - smoothstep(0.0, 0.04, min(min(glx, gly), glz));
+            // District brightness variation
+            vec3 districtId = floor(vPosition * noiseScale * 1.5);
+            float districtBright = fract(sin(dot(districtId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+            districtBright = 0.4 + districtBright * 0.6; // 0.4 to 1.0
+            // Warm city glow — streets + general area light
+            float areaGlow = 0.5 + cityGrid * 0.5;
+            finalColor += accentColor * areaGlow * districtBright * nightMask * 0.45;
+          }
+
           // ── Cloud layer (animated) ──
           if (hasClouds > 0.5) {
-            float cloudSpeed = (planetType == 5 || planetType == 7) ? 0.005 : 0.017;
+            float cloudSpeed = (planetType == 5 || planetType == 7 || planetType == 16) ? 0.005 : 0.017;
             vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, time * cloudSpeed * 0.4, 0.0);
             float cn = snoise(cloudPos);
             cn += snoise(cloudPos * 2.0) * 0.4;
@@ -826,6 +911,7 @@ export class Planet {
       'rocky', 'gas-giant', 'ice', 'lava', 'ocean', 'terrestrial',
       'hot-jupiter', 'eyeball', 'venus', 'carbon', 'sub-neptune',
       'hex', 'shattered', 'crystal', 'fungal', 'machine',
+      'city-lights', 'ecumenopolis',
     ];
     return types.indexOf(this.data.type);
   }

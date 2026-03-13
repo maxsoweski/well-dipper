@@ -504,6 +504,7 @@ const GALLERY_TYPES = [
   'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
   'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
   'planet-hex', 'planet-shattered', 'planet-crystal', 'planet-fungal', 'planet-machine',
+  'planet-city-lights', 'planet-ecumenopolis',
   'moon',
 ];
 let galleryMode = false;
