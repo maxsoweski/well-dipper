@@ -336,19 +336,21 @@ export class Planet {
             float haze = snoise(pos * noiseScale * 0.7) * 0.08;
             n = 0.5 + bands + haze;
           } else if (planetType == 11) {
-            // Hex: tessellated hexagonal plates (triplanar projection)
+            // Hex: tessellated hexagonal plates (dominant-axis cube projection)
+            // Pick the single dominant axis — no blending, so cells are flat
             float scale = noiseScale * 5.0;
             vec3 an = abs(normalize(pos));
-            // Triplanar blend weights — sharp falloff to avoid seam blending
-            vec3 w = pow(an, vec3(8.0));
-            w /= (w.x + w.y + w.z);
-            // Hex grid on each projection plane
-            vec3 hYZ = hexGrid(pos.yz * scale);
-            vec3 hXZ = hexGrid(pos.xz * scale);
-            vec3 hXY = hexGrid(pos.xy * scale);
-            // Blend: border and cellHash
-            float border = hYZ.x * w.x + hXZ.x * w.y + hXY.x * w.z;
-            float cellHash = hYZ.y * w.x + hXZ.y * w.y + hXY.y * w.z;
+            vec2 uv;
+            if (an.x > an.y && an.x > an.z) {
+              uv = pos.yz;
+            } else if (an.y > an.z) {
+              uv = pos.xz;
+            } else {
+              uv = pos.xy;
+            }
+            vec3 h = hexGrid(uv * scale);
+            float border = h.x;
+            float cellHash = h.y;
             // Encode: cell shading in low range, border in high range
             n = cellHash * 0.5 + border * 0.5;
           } else if (planetType == 12) {
