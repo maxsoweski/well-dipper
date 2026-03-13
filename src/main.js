@@ -1501,34 +1501,22 @@ function spawnNavigableDeepSky(data, destType, forWarp) {
 
 // ── Debug Instant Spawn ────────────────────────────────────────
 // Jump directly to any system type without warping (Shift+1 through Shift+7).
-// Generates data the same way the warp pipeline does, then calls spawnSystem.
-let _debugSeedCounter = 1000;
-
+// Debug spawn — triggers a full warp sequence to the requested destination type.
+// Uses _forceNextDestType so the warp pipeline picks the right generator,
+// then auto-selects a target and fires beginWarpTurn() for the full visual.
 function _debugSpawnType(destType) {
+  if (warpEffect.isActive) return;   // already warping
   if (galleryMode) exitGallery();
 
-  _debugSeedCounter++;
-  const seed = `debug-${destType}-${_debugSeedCounter}`;
-  let preGenData;
+  _forceNextDestType = destType;
 
-  if (destType === 'star-system') {
-    preGenData = StarSystemGenerator.generate(seed);
-  } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
-    preGenData = NavigableNebulaGenerator.generate(seed, destType);
-    preGenData._billboardData = NebulaGenerator.generate(seed, destType);
-  } else if (destType === 'open-cluster') {
-    preGenData = NavigableClusterGenerator.generate(seed);
-    preGenData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
-  } else if (destType.includes('galaxy')) {
-    preGenData = GalaxyGenerator.generate(seed, destType);
-  } else if (destType.includes('cluster')) {
-    preGenData = ClusterGenerator.generate(seed, destType);
+  // Auto-select a warp target if none is set
+  if (!warpTarget.direction) {
+    autoSelectWarpTarget();
   }
-  preGenData._destType = destType;
 
-  seedCounter = _debugSeedCounter;
-  spawnSystem({ forWarp: false, systemData: preGenData });
-  console.log(`Debug spawn: ${destType} (seed "${seed}")`);
+  beginWarpTurn();
+  console.log(`Debug warp: ${destType}`);
 }
 
 // ── Debug Gallery ──────────────────────────────────────────────
