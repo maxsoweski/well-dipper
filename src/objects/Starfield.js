@@ -191,13 +191,14 @@ export class Starfield {
    * closest star within a 3° cone, or null if nothing's close enough.
    *
    * @param {THREE.Vector3} rayDirection — normalized world-space ray
-   * @returns {THREE.Vector3|null} — normalized direction to nearest star
+   * @returns {{ direction: THREE.Vector3, index: number }|null}
    */
   findNearestStar(rayDirection) {
     const positions = this.mesh.geometry.attributes.position.array;
     const cosThreshold = Math.cos(3 * Math.PI / 180); // 3° cone
     let bestDot = cosThreshold;
     let bestDir = null;
+    let bestIndex = -1;
 
     const _dir = new THREE.Vector3();
     for (let i = 0; i < this.count; i++) {
@@ -209,9 +210,10 @@ export class Starfield {
       if (dot > bestDot) {
         bestDot = dot;
         bestDir = _dir.clone();
+        bestIndex = i;
       }
     }
-    return bestDir;
+    return bestDir ? { direction: bestDir, index: bestIndex } : null;
   }
 
   /**
@@ -238,7 +240,10 @@ export class Starfield {
 
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
     const p = pick * 3;
-    return new THREE.Vector3(positions[p], positions[p + 1], positions[p + 2]).normalize();
+    return {
+      direction: new THREE.Vector3(positions[p], positions[p + 1], positions[p + 2]).normalize(),
+      index: pick,
+    };
   }
 
   addTo(scene) {

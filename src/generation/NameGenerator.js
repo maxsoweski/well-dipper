@@ -444,12 +444,12 @@ function generateMoonName(rng, planetName, index, totalMoons) {
  *     planets: [{ name: string, moons: string[] }]
  *   }
  */
-function generateSystemNames(rng, systemData) {
+function generateSystemNames(rng, systemData, overrideSystemName = null) {
   // Use a dedicated child RNG so naming doesn't interfere with other generation
   const nameRng = rng.child('names');
 
-  // System name
-  const systemName = generateSystemName(nameRng.child('system'));
+  // System name — use override if provided (e.g., from warp target selection)
+  const systemName = overrideSystemName || generateSystemName(nameRng.child('system'));
 
   // Star names
   const starName = generateStarName(

@@ -79,6 +79,10 @@ export class BodyInfo {
     this._show(title, parts.join(' \u00b7 '));
   }
 
+  showWarpTarget(name) {
+    this._show(name, 'Warp Target');
+  }
+
   showStar(data, name) {
     const typeName = `${data.type}-Class Star`;
     const title = name ? `${name} \u2014 ${typeName}` : typeName;

@@ -32,7 +32,7 @@ import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { SoundEngine } from './audio/SoundEngine.js';
 import { MusicManager } from './audio/MusicManager.js';
-import { generateSystemNames } from './generation/NameGenerator.js';
+import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -114,6 +114,8 @@ let pendingSystemData = null; // pre-generated data cached during fold phase
 // Direction is used when starting warp so the rift opens toward that star.
 const warpTarget = {
   direction: null,   // THREE.Vector3 world-space direction, or null
+  name: null,        // deterministic name for the selected star (shown in BodyInfo)
+  starIndex: -1,     // index in starfield positions array (seeds name)
   blinkTimer: 0,     // accumulates time for 2 Hz blink
   blinkOn: false,    // current blink state
   turning: false,    // camera is rotating to face target before warp
@@ -559,6 +561,8 @@ warpEffect.onPrepareSystem = () => {
     pendingSystemData = ClusterGenerator.generate(seed, destType);
   }
   pendingSystemData._destType = destType;
+  // Carry the warp target's name into the new system so it matches what was shown
+  pendingSystemData._warpTargetName = warpTarget.name || null;
   console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold`);
 };
 
@@ -771,6 +775,8 @@ function _hideCurrentSystem() {
 function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Reset state ──
   warpTarget.direction = null;
+  warpTarget.name = null;
+  warpTarget.starIndex = -1;
   const wasAutopilot = autoNav.isActive;
 
   // Reset camera far plane (may have been extended for navigable nebulae)
@@ -852,10 +858,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   const systemData = preGenData || StarSystemGenerator.generate(seed);
 
   // ── Generate names for star system ──
+  // If we warped to a selected star, use its name as the system name.
+  // Otherwise generate fresh names from the seed.
   let systemNames = null;
   if (!systemData._navigable) {
     const nameRng = new SeededRandom(seed);
-    systemNames = generateSystemNames(nameRng, systemData);
+    systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null);
   }
 
   // ── Create star(s) ──
@@ -3463,13 +3471,20 @@ function trySelect(clientX, clientY) {
  * Green brackets will blink around it; pressing Space warps toward it.
  */
 function trySelectWarpTarget(rayDir) {
-  const dir = starfield.findNearestStar(rayDir);
-  if (!dir) return; // no star close enough to the click
+  const result = starfield.findNearestStar(rayDir);
+  if (!result) return; // no star close enough to the click
 
   soundEngine.play('warpTarget');
-  warpTarget.direction = dir;
+  warpTarget.direction = result.direction;
+  warpTarget.starIndex = result.index;
+  // Generate a deterministic name from the star's index — same index = same name every time
+  const nameRng = new SeededRandom(`warp-star-${result.index}`);
+  warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
   warpTarget.blinkTimer = 0;
   warpTarget.blinkOn = true;
+
+  // Show the star name in the HUD
+  bodyInfo.showWarpTarget(warpTarget.name);
 }
 
 /**
@@ -3478,9 +3493,12 @@ function trySelectWarpTarget(rayDir) {
  */
 function autoSelectWarpTarget() {
   camera.getWorldDirection(_starRayDir);
-  const dir = starfield.getRandomVisibleStar(_starRayDir);
-  if (dir) {
-    warpTarget.direction = dir;
+  const result = starfield.getRandomVisibleStar(_starRayDir);
+  if (result) {
+    warpTarget.direction = result.direction;
+    warpTarget.starIndex = result.index;
+    const nameRng = new SeededRandom(`warp-star-${result.index}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
     warpTarget.blinkTimer = 0;
     warpTarget.blinkOn = true;
   }
