@@ -430,6 +430,12 @@ export class PlanetGenerator {
    * - Transition: between habitable zone and frost line → sub-neptune, ice, gas-giant
    * - Outer: beyond frost line → gas-giant, ice, sub-neptune
    *
+   * Exotic/civilized types (NMS-inspired):
+   * - Exotic roll happens first, weighted by star type (M > K > O/B > F/G)
+   * - Max 1 exotic per system (zones.hasExotic flag)
+   * - Civilized types (city-lights, ecumenopolis) only in HZ around F/G/K/A stars
+   * - Zone restrictions filter which exotic subtypes can appear where
+   *
    * M-dwarfs rarely have gas giants (~3% real rate). Eyeball planets
    * are boosted around M/K stars (tidal locking in the close habitable zone).
    */
@@ -448,6 +454,57 @@ export class PlanetGenerator {
     }
 
     const { frostLine, hzInner, hzOuter, starType } = zones;
+
+    // ── Exotic/civilized roll (before normal zone selection) ──
+    // Only if this system doesn't already have an exotic planet
+    if (!zones.hasExotic) {
+      // Exotic chance per planet, by star type (NMS-inspired: M > K > O/B > F/G)
+      const exoticChance = {
+        'O': 0.035, 'B': 0.03, 'A': 0.02,
+        'F': 0.015, 'G': 0.015,
+        'K': 0.03, 'M': 0.04,
+      }[starType] || 0.015;
+
+      // Civilized chance — only around stable, long-lived stars
+      const civilizedChance = {
+        'F': 0.03, 'G': 0.04, 'K': 0.03, 'A': 0.005, 'M': 0.01,
+      }[starType] || 0;
+
+      const exoticRoll = rng.float();
+
+      // Civilized types: city-lights / ecumenopolis (HZ only)
+      if (civilizedChance > 0 && exoticRoll < civilizedChance && orbitRadius >= hzInner && orbitRadius < hzOuter) {
+        zones.hasExotic = true;
+        // ~70% city-lights, ~30% ecumenopolis
+        return rng.float() < 0.7 ? 'city-lights' : 'ecumenopolis';
+      }
+
+      // Exotic types: zone-filtered subtypes
+      if (exoticRoll < exoticChance + civilizedChance) {
+        // Determine which zone we're in (exclusive)
+        const zone =
+          orbitRadius < hzInner * 0.3 ? 'scorching' :
+          orbitRadius < hzInner       ? 'inner' :
+          orbitRadius < hzOuter       ? 'hz' :
+          orbitRadius < frostLine     ? 'transition' :
+                                        'outer';
+
+        // Which exotic types are allowed in each zone
+        const zoneAllowed = {
+          scorching:  ['shattered'],                                    // tidal/thermal stress
+          inner:      ['hex', 'machine', 'shattered', 'crystal'],       // varied
+          hz:         ['hex', 'machine', 'fungal'],                     // biological + artificial
+          transition: ['hex', 'machine', 'shattered', 'crystal', 'fungal'], // everything
+          outer:      ['hex', 'machine', 'crystal'],                    // cold, mineral, artificial
+        };
+
+        const allowed = zoneAllowed[zone] || [];
+        if (allowed.length > 0) {
+          zones.hasExotic = true;
+          return rng.pick(allowed);
+        }
+      }
+    }
 
     // ── Scorching zone: inside 0.3x habitable zone inner edge ──
     // Mix of hostile world types — lava, carbon, venus, hot-jupiters
