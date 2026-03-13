@@ -52,6 +52,8 @@ export class PlanetGenerator {
         { base: [0.7, 0.8, 0.9], accent: [0.5, 0.6, 0.8] },        // Pale blue
         { base: [0.85, 0.85, 0.9], accent: [0.6, 0.7, 0.85] },      // White-blue
         { base: [0.6, 0.7, 0.75], accent: [0.4, 0.5, 0.65] },       // Steel blue
+        { base: [0.75, 0.85, 0.8], accent: [0.5, 0.7, 0.6] },       // Mint frost
+        { base: [0.65, 0.65, 0.8], accent: [0.45, 0.45, 0.7] },     // Lavender ice
       ],
     },
     lava: {
@@ -59,6 +61,8 @@ export class PlanetGenerator {
         { base: [0.15, 0.1, 0.1], accent: [0.9, 0.3, 0.05] },      // Dark + orange glow
         { base: [0.2, 0.12, 0.08], accent: [1.0, 0.5, 0.1] },       // Dark + yellow glow
         { base: [0.12, 0.08, 0.1], accent: [0.8, 0.15, 0.05] },     // Dark + red glow
+        { base: [0.1, 0.1, 0.15], accent: [0.6, 0.2, 0.8] },        // Dark + violet glow
+        { base: [0.18, 0.15, 0.08], accent: [0.95, 0.8, 0.2] },     // Dark + bright gold glow
       ],
     },
     ocean: {
@@ -66,6 +70,8 @@ export class PlanetGenerator {
         { base: [0.1, 0.2, 0.5], accent: [0.15, 0.35, 0.45] },     // Deep blue
         { base: [0.05, 0.25, 0.35], accent: [0.1, 0.4, 0.35] },     // Teal
         { base: [0.08, 0.15, 0.4], accent: [0.12, 0.3, 0.5] },      // Dark ocean
+        { base: [0.15, 0.1, 0.35], accent: [0.2, 0.15, 0.45] },     // Purple deep
+        { base: [0.05, 0.3, 0.25], accent: [0.08, 0.45, 0.3] },     // Emerald sea
       ],
     },
     terrestrial: {
@@ -89,6 +95,8 @@ export class PlanetGenerator {
         { base: [0.08, 0.15, 0.45], accent: [0.2, 0.42, 0.18] },   // Dark ocean + green habitable
         { base: [0.1, 0.2, 0.5], accent: [0.25, 0.5, 0.2] },        // Blue ocean + lush ring
         { base: [0.06, 0.12, 0.35], accent: [0.3, 0.35, 0.18] },    // Deep ocean + savanna ring
+        { base: [0.12, 0.08, 0.3], accent: [0.35, 0.2, 0.15] },     // Purple ocean + desert ring
+        { base: [0.05, 0.2, 0.3], accent: [0.15, 0.45, 0.35] },     // Teal ocean + moss ring
       ],
     },
     venus: {
@@ -96,6 +104,8 @@ export class PlanetGenerator {
         { base: [0.75, 0.65, 0.4], accent: [0.85, 0.78, 0.55] },   // Classic cream-yellow
         { base: [0.7, 0.6, 0.35], accent: [0.8, 0.7, 0.45] },       // Warm sulfur
         { base: [0.65, 0.55, 0.38], accent: [0.78, 0.68, 0.5] },    // Pale gold
+        { base: [0.6, 0.5, 0.45], accent: [0.75, 0.65, 0.55] },     // Dusty rose
+        { base: [0.72, 0.58, 0.3], accent: [0.82, 0.72, 0.4] },     // Amber haze
       ],
     },
     carbon: {
@@ -103,6 +113,8 @@ export class PlanetGenerator {
         { base: [0.08, 0.07, 0.06], accent: [0.2, 0.15, 0.08] },   // Near-black + dark amber
         { base: [0.1, 0.08, 0.07], accent: [0.15, 0.12, 0.1] },     // Charcoal
         { base: [0.06, 0.05, 0.05], accent: [0.25, 0.18, 0.1] },    // Coal + amber highlights
+        { base: [0.05, 0.06, 0.08], accent: [0.12, 0.18, 0.25] },   // Dark steel + blue glint
+        { base: [0.09, 0.06, 0.1], accent: [0.2, 0.1, 0.22] },      // Carbon + violet shimmer
       ],
     },
     'sub-neptune': {
@@ -184,10 +196,10 @@ export class PlanetGenerator {
 
     // ── Rings ──
     const ringChance = {
-      'gas-giant': 0.6, 'ice': 0.15, 'rocky': 0.03,
-      'terrestrial': 0.05, 'ocean': 0.02, 'lava': 0.01,
-      'hot-jupiter': 0.05, 'sub-neptune': 0.1,
-      'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.02,
+      'gas-giant': 0.5, 'ice': 0.25, 'rocky': 0.08,
+      'terrestrial': 0.18, 'ocean': 0.05, 'lava': 0.03,
+      'hot-jupiter': 0.08, 'sub-neptune': 0.15,
+      'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.05,
     };
     const hasRings = rng.chance(ringChance[type] || 0.02);
     let rings = null;
@@ -337,64 +349,66 @@ export class PlanetGenerator {
     const { frostLine, hzInner, hzOuter, starType } = zones;
 
     // ── Scorching zone: inside 0.3x habitable zone inner edge ──
-    // Boosted hot-jupiters & carbon for more visual variety
+    // Mix of hostile world types — lava, carbon, venus, hot-jupiters
     if (orbitRadius < hzInner * 0.3) {
       if (starType !== 'M' && rng.chance(0.15)) return 'hot-jupiter';
-      if (roll < 0.28) return 'lava';
-      if (roll < 0.46) return 'rocky';
-      if (roll < 0.58) return 'venus';
-      if (roll < 0.76) return 'carbon';
-      return 'rocky';
+      if (roll < 0.22) return 'lava';
+      if (roll < 0.38) return 'rocky';
+      if (roll < 0.54) return 'venus';
+      if (roll < 0.72) return 'carbon';
+      if (roll < 0.86) return 'sub-neptune';
+      return 'lava';
     }
 
     // ── Inner zone: between scorching and habitable zone ──
-    // More venus, lava, carbon for exotic variety
+    // Broad mix — rocky, venus, terrestrial, carbon, sub-neptune
     if (orbitRadius < hzInner) {
-      if (roll < 0.18) return 'rocky';
-      if (roll < 0.34) return 'venus';
-      if (roll < 0.46) return 'terrestrial';
-      if (roll < 0.58) return 'lava';
-      if (roll < 0.68) return 'sub-neptune';
-      if (roll < 0.80) return 'carbon';
+      if (roll < 0.16) return 'rocky';
+      if (roll < 0.30) return 'venus';
+      if (roll < 0.44) return 'terrestrial';
+      if (roll < 0.54) return 'lava';
+      if (roll < 0.66) return 'carbon';
+      if (roll < 0.78) return 'sub-neptune';
       return 'ocean';
     }
 
     // ── Habitable zone ──
-    // Boosted eyeball, ocean, and terrestrial for visual interest
+    // Earth-like worlds (green terrestrials) are rare — most HZ planets are
+    // ocean, rocky, or sub-neptune. ~8% terrestrial aligns with optimistic
+    // exoplanet science (~1-5% of systems having a visibly alive world).
     if (orbitRadius < hzOuter) {
-      // Eyeball planets: boosted for ALL star types, extra for M/K (tidal locking)
-      const eyeballBoost = (starType === 'M' || starType === 'K') ? 0.18 : 0.10;
-      if (roll < 0.20) return 'terrestrial';
-      if (roll < 0.38) return 'ocean';
-      if (roll < 0.38 + eyeballBoost) return 'eyeball';
-      if (roll < 0.55) return 'sub-neptune';
-      if (roll < 0.65) return 'rocky';
-      if (roll < 0.75) return 'venus';
+      const eyeballBoost = (starType === 'M' || starType === 'K') ? 0.18 : 0.12;
+      if (roll < 0.08) return 'terrestrial';
+      if (roll < 0.28) return 'ocean';
+      if (roll < 0.28 + eyeballBoost) return 'eyeball';
+      if (roll < 0.48) return 'sub-neptune';
+      if (roll < 0.62) return 'rocky';
+      if (roll < 0.76) return 'venus';
       return 'ice';
     }
 
     // ── Transition zone: between habitable zone and frost line ──
-    // More gas giants and carbon for striking visuals
+    // Diverse mix — ice, sub-neptune, terrestrial, with some gas giants
     if (orbitRadius < frostLine) {
       if (roll < 0.18) return 'sub-neptune';
-      if (roll < 0.32) return 'ice';
-      if (roll < 0.40) return 'rocky';
-      if (roll < 0.58) return 'gas-giant';
-      if (roll < 0.70) return 'ocean';
-      if (roll < 0.82) return 'terrestrial';
+      if (roll < 0.34) return 'ice';
+      if (roll < 0.44) return 'rocky';
+      if (roll < 0.54) return 'gas-giant';
+      if (roll < 0.66) return 'ocean';
+      if (roll < 0.78) return 'terrestrial';
       return 'carbon';
     }
 
     // ── Outer system: beyond frost line ──
-    // Boosted gas giants for all star types (visually spectacular)
+    // Gas giants present but not dominant — ice and other types get space
     const frostRatio = orbitRadius / frostLine;
-    const gasBase = (starType === 'M') ? 0.15 : 0.32;
-    const gasBoost = (frostRatio < 3.0 && starType !== 'M') ? 0.12 : 0.0;
+    const gasBase = (starType === 'M') ? 0.12 : 0.22;
+    const gasBoost = (frostRatio < 3.0 && starType !== 'M') ? 0.08 : 0.0;
     if (roll < gasBase + gasBoost) return 'gas-giant';
-    if (roll < 0.48) return 'ice';
-    if (roll < 0.60) return 'sub-neptune';
-    if (roll < 0.70) return 'rocky';
-    if (roll < 0.82) return 'ocean';
+    if (roll < 0.42) return 'ice';
+    if (roll < 0.55) return 'sub-neptune';
+    if (roll < 0.67) return 'rocky';
+    if (roll < 0.80) return 'ocean';
     return 'carbon';
   }
 }
