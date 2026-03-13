@@ -646,12 +646,14 @@ html, body {
 }
 
 /* ── Portrait Mode: smaller text, tighter panels ── */
-@media (pointer: coarse) and (orientation: portrait) {
+@media (pointer: coarse) and (max-aspect-ratio: 1/1) {
   /* Hide fullscreen button in portrait — only useful in landscape */
   .speed-dial-btn[data-action="fullscreen"] {
     display: none !important;
   }
+}
 
+@media (pointer: coarse) and (orientation: portrait) {
   #body-info {
     top: 12px;
     left: 12px;
