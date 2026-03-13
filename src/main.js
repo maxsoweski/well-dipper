@@ -2916,20 +2916,18 @@ function animate() {
 
       // Hide system objects when ENTER starts — they're behind the camera
       // by now (camera flew past them during FOLD) or will fade quickly.
-      // Exception: distant deep sky (galaxies, globular clusters) stay visible
-      // through ENTER — they're ahead of you, growing on screen. Hidden at HYPER start.
+      // Exception: distant deep sky flying TOWARD (no target) — stays visible
+      // through ENTER (growing on screen). Hidden at HYPER start.
       if (prevState === 'fold' && warpEffect.state === 'enter') {
-        const isDistantDeepSky = system && system.type && system.type !== 'star-system' && !system._navigable;
-        if (!isDistantDeepSky) {
+        const isDistantDS = system && system.type && system.type !== 'star-system' && !system._navigable;
+        const flyingToward = isDistantDS && warpEffect.riftDirection === null;
+        if (!flyingToward) {
           _hideCurrentSystem();
         }
       }
       if (prevState === 'enter' && warpEffect.state === 'hyper') {
-        // Catch any remaining objects (distant deep sky) — tunnel is now opaque
-        const isDistantDeepSky = system && system.type && system.type !== 'star-system' && !system._navigable;
-        if (isDistantDeepSky) {
-          _hideCurrentSystem();
-        }
+        // Catch any remaining objects (distant deep sky flying toward) — tunnel is opaque
+        _hideCurrentSystem();
       }
 
       // ── Determine rift direction (default: camera forward) ──
@@ -2951,12 +2949,14 @@ function animate() {
       starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness, _riftNDC);
 
       // Deep sky objects: override sceneFade in certain phases.
-      // - During FOLD/ENTER for distant deep sky: keep visible (growing on screen)
-      // - During EXIT for all deep sky: keep visible (revealed through exit hole)
+      // - Distant deep sky flying TOWARD (no target): keep visible during FOLD/ENTER
+      // - Distant deep sky flying PAST (target selected): use normal sceneFade
+      // - EXIT for all deep sky: keep visible (revealed through exit hole)
       let effectiveSceneFade = warpEffect.sceneFade;
       const isDistantDS = system && system.type && system.type !== 'star-system' && !system._navigable;
-      if (isDistantDS && (warpEffect.state === 'fold' || warpEffect.state === 'enter')) {
-        effectiveSceneFade = 0;
+      const flyingPastDS = isDistantDS && warpEffect.riftDirection !== null;
+      if (isDistantDS && !flyingPastDS && (warpEffect.state === 'fold' || warpEffect.state === 'enter')) {
+        effectiveSceneFade = 0; // flying toward — keep galaxy visible
       }
       if (warpEffect.state === 'exit' && system && system.type && system.type !== 'star-system') {
         effectiveSceneFade = 0;
@@ -2987,18 +2987,21 @@ function animate() {
         camera.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
 
         // Deep sky objects during warp:
-        // - Distant (galaxies, globular clusters): move at 92% of camera speed
-        //   so there's a slow closing distance — the galaxy grows subtly on screen
-        //   as if you're flying toward one of its stars. warpRevealSystem() snaps
-        //   to final position when warp completes.
         // - Navigable (nebulae, open clusters): stay fixed — camera flies past them
         //   like star system objects.
+        // - Distant (galaxies, globular clusters): behavior depends on warp target.
+        //   * No target selected (riftDirection null): fly TOWARD the galaxy — it
+        //     grows on screen (92% of camera speed = slow closing distance).
+        //   * Background star selected: fly PAST the galaxy — it drifts behind you,
+        //     but slowly (50% of camera speed) because of its vast scale. A planet
+        //     would whoosh past at full speed; a galaxy is so immense it lingers.
         if (system && system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
-          const approachFactor = 0.92; // < 1.0 = slowly closing distance
-          system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * approachFactor * deltaTime);
+          const flyingPast = warpEffect.riftDirection !== null;
+          const dsFactor = flyingPast ? 0.5 : 0.92;
+          system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * dsFactor * deltaTime);
           if (system._dummyRefs) {
             for (const ref of system._dummyRefs) {
-              ref.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * approachFactor * deltaTime);
+              ref.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * dsFactor * deltaTime);
             }
           }
         }
