@@ -210,6 +210,10 @@ export class StarfieldGenerator {
       sizes,
       count: totalCount,
       realStars: realStarMap,
+      // Sky density grid for the galactic glow layer
+      skyGrid,
+      skyGridTheta: GRID_THETA,
+      skyGridPhi: GRID_PHI,
     };
   }
 

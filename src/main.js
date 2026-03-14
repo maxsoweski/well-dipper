@@ -35,6 +35,7 @@ import { MusicManager } from './audio/MusicManager.js';
 import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
 import { GalacticMap } from './generation/GalacticMap.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
+import { GalaxyGlow } from './objects/GalaxyGlow.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -93,13 +94,17 @@ const galacticMap = new GalacticMap('well-dipper-galaxy-1');
 let playerGalacticPos = galacticMap.getStartPosition();
 let currentGalaxyStar = null; // the GalacticMap star entry we're currently at
 
-// Generate initial galaxy-aware starfield
+// Generate initial galaxy-aware starfield + glow
+let galaxyGlow = null;
 {
   const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
   starfield.dispose();
   retroRenderer.starfieldScene.remove(starfield.mesh);
   starfield = new Starfield(sfData, 500);
   starfield.addTo(retroRenderer.starfieldScene);
+  // Diffuse galactic glow behind the point stars
+  galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
+  galaxyGlow.addTo(retroRenderer.starfieldScene);
 }
 
 // ── System State ──
@@ -619,15 +624,22 @@ warpEffect.onSwapSystem = () => {
   musicManager.play('hyperspace', 0.3);
   warpSwapSystem();
 
-  // ── Regenerate starfield for new galactic position ──
+  // ── Regenerate starfield + glow for new galactic position ──
   if (galacticMap) {
     const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
     starfield.dispose();
     retroRenderer.starfieldScene.remove(starfield.mesh);
     starfield = new Starfield(sfData, 500);
     starfield.addTo(retroRenderer.starfieldScene);
-    // Position the new starfield at the camera immediately
     starfield.update(camera.position);
+    // Swap galactic glow
+    if (galaxyGlow) {
+      galaxyGlow.dispose();
+      retroRenderer.starfieldScene.remove(galaxyGlow.mesh);
+    }
+    galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
+    galaxyGlow.addTo(retroRenderer.starfieldScene);
+    galaxyGlow.update(camera.position);
   }
 };
 
@@ -2657,6 +2669,7 @@ function animate() {
     camera.near = Math.max(0.0001, Math.min(1.0, cameraController.smoothedDistance * 0.01));
     camera.updateProjectionMatrix();
     starfield.update(camera.position);
+    if (galaxyGlow) galaxyGlow.update(camera.position);
     retroRenderer.render();
     return;
   }
@@ -3247,6 +3260,7 @@ function animate() {
   }
 
   starfield.update(camera.position);
+  if (galaxyGlow) galaxyGlow.update(camera.position);
 
   // ── Update HUD ──
   // During flythrough, compute yaw from camera position relative to origin
@@ -3369,13 +3383,17 @@ window.addEventListener('keydown', (e) => {
       // Teleport to the galactic position
       playerGalacticPos = { ...galaxyDebug.pos };
       const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      // Regenerate starfield
+      // Regenerate starfield + glow
       const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
       starfield.dispose();
       retroRenderer.starfieldScene.remove(starfield.mesh);
       starfield = new Starfield(sfData, 500);
       starfield.addTo(retroRenderer.starfieldScene);
       starfield.update(camera.position);
+      if (galaxyGlow) { galaxyGlow.dispose(); retroRenderer.starfieldScene.remove(galaxyGlow.mesh); }
+      galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
+      galaxyGlow.addTo(retroRenderer.starfieldScene);
+      galaxyGlow.update(camera.position);
       // Generate a system at this position
       const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
       const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'galaxy-debug';
