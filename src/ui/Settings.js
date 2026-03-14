@@ -10,7 +10,7 @@ const STORAGE_KEY = 'well-dipper-settings';
 const DEFAULTS = {
   // Visual
   pixelScale: 3,
-  starDensity: 6000,
+  starDensity: 18000,
 
   // Screensaver
   idleTimeout: 300,           // seconds before autopilot starts (5 minutes)
