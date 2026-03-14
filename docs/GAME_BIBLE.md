@@ -42,14 +42,17 @@ The warp is not just travel. It is the **inseparability of all points in space**
 
 ---
 
-## 1A. Two Modes
+## 1A. Three Development Layers
 
-Well Dipper has two distinct modes that coexist in the same application:
+Well Dipper exists as three layers, each building on the last. It's critical to understand which layer a feature belongs to — this prevents confusing what we HAVE with what we're PLANNING.
 
-**SCREENSAVER MODE (Current — Mostly Complete)**
+---
+
+**LAYER 1: SCREENSAVER — CURRENT (Mostly Complete)**
+
 The original product. A retro space screensaver that runs autonomously. You watch, or you lightly interact (click planets, select warp targets, adjust settings). No player character, no ship, no inventory, no combat. Just vast procedural space.
 
-What's done:
+What's done and working:
 - 11+ planet types with custom GLSL shaders, zone-based generation
 - Binary star systems, asteroid belts, moons
 - Warp transitions with fold/hyperspace/exit animations
@@ -60,30 +63,65 @@ What's done:
 - Sound effects (placeholder synthesized) and music system (ready, awaiting tracks)
 - Exotic/civilized planet overlay system
 - Science-driven planet distribution with metallicity, archetypes, log-normal spacing
+- Zone-aware moon generation
 
-What's remaining for screensaver mode:
+What's remaining:
 - Music tracks from Christian
 - CRT scanline filter (optional)
-- Possible enrichment with ships, megastructures, etc. as visual elements (no gameplay)
 
-**GAME MODE (Planning Phase — Not Yet Built)**
-A full space exploration/combat game built on top of the screensaver's foundation. You are a pilot. You fly a ship. You scan, trade, fight, refuel, upgrade, and explore a persistent galaxy.
+**This layer is functionally complete.** Everything below is additive.
 
-Game mode adds:
-- Player ship with movement (two flight models: all-range + on-rails)
-- Combat (two modes tied to velocity)
-- Scanner as universal interaction verb (4 layers)
-- Nav computer (replaces current minimap)
-- Fuel/energy system (rotor + gravity wells)
-- Ship upgrades and progression
-- Factions (lawful vs hostile, regional)
-- NPC ships, space stations, docking
-- Persistent save system
-- Galaxy-scale procedural generation
-- Narrative framework
-- Evolving warp experiences
+---
 
-The screensaver mode continues to exist as a separate mode — it's not replaced by the game. Think of it like a "demo reel" or "attract mode."
+**LAYER 2: SCREENSAVER ENRICHED — FUTURE (Adds Visual Richness, No Gameplay)**
+
+Enhancements to the screensaver that make it more visually rich and varied. These add new things to LOOK AT but zero gameplay mechanics. The screensaver remains passive — you watch, it plays.
+
+What this layer adds:
+- NPC ships flying routes, docking, passing through (visual only — no interaction)
+- Megastructures visible in systems (Dyson swarms, ring habitats, derelicts)
+- Non-main-sequence stars (white dwarfs, pulsars, red giants, black holes) with unique visuals
+- Comets, interstellar objects passing through systems
+- Space stations orbiting planets (visual only)
+- Music tracks playing (the 7-track system)
+- Environmental visual effects (radiation glow near pulsars, solar flares, nebula fog)
+- Higher LOD planet detail on close approach
+- Richer starfield reflecting galactic position (if galaxy layer is built)
+
+**Key distinction:** Nothing in this layer requires player input, a save system, or game state. It's all scenery. The autopilot still tours everything. The screensaver just has more to show you.
+
+---
+
+**LAYER 3: GAME MODE — PLANNING PHASE (Not Yet Built)**
+
+A fundamentally different experience built on the same universe. You are a pilot. You fly a ship. You make decisions. There is risk, reward, progression, and consequence. This is a GAME, not a screensaver.
+
+What this layer adds:
+- Player ship with manual flight (two models: all-range + on-rails)
+- Combat (two modes tied to velocity: Star Fox all-range + Panzer Dragoon on-rails)
+- Scanner as universal interaction verb (4 layers: galactic survey → star-wave → direct → codex)
+- Nav computer (diegetic CRT terminal replacing current minimap)
+- Fuel/energy system (rotor + gravity well minigame)
+- Ship upgrades and progression (rotor, shields, scanner, weapons, engines, hull, cargo)
+- Factions controlling galaxy regions (lawful vs hostile, expandable)
+- NPC ships with behavior, hailing, combat AI
+- Space stations with docking and interior exploration
+- Persistent save system (localStorage / IndexedDB)
+- Galaxy-scale procedural generation with regional variation
+- Narrative framework (environmental storytelling, unexpected scan results, mystery)
+- Evolving warp experiences (early: tunnel, mid: anomalies, late: impossible spaces)
+- NPC communications (text-based, faction-varied, AI-generated variety)
+- Economy (scan data trading, upgrade purchasing)
+
+**Key distinction:** Everything in this layer requires a player making choices. The screensaver mode still exists alongside it — think of the screensaver as "attract mode" or a separate menu option.
+
+---
+
+Throughout this bible, features are tagged:
+- **[SCREENSAVER]** — Layer 1, exists now
+- **[ENRICHED]** — Layer 2, visual additions to screensaver, no gameplay
+- **[GAME]** — Layer 3, full game systems
+- **[BOTH]** — Applies across all layers (e.g., planet generation, aesthetic rules)
 
 ---
 
