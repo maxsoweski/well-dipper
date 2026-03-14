@@ -453,6 +453,20 @@ export class PlanetGenerator {
     }
 
     const { frostLine, hzInner, hzOuter, starType } = zones;
+    // Metallicity and archetype size bias (optional — fallback for standalone use)
+    const metallicity = zones.metallicity ?? 0.0;
+    const sizeBias = zones.sizeBias ?? 'neutral';
+
+    // Fischer-Valenti scaling: gas giant probability ∝ 10^(2×[Fe/H]).
+    // At solar metallicity (0.0): factor = 1.0
+    // At [Fe/H] = +0.3: factor ≈ 4.0 (metal-rich → many gas giants)
+    // At [Fe/H] = -0.5: factor ≈ 0.1 (metal-poor → almost no gas giants)
+    const metalFactor = Math.pow(10, 2 * metallicity);
+
+    // Archetype size bias: shifts probability slightly toward smaller or
+    // larger planet types. Compact-rocky → more rocky, less gas.
+    // Spread-giant → more gas/sub-neptune, less rocky.
+    const sizeMod = sizeBias === 'small' ? -0.05 : sizeBias === 'large' ? 0.05 : 0;
 
     // NOTE: Exotic and civilized planet types (hex, machine, crystal, shattered,
     // fungal, city-lights, ecumenopolis) are NOT handled here. They are applied
@@ -492,7 +506,7 @@ export class PlanetGenerator {
     // bare rocky cores, carbon worlds. Hot Jupiters are migrated gas giants
     // (~0.5-1% of all systems, only around FGK stars).
     if (orbitRadius < hzInner * 0.4) {
-      if (starType !== 'M' && rng.chance(0.04)) return 'hot-jupiter';
+      if (starType !== 'M' && rng.chance(Math.min(0.04 * metalFactor, 0.15))) return 'hot-jupiter';
       if (roll < 0.30) return 'lava';
       if (roll < 0.55) return 'rocky';
       if (roll < 0.75) return 'carbon';
@@ -546,27 +560,27 @@ export class PlanetGenerator {
 
     // ── Transition zone: HZ outer edge to frost line ──
     // Water freezes on surfaces. Sub-Neptunes and ice worlds dominate.
-    // Gas giants rare here — they form AT the frost line, not before it.
+    // Gas giants starting to appear near frost line, scaled by metallicity.
     // No liquid water on surfaces — too cold.
     if (orbitRadius < frostLine) {
+      const transGasProb = Math.min(0.08 * metalFactor + sizeMod, 0.25);
       if (roll < 0.30) return 'sub-neptune';
       if (roll < 0.55) return 'ice';
       if (roll < 0.72) return 'rocky';
-      if (roll < 0.80) return 'gas-giant';
+      if (roll < 0.72 + transGasProb) return 'gas-giant';
       return 'carbon';
     }
 
     // ── Outer system: beyond frost line ──
     // Gas giant formation zone (core accretion peaks at snow line).
-    // ~15-20% of FGK stars have gas giants (Cumming 2008), ~3-5% of M dwarfs.
-    // But each individual outer planet has a LOW chance of being a gas giant —
-    // systems have multiple outer planets, so per-planet rate must be modest
-    // to hit 15-20% at the system level.
+    // Fischer-Valenti: P(giant) ∝ 10^(2×[Fe/H]).
+    // Metal-rich systems → many gas giants. Metal-poor → almost none.
+    // Archetype sizeBias also shifts probability.
     const frostRatio = orbitRadius / frostLine;
-    // Gas giants peak near frost line (1-3x), decline further out
-    const gasBase = (starType === 'M') ? 0.03 : 0.10;
-    const gasBoost = (frostRatio < 3.0 && starType !== 'M') ? 0.08 : 0.0;
-    if (roll < gasBase + gasBoost) return 'gas-giant';
+    const gasBase = ((starType === 'M') ? 0.03 : 0.10) * metalFactor + sizeMod;
+    const gasBoost = (frostRatio < 3.0 && starType !== 'M') ? 0.08 * metalFactor : 0.0;
+    const gasProb = Math.min(gasBase + gasBoost, 0.40);
+    if (roll < gasProb) return 'gas-giant';
     if (roll < 0.48) return 'ice';
     if (roll < 0.68) return 'sub-neptune';
     if (roll < 0.85) return 'rocky';

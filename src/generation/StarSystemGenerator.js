@@ -135,11 +135,30 @@ export class StarSystemGenerator {
       binaryOrbitAngle = rng.range(0, Math.PI * 2);
     }
 
+    // ── System-level parameters ──
+    // Metallicity: [Fe/H] relative to Sun. Drives gas giant probability
+    // (Fischer-Valenti: P ∝ 10^(2×[Fe/H])). Gaussian centered on solar.
+    // Later: derived from galactic position instead of randomized.
+    const metallicity = rng.gaussianClamped(0.0, 0.2, -1.0, 0.5);
+
+    // Age in Gyr. Stored for future use (M-dwarf pre-MS stripping,
+    // HZ migration, atmosphere survival). Not used in generation yet.
+    const ageGyr = rng.gaussianClamped(4.5, 2.5, 0.1, 12.0);
+
+    // System archetype — "peas in a pod" driver (Weiss et al. 2018).
+    // Real systems have correlated planet sizes and spacings.
+    // The archetype biases both spacing and size preference.
+    const archetypeRoll = rng.float();
+    const archetype = archetypeRoll < 0.30
+      ? { name: 'compact-rocky', spacingMuOffset: -0.10, sizeBias: 'small', countModifier: 1 }
+      : archetypeRoll < 0.75
+        ? { name: 'mixed', spacingMuOffset: 0.0, sizeBias: 'neutral', countModifier: 0 }
+        : { name: 'spread-giant', spacingMuOffset: 0.10, sizeBias: 'large', countModifier: -1 };
+
     // ── Physical zones (frost line, habitable zone) ──
     // Scale with the square root of stellar luminosity
     const luminosity = props.luminosity;
     // Frost line: 4.85√L AU (Hayashi line — where water ice can condense)
-    // Old value was 2.7√L which put the frost line too close to the star.
     const frostLineAU = 4.85 * Math.sqrt(luminosity);
     const hzInnerAU = 0.95 * Math.sqrt(luminosity);
     const hzOuterAU = 1.37 * Math.sqrt(luminosity);
@@ -147,20 +166,28 @@ export class StarSystemGenerator {
     // ── Orbital spacing (in AU) ──
     // Innermost orbit: scales with luminosity so hot stars have planets
     // further out (they'd be vaporized closer in).
-    // Range: ~0.15 AU (M-dwarf) to ~0.4 AU (G-type) to huge for O/B.
     const innerOrbitAU = rng.range(0.3, 0.5) * Math.sqrt(Math.max(luminosity, 0.01));
     // Binary systems: innermost planet must be outside binary orbits
-    // (~2.5x the binary separation for stability)
     const minInnerOrbitAU = isBinary ? binarySeparationAU * 2.5 : 0;
     const adjustedInnerAU = Math.max(innerOrbitAU, minInnerOrbitAU);
-    const spacingFactor = rng.range(1.6, 2.2);
 
-    // Zones for type selection use AU directly now
+    // Log-normal spacing parameters (Steffen & Hwang 2015, Weiss et al. 2018).
+    // Period ratios follow log-normal with mu≈0.55, sigma≈0.25, median≈1.73.
+    // Archetype shifts the mu: compact systems are tighter, spread systems wider.
+    const spacingMu = 0.55 + archetype.spacingMuOffset;
+    const spacingSigma = 0.25;
+    const minSpacingRatio = 1.2;  // Hard minimum from Kepler data
+    // Max orbit: don't place planets absurdly far out
+    const maxOrbitAU = 50 * Math.sqrt(Math.max(luminosity, 0.01));
+
+    // Zones for type selection (passed to PlanetGenerator)
     const zones = {
       frostLine: frostLineAU,
       hzInner: hzInnerAU,
       hzOuter: hzOuterAU,
       starType,
+      metallicity,
+      sizeBias: archetype.sizeBias,
     };
 
     // ── Map-scale orbital spacing (exaggerated, for backward compat) ──
@@ -186,17 +213,38 @@ export class StarSystemGenerator {
     };
 
     // ── Planet count ──
-    // ~8% chance of an empty system (no planets — just a lonely star or binary)
+    // ~8% chance of an empty system (no planets — just a lonely star or binary).
+    // Otherwise, gaussian distribution centered on mid-range, shifted by archetype.
+    // Compact-rocky systems get +1, spread-giant get -1.
     const [minPlanets, maxPlanets] = props.planetRange;
-    const planetCount = rng.chance(0.08) ? 0 : rng.int(minPlanets, maxPlanets);
+    const baseMean = (minPlanets + maxPlanets) / 2 + archetype.countModifier;
+    const planetCount = rng.chance(0.08)
+      ? 0
+      : Math.round(rng.gaussianClamped(baseMean, 1.5, 1, maxPlanets));
 
     // ── Generate planets ──
+    // Orbital spacing uses log-normal draws with peas-in-a-pod correlation.
+    // Adjacent spacings are 60% correlated (Weiss et al. 2018).
     const planets = [];
+    let currentOrbitAU = adjustedInnerAU;
+    let prevSpacing = 0;
     for (let i = 0; i < planetCount; i++) {
       const planetRng = rng.child(`planet-${i}`);
 
-      // Orbit in AU (geometric progression — Titius-Bode-like)
-      const orbitRadiusAU = adjustedInnerAU * Math.pow(spacingFactor, i);
+      // Log-normal spacing with peas-in-a-pod correlation
+      if (i > 0) {
+        const freshSpacing = Math.max(rng.logNormal(spacingMu, spacingSigma), minSpacingRatio);
+        const spacing = (i === 1)
+          ? freshSpacing
+          : 0.6 * prevSpacing + 0.4 * freshSpacing;
+        prevSpacing = spacing;
+        currentOrbitAU *= spacing;
+      }
+
+      // Stop if orbit exceeds reasonable limit for this star
+      if (currentOrbitAU > maxOrbitAU) break;
+
+      const orbitRadiusAU = currentOrbitAU;
       // Scene units (realistic) and map units (exaggerated)
       const orbitRadiusScene = auToScene(orbitRadiusAU);
       const orbitRadius = orbitRadiusAU * mapUnitsPerAU;  // map units (backward compat)
@@ -289,6 +337,10 @@ export class StarSystemGenerator {
       seed,
       // Zone boundaries (AU, scene, map units)
       zones: zoneData,
+      // System-level parameters (for overlays, UI, future galaxy integration)
+      metallicity,
+      ageGyr,
+      archetype: archetype.name,
       // Conversion factors (useful for consumers)
       mapUnitsPerAU,
     };

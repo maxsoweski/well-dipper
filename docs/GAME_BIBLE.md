@@ -118,10 +118,39 @@ Zones are defined by stellar luminosity and scale with √L:
 
 **Zones are first-class data.** They are stored in system data and available for future UI (zone rings on maps, scanner readouts, etc.).
 
+### System-Level Parameters
+
+**Metallicity** ([Fe/H] relative to Sun):
+- Gaussian centered on 0.0, stddev 0.2, clamped to [-1.0, +0.5]
+- Drives gas giant probability via Fischer-Valenti: P(giant) ∝ 10^(2×[Fe/H])
+- Metal-poor ([Fe/H] < -0.15): ~6% have gas giants
+- Solar ([Fe/H] ≈ 0): ~19% have gas giants
+- Metal-rich ([Fe/H] > +0.15): ~40% have gas giants
+- Later: derived from galactic position instead of randomized
+
+**Age** (Gyr):
+- Gaussian centered on 4.5, stddev 2.5, clamped to [0.1, 12.0]
+- Stored as data — not yet used in generation
+- Future: M-dwarf pre-MS atmosphere stripping, HZ migration
+
+**System Archetype** (Weiss et al. 2018 "peas in a pod"):
+- `compact-rocky` (30%): tighter spacing, +1 planet, smaller sizes
+- `mixed` (45%): default, no bias
+- `spread-giant` (25%): wider spacing, -1 planet, larger sizes
+- Drives both orbital spacing and planet type bias
+
 ### Planet Count
 - Determined by star type: O/B get 2-5, F/G get 4-8, K gets 3-7, M gets 3-6
 - ~8% chance of an empty system (no planets at all)
-- Orbital spacing follows geometric progression (Titius-Bode-like, factor 1.6-2.2×)
+- Gaussian distribution centered on mid-range, shifted by archetype
+- Result: most systems 4-6 planets, 1-2 planet systems are rare (~7%), 8 planet systems rare (~6%)
+
+### Orbital Spacing
+- Log-normal distribution per orbit (Steffen & Hwang 2015): μ=0.55, σ=0.25, median ratio ~1.73
+- Hard minimum ratio: 1.2 (nothing closer in Kepler data)
+- Peas-in-a-pod correlation: 60% of previous spacing + 40% fresh draw
+- Archetype shifts μ by ±0.10
+- Max orbit clamp at 50×√luminosity AU
 
 ### TODO: Zone Variability (needs research)
 - How does star age affect zone boundaries and planet formation?
