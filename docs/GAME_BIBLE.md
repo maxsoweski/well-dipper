@@ -581,7 +581,7 @@ for (let i = 0; i < N; i++) {
 - [ ] Star age effects on generation — when to start using `ageGyr` parameter
 
 ### Design Needed
-- [ ] Exotic spawning implementation — build overlay systems per §6
+- [x] Exotic spawning implementation — `ExoticOverlay.js` post-generation pass
 - [ ] Civilized planet spawning rates — finalize decision chain percentages
 - [ ] Navigation computer UI design — layout, interaction, aesthetic details
 - [ ] Megastructure visual design — how to render Dyson swarms, ring habitats
