@@ -263,11 +263,19 @@ export class StarSystemGenerator {
       // Generate planet using zone-based type selection (zones are in AU now)
       const planetData = PlanetGenerator.generate(planetRng, orbitRadiusAU, sunDirection, zones);
 
+      // Determine parent planet's orbital zone for moon type logic
+      const parentZone =
+        orbitRadiusAU < hzInnerAU * 0.4 ? 'scorching' :
+        orbitRadiusAU < hzInnerAU       ? 'inner' :
+        orbitRadiusAU < hzOuterAU       ? 'hz' :
+        orbitRadiusAU < frostLineAU     ? 'transition' :
+                                          'outer';
+
       // Generate moons
       const moons = [];
       for (let m = 0; m < planetData.moonCount; m++) {
         const moonRng = planetRng.child(`moon-${m}`);
-        const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount);
+        const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount, parentZone);
         moons.push(moonData);
       }
 

@@ -56,22 +56,27 @@ export class MoonGenerator {
    * @param {number} totalMoons - how many moons this planet has
    * @returns {object} moon data
    */
-  // Planet types that can appear as moons of large planets.
-  // NOT gas-giant (too massive), hot-jupiter (needs star proximity),
-  // lava (inner-system only), eyeball (tidal lock to star), carbon (keep rare).
-  static PLANET_MOON_TYPES = ['terrestrial', 'ocean', 'ice', 'rocky', 'venus', 'sub-neptune'];
+  // Planet types that can appear as planet-class moons, filtered by zone.
+  // Zone determines what large moons are physically possible.
+  static PLANET_MOON_TYPES_BY_ZONE = {
+    scorching:  ['rocky'],                                // Too hot for anything else
+    inner:      ['rocky', 'venus'],                       // Hot, greenhouse possible
+    hz:         ['terrestrial', 'ocean', 'ice', 'rocky'], // Life possible on large moons
+    transition: ['ice', 'rocky', 'ocean'],                // Cold, ice-dominant
+    outer:      ['ice', 'rocky', 'sub-neptune'],          // Frozen, Titan-like possible
+  };
 
-  static generate(rng, planetData, moonIndex, totalMoons) {
+  static generate(rng, planetData, moonIndex, totalMoons, parentZone = 'outer') {
     // ── Planet-moon check: large planets can have planet-class moons ──
     // Gas giants and sub-neptunes with 3+ moons, not the innermost slot
     // (innermost is reserved for volcanic Io-like moons).
-    // ~15% chance per eligible slot.
+    // ~10% chance per eligible slot (reduced from 15% — these are rare).
     const isLargeParent = planetData.type === 'gas-giant' || planetData.type === 'sub-neptune';
-    if (isLargeParent && moonIndex > 0 && totalMoons >= 3 && rng.chance(0.15)) {
-      return this._generatePlanetMoon(rng, planetData, moonIndex);
+    if (isLargeParent && moonIndex > 0 && totalMoons >= 3 && rng.chance(0.10)) {
+      return this._generatePlanetMoon(rng, planetData, moonIndex, parentZone);
     }
 
-    const type = this._pickType(rng, planetData, moonIndex);
+    const type = this._pickType(rng, planetData, moonIndex, parentZone);
 
     // Size: depends on moon type and parent planet
     // Gas giant moons can be much larger (Ganymede is bigger than Mercury)
@@ -197,10 +202,12 @@ export class MoonGenerator {
    * Generate a planet-class moon — uses PlanetGenerator for visuals
    * but MoonGenerator for orbital parameters.
    * Think Titan, Ganymede, or a captured mini-Neptune.
+   * Zone-aware: terrestrial/ocean only in HZ, ice dominant in outer.
    */
-  static _generatePlanetMoon(rng, planetData, moonIndex) {
-    // Pick a planet type appropriate for a moon
-    const planetType = rng.pick(this.PLANET_MOON_TYPES);
+  static _generatePlanetMoon(rng, planetData, moonIndex, parentZone) {
+    // Pick a planet type appropriate for this zone
+    const allowed = this.PLANET_MOON_TYPES_BY_ZONE[parentZone] || ['rocky', 'ice'];
+    const planetType = rng.pick(allowed);
 
     // Generate full planet data (orbit distance doesn't matter — we override it)
     const pData = PlanetGenerator.generate(rng, 1.0, planetData.sunDirection, null, planetType);
@@ -261,20 +268,69 @@ export class MoonGenerator {
   }
 
   /**
-   * Pick moon type based on parent planet and orbit position.
+   * Pick moon type based on parent planet, orbit position, and zone.
+   *
+   * Zone-aware logic (see docs/GAME_BIBLE.md):
+   * - Volcanic moons: tidal heating from proximity to gas giant,
+   *   works at any stellar distance (Io is 5 AU from Sun)
+   * - Terrestrial moons: only around HZ gas giants, and only ~3%
+   *   (Heller & Barnes 2013: need mass, magnetosphere, right distance)
+   * - Ice moons: dominant in transition/outer zones
+   * - Subsurface oceans: future moon type, not yet implemented
    */
-  static _pickType(rng, planetData, moonIndex) {
+  static _pickType(rng, planetData, moonIndex, parentZone) {
     const pType = planetData.type;
     const roll = rng.float();
 
     if (pType === 'gas-giant' || pType === 'sub-neptune') {
-      // Gas giants: innermost can be volcanic, rare terrestrial, then ice/rocky, outer = captured
-      if (moonIndex === 0 && rng.chance(0.3)) return 'volcanic';
-      if (rng.chance(0.06)) return 'terrestrial'; // Rare habitable moon
-      if (roll < 0.35) return 'ice';
-      if (roll < 0.65) return 'rocky';
-      if (roll < 0.85) return 'captured';
+      // ── Gas giant moons — zone determines what's possible ──
+
+      // Innermost moon: volcanic from tidal heating (works at any zone)
+      // Io orbits at 5.9 Jupiter radii, gets extreme tidal flexing
+      if (moonIndex === 0 && rng.chance(0.35)) return 'volcanic';
+
+      if (parentZone === 'scorching') {
+        // Hot Jupiters: most moons stripped during migration.
+        // Survivors are scorched rocks or lava.
+        if (roll < 0.50) return 'rocky';
+        if (roll < 0.80) return 'captured';
+        return 'volcanic';
+      }
+
+      if (parentZone === 'inner') {
+        // Too hot for ice or water. Rocky and captured dominate.
+        if (roll < 0.45) return 'rocky';
+        if (roll < 0.75) return 'captured';
+        if (roll < 0.90) return 'volcanic';
+        return 'rocky';
+      }
+
+      if (parentZone === 'hz') {
+        // The sweet spot: terrestrial moons are rare but possible.
+        // Need >0.25 Earth masses + own magnetosphere.
+        // ~3% chance (Heller & Barnes 2013).
+        if (rng.chance(0.03)) return 'terrestrial';
+        if (roll < 0.30) return 'ice';
+        if (roll < 0.60) return 'rocky';
+        if (roll < 0.80) return 'captured';
+        return 'ice';
+      }
+
+      if (parentZone === 'transition') {
+        // Cold. Ice dominates. Subsurface oceans possible (future type).
+        if (roll < 0.40) return 'ice';
+        if (roll < 0.65) return 'rocky';
+        if (roll < 0.85) return 'captured';
+        return 'ice';
+      }
+
+      // Outer zone (beyond frost line) — default
+      // Ice worlds dominate. Europa/Enceladus-style subsurface oceans.
+      if (roll < 0.45) return 'ice';
+      if (roll < 0.70) return 'rocky';
+      if (roll < 0.90) return 'captured';
       return 'ice';
+
     } else if (pType === 'ice') {
       if (roll < 0.5) return 'ice';
       if (roll < 0.8) return 'captured';
