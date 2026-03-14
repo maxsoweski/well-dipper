@@ -639,7 +639,7 @@ warpEffect.onSwapSystem = () => {
     }
     galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
     galaxyGlow.addTo(retroRenderer.starfieldScene);
-    galaxyGlow.update(camera.position);
+    galaxyGlow.update(camera.position, camera);
   }
 };
 
@@ -2669,7 +2669,7 @@ function animate() {
     camera.near = Math.max(0.0001, Math.min(1.0, cameraController.smoothedDistance * 0.01));
     camera.updateProjectionMatrix();
     starfield.update(camera.position);
-    if (galaxyGlow) galaxyGlow.update(camera.position);
+    if (galaxyGlow) galaxyGlow.update(camera.position, camera);
     retroRenderer.render();
     return;
   }
@@ -3260,7 +3260,7 @@ function animate() {
   }
 
   starfield.update(camera.position);
-  if (galaxyGlow) galaxyGlow.update(camera.position);
+  if (galaxyGlow) galaxyGlow.update(camera.position, camera);
 
   // ── Update HUD ──
   // During flythrough, compute yaw from camera position relative to origin
@@ -3393,7 +3393,7 @@ window.addEventListener('keydown', (e) => {
       if (galaxyGlow) { galaxyGlow.dispose(); retroRenderer.starfieldScene.remove(galaxyGlow.mesh); }
       galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
       galaxyGlow.addTo(retroRenderer.starfieldScene);
-      galaxyGlow.update(camera.position);
+      galaxyGlow.update(camera.position, camera);
       // Generate a system at this position
       const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
       const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'galaxy-debug';

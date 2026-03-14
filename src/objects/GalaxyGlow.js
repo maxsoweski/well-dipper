@@ -1,73 +1,104 @@
 import * as THREE from 'three';
 
 /**
- * GalaxyGlow — a subtle diffuse glow rendered behind the starfield points,
- * representing the unresolved billions of stars in the galaxy.
+ * GalaxyGlow — diffuse glow behind the starfield representing the
+ * unresolved billions of stars in the galaxy.
  *
- * Uses a sky density grid (from StarfieldGenerator) as a texture to shade
- * a sphere. Where density is high (galactic plane, center), you see a
- * warm/cool glow. Where density is low (halo, voids), it's black.
+ * Uses the same rendering approach as Nebula.js: layered billboard
+ * planes with FBM noise + domain warping + additive blending. This
+ * already looks great in the game for nebulae, so it should work
+ * well for the galactic glow too.
  *
- * This is what makes the Milky Way look "milky" — the individual stars
- * from the Starfield sit ON TOP of this smooth band.
+ * Multiple glow layers are placed at the densest sky directions
+ * (from the StarfieldGenerator's sky density grid). Each layer
+ * billboards to face the camera, creating a soft volumetric glow.
  *
- * Renders in the starfieldScene, behind the Starfield points (no depth write).
+ * Renders in the starfieldScene behind the Starfield points.
  */
 export class GalaxyGlow {
   /**
    * @param {Float32Array} skyGrid - density values [0-1], row-major (theta × phi)
    * @param {number} gridTheta - number of theta columns
    * @param {number} gridPhi - number of phi rows
-   * @param {number} radius - sky sphere radius (should match Starfield)
+   * @param {number} radius - sky sphere radius
    */
-  constructor(skyGrid, gridTheta, gridPhi, radius = 499) {
+  constructor(skyGrid, gridTheta, gridPhi, radius = 490) {
     this.radius = radius;
-    this.mesh = this._createGlow(skyGrid, gridTheta, gridPhi);
+    this.mesh = new THREE.Group();
+    this._layers = [];
+    this._createLayers(skyGrid, gridTheta, gridPhi);
   }
 
-  _createGlow(skyGrid, gridTheta, gridPhi) {
-    // Create a DataTexture from the sky density grid
-    // The texture maps theta (horizontal) × phi (vertical)
-    const texWidth = gridTheta;
-    const texHeight = gridPhi;
-    const texData = new Uint8Array(texWidth * texHeight * 4);
-
-    for (let ti = 0; ti < texWidth; ti++) {
-      for (let pi = 0; pi < texHeight; pi++) {
+  _createLayers(skyGrid, gridTheta, gridPhi) {
+    // Find the densest regions of the sky and place glow layers there.
+    // Collect all grid cells with significant density, sorted by density.
+    const cells = [];
+    for (let ti = 0; ti < gridTheta; ti++) {
+      for (let pi = 0; pi < gridPhi; pi++) {
         const density = skyGrid[ti * gridPhi + pi];
-        const idx = (pi * texWidth + ti) * 4;
-
-        // Color: warm white for dense regions, fading to black
-        // Slight warm tint toward high density (galactic core = yellowish)
-        const intensity = density * density; // square for more contrast
-        const r = Math.min(255, Math.round(intensity * 200));
-        const g = Math.min(255, Math.round(intensity * 185));
-        const b = Math.min(255, Math.round(intensity * 160));
-        texData[idx]     = r;
-        texData[idx + 1] = g;
-        texData[idx + 2] = b;
-        texData[idx + 3] = 255;
+        if (density > 0.15) { // Only place glow where there's meaningful density
+          const theta = ((ti + 0.5) / gridTheta) * Math.PI * 2;
+          const phi = ((pi + 0.5) / gridPhi) * Math.PI;
+          cells.push({ theta, phi, density });
+        }
       }
     }
+    cells.sort((a, b) => b.density - a.density);
 
-    const texture = new THREE.DataTexture(texData, texWidth, texHeight, THREE.RGBAFormat);
-    texture.needsUpdate = true;
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
+    // Place 6-12 glow layers at the densest directions
+    const layerCount = Math.min(Math.max(6, Math.floor(cells.length * 0.3)), 12);
 
-    // Use a sphere geometry — low poly is fine since the texture does the work
-    const geometry = new THREE.SphereGeometry(this.radius, 32, 16);
+    for (let i = 0; i < layerCount && i < cells.length; i++) {
+      const cell = cells[i];
+
+      // Direction on the sky sphere
+      const dirX = Math.sin(cell.phi) * Math.cos(cell.theta);
+      const dirY = Math.cos(cell.phi);
+      const dirZ = Math.sin(cell.phi) * Math.sin(cell.theta);
+
+      // Layer size scales with density (brighter regions = larger glow)
+      const baseSize = 200 + cell.density * 300;
+
+      // Color: warm tint for dense core regions, cooler for arm regions
+      const warmth = cell.density;
+      const r = 0.28 + warmth * 0.15;  // 0.28-0.43
+      const g = 0.24 + warmth * 0.10;  // 0.24-0.34
+      const b = 0.18 + warmth * 0.05;  // 0.18-0.23
+
+      // Opacity: denser = more opaque, but keep it subtle
+      const opacity = 0.08 + cell.density * 0.15; // 0.08-0.23
+
+      const layer = this._createLayer(baseSize, [r, g, b], opacity, i * 7.3);
+
+      // Position on sky sphere
+      layer.position.set(
+        dirX * this.radius,
+        dirY * this.radius,
+        dirZ * this.radius,
+      );
+
+      this.mesh.add(layer);
+      this._layers.push(layer);
+    }
+  }
+
+  _createLayer(size, color, opacity, seedOffset) {
+    const geometry = new THREE.PlaneGeometry(size, size);
 
     const material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      side: THREE.BackSide, // Render inside of sphere
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.FrontSide,
+
       uniforms: {
-        uDensityMap: { value: texture },
-        uOpacity: { value: 0.35 }, // Subtle — this is background glow, not a bright overlay
+        uColor: { value: new THREE.Color(color[0], color[1], color[2]) },
+        uOpacity: { value: opacity },
+        uNoiseScale: { value: 2.5 },
+        uNoiseSeed: { value: new THREE.Vector2(seedOffset, seedOffset * 0.7) },
       },
+
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         void main() {
@@ -75,34 +106,67 @@ export class GalaxyGlow {
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
+
       fragmentShader: /* glsl */ `
-        uniform sampler2D uDensityMap;
+        uniform vec3 uColor;
         uniform float uOpacity;
+        uniform float uNoiseScale;
+        uniform vec2 uNoiseSeed;
         varying vec2 vUv;
 
-        // 4x4 Bayer dithering matrix (matches Starfield and Planet shaders)
-        float bayerDither(vec2 coord) {
-          int x = int(mod(coord.x, 4.0));
-          int y = int(mod(coord.y, 4.0));
-          int idx = x + y * 4;
-          // Bayer 4x4 thresholds (normalized to 0-1)
-          float bayer[16];
-          bayer[0]=0.0/16.0; bayer[1]=8.0/16.0; bayer[2]=2.0/16.0; bayer[3]=10.0/16.0;
-          bayer[4]=12.0/16.0; bayer[5]=4.0/16.0; bayer[6]=14.0/16.0; bayer[7]=6.0/16.0;
-          bayer[8]=3.0/16.0; bayer[9]=11.0/16.0; bayer[10]=1.0/16.0; bayer[11]=9.0/16.0;
-          bayer[12]=15.0/16.0; bayer[13]=7.0/16.0; bayer[14]=13.0/16.0; bayer[15]=5.0/16.0;
-          return bayer[idx];
+        // Hash-based noise (same as Nebula.js)
+        vec2 hash22(vec2 p) {
+          p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+          return fract(sin(p) * 43758.5453);
+        }
+
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          float a = dot(hash22(i + vec2(0.0, 0.0)) - 0.5, f - vec2(0.0, 0.0));
+          float b = dot(hash22(i + vec2(1.0, 0.0)) - 0.5, f - vec2(1.0, 0.0));
+          float c = dot(hash22(i + vec2(0.0, 1.0)) - 0.5, f - vec2(0.0, 1.0));
+          float d = dot(hash22(i + vec2(1.0, 1.0)) - 0.5, f - vec2(1.0, 1.0));
+          return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) + 0.5;
+        }
+
+        // Fractal Brownian Motion
+        float fbm(vec2 p) {
+          float value = 0.0;
+          float amplitude = 0.5;
+          float frequency = 1.0;
+          for (int i = 0; i < 4; i++) {
+            value += amplitude * noise(p * frequency);
+            frequency *= 2.0;
+            amplitude *= 0.5;
+          }
+          return value;
         }
 
         void main() {
-          vec4 density = texture2D(uDensityMap, vUv);
-          float brightness = (density.r + density.g + density.b) / 3.0;
+          vec2 uv = vUv;
+          vec2 noiseP = uv * uNoiseScale + uNoiseSeed;
 
-          // Dither the glow for retro aesthetic consistency
-          float threshold = bayerDither(gl_FragCoord.xy);
-          if (brightness * uOpacity < threshold * 0.5) discard;
+          // Domain warping for organic cloud shapes
+          vec2 q = vec2(
+            fbm(noiseP + vec2(0.0, 0.0)),
+            fbm(noiseP + vec2(5.2, 1.3))
+          );
+          float warped = fbm(noiseP + 3.0 * q);
 
-          gl_FragColor = vec4(density.rgb * uOpacity, 1.0);
+          // Cloud shape
+          float cloud = smoothstep(0.15, 0.6, warped);
+
+          // Radial falloff: soft circular fade
+          float dist = length(uv - 0.5);
+          float falloff = 1.0 - smoothstep(0.15, 0.5, dist);
+
+          float alpha = cloud * falloff * uOpacity;
+
+          if (alpha < 0.005) discard;
+
+          gl_FragColor = vec4(uColor * alpha, alpha);
         }
       `,
     });
@@ -110,8 +174,17 @@ export class GalaxyGlow {
     return new THREE.Mesh(geometry, material);
   }
 
-  update(cameraPosition) {
+  /**
+   * Billboard all layers to face the camera.
+   * Same approach as Nebula.js — copy camera quaternion.
+   */
+  update(cameraPosition, camera) {
     this.mesh.position.copy(cameraPosition);
+    if (camera) {
+      for (const layer of this._layers) {
+        layer.quaternion.copy(camera.quaternion);
+      }
+    }
   }
 
   addTo(scene) {
@@ -119,8 +192,10 @@ export class GalaxyGlow {
   }
 
   dispose() {
-    this.mesh.geometry.dispose();
-    this.mesh.material.uniforms.uDensityMap.value.dispose();
-    this.mesh.material.dispose();
+    for (const layer of this._layers) {
+      layer.geometry.dispose();
+      layer.material.dispose();
+    }
+    this._layers = [];
   }
 }
