@@ -9,7 +9,7 @@
 ## 1. Vision
 
 ### What Is Well Dipper?
-A meditative retro space screensaver that doubles as an exploration game. You drift through procedurally generated star systems, warp between them, and encounter an infinite universe that feels real, varied, and occasionally surprising.
+A retro space screensaver that doubles as an exploration game. In screensaver mode, you drift through vast, open, limitless space. In game mode, you pilot your ship through the same universe — discovering, scanning, trading, fighting, refueling in gravity wells. Both modes coexist: the vastness is always there, whether you're watching planets orbit or dodging pirate fire.
 
 The screensaver is the MVP. The game systems grow out of it.
 
@@ -66,7 +66,7 @@ This is a living TODO — areas of the bible that are sketched but need deeper d
 ## 2. Aesthetic
 
 ### Era & Vibe
-Late-90s PC / PS1 / Saturn era. Low-poly geometry, posterized colors, Bayer dithering, pixelated upscaling. The feeling of early 3D space games — Frontier, Starglider, Galaxy on Fire — but meditative instead of frantic.
+Late-90s PC / PS1 / Saturn era. Low-poly geometry, posterized colors, Bayer dithering, pixelated upscaling. The feeling of early 3D space games — Frontier, Starglider, Galaxy on Fire. Vast rather than frantic. Open rather than cluttered.
 
 ### What We Do
 - Per-object Bayer dithering in fragment shaders (not a screen filter)
@@ -93,24 +93,24 @@ The game has two visual modes that work as a pair:
 ### Sound Design
 
 #### Musical Vision
-Late-90s retro synth — meditative, contemplative, NOT action-packed. Sparse arrangements, warm drones, FM/analog synth pads. Think Katamari Damacy meets planetarium screensaver. Slow tempos for exploration (60-90 BPM), faster for hyperspace (120-140 BPM).
+Late-90s retro synth. Sparse arrangements, warm drones, FM/analog synth pads in quiet moments. Intense, driving rhythms during combat and hazards. The music matches the texture of the experience — vast and open in empty space, tense near hostiles, strange near anomalies. Think Katamari Damacy meets planetarium screensaver for the low end, FTL combat intensity for the high end. Tempos: 60-90 BPM for exploration, 120-140 BPM for hyperspace and combat.
 
 **Reference soundtracks:** Outer Wilds (acoustic + wonder), FTL (synth exploration vs tense), Katamari Damacy (quirky retro), No Man's Sky (procedural ambient), Stellaris (grand space synths).
 
-#### Reactive Audio System (Future Direction)
-Audio should be **driven by system properties**, not just fixed tracks. The music responds to what you discover.
+#### Synesthetic Audio System (Future Direction)
+Audio is **driven by system properties**, not fixed tracks. Audio and visual information are **synesthetic** — one does not cause the other. They arise together as aspects of the same experience.
 
-**System properties that affect audio:**
+**System properties that shape audio:**
 - **Star type:** M-dwarf → warm/intimate; O-star → vast/intense
 - **System age:** Young → dynamic/chaotic; ancient → quiet/haunted
 - **Civilization presence:** Radio chatter, beacon pings, industrial hum
-- **Hostility:** Tense undertones when scan reveals hostiles
+- **Hostility:** Tense undertones accompany hostile indicators on scan
 - **Exotic phenomena:** Unique audio signatures for fungal blooms, megastructures, anomalies
-- **Environmental hazards:** Radiation, asteroid density, nebula interference affect soundscape
+- **Environmental hazards:** Radiation, asteroid density, nebula interference shape the soundscape
 
-**Key rule:** Audio is **REACTIVE to information received**, not predictive. Scan reveals hostiles → THEN tense music starts. You don't hear danger music before you know danger is there.
+**Key principle:** Audio and visual cues are **simultaneous, not sequential.** The moment hostiles appear on your scan display is the same moment the music shifts. The scan indicator and the audio are two aspects of one event — synesthetic, not cause-and-effect.
 
-**Exception:** Space anomalies can trigger audio premonition BEFORE you have scan data. Very rare, deliberately unsettling. Something feels wrong before you know why.
+**Exception:** Space anomalies can manifest in audio BEFORE any visual or scan data. Very rare, deliberately unsettling. Something feels wrong before you know why. This is the only case where audio leads.
 
 #### Music Architecture (Future Direction)
 The 7-track model (below) is the MVP. The long-term direction is a **layered stem system:**
@@ -124,8 +124,8 @@ The 7-track model (below) is the MVP. The long-term direction is a **layered ste
 
 | Track | Context | Duration | Loop? | Priority | Vibe |
 |-------|---------|----------|-------|----------|------|
-| **title** | Title screen | 60-90s | Yes | HIGH | Mysterious, contemplative, sparse — floating in void |
-| **explore** | Main gameplay (star systems) | 90-120s | Yes | HIGH | Meditative wonder, gentle movement. Most-heard track. |
+| **title** | Title screen | 60-90s | Yes | HIGH | Mysterious, spacious, sparse — floating in void |
+| **explore** | Main gameplay (star systems) | 90-120s | Yes | HIGH | Open, unhurried, vast. The sound of drifting through space. Most-heard track. |
 | **explore-alt** | Variation on explore | 90-120s | Yes | LOW | Same key, different melody/instruments |
 | **deepsky** | Galaxies, nebulae, clusters | 60-90s | Yes | MEDIUM | Grander, more awe-inspiring — bigger scale |
 | **warp-charge** | Portal opens (6s visual) | 6-7s | No | HIGH | Building tension, escalating energy |
@@ -610,7 +610,7 @@ If landing is ever implemented:
 **What this enables:**
 - Sense of scale (you're a person in this universe, not just a camera)
 - Narrative hooks (logs, terminals, environmental storytelling)
-- Break from the meditative drift — moments of intimate scale
+- Break from the vastness of space — moments of intimate scale
 
 **Design constraints:**
 - Must work with the retro aesthetic (low-poly interiors, dithered)
