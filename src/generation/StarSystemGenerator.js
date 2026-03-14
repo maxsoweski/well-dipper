@@ -67,11 +67,15 @@ export class StarSystemGenerator {
    * @param {string} seed
    * @returns {object} system data
    */
-  static generate(seed) {
+  static generate(seed, galaxyContext = null) {
     const rng = new SeededRandom(seed);
 
     // ── Primary Star ──
-    const starType = this._pickStarType(rng);
+    // If galaxy context provided, use region-adjusted star weights.
+    // Otherwise fall back to cinematic weights (screensaver mode).
+    const starType = galaxyContext
+      ? this._pickStarTypeFromWeights(rng, galaxyContext.starWeights)
+      : this._pickStarType(rng);
     const props = this.STAR_PROPERTIES[starType];
     const starVariation = rng.range(0.85, 1.15);
     const radiusSolarVaried = props.radiusSolar * starVariation;
@@ -90,7 +94,9 @@ export class StarSystemGenerator {
     };
 
     // ── Binary? (~35% of systems) ──
-    const isBinary = rng.chance(0.35);
+    // Galaxy context adjusts binary rate by component (bulge: 0.65x, halo: 0.8x)
+    const binaryBaseChance = 0.35 * (galaxyContext ? galaxyContext.binaryModifier : 1.0);
+    const isBinary = rng.chance(binaryBaseChance);
     let star2 = null;
     let binarySeparation = 0;
     let binarySeparationAU = 0;
@@ -137,14 +143,15 @@ export class StarSystemGenerator {
     }
 
     // ── System-level parameters ──
-    // Metallicity: [Fe/H] relative to Sun. Drives gas giant probability
-    // (Fischer-Valenti: P ∝ 10^(2×[Fe/H])). Gaussian centered on solar.
-    // Later: derived from galactic position instead of randomized.
-    const metallicity = rng.gaussianClamped(0.0, 0.2, -1.0, 0.5);
+    // If galaxy context is provided, derive from galactic position.
+    // Otherwise fall back to random (screensaver mode).
+    const metallicity = galaxyContext
+      ? galaxyContext.metallicity + rng.gaussian(0, 0.05)  // position-derived + small scatter
+      : rng.gaussianClamped(0.0, 0.2, -1.0, 0.5);         // random fallback
 
-    // Age in Gyr. Stored for future use (M-dwarf pre-MS stripping,
-    // HZ migration, atmosphere survival). Not used in generation yet.
-    const ageGyr = rng.gaussianClamped(4.5, 2.5, 0.1, 12.0);
+    const ageGyr = galaxyContext
+      ? Math.max(0.01, galaxyContext.age + rng.gaussian(0, 0.3))  // position-derived + scatter
+      : rng.gaussianClamped(4.5, 2.5, 0.1, 12.0);                // random fallback
 
     // System archetype — "peas in a pod" driver (Weiss et al. 2018).
     // Real systems have correlated planet sizes and spacings.
@@ -350,6 +357,9 @@ export class StarSystemGenerator {
       metallicity,
       ageGyr,
       archetype: archetype.name,
+      // Galaxy context (null in screensaver mode)
+      galaxyContext: galaxyContext || null,
+      galacticPosition: galaxyContext ? galaxyContext.position : null,
       // Conversion factors (useful for consumers)
       mapUnitsPerAU,
     };
@@ -367,6 +377,21 @@ export class StarSystemGenerator {
     const roll = rng.float();
     let cumulative = 0;
     for (const { type, weight } of this.STAR_WEIGHTS) {
+      cumulative += weight;
+      if (roll < cumulative) return type;
+    }
+    return 'M'; // fallback
+  }
+
+  /**
+   * Pick star type using galaxy-context-adjusted weights.
+   * The weights array comes from GalacticMap.deriveGalaxyContext().
+   * Format: [{ type: 'M', weight: 0.45 }, { type: 'K', weight: 0.30 }, ...]
+   */
+  static _pickStarTypeFromWeights(rng, weights) {
+    const roll = rng.float();
+    let cumulative = 0;
+    for (const { type, weight } of weights) {
       cumulative += weight;
       if (roll < cumulative) return type;
     }
