@@ -11,21 +11,21 @@
 ### What Is Well Dipper?
 A retro space screensaver that doubles as an exploration game. In screensaver mode, you drift through vast, open, limitless space. In game mode, you pilot your ship through the same universe — discovering, scanning, trading, fighting, refueling in gravity wells. Both modes coexist: the vastness is always there, whether you're watching planets orbit or dodging pirate fire.
 
-The screensaver is the MVP. The game systems grow out of it.
+The screensaver is the MVP. The game systems grow out of it. (See §1A for what's built vs what's planned.)
 
-### Player Identity
+### Player Identity [GAME]
 You are a **pilot**. You pilot your ship. The ship is your home, your vehicle, your interface with the universe.
 
 **Future:** Movement system within the ship — walk around, interact with systems. Gamified tasks like maintenance, repair, upgrades. Ship interior as a playable space between destinations.
 
 **Full identity TBD.** Max wants something unusual for the player character — not a generic space trucker or military officer. Still thinking on this.
 
-### Core Experience
+### Core Experience [BOTH]
 - **Drift.** You float through space. The camera moves gently. You watch planets orbit, stars glow, nebulae swirl.
 - **Discover.** Every system is different. Finding a terrestrial world or an alien megastructure is rare and meaningful.
 - **Warp.** Click a star in the sky, hit spacebar, watch the fold animation, arrive somewhere new. Forever.
 
-### The Warp as Sacred Experience
+### The Warp as Sacred Experience [GAME]
 The warp is not just travel. It is the **inseparability of all points in space** — a moment outside space-time. It should feel psychedelic, vast, and increasingly strange as the player gains experience.
 
 **Progression:**
@@ -42,7 +42,54 @@ The warp is not just travel. It is the **inseparability of all points in space**
 
 ---
 
+## 1A. Two Modes
+
+Well Dipper has two distinct modes that coexist in the same application:
+
+**SCREENSAVER MODE (Current — Mostly Complete)**
+The original product. A retro space screensaver that runs autonomously. You watch, or you lightly interact (click planets, select warp targets, adjust settings). No player character, no ship, no inventory, no combat. Just vast procedural space.
+
+What's done:
+- 11+ planet types with custom GLSL shaders, zone-based generation
+- Binary star systems, asteroid belts, moons
+- Warp transitions with fold/hyperspace/exit animations
+- Deep sky objects (galaxies, nebulae, clusters)
+- Autopilot touring with cinematic flythrough camera
+- Background star selection and warp targeting
+- Title screen, settings, body info HUD, minimap
+- Sound effects (placeholder synthesized) and music system (ready, awaiting tracks)
+- Exotic/civilized planet overlay system
+- Science-driven planet distribution with metallicity, archetypes, log-normal spacing
+
+What's remaining for screensaver mode:
+- Music tracks from Christian
+- CRT scanline filter (optional)
+- Possible enrichment with ships, megastructures, etc. as visual elements (no gameplay)
+
+**GAME MODE (Planning Phase — Not Yet Built)**
+A full space exploration/combat game built on top of the screensaver's foundation. You are a pilot. You fly a ship. You scan, trade, fight, refuel, upgrade, and explore a persistent galaxy.
+
+Game mode adds:
+- Player ship with movement (two flight models: all-range + on-rails)
+- Combat (two modes tied to velocity)
+- Scanner as universal interaction verb (4 layers)
+- Nav computer (replaces current minimap)
+- Fuel/energy system (rotor + gravity wells)
+- Ship upgrades and progression
+- Factions (lawful vs hostile, regional)
+- NPC ships, space stations, docking
+- Persistent save system
+- Galaxy-scale procedural generation
+- Narrative framework
+- Evolving warp experiences
+
+The screensaver mode continues to exist as a separate mode — it's not replaced by the game. Think of it like a "demo reel" or "attract mode."
+
+---
+
 ## 1B. Areas That Need Fleshing Out
+
+> **Note:** All items in this section are GAME MODE features. Screensaver mode is functionally complete pending music tracks.
 
 This is a living TODO — areas of the bible that are sketched but need deeper design work.
 
@@ -63,7 +110,7 @@ This is a living TODO — areas of the bible that are sketched but need deeper d
 
 ---
 
-## 2. Aesthetic
+## 2. Aesthetic [BOTH]
 
 ### Era & Vibe
 Late-90s PC / PS1 / Saturn era. Low-poly geometry, posterized colors, Bayer dithering, pixelated upscaling. The feeling of early 3D space games — Frontier, Starglider, Galaxy on Fire. Vast rather than frantic. Open rather than cluttered.
@@ -90,14 +137,27 @@ The game has two visual modes that work as a pair:
 1. **Main view** — The "real" 3D world. Aesthetic TBD (see above).
 2. **Nav computer** — Wireframe, vector-line CRT terminal. Representations of objects, not the objects themselves. (See §7 for details.)
 
-### Sound Design
+### Sound Design [BOTH]
 
-#### Musical Vision
+#### Diegetic Audio Principle [GAME]
+
+**No sound in space.** Everything the player hears originates from inside the ship. This is scientifically accurate and reinforces the diegetic design approach.
+
+Sources of sound:
+- **Ship internals:** Engine rumble, rotor whir during energy harvesting, hull stress groans under gravity, weapons cycling, mechanical systems
+- **Nav computer:** Notification pings, scan results, proximity alerts, communication chatter — all with that processed, CRT-terminal quality
+- **Warning systems:** Geiger-counter-like clicks near radiation, proximity alarms, shield impact feedback
+- **Other ships/explosions:** You don't hear them directly. Your ship's sensors detect them and the nav computer translates them into audio. External events sound filtered and processed — heard through the ship's instruments, not through vacuum.
+- **Music:** The one open question — is the soundtrack diegetic (playing from ship systems, like a radio) or non-diegetic (exists for the player, not the character)? TBD. Both approaches have merit.
+
+This constraint makes sound design MORE interesting, not less. Everything is mediated through the ship. The ship becomes a character through its sounds.
+
+#### Musical Vision [BOTH]
 Late-90s retro synth. Sparse arrangements, warm drones, FM/analog synth pads in quiet moments. Intense, driving rhythms during combat and hazards. The music matches the texture of the experience — vast and open in empty space, tense near hostiles, strange near anomalies. Think Katamari Damacy meets planetarium screensaver for the low end, FTL combat intensity for the high end. Tempos: 60-90 BPM for exploration, 120-140 BPM for hyperspace and combat.
 
 **Reference soundtracks:** Outer Wilds (acoustic + wonder), FTL (synth exploration vs tense), Katamari Damacy (quirky retro), No Man's Sky (procedural ambient), Stellaris (grand space synths).
 
-#### Synesthetic Audio System (Future Direction)
+#### Synesthetic Audio System [GAME] (Future Direction)
 Audio is **driven by system properties**, not fixed tracks. Audio and visual information are **synesthetic** — one does not cause the other. They arise together as aspects of the same experience.
 
 **System properties that shape audio:**
@@ -112,7 +172,7 @@ Audio is **driven by system properties**, not fixed tracks. Audio and visual inf
 
 **Exception:** Space anomalies can manifest in audio BEFORE any visual or scan data. Very rare, deliberately unsettling. Something feels wrong before you know why. This is the only case where audio leads.
 
-#### Music Architecture (Future Direction)
+#### Music Architecture [GAME] (Future Direction)
 The 7-track model (below) is the MVP. The long-term direction is a **layered stem system:**
 - Composer creates base tracks + modular stems/layers
 - System properties activate/deactivate layers in real-time
@@ -120,7 +180,7 @@ The 7-track model (below) is the MVP. The long-term direction is a **layered ste
 - This replaces "7 fixed songs" with a dynamic, property-driven soundscape
 - Composer (Christian) would create stems and layers, not just complete songs
 
-#### Music Tracks (7 total)
+#### Music Tracks [BOTH] (7 total)
 
 | Track | Context | Duration | Loop? | Priority | Vibe |
 |-------|---------|----------|-------|----------|------|
@@ -147,14 +207,14 @@ The 7-track model (below) is the MVP. The long-term direction is a **layered ste
 - Optional: 22 kHz for extra lo-fi crunch
 - Deliver to `/public/assets/music/` directory
 
-#### Sound Effects (Placeholder — Web Audio API synthesized)
+#### Sound Effects [SCREENSAVER] (Placeholder — Web Audio API synthesized)
 14 SFX in `SoundEngine.js`, all placeholder:
 - **UI:** select (blip), cycle (tick), toggleOn/Off, uiClick
 - **Autopilot:** rising/falling two-tone
 - **Warp:** target chirp, lock-on tone, 6.5s charge buildup (THE signature sound — sub-bass + dissonant sawtooth + noise + high whine), exit reverse
 - **Title:** cosmic drone, major chord arpeggio dismiss
 
-#### Audio Architecture
+#### Audio Architecture [BOTH]
 - `SoundEngine.js` — Web Audio API synthesized SFX
 - `MusicManager.js` — track loading, looping, crossfading, ducking
 - Music transitions: title dismiss → explore, warp fold → duck, hyper start → hyperspace, warp complete → explore/deepsky
@@ -163,16 +223,16 @@ The 7-track model (below) is the MVP. The long-term direction is a **layered ste
 
 ---
 
-## 3. Universe Structure
+## 3. Universe Structure [BOTH]
 
-### The Galaxy (future)
+### The Galaxy [GAME] (future)
 Not yet implemented. When implemented:
 - A master seed defines the entire galaxy
 - Each star's position in the galaxy derives a system seed
 - Same master seed → same galaxy, every time
 - Current approach (random seed per system) works identically at the system level — adding a galaxy layer on top is additive, not a rewrite
 
-### Deep Sky Objects
+### Deep Sky Objects [BOTH]
 15% of warps go to non-star-system destinations:
 - Spiral galaxies, elliptical galaxies
 - Emission nebulae, planetary nebulae
@@ -196,7 +256,7 @@ These are scenic destinations — no planets, no zones, just beautiful objects t
 
 ---
 
-## 4. Star Systems
+## 4. Star Systems [BOTH]
 
 ### Design Principle
 **Every star system should feel like a real place, not a procedural template.**
@@ -305,7 +365,7 @@ Zones are defined by stellar luminosity and scale with √L:
 
 ---
 
-## 5. Natural Planet Types
+## 5. Natural Planet Types [BOTH]
 
 ### The Decision Tree
 Planet types are determined by a science-driven decision tree in `PlanetGenerator._pickType()`. Each zone has its own probability distribution. The key rules:
@@ -369,12 +429,12 @@ These add variety and encounter opportunities without being full planets. Comets
 
 ---
 
-## 6. Overlay Systems (Exotic, Civilized, Megastructures)
+## 6. Overlay Systems (Exotic, Civilized, Megastructures) [BOTH]
 
 These systems run AFTER natural planet generation. They modify or add to the base system.
 They are NOT part of the natural decision tree.
 
-### 6A. Civilized Planets (Human-Like Civilization)
+### 6A. Civilized Planets [BOTH] (Human-Like Civilization)
 
 **Concept:** Civilization is an overlay on habitable planets — but also a **regional phenomenon** at the galaxy scale. A planet must first be terrestrial, ocean, or eyeball — then a separate roll determines if civilization developed there. But civilization also spreads influence to neighboring systems.
 
@@ -409,7 +469,7 @@ Civilization isn't just a per-system overlay — it's regional:
 - M stars: low (habitable but harsh — flares, tidal locking)
 - O/B stars: zero (too short-lived for civilization to develop)
 
-### 6B. Exotic Planets (Alien Anomalies)
+### 6B. Exotic Planets [BOTH] (Alien Anomalies)
 
 **Concept:** Rare alien phenomena that don't follow normal planetary science. Three subcategories with different spawning logic.
 
@@ -434,7 +494,7 @@ Alien-built objects. Not natural planets. Multiple placement strategies dependin
 - **machine** — Rigid grid, dark metal with circuit traces. Von Neumann probe grown to planet size. Exotic orbit: long elliptical, inclined relative to planetary plane. Crosses multiple zones.
 - **artificial moon** — Small construct orbiting a gas giant or large planet. Hidden/sheltered. (Future — needs moon overlay system.)
 
-### 6C. Megastructures (Future)
+### 6C. Megastructures [BOTH] (Future)
 
 Large-scale alien constructs that aren't planets. These are their own object types, not planet overlays.
 
@@ -453,9 +513,9 @@ Large-scale alien constructs that aren't planets. These are their own object typ
 
 ---
 
-## 6D. Environmental Hazards
+## 6D. Environmental Hazards [BOTH]
 
-Hazards make certain systems dangerous to enter or navigate. They create risk/reward decisions — dangerous systems may have valuable scan data or rare resources.
+Hazards make certain systems dangerous to enter or navigate. Visually present in both modes; gameplay effects (damage, fuel cost, scanner interference) are [GAME] only. They create risk/reward decisions — dangerous systems may have valuable scan data or rare resources.
 
 | Hazard | Source | Effect |
 |--------|--------|--------|
@@ -473,13 +533,13 @@ Hazards make certain systems dangerous to enter or navigate. They create risk/re
 
 ## 7. Navigation & UI
 
-### Current State
+### Current State [SCREENSAVER]
 - **System map minimap** (top-down radar, 192px HUD overlay)
 - **Gravity well map** (3D vertex-displaced contour, toggled with G)
 - **Body info HUD** (top-left popup on selection)
 - **Orbital overlay** (O key, orbit lines)
 
-### Future Vision: Navigation Computer
+### Future Vision: Navigation Computer [GAME]
 
 **Replace all current map overlays** with a single toggleable screen that looks like a retro CRT navigation computer. Think: the ship's onboard computer displaying a schematic of the star system.
 
@@ -497,7 +557,7 @@ Hazards make certain systems dangerous to enter or navigate. They create risk/re
 
 **Replaces:** GravityWell minimap, orbital minimap, orbital overlay. The real-time 3D view IS the "real thing" — the navigation computer is the abstraction layer.
 
-### Scanner System
+### Scanner System [GAME]
 
 The scanner is the **universal interaction verb**. Everything you learn about the universe comes through scanning. Four layers, from coarsest to finest:
 
@@ -531,7 +591,7 @@ Part of the nav computer. Tracks everything you've ever scanned.
 - Categorized by type (stars, planets, exotics, ships, stations)
 - Completion tracking (how many planet types discovered, etc.)
 
-### In-System Travel
+### In-System Travel [GAME]
 
 The travel loop within a system:
 
@@ -544,11 +604,11 @@ The travel loop within a system:
 
 ---
 
-## 8. Technology (Structures, Vehicles, Habitation)
+## 8. Technology (Structures, Vehicles, Habitation) [BOTH]
 
 Everything built by intelligent beings — human or alien. Ships, stations, bases, megastructures.
 
-### 8A. Ships (Pipeline Ready, Not Active)
+### 8A. Ships [BOTH] (Pipeline Ready, Not Active)
 
 #### Ship Archetypes
 6 types exported from Blender as .glb:
@@ -565,24 +625,24 @@ Everything built by intelligent beings — human or alien. Ships, stations, base
 - Metal-rich industrial → freighter convoys, construction vessels
 - Empty/frontier → lone explorer or nothing at all
 
-#### Ship Behavior (ShipManager — not started)
+#### Ship Behavior [GAME] (ShipManager — not started)
 State machine: CRUISING → APPROACH → ESCORT → DEPART → CRUISING
 Encounters: ~1 in 3 systems has a ship visit you during orbit.
 
-### 8B. Space Stations (Future)
+### 8B. Space Stations [GAME] (Future)
 Orbital structures around planets or at Lagrange points. Could range from small outposts to large rotating habitats. Docking possible for on-foot exploration (see §8E).
 
-### 8C. Bases (Future)
+### 8C. Bases [GAME] (Future)
 Surface installations on moons or planets. Landing pads, habitation domes, mining facilities. Tied to civilized planet overlay — a city-lights world might have visible bases from orbit.
 
-### 8D. Anomalous Structures (Future)
+### 8D. Anomalous Structures [BOTH] (Future)
 Objects that don't fit neatly into natural or civilized categories:
 - Derelict megaships (see §6C)
 - Ancient alien ruins on moons/planets
 - Signal sources (beacons, probes)
 - Unidentified objects in unusual orbits
 
-### 8E. Planetary Surface Detail / LOD Tiers
+### 8E. Planetary Surface Detail / LOD Tiers [BOTH]
 
 Three LOD tiers for celestial bodies:
 
@@ -594,7 +654,7 @@ Three LOD tiers for celestial bodies:
 
 **The aesthetic relies on NOT having immersive LOD.** So this is enhancement within the existing visual language, not a departure from it.
 
-### 8F. Landing Mechanics (Future)
+### 8F. Landing Mechanics [GAME] (Future)
 
 If landing is ever implemented:
 - Ship enters **belly-first** (heat shield on bottom)
@@ -604,7 +664,7 @@ If landing is ever implemented:
 - Landing sequence could be automated or semi-manual (skill element)
 - Surface transition TBD — this is far-future but the belly-first entry design decision is recorded here
 
-### 8G. On-Foot Exploration (Future — Long-term)
+### 8G. On-Foot Exploration [GAME] (Future — Long-term)
 **Minimum viable version:** Land at a space station, exit ship, walk around a basic interior environment. First-person movement in a small man-made space.
 
 **What this enables:**
@@ -619,11 +679,11 @@ If landing is ever implemented:
 
 ---
 
-## 9. Game Systems (Future)
+## 9. Game Systems [GAME] (Future)
 
 These are placeholder sections for systems that will be designed and implemented later.
 
-### Fuel/Energy System — The Rotor
+### Fuel/Energy System — The Rotor [GAME]
 
 The core energy loop of the game. The ship has a **rotor** — a mysterious device that interacts with gravity wells directly.
 
@@ -644,7 +704,7 @@ The core energy loop of the game. The ship has a **rotor** — a mysterious devi
 
 **Balance (TBD):** The math for energy yield vs escape cost per gravity well type needs design work. Bigger/denser objects = more energy but harder minigame and higher escape cost.
 
-### Ship Upgrade System
+### Ship Upgrade System [GAME]
 
 Upgrade paths tied to the fuel/rotor loop and progression:
 
@@ -661,7 +721,7 @@ Upgrade paths tied to the fuel/rotor loop and progression:
 
 **Acquisition:** Upgrades purchased or found. Economy TBD, but scan data trading at civilized systems is one confirmed income source.
 
-### NPC Communications
+### NPC Communications [GAME]
 
 Ships can hail you and you can hail ships. Interaction with space stations from outside (comms) and inside (on-foot, future).
 
@@ -673,7 +733,7 @@ Ships can hail you and you can hail ships. Interaction with space stations from 
 
 **Scanning → identification → communication flow:** Scanning a ship initiates the identification process — this is how you learn what you're dealing with before deciding to hail or avoid.
 
-### Combat System
+### Combat System [GAME]
 
 Two modes, both tied to velocity:
 
@@ -692,7 +752,7 @@ Triggered at **relativistic transit speed** — during high-speed travel between
 
 **Mode transitions follow the in-system travel loop (see §7):** Accelerate → on-rails combat possible → decelerate → all-range combat possible → interact with POI.
 
-### Faction System
+### Faction System [GAME]
 
 Minimum viable: **two factions.**
 
@@ -706,24 +766,24 @@ Minimum viable: **two factions.**
 - System expandable to more factions later — design needs slots for faction data per system
 - Player reputation with factions (future) — your actions affect how factions treat you
 
-### Discovery Log
+### Discovery Log [GAME]
 Track what you've found: planet types seen, star types visited, exotics discovered. Persistent across sessions (localStorage).
 
-### Exploration Score
+### Exploration Score [GAME]
 Points for variety: new planet types, rare finds (terrestrial, exotic, megastructure), deep sky visits.
 
-### Procedural Names
+### Procedural Names [GAME]
 Star systems and planets get generated names. Style TBD — scientific catalog numbers? Fantasy names? Mix?
 
-### Seed Sharing
+### Seed Sharing [BOTH]
 Share a seed string so others can visit the same system. Screenshot mode with seed overlay.
 
-### Galaxy Map
+### Galaxy Map [GAME]
 Higher-level navigation. See your position in the galaxy, pick destinations, see explored vs unexplored regions.
 
 ---
 
-## 10. Technical Foundation
+## 10. Technical Foundation [BOTH]
 
 ### Team
 - **Max** — Game Director, Art Designer
@@ -810,7 +870,7 @@ src/
 
 ---
 
-## 12. Galaxy-Scale Generation (Research Phase)
+## 12. Galaxy-Scale Generation [GAME] (Research Phase)
 
 ### Concept
 When implemented, the galaxy is a deterministic structure derived from a master seed. Your position in the galaxy affects what kinds of systems you encounter.
@@ -849,7 +909,7 @@ Current system generation works unchanged at the bottom of this chain. Galaxy is
 
 ---
 
-## 13. Generation Verification Log
+## 13. Generation Verification Log [BOTH]
 
 Census results to compare against when debugging. Run `node /tmp/census-script.mjs` pattern to regenerate.
 
@@ -935,7 +995,7 @@ for (let i = 0; i < N; i++) {
 
 ---
 
-## 15. Narrative Framework
+## 15. Narrative Framework [GAME]
 
 ### Philosophy
 The universe has **history** — megastructures were built by someone, fungal blooms spread, civilizations rose and fell. But it is **not over-explained.** Mysterious. Some things are never addressed directly. The player pieces things together.
