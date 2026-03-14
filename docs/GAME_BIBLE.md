@@ -25,6 +25,18 @@ You are a **pilot**. You pilot your ship. The ship is your home, your vehicle, y
 - **Discover.** Every system is different. Finding a terrestrial world or an alien megastructure is rare and meaningful.
 - **Warp.** Click a star in the sky, hit spacebar, watch the fold animation, arrive somewhere new. Forever.
 
+### The Warp as Sacred Experience
+The warp is not just travel. It is the **inseparability of all points in space** — a moment outside space-time. It should feel psychedelic, vast, and increasingly strange as the player gains experience.
+
+**Progression:**
+- **Early game:** Light tunnel, ship shaking, basic hyperspace visuals (what exists now). Travel is functional.
+- **Mid game:** Occasional anomalies — a shape in the tunnel, a sound that shouldn't be there, a flash of something vast and incomprehensible. Brief, unsettling, unexplained.
+- **Late game:** Full encounters within the warp itself. The tunnel gives way to impossible spaces — the room at the end of 2001: A Space Odyssey, psychedelic environments that don't follow physics, moments of profound strangeness. The warp becomes a *place*, not a transition.
+
+**Connection to space anomalies:** The warp and the anomaly system are related phenomena. Both are moments where the fabric of space-time is thin. Experienced travelers learn to perceive what was always there.
+
+**Design principle:** This is never explained. There is no lore dump about "what the warp really is." The player's understanding deepens through experience, not exposition.
+
 ### Name Origin
 "Well Dipper" = dipping between gravity wells.
 
