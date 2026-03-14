@@ -13,6 +13,13 @@ A meditative retro space screensaver that doubles as an exploration game. You dr
 
 The screensaver is the MVP. The game systems grow out of it.
 
+### Player Identity
+You are a **pilot**. You pilot your ship. The ship is your home, your vehicle, your interface with the universe.
+
+**Future:** Movement system within the ship — walk around, interact with systems. Gamified tasks like maintenance, repair, upgrades. Ship interior as a playable space between destinations.
+
+**Full identity TBD.** Max wants something unusual for the player character — not a generic space trucker or military officer. Still thinking on this.
+
 ### Core Experience
 - **Drift.** You float through space. The camera moves gently. You watch planets orbit, stars glow, nebulae swirl.
 - **Discover.** Every system is different. Finding a terrestrial world or an alien megastructure is rare and meaningful.
@@ -20,6 +27,27 @@ The screensaver is the MVP. The game systems grow out of it.
 
 ### Name Origin
 "Well Dipper" = dipping between gravity wells.
+
+---
+
+## 1B. Areas That Need Fleshing Out
+
+This is a living TODO — areas of the bible that are sketched but need deeper design work.
+
+- **Player identity** — Who are you? What's unusual about your character?
+- **Main game aesthetic** — The 9 palette modes aren't working cohesively. Need one strong visual language for the main view.
+- **Combat balance** — Two combat modes defined, but no specifics on weapons, damage, health, difficulty.
+- **Faction depth** — Two factions minimum, but what are their identities, territories, economies?
+- **Fuel/energy system** — Rotor system designed (see §9), but balance/math for energy yield vs escape cost still TBD.
+- **Rotor minigame balance** — Math for energy yield vs escape cost, difficulty curves per gravity well type.
+- **Economy/trading** — Scan data is tradeable, but what else? Currency? Markets?
+- **Ship upgrades** — Upgrade paths defined (see §9), but costs, tiers, and acquisition methods not designed.
+- **Codex/discovery log** — What does the persistent record actually look like?
+- **Narrative framework depth** — What specific stories/mysteries exist in the universe?
+- **NPC dialogue templates** — What do people actually say? Dialect/personality variations.
+- **Interstellar objects** — Gameplay mechanics for comets, rogue planets, and hyperbolic visitors.
+- **Landing sequence design** — Atmospheric entry, belly-first transition to surface, fire/plasma effects.
+- **Performance profiling** — Establish budgets for draw calls, memory, max objects in scene.
 
 ---
 
@@ -43,12 +71,42 @@ Late-90s PC / PS1 / Saturn era. Low-poly geometry, posterized colors, Bayer dith
 ### Color Palette Modes
 9 post-process palette options: Full Color (default), Monochrome, Amber CRT, Green Phosphor, Blue Phosphor, Game Boy, CGA, Sepia, Virtual Boy, Inverted.
 
+**Status: likely getting scrapped.** The 9 modes don't work cohesively — they feel like a grab bag rather than a unified aesthetic. Keep them in options for now, but the direction is: **one strong cohesive aesthetic for the main view.** The main view and nav computer should complement each other as two distinct visual languages. What that main aesthetic actually *is* needs further work.
+
+### Dual Visual Languages
+The game has two visual modes that work as a pair:
+1. **Main view** — The "real" 3D world. Aesthetic TBD (see above).
+2. **Nav computer** — Wireframe, vector-line CRT terminal. Representations of objects, not the objects themselves. (See §7 for details.)
+
 ### Sound Design
 
 #### Musical Vision
 Late-90s retro synth — meditative, contemplative, NOT action-packed. Sparse arrangements, warm drones, FM/analog synth pads. Think Katamari Damacy meets planetarium screensaver. Slow tempos for exploration (60-90 BPM), faster for hyperspace (120-140 BPM).
 
 **Reference soundtracks:** Outer Wilds (acoustic + wonder), FTL (synth exploration vs tense), Katamari Damacy (quirky retro), No Man's Sky (procedural ambient), Stellaris (grand space synths).
+
+#### Reactive Audio System (Future Direction)
+Audio should be **driven by system properties**, not just fixed tracks. The music responds to what you discover.
+
+**System properties that affect audio:**
+- **Star type:** M-dwarf → warm/intimate; O-star → vast/intense
+- **System age:** Young → dynamic/chaotic; ancient → quiet/haunted
+- **Civilization presence:** Radio chatter, beacon pings, industrial hum
+- **Hostility:** Tense undertones when scan reveals hostiles
+- **Exotic phenomena:** Unique audio signatures for fungal blooms, megastructures, anomalies
+- **Environmental hazards:** Radiation, asteroid density, nebula interference affect soundscape
+
+**Key rule:** Audio is **REACTIVE to information received**, not predictive. Scan reveals hostiles → THEN tense music starts. You don't hear danger music before you know danger is there.
+
+**Exception:** Space anomalies can trigger audio premonition BEFORE you have scan data. Very rare, deliberately unsettling. Something feels wrong before you know why.
+
+#### Music Architecture (Future Direction)
+The 7-track model (below) is the MVP. The long-term direction is a **layered stem system:**
+- Composer creates base tracks + modular stems/layers
+- System properties activate/deactivate layers in real-time
+- Base exploration track gets modified by star type, age, civilization, hostility
+- This replaces "7 fixed songs" with a dynamic, property-driven soundscape
+- Composer (Christian) would create stems and layers, not just complete songs
 
 #### Music Tracks (7 total)
 
@@ -110,6 +168,20 @@ Not yet implemented. When implemented:
 
 These are scenic destinations — no planets, no zones, just beautiful objects to orbit.
 
+### Deep Sky Objects and Galaxy Relationship
+
+**Nebulae, open clusters, and globular clusters are WITHIN galaxies.** They have spatial relationships with nearby star systems and influence local properties. Only other galaxies are truly external deep sky objects.
+
+**In-galaxy deep sky objects influence nearby systems:**
+- Near an emission/planetary nebula → nearby star systems are younger, more chaotic, active star formation
+- Near a globular cluster → nearby systems are ancient, metal-poor
+- Nebulae and clusters serve as regional signposts within the galaxy
+
+**For the game:**
+- In-galaxy deep sky objects influence nearby system generation (once galaxy layer exists)
+- Other galaxies are a separate scale — possibly late-game intergalactic travel, or screensaver-mode only
+- The starfield should eventually reflect galactic position (dense band along disk plane, sparse perpendicular, distant galaxies as dim points beyond)
+
 ---
 
 ## 4. Star Systems
@@ -138,6 +210,21 @@ Weighted for visual variety (not astronomical accuracy):
 | A (Blue-white) | 13% | Blue-white | Dramatic |
 | B (Blue) | 8% | Blue | Massive, spectacular |
 | O (Blue giant) | 5% | Deep blue | Rare and stunning |
+
+#### Non-Main-Sequence Stars (To Be Implemented)
+Stars that have evolved off the main sequence or never made it. These connect to the **age parameter** — old systems may have evolved stars, young systems may still be forming.
+
+| Type | Description | Planet Implications |
+|------|-------------|---------------------|
+| **White dwarf** | Dead star, remnant core | Weird close-in remnant planets, disrupted orbits |
+| **Neutron star / Pulsar** | Extreme radiation, millisecond rotation | Lethal radiation zones, exotic physics |
+| **Red giant** | Bloated dying star | Inner planets swallowed, HZ pushed way out |
+| **Brown dwarf** | Failed star, very dim | Small planetary systems, extremely close-in HZ |
+| **Wolf-Rayet star** | Massive, dying, violently shedding mass | Glowing nebulae, extreme stellar winds |
+| **Protostar** | Still forming | Debris disks instead of mature planets, no settled orbits |
+| **Black hole** | Collapsed star or primordial | Accretion disk, extreme gravity, lensing effects |
+
+**Design note:** These types create unique visual and gameplay experiences. A black hole system looks and feels completely different from a G-star system. Implementation should treat each as a distinct generation path, not just a reskinned main-sequence star.
 
 #### Binary Systems
 ~35% of systems are binary. Two stars orbit their barycenter, planets in circumbinary (P-type) orbits. Mass ratio distribution: 25% twins, 40% similar, 25% unequal, 10% extreme.
@@ -175,6 +262,7 @@ Zones are defined by stellar luminosity and scale with √L:
 - Gaussian centered on 4.5, stddev 2.5, clamped to [0.1, 12.0]
 - Stored as data — not yet used in generation
 - Future: M-dwarf pre-MS atmosphere stripping, HZ migration
+- **Age drives everything:** Whether civilization is possible (<2 Gyr = no), whether exotic life exists (older = more likely), visual identity of the system (young = debris disks, old = evolved stars), what hazards exist, and what non-main-sequence star types are present
 
 **System Archetype** (Weiss et al. 2018 "peas in a pod"):
 - `compact-rocky` (30%): tighter spacing, +1 planet, smaller sizes
@@ -245,6 +333,19 @@ These are the intended rates, verified by 5000-system census:
 | **carbon** | Near-black with diamond glints | Scorching, inner, transition, outer | Very dark, glints |
 | **sub-neptune** | Pale hazy mini-Neptune | Inner through outer | Hazy, mid-sized |
 
+### Comets and Interstellar Objects
+
+Missing from the main type catalog but important for variety and encounters:
+
+| Type | Description | Where | Rarity |
+|------|-------------|-------|--------|
+| **Comets** | Icy bodies with tails catching starlight. Visual spectacle. | Passing through systems on eccentric orbits | Occasional — visual treat |
+| **Dwarf planets** | Small, round bodies in outer system or scattered disk | Outer system, scattered disk | Common in outer zones |
+| **Rogue planets** | Ejected from systems, drifting through interstellar space | Interstellar space encounters | Rare |
+| **Interstellar objects** | Like 'Oumuamua — hyperbolic orbits passing through systems briefly | Transiting through systems | Extremely rare, mysterious, potential anomaly triggers |
+
+These add variety and encounter opportunities without being full planets. Comets are primarily visual. Rogue planets and interstellar objects are discovery-tier encounters — scanning one could be a significant find.
+
 ### Science Sources
 - **Eta-Earth:** Bryson et al. 2020 (Kepler DR25) — 37-60% of G stars have rocky HZ planet
 - **Most common planet:** Sub-Neptune (Fressin et al. 2013, Kepler)
@@ -263,13 +364,25 @@ They are NOT part of the natural decision tree.
 
 ### 6A. Civilized Planets (Human-Like Civilization)
 
-**Concept:** Civilization is an overlay on habitable planets. A planet must first be terrestrial, ocean, or eyeball — then a separate roll determines if civilization developed there.
+**Concept:** Civilization is an overlay on habitable planets — but also a **regional phenomenon** at the galaxy scale. A planet must first be terrestrial, ocean, or eyeball — then a separate roll determines if civilization developed there. But civilization also spreads influence to neighboring systems.
 
 **Decision chain:**
 1. System generates naturally (most have no habitable planets)
 2. If a habitable planet exists (terrestrial/ocean/eyeball), roll for civilization
 3. Civilization probability depends on star type (stable, long-lived stars favor it)
 4. If civilization hits, the planet type changes to city-lights or ecumenopolis
+
+**Civilization as a Galaxy Layer:**
+Civilization isn't just a per-system overlay — it's regional:
+- Civilized systems influence their neighbors
+- Metal-rich systems near civilized ones → industrial colonies, mining stations
+- Even systems with **no habitable zone** can have humanoid presence if metal-rich (stations, mining outposts, megastructures)
+- Presence driven by: **metallicity + proximity to civilized systems + system age**
+- Two branches:
+  - Habitable + metal-rich → colonized planets (city-lights, ecumenopolis)
+  - No habitable + metal-rich → artificial structures (stations, mining outposts, orbital habitats)
+
+**Metallicity × Civilization:** Metal-rich systems → more civilized presence. Metal-poor → less. This applies to both colonized planets AND industrial outposts.
 
 **Types:**
 - **city-lights** — Earth-like with city lights on the night side. Same terrain as base planet, but with light clusters visible in shadow. ~70% of civilized rolls.
@@ -328,6 +441,24 @@ Large-scale alien constructs that aren't planets. These are their own object typ
 
 ---
 
+## 6D. Environmental Hazards
+
+Hazards make certain systems dangerous to enter or navigate. They create risk/reward decisions — dangerous systems may have valuable scan data or rare resources.
+
+| Hazard | Source | Effect |
+|--------|--------|--------|
+| **Radiation zones** | Pulsars, magnetars, active stars | Damage over time, scanner interference |
+| **Solar flares** | Active M-dwarfs, young stars | Periodic bursts of damage, shield drain |
+| **Dense asteroid fields** | Young systems, disrupted orbits | Collision risk, reduced maneuverability |
+| **Nebula interference** | Emission/planetary nebulae | Scanner static, reduced visibility, navigation difficulty |
+| **Extreme gravity** | Black holes, neutron stars, white dwarfs | Fuel drain, trajectory distortion, tidal effects |
+
+**Ties into fuel/energy system:** Approaching heavy or dangerous objects costs more energy. Risk/reward — the most dangerous systems may contain the most valuable discoveries.
+
+**Ties into scanner:** Hazards are revealed (or hinted at) through the scanning system. Galactic survey data may flag known-dangerous systems. Star-wave scan on arrival reveals local hazard levels.
+
+---
+
 ## 7. Navigation & UI
 
 ### Current State
@@ -340,7 +471,9 @@ Large-scale alien constructs that aren't planets. These are their own object typ
 
 **Replace all current map overlays** with a single toggleable screen that looks like a retro CRT navigation computer. Think: the ship's onboard computer displaying a schematic of the star system.
 
-**Aesthetic:** Old-school computer simulation on a CRT display. Green/amber phosphor lines, scanlines, vector-drawn orbits. Like looking at a navigation terminal from the 80s.
+**Aesthetic:** Wireframe, vector-line style, 80s sci-fi CRT terminal. Representations of objects, not the objects themselves. Own phosphor color independent of main view. **Diegetic** — it's a real device in your ship, not a game UI overlay.
+
+**References:** Alien MU-TH-UR 6000, WarGames WOPR terminal, 80s vector displays.
 
 **Features (planned):**
 - Interactive system map (zoom, pan, click to select bodies)
@@ -348,8 +481,54 @@ Large-scale alien constructs that aren't planets. These are their own object typ
 - Body information panels (type, radius, features)
 - Warp target selection from the map
 - Toggle on/off as a full overlay or separate screen
+- Codex / discovery log (persistent record of everything scanned)
 
 **Replaces:** GravityWell minimap, orbital minimap, orbital overlay. The real-time 3D view IS the "real thing" — the navigation computer is the abstraction layer.
+
+### Scanner System
+
+The scanner is the **universal interaction verb**. Everything you learn about the universe comes through scanning. Four layers, from coarsest to finest:
+
+#### Layer 1: Galactic Survey Data (Before Arrival)
+Available from the galaxy map before you warp. Pre-existing data from galactic surveys.
+- Star type, estimated planet count, age estimate
+- Danger rating (known hazards)
+- Known vs unknown status
+- **Civilized systems** are fully mapped in the survey. Frontier/unexplored systems have only basic star type data. Young/chaotic systems flagged as high danger.
+
+#### Layer 2: Star-Wave Scan (On Arrival, Player-Triggered)
+You arrive in a system and bounce a scan wave off the star. Reveals the full system layout.
+- Planet positions, orbital radii, basic types
+- Confirms or contradicts survey data
+- **"Expected" vs "unexpected" results** drive emergent gameplay:
+  - Expected colonized planet is destroyed → story hook
+  - Unknown system has unexpected civilization → discovery
+  - Survey said 4 planets, scan finds 5 → hidden body
+  - Survey said safe, scan reveals hostiles → ambush
+
+#### Layer 3: Direct Scan (Fly Close)
+Approach an object and scan it directly. Richer detail than star-wave.
+- Material composition, surface features, higher LOD visual
+- Works on: planets, moons, ships, stations, anomalies
+- **On ships:** Identifies type, faction, combat capability, cargo hints
+- **Scan data is tradeable** at civilized systems — exploration has economic value
+
+#### Layer 4: Codex (Persistent Record)
+Part of the nav computer. Tracks everything you've ever scanned.
+- Discovery log — what you've found, where, when
+- Categorized by type (stars, planets, exotics, ships, stations)
+- Completion tracking (how many planet types discovered, etc.)
+
+### In-System Travel
+
+The travel loop within a system:
+
+1. **Select destination** on nav computer
+2. **Accelerate** to relativistic speed
+3. **Brief high-speed transit** — on-rails segment, combat possible (see §9 Combat)
+4. **Decelerate** with cinematic approach — tension builds, destination grows ahead
+5. **Arrive** at low speed — all-range combat possible (see §9 Combat)
+6. **Interact** with POI — dock, scan, orbit, engage
 
 ---
 
@@ -368,6 +547,12 @@ Everything built by intelligent beings — human or alien. Ships, stations, base
 - **Capitals** (0-1, 20% of systems, deep space)
 - **Explorers** (0-1, outer system)
 
+**Ship population reflects system properties:**
+- Compact-rocky systems → mining ships, surveyors
+- Civilized systems → shuttles, fighters, patrols
+- Metal-rich industrial → freighter convoys, construction vessels
+- Empty/frontier → lone explorer or nothing at all
+
 #### Ship Behavior (ShipManager — not started)
 State machine: CRUISING → APPROACH → ESCORT → DEPART → CRUISING
 Encounters: ~1 in 3 systems has a ship visit you during orbit.
@@ -385,7 +570,29 @@ Objects that don't fit neatly into natural or civilized categories:
 - Signal sources (beacons, probes)
 - Unidentified objects in unusual orbits
 
-### 8E. On-Foot Exploration (Future — Long-term)
+### 8E. Planetary Surface Detail / LOD Tiers
+
+Three LOD tiers for celestial bodies:
+
+1. **Billboard** — Already implemented. Fixed screen-size pixel dot when body is sub-pixel.
+2. **Current model** — The sphere with procedural shader. What we have now.
+3. **High-LOD / showcase** — Close-up detail. Surface features, continent shapes, mountain ranges (bump mapping), city grids on city-lights worlds. For when you're very close — showcase mode or pre-landing approach.
+
+**Critical aesthetic constraint:** Adding too much detail risks breaking the retro aesthetic. The high-LOD tier must still feel retro — more detail within the low-res, dithered rendering, not a jump to modern graphics. Test with a single planet type first to see how LOD transitions feel.
+
+**The aesthetic relies on NOT having immersive LOD.** So this is enhancement within the existing visual language, not a departure from it.
+
+### 8F. Landing Mechanics (Future)
+
+If landing is ever implemented:
+- Ship enters **belly-first** (heat shield on bottom)
+- Nose of ship is NOT exposed to reentry friction
+- This hides the transition — you're looking at fire effects on the belly, not the terrain resolving
+- Fire/plasma effects during atmospheric entry — could be visually striking in the retro aesthetic
+- Landing sequence could be automated or semi-manual (skill element)
+- Surface transition TBD — this is far-future but the belly-first entry design decision is recorded here
+
+### 8G. On-Foot Exploration (Future — Long-term)
 **Minimum viable version:** Land at a space station, exit ship, walk around a basic interior environment. First-person movement in a small man-made space.
 
 **What this enables:**
@@ -403,6 +610,89 @@ Objects that don't fit neatly into natural or civilized categories:
 ## 9. Game Systems (Future)
 
 These are placeholder sections for systems that will be designed and implemented later.
+
+### Fuel/Energy System — The Rotor
+
+The core energy loop of the game. The ship has a **rotor** — a mysterious device that interacts with gravity wells directly.
+
+**How it works:**
+1. Fly close to a massive object (star, gas giant, neutron star, etc.) — within significant interaction range of its gravity well
+2. Engage the rotor → energy harvesting begins
+3. Keep the ship's trajectory in the right spot while the rotor harvests (minigame — see below)
+4. Disengage and escape the gravity well with net positive energy
+
+**Critical rule:** Energy gained from dipping into a gravity well must be MORE than the energy required to escape it. Every dip is net positive — that's the core promise. The skill element determines *how much* net positive.
+
+**The Rotor Minigame:**
+- The rotor disrupts autopilot — requires manual piloting while engaged
+- Skill-based: too deep into the well = danger (ship damage, capture), too shallow = low yield
+- Sweet spot shifts based on the object type and mass
+- Exotic structures in systems add variables (fungal interference, debris fields, radiation bursts) keeping the minigame fresh across different systems
+- This is the game's core verb — you will do this hundreds of times, so it must have depth
+
+**Balance (TBD):** The math for energy yield vs escape cost per gravity well type needs design work. Bigger/denser objects = more energy but harder minigame and higher escape cost.
+
+### Ship Upgrade System
+
+Upgrade paths tied to the fuel/rotor loop and progression:
+
+| Category | What it does | Examples |
+|----------|-------------|---------|
+| **Rotor modules** | Harvest speed, efficiency | Faster energy gain per second in the well |
+| **Autopilot assist** | Help with rotor alignment | Tiered: basic alignment help → advanced auto-harvesting (expensive) |
+| **Shields** | Survive more dangerous environments | Dip into neutron stars, black hole accretion disks |
+| **Scanners** | More detail from scans, longer range | Tier 1 = basic type, Tier 3 = full composition + history |
+| **Weapons** | Combat capability | For combat modes (see below) |
+| **Engines** | Acceleration, max transit speed, maneuverability | Faster in-system travel, better dodging |
+| **Hull** | Damage resistance | Survive collisions, environmental hazards |
+| **Cargo/data storage** | Capacity for tradeable scan data | More scans stored = more income at civilized systems |
+
+**Acquisition:** Upgrades purchased or found. Economy TBD, but scan data trading at civilized systems is one confirmed income source.
+
+### NPC Communications
+
+Ships can hail you and you can hail ships. Interaction with space stations from outside (comms) and inside (on-foot, future).
+
+**Aesthetic:** Text-based, retro terminal style — fits the nav computer visual language. Communications appear on the nav computer screen, not as floating UI.
+
+**Communication types:** Greeting, warning, trade offer, distress signal, hostile challenge. Limited base types, but each has many dialect/personality variations so players rarely see the same line twice.
+
+**AI-generated variety:** Different factions have different communication styles. Civilized faction ships are formal/professional. Hostile faction ships are aggressive/taunting. Frontier independents are terse/pragmatic.
+
+**Scanning → identification → communication flow:** Scanning a ship initiates the identification process — this is how you learn what you're dealing with before deciding to hail or avoid.
+
+### Combat System
+
+Two modes, both tied to velocity:
+
+#### All-Range Mode (Star Fox style)
+Triggered at **low speed near POIs** — when you decelerate to approach stations, planets, or other objects.
+- Full 3D movement, enemies from all directions
+- Ambushes, pirate encounters, defensive installations
+- Dogfighting around structures and asteroid fields
+
+#### On-Rails Mode (Panzer Dragoon style)
+Triggered at **relativistic transit speed** — during high-speed travel between destinations.
+- Fixed trajectory, 360-degree targeting reticle
+- Limited lateral dodge movement
+- Enemies matching velocity alongside you
+- Could also trigger during warp sequences
+
+**Mode transitions follow the in-system travel loop (see §7):** Accelerate → on-rails combat possible → decelerate → all-range combat possible → interact with POI.
+
+### Faction System
+
+Minimum viable: **two factions.**
+
+| Faction | Territory | Behavior |
+|---------|-----------|----------|
+| **Lawful** | Civilized regions, industrial systems | Patrols, trade routes, protection. Hostile to pirates. |
+| **Hostile** | Gaps between civilized regions, frontier | Piracy, ambushes, unregulated salvage. Hostile to lawful. |
+
+- Factions control **regions** of the galaxy, not individual systems
+- Pirates operate in the gaps between civilized regions
+- System expandable to more factions later — design needs slots for faction data per system
+- Player reputation with factions (future) — your actions affect how factions treat you
 
 ### Discovery Log
 Track what you've found: planet types seen, star types visited, exotics discovered. Persistent across sessions (localStorage).
@@ -423,6 +713,11 @@ Higher-level navigation. See your position in the galaxy, pick destinations, see
 
 ## 10. Technical Foundation
 
+### Team
+- **Max** — Game Director, Art Designer
+- **Claude + sub-agents** — Development team
+- **Christian** (Max's brother) — Sound Designer, Music Composer
+
 ### Stack
 Vite + Three.js (vanilla JS, no framework)
 
@@ -431,6 +726,17 @@ Vite + Three.js (vanilla JS, no framework)
 - **Deterministic seeds:** Same seed → identical system. `.child()` creates independent sub-streams.
 - **Per-object dithering:** Bayer dithering in each object's fragment shader, not a screen filter.
 - **Dual-resolution rendering:** Scene at low res, starfield at full res, composited with alpha-based shader.
+
+### Performance / Optimization Strategy
+
+Not yet profiled, but needs concrete limits as the game grows:
+
+- **LOD budget:** When many objects are in scene (8 planets, 20 moons, asteroid belt, ships), LOD tiers must aggressively cull detail. Billboard system already handles sub-pixel objects.
+- **Draw call budget:** Needs profiling — establish a target (e.g., <200 draw calls) and monitor.
+- **Instancing:** Already used for asteroids. Extend to other repeated geometry (station modules, ship swarms, particle effects).
+- **Memory management:** Galaxy-scale data requires sector caching with LRU eviction. Only nearby sectors live in memory.
+- **Shader complexity:** Per-object dithering is cheap but stacks up. Monitor fragment shader cost as planet count grows.
+- **Critical path:** This becomes urgent as ship population, station rendering, and galaxy map are added. Profile early, set budgets, enforce them.
 
 ### File Structure
 ```
@@ -458,6 +764,8 @@ src/
 | **Space Engine** | Scientific accuracy for star/planet distribution. Galaxy-scale procedural generation with regional variation (spiral arms, bulge, halo). Zone variability research. |
 | **Minecraft** | Seed-based determinism. The entire world exists implicitly in the seed — you're discovering it, not generating it. Chunk/region loading model. |
 | **Frontier: Elite II** | Newtonian flight, realistic scale, the loneliness of deep space. 1990s aesthetic inspiration. |
+| **Star Fox 64** | All-range mode — full 3D dogfighting near POIs. Combat triggered by proximity. |
+| **Panzer Dragoon** | On-rails mode — fixed trajectory, 360-degree targeting. Combat during transit. |
 
 ### Science
 | Source | What it informs |
@@ -485,6 +793,8 @@ src/
 | **CRT displays** | Navigation computer UI concept, phosphor glow, scanlines |
 | **80s sci-fi computer interfaces** | System map aesthetic — vector lines, amber/green text, radar-style displays |
 | **Star Trek LCARS** | Inspiration for information layout (not the specific aesthetic) |
+| **Alien (MU-TH-UR 6000)** | Nav computer aesthetic — CRT terminal, phosphor glow, diegetic computer interface |
+| **WarGames (WOPR)** | Nav computer aesthetic — vector displays, wireframe representations, cold machine logic |
 
 ---
 
@@ -505,6 +815,14 @@ When implemented, the galaxy is a deterministic structure derived from a master 
 
 ### Key Variables for System Generation
 Star type, age, metallicity, binary frequency, planet count, and planet composition should all vary based on galactic position. Space Engine has already modeled this — their approach is a primary research target.
+
+### Civilization Regions
+At the galaxy scale, civilization forms **regions**, not isolated dots:
+- Clusters of civilized systems with shared trade routes and patrols
+- Industrial/mining colonies spread outward from civilized cores into metal-rich neighbors
+- Pirate/hostile factions fill the gaps between civilized regions
+- Frontier zones at the edges where civilization thins out
+- This is an overlay on the galaxy structure — computed after star placement, based on metallicity clusters + age constraints (civilization needs >2 Gyr)
 
 ### Seed Architecture
 ```
@@ -579,21 +897,56 @@ for (let i = 0; i < N; i++) {
 ### Active Research
 - [ ] Galactic regional variation — how metallicity/age/density vary across a galaxy
 - [ ] Star age effects on generation — when to start using `ageGyr` parameter
+- [ ] Non-main-sequence star generation — white dwarfs, neutron stars, red giants, brown dwarfs, Wolf-Rayet, protostars, black holes
 
 ### Design Needed
 - [x] Exotic spawning implementation — `ExoticOverlay.js` post-generation pass
 - [ ] Civilized planet spawning rates — finalize decision chain percentages
-- [ ] Navigation computer UI design — layout, interaction, aesthetic details
+- [ ] Civilization as galaxy layer — regional spread logic, proximity influence, metal-rich outpost rules
+- [ ] Navigation computer UI design — layout, interaction, aesthetic details (wireframe CRT direction decided)
+- [ ] Scanner system implementation — four layers (galactic survey, star-wave, direct, codex)
+- [ ] Combat system design — weapons, damage, health, difficulty for both modes
+- [ ] Faction system design — territory generation, reputation, encounter rules
+- [ ] Environmental hazard implementation — damage model, fuel costs, scanner integration
+- [ ] In-system travel loop — acceleration/deceleration mechanics, transit timing
+- [ ] Main game aesthetic — replace 9 palette modes with one cohesive visual language
+- [ ] Reactive audio system — stem/layer architecture, property-to-audio mappings
+- [ ] Player identity — who are you? What's unusual about the character?
 - [ ] Megastructure visual design — how to render Dyson swarms, ring habitats
 - [ ] On-foot exploration scope — what's the MVP interior?
 - [ ] Gap-giant association — two-pass generation (deferred Phase 6)
 
 ### Waiting On
-- [ ] Music tracks — Max's brother Christian
+- [ ] Music tracks — Max's brother Christian (future: layered stem system)
 - [ ] CRT scanline filter — Phase 11 remaining item
 - [ ] Galaxy-level seed structure — design after regional variation research
 
 ---
 
-*Last updated: 2026-03-13*
+## 15. Narrative Framework
+
+### Philosophy
+The universe has **history** — megastructures were built by someone, fungal blooms spread, civilizations rose and fell. But it is **not over-explained.** Mysterious. Some things are never addressed directly. The player pieces things together.
+
+**There is no narrator, no cutscenes, no exposition dumps.**
+
+### How Narrative Emerges
+- **Environmental storytelling:** What you see in a system tells a story. A destroyed colony near a fungal bloom. A derelict megaship in an empty system. An ancient civilization's hex structure orbiting a dying star.
+- **Unexpected scan results:** Expected colony is destroyed — what happened? Unknown system has unexpected civilization. Survey said 4 planets, scan finds 5. These gaps between expectation and reality are the story hooks.
+- **Ship communications / NPC dialogue:** Fragments of information from other pilots. Warnings, rumors, distress calls that reference events you haven't witnessed.
+- **Space anomalies:** A collection/discovery system (TBD) — finding and cataloging unexplained phenomena.
+- **Logs/terminals on stations:** Future, ties to on-foot exploration. Found text that fills in pieces of the universe's history.
+
+### Tone
+Mysterious, sometimes haunting, occasionally wondrous. The universe is vast and mostly indifferent. But there are pockets of beauty, strangeness, and implied history that reward attention.
+
+### What the Narrative is NOT
+- Not a main quest or storyline
+- Not a mystery with a single answer
+- Not lore dumps in codex entries
+- Not something you can "complete"
+
+---
+
+*Last updated: 2026-03-14*
 *This document is the authority. If code disagrees with the bible, the bible wins.*
