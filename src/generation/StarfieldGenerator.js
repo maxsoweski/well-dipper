@@ -80,8 +80,6 @@ export class StarfieldGenerator {
     }
 
     // ── Galactic geometry from player's perspective ──
-    // The galactic plane is at y=0 in galactic coordinates.
-    // The galactic center is at (0, 0, 0).
     const toCenterX = -playerPos.x;
     const toCenterY = -playerPos.y;
     const toCenterZ = -playerPos.z;
@@ -90,39 +88,68 @@ export class StarfieldGenerator {
     const centerDirY = toCenterY / (toCenterDist || 1);
     const centerDirZ = toCenterZ / (toCenterDist || 1);
 
-    // Player's R and density at current position (for relative scaling)
-    const playerR = Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z);
-    const localDensity = galacticMap.componentDensities(playerR, playerPos.y);
+    // ── Pre-compute sky density grid via ray marching ──
+    // Sample the galaxy's actual density along many sky directions.
+    // This correctly handles ANY position: disk, halo, edge, center.
+    // Grid: 32 theta × 16 phi = 512 cells, each sampled at 4 distances.
+    // ~2000 density evaluations, takes ~50-100ms (hidden in warp tunnel).
+    const GRID_THETA = 32;
+    const GRID_PHI = 16;
+    const skyGrid = new Float32Array(GRID_THETA * GRID_PHI);
+    let maxGridDensity = 0;
 
-    // ── Fast density estimation per sky direction ──
-    // Instead of expensive ray marching, use a simple geometric model:
-    // Density along a direction depends on (a) how close that direction
-    // stays to the galactic plane and (b) whether it points toward the
-    // galactic center (where density is higher).
-    //
-    // This is approximate but 100x faster than ray marching and visually
-    // produces the right result: a dense band along the disk plane with
-    // a bright core toward the center.
-    function quickDensity(dirX, dirY, dirZ) {
-      // How much this direction aligns with the galactic plane
-      // (y=0 is the plane, so |dirY| measures deviation from it)
-      const planeFactor = 1.0 - Math.abs(dirY) * 1.5; // 1.0 in plane, negative above
-      const planeWeight = Math.max(0, planeFactor);
+    for (let ti = 0; ti < GRID_THETA; ti++) {
+      const theta = (ti / GRID_THETA) * Math.PI * 2;
+      for (let pi = 0; pi < GRID_PHI; pi++) {
+        const phi = ((pi + 0.5) / GRID_PHI) * Math.PI; // avoid poles
+        const dirX = Math.sin(phi) * Math.cos(theta);
+        const dirY = Math.cos(phi); // phi=0 is up, phi=PI is down
+        const dirZ = Math.sin(phi) * Math.sin(theta);
 
-      // How much this direction points toward the galactic center
-      const centerDot = dirX * centerDirX + dirY * centerDirY + dirZ * centerDirZ;
-      const centerWeight = Math.max(0, centerDot);
+        // Ray march: sample density at 4 distances along this direction
+        let totalDensity = 0;
+        for (const dist of [0.5, 1.5, 3.0, 6.0]) {
+          const sampleX = playerPos.x + dirX * dist;
+          const sampleY = playerPos.y + dirY * dist;
+          const sampleZ = playerPos.z + dirZ * dist;
+          const R = Math.sqrt(sampleX * sampleX + sampleZ * sampleZ);
+          // Skip samples outside the galaxy
+          if (R > 20 || Math.abs(sampleY) > 10) continue;
+          const dens = galacticMap.componentDensities(R, sampleY);
+          // Weight closer samples more (they contribute more to brightness)
+          const distWeight = 1.0 / (dist * 0.5 + 0.5);
+          totalDensity += dens.totalDensity * distWeight;
+        }
 
-      // Combined: plane alignment + center direction + local density
-      // The local density scales everything (sparse halo = sparse skybox)
-      const baseDensity = localDensity.totalDensity;
-      return (planeWeight * 0.7 + centerWeight * 0.3) * Math.min(baseDensity * 10, 1.0);
+        const gridIdx = ti * GRID_PHI + pi;
+        skyGrid[gridIdx] = totalDensity;
+        if (totalDensity > maxGridDensity) maxGridDensity = totalDensity;
+      }
+    }
+
+    // Normalize grid to [0, 1]
+    if (maxGridDensity > 0) {
+      for (let i = 0; i < skyGrid.length; i++) {
+        skyGrid[i] /= maxGridDensity;
+      }
+    }
+
+    // Fast lookup: direction → grid density
+    function lookupDensity(dirX, dirY, dirZ) {
+      // Convert direction to theta/phi grid indices
+      const theta = Math.atan2(dirZ, dirX);
+      const phi = Math.acos(Math.max(-1, Math.min(1, dirY)));
+      let ti = Math.floor(((theta + Math.PI) / (Math.PI * 2)) * GRID_THETA);
+      let pi = Math.floor((phi / Math.PI) * GRID_PHI);
+      if (ti >= GRID_THETA) ti = GRID_THETA - 1;
+      if (pi >= GRID_PHI) pi = GRID_PHI - 1;
+      return skyGrid[ti * GRID_PHI + pi];
     }
 
     // ── Place background stars using density-weighted distribution ──
     let placed = 0;
     let attempts = 0;
-    const maxAttempts = bgCount * 8;
+    const maxAttempts = bgCount * 12;
 
     while (placed < bgCount && attempts < maxAttempts) {
       attempts++;
@@ -131,13 +158,13 @@ export class StarfieldGenerator {
       const theta = rng.range(0, Math.PI * 2);
       const phi = Math.acos(rng.range(-1, 1));
       const dirX = Math.sin(phi) * Math.cos(theta);
-      const dirY = Math.sin(phi) * Math.sin(theta);
-      const dirZ = Math.cos(phi);
+      const dirY = Math.cos(phi);
+      const dirZ = Math.sin(phi) * Math.sin(theta);
 
-      const density = quickDensity(dirX, dirY, dirZ);
+      const density = lookupDensity(dirX, dirY, dirZ);
 
-      // Accept/reject: minimum 8% chance to avoid totally empty skies
-      const acceptChance = 0.08 + 0.92 * density;
+      // Accept/reject: minimum 3% chance (faint background glow even in voids)
+      const acceptChance = 0.03 + 0.97 * density;
       if (rng.float() > acceptChance) continue;
 
       const idx = realStarCount + placed;
