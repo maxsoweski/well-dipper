@@ -252,6 +252,25 @@ export class StarSystemGenerator {
       }
     }
 
+    // ── Zone data (first-class, for UI/overlays/future mechanics) ──
+    // Boundaries in AU and scene units. See docs/GAME_BIBLE.md §4.
+    const zoneData = {
+      scorchingOuterAU: hzInnerAU * 0.4,
+      hzInnerAU,
+      hzOuterAU,
+      frostLineAU,
+      // Scene units for rendering zone rings, overlays, etc.
+      scorchingOuterScene: auToScene(hzInnerAU * 0.4),
+      hzInnerScene: auToScene(hzInnerAU),
+      hzOuterScene: auToScene(hzOuterAU),
+      frostLineScene: auToScene(frostLineAU),
+      // Map units for HUD overlays
+      scorchingOuterMap: hzInnerAU * 0.4 * mapUnitsPerAU,
+      hzInnerMap: hzInnerAU * mapUnitsPerAU,
+      hzOuterMap: hzOuterAU * mapUnitsPerAU,
+      frostLineMap: frostLineAU * mapUnitsPerAU,
+    };
+
     return {
       star,
       star2,
@@ -268,6 +287,8 @@ export class StarSystemGenerator {
       asteroidBelts,
       starInfo,
       seed,
+      // Zone boundaries (AU, scene, map units)
+      zones: zoneData,
       // Conversion factors (useful for consumers)
       mapUnitsPerAU,
     };

@@ -446,127 +446,130 @@ export class PlanetGenerator {
     if (!zones) {
       if (roll < 0.2) return 'rocky';
       if (roll < 0.4) return 'gas-giant';
-      if (roll < 0.55) return 'terrestrial';
-      if (roll < 0.65) return 'sub-neptune';
-      if (roll < 0.75) return 'ice';
-      if (roll < 0.85) return 'ocean';
-      return 'venus';
+      if (roll < 0.55) return 'sub-neptune';
+      if (roll < 0.7) return 'ice';
+      if (roll < 0.85) return 'venus';
+      return 'carbon';
     }
 
     const { frostLine, hzInner, hzOuter, starType } = zones;
 
-    // ── Exotic/civilized roll (before normal zone selection) ──
-    // Only if this system doesn't already have an exotic planet
-    if (!zones.hasExotic) {
-      // Exotic chance per planet, by star type (NMS-inspired: M > K > O/B > F/G)
-      const exoticChance = {
-        'O': 0.035, 'B': 0.03, 'A': 0.02,
-        'F': 0.015, 'G': 0.015,
-        'K': 0.03, 'M': 0.04,
-      }[starType] || 0.015;
+    // NOTE: Exotic and civilized planet types (hex, machine, crystal, shattered,
+    // fungal, city-lights, ecumenopolis) are NOT handled here. They are applied
+    // as overlay systems AFTER natural generation. See docs/GAME_BIBLE.md §6.
+    //
+    // This function only picks natural planet types based on zone and science.
 
-      // Civilized chance — only around stable, long-lived stars
-      const civilizedChance = {
-        'F': 0.03, 'G': 0.04, 'K': 0.03, 'A': 0.005, 'M': 0.01,
-      }[starType] || 0;
+    // ════════════════════════════════════════════════════════════
+    // SCIENCE-DRIVEN TYPE SELECTION
+    //
+    // Based on Kepler/TESS data and exoplanet formation science:
+    //
+    // Decision chain for habitable worlds (terrestrial/ocean/eyeball):
+    //   1. Must be in the habitable zone
+    //   2. Must be rocky (not sub-neptune/gas) — Kepler: ~30-40% of HZ planets
+    //      are sub-Neptune sized, leaving ~60-70% as rocky candidates
+    //   3. Must have surface liquid water — only ~10-25% of HZ rocky planets
+    //      (Forget 2012, Tian & Matsui)
+    //   4. Must have life (terrestrial only) — fraction of water worlds that
+    //      develop visible biosphere is unknown, but very small
+    //
+    // Result: ~40% of stars have HZ rocky planet × ~15% have water = ~6%
+    // of systems have an ocean world. Terrestrial (with life) ~2-3%.
+    //
+    // Eyeball planets: default habitable type for M/late-K dwarfs (tidally
+    // locked in close HZ). NOT rare — they're more common than terrestrial.
+    //
+    // Gas giants: ~15-20% of FGK systems, ~3-5% of M systems (Cumming 2008,
+    // Mayor 2011). Concentrated at/beyond frost line. Hot Jupiters ~0.5-1%.
+    //
+    // Most common planet type: sub-Neptune (Fressin 2013, Kepler).
+    // Super-Earths and sub-Neptunes dominate everywhere inside the frost line.
+    // ════════════════════════════════════════════════════════════
 
-      const exoticRoll = rng.float();
-
-      // Civilized types: city-lights / ecumenopolis (HZ only)
-      if (civilizedChance > 0 && exoticRoll < civilizedChance && orbitRadius >= hzInner && orbitRadius < hzOuter) {
-        zones.hasExotic = true;
-        // ~70% city-lights, ~30% ecumenopolis
-        return rng.float() < 0.7 ? 'city-lights' : 'ecumenopolis';
-      }
-
-      // Exotic types: zone-filtered subtypes
-      if (exoticRoll < exoticChance + civilizedChance) {
-        // Determine which zone we're in (exclusive)
-        const zone =
-          orbitRadius < hzInner * 0.3 ? 'scorching' :
-          orbitRadius < hzInner       ? 'inner' :
-          orbitRadius < hzOuter       ? 'hz' :
-          orbitRadius < frostLine     ? 'transition' :
-                                        'outer';
-
-        // Which exotic types are allowed in each zone
-        const zoneAllowed = {
-          scorching:  ['shattered'],                                    // tidal/thermal stress
-          inner:      ['hex', 'machine', 'shattered', 'crystal'],       // varied
-          hz:         ['hex', 'machine', 'fungal'],                     // biological + artificial
-          transition: ['hex', 'machine', 'shattered', 'crystal', 'fungal'], // everything
-          outer:      ['hex', 'machine', 'crystal'],                    // cold, mineral, artificial
-        };
-
-        const allowed = zoneAllowed[zone] || [];
-        if (allowed.length > 0) {
-          zones.hasExotic = true;
-          return rng.pick(allowed);
-        }
-      }
-    }
-
-    // ── Scorching zone: inside 0.3x habitable zone inner edge ──
-    // Mix of hostile world types — lava, carbon, venus, hot-jupiters
-    if (orbitRadius < hzInner * 0.3) {
-      if (starType !== 'M' && rng.chance(0.15)) return 'hot-jupiter';
-      if (roll < 0.22) return 'lava';
-      if (roll < 0.38) return 'rocky';
-      if (roll < 0.54) return 'venus';
-      if (roll < 0.72) return 'carbon';
-      if (roll < 0.86) return 'sub-neptune';
+    // ── Scorching zone: inside 0.4x habitable zone inner edge ──
+    // Extreme radiation strips atmospheres. Lava worlds from tidal heating,
+    // bare rocky cores, carbon worlds. Hot Jupiters are migrated gas giants
+    // (~0.5-1% of all systems, only around FGK stars).
+    if (orbitRadius < hzInner * 0.4) {
+      if (starType !== 'M' && rng.chance(0.04)) return 'hot-jupiter';
+      if (roll < 0.30) return 'lava';
+      if (roll < 0.55) return 'rocky';
+      if (roll < 0.75) return 'carbon';
+      if (roll < 0.90) return 'venus';
       return 'lava';
     }
 
-    // ── Inner zone: between scorching and habitable zone ──
-    // Broad mix — rocky, venus, terrestrial, carbon, sub-neptune
+    // ── Inner zone: scorching edge to HZ inner edge ──
+    // Too hot for liquid water. Venus-like greenhouse runaway dominates.
+    // Sub-Neptunes are the most common Kepler planet type at all distances.
+    // No terrestrial, no ocean — surface water boils off.
     if (orbitRadius < hzInner) {
-      if (roll < 0.16) return 'rocky';
       if (roll < 0.30) return 'venus';
-      if (roll < 0.44) return 'terrestrial';
-      if (roll < 0.54) return 'lava';
-      if (roll < 0.66) return 'carbon';
-      if (roll < 0.78) return 'sub-neptune';
-      return 'ocean';
+      if (roll < 0.50) return 'rocky';
+      if (roll < 0.65) return 'sub-neptune';
+      if (roll < 0.80) return 'carbon';
+      if (roll < 0.92) return 'lava';
+      return 'venus';
     }
 
     // ── Habitable zone ──
-    // Earth-like worlds (green terrestrials) are rare — most HZ planets are
-    // ocean, rocky, or sub-neptune. ~8% terrestrial aligns with optimistic
-    // exoplanet science (~1-5% of systems having a visibly alive world).
+    // Science-grounded but tuned for fun. Real rates are ~1-5% of systems
+    // having habitable worlds; we target ~8% (any habitable) to keep
+    // exploration rewarding without making life common.
+    //
+    // System-level targets (per 5000-system census):
+    //   ~3% of systems have terrestrial (life-bearing)
+    //   ~6% of systems have ocean (water world)
+    //   ~8% of systems have any habitable (terrestrial/ocean/eyeball)
+    //
+    // M/K dwarfs: HZ is close-in → tidal locking → eyeball is the default
+    // habitable type. Terrestrial (non-locked) is rare around these stars.
     if (orbitRadius < hzOuter) {
-      const eyeballBoost = (starType === 'M' || starType === 'K') ? 0.18 : 0.12;
-      if (roll < 0.08) return 'terrestrial';
-      if (roll < 0.28) return 'ocean';
-      if (roll < 0.28 + eyeballBoost) return 'eyeball';
+      const isCoolStar = (starType === 'M' || starType === 'K');
+      const terrestrialChance = isCoolStar ? 0.04 : 0.10;
+      const oceanChance = 0.13;
+      const eyeballChance = isCoolStar ? 0.06 : 0.02;
+
+      let threshold = 0;
+      threshold += terrestrialChance;
+      if (roll < threshold) return 'terrestrial';
+      threshold += oceanChance;
+      if (roll < threshold) return 'ocean';
+      threshold += eyeballChance;
+      if (roll < threshold) return 'eyeball';
       if (roll < 0.48) return 'sub-neptune';
-      if (roll < 0.62) return 'rocky';
-      if (roll < 0.76) return 'venus';
+      if (roll < 0.72) return 'rocky';
+      if (roll < 0.86) return 'venus';
       return 'ice';
     }
 
-    // ── Transition zone: between habitable zone and frost line ──
-    // Diverse mix — ice, sub-neptune, terrestrial, with some gas giants
+    // ── Transition zone: HZ outer edge to frost line ──
+    // Water freezes on surfaces. Sub-Neptunes and ice worlds dominate.
+    // Gas giants rare here — they form AT the frost line, not before it.
+    // No liquid water on surfaces — too cold.
     if (orbitRadius < frostLine) {
-      if (roll < 0.18) return 'sub-neptune';
-      if (roll < 0.34) return 'ice';
-      if (roll < 0.44) return 'rocky';
-      if (roll < 0.54) return 'gas-giant';
-      if (roll < 0.66) return 'ocean';
-      if (roll < 0.78) return 'terrestrial';
+      if (roll < 0.30) return 'sub-neptune';
+      if (roll < 0.55) return 'ice';
+      if (roll < 0.72) return 'rocky';
+      if (roll < 0.80) return 'gas-giant';
       return 'carbon';
     }
 
     // ── Outer system: beyond frost line ──
-    // Gas giants present but not dominant — ice and other types get space
+    // Gas giant formation zone (core accretion peaks at snow line).
+    // ~15-20% of FGK stars have gas giants (Cumming 2008), ~3-5% of M dwarfs.
+    // But each individual outer planet has a LOW chance of being a gas giant —
+    // systems have multiple outer planets, so per-planet rate must be modest
+    // to hit 15-20% at the system level.
     const frostRatio = orbitRadius / frostLine;
-    const gasBase = (starType === 'M') ? 0.12 : 0.22;
+    // Gas giants peak near frost line (1-3x), decline further out
+    const gasBase = (starType === 'M') ? 0.03 : 0.10;
     const gasBoost = (frostRatio < 3.0 && starType !== 'M') ? 0.08 : 0.0;
     if (roll < gasBase + gasBoost) return 'gas-giant';
-    if (roll < 0.42) return 'ice';
-    if (roll < 0.55) return 'sub-neptune';
-    if (roll < 0.67) return 'rocky';
-    if (roll < 0.80) return 'ocean';
+    if (roll < 0.48) return 'ice';
+    if (roll < 0.68) return 'sub-neptune';
+    if (roll < 0.85) return 'rocky';
     return 'carbon';
   }
 }
