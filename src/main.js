@@ -2984,6 +2984,13 @@ function animate() {
         effectiveSceneFade = 0;
       }
 
+      // During EXIT phase, the camera has repositioned for the new system.
+      // The old riftDirection now projects off-center. Force the exit reveal
+      // to open from screen center so it looks correct.
+      const warpUV = (warpEffect.state === 'exit')
+        ? _riftUV.set(0.5, 0.5)
+        : _riftUV;
+
       retroRenderer.setWarpUniforms(
         effectiveSceneFade,
         warpEffect.whiteFlash,
@@ -2991,7 +2998,7 @@ function animate() {
         warpEffect.hyperTime,
         warpEffect.foldGlow,
         warpEffect.exitReveal,
-        _riftUV,
+        warpUV,
       );
 
       // ── Camera slerp: rotate to face the rift during fold/enter ──
