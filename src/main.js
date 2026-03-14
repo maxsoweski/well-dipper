@@ -3355,12 +3355,13 @@ window.addEventListener('keydown', (e) => {
     // ── Galaxy position debug teleports ──
     // Shift+F1 through F5: jump to extreme galactic positions
     // to test how the starfield and system generation change
+    // Shift+Q/W/E/R/Z: galaxy position debug teleports
     const galaxyDebugPositions = {
-      'F1': { name: 'Solar neighborhood', pos: { x: 8.0, y: 0.025, z: 0.0 } },
-      'F2': { name: 'Galaxy edge (outer fringe)', pos: { x: 14.5, y: 0.0, z: 0.0 } },
-      'F3': { name: 'Above galaxy (halo)', pos: { x: 4.0, y: 6.0, z: 0.0 } },
-      'F4': { name: 'Galactic center', pos: { x: 0.5, y: 0.0, z: 0.5 } },
-      'F5': { name: 'Deep halo (outside galaxy)', pos: { x: 0.0, y: 12.0, z: 0.0 } },
+      'KeyQ': { name: 'Solar neighborhood', pos: { x: 8.0, y: 0.025, z: 0.0 } },
+      'KeyW': { name: 'Galaxy edge (outer fringe)', pos: { x: 14.5, y: 0.0, z: 0.0 } },
+      'KeyE': { name: 'Above galaxy (halo)', pos: { x: 4.0, y: 6.0, z: 0.0 } },
+      'KeyR': { name: 'Galactic center', pos: { x: 0.5, y: 0.0, z: 0.5 } },
+      'KeyZ': { name: 'Deep halo (outside galaxy)', pos: { x: 0.0, y: 12.0, z: 0.0 } },
     };
     const galaxyDebug = galaxyDebugPositions[e.code];
     if (galaxyDebug && galacticMap) {
