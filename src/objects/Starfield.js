@@ -11,19 +11,33 @@ import * as THREE from 'three';
  * - Fragment shader boosts brightness for the accumulation glow
  */
 export class Starfield {
-  constructor(count = 3000, radius = 500) {
-    this.count = count;
-    this.radius = radius;
-    this.mesh = this._createStars();
+  /**
+   * @param {number|object} countOrData - either a star count (legacy random mode)
+   *   or a data object { positions, colors, sizes, count, realStars } from StarfieldGenerator
+   * @param {number} radius - sky sphere radius (only used in legacy random mode)
+   */
+  constructor(countOrData = 3000, radius = 500) {
+    if (typeof countOrData === 'object' && countOrData.positions) {
+      // Galaxy-aware mode: use pre-generated data from StarfieldGenerator
+      this.count = countOrData.count;
+      this.radius = radius;
+      this.realStars = countOrData.realStars || []; // GalacticMap star references
+      this.mesh = this._createStarsFromData(countOrData.positions, countOrData.colors, countOrData.sizes);
+    } else {
+      // Legacy random mode (screensaver, no galaxy)
+      this.count = countOrData;
+      this.radius = radius;
+      this.realStars = [];
+      this.mesh = this._createStarsRandom();
+    }
   }
 
-  _createStars() {
-    // Each star needs x, y, z position and r, g, b color
+  _createStarsRandom() {
+    // Legacy: random uniform distribution (screensaver mode)
     const positions = new Float32Array(this.count * 3);
     const colors = new Float32Array(this.count * 3);
 
     for (let i = 0; i < this.count; i++) {
-      // Distribute points uniformly on a sphere surface.
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       const r = this.radius;
@@ -33,7 +47,6 @@ export class Starfield {
       positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       positions[i3 + 2] = r * Math.cos(phi);
 
-      // Star colors: mostly white, some tinted
       const colorRoll = Math.random();
       if (colorRoll < 0.05) {
         colors[i3] = 0.7; colors[i3 + 1] = 0.8; colors[i3 + 2] = 1.0;
@@ -47,7 +60,6 @@ export class Starfield {
       }
     }
 
-    // Vary star sizes
     const sizes = new Float32Array(this.count);
     for (let i = 0; i < this.count; i++) {
       const roll = Math.random();
@@ -55,6 +67,15 @@ export class Starfield {
       else if (roll < 0.03) sizes[i] = 4.0;
       else sizes[i] = 2.0;
     }
+
+    return this._buildMesh(positions, colors, sizes);
+  }
+
+  _createStarsFromData(positions, colors, sizes) {
+    return this._buildMesh(positions, colors, sizes);
+  }
+
+  _buildMesh(positions, colors, sizes) {
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -244,6 +265,21 @@ export class Starfield {
       direction: new THREE.Vector3(positions[p], positions[p + 1], positions[p + 2]).normalize(),
       index: pick,
     };
+  }
+
+  /**
+   * If the starfield was generated with galaxy awareness, check whether
+   * a clicked starfield index corresponds to a real GalacticMap star.
+   * Returns the star data if so, or null for background stars.
+   *
+   * @param {number} index - starfield point index (from findNearestStar)
+   * @returns {object|null} GalacticMap star entry, or null
+   */
+  getGalaxyStarForIndex(index) {
+    for (const entry of this.realStars) {
+      if (entry.index === index) return entry.starData;
+    }
+    return null;
   }
 
   addTo(scene) {
