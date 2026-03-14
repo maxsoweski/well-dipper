@@ -2,6 +2,7 @@ import { SeededRandom } from './SeededRandom.js';
 import { PlanetGenerator } from './PlanetGenerator.js';
 import { MoonGenerator } from './MoonGenerator.js';
 import { AsteroidBeltGenerator } from './AsteroidBeltGenerator.js';
+import { ExoticOverlay } from './ExoticOverlay.js';
 import {
   SOLAR_RADIUS_AU, EARTH_RADIUS_AU, AU_TO_SCENE,
   solarRadiiToScene, earthRadiiToScene, auToScene,
@@ -319,7 +320,7 @@ export class StarSystemGenerator {
       frostLineMap: frostLineAU * mapUnitsPerAU,
     };
 
-    return {
+    const systemData = {
       star,
       star2,
       isBinary,
@@ -344,6 +345,14 @@ export class StarSystemGenerator {
       // Conversion factors (useful for consumers)
       mapUnitsPerAU,
     };
+
+    // ── Exotic/civilized overlay ──
+    // Post-processing pass: rare alien anomalies, civilized worlds,
+    // geological formations. Modifies planets array in-place.
+    // See docs/GAME_BIBLE.md §6 and ExoticOverlay.js.
+    ExoticOverlay.apply(systemData);
+
+    return systemData;
   }
 
   static _pickStarType(rng) {
