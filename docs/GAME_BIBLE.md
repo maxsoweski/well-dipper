@@ -43,10 +43,53 @@ Late-90s PC / PS1 / Saturn era. Low-poly geometry, posterized colors, Bayer dith
 ### Color Palette Modes
 9 post-process palette options: Full Color (default), Monochrome, Amber CRT, Green Phosphor, Blue Phosphor, Game Boy, CGA, Sepia, Virtual Boy, Inverted.
 
-### Sound
-- Synthesized placeholder SFX (Web Audio API)
-- Music system ready (MusicManager with crossfading, ducking)
-- Waiting on real tracks from Max's brother
+### Sound Design
+
+#### Musical Vision
+Late-90s retro synth — meditative, contemplative, NOT action-packed. Sparse arrangements, warm drones, FM/analog synth pads. Think Katamari Damacy meets planetarium screensaver. Slow tempos for exploration (60-90 BPM), faster for hyperspace (120-140 BPM).
+
+**Reference soundtracks:** Outer Wilds (acoustic + wonder), FTL (synth exploration vs tense), Katamari Damacy (quirky retro), No Man's Sky (procedural ambient), Stellaris (grand space synths).
+
+#### Music Tracks (7 total)
+
+| Track | Context | Duration | Loop? | Priority | Vibe |
+|-------|---------|----------|-------|----------|------|
+| **title** | Title screen | 60-90s | Yes | HIGH | Mysterious, contemplative, sparse — floating in void |
+| **explore** | Main gameplay (star systems) | 90-120s | Yes | HIGH | Meditative wonder, gentle movement. Most-heard track. |
+| **explore-alt** | Variation on explore | 90-120s | Yes | LOW | Same key, different melody/instruments |
+| **deepsky** | Galaxies, nebulae, clusters | 60-90s | Yes | MEDIUM | Grander, more awe-inspiring — bigger scale |
+| **warp-charge** | Portal opens (6s visual) | 6-7s | No | HIGH | Building tension, escalating energy |
+| **hyperspace** | Inside warp tunnel | 60s | Yes | HIGH | Fast, intense, rhythmic — retro sci-fi energy |
+| **arrival** | Exiting warp into new system | 3-5s | No | MEDIUM | Brief wonder — "we're here," relief |
+
+**Key compatibility:** All tracks in same or related keys for smooth crossfades (nice-to-have, not mandatory).
+
+#### Looping Requirements (Critical)
+- Zero silence before/after music — trim to exactly 0ms
+- Even 10ms of silence causes an audible hiccup
+- Avoid hard transients at start/end
+- Reverb/delay tails must decay cleanly before loop point
+- Test loops by repeating 3-4 times in Audacity
+
+#### File Format
+- OGG Vorbis primary, MP3 fallback (Safari/iOS)
+- 128-192 kbps, 44.1 kHz stereo
+- Optional: 22 kHz for extra lo-fi crunch
+- Deliver to `/public/assets/music/` directory
+
+#### Sound Effects (Placeholder — Web Audio API synthesized)
+14 SFX in `SoundEngine.js`, all placeholder:
+- **UI:** select (blip), cycle (tick), toggleOn/Off, uiClick
+- **Autopilot:** rising/falling two-tone
+- **Warp:** target chirp, lock-on tone, 6.5s charge buildup (THE signature sound — sub-bass + dissonant sawtooth + noise + high whine), exit reverse
+- **Title:** cosmic drone, major chord arpeggio dismiss
+
+#### Audio Architecture
+- `SoundEngine.js` — Web Audio API synthesized SFX
+- `MusicManager.js` — track loading, looping, crossfading, ducking
+- Music transitions: title dismiss → explore, warp fold → duck, hyper start → hyperspace, warp complete → explore/deepsky
+- Sound Test panel: press T to preview all effects and tracks
+- Composer: Max's brother Christian. Guide doc: `Well-Dipper-Music-Guide.docx` in project root.
 
 ---
 
@@ -423,8 +466,14 @@ src/
 | **Bryson et al. 2020** | ~37-60% of Sun-like stars have rocky HZ planet |
 | **Fressin et al. 2013** | Planet size distribution — sub-Neptunes most common |
 | **Cumming et al. 2008 / Mayor et al. 2011** | Gas giant occurrence: 15-20% of FGK, 3-5% of M |
+| **Fischer & Valenti 2005** | Giant planet metallicity correlation: P(giant) ∝ 10^(2×[Fe/H]) |
+| **Buchhave et al. 2014** | Three regimes: terrestrial (<1.7R⊕), gas dwarf, giant — metallicity thresholds |
+| **Weiss et al. 2018** | "Peas in a pod" — intra-system size and spacing correlation |
+| **Steffen & Hwang 2015** | Period ratio distribution — log-normal, min 1.2, median ~1.73 |
+| **Zhu & Dong 2021** | Planet count distribution — ~1.2 planets/star inner system |
 | **Forget 2012** | ~10-25% of HZ rocky planets have surface liquid water |
 | **Barnes 2017** | Tidal locking for M-dwarf HZ planets → eyeball worlds |
+| **Luger & Barnes 2015** | M-dwarf pre-MS water loss on HZ planets |
 | **Hertzsprung-Russell diagram** | Star classification, luminosity-temperature relationship, stellar evolution |
 | **Core accretion model** | Gas giants form at/beyond frost line |
 
@@ -470,14 +519,66 @@ Current system generation works unchanged at the bottom of this chain. Galaxy is
 
 ---
 
-## 13. Open Questions & Research Needed
+## 13. Generation Verification Log
+
+Census results to compare against when debugging. Run `node /tmp/census-script.mjs` pattern to regenerate.
+
+### Baseline Census (2026-03-13, commit e6587d0, 5000 systems)
+
+**System-level rates:**
+| Metric | Target | Actual | Notes |
+|---|---|---|---|
+| Terrestrial | ~3% | 3.9% | Slightly high but acceptable |
+| Ocean | ~6% | 6.6% | Close |
+| Eyeball | ~2% | 1.9% | On target |
+| Any habitable | ~8-10% | 12.4% | High — driven by planet count changes |
+| Gas giant | ~20% | 20.9% | On target |
+| Hot Jupiter | ~1% | 1.5% | Slightly high |
+
+**Metallicity → gas giant correlation (Fischer-Valenti):**
+| Metallicity | Systems | With gas giant | Rate |
+|---|---|---|---|
+| Low ([Fe/H] < -0.15) | 1129 | 64 | 5.7% |
+| Mid (-0.15 to +0.15) | 2755 | 531 | 19.3% |
+| High ([Fe/H] > +0.15) | 1116 | 448 | 40.1% |
+
+**Archetype distribution:** compact-rocky 30.6%, mixed 45.2%, spread-giant 24.3%
+
+**Planet count:** avg 4.6/system, 7.5% empty, bell curve peaking at 5-6
+
+**Spacing ratios:** median 1.728, min 1.200, 25th pct 1.540, 75th pct 1.948
+
+**If rates seem off after future changes, check:**
+1. Did `_pickType()` thresholds change? (per-planet HZ chances)
+2. Did planet count distribution change? (more planets = more chances to hit HZ)
+3. Did spacing change? (wider spacing = fewer planets in HZ)
+4. Did metallicity distribution change? (affects gas giant rates)
+5. Did archetype weights change? (30/45/25 split)
+
+### How to Run a Census
+Generate N systems, count types. Pattern:
+```javascript
+import { StarSystemGenerator } from './src/generation/StarSystemGenerator.js';
+for (let i = 0; i < N; i++) {
+  const data = StarSystemGenerator.generate('census-' + i);
+  // count data.planets[].planetData.type
+  // check data.metallicity, data.archetype, data.ageGyr
+}
+```
+
+---
+
+## 14. Open Questions & Research Needed
+
+### Completed Research
+- [x] Zone variability by star type and age → see `docs/RESEARCH_zone-variability.md`
+- [x] Planet clustering patterns → implemented via peas-in-a-pod archetype system
+- [x] Stellar metallicity effects → implemented via Fischer-Valenti scaling
+- [x] Space Engine's approach → documented in research file
 
 ### Active Research
-- [ ] Zone variability by star type and age — how to make systems feel less template-stamped
-- [ ] Planet clustering patterns — Kepler data on how planets bunch up in real systems
-- [ ] Galactic regional variation — how star/planet populations differ across a galaxy
-- [ ] Space Engine's procedural generation approach — what variables drive their galaxy model
-- [ ] Stellar metallicity effects on planet formation — metal-poor stars → fewer rocky planets
+- [ ] Galactic regional variation — how metallicity/age/density vary across a galaxy
+- [ ] Star age effects on generation — when to start using `ageGyr` parameter
 
 ### Design Needed
 - [ ] Exotic spawning implementation — build overlay systems per §6
@@ -485,9 +586,10 @@ Current system generation works unchanged at the bottom of this chain. Galaxy is
 - [ ] Navigation computer UI design — layout, interaction, aesthetic details
 - [ ] Megastructure visual design — how to render Dyson swarms, ring habitats
 - [ ] On-foot exploration scope — what's the MVP interior?
+- [ ] Gap-giant association — two-pass generation (deferred Phase 6)
 
 ### Waiting On
-- [ ] Music tracks — Max's brother
+- [ ] Music tracks — Max's brother Christian
 - [ ] CRT scanline filter — Phase 11 remaining item
 - [ ] Galaxy-level seed structure — design after regional variation research
 
