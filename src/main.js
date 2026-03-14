@@ -33,6 +33,8 @@ import { BodyInfo } from './ui/BodyInfo.js';
 import { SoundEngine } from './audio/SoundEngine.js';
 import { MusicManager } from './audio/MusicManager.js';
 import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
+import { GalacticMap } from './generation/GalacticMap.js';
+import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -80,8 +82,25 @@ cameraController.hasFocusedBody = () => {
 // ── Starfield ──
 // Rendered at full resolution (via retroRenderer.starfieldScene) for tiny
 // crisp star points, separate from the low-res retro scene objects.
-const starfield = new Starfield(settings.get('starDensity'), 500);
+let starfield = new Starfield(settings.get('starDensity'), 500);
 starfield.addTo(retroRenderer.starfieldScene);
+
+// ── Galaxy State ──
+// GalacticMap provides the structural galaxy. When active, it drives
+// starfield generation, system properties, and warp target resolution.
+// When null, legacy sequential seed mode is used (screensaver).
+const galacticMap = new GalacticMap('well-dipper-galaxy-1');
+let playerGalacticPos = galacticMap.getStartPosition();
+let currentGalaxyStar = null; // the GalacticMap star entry we're currently at
+
+// Generate initial galaxy-aware starfield
+{
+  const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
+  starfield.dispose();
+  retroRenderer.starfieldScene.remove(starfield.mesh);
+  starfield = new Starfield(sfData, 500);
+  starfield.addTo(retroRenderer.starfieldScene);
+}
 
 // ── System State ──
 let seedCounter = 0;
@@ -545,7 +564,35 @@ warpEffect.onPrepareSystem = () => {
   _forceNextDestType = null; // clear after use
 
   if (destType === 'star-system') {
-    pendingSystemData = StarSystemGenerator.generate(seed);
+    // ── Galaxy-aware system generation ──
+    // If galaxy mode is active, resolve the warp target to a GalacticMap
+    // star and derive context from its galactic position.
+    let galaxyContext = null;
+    if (galacticMap && warpTarget.direction) {
+      // Find which galaxy star the player is warping toward
+      const nearby = galacticMap.findNearestStars(playerGalacticPos, 30);
+      let bestStar = null;
+      let bestDot = -1;
+      for (const star of nearby) {
+        if (star.distSq < 0.001) continue; // skip self
+        const dx = star.worldX - playerGalacticPos.x;
+        const dy = star.worldY - playerGalacticPos.y;
+        const dz = star.worldZ - playerGalacticPos.z;
+        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // Match warp direction to galaxy star direction
+        const dot = (dx / len) * warpTarget.direction.x
+                  + (dy / len) * warpTarget.direction.y
+                  + (dz / len) * warpTarget.direction.z;
+        if (dot > bestDot) { bestDot = dot; bestStar = star; }
+      }
+      if (bestStar) {
+        // Update player position to the destination star
+        playerGalacticPos = { x: bestStar.worldX, y: bestStar.worldY, z: bestStar.worldZ };
+        currentGalaxyStar = bestStar;
+        galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+      }
+    }
+    pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
   } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
     // Navigable nebulae — nav generator for star positions, billboard generator for visuals
     pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
@@ -571,6 +618,17 @@ warpEffect.onSwapSystem = () => {
   soundEngine.play('warpEnter');
   musicManager.play('hyperspace', 0.3);
   warpSwapSystem();
+
+  // ── Regenerate starfield for new galactic position ──
+  if (galacticMap) {
+    const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
+    starfield.dispose();
+    retroRenderer.starfieldScene.remove(starfield.mesh);
+    starfield = new Starfield(sfData, 500);
+    starfield.addTo(retroRenderer.starfieldScene);
+    // Position the new starfield at the camera immediately
+    starfield.update(camera.position);
+  }
 };
 
 // When warp exit finishes, reveal the new system and restart autopilot
