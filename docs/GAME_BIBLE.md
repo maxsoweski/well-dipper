@@ -839,12 +839,29 @@ Vite + Three.js (vanilla JS, no framework)
 
 ### Performance / Optimization Strategy
 
-Not yet profiled, but needs concrete limits as the game grows:
+**Measured performance (2026-03-14):**
+- Starfield generation (18K stars, ray-marched density): ~13-20ms per warp (budget: 3000ms tunnel)
+- Sector generation + nearest star search: ~2ms
+- Galaxy context derivation: <1ms
+- GalacticMap sector cache: 64 sectors max, LRU eviction
 
-- **LOD budget:** When many objects are in scene (8 planets, 20 moons, asteroid belt, ships), LOD tiers must aggressively cull detail. Billboard system already handles sub-pixel objects.
-- **Draw call budget:** Needs profiling — establish a target (e.g., <200 draw calls) and monitor.
-- **Instancing:** Already used for asteroids. Extend to other repeated geometry (station modules, ship swarms, particle effects).
-- **Memory management:** Galaxy-scale data requires sector caching with LRU eviction. Only nearby sectors live in memory.
+**Known performance issue:**
+- **Galaxy glow (diffuse band):** FBM noise billboard layers (nebula-style) cause severe frame drops from overdraw. 6-12 overlapping full-res fragment shader passes is too expensive for continuous display. **Fix needed:** pre-bake the FBM to a texture during warp (compute once, not per-frame), then display on a simple textured sphere at near-zero cost.
+
+**Three.js limitations tracked:**
+- No compute shaders (WebGL2) — all generation is CPU-side, which is fine
+- No built-in text rendering — solved by 2D canvas approach for nav computer
+- Full-res FBM shader overdraw is the main GPU bottleneck encountered so far
+- Starfield at full resolution (not pixelScale-reduced) is necessary for crisp star points but means any background effects also run at full res
+- Dynamic buffer updates fine up to ~20K points; beyond that needs profiling
+- 4 render passes at 1080p is comfortable; 5th pass (future CRT shader) should be fine
+- **Verdict so far: Three.js is sufficient. The overdraw issue is a design problem (too many overlapping FBM layers), not an engine limitation.**
+
+**General rules:**
+- **LOD budget:** Billboard system handles sub-pixel objects. High-LOD tier needs testing.
+- **Draw call budget:** Needs profiling — establish target and monitor.
+- **Instancing:** Already used for asteroids. Extend to repeated geometry.
+- **Memory:** Galaxy sectors cached with LRU. Only nearby sectors live in memory.
 - **Shader complexity:** Per-object dithering is cheap but stacks up. Monitor fragment shader cost as planet count grows.
 - **Critical path:** This becomes urgent as ship population, station rendering, and galaxy map are added. Profile early, set budgets, enforce them.
 
@@ -908,10 +925,24 @@ src/
 
 ---
 
-## 12. Galaxy-Scale Generation [GAME] (Research Phase)
+## 12. Galaxy-Scale Generation [GAME] (Partially Implemented)
 
 ### Concept
-When implemented, the galaxy is a deterministic structure derived from a master seed. Your position in the galaxy affects what kinds of systems you encounter.
+The galaxy is a deterministic structure derived from a master seed. Your position in the galaxy affects what kinds of systems you encounter.
+
+### What's Built (2026-03-14)
+- **GalacticMap.js:** Structural galaxy with sector-based grid (0.5 kpc cubes), density model (thin/thick disk, bulge, halo), 4 spiral arms, context derivation (metallicity gradients, age distributions, star-type weights by region), nearest-star navigation, LRU sector cache.
+- **StarfieldGenerator.js:** Ray-marched sky density grid produces galaxy-aware starfield. 18K stars weighted by actual galactic density. ~25 real GalacticMap stars placed as warp targets.
+- **StarSystemGenerator integration:** Accepts galaxyContext — star types, metallicity, age, binary rates all vary by galactic position. Null-guarded for screensaver mode.
+- **main.js warp flow:** Player position tracked. Warp resolves click direction to nearest GalacticMap star. Starfield regenerated per warp from new position.
+- **Debug teleports:** Shift+Q/W/E/R/Z for solar/edge/halo/center/deep-halo positions.
+
+### What's Not Built Yet
+- **Galaxy glow (diffuse band):** Disabled — FBM overdraw issue. Needs pre-baked texture approach.
+- **Nav computer:** Not started. Planned as 2D canvas → CRT shader (see §7).
+- **Deep sky objects in galaxy context:** Nebulae/clusters not yet tied to galactic position.
+- **Galaxy-aware starfield from outside a galaxy:** Not addressed — only works from inside.
+- **Civilization regions:** Galaxy-scale faction overlay not implemented.
 
 ### Regional Variation (needs research)
 | Region | Expected characteristics |
