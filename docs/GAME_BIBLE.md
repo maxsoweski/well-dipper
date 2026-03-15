@@ -133,7 +133,7 @@ This is a living TODO — areas of the bible that are sketched but need deeper d
 
 - **Player identity** — Who are you? What's unusual about your character?
 - **Main game aesthetic** — The 9 palette modes aren't working cohesively. Need one strong visual language for the main view.
-- **Combat balance** — Two combat modes defined, but no specifics on weapons, damage, health, difficulty.
+- **Combat balance** — Two combat modes defined, hold-and-release input system sketched (ranged/melee/defend). Needs charge thresholds, parry mechanics, damage values, enemy AI patterns, upgrade scaling.
 - **Faction depth** — Two factions minimum, but what are their identities, territories, economies?
 - **Fuel/energy system** — Rotor system designed (see §9), but balance/math for energy yield vs escape cost still TBD.
 - **Rotor minigame balance** — Math for energy yield vs escape cost, difficulty curves per gravity well type.
@@ -145,6 +145,9 @@ This is a living TODO — areas of the bible that are sketched but need deeper d
 - **Interstellar objects** — Gameplay mechanics for comets, rogue planets, and hyperbolic visitors.
 - **Landing sequence design** — Atmospheric entry, belly-first transition to surface, fire/plasma effects.
 - **Performance profiling** — Establish budgets for draw calls, memory, max objects in scene.
+- **BPM-synced universe** — How system properties map to BPM, how animations/camera/SFX quantize to the beat grid, interaction with stem system. See §2 Sound Design.
+- **Splash screen sequence** — Production company name/logo, timing, visual style, skip behavior. See §7.
+- **Magnification window** — Magnification level, visual style, mobile behavior, animation timing. See §7.
 
 ---
 
@@ -210,6 +213,32 @@ Audio is **driven by system properties**, not fixed tracks. Audio and visual inf
 
 **Exception:** Space anomalies can manifest in audio BEFORE any visual or scan data. Very rare, deliberately unsettling. Something feels wrong before you know why. This is the only case where audio leads.
 
+#### BPM-Synced Universe [BOTH]
+
+**Everything in a star system pulses to the same beat.** Each system has a unique BPM derived from its properties, and all elements sync to it:
+
+**What syncs to the system BPM:**
+- BGM tempo — the music's BPM matches the system
+- Planet animations — rotations, orbital movement, atmospheric effects
+- Camera movements — autopilot pans, cuts, and transitions land on beats
+- Sound effects — all SFX are musical (percussive/melodic hits in key and tempo)
+- Object animations — asteroid tumbles, ring rotations, moon orbits
+
+**How BPM is determined:**
+- Each star system generates a unique BPM from its properties (star type, planet count, age, etc.)
+- The BGM varies per system — same underlying track structure but tempo-shifted to match
+- Every system feels rhythmically distinct
+
+**Design questions to flesh out:**
+- BPM range — suggested starting point: 60-120 BPM (slower for calm/ancient systems, faster for chaotic/young ones)
+- What system properties drive the BPM? Star type alone, or also planet count, hazards, exotic/civilized status?
+- How does this interact with the layered stem system below? Stems would need to be tempo-flexible.
+- Camera sync specifics — do autopilot cuts snap to downbeats? Do pans ease on beat boundaries?
+- How are SFX made musical? Tuned to the system's key? Quantized to the beat grid?
+- Warp transitions — does the BPM crossfade between the departing system's tempo and the arriving system's tempo?
+
+**Key principle:** This is not background music with animations happening independently. The universe IS the music. A system at 72 BPM feels fundamentally different from one at 108 BPM — not just sonically, but visually and kinetically.
+
 #### Music Architecture [GAME] (Future Direction)
 The 7-track model (below) is the MVP. The long-term direction is a **layered stem system:**
 - Composer creates base tracks + modular stems/layers
@@ -217,11 +246,13 @@ The 7-track model (below) is the MVP. The long-term direction is a **layered ste
 - Base exploration track gets modified by star type, age, civilization, hostility
 - This replaces "7 fixed songs" with a dynamic, property-driven soundscape
 - Composer (Christian) would create stems and layers, not just complete songs
+- **All stems must be tempo-flexible** to support the BPM-synced universe (see above)
 
 #### Music Tracks [BOTH] (7 total)
 
 | Track | Context | Duration | Loop? | Priority | Vibe |
 |-------|---------|----------|-------|----------|------|
+| **splash-ramp** | Splash screens → title | ~6s | No | HIGH | Ramp-up intro that builds into the title theme |
 | **title** | Title screen | 60-90s | Yes | HIGH | Mysterious, spacious, sparse — floating in void |
 | **explore** | Main gameplay (star systems) | 90-120s | Yes | HIGH | Open, unhurried, vast. The sound of drifting through space. Most-heard track. |
 | **explore-alt** | Variation on explore | 90-120s | Yes | LOW | Same key, different melody/instruments |
@@ -571,11 +602,48 @@ Hazards make certain systems dangerous to enter or navigate. Visually present in
 
 ## 7. Navigation & UI
 
+### Splash Screen Sequence [BOTH]
+
+The app requires a click to enter — this is both a design choice (dramatic ramp-up) and a technical requirement (browsers require user interaction before playing audio).
+
+**Sequence (~6 seconds total):**
+1. **Click to enter** — black screen with minimal prompt
+2. **Splash 1:** Production company logo (fade in/out)
+3. **Splash 2:** Composer credit (Christian) (fade in/out)
+4. **Fade into title screen** — BGM is already playing by this point
+
+**Audio:** The `splash-ramp` track begins on click and builds over ~6 seconds, seamlessly transitioning into the `title` track as the title screen appears. The player never experiences silence after clicking — the music starts immediately and grows.
+
+**Design questions to flesh out:**
+- Production company name/logo design
+- Timing split between the two splash screens (e.g., 2.5s + 2.5s + 1s fade to title?)
+- Visual style of splash screens — minimal text on black? Animated? Match the retro CRT aesthetic?
+- Skip behavior — can the player click through splashes, or are they unskippable on first launch?
+
 ### Current State [SCREENSAVER]
 - **System map minimap** (top-down radar, 192px HUD overlay)
 - **Gravity well map** (3D vertex-displaced contour, toggled with G)
 - **Body info HUD** (top-left popup on selection)
 - **Orbital overlay** (O key, orbit lines)
+
+### Click-and-Hold Magnification Window [BOTH]
+
+A targeting loupe for selecting background stars. Bridges to macOS and mobile where precise clicking on tiny stars is difficult.
+
+**How it works:**
+- Click and hold anywhere on screen → a magnification circle expands outward from the click point
+- The circle shows a zoomed-in view of the background starfield around the cursor
+- While holding, the user can see individual stars clearly within the magnified area
+- On release → the star closest to the center of the magnification window is selected as the warp target
+- If no star is near center on release → no selection (cancels)
+
+**Design questions to flesh out:**
+- Magnification level — 2x? 4x? Adjustable?
+- Circle size — fixed max size or grows until release?
+- Visual style — lens distortion at edges? CRT-style magnification? Clean circle with border?
+- Does the magnified view show star names/types or just the visual?
+- Mobile: does this replace tap-to-select entirely, or augment it?
+- Animation: how fast does the circle expand? Instant or ~200-300ms ease-out?
 
 ### Future Vision: Navigation Computer [GAME]
 
@@ -790,6 +858,126 @@ Triggered at **relativistic transit speed** — during high-speed travel between
 
 **Mode transitions follow the in-system travel loop (see §7):** Accelerate → on-rails combat possible → decelerate → all-range combat possible → interact with POI.
 
+#### Combat Input System
+
+Applies to both ship-to-ship combat modes AND on-foot combat (Doom/early PC FPS style with basic mobility). The same core input system works across all combat contexts — only the visual presentation changes.
+
+**Not a rhythm game.** Player inputs are not mechanically tied to the BPM. However, like everything else in the universe, combat **animations and sound effects sync to the system's BPM** (see §2 BPM-Synced Universe). The audiovisual layer is musical; the player's actions are pure action-game.
+
+**Three actions: Ranged Attack, Melee/Ram, and Defend.** Each uses hold-and-release mechanics:
+
+**Rule of Three — Pick Any Two:**
+
+Three chargeable actions, but you can only hold/charge **two at a time**, never all three. This creates meaningful tactical choices in every moment:
+
+| Combo | What It Looks Like (Ship) | What It Looks Like (On-Foot) |
+|-------|--------------------------|------------------------------|
+| **Boost + Ranged** | Jet backward/sideways while unleashing charged laser beam — kiting, retreating fire | Jetpack dodge while firing precision ray |
+| **Boost + Melee** | Charge forward into a ram with charged laser weapon leading — aggressive rush | Jet forward into charged sword lunge — closing distance fast |
+| **Boost + Shield** | Shield bash (boost into enemy with shield up) or serious retreat with shield absorbing fire | Jetpack retreat under cover of shield, or shield-charge forward to close gap safely |
+| **Shield + Melee** | Hold shield while charging sword, waiting for counter-attack as enemy advances — defensive patience | Same — turtle up, wait for opening, unleash melee strike |
+| **Shield + Ranged** | Hold shield while charging beam — drop shield and fire the moment the opening appears | Same — defensive sniper posture |
+| **Melee + Ranged** | Charge both weapons simultaneously — aggressive all-in with no defense | Sword in one hand charging, ray in the other — maximum offense, maximum risk |
+
+**What you CAN'T do:** All three at once. No boosting while shielded while charging a weapon. You always have one system offline, which means you're always making a trade-off.
+
+**Precedent:** Star Fox boost/brake + shoot + bomb system. The key insight is that limiting to two creates constant decision-making without overwhelming the player with inputs.
+
+##### Newtonian Combat Physics
+
+Every attack produces equal and opposite reaction forces on both combatants. This is the spatial backbone of the combat system.
+
+**How it works:**
+- **Melee/ram:** You lunge forward and connect → both you and the enemy are pushed apart. A charged ram hit sends both parties flying backward from the impact point.
+- **Ranged beam:** Firing a charged beam produces recoil — a pinpoint long-charge shot pushes you backward noticeably. A quick-tap scatter shot has minimal recoil.
+- **Shield bash (boost + shield):** Ramming with shield up pushes the enemy back hard but you absorb the counter-force through the shield rather than taking damage.
+
+**Why this matters:**
+- **Prevents stun-locking.** Every hit creates separation, giving both sides a moment to reposition and decide their next move. You can't just mash attack and pin someone in a corner.
+- **Enables combos through physics.** A skilled player can chain: ram enemy into an asteroid → boost backward → charge pinpoint beam while they're recovering → fire. Or: shield bash to close distance → immediately charge melee while they're reeling from the push → release sword strike before they recover.
+- **Creates spatial flow.** Fights naturally move through space. Two ships dueling will drift across the system. On foot, fights move down corridors and through rooms. The environment becomes part of the fight — getting pushed into a wall, using a boost to arrest your knockback, ramming someone toward a hazard.
+- **Boost becomes defensive AND offensive.** Use boost to arrest your knockback after getting hit. Use boost to chase an enemy you just knocked away. Use boost to deliberately create distance after a melee exchange.
+
+**Design questions to flesh out:**
+- Force scaling — does a longer charge produce more knockback?
+- Mass differences — does a bigger ship/enemy get pushed less? Does the player's ship mass change with upgrades?
+- Environmental collisions — what happens when knockback pushes you into a wall, asteroid, or structure? Damage? Stun?
+- On-foot gravity — do planetary interiors have gravity that dampens vertical knockback, or is it all zero-g?
+- Recovery time — how quickly can you act after being knocked back? Is there a brief stagger window?
+
+##### Boost / Movement (Hold to Charge, Release to Thrust)
+
+The third action in the system. Hold to charge your boost (ship thrusters or on-foot jetpack), release to execute the movement. Direction depends on your input at the moment of release — forward, backward, lateral, up, down.
+
+| Hold Duration | Ship | On-Foot |
+|---------------|------|---------|
+| **Quick tap** | Quick dodge/juke — short burst in a direction | Quick jetpack hop/dodge |
+| **Long hold** | Charged boost — powerful thrust, covers real distance | Charged jetpack burst — significant repositioning |
+
+This is your stamina/mobility system. Combined with the other two actions, it creates the full tactical space.
+
+##### Ranged Attack (Hold to Charge, Release to Fire)
+
+| Hold Duration | Ship | On-Foot |
+|---------------|------|---------|
+| **Quick tap** | Diffuse scatter shot — wide spread, low damage, good at close range | Same — diffuse energy blast, close-range |
+| **Short hold** | Medium focus — moderate spread and damage | Medium beam focus |
+| **Long hold** | Pinpoint beam — narrow, high damage, effective at long range | Precision ray — sniper-like, long range |
+
+The beam weapon gathers and focuses as you hold — visually it goes from a wide diffuse glow to a tight concentrated point. This gives the player continuous control over the shot's spread vs. precision. You're trading charge time (vulnerability, since you can't defend) for damage and accuracy.
+
+##### Melee / Ram Attack (Hold to Charge, Release to Initiate)
+
+| Hold Duration | Ship | On-Foot |
+|---------------|------|---------|
+| **Quick tap** | Quick bump/nudge — minimal damage | Quick slash/stab with laser melee weapon |
+| **Long hold** | Charged ram — ship surges forward with charged laser weapon leading | Charged forward lunge — slice/stab with built-up energy |
+
+Hold gathers energy for a forward charge attack. Release initiates the dash/lunge. In ship: a ramming attack with a charged laser weapon at the prow. On foot: a melee weapon (likely laser-based — energy blade or similar) that charges and releases as a forward strike.
+
+##### Defense (Hold to Shield, Tap to Parry)
+
+**Shield (hold):**
+- Press and hold the defend button
+- ~0.5-1 second charge-up animation as the shield powers on (vulnerable during ramp-up)
+- Shield stays active while held — absorbs incoming damage
+- Release to drop shield — weapon systems come back online
+- You can begin charging your attack as your weapon comes back up from off-screen/offline
+- Natural flow: shield up → absorb enemy volley → drop shield → charge and fire → shield up again
+
+**Parry (tap):**
+- Quick tap at the right moment — timing-based
+- Possibly cursor-position-dependent (parry where your reticle is?)
+- Tighter window than shield but more rewarding (deflect damage back? stagger enemy? bonus opening?)
+- Exact parry mechanics TBD
+
+##### Combat Flow Example
+
+1. Enemy winds up attack (telegraphed visually)
+2. You hold defend → shield charges up → shield absorbs the hit
+3. You release defend → shield drops, weapon comes back online
+4. You immediately begin holding attack → beam gathers from diffuse to focused
+5. You release attack → pinpoint shot hits enemy
+6. Enemy begins next attack cycle → you decide: shield up again, or charge a ram?
+
+##### On-Foot Combat Context
+
+First-person, Doom-style. Corridors in stations, derelicts, planetary structures. Same three-action system:
+- Ranged: energy ray weapon (hold to focus, release to fire)
+- Melee: laser blade or energy melee weapon (hold to charge, release to lunge)
+- Defend: personal shield (hold to maintain, tap to parry)
+- Boost: jetpack (hold to charge, release to thrust in any direction)
+- Same rule of three applies — pick any two, never all three.
+
+**Design questions to flesh out:**
+- Exact charge thresholds — what counts as quick tap vs short hold vs long hold?
+- Parry mechanics — cursor-position-dependent? Timing-only? What's the reward?
+- Shield charge-up time — 0.5s or 1s? Does this scale with upgrades?
+- Can you cancel a charge (attack or defend) mid-hold?
+- Ram attack — how far does the dash carry you? Collision physics?
+- On-foot: separate game mode or seamless transition from ship?
+- Weapon upgrades — do they affect charge speed, max focus, shield strength?
+
 ### Faction System [GAME]
 
 Minimum viable: **two factions.**
@@ -829,13 +1017,53 @@ Higher-level navigation. See your position in the galaxy, pick destinations, see
 - **Christian** (Max's brother) — Sound Designer, Music Composer
 
 ### Stack
-Vite + Three.js (vanilla JS, no framework)
+**Current:** Vite + Three.js (vanilla JS, no framework)
+**Future (game mode):** Godot (under evaluation for engine migration)
+
+### Engine Migration Strategy
+
+**Decision (2026-03-15):** Three.js remains the engine for the screensaver (Layer 1 + Layer 2). When game mode development begins in earnest (ship movement, combat), evaluate building it in **Godot** instead.
+
+**Why migrate for game mode:**
+- Browser GPU crashes can silently drop to software rendering (experienced 2026-03-14 — Chrome GPU process crash caused full software fallback, player wouldn't know why it's slow)
+- Steam/app store distribution requires native executable — browser-wrapped games (Electron/Tauri) feel second-class
+- No successful paid games on Steam are browser-based
+- Performance ceiling: WebGL is a subset of full GPU capability
+- Audio limitations (browser autoplay policies, Web Audio API quirks)
+- Can't control the player's browser environment
+
+**Why Godot specifically:**
+- Open source, no royalties
+- Lightweight, good for indie scale
+- Exports to Steam, Windows, Mac, Linux, mobile
+- GDScript is beginner-friendly
+- Can import .glb models directly (existing ship pipeline works)
+- Retro shaders are very doable (custom shader language similar to GLSL)
+
+**What ports cleanly:**
+- All procedural generation code (GalacticMap, StarSystemGenerator, PlanetGenerator, etc.) is pure math with no Three.js dependency — ports to any language
+- GLSL shaders port to Godot's shader language with minor syntax changes
+- Game bible, design decisions, audio assets, music — all engine-independent
+- Blender model pipeline (.glb export) works with Godot directly
+
+**What doesn't port:**
+- Three.js-specific rendering code (RetroRenderer, Starfield, Galaxy, Planet mesh construction)
+- Scene management and camera code
+- UI code (settings panel, body info, etc.)
+
+**Timeline:** Keep building in Three.js for now — it's fast to iterate. Begin Godot evaluation when the first game-mode prototype is needed (ship movement + combat).
 
 ### Key Architecture Decisions
-- **Data-first generation:** Generators produce plain JS objects, no Three.js dependency. Meshes built separately.
+- **Data-first generation:** Generators produce plain JS objects, no Three.js dependency. Meshes built separately. **This is intentional for engine portability.**
 - **Deterministic seeds:** Same seed → identical system. `.child()` creates independent sub-streams.
 - **Per-object dithering:** Bayer dithering in each object's fragment shader, not a screen filter.
 - **Dual-resolution rendering:** Scene at low res, starfield at full res, composited with alpha-based shader.
+
+### Runtime GPU Detection [BOTH]
+
+The game should check the WebGL renderer at startup. If it detects software rendering ("Basic Render Driver", "SwiftShader", "llvmpipe"), display a warning: **"Performance warning: GPU not detected. Restart your browser for the best experience."**
+
+This addresses a known Chrome issue where a GPU process crash silently falls back to CPU rendering for the rest of the session. A browser restart fixes it, but the player needs to know.
 
 ### Performance / Optimization Strategy
 
@@ -1046,12 +1274,15 @@ for (let i = 0; i < N; i++) {
 - [ ] Civilization as galaxy layer — regional spread logic, proximity influence, metal-rich outpost rules
 - [ ] Navigation computer UI design — layout, interaction, aesthetic details (wireframe CRT direction decided)
 - [ ] Scanner system implementation — four layers (galactic survey, star-wave, direct, codex)
-- [ ] Combat system design — weapons, damage, health, difficulty for both modes
+- [ ] Combat system design — weapons, damage, health, difficulty for both modes, charge thresholds, parry mechanics, on-foot variant scope
 - [ ] Faction system design — territory generation, reputation, encounter rules
 - [ ] Environmental hazard implementation — damage model, fuel costs, scanner integration
 - [ ] In-system travel loop — acceleration/deceleration mechanics, transit timing
 - [ ] Main game aesthetic — replace 9 palette modes with one cohesive visual language
 - [ ] Reactive audio system — stem/layer architecture, property-to-audio mappings
+- [ ] BPM-synced universe — property-to-BPM mapping, animation quantization, musical SFX design
+- [ ] Splash screen sequence — production logo, composer credit, ramp-up audio, timing
+- [ ] Magnification targeting window — zoom level, visual style, mobile/macOS support
 - [ ] Player identity — who are you? What's unusual about the character?
 - [ ] Megastructure visual design — how to render Dyson swarms, ring habitats
 - [ ] On-foot exploration scope — what's the MVP interior?
