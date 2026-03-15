@@ -103,8 +103,10 @@ let galaxyGlow = null;
   starfield = new Starfield(sfData, 500);
   starfield.addTo(retroRenderer.starfieldScene);
   // Diffuse galactic glow behind the point stars
-  galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
-  galaxyGlow.addTo(retroRenderer.starfieldScene);
+  // Galaxy glow disabled — FBM billboard layers cause severe overdraw slowdown.
+  // TODO: Redesign as a pre-baked texture or low-res render target approach.
+  // galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
+  // galaxyGlow.addTo(retroRenderer.starfieldScene);
 }
 
 // ── System State ──
