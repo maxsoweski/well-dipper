@@ -7,6 +7,12 @@ import {
   SOLAR_RADIUS_AU, EARTH_RADIUS_AU, AU_TO_SCENE,
   solarRadiiToScene, earthRadiiToScene, auToScene,
 } from '../core/ScaleConstants.js';
+import {
+  deriveFormation, computeMigration, detectResonances, snapToResonances,
+  stellarEvolution, binaryStabilityLimit, circumbinaryHZ,
+  shouldBeltExist, shouldOuterBeltExist, kirkwoodGaps,
+  beltCompositionZones, lagrangePoints,
+} from './PhysicsEngine.js';
 
 /**
  * StarSystemGenerator — produces data for an entire star system:
@@ -153,15 +159,20 @@ export class StarSystemGenerator {
       ? Math.max(0.01, galaxyContext.age + rng.gaussian(0, 0.3))  // position-derived + scatter
       : rng.gaussianClamped(4.5, 2.5, 0.1, 12.0);                // random fallback
 
-    // System archetype — "peas in a pod" driver (Weiss et al. 2018).
-    // Real systems have correlated planet sizes and spacings.
-    // The archetype biases both spacing and size preference.
-    const archetypeRoll = rng.float();
-    const archetype = archetypeRoll < 0.30
-      ? { name: 'compact-rocky', spacingMuOffset: -0.10, sizeBias: 'small', countModifier: 1 }
-      : archetypeRoll < 0.75
-        ? { name: 'mixed', spacingMuOffset: 0.0, sizeBias: 'neutral', countModifier: 0 }
-        : { name: 'spread-giant', spacingMuOffset: 0.10, sizeBias: 'large', countModifier: -1 };
+    // Star mass estimate (rough main-sequence M-R relation)
+    const starMassSolar = Math.pow(radiusSolarVaried, 1.25);
+
+    // System archetype — derived from formation physics (PhysicsEngine §6).
+    // Protoplanetary disk mass (metallicity-driven) and dissipation timescale
+    // determine whether the system is compact-rocky, mixed, or spread-giant.
+    // This replaces the old random coin-flip.
+    const formation = deriveFormation(starMassSolar, metallicity, rng.float(), rng.float());
+    const archetypeLookup = {
+      'compact-rocky': { name: 'compact-rocky', spacingMuOffset: -0.10, sizeBias: 'small', countModifier: 1 },
+      'mixed':         { name: 'mixed', spacingMuOffset: 0.0, sizeBias: 'neutral', countModifier: 0 },
+      'spread-giant':  { name: 'spread-giant', spacingMuOffset: 0.10, sizeBias: 'large', countModifier: -1 },
+    };
+    const archetype = archetypeLookup[formation.archetype];
 
     // ── Physical zones (frost line, habitable zone) ──
     // Scale with the square root of stellar luminosity
@@ -188,7 +199,13 @@ export class StarSystemGenerator {
     // Max orbit: don't place planets absurdly far out
     const maxOrbitAU = 50 * Math.sqrt(Math.max(luminosity, 0.01));
 
-    // Zones for type selection (passed to PlanetGenerator)
+    // Zones object — the shared context passed to PlanetGenerator and MoonGenerator.
+    // This is the primary data contract between system and body generation.
+    // All physics calculations in PlanetGenerator depend on these fields.
+    //
+    // Required by PlanetGenerator._pickType():  frostLine, hzInner, hzOuter, starType, metallicity, sizeBias
+    // Required by PhysicsEngine (via PlanetGenerator): luminosity, ageGyr, starMassSolar
+    // Passed through to MoonGenerator._generatePlanetMoon() for planet-class moons
     const zones = {
       frostLine: frostLineAU,
       hzInner: hzInnerAU,
@@ -196,6 +213,9 @@ export class StarSystemGenerator {
       starType,
       metallicity,
       sizeBias: archetype.sizeBias,
+      luminosity,
+      ageGyr,
+      starMassSolar,
     };
 
     // ── Map-scale orbital spacing (exaggerated, for backward compat) ──
@@ -282,7 +302,7 @@ export class StarSystemGenerator {
       const moons = [];
       for (let m = 0; m < planetData.moonCount; m++) {
         const moonRng = planetRng.child(`moon-${m}`);
-        const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount, parentZone);
+        const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount, parentZone, zones);
         moons.push(moonData);
       }
 
@@ -299,20 +319,133 @@ export class StarSystemGenerator {
       });
     }
 
-    // ── Asteroid Belts ──
-    // ~55% chance, placed between two planet orbits (preferring just inside a gas giant)
+    // ── Planetary Migration (PhysicsEngine §5) ──
+    // Gas giants beyond the frost line may migrate inward, scattering inner planets.
+    const migrationResult = computeMigration(planets, formation.diskMass, frostLineAU, rng.float());
+    let migrationHistory = { occurred: false };
+    if (migrationResult) {
+      migrationHistory = migrationResult;
+      const migrant = planets[migrationResult.migrantIndex];
+
+      // Remove scattered planets (iterate backwards to preserve indices)
+      const toRemove = new Set();
+      for (const idx of migrationResult.scatteredIndices) {
+        if (rng.chance(0.7)) {
+          toRemove.add(idx); // 70% destroyed
+        }
+        // 30% survive but get kicked to wider orbits (not implemented yet — just survive)
+      }
+      // Filter out destroyed planets
+      const surviving = planets.filter((_, i) => !toRemove.has(i));
+      // Update migrant's orbit
+      const migrantInSurviving = surviving.find(p => p === migrant);
+      if (migrantInSurviving) {
+        migrantInSurviving.orbitRadiusAU = migrationResult.finalOrbitAU;
+        migrantInSurviving.orbitRadiusScene = auToScene(migrationResult.finalOrbitAU);
+        migrantInSurviving.orbitRadius = migrationResult.finalOrbitAU * mapUnitsPerAU;
+        // Change type to hot-jupiter
+        migrantInSurviving.planetData.type = 'hot-jupiter';
+        migrantInSurviving.planetData.rotationSpeed = 0; // tidally locked
+      }
+      // Sort by orbit after migration
+      planets.length = 0;
+      surviving.sort((a, b) => a.orbitRadiusAU - b.orbitRadiusAU).forEach(p => planets.push(p));
+      migrationHistory.scatteredCount = toRemove.size;
+    }
+
+    // ── Orbital Resonance Detection (PhysicsEngine §4) ──
+    // Compact systems may show resonance chains (like TRAPPIST-1)
+    const resonanceData = detectResonances(planets);
+    if (resonanceData.isResonant) {
+      snapToResonances(planets, resonanceData.resonances);
+      // Update scene/map units after snapping
+      for (const p of planets) {
+        p.orbitRadiusScene = auToScene(p.orbitRadiusAU);
+        p.orbitRadius = p.orbitRadiusAU * mapUnitsPerAU;
+      }
+    }
+
+    // ── Stellar Evolution (PhysicsEngine §8) ──
+    const evolution = stellarEvolution(starType, radiusSolarVaried, ageGyr);
+
+    // ── Binary Stability (PhysicsEngine §9) ──
+    let binaryStability = null;
+    if (isBinary) {
+      const stabilityLimitAU = binaryStabilityLimit(binarySeparationAU, binaryMassRatio);
+      // Remove planets inside stability limit
+      const stablePlanets = planets.filter(p => p.orbitRadiusAU > stabilityLimitAU);
+      planets.length = 0;
+      stablePlanets.forEach(p => planets.push(p));
+      // Compute circumbinary HZ
+      const cbHZ = circumbinaryHZ(star.luminosity, star2 ? star2.luminosity : 0);
+      binaryStability = { stabilityLimitAU, cbHZ };
+    }
+
+    // ── Asteroid Belts — Physics-driven (PhysicsEngine §12) ──
+    // Belts only form where gas giant resonances prevented planet accretion.
+    // No giant = no belt. Migration destroys belts.
     const asteroidBelts = [];
-    if (planets.length >= 3 && rng.chance(0.55)) {
-      const beltIndex = this._pickBeltLocation(rng, planets);
-      if (beltIndex >= 0) {
-        const beltRng = rng.child('main-belt');
-        // Pass both AU and map-unit orbits
-        const innerOrbitAU = planets[beltIndex].orbitRadiusAU;
-        const outerOrbitAU = planets[beltIndex + 1].orbitRadiusAU;
-        const innerOrbit = planets[beltIndex].orbitRadius;
-        const outerOrbit = planets[beltIndex + 1].orbitRadius;
-        const beltData = AsteroidBeltGenerator.generate(beltRng, innerOrbit, outerOrbit, innerOrbitAU, outerOrbitAU);
-        asteroidBelts.push(beltData);
+    const trojanClusters = [];
+    const beltPhysics = shouldBeltExist(planets, formation.diskMass, migrationHistory.occurred, frostLineAU);
+    if (beltPhysics) {
+      // Generate visual asteroids using existing AsteroidBeltGenerator
+      const beltRng = rng.child('main-belt');
+      // Find map-unit equivalents for the belt boundaries
+      const beltInnerMap = beltPhysics.innerAU * mapUnitsPerAU;
+      const beltOuterMap = beltPhysics.outerAU * mapUnitsPerAU;
+      const beltData = AsteroidBeltGenerator.generate(
+        beltRng, beltInnerMap, beltOuterMap,
+        beltPhysics.innerAU, beltPhysics.outerAU
+      );
+      // Attach physics data to the belt
+      beltData.physics = beltPhysics;
+      asteroidBelts.push(beltData);
+    }
+
+    // ── Kuiper Belt (PhysicsEngine §12) ──
+    const kuiperPhysics = shouldOuterBeltExist(planets, formation.diskMass);
+    if (kuiperPhysics) {
+      const kuiperRng = rng.child('kuiper-belt');
+      const kuiperInnerMap = kuiperPhysics.innerAU * mapUnitsPerAU;
+      const kuiperOuterMap = kuiperPhysics.outerAU * mapUnitsPerAU;
+      const kuiperData = AsteroidBeltGenerator.generate(
+        kuiperRng, kuiperInnerMap, kuiperOuterMap,
+        kuiperPhysics.innerAU, kuiperPhysics.outerAU
+      );
+      kuiperData.physics = kuiperPhysics;
+      kuiperData.isKuiper = true;
+      asteroidBelts.push(kuiperData);
+    }
+
+    // ── Trojan Asteroids (PhysicsEngine §12) ──
+    // L4/L5 clusters for each gas giant
+    for (let i = 0; i < planets.length; i++) {
+      const p = planets[i];
+      if (p.planetData.type === 'gas-giant' && rng.chance(0.6)) {
+        const lp = lagrangePoints(p.orbitRadiusAU, p.orbitAngle);
+        const trojanRng = rng.child(`trojan-${i}`);
+        const count = trojanRng.int(50, 200);
+        // 60% chance each of L4 and L5
+        if (trojanRng.chance(0.6)) {
+          trojanClusters.push({
+            giantIndex: i,
+            point: 'L4',
+            radiusAU: lp.L4.radiusAU,
+            angle: lp.L4.angle,
+            count,
+            spreadAngle: trojanRng.range(0.3, 0.7), // radians
+          });
+        }
+        if (trojanRng.chance(0.6)) {
+          trojanClusters.push({
+            giantIndex: i,
+            point: 'L5',
+            radiusAU: lp.L5.radiusAU,
+            angle: lp.L5.angle,
+            count: trojanRng.int(40, 180),
+            spreadAngle: trojanRng.range(0.3, 0.7),
+          });
+        }
       }
     }
 
@@ -349,6 +482,7 @@ export class StarSystemGenerator {
       binaryOrbitAngle,
       planets,
       asteroidBelts,
+      trojanClusters,
       starInfo,
       seed,
       // Zone boundaries (AU, scene, map units)
@@ -362,6 +496,12 @@ export class StarSystemGenerator {
       galacticPosition: galaxyContext ? galaxyContext.position : null,
       // Conversion factors (useful for consumers)
       mapUnitsPerAU,
+      // Physics-driven generation data (PhysicsEngine)
+      formation,
+      migrationHistory,
+      resonanceChain: resonanceData.isResonant ? resonanceData : null,
+      stellarEvolution: evolution,
+      binaryStability,
     };
 
     // ── Exotic/civilized overlay ──

@@ -79,6 +79,13 @@ export class GalacticMap {
 
     // Sector cache (LRU)
     this._sectorCache = new Map();
+
+    // Galactic features cache — Level 1 in the generation hierarchy.
+    // Features are generated per "feature region" (4 kpc cubes) and cached.
+    // Each region contains 0-N positioned features (nebulae, clusters, etc.)
+    this._featureRegionCache = new Map();
+    this._featureRegionSize = 4.0; // kpc — 8× sector size, covers many sectors
+    this._maxFeatureRegions = 32;
   }
 
   // ════════════════════════════════════════════════════════════
@@ -176,8 +183,11 @@ export class GalacticMap {
       const expectedTheta = this.armOffsets[arm] + this.pitchK * Math.log(R_kpc / 4.0);
       // Angular distance (wrapped to [-pi, pi])
       let dTheta = ((theta_rad - expectedTheta) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
-      // Convert to linear distance in kpc
-      const dist = Math.abs(dTheta) * R_kpc;
+      // Perpendicular distance to the spiral arm in kpc.
+      // The spiral crosses the radial direction at the pitch angle,
+      // so perpendicular distance = arc_distance * sin(pitch_angle).
+      const sinPitch = Math.sin(this.pitchAngle);
+      const dist = Math.abs(dTheta) * R_kpc * sinPitch;
       // Gaussian profile
       const strength = Math.exp(-0.5 * (dist / GalacticMap.ARM_WIDTH) ** 2);
       if (strength > maxStrength) maxStrength = strength;
@@ -298,14 +308,38 @@ export class GalacticMap {
       });
     }
 
-    // Deep sky objects (future — Phase 4)
-    const deepSkyObjects = [];
+    // Galactic features overlapping this sector (Level 1 → Level 2 cascade)
+    const overlappingFeatures = this.findFeaturesOverlappingSector(sx, sy, sz);
+
+    // Mark stars that are inside a galactic feature
+    for (const star of stars) {
+      star.featureContext = null;
+      for (const feat of overlappingFeatures) {
+        const dx = star.worldX - feat.position.x;
+        const dy = star.worldY - feat.position.y;
+        const dz = star.worldZ - feat.position.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < feat.radius) {
+          // Star is inside this feature — inherit its context
+          star.featureContext = {
+            type: feat.type,
+            featureSeed: feat.seed,
+            metallicity: feat.context.metallicity,
+            age: feat.context.age,
+            overrides: feat.overrides,
+            featureRadius: feat.radius,
+            distFromCenter: dist,
+          };
+          break; // First (nearest) feature wins
+        }
+      }
+    }
 
     return {
       key: this.getSectorKey(sx, sy, sz),
       sx, sy, sz,
       stars,
-      deepSkyObjects,
+      features: overlappingFeatures,
       armStrength: armStr,
       densities,
     };
@@ -343,10 +377,47 @@ export class GalacticMap {
     // Use a position-derived RNG for scatter
     const contextRng = new SeededRandom(`ctx-${x.toFixed(4)}-${y.toFixed(4)}-${z.toFixed(4)}`);
 
-    const metallicity = this._deriveMetallicity(contextRng, component, R, y);
-    const age = this._deriveAge(contextRng, component, armStr);
-    const starWeights = this._deriveStarWeights(component, armStr);
+    let metallicity = this._deriveMetallicity(contextRng, component, R, y);
+    let age = this._deriveAge(contextRng, component, armStr);
+    let starWeights = this._deriveStarWeights(component, armStr);
     const binaryMod = this._deriveBinaryModifier(component);
+
+    // Check if this position is inside any galactic feature.
+    // Uses a small search radius (0.5 kpc) — only catches features we're actually inside.
+    // Feature regions are cached, so repeated calls in the same area are fast.
+    const nearbyFeatures = this.findNearbyFeatures({ x, y, z }, 0.3);
+    let featureContext = null;
+    for (const feat of nearbyFeatures) {
+      if (feat.insideFeature) {
+        featureContext = {
+          type: feat.type,
+          seed: feat.seed,
+          metallicity: feat.context.metallicity,
+          age: feat.context.age,
+          overrides: feat.overrides,
+          radius: feat.radius,
+          distance: feat.distance,
+        };
+        // Override star generation parameters based on feature
+        if (feat.overrides.ageMax != null) {
+          age = Math.min(age, feat.overrides.ageMax);
+        }
+        if (feat.overrides.ageOverride != null) {
+          age = feat.overrides.ageOverride;
+        }
+        if (feat.overrides.metallicityOverride != null) {
+          metallicity = feat.overrides.metallicityOverride;
+        }
+        if (feat.overrides.metallicityBoost) {
+          metallicity += feat.overrides.metallicityBoost;
+        }
+        if (feat.overrides.obBoost) {
+          // Re-derive star weights with O/B boost
+          starWeights = this._deriveStarWeightsWithBoost(component, armStr, feat.overrides.obBoost);
+        }
+        break; // First feature wins
+      }
+    }
 
     return {
       component,
@@ -361,7 +432,27 @@ export class GalacticMap {
       z_kpc: y,
       theta_rad: theta,
       position: { x, y, z },
+      featureContext,
     };
+  }
+
+  /**
+   * Derive star weights with an additional O/B boost (for features like nebulae).
+   */
+  _deriveStarWeightsWithBoost(component, armStrength, obBoost) {
+    const weights = this._deriveStarWeights(component, armStrength);
+    // Apply additional boost to O and B types
+    for (const entry of weights) {
+      if (entry.type === 'O' || entry.type === 'B') {
+        entry.weight *= obBoost;
+      }
+    }
+    // Renormalize
+    const total = weights.reduce((s, e) => s + e.weight, 0);
+    for (const entry of weights) {
+      entry.weight /= total;
+    }
+    return weights;
   }
 
   /**
@@ -493,6 +584,274 @@ export class GalacticMap {
   _deriveBinaryModifier(component) {
     const mods = { thin: 1.0, thick: 0.8, halo: 0.8, bulge: 0.65 };
     return mods[component] || 1.0;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // GALACTIC FEATURES — Level 1 in generation hierarchy
+  // Positioned nebulae, clusters, OB associations.
+  // Generated per "feature region" (4 kpc cubes), cached like sectors.
+  // Features exist at specific positions for specific physical reasons.
+  // See GAME_BIBLE.md §12 for full design.
+  // ════════════════════════════════════════════════════════════
+
+  /**
+   * Feature types with generation parameters.
+   * probability: base chance per feature candidate point
+   * sizeRange: [min, max] radius in kpc
+   * conditions: what galactic context makes this feature possible
+   */
+  static FEATURE_TYPES = {
+    'emission-nebula': {
+      sizeRange: [0.03, 0.1],  // 30-100 pc
+      color: [0.8, 0.2, 0.1], // H-alpha red
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.5,
+      probability: 0.35,
+      contextOverrides: {
+        ageMax: 0.05,          // 50 Myr — very young stars
+        metallicityBoost: 0.1, // slightly enriched
+        obBoost: 3.0,          // O/B stars boosted
+      },
+    },
+    'dark-nebula': {
+      sizeRange: [0.005, 0.05],  // 5-50 pc
+      color: [0.05, 0.04, 0.03], // absorption (dark)
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.4,
+      probability: 0.25,
+      contextOverrides: {
+        ageMax: 0.01,           // pre-star-formation
+        starCountMultiplier: 0.3, // few stars inside (it's dark for a reason)
+      },
+    },
+    'open-cluster': {
+      sizeRange: [0.002, 0.02],  // 2-20 pc
+      color: [0.6, 0.7, 1.0],    // hot blue-white stars
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.3 && ctx.age < 2.0,
+      probability: 0.40,
+      contextOverrides: {
+        starCountMultiplier: 3.0,
+        metallicityScatter: 0.02, // tight metallicity (born together)
+        ageScatter: 0.01,         // tight age (born together)
+      },
+    },
+    'ob-association': {
+      sizeRange: [0.05, 0.3],   // 50-300 pc
+      color: [0.5, 0.6, 1.0],   // scattered hot stars
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.6,
+      probability: 0.15,
+      contextOverrides: {
+        ageMax: 0.03,
+        obBoost: 5.0,
+      },
+    },
+    'globular-cluster': {
+      sizeRange: [0.01, 0.1],   // 10-100 pc
+      color: [1.0, 0.85, 0.5],  // old yellow-orange stars
+      conditions: (ctx) => {
+        // Halo or bulge, very old
+        const isHaloish = ctx.componentWeights.halo > 0.2 || ctx.componentWeights.bulge > 0.3;
+        return isHaloish && ctx.age > 8.0;
+      },
+      probability: 0.08,
+      contextOverrides: {
+        starCountMultiplier: 10.0, // very dense
+        metallicityOverride: -1.5, // very metal poor
+        ageOverride: 12.0,
+      },
+    },
+    'supernova-remnant': {
+      sizeRange: [0.001, 0.03],  // 1-30 pc
+      color: [0.3, 0.8, 0.4],    // oxygen emission green
+      conditions: (ctx) => ctx.component === 'thin' && ctx.age > 0.003, // need dead massive stars
+      probability: 0.12,
+      contextOverrides: {
+        centralRemnant: true, // has neutron star or black hole at center
+      },
+    },
+  };
+
+  /**
+   * Get feature region grid indices from world coordinates.
+   */
+  _featureRegionIndices(x, y, z) {
+    const S = this._featureRegionSize;
+    return {
+      rx: Math.floor(x / S),
+      ry: Math.floor(y / S),
+      rz: Math.floor(z / S),
+    };
+  }
+
+  /**
+   * Get or generate a feature region.
+   * @returns {Array} features in this region
+   */
+  _getFeatureRegion(rx, ry, rz) {
+    const key = `fr:${rx},${ry},${rz}`;
+    if (this._featureRegionCache.has(key)) {
+      const region = this._featureRegionCache.get(key);
+      this._featureRegionCache.delete(key);
+      this._featureRegionCache.set(key, region);
+      return region;
+    }
+
+    const features = this._generateFeatureRegion(rx, ry, rz);
+
+    this._featureRegionCache.set(key, features);
+    if (this._featureRegionCache.size > this._maxFeatureRegions) {
+      const oldestKey = this._featureRegionCache.keys().next().value;
+      this._featureRegionCache.delete(oldestKey);
+    }
+
+    return features;
+  }
+
+  /**
+   * Generate features for a region.
+   * Samples candidate positions within the region and rolls for feature placement.
+   */
+  _generateFeatureRegion(rx, ry, rz) {
+    const S = this._featureRegionSize;
+    const seed = this.masterSeed + `-feat-${rx},${ry},${rz}`;
+    const rng = new SeededRandom(seed);
+
+    const features = [];
+
+    // Sample candidate positions in a grid within the region
+    // 4 kpc region → 8 candidate points per axis = 512 candidates (most will be rejected)
+    const samples = 8;
+    const step = S / samples;
+
+    for (let ix = 0; ix < samples; ix++) {
+      for (let iy = 0; iy < samples; iy++) {
+        for (let iz = 0; iz < samples; iz++) {
+          const x = rx * S + (ix + rng.float()) * step;
+          const y = ry * S + (iy + rng.float()) * step;
+          const z = rz * S + (iz + rng.float()) * step;
+
+          const R = Math.sqrt(x * x + z * z);
+          const theta = Math.atan2(z, x);
+          if (R > GalacticMap.GALAXY_RADIUS || Math.abs(y) > GalacticMap.GALAXY_HEIGHT) continue;
+
+          const densities = this.componentDensities(R, y);
+          const armStr = this.spiralArmStrength(R, theta);
+
+          // Derive context for this candidate position
+          const ctxRng = new SeededRandom(`${seed}-ctx-${ix}-${iy}-${iz}`);
+          const component = this._dominantComponent(densities);
+          const metallicity = this._deriveMetallicity(ctxRng, component, R, y);
+          const age = this._deriveAge(ctxRng, component, armStr);
+
+          const ctx = {
+            component,
+            componentWeights: densities,
+            spiralArmStrength: armStr,
+            metallicity,
+            age,
+            totalDensity: densities.totalDensity,
+          };
+
+          // Roll for each feature type
+          for (const [type, spec] of Object.entries(GalacticMap.FEATURE_TYPES)) {
+            if (!spec.conditions(ctx)) continue;
+
+            // Probability scaled by local density (denser regions → more features)
+            // Target: ~100-500 features galaxy-wide across all types
+            // ~64 feature regions in galactic plane, 512 candidates each
+            // Want ~2-8 features per region → perCandidate ≈ 0.005-0.015
+            const densityScale = Math.min(densities.totalDensity * 15, 2.0);
+            const perCandidateProb = spec.probability * densityScale * 0.02;
+
+            if (!rng.chance(perCandidateProb)) continue;
+
+            const featureRng = rng.child(`${type}-${ix}-${iy}-${iz}`);
+            const radius = featureRng.range(...spec.sizeRange);
+
+            features.push({
+              type,
+              position: { x, y, z },
+              radius,
+              seed: `${seed}-${type}-${ix}-${iy}-${iz}`,
+              color: [...spec.color],
+              context: {
+                metallicity: spec.contextOverrides.metallicityOverride ?? metallicity + (spec.contextOverrides.metallicityBoost || 0),
+                age: spec.contextOverrides.ageOverride ?? Math.min(age, spec.contextOverrides.ageMax || age),
+                component,
+                armStrength: armStr,
+              },
+              overrides: spec.contextOverrides,
+              // Precomputed for spatial queries
+              R_kpc: R,
+              z_kpc: y,
+            });
+          }
+        }
+      }
+    }
+
+    return features;
+  }
+
+  /**
+   * Get dominant component name from density weights.
+   */
+  _dominantComponent(densities) {
+    const entries = [
+      ['thin', densities.thin], ['thick', densities.thick],
+      ['bulge', densities.bulge], ['halo', densities.halo],
+    ];
+    entries.sort((a, b) => b[1] - a[1]);
+    return entries[0][0];
+  }
+
+  /**
+   * Find all galactic features near a position.
+   * Searches the 3x3x3 neighborhood of feature regions.
+   * @param {{ x, y, z }} position
+   * @param {number} maxDistance - max distance in kpc (default 2.0)
+   * @returns {Array} features sorted by distance
+   */
+  findNearbyFeatures(position, maxDistance = 2.0) {
+    const { rx, ry, rz } = this._featureRegionIndices(position.x, position.y, position.z);
+    const results = [];
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const features = this._getFeatureRegion(rx + dx, ry + dy, rz + dz);
+          for (const f of features) {
+            const distX = f.position.x - position.x;
+            const distY = f.position.y - position.y;
+            const distZ = f.position.z - position.z;
+            const dist = Math.sqrt(distX * distX + distY * distY + distZ * distZ);
+            if (dist < maxDistance + f.radius) {
+              results.push({ ...f, distance: dist, insideFeature: dist < f.radius });
+            }
+          }
+        }
+      }
+    }
+
+    results.sort((a, b) => a.distance - b.distance);
+    return results;
+  }
+
+  /**
+   * Find features that overlap a specific sector.
+   * Used by _generateSector to determine feature context for stars.
+   * @param {number} sx, sy, sz - sector grid coords
+   * @returns {Array} overlapping features
+   */
+  findFeaturesOverlappingSector(sx, sy, sz) {
+    const S = GalacticMap.SECTOR_SIZE;
+    const centerX = (sx + 0.5) * S;
+    const centerY = (sy + 0.5) * S;
+    const centerZ = (sz + 0.5) * S;
+    // Sector diagonal ≈ 0.5 * √3 ≈ 0.87 kpc
+    const sectorDiag = S * Math.sqrt(3) / 2;
+    return this.findNearbyFeatures(
+      { x: centerX, y: centerY, z: centerZ },
+      sectorDiag, // only features that actually overlap
+    );
   }
 
   // ════════════════════════════════════════════════════════════

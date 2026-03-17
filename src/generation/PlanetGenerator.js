@@ -1,4 +1,9 @@
 import { earthRadiiToScene } from '../core/ScaleConstants.js';
+import {
+  estimateMassEarth, computeAtmosphere, deriveComposition,
+  equilibriumTemperature, tidalLockTimescale, checkTidalLock,
+  habitabilityScore, computeSurfaceHistory, generateRingPhysics,
+} from './PhysicsEngine.js';
 
 /**
  * PlanetGenerator — produces data describing a single planet.
@@ -277,31 +282,72 @@ export class PlanetGenerator {
     };
     const noiseScale = rng.range(...(noiseScaleRanges[type] || [2.0, 5.0]));
 
-    // ── Rings ──
-    const ringChance = {
-      'gas-giant': 0.5, 'ice': 0.25, 'rocky': 0.08,
-      'terrestrial': 0.18, 'ocean': 0.05, 'lava': 0.03,
-      'hot-jupiter': 0.08, 'sub-neptune': 0.15,
-      'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.05,
-      'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
-      'fungal': 0.0, 'machine': 0.0,
-      'city-lights': 0.1, 'ecumenopolis': 0.05,
+    // ── Physics-driven properties ──
+    // Mass estimate from radius + type (PhysicsEngine §1)
+    const massEarth = estimateMassEarth(radiusEarth, type);
+
+    // Composition from star chemistry (PhysicsEngine §3)
+    // zones carries metallicity and frostLine from the system generator
+    const composition = zones
+      ? deriveComposition(zones.metallicity || 0, orbitRadiusAU, zones.frostLine || 4.85, rng.float())
+      : deriveComposition(0, orbitRadiusAU, 4.85, rng.float());
+
+    // Equilibrium temperature
+    const luminosityRel = zones?.luminosity || 1.0;
+    const T_eq = equilibriumTemperature(luminosityRel, Math.max(orbitRadiusAU, 0.01));
+
+    // Tidal locking (PhysicsEngine §2)
+    const starMassSolar = zones?.starMassSolar || 1.0;
+    const ageGyr = zones?.ageGyr || 4.5;
+    const lockTimescale = tidalLockTimescale(starMassSolar, massEarth, radiusEarth, Math.max(orbitRadiusAU, 0.01));
+    const tidalState = checkTidalLock(lockTimescale, ageGyr);
+
+    // Atmosphere — physics-driven (PhysicsEngine §1)
+    const atmoPhysics = computeAtmosphere({
+      radiusEarth, massEarth, orbitAU: orbitRadiusAU,
+      luminosityRel, ageGyr,
+      ironFraction: composition.ironFraction,
+      rotationSpeed: tidalState.locked ? 0 : 0.1,
+      type,
+    });
+
+    // Convert physics atmosphere to visual format (preserving renderer compatibility)
+    const atmoColors = {
+      'h2-he': [0.4, 0.55, 0.7],
+      'n2-o2': [0.3, 0.5, 0.9],
+      'co2-n2': [0.7, 0.6, 0.3],
+      'co2': [0.75, 0.55, 0.25],
+      'methane': [0.3, 0.4, 0.6],
+      'none': null,
     };
-    const hasRings = rng.chance(ringChance[type] || 0.02);
-    let rings = null;
-    if (hasRings) {
-      rings = {
-        innerRadius: rng.range(1.3, 1.6),
-        outerRadius: rng.range(1.8, 2.8),
-        color1: palette.base.map(c => Math.min(c + 0.2, 1.0)),
-        color2: palette.accent.map(c => Math.min(c + 0.1, 1.0)),
-        opacity: rng.range(0.4, 0.8),
-        tiltX: rng.chance(0.25) ? rng.range(-0.3, 0.3) : 0,
-        tiltZ: rng.chance(0.25) ? rng.range(-0.2, 0.2) : 0,
+    // Type-specific color overrides for visual quality
+    const typeAtmoColors = {
+      'gas-giant': palette.accent.map(c => Math.min(c * 1.3, 1.0)),
+      'hot-jupiter': [0.8, 0.35, 0.1],
+      'lava': [0.9, 0.3, 0.1],
+      'hex': [0.1, 0.6, 0.7],
+      'shattered': [0.3, 0.3, 0.8],
+      'crystal': [0.5, 0.2, 0.6],
+      'fungal': [0.15, 0.5, 0.4],
+      'ecumenopolis': [0.5, 0.45, 0.35],
+    };
+    let atmosphere = null;
+    if (atmoPhysics.retained) {
+      const atmoStrengths = {
+        'sub-neptune': [0.4, 0.8], 'venus': [0.5, 0.7], 'hot-jupiter': [0.3, 0.6],
+      };
+      const [sMin, sMax] = atmoStrengths[type] || [0.15, 0.55];
+      // Scale strength by pressure (clamped)
+      const pressureStrength = Math.min(1.0, atmoPhysics.pressure / 10);
+      atmosphere = {
+        color: typeAtmoColors[type] || atmoColors[atmoPhysics.composition] || [0.5, 0.5, 0.8],
+        strength: Math.max(sMin, Math.min(sMax, pressureStrength)),
+        // Physics data (for future use by scanner, HUD, etc.)
+        physics: atmoPhysics,
       };
     }
 
-    // ── Clouds ──
+    // ── Clouds ── (physics-informed: need atmosphere + right temperature)
     const cloudChance = {
       'terrestrial': 0.85, 'ocean': 0.7, 'gas-giant': 0.0,
       'rocky': 0.1, 'ice': 0.15, 'lava': 0.2,
@@ -311,13 +357,11 @@ export class PlanetGenerator {
       'fungal': 0.0, 'machine': 0.0,
       'city-lights': 0.75, 'ecumenopolis': 0.15,
     };
-    const hasClouds = rng.chance(cloudChance[type] || 0);
+    // Clouds require an atmosphere
+    const hasClouds = atmoPhysics.retained && rng.chance(cloudChance[type] || 0);
     let clouds = null;
     if (hasClouds) {
-      const cloudColors = {
-        'lava': [0.3, 0.2, 0.15],
-        'carbon': [0.2, 0.15, 0.1],
-      };
+      const cloudColors = { 'lava': [0.3, 0.2, 0.15], 'carbon': [0.2, 0.15, 0.1] };
       clouds = {
         color: cloudColors[type] || [0.9, 0.9, 0.92],
         density: rng.range(0.3, 0.7),
@@ -325,47 +369,52 @@ export class PlanetGenerator {
       };
     }
 
-    // ── Atmosphere ──
-    const atmosphereChance = {
-      'terrestrial': 0.9, 'ocean': 0.8, 'gas-giant': 1.0,
-      'rocky': 0.15, 'ice': 0.3, 'lava': 0.4,
-      'hot-jupiter': 1.0, 'sub-neptune': 1.0, 'venus': 1.0,
-      'eyeball': 0.8, 'carbon': 0.5,
-      'hex': 0.5, 'shattered': 0.3, 'crystal': 0.2,
-      'fungal': 0.7, 'machine': 0.0,
-      'city-lights': 0.9, 'ecumenopolis': 0.7,
+    // ── Rings — physics-driven (PhysicsEngine §11) ──
+    // Ring probability now depends on physical conditions, not flat chance
+    const ringChance = {
+      'gas-giant': 0.5, 'ice': 0.2, 'rocky': 0.05,
+      'terrestrial': 0.1, 'ocean': 0.03, 'lava': 0.02,
+      'hot-jupiter': 0.05, 'sub-neptune': 0.12,
+      'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.03,
+      'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
+      'fungal': 0.0, 'machine': 0.0,
+      'city-lights': 0.08, 'ecumenopolis': 0.03,
     };
-    const hasAtmosphere = rng.chance(atmosphereChance[type] || 0);
-    let atmosphere = null;
-    if (hasAtmosphere) {
-      const atmoColors = {
-        'terrestrial': [0.3, 0.5, 0.9],
-        'ocean': [0.2, 0.4, 0.8],
-        'gas-giant': palette.accent.map(c => Math.min(c * 1.3, 1.0)),
-        'ice': [0.5, 0.6, 0.9],
-        'lava': [0.9, 0.3, 0.1],
-        'rocky': [0.5, 0.4, 0.3],
-        'hot-jupiter': [0.8, 0.35, 0.1],
-        'sub-neptune': [0.4, 0.55, 0.7],
-        'venus': [0.7, 0.6, 0.3],
-        'eyeball': [0.3, 0.5, 0.85],
-        'carbon': [0.4, 0.3, 0.15],
-        'hex': [0.1, 0.6, 0.7],
-        'shattered': [0.3, 0.3, 0.8],
-        'crystal': [0.5, 0.2, 0.6],
-        'fungal': [0.15, 0.5, 0.4],
-        'city-lights': [0.3, 0.5, 0.9],
-        'ecumenopolis': [0.5, 0.45, 0.35],
-      };
-      const atmoStrengths = {
-        'sub-neptune': [0.4, 0.8],  // Thick haze — defining feature
-        'venus': [0.5, 0.7],        // Thick atmosphere
-        'hot-jupiter': [0.3, 0.6],
-      };
-      const [sMin, sMax] = atmoStrengths[type] || [0.2, 0.6];
-      atmosphere = {
-        color: atmoColors[type] || [0.5, 0.5, 0.8],
-        strength: rng.range(sMin, sMax),
+    const hasRings = rng.chance(ringChance[type] || 0.02);
+    let rings = null;
+    if (hasRings) {
+      // Pick ring origin based on type
+      const originRoll = rng.float();
+      let ringOrigin;
+      if (type === 'gas-giant' || type === 'sub-neptune') {
+        ringOrigin = originRoll < 0.5 ? 'roche' : originRoll < 0.8 ? 'accretion' : 'collision';
+      } else {
+        ringOrigin = originRoll < 0.6 ? 'collision' : 'roche';
+      }
+
+      const axialTilt = rng.chance(0.1) ? rng.range(-1.5, 1.5) : rng.range(-0.5, 0.5);
+      const ringPhysics = generateRingPhysics({
+        origin: ringOrigin,
+        planetRadiusEarth: radiusEarth,
+        planetDensity: composition.density,
+        ageGyr,
+        axialTilt,
+        moons: [], // moons not generated yet at this point
+        rngFloat1: rng.float(), rngFloat2: rng.float(),
+        rngFloat3: rng.float(), rngFloat4: rng.float(), rngFloat5: rng.float(),
+      });
+
+      // Convert to renderer-compatible format (preserving old field names)
+      rings = {
+        innerRadius: ringPhysics.innerRadius,
+        outerRadius: ringPhysics.outerRadius,
+        color1: ringPhysics.color1,
+        color2: ringPhysics.color2,
+        opacity: ringPhysics.density,
+        tiltX: ringPhysics.tiltX,
+        tiltZ: ringPhysics.tiltZ,
+        // Physics data
+        physics: ringPhysics,
       };
     }
 
@@ -380,6 +429,38 @@ export class PlanetGenerator {
     };
     const maxMoons = maxMoonsByType[type] ?? 1;
     const moonCount = rng.int(0, maxMoons);
+
+    // Habitability scoring (PhysicsEngine §7)
+    const habScore = habitabilityScore({
+      atmosphereRetained: atmoPhysics.retained,
+      T_eq,
+      ageGyr,
+      ironFraction: composition.ironFraction,
+      massEarth,
+      tidalState,
+      orbitStable: true, // refined by system generator later
+    });
+
+    // Surface history (PhysicsEngine §10)
+    const surfaceHistory = computeSurfaceHistory(
+      ageGyr, false, false, // nearBelt/nearGiant refined by system generator later
+      atmoPhysics.retained, 0, // tidalHeatingRate for planets is ~0 (moons get tidal heating)
+    );
+
+    // Axial tilt — use ring tilt if rings exist, otherwise random
+    const axialTilt = rings ? rings.tiltX : (rng.chance(0.1)
+      ? rng.range(-1.5, 1.5)
+      : rng.range(-0.5, 0.5));
+
+    // Rotation — physics-driven tidal locking replaces hardcoded check
+    let rotationSpeed;
+    if (tidalState.locked && tidalState.lockType === 'synchronous') {
+      rotationSpeed = 0;
+    } else if (tidalState.locked && tidalState.lockType === '3:2-resonance') {
+      rotationSpeed = 0.02; // slow spin, not zero
+    } else {
+      rotationSpeed = rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1);
+    }
 
     // Sun direction: use provided direction (from system generator) or random fallback
     if (!sunDirection) {
@@ -408,15 +489,16 @@ export class PlanetGenerator {
       moonCount,
       noiseScale,
       noiseDetail: rng.range(0.3, 0.8),
-      // Eyeball planets are tidally locked — no rotation
-      // Hot Jupiters are also tidally locked
-      rotationSpeed: (type === 'eyeball' || type === 'hot-jupiter')
-        ? 0
-        : rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1),
-      axialTilt: rng.chance(0.1)
-        ? rng.range(-1.5, 1.5)
-        : rng.range(-0.5, 0.5),
+      rotationSpeed,
+      axialTilt,
       sunDirection,
+      // Physics data (new — used by HUD, scanner, gameplay)
+      massEarth,
+      composition,
+      T_eq,
+      tidalState,
+      habitability: habScore,
+      surfaceHistory,
     };
   }
 

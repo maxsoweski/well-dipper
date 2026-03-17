@@ -66,14 +66,14 @@ export class MoonGenerator {
     outer:      ['ice', 'rocky', 'sub-neptune'],          // Frozen, Titan-like possible
   };
 
-  static generate(rng, planetData, moonIndex, totalMoons, parentZone = 'outer') {
+  static generate(rng, planetData, moonIndex, totalMoons, parentZone = 'outer', zones = null) {
     // ── Planet-moon check: large planets can have planet-class moons ──
     // Gas giants and sub-neptunes with 3+ moons, not the innermost slot
     // (innermost is reserved for volcanic Io-like moons).
     // ~10% chance per eligible slot (reduced from 15% — these are rare).
     const isLargeParent = planetData.type === 'gas-giant' || planetData.type === 'sub-neptune';
     if (isLargeParent && moonIndex > 0 && totalMoons >= 3 && rng.chance(0.10)) {
-      return this._generatePlanetMoon(rng, planetData, moonIndex, parentZone);
+      return this._generatePlanetMoon(rng, planetData, moonIndex, parentZone, zones);
     }
 
     const type = this._pickType(rng, planetData, moonIndex, parentZone);
@@ -204,13 +204,14 @@ export class MoonGenerator {
    * Think Titan, Ganymede, or a captured mini-Neptune.
    * Zone-aware: terrestrial/ocean only in HZ, ice dominant in outer.
    */
-  static _generatePlanetMoon(rng, planetData, moonIndex, parentZone) {
+  static _generatePlanetMoon(rng, planetData, moonIndex, parentZone, zones = null) {
     // Pick a planet type appropriate for this zone
     const allowed = this.PLANET_MOON_TYPES_BY_ZONE[parentZone] || ['rocky', 'ice'];
     const planetType = rng.pick(allowed);
 
-    // Generate full planet data (orbit distance doesn't matter — we override it)
-    const pData = PlanetGenerator.generate(rng, 1.0, planetData.sunDirection, null, planetType);
+    // Generate full planet data — pass zones so planet-moons inherit
+    // the system's metallicity, age, luminosity for physics calculations
+    const pData = PlanetGenerator.generate(rng, 1.0, planetData.sunDirection, zones, planetType);
 
     // Moon radius: 10-25% of parent (these are big moons — Ganymede is 0.038× Jupiter)
     const fraction = rng.range(0.10, 0.25);
