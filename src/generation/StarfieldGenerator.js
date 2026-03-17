@@ -73,8 +73,8 @@ export class StarfieldGenerator {
       colors[i3 + 1] = col[1];
       colors[i3 + 2] = col[2];
 
-      // Real stars are brighter/larger
-      sizes[i] = dist < 0.3 ? 6.0 : dist < 0.5 ? 4.0 : 3.0;
+      // Real stars are brighter/larger (min 4px for chunky retro look)
+      sizes[i] = dist < 0.3 ? 8.0 : dist < 0.5 ? 6.0 : 4.0;
 
       realStarMap.push({ index: i, starData: star });
     }
@@ -88,37 +88,103 @@ export class StarfieldGenerator {
     const centerDirY = toCenterY / (toCenterDist || 1);
     const centerDirZ = toCenterZ / (toCenterDist || 1);
 
-    // ── Pre-compute sky density grid via ray marching ──
-    // Sample the galaxy's actual density along many sky directions.
-    // This correctly handles ANY position: disk, halo, edge, center.
-    // Grid: 32 theta × 16 phi = 512 cells, each sampled at 4 distances.
-    // ~2000 density evaluations, takes ~50-100ms (hidden in warp tunnel).
+    // ── Arm strength using same model as GalaxyGlow shader ──
+    // Narrow arms (0.15 + 0.025*R), sin(pitch)-corrected perpendicular distance
+    const ARM_WIDTH_BASE = 0.15;
+    const ARM_WIDTH_SLOPE = 0.025;
+    const sinPitch = Math.sin(galacticMap.pitchAngle);
+    function narrowArmStrength(R, theta) {
+      if (R < 0.5) return 0;
+      const logR = Math.log(R / 4.0);
+      const armWidth = ARM_WIDTH_BASE + ARM_WIDTH_SLOPE * R;
+      let maxStr = 0;
+      for (let arm = 0; arm < galacticMap.numArms; arm++) {
+        const expectedTheta = galacticMap.armOffsets[arm] + galacticMap.pitchK * logR;
+        let dTheta = ((theta - expectedTheta) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        const dist = Math.abs(dTheta) * R * sinPitch;
+        const str = Math.exp(-0.5 * (dist / armWidth) ** 2);
+        if (str > maxStr) maxStr = str;
+      }
+      return maxStr;
+    }
+
+    // ── Surface density at a point on the galactic plane (y=0) ──
+    // Same model as GalaxyGlow shader — used for face-on star placement
+    const VISUAL_SCALE_LENGTH = 4.0;
+    function surfaceDensity(R, theta) {
+      const disk = Math.exp(-R / VISUAL_SCALE_LENGTH);
+      const thick = 0.12 * Math.exp(-R / 5.0);
+      const bulge = 2.0 * Math.exp(-R / 0.5);
+      const base = disk + thick + bulge;
+      const armStr = narrowArmStrength(R, theta);
+      const bulgeBlend = Math.min(1, Math.max(0, (R - 0.5) / 1.5));
+      const armFactor = 1.0 + (0.10 + armStr * 2.40 - 1.0) * bulgeBlend;
+      // Smooth edge taper
+      const edgeFade = R < 15 * 0.7 ? 1.0 : Math.max(0, 1.0 - (R - 15 * 0.7) / (15 * 0.4));
+      return base * armFactor * edgeFade;
+    }
+
+    // ── Pre-compute sky density grid ──
+    // Uses two methods depending on player height:
+    // ABOVE DISK (|y| > 1): face-on projection to galactic plane — gives spiral arm structure
+    // IN DISK (|y| < 1): ray march along view directions — gives Milky Way band
+    // Transition zone (1-2 kpc): blend between both
     const GRID_THETA = 32;
     const GRID_PHI = 16;
     const skyGrid = new Float32Array(GRID_THETA * GRID_PHI);
     let maxGridDensity = 0;
 
+    const absPlayerHeight = Math.abs(playerPos.y);
+    const aboveBlend = Math.min(1, Math.max(0, (absPlayerHeight - 1.0) / 1.0)); // 0 at |y|<1, 1 at |y|>2
+
     for (let ti = 0; ti < GRID_THETA; ti++) {
       const theta = (ti / GRID_THETA) * Math.PI * 2;
       for (let pi = 0; pi < GRID_PHI; pi++) {
-        const phi = ((pi + 0.5) / GRID_PHI) * Math.PI; // avoid poles
+        const phi = ((pi + 0.5) / GRID_PHI) * Math.PI;
         const dirX = Math.sin(phi) * Math.cos(theta);
-        const dirY = Math.cos(phi); // phi=0 is up, phi=PI is down
+        const dirY = Math.cos(phi);
         const dirZ = Math.sin(phi) * Math.sin(theta);
 
-        // Ray march: sample density at 4 distances along this direction
         let totalDensity = 0;
-        for (const dist of [0.5, 1.5, 3.0, 6.0]) {
-          const sampleX = playerPos.x + dirX * dist;
-          const sampleY = playerPos.y + dirY * dist;
-          const sampleZ = playerPos.z + dirZ * dist;
-          const R = Math.sqrt(sampleX * sampleX + sampleZ * sampleZ);
-          // Skip samples outside the galaxy
-          if (R > 20 || Math.abs(sampleY) > 10) continue;
-          const dens = galacticMap.componentDensities(R, sampleY);
-          // Weight closer samples more (they contribute more to brightness)
-          const distWeight = 1.0 / (dist * 0.5 + 0.5);
-          totalDensity += dens.totalDensity * distWeight;
+
+        // ── Face-on projection (from above the disk) ──
+        if (aboveBlend > 0.01) {
+          let faceDensity = 0;
+          if (Math.abs(dirY) > 0.01) {
+            const t = -playerPos.y / dirY;
+            if (t > 0) {
+              const hitX = playerPos.x + dirX * t;
+              const hitZ = playerPos.z + dirZ * t;
+              const R = Math.sqrt(hitX * hitX + hitZ * hitZ);
+              if (R <= 15 * 1.1) {
+                const hitTheta = Math.atan2(hitZ, hitX);
+                faceDensity = surfaceDensity(R, hitTheta);
+                // Distance falloff (perspective)
+                faceDensity /= (t * 0.05 + 1.0);
+              }
+            }
+          }
+          totalDensity += faceDensity * aboveBlend;
+        }
+
+        // ── Ray march (from inside the disk) ──
+        if (aboveBlend < 0.99) {
+          let marchDensity = 0;
+          for (const dist of [0.3, 0.8, 1.5, 3.0, 5.0, 8.0, 12.0]) {
+            const sampleX = playerPos.x + dirX * dist;
+            const sampleY = playerPos.y + dirY * dist;
+            const sampleZ = playerPos.z + dirZ * dist;
+            const R = Math.sqrt(sampleX * sampleX + sampleZ * sampleZ);
+            if (R > 20 || Math.abs(sampleY) > 10) continue;
+            const dens = galacticMap.componentDensities(R, sampleY);
+            const sampleTheta = Math.atan2(sampleZ, sampleX);
+            const armStr = narrowArmStrength(R, sampleTheta);
+            const bulgeBlendLocal = Math.min(1, Math.max(0, (R - 0.5) / 1.5));
+            const armFactor = 1.0 + (0.10 + armStr * 2.40 - 1.0) * bulgeBlendLocal;
+            const distWeight = 1.0 / (dist * 0.4 + 1.0);
+            marchDensity += dens.totalDensity * armFactor * distWeight;
+          }
+          totalDensity += marchDensity * (1.0 - aboveBlend);
         }
 
         const gridIdx = ti * GRID_PHI + pi;
@@ -134,22 +200,103 @@ export class StarfieldGenerator {
       }
     }
 
-    // Fast lookup: direction → grid density
+    // Fast lookup: direction → grid density (bilinear interpolation)
     function lookupDensity(dirX, dirY, dirZ) {
-      // Convert direction to theta/phi grid indices
+      // Convert direction to continuous grid coordinates
       const theta = Math.atan2(dirZ, dirX);
       const phi = Math.acos(Math.max(-1, Math.min(1, dirY)));
-      let ti = Math.floor(((theta + Math.PI) / (Math.PI * 2)) * GRID_THETA);
-      let pi = Math.floor((phi / Math.PI) * GRID_PHI);
-      if (ti >= GRID_THETA) ti = GRID_THETA - 1;
-      if (pi >= GRID_PHI) pi = GRID_PHI - 1;
-      return skyGrid[ti * GRID_PHI + pi];
+      const tf = ((theta + Math.PI) / (Math.PI * 2)) * GRID_THETA;
+      const pf = (phi / Math.PI) * GRID_PHI - 0.5; // center on cell
+
+      // Integer and fractional parts for bilinear interpolation
+      const ti0 = Math.floor(tf);
+      const pi0 = Math.floor(pf);
+      const ft = tf - ti0; // fractional theta
+      const fp = pf - pi0; // fractional phi
+
+      // Wrap theta (circular), clamp phi (poles)
+      const t0 = ((ti0 % GRID_THETA) + GRID_THETA) % GRID_THETA;
+      const t1 = (t0 + 1) % GRID_THETA;
+      const p0 = Math.max(0, Math.min(GRID_PHI - 1, pi0));
+      const p1 = Math.max(0, Math.min(GRID_PHI - 1, pi0 + 1));
+
+      // Sample 4 corners
+      const d00 = skyGrid[t0 * GRID_PHI + p0];
+      const d10 = skyGrid[t1 * GRID_PHI + p0];
+      const d01 = skyGrid[t0 * GRID_PHI + p1];
+      const d11 = skyGrid[t1 * GRID_PHI + p1];
+
+      // Bilinear blend
+      return (d00 * (1 - ft) * (1 - fp) +
+              d10 * ft * (1 - fp) +
+              d01 * (1 - ft) * fp +
+              d11 * ft * fp);
     }
 
-    // ── Place background stars using density-weighted distribution ──
+    // ── Direct density evaluation per-star (no grid aliasing) ──
+    // Evaluates the same density model as the glow shader for each
+    // random direction. This ensures stars follow the exact same spiral
+    // arm pattern as the glow at full angular resolution.
+    function directDensity(dirX, dirY, dirZ) {
+      let density = 0;
+
+      if (aboveBlend > 0.01) {
+        // Face-on: project to galactic plane
+        if (Math.abs(dirY) > 0.01) {
+          const t = -playerPos.y / dirY;
+          if (t > 0) {
+            const hitX = playerPos.x + dirX * t;
+            const hitZ = playerPos.z + dirZ * t;
+            const R = Math.sqrt(hitX * hitX + hitZ * hitZ);
+            if (R <= 15 * 1.1) {
+              const hitTheta = Math.atan2(hitZ, hitX);
+              let sd = surfaceDensity(R, hitTheta);
+              sd /= (t * 0.05 + 1.0);
+              density += sd * aboveBlend;
+            }
+          }
+        }
+      }
+
+      if (aboveBlend < 0.99) {
+        // Ray march from inside
+        let marchDensity = 0;
+        for (const dist of [0.3, 0.8, 1.5, 3.0, 5.0, 8.0, 12.0]) {
+          const sampleX = playerPos.x + dirX * dist;
+          const sampleY = playerPos.y + dirY * dist;
+          const sampleZ = playerPos.z + dirZ * dist;
+          const R = Math.sqrt(sampleX * sampleX + sampleZ * sampleZ);
+          if (R > 20 || Math.abs(sampleY) > 10) continue;
+          const dens = galacticMap.componentDensities(R, sampleY);
+          const sampleTheta = Math.atan2(sampleZ, sampleX);
+          const armStr = narrowArmStrength(R, sampleTheta);
+          const bulgeBlendLocal = Math.min(1, Math.max(0, (R - 0.5) / 1.5));
+          const armFactor = 1.0 + (0.10 + armStr * 2.40 - 1.0) * bulgeBlendLocal;
+          const distWeight = 1.0 / (dist * 0.4 + 1.0);
+          marchDensity += dens.totalDensity * armFactor * distWeight;
+        }
+        density += marchDensity * (1.0 - aboveBlend);
+      }
+
+      return density;
+    }
+
+    // Find max density for normalization (sample 200 directions)
+    let maxDirectDensity = 0.001;
+    for (let s = 0; s < 200; s++) {
+      const th = (s / 200) * Math.PI * 2;
+      const ph = Math.acos(1 - 2 * (s + 0.5) / 200);
+      const dx = Math.sin(ph) * Math.cos(th);
+      const dy = Math.cos(ph);
+      const dz = Math.sin(ph) * Math.sin(th);
+      const d = directDensity(dx, dy, dz);
+      if (d > maxDirectDensity) maxDirectDensity = d;
+    }
+
+    // ── Place background stars using direct density evaluation ──
     let placed = 0;
     let attempts = 0;
-    const maxAttempts = bgCount * 12;
+    const maxAttempts = bgCount * 15;
 
     while (placed < bgCount && attempts < maxAttempts) {
       attempts++;
@@ -161,10 +308,11 @@ export class StarfieldGenerator {
       const dirY = Math.cos(phi);
       const dirZ = Math.sin(phi) * Math.sin(theta);
 
-      const density = lookupDensity(dirX, dirY, dirZ);
+      const rawDensity = directDensity(dirX, dirY, dirZ);
+      const density = rawDensity / maxDirectDensity; // normalize to [0, 1]
 
-      // Accept/reject: minimum 3% chance (faint background glow even in voids)
-      const acceptChance = 0.03 + 0.97 * density;
+      // Accept/reject: minimum 2% chance (sparse halo background)
+      const acceptChance = 0.02 + 0.98 * density;
       if (rng.float() > acceptChance) continue;
 
       const idx = realStarCount + placed;
@@ -183,9 +331,9 @@ export class StarfieldGenerator {
 
       // Size: mostly small, occasional medium
       const sizeRoll = rng.float();
-      if (sizeRoll < 0.003) sizes[idx] = 5.0;
-      else if (sizeRoll < 0.02) sizes[idx] = 3.0;
-      else sizes[idx] = 2.0;
+      if (sizeRoll < 0.003) sizes[idx] = 8.0;
+      else if (sizeRoll < 0.02) sizes[idx] = 6.0;
+      else sizes[idx] = 4.0;
 
       placed++;
     }
@@ -200,7 +348,7 @@ export class StarfieldGenerator {
       positions[i3 + 1] = Math.sin(phi) * Math.sin(theta) * radius;
       positions[i3 + 2] = Math.cos(phi) * radius;
       colors[i3] = 0.3; colors[i3 + 1] = 0.3; colors[i3 + 2] = 0.3;
-      sizes[idx] = 1.5;
+      sizes[idx] = 3.0;
       placed++;
     }
 
@@ -214,6 +362,14 @@ export class StarfieldGenerator {
       skyGrid,
       skyGridTheta: GRID_THETA,
       skyGridPhi: GRID_PHI,
+      // Galactic geometry for GalaxyGlow shader
+      galCenterDir: { x: centerDirX, y: centerDirY, z: centerDirZ },
+      playerHeight: Math.abs(playerPos.y),
+      playerR: Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z),
+      // Full player position + arm model params for analytical glow shader
+      playerPos: { x: playerPos.x, y: playerPos.y, z: playerPos.z },
+      armOffsets: galacticMap.armOffsets.slice(), // copy of the 4 arm starting angles
+      armPitchK: galacticMap.pitchK,
     };
   }
 

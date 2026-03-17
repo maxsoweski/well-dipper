@@ -60,6 +60,11 @@ retroRenderer.setColorPalette(settings.get('colorPalette'));
 
 // ── Camera Controller ──
 const cameraController = new CameraController(camera, canvas);
+// Debug access for Playwright/console
+window._cam = camera;
+window._cc = cameraController;
+window._scene = scene;
+window._retroRenderer = retroRenderer;
 
 // When free-look ends without a focused body (title screen, deep sky),
 // clear focus so the camera stays where it was looking.
@@ -103,7 +108,7 @@ let galaxyGlow = null;
   starfield = new Starfield(sfData, 500);
   starfield.addTo(retroRenderer.starfieldScene);
   // Diffuse galactic glow behind the point stars
-  galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
+  galaxyGlow = new GalaxyGlow(499, sfData.playerPos, sfData.armOffsets, sfData.armPitchK);
   galaxyGlow.addTo(retroRenderer.starfieldScene);
 }
 
@@ -116,7 +121,7 @@ let orbitsVisible = settings.get('showOrbits');
 let gravityWellVisible = settings.get('showGravityWells');
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
-let minimapVisible = _isMobile ? false : settings.get('showMinimap');
+let minimapVisible = false; // off by default — toggle with G key
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
@@ -637,7 +642,7 @@ warpEffect.onSwapSystem = () => {
       galaxyGlow.dispose();
       retroRenderer.starfieldScene.remove(galaxyGlow.mesh);
     }
-    galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
+    galaxyGlow = new GalaxyGlow(499, sfData.playerPos, sfData.armOffsets, sfData.armPitchK);
     galaxyGlow.addTo(retroRenderer.starfieldScene);
     galaxyGlow.update(camera.position, camera);
   }
@@ -838,12 +843,12 @@ function _hideCurrentSystem() {
  * @param {boolean} options.forWarp  — if true, skip camera setup + flythrough start (warp handles that)
  * @param {Object} options.systemData — pre-generated data from StarSystemGenerator (skips re-generation)
  */
-function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
+function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCamera = false } = {}) {
   // ── Reset state ──
   warpTarget.direction = null;
   warpTarget.name = null;
   warpTarget.starIndex = -1;
-  const wasAutopilot = autoNav.isActive;
+  const wasAutopilot = debugCamera ? false : autoNav.isActive;
 
   // Reset camera far plane (may have been extended for navigable nebulae)
   if (camera.far > 200000) {
@@ -1242,55 +1247,67 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   if (forWarp) return;
 
   // ── Opening shot ──
-  if (planets.length > 0) {
-    // Randomly focus a planet or moon
-    const heroIndex = Math.floor(Math.random() * planets.length);
-    const hero = planets[heroIndex];
+  if (!debugCamera) {
+    // Normal mode: set up hero shot camera
+    if (planets.length > 0) {
+      // Randomly focus a planet or moon
+      const heroIndex = Math.floor(Math.random() * planets.length);
+      const hero = planets[heroIndex];
 
-    let heroMoonIndex = -1;
-    if (hero.moons.length > 0 && Math.random() < 0.3) {
-      heroMoonIndex = Math.floor(Math.random() * hero.moons.length);
+      let heroMoonIndex = -1;
+      if (hero.moons.length > 0 && Math.random() < 0.3) {
+        heroMoonIndex = Math.floor(Math.random() * hero.moons.length);
+      }
+
+      const yawOffset = (Math.random() - 0.5) * 0.25;
+      cameraController.setTarget(hero.planet.mesh.position.clone());
+      cameraController.yaw = hero.orbitAngle + yawOffset;
+      cameraController.smoothedYaw = cameraController.yaw;
+      cameraController.pitch = 0.08 + Math.random() * 0.12;
+      cameraController.smoothedPitch = cameraController.pitch;
+      cameraController.autoRotateActive = true;
+
+      focusIndex = heroIndex;
+      if (heroMoonIndex >= 0) {
+        const moon = hero.moons[heroMoonIndex];
+        const viewDist = Math.max(moon.data.radius * 5, 0.08);
+        focusMoonIndex = heroMoonIndex;
+        cameraController.distance = viewDist;
+        cameraController.smoothedDistance = viewDist;
+      } else {
+        const viewDist = hero.planet.data.radius * 6;
+        focusMoonIndex = -1;
+        cameraController.distance = viewDist;
+        cameraController.smoothedDistance = viewDist;
+      }
+    } else {
+      // Empty system — orbit the star
+      focusIndex = -1;
+      focusMoonIndex = -1;
+      cameraController.setTarget(new THREE.Vector3(0, 0, 0));
+      cameraController.yaw = Math.random() * Math.PI * 2;
+      cameraController.smoothedYaw = cameraController.yaw;
+      cameraController.pitch = 0.1;
+      cameraController.smoothedPitch = cameraController.pitch;
+      const viewDist = star.data.radius * 6;
+      cameraController.distance = viewDist;
+      cameraController.smoothedDistance = viewDist;
+      cameraController.autoRotateActive = true;
     }
 
-    const yawOffset = (Math.random() - 0.5) * 0.25;
-    cameraController.setTarget(hero.planet.mesh.position.clone());
-    cameraController.yaw = hero.orbitAngle + yawOffset;
-    cameraController.smoothedYaw = cameraController.yaw;
-    cameraController.pitch = 0.08 + Math.random() * 0.12;
-    cameraController.smoothedPitch = cameraController.pitch;
-    cameraController.autoRotateActive = true;
-
-    focusIndex = heroIndex;
-    if (heroMoonIndex >= 0) {
-      const moon = hero.moons[heroMoonIndex];
-      const viewDist = Math.max(moon.data.radius * 5, 0.08);
-      focusMoonIndex = heroMoonIndex;
-      cameraController.distance = viewDist;
-      cameraController.smoothedDistance = viewDist;
-    } else {
-      const viewDist = hero.planet.data.radius * 6;
-      focusMoonIndex = -1;
-      cameraController.distance = viewDist;
-      cameraController.smoothedDistance = viewDist;
+    // Restart autopilot with new system if it was active before
+    if (wasAutopilot) {
+      startFlythrough();
     }
   } else {
-    // Empty system — orbit the star
+    // Debug camera mode: orbit the star, no autopilot, camera set by caller
     focusIndex = -1;
     focusMoonIndex = -1;
     cameraController.setTarget(new THREE.Vector3(0, 0, 0));
-    cameraController.yaw = Math.random() * Math.PI * 2;
-    cameraController.smoothedYaw = cameraController.yaw;
-    cameraController.pitch = 0.1;
-    cameraController.smoothedPitch = cameraController.pitch;
-    const viewDist = star.data.radius * 6;
+    const viewDist = star.data.radius * 8;
     cameraController.distance = viewDist;
     cameraController.smoothedDistance = viewDist;
-    cameraController.autoRotateActive = true;
-  }
-
-  // Restart autopilot with new system if it was active before
-  if (wasAutopilot) {
-    startFlythrough();
+    cameraController.autoRotateActive = false;
   }
 }
 
@@ -2648,6 +2665,26 @@ function animate() {
   timer.update();
   const deltaTime = Math.min(timer.getDelta(), 0.1);
 
+  // ── Sky debug mode: free-look camera, render only starfield scene ──
+  if (window._skyDebug) {
+    camera.position.set(0, 100000, 0);
+    const yaw = window._skyYaw || 0;
+    const pitch = window._skyPitch || 0;
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    camera.lookAt(sy * cp + camera.position.x, sp + camera.position.y, cy * cp + camera.position.z);
+    camera.updateMatrixWorld();
+    starfield.update(camera.position);
+    if (galaxyGlow) galaxyGlow.update(camera.position, camera);
+    // Render ONLY the starfield scene (skip scene objects entirely)
+    const r = retroRenderer.renderer;
+    r.setRenderTarget(null);
+    r.setClearColor(0x000000, 1);
+    r.clear();
+    r.render(retroRenderer.starfieldScene, camera);
+    return;
+  }
+
   // ── Gallery mode: update objects, camera controller handles orbit ──
   if (galleryMode) {
     // Update deep sky objects (internal animation)
@@ -3371,11 +3408,16 @@ window.addEventListener('keydown', (e) => {
     // to test how the starfield and system generation change
     // Shift+Q/W/E/R/Z: galaxy position debug teleports
     const galaxyDebugPositions = {
-      'KeyQ': { name: 'Solar neighborhood', pos: { x: 8.0, y: 0.025, z: 0.0 } },
-      'KeyW': { name: 'Galaxy edge (outer fringe)', pos: { x: 14.5, y: 0.0, z: 0.0 } },
-      'KeyE': { name: 'Above galaxy (halo)', pos: { x: 4.0, y: 6.0, z: 0.0 } },
-      'KeyR': { name: 'Galactic center', pos: { x: 0.5, y: 0.0, z: 0.5 } },
-      'KeyZ': { name: 'Deep halo (outside galaxy)', pos: { x: 0.0, y: 12.0, z: 0.0 } },
+      'KeyQ': { name: 'Solar neighborhood (in disk, R=8)', pos: { x: 8.0, y: 0.025, z: 0.0 } },
+      'KeyW': { name: 'Galaxy edge (outer fringe, R=14.5)', pos: { x: 14.5, y: 0.0, z: 0.0 } },
+      'KeyE': { name: 'Above galaxy (halo, R=4, h=6)', pos: { x: 4.0, y: 6.0, z: 0.0 } },
+      'KeyR': { name: 'Galactic center (R=0.5)', pos: { x: 0.5, y: 0.0, z: 0.5 } },
+      'KeyZ': { name: 'Deep halo (directly above center, h=12)', pos: { x: 0.0, y: 12.0, z: 0.0 } },
+      'KeyX': { name: 'Below galaxy (looking up, h=-8)', pos: { x: 3.0, y: -8.0, z: 0.0 } },
+      'KeyC': { name: 'Spiral arm center (mid-arm, R=8)', pos: { x: -7.9, y: 0.025, z: -1.0 } },
+      'KeyV': { name: 'Spiral arm tip (outer arm, R=13)', pos: { x: 9.4, y: 0.025, z: -9.0 } },
+      'KeyB': { name: 'Galactic core (R=0.1)', pos: { x: 0.1, y: 0.0, z: 0.0 } },
+      'KeyN': { name: 'Edge-on view (far side, h=2)', pos: { x: -16.0, y: 2.0, z: 0.0 } },
     };
     const galaxyDebug = galaxyDebugPositions[e.code];
     if (galaxyDebug && galacticMap) {
@@ -3391,15 +3433,36 @@ window.addEventListener('keydown', (e) => {
       starfield.addTo(retroRenderer.starfieldScene);
       starfield.update(camera.position);
       if (galaxyGlow) { galaxyGlow.dispose(); retroRenderer.starfieldScene.remove(galaxyGlow.mesh); }
-      galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
+      galaxyGlow = new GalaxyGlow(499, sfData.playerPos, sfData.armOffsets, sfData.armPitchK);
       galaxyGlow.addTo(retroRenderer.starfieldScene);
       galaxyGlow.update(camera.position, camera);
-      // Generate a system at this position
+      // Generate a system but hide it — sky debug mode
       const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
       const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'galaxy-debug';
       const sysData = StarSystemGenerator.generate(starSeed, ctx);
       sysData._destType = 'star-system';
-      spawnSystem({ forWarp: false, systemData: sysData });
+      spawnSystem({ forWarp: false, systemData: sysData, debugCamera: true });
+
+      // ── Sky debug mode: hide star system, free-look the sky ──
+      idleTimer = -99999;
+      cameraController.bypassed = true;
+
+      // Point toward galactic center
+      const toCX = -galaxyDebug.pos.x;
+      const toCZ = -galaxyDebug.pos.z;
+      const toCY = -galaxyDebug.pos.y;
+      const len = Math.sqrt(toCX * toCX + toCY * toCY + toCZ * toCZ) || 1;
+
+      // Enable sky debug — animate loop handles everything
+      window._skyDebug = true;
+      window._skyYaw = Math.atan2(toCX, toCZ);
+      window._skyPitch = Math.asin(Math.max(-1, Math.min(1, toCY / len)));
+
+      // Kill any active warp
+      if (typeof warpEffect !== 'undefined' && warpEffect.isActive) {
+        warpEffect.reset();
+      }
+
       console.log('Galaxy debug: ' + galaxyDebug.name
         + ' | component=' + ctx.component
         + ' | [Fe/H]=' + ctx.metallicity.toFixed(2)
@@ -3713,6 +3776,13 @@ function beginWarpTurn() {
 
 // Idle tracking — any mouse movement resets idle timer (but no free-look)
 canvas.addEventListener('mousemove', (e) => {
+  // Sky debug free-look: drag to rotate camera
+  if (window._skyDebug && e.buttons === 1) {
+    window._skyYaw -= (e.movementX || 0) * 0.003;
+    window._skyPitch += (e.movementY || 0) * 0.003;
+    window._skyPitch = Math.max(-Math.PI * 0.49, Math.min(Math.PI * 0.49, window._skyPitch));
+    return;
+  }
   if (!autoNav.isActive) {
     idleTimer = 0;
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active

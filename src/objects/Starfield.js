@@ -63,9 +63,9 @@ export class Starfield {
     const sizes = new Float32Array(this.count);
     for (let i = 0; i < this.count; i++) {
       const roll = Math.random();
-      if (roll < 0.005) sizes[i] = 6.0;
-      else if (roll < 0.03) sizes[i] = 4.0;
-      else sizes[i] = 2.0;
+      if (roll < 0.005) sizes[i] = 8.0;
+      else if (roll < 0.03) sizes[i] = 6.0;
+      else sizes[i] = 4.0;
     }
 
     return this._buildMesh(positions, colors, sizes);
@@ -179,7 +179,7 @@ export class Starfield {
           // pattern has diagonal structure that becomes visible as organized
           // bands of white dots across the entire screen. Fix: blend from
           // dithered to smooth edges as fold progresses.
-          float threshold = bayerDither(gl_FragCoord.xy);
+          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
           float foldSmooth = clamp(uFoldAmount * 2.0, 0.0, 1.0);
           float cutoff = mix(threshold, 0.45, foldSmooth);
           if (edge > cutoff) discard;
