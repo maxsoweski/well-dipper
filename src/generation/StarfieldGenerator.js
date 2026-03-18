@@ -66,10 +66,15 @@ export class StarfieldGenerator {
     // ── Layer 1: Real nearby stars (all GalacticMap stars within search volume) ──
     // Search wider (up to ~3.5 kpc) to get more real stars.
     // Every found star becomes a real point — no arbitrary cap.
+    const _t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const nearbyStars = galacticMap.findNearestStars(playerPos, 500);
+    const _t1 = typeof performance !== 'undefined' ? performance.now() : 0;
     const warpableStars = nearbyStars.filter(s => s.distSq > 0.001);
     // Use all found stars (up to half the budget, to leave room for background)
     const realStarCount = Math.min(warpableStars.length, Math.floor(totalCount * 0.5));
+    if (typeof performance !== 'undefined') {
+      console.log(`StarfieldGen: findNearestStars(500)=${(_t1-_t0).toFixed(0)}ms, found=${nearbyStars.length}, using=${realStarCount}, totalBudget=${totalCount}`);
+    }
 
     // ── Layer 2: Background star budget ──
     const bgCount = totalCount - realStarCount;
@@ -83,6 +88,7 @@ export class StarfieldGenerator {
     const realStarMap = [];
 
     // ── Place real stars ──
+    const _t2 = typeof performance !== 'undefined' ? performance.now() : 0;
     for (let i = 0; i < realStarCount; i++) {
       const star = warpableStars[i];
       // Direction from player to this star
@@ -97,11 +103,18 @@ export class StarfieldGenerator {
       positions[i3 + 1] = (dy / dist) * radius;
       positions[i3 + 2] = (dz / dist) * radius;
 
-      // Color based on distance (closer = brighter) and region
+      // Color based on distance (closer = brighter) and region.
+      // Use lightweight density + arm queries instead of full deriveGalaxyContext()
+      // which is ~8ms per call (500 calls = 4+ seconds).
       const brightness = Math.min(1.0, 0.5 + 0.5 / (dist * 2));
-      // Derive rough star color from the galaxy context at that position
-      const starCtx = galacticMap.deriveGalaxyContext({ x: star.worldX, y: star.worldY, z: star.worldZ });
-      const col = this._starColorFromContext(rng, starCtx, brightness);
+      const starR = Math.sqrt(star.worldX * star.worldX + star.worldZ * star.worldZ);
+      const starTheta = Math.atan2(star.worldZ, star.worldX);
+      const densities = galacticMap.componentDensities(starR, star.worldY);
+      const armStr = galacticMap.spiralArmStrength(starR, starTheta);
+      // Determine dominant component cheaply
+      const comp = densities.bulge > densities.thin && densities.bulge > densities.halo ? 'bulge'
+        : densities.halo > densities.thin ? 'halo' : 'thin';
+      const col = this._starColorFromContext(rng, { spiralArmStrength: armStr, component: comp }, brightness);
       colors[i3]     = col[0];
       colors[i3 + 1] = col[1];
       colors[i3 + 2] = col[2];
@@ -110,6 +123,10 @@ export class StarfieldGenerator {
       sizes[i] = dist < 0.3 ? 8.0 : dist < 0.5 ? 6.0 : 4.0;
 
       realStarMap.push({ index: i, starData: star });
+    }
+
+    if (typeof performance !== 'undefined') {
+      console.log(`StarfieldGen: placeRealStars=${(performance.now()-_t2).toFixed(0)}ms (${realStarCount} stars, ${realStarCount} deriveGalaxyContext calls)`);
     }
 
     // ── Galactic geometry from player's perspective ──
