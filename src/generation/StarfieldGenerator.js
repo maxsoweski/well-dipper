@@ -29,14 +29,47 @@ export class StarfieldGenerator {
    *   positions/colors/sizes: Float32Arrays for Starfield constructor
    *   realStars: array of { index, starData } mapping starfield indices to GalacticMap stars
    */
-  static generate(galacticMap, playerPos, totalCount = 6000, radius = 500) {
+  /**
+   * Compute how many total stars to render based on local galactic density.
+   * Dense disk regions get more stars; sparse halo gets fewer.
+   * The emptiness of sparse regions IS the visual experience.
+   *
+   * @param {GalacticMap} galacticMap
+   * @param {{ x, y, z }} playerPos
+   * @param {number} baseCount — nominal count for average density (solar neighborhood)
+   * @returns {number} total star count for this position
+   */
+  static _computeStarBudget(galacticMap, playerPos, baseCount) {
+    const R = Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z);
+    const absY = Math.abs(playerPos.y);
+    const densities = galacticMap.componentDensities(R, playerPos.y);
+    // Solar neighborhood (R≈8, y≈0) has totalDensity ≈ 0.05-0.10
+    // Galactic center has totalDensity ≈ 2-4
+    // Halo (R=4, y=6) has totalDensity ≈ 0.001-0.005
+    // Normalize: solar neighborhood density → 1.0
+    const solarDensity = 0.07; // approximate at R=8, y=0
+    const relativeDensity = densities.totalDensity / solarDensity;
+
+    // Scale star count: sqrt so dense regions don't explode the count
+    // min 200 (even deep halo has SOME stars), max 2× baseCount
+    const scaled = baseCount * Math.sqrt(Math.min(relativeDensity, 4.0));
+    return Math.max(200, Math.min(baseCount * 2, Math.round(scaled)));
+  }
+
+  static generate(galacticMap, playerPos, baseCount = 6000, radius = 500) {
     const rng = new SeededRandom(`starfield-${playerPos.x.toFixed(3)}-${playerPos.y.toFixed(3)}-${playerPos.z.toFixed(3)}`);
 
-    // ── Layer 1: Real nearby stars (warp targets) ──
-    const nearbyStars = galacticMap.findNearestStars(playerPos, 30);
-    // Skip the very closest star (that's the one we're AT)
+    // ── Dynamic star count based on local density ──
+    // Sparse regions get fewer stars — the emptiness is part of the experience
+    const totalCount = this._computeStarBudget(galacticMap, playerPos, baseCount);
+
+    // ── Layer 1: Real nearby stars (all GalacticMap stars within search volume) ──
+    // Search wider (up to ~3.5 kpc) to get more real stars.
+    // Every found star becomes a real point — no arbitrary cap.
+    const nearbyStars = galacticMap.findNearestStars(playerPos, 500);
     const warpableStars = nearbyStars.filter(s => s.distSq > 0.001);
-    const realStarCount = Math.min(warpableStars.length, 25);
+    // Use all found stars (up to half the budget, to leave room for background)
+    const realStarCount = Math.min(warpableStars.length, Math.floor(totalCount * 0.5));
 
     // ── Layer 2: Background star budget ──
     const bgCount = totalCount - realStarCount;

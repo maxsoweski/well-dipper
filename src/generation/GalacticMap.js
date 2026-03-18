@@ -869,11 +869,16 @@ export class GalacticMap {
   findNearestStars(position, count = 20) {
     const { sx, sy, sz } = this.worldToSector(position.x, position.y, position.z);
 
+    // Search radius scales with requested count:
+    // count ≤ 30  → 3x3x3 = 27 sectors (fast, ~1.5 kpc)
+    // count ≤ 200 → 5x5x5 = 125 sectors (~2.5 kpc)
+    // count > 200 → 7x7x7 = 343 sectors (~3.5 kpc)
+    const halfR = count <= 30 ? 1 : count <= 200 ? 2 : 3;
+
     const candidates = [];
-    // Search 3x3x3 neighborhood
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -halfR; dx <= halfR; dx++) {
+      for (let dy = -halfR; dy <= halfR; dy++) {
+        for (let dz = -halfR; dz <= halfR; dz++) {
           const sector = this.getSector(sx + dx, sy + dy, sz + dz);
           for (const star of sector.stars) {
             const distX = star.worldX - position.x;
