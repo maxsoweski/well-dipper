@@ -36,6 +36,7 @@ import { generateSystemNames, generateSystemName } from './generation/NameGenera
 import { GalacticMap } from './generation/GalacticMap.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
 import { GalaxyGlow } from './objects/GalaxyGlow.js';
+import { SkyRenderer } from './rendering/SkyRenderer.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -85,12 +86,6 @@ cameraController.hasFocusedBody = () => {
   return false;
 };
 
-// ── Starfield ──
-// Rendered at full resolution (via retroRenderer.starfieldScene) for tiny
-// crisp star points, separate from the low-res retro scene objects.
-let starfield = new Starfield(settings.get('starDensity'), 500);
-starfield.addTo(retroRenderer.starfieldScene);
-
 // ── Galaxy State ──
 // GalacticMap provides the structural galaxy. When active, it drives
 // starfield generation, system properties, and warp target resolution.
@@ -99,18 +94,24 @@ const galacticMap = new GalacticMap('well-dipper-galaxy-1');
 let playerGalacticPos = galacticMap.getStartPosition();
 let currentGalaxyStar = null; // the GalacticMap star entry we're currently at
 
-// Generate initial galaxy-aware starfield + glow
-let galaxyGlow = null;
-{
-  const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
-  starfield.dispose();
-  retroRenderer.starfieldScene.remove(starfield.mesh);
-  starfield = new Starfield(sfData, 500);
-  starfield.addTo(retroRenderer.starfieldScene);
-  // Diffuse galactic glow behind the point stars
-  galaxyGlow = new GalaxyGlow(499, sfData.playerPos, sfData.armOffsets, sfData.armPitchK);
-  galaxyGlow.addTo(retroRenderer.starfieldScene);
-}
+// ── Sky Renderer ──
+// Coordinates galaxy glow + starfield + sky features with shared brightness budget.
+// Replaces the old pattern of manually managing Starfield + GalaxyGlow.
+const skyRenderer = new SkyRenderer(galacticMap, StarfieldGenerator, settings.get('starDensity'));
+skyRenderer.prepareForPosition(playerGalacticPos);
+skyRenderer.activate();
+retroRenderer.setSkyRenderer(skyRenderer);
+
+// Legacy aliases — these delegate to SkyRenderer so existing code
+// (warp targets, star finding, etc.) continues to work during migration.
+// TODO: Remove these once all callers are migrated to skyRenderer directly.
+const starfield = {
+  findNearestStar: (dir) => skyRenderer.findNearestStar(dir),
+  getRandomVisibleStar: (dir) => skyRenderer.getRandomVisibleStar(dir),
+  getGalaxyStarForIndex: (idx) => skyRenderer.getGalaxyStarForIndex(idx),
+  setWarpUniforms: (fold, bright, rift) => skyRenderer.setWarpUniforms(fold, bright, rift),
+  update: (pos) => {}, // SkyRenderer.update() handles this now
+};
 
 // ── System State ──
 let seedCounter = 0;
@@ -620,6 +621,8 @@ warpEffect.onPrepareSystem = () => {
   pendingSystemData._destType = destType;
   // Carry the warp target's name into the new system so it matches what was shown
   pendingSystemData._warpTargetName = warpTarget.name || null;
+  // Pre-generate sky data for new galactic position (CPU only, no GPU resources)
+  skyRenderer.prepareForPosition(playerGalacticPos);
   console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold`);
 };
 
@@ -629,23 +632,11 @@ warpEffect.onSwapSystem = () => {
   musicManager.play('hyperspace', 0.3);
   warpSwapSystem();
 
-  // ── Regenerate starfield + glow for new galactic position ──
-  if (galacticMap) {
-    const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
-    starfield.dispose();
-    retroRenderer.starfieldScene.remove(starfield.mesh);
-    starfield = new Starfield(sfData, 500);
-    starfield.addTo(retroRenderer.starfieldScene);
-    starfield.update(camera.position);
-    // Swap galactic glow
-    if (galaxyGlow) {
-      galaxyGlow.dispose();
-      retroRenderer.starfieldScene.remove(galaxyGlow.mesh);
-    }
-    galaxyGlow = new GalaxyGlow(499, sfData.playerPos, sfData.armOffsets, sfData.armPitchK);
-    galaxyGlow.addTo(retroRenderer.starfieldScene);
-    galaxyGlow.update(camera.position, camera);
-  }
+  // ── Regenerate sky for new galactic position ──
+  // SkyRenderer was pre-loaded during FOLD (prepareForPosition).
+  // Now create GPU resources — hidden behind the opaque warp tunnel.
+  skyRenderer.activate();
+  skyRenderer.update(camera, 0);
 };
 
 // When warp exit finishes, reveal the new system and restart autopilot
@@ -2665,7 +2656,7 @@ function animate() {
   timer.update();
   const deltaTime = Math.min(timer.getDelta(), 0.1);
 
-  // ── Sky debug mode: free-look camera, render only starfield scene ──
+  // ── Sky debug mode: free-look camera, render only sky scene ──
   if (window._skyDebug) {
     camera.position.set(0, 100000, 0);
     const yaw = window._skyYaw || 0;
@@ -2674,14 +2665,13 @@ function animate() {
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
     camera.lookAt(sy * cp + camera.position.x, sp + camera.position.y, cy * cp + camera.position.z);
     camera.updateMatrixWorld();
-    starfield.update(camera.position);
-    if (galaxyGlow) galaxyGlow.update(camera.position, camera);
-    // Render ONLY the starfield scene (skip scene objects entirely)
+    skyRenderer.update(camera, 0);
+    // Render ONLY the sky scene (skip scene objects entirely)
     const r = retroRenderer.renderer;
     r.setRenderTarget(null);
     r.setClearColor(0x000000, 1);
     r.clear();
-    r.render(retroRenderer.starfieldScene, camera);
+    r.render(skyRenderer.getScene(), camera);
     return;
   }
 
@@ -2705,8 +2695,7 @@ function animate() {
     // Dynamic near-plane — same formula as the main render loop
     camera.near = Math.max(0.0001, Math.min(1.0, cameraController.smoothedDistance * 0.01));
     camera.updateProjectionMatrix();
-    starfield.update(camera.position);
-    if (galaxyGlow) galaxyGlow.update(camera.position, camera);
+    skyRenderer.update(camera, deltaTime);
     retroRenderer.render();
     return;
   }
@@ -3296,8 +3285,7 @@ function animate() {
     camera.updateProjectionMatrix();
   }
 
-  starfield.update(camera.position);
-  if (galaxyGlow) galaxyGlow.update(camera.position, camera);
+  skyRenderer.update(camera, deltaTime);
 
   // ── Update HUD ──
   // During flythrough, compute yaw from camera position relative to origin
@@ -3425,17 +3413,10 @@ window.addEventListener('keydown', (e) => {
       // Teleport to the galactic position
       playerGalacticPos = { ...galaxyDebug.pos };
       const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      // Regenerate starfield + glow
-      const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
-      starfield.dispose();
-      retroRenderer.starfieldScene.remove(starfield.mesh);
-      starfield = new Starfield(sfData, 500);
-      starfield.addTo(retroRenderer.starfieldScene);
-      starfield.update(camera.position);
-      if (galaxyGlow) { galaxyGlow.dispose(); retroRenderer.starfieldScene.remove(galaxyGlow.mesh); }
-      galaxyGlow = new GalaxyGlow(499, sfData.playerPos, sfData.armOffsets, sfData.armPitchK);
-      galaxyGlow.addTo(retroRenderer.starfieldScene);
-      galaxyGlow.update(camera.position, camera);
+      // Regenerate sky for new galactic position
+      skyRenderer.prepareForPosition(playerGalacticPos);
+      skyRenderer.activate();
+      skyRenderer.update(camera, 0);
       // Generate a system but hide it — sky debug mode
       const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
       const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'galaxy-debug';

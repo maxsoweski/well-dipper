@@ -31,7 +31,10 @@ export class RetroRenderer {
     this.pixelScale = 3; // Each render pixel = 3×3 screen pixels
 
     // Separate scene for the starfield (rendered at full resolution)
+    // Legacy: used directly when no SkyRenderer is set.
+    // New: SkyRenderer owns the sky scene via setSkyRenderer().
     this.starfieldScene = new THREE.Scene();
+    this._skyRenderer = null;
 
     // HUD (system map) — set via setHud()
     this._hudScene = null;
@@ -57,6 +60,23 @@ export class RetroRenderer {
     this._setupComposite();
 
     this.resize();
+  }
+
+  /**
+   * Set a SkyRenderer to own the sky background pass.
+   * When set, the SkyRenderer's scene is used instead of this.starfieldScene.
+   * @param {import('./SkyRenderer.js').SkyRenderer} skyRenderer
+   */
+  setSkyRenderer(skyRenderer) {
+    this._skyRenderer = skyRenderer;
+  }
+
+  /**
+   * Get the scene used for the sky pass (SkyRenderer scene or legacy starfieldScene).
+   * @returns {THREE.Scene}
+   */
+  getSkyScene() {
+    return this._skyRenderer ? this._skyRenderer.getScene() : this.starfieldScene;
   }
 
   /**
@@ -632,11 +652,11 @@ export class RetroRenderer {
   render() {
     const r = this.renderer;
 
-    // Pass 1: Starfield at full resolution
+    // Pass 1: Sky at full resolution (SkyRenderer scene or legacy starfieldScene)
     r.setRenderTarget(this.bgTarget);
     r.setClearColor(0x000000, 1);
     r.clear();
-    r.render(this.starfieldScene, this.camera);
+    r.render(this.getSkyScene(), this.camera);
 
     // Pass 2: Scene objects at low resolution
     r.setRenderTarget(this.sceneTarget);
