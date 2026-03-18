@@ -2767,6 +2767,7 @@ function animate() {
     camera.near = Math.max(0.0001, Math.min(1.0, cameraController.smoothedDistance * 0.01));
     camera.updateProjectionMatrix();
     skyRenderer.update(camera, deltaTime);
+    retroRenderer.setTime(timer.getElapsed());
     retroRenderer.render();
     return;
   }
@@ -3373,6 +3374,7 @@ function animate() {
     gravityWell.update(hudYaw);
   }
 
+  retroRenderer.setTime(timer.getElapsed());
   retroRenderer.render();
 }
 

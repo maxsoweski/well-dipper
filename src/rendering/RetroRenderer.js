@@ -143,6 +143,22 @@ export class RetroRenderer {
   }
 
   /**
+   * Update time-based uniforms (call each frame).
+   * @param {number} time — elapsed time in seconds
+   */
+  setTime(time) {
+    this._compositeMesh.material.uniforms.uTime.value = time;
+  }
+
+  /**
+   * Set film grain strength. 0 = off, 0.045 = default subtle static.
+   * @param {number} strength
+   */
+  setGrainStrength(strength) {
+    this._compositeMesh.material.uniforms.uGrainStrength.value = strength;
+  }
+
+  /**
    * Set warp-related uniforms (called by main.js during warp).
    * @param {number} sceneFade    0 = scene visible, 1 = scene hidden
    * @param {number} whiteFlash   0 = no flash, 1 = full white
@@ -210,6 +226,9 @@ export class RetroRenderer {
         // Color palette (0=default, 1=mono, 2=amber, 3=green, 4=blue,
         //   5=gameboy, 6=cga, 7=sepia, 8=virtualboy, 9=inverted)
         uColorPalette: { value: 0 },
+        // Film grain / static (retro CRT/camera feel)
+        uTime: { value: 0.0 },
+        uGrainStrength: { value: 0.045 },  // 0 = off, ~0.04-0.06 = subtle static
       },
 
       vertexShader: /* glsl */ `
@@ -241,6 +260,9 @@ export class RetroRenderer {
         uniform float uTargetSize;
         // Color palette
         uniform int uColorPalette;
+        // Film grain
+        uniform float uTime;
+        uniform float uGrainStrength;
         varying vec2 vUv;
 
         // ── Color palette remapping ──
@@ -581,6 +603,17 @@ export class RetroRenderer {
               vec3 hyper = hyperspace(vUv, uHyperTime);
               result = mix(result, hyper, hyperMask);
             }
+          }
+
+          // ── Film grain / static (retro CRT feel) ──
+          // Animated per-frame noise over the entire image.
+          // Like Star Fox 64's static effect — gives texture to flat
+          // areas, unifies visual elements, authentic to the era.
+          if (uGrainStrength > 0.0) {
+            vec2 grainCoord = gl_FragCoord.xy;
+            float grain = fract(sin(dot(grainCoord, vec2(12.9898, 78.233)) + uTime * 43.0) * 43758.5453);
+            // Signed noise centered on zero (brightens AND darkens)
+            result += (grain - 0.5) * uGrainStrength;
           }
 
           result = applyPalette(result, uColorPalette);
