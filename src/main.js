@@ -1779,9 +1779,12 @@ debugPanel.setSpawnCallbacks({
       return { found: false, message: `No ${featureType} found within 10 kpc. Try a different galactic position (arms have more nebulae, halo has globular clusters).` };
     }
 
-    // Search nearby stars, generate systems, check for match
-    const nearby = galacticMap.findNearestStars(playerGalacticPos, 30);
-    const maxAttempts = Math.min(nearby.length, 30);
+    // Search nearby stars, generate systems, check for match.
+    // Rare types (neutron-star, black-hole) need a wider search.
+    const isRare = targetType === 'neutron-star' || targetType === 'black-hole';
+    const searchCount = isRare ? 200 : 50;
+    const nearby = galacticMap.findNearestStars(playerGalacticPos, searchCount);
+    const maxAttempts = Math.min(nearby.length, searchCount);
     let searched = 0;
 
     for (let i = 0; i < maxAttempts; i++) {
@@ -1837,6 +1840,15 @@ debugPanel.setSpawnCallbacks({
         spawnSystem({ forWarp: false, systemData: testData });
         debugPanel.setPlayerPos(playerGalacticPos);
         debugPanel.setSystem(system, testData);
+
+        // Focus camera on the star so evolved star types are visible
+        if (system?.star?.mesh) {
+          focusIndex = -2; // star focus mode
+          focusStarIndex = 0;
+          focusMoonIndex = -1;
+          const starR = system.star._renderRadius || 5;
+          cameraController.focusOn(system.star.mesh.position, starR * 5);
+        }
 
         const dist = Math.sqrt(star.distSq).toFixed(3);
         const msg = `Found ${targetType} at ${dist} kpc (searched ${searched} systems)`;

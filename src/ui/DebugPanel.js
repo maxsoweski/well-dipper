@@ -395,7 +395,9 @@ export class DebugPanel {
     for (const t of findTypes) {
       html += `<button class="debug-btn debug-find-btn" data-find="${t.id}">${t.label}</button>`;
     }
-    html += '</div></div>';
+    html += '</div>';
+    html += '<div id="debug-find-status" class="debug-find-status"></div>';
+    html += '</div>';
 
     // ── Seed Input ──
     html += '<div class="debug-section"><h3>SPAWN BY SEED</h3>';
@@ -440,44 +442,47 @@ export class DebugPanel {
     // ── Spawn buttons ──
     if (!this._spawnCallbacks) return;
 
-    // Teleport buttons — close panel first, then act
+    // Teleport buttons — keep panel open so user can click multiple
     for (const btn of container.querySelectorAll('[data-teleport]')) {
       btn.addEventListener('click', () => {
         const id = btn.dataset.teleport;
         const pos = positions.find(p => p.id === id);
         if (pos && this._spawnCallbacks.teleportToPosition) {
-          this.togglePanel();
-          requestAnimationFrame(() => {
-            this._spawnCallbacks.teleportToPosition(pos.pos, pos.label);
-          });
+          this._spawnCallbacks.teleportToPosition(pos.pos, pos.label);
+          // Flash the button to confirm
+          btn.style.background = 'rgba(0, 220, 130, 0.3)';
+          setTimeout(() => { btn.style.background = ''; }, 300);
         }
       });
     }
 
-    // System type buttons — close panel first, then spawn
+    // System type buttons — keep panel open
     for (const btn of container.querySelectorAll('[data-spawn]')) {
       btn.addEventListener('click', () => {
         const type = btn.dataset.spawn;
         if (this._spawnCallbacks.spawnSystemType) {
-          this.togglePanel();
-          requestAnimationFrame(() => {
-            this._spawnCallbacks.spawnSystemType(type);
-          });
+          this._spawnCallbacks.spawnSystemType(type);
+          btn.style.background = 'rgba(0, 220, 130, 0.3)';
+          setTimeout(() => { btn.style.background = ''; }, 300);
         }
       });
     }
 
-    // Find nearest buttons — close panel first, then search
+    // Find nearest buttons — show status, close on success, stay open on failure
+    const findStatus = container.querySelector('#debug-find-status');
     for (const btn of container.querySelectorAll('[data-find]')) {
       btn.addEventListener('click', () => {
         const targetType = btn.dataset.find;
-        // Close panel immediately so the scene can render during search
-        this.togglePanel();
-        // Run search after panel closes and a frame renders
+        if (findStatus) findStatus.textContent = `Searching for ${targetType.replace('feat:', '')}...`;
+        // Run search on next frame so status text renders first
         requestAnimationFrame(() => {
           if (this._spawnCallbacks?.findNearest) {
             const result = this._spawnCallbacks.findNearest(targetType);
-            console.log(`Find nearest: ${result.message}`);
+            if (result.found) {
+              this.togglePanel(); // close on success
+            } else if (findStatus) {
+              findStatus.textContent = result.message;
+            }
           }
         });
       });

@@ -609,10 +609,13 @@ export class RetroRenderer {
           // Animated per-frame noise over the entire image.
           // Like Star Fox 64's static effect — gives texture to flat
           // areas, unifies visual elements, authentic to the era.
+          // Uses interleaved gradient noise (Jimenez 2014) for minimal banding.
           if (uGrainStrength > 0.0) {
-            vec2 grainCoord = gl_FragCoord.xy;
-            float grain = fract(sin(dot(grainCoord, vec2(12.9898, 78.233)) + uTime * 43.0) * 43758.5453);
-            // Signed noise centered on zero (brightens AND darkens)
+            vec2 grainCoord = gl_FragCoord.xy + vec2(uTime * 120.7, uTime * 89.3);
+            // Interleaved gradient noise — low banding, high frequency
+            float grain = fract(52.9829189 * fract(dot(grainCoord, vec2(0.06711056, 0.00583715))));
+            // Second hash pass for extra randomness
+            grain = fract(grain * 3571.4953 + uTime * 17.31);
             result += (grain - 0.5) * uGrainStrength;
           }
 
