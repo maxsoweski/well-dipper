@@ -54,6 +54,17 @@ export class DebugPanel {
     this._focusMoonIndex = moonIndex;
   }
 
+  /**
+   * Set callbacks for debug spawner actions.
+   * @param {object} callbacks
+   * @param {function} callbacks.teleportToPosition — (pos: {x,y,z}, name: string) => void
+   * @param {function} callbacks.spawnSystemType — (destType: string) => void
+   * @param {function} callbacks.spawnWithSeed — (seed: string) => void
+   */
+  setSpawnCallbacks(callbacks) {
+    this._spawnCallbacks = callbacks;
+  }
+
   // ── Toggle ──
 
   toggleHUD() {
@@ -293,22 +304,103 @@ export class DebugPanel {
     }
     html += '</div></div>';
 
-    // ── Quick Actions ──
-    html += '<div class="debug-section"><h3>QUICK REFERENCE</h3><div class="debug-grid">';
-    html += this._row('Shift+Q', 'Solar neighborhood (R=8)');
-    html += this._row('Shift+R', 'Galactic center (R=0.5)');
-    html += this._row('Shift+E', 'Above galaxy (h=6)');
-    html += this._row('Shift+B', 'Galactic core (R=0.1)');
-    html += this._row('Shift+1-7', 'Force destination type');
-    html += this._row('Shift+0', 'Solar System (secret)');
+    // ── Galaxy Position Spawner ──
+    html += '<div class="debug-section"><h3>TELEPORT TO GALAXY POSITION</h3>';
+    html += '<div class="debug-btn-grid">';
+    const positions = [
+      { id: 'solar', label: 'Solar (R=8)', pos: { x: 8.0, y: 0.025, z: 0.0 } },
+      { id: 'center', label: 'Center (R=0.5)', pos: { x: 0.5, y: 0.0, z: 0.5 } },
+      { id: 'core', label: 'Core (R=0.1)', pos: { x: 0.1, y: 0.0, z: 0.0 } },
+      { id: 'edge', label: 'Edge (R=14.5)', pos: { x: 14.5, y: 0.0, z: 0.0 } },
+      { id: 'above', label: 'Above (h=6)', pos: { x: 4.0, y: 6.0, z: 0.0 } },
+      { id: 'below', label: 'Below (h=-8)', pos: { x: 3.0, y: -8.0, z: 0.0 } },
+      { id: 'arm', label: 'Arm center', pos: { x: -7.9, y: 0.025, z: -1.0 } },
+      { id: 'armtip', label: 'Arm tip', pos: { x: 9.4, y: 0.025, z: -9.0 } },
+      { id: 'halo', label: 'Deep halo (h=12)', pos: { x: 0.0, y: 12.0, z: 0.0 } },
+      { id: 'far', label: 'Far side (h=2)', pos: { x: -16.0, y: 2.0, z: 0.0 } },
+    ];
+    for (const p of positions) {
+      html += `<button class="debug-btn" data-teleport="${p.id}">${p.label}</button>`;
+    }
+    html += '</div></div>';
+
+    // ── System Type Spawner ──
+    html += '<div class="debug-section"><h3>SPAWN SYSTEM TYPE</h3>';
+    html += '<div class="debug-btn-grid">';
+    const types = [
+      { id: 'star-system', label: 'Star System' },
+      { id: 'spiral-galaxy', label: 'Spiral Galaxy' },
+      { id: 'elliptical-galaxy', label: 'Elliptical Galaxy' },
+      { id: 'emission-nebula', label: 'Emission Nebula' },
+      { id: 'planetary-nebula', label: 'Planetary Nebula' },
+      { id: 'globular-cluster', label: 'Globular Cluster' },
+      { id: 'open-cluster', label: 'Open Cluster' },
+    ];
+    for (const t of types) {
+      html += `<button class="debug-btn" data-spawn="${t.id}">${t.label}</button>`;
+    }
+    html += '</div></div>';
+
+    // ── Seed Input ──
+    html += '<div class="debug-section"><h3>SPAWN BY SEED</h3>';
+    html += '<div class="debug-seed-row">';
+    html += '<input type="text" id="debug-seed-input" class="debug-input" placeholder="Enter seed..." value="">';
+    html += '<button class="debug-btn" id="debug-seed-go">GO</button>';
     html += '</div></div>';
 
     el.innerHTML = html;
+
+    // ── Wire up button click handlers ──
+    this._wireSpawnButtons(el, positions);
   }
 
   _updatePanel() {
     // Update FPS in panel header if visible
     // Full re-populate is too expensive per frame — just update the FPS
+  }
+
+  _wireSpawnButtons(container, positions) {
+    if (!this._spawnCallbacks) return;
+
+    // Teleport buttons
+    for (const btn of container.querySelectorAll('[data-teleport]')) {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.teleport;
+        const pos = positions.find(p => p.id === id);
+        if (pos && this._spawnCallbacks.teleportToPosition) {
+          this._spawnCallbacks.teleportToPosition(pos.pos, pos.label);
+          this.togglePanel(); // close panel after action
+        }
+      });
+    }
+
+    // System type buttons
+    for (const btn of container.querySelectorAll('[data-spawn]')) {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.spawn;
+        if (this._spawnCallbacks.spawnSystemType) {
+          this._spawnCallbacks.spawnSystemType(type);
+          this.togglePanel();
+        }
+      });
+    }
+
+    // Seed input
+    const seedBtn = container.querySelector('#debug-seed-go');
+    const seedInput = container.querySelector('#debug-seed-input');
+    if (seedBtn && seedInput) {
+      seedBtn.addEventListener('click', () => {
+        const seed = seedInput.value.trim();
+        if (seed && this._spawnCallbacks.spawnWithSeed) {
+          this._spawnCallbacks.spawnWithSeed(seed);
+          this.togglePanel();
+        }
+      });
+      seedInput.addEventListener('keydown', (e) => {
+        e.stopPropagation(); // prevent game keybinds from firing while typing
+        if (e.code === 'Enter') seedBtn.click();
+      });
+    }
   }
 
   _row(label, value) {

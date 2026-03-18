@@ -1650,6 +1650,38 @@ function _debugSpawnType(destType) {
   console.log(`Debug spawn: ${destType} (seed "${seed}")`);
 }
 
+// ── Debug Panel spawn callbacks ──────────────────────────────────
+// Wire up the debug panel's interactive buttons to game functions.
+debugPanel.setSpawnCallbacks({
+  teleportToPosition: (pos, name) => {
+    if (!galacticMap) return;
+    if (galleryMode) exitGallery();
+    playerGalacticPos = { ...pos };
+    const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
+    skyRenderer.prepareForPosition(playerGalacticPos);
+    skyRenderer.activate();
+    skyRenderer.update(camera, 0);
+    // Generate a system at this position
+    const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
+    const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
+    const sysData = StarSystemGenerator.generate(starSeed, ctx);
+    sysData._destType = 'star-system';
+    spawnSystem({ forWarp: false, systemData: sysData });
+    debugPanel.setPlayerPos(playerGalacticPos);
+    console.log(`Debug teleport: ${name} → (${pos.x}, ${pos.y}, ${pos.z})`);
+  },
+  spawnSystemType: (destType) => {
+    _debugSpawnType(destType);
+  },
+  spawnWithSeed: (seed) => {
+    if (galleryMode) exitGallery();
+    const sysData = StarSystemGenerator.generate(seed);
+    sysData._destType = 'star-system';
+    spawnSystem({ forWarp: false, systemData: sysData });
+    console.log(`Debug spawn with seed: "${seed}"`);
+  },
+});
+
 // ── Debug Gallery ──────────────────────────────────────────────
 // Shows deep sky objects one at a time for evaluating procedural variation.
 
