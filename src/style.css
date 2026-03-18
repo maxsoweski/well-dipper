@@ -774,6 +774,32 @@ html, body {
   margin-top: 14px;
 }
 
+.debug-slider-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 50px;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  margin: 4px 0;
+}
+
+.debug-slider-row .dg-label {
+  color: rgba(100, 180, 255, 0.8);
+  text-align: right;
+}
+
+.debug-slider-row .dg-val {
+  color: rgba(0, 220, 130, 0.85);
+  text-align: right;
+  font-size: 10px;
+}
+
+.debug-slider-row input[type="range"] {
+  width: 100%;
+  height: 4px;
+  accent-color: rgba(255, 100, 100, 0.6);
+}
+
 .debug-btn-grid {
   display: flex;
   flex-wrap: wrap;

@@ -55,6 +55,14 @@ export class DebugPanel {
   }
 
   /**
+   * Set the RetroRenderer for grain control.
+   * @param {import('../rendering/RetroRenderer.js').RetroRenderer} renderer
+   */
+  setRetroRenderer(renderer) {
+    this._retroRenderer = renderer;
+  }
+
+  /**
    * Set callbacks for debug spawner actions.
    * @param {object} callbacks
    * @param {function} callbacks.teleportToPosition — (pos: {x,y,z}, name: string) => void
@@ -292,8 +300,8 @@ export class DebugPanel {
       html += '</div></div>';
     }
 
-    // ── Sky Renderer ──
-    html += '<div class="debug-section"><h3>SKY RENDERER</h3><div class="debug-grid">';
+    // ── Rendering Controls ──
+    html += '<div class="debug-section"><h3>RENDERING</h3><div class="debug-grid">';
     if (this._skyRenderer) {
       const cfg = this._skyRenderer._brightnessConfig;
       html += this._row('Glow range', `${cfg.glow.min.toFixed(2)} – ${cfg.glow.max.toFixed(2)}`);
@@ -302,7 +310,24 @@ export class DebugPanel {
       const tint = this._skyRenderer.getAmbientTint();
       html += this._row('Ambient tint', tint ? `rgb(${Math.round(tint.r*255)},${Math.round(tint.g*255)},${Math.round(tint.b*255)}) ${(tint.strength*100).toFixed(0)}%` : 'none');
     }
-    html += '</div></div>';
+    html += '</div>';
+    // Grain slider
+    const currentGrain = this._retroRenderer?._compositeMesh?.material?.uniforms?.uGrainStrength?.value ?? 0.045;
+    html += '<div class="debug-slider-row">';
+    html += `<label class="dg-label">Film Grain</label>`;
+    html += `<input type="range" id="debug-grain" min="0" max="0.15" step="0.005" value="${currentGrain}">`;
+    html += `<span class="dg-val" id="debug-grain-val">${currentGrain.toFixed(3)}</span>`;
+    html += '</div>';
+    // Star brightness slider
+    if (this._skyRenderer) {
+      const starMax = this._skyRenderer._brightnessConfig.stars.max;
+      html += '<div class="debug-slider-row">';
+      html += `<label class="dg-label">Star Bright</label>`;
+      html += `<input type="range" id="debug-star-bright" min="0.2" max="1.5" step="0.05" value="${starMax}">`;
+      html += `<span class="dg-val" id="debug-star-bright-val">${starMax.toFixed(2)}</span>`;
+      html += '</div>';
+    }
+    html += '</div>';
 
     // ── Galaxy Position Spawner ──
     html += '<div class="debug-section"><h3>TELEPORT TO GALAXY POSITION</h3>';
@@ -350,8 +375,8 @@ export class DebugPanel {
 
     el.innerHTML = html;
 
-    // ── Wire up button click handlers ──
-    this._wireSpawnButtons(el, positions);
+    // ── Wire up interactive controls ──
+    this._wireControls(el, positions);
   }
 
   _updatePanel() {
@@ -359,7 +384,29 @@ export class DebugPanel {
     // Full re-populate is too expensive per frame — just update the FPS
   }
 
-  _wireSpawnButtons(container, positions) {
+  _wireControls(container, positions) {
+    // ── Sliders ──
+    const grainSlider = container.querySelector('#debug-grain');
+    const grainVal = container.querySelector('#debug-grain-val');
+    if (grainSlider && this._retroRenderer) {
+      grainSlider.addEventListener('input', () => {
+        const v = parseFloat(grainSlider.value);
+        this._retroRenderer.setGrainStrength(v);
+        if (grainVal) grainVal.textContent = v.toFixed(3);
+      });
+    }
+
+    const starBrightSlider = container.querySelector('#debug-star-bright');
+    const starBrightVal = container.querySelector('#debug-star-bright-val');
+    if (starBrightSlider && this._skyRenderer) {
+      starBrightSlider.addEventListener('input', () => {
+        const v = parseFloat(starBrightSlider.value);
+        this._skyRenderer.setBrightnessRange('stars', { max: v });
+        if (starBrightVal) starBrightVal.textContent = v.toFixed(2);
+      });
+    }
+
+    // ── Spawn buttons ──
     if (!this._spawnCallbacks) return;
 
     // Teleport buttons
