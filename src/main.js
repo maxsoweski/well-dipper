@@ -6,6 +6,7 @@ import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { BodyRenderer } from './rendering/objects/BodyRenderer.js';
 import { LODManager } from './rendering/LODManager.js';
+import { DebugPanel } from './ui/DebugPanel.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
@@ -72,6 +73,11 @@ window._retroRenderer = retroRenderer;
 // Evaluates camera distance to bodies and assigns LOD tiers each frame.
 const lodManager = new LODManager(camera);
 
+// ── Debug Panel ──
+// Backtick (`) toggles corner HUD, F3 toggles full inspection panel.
+const debugPanel = new DebugPanel();
+debugPanel.setCamera(camera);
+
 // When free-look ends without a focused body (title screen, deep sky),
 // clear focus so the camera stays where it was looking.
 cameraController.onFreeLookEnd = () => {
@@ -106,6 +112,8 @@ const skyRenderer = new SkyRenderer(galacticMap, StarfieldGenerator, settings.ge
 skyRenderer.prepareForPosition(playerGalacticPos);
 skyRenderer.activate();
 retroRenderer.setSkyRenderer(skyRenderer);
+debugPanel.setSkyRenderer(skyRenderer);
+debugPanel.setPlayerPos(playerGalacticPos);
 
 // Legacy aliases — these delegate to SkyRenderer so existing code
 // (warp targets, star finding, etc.) continues to work during migration.
@@ -1171,6 +1179,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     binarySeparationMap: systemData.binarySeparation, // map-unit sep for gravity well
     names: systemNames, // generated names for system/star/planets/moons
   };
+
+  // ── Debug panel update ──
+  debugPanel.setSystem(system, systemData);
+  debugPanel.setPlayerPos(playerGalacticPos);
+  debugPanel.setLODManager(lodManager);
 
   // ── System map HUD ──
   // Only create the system map if there are planets (empty systems have nothing to map)
@@ -3313,6 +3326,8 @@ function animate() {
 
   skyRenderer.update(camera, deltaTime);
   lodManager.update();
+  debugPanel.setFocus(focusIndex, focusMoonIndex);
+  debugPanel.update(deltaTime);
 
   // ── Update HUD ──
   // During flythrough, compute yaw from camera position relative to origin
@@ -3342,6 +3357,19 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  // F3 key: toggle debug inspection panel
+  if (e.code === 'F3') {
+    e.preventDefault();
+    debugPanel.togglePanel();
+    return;
+  }
+
+  // Backtick key: toggle debug HUD (corner overlay)
+  if (e.code === 'Backquote') {
+    debugPanel.toggleHUD();
+    return;
+  }
+
   // S key: toggle settings panel (works always except title screen)
   if (e.code === 'KeyS' && !titleScreenActive) {
     toggleSettings();
@@ -3354,8 +3382,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Escape closes keybinds, settings, or sound test overlay if open
+  // Escape closes keybinds, settings, sound test, or debug overlay if open
   if (e.code === 'Escape') {
+    if (debugPanel.isPanelVisible) {
+      debugPanel.togglePanel();
+      return;
+    }
     if (_soundTestOpen) {
       toggleSoundTest();
       return;
