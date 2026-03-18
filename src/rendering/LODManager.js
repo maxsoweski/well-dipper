@@ -80,6 +80,7 @@ export class LODManager {
     const camPos = this._camera.position;
 
     for (const body of this._bodies) {
+      if (!body.mesh?.matrixWorld) continue;
       // Get world position of body mesh
       this._tempVec.setFromMatrixPosition(body.mesh.matrixWorld);
       const distance = camPos.distanceTo(this._tempVec);

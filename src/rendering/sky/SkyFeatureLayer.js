@@ -58,7 +58,7 @@ export class SkyFeatureLayer {
     // Sort by angular size (biggest first) and take top N
     const scored = features
       .map(f => {
-        const dist = Math.max(f.distance, 0.001);
+        const dist = Math.max(f.distance, 0.001); // prevent division by zero
         const angularRadius = f.radius / dist; // radians
         return { ...f, angularRadius, dist };
       })

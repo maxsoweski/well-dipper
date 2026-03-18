@@ -174,10 +174,10 @@ export class StarfieldLayer {
           // Scale vertex colors into [brightnessMin, brightnessMax] range.
           // This ensures stars always read brighter than galaxy glow beneath.
           vec3 col = vColor * uBrightness;
-          float lum = dot(col, vec3(0.299, 0.587, 0.114));
+          float lum = max(0.001, dot(col, vec3(0.299, 0.587, 0.114)));
           // Remap: dim stars → brightnessMin, bright stars → brightnessMax
-          float remapped = uBrightnessMin + lum * (uBrightnessMax - uBrightnessMin);
-          vec3 finalCol = (lum > 0.001) ? col * (remapped / lum) : col;
+          float remapped = uBrightnessMin + clamp(lum, 0.0, 1.0) * (uBrightnessMax - uBrightnessMin);
+          vec3 finalCol = col * (remapped / lum);
 
           gl_FragColor = vec4(min(finalCol, vec3(1.0)), 1.0);
         }

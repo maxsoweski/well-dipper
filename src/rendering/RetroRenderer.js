@@ -76,7 +76,10 @@ export class RetroRenderer {
    * @returns {THREE.Scene}
    */
   getSkyScene() {
-    return this._skyRenderer ? this._skyRenderer.getScene() : this.starfieldScene;
+    if (this._skyRenderer) {
+      return this._skyRenderer.getScene() ?? this.starfieldScene;
+    }
+    return this.starfieldScene;
   }
 
   /**

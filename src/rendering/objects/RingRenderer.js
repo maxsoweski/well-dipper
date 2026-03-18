@@ -78,22 +78,24 @@ export class RingRenderer {
 
     if (physics?.ringlets && physics.ringlets.length > 0) {
       // Physics-driven: use actual ringlet data
-      for (let i = 0; i < Math.min(physics.ringlets.length, MAX_RINGLETS); i++) {
+      for (let i = 0; i < physics.ringlets.length && ringletCount < MAX_RINGLETS; i++) {
         const rl = physics.ringlets[i];
-        ringletInnerR[i] = planetRadius * rl.innerR;
-        ringletOuterR[i] = planetRadius * rl.outerR;
-        ringletOpacity[i] = rl.opacity * (physics.density ?? 1.0);
+        if (rl.outerR - rl.innerR < 0.001) continue; // skip degenerate ringlets
+        const j = ringletCount;
+        ringletInnerR[j] = planetRadius * rl.innerR;
+        ringletOuterR[j] = planetRadius * rl.outerR;
+        ringletOpacity[j] = rl.opacity * (physics.density ?? 1.0);
         const color = COMPOSITION_COLORS[rl.composition] || COMPOSITION_COLORS['mixed'];
-        ringletColors[i * 3] = color[0];
-        ringletColors[i * 3 + 1] = color[1];
-        ringletColors[i * 3 + 2] = color[2];
+        ringletColors[j * 3] = color[0];
+        ringletColors[j * 3 + 1] = color[1];
+        ringletColors[j * 3 + 2] = color[2];
         ringletCount++;
       }
       // Physics-driven gaps from resonances
       if (physics.gaps) {
-        for (let i = 0; i < Math.min(physics.gaps.length, MAX_GAPS); i++) {
-          gapCenters[i] = planetRadius * physics.gaps[i].radius;
-          gapWidths[i] = planetRadius * physics.gaps[i].width;
+        for (let i = 0; i < physics.gaps.length && gapCount < MAX_GAPS; i++) {
+          gapCenters[gapCount] = planetRadius * physics.gaps[i].radius;
+          gapWidths[gapCount] = planetRadius * physics.gaps[i].width;
           gapCount++;
         }
       }
