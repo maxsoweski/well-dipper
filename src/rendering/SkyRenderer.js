@@ -52,9 +52,9 @@ export class SkyRenderer {
     //   features: [0, 0.25]  — nebulae/clusters (future, additive on glow)
     //   stars:    [0.10, 0.45] — resolved points, always pop over glow
     this._brightnessConfig = {
-      glow:     { min: 0.0, max: 0.15 },
-      features: { min: 0.0, max: 0.25 },
-      stars:    { min: 0.10, max: 0.45 },
+      glow:     { min: 0.0, max: 0.20 },
+      features: { min: 0.0, max: 0.30 },
+      stars:    { min: 0.15, max: 0.65 },
     };
 
     // Sub-layers (created in activate())
