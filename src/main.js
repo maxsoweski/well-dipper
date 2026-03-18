@@ -1685,6 +1685,49 @@ debugPanel.setSpawnCallbacks({
     if (!galacticMap) return { found: false, message: 'No galaxy active' };
     if (galleryMode) exitGallery();
 
+    // ── Galactic feature search (feat: prefix) ──
+    if (targetType.startsWith('feat:')) {
+      const featureType = targetType.slice(5); // remove 'feat:' prefix
+      // Search with increasing radius until we find one
+      for (const radius of [3.0, 6.0, 10.0]) {
+        const features = galacticMap.findNearbyFeatures(playerGalacticPos, radius);
+        const match = features.find(f => f.type === featureType);
+        if (match) {
+          // Teleport to a position just outside the feature (1.5x its radius away)
+          // so it's clearly visible in the sky
+          const viewDist = Math.max(match.radius * 1.5, 0.01);
+          const dx = match.position.x - playerGalacticPos.x;
+          const dy = match.position.y - playerGalacticPos.y;
+          const dz = match.position.z - playerGalacticPos.z;
+          const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+          // Position ourselves viewDist away from the feature, toward our current position
+          const newPos = {
+            x: match.position.x - (dx / len) * viewDist,
+            y: match.position.y - (dy / len) * viewDist,
+            z: match.position.z - (dz / len) * viewDist,
+          };
+          playerGalacticPos = newPos;
+          skyRenderer.prepareForPosition(playerGalacticPos);
+          skyRenderer.activate();
+          skyRenderer.update(camera, 0);
+          // Generate a system at this position
+          const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
+          const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
+          const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'feat-debug';
+          const sysData = StarSystemGenerator.generate(starSeed, ctx);
+          sysData._destType = 'star-system';
+          spawnSystem({ forWarp: false, systemData: sysData });
+          debugPanel.setPlayerPos(playerGalacticPos);
+          debugPanel.setSystem(system, sysData);
+
+          const msg = `Found ${featureType} at ${match.distance.toFixed(3)} kpc (r=${match.radius.toFixed(3)} kpc), viewing from ${viewDist.toFixed(3)} kpc away`;
+          console.log(`Debug find: ${msg}`);
+          return { found: true, message: msg };
+        }
+      }
+      return { found: false, message: `No ${featureType} found within 10 kpc. Try a different galactic position (arms have more nebulae, halo has globular clusters).` };
+    }
+
     // Search nearby stars, generate systems, check for match
     const nearby = galacticMap.findNearestStars(playerGalacticPos, 30);
     const maxAttempts = Math.min(nearby.length, 30);
@@ -3467,9 +3510,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // F3 key: toggle debug inspection panel
-  if (e.code === 'F3') {
-    e.preventDefault();
+  // Down arrow: toggle debug inspection panel
+  if (e.code === 'ArrowDown' && !galleryMode) {
     debugPanel.togglePanel();
     return;
   }

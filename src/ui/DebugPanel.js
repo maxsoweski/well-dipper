@@ -224,7 +224,7 @@ export class DebugPanel {
           <button class="overlay-close" aria-label="Close">&times;</button>
           <h2>DEBUG</h2>
           <div id="debug-content"></div>
-          <p class="debug-dismiss">F3 or ESC to close &nbsp; backtick (\`) toggles HUD</p>
+          <p class="debug-dismiss">DOWN ARROW or ESC to close &nbsp; backtick (\`) toggles HUD</p>
         </div>
       `;
       document.body.appendChild(this._panelEl);
@@ -385,6 +385,12 @@ export class DebugPanel {
       { id: 'habitable', label: 'Habitable Planet' },
       { id: 'rings', label: 'Ringed Planet' },
       { id: 'belt', label: 'Asteroid Belt' },
+      { id: 'feat:emission-nebula', label: 'Emission Nebula' },
+      { id: 'feat:dark-nebula', label: 'Dark Nebula' },
+      { id: 'feat:open-cluster', label: 'Open Cluster' },
+      { id: 'feat:globular-cluster', label: 'Globular Cluster' },
+      { id: 'feat:supernova-remnant', label: 'Supernova Remnant' },
+      { id: 'feat:ob-association', label: 'OB Association' },
     ];
     for (const t of findTypes) {
       html += `<button class="debug-btn debug-find-btn" data-find="${t.id}">${t.label}</button>`;
