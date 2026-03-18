@@ -36,9 +36,9 @@ export class BodyRenderer {
    * @param {object} bodyData — from PlanetGenerator or MoonGenerator
    * @param {object|null} physicsData — from PhysicsEngine (atmosphere, composition, etc.)
    * @param {object|null} starInfo — dual-star lighting info
-   * @param {object|null} parentData — parent planet data (for moons)
+   * @param {object|null} moonLightRefs — { lightDir, lightDir2 } refs from parent planet (moons only)
    */
-  constructor(bodyType, bodyData, physicsData, starInfo, parentData) {
+  constructor(bodyType, bodyData, physicsData, starInfo, moonLightRefs) {
     this.bodyType = bodyType;
     this.data = bodyData;
     this.physics = physicsData;
@@ -55,7 +55,10 @@ export class BodyRenderer {
     if (bodyType === 'planet') {
       this._delegate = new Planet(bodyData, starInfo);
     } else {
-      this._delegate = new Moon(bodyData, starInfo);
+      // Moon needs parent planet's light direction references
+      const lightDir = moonLightRefs?.lightDir || new THREE.Vector3(1, 0, 0);
+      const lightDir2 = moonLightRefs?.lightDir2 || null;
+      this._delegate = new Moon(bodyData, lightDir, lightDir2, starInfo);
     }
 
     // Expose the mesh for scene management
@@ -66,6 +69,11 @@ export class BodyRenderer {
 
     // Expose ring for Planet (if any)
     this.ring = this._delegate.ring || null;
+
+    // Expose light direction refs (Planet.js) for moons to reference
+    this._lightDir = this._delegate._lightDir || null;
+    this._lightDir2 = this._delegate._lightDir2 || null;
+
   }
 
   // ── Factory methods ──
@@ -74,8 +82,14 @@ export class BodyRenderer {
     return new BodyRenderer('planet', planetData, physicsData, starInfo, null);
   }
 
-  static createMoon(moonData, physicsData, starInfo, parentData) {
-    return new BodyRenderer('moon', moonData, physicsData, starInfo, parentData);
+  /**
+   * @param {object} moonData
+   * @param {object|null} physicsData
+   * @param {object|null} starInfo
+   * @param {{ lightDir: THREE.Vector3, lightDir2: THREE.Vector3 }} parentLightRefs — from parent planet
+   */
+  static createMoon(moonData, physicsData, starInfo, parentLightRefs) {
+    return new BodyRenderer('moon', moonData, physicsData, starInfo, parentLightRefs);
   }
 
   // ── LOD interface (for LODManager) ──

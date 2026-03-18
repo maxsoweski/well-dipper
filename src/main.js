@@ -5,6 +5,7 @@ import { StarFlare } from './objects/StarFlare.js';
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
+import { BodyRenderer } from './rendering/objects/BodyRenderer.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
@@ -995,7 +996,16 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
         ? { ...entry.planetData.clouds, scale: entry.planetData.clouds.scale * mapToSceneRatio }
         : null,
     };
-    const planet = new Planet(scenePlanetData, systemData.starInfo);
+    // Physics data for the BodyRenderer (composition, atmosphere, tidal, surface history)
+    const planetPhysics = {
+      composition: entry.planetData.composition || null,
+      atmosphere: entry.planetData.atmosphereRetained !== undefined
+        ? { retained: entry.planetData.atmosphereRetained }
+        : null,
+      tidalState: entry.planetData.tidalState || null,
+      surfaceHistory: entry.planetData.surfaceHistory || null,
+    };
+    const planet = BodyRenderer.createPlanet(scenePlanetData, planetPhysics, systemData.starInfo);
     const px = Math.cos(entry.orbitAngle) * entry.orbitRadiusScene;
     const pz = Math.sin(entry.orbitAngle) * entry.orbitRadiusScene;
     planet.mesh.position.set(px, 0, pz);
@@ -1047,7 +1057,10 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
           dispose() { planetMoon.dispose(); },
         };
       } else {
-        moon = new Moon(moonData, planet._lightDir, planet._lightDir2, systemData.starInfo);
+        moon = BodyRenderer.createMoon(
+          moonData, null, systemData.starInfo,
+          { lightDir: planet._lightDir, lightDir2: planet._lightDir2 }
+        );
       }
       moon.addTo(scene);
       moons.push(moon);
