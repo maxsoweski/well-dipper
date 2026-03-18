@@ -1681,6 +1681,81 @@ debugPanel.setSpawnCallbacks({
     spawnSystem({ forWarp: false, systemData: sysData });
     console.log(`Debug spawn with seed: "${seed}"`);
   },
+  findNearest: (targetType) => {
+    if (!galacticMap) return { found: false, message: 'No galaxy active' };
+    if (galleryMode) exitGallery();
+
+    // Search nearby stars, generate systems, check for match
+    const nearby = galacticMap.findNearestStars(playerGalacticPos, 30);
+    const maxAttempts = Math.min(nearby.length, 30);
+    let searched = 0;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      const star = nearby[i];
+      if (star.distSq < 0.001) continue; // skip self
+      searched++;
+
+      const ctx = galacticMap.deriveGalaxyContext({
+        x: star.worldX, y: star.worldY, z: star.worldZ,
+      });
+      const testData = StarSystemGenerator.generate(String(star.seed), ctx);
+
+      // Check if this system matches the target type
+      const evo = testData.stellarEvolution;
+      let match = false;
+
+      switch (targetType) {
+        case 'red-giant':
+          match = evo?.stage === 'red-giant';
+          break;
+        case 'white-dwarf':
+          match = evo?.remnantType === 'white-dwarf';
+          break;
+        case 'neutron-star':
+          match = evo?.remnantType === 'neutron-star';
+          break;
+        case 'black-hole':
+          match = evo?.remnantType === 'black-hole';
+          break;
+        case 'binary':
+          match = testData.isBinary;
+          break;
+        case 'habitable':
+          match = testData.planets.some(p =>
+            p.planetData.type === 'terrestrial' || p.planetData.type === 'ocean'
+          );
+          break;
+        case 'rings':
+          match = testData.planets.some(p => p.planetData.rings);
+          break;
+        case 'belt':
+          match = testData.asteroidBelts && testData.asteroidBelts.length > 0;
+          break;
+      }
+
+      if (match) {
+        // Teleport to this star's position and spawn the system
+        playerGalacticPos = { x: star.worldX, y: star.worldY, z: star.worldZ };
+        skyRenderer.prepareForPosition(playerGalacticPos);
+        skyRenderer.activate();
+        skyRenderer.update(camera, 0);
+        testData._destType = 'star-system';
+        spawnSystem({ forWarp: false, systemData: testData });
+        debugPanel.setPlayerPos(playerGalacticPos);
+        debugPanel.setSystem(system, testData);
+
+        const dist = Math.sqrt(star.distSq).toFixed(3);
+        const msg = `Found ${targetType} at ${dist} kpc (searched ${searched} systems)`;
+        console.log(`Debug find: ${msg}`);
+        return { found: true, message: msg };
+      }
+    }
+
+    return {
+      found: false,
+      message: `No ${targetType} found in ${searched} nearby systems. Try teleporting to a different galactic region first.`,
+    };
+  },
 });
 
 // ── Debug Gallery ──────────────────────────────────────────────

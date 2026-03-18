@@ -69,6 +69,13 @@ export class DebugPanel {
    * @param {function} callbacks.spawnSystemType — (destType: string) => void
    * @param {function} callbacks.spawnWithSeed — (seed: string) => void
    */
+  /**
+   * @param {object} callbacks
+   * @param {function} callbacks.teleportToPosition
+   * @param {function} callbacks.spawnSystemType
+   * @param {function} callbacks.spawnWithSeed
+   * @param {function} callbacks.findNearest — (targetType: string) => { found, systemData, starData, message }
+   */
   setSpawnCallbacks(callbacks) {
     this._spawnCallbacks = callbacks;
   }
@@ -366,6 +373,26 @@ export class DebugPanel {
     }
     html += '</div></div>';
 
+    // ── Find Nearest ──
+    html += '<div class="debug-section"><h3>FIND NEAREST</h3>';
+    html += '<div class="debug-btn-grid">';
+    const findTypes = [
+      { id: 'red-giant', label: 'Red Giant' },
+      { id: 'white-dwarf', label: 'White Dwarf' },
+      { id: 'neutron-star', label: 'Neutron Star' },
+      { id: 'black-hole', label: 'Black Hole' },
+      { id: 'binary', label: 'Binary System' },
+      { id: 'habitable', label: 'Habitable Planet' },
+      { id: 'rings', label: 'Ringed Planet' },
+      { id: 'belt', label: 'Asteroid Belt' },
+    ];
+    for (const t of findTypes) {
+      html += `<button class="debug-btn debug-find-btn" data-find="${t.id}">${t.label}</button>`;
+    }
+    html += '</div>';
+    html += '<div id="debug-find-status" class="debug-find-status"></div>';
+    html += '</div>';
+
     // ── Seed Input ──
     html += '<div class="debug-section"><h3>SPAWN BY SEED</h3>';
     html += '<div class="debug-seed-row">';
@@ -429,6 +456,26 @@ export class DebugPanel {
           this._spawnCallbacks.spawnSystemType(type);
           this.togglePanel();
         }
+      });
+    }
+
+    // Find nearest buttons
+    const findStatus = container.querySelector('#debug-find-status');
+    for (const btn of container.querySelectorAll('[data-find]')) {
+      btn.addEventListener('click', () => {
+        const targetType = btn.dataset.find;
+        if (findStatus) findStatus.textContent = `Searching for ${targetType}...`;
+        // Use setTimeout so the status text renders before the search blocks
+        setTimeout(() => {
+          if (this._spawnCallbacks?.findNearest) {
+            const result = this._spawnCallbacks.findNearest(targetType);
+            if (findStatus) findStatus.textContent = result.message;
+            if (result.found) {
+              // Auto-close panel after a moment so you can see the result
+              setTimeout(() => this.togglePanel(), 800);
+            }
+          }
+        }, 16);
       });
     }
 

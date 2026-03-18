@@ -828,6 +828,13 @@ html, body {
   background: rgba(255, 100, 100, 0.35);
 }
 
+.debug-find-status {
+  font-size: 10px;
+  color: rgba(255, 200, 100, 0.8);
+  margin-top: 4px;
+  min-height: 14px;
+}
+
 .debug-seed-row {
   display: flex;
   gap: 6px;
