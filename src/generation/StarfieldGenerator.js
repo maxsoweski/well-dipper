@@ -71,15 +71,22 @@ export class StarfieldGenerator {
     // Use all found stars (up to half the budget, to leave room for background)
     const realStarCount = Math.min(warpableStars.length, Math.floor(totalCount * 0.5));
 
-    // ── Layer 2: Background star budget ──
-    const bgCount = totalCount - realStarCount;
+    // ── Layer 3: Nearby galactic features as tagged sky points ──
+    // Features are placed alongside real stars so they're clickable warp targets.
+    // SkyFeatureLayer handles their visual rendering (billboards/patches);
+    // these points just make them clickable in the starfield.
+    const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0);
+    const featureCount = Math.min(nearbyFeatures.length, 16);
 
-    // ── Allocate arrays ──
+    // ── Layer 2: Background star budget ──
+    const bgCount = totalCount - realStarCount - featureCount;
+
+    // ── Allocate arrays (real stars + features + background) ──
     const positions = new Float32Array(totalCount * 3);
     const colors = new Float32Array(totalCount * 3);
     const sizes = new Float32Array(totalCount);
 
-    // Track which starfield indices map to real GalacticMap stars
+    // Track which starfield indices map to real GalacticMap stars or features
     const realStarMap = [];
 
     // ── Place real stars ──
@@ -117,6 +124,38 @@ export class StarfieldGenerator {
       sizes[i] = dist < 0.3 ? 8.0 : dist < 0.5 ? 6.0 : 4.0;
 
       realStarMap.push({ index: i, starData: star });
+    }
+
+    // ── Place galactic features as tagged sky points ──
+    for (let f = 0; f < featureCount; f++) {
+      const feature = nearbyFeatures[f];
+      const dx = feature.position.x - playerPos.x;
+      const dy = feature.position.y - playerPos.y;
+      const dz = feature.position.z - playerPos.z;
+      const dist = Math.max(feature.distance, 0.001);
+
+      const idx = realStarCount + f;
+      const i3 = idx * 3;
+      positions[i3]     = (dx / dist) * radius;
+      positions[i3 + 1] = (dy / dist) * radius;
+      positions[i3 + 2] = (dz / dist) * radius;
+
+      // Feature color from its type definition
+      colors[i3]     = feature.color[0] * 0.8;
+      colors[i3 + 1] = feature.color[1] * 0.8;
+      colors[i3 + 2] = feature.color[2] * 0.8;
+
+      // Features are slightly larger than normal stars so they stand out
+      sizes[idx] = 6.0;
+
+      // Tag as a feature in the star map so warp routing can distinguish it
+      realStarMap.push({
+        index: idx,
+        starData: null,
+        isFeature: true,
+        featureType: feature.type,
+        featureData: feature,
+      });
     }
 
     // ── Galactic geometry from player's perspective ──
@@ -355,7 +394,7 @@ export class StarfieldGenerator {
       const acceptChance = 0.02 + 0.98 * density;
       if (rng.float() > acceptChance) continue;
 
-      const idx = realStarCount + placed;
+      const idx = realStarCount + featureCount + placed;
       const i3 = idx * 3;
       positions[i3]     = dirX * radius;
       positions[i3 + 1] = dirY * radius;
@@ -380,7 +419,7 @@ export class StarfieldGenerator {
 
     // If we couldn't fill the budget (very sparse region), fill remainder as dim dots
     while (placed < bgCount) {
-      const idx = realStarCount + placed;
+      const idx = realStarCount + featureCount + placed;
       const i3 = idx * 3;
       const theta = rng.range(0, Math.PI * 2);
       const phi = Math.acos(rng.range(-1, 1));

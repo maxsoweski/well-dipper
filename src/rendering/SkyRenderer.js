@@ -201,6 +201,16 @@ export class SkyRenderer {
     return this._starfieldLayer?.getGalaxyStarForIndex(index) ?? null;
   }
 
+  /**
+   * Get the full starfield entry for an index — star, feature, or null.
+   * Used by warp routing to determine what was clicked.
+   * @param {number} index
+   * @returns {{ starData?, isFeature?, featureType?, featureData? }|null}
+   */
+  getEntryForIndex(index) {
+    return this._starfieldLayer?.getEntryForIndex(index) ?? null;
+  }
+
   // ── Brightness tuning ──
 
   /**

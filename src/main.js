@@ -160,6 +160,8 @@ const warpTarget = {
   direction: null,   // THREE.Vector3 world-space direction, or null
   name: null,        // deterministic name for the selected star (shown in BodyInfo)
   starIndex: -1,     // index in starfield positions array (seeds name)
+  destType: null,    // null = normal star, 'feature:emission-nebula' etc., 'external-galaxy'
+  featureData: null, // feature data from GalacticMap (when destType is feature:*)
   blinkTimer: 0,     // accumulates time for 2 Hz blink
   blinkOn: false,    // current blink state
   turning: false,    // camera is rotating to face target before warp
@@ -573,8 +575,40 @@ warpEffect.onPrepareSystem = () => {
   seedCounter++;
   const seed = `system-${seedCounter}`;
   const rng = new SeededRandom(seed);
-  // Use settings-based deep sky chance (overrides DestinationPicker's static weights)
+  // ── Route based on what was clicked ──
+  // If the player clicked a tagged galactic feature, route to a star inside it.
+  // Otherwise, use DestinationPicker (which may roll deep sky destinations).
   let destType;
+  if (warpTarget.destType?.startsWith('feature:') && warpTarget.featureData && galacticMap) {
+    // Clicked a galactic feature — find a star inside it and go there.
+    // This is the Category A/B routing: arrive at a star system whose sky
+    // shows the feature at immersive scale.
+    const feat = warpTarget.featureData;
+    // Position ourselves at the feature's center (or just inside its edge)
+    const viewDist = Math.max(feat.radius * 0.5, 0.005);
+    playerGalacticPos = {
+      x: feat.position.x,
+      y: feat.position.y,
+      z: feat.position.z,
+    };
+    const galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+    // Find the nearest real star at this position
+    const featStars = galacticMap.findNearestStars(playerGalacticPos, 5);
+    const featSeed = featStars.length > 0 ? String(featStars[0].seed) : feat.seed;
+    if (featStars.length > 0) {
+      playerGalacticPos = { x: featStars[0].worldX, y: featStars[0].worldY, z: featStars[0].worldZ };
+    }
+    pendingSystemData = StarSystemGenerator.generate(featSeed, galaxyContext);
+    pendingSystemData._destType = 'star-system';
+    pendingSystemData._warpTargetName = warpTarget.name || null;
+    pendingSystemData._insideFeature = feat; // for SkyFeatureLayer immersive rendering
+    skyRenderer.prepareForPosition(playerGalacticPos);
+    console.log(`Warp: routed to feature ${feat.type} → star system at (${playerGalacticPos.x.toFixed(2)}, ${playerGalacticPos.y.toFixed(3)}, ${playerGalacticPos.z.toFixed(2)})`);
+    warpTarget.destType = null; // consumed
+    warpTarget.featureData = null;
+    return;
+  }
+
   if (_forceNextDestType) {
     destType = _forceNextDestType;
   } else {
@@ -582,7 +616,6 @@ warpEffect.onPrepareSystem = () => {
     if (rng.float() >= dsChance) {
       destType = 'star-system';
     } else {
-      // Pick a deep sky subtype (re-roll excluding star-system)
       destType = DestinationPicker.pickDeepSky(rng);
     }
   }
@@ -3815,6 +3848,12 @@ function trySelect(clientX, clientY) {
 /**
  * Select the nearest background starfield point as a warp target.
  * Green brackets will blink around it; pressing Space warps toward it.
+ *
+ * The clicked point may be:
+ * - A real GalacticMap star → warp to that star system
+ * - A tagged galactic feature → warp to a star inside it (Category A/B)
+ * - A background star → generate system from direction
+ * The destType is stored on warpTarget so onPrepareSystem can route correctly.
  */
 function trySelectWarpTarget(rayDir) {
   const result = starfield.findNearestStar(rayDir);
@@ -3823,14 +3862,26 @@ function trySelectWarpTarget(rayDir) {
   soundEngine.play('warpTarget');
   warpTarget.direction = result.direction;
   warpTarget.starIndex = result.index;
-  // Generate a deterministic name from the star's index — same index = same name every time
-  const nameRng = new SeededRandom(`warp-star-${result.index}`);
-  warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+  warpTarget.destType = null; // default: normal star system
+
+  // Check what this starfield point represents
+  const entry = skyRenderer.getEntryForIndex(result.index);
+  if (entry?.isFeature) {
+    // Clicked a galactic feature — route to a star inside it
+    warpTarget.destType = `feature:${entry.featureType}`;
+    warpTarget.featureData = entry.featureData;
+    const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+    bodyInfo.showWarpTarget(`${warpTarget.name} (${entry.featureType.replace('-', ' ')})`);
+  } else {
+    // Normal star — generate name from index
+    const nameRng = new SeededRandom(`warp-star-${result.index}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+    bodyInfo.showWarpTarget(warpTarget.name);
+  }
+
   warpTarget.blinkTimer = 0;
   warpTarget.blinkOn = true;
-
-  // Show the star name in the HUD
-  bodyInfo.showWarpTarget(warpTarget.name);
 }
 
 /**

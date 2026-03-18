@@ -256,11 +256,23 @@ export class StarfieldLayer {
   /**
    * Check if a starfield index maps to a real GalacticMap star.
    * @param {number} index
-   * @returns {object|null}
+   * @returns {object|null} starData, or null for background/feature stars
    */
   getGalaxyStarForIndex(index) {
     for (const entry of this.realStars) {
       if (entry.index === index) return entry.starData;
+    }
+    return null;
+  }
+
+  /**
+   * Get the full starfield entry for an index — including feature data.
+   * @param {number} index
+   * @returns {{ starData?, isFeature?, featureType?, featureData? }|null}
+   */
+  getEntryForIndex(index) {
+    for (const entry of this.realStars) {
+      if (entry.index === index) return entry;
     }
     return null;
   }
