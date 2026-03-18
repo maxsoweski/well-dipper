@@ -84,6 +84,7 @@ class StarRendererBase {
     this.data = starData;
     this._renderRadius = renderRadius;
     this.mesh = new THREE.Group();
+    this.surface = null; // set by subclasses — used for raycasting
     this.type = 'unknown';
   }
 

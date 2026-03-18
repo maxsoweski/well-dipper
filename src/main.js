@@ -2,6 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { Starfield } from './objects/Starfield.js';
 import { StarFlare } from './objects/StarFlare.js';
+import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { OrbitLine } from './objects/OrbitLine.js';
@@ -938,7 +939,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   // ── Create star(s) ──
   // Scene-unit star data: override radius with radiusScene for 3D rendering
   const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene };
-  const star = new StarFlare(sceneStarData);
+  // Use physics-driven StarRenderer when stellar evolution data is available,
+  // otherwise fall back to StarFlare (legacy screensaver path)
+  const star = systemData.stellarEvolution
+    ? createStarRenderer(sceneStarData, { stellarEvolution: systemData.stellarEvolution })
+    : new StarFlare(sceneStarData);
   star.addTo(scene);
 
   let star2 = null;
@@ -946,7 +951,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
 
   if (systemData.isBinary) {
     const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene };
-    star2 = new StarFlare(sceneStarData2);
+    star2 = systemData.stellarEvolution
+      ? createStarRenderer(sceneStarData2, { stellarEvolution: systemData.stellarEvolution })
+      : new StarFlare(sceneStarData2);
     star2.addTo(scene);
 
     // Position binary stars at their starting positions (scene units)
