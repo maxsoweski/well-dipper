@@ -162,6 +162,7 @@ const warpTarget = {
   starIndex: -1,     // index in starfield positions array (seeds name)
   destType: null,    // null = normal star, 'feature:emission-nebula' etc., 'external-galaxy'
   featureData: null, // feature data from GalacticMap (when destType is feature:*)
+  galaxyData: null,  // external galaxy data (when destType is 'external-galaxy')
   blinkTimer: 0,     // accumulates time for 2 Hz blink
   blinkOn: false,    // current blink state
   turning: false,    // camera is rotating to face target before warp
@@ -579,6 +580,23 @@ warpEffect.onPrepareSystem = () => {
   // If the player clicked a tagged galactic feature, route to a star inside it.
   // Otherwise, use DestinationPicker (which may roll deep sky destinations).
   let destType;
+  if (warpTarget.destType === 'external-galaxy' && warpTarget.galaxyData) {
+    // Clicked an external galaxy — Category C: view from outside.
+    // Use the existing galaxy generator to create a particle cloud.
+    const gal = warpTarget.galaxyData;
+    const galType = gal.type === 'spiral' ? 'spiral-galaxy' : 'elliptical-galaxy';
+    pendingSystemData = GalaxyGenerator.generate(gal.seed, galType);
+    pendingSystemData._destType = galType;
+    pendingSystemData._warpTargetName = gal.name;
+    pendingSystemData._isExternalGalaxy = true; // flag for "strayed from home" prompt
+    // Don't update playerGalacticPos — we're not actually IN the other galaxy
+    skyRenderer.prepareForPosition(playerGalacticPos);
+    console.log(`Warp: external galaxy ${gal.name} (${galType})`);
+    warpTarget.destType = null;
+    warpTarget.galaxyData = null;
+    return;
+  }
+
   if (warpTarget.destType?.startsWith('feature:') && warpTarget.featureData && galacticMap) {
     // Clicked a galactic feature — find a star inside it and go there.
     // This is the Category A/B routing: arrive at a star system whose sky
@@ -3873,6 +3891,12 @@ function trySelectWarpTarget(rayDir) {
     const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
     warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
     bodyInfo.showWarpTarget(`${warpTarget.name} (${entry.featureType.replace('-', ' ')})`);
+  } else if (entry?.isExternalGalaxy) {
+    // Clicked an external galaxy — Category C destination
+    warpTarget.destType = 'external-galaxy';
+    warpTarget.galaxyData = entry.galaxyData;
+    warpTarget.name = entry.galaxyData.name;
+    bodyInfo.showWarpTarget(`${entry.galaxyData.name} (${entry.galaxyData.type} galaxy)`);
   } else {
     // Normal star — generate name from index
     const nameRng = new SeededRandom(`warp-star-${result.index}`);
@@ -3888,17 +3912,41 @@ function trySelectWarpTarget(rayDir) {
  * Auto-select a random visible star as warp target (screensaver mode).
  * Picks from the forward hemisphere so the brackets appear on-screen.
  */
+/**
+ * Auto-select a random visible star as warp target (screensaver mode).
+ * Uses the same routing pipeline as manual clicks — the randomly
+ * selected point might be a star, a galactic feature, or (rarely)
+ * an external galaxy. destType is set so onPrepareSystem routes correctly.
+ */
 function autoSelectWarpTarget() {
   camera.getWorldDirection(_starRayDir);
   const result = starfield.getRandomVisibleStar(_starRayDir);
-  if (result) {
-    warpTarget.direction = result.direction;
-    warpTarget.starIndex = result.index;
+  if (!result) return;
+
+  warpTarget.direction = result.direction;
+  warpTarget.starIndex = result.index;
+  warpTarget.destType = null;
+  warpTarget.featureData = null;
+  warpTarget.galaxyData = null;
+
+  // Check what this point represents (same logic as trySelectWarpTarget)
+  const entry = skyRenderer.getEntryForIndex(result.index);
+  if (entry?.isFeature) {
+    warpTarget.destType = `feature:${entry.featureType}`;
+    warpTarget.featureData = entry.featureData;
+    const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+  } else if (entry?.isExternalGalaxy) {
+    warpTarget.destType = 'external-galaxy';
+    warpTarget.galaxyData = entry.galaxyData;
+    warpTarget.name = entry.galaxyData.name;
+  } else {
     const nameRng = new SeededRandom(`warp-star-${result.index}`);
     warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
-    warpTarget.blinkTimer = 0;
-    warpTarget.blinkOn = true;
   }
+
+  warpTarget.blinkTimer = 0;
+  warpTarget.blinkOn = true;
 }
 
 /**

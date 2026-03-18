@@ -897,6 +897,77 @@ export class GalacticMap {
   }
 
   /**
+   * Get external galaxies visible from this galaxy.
+   * These are fixed objects at enormous distances — their sky positions
+   * barely change regardless of where you are within the home galaxy.
+   * Generated deterministically from the galaxy seed.
+   *
+   * @returns {Array<{ name, type, direction: {x,y,z}, angularSize, brightness, seed }>}
+   */
+  getExternalGalaxies() {
+    if (this._externalGalaxies) return this._externalGalaxies;
+
+    const rng = new SeededRandom(this.masterSeed + '-external-galaxies');
+    const galaxies = [];
+
+    // Generate 5-8 external galaxies at fixed sky positions
+    const count = rng.int(5, 8);
+    const types = ['spiral', 'elliptical', 'irregular', 'dwarf'];
+    const typeWeights = [0.35, 0.30, 0.15, 0.20];
+
+    for (let i = 0; i < count; i++) {
+      // Random direction on sphere (fixed per galaxy seed)
+      const theta = rng.range(0, Math.PI * 2);
+      const phi = Math.acos(rng.range(-1, 1));
+      const dirX = Math.sin(phi) * Math.cos(theta);
+      const dirY = Math.cos(phi);
+      const dirZ = Math.sin(phi) * Math.sin(theta);
+
+      // Avoid the galactic plane (Zone of Avoidance — dust blocks visibility)
+      // Re-roll if too close to the disk plane
+      if (Math.abs(dirY) < 0.15) continue;
+
+      // Pick type
+      let roll = rng.float();
+      let type = 'spiral';
+      let cumulative = 0;
+      for (let t = 0; t < types.length; t++) {
+        cumulative += typeWeights[t];
+        if (roll < cumulative) { type = types[t]; break; }
+      }
+
+      // Angular size: very small (these are millions of light-years away)
+      // Largest (Andromeda-equivalent): ~0.02 radians (~1 degree)
+      // Most: ~0.003-0.008 radians
+      const isLarge = i === 0; // first one is the "Andromeda" — largest
+      const angularSize = isLarge
+        ? rng.range(0.015, 0.025)
+        : rng.range(0.002, 0.008);
+
+      // Brightness: faint smudges
+      const brightness = isLarge ? 0.12 : rng.range(0.03, 0.08);
+
+      // Name
+      const nameRng = rng.child(`name-${i}`);
+      const prefixes = ['NGC', 'IC', 'M', 'UGC', 'PGC'];
+      const prefix = nameRng.pick(prefixes);
+      const num = nameRng.int(100, 9999);
+
+      galaxies.push({
+        name: `${prefix} ${num}`,
+        type,
+        direction: { x: dirX, y: dirY, z: dirZ },
+        angularSize,
+        brightness,
+        seed: `${this.masterSeed}-extgal-${i}`,
+      });
+    }
+
+    this._externalGalaxies = galaxies;
+    return galaxies;
+  }
+
+  /**
    * Get the default starting position (solar neighborhood).
    */
   getStartPosition() {

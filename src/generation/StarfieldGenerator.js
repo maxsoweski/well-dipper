@@ -72,14 +72,15 @@ export class StarfieldGenerator {
     const realStarCount = Math.min(warpableStars.length, Math.floor(totalCount * 0.5));
 
     // ── Layer 3: Nearby galactic features as tagged sky points ──
-    // Features are placed alongside real stars so they're clickable warp targets.
-    // SkyFeatureLayer handles their visual rendering (billboards/patches);
-    // these points just make them clickable in the starfield.
     const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0);
     const featureCount = Math.min(nearbyFeatures.length, 16);
 
+    // ── Layer 4: External galaxies (fixed sky positions, very faint smudges) ──
+    const externalGalaxies = galacticMap.getExternalGalaxies();
+    const extGalaxyCount = externalGalaxies.length;
+
     // ── Layer 2: Background star budget ──
-    const bgCount = totalCount - realStarCount - featureCount;
+    const bgCount = totalCount - realStarCount - featureCount - extGalaxyCount;
 
     // ── Allocate arrays (real stars + features + background) ──
     const positions = new Float32Array(totalCount * 3);
@@ -155,6 +156,32 @@ export class StarfieldGenerator {
         isFeature: true,
         featureType: feature.type,
         featureData: feature,
+      });
+    }
+
+    // ── Place external galaxies as tagged sky points ──
+    for (let g = 0; g < extGalaxyCount; g++) {
+      const gal = externalGalaxies[g];
+      const idx = realStarCount + featureCount + g;
+      const i3 = idx * 3;
+      positions[i3]     = gal.direction.x * radius;
+      positions[i3 + 1] = gal.direction.y * radius;
+      positions[i3 + 2] = gal.direction.z * radius;
+
+      // Faint warm color — external galaxies appear as dim smudges
+      colors[i3]     = 0.6 * gal.brightness;
+      colors[i3 + 1] = 0.55 * gal.brightness;
+      colors[i3 + 2] = 0.4 * gal.brightness;
+
+      // Slightly larger than background stars so they're distinguishable
+      sizes[idx] = 8.0;
+
+      realStarMap.push({
+        index: idx,
+        starData: null,
+        isFeature: false,
+        isExternalGalaxy: true,
+        galaxyData: gal,
       });
     }
 
@@ -394,7 +421,7 @@ export class StarfieldGenerator {
       const acceptChance = 0.02 + 0.98 * density;
       if (rng.float() > acceptChance) continue;
 
-      const idx = realStarCount + featureCount + placed;
+      const idx = realStarCount + featureCount + extGalaxyCount + placed;
       const i3 = idx * 3;
       positions[i3]     = dirX * radius;
       positions[i3 + 1] = dirY * radius;
@@ -419,7 +446,7 @@ export class StarfieldGenerator {
 
     // If we couldn't fill the budget (very sparse region), fill remainder as dim dots
     while (placed < bgCount) {
-      const idx = realStarCount + featureCount + placed;
+      const idx = realStarCount + featureCount + extGalaxyCount + placed;
       const i3 = idx * 3;
       const theta = rng.range(0, Math.PI * 2);
       const phi = Math.acos(rng.range(-1, 1));
