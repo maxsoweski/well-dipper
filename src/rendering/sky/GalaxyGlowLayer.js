@@ -154,6 +154,9 @@ export class GalaxyGlowLayer {
           if (abs(dir.y) < 0.01) return vec2(0.0);
           float t = -py / dir.y;
           if (t < 0.0) return vec2(0.0);
+          // Prevent singularity at galactic center — fade for very close projections
+          float closeFade = smoothstep(0.0, 0.2, t);
+          if (closeFade < 0.01) return vec2(0.0);
           vec3 hitPoint = uPlayerPos + dir * t;
           float R = length(hitPoint.xz);
           float edgeFade = 1.0 - smoothstep(GALAXY_RADIUS * 0.7, GALAXY_RADIUS * 1.1, R);
@@ -161,7 +164,7 @@ export class GalaxyGlowLayer {
           float theta = atan(hitPoint.z, hitPoint.x);
           float sd = surfaceDensity(R, theta);
           float distFade = 1.0 / (t * 0.05 + 1.0);
-          return vec2(sd * distFade * edgeFade, R);
+          return vec2(sd * distFade * edgeFade * closeFade, R);
         }
 
         // ── Analytical band (in-disk view) ──
