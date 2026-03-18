@@ -1,11 +1,11 @@
 import './style.css';
 import * as THREE from 'three';
-import { Starfield } from './objects/Starfield.js';
 import { StarFlare } from './objects/StarFlare.js';
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { BodyRenderer } from './rendering/objects/BodyRenderer.js';
+import { LODManager } from './rendering/LODManager.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
@@ -37,7 +37,6 @@ import { MusicManager } from './audio/MusicManager.js';
 import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
 import { GalacticMap } from './generation/GalacticMap.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
-import { GalaxyGlow } from './objects/GalaxyGlow.js';
 import { SkyRenderer } from './rendering/SkyRenderer.js';
 
 // ── User Settings (localStorage-backed) ──
@@ -68,6 +67,10 @@ window._cam = camera;
 window._cc = cameraController;
 window._scene = scene;
 window._retroRenderer = retroRenderer;
+
+// ── LOD Manager ──
+// Evaluates camera distance to bodies and assigns LOD tiers each frame.
+const lodManager = new LODManager(camera);
 
 // When free-look ends without a focused body (title screen, deep sky),
 // clear focus so the camera stays where it was looking.
@@ -858,6 +861,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   // but we still need to dispose GPU resources (textures, geometries, materials).
   // Safety net: ensure meshes are removed from scene. Usually done at FOLD→ENTER
   // transition, but can be missed if a frame skips states (e.g., tab backgrounded).
+  lodManager.clear();
   _hideCurrentSystem();
   if (systemMap) {
     systemMap.dispose();
@@ -1010,6 +1014,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     const pz = Math.sin(entry.orbitAngle) * entry.orbitRadiusScene;
     planet.mesh.position.set(px, 0, pz);
     planet.addTo(scene);
+    lodManager.register(planet);
 
     // Billboard indicator (shown when planet is sub-pixel at render resolution)
     const billboard = new Billboard(billboardColor(scenePlanetData.baseColor));
@@ -1061,6 +1066,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
           moonData, null, systemData.starInfo,
           { lightDir: planet._lightDir, lightDir2: planet._lightDir2 }
         );
+        lodManager.register(moon);
       }
       moon.addTo(scene);
       moons.push(moon);
@@ -3306,6 +3312,7 @@ function animate() {
   }
 
   skyRenderer.update(camera, deltaTime);
+  lodManager.update();
 
   // ── Update HUD ──
   // During flythrough, compute yaw from camera position relative to origin
