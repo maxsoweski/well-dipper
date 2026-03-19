@@ -1185,6 +1185,103 @@ export class GalacticMap {
   }
 
   /**
+   * Find all stars visible to the naked eye from a position.
+   * Searches outward in expanding shells, pre-filtering sectors:
+   * if no star in a sector could possibly be visible (based on the
+   * sector's brightest possible spectral type and distance), skip it.
+   *
+   * This eliminates the need for artificial background stars —
+   * every visible point is a real GalacticMap star.
+   *
+   * @param {{ x, y, z }} position
+   * @param {number} magThreshold — apparent magnitude limit (default 6.5 = naked eye)
+   * @returns {Array} visible stars sorted by apparent magnitude (brightest first)
+   */
+  findVisibleStars(position, magThreshold = 6.5) {
+    const { sx, sy, sz } = this.worldToSector(position.x, position.y, position.z);
+    const S = GalacticMap.SECTOR_SIZE;
+    const candidates = [];
+
+    // Maximum search radius: O-class visible to ~10 kpc = 20 sectors
+    const maxHalfR = 20;
+
+    // Brightest absolute magnitude per component type
+    // (what's the most luminous star a sector of this type could contain?)
+    const brightestMagByComponent = {
+      thin: -5.0,  // O-class in disk/arms
+      thick: 3.0,  // F-class (no O/B in thick disk)
+      bulge: 1.5,  // A-class (some young bulge stars)
+      halo: 7.0,   // K-class (no hot stars in halo)
+    };
+
+    for (let halfR = 0; halfR <= maxHalfR; halfR++) {
+      // Only iterate the SHELL at this radius (not the full cube)
+      // This avoids re-checking inner sectors
+      for (let dx = -halfR; dx <= halfR; dx++) {
+        for (let dy = -halfR; dy <= halfR; dy++) {
+          for (let dz = -halfR; dz <= halfR; dz++) {
+            // Only process the outer shell
+            if (Math.abs(dx) < halfR && Math.abs(dy) < halfR && Math.abs(dz) < halfR) continue;
+
+            // Sector center distance from player
+            const sectorCenterX = (sx + dx + 0.5) * S;
+            const sectorCenterY = (sy + dy + 0.5) * S;
+            const sectorCenterZ = (sz + dz + 0.5) * S;
+            const distX = sectorCenterX - position.x;
+            const distY = sectorCenterY - position.y;
+            const distZ = sectorCenterZ - position.z;
+            const sectorDist = Math.sqrt(distX * distX + distY * distY + distZ * distZ);
+
+            // ── Sector-level visibility pre-filter ──
+            // What's the brightest star this sector could contain?
+            const sectorR = Math.sqrt(sectorCenterX * sectorCenterX + sectorCenterZ * sectorCenterZ);
+            if (sectorR > GalacticMap.GALAXY_RADIUS * 1.2) continue;
+            if (Math.abs(sectorCenterY) > GalacticMap.GALAXY_HEIGHT * 2) continue;
+
+            const sectorDensities = this.potentialDerivedDensity(sectorR, sectorCenterY);
+            const sectorArm = this.spiralArmStrength(sectorR, Math.atan2(sectorCenterZ, sectorCenterX));
+
+            // Determine brightest possible spectral type
+            const comp = this._dominantComponent(sectorDensities);
+            let brightestMag = brightestMagByComponent[comp] ?? 7.0;
+            // Arm boost: arms can have O-class even in thick disk regions
+            if (sectorArm > 0.3 && comp !== 'halo') brightestMag = Math.min(brightestMag, -5.0);
+
+            // Apparent magnitude of the brightest possible star at this distance
+            const d_pc = Math.max(sectorDist * 1000, 0.1);
+            const bestApparentMag = brightestMag + 5 * Math.log10(d_pc / 10);
+
+            // If even the brightest possible star is invisible, skip this sector
+            if (bestApparentMag > magThreshold + 1.0) continue; // +1 margin for edge cases
+
+            // ── Sector passes pre-filter — generate and check individual stars ──
+            const sector = this.getSector(sx + dx, sy + dy, sz + dz);
+            for (const star of sector.stars) {
+              const sdx = star.worldX - position.x;
+              const sdy = star.worldY - position.y;
+              const sdz = star.worldZ - position.z;
+              const distSq = sdx * sdx + sdy * sdy + sdz * sdz;
+              if (distSq < 0.001 * 0.001) continue; // skip self
+
+              candidates.push({ ...star, distSq });
+            }
+          }
+        }
+      }
+
+      // Early exit: if we've searched far enough that no more O-class stars
+      // could be visible, stop expanding
+      const shellDist = halfR * S;
+      const bestPossibleMag = -5.0 + 5 * Math.log10(Math.max(shellDist * 1000, 0.1) / 10);
+      if (bestPossibleMag > magThreshold + 1.0) break;
+    }
+
+    // Sort by distance for consistent ordering
+    candidates.sort((a, b) => a.distSq - b.distSq);
+    return candidates;
+  }
+
+  /**
    * Get external galaxies visible from this galaxy.
    * These are fixed objects at enormous distances — their sky positions
    * barely change regardless of where you are within the home galaxy.

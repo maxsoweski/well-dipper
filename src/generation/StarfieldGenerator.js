@@ -153,7 +153,10 @@ export class StarfieldGenerator {
     // ── Layer 1: Real nearby stars (all GalacticMap stars within search volume) ──
     // Search wider (up to ~3.5 kpc) to get more real stars.
     // Every found star becomes a real point — no arbitrary cap.
-    const nearbyStars = galacticMap.findNearestStars(playerPos, 500);
+    // Find ALL stars that could possibly be visible (apparent magnitude < 6.5).
+    // Searches outward with sector-level pre-filtering — skips sectors where
+    // no star could be visible. Every visible point is a real GalacticMap star.
+    const nearbyStars = galacticMap.findVisibleStars(playerPos);
     const warpableStars = nearbyStars.filter(s => s.distSq > 0.001);
 
     // ── Layer 3: Nearby galactic features as tagged sky points ──
