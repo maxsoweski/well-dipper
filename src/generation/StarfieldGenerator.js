@@ -123,6 +123,12 @@ export class StarfieldGenerator {
     const nearbyForImmersion = galacticMap.findNearbyFeatures(playerPos, 0.5);
     const insideFeature = nearbyForImmersion.find(f => f.insideFeature) || null;
     const immersion = insideFeature ? (this.FEATURE_IMMERSION[insideFeature.type] || null) : null;
+    if (insideFeature) {
+      console.log(`StarfieldGen: INSIDE ${insideFeature.type} (r=${insideFeature.radius.toFixed(4)} kpc, dist=${insideFeature.distance.toFixed(4)} kpc), multiplier=${immersion?.starMultiplier ?? '?'}`);
+    } else {
+      const closest = nearbyForImmersion[0];
+      console.log(`StarfieldGen: not inside any feature. Nearest: ${closest ? `${closest.type} at ${closest.distance.toFixed(4)} kpc (r=${closest.radius.toFixed(4)})` : 'none within 0.5 kpc'}`);
+    }
 
     // ── Dynamic star count based on local density ──
     // Sparse regions get fewer stars — the emptiness is part of the experience

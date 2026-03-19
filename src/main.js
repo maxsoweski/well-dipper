@@ -1786,14 +1786,16 @@ debugPanel.setSpawnCallbacks({
         const features = galacticMap.findNearbyFeatures(playerGalacticPos, radius);
         const match = features.find(f => f.type === featureType);
         if (match) {
-          // Teleport to a position just outside the feature (1.5x its radius away)
-          // so it's clearly visible in the sky
-          const viewDist = Math.max(match.radius * 1.5, 0.01);
+          // Star regions (clusters, OB associations): go INSIDE the feature
+          // Gas features (nebulae, remnants): position just outside for viewing
+          const isStarRegion = ['globular-cluster', 'open-cluster', 'ob-association'].includes(match.type);
+          const viewDist = isStarRegion
+            ? match.radius * 0.3  // inside: 30% of radius from center
+            : Math.max(match.radius * 1.5, 0.01); // outside: 1.5x radius away
           const dx = match.position.x - playerGalacticPos.x;
           const dy = match.position.y - playerGalacticPos.y;
           const dz = match.position.z - playerGalacticPos.z;
           const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-          // Position ourselves viewDist away from the feature, toward our current position
           const newPos = {
             x: match.position.x - (dx / len) * viewDist,
             y: match.position.y - (dy / len) * viewDist,

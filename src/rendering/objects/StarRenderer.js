@@ -15,7 +15,7 @@ import * as THREE from 'three';
  * Usage:
  *   const star = StarRenderer.create(starData, physicsData, renderRadius);
  *   scene.add(star.mesh);
- *   star.update(camera, deltaTime);
+ *   star.update(deltaTime, camera);
  */
 
 // Shared glow texture — created once, reused by all stars
@@ -88,7 +88,7 @@ class StarRendererBase {
     this.type = 'unknown';
   }
 
-  update(camera, deltaTime) {
+  update(deltaTime, camera) {
     // Override in subclasses
   }
 
@@ -449,7 +449,8 @@ class NeutronStar extends StarRendererBase {
     return sprite;
   }
 
-  update(camera, deltaTime) {
+  update(deltaTime, camera) {
+    if (!camera) return;
     // Rotate beam
     this._beamAngle += this._beamSpeed * deltaTime;
     this.beam.material.uniforms.uBeamAngle.value = this._beamAngle;
@@ -584,7 +585,7 @@ class BlackHole extends StarRendererBase {
     return mesh;
   }
 
-  update(camera, deltaTime) {
+  update(deltaTime, camera) {
     this._diskAngle += deltaTime * 0.3;
     this.disk.material.uniforms.uTime.value = this._diskAngle;
   }
