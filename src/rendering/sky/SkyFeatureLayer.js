@@ -126,7 +126,7 @@ export class SkyFeatureLayer {
       case 'ob-association':
         return this._createClusterPoints(feature, position, size, brightness);
       case 'globular-cluster':
-        return this._createGlobularBillboard(feature, position, size, brightness);
+        return this._createGlobularPoints(feature, position, size, brightness);
       case 'supernova-remnant':
         return this._createRemnantBillboard(feature, position, size, brightness);
       default:
@@ -399,7 +399,85 @@ export class SkyFeatureLayer {
   }
 
   /**
-   * Globular cluster — compact warm glow billboard.
+   * Globular cluster — dense ball of warm star points.
+   * No gas, no diffuse glow — these are resolved stars even from a distance.
+   * Radial concentration toward center (King profile approximation).
+   */
+  _createGlobularPoints(feature, position, size, brightness) {
+    const count = 120; // dense enough to read as a cluster
+    const spread = size * 0.25; // tighter than open clusters
+
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+
+    const seedHash = this._hashSeed(feature.seed);
+    for (let i = 0; i < count; i++) {
+      // King profile: concentrate stars toward center
+      // Use cube of random for strong central concentration
+      const r = Math.pow(this._seededRand(seedHash + i * 2.3), 2.0) * spread;
+      const theta = this._seededRand(seedHash + i * 5.7) * Math.PI * 2;
+      const phi = Math.acos(this._seededRand(seedHash + i * 9.1) * 2 - 1);
+
+      const fx = Math.sin(phi) * Math.cos(theta) * r;
+      const fy = Math.cos(phi) * r;
+      const fz = Math.sin(phi) * Math.sin(theta) * r;
+
+      positions[i * 3] = position.x + fx;
+      positions[i * 3 + 1] = position.y + fy;
+      positions[i * 3 + 2] = position.z + fz;
+
+      // Warm yellow-orange with variation (old stellar population)
+      const warm = this._seededRand(seedHash + i * 13.1);
+      const bright = (0.5 + 0.5 * (1 - r / spread)) * brightness * 3; // brighter near center
+      colors[i * 3] = Math.min(1, feature.color[0] * bright + warm * 0.15);
+      colors[i * 3 + 1] = Math.min(1, feature.color[1] * bright + warm * 0.1);
+      colors[i * 3 + 2] = Math.min(1, feature.color[2] * bright * 0.7); // less blue
+
+      // Central stars slightly larger
+      sizes[i] = r < spread * 0.3 ? 6 : r < spread * 0.6 ? 4 : 3;
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uBrightness: { value: brightness },
+      },
+      vertexShader: /* glsl */ `
+        attribute float aSize;
+        varying vec3 vColor;
+        void main() {
+          vColor = color;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = max(2.0, aSize);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uBrightness;
+        varying vec3 vColor;
+        void main() {
+          float dist = length(gl_PointCoord - 0.5);
+          if (dist > 0.5) discard;
+          float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+          gl_FragColor = vec4(vColor * uBrightness * glow, 1.0);
+        }
+      `,
+    });
+
+    return new THREE.Points(geo, mat);
+  }
+
+  /**
+   * Globular cluster — compact warm glow billboard (LEGACY, kept for reference).
    */
   _createGlobularBillboard(feature, position, size, brightness) {
     const geo = new THREE.PlaneGeometry(size, size);
