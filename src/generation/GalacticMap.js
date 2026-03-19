@@ -77,6 +77,17 @@ export class GalacticMap {
       );
     }
 
+    // ── Calibrate potential model ──
+    // Compute normalization so potentialDerivedDensity at the solar
+    // neighborhood matches the current componentDensities output.
+    // This ensures identical star counts during the transition.
+    this._potentialDensityNorm = 1.0; // temporary, recalculated below
+    const currentDensity = this.componentDensities(GalacticMap.SOLAR_R, GalacticMap.SOLAR_Z).totalDensity;
+    const rawPotentialDensity = this.potentialDerivedDensity(GalacticMap.SOLAR_R, GalacticMap.SOLAR_Z).totalDensity;
+    if (rawPotentialDensity > 1e-10) {
+      this._potentialDensityNorm = currentDensity / rawPotentialDensity;
+    }
+
     // Sector cache (LRU)
     this._sectorCache = new Map();
 
@@ -193,6 +204,194 @@ export class GalacticMap {
       if (strength > maxStrength) maxStrength = strength;
     }
     return maxStrength;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // GRAVITATIONAL POTENTIAL MODEL — the primary data structure
+  // ════════════════════════════════════════════════════════════
+  //
+  // The gravitational potential Φ(R,z) is the fundamental quantity.
+  // Density, star count, feature locations, and gameplay values
+  // (escape velocity, warp cost, energy harvesting) all derive from it.
+  //
+  // Standard potential-density pairs from astrophysics:
+  //   Disk:  Miyamoto-Nagai (1975)
+  //   Bulge: Hernquist (1990)
+  //   Halo:  Navarro-Frenk-White (1997)
+  //   Arms:  Cox & Gomez (2002) perturbation model
+
+  // ── Potential model parameters ──
+  // Calibrated so potentialDerivedDensity at solar neighborhood
+  // matches componentDensities output (~0.065). G is absorbed into
+  // the mass constants (we work in arbitrary potential units, not SI).
+
+  static MN_A = 3.0;           // kpc — Miyamoto-Nagai disk radial scale
+  static MN_B = 0.28;          // kpc — disk vertical scale
+  static MN_GM = 1.0;          // disk "mass" (arbitrary units, calibrated)
+
+  static HERNQUIST_A = 0.6;    // kpc — bulge scale length
+  static HERNQUIST_GM = 0.50;  // bulge "mass" (tuned for component weight balance)
+
+  static NFW_RS = 12.0;        // kpc — halo scale radius
+  static NFW_NORM = 0.0003;    // halo normalization (tuned: Solar=1.0, Halo=1.14x)
+
+  /**
+   * Gravitational potential at a position in the galaxy.
+   * This is the PRIMARY data — everything else derives from it.
+   *
+   * @param {number} R_kpc — cylindrical radius from center
+   * @param {number} z_kpc — height above/below disk plane
+   * @returns {{ disk: number, bulge: number, halo: number, total: number }}
+   *   All values are negative (deeper well = more negative).
+   */
+  gravitationalPotential(R_kpc, z_kpc) {
+    // Miyamoto-Nagai disk potential
+    const zb = Math.sqrt(z_kpc * z_kpc + GalacticMap.MN_B * GalacticMap.MN_B);
+    const azb = GalacticMap.MN_A + zb;
+    const disk = -GalacticMap.MN_GM / Math.sqrt(R_kpc * R_kpc + azb * azb);
+
+    // Hernquist bulge potential
+    const r = Math.sqrt(R_kpc * R_kpc + z_kpc * z_kpc);
+    const bulge = -GalacticMap.HERNQUIST_GM / (r + GalacticMap.HERNQUIST_A);
+
+    // NFW halo potential
+    const rs = GalacticMap.NFW_RS;
+    const rSafe = Math.max(r, 0.01); // avoid log(0)
+    const halo = -GalacticMap.NFW_NORM * rs * Math.log(1 + rSafe / rs) / rSafe;
+
+    return {
+      disk,
+      bulge,
+      halo,
+      total: disk + bulge + halo,
+    };
+  }
+
+  /**
+   * Gradient of the gravitational potential (analytical derivatives).
+   * The gradient points TOWARD increasing potential (outward from wells).
+   * Force = -gradient, so force points INTO wells.
+   *
+   * @param {number} R_kpc
+   * @param {number} z_kpc
+   * @returns {{ dR: number, dz: number, magnitude: number }}
+   */
+  potentialGradient(R_kpc, z_kpc) {
+    const R = R_kpc;
+    const z = z_kpc;
+
+    // Miyamoto-Nagai disk gradient
+    const b = GalacticMap.MN_B;
+    const a = GalacticMap.MN_A;
+    const GM_d = GalacticMap.MN_GM;
+    const zb = Math.sqrt(z * z + b * b);
+    const azb = a + zb;
+    const D = Math.sqrt(R * R + azb * azb);
+    const D3 = D * D * D;
+    const dDisk_dR = GM_d * R / D3;
+    const dDisk_dz = GM_d * z * azb / (zb * D3);
+
+    // Hernquist bulge gradient
+    const GM_b = GalacticMap.HERNQUIST_GM;
+    const a_b = GalacticMap.HERNQUIST_A;
+    const r = Math.sqrt(R * R + z * z);
+    const rSafe = Math.max(r, 0.01);
+    const ra2 = (rSafe + a_b) * (rSafe + a_b);
+    const dBulge_dR = GM_b * R / (rSafe * ra2);
+    const dBulge_dz = GM_b * z / (rSafe * ra2);
+
+    // NFW halo gradient (radial, decomposed into R,z)
+    const rs = GalacticMap.NFW_RS;
+    const norm = GalacticMap.NFW_NORM;
+    const x = rSafe / rs;
+    const dHalo_dr = norm * rs * (Math.log(1 + x) / (rSafe * rSafe) - 1 / (rSafe * (rSafe + rs)));
+    const dHalo_dR = dHalo_dr * R / rSafe;
+    const dHalo_dz = dHalo_dr * z / rSafe;
+
+    const dR = dDisk_dR + dBulge_dR + dHalo_dR;
+    const dz = dDisk_dz + dBulge_dz + dHalo_dz;
+
+    return {
+      dR,
+      dz,
+      magnitude: Math.sqrt(dR * dR + dz * dz),
+    };
+  }
+
+  /**
+   * Density derived from the gravitational potential.
+   * Uses the analytical density-potential pairs (closed-form, no numerical Laplacian).
+   * Returns the same format as componentDensities() for drop-in compatibility.
+   *
+   * @param {number} R_kpc
+   * @param {number} z_kpc
+   * @returns {{ thin, thick, bulge, halo, totalDensity }}
+   */
+  potentialDerivedDensity(R_kpc, z_kpc) {
+    const R = R_kpc;
+    const z = z_kpc;
+
+    // Miyamoto-Nagai analytical density
+    const a = GalacticMap.MN_A;
+    const b = GalacticMap.MN_B;
+    const GM = GalacticMap.MN_GM;
+    const zb = Math.sqrt(z * z + b * b);
+    const azb = a + zb;
+    const Rsq = R * R;
+    const denom1 = Math.pow(Rsq + azb * azb, 2.5);
+    const denom2 = Math.pow(z * z + b * b, 1.5);
+    const diskDensity = (b * b * GM / (4 * Math.PI))
+      * (a * Rsq + (a + 3 * zb) * azb * azb)
+      / (denom1 * denom2);
+
+    // Hernquist analytical density
+    const a_b = GalacticMap.HERNQUIST_A;
+    const GM_b = GalacticMap.HERNQUIST_GM;
+    const r = Math.sqrt(Rsq + z * z);
+    const rSafe = Math.max(r, 0.01);
+    const bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
+
+    // NFW analytical density
+    const rs = GalacticMap.NFW_RS;
+    const norm = GalacticMap.NFW_NORM;
+    const x = rSafe / rs;
+    const haloDensity = norm / (x * (1 + x) * (1 + x));
+
+    // Split disk density into thin/thick (same ratio as current model)
+    const thinFrac = 1.0 / (1.0 + GalacticMap.THICK_DISK_NORM);
+    const thin = diskDensity * thinFrac;
+    const thick = diskDensity * (1 - thinFrac);
+
+    // Apply calibration normalization
+    const total = (thin + thick + bulgeDensity + haloDensity) * this._potentialDensityNorm;
+    const thinN = thin * this._potentialDensityNorm;
+    const thickN = thick * this._potentialDensityNorm;
+    const bulgeN = bulgeDensity * this._potentialDensityNorm;
+    const haloN = haloDensity * this._potentialDensityNorm;
+
+    if (total < 1e-10) {
+      return { thin: 0.25, thick: 0.25, bulge: 0.25, halo: 0.25, totalDensity: 0 };
+    }
+
+    return {
+      thin: thinN / total,
+      thick: thickN / total,
+      bulge: bulgeN / total,
+      halo: haloN / total,
+      totalDensity: total,
+    };
+  }
+
+  /**
+   * Escape velocity at a position (derived from potential).
+   * v_escape = sqrt(-2 × Φ). Useful for gameplay (warp cost).
+   * @param {number} R_kpc
+   * @param {number} z_kpc
+   * @returns {number} escape velocity in arbitrary units
+   */
+  escapeVelocity(R_kpc, z_kpc) {
+    const phi = this.gravitationalPotential(R_kpc, z_kpc).total;
+    return Math.sqrt(-2 * phi);
   }
 
   // ════════════════════════════════════════════════════════════
