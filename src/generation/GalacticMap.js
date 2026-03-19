@@ -472,21 +472,95 @@ export class GalacticMap {
     const densities = this.potentialDerivedDensity(R, centerY);
     const armStr = this.spiralArmStrength(R, theta);
 
-    // Star count: normalize density relative to solar neighborhood,
-    // then scale to a target count. Solar neighborhood (~0.06 density)
-    // should yield ~8-15 stars per sector for interesting navigation.
-    const solarDensity = 0.065; // approximate density at R=8, z=0
+    // Galactic features overlapping this sector (Level 1 → Level 2 cascade)
+    const overlappingFeatures = this.findFeaturesOverlappingSector(sx, sy, sz);
+
+    // ── Compute local density function that includes feature potentials ──
+    // This is the key to unified generation: features contribute their own
+    // gravitational potential wells, raising the local density. Stars form
+    // where the TOTAL potential (galaxy + features) is deep.
+    const _featureDensityAtPoint = (wx, wy, wz) => {
+      let featureDensity = 0;
+      for (const feat of overlappingFeatures) {
+        const spec = GalacticMap.FEATURE_TYPES[feat.type];
+        if (!spec) continue;
+        const multiplier = spec.contextOverrides.starCountMultiplier || 1;
+        if (multiplier <= 1) continue;
+
+        const dx = wx - feat.position.x;
+        const dy = wy - feat.position.y;
+        const dz = wz - feat.position.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const eps = feat.radius;
+
+        // Plummer sphere density: ρ ∝ (1 + r²/ε²)^(-5/2)
+        // Scaled by the feature's star count multiplier
+        const plummerDensity = multiplier * Math.pow(1 + (dist * dist) / (eps * eps), -2.5);
+        featureDensity += plummerDensity;
+      }
+      return featureDensity;
+    };
+
+    // ── Determine star budget for this sector ──
+    // Base count from galactic potential + boost from feature potentials.
+    // Features can dramatically increase the local star count.
+    const solarDensity = 0.065;
     const normalizedDensity = densities.totalDensity / solarDensity;
-    const targetAtSolar = 12; // stars per sector in solar neighborhood
-    const densityWithArms = normalizedDensity * (1 + armStr * GalacticMap.ARM_DENSITY_BOOST);
-    const starCount = Math.min(
-      Math.max(Math.round(densityWithArms * targetAtSolar), 0),
-      GalacticMap.MAX_STARS_PER_SECTOR,
+    const targetAtSolar = 12;
+    const baseStarCount = normalizedDensity * (1 + armStr * GalacticMap.ARM_DENSITY_BOOST) * targetAtSolar;
+
+    // Feature budget: compute at EACH feature's center within this sector,
+    // not just the sector center. Features are tiny relative to sectors —
+    // evaluating at the sector center misses their density contribution.
+    let featureStarBudget = 0;
+    for (const feat of overlappingFeatures) {
+      const spec = GalacticMap.FEATURE_TYPES[feat.type];
+      const mult = spec?.contextOverrides?.starCountMultiplier || 1;
+      if (mult <= 1) continue;
+      // How much of this feature overlaps this sector?
+      // Use the peak density (at feature center) scaled by volume overlap
+      const featVolume = (4 / 3) * Math.PI * feat.radius ** 3;
+      const sectorVolume = S * S * S;
+      // Approximate: if feature center is in this sector, most of feature is here
+      const fcx = feat.position.x - sx * S;
+      const fcy = feat.position.y - sy * S;
+      const fcz = feat.position.z - sz * S;
+      const centerHere = fcx >= 0 && fcx < S && fcy >= 0 && fcy < S && fcz >= 0 && fcz < S;
+      const overlap = centerHere ? 1.0 : 0.2;
+      // Star budget for this feature: scale multiplier by a base count
+      // representing how many stars the feature should have
+      const featureBase = mult * targetAtSolar * 3; // e.g. globular: 10 × 12 × 3 = 360
+      featureStarBudget += Math.round(featureBase * overlap);
+    }
+
+    const totalBudget = Math.min(
+      Math.max(Math.round(baseStarCount + featureStarBudget), 0),
+      GalacticMap.MAX_STARS_PER_SECTOR + Math.max(0, featureStarBudget), // raise cap for features
     );
 
-    // Place stars
+    // ── Place stars via density-weighted rejection sampling ──
+    // Propose random positions within the sector, accept/reject based on
+    // local density (galaxy potential + feature potentials). Stars naturally
+    // concentrate where the total potential well is deepest.
     const stars = [];
-    for (let i = 0; i < starCount; i++) {
+    const maxAttempts = totalBudget * 20; // rejection sampling needs headroom (features are tiny)
+    let attempts = 0;
+    let placed = 0;
+
+    // Precompute max density for acceptance probability normalization.
+    // Must include the PEAK feature density (at feature centers), not just
+    // the sector center. Otherwise rejection sampling under-accepts near features.
+    let peakFeatureDensity = 0;
+    for (const feat of overlappingFeatures) {
+      const spec = GalacticMap.FEATURE_TYPES[feat.type];
+      const mult = spec?.contextOverrides?.starCountMultiplier || 1;
+      if (mult > 1) peakFeatureDensity = Math.max(peakFeatureDensity, mult); // Plummer peak = multiplier
+    }
+    const maxDensity = densities.totalDensity + peakFeatureDensity + 0.001;
+
+    while (placed < totalBudget && attempts < maxAttempts) {
+      attempts++;
+
       const localX = rng.range(0, S);
       const localY = rng.range(0, S);
       const localZ = rng.range(0, S);
@@ -494,131 +568,35 @@ export class GalacticMap {
       const worldY = sy * S + localY;
       const worldZ = sz * S + localZ;
 
-      // Each star gets a unique seed derived from sector + index
+      // Evaluate total density at this specific point
+      const ptR = Math.sqrt(worldX * worldX + worldZ * worldZ);
+      const ptDensity = this.potentialDerivedDensity(ptR, worldY).totalDensity;
+      const ptFeatureDensity = _featureDensityAtPoint(worldX, worldY, worldZ);
+      const totalLocalDensity = ptDensity + ptFeatureDensity;
+
+      // Accept/reject: probability proportional to local density
+      const acceptProb = Math.min(1, totalLocalDensity / maxDensity);
+      if (rng.float() > acceptProb) continue;
+
       const starSeed = GalacticMap.hashCombine(
         GalacticMap.hashCombine(sx + 10000, sy + 10000),
-        GalacticMap.hashCombine(sz + 10000, i),
+        GalacticMap.hashCombine(sz + 10000, placed),
       );
 
       stars.push({
         localX, localY, localZ,
         worldX, worldY, worldZ,
         seed: starSeed,
-        index: i,
+        index: placed,
       });
+      placed++;
     }
 
-    // Galactic features overlapping this sector (Level 1 → Level 2 cascade)
-    const overlappingFeatures = this.findFeaturesOverlappingSector(sx, sy, sz);
-
-    // ── Generate additional stars inside features ──
-    // Features have their own stellar populations. A globular cluster has
-    // thousands of densely packed stars; an open cluster has hundreds.
-    // These are real GalacticMap stars — warpable, visible in nav computer.
-    for (const feat of overlappingFeatures) {
-      const spec = GalacticMap.FEATURE_TYPES[feat.type];
-      if (!spec) continue;
-      const multiplier = spec.contextOverrides.starCountMultiplier;
-      if (!multiplier || multiplier <= 1) continue; // no extra stars for this type
-
-      // How many stars to add for this feature in this sector.
-      // Scale by how much of the feature's volume overlaps this sector.
-      const featR = feat.radius;
-      // Approximate overlap: if feature center is in this sector, full count.
-      // If feature center is in adjacent sector, partial count.
-      const cx = feat.position.x - sx * S;
-      const cy = feat.position.y - sy * S;
-      const cz = feat.position.z - sz * S;
-      const centerInSector = cx >= 0 && cx < S && cy >= 0 && cy < S && cz >= 0 && cz < S;
-      const overlapFraction = centerInSector ? 1.0 : 0.3;
-
-      // Star count based on the feature's own density, NOT sector volume ratio.
-      // A globular cluster has ~100K-1M stars in reality; we generate a
-      // representative sample that makes the starfield visibly dense.
-      // Scale with radius: bigger features = more stars.
-      const featureStarBudget = {
-        'globular-cluster': 400,  // dense ball
-        'open-cluster': 150,      // loose group
-        'ob-association': 80,     // scattered giants
-        'emission-nebula': 60,    // modest star-forming boost
-        'supernova-remnant': 20,  // few extra
-      };
-      const budget = featureStarBudget[feat.type] || Math.round(multiplier * 30);
-      // Scale budget by feature radius relative to typical size
-      const typicalRadius = (spec.sizeRange[0] + spec.sizeRange[1]) / 2;
-      const radiusScale = Math.max(0.3, Math.min(3.0, featR / typicalRadius));
-      const featureStarCount = Math.round(budget * radiusScale * overlapFraction);
-
-      const featRng = new SeededRandom(`${seed}-feat-${feat.seed}`);
-
-      for (let fi = 0; fi < featureStarCount; fi++) {
-        // Place stars using the feature's density profile
-        let worldX, worldY, worldZ, distFromCenter;
-
-        if (feat.type === 'globular-cluster') {
-          // King profile: dense core, sparse halo
-          // r = R_feat * pow(random, 0.5) gives r^(-2) density
-          const r = featR * Math.sqrt(featRng.float());
-          const theta = featRng.range(0, Math.PI * 2);
-          const phi = Math.acos(featRng.range(-1, 1));
-          worldX = feat.position.x + Math.sin(phi) * Math.cos(theta) * r;
-          worldY = feat.position.y + Math.cos(phi) * r;
-          worldZ = feat.position.z + Math.sin(phi) * Math.sin(theta) * r;
-          distFromCenter = r;
-        } else if (feat.type === 'open-cluster') {
-          // Gaussian distribution with sub-clumps
-          const sigma = featR * 0.4;
-          worldX = feat.position.x + featRng.gaussian() * sigma;
-          worldY = feat.position.y + featRng.gaussian() * sigma * 0.3; // flattened
-          worldZ = feat.position.z + featRng.gaussian() * sigma;
-          distFromCenter = Math.sqrt(
-            (worldX - feat.position.x) ** 2 +
-            (worldY - feat.position.y) ** 2 +
-            (worldZ - feat.position.z) ** 2
-          );
-        } else {
-          // Default: uniform within feature radius
-          const r = featR * Math.cbrt(featRng.float());
-          const theta = featRng.range(0, Math.PI * 2);
-          const phi = Math.acos(featRng.range(-1, 1));
-          worldX = feat.position.x + Math.sin(phi) * Math.cos(theta) * r;
-          worldY = feat.position.y + Math.cos(phi) * r;
-          worldZ = feat.position.z + Math.sin(phi) * Math.sin(theta) * r;
-          distFromCenter = r;
-        }
-
-        // Only include stars that fall within THIS sector's bounds
-        const lx = worldX - sx * S;
-        const ly = worldY - sy * S;
-        const lz = worldZ - sz * S;
-        if (lx < 0 || lx >= S || ly < 0 || ly >= S || lz < 0 || lz >= S) continue;
-
-        const starSeed = GalacticMap.hashCombine(
-          GalacticMap.hashCombine(sx + 20000, fi),
-          GalacticMap.hashCombine(sz + 20000, Math.round(feat.position.x * 1000)),
-        );
-
-        stars.push({
-          localX: lx, localY: ly, localZ: lz,
-          worldX, worldY, worldZ,
-          seed: starSeed,
-          index: stars.length,
-          featureContext: {
-            type: feat.type,
-            featureSeed: feat.seed,
-            metallicity: feat.context.metallicity,
-            age: feat.context.age,
-            overrides: feat.overrides,
-            featureRadius: featR,
-            distFromCenter,
-          },
-        });
-      }
-    }
-
-    // Mark regular (non-feature) stars that happen to be inside a feature
+    // ── Tag stars inside features with featureContext ──
+    // Stars don't know they're "feature stars" — they just formed where
+    // the potential was deep. But we tag them so the nav computer and
+    // rendering can identify which feature they belong to.
     for (const star of stars) {
-      if (star.featureContext) continue; // already tagged (feature-generated star)
       star.featureContext = null;
       for (const feat of overlappingFeatures) {
         const dx = star.worldX - feat.position.x;
