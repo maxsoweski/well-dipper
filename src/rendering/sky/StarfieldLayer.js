@@ -167,15 +167,13 @@ export class StarfieldLayer {
           float cutoff = mix(threshold, 0.45, foldSmooth);
           if (shape < cutoff * 0.5) discard;
 
-          // ── Brightness from vertex color ──
-          // The generator already set per-star brightness from apparent magnitude.
-          // Just apply the brightness budget scaling.
+          // ── Direct brightness from vertex color ──
+          // The generator sets per-star color+brightness from apparent magnitude
+          // and spectral type. No budget remapping needed — the physics determines
+          // the brightness. Bright O-class stars should look BRIGHT.
           vec3 col = vColor * uBrightness * shape;
-          float lum = max(0.001, dot(col, vec3(0.299, 0.587, 0.114)));
-          float remapped = uBrightnessMin + clamp(lum, 0.0, 1.0) * (uBrightnessMax - uBrightnessMin);
-          vec3 finalCol = col * (remapped / lum);
 
-          gl_FragColor = vec4(min(finalCol, vec3(1.0)), 1.0);
+          gl_FragColor = vec4(min(col, vec3(1.0)), 1.0);
         }
       `,
     });
