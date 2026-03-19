@@ -47,6 +47,7 @@ export class GalaxyGlowLayer {
         uArmOffsets: { value: new THREE.Vector4(offsets[0], offsets[1], offsets[2], offsets[3]) },
         uArmPitchK: { value: armPitchK ?? (1.0 / Math.tan(12 * Math.PI / 180)) },
         uBrightnessMax: { value: brightnessRange.max },
+        uDensityNorm: { value: 1.0 }, // set from GalacticMap._potentialDensityNorm
       },
 
       vertexShader: /* glsl */ `
@@ -63,21 +64,25 @@ export class GalaxyGlowLayer {
         #define ARM_WIDTH_BASE 0.15
         #define ARM_WIDTH_SLOPE 0.025
         #define SIN_PITCH 0.2079
-        #define VISUAL_SCALE_LENGTH 4.0
-        #define THIN_DISK_HEIGHT 0.3
-        #define THICK_DISK_HEIGHT 0.9
-        #define THICK_DISK_NORM 0.12
-        #define BULGE_SCALE 0.5
-        #define BULGE_FLATTENING 0.5
-        #define BULGE_NORM 2.0
         #define GALAXY_RADIUS 15.0
-        #define DISK_SCALE_LENGTH 2.6
+
+        // ── Gravitational potential model constants ──
+        // Must match GalacticMap.js potential parameters exactly.
+        // Density derived from Miyamoto-Nagai + Hernquist + NFW.
+        #define MN_A 3.0
+        #define MN_B 0.28
+        #define MN_GM 1.0
+        #define HERNQUIST_A 0.6
+        #define HERNQUIST_GM 0.50
+        #define NFW_RS 12.0
+        #define NFW_NORM 0.0003
 
         uniform vec3 uPlayerPos;
         uniform vec3 uGalCenterDir;
         uniform vec4 uArmOffsets;
         uniform float uArmPitchK;
         uniform float uBrightnessMax;
+        uniform float uDensityNorm;
 
         varying vec3 vWorldDir;
 
@@ -134,12 +139,35 @@ export class GalaxyGlowLayer {
           return maxStr;
         }
 
+        // ── Potential-derived density ──
+        // Miyamoto-Nagai (disk) + Hernquist (bulge) + NFW (halo).
+        // Must match GalacticMap.potentialDerivedDensity() exactly.
+        float potentialDensity(float R, float z) {
+          // Miyamoto-Nagai disk density (analytical closed form)
+          float zb = sqrt(z * z + MN_B * MN_B);
+          float azb = MN_A + zb;
+          float Rsq = R * R;
+          float denom1 = pow(Rsq + azb * azb, 2.5);
+          float denom2 = pow(z * z + MN_B * MN_B, 1.5);
+          float diskDensity = (MN_B * MN_B * MN_GM / (4.0 * PI))
+            * (MN_A * Rsq + (MN_A + 3.0 * zb) * azb * azb)
+            / (denom1 * denom2);
+
+          // Hernquist bulge density
+          float r = max(sqrt(Rsq + z * z), 0.01);
+          float ra = r + HERNQUIST_A;
+          float bulgeDensity = HERNQUIST_GM * HERNQUIST_A / (2.0 * PI * r * ra * ra * ra);
+
+          // NFW halo density
+          float x = r / NFW_RS;
+          float haloDensity = NFW_NORM / (x * (1.0 + x) * (1.0 + x));
+
+          return (diskDensity + bulgeDensity + haloDensity) * uDensityNorm;
+        }
+
         // ── Surface density (face-on view from above) ──
         float surfaceDensity(float R, float theta) {
-          float disk = exp(-R / VISUAL_SCALE_LENGTH);
-          float thick = THICK_DISK_NORM * exp(-R / 5.0);
-          float bulge = BULGE_NORM * exp(-R / BULGE_SCALE);
-          float base = disk + thick + bulge;
+          float base = potentialDensity(R, 0.0);
 
           float armStr = spiralArmStrength(R, theta);
           float bulgeBlend = clamp((R - 0.5) / 1.5, 0.0, 1.0);
@@ -182,10 +210,8 @@ export class GalaxyGlowLayer {
             float R = length(sampleXZ);
             if (R > GALAXY_RADIUS * 1.1) continue;
             float edgeFade = 1.0 - smoothstep(GALAXY_RADIUS * 0.7, GALAXY_RADIUS * 1.1, R);
-            float disk = exp(-R / VISUAL_SCALE_LENGTH);
-            float thick = THICK_DISK_NORM * exp(-R / 5.0);
-            float bulge = BULGE_NORM * exp(-R / BULGE_SCALE);
-            float sd = (disk + thick + bulge) * edgeFade;
+            // Use potential-derived density instead of old exponential model
+            float sd = potentialDensity(R, 0.0) * edgeFade;
             float w = 1.0 / (t * 0.3 + 1.0);
             baseDensity += sd * w;
             weightedR += R * sd * w;

@@ -112,6 +112,10 @@ export class SkyRenderer {
         data.armPitchK,
         this._brightnessConfig.glow
       );
+      // Pass density normalization so GLSL model matches JS model
+      if (data.densityNorm && this._glowLayer._sphere?.material?.uniforms?.uDensityNorm) {
+        this._glowLayer._sphere.material.uniforms.uDensityNorm.value = data.densityNorm;
+      }
 
       // Sky features (nebulae, clusters, etc.)
       this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);

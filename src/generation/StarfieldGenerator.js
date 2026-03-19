@@ -608,6 +608,7 @@ export class StarfieldGenerator {
       playerPos: { x: playerPos.x, y: playerPos.y, z: playerPos.z },
       armOffsets: galacticMap.armOffsets.slice(), // copy of the 4 arm starting angles
       armPitchK: galacticMap.pitchK,
+      densityNorm: galacticMap._potentialDensityNorm,
     };
   }
 
