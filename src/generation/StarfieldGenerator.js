@@ -141,13 +141,13 @@ export class StarfieldGenerator {
       positions[i3 + 1] = (dy / dist) * radius;
       positions[i3 + 2] = (dz / dist) * radius;
 
-      // Feature color from its type definition
-      colors[i3]     = feature.color[0] * 0.8;
-      colors[i3 + 1] = feature.color[1] * 0.8;
-      colors[i3 + 2] = feature.color[2] * 0.8;
-
-      // Features are slightly larger than normal stars so they stand out
-      sizes[idx] = 6.0;
+      // Feature points are invisible — SkyFeatureLayer handles the visual.
+      // These exist only as click targets (findNearestStar works on positions
+      // in JS, not rendered size, so invisible points are still selectable).
+      colors[i3]     = 0;
+      colors[i3 + 1] = 0;
+      colors[i3 + 2] = 0;
+      sizes[idx] = 0.001; // effectively invisible
 
       // Tag as a feature in the star map so warp routing can distinguish it
       realStarMap.push({
