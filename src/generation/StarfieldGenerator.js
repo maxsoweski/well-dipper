@@ -95,11 +95,14 @@ export class StarfieldGenerator {
   }
 
   /**
-   * Map apparent magnitude to brightness multiplier [0, 1].
+   * Map apparent magnitude to brightness multiplier.
+   * Bright stars (negative magnitude) get values > 1.0 to ensure
+   * they visually dominate. The shader clamps to [0,1] per channel,
+   * so bright stars saturate to white — like real bright stars do.
    */
   static _brightnessFromMagnitude(appMag) {
-    // Magnitude 0 → brightness 1.0, magnitude 6.5 → brightness 0.1
-    return Math.max(0.08, Math.min(1.0, 1.0 - (appMag / 8.0)));
+    // Magnitude -5 → brightness 2.5, mag 0 → 1.5, mag 3 → 0.9, mag 6 → 0.15
+    return Math.max(0.1, 1.5 - (appMag / 5.0));
   }
 
   /**
