@@ -598,31 +598,33 @@ warpEffect.onPrepareSystem = () => {
   }
 
   if (warpTarget.destType?.startsWith('feature:') && warpTarget.featureData && galacticMap) {
-    // Clicked a galactic feature — find a star inside it and go there.
-    // This is the Category A/B routing: arrive at a star system whose sky
-    // shows the feature at immersive scale.
+    // Clicked a galactic feature — generate a star system at its center.
+    // Category A/B routing: player arrives INSIDE the feature, sky shows
+    // immersive starfield (dense warm stars for clusters, gas for nebulae).
+    //
+    // IMPORTANT: Don't search for a nearby GalacticMap sector star —
+    // features are much smaller than sectors (0.05 kpc vs 0.5 kpc), so
+    // sector stars are almost always OUTSIDE the feature. Generate the
+    // system directly from the feature's seed and position.
     const feat = warpTarget.featureData;
-    // Position ourselves at the feature's center (or just inside its edge)
-    const viewDist = Math.max(feat.radius * 0.5, 0.005);
     playerGalacticPos = {
       x: feat.position.x,
       y: feat.position.y,
       z: feat.position.z,
     };
     const galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
-    // Find the nearest real star at this position
-    const featStars = galacticMap.findNearestStars(playerGalacticPos, 5);
-    const featSeed = featStars.length > 0 ? String(featStars[0].seed) : feat.seed;
-    if (featStars.length > 0) {
-      playerGalacticPos = { x: featStars[0].worldX, y: featStars[0].worldY, z: featStars[0].worldZ };
+    // Apply feature context overrides (old metal-poor stars for globulars, etc.)
+    if (feat.context) {
+      if (feat.context.metallicity !== undefined) galaxyContext.metallicity = feat.context.metallicity;
+      if (feat.context.age !== undefined) galaxyContext.age = feat.context.age;
     }
-    pendingSystemData = StarSystemGenerator.generate(featSeed, galaxyContext);
+    pendingSystemData = StarSystemGenerator.generate(feat.seed, galaxyContext);
     pendingSystemData._destType = 'star-system';
     pendingSystemData._warpTargetName = warpTarget.name || null;
-    pendingSystemData._insideFeature = feat; // for SkyFeatureLayer immersive rendering
+    pendingSystemData._insideFeature = feat;
     skyRenderer.prepareForPosition(playerGalacticPos);
-    console.log(`Warp: routed to feature ${feat.type} → star system at (${playerGalacticPos.x.toFixed(2)}, ${playerGalacticPos.y.toFixed(3)}, ${playerGalacticPos.z.toFixed(2)})`);
-    warpTarget.destType = null; // consumed
+    console.log(`Warp: routed to feature ${feat.type} → system at feature center (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)})`);
+    warpTarget.destType = null;
     warpTarget.featureData = null;
     return;
   }
@@ -667,20 +669,19 @@ warpEffect.onPrepareSystem = () => {
     }
 
     if (foundFeature) {
-      // Route to a star inside this feature (same as click routing)
+      // Route to feature center (same logic as click routing)
       playerGalacticPos = { ...foundFeature.position };
       const galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      const featStars = galacticMap.findNearestStars(playerGalacticPos, 5);
-      const featSeed = featStars.length > 0 ? String(featStars[0].seed) : foundFeature.seed;
-      if (featStars.length > 0) {
-        playerGalacticPos = { x: featStars[0].worldX, y: featStars[0].worldY, z: featStars[0].worldZ };
+      if (foundFeature.context) {
+        if (foundFeature.context.metallicity !== undefined) galaxyContext.metallicity = foundFeature.context.metallicity;
+        if (foundFeature.context.age !== undefined) galaxyContext.age = foundFeature.context.age;
       }
-      pendingSystemData = StarSystemGenerator.generate(featSeed, galaxyContext);
+      pendingSystemData = StarSystemGenerator.generate(foundFeature.seed, galaxyContext);
       pendingSystemData._destType = 'star-system';
       pendingSystemData._warpTargetName = warpTarget.name || null;
       pendingSystemData._insideFeature = foundFeature;
       skyRenderer.prepareForPosition(playerGalacticPos);
-      console.log(`Warp: DestinationPicker rolled ${destType} → routed to feature ${foundFeature.type} at (${playerGalacticPos.x.toFixed(2)}, ${playerGalacticPos.y.toFixed(3)}, ${playerGalacticPos.z.toFixed(2)})`);
+      console.log(`Warp: DestinationPicker rolled ${destType} → feature ${foundFeature.type} at center`);
       return;
     }
     // No feature found — fall through to old generators as fallback

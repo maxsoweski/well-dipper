@@ -144,7 +144,11 @@ export class StarfieldGenerator {
     const realStarCount = Math.min(warpableStars.length, Math.floor(totalCount * 0.5));
 
     // ── Layer 3: Nearby galactic features as tagged sky points ──
-    const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0);
+    // Filter out features the player is inside — those are handled by
+    // starfield immersion, not sky billboards. Placing a click target for
+    // a feature you're inside creates a loop (click → warp → same place).
+    const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0)
+      .filter(f => !f.insideFeature);
     const featureCount = Math.min(nearbyFeatures.length, 16);
 
     // ── Layer 4: External galaxies (fixed sky positions, very faint smudges) ──
