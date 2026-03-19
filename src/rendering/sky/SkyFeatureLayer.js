@@ -66,6 +66,19 @@ export class SkyFeatureLayer {
       .slice(0, MAX_FEATURES);
 
     for (const feature of scored) {
+      // Skip features we're inside — don't render as a distant billboard.
+      // The ambient tint handles the "you're inside this" indication.
+      // Future: immersive mode wraps the feature around you instead.
+      if (feature.insideFeature) {
+        this.ambientTint = {
+          r: feature.color[0],
+          g: feature.color[1],
+          b: feature.color[2],
+          strength: 0.15,
+        };
+        continue;
+      }
+
       // Direction from player to feature (in galactic coords → sky direction)
       const dx = feature.position.x - playerPos.x;
       const dy = feature.position.y - playerPos.y;
@@ -94,16 +107,6 @@ export class SkyFeatureLayer {
       // Distance-based brightness falloff
       const distFade = Math.min(1.0, 1.0 / (feature.dist * 2));
       const brightness = distFade * this._brightnessRange.max;
-
-      // Check if we're inside this feature
-      if (feature.insideFeature) {
-        this.ambientTint = {
-          r: feature.color[0],
-          g: feature.color[1],
-          b: feature.color[2],
-          strength: 0.15, // subtle tint
-        };
-      }
 
       const mesh = this._createFeatureMesh(feature, skyPos, skySize, brightness);
       if (mesh) {
