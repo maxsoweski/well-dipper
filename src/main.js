@@ -114,6 +114,7 @@ skyRenderer.activate();
 retroRenderer.setSkyRenderer(skyRenderer);
 debugPanel.setSkyRenderer(skyRenderer);
 debugPanel.setRetroRenderer(retroRenderer);
+debugPanel.setGalacticMap(galacticMap);
 debugPanel.setPlayerPos(playerGalacticPos);
 
 // Legacy aliases — these delegate to SkyRenderer so existing code

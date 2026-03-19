@@ -46,6 +46,7 @@ export class DebugPanel {
   }
 
   setPlayerPos(pos) { this._playerPos = pos; }
+  setGalacticMap(gm) { this._galacticMap = gm; }
   setCamera(cam) { this._camera = cam; }
   setSkyRenderer(sky) { this._skyRenderer = sky; }
   setLODManager(lod) { this._lodManager = lod; }
@@ -131,11 +132,18 @@ export class DebugPanel {
     // FPS
     lines.push(`<span class="dh-label">FPS</span> <span class="dh-val">${this._fps}</span>`);
 
-    // Galactic position
+    // Galactic position + gravitational potential
     if (this._playerPos) {
       const p = this._playerPos;
-      const R = Math.sqrt(p.x * p.x + p.z * p.z).toFixed(2);
-      lines.push(`<span class="dh-label">GAL</span> <span class="dh-val">(${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}) R=${R}</span>`);
+      const R = Math.sqrt(p.x * p.x + p.z * p.z);
+      lines.push(`<span class="dh-label">GAL</span> <span class="dh-val">(${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}) R=${R.toFixed(2)}</span>`);
+
+      if (this._galacticMap) {
+        const phi = this._galacticMap.gravitationalPotential(R, p.y);
+        const vesc = this._galacticMap.escapeVelocity(R, p.y);
+        const grad = this._galacticMap.potentialGradient(R, p.y);
+        lines.push(`<span class="dh-label">WELL</span> <span class="dh-val">depth=${(-phi.total).toFixed(4)} v_esc=${vesc.toFixed(3)} grad=${grad.magnitude.toFixed(4)}</span>`);
+      }
     }
 
     // System type
