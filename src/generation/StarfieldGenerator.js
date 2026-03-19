@@ -123,13 +123,32 @@ export class StarfieldGenerator {
       // Determine dominant component cheaply
       const comp = densities.bulge > densities.thin && densities.bulge > densities.halo ? 'bulge'
         : densities.halo > densities.thin ? 'halo' : 'thin';
-      const col = this._starColorFromContext(rng, { spiralArmStrength: armStr, component: comp }, brightness);
+      // Feature stars get diagnostic coloring based on their featureContext
+      let col;
+      if (star.featureContext) {
+        const fc = star.featureContext;
+        // Diagnostic colors: make feature membership visible
+        if (fc.type === 'globular-cluster') {
+          col = [brightness * 1.2, brightness * 0.7, brightness * 0.2]; // warm orange
+        } else if (fc.type === 'open-cluster') {
+          col = [brightness * 0.5, brightness * 0.7, brightness * 1.2]; // blue
+        } else if (fc.type === 'ob-association') {
+          col = [brightness * 0.4, brightness * 0.5, brightness * 1.3]; // bright blue
+        } else if (fc.type === 'emission-nebula') {
+          col = [brightness * 1.2, brightness * 0.3, brightness * 0.3]; // red
+        } else {
+          col = this._starColorFromContext(rng, { spiralArmStrength: armStr, component: comp }, brightness);
+        }
+      } else {
+        col = this._starColorFromContext(rng, { spiralArmStrength: armStr, component: comp }, brightness);
+      }
       colors[i3]     = col[0];
       colors[i3 + 1] = col[1];
       colors[i3 + 2] = col[2];
 
-      // Real stars are brighter/larger (min 4px for chunky retro look)
-      sizes[i] = dist < 0.3 ? 8.0 : dist < 0.5 ? 6.0 : 4.0;
+      // Feature stars get a size boost so they stand out
+      const isFeature = !!star.featureContext;
+      sizes[i] = isFeature ? 8.0 : (dist < 0.3 ? 8.0 : dist < 0.5 ? 6.0 : 4.0);
 
       realStarMap.push({ index: i, starData: star });
     }
