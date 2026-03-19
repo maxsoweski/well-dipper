@@ -1,4 +1,5 @@
 import { SeededRandom } from './SeededRandom.js';
+import { HashGridStarfield } from './HashGridStarfield.js';
 
 /**
  * StarfieldGenerator — creates galaxy-aware starfield data arrays.
@@ -144,19 +145,15 @@ export class StarfieldGenerator {
   }
 
   static generate(galacticMap, playerPos, baseCount = 6000, radius = 500) {
-    const rng = new SeededRandom(`starfield-${playerPos.x.toFixed(3)}-${playerPos.y.toFixed(3)}-${playerPos.z.toFixed(3)}`);
+    // ── Hash-grid star generation ──
+    // Every visible star is deterministically computed from the gravitational
+    // potential field. No sectors, no caching — just the density at each
+    // grid point determining whether a star exists there.
+    const gridData = HashGridStarfield.generate(galacticMap, playerPos, radius);
 
-    // Star count is determined by physics (apparent magnitude visibility),
-    // not by a budget. The generation finds all visible stars.
-
-    // ── Layer 1: Real nearby stars (all GalacticMap stars within search volume) ──
-    // Search wider (up to ~3.5 kpc) to get more real stars.
-    // Every found star becomes a real point — no arbitrary cap.
-    // Find ALL stars that could possibly be visible (apparent magnitude < 6.5).
-    // Searches outward with sector-level pre-filtering — skips sectors where
-    // no star could be visible. Every visible point is a real GalacticMap star.
-    const nearbyStars = galacticMap.findVisibleStars(playerPos);
-    const warpableStars = nearbyStars.filter(s => s.distSq > 0.001);
+    // Start with the hash-grid stars, then append features + galaxies
+    const realStarCount = gridData.count;
+    const realStarMap = gridData.realStars;
 
     // ── Layer 3: Nearby galactic features as tagged sky points ──
     const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0)
@@ -167,85 +164,20 @@ export class StarfieldGenerator {
     const externalGalaxies = galacticMap.getExternalGalaxies();
     const extGalaxyCount = externalGalaxies.length;
 
-    // ── Allocate arrays generously ──
-    // Real star count isn't known until after magnitude filtering.
-    // Allocate for max possible (all warpable + features + galaxies + background).
-    const maxPoints = warpableStars.length + featureCount + extGalaxyCount;
-    const positions = new Float32Array(maxPoints * 3);
-    const colors = new Float32Array(maxPoints * 3);
-    const sizes = new Float32Array(maxPoints);
+    // ── Merge into combined arrays ──
+    const totalMax = realStarCount + featureCount + extGalaxyCount;
+    const positions = new Float32Array(totalMax * 3);
+    const colors = new Float32Array(totalMax * 3);
+    const sizes = new Float32Array(totalMax);
 
-    const realStarMap = [];
-
-    // ── Place real stars with apparent magnitude visibility filter ──
-    // Each star gets a spectral type estimate → absolute magnitude →
-    // apparent magnitude from distance. Stars too dim to see are skipped.
-    // The number of visible stars emerges from physics, not a budget.
-    let visibleCount = 0;
-    for (let i = 0; i < warpableStars.length; i++) {
-      const star = warpableStars[i];
-      const dx = star.worldX - playerPos.x;
-      const dy = star.worldY - playerPos.y;
-      const dz = star.worldZ - playerPos.z;
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-      // Estimate spectral type from galactic context at star's position
-      const starR = Math.sqrt(star.worldX * star.worldX + star.worldZ * star.worldZ);
-      const starTheta = Math.atan2(star.worldZ, star.worldX);
-      const densities = galacticMap.potentialDerivedDensity(starR, star.worldY);
-      const armStr = galacticMap.spiralArmStrength(starR, starTheta);
-      const comp = densities.bulge > densities.thin && densities.bulge > densities.halo ? 'bulge'
-        : densities.halo > densities.thin ? 'halo' : 'thin';
-
-      const spectralType = StarfieldGenerator._estimateSpectralType(star.seed, comp, armStr);
-      const appMag = StarfieldGenerator._apparentMagnitude(spectralType, dist);
-
-      // Visibility check: skip stars too dim to see
-      if (appMag > StarfieldGenerator.VISIBILITY_THRESHOLD) continue;
-
-      // This star is visible — place it
-      const idx = visibleCount;
-      const i3 = idx * 3;
-      positions[i3]     = (dx / dist) * radius;
-      positions[i3 + 1] = (dy / dist) * radius;
-      positions[i3 + 2] = (dz / dist) * radius;
-
-      // Color from spectral type
-      const brightness = StarfieldGenerator._brightnessFromMagnitude(appMag);
-      const baseColor = StarfieldGenerator.SPECTRAL_COLOR[spectralType] || [1, 1, 1];
-
-      // Feature stars get diagnostic tint (debug: makes cluster membership visible)
-      let col;
-      if (star.featureContext) {
-        const fc = star.featureContext;
-        if (fc.type === 'globular-cluster') {
-          col = [brightness * 1.2, brightness * 0.7, brightness * 0.2];
-        } else if (fc.type === 'open-cluster') {
-          col = [brightness * 0.5, brightness * 0.7, brightness * 1.2];
-        } else if (fc.type === 'ob-association') {
-          col = [brightness * 0.4, brightness * 0.5, brightness * 1.3];
-        } else {
-          col = [baseColor[0] * brightness, baseColor[1] * brightness, baseColor[2] * brightness];
-        }
-      } else {
-        col = [baseColor[0] * brightness, baseColor[1] * brightness, baseColor[2] * brightness];
-      }
-      colors[i3]     = col[0];
-      colors[i3 + 1] = col[1];
-      colors[i3 + 2] = col[2];
-
-      // Size from apparent magnitude
-      sizes[idx] = StarfieldGenerator._sizeFromMagnitude(appMag);
-
-      realStarMap.push({
-        index: idx,
-        starData: star,
-        estimatedType: spectralType,
-        apparentMagnitude: appMag,
-      });
-      visibleCount++;
+    // Copy hash-grid star data
+    for (let i = 0; i < realStarCount * 3; i++) {
+      positions[i] = gridData.positions[i];
+      colors[i] = gridData.colors[i];
     }
-    const realStarCount = visibleCount;
+    for (let i = 0; i < realStarCount; i++) {
+      sizes[i] = gridData.sizes[i];
+    }
 
     // ── Place galactic features as tagged sky points ──
     for (let f = 0; f < featureCount; f++) {
