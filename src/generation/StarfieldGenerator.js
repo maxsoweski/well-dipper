@@ -18,6 +18,90 @@ import { SeededRandom } from './SeededRandom.js';
  */
 export class StarfieldGenerator {
 
+  // Apparent magnitude pipeline — determines which stars are visible.
+  // Absolute magnitude: intrinsic brightness (lower = brighter).
+  // Apparent magnitude: how bright it looks from distance d.
+  //   m = M + 5 × log10(d_pc / 10)
+  // Naked-eye visibility threshold: ~6.5 magnitude.
+  static SPECTRAL_ABS_MAG = {
+    O: -5.0, B: -1.5, A: 1.5, F: 3.0, G: 5.0, K: 7.0, M: 10.0,
+  };
+
+  static SPECTRAL_COLOR = {
+    O: [0.6, 0.7, 1.0],    // blue-white
+    B: [0.7, 0.8, 1.0],    // blue-white
+    A: [0.95, 0.95, 1.0],  // white
+    F: [1.0, 0.95, 0.85],  // warm white
+    G: [1.0, 0.9, 0.7],    // yellow-white
+    K: [1.0, 0.75, 0.4],   // orange
+    M: [1.0, 0.5, 0.2],    // red-orange
+  };
+
+  // Maximum distance (kpc) at which each type is visible (mag < 6.5)
+  static SPECTRAL_MAX_DIST_KPC = {
+    O: 10.0, B: 2.5, A: 0.4, F: 0.15, G: 0.04, K: 0.012, M: 0.003,
+  };
+
+  static VISIBILITY_THRESHOLD = 6.5; // naked-eye magnitude limit
+
+  /**
+   * Estimate spectral type from galactic component and arm strength.
+   * Uses the star's own seed for deterministic selection.
+   */
+  static _estimateSpectralType(starSeed, component, armStrength) {
+    // Weights by component (same logic as GalacticMap._deriveStarWeights)
+    let weights;
+    if (component === 'halo') {
+      weights = { M: 0.45, K: 0.30, G: 0.18, F: 0.07, A: 0, B: 0, O: 0 };
+    } else if (component === 'bulge') {
+      weights = { M: 0.38, K: 0.28, G: 0.18, F: 0.10, A: 0.04, B: 0.015, O: 0.005 };
+    } else if (armStrength > 0.3) {
+      const boost = 1 + armStrength * 3;
+      weights = { M: 0.18, K: 0.20, G: 0.20, F: 0.16, A: 0.13, B: 0.08 * boost, O: 0.05 * boost };
+    } else {
+      weights = { M: 0.18, K: 0.20, G: 0.20, F: 0.16, A: 0.13, B: 0.08, O: 0.05 };
+    }
+
+    // Normalize and pick deterministically from seed
+    const types = ['M', 'K', 'G', 'F', 'A', 'B', 'O'];
+    const total = types.reduce((s, t) => s + (weights[t] || 0), 0);
+    const roll = ((starSeed % 10000) / 10000);
+    let cumulative = 0;
+    for (const type of types) {
+      cumulative += (weights[type] || 0) / total;
+      if (roll < cumulative) return type;
+    }
+    return 'M';
+  }
+
+  /**
+   * Compute apparent magnitude from spectral type and distance.
+   */
+  static _apparentMagnitude(spectralType, distKpc) {
+    const M = this.SPECTRAL_ABS_MAG[spectralType] ?? 10.0;
+    const d_pc = Math.max(distKpc * 1000, 0.1); // parsecs, minimum 0.1 to avoid log(0)
+    return M + 5 * Math.log10(d_pc / 10);
+  }
+
+  /**
+   * Map apparent magnitude to point sprite size (pixels).
+   */
+  static _sizeFromMagnitude(appMag) {
+    if (appMag < 0) return 10;
+    if (appMag < 2) return 8;
+    if (appMag < 4) return 6;
+    if (appMag < 6) return 4;
+    return 3;
+  }
+
+  /**
+   * Map apparent magnitude to brightness multiplier [0, 1].
+   */
+  static _brightnessFromMagnitude(appMag) {
+    // Magnitude 0 → brightness 1.0, magnitude 6.5 → brightness 0.1
+    return Math.max(0.08, Math.min(1.0, 1.0 - (appMag / 8.0)));
+  }
+
   /**
    * Generate starfield data arrays from a galactic position.
    *
@@ -42,7 +126,7 @@ export class StarfieldGenerator {
   static _computeStarBudget(galacticMap, playerPos, baseCount) {
     const R = Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z);
     const absY = Math.abs(playerPos.y);
-    const densities = galacticMap.componentDensities(R, playerPos.y);
+    const densities = galacticMap.potentialDerivedDensity(R, playerPos.y);
     // Solar neighborhood (R≈8, y≈0) has totalDensity ≈ 0.05-0.10
     // Galactic center has totalDensity ≈ 2-4
     // Halo (R=4, y=6) has totalDensity ≈ 0.001-0.005
@@ -71,87 +155,95 @@ export class StarfieldGenerator {
     // Every found star becomes a real point — no arbitrary cap.
     const nearbyStars = galacticMap.findNearestStars(playerPos, 500);
     const warpableStars = nearbyStars.filter(s => s.distSq > 0.001);
-    // Use all found stars (up to half the budget, to leave room for background)
-    const realStarCount = Math.min(warpableStars.length, Math.floor(totalCount * 0.5));
 
     // ── Layer 3: Nearby galactic features as tagged sky points ──
-    // Filter out features the player is inside — those are handled by
-    // starfield immersion, not sky billboards. Placing a click target for
-    // a feature you're inside creates a loop (click → warp → same place).
     const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0)
       .filter(f => !f.insideFeature);
     const featureCount = Math.min(nearbyFeatures.length, 16);
 
-    // ── Layer 4: External galaxies (fixed sky positions, very faint smudges) ──
+    // ── Layer 4: External galaxies ──
     const externalGalaxies = galacticMap.getExternalGalaxies();
     const extGalaxyCount = externalGalaxies.length;
 
-    // ── Layer 2: Background star budget ──
-    const bgCount = totalCount - realStarCount - featureCount - extGalaxyCount;
+    // ── Allocate arrays generously ──
+    // Real star count isn't known until after magnitude filtering.
+    // Allocate for max possible (all warpable + features + galaxies + background).
+    const maxPoints = warpableStars.length + featureCount + extGalaxyCount + totalCount;
+    const positions = new Float32Array(maxPoints * 3);
+    const colors = new Float32Array(maxPoints * 3);
+    const sizes = new Float32Array(maxPoints);
 
-    // ── Allocate arrays (real stars + features + background) ──
-    const positions = new Float32Array(totalCount * 3);
-    const colors = new Float32Array(totalCount * 3);
-    const sizes = new Float32Array(totalCount);
-
-    // Track which starfield indices map to real GalacticMap stars or features
     const realStarMap = [];
 
-    // ── Place real stars ──
-    for (let i = 0; i < realStarCount; i++) {
+    // ── Place real stars with apparent magnitude visibility filter ──
+    // Each star gets a spectral type estimate → absolute magnitude →
+    // apparent magnitude from distance. Stars too dim to see are skipped.
+    // The number of visible stars emerges from physics, not a budget.
+    let visibleCount = 0;
+    for (let i = 0; i < warpableStars.length; i++) {
       const star = warpableStars[i];
-      // Direction from player to this star
       const dx = star.worldX - playerPos.x;
       const dy = star.worldY - playerPos.y;
       const dz = star.worldZ - playerPos.z;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-      // Place on sky sphere in that direction
-      const i3 = i * 3;
+      // Estimate spectral type from galactic context at star's position
+      const starR = Math.sqrt(star.worldX * star.worldX + star.worldZ * star.worldZ);
+      const starTheta = Math.atan2(star.worldZ, star.worldX);
+      const densities = galacticMap.potentialDerivedDensity(starR, star.worldY);
+      const armStr = galacticMap.spiralArmStrength(starR, starTheta);
+      const comp = densities.bulge > densities.thin && densities.bulge > densities.halo ? 'bulge'
+        : densities.halo > densities.thin ? 'halo' : 'thin';
+
+      const spectralType = StarfieldGenerator._estimateSpectralType(star.seed, comp, armStr);
+      const appMag = StarfieldGenerator._apparentMagnitude(spectralType, dist);
+
+      // Visibility check: skip stars too dim to see
+      if (appMag > StarfieldGenerator.VISIBILITY_THRESHOLD) continue;
+
+      // This star is visible — place it
+      const idx = visibleCount;
+      const i3 = idx * 3;
       positions[i3]     = (dx / dist) * radius;
       positions[i3 + 1] = (dy / dist) * radius;
       positions[i3 + 2] = (dz / dist) * radius;
 
-      // Color based on distance (closer = brighter) and region.
-      // Use lightweight density + arm queries instead of full deriveGalaxyContext()
-      // which is ~8ms per call (500 calls = 4+ seconds).
-      const brightness = Math.min(1.0, 0.5 + 0.5 / (dist * 2));
-      const starR = Math.sqrt(star.worldX * star.worldX + star.worldZ * star.worldZ);
-      const starTheta = Math.atan2(star.worldZ, star.worldX);
-      const densities = galacticMap.componentDensities(starR, star.worldY);
-      const armStr = galacticMap.spiralArmStrength(starR, starTheta);
-      // Determine dominant component cheaply
-      const comp = densities.bulge > densities.thin && densities.bulge > densities.halo ? 'bulge'
-        : densities.halo > densities.thin ? 'halo' : 'thin';
-      // Feature stars get diagnostic coloring based on their featureContext
+      // Color from spectral type
+      const brightness = StarfieldGenerator._brightnessFromMagnitude(appMag);
+      const baseColor = StarfieldGenerator.SPECTRAL_COLOR[spectralType] || [1, 1, 1];
+
+      // Feature stars get diagnostic tint (debug: makes cluster membership visible)
       let col;
       if (star.featureContext) {
         const fc = star.featureContext;
-        // Diagnostic colors: make feature membership visible
         if (fc.type === 'globular-cluster') {
-          col = [brightness * 1.2, brightness * 0.7, brightness * 0.2]; // warm orange
+          col = [brightness * 1.2, brightness * 0.7, brightness * 0.2];
         } else if (fc.type === 'open-cluster') {
-          col = [brightness * 0.5, brightness * 0.7, brightness * 1.2]; // blue
+          col = [brightness * 0.5, brightness * 0.7, brightness * 1.2];
         } else if (fc.type === 'ob-association') {
-          col = [brightness * 0.4, brightness * 0.5, brightness * 1.3]; // bright blue
-        } else if (fc.type === 'emission-nebula') {
-          col = [brightness * 1.2, brightness * 0.3, brightness * 0.3]; // red
+          col = [brightness * 0.4, brightness * 0.5, brightness * 1.3];
         } else {
-          col = this._starColorFromContext(rng, { spiralArmStrength: armStr, component: comp }, brightness);
+          col = [baseColor[0] * brightness, baseColor[1] * brightness, baseColor[2] * brightness];
         }
       } else {
-        col = this._starColorFromContext(rng, { spiralArmStrength: armStr, component: comp }, brightness);
+        col = [baseColor[0] * brightness, baseColor[1] * brightness, baseColor[2] * brightness];
       }
       colors[i3]     = col[0];
       colors[i3 + 1] = col[1];
       colors[i3 + 2] = col[2];
 
-      // Feature stars get a size boost so they stand out
-      const isFeature = !!star.featureContext;
-      sizes[i] = isFeature ? 8.0 : (dist < 0.3 ? 8.0 : dist < 0.5 ? 6.0 : 4.0);
+      // Size from apparent magnitude
+      sizes[idx] = StarfieldGenerator._sizeFromMagnitude(appMag);
 
-      realStarMap.push({ index: i, starData: star });
+      realStarMap.push({
+        index: idx,
+        starData: star,
+        estimatedType: spectralType,
+        apparentMagnitude: appMag,
+      });
+      visibleCount++;
     }
+    const realStarCount = visibleCount;
 
     // ── Place galactic features as tagged sky points ──
     for (let f = 0; f < featureCount; f++) {
@@ -308,7 +400,7 @@ export class StarfieldGenerator {
             const sampleZ = playerPos.z + dirZ * dist;
             const R = Math.sqrt(sampleX * sampleX + sampleZ * sampleZ);
             if (R > 20 || Math.abs(sampleY) > 10) continue;
-            const dens = galacticMap.componentDensities(R, sampleY);
+            const dens = galacticMap.potentialDerivedDensity(R, sampleY);
             const sampleTheta = Math.atan2(sampleZ, sampleX);
             const armStr = narrowArmStrength(R, sampleTheta);
             const bulgeBlendLocal = Math.min(1, Math.max(0, (R - 0.5) / 1.5));
@@ -399,7 +491,7 @@ export class StarfieldGenerator {
           const sampleZ = playerPos.z + dirZ * dist;
           const R = Math.sqrt(sampleX * sampleX + sampleZ * sampleZ);
           if (R > 20 || Math.abs(sampleY) > 10) continue;
-          const dens = galacticMap.componentDensities(R, sampleY);
+          const dens = galacticMap.potentialDerivedDensity(R, sampleY);
           const sampleTheta = Math.atan2(sampleZ, sampleX);
           const armStr = narrowArmStrength(R, sampleTheta);
           const bulgeBlendLocal = Math.min(1, Math.max(0, (R - 0.5) / 1.5));
@@ -424,6 +516,13 @@ export class StarfieldGenerator {
       const d = directDensity(dx, dy, dz);
       if (d > maxDirectDensity) maxDirectDensity = d;
     }
+
+    // ── Background stars: fill remaining budget ──
+    // With the apparent magnitude filter, many real stars are invisible.
+    // Background stars fill in the visual density for unresolved distant stars.
+    // TODO: Eventually replace with sector-level visibility pre-filter
+    // so ALL visible points are real GalacticMap stars.
+    const bgCount = Math.max(0, totalCount - realStarCount - featureCount - extGalaxyCount);
 
     // ── Place background stars using direct density evaluation ──
     let placed = 0;
@@ -482,11 +581,14 @@ export class StarfieldGenerator {
       placed++;
     }
 
+    // Actual total: real visible stars + features + galaxies + background
+    const actualCount = realStarCount + featureCount + extGalaxyCount + placed;
+
     return {
       positions,
       colors,
       sizes,
-      count: totalCount,
+      count: actualCount,
       realStars: realStarMap,
       // Sky density grid for the galactic glow layer
       skyGrid,
