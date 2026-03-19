@@ -153,29 +153,25 @@ export class StarfieldLayer {
 
         void main() {
           vec2 center = gl_PointCoord - 0.5;
+          float dist = length(center);
 
-          float dist;
-          if (vSize < 5.0) {
-            dist = length(center);
-          } else {
-            dist = pow(abs(center.x), 0.6) + pow(abs(center.y), 0.6);
-          }
+          // Circular shape with soft glow falloff.
+          // Bright core → soft edge. Reads as a point of light.
+          float coreBright = 1.0 - smoothstep(0.0, 0.2, dist);   // bright center
+          float glow = 1.0 - smoothstep(0.1, 0.5, dist);          // soft halo
+          float shape = coreBright * 0.6 + glow * 0.4;
 
-          float edge = vSize < 5.0
-            ? smoothstep(0.3, 0.5, dist)
-            : smoothstep(0.35, 0.55, dist);
-
+          // Dithered edge (retro feel)
           float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
           float foldSmooth = clamp(uFoldAmount * 2.0, 0.0, 1.0);
           float cutoff = mix(threshold, 0.45, foldSmooth);
-          if (edge > cutoff) discard;
+          if (shape < cutoff * 0.5) discard;
 
-          // ── Brightness-budgeted output ──
-          // Scale vertex colors into [brightnessMin, brightnessMax] range.
-          // This ensures stars always read brighter than galaxy glow beneath.
-          vec3 col = vColor * uBrightness;
+          // ── Brightness from vertex color ──
+          // The generator already set per-star brightness from apparent magnitude.
+          // Just apply the brightness budget scaling.
+          vec3 col = vColor * uBrightness * shape;
           float lum = max(0.001, dot(col, vec3(0.299, 0.587, 0.114)));
-          // Remap: dim stars → brightnessMin, bright stars → brightnessMax
           float remapped = uBrightnessMin + clamp(lum, 0.0, 1.0) * (uBrightnessMax - uBrightnessMin);
           vec3 finalCol = col * (remapped / lum);
 
