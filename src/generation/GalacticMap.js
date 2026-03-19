@@ -311,8 +311,106 @@ export class GalacticMap {
     // Galactic features overlapping this sector (Level 1 → Level 2 cascade)
     const overlappingFeatures = this.findFeaturesOverlappingSector(sx, sy, sz);
 
-    // Mark stars that are inside a galactic feature
+    // ── Generate additional stars inside features ──
+    // Features have their own stellar populations. A globular cluster has
+    // thousands of densely packed stars; an open cluster has hundreds.
+    // These are real GalacticMap stars — warpable, visible in nav computer.
+    for (const feat of overlappingFeatures) {
+      const spec = GalacticMap.FEATURE_TYPES[feat.type];
+      if (!spec) continue;
+      const multiplier = spec.contextOverrides.starCountMultiplier;
+      if (!multiplier || multiplier <= 1) continue; // no extra stars for this type
+
+      // How many stars to add for this feature in this sector.
+      // Scale by how much of the feature's volume overlaps this sector.
+      const featR = feat.radius;
+      // Approximate overlap: if feature center is in this sector, full count.
+      // If feature center is in adjacent sector, partial count.
+      const cx = feat.position.x - sx * S;
+      const cy = feat.position.y - sy * S;
+      const cz = feat.position.z - sz * S;
+      const centerInSector = cx >= 0 && cx < S && cy >= 0 && cy < S && cz >= 0 && cz < S;
+      const overlapFraction = centerInSector ? 1.0 : 0.3;
+
+      // Base count: proportional to multiplier and feature size
+      // A globular cluster (10x, r=0.05kpc) should have ~200-500 stars
+      // An open cluster (3x, r=0.01kpc) should have ~50-150 stars
+      const featureVolume = (4 / 3) * Math.PI * featR * featR * featR;
+      const sectorVolume = S * S * S;
+      const volumeRatio = Math.min(1, featureVolume / sectorVolume);
+      const baseFeatureStars = Math.round(targetAtSolar * multiplier * 10 * volumeRatio);
+      const featureStarCount = Math.round(baseFeatureStars * overlapFraction);
+
+      const featRng = new SeededRandom(`${seed}-feat-${feat.seed}`);
+
+      for (let fi = 0; fi < featureStarCount; fi++) {
+        // Place stars using the feature's density profile
+        let worldX, worldY, worldZ, distFromCenter;
+
+        if (feat.type === 'globular-cluster') {
+          // King profile: dense core, sparse halo
+          // r = R_feat * pow(random, 0.5) gives r^(-2) density
+          const r = featR * Math.sqrt(featRng.float());
+          const theta = featRng.range(0, Math.PI * 2);
+          const phi = Math.acos(featRng.range(-1, 1));
+          worldX = feat.position.x + Math.sin(phi) * Math.cos(theta) * r;
+          worldY = feat.position.y + Math.cos(phi) * r;
+          worldZ = feat.position.z + Math.sin(phi) * Math.sin(theta) * r;
+          distFromCenter = r;
+        } else if (feat.type === 'open-cluster') {
+          // Gaussian distribution with sub-clumps
+          const sigma = featR * 0.4;
+          worldX = feat.position.x + featRng.gaussian() * sigma;
+          worldY = feat.position.y + featRng.gaussian() * sigma * 0.3; // flattened
+          worldZ = feat.position.z + featRng.gaussian() * sigma;
+          distFromCenter = Math.sqrt(
+            (worldX - feat.position.x) ** 2 +
+            (worldY - feat.position.y) ** 2 +
+            (worldZ - feat.position.z) ** 2
+          );
+        } else {
+          // Default: uniform within feature radius
+          const r = featR * Math.cbrt(featRng.float());
+          const theta = featRng.range(0, Math.PI * 2);
+          const phi = Math.acos(featRng.range(-1, 1));
+          worldX = feat.position.x + Math.sin(phi) * Math.cos(theta) * r;
+          worldY = feat.position.y + Math.cos(phi) * r;
+          worldZ = feat.position.z + Math.sin(phi) * Math.sin(theta) * r;
+          distFromCenter = r;
+        }
+
+        // Only include stars that fall within THIS sector's bounds
+        const lx = worldX - sx * S;
+        const ly = worldY - sy * S;
+        const lz = worldZ - sz * S;
+        if (lx < 0 || lx >= S || ly < 0 || ly >= S || lz < 0 || lz >= S) continue;
+
+        const starSeed = GalacticMap.hashCombine(
+          GalacticMap.hashCombine(sx + 20000, fi),
+          GalacticMap.hashCombine(sz + 20000, Math.round(feat.position.x * 1000)),
+        );
+
+        stars.push({
+          localX: lx, localY: ly, localZ: lz,
+          worldX, worldY, worldZ,
+          seed: starSeed,
+          index: stars.length,
+          featureContext: {
+            type: feat.type,
+            featureSeed: feat.seed,
+            metallicity: feat.context.metallicity,
+            age: feat.context.age,
+            overrides: feat.overrides,
+            featureRadius: featR,
+            distFromCenter,
+          },
+        });
+      }
+    }
+
+    // Mark regular (non-feature) stars that happen to be inside a feature
     for (const star of stars) {
+      if (star.featureContext) continue; // already tagged (feature-generated star)
       star.featureContext = null;
       for (const feat of overlappingFeatures) {
         const dx = star.worldX - feat.position.x;
@@ -320,7 +418,6 @@ export class GalacticMap {
         const dz = star.worldZ - feat.position.z;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (dist < feat.radius) {
-          // Star is inside this feature — inherit its context
           star.featureContext = {
             type: feat.type,
             featureSeed: feat.seed,
@@ -330,7 +427,7 @@ export class GalacticMap {
             featureRadius: feat.radius,
             distFromCenter: dist,
           };
-          break; // First (nearest) feature wins
+          break;
         }
       }
     }
