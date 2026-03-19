@@ -56,84 +56,15 @@ export class StarfieldGenerator {
     return Math.max(200, Math.min(baseCount * 2, Math.round(scaled)));
   }
 
-  // Feature immersion profiles — how being inside each feature type
-  // affects the starfield. Multiplier boosts total star count,
-  // colors/sizes define the visual character of the extra stars.
-  static FEATURE_IMMERSION = {
-    'globular-cluster': {
-      starMultiplier: 4.0,       // very dense
-      extraStarColor: [1.0, 0.85, 0.5],  // old yellow-orange population
-      extraStarColorVariance: 0.1,
-      extraStarSizeMin: 5.0,     // closer stars = brighter
-      extraStarSizeMax: 10.0,
-      extraStarBrightMin: 0.6,
-      extraStarBrightMax: 1.0,
-    },
-    'open-cluster': {
-      starMultiplier: 2.5,
-      extraStarColor: [0.7, 0.8, 1.0],   // young blue-white
-      extraStarColorVariance: 0.15,
-      extraStarSizeMin: 5.0,
-      extraStarSizeMax: 8.0,
-      extraStarBrightMin: 0.5,
-      extraStarBrightMax: 0.9,
-    },
-    'ob-association': {
-      starMultiplier: 1.8,
-      extraStarColor: [0.6, 0.7, 1.0],   // hot blue giants
-      extraStarColorVariance: 0.12,
-      extraStarSizeMin: 6.0,
-      extraStarSizeMax: 10.0,
-      extraStarBrightMin: 0.7,
-      extraStarBrightMax: 1.0,
-    },
-    'emission-nebula': {
-      starMultiplier: 1.5,       // star-forming = somewhat denser
-      extraStarColor: [0.8, 0.85, 1.0],
-      extraStarColorVariance: 0.2,
-      extraStarSizeMin: 4.0,
-      extraStarSizeMax: 7.0,
-      extraStarBrightMin: 0.4,
-      extraStarBrightMax: 0.8,
-    },
-    'dark-nebula': {
-      starMultiplier: 0.4,       // dark = fewer visible stars (absorption)
-      extraStarColor: [0.5, 0.45, 0.4],
-      extraStarColorVariance: 0.05,
-      extraStarSizeMin: 3.0,
-      extraStarSizeMax: 5.0,
-      extraStarBrightMin: 0.2,
-      extraStarBrightMax: 0.5,
-    },
-    'supernova-remnant': {
-      starMultiplier: 1.2,
-      extraStarColor: [0.8, 0.8, 0.85],
-      extraStarColorVariance: 0.15,
-      extraStarSizeMin: 4.0,
-      extraStarSizeMax: 6.0,
-      extraStarBrightMin: 0.4,
-      extraStarBrightMax: 0.7,
-    },
-  };
-
   static generate(galacticMap, playerPos, baseCount = 6000, radius = 500) {
     const rng = new SeededRandom(`starfield-${playerPos.x.toFixed(3)}-${playerPos.y.toFixed(3)}-${playerPos.z.toFixed(3)}`);
 
-    // ── Check if inside a galactic feature ──
-    const nearbyForImmersion = galacticMap.findNearbyFeatures(playerPos, 0.5);
-    const insideFeature = nearbyForImmersion.find(f => f.insideFeature) || null;
-    const immersion = insideFeature ? (this.FEATURE_IMMERSION[insideFeature.type] || null) : null;
-
     // ── Dynamic star count based on local density ──
     // Sparse regions get fewer stars — the emptiness is part of the experience
-    let totalCount = this._computeStarBudget(galacticMap, playerPos, baseCount);
-
-    // Inside a feature: multiply the star budget
-    if (immersion) {
-      totalCount = Math.round(totalCount * immersion.starMultiplier);
-      // Cap at a reasonable maximum for performance
-      totalCount = Math.min(totalCount, baseCount * 5);
-    }
+    // NOTE: Feature immersion (dense stars inside clusters) is NOT handled here.
+    // It must be handled in GalacticMap by generating actual star positions inside
+    // features — not by recoloring background stars. See design notes.
+    const totalCount = this._computeStarBudget(galacticMap, playerPos, baseCount);
 
     // ── Layer 1: Real nearby stars (all GalacticMap stars within search volume) ──
     // Search wider (up to ~3.5 kpc) to get more real stars.
@@ -503,26 +434,17 @@ export class StarfieldGenerator {
       positions[i3 + 1] = dirY * radius;
       positions[i3 + 2] = dirZ * radius;
 
-      // Color + size: feature-immersive or density-correlated
-      if (immersion) {
-        // Inside a feature: use the feature's stellar population colors
-        const bright = rng.range(immersion.extraStarBrightMin, immersion.extraStarBrightMax);
-        const v = immersion.extraStarColorVariance;
-        colors[i3]     = Math.min(1, immersion.extraStarColor[0] * bright + rng.range(-v, v));
-        colors[i3 + 1] = Math.min(1, immersion.extraStarColor[1] * bright + rng.range(-v, v));
-        colors[i3 + 2] = Math.min(1, immersion.extraStarColor[2] * bright + rng.range(-v, v));
-        sizes[idx] = rng.range(immersion.extraStarSizeMin, immersion.extraStarSizeMax);
-      } else {
-        // Normal: density-correlated colors
-        const col = this._backgroundStarColor(rng, density, dirX, dirY, dirZ, centerDirX, centerDirY, centerDirZ);
-        colors[i3]     = col[0];
-        colors[i3 + 1] = col[1];
-        colors[i3 + 2] = col[2];
-        const sizeRoll = rng.float();
-        if (sizeRoll < 0.003) sizes[idx] = 8.0;
-        else if (sizeRoll < 0.02) sizes[idx] = 6.0;
-        else sizes[idx] = 4.0;
-      }
+      // Color: density-correlated
+      const col = this._backgroundStarColor(rng, density, dirX, dirY, dirZ, centerDirX, centerDirY, centerDirZ);
+      colors[i3]     = col[0];
+      colors[i3 + 1] = col[1];
+      colors[i3 + 2] = col[2];
+
+      // Size: mostly small, occasional medium
+      const sizeRoll = rng.float();
+      if (sizeRoll < 0.003) sizes[idx] = 8.0;
+      else if (sizeRoll < 0.02) sizes[idx] = 6.0;
+      else sizes[idx] = 4.0;
 
       placed++;
     }
@@ -559,12 +481,6 @@ export class StarfieldGenerator {
       playerPos: { x: playerPos.x, y: playerPos.y, z: playerPos.z },
       armOffsets: galacticMap.armOffsets.slice(), // copy of the 4 arm starting angles
       armPitchK: galacticMap.pitchK,
-      // Feature immersion data (if player is inside a galactic feature)
-      insideFeature: insideFeature ? {
-        type: insideFeature.type,
-        name: insideFeature.type.replace('-', ' '),
-        starMultiplier: immersion?.starMultiplier ?? 1,
-      } : null,
     };
   }
 
