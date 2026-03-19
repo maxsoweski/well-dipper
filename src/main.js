@@ -639,30 +639,73 @@ warpEffect.onPrepareSystem = () => {
   }
   _forceNextDestType = null; // clear after use
 
+  // ── Category A/B deep sky: route to a star inside the feature ──
+  // When DestinationPicker rolls a cluster/nebula/remnant and we have
+  // a galaxy active, find a real galactic feature of that type and route
+  // to a star inside it. The old particle-cloud generators are ONLY used
+  // as fallback when no galaxy is active (legacy screensaver mode).
+  const CATEGORY_AB_TYPES = [
+    'emission-nebula', 'planetary-nebula', 'open-cluster',
+    'globular-cluster', 'ob-association', 'supernova-remnant',
+  ];
+  // Map DestinationPicker names to GalacticMap feature type names
+  const DEST_TO_FEATURE = {
+    'emission-nebula': 'emission-nebula',
+    'planetary-nebula': 'emission-nebula', // no separate type in GalacticMap
+    'open-cluster': 'open-cluster',
+    'globular-cluster': 'globular-cluster',
+  };
+
+  if (CATEGORY_AB_TYPES.includes(destType) && galacticMap) {
+    // Try to find a real galactic feature of this type nearby
+    const featureType = DEST_TO_FEATURE[destType] || destType;
+    let foundFeature = null;
+    for (const radius of [3.0, 6.0, 10.0]) {
+      const features = galacticMap.findNearbyFeatures(playerGalacticPos, radius);
+      foundFeature = features.find(f => f.type === featureType);
+      if (foundFeature) break;
+    }
+
+    if (foundFeature) {
+      // Route to a star inside this feature (same as click routing)
+      playerGalacticPos = { ...foundFeature.position };
+      const galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+      const featStars = galacticMap.findNearestStars(playerGalacticPos, 5);
+      const featSeed = featStars.length > 0 ? String(featStars[0].seed) : foundFeature.seed;
+      if (featStars.length > 0) {
+        playerGalacticPos = { x: featStars[0].worldX, y: featStars[0].worldY, z: featStars[0].worldZ };
+      }
+      pendingSystemData = StarSystemGenerator.generate(featSeed, galaxyContext);
+      pendingSystemData._destType = 'star-system';
+      pendingSystemData._warpTargetName = warpTarget.name || null;
+      pendingSystemData._insideFeature = foundFeature;
+      skyRenderer.prepareForPosition(playerGalacticPos);
+      console.log(`Warp: DestinationPicker rolled ${destType} → routed to feature ${foundFeature.type} at (${playerGalacticPos.x.toFixed(2)}, ${playerGalacticPos.y.toFixed(3)}, ${playerGalacticPos.z.toFixed(2)})`);
+      return;
+    }
+    // No feature found — fall through to old generators as fallback
+    console.log(`Warp: DestinationPicker rolled ${destType} but no feature found nearby, using legacy generator`);
+  }
+
   if (destType === 'star-system') {
     // ── Galaxy-aware system generation ──
-    // If galaxy mode is active, resolve the warp target to a GalacticMap
-    // star and derive context from its galactic position.
     let galaxyContext = null;
     if (galacticMap && warpTarget.direction) {
-      // Find which galaxy star the player is warping toward
       const nearby = galacticMap.findNearestStars(playerGalacticPos, 30);
       let bestStar = null;
       let bestDot = -1;
       for (const star of nearby) {
-        if (star.distSq < 0.001) continue; // skip self
+        if (star.distSq < 0.001) continue;
         const dx = star.worldX - playerGalacticPos.x;
         const dy = star.worldY - playerGalacticPos.y;
         const dz = star.worldZ - playerGalacticPos.z;
         const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        // Match warp direction to galaxy star direction
         const dot = (dx / len) * warpTarget.direction.x
                   + (dy / len) * warpTarget.direction.y
                   + (dz / len) * warpTarget.direction.z;
         if (dot > bestDot) { bestDot = dot; bestStar = star; }
       }
       if (bestStar) {
-        // Update player position to the destination star
         playerGalacticPos = { x: bestStar.worldX, y: bestStar.worldY, z: bestStar.worldZ };
         currentGalaxyStar = bestStar;
         galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
@@ -670,11 +713,10 @@ warpEffect.onPrepareSystem = () => {
     }
     pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
   } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
-    // Navigable nebulae — nav generator for star positions, billboard generator for visuals
+    // Legacy fallback: navigable nebula (no galaxy active or no feature found)
     pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
     pendingSystemData._billboardData = NebulaGenerator.generate(seed, destType);
   } else if (destType === 'open-cluster') {
-    // Navigable open cluster — nav generator for star positions, particle cloud for visuals
     pendingSystemData = NavigableClusterGenerator.generate(seed);
     pendingSystemData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
   } else if (destType.includes('galaxy')) {
