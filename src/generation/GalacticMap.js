@@ -465,10 +465,11 @@ export class GalacticMap {
     const centerY = (sy + 0.5) * S;
     const centerZ = (sz + 0.5) * S;
 
-    // Density at sector center (cylindrical coords)
+    // Density at sector center — derived from gravitational potential.
+    // The potential is the primary data; density emerges from it.
     const R = Math.sqrt(centerX * centerX + centerZ * centerZ);
     const theta = Math.atan2(centerZ, centerX);
-    const densities = this.componentDensities(R, centerY);
+    const densities = this.potentialDerivedDensity(R, centerY);
     const armStr = this.spiralArmStrength(R, theta);
 
     // Star count: normalize density relative to solar neighborhood,
@@ -665,8 +666,9 @@ export class GalacticMap {
     const R = Math.sqrt(x * x + z * z);
     const theta = Math.atan2(z, x);
 
-    const densities = this.componentDensities(R, y);
+    const densities = this.potentialDerivedDensity(R, y);
     const armStr = this.spiralArmStrength(R, theta);
+    const phi = this.gravitationalPotential(R, y);
 
     // Pick dominant component
     const componentEntries = [
@@ -732,6 +734,10 @@ export class GalacticMap {
       starWeights,
       binaryModifier: binaryMod,
       starDensity: densities.totalDensity,
+      // Gravitational potential data (primary game data)
+      gravitationalPotential: phi.total,
+      escapeVelocity: Math.sqrt(-2 * phi.total),
+      potentialDepth: -phi.total, // positive = deeper well
       R_kpc: R,
       z_kpc: y,
       theta_rad: theta,
@@ -1036,7 +1042,7 @@ export class GalacticMap {
           const theta = Math.atan2(z, x);
           if (R > GalacticMap.GALAXY_RADIUS || Math.abs(y) > GalacticMap.GALAXY_HEIGHT) continue;
 
-          const densities = this.componentDensities(R, y);
+          const densities = this.potentialDerivedDensity(R, y);
           const armStr = this.spiralArmStrength(R, theta);
 
           // Derive context for this candidate position
