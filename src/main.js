@@ -691,9 +691,25 @@ warpEffect.onPrepareSystem = () => {
 
   if (destType === 'star-system') {
     // ── Galaxy-aware system generation ──
+    // First, check if the clicked starfield point maps to a specific
+    // GalacticMap star. If so, warp directly to THAT star — don't do
+    // a second direction-based search that might find a different star.
     let galaxyContext = null;
-    if (galacticMap && warpTarget.direction) {
-      const nearby = galacticMap.findNearestStars(playerGalacticPos, 30);
+    let resolvedStar = null;
+
+    if (galacticMap && warpTarget.starIndex >= 0) {
+      // Try to resolve the clicked point to a specific GalacticMap star
+      const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
+      if (entry?.starData && entry.starData.worldX !== undefined) {
+        // Direct resolution: we know exactly which star was clicked
+        resolvedStar = entry.starData;
+      }
+    }
+
+    if (!resolvedStar && galacticMap && warpTarget.direction) {
+      // Fallback: direction-based search (for background stars or when
+      // the clicked point doesn't map to a real GalacticMap star)
+      const nearby = galacticMap.findNearestStars(playerGalacticPos, 500);
       let bestStar = null;
       let bestDot = -1;
       for (const star of nearby) {
@@ -707,12 +723,17 @@ warpEffect.onPrepareSystem = () => {
                   + (dz / len) * warpTarget.direction.z;
         if (dot > bestDot) { bestDot = dot; bestStar = star; }
       }
-      if (bestStar) {
-        playerGalacticPos = { x: bestStar.worldX, y: bestStar.worldY, z: bestStar.worldZ };
-        currentGalaxyStar = bestStar;
-        galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      }
+      resolvedStar = bestStar;
     }
+
+    if (resolvedStar) {
+      playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
+      currentGalaxyStar = resolvedStar;
+      galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+      // Use the resolved star's seed for deterministic system generation
+      seed = String(resolvedStar.seed);
+    }
+
     pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
   } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
     // Legacy fallback: navigable nebula (no galaxy active or no feature found)
