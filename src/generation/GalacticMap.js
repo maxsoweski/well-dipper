@@ -332,14 +332,22 @@ export class GalacticMap {
       const centerInSector = cx >= 0 && cx < S && cy >= 0 && cy < S && cz >= 0 && cz < S;
       const overlapFraction = centerInSector ? 1.0 : 0.3;
 
-      // Base count: proportional to multiplier and feature size
-      // A globular cluster (10x, r=0.05kpc) should have ~200-500 stars
-      // An open cluster (3x, r=0.01kpc) should have ~50-150 stars
-      const featureVolume = (4 / 3) * Math.PI * featR * featR * featR;
-      const sectorVolume = S * S * S;
-      const volumeRatio = Math.min(1, featureVolume / sectorVolume);
-      const baseFeatureStars = Math.round(targetAtSolar * multiplier * 10 * volumeRatio);
-      const featureStarCount = Math.round(baseFeatureStars * overlapFraction);
+      // Star count based on the feature's own density, NOT sector volume ratio.
+      // A globular cluster has ~100K-1M stars in reality; we generate a
+      // representative sample that makes the starfield visibly dense.
+      // Scale with radius: bigger features = more stars.
+      const featureStarBudget = {
+        'globular-cluster': 400,  // dense ball
+        'open-cluster': 150,      // loose group
+        'ob-association': 80,     // scattered giants
+        'emission-nebula': 60,    // modest star-forming boost
+        'supernova-remnant': 20,  // few extra
+      };
+      const budget = featureStarBudget[feat.type] || Math.round(multiplier * 30);
+      // Scale budget by feature radius relative to typical size
+      const typicalRadius = (spec.sizeRange[0] + spec.sizeRange[1]) / 2;
+      const radiusScale = Math.max(0.3, Math.min(3.0, featR / typicalRadius));
+      const featureStarCount = Math.round(budget * radiusScale * overlapFraction);
 
       const featRng = new SeededRandom(`${seed}-feat-${feat.seed}`);
 

@@ -118,17 +118,20 @@ export class SkyFeatureLayer {
 
   _createFeatureMesh(feature, position, size, brightness) {
     switch (feature.type) {
+      // Gas features: rendered as sky billboards (no GalacticMap stars for gas)
       case 'emission-nebula':
         return this._createNebulaBillboard(feature, position, size, brightness, false);
       case 'dark-nebula':
         return this._createDarkNebulaBillboard(feature, position, size, brightness);
-      case 'open-cluster':
-      case 'ob-association':
-        return this._createClusterPoints(feature, position, size, brightness);
-      case 'globular-cluster':
-        return this._createGlobularPoints(feature, position, size, brightness);
       case 'supernova-remnant':
         return this._createRemnantBillboard(feature, position, size, brightness);
+      // Star-region features: NOT rendered here — their stars are real
+      // GalacticMap entries that appear naturally in the starfield.
+      // Rendering them as billboards/point clouds would double-render.
+      case 'open-cluster':
+      case 'ob-association':
+      case 'globular-cluster':
+        return null;
       default:
         return null;
     }
