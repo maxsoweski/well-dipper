@@ -1786,12 +1786,9 @@ debugPanel.setSpawnCallbacks({
         const features = galacticMap.findNearbyFeatures(playerGalacticPos, radius);
         const match = features.find(f => f.type === featureType);
         if (match) {
-          // Star regions (clusters, OB associations): go INSIDE the feature
-          // Gas features (nebulae, remnants): position just outside for viewing
-          const isStarRegion = ['globular-cluster', 'open-cluster', 'ob-association'].includes(match.type);
-          const viewDist = isStarRegion
-            ? match.radius * 0.3  // inside: 30% of radius from center
-            : Math.max(match.radius * 1.5, 0.01); // outside: 1.5x radius away
+          // Position outside the feature at viewing distance.
+          // Player can then click the feature in the sky to warp inside it.
+          const viewDist = Math.max(match.radius * 2.0, 0.01);
           const dx = match.position.x - playerGalacticPos.x;
           const dy = match.position.y - playerGalacticPos.y;
           const dz = match.position.z - playerGalacticPos.z;
