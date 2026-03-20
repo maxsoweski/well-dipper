@@ -118,12 +118,12 @@ retroRenderer.setSkyRenderer(skyRenderer);
 // Load the HYG database (15,598 real naked-eye stars with names and positions).
 // Once loaded, real stars are merged into every subsequent starfield generation.
 const realStarCatalog = new RealStarCatalog();
+// Load real star catalog in the background — don't regenerate starfield
+// immediately. The catalog will be used on the NEXT warp/teleport.
+// This prevents the async load from interfering with title screen.
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
   debugPanel.setRealStarCatalog(realStarCatalog);
-  // Regenerate starfield to include real stars
-  skyRenderer.prepareForPosition(playerGalacticPos);
-  skyRenderer.activate();
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
 });
 debugPanel.setSkyRenderer(skyRenderer);
