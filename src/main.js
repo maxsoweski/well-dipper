@@ -120,6 +120,7 @@ retroRenderer.setSkyRenderer(skyRenderer);
 const realStarCatalog = new RealStarCatalog();
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
+  debugPanel.setRealStarCatalog(realStarCatalog);
   // Regenerate starfield to include real stars
   skyRenderer.prepareForPosition(playerGalacticPos);
   skyRenderer.activate();

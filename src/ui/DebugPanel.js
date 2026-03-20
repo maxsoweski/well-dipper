@@ -47,6 +47,7 @@ export class DebugPanel {
 
   setPlayerPos(pos) { this._playerPos = pos; }
   setGalacticMap(gm) { this._galacticMap = gm; }
+  setRealStarCatalog(catalog) { this._realStarCatalog = catalog; }
   setCamera(cam) { this._camera = cam; }
   setSkyRenderer(sky) { this._skyRenderer = sky; }
   setLODManager(lod) { this._lodManager = lod; }
@@ -288,6 +289,15 @@ export class DebugPanel {
     }
     html += '</div></div>';
 
+    // ── Star/Object Search ──
+    html += '<div class="debug-section"><h3>GO TO OBJECT</h3>';
+    html += '<div class="debug-seed-row">';
+    html += '<input type="text" id="debug-star-search" class="debug-input" placeholder="Search: Sirius, Betelgeuse, Sol...">';
+    html += '<button class="debug-btn" id="debug-star-search-go">GO</button>';
+    html += '</div>';
+    html += '<div id="debug-search-results" class="debug-find-status"></div>';
+    html += '</div>';
+
     // ── Galaxy Position ──
     html += '<div class="debug-section"><h3>GALAXY</h3><div class="debug-grid">';
     if (this._playerPos) {
@@ -493,6 +503,68 @@ export class DebugPanel {
             }
           }
         });
+      });
+    }
+
+    // Star/object search
+    const searchInput = container.querySelector('#debug-star-search');
+    const searchBtn = container.querySelector('#debug-star-search-go');
+    const searchResults = container.querySelector('#debug-search-results');
+    if (searchInput && searchBtn) {
+      const doSearch = () => {
+        const query = searchInput.value.trim().toLowerCase();
+        if (!query) return;
+
+        // Search the real star catalog
+        const catalog = this._realStarCatalog;
+        if (!catalog?.loaded) {
+          if (searchResults) searchResults.textContent = 'Star catalog not loaded yet';
+          return;
+        }
+
+        // Find matching stars (by name, case-insensitive, partial match)
+        const matches = [];
+        for (const star of catalog._stars) {
+          if (star.name && star.name.toLowerCase().includes(query)) {
+            matches.push(star);
+            if (matches.length >= 10) break; // cap results
+          }
+        }
+
+        if (matches.length === 0) {
+          // Check for "earth" / "sol" / "sun" special cases
+          if (query === 'earth' || query === 'sol' || query === 'sun' || query === 'solar system') {
+            if (this._spawnCallbacks?.teleportToPosition) {
+              this._spawnCallbacks.teleportToPosition({ x: 8.0, y: 0.025, z: 0.0 }, 'Sol (Solar System)');
+              if (searchResults) searchResults.textContent = 'Teleported to Sol';
+            }
+            return;
+          }
+          if (searchResults) searchResults.textContent = `No matches for "${query}"`;
+          return;
+        }
+
+        if (matches.length === 1 || query === matches[0].name.toLowerCase()) {
+          // Exact or single match — teleport directly
+          const star = matches[0];
+          if (this._spawnCallbacks?.teleportToPosition) {
+            this._spawnCallbacks.teleportToPosition(
+              { x: star.x, y: star.y, z: star.z },
+              star.name
+            );
+            if (searchResults) searchResults.textContent = `→ ${star.name} (${star.spect}-class, mag ${star.mag})`;
+          }
+        } else {
+          // Multiple matches — show list
+          const list = matches.slice(0, 5).map(s => `${s.name} (${s.spect}, mag ${s.mag})`).join(', ');
+          if (searchResults) searchResults.textContent = `${matches.length} matches: ${list}`;
+        }
+      };
+
+      searchBtn.addEventListener('click', doSearch);
+      searchInput.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.code === 'Enter') doSearch();
       });
     }
 
