@@ -575,7 +575,7 @@ warpEffect.onPrepareSystem = () => {
   // _hideCurrentSystem() is called later when ENTER starts (see animation loop).
 
   seedCounter++;
-  const seed = `system-${seedCounter}`;
+  let seed = `system-${seedCounter}`;
   const rng = new SeededRandom(seed);
   // ── Route based on what was clicked ──
   // If the player clicked a tagged galactic feature, route to a star inside it.
@@ -753,7 +753,8 @@ warpEffect.onPrepareSystem = () => {
   pendingSystemData._warpTargetName = warpTarget.name || null;
   // Pre-generate sky data for new galactic position (CPU only, no GPU resources)
   skyRenderer.prepareForPosition(playerGalacticPos);
-  console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold`);
+  const _sfCount = skyRenderer._pendingData?.count ?? 'NO DATA';
+  console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold | pos=(${playerGalacticPos.x.toFixed(3)},${playerGalacticPos.y.toFixed(3)},${playerGalacticPos.z.toFixed(3)}) | starfield=${_sfCount} stars`);
 };
 
 // System swap at hyper start (tunnel is opaque, hides any GPU resource creation)
