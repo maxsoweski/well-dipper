@@ -144,6 +144,9 @@ export class StarfieldGenerator {
     return Math.max(200, Math.min(baseCount * 2, Math.round(scaled)));
   }
 
+  // Reference to the loaded real star catalog (set from main.js)
+  static realStarCatalog = null;
+
   static generate(galacticMap, playerPos, baseCount = 6000, radius = 500) {
     // ── Hash-grid star generation ──
     // Every visible star is deterministically computed from the gravitational
@@ -151,9 +154,17 @@ export class StarfieldGenerator {
     // grid point determining whether a star exists there.
     const gridData = HashGridStarfield.generate(galacticMap, playerPos, radius);
 
-    // Start with the hash-grid stars, then append features + galaxies
-    const realStarCount = gridData.count;
-    const realStarMap = gridData.realStars;
+    // ── Real star overlay ──
+    // If the HYG catalog is loaded, find visible real stars and merge them
+    // with the hash-grid data. Real stars carry actual names and properties.
+    let realOverlay = [];
+    if (this.realStarCatalog?.loaded) {
+      realOverlay = this.realStarCatalog.findVisible(playerPos, 6.5, radius);
+    }
+
+    // Start with the hash-grid stars, then append real stars + features + galaxies
+    const realStarCount = gridData.count + realOverlay.length;
+    const realStarMap = [...gridData.realStars];
 
     // ── Layer 3: Nearby galactic features as tagged sky points ──
     const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0)
@@ -171,12 +182,42 @@ export class StarfieldGenerator {
     const sizes = new Float32Array(totalMax);
 
     // Copy hash-grid star data
-    for (let i = 0; i < realStarCount * 3; i++) {
+    const gridCount = gridData.count;
+    for (let i = 0; i < gridCount * 3; i++) {
       positions[i] = gridData.positions[i];
       colors[i] = gridData.colors[i];
     }
-    for (let i = 0; i < realStarCount; i++) {
+    for (let i = 0; i < gridCount; i++) {
       sizes[i] = gridData.sizes[i];
+    }
+
+    // Append real catalog stars
+    for (let r = 0; r < realOverlay.length; r++) {
+      const rs = realOverlay[r];
+      const idx = gridCount + r;
+      const i3 = idx * 3;
+      positions[i3]     = rs.skyX;
+      positions[i3 + 1] = rs.skyY;
+      positions[i3 + 2] = rs.skyZ;
+      colors[i3]     = rs.color[0];
+      colors[i3 + 1] = rs.color[1];
+      colors[i3 + 2] = rs.color[2];
+      sizes[idx] = rs.size;
+
+      realStarMap.push({
+        index: idx,
+        starData: {
+          worldX: rs.worldX,
+          worldY: rs.worldY,
+          worldZ: rs.worldZ,
+          seed: rs.seed,
+          name: rs.name,
+          isRealStar: true,
+        },
+        estimatedType: rs.type,
+        apparentMagnitude: rs.appMag,
+        name: rs.name,
+      });
     }
 
     // ── Place galactic features as tagged sky points ──

@@ -1,6 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { StarFlare } from './objects/StarFlare.js';
+import { RealStarCatalog } from './generation/RealStarCatalog.js';
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
@@ -112,6 +113,18 @@ const skyRenderer = new SkyRenderer(galacticMap, StarfieldGenerator, settings.ge
 skyRenderer.prepareForPosition(playerGalacticPos);
 skyRenderer.activate();
 retroRenderer.setSkyRenderer(skyRenderer);
+
+// ── Real Star Catalog ──
+// Load the HYG database (15,598 real naked-eye stars with names and positions).
+// Once loaded, real stars are merged into every subsequent starfield generation.
+const realStarCatalog = new RealStarCatalog();
+realStarCatalog.load().then(() => {
+  StarfieldGenerator.realStarCatalog = realStarCatalog;
+  // Regenerate starfield to include real stars
+  skyRenderer.prepareForPosition(playerGalacticPos);
+  skyRenderer.activate();
+  console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
+});
 debugPanel.setSkyRenderer(skyRenderer);
 debugPanel.setRetroRenderer(retroRenderer);
 debugPanel.setGalacticMap(galacticMap);
