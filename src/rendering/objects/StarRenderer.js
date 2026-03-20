@@ -345,7 +345,9 @@ class NeutronStar extends StarRendererBase {
 
     // Lighthouse beam — rotating billboard cone
     this._beamAngle = 0;
-    this._beamSpeed = 4.0 + Math.random() * 8.0; // 4-12 rad/s (fast!)
+    // Beam speed seeded from star data for determinism (same star = same speed)
+    const seedHash = starData.radius ? (starData.radius * 127.1 + (starData.color?.[0] || 0) * 311.7) : 7.3;
+    this._beamSpeed = 4.0 + (Math.abs(Math.sin(seedHash * 43758.5453)) * 8.0); // 4-12 rad/s
     this.beam = this._createBeam(renderRadius);
     this.mesh.add(this.beam);
 

@@ -892,8 +892,9 @@ export class GalacticMap {
     'emission-nebula': {
       sizeRange: [0.03, 0.1],  // 30-100 pc
       color: [0.8, 0.2, 0.1], // H-alpha red
-      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.5,
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.2,
       probability: 0.35,
+      galaxyWideTarget: 7000, // ~7,000 HII regions in the real Milky Way
       contextOverrides: {
         ageMax: 0.05,          // 50 Myr — very young stars
         metallicityBoost: 0.1, // slightly enriched
@@ -903,8 +904,9 @@ export class GalacticMap {
     'dark-nebula': {
       sizeRange: [0.005, 0.05],  // 5-50 pc
       color: [0.05, 0.04, 0.03], // absorption (dark)
-      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.4,
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.15,
       probability: 0.25,
+      galaxyWideTarget: 1500, // ~1,000-2,000 GMCs + thousands of smaller dark clouds
       contextOverrides: {
         ageMax: 0.01,           // pre-star-formation
         starCountMultiplier: 0.3, // few stars inside (it's dark for a reason)
@@ -913,8 +915,9 @@ export class GalacticMap {
     'open-cluster': {
       sizeRange: [0.002, 0.02],  // 2-20 pc
       color: [0.6, 0.7, 1.0],    // hot blue-white stars
-      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.3 && ctx.age < 2.0,
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.1,
       probability: 0.40,
+      galaxyWideTarget: 100000, // ~100,000 in reality (most dissolve within 1 Gyr)
       contextOverrides: {
         starCountMultiplier: 3.0,
         metallicityScatter: 0.02, // tight metallicity (born together)
@@ -924,8 +927,9 @@ export class GalacticMap {
     'ob-association': {
       sizeRange: [0.05, 0.3],   // 50-300 pc
       color: [0.5, 0.6, 1.0],   // scattered hot stars
-      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.6,
+      conditions: (ctx) => ctx.component === 'thin' && ctx.spiralArmStrength > 0.35,
       probability: 0.15,
+      galaxyWideTarget: 300, // ~100-300 in the real Milky Way
       contextOverrides: {
         ageMax: 0.03,
         obBoost: 5.0,
@@ -935,11 +939,12 @@ export class GalacticMap {
       sizeRange: [0.01, 0.1],   // 10-100 pc
       color: [1.0, 0.85, 0.5],  // old yellow-orange stars
       conditions: (ctx) => {
-        // Halo or bulge, very old
-        const isHaloish = ctx.componentWeights.halo > 0.2 || ctx.componentWeights.bulge > 0.3;
-        return isHaloish && ctx.age > 8.0;
+        // Halo or bulge — globulars are a halo population
+        const isHaloish = ctx.componentWeights.halo > 0.1 || ctx.componentWeights.bulge > 0.2;
+        return isHaloish;
       },
       probability: 0.08,
+      galaxyWideTarget: 50, // Target 50 → calibrated to produce ~160 after density weighting
       contextOverrides: {
         starCountMultiplier: 10.0, // very dense
         metallicityOverride: -1.5, // very metal poor
@@ -949,8 +954,9 @@ export class GalacticMap {
     'supernova-remnant': {
       sizeRange: [0.001, 0.03],  // 1-30 pc
       color: [0.3, 0.8, 0.4],    // oxygen emission green
-      conditions: (ctx) => ctx.component === 'thin' && ctx.age > 0.003, // need dead massive stars
+      conditions: (ctx) => ctx.component === 'thin' || ctx.component === 'thick',
       probability: 0.12,
+      galaxyWideTarget: 1000, // ~1,000-3,000 estimated in the real Milky Way
       contextOverrides: {
         centralRemnant: true, // has neutron star or black hole at center
       },
@@ -1042,12 +1048,17 @@ export class GalacticMap {
           for (const [type, spec] of Object.entries(GalacticMap.FEATURE_TYPES)) {
             if (!spec.conditions(ctx)) continue;
 
-            // Probability scaled by local density (denser regions → more features)
-            // Target: ~100-500 features galaxy-wide across all types
-            // ~64 feature regions in galactic plane, 512 candidates each
-            // Want ~2-8 features per region → perCandidate ≈ 0.005-0.015
+            // Probability calibrated against real Milky Way feature counts.
+            // Galaxy has ~84 feature regions × 512 candidates = ~43,000 total candidates.
+            // After condition filtering, ~30-50% pass → ~15,000 valid candidates.
+            // Scale per-candidate probability to hit realistic galaxy-wide targets.
             const densityScale = Math.min(densities.totalDensity * 15, 2.0);
-            const perCandidateProb = spec.probability * densityScale * 0.02;
+            const galaxyTarget = spec.galaxyWideTarget || 100;
+            // Estimated valid candidates galaxy-wide for this type
+            const estValidCandidates = 15000 * spec.probability;
+            const perCandidateProb = Math.min(0.95,
+              (galaxyTarget / Math.max(estValidCandidates, 100)) * densityScale
+            );
 
             if (!rng.chance(perCandidateProb)) continue;
 
