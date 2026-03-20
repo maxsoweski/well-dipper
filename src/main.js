@@ -3732,7 +3732,8 @@ window.addEventListener('keydown', (e) => {
   // All debug spawning/teleporting is now handled via the debug panel (Down Arrow key).
 
   // D key: toggle debug gallery (works even during warp)
-  if (e.code === 'KeyD') {
+  // G key: toggle debug gallery (was D — changed to free WASD for movement)
+  if (e.code === 'KeyG') {
     if (galleryMode) {
       exitGallery();
     } else {
