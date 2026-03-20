@@ -1,3 +1,5 @@
+import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
+
 /**
  * DebugPanel — developer tools overlay for Well Dipper.
  *
@@ -548,6 +550,24 @@ export class DebugPanel {
           }
         }
 
+        // Also search known object profiles (Messier catalog etc.)
+        const knownMatches = searchKnownObjects(query);
+        for (const km of knownMatches) {
+          // Avoid duplicates if already found via feature catalog
+          const isDup = matches.some(m => m.name?.toLowerCase() === km.profile.name.toLowerCase());
+          if (!isDup) {
+            matches.push({
+              name: `${km.profile.name} (${km.key})`,
+              position: km.profile.galacticPos,
+              type: km.profile.type,
+              radius: km.profile.radius,
+              isFeatureResult: true,
+              isKnownObject: true,
+              knownKey: km.key,
+            });
+          }
+        }
+
         if (matches.length === 0) {
           // Check for "earth" / "sol" / "sun" special cases
           if (query === 'earth' || query === 'sol' || query === 'sun' || query === 'solar system') {
@@ -571,7 +591,7 @@ export class DebugPanel {
           if (this._spawnCallbacks?.teleportToPosition) {
             this._spawnCallbacks.teleportToPosition(pos, name);
             const desc = match.isFeatureResult
-              ? `${match.type}, r=${match.radius} kpc`
+              ? `${match.type}, r=${match.radius?.toFixed?.(4) ?? match.radius} kpc`
               : `${match.spect}-class, mag ${match.mag}`;
             if (searchResults) searchResults.textContent = `→ ${name} (${desc})`;
           }
