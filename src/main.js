@@ -3677,7 +3677,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   // S key: toggle settings panel (works always except title screen)
-  if (e.code === 'KeyS' && !titleScreenActive) {
+  // P key: toggle settings panel (was S — moved to free WASD for movement)
+  if (e.code === 'KeyP' && !titleScreenActive) {
     toggleSettings();
     return;
   }
@@ -3775,7 +3776,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   // A key: toggle autopilot
-  if (e.code === 'KeyA') {
+  // Q key: toggle autopilot (was A — moved to free WASD for movement)
+  if (e.code === 'KeyQ') {
     if (autoNav.isActive) {
       stopFlythrough();
     } else if (system) {
