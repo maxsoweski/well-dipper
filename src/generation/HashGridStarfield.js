@@ -94,8 +94,11 @@ export class HashGridStarfield {
     const threshold = this.VISIBILITY_THRESHOLD;
     const stars = [];
 
-    // Cache nearby features once (not per-cell)
-    const cachedFeatures = galacticMap.findNearbyFeatures(playerPos, 12.0);
+    // Cache nearby features once (not per-cell).
+    // Small radius: Plummer wells only affect cells within ~3× feature radius.
+    // Most features are 0.01-0.3 kpc, so 1.0 kpc catches everything relevant.
+    // Using 12 kpc returned thousands of features → billions of distance checks.
+    const cachedFeatures = galacticMap.findNearbyFeatures(playerPos, 1.0);
 
     // Search each spectral type independently at its own grid resolution
     for (const type of ALL_TYPES) {
