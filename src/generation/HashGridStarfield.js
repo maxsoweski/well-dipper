@@ -25,7 +25,17 @@ import { GalacticMap } from './GalacticMap.js';
  * naturally.
  */
 
-const ABS_MAG = { O: -5.0, B: -1.5, A: 1.5, F: 3.0, G: 5.0, K: 7.0, M: 10.0 };
+// Absolute magnitudes — main-sequence dwarfs AND evolved giants.
+// Evolved stars (Kg, Gg, Mg) have evolved off the main sequence:
+// same spectral color but 100-10,000x brighter. They make old
+// populations (globular clusters, bulge) visible from far away.
+const ABS_MAG = {
+  O: -5.0, B: -1.5, A: 1.5, F: 3.0, G: 5.0, K: 7.0, M: 10.0,
+  // Evolved tiers — same colors, much brighter
+  Kg: -0.5,  // K-type red giant (RGB tip, ~200 L☉)
+  Gg: 0.5,   // G-type giant (red clump / horizontal branch, ~50 L☉)
+  Mg: -0.2,  // M-type AGB star (~300 L☉)
+};
 
 const SPECTRAL_COLOR = {
   O: [0.6, 0.7, 1.0],
@@ -35,11 +45,20 @@ const SPECTRAL_COLOR = {
   G: [1.0, 0.9, 0.7],
   K: [1.0, 0.75, 0.4],
   M: [1.0, 0.5, 0.2],
+  // Evolved stars — same spectral colors as their dwarf counterparts
+  Kg: [1.0, 0.65, 0.3],   // orange giant (slightly redder than K dwarf)
+  Gg: [1.0, 0.85, 0.5],   // yellow giant
+  Mg: [1.0, 0.4, 0.15],   // deep red AGB
 };
 
 // Per-type configuration: cell size (kpc), max visible distance (kpc),
 // acceptance normalization, and the population fraction this type represents.
 // Cell sizes are chosen so each type searches ~50 cells radius max → ~500K cells.
+//
+// Evolved tiers (Kg, Gg, Mg) have low acceptance overall but are boosted
+// in old populations (halo, bulge, globular clusters) via age-dependent
+// acceptance in _searchType. In a 12 Gyr population, ~1-3% of stars are
+// evolved giants, but they contribute 40-60% of the total luminosity.
 const TYPE_CONFIG = {
   O: { cell: 0.100, maxDist: 10.0,  acceptNorm: 0.08,  popFraction: 0.0001 },
   B: { cell: 0.030, maxDist: 2.5,   acceptNorm: 0.15,  popFraction: 0.001 },
@@ -48,9 +67,17 @@ const TYPE_CONFIG = {
   G: { cell: 0.001, maxDist: 0.04,  acceptNorm: 0.6,   popFraction: 0.08 },
   K: { cell: 0.0005, maxDist: 0.012, acceptNorm: 0.8,  popFraction: 0.12 },
   M: { cell: 0.0002, maxDist: 0.003, acceptNorm: 1.0,  popFraction: 0.76 },
+  // Evolved giants — rare (~1-3% of old populations) but very bright.
+  // Higher acceptNorm than main-sequence because giants are individually
+  // very luminous — each one represents the evolved state of what was
+  // once a normal G/K star. In old populations they dominate the light.
+  Kg: { cell: 0.050, maxDist: 5.0,  acceptNorm: 0.15,  popFraction: 0.002 },
+  Gg: { cell: 0.050, maxDist: 4.0,  acceptNorm: 0.12,  popFraction: 0.001 },
+  Mg: { cell: 0.060, maxDist: 6.0,  acceptNorm: 0.10,  popFraction: 0.0005 },
 };
 
-const ALL_TYPES = ['O', 'B', 'A', 'F', 'G', 'K', 'M'];
+const ALL_TYPES = ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'Kg', 'Gg', 'Mg'];
+const EVOLVED_TYPES = new Set(['Kg', 'Gg', 'Mg']);
 
 export class HashGridStarfield {
 
@@ -193,7 +220,36 @@ export class HashGridStarfield {
             totalDensity += this._featureDensityCached(cachedFeatures, wx, wy, wz);
 
             // Acceptance test
-            const acceptProb = Math.min(0.95, totalDensity * cfg.acceptNorm);
+            let acceptProb = Math.min(0.95, totalDensity * cfg.acceptNorm);
+
+            // Evolved star tiers: acceptance depends on local population age.
+            // Old populations (halo, bulge, globular clusters) have more giants.
+            // This is physics flowing through the pipeline: the potential model
+            // determines component weights → old fraction → giant probability.
+            if (EVOLVED_TYPES.has(type)) {
+              const haloWeight = densities.halo || 0;
+              const bulgeWeight = densities.bulge || 0;
+              const oldFraction = haloWeight + bulgeWeight * 0.8;
+
+              // Feature density boost: if near a globular cluster, giants are
+              // concentrated there (globulars are packed with evolved stars)
+              let featureGiantBoost = 1.0;
+              for (const feat of cachedFeatures) {
+                if (feat.type !== 'globular-cluster') continue;
+                const fdx = wx - feat.position.x, fdy = wy - feat.position.y, fdz = wz - feat.position.z;
+                const fdistSq = fdx * fdx + fdy * fdy + fdz * fdz;
+                if (fdistSq < feat.radius * feat.radius * 9) { // within 3× radius
+                  featureGiantBoost = Math.max(featureGiantBoost, 15.0);
+                }
+              }
+
+              // Scale acceptance: thin disk (young) = very few giants,
+              // halo/bulge (old) = many giants, globular cluster = packed.
+              // The 0.1 base ensures SOME giants even in the disk (old disk stars).
+              acceptProb *= (0.1 + oldFraction * 5.0) * featureGiantBoost;
+              acceptProb = Math.min(0.95, acceptProb);
+            }
+
             const hashNorm = (h & 0xFFFF) / 65536;
             if (hashNorm > acceptProb) continue;
 
