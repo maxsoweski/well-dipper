@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { StarFlare } from './objects/StarFlare.js';
 import { RealStarCatalog } from './generation/RealStarCatalog.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
+import { HashGridStarfield } from './generation/HashGridStarfield.js';
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
@@ -132,8 +133,9 @@ realStarCatalog.load().then(() => {
 
 // Load real feature catalogs (globular clusters, etc.)
 realFeatureCatalog.load().then(() => {
-  // Make real features available to the debug panel search
   debugPanel.setRealFeatureCatalog(realFeatureCatalog);
+  // Make real features available to the hash grid for Plummer density
+  HashGridStarfield.realFeatureCatalog = realFeatureCatalog;
   console.log(`Real feature catalog loaded: ${realFeatureCatalog.globularClusters.length} globular clusters`);
 });
 debugPanel.setSkyRenderer(skyRenderer);

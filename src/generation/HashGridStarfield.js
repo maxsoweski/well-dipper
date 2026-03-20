@@ -90,15 +90,21 @@ export class HashGridStarfield {
    * @param {number} skyRadius — sky sphere radius for rendering
    * @returns {{ positions, colors, sizes, count, realStars }}
    */
+  // Reference to real feature catalog (set from main.js)
+  static realFeatureCatalog = null;
+
   static generate(galacticMap, playerPos, skyRadius = 500) {
     const threshold = this.VISIBILITY_THRESHOLD;
     const stars = [];
 
     // Cache nearby features once (not per-cell).
-    // Small radius: Plummer wells only affect cells within ~3× feature radius.
-    // Most features are 0.01-0.3 kpc, so 1.0 kpc catches everything relevant.
-    // Using 12 kpc returned thousands of features → billions of distance checks.
-    const cachedFeatures = galacticMap.findNearbyFeatures(playerPos, 1.0);
+    // Combines procedural features from GalacticMap with real features
+    // from astronomical catalogs (Harris globular clusters, etc.).
+    const proceduralFeatures = galacticMap.findNearbyFeatures(playerPos, 1.0);
+    const realFeatures = this.realFeatureCatalog?.loaded
+      ? this.realFeatureCatalog.findNearby(playerPos, 1.0)
+      : [];
+    const cachedFeatures = [...proceduralFeatures, ...realFeatures];
 
     // Search each spectral type independently at its own grid resolution
     for (const type of ALL_TYPES) {
