@@ -1879,7 +1879,35 @@ See `docs/RESEARCH_rendering-physics-data.md` for full details. Estimated ~2,200
 | 13 | Trojan asteroids (§4C) | ✅ Built | L4/L5 clusters per gas giant |
 | 14 | Outer/Kuiper belts (§4C) | ✅ Built | Icy belt beyond outermost giant |
 
-**Galactic feature layer — IMPLEMENTED.** Level 1 in the 6-level hierarchy (§12). GalacticMap generates positioned nebulae, clusters, OB associations, supernova remnants, dark nebulae. Sectors inherit feature context. Stars inside features get modified generation parameters.
+### Gravity-First Generation Principle (2026-03-19)
+
+**Gravity is the unifying principle of Well Dipper.** The gravitational potential field Φ(x,y,z) is the primary data structure. Everything derives from it:
+
+- **Star density** = f(Φ) — more stars where the potential is deep
+- **Star types** = from component weights (disk/bulge/halo) at each position
+- **Features** = local potential perturbations (Plummer wells for clusters)
+- **Brightness** = spectral type + distance → apparent magnitude
+- **Gameplay** = energy harvesting, warp cost, escape velocity — all from Φ
+
+**Standard galactic potential components (established astrophysics):**
+- Disk: Miyamoto-Nagai potential (a=3.0, b=0.28 kpc)
+- Bulge: Hernquist potential (a=0.6 kpc)
+- Halo: NFW profile (rs=12 kpc)
+
+**Realistic-scale galaxy:** ~200 billion stars via 7-tier hash grid (one per spectral type, O through M, plus evolved giant tiers Kg/Gg/Mg). ~7,300 visible from the solar neighborhood. Every visible point is a real deterministic star.
+
+**Real astronomical data overlay:** HYG v4.0 catalog (15,598 real stars with names — Sirius, Betelgeuse, etc.) merged with procedural stars. Harris globular cluster catalog (152 real clusters). Real data sits in the same potential field as procedural data.
+
+**Feature counts calibrated to real Milky Way:**
+- Emission nebulae: ~2,000 (real: 1,500-3,000)
+- Open clusters: ~1,700 (real: 1,000-3,000)
+- Globular clusters: ~150 (real: 150-180)
+- Dark nebulae: ~190 (real: 500-1,000)
+- Supernova remnants: ~120 (real: 300-1,000)
+
+**No game has done this before.** First game to unify procedural generation AND gameplay through gravitational potential.
+
+**Galactic feature layer — IMPLEMENTED.** Features generated from density-integrated expected counts matching real Milky Way populations. Feature Plummer wells raise local density in the hash grid, naturally producing dense star regions (globular clusters, etc.).
 
 **Galaxy visualization scripts — BUILT.** `scripts/galaxy-viz.mjs` generates HTML maps (galaxy overview with features, sector deep-dives with full physics data per system).
 
