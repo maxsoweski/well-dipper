@@ -1909,6 +1909,36 @@ See `docs/RESEARCH_rendering-physics-data.md` for full details. Estimated ~2,200
 
 **Galactic feature layer — IMPLEMENTED.** Features generated from density-integrated expected counts matching real Milky Way populations. Feature Plummer wells raise local density in the hash grid, naturally producing dense star regions (globular clusters, etc.).
 
+### Three-Layer Data Architecture (2026-03-20)
+
+The galaxy has three data layers, each building on the one below:
+
+**Layer 1: Procedural Generation (gravitational potential)**
+- The gravitational potential field Φ(x,y,z) determines everything
+- ~200 billion stars from 7-tier hash grid
+- ~4,100 features from density-integrated expected counts
+- Works everywhere, fills the entire galaxy, fully deterministic
+- This is the FOUNDATION — it runs even with no real data
+
+**Layer 2: Real Data Overlay (astronomical catalogs)**
+- HYG v4.0: 15,598 real named stars at correct positions
+- Harris catalog: 152 real globular clusters (to be integrated)
+- Future: NGC/Messier nebulae, Gaia open clusters, Green's SNRs
+- Real data OVERRIDES procedural at specific positions
+- Same pipeline — real stars render identically to procedural ones
+- Gameplay mechanics (gravity, warp cost) work the same for both
+
+**Layer 3: Visual Override (observational appearances)**
+- For ~50-80 famous objects (Messier catalog, notable NGC objects)
+- Stylized visual representations based on real observations
+- NOT procedural — this is an intentional, designed layer
+- The pipeline CAN'T produce the specific appearance of the Orion Nebula from physics alone
+- Applies at medium-to-close range; distant rendering is procedural
+- Must match retro aesthetic (posterized, dithered, stylized)
+- The Solar System is the extreme case (handcrafted planets)
+
+**Why Layer 3 is not a tack-on:** It's grounded in real observations applied to objects with real identities. The procedural system puts the RIGHT KIND of object at the RIGHT PLACE with the RIGHT PHYSICAL PROPERTIES. Layer 3 provides visual specificity that physics alone cannot generate. It's designed, intentional, and clearly bounded to cataloged objects.
+
 **Galaxy visualization scripts — BUILT.** `scripts/galaxy-viz.mjs` generates HTML maps (galaxy overview with features, sector deep-dives with full physics data per system).
 
 Belt/ring traversal hazard model: A+C hybrid (physics-honest sparse baseline + localized dense pockets at families/resonance pile-ups/Trojans). Rings effectively solid at speed. See §4C.

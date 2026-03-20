@@ -2,6 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { StarFlare } from './objects/StarFlare.js';
 import { RealStarCatalog } from './generation/RealStarCatalog.js';
+import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
@@ -118,13 +119,22 @@ retroRenderer.setSkyRenderer(skyRenderer);
 // Load the HYG database (15,598 real naked-eye stars with names and positions).
 // Once loaded, real stars are merged into every subsequent starfield generation.
 const realStarCatalog = new RealStarCatalog();
-// Load real star catalog in the background — don't regenerate starfield
-// immediately. The catalog will be used on the NEXT warp/teleport.
-// This prevents the async load from interfering with title screen.
+// ── Real Data Catalogs ──
+// Load in background. Used on next warp/teleport, not immediately.
+const realFeatureCatalog = new RealFeatureCatalog();
+
+// Load real star catalog
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
   debugPanel.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
+});
+
+// Load real feature catalogs (globular clusters, etc.)
+realFeatureCatalog.load().then(() => {
+  // Make real features available to the debug panel search
+  debugPanel.setRealFeatureCatalog(realFeatureCatalog);
+  console.log(`Real feature catalog loaded: ${realFeatureCatalog.globularClusters.length} globular clusters`);
 });
 debugPanel.setSkyRenderer(skyRenderer);
 debugPanel.setRetroRenderer(retroRenderer);

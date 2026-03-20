@@ -48,6 +48,7 @@ export class DebugPanel {
   setPlayerPos(pos) { this._playerPos = pos; }
   setGalacticMap(gm) { this._galacticMap = gm; }
   setRealStarCatalog(catalog) { this._realStarCatalog = catalog; }
+  setRealFeatureCatalog(catalog) { this._realFeatureCatalog = catalog; }
   setCamera(cam) { this._camera = cam; }
   setSkyRenderer(sky) { this._skyRenderer = sky; }
   setLODManager(lod) { this._lodManager = lod; }
@@ -531,6 +532,22 @@ export class DebugPanel {
           }
         }
 
+        // Also search real feature catalogs (globular clusters, etc.)
+        const featureCatalog = this._realFeatureCatalog;
+        if (featureCatalog?.loaded) {
+          for (const gc of featureCatalog.globularClusters) {
+            if (gc.name && gc.name.toLowerCase().includes(query)) {
+              matches.push({ ...gc, isFeatureResult: true });
+              if (matches.length >= 10) break;
+            }
+            // Also match by Harris ID (e.g., "NGC 104")
+            if (gc.harrisId && gc.harrisId.toLowerCase().includes(query)) {
+              matches.push({ ...gc, isFeatureResult: true });
+              if (matches.length >= 10) break;
+            }
+          }
+        }
+
         if (matches.length === 0) {
           // Check for "earth" / "sol" / "sun" special cases
           if (query === 'earth' || query === 'sol' || query === 'sun' || query === 'solar system') {
@@ -544,19 +561,26 @@ export class DebugPanel {
           return;
         }
 
-        if (matches.length === 1 || query === matches[0].name.toLowerCase()) {
+        if (matches.length === 1 || query === matches[0].name?.toLowerCase()) {
           // Exact or single match — teleport directly
-          const star = matches[0];
+          const match = matches[0];
+          const pos = match.isFeatureResult
+            ? match.position
+            : { x: match.x, y: match.y, z: match.z };
+          const name = match.name || match.harrisId || '?';
           if (this._spawnCallbacks?.teleportToPosition) {
-            this._spawnCallbacks.teleportToPosition(
-              { x: star.x, y: star.y, z: star.z },
-              star.name
-            );
-            if (searchResults) searchResults.textContent = `→ ${star.name} (${star.spect}-class, mag ${star.mag})`;
+            this._spawnCallbacks.teleportToPosition(pos, name);
+            const desc = match.isFeatureResult
+              ? `${match.type}, r=${match.radius} kpc`
+              : `${match.spect}-class, mag ${match.mag}`;
+            if (searchResults) searchResults.textContent = `→ ${name} (${desc})`;
           }
         } else {
           // Multiple matches — show list
-          const list = matches.slice(0, 5).map(s => `${s.name} (${s.spect}, mag ${s.mag})`).join(', ');
+          const list = matches.slice(0, 5).map(s => {
+            const name = s.name || s.harrisId || '?';
+            return s.isFeatureResult ? `${name} (${s.type})` : `${name} (${s.spect}, mag ${s.mag})`;
+          }).join(', ');
           if (searchResults) searchResults.textContent = `${matches.length} matches: ${list}`;
         }
       };
