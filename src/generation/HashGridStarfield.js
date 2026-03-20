@@ -99,23 +99,15 @@ export class HashGridStarfield {
       positions[i3 + 1] = (dy / dist) * skyRadius;
       positions[i3 + 2] = (dz / dist) * skyRadius;
 
+      // Color from spectral type and brightness — no overrides.
+      // Stars inside features look different because the PHYSICS
+      // produces different spectral types there (old K/M in globulars,
+      // young B/A in open clusters), not because we paint them.
       const baseCol = SPECTRAL_COLOR[s.type] || [1, 1, 1];
       const brightness = Math.max(0.1, 1.5 - (s.appMag / 5.0));
-
-      // Feature diagnostic coloring
-      if (s.featureType === 'globular-cluster') {
-        colors[i3]     = brightness * 1.2;
-        colors[i3 + 1] = brightness * 0.7;
-        colors[i3 + 2] = brightness * 0.2;
-      } else if (s.featureType === 'open-cluster') {
-        colors[i3]     = brightness * 0.5;
-        colors[i3 + 1] = brightness * 0.7;
-        colors[i3 + 2] = brightness * 1.2;
-      } else {
-        colors[i3]     = baseCol[0] * brightness;
-        colors[i3 + 1] = baseCol[1] * brightness;
-        colors[i3 + 2] = baseCol[2] * brightness;
-      }
+      colors[i3]     = baseCol[0] * brightness;
+      colors[i3 + 1] = baseCol[1] * brightness;
+      colors[i3 + 2] = baseCol[2] * brightness;
 
       if (s.appMag < 0) sizes[i] = 10;
       else if (s.appMag < 2) sizes[i] = 8;
