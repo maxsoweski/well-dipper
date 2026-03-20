@@ -1,81 +1,194 @@
 import * as THREE from 'three';
 
 /**
- * GalaxyGlow — diffuse glow behind the starfield representing the
- * unresolved billions of stars in the galaxy.
+ * GalaxyGlow — full-sky analytical galaxy glow on a BackSide sphere.
  *
- * Uses a sky sphere with a fully analytical shader. Two rendering modes
- * blend based on player height above the galactic plane:
+ * Renders the unresolved billions of stars as a diffuse glow behind the
+ * point-star starfield. Uses the same density model as GalacticMap
+ * (exponential disk + bulge + spiral arms) but computed entirely in the
+ * fragment shader via ray integration along each view direction.
  *
- * FROM INSIDE THE DISK: Ray-marches along view directions, integrating
- * density to produce the Milky Way band effect.
+ * IMPORTANT: This is a DISPLAY layer. It does not define galaxy structure.
+ * All arm data (offsets, widths, strengths) comes from GalacticMap via
+ * uniforms. GalacticMap is the single source of truth for galaxy structure.
  *
- * FROM ABOVE/BELOW: Projects each view direction onto the galactic plane,
- * evaluating surface density at the intersection point. This reveals
- * the face-on spiral arm structure.
+ * Key design:
+ * - BackSide IcosahedronGeometry (detail 4) = sky dome that surrounds camera
+ * - Analytical density model replicated in GLSL (matches GalacticMap.js)
+ * - Per-arm width and strength from GalacticMap (2 major + 4 minor)
+ * - Feature Plummer integration: nearby clusters/features brighten the glow
+ * - Retro styling: chunky 3x Bayer dithering, posterized color bands
+ * - Sin-based smooth noise for dust lanes (no hash grid artifacts)
+ * - Brightness capped to always read dimmer than point stars
+ *
+ * Renders in the starfieldScene at full resolution, behind Starfield points.
  */
 export class GalaxyGlow {
-  constructor(radius = 498, playerPos, armOffsets, armPitchK) {
+  /**
+   * @param {number} radius - sky sphere radius (should be < starfield radius)
+   * @param {object} [options] - configuration
+   * @param {object} [options.playerPos] - {x,y,z} galactic position in kpc
+   * @param {object} [options.galacticMap] - GalacticMap instance (source of truth for arms)
+   * @param {Array}  [options.features] - nearby features [{x,y,z,type,radius,brightness}]
+   */
+  constructor(radius = 490, options = {}) {
     this.radius = radius;
 
-    const px = playerPos?.x ?? 8;
-    const py = playerPos?.y ?? 0;
-    const pz = playerPos?.z ?? 0;
-    const toCenterX = -px;
-    const toCenterY = -py;
-    const toCenterZ = -pz;
-    const gcLen = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY + toCenterZ * toCenterZ) || 1;
+    // Player galactic position (defaults to solar neighborhood)
+    const pos = options.playerPos || { x: 8.0, y: 0.025, z: 0.0 };
+    const gm = options.galacticMap;
 
-    const offsets = armOffsets || [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+    // ── Arm data from GalacticMap (single source of truth) ──
+    // If no galacticMap provided, fall back to 4 equal arms (legacy/title screen)
+    const MAX_ARMS = 8; // shader array size
+    const armOffsets = new Array(MAX_ARMS).fill(0);
+    const armWidths = new Array(MAX_ARMS).fill(0.6);
+    const armStrengths = new Array(MAX_ARMS).fill(0);
+    let armCount = 0;
+    let pitchK = 1.0 / Math.tan(12 * Math.PI / 180);
 
-    const geometry = new THREE.IcosahedronGeometry(radius, 16);
+    if (gm && gm.arms) {
+      armCount = Math.min(gm.arms.length, MAX_ARMS);
+      for (let i = 0; i < armCount; i++) {
+        armOffsets[i] = gm.armOffsets[i];
+        armWidths[i] = gm.armWidths[i];
+        armStrengths[i] = gm.armStrengths[i];
+      }
+      pitchK = gm.pitchK;
+    } else {
+      // Legacy fallback: 4 equal arms
+      armCount = 4;
+      for (let i = 0; i < 4; i++) {
+        armOffsets[i] = i * Math.PI / 2;
+        armWidths[i] = 0.6;
+        armStrengths[i] = 1.0;
+      }
+    }
+
+    // Feature data for Plummer glow contributions
+    const featureUniforms = this._packFeatures(options.features || [], pos);
+
+    // Build the sky sphere
+    const geometry = new THREE.IcosahedronGeometry(radius, 4);
     const material = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
       transparent: true,
       depthWrite: false,
       depthTest: false,
       blending: THREE.AdditiveBlending,
-      side: THREE.BackSide,
 
       uniforms: {
-        uPlayerPos: { value: new THREE.Vector3(px, py, pz) },
-        uGalCenterDir: { value: new THREE.Vector3(toCenterX / gcLen, toCenterY / gcLen, toCenterZ / gcLen) },
-        uArmOffsets: { value: new THREE.Vector4(offsets[0], offsets[1], offsets[2], offsets[3]) },
-        uArmPitchK: { value: armPitchK ?? (1.0 / Math.tan(12 * Math.PI / 180)) },
+        uPlayerPos: { value: new THREE.Vector3(pos.x, pos.y, pos.z) },
+        // Arm data — fed from GalacticMap, not defined here
+        uArmOffsets: { value: armOffsets },
+        uArmWidths: { value: armWidths },
+        uArmStrengths: { value: armStrengths },
+        uArmCount: { value: armCount },
+        uPitchK: { value: pitchK },
+        // Feature Plummer contributions (up to 8 features)
+        uFeatureCount: { value: featureUniforms.count },
+        uFeatureDirs: { value: featureUniforms.dirs },
+        uFeatureParams: { value: featureUniforms.params },
+        // Global controls
+        uGlowIntensity: { value: 0.18 },
+        uDustStrength: { value: 0.35 },
       },
 
       vertexShader: /* glsl */ `
         varying vec3 vWorldDir;
         void main() {
-          vWorldDir = position;
+          vWorldDir = normalize(position);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
 
       fragmentShader: /* glsl */ `
         #define PI 3.14159265359
-        #define NUM_ARMS 4
-        #define ARM_WIDTH_BASE 0.15
-        #define ARM_WIDTH_SLOPE 0.025
+        #define MAX_ARMS 8
         #define SIN_PITCH 0.2079
-        #define VISUAL_SCALE_LENGTH 4.0
-        #define THIN_DISK_HEIGHT 0.3
-        #define THICK_DISK_HEIGHT 0.9
-        #define THICK_DISK_NORM 0.12
-        #define BULGE_SCALE 0.5
-        #define BULGE_FLATTENING 0.5
-        #define BULGE_NORM 2.0
-        #define GALAXY_RADIUS 15.0
-        #define DISK_SCALE_LENGTH 2.6
 
         uniform vec3 uPlayerPos;
-        uniform vec3 uGalCenterDir;
-        uniform vec4 uArmOffsets;
-        uniform float uArmPitchK;
+        uniform float uArmOffsets[MAX_ARMS];
+        uniform float uArmWidths[MAX_ARMS];
+        uniform float uArmStrengths[MAX_ARMS];
+        uniform int uArmCount;
+        uniform float uPitchK;
+        uniform int uFeatureCount;
+        uniform vec2 uFeatureDirs[8];
+        uniform vec2 uFeatureParams[8];
+        uniform float uGlowIntensity;
+        uniform float uDustStrength;
 
         varying vec3 vWorldDir;
 
-        // ── 4x4 Bayer dithering ──
-        float bayerDither(vec2 coord) {
+        // ═══════════════════════════════════════════════════
+        // Galaxy density model (matches GalacticMap.js)
+        // ═══════════════════════════════════════════════════
+
+        float galaxyDensity(float R, float z) {
+          float absZ = abs(z);
+          float thin = exp(-R / 2.6) * exp(-absZ / 0.3);
+          float thick = 0.12 * exp(-R / 3.6) * exp(-absZ / 0.9);
+          float rBulge = sqrt(R * R + (z / 0.5) * (z / 0.5));
+          float bulge = 2.0 * exp(-rBulge / 0.5);
+          float rHalo = sqrt(R * R + z * z);
+          float halo = 0.005 * pow(max(rHalo, 2.0) / 8.0, -3.5);
+          return thin + thick + bulge + halo;
+        }
+
+        // Spiral arm strength — reads per-arm width and strength from
+        // GalacticMap uniforms. Mirrors GalacticMap.spiralArmStrength().
+        float spiralArms(float R, float theta) {
+          if (R < 0.5) return 0.0;
+
+          float logR = log(R / 4.0);
+          float maxStr = 0.0;
+
+          for (int arm = 0; arm < MAX_ARMS; arm++) {
+            if (arm >= uArmCount) break;
+
+            float expectedTheta = uArmOffsets[arm] + uPitchK * logR;
+            float dTheta = mod(theta - expectedTheta + 3.0 * PI, 2.0 * PI) - PI;
+            // Perpendicular distance (sin(pitch) correction)
+            float dist = abs(dTheta) * R * SIN_PITCH;
+            // Per-arm Gaussian width from GalacticMap
+            float armWidth = uArmWidths[arm];
+            float strength = exp(-0.5 * (dist / armWidth) * (dist / armWidth));
+            // Per-arm density strength from GalacticMap
+            strength *= uArmStrengths[arm];
+
+            maxStr = max(maxStr, strength);
+          }
+          return maxStr;
+        }
+
+        // ═══════════════════════════════════════════════════
+        // Smooth noise for dust lanes (sin-based, no hash grid)
+        // ═══════════════════════════════════════════════════
+
+        float smoothNoise(vec2 p) {
+          float n = sin(p.x * 1.7 + p.y * 2.3) * 0.5
+                  + sin(p.x * 3.1 - p.y * 1.9) * 0.25
+                  + sin(p.x * 5.7 + p.y * 4.3 + 1.7) * 0.125
+                  + sin(p.x * 11.3 - p.y * 8.7 + 3.1) * 0.0625;
+          return n * 0.5 + 0.5;
+        }
+
+        float dustLanes(float R, float theta, float z) {
+          float zFade = exp(-abs(z) / 0.15);
+          float n = smoothNoise(vec2(R * 2.0 + theta * 0.5, theta * 3.0 + R));
+          float armStr = spiralArms(R, theta);
+          float armEdge = armStr * (1.0 - armStr) * 4.0;
+          float dustAmount = (0.3 + armEdge * 0.7) * n * zFade;
+          float rFade = smoothstep(1.5, 3.0, R) * (1.0 - smoothstep(10.0, 14.0, R));
+          return dustAmount * rFade * uDustStrength;
+        }
+
+        // ═══════════════════════════════════════════════════
+        // Retro styling: Bayer dither + posterization
+        // ═══════════════════════════════════════════════════
+
+        float bayerDither4x4(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
           float t = 0.0;
           if (p.y < 0.5) {
@@ -90,296 +203,198 @@ export class GalaxyGlow {
           return t / 16.0;
         }
 
-        // ── Hash noise for dust lanes ──
-        float hash21(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
-        float hashNoise(vec2 p) {
-          vec2 i = floor(p);
-          vec2 f = fract(p);
-          float a = hash21(i);
-          float b = hash21(i + vec2(1.0, 0.0));
-          float c = hash21(i + vec2(0.0, 1.0));
-          float d = hash21(i + vec2(1.0, 1.0));
-          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-        }
-        float dustNoise(vec2 p) {
-          return (hashNoise(p * 2.5) + 0.5 * hashNoise(p * 5.0 + 17.0)) / 1.5;
+        vec3 posterize(vec3 col, float levels) {
+          return floor(col * levels + 0.5) / levels;
         }
 
-        // ── Spiral arm strength ──
-        float spiralArmStrength(float R, float theta) {
-          if (R < 0.5) return 0.0;
-          float logR = log(R / 4.0);
-          float armWidth = ARM_WIDTH_BASE + ARM_WIDTH_SLOPE * R;
-          float maxStr = 0.0;
-          float offsets[4];
-          offsets[0] = uArmOffsets.x;
-          offsets[1] = uArmOffsets.y;
-          offsets[2] = uArmOffsets.z;
-          offsets[3] = uArmOffsets.w;
-          for (int i = 0; i < NUM_ARMS; i++) {
-            float expectedTheta = offsets[i] + uArmPitchK * logR;
-            float dTheta = mod(theta - expectedTheta + 3.0 * PI, 2.0 * PI) - PI;
-            float dist = abs(dTheta) * R * SIN_PITCH;
-            float str = exp(-0.5 * (dist / armWidth) * (dist / armWidth));
-            maxStr = max(maxStr, str);
+        // ═══════════════════════════════════════════════════
+        // Feature Plummer glow (globular clusters, etc.)
+        // ═══════════════════════════════════════════════════
+
+        float featureGlow(vec3 viewDir) {
+          float totalGlow = 0.0;
+          for (int i = 0; i < 8; i++) {
+            if (i >= uFeatureCount) break;
+            float fTheta = uFeatureDirs[i].x;
+            float fPhi = uFeatureDirs[i].y;
+            float angRadius = uFeatureParams[i].x;
+            float brightness = uFeatureParams[i].y;
+
+            vec3 featureDir = vec3(
+              sin(fPhi) * cos(fTheta),
+              cos(fPhi),
+              sin(fPhi) * sin(fTheta)
+            );
+            float cosAngle = dot(viewDir, featureDir);
+            float angle = acos(clamp(cosAngle, -1.0, 1.0));
+
+            // Plummer profile: I(r) = I0 / (1 + (r/a)^2)^2
+            float ra = angle / max(angRadius, 0.001);
+            float plummer = 1.0 / ((1.0 + ra * ra) * (1.0 + ra * ra));
+            totalGlow += plummer * brightness;
           }
-          return maxStr;
+          return totalGlow;
         }
 
-        // ── Wide spiral arm strength (for in-disk band glow) ──
-        // Arms are 3x wider — smooths out pillar artifacts from discrete
-        // sampling. Physically motivated: from inside the disk, projection
-        // effects, dust, and overlapping arm halos blur arm features.
-        float spiralArmStrengthWide(float R, float theta) {
-          if (R < 0.5) return 0.0;
-          float logR = log(R / 4.0);
-          float armWidth = (ARM_WIDTH_BASE + ARM_WIDTH_SLOPE * R) * 3.0;
-          float maxStr = 0.0;
-          float offsets[4];
-          offsets[0] = uArmOffsets.x;
-          offsets[1] = uArmOffsets.y;
-          offsets[2] = uArmOffsets.z;
-          offsets[3] = uArmOffsets.w;
-          for (int i = 0; i < NUM_ARMS; i++) {
-            float expectedTheta = offsets[i] + uArmPitchK * logR;
-            float dTheta = mod(theta - expectedTheta + 3.0 * PI, 2.0 * PI) - PI;
-            float dist = abs(dTheta) * R * SIN_PITCH;
-            float str = exp(-0.5 * (dist / armWidth) * (dist / armWidth));
-            maxStr = max(maxStr, str);
-          }
-          return maxStr;
-        }
-
-        // ── Surface density (smooth — for in-disk band glow) ──
-        float surfaceDensitySmooth(float R, float theta) {
-          float disk = exp(-R / VISUAL_SCALE_LENGTH);
-          float thick = THICK_DISK_NORM * exp(-R / 5.0);
-          float bulge = BULGE_NORM * exp(-R / BULGE_SCALE);
-          float base = disk + thick + bulge;
-
-          float armStr = spiralArmStrengthWide(R, theta);
-          float bulgeBlend = clamp((R - 0.5) / 1.5, 0.0, 1.0);
-          float armFactor = mix(1.0, 0.10 + armStr * 2.40, bulgeBlend);
-
-          return base * armFactor;
-        }
-
-        // ── Surface density (face-on view from above) ──
-        float surfaceDensity(float R, float theta) {
-          float disk = exp(-R / VISUAL_SCALE_LENGTH);
-          float thick = THICK_DISK_NORM * exp(-R / 5.0);
-          float bulge = BULGE_NORM * exp(-R / BULGE_SCALE);
-          float base = disk + thick + bulge;
-
-          float armStr = spiralArmStrength(R, theta);
-          float bulgeBlend = clamp((R - 0.5) / 1.5, 0.0, 1.0);
-          float armFactor = mix(1.0, 0.10 + armStr * 2.40, bulgeBlend);
-
-          return base * armFactor;
-        }
-
-        // ── Volume density (ray march from inside disk) ──
-        float volumeDensity(vec3 pos) {
-          float R = length(pos.xz);
-          float absY = abs(pos.y);
-          float thin = exp(-R / DISK_SCALE_LENGTH) * exp(-absY / THIN_DISK_HEIGHT);
-          float thick = THICK_DISK_NORM * exp(-R / 3.6) * exp(-absY / THICK_DISK_HEIGHT);
-          float rBulge = sqrt(R * R + (pos.y / BULGE_FLATTENING) * (pos.y / BULGE_FLATTENING));
-          float bulge = BULGE_NORM * exp(-rBulge / BULGE_SCALE);
-          float base = thin + thick + bulge;
-
-          float theta = atan(pos.z, pos.x);
-          float armStr = spiralArmStrength(R, theta);
-          float bulgeBlend = clamp((R - 0.5) / 1.5, 0.0, 1.0);
-          float armFactor = mix(1.0, 0.10 + armStr * 2.40, bulgeBlend);
-
-          return base * armFactor;
-        }
-
-        // ── Face-on: project to galactic plane ──
-        // Returns density AND radius at hit point (for color mapping)
-        vec2 faceOnDensityAndR(vec3 dir) {
-          float py = uPlayerPos.y;
-          if (abs(dir.y) < 0.01) return vec2(0.0);
-          float t = -py / dir.y;
-          if (t < 0.0) return vec2(0.0);
-          vec3 hitPoint = uPlayerPos + dir * t;
-          float R = length(hitPoint.xz);
-          // Smooth taper at galaxy edge instead of hard cutoff
-          float edgeFade = 1.0 - smoothstep(GALAXY_RADIUS * 0.7, GALAXY_RADIUS * 1.1, R);
-          if (edgeFade < 0.001) return vec2(0.0);
-          float theta = atan(hitPoint.z, hitPoint.x);
-          float sd = surfaceDensity(R, theta);
-          float distFade = 1.0 / (t * 0.05 + 1.0);
-          return vec2(sd * distFade * edgeFade, R);
-        }
-
-        // ── Analytical band (in-disk view) ──
-        // Two-part approach to avoid pillar artifacts:
-        //   1. SMOOTH BASE: exponential disk (no arms) sampled along sightline
-        //      — this is perfectly smooth because exp(-R/h) varies gently
-        //   2. ARM MODULATION: evaluated at 2 representative points (near + far)
-        //      averaged to smooth out spiral crossings
-        // Returns vec3(density, avgRadius, avgArmStr).
-        vec3 analyticalBandDensity(vec3 dir) {
-          vec2 planeDir = normalize(dir.xz + vec2(0.00001));
-
-          // 1. Smooth base — exponential disk WITHOUT arm modulation
-          float baseDensity = 0.0;
-          float weightedR = 0.0;
-          float totalWeight = 0.0;
-
-          for (int i = 0; i < 12; i++) {
-            float fi = float(i);
-            float t = 0.3 + fi * 1.2; // 0.3 to 13.5 kpc
-            vec2 sampleXZ = uPlayerPos.xz + planeDir * t;
-            float R = length(sampleXZ);
-            if (R > GALAXY_RADIUS * 1.1) continue;
-            float edgeFade = 1.0 - smoothstep(GALAXY_RADIUS * 0.7, GALAXY_RADIUS * 1.1, R);
-            // Pure exponential disk + bulge, no arm structure
-            float disk = exp(-R / VISUAL_SCALE_LENGTH);
-            float thick = THICK_DISK_NORM * exp(-R / 5.0);
-            float bulge = BULGE_NORM * exp(-R / BULGE_SCALE);
-            float sd = (disk + thick + bulge) * edgeFade;
-            float w = 1.0 / (t * 0.3 + 1.0);
-            baseDensity += sd * w;
-            weightedR += R * sd * w;
-            totalWeight += sd * w;
-          }
-
-          float avgR = (totalWeight > 0.001) ? weightedR / totalWeight : length(uPlayerPos.xz);
-
-          // No arm modulation — the starfield particles already show arm
-          // structure. The glow is the smooth unresolved background.
-          // Any discrete arm evaluation creates visible banding artifacts
-          // from inside the disk.
-          float armStr = 0.0;
-
-          // 3. Vertical profile — disk band + spherical bulge
-          float sinElev = abs(dir.y);
-          // Thin disk band (narrow Gaussian)
-          float diskWidth = 0.08 + smoothstep(8.0, 2.0, avgR) * 0.12;
-          float diskFalloff = exp(-sinElev * sinElev / (2.0 * diskWidth * diskWidth));
-          // Spherical bulge (very wide — visible overhead at center)
-          float bulgeR = length(uPlayerPos.xz);
-          float bulgeStrength = smoothstep(4.0, 0.3, bulgeR); // strong at center, gone by R=4
-          float bulgeFalloff = exp(-sinElev * sinElev / (2.0 * 0.8 * 0.8)); // wide: ~50° half-width
-          float verticalFalloff = mix(diskFalloff, max(diskFalloff, bulgeFalloff), bulgeStrength);
-
-          return vec3(baseDensity * verticalFalloff, avgR, armStr);
-        }
+        // ═══════════════════════════════════════════════════
+        // Main: ray-integrated galaxy glow
+        // ═══════════════════════════════════════════════════
 
         void main() {
           vec3 dir = normalize(vWorldDir);
 
-          float absHeight = abs(uPlayerPos.y);
-          float aboveBlend = smoothstep(0.8, 3.0, absHeight);
+          // ── Ray integration along view direction ──
+          float totalLight = 0.0;
+          float totalDust = 0.0;
+          float centerBrightness = 0.0;
 
-          float density = 0.0;
-          float hitR = 8.0;
-          float armStrAtHit = 0.0;
+          for (int s = 0; s < 6; s++) {
+            float d = s == 0 ? 0.3 : s == 1 ? 0.8 : s == 2 ? 1.5 :
+                      s == 3 ? 3.0 : s == 4 ? 6.0 : 12.0;
+            float w = s == 0 ? 1.0 : s == 1 ? 0.7 : s == 2 ? 0.45 :
+                      s == 3 ? 0.25 : s == 4 ? 0.12 : 0.05;
 
-          if (aboveBlend > 0.01) {
-            vec2 faceResult = faceOnDensityAndR(dir);
-            float faceDensity = faceResult.x;
-            hitR = max(faceResult.y, 0.1);
-            density += (faceDensity / 2.5) * aboveBlend;
-            // Compute arm strength at hit point for color mapping
-            float py = uPlayerPos.y;
-            if (abs(dir.y) > 0.01) {
-              float t = -py / dir.y;
-              if (t > 0.0) {
-                vec3 hp = uPlayerPos + dir * t;
-                armStrAtHit = spiralArmStrength(length(hp.xz), atan(hp.z, hp.x));
-              }
+            vec3 samplePos = uPlayerPos + dir * d;
+            float R = length(vec2(samplePos.x, samplePos.z));
+            float z = samplePos.y;
+            float theta = atan(samplePos.z, samplePos.x);
+
+            if (R < 20.0 && abs(z) < 10.0) {
+              float baseDensity = galaxyDensity(R, z);
+              float armStr = spiralArms(R, theta);
+              float density = baseDensity * (1.0 + armStr * 1.8);
+
+              totalDust += dustLanes(R, theta, z) * w;
+              totalLight += density * w;
+
+              if (R < 2.0) centerBrightness += density * w * 0.5;
             }
           }
 
-          if (aboveBlend < 0.99) {
-            vec3 bandResult = analyticalBandDensity(dir);
-            float bandDensity = bandResult.x;
-            density += (bandDensity / 1.5) * (1.0 - aboveBlend);
-            // Blend color info so in-disk view gets proper color variation
-            float bandR = bandResult.y;
-            float bandArm = bandResult.z;
-            hitR = mix(bandR, hitR, aboveBlend);
-            armStrAtHit = mix(bandArm, armStrAtHit, aboveBlend);
+          // Apply dust absorption (Beer-Lambert)
+          float transmission = exp(-totalDust * 2.0);
+          totalLight *= transmission;
+
+          // ── Normalize and shape ──
+          float glowBrightness = totalLight * uGlowIntensity;
+
+          // Soft cap with sqrt compression above threshold
+          float capThreshold = 0.25;
+          if (glowBrightness > capThreshold) {
+            glowBrightness = capThreshold + sqrt(glowBrightness - capThreshold) * 0.15;
           }
 
-          // Tone mapping — sqrt compresses dynamic range
-          // Cap at 0.7 to simulate eye/camera adaptation: even at the
-          // galactic center, individual stars should be visible through
-          // the glow (your eyes would adjust to the brightness)
-          density = sqrt(clamp(density, 0.0, 1.0));
-          density = min(density, 0.7);
+          // ── Feature glow (Plummer contribution) ──
+          float fGlow = featureGlow(dir);
+          glowBrightness += fGlow * 0.12;
 
-          if (density < 0.01) discard;
+          // Hard max: glow should never exceed ~0.35 to preserve star hierarchy
+          glowBrightness = min(glowBrightness, 0.35);
 
-          // ── Dust lanes (inside disk only) ──
-          // DISABLED: hashNoise grid creates rectangular cell artifacts.
-          // TODO: replace with smooth noise or pre-baked texture if dust
-          // lanes are desired. For now the starfield provides visual texture.
-          // if (aboveBlend < 0.5) { ... }
+          // ── Color ──
+          float warmth = centerBrightness / max(totalLight * uGlowIntensity, 0.001);
+          warmth = clamp(warmth, 0.0, 1.0);
 
-          // ── Color mapping — physically motivated ──
-          vec3 bulgeColor = vec3(0.70, 0.58, 0.35);  // warm yellow-white
-          vec3 diskColor = vec3(0.45, 0.40, 0.35);    // warm white
-          vec3 armColor = vec3(0.40, 0.48, 0.65);     // blue-white (young OB stars)
-          vec3 armCoreColor = vec3(0.65, 0.62, 0.55); // bright white core of arms
-          vec3 nebulaColor = vec3(0.60, 0.28, 0.35);  // reddish-pink (H-II regions)
+          vec3 warmColor = vec3(0.45, 0.35, 0.18);  // bulge gold
+          vec3 coolColor = vec3(0.30, 0.30, 0.32);   // disk blue-white
+          vec3 baseColor = mix(coolColor, warmColor, warmth);
 
-          // Wider bulge: strong at R<2, fades by R=5
-          float bulgeWeight = smoothstep(5.0, 0.5, hitR);
-          // Arm color: blue tint in outer disk arms
-          float armBlend = armStrAtHit * smoothstep(1.5, 4.0, hitR);
-          // Arm core brightness: white glow at arm centers (density of overlapping stars)
-          float armCoreWeight = pow(armStrAtHit, 3.0) * smoothstep(1.5, 3.0, hitR) * 0.4;
-          // Nebula patches: noise-driven splotches within arms (lower threshold = more visible)
-          float nebulaStrength = 0.0;
-          if (armStrAtHit > 0.2) {
-            float nebNoise = hashNoise(dir.xz * 6.0 + vec2(31.7, 5.3));
-            nebulaStrength = smoothstep(0.4, 0.65, nebNoise) * armStrAtHit * smoothstep(1.5, 4.0, hitR) * 0.3;
+          // Feature glow: slightly brighter and warmer
+          if (fGlow > 0.01) {
+            vec3 featureColor = vec3(0.40, 0.35, 0.25);
+            float featureMix = clamp(fGlow * 3.0, 0.0, 0.5);
+            baseColor = mix(baseColor, featureColor, featureMix);
           }
 
-          // Build final color
-          vec3 baseColor = diskColor;
-          baseColor = mix(baseColor, bulgeColor, bulgeWeight);
-          baseColor = mix(baseColor, armColor, armBlend * 0.5);
-          baseColor = mix(baseColor, armCoreColor, armCoreWeight);
-          baseColor = mix(baseColor, nebulaColor, nebulaStrength);
+          // ── Retro styling ──
+          vec2 chunkyCoord = floor(gl_FragCoord.xy / 3.0);
+          vec3 color = baseColor * glowBrightness;
+          color = posterize(color, 8.0);
 
-          // Bulge brightness boost — wider and more intense
-          float bulgeBrightness = 1.0 + bulgeWeight * 3.0; // up to 4x at center
+          float dither = bayerDither4x4(chunkyCoord);
+          float alpha = glowBrightness;
 
-          // ── Posterize — 12 bands for smooth gradation ──
-          float numBands = 12.0;
-          float band = floor(density * numBands) / numBands;
-          float nextBand = min(1.0, band + 1.0 / numBands);
-          float bandFrac = fract(density * numBands);
+          if (alpha < dither * 0.5) discard;
 
-          // ── Bayer dithering (chunky — match retro pixel grid) ──
-          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
-          float finalDensity = (bandFrac > threshold) ? nextBand : band;
-
-          if (finalDensity < 0.02) discard;
-
-          // Output with bulge brightness boost
-          float brightness = finalDensity * 0.5 * bulgeBrightness;
-          gl_FragColor = vec4(baseColor * brightness, 1.0);
+          gl_FragColor = vec4(color, alpha);
         }
       `,
     });
 
-    this._sphere = new THREE.Mesh(geometry, material);
-    this.mesh = this._sphere;
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.renderOrder = -1;
   }
 
+  /**
+   * Pack nearby feature data into uniform-friendly arrays.
+   */
+  _packFeatures(features, playerPos) {
+    const MAX_FEATURES = 8;
+    const dirs = [];
+    const params = [];
+    let count = 0;
+
+    for (let i = 0; i < Math.min(features.length, MAX_FEATURES); i++) {
+      const f = features[i];
+      const dx = f.x - playerPos.x;
+      const dy = f.y - playerPos.y;
+      const dz = f.z - playerPos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < 0.001) continue;
+
+      const theta = Math.atan2(dz, dx);
+      const phi = Math.acos(Math.max(-1, Math.min(1, dy / dist)));
+      const featureRadius = f.radius || 0.1;
+      const angularRadius = Math.atan(featureRadius / dist);
+      const brightness = (f.brightness || 1.0) * Math.min(1.0, 0.5 / dist);
+
+      dirs.push(new THREE.Vector2(theta, phi));
+      params.push(new THREE.Vector2(angularRadius, brightness));
+      count++;
+    }
+
+    while (dirs.length < MAX_FEATURES) {
+      dirs.push(new THREE.Vector2(0, 0));
+      params.push(new THREE.Vector2(0, 0));
+    }
+
+    return { count, dirs, params };
+  }
+
+  /**
+   * Update the glow sphere to follow the camera.
+   */
   update(cameraPosition, camera) {
     this.mesh.position.copy(cameraPosition);
+  }
+
+  /**
+   * Update player position, arm data, and features (called on warp arrival).
+   * @param {object} playerPos - {x,y,z} galactic position in kpc
+   * @param {object} [galacticMap] - GalacticMap instance for arm data
+   * @param {Array} [features] - nearby features for Plummer glow
+   */
+  setGalacticPosition(playerPos, galacticMap, features) {
+    const u = this.mesh.material.uniforms;
+    u.uPlayerPos.value.set(playerPos.x, playerPos.y, playerPos.z);
+
+    if (galacticMap && galacticMap.arms) {
+      const max = 8;
+      for (let i = 0; i < Math.min(galacticMap.arms.length, max); i++) {
+        u.uArmOffsets.value[i] = galacticMap.armOffsets[i];
+        u.uArmWidths.value[i] = galacticMap.armWidths[i];
+        u.uArmStrengths.value[i] = galacticMap.armStrengths[i];
+      }
+      u.uArmCount.value = Math.min(galacticMap.arms.length, max);
+      u.uPitchK.value = galacticMap.pitchK;
+    }
+
+    if (features) {
+      const packed = this._packFeatures(features, playerPos);
+      u.uFeatureCount.value = packed.count;
+      u.uFeatureDirs.value = packed.dirs;
+      u.uFeatureParams.value = packed.params;
+    }
   }
 
   addTo(scene) {
@@ -387,7 +402,7 @@ export class GalaxyGlow {
   }
 
   dispose() {
-    this._sphere.geometry.dispose();
-    this._sphere.material.dispose();
+    this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
   }
 }

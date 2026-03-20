@@ -108,9 +108,9 @@ export class SkyRenderer {
       this._glowLayer = new GalaxyGlowLayer(
         this._glowRadius,
         data.playerPos,
-        data.armOffsets,
-        data.armPitchK,
-        this._brightnessConfig.glow
+        this._galacticMap,  // source of truth for arm data
+        this._brightnessConfig.glow,
+        this._pendingFeatures || []  // nearby features for Plummer glow
       );
       // Pass density normalization so GLSL model matches JS model
       if (data.densityNorm && this._glowLayer._sphere?.material?.uniforms?.uDensityNorm) {

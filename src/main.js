@@ -1812,7 +1812,8 @@ debugPanel.setSpawnCallbacks({
     sysData._destType = 'star-system';
     spawnSystem({ forWarp: false, systemData: sysData });
     debugPanel.setPlayerPos(playerGalacticPos);
-    console.log(`Debug teleport: ${name} → (${pos.x}, ${pos.y}, ${pos.z})`);
+    const armInfo = ctx.armInfo;
+    console.log(`Debug teleport: ${name} → (${pos.x}, ${pos.y}, ${pos.z}) | arm=${ctx.spiralArmStrength.toFixed(2)} | nearestArm=${armInfo ? armInfo.armName : 'unknown'}${armInfo && armInfo.isMajor ? ' (MAJOR)' : ''}`);
   },
   spawnSystemType: (destType) => {
     _debugSpawnType(destType);
@@ -2818,6 +2819,7 @@ function findClosestBody() {
 function focusPlanet(index) {
   if (!system) return;
   soundEngine.play('select');
+  cameraController.killFlightVelocity();
   focusMoonIndex = -1;
   focusStarIndex = -1;
 
@@ -3578,7 +3580,8 @@ function animate() {
     // ── Camera tracking (manual mode only) ──
     // Skip during flythrough (camera is driven by FlythroughCamera)
     // Skip during gallery mode (camera orbits the gallery object at origin)
-    if (!cameraController.bypassed && !galleryMode) {
+    // Skip during WASD flight — player is moving freely, don't snap back to body
+    if (!cameraController.bypassed && !galleryMode && !cameraController.isFlying) {
       // Determine the tracked body's position (if any)
       let trackPos = null;
       if (focusIndex === -2 && focusStarIndex >= 0) {
@@ -3602,6 +3605,31 @@ function animate() {
           cameraController.trackTarget(trackPos);
         }
       }
+    }
+  }
+
+  // ── WASD free-flight input ──
+  // Read held keys each frame and feed thrust direction to the camera.
+  // Flight is disabled during warp, title screen, overlays, gallery, and autopilot.
+  {
+    const flightOk = !titleScreenActive
+                   && !warpEffect.isActive
+                   && !warpTarget.turning
+                   && !galleryMode
+                   && !autoNav.isActive
+                   && !_settingsOpen
+                   && !_soundTestOpen
+                   && document.getElementById('keybinds-overlay')?.style.display === 'none';
+    cameraController._flightEnabled = flightOk;
+
+    if (flightOk) {
+      // Use e.code values (KeyW/KeyS/etc.) — immune to Shift changing e.key case
+      const fwd = (_heldKeys.has('KeyW') ? 1 : 0) - (_heldKeys.has('KeyS') ? 1 : 0);
+      const right = (_heldKeys.has('KeyD') ? 1 : 0) - (_heldKeys.has('KeyA') ? 1 : 0);
+      const boost = _heldKeys.has('Shift') || _heldKeys.has('ShiftLeft') || _heldKeys.has('ShiftRight');
+      cameraController.setFlightInput(fwd, right, boost);
+    } else {
+      cameraController.setFlightInput(0, 0, false);
     }
   }
 
@@ -3657,6 +3685,8 @@ window.addEventListener('resize', () => retroRenderer.resize());
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
   _heldKeys.add(e.key);
+  // Also track e.code so WASD works reliably regardless of Shift state
+  _heldKeys.add(e.code);
 
   // K key: toggle keybinds overlay (works always — title, gameplay, warp)
   if (e.code === 'KeyK') {
@@ -3676,7 +3706,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // S key: toggle settings panel (works always except title screen)
   // P key: toggle settings panel (was S — moved to free WASD for movement)
   if (e.code === 'KeyP' && !titleScreenActive) {
     toggleSettings();
@@ -3732,8 +3761,7 @@ window.addEventListener('keydown', (e) => {
   // Old Shift+number and Shift+letter debug shortcuts removed.
   // All debug spawning/teleporting is now handled via the debug panel (Down Arrow key).
 
-  // D key: toggle debug gallery (works even during warp)
-  // G key: toggle debug gallery (was D — changed to free WASD for movement)
+  // G key: toggle debug gallery (was D — moved to free WASD for movement)
   if (e.code === 'KeyG') {
     if (galleryMode) {
       exitGallery();
@@ -3775,7 +3803,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // A key: toggle autopilot
   // Q key: toggle autopilot (was A — moved to free WASD for movement)
   if (e.code === 'KeyQ') {
     if (autoNav.isActive) {
@@ -3789,6 +3816,11 @@ window.addEventListener('keydown', (e) => {
 
   // During autopilot, some keys redirect the tour instead of normal behavior
   if (autoNav.isActive) {
+    // WASD: stop autopilot and take manual control
+    if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
+      stopFlythrough();
+      return;
+    }
     if (e.code === 'Space') {
       e.preventDefault();
       beginWarpTurn();
@@ -3819,9 +3851,9 @@ window.addEventListener('keydown', (e) => {
         }
       }
     }
-    // O, G still work normally during autopilot
+    // O, V still work normally during autopilot
     if (e.code === 'KeyO') toggleOrbits();
-    if (e.code === 'KeyG') toggleGravityWell();
+    if (e.code === 'KeyV') toggleGravityWell();
     return;
   }
 
@@ -3845,7 +3877,7 @@ window.addEventListener('keydown', (e) => {
     }
   } else if (e.code === 'KeyO') {
     toggleOrbits();
-  } else if (e.code === 'KeyG') {
+  } else if (e.code === 'KeyV') {
     toggleGravityWell();
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
@@ -3857,6 +3889,12 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   _heldKeys.delete(e.key);
+  _heldKeys.delete(e.code);
+});
+
+// Clear all held keys when window loses focus — prevents WASD getting "stuck"
+window.addEventListener('blur', () => {
+  _heldKeys.clear();
 });
 
 // ── Click/tap-to-select ──
@@ -4064,6 +4102,9 @@ function beginWarpTurn() {
   if (warpEffect.isActive) return;   // already warping
   if (warpTarget.turning) return;    // already turning
   soundEngine.play('warpLockOn');
+
+  // Kill any WASD flight momentum before warping
+  cameraController.killFlightVelocity();
 
   // Cancel deep sky linger timer (we're warping now)
   _deepSkyLingerTimer = -1;

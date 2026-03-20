@@ -46,11 +46,38 @@ export class GalacticMap {
   static HALO_POWER = -3.5;           // power-law exponent
   static HALO_REF_RADIUS = 8.0;      // kpc (normalization radius)
 
-  // Spiral arms
-  static NUM_ARMS = 4;
+  // Spiral arms — realistic Milky Way structure
+  // 2 major arms (Scutum-Centaurus, Perseus) + minor arms
+  // See Churchwell et al. 2009, Vallée 2017
   static ARM_PITCH_DEG = 12;
-  static ARM_WIDTH = 0.6;             // kpc (half-width of Gaussian profile)
-  static ARM_DENSITY_BOOST = 1.8;     // multiplier on disk density in arms
+  // ARM_DENSITY_BOOST is now per-arm (see ARM_DEFS below), but we keep
+  // a base value for backward-compat calculations in _generateSector
+  static ARM_DENSITY_BOOST = 1.8;
+
+  // Each arm: { name, offset (radians), densityBoost, width (kpc), isMajor }
+  // Offsets calibrated so the Sun (R=8, theta=0) falls between Perseus
+  // and Sagittarius, near the Orion Spur — matching real Milky Way geometry.
+  //
+  // Angular offsets at R=4 kpc reference radius:
+  //   Scutum-Centaurus: 0°     (major)
+  //   Perseus:          180°   (major, wraps behind Sun)
+  //   Sagittarius:      ~50°   (minor, inside Sun's orbit)
+  //   Norma:            ~230°  (minor)
+  //   Outer:            ~140°  (minor, beyond Perseus)
+  //   Orion Spur:       local spur near the Sun
+  static ARM_DEFS = [
+    // ─── Major arms ───
+    { name: 'Scutum-Centaurus', offset: 0.0,    densityBoost: 2.5, width: 0.7, isMajor: true },
+    { name: 'Perseus',          offset: Math.PI, densityBoost: 2.5, width: 0.7, isMajor: true },
+    // ─── Minor arms ───
+    { name: 'Sagittarius',  offset: 0.87,           densityBoost: 1.2, width: 0.45, isMajor: false },
+    { name: 'Norma',        offset: Math.PI + 0.87,  densityBoost: 1.0, width: 0.40, isMajor: false },
+    { name: 'Outer',        offset: Math.PI * 0.78,  densityBoost: 0.8, width: 0.35, isMajor: false },
+    // ─── Local spur (Orion Spur) ───
+    // Short spur between Perseus and Sagittarius, near the Sun.
+    // Lower density than even minor arms, but included for realism.
+    { name: 'Orion Spur',   offset: Math.PI * 0.65,  densityBoost: 0.6, width: 0.30, isMajor: false },
+  ];
 
   // Navigable range
   static GALAXY_RADIUS = 15;          // kpc (visible disk)
@@ -65,17 +92,28 @@ export class GalacticMap {
     this.rng = new SeededRandom(masterSeed);
 
     // Galaxy-level parameters (could be varied per seed for different galaxies)
-    this.numArms = GalacticMap.NUM_ARMS;
     this.pitchAngle = GalacticMap.ARM_PITCH_DEG * Math.PI / 180;
     this.pitchK = 1.0 / Math.tan(this.pitchAngle);
 
-    // Arm starting angles (evenly spaced + small per-seed offsets)
-    this.armOffsets = [];
-    for (let i = 0; i < this.numArms; i++) {
-      this.armOffsets.push(
-        (i * 2 * Math.PI / this.numArms) + this.rng.range(-0.1, 0.1)
-      );
-    }
+    // Build arm data from static definitions + small per-seed jitter
+    // so different galaxy seeds get slightly different arm positions.
+    this.arms = GalacticMap.ARM_DEFS.map((def, i) => ({
+      name: def.name,
+      offset: def.offset + this.rng.range(-0.08, 0.08),
+      densityBoost: def.densityBoost,
+      width: def.width,
+      isMajor: def.isMajor,
+    }));
+
+    // Legacy compat: numArms = total arm count
+    this.numArms = this.arms.length;
+    // Legacy compat: flat armOffsets array
+    this.armOffsets = this.arms.map(a => a.offset);
+
+    // Pre-computed arm data arrays for GPU uniforms (GalaxyGlow shader).
+    // Single source of truth — glow shader reads these, not its own definitions.
+    this.armWidths = this.arms.map(a => a.width);
+    this.armStrengths = this.arms.map(a => a.densityBoost / 2.5); // normalized 0-1
 
     // ── Calibrate potential model ──
     // Compute normalization so potentialDerivedDensity at the solar
@@ -176,22 +214,23 @@ export class GalacticMap {
   }
 
   /**
-   * How strongly a position is inside a spiral arm (0 = inter-arm, 1 = arm center).
+   * How strongly a position is inside a spiral arm (0 = inter-arm, 1+ = arm center).
    * Uses logarithmic spiral model with Gaussian cross-section.
+   * Returns a density-weighted strength: major arms peak higher than minor arms.
    *
    * See RESEARCH_star-population-synthesis.md §6.
    *
    * @param {number} R_kpc - cylindrical radius
    * @param {number} theta_rad - angle in disk plane
-   * @returns {number} 0 to 1
+   * @returns {number} 0 to ~1 (can exceed 1 for strongest major arms)
    */
   spiralArmStrength(R_kpc, theta_rad) {
     if (R_kpc < 0.5) return 0; // No arms in the very center (bulge dominates)
 
     let maxStrength = 0;
-    for (let arm = 0; arm < this.numArms; arm++) {
+    for (const arm of this.arms) {
       // Expected angle at this radius for this arm
-      const expectedTheta = this.armOffsets[arm] + this.pitchK * Math.log(R_kpc / 4.0);
+      const expectedTheta = arm.offset + this.pitchK * Math.log(R_kpc / 4.0);
       // Angular distance (wrapped to [-pi, pi])
       let dTheta = ((theta_rad - expectedTheta) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
       // Perpendicular distance to the spiral arm in kpc.
@@ -199,11 +238,47 @@ export class GalacticMap {
       // so perpendicular distance = arc_distance * sin(pitch_angle).
       const sinPitch = Math.sin(this.pitchAngle);
       const dist = Math.abs(dTheta) * R_kpc * sinPitch;
-      // Gaussian profile
-      const strength = Math.exp(-0.5 * (dist / GalacticMap.ARM_WIDTH) ** 2);
+      // Gaussian profile with per-arm width
+      const gaussianStrength = Math.exp(-0.5 * (dist / arm.width) ** 2);
+      // Scale by this arm's density boost (major arms ~2.5, minor ~0.6-1.2)
+      // Normalize so the max possible value from the strongest arm ≈ 1.0
+      const strength = gaussianStrength * (arm.densityBoost / 2.5);
       if (strength > maxStrength) maxStrength = strength;
     }
     return maxStrength;
+  }
+
+  /**
+   * Detailed arm info at a position — which arm is closest and its properties.
+   * Used for galaxy context (star formation rates differ by arm type).
+   *
+   * @param {number} R_kpc - cylindrical radius
+   * @param {number} theta_rad - angle in disk plane
+   * @returns {{ armName, isMajor, strength, densityBoost }}
+   */
+  nearestArmInfo(R_kpc, theta_rad) {
+    if (R_kpc < 0.5) return { armName: 'bulge', isMajor: false, strength: 0, densityBoost: 0 };
+
+    let bestArm = null;
+    let bestStrength = 0;
+
+    for (const arm of this.arms) {
+      const expectedTheta = arm.offset + this.pitchK * Math.log(R_kpc / 4.0);
+      let dTheta = ((theta_rad - expectedTheta) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+      const dist = Math.abs(dTheta) * R_kpc;
+      const strength = Math.exp(-0.5 * (dist / arm.width) ** 2);
+      if (strength > bestStrength) {
+        bestStrength = strength;
+        bestArm = arm;
+      }
+    }
+
+    return {
+      armName: bestArm ? bestArm.name : 'inter-arm',
+      isMajor: bestArm ? bestArm.isMajor : false,
+      strength: bestStrength,
+      densityBoost: bestArm ? bestArm.densityBoost : 0,
+    };
   }
 
   // ════════════════════════════════════════════════════════════
@@ -647,6 +722,7 @@ export class GalacticMap {
     const densities = this.potentialDerivedDensity(R, y);
     const armStr = this.spiralArmStrength(R, theta);
     const phi = this.gravitationalPotential(R, y);
+    const armInfo = this.nearestArmInfo(R, theta);
 
     // Pick dominant component
     const componentEntries = [
@@ -663,7 +739,7 @@ export class GalacticMap {
 
     let metallicity = this._deriveMetallicity(contextRng, component, R, y);
     let age = this._deriveAge(contextRng, component, armStr);
-    let starWeights = this._deriveStarWeights(component, armStr);
+    let starWeights = this._deriveStarWeights(component, armStr, armInfo);
     const binaryMod = this._deriveBinaryModifier(component);
 
     // Check if this position is inside any galactic feature.
@@ -707,6 +783,7 @@ export class GalacticMap {
       component,
       componentWeights: { ...densities },
       spiralArmStrength: armStr,
+      armInfo,  // { armName, isMajor, strength, densityBoost }
       metallicity,
       age,
       starWeights,
@@ -817,10 +894,11 @@ export class GalacticMap {
    *
    * Key rules from research:
    * - Halo/thick disk: no O/B/A (they've all died — too old)
-   * - Spiral arms: O/B boosted 5-10x (active star formation)
+   * - Major spiral arms: O/B boosted strongly (active star formation)
+   * - Minor arms: moderate O/B boost
    * - Bulge: shift toward K/M
    */
-  _deriveStarWeights(component, armStrength) {
+  _deriveStarWeights(component, armStrength, armInfo = null) {
     // Base cinematic weights (from StarSystemGenerator)
     const base = {
       M: 0.18, K: 0.20, G: 0.20, F: 0.16, A: 0.13, B: 0.08, O: 0.05,
@@ -832,12 +910,15 @@ export class GalacticMap {
       case 'thin':
         weights = { ...base };
         // Boost O/B in spiral arms (star formation regions)
-        // Moderate boost — arms have more massive stars but M/K still dominate
+        // Major arms get stronger boost than minor arms
         if (armStrength > 0.3) {
-          const boost = 1 + armStrength * 3; // up to 4x in arm center
+          const isMajor = armInfo && armInfo.isMajor;
+          // Major arms: up to 5x boost. Minor arms: up to 2.5x.
+          const maxBoost = isMajor ? 4.0 : 1.5;
+          const boost = 1 + armStrength * maxBoost;
           weights.O *= boost;
           weights.B *= boost;
-          weights.A *= (1 + armStrength);
+          weights.A *= (1 + armStrength * (isMajor ? 1.5 : 0.7));
         }
         break;
       case 'thick':

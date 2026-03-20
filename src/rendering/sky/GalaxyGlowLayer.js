@@ -3,9 +3,17 @@ import * as THREE from 'three';
 /**
  * GalaxyGlowLayer — diffuse glow representing billions of unresolved stars.
  *
- * Refactored from GalaxyGlow.js with brightness budgeting:
- * output clamped to brightnessRange [0, max] so it never overpowers
- * the starfield layer above it.
+ * DISPLAY LAYER ONLY — does not define galaxy structure.
+ * All arm data (offsets, widths, strengths) comes from GalacticMap via
+ * uniforms. GalacticMap is the single source of truth.
+ *
+ * Features:
+ * - Potential-derived density model (Miyamoto-Nagai + Hernquist + NFW)
+ * - Per-arm width and strength from GalacticMap (2 major + minor arms)
+ * - Sin-based smooth dust lanes (no hash grid artifacts)
+ * - Feature Plummer integration (nearby clusters brighten the glow)
+ * - Chunky 3x Bayer dithering, posterized color bands (retro aesthetic)
+ * - Brightness-budgeted output (never overpowers starfield)
  *
  * Two rendering modes blend based on player height:
  *   FROM INSIDE: ray-march along sightlines → Milky Way band
@@ -15,23 +23,46 @@ export class GalaxyGlowLayer {
   /**
    * @param {number} radius — sky sphere radius (should be < starfield radius)
    * @param {{ x: number, y: number, z: number }} playerPos — galactic position in kpc
-   * @param {number[]} armOffsets — 4 spiral arm starting angles
-   * @param {number} armPitchK — tan(pitch angle) for spiral math
+   * @param {object} galacticMap — GalacticMap instance (source of truth for arms)
    * @param {{ min: number, max: number }} brightnessRange — output brightness limits
+   * @param {Array} [features] — nearby features [{x,y,z,type,radius,brightness}]
    */
-  constructor(radius, playerPos, armOffsets, armPitchK, brightnessRange) {
+  constructor(radius, playerPos, galacticMap, brightnessRange, features) {
     this.radius = radius;
     this._brightnessRange = brightnessRange;
 
     const px = playerPos?.x ?? 8;
     const py = playerPos?.y ?? 0;
     const pz = playerPos?.z ?? 0;
-    const toCenterX = -px;
-    const toCenterY = -py;
-    const toCenterZ = -pz;
-    const gcLen = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY + toCenterZ * toCenterZ) || 1;
 
-    const offsets = armOffsets || [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+    // ── Arm data from GalacticMap (single source of truth) ──
+    const MAX_ARMS = 8;
+    const armOffsets = new Array(MAX_ARMS).fill(0);
+    const armWidths = new Array(MAX_ARMS).fill(0.6);
+    const armStrengths = new Array(MAX_ARMS).fill(0);
+    let armCount = 0;
+    let pitchK = 1.0 / Math.tan(12 * Math.PI / 180);
+
+    if (galacticMap && galacticMap.arms) {
+      armCount = Math.min(galacticMap.arms.length, MAX_ARMS);
+      for (let i = 0; i < armCount; i++) {
+        armOffsets[i] = galacticMap.armOffsets[i];
+        armWidths[i] = galacticMap.armWidths[i];
+        armStrengths[i] = galacticMap.armStrengths[i];
+      }
+      pitchK = galacticMap.pitchK;
+    } else {
+      // Legacy fallback
+      armCount = 4;
+      for (let i = 0; i < 4; i++) {
+        armOffsets[i] = i * Math.PI / 2;
+        armWidths[i] = 0.6;
+        armStrengths[i] = 1.0;
+      }
+    }
+
+    // Feature Plummer data
+    const featureUniforms = this._packFeatures(features || [], { x: px, y: py, z: pz });
 
     const geometry = new THREE.IcosahedronGeometry(radius, 16);
     const material = new THREE.ShaderMaterial({
@@ -43,11 +74,21 @@ export class GalaxyGlowLayer {
 
       uniforms: {
         uPlayerPos: { value: new THREE.Vector3(px, py, pz) },
-        uGalCenterDir: { value: new THREE.Vector3(toCenterX / gcLen, toCenterY / gcLen, toCenterZ / gcLen) },
-        uArmOffsets: { value: new THREE.Vector4(offsets[0], offsets[1], offsets[2], offsets[3]) },
-        uArmPitchK: { value: armPitchK ?? (1.0 / Math.tan(12 * Math.PI / 180)) },
+        // Per-arm data from GalacticMap
+        uArmOffsets: { value: armOffsets },
+        uArmWidths: { value: armWidths },
+        uArmStrengths: { value: armStrengths },
+        uArmCount: { value: armCount },
+        uPitchK: { value: pitchK },
+        // Brightness budget
         uBrightnessMax: { value: brightnessRange.max },
-        uDensityNorm: { value: 1.0 }, // set from GalacticMap._potentialDensityNorm
+        uDensityNorm: { value: 1.0 },
+        // Feature Plummer
+        uFeatureCount: { value: featureUniforms.count },
+        uFeatureDirs: { value: featureUniforms.dirs },
+        uFeatureParams: { value: featureUniforms.params },
+        // Dust control
+        uDustStrength: { value: 0.35 },
       },
 
       vertexShader: /* glsl */ `
@@ -60,15 +101,11 @@ export class GalaxyGlowLayer {
 
       fragmentShader: /* glsl */ `
         #define PI 3.14159265359
-        #define NUM_ARMS 4
-        #define ARM_WIDTH_BASE 0.15
-        #define ARM_WIDTH_SLOPE 0.025
+        #define MAX_ARMS 8
         #define SIN_PITCH 0.2079
         #define GALAXY_RADIUS 15.0
 
-        // ── Gravitational potential model constants ──
-        // Must match GalacticMap.js potential parameters exactly.
-        // Density derived from Miyamoto-Nagai + Hernquist + NFW.
+        // ── Potential model constants (must match GalacticMap.js) ──
         #define MN_A 3.0
         #define MN_B 0.28
         #define MN_GM 1.0
@@ -78,11 +115,17 @@ export class GalaxyGlowLayer {
         #define NFW_NORM 0.0003
 
         uniform vec3 uPlayerPos;
-        uniform vec3 uGalCenterDir;
-        uniform vec4 uArmOffsets;
-        uniform float uArmPitchK;
+        uniform float uArmOffsets[MAX_ARMS];
+        uniform float uArmWidths[MAX_ARMS];
+        uniform float uArmStrengths[MAX_ARMS];
+        uniform int uArmCount;
+        uniform float uPitchK;
         uniform float uBrightnessMax;
         uniform float uDensityNorm;
+        uniform int uFeatureCount;
+        uniform vec2 uFeatureDirs[8];
+        uniform vec2 uFeatureParams[8];
+        uniform float uDustStrength;
 
         varying vec3 vWorldDir;
 
@@ -102,7 +145,7 @@ export class GalaxyGlowLayer {
           return t / 16.0;
         }
 
-        // ── Hash noise for nebula patches ──
+        // ── Hash noise (for nebula patches in color mapping) ──
         float hash21(vec2 p) {
           p = fract(p * vec2(123.34, 456.21));
           p += dot(p, p + 45.32);
@@ -118,32 +161,39 @@ export class GalaxyGlowLayer {
           return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
         }
 
-        // ── Spiral arm strength ──
+        // ── Smooth noise for dust lanes (sin-based, no cell artifacts) ──
+        float smoothNoise(vec2 p) {
+          float n = sin(p.x * 1.7 + p.y * 2.3) * 0.5
+                  + sin(p.x * 3.1 - p.y * 1.9) * 0.25
+                  + sin(p.x * 5.7 + p.y * 4.3 + 1.7) * 0.125
+                  + sin(p.x * 11.3 - p.y * 8.7 + 3.1) * 0.0625;
+          return n * 0.5 + 0.5;
+        }
+
+        // ── Spiral arm strength — reads per-arm data from GalacticMap ──
         float spiralArmStrength(float R, float theta) {
           if (R < 0.5) return 0.0;
           float logR = log(R / 4.0);
-          float armWidth = ARM_WIDTH_BASE + ARM_WIDTH_SLOPE * R;
           float maxStr = 0.0;
-          float offsets[4];
-          offsets[0] = uArmOffsets.x;
-          offsets[1] = uArmOffsets.y;
-          offsets[2] = uArmOffsets.z;
-          offsets[3] = uArmOffsets.w;
-          for (int i = 0; i < NUM_ARMS; i++) {
-            float expectedTheta = offsets[i] + uArmPitchK * logR;
+
+          for (int arm = 0; arm < MAX_ARMS; arm++) {
+            if (arm >= uArmCount) break;
+            float expectedTheta = uArmOffsets[arm] + uPitchK * logR;
             float dTheta = mod(theta - expectedTheta + 3.0 * PI, 2.0 * PI) - PI;
+            // Perpendicular distance (sin(pitch) correction)
             float dist = abs(dTheta) * R * SIN_PITCH;
-            float str = exp(-0.5 * (dist / armWidth) * (dist / armWidth));
-            maxStr = max(maxStr, str);
+            // Per-arm Gaussian width from GalacticMap
+            float armWidth = uArmWidths[arm];
+            float strength = exp(-0.5 * (dist / armWidth) * (dist / armWidth));
+            // Per-arm density strength from GalacticMap
+            strength *= uArmStrengths[arm];
+            maxStr = max(maxStr, strength);
           }
           return maxStr;
         }
 
         // ── Potential-derived density ──
-        // Miyamoto-Nagai (disk) + Hernquist (bulge) + NFW (halo).
-        // Must match GalacticMap.potentialDerivedDensity() exactly.
         float potentialDensity(float R, float z) {
-          // Miyamoto-Nagai disk density (analytical closed form)
           float zb = sqrt(z * z + MN_B * MN_B);
           float azb = MN_A + zb;
           float Rsq = R * R;
@@ -153,26 +203,56 @@ export class GalaxyGlowLayer {
             * (MN_A * Rsq + (MN_A + 3.0 * zb) * azb * azb)
             / (denom1 * denom2);
 
-          // Hernquist bulge density
           float r = max(sqrt(Rsq + z * z), 0.01);
           float ra = r + HERNQUIST_A;
           float bulgeDensity = HERNQUIST_GM * HERNQUIST_A / (2.0 * PI * r * ra * ra * ra);
 
-          // NFW halo density
           float x = r / NFW_RS;
           float haloDensity = NFW_NORM / (x * (1.0 + x) * (1.0 + x));
 
           return (diskDensity + bulgeDensity + haloDensity) * uDensityNorm;
         }
 
+        // ── Dust lanes ──
+        float dustLanes(float R, float theta, float z) {
+          float zFade = exp(-abs(z) / 0.15);
+          float n = smoothNoise(vec2(R * 2.0 + theta * 0.5, theta * 3.0 + R));
+          float armStr = spiralArmStrength(R, theta);
+          float armEdge = armStr * (1.0 - armStr) * 4.0;
+          float dustAmount = (0.3 + armEdge * 0.7) * n * zFade;
+          float rFade = smoothstep(1.5, 3.0, R) * (1.0 - smoothstep(10.0, 14.0, R));
+          return dustAmount * rFade * uDustStrength;
+        }
+
+        // ── Feature Plummer glow ──
+        float featureGlow(vec3 viewDir) {
+          float totalGlow = 0.0;
+          for (int i = 0; i < 8; i++) {
+            if (i >= uFeatureCount) break;
+            float fTheta = uFeatureDirs[i].x;
+            float fPhi = uFeatureDirs[i].y;
+            float angRadius = uFeatureParams[i].x;
+            float brightness = uFeatureParams[i].y;
+            vec3 featureDir = vec3(
+              sin(fPhi) * cos(fTheta),
+              cos(fPhi),
+              sin(fPhi) * sin(fTheta)
+            );
+            float cosAngle = dot(viewDir, featureDir);
+            float angle = acos(clamp(cosAngle, -1.0, 1.0));
+            float ra = angle / max(angRadius, 0.001);
+            float plummer = 1.0 / ((1.0 + ra * ra) * (1.0 + ra * ra));
+            totalGlow += plummer * brightness;
+          }
+          return totalGlow;
+        }
+
         // ── Surface density (face-on view from above) ──
         float surfaceDensity(float R, float theta) {
           float base = potentialDensity(R, 0.0);
-
           float armStr = spiralArmStrength(R, theta);
           float bulgeBlend = clamp((R - 0.5) / 1.5, 0.0, 1.0);
           float armFactor = mix(1.0, 0.10 + armStr * 2.40, bulgeBlend);
-
           return base * armFactor;
         }
 
@@ -182,7 +262,6 @@ export class GalaxyGlowLayer {
           if (abs(dir.y) < 0.01) return vec2(0.0);
           float t = -py / dir.y;
           if (t < 0.0) return vec2(0.0);
-          // Prevent singularity at galactic center — fade for very close projections
           float closeFade = smoothstep(0.0, 0.2, t);
           if (closeFade < 0.01) return vec2(0.0);
           vec3 hitPoint = uPlayerPos + dir * t;
@@ -202,6 +281,7 @@ export class GalaxyGlowLayer {
           float baseDensity = 0.0;
           float weightedR = 0.0;
           float totalWeight = 0.0;
+          float totalDust = 0.0;
 
           for (int i = 0; i < 12; i++) {
             float fi = float(i);
@@ -210,13 +290,19 @@ export class GalaxyGlowLayer {
             float R = length(sampleXZ);
             if (R > GALAXY_RADIUS * 1.1) continue;
             float edgeFade = 1.0 - smoothstep(GALAXY_RADIUS * 0.7, GALAXY_RADIUS * 1.1, R);
-            // Use potential-derived density instead of old exponential model
             float sd = potentialDensity(R, 0.0) * edgeFade;
             float w = 1.0 / (t * 0.3 + 1.0);
             baseDensity += sd * w;
             weightedR += R * sd * w;
             totalWeight += sd * w;
+            // Accumulate dust along the sightline
+            float theta = atan(sampleXZ.y, sampleXZ.x);
+            totalDust += dustLanes(R, theta, 0.0) * w;
           }
+
+          // Apply dust absorption (Beer-Lambert)
+          float transmission = exp(-totalDust * 2.0);
+          baseDensity *= transmission;
 
           float avgR = (totalWeight > 0.001) ? weightedR / totalWeight : length(uPlayerPos.xz);
           float armStr = 0.0;
@@ -267,13 +353,18 @@ export class GalaxyGlowLayer {
             armStrAtHit = mix(bandArm, armStrAtHit, aboveBlend);
           }
 
-          // Tone mapping — sqrt compresses dynamic range
+          // Tone mapping
           density = sqrt(clamp(density, 0.0, 1.0));
           density = min(density, 0.7);
 
           if (density < 0.01) discard;
 
-          // ── Color mapping — physically motivated ──
+          // ── Feature glow (Plummer contribution) ──
+          float fGlow = featureGlow(dir);
+          density += fGlow * 0.12;
+          density = min(density, 0.7);
+
+          // ── Color mapping ──
           vec3 bulgeColor = vec3(0.70, 0.58, 0.35);
           vec3 diskColor = vec3(0.45, 0.40, 0.35);
           vec3 armColor = vec3(0.40, 0.48, 0.65);
@@ -289,6 +380,13 @@ export class GalaxyGlowLayer {
             nebulaStrength = smoothstep(0.4, 0.65, nebNoise) * armStrAtHit * smoothstep(1.5, 4.0, hitR) * 0.3;
           }
 
+          // Feature glow tints slightly warmer
+          if (fGlow > 0.01) {
+            vec3 featureColor = vec3(0.40, 0.35, 0.25);
+            float featureMix = clamp(fGlow * 3.0, 0.0, 0.5);
+            diskColor = mix(diskColor, featureColor, featureMix);
+          }
+
           vec3 baseColor = diskColor;
           baseColor = mix(baseColor, bulgeColor, bulgeWeight);
           baseColor = mix(baseColor, armColor, armBlend * 0.5);
@@ -297,21 +395,19 @@ export class GalaxyGlowLayer {
 
           float bulgeBrightness = 1.0 + bulgeWeight * 3.0;
 
-          // ── Posterize — 12 bands for smooth gradation ──
+          // ── Posterize — 12 bands ──
           float numBands = 12.0;
           float band = floor(density * numBands) / numBands;
           float nextBand = min(1.0, band + 1.0 / numBands);
           float bandFrac = fract(density * numBands);
 
-          // ── Bayer dithering (chunky — match retro pixel grid) ──
+          // ── Bayer dithering (chunky 3x3 — match retro pixel grid) ──
           float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
           float finalDensity = (bandFrac > threshold) ? nextBand : band;
 
           if (finalDensity < 0.02) discard;
 
           // ── Brightness-budgeted output ──
-          // Scale into the assigned brightness range so glow never
-          // overpowers layers rendered on top of it.
           float rawBrightness = finalDensity * 0.5 * bulgeBrightness;
           float brightness = rawBrightness * uBrightnessMax;
           gl_FragColor = vec4(baseColor * brightness, 1.0);
@@ -321,6 +417,42 @@ export class GalaxyGlowLayer {
 
     this._sphere = new THREE.Mesh(geometry, material);
     this.mesh = this._sphere;
+  }
+
+  /**
+   * Pack nearby feature data into uniform-friendly arrays.
+   */
+  _packFeatures(features, playerPos) {
+    const MAX_FEATURES = 8;
+    const dirs = [];
+    const params = [];
+    let count = 0;
+
+    for (let i = 0; i < Math.min(features.length, MAX_FEATURES); i++) {
+      const f = features[i];
+      const dx = f.x - playerPos.x;
+      const dy = f.y - playerPos.y;
+      const dz = f.z - playerPos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < 0.001) continue;
+
+      const theta = Math.atan2(dz, dx);
+      const phi = Math.acos(Math.max(-1, Math.min(1, dy / dist)));
+      const featureRadius = f.radius || 0.1;
+      const angularRadius = Math.atan(featureRadius / dist);
+      const brightness = (f.brightness || 1.0) * Math.min(1.0, 0.5 / dist);
+
+      dirs.push(new THREE.Vector2(theta, phi));
+      params.push(new THREE.Vector2(angularRadius, brightness));
+      count++;
+    }
+
+    while (dirs.length < MAX_FEATURES) {
+      dirs.push(new THREE.Vector2(0, 0));
+      params.push(new THREE.Vector2(0, 0));
+    }
+
+    return { count, dirs, params };
   }
 
   update(cameraPosition) {
