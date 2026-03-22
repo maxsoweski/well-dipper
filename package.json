@@ -8,10 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "sync-ships": "bash scripts/sync-ships.sh",
+    "generate-glow": "node scripts/generate-galaxy-glow.mjs",
+    "generate-glow:test": "node scripts/generate-galaxy-glow.mjs --test",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "pngjs": "^7.0.0",
     "vite": "^7.3.1",
     "vitest": "^4.1.0"
   },

@@ -36,10 +36,21 @@ export class GalacticMap {
   static THICK_DISK_HEIGHT = 0.9;     // kpc
   static THICK_DISK_NORM = 0.12;      // relative to thin disk
 
-  // Bulge
+  // Bulge (spherical component — old stars)
   static BULGE_SCALE = 0.5;           // kpc (effective radius)
   static BULGE_FLATTENING = 0.5;      // axis ratio (oblate)
   static BULGE_NORM = 2.0;            // normalization
+
+  // Galactic bar — elongated stellar structure at the center.
+  // The Milky Way's bar is ~4-5 kpc long, ~1.5 kpc wide, oriented
+  // at ~25-30° from the Sun-center line. It connects the inner ends
+  // of the two major spiral arms.
+  // References: Wegg & Gerhard 2015, Bland-Hawthorn & Gerhard 2016
+  static BAR_HALF_LENGTH = 2.2;       // kpc (semi-major axis)
+  static BAR_HALF_WIDTH = 0.7;        // kpc (semi-minor axis in-plane)
+  static BAR_HALF_HEIGHT = 0.4;       // kpc (semi-minor axis vertical)
+  static BAR_ANGLE_DEG = 28;          // degrees from Sun-center line
+  static BAR_DENSITY = 1.5;           // density boost at bar center relative to bulge
 
   // Halo
   static HALO_NORM = 0.005;           // very sparse
@@ -109,6 +120,11 @@ export class GalacticMap {
     this.numArms = this.arms.length;
     // Legacy compat: flat armOffsets array
     this.armOffsets = this.arms.map(a => a.offset);
+
+    // Galactic bar angle (with per-seed jitter)
+    this.barAngle = (GalacticMap.BAR_ANGLE_DEG + this.rng.range(-3, 3)) * Math.PI / 180;
+    this.barCosA = Math.cos(this.barAngle);
+    this.barSinA = Math.sin(this.barAngle);
 
     // Pre-computed arm data arrays for GPU uniforms (GalaxyGlow shader).
     // Single source of truth — glow shader reads these, not its own definitions.
@@ -224,6 +240,30 @@ export class GalacticMap {
    * @param {number} theta_rad - angle in disk plane
    * @returns {number} 0 to ~1 (can exceed 1 for strongest major arms)
    */
+  /**
+   * Galactic bar density enhancement at a position.
+   * Returns 0–1+ indicating how much the bar boosts density at (R, theta).
+   * The bar is an elongated triaxial structure at the galaxy center.
+   *
+   * @param {number} R_kpc — cylindrical radius
+   * @param {number} theta_rad — angle in disk plane
+   * @returns {number} bar density boost factor (0 = no bar, >0 = inside bar)
+   */
+  barStrength(R_kpc, theta_rad) {
+    if (R_kpc > GalacticMap.BAR_HALF_LENGTH * 1.5) return 0;
+
+    // Rotate into bar frame
+    const x = R_kpc * Math.cos(theta_rad);
+    const z = R_kpc * Math.sin(theta_rad);
+    const bx = x * this.barCosA + z * this.barSinA;
+    const bz = -x * this.barSinA + z * this.barCosA;
+
+    // Evaluate ellipsoidal Gaussian
+    const sx = bx / GalacticMap.BAR_HALF_LENGTH;
+    const sz = bz / GalacticMap.BAR_HALF_WIDTH;
+    return Math.exp(-0.5 * (sx * sx + sz * sz)) * GalacticMap.BAR_DENSITY;
+  }
+
   spiralArmStrength(R_kpc, theta_rad) {
     if (R_kpc < 0.5) return 0; // No arms in the very center (bulge dominates)
 
@@ -300,9 +340,15 @@ export class GalacticMap {
   // matches componentDensities output (~0.065). G is absorbed into
   // the mass constants (we work in arbitrary potential units, not SI).
 
-  static MN_A = 3.0;           // kpc — Miyamoto-Nagai disk radial scale
-  static MN_B = 0.28;          // kpc — disk vertical scale
-  static MN_GM = 1.0;          // disk "mass" (arbitrary units, calibrated)
+  static MN_A = 3.0;           // kpc — Miyamoto-Nagai thin disk radial scale
+  static MN_B = 0.28;          // kpc — thin disk vertical scale
+  static MN_GM = 1.0;          // thin disk "mass" (arbitrary units, calibrated)
+
+  // Thick disk — older stellar population, larger scale height
+  // Contains ~15% of disk stars, extends ~3x higher than thin disk
+  static MN_THICK_A = 2.6;    // kpc — thick disk radial scale (slightly more compact)
+  static MN_THICK_B = 0.90;   // kpc — thick disk vertical scale (~3x thin disk)
+  static MN_THICK_GM = 0.65;  // thick disk mass (calibrated for ~200B total galaxy)
 
   static HERNQUIST_A = 0.6;    // kpc — bulge scale length
   static HERNQUIST_GM = 0.50;  // bulge "mass" (tuned for component weight balance)
@@ -320,10 +366,17 @@ export class GalacticMap {
    *   All values are negative (deeper well = more negative).
    */
   gravitationalPotential(R_kpc, z_kpc) {
-    // Miyamoto-Nagai disk potential
+    // Miyamoto-Nagai thin disk potential
     const zb = Math.sqrt(z_kpc * z_kpc + GalacticMap.MN_B * GalacticMap.MN_B);
     const azb = GalacticMap.MN_A + zb;
-    const disk = -GalacticMap.MN_GM / Math.sqrt(R_kpc * R_kpc + azb * azb);
+    const thinDisk = -GalacticMap.MN_GM / Math.sqrt(R_kpc * R_kpc + azb * azb);
+
+    // Miyamoto-Nagai thick disk potential
+    const zb2 = Math.sqrt(z_kpc * z_kpc + GalacticMap.MN_THICK_B * GalacticMap.MN_THICK_B);
+    const azb2 = GalacticMap.MN_THICK_A + zb2;
+    const thickDisk = -GalacticMap.MN_THICK_GM / Math.sqrt(R_kpc * R_kpc + azb2 * azb2);
+
+    const disk = thinDisk + thickDisk;
 
     // Hernquist bulge potential
     const r = Math.sqrt(R_kpc * R_kpc + z_kpc * z_kpc);
@@ -355,7 +408,7 @@ export class GalacticMap {
     const R = R_kpc;
     const z = z_kpc;
 
-    // Miyamoto-Nagai disk gradient
+    // Miyamoto-Nagai thin disk gradient
     const b = GalacticMap.MN_B;
     const a = GalacticMap.MN_A;
     const GM_d = GalacticMap.MN_GM;
@@ -363,8 +416,19 @@ export class GalacticMap {
     const azb = a + zb;
     const D = Math.sqrt(R * R + azb * azb);
     const D3 = D * D * D;
-    const dDisk_dR = GM_d * R / D3;
-    const dDisk_dz = GM_d * z * azb / (zb * D3);
+    let dDisk_dR = GM_d * R / D3;
+    let dDisk_dz = GM_d * z * azb / (zb * D3);
+
+    // Miyamoto-Nagai thick disk gradient
+    const b2 = GalacticMap.MN_THICK_B;
+    const a2 = GalacticMap.MN_THICK_A;
+    const GM_d2 = GalacticMap.MN_THICK_GM;
+    const zb2 = Math.sqrt(z * z + b2 * b2);
+    const azb2 = a2 + zb2;
+    const D2 = Math.sqrt(R * R + azb2 * azb2);
+    const D2_3 = D2 * D2 * D2;
+    dDisk_dR += GM_d2 * R / D2_3;
+    dDisk_dz += GM_d2 * z * azb2 / (zb2 * D2_3);
 
     // Hernquist bulge gradient
     const GM_b = GalacticMap.HERNQUIST_GM;
@@ -405,26 +469,64 @@ export class GalacticMap {
   potentialDerivedDensity(R_kpc, z_kpc) {
     const R = R_kpc;
     const z = z_kpc;
+    const Rsq = R * R;
 
-    // Miyamoto-Nagai analytical density
+    // Miyamoto-Nagai thin disk analytical density
     const a = GalacticMap.MN_A;
     const b = GalacticMap.MN_B;
     const GM = GalacticMap.MN_GM;
     const zb = Math.sqrt(z * z + b * b);
     const azb = a + zb;
-    const Rsq = R * R;
     const denom1 = Math.pow(Rsq + azb * azb, 2.5);
     const denom2 = Math.pow(z * z + b * b, 1.5);
-    const diskDensity = (b * b * GM / (4 * Math.PI))
+    const thin = (b * b * GM / (4 * Math.PI))
       * (a * Rsq + (a + 3 * zb) * azb * azb)
       / (denom1 * denom2);
 
-    // Hernquist analytical density
+    // Miyamoto-Nagai thick disk analytical density
+    const a2 = GalacticMap.MN_THICK_A;
+    const b2 = GalacticMap.MN_THICK_B;
+    const GM2 = GalacticMap.MN_THICK_GM;
+    const zb2 = Math.sqrt(z * z + b2 * b2);
+    const azb2 = a2 + zb2;
+    const denom3 = Math.pow(Rsq + azb2 * azb2, 2.5);
+    const denom4 = Math.pow(z * z + b2 * b2, 1.5);
+    const thick = (b2 * b2 * GM2 / (4 * Math.PI))
+      * (a2 * Rsq + (a2 + 3 * zb2) * azb2 * azb2)
+      / (denom3 * denom4);
+
+    // Hernquist analytical density (spherical bulge)
     const a_b = GalacticMap.HERNQUIST_A;
     const GM_b = GalacticMap.HERNQUIST_GM;
     const r = Math.sqrt(Rsq + z * z);
     const rSafe = Math.max(r, 0.01);
-    const bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
+    let bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
+
+    // Galactic bar: triaxial Gaussian over-density at the center.
+    // Rotate coordinates into bar frame, then evaluate an ellipsoidal
+    // Gaussian. The bar adds density ON TOP of the spherical bulge —
+    // the bulge is the old, round component; the bar is a younger,
+    // elongated structure embedded within it.
+    const barX = R * Math.cos(Math.atan2(z, R)) || 0; // project onto plane for rotation
+    const bx = this.barCosA * R * (Rsq > 0 ? Math.cos(Math.atan2(z, Math.sqrt(Rsq))) : 0);
+    // Actually, simpler: rotate the (x, z_galactic) in the disk plane
+    // R and theta give us galactic (x, z) but potentialDerivedDensity takes (R, z_height).
+    // The bar operates in the XZ galactic plane. Since we only have R (not theta),
+    // we need theta to compute the bar contribution. We'll handle this by adding
+    // a separate method that the full pipeline can call with both R and theta.
+    // For now, add the bar as an azimuthally-averaged enhancement to the bulge,
+    // which is the correct approach for the radial density profile.
+    // The angular structure is handled by a new barStrength(R, theta) method below.
+    if (R < GalacticMap.BAR_HALF_LENGTH * 1.5) {
+      // Azimuthally-averaged bar contribution: the bar makes the central
+      // region denser than the spherical bulge alone, even when averaged
+      // over all angles. The bar contains roughly as much stellar mass
+      // as the spherical bulge itself.
+      const barR = R / GalacticMap.BAR_HALF_LENGTH;
+      const barZ = Math.abs(z) / GalacticMap.BAR_HALF_HEIGHT;
+      const barProfile = Math.exp(-0.5 * (barR * barR + barZ * barZ));
+      bulgeDensity *= (1 + barProfile * GalacticMap.BAR_DENSITY);
+    }
 
     // NFW analytical density
     const rs = GalacticMap.NFW_RS;
@@ -432,15 +534,20 @@ export class GalacticMap {
     const x = rSafe / rs;
     const haloDensity = norm / (x * (1 + x) * (1 + x));
 
-    // Split disk density into thin/thick (same ratio as current model)
-    const thinFrac = 1.0 / (1.0 + GalacticMap.THICK_DISK_NORM);
-    const thin = diskDensity * thinFrac;
-    const thick = diskDensity * (1 - thinFrac);
+    // Disk truncation: the stellar disk genuinely ends at ~GALAXY_RADIUS.
+    // Real galaxies have truncation radii where star formation ceases.
+    // Smooth error-function-like fade so it's not a hard edge.
+    // Applied to thin + thick disk only — bulge and halo extend further.
+    const truncR = GalacticMap.GALAXY_RADIUS;
+    const truncWidth = truncR * 0.1; // fade over ~1.5 kpc
+    const diskTrunc = R < truncR - truncWidth ? 1.0 :
+      R > truncR ? 0.0 :
+      0.5 * (1 + Math.cos(Math.PI * (R - (truncR - truncWidth)) / truncWidth));
 
-    // Apply calibration normalization
-    const total = (thin + thick + bulgeDensity + haloDensity) * this._potentialDensityNorm;
-    const thinN = thin * this._potentialDensityNorm;
-    const thickN = thick * this._potentialDensityNorm;
+    // Apply calibration normalization (with disk truncation)
+    const total = (thin * diskTrunc + thick * diskTrunc + bulgeDensity + haloDensity) * this._potentialDensityNorm;
+    const thinN = thin * diskTrunc * this._potentialDensityNorm;
+    const thickN = thick * diskTrunc * this._potentialDensityNorm;
     const bulgeN = bulgeDensity * this._potentialDensityNorm;
     const haloN = haloDensity * this._potentialDensityNorm;
 
@@ -898,6 +1005,61 @@ export class GalacticMap {
    * - Minor arms: moderate O/B boost
    * - Bulge: shift toward K/M
    */
+  /**
+   * Fast per-type density multiplier for the hash grid starfield.
+   *
+   * Returns how much a given spectral type's base density should be scaled
+   * at this galactic position. Driven by the same physics as _deriveStarWeights:
+   *   - Gravitational potential → component fractions (thin/thick/bulge/halo)
+   *   - Component → which star types dominate (young thin disk has O/B, old halo doesn't)
+   *   - Arm strength → boosts young types in star-forming regions
+   *
+   * This replaces the flat ARM_DENSITY_BOOST in the hash grid with a per-type
+   * multiplier that flows from the potential model.
+   *
+   * @param {string} type — spectral type ('O','B','A','F','G','K','M','Kg','Gg','Mg')
+   * @param {Object} densities — from potentialDerivedDensity() { thin, thick, bulge, halo }
+   * @param {number} armStr — from spiralArmStrength()
+   * @param {Object|null} armInfo — from nearestArmInfo() { isMajor }
+   * @returns {number} density multiplier (>= 0)
+   */
+  starTypeDensityMultiplier(type, densities, armStr, armInfo = null) {
+    // Base weights per component (same source data as _deriveStarWeights)
+    // These encode the physics: young populations have O/B, old don't.
+    const WEIGHTS = {
+      thin:  { O: 0.05,  B: 0.08,  A: 0.13,  F: 0.16, G: 0.20, K: 0.20, M: 0.18 },
+      thick: { O: 0,     B: 0,     A: 0.02,  F: 0.10, G: 0.18, K: 0.30, M: 0.40 },
+      bulge: { O: 0.005, B: 0.015, A: 0.04,  F: 0.10, G: 0.18, K: 0.28, M: 0.38 },
+      halo:  { O: 0,     B: 0,     A: 0,     F: 0.07, G: 0.18, K: 0.30, M: 0.45 },
+    };
+    // Evolved types map to their dwarf counterpart's weight
+    const baseType = type.length > 1 ? type[0] : type;
+
+    // Blend weights by component fraction (each component contributes proportionally)
+    let weight = 0;
+    weight += (WEIGHTS.thin[baseType] || 0) * (densities.thin || 0);
+    weight += (WEIGHTS.thick[baseType] || 0) * (densities.thick || 0);
+    weight += (WEIGHTS.bulge[baseType] || 0) * (densities.bulge || 0);
+    weight += (WEIGHTS.halo[baseType] || 0) * (densities.halo || 0);
+
+    // Arm boost for young types in thin disk (star formation in spiral arms)
+    if (armStr > 0.1 && densities.thin > 0.2) {
+      const isMajor = armInfo && armInfo.isMajor;
+      if (baseType === 'O' || baseType === 'B') {
+        const maxBoost = isMajor ? 4.0 : 1.5;
+        weight *= (1 + armStr * maxBoost);
+      } else if (baseType === 'A') {
+        weight *= (1 + armStr * (isMajor ? 1.5 : 0.7));
+      }
+    }
+
+    // Normalize: return multiplier relative to a "baseline" weight.
+    // Use the thin disk base weight for this type as the reference,
+    // so areas dominated by thin disk ≈ 1.0, thick/halo < 1.0, arm peaks > 1.0.
+    const baseline = WEIGHTS.thin[baseType] || 0.1;
+    return weight / baseline;
+  }
+
   _deriveStarWeights(component, armStrength, armInfo = null) {
     // Base cinematic weights (from StarSystemGenerator)
     const base = {

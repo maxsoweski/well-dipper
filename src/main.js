@@ -40,6 +40,7 @@ import { SoundEngine } from './audio/SoundEngine.js';
 import { MusicManager } from './audio/MusicManager.js';
 import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
 import { GalacticMap } from './generation/GalacticMap.js';
+import { NavComputer } from './ui/NavComputer.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
 import { SkyRenderer } from './rendering/SkyRenderer.js';
 
@@ -80,6 +81,7 @@ const lodManager = new LODManager(camera);
 // Backtick (`) toggles corner HUD, F3 toggles full inspection panel.
 const debugPanel = new DebugPanel();
 debugPanel.setCamera(camera);
+debugPanel.setCameraController(cameraController);
 
 // When free-look ends without a focused body (title screen, deep sky),
 // clear focus so the camera stays where it was looking.
@@ -156,6 +158,7 @@ const starfield = {
 
 // ── System State ──
 let seedCounter = 0;
+let _currentSystemName = '';
 let system = null;
 let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
@@ -268,6 +271,60 @@ function toggleKeybinds() {
   const el = document.getElementById('keybinds-overlay');
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
+
+// ── Nav Computer ──
+let _navComputerOpen = false;
+let _navComputer = null;
+let _navAnimFrame = null;
+
+function toggleNavComputer() {
+  const el = document.getElementById('nav-computer-overlay');
+  if (!el) return;
+  _navComputerOpen = !_navComputerOpen;
+  soundEngine.play('uiClick');
+  if (_navComputerOpen) {
+    el.style.display = 'flex';
+    // Initialize nav computer if needed
+    if (!_navComputer) {
+      const navCanvas = document.getElementById('nav-computer-canvas');
+      _navComputer = new NavComputer(navCanvas, galacticMap);
+    }
+    // Update player position and system name
+    _navComputer.setPlayerPosition(
+      playerGalacticPos || { x: 8, y: 0, z: 0 },
+      null
+    );
+    _navComputer._currentSystemName = _currentSystemName || 'Unknown';
+    // Activate key listeners + start render loop
+    _navComputer.activate();
+    _navRenderLoop();
+  } else {
+    el.style.display = 'none';
+    if (_navComputer) _navComputer.deactivate();
+    if (_navAnimFrame) {
+      cancelAnimationFrame(_navAnimFrame);
+      _navAnimFrame = null;
+    }
+  }
+}
+
+function _navRenderLoop() {
+  if (!_navComputerOpen) return;
+  _navComputer.render();
+  _navAnimFrame = requestAnimationFrame(_navRenderLoop);
+}
+
+// Wire up nav computer close button + backdrop click
+{
+  const navEl = document.getElementById('nav-computer-overlay');
+  if (navEl) {
+    const closeBtn = navEl.querySelector('.overlay-close');
+    if (closeBtn) closeBtn.addEventListener('click', toggleNavComputer);
+    navEl.addEventListener('click', (e) => {
+      if (e.target === navEl) toggleNavComputer();
+    });
+  }
 }
 
 // ── Settings Panel ──
@@ -1401,6 +1458,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   const beltDesc = systemData.asteroidBelts.length > 0
     ? `, ${systemData.asteroidBelts[0].asteroids.length} asteroids`
     : '';
+  _currentSystemName = systemNames ? systemNames.system : seed;
   const sysLabel = systemNames ? `"${systemNames.system}"` : `"${seed}"`;
   console.log(`System ${sysLabel} (seed: ${seed}) — ${starDesc}, ${systemData.planets.length} planets${beltDesc}`);
 
@@ -3712,6 +3770,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  // N key: toggle nav computer
+  if (e.code === 'KeyN' && !titleScreenActive) {
+    toggleNavComputer();
+    return;
+  }
+
   // T key: toggle sound test panel (works always except title screen)
   if (e.code === 'KeyT' && !titleScreenActive) {
     toggleSoundTest();
@@ -3726,6 +3790,11 @@ window.addEventListener('keydown', (e) => {
     }
     if (_soundTestOpen) {
       toggleSoundTest();
+      return;
+    }
+    if (_navComputerOpen) {
+      if (_navComputer && _navComputer.handleEscape()) return; // back one level
+      toggleNavComputer(); // close if already at galaxy level
       return;
     }
     if (_settingsOpen) {

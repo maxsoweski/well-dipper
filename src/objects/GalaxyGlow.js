@@ -314,9 +314,11 @@ export class GalaxyGlow {
           float dither = bayerDither4x4(chunkyCoord);
           float alpha = glowBrightness;
 
-          if (alpha < dither * 0.5) discard;
+          // Smooth fade at edges instead of hard discard
+          float edgeAlpha = smoothstep(0.0, 0.15, alpha);
+          if (edgeAlpha < 0.01) discard;
 
-          gl_FragColor = vec4(color, alpha);
+          gl_FragColor = vec4(color, edgeAlpha);
         }
       `,
     });

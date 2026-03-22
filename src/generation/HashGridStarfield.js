@@ -59,21 +59,31 @@ const SPECTRAL_COLOR = {
 // in old populations (halo, bulge, globular clusters) via age-dependent
 // acceptance in _searchType. In a 12 Gyr population, ~1-3% of stars are
 // evolved giants, but they contribute 40-60% of the total luminosity.
+// Cell sizes calibrated from real Milky Way population data:
+// - Total galaxy: ~200 billion stars
+// - Solar neighborhood density: ~0.14 stars/pc³
+// - Population fractions from real IMF (initial mass function)
+//
+// Each type's cell size is set so that at solar density (0.14 stars/pc³),
+// the correct fraction of that type is produced. The density model then
+// naturally scales counts up (galactic center) or down (outer rim).
+//
+// maxDist is the maximum distance a star of this type is visible from
+// (based on absolute magnitude vs visibility threshold of 6.5).
 const TYPE_CONFIG = {
-  O: { cell: 0.100, maxDist: 10.0,  acceptNorm: 0.08,  popFraction: 0.0001 },
-  B: { cell: 0.030, maxDist: 2.5,   acceptNorm: 0.15,  popFraction: 0.001 },
-  A: { cell: 0.008, maxDist: 0.4,   acceptNorm: 0.25,  popFraction: 0.006 },
-  F: { cell: 0.003, maxDist: 0.15,  acceptNorm: 0.4,   popFraction: 0.03 },
-  G: { cell: 0.001, maxDist: 0.04,  acceptNorm: 0.6,   popFraction: 0.08 },
-  K: { cell: 0.0005, maxDist: 0.012, acceptNorm: 0.8,  popFraction: 0.12 },
-  M: { cell: 0.0002, maxDist: 0.003, acceptNorm: 1.0,  popFraction: 0.76 },
+  O: { cell: 0.074, maxDist: 2.0,   acceptNorm: 0.08,  popFraction: 0.0000003 },
+  B: { cell: 0.0056, maxDist: 0.2,  acceptNorm: 0.15,  popFraction: 0.0013 },
+  A: { cell: 0.0033, maxDist: 0.1,  acceptNorm: 0.15,  popFraction: 0.006 },
+  F: { cell: 0.0025, maxDist: 0.05, acceptNorm: 0.30,  popFraction: 0.03 },
+  G: { cell: 0.0021, maxDist: 0.02, acceptNorm: 0.50,  popFraction: 0.076 },
+  K: { cell: 0.0018, maxDist: 0.008, acceptNorm: 0.50, popFraction: 0.121 },
+  M: { cell: 0.0011, maxDist: 0.002, acceptNorm: 0.70, popFraction: 0.765 },
   // Evolved giants — rare (~1-3% of old populations) but very bright.
-  // Higher acceptNorm than main-sequence because giants are individually
-  // very luminous — each one represents the evolved state of what was
-  // once a normal G/K star. In old populations they dominate the light.
-  Kg: { cell: 0.050, maxDist: 5.0,  acceptNorm: 0.15,  popFraction: 0.002 },
-  Gg: { cell: 0.050, maxDist: 4.0,  acceptNorm: 0.12,  popFraction: 0.001 },
-  Mg: { cell: 0.060, maxDist: 6.0,  acceptNorm: 0.10,  popFraction: 0.0005 },
+  // Cell sizes kept larger since these are genuinely rare objects.
+  // Age-dependent acceptance in _searchType boosts them in old populations.
+  Kg: { cell: 0.050, maxDist: 0.25,  acceptNorm: 0.15,  popFraction: 0.002 },
+  Gg: { cell: 0.050, maxDist: 0.16,  acceptNorm: 0.12,  popFraction: 0.001 },
+  Mg: { cell: 0.060, maxDist: 0.22,  acceptNorm: 0.10,  popFraction: 0.0005 },
 };
 
 const ALL_TYPES = ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'Kg', 'Gg', 'Mg'];
@@ -220,16 +230,26 @@ export class HashGridStarfield {
             // Hash this cell
             const h = this._hashCell(cx, cy, cz, typeOffset);
 
-            // Evaluate density
+            // Evaluate density at cell center
             const densities = galacticMap.potentialDerivedDensity(R, wy);
-            const armStr = galacticMap.spiralArmStrength(R, Math.atan2(wz, wx));
-            let totalDensity = densities.totalDensity * (1 + armStr * GalacticMap.ARM_DENSITY_BOOST);
+            // Use actual galactic coordinates (wx, wz) directly for arm strength.
+            // spiralArmStrength handles theta wrapping internally, but atan2 has
+            // a discontinuity at theta=±π. Offset the cell slightly off the wx=0
+            // axis to avoid landing exactly on the seam.
+            const armTheta = Math.atan2(wz, wx || 1e-10);
+            const armStr = galacticMap.spiralArmStrength(R, armTheta);
+            // Per-type density: driven by gravitational potential → component
+            // fractions → population physics. Young types (O/B) concentrate in
+            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
+            const armInfo = galacticMap.nearestArmInfo(R, armTheta);
+            const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
+            let totalDensity = densities.totalDensity * typeMultiplier;
 
             // Feature density
             totalDensity += this._featureDensityCached(cachedFeatures, wx, wy, wz);
 
             // Acceptance test
-            let acceptProb = Math.min(0.95, totalDensity * cfg.acceptNorm);
+            let acceptProb = Math.min(1.0, totalDensity * cfg.acceptNorm);
 
             // Evolved star tiers: acceptance depends on local population age.
             // Old populations (halo, bulge, globular clusters) have more giants.
@@ -256,7 +276,7 @@ export class HashGridStarfield {
               // halo/bulge (old) = many giants, globular cluster = packed.
               // The 0.1 base ensures SOME giants even in the disk (old disk stars).
               acceptProb *= (0.1 + oldFraction * 5.0) * featureGiantBoost;
-              acceptProb = Math.min(0.95, acceptProb);
+              acceptProb = Math.min(1.0, acceptProb);
             }
 
             const hashNorm = (h & 0xFFFF) / 65536;
@@ -300,6 +320,359 @@ export class HashGridStarfield {
         }
       }
     }
+  }
+
+  /**
+   * Find all stars within a radius of a position.
+   * Used by the nav computer to show navigable stars.
+   * Unlike generate(), this ignores visibility thresholds — it returns
+   * every star the hash grid produces, regardless of apparent magnitude.
+   *
+   * @param {GalacticMap} galacticMap
+   * @param {{ x, y, z }} center — galactic position in kpc
+   * @param {number} radiusKpc — search radius in kpc
+   * @param {number} [maxResults=500] — cap on returned stars
+   * @returns {Array<{ worldX, worldY, worldZ, seed, type, dist }>}
+   */
+  static findStarsInRadius(galacticMap, center, radiusKpc, maxResults = 500) {
+    const cx = center.x, cy = center.y || 0, cz = center.z || 0;
+    const radiusSq = radiusKpc * radiusKpc;
+    const results = [];
+
+    // Cache nearby features once
+    const proceduralFeatures = galacticMap.findNearbyFeatures(center, Math.max(radiusKpc, 0.5));
+    const realFeatures = this.realFeatureCatalog?.loaded
+      ? this.realFeatureCatalog.findNearby(center, Math.max(radiusKpc, 0.5))
+      : [];
+    const cachedFeatures = [...proceduralFeatures, ...realFeatures];
+
+    for (let ti = 0; ti < ALL_TYPES.length; ti++) {
+      const type = ALL_TYPES[ti];
+      const cfg = TYPE_CONFIG[type];
+      const cellSize = cfg.cell;
+
+      const maxCells = Math.ceil(radiusKpc / cellSize);
+      // Skip types whose cell grid would be too dense for the search radius
+      // (> 200 cells per axis = 8M+ cells to check = too slow)
+      if (maxCells > 200) continue;
+
+      const gcx = Math.floor(cx / cellSize);
+      const gcy = Math.floor(cy / cellSize);
+      const gcz = Math.floor(cz / cellSize);
+
+      for (let dx = -maxCells; dx <= maxCells; dx++) {
+        for (let dy = -maxCells; dy <= maxCells; dy++) {
+          for (let dz = -maxCells; dz <= maxCells; dz++) {
+            const cellX = gcx + dx;
+            const cellY = gcy + dy;
+            const cellZ = gcz + dz;
+
+            const wx = (cellX + 0.5) * cellSize;
+            const wy = (cellY + 0.5) * cellSize;
+            const wz = (cellZ + 0.5) * cellSize;
+
+            // Quick distance check on cell center
+            const cdx = wx - cx, cdy = wy - cy, cdz = wz - cz;
+            if (cdx * cdx + cdy * cdy + cdz * cdz > radiusSq * 1.5) continue;
+
+            const R = Math.sqrt(wx * wx + wz * wz);
+            if (R > GalacticMap.GALAXY_RADIUS * 1.2) continue;
+
+            // Hash + acceptance test (same as _searchType)
+            const typeOffset = ti * 100003;
+            const h = this._hashCell(cellX, cellY, cellZ, typeOffset);
+            const densities = galacticMap.potentialDerivedDensity(R, wy);
+            const armTheta = Math.atan2(wz, wx || 1e-10);
+            const armStr = galacticMap.spiralArmStrength(R, armTheta);
+            // Per-type density: driven by gravitational potential → component
+            // fractions → population physics. Young types (O/B) concentrate in
+            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
+            const armInfo = galacticMap.nearestArmInfo(R, armTheta);
+            const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
+            let totalDensity = densities.totalDensity * typeMultiplier;
+            totalDensity += this._featureDensityCached(cachedFeatures, wx, wy, wz);
+
+            let acceptProb = Math.min(1.0, totalDensity * cfg.acceptNorm);
+
+            // Evolved star age-dependent acceptance (same as _searchType)
+            if (EVOLVED_TYPES.has(type)) {
+              const haloWeight = densities.halo || 0;
+              const bulgeWeight = densities.bulge || 0;
+              const oldFraction = Math.min(1, (haloWeight + bulgeWeight) * 3 + 0.15);
+              let featureGiantBoost = 1.0;
+              for (const feat of cachedFeatures) {
+                if (feat.type !== 'globular-cluster') continue;
+                const fdx = wx - feat.position.x, fdy = wy - feat.position.y, fdz = wz - feat.position.z;
+                if (fdx * fdx + fdy * fdy + fdz * fdz < feat.radius * feat.radius * 9) {
+                  featureGiantBoost = Math.max(featureGiantBoost, 15.0);
+                }
+              }
+              acceptProb *= (0.1 + oldFraction * 5.0) * featureGiantBoost;
+              acceptProb = Math.min(1.0, acceptProb);
+            }
+
+            const hashNorm = (h & 0xFFFF) / 65536;
+            if (hashNorm > acceptProb) continue;
+
+            // Star position (same offset logic as _searchType)
+            const offX = ((h >> 8) & 0xFF) / 255 - 0.5;
+            const offY = ((h >> 16) & 0xFF) / 255 - 0.5;
+            const offZ = ((h >> 24) & 0xFF) / 255 - 0.5;
+            const starX = wx + offX * cellSize;
+            const starY = wy + offY * cellSize;
+            const starZ = wz + offZ * cellSize;
+
+            // Precise distance check on actual star position
+            const sdx = starX - cx, sdy = starY - cy, sdz = starZ - cz;
+            const distSq = sdx * sdx + sdy * sdy + sdz * sdz;
+            if (distSq > radiusSq) continue;
+
+            const seed = GalacticMap.hashCombine(h, cellX * 31 + cellZ * 997);
+
+            results.push({
+              worldX: starX, worldY: starY, worldZ: starZ,
+              seed, type, dist: Math.sqrt(distSq),
+            });
+          }
+        }
+      }
+    }
+
+    // Sort by distance and truncate
+    results.sort((a, b) => a.dist - b.dist);
+    if (results.length > maxResults) results.length = maxResults;
+    return results;
+  }
+
+  /**
+   * Find all stars within a cube centered on a position.
+   * Used by the nav computer local view — cube matches the visible volume.
+   *
+   * @param {GalacticMap} galacticMap
+   * @param {{ x, y, z }} center — center of cube in kpc
+   * @param {number} halfSize — half the cube side length in kpc
+   * @param {number} [maxResults=500]
+   * @returns {Array<{ worldX, worldY, worldZ, seed, type, dist }>}
+   */
+  static findStarsInCube(galacticMap, center, halfSize, maxResults = 500) {
+    const cx = center.x, cy = center.y || 0, cz = center.z || 0;
+    const results = [];
+
+    const proceduralFeatures = galacticMap.findNearbyFeatures(center, Math.max(halfSize * 1.5, 0.5));
+    const realFeatures = this.realFeatureCatalog?.loaded
+      ? this.realFeatureCatalog.findNearby(center, Math.max(halfSize * 1.5, 0.5))
+      : [];
+    const cachedFeatures = [...proceduralFeatures, ...realFeatures];
+
+    for (let ti = 0; ti < ALL_TYPES.length; ti++) {
+      const type = ALL_TYPES[ti];
+      const cfg = TYPE_CONFIG[type];
+      const cellSize = cfg.cell;
+
+      const maxCells = Math.ceil(halfSize / cellSize);
+      if (maxCells > 200) continue;
+
+      const gcx = Math.floor(cx / cellSize);
+      const gcy = Math.floor(cy / cellSize);
+      const gcz = Math.floor(cz / cellSize);
+
+      for (let dx = -maxCells; dx <= maxCells; dx++) {
+        for (let dy = -maxCells; dy <= maxCells; dy++) {
+          for (let dz = -maxCells; dz <= maxCells; dz++) {
+            const cellX = gcx + dx;
+            const cellY = gcy + dy;
+            const cellZ = gcz + dz;
+
+            const wx = (cellX + 0.5) * cellSize;
+            const wy = (cellY + 0.5) * cellSize;
+            const wz = (cellZ + 0.5) * cellSize;
+
+            // Cube bounds check on cell center
+            if (Math.abs(wx - cx) > halfSize * 1.1) continue;
+            if (Math.abs(wy - cy) > halfSize * 1.1) continue;
+            if (Math.abs(wz - cz) > halfSize * 1.1) continue;
+
+            const R = Math.sqrt(wx * wx + wz * wz);
+            if (R > GalacticMap.GALAXY_RADIUS * 1.2) continue;
+
+            const typeOffset = ti * 100003;
+            const h = this._hashCell(cellX, cellY, cellZ, typeOffset);
+            const densities = galacticMap.potentialDerivedDensity(R, wy);
+            const armTheta = Math.atan2(wz, wx || 1e-10);
+            const armStr = galacticMap.spiralArmStrength(R, armTheta);
+            // Per-type density: driven by gravitational potential → component
+            // fractions → population physics. Young types (O/B) concentrate in
+            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
+            const armInfo = galacticMap.nearestArmInfo(R, armTheta);
+            const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
+            let totalDensity = densities.totalDensity * typeMultiplier;
+            totalDensity += this._featureDensityCached(cachedFeatures, wx, wy, wz);
+
+            let acceptProb = Math.min(1.0, totalDensity * cfg.acceptNorm);
+
+            if (EVOLVED_TYPES.has(type)) {
+              const haloWeight = densities.halo || 0;
+              const bulgeWeight = densities.bulge || 0;
+              const oldFraction = Math.min(1, (haloWeight + bulgeWeight) * 3 + 0.15);
+              let featureGiantBoost = 1.0;
+              for (const feat of cachedFeatures) {
+                if (feat.type !== 'globular-cluster') continue;
+                const fdx = wx - feat.position.x, fdy = wy - feat.position.y, fdz = wz - feat.position.z;
+                if (fdx * fdx + fdy * fdy + fdz * fdz < feat.radius * feat.radius * 9) {
+                  featureGiantBoost = Math.max(featureGiantBoost, 15.0);
+                }
+              }
+              acceptProb *= (0.1 + oldFraction * 5.0) * featureGiantBoost;
+              acceptProb = Math.min(1.0, acceptProb);
+            }
+
+            const hashNorm = (h & 0xFFFF) / 65536;
+            if (hashNorm > acceptProb) continue;
+
+            const offX = ((h >> 8) & 0xFF) / 255 - 0.5;
+            const offY = ((h >> 16) & 0xFF) / 255 - 0.5;
+            const offZ = ((h >> 24) & 0xFF) / 255 - 0.5;
+            const starX = wx + offX * cellSize;
+            const starY = wy + offY * cellSize;
+            const starZ = wz + offZ * cellSize;
+
+            // Precise cube check on star position
+            if (Math.abs(starX - cx) > halfSize) continue;
+            if (Math.abs(starY - cy) > halfSize) continue;
+            if (Math.abs(starZ - cz) > halfSize) continue;
+
+            const sdx = starX - cx, sdy = starY - cy, sdz = starZ - cz;
+            const seed = GalacticMap.hashCombine(h, cellX * 31 + cellZ * 997);
+
+            results.push({
+              worldX: starX, worldY: starY, worldZ: starZ,
+              seed, type, dist: Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz),
+            });
+          }
+        }
+      }
+    }
+
+    results.sort((a, b) => a.dist - b.dist);
+    if (results.length > maxResults) results.length = maxResults;
+    return results;
+  }
+
+  /**
+   * Find all stars in a column: bounded XZ (block edges), tall Y (full disk).
+   *
+   * @param {GalacticMap} galacticMap
+   * @param {{ x, y, z }} center
+   * @param {number} xzHalf — half-size in X and Z (kpc)
+   * @param {number} yHalf — half-size in Y (kpc), typically much larger
+   * @param {number} [maxResults=3000]
+   */
+  static findStarsInColumn(galacticMap, center, xzHalf, yHalf, maxResults = 3000) {
+    const cx = center.x, cy = center.y || 0, cz = center.z || 0;
+    const results = [];
+
+    const featureRadius = Math.max(xzHalf, yHalf) * 1.5;
+    const proceduralFeatures = galacticMap.findNearbyFeatures(center, Math.max(featureRadius, 0.5));
+    const realFeatures = this.realFeatureCatalog?.loaded
+      ? this.realFeatureCatalog.findNearby(center, Math.max(featureRadius, 0.5))
+      : [];
+    const cachedFeatures = [...proceduralFeatures, ...realFeatures];
+
+    for (let ti = 0; ti < ALL_TYPES.length; ti++) {
+      const type = ALL_TYPES[ti];
+      const cfg = TYPE_CONFIG[type];
+      const cellSize = cfg.cell;
+
+      // Check cell counts for each axis independently
+      const xzCells = Math.ceil(xzHalf / cellSize);
+      const yCells = Math.ceil(yHalf / cellSize);
+      // Skip if XZ grid is too dense
+      if (xzCells > 200) continue;
+      // Cap Y cells to prevent explosion for tiny cell types
+      const ySearch = Math.min(yCells, 200);
+
+      const gcx = Math.floor(cx / cellSize);
+      const gcy = Math.floor(cy / cellSize);
+      const gcz = Math.floor(cz / cellSize);
+
+      for (let dx = -xzCells; dx <= xzCells; dx++) {
+        for (let dy = -ySearch; dy <= ySearch; dy++) {
+          for (let dz = -xzCells; dz <= xzCells; dz++) {
+            const cellX = gcx + dx;
+            const cellY = gcy + dy;
+            const cellZ = gcz + dz;
+
+            const wx = (cellX + 0.5) * cellSize;
+            const wy = (cellY + 0.5) * cellSize;
+            const wz = (cellZ + 0.5) * cellSize;
+
+            if (Math.abs(wx - cx) > xzHalf * 1.1) continue;
+            if (Math.abs(wy - cy) > yHalf * 1.1) continue;
+            if (Math.abs(wz - cz) > xzHalf * 1.1) continue;
+
+            const R = Math.sqrt(wx * wx + wz * wz);
+            if (R > GalacticMap.GALAXY_RADIUS * 1.2) continue;
+
+            const typeOffset = ti * 100003;
+            const h = this._hashCell(cellX, cellY, cellZ, typeOffset);
+            const densities = galacticMap.potentialDerivedDensity(R, wy);
+            const armTheta = Math.atan2(wz, wx || 1e-10);
+            const armStr = galacticMap.spiralArmStrength(R, armTheta);
+            // Per-type density: driven by gravitational potential → component
+            // fractions → population physics. Young types (O/B) concentrate in
+            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
+            const armInfo = galacticMap.nearestArmInfo(R, armTheta);
+            const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
+            let totalDensity = densities.totalDensity * typeMultiplier;
+            totalDensity += this._featureDensityCached(cachedFeatures, wx, wy, wz);
+
+            let acceptProb = Math.min(1.0, totalDensity * cfg.acceptNorm);
+
+            if (EVOLVED_TYPES.has(type)) {
+              const haloWeight = densities.halo || 0;
+              const bulgeWeight = densities.bulge || 0;
+              const oldFraction = Math.min(1, (haloWeight + bulgeWeight) * 3 + 0.15);
+              let featureGiantBoost = 1.0;
+              for (const feat of cachedFeatures) {
+                if (feat.type !== 'globular-cluster') continue;
+                const fdx = wx - feat.position.x, fdy = wy - feat.position.y, fdz = wz - feat.position.z;
+                if (fdx * fdx + fdy * fdy + fdz * fdz < feat.radius * feat.radius * 9) {
+                  featureGiantBoost = Math.max(featureGiantBoost, 15.0);
+                }
+              }
+              acceptProb *= (0.1 + oldFraction * 5.0) * featureGiantBoost;
+              acceptProb = Math.min(1.0, acceptProb);
+            }
+
+            const hashNorm = (h & 0xFFFF) / 65536;
+            if (hashNorm > acceptProb) continue;
+
+            const offX = ((h >> 8) & 0xFF) / 255 - 0.5;
+            const offY = ((h >> 16) & 0xFF) / 255 - 0.5;
+            const offZ = ((h >> 24) & 0xFF) / 255 - 0.5;
+            const starX = wx + offX * cellSize;
+            const starY = wy + offY * cellSize;
+            const starZ = wz + offZ * cellSize;
+
+            if (Math.abs(starX - cx) > xzHalf) continue;
+            if (Math.abs(starY - cy) > yHalf) continue;
+            if (Math.abs(starZ - cz) > xzHalf) continue;
+
+            const sdx = starX - cx, sdy = starY - cy, sdz = starZ - cz;
+            const seed = GalacticMap.hashCombine(h, cellX * 31 + cellZ * 997);
+
+            results.push({
+              worldX: starX, worldY: starY, worldZ: starZ,
+              seed, type, dist: Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz),
+            });
+          }
+        }
+      }
+    }
+
+    results.sort((a, b) => a.dist - b.dist);
+    if (results.length > maxResults) results.length = maxResults;
+    return results;
   }
 
   /**

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GalaxyGlowLayer } from './sky/GalaxyGlowLayer.js';
 import { SkyFeatureLayer } from './sky/SkyFeatureLayer.js';
 import { StarfieldLayer } from './sky/StarfieldLayer.js';
+import { GlowTextureManager } from './sky/GlowTextureManager.js';
 
 /**
  * SkyRenderer — single coordinator for the entire sky background.
@@ -62,6 +63,9 @@ export class SkyRenderer {
     this._featureLayer = null;
     this._starfieldLayer = null;
 
+    // Glow texture manager — handles loading + caching panoramas
+    this._glowManager = new GlowTextureManager();
+
     // Prepared data (generated in prepareForPosition(), consumed in activate())
     this._pendingData = null;
 
@@ -104,18 +108,18 @@ export class SkyRenderer {
     const data = this._pendingData;
 
     if (data) {
-      // Galaxy-aware mode
+      // Galaxy-aware mode — texture-mapped glow from pre-computed panoramas
       this._glowLayer = new GalaxyGlowLayer(
         this._glowRadius,
-        data.playerPos,
-        this._galacticMap,  // source of truth for arm data
         this._brightnessConfig.glow,
-        this._pendingFeatures || []  // nearby features for Plummer glow
       );
-      // Pass density normalization so GLSL model matches JS model
-      if (data.densityNorm && this._glowLayer._sphere?.material?.uniforms?.uDensityNorm) {
-        this._glowLayer._sphere.material.uniforms.uDensityNorm.value = data.densityNorm;
-      }
+
+      // Load the nearest glow panorama for this position
+      this._glowManager.loadForPosition(data.playerPos).then(texture => {
+        if (this._glowLayer) {
+          this._glowLayer.setTexture(texture);
+        }
+      });
 
       // Sky features (nebulae, clusters, etc.)
       this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);
@@ -261,5 +265,8 @@ export class SkyRenderer {
 
   dispose() {
     this._clearScene();
+    if (this._glowManager) {
+      this._glowManager.dispose();
+    }
   }
 }

@@ -52,6 +52,7 @@ export class DebugPanel {
   setRealStarCatalog(catalog) { this._realStarCatalog = catalog; }
   setRealFeatureCatalog(catalog) { this._realFeatureCatalog = catalog; }
   setCamera(cam) { this._camera = cam; }
+  setCameraController(ctrl) { this._cameraController = ctrl; }
   setSkyRenderer(sky) { this._skyRenderer = sky; }
   setLODManager(lod) { this._lodManager = lod; }
   setFocus(planetIndex, moonIndex) {
@@ -355,6 +356,15 @@ export class DebugPanel {
       html += `<span class="dg-val" id="debug-star-bright-val">${starMax.toFixed(2)}</span>`;
       html += '</div>';
     }
+    // Mouse sensitivity slider
+    if (this._cameraController) {
+      const sens = this._cameraController.dragSensitivity;
+      html += '<div class="debug-slider-row">';
+      html += `<label class="dg-label">Mouse Sens</label>`;
+      html += `<input type="range" id="debug-mouse-sens" min="0.001" max="0.02" step="0.001" value="${sens}">`;
+      html += `<span class="dg-val" id="debug-mouse-sens-val">${sens.toFixed(3)}</span>`;
+      html += '</div>';
+    }
     html += '</div>';
 
     // ── Galaxy Position Spawner ──
@@ -457,6 +467,16 @@ export class DebugPanel {
         const v = parseFloat(starBrightSlider.value);
         this._skyRenderer.setBrightnessRange('stars', { max: v });
         if (starBrightVal) starBrightVal.textContent = v.toFixed(2);
+      });
+    }
+
+    const mouseSensSlider = container.querySelector('#debug-mouse-sens');
+    const mouseSensVal = container.querySelector('#debug-mouse-sens-val');
+    if (mouseSensSlider && this._cameraController) {
+      mouseSensSlider.addEventListener('input', () => {
+        const v = parseFloat(mouseSensSlider.value);
+        this._cameraController.dragSensitivity = v;
+        if (mouseSensVal) mouseSensVal.textContent = v.toFixed(3);
       });
     }
 

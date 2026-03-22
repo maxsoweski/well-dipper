@@ -96,6 +96,7 @@ export class CameraController {
     this._flightBoosting = false;
     this._flightActive = false;    // true when any WASD key is held or velocity > 0
     this._flightEnabled = true;    // false during warp, title, overlays, etc.
+    this._flightFreeLook = false;  // true when free-look was auto-entered by WASD
 
     // ── Bypass mode (for flythrough camera) ──
     this.bypassed = false;
@@ -572,10 +573,19 @@ export class CameraController {
    * @param {boolean} boost  - true when Shift is held
    */
   setFlightInput(forward, right, boost) {
+    const hadInput = this._flightInput.lengthSq() > 0;
+    const hasInput = (forward !== 0 || right !== 0);
+
     this._flightInput.set(right, 0, -forward); // -Z is forward in camera space
     this._flightBoosting = boost;
-    this._flightActive = (forward !== 0 || right !== 0)
-                       || this._flightVelocity.lengthSq() > 0.0001;
+    this._flightActive = hasInput || this._flightVelocity.lengthSq() > 0.0001;
+
+    // Auto-enter free-look when WASD starts — FPS-style mouse look
+    // so you don't have to hold a button to steer while flying
+    if (hasInput && !hadInput && !this.isFreeLooking) {
+      this._flightFreeLook = true;
+      this.enterFreeLook();
+    }
   }
 
   /** True if the ship has any velocity or active input. */
@@ -588,6 +598,11 @@ export class CameraController {
     this._flightVelocity.set(0, 0, 0);
     this._flightInput.set(0, 0, 0);
     this._flightActive = false;
+    // Exit flight free-look if we entered it
+    if (this._flightFreeLook) {
+      this._flightFreeLook = false;
+      this.exitFreeLook(false);
+    }
   }
 
   update(deltaTime) {
@@ -727,8 +742,15 @@ export class CameraController {
       }
 
       // Update active flag
+      const wasFlying = this._flightActive;
       this._flightActive = this._flightInput.lengthSq() > 0
                          || this._flightVelocity.lengthSq() > 0.0001;
+
+      // Exit flight free-look when coasted to a stop
+      if (wasFlying && !this._flightActive && this._flightFreeLook) {
+        this._flightFreeLook = false;
+        this.exitFreeLook(false);
+      }
     }
 
     this._applyOrbit();
