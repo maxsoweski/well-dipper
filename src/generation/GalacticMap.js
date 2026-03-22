@@ -572,14 +572,16 @@ export class GalacticMap {
       const dZ = 0.02;
 
       // Only compute the spiral+bar part of the potential (not axisymmetric)
-      const phiSB = (r, z, t) => {
-        const p = this.gravitationalPotential(r, z, t);
-        return p.spiral + p.bar;
-      };
+      // Fast spiral+bar-only potential — skips axisymmetric components
+      // since they cancel out in the finite differences (they don't depend on theta
+      // and we only need the non-axisymmetric Laplacian).
+      const phiSB = (r, z, t) => this._spiralBarPotential(r, z, t);
 
       const phi0 = phiSB(R, z, theta_rad);
-      const dPhidR2 = (phiSB(R + dR, z, theta_rad) - 2 * phi0 + phiSB(R - dR, z, theta_rad)) / (dR * dR);
-      const dPhidR = (phiSB(R + dR, z, theta_rad) - phiSB(R - dR, z, theta_rad)) / (2 * dR);
+      const phiRp = phiSB(R + dR, z, theta_rad);
+      const phiRm = phiSB(Math.max(0.01, R - dR), z, theta_rad);
+      const dPhidR2 = (phiRp - 2 * phi0 + phiRm) / (dR * dR);
+      const dPhidR = (phiRp - phiRm) / (2 * dR);
       const dPhidT2 = (phiSB(R, z, theta_rad + dTheta) - 2 * phi0 + phiSB(R, z, theta_rad - dTheta)) / (dTheta * dTheta);
       const dPhidZ2 = (phiSB(R, z + dZ, theta_rad) - 2 * phi0 + phiSB(R, z - dZ, theta_rad)) / (dZ * dZ);
 
@@ -630,6 +632,53 @@ export class GalacticMap {
    * @param {number} z_kpc
    * @returns {number} escape velocity in arbitrary units
    */
+  /**
+   * Fast spiral + bar potential only (no axisymmetric components).
+   * Used by the numerical Laplacian in potentialDerivedDensity —
+   * the axisymmetric terms cancel in finite differences, so computing
+   * them is wasted work.
+   * @private
+   */
+  _spiralBarPotential(R, z, theta) {
+    if (R < 0.01) return 0;
+
+    let spiral = 0;
+    const H = GalacticMap.SPIRAL_SCALE_HEIGHT;
+    const Rs = GalacticMap.SPIRAL_RADIAL_SCALE;
+    const Rref = GalacticMap.SPIRAL_REF_RADIUS;
+    const sinAlpha = Math.sin(this.pitchAngle);
+
+    for (let a = 0; a < this.arms.length; a++) {
+      const arm = this.arms[a];
+      const amp = this.armAmplitudes[a];
+      const gamma = theta - arm.offset - this.pitchK * Math.log(R / Rref);
+      const K = 1 / (R * sinAlpha);
+      const KH = K * H;
+      const Kz = K * Math.abs(z);
+      const sechTerm = Kz < 10 ? 1 / Math.cosh(Kz) : 0;
+      const Bn = KH * (1 + 0.4 * KH);
+      const Dn = (1 + KH + 0.3 * KH * KH) / (1 + 0.3 * KH);
+      const radialDecay = Math.exp(-(R - Rref) / Rs);
+      const Cn = 8 / (3 * Math.PI);
+      spiral += -amp * GalacticMap.MN_GM * 0.03 * radialDecay *
+        (Cn / (K * Dn)) * Math.cos(gamma) * Math.pow(sechTerm, Bn);
+    }
+
+    // Dehnen bar
+    let bar = 0;
+    const Rb = GalacticMap.BAR_HALF_LENGTH;
+    const Ab = GalacticMap.BAR_AMPLITUDE;
+    const cos2 = Math.cos(2 * (theta - this.barAngle));
+    const r = Math.sqrt(R * R + z * z);
+    if (R < Rb) {
+      bar = -Ab * cos2 * (R / Rb) * (R / Rb) * (-Math.pow(r / Rb, 3) - 2);
+    } else {
+      bar = -Ab * cos2 * (R / r) * (R / r) * (-Math.pow(Rb / r, 3));
+    }
+
+    return spiral + bar;
+  }
+
   escapeVelocity(R_kpc, z_kpc, theta_rad) {
     const phi = this.gravitationalPotential(R_kpc, z_kpc, theta_rad).total;
     return Math.sqrt(-2 * phi);
