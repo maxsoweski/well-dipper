@@ -1,0 +1,38 @@
+Nav Map: R0-Z0-r0.5
+Center: (0, 0) kpc
+Radius: 0.5 kpc
+Scale bar: 0.5 kpc
+Stars: 500
+
+HD 316                      105 pc   pixel:(478, 593)
+Kout Reach                  145 pc   pixel:(629, 633)
+El                          145 pc   pixel:(427, 582)
+Iota Cygni                  178 pc   pixel:(695, 419)
+LHS 0                       245 pc   pixel:(723, 333)
+HD 882                      253 pc   pixel:(896, 643)
+WISE 60                     271 pc   pixel:(762, 467)
+Una                         280 pc   pixel:(515, 292)
+Iota Virginis               282 pc   pixel:(539, 268)
+Pi Serpentis                312 pc   pixel:(518, 677)
+Iota Virginis               312 pc   pixel:(964, 568)
+Proxima                     326 pc   pixel:(960, 515)
+Wolf 0                      329 pc   pixel:(486, 688)
+Kepler-0                    333 pc   pixel:(748, 236)
+Pi Draconis                 334 pc   pixel:(514, 532)
+WISE 34                     347 pc   pixel:(793, 302)
+Omega Eridani               348 pc   pixel:(457, 565)
+KOI-93                      348 pc   pixel:(250, 825)
+HR 98                       349 pc   pixel:(315, 896)
+Rho Velorum                 356 pc   pixel:(301, 819)
+Me                          360 pc   pixel:(433, 202)
+LHS 0                       365 pc   pixel:(309, 599)
+Fan                         366 pc   pixel:(824, 484)
+TRAPPIST-0                  371 pc   pixel:(853, 727)
+Niap                        376 pc   pixel:(1009, 541)
+Proxima                     378 pc   pixel:(699, 185)
+En                          380 pc   pixel:(776, 882)
+TRAPPIST-0                  386 pc   pixel:(526, 190)
+Ol                          390 pc   pixel:(251, 707)
+Nu Eridani                  395 pc   pixel:(814, 188)
+Chi Eridani                 399 pc   pixel:(1042, 776)
+Alpha Carinae               399 pc   pixel:(686, 186)

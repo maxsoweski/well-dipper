@@ -42,15 +42,22 @@ export class GalacticMap {
   static BULGE_NORM = 2.0;            // normalization
 
   // Galactic bar — elongated stellar structure at the center.
-  // The Milky Way's bar is ~4-5 kpc long, ~1.5 kpc wide, oriented
-  // at ~25-30° from the Sun-center line. It connects the inner ends
-  // of the two major spiral arms.
-  // References: Wegg & Gerhard 2015, Bland-Hawthorn & Gerhard 2016
-  static BAR_HALF_LENGTH = 2.2;       // kpc (semi-major axis)
-  static BAR_HALF_WIDTH = 0.7;        // kpc (semi-minor axis in-plane)
-  static BAR_HALF_HEIGHT = 0.4;       // kpc (semi-minor axis vertical)
+  // Modeled as a Dehnen (2000) quadrupolar potential perturbation.
+  // The Milky Way's bar is ~4-5 kpc long, oriented ~25-30° from
+  // the Sun-center line. It connects the inner ends of the major arms.
+  // References: Dehnen 2000, Wegg & Gerhard 2015, Bland-Hawthorn & Gerhard 2016
+  static BAR_HALF_LENGTH = 2.2;       // kpc (bar radius R_b in Dehnen model)
+  static BAR_HALF_WIDTH = 0.7;        // kpc (used for bar axis ratio)
+  static BAR_HALF_HEIGHT = 0.4;       // kpc (vertical scale)
   static BAR_ANGLE_DEG = 28;          // degrees from Sun-center line
-  static BAR_DENSITY = 1.5;           // density boost at bar center relative to bulge
+  static BAR_AMPLITUDE = 0.015;       // potential perturbation strength (tuned for ~2.5x density contrast)
+
+  // Cox & Gomez (2002) spiral arm potential perturbation.
+  // Each arm is a separate perturbation term with its own amplitude.
+  // The density emerges from the Poisson equation applied to this potential.
+  static SPIRAL_SCALE_HEIGHT = 0.18;  // kpc — vertical scale of spiral perturbation
+  static SPIRAL_RADIAL_SCALE = 3.5;   // kpc — radial decay length
+  static SPIRAL_REF_RADIUS = 4.0;     // kpc — reference radius for log-spiral phase
 
   // Halo
   static HALO_NORM = 0.005;           // very sparse
@@ -125,6 +132,11 @@ export class GalacticMap {
     this.barAngle = (GalacticMap.BAR_ANGLE_DEG + this.rng.range(-3, 3)) * Math.PI / 180;
     this.barCosA = Math.cos(this.barAngle);
     this.barSinA = Math.sin(this.barAngle);
+
+    // Pre-compute per-arm spiral potential amplitudes from densityBoost.
+    // Major arms (densityBoost 2.5) get the full amplitude; minor arms are proportional.
+    const maxBoost = Math.max(...this.arms.map(a => a.densityBoost));
+    this.armAmplitudes = this.arms.map(a => a.densityBoost / maxBoost);
 
     // Pre-computed arm data arrays for GPU uniforms (GalaxyGlow shader).
     // Single source of truth — glow shader reads these, not its own definitions.
@@ -360,38 +372,109 @@ export class GalacticMap {
    * Gravitational potential at a position in the galaxy.
    * This is the PRIMARY data — everything else derives from it.
    *
+   * When theta is provided, includes non-axisymmetric perturbations:
+   *   - Spiral arms: Cox & Gomez (2002) per-arm perturbation
+   *   - Galactic bar: Dehnen (2000) quadrupolar perturbation
+   * When theta is omitted, returns the axisymmetric potential only.
+   *
    * @param {number} R_kpc — cylindrical radius from center
    * @param {number} z_kpc — height above/below disk plane
-   * @returns {{ disk: number, bulge: number, halo: number, total: number }}
+   * @param {number} [theta_rad] — angle in disk plane (optional)
+   * @returns {{ disk, bulge, halo, spiral, bar, total }}
    *   All values are negative (deeper well = more negative).
    */
-  gravitationalPotential(R_kpc, z_kpc) {
+  gravitationalPotential(R_kpc, z_kpc, theta_rad) {
+    const R = R_kpc;
+    const z = z_kpc;
+    const Rsq = R * R;
+
     // Miyamoto-Nagai thin disk potential
-    const zb = Math.sqrt(z_kpc * z_kpc + GalacticMap.MN_B * GalacticMap.MN_B);
+    const zb = Math.sqrt(z * z + GalacticMap.MN_B * GalacticMap.MN_B);
     const azb = GalacticMap.MN_A + zb;
-    const thinDisk = -GalacticMap.MN_GM / Math.sqrt(R_kpc * R_kpc + azb * azb);
+    const thinDisk = -GalacticMap.MN_GM / Math.sqrt(Rsq + azb * azb);
 
     // Miyamoto-Nagai thick disk potential
-    const zb2 = Math.sqrt(z_kpc * z_kpc + GalacticMap.MN_THICK_B * GalacticMap.MN_THICK_B);
+    const zb2 = Math.sqrt(z * z + GalacticMap.MN_THICK_B * GalacticMap.MN_THICK_B);
     const azb2 = GalacticMap.MN_THICK_A + zb2;
-    const thickDisk = -GalacticMap.MN_THICK_GM / Math.sqrt(R_kpc * R_kpc + azb2 * azb2);
+    const thickDisk = -GalacticMap.MN_THICK_GM / Math.sqrt(Rsq + azb2 * azb2);
 
     const disk = thinDisk + thickDisk;
 
     // Hernquist bulge potential
-    const r = Math.sqrt(R_kpc * R_kpc + z_kpc * z_kpc);
+    const r = Math.sqrt(Rsq + z * z);
     const bulge = -GalacticMap.HERNQUIST_GM / (r + GalacticMap.HERNQUIST_A);
 
     // NFW halo potential
     const rs = GalacticMap.NFW_RS;
-    const rSafe = Math.max(r, 0.01); // avoid log(0)
+    const rSafe = Math.max(r, 0.01);
     const halo = -GalacticMap.NFW_NORM * rs * Math.log(1 + rSafe / rs) / rSafe;
+
+    let spiral = 0;
+    let bar = 0;
+
+    if (theta_rad !== undefined && R > 0.01) {
+      // ── Cox & Gomez (2002) spiral arm potential ──
+      // Each arm is a separate perturbation. Using 1 harmonic (n=1)
+      // for performance — higher harmonics sharpen the arm cross-section
+      // but aren't critical at game scale.
+      const H = GalacticMap.SPIRAL_SCALE_HEIGHT;
+      const Rs = GalacticMap.SPIRAL_RADIAL_SCALE;
+      const Rref = GalacticMap.SPIRAL_REF_RADIUS;
+      const sinAlpha = Math.sin(this.pitchAngle);
+      const N = 1; // single-arm mode (each arm evaluated independently)
+
+      for (let a = 0; a < this.arms.length; a++) {
+        const arm = this.arms[a];
+        const amp = this.armAmplitudes[a];
+
+        // Spiral phase for this arm
+        const gamma = theta_rad - arm.offset - this.pitchK * Math.log(R / Rref);
+
+        // Radial wavenumber
+        const K = N / (R * sinAlpha);
+        const KH = K * H;
+
+        // Vertical shape (sech approximation: 1/cosh(x) ≈ 2*exp(-|x|) for large x)
+        const Kz = K * Math.abs(z);
+        const sechTerm = Kz < 10 ? 1 / Math.cosh(Kz) : 0;
+
+        // Density-wave normalization
+        const Bn = KH * (1 + 0.4 * KH);
+        const Dn = (1 + KH + 0.3 * KH * KH) / (1 + 0.3 * KH);
+
+        // Radial decay
+        const radialDecay = Math.exp(-(R - Rref) / Rs);
+
+        // CG02 potential for this arm (n=1 harmonic only)
+        // Negative because gravitational wells are negative
+        const Cn = 8 / (3 * Math.PI); // n=1 coefficient
+        spiral += -amp * GalacticMap.MN_GM * 0.03 * radialDecay *
+          (Cn / (K * Dn)) * Math.cos(gamma) * Math.pow(sechTerm, Bn);
+      }
+
+      // ── Dehnen (2000) bar potential ──
+      // Quadrupolar perturbation: cos(2*(theta - theta_bar))
+      const Rb = GalacticMap.BAR_HALF_LENGTH;
+      const Ab = GalacticMap.BAR_AMPLITUDE;
+      const thetaBar = this.barAngle;
+      const cos2 = Math.cos(2 * (theta_rad - thetaBar));
+
+      if (R < Rb) {
+        // Inside bar: potential is polynomial
+        bar = -Ab * cos2 * (R / Rb) * (R / Rb) * (-(r / Rb) * (r / Rb) * (r / Rb) - 2);
+      } else {
+        // Outside bar: potential falls off as (Rb/r)^3
+        bar = -Ab * cos2 * (R / r) * (R / r) * (-(Rb / r) * (Rb / r) * (Rb / r));
+      }
+    }
 
     return {
       disk,
       bulge,
       halo,
-      total: disk + bulge + halo,
+      spiral,
+      bar,
+      total: disk + bulge + halo + spiral + bar,
     };
   }
 
@@ -459,14 +542,18 @@ export class GalacticMap {
 
   /**
    * Density derived from the gravitational potential.
-   * Uses the analytical density-potential pairs (closed-form, no numerical Laplacian).
-   * Returns the same format as componentDensities() for drop-in compatibility.
+   *
+   * The axisymmetric components (disks, bulge, halo) use closed-form
+   * density-potential pairs. When theta is provided, the spiral arm and
+   * bar density perturbations are computed from the potential via numerical
+   * Laplacian — ensuring density is exactly consistent with the potential.
    *
    * @param {number} R_kpc
    * @param {number} z_kpc
+   * @param {number} [theta_rad] — angle in disk plane (optional)
    * @returns {{ thin, thick, bulge, halo, totalDensity }}
    */
-  potentialDerivedDensity(R_kpc, z_kpc) {
+  potentialDerivedDensity(R_kpc, z_kpc, theta_rad) {
     const R = R_kpc;
     const z = z_kpc;
     const Rsq = R * R;
@@ -500,33 +587,7 @@ export class GalacticMap {
     const GM_b = GalacticMap.HERNQUIST_GM;
     const r = Math.sqrt(Rsq + z * z);
     const rSafe = Math.max(r, 0.01);
-    let bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
-
-    // Galactic bar: triaxial Gaussian over-density at the center.
-    // Rotate coordinates into bar frame, then evaluate an ellipsoidal
-    // Gaussian. The bar adds density ON TOP of the spherical bulge —
-    // the bulge is the old, round component; the bar is a younger,
-    // elongated structure embedded within it.
-    const barX = R * Math.cos(Math.atan2(z, R)) || 0; // project onto plane for rotation
-    const bx = this.barCosA * R * (Rsq > 0 ? Math.cos(Math.atan2(z, Math.sqrt(Rsq))) : 0);
-    // Actually, simpler: rotate the (x, z_galactic) in the disk plane
-    // R and theta give us galactic (x, z) but potentialDerivedDensity takes (R, z_height).
-    // The bar operates in the XZ galactic plane. Since we only have R (not theta),
-    // we need theta to compute the bar contribution. We'll handle this by adding
-    // a separate method that the full pipeline can call with both R and theta.
-    // For now, add the bar as an azimuthally-averaged enhancement to the bulge,
-    // which is the correct approach for the radial density profile.
-    // The angular structure is handled by a new barStrength(R, theta) method below.
-    if (R < GalacticMap.BAR_HALF_LENGTH * 1.5) {
-      // Azimuthally-averaged bar contribution: the bar makes the central
-      // region denser than the spherical bulge alone, even when averaged
-      // over all angles. The bar contains roughly as much stellar mass
-      // as the spherical bulge itself.
-      const barR = R / GalacticMap.BAR_HALF_LENGTH;
-      const barZ = Math.abs(z) / GalacticMap.BAR_HALF_HEIGHT;
-      const barProfile = Math.exp(-0.5 * (barR * barR + barZ * barZ));
-      bulgeDensity *= (1 + barProfile * GalacticMap.BAR_DENSITY);
-    }
+    const bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
 
     // NFW analytical density
     const rs = GalacticMap.NFW_RS;
@@ -534,19 +595,55 @@ export class GalacticMap {
     const x = rSafe / rs;
     const haloDensity = norm / (x * (1 + x) * (1 + x));
 
+    // ── Spiral arm + bar density from potential perturbation ──
+    // When theta is provided, compute the non-axisymmetric density
+    // contribution via numerical Laplacian of the spiral+bar potential.
+    // This ensures density is exactly consistent with the potential —
+    // the arms and bar are gravitational features, not geometric overlays.
+    let spiralBarDensity = 0;
+    if (theta_rad !== undefined && R > 0.3) {
+      // Numerical Laplacian in cylindrical coordinates:
+      // ∇²Φ = d²Φ/dR² + (1/R)dΦ/dR + (1/R²)d²Φ/dθ² + d²Φ/dz²
+      // Using central finite differences on just the spiral+bar component.
+      const dR = 0.02; // kpc step for finite differences
+      const dTheta = 0.02;
+      const dZ = 0.02;
+
+      // Only compute the spiral+bar part of the potential (not axisymmetric)
+      const phiSB = (r, z, t) => {
+        const p = this.gravitationalPotential(r, z, t);
+        return p.spiral + p.bar;
+      };
+
+      const phi0 = phiSB(R, z, theta_rad);
+      const dPhidR2 = (phiSB(R + dR, z, theta_rad) - 2 * phi0 + phiSB(R - dR, z, theta_rad)) / (dR * dR);
+      const dPhidR = (phiSB(R + dR, z, theta_rad) - phiSB(R - dR, z, theta_rad)) / (2 * dR);
+      const dPhidT2 = (phiSB(R, z, theta_rad + dTheta) - 2 * phi0 + phiSB(R, z, theta_rad - dTheta)) / (dTheta * dTheta);
+      const dPhidZ2 = (phiSB(R, z + dZ, theta_rad) - 2 * phi0 + phiSB(R, z - dZ, theta_rad)) / (dZ * dZ);
+
+      // Poisson equation: ρ = (1/4πG) ∇²Φ
+      // We work in arbitrary units where G is absorbed, so ρ = ∇²Φ / (4π)
+      // This CAN be negative — spiral arms redistribute density, pulling it
+      // from inter-arm regions into the arms. Negative values reduce the
+      // axisymmetric density between arms. Total density is clamped to 0
+      // at the end to prevent unphysical negative total.
+      const laplacian = dPhidR2 + dPhidR / R + dPhidT2 / (R * R) + dPhidZ2;
+      spiralBarDensity = laplacian / (4 * Math.PI);
+    }
+
     // Disk truncation: the stellar disk genuinely ends at ~GALAXY_RADIUS.
-    // Real galaxies have truncation radii where star formation ceases.
-    // Smooth error-function-like fade so it's not a hard edge.
-    // Applied to thin + thick disk only — bulge and halo extend further.
     const truncR = GalacticMap.GALAXY_RADIUS;
-    const truncWidth = truncR * 0.1; // fade over ~1.5 kpc
+    const truncWidth = truncR * 0.1;
     const diskTrunc = R < truncR - truncWidth ? 1.0 :
       R > truncR ? 0.0 :
       0.5 * (1 + Math.cos(Math.PI * (R - (truncR - truncWidth)) / truncWidth));
 
     // Apply calibration normalization (with disk truncation)
-    const total = (thin * diskTrunc + thick * diskTrunc + bulgeDensity + haloDensity) * this._potentialDensityNorm;
-    const thinN = thin * diskTrunc * this._potentialDensityNorm;
+    // Spiral/bar density modifies the thin disk (it's a disk-plane feature).
+    // Can be negative between arms (density is reduced there).
+    const thinWithSpiral = Math.max(0, thin + spiralBarDensity) * diskTrunc;
+    const total = (thinWithSpiral + thick * diskTrunc + bulgeDensity + haloDensity) * this._potentialDensityNorm;
+    const thinN = thinWithSpiral * this._potentialDensityNorm;
     const thickN = thick * diskTrunc * this._potentialDensityNorm;
     const bulgeN = bulgeDensity * this._potentialDensityNorm;
     const haloN = haloDensity * this._potentialDensityNorm;
@@ -571,8 +668,8 @@ export class GalacticMap {
    * @param {number} z_kpc
    * @returns {number} escape velocity in arbitrary units
    */
-  escapeVelocity(R_kpc, z_kpc) {
-    const phi = this.gravitationalPotential(R_kpc, z_kpc).total;
+  escapeVelocity(R_kpc, z_kpc, theta_rad) {
+    const phi = this.gravitationalPotential(R_kpc, z_kpc, theta_rad).total;
     return Math.sqrt(-2 * phi);
   }
 

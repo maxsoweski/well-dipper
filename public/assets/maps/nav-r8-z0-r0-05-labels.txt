@@ -1,0 +1,7 @@
+Nav Map: R8-Z0-r0.05
+Center: (8, 0) kpc
+Radius: 0.05 kpc
+Scale bar: 0.01 kpc
+Stars: 500
+
+
