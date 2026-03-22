@@ -8,24 +8,32 @@ No layer generates data independently — each reads from the layer above.
 ```
 LAYER 0: GRAVITATIONAL POTENTIAL (source of truth)
 │
-│  GalacticMap.gravitationalPotential(R, z)
-│  ├── Miyamoto-Nagai thin disk potential
-│  ├── Miyamoto-Nagai thick disk potential
-│  ├── Hernquist bulge potential
-│  └── NFW dark matter halo potential
+│  GalacticMap.gravitationalPotential(R, z, theta)
+│  ├── Miyamoto-Nagai thin disk potential (axisymmetric)
+│  ├── Miyamoto-Nagai thick disk potential (axisymmetric)
+│  ├── Hernquist bulge potential (axisymmetric)
+│  ├── NFW dark matter halo potential (axisymmetric)
+│  ├── Cox & Gomez (2002) spiral arm perturbation (per-arm, theta-dependent)
+│  └── Dehnen (2000) bar perturbation (quadrupolar, theta-dependent)
 │
-├──→ potentialDerivedDensity(R, z)          ← analytical density from Φ
+├──→ potentialDerivedDensity(R, z, theta)   ← density from Φ + Poisson eq.
 │    Returns: { thin, thick, bulge, halo, totalDensity }
-│    (component fractions = what KIND of stars live here)
+│    When theta provided: includes spiral+bar density via numerical Laplacian
+│    Disk truncation built in (cosine fade at GALAXY_RADIUS)
 │
-├──→ spiralArmStrength(R, theta)           ← arm modulation
+├──→ spiralArmStrength(R, theta)           ← informational query
 │    Returns: 0–1 (how close to a spiral arm center)
-│    Uses: ARM_DEFS (6 arms: offsets, widths, density boosts)
+│    Used for: star-type population context (O/B boost), NOT density
 │
-├──→ nearestArmInfo(R, theta)              ← which arm, major/minor
+├──→ nearestArmInfo(R, theta)              ← informational query
 │    Returns: { armName, isMajor, strength }
+│    Used for: major/minor arm distinction in population physics
 │
-└──→ escapeVelocity(R, z)                 ← gameplay: warp cost
+├──→ barStrength(R, theta)                 ← informational query
+│    Returns: bar density boost factor at this angle
+│
+└──→ escapeVelocity(R, z, theta)           ← gameplay: warp cost
+     Now varies with arm/bar position (deeper well in arms)
 ```
 
 ```
