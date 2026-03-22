@@ -167,38 +167,13 @@ export class GalaxyLuminosityRenderer {
         const R = Math.sqrt(gx * gx + gz * gz);
         const theta = Math.atan2(gz, gx);
 
-        // Query Layer 0 — disk truncation is built into the density model,
-        // so no ad-hoc cutoff needed here.
-        const densities = gm.potentialDerivedDensity(R, 0);
+        // Query Layer 0 — disk truncation, spiral arms, and bar are all
+        // built into potentialDerivedDensity when theta is provided.
+        // No separate bar/arm calculations needed here.
+        const densities = gm.potentialDerivedDensity(R, 0, theta);
         const armStr = gm.spiralArmStrength(R, theta);
         const armInfo = gm.nearestArmInfo(R, theta);
-        // Bar: reshape the central density from round to elongated.
-        // Instead of querying density at the true radius R, we compute
-        // an "effective radius" that is shorter along the bar axis and
-        // longer perpendicular. This stretches the isophotes (contours
-        // of equal brightness) into the bar shape — the same physical
-        // effect as redistributing bulge stars into an elongated orbit family.
-        let totalDensity = densities.totalDensity;
-        if (R < GalacticMap.BAR_HALF_LENGTH * 2) {
-          // Rotate into bar frame
-          const bx = gx * gm.barCosA + gz * gm.barSinA;
-          const bz = -gx * gm.barSinA + gz * gm.barCosA;
-          // Effective radius: compressed along bar major axis, expanded perpendicular
-          // This makes density contours elliptical instead of circular
-          const barAxisRatio = GalacticMap.BAR_HALF_WIDTH / GalacticMap.BAR_HALF_LENGTH; // ~0.32
-          const Reff = Math.sqrt((bx * barAxisRatio) ** 2 + bz ** 2);
-          // Blend: at R=0 fully barred, at R=BAR_LENGTH*1.5 fully round
-          const barBlend = 1 - Math.min(1, R / (GalacticMap.BAR_HALF_LENGTH * 1.5));
-          if (barBlend > 0.01) {
-            // Re-query density at the effective radius to get the bar-shaped density
-            const barDensities = gm.potentialDerivedDensity(Reff, 0);
-            // Blend between round (original) and bar-shaped density
-            const barDensity = barDensities.totalDensity * barDensities.bulge;
-            const roundDensity = densities.totalDensity * densities.bulge;
-            // Replace the bulge contribution with the bar-shaped version
-            totalDensity += (barDensity - roundDensity) * barBlend;
-          }
-        }
+        const totalDensity = densities.totalDensity;
 
         // Sum luminosity contributions from all spectral types.
         // Uses REAL IMF population fractions (not cinematic weights) blended

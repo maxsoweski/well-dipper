@@ -380,12 +380,9 @@ export class HashGridStarfield {
             // Hash + acceptance test (same as _searchType)
             const typeOffset = ti * 100003;
             const h = this._hashCell(cellX, cellY, cellZ, typeOffset);
-            const densities = galacticMap.potentialDerivedDensity(R, wy);
             const armTheta = Math.atan2(wz, wx || 1e-10);
+            const densities = galacticMap.potentialDerivedDensity(R, wy, armTheta);
             const armStr = galacticMap.spiralArmStrength(R, armTheta);
-            // Per-type density: driven by gravitational potential → component
-            // fractions → population physics. Young types (O/B) concentrate in
-            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
             const armInfo = galacticMap.nearestArmInfo(R, armTheta);
             const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
             let totalDensity = densities.totalDensity * typeMultiplier;
@@ -496,12 +493,9 @@ export class HashGridStarfield {
 
             const typeOffset = ti * 100003;
             const h = this._hashCell(cellX, cellY, cellZ, typeOffset);
-            const densities = galacticMap.potentialDerivedDensity(R, wy);
             const armTheta = Math.atan2(wz, wx || 1e-10);
+            const densities = galacticMap.potentialDerivedDensity(R, wy, armTheta);
             const armStr = galacticMap.spiralArmStrength(R, armTheta);
-            // Per-type density: driven by gravitational potential → component
-            // fractions → population physics. Young types (O/B) concentrate in
-            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
             const armInfo = galacticMap.nearestArmInfo(R, armTheta);
             const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
             let totalDensity = densities.totalDensity * typeMultiplier;
@@ -614,12 +608,9 @@ export class HashGridStarfield {
 
             const typeOffset = ti * 100003;
             const h = this._hashCell(cellX, cellY, cellZ, typeOffset);
-            const densities = galacticMap.potentialDerivedDensity(R, wy);
             const armTheta = Math.atan2(wz, wx || 1e-10);
+            const densities = galacticMap.potentialDerivedDensity(R, wy, armTheta);
             const armStr = galacticMap.spiralArmStrength(R, armTheta);
-            // Per-type density: driven by gravitational potential → component
-            // fractions → population physics. Young types (O/B) concentrate in
-            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
             const armInfo = galacticMap.nearestArmInfo(R, armTheta);
             const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
             let totalDensity = densities.totalDensity * typeMultiplier;

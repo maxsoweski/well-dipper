@@ -354,13 +354,11 @@ export class NavComputer {
   _galaxyDensity(x, z) {
     const R = Math.sqrt(x * x + z * z);
     const theta = Math.atan2(z, x);
-    const d = this._gm.potentialDerivedDensity(R, 0);
-    const armStr = this._gm.spiralArmStrength(R, theta);
-    const blend = Math.max(0, Math.min(1, (R - 0.5) / 1.5));
-    const armFactor = (0.1 + armStr * 2.9) * blend + (1 - blend);
-    // Disk truncation is now built into potentialDerivedDensity() at Layer 0.
-    // No separate edge fade needed here.
-    return d.totalDensity * armFactor;
+    // All density modulation (arms, bar, truncation) is built into
+    // potentialDerivedDensity when theta is provided. No separate
+    // arm multiplication or edge fade needed.
+    const d = this._gm.potentialDerivedDensity(R, 0, theta);
+    return d.totalDensity;
   }
 
   /**
