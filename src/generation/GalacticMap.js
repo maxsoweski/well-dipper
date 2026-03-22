@@ -30,16 +30,10 @@ export class GalacticMap {
   static MAX_STARS_PER_SECTOR = 30;   // cap for densest regions
   static MAX_CACHED_SECTORS = 64;     // LRU cache size
 
-  // Disk geometry
-  static DISK_SCALE_LENGTH = 2.6;     // kpc (radial exponential decay)
-  static THIN_DISK_HEIGHT = 0.3;      // kpc (scale height)
-  static THICK_DISK_HEIGHT = 0.9;     // kpc
-  static THICK_DISK_NORM = 0.12;      // relative to thin disk
-
-  // Bulge (spherical component — old stars)
-  static BULGE_SCALE = 0.5;           // kpc (effective radius)
-  static BULGE_FLATTENING = 0.5;      // axis ratio (oblate)
-  static BULGE_NORM = 2.0;            // normalization
+  // Legacy constants removed: DISK_SCALE_LENGTH, THIN_DISK_HEIGHT,
+  // THICK_DISK_HEIGHT, THICK_DISK_NORM, BULGE_SCALE, BULGE_FLATTENING,
+  // BULGE_NORM — these were for the old componentDensities() model.
+  // All density now derives from potentialDerivedDensity() via MN/Hernquist/NFW.
 
   // Galactic bar — elongated stellar structure at the center.
   // Modeled as a Dehnen (2000) quadrupolar potential perturbation.
@@ -58,11 +52,6 @@ export class GalacticMap {
   static SPIRAL_SCALE_HEIGHT = 0.18;  // kpc — vertical scale of spiral perturbation
   static SPIRAL_RADIAL_SCALE = 3.5;   // kpc — radial decay length
   static SPIRAL_REF_RADIUS = 4.0;     // kpc — reference radius for log-spiral phase
-
-  // Halo
-  static HALO_NORM = 0.005;           // very sparse
-  static HALO_POWER = -3.5;           // power-law exponent
-  static HALO_REF_RADIUS = 8.0;      // kpc (normalization radius)
 
   // Spiral arms — realistic Milky Way structure
   // 2 major arms (Scutum-Centaurus, Perseus) + minor arms
@@ -105,6 +94,17 @@ export class GalacticMap {
   static SOLAR_R = 8.0;              // kpc from center
   static SOLAR_Z = 0.025;            // kpc above plane
 
+  // ── Component star-type weights (single source of truth) ──
+  // Used by both _deriveStarWeights (system generation) and
+  // starTypeDensityMultiplier (hash grid per-type density).
+  // Each component has a characteristic spectral type mix reflecting its age.
+  static COMPONENT_STAR_WEIGHTS = {
+    thin:  { O: 0.05,  B: 0.08,  A: 0.13,  F: 0.16, G: 0.20, K: 0.20, M: 0.18 },
+    thick: { O: 0,     B: 0,     A: 0.02,  F: 0.10, G: 0.18, K: 0.30, M: 0.40 },
+    bulge: { O: 0.005, B: 0.015, A: 0.04,  F: 0.10, G: 0.18, K: 0.28, M: 0.38 },
+    halo:  { O: 0,     B: 0,     A: 0,     F: 0.07, G: 0.18, K: 0.30, M: 0.45 },
+  };
+
   constructor(masterSeed = 'well-dipper-galaxy-1') {
     this.masterSeed = masterSeed;
     this.rng = new SeededRandom(masterSeed);
@@ -144,14 +144,15 @@ export class GalacticMap {
     this.armStrengths = this.arms.map(a => a.densityBoost / 2.5); // normalized 0-1
 
     // ── Calibrate potential model ──
-    // Compute normalization so potentialDerivedDensity at the solar
-    // neighborhood matches the current componentDensities output.
-    // This ensures identical star counts during the transition.
+    // Scale potentialDerivedDensity so the solar neighborhood matches the
+    // target density of ~0.06 stars/pc³ (observational constraint).
+    // This is the ONLY calibration point — all other densities derive
+    // from the same potential model with this single normalization.
     this._potentialDensityNorm = 1.0; // temporary, recalculated below
-    const currentDensity = this.componentDensities(GalacticMap.SOLAR_R, GalacticMap.SOLAR_Z).totalDensity;
+    const TARGET_SOLAR_DENSITY = 0.06; // stars/pc³ at solar neighborhood
     const rawPotentialDensity = this.potentialDerivedDensity(GalacticMap.SOLAR_R, GalacticMap.SOLAR_Z).totalDensity;
     if (rawPotentialDensity > 1e-10) {
-      this._potentialDensityNorm = currentDensity / rawPotentialDensity;
+      this._potentialDensityNorm = TARGET_SOLAR_DENSITY / rawPotentialDensity;
     }
 
     // Sector cache (LRU)
@@ -194,52 +195,11 @@ export class GalacticMap {
   // DENSITY MODEL — where stars are in the galaxy
   // ════════════════════════════════════════════════════════════
 
-  /**
-   * Galactic component densities at a given position.
-   * Returns normalized weights (sum to 1) + total density.
-   *
-   * Based on Bland-Hawthorn & Gerhard 2016.
-   * See RESEARCH_star-population-synthesis.md §6.
-   *
-   * @param {number} R_kpc - cylindrical radius from center
-   * @param {number} z_kpc - height above/below disk plane
-   * @returns {{ thin, thick, bulge, halo, totalDensity }}
-   */
-  componentDensities(R_kpc, z_kpc) {
-    const absZ = Math.abs(z_kpc);
-
-    // Thin disk: exponential in R and z
-    const thin = Math.exp(-R_kpc / GalacticMap.DISK_SCALE_LENGTH)
-               * Math.exp(-absZ / GalacticMap.THIN_DISK_HEIGHT);
-
-    // Thick disk: broader, 12% normalization
-    const thick = GalacticMap.THICK_DISK_NORM
-                * Math.exp(-R_kpc / 3.6)
-                * Math.exp(-absZ / GalacticMap.THICK_DISK_HEIGHT);
-
-    // Bulge: flattened exponential
-    const rBulge = Math.sqrt(R_kpc * R_kpc + (z_kpc / GalacticMap.BULGE_FLATTENING) ** 2);
-    const bulge = GalacticMap.BULGE_NORM * Math.exp(-rBulge / GalacticMap.BULGE_SCALE);
-
-    // Halo: power law with floor to prevent explosion at center
-    // (bulge dominates the center, not the halo)
-    const rHalo = Math.sqrt(R_kpc * R_kpc + z_kpc * z_kpc);
-    const halo = GalacticMap.HALO_NORM
-               * Math.pow(Math.max(rHalo, 2.0) / GalacticMap.HALO_REF_RADIUS, GalacticMap.HALO_POWER);
-
-    const total = thin + thick + bulge + halo;
-    if (total < 1e-10) {
-      return { thin: 0.25, thick: 0.25, bulge: 0.25, halo: 0.25, totalDensity: 0 };
-    }
-
-    return {
-      thin: thin / total,
-      thick: thick / total,
-      bulge: bulge / total,
-      halo: halo / total,
-      totalDensity: total,
-    };
-  }
+  // componentDensities() — REMOVED.
+  // Was a legacy density model using exponential profiles (separate from the
+  // potential-derived model). Only used for calibration normalization, which
+  // now uses a direct target constant (TARGET_SOLAR_DENSITY = 0.06).
+  // The potential-derived density is the single source of truth.
 
   /**
    * How strongly a position is inside a spiral arm (0 = inter-arm, 1+ = arm center).
@@ -314,10 +274,12 @@ export class GalacticMap {
     let bestArm = null;
     let bestStrength = 0;
 
+    const sinPitch = Math.sin(this.pitchAngle);
     for (const arm of this.arms) {
       const expectedTheta = arm.offset + this.pitchK * Math.log(R_kpc / 4.0);
       let dTheta = ((theta_rad - expectedTheta) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
-      const dist = Math.abs(dTheta) * R_kpc;
+      // Perpendicular distance to spiral arm — same formula as spiralArmStrength
+      const dist = Math.abs(dTheta) * R_kpc * sinPitch;
       const strength = Math.exp(-0.5 * (dist / arm.width) ** 2);
       if (strength > bestStrength) {
         bestStrength = strength;
@@ -748,7 +710,7 @@ export class GalacticMap {
     // The potential is the primary data; density emerges from it.
     const R = Math.sqrt(centerX * centerX + centerZ * centerZ);
     const theta = Math.atan2(centerZ, centerX);
-    const densities = this.potentialDerivedDensity(R, centerY);
+    const densities = this.potentialDerivedDensity(R, centerY, theta);
     const armStr = this.spiralArmStrength(R, theta);
 
     // Galactic features overlapping this sector (Level 1 → Level 2 cascade)
@@ -786,7 +748,9 @@ export class GalacticMap {
     const solarDensity = 0.065;
     const normalizedDensity = densities.totalDensity / solarDensity;
     const targetAtSolar = 12;
-    const baseStarCount = normalizedDensity * (1 + armStr * GalacticMap.ARM_DENSITY_BOOST) * targetAtSolar;
+    // Arm density modulation is now built into potentialDerivedDensity (via theta).
+    // No separate arm multiplication needed — that would double-count.
+    const baseStarCount = normalizedDensity * targetAtSolar;
 
     // Feature budget: compute at EACH feature's center within this sector,
     // not just the sector center. Features are tiny relative to sectors —
@@ -923,9 +887,9 @@ export class GalacticMap {
     const R = Math.sqrt(x * x + z * z);
     const theta = Math.atan2(z, x);
 
-    const densities = this.potentialDerivedDensity(R, y);
+    const densities = this.potentialDerivedDensity(R, y, theta);
     const armStr = this.spiralArmStrength(R, theta);
-    const phi = this.gravitationalPotential(R, y);
+    const phi = this.gravitationalPotential(R, y, theta);
     const armInfo = this.nearestArmInfo(R, theta);
 
     // Pick dominant component
@@ -1121,23 +1085,15 @@ export class GalacticMap {
    * @returns {number} density multiplier (>= 0)
    */
   starTypeDensityMultiplier(type, densities, armStr, armInfo = null) {
-    // Base weights per component (same source data as _deriveStarWeights)
-    // These encode the physics: young populations have O/B, old don't.
-    const WEIGHTS = {
-      thin:  { O: 0.05,  B: 0.08,  A: 0.13,  F: 0.16, G: 0.20, K: 0.20, M: 0.18 },
-      thick: { O: 0,     B: 0,     A: 0.02,  F: 0.10, G: 0.18, K: 0.30, M: 0.40 },
-      bulge: { O: 0.005, B: 0.015, A: 0.04,  F: 0.10, G: 0.18, K: 0.28, M: 0.38 },
-      halo:  { O: 0,     B: 0,     A: 0,     F: 0.07, G: 0.18, K: 0.30, M: 0.45 },
-    };
-    // Evolved types map to their dwarf counterpart's weight
+    const W = GalacticMap.COMPONENT_STAR_WEIGHTS;
     const baseType = type.length > 1 ? type[0] : type;
 
     // Blend weights by component fraction (each component contributes proportionally)
     let weight = 0;
-    weight += (WEIGHTS.thin[baseType] || 0) * (densities.thin || 0);
-    weight += (WEIGHTS.thick[baseType] || 0) * (densities.thick || 0);
-    weight += (WEIGHTS.bulge[baseType] || 0) * (densities.bulge || 0);
-    weight += (WEIGHTS.halo[baseType] || 0) * (densities.halo || 0);
+    weight += (W.thin[baseType] || 0) * (densities.thin || 0);
+    weight += (W.thick[baseType] || 0) * (densities.thick || 0);
+    weight += (W.bulge[baseType] || 0) * (densities.bulge || 0);
+    weight += (W.halo[baseType] || 0) * (densities.halo || 0);
 
     // Arm boost for young types in thin disk (star formation in spiral arms)
     if (armStr > 0.1 && densities.thin > 0.2) {
@@ -1153,26 +1109,21 @@ export class GalacticMap {
     // Normalize: return multiplier relative to a "baseline" weight.
     // Use the thin disk base weight for this type as the reference,
     // so areas dominated by thin disk ≈ 1.0, thick/halo < 1.0, arm peaks > 1.0.
-    const baseline = WEIGHTS.thin[baseType] || 0.1;
+    const baseline = W.thin[baseType] || 0.1;
     return weight / baseline;
   }
 
   _deriveStarWeights(component, armStrength, armInfo = null) {
-    // Base cinematic weights (from StarSystemGenerator)
-    const base = {
-      M: 0.18, K: 0.20, G: 0.20, F: 0.16, A: 0.13, B: 0.08, O: 0.05,
-    };
+    const W = GalacticMap.COMPONENT_STAR_WEIGHTS;
 
     let weights;
 
     switch (component) {
       case 'thin':
-        weights = { ...base };
+        weights = { ...W.thin };
         // Boost O/B in spiral arms (star formation regions)
-        // Major arms get stronger boost than minor arms
-        if (armStrength > 0.3) {
+        if (armStrength > 0.1) {
           const isMajor = armInfo && armInfo.isMajor;
-          // Major arms: up to 5x boost. Minor arms: up to 2.5x.
           const maxBoost = isMajor ? 4.0 : 1.5;
           const boost = 1 + armStrength * maxBoost;
           weights.O *= boost;
@@ -1181,19 +1132,16 @@ export class GalacticMap {
         }
         break;
       case 'thick':
-        // Old population: no O/B, very few A, shift to K/M
-        weights = { M: 0.40, K: 0.30, G: 0.18, F: 0.10, A: 0.02, B: 0, O: 0 };
+        weights = { ...W.thick };
         break;
       case 'bulge':
-        // Mix: mostly old, some young near center
-        weights = { M: 0.38, K: 0.28, G: 0.18, F: 0.10, A: 0.04, B: 0.015, O: 0.005 };
+        weights = { ...W.bulge };
         break;
       case 'halo':
-        // Ancient: only long-lived stars survive
-        weights = { M: 0.45, K: 0.30, G: 0.18, F: 0.07, A: 0, B: 0, O: 0 };
+        weights = { ...W.halo };
         break;
       default:
-        weights = { ...base };
+        weights = { ...W.thin };
     }
 
     // Normalize

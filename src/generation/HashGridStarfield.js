@@ -230,17 +230,16 @@ export class HashGridStarfield {
             // Hash this cell
             const h = this._hashCell(cx, cy, cz, typeOffset);
 
-            // Evaluate density at cell center
-            const densities = galacticMap.potentialDerivedDensity(R, wy);
-            // Use actual galactic coordinates (wx, wz) directly for arm strength.
-            // spiralArmStrength handles theta wrapping internally, but atan2 has
-            // a discontinuity at theta=±π. Offset the cell slightly off the wx=0
-            // axis to avoid landing exactly on the seam.
+            // Evaluate density at cell center.
+            // theta is passed so density includes spiral arm + bar perturbation
+            // from the gravitational potential (Cox & Gomez + Dehnen models).
             const armTheta = Math.atan2(wz, wx || 1e-10);
+            const densities = galacticMap.potentialDerivedDensity(R, wy, armTheta);
+            // Arm strength is still queried separately for two purposes:
+            // 1. starTypeDensityMultiplier uses it to boost O/B fractions in arms
+            //    (population effect, independent of density perturbation)
+            // 2. nearestArmInfo identifies which arm for major/minor distinction
             const armStr = galacticMap.spiralArmStrength(R, armTheta);
-            // Per-type density: driven by gravitational potential → component
-            // fractions → population physics. Young types (O/B) concentrate in
-            // arms, old types (K/M) are uniform. See GalacticMap.starTypeDensityMultiplier.
             const armInfo = galacticMap.nearestArmInfo(R, armTheta);
             const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
             let totalDensity = densities.totalDensity * typeMultiplier;
