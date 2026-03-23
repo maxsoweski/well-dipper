@@ -203,61 +203,60 @@ export class GalaxyCloud {
             float edgeFade = 1.0 - smoothstep(uRadius * 0.8, uRadius, R);
             if (edgeFade < 0.01) discard;
 
-            // ── Galaxy structure ──
+            // ── Galaxy structure (used as a MASK, not as the shape) ──
             float disk = diskDensity(R);
             float arm = armDensity(R, theta);
             float bar = barDensity(R, theta);
-
-            // Combine: disk base + arm boost + bar boost
-            // Arms fade in from R=0.5 to R=2 (bulge region has no arms)
             float armBlend = smoothstep(0.5, 2.0, R);
-            float density = disk * (0.1 + arm * 2.0) * armBlend
-                          + disk * (1.0 - armBlend) // smooth disk in bulge
-                          + bar * disk;             // bar adds on top
 
-            // Tone map density
-            density = pow(density, 0.4);
-            density *= edgeFade;
+            // How much cloud is ALLOWED here (0 = no cloud, 1 = full cloud possible)
+            // Arms allow lots of cloud, inter-arm allows very little
+            float armPermit = (0.05 + arm * 1.5) * armBlend + (1.0 - armBlend);
+            float barPermit = bar;
+            float permit = min(1.0, (armPermit + barPermit) * disk * 3.0) * edgeFade;
 
-            // ── Domain-warped FBM (the Nebula.js magic) ──
+            // Bulge: always permitted (bright core)
+            float corePermit = smoothstep(3.0, 0.3, R);
+            permit = max(permit, corePermit * disk * 2.0);
+
+            if (permit < 0.01) discard;
+
+            // ── Domain-warped FBM — THE shape (same recipe as Nebula.js) ──
             vec2 noiseP = vec2(wx, wz) * uNoiseScale / uRadius + uNoiseSeed;
 
+            // Strong domain warping → billowing, organic swirls
             vec2 q = vec2(
-              fbm(noiseP + vec2(0.0, 0.0) + uTime * 0.01),
-              fbm(noiseP + vec2(5.2, 1.3) + uTime * 0.008)
+              fbm(noiseP + uTime * 0.008),
+              fbm(noiseP + vec2(5.2, 1.3) + uTime * 0.006)
             );
             float warped = fbm(noiseP + 3.5 * q);
 
-            // Cloud shape: threshold scales with density
-            // Dense regions → full cloud, sparse → mostly void
-            float coverage = min(1.0, density * 2.5);
-            float lo = 0.1 + (1.0 - coverage) * 0.35;
-            float hi = lo + 0.3;
+            // Cloud shape from noise — same smoothstep as Nebula.js
+            // permit controls the threshold: high permit = low threshold = more cloud
+            float lo = 0.15 + (1.0 - permit) * 0.4;
+            float hi = lo + 0.4;
             float cloud = smoothstep(lo, hi, warped);
 
-            // Bulge core stays smooth (no voids)
-            float coreSmooth = smoothstep(2.0, 0.5, R);
-            cloud = mix(cloud, 1.0, coreSmooth);
+            if (cloud < 0.01) discard;
 
             // ── Dust lane shadows ──
-            // Dark filaments along inner arm edges, textured with their own noise
             if (uDustStrength > 0.0 && R > 3.0) {
               float dust = dustLane(R, theta);
-              // Wispy noise at different scale than the cloud noise
-              vec2 dustNoiseP = vec2(wx, wz) * 1.5 / uRadius + uNoiseSeed * 1.7 + 77.0;
-              float dustNoise = fbm(dustNoiseP + vec2(3.1, 7.2));
-              // Filamentary shape: threshold the noise
-              float dustShape = smoothstep(0.25, 0.55, dustNoise);
-              // Absorb: reduce cloud brightness in dusty regions
-              float absorption = dust * dustShape * uDustStrength;
-              cloud *= 1.0 - min(absorption, 0.85);
+              vec2 dustP = vec2(wx, wz) * 1.8 / uRadius + uNoiseSeed * 1.7 + 77.0;
+              vec2 dq = vec2(
+                fbm(dustP + vec2(3.1, 7.2)),
+                fbm(dustP + vec2(8.4, 2.8))
+              );
+              float dustWarped = fbm(dustP + 3.0 * dq);
+              float dustShape = smoothstep(0.2, 0.5, dustWarped);
+              cloud *= 1.0 - min(dust * dustShape * uDustStrength, 0.85);
             }
 
-            float alpha = density * cloud * uOpacity;
+            // ── Alpha: cloud shape × permit envelope × opacity ──
+            float alpha = cloud * permit * uOpacity;
             if (alpha < 0.003) discard;
 
             // ── Color ──
-            // Warm golden center → blue-white arms → warm inter-arm
             vec3 bulgeCol = vec3(1.0, 0.82, 0.5);
             vec3 armCol = vec3(0.7, 0.8, 1.0);
             vec3 diskCol = vec3(0.9, 0.85, 0.75);
