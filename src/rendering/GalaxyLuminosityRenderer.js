@@ -348,12 +348,17 @@ export class GalaxyLuminosityRenderer {
         let brightness = Math.asinh(lum * stretch) / asinhDenom;
         brightness = Math.pow(brightness, gamma);
 
-        // ── Write pixel ──
+        // ── Write pixel (premultiplied alpha, like Nebula.js) ──
+        // Bright regions glow (high alpha + bright color).
+        // Dim regions are transparent (low alpha → dark background shows through).
+        // This eliminates the muddy brown in inter-arm regions — they become
+        // transparent/black instead of opaque brown.
+        const alpha = Math.min(1, brightness * 1.5); // slightly boost alpha so arms are more opaque
         const idx = i * 4;
         imgData.data[idx]     = Math.min(255, Math.round(cr * brightness * 255));
         imgData.data[idx + 1] = Math.min(255, Math.round(cg * brightness * 255));
         imgData.data[idx + 2] = Math.min(255, Math.round(cb * brightness * 255));
-        imgData.data[idx + 3] = 255;
+        imgData.data[idx + 3] = Math.round(alpha * 255);
       }
     }
 

@@ -37,42 +37,38 @@
   <div id="hud"></div>
   <div id="status" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;z-index:20;">GENERATING...</div>
   <div id="controls" style="display:none;">
-    <div style="margin-bottom: 6px; color: #0a0; font-size: 11px;">
-      drag = orbit around center &nbsp; scroll = zoom
-    </div>
-    <label>Star Brightness: <input type="range" id="bright" min="0" max="5.0" step="0.05" value="1.00"> <span id="brightVal">1.00</span></label>
-    <label>Star Size: <input type="range" id="scale" min="0.01" max="2.0" step="0.01" value="0.30"> <span id="scaleVal">0.30</span></label>
-    <label>Spread: <input type="range" id="spread" min="1.0" max="30.0" step="0.5" value="3.0"> <span id="spreadVal">3.0</span></label>
-    <label>Glow: <input type="range" id="glow" min="0" max="3.0" step="0.01" value="0.30"> <span id="glowVal">0.30</span></label>
-    <label>Dust: <input type="range" id="dust" min="0" max="2.0" step="0.01" value="0.50"> <span id="dustVal">0.50</span></label>
-    <label>Dither: <input type="range" id="dither" min="0" max="1.5" step="0.01" value="0.0"> <span id="ditherVal">0.0</span></label>
-    <label>Near Fade: <input type="range" id="nearfade" min="0" max="15.0" step="0.5" value="0.0"> <span id="nearfadeVal">0.0</span> kpc</label>
-    <label>Choke: <input type="range" id="choke" min="1.0" max="15.0" step="0.5" value="15.0"> <span id="chokeVal">15.0</span> kpc</label>
-    <label>Particles: <input type="range" id="pcount" min="100000" max="2000000" step="100000" value="600000"> <span id="pcountVal">600K</span></label>
-    <div style="margin-top: 4px;">
-      <button class="btn" id="toggleOverlay">Sector Overlay: OFF</button>
-      <button class="btn" id="toggleLumView">Luminosity View: OFF</button>
-    </div>
-    <div id="lumControls" style="display:none; margin-top: 4px; border-top: 1px solid #0a0; padding-top: 4px;">
-      <div class="section-label" style="color:#0a0; font-size:11px;">── LUMINOSITY ──</div>
-      <label>Stretch: <input type="range" id="lumStretch" min="10" max="5000" step="10" value="500"> <span id="lumStretchVal">500</span></label>
-      <label>Gamma: <input type="range" id="lumGamma" min="0.2" max="1.0" step="0.05" value="0.50"> <span id="lumGammaVal">0.50</span></label>
-      <label>Dust: <input type="range" id="lumDust" min="0" max="1.0" step="0.05" value="0.50"> <span id="lumDustVal">0.50</span></label>
-      <label>Noise: <input type="range" id="lumNoise" min="0" max="1.0" step="0.05" value="0.40"> <span id="lumNoiseVal">0.40</span></label>
-      <label>Extent: <input type="range" id="lumExtent" min="0.5" max="22" step="0.5" value="22"> <span id="lumExtentVal">22</span> kpc</label>
-      <label>Resolution: <input type="range" id="lumRes" min="256" max="1024" step="128" value="512"> <span id="lumResVal">512</span></label>
-      <button class="btn" id="lumRender">Render</button>
-      <button class="btn" id="lumExport">Export PNG</button>
-    </div>
+    <!-- Luminosity controls (default view) -->
+    <label>Stretch: <input type="range" id="lumStretch" min="10" max="5000" step="10" value="500"> <span id="lumStretchVal">500</span></label>
+    <label>Gamma: <input type="range" id="lumGamma" min="0.2" max="1.0" step="0.05" value="0.50"> <span id="lumGammaVal">0.50</span></label>
+    <label>Dust: <input type="range" id="lumDust" min="0" max="1.0" step="0.05" value="0.50"> <span id="lumDustVal">0.50</span></label>
+    <label>Noise: <input type="range" id="lumNoise" min="0" max="1.0" step="0.05" value="0.40"> <span id="lumNoiseVal">0.40</span></label>
+    <label>Extent: <input type="range" id="lumExtent" min="0.5" max="22" step="0.5" value="22"> <span id="lumExtentVal">22</span> kpc</label>
+    <label>Resolution: <input type="range" id="lumRes" min="256" max="1024" step="128" value="512"> <span id="lumResVal">512</span></label>
     <div style="margin-top: 6px;">
-      <button class="btn" id="viewTop">Top-Down</button>
-      <button class="btn" id="viewEdge">Edge-On</button>
-      <button class="btn" id="viewAngled">Angled</button>
-      <button class="btn" id="exportTop">Export View</button>
-      <button class="btn" id="exportNav">Export Nav Map</button>
+      <button class="btn" id="lumExport">Export PNG</button>
+      <button class="btn" id="toggleOverlay">Sector Overlay: OFF</button>
+      <button class="btn" id="toggleParticleView">Particle View</button>
       <button class="btn" id="saveSettings">Save Settings</button>
       <button class="btn" id="loadSettings">Load Settings</button>
       <button class="btn" id="dumpSettings">Copy Settings</button>
+    </div>
+    <!-- Particle controls (hidden by default, shown via Particle View button) -->
+    <div id="particleControls" style="display:none; margin-top: 6px; border-top: 1px solid #0a0; padding-top: 4px;">
+      <div style="color:#0a0; font-size:11px;">── PARTICLE VIEW ──</div>
+      <label>Star Brightness: <input type="range" id="bright" min="0" max="5.0" step="0.05" value="1.00"> <span id="brightVal">1.00</span></label>
+      <label>Star Size: <input type="range" id="scale" min="0.01" max="2.0" step="0.01" value="0.30"> <span id="scaleVal">0.30</span></label>
+      <label>Spread: <input type="range" id="spread" min="1.0" max="30.0" step="0.5" value="3.0"> <span id="spreadVal">3.0</span></label>
+      <label>Glow: <input type="range" id="glow" min="0" max="3.0" step="0.01" value="0.30"> <span id="glowVal">0.30</span></label>
+      <label>Dust: <input type="range" id="dust" min="0" max="2.0" step="0.01" value="0.50"> <span id="dustVal">0.50</span></label>
+      <label>Dither: <input type="range" id="dither" min="0" max="1.5" step="0.01" value="0.0"> <span id="ditherVal">0.0</span></label>
+      <label>Near Fade: <input type="range" id="nearfade" min="0" max="15.0" step="0.5" value="0.0"> <span id="nearfadeVal">0.0</span> kpc</label>
+      <label>Choke: <input type="range" id="choke" min="1.0" max="15.0" step="0.5" value="15.0"> <span id="chokeVal">15.0</span> kpc</label>
+      <label>Particles: <input type="range" id="pcount" min="100000" max="2000000" step="100000" value="600000"> <span id="pcountVal">600K</span></label>
+      <button class="btn" id="viewTop">Top-Down</button>
+      <button class="btn" id="viewEdge">Edge-On</button>
+      <button class="btn" id="viewAngled">Angled</button>
+      <button class="btn" id="exportTop">Export Particle View</button>
+      <button class="btn" id="exportNav">Export Nav Map</button>
     </div>
   </div>
   <script type="module">
@@ -186,7 +182,7 @@
     // ── Luminosity 2D view ──
     const lumRenderer = new GalaxyLuminosityRenderer(galacticMap);
     const lumCanvas = document.getElementById('lumCanvas');
-    let lumViewActive = false;
+    let lumViewActive = true; // default ON
 
     function renderLumView() {
       const stretch = parseFloat(document.getElementById('lumStretch').value);
@@ -211,18 +207,31 @@
       lumCanvas.style.width = viewSize + 'px';
       lumCanvas.style.height = viewSize + 'px';
       const ctx = lumCanvas.getContext('2d');
+      // Black background — transparent pixels in the luminosity image
+      // become dark space, bright pixels glow on top
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, res, res);
       ctx.drawImage(result, 0, 0);
     }
 
-    document.getElementById('toggleLumView').onclick = () => {
-      lumViewActive = !lumViewActive;
-      lumCanvas.style.display = lumViewActive ? 'block' : 'none';
-      document.getElementById('lumControls').style.display = lumViewActive ? 'block' : 'none';
-      document.getElementById('toggleLumView').textContent = 'Luminosity View: ' + (lumViewActive ? 'ON' : 'OFF');
-      if (lumViewActive) renderLumView();
-    };
+    // Luminosity view starts ON
+    lumCanvas.style.display = 'block';
+    renderLumView();
 
-    document.getElementById('lumRender').onclick = () => renderLumView();
+    document.getElementById('toggleParticleView').onclick = () => {
+      const pc = document.getElementById('particleControls');
+      const showing = pc.style.display !== 'none';
+      pc.style.display = showing ? 'none' : 'block';
+      // When showing particle view, hide luminosity overlay so you can see particles
+      if (!showing) {
+        lumViewActive = false;
+        lumCanvas.style.display = 'none';
+      } else {
+        lumViewActive = true;
+        lumCanvas.style.display = 'block';
+        renderLumView();
+      }
+    };
 
     // Live sliders — auto-render on release
     for (const id of ['lumStretch', 'lumGamma', 'lumDust', 'lumNoise', 'lumExtent', 'lumRes']) {

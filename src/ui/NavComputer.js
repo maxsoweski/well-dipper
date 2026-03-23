@@ -448,6 +448,9 @@ export class NavComputer {
     // at the exact spatial extent being viewed.
     const map = this._getOrRenderMap(cx, cz, ext);
     ctx.imageSmoothingEnabled = true;
+    // Black background — luminosity image has transparency for dim regions
+    ctx.fillStyle = '#000';
+    ctx.fillRect(ox, oy, drawSize, drawSize);
     ctx.drawImage(map, 0, 0, this._mapRes, this._mapRes, ox, oy, drawSize, drawSize);
   }
 
