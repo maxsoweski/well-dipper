@@ -33,7 +33,7 @@
 </head>
 <body>
   <canvas id="canvas"></canvas>
-  <canvas id="lumCanvas" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:5; image-rendering:pixelated;"></canvas>
+  <canvas id="lumCanvas" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:5; image-rendering:pixelated;"></canvas>
   <div id="hud"></div>
   <div id="status" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;z-index:20;">GENERATING...</div>
   <div id="controls" style="display:none;">
@@ -206,6 +206,10 @@
       // Display on overlay canvas
       lumCanvas.width = res;
       lumCanvas.height = res;
+      // Display as a square that fits the viewport
+      const viewSize = Math.min(window.innerWidth, window.innerHeight);
+      lumCanvas.style.width = viewSize + 'px';
+      lumCanvas.style.height = viewSize + 'px';
       const ctx = lumCanvas.getContext('2d');
       ctx.drawImage(result, 0, 0);
     }
