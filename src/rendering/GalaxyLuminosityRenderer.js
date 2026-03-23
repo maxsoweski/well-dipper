@@ -112,6 +112,11 @@ function _fbm(px, py, octaves = 4) {
   return v;
 }
 
+function _smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 export class GalaxyLuminosityRenderer {
 
   /**
@@ -285,84 +290,114 @@ export class GalaxyLuminosityRenderer {
 
     if (maxLum < 1e-20) maxLum = 1;
 
-    // ── Pass 2: Post-processing and pixel output ──
+    // ── Pass 2: Nebula-style layered compositing ──
+    //
+    // Instead of smooth density → pixel, use domain-warped FBM noise to
+    // create cloud-like texture (same technique as Nebula.js).
+    // The density model drives WHERE clouds form (arms, bulge) while the
+    // noise creates HOW they look (bright knots, dark voids, filaments).
+    //
+    // Multiple noise layers are composited additively — each layer uses
+    // a different noise seed and scale, creating depth and complexity.
 
     const canvas = document.createElement('canvas');
     canvas.width = RES;
     canvas.height = RES;
     const ctx = canvas.getContext('2d');
-    const imgData = ctx.createImageData(RES, RES);
 
-    // Noise frequency scales with extent (finer detail at closer zoom)
-    const noiseFreq = 0.8 / Math.max(extent, 0.01);
-    // More noise octaves at closer zoom (more detail resolvable)
-    const noiseOctaves = extent > 10 ? 4 : extent > 2 ? 5 : 6;
+    // Start with black — transparent regions stay dark
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, RES, RES);
 
-    // Asinh stretch — the astronomical standard for galaxy imaging.
-    // Compresses the extreme dynamic range (center is 5000× brighter
-    // than arms) while keeping faint regions visible.
     const asinhDenom = Math.asinh(maxLum * stretch);
 
-    for (let py = 0; py < RES; py++) {
-      for (let px = 0; px < RES; px++) {
-        const i = py * RES + px;
-        let lum = lumGrid[i];
-        let cr = colorR[i], cg = colorG[i], cb = colorB[i];
+    // Number of cloud layers — more layers = richer texture, slower render
+    const NUM_LAYERS = 5;
 
-        const gx = centerX + (px / RES - 0.5) * extent * 2;
-        const gz = centerZ - (py / RES - 0.5) * extent * 2;
-        const R = Math.sqrt(gx * gx + gz * gz);
-        const theta = Math.atan2(gz, gx);
+    for (let layer = 0; layer < NUM_LAYERS; layer++) {
+      const imgData = ctx.createImageData(RES, RES);
 
-        // ── Dust lane absorption (post-processing, not generation) ──
-        if (dustStrength > 0 && R > 3) {
-          const dustStr = this._dustLane(R, theta);
-          const dustNoise = _fbm(gx * 1.5 + 77, gz * 1.5 + 77);
-          const dustAmt = dustStr * Math.max(0, (dustNoise - 0.25) / 0.35);
-          lum *= 1 - Math.min(dustAmt * dustStrength, 0.85);
+      // Each layer gets a unique noise seed for variation
+      const seedX = Math.sin(layer * 7.3 + 0.5) * 50 + 50;
+      const seedZ = Math.cos(layer * 5.1 + 1.2) * 50 + 50;
 
-          // Dust tints light slightly reddish
-          if (dustAmt > 0.2) {
-            const tint = dustAmt * dustStrength * 0.2;
-            cr = cr * (1 - tint) + 0.5 * tint;
-            cg = cg * (1 - tint) + 0.2 * tint;
-            cb = cb * (1 - tint) + 0.1 * tint;
+      // Each layer has a slightly different noise scale for multi-scale texture
+      const noiseScale = (1.5 + layer * 0.4) / Math.max(extent, 0.01);
+
+      // Layer opacity — distribute evenly, sum to ~1
+      const layerOpacity = 1.0 / NUM_LAYERS;
+
+      for (let py = 0; py < RES; py++) {
+        for (let px = 0; px < RES; px++) {
+          const i = py * RES + px;
+          const lum = lumGrid[i];
+          const cr = colorR[i], cg = colorG[i], cb = colorB[i];
+
+          const gx = centerX + (px / RES - 0.5) * extent * 2;
+          const gz = centerZ - (py / RES - 0.5) * extent * 2;
+          const R = Math.sqrt(gx * gx + gz * gz);
+
+          // ── Tone-map the luminosity ──
+          let brightness = Math.asinh(lum * stretch) / asinhDenom;
+          brightness = Math.pow(Math.max(0, brightness), gamma);
+
+          // ── Domain-warped FBM cloud shape (Nebula.js recipe) ──
+          // This is what creates the textured, photographic look
+          const npx = gx * noiseScale + seedX;
+          const npy = gz * noiseScale + seedZ;
+
+          // Domain warping: feed one FBM into another → organic swirls
+          const q0 = _fbm(npx, npy, 5);
+          const q1 = _fbm(npx + 5.2, npy + 1.3, 5);
+          const warped = _fbm(npx + 3.5 * q0, npy + 3.5 * q1, 5);
+
+          // Cloud shape: smoothstep threshold creates distinct bright/dark regions
+          // Low threshold = more cloud coverage, high = more voids
+          // Scale threshold by density — dense regions have more cloud, sparse have more void
+          const densityNorm = Math.min(1, brightness * 3);
+          const cloudThreshLow = 0.15 + (1 - densityNorm) * 0.25; // sparse = higher threshold = less cloud
+          const cloudThreshHigh = cloudThreshLow + 0.35;
+          let cloud = _smoothstep(cloudThreshLow, cloudThreshHigh, warped);
+
+          // Core stays smooth and bright (no dark voids in the bulge)
+          const coreBlend = R < 1 ? 1 : R < 3 ? 1 - (R - 1) / 2 : 0;
+          cloud = cloud * (1 - coreBlend) + coreBlend;
+
+          // ── Dust lane absorption ──
+          if (dustStrength > 0 && R > 3) {
+            const theta = Math.atan2(gz, gx);
+            const dustStr = this._dustLane(R, theta);
+            const dustNoise = _fbm(gx * 1.5 + 77, gz * 1.5 + 77);
+            const dustAmt = dustStr * Math.max(0, (dustNoise - 0.25) / 0.35);
+            cloud *= 1 - Math.min(dustAmt * dustStrength, 0.85);
           }
+
+          // ── Final alpha: brightness × cloud shape × layer opacity ──
+          const alpha = brightness * cloud * layerOpacity;
+          if (alpha < 0.002) continue; // skip transparent pixels
+
+          // Premultiplied alpha (additive compositing)
+          const idx = i * 4;
+          imgData.data[idx]     = Math.min(255, Math.round(cr * alpha * 255));
+          imgData.data[idx + 1] = Math.min(255, Math.round(cg * alpha * 255));
+          imgData.data[idx + 2] = Math.min(255, Math.round(cb * alpha * 255));
+          imgData.data[idx + 3] = Math.round(Math.min(1, alpha) * 255);
         }
-
-        // ── FBM noise texture (post-processing — organic variation) ──
-        if (noiseStrength > 0) {
-          const noiseR = Math.max(R, 0.5);
-          const npx = gx * noiseFreq + gx / noiseR * 2 + 42;
-          const npy = gz * noiseFreq + gz / noiseR * 2 + 42;
-          const q0 = _fbm(npx, npy, noiseOctaves);
-          const q1 = _fbm(npx + 5.2, npy + 1.3, noiseOctaves);
-          const noiseTex = 0.5 + _fbm(npx + 2 * q0, npy + 2 * q1, noiseOctaves) * 0.8;
-
-          // Noise blends in — core stays smooth
-          const noiseBlend = R < 1 ? 0 : R < 5 ? (R - 1) / 4 : 1;
-          lum *= 1 * (1 - noiseBlend * noiseStrength) + noiseTex * noiseBlend * noiseStrength;
-        }
-
-        // ── Tone mapping ──
-        let brightness = Math.asinh(lum * stretch) / asinhDenom;
-        brightness = Math.pow(brightness, gamma);
-
-        // ── Write pixel (premultiplied alpha, like Nebula.js) ──
-        // Bright regions glow (high alpha + bright color).
-        // Dim regions are transparent (low alpha → dark background shows through).
-        // This eliminates the muddy brown in inter-arm regions — they become
-        // transparent/black instead of opaque brown.
-        const alpha = Math.min(1, brightness * 1.5); // slightly boost alpha so arms are more opaque
-        const idx = i * 4;
-        imgData.data[idx]     = Math.min(255, Math.round(cr * brightness * 255));
-        imgData.data[idx + 1] = Math.min(255, Math.round(cg * brightness * 255));
-        imgData.data[idx + 2] = Math.min(255, Math.round(cb * brightness * 255));
-        imgData.data[idx + 3] = Math.round(alpha * 255);
       }
+
+      // Composite this layer additively onto the canvas
+      const layerCanvas = document.createElement('canvas');
+      layerCanvas.width = RES;
+      layerCanvas.height = RES;
+      const layerCtx = layerCanvas.getContext('2d');
+      layerCtx.putImageData(imgData, 0, 0);
+
+      // Use 'lighter' composite mode = additive blending (like THREE.AdditiveBlending)
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(layerCanvas, 0, 0);
     }
 
-    ctx.putImageData(imgData, 0, 0);
+    ctx.globalCompositeOperation = 'source-over'; // reset
     return canvas;
   }
 
