@@ -411,7 +411,7 @@ export class GalacticMap {
         // CG02 potential for this arm (n=1 harmonic only)
         // Negative because gravitational wells are negative
         const Cn = 8 / (3 * Math.PI); // n=1 coefficient
-        spiral += -amp * GalacticMap.MN_GM * 0.03 * radialDecay *
+        spiral += -amp * GalacticMap.MN_GM * 0.008 * radialDecay *
           (Cn / (K * Dn)) * Math.cos(gamma) * Math.pow(sechTerm, Bn);
       }
 
@@ -690,7 +690,7 @@ export class GalacticMap {
       const Dn = (1 + KH + 0.3 * KH * KH) / (1 + 0.3 * KH);
       const radialDecay = Math.exp(-(R - Rref) / Rs);
       const Cn = 8 / (3 * Math.PI);
-      spiral += -amp * GalacticMap.MN_GM * 0.03 * radialDecay *
+      spiral += -amp * GalacticMap.MN_GM * 0.008 * radialDecay *
         (Cn / (K * Dn)) * Math.cos(gamma) * Math.pow(Math.max(0, sechTerm), Bn);
     }
 
@@ -723,7 +723,7 @@ export class GalacticMap {
       const Dn = (1 + KH + 0.3 * KH * KH) / (1 + 0.3 * KH);
       const radialDecay = Math.exp(-(R - Rref) / Rs);
       const Cn = 8 / (3 * Math.PI);
-      spiral += -amp * GalacticMap.MN_GM * 0.03 * radialDecay *
+      spiral += -amp * GalacticMap.MN_GM * 0.008 * radialDecay *
         (Cn / (K * Dn)) * Math.cos(gamma) * Math.pow(sechTerm, Bn);
     }
 
