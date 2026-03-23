@@ -44,7 +44,8 @@ export class GalacticMap {
   static BAR_HALF_WIDTH = 0.7;        // kpc (used for bar axis ratio)
   static BAR_HALF_HEIGHT = 0.4;       // kpc (vertical scale)
   static BAR_ANGLE_DEG = 28;          // degrees from Sun-center line
-  static BAR_AMPLITUDE = 0.015;       // potential perturbation strength (tuned for ~2.5x density contrast)
+  static BAR_AMPLITUDE = 0.005;       // potential perturbation strength (Dehnen model, modest)
+  static BAR_DENSITY = 3.0;           // bar's own stellar mass boost relative to bulge
 
   // Cox & Gomez (2002) spiral arm potential perturbation.
   // Each arm is a separate perturbation term with its own amplitude.
@@ -423,10 +424,11 @@ export class GalacticMap {
 
       if (R < Rb) {
         // Inside bar: potential is polynomial
-        bar = -Ab * cos2 * (R / Rb) * (R / Rb) * (-(r / Rb) * (r / Rb) * (r / Rb) - 2);
+        // cos2 > 0 along bar → more negative potential (deeper well)
+        bar = Ab * cos2 * (R / Rb) * (R / Rb) * (-(r / Rb) * (r / Rb) * (r / Rb) - 2);
       } else {
         // Outside bar: potential falls off as (Rb/r)^3
-        bar = -Ab * cos2 * (R / r) * (R / r) * (-(Rb / r) * (Rb / r) * (Rb / r));
+        bar = Ab * cos2 * (R / r) * (R / r) * (-(Rb / r) * (Rb / r) * (Rb / r));
       }
     }
 
@@ -549,7 +551,33 @@ export class GalacticMap {
     const GM_b = GalacticMap.HERNQUIST_GM;
     const r = Math.sqrt(Rsq + z * z);
     const rSafe = Math.max(r, 0.01);
-    const bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
+    let bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
+
+    // Galactic bar's own stellar mass: an elongated triaxial Gaussian
+    // embedded in the bulge. This is the bar's actual mass distribution —
+    // distinct from the Dehnen perturbation (which models the bar's effect
+    // on disk orbits). When theta is provided, use the full angular shape;
+    // without theta, use the azimuthally-averaged profile.
+    if (R < GalacticMap.BAR_HALF_LENGTH * 1.5) {
+      let barMass;
+      if (theta_rad !== undefined) {
+        // Full angular bar shape — rotate galactic (x,z) into bar frame
+        const gx = R * Math.cos(theta_rad);
+        const gz = R * Math.sin(theta_rad);
+        const bx = gx * this.barCosA + gz * this.barSinA;
+        const bz = -gx * this.barSinA + gz * this.barCosA;
+        const sx = bx / GalacticMap.BAR_HALF_LENGTH;
+        const sz = bz / GalacticMap.BAR_HALF_WIDTH;
+        const sy = Math.abs(z) / GalacticMap.BAR_HALF_HEIGHT;
+        barMass = Math.exp(-0.5 * (sx * sx + sz * sz + sy * sy));
+      } else {
+        // Azimuthally-averaged (for calls without theta)
+        const barR = R / GalacticMap.BAR_HALF_LENGTH;
+        const barZ = Math.abs(z) / GalacticMap.BAR_HALF_HEIGHT;
+        barMass = Math.exp(-0.5 * (barR * barR + barZ * barZ));
+      }
+      bulgeDensity *= (1 + barMass * GalacticMap.BAR_DENSITY);
+    }
 
     // NFW analytical density
     const rs = GalacticMap.NFW_RS;
@@ -557,11 +585,13 @@ export class GalacticMap {
     const x = rSafe / rs;
     const haloDensity = norm / (x * (1 + x) * (1 + x));
 
-    // ── Spiral arm + bar density from potential perturbation ──
-    // When theta is provided, compute the non-axisymmetric density
-    // contribution via numerical Laplacian of the spiral+bar potential.
-    // This ensures density is exactly consistent with the potential —
-    // the arms and bar are gravitational features, not geometric overlays.
+    // ── Spiral arm density from potential perturbation ──
+    // When theta is provided, compute the spiral arm density contribution
+    // via numerical Laplacian of the spiral potential. The bar's own mass
+    // is handled above via the triaxial Gaussian (direct mass model).
+    // The Dehnen bar perturbation is excluded from the Laplacian because
+    // it models orbital reshaping, not mass addition — its Laplacian
+    // gives the wrong sign for density (negative along the bar axis).
     let spiralBarDensity = 0;
     if (theta_rad !== undefined && R > 0.3) {
       // Numerical Laplacian in cylindrical coordinates:
@@ -572,10 +602,11 @@ export class GalacticMap {
       const dZ = 0.02;
 
       // Only compute the spiral+bar part of the potential (not axisymmetric)
-      // Fast spiral+bar-only potential — skips axisymmetric components
-      // since they cancel out in the finite differences (they don't depend on theta
-      // and we only need the non-axisymmetric Laplacian).
-      const phiSB = (r, z, t) => this._spiralBarPotential(r, z, t);
+      // Fast spiral-only potential for the Laplacian.
+      // The bar is excluded: its Dehnen perturbation models orbital dynamics
+      // (escape velocity, warp cost) but its Laplacian gives inverted density.
+      // Bar mass is handled directly via the triaxial Gaussian above.
+      const phiSB = (r, z, t) => this._spiralPotentialOnly(r, z, t);
 
       const phi0 = phiSB(R, z, theta_rad);
       const phiRp = phiSB(R + dR, z, theta_rad);
@@ -633,10 +664,45 @@ export class GalacticMap {
    * @returns {number} escape velocity in arbitrary units
    */
   /**
-   * Fast spiral + bar potential only (no axisymmetric components).
+   * Fast spiral-only potential (no bar, no axisymmetric components).
    * Used by the numerical Laplacian in potentialDerivedDensity —
-   * the axisymmetric terms cancel in finite differences, so computing
-   * them is wasted work.
+   * the axisymmetric terms cancel in finite differences.
+   * Bar is excluded because its Laplacian gives inverted density.
+   * @private
+   */
+  _spiralPotentialOnly(R, z, theta) {
+    if (R < 0.5) return 0; // No spiral structure in the bulge
+    // Fade spiral in from R=0.5 to R=2 (bulge-to-disk transition)
+    const spiralFade = R < 2 ? (R - 0.5) / 1.5 : 1;
+
+    let spiral = 0;
+    const H = GalacticMap.SPIRAL_SCALE_HEIGHT;
+    const Rs = GalacticMap.SPIRAL_RADIAL_SCALE;
+    const Rref = GalacticMap.SPIRAL_REF_RADIUS;
+    const sinAlpha = Math.sin(this.pitchAngle);
+
+    for (let a = 0; a < this.arms.length; a++) {
+      const arm = this.arms[a];
+      const amp = this.armAmplitudes[a];
+      const gamma = theta - arm.offset - this.pitchK * Math.log(R / Rref);
+      const K = 1 / (R * sinAlpha);
+      const KH = K * H;
+      const Kz = K * Math.abs(z);
+      const sechTerm = Kz < 10 ? 1 / Math.cosh(Kz) : 0;
+      const Bn = KH * (1 + 0.4 * KH);
+      const Dn = (1 + KH + 0.3 * KH * KH) / (1 + 0.3 * KH);
+      const radialDecay = Math.exp(-(R - Rref) / Rs);
+      const Cn = 8 / (3 * Math.PI);
+      spiral += -amp * GalacticMap.MN_GM * 0.03 * radialDecay *
+        (Cn / (K * Dn)) * Math.cos(gamma) * Math.pow(Math.max(0, sechTerm), Bn);
+    }
+
+    return spiral * spiralFade;
+  }
+
+  /**
+   * Fast spiral + bar potential (no axisymmetric components).
+   * Used by gravitationalPotential for the full potential including bar.
    * @private
    */
   _spiralBarPotential(R, z, theta) {
@@ -671,9 +737,9 @@ export class GalacticMap {
     const cos2 = Math.cos(2 * (theta - this.barAngle));
     const r = Math.sqrt(R * R + z * z);
     if (R < Rb) {
-      bar = -Ab * cos2 * (R / Rb) * (R / Rb) * (-Math.pow(r / Rb, 3) - 2);
+      bar = Ab * cos2 * (R / Rb) * (R / Rb) * (-Math.pow(r / Rb, 3) - 2);
     } else {
-      bar = -Ab * cos2 * (R / r) * (R / r) * (-Math.pow(Rb / r, 3));
+      bar = Ab * cos2 * (R / r) * (R / r) * (-Math.pow(Rb / r, 3));
     }
 
     return spiral + bar;
