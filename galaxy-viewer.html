@@ -77,6 +77,7 @@
     import { GalacticSectors } from './src/generation/GalacticSectors.js';
     import { MilkyWayModel } from './src/generation/MilkyWayModel.js';
     import { MilkyWay } from './src/objects/MilkyWay.js';
+    import { GalaxyCloud } from './src/objects/GalaxyCloud.js';
     import { GalaxyLuminosityRenderer } from './src/rendering/GalaxyLuminosityRenderer.js';
 
     const canvas = document.getElementById('canvas');
@@ -294,6 +295,13 @@
 
     build();
 
+    // ── Galaxy Cloud (Nebula-style rendering) ──
+    const galaxyCloud = new GalaxyCloud(
+      { arms: galacticMap.arms, pitchK: galacticMap.pitchK, barAngle: galacticMap.barAngle },
+      { radius: 15, layerCount: 7, opacity: 0.35 }
+    );
+    galaxyCloud.addTo(scene);
+
     // ── Camera: always orbits galaxy center (0,0,0) ──
     let isDragging = false;
     let orbitTheta = Math.PI / 4, orbitPhi = Math.PI / 4, orbitRadius = 30;
@@ -502,6 +510,7 @@
       const dt = Math.min((time - lastTime) / 1000, 0.1);
       lastTime = time;
       if (milkyWay) milkyWay.update(dt);
+      galaxyCloud.update(dt);
 
       renderer.render(scene, camera);
       hudEl.innerHTML =
