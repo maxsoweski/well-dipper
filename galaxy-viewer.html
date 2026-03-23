@@ -421,7 +421,8 @@
     };
 
     // ── Save / Load settings via localStorage ──
-    const SLIDER_IDS = ['bright', 'scale', 'spread', 'glow', 'dust', 'dither', 'nearfade', 'choke', 'pcount'];
+    const SLIDER_IDS = ['bright', 'scale', 'spread', 'glow', 'dust', 'dither', 'nearfade', 'choke', 'pcount',
+      'lumStretch', 'lumGamma', 'lumDust', 'lumNoise', 'lumExtent', 'lumRes'];
     const STORAGE_KEY = 'galaxy-viewer-settings';
 
     document.getElementById('saveSettings').onclick = () => {
