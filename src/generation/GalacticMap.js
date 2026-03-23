@@ -551,17 +551,15 @@ export class GalacticMap {
     const GM_b = GalacticMap.HERNQUIST_GM;
     const r = Math.sqrt(Rsq + z * z);
     const rSafe = Math.max(r, 0.01);
-    let bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
+    const bulgeDensity = GM_b * a_b / (2 * Math.PI * rSafe * Math.pow(rSafe + a_b, 3));
 
-    // Galactic bar's own stellar mass: an elongated triaxial Gaussian
-    // embedded in the bulge. This is the bar's actual mass distribution —
-    // distinct from the Dehnen perturbation (which models the bar's effect
-    // on disk orbits). When theta is provided, use the full angular shape;
-    // without theta, use the azimuthally-averaged profile.
+    // Galactic bar's own stellar mass — computed here, applied to total below.
+    // The bar is a concentration of BOTH disk and bulge stars captured into
+    // elongated orbits, so it boosts the total density, not just the bulge.
+    let barMassBoost = 0;
     if (R < GalacticMap.BAR_HALF_LENGTH * 1.5) {
       let barMass;
       if (theta_rad !== undefined) {
-        // Full angular bar shape — rotate galactic (x,z) into bar frame
         const gx = R * Math.cos(theta_rad);
         const gz = R * Math.sin(theta_rad);
         const bx = gx * this.barCosA + gz * this.barSinA;
@@ -571,12 +569,11 @@ export class GalacticMap {
         const sy = Math.abs(z) / GalacticMap.BAR_HALF_HEIGHT;
         barMass = Math.exp(-0.5 * (sx * sx + sz * sz + sy * sy));
       } else {
-        // Azimuthally-averaged (for calls without theta)
         const barR = R / GalacticMap.BAR_HALF_LENGTH;
         const barZ = Math.abs(z) / GalacticMap.BAR_HALF_HEIGHT;
         barMass = Math.exp(-0.5 * (barR * barR + barZ * barZ));
       }
-      bulgeDensity *= (1 + barMass * GalacticMap.BAR_DENSITY);
+      barMassBoost = barMass * GalacticMap.BAR_DENSITY;
     }
 
     // NFW analytical density
@@ -633,11 +630,11 @@ export class GalacticMap {
       R > truncR ? 0.0 :
       0.5 * (1 + Math.cos(Math.PI * (R - (truncR - truncWidth)) / truncWidth));
 
-    // Apply calibration normalization (with disk truncation)
-    // Spiral/bar density modifies the thin disk (it's a disk-plane feature).
-    // Can be negative between arms (density is reduced there).
+    // Apply calibration normalization (with disk truncation + bar mass)
     const thinWithSpiral = Math.max(0, thin + spiralBarDensity) * diskTrunc;
-    const total = (thinWithSpiral + thick * diskTrunc + bulgeDensity + haloDensity) * this._potentialDensityNorm;
+    const rawTotal = thinWithSpiral + thick * diskTrunc + bulgeDensity + haloDensity;
+    // Bar mass boosts the total density (bar captures disk+bulge stars into elongated orbits)
+    const total = rawTotal * (1 + barMassBoost) * this._potentialDensityNorm;
     const thinN = thinWithSpiral * this._potentialDensityNorm;
     const thickN = thick * diskTrunc * this._potentialDensityNorm;
     const bulgeN = bulgeDensity * this._potentialDensityNorm;
