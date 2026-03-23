@@ -85,6 +85,7 @@ export class GalaxyCloud {
           uBarAngle: { value: armData.barAngle || 0 },
           uBarLength: { value: 2.2 },
           uBarWidth: { value: 0.7 },
+          uDustStrength: { value: 0.5 },
         },
 
         vertexShader: /* glsl */ `
@@ -112,6 +113,7 @@ export class GalaxyCloud {
           uniform float uBarAngle;
           uniform float uBarLength;
           uniform float uBarWidth;
+          uniform float uDustStrength;
           varying vec2 vUv;
           varying vec3 vWorldPos;
 
@@ -158,6 +160,25 @@ export class GalaxyCloud {
           // ── Disk density (exponential falloff) ──
           float diskDensity(float R) {
             return exp(-R / 2.6);
+          }
+
+          // ── Dust lane density (inner trailing edge of arms) ──
+          float dustLane(float R, float theta) {
+            if (R < 3.0) return 0.0; // no dust near core
+            float sinP = sin(atan(1.0 / uPitchK));
+            float best = 0.0;
+            for (int i = 0; i < 8; i++) {
+              if (i >= uNumArms) break;
+              // Offset inward from arm center (trailing edge)
+              float expected = uArmOffsets[i] + uPitchK * log(R / 4.0) - 0.08;
+              float dt = mod(theta - expected + 3.14159, 6.28318) - 3.14159;
+              float dist = abs(dt) * R * sinP;
+              // Narrower than arm — dust is concentrated
+              float w = uArmWidths[i] * 0.35;
+              float g = exp(-0.5 * pow(dist / w, 2.0));
+              best = max(best, g * uArmStrengths[i]);
+            }
+            return best;
           }
 
           // ── Bar density ──
@@ -218,6 +239,20 @@ export class GalaxyCloud {
             float coreSmooth = smoothstep(2.0, 0.5, R);
             cloud = mix(cloud, 1.0, coreSmooth);
 
+            // ── Dust lane shadows ──
+            // Dark filaments along inner arm edges, textured with their own noise
+            if (uDustStrength > 0.0 && R > 3.0) {
+              float dust = dustLane(R, theta);
+              // Wispy noise at different scale than the cloud noise
+              vec2 dustNoiseP = vec2(wx, wz) * 1.5 / uRadius + uNoiseSeed * 1.7 + 77.0;
+              float dustNoise = fbm(dustNoiseP + vec2(3.1, 7.2));
+              // Filamentary shape: threshold the noise
+              float dustShape = smoothstep(0.25, 0.55, dustNoise);
+              // Absorb: reduce cloud brightness in dusty regions
+              float absorption = dust * dustShape * uDustStrength;
+              cloud *= 1.0 - min(absorption, 0.85);
+            }
+
             float alpha = density * cloud * uOpacity;
             if (alpha < 0.003) discard;
 
@@ -255,8 +290,13 @@ export class GalaxyCloud {
 
   setOpacity(val) {
     for (const layer of this._layers) {
-      // Scale relative to the layer's original vertFade-adjusted opacity
       layer.material.uniforms.uOpacity.value = val;
+    }
+  }
+
+  setDustStrength(val) {
+    for (const layer of this._layers) {
+      layer.material.uniforms.uDustStrength.value = val;
     }
   }
 

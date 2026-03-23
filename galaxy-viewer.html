@@ -42,6 +42,7 @@
     </div>
     <!-- Cloud view controls (default) -->
     <label>Opacity: <input type="range" id="cloudOpacity" min="0.05" max="1.0" step="0.05" value="0.35"> <span id="cloudOpacityVal">0.35</span></label>
+    <label>Dust: <input type="range" id="cloudDust" min="0" max="2.0" step="0.05" value="0.50"> <span id="cloudDustVal">0.50</span></label>
     <label>Layers: <input type="range" id="cloudLayers" min="3" max="12" step="1" value="7"> <span id="cloudLayersVal">7</span></label>
     <div style="margin-top: 6px;">
       <button class="btn" id="viewTop">Top-Down</button>
@@ -224,11 +225,16 @@
     lumCanvas.style.display = 'none';
     lumViewActive = false;
 
-    // Cloud opacity slider
+    // Cloud sliders
     document.getElementById('cloudOpacity').oninput = (e) => {
       const v = parseFloat(e.target.value);
       document.getElementById('cloudOpacityVal').textContent = v.toFixed(2);
       galaxyCloud.setOpacity(v);
+    };
+    document.getElementById('cloudDust').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('cloudDustVal').textContent = v.toFixed(2);
+      galaxyCloud.setDustStrength(v);
     };
 
     // Cloud layer count (requires rebuild)
