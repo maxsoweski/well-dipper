@@ -37,23 +37,24 @@
   <div id="hud"></div>
   <div id="status" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;z-index:20;">GENERATING...</div>
   <div id="controls" style="display:none;">
-    <!-- Luminosity controls (default view) -->
-    <label>Stretch: <input type="range" id="lumStretch" min="10" max="5000" step="10" value="500"> <span id="lumStretchVal">500</span></label>
-    <label>Gamma: <input type="range" id="lumGamma" min="0.2" max="1.0" step="0.05" value="0.50"> <span id="lumGammaVal">0.50</span></label>
-    <label>Dust: <input type="range" id="lumDust" min="0" max="1.0" step="0.05" value="0.50"> <span id="lumDustVal">0.50</span></label>
-    <label>Noise: <input type="range" id="lumNoise" min="0" max="1.0" step="0.05" value="0.40"> <span id="lumNoiseVal">0.40</span></label>
-    <label>Extent: <input type="range" id="lumExtent" min="0.5" max="22" step="0.5" value="22"> <span id="lumExtentVal">22</span> kpc</label>
-    <label>Resolution: <input type="range" id="lumRes" min="256" max="1024" step="128" value="512"> <span id="lumResVal">512</span></label>
+    <div style="margin-bottom: 6px; color: #0a0; font-size: 11px;">
+      GALAXY CLOUD VIEW &nbsp; drag = orbit &nbsp; scroll = zoom
+    </div>
+    <!-- Cloud view controls (default) -->
+    <label>Opacity: <input type="range" id="cloudOpacity" min="0.05" max="1.0" step="0.05" value="0.35"> <span id="cloudOpacityVal">0.35</span></label>
+    <label>Layers: <input type="range" id="cloudLayers" min="3" max="12" step="1" value="7"> <span id="cloudLayersVal">7</span></label>
     <div style="margin-top: 6px;">
-      <button class="btn" id="lumExport">Export PNG</button>
+      <button class="btn" id="viewTop">Top-Down</button>
+      <button class="btn" id="viewEdge">Edge-On</button>
+      <button class="btn" id="viewAngled">Angled</button>
       <button class="btn" id="toggleOverlay">Sector Overlay: OFF</button>
-      <button class="btn" id="toggleParticleView">Particle View</button>
+      <button class="btn" id="exportNav">Export Nav Map</button>
       <button class="btn" id="saveSettings">Save Settings</button>
       <button class="btn" id="loadSettings">Load Settings</button>
       <button class="btn" id="dumpSettings">Copy Settings</button>
     </div>
-    <!-- Particle controls (hidden by default, shown via Particle View button) -->
-    <div id="particleControls" style="display:none; margin-top: 6px; border-top: 1px solid #0a0; padding-top: 4px;">
+    <!-- Hidden: particle + luminosity controls (for debugging) -->
+    <div id="extraControls" style="display:none; margin-top: 6px; border-top: 1px solid #0a0; padding-top: 4px;">
       <div style="color:#0a0; font-size:11px;">── PARTICLE VIEW ──</div>
       <label>Star Brightness: <input type="range" id="bright" min="0" max="5.0" step="0.05" value="1.00"> <span id="brightVal">1.00</span></label>
       <label>Star Size: <input type="range" id="scale" min="0.01" max="2.0" step="0.01" value="0.30"> <span id="scaleVal">0.30</span></label>
@@ -64,11 +65,15 @@
       <label>Near Fade: <input type="range" id="nearfade" min="0" max="15.0" step="0.5" value="0.0"> <span id="nearfadeVal">0.0</span> kpc</label>
       <label>Choke: <input type="range" id="choke" min="1.0" max="15.0" step="0.5" value="15.0"> <span id="chokeVal">15.0</span> kpc</label>
       <label>Particles: <input type="range" id="pcount" min="100000" max="2000000" step="100000" value="600000"> <span id="pcountVal">600K</span></label>
-      <button class="btn" id="viewTop">Top-Down</button>
-      <button class="btn" id="viewEdge">Edge-On</button>
-      <button class="btn" id="viewAngled">Angled</button>
+      <div style="color:#0a0; font-size:11px; margin-top:4px;">── LUMINOSITY VIEW ──</div>
+      <label>Stretch: <input type="range" id="lumStretch" min="10" max="5000" step="10" value="500"> <span id="lumStretchVal">500</span></label>
+      <label>Gamma: <input type="range" id="lumGamma" min="0.2" max="1.0" step="0.05" value="0.50"> <span id="lumGammaVal">0.50</span></label>
+      <label>Dust: <input type="range" id="lumDust" min="0" max="1.0" step="0.05" value="0.50"> <span id="lumDustVal">0.50</span></label>
+      <label>Noise: <input type="range" id="lumNoise" min="0" max="1.0" step="0.05" value="0.40"> <span id="lumNoiseVal">0.40</span></label>
+      <label>Extent: <input type="range" id="lumExtent" min="0.5" max="22" step="0.5" value="22"> <span id="lumExtentVal">22</span> kpc</label>
+      <label>Resolution: <input type="range" id="lumRes" min="256" max="1024" step="128" value="512"> <span id="lumResVal">512</span></label>
+      <button class="btn" id="lumExport">Export Luminosity PNG</button>
       <button class="btn" id="exportTop">Export Particle View</button>
-      <button class="btn" id="exportNav">Export Nav Map</button>
     </div>
   </div>
   <script type="module">
@@ -215,23 +220,34 @@
       ctx.drawImage(result, 0, 0);
     }
 
-    // Luminosity view starts ON
-    lumCanvas.style.display = 'block';
-    renderLumView();
+    // Cloud view is the default — hide luminosity overlay and particles
+    lumCanvas.style.display = 'none';
+    lumViewActive = false;
 
-    document.getElementById('toggleParticleView').onclick = () => {
-      const pc = document.getElementById('particleControls');
-      const showing = pc.style.display !== 'none';
-      pc.style.display = showing ? 'none' : 'block';
-      // When showing particle view, hide luminosity overlay so you can see particles
-      if (!showing) {
-        lumViewActive = false;
-        lumCanvas.style.display = 'none';
-      } else {
-        lumViewActive = true;
-        lumCanvas.style.display = 'block';
-        renderLumView();
-      }
+    // Cloud opacity slider
+    document.getElementById('cloudOpacity').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('cloudOpacityVal').textContent = v.toFixed(2);
+      galaxyCloud.setOpacity(v);
+    };
+
+    // Cloud layer count (requires rebuild)
+    document.getElementById('cloudLayers').onchange = (e) => {
+      const count = parseInt(e.target.value);
+      document.getElementById('cloudLayersVal').textContent = count;
+      galaxyCloud.removeFrom(scene);
+      galaxyCloud.dispose();
+      // Rebuild — can't just change layer count without recreating
+      const newCloud = new GalaxyCloud(
+        { arms: galacticMap.arms, pitchK: galacticMap.pitchK, barAngle: galacticMap.barAngle },
+        { radius: 15, layerCount: count, opacity: parseFloat(document.getElementById('cloudOpacity').value) }
+      );
+      newCloud.addTo(scene);
+      // Swap reference (galaxyCloud is const, so we update the scene directly)
+      Object.assign(galaxyCloud, { mesh: newCloud.mesh, _layers: newCloud._layers });
+    };
+    document.getElementById('cloudLayers').oninput = (e) => {
+      document.getElementById('cloudLayersVal').textContent = e.target.value;
     };
 
     // Live sliders — auto-render on release
@@ -286,6 +302,7 @@
         // Set initial dust from slider
         milkyWay.setDustOpacity(sv.dustOpacity);
         milkyWay.addTo(scene);
+        milkyWay.mesh.visible = false; // hidden by default — cloud view is primary
 
         statusEl.style.display = 'none';
         controlsEl.style.display = 'block';
@@ -304,7 +321,7 @@
 
     // ── Camera: always orbits galaxy center (0,0,0) ──
     let isDragging = false;
-    let orbitTheta = Math.PI / 4, orbitPhi = Math.PI / 4, orbitRadius = 30;
+    let orbitTheta = 0, orbitPhi = 0.05, orbitRadius = 25; // top-down by default
     let lastMX = 0, lastMY = 0;
 
     function camUpdate() {
@@ -514,7 +531,7 @@
 
       renderer.render(scene, camera);
       hudEl.innerHTML =
-        `GALAXY MODEL VIEWER<br>` +
+        `GALAXY CLOUD VIEWER<br>` +
         `Particles: ${milkyWay ? milkyWay.data.particleCount.toLocaleString() : '...'}<br>` +
         `Distance: ${orbitRadius.toFixed(1)} kpc`;
     }
