@@ -47,6 +47,7 @@
       <button class="btn" id="viewTop">Top-Down</button>
       <button class="btn" id="viewEdge">Edge-On</button>
       <button class="btn" id="viewAngled">Angled</button>
+      <button class="btn" id="toggleMode">Nebula Mode</button>
       <button class="btn" id="toggleOverlay">Sector Overlay: OFF</button>
       <button class="btn" id="exportNav">Export Nav Map</button>
       <button class="btn" id="saveSettings">Save Settings</button>
@@ -83,6 +84,7 @@
     import { MilkyWayModel } from './src/generation/MilkyWayModel.js';
     import { MilkyWay } from './src/objects/MilkyWay.js';
     import { GalaxyCloud } from './src/objects/GalaxyCloud.js';
+    import { GalaxyNebula } from './src/objects/GalaxyNebula.js';
     import { GalaxyLuminosityRenderer } from './src/rendering/GalaxyLuminosityRenderer.js';
 
     const canvas = document.getElementById('canvas');
@@ -179,6 +181,15 @@
       overlayGroup.add(new THREE.LineSegments(boxGeo, boxMat));
     }
     buildOverlay();
+
+    // Toggle between cloud mode and nebula mode
+    let nebulaMode = false;
+    document.getElementById('toggleMode').onclick = () => {
+      nebulaMode = !nebulaMode;
+      galaxyCloud.mesh.visible = !nebulaMode;
+      galaxyNebula.mesh.visible = nebulaMode;
+      document.getElementById('toggleMode').textContent = nebulaMode ? 'Cloud Mode' : 'Nebula Mode';
+    };
 
     document.getElementById('toggleOverlay').onclick = () => {
       overlayGroup.visible = !overlayGroup.visible;
@@ -312,12 +323,20 @@
 
     build();
 
-    // ── Galaxy Cloud (Nebula-style rendering) ──
+    // ── Galaxy Cloud (shader-computed density) ──
     const galaxyCloud = new GalaxyCloud(
       { arms: galacticMap.arms, pitchK: galacticMap.pitchK, barAngle: galacticMap.barAngle },
       { radius: 15, layerCount: 7, opacity: 0.35 }
     );
     galaxyCloud.addTo(scene);
+
+    // ── Galaxy Nebula (scattered nebula layers along arms) ──
+    const galaxyNebula = new GalaxyNebula(
+      { arms: galacticMap.arms, pitchK: galacticMap.pitchK, barAngle: galacticMap.barAngle },
+      { radius: 15, layersPerArm: 12, bulgeCount: 8 }
+    );
+    galaxyNebula.mesh.visible = false; // hidden by default
+    galaxyNebula.addTo(scene);
 
     // ── Camera: always orbits galaxy center (0,0,0) ──
     let isDragging = false;
@@ -528,6 +547,7 @@
       lastTime = time;
       if (milkyWay) milkyWay.update(dt);
       galaxyCloud.update(dt);
+      galaxyNebula.update(dt, camera);
 
       renderer.render(scene, camera);
       hudEl.innerHTML =
