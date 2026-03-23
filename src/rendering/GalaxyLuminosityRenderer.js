@@ -142,262 +142,113 @@ export class GalaxyLuminosityRenderer {
    */
   render(centerX, centerZ, extent, resolution, options = {}) {
     const {
-      dustStrength = 0.5,
-      noiseStrength = 0.5,
-      gamma = 0.45,
+      gamma = 0.5,
       stretch = 500,
     } = options;
 
     const RES = resolution;
     const gm = this._gm;
 
-    // ── Pass 1: Compute luminosity and color grids ──
-
-    const lumGrid = new Float64Array(RES * RES);
-    const colorR = new Float64Array(RES * RES);
-    const colorG = new Float64Array(RES * RES);
-    const colorB = new Float64Array(RES * RES);
-    let maxLum = 0;
-
-    // Pre-query Layer 1 features for the entire view (once, not per pixel)
-    const viewFeatures = extent < 10
-      ? gm.findNearbyFeatures({ x: centerX, y: 0, z: centerZ }, extent * 1.5)
-      : [];
+    // ── Compute density grid (Layer 0 query) ──
+    const densityGrid = new Float64Array(RES * RES);
+    let maxDensity = 0;
 
     for (let py = 0; py < RES; py++) {
       for (let px = 0; px < RES; px++) {
         const gx = centerX + (px / RES - 0.5) * extent * 2;
-        const gz = centerZ - (py / RES - 0.5) * extent * 2; // Y-flip: top = +Z
-
+        const gz = centerZ - (py / RES - 0.5) * extent * 2;
         const R = Math.sqrt(gx * gx + gz * gz);
         const theta = Math.atan2(gz, gx);
-
-        // Query Layer 0 — disk truncation, spiral arms, and bar are all
-        // built into potentialDerivedDensity when theta is provided.
-        // No separate bar/arm calculations needed here.
-        const densities = gm.potentialDerivedDensity(R, 0, theta);
-        const armStr = gm.spiralArmStrength(R, theta);
-        const armInfo = gm.nearestArmInfo(R, theta);
-        const totalDensity = densities.totalDensity;
-
-        // Sum luminosity contributions from all spectral types.
-        // Uses REAL IMF population fractions (not cinematic weights) blended
-        // by the component fractions from the gravitational potential.
-        // This produces physically correct integrated colors:
-        //   - Arms: B-dominated luminosity → blue-white
-        //   - Inter-arm: F/G-dominated → warm white
-        //   - Bulge: evolved giants → golden-orange
-        let totalLum = 0;
-        let cr = 0, cg = 0, cb = 0;
-
-        // Main-sequence types
-        for (const type of MS_TYPES) {
-          // Blend real population fractions by component weight
-          let frac = 0;
-          frac += (REAL_POP_FRACTIONS.thin[type] || 0) * (densities.thin || 0);
-          frac += (REAL_POP_FRACTIONS.thick[type] || 0) * (densities.thick || 0);
-          frac += (REAL_POP_FRACTIONS.bulge[type] || 0) * (densities.bulge || 0);
-          frac += (REAL_POP_FRACTIONS.halo[type] || 0) * (densities.halo || 0);
-
-          // Arm boost for young types in thin disk regions
-          if (armStr > 0.1 && densities.thin > 0.2) {
-            frac *= 1 + armStr * ((ARM_BOOST[type] || 1) - 1);
-          }
-
-          const lum = totalDensity * frac * TYPE_LUMINOSITY[type];
-          totalLum += lum;
-          const col = SPECTRAL_COLOR[type];
-          cr += lum * col[0];
-          cg += lum * col[1];
-          cb += lum * col[2];
-        }
-
-        // Evolved types: fraction of their base type's population
-        for (const { type, base } of EVOLVED_TYPES) {
-          let baseFrac = 0;
-          baseFrac += (REAL_POP_FRACTIONS.thin[base] || 0) * (densities.thin || 0);
-          baseFrac += (REAL_POP_FRACTIONS.thick[base] || 0) * (densities.thick || 0);
-          baseFrac += (REAL_POP_FRACTIONS.bulge[base] || 0) * (densities.bulge || 0);
-          baseFrac += (REAL_POP_FRACTIONS.halo[base] || 0) * (densities.halo || 0);
-
-          // Evolved fraction increases in old populations (bulge/halo have more giants)
-          const oldBoost = 1 + (densities.bulge + densities.halo) * 3;
-          const lum = totalDensity * baseFrac * EVOLVED_FRACTION[type] * oldBoost * TYPE_LUMINOSITY[type];
-          totalLum += lum;
-          const col = SPECTRAL_COLOR[type];
-          cr += lum * col[0];
-          cg += lum * col[1];
-          cb += lum * col[2];
-        }
-
-        // ── Layer 1 features: bright spots from nebulae, clusters, OB assoc ──
-        // Pre-queried once for the entire view, iterated per pixel.
-        if (viewFeatures.length > 0) {
-          for (const feat of viewFeatures) {
-            const fdx = gx - feat.position.x;
-            const fdz = gz - feat.position.z;
-            const fdist = Math.sqrt(fdx * fdx + fdz * fdz);
-            const fRadius = feat.radius || 0.05;
-            if (fdist > fRadius * 3) continue;
-
-            // Plummer-like brightness profile
-            const plummer = 1 / (1 + (fdist / fRadius) ** 2);
-
-            // Feature type determines luminosity and color contribution
-            let fLum = plummer * totalDensity * 50; // features are locally bright
-            let fColor;
-            switch (feat.type) {
-              case 'emission-nebula':
-                fColor = [0.9, 0.3, 0.4]; // H-alpha pink
-                fLum *= 3;
-                break;
-              case 'open-cluster':
-              case 'ob-association':
-                fColor = [0.6, 0.7, 1.0]; // young blue
-                fLum *= 5;
-                break;
-              case 'globular-cluster':
-                fColor = [1.0, 0.8, 0.5]; // old golden
-                fLum *= 2;
-                break;
-              default:
-                fColor = [0.8, 0.8, 0.9];
-                fLum *= 1;
-            }
-
-            totalLum += fLum;
-            cr += fLum * fColor[0];
-            cg += fLum * fColor[1];
-            cb += fLum * fColor[2];
-          }
-        }
-
-        // Normalize color by total luminosity
-        if (totalLum > 0) {
-          cr /= totalLum;
-          cg /= totalLum;
-          cb /= totalLum;
-        }
-
-        const i = py * RES + px;
-        lumGrid[i] = totalLum;
-        colorR[i] = cr;
-        colorG[i] = cg;
-        colorB[i] = cb;
-        if (totalLum > maxLum) maxLum = totalLum;
+        const d = gm.potentialDerivedDensity(R, 0, theta).totalDensity;
+        densityGrid[py * RES + px] = d;
+        if (d > maxDensity) maxDensity = d;
       }
     }
+    if (maxDensity < 1e-20) maxDensity = 1;
 
-    if (maxLum < 1e-20) maxLum = 1;
-
-    // ── Pass 2: Nebula-style layered compositing ──
+    // ── Nebula-style layered cloud rendering ──
     //
-    // Instead of smooth density → pixel, use domain-warped FBM noise to
-    // create cloud-like texture (same technique as Nebula.js).
-    // The density model drives WHERE clouds form (arms, bulge) while the
-    // noise creates HOW they look (bright knots, dark voids, filaments).
+    // Same technique as Nebula.js: multiple transparent layers with
+    // domain-warped FBM noise, composited additively.
+    // Density from the gravitational model drives WHERE clouds form.
+    // Noise drives HOW they look (bright knots, dark voids, filaments).
     //
-    // Multiple noise layers are composited additively — each layer uses
-    // a different noise seed and scale, creating depth and complexity.
+    // Simple warm-white light for now — luminosity coloring comes later.
 
     const canvas = document.createElement('canvas');
     canvas.width = RES;
     canvas.height = RES;
     const ctx = canvas.getContext('2d');
-
-    // Start with black — transparent regions stay dark
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, RES, RES);
 
-    const asinhDenom = Math.asinh(maxLum * stretch);
-
-    // Number of cloud layers — more layers = richer texture, slower render
-    const NUM_LAYERS = 5;
+    const NUM_LAYERS = 7;
+    const baseColor = [0.9, 0.85, 0.75]; // warm white
 
     for (let layer = 0; layer < NUM_LAYERS; layer++) {
       const imgData = ctx.createImageData(RES, RES);
 
-      // Each layer gets a unique noise seed for variation
+      // Unique noise seed per layer
       const seedX = Math.sin(layer * 7.3 + 0.5) * 50 + 50;
       const seedZ = Math.cos(layer * 5.1 + 1.2) * 50 + 50;
 
-      // Each layer has a slightly different noise scale for multi-scale texture
-      const noiseScale = (1.5 + layer * 0.4) / Math.max(extent, 0.01);
+      // Multi-scale: each layer at a different noise frequency
+      const noiseScale = (1.0 + layer * 0.5) / Math.max(extent, 0.01);
 
-      // Layer opacity — distribute evenly, sum to ~1
-      const layerOpacity = 1.0 / NUM_LAYERS;
+      // Per-layer opacity
+      const layerOpacity = 0.7 / NUM_LAYERS;
 
       for (let py = 0; py < RES; py++) {
         for (let px = 0; px < RES; px++) {
           const i = py * RES + px;
-          const lum = lumGrid[i];
-          const cr = colorR[i], cg = colorG[i], cb = colorB[i];
+          const density = densityGrid[i];
 
           const gx = centerX + (px / RES - 0.5) * extent * 2;
           const gz = centerZ - (py / RES - 0.5) * extent * 2;
-          const R = Math.sqrt(gx * gx + gz * gz);
 
-          // ── Tone-map the luminosity ──
-          let brightness = Math.asinh(lum * stretch) / asinhDenom;
-          brightness = Math.pow(Math.max(0, brightness), gamma);
+          // Normalize density (asinh stretch)
+          let bright = Math.asinh(density * stretch) / Math.asinh(maxDensity * stretch);
+          bright = Math.pow(Math.max(0, bright), gamma);
 
-          // ── Domain-warped FBM cloud shape (Nebula.js recipe) ──
-          // This is what creates the textured, photographic look
+          // ── Domain-warped FBM (the Nebula.js recipe) ──
           const npx = gx * noiseScale + seedX;
           const npy = gz * noiseScale + seedZ;
 
-          // Domain warping: feed one FBM into another → organic swirls
           const q0 = _fbm(npx, npy, 5);
           const q1 = _fbm(npx + 5.2, npy + 1.3, 5);
           const warped = _fbm(npx + 3.5 * q0, npy + 3.5 * q1, 5);
 
-          // Cloud shape: smoothstep threshold creates distinct bright/dark regions
-          // Low threshold = more cloud coverage, high = more voids
-          // Scale threshold by density — dense regions have more cloud, sparse have more void
-          const densityNorm = Math.min(1, brightness * 3);
-          const cloudThreshLow = 0.15 + (1 - densityNorm) * 0.25; // sparse = higher threshold = less cloud
-          const cloudThreshHigh = cloudThreshLow + 0.35;
-          let cloud = _smoothstep(cloudThreshLow, cloudThreshHigh, warped);
+          // Cloud shape: smoothstep creates bright clouds / dark voids
+          // Dense regions → low threshold → more cloud
+          // Sparse regions → high threshold → more void
+          const cloudCoverage = Math.min(1, bright * 2.5);
+          const lo = 0.1 + (1 - cloudCoverage) * 0.35;
+          const hi = lo + 0.3;
+          const cloud = _smoothstep(lo, hi, warped);
 
-          // Core stays smooth and bright (no dark voids in the bulge)
-          const coreBlend = R < 1 ? 1 : R < 3 ? 1 - (R - 1) / 2 : 0;
-          cloud = cloud * (1 - coreBlend) + coreBlend;
+          // Final alpha
+          const alpha = bright * cloud * layerOpacity;
+          if (alpha < 0.001) continue;
 
-          // ── Dust lane absorption ──
-          if (dustStrength > 0 && R > 3) {
-            const theta = Math.atan2(gz, gx);
-            const dustStr = this._dustLane(R, theta);
-            const dustNoise = _fbm(gx * 1.5 + 77, gz * 1.5 + 77);
-            const dustAmt = dustStr * Math.max(0, (dustNoise - 0.25) / 0.35);
-            cloud *= 1 - Math.min(dustAmt * dustStrength, 0.85);
-          }
-
-          // ── Final alpha: brightness × cloud shape × layer opacity ──
-          const alpha = brightness * cloud * layerOpacity;
-          if (alpha < 0.002) continue; // skip transparent pixels
-
-          // Premultiplied alpha (additive compositing)
+          // Premultiplied color (additive)
           const idx = i * 4;
-          imgData.data[idx]     = Math.min(255, Math.round(cr * alpha * 255));
-          imgData.data[idx + 1] = Math.min(255, Math.round(cg * alpha * 255));
-          imgData.data[idx + 2] = Math.min(255, Math.round(cb * alpha * 255));
+          imgData.data[idx]     = Math.min(255, Math.round(baseColor[0] * alpha * 255));
+          imgData.data[idx + 1] = Math.min(255, Math.round(baseColor[1] * alpha * 255));
+          imgData.data[idx + 2] = Math.min(255, Math.round(baseColor[2] * alpha * 255));
           imgData.data[idx + 3] = Math.round(Math.min(1, alpha) * 255);
         }
       }
 
-      // Composite this layer additively onto the canvas
+      // Composite additively
       const layerCanvas = document.createElement('canvas');
       layerCanvas.width = RES;
       layerCanvas.height = RES;
-      const layerCtx = layerCanvas.getContext('2d');
-      layerCtx.putImageData(imgData, 0, 0);
-
-      // Use 'lighter' composite mode = additive blending (like THREE.AdditiveBlending)
+      layerCanvas.getContext('2d').putImageData(imgData, 0, 0);
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(layerCanvas, 0, 0);
     }
 
-    ctx.globalCompositeOperation = 'source-over'; // reset
+    ctx.globalCompositeOperation = 'source-over';
     return canvas;
   }
 
