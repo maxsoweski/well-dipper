@@ -9,7 +9,7 @@ import {
 } from '../core/ScaleConstants.js';
 import {
   deriveFormation, computeMigration, detectResonances, snapToResonances,
-  stellarEvolution, binaryStabilityLimit, circumbinaryHZ,
+  stellarEvolution, mainSequenceLifetime, binaryStabilityLimit, circumbinaryHZ,
   shouldBeltExist, shouldOuterBeltExist, kirkwoodGaps,
   beltCompositionZones, lagrangePoints,
 } from './PhysicsEngine.js';
@@ -92,9 +92,21 @@ export class StarSystemGenerator {
     // Map evolved hash grid types to their base types for system generation.
     // The hash grid uses Kg/Gg/Mg for evolved giants (same spectral color,
     // much brighter). StarSystemGenerator only knows O/B/A/F/G/K/M.
+    // Track whether this was an evolved type — it affects age derivation.
+    // Map non-standard types to their closest STAR_PROPERTIES equivalent.
+    // Evolved giants → base type. Unusual types (Wolf-Rayet, Carbon, S-type) → nearest match.
     const EVOLVED_TYPE_MAP = { 'Kg': 'K', 'Gg': 'G', 'Mg': 'M' };
-    if (EVOLVED_TYPE_MAP[starType]) {
+    const UNUSUAL_TYPE_MAP = { 'W': 'O', 'C': 'M', 'S': 'K' }; // W→O (hot massive), C→M (cool giant), S→K (cool giant)
+    const wasEvolvedType = EVOLVED_TYPE_MAP[starType] !== undefined;
+    if (wasEvolvedType) {
       starType = EVOLVED_TYPE_MAP[starType];
+    } else if (UNUSUAL_TYPE_MAP[starType]) {
+      starType = UNUSUAL_TYPE_MAP[starType];
+    }
+    // Final safety: if type is still unknown, fall back to G (solar-like)
+    if (!this.STAR_PROPERTIES[starType]) {
+      console.warn(`[SSG] Unknown star type "${starType}", falling back to G`);
+      starType = 'G';
     }
     const props = this.STAR_PROPERTIES[starType];
     const starVariation = rng.range(0.85, 1.15);
@@ -169,9 +181,24 @@ export class StarSystemGenerator {
       ? galaxyContext.metallicity + rng.gaussian(0, 0.05)  // position-derived + small scatter
       : rng.gaussianClamped(0.0, 0.2, -1.0, 0.5);         // random fallback
 
-    const ageGyr = galaxyContext
-      ? Math.max(0.01, galaxyContext.age + rng.gaussian(0, 0.3))  // position-derived + scatter
-      : rng.gaussianClamped(4.5, 2.5, 0.1, 12.0);                // random fallback
+    // Age derivation: the hash grid type implicitly constrains the age.
+    // A living star (O/B/A/F/G/K/M) must be younger than its MS lifetime.
+    // An evolved star (Kg/Gg/Mg) must be older than its base type's MS lifetime.
+    // This ensures the stellar evolution function produces consistent results.
+    const msLifetime = mainSequenceLifetime(starType, radiusSolarVaried);
+    let ageGyr;
+    if (!galaxyContext) {
+      ageGyr = rng.gaussianClamped(4.5, 2.5, 0.1, 12.0); // random fallback (screensaver)
+    } else if (wasEvolvedType) {
+      // Evolved: age must exceed MS lifetime. Use region age but floor to MS lifetime.
+      const regionAge = Math.max(0.01, galaxyContext.age + rng.gaussian(0, 0.3));
+      ageGyr = Math.max(msLifetime * 1.1, regionAge);
+    } else {
+      // Living star: age must be within MS lifetime.
+      // Use region age but cap to MS lifetime so stellar evolution says "main sequence."
+      const regionAge = Math.max(0.01, galaxyContext.age + rng.gaussian(0, 0.3));
+      ageGyr = Math.min(regionAge, msLifetime * 0.95);
+    }
 
     // Star mass estimate (rough main-sequence M-R relation)
     const starMassSolar = Math.pow(radiusSolarVaried, 1.25);
