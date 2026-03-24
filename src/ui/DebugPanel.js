@@ -404,6 +404,24 @@ export class DebugPanel {
     }
     html += '</div></div>';
 
+    // ── Glow Test (position-only, no starfield regen) ──
+    html += '<div class="debug-section"><h3>GLOW VIEW TEST</h3>';
+    html += '<div class="debug-btn-grid">';
+    const glowPositions = [
+      { id: 'glow-solar', label: 'Sol', pos: { x: 8.0, y: 0.025, z: 0.0 } },
+      { id: 'glow-above', label: 'Above (5 kpc)', pos: { x: 0, y: 5, z: 0 } },
+      { id: 'glow-above-sol', label: 'Above Sol', pos: { x: 8, y: 5, z: 0 } },
+      { id: 'glow-center', label: 'Center', pos: { x: 0, y: 0, z: 0 } },
+      { id: 'glow-edge', label: 'Edge (R=15)', pos: { x: 15, y: 0, z: 0 } },
+      { id: 'glow-far', label: 'Far above (10 kpc)', pos: { x: 0, y: 10, z: 0 } },
+      { id: 'glow-arm', label: 'In Perseus arm', pos: { x: -8, y: 0, z: -1 } },
+      { id: 'glow-interarm', label: 'Inter-arm', pos: { x: 5, y: 0, z: 5 } },
+    ];
+    for (const p of glowPositions) {
+      html += `<button class="debug-btn" data-glow="${p.id}">${p.label}</button>`;
+    }
+    html += '</div></div>';
+
     // ── Find Nearest ──
     html += '<div class="debug-section"><h3>FIND NEAREST</h3>';
     html += '<div class="debug-btn-grid">';
@@ -492,6 +510,28 @@ export class DebugPanel {
           this._spawnCallbacks.teleportToPosition(pos.pos, pos.label);
           // Flash the button to confirm
           btn.style.background = 'rgba(0, 220, 130, 0.3)';
+          setTimeout(() => { btn.style.background = ''; }, 300);
+        }
+      });
+    }
+
+    // Glow test buttons — only change glow shader position, no starfield regen
+    const glowPosData = {
+      'glow-solar': { x: 8.0, y: 0.025, z: 0.0 },
+      'glow-above': { x: 0, y: 5, z: 0 },
+      'glow-above-sol': { x: 8, y: 5, z: 0 },
+      'glow-center': { x: 0, y: 0, z: 0 },
+      'glow-edge': { x: 15, y: 0, z: 0 },
+      'glow-far': { x: 0, y: 10, z: 0 },
+      'glow-arm': { x: -8, y: 0, z: -1 },
+      'glow-interarm': { x: 5, y: 0, z: 5 },
+    };
+    for (const btn of container.querySelectorAll('[data-glow]')) {
+      btn.addEventListener('click', () => {
+        const pos = glowPosData[btn.dataset.glow];
+        if (pos && window._glowLayer) {
+          window._glowLayer.debugSetPosition(pos.x, pos.y, pos.z);
+          btn.style.background = 'rgba(220, 180, 0, 0.3)';
           setTimeout(() => { btn.style.background = ''; }, 300);
         }
       });

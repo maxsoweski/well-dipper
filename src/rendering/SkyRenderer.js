@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GalaxyGlowLayer } from './sky/GalaxyGlowLayer.js';
+import { ProceduralGlowLayer } from './sky/ProceduralGlowLayer.js';
 import { SkyFeatureLayer } from './sky/SkyFeatureLayer.js';
 import { StarfieldLayer } from './sky/StarfieldLayer.js';
 import { GlowTextureManager } from './sky/GlowTextureManager.js';
@@ -82,6 +83,11 @@ export class SkyRenderer {
   prepareForPosition(playerPos) {
     this._playerPos = playerPos;
 
+    // Update procedural glow with new position (if already activated)
+    if (this._glowLayer && this._glowLayer.setPlayerPosition) {
+      this._glowLayer.setPlayerPosition(playerPos);
+    }
+
     if (this._galacticMap && this._starfieldGenerator) {
       this._pendingData = this._starfieldGenerator.generate(
         this._galacticMap,
@@ -108,18 +114,18 @@ export class SkyRenderer {
     const data = this._pendingData;
 
     if (data) {
-      // Galaxy-aware mode — texture-mapped glow from pre-computed panoramas
-      this._glowLayer = new GalaxyGlowLayer(
+      // Galaxy-aware mode — procedural glow from real-time density integration
+      this._glowLayer = new ProceduralGlowLayer(
         this._glowRadius,
         this._brightnessConfig.glow,
+        this._galacticMap,
       );
-
-      // Load the nearest glow panorama for this position
-      this._glowManager.loadForPosition(data.playerPos).then(texture => {
-        if (this._glowLayer) {
-          this._glowLayer.setTexture(texture);
-        }
-      });
+      if (this._playerPos) {
+        this._glowLayer.setPlayerPosition(this._playerPos);
+      }
+      // Debug: expose glow layer for console testing
+      // Usage: window._glowLayer.debugSetPosition(0, 5, 0) — view from above
+      window._glowLayer = this._glowLayer;
 
       // Sky features (nebulae, clusters, etc.)
       this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);
