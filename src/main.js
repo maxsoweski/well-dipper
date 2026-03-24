@@ -14,7 +14,8 @@ import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
 import { GravityWellMap } from './ui/GravityWellMap.js';
-import { CameraController } from './camera/CameraController.js';
+// import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
+import { ShipCameraSystem } from './camera/ShipCameraSystem.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
@@ -66,7 +67,7 @@ const retroRenderer = new RetroRenderer(canvas, scene, camera);
 retroRenderer.setColorPalette(settings.get('colorPalette'));
 
 // ── Camera Controller ──
-const cameraController = new CameraController(camera, canvas);
+const cameraController = new ShipCameraSystem(camera, canvas);
 // Debug access for Playwright/console
 window._cam = camera;
 window._cc = cameraController;
@@ -130,6 +131,7 @@ const realFeatureCatalog = new RealFeatureCatalog();
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
   debugPanel.setRealStarCatalog(realStarCatalog);
+  if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
 });
 
@@ -208,9 +210,14 @@ autoNav.onTourComplete = () => {
   if (system && system._navigable) return;
 
   autoSelectWarpTarget();
-  setTimeout(() => {
-    beginWarpTurn();
-  }, 1500);
+  // Only begin warp if we actually found a target star
+  if (warpTarget.navStarData || warpTarget.featureData || warpTarget.galaxyData) {
+    setTimeout(() => {
+      beginWarpTurn();
+    }, 1500);
+  } else {
+    console.warn('[WARP] autoSelectWarpTarget found no star — skipping auto-warp');
+  }
 };
 
 // Deep sky contemplation: camera stays fixed, timer triggers next warp.
@@ -225,6 +232,7 @@ const _heldKeys = new Set();
 
 // ── Title screen ──
 let titleScreenActive = true;
+const SKIP_TITLE_SCREEN = true; // TESTING: auto-dismiss title, start in star system directly
 let _titleAutoTimer = null;
 
 function dismissTitleScreen() {
@@ -289,6 +297,7 @@ function toggleNavComputer() {
     if (!_navComputer) {
       const navCanvas = document.getElementById('nav-computer-canvas');
       _navComputer = new NavComputer(navCanvas, galacticMap);
+      if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
     }
     // Update player position and system name
     _navComputer.setPlayerPosition(
@@ -296,17 +305,107 @@ function toggleNavComputer() {
       null
     );
     _navComputer._currentSystemName = _currentSystemName || 'Unknown';
+
+    // Direction 2: Sky → Nav Computer
+    // If there's an active warp target, resolve its galactic position
+    // and pass it to the nav computer so all zoom levels can show it.
+    if (warpTarget.direction && galacticMap) {
+      const targetWorldPos = _resolveWarpTargetGalacticPos();
+      _navComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
+    } else {
+      _navComputer.setExternalTarget(null);
+    }
+
     // Activate key listeners + start render loop
     _navComputer.activate();
     _navRenderLoop();
   } else {
+    // Direction 1: Nav Computer → Warp
+    // If the user selected a star in the nav computer, set it as the warp target.
+    if (_navComputer) {
+      const navStar = _navComputer.getSelectedStar();
+      if (navStar) {
+        _setWarpTargetFromNavStar(navStar);
+      }
+      _navComputer.deactivate();
+    }
     el.style.display = 'none';
-    if (_navComputer) _navComputer.deactivate();
     if (_navAnimFrame) {
       cancelAnimationFrame(_navAnimFrame);
       _navAnimFrame = null;
     }
   }
+}
+
+/**
+ * Resolve the current warp target direction to a galactic position.
+ * Used to pass the target to the nav computer for display.
+ * Same search logic as onPrepareSystem's direction-based fallback.
+ */
+function _resolveWarpTargetGalacticPos() {
+  const pos = playerGalacticPos || { x: 8, y: 0, z: 0 };
+
+  // First try: if we have a starIndex, resolve via skyRenderer
+  if (warpTarget.starIndex >= 0) {
+    const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
+    if (entry?.starData && entry.starData.worldX !== undefined) {
+      return { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ };
+    }
+  }
+
+  // Check navStarData (nav computer selection — has exact position)
+  if (warpTarget.navStarData) {
+    return {
+      x: warpTarget.navStarData.worldX,
+      y: warpTarget.navStarData.worldY,
+      z: warpTarget.navStarData.worldZ,
+    };
+  }
+
+  // No direction-based fallback needed — every star is a real hash grid star
+  console.warn('[WARP] _resolveWarpTargetGalacticPos: no starIndex or navStarData');
+  return null;
+}
+
+/**
+ * Set a warp target from a nav computer star selection.
+ * Computes the sky direction from player → star and sets up the warp target
+ * so it behaves identically to clicking a star in the sky.
+ */
+function _setWarpTargetFromNavStar(navStar) {
+  const pos = playerGalacticPos || { x: 8, y: 0, z: 0 };
+  const dx = navStar.worldX - pos.x;
+  const dy = navStar.worldY - pos.y;
+  const dz = navStar.worldZ - pos.z;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (len < 1e-10) return; // star is at player position
+
+  // Compute direction vector (same space as camera directions)
+  const direction = new THREE.Vector3(dx / len, dy / len, dz / len);
+
+  // Set up warp target — attach the exact nav star data so warp resolution
+  // can go directly to this star without a direction-based fallback search.
+  // The fallback search uses HashGridStarfield.findStarsInRadius (same hash
+  // grid the nav computer queries), so direct attachment avoids the search.
+  soundEngine.play('warpTarget');
+  warpTarget.direction = direction;
+  warpTarget.starIndex = -1;  // no sky starfield index
+  warpTarget.destType = null;  // normal star system
+  warpTarget.featureData = null;
+  warpTarget.galaxyData = null;
+  warpTarget.navStarData = {    // exact star from nav computer's hash grid query
+    worldX: navStar.worldX,
+    worldY: navStar.worldY,
+    worldZ: navStar.worldZ,
+    seed: navStar.seed,
+  };
+  warpTarget.name = navStar.name || generateSystemName(new SeededRandom(`warp-nav-${navStar.seed}`));
+  warpTarget.blinkTimer = 0;
+  warpTarget.blinkOn = true;
+  warpTarget.turning = false;
+
+  // Show the target name in the HUD
+  bodyInfo.showWarpTarget(warpTarget.name);
 }
 
 function _navRenderLoop() {
@@ -780,33 +879,27 @@ warpEffect.onPrepareSystem = () => {
     let galaxyContext = null;
     let resolvedStar = null;
 
-    if (galacticMap && warpTarget.starIndex >= 0) {
-      // Try to resolve the clicked point to a specific GalacticMap star
+    // Priority 1: Nav computer selected a specific star — use its exact position + seed
+    if (warpTarget.navStarData) {
+      resolvedStar = warpTarget.navStarData;
+      console.log(`[WARP] Priority 1 (navStarData): Y=${resolvedStar.worldY?.toFixed(4)}, seed=${resolvedStar.seed}`);
+    }
+
+    // Priority 2: Sky starfield click — resolve via index
+    if (!resolvedStar && galacticMap && warpTarget.starIndex >= 0) {
       const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
       if (entry?.starData && entry.starData.worldX !== undefined) {
-        // Direct resolution: we know exactly which star was clicked
         resolvedStar = entry.starData;
       }
     }
 
-    if (!resolvedStar && galacticMap && warpTarget.direction) {
-      // Fallback: direction-based search (for background stars or when
-      // the clicked point doesn't map to a real GalacticMap star)
-      const nearby = galacticMap.findNearestStars(playerGalacticPos, 500);
-      let bestStar = null;
-      let bestDot = -1;
-      for (const star of nearby) {
-        if (star.distSq < 0.001) continue;
-        const dx = star.worldX - playerGalacticPos.x;
-        const dy = star.worldY - playerGalacticPos.y;
-        const dz = star.worldZ - playerGalacticPos.z;
-        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        const dot = (dx / len) * warpTarget.direction.x
-                  + (dy / len) * warpTarget.direction.y
-                  + (dz / len) * warpTarget.direction.z;
-        if (dot > bestDot) { bestDot = dot; bestStar = star; }
-      }
-      resolvedStar = bestStar;
+    // No direction-based fallback needed: every sky star has a starIndex
+    // (Priority 2) and every nav star has navStarData (Priority 1).
+    // The old direction-based search was a legacy holdover from when the
+    // sky had fake fill stars. With the hash grid, every point of light
+    // is a real star with exact coordinates.
+    if (!resolvedStar) {
+      console.warn('[WARP] No star resolved — neither navStarData nor starIndex matched. This should not happen.');
     }
 
     if (resolvedStar) {
@@ -815,6 +908,7 @@ warpEffect.onPrepareSystem = () => {
       galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
       // Use the resolved star's seed for deterministic system generation
       seed = String(resolvedStar.seed);
+      console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
     pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
@@ -922,7 +1016,21 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
 }
 
 // ── Title screen: spawn a random deep sky object as the backdrop ──
-{
+if (SKIP_TITLE_SCREEN) {
+  // TESTING: Start directly in a star system at the solar neighborhood
+  titleScreenActive = false;
+  const el = document.getElementById('title-screen');
+  if (el) el.style.display = 'none';
+  const startCtx = galacticMap ? galacticMap.deriveGalaxyContext(playerGalacticPos) : null;
+  const startData = StarSystemGenerator.generate('solar-test', startCtx);
+  startData._destType = 'star-system';
+  spawnSystem({ forWarp: false, systemData: startData });
+  if (galacticMap) {
+    skyRenderer.prepareForPosition(playerGalacticPos);
+    skyRenderer.activate();
+    skyRenderer.update(camera, 0);
+  }
+} else {
   const titleSeed = `title-${Date.now()}`;
   const titleRng = new SeededRandom(titleSeed);
   // Only use distant-view types so the object is visible as a whole showcase.
@@ -973,9 +1081,14 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
 
 
   // Auto-dismiss title screen after configured timeout
-  _titleAutoTimer = setTimeout(() => {
-    if (titleScreenActive) dismissTitleScreen();
-  }, settings.get('titleAutoDismiss') * 1000);
+  if (SKIP_TITLE_SCREEN) {
+    // TESTING: dismiss immediately, skip to star system
+    setTimeout(() => dismissTitleScreen(), 100);
+  } else {
+    _titleAutoTimer = setTimeout(() => {
+      if (titleScreenActive) dismissTitleScreen();
+    }, settings.get('titleAutoDismiss') * 1000);
+  }
 
   // Mobile fullscreen button on title screen
   // Must use touchend (not click) — click fires too late on mobile, canvas touchstart
@@ -992,7 +1105,7 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
       dismissTitleScreen();
     });
   }
-}
+} // end if/else SKIP_TITLE_SCREEN
 
 /**
  * Hide the current system from the scene during warp FOLD.
@@ -1123,6 +1236,8 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
 
   // Deep sky objects get their own spawn path
   if (DestinationPicker.isDeepSky(destType)) {
+    // No gravity system for deep sky — fall back to orbit mode
+    cameraController.clearGravity();
     if (DestinationPicker.isNavigable(destType)) {
       // Navigable deep sky: stars are clickable/orbitable — normal camera behavior
       cameraController.forceFreeLook = false;
@@ -1380,6 +1495,18 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     binarySeparationMap: systemData.binarySeparation, // map-unit sep for gravity well
     names: systemNames, // generated names for system/star/planets/moons
   };
+
+  // ── Initialize gravity-driven camera system ──
+  // Build body mesh references for GravityField
+  {
+    const bodyMeshes = {
+      star: star.mesh,
+      star2: star2 ? star2.mesh : undefined,
+      planets: planets.map(e => e.planet.mesh),
+      moons: planets.map(e => e.moons.map(m => m.mesh)),
+    };
+    cameraController.initGravity(systemData, bodyMeshes);
+  }
 
   // ── Debug panel update ──
   debugPanel.setSystem(system, systemData);
@@ -1864,7 +1991,7 @@ debugPanel.setSpawnCallbacks({
     skyRenderer.activate();
     skyRenderer.update(camera, 0);
     // Generate a system at this position
-    const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
+    const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.5, 1);
     const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
     const sysData = StarSystemGenerator.generate(starSeed, ctx);
     sysData._destType = 'star-system';
@@ -1913,7 +2040,7 @@ debugPanel.setSpawnCallbacks({
           skyRenderer.update(camera, 0);
           // Generate a system at this position
           const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
-          const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
+          const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.5, 1);
           const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'feat-debug';
           const sysData = StarSystemGenerator.generate(starSeed, ctx);
           sysData._destType = 'star-system';
@@ -1933,13 +2060,14 @@ debugPanel.setSpawnCallbacks({
     // Rare types (neutron-star, black-hole) need a wider search.
     const isRare = targetType === 'neutron-star' || targetType === 'black-hole';
     const searchCount = isRare ? 200 : 50;
-    const nearby = galacticMap.findNearestStars(playerGalacticPos, searchCount);
+    const searchRadius = isRare ? 2.0 : 1.0;
+    const nearby = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, searchRadius, searchCount);
     const maxAttempts = Math.min(nearby.length, searchCount);
     let searched = 0;
 
     for (let i = 0; i < maxAttempts; i++) {
       const star = nearby[i];
-      if (star.distSq < 0.001) continue; // skip self
+      if (star.dist < 0.001) continue; // skip self
       searched++;
 
       const ctx = galacticMap.deriveGalaxyContext({
@@ -2000,7 +2128,7 @@ debugPanel.setSpawnCallbacks({
           cameraController.focusOn(system.star.mesh.position, starR * 5);
         }
 
-        const dist = Math.sqrt(star.distSq).toFixed(3);
+        const dist = star.dist.toFixed(3);
         const msg = `Found ${targetType} at ${dist} kpc (searched ${searched} systems)`;
         console.log(`Debug find: ${msg}`);
         return { found: true, message: msg };
@@ -4095,8 +4223,14 @@ function trySelectWarpTarget(rayDir) {
   warpTarget.starIndex = result.index;
   warpTarget.destType = null; // default: normal star system
 
-  // Check what this starfield point represents
+  // Resolve star data NOW (before starfield regeneration invalidates the index)
   const entry = skyRenderer.getEntryForIndex(result.index);
+  if (entry?.starData) {
+    warpTarget.navStarData = entry.starData;
+  } else {
+    warpTarget.navStarData = null;
+  }
+
   if (entry?.isFeature) {
     // Clicked a galactic feature — route to a star inside it
     warpTarget.destType = `feature:${entry.featureType}`;
@@ -4142,8 +4276,15 @@ function autoSelectWarpTarget() {
   warpTarget.featureData = null;
   warpTarget.galaxyData = null;
 
-  // Check what this point represents (same logic as trySelectWarpTarget)
+  // Resolve star data NOW (before starfield regeneration invalidates the index).
+  // Store as navStarData so warp resolution uses it directly.
   const entry = skyRenderer.getEntryForIndex(result.index);
+  if (entry?.starData) {
+    warpTarget.navStarData = entry.starData;
+  } else {
+    warpTarget.navStarData = null;
+  }
+
   if (entry?.isFeature) {
     warpTarget.destType = `feature:${entry.featureType}`;
     warpTarget.featureData = entry.featureData;

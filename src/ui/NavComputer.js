@@ -50,12 +50,26 @@ export class NavComputer {
     this._localRotY = 0.3;
     this._hoveredLocalStar = null;
 
+    // ── On-demand column loading ──
+    // Only loads stars within the visible Y range. Expands as user scrolls.
+    this._loadedYMin = null; // lowest Y (kpc) we've queried
+    this._loadedYMax = null; // highest Y (kpc) we've queried
+    this._loadedSeen = new Set(); // dedup keys for stars already in _localStars
+    this._loadBlockCenter = null; // block center for current column
+    this._loadBlockHalf = null;   // block half-size for current column
+    this._bgLoadTimer = null;     // background expansion timer
+    this._estimatedBlockStars = null; // estimated total stars in full column
+
     // ── Player ──
     this._playerX = 8;
     this._playerY = 0;
     this._playerZ = 0;
     this._currentSystemName = '';
     this._currentSector = null;
+
+    // ── Warp target bridge ──
+    this._selectedNavStar = null;   // star selected BY user in local view { wx, wy, wz, seed, name }
+    this._externalTarget = null;    // warp target SET from outside { x, y, z } in galactic kpc
 
     // ── Mouse ──
     this._mouseX = 0;
@@ -73,13 +87,21 @@ export class NavComputer {
     this._mapCacheMax = 8;
     this._mapRes = 512;
 
+    // ── Real star catalog (set via setRealStarCatalog) ──
+    this._realStarCatalog = null;
+
     // ── RNG ──
     this._makeRng = (seed) => {
       const fn = alea(seed);
       return {
-        float: () => fn(), int: (max) => Math.floor(fn() * max),
+        float: () => fn(),
+        int: (minOrMax, max) => {
+          if (max === undefined) return Math.floor(fn() * minOrMax); // int(max) → [0, max)
+          return minOrMax + Math.floor(fn() * (max - minOrMax + 1)); // int(min, max) → [min, max] inclusive
+        },
         pick: (arr) => arr[Math.floor(fn() * arr.length)],
         bool: (p) => fn() < (p || 0.5), chance: (p) => fn() < p,
+        child: (label) => this._makeRng(seed + ':' + label),
       };
     };
 
@@ -135,22 +157,84 @@ export class NavComputer {
     document.removeEventListener('keydown', this._onKeyDown, true);
     document.removeEventListener('keyup', this._onKeyUp, true);
     this._heldKeys.clear();
+    this._resetColumnLoad();
+  }
+
+  /**
+   * Called by main.js when opening the nav computer with an existing warp target.
+   * Stores the target's galactic position so all zoom levels can draw an indicator.
+   * @param {{ x: number, y: number, z: number }} worldPos — galactic coords in kpc
+   * @param {string} [name] — display name of the target
+   */
+  setRealStarCatalog(catalog) {
+    this._realStarCatalog = catalog;
+  }
+
+  setExternalTarget(worldPos, name) {
+    if (!worldPos) {
+      this._externalTarget = null;
+      return;
+    }
+    this._externalTarget = { x: worldPos.x, y: worldPos.y || 0, z: worldPos.z, name: name || '' };
+    // If a local star matches this position, auto-select it
+    this._tryAutoSelectExternalTarget();
+  }
+
+  /**
+   * Returns the star selected inside the nav computer's local view.
+   * main.js uses this to set a warp target when the nav computer closes.
+   * @returns {{ worldX: number, worldY: number, worldZ: number, seed: number, name: string }|null}
+   */
+  getSelectedStar() {
+    if (!this._selectedNavStar) return null;
+    return {
+      worldX: this._selectedNavStar.wx,
+      worldY: this._selectedNavStar.wy,
+      worldZ: this._selectedNavStar.wz,
+      seed: this._selectedNavStar.seed,
+      name: this._selectedNavStar.name,
+    };
+  }
+
+  /**
+   * If local stars are loaded and an external target is set,
+   * find the matching star and auto-select it.
+   */
+  _tryAutoSelectExternalTarget() {
+    if (!this._externalTarget || this._localStars.length === 0) return;
+    const tx = this._externalTarget.x;
+    const ty = this._externalTarget.y;
+    const tz = this._externalTarget.z;
+    let bestStar = null;
+    let bestDist = Infinity;
+    for (const s of this._localStars) {
+      const dx = s.wx - tx, dy = s.wy - ty, dz = s.wz - tz;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestDist) { bestDist = d; bestStar = s; }
+    }
+    // Match within 1 pc (0.001 kpc)
+    if (bestStar && bestDist < 0.001 * 0.001) {
+      this._selectedNavStar = bestStar;
+    }
   }
 
   setPlayerPosition(galacticPos) {
     this._playerX = galacticPos.x;
     this._playerY = galacticPos.y || 0;
     this._playerZ = galacticPos.z;
+    console.log(`[NAV] setPlayerPosition: Y=${galacticPos.y?.toFixed(4) || '0'} → _playerY=${this._playerY.toFixed(4)}`);
     this._currentSector = this._sectors.getSectorAt({ x: this._playerX, z: this._playerZ });
 
-    // Center local view on player's XZ position but at the galactic plane (y=0)
-    this._localCenter = { x: this._playerX, y: 0, z: this._playerZ };
+    // Center local view on player's actual 3D position (including height above plane)
+    this._localCenter = { x: this._playerX, y: this._playerY, z: this._playerZ };
     // Cube size based on local density
     this._localCubeSize = Math.max(0.003, this._computeTileSize(this._playerX, this._playerZ, 500));
     this._localRadius = Math.min(this._localCubeSize, this._localCubeSize / 3);
     // Fixed grid cell size — 1 pc (0.001 kpc), like tiles on a floor
     this._localGridCell = 0.001;
     this._localStars = [];
+    this._resetColumnLoad();
+    this._selectedNavStar = null; // clear any previous selection
 
     // Set up the view stack so all levels are centered on player
     this._setupViewStackForPlayer();
@@ -228,6 +312,8 @@ export class NavComputer {
       if (this._heldKeys.has('KeyR')) { this._localCenter.y += panSpeed; }
       if (this._heldKeys.has('KeyF')) { this._localCenter.y -= panSpeed; }
 
+      // Full column is queried once (all slices) — no re-query needed on Y scroll
+
       if (dx !== 0 || dz !== 0) {
         this._localCenter.x += dx;
         this._localCenter.z += dz;
@@ -267,6 +353,7 @@ export class NavComputer {
       this._applyLevelView();
       this._hoveredTile = null;
       this._localStars = [];
+      this._resetColumnLoad();
       return true;
     }
     return false;
@@ -441,6 +528,19 @@ export class NavComputer {
       // Arrow pointing toward player
       this._drawPlayerArrow(ctx, ox, oy, drawSize, px, pz);
     }
+
+    // External warp target indicator (green diamond)
+    const target = this._externalTarget;
+    if (target) {
+      const tx = ox + (target.x - cx + ext) / viewSize * drawSize;
+      const tz = oy + (-(target.z - cz) + ext) / viewSize * drawSize;
+      if (tx >= ox - 10 && tx <= ox + drawSize + 10 && tz >= oy - 10 && tz <= oy + drawSize + 10) {
+        this._drawTargetMarker(ctx, tx, tz);
+      } else {
+        // Arrow pointing toward target
+        this._drawTargetArrow(ctx, ox, oy, drawSize, tx, tz);
+      }
+    }
   }
 
   _renderDensityBg(ctx, ox, oy, drawSize, cx, cz, ext) {
@@ -470,11 +570,24 @@ export class NavComputer {
     // Scale-dependent post-processing options
     console.log('NavComputer: rendering luminosity map at (' + cx.toFixed(1) + ',' + cz.toFixed(1) + ') ext=' + ext.toFixed(2) + ' key=' + key);
     const t0 = performance.now();
+    // Scale-dependent lighting: at full galaxy view, use defaults.
+    // At sector/district zoom, boost arms and disk so local detail is visible.
+    const compOverrides = {};
+    if (ext < 10) {
+      // Zoomed in — boost faint components so local structure is visible
+      compOverrides.arms = { gain: 5.0, stretch: 800 };
+      compOverrides.disk = { gain: 4.0, stretch: 600 };
+    }
+    if (ext < 2) {
+      // Deep zoom — maximize local contrast
+      compOverrides.arms = { gain: 8.0, stretch: 1200 };
+      compOverrides.disk = { gain: 6.0, stretch: 1000 };
+      compOverrides.core = { gain: 0.5 };  // dim core to avoid washing out local detail
+    }
     const canvas = this._luminosityRenderer.render(cx, cz, ext, this._mapRes, {
       dustStrength: ext > 10 ? 0.5 : ext > 2 ? 0.3 : 0.1,
       noiseStrength: ext > 10 ? 0.4 : ext > 2 ? 0.6 : 0.8,
-      gamma: 0.5,
-      stretch: 500,
+      components: compOverrides,
     });
 
     console.log('NavComputer: rendered in', (performance.now() - t0).toFixed(0), 'ms');
@@ -601,31 +714,11 @@ export class NavComputer {
     const rad = this._localRadius;
     const drawH = h - 50; // leave room for tabs
 
-    // Query ALL stars in the full block column (once, cached)
-    // XZ bounded by block, Y extends to full disk height
-    if (this._localStars.length === 0) {
-      const blockCenter = this._viewStack[3]?.center || { x: cx, z: cz };
-      const blockHalf = this._localCubeSize || 0.005;
-      // Use a tall Y extent to capture the full disk column
-      const yHalf = 0.3; // ±300 pc — captures essentially all disk stars
-      const pos = { x: blockCenter.x, y: 0, z: blockCenter.z };
-      const raw = HashGridStarfield.findStarsInColumn(this._gm, pos, blockHalf, yHalf, 50000);
-      const spectralColors = {
-        O: '#94b4ff', B: '#b0c4ff', A: '#d0d8ff', F: '#fff5e0',
-        G: '#ffefb0', K: '#ffc480', M: '#ff9664',
-        Kg: '#ffa050', Gg: '#ffd880', Mg: '#ff6030',
-      };
-      this._localStars = raw.map(s => {
-        let name = '';
-        try { name = generateSystemName(this._makeRng(s.seed)); } catch {}
-        return {
-          wx: s.worldX, wy: s.worldY, wz: s.worldZ,
-          name, spectral: s.type, color: spectralColors[s.type] || '#ff9664',
-          seed: s.seed, dist: s.dist,
-          distPc: (s.dist * 1000).toFixed(0),
-        };
-      });
-    }
+    // On-demand loading: query stars for the visible Y range + margin.
+    // Expands automatically as the user scrolls with R/F.
+    const yWindowHalf = rad * 2; // matches render window below
+    this._ensureStarsLoaded(cx, cy, cz, yWindowHalf);
+
 
     // 3D projection — orbit around the block center, not the camera position.
     // The camera can WASD around within the block, but rotation always pivots
@@ -758,9 +851,8 @@ export class NavComputer {
       ctx.beginPath(); ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.stroke();
     }
 
-    // Y window: only render stars within a vertical band around current view center.
-    // This lets us have unlimited stars in the column without rendering them all.
-    const yWindowHalf = rad * 2; // render stars within ±2x view radius of center Y
+    // Y window: only render stars within the visible vertical band.
+    // yWindowHalf already computed above for the loading query.
     const viewCenterY = cy;
 
     // Filter to Y window, then project and sort
@@ -790,9 +882,35 @@ export class NavComputer {
       ctx.fillStyle = 'rgba(100, 180, 255, 0.2)';
       ctx.beginPath(); ctx.arc(planeP.x, planeP.y, 1.5, 0, Math.PI * 2); ctx.fill();
 
-      // Star
+      // Star — real named stars are slightly larger
+      const isSelected = this._selectedNavStar === star;
+      const baseRadius = star.isReal ? 4.5 : 3.5;
       ctx.fillStyle = star.color;
-      ctx.beginPath(); ctx.arc(starP.x, starP.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(starP.x, starP.y, isSelected ? baseRadius + 1 : baseRadius, 0, Math.PI * 2); ctx.fill();
+
+      // Real named stars: always show name label in gold/amber
+      if (star.isReal && star.name) {
+        ctx.font = '10px "DotGothic16", monospace';
+        ctx.fillStyle = '#ffc850'; // gold/amber
+        ctx.textAlign = 'left';
+        ctx.fillText(star.name, starP.x + baseRadius + 4, starP.y + 3);
+        // Subtle amber glow ring
+        ctx.strokeStyle = 'rgba(255, 200, 80, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(starP.x, starP.y, baseRadius + 2, 0, Math.PI * 2); ctx.stroke();
+      }
+
+      // Selected star: green highlight ring
+      if (isSelected) {
+        const pulse = 1 + Math.sin(Date.now() * 0.004) * 0.15;
+        ctx.strokeStyle = '#00ff80';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(starP.x, starP.y, 10 * pulse, 0, Math.PI * 2); ctx.stroke();
+        // Inner ring
+        ctx.strokeStyle = 'rgba(0, 255, 128, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(starP.x, starP.y, 6, 0, Math.PI * 2); ctx.stroke();
+      }
 
       // Hover check
       const dx = this._mouseX - starP.x, dy = this._mouseY - starP.y;
@@ -804,6 +922,19 @@ export class NavComputer {
     // Player marker
     const playerP = project(this._playerX, this._playerY, this._playerZ);
     this._drawPlayerMarker(ctx, playerP.x, playerP.y, 8);
+
+    // Selected star info banner (shown below HUD)
+    if (this._selectedNavStar) {
+      const s = this._selectedNavStar;
+      ctx.font = '11px "DotGothic16", monospace';
+      ctx.fillStyle = '#00ff80';
+      ctx.textAlign = 'center';
+      ctx.fillText('WARP TARGET', w / 2, drawH - 24);
+      ctx.font = '14px "DotGothic16", monospace';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(s.name || 'Unnamed', w / 2, drawH - 8);
+      ctx.textAlign = 'left';
+    }
 
     // Hover tooltip
     if (this._hoveredLocalStar) {
@@ -947,6 +1078,229 @@ export class NavComputer {
     ctx.textAlign = 'left';
   }
 
+  // ════════════════════════════════════════════════════
+  // ON-DEMAND COLUMN LOADING
+  // ════════════════════════════════════════════════════
+
+  static _SPECTRAL_COLORS = {
+    O: '#94b4ff', B: '#b0c4ff', A: '#d0d8ff', F: '#fff5e0',
+    G: '#ffefb0', K: '#ffc480', M: '#ff9664',
+    Kg: '#ffa050', Gg: '#ffd880', Mg: '#ff6030',
+  };
+
+  /**
+   * Ensure stars are loaded for the visible Y range around viewY ± yHalf.
+   * On first call, queries the visible range synchronously (fast, small window).
+   * Then schedules background expansion to pre-load above and below.
+   */
+  _ensureStarsLoaded(cx, cy, cz, yHalf) {
+    const blockCenter = this._viewStack[3]?.center || { x: cx, z: cz };
+    const blockHalf = this._localCubeSize || 0.005;
+
+    // If block changed (navigated to new block), reset everything
+    if (!this._loadBlockCenter ||
+        this._loadBlockCenter.x !== blockCenter.x ||
+        this._loadBlockCenter.z !== blockCenter.z) {
+      this._localStars = [];
+      this._loadedSeen = new Set();
+      this._loadedYMin = null;
+      this._loadedYMax = null;
+      this._loadBlockCenter = { ...blockCenter };
+      this._loadBlockHalf = blockHalf;
+      this._estimatedBlockStars = this._estimateBlockStarCount(blockCenter, blockHalf);
+      this._cancelBgExpand();
+    }
+
+    // Add margin so scrolling doesn't immediately need a new query
+    const margin = yHalf;
+    const needMin = cy - yHalf - margin;
+    const needMax = cy + yHalf + margin;
+
+    if (this._loadedYMin === null) {
+      // First load — query the visible range synchronously
+      this._queryYRange(needMin, needMax);
+      console.log(`[NAV] Initial load: ${this._localStars.length} stars (Y: ${(needMin * 1000).toFixed(0)} to ${(needMax * 1000).toFixed(0)} pc)`);
+      this._tryAutoSelectExternalTarget();
+      // Start background expansion
+      this._scheduleBgExpand();
+      return;
+    }
+
+    // Extend if the view has scrolled beyond loaded range
+    if (needMin < this._loadedYMin) {
+      this._queryYRange(needMin, this._loadedYMin);
+    }
+    if (needMax > this._loadedYMax) {
+      this._queryYRange(this._loadedYMax, needMax);
+    }
+  }
+
+  /**
+   * Query the hash grid for stars in a Y band and merge into _localStars.
+   * Updates _loadedYMin/_loadedYMax to track the total loaded range.
+   */
+  _queryYRange(yMin, yMax) {
+    const bc = this._loadBlockCenter;
+    const bh = this._loadBlockHalf;
+    const centerY = (yMin + yMax) / 2;
+    const halfY = (yMax - yMin) / 2;
+
+    if (halfY <= 0) return;
+
+    const stars = HashGridStarfield.findStarsInColumn(
+      this._gm, { x: bc.x, y: centerY, z: bc.z }, bh, halfY, 50000
+    );
+
+    for (const s of stars) {
+      const key = `${s.seed}-${s.worldX.toFixed(6)}`;
+      if (!this._loadedSeen.has(key)) {
+        this._loadedSeen.add(key);
+        let name = '';
+        try { name = generateSystemName(this._makeRng(s.seed)); } catch {}
+        this._localStars.push({
+          wx: s.worldX, wy: s.worldY, wz: s.worldZ,
+          name, spectral: s.type,
+          color: NavComputer._SPECTRAL_COLORS[s.type] || '#ff9664',
+          seed: s.seed, dist: s.dist,
+          distPc: (s.dist * 1000).toFixed(0),
+        });
+      }
+    }
+
+    // ── Real star overlay ──
+    // Check if any named real stars fall within this block volume.
+    // If a real star is near an existing hash-grid star (within 2 pc = 0.002 kpc),
+    // replace that star's name. Otherwise, add the real star as a new entry.
+    if (this._realStarCatalog && this._realStarCatalog.loaded) {
+      const realStars = this._realStarCatalog.findInVolume(
+        { x: bc.x, y: centerY, z: bc.z }, bh, halfY
+      );
+      const MATCH_DIST = 0.002; // 2 pc in kpc
+      for (const rs of realStars) {
+        if (!rs.name) continue; // skip unnamed catalog entries
+        const realKey = `real-${rs.name}`;
+        if (this._loadedSeen.has(realKey)) continue;
+        this._loadedSeen.add(realKey);
+
+        // Try to find the nearest hash-grid star to replace
+        let bestIdx = -1, bestDist = MATCH_DIST;
+        for (let i = 0; i < this._localStars.length; i++) {
+          const ls = this._localStars[i];
+          if (ls.isReal) continue; // don't match against other real stars
+          const dx = ls.wx - rs.x, dy = ls.wy - rs.y, dz = ls.wz - rs.z;
+          const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+
+        if (bestIdx >= 0) {
+          // Replace the hash-grid star's name with the real name
+          this._localStars[bestIdx].name = rs.name;
+          this._localStars[bestIdx].isReal = true;
+          if (rs.spect) {
+            this._localStars[bestIdx].spectral = rs.spect;
+            this._localStars[bestIdx].color = NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664';
+          }
+        } else {
+          // No nearby match — add as a new star entry
+          const dx = rs.x - this._playerX, dy = rs.y - this._playerY, dz = rs.z - this._playerZ;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          this._localStars.push({
+            wx: rs.x, wy: rs.y, wz: rs.z,
+            name: rs.name, spectral: rs.spect || '?',
+            color: NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664',
+            seed: Math.round(rs.x * 10000) ^ Math.round(rs.z * 10000),
+            dist, distPc: (dist * 1000).toFixed(0),
+            isReal: true,
+          });
+        }
+      }
+    }
+
+    // Expand tracked range
+    if (this._loadedYMin === null) {
+      this._loadedYMin = yMin;
+      this._loadedYMax = yMax;
+    } else {
+      this._loadedYMin = Math.min(this._loadedYMin, yMin);
+      this._loadedYMax = Math.max(this._loadedYMax, yMax);
+    }
+  }
+
+  /** Background-expand the loaded range one step at a time. */
+  _scheduleBgExpand() {
+    this._cancelBgExpand();
+    const MAX_Y = 3.0; // GalacticMap.GALAXY_HEIGHT
+    const STEP = 0.1;  // 100 pc per background step
+
+    this._bgLoadTimer = setTimeout(() => {
+      this._bgLoadTimer = null;
+      if (this._loadedYMin === null) return;
+
+      let expanded = false;
+      // Expand downward
+      if (this._loadedYMin > -MAX_Y) {
+        const newMin = Math.max(-MAX_Y, this._loadedYMin - STEP);
+        this._queryYRange(newMin, this._loadedYMin);
+        expanded = true;
+      }
+      // Expand upward
+      if (this._loadedYMax < MAX_Y) {
+        const newMax = Math.min(MAX_Y, this._loadedYMax + STEP);
+        this._queryYRange(this._loadedYMax, newMax);
+        expanded = true;
+      }
+
+      if (expanded) {
+        this._scheduleBgExpand(); // continue expanding
+      } else {
+        console.log(`[NAV] Column fully loaded: ${this._localStars.length} stars`);
+      }
+    }, 0);
+  }
+
+  _cancelBgExpand() {
+    if (this._bgLoadTimer !== null) {
+      clearTimeout(this._bgLoadTimer);
+      this._bgLoadTimer = null;
+    }
+  }
+
+  /** Full reset — clears all loaded stars and column state. */
+  _resetColumnLoad() {
+    this._cancelBgExpand();
+    this._loadedYMin = null;
+    this._loadedYMax = null;
+    this._loadedSeen = new Set();
+    this._loadBlockCenter = null;
+    this._loadBlockHalf = null;
+    this._estimatedBlockStars = null;
+  }
+
+  /**
+   * Estimate total star count in the full block column by integrating
+   * the density model. Fast — just samples the potential, no hash grid.
+   */
+  _estimateBlockStarCount(blockCenter, blockHalf) {
+    const MAX_Y = 3.0; // kpc
+    const SAMPLES = 24; // Y samples across ±3 kpc
+    const step = (MAX_Y * 2) / SAMPLES;
+    const R = Math.sqrt(blockCenter.x * blockCenter.x + blockCenter.z * blockCenter.z);
+    const theta = Math.atan2(blockCenter.z, blockCenter.x || 1e-10);
+    const blockVolPerSlice = (blockHalf * 2) * (blockHalf * 2) * step; // kpc³
+
+    let totalDensity = 0;
+    for (let i = 0; i < SAMPLES; i++) {
+      const y = -MAX_Y + (i + 0.5) * step;
+      const d = this._gm.potentialDerivedDensity(R, y, theta);
+      totalDensity += d.totalDensity; // stars/pc³
+    }
+
+    // Average density × total volume, converting kpc³ to pc³
+    const avgDensity = totalDensity / SAMPLES; // stars/pc³
+    const totalVolPc3 = (blockHalf * 2 * 1000) * (blockHalf * 2 * 1000) * (MAX_Y * 2 * 1000);
+    return Math.round(avgDensity * totalVolPc3);
+  }
+
   /**
    * Compute grid line spacing that keeps ~8-12 lines visible regardless of zoom.
    * Snaps to "nice" values (1, 2, 5, 10, 20, 50... in parsecs).
@@ -983,6 +1337,60 @@ export class NavComputer {
     ctx.stroke();
     ctx.fillStyle = '#00ff80';
     ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /**
+   * Draw a green diamond marker for the warp target at 2D levels.
+   */
+  _drawTargetMarker(ctx, x, y, size = 8) {
+    const pulse = 1 + Math.sin(Date.now() * 0.004) * 0.2;
+    const s = size * pulse;
+
+    // Outer diamond
+    ctx.strokeStyle = '#00ff80';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - s);
+    ctx.lineTo(x + s, y);
+    ctx.lineTo(x, y + s);
+    ctx.lineTo(x - s, y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Inner dot
+    ctx.fillStyle = '#00ff80';
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Label
+    if (this._externalTarget?.name) {
+      ctx.font = '10px "DotGothic16", monospace';
+      ctx.fillStyle = '#00ff80';
+      ctx.textAlign = 'center';
+      ctx.fillText(this._externalTarget.name, x, y - s - 4);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  /**
+   * Draw an arrow at the edge of the 2D view pointing toward the off-screen target.
+   */
+  _drawTargetArrow(ctx, ox, oy, size, tx, tz) {
+    const cx = ox + size / 2, cy = oy + size / 2;
+    const angle = Math.atan2(tz - cy, tx - cx);
+    const edgeX = cx + Math.cos(angle) * (size / 2 - 10);
+    const edgeY = cy + Math.sin(angle) * (size / 2 - 10);
+
+    ctx.fillStyle = '#00ff80';
+    ctx.beginPath();
+    ctx.moveTo(edgeX + Math.cos(angle) * 6, edgeY + Math.sin(angle) * 6);
+    ctx.lineTo(edgeX - Math.cos(angle) * 4 + Math.sin(angle) * 4,
+               edgeY - Math.sin(angle) * 4 - Math.cos(angle) * 4);
+    ctx.lineTo(edgeX - Math.cos(angle) * 4 - Math.sin(angle) * 4,
+               edgeY - Math.sin(angle) * 4 + Math.cos(angle) * 4);
+    ctx.closePath();
+    ctx.fill();
   }
 
   _drawPlayerArrow(ctx, ox, oy, size, px, pz) {
@@ -1088,11 +1496,35 @@ export class NavComputer {
     ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
 
     if (this._levelIndex === 4 && this._localStars.length > 0) {
-      ctx.fillText(`${this._localStars.length} SYSTEMS IN COLUMN`, w - 16, 42);
+      const est = this._estimatedBlockStars;
+      const estLabel = est != null ? `~${est.toLocaleString()} SYSTEMS IN BLOCK` : '';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillText(estLabel, w - 16, 42);
       const radLy = (this._localRadius * 1000 * 3.26).toFixed(0);
       ctx.fillText(`VIEW: ${radLy} ly`, w - 16, 58);
-      const yPc = (this._localCenter.y * 1000).toFixed(0);
-      ctx.fillText(`HEIGHT: ${yPc} pc ${this._localCenter.y >= 0 ? 'above' : 'below'} plane`, w - 16, 74);
+
+      // HEIGHT display with galactic structure context
+      const yKpc = this._localCenter.y;
+      const absYKpc = Math.abs(yKpc);
+      const yPc = (yKpc * 1000).toFixed(0);
+      const aboveBelow = yKpc >= 0 ? 'above' : 'below';
+      let region;
+      if (absYKpc < 0.3) region = 'thin disk';
+      else if (absYKpc < 1.0) region = 'thick disk';
+      else region = 'halo';
+      ctx.fillText(`HEIGHT: ${yPc} pc ${aboveBelow} plane (${region})`, w - 16, 74);
+
+      // Player galactic Y in kpc and pc
+      const playerYPc = (this._playerY * 1000).toFixed(0);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillText(`PLAYER Y: ${this._playerY.toFixed(3)} kpc (${playerYPc} pc)`, w - 16, 90);
+
+      // Y range being queried
+      const yCenter = this._playerY;
+      const yHalf = 2.0;
+      const yMinPc = ((yCenter - yHalf) * 1000).toFixed(0);
+      const yMaxPc = ((yCenter + yHalf) * 1000).toFixed(0);
+      ctx.fillText(`Y RANGE: ${yMinPc} to ${yMaxPc} pc`, w - 16, 106);
     }
 
     ctx.textAlign = 'left';
@@ -1191,6 +1623,7 @@ export class NavComputer {
         this._applyLevelView();
         this._hoveredTile = null;
         this._localStars = [];
+        this._resetColumnLoad();
         this._densityCacheKey = '';
       }
       return;
@@ -1206,6 +1639,18 @@ export class NavComputer {
     const dx = p.x - this._dragStartX;
     const dy = p.y - this._dragStartY;
     if (dx * dx + dy * dy > 25) return; // was a drag, not a click
+
+    // Local level — click a star to select it as nav target
+    if (this._levelIndex === 4 && this._hoveredLocalStar) {
+      const star = this._hoveredLocalStar.star;
+      if (this._selectedNavStar === star) {
+        // Click same star again → deselect
+        this._selectedNavStar = null;
+      } else {
+        this._selectedNavStar = star;
+      }
+      return;
+    }
 
     // Galaxy level — click a sector
     if (this._levelIndex === 0 && this._hoveredTile && this._hoveredTile.sector) {
@@ -1243,13 +1688,14 @@ export class NavComputer {
         this._densityCacheKey = '';
       } else {
         // Level 3 (block) → Level 4 (local)
-        this._localCenter = { x: newCx, y: 0, z: newCz };
+        this._localCenter = { x: newCx, y: this._playerY, z: newCz };
         // Cube size from local density at target position (same formula as player's block)
         this._localCubeSize = Math.max(0.003, this._computeTileSize(newCx, newCz, 500));
         // Default zoom = 1/3 of cube (readable density)
         this._localRadius = Math.max(0.002, this._localCubeSize / 3);
         this._localGridCell = 0.001; // 1 pc fixed cell size
         this._localStars = [];
+        this._resetColumnLoad();
         this._levelIndex = 4;
         this._hoveredTile = null;
       }
@@ -1263,7 +1709,7 @@ export class NavComputer {
       const factor = e.deltaY > 0 ? 1.15 : 0.87;
       // Min: 2 pc, Max: matches the cube size (no empty space beyond)
       this._localRadius = Math.max(0.002, Math.min(this._localCubeSize || 0.01, this._localRadius * factor));
-      this._localStars = [];
+      // Don't clear _localStars — the column data is still valid, just the view scale changed
     }
   }
 }

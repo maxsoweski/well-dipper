@@ -57,6 +57,33 @@ export class RealStarCatalog {
   }
 
   /**
+   * Find all real stars within an axis-aligned bounding box.
+   *
+   * @param {{ x, y, z }} center — center of the box in galactic kpc
+   * @param {number} xzHalf — half-size on X and Z axes (kpc)
+   * @param {number} yHalf — half-size on Y axis (kpc)
+   * @returns {Array<{ x, y, z, name, spect, absMag, lum, ci }>}
+   */
+  findInVolume(center, xzHalf, yHalf) {
+    if (!this._stars) return [];
+
+    const xMin = center.x - xzHalf, xMax = center.x + xzHalf;
+    const yMin = center.y - yHalf,  yMax = center.y + yHalf;
+    const zMin = center.z - xzHalf, zMax = center.z + xzHalf;
+
+    const results = [];
+    for (let i = 0; i < this._stars.length; i++) {
+      const s = this._stars[i];
+      if (s.x >= xMin && s.x <= xMax &&
+          s.y >= yMin && s.y <= yMax &&
+          s.z >= zMin && s.z <= zMax) {
+        results.push(s);
+      }
+    }
+    return results;
+  }
+
+  /**
    * Find all real stars visible from a position.
    * Returns stars with apparent magnitude below the threshold.
    *
