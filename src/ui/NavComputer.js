@@ -193,6 +193,7 @@ export class NavComputer {
       worldZ: this._selectedNavStar.wz,
       seed: this._selectedNavStar.seed,
       name: this._selectedNavStar.name,
+      type: this._selectedNavStar.spectral,
     };
   }
 

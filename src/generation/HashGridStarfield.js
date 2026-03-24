@@ -168,6 +168,7 @@ export class HashGridStarfield {
           worldY: s.worldY,
           worldZ: s.worldZ,
           seed: s.seed,
+          type: s.type,
           featureContext: s.featureType ? {
             type: s.featureType,
           } : null,
@@ -579,10 +580,10 @@ export class HashGridStarfield {
       // Check cell counts for each axis independently
       const xzCells = Math.ceil(xzHalf / cellSize);
       const yCells = Math.ceil(yHalf / cellSize);
-      // Skip if XZ grid is too dense
+      // Skip if grid is too dense on any axis
       if (xzCells > 200) continue;
-      // Cap Y cells to prevent explosion for tiny cell types
-      const ySearch = Math.min(yCells, 200);
+      if (yCells > 200) continue;
+      const ySearch = yCells;
 
       const gcx = Math.floor(cx / cellSize);
       const gcy = Math.floor(cy / cellSize);

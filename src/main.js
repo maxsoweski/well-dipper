@@ -30,6 +30,7 @@ import { VolumetricNebula } from './objects/VolumetricNebula.js';
 import { NavigableNebulaGenerator } from './generation/NavigableNebulaGenerator.js';
 import { NavigableClusterGenerator } from './generation/NavigableClusterGenerator.js';
 import { generateSolarSystem } from './generation/SolarSystemData.js';
+import { KnownSystems } from './generation/KnownSystems.js';
 import { SeededRandom } from './generation/SeededRandom.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
@@ -398,6 +399,7 @@ function _setWarpTargetFromNavStar(navStar) {
     worldY: navStar.worldY,
     worldZ: navStar.worldZ,
     seed: navStar.seed,
+    type: navStar.type,
   };
   warpTarget.name = navStar.name || generateSystemName(new SeededRandom(`warp-nav-${navStar.seed}`));
   warpTarget.blinkTimer = 0;
@@ -906,12 +908,26 @@ warpEffect.onPrepareSystem = () => {
       playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
       currentGalaxyStar = resolvedStar;
       galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+      // Hash grid already determined this star's type — pass it through
+      // so StarSystemGenerator uses it instead of re-rolling from weights
+      if (resolvedStar.type) {
+        galaxyContext.starTypeOverride = resolvedStar.type;
+      }
       // Use the resolved star's seed for deterministic system generation
       seed = String(resolvedStar.seed);
       console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
-    pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
+    // Check for known system override at this position
+    const knownWarp = KnownSystems.findAt(playerGalacticPos);
+    if (knownWarp) {
+      pendingSystemData = knownWarp.generate();
+      pendingSystemData._knownSystemNames = knownWarp.names;
+      pendingSystemData._warpTargetName = knownWarp.name;
+      console.log(`[WARP] Known system override: ${knownWarp.name}`);
+    } else {
+      pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
+    }
   } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
     // Legacy fallback: navigable nebula (no galaxy active or no feature found)
     pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
@@ -1021,9 +1037,17 @@ if (SKIP_TITLE_SCREEN) {
   titleScreenActive = false;
   const el = document.getElementById('title-screen');
   if (el) el.style.display = 'none';
-  const startCtx = galacticMap ? galacticMap.deriveGalaxyContext(playerGalacticPos) : null;
-  const startData = StarSystemGenerator.generate('solar-test', startCtx);
-  startData._destType = 'star-system';
+  const knownStart = KnownSystems.findAt(playerGalacticPos);
+  let startData;
+  if (knownStart) {
+    startData = knownStart.generate();
+    startData._knownSystemNames = knownStart.names;
+    console.log(`[START] Known system: ${knownStart.name}`);
+  } else {
+    const startCtx = galacticMap ? galacticMap.deriveGalaxyContext(playerGalacticPos) : null;
+    startData = StarSystemGenerator.generate('solar-test', startCtx);
+    startData._destType = 'star-system';
+  }
   spawnSystem({ forWarp: false, systemData: startData });
   if (galacticMap) {
     skyRenderer.prepareForPosition(playerGalacticPos);
@@ -1257,10 +1281,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   const systemData = preGenData || StarSystemGenerator.generate(seed);
 
   // ── Generate names for star system ──
-  // If we warped to a selected star, use its name as the system name.
-  // Otherwise generate fresh names from the seed.
+  // Known systems use pre-defined real names. Otherwise generate from seed.
   let systemNames = null;
-  if (!systemData._navigable) {
+  if (systemData._knownSystemNames) {
+    systemNames = systemData._knownSystemNames;
+  } else if (!systemData._navigable) {
     const nameRng = new SeededRandom(seed);
     systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null);
   }
@@ -4227,6 +4252,10 @@ function trySelectWarpTarget(rayDir) {
   const entry = skyRenderer.getEntryForIndex(result.index);
   if (entry?.starData) {
     warpTarget.navStarData = entry.starData;
+    // Ensure type is present (hash grid stars have it; real catalog stars need estimatedType fallback)
+    if (!warpTarget.navStarData.type && entry.estimatedType) {
+      warpTarget.navStarData.type = entry.estimatedType;
+    }
   } else {
     warpTarget.navStarData = null;
   }
@@ -4281,6 +4310,10 @@ function autoSelectWarpTarget() {
   const entry = skyRenderer.getEntryForIndex(result.index);
   if (entry?.starData) {
     warpTarget.navStarData = entry.starData;
+    // Ensure type is present (hash grid stars have it; real catalog stars need estimatedType fallback)
+    if (!warpTarget.navStarData.type && entry.estimatedType) {
+      warpTarget.navStarData.type = entry.estimatedType;
+    }
   } else {
     warpTarget.navStarData = null;
   }

@@ -8,9 +8,9 @@ import { HashGridStarfield } from './HashGridStarfield.js';
  * position/color/size arrays compatible with Starfield.js.
  *
  * The starfield has two layers:
- * 1. "Real" nearby stars from GalacticMap.findNearestStars() — these are
- *    actual warp targets with deterministic seeds. Placed as specific
- *    bright points on the sky sphere.
+ * 1. "Real" nearby stars from HashGridStarfield — these are actual warp
+ *    targets with deterministic seeds. Placed as specific bright points
+ *    on the sky sphere.
  * 2. Background stars density-weighted by sampling GalacticMap along
  *    various sky directions. Creates the galaxy band effect: dense
  *    toward the galactic center/disk plane, sparse above/below.
@@ -44,36 +44,6 @@ export class StarfieldGenerator {
   };
 
   static VISIBILITY_THRESHOLD = 6.5; // naked-eye magnitude limit
-
-  /**
-   * Estimate spectral type from galactic component and arm strength.
-   * Uses the star's own seed for deterministic selection.
-   */
-  static _estimateSpectralType(starSeed, component, armStrength) {
-    // Weights by component (same logic as GalacticMap._deriveStarWeights)
-    let weights;
-    if (component === 'halo') {
-      weights = { M: 0.45, K: 0.30, G: 0.18, F: 0.07, A: 0, B: 0, O: 0 };
-    } else if (component === 'bulge') {
-      weights = { M: 0.38, K: 0.28, G: 0.18, F: 0.10, A: 0.04, B: 0.015, O: 0.005 };
-    } else if (armStrength > 0.3) {
-      const boost = 1 + armStrength * 3;
-      weights = { M: 0.18, K: 0.20, G: 0.20, F: 0.16, A: 0.13, B: 0.08 * boost, O: 0.05 * boost };
-    } else {
-      weights = { M: 0.18, K: 0.20, G: 0.20, F: 0.16, A: 0.13, B: 0.08, O: 0.05 };
-    }
-
-    // Normalize and pick deterministically from seed
-    const types = ['M', 'K', 'G', 'F', 'A', 'B', 'O'];
-    const total = types.reduce((s, t) => s + (weights[t] || 0), 0);
-    const roll = ((starSeed % 10000) / 10000);
-    let cumulative = 0;
-    for (const type of types) {
-      cumulative += (weights[type] || 0) / total;
-      if (roll < cumulative) return type;
-    }
-    return 'M';
-  }
 
   /**
    * Compute apparent magnitude from spectral type and distance.
@@ -213,6 +183,7 @@ export class StarfieldGenerator {
           seed: rs.seed,
           name: rs.name,
           isRealStar: true,
+          type: rs.type,
         },
         estimatedType: rs.type,
         apparentMagnitude: rs.appMag,

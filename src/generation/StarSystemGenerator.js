@@ -77,11 +77,25 @@ export class StarSystemGenerator {
     const rng = new SeededRandom(seed);
 
     // ── Primary Star ──
-    // If galaxy context provided, use region-adjusted star weights.
-    // Otherwise fall back to cinematic weights (screensaver mode).
-    const starType = galaxyContext
-      ? this._pickStarTypeFromWeights(rng, galaxyContext.starWeights)
-      : this._pickStarType(rng);
+    // If the hash grid already determined this star's type, use it directly.
+    // Otherwise use galaxy-context weights or fall back to cinematic weights.
+    let starType;
+    if (galaxyContext?.starTypeOverride) {
+      // Hash grid already determined this star's type — respect it
+      starType = galaxyContext.starTypeOverride;
+    } else if (galaxyContext) {
+      starType = this._pickStarTypeFromWeights(rng, galaxyContext.starWeights);
+    } else {
+      starType = this._pickStarType(rng);
+    }
+
+    // Map evolved hash grid types to their base types for system generation.
+    // The hash grid uses Kg/Gg/Mg for evolved giants (same spectral color,
+    // much brighter). StarSystemGenerator only knows O/B/A/F/G/K/M.
+    const EVOLVED_TYPE_MAP = { 'Kg': 'K', 'Gg': 'G', 'Mg': 'M' };
+    if (EVOLVED_TYPE_MAP[starType]) {
+      starType = EVOLVED_TYPE_MAP[starType];
+    }
     const props = this.STAR_PROPERTIES[starType];
     const starVariation = rng.range(0.85, 1.15);
     const radiusSolarVaried = props.radiusSolar * starVariation;
