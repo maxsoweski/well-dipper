@@ -45,6 +45,8 @@ import { GalacticMap } from './generation/GalacticMap.js';
 import { NavComputer } from './ui/NavComputer.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
 import { SkyRenderer } from './rendering/SkyRenderer.js';
+import { SkyFeatureLayer } from './rendering/sky/SkyFeatureLayer.js';
+import { KNOWN_OBJECT_PROFILES } from './data/KnownObjectProfiles.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -722,6 +724,8 @@ function toggleSoundTest() {
 // Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
 const GALLERY_TYPES = [
+  // Known object profiles (all 37 real Messier/NGC objects)
+  'known-feature',
   // Deep sky (distant view)
   'spiral-galaxy', 'elliptical-galaxy',
   'emission-nebula', 'planetary-nebula',
@@ -739,6 +743,12 @@ const GALLERY_TYPES = [
   'planet-city-lights', 'planet-ecumenopolis',
   'moon',
 ];
+
+// Pre-built list of known object profile keys for gallery cycling
+const _knownProfileKeys = Object.keys(KNOWN_OBJECT_PROFILES);
+
+// Shared SkyFeatureLayer instance for gallery billboard creation
+let _gallerySkyFeatureLayer = null;
 let galleryMode = false;
 let gallerySeed = 1;
 let galleryTypeIdx = 0;
@@ -2271,6 +2281,12 @@ function exitGallery() {
   // Clean up gallery objects
   _galleryCleanup();
 
+  // Dispose the shared SkyFeatureLayer used for known-feature billboards
+  if (_gallerySkyFeatureLayer) {
+    _gallerySkyFeatureLayer.dispose();
+    _gallerySkyFeatureLayer = null;
+  }
+
   // Restore everything in the current system
   _setSystemVisible(true);
 
@@ -2295,7 +2311,13 @@ function _galleryCleanup() {
   }
   for (const obj of _galleryMeshes) {
     scene.remove(obj.mesh || obj);
-    if (obj.dispose) obj.dispose();
+    if (obj.dispose) {
+      obj.dispose();
+    } else if (obj instanceof THREE.Mesh) {
+      // Raw THREE.Mesh (e.g., known-feature billboard) — dispose GPU resources
+      obj.geometry.dispose();
+      obj.material.dispose();
+    }
   }
   _galleryMeshes = [];
 }
@@ -2356,6 +2378,102 @@ function gallerySpawn() {
   const rng = new SeededRandom(seed);
 
   let infoText = '';
+
+  // ── Known Feature Gallery (cycles through all 37 real Messier/NGC profiles) ──
+  if (type === 'known-feature') {
+    // Clamp seed to valid profile index (Left/Right cycles through profiles)
+    const profileIdx = ((gallerySeed - 1) % _knownProfileKeys.length + _knownProfileKeys.length) % _knownProfileKeys.length;
+    const profileKey = _knownProfileKeys[profileIdx];
+    const profile = KNOWN_OBJECT_PROFILES[profileKey];
+
+    // Lazily create a SkyFeatureLayer for billboard rendering
+    if (!_gallerySkyFeatureLayer) {
+      _gallerySkyFeatureLayer = new SkyFeatureLayer({ min: 0.3, max: 1.0 });
+    }
+
+    const isCluster = profile.type === 'globular-cluster' || profile.type === 'open-cluster';
+    const hasNebulaLayers = profile.layers > 0;
+
+    if (isCluster && !hasNebulaLayers) {
+      // Pure star clusters — no billboard to show, just info
+      camera.position.set(0, 5, 20);
+      camera.lookAt(0, 0, 0);
+    } else {
+      // Build a fake feature object matching what SkyFeatureLayer expects
+      const fakeFeature = {
+        type: profile.type,
+        color: profile.colorPrimary,
+        seed: profileKey,
+        knownProfile: profile,
+      };
+
+      // Place billboard at origin with a viewable size
+      const billboardSize = 40;
+      const billboardPos = new THREE.Vector3(0, 0, 0);
+      const brightness = 1.0;
+
+      const mesh = _gallerySkyFeatureLayer._createNebulaBillboard(
+        fakeFeature, billboardPos, billboardSize, brightness
+      );
+      if (mesh) {
+        // Rotate to face camera instead of origin (we're looking at origin)
+        mesh.lookAt(camera.position);
+        scene.add(mesh);
+        _galleryMeshes.push(mesh);
+      }
+
+      camera.position.set(0, 0, 35);
+      camera.lookAt(0, 0, 0);
+    }
+
+    // ── Build info overlay with full profile data ──
+    const colorSwatch = (c) => {
+      const r = Math.round(c[0] * 255);
+      const g = Math.round(c[1] * 255);
+      const b = Math.round(c[2] * 255);
+      return `rgb(${r},${g},${b})`;
+    };
+
+    // Update the gallery overlay with rich profile info
+    const overlay = document.getElementById('gallery-overlay');
+    const info = document.getElementById('gallery-info');
+    if (overlay) overlay.style.display = 'block';
+
+    const profileNum = profileIdx + 1;
+    const total = _knownProfileKeys.length;
+    const catalogIds = [profile.messier, profile.ngc].filter(Boolean).join(' / ') || profileKey;
+
+    let detailLines = [
+      `${profile.name}  (${catalogIds})`,
+      `type: ${profile.type}  |  shape: ${profile.shape}  |  layers: ${profile.layers}`,
+      `mag: ${profile.integratedMagnitude}  |  warp: ${profile.domainWarpStrength}  |  asym: ${profile.asymmetry}`,
+    ];
+    if (profile.darkLanes) {
+      detailLines.push(`dark lanes: ${profile.darkLaneStrength}`);
+    }
+    if (profile.centralStar) {
+      detailLines.push(`central star: lum=${profile.centralStar.luminosity}`);
+    }
+    if (profile.embeddedStars) {
+      detailLines.push(`embedded stars: ${profile.embeddedStars.count}  |  conc: ${profile.embeddedStars.concentration}`);
+    }
+    if (isCluster && !hasNebulaLayers) {
+      detailLines.push('(cluster — stars only, no nebula billboard)');
+    }
+
+    if (info) {
+      info.innerHTML = `<span style="color:#ff0">[${profileNum}/${total}]</span> ${detailLines[0]}<br>`
+        + `<span style="display:inline-block;width:14px;height:14px;background:${colorSwatch(profile.colorPrimary)};vertical-align:middle;border:1px solid #555;margin-right:4px;"></span>`
+        + `<span style="display:inline-block;width:14px;height:14px;background:${colorSwatch(profile.colorSecondary)};vertical-align:middle;border:1px solid #555;margin-right:8px;"></span>`
+        + `mix: ${profile.colorMix}<br>`
+        + detailLines.slice(1).join('<br>');
+    }
+
+    console.log(`Gallery: Known Feature ${profileNum}/${total} — ${profile.name} (${profileKey})`);
+    // Hand camera to orbit controller
+    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+    return;  // Skip the default overlay update at the bottom of gallerySpawn
+  }
 
   // ── Volumetric nebula test (Points-based gas cloud) ──
   if (type === 'volumetric-nebula-test') {

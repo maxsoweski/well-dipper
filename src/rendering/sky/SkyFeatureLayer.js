@@ -25,6 +25,28 @@ const FEATURE_RADIUS = 499.5;
 // Search radius for features (kpc) — features beyond this are too dim to see
 const SEARCH_RADIUS = 3.0;
 
+/**
+ * Shape mode integers for the nebula billboard fragment shader.
+ * Each mode produces a visually distinct noise/falloff pattern.
+ *   0 = irregular:   FBM + strong domain warp, dark lanes (emission nebulae like Orion)
+ *   1 = ring:        hollow center, bright rim (planetary nebulae like Ring, Helix)
+ *   2 = bipolar:     two lobes / hourglass (planetary nebulae like Dumbbell)
+ *   3 = filamentary: stretched wispy threads (supernova remnants like Veil, Crab)
+ *   4 = shell:       thin bright rim, dark interior (supernova remnant shells)
+ *   5 = diffuse:     soft Gaussian blob, smooth edges (reflection nebulae like M78)
+ */
+const SHAPE_MODE = {
+  'irregular': 0,
+  'ring': 1,
+  'bipolar': 2,
+  'bilobed': 2,  // alias — bilobed profiles map to bipolar shader
+  'filamentary': 3,
+  'shell': 4,
+  'diffuse': 5,
+  'center-bright': 0,  // legacy fallback
+  'scattered': 0,      // legacy fallback
+};
+
 export class SkyFeatureLayer {
   /**
    * @param {{ min: number, max: number }} brightnessRange — output brightness limits
@@ -117,15 +139,21 @@ export class SkyFeatureLayer {
   }
 
   _createFeatureMesh(feature, position, size, brightness) {
+    // Assign shape mode for procedural features (no knownProfile).
+    // Known objects already have a `shape` field in their profile.
+    if (!feature.knownProfile) {
+      feature._shapeMode = this._assignProceduralShapeMode(feature);
+    }
+
     switch (feature.type) {
       // Gas features: rendered as sky billboards (no GalacticMap stars for gas)
       case 'emission-nebula':
       case 'planetary-nebula':
+      case 'reflection-nebula':
+      case 'supernova-remnant':
         return this._createNebulaBillboard(feature, position, size, brightness);
       case 'dark-nebula':
         return this._createDarkNebulaBillboard(feature, position, size, brightness);
-      case 'supernova-remnant':
-        return this._createRemnantBillboard(feature, position, size, brightness);
       // Star-region features: usually NOT rendered as billboards — their stars
       // appear naturally in the starfield. EXCEPTION: known objects with
       // nebulosity layers (e.g., Pleiades reflection nebulosity) DO get
@@ -143,7 +171,39 @@ export class SkyFeatureLayer {
   }
 
   /**
-   * Emission nebula — FBM noise billboard with H-alpha + OIII colors.
+   * Assign a shape mode integer to a procedural (non-known) feature
+   * based on its type and a seeded roll.
+   *   emission-nebula:     70% irregular, 30% filamentary
+   *   planetary-nebula:    50% ring, 30% bipolar, 20% shell
+   *   supernova-remnant:   40% filamentary, 40% shell, 20% irregular
+   *   reflection-nebula:   100% diffuse
+   *   dark-nebula:         0 (handled separately)
+   */
+  _assignProceduralShapeMode(feature) {
+    const roll = this._hashSeed(feature.seed + '-shape');
+    switch (feature.type) {
+      case 'emission-nebula':
+        return roll < 0.7 ? SHAPE_MODE['irregular'] : SHAPE_MODE['filamentary'];
+      case 'planetary-nebula':
+        if (roll < 0.5) return SHAPE_MODE['ring'];
+        if (roll < 0.8) return SHAPE_MODE['bipolar'];
+        return SHAPE_MODE['shell'];
+      case 'supernova-remnant':
+        if (roll < 0.4) return SHAPE_MODE['filamentary'];
+        if (roll < 0.8) return SHAPE_MODE['shell'];
+        return SHAPE_MODE['irregular'];
+      case 'reflection-nebula':
+        return SHAPE_MODE['diffuse'];
+      default:
+        return SHAPE_MODE['irregular'];
+    }
+  }
+
+  /**
+   * Nebula billboard — unified shader with 6 distinct shape modes.
+   * Handles emission, planetary, reflection nebulae AND supernova remnants.
+   * Shape mode is selected from the knownProfile.shape string or
+   * procedurally assigned via _assignProceduralShapeMode().
    */
   _createNebulaBillboard(feature, position, size, brightness) {
     // Use knownProfile colors when available, otherwise fall back to generic OIII teal
@@ -157,8 +217,16 @@ export class SkyFeatureLayer {
 
     // Shape-specific parameters from profile (defaults preserve original behavior)
     const domainWarpStrength = kp ? (kp.domainWarpStrength ?? 0.8) : 0.8;
-    const brightnessShapeMap = { 'center-bright': 0, 'ring': 1, 'scattered': 2 };
-    const brightnessShape = kp ? (brightnessShapeMap[kp.brightnessProfile] ?? 0) : 0;
+
+    // Resolve shape mode: known profile shape string → integer, or procedural assignment
+    let shapeMode;
+    if (kp && kp.shape != null) {
+      shapeMode = SHAPE_MODE[kp.shape] ?? SHAPE_MODE['irregular'];
+    } else if (feature._shapeMode != null) {
+      shapeMode = feature._shapeMode;
+    } else {
+      shapeMode = SHAPE_MODE['irregular'];
+    }
 
     const geo = new THREE.PlaneGeometry(size, size);
     const mat = new THREE.ShaderMaterial({
@@ -174,7 +242,7 @@ export class SkyFeatureLayer {
         uBrightness: { value: brightness },
         uSeed: { value: this._hashSeed(feature.seed) },
         uDomainWarpStrength: { value: domainWarpStrength },
-        uBrightnessShape: { value: brightnessShape },
+        uShapeMode: { value: shapeMode },
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -190,7 +258,7 @@ export class SkyFeatureLayer {
         uniform float uBrightness;
         uniform float uSeed;
         uniform float uDomainWarpStrength;
-        uniform int uBrightnessShape;
+        uniform int uShapeMode;
         varying vec2 vUv;
 
         // Simple hash-based noise
@@ -234,32 +302,117 @@ export class SkyFeatureLayer {
         void main() {
           vec2 centered = vUv - 0.5;
           float dist = length(centered);
+          float angle = atan(centered.y, centered.x);
 
-          // Radial falloff — shape depends on uBrightnessShape
-          float falloff;
-          if (uBrightnessShape == 1) {
-            // Ring: bright ring with dim center (planetary nebulae like M57)
-            float ringDist = abs(dist - 0.25);
-            falloff = 1.0 - smoothstep(0.0, 0.2, ringDist);
-            falloff *= 1.0 - smoothstep(0.35, 0.5, dist);
-          } else if (uBrightnessShape == 2) {
-            // Scattered: gentler falloff for loose structures
-            falloff = 1.0 - smoothstep(0.35, 0.5, dist);
+          // ── Compute density per shape mode ──
+          float density = 0.0;
+          float n = 0.0;  // noise value (also used for color mixing)
+
+          if (uShapeMode == 0) {
+            // ── IRREGULAR: FBM + domain warp + dark lanes ──
+            // Classic emission nebula look (Orion, Eagle, Lagoon)
+            float falloff = 1.0 - smoothstep(0.2, 0.5, dist);
+            if (falloff < 0.01) discard;
+            vec2 nc = centered * 4.0 + vec2(uSeed, uSeed * 0.7);
+            n = fbm(nc);
+            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
+            n = fbm(nc + warp * uDomainWarpStrength);
+            density = n * falloff;
+
+          } else if (uShapeMode == 1) {
+            // ── RING: hollow center, bright rim ──
+            // Planetary nebulae (Ring M57, Helix, Southern Ring)
+            float ringRadius = 0.25;
+            float ringWidth = 0.07;
+            float ring = exp(-pow(dist - ringRadius, 2.0) / (2.0 * ringWidth * ringWidth));
+            // Dim the interior — center is darker than the rim
+            float centerDim = smoothstep(0.0, ringRadius * 0.6, dist);
+            ring *= centerDim;
+            // Outer falloff
+            ring *= 1.0 - smoothstep(0.38, 0.5, dist);
+            // Angular noise for texture along the ring
+            vec2 nc = centered * 5.0 + vec2(uSeed, uSeed * 0.7);
+            n = fbm(nc);
+            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
+            n = fbm(nc + warp * uDomainWarpStrength * 0.5);
+            density = ring * (0.5 + 0.5 * n);
+
+          } else if (uShapeMode == 2) {
+            // ── BIPOLAR: two lobes / hourglass / butterfly ──
+            // Planetary nebulae (Dumbbell M27, some PNe with jets)
+            // Two lobes along a seed-derived axis
+            float lobeAngle = uSeed * 6.28;
+            float cosA = cos(lobeAngle);
+            float sinA = sin(lobeAngle);
+            vec2 rotated = vec2(
+              centered.x * cosA - centered.y * sinA,
+              centered.x * sinA + centered.y * cosA
+            );
+            // Lobes: stretched in one axis, compressed in the other
+            float lobeX = rotated.x * 1.8;  // narrow waist
+            float lobeY = rotated.y * 0.9;  // elongated lobes
+            float lobeDist = length(vec2(lobeX, lobeY));
+            // Two-lobe shape: bias toward top and bottom
+            float lobeBias = abs(rotated.y) * 2.0;
+            float falloff = (1.0 - smoothstep(0.2, 0.45, lobeDist)) * smoothstep(0.0, 0.08, lobeBias);
+            // Add back a faint central hub
+            float hub = exp(-dist * dist / 0.008) * 0.3;
+            falloff = max(falloff, hub);
+            if (falloff < 0.01) discard;
+            vec2 nc = centered * 5.0 + vec2(uSeed, uSeed * 0.7);
+            n = fbm(nc);
+            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
+            n = fbm(nc + warp * uDomainWarpStrength * 0.6);
+            density = n * falloff;
+
+          } else if (uShapeMode == 3) {
+            // ── FILAMENTARY: stretched wispy threads ──
+            // Supernova remnants (Veil, Crab), some emission nebulae
+            float falloff = 1.0 - smoothstep(0.2, 0.45, dist);
+            if (falloff < 0.01) discard;
+            // Stretch noise coordinates in one direction for thread-like look
+            float stretchAngle = uSeed * 6.28;
+            float cosS = cos(stretchAngle);
+            float sinS = sin(stretchAngle);
+            vec2 stretched = vec2(
+              centered.x * cosS - centered.y * sinS,
+              (centered.x * sinS + centered.y * cosS) * 2.5
+            );
+            vec2 nc = stretched * 6.0 + vec2(uSeed, uSeed * 0.7);
+            // Heavy domain warp for tangled filament look
+            vec2 warp1 = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
+            vec2 warp2 = vec2(fbm(nc + warp1 * 0.8 + 3.1), fbm(nc + warp1 * 0.8 + 4.5));
+            n = fbm(nc + warp2 * uDomainWarpStrength);
+            // Threshold to create gaps between filaments
+            float filament = smoothstep(0.3, 0.55, n);
+            density = filament * falloff;
+
+          } else if (uShapeMode == 4) {
+            // ── SHELL: thin bright rim, dark interior (soap bubble) ──
+            // Supernova remnant shells, bubble nebulae
+            float shellRadius = 0.3;
+            float shellThickness = 0.04;
+            float shell = exp(-pow(dist - shellRadius, 2.0) / (2.0 * shellThickness * shellThickness));
+            // Outer falloff
+            shell *= 1.0 - smoothstep(0.42, 0.5, dist);
+            // Angular noise for uneven brightness around the shell
+            float angularN = noise(vec2(angle * 4.0 + uSeed, dist * 10.0));
+            shell *= 0.5 + 0.5 * angularN;
+            n = angularN;
+            density = shell;
+
           } else {
-            // Center-bright (default): original behavior
-            falloff = 1.0 - smoothstep(0.2, 0.5, dist);
+            // ── DIFFUSE (mode 5): soft Gaussian blob ──
+            // Reflection nebulae (M78, Pleiades gas)
+            float gaussian = exp(-dist * dist / 0.06);
+            gaussian *= 1.0 - smoothstep(0.35, 0.5, dist);
+            vec2 nc = centered * 3.0 + vec2(uSeed, uSeed * 0.7);
+            n = fbm(nc);
+            // Very gentle warp — soft, not structured
+            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
+            n = fbm(nc + warp * uDomainWarpStrength * 0.3);
+            density = gaussian * (0.6 + 0.4 * n);
           }
-          if (falloff < 0.01) discard;
-
-          // FBM noise for nebula structure
-          vec2 noiseCoord = centered * 4.0 + vec2(uSeed, uSeed * 0.7);
-          float n = fbm(noiseCoord);
-          // Domain warp for organic shapes — strength from profile
-          // Higher values = more stringy/filamentary (M1), lower = smoother (M57)
-          vec2 warp = vec2(fbm(noiseCoord + 1.3), fbm(noiseCoord + 2.7));
-          n = fbm(noiseCoord + warp * uDomainWarpStrength);
-
-          float density = n * falloff;
 
           // Dither (chunky to match retro pixel grid)
           float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
