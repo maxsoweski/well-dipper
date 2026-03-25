@@ -143,6 +143,13 @@ export class SkyFeatureLayer {
     // Known objects already have a `shape` field in their profile.
     if (!feature.knownProfile) {
       feature._shapeMode = this._assignProceduralShapeMode(feature);
+      // Procedural asymmetry and dark lanes for visual variety
+      const asymRoll = this._hashSeed(feature.seed + '-asym');
+      feature._asymmetry = asymRoll * 0.6; // 0 to 0.6
+      const dlRoll = this._hashSeed(feature.seed + '-dlane');
+      // Emission nebulae often have dark lanes (dust); others less so
+      feature._darkLaneStrength = (feature.type === 'emission-nebula' && dlRoll > 0.5)
+        ? dlRoll * 0.5 : 0.0;
     }
 
     switch (feature.type) {
@@ -206,17 +213,45 @@ export class SkyFeatureLayer {
    * procedurally assigned via _assignProceduralShapeMode().
    */
   _createNebulaBillboard(feature, position, size, brightness) {
-    // Use knownProfile colors when available, otherwise fall back to generic OIII teal
+    // Use knownProfile colors when available, otherwise type-specific secondary
     const kp = feature.knownProfile;
-    const secondaryColor = kp
-      ? kp.colorSecondary
-      : [0.2, 0.7, 0.6]; // default OIII teal for generic emission nebulae
-    const colorMixStrength = kp
-      ? kp.colorMix
-      : 0.4; // default blend amount for generic nebulae
+    let secondaryColor;
+    let colorMixStrength;
+    if (kp) {
+      secondaryColor = kp.colorSecondary;
+      colorMixStrength = kp.colorMix;
+    } else {
+      // Type-specific secondary colors for procedural nebulae
+      const colorRoll = this._hashSeed(feature.seed + '-col2');
+      switch (feature.type) {
+        case 'emission-nebula':
+          // Vary between OIII teal, SII red, and NII yellow-orange
+          secondaryColor = colorRoll < 0.5 ? [0.2, 0.7, 0.6]    // OIII teal
+            : colorRoll < 0.8 ? [0.7, 0.2, 0.15]                 // SII red
+            : [0.8, 0.6, 0.2];                                    // NII warm
+          break;
+        case 'planetary-nebula':
+          secondaryColor = colorRoll < 0.6 ? [0.15, 0.6, 0.65]   // OIII teal-green
+            : [0.5, 0.3, 0.7];                                    // NII violet
+          break;
+        case 'supernova-remnant':
+          secondaryColor = colorRoll < 0.5 ? [0.3, 0.4, 0.8]     // synchrotron blue
+            : [0.6, 0.7, 0.3];                                    // shock-heated green
+          break;
+        case 'reflection-nebula':
+          secondaryColor = [0.4, 0.5, 0.9];                       // scattered starlight blue
+          break;
+        default:
+          secondaryColor = [0.2, 0.7, 0.6];
+      }
+      colorMixStrength = 0.3 + colorRoll * 0.3; // 0.3 to 0.6
+    }
 
     // Shape-specific parameters from profile (defaults preserve original behavior)
-    const domainWarpStrength = kp ? (kp.domainWarpStrength ?? 0.8) : 0.8;
+    const warpRoll = this._hashSeed(feature.seed + '-warp');
+    const domainWarpStrength = kp ? (kp.domainWarpStrength ?? 0.8) : (0.4 + warpRoll * 0.8); // 0.4 to 1.2
+    const asymmetry = kp ? (kp.asymmetry ?? 0.3) : (feature._asymmetry ?? 0.3);
+    const darkLaneStrength = (kp && kp.darkLanes) ? (kp.darkLaneStrength ?? 0.3) : (feature._darkLaneStrength ?? 0.0);
 
     // Resolve shape mode: known profile shape string → integer, or procedural assignment
     let shapeMode;
@@ -242,6 +277,8 @@ export class SkyFeatureLayer {
         uBrightness: { value: brightness },
         uSeed: { value: this._hashSeed(feature.seed) },
         uDomainWarpStrength: { value: domainWarpStrength },
+        uAsymmetry: { value: asymmetry },
+        uDarkLaneStrength: { value: darkLaneStrength },
         uShapeMode: { value: shapeMode },
       },
       vertexShader: /* glsl */ `
@@ -258,6 +295,8 @@ export class SkyFeatureLayer {
         uniform float uBrightness;
         uniform float uSeed;
         uniform float uDomainWarpStrength;
+        uniform float uAsymmetry;
+        uniform float uDarkLaneStrength;
         uniform int uShapeMode;
         varying vec2 vUv;
 
@@ -311,25 +350,47 @@ export class SkyFeatureLayer {
           if (uShapeMode == 0) {
             // ── IRREGULAR: FBM + domain warp + dark lanes ──
             // Classic emission nebula look (Orion, Eagle, Lagoon)
-            float falloff = 1.0 - smoothstep(0.2, 0.5, dist);
+            // Asymmetry stretches the falloff shape (0 = circular, 1 = very elongated)
+            float stretchAngle = uSeed * 6.28;
+            float cs0 = cos(stretchAngle), sn0 = sin(stretchAngle);
+            vec2 asym = vec2(
+              centered.x * cs0 - centered.y * sn0,
+              (centered.x * sn0 + centered.y * cs0) * (1.0 + uAsymmetry * 0.8)
+            );
+            float asymDist = length(asym);
+            float falloff = 1.0 - smoothstep(0.2, 0.5, asymDist);
             if (falloff < 0.01) discard;
             vec2 nc = centered * 4.0 + vec2(uSeed, uSeed * 0.7);
             n = fbm(nc);
             vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
             n = fbm(nc + warp * uDomainWarpStrength);
+            // Dark lanes: subtract noise-based dark channels (dust absorption)
+            if (uDarkLaneStrength > 0.0) {
+              float lane = fbm(nc * 1.5 + vec2(uSeed * 3.1, uSeed * 1.7));
+              lane = smoothstep(0.4, 0.7, lane);
+              n *= 1.0 - lane * uDarkLaneStrength;
+            }
             density = n * falloff;
 
           } else if (uShapeMode == 1) {
             // ── RING: hollow center, bright rim ──
             // Planetary nebulae (Ring M57, Helix, Southern Ring)
+            // Asymmetry makes the ring eccentric (elliptical, not circular)
+            float ringAngle = uSeed * 6.28;
+            float cs1 = cos(ringAngle), sn1 = sin(ringAngle);
+            vec2 ringCoord = vec2(
+              centered.x * cs1 - centered.y * sn1,
+              (centered.x * sn1 + centered.y * cs1) * (1.0 + uAsymmetry * 0.6)
+            );
+            float ringDist = length(ringCoord);
             float ringRadius = 0.25;
             float ringWidth = 0.07;
-            float ring = exp(-pow(dist - ringRadius, 2.0) / (2.0 * ringWidth * ringWidth));
+            float ring = exp(-pow(ringDist - ringRadius, 2.0) / (2.0 * ringWidth * ringWidth));
             // Dim the interior — center is darker than the rim
-            float centerDim = smoothstep(0.0, ringRadius * 0.6, dist);
+            float centerDim = smoothstep(0.0, ringRadius * 0.6, ringDist);
             ring *= centerDim;
             // Outer falloff
-            ring *= 1.0 - smoothstep(0.38, 0.5, dist);
+            ring *= 1.0 - smoothstep(0.38, 0.5, ringDist);
             // Angular noise for texture along the ring
             vec2 nc = centered * 5.0 + vec2(uSeed, uSeed * 0.7);
             n = fbm(nc);
@@ -349,11 +410,14 @@ export class SkyFeatureLayer {
               centered.x * sinA + centered.y * cosA
             );
             // Lobes: stretched in one axis, compressed in the other
-            float lobeX = rotated.x * 1.8;  // narrow waist
-            float lobeY = rotated.y * 0.9;  // elongated lobes
+            // Asymmetry: one lobe larger than the other (0 = symmetric, 1 = very lopsided)
+            float lobeX = rotated.x * (1.8 + uAsymmetry * 0.5);
+            float lobeY = rotated.y * 0.9;
             float lobeDist = length(vec2(lobeX, lobeY));
             // Two-lobe shape: bias toward top and bottom
-            float lobeBias = abs(rotated.y) * 2.0;
+            // Asymmetry shifts the waist off-center
+            float waistShift = rotated.y * uAsymmetry * 0.15;
+            float lobeBias = abs(rotated.y + waistShift) * 2.0;
             float falloff = (1.0 - smoothstep(0.2, 0.45, lobeDist)) * smoothstep(0.0, 0.08, lobeBias);
             // Add back a faint central hub
             float hub = exp(-dist * dist / 0.008) * 0.3;
@@ -368,15 +432,16 @@ export class SkyFeatureLayer {
           } else if (uShapeMode == 3) {
             // ── FILAMENTARY: stretched wispy threads ──
             // Supernova remnants (Veil, Crab), some emission nebulae
+            // Asymmetry controls how stretched/directional vs tangled the filaments are
+            float stretchFactor = 2.0 + uAsymmetry * 2.0;  // 2.0 (tangled) to 4.0 (very stretched)
             float falloff = 1.0 - smoothstep(0.2, 0.45, dist);
             if (falloff < 0.01) discard;
-            // Stretch noise coordinates in one direction for thread-like look
             float stretchAngle = uSeed * 6.28;
             float cosS = cos(stretchAngle);
             float sinS = sin(stretchAngle);
             vec2 stretched = vec2(
               centered.x * cosS - centered.y * sinS,
-              (centered.x * sinS + centered.y * cosS) * 2.5
+              (centered.x * sinS + centered.y * cosS) * stretchFactor
             );
             vec2 nc = stretched * 6.0 + vec2(uSeed, uSeed * 0.7);
             // Heavy domain warp for tangled filament look
@@ -390,13 +455,22 @@ export class SkyFeatureLayer {
           } else if (uShapeMode == 4) {
             // ── SHELL: thin bright rim, dark interior (soap bubble) ──
             // Supernova remnant shells, bubble nebulae
+            // Asymmetry makes the shell non-circular (deformed by asymmetric explosion)
+            float shellAngle = uSeed * 6.28;
+            float cs4 = cos(shellAngle), sn4 = sin(shellAngle);
+            vec2 shellCoord = vec2(
+              centered.x * cs4 - centered.y * sn4,
+              (centered.x * sn4 + centered.y * cs4) * (1.0 + uAsymmetry * 0.5)
+            );
+            float shellDist = length(shellCoord);
             float shellRadius = 0.3;
             float shellThickness = 0.04;
-            float shell = exp(-pow(dist - shellRadius, 2.0) / (2.0 * shellThickness * shellThickness));
+            float shell = exp(-pow(shellDist - shellRadius, 2.0) / (2.0 * shellThickness * shellThickness));
             // Outer falloff
-            shell *= 1.0 - smoothstep(0.42, 0.5, dist);
+            shell *= 1.0 - smoothstep(0.42, 0.5, shellDist);
             // Angular noise for uneven brightness around the shell
-            float angularN = noise(vec2(angle * 4.0 + uSeed, dist * 10.0));
+            float shellAng = atan(shellCoord.y, shellCoord.x);
+            float angularN = noise(vec2(shellAng * 4.0 + uSeed, shellDist * 10.0));
             shell *= 0.5 + 0.5 * angularN;
             n = angularN;
             density = shell;
