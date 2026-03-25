@@ -428,14 +428,24 @@ export class Planet {
             n = cellValue;
           } else if (planetType == 14) {
             // Fungal: dark base with bioluminescent glow-spot clusters
-            float terrain = snoise(pos * noiseScale) * 0.3 + 0.3;
-            float spots1 = snoise(pos * noiseScale * 4.0);
-            float spots2 = snoise(pos * noiseScale * 6.0 + vec3(100.0));
+            // Domain warp for organic, branching mycelium networks
+            vec3 warpedPos = pos + vec3(
+              snoise(pos * noiseScale * 0.6 + vec3(10.0)) * 0.15,
+              snoise(pos * noiseScale * 0.6 + vec3(20.0)) * 0.15,
+              snoise(pos * noiseScale * 0.6 + vec3(30.0)) * 0.15
+            );
+            float terrain = snoise(warpedPos * noiseScale) * 0.3 + 0.3;
+            // Branching network: ridge noise for vein-like structures
+            float veins = 1.0 - abs(snoise(warpedPos * noiseScale * 2.0));
+            veins = pow(veins, 2.5) * 0.4;
+            // Glow spots clustered along the network
+            float spots1 = snoise(warpedPos * noiseScale * 4.0);
+            float spots2 = snoise(warpedPos * noiseScale * 6.0 + vec3(100.0));
             float clusterMask = snoise(pos * noiseScale * 0.8) * 0.5 + 0.5;
             clusterMask = smoothstep(0.3, 0.7, clusterMask);
             float glow = max(spots1, spots2);
             glow = pow(max(glow, 0.0), 3.0) * clusterMask;
-            n = terrain + glow * 1.5;
+            n = terrain + veins + glow * 1.5;
           } else if (planetType == 15) {
             // Machine: rectangular circuit grid with lit/dark cells
             vec3 gridPos = pos * noiseScale * 4.0;
@@ -723,13 +733,22 @@ export class Planet {
             finalColor += accentColor * crackGlow * 0.25;
           }
 
-          // Fungal: bioluminescent spots glow in darkness
+          // Fungal: bioluminescent spots + veins glow in darkness
           if (planetType == 14) {
-            float spots1 = snoise(vPosition * noiseScale * 4.0);
-            float spots2 = snoise(vPosition * noiseScale * 6.0 + vec3(100.0));
-            float clusterMask = smoothstep(0.3, 0.7, snoise(vPosition * noiseScale * 0.8) * 0.5 + 0.5);
-            float emGlow = pow(max(max(spots1, spots2), 0.0), 3.0) * clusterMask;
-            finalColor += accentColor * emGlow * 0.35;
+            // Match domain warp from getSurfacePattern
+            vec3 fWarpPos = vPosition + vec3(
+              snoise(vPosition * noiseScale * 0.6 + vec3(10.0)) * 0.15,
+              snoise(vPosition * noiseScale * 0.6 + vec3(20.0)) * 0.15,
+              snoise(vPosition * noiseScale * 0.6 + vec3(30.0)) * 0.15
+            );
+            float fSpots1 = snoise(fWarpPos * noiseScale * 4.0);
+            float fSpots2 = snoise(fWarpPos * noiseScale * 6.0 + vec3(100.0));
+            float fCluster = smoothstep(0.3, 0.7, snoise(vPosition * noiseScale * 0.8) * 0.5 + 0.5);
+            float emGlow = pow(max(max(fSpots1, fSpots2), 0.0), 3.0) * fCluster;
+            // Vein glow (branching network glows faintly)
+            float fVeins = 1.0 - abs(snoise(fWarpPos * noiseScale * 2.0));
+            fVeins = pow(fVeins, 2.5) * 0.2;
+            finalColor += accentColor * (emGlow * 0.35 + fVeins * 0.15);
           }
 
           // Machine: grid lines glow like city lights

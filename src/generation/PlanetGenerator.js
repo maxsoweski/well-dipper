@@ -236,10 +236,24 @@ export class PlanetGenerator {
     },
     fungal: {
       colors: [
-        { base: [0.08, 0.15, 0.1], accent: [0.1, 0.8, 0.7] },      // Dark green + cyan glow
-        { base: [0.06, 0.12, 0.12], accent: [0.8, 0.2, 0.6] },      // Dark teal + pink glow
-        { base: [0.1, 0.1, 0.06], accent: [0.2, 0.9, 0.4] },        // Brown-green + green glow
-        { base: [0.05, 0.1, 0.1], accent: [0.3, 0.7, 0.9] },        // Dark teal + blue glow
+        { base: [0.08, 0.15, 0.1], accent: [0.1, 0.8, 0.7] },       // Dark green + cyan glow
+        { base: [0.06, 0.12, 0.12], accent: [0.8, 0.2, 0.6] },       // Dark teal + pink glow
+        { base: [0.1, 0.1, 0.06], accent: [0.2, 0.9, 0.4] },         // Brown-green + green glow
+        { base: [0.05, 0.1, 0.1], accent: [0.3, 0.7, 0.9] },         // Dark teal + blue glow
+        { base: [0.12, 0.05, 0.12], accent: [0.7, 0.1, 0.9] },       // Deep purple + violet biolum
+        { base: [0.06, 0.08, 0.05], accent: [0.4, 0.95, 0.3] },      // Near-black + neon green
+        { base: [0.1, 0.08, 0.04], accent: [0.9, 0.5, 0.1] },        // Dark soil + orange fruiting
+        { base: [0.04, 0.04, 0.06], accent: [0.2, 0.4, 0.95] },      // Dark void + electric blue
+        { base: [0.08, 0.06, 0.1], accent: [0.9, 0.3, 0.8] },        // Dark purple + magenta glow
+        { base: [0.12, 0.12, 0.08], accent: [0.8, 0.8, 0.2] },       // Brown + yellow-green biolum
+        { base: [0.03, 0.06, 0.08], accent: [0.15, 0.85, 0.85] },    // Abyssal dark + aqua glow
+        { base: [0.1, 0.04, 0.06], accent: [0.95, 0.2, 0.3] },       // Dark red + crimson fruiting
+        { base: [0.06, 0.1, 0.06], accent: [0.5, 0.9, 0.6] },        // Forest floor + pale green
+        { base: [0.08, 0.05, 0.08], accent: [0.6, 0.3, 0.95] },      // Dark + deep purple mycelium
+        { base: [0.05, 0.05, 0.03], accent: [0.85, 0.75, 0.4] },     // Ghostly white-gold (spectral)
+        { base: [0.04, 0.08, 0.12], accent: [0.3, 0.6, 0.85] },      // Deep sea + bioluminescent blue
+        { base: [0.1, 0.06, 0.02], accent: [0.7, 0.4, 0.1] },        // Dark amber + warm orange
+        { base: [0.02, 0.06, 0.04], accent: [0.1, 0.95, 0.5] },      // Near-black + emerald glow
       ],
     },
     machine: {
@@ -348,6 +362,7 @@ export class PlanetGenerator {
       'hot-jupiter': [1.5, 3.0],
       'sub-neptune': [1.5, 2.5],
       'venus': [1.5, 3.0],
+      'fungal': [1.5, 6.0], // Wide range: low = large sprawling networks, high = dense fine clusters
     };
     const noiseScale = rng.range(...(noiseScaleRanges[type] || [2.0, 5.0]));
 
