@@ -74,6 +74,18 @@ export class Planet {
         shadowPlanetCount: { value: 0 },
         shadowPlanetPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
         shadowPlanetRadius: { value: new Float32Array(2) },
+        // Gas giant storms
+        stormCount: { value: d.storms?.spots?.length || 0 },
+        stormPos: { value: (d.storms?.spots || []).map(s => new THREE.Vector3(...s.position)).concat(Array.from({ length: 3 - (d.storms?.spots?.length || 0) }, () => new THREE.Vector3())).slice(0, 3) },
+        stormSize: { value: new Float32Array((d.storms?.spots || []).map(s => s.size).concat([0, 0, 0]).slice(0, 3)) },
+        stormAspect: { value: new Float32Array((d.storms?.spots || []).map(s => s.aspect).concat([1, 1, 1]).slice(0, 3)) },
+        stormColor: { value: (d.storms?.spots || []).map(s => new THREE.Vector3(...s.color)).concat(Array.from({ length: 3 - (d.storms?.spots?.length || 0) }, () => new THREE.Vector3())).slice(0, 3) },
+        // Polar geometric storm
+        hasPolarStorm: { value: d.storms?.polarStorm ? 1.0 : 0.0 },
+        polarStormSides: { value: d.storms?.polarStorm?.sides || 6 },
+        polarStormPole: { value: d.storms?.polarStorm?.pole || 1.0 },
+        polarStormRadius: { value: d.storms?.polarStorm?.radius || 0.15 },
+        polarStormColor: { value: new THREE.Vector3(...(d.storms?.polarStorm?.color || [0.5, 0.5, 0.5])) },
       },
 
       vertexShader: /* glsl */ `
@@ -127,6 +139,19 @@ export class Planet {
         uniform int shadowPlanetCount;
         uniform vec3 shadowPlanetPos[2];
         uniform float shadowPlanetRadius[2];
+        // Gas giant storms
+        const int MAX_STORMS = 3;
+        uniform int stormCount;
+        uniform vec3 stormPos[3];
+        uniform float stormSize[3];
+        uniform float stormAspect[3];
+        uniform vec3 stormColor[3];
+        // Polar geometric storm
+        uniform float hasPolarStorm;
+        uniform int polarStormSides;
+        uniform float polarStormPole;
+        uniform float polarStormRadius;
+        uniform vec3 polarStormColor;
 
         varying vec3 vNormal;
         varying vec3 vPosition;
@@ -488,6 +513,45 @@ export class Planet {
 
             float polarDark = smoothstep(0.6, 1.0, abs(vPosition.y) / planetRadius);
             surfaceColor *= 1.0 - polarDark * 0.3;
+
+            // Storm spots (oval dark/bright spots like Jupiter's GRS)
+            vec3 surfNorm = normalize(vPosition);
+            for (int i = 0; i < MAX_STORMS; i++) {
+              if (i >= stormCount) break;
+              // Angular distance from storm center
+              float angDist = acos(clamp(dot(surfNorm, stormPos[i]), -1.0, 1.0));
+              // Stretch along latitude for oval shape
+              // Project displacement into lat/lon components
+              vec3 toFrag = surfNorm - stormPos[i] * dot(surfNorm, stormPos[i]);
+              float latComponent = abs(dot(normalize(toFrag), vec3(0.0, 1.0, 0.0)));
+              float ovalDist = angDist * (1.0 + (stormAspect[i] - 1.0) * latComponent);
+              // Domain warping for organic shape
+              float warp = snoise(surfNorm * noiseScale * 3.0 + vec3(float(i) * 50.0)) * 0.03;
+              ovalDist += warp;
+              // Soft-edged blend
+              float stormMask = 1.0 - smoothstep(stormSize[i] * 0.6, stormSize[i], ovalDist);
+              surfaceColor = mix(surfaceColor, stormColor[i], stormMask);
+            }
+
+            // Polar geometric storm (hexagonal/polygonal, like Saturn's hexagon)
+            if (hasPolarStorm > 0.5) {
+              float polarY = vPosition.y / planetRadius * polarStormPole;
+              if (polarY > 0.7) {
+                // Project onto polar plane
+                float angFromPole = acos(clamp(polarY, -1.0, 1.0));
+                float azimuth = atan(vPosition.z, vPosition.x);
+                // Regular polygon SDF
+                float sides = float(polarStormSides);
+                float sliceAngle = 6.2831853 / sides;
+                float polyDist = cos(floor(0.5 + azimuth / sliceAngle) * sliceAngle - azimuth) * angFromPole;
+                // Soft polygon edge
+                float polyMask = 1.0 - smoothstep(polarStormRadius * 0.7, polarStormRadius, polyDist);
+                // Add noise for organic edges
+                float edgeNoise = snoise(surfNorm * noiseScale * 4.0 + vec3(99.0)) * 0.02;
+                polyMask *= 1.0 - smoothstep(polarStormRadius * 0.6, polarStormRadius + edgeNoise, polyDist);
+                surfaceColor = mix(surfaceColor, polarStormColor, polyMask * 0.7);
+              }
+            }
           } else if (planetType == 6) {
             // Hot Jupiter: dark base with glowing day-side heat
             float swirl = pattern * 0.5 + 0.5;

@@ -52,6 +52,14 @@ export class PlanetGenerator {
         { base: [0.3, 0.3, 0.35], accent: [0.5, 0.4, 0.3] },        // Grey rock
         { base: [0.45, 0.3, 0.2], accent: [0.6, 0.45, 0.35] },      // Rust
         { base: [0.25, 0.2, 0.2], accent: [0.4, 0.35, 0.3] },       // Dark stone
+        { base: [0.5, 0.4, 0.25], accent: [0.65, 0.5, 0.3] },       // Sandstone
+        { base: [0.2, 0.18, 0.25], accent: [0.35, 0.3, 0.4] },      // Slate purple
+        { base: [0.4, 0.2, 0.15], accent: [0.55, 0.35, 0.2] },      // Red sandstone
+        { base: [0.3, 0.25, 0.3], accent: [0.45, 0.4, 0.45] },      // Mauve rock
+        { base: [0.15, 0.15, 0.18], accent: [0.3, 0.28, 0.35] },    // Basalt
+        { base: [0.55, 0.5, 0.35], accent: [0.7, 0.65, 0.45] },     // Ochre
+        { base: [0.22, 0.28, 0.22], accent: [0.35, 0.42, 0.32] },   // Green-grey rock
+        { base: [0.4, 0.35, 0.4], accent: [0.55, 0.5, 0.55] },      // Granite pink
       ],
     },
     'gas-giant': {
@@ -61,6 +69,21 @@ export class PlanetGenerator {
         { base: [0.6, 0.3, 0.2], accent: [0.8, 0.5, 0.3] },         // Warm red
         { base: [0.55, 0.45, 0.3], accent: [0.7, 0.6, 0.4] },       // Muted tan
         { base: [0.2, 0.3, 0.35], accent: [0.35, 0.5, 0.55] },      // Blue-grey
+        { base: [0.75, 0.6, 0.35], accent: [0.9, 0.75, 0.45] },     // Saturn pale gold
+        { base: [0.45, 0.35, 0.55], accent: [0.6, 0.5, 0.7] },      // Lavender bands
+        { base: [0.15, 0.25, 0.45], accent: [0.3, 0.45, 0.65] },    // Deep ocean blue
+        { base: [0.65, 0.4, 0.15], accent: [0.8, 0.55, 0.2] },      // Amber storm
+        { base: [0.35, 0.45, 0.35], accent: [0.5, 0.6, 0.45] },     // Olive green
+        { base: [0.5, 0.3, 0.4], accent: [0.7, 0.45, 0.55] },       // Rose bands
+        { base: [0.25, 0.2, 0.4], accent: [0.4, 0.35, 0.6] },       // Indigo
+        { base: [0.4, 0.5, 0.5], accent: [0.55, 0.65, 0.6] },       // Turquoise haze
+        { base: [0.7, 0.55, 0.4], accent: [0.85, 0.7, 0.5] },       // Peach cream
+        { base: [0.3, 0.4, 0.25], accent: [0.45, 0.55, 0.35] },     // Jade green
+        { base: [0.55, 0.35, 0.25], accent: [0.75, 0.5, 0.35] },    // Copper bands
+        { base: [0.18, 0.22, 0.3], accent: [0.3, 0.38, 0.5] },      // Dark steel blue
+        { base: [0.6, 0.55, 0.45], accent: [0.75, 0.7, 0.55] },     // Pale butter
+        { base: [0.45, 0.25, 0.3], accent: [0.65, 0.4, 0.45] },     // Burgundy bands
+        { base: [0.35, 0.3, 0.2], accent: [0.5, 0.45, 0.3] },       // Khaki brown
       ],
     },
     ice: {
@@ -70,6 +93,21 @@ export class PlanetGenerator {
         { base: [0.6, 0.7, 0.75], accent: [0.4, 0.5, 0.65] },       // Steel blue
         { base: [0.75, 0.85, 0.8], accent: [0.5, 0.7, 0.6] },       // Mint frost
         { base: [0.65, 0.65, 0.8], accent: [0.45, 0.45, 0.7] },     // Lavender ice
+        { base: [0.8, 0.9, 0.95], accent: [0.55, 0.7, 0.85] },      // Bright arctic
+        { base: [0.55, 0.6, 0.7], accent: [0.35, 0.4, 0.55] },      // Dark glacier
+        { base: [0.7, 0.75, 0.85], accent: [0.5, 0.55, 0.75] },     // Periwinkle ice
+        { base: [0.8, 0.8, 0.75], accent: [0.6, 0.6, 0.55] },       // Dirty ice
+        { base: [0.6, 0.75, 0.85], accent: [0.4, 0.55, 0.7] },      // Europa blue
+        { base: [0.9, 0.88, 0.85], accent: [0.7, 0.65, 0.6] },      // Warm white ice
+        { base: [0.5, 0.55, 0.65], accent: [0.3, 0.35, 0.5] },      // Titan grey
+        { base: [0.65, 0.8, 0.75], accent: [0.45, 0.6, 0.55] },     // Jade ice
+        { base: [0.72, 0.68, 0.82], accent: [0.52, 0.48, 0.68] },   // Amethyst frost
+        { base: [0.78, 0.82, 0.78], accent: [0.55, 0.6, 0.55] },    // Green-grey frost
+        { base: [0.6, 0.65, 0.55], accent: [0.4, 0.45, 0.35] },     // Methane haze ice
+        { base: [0.85, 0.8, 0.9], accent: [0.65, 0.6, 0.75] },      // Pink frost
+        { base: [0.55, 0.7, 0.8], accent: [0.35, 0.5, 0.65] },      // Deep frozen ocean
+        { base: [0.75, 0.7, 0.65], accent: [0.55, 0.5, 0.45] },     // Io-like sulfur ice
+        { base: [0.68, 0.78, 0.88], accent: [0.48, 0.58, 0.72] },   // Enceladus
       ],
     },
     lava: {
@@ -79,6 +117,21 @@ export class PlanetGenerator {
         { base: [0.12, 0.08, 0.1], accent: [0.8, 0.15, 0.05] },     // Dark + red glow
         { base: [0.1, 0.1, 0.15], accent: [0.6, 0.2, 0.8] },        // Dark + violet glow
         { base: [0.18, 0.15, 0.08], accent: [0.95, 0.8, 0.2] },     // Dark + bright gold glow
+        { base: [0.08, 0.05, 0.05], accent: [1.0, 0.2, 0.0] },      // Obsidian + pure red lava
+        { base: [0.12, 0.1, 0.12], accent: [0.85, 0.4, 0.6] },      // Dark + magenta cracks
+        { base: [0.14, 0.08, 0.05], accent: [0.9, 0.6, 0.1] },      // Dark brown + amber rivers
+        { base: [0.06, 0.06, 0.08], accent: [0.5, 0.8, 0.9] },      // Near-black + cyan hot cracks
+        { base: [0.1, 0.07, 0.05], accent: [0.95, 0.35, 0.0] },     // Charcoal + neon orange
+        { base: [0.08, 0.08, 0.12], accent: [0.7, 0.3, 0.9] },      // Dark + purple-white glow
+        { base: [0.16, 0.12, 0.06], accent: [0.85, 0.7, 0.1] },     // Brown crust + gold veins
+        { base: [0.05, 0.03, 0.06], accent: [0.4, 0.9, 0.3] },      // Obsidian + green plasma
+        { base: [0.12, 0.06, 0.02], accent: [0.95, 0.45, 0.0] },    // Dark rust + bright orange
+        { base: [0.1, 0.1, 0.08], accent: [0.9, 0.9, 0.4] },        // Grey + white-hot cracks
+        { base: [0.07, 0.05, 0.1], accent: [0.6, 0.1, 0.3] },       // Deep purple + blood red
+        { base: [0.15, 0.08, 0.04], accent: [1.0, 0.65, 0.0] },     // Sienna + solar gold
+        { base: [0.04, 0.04, 0.06], accent: [0.3, 0.5, 1.0] },      // Near-black + electric blue
+        { base: [0.1, 0.12, 0.08], accent: [0.8, 0.55, 0.15] },     // Greenish crust + amber
+        { base: [0.08, 0.04, 0.08], accent: [0.9, 0.2, 0.5] },      // Dark + hot pink fissures
       ],
     },
     ocean: {
@@ -96,6 +149,22 @@ export class PlanetGenerator {
         { base: [0.08, 0.18, 0.45], accent: [0.3, 0.5, 0.15] },     // Dark ocean + lush green
         { base: [0.12, 0.25, 0.5], accent: [0.35, 0.35, 0.2] },     // Ocean + savanna
         { base: [0.05, 0.15, 0.35], accent: [0.15, 0.35, 0.15] },   // Deep ocean + dark forest
+        { base: [0.15, 0.22, 0.45], accent: [0.4, 0.3, 0.15] },     // Ocean + desert continent
+        { base: [0.06, 0.12, 0.3], accent: [0.25, 0.55, 0.3] },     // Dark ocean + emerald
+        { base: [0.1, 0.18, 0.4], accent: [0.45, 0.4, 0.25] },      // Ocean + autumn land
+        { base: [0.08, 0.2, 0.42], accent: [0.5, 0.45, 0.35] },     // Ocean + rocky coast
+        { base: [0.05, 0.1, 0.3], accent: [0.35, 0.25, 0.15] },     // Deep ocean + arid land
+        { base: [0.12, 0.22, 0.48], accent: [0.2, 0.4, 0.25] },     // Bright ocean + olive land
+        { base: [0.1, 0.15, 0.38], accent: [0.55, 0.5, 0.3] },      // Ocean + golden plains
+        { base: [0.06, 0.16, 0.32], accent: [0.3, 0.5, 0.4] },      // Teal ocean + moss
+        { base: [0.15, 0.2, 0.35], accent: [0.4, 0.35, 0.3] },      // Warm ocean + brown land
+        { base: [0.08, 0.2, 0.5], accent: [0.15, 0.3, 0.18] },      // Vivid ocean + dark green
+        { base: [0.1, 0.16, 0.42], accent: [0.5, 0.3, 0.2] },       // Ocean + red soil
+        { base: [0.07, 0.14, 0.28], accent: [0.4, 0.45, 0.2] },     // Dark ocean + grassland
+        { base: [0.12, 0.18, 0.35], accent: [0.3, 0.45, 0.35] },    // Ocean + tundra green
+        { base: [0.05, 0.12, 0.25], accent: [0.45, 0.35, 0.25] },   // Deep ocean + sandstone
+        { base: [0.1, 0.2, 0.45], accent: [0.2, 0.35, 0.2] },       // Clear ocean + pine
+        { base: [0.08, 0.15, 0.38], accent: [0.55, 0.45, 0.15] },   // Ocean + wheat fields
       ],
     },
     'hot-jupiter': {
@@ -447,6 +516,72 @@ export class PlanetGenerator {
       atmoPhysics.retained, 0, // tidalHeatingRate for planets is ~0 (moons get tidal heating)
     );
 
+    // ── Gas giant storms ── (deterministic from seed)
+    let storms = null;
+    if (type === 'gas-giant') {
+      const stormSpots = [];
+      // ~40% of gas giants have at least one visible storm
+      if (rng.chance(0.4)) {
+        const count = rng.int(1, 3);
+        for (let i = 0; i < count; i++) {
+          // Position on sphere — avoid extreme poles for storm spots
+          const theta = rng.range(0, Math.PI * 2);
+          const phi = Math.acos(rng.range(-0.7, 0.7));
+          // Size: angular radius (0.1 = small storm, 0.3 = massive Great Red Spot)
+          const size = rng.range(0.08, 0.3);
+          // Aspect ratio for oval shape (1.2-2.5, elongated along latitude)
+          const aspect = rng.range(1.2, 2.5);
+          // Storm color: contrasting — darken or shift from base/accent
+          const colorChoice = rng.float();
+          let color;
+          if (colorChoice < 0.4) {
+            // Dark bruise (like Neptune's Great Dark Spot)
+            color = palette.base.map(c => c * 0.4);
+          } else if (colorChoice < 0.7) {
+            // Warm contrasting (like Jupiter's Great Red Spot)
+            color = [
+              Math.min(palette.accent[0] * 1.3 + 0.1, 1.0),
+              palette.accent[1] * 0.6,
+              palette.accent[2] * 0.4,
+            ];
+          } else {
+            // Bright pale spot (like Saturn's white storms)
+            color = palette.accent.map(c => Math.min(c * 1.5 + 0.15, 1.0));
+          }
+          stormSpots.push({
+            position: [
+              Math.sin(phi) * Math.cos(theta),
+              Math.cos(phi), // Y is up in the shader
+              Math.sin(phi) * Math.sin(theta),
+            ],
+            size,
+            aspect,
+            color,
+          });
+        }
+      }
+      // Polar geometric storm (~15% chance, like Saturn's hexagon)
+      let polarStorm = null;
+      if (rng.chance(0.15)) {
+        polarStorm = {
+          sides: rng.int(5, 8),
+          // Which pole (north or south)
+          pole: rng.chance(0.5) ? 1.0 : -1.0,
+          // Angular radius of the polygon
+          radius: rng.range(0.12, 0.22),
+          // Contrasting color
+          color: [
+            Math.min(palette.base[0] * 0.7 + 0.15, 1.0),
+            Math.min(palette.base[1] * 0.7 + 0.1, 1.0),
+            Math.min(palette.base[2] * 0.7 + 0.2, 1.0),
+          ],
+        };
+      }
+      if (stormSpots.length > 0 || polarStorm) {
+        storms = { spots: stormSpots, polarStorm };
+      }
+    }
+
     // Axial tilt — use ring tilt if rings exist, otherwise random
     const axialTilt = rings ? rings.tiltX : (rng.chance(0.1)
       ? rng.range(-1.5, 1.5)
@@ -486,6 +621,7 @@ export class PlanetGenerator {
       rings,
       clouds,
       atmosphere,
+      storms,
       moonCount,
       noiseScale,
       noiseDetail: rng.range(0.3, 0.8),
