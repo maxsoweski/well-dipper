@@ -162,6 +162,13 @@ export class MoonGenerator {
         color: [0.4, 0.6, 1.0],
         strength: rng.range(0.25, 0.5),
       } : null,
+      // Terrestrial moons can have faint auroras (N2/O2 atmosphere)
+      aurora: type === 'terrestrial' ? {
+        color: [0.3, 0.9, 0.4],     // Green oxygen line
+        intensity: rng.range(0.1, 0.4),
+        ringLatitude: rng.range(0.7, 0.85),
+        ringWidth: rng.range(0.08, 0.15),
+      } : null,
     };
   }
 

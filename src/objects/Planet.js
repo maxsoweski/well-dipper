@@ -80,6 +80,12 @@ export class Planet {
         stormSize: { value: new Float32Array((d.storms?.spots || []).map(s => s.size).concat([0, 0, 0]).slice(0, 3)) },
         stormAspect: { value: new Float32Array((d.storms?.spots || []).map(s => s.aspect).concat([1, 1, 1]).slice(0, 3)) },
         stormColor: { value: (d.storms?.spots || []).map(s => new THREE.Vector3(...s.color)).concat(Array.from({ length: 3 - (d.storms?.spots?.length || 0) }, () => new THREE.Vector3())).slice(0, 3) },
+        // Aurora
+        hasAurora: { value: d.aurora ? 1.0 : 0.0 },
+        auroraColor: { value: new THREE.Vector3(...(d.aurora?.color || [0.3, 0.8, 0.4])) },
+        auroraIntensity: { value: d.aurora?.intensity || 0.0 },
+        auroraRingLat: { value: d.aurora?.ringLatitude || 0.8 },
+        auroraRingWidth: { value: d.aurora?.ringWidth || 0.1 },
         // Polar geometric storm
         hasPolarStorm: { value: d.storms?.polarStorm ? 1.0 : 0.0 },
         polarStormSides: { value: d.storms?.polarStorm?.sides || 6 },
@@ -139,6 +145,12 @@ export class Planet {
         uniform int shadowPlanetCount;
         uniform vec3 shadowPlanetPos[2];
         uniform float shadowPlanetRadius[2];
+        // Aurora
+        uniform float hasAurora;
+        uniform vec3 auroraColor;
+        uniform float auroraIntensity;
+        uniform float auroraRingLat;
+        uniform float auroraRingWidth;
         // Gas giant storms
         const int MAX_STORMS = 3;
         uniform int stormCount;
@@ -771,6 +783,32 @@ export class Planet {
             // Warm city glow — streets + general area light
             float areaGlow = 0.5 + cityGrid * 0.5;
             finalColor += accentColor * areaGlow * districtBright * nightMask * 0.45;
+          }
+
+          // ── Aurora (night-side glowing rings near magnetic poles) ──
+          if (hasAurora > 0.5) {
+            // Night-side mask: aurora visible in darkness and twilight
+            float auroraNight = 1.0 - smoothstep(0.0, 0.25, diffuse);
+            // Latitude from equator (object-space Y, normalized)
+            float lat = abs(vPosition.y) / planetRadius;
+            // Ring shape: Gaussian-like band at the auroral latitude
+            float ringDist = abs(lat - auroraRingLat);
+            float ringMask = exp(-ringDist * ringDist / (2.0 * auroraRingWidth * auroraRingWidth));
+            // Add flowing noise for curtain-like structure
+            float azimuth = atan(vPosition.z, vPosition.x);
+            float curtain = snoise(vec3(azimuth * 3.0, lat * 10.0, time * 0.3)) * 0.5 + 0.5;
+            curtain += snoise(vec3(azimuth * 7.0, lat * 15.0, time * 0.5)) * 0.25;
+            // Rays/spikes extending upward from the ring
+            float rays = pow(curtain, 2.0);
+            // Combine: ring shape × curtain texture × night mask
+            float auroraMask = ringMask * rays * auroraNight * auroraIntensity;
+            // Subtle color variation: slightly shift hue along the ring
+            vec3 auroraFinal = auroraColor;
+            float hueShift = snoise(vec3(azimuth * 2.0, 0.0, time * 0.2)) * 0.15;
+            auroraFinal.r += hueShift;
+            auroraFinal.g -= hueShift * 0.5;
+            // Additive glow (auroras emit light, don't replace surface)
+            finalColor += auroraFinal * auroraMask * 0.6;
           }
 
           // ── Cloud layer (animated) ──
