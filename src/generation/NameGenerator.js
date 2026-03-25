@@ -90,7 +90,8 @@ const CATALOG_FORMATS = [
   { prefix: 'LHS',     minNum: 1,      maxNum: 5000,   separator: ' ' },   // Luyten Half-Second
   { prefix: 'Ross',    minNum: 1,      maxNum: 999,    separator: ' ' },   // Ross catalog
   { prefix: 'Wolf',    minNum: 1,      maxNum: 1500,   separator: ' ' },   // Wolf catalog
-  { prefix: 'Proxima', minNum: null,   maxNum: null,    separator: '' },    // single-word (no number)
+  { prefix: '2MASS',   minNum: 1000,   maxNum: 99999,  separator: ' J' },  // 2MASS survey
+  { prefix: 'SDSS',    minNum: 1000,   maxNum: 99999,  separator: ' J' },  // Sloan survey
 ];
 
 // Greek letter + constellation style (e.g., "Alpha Centauri")
@@ -246,53 +247,171 @@ function generatePrefixedName(rng) {
 
 
 // ─────────────────────────────────────────────────────────────────────
+// GALACTIC REGION CLASSIFICATION
+// ─────────────────────────────────────────────────────────────────────
+
+// Region-specific phoneme preferences. Core = short/formal, Rim = exotic/flowing.
+const REGION_ONSETS = {
+  core: ['k', 'k', 't', 't', 'g', 'd', 'b', 'z', 'kh', 'sk', 'gr', 'dr'],
+  arm: ONSETS, // default
+  rim: ['sh', 'th', 'ch', 'fl', 'v', 'v', 'l', 'l', 'n', 'w', 'ph', 'fr', 'gl', 'cr'],
+  halo: ['th', 'ph', 'kh', 'd', 'b', 'r', 'r', 'n', 'n', 'm', 's', 'h', 'h', 'l'],
+};
+
+const REGION_SUFFIXES = {
+  core: ['ax', 'ix', 'us', 'os', 'ek', 'ar', 'un', 'ot', 'ab'],
+  arm: SPACE_SUFFIXES, // default
+  rim: ['eon', 'ara', 'una', 'iel', 'eon', 'ura', 'ynn', 'ael', 'ova', 'ith'],
+  halo: ['oth', 'ath', 'enn', 'ull', 'arr', 'oss', 'or', 'ur', 'an', 'el'],
+};
+
+/**
+ * Classify a galactic position into a naming region.
+ * Returns a region key and sector code for collision avoidance.
+ *
+ * @param {{ x: number, y: number, z: number }} pos - galactocentric kpc
+ * @returns {{ region: string, sectorCode: number }}
+ */
+function _classifyRegion(pos) {
+  if (!pos) return { region: 'arm', sectorCode: 0 };
+
+  const distFromCenter = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
+  const heightAbovePlane = Math.abs(pos.y);
+
+  // Sector code: hash position into ~1 kpc cubes for collision avoidance
+  const sx = Math.floor(pos.x + 0.5);
+  const sy = Math.floor(pos.y + 0.5);
+  const sz = Math.floor(pos.z + 0.5);
+  // Simple spatial hash to create a unique sector number
+  const sectorCode = ((sx * 73856093) ^ (sy * 19349663) ^ (sz * 83492791)) >>> 0;
+
+  let region;
+  if (heightAbovePlane > 2.0) {
+    region = 'halo';
+  } else if (distFromCenter < 3.0) {
+    region = 'core';
+  } else if (distFromCenter > 14.0) {
+    region = 'rim';
+  } else {
+    region = 'arm';
+  }
+
+  return { region, sectorCode };
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // SYSTEM NAME GENERATION
 // ─────────────────────────────────────────────────────────────────────
 
+// Style distributions per region: [catalog, greek, pronounceable, prefixed, titled]
+const REGION_STYLES = {
+  core: [0.40, 0.15, 0.25, 0.15, 0.05], // core: formal, catalog-heavy
+  arm:  [0.20, 0.10, 0.40, 0.20, 0.10], // arm: default mix
+  rim:  [0.10, 0.05, 0.50, 0.25, 0.10], // rim: exotic, more fantasy names
+  halo: [0.15, 0.10, 0.35, 0.25, 0.15], // halo: archaic, titled
+};
+
 /**
- * Generate a star system name.
+ * Generate a star system name, optionally incorporating galactic position.
  *
- * Distribution (~30% catalog, ~70% pronounceable):
- * - 20% catalog designations (HD 47832, GJ 1214, Kepler-442)
- * - 10% Greek letter + constellation (Alpha Draconis)
- * - 40% pronounceable generated words (Velorath, Syndara)
- * - 20% prefix-based names (Alderon, Cyrath)
- * - 10% pronounceable + title (Keth Prime, Syndara Reach)
+ * When position is provided:
+ * - Naming style distribution varies by region (core/arm/rim/halo)
+ * - Phoneme preferences differ per region (core = harsh/short, rim = flowing/exotic)
+ * - A sector-derived hash is mixed into catalog numbers to prevent cross-region collisions
  *
  * @param {SeededRandom} rng
+ * @param {{ x: number, y: number, z: number }} [galacticPos] - optional position in kpc
  * @returns {string}
  */
-function generateSystemName(rng) {
-  const roll = rng.float();
+function generateSystemName(rng, galacticPos) {
+  const { region, sectorCode } = _classifyRegion(galacticPos);
+  const thresholds = REGION_STYLES[region];
+  // Mix sector code into RNG to diversify names across regions.
+  // This means the same seed at different positions generates different names.
+  const nameRng = sectorCode ? rng.child('sec-' + sectorCode) : rng;
+  const roll = nameRng.float();
 
-  if (roll < 0.20) {
-    // ── Catalog designation ──
-    return _catalogName(rng);
+  // Cumulative thresholds
+  const t0 = thresholds[0];
+  const t1 = t0 + thresholds[1];
+  const t2 = t1 + thresholds[2];
+  const t3 = t2 + thresholds[3];
+
+  if (roll < t0) {
+    // ── Catalog designation ── sector code mixed in for uniqueness
+    return _catalogName(nameRng, sectorCode);
   }
 
-  if (roll < 0.30) {
+  if (roll < t1) {
     // ── Greek letter + constellation ──
-    return rng.pick(GREEK_LETTERS) + ' ' + rng.pick(CONSTELLATIONS);
+    // Append sector-derived number suffix to avoid collisions (24×25=600 base combos isn't enough)
+    const sectorNum = sectorCode ? (sectorCode % 9000 + 1000) : nameRng.int(1000, 9999);
+    return nameRng.pick(GREEK_LETTERS) + ' ' + nameRng.pick(CONSTELLATIONS) + ' ' + sectorNum;
   }
 
-  if (roll < 0.70) {
-    // ── Pure pronounceable word ──
-    return generateWord(rng, 2, 3);
+  if (roll < t2) {
+    // ── Pure pronounceable word (region-flavored) ──
+    return _regionWord(nameRng, region, 2, 3);
   }
 
-  if (roll < 0.90) {
+  if (roll < t3) {
     // ── Prefix-based name ──
-    return generatePrefixedName(rng);
+    return _regionPrefixedName(nameRng, region);
   }
 
   // ── Pronounceable + title suffix ──
-  return generateWord(rng, 2, 2) + ' ' + rng.pick(SYSTEM_TITLES);
+  return _regionWord(nameRng, region, 2, 2) + ' ' + nameRng.pick(SYSTEM_TITLES);
+}
+
+/**
+ * Generate a pronounceable word using region-specific phonemes.
+ */
+function _regionWord(rng, region, minSyllables, maxSyllables) {
+  const onsets = REGION_ONSETS[region] || ONSETS;
+  const suffixes = REGION_SUFFIXES[region] || SPACE_SUFFIXES;
+  const count = rng.int(minSyllables, maxSyllables);
+  let word = '';
+
+  for (let i = 0; i < count; i++) {
+    if (i === count - 1 && rng.chance(0.35)) {
+      word += rng.pick(suffixes);
+    } else {
+      // Region-flavored syllable: use region onsets
+      const onset = rng.chance(i === 0 ? 0.90 : 0.80) ? rng.pick(onsets) : '';
+      const nucleus = rng.pick(NUCLEI);
+      const coda = rng.pick(CODAS);
+      word += onset + nucleus + coda;
+    }
+  }
+
+  word = smoothWord(word);
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
+ * Generate a prefix-based name with optional region influence.
+ */
+function _regionPrefixedName(rng, region) {
+  const prefix = rng.pick(FLAVOR_PREFIXES);
+  const suffixes = REGION_SUFFIXES[region] || SPACE_SUFFIXES;
+  let suffix = '';
+  const syllables = rng.int(1, 2);
+  for (let i = 0; i < syllables; i++) {
+    if (i === syllables - 1 && rng.chance(0.5)) {
+      suffix += rng.pick(suffixes);
+    } else {
+      suffix += generateSyllable(rng);
+    }
+  }
+  return prefix + suffix;
 }
 
 /**
  * Generate a catalog-style designation.
+ * When sectorCode is provided, it's mixed into the number to prevent
+ * cross-region collisions (two distant stars can't share "HD 47832").
  */
-function _catalogName(rng) {
+function _catalogName(rng, sectorCode = 0) {
   const catalog = rng.pick(CATALOG_FORMATS);
 
   // Some catalogs are single-word (like "Proxima")
@@ -300,7 +419,11 @@ function _catalogName(rng) {
     return catalog.prefix;
   }
 
-  const number = rng.int(catalog.minNum, catalog.maxNum);
+  // Mix sector code into the number range for uniqueness across regions
+  const range = catalog.maxNum - catalog.minNum;
+  const baseNum = rng.int(catalog.minNum, catalog.maxNum);
+  const offset = sectorCode ? (sectorCode % range) : 0;
+  const number = catalog.minNum + ((baseNum - catalog.minNum + offset) % range);
   return catalog.prefix + catalog.separator + number;
 }
 
@@ -444,12 +567,12 @@ function generateMoonName(rng, planetName, index, totalMoons) {
  *     planets: [{ name: string, moons: string[] }]
  *   }
  */
-function generateSystemNames(rng, systemData, overrideSystemName = null) {
+function generateSystemNames(rng, systemData, overrideSystemName = null, galacticPos = null) {
   // Use a dedicated child RNG so naming doesn't interfere with other generation
   const nameRng = rng.child('names');
 
   // System name — use override if provided (e.g., from warp target selection)
-  const systemName = overrideSystemName || generateSystemName(nameRng.child('system'));
+  const systemName = overrideSystemName || generateSystemName(nameRng.child('system'), galacticPos);
 
   // Star names
   const starName = generateStarName(

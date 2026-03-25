@@ -124,8 +124,12 @@ export class SkyRenderer {
         this._glowLayer.setPlayerPosition(this._playerPos);
       }
       // Debug: expose glow layer for console testing
-      // Usage: window._glowLayer.debugSetPosition(0, 5, 0) — view from above
       window._glowLayer = this._glowLayer;
+
+      // Restore target marker if one was pending (set before activate recreated the layer)
+      if (this._pendingTargetMarker && this._glowLayer) {
+        this._glowLayer.setTargetMarker(this._pendingTargetMarker);
+      }
 
       // Sky features (nebulae, clusters, etc.)
       this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);
@@ -191,6 +195,22 @@ export class SkyRenderer {
    */
   getScene() {
     return this._scene;
+  }
+
+  // ── Target marker (persists across activate) ──
+
+  setTargetMarker(pos) {
+    this._pendingTargetMarker = pos || null;
+    if (this._glowLayer) {
+      this._glowLayer.setTargetMarker(pos);
+    }
+  }
+
+  clearTargetMarker() {
+    this._pendingTargetMarker = null;
+    if (this._glowLayer) {
+      this._glowLayer.setTargetMarker(null);
+    }
   }
 
   // ── Warp interface (delegates to starfield layer) ──

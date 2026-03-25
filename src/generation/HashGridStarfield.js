@@ -352,9 +352,9 @@ export class HashGridStarfield {
       const cellSize = cfg.cell;
 
       const maxCells = Math.ceil(radiusKpc / cellSize);
-      // Skip types whose cell grid would be too dense for the search radius
-      // (> 200 cells per axis = 8M+ cells to check = too slow)
-      if (maxCells > 200) continue;
+      // Skip types whose cell grid would be too dense for the search radius.
+      // At 100 cells per axis, the cube is 8M cells — upper bound for performance.
+      if (maxCells > 100) continue;
 
       const gcx = Math.floor(cx / cellSize);
       const gcy = Math.floor(cy / cellSize);

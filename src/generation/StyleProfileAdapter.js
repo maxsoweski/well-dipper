@@ -56,6 +56,11 @@ export class StyleProfileAdapter {
         position[2] += Math.sin(angle) * ringR;
       }
 
+      // Map brightnessProfile string to shader int:
+      //   0 = center-bright, 1 = ring, 2 = scattered
+      const brightnessShapeMap = { 'center-bright': 0, 'ring': 1, 'scattered': 2 };
+      const brightnessShape = brightnessShapeMap[profile.brightnessProfile] ?? 0;
+
       layers.push({
         position,
         size: renderRadius * rng.range(0.5, 1.3),
@@ -68,6 +73,10 @@ export class StyleProfileAdapter {
         noiseSeed: [rng.float() * 100, rng.float() * 100],
         noiseScale: profile.noiseScale || 3.0,
         opacity: rng.range(0.25, 0.6),
+        domainWarpStrength: profile.domainWarpStrength ?? 0.7,
+        darkLaneStrength: profile.darkLaneStrength ?? 0.0,
+        asymmetry: profile.asymmetry ?? 0.0,
+        brightnessShape,
       });
     }
 

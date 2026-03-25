@@ -62,6 +62,8 @@ export class ProceduralGlowLayer {
         uTime: { value: 0.0 },
         uShowCenterMarker: { value: true },  // debug: show galactic center indicator
         uBarAngle: { value: galacticMap.barAngle || (28.0 * Math.PI / 180.0) },
+        uTargetPos: { value: new THREE.Vector3(0, 0, 0) },
+        uShowTarget: { value: false },
       },
 
       vertexShader: /* glsl */ `
@@ -91,6 +93,8 @@ export class ProceduralGlowLayer {
         uniform float uTime;
         uniform bool uShowCenterMarker;
         uniform float uBarAngle;
+        uniform vec3 uTargetPos;
+        uniform bool uShowTarget;
 
         varying vec3 vWorldDir;
 
@@ -428,6 +432,38 @@ export class ProceduralGlowLayer {
             if (centerDot > 0.999 && centerDot < 0.9995) { gl_FragColor = vec4(1.0, 0.3, 0.0, 0.8); return; }
           }
 
+          // Target reticle — thin green corner brackets
+          if (uShowTarget) {
+            vec3 toTarget = normalize(uTargetPos - cam);
+            // Project dir onto a plane perpendicular to toTarget
+            // to get 2D coordinates for bracket drawing
+            float targetDot = dot(dir, toTarget);
+            if (targetDot > 0.95) {
+              // Build a local 2D frame around the target direction
+              vec3 up = abs(toTarget.y) < 0.99 ? vec3(0, 1, 0) : vec3(1, 0, 0);
+              vec3 right = normalize(cross(up, toTarget));
+              vec3 localUp = cross(toTarget, right);
+              // 2D offset from target center
+              float u = dot(dir - toTarget * targetDot, right);
+              float v = dot(dir - toTarget * targetDot, localUp);
+              // Bracket size (angular) — ~2° half-size
+              float bSize = 0.035;
+              float lineW = 0.002;  // thin lines
+              float cornerLen = bSize * 0.4;  // bracket arm length
+              float au = abs(u);
+              float av = abs(v);
+              // Check if pixel is on any of the 4 corner brackets
+              bool onBracket = false;
+              // Corner at (+bSize, +bSize) and mirrors
+              if (au > bSize - cornerLen && au < bSize + lineW && av > bSize - lineW && av < bSize + lineW) onBracket = true;
+              if (av > bSize - cornerLen && av < bSize + lineW && au > bSize - lineW && au < bSize + lineW) onBracket = true;
+              if (onBracket) {
+                gl_FragColor = vec4(0.0, 0.9, 0.3, 0.8);
+                return;
+              }
+            }
+          }
+
           gl_FragColor = vec4(color * brightness * uBrightnessMax, brightness * uOpacity);
         }
       `,
@@ -463,6 +499,16 @@ export class ProceduralGlowLayer {
   /** Toggle the galactic center debug marker. */
   setShowCenterMarker(show) {
     this._sphere.material.uniforms.uShowCenterMarker.value = show;
+  }
+
+  /** Set a target marker (green reticle) pointing at a galactic position. */
+  setTargetMarker(pos) {
+    if (pos) {
+      this._sphere.material.uniforms.uTargetPos.value.set(pos.x, pos.y || 0, pos.z || 0);
+      this._sphere.material.uniforms.uShowTarget.value = true;
+    } else {
+      this._sphere.material.uniforms.uShowTarget.value = false;
+    }
   }
 
   /**

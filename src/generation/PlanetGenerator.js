@@ -416,6 +416,58 @@ export class PlanetGenerator {
       };
     }
 
+    // ── Aurora ── (physics-driven: magnetic field + atmosphere + stellar wind)
+    let aurora = null;
+    if (atmoPhysics.retained) {
+      // Magnetic field strength: iron core fraction × rotation factor
+      const isLocked = tidalState.locked && tidalState.lockType === 'synchronous';
+      const fieldStrength = composition.ironFraction * (isLocked ? 0.2 : 1.0);
+
+      // UV/stellar wind flux (1/r² from star)
+      const uvFlux = luminosityRel / Math.max(orbitRadiusAU * orbitRadiusAU, 0.001);
+
+      // Aurora requires magnetic field AND stellar wind interaction
+      // Strong field + moderate UV = clear auroral ovals (Earth, Jupiter)
+      // Weak field = no aurora (Venus, Mars)
+      // Very strong UV can overwhelm even weak fields (close-in planets around M-dwarfs)
+      if (fieldStrength > 0.05) {
+        // Aurora intensity: stronger stellar wind + stronger field = brighter
+        // But very close planets get overwhelmed (field compressed, aurora everywhere)
+        const windIntensity = Math.min(uvFlux, 50); // cap extreme cases
+        const auroraIntensity = Math.min(1.0, fieldStrength * windIntensity * 0.15);
+
+        // Only visible auroras above a threshold
+        if (auroraIntensity > 0.05) {
+          // Aurora color depends on atmospheric composition
+          // N2/O2: green (557.7nm oxygen) + red (630nm oxygen) — Earth
+          // H2/He: blue/purple (Balmer series hydrogen) — Jupiter, Saturn
+          // CO2: pink/red (CO2 dissociation → O emissions)
+          // Methane: blue-green
+          const auroraColors = {
+            'n2-o2': [0.3, 0.9, 0.4],    // Green (oxygen line)
+            'h2-he': [0.3, 0.2, 0.8],     // Blue-purple (hydrogen)
+            'co2-n2': [0.8, 0.3, 0.4],    // Pink-red
+            'co2': [0.9, 0.35, 0.5],      // Pink
+            'methane': [0.2, 0.6, 0.7],   // Blue-green
+          };
+          const color = auroraColors[atmoPhysics.composition] || [0.3, 0.8, 0.4];
+
+          // Aurora ring latitude: typically 60-75° from equator (15-30° from pole)
+          // Stronger field → narrower ring closer to pole
+          // Weaker field → wider, more diffuse ring, closer to equator
+          const ringLatitude = 0.7 + fieldStrength * 0.2; // 0.7 to 0.9 (in normalized Y)
+          const ringWidth = 0.15 - fieldStrength * 0.08;  // 0.07 to 0.15
+
+          aurora = {
+            color,
+            intensity: auroraIntensity,
+            ringLatitude,
+            ringWidth,
+          };
+        }
+      }
+    }
+
     // ── Clouds ── (physics-informed: need atmosphere + right temperature)
     const cloudChance = {
       'terrestrial': 0.85, 'ocean': 0.7, 'gas-giant': 0.0,
@@ -621,6 +673,7 @@ export class PlanetGenerator {
       rings,
       clouds,
       atmosphere,
+      aurora,
       storms,
       moonCount,
       noiseScale,

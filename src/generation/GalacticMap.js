@@ -1,4 +1,5 @@
 import { SeededRandom } from './SeededRandom.js';
+import { KNOWN_OBJECT_PROFILES } from '../data/KnownObjectProfiles.js';
 
 /**
  * GalacticMap — the structural/navigational galaxy that the player lives inside.
@@ -10,9 +11,9 @@ import { SeededRandom } from './SeededRandom.js';
  *
  * Architecture:
  *   Master seed → galaxy parameters (arms, bulge, disk)
- *   Galaxy → sectors (0.5 kpc cubes, cached with LRU)
- *   Sector → stars (5-30 per sector, positioned and seeded)
- *   Star → system seed + galaxy context (metallicity, age, star-type weights)
+ *   Gravitational potential → density model → star properties
+ *   Feature regions (4 kpc cubes, cached) → nebulae, clusters, etc.
+ *   HashGridStarfield → deterministic star placement via spatial hashing
  *
  * The galaxy is deterministic: same master seed → same galaxy, always.
  * Same star at same position → same system, always.
@@ -26,9 +27,6 @@ export class GalacticMap {
 
   // ── Galaxy structure constants ──
   // Milky Way-inspired defaults. Could be seed-varied for different galaxies.
-  static SECTOR_SIZE = 0.5;           // kpc per sector cube edge
-  static MAX_STARS_PER_SECTOR = 30;   // cap for densest regions
-  static MAX_CACHED_SECTORS = 64;     // LRU cache size
 
   // Legacy constants removed: DISK_SCALE_LENGTH, THIN_DISK_HEIGHT,
   // THICK_DISK_HEIGHT, THICK_DISK_NORM, BULGE_SCALE, BULGE_FLATTENING,
@@ -59,7 +57,7 @@ export class GalacticMap {
   // See Churchwell et al. 2009, Vallée 2017
   static ARM_PITCH_DEG = 12;
   // ARM_DENSITY_BOOST is now per-arm (see ARM_DEFS below), but we keep
-  // a base value for backward-compat calculations in _generateSector
+  // a base value for backward-compat calculations
   static ARM_DENSITY_BOOST = 1.8;
 
   // Each arm: { name, offset (radians), densityBoost, width (kpc), isMajor }
@@ -156,15 +154,24 @@ export class GalacticMap {
       this._potentialDensityNorm = TARGET_SOLAR_DENSITY / rawPotentialDensity;
     }
 
-    // Sector cache (LRU)
-    this._sectorCache = new Map();
-
     // Galactic features cache — Level 1 in the generation hierarchy.
     // Features are generated per "feature region" (4 kpc cubes) and cached.
     // Each region contains 0-N positioned features (nebulae, clusters, etc.)
     this._featureRegionCache = new Map();
     this._featureRegionSize = 4.0; // kpc — 8× sector size, covers many sectors
     this._maxFeatureRegions = 32;
+
+    // Known galactic objects (Messier/NGC) — pre-indexed by feature region
+    // so _generateFeatureRegion can inject them without scanning every time.
+    this._knownObjectsByRegion = new Map();
+    for (const [key, profile] of Object.entries(KNOWN_OBJECT_PROFILES)) {
+      const pos = profile.galacticPos;
+      const regionKey = this._knownObjectRegionKey(pos.x, pos.y, pos.z);
+      if (!this._knownObjectsByRegion.has(regionKey)) {
+        this._knownObjectsByRegion.set(regionKey, []);
+      }
+      this._knownObjectsByRegion.get(regionKey).push({ key, profile });
+    }
   }
 
   // ════════════════════════════════════════════════════════════
@@ -181,15 +188,6 @@ export class GalacticMap {
     h = Math.imul(h ^ (h >>> 13), 0x45d9f3b);
     h = (h ^ (h >>> 16)) >>> 0;
     return h;
-  }
-
-  /**
-   * Derive a deterministic string seed for a sector from its grid coordinates.
-   */
-  sectorSeed(sx, sy, sz) {
-    const h1 = GalacticMap.hashCombine(sx + 10000, sy + 10000);
-    const h2 = GalacticMap.hashCombine(h1, sz + 10000);
-    return this.masterSeed + '-sector-' + h2;
   }
 
   // ════════════════════════════════════════════════════════════
@@ -641,8 +639,13 @@ export class GalacticMap {
     const haloN = haloDensity * this._potentialDensityNorm;
 
     if (total < 1e-10) {
-      return { thin: 0.25, thick: 0.25, bulge: 0.25, halo: 0.25, totalDensity: 0 };
+      return { thin: 0.25, thick: 0.25, bulge: 0.25, halo: 0.25, totalDensity: 0,
+        thinAbs: 0, thickAbs: 0, bulgeAbs: 0, haloAbs: 0, barAbs: 0 };
     }
+
+    // Bar density: the bar boosts the total by (1 + barMassBoost), so
+    // barDensity = rawTotal * barMassBoost * norm (the excess over base)
+    const barAbs = rawTotal * barMassBoost * this._potentialDensityNorm;
 
     return {
       thin: thinN / total,
@@ -650,6 +653,13 @@ export class GalacticMap {
       bulge: bulgeN / total,
       halo: haloN / total,
       totalDensity: total,
+      // Absolute densities (stars/pc³) for each component — used by
+      // GalaxyLuminosityRenderer for independent per-component lighting.
+      thinAbs: thinN,
+      thickAbs: thickN,
+      bulgeAbs: bulgeN,
+      haloAbs: haloN,
+      barAbs: barAbs,
     };
   }
 
@@ -745,242 +755,6 @@ export class GalacticMap {
   escapeVelocity(R_kpc, z_kpc, theta_rad) {
     const phi = this.gravitationalPotential(R_kpc, z_kpc, theta_rad).total;
     return Math.sqrt(-2 * phi);
-  }
-
-  // ════════════════════════════════════════════════════════════
-  // SECTOR GENERATION — deterministic star placement
-  // ════════════════════════════════════════════════════════════
-
-  /**
-   * Convert world coordinates to sector grid indices.
-   */
-  worldToSector(x, y, z) {
-    const S = GalacticMap.SECTOR_SIZE;
-    return {
-      sx: Math.floor(x / S),
-      sy: Math.floor(y / S),
-      sz: Math.floor(z / S),
-    };
-  }
-
-  /**
-   * Get the sector key string for cache lookup.
-   */
-  getSectorKey(sx, sy, sz) {
-    return `${sx},${sy},${sz}`;
-  }
-
-  /**
-   * Generate or retrieve a sector from cache.
-   * A sector is a 0.5 kpc cube containing 0-30 stars.
-   *
-   * @param {number} sx - sector grid X
-   * @param {number} sy - sector grid Y
-   * @param {number} sz - sector grid Z
-   * @returns {{ key, stars: Array, deepSkyObjects: Array }}
-   */
-  getSector(sx, sy, sz) {
-    const key = this.getSectorKey(sx, sy, sz);
-
-    // Check cache
-    if (this._sectorCache.has(key)) {
-      const sector = this._sectorCache.get(key);
-      // Move to end (most recently used)
-      this._sectorCache.delete(key);
-      this._sectorCache.set(key, sector);
-      return sector;
-    }
-
-    // Generate
-    const sector = this._generateSector(sx, sy, sz);
-
-    // Cache with LRU eviction
-    this._sectorCache.set(key, sector);
-    if (this._sectorCache.size > GalacticMap.MAX_CACHED_SECTORS) {
-      // Delete oldest (first key in Map iteration order)
-      const oldestKey = this._sectorCache.keys().next().value;
-      this._sectorCache.delete(oldestKey);
-    }
-
-    return sector;
-  }
-
-  /**
-   * Internal: generate a new sector.
-   */
-  _generateSector(sx, sy, sz) {
-    const S = GalacticMap.SECTOR_SIZE;
-    const seed = this.sectorSeed(sx, sy, sz);
-    const rng = new SeededRandom(seed);
-
-    // Sector center in world coordinates
-    const centerX = (sx + 0.5) * S;
-    const centerY = (sy + 0.5) * S;
-    const centerZ = (sz + 0.5) * S;
-
-    // Density at sector center — derived from gravitational potential.
-    // The potential is the primary data; density emerges from it.
-    const R = Math.sqrt(centerX * centerX + centerZ * centerZ);
-    const theta = Math.atan2(centerZ, centerX);
-    const densities = this.potentialDerivedDensity(R, centerY, theta);
-    const armStr = this.spiralArmStrength(R, theta);
-
-    // Galactic features overlapping this sector (Level 1 → Level 2 cascade)
-    const overlappingFeatures = this.findFeaturesOverlappingSector(sx, sy, sz);
-
-    // ── Compute local density function that includes feature potentials ──
-    // This is the key to unified generation: features contribute their own
-    // gravitational potential wells, raising the local density. Stars form
-    // where the TOTAL potential (galaxy + features) is deep.
-    const _featureDensityAtPoint = (wx, wy, wz) => {
-      let featureDensity = 0;
-      for (const feat of overlappingFeatures) {
-        const spec = GalacticMap.FEATURE_TYPES[feat.type];
-        if (!spec) continue;
-        const multiplier = spec.contextOverrides.starCountMultiplier || 1;
-        if (multiplier <= 1) continue;
-
-        const dx = wx - feat.position.x;
-        const dy = wy - feat.position.y;
-        const dz = wz - feat.position.z;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        const eps = feat.radius;
-
-        // Plummer sphere density: ρ ∝ (1 + r²/ε²)^(-5/2)
-        // Scaled by the feature's star count multiplier
-        const plummerDensity = multiplier * Math.pow(1 + (dist * dist) / (eps * eps), -2.5);
-        featureDensity += plummerDensity;
-      }
-      return featureDensity;
-    };
-
-    // ── Determine star budget for this sector ──
-    // Base count from galactic potential + boost from feature potentials.
-    // Features can dramatically increase the local star count.
-    const solarDensity = 0.065;
-    const normalizedDensity = densities.totalDensity / solarDensity;
-    const targetAtSolar = 12;
-    // Arm density modulation is now built into potentialDerivedDensity (via theta).
-    // No separate arm multiplication needed — that would double-count.
-    const baseStarCount = normalizedDensity * targetAtSolar;
-
-    // Feature budget: compute at EACH feature's center within this sector,
-    // not just the sector center. Features are tiny relative to sectors —
-    // evaluating at the sector center misses their density contribution.
-    let featureStarBudget = 0;
-    for (const feat of overlappingFeatures) {
-      const spec = GalacticMap.FEATURE_TYPES[feat.type];
-      const mult = spec?.contextOverrides?.starCountMultiplier || 1;
-      if (mult <= 1) continue;
-      // How much of this feature overlaps this sector?
-      // Use the peak density (at feature center) scaled by volume overlap
-      const featVolume = (4 / 3) * Math.PI * feat.radius ** 3;
-      const sectorVolume = S * S * S;
-      // Approximate: if feature center is in this sector, most of feature is here
-      const fcx = feat.position.x - sx * S;
-      const fcy = feat.position.y - sy * S;
-      const fcz = feat.position.z - sz * S;
-      const centerHere = fcx >= 0 && fcx < S && fcy >= 0 && fcy < S && fcz >= 0 && fcz < S;
-      const overlap = centerHere ? 1.0 : 0.2;
-      // Star budget for this feature: scale multiplier by a base count
-      // representing how many stars the feature should have
-      const featureBase = mult * targetAtSolar * 3; // e.g. globular: 10 × 12 × 3 = 360
-      featureStarBudget += Math.round(featureBase * overlap);
-    }
-
-    const totalBudget = Math.min(
-      Math.max(Math.round(baseStarCount + featureStarBudget), 0),
-      GalacticMap.MAX_STARS_PER_SECTOR + Math.max(0, featureStarBudget), // raise cap for features
-    );
-
-    // ── Place stars via density-weighted rejection sampling ──
-    // Propose random positions within the sector, accept/reject based on
-    // local density (galaxy potential + feature potentials). Stars naturally
-    // concentrate where the total potential well is deepest.
-    const stars = [];
-    const maxAttempts = totalBudget * 20; // rejection sampling needs headroom (features are tiny)
-    let attempts = 0;
-    let placed = 0;
-
-    // Precompute max density for acceptance probability normalization.
-    // Must include the PEAK feature density (at feature centers), not just
-    // the sector center. Otherwise rejection sampling under-accepts near features.
-    let peakFeatureDensity = 0;
-    for (const feat of overlappingFeatures) {
-      const spec = GalacticMap.FEATURE_TYPES[feat.type];
-      const mult = spec?.contextOverrides?.starCountMultiplier || 1;
-      if (mult > 1) peakFeatureDensity = Math.max(peakFeatureDensity, mult); // Plummer peak = multiplier
-    }
-    const maxDensity = densities.totalDensity + peakFeatureDensity + 0.001;
-
-    while (placed < totalBudget && attempts < maxAttempts) {
-      attempts++;
-
-      const localX = rng.range(0, S);
-      const localY = rng.range(0, S);
-      const localZ = rng.range(0, S);
-      const worldX = sx * S + localX;
-      const worldY = sy * S + localY;
-      const worldZ = sz * S + localZ;
-
-      // Evaluate total density at this specific point
-      const ptR = Math.sqrt(worldX * worldX + worldZ * worldZ);
-      const ptDensity = this.potentialDerivedDensity(ptR, worldY).totalDensity;
-      const ptFeatureDensity = _featureDensityAtPoint(worldX, worldY, worldZ);
-      const totalLocalDensity = ptDensity + ptFeatureDensity;
-
-      // Accept/reject: probability proportional to local density
-      const acceptProb = Math.min(1, totalLocalDensity / maxDensity);
-      if (rng.float() > acceptProb) continue;
-
-      const starSeed = GalacticMap.hashCombine(
-        GalacticMap.hashCombine(sx + 10000, sy + 10000),
-        GalacticMap.hashCombine(sz + 10000, placed),
-      );
-
-      stars.push({
-        localX, localY, localZ,
-        worldX, worldY, worldZ,
-        seed: starSeed,
-        index: placed,
-      });
-      placed++;
-    }
-
-    // ── Tag stars inside features with featureContext ──
-    // Stars don't know they're "feature stars" — they just formed where
-    // the potential was deep. But we tag them so the nav computer and
-    // rendering can identify which feature they belong to.
-    for (const star of stars) {
-      star.featureContext = null;
-      for (const feat of overlappingFeatures) {
-        const dx = star.worldX - feat.position.x;
-        const dy = star.worldY - feat.position.y;
-        const dz = star.worldZ - feat.position.z;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (dist < feat.radius) {
-          star.featureContext = {
-            type: feat.type,
-            featureSeed: feat.seed,
-            metallicity: feat.context.metallicity,
-            age: feat.context.age,
-            overrides: feat.overrides,
-            featureRadius: feat.radius,
-            distFromCenter: dist,
-          };
-          break;
-        }
-      }
-    }
-
-    return {
-      key: this.getSectorKey(sx, sy, sz),
-      sx, sy, sz,
-      stars,
-      features: overlappingFeatures,
-      armStrength: armStr,
-      densities,
-    };
   }
 
   // ════════════════════════════════════════════════════════════
@@ -1277,7 +1051,7 @@ export class GalacticMap {
   // ════════════════════════════════════════════════════════════
   // GALACTIC FEATURES — Level 1 in generation hierarchy
   // Positioned nebulae, clusters, OB associations.
-  // Generated per "feature region" (4 kpc cubes), cached like sectors.
+  // Generated per "feature region" (4 kpc cubes), cached with LRU.
   // Features exist at specific positions for specific physical reasons.
   // See GAME_BIBLE.md §12 for full design.
   // ════════════════════════════════════════════════════════════
@@ -1373,6 +1147,15 @@ export class GalacticMap {
       ry: Math.floor(y / S),
       rz: Math.floor(z / S),
     };
+  }
+
+  /**
+   * Region key string for a world position — used to index known objects
+   * into the same grid as _featureRegionIndices.
+   */
+  _knownObjectRegionKey(x, y, z) {
+    const S = this._featureRegionSize;
+    return `fr:${Math.floor(x / S)},${Math.floor(y / S)},${Math.floor(z / S)}`;
   }
 
   /**
@@ -1487,6 +1270,55 @@ export class GalacticMap {
       }
     }
 
+    // ── Inject known galactic objects that fall in this region ──
+    // These replace or supplement procedural features at their real positions.
+    const regionKey = `fr:${rx},${ry},${rz}`;
+    const knownInRegion = this._knownObjectsByRegion.get(regionKey);
+    if (knownInRegion) {
+      for (const { key, profile } of knownInRegion) {
+        // Remove any procedural feature that overlaps this known object's position
+        // (within 2× its radius) to avoid visual doubling.
+        const pos = profile.galacticPos;
+        for (let i = features.length - 1; i >= 0; i--) {
+          const f = features[i];
+          const dx = f.position.x - pos.x;
+          const dy = f.position.y - pos.y;
+          const dz = f.position.z - pos.z;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist < profile.radius * 2) {
+            features.splice(i, 1);
+          }
+        }
+
+        // Derive context for the known object's position
+        const R = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
+        const theta = Math.atan2(pos.z, pos.x);
+        const knownDensities = this.potentialDerivedDensity(R, pos.y);
+        const knownArmStr = this.spiralArmStrength(R, theta);
+        const knownComponent = this._dominantComponent(knownDensities);
+
+        // Add the known object as a feature
+        features.push({
+          type: profile.type,
+          position: { x: pos.x, y: pos.y, z: pos.z },
+          radius: profile.radius,
+          seed: profile.messier || profile.ngc,
+          color: [...profile.colorPrimary],
+          knownProfile: profile,
+          isKnownObject: true,
+          context: {
+            metallicity: 0.0, // known objects don't need metallicity for rendering
+            age: 10.0, // reasonable default for known objects
+            component: knownComponent,
+            armStrength: knownArmStr,
+          },
+          overrides: {},
+          R_kpc: R,
+          z_kpc: pos.y,
+        });
+      }
+    }
+
     return features;
   }
 
@@ -1532,164 +1364,6 @@ export class GalacticMap {
 
     results.sort((a, b) => a.distance - b.distance);
     return results;
-  }
-
-  /**
-   * Find features that overlap a specific sector.
-   * Used by _generateSector to determine feature context for stars.
-   * @param {number} sx, sy, sz - sector grid coords
-   * @returns {Array} overlapping features
-   */
-  findFeaturesOverlappingSector(sx, sy, sz) {
-    const S = GalacticMap.SECTOR_SIZE;
-    const centerX = (sx + 0.5) * S;
-    const centerY = (sy + 0.5) * S;
-    const centerZ = (sz + 0.5) * S;
-    // Sector diagonal ≈ 0.5 * √3 ≈ 0.87 kpc
-    const sectorDiag = S * Math.sqrt(3) / 2;
-    return this.findNearbyFeatures(
-      { x: centerX, y: centerY, z: centerZ },
-      sectorDiag, // only features that actually overlap
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════
-  // NAVIGATION — finding nearby stars
-  // ════════════════════════════════════════════════════════════
-
-  /**
-   * Find the N nearest stars to a galactic position.
-   * Searches a 3x3x3 neighborhood of sectors (27 sectors).
-   *
-   * @param {{ x, y, z }} position - world coords in kpc
-   * @param {number} count - how many to return
-   * @returns {Array} sorted by distance, closest first
-   */
-  findNearestStars(position, count = 20) {
-    const { sx, sy, sz } = this.worldToSector(position.x, position.y, position.z);
-
-    // Search radius scales with requested count:
-    // count ≤ 30  → 3x3x3 = 27 sectors (fast, ~1.5 kpc)
-    // count ≤ 200 → 5x5x5 = 125 sectors (~2.5 kpc)
-    // count > 200 → 7x7x7 = 343 sectors (~3.5 kpc)
-    const halfR = count <= 30 ? 1 : count <= 200 ? 2 : 3;
-
-    const candidates = [];
-    for (let dx = -halfR; dx <= halfR; dx++) {
-      for (let dy = -halfR; dy <= halfR; dy++) {
-        for (let dz = -halfR; dz <= halfR; dz++) {
-          const sector = this.getSector(sx + dx, sy + dy, sz + dz);
-          for (const star of sector.stars) {
-            const distX = star.worldX - position.x;
-            const distY = star.worldY - position.y;
-            const distZ = star.worldZ - position.z;
-            const distSq = distX * distX + distY * distY + distZ * distZ;
-            candidates.push({ ...star, distSq });
-          }
-        }
-      }
-    }
-
-    // Sort by distance, return top N
-    candidates.sort((a, b) => a.distSq - b.distSq);
-    return candidates.slice(0, count);
-  }
-
-  /**
-   * Find all stars visible to the naked eye from a position.
-   * Searches outward in expanding shells, pre-filtering sectors:
-   * if no star in a sector could possibly be visible (based on the
-   * sector's brightest possible spectral type and distance), skip it.
-   *
-   * This eliminates the need for artificial background stars —
-   * every visible point is a real GalacticMap star.
-   *
-   * @param {{ x, y, z }} position
-   * @param {number} magThreshold — apparent magnitude limit (default 6.5 = naked eye)
-   * @returns {Array} visible stars sorted by apparent magnitude (brightest first)
-   */
-  findVisibleStars(position, magThreshold = 6.5) {
-    const { sx, sy, sz } = this.worldToSector(position.x, position.y, position.z);
-    const S = GalacticMap.SECTOR_SIZE;
-    const candidates = [];
-
-    // Maximum search radius: O-class visible to ~10 kpc = 20 sectors
-    const maxHalfR = 20;
-
-    // Brightest absolute magnitude per component type
-    // (what's the most luminous star a sector of this type could contain?)
-    const brightestMagByComponent = {
-      thin: -5.0,  // O-class in disk/arms
-      thick: 3.0,  // F-class (no O/B in thick disk)
-      bulge: 1.5,  // A-class (some young bulge stars)
-      halo: 7.0,   // K-class (no hot stars in halo)
-    };
-
-    for (let halfR = 0; halfR <= maxHalfR; halfR++) {
-      // Only iterate the SHELL at this radius (not the full cube)
-      // This avoids re-checking inner sectors
-      for (let dx = -halfR; dx <= halfR; dx++) {
-        for (let dy = -halfR; dy <= halfR; dy++) {
-          for (let dz = -halfR; dz <= halfR; dz++) {
-            // Only process the outer shell
-            if (Math.abs(dx) < halfR && Math.abs(dy) < halfR && Math.abs(dz) < halfR) continue;
-
-            // Sector center distance from player
-            const sectorCenterX = (sx + dx + 0.5) * S;
-            const sectorCenterY = (sy + dy + 0.5) * S;
-            const sectorCenterZ = (sz + dz + 0.5) * S;
-            const distX = sectorCenterX - position.x;
-            const distY = sectorCenterY - position.y;
-            const distZ = sectorCenterZ - position.z;
-            const sectorDist = Math.sqrt(distX * distX + distY * distY + distZ * distZ);
-
-            // ── Sector-level visibility pre-filter ──
-            // What's the brightest star this sector could contain?
-            const sectorR = Math.sqrt(sectorCenterX * sectorCenterX + sectorCenterZ * sectorCenterZ);
-            if (sectorR > GalacticMap.GALAXY_RADIUS * 1.2) continue;
-            if (Math.abs(sectorCenterY) > GalacticMap.GALAXY_HEIGHT * 2) continue;
-
-            const sectorDensities = this.potentialDerivedDensity(sectorR, sectorCenterY);
-            const sectorArm = this.spiralArmStrength(sectorR, Math.atan2(sectorCenterZ, sectorCenterX));
-
-            // Determine brightest possible spectral type
-            const comp = this._dominantComponent(sectorDensities);
-            let brightestMag = brightestMagByComponent[comp] ?? 7.0;
-            // Arm boost: arms can have O-class even in thick disk regions
-            if (sectorArm > 0.3 && comp !== 'halo') brightestMag = Math.min(brightestMag, -5.0);
-
-            // Apparent magnitude of the brightest possible star at this distance
-            const d_pc = Math.max(sectorDist * 1000, 0.1);
-            const bestApparentMag = brightestMag + 5 * Math.log10(d_pc / 10);
-
-            // If even the brightest possible star is invisible, skip this sector
-            if (bestApparentMag > magThreshold + 1.0) continue; // +1 margin for edge cases
-
-            // ── Sector passes pre-filter — generate and check individual stars ──
-            const sector = this.getSector(sx + dx, sy + dy, sz + dz);
-            for (const star of sector.stars) {
-              const sdx = star.worldX - position.x;
-              const sdy = star.worldY - position.y;
-              const sdz = star.worldZ - position.z;
-              const distSq = sdx * sdx + sdy * sdy + sdz * sdz;
-              if (distSq < 0.001 * 0.001) continue; // skip self
-
-              candidates.push({ ...star, distSq });
-            }
-          }
-        }
-      }
-
-      // Early exit: if we've searched far enough that no more O-class stars
-      // could be visible, stop expanding
-      const shellDist = halfR * S;
-      const bestPossibleMag = -5.0 + 5 * Math.log10(Math.max(shellDist * 1000, 0.1) / 10);
-      if (bestPossibleMag > magThreshold + 1.0) break;
-    }
-
-    // Sort by distance for consistent ordering
-    candidates.sort((a, b) => a.distSq - b.distSq);
-    return candidates;
   }
 
   /**

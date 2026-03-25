@@ -67,20 +67,6 @@ describe('Galactic Feature Layer', () => {
     }
   });
 
-  it('sectors know about overlapping features', () => {
-    // Generate a sector and check it has feature data
-    const sector = map.getSector(16, 0, 0); // solar neighborhood
-    expect(Array.isArray(sector.features)).toBe(true);
-    // Stars may or may not have featureContext depending on whether any features overlap
-    for (const star of sector.stars) {
-      // featureContext should be null or a valid object
-      if (star.featureContext) {
-        expect(star.featureContext.type).toBeDefined();
-        expect(star.featureContext.featureSeed).toBeDefined();
-      }
-    }
-  });
-
   it('deriveGalaxyContext includes feature context when inside a feature', () => {
     // Find a feature first, then check context at its center
     const features = map.findNearbyFeatures({ x: 6, y: 0, z: 0 }, 5.0);

@@ -401,7 +401,7 @@ function _setWarpTargetFromNavStar(navStar) {
     seed: navStar.seed,
     type: navStar.type,
   };
-  warpTarget.name = navStar.name || generateSystemName(new SeededRandom(`warp-nav-${navStar.seed}`));
+  warpTarget.name = navStar.name || generateSystemName(new SeededRandom(`warp-nav-${navStar.seed}`), { x: navStar.worldX, y: navStar.worldY, z: navStar.worldZ });
   warpTarget.blinkTimer = 0;
   warpTarget.blinkOn = true;
   warpTarget.turning = false;
@@ -2011,19 +2011,51 @@ debugPanel.setSpawnCallbacks({
     if (!galacticMap) return;
     if (galleryMode) exitGallery();
     playerGalacticPos = { ...pos };
+    console.log(`Teleporting to ${name}...`);
+
+    // Break into async steps so the browser doesn't freeze.
+    // Step 1: galaxy context + sky prep (fast)
     const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
-    skyRenderer.prepareForPosition(playerGalacticPos);
-    skyRenderer.activate();
-    skyRenderer.update(camera, 0);
-    // Generate a system at this position
-    const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.5, 1);
-    const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
-    const sysData = StarSystemGenerator.generate(starSeed, ctx);
-    sysData._destType = 'star-system';
-    spawnSystem({ forWarp: false, systemData: sysData });
-    debugPanel.setPlayerPos(playerGalacticPos);
-    const armInfo = ctx.armInfo;
-    console.log(`Debug teleport: ${name} → (${pos.x}, ${pos.y}, ${pos.z}) | arm=${ctx.spiralArmStrength.toFixed(2)} | nearestArm=${armInfo ? armInfo.armName : 'unknown'}${armInfo && armInfo.isMajor ? ' (MAJOR)' : ''}`);
+
+    // Update glow position immediately (instant visual feedback)
+    if (skyRenderer._glowLayer?.setPlayerPosition) {
+      skyRenderer._glowLayer.setPlayerPosition(playerGalacticPos);
+    }
+
+    // Step 2: starfield generation (slow ~2s) — deferred
+    setTimeout(() => {
+      skyRenderer.prepareForPosition(playerGalacticPos);
+      skyRenderer.activate();
+      skyRenderer.update(camera, 0);
+
+      // Step 3: system generation — deferred again
+      setTimeout(() => {
+        const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.01, 1);
+        const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
+        const knownSys = KnownSystems.findAt(playerGalacticPos);
+        let sysData;
+        if (knownSys) {
+          sysData = knownSys.generate();
+          sysData._knownSystemNames = knownSys.names;
+        } else {
+          sysData = StarSystemGenerator.generate(starSeed, ctx);
+        }
+        sysData._destType = 'star-system';
+        spawnSystem({ forWarp: false, systemData: sysData });
+        debugPanel.setPlayerPos(playerGalacticPos);
+
+        // Apply pending highlight marker (set by debug panel search)
+        if (debugPanel._pendingHighlight) {
+          if (window._glowLayer) {
+            window._glowLayer.setTargetMarker(debugPanel._pendingHighlight);
+          }
+          debugPanel._pendingHighlight = null;
+        }
+
+        const armInfo = ctx.armInfo;
+        console.log(`Debug teleport: ${name} → (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}) | arm=${ctx.spiralArmStrength.toFixed(2)} | nearestArm=${armInfo ? armInfo.armName : 'unknown'}${armInfo && armInfo.isMajor ? ' (MAJOR)' : ''}`);
+      }, 50);
+    }, 50);
   },
   spawnSystemType: (destType) => {
     _debugSpawnType(destType);
@@ -2065,7 +2097,7 @@ debugPanel.setSpawnCallbacks({
           skyRenderer.update(camera, 0);
           // Generate a system at this position
           const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
-          const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.5, 1);
+          const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.01, 1);
           const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'feat-debug';
           const sysData = StarSystemGenerator.generate(starSeed, ctx);
           sysData._destType = 'star-system';
@@ -4260,12 +4292,15 @@ function trySelectWarpTarget(rayDir) {
     warpTarget.navStarData = null;
   }
 
+  // Extract galactic position from star data for region-aware naming
+  const starPos = entry?.starData ? { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ } : null;
+
   if (entry?.isFeature) {
     // Clicked a galactic feature — route to a star inside it
     warpTarget.destType = `feature:${entry.featureType}`;
     warpTarget.featureData = entry.featureData;
     const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
     bodyInfo.showWarpTarget(`${warpTarget.name} (${entry.featureType.replace('-', ' ')})`);
   } else if (entry?.isExternalGalaxy) {
     // Clicked an external galaxy — Category C destination
@@ -4276,7 +4311,7 @@ function trySelectWarpTarget(rayDir) {
   } else {
     // Normal star — generate name from index
     const nameRng = new SeededRandom(`warp-star-${result.index}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
     bodyInfo.showWarpTarget(warpTarget.name);
   }
 
@@ -4318,18 +4353,21 @@ function autoSelectWarpTarget() {
     warpTarget.navStarData = null;
   }
 
+  // Extract galactic position for region-aware naming
+  const autoStarPos = entry?.starData ? { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ } : null;
+
   if (entry?.isFeature) {
     warpTarget.destType = `feature:${entry.featureType}`;
     warpTarget.featureData = entry.featureData;
     const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
   } else if (entry?.isExternalGalaxy) {
     warpTarget.destType = 'external-galaxy';
     warpTarget.galaxyData = entry.galaxyData;
     warpTarget.name = entry.galaxyData.name;
   } else {
     const nameRng = new SeededRandom(`warp-star-${result.index}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
   }
 
   warpTarget.blinkTimer = 0;

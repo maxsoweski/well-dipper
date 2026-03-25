@@ -120,17 +120,22 @@ export class SkyFeatureLayer {
     switch (feature.type) {
       // Gas features: rendered as sky billboards (no GalacticMap stars for gas)
       case 'emission-nebula':
-        return this._createNebulaBillboard(feature, position, size, brightness, false);
+      case 'planetary-nebula':
+        return this._createNebulaBillboard(feature, position, size, brightness);
       case 'dark-nebula':
         return this._createDarkNebulaBillboard(feature, position, size, brightness);
       case 'supernova-remnant':
         return this._createRemnantBillboard(feature, position, size, brightness);
-      // Star-region features: NOT rendered here — their stars are real
-      // GalacticMap entries that appear naturally in the starfield.
-      // Rendering them as billboards/point clouds would double-render.
+      // Star-region features: usually NOT rendered as billboards — their stars
+      // appear naturally in the starfield. EXCEPTION: known objects with
+      // nebulosity layers (e.g., Pleiades reflection nebulosity) DO get
+      // a faint nebula billboard for the gas component.
       case 'open-cluster':
       case 'ob-association':
       case 'globular-cluster':
+        if (feature.knownProfile && feature.knownProfile.layers > 0) {
+          return this._createNebulaBillboard(feature, position, size, brightness * 0.6);
+        }
         return null;
       default:
         return null;
@@ -141,6 +146,20 @@ export class SkyFeatureLayer {
    * Emission nebula — FBM noise billboard with H-alpha + OIII colors.
    */
   _createNebulaBillboard(feature, position, size, brightness) {
+    // Use knownProfile colors when available, otherwise fall back to generic OIII teal
+    const kp = feature.knownProfile;
+    const secondaryColor = kp
+      ? kp.colorSecondary
+      : [0.2, 0.7, 0.6]; // default OIII teal for generic emission nebulae
+    const colorMixStrength = kp
+      ? kp.colorMix
+      : 0.4; // default blend amount for generic nebulae
+
+    // Shape-specific parameters from profile (defaults preserve original behavior)
+    const domainWarpStrength = kp ? (kp.domainWarpStrength ?? 0.8) : 0.8;
+    const brightnessShapeMap = { 'center-bright': 0, 'ring': 1, 'scattered': 2 };
+    const brightnessShape = kp ? (brightnessShapeMap[kp.brightnessProfile] ?? 0) : 0;
+
     const geo = new THREE.PlaneGeometry(size, size);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
@@ -150,8 +169,12 @@ export class SkyFeatureLayer {
       side: THREE.DoubleSide,
       uniforms: {
         uColor: { value: new THREE.Vector3(feature.color[0], feature.color[1], feature.color[2]) },
+        uColorSecondary: { value: new THREE.Vector3(secondaryColor[0], secondaryColor[1], secondaryColor[2]) },
+        uColorMixStrength: { value: colorMixStrength },
         uBrightness: { value: brightness },
         uSeed: { value: this._hashSeed(feature.seed) },
+        uDomainWarpStrength: { value: domainWarpStrength },
+        uBrightnessShape: { value: brightnessShape },
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -162,8 +185,12 @@ export class SkyFeatureLayer {
       `,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
+        uniform vec3 uColorSecondary;
+        uniform float uColorMixStrength;
         uniform float uBrightness;
         uniform float uSeed;
+        uniform float uDomainWarpStrength;
+        uniform int uBrightnessShape;
         varying vec2 vUv;
 
         // Simple hash-based noise
@@ -207,16 +234,30 @@ export class SkyFeatureLayer {
         void main() {
           vec2 centered = vUv - 0.5;
           float dist = length(centered);
-          // Circular falloff
-          float falloff = 1.0 - smoothstep(0.2, 0.5, dist);
+
+          // Radial falloff — shape depends on uBrightnessShape
+          float falloff;
+          if (uBrightnessShape == 1) {
+            // Ring: bright ring with dim center (planetary nebulae like M57)
+            float ringDist = abs(dist - 0.25);
+            falloff = 1.0 - smoothstep(0.0, 0.2, ringDist);
+            falloff *= 1.0 - smoothstep(0.35, 0.5, dist);
+          } else if (uBrightnessShape == 2) {
+            // Scattered: gentler falloff for loose structures
+            falloff = 1.0 - smoothstep(0.35, 0.5, dist);
+          } else {
+            // Center-bright (default): original behavior
+            falloff = 1.0 - smoothstep(0.2, 0.5, dist);
+          }
           if (falloff < 0.01) discard;
 
           // FBM noise for nebula structure
           vec2 noiseCoord = centered * 4.0 + vec2(uSeed, uSeed * 0.7);
           float n = fbm(noiseCoord);
-          // Domain warp for organic shapes
+          // Domain warp for organic shapes — strength from profile
+          // Higher values = more stringy/filamentary (M1), lower = smoother (M57)
           vec2 warp = vec2(fbm(noiseCoord + 1.3), fbm(noiseCoord + 2.7));
-          n = fbm(noiseCoord + warp * 0.8);
+          n = fbm(noiseCoord + warp * uDomainWarpStrength);
 
           float density = n * falloff;
 
@@ -224,10 +265,9 @@ export class SkyFeatureLayer {
           float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
           if (density < threshold * 0.8) discard;
 
-          // Color: blend between primary and secondary (OIII teal for emission nebulae)
-          vec3 oiiiColor = vec3(0.2, 0.7, 0.6);
+          // Color: blend between primary and secondary using profile-driven mix
           float colorMix = smoothstep(0.3, 0.7, n);
-          vec3 col = mix(uColor, oiiiColor, colorMix * 0.4);
+          vec3 col = mix(uColor, uColorSecondary, colorMix * uColorMixStrength);
 
           gl_FragColor = vec4(col * uBrightness * density, 1.0);
         }
@@ -551,6 +591,20 @@ export class SkyFeatureLayer {
    * Supernova remnant — ring-shaped billboard with green emission.
    */
   _createRemnantBillboard(feature, position, size, brightness) {
+    // Use knownProfile colors when available, otherwise single-color rendering
+    const kp = feature.knownProfile;
+    const secondaryColor = kp
+      ? kp.colorSecondary
+      : feature.color; // fall back to primary (no blend for generic remnants)
+    const colorMixStrength = kp
+      ? kp.colorMix
+      : 0.0;
+
+    // Shape hints from profile: filamentary remnants (M1) get higher warp,
+    // ring-shaped remnants get standard structure
+    const domainWarpStrength = kp ? (kp.domainWarpStrength ?? 0.5) : 0.5;
+    const isFilamentary = kp ? (kp.shape === 'filamentary') : false;
+
     const geo = new THREE.PlaneGeometry(size, size);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
@@ -560,8 +614,12 @@ export class SkyFeatureLayer {
       side: THREE.DoubleSide,
       uniforms: {
         uColor: { value: new THREE.Vector3(feature.color[0], feature.color[1], feature.color[2]) },
+        uColorSecondary: { value: new THREE.Vector3(secondaryColor[0], secondaryColor[1], secondaryColor[2]) },
+        uColorMixStrength: { value: colorMixStrength },
         uBrightness: { value: brightness },
         uSeed: { value: this._hashSeed(feature.seed) },
+        uDomainWarpStrength: { value: domainWarpStrength },
+        uFilamentary: { value: isFilamentary ? 1 : 0 },
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -572,8 +630,12 @@ export class SkyFeatureLayer {
       `,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
+        uniform vec3 uColorSecondary;
+        uniform float uColorMixStrength;
         uniform float uBrightness;
         uniform float uSeed;
+        uniform float uDomainWarpStrength;
+        uniform int uFilamentary;
         varying vec2 vUv;
 
         float hash(vec2 p) {
@@ -587,6 +649,14 @@ export class SkyFeatureLayer {
           float a = hash(i); float b = hash(i + vec2(1,0));
           float c = hash(i + vec2(0,1)); float d = hash(i + vec2(1,1));
           return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+        }
+        float fbm(vec2 p) {
+          float v = 0.0, a = 0.5;
+          for (int i = 0; i < 4; i++) {
+            v += a * noise(p);
+            p *= 2.1; a *= 0.5;
+          }
+          return v;
         }
 
         float bayerDither(vec2 coord) {
@@ -608,20 +678,36 @@ export class SkyFeatureLayer {
           vec2 centered = vUv - 0.5;
           float dist = length(centered);
 
-          // Ring shape
-          float ringRadius = 0.3;
-          float ringWidth = 0.08;
-          float ring = exp(-pow(dist - ringRadius, 2.0) / (2.0 * ringWidth * ringWidth));
-
-          // Noise for filamentary structure
-          float angle = atan(centered.y, centered.x);
-          float n = noise(vec2(angle * 3.0 + uSeed, dist * 8.0));
-          ring *= 0.5 + 0.5 * n;
+          float density;
+          if (uFilamentary == 1) {
+            // Filamentary remnant (like M1 Crab): stringy structure, no ring
+            // Use domain-warped FBM for tangled filament look
+            vec2 noiseCoord = centered * 6.0 + vec2(uSeed, uSeed * 0.7);
+            vec2 warp = vec2(fbm(noiseCoord + 1.3), fbm(noiseCoord + 2.7));
+            float n = fbm(noiseCoord + warp * uDomainWarpStrength);
+            // Radial falloff — center-bright blob, not a ring
+            float falloff = 1.0 - smoothstep(0.2, 0.45, dist);
+            density = n * falloff;
+          } else {
+            // Ring-shaped remnant (default): ring + angular noise
+            float ringRadius = 0.3;
+            float ringWidth = 0.08;
+            float ring = exp(-pow(dist - ringRadius, 2.0) / (2.0 * ringWidth * ringWidth));
+            // Noise for filamentary structure along the ring
+            float angle = atan(centered.y, centered.x);
+            float n = noise(vec2(angle * 3.0 + uSeed, dist * 8.0));
+            ring *= 0.5 + 0.5 * n;
+            density = ring;
+          }
 
           float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
-          if (ring < threshold * 0.5) discard;
+          if (density < threshold * 0.5) discard;
 
-          gl_FragColor = vec4(uColor * uBrightness * ring, 1.0);
+          // Blend primary and secondary colors based on noise variation
+          float colorN = noise(centered * 5.0 + vec2(uSeed * 1.3, uSeed * 0.9));
+          vec3 col = mix(uColor, uColorSecondary, colorN * uColorMixStrength);
+
+          gl_FragColor = vec4(col * uBrightness * density, 1.0);
         }
       `,
     });

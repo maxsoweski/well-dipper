@@ -85,6 +85,19 @@ export class GalaxyCloud {
           uBarAngle: { value: armData.barAngle || 0 },
           uBarLength: { value: 2.2 },
           uBarWidth: { value: 0.7 },
+          // Per-component lighting: [gain, gamma, 0] packed into vec3
+          uCoreLight: { value: new THREE.Vector3(1.0, 0.6, 0) },
+          uBarLight: { value: new THREE.Vector3(1.5, 0.5, 0) },
+          uArmsLight: { value: new THREE.Vector3(3.0, 0.45, 0) },
+          uDiskLight: { value: new THREE.Vector3(2.0, 0.5, 0) },
+          // Per-component colors
+          uCoreColor: { value: new THREE.Color(1.0, 0.88, 0.55) },
+          uBarColor: { value: new THREE.Color(1.0, 0.82, 0.50) },
+          uArmsColor: { value: new THREE.Color(0.75, 0.85, 1.0) },
+          uDiskColor: { value: new THREE.Color(1.0, 0.92, 0.75) },
+          // Global exposure + highlight compression
+          uExposure: { value: 0.5 },
+          uHighlightCompress: { value: 0.8 },
         },
 
         vertexShader: /* glsl */ `
@@ -112,6 +125,18 @@ export class GalaxyCloud {
           uniform float uBarAngle;
           uniform float uBarLength;
           uniform float uBarWidth;
+          // Per-component lighting: x = gain, y = gamma
+          uniform vec3 uCoreLight;
+          uniform vec3 uBarLight;
+          uniform vec3 uArmsLight;
+          uniform vec3 uDiskLight;
+          // Per-component colors
+          uniform vec3 uCoreColor;
+          uniform vec3 uBarColor;
+          uniform vec3 uArmsColor;
+          uniform vec3 uDiskColor;
+          uniform float uExposure;
+          uniform float uHighlightCompress;
           varying vec2 vUv;
           varying vec3 vWorldPos;
 
@@ -172,6 +197,11 @@ export class GalaxyCloud {
             return exp(-0.5 * (sx*sx + sz*sz)) * 2.0;
           }
 
+          // Apply per-component gain + gamma
+          float compBright(float raw, vec3 light) {
+            return pow(raw * light.x, light.y);
+          }
+
           void main() {
             float wx = vWorldPos.x;
             float wz = vWorldPos.z;
@@ -182,21 +212,32 @@ export class GalaxyCloud {
             float edgeFade = 1.0 - smoothstep(uRadius * 0.8, uRadius, R);
             if (edgeFade < 0.01) discard;
 
-            // ── Galaxy structure ──
+            // ── Galaxy structure: separate components ──
             float disk = diskDensity(R);
             float arm = armDensity(R, theta);
-            float bar = barDensity(R, theta);
+            float barVal = barDensity(R, theta);
 
-            // Combine: disk base + arm boost + bar boost
             // Arms fade in from R=0.5 to R=2 (bulge region has no arms)
             float armBlend = smoothstep(0.5, 2.0, R);
-            float density = disk * (0.1 + arm * 2.0) * armBlend
-                          + disk * (1.0 - armBlend) // smooth disk in bulge
-                          + bar * disk;             // bar adds on top
 
-            // Tone map density
-            density = pow(density, 0.4);
-            density *= edgeFade;
+            // Decompose into 4 components (same split as GalaxyLuminosityRenderer):
+            // Core = disk in the bulge region (R < 2)
+            float coreDensity = disk * (1.0 - armBlend);
+            // Bar = bar contribution
+            float barDensity = barVal * disk;
+            // Arms = disk * arm strength in arm regions
+            float armsDensity = disk * arm * 2.0 * armBlend;
+            // Disk = remaining inter-arm disk
+            float diskDensity = disk * 0.1 * armBlend;
+
+            // Apply per-component gain + gamma (independent tone mapping)
+            float coreBright = compBright(coreDensity, uCoreLight) * edgeFade;
+            float barBright = compBright(barDensity, uBarLight) * edgeFade;
+            float armsBright = compBright(armsDensity, uArmsLight) * edgeFade;
+            float diskBright = compBright(diskDensity, uDiskLight) * edgeFade;
+
+            // Total density for cloud coverage threshold
+            float density = coreBright + barBright + armsBright + diskBright;
 
             // ── Domain-warped FBM (the Nebula.js magic) ──
             vec2 noiseP = vec2(wx, wz) * uNoiseScale / uRadius + uNoiseSeed;
@@ -208,7 +249,6 @@ export class GalaxyCloud {
             float warped = fbm(noiseP + 3.5 * q);
 
             // Cloud shape: threshold scales with density
-            // Dense regions → full cloud, sparse → mostly void
             float coverage = min(1.0, density * 2.5);
             float lo = 0.1 + (1.0 - coverage) * 0.35;
             float hi = lo + 0.3;
@@ -218,22 +258,28 @@ export class GalaxyCloud {
             float coreSmooth = smoothstep(2.0, 0.5, R);
             cloud = mix(cloud, 1.0, coreSmooth);
 
-            float alpha = density * cloud * uOpacity;
+            // ── Per-component color compositing ──
+            // Each component contributes its color * brightness * cloud
+            vec3 col = uCoreColor * coreBright
+                     + uBarColor * barBright
+                     + uArmsColor * armsBright
+                     + uDiskColor * diskBright;
+            col *= cloud;
+
+            // Apply exposure (overall brightness dial)
+            col *= uExposure;
+
+            // Highlight compression: soft-clamp bright areas using
+            // Reinhard tone mapping per-channel. At compress=1.0,
+            // values are fully compressed (never exceed 1.0).
+            // At compress=0.0, no compression (linear, can blow out).
+            vec3 compressed = col / (1.0 + col);
+            col = mix(col, compressed, uHighlightCompress);
+
+            float alpha = length(col) * cloud * uOpacity;
             if (alpha < 0.003) discard;
 
-            // ── Color ──
-            // Warm golden center → blue-white arms → warm inter-arm
-            vec3 bulgeCol = vec3(1.0, 0.82, 0.5);
-            vec3 armCol = vec3(0.7, 0.8, 1.0);
-            vec3 diskCol = vec3(0.9, 0.85, 0.75);
-            float bf = smoothstep(2.5, 0.0, R);
-            vec3 col = mix(
-              mix(diskCol, armCol, smoothstep(0.2, 0.7, arm * armBlend)),
-              bulgeCol,
-              bf
-            );
-
-            gl_FragColor = vec4(col * alpha, alpha);
+            gl_FragColor = vec4(col * uOpacity, alpha);
           }
         `,
       });
@@ -256,6 +302,53 @@ export class GalaxyCloud {
   setOpacity(val) {
     for (const layer of this._layers) {
       layer.material.uniforms.uOpacity.value = val;
+    }
+  }
+
+  /**
+   * Set per-component lighting: gain and gamma.
+   * @param {string} component — 'core', 'bar', 'arms', or 'disk'
+   * @param {number} gain — brightness multiplier
+   * @param {number} gamma — power curve (< 1 = brighter midtones)
+   */
+  setComponentLight(component, gain, gamma) {
+    const key = {
+      core: 'uCoreLight', bar: 'uBarLight',
+      arms: 'uArmsLight', disk: 'uDiskLight',
+    }[component];
+    if (!key) return;
+    for (const layer of this._layers) {
+      layer.material.uniforms[key].value.set(gain, gamma, 0);
+    }
+  }
+
+  /**
+   * Set per-component color.
+   * @param {string} component — 'core', 'bar', 'arms', or 'disk'
+   * @param {number} r — red 0-1
+   * @param {number} g — green 0-1
+   * @param {number} b — blue 0-1
+   */
+  setExposure(val) {
+    for (const layer of this._layers) {
+      layer.material.uniforms.uExposure.value = val;
+    }
+  }
+
+  setHighlightCompress(val) {
+    for (const layer of this._layers) {
+      layer.material.uniforms.uHighlightCompress.value = val;
+    }
+  }
+
+  setComponentColor(component, r, g, b) {
+    const key = {
+      core: 'uCoreColor', bar: 'uBarColor',
+      arms: 'uArmsColor', disk: 'uDiskColor',
+    }[component];
+    if (!key) return;
+    for (const layer of this._layers) {
+      layer.material.uniforms[key].value.set(r, g, b);
     }
   }
 

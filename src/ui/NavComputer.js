@@ -1157,7 +1157,7 @@ export class NavComputer {
       if (!this._loadedSeen.has(key)) {
         this._loadedSeen.add(key);
         let name = '';
-        try { name = generateSystemName(this._makeRng(s.seed)); } catch {}
+        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch {}
         this._localStars.push({
           wx: s.worldX, wy: s.worldY, wz: s.worldZ,
           name, spectral: s.type,

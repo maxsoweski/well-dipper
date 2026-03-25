@@ -1461,6 +1461,47 @@ Higher-level navigation. See your position in the galaxy, pick destinations, see
 - **Per-object dithering:** Bayer dithering in each object's fragment shader, not a screen filter.
 - **Dual-resolution rendering:** Scene at low res, starfield at full res, composited with alpha-based shader.
 
+### Development Philosophy [BOTH]
+
+These principles govern all development decisions. They emerged from hard-won lessons during the project and must be followed at every stage.
+
+#### 1. Hash Grid Authority
+The hash grid IS the galaxy. Every star the player can see, visit, or interact with comes from `HashGridStarfield`. There is no parallel star system. The nav computer, the sky renderer, the warp system, and all future features read from the same source. If a feature needs star data, it queries the hash grid — never a separate list, cache, or approximation.
+
+**Why:** The original sector-based system produced different stars than the sky renderer, causing bugs where warping to a star in the nav computer resolved to the wrong star. Unifying on the hash grid eliminated an entire class of consistency bugs.
+
+#### 2. No Tack-On Systems
+Every feature must flow naturally from the generation pipeline. If rendering needs data that generation doesn't provide, the fix is ALWAYS in generation — never in rendering.
+
+**The test:** If you removed the feature code, would the generation pipeline still produce correct data that the feature could use? If the pipeline doesn't produce the right data, fix the pipeline — don't add a post-process that papers over it.
+
+**Why:** Multiple times, features were built by hacking visual output (recoloring background stars to fake cluster membership, adding screen-wide filters). These looked like filters, not like authentic world properties. The pipeline must produce truth; rendering just displays it.
+
+#### 3. Per-Object Retro Aesthetic
+Dithering, posterization, and resolution reduction happen per-object in fragment shaders — not as a screen-wide post-process filter. Each visual layer (stars, planets, nebulae, galaxy glow, HUD) may render at its own resolution.
+
+**Why:** A screen-wide retro filter looks like a filter applied to a modern game. Per-object retro rendering looks like an authentic retro game. The difference is immediately visible and fundamental to the aesthetic.
+
+#### 4. BPM-Synced Animation
+All camera movements, autopilot transitions, and sound effects synchronize to a master BPM clock. The screensaver is a musical experience — everything happens in time.
+
+**Why:** The screensaver is Max's brother's musical showcase. Random timing looks random; beat-synced timing looks intentional and cinematic. BPM sync is what makes the screensaver feel designed rather than procedural.
+
+#### 5. Model Produces → Pipeline Carries → Renderer Consumes
+Data flows one direction through the system:
+- **Model** (GalacticMap, hash grid, generators) produces raw data
+- **Pipeline** (star data objects, system data objects) carries it
+- **Renderer** (Three.js meshes, shaders, HUD) consumes and displays it
+
+Never go backward. The renderer never writes data that the model reads. The pipeline never modifies what the model produced. If the renderer needs different data, change the model.
+
+**Why:** Bidirectional data flow creates circular dependencies and makes bugs impossible to trace. One-directional flow means every bug has a clear origin: either the model produced wrong data, the pipeline lost it, or the renderer displayed it incorrectly.
+
+#### 6. First Principles Over Patches
+If a system needs more than 2-3 patches to achieve a goal, the architecture is wrong. Stop patching, step back, and ask whether the underlying design supports what you're trying to do. Redesign the piece, don't keep adding tape.
+
+**Why:** The original sector system (12 stars per sector) was patched repeatedly to produce more stars. Each patch created new bugs. Stepping back and rebuilding on a hash grid (200+ billion stars) solved everything the patches were trying to fix — and opened capabilities that patches never could have.
+
 ### Runtime GPU Detection [BOTH]
 
 The game should check the WebGL renderer at startup. If it detects software rendering ("Basic Render Driver", "SwiftShader", "llvmpipe"), display a warning: **"Performance warning: GPU not detected. Restart your browser for the best experience."**

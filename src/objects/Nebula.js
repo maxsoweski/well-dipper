@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { StarFlare } from './StarFlare.js';
 
 /**
  * Nebula — renders nebulae as layered semi-transparent planes with noise shaders.
@@ -27,14 +26,12 @@ export class Nebula {
     this.mesh.add(this._stars);
 
     // Create central white dwarf for planetary nebulae
+    // Simple emissive sphere + glow sprite — no need for full StarFlare
+    // diffraction spikes or chromatic aberration at nebula scale.
     this._centralStar = null;
     if (nebulaData.centralStar) {
-      this._centralStar = new StarFlare({
-        color: nebulaData.centralStar.color,
-        radius: nebulaData.centralStar.radius,
-        luminosity: nebulaData.centralStar.luminosity,
-      });
-      this._centralStar.addTo(this.mesh);
+      this._centralStar = this._createCentralStar(nebulaData.centralStar);
+      this.mesh.add(this._centralStar.group);
     }
   }
 
@@ -57,6 +54,10 @@ export class Nebula {
           uNoiseScale: { value: layerData.noiseScale },
           uNoiseSeed: { value: new THREE.Vector2(layerData.noiseSeed[0], layerData.noiseSeed[1]) },
           uTime: { value: 0 },
+          uDomainWarpStrength: { value: layerData.domainWarpStrength ?? 3.5 },
+          uDarkLaneStrength: { value: layerData.darkLaneStrength ?? 0.0 },
+          uAsymmetry: { value: layerData.asymmetry ?? 0.0 },
+          uBrightnessShape: { value: layerData.brightnessShape ?? 0 },
         },
 
         vertexShader: /* glsl */ `
@@ -73,6 +74,10 @@ export class Nebula {
           uniform float uNoiseScale;
           uniform vec2 uNoiseSeed;
           uniform float uTime;
+          uniform float uDomainWarpStrength;
+          uniform float uDarkLaneStrength;
+          uniform float uAsymmetry;
+          uniform int uBrightnessShape;
           varying vec2 vUv;
 
           // ── Simplex-like noise (hash-based) ──
@@ -112,18 +117,49 @@ export class Nebula {
             vec2 noiseP = uv * uNoiseScale + uNoiseSeed;
 
             // Domain warping: feed one FBM into another for organic swirls
+            // uDomainWarpStrength controls how much the noise folds on itself
+            // (higher = more stringy/filamentary structure)
             vec2 q = vec2(
               fbm(noiseP + vec2(0.0, 0.0) + uTime * 0.01),
               fbm(noiseP + vec2(5.2, 1.3) + uTime * 0.008)
             );
-            float warped = fbm(noiseP + 3.5 * q);
+            float warped = fbm(noiseP + uDomainWarpStrength * q);
 
             // Cloud shape from warped noise
             float cloud = smoothstep(0.15, 0.55, warped);
 
-            // Radial falloff: fade out toward edges of the plane
-            float dist = length(uv - 0.5);
-            float falloff = 1.0 - smoothstep(0.25, 0.5, dist);
+            // Dark lane carving: high-frequency noise cuts dark channels
+            // when uDarkLaneStrength > 0 (e.g. M42's dust lanes)
+            if (uDarkLaneStrength > 0.0) {
+              vec2 laneP = uv * uNoiseScale * 2.5 + uNoiseSeed * 1.7;
+              float laneNoise = fbm(laneP + q * 0.5);
+              // Carve dark channels where lane noise is low
+              float lane = smoothstep(0.25, 0.45, laneNoise);
+              cloud *= mix(1.0, lane, uDarkLaneStrength);
+            }
+
+            // Asymmetry: offset the radial falloff center so the nebula
+            // isn't perfectly centered (e.g. M42's bright bar is off-center)
+            vec2 falloffCenter = vec2(0.5) + vec2(uAsymmetry * 0.15, 0.0);
+            float dist = length(uv - falloffCenter);
+
+            // Radial falloff — shape depends on uBrightnessShape:
+            //   0 = center-bright (default): gaussian-like center falloff
+            //   1 = ring: bright ring with dim center (planetary nebulae)
+            //   2 = scattered: flatter falloff for loose structures
+            float falloff;
+            if (uBrightnessShape == 1) {
+              // Ring: peak brightness at dist ~0.25, dim at center and edges
+              float ringDist = abs(dist - 0.25);
+              falloff = 1.0 - smoothstep(0.0, 0.25, ringDist);
+              falloff *= 1.0 - smoothstep(0.35, 0.5, dist); // still fade at outer edge
+            } else if (uBrightnessShape == 2) {
+              // Scattered: gentler falloff, more uniform brightness
+              falloff = 1.0 - smoothstep(0.35, 0.5, dist);
+            } else {
+              // Center-bright (default): original behavior
+              falloff = 1.0 - smoothstep(0.25, 0.5, dist);
+            }
 
             float alpha = cloud * falloff * uOpacity;
 
@@ -227,6 +263,62 @@ export class Nebula {
   }
 
   /**
+   * Create a simple central star for planetary nebulae.
+   * Just an emissive sphere + additive glow sprite — bright colored dot,
+   * no diffraction spikes or chromatic aberration needed.
+   */
+  _createCentralStar(starData) {
+    const group = new THREE.Group();
+    const [r, g, b] = starData.color;
+    const color = new THREE.Color(r, g, b);
+    const radius = starData.radius;
+
+    // Emissive sphere core
+    const sphereGeo = new THREE.IcosahedronGeometry(radius, 2);
+    const sphereMat = new THREE.MeshBasicMaterial({ color });
+    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+    sphere.frustumCulled = false;
+    group.add(sphere);
+
+    // Additive glow sprite
+    const glowScale = radius * 4;
+    const glowMat = new THREE.SpriteMaterial({
+      map: this._getGlowTexture(),
+      color,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    });
+    const glow = new THREE.Sprite(glowMat);
+    glow.scale.set(glowScale, glowScale, 1);
+    group.add(glow);
+
+    return { group, sphere, sphereGeo, sphereMat, glow, glowMat, glowScale };
+  }
+
+  /** Shared radial gradient glow texture (created once, cached on class). */
+  _getGlowTexture() {
+    if (Nebula._glowTexture) return Nebula._glowTexture;
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const cx = size / 2;
+    const gradient = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.5)');
+    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.15)');
+    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.04)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    Nebula._glowTexture = new THREE.CanvasTexture(canvas);
+    Nebula._glowTexture.magFilter = THREE.NearestFilter;
+    return Nebula._glowTexture;
+  }
+
+  /**
    * Update animation (slow gas drift) and billboard layers toward camera.
    * @param {number} deltaTime — seconds since last frame
    * @param {THREE.Camera} [camera] — if provided, layers face the camera
@@ -243,9 +335,14 @@ export class Nebula {
         layer.quaternion.copy(camera.quaternion);
       }
     }
-    // Update central star (billboard LOD, brightness pulse)
+    // Scale central star glow to stay visible at distance
     if (this._centralStar && camera) {
-      this._centralStar.update(deltaTime, camera);
+      const cs = this._centralStar;
+      const dist = camera.position.distanceTo(this.mesh.position);
+      const minAngularSize = 0.012;
+      const distScale = dist * minAngularSize;
+      const scale = Math.max(cs.glowScale, distScale);
+      cs.glow.scale.set(scale, scale, 1);
     }
   }
 
@@ -267,7 +364,11 @@ export class Nebula {
       this._stars.material.dispose();
     }
     if (this._centralStar) {
-      this._centralStar.dispose();
+      const cs = this._centralStar;
+      cs.sphereGeo.dispose();
+      cs.sphereMat.dispose();
+      cs.glowMat.dispose();
+      // Don't dispose the shared glow texture
     }
   }
 }

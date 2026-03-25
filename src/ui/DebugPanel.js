@@ -48,6 +48,8 @@ export class DebugPanel {
   }
 
   setPlayerPos(pos) { this._playerPos = pos; }
+  getSearchTarget() { return this._searchTarget || null; }
+  clearSearchTarget() { this._searchTarget = null; }
   setGalacticMap(gm) { this._galacticMap = gm; }
   setRealStarCatalog(catalog) { this._realStarCatalog = catalog; }
   setRealFeatureCatalog(catalog) { this._realFeatureCatalog = catalog; }
@@ -296,8 +298,12 @@ export class DebugPanel {
     // ── Star/Object Search ──
     html += '<div class="debug-section"><h3>GO TO OBJECT</h3>';
     html += '<div class="debug-seed-row">';
-    html += '<input type="text" id="debug-star-search" class="debug-input" placeholder="Search: Sirius, Betelgeuse, Sol...">';
+    html += '<input type="text" id="debug-star-search" class="debug-input" placeholder="Search: Sirius, M42, Helix...">';
     html += '<button class="debug-btn" id="debug-star-search-go">GO</button>';
+    html += '</div>';
+    html += '<div style="margin-top:4px;font-size:10px">';
+    html += '<label style="color:#8cf;cursor:pointer;margin-right:10px"><input type="checkbox" id="debug-search-near" checked> Near</label>';
+    html += '<label style="color:#5f8;cursor:pointer"><input type="checkbox" id="debug-search-highlight" checked> Highlight</label>';
     html += '</div>';
     html += '<div id="debug-search-results" class="debug-find-status"></div>';
     html += '</div>';
@@ -642,18 +648,58 @@ export class DebugPanel {
         }
 
         if (matches.length === 1 || query === matches[0].name?.toLowerCase()) {
-          // Exact or single match — teleport directly
+          // Exact or single match — teleport
           const match = matches[0];
-          const pos = match.isFeatureResult
+          const targetPos = match.isFeatureResult
             ? match.position
             : { x: match.x, y: match.y, z: match.z };
           const name = match.name || match.harrisId || '?';
+
+          // "Near" mode: offset from the feature so you can see it
+          const nearCheckbox = container.querySelector('#debug-search-near');
+          const nearMode = nearCheckbox?.checked && match.isFeatureResult && match.radius;
+
+          let teleportPos;
+          if (nearMode) {
+            // Calculate viewing distance: feature fills ~25° of the sky.
+            // distance = radius / tan(12.5°) ≈ radius * 4.5
+            // Minimum 0.005 kpc (5 pc) so you're not inside tiny objects.
+            const viewDist = Math.max(match.radius * 4.5, 0.005);
+            // Direction from feature toward galactic center,
+            // so the glow is behind the feature, not in front of it.
+            const dx = -(targetPos.x || 0);
+            const dy = -(targetPos.y || 0);
+            const dz = -(targetPos.z || 0);
+            const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+            teleportPos = {
+              x: (targetPos.x || 0) + (dx / d) * viewDist,
+              y: (targetPos.y || 0) + (dy / d) * viewDist,
+              z: (targetPos.z || 0) + (dz / d) * viewDist,
+            };
+            console.log(`[NEAR] Feature radius: ${(match.radius * 1000).toFixed(1)} pc, viewing dist: ${(viewDist * 1000).toFixed(1)} pc, angular size: ~${(2 * Math.atan(match.radius / viewDist) * 180 / Math.PI).toFixed(1)}°`);
+          } else {
+            teleportPos = targetPos;
+          }
+
           if (this._spawnCallbacks?.teleportToPosition) {
-            this._spawnCallbacks.teleportToPosition(pos, name);
+            this._spawnCallbacks.teleportToPosition(teleportPos, name);
+
+            // Store the target for reticle rendering
+            this._searchTarget = {
+              name,
+              position: targetPos,
+              radius: match.radius || 0,
+              type: match.type || '',
+            };
+            // Set target marker after teleport completes (async — glow layer gets recreated)
+            const highlightCb2 = container.querySelector('#debug-search-highlight');
+            this._pendingHighlight = highlightCb2?.checked ? targetPos : null;
+
             const desc = match.isFeatureResult
               ? `${match.type}, r=${match.radius?.toFixed?.(4) ?? match.radius} kpc`
               : `${match.spect}-class, mag ${match.mag}`;
-            if (searchResults) searchResults.textContent = `→ ${name} (${desc})`;
+            const modeLabel = nearMode ? ' (nearby view)' : '';
+            if (searchResults) searchResults.textContent = `→ ${name} (${desc})${modeLabel}`;
           }
         } else {
           // Multiple matches — show list
@@ -670,6 +716,20 @@ export class DebugPanel {
         e.stopPropagation();
         if (e.code === 'Enter') doSearch();
       });
+
+      // Highlight toggle — turn reticle on/off for current target
+      const highlightCb = container.querySelector('#debug-search-highlight');
+      if (highlightCb) {
+        highlightCb.addEventListener('change', () => {
+          if (window._glowLayer) {
+            if (highlightCb.checked && this._searchTarget) {
+              window._glowLayer.setTargetMarker(this._searchTarget.position);
+            } else {
+              window._glowLayer.setTargetMarker(null);
+            }
+          }
+        });
+      }
     }
 
     // Seed input

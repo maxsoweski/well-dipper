@@ -73,6 +73,11 @@ export class NebulaGenerator {
         noiseSeed: [rng.float() * 100, rng.float() * 100],
         noiseScale: rng.range(1.5, 3.5),
         opacity: rng.range(0.25, 0.65),
+        // Shape-specific parameters for procedural variety
+        domainWarpStrength: rng.range(0.3, 1.0),
+        darkLaneStrength: rng.range(0, 0.3), // emission nebulae can have dust lanes
+        asymmetry: rng.range(0, 0.4),
+        brightnessShape: 0, // emission nebulae are center-bright
       });
     }
 
@@ -175,6 +180,11 @@ export class NebulaGenerator {
         noiseSeed: [rng.float() * 100, rng.float() * 100],
         noiseScale: rng.range(2.0, 4.0),
         opacity: rng.range(0.3, 0.7),
+        // Planetary nebulae: ring brightness, low warp, no dark lanes
+        domainWarpStrength: rng.range(0.3, 0.6),
+        darkLaneStrength: 0,
+        asymmetry: rng.range(0, 0.2),
+        brightnessShape: 1, // ring falloff
       });
     }
 
