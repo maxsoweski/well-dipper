@@ -152,24 +152,25 @@ export class ProceduralGlowLayer {
         float spiralArmStrength(float R, float theta) {
           // Arms start at the end of the bar (~2.5 kpc) and wind outward.
           // No arm structure inside the bar radius.
-          if (R < 2.0) return 0.0;
+          if (R < 1.2) return 0.0;
           float bestStr = 0.0;
-          // Fade arms in from 2.0 to 3.5 kpc (bar-to-arm transition)
-          float armFade = smoothstep(2.0, 3.5, R);
+          // Fade arms in from bar tips (1.2 kpc) — fully visible by 2.5 kpc
+          float armFade = smoothstep(1.2, 2.5, R);
           float logR = log(max(R, 0.01));
 
           float sinPitch = sin(12.0 * PI / 180.0);
 
-          for (int i = 0; i < 2; i++) {
-            // Only the 2 major arms for the glow
+          for (int i = 0; i < 8; i++) {
+            if (i >= uArmCount) break;
             float armTheta = uArmOffsets[i] + uPitchK * logR;
 
-            // Simple angular distance — mod to [-π, π]
             float dTheta = mod(theta - armTheta + 3.0 * PI, 2.0 * PI) - PI;
             float perpDist = abs(dTheta) * R * sinPitch;
 
-            float armW = uArmWidths[i] * (0.15 + 0.04 * R);
+            float armW = uArmWidths[i] * (0.3 + 0.06 * R);  // wide, diffuse arms
             float str = uArmBoosts[i] * exp(-0.5 * perpDist * perpDist / (armW * armW));
+            // Minor arms visible but subdominant
+            if (i >= 2) str *= 0.4;
             str *= armFade;
             bestStr = max(bestStr, str);
           }
@@ -207,17 +208,27 @@ export class ProceduralGlowLayer {
           float thin = exp(-R * R / (2.0 * 4.0 * 4.0))   // radial: ~4 kpc
                      * exp(-z * z / (2.0 * 0.08 * 0.08));  // vertical: ~80 pc
 
-          // Bulge/bar — only slightly wider than the disk, compact
-          // Reference photo shows the center barely swells above the band.
-          float barR = sqrt(R * R + z * z * 8.0);  // strongly compressed vertically
-          float bulge = 2.0 * exp(-barR * barR / (2.0 * 1.2 * 1.2));
+          // Galactic bar — elongated, rotated by uBarAngle from Sun-center line.
+          // Converts (R, theta) to bar-aligned coordinates for triaxial Gaussian.
+          float cosBar = cos(uBarAngle);
+          float sinBar = sin(uBarAngle);
+          float gx = R * cos(theta);
+          float gz = R * sin(theta);
+          float bx = gx * cosBar + gz * sinBar;   // along bar axis
+          float bz = -gx * sinBar + gz * cosBar;   // across bar axis
+          // Compact bright bar — small relative to the galaxy
+          float bulge = 5.0 * exp(-0.5 * (
+            bx * bx / (1.5 * 1.5) +    // half-length 1.5 kpc (compact)
+            bz * bz / (0.35 * 0.35) +  // half-width 350 pc (narrow)
+            z * z / (0.3 * 0.3)         // vertical 300 pc
+          ));
 
           // Spiral arm modulation — moderate contrast with soft transitions.
           // Arms brighten the band but don't create sharp bulges.
           float armStr = spiralArmStrength(R, theta);
           // Mild smoothing — preserve the difference between major and minor arms
           armStr = pow(max(armStr, 0.001), 0.7);
-          float armMod = 0.2 + armStr * 3.0;  // inter-arm very dim (0.2), arm center bright (3.2)
+          float armMod = 0.5 + armStr * 2.0;  // inter-arm has faint glow (0.5), arms bright (2.5)
 
           // Disk truncation
           float trunc = smoothstep(GALAXY_R, GALAXY_R - 1.5, R);
@@ -333,21 +344,26 @@ export class ProceduralGlowLayer {
           float tCross = (abs(dir.y) > 0.01) ? (-cam.y / dir.y) : -1.0;
           bool hasCrossing = tCross > NEAR_FADE && tCross < MAX_DIST && abs(cam.y) > 0.5;
 
-          // Sample array: 8 dense samples around disk crossing + 8 coarse samples
+          // When above the disk (hasCrossing): only dense samples at the disk crossing.
+          // No coarse samples — they can accidentally hit the disk at wrong (R,theta),
+          // creating ghost arm artifacts.
+          // When in the disk (!hasCrossing): uniform samples along the full ray.
+          int numSamples = hasCrossing ? 8 : NUM_STEPS;
+
           for (int i = 0; i < NUM_STEPS; i++) {
+            if (i >= numSamples) break;
+
             float t;
             float effStep;
 
-            if (hasCrossing && i < 8) {
-              // Dense samples: ±0.35 kpc around the disk crossing, 0.1 kpc apart
+            if (hasCrossing) {
+              // Dense samples only: ±0.35 kpc around the disk crossing
               t = tCross + (float(i) - 3.5) * 0.1;
               effStep = 0.1;
             } else {
-              // Coarse samples: spread across the full range
-              int ci = hasCrossing ? (i - 8) : i;
-              int totalCoarse = hasCrossing ? 8 : NUM_STEPS;
-              t = (float(ci) + 0.5) * (MAX_DIST / float(totalCoarse));
-              effStep = MAX_DIST / float(totalCoarse);
+              // Uniform samples along the full ray
+              t = (float(i) + 0.5) * (MAX_DIST / float(NUM_STEPS));
+              effStep = MAX_DIST / float(NUM_STEPS);
             }
 
             if (t < 0.0 || t > MAX_DIST) continue;
@@ -377,78 +393,40 @@ export class ProceduralGlowLayer {
             weightAccum += contribution * lumWeight;
           }
 
-          // Tone mapping — preserve more dynamic range so center is clearly brighter.
-          // Use pow() instead of sqrt() for steeper contrast curve.
+          // ── Tone mapping ──
+          // Brightness adapts to viewing angle.
+          // From above: looking through full disk = bright.
+          // From inside: looking along disk = moderate.
+          float aboveFactor = abs(cam.y) > 0.5 ? 1.2 : 0.65;
           float brightness = glow * 6.0;
           brightness = 1.0 - exp(-brightness);
-          brightness = pow(brightness, 0.7);  // steeper than sqrt, preserves center/edge contrast
+          brightness *= aboveFactor;
 
-          // Scale for transparency — brighter toward galactic center
-          vec3 toCenterDir2 = normalize(-cam);
-          float centerBright = smoothstep(0.2, 0.9, dot(dir, toCenterDir2));
-          brightness *= 0.55 + centerBright * 0.35;  // 0.55 at edges, up to 0.90 at center
+          if (brightness < 0.005) discard;
 
-          // ── Edge patchiness ──
-          // Subtle noise only at the fringes of the band.
-          // Creates uneven edges that the dithering turns into stippled pattern.
-          // NO noise in dark sky regions — only where there's already glow.
-          if (brightness > 0.02) {
-            vec3 noiseDir1 = dir * 25.0;  // ~8° features
-            float edgeNoise = noise3D(noiseDir1);
-            // Only affect the transition zone (edges of the band)
-            float edgeFactor = smoothstep(0.03, 0.25, brightness);
-            float noiseAmt = (1.0 - edgeFactor) * 0.12;  // up to 12% at edges, 0% in core
-            brightness += (edgeNoise - 0.5) * noiseAmt;
-          }
+          // ── Color: warm center, silvery elsewhere ──
+          vec3 toCenter = normalize(-cam);
+          float centerDot = dot(dir, toCenter);
+          float centerInfluence = smoothstep(0.6, 0.97, centerDot);
+          vec3 color = mix(
+            vec3(0.95, 0.93, 0.90),          // silvery white (disk)
+            vec3(1.0, 0.78, 0.45),            // warm golden (center)
+            centerInfluence * 0.45
+          );
 
-          if (brightness < 0.008) discard;
-
-          // Final color from weighted stellar populations
-          vec3 color = weightAccum > 0.001 ? colorAccum / weightAccum : vec3(1.0, 0.88, 0.65);
-
-          // Direction-based color shift toward galactic center.
-          // Looking toward center = more evolved giants = warmer/golden.
-          // This is a real physical effect — the bulge's old stellar population
-          // dominates the integrated light in that direction.
-          vec3 toCenterDir = normalize(-cam);
-          float centerDot = dot(dir, toCenterDir);
-          float centerInfluence = smoothstep(0.6, 0.97, centerDot);  // tight — only near dead center
-          vec3 warmShift = vec3(1.0, 0.78, 0.45);  // warm golden
-          color = mix(color, warmShift, centerInfluence * 0.45);  // up to 45% golden at center
-
-          // ── Retro aesthetic ──
+          // ── Retro dithering ──
           vec2 ditherCoord = floor(gl_FragCoord.xy / 3.0);
           float dither = bayerDither(ditherCoord);
-
-          // Posterize to 8 levels (more subtle gradation for the glow)
           float levels = 8.0;
           brightness = floor(brightness * levels + dither) / levels;
 
-          if (brightness < 0.01 && !uShowCenterMarker) discard;
-
-          // Debug: galactic center marker (red crosshair)
-          if (uShowCenterMarker) {
-            // Direction from camera to galactic center (0, 0, 0)
-            vec3 toCenterDir = normalize(-cam);
-            float dotCenter = dot(dir, toCenterDir);
-            // Crosshair at center direction
-            if (dotCenter > 0.9998) {
-              gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-              return;
-            }
-            // Ring around center
-            if (dotCenter > 0.999 && dotCenter < 0.9995) {
-              gl_FragColor = vec4(1.0, 0.3, 0.0, 0.8);
-              return;
-            }
-            // Wider ring at ~5 degrees
-            if (abs(dotCenter - 0.996) < 0.0005) {
-              gl_FragColor = vec4(0.5, 0.2, 0.0, 0.4);
-              return;
-            }
-          }
-
           if (brightness < 0.01) discard;
+
+          // Center marker
+          if (uShowCenterMarker) {
+            if (centerDot > 0.9998) { gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); return; }
+            if (centerDot > 0.999 && centerDot < 0.9995) { gl_FragColor = vec4(1.0, 0.3, 0.0, 0.8); return; }
+          }
 
           gl_FragColor = vec4(color * brightness * uBrightnessMax, brightness * uOpacity);
         }

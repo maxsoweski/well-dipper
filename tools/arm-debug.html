@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Spiral Arm Debug</title>
+<style>
+  body { background: #111; color: #eee; font-family: monospace; margin: 20px; }
+  canvas { border: 1px solid #444; }
+  .controls { margin: 10px 0; }
+  label { margin-right: 15px; }
+</style>
+</head>
+<body>
+<h2>Spiral Arm Pattern — Top-Down View</h2>
+<p>White = on arm, black = between arms. Red dot = Sol (8, 0).</p>
+<div class="controls">
+  <label>Arm width: <input type="range" id="widthScale" min="0.05" max="1.0" step="0.01" value="0.15"> <span id="widthVal">0.15</span></label>
+  <label>Arm width R-scale: <input type="range" id="widthR" min="0.01" max="0.1" step="0.005" value="0.04"> <span id="widthRVal">0.04</span></label>
+  <label>Pitch (deg): <input type="range" id="pitch" min="5" max="30" step="1" value="12"> <span id="pitchVal">12</span></label>
+  <label>Arms: <select id="armCount"><option value="2">2 major</option><option value="6" selected>All 6</option></select></label>
+  <label>Arm start R: <input type="range" id="armStart" min="0" max="5" step="0.5" value="2"> <span id="armStartVal">2.0</span></label>
+</div>
+<canvas id="c" width="800" height="800"></canvas>
+
+<script>
+// Arm definitions from GalacticMap.js
+const ARM_DEFS = [
+  { name: 'Scutum-Centaurus', offset: 0.0, densityBoost: 2.5, width: 0.7, isMajor: true },
+  { name: 'Perseus', offset: Math.PI, densityBoost: 2.5, width: 0.7, isMajor: true },
+  { name: 'Sagittarius', offset: 0.87, densityBoost: 1.2, width: 0.45, isMajor: false },
+  { name: 'Norma', offset: Math.PI + 0.87, densityBoost: 1.0, width: 0.40, isMajor: false },
+  { name: 'Outer', offset: Math.PI * 0.78, densityBoost: 0.8, width: 0.35, isMajor: false },
+  { name: 'Orion Spur', offset: Math.PI * 0.65, densityBoost: 0.6, width: 0.30, isMajor: false },
+];
+
+function spiralArmStrength(R, theta, pitchDeg, widthBase, widthRScale, armStartR, armCount) {
+  if (R < armStartR) return 0;
+  const pitchK = 1.0 / Math.tan(pitchDeg * Math.PI / 180);
+  const sinPitch = Math.sin(pitchDeg * Math.PI / 180);
+  const armFade = smoothstep(armStartR, armStartR + 1.5, R);
+  const logR = Math.log(Math.max(R, 0.01));
+  let bestStr = 0;
+
+  const count = armCount === 2 ? 2 : ARM_DEFS.length;
+  for (let i = 0; i < count; i++) {
+    const arm = ARM_DEFS[i];
+    const armTheta = arm.offset + pitchK * logR;
+    let dTheta = ((theta - armTheta) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+    const perpDist = Math.abs(dTheta) * R * sinPitch;
+    const armW = arm.width * (widthBase + widthRScale * R);
+    let str = arm.densityBoost * Math.exp(-0.5 * perpDist * perpDist / (armW * armW));
+    if (armCount === 2 && i >= 2) str = 0;
+    str *= armFade;
+    bestStr = Math.max(bestStr, str);
+  }
+  return bestStr;
+}
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function render() {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pitchDeg = parseFloat(document.getElementById('pitch').value);
+  const widthBase = parseFloat(document.getElementById('widthScale').value);
+  const widthRScale = parseFloat(document.getElementById('widthR').value);
+  const armStartR = parseFloat(document.getElementById('armStart').value);
+  const armCount = parseInt(document.getElementById('armCount').value);
+
+  document.getElementById('pitchVal').textContent = pitchDeg;
+  document.getElementById('widthVal').textContent = widthBase;
+  document.getElementById('widthRVal').textContent = widthRScale;
+  document.getElementById('armStartVal').textContent = armStartR.toFixed(1);
+
+  const imgData = ctx.createImageData(w, h);
+  const maxR = 16; // kpc
+
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      // Map pixel to galactic (x, z) — center of image = galactic center
+      const gx = (px / w - 0.5) * 2 * maxR;
+      const gz = (py / h - 0.5) * 2 * maxR;
+      const R = Math.sqrt(gx * gx + gz * gz);
+      const theta = Math.atan2(gz, gx + 0.0001);
+
+      let v = 0;
+      if (R < 15 && R > 0.1) {
+        v = spiralArmStrength(R, theta, pitchDeg, widthBase, widthRScale, armStartR, armCount);
+        v = Math.min(v, 1.0);
+      }
+
+      // Disk radial falloff for context
+      const disk = Math.exp(-R * R / (2 * 4 * 4));
+      const combined = v * 0.8 + disk * 0.2;
+
+      const idx = (py * w + px) * 4;
+      imgData.data[idx] = combined * 255;
+      imgData.data[idx + 1] = combined * 230;
+      imgData.data[idx + 2] = combined * 200;
+      imgData.data[idx + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  // Draw Sol position
+  const solPx = (8.0 / maxR * 0.5 + 0.5) * w;
+  const solPy = (0.0 / maxR * 0.5 + 0.5) * h;
+  ctx.fillStyle = 'red';
+  ctx.beginPath();
+  ctx.arc(solPx, solPy, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Draw galactic center
+  ctx.fillStyle = 'cyan';
+  ctx.beginPath();
+  ctx.arc(w/2, h/2, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Labels
+  ctx.fillStyle = '#888';
+  ctx.font = '11px monospace';
+  ctx.fillText('Galactic Center', w/2 + 6, h/2 - 6);
+  ctx.fillText('Sol', solPx + 6, solPy - 6);
+  ctx.fillText(`${maxR} kpc`, w - 50, h - 10);
+
+  // Draw arm traces for reference
+  ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+  ctx.lineWidth = 1;
+  const pitchK = 1.0 / Math.tan(pitchDeg * Math.PI / 180);
+  const count = armCount === 2 ? 2 : ARM_DEFS.length;
+  for (let ai = 0; ai < count; ai++) {
+    ctx.beginPath();
+    for (let r = armStartR; r < 15; r += 0.1) {
+      const t = ARM_DEFS[ai].offset + pitchK * Math.log(r);
+      const x = r * Math.cos(t);
+      const z = r * Math.sin(t);
+      const px2 = (x / maxR * 0.5 + 0.5) * w;
+      const py2 = (z / maxR * 0.5 + 0.5) * h;
+      if (r === armStartR) ctx.moveTo(px2, py2);
+      else ctx.lineTo(px2, py2);
+    }
+    ctx.stroke();
+  }
+}
+
+// Wire up controls
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('input', render);
+});
+
+render();
+</script>
+</body>
+</html>
