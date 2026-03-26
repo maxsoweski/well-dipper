@@ -162,6 +162,39 @@ float totalShadow(vec3 fragPos, vec3 starPosition) {
   }
   return shadow;
 }
+
+// ── Aurora uniforms + function ──
+// Physics-driven: requires atmosphere + magnetic field + stellar wind.
+// Added as shared function so all planet categories can use it.
+uniform float hasAurora;
+uniform vec3 auroraColor;
+uniform float auroraIntensity;
+uniform float auroraRingLat;
+uniform float auroraRingWidth;
+
+vec3 applyAurora(vec3 color, vec3 pos, float pRadius, vec3 lDir, float diff) {
+  if (hasAurora < 0.5) return color;
+  // Night-side mask: aurora visible in darkness and twilight
+  float nightMask = 1.0 - smoothstep(0.0, 0.25, diff);
+  // Latitude from equator (object-space Y, normalized)
+  float lat = abs(pos.y) / pRadius;
+  // Ring shape: Gaussian band at the auroral latitude
+  float ringDist = abs(lat - auroraRingLat);
+  float ringMask = exp(-ringDist * ringDist / (2.0 * auroraRingWidth * auroraRingWidth));
+  // Curtain-like structure from noise
+  float azimuth = atan(pos.z, pos.x);
+  float curtain = snoise(vec3(azimuth * 3.0, lat * 10.0, time * 0.3)) * 0.5 + 0.5;
+  curtain += snoise(vec3(azimuth * 7.0, lat * 15.0, time * 0.5)) * 0.25;
+  float rays = pow(max(curtain, 0.0), 2.0);
+  // Combine
+  float auroraMask = ringMask * rays * nightMask * auroraIntensity;
+  // Subtle hue variation along the ring
+  float hueShift = snoise(vec3(azimuth * 2.0, 0.0, time * 0.2)) * 0.15;
+  vec3 auroraFinal = auroraColor;
+  auroraFinal.r += hueShift;
+  auroraFinal.g -= hueShift * 0.5;
+  return color + auroraFinal * auroraMask * 0.6;
+}
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,6 +355,9 @@ void main() {
     finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
 
+  // ── Aurora (night-side glow near magnetic poles) ──
+  finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
+
   // ── Posterize with edge dithering ──
   finalColor = min(finalColor, vec3(1.0));
   finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
@@ -471,6 +507,9 @@ void main() {
 
     finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
+
+  // ── Aurora (night-side glow near magnetic poles) ──
+  finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
 
   // ── Posterize with edge dithering ──
   finalColor = min(finalColor, vec3(1.0));
@@ -775,6 +814,9 @@ void main() {
     finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
 
+  // ── Aurora (night-side glow near magnetic poles) ──
+  finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
+
   // ── Posterize with edge dithering ──
   finalColor = min(finalColor, vec3(1.0));
   finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
@@ -859,6 +901,12 @@ export class Planet {
         // Atmosphere
         atmosphereStrength: { value: d.atmosphere?.strength || 0.0 },
         atmosphereColor: { value: new THREE.Vector3(...(d.atmosphere?.color || [0.5, 0.5, 0.8])) },
+        // Aurora (physics-driven: atmosphere + magnetic field + stellar wind)
+        hasAurora: { value: d.aurora ? 1.0 : 0.0 },
+        auroraColor: { value: new THREE.Vector3(...(d.aurora?.color || [0.3, 0.8, 0.4])) },
+        auroraIntensity: { value: d.aurora?.intensity || 0.0 },
+        auroraRingLat: { value: d.aurora?.ringLatitude || 0.75 },
+        auroraRingWidth: { value: d.aurora?.ringWidth || 0.08 },
         // Shadow casters
         starPos1: { value: new THREE.Vector3() },
         starPos2: { value: new THREE.Vector3() },
