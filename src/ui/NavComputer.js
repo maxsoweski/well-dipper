@@ -71,6 +71,9 @@ export class NavComputer {
     this._selectedNavStar = null;   // star selected BY user in local view { wx, wy, wz, seed, name }
     this._externalTarget = null;    // warp target SET from outside { x, y, z } in galactic kpc
 
+    // ── Drill-down animation ──
+    this._anim = null; // { startTime, duration, fromCenter, fromSize, toCenter, toSize, fromLevel, toLevel }
+
     // ── Mouse ──
     this._mouseX = 0;
     this._mouseY = 0;
@@ -283,6 +286,55 @@ export class NavComputer {
     }
   }
 
+  /**
+   * Start an animated transition between two 2D views.
+   * The animation smoothly interpolates center and size using ease-in-out.
+   * @param {{ x: number, z: number }} fromCenter
+   * @param {number} fromSize
+   * @param {{ x: number, z: number }} toCenter
+   * @param {number} toSize
+   * @param {number} toLevel — level index to switch to when animation completes
+   * @param {number} [duration=400] — animation duration in ms
+   */
+  _startDrillAnim(fromCenter, fromSize, toCenter, toSize, toLevel, duration = 400) {
+    this._anim = {
+      startTime: performance.now(),
+      duration,
+      fromCenter: { ...fromCenter },
+      fromSize,
+      toCenter: { ...toCenter },
+      toSize,
+      toLevel,
+    };
+  }
+
+  /**
+   * Update drill-down animation state. Called at start of render().
+   * Returns true if animation is active (suppresses click handling).
+   */
+  _updateAnim() {
+    if (!this._anim) return false;
+    const elapsed = performance.now() - this._anim.startTime;
+    let t = Math.min(1.0, elapsed / this._anim.duration);
+
+    // Ease-in-out (smootherstep for polished feel)
+    t = t * t * t * (t * (t * 6 - 15) + 10);
+
+    // Interpolate view
+    this._viewCenter.x = this._anim.fromCenter.x + (this._anim.toCenter.x - this._anim.fromCenter.x) * t;
+    this._viewCenter.z = this._anim.fromCenter.z + (this._anim.toCenter.z - this._anim.fromCenter.z) * t;
+    this._viewSize = this._anim.fromSize + (this._anim.toSize - this._anim.fromSize) * t;
+
+    if (elapsed >= this._anim.duration) {
+      // Animation complete — snap to final state and switch level
+      this._levelIndex = this._anim.toLevel;
+      this._applyLevelView();
+      this._densityCacheKey = '';
+      this._anim = null;
+    }
+    return true;
+  }
+
   render() {
     this._resizeCanvas();
     const ctx = this._ctx;
@@ -330,6 +382,9 @@ export class NavComputer {
       }
     }
 
+    // Update drill-down animation (interpolates view center + size)
+    this._updateAnim();
+
     ctx.fillStyle = '#050508';
     ctx.fillRect(0, 0, w, h);
 
@@ -349,9 +404,23 @@ export class NavComputer {
   }
 
   handleEscape() {
+    if (this._anim) return true; // ignore during animation
     if (this._levelIndex > 0) {
-      this._levelIndex--;
-      this._applyLevelView();
+      const prevLevel = this._levelIndex - 1;
+      const target = this._viewStack[prevLevel];
+      if (target && this._levelIndex <= 3) {
+        // Animate zoom-out from current 2D view to parent level
+        this._startDrillAnim(
+          { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
+          { x: target.center.x, z: target.center.z }, target.size,
+          prevLevel, 400
+        );
+      } else {
+        // Instant switch (e.g., local→block, or missing stack entry)
+        this._levelIndex = prevLevel;
+        this._applyLevelView();
+        this._densityCacheKey = '';
+      }
       this._hoveredTile = null;
       this._localStars = [];
       this._resetColumnLoad();
@@ -1611,6 +1680,7 @@ export class NavComputer {
   }
 
   _handleClick(e) {
+    if (this._anim) return; // suppress clicks during drill animation
     const p = this._getCanvasPos(e);
 
     // Check tab clicks
@@ -1620,12 +1690,22 @@ export class NavComputer {
       const tabW = this._canvas.width / LEVELS.length;
       const idx = Math.floor(p.x / tabW);
       if (idx >= 0 && idx < LEVELS.length) {
-        this._levelIndex = idx;
-        this._applyLevelView();
+        const target = this._viewStack[idx];
+        // Animate between 2D levels if both are 2D and have stack entries
+        if (idx < 4 && this._levelIndex < 4 && target) {
+          this._startDrillAnim(
+            { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
+            { x: target.center.x, z: target.center.z }, target.size,
+            idx, 350
+          );
+        } else {
+          this._levelIndex = idx;
+          this._applyLevelView();
+          this._densityCacheKey = '';
+        }
         this._hoveredTile = null;
         this._localStars = [];
         this._resetColumnLoad();
-        this._densityCacheKey = '';
       }
       return;
     }
@@ -1661,10 +1741,12 @@ export class NavComputer {
         size: s.size,
         sectorName: s.name,
       };
-      this._levelIndex = 1;
-      this._applyLevelView();
+      this._startDrillAnim(
+        { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
+        { x: s.centerX, z: s.centerZ }, s.size,
+        1, 500
+      );
       this._hoveredTile = null;
-      this._densityCacheKey = '';
       return;
     }
 
@@ -1677,27 +1759,34 @@ export class NavComputer {
       const newCz = this._viewCenter.z + ext - (row + 0.5) * tileSize;
 
       if (this._levelIndex < 3) {
-        // Drill into next 2D level
+        // Drill into next 2D level — animated zoom
         const nextSize = tileSize;
         this._viewStack[this._levelIndex + 1] = {
           center: { x: newCx, z: newCz },
           size: nextSize,
         };
-        this._levelIndex++;
-        this._applyLevelView();
+        this._startDrillAnim(
+          { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
+          { x: newCx, z: newCz }, nextSize,
+          this._levelIndex + 1, 400
+        );
         this._hoveredTile = null;
-        this._densityCacheKey = '';
       } else {
-        // Level 3 (block) → Level 4 (local)
+        // Level 3 (block) → Level 4 (local) — zoom into tile then switch
         this._localCenter = { x: newCx, y: this._playerY, z: newCz };
-        // Cube size from local density at target position (same formula as player's block)
         this._localCubeSize = Math.max(0.003, this._computeTileSize(newCx, newCz, 500));
-        // Default zoom = 1/3 of cube (readable density)
         this._localRadius = Math.max(0.002, this._localCubeSize / 3);
-        this._localGridCell = 0.001; // 1 pc fixed cell size
+        this._localGridCell = 0.001;
         this._localStars = [];
         this._resetColumnLoad();
-        this._levelIndex = 4;
+        // Animate zoom into the tile, then switch to local at completion
+        const localSize = tileSize * 0.5; // zoom past the tile boundary
+        this._viewStack[4] = { center: { x: newCx, z: newCz }, size: localSize };
+        this._startDrillAnim(
+          { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
+          { x: newCx, z: newCz }, localSize,
+          4, 500
+        );
         this._hoveredTile = null;
       }
       return;
