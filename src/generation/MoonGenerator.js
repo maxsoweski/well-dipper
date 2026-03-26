@@ -26,46 +26,25 @@ export class MoonGenerator {
       { base: [0.12, 0.10, 0.09], accent: [0.35, 0.30, 0.25] },    // Dark charcoal + warm gray
       { base: [0.08, 0.08, 0.10], accent: [0.30, 0.25, 0.22] },    // Near-black + brown-gray
       { base: [0.14, 0.12, 0.08], accent: [0.38, 0.28, 0.20] },    // Dark rusty + sandy
-      { base: [0.06, 0.06, 0.06], accent: [0.28, 0.28, 0.30] },    // Carbonaceous (C-type asteroid)
-      { base: [0.10, 0.08, 0.12], accent: [0.32, 0.28, 0.35] },    // Dark purple-gray (Phoebe-like)
-      { base: [0.15, 0.10, 0.06], accent: [0.40, 0.32, 0.18] },    // Reddish iron-rich (D-type)
-      { base: [0.09, 0.10, 0.08], accent: [0.30, 0.35, 0.28] },    // Greenish-gray (olivine-rich)
     ],
     rocky: [
       { base: [0.55, 0.53, 0.50], accent: [0.22, 0.20, 0.18] },    // Light highlands + dark maria
       { base: [0.50, 0.45, 0.42], accent: [0.18, 0.16, 0.15] },    // Moon-gray + deep shadow
       { base: [0.48, 0.40, 0.35], accent: [0.20, 0.18, 0.16] },    // Brown highland + dark basin
-      { base: [0.60, 0.58, 0.55], accent: [0.25, 0.22, 0.20] },    // Bright highland (like lunar farside)
-      { base: [0.42, 0.38, 0.35], accent: [0.65, 0.60, 0.55] },    // Dark maria + bright rays (inverted)
-      { base: [0.52, 0.42, 0.32], accent: [0.22, 0.18, 0.14] },    // Warm brown (Callisto-like)
-      { base: [0.45, 0.45, 0.50], accent: [0.18, 0.18, 0.22] },    // Blue-gray basalt (Mercury-like)
-      { base: [0.55, 0.48, 0.40], accent: [0.28, 0.22, 0.15] },    // Sandy highland + dark floor
-      { base: [0.38, 0.35, 0.38], accent: [0.58, 0.55, 0.58] },    // Slate + bright ejecta
     ],
     ice: [
       { base: [0.85, 0.88, 0.92], accent: [0.30, 0.40, 0.55] },    // Bright ice + deep blue cracks
       { base: [0.90, 0.90, 0.95], accent: [0.40, 0.50, 0.65] },    // Brilliant white + teal cracks
       { base: [0.70, 0.75, 0.82], accent: [0.25, 0.35, 0.50] },    // Blue-gray ice + dark fissures
-      { base: [0.92, 0.90, 0.88], accent: [0.45, 0.38, 0.30] },    // Bright Enceladus (warm cracks)
-      { base: [0.78, 0.80, 0.85], accent: [0.35, 0.42, 0.55] },    // Europa blue-white
-      { base: [0.65, 0.62, 0.55], accent: [0.35, 0.30, 0.22] },    // Dirty ice (Ganymede-like)
-      { base: [0.75, 0.78, 0.72], accent: [0.28, 0.32, 0.25] },    // Green-tinted ice (tholins)
-      { base: [0.82, 0.85, 0.90], accent: [0.50, 0.55, 0.70] },    // Pale blue + lavender cracks
-      { base: [0.72, 0.68, 0.60], accent: [0.40, 0.35, 0.28] },    // Titan-like (icy + organic haze)
     ],
     volcanic: [
       { base: [0.75, 0.65, 0.20], accent: [0.12, 0.08, 0.05] },    // Sulfur yellow + dark lava
       { base: [0.80, 0.55, 0.12], accent: [0.15, 0.06, 0.04] },    // Orange-yellow + black lava
-      { base: [0.70, 0.70, 0.25], accent: [0.10, 0.10, 0.08] },    // Pale sulfur + charcoal lava
-      { base: [0.85, 0.50, 0.08], accent: [0.18, 0.10, 0.06] },    // Bright orange Io + dark caldera
-      { base: [0.65, 0.58, 0.15], accent: [0.08, 0.05, 0.05] },    // Green-yellow sulfur + near-black
     ],
     terrestrial: [
       { base: [0.08, 0.15, 0.50], accent: [0.25, 0.50, 0.18] },    // Blue ocean + green land
       { base: [0.06, 0.12, 0.45], accent: [0.35, 0.55, 0.12] },    // Dark ocean + lush green
       { base: [0.10, 0.20, 0.48], accent: [0.40, 0.38, 0.15] },    // Ocean + savanna
-      { base: [0.05, 0.12, 0.35], accent: [0.18, 0.40, 0.22] },    // Deep ocean + dark forest
-      { base: [0.08, 0.18, 0.42], accent: [0.45, 0.42, 0.20] },    // Ocean + autumn grassland
     ],
   };
 
@@ -182,13 +161,6 @@ export class MoonGenerator {
       atmosphere: type === 'terrestrial' ? {
         color: [0.4, 0.6, 1.0],
         strength: rng.range(0.25, 0.5),
-      } : null,
-      // Terrestrial moons can have faint auroras (N2/O2 atmosphere)
-      aurora: type === 'terrestrial' ? {
-        color: [0.3, 0.9, 0.4],     // Green oxygen line
-        intensity: rng.range(0.1, 0.4),
-        ringLatitude: rng.range(0.7, 0.85),
-        ringWidth: rng.range(0.08, 0.15),
       } : null,
     };
   }

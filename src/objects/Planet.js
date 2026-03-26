@@ -74,24 +74,6 @@ export class Planet {
         shadowPlanetCount: { value: 0 },
         shadowPlanetPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
         shadowPlanetRadius: { value: new Float32Array(2) },
-        // Gas giant storms
-        stormCount: { value: d.storms?.spots?.length || 0 },
-        stormPos: { value: (d.storms?.spots || []).map(s => new THREE.Vector3(...s.position)).concat(Array.from({ length: 3 - (d.storms?.spots?.length || 0) }, () => new THREE.Vector3())).slice(0, 3) },
-        stormSize: { value: new Float32Array((d.storms?.spots || []).map(s => s.size).concat([0, 0, 0]).slice(0, 3)) },
-        stormAspect: { value: new Float32Array((d.storms?.spots || []).map(s => s.aspect).concat([1, 1, 1]).slice(0, 3)) },
-        stormColor: { value: (d.storms?.spots || []).map(s => new THREE.Vector3(...s.color)).concat(Array.from({ length: 3 - (d.storms?.spots?.length || 0) }, () => new THREE.Vector3())).slice(0, 3) },
-        // Aurora
-        hasAurora: { value: d.aurora ? 1.0 : 0.0 },
-        auroraColor: { value: new THREE.Vector3(...(d.aurora?.color || [0.3, 0.8, 0.4])) },
-        auroraIntensity: { value: d.aurora?.intensity || 0.0 },
-        auroraRingLat: { value: d.aurora?.ringLatitude || 0.8 },
-        auroraRingWidth: { value: d.aurora?.ringWidth || 0.1 },
-        // Polar geometric storm
-        hasPolarStorm: { value: d.storms?.polarStorm ? 1.0 : 0.0 },
-        polarStormSides: { value: d.storms?.polarStorm?.sides || 6 },
-        polarStormPole: { value: d.storms?.polarStorm?.pole || 1.0 },
-        polarStormRadius: { value: d.storms?.polarStorm?.radius || 0.15 },
-        polarStormColor: { value: new THREE.Vector3(...(d.storms?.polarStorm?.color || [0.5, 0.5, 0.5])) },
       },
 
       vertexShader: /* glsl */ `
@@ -145,25 +127,6 @@ export class Planet {
         uniform int shadowPlanetCount;
         uniform vec3 shadowPlanetPos[2];
         uniform float shadowPlanetRadius[2];
-        // Aurora
-        uniform float hasAurora;
-        uniform vec3 auroraColor;
-        uniform float auroraIntensity;
-        uniform float auroraRingLat;
-        uniform float auroraRingWidth;
-        // Gas giant storms
-        const int MAX_STORMS = 3;
-        uniform int stormCount;
-        uniform vec3 stormPos[3];
-        uniform float stormSize[3];
-        uniform float stormAspect[3];
-        uniform vec3 stormColor[3];
-        // Polar geometric storm
-        uniform float hasPolarStorm;
-        uniform int polarStormSides;
-        uniform float polarStormPole;
-        uniform float polarStormRadius;
-        uniform vec3 polarStormColor;
 
         varying vec3 vNormal;
         varying vec3 vPosition;
@@ -428,24 +391,14 @@ export class Planet {
             n = cellValue;
           } else if (planetType == 14) {
             // Fungal: dark base with bioluminescent glow-spot clusters
-            // Domain warp for organic, branching mycelium networks
-            vec3 warpedPos = pos + vec3(
-              snoise(pos * noiseScale * 0.6 + vec3(10.0)) * 0.15,
-              snoise(pos * noiseScale * 0.6 + vec3(20.0)) * 0.15,
-              snoise(pos * noiseScale * 0.6 + vec3(30.0)) * 0.15
-            );
-            float terrain = snoise(warpedPos * noiseScale) * 0.3 + 0.3;
-            // Branching network: ridge noise for vein-like structures
-            float veins = 1.0 - abs(snoise(warpedPos * noiseScale * 2.0));
-            veins = pow(veins, 2.5) * 0.4;
-            // Glow spots clustered along the network
-            float spots1 = snoise(warpedPos * noiseScale * 4.0);
-            float spots2 = snoise(warpedPos * noiseScale * 6.0 + vec3(100.0));
+            float terrain = snoise(pos * noiseScale) * 0.3 + 0.3;
+            float spots1 = snoise(pos * noiseScale * 4.0);
+            float spots2 = snoise(pos * noiseScale * 6.0 + vec3(100.0));
             float clusterMask = snoise(pos * noiseScale * 0.8) * 0.5 + 0.5;
             clusterMask = smoothstep(0.3, 0.7, clusterMask);
             float glow = max(spots1, spots2);
             glow = pow(max(glow, 0.0), 3.0) * clusterMask;
-            n = terrain + veins + glow * 1.5;
+            n = terrain + glow * 1.5;
           } else if (planetType == 15) {
             // Machine: rectangular circuit grid with lit/dark cells
             vec3 gridPos = pos * noiseScale * 4.0;
@@ -535,45 +488,6 @@ export class Planet {
 
             float polarDark = smoothstep(0.6, 1.0, abs(vPosition.y) / planetRadius);
             surfaceColor *= 1.0 - polarDark * 0.3;
-
-            // Storm spots (oval dark/bright spots like Jupiter's GRS)
-            vec3 surfNorm = normalize(vPosition);
-            for (int i = 0; i < MAX_STORMS; i++) {
-              if (i >= stormCount) break;
-              // Angular distance from storm center
-              float angDist = acos(clamp(dot(surfNorm, stormPos[i]), -1.0, 1.0));
-              // Stretch along latitude for oval shape
-              // Project displacement into lat/lon components
-              vec3 toFrag = surfNorm - stormPos[i] * dot(surfNorm, stormPos[i]);
-              float latComponent = abs(dot(normalize(toFrag), vec3(0.0, 1.0, 0.0)));
-              float ovalDist = angDist * (1.0 + (stormAspect[i] - 1.0) * latComponent);
-              // Domain warping for organic shape
-              float warp = snoise(surfNorm * noiseScale * 3.0 + vec3(float(i) * 50.0)) * 0.03;
-              ovalDist += warp;
-              // Soft-edged blend
-              float stormMask = 1.0 - smoothstep(stormSize[i] * 0.6, stormSize[i], ovalDist);
-              surfaceColor = mix(surfaceColor, stormColor[i], stormMask);
-            }
-
-            // Polar geometric storm (hexagonal/polygonal, like Saturn's hexagon)
-            if (hasPolarStorm > 0.5) {
-              float polarY = vPosition.y / planetRadius * polarStormPole;
-              if (polarY > 0.7) {
-                // Project onto polar plane
-                float angFromPole = acos(clamp(polarY, -1.0, 1.0));
-                float azimuth = atan(vPosition.z, vPosition.x);
-                // Regular polygon SDF
-                float sides = float(polarStormSides);
-                float sliceAngle = 6.2831853 / sides;
-                float polyDist = cos(floor(0.5 + azimuth / sliceAngle) * sliceAngle - azimuth) * angFromPole;
-                // Soft polygon edge
-                float polyMask = 1.0 - smoothstep(polarStormRadius * 0.7, polarStormRadius, polyDist);
-                // Add noise for organic edges
-                float edgeNoise = snoise(surfNorm * noiseScale * 4.0 + vec3(99.0)) * 0.02;
-                polyMask *= 1.0 - smoothstep(polarStormRadius * 0.6, polarStormRadius + edgeNoise, polyDist);
-                surfaceColor = mix(surfaceColor, polarStormColor, polyMask * 0.7);
-              }
-            }
           } else if (planetType == 6) {
             // Hot Jupiter: dark base with glowing day-side heat
             float swirl = pattern * 0.5 + 0.5;
@@ -733,22 +647,13 @@ export class Planet {
             finalColor += accentColor * crackGlow * 0.25;
           }
 
-          // Fungal: bioluminescent spots + veins glow in darkness
+          // Fungal: bioluminescent spots glow in darkness
           if (planetType == 14) {
-            // Match domain warp from getSurfacePattern
-            vec3 fWarpPos = vPosition + vec3(
-              snoise(vPosition * noiseScale * 0.6 + vec3(10.0)) * 0.15,
-              snoise(vPosition * noiseScale * 0.6 + vec3(20.0)) * 0.15,
-              snoise(vPosition * noiseScale * 0.6 + vec3(30.0)) * 0.15
-            );
-            float fSpots1 = snoise(fWarpPos * noiseScale * 4.0);
-            float fSpots2 = snoise(fWarpPos * noiseScale * 6.0 + vec3(100.0));
-            float fCluster = smoothstep(0.3, 0.7, snoise(vPosition * noiseScale * 0.8) * 0.5 + 0.5);
-            float emGlow = pow(max(max(fSpots1, fSpots2), 0.0), 3.0) * fCluster;
-            // Vein glow (branching network glows faintly)
-            float fVeins = 1.0 - abs(snoise(fWarpPos * noiseScale * 2.0));
-            fVeins = pow(fVeins, 2.5) * 0.2;
-            finalColor += accentColor * (emGlow * 0.35 + fVeins * 0.15);
+            float spots1 = snoise(vPosition * noiseScale * 4.0);
+            float spots2 = snoise(vPosition * noiseScale * 6.0 + vec3(100.0));
+            float clusterMask = smoothstep(0.3, 0.7, snoise(vPosition * noiseScale * 0.8) * 0.5 + 0.5);
+            float emGlow = pow(max(max(spots1, spots2), 0.0), 3.0) * clusterMask;
+            finalColor += accentColor * emGlow * 0.35;
           }
 
           // Machine: grid lines glow like city lights
@@ -802,32 +707,6 @@ export class Planet {
             // Warm city glow — streets + general area light
             float areaGlow = 0.5 + cityGrid * 0.5;
             finalColor += accentColor * areaGlow * districtBright * nightMask * 0.45;
-          }
-
-          // ── Aurora (night-side glowing rings near magnetic poles) ──
-          if (hasAurora > 0.5) {
-            // Night-side mask: aurora visible in darkness and twilight
-            float auroraNight = 1.0 - smoothstep(0.0, 0.25, diffuse);
-            // Latitude from equator (object-space Y, normalized)
-            float lat = abs(vPosition.y) / planetRadius;
-            // Ring shape: Gaussian-like band at the auroral latitude
-            float ringDist = abs(lat - auroraRingLat);
-            float ringMask = exp(-ringDist * ringDist / (2.0 * auroraRingWidth * auroraRingWidth));
-            // Add flowing noise for curtain-like structure
-            float azimuth = atan(vPosition.z, vPosition.x);
-            float curtain = snoise(vec3(azimuth * 3.0, lat * 10.0, time * 0.3)) * 0.5 + 0.5;
-            curtain += snoise(vec3(azimuth * 7.0, lat * 15.0, time * 0.5)) * 0.25;
-            // Rays/spikes extending upward from the ring
-            float rays = pow(curtain, 2.0);
-            // Combine: ring shape × curtain texture × night mask
-            float auroraMask = ringMask * rays * auroraNight * auroraIntensity;
-            // Subtle color variation: slightly shift hue along the ring
-            vec3 auroraFinal = auroraColor;
-            float hueShift = snoise(vec3(azimuth * 2.0, 0.0, time * 0.2)) * 0.15;
-            auroraFinal.r += hueShift;
-            auroraFinal.g -= hueShift * 0.5;
-            // Additive glow (auroras emit light, don't replace surface)
-            finalColor += auroraFinal * auroraMask * 0.6;
           }
 
           // ── Cloud layer (animated) ──

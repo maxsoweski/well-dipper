@@ -58,13 +58,6 @@ export class Moon {
         hasAtmosphere: { value: d.atmosphere ? 1.0 : 0.0 },
         atmosphereColor: { value: new THREE.Vector3(...(d.atmosphere?.color || [0.4, 0.6, 1.0])) },
         atmosphereStrength: { value: d.atmosphere?.strength || 0.0 },
-        // Aurora (terrestrial moons)
-        moonRadius: { value: d.radius },
-        hasAurora: { value: d.aurora ? 1.0 : 0.0 },
-        auroraColor: { value: new THREE.Vector3(...(d.aurora?.color || [0.3, 0.8, 0.4])) },
-        auroraIntensity: { value: d.aurora?.intensity || 0.0 },
-        auroraRingLat: { value: d.aurora?.ringLatitude || 0.8 },
-        auroraRingWidth: { value: d.aurora?.ringWidth || 0.1 },
       },
 
       vertexShader: /* glsl */ `
@@ -109,13 +102,6 @@ export class Moon {
         uniform float hasAtmosphere;
         uniform vec3 atmosphereColor;
         uniform float atmosphereStrength;
-        // Aurora (+ moonRadius for latitude calc)
-        uniform float moonRadius;
-        uniform float hasAurora;
-        uniform vec3 auroraColor;
-        uniform float auroraIntensity;
-        uniform float auroraRingLat;
-        uniform float auroraRingWidth;
 
         varying vec3 vNormal;
         varying vec3 vPosition;
@@ -318,20 +304,6 @@ export class Moon {
           if (moonType == 3) {
             float nightGlow = max(-dot(vNormal, lightDir), 0.0);
             finalColor += accentColor * nightGlow * 0.15;
-          }
-
-          // ── Aurora (terrestrial moons — night-side glow near magnetic poles) ──
-          if (hasAurora > 0.5) {
-            float auroraNight = 1.0 - smoothstep(0.0, 0.25, diffuse);
-            float lat = abs(vPosition.y) / moonRadius;
-            float ringDist = abs(lat - auroraRingLat);
-            float ringMask = exp(-ringDist * ringDist / (2.0 * auroraRingWidth * auroraRingWidth));
-            float azimuth = atan(vPosition.z, vPosition.x);
-            float curtain = snoise(vec3(azimuth * 3.0, lat * 10.0, time * 0.3)) * 0.5 + 0.5;
-            curtain += snoise(vec3(azimuth * 7.0, lat * 15.0, time * 0.5)) * 0.25;
-            float rays = pow(curtain, 2.0);
-            float auroraMask = ringMask * rays * auroraNight * auroraIntensity;
-            finalColor += auroraColor * auroraMask * 0.5;
           }
 
           // ── Cloud layer (terrestrial moons — animated) ──

@@ -701,6 +701,18 @@ export class RetroRenderer {
     r.setRenderTarget(this.sceneTarget);
     r.setClearColor(0x000000, 0);
     r.clear();
+    // DEBUG: identify broken shaders
+    if (!this._shaderDebugDone) {
+      this._shaderDebugDone = true;
+      this.scene.traverse((obj) => {
+        if (obj.material && obj.material.type === 'ShaderMaterial') {
+          const name = obj.material.name || obj.name || obj.constructor?.name || 'unknown';
+          const hasVS = obj.material.vertexShader ? obj.material.vertexShader.length : 0;
+          const hasFS = obj.material.fragmentShader ? obj.material.fragmentShader.length : 0;
+          console.log(`[SHADER DEBUG] ${name}: VS=${hasVS} chars, FS=${hasFS} chars`);
+        }
+      });
+    }
     r.render(this.scene, this.camera);
 
     // Pass 3: HUD at small resolution

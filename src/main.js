@@ -45,8 +45,6 @@ import { GalacticMap } from './generation/GalacticMap.js';
 import { NavComputer } from './ui/NavComputer.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
 import { SkyRenderer } from './rendering/SkyRenderer.js';
-import { SkyFeatureLayer } from './rendering/sky/SkyFeatureLayer.js';
-import { KNOWN_OBJECT_PROFILES } from './data/KnownObjectProfiles.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -724,8 +722,6 @@ function toggleSoundTest() {
 // Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
 const GALLERY_TYPES = [
-  // Known object profiles (all 37 real Messier/NGC objects)
-  'known-feature',
   // Deep sky (distant view)
   'spiral-galaxy', 'elliptical-galaxy',
   'emission-nebula', 'planetary-nebula',
@@ -743,15 +739,10 @@ const GALLERY_TYPES = [
   'planet-city-lights', 'planet-ecumenopolis',
   'moon',
 ];
-
-// Pre-built list of known object profile keys for gallery cycling
-const _knownProfileKeys = Object.keys(KNOWN_OBJECT_PROFILES);
-
-// Shared SkyFeatureLayer instance for gallery billboard creation
-let _gallerySkyFeatureLayer = null;
 let galleryMode = false;
 let gallerySeed = 1;
 let galleryTypeIdx = 0;
+let _gallerySkipDir = 1; // direction to skip non-renderable items
 let galleryObject = null;      // current Galaxy/Nebula instance (deep sky)
 let _galleryMeshes = [];       // Star/Planet/Moon meshes (star system objects)
 const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for gallery moons
@@ -2281,12 +2272,6 @@ function exitGallery() {
   // Clean up gallery objects
   _galleryCleanup();
 
-  // Dispose the shared SkyFeatureLayer used for known-feature billboards
-  if (_gallerySkyFeatureLayer) {
-    _gallerySkyFeatureLayer.dispose();
-    _gallerySkyFeatureLayer = null;
-  }
-
   // Restore everything in the current system
   _setSystemVisible(true);
 
@@ -2311,13 +2296,7 @@ function _galleryCleanup() {
   }
   for (const obj of _galleryMeshes) {
     scene.remove(obj.mesh || obj);
-    if (obj.dispose) {
-      obj.dispose();
-    } else if (obj instanceof THREE.Mesh) {
-      // Raw THREE.Mesh (e.g., known-feature billboard) — dispose GPU resources
-      obj.geometry.dispose();
-      obj.material.dispose();
-    }
+    if (obj.dispose) obj.dispose();
   }
   _galleryMeshes = [];
 }
@@ -2379,6 +2358,8 @@ function gallerySpawn() {
 
   let infoText = '';
 
+<<<<<<< Updated upstream
+=======
   // ── Known Feature Gallery (cycles through all 37 real Messier/NGC profiles) ──
   if (type === 'known-feature') {
     // Clamp seed to valid profile index (Left/Right cycles through profiles)
@@ -2395,9 +2376,10 @@ function gallerySpawn() {
     const hasNebulaLayers = profile.layers > 0;
 
     if (isCluster && !hasNebulaLayers) {
-      // Pure star clusters — no billboard to show, just info
-      camera.position.set(0, 5, 20);
-      camera.lookAt(0, 0, 0);
+      // Pure star clusters have no visual — auto-skip to next renderable item
+      gallerySeed += _gallerySkipDir;
+      gallerySpawn();
+      return;
     } else {
       // Build a fake feature object matching what SkyFeatureLayer expects
       const fakeFeature = {
@@ -2475,6 +2457,7 @@ function gallerySpawn() {
     return;  // Skip the default overlay update at the bottom of gallerySpawn
   }
 
+>>>>>>> Stashed changes
   // ── Volumetric nebula test (Points-based gas cloud) ──
   if (type === 'volumetric-nebula-test') {
     const testData = _generateVolumetricTestData(rng);
@@ -4147,15 +4130,19 @@ window.addEventListener('keydown', (e) => {
   if (galleryMode) {
     if (e.code === 'ArrowRight') {
       gallerySeed++;
+      _gallerySkipDir = 1;
       gallerySpawn();
     } else if (e.code === 'ArrowLeft') {
       gallerySeed = Math.max(1, gallerySeed - 1);
+      _gallerySkipDir = -1;
       gallerySpawn();
     } else if (e.code === 'ArrowUp') {
       galleryTypeIdx = (galleryTypeIdx + 1) % GALLERY_TYPES.length;
+      gallerySeed = 1; // reset seed when changing category
       gallerySpawn();
     } else if (e.code === 'ArrowDown') {
       galleryTypeIdx = (galleryTypeIdx - 1 + GALLERY_TYPES.length) % GALLERY_TYPES.length;
+      gallerySeed = 1; // reset seed when changing category
       gallerySpawn();
     }
     return;  // Block all other input in gallery mode
