@@ -64,6 +64,11 @@ export class ProceduralGlowLayer {
         uBarAngle: { value: galacticMap.barAngle || (28.0 * Math.PI / 180.0) },
         uTargetPos: { value: new THREE.Vector3(0, 0, 0) },
         uShowTarget: { value: false },
+        // Feature absorption — up to 8 nearby features dim the glow
+        uFeaturePositions: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
+        uFeatureRadii: { value: new Float32Array(8) },
+        uFeatureAbsorption: { value: new Float32Array(8) },
+        uFeatureCount: { value: 0 },
       },
 
       vertexShader: /* glsl */ `
@@ -95,6 +100,12 @@ export class ProceduralGlowLayer {
         uniform float uBarAngle;
         uniform vec3 uTargetPos;
         uniform bool uShowTarget;
+
+        // Feature absorption — nearby features dim the glow behind them
+        uniform vec3 uFeaturePositions[8];
+        uniform float uFeatureRadii[8];
+        uniform float uFeatureAbsorption[8];
+        uniform int uFeatureCount;
 
         varying vec3 vWorldDir;
 
@@ -385,7 +396,22 @@ export class ProceduralGlowLayer {
             float density = totalDensity(R, z, theta);
             float armStr = spiralArmStrength(R, theta);
 
-            float contribution = density * nearFade * effStep;
+            // Feature absorption — reduce glow inside nearby feature volumes
+            float absorption = 1.0;
+            for (int j = 0; j < 8; j++) {
+              if (j >= uFeatureCount) break;
+              vec3 toFeature = p - uFeaturePositions[j];
+              float dist2 = dot(toFeature, toFeature);
+              float r = uFeatureRadii[j];
+              if (dist2 < r * r) {
+                // Smooth falloff: full absorption at center, none at edge
+                float d = sqrt(dist2) / r;
+                float strength = uFeatureAbsorption[j] * (1.0 - d * d);
+                absorption *= (1.0 - strength);
+              }
+            }
+
+            float contribution = density * nearFade * effStep * absorption;
             glow += contribution;
 
             // Color weighted by contribution and bulge luminosity
@@ -509,6 +535,45 @@ export class ProceduralGlowLayer {
     } else {
       this._sphere.material.uniforms.uShowTarget.value = false;
     }
+  }
+
+  /**
+   * Set nearby galactic features for glow absorption.
+   * The glow shader dims itself where the ray passes through a feature volume,
+   * so nebulae partially replace background glow with their own color
+   * rather than just adding light additively on top.
+   *
+   * @param {Array} features — from GalacticMap.findNearbyFeatures()
+   */
+  setFeatureAbsorption(features) {
+    // Absorption strength by feature type
+    const absorptionByType = {
+      'emission-nebula': 0.5,
+      'dark-nebula': 0.8,
+      'planetary-nebula': 0.3,
+      'reflection-nebula': 0.3,
+      'supernova-remnant': 0.2,
+      'open-cluster': 0.1,
+      'ob-association': 0.1,
+      'globular-cluster': 0.05,
+    };
+
+    const uniforms = this._sphere.material.uniforms;
+    const count = Math.min(features.length, 8);
+
+    for (let i = 0; i < 8; i++) {
+      if (i < count) {
+        const f = features[i];
+        uniforms.uFeaturePositions.value[i].set(f.position.x, f.position.y, f.position.z);
+        uniforms.uFeatureRadii.value[i] = f.radius;
+        uniforms.uFeatureAbsorption.value[i] = absorptionByType[f.type] ?? 0.1;
+      } else {
+        uniforms.uFeaturePositions.value[i].set(0, 0, 0);
+        uniforms.uFeatureRadii.value[i] = 0;
+        uniforms.uFeatureAbsorption.value[i] = 0;
+      }
+    }
+    uniforms.uFeatureCount.value = count;
   }
 
   /**
