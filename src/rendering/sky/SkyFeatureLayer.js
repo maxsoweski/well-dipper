@@ -263,194 +263,6 @@ export class SkyFeatureLayer {
       shapeMode = SHAPE_MODE['irregular'];
     }
 
-    // ── Absorption mesh: darkens galaxy glow behind the nebula ──
-    // Uses custom blending: dst = dst * (1 - srcAlpha), src contributes nothing.
-    // Same density computation as emission, but outputs black with absorption alpha.
-    // This creates the visual effect of gas/dust blocking light behind it.
-    const absGeo = new THREE.PlaneGeometry(size, size);
-    const absorbStrength = this._getAbsorptionStrength(feature);
-    const absMat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.CustomBlending,
-      blendSrc: THREE.ZeroFactor,
-      blendDst: THREE.OneMinusSrcAlphaFactor,
-      blendEquation: THREE.AddEquation,
-      side: THREE.DoubleSide,
-      uniforms: {
-        uSeed: { value: this._hashSeed(feature.seed) },
-        uDomainWarpStrength: { value: domainWarpStrength },
-        uAsymmetry: { value: asymmetry },
-        uDarkLaneStrength: { value: darkLaneStrength },
-        uShapeMode: { value: shapeMode },
-        uAbsorbStrength: { value: absorbStrength },
-      },
-      vertexShader: /* glsl */ `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        uniform float uSeed;
-        uniform float uDomainWarpStrength;
-        uniform float uAsymmetry;
-        uniform float uDarkLaneStrength;
-        uniform int uShapeMode;
-        uniform float uAbsorbStrength;
-        varying vec2 vUv;
-
-        float hash(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
-        float noise(vec2 p) {
-          vec2 i = floor(p); vec2 f = fract(p);
-          f = f * f * (3.0 - 2.0 * f);
-          float a = hash(i); float b = hash(i + vec2(1,0));
-          float c = hash(i + vec2(0,1)); float d = hash(i + vec2(1,1));
-          return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
-        }
-        float fbm(vec2 p) {
-          float v = 0.0, a = 0.5;
-          for (int i = 0; i < 4; i++) {
-            v += a * noise(p);
-            p *= 2.1; a *= 0.5;
-          }
-          return v;
-        }
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
-
-        void main() {
-          vec2 centered = vUv - 0.5;
-          float dist = length(centered);
-          float density = 0.0;
-
-          // Compute density using the same shape modes as emission pass
-          if (uShapeMode == 0) {
-            float stretchAngle = uSeed * 6.28;
-            float cs0 = cos(stretchAngle), sn0 = sin(stretchAngle);
-            vec2 asym = vec2(
-              centered.x * cs0 - centered.y * sn0,
-              (centered.x * sn0 + centered.y * cs0) * (1.0 + uAsymmetry * 0.8)
-            );
-            float asymDist = length(asym);
-            float falloff = 1.0 - smoothstep(0.2, 0.5, asymDist);
-            if (falloff < 0.01) discard;
-            vec2 nc = centered * 4.0 + vec2(uSeed, uSeed * 0.7);
-            float n = fbm(nc);
-            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
-            n = fbm(nc + warp * uDomainWarpStrength);
-            density = n * falloff;
-          } else if (uShapeMode == 1) {
-            float ringAngle = uSeed * 6.28;
-            float cs1 = cos(ringAngle), sn1 = sin(ringAngle);
-            vec2 ringCoord = vec2(
-              centered.x * cs1 - centered.y * sn1,
-              (centered.x * sn1 + centered.y * cs1) * (1.0 + uAsymmetry * 0.6)
-            );
-            float ringDist = length(ringCoord);
-            float ring = exp(-pow(ringDist - 0.25, 2.0) / (2.0 * 0.07 * 0.07));
-            ring *= smoothstep(0.0, 0.15, ringDist);
-            ring *= 1.0 - smoothstep(0.38, 0.5, ringDist);
-            vec2 nc = centered * 5.0 + vec2(uSeed, uSeed * 0.7);
-            float n = fbm(nc);
-            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
-            n = fbm(nc + warp * uDomainWarpStrength * 0.5);
-            density = ring * (0.5 + 0.5 * n);
-          } else if (uShapeMode == 2) {
-            float lobeAngle = uSeed * 6.28;
-            float cosA = cos(lobeAngle), sinA = sin(lobeAngle);
-            vec2 rotated = vec2(
-              centered.x * cosA - centered.y * sinA,
-              centered.x * sinA + centered.y * cosA
-            );
-            float lobeX = rotated.x * (1.8 + uAsymmetry * 0.5);
-            float lobeY = rotated.y * 0.9;
-            float lobeDist = length(vec2(lobeX, lobeY));
-            float waistShift = rotated.y * uAsymmetry * 0.15;
-            float lobeBias = abs(rotated.y + waistShift) * 2.0;
-            float falloff = (1.0 - smoothstep(0.2, 0.45, lobeDist)) * smoothstep(0.0, 0.08, lobeBias);
-            float hub = exp(-dist * dist / 0.008) * 0.3;
-            falloff = max(falloff, hub);
-            if (falloff < 0.01) discard;
-            vec2 nc = centered * 5.0 + vec2(uSeed, uSeed * 0.7);
-            float n = fbm(nc);
-            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
-            n = fbm(nc + warp * uDomainWarpStrength * 0.6);
-            density = n * falloff;
-          } else if (uShapeMode == 3) {
-            float stretchFactor = 2.0 + uAsymmetry * 2.0;
-            float stretchAngle = uSeed * 6.28;
-            float cosS = cos(stretchAngle), sinS = sin(stretchAngle);
-            vec2 stretched = vec2(
-              centered.x * cosS - centered.y * sinS,
-              (centered.x * sinS + centered.y * cosS) * stretchFactor
-            );
-            vec2 nc = stretched * 6.0 + vec2(uSeed, uSeed * 0.7);
-            vec2 warp1 = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
-            vec2 warp2 = vec2(fbm(nc + warp1 * 0.8 + 3.1), fbm(nc + warp1 * 0.8 + 4.5));
-            float n = fbm(nc + warp2 * uDomainWarpStrength);
-            float threshLow = 0.2 + dist * 1.2;
-            float threshHigh = threshLow + 0.15;
-            density = smoothstep(threshLow, threshHigh, n) * 0.55;
-          } else if (uShapeMode == 4) {
-            float shellAngle = uSeed * 6.28;
-            float cs4 = cos(shellAngle), sn4 = sin(shellAngle);
-            vec2 shellCoord = vec2(
-              centered.x * cs4 - centered.y * sn4,
-              (centered.x * sn4 + centered.y * cs4) * (1.0 + uAsymmetry * 0.5)
-            );
-            float shellDist = length(shellCoord);
-            float shell = exp(-pow(shellDist - 0.3, 2.0) / (2.0 * 0.04 * 0.04));
-            shell *= 1.0 - smoothstep(0.42, 0.5, shellDist);
-            float shellAng = atan(shellCoord.y, shellCoord.x);
-            float angularN = noise(vec2(shellAng * 4.0 + uSeed, shellDist * 10.0));
-            shell *= 0.5 + 0.5 * angularN;
-            density = shell;
-          } else {
-            float gaussian = exp(-dist * dist / 0.06);
-            gaussian *= 1.0 - smoothstep(0.35, 0.5, dist);
-            vec2 nc = centered * 3.0 + vec2(uSeed, uSeed * 0.7);
-            float n = fbm(nc);
-            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
-            n = fbm(nc + warp * uDomainWarpStrength * 0.3);
-            density = gaussian * (0.6 + 0.4 * n);
-          }
-
-          // Dither for retro transparency
-          float threshold = bayerDither(gl_FragCoord.xy);
-          if (density < threshold) discard;
-
-          // Output black with absorption alpha — darkens whatever is behind
-          float alpha = density * uAbsorbStrength;
-          gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
-        }
-      `,
-    });
-
-    const absMesh = new THREE.Mesh(absGeo, absMat);
-    absMesh.position.copy(position);
-    absMesh.lookAt(0, 0, 0);
-    absMesh.renderOrder = -1; // Render absorption BEFORE emission
-
-    // ── Emission mesh: adds the nebula's own light ──
     const geo = new THREE.PlaneGeometry(size, size);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
@@ -689,32 +501,11 @@ export class SkyFeatureLayer {
       `,
     });
 
-    const emitMesh = new THREE.Mesh(geo, mat);
-    emitMesh.position.copy(position);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(position);
     // Billboard: face the origin (camera is always at sky sphere center)
-    emitMesh.lookAt(0, 0, 0);
-    emitMesh.renderOrder = 0; // After absorption pass
-
-    // Return group containing both absorption + emission meshes
-    const group = new THREE.Group();
-    group.add(absMesh);
-    group.add(emitMesh);
-    return group;
-  }
-
-  /**
-   * Per-type absorption strength. Denser gas types absorb more.
-   * Emission nebulae have the most dust; planetary nebulae are thinner shells;
-   * supernova remnants are wispy; reflection nebulae scatter but still occlude.
-   */
-  _getAbsorptionStrength(feature) {
-    switch (feature.type) {
-      case 'emission-nebula':   return 0.55; // Dense gas + dust, strong absorption
-      case 'planetary-nebula':  return 0.25; // Thin expanding shell, moderate
-      case 'supernova-remnant': return 0.20; // Wispy filaments, light absorption
-      case 'reflection-nebula': return 0.40; // Dust scattering = occlusion
-      default:                  return 0.30;
-    }
+    mesh.lookAt(0, 0, 0);
+    return mesh;
   }
 
   /**
@@ -727,11 +518,8 @@ export class SkyFeatureLayer {
       transparent: true,
       depthWrite: false,
       depthTest: false,
-      // Custom blending: dst = dst * (1 - srcAlpha) — purely absorptive
-      blending: THREE.CustomBlending,
-      blendSrc: THREE.ZeroFactor,
-      blendDst: THREE.OneMinusSrcAlphaFactor,
-      blendEquation: THREE.AddEquation,
+      // Normal blending with alpha — will darken what's behind it
+      blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
       uniforms: {
         uSeed: { value: this._hashSeed(feature.seed) },
