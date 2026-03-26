@@ -2358,8 +2358,6 @@ function gallerySpawn() {
 
   let infoText = '';
 
-<<<<<<< Updated upstream
-=======
   // ── Known Feature Gallery (cycles through all 37 real Messier/NGC profiles) ──
   if (type === 'known-feature') {
     // Clamp seed to valid profile index (Left/Right cycles through profiles)
@@ -2457,7 +2455,6 @@ function gallerySpawn() {
     return;  // Skip the default overlay update at the bottom of gallerySpawn
   }
 
->>>>>>> Stashed changes
   // ── Volumetric nebula test (Points-based gas cloud) ──
   if (type === 'volumetric-nebula-test') {
     const testData = _generateVolumetricTestData(rng);
