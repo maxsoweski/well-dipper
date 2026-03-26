@@ -60,7 +60,7 @@ export class ProceduralGlowLayer {
         uPitchK: { value: 1.0 / Math.tan(12.0 * Math.PI / 180.0) },
         // Time for subtle animation
         uTime: { value: 0.0 },
-        uShowCenterMarker: { value: true },  // debug: show galactic center indicator
+        uShowCenterMarker: { value: false },  // debug: show galactic center indicator
         uBarAngle: { value: galacticMap.barAngle || (28.0 * Math.PI / 180.0) },
         uTargetPos: { value: new THREE.Vector3(0, 0, 0) },
         uShowTarget: { value: false },
@@ -396,22 +396,7 @@ export class ProceduralGlowLayer {
             float density = totalDensity(R, z, theta);
             float armStr = spiralArmStrength(R, theta);
 
-            // Feature absorption — reduce glow inside nearby feature volumes
-            float absorption = 1.0;
-            for (int j = 0; j < 8; j++) {
-              if (j >= uFeatureCount) break;
-              vec3 toFeature = p - uFeaturePositions[j];
-              float dist2 = dot(toFeature, toFeature);
-              float r = uFeatureRadii[j];
-              if (dist2 < r * r) {
-                // Smooth falloff: full absorption at center, none at edge
-                float d = sqrt(dist2) / r;
-                float strength = uFeatureAbsorption[j] * (1.0 - d * d);
-                absorption *= (1.0 - strength);
-              }
-            }
-
-            float contribution = density * nearFade * effStep * absorption;
+            float contribution = density * nearFade * effStep;
             glow += contribution;
 
             // Color weighted by contribution and bulge luminosity
@@ -548,14 +533,14 @@ export class ProceduralGlowLayer {
   setFeatureAbsorption(features) {
     // Absorption strength by feature type
     const absorptionByType = {
-      'emission-nebula': 0.5,
-      'dark-nebula': 0.8,
-      'planetary-nebula': 0.3,
-      'reflection-nebula': 0.3,
-      'supernova-remnant': 0.2,
-      'open-cluster': 0.1,
-      'ob-association': 0.1,
-      'globular-cluster': 0.05,
+      'emission-nebula': 0.7,
+      'dark-nebula': 0.9,
+      'planetary-nebula': 0.5,
+      'reflection-nebula': 0.4,
+      'supernova-remnant': 0.4,
+      'open-cluster': 0.3,
+      'ob-association': 0.25,
+      'globular-cluster': 0.2,
     };
 
     const uniforms = this._sphere.material.uniforms;
@@ -574,6 +559,11 @@ export class ProceduralGlowLayer {
       }
     }
     uniforms.uFeatureCount.value = count;
+    if (count > 0) {
+      console.log(`[GLOW] Feature absorption: ${count} features loaded. First: pos=(${features[0].position.x.toFixed(2)}, ${features[0].position.y.toFixed(2)}, ${features[0].position.z.toFixed(2)}), r=${features[0].radius.toFixed(4)}, type=${features[0].type}`);
+    } else {
+      console.log('[GLOW] Feature absorption: no features nearby');
+    }
   }
 
   /**

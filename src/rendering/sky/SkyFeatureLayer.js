@@ -132,6 +132,21 @@ export class SkyFeatureLayer {
 
       const mesh = this._createFeatureMesh(feature, skyPos, skySize, brightness);
       if (mesh) {
+        // Create absorption layer — darkens the glow behind this nebula.
+        // Renders BEFORE the emission mesh (lower renderOrder).
+        // Only for gas features, not clusters.
+        const gasTypes = ['emission-nebula', 'planetary-nebula', 'supernova-remnant',
+                          'reflection-nebula', 'dark-nebula'];
+        if (gasTypes.includes(feature.type)) {
+          const absorbMesh = this._createAbsorptionMesh(feature, skyPos, skySize);
+          if (absorbMesh) {
+            absorbMesh.renderOrder = 1;  // render AFTER glow (0) but BEFORE emission (2)
+            this._group.add(absorbMesh);
+            this._meshes.push(absorbMesh);
+          }
+        }
+
+        mesh.renderOrder = 2;  // render AFTER absorption layer
         this._group.add(mesh);
         this._meshes.push(mesh);
       }
@@ -212,6 +227,108 @@ export class SkyFeatureLayer {
    * Shape mode is selected from the knownProfile.shape string or
    * procedurally assigned via _assignProceduralShapeMode().
    */
+  /**
+   * Absorption layer — semi-transparent black shape that darkens the glow
+   * behind a nebula. Same shape as the emission billboard but uses
+   * NormalBlending to BLOCK light instead of adding it.
+   * Like how a planet blocks the sky — just semi-transparent.
+   */
+  _createAbsorptionMesh(feature, position, size) {
+    // High absorption — nearly fully block the glow so the nebula's own
+    // emission color is what you see instead of glow + nebula stacked.
+    const absorptionStrength = {
+      'emission-nebula': 0.9,
+      'dark-nebula': 0.95,
+      'planetary-nebula': 0.8,
+      'reflection-nebula': 0.7,
+      'supernova-remnant': 0.75,
+    }[feature.type] || 0.8;
+
+    const absorbSize = size * 1.3;  // larger than emission billboard for visible dark rim
+    const geo = new THREE.PlaneGeometry(absorbSize, absorbSize);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.NormalBlending,  // KEY: normal blending darkens the glow behind
+      side: THREE.DoubleSide,
+      uniforms: {
+        uSeed: { value: this._hashSeed(feature.seed) },
+        uAbsorption: { value: absorptionStrength },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uSeed;
+        uniform float uAbsorption;
+        varying vec2 vUv;
+
+        // Simple noise for shape
+        float hash(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = hash(i); float b = hash(i + vec2(1,0));
+          float c = hash(i + vec2(0,1)); float d = hash(i + vec2(1,1));
+          return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+        }
+        float fbm(vec2 p) {
+          float v = 0.0; float a = 0.5;
+          for (int i = 0; i < 4; i++) {
+            v += a * noise(p); p *= 2.0; a *= 0.5;
+          }
+          return v;
+        }
+
+        void main() {
+          vec2 centered = vUv - 0.5;
+          float dist = length(centered);
+
+          // Outer falloff — slightly larger than the emission billboard
+          float falloff = 1.0 - smoothstep(0.2, 0.5, dist);
+          if (falloff < 0.01) discard;
+
+          // Dust tendril noise — different from the emission noise.
+          // Use a higher frequency + strong domain warp for filamentary structure.
+          vec2 nc = centered * 5.0 + vec2(uSeed * 1.3, uSeed * 0.9);
+          vec2 warp1 = vec2(fbm(nc + 3.1), fbm(nc + 4.7));
+          vec2 warp2 = vec2(fbm(nc + warp1 * 0.7 + 5.3), fbm(nc + warp1 * 0.7 + 6.1));
+          float n = fbm(nc + warp2 * 0.8);
+
+          // Threshold to create distinct dust tendrils with gaps between them.
+          // Where noise is high → dense dust (fully opaque).
+          // Where noise is low → gap (transparent, glow shows through).
+          float tendril = smoothstep(0.35, 0.55, n);
+
+          // Also add some broad diffuse absorption across the whole nebula
+          float diffuse = n * 0.3;
+
+          float density = (tendril * 0.7 + diffuse) * falloff;
+          if (density < 0.03) discard;
+
+          // Dust is dark but not pure black — very dark brown/grey
+          vec3 dustColor = vec3(0.02, 0.015, 0.01);
+          gl_FragColor = vec4(dustColor, density * uAbsorption);
+        }
+      `,
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(position);
+    mesh.lookAt(0, 0, 0);
+    return mesh;
+  }
+
   _createNebulaBillboard(feature, position, size, brightness) {
     // Use knownProfile colors when available, otherwise type-specific secondary
     const kp = feature.knownProfile;

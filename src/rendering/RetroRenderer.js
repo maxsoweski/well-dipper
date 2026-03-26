@@ -695,7 +695,40 @@ export class RetroRenderer {
     r.setRenderTarget(this.bgTarget);
     r.setClearColor(0x000000, 1);
     r.clear();
-    r.render(this.getSkyScene(), this.camera);
+    // Render sky in two sub-passes so absorption meshes can darken the glow.
+    // Pass 1A: glow + starfield (additive)
+    // Pass 1B: features (includes absorption meshes with NormalBlending)
+    const skyScene = this.getSkyScene();
+    if (skyScene && this._skyRenderer) {
+      // Render glow layer alone first
+      const glowMesh = this._skyRenderer._glowLayer?.mesh;
+      const starMesh = this._skyRenderer._starfieldLayer?.mesh;
+      const featureGroup = this._skyRenderer._featureLayer?.mesh;
+
+      // DEBUG: log once
+      if (!this._absorbDebugDone) {
+        this._absorbDebugDone = true;
+        const absorbCount = featureGroup ? featureGroup.children.filter(c => c.material?.blending === THREE.NormalBlending).length : 0;
+        const emitCount = featureGroup ? featureGroup.children.filter(c => c.material?.blending === THREE.AdditiveBlending).length : 0;
+        console.log(`[SKY 2-PASS] glow=${!!glowMesh}, stars=${!!starMesh}, features=${!!featureGroup}, absorption meshes=${absorbCount}, emission meshes=${emitCount}`);
+      }
+
+      // Hide features, render glow + stars
+      if (featureGroup) featureGroup.visible = false;
+      r.render(skyScene, this.camera);
+
+      // Now show features (absorption + emission), render on top
+      if (featureGroup) featureGroup.visible = true;
+      if (glowMesh) glowMesh.visible = false;
+      if (starMesh) starMesh.visible = false;
+      r.autoClear = false;
+      r.render(skyScene, this.camera);
+      r.autoClear = true;
+      if (glowMesh) glowMesh.visible = true;
+      if (starMesh) starMesh.visible = true;
+    } else {
+      r.render(skyScene, this.camera);
+    }
 
     // Pass 2: Scene objects at low resolution
     r.setRenderTarget(this.sceneTarget);

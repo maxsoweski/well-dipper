@@ -154,13 +154,15 @@ export class SkyRenderer {
       );
     }
 
-    // Add to scene in render order: glow (back) → features → stars (front)
+    // Add to scene in render order: glow (0) → absorption (1) → emission (2) → stars (3)
     if (this._glowLayer) {
+      this._glowLayer.mesh.renderOrder = 0;
       this._scene.add(this._glowLayer.mesh);
     }
     if (this._featureLayer) {
       this._scene.add(this._featureLayer.mesh);
     }
+    this._starfieldLayer.mesh.renderOrder = 3;
     this._scene.add(this._starfieldLayer.mesh);
 
     this._pendingData = null;
