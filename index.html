@@ -11,8 +11,17 @@
   <body>
     <canvas id="canvas"></canvas>
 
+    <!-- Splash + intro sequence (before title screen) -->
+    <div id="splash-screen">
+      <p class="splash-prompt">CLICK TO BEGIN</p>
+    </div>
+    <div id="intro-overlay" style="display:none;">
+      <div id="intro-logo1" class="intro-logo">LOGO ONE</div>
+      <div id="intro-logo2" class="intro-logo">LOGO TWO</div>
+    </div>
+
     <!-- Title screen overlay -->
-    <div id="title-screen">
+    <div id="title-screen" style="display:none;">
       <div class="title-content">
         <h1 class="title-name">WELL-DIPPER</h1>
         <p class="title-prompt">press any key to begin</p>

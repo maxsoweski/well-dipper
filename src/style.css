@@ -183,6 +183,9 @@ html, body {
   justify-content: center;
   pointer-events: none;
   transition: opacity 1s ease;
+}
+
+#title-screen.animate-in {
   animation: title-fade-in 4s ease-out forwards;
 }
 
@@ -673,4 +676,54 @@ html, body {
     max-width: 95vw;
     max-height: 80vh;
   }
+}
+
+/* ── Splash screen ── */
+#splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.splash-prompt {
+  font-family: 'Pixelify Sans', monospace;
+  font-size: 24px;
+  color: #fff;
+  letter-spacing: 4px;
+  animation: splash-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes splash-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Intro sequence ── */
+#intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 550;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-logo {
+  position: absolute;
+  font-family: 'Pixelify Sans', monospace;
+  font-size: 48px;
+  color: #fff;
+  letter-spacing: 6px;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+
+.intro-logo.visible {
+  opacity: 1;
 }

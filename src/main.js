@@ -170,8 +170,73 @@ let _deepSkyDrift = null;     // { startPos, endPos, duration, elapsed } — mom
 let _forceNextDestType = null;
 const _heldKeys = new Set();
 
+// ── Splash + Intro sequence ──
+// Splash: black screen, click to start.
+// Intro: 6-second sequence — Logo 1 fade in/out, Logo 2 fade in/out, then title screen.
+let splashActive = true;
+
+function startIntroSequence() {
+  const splash = document.getElementById('splash-screen');
+  if (splash) splash.style.display = 'none';
+
+  const overlay = document.getElementById('intro-overlay');
+  const logo1 = document.getElementById('intro-logo1');
+  const logo2 = document.getElementById('intro-logo2');
+  const titleEl = document.getElementById('title-screen');
+
+  if (!overlay || !logo1 || !logo2) {
+    // Fallback: skip intro, show title directly
+    if (titleEl) titleEl.style.display = '';
+    splashActive = false;
+    titleScreenActive = true;
+    return;
+  }
+
+  overlay.style.display = '';
+
+  // Timeline (~12 seconds total):
+  //   0.0s — Logo 1 fades in
+  //   2.4s — Logo 1 fades out
+  //   4.0s — Logo 2 fades in
+  //   6.4s — Logo 2 fades out
+  //   8.0s — Overlay removed, title screen shown
+
+  // Logo 1 in
+  setTimeout(() => { logo1.classList.add('visible'); }, 200);
+  // Logo 1 out
+  setTimeout(() => { logo1.classList.remove('visible'); }, 2400);
+  // Logo 2 in
+  setTimeout(() => { logo2.classList.add('visible'); }, 4000);
+  // Logo 2 out
+  setTimeout(() => { logo2.classList.remove('visible'); }, 6400);
+  // Remove overlay, show title screen
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    if (titleEl) {
+      titleEl.style.display = '';
+      // Force reflow so the browser registers the display change before the animation class
+      void titleEl.offsetHeight;
+      titleEl.classList.add('animate-in');
+    }
+    splashActive = false;
+    titleScreenActive = true;
+    // Start auto-dismiss timer NOW (not at page load) so it counts from when the title is visible
+    if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
+    _titleAutoTimer = setTimeout(() => {
+      if (titleScreenActive) dismissTitleScreen();
+    }, settings.get('titleAutoDismiss') * 1000);
+  }, 8000);
+}
+
+// Splash screen click handler
+document.getElementById('splash-screen')?.addEventListener('click', () => {
+  if (!splashActive) return;
+  startIntroSequence();
+});
+
 // ── Title screen ──
-let titleScreenActive = true;
+// Starts false — set to true only when the title screen is actually displayed (after intro sequence)
+let titleScreenActive = false;
 let _titleAutoTimer = null;
 
 function dismissTitleScreen() {
@@ -762,10 +827,8 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
 
 
 
-  // Auto-dismiss title screen after configured timeout
-  _titleAutoTimer = setTimeout(() => {
-    if (titleScreenActive) dismissTitleScreen();
-  }, settings.get('titleAutoDismiss') * 1000);
+  // Auto-dismiss timer is now started by startIntroSequence() when the title actually appears.
+  // (Previously it started at page load, racing the intro sequence.)
 
   // Mobile fullscreen button on title screen
   // Must use touchend (not click) — click fires too late on mobile, canvas touchstart
@@ -3113,9 +3176,9 @@ function animate() {
     }
 
     // ── Autopilot (cinematic flythrough) ──
-    // Skip idle timer during warp or title screen (title has its own 30s timer)
-    if (warpEffect.isActive || titleScreenActive) {
-      // Warp or title screen is active — don't start autopilot
+    // Skip idle timer during splash/intro/title/warp
+    if (warpEffect.isActive || splashActive || titleScreenActive) {
+      // Warp, splash, or title screen is active — don't start autopilot
     } else if (!autoNav.isActive) {
       idleTimer += deltaTime;
       if (idleTimer >= settings.get('idleTimeout')) {
@@ -3182,7 +3245,7 @@ function animate() {
     // ── Deep sky contemplation timer ──
     // After the timer, auto-warp away.
     // Paused during title screen (title has its own 30s dismiss timer).
-    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !titleScreenActive) {
+    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !splashActive && !titleScreenActive) {
       _deepSkyLingerTimer -= deltaTime;
       if (_deepSkyLingerTimer <= 0) {
         _deepSkyLingerTimer = -1;
@@ -3318,6 +3381,9 @@ window.addEventListener('keydown', (e) => {
       return;
     }
   }
+
+  // Block all input during splash/intro sequence
+  if (splashActive) return;
 
   // Title screen: any key dismisses (except K which we already handled)
   if (titleScreenActive) {
@@ -3772,6 +3838,7 @@ let _minimapDidDrag = false; // true once mouse actually moves during minimap dr
 
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
+  if (splashActive) return;
   if (titleScreenActive) { dismissTitleScreen(); return; }
   _mouseDown.x = e.clientX;
   _mouseDown.y = e.clientY;
@@ -3870,6 +3937,7 @@ let _lastTapTime = 0;
 const _touchStart = { x: 0, y: 0 };
 
 canvas.addEventListener('touchstart', (e) => {
+  if (splashActive) return;
   if (titleScreenActive) { dismissTitleScreen(); return; }
   if (e.touches.length === 1) {
     _touchStart.x = e.touches[0].clientX;
