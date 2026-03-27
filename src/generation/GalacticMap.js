@@ -1138,6 +1138,79 @@ export class GalacticMap {
   };
 
   /**
+   * Per-instance color variation for procedural features.
+   * Each nebula type has a palette of plausible colors based on real
+   * emission line physics (H-alpha, OIII, NII, SII) and dust reddening.
+   * The base color shifts within that palette so nebulae look related but distinct.
+   */
+  _varyFeatureColor(baseColor, type, rng) {
+    const roll = rng.range(0, 1);
+    const pick = (palette) => {
+      const idx = Math.floor(roll * palette.length) % palette.length;
+      const chosen = palette[idx];
+      // Small random perturbation for uniqueness within the chosen variant
+      const jitter = 0.08;
+      return [
+        Math.max(0, Math.min(1, chosen[0] + rng.range(-jitter, jitter))),
+        Math.max(0, Math.min(1, chosen[1] + rng.range(-jitter, jitter))),
+        Math.max(0, Math.min(1, chosen[2] + rng.range(-jitter, jitter))),
+      ];
+    };
+
+    switch (type) {
+      case 'emission-nebula':
+        // Real emission nebulae: H-alpha dominant (red/pink), OIII regions
+        // (teal), NII (deeper red), some appear pinkish-white in dense cores
+        return pick([
+          [0.8, 0.2, 0.1],   // H-alpha red (classic Orion)
+          [0.9, 0.3, 0.25],  // pinkish red (Lagoon-like)
+          [0.7, 0.15, 0.2],  // deep crimson (Rosette-like)
+          [0.85, 0.4, 0.3],  // warm pink (Carina-like)
+          [0.6, 0.25, 0.3],  // dusty rose
+          [0.75, 0.35, 0.15], // amber-red (Eagle-like)
+          [0.5, 0.3, 0.35],  // muted mauve (heavily reddened)
+        ]);
+      case 'planetary-nebula':
+        // Planetary nebulae: most varied — OIII green, blue-green, violet,
+        // some red, white cores. Very colorful objects.
+        return pick([
+          [0.3, 0.8, 0.4],   // OIII green (classic)
+          [0.2, 0.6, 0.7],   // teal-blue (NGC 7027-like)
+          [0.4, 0.5, 0.8],   // blue-violet (Cat's Eye-like)
+          [0.7, 0.3, 0.5],   // magenta-pink (Butterfly-like)
+          [0.5, 0.7, 0.3],   // yellow-green
+          [0.3, 0.4, 0.9],   // deep blue (Blue Snowball-like)
+          [0.6, 0.8, 0.7],   // pale cyan-green
+          [0.8, 0.5, 0.3],   // warm orange (Helix-like outer shell)
+        ]);
+      case 'supernova-remnant':
+        // SNR: shock-heated gas glows in multiple lines — green, blue,
+        // red filaments, some with distinct color regions
+        return pick([
+          [0.3, 0.8, 0.4],   // oxygen green (original)
+          [0.4, 0.5, 0.8],   // synchrotron blue-purple (Crab-like)
+          [0.7, 0.25, 0.2],  // shock-heated red (Veil outer)
+          [0.5, 0.6, 0.3],   // yellow-green (Cassiopeia A-like)
+          [0.3, 0.7, 0.7],   // teal (Tycho-like)
+          [0.6, 0.35, 0.6],  // purple-pink
+        ]);
+      case 'reflection-nebula':
+        // Reflection nebulae: scattered starlight, always blue-ish
+        // but varying in warmth
+        return pick([
+          [0.3, 0.4, 0.9],   // deep blue (Witch Head-like)
+          [0.4, 0.5, 0.85],  // medium blue (Pleiades-like)
+          [0.5, 0.6, 0.8],   // pale blue
+          [0.35, 0.45, 0.75], // dusty blue
+        ]);
+      case 'dark-nebula':
+        return [...baseColor]; // dark nebulae stay dark
+      default:
+        return [...baseColor];
+    }
+  }
+
+  /**
    * Get feature region grid indices from world coordinates.
    */
   _featureRegionIndices(x, y, z) {
@@ -1248,12 +1321,17 @@ export class GalacticMap {
             const featureRng = rng.child(`${type}-${ix}-${iy}-${iz}`);
             const radius = featureRng.range(...spec.sizeRange);
 
+            // Per-instance color variation — nebulae of the same type should
+            // look related but not identical. Real nebulae vary in dominant
+            // emission line, excitation, and dust reddening.
+            const instanceColor = this._varyFeatureColor(spec.color, type, featureRng);
+
             features.push({
               type,
               position: { x, y, z },
               radius,
               seed: `${seed}-${type}-${ix}-${iy}-${iz}`,
-              color: [...spec.color],
+              color: instanceColor,
               context: {
                 metallicity: spec.contextOverrides.metallicityOverride ?? metallicity + (spec.contextOverrides.metallicityBoost || 0),
                 age: spec.contextOverrides.ageOverride ?? Math.min(age, spec.contextOverrides.ageMax || age),

@@ -77,6 +77,17 @@ window._cc = cameraController;
 window._scene = scene;
 window._retroRenderer = retroRenderer;
 
+// Toggle in-system objects (planets, moons, orbits, labels) for sky debugging.
+// Call from console: window._skyOnly()  or  window._skyOnly(false) to restore.
+window._skyOnly = (hide = true) => {
+  // Recursively hide/show everything in the main scene
+  scene.traverse(obj => {
+    if (obj !== scene) obj.visible = !hide;
+  });
+  // The sky is rendered in a separate scene by SkyRenderer — leave it alone
+  console.log(hide ? '[DEBUG] System objects hidden — sky only' : '[DEBUG] System objects restored');
+};
+
 // ── LOD Manager ──
 // Evaluates camera distance to bodies and assigns LOD tiers each frame.
 const lodManager = new LODManager(camera);

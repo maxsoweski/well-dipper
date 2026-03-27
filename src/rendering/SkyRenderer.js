@@ -135,9 +135,8 @@ export class SkyRenderer {
       this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);
       if (this._pendingFeatures && this._pendingFeatures.length > 0) {
         this._featureLayer.setFeatures(this._pendingFeatures, this._playerPos);
-        // Pass feature data to glow layer for absorption —
-        // glow dims where ray passes through feature volumes
-        this._glowLayer.setFeatureAbsorption(this._pendingFeatures);
+        // Nebula billboards now handle their own glow absorption via
+        // premultiplied alpha + Beer-Lambert — no glow shader absorption needed.
       }
 
       this._starfieldLayer = new StarfieldLayer(

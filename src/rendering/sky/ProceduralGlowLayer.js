@@ -101,10 +101,9 @@ export class ProceduralGlowLayer {
         uniform vec3 uTargetPos;
         uniform bool uShowTarget;
 
-        // Feature absorption — nearby features dim the glow behind them
-        uniform vec3 uFeaturePositions[8];
-        uniform float uFeatureRadii[8];
-        uniform float uFeatureAbsorption[8];
+        // Feature absorption uniforms kept for potential future use but
+        // no longer read by the shader — nebula billboards handle absorption
+        // via premultiplied alpha blending now.
         uniform int uFeatureCount;
 
         varying vec3 vWorldDir;
@@ -417,6 +416,10 @@ export class ProceduralGlowLayer {
           brightness = 1.0 - exp(-brightness);
           brightness *= aboveFactor;
 
+          // Feature absorption removed — nebula billboards now handle their own
+          // glow blocking via premultiplied alpha + Beer-Lambert transmittance.
+          // The old shader-based dimming is no longer needed.
+
           if (brightness < 0.005) discard;
 
           // ── Color: warm center, silvery elsewhere ──
@@ -531,16 +534,18 @@ export class ProceduralGlowLayer {
    * @param {Array} features — from GalacticMap.findNearbyFeatures()
    */
   setFeatureAbsorption(features) {
-    // Absorption strength by feature type
+    // Absorption strength by feature type — sole absorption system now
+    // (mesh-based absorption disabled). These dim the glow where nebulae/dust
+    // block background starlight, so emission features show their own color.
     const absorptionByType = {
-      'emission-nebula': 0.7,
-      'dark-nebula': 0.9,
-      'planetary-nebula': 0.5,
-      'reflection-nebula': 0.4,
-      'supernova-remnant': 0.4,
-      'open-cluster': 0.3,
-      'ob-association': 0.25,
-      'globular-cluster': 0.2,
+      'emission-nebula': 0.5,
+      'dark-nebula': 0.7,
+      'planetary-nebula': 0.35,
+      'reflection-nebula': 0.3,
+      'supernova-remnant': 0.3,
+      'open-cluster': 0.15,
+      'ob-association': 0.12,
+      'globular-cluster': 0.1,
     };
 
     const uniforms = this._sphere.material.uniforms;

@@ -126,25 +126,30 @@ export class SkyFeatureLayer {
         2.0 // minimum size so tiny features are still visible
       );
 
-      // Distance-based brightness falloff
+      // Distance-based brightness AND opacity falloff.
+      // Closer nebulae are brighter and more opaque; distant ones fade
+      // in both emission and transparency — like stars with apparent magnitude.
       const distFade = Math.min(1.0, 1.0 / (feature.dist * 2));
       const brightness = distFade * this._brightnessRange.max;
 
+      // Store distFade so _createFeatureMesh can scale absorption too
+      feature._distFade = distFade;
+
       const mesh = this._createFeatureMesh(feature, skyPos, skySize, brightness);
       if (mesh) {
-        // Create absorption layer — darkens the glow behind this nebula.
-        // Renders BEFORE the emission mesh (lower renderOrder).
-        // Only for gas features, not clusters.
-        const gasTypes = ['emission-nebula', 'planetary-nebula', 'supernova-remnant',
-                          'reflection-nebula', 'dark-nebula'];
-        if (gasTypes.includes(feature.type)) {
-          const absorbMesh = this._createAbsorptionMesh(feature, skyPos, skySize);
-          if (absorbMesh) {
-            absorbMesh.renderOrder = 1;  // render AFTER glow (0) but BEFORE emission (2)
-            this._group.add(absorbMesh);
-            this._meshes.push(absorbMesh);
-          }
-        }
+        // Absorption meshes disabled — glow shader handles dimming directly.
+        // Mesh-based absorption kept in _createAbsorptionMesh() for future use
+        // (e.g. dark nebulae that should be visibly opaque clouds).
+        // const gasTypes = ['emission-nebula', 'planetary-nebula', 'supernova-remnant',
+        //                   'reflection-nebula', 'dark-nebula'];
+        // if (gasTypes.includes(feature.type)) {
+        //   const absorbMesh = this._createAbsorptionMesh(feature, skyPos, skySize);
+        //   if (absorbMesh) {
+        //     absorbMesh.renderOrder = 1;
+        //     this._group.add(absorbMesh);
+        //     this._meshes.push(absorbMesh);
+        //   }
+        // }
 
         mesh.renderOrder = 2;  // render AFTER absorption layer
         this._group.add(mesh);
@@ -160,11 +165,16 @@ export class SkyFeatureLayer {
       feature._shapeMode = this._assignProceduralShapeMode(feature);
       // Procedural asymmetry and dark lanes for visual variety
       const asymRoll = this._hashSeed(feature.seed + '-asym');
-      feature._asymmetry = asymRoll * 0.6; // 0 to 0.6
+      feature._asymmetry = asymRoll * 0.9; // 0 to 0.9 (wider range for more distinct shapes)
       const dlRoll = this._hashSeed(feature.seed + '-dlane');
-      // Emission nebulae often have dark lanes (dust); others less so
-      feature._darkLaneStrength = (feature.type === 'emission-nebula' && dlRoll > 0.5)
-        ? dlRoll * 0.5 : 0.0;
+      // Dark lanes: emission nebulae often, others sometimes
+      if (feature.type === 'emission-nebula') {
+        feature._darkLaneStrength = dlRoll > 0.3 ? dlRoll * 0.6 : 0.0;
+      } else if (feature.type === 'supernova-remnant') {
+        feature._darkLaneStrength = dlRoll > 0.6 ? dlRoll * 0.3 : 0.0;
+      } else {
+        feature._darkLaneStrength = 0.0;
+      }
     }
 
     switch (feature.type) {
@@ -201,21 +211,50 @@ export class SkyFeatureLayer {
    *   reflection-nebula:   100% diffuse
    *   dark-nebula:         0 (handled separately)
    */
+  /**
+   * Beer-Lambert absorption coefficient per feature type.
+   * Higher = denser cloud, blocks more galactic glow at the same noise density.
+   * Emission nebulae are the thickest gas clouds; reflection nebulae are wispy.
+   */
+  _absorptionCoeffForType(type) {
+    // Lower coefficients = more transparent, more distant-feeling.
+    // Nebulae should feel like part of the sky, not painted on top.
+    const coefficients = {
+      'emission-nebula': 3.0,
+      'dark-nebula': 5.0,
+      'planetary-nebula': 2.5,
+      'reflection-nebula': 1.5,
+      'supernova-remnant': 2.0,
+    };
+    return coefficients[type] ?? 2.0;
+  }
+
   _assignProceduralShapeMode(feature) {
     const roll = this._hashSeed(feature.seed + '-shape');
     switch (feature.type) {
       case 'emission-nebula':
-        return roll < 0.7 ? SHAPE_MODE['irregular'] : SHAPE_MODE['filamentary'];
+        // Real emission nebulae are wildly varied — from compact blobs
+        // to vast shells (Barnard's Loop) to complex filamentary structures.
+        // Use all 6 modes with different weights.
+        if (roll < 0.30) return SHAPE_MODE['irregular'];    // classic blob (Orion)
+        if (roll < 0.50) return SHAPE_MODE['filamentary'];  // threads (NGC 6960)
+        if (roll < 0.65) return SHAPE_MODE['ring'];          // shell/ring (Barnard's Loop)
+        if (roll < 0.78) return SHAPE_MODE['bipolar'];       // bipolar outflow (Eta Carinae)
+        if (roll < 0.90) return SHAPE_MODE['shell'];         // bubble (Bubble Nebula)
+        return SHAPE_MODE['diffuse'];                         // faint diffuse glow
       case 'planetary-nebula':
-        if (roll < 0.5) return SHAPE_MODE['ring'];
-        if (roll < 0.8) return SHAPE_MODE['bipolar'];
-        return SHAPE_MODE['shell'];
+        if (roll < 0.35) return SHAPE_MODE['ring'];
+        if (roll < 0.60) return SHAPE_MODE['bipolar'];
+        if (roll < 0.80) return SHAPE_MODE['shell'];
+        return SHAPE_MODE['irregular'];  // some are messy/asymmetric
       case 'supernova-remnant':
-        if (roll < 0.4) return SHAPE_MODE['filamentary'];
-        if (roll < 0.8) return SHAPE_MODE['shell'];
+        if (roll < 0.30) return SHAPE_MODE['filamentary'];
+        if (roll < 0.55) return SHAPE_MODE['shell'];
+        if (roll < 0.75) return SHAPE_MODE['ring'];          // expanding shock ring
         return SHAPE_MODE['irregular'];
       case 'reflection-nebula':
-        return SHAPE_MODE['diffuse'];
+        if (roll < 0.7) return SHAPE_MODE['diffuse'];
+        return SHAPE_MODE['irregular'];   // some have structure
       default:
         return SHAPE_MODE['irregular'];
     }
@@ -237,14 +276,14 @@ export class SkyFeatureLayer {
     // High absorption — nearly fully block the glow so the nebula's own
     // emission color is what you see instead of glow + nebula stacked.
     const absorptionStrength = {
-      'emission-nebula': 0.9,
-      'dark-nebula': 0.95,
-      'planetary-nebula': 0.8,
-      'reflection-nebula': 0.7,
-      'supernova-remnant': 0.75,
-    }[feature.type] || 0.8;
+      'emission-nebula': 0.2,
+      'dark-nebula': 0.3,
+      'planetary-nebula': 0.15,
+      'reflection-nebula': 0.12,
+      'supernova-remnant': 0.15,
+    }[feature.type] || 0.15;
 
-    const absorbSize = size * 1.3;  // larger than emission billboard for visible dark rim
+    const absorbSize = size * 2.0;  // larger so edges fade before billboard boundary
     const geo = new THREE.PlaneGeometry(absorbSize, absorbSize);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
@@ -294,30 +333,24 @@ export class SkyFeatureLayer {
           vec2 centered = vUv - 0.5;
           float dist = length(centered);
 
-          // Outer falloff — slightly larger than the emission billboard
-          float falloff = 1.0 - smoothstep(0.2, 0.5, dist);
+          // Gaussian-like falloff — concentrated in center, fades well before edge.
+          // sigma ~0.14, reaches ~1% by dist=0.3 (billboard edge is 0.5).
+          float falloff = exp(-dist * dist / (0.04));
           if (falloff < 0.01) discard;
 
-          // Dust tendril noise — different from the emission noise.
-          // Use a higher frequency + strong domain warp for filamentary structure.
-          vec2 nc = centered * 5.0 + vec2(uSeed * 1.3, uSeed * 0.9);
+          // Soft noise — continuous variation, no hard thresholds.
+          // Lower frequency + domain warp for wispy, organic shapes.
+          vec2 nc = centered * 3.5 + vec2(uSeed * 1.3, uSeed * 0.9);
           vec2 warp1 = vec2(fbm(nc + 3.1), fbm(nc + 4.7));
-          vec2 warp2 = vec2(fbm(nc + warp1 * 0.7 + 5.3), fbm(nc + warp1 * 0.7 + 6.1));
-          float n = fbm(nc + warp2 * 0.8);
+          float n = fbm(nc + warp1 * 0.5);
 
-          // Threshold to create distinct dust tendrils with gaps between them.
-          // Where noise is high → dense dust (fully opaque).
-          // Where noise is low → gap (transparent, glow shows through).
-          float tendril = smoothstep(0.35, 0.55, n);
+          // Continuous density — no step/threshold, just smooth noise variation.
+          // Noise provides natural variation (denser/thinner patches).
+          float density = n * n * falloff;
+          if (density < 0.02) discard;
 
-          // Also add some broad diffuse absorption across the whole nebula
-          float diffuse = n * 0.3;
-
-          float density = (tendril * 0.7 + diffuse) * falloff;
-          if (density < 0.03) discard;
-
-          // Dust is dark but not pure black — very dark brown/grey
-          vec3 dustColor = vec3(0.02, 0.015, 0.01);
+          // Warm dark dust — matches glow tone so transitions are seamless
+          vec3 dustColor = vec3(0.06, 0.045, 0.03);
           gl_FragColor = vec4(dustColor, density * uAbsorption);
         }
       `,
@@ -366,7 +399,7 @@ export class SkyFeatureLayer {
 
     // Shape-specific parameters from profile (defaults preserve original behavior)
     const warpRoll = this._hashSeed(feature.seed + '-warp');
-    const domainWarpStrength = kp ? (kp.domainWarpStrength ?? 0.8) : (0.4 + warpRoll * 0.8); // 0.4 to 1.2
+    const domainWarpStrength = kp ? (kp.domainWarpStrength ?? 0.8) : (0.2 + warpRoll * 1.3); // 0.2 to 1.5 (wider range)
     const asymmetry = kp ? (kp.asymmetry ?? 0.3) : (feature._asymmetry ?? 0.3);
     const darkLaneStrength = (kp && kp.darkLanes) ? (kp.darkLaneStrength ?? 0.3) : (feature._darkLaneStrength ?? 0.0);
 
@@ -385,7 +418,13 @@ export class SkyFeatureLayer {
       transparent: true,
       depthWrite: false,
       depthTest: false,
-      blending: THREE.AdditiveBlending,
+      // Premultiplied alpha: nebula emits its own color (rgb) AND blocks
+      // the galactic glow behind it (alpha). Like storm clouds blocking the sun.
+      // Beer-Lambert transmittance gives physically correct opacity curves.
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,              // use rgb as-is (premultiplied)
+      blendDst: THREE.OneMinusSrcAlphaFactor,  // background * (1 - alpha)
       side: THREE.DoubleSide,
       uniforms: {
         uColor: { value: new THREE.Vector3(feature.color[0], feature.color[1], feature.color[2]) },
@@ -397,6 +436,14 @@ export class SkyFeatureLayer {
         uAsymmetry: { value: asymmetry },
         uDarkLaneStrength: { value: darkLaneStrength },
         uShapeMode: { value: shapeMode },
+        // Beer-Lambert absorption coefficient — higher = more opaque at same density.
+        // Tuned per feature type so emission nebulae block glow convincingly
+        // while reflection nebulae stay wispy.
+        // Absorption scales with distance — distant nebulae are more transparent.
+        // Without this, far nebulae create dark patches without enough emission
+        // to justify them (dim but still opaque = dark blotch).
+        uAbsorptionCoeff: { value: this._absorptionCoeffForType(feature.type) * (feature._distFade ?? 1.0) },
+        uPixelScale: { value: 3.0 }, // match RetroRenderer.pixelScale
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -415,6 +462,8 @@ export class SkyFeatureLayer {
         uniform float uAsymmetry;
         uniform float uDarkLaneStrength;
         uniform int uShapeMode;
+        uniform float uAbsorptionCoeff;
+        uniform float uPixelScale;
         varying vec2 vUv;
 
         // Simple hash-based noise
@@ -467,7 +516,22 @@ export class SkyFeatureLayer {
           if (uShapeMode == 0) {
             // ── IRREGULAR: FBM + domain warp + dark lanes ──
             // Classic emission nebula look (Orion, Eagle, Lagoon)
-            // Asymmetry stretches the falloff shape (0 = circular, 1 = very elongated)
+            // Seed-derived variety: noise scale, falloff shape, warp offsets,
+            // and clumping so each nebula has distinct character, not just rotation.
+
+            // Derive variety parameters from seed (deterministic per nebula)
+            float s1 = fract(uSeed * 7.31);   // 0-1: noise scale factor
+            float s2 = fract(uSeed * 13.17);  // 0-1: falloff inner radius
+            float s3 = fract(uSeed * 19.53);  // 0-1: warp offset variation
+            float s4 = fract(uSeed * 29.71);  // 0-1: clump count / style
+
+            // Noise frequency: 3.0 (coarse blobs) to 6.0 (fine detail)
+            float noiseScale = 3.0 + s1 * 3.0;
+
+            // Falloff shape: some nebulae are compact (tight center), others diffuse
+            float falloffInner = 0.12 + s2 * 0.15;  // 0.12 to 0.27
+            float falloffOuter = falloffInner + 0.2 + s2 * 0.15; // spread varies too
+
             float stretchAngle = uSeed * 6.28;
             float cs0 = cos(stretchAngle), sn0 = sin(stretchAngle);
             vec2 asym = vec2(
@@ -475,50 +539,101 @@ export class SkyFeatureLayer {
               (centered.x * sn0 + centered.y * cs0) * (1.0 + uAsymmetry * 0.8)
             );
             float asymDist = length(asym);
-            float falloff = 1.0 - smoothstep(0.2, 0.5, asymDist);
+            float falloff = 1.0 - smoothstep(falloffInner, falloffOuter, asymDist);
+
+            // Clumping: low-frequency noise creates 2-3 density peaks instead of
+            // one smooth blob. Some nebulae are single-core, others multi-lobed.
+            float clumpNoise = fbm(centered * 2.0 + vec2(uSeed * 5.3, uSeed * 3.1));
+            float clumpStrength = s4 * 0.5; // 0 to 0.5 — how much clumping matters
+            falloff *= (1.0 - clumpStrength) + clumpStrength * smoothstep(0.25, 0.55, clumpNoise);
+
             if (falloff < 0.01) discard;
-            vec2 nc = centered * 4.0 + vec2(uSeed, uSeed * 0.7);
+
+            // Warp offsets vary per nebula so the distortion pattern differs
+            float warpOff1 = 1.3 + s3 * 4.0;
+            float warpOff2 = 2.7 + s3 * 3.0;
+            vec2 nc = centered * noiseScale + vec2(uSeed, uSeed * 0.7);
             n = fbm(nc);
-            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
+            vec2 warp = vec2(fbm(nc + warpOff1), fbm(nc + warpOff2));
             n = fbm(nc + warp * uDomainWarpStrength);
+
             // Dark lanes: subtract noise-based dark channels (dust absorption)
             if (uDarkLaneStrength > 0.0) {
               float lane = fbm(nc * 1.5 + vec2(uSeed * 3.1, uSeed * 1.7));
               lane = smoothstep(0.4, 0.7, lane);
               n *= 1.0 - lane * uDarkLaneStrength;
             }
-            density = n * falloff;
+
+            // Cloud density: square the noise then rescale to create stronger
+            // gradients. Plain noise (0-1 uniform) gives flat dithering;
+            // squared noise concentrates values near 0 with peaks near 1,
+            // creating the layered/billowing look when dithered.
+            // Multiply by 2.5 to compensate (FBM averages ~0.5, squared = ~0.25).
+            float cloud = n * n * 2.5;
+            density = cloud * falloff;
 
           } else if (uShapeMode == 1) {
-            // ── RING: hollow center, bright rim ──
+            // ── RING: distorted, lumpy, partially broken rim ──
             // Planetary nebulae (Ring M57, Helix, Southern Ring)
-            // Asymmetry makes the ring eccentric (elliptical, not circular)
+            // Real rings are never perfect circles — lumpy, thick/thin,
+            // brighter in some arcs, fading in others.
             float ringAngle = uSeed * 6.28;
             float cs1 = cos(ringAngle), sn1 = sin(ringAngle);
             vec2 ringCoord = vec2(
               centered.x * cs1 - centered.y * sn1,
               (centered.x * sn1 + centered.y * cs1) * (1.0 + uAsymmetry * 0.6)
             );
+
+            // Seed-derived variety
+            float sr1 = fract(uSeed * 9.37);   // radius variation
+            float sr2 = fract(uSeed * 14.71);  // gap character
+            float sr3 = fract(uSeed * 21.53);  // noise scale
+
+            // Polar coordinates for angular distortion
             float ringDist = length(ringCoord);
-            float ringRadius = 0.25;
-            float ringWidth = 0.07;
-            float ring = exp(-pow(ringDist - ringRadius, 2.0) / (2.0 * ringWidth * ringWidth));
-            // Dim the interior — center is darker than the rim
-            float centerDim = smoothstep(0.0, ringRadius * 0.6, ringDist);
-            ring *= centerDim;
-            // Outer falloff
-            ring *= 1.0 - smoothstep(0.38, 0.5, ringDist);
-            // Angular noise for texture along the ring
-            vec2 nc = centered * 5.0 + vec2(uSeed, uSeed * 0.7);
+            float angle = atan(ringCoord.y, ringCoord.x);
+
+            // Distort the ring radius — noise-based lumps make it irregular
+            vec2 nc = centered * (4.0 + sr3 * 3.0) + vec2(uSeed, uSeed * 0.7);
             n = fbm(nc);
-            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
-            n = fbm(nc + warp * uDomainWarpStrength * 0.5);
-            density = ring * (0.5 + 0.5 * n);
+            vec2 warp = vec2(fbm(nc + 1.3 + sr1 * 3.0), fbm(nc + 2.7 + sr1 * 2.0));
+            n = fbm(nc + warp * uDomainWarpStrength * 0.7);
+
+            // Base radius varies per-nebula + angular noise distortion
+            float baseRadius = 0.18 + sr1 * 0.12;  // 0.18 to 0.30
+            float angularNoise = fbm(vec2(angle * 2.0 + uSeed * 5.0, uSeed * 3.0));
+            float lumpyRadius = baseRadius + (angularNoise - 0.5) * 0.08;
+
+            // Ring width varies along the circumference
+            float baseWidth = 0.05 + sr2 * 0.06;   // 0.05 to 0.11
+            float widthVar = 0.6 + 0.4 * fbm(vec2(angle * 3.0 + uSeed, uSeed * 2.1));
+            float ringWidth = baseWidth * widthVar;
+
+            // Gaussian ring with distorted radius and varying width
+            float ring = exp(-pow(ringDist - lumpyRadius, 2.0) / (2.0 * ringWidth * ringWidth));
+
+            // Gaps: angular noise creates partial breaks in the ring
+            float gapNoise = fbm(vec2(angle * 1.5 + uSeed * 7.0, uSeed));
+            float gapStrength = sr2 * 0.6; // 0 to 0.6
+            ring *= (1.0 - gapStrength) + gapStrength * smoothstep(0.25, 0.5, gapNoise);
+
+            // Dim the interior
+            float centerDim = smoothstep(0.0, lumpyRadius * 0.5, ringDist);
+            ring *= centerDim;
+
+            // Outer falloff
+            ring *= 1.0 - smoothstep(lumpyRadius + ringWidth * 3.0, lumpyRadius + ringWidth * 5.0, ringDist);
+
+            // Cloud density within the ring — squared noise for billowing gradients
+            float cloud = n * n * 2.5;
+            density = ring * (0.3 + 0.7 * cloud);
 
           } else if (uShapeMode == 2) {
             // ── BIPOLAR: two lobes / hourglass / butterfly ──
             // Planetary nebulae (Dumbbell M27, some PNe with jets)
-            // Two lobes along a seed-derived axis
+            float sb1 = fract(uSeed * 8.91);  // lobe shape variation
+            float sb2 = fract(uSeed * 15.37); // warp character
+
             float lobeAngle = uSeed * 6.28;
             float cosA = cos(lobeAngle);
             float sinA = sin(lobeAngle);
@@ -526,31 +641,40 @@ export class SkyFeatureLayer {
               centered.x * cosA - centered.y * sinA,
               centered.x * sinA + centered.y * cosA
             );
-            // Lobes: stretched in one axis, compressed in the other
-            // Asymmetry: one lobe larger than the other (0 = symmetric, 1 = very lopsided)
-            float lobeX = rotated.x * (1.8 + uAsymmetry * 0.5);
-            float lobeY = rotated.y * 0.9;
+            // Lobe dimensions vary per nebula
+            float lobeX = rotated.x * (1.5 + uAsymmetry * 0.8 + sb1 * 0.5);
+            float lobeY = rotated.y * (0.7 + sb1 * 0.4);
             float lobeDist = length(vec2(lobeX, lobeY));
-            // Two-lobe shape: bias toward top and bottom
-            // Asymmetry shifts the waist off-center
-            float waistShift = rotated.y * uAsymmetry * 0.15;
-            float lobeBias = abs(rotated.y + waistShift) * 2.0;
-            float falloff = (1.0 - smoothstep(0.2, 0.45, lobeDist)) * smoothstep(0.0, 0.08, lobeBias);
-            // Add back a faint central hub
-            float hub = exp(-dist * dist / 0.008) * 0.3;
+            float waistShift = rotated.y * uAsymmetry * 0.2;
+            float lobeBias = abs(rotated.y + waistShift) * (1.5 + sb1);
+            float falloff = (1.0 - smoothstep(0.15, 0.42, lobeDist)) * smoothstep(0.0, 0.06 + sb1 * 0.04, lobeBias);
+            float hub = exp(-dist * dist / 0.006) * 0.25;
             falloff = max(falloff, hub);
             if (falloff < 0.01) discard;
-            vec2 nc = centered * 5.0 + vec2(uSeed, uSeed * 0.7);
+
+            // Cloud density — domain-warped FBM with squared gradients
+            float noiseScale = 4.0 + sb2 * 3.0;
+            vec2 nc = centered * noiseScale + vec2(uSeed, uSeed * 0.7);
             n = fbm(nc);
-            vec2 warp = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
-            n = fbm(nc + warp * uDomainWarpStrength * 0.6);
-            density = n * falloff;
+            float warpOff1 = 1.3 + sb2 * 4.0;
+            float warpOff2 = 2.7 + sb2 * 3.0;
+            vec2 warp = vec2(fbm(nc + warpOff1), fbm(nc + warpOff2));
+            n = fbm(nc + warp * uDomainWarpStrength * 0.7);
+            float cloud = n * n * 2.5;
+            density = cloud * falloff;
 
           } else if (uShapeMode == 3) {
-            // ── FILAMENTARY: stretched wispy threads ──
-            // NO mask — the noise threshold rises with distance from center,
-            // so filaments naturally peter out at irregular distances.
-            float stretchFactor = 2.0 + uAsymmetry * 2.0;
+            // ── FILAMENTARY: tangled threads with billowing cloud density ──
+            // Same "cloud rendering" technique as ring/bipolar nebulae:
+            // strong internal density gradients that dithering turns into
+            // visible bands/layers (topographic contour look = depth illusion).
+            // Filament SHAPE masks WHERE the cloud appears; cloud DENSITY
+            // controls HOW it looks within those shapes.
+            float sf1 = fract(uSeed * 11.37);  // thread scale
+            float sf2 = fract(uSeed * 17.89);  // knot frequency
+            float sf3 = fract(uSeed * 23.41);  // warp character
+
+            float stretchFactor = 1.5 + uAsymmetry * 1.5;
             float stretchAngle = uSeed * 6.28;
             float cosS = cos(stretchAngle);
             float sinS = sin(stretchAngle);
@@ -558,38 +682,94 @@ export class SkyFeatureLayer {
               centered.x * cosS - centered.y * sinS,
               (centered.x * sinS + centered.y * cosS) * stretchFactor
             );
-            vec2 nc = stretched * 6.0 + vec2(uSeed, uSeed * 0.7);
-            vec2 warp1 = vec2(fbm(nc + 1.3), fbm(nc + 2.7));
+
+            // ── Step 1: Filament mask — where the threads are ──
+            float coarseScale = 4.0 + sf1 * 2.0;
+            vec2 nc = stretched * coarseScale + vec2(uSeed, uSeed * 0.7);
+            float warpOff1 = 1.3 + sf3 * 5.0;
+            float warpOff2 = 2.7 + sf3 * 3.5;
+            vec2 warp1 = vec2(fbm(nc + warpOff1), fbm(nc + warpOff2));
             vec2 warp2 = vec2(fbm(nc + warp1 * 0.8 + 3.1), fbm(nc + warp1 * 0.8 + 4.5));
-            n = fbm(nc + warp2 * uDomainWarpStrength);
-            // Rising threshold: organic boundary, no geometric mask
-            float threshLow = 0.2 + dist * 1.2;
-            float threshHigh = threshLow + 0.15;
-            float filament = smoothstep(threshLow, threshHigh, n);
-            density = filament * 0.55;
+            float coarseN = fbm(nc + warp2 * uDomainWarpStrength);
+
+            // Wider, bolder filaments — lower threshold = thicker threads
+            float threshLow = 0.1 + dist * 0.8;
+            float threshHigh = threshLow + 0.25;
+            float filamentMask = smoothstep(threshLow, threshHigh, coarseN);
+
+            // Falloff from center so filaments fade at edges
+            float radialFade = 1.0 - smoothstep(0.25, 0.48, dist);
+            filamentMask *= radialFade;
+
+            // ── Step 2: Cloud density within filaments ──
+            // Same domain-warped FBM + squared gradient as irregular mode.
+            // This is what gives the "billowing cloud" look — the squared
+            // noise creates strong density gradients that the Bayer dithering
+            // turns into visible layered bands (topographic depth illusion).
+            float cloudScale = 5.0 + sf2 * 3.0;
+            vec2 cloudNc = centered * cloudScale + vec2(uSeed * 3.1, uSeed * 2.3);
+            float cloudWarpOff1 = 1.7 + sf3 * 3.0;
+            float cloudWarpOff2 = 3.9 + sf3 * 2.0;
+            vec2 cloudWarp = vec2(fbm(cloudNc + cloudWarpOff1), fbm(cloudNc + cloudWarpOff2));
+            float cloudN = fbm(cloudNc + cloudWarp * uDomainWarpStrength * 0.6);
+
+            // Squared noise for billowing gradients (same technique as mode 0)
+            float cloud = cloudN * cloudN * 2.5;
+
+            // Bright knots at intersections
+            float knotFreq = 3.0 + sf2 * 4.0;
+            float knotN = fbm(stretched * knotFreq + vec2(uSeed * 4.7, uSeed * 2.9));
+            float knots = smoothstep(0.5, 0.7, knotN) * filamentMask;
+            cloud += knots * 0.3;
+
+            n = cloudN; // for color mixing
+            density = filamentMask * cloud * 0.9;
 
           } else if (uShapeMode == 4) {
-            // ── SHELL: thin bright rim, dark interior (soap bubble) ──
+            // ── SHELL: distorted, broken rim with cloud density ──
             // Supernova remnant shells, bubble nebulae
-            // Asymmetry makes the shell non-circular (deformed by asymmetric explosion)
+            // Same distortion approach as ring mode — lumpy, varying width, gaps.
+            float ss1 = fract(uSeed * 12.47);  // radius variation
+            float ss2 = fract(uSeed * 18.93);  // gap/break character
+            float ss3 = fract(uSeed * 25.11);  // noise scale
+
             float shellAngle = uSeed * 6.28;
             float cs4 = cos(shellAngle), sn4 = sin(shellAngle);
             vec2 shellCoord = vec2(
               centered.x * cs4 - centered.y * sn4,
-              (centered.x * sn4 + centered.y * cs4) * (1.0 + uAsymmetry * 0.5)
+              (centered.x * sn4 + centered.y * cs4) * (1.0 + uAsymmetry * 0.7)
             );
             float shellDist = length(shellCoord);
-            float shellRadius = 0.3;
-            float shellThickness = 0.04;
-            float shell = exp(-pow(shellDist - shellRadius, 2.0) / (2.0 * shellThickness * shellThickness));
-            // Outer falloff
-            shell *= 1.0 - smoothstep(0.42, 0.5, shellDist);
-            // Angular noise for uneven brightness around the shell
             float shellAng = atan(shellCoord.y, shellCoord.x);
-            float angularN = noise(vec2(shellAng * 4.0 + uSeed, shellDist * 10.0));
-            shell *= 0.5 + 0.5 * angularN;
-            n = angularN;
-            density = shell;
+
+            // Distort the shell radius with angular noise
+            vec2 nc = centered * (4.0 + ss3 * 3.0) + vec2(uSeed * 1.3, uSeed * 0.9);
+            n = fbm(nc);
+            vec2 warp = vec2(fbm(nc + 1.5 + ss1 * 3.0), fbm(nc + 3.1 + ss1 * 2.0));
+            n = fbm(nc + warp * uDomainWarpStrength * 0.6);
+
+            float baseRadius = 0.22 + ss1 * 0.12;
+            float angularLump = fbm(vec2(shellAng * 2.5 + uSeed * 6.0, uSeed * 4.0));
+            float lumpyRadius = baseRadius + (angularLump - 0.5) * 0.1;
+
+            // Varying thickness
+            float baseThickness = 0.04 + ss2 * 0.05;
+            float thicknessVar = 0.5 + 0.5 * fbm(vec2(shellAng * 2.0 + uSeed * 3.0, uSeed));
+            float shellThickness = baseThickness * thicknessVar;
+
+            float shell = exp(-pow(shellDist - lumpyRadius, 2.0) / (2.0 * shellThickness * shellThickness));
+
+            // Gaps/breaks in the shell
+            float gapNoise = fbm(vec2(shellAng * 1.8 + uSeed * 8.0, uSeed * 2.0));
+            float gapStrength = ss2 * 0.7;
+            shell *= (1.0 - gapStrength) + gapStrength * smoothstep(0.2, 0.5, gapNoise);
+
+            // Outer falloff
+            shell *= 1.0 - smoothstep(lumpyRadius + shellThickness * 3.0, lumpyRadius + shellThickness * 6.0, shellDist);
+
+            // Cloud density for billowing look
+            float cloud = n * n * 2.5;
+            density = shell * (0.3 + 0.7 * cloud);
 
           } else {
             // ── DIFFUSE (mode 5): soft Gaussian blob ──
@@ -604,16 +784,42 @@ export class SkyFeatureLayer {
             density = gaussian * (0.6 + 0.4 * n);
           }
 
-          // Dither IS the transparency mechanism
-          float threshold = bayerDither(gl_FragCoord.xy);
+          // Dither at the retro pixel resolution — snap gl_FragCoord to the
+          // low-res grid so nebulae look the same chunky resolution as
+          // near-field scene objects (planets, moons, etc.)
+          vec2 retroCoord = floor(gl_FragCoord.xy / uPixelScale);
+          float threshold = bayerDither(retroCoord);
           if (density < threshold) discard;
 
           // Color: blend between primary and secondary using profile-driven mix
           float colorMix = smoothstep(0.3, 0.7, n);
           vec3 col = mix(uColor, uColorSecondary, colorMix * uColorMixStrength);
 
-          float bright = smoothstep(0.0, 0.7, density);
-          gl_FragColor = vec4(col * uBrightness * bright, 1.0);
+          // ── Beer-Lambert absorption ──
+          // Dense regions block more of the galactic glow behind them.
+          // transmittance = how much background light passes through.
+          float beer = exp(-density * uAbsorptionCoeff);
+          float transmittance = beer;
+          float opacity = 1.0 - transmittance;
+
+          // ── Powder function (Guerrilla Games) ──
+          // Corrects Beer-Lambert at thin edges: gives backlit nebula edges
+          // a bright rim, like the silver lining on storm clouds.
+          float powder = 1.0 - exp(-density * uAbsorptionCoeff * 2.0);
+          float backlitGlow = beer * powder;
+
+          // Nebula's own emission + backlit rim glow.
+          // Reduced from 1.8× to 1.2× — nebulae were too bright/close-feeling.
+          // They should be subtle, distant features, not bright foreground objects.
+          float emissionBright = smoothstep(0.0, 0.6, density);
+          vec3 emission = col * uBrightness * emissionBright * 1.2;
+          vec3 rimGlow = col * backlitGlow * uBrightness * 0.3;
+
+          // Premultiplied alpha output:
+          // rgb = emission already multiplied by opacity (premultiplied)
+          // alpha = how much background to block
+          vec3 premultRgb = (emission + rimGlow) * opacity;
+          gl_FragColor = vec4(premultRgb, opacity);
         }
       `,
     });
