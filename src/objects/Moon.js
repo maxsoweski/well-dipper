@@ -207,6 +207,51 @@ export class Moon {
           return smoothstep(casterRadius * 0.85, casterRadius * 1.15, sqrt(d2));
         }
 
+        // ── Heightmap normal perturbation from procedural noise ──
+        // Computes a "height" value from multi-octave noise, then uses
+        // finite differences along the tangent plane to derive a perturbed
+        // surface normal. This gives all procedural bodies crater-like
+        // relief that responds to lighting — the same technique that makes
+        // the NASA-textured Moon look great.
+        float computeHeight(vec3 pos) {
+          // Large-scale features: impact basins, hemispheric differences
+          float h = snoise(pos * noiseScale * 0.3) * 0.5;
+          // Medium terrain: large craters, ridges
+          h += snoise(pos * noiseScale) * 0.35;
+          // Fine detail: small craters, roughness
+          h += snoise(pos * noiseScale * 2.0) * 0.2;
+          h += snoise(pos * noiseScale * 4.0) * 0.1;
+          return h;
+        }
+
+        vec3 perturbNormalFromNoise(vec3 N, vec3 pos, float strength) {
+          // Build tangent frame from geometric normal
+          vec3 up = abs(N.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+          vec3 T = normalize(cross(up, N));
+          vec3 B = cross(N, T);
+
+          // Finite differences along tangent/bitangent
+          float eps = 0.01;
+          float h0 = computeHeight(pos);
+          float hT = computeHeight(pos + T * eps);
+          float hB = computeHeight(pos + B * eps);
+
+          // Raw gradient can be ~10-20 due to noise frequency; scale down
+          // so strength 0.25 = visible relief, not flipped normals
+          float dT = (hT - h0) / eps;
+          float dB = (hB - h0) / eps;
+          float scale = strength * 0.025;
+
+          vec3 perturbed = normalize(N - T * dT * scale - B * dB * scale);
+          // Clamp: perturbed normal must stay within ~60deg of geometric.
+          // Prevents flipped normals -> pure black patches.
+          float deviation = dot(perturbed, N);
+          if (deviation < 0.5) {
+            perturbed = normalize(mix(perturbed, N, 0.5));
+          }
+          return perturbed;
+        }
+
         void main() {
           #include <logdepthbuf_fragment>
           // Surface pattern by moon type
@@ -253,19 +298,33 @@ export class Moon {
             caldera = pow(max(-caldera, 0.0), 3.0);
             surfaceColor -= vec3(0.12) * caldera;
           } else if (moonType == 4) {
-            // Terrestrial: ocean + land like a mini-Earth
+            // Terrestrial: ocean + varied land terrain
             float continent = snoise(vPosition * noiseScale * 0.7);
             continent += snoise(vPosition * noiseScale * 1.5) * 0.35;
             continent += snoise(vPosition * noiseScale * 3.0) * 0.18;
             continent += snoise(vPosition * noiseScale * 6.0) * 0.08;
             float height = continent * 0.5 + 0.5;
             float seaLevel = 0.48;
-            // Soft coastline instead of hard step
             float landMask = smoothstep(seaLevel - 0.02, seaLevel + 0.04, height);
-            surfaceColor = mix(baseColor, accentColor, landMask);
-            // Shallow water shelf (lighter near coast)
-            float shelf = smoothstep(seaLevel - 0.12, seaLevel, height) * (1.0 - landMask);
-            surfaceColor += vec3(0.06, 0.08, 0.04) * shelf;
+
+            // Ocean with depth gradient
+            vec3 deepOcean = baseColor * 0.6;
+            float oceanDepth = smoothstep(seaLevel - 0.3, seaLevel, height);
+            vec3 ocean = mix(deepOcean, baseColor * 1.1, oceanDepth);
+
+            // Land with elevation zones
+            float landElev = smoothstep(seaLevel, seaLevel + 0.3, height);
+            vec3 lowland = accentColor;
+            vec3 midland = accentColor * 0.6 + vec3(0.16, 0.12, 0.05);
+            vec3 highland = vec3(0.40, 0.36, 0.32);
+            vec3 land = lowland;
+            land = mix(land, midland, smoothstep(0.25, 0.5, landElev));
+            land = mix(land, highland, smoothstep(0.6, 0.85, landElev));
+            // Local terrain noise for variety
+            float terrVar = snoise(vPosition * noiseScale * 4.0) * 0.06;
+            land += vec3(terrVar, terrVar * 0.7, terrVar * 0.4);
+
+            surfaceColor = mix(ocean, land, landMask);
           } else {
             // Captured: dark, battered surface with multi-scale roughness
             float detail = snoise(vPosition * noiseScale) * 0.4
@@ -277,21 +336,43 @@ export class Moon {
             surfaceColor = mix(baseColor, accentColor, mask);
           }
 
-          // ── Dual-star Lighting ──
-          float diff1 = max(dot(vNormal, lightDir), 0.0);
-          float diff2 = max(dot(vNormal, lightDir2), 0.0);
+          // ── Normal perturbation from procedural noise ──
+          // Airless bodies get strong relief (craters, basins, scarring).
+          // Terrestrial moons: only perturb land, not water.
+          float perturbStrength = 0.15;
+          if (moonType == 0 || moonType == 1) perturbStrength = 0.30; // rocky/captured: heavy cratering
+          else if (moonType == 2) perturbStrength = 0.22;             // ice: ridges + terrain
+          else if (moonType == 3) perturbStrength = 0.25;             // volcanic: caldera relief
 
-          // Type-specific terminator shaping (using primary star for shape)
+          // Terrestrial moons: mask perturbation over water
+          if (moonType == 4) {
+            float tHeight = snoise(vPosition * noiseScale * 0.7)
+                          + snoise(vPosition * noiseScale * 1.5) * 0.35
+                          + snoise(vPosition * noiseScale * 3.0) * 0.18
+                          + snoise(vPosition * noiseScale * 6.0) * 0.08;
+            float tLandMask = smoothstep(0.46, 0.50, tHeight * 0.5 + 0.5);
+            perturbStrength = 0.20 * tLandMask;
+          }
+
+          vec3 shadingNormal = perturbStrength > 0.001
+            ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
+            : vNormal;
+
+          // ── Dual-star Lighting (using perturbed normal) ──
+          float diff1 = max(dot(shadingNormal, lightDir), 0.0);
+          float diff2 = max(dot(shadingNormal, lightDir2), 0.0);
+
+          // Type-specific terminator shaping
           // Airless bodies get sharp terminators, atmospheric ones get soft
           if (moonType == 0 || moonType == 1) {
-            diff1 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir));
-            diff2 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir2));
+            diff1 = smoothstep(-0.02, 0.08, dot(shadingNormal, lightDir));
+            diff2 = smoothstep(-0.02, 0.08, dot(shadingNormal, lightDir2));
           } else if (moonType == 3) {
-            diff1 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir));
-            diff2 = smoothstep(-0.02, 0.08, dot(vNormal, lightDir2));
+            diff1 = smoothstep(-0.02, 0.08, dot(shadingNormal, lightDir));
+            diff2 = smoothstep(-0.02, 0.08, dot(shadingNormal, lightDir2));
           } else if (moonType == 4) {
-            diff1 = smoothstep(-0.1, 0.3, dot(vNormal, lightDir));
-            diff2 = smoothstep(-0.1, 0.3, dot(vNormal, lightDir2));
+            diff1 = smoothstep(-0.1, 0.3, dot(shadingNormal, lightDir));
+            diff2 = smoothstep(-0.1, 0.3, dot(shadingNormal, lightDir2));
           }
           // Ice (moonType 2) keeps the default smooth diffuse
 
@@ -316,7 +397,7 @@ export class Moon {
 
           // Volcanic: faint glow on dark side from lava
           if (moonType == 3) {
-            float nightGlow = max(-dot(vNormal, lightDir), 0.0);
+            float nightGlow = max(-dot(shadingNormal, lightDir), 0.0);
             finalColor += accentColor * nightGlow * 0.15;
           }
 

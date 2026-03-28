@@ -130,6 +130,7 @@ export function generateSolarSystem() {
       axialTilt: 0.03,         // ~2°
       rings: null, clouds: null, atmosphere: null,
       moons: [],
+      profileId: 'sol-mercury',
     },
 
     // ── Venus ────────────────────────────────────────────────────
@@ -148,6 +149,7 @@ export function generateSolarSystem() {
       clouds: { color: [0.9, 0.82, 0.65], density: 0.7, scale: 2.5 },
       atmosphere: { color: [0.9, 0.8, 0.5], strength: 0.6 },
       moons: [],
+      profileId: 'sol-venus',
     },
 
     // ── Earth ────────────────────────────────────────────────────
@@ -165,6 +167,7 @@ export function generateSolarSystem() {
       rings: null,
       clouds: { color: [0.95, 0.95, 0.97], density: 0.45, scale: 3.0 },
       atmosphere: { color: [0.4, 0.6, 1.0], strength: 0.4 },
+      profileId: 'sol-earth',
       moons: [
         // The Moon
         {
@@ -175,6 +178,7 @@ export function generateSolarSystem() {
           accentColor: [0.45, 0.43, 0.40],
           noiseScale: 4.0,
           inclination: 0.09,     // ~5°
+          profileId: 'sol-moon',
         },
       ],
     },
@@ -191,8 +195,10 @@ export function generateSolarSystem() {
       noiseDetail: 0.55,
       rotationSpeed: 0.1,
       axialTilt: 0.44,         // 25.2°
-      rings: null, clouds: null,
+      rings: null,
+      clouds: { color: [0.75, 0.55, 0.35], density: 0.15, scale: 2.0 },
       atmosphere: { color: [0.8, 0.5, 0.3], strength: 0.15 },
+      profileId: 'sol-mars',
       moons: [
         // Phobos
         {
@@ -246,6 +252,7 @@ export function generateSolarSystem() {
       rotationSpeed: 0.167,     // fastest spinner (~10 hours)
       axialTilt: 0.05,          // 3.1°
       rings: null, clouds: null, atmosphere: null,
+      profileId: 'sol-jupiter',
       moons: [
         // Amalthea (inner shepherd)
         {
@@ -266,6 +273,7 @@ export function generateSolarSystem() {
           accentColor: [0.90, 0.55, 0.15],
           noiseScale: 4.5,
           inclination: 0.01,
+          profileId: 'sol-io',
         },
         // Europa
         {
@@ -276,6 +284,7 @@ export function generateSolarSystem() {
           accentColor: [0.60, 0.55, 0.50],
           noiseScale: 5.0,
           inclination: 0.008,
+          profileId: 'sol-europa',
         },
         // Ganymede (largest moon in the solar system)
         {
@@ -286,6 +295,7 @@ export function generateSolarSystem() {
           accentColor: [0.42, 0.38, 0.35],
           noiseScale: 3.5,
           inclination: 0.005,
+          profileId: 'sol-ganymede',
         },
         // Callisto
         {
@@ -296,6 +306,7 @@ export function generateSolarSystem() {
           accentColor: [0.28, 0.25, 0.23],
           noiseScale: 4.0,
           inclination: 0.005,
+          profileId: 'sol-callisto',
         },
       ],
     },
@@ -321,6 +332,7 @@ export function generateSolarSystem() {
         tiltX: 0, tiltZ: 0,
       },
       clouds: null, atmosphere: null,
+      profileId: 'sol-saturn',
       moons: [
         // Mimas ("Death Star" — huge Herschel crater)
         {
@@ -384,6 +396,7 @@ export function generateSolarSystem() {
           inclination: 0.005,
           clouds: { color: [0.75, 0.60, 0.35], density: 0.6, scale: 3.0 },
           atmosphere: { color: [0.7, 0.55, 0.3], strength: 0.5 },
+          profileId: 'sol-titan',
         },
         // Hyperion (irregular, chaotic rotation)
         {
@@ -441,6 +454,7 @@ export function generateSolarSystem() {
       },
       clouds: null,
       atmosphere: { color: [0.5, 0.75, 0.85], strength: 0.45 },
+      profileId: 'sol-uranus',
       moons: [
         // Miranda (bizarre patchwork terrain)
         {
@@ -517,6 +531,7 @@ export function generateSolarSystem() {
       },
       clouds: { color: [0.6, 0.7, 0.9], density: 0.25, scale: 2.0 },
       atmosphere: { color: [0.3, 0.5, 0.9], strength: 0.5 },
+      profileId: 'sol-neptune',
       moons: [
         // Proteus (irregularly shaped, dark)
         {
@@ -538,6 +553,7 @@ export function generateSolarSystem() {
           noiseScale: 4.0,
           inclination: 2.72,     // ~156° retrograde
           retrograde: true,
+          profileId: 'sol-triton',
         },
       ],
     },
@@ -556,6 +572,7 @@ export function generateSolarSystem() {
       axialTilt: 2.14,           // 122.5° — significantly tilted
       rings: null, clouds: null,
       atmosphere: { color: [0.5, 0.5, 0.6], strength: 0.1 },  // tenuous N2
+      profileId: 'sol-pluto',
       moons: [
         // Charon (binary companion — 1:8 mass ratio, tidally locked)
         {
@@ -566,6 +583,7 @@ export function generateSolarSystem() {
           accentColor: [0.40, 0.38, 0.35],
           noiseScale: 4.5,
           inclination: 0.0,      // coplanar with Pluto's equator
+          profileId: 'sol-charon',
         },
       ],
     },
@@ -663,6 +681,7 @@ export function generateSolarSystem() {
       rotationSpeed: p.rotationSpeed,
       axialTilt: p.axialTilt,
       sunDirection: sunDir,
+      profileId: p.profileId || null,
     };
 
     // Build moons
@@ -694,6 +713,7 @@ export function generateSolarSystem() {
             rotationSpeed: 0.05,
             axialTilt: 0.1,
             sunDirection: sunDir,
+            profileId: m.profileId || null,
           },
           radiusEarth: moonRadiusEarth,
           radiusScene: moonRadiusScene,
@@ -736,6 +756,7 @@ export function generateSolarSystem() {
         noiseScale: Math.max(m.noiseScale, 2.5 / moonMapRadius),
         clouds: null,
         atmosphere: null,
+        profileId: m.profileId || null,
       };
     });
 
