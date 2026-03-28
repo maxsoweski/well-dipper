@@ -119,6 +119,37 @@ implementations exist from Gustavson/Ashima).
 - On RTX 5080 at 1080p: negligible (< 0.5ms per frame)
 - On mobile/integrated: may need to reduce to 2 crater scales
 
+## Research: Alternative Crater Algorithms (for future refinement)
+
+### Sine-of-sqrt-distance (davidar)
+More natural-looking than smoothstep sandwich. Uses `sin(2*PI*sqrt(d))` weighted
+by `exp(-4*d)` — creates natural bowl + rim + oscillating ejecta. Requires 5x5x5
+search (125 iterations) instead of 3x3x3 (27) because the sine wave extends beyond
+the immediate cell. Consider switching if current smoothstep approach looks too
+artificial after visual testing.
+
+### Multi-octave layering
+```
+for (i = 0..4) {
+    freq = pow(2, i);  amp = pow(0.5, i);
+    height += amp * craters(pos * freq);
+}
+```
+Each octave doubles frequency (more, smaller craters), halves amplitude.
+Add FBM noise inside crater bowls for floor roughness.
+
+### Cubemap baking for performance
+If LOD2 is too expensive per-fragment, bake the crater heightmap to a cubemap
+texture once, then sample per-frame. Converts ~800 ops/fragment into one texture
+fetch. Only needed if profiling shows issues.
+
+### Sources
+- Gustavson 3D Cellular Noise (MIT): github.com/stegu/webgl-noise
+- MaxBittker 3D Voronoi: github.com/MaxBittker/glsl-voronoi-noise
+- davidar GPU Planet Simulation: davidar.io/post/sim-glsl
+- IQ Useful Functions: iquilezles.org/articles/functions/
+- IQ Voronoi Borders: iquilezles.org/articles/voronoilines/
+
 ## Standing Rules
 1. LOD2 improvements must survive posterization — no point adding detail
    that gets quantized away. Focus on features that affect LIGHTING
