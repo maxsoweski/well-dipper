@@ -18,7 +18,23 @@ You are a **pilot**. You pilot your ship. The ship is your home, your vehicle, y
 
 **Future:** Movement system within the ship — walk around, interact with systems. Gamified tasks like maintenance, repair, upgrades. Ship interior as a playable space between destinations.
 
-**Full identity TBD.** Max wants something unusual for the player character — not a generic space trucker or military officer. Still thinking on this.
+#### The Player — Scion of a Breakaway Line
+
+The player is the **scion** — possibly the last living heir — of an eccentric breakaway line of human civilization. This offshoot split from mainstream humanity roughly a millennia ago and became increasingly eclectic and divergent over the centuries: different technology, different culture, different priorities.
+
+**Disadvantages:**
+- No faction support — no one owes you anything, no one is coming to help
+- No backup — you are alone in the universe
+- Vulnerable — one ship, one pilot, no fleet
+- Possibly hunted — people who want the tech, people who remember the breakaway line and have opinions about it
+
+**Advantages:**
+- Exceptional ship technology, particularly propulsion (see §8H)
+- Personal warp capability — you carry your own fold generator when most people depend on infrastructure (stabilized warp gates)
+- Exotic propulsion systems that are more efficient than modern corporate drives
+- The ship is old and temperamental but fundamentally superior — like inheriting a hand-built mechanical watch in a world of digital ones
+
+**What this means for gameplay:** The player is powerful but fragile. Capable of going anywhere, but with no safety net. The ship's superiority is real but comes with maintenance burden and the constant awareness that there are no replacement parts. This tension — extraordinary capability, total isolation — is the player's core experience.
 
 ### Core Experience [BOTH]
 - **Drift.** You float through space. The camera moves gently. You watch planets orbit, stars glow, nebulae swirl.
@@ -1198,6 +1214,45 @@ If landing is ever implemented:
 - Must work with the retro aesthetic (low-poly interiors, dithered)
 - Should feel like a natural extension, not a different game
 - Start extremely small — one room, one station type
+
+### 8H. Propulsion & Travel Landscape [GAME] (Lore Seeds)
+
+The universe has a layered travel infrastructure. Most people rely on built infrastructure for long-distance travel. The player's ship is the exception.
+
+#### Laser Highways (Civilized Systems)
+
+Infrastructure-dependent **laser sail corridors** for relativistic in-system travel (~0.1c–0.5c). Think interstate highways in space — massive laser arrays at one end, sail ships glinting as they accelerate along fixed routes. NPCs and commerce use these. They connect planets, stations, and resource nodes within a system.
+
+**Gameplay texture:** The player sees these but doesn't use them. Fly past the traffic, the infrastructure, the signs of civilization. Laser highways are **scenic features** — evidence of the living universe, not something you depend on.
+
+#### Stabilized Warp Gates (Civilized Systems)
+
+Fixed installations that create stable fold points for long-distance interstellar travel. Where NPCs congregate, trade happens, stories unfold. These are the on-ramps and truck stops of the galaxy — social hubs, chokepoints, places where factions project power.
+
+**Gameplay texture:** The player CAN use them but doesn't NEED to. Gates are **social/trade hubs** — visit them for commerce, information, NPC encounters, and faction interactions. But the player's personal fold capability means they're never stuck waiting for a gate or limited to gate-connected routes.
+
+#### Standard High-End Drives
+
+**Antimatter-catalyzed fusion** drives are the best that modern corporate and military ships run — capable of 0.3c to 0.9c in-system. Expensive antimatter fuel creates a political and economic layer: who controls the fuel, who can afford it, who gets stranded when supply lines break.
+
+#### The Player's Drive — Pre-Collapse Exotic Tech
+
+The player's ship runs on something different. Not antimatter fusion, not a bigger version of what everyone else has — a **different principle entirely.** Pre-collapse technology from the breakaway line's centuries of independent development. More elegant, more efficient, less dependent on rare fuel. The specifics are deliberately vague (this is lore seed territory, not hard spec), but the key properties are:
+
+- **Personal warp/fold capability** — the ship carries its own fold generator. Gates are infrastructure; the player's ship IS its own gate. This is what most people outside the larger corporate fleets don't have access to.
+- **Superior efficiency** — goes farther on less, whatever "less" means for its exotic fuel source
+- **Old and temperamental** — generational wealth in hardware form. It works beautifully when it works. Maintenance is part of the experience.
+
+#### Time Debt
+
+Relativistic travel creates time debt — the faster you go, the more time passes for the rest of the universe relative to you. This hits differently depending on who you are:
+
+- **NPCs** accept time debt as commute cost. Take the laser highway, lose a few hours of external time, arrive at your destination. It's baked into civilization.
+- **The player** chooses time debt deliberately — pushing into frontier space at high fractions of c, accepting that the universe ages around them. This reinforces the isolation theme: every deep exploration run costs you time with the civilized world.
+
+#### Frontier Space — Where the Ship Shines
+
+Beyond the laser highways, beyond the warp gates, there is nothing but empty space and whatever you brought with you. No infrastructure, no commerce lanes, no rescue. This is where the player's ship is in its element — where personal warp capability and exotic efficiency aren't luxuries but survival necessities. The frontier is the player's domain.
 
 ---
 
