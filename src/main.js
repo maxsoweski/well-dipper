@@ -47,6 +47,10 @@ import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
 import { SkyRenderer } from './rendering/SkyRenderer.js';
 import { SkyFeatureLayer } from './rendering/sky/SkyFeatureLayer.js';
 import { KNOWN_OBJECT_PROFILES } from './data/KnownObjectProfiles.js';
+import { ShipSpawner } from './objects/ShipSpawner.js';
+import { TextureBaker, getBakeType } from './rendering/TextureBaker.js';
+import { createTexturedBodyMaterial } from './rendering/shaders/TexturedBodyShader.js';
+import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/MaterialBodyShader.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -64,10 +68,17 @@ const scene = new THREE.Scene();
 // ── Camera ──
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 200000);
 
+// ── Ship Spawner ──
+const shipSpawner = new ShipSpawner();
+shipSpawner.init();  // async, loads manifest in background — non-blocking
+
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
 const retroRenderer = new RetroRenderer(canvas, scene, camera);
 retroRenderer.setColorPalette(settings.get('colorPalette'));
+
+// ── Texture Baker (runtime procedural → texture baking) ──
+let textureBaker = null; // lazy-init on first use (needs renderer)
 
 // ── Camera Controller ──
 const cameraController = new ShipCameraSystem(camera, canvas);
@@ -310,7 +321,7 @@ function toggleNavComputer() {
     // Initialize nav computer if needed
     if (!_navComputer) {
       const navCanvas = document.getElementById('nav-computer-canvas');
-      _navComputer = new NavComputer(navCanvas, galacticMap);
+      _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
       if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
     }
     // Update player position and system name
@@ -1196,6 +1207,10 @@ function _hideCurrentSystem() {
       for (const line of system.starOrbitLines) scene.remove(line.mesh);
     }
   }
+  // Hide ships (they'll be disposed in spawnSystem cleanup)
+  for (const ship of shipSpawner.ships) {
+    scene.remove(ship.mesh);
+  }
   // Hide HUD (don't dispose yet — that happens in spawnSystem during HYPER)
   retroRenderer.setHud(null, null);
   clickTargets = new Map();
@@ -1223,6 +1238,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     stopFlythrough();
   }
   idleTimer = 0;
+
+  // ── Clean up ships from previous system ──
+  shipSpawner.clear(scene);
 
   // ── Clean up old system ──
   // Meshes were already removed from scene during FOLD (_hideCurrentSystem),
@@ -1542,6 +1560,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     binarySeparationMap: systemData.binarySeparation, // map-unit sep for gravity well
     names: systemNames, // generated names for system/star/planets/moons
   };
+
+  // ── Spawn flavor ships near planets ──
+  {
+    const shipRng = new SeededRandom(`${seed}-ships`);
+    shipSpawner.spawnForSystem(scene, systemData, planets, () => shipRng.float());
+  }
 
   // ── Initialize gravity-driven camera system ──
   // Build body mesh references for GravityField
@@ -2315,6 +2339,7 @@ function exitGallery() {
 }
 
 /** Clean up any gallery-spawned objects */
+let _galleryBakedRTs = [];
 function _galleryCleanup() {
   if (galleryObject) {
     galleryObject.removeFrom(scene);
@@ -2332,6 +2357,16 @@ function _galleryCleanup() {
     }
   }
   _galleryMeshes = [];
+  // Dispose baked texture render targets
+  for (const rt of _galleryBakedRTs) {
+    rt.dispose();
+  }
+  _galleryBakedRTs = [];
+  // Hide comparison labels
+  const lblL = document.getElementById('gallery-label-left');
+  const lblR = document.getElementById('gallery-label-right');
+  if (lblL) lblL.style.display = 'none';
+  if (lblR) lblR.style.display = 'none';
 }
 
 /**
@@ -2665,33 +2700,122 @@ function gallerySpawn() {
       brightness2: 0,
     };
 
+    // ── Side-by-side: procedural (left) vs baked texture (right) ──
+    const lightDir = new THREE.Vector3(0.5, 0.3, 0.8).normalize();
+
+    // Left: procedural shader (existing Planet.js)
     const planet = new Planet(scenePlanetData, starInfo);
-    planet._lightDir.set(0.5, 0.3, 0.8).normalize();
+    planet._lightDir.copy(lightDir);
     planet.addTo(scene);
     _galleryMeshes.push(planet);
 
     const r = scenePlanetData.radius;
-    // Point orbit controller at the origin (where gallery planet lives)
-    // and set distance so the near-plane calculation works correctly.
+    const spacing = r * 2.8; // gap between the two spheres
+
+    // Position procedural on the left
+    planet.mesh.position.set(-spacing * 0.5, 0, 0);
+
+    // Right: material channel approach (baked channels + palette display shader)
+    if (!textureBaker) {
+      textureBaker = new TextureBaker(retroRenderer.renderer);
+    }
+    const bakeSeed = gallerySeed * 137.0 + (forcedPlanet.baseColor?.[0] ?? 0.5) * 1000;
+    const bakeType = getBakeType(planetType, false);
+    // Sea level varies per planet — derived from seed for consistency
+    // Lower seaLevel = more land (desert world), higher = more ocean (archipelago)
+    // Terrestrial range: 0.32 (arid, ~30% water) to 0.52 (oceanic, ~65% water)
+    // Ocean worlds: always high water
+    const seaLevelHash = ((bakeSeed * 7919.0) % 1.0 + 1.0) % 1.0; // 0-1 from seed
+    const bakeSeaLevel = planetType === 'terrestrial' ? 0.32 + seaLevelHash * 0.20
+                       : planetType === 'ocean' ? 0.50 + seaLevelHash * 0.10
+                       : -1.0;
+    const baked = textureBaker.bakeChannels(bakeSeed, {
+      noiseScale: forcedPlanet.noiseScale ?? 4.0,
+      bodyType: bakeType,
+      seaLevel: bakeSeaLevel,
+      axialTilt: forcedPlanet.axialTilt ?? 0.0,
+    });
+
+    // Pick palette based on planet type
+    const paletteMap = {
+      'rocky': 'rocky', 'ice': 'ice', 'terrestrial': 'terrestrial',
+      'lava': 'lava', 'volcanic': 'volcanic',
+      'ocean': 'terrestrial', 'carbon': 'rocky', 'venus': 'rocky',
+      'captured': 'rocky',
+    };
+    const paletteName = paletteMap[planetType] || 'rocky';
+    let palette = { ...PALETTES[paletteName] };
+
+    // CRITICAL: display shader seaLevel must match baking shader seaLevel
+    // Override the palette's hardcoded seaLevel with the actual value we baked with
+    palette.seaLevel = bakeSeaLevel;
+
+    // Tint zone colors from planet's base/accent (non-biome types only)
+    // Terrestrial uses biome sub-palette — don't override its zone colors
+    if (!palette.biomeMode && forcedPlanet.baseColor && forcedPlanet.accentColor) {
+      const bc = forcedPlanet.baseColor;
+      const ac = forcedPlanet.accentColor;
+      palette.zone0 = [ac[0] * 0.8, ac[1] * 0.8, ac[2] * 0.8];
+      palette.zone1 = [
+        (ac[0] + bc[0]) * 0.45,
+        (ac[1] + bc[1]) * 0.45,
+        (ac[2] + bc[2]) * 0.45,
+      ];
+      palette.zone2 = [bc[0] * 0.9, bc[1] * 0.9, bc[2] * 0.9];
+      palette.zone3 = [bc[0] * 1.0, bc[1] * 1.0, bc[2] * 1.0];
+      palette.zone4 = [
+        Math.min(1.0, bc[0] * 1.15),
+        Math.min(1.0, bc[1] * 1.15),
+        Math.min(1.0, bc[2] * 1.15),
+      ];
+    }
+
+    const channelGeom = new THREE.IcosahedronGeometry(scenePlanetData.radius, 4);
+    const channelMat = createMaterialBodyMaterial({
+      lightDir,
+      lightDir2: null,
+      starInfo,
+      heightScale: 0.06,
+      posterizeLevels: 8.0,
+      ditherEdgeWidth: 0.5,
+      palette,
+    });
+    channelMat.uniforms.materialMap.value = baked.materialMap;
+    channelMat.uniforms.hasMaterial.value = 1.0;
+    const channelMesh = new THREE.Mesh(channelGeom, channelMat);
+    channelMesh.position.set(spacing * 0.5, 0, 0);
+    scene.add(channelMesh);
+    _galleryMeshes.push(channelMesh);
+
+    // Store baked render target for cleanup
+    if (!_galleryBakedRTs) _galleryBakedRTs = [];
+    _galleryBakedRTs.push(baked.renderTarget);
+
+    // Camera centered between both, far enough to see both
     cameraController.target.set(0, 0, 0);
     cameraController._targetGoal.set(0, 0, 0);
     cameraController._transitioning = false;
-    cameraController.distance = r * 3;
-    cameraController.smoothedDistance = r * 3;
-    cameraController.pitch = 0.1;          // slight upward tilt
+    cameraController.distance = r * 5;
+    cameraController.smoothedDistance = r * 5;
+    cameraController.pitch = 0.1;
     cameraController.smoothedPitch = 0.1;
     cameraController.smoothedYaw = cameraController.yaw;
     cameraController._returningToOrbit = false;
     cameraController.isFreeLooking = false;
     cameraController.forceFreeLook = false;
-    // Explicitly position camera — don't rely on next update() cycle
-    camera.position.set(0, r * 0.3, r * 3);
+    camera.position.set(0, r * 0.5, r * 5);
     camera.lookAt(0, 0, 0);
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');
     if (forcedPlanet.clouds) features.push('clouds');
     if (forcedPlanet.atmosphere) features.push('atmo');
+    // Show side-by-side labels
+    const lblL = document.getElementById('gallery-label-left');
+    const lblR = document.getElementById('gallery-label-right');
+    if (lblL) lblL.style.display = 'block';
+    if (lblR) lblR.style.display = 'block';
+
     infoText = `${forcedPlanet.radiusEarth.toFixed(2)} R⊕  |  ${features.join(', ') || 'no extras'}`;
   }
 
@@ -3536,34 +3660,41 @@ function animate() {
     for (let i = 0; i < system.planets.length; i++) {
       const entry = system.planets[i];
       const pMat = entry.planet.surface.material;
+      const pu = pMat.uniforms;
 
-      // Pass star positions to planet shader
-      pMat.uniforms.starPos1.value.copy(_star1Pos);
-      pMat.uniforms.starPos2.value.copy(_star2Pos);
+      // Pass star positions to planet shader (if uniforms exist)
+      if (pu.starPos1) pu.starPos1.value.copy(_star1Pos);
+      if (pu.starPos2) pu.starPos2.value.copy(_star2Pos);
 
       // Transit shadows: moons casting shadows on this planet
-      const moonCount = Math.min(entry.moons.length, 6);
-      pMat.uniforms.shadowMoonCount.value = moonCount;
-      for (let m = 0; m < moonCount; m++) {
-        pMat.uniforms.shadowMoonPos.value[m].copy(entry.moons[m].mesh.position);
-        pMat.uniforms.shadowMoonRadius.value[m] = entry.moons[m].data.radius;
+      // (textured shader doesn't have moon shadow arrays — skip if missing)
+      if (pu.shadowMoonCount) {
+        const moonCount = Math.min(entry.moons.length, 6);
+        pu.shadowMoonCount.value = moonCount;
+        for (let m = 0; m < moonCount; m++) {
+          pu.shadowMoonPos.value[m].copy(entry.moons[m].mesh.position);
+          pu.shadowMoonRadius.value[m] = entry.moons[m].data.radius;
+        }
       }
 
       // Planet-planet shadows: check immediate orbital neighbors
-      let shadowPlanetIdx = 0;
-      if (i > 0) {
-        const inner = system.planets[i - 1];
-        pMat.uniforms.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position);
-        pMat.uniforms.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius;
-        shadowPlanetIdx++;
+      // (textured shader has single shadowPlanetPos, not arrays — skip if missing)
+      if (pu.shadowPlanetCount) {
+        let shadowPlanetIdx = 0;
+        if (i > 0) {
+          const inner = system.planets[i - 1];
+          pu.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position);
+          pu.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius;
+          shadowPlanetIdx++;
+        }
+        if (i < system.planets.length - 1 && shadowPlanetIdx < 2) {
+          const outer = system.planets[i + 1];
+          pu.shadowPlanetPos.value[shadowPlanetIdx].copy(outer.planet.mesh.position);
+          pu.shadowPlanetRadius.value[shadowPlanetIdx] = outer.planet.data.radius;
+          shadowPlanetIdx++;
+        }
+        pu.shadowPlanetCount.value = shadowPlanetIdx;
       }
-      if (i < system.planets.length - 1 && shadowPlanetIdx < 2) {
-        const outer = system.planets[i + 1];
-        pMat.uniforms.shadowPlanetPos.value[shadowPlanetIdx].copy(outer.planet.mesh.position);
-        pMat.uniforms.shadowPlanetRadius.value[shadowPlanetIdx] = outer.planet.data.radius;
-        shadowPlanetIdx++;
-      }
-      pMat.uniforms.shadowPlanetCount.value = shadowPlanetIdx;
 
       // Moon eclipse shadows: planet eclipsing starlight from moons
       for (const moon of entry.moons) {
@@ -3602,6 +3733,9 @@ function animate() {
         belt.updateStarPositions(system.star.mesh.position, system.star2.mesh.position);
       }
     }
+
+    // ── Update flavor ships orbiting planets ──
+    shipSpawner.update(orbitDt, system.planets);
 
     // ── Update gravity well minimap positions (map-unit coords) ──
     if (gravityWell && gravityWellVisible && gravityWellPlanets) {
@@ -4143,6 +4277,52 @@ window.addEventListener('keydown', (e) => {
     console.log('Debug: next warp → globular cluster');
   }
 
+  // Shift+B: test baked textures on the focused planet
+  if (e.shiftKey && e.code === 'KeyB' && system) {
+    if (!textureBaker) {
+      textureBaker = new TextureBaker(retroRenderer.renderer);
+    }
+    // Find the focused planet or default to first
+    let targetEntry = system.planets[0];
+    if (focusIndex >= 0 && focusIndex < system.planets.length) {
+      targetEntry = system.planets[focusIndex];
+    }
+    const pd = targetEntry.planet.data;
+    const bakeType = getBakeType(pd.type, false);
+    const seed = pd.noiseScale * 100 + (pd.baseColor?.[0] ?? 0.5) * 1000;
+    console.log(`[TextureBaker] Baking type=${pd.type} (bakeType=${bakeType}), seed=${seed.toFixed(1)}`);
+    const baked = textureBaker.bake(seed, {
+      noiseScale: pd.noiseScale ?? 4.0,
+      bodyType: bakeType,
+      baseColor: pd.baseColor,
+      accentColor: pd.accentColor,
+      noiseDetail: pd.noiseDetail ?? 0.5,
+    });
+    // Create a textured material and swap it onto the planet surface
+    const surface = targetEntry.planet.surface || targetEntry.planet.mesh;
+    if (surface) {
+      const starInfo = system.starInfo;
+      const lightDir = targetEntry.planet._lightDir || new THREE.Vector3(1, 0, 0);
+      const lightDir2 = targetEntry.planet._lightDir2 || null;
+      const bakedMat = createTexturedBodyMaterial({
+        lightDir,
+        lightDir2,
+        starInfo,
+        heightScale: 0.06,
+        posterizeLevels: 8.0,
+        ditherEdgeWidth: 0.5,
+      });
+      // Wire baked textures
+      bakedMat.uniforms.diffuseMap.value = baked.diffuseMap;
+      bakedMat.uniforms.heightMap.value = baked.heightMap;
+      bakedMat.uniforms.hasTextures.value = 1.0;
+      bakedMat.uniforms.hasHeightMap.value = 1.0;
+      surface.material = bakedMat;
+      console.log('[TextureBaker] Swapped to baked texture material');
+    }
+    return;
+  }
+
   // Old Shift+number and Shift+letter debug shortcuts removed.
   // All debug spawning/teleporting is now handled via the debug panel (Down Arrow key).
 
@@ -4180,6 +4360,57 @@ window.addEventListener('keydown', (e) => {
 
   // Block all input during warp transition or pre-warp turn
   if (warpEffect.isActive || warpTarget.turning) return;
+
+  // Shift+L: DEBUG — teleport to Earth's Moon (for LOD testing)
+  if (e.code === 'KeyL' && e.shiftKey) {
+    console.log('Debug: teleporting to Earth\'s Moon...');
+
+    // Step 1: Spawn the Solar System if not already present
+    const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
+    const knownSol = KnownSystems.findAt(solPos);
+    if (!knownSol) {
+      console.warn('Debug: Sol not found in KnownSystems!');
+      return;
+    }
+
+    // Update player position to Sol
+    playerGalacticPos = { ...solPos };
+    if (skyRenderer._glowLayer?.setPlayerPosition) {
+      skyRenderer._glowLayer.setPlayerPosition(playerGalacticPos);
+    }
+
+    // Generate and spawn the Solar System
+    const solarData = knownSol.generate();
+    solarData._knownSystemNames = knownSol.names;
+    spawnSystem({ forWarp: false, systemData: solarData });
+    debugPanel.setPlayerPos(playerGalacticPos);
+
+    // Step 2: Focus camera on Earth's Moon (Earth = index 2, Moon = index 0)
+    // Use requestAnimationFrame to let the system finish spawning first
+    requestAnimationFrame(() => {
+      if (!system || system.planets.length < 3) {
+        console.warn('Debug: Solar System spawned but Earth not found at index 2');
+        return;
+      }
+      const earthEntry = system.planets[2]; // Earth
+      if (!earthEntry.moons || earthEntry.moons.length === 0) {
+        console.warn('Debug: Earth has no moons');
+        return;
+      }
+      const moon = earthEntry.moons[0]; // The Moon
+      const viewDist = moon.data.radius * 15; // ~15x radius, well within LOD2 range
+
+      focusIndex = 2;
+      focusMoonIndex = 0;
+      focusStarIndex = -1;
+      cameraController.focusOn(moon.mesh.position, viewDist);
+
+      const mName = system.names?.planets?.[2]?.moons?.[0] ?? 'Moon';
+      bodyInfo.showMoon(moon.data, 2, mName);
+      console.log(`Debug: Camera placed near ${mName}, viewDist=${viewDist.toFixed(4)}, moonRadius=${moon.data.radius.toFixed(4)}`);
+    });
+    return;
+  }
 
   // M key: toggle minimap
   if (e.code === 'KeyM') {
