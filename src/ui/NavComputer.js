@@ -1,7 +1,9 @@
 import { generateSystemName } from '../generation/NameGenerator.js';
+import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
+import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
 import alea from 'alea';
 
 /**
@@ -17,12 +19,16 @@ import alea from 'alea';
  * Panning supported at all 2D levels. Player position always visible.
  */
 
-const LEVELS = ['galaxy', 'sector', 'district', 'block', 'local'];
-const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'DISTRICT', 'BLOCK', 'LOCAL'];
-const GRID_N = 8; // tiles per axis at each 2D level
+const LEVELS = ['galaxy', 'sector', 'region', 'column', 'system'];
+const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'COLUMN', 'SYSTEM'];
+const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
+
+function gridNForLevel(levelIndex) {
+  return levelIndex === 2 ? 16 : 8; // region = 16x16, sector = 8x8
+}
 
 export class NavComputer {
-  constructor(canvas, galacticMap) {
+  constructor(canvas, galacticMap, webglRenderer) {
     this._canvas = canvas;
     this._ctx = canvas.getContext('2d');
     this._gm = galacticMap;
@@ -31,7 +37,7 @@ export class NavComputer {
     this._sectors = new GalacticSectors(galacticMap, 'well-dipper-galaxy-1');
 
     // Current level
-    this._levelIndex = 4; // start at LOCAL
+    this._levelIndex = 3; // start at COLUMN
 
     // ── 2D view state (shared by levels 0-3) ──
     this._viewCenter = { x: 8, z: 0 }; // center of current 2D view (kpc)
@@ -68,8 +74,18 @@ export class NavComputer {
     this._currentSector = null;
 
     // ── Warp target bridge ──
-    this._selectedNavStar = null;   // star selected BY user in local view { wx, wy, wz, seed, name }
+    this._selectedNavStar = null;   // star selected BY user in column view { wx, wy, wz, seed, name }
     this._externalTarget = null;    // warp target SET from outside { x, y, z } in galactic kpc
+
+    // ── System view (level 4) ──
+    this._systemStar = null;        // star data from column view click
+    this._systemData = null;        // StarSystemGenerator.generate() result
+    this._hoveredBody = null;       // planet/star under cursor { type, index }
+    this._systemRotX = 0.5;         // 3D view rotation (elevation)
+    this._systemRotY = 0.0;         // 3D view rotation (azimuth)
+    this._systemMode = 'system';    // 'system' or 'planet'
+    this._selectedPlanetIdx = -1;   // which planet is selected for detail view
+    this._systemZoom = 1.0;         // zoom multiplier for system view
 
     // ── Drill-down animation ──
     this._anim = null; // { startTime, duration, fromCenter, fromSize, toCenter, toSize, fromLevel, toLevel }
@@ -84,7 +100,9 @@ export class NavComputer {
     this._dragStartRotY = 0;
     this._panStartCenter = null;
 
-    // ── Galaxy luminosity renderer (per-view images driven by Layer 0) ──
+    // ── Galaxy renderer (GPU-accelerated top-down view) ──
+    this._navGalaxyRenderer = webglRenderer ? new NavGalaxyRenderer(webglRenderer, galacticMap) : null;
+    // Fallback: CPU luminosity renderer (used if no WebGL renderer available)
     this._luminosityRenderer = new GalaxyLuminosityRenderer(galacticMap);
     this._mapCache = new Map();  // key: "cx,cz,ext" → { canvas, lastUsed }
     this._mapCacheMax = 8;
@@ -127,7 +145,7 @@ export class NavComputer {
         e.preventDefault();
         e.stopPropagation();
       }
-      if (e.code === 'Backquote' && this._levelIndex === 4) {
+      if (e.code === 'Backquote' && this._levelIndex === 3) {
         this._localDebug = !this._localDebug;
         e.preventDefault();
         e.stopPropagation();
@@ -232,8 +250,8 @@ export class NavComputer {
     // Center local view on player's actual 3D position (including height above plane)
     this._localCenter = { x: this._playerX, y: this._playerY, z: this._playerZ };
     // Cube size based on local density
-    this._localCubeSize = Math.max(0.003, this._computeTileSize(this._playerX, this._playerZ, 500));
-    this._localRadius = Math.min(this._localCubeSize, this._localCubeSize / 3);
+    this._localCubeSize = Math.max(0.003, this._computeTileSize(this._playerX, this._playerZ, 150));
+    this._localRadius = 0.0015; // ~5 light years default zoom
     // Fixed grid cell size — 1 pc (0.001 kpc), like tiles on a floor
     this._localGridCell = 0.001;
     this._localStars = [];
@@ -261,17 +279,11 @@ export class NavComputer {
       this._viewStack.push({ center: { x: this._playerX, z: this._playerZ }, size: 2 });
     }
 
-    // District and block — adaptive sizing centered on player
-    const districtSize = this._computeTileSize(this._playerX, this._playerZ, 10000) * GRID_N;
+    // Region — single 16x16 grid (merged district+block)
+    const regionSize = this._computeTileSize(this._playerX, this._playerZ, 10000) * 16;
     this._viewStack.push({
       center: { x: this._playerX, z: this._playerZ },
-      size: districtSize,
-    });
-
-    const blockSize = this._computeTileSize(this._playerX, this._playerZ, 1000) * GRID_N;
-    this._viewStack.push({
-      center: { x: this._playerX, z: this._playerZ },
-      size: blockSize,
+      size: regionSize,
     });
 
     // Set current view based on level
@@ -341,8 +353,35 @@ export class NavComputer {
     const w = this._canvas.width;
     const h = this._canvas.height;
 
-    // WASD panning in local view
-    if (this._levelIndex === 4 && this._heldKeys.size > 0) {
+    // System zoom animation (column → system transition)
+    if (this._systemZoomAnim) {
+      const za = this._systemZoomAnim;
+      const elapsed = performance.now() - za.startTime;
+      let t = Math.min(1.0, elapsed / za.duration);
+      t = t * t; // ease-in (accelerate into the star)
+      this._localRadius = za.fromRadius + (za.toRadius - za.fromRadius) * t;
+      // Pan toward the star
+      this._localCenter.x = za.fromCenter.x + (za.starPos.x - za.fromCenter.x) * t;
+      this._localCenter.y = za.fromCenter.y + (za.starPos.y - za.fromCenter.y) * t;
+      this._localCenter.z = za.fromCenter.z + (za.starPos.z - za.fromCenter.z) * t;
+      if (t >= 1.0) {
+        this._systemZoomAnim = null;
+        this._levelIndex = 4; // switch to system view
+      }
+    }
+
+    // Tilt animation (region → column transition)
+    if (this._tiltAnim && this._levelIndex === 3) {
+      if (!this._tiltAnim.startTime) this._tiltAnim.startTime = performance.now();
+      const elapsed = performance.now() - this._tiltAnim.startTime;
+      let t = Math.min(1.0, elapsed / this._tiltAnim.duration);
+      t = t * t * (3 - 2 * t); // smoothstep
+      this._localRotX = this._tiltAnim.from + (this._tiltAnim.to - this._tiltAnim.from) * t;
+      if (t >= 1.0) this._tiltAnim = null;
+    }
+
+    // WASD panning in column view
+    if (this._levelIndex === 3 && this._heldKeys.size > 0) {
       const panSpeed = this._localRadius * 0.01; // slow enough to see individual grid lines move
       const cosY = Math.cos(this._localRotY);
       const sinY = Math.sin(this._localRotY);
@@ -372,7 +411,7 @@ export class NavComputer {
         this._localCenter.z += dz;
 
         // Clamp to block boundaries (XZ only — Y is unconstrained)
-        const blockCenter = this._viewStack[3]?.center;
+        const blockCenter = this._viewStack[2]?.center;
         if (blockCenter && this._localCubeSize) {
           const half = this._localCubeSize;
           this._localCenter.x = Math.max(blockCenter.x - half, Math.min(blockCenter.x + half, this._localCenter.x));
@@ -389,7 +428,9 @@ export class NavComputer {
     ctx.fillRect(0, 0, w, h);
 
     const level = LEVELS[this._levelIndex];
-    if (level === 'local') {
+    if (level === 'system') {
+      this._renderSystem(ctx, w, h);
+    } else if (level === 'column') {
       this._renderLocal(ctx, w, h);
     } else {
       this._render2DLevel(ctx, w, h);
@@ -406,9 +447,23 @@ export class NavComputer {
   handleEscape() {
     if (this._anim) return true; // ignore during animation
     if (this._levelIndex > 0) {
+      // System view: planet detail → system overview → column
+      if (this._levelIndex === 4) {
+        if (this._systemMode === 'planet') {
+          this._systemMode = 'system';
+          this._selectedPlanetIdx = -1;
+          return true;
+        }
+        this._levelIndex = 3;
+        this._systemStar = null;
+        this._systemData = null;
+        this._hoveredBody = null;
+        this._systemMode = 'system';
+        return true;
+      }
       const prevLevel = this._levelIndex - 1;
       const target = this._viewStack[prevLevel];
-      if (target && this._levelIndex <= 3) {
+      if (target && this._levelIndex <= 2) {
         // Animate zoom-out from current 2D view to parent level
         this._startDrillAnim(
           { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
@@ -416,7 +471,7 @@ export class NavComputer {
           prevLevel, 400
         );
       } else {
-        // Instant switch (e.g., local→block, or missing stack entry)
+        // Instant switch (e.g., column→region, or missing stack entry)
         this._levelIndex = prevLevel;
         this._applyLevelView();
         this._densityCacheKey = '';
@@ -532,7 +587,7 @@ export class NavComputer {
   }
 
   // ════════════════════════════════════════════════════
-  // 2D LEVEL RENDERING (Galaxy, Sector, District, Block)
+  // 2D LEVEL RENDERING (Galaxy, Sector, Region)
   // ════════════════════════════════════════════════════
 
   _render2DLevel(ctx, w, h) {
@@ -554,11 +609,12 @@ export class NavComputer {
     if (this._levelIndex === 0) {
       this._renderSectorOverlay(ctx, ox, oy, drawSize, cx, cz, ext);
     } else {
-      // Grid tiles
-      const tileW = drawSize / GRID_N;
+      // Grid tiles — region uses 16x16, sector uses 8x8
+      const gn = gridNForLevel(this._levelIndex);
+      const tileW = drawSize / gn;
       ctx.strokeStyle = 'rgba(100, 180, 255, 0.12)';
       ctx.lineWidth = 1;
-      for (let i = 0; i <= GRID_N; i++) {
+      for (let i = 0; i <= gn; i++) {
         ctx.beginPath();
         ctx.moveTo(ox + i * tileW, oy);
         ctx.lineTo(ox + i * tileW, oy + drawSize);
@@ -577,7 +633,7 @@ export class NavComputer {
         ctx.strokeRect(ox + col * tileW, oy + row * tileW, tileW, tileW);
 
         // Tile info
-        const tileSize = viewSize / GRID_N;
+        const tileSize = viewSize / gn;
         const tileCx = cx - ext + (col + 0.5) * tileSize;
         const tileCz = cz + ext - (row + 0.5) * tileSize;
         const label = `(${tileCx.toFixed(1)}, ${tileCz.toFixed(1)})`;
@@ -625,7 +681,12 @@ export class NavComputer {
   }
 
   _getOrRenderMap(cx, cz, ext) {
-    // Quantize key to avoid re-rendering for tiny view shifts
+    // Use GPU galaxy renderer if available — matches the in-game galaxy model
+    if (this._navGalaxyRenderer) {
+      return this._navGalaxyRenderer.render(cx, cz, ext);
+    }
+
+    // Fallback: CPU luminosity renderer
     const qcx = Math.round(cx * 10) / 10;
     const qcz = Math.round(cz * 10) / 10;
     const qext = Math.round(ext * 100) / 100;
@@ -637,22 +698,15 @@ export class NavComputer {
       return entry.canvas;
     }
 
-    // Scale-dependent post-processing options
-    console.log('NavComputer: rendering luminosity map at (' + cx.toFixed(1) + ',' + cz.toFixed(1) + ') ext=' + ext.toFixed(2) + ' key=' + key);
-    const t0 = performance.now();
-    // Scale-dependent lighting: at full galaxy view, use defaults.
-    // At sector/district zoom, boost arms and disk so local detail is visible.
     const compOverrides = {};
     if (ext < 10) {
-      // Zoomed in — boost faint components so local structure is visible
-      compOverrides.arms = { gain: 5.0, stretch: 800 };
-      compOverrides.disk = { gain: 4.0, stretch: 600 };
+      compOverrides.arms = { gain: 4.0, stretch: 400 };
+      compOverrides.disk = { gain: 3.0, stretch: 350 };
     }
     if (ext < 2) {
-      // Deep zoom — maximize local contrast
-      compOverrides.arms = { gain: 8.0, stretch: 1200 };
-      compOverrides.disk = { gain: 6.0, stretch: 1000 };
-      compOverrides.core = { gain: 0.5 };  // dim core to avoid washing out local detail
+      compOverrides.arms = { gain: 5.0, stretch: 500, gamma: 0.6 };
+      compOverrides.disk = { gain: 4.0, stretch: 400 };
+      compOverrides.core = { gain: 0.2 };
     }
     const canvas = this._luminosityRenderer.render(cx, cz, ext, this._mapRes, {
       dustStrength: ext > 10 ? 0.5 : ext > 2 ? 0.3 : 0.1,
@@ -660,10 +714,7 @@ export class NavComputer {
       components: compOverrides,
     });
 
-    console.log('NavComputer: rendered in', (performance.now() - t0).toFixed(0), 'ms');
     this._mapCache.set(key, { canvas, lastUsed: Date.now() });
-
-    // Evict oldest if over limit
     if (this._mapCache.size > this._mapCacheMax) {
       let oldest = null, oldestTime = Infinity;
       for (const [k, v] of this._mapCache) {
@@ -793,7 +844,7 @@ export class NavComputer {
     // 3D projection — orbit around the block center, not the camera position.
     // The camera can WASD around within the block, but rotation always pivots
     // around the column's central axis.
-    const blockCenter = this._viewStack[3]?.center || { x: cx, z: cz };
+    const blockCenter = this._viewStack[2]?.center || { x: cx, z: cz };
     const orbitX = blockCenter.x;
     const orbitZ = blockCenter.z;
 
@@ -1023,17 +1074,489 @@ export class NavComputer {
     this._renderColumnMinimap(ctx, w, drawH);
   }
 
+  // ════════════════════════════════════════════════════
+  // SYSTEM VIEW (Level 4)
+  // ════════════════════════════════════════════════════
+
+  _renderSystem(ctx, w, h) {
+    const drawH = h - 50;
+
+    // Generate system data on first render
+    if (!this._systemData && this._systemStar) {
+      const star = this._systemStar;
+      console.log('[NAV] Generating system for', star.name, '...');
+      const galaxyCtx = this._gm.deriveGalaxyContext({ x: star.wx, y: star.wy, z: star.wz });
+      galaxyCtx.starTypeOverride = star.spectral;
+      try {
+        this._systemData = StarSystemGenerator.generate(String(star.seed), galaxyCtx);
+        console.log('[NAV] System generated:', this._systemData.planets?.length, 'planets');
+      } catch (e) {
+        console.warn('[NAV] System generation failed:', e);
+        this._systemData = { star: { type: star.spectral, radiusSolar: 1, color: [1, 1, 0.8] }, planets: [], zones: {} };
+      }
+    }
+    if (!this._systemData) {
+      console.warn('[NAV] No system data and no star — skipping render');
+      return;
+    }
+
+    if (this._systemMode === 'planet') {
+      this._renderPlanetDetail(ctx, w, h);
+      return;
+    }
+
+    const sys = this._systemData;
+    const planets = sys.planets || [];
+    const zones = sys.zones || {};
+    const starName = this._systemStar?.name || 'Unknown';
+
+    // ── 3D projection setup ──
+    const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
+    const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
+    const viewSize = Math.min(w, drawH) * 0.85;
+    const centerSX = w / 2, centerSY = drawH / 2;
+
+    // Scale: sqrt(AU) compression so inner + outer planets both visible
+    const maxOrbitAU = planets.length > 0
+      ? Math.max(...planets.map(p => p.orbitRadiusAU))
+      : 5;
+    const maxR = Math.sqrt(maxOrbitAU) * 1.2 || 3;
+    const projScale = ((viewSize / 2) / maxR) * this._systemZoom;
+
+    const auToScreen = (au) => Math.sqrt(au);
+
+    const project = (wx, wy, wz) => {
+      let rx = wx, ry = wy, rz = wz;
+      let tx = rx * cosY - rz * sinY; rz = rx * sinY + rz * cosY; rx = tx;
+      let ty = ry * cosX - rz * sinX; rz = ry * sinX + rz * cosX; ry = ty;
+      return { x: centerSX + rx * projScale, y: centerSY - ry * projScale, depth: rz };
+    };
+
+    const planetColors = {
+      'rocky': '#a09080', 'terrestrial': '#4a8a4a', 'ocean': '#3060b0',
+      'ice': '#b0c8e0', 'lava': '#d04020', 'venus': '#c0a050',
+      'gas-giant': '#c09060', 'hot-jupiter': '#e06030', 'sub-neptune': '#5090c0',
+      'carbon': '#606060', 'volcanic': '#b03010', 'eyeball': '#80a0c0',
+    };
+
+    // ── Habitable zone ring ──
+    if (zones.hzInnerAU && zones.hzOuterAU) {
+      const SEGS = 64;
+      for (const hzAU of [zones.hzInnerAU, zones.hzOuterAU]) {
+        const r = auToScreen(hzAU);
+        ctx.strokeStyle = 'rgba(50, 180, 80, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let s = 0; s <= SEGS; s++) {
+          const a = (s / SEGS) * Math.PI * 2;
+          const p = project(Math.cos(a) * r, 0, Math.sin(a) * r);
+          if (s === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+      }
+      // Fill between inner and outer
+      ctx.fillStyle = 'rgba(50, 180, 80, 0.04)';
+      ctx.beginPath();
+      const rInner = auToScreen(zones.hzInnerAU);
+      const rOuter = auToScreen(zones.hzOuterAU);
+      for (let s = 0; s <= SEGS; s++) {
+        const a = (s / SEGS) * Math.PI * 2;
+        const p = project(Math.cos(a) * rOuter, 0, Math.sin(a) * rOuter);
+        if (s === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      for (let s = SEGS; s >= 0; s--) {
+        const a = (s / SEGS) * Math.PI * 2;
+        const p = project(Math.cos(a) * rInner, 0, Math.sin(a) * rInner);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // ── Asteroid belt zones ──
+    const belts = sys.asteroidBelts || [];
+    for (const belt of belts) {
+      const innerAU = belt.physics?.innerAU || 0;
+      const outerAU = belt.physics?.outerAU || 0;
+      if (innerAU <= 0 || outerAU <= 0) continue;
+
+      const beltColor = belt.isKuiper
+        ? 'rgba(120, 140, 180, 0.06)'   // icy blue-gray for Kuiper belt
+        : 'rgba(180, 140, 80, 0.06)';   // dusty amber for main belt
+      const lineColor = belt.isKuiper
+        ? 'rgba(120, 140, 180, 0.18)'
+        : 'rgba(180, 140, 80, 0.18)';
+      const labelColor = belt.isKuiper
+        ? 'rgba(120, 140, 180, 0.4)'
+        : 'rgba(180, 140, 80, 0.4)';
+
+      const BELT_SEGS = 48;
+      const rInner = auToScreen(innerAU);
+      const rOuter = auToScreen(outerAU);
+
+      // Ring borders
+      for (const r of [rInner, rOuter]) {
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let s = 0; s <= BELT_SEGS; s++) {
+          const a = (s / BELT_SEGS) * Math.PI * 2;
+          const p = project(Math.cos(a) * r, 0, Math.sin(a) * r);
+          if (s === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+      }
+
+      // Fill between inner and outer
+      ctx.fillStyle = beltColor;
+      ctx.beginPath();
+      for (let s = 0; s <= BELT_SEGS; s++) {
+        const a = (s / BELT_SEGS) * Math.PI * 2;
+        const p = project(Math.cos(a) * rOuter, 0, Math.sin(a) * rOuter);
+        if (s === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      for (let s = BELT_SEGS; s >= 0; s--) {
+        const a = (s / BELT_SEGS) * Math.PI * 2;
+        const p = project(Math.cos(a) * rInner, 0, Math.sin(a) * rInner);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Label
+      const labelAngle = Math.PI * 0.25; // 45° position
+      const labelR = (rInner + rOuter) / 2;
+      const labelP = project(Math.cos(labelAngle) * labelR, 0, Math.sin(labelAngle) * labelR);
+      ctx.font = '8px "DotGothic16", monospace';
+      ctx.fillStyle = labelColor;
+      ctx.textAlign = 'center';
+      ctx.fillText(belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT', labelP.x, labelP.y - 6);
+    }
+
+    // ── Orbit circles (wireframe) ──
+    const ORBIT_SEGS = 48;
+    for (let i = 0; i < planets.length; i++) {
+      const r = auToScreen(planets[i].orbitRadiusAU);
+      const isSelected = i === this._selectedPlanetIdx;
+      ctx.strokeStyle = isSelected ? 'rgba(100, 180, 255, 0.5)' : 'rgba(100, 180, 255, 0.15)';
+      ctx.lineWidth = isSelected ? 1.5 : 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      for (let s = 0; s <= ORBIT_SEGS; s++) {
+        const a = (s / ORBIT_SEGS) * Math.PI * 2;
+        const p = project(Math.cos(a) * r, 0, Math.sin(a) * r);
+        if (s === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // ── Star at center ──
+    const starColor = sys.star?.color || [1, 0.9, 0.7];
+    const starP = project(0, 0, 0);
+    const starR = Math.max(6, Math.min(16, (sys.star?.radiusSolar || 1) * 5));
+
+    // Star glow
+    const grad = ctx.createRadialGradient(starP.x, starP.y, 0, starP.x, starP.y, starR * 3);
+    grad.addColorStop(0, `rgba(${Math.round(starColor[0]*255)},${Math.round(starColor[1]*255)},${Math.round(starColor[2]*255)},0.3)`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(starP.x, starP.y, starR * 3, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = `rgb(${Math.round(starColor[0]*255)},${Math.round(starColor[1]*255)},${Math.round(starColor[2]*255)})`;
+    ctx.beginPath(); ctx.arc(starP.x, starP.y, starR, 0, Math.PI * 2); ctx.fill();
+
+    // ── Planets (depth-sorted) ──
+    this._hoveredBody = null;
+    const hitDist = 14;
+
+    const planetProj = planets.map((p, i) => {
+      const r = auToScreen(p.orbitRadiusAU);
+      const angle = p.orbitAngle || 0;
+      const wx = Math.cos(angle) * r;
+      const wz = Math.sin(angle) * r;
+      const sp = project(wx, 0, wz);
+      return { planet: p, index: i, sp, wx, wz };
+    });
+    planetProj.sort((a, b) => b.sp.depth - a.sp.depth);
+
+    for (const { planet: p, index: i, sp, wx, wz } of planetProj) {
+      const pd = p.planetData;
+      const baseR = Math.max(4, Math.min(12, 3 + Math.log2(Math.max(0.5, pd.radiusEarth)) * 2.5));
+      const pColor = planetColors[pd.type] || '#808080';
+
+      // Planet body
+      ctx.fillStyle = pColor;
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, baseR, 0, Math.PI * 2); ctx.fill();
+
+      // Wireframe outline
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, baseR, 0, Math.PI * 2); ctx.stroke();
+
+      // Ring indicator
+      if (pd.rings) {
+        ctx.strokeStyle = 'rgba(200, 180, 150, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(sp.x, sp.y, baseR + 5, baseR * 0.3, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Moons — small dots on tiny orbits around the planet
+      if (p.moons && p.moons.length > 0) {
+        for (let m = 0; m < p.moons.length; m++) {
+          const moon = p.moons[m];
+          // Moon orbit radius in screen space — scale relative to planet size
+          const moonOrbitR = baseR + 4 + m * 3.5;
+          // Moon position on its orbit (use startAngle for deterministic placement)
+          const moonAngle = moon.startAngle || (m * 2.4 + 0.7);
+          // Project the moon's 3D position (orbit is in the planet's local XZ plane)
+          const moonWx = wx + Math.cos(moonAngle) * moonOrbitR / projScale;
+          const moonWz = wz + Math.sin(moonAngle) * moonOrbitR / projScale;
+          const moonP = project(moonWx, 0, moonWz);
+
+          // Tiny orbit circle
+          ctx.strokeStyle = 'rgba(150, 150, 150, 0.12)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath(); ctx.arc(sp.x, sp.y, moonOrbitR, 0, Math.PI * 2); ctx.stroke();
+
+          // Moon dot
+          const moonR = Math.max(1.5, Math.min(3, 1 + (moon.radiusEarth || 0.1) * 3));
+          ctx.fillStyle = 'rgba(200, 200, 200, 0.7)';
+          ctx.beginPath(); ctx.arc(moonP.x, moonP.y, moonR, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      // Planet label
+      ctx.font = '9px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.textAlign = 'center';
+      ctx.fillText(pd.type, sp.x, sp.y + baseR + 12);
+
+      // Hover detection
+      const mdx = this._mouseX - sp.x, mdy = this._mouseY - sp.y;
+      if (mdx * mdx + mdy * mdy < hitDist * hitDist) {
+        this._hoveredBody = { type: 'planet', index: i, sx: sp.x, sy: sp.y };
+      }
+    }
+
+    // Star hover
+    const sdx = this._mouseX - starP.x, sdy = this._mouseY - starP.y;
+    if (sdx * sdx + sdy * sdy < (starR + 4) * (starR + 4)) {
+      this._hoveredBody = { type: 'star', index: -1, sx: starP.x, sy: starP.y };
+    }
+
+    // ── Hover: leader line callout ──
+    if (this._hoveredBody) {
+      const hb = this._hoveredBody;
+      let title, lines;
+      if (hb.type === 'planet') {
+        const p = planets[hb.index];
+        const pd = p.planetData;
+        title = `Planet ${hb.index + 1}`;
+        lines = [
+          `${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕`,
+          `${p.orbitRadiusAU.toFixed(2)} AU`,
+        ];
+        if (pd.T_eq) lines.push(`${Math.round(pd.T_eq)} K`);
+        if (pd.habitability > 0.3) lines.push(`Habitability: ${(pd.habitability * 100).toFixed(0)}%`);
+        if (p.moons?.length > 0) lines.push(`${p.moons.length} moon${p.moons.length > 1 ? 's' : ''}`);
+        if (pd.rings) lines.push('Ringed');
+        // Highlight ring on hovered planet
+        ctx.strokeStyle = 'rgba(100, 180, 255, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(hb.sx, hb.sy, 10, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        title = starName;
+        lines = [
+          `${sys.star.type} class`,
+          `${(sys.star.radiusSolar || 1).toFixed(2)} R☉`,
+          `Age: ${(sys.ageGyr || 0).toFixed(1)} Gyr`,
+          `${planets.length} planet${planets.length !== 1 ? 's' : ''}`,
+        ];
+        if (sys.isBinary) lines.push('Binary system');
+      }
+      this._drawLeaderCallout(ctx, hb.sx, hb.sy, title, lines, w, drawH);
+    }
+
+    // ── Header ──
+    ctx.font = '14px "DotGothic16", monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(starName, 16, 24);
+    ctx.font = '11px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
+    ctx.fillText(`${sys.star?.type || '?'} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
+
+    // ── Hint ──
+    ctx.font = '10px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.textAlign = 'center';
+    ctx.fillText('CLICK PLANET FOR DETAIL · DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+    ctx.textAlign = 'left';
+  }
+
+  // ── Planet detail sub-view ──
+  _renderPlanetDetail(ctx, w, h) {
+    const drawH = h - 50;
+    const sys = this._systemData;
+    const planets = sys.planets || [];
+    const idx = this._selectedPlanetIdx;
+    if (idx < 0 || idx >= planets.length) { this._systemMode = 'system'; return; }
+
+    const p = planets[idx];
+    const pd = p.planetData;
+    const moons = p.moons || [];
+    const starName = this._systemStar?.name || 'Unknown';
+
+    // ── 3D projection (same as system view) ──
+    const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
+    const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
+    const viewSize = Math.min(w, drawH) * 0.7;
+    const centerSX = w / 2, centerSY = drawH / 2;
+
+    // Scale based on outermost moon orbit
+    const maxMoonR = moons.length > 0
+      ? Math.max(...moons.map(m => m.orbitRadiusEarth || 20)) * 1.3
+      : 30;
+    const projScale = ((viewSize / 2) / Math.sqrt(maxMoonR)) * this._systemZoom;
+
+    const project = (wx, wy, wz) => {
+      let rx = wx, ry = wy, rz = wz;
+      let tx = rx * cosY - rz * sinY; rz = rx * sinY + rz * cosY; rx = tx;
+      let ty = ry * cosX - rz * sinX; rz = ry * sinX + rz * cosX; ry = ty;
+      return { x: centerSX + rx * projScale, y: centerSY - ry * projScale, depth: rz };
+    };
+
+    // ── Planet at center ──
+    const planetP = project(0, 0, 0);
+    const planetR = Math.max(12, Math.min(30, 8 + Math.log2(Math.max(0.5, pd.radiusEarth)) * 6));
+
+    const planetColors = {
+      'rocky': '#a09080', 'terrestrial': '#4a8a4a', 'ocean': '#3060b0',
+      'ice': '#b0c8e0', 'lava': '#d04020', 'venus': '#c0a050',
+      'gas-giant': '#c09060', 'hot-jupiter': '#e06030', 'sub-neptune': '#5090c0',
+      'carbon': '#606060', 'volcanic': '#b03010', 'eyeball': '#80a0c0',
+    };
+    const pColor = planetColors[pd.type] || '#808080';
+
+    // Planet body
+    ctx.fillStyle = pColor;
+    ctx.beginPath(); ctx.arc(planetP.x, planetP.y, planetR, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(planetP.x, planetP.y, planetR, 0, Math.PI * 2); ctx.stroke();
+
+    // Rings
+    if (pd.rings) {
+      ctx.strokeStyle = 'rgba(200, 180, 150, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(planetP.x, planetP.y, planetR * 1.6, planetR * 0.4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // ── Moon orbits + moons ──
+    const ORBIT_SEGS = 36;
+    this._hoveredBody = null;
+
+    for (let m = 0; m < moons.length; m++) {
+      const moon = moons[m];
+      const moonOrbitR = Math.sqrt(moon.orbitRadiusEarth || (10 + m * 8));
+
+      // Orbit circle
+      ctx.strokeStyle = 'rgba(100, 180, 255, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      for (let s = 0; s <= ORBIT_SEGS; s++) {
+        const a = (s / ORBIT_SEGS) * Math.PI * 2;
+        const mp = project(Math.cos(a) * moonOrbitR, 0, Math.sin(a) * moonOrbitR);
+        if (s === 0) ctx.moveTo(mp.x, mp.y); else ctx.lineTo(mp.x, mp.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Moon position
+      const moonAngle = moon.startAngle || (m * 2.4);
+      const mx = Math.cos(moonAngle) * moonOrbitR;
+      const mz = Math.sin(moonAngle) * moonOrbitR;
+      const moonP = project(mx, 0, mz);
+      const moonR = Math.max(3, Math.min(8, 2 + Math.log2(Math.max(0.1, moon.radiusEarth || 0.3)) * 2));
+
+      ctx.fillStyle = '#b0b0b0';
+      ctx.beginPath(); ctx.arc(moonP.x, moonP.y, moonR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(moonP.x, moonP.y, moonR, 0, Math.PI * 2); ctx.stroke();
+
+      // Moon label
+      ctx.font = '8px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.textAlign = 'center';
+      ctx.fillText(moon.type || 'moon', moonP.x, moonP.y + moonR + 10);
+
+      // Moon hover
+      const mdx = this._mouseX - moonP.x, mdy = this._mouseY - moonP.y;
+      if (mdx * mdx + mdy * mdy < 10 * 10) {
+        this._hoveredBody = { type: 'moon', index: m, sx: moonP.x, sy: moonP.y };
+      }
+    }
+
+    // Moon hover tooltip
+    if (this._hoveredBody && this._hoveredBody.type === 'moon') {
+      const moon = moons[this._hoveredBody.index];
+      const lines = [
+        moon.type || 'moon',
+        `${(moon.radiusEarth || 0.1).toFixed(2)} R⊕`,
+      ];
+      if (moon.isPlanetMoon) lines.push('Planet-class moon');
+      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, `Moon ${this._hoveredBody.index + 1}`, lines);
+    }
+
+    // ── Header ──
+    ctx.font = '14px "DotGothic16", monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${starName} — Planet ${idx + 1}`, 16, 24);
+    ctx.font = '11px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
+    ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
+    if (pd.T_eq) {
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
+    }
+
+    // ── Hint ──
+    ctx.font = '10px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.textAlign = 'center';
+    ctx.fillText('CLICK TO SET WARP TARGET · DRAG TO ROTATE · ESC TO GO BACK', w / 2, drawH - 8);
+    ctx.textAlign = 'left';
+  }
+
   _renderColumnMinimap(ctx, w, h) {
+    // Guard: skip minimap when no stars are loaded
+    if (this._localStars.length === 0) return;
+
     const cubeHalf = this._localCubeSize || 0.01;
-    const blockCenter = this._viewStack[3]?.center || this._localCenter;
+    const blockCenter = this._viewStack[2]?.center || this._localCenter;
 
     // Find Y extent of all stars
-    let minStarY = 0, maxStarY = 0;
+    let minStarY = Infinity, maxStarY = -Infinity;
     for (const s of this._localStars) {
       if (s.wy < minStarY) minStarY = s.wy;
       if (s.wy > maxStarY) maxStarY = s.wy;
     }
-    const yRange = Math.max(0.001, maxStarY - minStarY);
+    // Ensure stable range — pad to ±5 pc around center if too narrow
+    let yRange = maxStarY - minStarY;
+    if (yRange < 0.01) {
+      const mid = (minStarY + maxStarY) / 2;
+      minStarY = mid - 0.005;
+      maxStarY = mid + 0.005;
+      yRange = 0.01;
+    }
 
     // Column minimap dimensions — tall and narrow, like the actual column shape
     const xzSize = 60;  // width of XZ plane representation
@@ -1090,7 +1613,7 @@ export class NavComputer {
 
     // View window rectangle
     const viewW = Math.max(6, (this._localRadius / cubeHalf) * xzSize);
-    const viewH = Math.max(4, (this._localRadius * 4 / yRange) * ySize);
+    const viewH = Math.min(ySize - 4, Math.max(4, (this._localRadius * 4 / yRange) * ySize));
 
     ctx.fillStyle = 'rgba(100, 180, 255, 0.15)';
     ctx.fillRect(camScreenX - viewW / 2, camScreenY - viewH / 2, viewW, viewH);
@@ -1164,7 +1687,7 @@ export class NavComputer {
    * Then schedules background expansion to pre-load above and below.
    */
   _ensureStarsLoaded(cx, cy, cz, yHalf) {
-    const blockCenter = this._viewStack[3]?.center || { x: cx, z: cz };
+    const blockCenter = this._viewStack[2]?.center || { x: cx, z: cz };
     const blockHalf = this._localCubeSize || 0.005;
 
     // If block changed (navigated to new block), reset everything
@@ -1509,6 +2032,79 @@ export class NavComputer {
     }
   }
 
+  /**
+   * Draw a leader line callout — label floats to the side of the object,
+   * connected by a thin line. Position chosen to avoid going off-screen.
+   */
+  _drawLeaderCallout(ctx, objX, objY, title, lines, canvasW, canvasH) {
+    const maxLen = Math.max(title.length, ...lines.map(l => l.length));
+    const boxW = maxLen * 8 + 24;
+    const boxH = (lines.length + 1) * 16 + 14;
+    const leaderLen = 50; // distance from object to label
+    const margin = 12;
+
+    // Choose direction: prefer upper-right, but adapt to screen edges
+    let dirX = 1, dirY = -1;
+    if (objX + leaderLen + boxW + margin > canvasW) dirX = -1;
+    if (objY - leaderLen - boxH - margin < 0) dirY = 1;
+
+    // Leader line endpoint (elbow point)
+    const elbowX = objX + dirX * leaderLen;
+    const elbowY = objY + dirY * leaderLen * 0.6;
+
+    // Box position: anchored at the elbow
+    const boxX = dirX > 0 ? elbowX : elbowX - boxW;
+    const boxY = dirY < 0 ? elbowY - boxH : elbowY;
+
+    // Clamp to screen
+    const clampedBoxX = Math.max(margin, Math.min(canvasW - boxW - margin, boxX));
+    const clampedBoxY = Math.max(margin, Math.min(canvasH - boxH - margin, boxY));
+
+    // Leader line: object → elbow → box edge
+    const lineEndX = dirX > 0 ? clampedBoxX : clampedBoxX + boxW;
+    const lineEndY = clampedBoxY + boxH / 2;
+
+    // Small dot at the object
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.8)';
+    ctx.beginPath(); ctx.arc(objX, objY, 2, 0, Math.PI * 2); ctx.fill();
+
+    // Leader line
+    ctx.strokeStyle = 'rgba(100, 180, 255, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(objX, objY);
+    ctx.lineTo(elbowX, elbowY);
+    ctx.lineTo(lineEndX, lineEndY);
+    ctx.stroke();
+
+    // Small tick at the connection to the box
+    ctx.strokeStyle = 'rgba(100, 180, 255, 0.6)';
+    ctx.beginPath();
+    ctx.moveTo(lineEndX, lineEndY - 4);
+    ctx.lineTo(lineEndX, lineEndY + 4);
+    ctx.stroke();
+
+    // Label box
+    ctx.fillStyle = 'rgba(8, 10, 18, 0.88)';
+    ctx.strokeStyle = 'rgba(100, 180, 255, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(clampedBoxX, clampedBoxY, boxW, boxH, 3); ctx.fill(); ctx.stroke();
+
+    // Title
+    ctx.font = '12px "DotGothic16", monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, clampedBoxX + 10, clampedBoxY + 16);
+
+    // Info lines
+    ctx.font = '11px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.8)';
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], clampedBoxX + 10, clampedBoxY + 32 + i * 16);
+    }
+    ctx.textAlign = 'left';
+  }
+
   // ════════════════════════════════════════════════════
   // HUD + LEVEL TABS
   // ════════════════════════════════════════════════════
@@ -1543,8 +2139,8 @@ export class NavComputer {
   _renderHUD(ctx, w, h) {
     ctx.font = '14px "DotGothic16", monospace';
 
-    // System name (top-left)
-    if (this._currentSystemName) {
+    // System name (top-left) — hide when system view draws its own header
+    if (this._currentSystemName && this._levelIndex !== 4) {
       ctx.fillStyle = '#00ff80';
       ctx.fillText('CURRENT SYSTEM', 16, 24);
       ctx.font = '16px "DotGothic16", monospace';
@@ -1553,7 +2149,7 @@ export class NavComputer {
     }
 
     // Sector name
-    if (this._currentSector) {
+    if (this._currentSector && this._levelIndex !== 4) {
       ctx.font = '11px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
       ctx.fillText(this._currentSector.name, 16, 60);
@@ -1565,7 +2161,7 @@ export class NavComputer {
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
 
-    if (this._levelIndex === 4 && this._localStars.length > 0) {
+    if (this._levelIndex === 3 && this._localStars.length > 0) {
       const est = this._estimatedBlockStars;
       const estLabel = est != null ? `~${est.toLocaleString()} SYSTEMS IN BLOCK` : '';
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -1619,13 +2215,18 @@ export class NavComputer {
 
     // Dragging
     if (this._dragging) {
-      if (this._levelIndex === 4) {
-        // Local: orbit
+      if (this._levelIndex === 3) {
+        // Column: orbit
         const dx = p.x - this._dragStartX;
         const dy = p.y - this._dragStartY;
         this._localRotY = this._dragStartRotY + dx * 0.008;
-        // Clamp vertical tilt: 0 = edge-on, π/2 = top-down. Never underneath.
         this._localRotX = Math.max(0, Math.min(Math.PI / 2, this._dragStartRotX - dy * 0.008));
+      } else if (this._levelIndex === 4) {
+        // System view: orbit
+        const dx = p.x - this._dragStartX;
+        const dy = p.y - this._dragStartY;
+        this._systemRotY = this._dragStartRotY + dx * 0.008;
+        this._systemRotX = Math.max(0.1, Math.min(Math.PI / 2, this._dragStartRotX - dy * 0.008));
       } else {
         // 2D: pan
         if (this._panStartCenter) {
@@ -1642,14 +2243,15 @@ export class NavComputer {
     }
 
     // Hover detection for 2D levels
-    if (this._levelIndex < 4 && this._levelIndex > 0) {
+    if (this._levelIndex > 0 && this._levelIndex <= 2) {
       const drawSize = Math.min(this._canvas.width, this._canvas.height) - 80;
       const ox = (this._canvas.width - drawSize) / 2;
       const oy = 10;
-      const tileW = drawSize / GRID_N;
+      const gn = gridNForLevel(this._levelIndex);
+      const tileW = drawSize / gn;
       const col = Math.floor((p.x - ox) / tileW);
       const row = Math.floor((p.y - oy) / tileW);
-      if (col >= 0 && col < GRID_N && row >= 0 && row < GRID_N) {
+      if (col >= 0 && col < gn && row >= 0 && row < gn) {
         this._hoveredTile = { col, row };
       } else {
         this._hoveredTile = null;
@@ -1666,9 +2268,12 @@ export class NavComputer {
     this._dragStartX = p.x;
     this._dragStartY = p.y;
 
-    if (this._levelIndex === 4) {
+    if (this._levelIndex === 3) {
       this._dragStartRotX = this._localRotX;
       this._dragStartRotY = this._localRotY;
+    } else if (this._levelIndex === 4) {
+      this._dragStartRotX = this._systemRotX;
+      this._dragStartRotY = this._systemRotY;
     } else {
       this._panStartCenter = { ...this._viewCenter };
     }
@@ -1692,20 +2297,24 @@ export class NavComputer {
       if (idx >= 0 && idx < LEVELS.length) {
         const target = this._viewStack[idx];
         // Animate between 2D levels if both are 2D and have stack entries
-        if (idx < 4 && this._levelIndex < 4 && target) {
+        if (idx <= 2 && this._levelIndex <= 2 && target) {
           this._startDrillAnim(
             { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
             { x: target.center.x, z: target.center.z }, target.size,
             idx, 350
           );
         } else {
+          // System tab needs a star selected first — ignore if no system data
+          if (idx === 4 && !this._systemData) return;
           this._levelIndex = idx;
           this._applyLevelView();
           this._densityCacheKey = '';
         }
         this._hoveredTile = null;
-        this._localStars = [];
-        this._resetColumnLoad();
+        if (idx !== 3 && idx !== 4) {
+          this._localStars = [];
+          this._resetColumnLoad();
+        }
       }
       return;
     }
@@ -1721,15 +2330,47 @@ export class NavComputer {
     const dy = p.y - this._dragStartY;
     if (dx * dx + dy * dy > 25) return; // was a drag, not a click
 
-    // Local level — click a star to select it as nav target
-    if (this._levelIndex === 4 && this._hoveredLocalStar) {
-      const star = this._hoveredLocalStar.star;
-      if (this._selectedNavStar === star) {
-        // Click same star again → deselect
-        this._selectedNavStar = null;
-      } else {
-        this._selectedNavStar = star;
+    // System view — click body
+    if (this._levelIndex === 4) {
+      if (this._systemMode === 'planet') {
+        // In planet detail: click selects warp target and returns to system
+        this._selectedNavStar = this._systemStar;
+        this._systemMode = 'system';
+        return;
       }
+      if (this._hoveredBody && this._hoveredBody.type === 'planet') {
+        // Click planet → enter planet detail
+        this._selectedPlanetIdx = this._hoveredBody.index;
+        this._systemMode = 'planet';
+        return;
+      }
+      if (this._hoveredBody && this._hoveredBody.type === 'star') {
+        // Click star → select as warp target
+        this._selectedNavStar = this._systemStar;
+        return;
+      }
+      return;
+    }
+
+    // Column level — click a star to enter system view with zoom animation
+    if (this._levelIndex === 3 && this._hoveredLocalStar) {
+      const star = this._hoveredLocalStar.star;
+      console.log('[NAV] Entering system view for:', star.name, 'seed:', star.seed, 'type:', star.spectral);
+      this._systemStar = star;
+      this._selectedNavStar = star;
+      this._systemData = null; // will be generated in _renderSystem
+      this._hoveredBody = null;
+      this._systemMode = 'system';
+      this._systemZoom = 1.0; // reset zoom for new system
+      // Zoom animation: shrink column view radius toward the star, then switch
+      this._systemZoomAnim = {
+        startTime: performance.now(),
+        duration: 400,
+        fromRadius: this._localRadius,
+        toRadius: this._localRadius * 0.1,
+        starPos: { x: star.wx, y: star.wy, z: star.wz },
+        fromCenter: { ...this._localCenter },
+      };
       return;
     }
 
@@ -1750,42 +2391,48 @@ export class NavComputer {
       return;
     }
 
-    // Other 2D levels — click a tile to drill down
-    if (this._levelIndex >= 1 && this._levelIndex <= 3 && this._hoveredTile && this._hoveredTile.col !== undefined) {
+    // Sector/Region — click a tile to drill down
+    if (this._levelIndex >= 1 && this._levelIndex <= 2 && this._hoveredTile && this._hoveredTile.col !== undefined) {
       const { col, row } = this._hoveredTile;
-      const tileSize = this._viewSize / GRID_N;
+      const gn = gridNForLevel(this._levelIndex);
+      const tileSize = this._viewSize / gn;
       const ext = this._viewSize / 2;
       const newCx = this._viewCenter.x - ext + (col + 0.5) * tileSize;
       const newCz = this._viewCenter.z + ext - (row + 0.5) * tileSize;
 
-      if (this._levelIndex < 3) {
-        // Drill into next 2D level — animated zoom
-        const nextSize = tileSize;
-        this._viewStack[this._levelIndex + 1] = {
+      if (this._levelIndex === 1) {
+        // Sector → Region — zoom into the clicked tile
+        const nextSize = tileSize; // the region view subdivides this tile into 16×16
+        this._viewStack[2] = {
           center: { x: newCx, z: newCz },
           size: nextSize,
         };
         this._startDrillAnim(
           { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
           { x: newCx, z: newCz }, nextSize,
-          this._levelIndex + 1, 400
+          2, 400
         );
         this._hoveredTile = null;
       } else {
-        // Level 3 (block) → Level 4 (local) — zoom into tile then switch
+        // Region (level 2) → Column (level 3) — zoom into tile then switch
         this._localCenter = { x: newCx, y: this._playerY, z: newCz };
-        this._localCubeSize = Math.max(0.003, this._computeTileSize(newCx, newCz, 500));
-        this._localRadius = Math.max(0.002, this._localCubeSize / 3);
+        // Update viewStack so orbit center matches the tile center
+        this._viewStack[2] = { center: { x: newCx, z: newCz }, size: tileSize };
+        this._localCubeSize = Math.max(0.003, this._computeTileSize(newCx, newCz, 150));
+        // Default zoom: ~5 light years (5 ly ≈ 1.53 pc ≈ 0.00153 kpc)
+        this._localRadius = 0.0015;
         this._localGridCell = 0.001;
         this._localStars = [];
         this._resetColumnLoad();
-        // Animate zoom into the tile, then switch to local at completion
-        const localSize = tileSize * 0.5; // zoom past the tile boundary
-        this._viewStack[4] = { center: { x: newCx, z: newCz }, size: localSize };
+        // Start column view top-down, then tilt to default angle
+        this._localRotX = Math.PI / 2; // top-down (matches 2D view)
+        this._tiltAnim = { startTime: null, duration: 600, from: Math.PI / 2, to: 0.5 };
+        // Animate zoom into the tile, then switch to column at completion
+        const localSize = tileSize * 0.5;
         this._startDrillAnim(
           { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
           { x: newCx, z: newCz }, localSize,
-          4, 500
+          3, 500
         );
         this._hoveredTile = null;
       }
@@ -1795,11 +2442,12 @@ export class NavComputer {
 
   _handleWheel(e) {
     e.preventDefault();
-    if (this._levelIndex === 4) {
+    if (this._levelIndex === 3) {
       const factor = e.deltaY > 0 ? 1.15 : 0.87;
-      // Min: 2 pc, Max: matches the cube size (no empty space beyond)
       this._localRadius = Math.max(0.002, Math.min(this._localCubeSize || 0.01, this._localRadius * factor));
-      // Don't clear _localStars — the column data is still valid, just the view scale changed
+    } else if (this._levelIndex === 4) {
+      const factor = e.deltaY > 0 ? 0.87 : 1.15;
+      this._systemZoom = Math.max(0.3, Math.min(5.0, this._systemZoom * factor));
     }
   }
 }

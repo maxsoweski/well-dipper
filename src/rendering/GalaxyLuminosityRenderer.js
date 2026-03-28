@@ -73,7 +73,7 @@ const DEFAULT_COMPONENTS = {
     stretch: 100,
   },
   arms: {
-    color: [0.75, 0.85, 1.0],   // blue-white — young O/B population
+    color: [0.6, 0.8, 1.0],     // blue-white — young O/B population (saturated)
     gain: 3.0,                    // boost arms so they're visible next to core
     gamma: 0.45,
     stretch: 500,                 // high stretch → bring out faint outer arms
@@ -277,11 +277,15 @@ export class GalaxyLuminosityRenderer {
           b *= absorption;
         }
 
+        // Cap total brightness while preserving hue — prevents saturation to white
+        const maxChan = Math.max(r, g, b);
+        if (maxChan > 1.0) { r /= maxChan; g /= maxChan; b /= maxChan; }
+
         // Write pixel
         const idx = i * 4;
-        imgData.data[idx]     = Math.min(255, Math.round(Math.max(0, r) * 255));
-        imgData.data[idx + 1] = Math.min(255, Math.round(Math.max(0, g) * 255));
-        imgData.data[idx + 2] = Math.min(255, Math.round(Math.max(0, b) * 255));
+        imgData.data[idx]     = Math.round(Math.max(0, r) * 255);
+        imgData.data[idx + 1] = Math.round(Math.max(0, g) * 255);
+        imgData.data[idx + 2] = Math.round(Math.max(0, b) * 255);
         imgData.data[idx + 3] = 255;
       }
     }

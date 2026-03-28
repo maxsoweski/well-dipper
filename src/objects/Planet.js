@@ -195,6 +195,47 @@ vec3 applyAurora(vec3 color, vec3 pos, float pRadius, vec3 lDir, float diff) {
   auroraFinal.g -= hueShift * 0.5;
   return color + auroraFinal * auroraMask * 0.6;
 }
+
+// ── Heightmap normal perturbation from procedural noise ──
+// Multi-octave FBM "height" with large-scale impact basins and fine
+// terrain detail. Sampled via finite differences along the tangent
+// plane to produce perturbed normals for convincing relief.
+float computeHeight(vec3 pos) {
+  // Large-scale features: impact basins, hemispheric differences
+  float h = snoise(pos * noiseScale * 0.3) * 0.5;
+  // Medium terrain: mountain ranges, large craters
+  h += snoise(pos * noiseScale) * 0.35;
+  // Fine detail: small craters, ridges, roughness
+  h += snoise(pos * noiseScale * 2.0) * 0.2;
+  h += snoise(pos * noiseScale * 4.0) * 0.1;
+  return h;
+}
+
+vec3 perturbNormalFromNoise(vec3 N, vec3 pos, float strength) {
+  vec3 up = abs(N.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 T = normalize(cross(up, N));
+  vec3 B = cross(N, T);
+
+  float eps = 0.01;
+  float h0 = computeHeight(pos);
+  float hT = computeHeight(pos + T * eps);
+  float hB = computeHeight(pos + B * eps);
+
+  // Raw gradient can be ~10-20 due to noise frequency; scale down
+  // so strength 0.25 = visible relief, not flipped normals
+  float dT = (hT - h0) / eps;
+  float dB = (hB - h0) / eps;
+  float scale = strength * 0.025;
+
+  vec3 perturbed = normalize(N - T * dT * scale - B * dB * scale);
+  // Clamp: perturbed normal must stay within ~60deg of geometric normal.
+  // Prevents normals from flipping away from the light -> pure black patches.
+  float deviation = dot(perturbed, N);
+  if (deviation < 0.5) {
+    perturbed = normalize(mix(perturbed, N, 0.5));
+  }
+  return perturbed;
+}
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -298,9 +339,13 @@ void main() {
     surfaceColor = mix(baseColor, accentColor, val);
   }
 
+  // ── Normal perturbation ──
+  // Gas giants are cloud surfaces — no terrain relief. Skip perturbation.
+  vec3 shadingNormal = vNormal;
+
   // ── Dual-star Lighting with Shadows ──
-  float diff1 = max(dot(vNormal, lightDir), 0.0);
-  float diff2 = max(dot(vNormal, lightDir2), 0.0);
+  float diff1 = max(dot(shadingNormal, lightDir), 0.0);
+  float diff2 = max(dot(shadingNormal, lightDir2), 0.0);
 
   float shadow1 = totalShadow(vWorldPos, starPos1);
   float shadow2 = totalShadow(vWorldPos, starPos2);
@@ -309,7 +354,7 @@ void main() {
                  + starColor2 * diff2 * starBrightness2 * shadow2;
   float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
 
-  float ambient = 0.02;
+  float ambient = 0.035;
   // Hot Jupiter: slightly more ambient from thermal glow
   if (planetType == 6) {
     ambient = 0.04;
@@ -417,19 +462,42 @@ void main() {
   // ── Surface color (type-dependent) ──
   vec3 surfaceColor;
 
+  // Track land vs water for perturbation masking (terrestrial/ocean types)
+  float terrainLandMask = 1.0; // default: everything is "land" (gets perturbation)
+
   if (planetType == 5) {
-    // Terrestrial: sharp ocean / land boundary
+    // Terrestrial: ocean + varied terrain with elevation zones
     float height = pattern * 0.5 + 0.5;
     float seaLevel = 0.45;
     float landMask = step(seaLevel, height);
+    terrainLandMask = landMask; // store for perturbation masking
 
-    vec3 deepOcean = baseColor * 0.7;
-    float oceanDepth = smoothstep(seaLevel - 0.25, seaLevel, height);
-    vec3 ocean = mix(deepOcean, baseColor, oceanDepth);
+    // Ocean: depth-based color gradient
+    vec3 deepOcean = baseColor * 0.8;
+    float oceanDepth = smoothstep(seaLevel - 0.3, seaLevel, height);
+    vec3 shallowOcean = baseColor * 1.1;
+    vec3 ocean = mix(deepOcean, shallowOcean, oceanDepth);
 
-    float landHeight = smoothstep(seaLevel, seaLevel + 0.3, height);
-    vec3 highland = accentColor * 0.6 + vec3(0.15, 0.12, 0.08);
-    vec3 land = mix(accentColor, highland, landHeight);
+    // Land: elevation-based terrain zones
+    float landElev = smoothstep(seaLevel, seaLevel + 0.35, height);
+    // Coastal lowlands: green vegetation
+    vec3 lowland = accentColor;
+    // Mid-elevation: brown/tan (dry grassland, scrub)
+    vec3 midland = accentColor * 0.6 + vec3(0.18, 0.14, 0.06);
+    // Highland: grey-brown rock
+    vec3 highland = vec3(0.42, 0.38, 0.34);
+    // Peaks: light grey/white rock
+    vec3 peak = vec3(0.6, 0.58, 0.55);
+
+    // Blend through zones
+    vec3 land = lowland;
+    land = mix(land, midland, smoothstep(0.2, 0.45, landElev));
+    land = mix(land, highland, smoothstep(0.5, 0.75, landElev));
+    land = mix(land, peak, smoothstep(0.8, 0.95, landElev));
+
+    // Add local variation so terrain isn't pure bands
+    float terrainNoise = snoise(vPosition * noiseScale * 4.0) * 0.08;
+    land += vec3(terrainNoise, terrainNoise * 0.8, terrainNoise * 0.5);
 
     surfaceColor = mix(ocean, land, landMask);
 
@@ -439,6 +507,22 @@ void main() {
     float iceMask = smoothstep(0.55, 0.7, latitude + iceNoise);
     vec3 iceColor = vec3(0.85, 0.88, 0.92);
     surfaceColor = mix(surfaceColor, iceColor, iceMask);
+  } else if (planetType == 4) {
+    // Ocean world: mostly water with sparse islands
+    float height = pattern * 0.5 + 0.5;
+    float seaLevel = 0.55;
+    terrainLandMask = smoothstep(seaLevel - 0.01, seaLevel + 0.03, height);
+
+    // Ocean depth gradient
+    vec3 deepOcean = baseColor * 0.75;
+    float oceanDepth = smoothstep(seaLevel - 0.3, seaLevel, height);
+    vec3 ocean = mix(deepOcean, baseColor * 1.1, oceanDepth);
+
+    // Sparse island land
+    float landElev = smoothstep(seaLevel, seaLevel + 0.2, height);
+    vec3 land = mix(accentColor, accentColor * 0.7 + vec3(0.12, 0.1, 0.06), landElev);
+
+    surfaceColor = mix(ocean, land, terrainLandMask);
   } else if (planetType == 8) {
     // Venus: nearly featureless, low-contrast cream/yellow clouds
     float val = pattern;
@@ -457,9 +541,22 @@ void main() {
     surfaceColor = mix(baseColor, accentColor, mixFactor);
   }
 
+  // ── Normal perturbation ──
+  // Rocky/airless: strong relief. Atmospheric: softer. Water: none.
+  float perturbStrength = 0.25; // rocky, ice, carbon — airless, cratered
+  if (planetType == 3) perturbStrength = 0.20;  // lava: visible but not dominant
+  if (planetType == 4) perturbStrength = 0.20;  // ocean: land parts only (masked below)
+  if (planetType == 5) perturbStrength = 0.20;  // terrestrial: land parts only (masked below)
+  if (planetType == 8) perturbStrength = 0.0;   // venus: hidden by thick clouds
+  // Water is flat from space — only perturb land areas
+  perturbStrength *= terrainLandMask;
+  vec3 shadingNormal = perturbStrength > 0.001
+    ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
+    : vNormal;
+
   // ── Dual-star Lighting with Shadows ──
-  float diff1 = max(dot(vNormal, lightDir), 0.0);
-  float diff2 = max(dot(vNormal, lightDir2), 0.0);
+  float diff1 = max(dot(shadingNormal, lightDir), 0.0);
+  float diff2 = max(dot(shadingNormal, lightDir2), 0.0);
 
   float shadow1 = totalShadow(vWorldPos, starPos1);
   float shadow2 = totalShadow(vWorldPos, starPos2);
@@ -468,7 +565,7 @@ void main() {
                  + starColor2 * diff2 * starBrightness2 * shadow2;
   float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
 
-  float ambient = 0.02;
+  float ambient = 0.035;
 
   vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
 
@@ -480,17 +577,61 @@ void main() {
     finalColor += vec3(0.5, 0.55, 0.6) * glint * 0.3;
   }
 
-  // ── Cloud layer (animated) ──
+  // ── Cloud / weather layer (animated) ──
   if (hasClouds > 0.5) {
-    float cloudSpeed = (planetType == 5) ? 0.005 : 0.017;
-    vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, time * cloudSpeed * 0.4, 0.0);
-    float cn = snoise(cloudPos);
-    cn += snoise(cloudPos * 2.0) * 0.4;
-    cn += snoise(cloudPos * 4.0) * 0.2;
-    cn += snoise(cloudPos * 8.0) * 0.1;
-    float cloudMask = smoothstep(0.05, 0.15, cn) * cloudDensity;
-    float cloudLight = diffuse * 0.9;
-    finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+    float cloudSpeed = 0.005;
+
+    if (planetType == 5) {
+      // ── Terrestrial weather system ──
+      // Latitude-dependent cloud bands (Earth-like circulation)
+      float lat = abs(vPosition.y) / planetRadius;
+
+      // ITCZ near equator (0-10°), storm tracks (30-60°), polar (70+°)
+      float itcz = exp(-lat * lat / (2.0 * 0.08 * 0.08)) * 0.6;
+      float stormTrack = exp(-(lat - 0.55) * (lat - 0.55) / (2.0 * 0.15 * 0.15)) * 0.8;
+      float polar = smoothstep(0.65, 0.85, lat) * 0.4;
+      float latBias = itcz + stormTrack + polar;
+
+      // Base cloud noise with domain warping for swirling patterns
+      vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, 0.0, 0.0);
+      // Domain warp: offset the sampling position by noise → creates swirls
+      float warpX = snoise(cloudPos * 0.5 + vec3(0.0, 0.0, time * 0.002)) * 0.3;
+      float warpZ = snoise(cloudPos * 0.5 + vec3(50.0, 0.0, time * 0.002)) * 0.3;
+      vec3 warpedPos = cloudPos + vec3(warpX, 0.0, warpZ);
+
+      float cn = snoise(warpedPos);
+      cn += snoise(warpedPos * 2.0) * 0.4;
+      cn += snoise(warpedPos * 4.0) * 0.15;
+
+      // Combine FBM with latitude bias
+      float cloudMask = smoothstep(-0.1, 0.25, cn + latBias * 0.3) * cloudDensity;
+
+      // Clouds are brighter on the sun-facing side, dimmer in shadow
+      float cloudLight = max(diffuse * 0.85, 0.06);
+      finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+
+    } else if (planetType == 0) {
+      // ── Rocky planet dust clouds (Mars-like) ──
+      // Large regional dust storms, very thin, patchy
+      vec3 dustPos = vPosition * cloudScale * 0.6 + vec3(time * 0.002, 0.0, 0.0);
+      float dust = snoise(dustPos * 0.5);
+      dust += snoise(dustPos * 1.0) * 0.4;
+      // Only the densest patches show — mostly clear
+      float dustMask = smoothstep(0.3, 0.6, dust) * cloudDensity;
+      float dustLight = max(diffuse * 0.9, 0.04);
+      finalColor = mix(finalColor, cloudColor * dustLight, dustMask);
+
+    } else {
+      // ── Generic clouds (Venus surface view, other types) ──
+      vec3 cloudPos = vPosition * cloudScale + vec3(time * 0.017, time * 0.007, 0.0);
+      float cn = snoise(cloudPos);
+      cn += snoise(cloudPos * 2.0) * 0.4;
+      cn += snoise(cloudPos * 4.0) * 0.2;
+      cn += snoise(cloudPos * 8.0) * 0.1;
+      float cloudMask = smoothstep(0.05, 0.15, cn) * cloudDensity;
+      float cloudLight = max(diffuse * 0.9, 0.04);
+      finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+    }
   }
 
   // ── Atmosphere rim glow (fresnel, lit side only) ──
@@ -708,9 +849,21 @@ void main() {
     surfaceColor = mix(baseColor, accentColor, mixFactor);
   }
 
+  // ── Normal perturbation ──
+  // Exotic bodies: organic noise relief doesn't fit geometric aesthetics.
+  // TODO: type-specific perturbation (hex grid relief, crystal facets, etc.)
+  // For now, only shattered and fungal get noise relief (organic shapes fit them).
+  float perturbStrength = 0.0;
+  if (planetType == 12) perturbStrength = 0.20; // shattered: fractured terrain
+  if (planetType == 14) perturbStrength = 0.15; // fungal: organic growth relief
+  if (planetType == 16) perturbStrength = 0.18; // city-lights: terrestrial terrain
+  vec3 shadingNormal = perturbStrength > 0.001
+    ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
+    : vNormal;
+
   // ── Dual-star Lighting with Shadows ──
-  float diff1 = max(dot(vNormal, lightDir), 0.0);
-  float diff2 = max(dot(vNormal, lightDir2), 0.0);
+  float diff1 = max(dot(shadingNormal, lightDir), 0.0);
+  float diff2 = max(dot(shadingNormal, lightDir2), 0.0);
 
   float shadow1 = totalShadow(vWorldPos, starPos1);
   float shadow2 = totalShadow(vWorldPos, starPos2);
@@ -720,7 +873,7 @@ void main() {
   float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
 
   // Emissive exotic types: slightly more ambient (hex=11 and crystal=13 are not emissive)
-  float ambient = 0.02;
+  float ambient = 0.035;
   if (planetType == 12 || planetType == 14 || planetType == 15 || planetType == 16 || planetType == 17) {
     ambient = 0.04;
   }
