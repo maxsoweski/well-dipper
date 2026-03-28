@@ -158,6 +158,21 @@ export class BodyRenderer {
     } else if (prevTier === 2 && tier < 2) {
       this._swapToProcedural();
     }
+
+    // Update lodLevel uniform on procedural shader (for LOD2 detail)
+    this._updateProceduralLODLevel(tier);
+  }
+
+  /**
+   * Set the lodLevel uniform on the procedural shader material.
+   * This controls enhanced detail (craters, extra noise octaves) in the
+   * Moon.js / Planet.js shaders when the camera is close.
+   * @private
+   */
+  _updateProceduralLODLevel(tier) {
+    const surface = this._delegate.surface || this._delegate.mesh;
+    if (!surface?.material?.uniforms?.lodLevel) return;
+    surface.material.uniforms.lodLevel.value = tier;
   }
 
   // ── LOD1 ↔ LOD2 downscaling pipeline ──

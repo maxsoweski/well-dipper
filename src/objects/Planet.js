@@ -39,6 +39,8 @@ const int MAX_SHADOW_PLANETS = 2;
 uniform int shadowPlanetCount;
 uniform vec3 shadowPlanetPos[2];
 uniform float shadowPlanetRadius[2];
+// LOD level for detail switching
+uniform int lodLevel;
 
 varying vec3 vNormal;
 varying vec3 vPosition;
@@ -1069,6 +1071,8 @@ export class Planet {
         shadowPlanetCount: { value: 0 },
         shadowPlanetPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
         shadowPlanetRadius: { value: new Float32Array(2) },
+        // LOD level: 1=orbital (default), 2=close-up (enhanced detail)
+        lodLevel: { value: 1 },
       },
 
       vertexShader: /* glsl */ `

@@ -65,6 +65,8 @@ export class Moon {
         auroraIntensity: { value: d.aurora?.intensity || 0.0 },
         auroraRingLat: { value: d.aurora?.ringLatitude || 0.8 },
         auroraRingWidth: { value: d.aurora?.ringWidth || 0.1 },
+        // LOD level: 1=orbital (default), 2=close-up (enhanced detail)
+        lodLevel: { value: 1 },
       },
 
       vertexShader: /* glsl */ `
@@ -116,6 +118,8 @@ export class Moon {
         uniform float auroraIntensity;
         uniform float auroraRingLat;
         uniform float auroraRingWidth;
+        // LOD level for detail switching
+        uniform int lodLevel;
 
         varying vec3 vNormal;
         varying vec3 vPosition;
@@ -252,6 +256,78 @@ export class Moon {
           return perturbed;
         }
 
+        // ── 3D Cellular (Worley) noise — simplified 2x2x2 search ──
+        // Returns vec2(F1, F2) where F1 = distance to nearest cell center,
+        // F2 = distance to second nearest. Used for crater placement.
+        // Based on Stefan Gustavson's implementation (MIT license).
+        vec3 cellHash(vec3 p) {
+          // Hash function: deterministic pseudo-random point in cell
+          p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
+                   dot(p, vec3(269.5, 183.3, 246.1)),
+                   dot(p, vec3(113.5, 271.9, 124.6)));
+          return fract(sin(p) * 43758.5453123);
+        }
+
+        vec2 cellular3D(vec3 P) {
+          vec3 Pi = floor(P);
+          vec3 Pf = fract(P);
+          float f1 = 10.0;
+          float f2 = 10.0;
+          // Search 3x3x3 neighborhood
+          for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+              for (int z = -1; z <= 1; z++) {
+                vec3 offset = vec3(float(x), float(y), float(z));
+                vec3 cellCenter = offset + cellHash(Pi + offset) - Pf;
+                float d = dot(cellCenter, cellCenter); // squared distance
+                if (d < f1) { f2 = f1; f1 = d; }
+                else if (d < f2) { f2 = d; }
+              }
+            }
+          }
+          return vec2(sqrt(f1), sqrt(f2));
+        }
+
+        // ── Crater profile from cellular F1 distance ──
+        // Produces realistic impact crater: bowl depression + raised rim + ejecta
+        float craterProfile(float f1, float craterRadius) {
+          float r = f1 / craterRadius;
+          if (r > 2.0) return 0.0;
+          // Bowl: smooth parabolic depression inside crater
+          float bowl = (smoothstep(0.0, 1.0, r) - 1.0) * 0.5;
+          // Rim: Gaussian bump at crater edge
+          float rim = exp(-(r - 1.0) * (r - 1.0) * 10.0) * 0.25;
+          // Ejecta: gentle falloff outside rim
+          float ejecta = exp(-max(r - 1.0, 0.0) * 4.0) * step(1.0, r) * 0.08;
+          return bowl + rim + ejecta;
+        }
+
+        // ── LOD2 height: more octaves + crater features ──
+        float computeHeightLOD2(vec3 pos) {
+          // Base terrain (same 4 octaves as LOD1)
+          float h = snoise(pos * noiseScale * 0.3) * 0.5;
+          h += snoise(pos * noiseScale) * 0.35;
+          h += snoise(pos * noiseScale * 2.0) * 0.2;
+          h += snoise(pos * noiseScale * 4.0) * 0.1;
+          // Extra fine octaves (LOD2 only)
+          h += snoise(pos * noiseScale * 8.0) * 0.05;
+          h += snoise(pos * noiseScale * 16.0) * 0.025;
+
+          // Large impact basins (few, deep)
+          vec2 c1 = cellular3D(pos * noiseScale * 0.4);
+          h += craterProfile(c1.x, 0.4) * 0.6;
+
+          // Medium craters (common)
+          vec2 c2 = cellular3D(pos * noiseScale * 1.5);
+          h += craterProfile(c2.x, 0.35) * 0.3;
+
+          // Small impacts (many, subtle)
+          vec2 c3 = cellular3D(pos * noiseScale * 4.5);
+          h += craterProfile(c3.x, 0.3) * 0.12;
+
+          return h;
+        }
+
         void main() {
           #include <logdepthbuf_fragment>
           // Surface pattern by moon type
@@ -272,6 +348,20 @@ export class Moon {
             // Fine surface roughness
             float rough = snoise(vPosition * noiseScale * 5.0) * 0.08;
             surfaceColor += vec3(rough);
+            // LOD2: crater color details from cellular noise
+            if (lodLevel >= 2) {
+              // Large crater interiors: slightly darker (shadow-filling dust)
+              vec2 cl = cellular3D(vPosition * noiseScale * 0.4);
+              float largeBowl = 1.0 - smoothstep(0.0, 0.35, cl.x);
+              surfaceColor *= 1.0 - largeBowl * 0.12;
+              // Fresh impact rays: bright radial streaks
+              vec2 cm = cellular3D(vPosition * noiseScale * 1.5);
+              float freshImpact = 1.0 - smoothstep(0.0, 0.15, cm.x);
+              surfaceColor += vec3(0.10) * freshImpact;
+              // Extra fine roughness at LOD2
+              float fineRough = snoise(vPosition * noiseScale * 10.0) * 0.04;
+              surfaceColor += vec3(fineRough);
+            }
           } else if (moonType == 2) {
             // Ice: white/blue surface with dark crack networks
             // Broader cracks (pow 3 not 5) + dual-scale fractures
@@ -344,6 +434,13 @@ export class Moon {
           else if (moonType == 2) perturbStrength = 0.22;             // ice: ridges + terrain
           else if (moonType == 3) perturbStrength = 0.25;             // volcanic: caldera relief
 
+          // LOD2: stronger perturbation + crater features for rocky/captured
+          if (lodLevel >= 2) {
+            if (moonType == 0 || moonType == 1) perturbStrength = 0.45;
+            else if (moonType == 2) perturbStrength = 0.32;
+            else if (moonType == 3) perturbStrength = 0.35;
+          }
+
           // Terrestrial moons: mask perturbation over water
           if (moonType == 4) {
             float tHeight = snoise(vPosition * noiseScale * 0.7)
@@ -351,12 +448,31 @@ export class Moon {
                           + snoise(vPosition * noiseScale * 3.0) * 0.18
                           + snoise(vPosition * noiseScale * 6.0) * 0.08;
             float tLandMask = smoothstep(0.46, 0.50, tHeight * 0.5 + 0.5);
-            perturbStrength = 0.20 * tLandMask;
+            perturbStrength = (lodLevel >= 2 ? 0.30 : 0.20) * tLandMask;
           }
 
-          vec3 shadingNormal = perturbStrength > 0.001
-            ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
-            : vNormal;
+          // LOD2: use enhanced height function with craters for rocky/captured
+          vec3 shadingNormal;
+          if (lodLevel >= 2 && (moonType == 0 || moonType == 1)) {
+            // LOD2 rocky/captured: craters + extra octaves
+            vec3 up2 = abs(vNormal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+            vec3 T2 = normalize(cross(up2, vNormal));
+            vec3 B2 = cross(vNormal, T2);
+            float eps2 = 0.01;
+            float h0 = computeHeightLOD2(vPosition);
+            float hT = computeHeightLOD2(vPosition + T2 * eps2);
+            float hB = computeHeightLOD2(vPosition + B2 * eps2);
+            float dT2 = (hT - h0) / eps2;
+            float dB2 = (hB - h0) / eps2;
+            float scale2 = perturbStrength * 0.025;
+            shadingNormal = normalize(vNormal - T2 * dT2 * scale2 - B2 * dB2 * scale2);
+            float dev2 = dot(shadingNormal, vNormal);
+            if (dev2 < 0.5) shadingNormal = normalize(mix(shadingNormal, vNormal, 0.5));
+          } else {
+            shadingNormal = perturbStrength > 0.001
+              ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
+              : vNormal;
+          }
 
           // ── Dual-star Lighting (using perturbed normal) ──
           float diff1 = max(dot(shadingNormal, lightDir), 0.0);
