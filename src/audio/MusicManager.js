@@ -88,7 +88,7 @@ export class MusicManager {
    * Preload all known tracks.
    */
   async preloadAll() {
-    const tracks = ['title', 'explore', 'hyperspace', 'deepsky', 'warp-charge', 'arrival'];
+    const tracks = ['intro', 'title', 'explore', 'hyperspace', 'deepsky', 'warp-charge', 'arrival'];
     await Promise.all(tracks.map(t => this.preload(t)));
   }
 
