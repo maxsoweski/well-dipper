@@ -616,7 +616,7 @@ const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for galler
 warpEffect.onPrepareSystem = () => {
   bodyInfo.hide();
   soundEngine.play('warpCharge');
-  musicManager.duck(0.15, 4.0);
+  musicManager.stop(0.5);
 
   // Keep system visible during FOLD — camera flies past objects.
   // _hideCurrentSystem() is called later when ENTER starts (see animation loop).
