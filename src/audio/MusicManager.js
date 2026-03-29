@@ -58,6 +58,33 @@ export class MusicManager {
   }
 
   /**
+   * Find the sample index where audio content starts/ends (trims MP3 encoder padding).
+   * Scans all channels; threshold is near-silence.
+   */
+  _trimBounds(buffer) {
+    const threshold = 0.005;
+    const len = buffer.length;
+    const channels = buffer.numberOfChannels;
+    let start = 0, end = len - 1;
+
+    // Find first non-silent sample
+    outer1: for (let i = 0; i < len; i++) {
+      for (let ch = 0; ch < channels; ch++) {
+        if (Math.abs(buffer.getChannelData(ch)[i]) > threshold) { start = i; break outer1; }
+      }
+    }
+
+    // Find last non-silent sample
+    outer2: for (let i = len - 1; i >= start; i--) {
+      for (let ch = 0; ch < channels; ch++) {
+        if (Math.abs(buffer.getChannelData(ch)[i]) > threshold) { end = i; break outer2; }
+      }
+    }
+
+    return { start, end: end + 1 };
+  }
+
+  /**
    * Preload a track into the buffer cache.
    * @param {string} name — track name (e.g. 'explore')
    */
@@ -75,7 +102,15 @@ export class MusicManager {
         const resp = await fetch(`${base}${name}.${ext}`);
         if (!resp.ok) continue;
         const arrayBuf = await resp.arrayBuffer();
-        this._buffers[name] = await ctx.decodeAudioData(arrayBuf);
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        // Trim silence from MP3 encoder padding for gapless looping
+        const bounds = this._trimBounds(decoded);
+        const trimLen = bounds.end - bounds.start;
+        const trimmed = ctx.createBuffer(decoded.numberOfChannels, trimLen, decoded.sampleRate);
+        for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+          trimmed.copyToChannel(decoded.getChannelData(ch).subarray(bounds.start, bounds.end), ch);
+        }
+        this._buffers[name] = trimmed;
         break;
       } catch {
         // Try next format
