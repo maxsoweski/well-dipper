@@ -3437,8 +3437,11 @@ function focusPlanet(index) {
   } else {
     focusIndex = index;
     const entry = system.planets[index];
-    const viewDist = entry.planet.data.radius * 6;
-    cameraController.focusOn(entry.planet.mesh.position, viewDist);
+    const bodyRadius = entry.planet.data.radius;
+    const orbitDist = bodyRadius * 6;
+    // Smooth cinematic travel instead of instant snap
+    cameraController.bypassed = true;
+    flythrough.beginTravelFrom(entry.planet.mesh, orbitDist, bodyRadius);
     const pName = system.names?.planets?.[index]?.name ?? null;
     bodyInfo.showPlanet(entry.planet.data, index, pName);
     console.log(`Focus: planet ${index + 1} ${pName || ''} (${entry.planet.data.type})`);
@@ -3474,7 +3477,10 @@ function focusStar(starIdx) {
     const innerOrbit = system.planets[0].orbitRadius;
     viewDist = Math.min(idealDist, innerOrbit * 0.4);
   }
-  cameraController.focusOn(starObj.mesh.position, viewDist);
+  // Smooth cinematic travel instead of instant snap
+  const bodyRadius = starObj.data.radius;
+  cameraController.bypassed = true;
+  flythrough.beginTravelFrom(starObj.mesh, viewDist, bodyRadius);
   const sName = system.names
     ? (starIdx === 1 ? system.names.star2 : system.names.star)
     : null;
@@ -3502,7 +3508,10 @@ function focusMoon(planetIndex, moonIndex) {
   focusIndex = planetIndex;
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;
-  cameraController.focusOn(moon.mesh.position, viewDist);
+  // Smooth cinematic travel instead of instant snap
+  const bodyRadius = moon.data.radius;
+  cameraController.bypassed = true;
+  flythrough.beginTravelFrom(moon.mesh, viewDist, bodyRadius);
   const mName = system.names?.planets?.[planetIndex]?.moons?.[moonIndex] ?? null;
   bodyInfo.showMoon(moon.data, planetIndex, mName);
   console.log(`Focus: moon ${moonIndex + 1} ${mName || ''} of planet ${planetIndex + 1} (${moon.data.type})`);
@@ -4136,16 +4145,19 @@ function animate() {
       }
 
       if (result.travelComplete) {
-        // Arrived at next body — begin orbit
-        const stop = autoNav.getCurrentStop();
+        // Arrived at next body
+        const stop = autoNav.isActive ? autoNav.getCurrentStop() : null;
         if (stop && stop.bodyRef) {
-          // Set next body ref BEFORE orbit so the orbit direction
-          // can be optimized for departure toward the next body
+          // Autopilot mode: begin orbit and continue tour
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
           flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger * settings.get('tourLingerMultiplier'));
-          // Show current body on minimap (no blink — we just arrived)
           updateFocusFromStop(stop);
+        } else {
+          // Manual burn: hand camera back to orbit controller at destination
+          flythrough.stop();
+          cameraController.bypassed = false;
+          cameraController.restoreFromWorldState(camera.position.clone());
         }
       }
     }
