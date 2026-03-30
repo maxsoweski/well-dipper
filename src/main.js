@@ -3412,10 +3412,15 @@ window.addEventListener('keydown', (e) => {
   // Block all input during splash/intro sequence
   if (splashActive) return;
 
-  // Title screen: any key dismisses (except K which we already handled)
+  // Title screen: game keys dismiss (ignore F-keys, modifier-only, browser keys)
   if (titleScreenActive) {
-    dismissTitleScreen();
-    return; // don't pass the dismiss key through to gameplay
+    const ignore = e.key.startsWith('F') || e.key === 'Meta' || e.key === 'Alt'
+      || e.key === 'Control' || e.key === 'Shift' || e.key === 'CapsLock'
+      || e.key === 'Tab' || e.key === 'NumLock' || e.key === 'ScrollLock';
+    if (!ignore) {
+      dismissTitleScreen();
+      return;
+    }
   }
 
   // Debug destination override: set at any time (even during warp).
