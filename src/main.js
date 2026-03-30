@@ -239,9 +239,14 @@ function startIntroSequence() {
         }, 5000);
       }, titleDur * 1000);
     } else {
+      // Fallback: stop music after default timeout, then 5s silence
+      const fallbackMs = settings.get('titleAutoDismiss') * 1000;
       _titleAutoTimer = setTimeout(() => {
-        if (titleScreenActive) dismissTitleScreen();
-      }, settings.get('titleAutoDismiss') * 1000);
+        musicManager.stop(1.0);
+        _titleAutoTimer = setTimeout(() => {
+          if (titleScreenActive) dismissTitleScreen();
+        }, 5000);
+      }, fallbackMs);
     }
   }, 8000);
 }
@@ -261,7 +266,7 @@ function dismissTitleScreen() {
   if (!titleScreenActive) return;
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
-  musicManager.play('explore');
+  musicManager.stop(0.5);
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
