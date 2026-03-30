@@ -424,14 +424,18 @@ function toggleNavComputer() {
           if (action.type === 'burn') {
             // In-system transit — fly to the selected body
             if (action.target === 'star') {
-              const stop = autoNav.isActive ? autoNav.jumpToStar() : null;
-              if (stop?.bodyRef) {
-                flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+              // Try autoNav first, then keyboard shortcut path
+              if (autoNav.isActive) {
+                const stop = autoNav.jumpToStar();
+                if (stop?.bodyRef) flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
               } else {
-                // Fallback: focus on star via keyboard-style path
+                // Use the star's render radius for a safe orbit distance
+                const starRadius = system?.star?.data?.radius || system?.star?._renderRadius || 5;
                 focusIndex = -1;
                 focusMoonIndex = -1;
-                cameraController.focusOn(system?.star?.mesh, system?.star?.mesh?.scale?.x * 3 || 20);
+                if (system?.star?.mesh) {
+                  cameraController.focusOn(system.star.mesh, starRadius * 4);
+                }
               }
             } else if (action.target === 'planet') {
               const stop = autoNav.isActive ? autoNav.jumpToPlanet(action.planetIndex) : null;
