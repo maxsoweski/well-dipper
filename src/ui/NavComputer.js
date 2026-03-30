@@ -2017,6 +2017,23 @@ export class NavComputer {
       ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
     }
 
+    // ── Selection ring on selected moon ──
+    if (isCurrent && this._selectedBody && this._selectedBody.type === 'moon') {
+      const selMoonIdx = this._selectedBody.moonIndex;
+      if (selMoonIdx >= 0 && selMoonIdx < moons.length) {
+        const moon = moons[selMoonIdx];
+        const moonOrbitR = Math.sqrt(moon.orbitRadiusEarth || 1) * moonOrbitScale;
+        const moonAngle = moon.orbitAngle || (selMoonIdx * Math.PI * 2 / Math.max(1, moons.length));
+        const moonP = project(Math.cos(moonAngle) * moonOrbitR, 0, Math.sin(moonAngle) * moonOrbitR);
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.004);
+        ctx.strokeStyle = '#00ff80';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath(); ctx.arc(moonP.x, moonP.y, 12, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
     // ── Hint ──
     ctx.font = '10px "DotGothic16", monospace';
     // ── COMMIT button + hint ──
@@ -2910,11 +2927,21 @@ export class NavComputer {
       }
       if (this._hoveredBody && this._hoveredBody.type === 'planet') {
         if (this._onSound) this._onSound('select');
-        this._selectedPlanetIdx = this._hoveredBody.index;
-        this._systemMode = 'planet';
+        const pIdx = this._hoveredBody.index;
+        const hasMoons = this._systemData?.planets?.[pIdx]?.moons?.length > 0;
+
         if (isCurrent) {
-          this._selectedBody = { type: 'planet', planetIndex: this._hoveredBody.index };
+          this._selectedBody = { type: 'planet', planetIndex: pIdx };
           this._commitAction = this._buildCommitAction();
+          // Only drill into detail if the planet has moons to explore
+          if (hasMoons) {
+            this._selectedPlanetIdx = pIdx;
+            this._systemMode = 'planet';
+          }
+        } else {
+          // Foreign system: always drill for info
+          this._selectedPlanetIdx = pIdx;
+          this._systemMode = 'planet';
         }
         return;
       }
