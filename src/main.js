@@ -355,6 +355,8 @@ function dismissTitleScreen() {
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
   musicManager.stop(0.5);
+  // Restore galaxy glow (hidden during title screen)
+  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
@@ -1233,6 +1235,8 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   const yOffset = 0.4 + titleRng.float() * 0.6;
   const titlePos = { x: R * Math.cos(theta), y: yOffset, z: R * Math.sin(theta) };
   skyRenderer.prepareForPosition(titlePos);
+  // Hide galaxy glow on title screen — it detracts from the nebula
+  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = false;
 
   // Spawn the nebula
   const deepSkyTypes = ['emission-nebula', 'planetary-nebula'];
