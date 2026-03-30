@@ -425,41 +425,42 @@ function toggleNavComputer() {
           toggleNavComputer();
 
           if (action.type === 'burn') {
-            // In-system transit — fly to the selected body
-            if (action.target === 'star') {
-              // Try autoNav first, then keyboard shortcut path
-              if (autoNav.isActive) {
-                const stop = autoNav.jumpToStar();
-                if (stop?.bodyRef) flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
-              } else {
-                // Use the star's render radius for a safe orbit distance
-                const starRadius = system?.star?.data?.radius || system?.star?._renderRadius || 5;
-                focusIndex = -1;
-                focusMoonIndex = -1;
-                if (system?.star?.mesh) {
-                  cameraController.focusOn(system.star.mesh, starRadius * 4);
-                }
-              }
-            } else if (action.target === 'planet') {
-              const stop = autoNav.isActive ? autoNav.jumpToPlanet(action.planetIndex) : null;
+            // In-system transit — use autoNav if active, else direct focus
+            // First try autoNav (gives smooth flythrough with proper orbit distances)
+            let handled = false;
+            if (autoNav.isActive) {
+              let stop = null;
+              if (action.target === 'star') stop = autoNav.jumpToStar();
+              else if (action.target === 'planet') stop = autoNav.jumpToPlanet(action.planetIndex);
               if (stop?.bodyRef) {
                 flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
-              } else {
-                // Fallback: focus on planet
-                focusIndex = action.planetIndex;
-                focusMoonIndex = -1;
-                const p = system?.planets?.[action.planetIndex];
-                if (p?.planet?.mesh) {
-                  cameraController.focusOn(p.planet.mesh, p.planet.mesh.scale.x * 5 || 10);
-                }
+                handled = true;
               }
-            } else if (action.target === 'moon') {
-              const p = system?.planets?.[action.planetIndex];
-              const moon = p?.moons?.[action.moonIndex];
-              if (moon?.mesh) {
-                focusIndex = action.planetIndex;
-                focusMoonIndex = action.moonIndex;
-                cameraController.focusOn(moon.mesh, moon.mesh.scale.x * 5 || 5);
+            }
+            if (!handled) {
+              // Direct camera focus — compute safe orbit distance from system data
+              if (action.target === 'star' && system?.star?.mesh) {
+                focusIndex = -1;
+                focusMoonIndex = -1;
+                const r = system._systemData?.star?.radiusScene || system.star?._renderRadius || 5;
+                cameraController.focusOn(system.star.mesh, Math.max(r * 4, 20));
+              } else if (action.target === 'planet') {
+                const entry = system?.planets?.[action.planetIndex];
+                if (entry?.planet?.mesh) {
+                  focusIndex = action.planetIndex;
+                  focusMoonIndex = -1;
+                  const r = entry.planet.mesh.geometry?.parameters?.radius || entry.orbitRadius * 0.1 || 10;
+                  cameraController.focusOn(entry.planet.mesh, Math.max(r * 5, 8));
+                }
+              } else if (action.target === 'moon') {
+                const entry = system?.planets?.[action.planetIndex];
+                const moon = entry?.moons?.[action.moonIndex];
+                if (moon?.mesh) {
+                  focusIndex = action.planetIndex;
+                  focusMoonIndex = action.moonIndex;
+                  const r = moon.mesh.geometry?.parameters?.radius || 2;
+                  cameraController.focusOn(moon.mesh, Math.max(r * 5, 4));
+                }
               }
             }
           } else if (action.type === 'warp') {
