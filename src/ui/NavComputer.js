@@ -94,6 +94,7 @@ export class NavComputer {
     this._onCommit = null;           // callback: (action) => void
     this._onDrillSound = null;       // callback: (levelIndex) => void — plays level-appropriate sound
     this._onSound = null;            // callback: (soundName) => void — plays named SFX
+    this._currentSystemData = null;  // actual spawned system data from main.js
 
     // ── Ship position in current system ──
     // focusIndex: -1 = overview (no specific body), -2 = star, 0+ = planet index
@@ -230,6 +231,11 @@ export class NavComputer {
       name: this._selectedNavStar.name,
       type: this._selectedNavStar.spectral,
     };
+  }
+
+  /** Set the actual spawned system data for the current system. */
+  setCurrentSystemData(data) {
+    this._currentSystemData = data;
   }
 
   /** Find the star nearest to the player's position in _localStars. */
@@ -1196,15 +1202,21 @@ export class NavComputer {
     // Generate system data on first render
     if (!this._systemData && this._systemStar) {
       const star = this._systemStar;
-      console.log('[NAV] Generating system for', star.name, '...');
-      const galaxyCtx = this._gm.deriveGalaxyContext({ x: star.wx, y: star.wy, z: star.wz });
-      galaxyCtx.starTypeOverride = star.spectral;
-      try {
-        this._systemData = StarSystemGenerator.generate(String(star.seed), galaxyCtx);
-        console.log('[NAV] System generated:', this._systemData.planets?.length, 'planets');
-      } catch (e) {
-        console.warn('[NAV] System generation failed:', e);
-        this._systemData = { star: { type: star.spectral, radiusSolar: 1, color: [1, 1, 0.8] }, planets: [], zones: {} };
+      // Use actual spawned system data for the current system (avoids regeneration mismatch)
+      if (this._isCurrentSystem() && this._currentSystemData) {
+        this._systemData = this._currentSystemData;
+        console.log('[NAV] Using actual system data:', this._systemData.planets?.length, 'planets');
+      } else {
+        console.log('[NAV] Generating system for', star.name, '...');
+        const galaxyCtx = this._gm.deriveGalaxyContext({ x: star.wx, y: star.wy, z: star.wz });
+        galaxyCtx.starTypeOverride = star.spectral;
+        try {
+          this._systemData = StarSystemGenerator.generate(String(star.seed), galaxyCtx);
+          console.log('[NAV] System generated:', this._systemData.planets?.length, 'planets');
+        } catch (e) {
+          console.warn('[NAV] System generation failed:', e);
+          this._systemData = { star: { type: star.spectral, radiusSolar: 1, color: [1, 1, 0.8] }, planets: [], zones: {} };
+        }
       }
     }
     if (!this._systemData) {

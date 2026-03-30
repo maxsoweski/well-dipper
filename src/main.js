@@ -484,6 +484,8 @@ function toggleNavComputer() {
     );
     _navComputer._currentSystemName = _currentSystemName || 'Unknown';
     _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+    // Pass actual spawned system data so nav shows correct planet count
+    if (system) _navComputer.setCurrentSystemData(system._systemData || null);
 
     // Direction 2: Sky → Nav Computer
     // If there's an active warp target, resolve its galactic position
@@ -1458,6 +1460,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
 
   if (systemData.isBinary) {
     const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene };
+    console.log(`[BINARY] star2: radius=${sceneStarData2.radius?.toFixed(2)}, type=${sceneStarData2.type}, color=[${sceneStarData2.color}], sep=${systemData.binarySeparationScene?.toFixed(2)}`);
     star2 = new StarFlare(sceneStarData2);
     star2.addTo(scene);
 
@@ -1670,6 +1673,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     binaryMassRatio: systemData.binaryMassRatio,
     binarySeparationMap: systemData.binarySeparation, // map-unit sep for gravity well
     names: systemNames, // generated names for system/star/planets/moons
+    _systemData: systemData, // raw generation data for nav computer
   };
 
   // ── Spawn flavor ships near planets ──

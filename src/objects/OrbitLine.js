@@ -17,7 +17,7 @@ export class OrbitLine {
   constructor(radius, color = 0x444444) {
     const segments = Math.max(128, Math.ceil(Math.sqrt(radius) * 32));
     const points = [];
-    for (let i = 0; i <= segments; i++) {
+    for (let i = 0; i < segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
       points.push(new THREE.Vector3(
         Math.cos(angle) * radius,
@@ -33,7 +33,7 @@ export class OrbitLine {
       opacity: 0.8,
     });
 
-    this.mesh = new THREE.Line(geometry, material);
+    this.mesh = new THREE.LineLoop(geometry, material);
   }
 
   addTo(scene) {
