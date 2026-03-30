@@ -238,8 +238,12 @@ function startIntroSequence() {
           console.log('[Title] Stopping music now');
           musicManager.stop(1.0);
           _titleAutoTimer = setTimeout(() => {
-            console.log('[Title] Auto-dismissing now');
-            if (titleScreenActive) dismissTitleScreen();
+            console.log('[Title] Auto-dismissing + warping');
+            if (titleScreenActive) {
+              dismissTitleScreen();
+              // Warp immediately — skip the deep sky linger timer
+              setTimeout(() => beginWarpTurn(), 1500);
+            }
           }, silenceGap);
         }, musicMs);
       }
