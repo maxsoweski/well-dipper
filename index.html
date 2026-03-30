@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Well Dipper</title>
+    <link rel="icon" href="data:,">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Pixelify+Sans:wght@700&display=swap" rel="stylesheet">
@@ -11,11 +12,32 @@
   <body>
     <canvas id="canvas"></canvas>
 
+    <!-- Splash + intro sequence (before title screen) -->
+    <div id="splash-screen">
+      <p class="splash-prompt" id="splash-text"></p>
+      <script>
+        // Per-character sliding illumination
+        const _st = 'Do you wish to begin?';
+        const _el = document.getElementById('splash-text');
+        for (let i = 0; i < _st.length; i++) {
+          const s = document.createElement('span');
+          s.className = 'sc';
+          s.style.setProperty('--i', i);
+          s.textContent = _st[i] === ' ' ? '\u00A0' : _st[i];
+          _el.appendChild(s);
+        }
+      </script>
+    </div>
+    <div id="intro-overlay" style="display:none;">
+      <div id="intro-logo1" class="intro-logo"><span class="deshe-title">DESHÉ</span><span class="deshe-sub">studios</span></div>
+      <div id="intro-logo2" class="intro-logo intro-credit">original score by<br><span class="credit-name">Christian Sewesky</span></div>
+    </div>
+
     <!-- Title screen overlay -->
-    <div id="title-screen">
+    <div id="title-screen" style="display:none;">
       <div class="title-content">
         <h1 class="title-name">WELL-DIPPER</h1>
-        <p class="title-prompt">press any key to begin</p>
+        <p class="title-prompt">press anything to begin</p>
       </div>
       <button id="title-fullscreen-btn" class="title-fullscreen-btn">&#x26F6; FULLSCREEN</button>
       <div class="title-keybind-hint">k &mdash; keybinds</div>

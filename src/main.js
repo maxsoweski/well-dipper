@@ -142,6 +142,8 @@ let currentGalaxyStar = null; // the GalacticMap star entry we're currently at
 const skyRenderer = new SkyRenderer(galacticMap, StarfieldGenerator, settings.get('starDensity'));
 skyRenderer.prepareForPosition(playerGalacticPos);
 skyRenderer.activate();
+// Hide galaxy glow during title screen — show only starfield + nebula
+if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = false;
 retroRenderer.setSkyRenderer(skyRenderer);
 
 // ── Real Star Catalog ──
@@ -255,16 +257,108 @@ let _deepSkyDrift = null;     // { startPos, endPos, duration, elapsed } — mom
 let _forceNextDestType = null;
 const _heldKeys = new Set();
 
+// ── Splash + Intro sequence ──
+let splashActive = true;
+
+function startIntroSequence() {
+  const splash = document.getElementById('splash-screen');
+  if (splash) splash.style.display = 'none';
+
+  const overlay = document.getElementById('intro-overlay');
+  const logo1 = document.getElementById('intro-logo1');
+  const logo2 = document.getElementById('intro-logo2');
+  const titleEl = document.getElementById('title-screen');
+
+  if (!overlay || !logo1 || !logo2) {
+    // Fallback: skip intro, show title directly
+    if (titleEl) titleEl.style.display = '';
+    splashActive = false;
+    titleScreenActive = true;
+    musicManager.play('title');
+    return;
+  }
+
+  overlay.style.display = '';
+
+  // Start intro music immediately (one-shot, plays over the logo sequence)
+  musicManager.playOnce('intro', 0.8);
+
+  // Timeline (~12 seconds total):
+  //   0.0s — Logo 1 fades in
+  //   2.4s — Logo 1 fades out
+  //   4.0s — Logo 2 fades in
+  //   6.4s — Logo 2 fades out
+  //   8.0s — Overlay removed, title screen shown
+
+  // Logo 1 in
+  setTimeout(() => { logo1.classList.add('visible'); }, 200);
+  // Logo 1 out
+  setTimeout(() => { logo1.classList.remove('visible'); }, 2400);
+  // Logo 2 in
+  setTimeout(() => { logo2.classList.add('visible'); }, 4000);
+  // Logo 2 out
+  setTimeout(() => { logo2.classList.remove('visible'); }, 6400);
+  // Remove overlay, show title screen
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    if (titleEl) {
+      titleEl.style.display = '';
+      void titleEl.offsetHeight;
+      titleEl.classList.add('animate-in');
+    }
+    splashActive = false;
+    titleScreenActive = true;
+    // Start looping title theme, then set auto-dismiss timer once loaded
+    musicManager.play('title').then(() => {
+      if (!titleScreenActive) return;
+      const titleDur = musicManager.getDuration('title');
+      const titleLoops = 4;
+      const silenceGap = 3000;
+      if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
+      if (titleDur > 0) {
+        _titleAutoTimer = setTimeout(() => {
+          musicManager.stop(1.0);
+          _titleAutoTimer = setTimeout(() => {
+            if (titleScreenActive) {
+              dismissTitleScreen();
+              setTimeout(() => beginWarpTurn(), 1500);
+            }
+          }, silenceGap);
+        }, titleDur * titleLoops * 1000);
+      }
+    });
+  }, 8000);
+}
+
+// Splash screen click handler — hold D for debug skip
+document.getElementById('splash-screen')?.addEventListener('click', () => {
+  if (!splashActive) return;
+  if (_heldKeys.has('KeyD')) {
+    // Debug skip: bypass intro + title, go straight to gameplay
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.style.display = 'none';
+    const titleEl = document.getElementById('title-screen');
+    if (titleEl) titleEl.style.display = 'none';
+    splashActive = false;
+    titleScreenActive = false;
+    if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+    console.log('[DEBUG] Skipped intro — direct to gameplay');
+    return;
+  }
+  startIntroSequence();
+});
+
 // ── Title screen ──
-let titleScreenActive = true;
-const SKIP_TITLE_SCREEN = true; // TESTING: auto-dismiss title, start in star system directly
+let titleScreenActive = false;
 let _titleAutoTimer = null;
 
 function dismissTitleScreen() {
   if (!titleScreenActive) return;
   titleScreenActive = false;
-  soundEngine.play('titleDismiss');
-  musicManager.play('explore');
+  // soundEngine.play('titleDismiss'); // muted for now
+  musicManager.stop(0.5);
+  // Restore galaxy glow (hidden during title screen)
+  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
@@ -315,7 +409,7 @@ function toggleNavComputer() {
   const el = document.getElementById('nav-computer-overlay');
   if (!el) return;
   _navComputerOpen = !_navComputerOpen;
-  soundEngine.play('uiClick');
+  soundEngine.play(_navComputerOpen ? 'navOpen' : 'navClose');
   if (_navComputerOpen) {
     el.style.display = 'flex';
     // Initialize nav computer if needed
@@ -323,6 +417,67 @@ function toggleNavComputer() {
       const navCanvas = document.getElementById('nav-computer-canvas');
       _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
       if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
+
+      // Wire COMMIT BURN/WARP callback
+      _navComputer.setCommitCallback((action) => {
+        // Close nav computer first
+        setTimeout(() => {
+          toggleNavComputer();
+
+          if (action.type === 'burn') {
+            // In-system transit — fly to the selected body
+            if (action.target === 'star') {
+              const stop = autoNav.isActive ? autoNav.jumpToStar() : null;
+              if (stop?.bodyRef) {
+                flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+              } else {
+                // Fallback: focus on star via keyboard-style path
+                focusIndex = -1;
+                focusMoonIndex = -1;
+                cameraController.focusOn(system?.star?.mesh, system?.star?.mesh?.scale?.x * 3 || 20);
+              }
+            } else if (action.target === 'planet') {
+              const stop = autoNav.isActive ? autoNav.jumpToPlanet(action.planetIndex) : null;
+              if (stop?.bodyRef) {
+                flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+              } else {
+                // Fallback: focus on planet
+                focusIndex = action.planetIndex;
+                focusMoonIndex = -1;
+                const p = system?.planets?.[action.planetIndex];
+                if (p?.planet?.mesh) {
+                  cameraController.focusOn(p.planet.mesh, p.planet.mesh.scale.x * 5 || 10);
+                }
+              }
+            } else if (action.target === 'moon') {
+              const p = system?.planets?.[action.planetIndex];
+              const moon = p?.moons?.[action.moonIndex];
+              if (moon?.mesh) {
+                focusIndex = action.planetIndex;
+                focusMoonIndex = action.moonIndex;
+                cameraController.focusOn(moon.mesh, moon.mesh.scale.x * 5 || 5);
+              }
+            }
+          } else if (action.type === 'warp') {
+            // Inter-system warp
+            _setWarpTargetFromNavStar({
+              worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
+              seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+            });
+            setTimeout(() => beginWarpTurn(), 500);
+          }
+        }, 0);
+      });
+
+      // Wire drill level sounds — pitch varies by zoom level
+      _navComputer.setDrillSoundCallback((levelIdx) => {
+        soundEngine.play(`navDrill${levelIdx}`);
+      });
+
+      // Wire general nav UI sounds
+      _navComputer.setSoundCallback((name) => {
+        soundEngine.play(name);
+      });
     }
     // Update player position and system name
     _navComputer.setPlayerPosition(
@@ -786,7 +941,7 @@ const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for galler
 warpEffect.onPrepareSystem = () => {
   bodyInfo.hide();
   soundEngine.play('warpCharge');
-  musicManager.duck(0.15, 4.0);
+  musicManager.stop(0.5);
 
   // Keep system visible during FOLD — camera flies past objects.
   // _hideCurrentSystem() is called later when ENTER starts (see animation loop).
@@ -951,8 +1106,11 @@ warpEffect.onPrepareSystem = () => {
       console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
-    // Check for known system override at this position
-    const knownWarp = KnownSystems.findAt(playerGalacticPos);
+    // Check for known system override at this position —
+    // but skip if the user explicitly picked a different star from the nav computer
+    const hasNavStar = !!warpTarget.navStarData;
+    const knownWarp = hasNavStar ? null : KnownSystems.findAt(playerGalacticPos);
+    console.log(`[WARP] knownSystem check: hasNavStar=${hasNavStar}, knownWarp=${knownWarp?.name || 'none'}`);
     if (knownWarp) {
       pendingSystemData = knownWarp.generate();
       pendingSystemData._knownSystemNames = knownWarp.names;
@@ -1064,92 +1222,34 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   return best;
 }
 
-// ── Title screen: spawn a random deep sky object as the backdrop ──
-if (SKIP_TITLE_SCREEN) {
-  // TESTING: Start directly in a star system at the solar neighborhood
-  titleScreenActive = false;
-  const el = document.getElementById('title-screen');
-  if (el) el.style.display = 'none';
-  const knownStart = KnownSystems.findAt(playerGalacticPos);
-  let startData;
-  if (knownStart) {
-    startData = knownStart.generate();
-    startData._knownSystemNames = knownStart.names;
-    console.log(`[START] Known system: ${knownStart.name}`);
-  } else {
-    const startCtx = galacticMap ? galacticMap.deriveGalaxyContext(playerGalacticPos) : null;
-    startData = StarSystemGenerator.generate('solar-test', startCtx);
-    startData._destType = 'star-system';
-  }
-  spawnSystem({ forWarp: false, systemData: startData });
-  if (galacticMap) {
-    skyRenderer.prepareForPosition(playerGalacticPos);
-    skyRenderer.activate();
-    skyRenderer.update(camera, 0);
-  }
-} else {
+// ── Title screen: spawn a random nebula as the backdrop ──
+{
   const titleSeed = `title-${Date.now()}`;
   const titleRng = new SeededRandom(titleSeed);
-  // Only use distant-view types so the object is visible as a whole showcase.
-  // Nebulae use NebulaGenerator (distant billboard), not NavigableNebulaGenerator.
-  // destType uses 'title-*-nebula' to avoid isNavigable() routing in spawnSystem.
-  const deepSkyTypes = ['spiral-galaxy', 'elliptical-galaxy', 'emission-nebula',
-                         'planetary-nebula', 'globular-cluster', 'open-cluster'];
+  const deepSkyTypes = ['emission-nebula', 'planetary-nebula'];
   const titleType = deepSkyTypes[titleRng.int(0, deepSkyTypes.length - 1)];
-  let titleData;
-  if (titleType.includes('galaxy')) {
-    titleData = GalaxyGenerator.generate(titleSeed, titleType);
-    titleData._destType = titleType;
-  } else if (titleType === 'emission-nebula' || titleType === 'planetary-nebula') {
-    titleData = NebulaGenerator.generate(titleSeed, titleType);
-    // Use a destType that won't match isNavigable() but still routes to Nebula class
-    titleData._destType = `title-${titleType}`;
-  } else if (titleType === 'open-cluster') {
-    titleData = ClusterGenerator.generate(titleSeed, titleType);
-    // Attach navigable star data for StarFlare overlay
-    titleData._navStars = NavigableClusterGenerator.generate(titleSeed);
-    // Prefix with 'title-' to avoid isNavigable() routing to spawnNavigableDeepSky
-    titleData._destType = `title-${titleType}`;
-  } else {
-    titleData = ClusterGenerator.generate(titleSeed, titleType);
-    titleData._destType = titleType;
+  const titleData = NebulaGenerator.generate(titleSeed, titleType);
+  titleData._destType = `title-${titleType}`;
+  // Use master-style simple nebula rendering for the title screen —
+  // zero out the advanced procedural parameters (domain warp, dark lanes, etc.)
+  for (const layer of titleData.layers || []) {
+    layer.domainWarpStrength = 3.5; // master default
+    layer.darkLaneStrength = 0;
+    layer.asymmetry = 0;
+    layer.brightnessShape = 0;
   }
   spawnSystem({ systemData: titleData });
 
-  // Orbit around the object center so it sits behind the centered title text.
   const r = titleData.radius || 200;
-  let orbitCenter;
-  if (titleType.includes('galaxy')) {
-    orbitCenter = new THREE.Vector3(0, 0, 0);
-    camera.position.set(r * 0.3, r * 0.15, r * 1.1);
-  } else if (titleType.includes('nebula')) {
-    orbitCenter = new THREE.Vector3(0, 0, 0);
-    camera.position.set(0, 0, r * 1.25);
-  } else {
-    // Clusters
-    orbitCenter = new THREE.Vector3(0, 0, 0);
-    camera.position.set(0, 0, r * 1.25);
-  }
+  const orbitCenter = new THREE.Vector3(0, 0, 0);
+  camera.position.set(0, 0, r * 1.25);
   camera.lookAt(orbitCenter);
   cameraController.restoreFromWorldState(orbitCenter);
-  // Slow visible orbit for the title screen showcase
   cameraController.autoRotateSpeed = 3.0;
 
+  // Auto-dismiss timer is now started by startIntroSequence() when the title actually appears.
 
-
-  // Auto-dismiss title screen after configured timeout
-  if (SKIP_TITLE_SCREEN) {
-    // TESTING: dismiss immediately, skip to star system
-    setTimeout(() => dismissTitleScreen(), 100);
-  } else {
-    _titleAutoTimer = setTimeout(() => {
-      if (titleScreenActive) dismissTitleScreen();
-    }, settings.get('titleAutoDismiss') * 1000);
-  }
-
-  // Mobile fullscreen button on title screen
-  // Must use touchend (not click) — click fires too late on mobile, canvas touchstart
-  // dismisses the title screen first. Also requestFullscreen needs a direct user gesture.
+  // Mobile fullscreen button on title screen — only goes fullscreen, no dismiss
   const fsBtn = document.getElementById('title-fullscreen-btn');
   if (fsBtn) {
     fsBtn.addEventListener('touchstart', (e) => {
@@ -1159,10 +1259,13 @@ if (SKIP_TITLE_SCREEN) {
       e.preventDefault();
       e.stopPropagation();
       document.documentElement.requestFullscreen().catch(() => {});
-      dismissTitleScreen();
+    });
+    fsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.documentElement.requestFullscreen().catch(() => {});
     });
   }
-} // end if/else SKIP_TITLE_SCREEN
+}
 
 /**
  * Hide the current system from the scene during warp FOLD.
@@ -1333,11 +1436,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   // ── Create star(s) ──
   // Scene-unit star data: override radius with radiusScene for 3D rendering
   const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene };
-  // Use physics-driven StarRenderer when stellar evolution data is available,
-  // otherwise fall back to StarFlare (legacy screensaver path)
-  const star = systemData.stellarEvolution
-    ? createStarRenderer(sceneStarData, { stellarEvolution: systemData.stellarEvolution })
-    : new StarFlare(sceneStarData);
+  // Always use StarFlare for the primary system star(s) — gives the full
+  // diffraction spike effect that matches the desired visual look.
+  const star = new StarFlare(sceneStarData);
   star.addTo(scene);
 
   let star2 = null;
@@ -1345,9 +1446,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
 
   if (systemData.isBinary) {
     const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene };
-    star2 = systemData.stellarEvolution
-      ? createStarRenderer(sceneStarData2, { stellarEvolution: systemData.stellarEvolution })
-      : new StarFlare(sceneStarData2);
+    star2 = new StarFlare(sceneStarData2);
     star2.addTo(scene);
 
     // Position binary stars at their starting positions (scene units)
@@ -3995,8 +4094,8 @@ function animate() {
 
     // ── Autopilot (cinematic flythrough) ──
     // Skip idle timer during warp or title screen (title has its own 30s timer)
-    if (warpEffect.isActive || titleScreenActive) {
-      // Warp or title screen is active — don't start autopilot
+    if (warpEffect.isActive || splashActive || titleScreenActive) {
+      // Warp, splash, or title screen is active — don't start autopilot
     } else if (!autoNav.isActive) {
       idleTimer += deltaTime;
       if (idleTimer >= settings.get('idleTimeout')) {
@@ -4063,7 +4162,7 @@ function animate() {
     // ── Deep sky contemplation timer ──
     // After the timer, auto-warp away.
     // Paused during title screen (title has its own 30s dismiss timer).
-    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !titleScreenActive) {
+    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !splashActive && !titleScreenActive) {
       _deepSkyLingerTimer -= deltaTime;
       if (_deepSkyLingerTimer <= 0) {
         _deepSkyLingerTimer = -1;
@@ -4258,10 +4357,18 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // Title screen: any key dismisses (except K which we already handled)
+  // Block all input during splash/intro sequence
+  if (splashActive) return;
+
+  // Title screen: game keys dismiss (ignore F-keys, modifier-only, browser keys)
   if (titleScreenActive) {
-    dismissTitleScreen();
-    return; // don't pass the dismiss key through to gameplay
+    const ignore = e.key.startsWith('F') || e.key === 'Meta' || e.key === 'Alt'
+      || e.key === 'Control' || e.key === 'Shift' || e.key === 'CapsLock'
+      || e.key === 'Tab' || e.key === 'NumLock' || e.key === 'ScrollLock';
+    if (!ignore) {
+      dismissTitleScreen();
+      return;
+    }
   }
 
   // Debug destination override: set at any time (even during warp).
@@ -4840,6 +4947,7 @@ let _minimapDidDrag = false; // true once mouse actually moves during minimap dr
 
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
+  if (splashActive) return;
   if (titleScreenActive) { dismissTitleScreen(); return; }
   _mouseDown.x = e.clientX;
   _mouseDown.y = e.clientY;
@@ -4938,6 +5046,7 @@ let _lastTapTime = 0;
 const _touchStart = { x: 0, y: 0 };
 
 canvas.addEventListener('touchstart', (e) => {
+  if (splashActive) return;
   if (titleScreenActive) { dismissTitleScreen(); return; }
   if (e.touches.length === 1) {
     _touchStart.x = e.touches[0].clientX;

@@ -183,6 +183,9 @@ html, body {
   justify-content: center;
   pointer-events: none;
   transition: opacity 1s ease;
+}
+
+#title-screen.animate-in {
   animation: title-fade-in 4s ease-out forwards;
 }
 
@@ -241,6 +244,8 @@ html, body {
   margin-top: 8px;
   letter-spacing: 0.15em;
   margin-right: -0.15em;
+  position: relative;
+  left: -2px;
   opacity: 0;
   animation: title-prompt-in 1.5s ease-out 6s forwards, title-blink 4s ease-in-out 7.5s infinite;
   text-shadow:
@@ -673,6 +678,109 @@ html, body {
     max-width: 95vw;
     max-height: 80vh;
   }
+}
+
+/* ══════════════════════════════════════════════
+   Splash Screen
+   ══════════════════════════════════════════════ */
+
+#splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.splash-prompt {
+  font-family: 'Pixelify Sans', monospace;
+  font-size: 24px;
+  color: #fff;
+  letter-spacing: 4px;
+}
+
+.sc {
+  opacity: 0;
+  display: inline-block;
+  /* 21 chars total. Each char gets a staggered start within a 4s cycle.
+     ~5 chars lit at once = illumination window slides L→R then all fade. */
+  animation: sc-glow 4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.13s);
+}
+
+@keyframes sc-glow {
+  0%        { opacity: 0; }
+  5%        { opacity: 1; }
+  18%       { opacity: 1; }
+  28%       { opacity: 0; }
+  100%      { opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════
+   Intro Sequence (logo cards)
+   ══════════════════════════════════════════════ */
+
+#intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 550;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-logo {
+  position: absolute;
+  font-family: 'Pixelify Sans', monospace;
+  font-size: 48px;
+  color: #fff;
+  letter-spacing: 6px;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.intro-logo.visible {
+  opacity: 1;
+}
+
+.deshe-title {
+  font-size: 96px;
+  letter-spacing: 18px;
+  display: block;
+  font-family: 'DotGothic16', monospace;
+}
+
+.deshe-sub {
+  font-size: 22px;
+  letter-spacing: 12px;
+  margin-top: 4px;
+  display: block;
+  text-transform: uppercase;
+  font-family: 'DotGothic16', monospace;
+}
+
+.intro-credit {
+  font-size: 24px;
+  letter-spacing: 3px;
+  line-height: 1.8;
+  font-family: 'DotGothic16', monospace;
+}
+
+.credit-name {
+  font-size: 48px;
+  font-weight: bold;
+  display: block;
+  letter-spacing: 4px;
+  font-family: 'Pixelify Sans', monospace;
 }
 
 /* ══════════════════════════════════════════════

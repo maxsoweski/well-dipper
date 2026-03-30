@@ -231,17 +231,11 @@ export class StarFlare {
 
           // Dithered edges: use Bayer threshold against brightness to create
           // stippled transparency at the edges of spikes, glow, and halo.
-          // Chunky dither (3x) matches the retro pixel grid.
           float brightness = max(max(color.r, color.g), color.b);
           if (brightness < 0.01) discard;
-          float dither = bayerDither(floor(gl_FragCoord.xy / 3.0));
+          float dither = bayerDither(gl_FragCoord.xy);
           if (dither > brightness) discard;
-
-          // Alpha proportional to brightness: bright core = full replace,
-          // dim edges = blend with background. Prevents dim flare pixels
-          // from appearing as dark debris against bright galaxy backgrounds.
-          float alpha = clamp(brightness * 2.0, 0.0, 1.0);
-          gl_FragColor = vec4(color, alpha);
+          gl_FragColor = vec4(color, 1.0);
         }
       `,
       transparent: true,

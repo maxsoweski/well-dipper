@@ -58,6 +58,22 @@ export class MusicManager {
   }
 
   /**
+   * Apply a short crossfade ramp at the start and end of a buffer so that
+   * loop = true produces a seamless loop with no click at the boundary.
+   */
+  _applyLoopFade(buffer) {
+    const fadeSamples = Math.min(256, Math.floor(buffer.length / 4));
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < fadeSamples; i++) {
+        const t = i / fadeSamples;
+        data[i] *= t;
+        data[buffer.length - 1 - i] *= t;
+      }
+    }
+  }
+
+  /**
    * Preload a track into the buffer cache.
    * @param {string} name — track name (e.g. 'explore')
    */
@@ -68,14 +84,16 @@ export class MusicManager {
     const ctx = this._soundEngine.context;
     if (!ctx) { this._loading.delete(name); return; }
 
-    // Try OGG first, fall back to MP3
+    // Load MP3 (add OGG back to this list if OGG files are added later)
     const base = `${import.meta.env.BASE_URL}assets/music/`;
-    for (const ext of ['ogg', 'mp3']) {
+    for (const ext of ['mp3']) {
       try {
         const resp = await fetch(`${base}${name}.${ext}`);
         if (!resp.ok) continue;
         const arrayBuf = await resp.arrayBuffer();
-        this._buffers[name] = await ctx.decodeAudioData(arrayBuf);
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        this._applyLoopFade(decoded);
+        this._buffers[name] = decoded;
         break;
       } catch {
         // Try next format
@@ -88,7 +106,7 @@ export class MusicManager {
    * Preload all known tracks.
    */
   async preloadAll() {
-    const tracks = ['title', 'explore', 'hyperspace', 'deepsky', 'warp-charge', 'arrival'];
+    const tracks = ['intro', 'title', 'explore', 'hyperspace', 'deepsky', 'warp-charge', 'arrival'];
     await Promise.all(tracks.map(t => this.preload(t)));
   }
 
@@ -216,5 +234,11 @@ export class MusicManager {
   /** Name of the currently playing track, or null. */
   get currentTrack() {
     return this._currentTrack?.name ?? null;
+  }
+
+  /** Get the duration of a loaded track in seconds, or 0 if not loaded. */
+  getDuration(name) {
+    const buf = this._buffers[name];
+    return buf ? buf.duration : 0;
   }
 }

@@ -87,6 +87,14 @@ export class NavComputer {
     this._selectedPlanetIdx = -1;   // which planet is selected for detail view
     this._systemZoom = 1.0;         // zoom multiplier for system view
 
+    // ── COMMIT BURN / WARP ──
+    this._selectedBody = null;       // { type: 'star'|'planet'|'moon', index }
+    this._commitAction = null;       // { type: 'burn'|'warp', target, planetIndex, moonIndex, star }
+    this._commitButtonRect = null;   // { x, y, w, h } for click hit testing
+    this._onCommit = null;           // callback: (action) => void
+    this._onDrillSound = null;       // callback: (levelIndex) => void — plays level-appropriate sound
+    this._onSound = null;            // callback: (soundName) => void — plays named SFX
+
     // ── Drill-down animation ──
     this._anim = null; // { startTime, duration, fromCenter, fromSize, toCenter, toSize, fromLevel, toLevel }
 
@@ -216,6 +224,51 @@ export class NavComputer {
       name: this._selectedNavStar.name,
       type: this._selectedNavStar.spectral,
     };
+  }
+
+  /** Check if the currently viewed system is the player's current system. */
+  _isCurrentSystem() {
+    if (!this._systemStar) return false;
+    const dx = this._systemStar.wx - this._playerX;
+    const dy = this._systemStar.wy - this._playerY;
+    const dz = this._systemStar.wz - this._playerZ;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) < 0.002;
+  }
+
+  /** Set callback for COMMIT BURN/WARP button. */
+  setCommitCallback(fn) { this._onCommit = fn; }
+
+  /** Set callback for drill level sound. */
+  setDrillSoundCallback(fn) { this._onDrillSound = fn; }
+
+  /** Set callback for general UI sounds. */
+  setSoundCallback(fn) { this._onSound = fn; }
+
+  /** Get the pending commit action (backup for close path). */
+  getCommitAction() { return this._commitAction; }
+
+  /** Build a commit action from the current selection. */
+  _buildCommitAction() {
+    if (!this._selectedBody || !this._systemStar) return null;
+    const isCurrent = this._isCurrentSystem();
+    const action = {
+      type: isCurrent ? 'burn' : 'warp',
+      target: this._selectedBody.type,
+      planetIndex: this._selectedBody.planetIndex ?? null,
+      moonIndex: this._selectedBody.moonIndex ?? null,
+      star: {
+        wx: this._systemStar.wx, wy: this._systemStar.wy, wz: this._systemStar.wz,
+        seed: this._systemStar.seed, name: this._systemStar.name, spectral: this._systemStar.spectral,
+      },
+    };
+    return action;
+  }
+
+  /** Clear commit selection state. */
+  _clearCommitSelection() {
+    this._selectedBody = null;
+    this._commitAction = null;
+    this._commitButtonRect = null;
   }
 
   /**
@@ -449,6 +502,7 @@ export class NavComputer {
     if (this._levelIndex > 0) {
       // System view: planet detail → system overview → column
       if (this._levelIndex === 4) {
+        this._clearCommitSelection();
         if (this._systemMode === 'planet') {
           this._systemMode = 'system';
           this._selectedPlanetIdx = -1;
@@ -459,6 +513,7 @@ export class NavComputer {
         this._systemData = null;
         this._hoveredBody = null;
         this._systemMode = 'system';
+        if (this._onDrillSound) this._onDrillSound(3);
         return true;
       }
       const prevLevel = this._levelIndex - 1;
@@ -472,6 +527,7 @@ export class NavComputer {
         );
       } else {
         // Instant switch (e.g., column→region, or missing stack entry)
+        if (this._onDrillSound) this._onDrillSound(prevLevel);
         this._levelIndex = prevLevel;
         this._applyLevelView();
         this._densityCacheKey = '';
@@ -1389,11 +1445,40 @@ export class NavComputer {
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
     ctx.fillText(`${sys.star?.type || '?'} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
 
-    // ── Hint ──
-    ctx.font = '10px "DotGothic16", monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.textAlign = 'center';
-    ctx.fillText('CLICK PLANET FOR DETAIL · DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+    // ── COMMIT button + hint ──
+    const isCurrent = this._isCurrentSystem();
+    if (this._selectedBody && this._commitAction) {
+      // Draw COMMIT button
+      const btnText = isCurrent ? '[ COMMIT BURN ]' : '[ COMMIT WARP ]';
+      const btnColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
+      const btnW = 180, btnH = 28;
+      const btnX = (w - btnW) / 2, btnY = drawH - 52;
+      ctx.fillStyle = isCurrent ? 'rgba(0, 255, 128, 0.1)' : 'rgba(100, 180, 255, 0.1)';
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = btnColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(btnX, btnY, btnW, btnH);
+      ctx.font = '12px "DotGothic16", monospace';
+      ctx.fillStyle = btnColor;
+      ctx.textAlign = 'center';
+      ctx.fillText(btnText, w / 2, btnY + 19);
+      this._commitButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+
+      // Hint below button
+      ctx.font = '10px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillText('DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+    } else {
+      this._commitButtonRect = null;
+      ctx.font = '10px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.textAlign = 'center';
+      if (isCurrent) {
+        ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+      } else {
+        ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · ESC TO RETURN', w / 2, drawH - 8);
+      }
+    }
     ctx.textAlign = 'left';
   }
 
@@ -1530,9 +1615,36 @@ export class NavComputer {
 
     // ── Hint ──
     ctx.font = '10px "DotGothic16", monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.textAlign = 'center';
-    ctx.fillText('CLICK TO SET WARP TARGET · DRAG TO ROTATE · ESC TO GO BACK', w / 2, drawH - 8);
+    // ── COMMIT button + hint ──
+    const isCurrent = this._isCurrentSystem();
+    if (isCurrent && this._selectedBody && this._commitAction) {
+      const btnText = '[ COMMIT BURN ]';
+      const btnW = 180, btnH = 28;
+      const btnX = (w - btnW) / 2, btnY = drawH - 52;
+      ctx.fillStyle = 'rgba(0, 255, 128, 0.1)';
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = '#00ff80';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(btnX, btnY, btnW, btnH);
+      ctx.font = '12px "DotGothic16", monospace';
+      ctx.fillStyle = '#00ff80';
+      ctx.textAlign = 'center';
+      ctx.fillText(btnText, w / 2, btnY + 19);
+      this._commitButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+
+      ctx.font = '10px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillText('ESC TO GO BACK', w / 2, drawH - 8);
+    } else {
+      this._commitButtonRect = null;
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.textAlign = 'center';
+      if (isCurrent) {
+        ctx.fillText('SELECT MOON TO NAVIGATE · ESC TO GO BACK', w / 2, drawH - 8);
+      } else {
+        ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+      }
+    }
     ctx.textAlign = 'left';
   }
 
@@ -2298,6 +2410,7 @@ export class NavComputer {
         const target = this._viewStack[idx];
         // Animate between 2D levels if both are 2D and have stack entries
         if (idx <= 2 && this._levelIndex <= 2 && target) {
+          if (this._onDrillSound) this._onDrillSound(idx);
           this._startDrillAnim(
             { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
             { x: target.center.x, z: target.center.z }, target.size,
@@ -2306,6 +2419,7 @@ export class NavComputer {
         } else {
           // System tab needs a star selected first — ignore if no system data
           if (idx === 4 && !this._systemData) return;
+          if (this._onDrillSound) this._onDrillSound(idx);
           this._levelIndex = idx;
           this._applyLevelView();
           this._densityCacheKey = '';
@@ -2330,25 +2444,68 @@ export class NavComputer {
     const dy = p.y - this._dragStartY;
     if (dx * dx + dy * dy > 25) return; // was a drag, not a click
 
-    // System view — click body
+    // System view — click body or COMMIT button
     if (this._levelIndex === 4) {
+      const isCurrent = this._isCurrentSystem();
+
+      // Check COMMIT button click first
+      if (this._commitButtonRect && this._commitAction) {
+        const r = this._commitButtonRect;
+        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+          if (this._onSound) this._onSound(isCurrent ? 'warpLockOn' : 'warpTarget');
+          if (this._onCommit) this._onCommit(this._commitAction);
+          return;
+        }
+      }
+
       if (this._systemMode === 'planet') {
-        // In planet detail: click selects warp target and returns to system
-        this._selectedNavStar = this._systemStar;
-        this._systemMode = 'system';
+        if (isCurrent) {
+          // Current system planet detail: click moon or planet to select as burn target
+          if (this._hoveredBody && this._hoveredBody.type === 'moon') {
+            if (this._onSound) this._onSound('select');
+            this._selectedBody = { type: 'moon', planetIndex: this._selectedPlanetIdx, moonIndex: this._hoveredBody.index };
+            this._commitAction = this._buildCommitAction();
+            return;
+          }
+          if (this._hoveredBody && this._hoveredBody.type === 'planet') {
+            if (this._onSound) this._onSound('select');
+            this._selectedBody = { type: 'planet', planetIndex: this._selectedPlanetIdx };
+            this._commitAction = this._buildCommitAction();
+            return;
+          }
+          // Click empty — clear selection, return to system view
+          this._clearCommitSelection();
+          this._systemMode = 'system';
+          return;
+        } else {
+          // Foreign system planet detail: click returns to system (info only)
+          this._systemMode = 'system';
+          return;
+        }
+      }
+
+      // System mode
+      if (this._hoveredBody && this._hoveredBody.type === 'star') {
+        if (this._onSound) this._onSound('select');
+        this._selectedBody = { type: 'star' };
+        this._commitAction = this._buildCommitAction();
+        if (!isCurrent) {
+          this._selectedNavStar = this._systemStar;
+        }
         return;
       }
       if (this._hoveredBody && this._hoveredBody.type === 'planet') {
-        // Click planet → enter planet detail
+        if (this._onSound) this._onSound('select');
         this._selectedPlanetIdx = this._hoveredBody.index;
         this._systemMode = 'planet';
+        if (isCurrent) {
+          this._selectedBody = { type: 'planet', planetIndex: this._hoveredBody.index };
+          this._commitAction = this._buildCommitAction();
+        }
         return;
       }
-      if (this._hoveredBody && this._hoveredBody.type === 'star') {
-        // Click star → select as warp target
-        this._selectedNavStar = this._systemStar;
-        return;
-      }
+      // Click empty space — clear selection
+      this._clearCommitSelection();
       return;
     }
 
@@ -2356,12 +2513,16 @@ export class NavComputer {
     if (this._levelIndex === 3 && this._hoveredLocalStar) {
       const star = this._hoveredLocalStar.star;
       console.log('[NAV] Entering system view for:', star.name, 'seed:', star.seed, 'type:', star.spectral);
+      if (this._onDrillSound) this._onDrillSound(4);
       this._systemStar = star;
       this._selectedNavStar = star;
+      // Update external target so trajectory line shows in 2D views
+      this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
       this._systemData = null; // will be generated in _renderSystem
       this._hoveredBody = null;
       this._systemMode = 'system';
       this._systemZoom = 1.0; // reset zoom for new system
+      this._clearCommitSelection();
       // Zoom animation: shrink column view radius toward the star, then switch
       this._systemZoomAnim = {
         startTime: performance.now(),
@@ -2382,6 +2543,7 @@ export class NavComputer {
         size: s.size,
         sectorName: s.name,
       };
+      if (this._onDrillSound) this._onDrillSound(1);
       this._startDrillAnim(
         { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
         { x: s.centerX, z: s.centerZ }, s.size,
@@ -2407,6 +2569,7 @@ export class NavComputer {
           center: { x: newCx, z: newCz },
           size: nextSize,
         };
+        if (this._onDrillSound) this._onDrillSound(2);
         this._startDrillAnim(
           { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
           { x: newCx, z: newCz }, nextSize,
@@ -2429,6 +2592,7 @@ export class NavComputer {
         this._tiltAnim = { startTime: null, duration: 600, from: Math.PI / 2, to: 0.5 };
         // Animate zoom into the tile, then switch to column at completion
         const localSize = tileSize * 0.5;
+        if (this._onDrillSound) this._onDrillSound(3);
         this._startDrillAnim(
           { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
           { x: newCx, z: newCz }, localSize,
