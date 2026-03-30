@@ -1736,6 +1736,28 @@ export class NavComputer {
       : `${sys.star?.type || '?'}`;
     ctx.fillText(`${starTypeLabel} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
 
+    // ── Selection ring on selected body ──
+    if (this._selectedBody) {
+      const selColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
+      const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.004);
+      ctx.strokeStyle = selColor;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = pulse;
+      if (this._selectedBody.type === 'star') {
+        const idx = this._selectedBody.starIndex || 0;
+        const sp = idx === 1 && star2P ? star2P : starP;
+        const sr = idx === 1 ? star2R : starR;
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, sr + 6, 0, Math.PI * 2); ctx.stroke();
+      } else if (this._selectedBody.type === 'planet') {
+        const proj = planetProj.find(p => p.index === this._selectedBody.planetIndex);
+        if (proj) {
+          const pr = Math.max(4, Math.min(12, 3 + Math.log2(Math.max(0.5, proj.planet.planetData.radiusEarth)) * 2.5));
+          ctx.beginPath(); ctx.arc(proj.sp.x, proj.sp.y, pr + 5, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // ── COMMIT button + hint ──
     // Foreign system: always show COMMIT WARP (warp to the star)
     if (!isCurrent && !this._commitAction) {
