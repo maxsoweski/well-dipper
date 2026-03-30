@@ -340,6 +340,9 @@ document.getElementById('splash-screen')?.addEventListener('click', () => {
     splashActive = false;
     titleScreenActive = false;
     if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+    // Clear D key so it doesn't trigger WASD flight after skip
+    _heldKeys.delete('KeyD');
+    _heldKeys.delete('d');
     console.log('[DEBUG] Skipped intro — direct to gameplay');
     return;
   }
