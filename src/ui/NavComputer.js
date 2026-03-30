@@ -302,6 +302,7 @@ export class NavComputer {
     const action = {
       type: isCurrent ? 'burn' : 'warp',
       target: this._selectedBody.type,
+      starIndex: this._selectedBody.starIndex ?? 0,
       planetIndex: this._selectedBody.planetIndex ?? null,
       moonIndex: this._selectedBody.moonIndex ?? null,
       star: {
@@ -1738,7 +1739,7 @@ export class NavComputer {
     // ── COMMIT button + hint ──
     // Foreign system: always show COMMIT WARP (warp to the star)
     if (!isCurrent && !this._commitAction) {
-      this._selectedBody = { type: 'star' };
+      this._selectedBody = { type: 'star', starIndex: 0 };
       this._commitAction = this._buildCommitAction();
       this._selectedNavStar = this._systemStar;
     }
@@ -2878,7 +2879,7 @@ export class NavComputer {
       // System mode
       if (this._hoveredBody && this._hoveredBody.type === 'star') {
         if (this._onSound) this._onSound('select');
-        this._selectedBody = { type: 'star' };
+        this._selectedBody = { type: 'star', starIndex: this._hoveredBody.index || 0 };
         this._commitAction = this._buildCommitAction();
         if (!isCurrent) {
           this._selectedNavStar = this._systemStar;

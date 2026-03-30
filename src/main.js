@@ -475,7 +475,7 @@ function dispatchNavAction(action) {
 
   if (action.type === 'burn') {
     // In-system transit — same focus functions as Tab/1-9 keys
-    if (action.target === 'star') focusStar(0);
+    if (action.target === 'star') focusStar(action.starIndex || 0);
     else if (action.target === 'planet') focusPlanet(action.planetIndex);
     else if (action.target === 'moon') focusMoon(action.planetIndex, action.moonIndex);
   } else if (action.type === 'warp') {
