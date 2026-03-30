@@ -736,6 +736,7 @@ html, body {
   font-size: 96px;
   letter-spacing: 18px;
   display: block;
+  font-family: 'DotGothic16', monospace;
 }
 
 .deshe-sub {
@@ -744,10 +745,20 @@ html, body {
   margin-top: 4px;
   display: block;
   text-transform: uppercase;
+  font-family: 'DotGothic16', monospace;
 }
 
 .intro-credit {
   font-size: 24px;
   letter-spacing: 3px;
-  line-height: 1.6;
+  line-height: 1.8;
+  font-family: 'DotGothic16', monospace;
+}
+
+.credit-name {
+  font-size: 48px;
+  font-weight: bold;
+  display: block;
+  letter-spacing: 4px;
+  font-family: 'Pixelify Sans', monospace;
 }
