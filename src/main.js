@@ -357,6 +357,12 @@ function dismissTitleScreen() {
   musicManager.stop(0.5);
   // Restore galaxy glow (hidden during title screen)
   if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+  const skyScene = retroRenderer.getSkyScene?.();
+  if (skyScene) {
+    skyScene.traverse((child) => {
+      if (child._hiddenForTitle) { child.visible = true; child._hiddenForTitle = false; }
+    });
+  }
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
@@ -1238,7 +1244,22 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   const titlePos = { x: R * Math.cos(theta), y: yOffset, z: R * Math.sin(theta) };
   skyRenderer.prepareForPosition(titlePos);
   // Hide galaxy glow on title screen — it detracts from the nebula
-  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = false;
+  if (skyRenderer._glowLayer?.mesh) {
+    skyRenderer._glowLayer.mesh.visible = false;
+    console.log('[TITLE] Galaxy glow hidden');
+  } else {
+    console.warn('[TITLE] No glow layer mesh to hide');
+  }
+  // Also hide the glow in the scene directly (it may be a child of the sky scene)
+  const skyScene = retroRenderer.getSkyScene?.();
+  if (skyScene) {
+    skyScene.traverse((child) => {
+      if (child.material?.uniforms?.uThinColor) {
+        child.visible = false;
+        child._hiddenForTitle = true;
+      }
+    });
+  }
 
   // Spawn the nebula
   const deepSkyTypes = ['emission-nebula', 'planetary-nebula'];
