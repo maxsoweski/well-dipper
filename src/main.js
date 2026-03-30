@@ -865,7 +865,10 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
       e.preventDefault();
       e.stopPropagation();
       document.documentElement.requestFullscreen().catch(() => {});
-      dismissTitleScreen();
+    });
+    fsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.documentElement.requestFullscreen().catch(() => {});
     });
   }
 }
