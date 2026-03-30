@@ -224,32 +224,23 @@ function startIntroSequence() {
     }
     splashActive = false;
     titleScreenActive = true;
-    // Start looping title theme
-    musicManager.play('title');
-    // After N loops: stop music, wait for silence, then auto-dismiss
-    if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
-    const titleDur = musicManager.getDuration('title');
-    const titleLoops = 4;
-    const silenceGap = 3000; // ms of silence before auto-warp
-    console.log(`[Title] track duration=${titleDur.toFixed(2)}s, ${titleLoops} loops = ${(titleDur*titleLoops).toFixed(1)}s + ${silenceGap/1000}s silence`);
-    if (titleDur > 0) {
-      // Stop music at end of Nth loop
-      _titleAutoTimer = setTimeout(() => {
-        musicManager.stop(1.0);
+    // Start looping title theme, then set auto-dismiss timer once loaded
+    musicManager.play('title').then(() => {
+      if (!titleScreenActive) return; // user already dismissed
+      const titleDur = musicManager.getDuration('title');
+      const titleLoops = 4;
+      const silenceGap = 3000;
+      console.log(`[Title] track duration=${titleDur.toFixed(2)}s, ${titleLoops} loops = ${(titleDur*titleLoops).toFixed(1)}s + ${silenceGap/1000}s silence`);
+      if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
+      if (titleDur > 0) {
         _titleAutoTimer = setTimeout(() => {
-          if (titleScreenActive) dismissTitleScreen();
-        }, silenceGap);
-      }, titleDur * titleLoops * 1000);
-    } else {
-      // Fallback: stop music after default timeout, then silence gap
-      const fallbackMs = settings.get('titleAutoDismiss') * 1000;
-      _titleAutoTimer = setTimeout(() => {
-        musicManager.stop(1.0);
-        _titleAutoTimer = setTimeout(() => {
-          if (titleScreenActive) dismissTitleScreen();
-        }, silenceGap);
-      }, fallbackMs);
-    }
+          musicManager.stop(1.0);
+          _titleAutoTimer = setTimeout(() => {
+            if (titleScreenActive) dismissTitleScreen();
+          }, silenceGap);
+        }, titleDur * titleLoops * 1000);
+      }
+    });
   }, 8000);
 }
 

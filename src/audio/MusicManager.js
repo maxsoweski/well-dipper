@@ -111,9 +111,9 @@ export class MusicManager {
     const ctx = this._soundEngine.context;
     if (!ctx) { this._loading.delete(name); return; }
 
-    // Try OGG first, fall back to MP3
+    // Load MP3 (add OGG back to this list if OGG files are added later)
     const base = `${import.meta.env.BASE_URL}assets/music/`;
-    for (const ext of ['ogg', 'mp3']) {
+    for (const ext of ['mp3']) {
       try {
         const resp = await fetch(`${base}${name}.${ext}`);
         if (!resp.ok) continue;
