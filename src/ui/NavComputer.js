@@ -95,6 +95,12 @@ export class NavComputer {
     this._onDrillSound = null;       // callback: (levelIndex) => void — plays level-appropriate sound
     this._onSound = null;            // callback: (soundName) => void — plays named SFX
 
+    // ── Ship position in current system ──
+    // focusIndex: -1 = overview (no specific body), -2 = star, 0+ = planet index
+    // focusMoonIndex: -1 = planet itself, 0+ = moon index
+    this._currentFocusIndex = -1;
+    this._currentMoonIndex = -1;
+
     // ── Drill-down animation ──
     this._anim = null; // { startTime, duration, fromCenter, fromSize, toCenter, toSize, fromLevel, toLevel }
 
@@ -291,6 +297,14 @@ export class NavComputer {
     if (bestStar && bestDist < 0.001 * 0.001) {
       this._selectedNavStar = bestStar;
     }
+  }
+
+  /** Tell the nav computer which body the player is currently near.
+   *  focusIndex: -1 = overview, -2 = star, 0+ = planet index
+   *  moonIndex: -1 = planet itself, 0+ = specific moon */
+  setCurrentBody(focusIndex, moonIndex) {
+    this._currentFocusIndex = focusIndex;
+    this._currentMoonIndex = moonIndex;
   }
 
   setPlayerPosition(galacticPos) {
@@ -509,6 +523,14 @@ export class NavComputer {
           return true;
         }
         this._levelIndex = 3;
+        // Stash binary status on the column star so column view can show a double-dot
+        if (this._systemData?.isBinary && this._systemStar) {
+          const match = this._localStars.find(s => s.seed === this._systemStar.seed);
+          if (match) {
+            match._isBinary = true;
+            match._star2Type = this._systemData.star2?.type || null;
+          }
+        }
         this._systemStar = null;
         this._systemData = null;
         this._hoveredBody = null;
@@ -1062,8 +1084,24 @@ export class NavComputer {
       // Star — real named stars are slightly larger
       const isSelected = this._selectedNavStar === star;
       const baseRadius = star.isReal ? 4.5 : 3.5;
-      ctx.fillStyle = star.color;
-      ctx.beginPath(); ctx.arc(starP.x, starP.y, isSelected ? baseRadius + 1 : baseRadius, 0, Math.PI * 2); ctx.fill();
+      const drawR = isSelected ? baseRadius + 1 : baseRadius;
+
+      if (star._isBinary) {
+        // Binary: draw two slightly offset dots instead of one
+        const offset = drawR * 0.7; // separation between the pair
+        // Primary dot
+        ctx.fillStyle = star.color;
+        ctx.beginPath(); ctx.arc(starP.x - offset, starP.y, drawR * 0.8, 0, Math.PI * 2); ctx.fill();
+        // Companion dot — use companion spectral color if available, else dimmer primary
+        const s2Color = star._star2Type
+          ? (NavComputer._SPECTRAL_COLORS[star._star2Type] || star.color)
+          : star.color;
+        ctx.fillStyle = s2Color;
+        ctx.beginPath(); ctx.arc(starP.x + offset, starP.y, drawR * 0.65, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = star.color;
+        ctx.beginPath(); ctx.arc(starP.x, starP.y, drawR, 0, Math.PI * 2); ctx.fill();
+      }
 
       // Real named stars: always show name label in gold/amber
       if (star.isReal && star.name) {
@@ -1116,11 +1154,15 @@ export class NavComputer {
     // Hover tooltip
     if (this._hoveredLocalStar) {
       const { star, sx, sy } = this._hoveredLocalStar;
-      this._drawTooltip(ctx, sx, sy, star.name || 'Unnamed', [
+      const tooltipLines = [
         `${star.spectral} class`,
         `${star.distPc} pc (${(star.dist * 1000 * 3.26).toFixed(1)} ly)`,
         `${((star.wy - planeY) * 1000).toFixed(0)} pc ${star.wy >= planeY ? 'above' : 'below'} plane`,
-      ]);
+      ];
+      if (star._isBinary) {
+        tooltipLines.push(`Binary (${star.spectral}+${star._star2Type || '?'})`);
+      }
+      this._drawTooltip(ctx, sx, sy, star.name || 'Unnamed', tooltipLines);
       ctx.strokeStyle = 'rgba(100, 180, 255, 0.8)';
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(sx, sy, 8, 0, Math.PI * 2); ctx.stroke();
@@ -1307,20 +1349,79 @@ export class NavComputer {
       ctx.setLineDash([]);
     }
 
-    // ── Star at center ──
+    // ── Stars (primary + optional binary companion) ──
     const starColor = sys.star?.color || [1, 0.9, 0.7];
-    const starP = project(0, 0, 0);
     const starR = Math.max(6, Math.min(16, (sys.star?.radiusSolar || 1) * 5));
 
-    // Star glow
+    // Binary star positions: offset from barycenter using separation + mass ratio
+    let star1Wx = 0, star1Wz = 0;
+    let star2Wx = 0, star2Wz = 0;
+    if (sys.isBinary && sys.star2) {
+      const q = sys.binaryMassRatio || 0.5;
+      const sepAU = sys.binarySeparationAU || 0.3;
+      const sep = auToScreen(sepAU);
+      const r1 = sep * q / (1 + q);     // primary offset from barycenter
+      const r2 = sep * 1.0 / (1 + q);   // secondary offset from barycenter
+      const angle = sys.binaryOrbitAngle || 0;
+      star1Wx = Math.cos(angle) * r1;
+      star1Wz = Math.sin(angle) * r1;
+      star2Wx = -Math.cos(angle) * r2;
+      star2Wz = -Math.sin(angle) * r2;
+    }
+
+    const starP = project(star1Wx, 0, star1Wz);
+
+    // Primary star glow
     const grad = ctx.createRadialGradient(starP.x, starP.y, 0, starP.x, starP.y, starR * 3);
     grad.addColorStop(0, `rgba(${Math.round(starColor[0]*255)},${Math.round(starColor[1]*255)},${Math.round(starColor[2]*255)},0.3)`);
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(starP.x, starP.y, starR * 3, 0, Math.PI * 2); ctx.fill();
 
+    // Primary star body
     ctx.fillStyle = `rgb(${Math.round(starColor[0]*255)},${Math.round(starColor[1]*255)},${Math.round(starColor[2]*255)})`;
     ctx.beginPath(); ctx.arc(starP.x, starP.y, starR, 0, Math.PI * 2); ctx.fill();
+
+    // ── Binary companion star ──
+    let star2P = null;
+    let star2R = 0;
+    if (sys.isBinary && sys.star2) {
+      const s2Color = sys.star2.color || [1, 0.7, 0.5];
+      star2R = Math.max(4, Math.min(12, (sys.star2.radiusSolar || 0.5) * 5));
+      star2P = project(star2Wx, 0, star2Wz);
+
+      // Companion glow
+      const grad2 = ctx.createRadialGradient(star2P.x, star2P.y, 0, star2P.x, star2P.y, star2R * 3);
+      grad2.addColorStop(0, `rgba(${Math.round(s2Color[0]*255)},${Math.round(s2Color[1]*255)},${Math.round(s2Color[2]*255)},0.25)`);
+      grad2.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad2;
+      ctx.beginPath(); ctx.arc(star2P.x, star2P.y, star2R * 3, 0, Math.PI * 2); ctx.fill();
+
+      // Companion body
+      ctx.fillStyle = `rgb(${Math.round(s2Color[0]*255)},${Math.round(s2Color[1]*255)},${Math.round(s2Color[2]*255)})`;
+      ctx.beginPath(); ctx.arc(star2P.x, star2P.y, star2R, 0, Math.PI * 2); ctx.fill();
+
+      // Subtle orbit rings for binary pair (dashed)
+      const q = sys.binaryMassRatio || 0.5;
+      const sepAU = sys.binarySeparationAU || 0.3;
+      const sep = auToScreen(sepAU);
+      const orbitR1 = sep * q / (1 + q);
+      const orbitR2 = sep * 1.0 / (1 + q);
+      const ORBIT_SEGS_BIN = 32;
+      ctx.setLineDash([2, 3]);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.lineWidth = 0.5;
+      for (const orbitR of [orbitR1, orbitR2]) {
+        ctx.beginPath();
+        for (let s = 0; s <= ORBIT_SEGS_BIN; s++) {
+          const a = (s / ORBIT_SEGS_BIN) * Math.PI * 2;
+          const p = project(Math.cos(a) * orbitR, 0, Math.sin(a) * orbitR);
+          if (s === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
 
     // ── Planets (depth-sorted) ──
     this._hoveredBody = null;
@@ -1359,23 +1460,37 @@ export class NavComputer {
         ctx.stroke();
       }
 
-      // Moons — small dots on tiny orbits around the planet
+      // Moons — small dots on 3D-projected orbits around the planet
       if (p.moons && p.moons.length > 0) {
+        const MOON_ORBIT_SEGS = 32;
         for (let m = 0; m < p.moons.length; m++) {
           const moon = p.moons[m];
-          // Moon orbit radius in screen space — scale relative to planet size
-          const moonOrbitR = baseR + 4 + m * 3.5;
-          // Moon position on its orbit (use startAngle for deterministic placement)
-          const moonAngle = moon.startAngle || (m * 2.4 + 0.7);
-          // Project the moon's 3D position (orbit is in the planet's local XZ plane)
-          const moonWx = wx + Math.cos(moonAngle) * moonOrbitR / projScale;
-          const moonWz = wz + Math.sin(moonAngle) * moonOrbitR / projScale;
-          const moonP = project(moonWx, 0, moonWz);
+          // Use actual orbit data with sqrt compression, matching _renderPlanetDetail
+          const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + m * 8));
+          // Scale moon orbits down so they're visible but compact in system view
+          // Planet orbits use auToScreen (sqrt of AU); moon orbits are in Earth-radii,
+          // so we need a conversion factor to make them visible relative to the planet
+          const moonOrbitScale = (baseR + 6 + m * 4) / (moonOrbitWorld * projScale);
+          const moonOrbitR = moonOrbitWorld * moonOrbitScale;
 
-          // Tiny orbit circle
+          // 3D-projected orbit circle (tilts with rotation like planet orbits)
           ctx.strokeStyle = 'rgba(150, 150, 150, 0.12)';
           ctx.lineWidth = 0.5;
-          ctx.beginPath(); ctx.arc(sp.x, sp.y, moonOrbitR, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath();
+          for (let s = 0; s <= MOON_ORBIT_SEGS; s++) {
+            const a = (s / MOON_ORBIT_SEGS) * Math.PI * 2;
+            const moWx = wx + Math.cos(a) * moonOrbitR;
+            const moWz = wz + Math.sin(a) * moonOrbitR;
+            const moP = project(moWx, 0, moWz);
+            if (s === 0) ctx.moveTo(moP.x, moP.y); else ctx.lineTo(moP.x, moP.y);
+          }
+          ctx.stroke();
+
+          // Moon position on its orbit (use startAngle for deterministic placement)
+          const moonAngle = moon.startAngle || (m * 2.4 + 0.7);
+          const moonWx = wx + Math.cos(moonAngle) * moonOrbitR;
+          const moonWz = wz + Math.sin(moonAngle) * moonOrbitR;
+          const moonP = project(moonWx, 0, moonWz);
 
           // Moon dot
           const moonR = Math.max(1.5, Math.min(3, 1 + (moon.radiusEarth || 0.1) * 3));
@@ -1388,7 +1503,7 @@ export class NavComputer {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(pd.type, sp.x, sp.y + baseR + 12);
+      ctx.fillText(`${starName}-${i + 1}`, sp.x, sp.y + baseR + 12);
 
       // Hover detection
       const mdx = this._mouseX - sp.x, mdy = this._mouseY - sp.y;
@@ -1397,10 +1512,17 @@ export class NavComputer {
       }
     }
 
-    // Star hover
+    // Star hover (primary)
     const sdx = this._mouseX - starP.x, sdy = this._mouseY - starP.y;
     if (sdx * sdx + sdy * sdy < (starR + 4) * (starR + 4)) {
-      this._hoveredBody = { type: 'star', index: -1, sx: starP.x, sy: starP.y };
+      this._hoveredBody = { type: 'star', index: 0, sx: starP.x, sy: starP.y };
+    }
+    // Star hover (binary companion)
+    if (star2P) {
+      const s2dx = this._mouseX - star2P.x, s2dy = this._mouseY - star2P.y;
+      if (s2dx * s2dx + s2dy * s2dy < (star2R + 4) * (star2R + 4)) {
+        this._hoveredBody = { type: 'star', index: 1, sx: star2P.x, sy: star2P.y };
+      }
     }
 
     // ── Hover: leader line callout ──
@@ -1410,7 +1532,7 @@ export class NavComputer {
       if (hb.type === 'planet') {
         const p = planets[hb.index];
         const pd = p.planetData;
-        title = `Planet ${hb.index + 1}`;
+        title = `${starName}-${hb.index + 1}`;
         lines = [
           `${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕`,
           `${p.orbitRadiusAU.toFixed(2)} AU`,
@@ -1423,10 +1545,19 @@ export class NavComputer {
         ctx.strokeStyle = 'rgba(100, 180, 255, 0.8)';
         ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(hb.sx, hb.sy, 10, 0, Math.PI * 2); ctx.stroke();
-      } else {
-        title = starName;
+      } else if (hb.index === 1 && sys.isBinary && sys.star2) {
+        // Companion star hover
+        title = starName + ' B';
         lines = [
-          `${sys.star.type} class`,
+          `${sys.star2.type} class (companion)`,
+          `${(sys.star2.radiusSolar || 0.5).toFixed(2)} R☉`,
+          `Sep: ${(sys.binarySeparationAU || 0).toFixed(3)} AU`,
+        ];
+      } else {
+        // Primary star hover
+        title = starName + (sys.isBinary ? ' A' : '');
+        lines = [
+          `${sys.star.type} class${sys.isBinary ? ' (primary)' : ''}`,
           `${(sys.star.radiusSolar || 1).toFixed(2)} R☉`,
           `Age: ${(sys.ageGyr || 0).toFixed(1)} Gyr`,
           `${planets.length} planet${planets.length !== 1 ? 's' : ''}`,
@@ -1436,6 +1567,114 @@ export class NavComputer {
       this._drawLeaderCallout(ctx, hb.sx, hb.sy, title, lines, w, drawH);
     }
 
+    // ── Ship position indicator + trajectory line ──
+    const isCurrent = this._isCurrentSystem();
+    if (isCurrent) {
+      // Compute ship's projected position based on which body the player is near
+      let shipP = null;
+      if (this._currentFocusIndex === -2 || this._currentFocusIndex === -1) {
+        // At star or system overview — ship is at center
+        shipP = project(0, 0, 0);
+      } else if (this._currentFocusIndex >= 0 && this._currentFocusIndex < planets.length) {
+        const cp = planets[this._currentFocusIndex];
+        const cpR = auToScreen(cp.orbitRadiusAU);
+        const cpAngle = cp.orbitAngle || 0;
+        const cpWx = Math.cos(cpAngle) * cpR;
+        const cpWz = Math.sin(cpAngle) * cpR;
+
+        if (this._currentMoonIndex >= 0 && cp.moons && this._currentMoonIndex < cp.moons.length) {
+          // At a moon — offset from planet position
+          // Must match the moon orbit formula used in rendering (lines 1465-1474)
+          const moon = cp.moons[this._currentMoonIndex];
+          const baseR = Math.max(4, Math.min(12, 3 + Math.log2(Math.max(0.5, cp.planetData.radiusEarth)) * 2.5));
+          const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + this._currentMoonIndex * 8));
+          const moonOrbitScale = (baseR + 6 + this._currentMoonIndex * 4) / (moonOrbitWorld * projScale);
+          const moonOrbitR = moonOrbitWorld * moonOrbitScale;
+          const moonAngle = moon.startAngle || (this._currentMoonIndex * 2.4 + 0.7);
+          const moonWx = cpWx + Math.cos(moonAngle) * moonOrbitR;
+          const moonWz = cpWz + Math.sin(moonAngle) * moonOrbitR;
+          shipP = project(moonWx, 0, moonWz);
+        } else {
+          // At a planet
+          shipP = project(cpWx, 0, cpWz);
+        }
+      }
+
+      // Draw ship diamond indicator
+      if (shipP) {
+        const s = 5; // half-size of diamond
+        ctx.fillStyle = '#00ff80';
+        ctx.strokeStyle = '#00ff80';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(shipP.x, shipP.y - s * 1.4); // top
+        ctx.lineTo(shipP.x + s, shipP.y);        // right
+        ctx.lineTo(shipP.x, shipP.y + s * 0.8);  // bottom
+        ctx.lineTo(shipP.x - s, shipP.y);        // left
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Small "SHIP" label
+        ctx.font = '7px "DotGothic16", monospace';
+        ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
+        ctx.textAlign = 'center';
+        ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        ctx.textAlign = 'left';
+
+        // ── Trajectory line from ship to hovered/selected body ──
+        const target = this._hoveredBody || this._selectedBody;
+        if (target) {
+          let destP = null;
+          if (target.type === 'star') {
+            destP = starP; // center of system
+          } else if (target.type === 'planet') {
+            const ti = target.index ?? target.planetIndex;
+            if (ti >= 0 && ti < planets.length) {
+              const tp = planets[ti];
+              const tR = auToScreen(tp.orbitRadiusAU);
+              const tAngle = tp.orbitAngle || 0;
+              destP = project(Math.cos(tAngle) * tR, 0, Math.sin(tAngle) * tR);
+            }
+          }
+          if (destP) {
+            // Dashed trajectory line — green for burn (current system)
+            const trajColor = '#00ff80';
+            ctx.strokeStyle = trajColor;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([6, 4]);
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(shipP.x, shipP.y);
+            ctx.lineTo(destP.x, destP.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1.0;
+
+            // Small arrowhead at destination end
+            const adx = destP.x - shipP.x, ady = destP.y - shipP.y;
+            const len = Math.sqrt(adx * adx + ady * ady);
+            if (len > 20) {
+              const ux = adx / len, uy = ady / len;
+              const arrowLen = 8;
+              const arrowW = 4;
+              const tipX = destP.x - ux * 12; // offset from body center
+              const tipY = destP.y - uy * 12;
+              ctx.fillStyle = trajColor;
+              ctx.globalAlpha = 0.6;
+              ctx.beginPath();
+              ctx.moveTo(tipX, tipY);
+              ctx.lineTo(tipX - ux * arrowLen + uy * arrowW, tipY - uy * arrowLen - ux * arrowW);
+              ctx.lineTo(tipX - ux * arrowLen - uy * arrowW, tipY - uy * arrowLen + ux * arrowW);
+              ctx.closePath();
+              ctx.fill();
+              ctx.globalAlpha = 1.0;
+            }
+          }
+        }
+      }
+    }
+
     // ── Header ──
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
@@ -1443,10 +1682,12 @@ export class NavComputer {
     ctx.fillText(starName, 16, 24);
     ctx.font = '11px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
-    ctx.fillText(`${sys.star?.type || '?'} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
+    const starTypeLabel = sys.isBinary && sys.star2
+      ? `${sys.star?.type || '?'}+${sys.star2.type} binary`
+      : `${sys.star?.type || '?'}`;
+    ctx.fillText(`${starTypeLabel} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
 
     // ── COMMIT button + hint ──
-    const isCurrent = this._isCurrentSystem();
     if (this._selectedBody && this._commitAction) {
       // Draw COMMIT button
       const btnText = isCurrent ? '[ COMMIT BURN ]' : '[ COMMIT WARP ]';
@@ -1588,7 +1829,6 @@ export class NavComputer {
         this._hoveredBody = { type: 'moon', index: m, sx: moonP.x, sy: moonP.y };
       }
     }
-
     // Moon hover tooltip
     if (this._hoveredBody && this._hoveredBody.type === 'moon') {
       const moon = moons[this._hoveredBody.index];
@@ -1597,14 +1837,101 @@ export class NavComputer {
         `${(moon.radiusEarth || 0.1).toFixed(2)} R⊕`,
       ];
       if (moon.isPlanetMoon) lines.push('Planet-class moon');
-      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, `Moon ${this._hoveredBody.index + 1}`, lines);
+      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, `${starName}-${idx + 1}${String.fromCharCode(97 + this._hoveredBody.index)}`, lines);
+    }
+
+    // ── Ship position indicator + trajectory line (planet detail) ──
+    const isCurrent = this._isCurrentSystem();
+    if (isCurrent && this._currentFocusIndex === idx) {
+      let shipP = null;
+      if (this._currentMoonIndex >= 0 && this._currentMoonIndex < moons.length) {
+        // Ship is at a specific moon
+        const shipMoon = moons[this._currentMoonIndex];
+        const shipMoonOrbitR = Math.sqrt(shipMoon.orbitRadiusEarth || (10 + this._currentMoonIndex * 8));
+        const shipMoonAngle = shipMoon.startAngle || (this._currentMoonIndex * 2.4);
+        const smx = Math.cos(shipMoonAngle) * shipMoonOrbitR;
+        const smz = Math.sin(shipMoonAngle) * shipMoonOrbitR;
+        shipP = project(smx, 0, smz);
+      } else {
+        // Ship is at the planet itself (center)
+        shipP = planetP;
+      }
+
+      if (shipP) {
+        // Draw ship diamond
+        const s = 5;
+        ctx.fillStyle = '#00ff80';
+        ctx.strokeStyle = '#00ff80';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(shipP.x, shipP.y - s * 1.4);
+        ctx.lineTo(shipP.x + s, shipP.y);
+        ctx.lineTo(shipP.x, shipP.y + s * 0.8);
+        ctx.lineTo(shipP.x - s, shipP.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '7px "DotGothic16", monospace';
+        ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
+        ctx.textAlign = 'center';
+        ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        ctx.textAlign = 'left';
+
+        // Trajectory line to hovered/selected moon
+        const target = this._hoveredBody || this._selectedBody;
+        if (target) {
+          let destP = null;
+          if (target.type === 'moon') {
+            const mi = target.index ?? target.moonIndex;
+            if (mi >= 0 && mi < moons.length) {
+              const tm = moons[mi];
+              const tmOrbitR = Math.sqrt(tm.orbitRadiusEarth || (10 + mi * 8));
+              const tmAngle = tm.startAngle || (mi * 2.4);
+              destP = project(Math.cos(tmAngle) * tmOrbitR, 0, Math.sin(tmAngle) * tmOrbitR);
+            }
+          } else if (target.type === 'planet') {
+            destP = planetP;
+          }
+          if (destP) {
+            const trajColor = '#00ff80';
+            ctx.strokeStyle = trajColor;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([6, 4]);
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(shipP.x, shipP.y);
+            ctx.lineTo(destP.x, destP.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1.0;
+
+            const adx = destP.x - shipP.x, ady = destP.y - shipP.y;
+            const len = Math.sqrt(adx * adx + ady * ady);
+            if (len > 20) {
+              const ux = adx / len, uy = ady / len;
+              const tipX = destP.x - ux * 12;
+              const tipY = destP.y - uy * 12;
+              ctx.fillStyle = trajColor;
+              ctx.globalAlpha = 0.6;
+              ctx.beginPath();
+              ctx.moveTo(tipX, tipY);
+              ctx.lineTo(tipX - ux * 8 + uy * 4, tipY - uy * 8 - ux * 4);
+              ctx.lineTo(tipX - ux * 8 - uy * 4, tipY - uy * 8 + ux * 4);
+              ctx.closePath();
+              ctx.fill();
+              ctx.globalAlpha = 1.0;
+            }
+          }
+        }
+      }
     }
 
     // ── Header ──
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
-    ctx.fillText(`${starName} — Planet ${idx + 1}`, 16, 24);
+    ctx.fillText(`${starName}-${idx + 1}`, 16, 24);
     ctx.font = '11px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
     ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
@@ -1616,7 +1943,6 @@ export class NavComputer {
     // ── Hint ──
     ctx.font = '10px "DotGothic16", monospace';
     // ── COMMIT button + hint ──
-    const isCurrent = this._isCurrentSystem();
     if (isCurrent && this._selectedBody && this._commitAction) {
       const btnText = '[ COMMIT BURN ]';
       const btnW = 180, btnH = 28;

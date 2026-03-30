@@ -485,6 +485,7 @@ function toggleNavComputer() {
       null
     );
     _navComputer._currentSystemName = _currentSystemName || 'Unknown';
+    _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
 
     // Direction 2: Sky → Nav Computer
     // If there's an active warp target, resolve its galactic position
