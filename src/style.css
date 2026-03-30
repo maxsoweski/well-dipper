@@ -722,8 +722,32 @@ html, body {
   letter-spacing: 6px;
   opacity: 0;
   transition: opacity 1.6s ease;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .intro-logo.visible {
   opacity: 1;
+}
+
+.deshe-title {
+  font-size: 96px;
+  letter-spacing: 18px;
+  display: block;
+}
+
+.deshe-sub {
+  font-size: 22px;
+  letter-spacing: 12px;
+  margin-top: 4px;
+  display: block;
+  text-transform: uppercase;
+}
+
+.intro-credit {
+  font-size: 24px;
+  letter-spacing: 3px;
+  line-height: 1.6;
 }
