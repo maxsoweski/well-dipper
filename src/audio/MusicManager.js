@@ -62,7 +62,7 @@ export class MusicManager {
    * Scans all channels; threshold is near-silence.
    */
   _trimBounds(buffer) {
-    const threshold = 0.005;
+    const threshold = 0.002;
     const len = buffer.length;
     const channels = buffer.numberOfChannels;
     let start = 0, end = len - 1;
@@ -82,6 +82,22 @@ export class MusicManager {
     }
 
     return { start, end: end + 1 };
+  }
+
+  /**
+   * Apply a short crossfade ramp at the start and end of a buffer so that
+   * loop = true produces a seamless loop with no click at the boundary.
+   */
+  _applyLoopFade(buffer) {
+    const fadeSamples = Math.min(256, Math.floor(buffer.length / 4));
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < fadeSamples; i++) {
+        const t = i / fadeSamples; // 0 → 1
+        data[i] *= t;
+        data[buffer.length - 1 - i] *= t;
+      }
+    }
   }
 
   /**
@@ -110,6 +126,7 @@ export class MusicManager {
         for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
           trimmed.copyToChannel(decoded.getChannelData(ch).subarray(bounds.start, bounds.end), ch);
         }
+        this._applyLoopFade(trimmed);
         this._buffers[name] = trimmed;
         break;
       } catch {
@@ -251,5 +268,11 @@ export class MusicManager {
   /** Name of the currently playing track, or null. */
   get currentTrack() {
     return this._currentTrack?.name ?? null;
+  }
+
+  /** Get the duration of a loaded track in seconds, or 0 if not loaded. */
+  getDuration(name) {
+    const buf = this._buffers[name];
+    return buf ? buf.duration : 0;
   }
 }

@@ -196,7 +196,7 @@ function startIntroSequence() {
   overlay.style.display = '';
 
   // Start intro music immediately (one-shot, plays over the logo sequence)
-  musicManager.playOnce('intro');
+  musicManager.playOnce('intro', 0.8);
 
   // Timeline (~12 seconds total):
   //   0.0s — Logo 1 fades in
@@ -226,11 +226,13 @@ function startIntroSequence() {
     titleScreenActive = true;
     // Start looping title theme
     musicManager.play('title');
-    // Start auto-dismiss timer NOW (not at page load) so it counts from when the title is visible
+    // Auto-dismiss after 8 loops of the title track (no user input)
     if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
+    const titleDur = musicManager.getDuration('title');
+    const autoDismissMs = titleDur > 0 ? titleDur * 8 * 1000 : settings.get('titleAutoDismiss') * 1000;
     _titleAutoTimer = setTimeout(() => {
       if (titleScreenActive) dismissTitleScreen();
-    }, settings.get('titleAutoDismiss') * 1000);
+    }, autoDismissMs);
   }, 8000);
 }
 
