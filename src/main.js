@@ -355,11 +355,7 @@ function dismissTitleScreen() {
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
   musicManager.stop(0.5);
-  // Restore galaxy glow (hidden during title screen)
-  if (skyRenderer._glowLayer?.mesh) {
-    skyRenderer._glowLayer.mesh._hiddenForTitle = false;
-    skyRenderer._glowLayer.mesh.visible = true;
-  }
+  // Galaxy glow stays hidden until warp (restored in onSwapSystem)
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
@@ -1156,6 +1152,11 @@ warpEffect.onSwapSystem = () => {
   // Now create GPU resources — hidden behind the opaque warp tunnel.
   skyRenderer.activate();
   skyRenderer.update(camera, 0);
+  // Restore galaxy glow (hidden during title screen)
+  if (skyRenderer._glowLayer?.mesh) {
+    skyRenderer._glowLayer.mesh._hiddenForTitle = false;
+    skyRenderer._glowLayer.mesh.visible = true;
+  }
 };
 
 // When warp exit finishes, reveal the new system and restart autopilot
