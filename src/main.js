@@ -3272,7 +3272,7 @@ function warpSwapSystem() {
       // Star system: approach toward the star
       const star = system.star;
       const starPos = star.mesh.position;
-      const innerOrbit = system.planets[0].orbitRadius;
+      const innerOrbit = system.planets.length > 0 ? system.planets[0].orbitRadius : star.data.radius * 10;
       const orbitDist = Math.min(star.data.radius * 8, innerOrbit * 0.6);
 
       camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
