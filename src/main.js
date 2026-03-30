@@ -471,6 +471,7 @@ function closeNavComputer() {
 
 function dispatchNavAction(action) {
   if (!action) return;
+  console.log(`[NAV DISPATCH] type=${action.type}, target=${action.target}, star=${action.star?.name} seed=${action.star?.seed}`);
 
   if (action.type === 'burn') {
     // In-system transit — same focus functions as Tab/1-9 keys
