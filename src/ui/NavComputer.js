@@ -181,6 +181,27 @@ export class NavComputer {
     this._resizeCanvas();
   }
 
+  /** Open directly to the system view for the current system. */
+  openToCurrentSystem() {
+    const nearest = this._findNearestStar();
+    if (nearest) {
+      this._systemStar = nearest;
+      this._selectedNavStar = nearest;
+      this._externalTarget = { x: nearest.wx, y: nearest.wy, z: nearest.wz, name: nearest.name || '' };
+      // Use actual system data if available
+      if (this._currentSystemData) {
+        this._systemData = this._currentSystemData;
+      } else {
+        this._systemData = null; // will regenerate in _renderSystem
+      }
+      this._hoveredBody = null;
+      this._systemMode = 'system';
+      this._systemZoom = 1.0;
+      this._clearCommitSelection();
+      this._levelIndex = 4;
+    }
+  }
+
   _resizeCanvas() {
     const rect = this._canvas.getBoundingClientRect();
     if (this._canvas.width !== rect.width || this._canvas.height !== rect.height) {

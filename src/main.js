@@ -489,6 +489,8 @@ function toggleNavComputer() {
     _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
     // Pass actual spawned system data so nav shows correct planet count
     if (system) _navComputer.setCurrentSystemData(system._systemData || null);
+    // Always open to the current system view
+    _navComputer.openToCurrentSystem();
 
     // Direction 2: Sky → Nav Computer
     // If there's an active warp target, resolve its galactic position
