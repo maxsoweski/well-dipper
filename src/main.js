@@ -226,18 +226,19 @@ function startIntroSequence() {
     titleScreenActive = true;
     // Start looping title theme
     musicManager.play('title');
-    // After one full loop: stop music, wait 5s silence, then auto-dismiss
+    // After 3 loops: stop music, wait 5s silence, then auto-dismiss
     if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
     const titleDur = musicManager.getDuration('title');
+    const titleLoops = 3;
     if (titleDur > 0) {
-      // Stop music at end of first loop
+      // Stop music at end of Nth loop
       _titleAutoTimer = setTimeout(() => {
         musicManager.stop(1.0);
         // 5 seconds of silence, then auto-warp
         _titleAutoTimer = setTimeout(() => {
           if (titleScreenActive) dismissTitleScreen();
         }, 5000);
-      }, titleDur * 1000);
+      }, titleDur * titleLoops * 1000);
     } else {
       // Fallback: stop music after default timeout, then 5s silence
       const fallbackMs = settings.get('titleAutoDismiss') * 1000;
@@ -806,8 +807,7 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   // Only use distant-view types so the object is visible as a whole showcase.
   // Nebulae use NebulaGenerator (distant billboard), not NavigableNebulaGenerator.
   // destType uses 'title-*-nebula' to avoid isNavigable() routing in spawnSystem.
-  const deepSkyTypes = ['spiral-galaxy', 'elliptical-galaxy', 'emission-nebula',
-                         'planetary-nebula', 'globular-cluster', 'open-cluster'];
+  const deepSkyTypes = ['emission-nebula', 'planetary-nebula'];
   const titleType = deepSkyTypes[titleRng.int(0, deepSkyTypes.length - 1)];
   let titleData;
   if (titleType.includes('galaxy')) {
