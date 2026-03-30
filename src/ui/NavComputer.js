@@ -232,6 +232,20 @@ export class NavComputer {
     };
   }
 
+  /** Find the star nearest to the player's position in _localStars. */
+  _findNearestStar() {
+    if (!this._localStars || this._localStars.length === 0) return null;
+    let best = null, bestDist = Infinity;
+    for (const s of this._localStars) {
+      const dx = s.wx - this._playerX;
+      const dy = s.wy - this._playerY;
+      const dz = s.wz - this._playerZ;
+      const d = dx * dx + dy * dy + dz * dz;
+      if (d < bestDist) { bestDist = d; best = s; }
+    }
+    return best;
+  }
+
   /** Check if the currently viewed system is the player's current system. */
   _isCurrentSystem() {
     if (!this._systemStar) return false;
@@ -2743,8 +2757,19 @@ export class NavComputer {
             idx, 350
           );
         } else {
-          // System tab needs a star selected first — ignore if no system data
-          if (idx === 4 && !this._systemData) return;
+          // System tab — if no star selected, auto-select the nearest star to the player
+          if (idx === 4 && !this._systemData) {
+            const nearest = this._findNearestStar();
+            if (!nearest) return;
+            this._systemStar = nearest;
+            this._selectedNavStar = nearest;
+            this._externalTarget = { x: nearest.wx, y: nearest.wy, z: nearest.wz, name: nearest.name || '' };
+            this._systemData = null;
+            this._hoveredBody = null;
+            this._systemMode = 'system';
+            this._systemZoom = 1.0;
+            this._clearCommitSelection();
+          }
           if (this._onDrillSound) this._onDrillSound(idx);
           this._levelIndex = idx;
           this._applyLevelView();

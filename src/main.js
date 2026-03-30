@@ -142,8 +142,6 @@ let currentGalaxyStar = null; // the GalacticMap star entry we're currently at
 const skyRenderer = new SkyRenderer(galacticMap, StarfieldGenerator, settings.get('starDensity'));
 skyRenderer.prepareForPosition(playerGalacticPos);
 skyRenderer.activate();
-// Hide galaxy glow during title screen — show only starfield + nebula
-if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = false;
 retroRenderer.setSkyRenderer(skyRenderer);
 
 // ── Real Star Catalog ──
@@ -357,8 +355,6 @@ function dismissTitleScreen() {
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
   musicManager.stop(0.5);
-  // Restore galaxy glow (hidden during title screen)
-  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
@@ -1223,30 +1219,32 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   return best;
 }
 
-// ── Title screen: spawn a random nebula as the backdrop ──
+// ── Title screen: abandoned location (sparse inter-arm gap) ──
+// Position the camera in the void between spiral arms — lonely, atmospheric.
+// The galaxy glow is visible in the distance but few nearby stars.
 {
-  const titleSeed = `title-${Date.now()}`;
-  const titleRng = new SeededRandom(titleSeed);
-  const deepSkyTypes = ['emission-nebula', 'planetary-nebula'];
-  const titleType = deepSkyTypes[titleRng.int(0, deepSkyTypes.length - 1)];
-  const titleData = NebulaGenerator.generate(titleSeed, titleType);
-  titleData._destType = `title-${titleType}`;
-  // Use master-style simple nebula rendering for the title screen —
-  // zero out the advanced procedural parameters (domain warp, dark lanes, etc.)
-  for (const layer of titleData.layers || []) {
-    layer.domainWarpStrength = 3.5; // master default
-    layer.darkLaneStrength = 0;
-    layer.asymmetry = 0;
-    layer.brightnessShape = 0;
-  }
-  spawnSystem({ systemData: titleData });
+  const titleRng = new SeededRandom(`title-${Date.now()}`);
+  // Pick a random inter-arm angle (90° offsets from major arms at 0 and π)
+  const interArmAngles = [Math.PI * 0.5, Math.PI * 1.5, Math.PI * 0.25, Math.PI * 1.25];
+  const theta = interArmAngles[titleRng.int(0, interArmAngles.length - 1)];
+  const R = 5.5 + titleRng.float() * 3.0; // 5.5–8.5 kpc from center
+  const yOffset = 0.8 + titleRng.float() * 0.8; // 0.8–1.6 kpc above disk
+  const titlePos = {
+    x: R * Math.cos(theta),
+    y: yOffset,
+    z: R * Math.sin(theta),
+  };
+  // Move the sky renderer to this sparse position and show the galaxy glow
+  skyRenderer.prepareForPosition(titlePos);
+  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
 
-  const r = titleData.radius || 200;
-  const orbitCenter = new THREE.Vector3(0, 0, 0);
-  camera.position.set(0, 0, r * 1.25);
-  camera.lookAt(orbitCenter);
-  cameraController.restoreFromWorldState(orbitCenter);
-  cameraController.autoRotateSpeed = 3.0;
+  // No system to spawn — just the starfield and galaxy glow in the void
+  camera.position.set(0, 0, 0);
+  // Look toward the galactic center (the bright part of the sky)
+  const lookDir = new THREE.Vector3(-titlePos.x, -titlePos.y * 0.3, -titlePos.z).normalize().multiplyScalar(100);
+  camera.lookAt(lookDir);
+  cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+  cameraController.autoRotateSpeed = 0.5; // Very slow drift through the void
 
   // Auto-dismiss timer is now started by startIntroSequence() when the title actually appears.
 
