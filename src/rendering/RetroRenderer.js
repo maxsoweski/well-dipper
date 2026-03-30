@@ -714,6 +714,9 @@ export class RetroRenderer {
       }
 
       // Hide features, render glow + stars
+      // Respect _hiddenForTitle flag — don't render glow if intentionally hidden
+      const glowHidden = glowMesh?._hiddenForTitle;
+      if (glowHidden && glowMesh) glowMesh.visible = false;
       if (featureGroup) featureGroup.visible = false;
       r.render(skyScene, this.camera);
 
@@ -724,7 +727,7 @@ export class RetroRenderer {
       r.autoClear = false;
       r.render(skyScene, this.camera);
       r.autoClear = true;
-      if (glowMesh) glowMesh.visible = true;
+      if (glowMesh && !glowHidden) glowMesh.visible = true;
       if (starMesh) starMesh.visible = true;
     } else {
       r.render(skyScene, this.camera);
