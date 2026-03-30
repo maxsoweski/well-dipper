@@ -230,15 +230,18 @@ function startIntroSequence() {
       const titleDur = musicManager.getDuration('title');
       const titleLoops = 4;
       const silenceGap = 3000;
-      console.log(`[Title] track duration=${titleDur.toFixed(2)}s, ${titleLoops} loops = ${(titleDur*titleLoops).toFixed(1)}s + ${silenceGap/1000}s silence`);
+      const musicMs = titleDur * titleLoops * 1000;
+      console.log(`[Title] duration=${titleDur.toFixed(2)}s × ${titleLoops} = ${(musicMs/1000).toFixed(1)}s music + ${silenceGap/1000}s silence = ${((musicMs+silenceGap)/1000).toFixed(1)}s total`);
       if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
       if (titleDur > 0) {
         _titleAutoTimer = setTimeout(() => {
+          console.log('[Title] Stopping music now');
           musicManager.stop(1.0);
           _titleAutoTimer = setTimeout(() => {
+            console.log('[Title] Auto-dismissing now');
             if (titleScreenActive) dismissTitleScreen();
           }, silenceGap);
-        }, titleDur * titleLoops * 1000);
+        }, musicMs);
       }
     });
   }, 8000);
