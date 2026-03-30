@@ -3411,6 +3411,13 @@ function findClosestBody() {
   return closest;
 }
 
+/** Sync the nav computer's body tracking with current focus (if nav is open). */
+function _syncNavBody() {
+  if (_navComputerOpen && _navComputer) {
+    _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  }
+}
+
 /**
  * Focus the camera on a specific planet (by index), or overview if -1.
  */
@@ -3436,6 +3443,7 @@ function focusPlanet(index) {
     bodyInfo.showPlanet(entry.planet.data, index, pName);
     console.log(`Focus: planet ${index + 1} ${pName || ''} (${entry.planet.data.type})`);
   }
+  _syncNavBody();
 }
 
 /**
@@ -3475,6 +3483,7 @@ function focusStar(starIdx) {
     ? (starIdx === 0 ? 'primary star' : 'secondary star')
     : 'star';
   console.log(`Focus: ${label} ${sName || ''} (${starObj.data.type}-class)`);
+  _syncNavBody();
 }
 
 /**
@@ -3497,6 +3506,7 @@ function focusMoon(planetIndex, moonIndex) {
   const mName = system.names?.planets?.[planetIndex]?.moons?.[moonIndex] ?? null;
   bodyInfo.showMoon(moon.data, planetIndex, mName);
   console.log(`Focus: moon ${moonIndex + 1} ${mName || ''} of planet ${planetIndex + 1} (${moon.data.type})`);
+  _syncNavBody();
 }
 
 function toggleOrbits() {
