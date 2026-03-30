@@ -4116,12 +4116,8 @@ function animate() {
     // Skip idle timer during warp or title screen (title has its own 30s timer)
     if (warpEffect.isActive || splashActive || titleScreenActive) {
       // Warp, splash, or title screen is active — don't start autopilot
-    } else if (!autoNav.isActive) {
-      idleTimer += deltaTime;
-      if (idleTimer >= settings.get('idleTimeout')) {
-        startFlythrough();
-      }
     } else if (flythrough.active) {
+      // Flythrough runs whether autoNav is active or not (manual burns use it too)
       const result = flythrough.update(deltaTime);
 
       // "Now targeting" — 2s before orbit ends, blink the next target
@@ -4159,6 +4155,12 @@ function animate() {
           cameraController.bypassed = false;
           cameraController.restoreFromWorldState(camera.position.clone());
         }
+      }
+    } else if (!autoNav.isActive) {
+      // No warp, no flythrough, no autopilot — run idle timer
+      idleTimer += deltaTime;
+      if (idleTimer >= settings.get('idleTimeout')) {
+        startFlythrough();
       }
     }
 
