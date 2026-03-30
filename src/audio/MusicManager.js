@@ -122,6 +122,7 @@ export class MusicManager {
         // Trim silence from MP3 encoder padding for gapless looping
         const bounds = this._trimBounds(decoded);
         const trimLen = bounds.end - bounds.start;
+        console.log(`[Music] ${name}: raw=${decoded.duration.toFixed(2)}s, trimmed=${(trimLen/decoded.sampleRate).toFixed(2)}s (cut ${((decoded.length-trimLen)/decoded.sampleRate*1000).toFixed(0)}ms)`);
         const trimmed = ctx.createBuffer(decoded.numberOfChannels, trimLen, decoded.sampleRate);
         for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
           trimmed.copyToChannel(decoded.getChannelData(ch).subarray(bounds.start, bounds.end), ch);

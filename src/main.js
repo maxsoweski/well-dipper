@@ -226,27 +226,28 @@ function startIntroSequence() {
     titleScreenActive = true;
     // Start looping title theme
     musicManager.play('title');
-    // After 3 loops: stop music, wait 5s silence, then auto-dismiss
+    // After N loops: stop music, wait for silence, then auto-dismiss
     if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
     const titleDur = musicManager.getDuration('title');
-    const titleLoops = 3;
+    const titleLoops = 4;
+    const silenceGap = 3000; // ms of silence before auto-warp
+    console.log(`[Title] track duration=${titleDur.toFixed(2)}s, ${titleLoops} loops = ${(titleDur*titleLoops).toFixed(1)}s + ${silenceGap/1000}s silence`);
     if (titleDur > 0) {
       // Stop music at end of Nth loop
       _titleAutoTimer = setTimeout(() => {
         musicManager.stop(1.0);
-        // 5 seconds of silence, then auto-warp
         _titleAutoTimer = setTimeout(() => {
           if (titleScreenActive) dismissTitleScreen();
-        }, 5000);
+        }, silenceGap);
       }, titleDur * titleLoops * 1000);
     } else {
-      // Fallback: stop music after default timeout, then 5s silence
+      // Fallback: stop music after default timeout, then silence gap
       const fallbackMs = settings.get('titleAutoDismiss') * 1000;
       _titleAutoTimer = setTimeout(() => {
         musicManager.stop(1.0);
         _titleAutoTimer = setTimeout(() => {
           if (titleScreenActive) dismissTitleScreen();
-        }, 5000);
+        }, silenceGap);
       }, fallbackMs);
     }
   }, 8000);
