@@ -92,6 +92,7 @@ export class NavComputer {
     this._commitAction = null;       // { type: 'burn'|'warp', target, planetIndex, moonIndex, star }
     this._commitButtonRect = null;   // { x, y, w, h } for click hit testing
     this._onCommit = null;           // callback: (action) => void
+    this._pendingAction = null;      // set by COMMIT click, read by main.js closeNavComputer()
     this._onDrillSound = null;       // callback: (levelIndex) => void — plays level-appropriate sound
     this._onSound = null;            // callback: (soundName) => void — plays named SFX
     this._currentSystemData = null;  // actual spawned system data from main.js

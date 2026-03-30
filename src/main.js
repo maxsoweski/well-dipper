@@ -405,128 +405,92 @@ let _navComputerOpen = false;
 let _navComputer = null;
 let _navAnimFrame = null;
 
-function toggleNavComputer() {
+// ── Nav Computer: open / close / dispatch (separated concerns) ──
+
+function _initNavComputer() {
+  const navCanvas = document.getElementById('nav-computer-canvas');
+  _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
+  if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
+
+  // COMMIT button → request close (action retrieved via nav.close())
+  _navComputer.setCommitCallback((action) => {
+    // Store the action, then close — dispatchNavAction reads it
+    _navComputer._pendingAction = action;
+    closeNavComputer();
+  });
+
+  // Audio bridges
+  _navComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
+  _navComputer.setSoundCallback((name) => soundEngine.play(name));
+}
+
+function openNavComputer() {
   const el = document.getElementById('nav-computer-overlay');
-  if (!el) return;
-  _navComputerOpen = !_navComputerOpen;
-  soundEngine.play(_navComputerOpen ? 'navOpen' : 'navClose');
-  if (_navComputerOpen) {
-    el.style.display = 'flex';
-    // Initialize nav computer if needed
-    if (!_navComputer) {
-      const navCanvas = document.getElementById('nav-computer-canvas');
-      _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
-      if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
+  if (!el || _navComputerOpen) return;
+  _navComputerOpen = true;
+  soundEngine.play('navOpen');
+  el.style.display = 'flex';
 
-      // Wire COMMIT BURN/WARP callback
-      _navComputer.setCommitCallback((action) => {
-        // Clear nav star selection BEFORE closing — prevents toggleNavComputer's
-        // close path from arming a warp target (it reads getSelectedStar on close)
-        _navComputer._selectedNavStar = null;
+  if (!_navComputer) _initNavComputer();
 
-        setTimeout(() => {
-          toggleNavComputer();
+  // Sync state
+  _navComputer.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 }, null);
+  _navComputer._currentSystemName = _currentSystemName || 'Unknown';
+  _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  if (system) _navComputer.setCurrentSystemData(system._systemData || null);
+  _navComputer.openToCurrentSystem();
 
-          if (action.type === 'burn') {
-            // In-system transit — use autoNav if active, else direct focus
-            let handled = false;
-            if (autoNav.isActive) {
-              let stop = null;
-              if (action.target === 'star') stop = autoNav.jumpToStar();
-              else if (action.target === 'planet') stop = autoNav.jumpToPlanet(action.planetIndex);
-              if (stop?.bodyRef) {
-                flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
-                handled = true;
-              }
-            }
-            if (!handled) {
-              // Direct camera focus — pass .position (Vector3), not the mesh itself
-              if (action.target === 'star' && system?.star?.mesh) {
-                focusIndex = -1;
-                focusMoonIndex = -1;
-                const r = system._systemData?.star?.radiusScene || system.star?._renderRadius || 5;
-                cameraController.focusOn(system.star.mesh.position, Math.max(r * 4, 20));
-              } else if (action.target === 'planet') {
-                const entry = system?.planets?.[action.planetIndex];
-                if (entry?.planet?.mesh) {
-                  focusIndex = action.planetIndex;
-                  focusMoonIndex = -1;
-                  const r = entry.planet.mesh.geometry?.parameters?.radius || entry.orbitRadius * 0.1 || 10;
-                  cameraController.focusOn(entry.planet.mesh.position, Math.max(r * 5, 8));
-                }
-              } else if (action.target === 'moon') {
-                const entry = system?.planets?.[action.planetIndex];
-                const moon = entry?.moons?.[action.moonIndex];
-                if (moon?.mesh) {
-                  focusIndex = action.planetIndex;
-                  focusMoonIndex = action.moonIndex;
-                  const r = moon.mesh.geometry?.parameters?.radius || 2;
-                  cameraController.focusOn(moon.mesh.position, Math.max(r * 5, 4));
-                }
-              }
-            }
-          } else if (action.type === 'warp') {
-            // Inter-system warp
-            _setWarpTargetFromNavStar({
-              worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
-              seed: action.star.seed, name: action.star.name, type: action.star.spectral,
-            });
-            setTimeout(() => beginWarpTurn(), 500);
-          }
-        }, 0);
-      });
-
-      // Wire drill level sounds — pitch varies by zoom level
-      _navComputer.setDrillSoundCallback((levelIdx) => {
-        soundEngine.play(`navDrill${levelIdx}`);
-      });
-
-      // Wire general nav UI sounds
-      _navComputer.setSoundCallback((name) => {
-        soundEngine.play(name);
-      });
-    }
-    // Update player position and system name
-    _navComputer.setPlayerPosition(
-      playerGalacticPos || { x: 8, y: 0, z: 0 },
-      null
-    );
-    _navComputer._currentSystemName = _currentSystemName || 'Unknown';
-    _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
-    // Pass actual spawned system data so nav shows correct planet count
-    if (system) _navComputer.setCurrentSystemData(system._systemData || null);
-    // Always open to the current system view
-    _navComputer.openToCurrentSystem();
-
-    // Direction 2: Sky → Nav Computer
-    // If there's an active warp target, resolve its galactic position
-    // and pass it to the nav computer so all zoom levels can show it.
-    if (warpTarget.direction && galacticMap) {
-      const targetWorldPos = _resolveWarpTargetGalacticPos();
-      _navComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
-    } else {
-      _navComputer.setExternalTarget(null);
-    }
-
-    // Activate key listeners + start render loop
-    _navComputer.activate();
-    _navRenderLoop();
+  // Pass existing warp target for display
+  if (warpTarget.direction && galacticMap) {
+    const targetWorldPos = _resolveWarpTargetGalacticPos();
+    _navComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
   } else {
-    // Direction 1: Nav Computer → Warp
-    // If the user selected a star in the nav computer, set it as the warp target.
-    if (_navComputer) {
-      const navStar = _navComputer.getSelectedStar();
-      if (navStar) {
-        _setWarpTargetFromNavStar(navStar);
-      }
-      _navComputer.deactivate();
-    }
-    el.style.display = 'none';
-    if (_navAnimFrame) {
-      cancelAnimationFrame(_navAnimFrame);
-      _navAnimFrame = null;
-    }
+    _navComputer.setExternalTarget(null);
   }
+
+  _navComputer.activate();
+  _navRenderLoop();
+}
+
+function closeNavComputer() {
+  const el = document.getElementById('nav-computer-overlay');
+  if (!el || !_navComputerOpen) return;
+  _navComputerOpen = false;
+  soundEngine.play('navClose');
+
+  // Read and dispatch any pending action
+  const action = _navComputer?._pendingAction || null;
+  _navComputer._pendingAction = null;
+
+  if (_navComputer) _navComputer.deactivate();
+  el.style.display = 'none';
+  if (_navAnimFrame) { cancelAnimationFrame(_navAnimFrame); _navAnimFrame = null; }
+
+  dispatchNavAction(action);
+}
+
+function dispatchNavAction(action) {
+  if (!action) return;
+
+  if (action.type === 'burn') {
+    // In-system transit — same focus functions as Tab/1-9 keys
+    if (action.target === 'star') focusStar(0);
+    else if (action.target === 'planet') focusPlanet(action.planetIndex);
+    else if (action.target === 'moon') focusMoon(action.planetIndex, action.moonIndex);
+  } else if (action.type === 'warp') {
+    // Inter-system warp
+    _setWarpTargetFromNavStar({
+      worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
+      seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+    });
+    setTimeout(() => beginWarpTurn(), 500);
+  }
+}
+
+// Legacy toggle for keybind compatibility
+function toggleNavComputer() {
+  if (_navComputerOpen) closeNavComputer();
+  else openNavComputer();
 }
 
 /**
