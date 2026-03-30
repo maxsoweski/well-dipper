@@ -1735,6 +1735,12 @@ export class NavComputer {
     ctx.fillText(`${starTypeLabel} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
 
     // ── COMMIT button + hint ──
+    // Foreign system: always show COMMIT WARP (warp to the star)
+    if (!isCurrent && !this._commitAction) {
+      this._selectedBody = { type: 'star' };
+      this._commitAction = this._buildCommitAction();
+      this._selectedNavStar = this._systemStar;
+    }
     if (this._selectedBody && this._commitAction) {
       // Draw COMMIT button
       const btnText = isCurrent ? '[ COMMIT BURN ]' : '[ COMMIT WARP ]';
