@@ -227,12 +227,22 @@ const warpTarget = {
   lockBlinkFrames: 0, // frame counter for rapid lock-on blink
 };
 
+// Track how many full tour cycles have completed for the current system.
+// Used to auto-warp out of navigable deep sky after enough touring.
+let _tourCycleCount = 0;
+
 // When the tour visits every body, auto-select a visible star and warp toward it.
 // Brackets blink for 1.5s, then camera turns to face it, then warp fires.
 autoNav.onTourComplete = () => {
-  // Navigable deep sky (nebulae, open clusters): just loop the tour.
-  // The user can manually warp with Space when they want to leave.
-  if (system && system._navigable) return;
+  _tourCycleCount++;
+
+  // Navigable deep sky (nebulae, open clusters): loop the tour for 2 cycles,
+  // then auto-warp away so the screensaver doesn't get stuck.
+  if (system && system._navigable) {
+    if (_tourCycleCount < 2) return; // keep touring
+    // 2 full cycles done — time to leave
+    console.log('[NAV] Navigable deep sky: 2 tour cycles done, auto-warping out');
+  }
 
   autoSelectWarpTarget();
   // Only begin warp if we actually found a target star
@@ -1329,6 +1339,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   warpTarget.direction = null;
   warpTarget.name = null;
   warpTarget.starIndex = -1;
+  warpTarget.navStarData = null;
+  warpTarget.destType = null;
+  warpTarget.featureData = null;
+  warpTarget.galaxyData = null;
+  _tourCycleCount = 0;
   const wasAutopilot = debugCamera ? false : autoNav.isActive;
 
   // Reset camera far plane (may have been extended for navigable nebulae)
@@ -3108,6 +3123,9 @@ function updateFocusFromStop(stop) {
  */
 function startFlythrough() {
   if (!system) return;
+  // Don't start autopilot during warp — the warp pipeline owns the camera
+  // and warpRevealSystem will start the tour for the new system.
+  if (warpEffect.isActive) return;
   soundEngine.play('autopilotOn');
 
   if (system._navigable) {
@@ -3197,6 +3215,9 @@ function warpSwapSystem() {
   // Stop autopilot (don't restore camera — warp controls it)
   flythrough.stop();
   autoNav.stop();
+  // Cancel any stale deep sky linger timer from the previous system
+  // (e.g., title screen auto-dismiss sets this during warp)
+  _deepSkyLingerTimer = -1;
 
   // Create new system using pre-generated data (GPU resource creation only).
   // seedCounter was already incremented in onPrepareSystem.
@@ -3428,10 +3449,16 @@ function focusPlanet(index) {
   focusMoonIndex = -1;
   focusStarIndex = -1;
 
-  if (index < 0 || index >= system.planets.length) {
+  if (index < 0 || index >= system.planets.length || system.planets.length === 0) {
     focusIndex = -1;
-    const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
-    cameraController.viewSystem(outerOrbit);
+    if (system.planets.length > 0) {
+      const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
+      cameraController.viewSystem(outerOrbit);
+    } else {
+      // 0-planet system: orbit the star instead
+      const starR = system.star ? system.star.data.radius : 5;
+      cameraController.viewSystem(starR * 10);
+    }
     bodyInfo.hide();
     console.log('System overview');
   } else {
@@ -4344,8 +4371,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // N key: toggle nav computer
-  if (e.code === 'KeyN' && !titleScreenActive) {
+  // N key: toggle nav computer (blocked during warp)
+  if (e.code === 'KeyN' && !titleScreenActive && !warpEffect.isActive) {
     toggleNavComputer();
     return;
   }
@@ -4622,6 +4649,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (!system) return;
     const n = system.planets.length;
+    if (n === 0) return; // no planets to cycle through
     if (e.shiftKey) {
       focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
     } else {
@@ -5157,10 +5185,12 @@ if (mobileControls) {
     } else if (action === 'prev') {
       if (!system) return;
       const n = system.planets.length;
+      if (n === 0) return;
       focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
     } else if (action === 'next') {
       if (!system) return;
       const n = system.planets.length;
+      if (n === 0) return;
       focusPlanet((focusIndex + 1) % n);
     } else if (action === 'orbits') {
       toggleOrbits();
