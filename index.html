@@ -70,6 +70,7 @@
           <span class="kb-key">T</span><span class="kb-desc">Sound test</span>
           <span class="kb-key">DOWN</span><span class="kb-desc">Debug panel</span>
           <span class="kb-key">`</span><span class="kb-desc">Debug HUD</span>
+          <span class="kb-key">X</span><span class="kb-desc">Pretext Lab (text experiments)</span>
           <span class="kb-key">K</span><span class="kb-desc">Toggle this overlay</span>
         </div>
         <p class="keybinds-dismiss">K or ESC to close</p>
@@ -241,6 +242,14 @@
         <button class="speed-dial-btn" data-action="orbits" title="Orbits">&#x25CE;</button>
         <button class="speed-dial-btn" data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
         <button class="speed-dial-btn" data-action="settings" title="Settings">&#x2630;</button>
+      </div>
+    </div>
+
+    <!-- Pretext Lab overlay (toggled with X) -->
+    <div id="pretext-lab-overlay" style="display:none;">
+      <div class="pretext-lab-panel">
+        <button class="overlay-close" aria-label="Close">&times;</button>
+        <canvas id="pretext-lab-canvas"></canvas>
       </div>
     </div>
 
