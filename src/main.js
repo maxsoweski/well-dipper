@@ -1,14 +1,21 @@
 import './style.css';
 import * as THREE from 'three';
-import { Starfield } from './objects/Starfield.js';
 import { StarFlare } from './objects/StarFlare.js';
+import { RealStarCatalog } from './generation/RealStarCatalog.js';
+import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
+import { HashGridStarfield } from './generation/HashGridStarfield.js';
+import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
+import { BodyRenderer } from './rendering/objects/BodyRenderer.js';
+import { LODManager } from './rendering/LODManager.js';
+import { DebugPanel } from './ui/DebugPanel.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
 import { GravityWellMap } from './ui/GravityWellMap.js';
-import { CameraController } from './camera/CameraController.js';
+// import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
+import { ShipCameraSystem } from './camera/ShipCameraSystem.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
@@ -23,6 +30,7 @@ import { VolumetricNebula } from './objects/VolumetricNebula.js';
 import { NavigableNebulaGenerator } from './generation/NavigableNebulaGenerator.js';
 import { NavigableClusterGenerator } from './generation/NavigableClusterGenerator.js';
 import { generateSolarSystem } from './generation/SolarSystemData.js';
+import { KnownSystems } from './generation/KnownSystems.js';
 import { SeededRandom } from './generation/SeededRandom.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
@@ -34,8 +42,16 @@ import { SoundEngine } from './audio/SoundEngine.js';
 import { MusicManager } from './audio/MusicManager.js';
 import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
 import { GalacticMap } from './generation/GalacticMap.js';
+import { NavComputer } from './ui/NavComputer.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
-import { GalaxyGlow } from './objects/GalaxyGlow.js';
+import { SkyRenderer } from './rendering/SkyRenderer.js';
+import { SkyFeatureLayer } from './rendering/sky/SkyFeatureLayer.js';
+import { KNOWN_OBJECT_PROFILES } from './data/KnownObjectProfiles.js';
+import { ShipSpawner } from './objects/ShipSpawner.js';
+import { TextureBaker, getBakeType } from './rendering/TextureBaker.js';
+import { createTexturedBodyMaterial } from './rendering/shaders/TexturedBodyShader.js';
+import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/MaterialBodyShader.js';
+import { PretextLab } from './ui/PretextLab.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -53,13 +69,46 @@ const scene = new THREE.Scene();
 // ── Camera ──
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 200000);
 
+// ── Ship Spawner ──
+const shipSpawner = new ShipSpawner();
+shipSpawner.init();  // async, loads manifest in background — non-blocking
+
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
 const retroRenderer = new RetroRenderer(canvas, scene, camera);
 retroRenderer.setColorPalette(settings.get('colorPalette'));
 
+// ── Texture Baker (runtime procedural → texture baking) ──
+let textureBaker = null; // lazy-init on first use (needs renderer)
+
 // ── Camera Controller ──
-const cameraController = new CameraController(camera, canvas);
+const cameraController = new ShipCameraSystem(camera, canvas);
+// Debug access for Playwright/console
+window._cam = camera;
+window._cc = cameraController;
+window._scene = scene;
+window._retroRenderer = retroRenderer;
+
+// Toggle in-system objects (planets, moons, orbits, labels) for sky debugging.
+// Call from console: window._skyOnly()  or  window._skyOnly(false) to restore.
+window._skyOnly = (hide = true) => {
+  // Recursively hide/show everything in the main scene
+  scene.traverse(obj => {
+    if (obj !== scene) obj.visible = !hide;
+  });
+  // The sky is rendered in a separate scene by SkyRenderer — leave it alone
+  console.log(hide ? '[DEBUG] System objects hidden — sky only' : '[DEBUG] System objects restored');
+};
+
+// ── LOD Manager ──
+// Evaluates camera distance to bodies and assigns LOD tiers each frame.
+const lodManager = new LODManager(camera);
+
+// ── Debug Panel ──
+// Backtick (`) toggles corner HUD, F3 toggles full inspection panel.
+const debugPanel = new DebugPanel();
+debugPanel.setCamera(camera);
+debugPanel.setCameraController(cameraController);
 
 // When free-look ends without a focused body (title screen, deep sky),
 // clear focus so the camera stays where it was looking.
@@ -80,12 +129,6 @@ cameraController.hasFocusedBody = () => {
   return false;
 };
 
-// ── Starfield ──
-// Rendered at full resolution (via retroRenderer.starfieldScene) for tiny
-// crisp star points, separate from the low-res retro scene objects.
-let starfield = new Starfield(settings.get('starDensity'), 500);
-starfield.addTo(retroRenderer.starfieldScene);
-
 // ── Galaxy State ──
 // GalacticMap provides the structural galaxy. When active, it drives
 // starfield generation, system properties, and warp target resolution.
@@ -94,21 +137,56 @@ const galacticMap = new GalacticMap('well-dipper-galaxy-1');
 let playerGalacticPos = galacticMap.getStartPosition();
 let currentGalaxyStar = null; // the GalacticMap star entry we're currently at
 
-// Generate initial galaxy-aware starfield + glow
-let galaxyGlow = null;
-{
-  const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
-  starfield.dispose();
-  retroRenderer.starfieldScene.remove(starfield.mesh);
-  starfield = new Starfield(sfData, 500);
-  starfield.addTo(retroRenderer.starfieldScene);
-  // Diffuse galactic glow behind the point stars
-  galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
-  galaxyGlow.addTo(retroRenderer.starfieldScene);
-}
+// ── Sky Renderer ──
+// Coordinates galaxy glow + starfield + sky features with shared brightness budget.
+// Replaces the old pattern of manually managing Starfield + GalaxyGlow.
+const skyRenderer = new SkyRenderer(galacticMap, StarfieldGenerator, settings.get('starDensity'));
+skyRenderer.prepareForPosition(playerGalacticPos);
+skyRenderer.activate();
+retroRenderer.setSkyRenderer(skyRenderer);
+
+// ── Real Star Catalog ──
+// Load the HYG database (15,598 real naked-eye stars with names and positions).
+// Once loaded, real stars are merged into every subsequent starfield generation.
+const realStarCatalog = new RealStarCatalog();
+// ── Real Data Catalogs ──
+// Load in background. Used on next warp/teleport, not immediately.
+const realFeatureCatalog = new RealFeatureCatalog();
+
+// Load real star catalog
+realStarCatalog.load().then(() => {
+  StarfieldGenerator.realStarCatalog = realStarCatalog;
+  debugPanel.setRealStarCatalog(realStarCatalog);
+  if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
+  console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
+});
+
+// Load real feature catalogs (globular clusters, etc.)
+realFeatureCatalog.load().then(() => {
+  debugPanel.setRealFeatureCatalog(realFeatureCatalog);
+  // Make real features available to the hash grid for Plummer density
+  HashGridStarfield.realFeatureCatalog = realFeatureCatalog;
+  console.log(`Real feature catalog loaded: ${realFeatureCatalog.globularClusters.length} globular clusters`);
+});
+debugPanel.setSkyRenderer(skyRenderer);
+debugPanel.setRetroRenderer(retroRenderer);
+debugPanel.setGalacticMap(galacticMap);
+debugPanel.setPlayerPos(playerGalacticPos);
+
+// Legacy aliases — these delegate to SkyRenderer so existing code
+// (warp targets, star finding, etc.) continues to work during migration.
+// TODO: Remove these once all callers are migrated to skyRenderer directly.
+const starfield = {
+  findNearestStar: (dir) => skyRenderer.findNearestStar(dir),
+  getRandomVisibleStar: (dir) => skyRenderer.getRandomVisibleStar(dir),
+  getGalaxyStarForIndex: (idx) => skyRenderer.getGalaxyStarForIndex(idx),
+  setWarpUniforms: (fold, bright, rift) => skyRenderer.setWarpUniforms(fold, bright, rift),
+  update: (pos) => {}, // SkyRenderer.update() handles this now
+};
 
 // ── System State ──
 let seedCounter = 0;
+let _currentSystemName = '';
 let system = null;
 let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
@@ -116,7 +194,7 @@ let orbitsVisible = settings.get('showOrbits');
 let gravityWellVisible = settings.get('showGravityWells');
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
-let minimapVisible = _isMobile ? false : settings.get('showMinimap');
+let minimapVisible = false; // off by default — toggle with G key
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
@@ -140,6 +218,9 @@ const warpTarget = {
   direction: null,   // THREE.Vector3 world-space direction, or null
   name: null,        // deterministic name for the selected star (shown in BodyInfo)
   starIndex: -1,     // index in starfield positions array (seeds name)
+  destType: null,    // null = normal star, 'feature:emission-nebula' etc., 'external-galaxy'
+  featureData: null, // feature data from GalacticMap (when destType is feature:*)
+  galaxyData: null,  // external galaxy data (when destType is 'external-galaxy')
   blinkTimer: 0,     // accumulates time for 2 Hz blink
   blinkOn: false,    // current blink state
   turning: false,    // camera is rotating to face target before warp
@@ -150,14 +231,15 @@ const warpTarget = {
 // When the tour visits every body, auto-select a visible star and warp toward it.
 // Brackets blink for 1.5s, then camera turns to face it, then warp fires.
 autoNav.onTourComplete = () => {
-  // Navigable deep sky (nebulae, open clusters): just loop the tour.
-  // The user can manually warp with Space when they want to leave.
-  if (system && system._navigable) return;
-
   autoSelectWarpTarget();
-  setTimeout(() => {
-    beginWarpTurn();
-  }, 1500);
+  // Only begin warp if we actually found a target star
+  if (warpTarget.navStarData || warpTarget.featureData || warpTarget.galaxyData) {
+    setTimeout(() => {
+      beginWarpTurn();
+    }, 1500);
+  } else {
+    console.warn('[WARP] autoSelectWarpTarget found no star — skipping auto-warp');
+  }
 };
 
 // Deep sky contemplation: camera stays fixed, timer triggers next warp.
@@ -171,8 +253,6 @@ let _forceNextDestType = null;
 const _heldKeys = new Set();
 
 // ── Splash + Intro sequence ──
-// Splash: black screen, click to start.
-// Intro: 6-second sequence — Logo 1 fade in/out, Logo 2 fade in/out, then title screen.
 let splashActive = true;
 
 function startIntroSequence() {
@@ -218,7 +298,6 @@ function startIntroSequence() {
     overlay.style.display = 'none';
     if (titleEl) {
       titleEl.style.display = '';
-      // Force reflow so the browser registers the display change before the animation class
       void titleEl.offsetHeight;
       titleEl.classList.add('animate-in');
     }
@@ -226,39 +305,49 @@ function startIntroSequence() {
     titleScreenActive = true;
     // Start looping title theme, then set auto-dismiss timer once loaded
     musicManager.play('title').then(() => {
-      if (!titleScreenActive) return; // user already dismissed
+      if (!titleScreenActive) return;
       const titleDur = musicManager.getDuration('title');
       const titleLoops = 4;
       const silenceGap = 3000;
-      const musicMs = titleDur * titleLoops * 1000;
-      console.log(`[Title] duration=${titleDur.toFixed(2)}s × ${titleLoops} = ${(musicMs/1000).toFixed(1)}s music + ${silenceGap/1000}s silence = ${((musicMs+silenceGap)/1000).toFixed(1)}s total`);
       if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
       if (titleDur > 0) {
         _titleAutoTimer = setTimeout(() => {
-          console.log('[Title] Stopping music now');
           musicManager.stop(1.0);
           _titleAutoTimer = setTimeout(() => {
-            console.log('[Title] Auto-dismissing + warping');
             if (titleScreenActive) {
               dismissTitleScreen();
-              // Warp immediately — skip the deep sky linger timer
-              setTimeout(() => beginWarpTurn(), 1500);
+              // Always select a real hash grid star before warping
+              setTimeout(() => { autoSelectWarpTarget(); beginWarpTurn(); }, 1500);
             }
           }, silenceGap);
-        }, musicMs);
+        }, titleDur * titleLoops * 1000);
       }
     });
   }, 8000);
 }
 
-// Splash screen click handler
+// Splash screen click handler — hold D for debug skip
 document.getElementById('splash-screen')?.addEventListener('click', () => {
   if (!splashActive) return;
+  if (_heldKeys.has('KeyD')) {
+    // Debug skip: bypass intro + title, go straight to gameplay
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.style.display = 'none';
+    const titleEl = document.getElementById('title-screen');
+    if (titleEl) titleEl.style.display = 'none';
+    splashActive = false;
+    titleScreenActive = false;
+    if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+    // Clear D key so it doesn't trigger WASD flight after skip
+    _heldKeys.delete('KeyD');
+    _heldKeys.delete('d');
+    console.log('[DEBUG] Skipped intro — direct to gameplay');
+    return;
+  }
   startIntroSequence();
 });
 
 // ── Title screen ──
-// Starts false — set to true only when the title screen is actually displayed (after intro sequence)
 let titleScreenActive = false;
 let _titleAutoTimer = null;
 
@@ -267,6 +356,7 @@ function dismissTitleScreen() {
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
   musicManager.stop(0.5);
+  // Galaxy glow stays hidden until warp (restored in onSwapSystem)
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
   const el = document.getElementById('title-screen');
@@ -306,6 +396,190 @@ function toggleKeybinds() {
   const el = document.getElementById('keybinds-overlay');
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
+
+// ── Nav Computer ──
+let _navComputerOpen = false;
+let _navComputer = null;
+let _navAnimFrame = null;
+
+// ── Nav Computer: open / close / dispatch (separated concerns) ──
+
+function _initNavComputer() {
+  const navCanvas = document.getElementById('nav-computer-canvas');
+  _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
+  if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
+
+  // COMMIT button → request close (action retrieved via nav.close())
+  _navComputer.setCommitCallback((action) => {
+    // Store the action, then close — dispatchNavAction reads it
+    _navComputer._pendingAction = action;
+    closeNavComputer();
+  });
+
+  // Audio bridges
+  _navComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
+  _navComputer.setSoundCallback((name) => soundEngine.play(name));
+}
+
+function openNavComputer() {
+  const el = document.getElementById('nav-computer-overlay');
+  if (!el || _navComputerOpen) return;
+  _navComputerOpen = true;
+  soundEngine.play('navOpen');
+  el.style.display = 'flex';
+
+  if (!_navComputer) _initNavComputer();
+
+  // Sync state
+  _navComputer.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 }, null);
+  _navComputer._currentSystemName = _currentSystemName || 'Unknown';
+  _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  if (system) _navComputer.setCurrentSystemData(system._systemData || null);
+  _navComputer.openToCurrentSystem();
+
+  // Pass existing warp target for display
+  if (warpTarget.direction && galacticMap) {
+    const targetWorldPos = _resolveWarpTargetGalacticPos();
+    _navComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
+  } else {
+    _navComputer.setExternalTarget(null);
+  }
+
+  _navComputer.activate();
+  _navRenderLoop();
+}
+
+function closeNavComputer() {
+  const el = document.getElementById('nav-computer-overlay');
+  if (!el || !_navComputerOpen) return;
+  _navComputerOpen = false;
+  soundEngine.play('navClose');
+
+  // Read and dispatch any pending action
+  const action = _navComputer?._pendingAction || null;
+  _navComputer._pendingAction = null;
+
+  if (_navComputer) _navComputer.deactivate();
+  el.style.display = 'none';
+  if (_navAnimFrame) { cancelAnimationFrame(_navAnimFrame); _navAnimFrame = null; }
+
+  dispatchNavAction(action);
+}
+
+function dispatchNavAction(action) {
+  if (!action) return;
+  console.log(`[NAV DISPATCH] type=${action.type}, target=${action.target}, star=${action.star?.name} seed=${action.star?.seed}`);
+
+  if (action.type === 'burn') {
+    // In-system transit — same focus functions as Tab/1-9 keys
+    if (action.target === 'star') focusStar(action.starIndex || 0);
+    else if (action.target === 'planet') focusPlanet(action.planetIndex);
+    else if (action.target === 'moon') focusMoon(action.planetIndex, action.moonIndex);
+  } else if (action.type === 'warp') {
+    // Inter-system warp
+    _setWarpTargetFromNavStar({
+      worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
+      seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+    });
+    setTimeout(() => beginWarpTurn(), 500);
+  }
+}
+
+// Legacy toggle for keybind compatibility
+function toggleNavComputer() {
+  if (_navComputerOpen) closeNavComputer();
+  else openNavComputer();
+}
+
+/**
+ * Resolve the current warp target direction to a galactic position.
+ * Used to pass the target to the nav computer for display.
+ * Same search logic as onPrepareSystem's direction-based fallback.
+ */
+function _resolveWarpTargetGalacticPos() {
+  const pos = playerGalacticPos || { x: 8, y: 0, z: 0 };
+
+  // First try: if we have a starIndex, resolve via skyRenderer
+  if (warpTarget.starIndex >= 0) {
+    const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
+    if (entry?.starData && entry.starData.worldX !== undefined) {
+      return { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ };
+    }
+  }
+
+  // Check navStarData (nav computer selection — has exact position)
+  if (warpTarget.navStarData) {
+    return {
+      x: warpTarget.navStarData.worldX,
+      y: warpTarget.navStarData.worldY,
+      z: warpTarget.navStarData.worldZ,
+    };
+  }
+
+  // No direction-based fallback needed — every star is a real hash grid star
+  console.warn('[WARP] _resolveWarpTargetGalacticPos: no starIndex or navStarData');
+  return null;
+}
+
+/**
+ * Set a warp target from a nav computer star selection.
+ * Computes the sky direction from player → star and sets up the warp target
+ * so it behaves identically to clicking a star in the sky.
+ */
+function _setWarpTargetFromNavStar(navStar) {
+  const pos = playerGalacticPos || { x: 8, y: 0, z: 0 };
+  const dx = navStar.worldX - pos.x;
+  const dy = navStar.worldY - pos.y;
+  const dz = navStar.worldZ - pos.z;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (len < 1e-10) return; // star is at player position
+
+  // Compute direction vector (same space as camera directions)
+  const direction = new THREE.Vector3(dx / len, dy / len, dz / len);
+
+  // Set up warp target — attach the exact nav star data so warp resolution
+  // can go directly to this star without a direction-based fallback search.
+  // The fallback search uses HashGridStarfield.findStarsInRadius (same hash
+  // grid the nav computer queries), so direct attachment avoids the search.
+  soundEngine.play('warpTarget');
+  warpTarget.direction = direction;
+  warpTarget.starIndex = -1;  // no sky starfield index
+  warpTarget.destType = null;  // normal star system
+  warpTarget.featureData = null;
+  warpTarget.galaxyData = null;
+  warpTarget.navStarData = {    // exact star from nav computer's hash grid query
+    worldX: navStar.worldX,
+    worldY: navStar.worldY,
+    worldZ: navStar.worldZ,
+    seed: navStar.seed,
+    type: navStar.type,
+  };
+  warpTarget.name = navStar.name || generateSystemName(new SeededRandom(`warp-nav-${navStar.seed}`), { x: navStar.worldX, y: navStar.worldY, z: navStar.worldZ });
+  warpTarget.blinkTimer = 0;
+  warpTarget.blinkOn = true;
+  warpTarget.turning = false;
+
+  // Show the target name in the HUD
+  bodyInfo.showWarpTarget(warpTarget.name);
+}
+
+function _navRenderLoop() {
+  if (!_navComputerOpen) return;
+  _navComputer.render();
+  _navAnimFrame = requestAnimationFrame(_navRenderLoop);
+}
+
+// Wire up nav computer close button + backdrop click
+{
+  const navEl = document.getElementById('nav-computer-overlay');
+  if (navEl) {
+    const closeBtn = navEl.querySelector('.overlay-close');
+    if (closeBtn) closeBtn.addEventListener('click', toggleNavComputer);
+    navEl.addEventListener('click', (e) => {
+      if (e.target === navEl) toggleNavComputer();
+    });
+  }
 }
 
 // ── Settings Panel ──
@@ -598,10 +872,43 @@ function toggleSoundTest() {
   }
 }
 
+// ── Pretext Lab (experimental text overlay — X key) ──
+let _pretextLabOpen = false;
+const _pretextLab = new PretextLab();
+
+function togglePretextLab() {
+  const el = document.getElementById('pretext-lab-overlay');
+  if (!el) return;
+  _pretextLabOpen = !_pretextLabOpen;
+  soundEngine.play('uiClick');
+  if (_pretextLabOpen) {
+    el.style.display = 'flex';
+    _pretextLab.activate();
+  } else {
+    el.style.display = 'none';
+    _pretextLab.deactivate();
+  }
+}
+
+// Pretext Lab close button + backdrop
+{
+  const labEl = document.getElementById('pretext-lab-overlay');
+  if (labEl) {
+    labEl.querySelector('.overlay-close')?.addEventListener('click', () => {
+      togglePretextLab();
+    });
+    labEl.addEventListener('click', (e) => {
+      if (e.target === labEl) togglePretextLab();
+    });
+  }
+}
+
 // ── Debug Gallery Mode ──
 // Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
 const GALLERY_TYPES = [
+  // Known object profiles (all 37 real Messier/NGC objects)
+  'known-feature',
   // Deep sky (distant view)
   'spiral-galaxy', 'elliptical-galaxy',
   'emission-nebula', 'planetary-nebula',
@@ -619,9 +926,16 @@ const GALLERY_TYPES = [
   'planet-city-lights', 'planet-ecumenopolis',
   'moon',
 ];
+
+// Pre-built list of known object profile keys for gallery cycling
+const _knownProfileKeys = Object.keys(KNOWN_OBJECT_PROFILES);
+
+// Shared SkyFeatureLayer instance for gallery billboard creation
+let _gallerySkyFeatureLayer = null;
 let galleryMode = false;
 let gallerySeed = 1;
 let galleryTypeIdx = 0;
+let _gallerySkipDir = 1;
 let galleryObject = null;      // current Galaxy/Nebula instance (deep sky)
 let _galleryMeshes = [];       // Star/Planet/Moon meshes (star system objects)
 const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for gallery moons
@@ -639,10 +953,61 @@ warpEffect.onPrepareSystem = () => {
   // _hideCurrentSystem() is called later when ENTER starts (see animation loop).
 
   seedCounter++;
-  const seed = `system-${seedCounter}`;
+  let seed = `system-${seedCounter}`;
   const rng = new SeededRandom(seed);
-  // Use settings-based deep sky chance (overrides DestinationPicker's static weights)
+  // ── Route based on what was clicked ──
+  // If the player clicked a tagged galactic feature, route to a star inside it.
+  // Otherwise, use DestinationPicker (which may roll deep sky destinations).
   let destType;
+  if (warpTarget.destType === 'external-galaxy' && warpTarget.galaxyData) {
+    // Clicked an external galaxy — Category C: view from outside.
+    // Use the existing galaxy generator to create a particle cloud.
+    const gal = warpTarget.galaxyData;
+    const galType = gal.type === 'spiral' ? 'spiral-galaxy' : 'elliptical-galaxy';
+    pendingSystemData = GalaxyGenerator.generate(gal.seed, galType);
+    pendingSystemData._destType = galType;
+    pendingSystemData._warpTargetName = gal.name;
+    pendingSystemData._isExternalGalaxy = true; // flag for "strayed from home" prompt
+    // Don't update playerGalacticPos — we're not actually IN the other galaxy
+    skyRenderer.prepareForPosition(playerGalacticPos);
+    console.log(`Warp: external galaxy ${gal.name} (${galType})`);
+    warpTarget.destType = null;
+    warpTarget.galaxyData = null;
+    return;
+  }
+
+  if (warpTarget.destType?.startsWith('feature:') && warpTarget.featureData && galacticMap) {
+    // Clicked a galactic feature — generate a star system at its center.
+    // Category A/B routing: player arrives INSIDE the feature, sky shows
+    // immersive starfield (dense warm stars for clusters, gas for nebulae).
+    //
+    // IMPORTANT: Don't search for a nearby GalacticMap sector star —
+    // features are much smaller than sectors (0.05 kpc vs 0.5 kpc), so
+    // sector stars are almost always OUTSIDE the feature. Generate the
+    // system directly from the feature's seed and position.
+    const feat = warpTarget.featureData;
+    playerGalacticPos = {
+      x: feat.position.x,
+      y: feat.position.y,
+      z: feat.position.z,
+    };
+    const galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+    // Apply feature context overrides (old metal-poor stars for globulars, etc.)
+    if (feat.context) {
+      if (feat.context.metallicity !== undefined) galaxyContext.metallicity = feat.context.metallicity;
+      if (feat.context.age !== undefined) galaxyContext.age = feat.context.age;
+    }
+    pendingSystemData = StarSystemGenerator.generate(feat.seed, galaxyContext);
+    pendingSystemData._destType = 'star-system';
+    pendingSystemData._warpTargetName = warpTarget.name || null;
+    pendingSystemData._insideFeature = feat;
+    skyRenderer.prepareForPosition(playerGalacticPos);
+    console.log(`Warp: routed to feature ${feat.type} → system at feature center (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)})`);
+    warpTarget.destType = null;
+    warpTarget.featureData = null;
+    return;
+  }
+
   if (_forceNextDestType) {
     destType = _forceNextDestType;
   } else {
@@ -650,60 +1015,138 @@ warpEffect.onPrepareSystem = () => {
     if (rng.float() >= dsChance) {
       destType = 'star-system';
     } else {
-      // Pick a deep sky subtype (re-roll excluding star-system)
       destType = DestinationPicker.pickDeepSky(rng);
     }
   }
   _forceNextDestType = null; // clear after use
 
+  // ── Category A/B deep sky: route to a star inside the feature ──
+  // When DestinationPicker rolls a cluster/nebula/remnant and we have
+  // a galaxy active, find a real galactic feature of that type and route
+  // to a star inside it. The old particle-cloud generators are ONLY used
+  // as fallback when no galaxy is active (legacy screensaver mode).
+  const CATEGORY_AB_TYPES = [
+    'emission-nebula', 'planetary-nebula', 'open-cluster',
+    'globular-cluster', 'ob-association', 'supernova-remnant',
+  ];
+  // Map DestinationPicker names to GalacticMap feature type names
+  const DEST_TO_FEATURE = {
+    'emission-nebula': 'emission-nebula',
+    'planetary-nebula': 'emission-nebula', // no separate type in GalacticMap
+    'open-cluster': 'open-cluster',
+    'globular-cluster': 'globular-cluster',
+  };
+
+  if (CATEGORY_AB_TYPES.includes(destType) && galacticMap) {
+    // Try to find a real galactic feature of this type nearby
+    const featureType = DEST_TO_FEATURE[destType] || destType;
+    let foundFeature = null;
+    for (const radius of [3.0, 6.0, 10.0]) {
+      const features = galacticMap.findNearbyFeatures(playerGalacticPos, radius);
+      foundFeature = features.find(f => f.type === featureType);
+      if (foundFeature) break;
+    }
+
+    if (foundFeature) {
+      // Route to feature center (same logic as click routing)
+      playerGalacticPos = { ...foundFeature.position };
+      const galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+      if (foundFeature.context) {
+        if (foundFeature.context.metallicity !== undefined) galaxyContext.metallicity = foundFeature.context.metallicity;
+        if (foundFeature.context.age !== undefined) galaxyContext.age = foundFeature.context.age;
+      }
+      pendingSystemData = StarSystemGenerator.generate(foundFeature.seed, galaxyContext);
+      pendingSystemData._destType = 'star-system';
+      pendingSystemData._warpTargetName = warpTarget.name || null;
+      pendingSystemData._insideFeature = foundFeature;
+      skyRenderer.prepareForPosition(playerGalacticPos);
+      console.log(`Warp: DestinationPicker rolled ${destType} → feature ${foundFeature.type} at center`);
+      return;
+    }
+    // No feature found — fall back to star system (the procedural model's domain).
+    // The old NavigableNebula/ClusterGenerators are legacy dead code that creates
+    // fake tournable objects outside the procedural galaxy model. All warp
+    // destinations must come from the hash grid or real feature catalog.
+    console.log(`Warp: DestinationPicker rolled ${destType} but no feature found nearby, falling back to star-system`);
+    destType = 'star-system';
+  }
+
   if (destType === 'star-system') {
     // ── Galaxy-aware system generation ──
-    // If galaxy mode is active, resolve the warp target to a GalacticMap
-    // star and derive context from its galactic position.
+    // First, check if the clicked starfield point maps to a specific
+    // GalacticMap star. If so, warp directly to THAT star — don't do
+    // a second direction-based search that might find a different star.
     let galaxyContext = null;
-    if (galacticMap && warpTarget.direction) {
-      // Find which galaxy star the player is warping toward
-      const nearby = galacticMap.findNearestStars(playerGalacticPos, 30);
-      let bestStar = null;
-      let bestDot = -1;
-      for (const star of nearby) {
-        if (star.distSq < 0.001) continue; // skip self
-        const dx = star.worldX - playerGalacticPos.x;
-        const dy = star.worldY - playerGalacticPos.y;
-        const dz = star.worldZ - playerGalacticPos.z;
-        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        // Match warp direction to galaxy star direction
-        const dot = (dx / len) * warpTarget.direction.x
-                  + (dy / len) * warpTarget.direction.y
-                  + (dz / len) * warpTarget.direction.z;
-        if (dot > bestDot) { bestDot = dot; bestStar = star; }
-      }
-      if (bestStar) {
-        // Update player position to the destination star
-        playerGalacticPos = { x: bestStar.worldX, y: bestStar.worldY, z: bestStar.worldZ };
-        currentGalaxyStar = bestStar;
-        galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+    let resolvedStar = null;
+
+    // Priority 1: Nav computer selected a specific star — use its exact position + seed
+    if (warpTarget.navStarData) {
+      resolvedStar = warpTarget.navStarData;
+      console.log(`[WARP] Priority 1 (navStarData): Y=${resolvedStar.worldY?.toFixed(4)}, seed=${resolvedStar.seed}`);
+    }
+
+    // Priority 2: Sky starfield click — resolve via index
+    if (!resolvedStar && galacticMap && warpTarget.starIndex >= 0) {
+      const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
+      if (entry?.starData && entry.starData.worldX !== undefined) {
+        resolvedStar = entry.starData;
       }
     }
-    pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
-  } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
-    // Navigable nebulae — nav generator for star positions, billboard generator for visuals
-    pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
-    pendingSystemData._billboardData = NebulaGenerator.generate(seed, destType);
-  } else if (destType === 'open-cluster') {
-    // Navigable open cluster — nav generator for star positions, particle cloud for visuals
-    pendingSystemData = NavigableClusterGenerator.generate(seed);
-    pendingSystemData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
+
+    // No direction-based fallback needed: every sky star has a starIndex
+    // (Priority 2) and every nav star has navStarData (Priority 1).
+    // The old direction-based search was a legacy holdover from when the
+    // sky had fake fill stars. With the hash grid, every point of light
+    // is a real star with exact coordinates.
+    if (!resolvedStar) {
+      console.warn('[WARP] No star resolved — neither navStarData nor starIndex matched. This should not happen.');
+    }
+
+    if (resolvedStar) {
+      playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
+      currentGalaxyStar = resolvedStar;
+      galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
+      // Hash grid already determined this star's type — pass it through
+      // so StarSystemGenerator uses it instead of re-rolling from weights
+      if (resolvedStar.type) {
+        galaxyContext.starTypeOverride = resolvedStar.type;
+      }
+      // Use the resolved star's seed for deterministic system generation
+      seed = String(resolvedStar.seed);
+      console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
+    }
+
+    // Check for known system override at this position —
+    // but skip if the user explicitly picked a different star from the nav computer
+    const hasNavStar = !!warpTarget.navStarData;
+    const knownWarp = hasNavStar ? null : KnownSystems.findAt(playerGalacticPos);
+    console.log(`[WARP] knownSystem check: hasNavStar=${hasNavStar}, knownWarp=${knownWarp?.name || 'none'}`);
+    if (knownWarp) {
+      pendingSystemData = knownWarp.generate();
+      pendingSystemData._knownSystemNames = knownWarp.names;
+      pendingSystemData._warpTargetName = knownWarp.name;
+      console.log(`[WARP] Known system override: ${knownWarp.name}`);
+    } else {
+      pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
+    }
   } else if (destType.includes('galaxy')) {
+    // External galaxy Easter egg — player warped to a distant galaxy visible in the sky.
+    // These are definitionally outside the Milky Way model, so GalaxyGenerator is correct.
+    // TODO: show "you've gone too far" message on arrival
     pendingSystemData = GalaxyGenerator.generate(seed, destType);
-  } else if (destType.includes('cluster')) {
-    // globular-cluster — distant view
-    pendingSystemData = ClusterGenerator.generate(seed, destType);
+  } else {
+    // Any other destType that wasn't caught above — should not happen in production.
+    // Fall back to a star system at the current position rather than using legacy generators.
+    console.warn(`[WARP] Unexpected destType '${destType}', falling back to star-system`);
+    pendingSystemData = StarSystemGenerator.generate(seed);
   }
   pendingSystemData._destType = destType;
   // Carry the warp target's name into the new system so it matches what was shown
   pendingSystemData._warpTargetName = warpTarget.name || null;
-  console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold`);
+  // Pre-generate sky data for new galactic position (CPU only, no GPU resources)
+  skyRenderer.prepareForPosition(playerGalacticPos);
+  const _sfCount = skyRenderer._pendingData?.count ?? 'NO DATA';
+  console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold | pos=(${playerGalacticPos.x.toFixed(3)},${playerGalacticPos.y.toFixed(3)},${playerGalacticPos.z.toFixed(3)}) | starfield=${_sfCount} stars`);
 };
 
 // System swap at hyper start (tunnel is opaque, hides any GPU resource creation)
@@ -712,22 +1155,15 @@ warpEffect.onSwapSystem = () => {
   musicManager.play('hyperspace', 0.3);
   warpSwapSystem();
 
-  // ── Regenerate starfield + glow for new galactic position ──
-  if (galacticMap) {
-    const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
-    starfield.dispose();
-    retroRenderer.starfieldScene.remove(starfield.mesh);
-    starfield = new Starfield(sfData, 500);
-    starfield.addTo(retroRenderer.starfieldScene);
-    starfield.update(camera.position);
-    // Swap galactic glow
-    if (galaxyGlow) {
-      galaxyGlow.dispose();
-      retroRenderer.starfieldScene.remove(galaxyGlow.mesh);
-    }
-    galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
-    galaxyGlow.addTo(retroRenderer.starfieldScene);
-    galaxyGlow.update(camera.position, camera);
+  // ── Regenerate sky for new galactic position ──
+  // SkyRenderer was pre-loaded during FOLD (prepareForPosition).
+  // Now create GPU resources — hidden behind the opaque warp tunnel.
+  skyRenderer.activate();
+  skyRenderer.update(camera, 0);
+  // Restore galaxy glow (hidden during title screen)
+  if (skyRenderer._glowLayer?.mesh) {
+    skyRenderer._glowLayer.mesh._hiddenForTitle = false;
+    skyRenderer._glowLayer.mesh.visible = true;
   }
 };
 
@@ -799,62 +1235,51 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   return best;
 }
 
-// ── Title screen: spawn a random deep sky object as the backdrop ──
+// ── Title screen: nebula backdrop with varied sparse starfield ──
+// Spawn a nebula as the visual feature, but position the sky renderer
+// in a random sparse inter-arm gap so the background starfield varies
+// each time and doesn't overwhelm the nebula.
 {
-  const titleSeed = `title-${Date.now()}`;
-  const titleRng = new SeededRandom(titleSeed);
-  // Only use distant-view types so the object is visible as a whole showcase.
-  // Nebulae use NebulaGenerator (distant billboard), not NavigableNebulaGenerator.
-  // destType uses 'title-*-nebula' to avoid isNavigable() routing in spawnSystem.
+  const titleRng = new SeededRandom(`title-${Date.now()}`);
+
+  // Position sky in a sparse inter-arm location (varied each load)
+  const interArmAngles = [Math.PI * 0.5, Math.PI * 1.5, Math.PI * 0.25, Math.PI * 1.25];
+  const theta = interArmAngles[titleRng.int(0, interArmAngles.length - 1)];
+  const R = 5.5 + titleRng.float() * 3.0;
+  const yOffset = 0.4 + titleRng.float() * 0.6;
+  const titlePos = { x: R * Math.cos(theta), y: yOffset, z: R * Math.sin(theta) };
+  skyRenderer.prepareForPosition(titlePos);
+  // Hide galaxy glow on title screen — it detracts from the nebula
+  // Hide galaxy glow — set flag so RetroRenderer's 2-pass loop respects it
+  if (skyRenderer._glowLayer?.mesh) {
+    skyRenderer._glowLayer.mesh.visible = false;
+    skyRenderer._glowLayer.mesh._hiddenForTitle = true;
+  }
+
+  // Spawn the nebula
   const deepSkyTypes = ['emission-nebula', 'planetary-nebula'];
   const titleType = deepSkyTypes[titleRng.int(0, deepSkyTypes.length - 1)];
-  let titleData;
-  if (titleType.includes('galaxy')) {
-    titleData = GalaxyGenerator.generate(titleSeed, titleType);
-    titleData._destType = titleType;
-  } else if (titleType === 'emission-nebula' || titleType === 'planetary-nebula') {
-    titleData = NebulaGenerator.generate(titleSeed, titleType);
-    // Use a destType that won't match isNavigable() but still routes to Nebula class
-    titleData._destType = `title-${titleType}`;
-  } else if (titleType === 'open-cluster') {
-    titleData = ClusterGenerator.generate(titleSeed, titleType);
-    // Attach navigable star data for StarFlare overlay
-    titleData._navStars = NavigableClusterGenerator.generate(titleSeed);
-    // Prefix with 'title-' to avoid isNavigable() routing to spawnNavigableDeepSky
-    titleData._destType = `title-${titleType}`;
-  } else {
-    titleData = ClusterGenerator.generate(titleSeed, titleType);
-    titleData._destType = titleType;
+  const titleData = NebulaGenerator.generate(`title-${Date.now()}`, titleType);
+  titleData._destType = `title-${titleType}`;
+  // Use master-style simple nebula rendering
+  for (const layer of titleData.layers || []) {
+    layer.domainWarpStrength = 3.5;
+    layer.darkLaneStrength = 0;
+    layer.asymmetry = 0;
+    layer.brightnessShape = 0;
   }
   spawnSystem({ systemData: titleData });
 
-  // Orbit around the object center so it sits behind the centered title text.
   const r = titleData.radius || 200;
-  let orbitCenter;
-  if (titleType.includes('galaxy')) {
-    orbitCenter = new THREE.Vector3(0, 0, 0);
-    camera.position.set(r * 0.3, r * 0.15, r * 1.1);
-  } else if (titleType.includes('nebula')) {
-    orbitCenter = new THREE.Vector3(0, 0, 0);
-    camera.position.set(0, 0, r * 1.25);
-  } else {
-    // Clusters
-    orbitCenter = new THREE.Vector3(0, 0, 0);
-    camera.position.set(0, 0, r * 1.25);
-  }
+  const orbitCenter = new THREE.Vector3(0, 0, 0);
+  camera.position.set(0, 0, r * 1.25);
   camera.lookAt(orbitCenter);
   cameraController.restoreFromWorldState(orbitCenter);
-  // Slow visible orbit for the title screen showcase
   cameraController.autoRotateSpeed = 3.0;
 
-
-
   // Auto-dismiss timer is now started by startIntroSequence() when the title actually appears.
-  // (Previously it started at page load, racing the intro sequence.)
 
-  // Mobile fullscreen button on title screen
-  // Must use touchend (not click) — click fires too late on mobile, canvas touchstart
-  // dismisses the title screen first. Also requestFullscreen needs a direct user gesture.
+  // Mobile fullscreen button on title screen — only goes fullscreen, no dismiss
   const fsBtn = document.getElementById('title-fullscreen-btn');
   if (fsBtn) {
     fsBtn.addEventListener('touchstart', (e) => {
@@ -915,6 +1340,10 @@ function _hideCurrentSystem() {
       for (const line of system.starOrbitLines) scene.remove(line.mesh);
     }
   }
+  // Hide ships (they'll be disposed in spawnSystem cleanup)
+  for (const ship of shipSpawner.ships) {
+    scene.remove(ship.mesh);
+  }
   // Hide HUD (don't dispose yet — that happens in spawnSystem during HYPER)
   retroRenderer.setHud(null, null);
   clickTargets = new Map();
@@ -926,12 +1355,16 @@ function _hideCurrentSystem() {
  * @param {boolean} options.forWarp  — if true, skip camera setup + flythrough start (warp handles that)
  * @param {Object} options.systemData — pre-generated data from StarSystemGenerator (skips re-generation)
  */
-function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
+function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCamera = false } = {}) {
   // ── Reset state ──
   warpTarget.direction = null;
   warpTarget.name = null;
   warpTarget.starIndex = -1;
-  const wasAutopilot = autoNav.isActive;
+  warpTarget.navStarData = null;
+  warpTarget.destType = null;
+  warpTarget.featureData = null;
+  warpTarget.galaxyData = null;
+  const wasAutopilot = debugCamera ? false : autoNav.isActive;
 
   // Reset camera far plane (may have been extended for navigable nebulae)
   if (camera.far > 200000) {
@@ -943,11 +1376,15 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   }
   idleTimer = 0;
 
+  // ── Clean up ships from previous system ──
+  shipSpawner.clear(scene);
+
   // ── Clean up old system ──
   // Meshes were already removed from scene during FOLD (_hideCurrentSystem),
   // but we still need to dispose GPU resources (textures, geometries, materials).
   // Safety net: ensure meshes are removed from scene. Usually done at FOLD→ENTER
   // transition, but can be missed if a frame skips states (e.g., tab backgrounded).
+  lodManager.clear();
   _hideCurrentSystem();
   if (systemMap) {
     systemMap.dispose();
@@ -1000,6 +1437,8 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   // Deep sky objects get their own spawn path
   if (DestinationPicker.isDeepSky(destType)) {
+    // No gravity system for deep sky — fall back to orbit mode
+    cameraController.clearGravity();
     if (DestinationPicker.isNavigable(destType)) {
       // Navigable deep sky: stars are clickable/orbitable — normal camera behavior
       cameraController.forceFreeLook = false;
@@ -1019,10 +1458,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   const systemData = preGenData || StarSystemGenerator.generate(seed);
 
   // ── Generate names for star system ──
-  // If we warped to a selected star, use its name as the system name.
-  // Otherwise generate fresh names from the seed.
+  // Known systems use pre-defined real names. Otherwise generate from seed.
   let systemNames = null;
-  if (!systemData._navigable) {
+  if (systemData._knownSystemNames) {
+    systemNames = systemData._knownSystemNames;
+  } else if (!systemData._navigable) {
     const nameRng = new SeededRandom(seed);
     systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null);
   }
@@ -1030,6 +1470,8 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   // ── Create star(s) ──
   // Scene-unit star data: override radius with radiusScene for 3D rendering
   const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene };
+  // Always use StarFlare for the primary system star(s) — gives the full
+  // diffraction spike effect that matches the desired visual look.
   const star = new StarFlare(sceneStarData);
   star.addTo(scene);
 
@@ -1038,6 +1480,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
 
   if (systemData.isBinary) {
     const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene };
+    console.log(`[BINARY] star2: radius=${sceneStarData2.radius?.toFixed(2)}, type=${sceneStarData2.type}, color=[${sceneStarData2.color}], sep=${systemData.binarySeparationScene?.toFixed(2)}`);
     star2 = new StarFlare(sceneStarData2);
     star2.addTo(scene);
 
@@ -1080,11 +1523,21 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
         ? { ...entry.planetData.clouds, scale: entry.planetData.clouds.scale * mapToSceneRatio }
         : null,
     };
-    const planet = new Planet(scenePlanetData, systemData.starInfo);
+    // Physics data for the BodyRenderer (composition, atmosphere, tidal, surface history)
+    const planetPhysics = {
+      composition: entry.planetData.composition || null,
+      atmosphere: entry.planetData.atmosphereRetained !== undefined
+        ? { retained: entry.planetData.atmosphereRetained }
+        : null,
+      tidalState: entry.planetData.tidalState || null,
+      surfaceHistory: entry.planetData.surfaceHistory || null,
+    };
+    const planet = BodyRenderer.createPlanet(scenePlanetData, planetPhysics, systemData.starInfo);
     const px = Math.cos(entry.orbitAngle) * entry.orbitRadiusScene;
     const pz = Math.sin(entry.orbitAngle) * entry.orbitRadiusScene;
     planet.mesh.position.set(px, 0, pz);
     planet.addTo(scene);
+    lodManager.register(planet);
 
     // Billboard indicator (shown when planet is sub-pixel at render resolution)
     const billboard = new Billboard(billboardColor(scenePlanetData.baseColor));
@@ -1132,7 +1585,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
           dispose() { planetMoon.dispose(); },
         };
       } else {
-        moon = new Moon(moonData, planet._lightDir, planet._lightDir2, systemData.starInfo);
+        moon = BodyRenderer.createMoon(
+          moonData, null, systemData.starInfo,
+          { lightDir: planet._lightDir, lightDir2: planet._lightDir2 }
+        );
+        lodManager.register(moon);
       }
       moon.addTo(scene);
       moons.push(moon);
@@ -1236,7 +1693,31 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
     binaryMassRatio: systemData.binaryMassRatio,
     binarySeparationMap: systemData.binarySeparation, // map-unit sep for gravity well
     names: systemNames, // generated names for system/star/planets/moons
+    _systemData: systemData, // raw generation data for nav computer
   };
+
+  // ── Spawn flavor ships near planets ──
+  {
+    const shipRng = new SeededRandom(`${seed}-ships`);
+    shipSpawner.spawnForSystem(scene, systemData, planets, () => shipRng.float());
+  }
+
+  // ── Initialize gravity-driven camera system ──
+  // Build body mesh references for GravityField
+  {
+    const bodyMeshes = {
+      star: star.mesh,
+      star2: star2 ? star2.mesh : undefined,
+      planets: planets.map(e => e.planet.mesh),
+      moons: planets.map(e => e.moons.map(m => m.mesh)),
+    };
+    cameraController.initGravity(systemData, bodyMeshes);
+  }
+
+  // ── Debug panel update ──
+  debugPanel.setSystem(system, systemData);
+  debugPanel.setPlayerPos(playerGalacticPos);
+  debugPanel.setLODManager(lodManager);
 
   // ── System map HUD ──
   // Only create the system map if there are planets (empty systems have nothing to map)
@@ -1310,6 +1791,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   const beltDesc = systemData.asteroidBelts.length > 0
     ? `, ${systemData.asteroidBelts[0].asteroids.length} asteroids`
     : '';
+  _currentSystemName = systemNames ? systemNames.system : seed;
   const sysLabel = systemNames ? `"${systemNames.system}"` : `"${seed}"`;
   console.log(`System ${sysLabel} (seed: ${seed}) — ${starDesc}, ${systemData.planets.length} planets${beltDesc}`);
 
@@ -1330,55 +1812,67 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null } = {}) {
   if (forWarp) return;
 
   // ── Opening shot ──
-  if (planets.length > 0) {
-    // Randomly focus a planet or moon
-    const heroIndex = Math.floor(Math.random() * planets.length);
-    const hero = planets[heroIndex];
+  if (!debugCamera) {
+    // Normal mode: set up hero shot camera
+    if (planets.length > 0) {
+      // Randomly focus a planet or moon
+      const heroIndex = Math.floor(Math.random() * planets.length);
+      const hero = planets[heroIndex];
 
-    let heroMoonIndex = -1;
-    if (hero.moons.length > 0 && Math.random() < 0.3) {
-      heroMoonIndex = Math.floor(Math.random() * hero.moons.length);
+      let heroMoonIndex = -1;
+      if (hero.moons.length > 0 && Math.random() < 0.3) {
+        heroMoonIndex = Math.floor(Math.random() * hero.moons.length);
+      }
+
+      const yawOffset = (Math.random() - 0.5) * 0.25;
+      cameraController.setTarget(hero.planet.mesh.position.clone());
+      cameraController.yaw = hero.orbitAngle + yawOffset;
+      cameraController.smoothedYaw = cameraController.yaw;
+      cameraController.pitch = 0.08 + Math.random() * 0.12;
+      cameraController.smoothedPitch = cameraController.pitch;
+      cameraController.autoRotateActive = true;
+
+      focusIndex = heroIndex;
+      if (heroMoonIndex >= 0) {
+        const moon = hero.moons[heroMoonIndex];
+        const viewDist = Math.max(moon.data.radius * 5, 0.08);
+        focusMoonIndex = heroMoonIndex;
+        cameraController.distance = viewDist;
+        cameraController.smoothedDistance = viewDist;
+      } else {
+        const viewDist = hero.planet.data.radius * 6;
+        focusMoonIndex = -1;
+        cameraController.distance = viewDist;
+        cameraController.smoothedDistance = viewDist;
+      }
+    } else {
+      // Empty system — orbit the star
+      focusIndex = -1;
+      focusMoonIndex = -1;
+      cameraController.setTarget(new THREE.Vector3(0, 0, 0));
+      cameraController.yaw = Math.random() * Math.PI * 2;
+      cameraController.smoothedYaw = cameraController.yaw;
+      cameraController.pitch = 0.1;
+      cameraController.smoothedPitch = cameraController.pitch;
+      const viewDist = star.data.radius * 6;
+      cameraController.distance = viewDist;
+      cameraController.smoothedDistance = viewDist;
+      cameraController.autoRotateActive = true;
     }
 
-    const yawOffset = (Math.random() - 0.5) * 0.25;
-    cameraController.setTarget(hero.planet.mesh.position.clone());
-    cameraController.yaw = hero.orbitAngle + yawOffset;
-    cameraController.smoothedYaw = cameraController.yaw;
-    cameraController.pitch = 0.08 + Math.random() * 0.12;
-    cameraController.smoothedPitch = cameraController.pitch;
-    cameraController.autoRotateActive = true;
-
-    focusIndex = heroIndex;
-    if (heroMoonIndex >= 0) {
-      const moon = hero.moons[heroMoonIndex];
-      const viewDist = Math.max(moon.data.radius * 5, 0.08);
-      focusMoonIndex = heroMoonIndex;
-      cameraController.distance = viewDist;
-      cameraController.smoothedDistance = viewDist;
-    } else {
-      const viewDist = hero.planet.data.radius * 6;
-      focusMoonIndex = -1;
-      cameraController.distance = viewDist;
-      cameraController.smoothedDistance = viewDist;
+    // Restart autopilot with new system if it was active before
+    if (wasAutopilot) {
+      startFlythrough();
     }
   } else {
-    // Empty system — orbit the star
+    // Debug camera mode: orbit the star, no autopilot, camera set by caller
     focusIndex = -1;
     focusMoonIndex = -1;
     cameraController.setTarget(new THREE.Vector3(0, 0, 0));
-    cameraController.yaw = Math.random() * Math.PI * 2;
-    cameraController.smoothedYaw = cameraController.yaw;
-    cameraController.pitch = 0.1;
-    cameraController.smoothedPitch = cameraController.pitch;
-    const viewDist = star.data.radius * 6;
+    const viewDist = star.data.radius * 8;
     cameraController.distance = viewDist;
     cameraController.smoothedDistance = viewDist;
-    cameraController.autoRotateActive = true;
-  }
-
-  // Restart autopilot with new system if it was active before
-  if (wasAutopilot) {
-    startFlythrough();
+    cameraController.autoRotateActive = false;
   }
 }
 
@@ -1691,6 +2185,201 @@ function _debugSpawnType(destType) {
   console.log(`Debug spawn: ${destType} (seed "${seed}")`);
 }
 
+// ── Debug Panel spawn callbacks ──────────────────────────────────
+// Wire up the debug panel's interactive buttons to game functions.
+debugPanel.setSpawnCallbacks({
+  teleportToPosition: (pos, name) => {
+    if (!galacticMap) return;
+    if (galleryMode) exitGallery();
+    playerGalacticPos = { ...pos };
+    console.log(`Teleporting to ${name}...`);
+
+    // Break into async steps so the browser doesn't freeze.
+    // Step 1: galaxy context + sky prep (fast)
+    const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
+
+    // Update glow position immediately (instant visual feedback)
+    if (skyRenderer._glowLayer?.setPlayerPosition) {
+      skyRenderer._glowLayer.setPlayerPosition(playerGalacticPos);
+    }
+
+    // Step 2: starfield generation (slow ~2s) — deferred
+    setTimeout(() => {
+      skyRenderer.prepareForPosition(playerGalacticPos);
+      skyRenderer.activate();
+      skyRenderer.update(camera, 0);
+
+      // Step 3: system generation — deferred again
+      setTimeout(() => {
+        const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.01, 1);
+        const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
+        const knownSys = KnownSystems.findAt(playerGalacticPos);
+        let sysData;
+        if (knownSys) {
+          sysData = knownSys.generate();
+          sysData._knownSystemNames = knownSys.names;
+        } else {
+          sysData = StarSystemGenerator.generate(starSeed, ctx);
+        }
+        sysData._destType = 'star-system';
+        spawnSystem({ forWarp: false, systemData: sysData });
+        debugPanel.setPlayerPos(playerGalacticPos);
+
+        // Apply pending highlight marker (set by debug panel search)
+        if (debugPanel._pendingHighlight) {
+          if (window._glowLayer) {
+            window._glowLayer.setTargetMarker(debugPanel._pendingHighlight);
+          }
+          debugPanel._pendingHighlight = null;
+        }
+
+        const armInfo = ctx.armInfo;
+        console.log(`Debug teleport: ${name} → (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}) | arm=${ctx.spiralArmStrength.toFixed(2)} | nearestArm=${armInfo ? armInfo.armName : 'unknown'}${armInfo && armInfo.isMajor ? ' (MAJOR)' : ''}`);
+      }, 50);
+    }, 50);
+  },
+  spawnSystemType: (destType) => {
+    _debugSpawnType(destType);
+  },
+  spawnWithSeed: (seed) => {
+    if (galleryMode) exitGallery();
+    const sysData = StarSystemGenerator.generate(seed);
+    sysData._destType = 'star-system';
+    spawnSystem({ forWarp: false, systemData: sysData });
+    console.log(`Debug spawn with seed: "${seed}"`);
+  },
+  findNearest: (targetType) => {
+    if (!galacticMap) return { found: false, message: 'No galaxy active' };
+    if (galleryMode) exitGallery();
+
+    // ── Galactic feature search (feat: prefix) ──
+    if (targetType.startsWith('feat:')) {
+      const featureType = targetType.slice(5); // remove 'feat:' prefix
+      // Search with increasing radius until we find one
+      for (const radius of [3.0, 6.0, 10.0]) {
+        const features = galacticMap.findNearbyFeatures(playerGalacticPos, radius);
+        const match = features.find(f => f.type === featureType);
+        if (match) {
+          // Position outside the feature at viewing distance.
+          // Player can then click the feature in the sky to warp inside it.
+          const viewDist = Math.max(match.radius * 2.0, 0.01);
+          const dx = match.position.x - playerGalacticPos.x;
+          const dy = match.position.y - playerGalacticPos.y;
+          const dz = match.position.z - playerGalacticPos.z;
+          const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+          const newPos = {
+            x: match.position.x - (dx / len) * viewDist,
+            y: match.position.y - (dy / len) * viewDist,
+            z: match.position.z - (dz / len) * viewDist,
+          };
+          playerGalacticPos = newPos;
+          skyRenderer.prepareForPosition(playerGalacticPos);
+          skyRenderer.activate();
+          skyRenderer.update(camera, 0);
+          // Generate a system at this position
+          const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
+          const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.01, 1);
+          const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'feat-debug';
+          const sysData = StarSystemGenerator.generate(starSeed, ctx);
+          sysData._destType = 'star-system';
+          spawnSystem({ forWarp: false, systemData: sysData });
+          debugPanel.setPlayerPos(playerGalacticPos);
+          debugPanel.setSystem(system, sysData);
+
+          const msg = `Found ${featureType} at ${match.distance.toFixed(3)} kpc (r=${match.radius.toFixed(3)} kpc), viewing from ${viewDist.toFixed(3)} kpc away`;
+          console.log(`Debug find: ${msg}`);
+          return { found: true, message: msg };
+        }
+      }
+      return { found: false, message: `No ${featureType} found within 10 kpc. Try a different galactic position (arms have more nebulae, halo has globular clusters).` };
+    }
+
+    // Search nearby stars, generate systems, check for match.
+    // Rare types (neutron-star, black-hole) need a wider search.
+    const isRare = targetType === 'neutron-star' || targetType === 'black-hole';
+    const searchCount = isRare ? 200 : 50;
+    const searchRadius = isRare ? 2.0 : 1.0;
+    const nearby = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, searchRadius, searchCount);
+    const maxAttempts = Math.min(nearby.length, searchCount);
+    let searched = 0;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      const star = nearby[i];
+      if (star.dist < 0.001) continue; // skip self
+      searched++;
+
+      const ctx = galacticMap.deriveGalaxyContext({
+        x: star.worldX, y: star.worldY, z: star.worldZ,
+      });
+      const testData = StarSystemGenerator.generate(String(star.seed), ctx);
+
+      // Check if this system matches the target type
+      const evo = testData.stellarEvolution;
+      let match = false;
+
+      switch (targetType) {
+        case 'red-giant':
+          match = evo?.stage === 'red-giant';
+          break;
+        case 'white-dwarf':
+          match = evo?.remnantType === 'white-dwarf';
+          break;
+        case 'neutron-star':
+          match = evo?.remnantType === 'neutron-star';
+          break;
+        case 'black-hole':
+          match = evo?.remnantType === 'black-hole';
+          break;
+        case 'binary':
+          match = testData.isBinary;
+          break;
+        case 'habitable':
+          match = testData.planets.some(p =>
+            p.planetData.type === 'terrestrial' || p.planetData.type === 'ocean'
+          );
+          break;
+        case 'rings':
+          match = testData.planets.some(p => p.planetData.rings);
+          break;
+        case 'belt':
+          match = testData.asteroidBelts && testData.asteroidBelts.length > 0;
+          break;
+      }
+
+      if (match) {
+        // Teleport to this star's position and spawn the system
+        playerGalacticPos = { x: star.worldX, y: star.worldY, z: star.worldZ };
+        skyRenderer.prepareForPosition(playerGalacticPos);
+        skyRenderer.activate();
+        skyRenderer.update(camera, 0);
+        testData._destType = 'star-system';
+        spawnSystem({ forWarp: false, systemData: testData });
+        debugPanel.setPlayerPos(playerGalacticPos);
+        debugPanel.setSystem(system, testData);
+
+        // Focus camera on the star so evolved star types are visible
+        if (system?.star?.mesh) {
+          focusIndex = -2; // star focus mode
+          focusStarIndex = 0;
+          focusMoonIndex = -1;
+          const starR = system.star._renderRadius || 5;
+          cameraController.focusOn(system.star.mesh.position, starR * 5);
+        }
+
+        const dist = star.dist.toFixed(3);
+        const msg = `Found ${targetType} at ${dist} kpc (searched ${searched} systems)`;
+        console.log(`Debug find: ${msg}`);
+        return { found: true, message: msg };
+      }
+    }
+
+    return {
+      found: false,
+      message: `No ${targetType} found in ${searched} nearby systems. Try teleporting to a different galactic region first.`,
+    };
+  },
+});
+
 // ── Debug Gallery ──────────────────────────────────────────────
 // Shows deep sky objects one at a time for evaluating procedural variation.
 
@@ -1763,6 +2452,12 @@ function exitGallery() {
   // Clean up gallery objects
   _galleryCleanup();
 
+  // Dispose the shared SkyFeatureLayer used for known-feature billboards
+  if (_gallerySkyFeatureLayer) {
+    _gallerySkyFeatureLayer.dispose();
+    _gallerySkyFeatureLayer = null;
+  }
+
   // Restore everything in the current system
   _setSystemVisible(true);
 
@@ -1779,6 +2474,7 @@ function exitGallery() {
 }
 
 /** Clean up any gallery-spawned objects */
+let _galleryBakedRTs = [];
 function _galleryCleanup() {
   if (galleryObject) {
     galleryObject.removeFrom(scene);
@@ -1787,9 +2483,25 @@ function _galleryCleanup() {
   }
   for (const obj of _galleryMeshes) {
     scene.remove(obj.mesh || obj);
-    if (obj.dispose) obj.dispose();
+    if (obj.dispose) {
+      obj.dispose();
+    } else if (obj instanceof THREE.Mesh) {
+      // Raw THREE.Mesh (e.g., known-feature billboard) — dispose GPU resources
+      obj.geometry.dispose();
+      obj.material.dispose();
+    }
   }
   _galleryMeshes = [];
+  // Dispose baked texture render targets
+  for (const rt of _galleryBakedRTs) {
+    rt.dispose();
+  }
+  _galleryBakedRTs = [];
+  // Hide comparison labels
+  const lblL = document.getElementById('gallery-label-left');
+  const lblR = document.getElementById('gallery-label-right');
+  if (lblL) lblL.style.display = 'none';
+  if (lblR) lblR.style.display = 'none';
 }
 
 /**
@@ -1848,6 +2560,103 @@ function gallerySpawn() {
   const rng = new SeededRandom(seed);
 
   let infoText = '';
+
+  // ── Known Feature Gallery (cycles through all 37 real Messier/NGC profiles) ──
+  if (type === 'known-feature') {
+    // Clamp seed to valid profile index (Left/Right cycles through profiles)
+    const profileIdx = ((gallerySeed - 1) % _knownProfileKeys.length + _knownProfileKeys.length) % _knownProfileKeys.length;
+    const profileKey = _knownProfileKeys[profileIdx];
+    const profile = KNOWN_OBJECT_PROFILES[profileKey];
+
+    // Lazily create a SkyFeatureLayer for billboard rendering
+    if (!_gallerySkyFeatureLayer) {
+      _gallerySkyFeatureLayer = new SkyFeatureLayer({ min: 0.3, max: 1.0 });
+    }
+
+    const isCluster = profile.type === 'globular-cluster' || profile.type === 'open-cluster';
+    const hasNebulaLayers = profile.layers > 0;
+
+    if (isCluster && !hasNebulaLayers) {
+      // Pure star clusters — auto-skip to next renderable item
+      gallerySeed += _gallerySkipDir || 1;
+      gallerySpawn();
+      return;
+    } else {
+      // Build a fake feature object matching what SkyFeatureLayer expects
+      const fakeFeature = {
+        type: profile.type,
+        color: profile.colorPrimary,
+        seed: profileKey,
+        knownProfile: profile,
+      };
+
+      // Place billboard at origin with a viewable size
+      const billboardSize = 40;
+      const billboardPos = new THREE.Vector3(0, 0, 0);
+      const brightness = 1.0;
+
+      const mesh = _gallerySkyFeatureLayer._createNebulaBillboard(
+        fakeFeature, billboardPos, billboardSize, brightness
+      );
+      if (mesh) {
+        // Rotate to face camera instead of origin (we're looking at origin)
+        mesh.lookAt(camera.position);
+        scene.add(mesh);
+        _galleryMeshes.push(mesh);
+      }
+
+      camera.position.set(0, 0, 35);
+      camera.lookAt(0, 0, 0);
+    }
+
+    // ── Build info overlay with full profile data ──
+    const colorSwatch = (c) => {
+      const r = Math.round(c[0] * 255);
+      const g = Math.round(c[1] * 255);
+      const b = Math.round(c[2] * 255);
+      return `rgb(${r},${g},${b})`;
+    };
+
+    // Update the gallery overlay with rich profile info
+    const overlay = document.getElementById('gallery-overlay');
+    const info = document.getElementById('gallery-info');
+    if (overlay) overlay.style.display = 'block';
+
+    const profileNum = profileIdx + 1;
+    const total = _knownProfileKeys.length;
+    const catalogIds = [profile.messier, profile.ngc].filter(Boolean).join(' / ') || profileKey;
+
+    let detailLines = [
+      `${profile.name}  (${catalogIds})`,
+      `type: ${profile.type}  |  shape: ${profile.shape}  |  layers: ${profile.layers}`,
+      `mag: ${profile.integratedMagnitude}  |  warp: ${profile.domainWarpStrength}  |  asym: ${profile.asymmetry}`,
+    ];
+    if (profile.darkLanes) {
+      detailLines.push(`dark lanes: ${profile.darkLaneStrength}`);
+    }
+    if (profile.centralStar) {
+      detailLines.push(`central star: lum=${profile.centralStar.luminosity}`);
+    }
+    if (profile.embeddedStars) {
+      detailLines.push(`embedded stars: ${profile.embeddedStars.count}  |  conc: ${profile.embeddedStars.concentration}`);
+    }
+    if (isCluster && !hasNebulaLayers) {
+      detailLines.push('(cluster — stars only, no nebula billboard)');
+    }
+
+    if (info) {
+      info.innerHTML = `<span style="color:#ff0">[${profileNum}/${total}]</span> ${detailLines[0]}<br>`
+        + `<span style="display:inline-block;width:14px;height:14px;background:${colorSwatch(profile.colorPrimary)};vertical-align:middle;border:1px solid #555;margin-right:4px;"></span>`
+        + `<span style="display:inline-block;width:14px;height:14px;background:${colorSwatch(profile.colorSecondary)};vertical-align:middle;border:1px solid #555;margin-right:8px;"></span>`
+        + `mix: ${profile.colorMix}<br>`
+        + detailLines.slice(1).join('<br>');
+    }
+
+    console.log(`Gallery: Known Feature ${profileNum}/${total} — ${profile.name} (${profileKey})`);
+    // Hand camera to orbit controller
+    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+    return;  // Skip the default overlay update at the bottom of gallerySpawn
+  }
 
   // ── Volumetric nebula test (Points-based gas cloud) ──
   if (type === 'volumetric-nebula-test') {
@@ -2026,33 +2835,122 @@ function gallerySpawn() {
       brightness2: 0,
     };
 
+    // ── Side-by-side: procedural (left) vs baked texture (right) ──
+    const lightDir = new THREE.Vector3(0.5, 0.3, 0.8).normalize();
+
+    // Left: procedural shader (existing Planet.js)
     const planet = new Planet(scenePlanetData, starInfo);
-    planet._lightDir.set(0.5, 0.3, 0.8).normalize();
+    planet._lightDir.copy(lightDir);
     planet.addTo(scene);
     _galleryMeshes.push(planet);
 
     const r = scenePlanetData.radius;
-    // Point orbit controller at the origin (where gallery planet lives)
-    // and set distance so the near-plane calculation works correctly.
+    const spacing = r * 2.8; // gap between the two spheres
+
+    // Position procedural on the left
+    planet.mesh.position.set(-spacing * 0.5, 0, 0);
+
+    // Right: material channel approach (baked channels + palette display shader)
+    if (!textureBaker) {
+      textureBaker = new TextureBaker(retroRenderer.renderer);
+    }
+    const bakeSeed = gallerySeed * 137.0 + (forcedPlanet.baseColor?.[0] ?? 0.5) * 1000;
+    const bakeType = getBakeType(planetType, false);
+    // Sea level varies per planet — derived from seed for consistency
+    // Lower seaLevel = more land (desert world), higher = more ocean (archipelago)
+    // Terrestrial range: 0.32 (arid, ~30% water) to 0.52 (oceanic, ~65% water)
+    // Ocean worlds: always high water
+    const seaLevelHash = ((bakeSeed * 7919.0) % 1.0 + 1.0) % 1.0; // 0-1 from seed
+    const bakeSeaLevel = planetType === 'terrestrial' ? 0.32 + seaLevelHash * 0.20
+                       : planetType === 'ocean' ? 0.50 + seaLevelHash * 0.10
+                       : -1.0;
+    const baked = textureBaker.bakeChannels(bakeSeed, {
+      noiseScale: forcedPlanet.noiseScale ?? 4.0,
+      bodyType: bakeType,
+      seaLevel: bakeSeaLevel,
+      axialTilt: forcedPlanet.axialTilt ?? 0.0,
+    });
+
+    // Pick palette based on planet type
+    const paletteMap = {
+      'rocky': 'rocky', 'ice': 'ice', 'terrestrial': 'terrestrial',
+      'lava': 'lava', 'volcanic': 'volcanic',
+      'ocean': 'terrestrial', 'carbon': 'rocky', 'venus': 'rocky',
+      'captured': 'rocky',
+    };
+    const paletteName = paletteMap[planetType] || 'rocky';
+    let palette = { ...PALETTES[paletteName] };
+
+    // CRITICAL: display shader seaLevel must match baking shader seaLevel
+    // Override the palette's hardcoded seaLevel with the actual value we baked with
+    palette.seaLevel = bakeSeaLevel;
+
+    // Tint zone colors from planet's base/accent (non-biome types only)
+    // Terrestrial uses biome sub-palette — don't override its zone colors
+    if (!palette.biomeMode && forcedPlanet.baseColor && forcedPlanet.accentColor) {
+      const bc = forcedPlanet.baseColor;
+      const ac = forcedPlanet.accentColor;
+      palette.zone0 = [ac[0] * 0.8, ac[1] * 0.8, ac[2] * 0.8];
+      palette.zone1 = [
+        (ac[0] + bc[0]) * 0.45,
+        (ac[1] + bc[1]) * 0.45,
+        (ac[2] + bc[2]) * 0.45,
+      ];
+      palette.zone2 = [bc[0] * 0.9, bc[1] * 0.9, bc[2] * 0.9];
+      palette.zone3 = [bc[0] * 1.0, bc[1] * 1.0, bc[2] * 1.0];
+      palette.zone4 = [
+        Math.min(1.0, bc[0] * 1.15),
+        Math.min(1.0, bc[1] * 1.15),
+        Math.min(1.0, bc[2] * 1.15),
+      ];
+    }
+
+    const channelGeom = new THREE.IcosahedronGeometry(scenePlanetData.radius, 4);
+    const channelMat = createMaterialBodyMaterial({
+      lightDir,
+      lightDir2: null,
+      starInfo,
+      heightScale: 0.06,
+      posterizeLevels: 8.0,
+      ditherEdgeWidth: 0.5,
+      palette,
+    });
+    channelMat.uniforms.materialMap.value = baked.materialMap;
+    channelMat.uniforms.hasMaterial.value = 1.0;
+    const channelMesh = new THREE.Mesh(channelGeom, channelMat);
+    channelMesh.position.set(spacing * 0.5, 0, 0);
+    scene.add(channelMesh);
+    _galleryMeshes.push(channelMesh);
+
+    // Store baked render target for cleanup
+    if (!_galleryBakedRTs) _galleryBakedRTs = [];
+    _galleryBakedRTs.push(baked.renderTarget);
+
+    // Camera centered between both, far enough to see both
     cameraController.target.set(0, 0, 0);
     cameraController._targetGoal.set(0, 0, 0);
     cameraController._transitioning = false;
-    cameraController.distance = r * 3;
-    cameraController.smoothedDistance = r * 3;
-    cameraController.pitch = 0.1;          // slight upward tilt
+    cameraController.distance = r * 5;
+    cameraController.smoothedDistance = r * 5;
+    cameraController.pitch = 0.1;
     cameraController.smoothedPitch = 0.1;
     cameraController.smoothedYaw = cameraController.yaw;
     cameraController._returningToOrbit = false;
     cameraController.isFreeLooking = false;
     cameraController.forceFreeLook = false;
-    // Explicitly position camera — don't rely on next update() cycle
-    camera.position.set(0, r * 0.3, r * 3);
+    camera.position.set(0, r * 0.5, r * 5);
     camera.lookAt(0, 0, 0);
 
     const features = [];
     if (forcedPlanet.rings) features.push('rings');
     if (forcedPlanet.clouds) features.push('clouds');
     if (forcedPlanet.atmosphere) features.push('atmo');
+    // Show side-by-side labels
+    const lblL = document.getElementById('gallery-label-left');
+    const lblR = document.getElementById('gallery-label-right');
+    if (lblL) lblL.style.display = 'block';
+    if (lblR) lblR.style.display = 'block';
+
     infoText = `${forcedPlanet.radiusEarth.toFixed(2)} R⊕  |  ${features.join(', ') || 'no extras'}`;
   }
 
@@ -2245,6 +3143,9 @@ function updateFocusFromStop(stop) {
  */
 function startFlythrough() {
   if (!system) return;
+  // Don't start autopilot during warp — the warp pipeline owns the camera
+  // and warpRevealSystem will start the tour for the new system.
+  if (warpEffect.isActive) return;
   soundEngine.play('autopilotOn');
 
   if (system._navigable) {
@@ -2334,6 +3235,9 @@ function warpSwapSystem() {
   // Stop autopilot (don't restore camera — warp controls it)
   flythrough.stop();
   autoNav.stop();
+  // Cancel any stale deep sky linger timer from the previous system
+  // (e.g., title screen auto-dismiss sets this during warp)
+  _deepSkyLingerTimer = -1;
 
   // Create new system using pre-generated data (GPU resource creation only).
   // seedCounter was already incremented in onPrepareSystem.
@@ -2374,7 +3278,7 @@ function warpSwapSystem() {
       // Star system: approach toward the star
       const star = system.star;
       const starPos = star.mesh.position;
-      const innerOrbit = system.planets[0].orbitRadius;
+      const innerOrbit = system.planets.length > 0 ? system.planets[0].orbitRadius : star.data.radius * 10;
       const orbitDist = Math.min(star.data.radius * 8, innerOrbit * 0.6);
 
       camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
@@ -2548,30 +3452,48 @@ function findClosestBody() {
   return closest;
 }
 
+/** Sync the nav computer's body tracking with current focus (if nav is open). */
+function _syncNavBody() {
+  if (_navComputerOpen && _navComputer) {
+    _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  }
+}
+
 /**
  * Focus the camera on a specific planet (by index), or overview if -1.
  */
 function focusPlanet(index) {
   if (!system) return;
   soundEngine.play('select');
+  cameraController.killFlightVelocity();
   focusMoonIndex = -1;
   focusStarIndex = -1;
 
-  if (index < 0 || index >= system.planets.length) {
+  if (index < 0 || index >= system.planets.length || system.planets.length === 0) {
     focusIndex = -1;
-    const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
-    cameraController.viewSystem(outerOrbit);
+    if (system.planets.length > 0) {
+      const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
+      cameraController.viewSystem(outerOrbit);
+    } else {
+      // 0-planet system: orbit the star instead
+      const starR = system.star ? system.star.data.radius : 5;
+      cameraController.viewSystem(starR * 10);
+    }
     bodyInfo.hide();
     console.log('System overview');
   } else {
     focusIndex = index;
     const entry = system.planets[index];
-    const viewDist = entry.planet.data.radius * 6;
-    cameraController.focusOn(entry.planet.mesh.position, viewDist);
+    const bodyRadius = entry.planet.data.radius;
+    const orbitDist = bodyRadius * 6;
+    // Smooth cinematic travel instead of instant snap
+    cameraController.bypassed = true;
+    flythrough.beginTravelFrom(entry.planet.mesh, orbitDist, bodyRadius);
     const pName = system.names?.planets?.[index]?.name ?? null;
     bodyInfo.showPlanet(entry.planet.data, index, pName);
     console.log(`Focus: planet ${index + 1} ${pName || ''} (${entry.planet.data.type})`);
   }
+  _syncNavBody();
 }
 
 /**
@@ -2602,7 +3524,10 @@ function focusStar(starIdx) {
     const innerOrbit = system.planets[0].orbitRadius;
     viewDist = Math.min(idealDist, innerOrbit * 0.4);
   }
-  cameraController.focusOn(starObj.mesh.position, viewDist);
+  // Smooth cinematic travel instead of instant snap
+  const bodyRadius = starObj.data.radius;
+  cameraController.bypassed = true;
+  flythrough.beginTravelFrom(starObj.mesh, viewDist, bodyRadius);
   const sName = system.names
     ? (starIdx === 1 ? system.names.star2 : system.names.star)
     : null;
@@ -2611,6 +3536,7 @@ function focusStar(starIdx) {
     ? (starIdx === 0 ? 'primary star' : 'secondary star')
     : 'star';
   console.log(`Focus: ${label} ${sName || ''} (${starObj.data.type}-class)`);
+  _syncNavBody();
 }
 
 /**
@@ -2629,10 +3555,14 @@ function focusMoon(planetIndex, moonIndex) {
   focusIndex = planetIndex;
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;
-  cameraController.focusOn(moon.mesh.position, viewDist);
+  // Smooth cinematic travel instead of instant snap
+  const bodyRadius = moon.data.radius;
+  cameraController.bypassed = true;
+  flythrough.beginTravelFrom(moon.mesh, viewDist, bodyRadius);
   const mName = system.names?.planets?.[planetIndex]?.moons?.[moonIndex] ?? null;
   bodyInfo.showMoon(moon.data, planetIndex, mName);
   console.log(`Focus: moon ${moonIndex + 1} ${mName || ''} of planet ${planetIndex + 1} (${moon.data.type})`);
+  _syncNavBody();
 }
 
 function toggleOrbits() {
@@ -2736,6 +3666,25 @@ function animate() {
   timer.update();
   const deltaTime = Math.min(timer.getDelta(), 0.1);
 
+  // ── Sky debug mode: free-look camera, render only sky scene ──
+  if (window._skyDebug) {
+    camera.position.set(0, 100000, 0);
+    const yaw = window._skyYaw || 0;
+    const pitch = window._skyPitch || 0;
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    camera.lookAt(sy * cp + camera.position.x, sp + camera.position.y, cy * cp + camera.position.z);
+    camera.updateMatrixWorld();
+    skyRenderer.update(camera, 0);
+    // Render ONLY the sky scene (skip scene objects entirely)
+    const r = retroRenderer.renderer;
+    r.setRenderTarget(null);
+    r.setClearColor(0x000000, 1);
+    r.clear();
+    r.render(skyRenderer.getScene(), camera);
+    return;
+  }
+
   // ── Gallery mode: update objects, camera controller handles orbit ──
   if (galleryMode) {
     // Update deep sky objects (internal animation)
@@ -2756,8 +3705,8 @@ function animate() {
     // Dynamic near-plane — same formula as the main render loop
     camera.near = Math.max(0.0001, Math.min(1.0, cameraController.smoothedDistance * 0.01));
     camera.updateProjectionMatrix();
-    starfield.update(camera.position);
-    if (galaxyGlow) galaxyGlow.update(camera.position, camera);
+    skyRenderer.update(camera, deltaTime);
+    retroRenderer.setTime(timer.getElapsed());
     retroRenderer.render();
     return;
   }
@@ -2877,34 +3826,41 @@ function animate() {
     for (let i = 0; i < system.planets.length; i++) {
       const entry = system.planets[i];
       const pMat = entry.planet.surface.material;
+      const pu = pMat.uniforms;
 
-      // Pass star positions to planet shader
-      pMat.uniforms.starPos1.value.copy(_star1Pos);
-      pMat.uniforms.starPos2.value.copy(_star2Pos);
+      // Pass star positions to planet shader (if uniforms exist)
+      if (pu.starPos1) pu.starPos1.value.copy(_star1Pos);
+      if (pu.starPos2) pu.starPos2.value.copy(_star2Pos);
 
       // Transit shadows: moons casting shadows on this planet
-      const moonCount = Math.min(entry.moons.length, 6);
-      pMat.uniforms.shadowMoonCount.value = moonCount;
-      for (let m = 0; m < moonCount; m++) {
-        pMat.uniforms.shadowMoonPos.value[m].copy(entry.moons[m].mesh.position);
-        pMat.uniforms.shadowMoonRadius.value[m] = entry.moons[m].data.radius;
+      // (textured shader doesn't have moon shadow arrays — skip if missing)
+      if (pu.shadowMoonCount) {
+        const moonCount = Math.min(entry.moons.length, 6);
+        pu.shadowMoonCount.value = moonCount;
+        for (let m = 0; m < moonCount; m++) {
+          pu.shadowMoonPos.value[m].copy(entry.moons[m].mesh.position);
+          pu.shadowMoonRadius.value[m] = entry.moons[m].data.radius;
+        }
       }
 
       // Planet-planet shadows: check immediate orbital neighbors
-      let shadowPlanetIdx = 0;
-      if (i > 0) {
-        const inner = system.planets[i - 1];
-        pMat.uniforms.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position);
-        pMat.uniforms.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius;
-        shadowPlanetIdx++;
+      // (textured shader has single shadowPlanetPos, not arrays — skip if missing)
+      if (pu.shadowPlanetCount) {
+        let shadowPlanetIdx = 0;
+        if (i > 0) {
+          const inner = system.planets[i - 1];
+          pu.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position);
+          pu.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius;
+          shadowPlanetIdx++;
+        }
+        if (i < system.planets.length - 1 && shadowPlanetIdx < 2) {
+          const outer = system.planets[i + 1];
+          pu.shadowPlanetPos.value[shadowPlanetIdx].copy(outer.planet.mesh.position);
+          pu.shadowPlanetRadius.value[shadowPlanetIdx] = outer.planet.data.radius;
+          shadowPlanetIdx++;
+        }
+        pu.shadowPlanetCount.value = shadowPlanetIdx;
       }
-      if (i < system.planets.length - 1 && shadowPlanetIdx < 2) {
-        const outer = system.planets[i + 1];
-        pMat.uniforms.shadowPlanetPos.value[shadowPlanetIdx].copy(outer.planet.mesh.position);
-        pMat.uniforms.shadowPlanetRadius.value[shadowPlanetIdx] = outer.planet.data.radius;
-        shadowPlanetIdx++;
-      }
-      pMat.uniforms.shadowPlanetCount.value = shadowPlanetIdx;
 
       // Moon eclipse shadows: planet eclipsing starlight from moons
       for (const moon of entry.moons) {
@@ -2943,6 +3899,9 @@ function animate() {
         belt.updateStarPositions(system.star.mesh.position, system.star2.mesh.position);
       }
     }
+
+    // ── Update flavor ships orbiting planets ──
+    shipSpawner.update(orbitDt, system.planets);
 
     // ── Update gravity well minimap positions (map-unit coords) ──
     if (gravityWell && gravityWellVisible && gravityWellPlanets) {
@@ -3201,15 +4160,11 @@ function animate() {
     }
 
     // ── Autopilot (cinematic flythrough) ──
-    // Skip idle timer during splash/intro/title/warp
+    // Skip idle timer during warp or title screen (title has its own 30s timer)
     if (warpEffect.isActive || splashActive || titleScreenActive) {
       // Warp, splash, or title screen is active — don't start autopilot
-    } else if (!autoNav.isActive) {
-      idleTimer += deltaTime;
-      if (idleTimer >= settings.get('idleTimeout')) {
-        startFlythrough();
-      }
     } else if (flythrough.active) {
+      // Flythrough runs whether autoNav is active or not (manual burns use it too)
       const result = flythrough.update(deltaTime);
 
       // "Now targeting" — 2s before orbit ends, blink the next target
@@ -3233,17 +4188,26 @@ function animate() {
       }
 
       if (result.travelComplete) {
-        // Arrived at next body — begin orbit
-        const stop = autoNav.getCurrentStop();
+        // Arrived at next body
+        const stop = autoNav.isActive ? autoNav.getCurrentStop() : null;
         if (stop && stop.bodyRef) {
-          // Set next body ref BEFORE orbit so the orbit direction
-          // can be optimized for departure toward the next body
+          // Autopilot mode: begin orbit and continue tour
           const upcoming = autoNav.getNextStop();
           flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
           flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger * settings.get('tourLingerMultiplier'));
-          // Show current body on minimap (no blink — we just arrived)
           updateFocusFromStop(stop);
+        } else {
+          // Manual burn: hand camera back to orbit controller at destination
+          flythrough.stop();
+          cameraController.bypassed = false;
+          cameraController.restoreFromWorldState(camera.position.clone());
         }
+      }
+    } else if (!autoNav.isActive) {
+      // No warp, no flythrough, no autopilot — run idle timer
+      idleTimer += deltaTime;
+      if (idleTimer >= settings.get('idleTimeout')) {
+        startFlythrough();
       }
     }
 
@@ -3295,7 +4259,8 @@ function animate() {
     // ── Camera tracking (manual mode only) ──
     // Skip during flythrough (camera is driven by FlythroughCamera)
     // Skip during gallery mode (camera orbits the gallery object at origin)
-    if (!cameraController.bypassed && !galleryMode) {
+    // Skip during WASD flight — player is moving freely, don't snap back to body
+    if (!cameraController.bypassed && !galleryMode && !cameraController.isFlying) {
       // Determine the tracked body's position (if any)
       let trackPos = null;
       if (focusIndex === -2 && focusStarIndex >= 0) {
@@ -3319,6 +4284,31 @@ function animate() {
           cameraController.trackTarget(trackPos);
         }
       }
+    }
+  }
+
+  // ── WASD free-flight input ──
+  // Read held keys each frame and feed thrust direction to the camera.
+  // Flight is disabled during warp, title screen, overlays, gallery, and autopilot.
+  {
+    const flightOk = !titleScreenActive
+                   && !warpEffect.isActive
+                   && !warpTarget.turning
+                   && !galleryMode
+                   && !autoNav.isActive
+                   && !_settingsOpen
+                   && !_soundTestOpen
+                   && document.getElementById('keybinds-overlay')?.style.display === 'none';
+    cameraController._flightEnabled = flightOk;
+
+    if (flightOk) {
+      // Use e.code values (KeyW/KeyS/etc.) — immune to Shift changing e.key case
+      const fwd = (_heldKeys.has('KeyW') ? 1 : 0) - (_heldKeys.has('KeyS') ? 1 : 0);
+      const right = (_heldKeys.has('KeyD') ? 1 : 0) - (_heldKeys.has('KeyA') ? 1 : 0);
+      const boost = _heldKeys.has('Shift') || _heldKeys.has('ShiftLeft') || _heldKeys.has('ShiftRight');
+      cameraController.setFlightInput(fwd, right, boost);
+    } else {
+      cameraController.setFlightInput(0, 0, false);
     }
   }
 
@@ -3347,8 +4337,10 @@ function animate() {
     camera.updateProjectionMatrix();
   }
 
-  starfield.update(camera.position);
-  if (galaxyGlow) galaxyGlow.update(camera.position, camera);
+  skyRenderer.update(camera, deltaTime);
+  lodManager.update();
+  debugPanel.setFocus(focusIndex, focusMoonIndex);
+  debugPanel.update(deltaTime);
 
   // ── Update HUD ──
   // During flythrough, compute yaw from camera position relative to origin
@@ -3362,6 +4354,7 @@ function animate() {
     gravityWell.update(hudYaw);
   }
 
+  retroRenderer.setTime(timer.getElapsed());
   retroRenderer.render();
 }
 
@@ -3371,6 +4364,8 @@ window.addEventListener('resize', () => retroRenderer.resize());
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
   _heldKeys.add(e.key);
+  // Also track e.code so WASD works reliably regardless of Shift state
+  _heldKeys.add(e.code);
 
   // K key: toggle keybinds overlay (works always — title, gameplay, warp)
   if (e.code === 'KeyK') {
@@ -3378,9 +4373,27 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // S key: toggle settings panel (works always except title screen)
-  if (e.code === 'KeyS' && !titleScreenActive) {
+  // Down arrow: toggle debug inspection panel
+  if (e.code === 'ArrowDown' && !galleryMode) {
+    debugPanel.togglePanel();
+    return;
+  }
+
+  // Backtick key: toggle debug HUD (corner overlay)
+  if (e.code === 'Backquote') {
+    debugPanel.toggleHUD();
+    return;
+  }
+
+  // P key: toggle settings panel (was S — moved to free WASD for movement)
+  if (e.code === 'KeyP' && !titleScreenActive) {
     toggleSettings();
+    return;
+  }
+
+  // N key: toggle nav computer (blocked during warp)
+  if (e.code === 'KeyN' && !titleScreenActive && !warpEffect.isActive) {
+    toggleNavComputer();
     return;
   }
 
@@ -3390,10 +4403,29 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Escape closes keybinds, settings, or sound test overlay if open
+  // X key: toggle Pretext Lab (text rendering experiments)
+  if (e.code === 'KeyX' && !titleScreenActive) {
+    togglePretextLab();
+    return;
+  }
+
+  // Escape closes keybinds, settings, sound test, or debug overlay if open
   if (e.code === 'Escape') {
+    if (debugPanel.isPanelVisible) {
+      debugPanel.togglePanel();
+      return;
+    }
+    if (_pretextLabOpen) {
+      togglePretextLab();
+      return;
+    }
     if (_soundTestOpen) {
       toggleSoundTest();
+      return;
+    }
+    if (_navComputerOpen) {
+      if (_navComputer && _navComputer.handleEscape()) return; // back one level
+      toggleNavComputer(); // close if already at galaxy level
       return;
     }
     if (_settingsOpen) {
@@ -3434,79 +4466,57 @@ window.addEventListener('keydown', (e) => {
     console.log('Debug: next warp → globular cluster');
   }
 
-  // Debug instant-spawn: Shift+1 through Shift+7 jump directly to a system type
-  // without warping. Each press generates a new random seed.
-  if (e.shiftKey && !warpEffect.isActive) {
-    const debugTypes = {
-      '!': 'star-system',         // Shift+1
-      '@': 'spiral-galaxy',       // Shift+2
-      '#': 'elliptical-galaxy',   // Shift+3
-      '$': 'emission-nebula',     // Shift+4
-      '%': 'planetary-nebula',    // Shift+5
-      '^': 'globular-cluster',    // Shift+6
-      '&': 'open-cluster',        // Shift+7
-    };
-    const destType = debugTypes[e.key];
-    if (destType) {
-      _debugSpawnType(destType);
-      return;
+  // Shift+B: test baked textures on the focused planet
+  if (e.shiftKey && e.code === 'KeyB' && system) {
+    if (!textureBaker) {
+      textureBaker = new TextureBaker(retroRenderer.renderer);
     }
-
-    // Shift+0 → secret Solar System mode
-    if (e.key === ')') {
-      if (galleryMode) exitGallery();
-      const solData = generateSolarSystem();
-      solData._destType = 'star-system';
-      spawnSystem({ forWarp: false, systemData: solData });
-      console.log('Secret mode: Solar System');
-      return;
+    // Find the focused planet or default to first
+    let targetEntry = system.planets[0];
+    if (focusIndex >= 0 && focusIndex < system.planets.length) {
+      targetEntry = system.planets[focusIndex];
     }
-
-    // ── Galaxy position debug teleports ──
-    // Shift+F1 through F5: jump to extreme galactic positions
-    // to test how the starfield and system generation change
-    // Shift+Q/W/E/R/Z: galaxy position debug teleports
-    const galaxyDebugPositions = {
-      'KeyQ': { name: 'Solar neighborhood', pos: { x: 8.0, y: 0.025, z: 0.0 } },
-      'KeyW': { name: 'Galaxy edge (outer fringe)', pos: { x: 14.5, y: 0.0, z: 0.0 } },
-      'KeyE': { name: 'Above galaxy (halo)', pos: { x: 4.0, y: 6.0, z: 0.0 } },
-      'KeyR': { name: 'Galactic center', pos: { x: 0.5, y: 0.0, z: 0.5 } },
-      'KeyZ': { name: 'Deep halo (outside galaxy)', pos: { x: 0.0, y: 12.0, z: 0.0 } },
-    };
-    const galaxyDebug = galaxyDebugPositions[e.code];
-    if (galaxyDebug && galacticMap) {
-      if (galleryMode) exitGallery();
-      // Teleport to the galactic position
-      playerGalacticPos = { ...galaxyDebug.pos };
-      const ctx = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      // Regenerate starfield + glow
-      const sfData = StarfieldGenerator.generate(galacticMap, playerGalacticPos, settings.get('starDensity'), 500);
-      starfield.dispose();
-      retroRenderer.starfieldScene.remove(starfield.mesh);
-      starfield = new Starfield(sfData, 500);
-      starfield.addTo(retroRenderer.starfieldScene);
-      starfield.update(camera.position);
-      if (galaxyGlow) { galaxyGlow.dispose(); retroRenderer.starfieldScene.remove(galaxyGlow.mesh); }
-      galaxyGlow = new GalaxyGlow(sfData.skyGrid, sfData.skyGridTheta, sfData.skyGridPhi, 499);
-      galaxyGlow.addTo(retroRenderer.starfieldScene);
-      galaxyGlow.update(camera.position, camera);
-      // Generate a system at this position
-      const nearest = galacticMap.findNearestStars(playerGalacticPos, 1);
-      const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'galaxy-debug';
-      const sysData = StarSystemGenerator.generate(starSeed, ctx);
-      sysData._destType = 'star-system';
-      spawnSystem({ forWarp: false, systemData: sysData });
-      console.log('Galaxy debug: ' + galaxyDebug.name
-        + ' | component=' + ctx.component
-        + ' | [Fe/H]=' + ctx.metallicity.toFixed(2)
-        + ' | age=' + ctx.age.toFixed(1) + 'Gyr'
-        + ' | arm=' + ctx.spiralArmStrength.toFixed(2));
-      return;
+    const pd = targetEntry.planet.data;
+    const bakeType = getBakeType(pd.type, false);
+    const seed = pd.noiseScale * 100 + (pd.baseColor?.[0] ?? 0.5) * 1000;
+    console.log(`[TextureBaker] Baking type=${pd.type} (bakeType=${bakeType}), seed=${seed.toFixed(1)}`);
+    const baked = textureBaker.bake(seed, {
+      noiseScale: pd.noiseScale ?? 4.0,
+      bodyType: bakeType,
+      baseColor: pd.baseColor,
+      accentColor: pd.accentColor,
+      noiseDetail: pd.noiseDetail ?? 0.5,
+    });
+    // Create a textured material and swap it onto the planet surface
+    const surface = targetEntry.planet.surface || targetEntry.planet.mesh;
+    if (surface) {
+      const starInfo = system.starInfo;
+      const lightDir = targetEntry.planet._lightDir || new THREE.Vector3(1, 0, 0);
+      const lightDir2 = targetEntry.planet._lightDir2 || null;
+      const bakedMat = createTexturedBodyMaterial({
+        lightDir,
+        lightDir2,
+        starInfo,
+        heightScale: 0.06,
+        posterizeLevels: 8.0,
+        ditherEdgeWidth: 0.5,
+      });
+      // Wire baked textures
+      bakedMat.uniforms.diffuseMap.value = baked.diffuseMap;
+      bakedMat.uniforms.heightMap.value = baked.heightMap;
+      bakedMat.uniforms.hasTextures.value = 1.0;
+      bakedMat.uniforms.hasHeightMap.value = 1.0;
+      surface.material = bakedMat;
+      console.log('[TextureBaker] Swapped to baked texture material');
     }
+    return;
   }
 
-  // D key: toggle debug gallery (works even during warp)
-  if (e.code === 'KeyD') {
+  // Old Shift+number and Shift+letter debug shortcuts removed.
+  // All debug spawning/teleporting is now handled via the debug panel (Down Arrow key).
+
+  // G key: toggle debug gallery (was D — moved to free WASD for movement)
+  if (e.code === 'KeyG') {
     if (galleryMode) {
       exitGallery();
     } else {
@@ -3519,15 +4529,19 @@ window.addEventListener('keydown', (e) => {
   if (galleryMode) {
     if (e.code === 'ArrowRight') {
       gallerySeed++;
+      _gallerySkipDir = 1;
       gallerySpawn();
     } else if (e.code === 'ArrowLeft') {
       gallerySeed = Math.max(1, gallerySeed - 1);
+      _gallerySkipDir = -1;
       gallerySpawn();
     } else if (e.code === 'ArrowUp') {
       galleryTypeIdx = (galleryTypeIdx + 1) % GALLERY_TYPES.length;
+      gallerySeed = 1;
       gallerySpawn();
     } else if (e.code === 'ArrowDown') {
       galleryTypeIdx = (galleryTypeIdx - 1 + GALLERY_TYPES.length) % GALLERY_TYPES.length;
+      gallerySeed = 1;
       gallerySpawn();
     }
     return;  // Block all other input in gallery mode
@@ -3535,6 +4549,57 @@ window.addEventListener('keydown', (e) => {
 
   // Block all input during warp transition or pre-warp turn
   if (warpEffect.isActive || warpTarget.turning) return;
+
+  // Shift+L: DEBUG — teleport to Earth's Moon (for LOD testing)
+  if (e.code === 'KeyL' && e.shiftKey) {
+    console.log('Debug: teleporting to Earth\'s Moon...');
+
+    // Step 1: Spawn the Solar System if not already present
+    const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
+    const knownSol = KnownSystems.findAt(solPos);
+    if (!knownSol) {
+      console.warn('Debug: Sol not found in KnownSystems!');
+      return;
+    }
+
+    // Update player position to Sol
+    playerGalacticPos = { ...solPos };
+    if (skyRenderer._glowLayer?.setPlayerPosition) {
+      skyRenderer._glowLayer.setPlayerPosition(playerGalacticPos);
+    }
+
+    // Generate and spawn the Solar System
+    const solarData = knownSol.generate();
+    solarData._knownSystemNames = knownSol.names;
+    spawnSystem({ forWarp: false, systemData: solarData });
+    debugPanel.setPlayerPos(playerGalacticPos);
+
+    // Step 2: Focus camera on Earth's Moon (Earth = index 2, Moon = index 0)
+    // Use requestAnimationFrame to let the system finish spawning first
+    requestAnimationFrame(() => {
+      if (!system || system.planets.length < 3) {
+        console.warn('Debug: Solar System spawned but Earth not found at index 2');
+        return;
+      }
+      const earthEntry = system.planets[2]; // Earth
+      if (!earthEntry.moons || earthEntry.moons.length === 0) {
+        console.warn('Debug: Earth has no moons');
+        return;
+      }
+      const moon = earthEntry.moons[0]; // The Moon
+      const viewDist = moon.data.radius * 15; // ~15x radius, well within LOD2 range
+
+      focusIndex = 2;
+      focusMoonIndex = 0;
+      focusStarIndex = -1;
+      cameraController.focusOn(moon.mesh.position, viewDist);
+
+      const mName = system.names?.planets?.[2]?.moons?.[0] ?? 'Moon';
+      bodyInfo.showMoon(moon.data, 2, mName);
+      console.log(`Debug: Camera placed near ${mName}, viewDist=${viewDist.toFixed(4)}, moonRadius=${moon.data.radius.toFixed(4)}`);
+    });
+    return;
+  }
 
   // M key: toggle minimap
   if (e.code === 'KeyM') {
@@ -3547,8 +4612,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // A key: toggle autopilot
-  if (e.code === 'KeyA') {
+  // Q key: toggle autopilot (was A — moved to free WASD for movement)
+  if (e.code === 'KeyQ') {
     if (autoNav.isActive) {
       stopFlythrough();
     } else if (system) {
@@ -3560,6 +4625,11 @@ window.addEventListener('keydown', (e) => {
 
   // During autopilot, some keys redirect the tour instead of normal behavior
   if (autoNav.isActive) {
+    // WASD: stop autopilot and take manual control
+    if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
+      stopFlythrough();
+      return;
+    }
     if (e.code === 'Space') {
       e.preventDefault();
       beginWarpTurn();
@@ -3590,9 +4660,9 @@ window.addEventListener('keydown', (e) => {
         }
       }
     }
-    // O, G still work normally during autopilot
+    // O, V still work normally during autopilot
     if (e.code === 'KeyO') toggleOrbits();
-    if (e.code === 'KeyG') toggleGravityWell();
+    if (e.code === 'KeyV') toggleGravityWell();
     return;
   }
 
@@ -3609,6 +4679,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (!system) return;
     const n = system.planets.length;
+    if (n === 0) return; // no planets to cycle through
     if (e.shiftKey) {
       focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
     } else {
@@ -3616,7 +4687,7 @@ window.addEventListener('keydown', (e) => {
     }
   } else if (e.code === 'KeyO') {
     toggleOrbits();
-  } else if (e.code === 'KeyG') {
+  } else if (e.code === 'KeyV') {
     toggleGravityWell();
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
@@ -3628,6 +4699,12 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   _heldKeys.delete(e.key);
+  _heldKeys.delete(e.code);
+});
+
+// Clear all held keys when window loses focus — prevents WASD getting "stuck"
+window.addEventListener('blur', () => {
+  _heldKeys.clear();
 });
 
 // ── Click/tap-to-select ──
@@ -3743,6 +4820,12 @@ function trySelect(clientX, clientY) {
 /**
  * Select the nearest background starfield point as a warp target.
  * Green brackets will blink around it; pressing Space warps toward it.
+ *
+ * The clicked point may be:
+ * - A real GalacticMap star → warp to that star system
+ * - A tagged galactic feature → warp to a star inside it (Category A/B)
+ * - A background star → generate system from direction
+ * The destType is stored on warpTarget so onPrepareSystem can route correctly.
  */
 function trySelectWarpTarget(rayDir) {
   const result = starfield.findNearestStar(rayDir);
@@ -3751,31 +4834,100 @@ function trySelectWarpTarget(rayDir) {
   soundEngine.play('warpTarget');
   warpTarget.direction = result.direction;
   warpTarget.starIndex = result.index;
-  // Generate a deterministic name from the star's index — same index = same name every time
-  const nameRng = new SeededRandom(`warp-star-${result.index}`);
-  warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
+  warpTarget.destType = null; // default: normal star system
+
+  // Resolve star data NOW (before starfield regeneration invalidates the index)
+  const entry = skyRenderer.getEntryForIndex(result.index);
+  if (entry?.starData) {
+    warpTarget.navStarData = entry.starData;
+    // Ensure type is present (hash grid stars have it; real catalog stars need estimatedType fallback)
+    if (!warpTarget.navStarData.type && entry.estimatedType) {
+      warpTarget.navStarData.type = entry.estimatedType;
+    }
+  } else {
+    warpTarget.navStarData = null;
+  }
+
+  // Extract galactic position from star data for region-aware naming
+  const starPos = entry?.starData ? { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ } : null;
+
+  if (entry?.isFeature) {
+    // Clicked a galactic feature — route to a star inside it
+    warpTarget.destType = `feature:${entry.featureType}`;
+    warpTarget.featureData = entry.featureData;
+    const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    bodyInfo.showWarpTarget(`${warpTarget.name} (${entry.featureType.replace('-', ' ')})`);
+  } else if (entry?.isExternalGalaxy) {
+    // Clicked an external galaxy — Category C destination
+    warpTarget.destType = 'external-galaxy';
+    warpTarget.galaxyData = entry.galaxyData;
+    warpTarget.name = entry.galaxyData.name;
+    bodyInfo.showWarpTarget(`${entry.galaxyData.name} (${entry.galaxyData.type} galaxy)`);
+  } else {
+    // Normal star — generate name from index
+    const nameRng = new SeededRandom(`warp-star-${result.index}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    bodyInfo.showWarpTarget(warpTarget.name);
+  }
+
   warpTarget.blinkTimer = 0;
   warpTarget.blinkOn = true;
-
-  // Show the star name in the HUD
-  bodyInfo.showWarpTarget(warpTarget.name);
 }
 
 /**
  * Auto-select a random visible star as warp target (screensaver mode).
  * Picks from the forward hemisphere so the brackets appear on-screen.
  */
+/**
+ * Auto-select a random visible star as warp target (screensaver mode).
+ * Uses the same routing pipeline as manual clicks — the randomly
+ * selected point might be a star, a galactic feature, or (rarely)
+ * an external galaxy. destType is set so onPrepareSystem routes correctly.
+ */
 function autoSelectWarpTarget() {
   camera.getWorldDirection(_starRayDir);
   const result = starfield.getRandomVisibleStar(_starRayDir);
-  if (result) {
-    warpTarget.direction = result.direction;
-    warpTarget.starIndex = result.index;
-    const nameRng = new SeededRandom(`warp-star-${result.index}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'));
-    warpTarget.blinkTimer = 0;
-    warpTarget.blinkOn = true;
+  if (!result) return;
+
+  warpTarget.direction = result.direction;
+  warpTarget.starIndex = result.index;
+  warpTarget.destType = null;
+  warpTarget.featureData = null;
+  warpTarget.galaxyData = null;
+
+  // Resolve star data NOW (before starfield regeneration invalidates the index).
+  // Store as navStarData so warp resolution uses it directly.
+  const entry = skyRenderer.getEntryForIndex(result.index);
+  if (entry?.starData) {
+    warpTarget.navStarData = entry.starData;
+    // Ensure type is present (hash grid stars have it; real catalog stars need estimatedType fallback)
+    if (!warpTarget.navStarData.type && entry.estimatedType) {
+      warpTarget.navStarData.type = entry.estimatedType;
+    }
+  } else {
+    warpTarget.navStarData = null;
   }
+
+  // Extract galactic position for region-aware naming
+  const autoStarPos = entry?.starData ? { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ } : null;
+
+  if (entry?.isFeature) {
+    warpTarget.destType = `feature:${entry.featureType}`;
+    warpTarget.featureData = entry.featureData;
+    const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+  } else if (entry?.isExternalGalaxy) {
+    warpTarget.destType = 'external-galaxy';
+    warpTarget.galaxyData = entry.galaxyData;
+    warpTarget.name = entry.galaxyData.name;
+  } else {
+    const nameRng = new SeededRandom(`warp-star-${result.index}`);
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+  }
+
+  warpTarget.blinkTimer = 0;
+  warpTarget.blinkOn = true;
 }
 
 /**
@@ -3788,14 +4940,20 @@ function beginWarpTurn() {
   if (warpTarget.turning) return;    // already turning
   soundEngine.play('warpLockOn');
 
+  // Kill any WASD flight momentum before warping
+  cameraController.killFlightVelocity();
+
   // Cancel deep sky linger timer (we're warping now)
   _deepSkyLingerTimer = -1;
 
   if (!warpTarget.direction) {
-    // No target — warp toward camera forward immediately
-    cameraController.bypassed = true;
-    warpEffect.start(null);
-    return;
+    // No target set — pick a real hash grid star before warping
+    autoSelectWarpTarget();
+    if (!warpTarget.direction) {
+      // Still no target (no visible stars?) — abort warp
+      console.warn('[WARP] No star found for warp — aborting');
+      return;
+    }
   }
 
   // Stop flythrough camera — we're taking direct control for the turn.
@@ -3809,6 +4967,13 @@ function beginWarpTurn() {
 
 // Idle tracking — any mouse movement resets idle timer (but no free-look)
 canvas.addEventListener('mousemove', (e) => {
+  // Sky debug free-look: drag to rotate camera
+  if (window._skyDebug && e.buttons === 1) {
+    window._skyYaw -= (e.movementX || 0) * 0.003;
+    window._skyPitch += (e.movementY || 0) * 0.003;
+    window._skyPitch = Math.max(-Math.PI * 0.49, Math.min(Math.PI * 0.49, window._skyPitch));
+    return;
+  }
   if (!autoNav.isActive) {
     idleTimer = 0;
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
@@ -4053,10 +5218,12 @@ if (mobileControls) {
     } else if (action === 'prev') {
       if (!system) return;
       const n = system.planets.length;
+      if (n === 0) return;
       focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
     } else if (action === 'next') {
       if (!system) return;
       const n = system.planets.length;
+      if (n === 0) return;
       focusPlanet((focusIndex + 1) % n);
     } else if (action === 'orbits') {
       toggleOrbits();

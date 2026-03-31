@@ -1,5 +1,150 @@
 {
-  "fighters": [],
+  "fighters": [
+    {
+      "file": "fighters/fighter-interceptor-1.glb",
+      "seed": 1,
+      "subtype": "Interceptor",
+      "verts": 864,
+      "tris": 288,
+      "palette": "Foss Orange/Blue"
+    },
+    {
+      "file": "fighters/fighter-interceptor-2.glb",
+      "seed": 2,
+      "subtype": "Interceptor",
+      "verts": 864,
+      "tris": 288,
+      "palette": "Foss Yellow/Green"
+    },
+    {
+      "file": "fighters/fighter-interceptor-3.glb",
+      "seed": 3,
+      "subtype": "Interceptor",
+      "verts": 864,
+      "tris": 288,
+      "palette": "Military Grey"
+    },
+    {
+      "file": "fighters/fighter-dart-101.glb",
+      "seed": 101,
+      "subtype": "Dart",
+      "verts": 456,
+      "tris": 152,
+      "palette": "Foss Yellow/Green"
+    },
+    {
+      "file": "fighters/fighter-dart-102.glb",
+      "seed": 102,
+      "subtype": "Dart",
+      "verts": 456,
+      "tris": 152,
+      "palette": "Military Grey"
+    },
+    {
+      "file": "fighters/fighter-dart-103.glb",
+      "seed": 103,
+      "subtype": "Dart",
+      "verts": 456,
+      "tris": 152,
+      "palette": "Deep Space Black"
+    },
+    {
+      "file": "fighters/fighter-bat-201.glb",
+      "seed": 201,
+      "subtype": "Bat",
+      "verts": 600,
+      "tris": 200,
+      "palette": "Military Grey"
+    },
+    {
+      "file": "fighters/fighter-bat-202.glb",
+      "seed": 202,
+      "subtype": "Bat",
+      "verts": 600,
+      "tris": 200,
+      "palette": "Deep Space Black"
+    },
+    {
+      "file": "fighters/fighter-bat-203.glb",
+      "seed": 203,
+      "subtype": "Bat",
+      "verts": 600,
+      "tris": 200,
+      "palette": "Ice Blue"
+    },
+    {
+      "file": "fighters/fighter-canard-301.glb",
+      "seed": 301,
+      "subtype": "Canard",
+      "verts": 864,
+      "tris": 288,
+      "palette": "Deep Space Black"
+    },
+    {
+      "file": "fighters/fighter-canard-302.glb",
+      "seed": 302,
+      "subtype": "Canard",
+      "verts": 864,
+      "tris": 288,
+      "palette": "Ice Blue"
+    },
+    {
+      "file": "fighters/fighter-canard-303.glb",
+      "seed": 303,
+      "subtype": "Canard",
+      "verts": 864,
+      "tris": 288,
+      "palette": "Foss Red/White"
+    },
+    {
+      "file": "fighters/fighter-hammerhead-401.glb",
+      "seed": 401,
+      "subtype": "Hammerhead",
+      "verts": 792,
+      "tris": 264,
+      "palette": "Ice Blue"
+    },
+    {
+      "file": "fighters/fighter-hammerhead-402.glb",
+      "seed": 402,
+      "subtype": "Hammerhead",
+      "verts": 792,
+      "tris": 264,
+      "palette": "Foss Red/White"
+    },
+    {
+      "file": "fighters/fighter-hammerhead-403.glb",
+      "seed": 403,
+      "subtype": "Hammerhead",
+      "verts": 792,
+      "tris": 264,
+      "palette": "Foss Orange/Blue"
+    },
+    {
+      "file": "fighters/fighter-flying-wing-501.glb",
+      "seed": 501,
+      "subtype": "Flying Wing",
+      "verts": 1176,
+      "tris": 392,
+      "palette": "Foss Red/White"
+    },
+    {
+      "file": "fighters/fighter-flying-wing-502.glb",
+      "seed": 502,
+      "subtype": "Flying Wing",
+      "verts": 822,
+      "tris": 274,
+      "palette": "Foss Orange/Blue"
+    },
+    {
+      "file": "fighters/fighter-flying-wing-503.glb",
+      "seed": 503,
+      "subtype": "Flying Wing",
+      "verts": 984,
+      "tris": 328,
+      "palette": "Foss Yellow/Green"
+    }
+  ],
   "shuttles": [],
   "freighters": [],
   "cruisers": [],

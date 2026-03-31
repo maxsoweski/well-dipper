@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Galaxy Model Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; color: #0f0; font-family: 'DotGothic16', monospace; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 13px; line-height: 1.6;
+      text-shadow: 0 0 8px #000, 0 0 16px #000;
+      pointer-events: none; z-index: 10;
+    }
+    #controls {
+      position: fixed; bottom: 12px; left: 12px;
+      font-size: 12px; line-height: 2.0;
+      text-shadow: 0 0 8px #000;
+      z-index: 10; max-width: 360px;
+    }
+    #controls label { display: block; cursor: pointer; }
+    #controls input[type=range] { width: 140px; vertical-align: middle; }
+    .btn {
+      background: rgba(0,255,0,0.1); border: 1px solid #0f0; color: #0f0;
+      font-family: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer;
+      margin: 2px;
+    }
+    .btn:hover { background: rgba(0,255,0,0.25); }
+    #lightingPanel {
+      position: fixed; top: 12px; right: 12px;
+      font-size: 11px; line-height: 1.8;
+      text-shadow: 0 0 8px #000;
+      z-index: 10; width: 260px;
+      background: rgba(0,0,0,0.7);
+      padding: 8px 10px;
+      border: 1px solid rgba(0,255,0,0.3);
+      border-radius: 4px;
+    }
+    #lightingPanel label { display: block; cursor: pointer; }
+    #lightingPanel input[type=range] { width: 120px; vertical-align: middle; }
+    .comp-section { margin-bottom: 4px; padding: 2px 0 2px 6px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <canvas id="lumCanvas" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:5; image-rendering:pixelated;"></canvas>
+  <div id="hud"></div>
+  <!-- Right-side lighting panel — always visible, controls cloud view in real-time -->
+  <div id="lightingPanel">
+    <div style="color:#0f0; font-size:12px; margin-bottom:6px;">COMPONENT LIGHTING</div>
+    <div id="lightSliders"></div>
+    <div style="margin-top:6px; border-top:1px solid rgba(0,255,0,0.2); padding-top:4px;">
+      <span style="color:#0f0; font-size:11px;">GLOBAL</span>
+      <label>Exposure: <input type="range" id="cl-exposure" min="0.05" max="2.0" step="0.05" value="0.50"> <span id="cl-exposureV">0.50</span></label>
+      <label>Highlight Compress: <input type="range" id="cl-highlight" min="0" max="1.0" step="0.05" value="0.80"> <span id="cl-highlightV">0.80</span></label>
+      <label>Cloud Opacity: <input type="range" id="cloudOpacity2" min="0.05" max="1.0" step="0.05" value="0.35"> <span id="cloudOpacity2Val">0.35</span></label>
+    </div>
+    <button class="btn" id="resetLighting" style="margin-top:4px;">Reset Defaults</button>
+  </div>
+  <div id="status" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;z-index:20;">GENERATING...</div>
+  <div id="controls" style="display:none;">
+    <div style="margin-bottom: 6px; color: #0a0; font-size: 11px;">
+      GALAXY CLOUD VIEW &nbsp; drag = orbit &nbsp; scroll = zoom
+    </div>
+    <!-- Cloud view controls (default) -->
+    <label>Opacity: <input type="range" id="cloudOpacity" min="0.05" max="1.0" step="0.05" value="0.35"> <span id="cloudOpacityVal">0.35</span></label>
+    <label>Layers: <input type="range" id="cloudLayers" min="3" max="12" step="1" value="7"> <span id="cloudLayersVal">7</span></label>
+    <div style="margin-top: 6px;">
+      <button class="btn" id="viewTop">Top-Down</button>
+      <button class="btn" id="viewEdge">Edge-On</button>
+      <button class="btn" id="viewAngled">Angled</button>
+      <button class="btn" id="toggleMode">Nebula Mode</button>
+      <button class="btn" id="toggleLum">Luminosity View</button>
+      <button class="btn" id="toggleOverlay">Sector Overlay: OFF</button>
+      <button class="btn" id="exportNav">Export Nav Map</button>
+      <button class="btn" id="saveSettings">Save Settings</button>
+      <button class="btn" id="loadSettings">Load Settings</button>
+      <button class="btn" id="dumpSettings">Copy Settings</button>
+    </div>
+    <!-- Hidden: particle + luminosity controls (for debugging) -->
+    <div id="extraControls" style="display:none; margin-top: 6px; border-top: 1px solid #0a0; padding-top: 4px;">
+      <div style="color:#0a0; font-size:11px;">── PARTICLE VIEW ──</div>
+      <label>Star Brightness: <input type="range" id="bright" min="0" max="5.0" step="0.05" value="1.00"> <span id="brightVal">1.00</span></label>
+      <label>Star Size: <input type="range" id="scale" min="0.01" max="2.0" step="0.01" value="0.30"> <span id="scaleVal">0.30</span></label>
+      <label>Spread: <input type="range" id="spread" min="1.0" max="30.0" step="0.5" value="3.0"> <span id="spreadVal">3.0</span></label>
+      <label>Glow: <input type="range" id="glow" min="0" max="3.0" step="0.01" value="0.30"> <span id="glowVal">0.30</span></label>
+      <label>Dust: <input type="range" id="dust" min="0" max="2.0" step="0.01" value="0.50"> <span id="dustVal">0.50</span></label>
+      <label>Dither: <input type="range" id="dither" min="0" max="1.5" step="0.01" value="0.0"> <span id="ditherVal">0.0</span></label>
+      <label>Near Fade: <input type="range" id="nearfade" min="0" max="15.0" step="0.5" value="0.0"> <span id="nearfadeVal">0.0</span> kpc</label>
+      <label>Choke: <input type="range" id="choke" min="1.0" max="15.0" step="0.5" value="15.0"> <span id="chokeVal">15.0</span> kpc</label>
+      <label>Particles: <input type="range" id="pcount" min="100000" max="2000000" step="100000" value="600000"> <span id="pcountVal">600K</span></label>
+      <div style="color:#0a0; font-size:11px; margin-top:4px;">── LUMINOSITY VIEW ──</div>
+      <div style="color:#0a0; font-size:10px; margin-bottom:2px;">Per-component lighting:</div>
+      <div id="compControls"></div>
+      <div style="margin-top:4px;">
+        <label>Dust: <input type="range" id="lumDust" min="0" max="1.0" step="0.05" value="0.40"> <span id="lumDustVal">0.40</span></label>
+        <label>Noise: <input type="range" id="lumNoise" min="0" max="1.0" step="0.05" value="0.60"> <span id="lumNoiseVal">0.60</span></label>
+        <label>Extent: <input type="range" id="lumExtent" min="0.5" max="22" step="0.5" value="22"> <span id="lumExtentVal">22</span> kpc</label>
+        <label>Resolution: <input type="range" id="lumRes" min="256" max="1024" step="128" value="512"> <span id="lumResVal">512</span></label>
+      </div>
+      <button class="btn" id="lumExport">Export Luminosity PNG</button>
+      <button class="btn" id="lumResetComp">Reset Components</button>
+      <button class="btn" id="exportTop">Export Particle View</button>
+    </div>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GalacticMap } from './src/generation/GalacticMap.js';
+    import { GalacticSectors } from './src/generation/GalacticSectors.js';
+    import { MilkyWayModel } from './src/generation/MilkyWayModel.js';
+    import { MilkyWay } from './src/objects/MilkyWay.js';
+    import { GalaxyCloud } from './src/objects/GalaxyCloud.js';
+    import { GalaxyNebula } from './src/objects/GalaxyNebula.js';
+    import { GalaxyLuminosityRenderer } from './src/rendering/GalaxyLuminosityRenderer.js';
+
+    const canvas = document.getElementById('canvas');
+    const hudEl = document.getElementById('hud');
+    const statusEl = document.getElementById('status');
+    const controlsEl = document.getElementById('controls');
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 2);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000);
+    // Sort objects by renderOrder so dust renders after glow+particles
+    renderer.sortObjects = true;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 500);
+
+
+    const galacticMap = new GalacticMap('well-dipper-galaxy-1');
+    const sectors = new GalacticSectors(galacticMap);
+    let milkyWay = null;
+
+    // ── Sector overlay (togglable) ──
+    const overlayGroup = new THREE.Group();
+    overlayGroup.visible = false;
+    scene.add(overlayGroup);
+
+    function buildOverlay() {
+      // Sector grid lines
+      const allSectors = sectors.getSectorsInBounds(-22, 22, -22, 22);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x3366aa, transparent: true, opacity: 0.25 });
+      for (const s of allSectors) {
+        const geo = new THREE.BufferGeometry();
+        const y = 0.01; // just above galactic plane
+        const verts = new Float32Array([
+          s.minX, y, s.minZ,  s.maxX, y, s.minZ,
+          s.maxX, y, s.minZ,  s.maxX, y, s.maxZ,
+          s.maxX, y, s.maxZ,  s.minX, y, s.maxZ,
+          s.minX, y, s.maxZ,  s.minX, y, s.minZ,
+        ]);
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+        overlayGroup.add(new THREE.LineSegments(geo, lineMat));
+      }
+
+      // Player position (solar neighborhood)
+      const playerGeo = new THREE.SphereGeometry(0.2, 8, 8);
+      const playerMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+      const playerMarker = new THREE.Mesh(playerGeo, playerMat);
+      playerMarker.position.set(GalacticMap.SOLAR_R, 0.05, GalacticMap.SOLAR_Z);
+      overlayGroup.add(playerMarker);
+
+      // Galaxy center
+      const centerGeo = new THREE.SphereGeometry(0.15, 8, 8);
+      const centerMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const centerMarker = new THREE.Mesh(centerGeo, centerMat);
+      centerMarker.position.set(0, 0.05, 0);
+      overlayGroup.add(centerMarker);
+
+      // Major arm tip markers
+      const R_TIP = 13;
+      for (const arm of galacticMap.arms) {
+        const theta = arm.offset + galacticMap.pitchK * Math.log(R_TIP / 4.0);
+        const x = R_TIP * Math.cos(theta);
+        const z = R_TIP * Math.sin(theta);
+        const color = arm.isMajor ? 0xff3333 : 0xffaa33;
+        const size = arm.isMajor ? 0.25 : 0.12;
+        const geo = new THREE.SphereGeometry(size, 8, 8);
+        const mat = new THREE.MeshBasicMaterial({ color });
+        const marker = new THREE.Mesh(geo, mat);
+        marker.position.set(x, 0.05, z);
+        overlayGroup.add(marker);
+      }
+
+      // Extent circle at 15 kpc (galaxy radius)
+      const circlePts = [];
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        circlePts.push(new THREE.Vector3(15 * Math.cos(a), 0.01, 15 * Math.sin(a)));
+      }
+      const circleGeo = new THREE.BufferGeometry().setFromPoints(circlePts);
+      const circleMat = new THREE.LineBasicMaterial({ color: 0x444444, transparent: true, opacity: 0.4 });
+      overlayGroup.add(new THREE.Line(circleGeo, circleMat));
+
+      // ±22 kpc extent box (nav map boundary)
+      const boxVerts = new Float32Array([
+        -22, 0.01, -22,  22, 0.01, -22,
+        22, 0.01, -22,   22, 0.01, 22,
+        22, 0.01, 22,   -22, 0.01, 22,
+        -22, 0.01, 22,  -22, 0.01, -22,
+      ]);
+      const boxGeo = new THREE.BufferGeometry();
+      boxGeo.setAttribute('position', new THREE.Float32BufferAttribute(boxVerts, 3));
+      const boxMat = new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.3 });
+      overlayGroup.add(new THREE.LineSegments(boxGeo, boxMat));
+    }
+    buildOverlay();
+
+    // Toggle between cloud mode and nebula mode
+    let nebulaMode = false;
+    document.getElementById('toggleMode').onclick = () => {
+      nebulaMode = !nebulaMode;
+      galaxyCloud.mesh.visible = !nebulaMode;
+      galaxyNebula.mesh.visible = nebulaMode;
+      document.getElementById('toggleMode').textContent = nebulaMode ? 'Cloud Mode' : 'Nebula Mode';
+    };
+
+    document.getElementById('toggleOverlay').onclick = () => {
+      overlayGroup.visible = !overlayGroup.visible;
+      document.getElementById('toggleOverlay').textContent = 'Sector Overlay: ' + (overlayGroup.visible ? 'ON' : 'OFF');
+    };
+
+    // Toggle luminosity 2D view (shows per-component lighting controls)
+    document.getElementById('toggleLum').onclick = () => {
+      lumViewActive = !lumViewActive;
+      lumCanvas.style.display = lumViewActive ? 'block' : 'none';
+      document.getElementById('extraControls').style.display = lumViewActive ? 'block' : 'none';
+      document.getElementById('toggleLum').textContent = lumViewActive ? 'Hide Luminosity' : 'Luminosity View';
+      if (lumViewActive) renderLumView();
+    };
+
+    // ── Luminosity 2D view ──
+    const lumRenderer = new GalaxyLuminosityRenderer(galacticMap);
+    const lumCanvas = document.getElementById('lumCanvas');
+    let lumViewActive = true; // default ON
+
+    // ── Build per-component sliders dynamically ──
+    const compDefaults = GalaxyLuminosityRenderer.getDefaultComponents();
+    const COMP_NAMES = ['core', 'bar', 'arms', 'disk', 'halo'];
+    const COMP_COLORS = { core: '#ffdd88', bar: '#ffd080', arms: '#bbddff', disk: '#ffeebb', halo: '#ccbbdd' };
+
+    function buildCompControls() {
+      const container = document.getElementById('compControls');
+      container.innerHTML = '';
+      for (const name of COMP_NAMES) {
+        const d = compDefaults[name];
+        const color = COMP_COLORS[name];
+        const div = document.createElement('div');
+        div.style.cssText = 'margin-bottom:3px; padding:2px 0; border-left:2px solid ' + color + '; padding-left:4px;';
+        div.innerHTML = `
+          <span style="color:${color}; font-size:11px; text-transform:uppercase;">${name}</span>
+          <label>gain <input type="range" id="comp-${name}-gain" min="0" max="20" step="0.1" value="${d.gain}"> <span id="comp-${name}-gainVal">${d.gain.toFixed(1)}</span></label>
+          <label>gamma <input type="range" id="comp-${name}-gamma" min="0.1" max="1.5" step="0.05" value="${d.gamma}"> <span id="comp-${name}-gammaVal">${d.gamma.toFixed(2)}</span></label>
+          <label>stretch <input type="range" id="comp-${name}-stretch" min="1" max="2000" step="1" value="${d.stretch}"> <span id="comp-${name}-stretchVal">${d.stretch}</span></label>
+        `;
+        container.appendChild(div);
+      }
+      // Wire up live value display + re-render on change
+      for (const name of COMP_NAMES) {
+        for (const prop of ['gain', 'gamma', 'stretch']) {
+          const el = document.getElementById(`comp-${name}-${prop}`);
+          el.oninput = (e) => {
+            const v = parseFloat(e.target.value);
+            document.getElementById(`comp-${name}-${prop}Val`).textContent =
+              prop === 'stretch' ? v.toFixed(0) : v.toFixed(prop === 'gain' ? 1 : 2);
+          };
+          el.onchange = () => { if (lumViewActive) renderLumView(); };
+        }
+      }
+    }
+    buildCompControls();
+
+    // Reset components to defaults
+    document.getElementById('lumResetComp').onclick = () => {
+      for (const name of COMP_NAMES) {
+        const d = compDefaults[name];
+        for (const [prop, val] of Object.entries({ gain: d.gain, gamma: d.gamma, stretch: d.stretch })) {
+          const el = document.getElementById(`comp-${name}-${prop}`);
+          el.value = val;
+          el.dispatchEvent(new Event('input'));
+        }
+      }
+      if (lumViewActive) renderLumView();
+    };
+
+    function getCompOverrides() {
+      const overrides = {};
+      for (const name of COMP_NAMES) {
+        overrides[name] = {
+          gain: parseFloat(document.getElementById(`comp-${name}-gain`).value),
+          gamma: parseFloat(document.getElementById(`comp-${name}-gamma`).value),
+          stretch: parseFloat(document.getElementById(`comp-${name}-stretch`).value),
+        };
+      }
+      return overrides;
+    }
+
+    function renderLumView() {
+      const dust = parseFloat(document.getElementById('lumDust').value);
+      const noise = parseFloat(document.getElementById('lumNoise').value);
+      const extent = parseFloat(document.getElementById('lumExtent').value);
+      const res = parseInt(document.getElementById('lumRes').value);
+      const components = getCompOverrides();
+
+      console.log('Rendering luminosity view: extent=' + extent + ' res=' + res);
+      const t0 = performance.now();
+      const result = lumRenderer.render(0, 0, extent, res, {
+        components, dustStrength: dust, noiseStrength: noise,
+      });
+      console.log('Done in', (performance.now() - t0).toFixed(0), 'ms');
+
+      // Display on overlay canvas
+      lumCanvas.width = res;
+      lumCanvas.height = res;
+      const viewSize = Math.min(window.innerWidth, window.innerHeight);
+      lumCanvas.style.width = viewSize + 'px';
+      lumCanvas.style.height = viewSize + 'px';
+      const ctx = lumCanvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, res, res);
+      ctx.drawImage(result, 0, 0);
+    }
+
+    // Cloud view is the default — hide luminosity overlay and particles
+    lumCanvas.style.display = 'none';
+    lumViewActive = false;
+
+    // Cloud sliders
+    document.getElementById('cloudOpacity').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('cloudOpacityVal').textContent = v.toFixed(2);
+      galaxyCloud.setOpacity(v);
+    };
+
+    // Cloud layer count (requires rebuild)
+    document.getElementById('cloudLayers').onchange = (e) => {
+      const count = parseInt(e.target.value);
+      document.getElementById('cloudLayersVal').textContent = count;
+      galaxyCloud.removeFrom(scene);
+      galaxyCloud.dispose();
+      // Rebuild — can't just change layer count without recreating
+      const newCloud = new GalaxyCloud(
+        { arms: galacticMap.arms, pitchK: galacticMap.pitchK, barAngle: galacticMap.barAngle },
+        { radius: 15, layerCount: count, opacity: parseFloat(document.getElementById('cloudOpacity').value) }
+      );
+      newCloud.addTo(scene);
+      // Swap reference (galaxyCloud is const, so we update the scene directly)
+      Object.assign(galaxyCloud, { mesh: newCloud.mesh, _layers: newCloud._layers });
+    };
+    document.getElementById('cloudLayers').oninput = (e) => {
+      document.getElementById('cloudLayersVal').textContent = e.target.value;
+    };
+
+    // Live sliders — auto-render on release
+    for (const id of ['lumDust', 'lumNoise', 'lumExtent', 'lumRes']) {
+      const el = document.getElementById(id);
+      el.oninput = (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById(id + 'Val').textContent = id === 'lumRes' ? val : val.toFixed(2);
+      };
+      el.onchange = () => { if (lumViewActive) renderLumView(); };
+    }
+
+    document.getElementById('lumExport').onclick = () => {
+      lumCanvas.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'galaxy-luminosity.png';
+        a.click();
+      });
+    };
+
+    function getSliderValues() {
+      return {
+        brightness: parseFloat(document.getElementById('bright').value),
+        scale: parseFloat(document.getElementById('scale').value),
+        glowBrightness: parseFloat(document.getElementById('glow').value),
+        dustOpacity: parseFloat(document.getElementById('dust').value),
+        count: parseInt(document.getElementById('pcount').value),
+      };
+    }
+
+    function build(count) {
+      const sv = getSliderValues();
+      if (count !== undefined) sv.count = count;
+
+      if (milkyWay) { milkyWay.removeFrom(scene); milkyWay.dispose(); }
+      statusEl.style.display = 'block';
+      statusEl.textContent = `GENERATING ${(sv.count/1000).toFixed(0)}K PARTICLES...`;
+
+      setTimeout(() => {
+        const t0 = performance.now();
+        const data = MilkyWayModel.generate(galacticMap, { totalParticles: sv.count });
+        const ms = performance.now() - t0;
+
+        milkyWay = new MilkyWay(data, {
+          brightness: sv.brightness,
+          scale: sv.scale,
+          armData: { arms: galacticMap.arms, pitchK: galacticMap.pitchK },
+          glowBrightness: sv.glowBrightness,
+          radius: 15,
+        });
+        // Set initial dust from slider
+        milkyWay.setDustOpacity(sv.dustOpacity);
+        milkyWay.addTo(scene);
+        milkyWay.mesh.visible = false; // hidden by default — cloud view is primary
+
+        statusEl.style.display = 'none';
+        controlsEl.style.display = 'block';
+        console.log(`${(sv.count/1000).toFixed(0)}K particles in ${ms.toFixed(0)}ms`);
+      }, 16);
+    }
+
+    build();
+
+    // ── Galaxy Cloud (shader-computed density) ──
+    const galaxyCloud = new GalaxyCloud(
+      { arms: galacticMap.arms, pitchK: galacticMap.pitchK, barAngle: galacticMap.barAngle },
+      { radius: 15, layerCount: 7, opacity: 0.35 }
+    );
+    galaxyCloud.addTo(scene);
+
+    // ── Right-side lighting panel — real-time cloud controls ──
+    const LIGHT_COMPS = [
+      { name: 'core', label: 'CORE', color: '#ffdd88', defGain: 1.0, defGamma: 0.6 },
+      { name: 'bar',  label: 'BAR',  color: '#ffd080', defGain: 1.5, defGamma: 0.5 },
+      { name: 'arms', label: 'ARMS', color: '#bbddff', defGain: 3.0, defGamma: 0.45 },
+      { name: 'disk', label: 'DISK', color: '#ffeebb', defGain: 2.0, defGamma: 0.5 },
+    ];
+
+    function buildLightSliders() {
+      const container = document.getElementById('lightSliders');
+      container.innerHTML = '';
+      for (const c of LIGHT_COMPS) {
+        const div = document.createElement('div');
+        div.className = 'comp-section';
+        div.style.borderLeft = '2px solid ' + c.color;
+        div.innerHTML = `
+          <span style="color:${c.color}; font-size:11px;">${c.label}</span>
+          <label>gain <input type="range" id="cl-${c.name}-gain" min="0" max="15" step="0.1" value="${c.defGain}"> <span id="cl-${c.name}-gainV">${c.defGain.toFixed(1)}</span></label>
+          <label>gamma <input type="range" id="cl-${c.name}-gamma" min="0.1" max="1.5" step="0.05" value="${c.defGamma}"> <span id="cl-${c.name}-gammaV">${c.defGamma.toFixed(2)}</span></label>
+        `;
+        container.appendChild(div);
+      }
+      // Wire up real-time updates
+      for (const c of LIGHT_COMPS) {
+        const gainEl = document.getElementById(`cl-${c.name}-gain`);
+        const gammaEl = document.getElementById(`cl-${c.name}-gamma`);
+        const updateComp = () => {
+          const gain = parseFloat(gainEl.value);
+          const gamma = parseFloat(gammaEl.value);
+          document.getElementById(`cl-${c.name}-gainV`).textContent = gain.toFixed(1);
+          document.getElementById(`cl-${c.name}-gammaV`).textContent = gamma.toFixed(2);
+          galaxyCloud.setComponentLight(c.name, gain, gamma);
+        };
+        gainEl.oninput = updateComp;
+        gammaEl.oninput = updateComp;
+      }
+    }
+    buildLightSliders();
+
+    // Exposure + highlight compression
+    document.getElementById('cl-exposure').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('cl-exposureV').textContent = v.toFixed(2);
+      galaxyCloud.setExposure(v);
+    };
+    document.getElementById('cl-highlight').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('cl-highlightV').textContent = v.toFixed(2);
+      galaxyCloud.setHighlightCompress(v);
+    };
+
+    // Cloud opacity from right panel
+    document.getElementById('cloudOpacity2').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('cloudOpacity2Val').textContent = v.toFixed(2);
+      galaxyCloud.setOpacity(v);
+      // Sync left-side slider if it exists
+      const leftSlider = document.getElementById('cloudOpacity');
+      if (leftSlider) { leftSlider.value = v; document.getElementById('cloudOpacityVal').textContent = v.toFixed(2); }
+    };
+
+    // Reset lighting to defaults
+    document.getElementById('resetLighting').onclick = () => {
+      for (const c of LIGHT_COMPS) {
+        document.getElementById(`cl-${c.name}-gain`).value = c.defGain;
+        document.getElementById(`cl-${c.name}-gamma`).value = c.defGamma;
+        galaxyCloud.setComponentLight(c.name, c.defGain, c.defGamma);
+        document.getElementById(`cl-${c.name}-gainV`).textContent = c.defGain.toFixed(1);
+        document.getElementById(`cl-${c.name}-gammaV`).textContent = c.defGamma.toFixed(2);
+      }
+      document.getElementById('cl-exposure').value = 0.5;
+      document.getElementById('cl-exposureV').textContent = '0.50';
+      galaxyCloud.setExposure(0.5);
+      document.getElementById('cl-highlight').value = 0.8;
+      document.getElementById('cl-highlightV').textContent = '0.80';
+      galaxyCloud.setHighlightCompress(0.8);
+    };
+
+    // ── Galaxy Nebula (scattered nebula layers along arms) ──
+    const galaxyNebula = new GalaxyNebula(
+      { arms: galacticMap.arms, pitchK: galacticMap.pitchK, barAngle: galacticMap.barAngle },
+      { radius: 15, layersPerArm: 12, bulgeCount: 8 }
+    );
+    galaxyNebula.mesh.visible = false; // hidden by default
+    galaxyNebula.addTo(scene);
+
+    // ── Camera: always orbits galaxy center (0,0,0) ──
+    let isDragging = false;
+    let orbitTheta = 0, orbitPhi = 0.05, orbitRadius = 25; // top-down by default
+    let lastMX = 0, lastMY = 0;
+
+    function camUpdate() {
+      const sp = Math.sin(orbitPhi);
+      camera.position.set(
+        orbitRadius * sp * Math.cos(orbitTheta),
+        orbitRadius * Math.cos(orbitPhi),
+        orbitRadius * sp * Math.sin(orbitTheta),
+      );
+      camera.lookAt(0, 0, 0);
+    }
+    camUpdate();
+
+    canvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      lastMX = e.clientX; lastMY = e.clientY;
+    });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
+      lastMX = e.clientX; lastMY = e.clientY;
+      orbitTheta -= dx * 0.005;
+      orbitPhi = Math.max(0.05, Math.min(Math.PI - 0.05, orbitPhi - dy * 0.005));
+      camUpdate();
+    });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      orbitRadius *= e.deltaY > 0 ? 1.1 : 0.9;
+      orbitRadius = Math.max(0.5, Math.min(200, orbitRadius));
+      camUpdate();
+    }, { passive: false });
+
+    // ── Views ──
+    function setView(th, ph, r) {
+      orbitTheta = th; orbitPhi = ph; orbitRadius = r; camUpdate();
+    }
+    document.getElementById('viewTop').onclick = () => setView(0, 0.05, 25);
+    document.getElementById('viewEdge').onclick = () => setView(0, Math.PI/2 - 0.05, 35);
+    document.getElementById('viewAngled').onclick = () => setView(Math.PI/4, Math.PI/4, 30);
+
+    // ── Sliders ──
+    document.getElementById('bright').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('brightVal').textContent = v.toFixed(2);
+      if (milkyWay) milkyWay.setBrightness(v);
+    };
+    document.getElementById('scale').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('scaleVal').textContent = v.toFixed(2);
+      if (milkyWay) milkyWay.setScale(v);
+    };
+    document.getElementById('spread').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('spreadVal').textContent = v.toFixed(1);
+      if (milkyWay) milkyWay.setSpread(v);
+    };
+    document.getElementById('glow').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('glowVal').textContent = v.toFixed(2);
+      if (milkyWay) milkyWay.setGlowBrightness(v);
+    };
+    document.getElementById('dither').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('ditherVal').textContent = v.toFixed(2);
+      if (milkyWay) milkyWay.setDither(v);
+    };
+    document.getElementById('nearfade').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('nearfadeVal').textContent = v.toFixed(1);
+      if (milkyWay) milkyWay.setNearFade(v);
+    };
+    document.getElementById('choke').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('chokeVal').textContent = v.toFixed(1);
+      if (milkyWay) milkyWay.setChoke(v);
+    };
+    document.getElementById('dust').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('dustVal').textContent = v.toFixed(2);
+      if (milkyWay) milkyWay.setDustOpacity(v);
+    };
+    // Particle count: auto-rebuild on release
+    document.getElementById('pcount').onchange = (e) => {
+      const count = parseInt(e.target.value);
+      document.getElementById('pcountVal').textContent = (count/1000).toFixed(0) + 'K';
+      build(count);
+    };
+    document.getElementById('pcount').oninput = (e) => {
+      document.getElementById('pcountVal').textContent = (parseInt(e.target.value)/1000).toFixed(0) + 'K';
+    };
+
+    // ── Export: saves exactly what's on screen ──
+    document.getElementById('exportTop').onclick = () => {
+      renderer.render(scene, camera);
+      canvas.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'galaxy-export.png';
+        a.click();
+      });
+    };
+
+    // ── Nav Map Export: orthographic top-down, ±22 kpc, 1024×1024 ──
+    // Matches NavComputer._galaxyImageExtent exactly
+    document.getElementById('exportNav').onclick = () => {
+      const SIZE = 1024;
+      const EXTENT = 22; // kpc half-width — must match NavComputer._galaxyImageExtent
+      const ow = renderer.domElement.width, oh = renderer.domElement.height;
+
+      renderer.setSize(SIZE, SIZE);
+      const ortho = new THREE.OrthographicCamera(-EXTENT, EXTENT, EXTENT, -EXTENT, 0.01, 200);
+      ortho.position.set(0, 50, 0);
+      ortho.up.set(0, 0, -1);
+      ortho.lookAt(0, 0, 0);
+      ortho.updateProjectionMatrix();
+
+      renderer.render(scene, ortho);
+      canvas.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'galaxy-nav.png';
+        a.click();
+
+        // Restore
+        renderer.setSize(ow, oh);
+        camera.aspect = ow / oh;
+        camera.updateProjectionMatrix();
+        camUpdate();
+      });
+    };
+
+    // ── Save / Load settings via localStorage ──
+    // Build full slider ID list including per-component controls
+    const COMP_SLIDER_IDS = [];
+    for (const name of COMP_NAMES) {
+      for (const prop of ['gain', 'gamma', 'stretch']) {
+        COMP_SLIDER_IDS.push(`comp-${name}-${prop}`);
+      }
+    }
+    const SLIDER_IDS = ['bright', 'scale', 'spread', 'glow', 'dust', 'dither', 'nearfade', 'choke', 'pcount',
+      'lumDust', 'lumNoise', 'lumExtent', 'lumRes', ...COMP_SLIDER_IDS];
+    const STORAGE_KEY = 'galaxy-viewer-settings';
+
+    document.getElementById('saveSettings').onclick = () => {
+      const settings = {};
+      for (const id of SLIDER_IDS) {
+        settings[id] = document.getElementById(id).value;
+      }
+      settings.camera = { theta: orbitTheta, phi: orbitPhi, radius: orbitRadius };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      console.log('Settings saved');
+    };
+
+    document.getElementById('dumpSettings').onclick = () => {
+      const settings = {};
+      for (const id of SLIDER_IDS) settings[id] = document.getElementById(id).value;
+      settings.camera = { theta: orbitTheta, phi: orbitPhi, radius: orbitRadius };
+      const text = JSON.stringify(settings, null, 2);
+      navigator.clipboard.writeText(text).then(() => {
+        console.log('Settings copied to clipboard');
+      }).catch(() => {
+        console.log('SETTINGS:', text);
+      });
+    };
+
+    document.getElementById('loadSettings').onclick = () => {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { console.log('No saved settings'); return; }
+      const settings = JSON.parse(raw);
+
+      // Restore sliders and fire their handlers
+      for (const id of SLIDER_IDS) {
+        if (settings[id] !== undefined) {
+          const el = document.getElementById(id);
+          el.value = settings[id];
+          el.dispatchEvent(new Event('input'));
+        }
+      }
+      // Particle count needs a rebuild
+      if (settings.pcount) {
+        document.getElementById('pcount').dispatchEvent(new Event('change'));
+      }
+      // Restore camera
+      if (settings.camera) {
+        orbitTheta = settings.camera.theta;
+        orbitPhi = settings.camera.phi;
+        orbitRadius = settings.camera.radius;
+        camUpdate();
+      }
+      console.log('Settings loaded');
+    };
+
+    // Auto-load on startup if settings exist
+    if (localStorage.getItem(STORAGE_KEY)) {
+      // Delay to let the initial build finish first
+      setTimeout(() => document.getElementById('loadSettings').click(), 500);
+    }
+
+    window.onresize = () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    };
+
+    // ── Render loop ──
+    let lastTime = 0;
+    function animate(time) {
+      requestAnimationFrame(animate);
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      if (milkyWay) milkyWay.update(dt);
+      galaxyCloud.update(dt);
+      galaxyNebula.update(dt, camera);
+
+      renderer.render(scene, camera);
+      hudEl.innerHTML =
+        `GALAXY CLOUD VIEWER<br>` +
+        `Particles: ${milkyWay ? milkyWay.data.particleCount.toLocaleString() : '...'}<br>` +
+        `Distance: ${orbitRadius.toFixed(1)} kpc`;
+    }
+    animate(0);
+  </script>
+</body>
+</html>

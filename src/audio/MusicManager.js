@@ -58,33 +58,6 @@ export class MusicManager {
   }
 
   /**
-   * Find the sample index where audio content starts/ends (trims MP3 encoder padding).
-   * Scans all channels; threshold is near-silence.
-   */
-  _trimBounds(buffer) {
-    const threshold = 0.002;
-    const len = buffer.length;
-    const channels = buffer.numberOfChannels;
-    let start = 0, end = len - 1;
-
-    // Find first non-silent sample
-    outer1: for (let i = 0; i < len; i++) {
-      for (let ch = 0; ch < channels; ch++) {
-        if (Math.abs(buffer.getChannelData(ch)[i]) > threshold) { start = i; break outer1; }
-      }
-    }
-
-    // Find last non-silent sample
-    outer2: for (let i = len - 1; i >= start; i--) {
-      for (let ch = 0; ch < channels; ch++) {
-        if (Math.abs(buffer.getChannelData(ch)[i]) > threshold) { end = i; break outer2; }
-      }
-    }
-
-    return { start, end: end + 1 };
-  }
-
-  /**
    * Apply a short crossfade ramp at the start and end of a buffer so that
    * loop = true produces a seamless loop with no click at the boundary.
    */
@@ -93,7 +66,7 @@ export class MusicManager {
     for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
       const data = buffer.getChannelData(ch);
       for (let i = 0; i < fadeSamples; i++) {
-        const t = i / fadeSamples; // 0 → 1
+        const t = i / fadeSamples;
         data[i] *= t;
         data[buffer.length - 1 - i] *= t;
       }
@@ -119,8 +92,6 @@ export class MusicManager {
         if (!resp.ok) continue;
         const arrayBuf = await resp.arrayBuffer();
         const decoded = await ctx.decodeAudioData(arrayBuf);
-        // Apply short crossfade at buffer edges for gapless looping
-        // (smooths MP3 encoder padding without cutting actual content)
         this._applyLoopFade(decoded);
         this._buffers[name] = decoded;
         break;

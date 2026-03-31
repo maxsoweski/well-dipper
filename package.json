@@ -7,14 +7,22 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "sync-ships": "bash scripts/sync-ships.sh"
+    "sync-ships": "bash scripts/sync-ships.sh",
+    "generate-glow": "node scripts/generate-galaxy-glow.mjs",
+    "generate-glow:test": "node scripts/generate-galaxy-glow.mjs --test",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "vite": "^7.3.1"
+    "pngjs": "^7.0.0",
+    "vite": "^7.3.1",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
+    "@chenglou/pretext": "^0.0.3",
     "alea": "^1.0.1",
     "lil-gui": "^0.21.0",
+    "sharp": "^0.34.5",
     "simplex-noise": "^4.0.3",
     "three": "^0.183.1"
   }

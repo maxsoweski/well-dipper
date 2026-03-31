@@ -1,5 +1,990 @@
 import * as THREE from 'three';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Fragment shader split into HEADER + per-category BODY + FOOTER.
+// Each assembled variant stays well under 20KB (the monolithic was ~31KB,
+// approaching Chrome/ANGLE's ~33KB compile limit).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Shared header: uniforms, varyings, noise, helpers ──
+const FRAG_HEADER = /* glsl */ `
+#include <logdepthbuf_pars_fragment>
+uniform vec3 baseColor;
+uniform vec3 accentColor;
+uniform float noiseScale;
+uniform float noiseDetail;
+uniform vec3 lightDir;
+uniform vec3 lightDir2;
+uniform vec3 starColor1;
+uniform vec3 starColor2;
+uniform float starBrightness1;
+uniform float starBrightness2;
+uniform float time;
+uniform int planetType;
+uniform float planetRadius;
+uniform float hasClouds;
+uniform vec3 cloudColor;
+uniform float cloudDensity;
+uniform float cloudScale;
+uniform float atmosphereStrength;
+uniform vec3 atmosphereColor;
+// Shadow casters
+uniform vec3 starPos1;
+uniform vec3 starPos2;
+const int MAX_SHADOW_MOONS = 6;
+uniform int shadowMoonCount;
+uniform vec3 shadowMoonPos[6];
+uniform float shadowMoonRadius[6];
+const int MAX_SHADOW_PLANETS = 2;
+uniform int shadowPlanetCount;
+uniform vec3 shadowPlanetPos[2];
+uniform float shadowPlanetRadius[2];
+// LOD level for detail switching
+uniform int lodLevel;
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec3 vWorldPos;
+varying vec3 vViewDir;
+
+// ── Simplex-like noise (GPU version) ──
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+float snoise(vec3 v) {
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+
+  vec3 i = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+
+  i = mod289(i);
+  vec4 p = permute(permute(permute(
+    i.z + vec4(0.0, i1.z, i2.z, 1.0))
+    + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+    + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+
+  float n_ = 0.142857142857;
+  vec3 ns = n_ * D.wyz - D.xzx;
+
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_);
+
+  vec4 x = x_ * ns.x + ns.yyyy;
+  vec4 y = y_ * ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+
+  vec4 s0 = floor(b0) * 2.0 + 1.0;
+  vec4 s1 = floor(b1) * 2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+
+  vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+  vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+
+  vec3 p0 = vec3(a0.xy, h.x);
+  vec3 p1 = vec3(a0.zw, h.y);
+  vec3 p2 = vec3(a1.xy, h.z);
+  vec3 p3 = vec3(a1.zw, h.w);
+
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x;
+  p1 *= norm.y;
+  p2 *= norm.z;
+  p3 *= norm.w;
+
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+
+// ── 4x4 Bayer dithering threshold ──
+float bayerDither(vec2 coord) {
+  vec2 p = mod(floor(coord), 4.0);
+  float t = 0.0;
+  if (p.y < 0.5) {
+    t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+  } else if (p.y < 1.5) {
+    t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+  } else if (p.y < 2.5) {
+    t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+  } else {
+    t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+  }
+  return t / 16.0;
+}
+
+// ── Edge-dithered posterization ──
+vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
+  float dither = bayerDither(fragCoord) - 0.5;
+  vec3 dithered = color + dither * edgeWidth / levels;
+  return floor(dithered * levels + 0.5) / levels;
+}
+
+// ── Ray-sphere shadow test ──
+// Returns 0.0 (full shadow) to 1.0 (no shadow)
+float sphereShadow(vec3 fragPos, vec3 starPosition, vec3 casterPos, float casterRadius) {
+  vec3 toStar = starPosition - fragPos;
+  float distToStar = length(toStar);
+  vec3 rayDir = toStar / distToStar;
+  vec3 oc = casterPos - fragPos;
+  float tca = dot(oc, rayDir);
+  if (tca < 0.0) return 1.0;
+  if (tca > distToStar) return 1.0;
+  float d2 = dot(oc, oc) - tca * tca;
+  if (d2 >= casterRadius * casterRadius * 1.3) return 1.0;
+  return smoothstep(casterRadius * 0.85, casterRadius * 1.15, sqrt(d2));
+}
+
+// Total shadow factor for one star from all casters
+float totalShadow(vec3 fragPos, vec3 starPosition) {
+  float shadow = 1.0;
+  for (int i = 0; i < MAX_SHADOW_MOONS; i++) {
+    if (i >= shadowMoonCount) break;
+    shadow *= sphereShadow(fragPos, starPosition, shadowMoonPos[i], shadowMoonRadius[i]);
+  }
+  for (int i = 0; i < MAX_SHADOW_PLANETS; i++) {
+    if (i >= shadowPlanetCount) break;
+    shadow *= sphereShadow(fragPos, starPosition, shadowPlanetPos[i], shadowPlanetRadius[i]);
+  }
+  return shadow;
+}
+
+// ── Aurora uniforms + function ──
+// Physics-driven: requires atmosphere + magnetic field + stellar wind.
+// Added as shared function so all planet categories can use it.
+uniform float hasAurora;
+uniform vec3 auroraColor;
+uniform float auroraIntensity;
+uniform float auroraRingLat;
+uniform float auroraRingWidth;
+
+vec3 applyAurora(vec3 color, vec3 pos, float pRadius, vec3 lDir, float diff) {
+  if (hasAurora < 0.5) return color;
+  // Night-side mask: aurora visible in darkness and twilight
+  float nightMask = 1.0 - smoothstep(0.0, 0.25, diff);
+  // Latitude from equator (object-space Y, normalized)
+  float lat = abs(pos.y) / pRadius;
+  // Ring shape: Gaussian band at the auroral latitude
+  float ringDist = abs(lat - auroraRingLat);
+  float ringMask = exp(-ringDist * ringDist / (2.0 * auroraRingWidth * auroraRingWidth));
+  // Curtain-like structure from noise
+  float azimuth = atan(pos.z, pos.x);
+  float curtain = snoise(vec3(azimuth * 3.0, lat * 10.0, time * 0.3)) * 0.5 + 0.5;
+  curtain += snoise(vec3(azimuth * 7.0, lat * 15.0, time * 0.5)) * 0.25;
+  float rays = pow(max(curtain, 0.0), 2.0);
+  // Combine
+  float auroraMask = ringMask * rays * nightMask * auroraIntensity;
+  // Subtle hue variation along the ring
+  float hueShift = snoise(vec3(azimuth * 2.0, 0.0, time * 0.2)) * 0.15;
+  vec3 auroraFinal = auroraColor;
+  auroraFinal.r += hueShift;
+  auroraFinal.g -= hueShift * 0.5;
+  return color + auroraFinal * auroraMask * 0.6;
+}
+
+// ── Heightmap normal perturbation from procedural noise ──
+// Multi-octave FBM "height" with large-scale impact basins and fine
+// terrain detail. Sampled via finite differences along the tangent
+// plane to produce perturbed normals for convincing relief.
+float computeHeight(vec3 pos) {
+  // Large-scale features: impact basins, hemispheric differences
+  float h = snoise(pos * noiseScale * 0.3) * 0.5;
+  // Medium terrain: mountain ranges, large craters
+  h += snoise(pos * noiseScale) * 0.35;
+  // Fine detail: small craters, ridges, roughness
+  h += snoise(pos * noiseScale * 2.0) * 0.2;
+  h += snoise(pos * noiseScale * 4.0) * 0.1;
+  return h;
+}
+
+vec3 perturbNormalFromNoise(vec3 N, vec3 pos, float strength) {
+  vec3 up = abs(N.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 T = normalize(cross(up, N));
+  vec3 B = cross(N, T);
+
+  float eps = 0.01;
+  float h0 = computeHeight(pos);
+  float hT = computeHeight(pos + T * eps);
+  float hB = computeHeight(pos + B * eps);
+
+  // Raw gradient can be ~10-20 due to noise frequency; scale down
+  // so strength 0.25 = visible relief, not flipped normals
+  float dT = (hT - h0) / eps;
+  float dB = (hB - h0) / eps;
+  float scale = strength * 0.025;
+
+  vec3 perturbed = normalize(N - T * dT * scale - B * dB * scale);
+  // Clamp: perturbed normal must stay within ~60deg of geometric normal.
+  // Prevents normals from flipping away from the light -> pure black patches.
+  float deviation = dot(perturbed, N);
+  if (deviation < 0.5) {
+    perturbed = normalize(mix(perturbed, N, 0.5));
+  }
+  return perturbed;
+}
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Category 1 — Gas Giants (types: gas-giant=1, hot-jupiter=6, eyeball=7, sub-neptune=10)
+// Band patterns, swirls, thermal glow, polar darkening
+// ─────────────────────────────────────────────────────────────────────────────
+const GAS_BODY = /* glsl */ `
+float getSurfacePattern(vec3 pos) {
+  float n = snoise(pos * noiseScale);
+  n += snoise(pos * noiseScale * 2.0) * noiseDetail * 0.5;
+
+  if (planetType == 1) {
+    // Gas giant: Jupiter-like with multiple bands, turbulence, storms
+    float lat = pos.y * noiseScale;
+    float bands = sin(lat * 3.5) * 0.5
+                + sin(lat * 7.0 + 0.5) * 0.3
+                + sin(lat * 13.0) * 0.12;
+    float turb = snoise(pos * noiseScale * 2.0) * 0.35
+               + snoise(pos * noiseScale * 4.0) * 0.15;
+    bands += turb * (1.0 - abs(bands));
+    float storm = snoise(pos * noiseScale * 0.5 + vec3(50.0, 0.0, 0.0));
+    storm = pow(max(storm, 0.0), 4.0);
+    n = bands * 0.5 + 0.5 + storm * 0.4;
+  } else if (planetType == 6) {
+    // Hot Jupiter: chaotic swirls, less banding than normal gas giant
+    float lat = pos.y * noiseScale;
+    float bands = sin(lat * 2.5) * 0.3 + sin(lat * 5.0) * 0.15;
+    float swirl = snoise(pos * noiseScale * 1.5) * 0.5
+                + snoise(pos * noiseScale * 3.0) * 0.25;
+    n = bands + swirl;
+  } else if (planetType == 7) {
+    // Eyeball: concentric climate rings centered on the sub-stellar point
+    float angDist = acos(clamp(dot(normalize(vWorldPos), lightDir), -1.0, 1.0));
+    float ringNoise = snoise(pos * noiseScale * 2.0) * 0.15;
+    n = angDist + ringNoise;
+  } else if (planetType == 10) {
+    // Sub-Neptune: very smooth, subtle banding, hazy appearance
+    float lat = pos.y * noiseScale;
+    float bands = sin(lat * 3.0) * 0.1 + sin(lat * 6.0) * 0.05;
+    float haze = snoise(pos * noiseScale * 0.7) * 0.08;
+    n = 0.5 + bands + haze;
+  }
+
+  return n;
+}
+
+void main() {
+  #include <logdepthbuf_fragment>
+  float pattern = getSurfacePattern(vPosition);
+
+  // ── Surface color (type-dependent) ──
+  vec3 surfaceColor;
+
+  if (planetType == 1) {
+    // Gas giant: zones, belts, storms
+    float bandVal = pattern;
+    float zoneMask = smoothstep(0.42, 0.58, bandVal);
+    surfaceColor = mix(baseColor, accentColor, zoneMask);
+
+    vec3 stormColor = baseColor * 0.5 + vec3(0.3, 0.1, 0.05);
+    float stormMask = smoothstep(0.78, 0.88, bandVal);
+    surfaceColor = mix(surfaceColor, stormColor, stormMask);
+
+    float polarDark = smoothstep(0.6, 1.0, abs(vPosition.y) / planetRadius);
+    surfaceColor *= 1.0 - polarDark * 0.3;
+  } else if (planetType == 6) {
+    // Hot Jupiter: dark base with glowing day-side heat
+    float swirl = pattern * 0.5 + 0.5;
+    surfaceColor = mix(baseColor, baseColor * 1.3, swirl);
+
+    // Thermal glow: use world-space pos so it stays fixed toward the sun
+    float starFacing = max(dot(normalize(vWorldPos), lightDir), 0.0);
+    float hotspot = pow(starFacing, 3.0);
+    vec3 glowColor = accentColor;
+    surfaceColor += glowColor * hotspot * 0.8;
+
+    // Night side thermal glow — very faint deep red
+    float nightSide = max(-dot(normalize(vWorldPos), lightDir), 0.0);
+    surfaceColor += vec3(0.15, 0.03, 0.01) * nightSide * 0.5;
+  } else if (planetType == 7) {
+    // Eyeball planet: concentric climate zones
+    float angDist = pattern;
+
+    vec3 oceanColor = baseColor;
+    vec3 landColor = accentColor;
+    vec3 iceColor = vec3(0.82, 0.85, 0.9);
+    vec3 frozenColor = vec3(0.7, 0.72, 0.78);
+
+    float oceanMask = 1.0 - smoothstep(0.3, 0.5, angDist);
+    float landMask = smoothstep(0.3, 0.5, angDist) * (1.0 - smoothstep(0.8, 1.0, angDist));
+    float iceMask = smoothstep(0.8, 1.0, angDist) * (1.0 - smoothstep(1.5, 1.8, angDist));
+    float frozenMask = smoothstep(1.5, 1.8, angDist);
+
+    surfaceColor = oceanColor * oceanMask
+                 + landColor * landMask
+                 + iceColor * iceMask
+                 + frozenColor * frozenMask;
+  } else {
+    // Sub-Neptune (10): smooth, muted, hazy blend
+    float val = pattern;
+    surfaceColor = mix(baseColor, accentColor, val);
+  }
+
+  // ── Normal perturbation ──
+  // Gas giants are cloud surfaces — no terrain relief. Skip perturbation.
+  vec3 shadingNormal = vNormal;
+
+  // ── Dual-star Lighting with Shadows ──
+  float diff1 = max(dot(shadingNormal, lightDir), 0.0);
+  float diff2 = max(dot(shadingNormal, lightDir2), 0.0);
+
+  float shadow1 = totalShadow(vWorldPos, starPos1);
+  float shadow2 = totalShadow(vWorldPos, starPos2);
+
+  vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1
+                 + starColor2 * diff2 * starBrightness2 * shadow2;
+  float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
+
+  float ambient = 0.035;
+  // Hot Jupiter: slightly more ambient from thermal glow
+  if (planetType == 6) {
+    ambient = 0.04;
+  }
+
+  vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
+
+  // Hot Jupiter: add emissive glow that doesn't depend on light
+  if (planetType == 6) {
+    float starFacing = max(dot(normalize(vWorldPos), lightDir), 0.0);
+    float hotspot = pow(starFacing, 3.0);
+    finalColor += accentColor * hotspot * 0.3;
+    // Night side deep red emission
+    float nightSide = max(-dot(normalize(vWorldPos), lightDir), 0.0);
+    finalColor += vec3(0.12, 0.02, 0.0) * pow(nightSide, 0.8) * 0.4;
+  }
+
+  // ── Cloud layer (animated) ──
+  if (hasClouds > 0.5) {
+    float cloudSpeed = (planetType == 7) ? 0.005 : 0.017;
+    vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, time * cloudSpeed * 0.4, 0.0);
+    float cn = snoise(cloudPos);
+    cn += snoise(cloudPos * 2.0) * 0.4;
+    cn += snoise(cloudPos * 4.0) * 0.2;
+    cn += snoise(cloudPos * 8.0) * 0.1;
+    float cloudMask = smoothstep(0.05, 0.15, cn) * cloudDensity;
+    float cloudLight = diffuse * 0.9;
+    finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+  }
+
+  // ── Atmosphere rim glow (fresnel, lit side only) ──
+  if (atmosphereStrength > 0.0) {
+    vec3 viewDir = normalize(vViewDir);
+    float fresnel = 1.0 - max(dot(vNormal, viewDir), 0.0);
+    fresnel = pow(fresnel, 3.0);
+    float sunFacing = smoothstep(-0.1, 0.3, diffuse);
+
+    // Sub-Neptune: atmosphere glow wraps further around
+    if (planetType == 10) {
+      sunFacing = smoothstep(-0.3, 0.2, diffuse);
+    }
+
+    finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
+  }
+
+  // ── Aurora (night-side glow near magnetic poles) ──
+  finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
+
+  // ── Posterize with edge dithering ──
+  finalColor = min(finalColor, vec3(1.0));
+  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Category 2 — Rocky/Terrestrial (types: rocky=0, ice=2, lava=3, ocean=4,
+//              terrestrial=5, venus=8, carbon=9)
+// Terrain noise, cracks, continents, seas, volcanic glow
+// ─────────────────────────────────────────────────────────────────────────────
+const ROCKY_BODY = /* glsl */ `
+float getSurfacePattern(vec3 pos) {
+  float n = snoise(pos * noiseScale);
+  n += snoise(pos * noiseScale * 2.0) * noiseDetail * 0.5;
+
+  if (planetType == 3) {
+    // Lava: sharp glowing cracks
+    n = 1.0 - abs(n);
+    n = pow(n, 2.0);
+  } else if (planetType == 2) {
+    // Ice: subtle cracks overlaid on smooth surface
+    float cracks = 1.0 - abs(snoise(pos * noiseScale * 3.0));
+    cracks = pow(cracks, 4.0);
+    n = n * 0.3 + 0.5 + cracks * 0.3;
+  } else if (planetType == 5) {
+    // Terrestrial: continent-like shapes with ragged coastlines
+    float continent = snoise(pos * noiseScale * 0.7);
+    continent += snoise(pos * noiseScale * 1.5) * 0.3;
+    continent += snoise(pos * noiseScale * 3.0) * 0.15;
+    continent += snoise(pos * noiseScale * 6.0) * 0.08;
+    n = continent;
+  } else if (planetType == 8) {
+    // Venus: very subtle, slow-moving banding beneath thick clouds
+    float lat = pos.y * noiseScale;
+    float bands = sin(lat * 2.0) * 0.15 + sin(lat * 4.0) * 0.08;
+    float swirl = snoise(pos * noiseScale * 0.8) * 0.12;
+    n = 0.5 + bands + swirl;
+  } else if (planetType == 9) {
+    // Carbon: dark surface with occasional bright crystalline facets
+    float base = snoise(pos * noiseScale) * 0.3;
+    float crystal = snoise(pos * noiseScale * 5.0);
+    crystal = pow(max(crystal, 0.0), 8.0);
+    n = base * 0.5 + 0.4 + crystal * 0.6;
+  }
+  // rocky (0) and ocean (4) use the default n from above
+
+  return n;
+}
+
+void main() {
+  #include <logdepthbuf_fragment>
+  float pattern = getSurfacePattern(vPosition);
+
+  // ── Surface color (type-dependent) ──
+  vec3 surfaceColor;
+
+  // Track land vs water for perturbation masking (terrestrial/ocean types)
+  float terrainLandMask = 1.0; // default: everything is "land" (gets perturbation)
+
+  if (planetType == 5) {
+    // Terrestrial: ocean + varied terrain with elevation zones
+    float height = pattern * 0.5 + 0.5;
+    float seaLevel = 0.45;
+    float landMask = step(seaLevel, height);
+    terrainLandMask = landMask; // store for perturbation masking
+
+    // Ocean: depth-based color gradient
+    vec3 deepOcean = baseColor * 0.8;
+    float oceanDepth = smoothstep(seaLevel - 0.3, seaLevel, height);
+    vec3 shallowOcean = baseColor * 1.1;
+    vec3 ocean = mix(deepOcean, shallowOcean, oceanDepth);
+
+    // Land: elevation-based terrain zones
+    float landElev = smoothstep(seaLevel, seaLevel + 0.35, height);
+    // Coastal lowlands: green vegetation
+    vec3 lowland = accentColor;
+    // Mid-elevation: brown/tan (dry grassland, scrub)
+    vec3 midland = accentColor * 0.6 + vec3(0.18, 0.14, 0.06);
+    // Highland: grey-brown rock
+    vec3 highland = vec3(0.42, 0.38, 0.34);
+    // Peaks: light grey/white rock
+    vec3 peak = vec3(0.6, 0.58, 0.55);
+
+    // Blend through zones
+    vec3 land = lowland;
+    land = mix(land, midland, smoothstep(0.2, 0.45, landElev));
+    land = mix(land, highland, smoothstep(0.5, 0.75, landElev));
+    land = mix(land, peak, smoothstep(0.8, 0.95, landElev));
+
+    // Add local variation so terrain isn't pure bands
+    float terrainNoise = snoise(vPosition * noiseScale * 4.0) * 0.08;
+    land += vec3(terrainNoise, terrainNoise * 0.8, terrainNoise * 0.5);
+
+    surfaceColor = mix(ocean, land, landMask);
+
+    // Ice caps at planet's rotational poles (object-space Y, not world Y)
+    float latitude = abs(vPosition.y) / planetRadius;
+    float iceNoise = snoise(vPosition * noiseScale * 2.0) * 0.15;
+    float iceMask = smoothstep(0.55, 0.7, latitude + iceNoise);
+    vec3 iceColor = vec3(0.85, 0.88, 0.92);
+    surfaceColor = mix(surfaceColor, iceColor, iceMask);
+  } else if (planetType == 4) {
+    // Ocean world: mostly water with sparse islands
+    float height = pattern * 0.5 + 0.5;
+    float seaLevel = 0.55;
+    terrainLandMask = smoothstep(seaLevel - 0.01, seaLevel + 0.03, height);
+
+    // Ocean depth gradient
+    vec3 deepOcean = baseColor * 0.75;
+    float oceanDepth = smoothstep(seaLevel - 0.3, seaLevel, height);
+    vec3 ocean = mix(deepOcean, baseColor * 1.1, oceanDepth);
+
+    // Sparse island land
+    float landElev = smoothstep(seaLevel, seaLevel + 0.2, height);
+    vec3 land = mix(accentColor, accentColor * 0.7 + vec3(0.12, 0.1, 0.06), landElev);
+
+    surfaceColor = mix(ocean, land, terrainLandMask);
+  } else if (planetType == 8) {
+    // Venus: nearly featureless, low-contrast cream/yellow clouds
+    float val = pattern;
+    surfaceColor = mix(baseColor, accentColor, val);
+  } else if (planetType == 9) {
+    // Carbon: very dark with rare bright diamond glints
+    float val = pattern;
+    surfaceColor = mix(baseColor, accentColor, smoothstep(0.3, 0.6, val));
+
+    // Diamond glints: bright white specular points
+    float glint = smoothstep(0.85, 0.95, val);
+    surfaceColor += vec3(0.8, 0.85, 0.9) * glint;
+  } else {
+    // Default: smooth blend between base and accent (rocky, ocean, ice, lava)
+    float mixFactor = smoothstep(0.3, 0.7, pattern * 0.5 + 0.5);
+    surfaceColor = mix(baseColor, accentColor, mixFactor);
+  }
+
+  // ── Normal perturbation ──
+  // Rocky/airless: strong relief. Atmospheric: softer. Water: none.
+  float perturbStrength = 0.25; // rocky, ice, carbon — airless, cratered
+  if (planetType == 3) perturbStrength = 0.20;  // lava: visible but not dominant
+  if (planetType == 4) perturbStrength = 0.20;  // ocean: land parts only (masked below)
+  if (planetType == 5) perturbStrength = 0.20;  // terrestrial: land parts only (masked below)
+  if (planetType == 8) perturbStrength = 0.0;   // venus: hidden by thick clouds
+  // Water is flat from space — only perturb land areas
+  perturbStrength *= terrainLandMask;
+  vec3 shadingNormal = perturbStrength > 0.001
+    ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
+    : vNormal;
+
+  // ── Dual-star Lighting with Shadows ──
+  float diff1 = max(dot(shadingNormal, lightDir), 0.0);
+  float diff2 = max(dot(shadingNormal, lightDir2), 0.0);
+
+  float shadow1 = totalShadow(vWorldPos, starPos1);
+  float shadow2 = totalShadow(vWorldPos, starPos2);
+
+  vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1
+                 + starColor2 * diff2 * starBrightness2 * shadow2;
+  float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
+
+  float ambient = 0.035;
+
+  vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
+
+  // Carbon: diamond glints are emissive (glow in shadow too)
+  if (planetType == 9) {
+    float crystal = snoise(vPosition * noiseScale * 5.0);
+    crystal = pow(max(crystal, 0.0), 8.0);
+    float glint = smoothstep(0.85, 0.95, crystal * 0.6 + 0.4 + snoise(vPosition * noiseScale) * 0.15);
+    finalColor += vec3(0.5, 0.55, 0.6) * glint * 0.3;
+  }
+
+  // ── Cloud / weather layer (animated) ──
+  if (hasClouds > 0.5) {
+    float cloudSpeed = 0.005;
+
+    if (planetType == 5) {
+      // ── Terrestrial weather system ──
+      // Latitude-dependent cloud bands (Earth-like circulation)
+      float lat = abs(vPosition.y) / planetRadius;
+
+      // ITCZ near equator (0-10°), storm tracks (30-60°), polar (70+°)
+      float itcz = exp(-lat * lat / (2.0 * 0.08 * 0.08)) * 0.6;
+      float stormTrack = exp(-(lat - 0.55) * (lat - 0.55) / (2.0 * 0.15 * 0.15)) * 0.8;
+      float polar = smoothstep(0.65, 0.85, lat) * 0.4;
+      float latBias = itcz + stormTrack + polar;
+
+      // Base cloud noise with domain warping for swirling patterns
+      vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, 0.0, 0.0);
+      // Domain warp: offset the sampling position by noise → creates swirls
+      float warpX = snoise(cloudPos * 0.5 + vec3(0.0, 0.0, time * 0.002)) * 0.3;
+      float warpZ = snoise(cloudPos * 0.5 + vec3(50.0, 0.0, time * 0.002)) * 0.3;
+      vec3 warpedPos = cloudPos + vec3(warpX, 0.0, warpZ);
+
+      float cn = snoise(warpedPos);
+      cn += snoise(warpedPos * 2.0) * 0.4;
+      cn += snoise(warpedPos * 4.0) * 0.15;
+
+      // Combine FBM with latitude bias
+      float cloudMask = smoothstep(-0.1, 0.25, cn + latBias * 0.3) * cloudDensity;
+
+      // Clouds are brighter on the sun-facing side, dimmer in shadow
+      float cloudLight = max(diffuse * 0.85, 0.06);
+      finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+
+    } else if (planetType == 0) {
+      // ── Rocky planet dust clouds (Mars-like) ──
+      // Large regional dust storms, very thin, patchy
+      vec3 dustPos = vPosition * cloudScale * 0.6 + vec3(time * 0.002, 0.0, 0.0);
+      float dust = snoise(dustPos * 0.5);
+      dust += snoise(dustPos * 1.0) * 0.4;
+      // Only the densest patches show — mostly clear
+      float dustMask = smoothstep(0.3, 0.6, dust) * cloudDensity;
+      float dustLight = max(diffuse * 0.9, 0.04);
+      finalColor = mix(finalColor, cloudColor * dustLight, dustMask);
+
+    } else {
+      // ── Generic clouds (Venus surface view, other types) ──
+      vec3 cloudPos = vPosition * cloudScale + vec3(time * 0.017, time * 0.007, 0.0);
+      float cn = snoise(cloudPos);
+      cn += snoise(cloudPos * 2.0) * 0.4;
+      cn += snoise(cloudPos * 4.0) * 0.2;
+      cn += snoise(cloudPos * 8.0) * 0.1;
+      float cloudMask = smoothstep(0.05, 0.15, cn) * cloudDensity;
+      float cloudLight = max(diffuse * 0.9, 0.04);
+      finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+    }
+  }
+
+  // ── Atmosphere rim glow (fresnel, lit side only) ──
+  if (atmosphereStrength > 0.0) {
+    vec3 viewDir = normalize(vViewDir);
+    float fresnel = 1.0 - max(dot(vNormal, viewDir), 0.0);
+    fresnel = pow(fresnel, 3.0);
+    float sunFacing = smoothstep(-0.1, 0.3, diffuse);
+
+    // Venus: atmosphere glow wraps further around
+    if (planetType == 8) {
+      sunFacing = smoothstep(-0.3, 0.2, diffuse);
+    }
+
+    finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
+  }
+
+  // ── Aurora (night-side glow near magnetic poles) ──
+  finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
+
+  // ── Posterize with edge dithering ──
+  finalColor = min(finalColor, vec3(1.0));
+  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Category 3 — Exotic (types: hex=11, shattered=12, crystal=13, fungal=14,
+//              machine=15, city-lights=16, ecumenopolis=17)
+// Special visual effects, geometric patterns, bioluminescence
+// ─────────────────────────────────────────────────────────────────────────────
+const EXOTIC_BODY = /* glsl */ `
+// ── Hex grid helper ──
+vec3 hexGrid(vec2 p) {
+  const vec2 s = vec2(1.0, 1.7320508);
+  vec2 a = mod(p, s) - s * 0.5;
+  vec2 b = mod(p - s * 0.5, s) - s * 0.5;
+  bool useA = dot(a, a) < dot(b, b);
+  vec2 gv = useA ? a : b;
+  vec2 id = p - gv;
+  float edgeDist = 0.5 - max(abs(gv.x), dot(abs(gv), vec2(0.5, 0.86602540)));
+  float cellHash = fract(sin(dot(floor(id * 2.0 + 0.5), vec2(127.1, 311.7))) * 43758.5453);
+  float border = 1.0 - smoothstep(0.0, 0.05, edgeDist);
+  return vec3(border, cellHash, edgeDist);
+}
+
+float getSurfacePattern(vec3 pos) {
+  float n = snoise(pos * noiseScale);
+  n += snoise(pos * noiseScale * 2.0) * noiseDetail * 0.5;
+
+  if (planetType == 11) {
+    // Hex: tessellated hexagonal plates (dominant-axis cube projection)
+    float scale = noiseScale * 5.0;
+    vec3 an = abs(normalize(pos));
+    vec2 uv;
+    if (an.x > an.y && an.x > an.z) {
+      uv = pos.yz;
+    } else if (an.y > an.z) {
+      uv = pos.xz;
+    } else {
+      uv = pos.xy;
+    }
+    vec3 h = hexGrid(uv * scale);
+    float border = h.x;
+    float cellHash = h.y;
+    n = cellHash * 0.5 + border * 0.5;
+  } else if (planetType == 12) {
+    // Shattered: wide blue-white fracture lines on dark rock
+    float crack1 = 1.0 - abs(snoise(pos * noiseScale * 1.5));
+    float crack2 = 1.0 - abs(snoise(pos * noiseScale * 0.7 + vec3(50.0)));
+    crack1 = pow(crack1, 1.5);
+    crack2 = pow(crack2, 1.5);
+    float cracks = max(crack1, crack2 * 0.8);
+    float node = crack1 * crack2;
+    node = pow(node, 0.8);
+    n = cracks + node * 0.5;
+  } else if (planetType == 13) {
+    // Crystal: angular Voronoi facets with gemstone coloring
+    vec3 scaledPos = pos * noiseScale * 2.5;
+    vec3 cellBase = floor(scaledPos);
+    float minDist = 10.0;
+    float cellValue = 0.0;
+    for (int dx = -1; dx <= 1; dx++) {
+      for (int dy = -1; dy <= 1; dy++) {
+        for (int dz = -1; dz <= 1; dz++) {
+          vec3 neighbor = cellBase + vec3(float(dx), float(dy), float(dz));
+          vec3 point = neighbor + fract(sin(vec3(
+            dot(neighbor, vec3(127.1, 311.7, 74.7)),
+            dot(neighbor, vec3(269.5, 183.3, 246.1)),
+            dot(neighbor, vec3(113.5, 271.9, 124.6))
+          )) * 43758.5453) * 0.8 + 0.1;
+          float d = length(scaledPos - point);
+          if (d < minDist) {
+            minDist = d;
+            cellValue = fract(sin(dot(neighbor, vec3(43.34, 85.17, 67.89))) * 4758.5);
+          }
+        }
+      }
+    }
+    n = cellValue;
+  } else if (planetType == 14) {
+    // Fungal: dark base with bioluminescent glow-spot clusters
+    float terrain = snoise(pos * noiseScale) * 0.3 + 0.3;
+    float spots1 = snoise(pos * noiseScale * 4.0);
+    float spots2 = snoise(pos * noiseScale * 6.0 + vec3(100.0));
+    float clusterMask = snoise(pos * noiseScale * 0.8) * 0.5 + 0.5;
+    clusterMask = smoothstep(0.3, 0.7, clusterMask);
+    float glow = max(spots1, spots2);
+    glow = pow(max(glow, 0.0), 3.0) * clusterMask;
+    n = terrain + glow * 1.5;
+  } else if (planetType == 15) {
+    // Machine: rectangular circuit grid with lit/dark cells
+    vec3 gridPos = pos * noiseScale * 4.0;
+    vec3 f = fract(gridPos);
+    float lineX = min(f.x, 1.0 - f.x);
+    float lineY = min(f.y, 1.0 - f.y);
+    float lineZ = min(f.z, 1.0 - f.z);
+    float line = min(min(lineX, lineY), lineZ);
+    float grid = 1.0 - smoothstep(0.0, 0.06, line);
+    float secondLine = min(max(lineX, lineY), max(min(lineX, lineY), lineZ));
+    float intersection = grid * (1.0 - smoothstep(0.0, 0.06, secondLine));
+    vec3 cellId = floor(gridPos);
+    float cellHash = fract(sin(dot(cellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+    float cellLit = step(0.55, cellHash);
+    n = grid * 0.7 + intersection * 0.3 + cellLit * 0.15;
+  } else if (planetType == 16) {
+    // City-lights: same continent shapes as terrestrial
+    float continent = snoise(pos * noiseScale * 0.7);
+    continent += snoise(pos * noiseScale * 1.5) * 0.3;
+    continent += snoise(pos * noiseScale * 3.0) * 0.15;
+    continent += snoise(pos * noiseScale * 6.0) * 0.08;
+    n = continent;
+  } else if (planetType == 17) {
+    // Ecumenopolis: fine city-block grid covering the whole surface
+    vec3 gridPos1 = pos * noiseScale * 6.0;
+    vec3 f1 = fract(gridPos1);
+    float lx1 = min(f1.x, 1.0 - f1.x);
+    float ly1 = min(f1.y, 1.0 - f1.y);
+    float lz1 = min(f1.z, 1.0 - f1.z);
+    float grid1 = 1.0 - smoothstep(0.0, 0.04, min(min(lx1, ly1), lz1));
+    vec3 gridPos2 = pos * noiseScale * 1.5;
+    vec3 f2 = fract(gridPos2);
+    float lx2 = min(f2.x, 1.0 - f2.x);
+    float ly2 = min(f2.y, 1.0 - f2.y);
+    float lz2 = min(f2.z, 1.0 - f2.z);
+    float grid2 = 1.0 - smoothstep(0.0, 0.06, min(min(lx2, ly2), lz2));
+    vec3 cellId = floor(gridPos2);
+    float district = fract(sin(dot(cellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+    n = grid1 * 0.5 + grid2 * 0.3 + district * 0.2;
+  }
+
+  return n;
+}
+
+void main() {
+  #include <logdepthbuf_fragment>
+  float pattern = getSurfacePattern(vPosition);
+
+  // ── Surface color (type-dependent) ──
+  vec3 surfaceColor;
+
+  if (planetType == 11) {
+    // Hex: cell interior varies per cell, borders are bright accent
+    float border = smoothstep(0.4, 0.55, pattern);
+    float cellShade = pattern * 2.0 * (1.0 - border);
+    surfaceColor = mix(baseColor * 0.7, baseColor * 1.3, cellShade);
+    surfaceColor = mix(surfaceColor, accentColor, border);
+  } else if (planetType == 12) {
+    // Shattered: dark rock with glowing cool-colored fracture lines
+    float crackIntensity = smoothstep(0.2, 0.6, pattern);
+    surfaceColor = mix(baseColor, accentColor, crackIntensity);
+    float hotCrack = smoothstep(0.7, 0.9, pattern);
+    surfaceColor += vec3(0.5, 0.5, 0.6) * hotCrack;
+  } else if (planetType == 13) {
+    // Crystal: flat-shaded facets with bright gemstone highlights
+    float facetShade = pattern;
+    surfaceColor = mix(baseColor, accentColor, facetShade);
+    float highlight = smoothstep(0.8, 0.95, facetShade);
+    surfaceColor += vec3(0.6, 0.5, 0.7) * highlight;
+  } else if (planetType == 14) {
+    // Fungal: dark terrain with bright bioluminescent glow spots
+    float terrain = clamp(pattern, 0.0, 0.5);
+    float glowAmount = max(pattern - 0.5, 0.0) * 2.0;
+    surfaceColor = mix(baseColor * 0.8, baseColor, terrain * 2.0);
+    surfaceColor += accentColor * glowAmount;
+  } else if (planetType == 15) {
+    // Machine: dark metallic base with glowing grid lines
+    float gridLine = smoothstep(0.3, 0.5, pattern);
+    surfaceColor = mix(baseColor, accentColor, gridLine);
+    float bright = smoothstep(0.7, 0.9, pattern);
+    surfaceColor += accentColor * 0.5 * bright;
+  } else if (planetType == 16) {
+    // City-lights: same land/ocean coloring as terrestrial (type 5)
+    float height = pattern * 0.5 + 0.5;
+    float seaLevel = 0.45;
+    float landMask = step(seaLevel, height);
+    vec3 deepOcean = baseColor * 0.7;
+    float oceanDepth = smoothstep(seaLevel - 0.25, seaLevel, height);
+    vec3 ocean = mix(deepOcean, baseColor, oceanDepth);
+    float landHeight = smoothstep(seaLevel, seaLevel + 0.3, height);
+    vec3 highland = accentColor * 0.6 + vec3(0.15, 0.12, 0.08);
+    vec3 land = mix(accentColor, highland, landHeight);
+    surfaceColor = mix(ocean, land, landMask);
+  } else if (planetType == 17) {
+    // Ecumenopolis: steel/concrete surface with warm-toned districts
+    float gridLine = smoothstep(0.3, 0.45, pattern);
+    float district = clamp(pattern * 1.5, 0.0, 1.0);
+    surfaceColor = mix(baseColor * 0.8, baseColor * 1.2, district);
+    surfaceColor = mix(surfaceColor, baseColor * 1.5, gridLine * 0.4);
+  } else {
+    // Fallback
+    float mixFactor = smoothstep(0.3, 0.7, pattern * 0.5 + 0.5);
+    surfaceColor = mix(baseColor, accentColor, mixFactor);
+  }
+
+  // ── Normal perturbation ──
+  // Exotic bodies: organic noise relief doesn't fit geometric aesthetics.
+  // TODO: type-specific perturbation (hex grid relief, crystal facets, etc.)
+  // For now, only shattered and fungal get noise relief (organic shapes fit them).
+  float perturbStrength = 0.0;
+  if (planetType == 12) perturbStrength = 0.20; // shattered: fractured terrain
+  if (planetType == 14) perturbStrength = 0.15; // fungal: organic growth relief
+  if (planetType == 16) perturbStrength = 0.18; // city-lights: terrestrial terrain
+  vec3 shadingNormal = perturbStrength > 0.001
+    ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
+    : vNormal;
+
+  // ── Dual-star Lighting with Shadows ──
+  float diff1 = max(dot(shadingNormal, lightDir), 0.0);
+  float diff2 = max(dot(shadingNormal, lightDir2), 0.0);
+
+  float shadow1 = totalShadow(vWorldPos, starPos1);
+  float shadow2 = totalShadow(vWorldPos, starPos2);
+
+  vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1
+                 + starColor2 * diff2 * starBrightness2 * shadow2;
+  float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
+
+  // Emissive exotic types: slightly more ambient (hex=11 and crystal=13 are not emissive)
+  float ambient = 0.035;
+  if (planetType == 12 || planetType == 14 || planetType == 15 || planetType == 16 || planetType == 17) {
+    ambient = 0.04;
+  }
+
+  vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
+
+  // Shattered: fracture lines glow on dark side
+  if (planetType == 12) {
+    float crack1 = 1.0 - abs(snoise(vPosition * noiseScale * 1.5));
+    float crack2 = 1.0 - abs(snoise(vPosition * noiseScale * 0.7 + vec3(50.0)));
+    float crackGlow = max(pow(crack1, 1.5), pow(crack2, 1.5) * 0.8);
+    finalColor += accentColor * crackGlow * 0.25;
+  }
+
+  // Fungal: bioluminescent spots glow in darkness
+  if (planetType == 14) {
+    float spots1 = snoise(vPosition * noiseScale * 4.0);
+    float spots2 = snoise(vPosition * noiseScale * 6.0 + vec3(100.0));
+    float clusterMask = smoothstep(0.3, 0.7, snoise(vPosition * noiseScale * 0.8) * 0.5 + 0.5);
+    float emGlow = pow(max(max(spots1, spots2), 0.0), 3.0) * clusterMask;
+    finalColor += accentColor * emGlow * 0.35;
+  }
+
+  // Machine: grid lines glow like city lights
+  if (planetType == 15) {
+    vec3 gridPos = vPosition * noiseScale * 4.0;
+    vec3 gf = fract(gridPos);
+    float glX = min(gf.x, 1.0 - gf.x);
+    float glY = min(gf.y, 1.0 - gf.y);
+    float glZ = min(gf.z, 1.0 - gf.z);
+    float gLine = min(min(glX, glY), glZ);
+    float emGrid = 1.0 - smoothstep(0.0, 0.06, gLine);
+    vec3 gCellId = floor(gridPos);
+    float gCellHash = fract(sin(dot(gCellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+    float gCellLit = step(0.55, gCellHash);
+    finalColor += accentColor * (emGrid * 0.2 + gCellLit * 0.08);
+  }
+
+  // City-lights: scattered warm lights on night-side land masses
+  if (planetType == 16) {
+    float nightMask = 1.0 - smoothstep(0.0, 0.15, diffuse);
+    float continent = snoise(vPosition * noiseScale * 0.7);
+    continent += snoise(vPosition * noiseScale * 1.5) * 0.3;
+    continent += snoise(vPosition * noiseScale * 3.0) * 0.15;
+    float landMask = step(0.45, continent * 0.5 + 0.5);
+    float cities = snoise(vPosition * noiseScale * 8.0);
+    cities += snoise(vPosition * noiseScale * 16.0) * 0.5;
+    float cityMask = smoothstep(0.2, 0.6, cities) * landMask;
+    float coastDist = abs(continent * 0.5 + 0.5 - 0.45);
+    float coastBoost = 1.0 + smoothstep(0.15, 0.0, coastDist) * 0.8;
+    vec3 cityColor = vec3(0.95, 0.75, 0.3);
+    finalColor += cityColor * cityMask * coastBoost * nightMask * 0.3;
+  }
+
+  // Ecumenopolis: entire surface glows on night side
+  if (planetType == 17) {
+    float nightMask = 1.0 - smoothstep(0.0, 0.15, diffuse);
+    vec3 gp = vPosition * noiseScale * 6.0;
+    vec3 gf2 = fract(gp);
+    float glx = min(gf2.x, 1.0 - gf2.x);
+    float gly = min(gf2.y, 1.0 - gf2.y);
+    float glz = min(gf2.z, 1.0 - gf2.z);
+    float cityGrid = 1.0 - smoothstep(0.0, 0.04, min(min(glx, gly), glz));
+    vec3 districtId = floor(vPosition * noiseScale * 1.5);
+    float districtBright = fract(sin(dot(districtId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+    districtBright = 0.4 + districtBright * 0.6;
+    float areaGlow = 0.5 + cityGrid * 0.5;
+    finalColor += accentColor * areaGlow * districtBright * nightMask * 0.45;
+  }
+
+  // ── Cloud layer (animated) ──
+  if (hasClouds > 0.5) {
+    float cloudSpeed = (planetType == 16) ? 0.005 : 0.017;
+    vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, time * cloudSpeed * 0.4, 0.0);
+    float cn = snoise(cloudPos);
+    cn += snoise(cloudPos * 2.0) * 0.4;
+    cn += snoise(cloudPos * 4.0) * 0.2;
+    cn += snoise(cloudPos * 8.0) * 0.1;
+    float cloudMask = smoothstep(0.05, 0.15, cn) * cloudDensity;
+    float cloudLight = diffuse * 0.9;
+    finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
+  }
+
+  // ── Atmosphere rim glow (fresnel, lit side only) ──
+  if (atmosphereStrength > 0.0) {
+    vec3 viewDir = normalize(vViewDir);
+    float fresnel = 1.0 - max(dot(vNormal, viewDir), 0.0);
+    fresnel = pow(fresnel, 3.0);
+    float sunFacing = smoothstep(-0.1, 0.3, diffuse);
+
+    finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
+  }
+
+  // ── Aurora (night-side glow near magnetic poles) ──
+  finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
+
+  // ── Posterize with edge dithering ──
+  finalColor = min(finalColor, vec3(1.0));
+  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// ── Category routing ──
+const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']);
+const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
+// Everything else → EXOTIC
+
 /**
  * Planet — a sphere with a procedural noise-based surface, optional
  * cloud layer, atmosphere rim glow, and ring system.
@@ -42,6 +1027,12 @@ export class Planet {
     const geometry = new THREE.IcosahedronGeometry(this.data.radius, 5);
     const d = this.data;
 
+    // Pick the shader variant based on planet category
+    let fragmentBody;
+    if (GAS_TYPES.has(d.type)) fragmentBody = GAS_BODY;
+    else if (ROCKY_TYPES.has(d.type)) fragmentBody = ROCKY_BODY;
+    else fragmentBody = EXOTIC_BODY;
+
     const material = new THREE.ShaderMaterial({
       uniforms: {
         baseColor: { value: new THREE.Vector3(...d.baseColor) },
@@ -65,6 +1056,12 @@ export class Planet {
         // Atmosphere
         atmosphereStrength: { value: d.atmosphere?.strength || 0.0 },
         atmosphereColor: { value: new THREE.Vector3(...(d.atmosphere?.color || [0.5, 0.5, 0.8])) },
+        // Aurora (physics-driven: atmosphere + magnetic field + stellar wind)
+        hasAurora: { value: d.aurora ? 1.0 : 0.0 },
+        auroraColor: { value: new THREE.Vector3(...(d.aurora?.color || [0.3, 0.8, 0.4])) },
+        auroraIntensity: { value: d.aurora?.intensity || 0.0 },
+        auroraRingLat: { value: d.aurora?.ringLatitude || 0.75 },
+        auroraRingWidth: { value: d.aurora?.ringWidth || 0.08 },
         // Shadow casters
         starPos1: { value: new THREE.Vector3() },
         starPos2: { value: new THREE.Vector3() },
@@ -74,6 +1071,8 @@ export class Planet {
         shadowPlanetCount: { value: 0 },
         shadowPlanetPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
         shadowPlanetRadius: { value: new Float32Array(2) },
+        // LOD level: 1=orbital (default), 2=close-up (enhanced detail)
+        lodLevel: { value: 1 },
       },
 
       vertexShader: /* glsl */ `
@@ -95,655 +1094,7 @@ export class Planet {
         }
       `,
 
-      fragmentShader: /* glsl */ `
-        #include <logdepthbuf_pars_fragment>
-        uniform vec3 baseColor;
-        uniform vec3 accentColor;
-        uniform float noiseScale;
-        uniform float noiseDetail;
-        uniform vec3 lightDir;
-        uniform vec3 lightDir2;
-        uniform vec3 starColor1;
-        uniform vec3 starColor2;
-        uniform float starBrightness1;
-        uniform float starBrightness2;
-        uniform float time;
-        uniform int planetType;
-        uniform float planetRadius;
-        uniform float hasClouds;
-        uniform vec3 cloudColor;
-        uniform float cloudDensity;
-        uniform float cloudScale;
-        uniform float atmosphereStrength;
-        uniform vec3 atmosphereColor;
-        // Shadow casters
-        uniform vec3 starPos1;
-        uniform vec3 starPos2;
-        const int MAX_SHADOW_MOONS = 6;
-        uniform int shadowMoonCount;
-        uniform vec3 shadowMoonPos[6];
-        uniform float shadowMoonRadius[6];
-        const int MAX_SHADOW_PLANETS = 2;
-        uniform int shadowPlanetCount;
-        uniform vec3 shadowPlanetPos[2];
-        uniform float shadowPlanetRadius[2];
-
-        varying vec3 vNormal;
-        varying vec3 vPosition;
-        varying vec3 vWorldPos;
-        varying vec3 vViewDir;
-
-        // ── Simplex-like noise (GPU version) ──
-        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-        vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-        vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
-        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-
-        float snoise(vec3 v) {
-          const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-          const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-
-          vec3 i = floor(v + dot(v, C.yyy));
-          vec3 x0 = v - i + dot(i, C.xxx);
-
-          vec3 g = step(x0.yzx, x0.xyz);
-          vec3 l = 1.0 - g;
-          vec3 i1 = min(g.xyz, l.zxy);
-          vec3 i2 = max(g.xyz, l.zxy);
-
-          vec3 x1 = x0 - i1 + C.xxx;
-          vec3 x2 = x0 - i2 + C.yyy;
-          vec3 x3 = x0 - D.yyy;
-
-          i = mod289(i);
-          vec4 p = permute(permute(permute(
-            i.z + vec4(0.0, i1.z, i2.z, 1.0))
-            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-
-          float n_ = 0.142857142857;
-          vec3 ns = n_ * D.wyz - D.xzx;
-
-          vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-
-          vec4 x_ = floor(j * ns.z);
-          vec4 y_ = floor(j - 7.0 * x_);
-
-          vec4 x = x_ * ns.x + ns.yyyy;
-          vec4 y = y_ * ns.x + ns.yyyy;
-          vec4 h = 1.0 - abs(x) - abs(y);
-
-          vec4 b0 = vec4(x.xy, y.xy);
-          vec4 b1 = vec4(x.zw, y.zw);
-
-          vec4 s0 = floor(b0) * 2.0 + 1.0;
-          vec4 s1 = floor(b1) * 2.0 + 1.0;
-          vec4 sh = -step(h, vec4(0.0));
-
-          vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
-          vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
-
-          vec3 p0 = vec3(a0.xy, h.x);
-          vec3 p1 = vec3(a0.zw, h.y);
-          vec3 p2 = vec3(a1.xy, h.z);
-          vec3 p3 = vec3(a1.zw, h.w);
-
-          vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
-          p0 *= norm.x;
-          p1 *= norm.y;
-          p2 *= norm.z;
-          p3 *= norm.w;
-
-          vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-          m = m * m;
-          return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
-        }
-
-        // ── 4x4 Bayer dithering threshold ──
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
-
-        // ── Edge-dithered posterization ──
-        vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
-          float dither = bayerDither(fragCoord) - 0.5;
-          vec3 dithered = color + dither * edgeWidth / levels;
-          return floor(dithered * levels + 0.5) / levels;
-        }
-
-        // ── Ray-sphere shadow test ──
-        // Returns 0.0 (full shadow) to 1.0 (no shadow)
-        float sphereShadow(vec3 fragPos, vec3 starPosition, vec3 casterPos, float casterRadius) {
-          vec3 toStar = starPosition - fragPos;
-          float distToStar = length(toStar);
-          vec3 rayDir = toStar / distToStar;
-          vec3 oc = casterPos - fragPos;
-          float tca = dot(oc, rayDir);
-          if (tca < 0.0) return 1.0;
-          if (tca > distToStar) return 1.0;
-          float d2 = dot(oc, oc) - tca * tca;
-          if (d2 >= casterRadius * casterRadius * 1.3) return 1.0;
-          return smoothstep(casterRadius * 0.85, casterRadius * 1.15, sqrt(d2));
-        }
-
-        // Total shadow factor for one star from all casters
-        float totalShadow(vec3 fragPos, vec3 starPosition) {
-          float shadow = 1.0;
-          for (int i = 0; i < MAX_SHADOW_MOONS; i++) {
-            if (i >= shadowMoonCount) break;
-            shadow *= sphereShadow(fragPos, starPosition, shadowMoonPos[i], shadowMoonRadius[i]);
-          }
-          for (int i = 0; i < MAX_SHADOW_PLANETS; i++) {
-            if (i >= shadowPlanetCount) break;
-            shadow *= sphereShadow(fragPos, starPosition, shadowPlanetPos[i], shadowPlanetRadius[i]);
-          }
-          return shadow;
-        }
-
-        // ── Hex grid helper ──
-        // Flat-top hex grid on a proper triangular lattice.
-        // s = vec2(1, sqrt(3)) so ALL six neighbors are distance 1.0 apart.
-        // Returns vec3(border, cellHash, edgeDist).
-        vec3 hexGrid(vec2 p) {
-          const vec2 s = vec2(1.0, 1.7320508); // 1, sqrt(3)
-          vec2 a = mod(p, s) - s * 0.5;
-          vec2 b = mod(p - s * 0.5, s) - s * 0.5;
-          // Pick the closer hex center
-          bool useA = dot(a, a) < dot(b, b);
-          vec2 gv = useA ? a : b;
-          vec2 id = p - gv;
-          // Flat-top hex SDF — inradius = 0.5
-          // max of: distance to flat side (|gv.x|) and distance to angled sides
-          float edgeDist = 0.5 - max(abs(gv.x), dot(abs(gv), vec2(0.5, 0.86602540)));
-          float cellHash = fract(sin(dot(floor(id * 2.0 + 0.5), vec2(127.1, 311.7))) * 43758.5453);
-          float border = 1.0 - smoothstep(0.0, 0.05, edgeDist);
-          return vec3(border, cellHash, edgeDist);
-        }
-
-        // ── Surface pattern based on planet type ──
-        float getSurfacePattern(vec3 pos) {
-          float n = snoise(pos * noiseScale);
-          n += snoise(pos * noiseScale * 2.0) * noiseDetail * 0.5;
-
-          if (planetType == 1) {
-            // Gas giant: Jupiter-like with multiple bands, turbulence, storms
-            float lat = pos.y * noiseScale;
-            float bands = sin(lat * 3.5) * 0.5
-                        + sin(lat * 7.0 + 0.5) * 0.3
-                        + sin(lat * 13.0) * 0.12;
-            float turb = snoise(pos * noiseScale * 2.0) * 0.35
-                       + snoise(pos * noiseScale * 4.0) * 0.15;
-            bands += turb * (1.0 - abs(bands));
-            float storm = snoise(pos * noiseScale * 0.5 + vec3(50.0, 0.0, 0.0));
-            storm = pow(max(storm, 0.0), 4.0);
-            n = bands * 0.5 + 0.5 + storm * 0.4;
-          } else if (planetType == 3) {
-            // Lava: sharp glowing cracks
-            n = 1.0 - abs(n);
-            n = pow(n, 2.0);
-          } else if (planetType == 2) {
-            // Ice: subtle cracks overlaid on smooth surface
-            float cracks = 1.0 - abs(snoise(pos * noiseScale * 3.0));
-            cracks = pow(cracks, 4.0);
-            n = n * 0.3 + 0.5 + cracks * 0.3;
-          } else if (planetType == 5) {
-            // Terrestrial: continent-like shapes with ragged coastlines
-            float continent = snoise(pos * noiseScale * 0.7);
-            continent += snoise(pos * noiseScale * 1.5) * 0.3;
-            continent += snoise(pos * noiseScale * 3.0) * 0.15;
-            continent += snoise(pos * noiseScale * 6.0) * 0.08;
-            n = continent;
-          } else if (planetType == 6) {
-            // Hot Jupiter: chaotic swirls, less banding than normal gas giant
-            float lat = pos.y * noiseScale;
-            float bands = sin(lat * 2.5) * 0.3 + sin(lat * 5.0) * 0.15;
-            float swirl = snoise(pos * noiseScale * 1.5) * 0.5
-                        + snoise(pos * noiseScale * 3.0) * 0.25;
-            n = bands + swirl;
-          } else if (planetType == 7) {
-            // Eyeball: concentric climate rings centered on the sub-stellar point
-            // Use world-space position so zones don't rotate with the surface
-            float angDist = acos(clamp(dot(normalize(vWorldPos), lightDir), -1.0, 1.0));
-            // Add noise for irregular ring edges
-            float ringNoise = snoise(pos * noiseScale * 2.0) * 0.15;
-            n = angDist + ringNoise;
-          } else if (planetType == 8) {
-            // Venus: very subtle, slow-moving banding beneath thick clouds
-            float lat = pos.y * noiseScale;
-            float bands = sin(lat * 2.0) * 0.15 + sin(lat * 4.0) * 0.08;
-            float swirl = snoise(pos * noiseScale * 0.8) * 0.12;
-            n = 0.5 + bands + swirl; // centered around 0.5, very low contrast
-          } else if (planetType == 9) {
-            // Carbon: dark surface with occasional bright crystalline facets
-            float base = snoise(pos * noiseScale) * 0.3;
-            // Sharp "glint" peaks from high-frequency noise
-            float crystal = snoise(pos * noiseScale * 5.0);
-            crystal = pow(max(crystal, 0.0), 8.0); // very sharp peaks = rare glints
-            n = base * 0.5 + 0.4 + crystal * 0.6;
-          } else if (planetType == 10) {
-            // Sub-Neptune: very smooth, subtle banding, hazy appearance
-            float lat = pos.y * noiseScale;
-            float bands = sin(lat * 3.0) * 0.1 + sin(lat * 6.0) * 0.05;
-            float haze = snoise(pos * noiseScale * 0.7) * 0.08;
-            n = 0.5 + bands + haze;
-          } else if (planetType == 11) {
-            // Hex: tessellated hexagonal plates (dominant-axis cube projection)
-            // Pick the single dominant axis — no blending, so cells are flat
-            float scale = noiseScale * 5.0;
-            vec3 an = abs(normalize(pos));
-            vec2 uv;
-            if (an.x > an.y && an.x > an.z) {
-              uv = pos.yz;
-            } else if (an.y > an.z) {
-              uv = pos.xz;
-            } else {
-              uv = pos.xy;
-            }
-            vec3 h = hexGrid(uv * scale);
-            float border = h.x;
-            float cellHash = h.y;
-            // Encode: cell shading in low range, border in high range
-            n = cellHash * 0.5 + border * 0.5;
-          } else if (planetType == 12) {
-            // Shattered: wide blue-white fracture lines on dark rock
-            float crack1 = 1.0 - abs(snoise(pos * noiseScale * 1.5));
-            float crack2 = 1.0 - abs(snoise(pos * noiseScale * 0.7 + vec3(50.0)));
-            crack1 = pow(crack1, 1.5);
-            crack2 = pow(crack2, 1.5);
-            float cracks = max(crack1, crack2 * 0.8);
-            float node = crack1 * crack2;
-            node = pow(node, 0.8);
-            n = cracks + node * 0.5;
-          } else if (planetType == 13) {
-            // Crystal: angular Voronoi facets with gemstone coloring
-            vec3 scaledPos = pos * noiseScale * 2.5;
-            vec3 cellBase = floor(scaledPos);
-            float minDist = 10.0;
-            float cellValue = 0.0;
-            for (int dx = -1; dx <= 1; dx++) {
-              for (int dy = -1; dy <= 1; dy++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                  vec3 neighbor = cellBase + vec3(float(dx), float(dy), float(dz));
-                  vec3 point = neighbor + fract(sin(vec3(
-                    dot(neighbor, vec3(127.1, 311.7, 74.7)),
-                    dot(neighbor, vec3(269.5, 183.3, 246.1)),
-                    dot(neighbor, vec3(113.5, 271.9, 124.6))
-                  )) * 43758.5453) * 0.8 + 0.1;
-                  float d = length(scaledPos - point);
-                  if (d < minDist) {
-                    minDist = d;
-                    cellValue = fract(sin(dot(neighbor, vec3(43.34, 85.17, 67.89))) * 4758.5);
-                  }
-                }
-              }
-            }
-            n = cellValue;
-          } else if (planetType == 14) {
-            // Fungal: dark base with bioluminescent glow-spot clusters
-            float terrain = snoise(pos * noiseScale) * 0.3 + 0.3;
-            float spots1 = snoise(pos * noiseScale * 4.0);
-            float spots2 = snoise(pos * noiseScale * 6.0 + vec3(100.0));
-            float clusterMask = snoise(pos * noiseScale * 0.8) * 0.5 + 0.5;
-            clusterMask = smoothstep(0.3, 0.7, clusterMask);
-            float glow = max(spots1, spots2);
-            glow = pow(max(glow, 0.0), 3.0) * clusterMask;
-            n = terrain + glow * 1.5;
-          } else if (planetType == 15) {
-            // Machine: rectangular circuit grid with lit/dark cells
-            vec3 gridPos = pos * noiseScale * 4.0;
-            vec3 f = fract(gridPos);
-            float lineX = min(f.x, 1.0 - f.x);
-            float lineY = min(f.y, 1.0 - f.y);
-            float lineZ = min(f.z, 1.0 - f.z);
-            float line = min(min(lineX, lineY), lineZ);
-            float grid = 1.0 - smoothstep(0.0, 0.06, line);
-            float secondLine = min(max(lineX, lineY), max(min(lineX, lineY), lineZ));
-            float intersection = grid * (1.0 - smoothstep(0.0, 0.06, secondLine));
-            vec3 cellId = floor(gridPos);
-            float cellHash = fract(sin(dot(cellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
-            float cellLit = step(0.55, cellHash);
-            n = grid * 0.7 + intersection * 0.3 + cellLit * 0.15;
-          } else if (planetType == 16) {
-            // City-lights: same continent shapes as terrestrial
-            float continent = snoise(pos * noiseScale * 0.7);
-            continent += snoise(pos * noiseScale * 1.5) * 0.3;
-            continent += snoise(pos * noiseScale * 3.0) * 0.15;
-            continent += snoise(pos * noiseScale * 6.0) * 0.08;
-            n = continent;
-          } else if (planetType == 17) {
-            // Ecumenopolis: fine city-block grid covering the whole surface
-            // Multiple scales of grid for that layered urban look
-            vec3 gridPos1 = pos * noiseScale * 6.0;
-            vec3 f1 = fract(gridPos1);
-            float lx1 = min(f1.x, 1.0 - f1.x);
-            float ly1 = min(f1.y, 1.0 - f1.y);
-            float lz1 = min(f1.z, 1.0 - f1.z);
-            float grid1 = 1.0 - smoothstep(0.0, 0.04, min(min(lx1, ly1), lz1));
-            // Coarser district-level grid
-            vec3 gridPos2 = pos * noiseScale * 1.5;
-            vec3 f2 = fract(gridPos2);
-            float lx2 = min(f2.x, 1.0 - f2.x);
-            float ly2 = min(f2.y, 1.0 - f2.y);
-            float lz2 = min(f2.z, 1.0 - f2.z);
-            float grid2 = 1.0 - smoothstep(0.0, 0.06, min(min(lx2, ly2), lz2));
-            // Cell brightness variation (districts have different density)
-            vec3 cellId = floor(gridPos2);
-            float district = fract(sin(dot(cellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
-            // Combine: fine grid + district grid + district variation
-            n = grid1 * 0.5 + grid2 * 0.3 + district * 0.2;
-          }
-
-          return n;
-        }
-
-        void main() {
-          #include <logdepthbuf_fragment>
-          float pattern = getSurfacePattern(vPosition);
-
-          // ── Surface color (type-dependent) ──
-          vec3 surfaceColor;
-
-          if (planetType == 5) {
-            // Terrestrial: sharp ocean / land boundary
-            float height = pattern * 0.5 + 0.5;
-            float seaLevel = 0.45;
-            float landMask = step(seaLevel, height);
-
-            vec3 deepOcean = baseColor * 0.7;
-            float oceanDepth = smoothstep(seaLevel - 0.25, seaLevel, height);
-            vec3 ocean = mix(deepOcean, baseColor, oceanDepth);
-
-            float landHeight = smoothstep(seaLevel, seaLevel + 0.3, height);
-            vec3 highland = accentColor * 0.6 + vec3(0.15, 0.12, 0.08);
-            vec3 land = mix(accentColor, highland, landHeight);
-
-            surfaceColor = mix(ocean, land, landMask);
-
-            // Ice caps at planet's rotational poles (object-space Y, not world Y)
-            float latitude = abs(vPosition.y) / planetRadius;
-            float iceNoise = snoise(vPosition * noiseScale * 2.0) * 0.15;
-            float iceMask = smoothstep(0.55, 0.7, latitude + iceNoise);
-            vec3 iceColor = vec3(0.85, 0.88, 0.92);
-            surfaceColor = mix(surfaceColor, iceColor, iceMask);
-          } else if (planetType == 1) {
-            // Gas giant: zones, belts, storms
-            float bandVal = pattern;
-            float zoneMask = smoothstep(0.42, 0.58, bandVal);
-            surfaceColor = mix(baseColor, accentColor, zoneMask);
-
-            vec3 stormColor = baseColor * 0.5 + vec3(0.3, 0.1, 0.05);
-            float stormMask = smoothstep(0.78, 0.88, bandVal);
-            surfaceColor = mix(surfaceColor, stormColor, stormMask);
-
-            float polarDark = smoothstep(0.6, 1.0, abs(vPosition.y) / planetRadius);
-            surfaceColor *= 1.0 - polarDark * 0.3;
-          } else if (planetType == 6) {
-            // Hot Jupiter: dark base with glowing day-side heat
-            float swirl = pattern * 0.5 + 0.5;
-            surfaceColor = mix(baseColor, baseColor * 1.3, swirl);
-
-            // Thermal glow: use world-space pos so it stays fixed toward the sun
-            float starFacing = max(dot(normalize(vWorldPos), lightDir), 0.0);
-            float hotspot = pow(starFacing, 3.0);
-            vec3 glowColor = accentColor;
-            surfaceColor += glowColor * hotspot * 0.8;
-
-            // Night side thermal glow — very faint deep red
-            float nightSide = max(-dot(normalize(vWorldPos), lightDir), 0.0);
-            surfaceColor += vec3(0.15, 0.03, 0.01) * nightSide * 0.5;
-          } else if (planetType == 7) {
-            // Eyeball planet: concentric climate zones
-            float angDist = pattern; // angular distance from sub-stellar point
-
-            // Zone boundaries (from center outward):
-            // 0.0-0.4: open ocean (dark blue), 0.4-0.8: habitable (green/brown),
-            // 0.8-1.5: ice transition, 1.5+: frozen night (white)
-            vec3 oceanColor = baseColor;
-            vec3 landColor = accentColor;
-            vec3 iceColor = vec3(0.82, 0.85, 0.9);
-            vec3 frozenColor = vec3(0.7, 0.72, 0.78);
-
-            float oceanMask = 1.0 - smoothstep(0.3, 0.5, angDist);
-            float landMask = smoothstep(0.3, 0.5, angDist) * (1.0 - smoothstep(0.8, 1.0, angDist));
-            float iceMask = smoothstep(0.8, 1.0, angDist) * (1.0 - smoothstep(1.5, 1.8, angDist));
-            float frozenMask = smoothstep(1.5, 1.8, angDist);
-
-            surfaceColor = oceanColor * oceanMask
-                         + landColor * landMask
-                         + iceColor * iceMask
-                         + frozenColor * frozenMask;
-          } else if (planetType == 8) {
-            // Venus: nearly featureless, low-contrast cream/yellow clouds
-            float val = pattern;
-            surfaceColor = mix(baseColor, accentColor, val);
-          } else if (planetType == 9) {
-            // Carbon: very dark with rare bright diamond glints
-            float val = pattern;
-            surfaceColor = mix(baseColor, accentColor, smoothstep(0.3, 0.6, val));
-
-            // Diamond glints: bright white specular points
-            float glint = smoothstep(0.85, 0.95, val);
-            surfaceColor += vec3(0.8, 0.85, 0.9) * glint;
-          } else if (planetType == 10) {
-            // Sub-Neptune: smooth, muted, hazy blend
-            float val = pattern;
-            surfaceColor = mix(baseColor, accentColor, val);
-          } else if (planetType == 11) {
-            // Hex: cell interior varies per cell, borders are bright accent
-            float border = smoothstep(0.4, 0.55, pattern);
-            float cellShade = pattern * 2.0 * (1.0 - border); // extract cell hash
-            surfaceColor = mix(baseColor * 0.7, baseColor * 1.3, cellShade);
-            surfaceColor = mix(surfaceColor, accentColor, border);
-          } else if (planetType == 12) {
-            // Shattered: dark rock with glowing cool-colored fracture lines
-            float crackIntensity = smoothstep(0.2, 0.6, pattern);
-            surfaceColor = mix(baseColor, accentColor, crackIntensity);
-            float hotCrack = smoothstep(0.7, 0.9, pattern);
-            surfaceColor += vec3(0.5, 0.5, 0.6) * hotCrack;
-          } else if (planetType == 13) {
-            // Crystal: flat-shaded facets with bright gemstone highlights
-            float facetShade = pattern;
-            surfaceColor = mix(baseColor, accentColor, facetShade);
-            float highlight = smoothstep(0.8, 0.95, facetShade);
-            surfaceColor += vec3(0.6, 0.5, 0.7) * highlight;
-          } else if (planetType == 14) {
-            // Fungal: dark terrain with bright bioluminescent glow spots
-            float terrain = clamp(pattern, 0.0, 0.5);
-            float glowAmount = max(pattern - 0.5, 0.0) * 2.0;
-            surfaceColor = mix(baseColor * 0.8, baseColor, terrain * 2.0);
-            surfaceColor += accentColor * glowAmount;
-          } else if (planetType == 15) {
-            // Machine: dark metallic base with glowing grid lines
-            float gridLine = smoothstep(0.3, 0.5, pattern);
-            surfaceColor = mix(baseColor, accentColor, gridLine);
-            float bright = smoothstep(0.7, 0.9, pattern);
-            surfaceColor += accentColor * 0.5 * bright;
-          } else if (planetType == 16) {
-            // City-lights: same land/ocean coloring as terrestrial (type 5)
-            float height = pattern * 0.5 + 0.5;
-            float seaLevel = 0.45;
-            float landMask = step(seaLevel, height);
-            vec3 deepOcean = baseColor * 0.7;
-            float oceanDepth = smoothstep(seaLevel - 0.25, seaLevel, height);
-            vec3 ocean = mix(deepOcean, baseColor, oceanDepth);
-            float landHeight = smoothstep(seaLevel, seaLevel + 0.3, height);
-            vec3 highland = accentColor * 0.6 + vec3(0.15, 0.12, 0.08);
-            vec3 land = mix(accentColor, highland, landHeight);
-            surfaceColor = mix(ocean, land, landMask);
-          } else if (planetType == 17) {
-            // Ecumenopolis: steel/concrete surface with warm-toned districts
-            float gridLine = smoothstep(0.3, 0.45, pattern);
-            float district = clamp(pattern * 1.5, 0.0, 1.0);
-            // Base is gray urban sprawl, accent tints brighter districts
-            surfaceColor = mix(baseColor * 0.8, baseColor * 1.2, district);
-            surfaceColor = mix(surfaceColor, baseColor * 1.5, gridLine * 0.4);
-          } else {
-            // Default: smooth blend between base and accent (rocky, ocean, ice, lava)
-            float mixFactor = smoothstep(0.3, 0.7, pattern * 0.5 + 0.5);
-            surfaceColor = mix(baseColor, accentColor, mixFactor);
-          }
-
-          // ── Dual-star Lighting with Shadows ──
-          float diff1 = max(dot(vNormal, lightDir), 0.0);
-          float diff2 = max(dot(vNormal, lightDir2), 0.0);
-
-          // Shadow modulation per star (moons/planets blocking light)
-          float shadow1 = totalShadow(vWorldPos, starPos1);
-          float shadow2 = totalShadow(vWorldPos, starPos2);
-
-          // Combined star-colored light with shadows
-          vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1
-                         + starColor2 * diff2 * starBrightness2 * shadow2;
-          // Total brightness (for effects that just need a scalar)
-          float diffuse = diff1 * starBrightness1 * shadow1 + diff2 * starBrightness2 * shadow2;
-
-          // Tiny ambient so dark sides show as silhouettes, not invisible black
-          float ambient = 0.02;
-          // Hot Jupiter: slightly more ambient from thermal glow
-          if (planetType == 6) {
-            ambient = 0.04;
-          }
-          // Emissive exotic types: slightly more ambient
-          if (planetType == 12 || planetType == 14 || planetType == 15 || planetType == 16 || planetType == 17) {
-            ambient = 0.04;
-          }
-
-          vec3 finalColor = surfaceColor * (starLight + vec3(ambient));
-
-          // Hot Jupiter: add emissive glow that doesn't depend on light
-          if (planetType == 6) {
-            float starFacing = max(dot(normalize(vWorldPos), lightDir), 0.0);
-            float hotspot = pow(starFacing, 3.0);
-            finalColor += accentColor * hotspot * 0.3;
-            // Night side deep red emission
-            float nightSide = max(-dot(normalize(vWorldPos), lightDir), 0.0);
-            finalColor += vec3(0.12, 0.02, 0.0) * pow(nightSide, 0.8) * 0.4;
-          }
-
-          // Carbon: diamond glints are emissive (glow in shadow too)
-          if (planetType == 9) {
-            float crystal = snoise(vPosition * noiseScale * 5.0);
-            crystal = pow(max(crystal, 0.0), 8.0);
-            float glint = smoothstep(0.85, 0.95, crystal * 0.6 + 0.4 + snoise(vPosition * noiseScale) * 0.15);
-            finalColor += vec3(0.5, 0.55, 0.6) * glint * 0.3;
-          }
-
-          // Shattered: fracture lines glow on dark side
-          if (planetType == 12) {
-            float crack1 = 1.0 - abs(snoise(vPosition * noiseScale * 1.5));
-            float crack2 = 1.0 - abs(snoise(vPosition * noiseScale * 0.7 + vec3(50.0)));
-            float crackGlow = max(pow(crack1, 1.5), pow(crack2, 1.5) * 0.8);
-            finalColor += accentColor * crackGlow * 0.25;
-          }
-
-          // Fungal: bioluminescent spots glow in darkness
-          if (planetType == 14) {
-            float spots1 = snoise(vPosition * noiseScale * 4.0);
-            float spots2 = snoise(vPosition * noiseScale * 6.0 + vec3(100.0));
-            float clusterMask = smoothstep(0.3, 0.7, snoise(vPosition * noiseScale * 0.8) * 0.5 + 0.5);
-            float emGlow = pow(max(max(spots1, spots2), 0.0), 3.0) * clusterMask;
-            finalColor += accentColor * emGlow * 0.35;
-          }
-
-          // Machine: grid lines glow like city lights
-          if (planetType == 15) {
-            vec3 gridPos = vPosition * noiseScale * 4.0;
-            vec3 gf = fract(gridPos);
-            float glX = min(gf.x, 1.0 - gf.x);
-            float glY = min(gf.y, 1.0 - gf.y);
-            float glZ = min(gf.z, 1.0 - gf.z);
-            float gLine = min(min(glX, glY), glZ);
-            float emGrid = 1.0 - smoothstep(0.0, 0.06, gLine);
-            vec3 gCellId = floor(gridPos);
-            float gCellHash = fract(sin(dot(gCellId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
-            float gCellLit = step(0.55, gCellHash);
-            finalColor += accentColor * (emGrid * 0.2 + gCellLit * 0.08);
-          }
-
-          // City-lights: scattered warm lights on night-side land masses
-          if (planetType == 16) {
-            float nightMask = 1.0 - smoothstep(0.0, 0.15, diffuse);
-            // Continent mask (same as surface pattern)
-            float continent = snoise(vPosition * noiseScale * 0.7);
-            continent += snoise(vPosition * noiseScale * 1.5) * 0.3;
-            continent += snoise(vPosition * noiseScale * 3.0) * 0.15;
-            float landMask = step(0.45, continent * 0.5 + 0.5);
-            // City clusters — high-freq noise for individual lights
-            float cities = snoise(vPosition * noiseScale * 8.0);
-            cities += snoise(vPosition * noiseScale * 16.0) * 0.5;
-            float cityMask = smoothstep(0.2, 0.6, cities) * landMask;
-            // Coastal concentration — brighter near coastlines
-            float coastDist = abs(continent * 0.5 + 0.5 - 0.45);
-            float coastBoost = 1.0 + smoothstep(0.15, 0.0, coastDist) * 0.8;
-            vec3 cityColor = vec3(0.95, 0.75, 0.3); // warm amber
-            finalColor += cityColor * cityMask * coastBoost * nightMask * 0.3;
-          }
-
-          // Ecumenopolis: entire surface glows on night side
-          if (planetType == 17) {
-            float nightMask = 1.0 - smoothstep(0.0, 0.15, diffuse);
-            // Fine city grid glow
-            vec3 gp = vPosition * noiseScale * 6.0;
-            vec3 gf2 = fract(gp);
-            float glx = min(gf2.x, 1.0 - gf2.x);
-            float gly = min(gf2.y, 1.0 - gf2.y);
-            float glz = min(gf2.z, 1.0 - gf2.z);
-            float cityGrid = 1.0 - smoothstep(0.0, 0.04, min(min(glx, gly), glz));
-            // District brightness variation
-            vec3 districtId = floor(vPosition * noiseScale * 1.5);
-            float districtBright = fract(sin(dot(districtId, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
-            districtBright = 0.4 + districtBright * 0.6; // 0.4 to 1.0
-            // Warm city glow — streets + general area light
-            float areaGlow = 0.5 + cityGrid * 0.5;
-            finalColor += accentColor * areaGlow * districtBright * nightMask * 0.45;
-          }
-
-          // ── Cloud layer (animated) ──
-          if (hasClouds > 0.5) {
-            float cloudSpeed = (planetType == 5 || planetType == 7 || planetType == 16) ? 0.005 : 0.017;
-            vec3 cloudPos = vPosition * cloudScale + vec3(time * cloudSpeed, time * cloudSpeed * 0.4, 0.0);
-            float cn = snoise(cloudPos);
-            cn += snoise(cloudPos * 2.0) * 0.4;
-            cn += snoise(cloudPos * 4.0) * 0.2;
-            cn += snoise(cloudPos * 8.0) * 0.1;
-            float cloudMask = smoothstep(0.05, 0.15, cn) * cloudDensity;
-            float cloudLight = diffuse * 0.9;
-            finalColor = mix(finalColor, cloudColor * cloudLight, cloudMask);
-          }
-
-          // ── Atmosphere rim glow (fresnel, lit side only) ──
-          if (atmosphereStrength > 0.0) {
-            vec3 viewDir = normalize(vViewDir);
-            float fresnel = 1.0 - max(dot(vNormal, viewDir), 0.0);
-            fresnel = pow(fresnel, 3.0);
-            float sunFacing = smoothstep(-0.1, 0.3, diffuse);
-
-            // Sub-Neptune and Venus: atmosphere glow wraps further around
-            if (planetType == 8 || planetType == 10) {
-              sunFacing = smoothstep(-0.3, 0.2, diffuse);
-            }
-
-            finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
-          }
-
-          // ── Posterize with edge dithering ──
-          finalColor = min(finalColor, vec3(1.0));
-          finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
-
-          gl_FragColor = vec4(finalColor, 1.0);
-        }
-      `,
+      fragmentShader: FRAG_HEADER + fragmentBody,
     });
 
     return new THREE.Mesh(geometry, material);

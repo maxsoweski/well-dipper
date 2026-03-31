@@ -1,4 +1,9 @@
 import { earthRadiiToScene } from '../core/ScaleConstants.js';
+import {
+  estimateMassEarth, computeAtmosphere, deriveComposition,
+  equilibriumTemperature, tidalLockTimescale, checkTidalLock,
+  habitabilityScore, computeSurfaceHistory, generateRingPhysics,
+} from './PhysicsEngine.js';
 
 /**
  * PlanetGenerator — produces data describing a single planet.
@@ -47,6 +52,14 @@ export class PlanetGenerator {
         { base: [0.3, 0.3, 0.35], accent: [0.5, 0.4, 0.3] },        // Grey rock
         { base: [0.45, 0.3, 0.2], accent: [0.6, 0.45, 0.35] },      // Rust
         { base: [0.25, 0.2, 0.2], accent: [0.4, 0.35, 0.3] },       // Dark stone
+        { base: [0.5, 0.4, 0.25], accent: [0.65, 0.5, 0.3] },       // Sandstone
+        { base: [0.2, 0.18, 0.25], accent: [0.35, 0.3, 0.4] },      // Slate purple
+        { base: [0.4, 0.2, 0.15], accent: [0.55, 0.35, 0.2] },      // Red sandstone
+        { base: [0.3, 0.25, 0.3], accent: [0.45, 0.4, 0.45] },      // Mauve rock
+        { base: [0.15, 0.15, 0.18], accent: [0.3, 0.28, 0.35] },    // Basalt
+        { base: [0.55, 0.5, 0.35], accent: [0.7, 0.65, 0.45] },     // Ochre
+        { base: [0.22, 0.28, 0.22], accent: [0.35, 0.42, 0.32] },   // Green-grey rock
+        { base: [0.4, 0.35, 0.4], accent: [0.55, 0.5, 0.55] },      // Granite pink
       ],
     },
     'gas-giant': {
@@ -56,6 +69,21 @@ export class PlanetGenerator {
         { base: [0.6, 0.3, 0.2], accent: [0.8, 0.5, 0.3] },         // Warm red
         { base: [0.55, 0.45, 0.3], accent: [0.7, 0.6, 0.4] },       // Muted tan
         { base: [0.2, 0.3, 0.35], accent: [0.35, 0.5, 0.55] },      // Blue-grey
+        { base: [0.75, 0.6, 0.35], accent: [0.9, 0.75, 0.45] },     // Saturn pale gold
+        { base: [0.45, 0.35, 0.55], accent: [0.6, 0.5, 0.7] },      // Lavender bands
+        { base: [0.15, 0.25, 0.45], accent: [0.3, 0.45, 0.65] },    // Deep ocean blue
+        { base: [0.65, 0.4, 0.15], accent: [0.8, 0.55, 0.2] },      // Amber storm
+        { base: [0.35, 0.45, 0.35], accent: [0.5, 0.6, 0.45] },     // Olive green
+        { base: [0.5, 0.3, 0.4], accent: [0.7, 0.45, 0.55] },       // Rose bands
+        { base: [0.25, 0.2, 0.4], accent: [0.4, 0.35, 0.6] },       // Indigo
+        { base: [0.4, 0.5, 0.5], accent: [0.55, 0.65, 0.6] },       // Turquoise haze
+        { base: [0.7, 0.55, 0.4], accent: [0.85, 0.7, 0.5] },       // Peach cream
+        { base: [0.3, 0.4, 0.25], accent: [0.45, 0.55, 0.35] },     // Jade green
+        { base: [0.55, 0.35, 0.25], accent: [0.75, 0.5, 0.35] },    // Copper bands
+        { base: [0.18, 0.22, 0.3], accent: [0.3, 0.38, 0.5] },      // Dark steel blue
+        { base: [0.6, 0.55, 0.45], accent: [0.75, 0.7, 0.55] },     // Pale butter
+        { base: [0.45, 0.25, 0.3], accent: [0.65, 0.4, 0.45] },     // Burgundy bands
+        { base: [0.35, 0.3, 0.2], accent: [0.5, 0.45, 0.3] },       // Khaki brown
       ],
     },
     ice: {
@@ -65,6 +93,21 @@ export class PlanetGenerator {
         { base: [0.6, 0.7, 0.75], accent: [0.4, 0.5, 0.65] },       // Steel blue
         { base: [0.75, 0.85, 0.8], accent: [0.5, 0.7, 0.6] },       // Mint frost
         { base: [0.65, 0.65, 0.8], accent: [0.45, 0.45, 0.7] },     // Lavender ice
+        { base: [0.8, 0.9, 0.95], accent: [0.55, 0.7, 0.85] },      // Bright arctic
+        { base: [0.55, 0.6, 0.7], accent: [0.35, 0.4, 0.55] },      // Dark glacier
+        { base: [0.7, 0.75, 0.85], accent: [0.5, 0.55, 0.75] },     // Periwinkle ice
+        { base: [0.8, 0.8, 0.75], accent: [0.6, 0.6, 0.55] },       // Dirty ice
+        { base: [0.6, 0.75, 0.85], accent: [0.4, 0.55, 0.7] },      // Europa blue
+        { base: [0.9, 0.88, 0.85], accent: [0.7, 0.65, 0.6] },      // Warm white ice
+        { base: [0.5, 0.55, 0.65], accent: [0.3, 0.35, 0.5] },      // Titan grey
+        { base: [0.65, 0.8, 0.75], accent: [0.45, 0.6, 0.55] },     // Jade ice
+        { base: [0.72, 0.68, 0.82], accent: [0.52, 0.48, 0.68] },   // Amethyst frost
+        { base: [0.78, 0.82, 0.78], accent: [0.55, 0.6, 0.55] },    // Green-grey frost
+        { base: [0.6, 0.65, 0.55], accent: [0.4, 0.45, 0.35] },     // Methane haze ice
+        { base: [0.85, 0.8, 0.9], accent: [0.65, 0.6, 0.75] },      // Pink frost
+        { base: [0.55, 0.7, 0.8], accent: [0.35, 0.5, 0.65] },      // Deep frozen ocean
+        { base: [0.75, 0.7, 0.65], accent: [0.55, 0.5, 0.45] },     // Io-like sulfur ice
+        { base: [0.68, 0.78, 0.88], accent: [0.48, 0.58, 0.72] },   // Enceladus
       ],
     },
     lava: {
@@ -74,6 +117,21 @@ export class PlanetGenerator {
         { base: [0.12, 0.08, 0.1], accent: [0.8, 0.15, 0.05] },     // Dark + red glow
         { base: [0.1, 0.1, 0.15], accent: [0.6, 0.2, 0.8] },        // Dark + violet glow
         { base: [0.18, 0.15, 0.08], accent: [0.95, 0.8, 0.2] },     // Dark + bright gold glow
+        { base: [0.08, 0.05, 0.05], accent: [1.0, 0.2, 0.0] },      // Obsidian + pure red lava
+        { base: [0.12, 0.1, 0.12], accent: [0.85, 0.4, 0.6] },      // Dark + magenta cracks
+        { base: [0.14, 0.08, 0.05], accent: [0.9, 0.6, 0.1] },      // Dark brown + amber rivers
+        { base: [0.06, 0.06, 0.08], accent: [0.5, 0.8, 0.9] },      // Near-black + cyan hot cracks
+        { base: [0.1, 0.07, 0.05], accent: [0.95, 0.35, 0.0] },     // Charcoal + neon orange
+        { base: [0.08, 0.08, 0.12], accent: [0.7, 0.3, 0.9] },      // Dark + purple-white glow
+        { base: [0.16, 0.12, 0.06], accent: [0.85, 0.7, 0.1] },     // Brown crust + gold veins
+        { base: [0.05, 0.03, 0.06], accent: [0.4, 0.9, 0.3] },      // Obsidian + green plasma
+        { base: [0.12, 0.06, 0.02], accent: [0.95, 0.45, 0.0] },    // Dark rust + bright orange
+        { base: [0.1, 0.1, 0.08], accent: [0.9, 0.9, 0.4] },        // Grey + white-hot cracks
+        { base: [0.07, 0.05, 0.1], accent: [0.6, 0.1, 0.3] },       // Deep purple + blood red
+        { base: [0.15, 0.08, 0.04], accent: [1.0, 0.65, 0.0] },     // Sienna + solar gold
+        { base: [0.04, 0.04, 0.06], accent: [0.3, 0.5, 1.0] },      // Near-black + electric blue
+        { base: [0.1, 0.12, 0.08], accent: [0.8, 0.55, 0.15] },     // Greenish crust + amber
+        { base: [0.08, 0.04, 0.08], accent: [0.9, 0.2, 0.5] },      // Dark + hot pink fissures
       ],
     },
     ocean: {
@@ -91,6 +149,22 @@ export class PlanetGenerator {
         { base: [0.08, 0.18, 0.45], accent: [0.3, 0.5, 0.15] },     // Dark ocean + lush green
         { base: [0.12, 0.25, 0.5], accent: [0.35, 0.35, 0.2] },     // Ocean + savanna
         { base: [0.05, 0.15, 0.35], accent: [0.15, 0.35, 0.15] },   // Deep ocean + dark forest
+        { base: [0.15, 0.22, 0.45], accent: [0.4, 0.3, 0.15] },     // Ocean + desert continent
+        { base: [0.06, 0.12, 0.3], accent: [0.25, 0.55, 0.3] },     // Dark ocean + emerald
+        { base: [0.1, 0.18, 0.4], accent: [0.45, 0.4, 0.25] },      // Ocean + autumn land
+        { base: [0.08, 0.2, 0.42], accent: [0.5, 0.45, 0.35] },     // Ocean + rocky coast
+        { base: [0.05, 0.1, 0.3], accent: [0.35, 0.25, 0.15] },     // Deep ocean + arid land
+        { base: [0.12, 0.22, 0.48], accent: [0.2, 0.4, 0.25] },     // Bright ocean + olive land
+        { base: [0.1, 0.15, 0.38], accent: [0.55, 0.5, 0.3] },      // Ocean + golden plains
+        { base: [0.06, 0.16, 0.32], accent: [0.3, 0.5, 0.4] },      // Teal ocean + moss
+        { base: [0.15, 0.2, 0.35], accent: [0.4, 0.35, 0.3] },      // Warm ocean + brown land
+        { base: [0.08, 0.2, 0.5], accent: [0.15, 0.3, 0.18] },      // Vivid ocean + dark green
+        { base: [0.1, 0.16, 0.42], accent: [0.5, 0.3, 0.2] },       // Ocean + red soil
+        { base: [0.07, 0.14, 0.28], accent: [0.4, 0.45, 0.2] },     // Dark ocean + grassland
+        { base: [0.12, 0.18, 0.35], accent: [0.3, 0.45, 0.35] },    // Ocean + tundra green
+        { base: [0.05, 0.12, 0.25], accent: [0.45, 0.35, 0.25] },   // Deep ocean + sandstone
+        { base: [0.1, 0.2, 0.45], accent: [0.2, 0.35, 0.2] },       // Clear ocean + pine
+        { base: [0.08, 0.15, 0.38], accent: [0.55, 0.45, 0.15] },   // Ocean + wheat fields
       ],
     },
     'hot-jupiter': {
@@ -162,10 +236,24 @@ export class PlanetGenerator {
     },
     fungal: {
       colors: [
-        { base: [0.08, 0.15, 0.1], accent: [0.1, 0.8, 0.7] },      // Dark green + cyan glow
-        { base: [0.06, 0.12, 0.12], accent: [0.8, 0.2, 0.6] },      // Dark teal + pink glow
-        { base: [0.1, 0.1, 0.06], accent: [0.2, 0.9, 0.4] },        // Brown-green + green glow
-        { base: [0.05, 0.1, 0.1], accent: [0.3, 0.7, 0.9] },        // Dark teal + blue glow
+        { base: [0.08, 0.15, 0.1], accent: [0.1, 0.8, 0.7] },       // Dark green + cyan glow
+        { base: [0.06, 0.12, 0.12], accent: [0.8, 0.2, 0.6] },       // Dark teal + pink glow
+        { base: [0.1, 0.1, 0.06], accent: [0.2, 0.9, 0.4] },         // Brown-green + green glow
+        { base: [0.05, 0.1, 0.1], accent: [0.3, 0.7, 0.9] },         // Dark teal + blue glow
+        { base: [0.12, 0.05, 0.12], accent: [0.7, 0.1, 0.9] },       // Deep purple + violet biolum
+        { base: [0.06, 0.08, 0.05], accent: [0.4, 0.95, 0.3] },      // Near-black + neon green
+        { base: [0.1, 0.08, 0.04], accent: [0.9, 0.5, 0.1] },        // Dark soil + orange fruiting
+        { base: [0.04, 0.04, 0.06], accent: [0.2, 0.4, 0.95] },      // Dark void + electric blue
+        { base: [0.08, 0.06, 0.1], accent: [0.9, 0.3, 0.8] },        // Dark purple + magenta glow
+        { base: [0.12, 0.12, 0.08], accent: [0.8, 0.8, 0.2] },       // Brown + yellow-green biolum
+        { base: [0.03, 0.06, 0.08], accent: [0.15, 0.85, 0.85] },    // Abyssal dark + aqua glow
+        { base: [0.1, 0.04, 0.06], accent: [0.95, 0.2, 0.3] },       // Dark red + crimson fruiting
+        { base: [0.06, 0.1, 0.06], accent: [0.5, 0.9, 0.6] },        // Forest floor + pale green
+        { base: [0.08, 0.05, 0.08], accent: [0.6, 0.3, 0.95] },      // Dark + deep purple mycelium
+        { base: [0.05, 0.05, 0.03], accent: [0.85, 0.75, 0.4] },     // Ghostly white-gold (spectral)
+        { base: [0.04, 0.08, 0.12], accent: [0.3, 0.6, 0.85] },      // Deep sea + bioluminescent blue
+        { base: [0.1, 0.06, 0.02], accent: [0.7, 0.4, 0.1] },        // Dark amber + warm orange
+        { base: [0.02, 0.06, 0.04], accent: [0.1, 0.95, 0.5] },      // Near-black + emerald glow
       ],
     },
     machine: {
@@ -274,34 +362,128 @@ export class PlanetGenerator {
       'hot-jupiter': [1.5, 3.0],
       'sub-neptune': [1.5, 2.5],
       'venus': [1.5, 3.0],
+      'fungal': [1.5, 6.0], // Wide range: low = large sprawling networks, high = dense fine clusters
     };
     const noiseScale = rng.range(...(noiseScaleRanges[type] || [2.0, 5.0]));
 
-    // ── Rings ──
-    const ringChance = {
-      'gas-giant': 0.5, 'ice': 0.25, 'rocky': 0.08,
-      'terrestrial': 0.18, 'ocean': 0.05, 'lava': 0.03,
-      'hot-jupiter': 0.08, 'sub-neptune': 0.15,
-      'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.05,
-      'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
-      'fungal': 0.0, 'machine': 0.0,
-      'city-lights': 0.1, 'ecumenopolis': 0.05,
+    // ── Physics-driven properties ──
+    // Mass estimate from radius + type (PhysicsEngine §1)
+    const massEarth = estimateMassEarth(radiusEarth, type);
+
+    // Composition from star chemistry (PhysicsEngine §3)
+    // zones carries metallicity and frostLine from the system generator
+    const composition = zones
+      ? deriveComposition(zones.metallicity || 0, orbitRadiusAU, zones.frostLine || 4.85, rng.float())
+      : deriveComposition(0, orbitRadiusAU, 4.85, rng.float());
+
+    // Equilibrium temperature
+    const luminosityRel = zones?.luminosity || 1.0;
+    const T_eq = equilibriumTemperature(luminosityRel, Math.max(orbitRadiusAU, 0.01));
+
+    // Tidal locking (PhysicsEngine §2)
+    const starMassSolar = zones?.starMassSolar || 1.0;
+    const ageGyr = zones?.ageGyr || 4.5;
+    const lockTimescale = tidalLockTimescale(starMassSolar, massEarth, radiusEarth, Math.max(orbitRadiusAU, 0.01));
+    const tidalState = checkTidalLock(lockTimescale, ageGyr);
+
+    // Atmosphere — physics-driven (PhysicsEngine §1)
+    const atmoPhysics = computeAtmosphere({
+      radiusEarth, massEarth, orbitAU: orbitRadiusAU,
+      luminosityRel, ageGyr,
+      ironFraction: composition.ironFraction,
+      rotationSpeed: tidalState.locked ? 0 : 0.1,
+      type,
+    });
+
+    // Convert physics atmosphere to visual format (preserving renderer compatibility)
+    const atmoColors = {
+      'h2-he': [0.4, 0.55, 0.7],
+      'n2-o2': [0.3, 0.5, 0.9],
+      'co2-n2': [0.7, 0.6, 0.3],
+      'co2': [0.75, 0.55, 0.25],
+      'methane': [0.3, 0.4, 0.6],
+      'none': null,
     };
-    const hasRings = rng.chance(ringChance[type] || 0.02);
-    let rings = null;
-    if (hasRings) {
-      rings = {
-        innerRadius: rng.range(1.3, 1.6),
-        outerRadius: rng.range(1.8, 2.8),
-        color1: palette.base.map(c => Math.min(c + 0.2, 1.0)),
-        color2: palette.accent.map(c => Math.min(c + 0.1, 1.0)),
-        opacity: rng.range(0.4, 0.8),
-        tiltX: rng.chance(0.25) ? rng.range(-0.3, 0.3) : 0,
-        tiltZ: rng.chance(0.25) ? rng.range(-0.2, 0.2) : 0,
+    // Type-specific color overrides for visual quality
+    const typeAtmoColors = {
+      'gas-giant': palette.accent.map(c => Math.min(c * 1.3, 1.0)),
+      'hot-jupiter': [0.8, 0.35, 0.1],
+      'lava': [0.9, 0.3, 0.1],
+      'hex': [0.1, 0.6, 0.7],
+      'shattered': [0.3, 0.3, 0.8],
+      'crystal': [0.5, 0.2, 0.6],
+      'fungal': [0.15, 0.5, 0.4],
+      'ecumenopolis': [0.5, 0.45, 0.35],
+    };
+    let atmosphere = null;
+    if (atmoPhysics.retained) {
+      const atmoStrengths = {
+        'sub-neptune': [0.4, 0.8], 'venus': [0.5, 0.7], 'hot-jupiter': [0.3, 0.6],
+      };
+      const [sMin, sMax] = atmoStrengths[type] || [0.15, 0.55];
+      // Scale strength by pressure (clamped)
+      const pressureStrength = Math.min(1.0, atmoPhysics.pressure / 10);
+      atmosphere = {
+        color: typeAtmoColors[type] || atmoColors[atmoPhysics.composition] || [0.5, 0.5, 0.8],
+        strength: Math.max(sMin, Math.min(sMax, pressureStrength)),
+        // Physics data (for future use by scanner, HUD, etc.)
+        physics: atmoPhysics,
       };
     }
 
-    // ── Clouds ──
+    // ── Aurora ── (physics-driven: magnetic field + atmosphere + stellar wind)
+    let aurora = null;
+    if (atmoPhysics.retained) {
+      // Magnetic field strength: iron core fraction × rotation factor
+      const isLocked = tidalState.locked && tidalState.lockType === 'synchronous';
+      const fieldStrength = composition.ironFraction * (isLocked ? 0.2 : 1.0);
+
+      // UV/stellar wind flux (1/r² from star)
+      const uvFlux = luminosityRel / Math.max(orbitRadiusAU * orbitRadiusAU, 0.001);
+
+      // Aurora requires magnetic field AND stellar wind interaction
+      // Strong field + moderate UV = clear auroral ovals (Earth, Jupiter)
+      // Weak field = no aurora (Venus, Mars)
+      // Very strong UV can overwhelm even weak fields (close-in planets around M-dwarfs)
+      if (fieldStrength > 0.05) {
+        // Aurora intensity: stronger stellar wind + stronger field = brighter
+        // But very close planets get overwhelmed (field compressed, aurora everywhere)
+        const windIntensity = Math.min(uvFlux, 50); // cap extreme cases
+        const auroraIntensity = Math.min(1.0, fieldStrength * windIntensity * 0.15);
+
+        // Only visible auroras above a threshold
+        if (auroraIntensity > 0.05) {
+          // Aurora color depends on atmospheric composition
+          // N2/O2: green (557.7nm oxygen) + red (630nm oxygen) — Earth
+          // H2/He: blue/purple (Balmer series hydrogen) — Jupiter, Saturn
+          // CO2: pink/red (CO2 dissociation → O emissions)
+          // Methane: blue-green
+          const auroraColors = {
+            'n2-o2': [0.3, 0.9, 0.4],    // Green (oxygen line)
+            'h2-he': [0.3, 0.2, 0.8],     // Blue-purple (hydrogen)
+            'co2-n2': [0.8, 0.3, 0.4],    // Pink-red
+            'co2': [0.9, 0.35, 0.5],      // Pink
+            'methane': [0.2, 0.6, 0.7],   // Blue-green
+          };
+          const color = auroraColors[atmoPhysics.composition] || [0.3, 0.8, 0.4];
+
+          // Aurora ring latitude: typically 60-75° from equator (15-30° from pole)
+          // Stronger field → narrower ring closer to pole
+          // Weaker field → wider, more diffuse ring, closer to equator
+          const ringLatitude = 0.7 + fieldStrength * 0.2; // 0.7 to 0.9 (in normalized Y)
+          const ringWidth = 0.15 - fieldStrength * 0.08;  // 0.07 to 0.15
+
+          aurora = {
+            color,
+            intensity: auroraIntensity,
+            ringLatitude,
+            ringWidth,
+          };
+        }
+      }
+    }
+
+    // ── Clouds ── (physics-informed: need atmosphere + right temperature)
     const cloudChance = {
       'terrestrial': 0.85, 'ocean': 0.7, 'gas-giant': 0.0,
       'rocky': 0.1, 'ice': 0.15, 'lava': 0.2,
@@ -311,13 +493,11 @@ export class PlanetGenerator {
       'fungal': 0.0, 'machine': 0.0,
       'city-lights': 0.75, 'ecumenopolis': 0.15,
     };
-    const hasClouds = rng.chance(cloudChance[type] || 0);
+    // Clouds require an atmosphere
+    const hasClouds = atmoPhysics.retained && rng.chance(cloudChance[type] || 0);
     let clouds = null;
     if (hasClouds) {
-      const cloudColors = {
-        'lava': [0.3, 0.2, 0.15],
-        'carbon': [0.2, 0.15, 0.1],
-      };
+      const cloudColors = { 'lava': [0.3, 0.2, 0.15], 'carbon': [0.2, 0.15, 0.1] };
       clouds = {
         color: cloudColors[type] || [0.9, 0.9, 0.92],
         density: rng.range(0.3, 0.7),
@@ -325,47 +505,52 @@ export class PlanetGenerator {
       };
     }
 
-    // ── Atmosphere ──
-    const atmosphereChance = {
-      'terrestrial': 0.9, 'ocean': 0.8, 'gas-giant': 1.0,
-      'rocky': 0.15, 'ice': 0.3, 'lava': 0.4,
-      'hot-jupiter': 1.0, 'sub-neptune': 1.0, 'venus': 1.0,
-      'eyeball': 0.8, 'carbon': 0.5,
-      'hex': 0.5, 'shattered': 0.3, 'crystal': 0.2,
-      'fungal': 0.7, 'machine': 0.0,
-      'city-lights': 0.9, 'ecumenopolis': 0.7,
+    // ── Rings — physics-driven (PhysicsEngine §11) ──
+    // Ring probability now depends on physical conditions, not flat chance
+    const ringChance = {
+      'gas-giant': 0.5, 'ice': 0.2, 'rocky': 0.05,
+      'terrestrial': 0.1, 'ocean': 0.03, 'lava': 0.02,
+      'hot-jupiter': 0.05, 'sub-neptune': 0.12,
+      'eyeball': 0.0, 'venus': 0.0, 'carbon': 0.03,
+      'hex': 0.0, 'shattered': 0.0, 'crystal': 0.0,
+      'fungal': 0.0, 'machine': 0.0,
+      'city-lights': 0.08, 'ecumenopolis': 0.03,
     };
-    const hasAtmosphere = rng.chance(atmosphereChance[type] || 0);
-    let atmosphere = null;
-    if (hasAtmosphere) {
-      const atmoColors = {
-        'terrestrial': [0.3, 0.5, 0.9],
-        'ocean': [0.2, 0.4, 0.8],
-        'gas-giant': palette.accent.map(c => Math.min(c * 1.3, 1.0)),
-        'ice': [0.5, 0.6, 0.9],
-        'lava': [0.9, 0.3, 0.1],
-        'rocky': [0.5, 0.4, 0.3],
-        'hot-jupiter': [0.8, 0.35, 0.1],
-        'sub-neptune': [0.4, 0.55, 0.7],
-        'venus': [0.7, 0.6, 0.3],
-        'eyeball': [0.3, 0.5, 0.85],
-        'carbon': [0.4, 0.3, 0.15],
-        'hex': [0.1, 0.6, 0.7],
-        'shattered': [0.3, 0.3, 0.8],
-        'crystal': [0.5, 0.2, 0.6],
-        'fungal': [0.15, 0.5, 0.4],
-        'city-lights': [0.3, 0.5, 0.9],
-        'ecumenopolis': [0.5, 0.45, 0.35],
-      };
-      const atmoStrengths = {
-        'sub-neptune': [0.4, 0.8],  // Thick haze — defining feature
-        'venus': [0.5, 0.7],        // Thick atmosphere
-        'hot-jupiter': [0.3, 0.6],
-      };
-      const [sMin, sMax] = atmoStrengths[type] || [0.2, 0.6];
-      atmosphere = {
-        color: atmoColors[type] || [0.5, 0.5, 0.8],
-        strength: rng.range(sMin, sMax),
+    const hasRings = rng.chance(ringChance[type] || 0.02);
+    let rings = null;
+    if (hasRings) {
+      // Pick ring origin based on type
+      const originRoll = rng.float();
+      let ringOrigin;
+      if (type === 'gas-giant' || type === 'sub-neptune') {
+        ringOrigin = originRoll < 0.5 ? 'roche' : originRoll < 0.8 ? 'accretion' : 'collision';
+      } else {
+        ringOrigin = originRoll < 0.6 ? 'collision' : 'roche';
+      }
+
+      const axialTilt = rng.chance(0.1) ? rng.range(-1.5, 1.5) : rng.range(-0.5, 0.5);
+      const ringPhysics = generateRingPhysics({
+        origin: ringOrigin,
+        planetRadiusEarth: radiusEarth,
+        planetDensity: composition.density,
+        ageGyr,
+        axialTilt,
+        moons: [], // moons not generated yet at this point
+        rngFloat1: rng.float(), rngFloat2: rng.float(),
+        rngFloat3: rng.float(), rngFloat4: rng.float(), rngFloat5: rng.float(),
+      });
+
+      // Convert to renderer-compatible format (preserving old field names)
+      rings = {
+        innerRadius: ringPhysics.innerRadius,
+        outerRadius: ringPhysics.outerRadius,
+        color1: ringPhysics.color1,
+        color2: ringPhysics.color2,
+        opacity: ringPhysics.density,
+        tiltX: ringPhysics.tiltX,
+        tiltZ: ringPhysics.tiltZ,
+        // Physics data
+        physics: ringPhysics,
       };
     }
 
@@ -380,6 +565,104 @@ export class PlanetGenerator {
     };
     const maxMoons = maxMoonsByType[type] ?? 1;
     const moonCount = rng.int(0, maxMoons);
+
+    // Habitability scoring (PhysicsEngine §7)
+    const habScore = habitabilityScore({
+      atmosphereRetained: atmoPhysics.retained,
+      T_eq,
+      ageGyr,
+      ironFraction: composition.ironFraction,
+      massEarth,
+      tidalState,
+      orbitStable: true, // refined by system generator later
+    });
+
+    // Surface history (PhysicsEngine §10)
+    const surfaceHistory = computeSurfaceHistory(
+      ageGyr, false, false, // nearBelt/nearGiant refined by system generator later
+      atmoPhysics.retained, 0, // tidalHeatingRate for planets is ~0 (moons get tidal heating)
+    );
+
+    // ── Gas giant storms ── (deterministic from seed)
+    let storms = null;
+    if (type === 'gas-giant') {
+      const stormSpots = [];
+      // ~40% of gas giants have at least one visible storm
+      if (rng.chance(0.4)) {
+        const count = rng.int(1, 3);
+        for (let i = 0; i < count; i++) {
+          // Position on sphere — avoid extreme poles for storm spots
+          const theta = rng.range(0, Math.PI * 2);
+          const phi = Math.acos(rng.range(-0.7, 0.7));
+          // Size: angular radius (0.1 = small storm, 0.3 = massive Great Red Spot)
+          const size = rng.range(0.08, 0.3);
+          // Aspect ratio for oval shape (1.2-2.5, elongated along latitude)
+          const aspect = rng.range(1.2, 2.5);
+          // Storm color: contrasting — darken or shift from base/accent
+          const colorChoice = rng.float();
+          let color;
+          if (colorChoice < 0.4) {
+            // Dark bruise (like Neptune's Great Dark Spot)
+            color = palette.base.map(c => c * 0.4);
+          } else if (colorChoice < 0.7) {
+            // Warm contrasting (like Jupiter's Great Red Spot)
+            color = [
+              Math.min(palette.accent[0] * 1.3 + 0.1, 1.0),
+              palette.accent[1] * 0.6,
+              palette.accent[2] * 0.4,
+            ];
+          } else {
+            // Bright pale spot (like Saturn's white storms)
+            color = palette.accent.map(c => Math.min(c * 1.5 + 0.15, 1.0));
+          }
+          stormSpots.push({
+            position: [
+              Math.sin(phi) * Math.cos(theta),
+              Math.cos(phi), // Y is up in the shader
+              Math.sin(phi) * Math.sin(theta),
+            ],
+            size,
+            aspect,
+            color,
+          });
+        }
+      }
+      // Polar geometric storm (~15% chance, like Saturn's hexagon)
+      let polarStorm = null;
+      if (rng.chance(0.15)) {
+        polarStorm = {
+          sides: rng.int(5, 8),
+          // Which pole (north or south)
+          pole: rng.chance(0.5) ? 1.0 : -1.0,
+          // Angular radius of the polygon
+          radius: rng.range(0.12, 0.22),
+          // Contrasting color
+          color: [
+            Math.min(palette.base[0] * 0.7 + 0.15, 1.0),
+            Math.min(palette.base[1] * 0.7 + 0.1, 1.0),
+            Math.min(palette.base[2] * 0.7 + 0.2, 1.0),
+          ],
+        };
+      }
+      if (stormSpots.length > 0 || polarStorm) {
+        storms = { spots: stormSpots, polarStorm };
+      }
+    }
+
+    // Axial tilt — use ring tilt if rings exist, otherwise random
+    const axialTilt = rings ? rings.tiltX : (rng.chance(0.1)
+      ? rng.range(-1.5, 1.5)
+      : rng.range(-0.5, 0.5));
+
+    // Rotation — physics-driven tidal locking replaces hardcoded check
+    let rotationSpeed;
+    if (tidalState.locked && tidalState.lockType === 'synchronous') {
+      rotationSpeed = 0;
+    } else if (tidalState.locked && tidalState.lockType === '3:2-resonance') {
+      rotationSpeed = 0.02; // slow spin, not zero
+    } else {
+      rotationSpeed = rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1);
+    }
 
     // Sun direction: use provided direction (from system generator) or random fallback
     if (!sunDirection) {
@@ -405,18 +688,21 @@ export class PlanetGenerator {
       rings,
       clouds,
       atmosphere,
+      aurora,
+      storms,
       moonCount,
       noiseScale,
       noiseDetail: rng.range(0.3, 0.8),
-      // Eyeball planets are tidally locked — no rotation
-      // Hot Jupiters are also tidally locked
-      rotationSpeed: (type === 'eyeball' || type === 'hot-jupiter')
-        ? 0
-        : rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1),
-      axialTilt: rng.chance(0.1)
-        ? rng.range(-1.5, 1.5)
-        : rng.range(-0.5, 0.5),
+      rotationSpeed,
+      axialTilt,
       sunDirection,
+      // Physics data (new — used by HUD, scanner, gameplay)
+      massEarth,
+      composition,
+      T_eq,
+      tidalState,
+      habitability: habScore,
+      surfaceHistory,
     };
   }
 

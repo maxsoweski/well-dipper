@@ -1,0 +1,8 @@
+Nav Map: solar-local
+Center: (8, 0) kpc
+Radius: 0.15 kpc
+Scale bar: 0.1 kpc
+Stars: 500
+
+Phi Crucis                   96 pc   pixel:(717, 476)
+TYC 878                     106 pc   pixel:(538, 541)

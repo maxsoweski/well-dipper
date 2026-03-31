@@ -86,6 +86,18 @@ export class CameraController {
     // Used to decide whether to resume orbit or clear focus on free-look exit.
     this.hasFocusedBody = null;
 
+    // ── WASD free-flight (thrust/drag/momentum) ──
+    this._flightVelocity = new THREE.Vector3(); // current velocity in world space
+    this._flightInput = new THREE.Vector3();    // raw input direction (local space)
+    this._flightThrust = 15;       // acceleration units/s^2
+    this._flightBoostMult = 3;     // Shift multiplier
+    this._flightDrag = 3;          // drag coefficient (higher = faster stop)
+    this._flightMaxSpeed = 30;     // speed cap (units/s)
+    this._flightBoosting = false;
+    this._flightActive = false;    // true when any WASD key is held or velocity > 0
+    this._flightEnabled = true;    // false during warp, title, overlays, etc.
+    this._flightFreeLook = false;  // true when free-look was auto-entered by WASD
+
     // ── Bypass mode (for flythrough camera) ──
     this.bypassed = false;
 
@@ -552,6 +564,47 @@ export class CameraController {
     this.zoomSpeed = 0;
   }
 
+  // ── WASD free-flight input ──
+
+  /**
+   * Set flight input direction from held keys.
+   * @param {number} forward - +1 = W, -1 = S, 0 = neither
+   * @param {number} right   - +1 = D, -1 = A, 0 = neither
+   * @param {boolean} boost  - true when Shift is held
+   */
+  setFlightInput(forward, right, boost) {
+    const hadInput = this._flightInput.lengthSq() > 0;
+    const hasInput = (forward !== 0 || right !== 0);
+
+    this._flightInput.set(right, 0, -forward); // -Z is forward in camera space
+    this._flightBoosting = boost;
+    this._flightActive = hasInput || this._flightVelocity.lengthSq() > 0.0001;
+
+    // Auto-enter free-look when WASD starts — FPS-style mouse look
+    // so you don't have to hold a button to steer while flying
+    if (hasInput && !hadInput && !this.isFreeLooking) {
+      this._flightFreeLook = true;
+      this.enterFreeLook();
+    }
+  }
+
+  /** True if the ship has any velocity or active input. */
+  get isFlying() {
+    return this._flightVelocity.lengthSq() > 0.0001;
+  }
+
+  /** Kill all flight velocity instantly (e.g., on warp or focus change). */
+  killFlightVelocity() {
+    this._flightVelocity.set(0, 0, 0);
+    this._flightInput.set(0, 0, 0);
+    this._flightActive = false;
+    // Exit flight free-look if we entered it
+    if (this._flightFreeLook) {
+      this._flightFreeLook = false;
+      this.exitFreeLook(false);
+    }
+  }
+
   update(deltaTime) {
     if (this.bypassed) return;
 
@@ -633,6 +686,72 @@ export class CameraController {
     const logSmoothed = Math.log(this.smoothedDistance);
     const logTarget = Math.log(this.distance);
     this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
+
+    // ── WASD free-flight physics ──
+    // Thrust/drag model: holding a key accelerates, releasing decelerates via drag.
+    // Movement is in the camera's local XZ plane (forward = look direction projected
+    // onto the horizontal plane, strafe = perpendicular). This moves the orbit target
+    // so the camera "carries" its orbit point with it, preserving mouse-look orbit.
+    //
+    // Speed scales with orbit distance so movement feels proportional whether you're
+    // zoomed in on a moon (distance ~0.3) or zoomed out to system view (~500).
+    if (this._flightEnabled && (this._flightActive || this._flightVelocity.lengthSq() > 0.0001)) {
+      // Distance-proportional speed: at distance 1, base speed applies.
+      // At distance 100, you move 100x faster. Clamped so tiny zoom doesn't freeze.
+      const distScale = Math.max(0.1, this.smoothedDistance * 0.5);
+      const boostMult = this._flightBoosting ? this._flightBoostMult : 1;
+      const thrust = this._flightThrust * distScale * boostMult;
+      const maxSpd = this._flightMaxSpeed * distScale * boostMult;
+
+      if (this._flightInput.lengthSq() > 0) {
+        // Camera forward direction (projected onto XZ plane for horizontal movement)
+        const fwd = new THREE.Vector3();
+        this.camera.getWorldDirection(fwd);
+        fwd.y = 0;
+        fwd.normalize();
+
+        // Camera right direction
+        const right = new THREE.Vector3();
+        right.crossVectors(fwd, this.camera.up).normalize();
+
+        // Compose world-space acceleration from input.
+        // setFlightInput sets z = -forward, so negate to get forward along fwd.
+        const accel = new THREE.Vector3();
+        accel.addScaledVector(fwd, -this._flightInput.z);
+        accel.addScaledVector(right, this._flightInput.x);
+        accel.normalize();
+
+        this._flightVelocity.addScaledVector(accel, thrust * deltaTime);
+      }
+
+      // Drag — exponential decay so you coast to a stop
+      const dragFactor = Math.exp(-this._flightDrag * deltaTime);
+      this._flightVelocity.multiplyScalar(dragFactor);
+
+      // Speed cap
+      const speed = this._flightVelocity.length();
+      if (speed > maxSpd) {
+        this._flightVelocity.multiplyScalar(maxSpd / speed);
+      }
+
+      // Apply displacement to orbit target (camera follows via orbit math)
+      if (speed > 0.0001) {
+        const displacement = this._flightVelocity.clone().multiplyScalar(deltaTime);
+        this.target.add(displacement);
+        this._targetGoal.add(displacement);
+      }
+
+      // Update active flag
+      const wasFlying = this._flightActive;
+      this._flightActive = this._flightInput.lengthSq() > 0
+                         || this._flightVelocity.lengthSq() > 0.0001;
+
+      // Exit flight free-look when coasted to a stop
+      if (wasFlying && !this._flightActive && this._flightFreeLook) {
+        this._flightFreeLook = false;
+        this.exitFreeLook(false);
+      }
+    }
 
     this._applyOrbit();
   }

@@ -231,12 +231,10 @@ export class StarFlare {
 
           // Dithered edges: use Bayer threshold against brightness to create
           // stippled transparency at the edges of spikes, glow, and halo.
-          // This matches the retro dithered aesthetic of the rest of the game.
           float brightness = max(max(color.r, color.g), color.b);
           if (brightness < 0.01) discard;
           float dither = bayerDither(gl_FragCoord.xy);
           if (dither > brightness) discard;
-
           gl_FragColor = vec4(color, 1.0);
         }
       `,

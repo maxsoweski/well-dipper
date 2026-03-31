@@ -17,6 +17,8 @@ const SFX_NAMES = [
   'autopilotOn', 'autopilotOff',
   'warpTarget', 'warpLockOn', 'warpCharge', 'warpEnter', 'warpExit',
   'titleDismiss', 'uiClick',
+  'navOpen', 'navClose',
+  'navDrill0', 'navDrill1', 'navDrill2', 'navDrill3', 'navDrill4',
 ];
 
 export class SoundEngine {

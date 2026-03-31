@@ -31,7 +31,10 @@ export class RetroRenderer {
     this.pixelScale = 3; // Each render pixel = 3×3 screen pixels
 
     // Separate scene for the starfield (rendered at full resolution)
+    // Legacy: used directly when no SkyRenderer is set.
+    // New: SkyRenderer owns the sky scene via setSkyRenderer().
     this.starfieldScene = new THREE.Scene();
+    this._skyRenderer = null;
 
     // HUD (system map) — set via setHud()
     this._hudScene = null;
@@ -57,6 +60,26 @@ export class RetroRenderer {
     this._setupComposite();
 
     this.resize();
+  }
+
+  /**
+   * Set a SkyRenderer to own the sky background pass.
+   * When set, the SkyRenderer's scene is used instead of this.starfieldScene.
+   * @param {import('./SkyRenderer.js').SkyRenderer} skyRenderer
+   */
+  setSkyRenderer(skyRenderer) {
+    this._skyRenderer = skyRenderer;
+  }
+
+  /**
+   * Get the scene used for the sky pass (SkyRenderer scene or legacy starfieldScene).
+   * @returns {THREE.Scene}
+   */
+  getSkyScene() {
+    if (this._skyRenderer) {
+      return this._skyRenderer.getScene() ?? this.starfieldScene;
+    }
+    return this.starfieldScene;
   }
 
   /**
@@ -117,6 +140,22 @@ export class RetroRenderer {
    */
   setColorPalette(palette) {
     this._compositeMesh.material.uniforms.uColorPalette.value = palette;
+  }
+
+  /**
+   * Update time-based uniforms (call each frame).
+   * @param {number} time — elapsed time in seconds
+   */
+  setTime(time) {
+    this._compositeMesh.material.uniforms.uTime.value = time;
+  }
+
+  /**
+   * Set film grain strength. 0 = off, 0.045 = default subtle static.
+   * @param {number} strength
+   */
+  setGrainStrength(strength) {
+    this._compositeMesh.material.uniforms.uGrainStrength.value = strength;
   }
 
   /**
@@ -187,6 +226,9 @@ export class RetroRenderer {
         // Color palette (0=default, 1=mono, 2=amber, 3=green, 4=blue,
         //   5=gameboy, 6=cga, 7=sepia, 8=virtualboy, 9=inverted)
         uColorPalette: { value: 0 },
+        // Film grain / static (retro CRT/camera feel)
+        uTime: { value: 0.0 },
+        uGrainStrength: { value: 0.045 },  // 0 = off, ~0.04-0.06 = subtle static
       },
 
       vertexShader: /* glsl */ `
@@ -218,6 +260,9 @@ export class RetroRenderer {
         uniform float uTargetSize;
         // Color palette
         uniform int uColorPalette;
+        // Film grain
+        uniform float uTime;
+        uniform float uGrainStrength;
         varying vec2 vUv;
 
         // ── Color palette remapping ──
@@ -560,6 +605,20 @@ export class RetroRenderer {
             }
           }
 
+          // ── Film grain / static (retro CRT feel) ──
+          // Animated per-frame noise over the entire image.
+          // Like Star Fox 64's static effect — gives texture to flat
+          // areas, unifies visual elements, authentic to the era.
+          // Uses interleaved gradient noise (Jimenez 2014) for minimal banding.
+          if (uGrainStrength > 0.0) {
+            vec2 grainCoord = gl_FragCoord.xy + vec2(uTime * 120.7, uTime * 89.3);
+            // Interleaved gradient noise — low banding, high frequency
+            float grain = fract(52.9829189 * fract(dot(grainCoord, vec2(0.06711056, 0.00583715))));
+            // Second hash pass for extra randomness
+            grain = fract(grain * 3571.4953 + uTime * 17.31);
+            result += (grain - 0.5) * uGrainStrength;
+          }
+
           result = applyPalette(result, uColorPalette);
           gl_FragColor = vec4(result, 1.0);
         }
@@ -632,16 +691,64 @@ export class RetroRenderer {
   render() {
     const r = this.renderer;
 
-    // Pass 1: Starfield at full resolution
+    // Pass 1: Sky at full resolution (SkyRenderer scene or legacy starfieldScene)
     r.setRenderTarget(this.bgTarget);
     r.setClearColor(0x000000, 1);
     r.clear();
-    r.render(this.starfieldScene, this.camera);
+    // Render sky in two sub-passes so absorption meshes can darken the glow.
+    // Pass 1A: glow + starfield (additive)
+    // Pass 1B: features (includes absorption meshes with NormalBlending)
+    const skyScene = this.getSkyScene();
+    if (skyScene && this._skyRenderer) {
+      // Render glow layer alone first
+      const glowMesh = this._skyRenderer._glowLayer?.mesh;
+      const starMesh = this._skyRenderer._starfieldLayer?.mesh;
+      const featureGroup = this._skyRenderer._featureLayer?.mesh;
+
+      // DEBUG: log once
+      if (!this._absorbDebugDone) {
+        this._absorbDebugDone = true;
+        const absorbCount = featureGroup ? featureGroup.children.filter(c => c.material?.blending === THREE.NormalBlending).length : 0;
+        const emitCount = featureGroup ? featureGroup.children.filter(c => c.material?.blending === THREE.AdditiveBlending).length : 0;
+        console.log(`[SKY 2-PASS] glow=${!!glowMesh}, stars=${!!starMesh}, features=${!!featureGroup}, absorption meshes=${absorbCount}, emission meshes=${emitCount}`);
+      }
+
+      // Hide features, render glow + stars
+      // Respect _hiddenForTitle flag — don't render glow if intentionally hidden
+      const glowHidden = glowMesh?._hiddenForTitle;
+      if (glowHidden && glowMesh) glowMesh.visible = false;
+      if (featureGroup) featureGroup.visible = false;
+      r.render(skyScene, this.camera);
+
+      // Now show features (absorption + emission), render on top
+      if (featureGroup) featureGroup.visible = true;
+      if (glowMesh) glowMesh.visible = false;
+      if (starMesh) starMesh.visible = false;
+      r.autoClear = false;
+      r.render(skyScene, this.camera);
+      r.autoClear = true;
+      if (glowMesh && !glowHidden) glowMesh.visible = true;
+      if (starMesh) starMesh.visible = true;
+    } else {
+      r.render(skyScene, this.camera);
+    }
 
     // Pass 2: Scene objects at low resolution
     r.setRenderTarget(this.sceneTarget);
     r.setClearColor(0x000000, 0);
     r.clear();
+    // DEBUG: identify broken shaders
+    if (!this._shaderDebugDone) {
+      this._shaderDebugDone = true;
+      this.scene.traverse((obj) => {
+        if (obj.material && obj.material.type === 'ShaderMaterial') {
+          const name = obj.material.name || obj.name || obj.constructor?.name || 'unknown';
+          const hasVS = obj.material.vertexShader ? obj.material.vertexShader.length : 0;
+          const hasFS = obj.material.fragmentShader ? obj.material.fragmentShader.length : 0;
+          console.log(`[SHADER DEBUG] ${name}: VS=${hasVS} chars, FS=${hasFS} chars`);
+        }
+      });
+    }
     r.render(this.scene, this.camera);
 
     // Pass 3: HUD at small resolution

@@ -1,4 +1,5 @@
 import { SeededRandom } from './SeededRandom.js';
+import { HashGridStarfield } from './HashGridStarfield.js';
 
 /**
  * StarfieldGenerator — creates galaxy-aware starfield data arrays.
@@ -7,9 +8,9 @@ import { SeededRandom } from './SeededRandom.js';
  * position/color/size arrays compatible with Starfield.js.
  *
  * The starfield has two layers:
- * 1. "Real" nearby stars from GalacticMap.findNearestStars() — these are
- *    actual warp targets with deterministic seeds. Placed as specific
- *    bright points on the sky sphere.
+ * 1. "Real" nearby stars from HashGridStarfield — these are actual warp
+ *    targets with deterministic seeds. Placed as specific bright points
+ *    on the sky sphere.
  * 2. Background stars density-weighted by sampling GalacticMap along
  *    various sky directions. Creates the galaxy band effect: dense
  *    toward the galactic center/disk plane, sparse above/below.
@@ -17,6 +18,63 @@ import { SeededRandom } from './SeededRandom.js';
  * See docs/GAME_BIBLE.md §12 for galaxy-scale design.
  */
 export class StarfieldGenerator {
+
+  // Apparent magnitude pipeline — determines which stars are visible.
+  // Absolute magnitude: intrinsic brightness (lower = brighter).
+  // Apparent magnitude: how bright it looks from distance d.
+  //   m = M + 5 × log10(d_pc / 10)
+  // Naked-eye visibility threshold: ~6.5 magnitude.
+  static SPECTRAL_ABS_MAG = {
+    O: -5.0, B: -1.5, A: 1.5, F: 3.0, G: 5.0, K: 7.0, M: 10.0,
+  };
+
+  static SPECTRAL_COLOR = {
+    O: [0.6, 0.7, 1.0],    // blue-white
+    B: [0.7, 0.8, 1.0],    // blue-white
+    A: [0.95, 0.95, 1.0],  // white
+    F: [1.0, 0.95, 0.85],  // warm white
+    G: [1.0, 0.9, 0.7],    // yellow-white
+    K: [1.0, 0.75, 0.4],   // orange
+    M: [1.0, 0.5, 0.2],    // red-orange
+  };
+
+  // Maximum distance (kpc) at which each type is visible (mag < 6.5)
+  static SPECTRAL_MAX_DIST_KPC = {
+    O: 10.0, B: 2.5, A: 0.4, F: 0.15, G: 0.04, K: 0.012, M: 0.003,
+  };
+
+  static VISIBILITY_THRESHOLD = 6.5; // naked-eye magnitude limit
+
+  /**
+   * Compute apparent magnitude from spectral type and distance.
+   */
+  static _apparentMagnitude(spectralType, distKpc) {
+    const M = this.SPECTRAL_ABS_MAG[spectralType] ?? 10.0;
+    const d_pc = Math.max(distKpc * 1000, 0.1); // parsecs, minimum 0.1 to avoid log(0)
+    return M + 5 * Math.log10(d_pc / 10);
+  }
+
+  /**
+   * Map apparent magnitude to point sprite size (pixels).
+   */
+  static _sizeFromMagnitude(appMag) {
+    if (appMag < 0) return 10;
+    if (appMag < 2) return 8;
+    if (appMag < 4) return 6;
+    if (appMag < 6) return 4;
+    return 3;
+  }
+
+  /**
+   * Map apparent magnitude to brightness multiplier.
+   * Bright stars (negative magnitude) get values > 1.0 to ensure
+   * they visually dominate. The shader clamps to [0,1] per channel,
+   * so bright stars saturate to white — like real bright stars do.
+   */
+  static _brightnessFromMagnitude(appMag) {
+    // Magnitude -5 → brightness 2.5, mag 0 → 1.5, mag 3 → 0.9, mag 6 → 0.15
+    return Math.max(0.1, 1.5 - (appMag / 5.0));
+  }
 
   /**
    * Generate starfield data arrays from a galactic position.
@@ -29,57 +87,169 @@ export class StarfieldGenerator {
    *   positions/colors/sizes: Float32Arrays for Starfield constructor
    *   realStars: array of { index, starData } mapping starfield indices to GalacticMap stars
    */
-  static generate(galacticMap, playerPos, totalCount = 6000, radius = 500) {
-    const rng = new SeededRandom(`starfield-${playerPos.x.toFixed(3)}-${playerPos.y.toFixed(3)}-${playerPos.z.toFixed(3)}`);
+  /**
+   * Compute how many total stars to render based on local galactic density.
+   * Dense disk regions get more stars; sparse halo gets fewer.
+   * The emptiness of sparse regions IS the visual experience.
+   *
+   * @param {GalacticMap} galacticMap
+   * @param {{ x, y, z }} playerPos
+   * @param {number} baseCount — nominal count for average density (solar neighborhood)
+   * @returns {number} total star count for this position
+   */
+  static _computeStarBudget(galacticMap, playerPos, baseCount) {
+    const R = Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z);
+    const absY = Math.abs(playerPos.y);
+    const densities = galacticMap.potentialDerivedDensity(R, playerPos.y);
+    // Solar neighborhood (R≈8, y≈0) has totalDensity ≈ 0.05-0.10
+    // Galactic center has totalDensity ≈ 2-4
+    // Halo (R=4, y=6) has totalDensity ≈ 0.001-0.005
+    // Normalize: solar neighborhood density → 1.0
+    const solarDensity = 0.07; // approximate at R=8, y=0
+    const relativeDensity = densities.totalDensity / solarDensity;
 
-    // ── Layer 1: Real nearby stars (warp targets) ──
-    const nearbyStars = galacticMap.findNearestStars(playerPos, 30);
-    // Skip the very closest star (that's the one we're AT)
-    const warpableStars = nearbyStars.filter(s => s.distSq > 0.001);
-    const realStarCount = Math.min(warpableStars.length, 25);
+    // Scale star count: sqrt so dense regions don't explode the count
+    // min 200 (even deep halo has SOME stars), max 2× baseCount
+    const scaled = baseCount * Math.sqrt(Math.min(relativeDensity, 4.0));
+    return Math.max(200, Math.min(baseCount * 2, Math.round(scaled)));
+  }
 
-    // ── Layer 2: Background star budget ──
-    const bgCount = totalCount - realStarCount;
+  // Reference to the loaded real star catalog (set from main.js)
+  static realStarCatalog = null;
 
-    // ── Allocate arrays ──
-    const positions = new Float32Array(totalCount * 3);
-    const colors = new Float32Array(totalCount * 3);
-    const sizes = new Float32Array(totalCount);
+  static generate(galacticMap, playerPos, baseCount = 6000, radius = 500) {
+    // ── Hash-grid star generation ──
+    // Every visible star is deterministically computed from the gravitational
+    // potential field. No sectors, no caching — just the density at each
+    // grid point determining whether a star exists there.
+    const gridData = HashGridStarfield.generate(galacticMap, playerPos, radius);
 
-    // Track which starfield indices map to real GalacticMap stars
-    const realStarMap = [];
+    // ── Real star overlay ──
+    // If the HYG catalog is loaded, find visible real stars and merge them
+    // with the hash-grid data. Real stars carry actual names and properties.
+    let realOverlay = [];
+    if (this.realStarCatalog?.loaded) {
+      realOverlay = this.realStarCatalog.findVisible(playerPos, 6.5, radius);
+    }
 
-    // ── Place real stars ──
-    for (let i = 0; i < realStarCount; i++) {
-      const star = warpableStars[i];
-      // Direction from player to this star
-      const dx = star.worldX - playerPos.x;
-      const dy = star.worldY - playerPos.y;
-      const dz = star.worldZ - playerPos.z;
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    // Start with the hash-grid stars, then append real stars + features + galaxies
+    const realStarCount = gridData.count + realOverlay.length;
+    const realStarMap = [...gridData.realStars];
 
-      // Place on sky sphere in that direction
-      const i3 = i * 3;
+    // ── Layer 3: Nearby galactic features as tagged sky points ──
+    const nearbyFeatures = galacticMap.findNearbyFeatures(playerPos, 3.0)
+      .filter(f => !f.insideFeature);
+    const featureCount = Math.min(nearbyFeatures.length, 16);
+
+    // ── Layer 4: External galaxies ──
+    const externalGalaxies = galacticMap.getExternalGalaxies();
+    const extGalaxyCount = externalGalaxies.length;
+
+    // ── Merge into combined arrays ──
+    const totalMax = realStarCount + featureCount + extGalaxyCount;
+    const positions = new Float32Array(totalMax * 3);
+    const colors = new Float32Array(totalMax * 3);
+    const sizes = new Float32Array(totalMax);
+
+    // Copy hash-grid star data
+    const gridCount = gridData.count;
+    for (let i = 0; i < gridCount * 3; i++) {
+      positions[i] = gridData.positions[i];
+      colors[i] = gridData.colors[i];
+    }
+    for (let i = 0; i < gridCount; i++) {
+      sizes[i] = gridData.sizes[i];
+    }
+
+    // Append real catalog stars
+    for (let r = 0; r < realOverlay.length; r++) {
+      const rs = realOverlay[r];
+      const idx = gridCount + r;
+      const i3 = idx * 3;
+      positions[i3]     = rs.skyX;
+      positions[i3 + 1] = rs.skyY;
+      positions[i3 + 2] = rs.skyZ;
+      colors[i3]     = rs.color[0];
+      colors[i3 + 1] = rs.color[1];
+      colors[i3 + 2] = rs.color[2];
+      sizes[idx] = rs.size;
+
+      realStarMap.push({
+        index: idx,
+        starData: {
+          worldX: rs.worldX,
+          worldY: rs.worldY,
+          worldZ: rs.worldZ,
+          seed: rs.seed,
+          name: rs.name,
+          isRealStar: true,
+          type: rs.type,
+        },
+        estimatedType: rs.type,
+        apparentMagnitude: rs.appMag,
+        name: rs.name,
+      });
+    }
+
+    // ── Place galactic features as tagged sky points ──
+    for (let f = 0; f < featureCount; f++) {
+      const feature = nearbyFeatures[f];
+      const dx = feature.position.x - playerPos.x;
+      const dy = feature.position.y - playerPos.y;
+      const dz = feature.position.z - playerPos.z;
+      const dist = Math.max(feature.distance, 0.001);
+
+      const idx = realStarCount + f;
+      const i3 = idx * 3;
       positions[i3]     = (dx / dist) * radius;
       positions[i3 + 1] = (dy / dist) * radius;
       positions[i3 + 2] = (dz / dist) * radius;
 
-      // Color based on distance (closer = brighter) and region
-      const brightness = Math.min(1.0, 0.5 + 0.5 / (dist * 2));
-      // Derive rough star color from the galaxy context at that position
-      const starCtx = galacticMap.deriveGalaxyContext({ x: star.worldX, y: star.worldY, z: star.worldZ });
-      const col = this._starColorFromContext(rng, starCtx, brightness);
-      colors[i3]     = col[0];
-      colors[i3 + 1] = col[1];
-      colors[i3 + 2] = col[2];
+      // Feature points are invisible — SkyFeatureLayer handles the visual.
+      // These exist only as click targets (findNearestStar works on positions
+      // in JS, not rendered size, so invisible points are still selectable).
+      colors[i3]     = 0;
+      colors[i3 + 1] = 0;
+      colors[i3 + 2] = 0;
+      sizes[idx] = 0.001; // effectively invisible
 
-      // Real stars are brighter/larger
-      sizes[i] = dist < 0.3 ? 6.0 : dist < 0.5 ? 4.0 : 3.0;
-
-      realStarMap.push({ index: i, starData: star });
+      // Tag as a feature in the star map so warp routing can distinguish it
+      realStarMap.push({
+        index: idx,
+        starData: null,
+        isFeature: true,
+        featureType: feature.type,
+        featureData: feature,
+      });
     }
 
-    // ── Galactic geometry from player's perspective ──
+    // ── Place external galaxies as tagged sky points ──
+    for (let g = 0; g < extGalaxyCount; g++) {
+      const gal = externalGalaxies[g];
+      const idx = realStarCount + featureCount + g;
+      const i3 = idx * 3;
+      positions[i3]     = gal.direction.x * radius;
+      positions[i3 + 1] = gal.direction.y * radius;
+      positions[i3 + 2] = gal.direction.z * radius;
+
+      // Faint warm color — external galaxies appear as dim smudges
+      colors[i3]     = 0.6 * gal.brightness;
+      colors[i3 + 1] = 0.55 * gal.brightness;
+      colors[i3 + 2] = 0.4 * gal.brightness;
+
+      // Slightly larger than background stars so they're distinguishable
+      sizes[idx] = 8.0;
+
+      realStarMap.push({
+        index: idx,
+        starData: null,
+        isFeature: false,
+        isExternalGalaxy: true,
+        galaxyData: gal,
+      });
+    }
+
+    // ── Galactic geometry for glow shader ──
     const toCenterX = -playerPos.x;
     const toCenterY = -playerPos.y;
     const toCenterZ = -playerPos.z;
@@ -88,193 +258,28 @@ export class StarfieldGenerator {
     const centerDirY = toCenterY / (toCenterDist || 1);
     const centerDirZ = toCenterZ / (toCenterDist || 1);
 
-    // ── Pre-compute sky density grid via ray marching ──
-    // Sample the galaxy's actual density along many sky directions.
-    // This correctly handles ANY position: disk, halo, edge, center.
-    // Grid: 32 theta × 16 phi = 512 cells, each sampled at 4 distances.
-    // ~2000 density evaluations, takes ~50-100ms (hidden in warp tunnel).
-    const GRID_THETA = 32;
-    const GRID_PHI = 16;
-    const skyGrid = new Float32Array(GRID_THETA * GRID_PHI);
-    let maxGridDensity = 0;
-
-    for (let ti = 0; ti < GRID_THETA; ti++) {
-      const theta = (ti / GRID_THETA) * Math.PI * 2;
-      for (let pi = 0; pi < GRID_PHI; pi++) {
-        const phi = ((pi + 0.5) / GRID_PHI) * Math.PI; // avoid poles
-        const dirX = Math.sin(phi) * Math.cos(theta);
-        const dirY = Math.cos(phi); // phi=0 is up, phi=PI is down
-        const dirZ = Math.sin(phi) * Math.sin(theta);
-
-        // Ray march: sample density at 4 distances along this direction
-        let totalDensity = 0;
-        for (const dist of [0.5, 1.5, 3.0, 6.0]) {
-          const sampleX = playerPos.x + dirX * dist;
-          const sampleY = playerPos.y + dirY * dist;
-          const sampleZ = playerPos.z + dirZ * dist;
-          const R = Math.sqrt(sampleX * sampleX + sampleZ * sampleZ);
-          // Skip samples outside the galaxy
-          if (R > 20 || Math.abs(sampleY) > 10) continue;
-          const dens = galacticMap.componentDensities(R, sampleY);
-          // Weight closer samples more (they contribute more to brightness)
-          const distWeight = 1.0 / (dist * 0.5 + 0.5);
-          totalDensity += dens.totalDensity * distWeight;
-        }
-
-        const gridIdx = ti * GRID_PHI + pi;
-        skyGrid[gridIdx] = totalDensity;
-        if (totalDensity > maxGridDensity) maxGridDensity = totalDensity;
-      }
-    }
-
-    // Normalize grid to [0, 1]
-    if (maxGridDensity > 0) {
-      for (let i = 0; i < skyGrid.length; i++) {
-        skyGrid[i] /= maxGridDensity;
-      }
-    }
-
-    // Fast lookup: direction → grid density
-    function lookupDensity(dirX, dirY, dirZ) {
-      // Convert direction to theta/phi grid indices
-      const theta = Math.atan2(dirZ, dirX);
-      const phi = Math.acos(Math.max(-1, Math.min(1, dirY)));
-      let ti = Math.floor(((theta + Math.PI) / (Math.PI * 2)) * GRID_THETA);
-      let pi = Math.floor((phi / Math.PI) * GRID_PHI);
-      if (ti >= GRID_THETA) ti = GRID_THETA - 1;
-      if (pi >= GRID_PHI) pi = GRID_PHI - 1;
-      return skyGrid[ti * GRID_PHI + pi];
-    }
-
-    // ── Place background stars using density-weighted distribution ──
-    let placed = 0;
-    let attempts = 0;
-    const maxAttempts = bgCount * 12;
-
-    while (placed < bgCount && attempts < maxAttempts) {
-      attempts++;
-
-      // Random direction on sphere
-      const theta = rng.range(0, Math.PI * 2);
-      const phi = Math.acos(rng.range(-1, 1));
-      const dirX = Math.sin(phi) * Math.cos(theta);
-      const dirY = Math.cos(phi);
-      const dirZ = Math.sin(phi) * Math.sin(theta);
-
-      const density = lookupDensity(dirX, dirY, dirZ);
-
-      // Accept/reject: minimum 3% chance (faint background glow even in voids)
-      const acceptChance = 0.03 + 0.97 * density;
-      if (rng.float() > acceptChance) continue;
-
-      const idx = realStarCount + placed;
-      const i3 = idx * 3;
-      positions[i3]     = dirX * radius;
-      positions[i3 + 1] = dirY * radius;
-      positions[i3 + 2] = dirZ * radius;
-
-      // Color: density-correlated
-      // High density (disk/arms) → mix of warm and blue-white
-      // Low density (halo direction) → dim whites
-      const col = this._backgroundStarColor(rng, density, dirX, dirY, dirZ, centerDirX, centerDirY, centerDirZ);
-      colors[i3]     = col[0];
-      colors[i3 + 1] = col[1];
-      colors[i3 + 2] = col[2];
-
-      // Size: mostly small, occasional medium
-      const sizeRoll = rng.float();
-      if (sizeRoll < 0.003) sizes[idx] = 5.0;
-      else if (sizeRoll < 0.02) sizes[idx] = 3.0;
-      else sizes[idx] = 2.0;
-
-      placed++;
-    }
-
-    // If we couldn't fill the budget (very sparse region), fill remainder as dim dots
-    while (placed < bgCount) {
-      const idx = realStarCount + placed;
-      const i3 = idx * 3;
-      const theta = rng.range(0, Math.PI * 2);
-      const phi = Math.acos(rng.range(-1, 1));
-      positions[i3]     = Math.sin(phi) * Math.cos(theta) * radius;
-      positions[i3 + 1] = Math.sin(phi) * Math.sin(theta) * radius;
-      positions[i3 + 2] = Math.cos(phi) * radius;
-      colors[i3] = 0.3; colors[i3 + 1] = 0.3; colors[i3 + 2] = 0.3;
-      sizes[idx] = 1.5;
-      placed++;
-    }
+    // ── No background stars ──
+    // Every visible point of light is a real GalacticMap star with a seed,
+    // position, and spectral type. The galaxy glow layer handles the
+    // unresolved diffuse background (billions of stars too dim to see individually).
+    const actualCount = realStarCount + featureCount + extGalaxyCount;
 
     return {
       positions,
       colors,
       sizes,
-      count: totalCount,
+      count: actualCount,
       realStars: realStarMap,
-      // Sky density grid for the galactic glow layer
-      skyGrid,
-      skyGridTheta: GRID_THETA,
-      skyGridPhi: GRID_PHI,
+      // Galactic geometry for GalaxyGlow shader
+      galCenterDir: { x: centerDirX, y: centerDirY, z: centerDirZ },
+      playerHeight: Math.abs(playerPos.y),
+      playerR: Math.sqrt(playerPos.x * playerPos.x + playerPos.z * playerPos.z),
+      // Full player position + arm model params for analytical glow shader
+      playerPos: { x: playerPos.x, y: playerPos.y, z: playerPos.z },
+      armOffsets: galacticMap.armOffsets.slice(), // copy of the 4 arm starting angles
+      armPitchK: galacticMap.pitchK,
+      densityNorm: galacticMap._potentialDensityNorm,
     };
   }
 
-  /**
-   * Color for a real (warp-target) star based on its galaxy context.
-   */
-  static _starColorFromContext(rng, ctx, brightness) {
-    // Arm = bluer, bulge = warmer, halo = dim white
-    const arm = ctx.spiralArmStrength;
-    const comp = ctx.component;
-
-    if (comp === 'halo') {
-      return [brightness * 0.9, brightness * 0.85, brightness * 0.8]; // Dim warm white
-    }
-    if (comp === 'bulge') {
-      return [brightness, brightness * 0.85, brightness * 0.6]; // Orange-warm
-    }
-    if (arm > 0.5) {
-      // Spiral arm — mix of blue-white and warm
-      if (rng.chance(0.3)) {
-        return [brightness * 0.7, brightness * 0.8, brightness]; // Blue-white
-      }
-      return [brightness, brightness * 0.95, brightness * 0.85]; // White
-    }
-    // General disk
-    return [brightness, brightness, brightness * 0.9]; // Slightly warm white
-  }
-
-  /**
-   * Color for a background (non-warp-target) star.
-   * Density factor and direction relative to galactic center influence color.
-   */
-  static _backgroundStarColor(rng, densityFactor, dirX, dirY, dirZ, centerDirX, centerDirY, centerDirZ) {
-    // How much this direction points toward the galactic center
-    const centerDot = dirX * centerDirX + dirY * centerDirY + dirZ * centerDirZ;
-    const towardCenter = Math.max(0, centerDot);
-
-    // Base brightness: denser directions = brighter stars on average
-    const baseBright = 0.3 + densityFactor * 0.5;
-    const brightness = baseBright + rng.range(-0.15, 0.15);
-    const b = Math.max(0.15, Math.min(1.0, brightness));
-
-    // Color roll
-    const roll = rng.float();
-
-    // Toward galactic center: warmer (old bulge stars)
-    if (towardCenter > 0.7 && roll < 0.3) {
-      return [b, b * 0.8, b * 0.5]; // Warm yellow-orange
-    }
-
-    // High density regions: occasional blue (young arm stars)
-    if (densityFactor > 0.5 && roll < 0.15) {
-      return [b * 0.7, b * 0.8, b]; // Blue-white
-    }
-
-    // Occasional tinted stars for variety
-    if (roll < 0.05) return [b, b * 0.6, b * 0.4]; // Orange
-    if (roll < 0.08) return [b * 0.7, b * 0.8, b]; // Blue
-    if (roll < 0.12) return [b, b * 0.95, b * 0.7]; // Warm yellow
-
-    // Default: white with slight warmth
-    return [b, b, b * 0.92];
-  }
 }
