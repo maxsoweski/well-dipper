@@ -316,7 +316,8 @@ function startIntroSequence() {
           _titleAutoTimer = setTimeout(() => {
             if (titleScreenActive) {
               dismissTitleScreen();
-              setTimeout(() => beginWarpTurn(), 1500);
+              // Always select a real hash grid star before warping
+              setTimeout(() => { autoSelectWarpTarget(); beginWarpTurn(); }, 1500);
             }
           }, silenceGap);
         }, titleDur * titleLoops * 1000);
@@ -1128,18 +1129,16 @@ warpEffect.onPrepareSystem = () => {
     } else {
       pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
     }
-  } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
-    // Legacy fallback: navigable nebula (no galaxy active or no feature found)
-    pendingSystemData = NavigableNebulaGenerator.generate(seed, destType);
-    pendingSystemData._billboardData = NebulaGenerator.generate(seed, destType);
-  } else if (destType === 'open-cluster') {
-    pendingSystemData = NavigableClusterGenerator.generate(seed);
-    pendingSystemData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
   } else if (destType.includes('galaxy')) {
+    // External galaxy Easter egg — player warped to a distant galaxy visible in the sky.
+    // These are definitionally outside the Milky Way model, so GalaxyGenerator is correct.
+    // TODO: show "you've gone too far" message on arrival
     pendingSystemData = GalaxyGenerator.generate(seed, destType);
-  } else if (destType.includes('cluster')) {
-    // globular-cluster — distant view
-    pendingSystemData = ClusterGenerator.generate(seed, destType);
+  } else {
+    // Any other destType that wasn't caught above — should not happen in production.
+    // Fall back to a star system at the current position rather than using legacy generators.
+    console.warn(`[WARP] Unexpected destType '${destType}', falling back to star-system`);
+    pendingSystemData = StarSystemGenerator.generate(seed);
   }
   pendingSystemData._destType = destType;
   // Carry the warp target's name into the new system so it matches what was shown
@@ -4948,10 +4947,13 @@ function beginWarpTurn() {
   _deepSkyLingerTimer = -1;
 
   if (!warpTarget.direction) {
-    // No target — warp toward camera forward immediately
-    cameraController.bypassed = true;
-    warpEffect.start(null);
-    return;
+    // No target set — pick a real hash grid star before warping
+    autoSelectWarpTarget();
+    if (!warpTarget.direction) {
+      // Still no target (no visible stars?) — abort warp
+      console.warn('[WARP] No star found for warp — aborting');
+      return;
+    }
   }
 
   // Stop flythrough camera — we're taking direct control for the turn.
