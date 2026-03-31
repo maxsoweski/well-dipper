@@ -51,6 +51,7 @@ import { ShipSpawner } from './objects/ShipSpawner.js';
 import { TextureBaker, getBakeType } from './rendering/TextureBaker.js';
 import { createTexturedBodyMaterial } from './rendering/shaders/TexturedBodyShader.js';
 import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/MaterialBodyShader.js';
+import { PretextLab } from './ui/PretextLab.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -227,23 +228,9 @@ const warpTarget = {
   lockBlinkFrames: 0, // frame counter for rapid lock-on blink
 };
 
-// Track how many full tour cycles have completed for the current system.
-// Used to auto-warp out of navigable deep sky after enough touring.
-let _tourCycleCount = 0;
-
 // When the tour visits every body, auto-select a visible star and warp toward it.
 // Brackets blink for 1.5s, then camera turns to face it, then warp fires.
 autoNav.onTourComplete = () => {
-  _tourCycleCount++;
-
-  // Navigable deep sky (nebulae, open clusters): loop the tour for 2 cycles,
-  // then auto-warp away so the screensaver doesn't get stuck.
-  if (system && system._navigable) {
-    if (_tourCycleCount < 2) return; // keep touring
-    // 2 full cycles done — time to leave
-    console.log('[NAV] Navigable deep sky: 2 tour cycles done, auto-warping out');
-  }
-
   autoSelectWarpTarget();
   // Only begin warp if we actually found a target star
   if (warpTarget.navStarData || warpTarget.featureData || warpTarget.galaxyData) {
@@ -884,6 +871,37 @@ function toggleSoundTest() {
   }
 }
 
+// ── Pretext Lab (experimental text overlay — X key) ──
+let _pretextLabOpen = false;
+const _pretextLab = new PretextLab();
+
+function togglePretextLab() {
+  const el = document.getElementById('pretext-lab-overlay');
+  if (!el) return;
+  _pretextLabOpen = !_pretextLabOpen;
+  soundEngine.play('uiClick');
+  if (_pretextLabOpen) {
+    el.style.display = 'flex';
+    _pretextLab.activate();
+  } else {
+    el.style.display = 'none';
+    _pretextLab.deactivate();
+  }
+}
+
+// Pretext Lab close button + backdrop
+{
+  const labEl = document.getElementById('pretext-lab-overlay');
+  if (labEl) {
+    labEl.querySelector('.overlay-close')?.addEventListener('click', () => {
+      togglePretextLab();
+    });
+    labEl.addEventListener('click', (e) => {
+      if (e.target === labEl) togglePretextLab();
+    });
+  }
+}
+
 // ── Debug Gallery Mode ──
 // Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
@@ -1044,8 +1062,12 @@ warpEffect.onPrepareSystem = () => {
       console.log(`Warp: DestinationPicker rolled ${destType} → feature ${foundFeature.type} at center`);
       return;
     }
-    // No feature found — fall through to old generators as fallback
-    console.log(`Warp: DestinationPicker rolled ${destType} but no feature found nearby, using legacy generator`);
+    // No feature found — fall back to star system (the procedural model's domain).
+    // The old NavigableNebula/ClusterGenerators are legacy dead code that creates
+    // fake tournable objects outside the procedural galaxy model. All warp
+    // destinations must come from the hash grid or real feature catalog.
+    console.log(`Warp: DestinationPicker rolled ${destType} but no feature found nearby, falling back to star-system`);
+    destType = 'star-system';
   }
 
   if (destType === 'star-system') {
@@ -1343,7 +1365,6 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   warpTarget.destType = null;
   warpTarget.featureData = null;
   warpTarget.galaxyData = null;
-  _tourCycleCount = 0;
   const wasAutopilot = debugCamera ? false : autoNav.isActive;
 
   // Reset camera far plane (may have been extended for navigable nebulae)
@@ -4383,10 +4404,20 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  // X key: toggle Pretext Lab (text rendering experiments)
+  if (e.code === 'KeyX' && !titleScreenActive) {
+    togglePretextLab();
+    return;
+  }
+
   // Escape closes keybinds, settings, sound test, or debug overlay if open
   if (e.code === 'Escape') {
     if (debugPanel.isPanelVisible) {
       debugPanel.togglePanel();
+      return;
+    }
+    if (_pretextLabOpen) {
+      togglePretextLab();
       return;
     }
     if (_soundTestOpen) {
