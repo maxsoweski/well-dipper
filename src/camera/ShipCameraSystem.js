@@ -233,6 +233,7 @@ export class ShipCameraSystem {
     this.pitch = Math.atan2(dy, horizDist);
     this.smoothedPitch = this.pitch;
     this.distance = viewDistance;
+    this.smoothedDistance = viewDistance; // snap — no lerp blip on arrival
     this.zoomSpeed = 0;
 
     // If gravity mode is active, also position the flight system
