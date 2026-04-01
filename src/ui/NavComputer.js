@@ -2021,14 +2021,15 @@ export class NavComputer {
       const selMoonIdx = this._selectedBody.moonIndex;
       if (selMoonIdx >= 0 && selMoonIdx < moons.length) {
         const moon = moons[selMoonIdx];
-        const moonOrbitR = Math.sqrt(moon.orbitRadiusEarth || 1) * moonOrbitScale;
-        const moonAngle = moon.orbitAngle || (selMoonIdx * Math.PI * 2 / Math.max(1, moons.length));
-        const moonP = project(Math.cos(moonAngle) * moonOrbitR, 0, Math.sin(moonAngle) * moonOrbitR);
+        // Same orbit + projection as moon rendering above
+        const selOrbitR = Math.sqrt(moon.orbitRadiusEarth || (10 + selMoonIdx * 8));
+        const selAngle = moon.startAngle || (selMoonIdx * 2.4);
+        const selP = project(Math.cos(selAngle) * selOrbitR, 0, Math.sin(selAngle) * selOrbitR);
         const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.004);
         ctx.strokeStyle = '#00ff80';
         ctx.lineWidth = 2;
         ctx.globalAlpha = pulse;
-        ctx.beginPath(); ctx.arc(moonP.x, moonP.y, 12, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(selP.x, selP.y, 12, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1;
       }
     }
