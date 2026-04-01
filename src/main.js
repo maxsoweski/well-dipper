@@ -4188,6 +4188,9 @@ function animate() {
     } else if (flythrough.active) {
       // Flythrough runs whether autoNav is active or not (manual burns use it too)
       const result = flythrough.update(deltaTime);
+      if (result.travelComplete || result.orbitComplete) {
+        console.log(`[FLYTHROUGH] travelComplete=${result.travelComplete}, orbitComplete=${result.orbitComplete}, state=${flythrough.state}`);
+      }
 
       // "Now targeting" — 2s before orbit ends, blink the next target
       if (result.targetingReady) {
@@ -4211,6 +4214,7 @@ function animate() {
 
       if (result.travelComplete) {
         // Arrived at next body
+        console.log(`[TRAVEL COMPLETE] autoNav=${autoNav.isActive}, flythrough.active=${flythrough.active}, body=${flythrough._travelToBody?.position?.x?.toFixed(2)}`);
         const stop = autoNav.isActive ? autoNav.getCurrentStop() : null;
         if (stop && stop.bodyRef) {
           // Autopilot mode: begin orbit and continue tour
