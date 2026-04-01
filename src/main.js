@@ -423,6 +423,13 @@ function _initNavComputer() {
   // Audio bridges
   _navComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
   _navComputer.setSoundCallback((name) => soundEngine.play(name));
+
+  // Autopilot toggle from nav computer
+  _navComputer.setOnAutopilotToggle((enable) => {
+    if (enable) startFlythrough();
+    else stopFlythrough();
+    _navComputer.setAutopilotState(enable);
+  });
 }
 
 function openNavComputer() {
@@ -452,6 +459,7 @@ function openNavComputer() {
       seed: gs.seed, dist: 0, distPc: '0',
     };
   }
+  _navComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
   _navComputer.openToCurrentSystem(currentStar, sysData);
 
   // Pass existing warp target for display
@@ -5135,10 +5143,11 @@ canvas.addEventListener('mousedown', (e) => {
 
 // Scroll wheel resets idle timer
 canvas.addEventListener('wheel', () => {
-  if (!autoNav.isActive) {
-    idleTimer = 0;
-    _deepSkyLingerTimer = -1;
+  if (autoNav.isActive || _manualBurnOrbiting) {
+    stopFlythrough();
   }
+  idleTimer = 0;
+  _deepSkyLingerTimer = -1;
 }, { passive: true });
 
 window.addEventListener('mouseup', (e) => {

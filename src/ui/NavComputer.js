@@ -96,6 +96,9 @@ export class NavComputer {
     this._onDrillSound = null;       // callback: (levelIndex) => void — plays level-appropriate sound
     this._onSound = null;            // callback: (soundName) => void — plays named SFX
     this._currentSystemData = null;  // actual spawned system data from main.js
+    this._autopilotActive = false;   // mirror of autoNav state from main.js
+    this._autopilotButtonRect = null;
+    this._onAutopilotToggle = null;  // callback: (enable) => void
 
     // ── Ship position in current system ──
     // focusIndex: -1 = overview (no specific body), -2 = star, 0+ = planet index
@@ -290,6 +293,12 @@ export class NavComputer {
 
   /** Set callback for general UI sounds. */
   setSoundCallback(fn) { this._onSound = fn; }
+
+  /** Set autopilot state (for display). */
+  setAutopilotState(active) { this._autopilotActive = active; }
+
+  /** Set callback for autopilot toggle. */
+  setOnAutopilotToggle(fn) { this._onAutopilotToggle = fn; }
 
   /** Get the pending commit action (backup for close path). */
   getCommitAction() { return this._commitAction; }
@@ -2687,6 +2696,25 @@ export class NavComputer {
       ctx.fillText(this._currentSector.name, 16, 60);
     }
 
+    // Autopilot toggle button (bottom-left, above tabs)
+    {
+      const tabH = 32;
+      const btnText = this._autopilotActive ? '▶ AUTOPILOT ON' : '▷ AUTOPILOT OFF';
+      const btnColor = this._autopilotActive ? '#00ff80' : 'rgba(255,255,255,0.35)';
+      const btnW = 140, btnH = 24;
+      const btnX = 8, btnY = h - tabH - btnH - 8;
+      ctx.fillStyle = this._autopilotActive ? 'rgba(0, 255, 128, 0.08)' : 'rgba(255,255,255,0.03)';
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = btnColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(btnX, btnY, btnW, btnH);
+      ctx.font = '10px "DotGothic16", monospace';
+      ctx.fillStyle = btnColor;
+      ctx.textAlign = 'left';
+      ctx.fillText(btnText, btnX + 8, btnY + 16);
+      this._autopilotButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+    }
+
     // Level info (top-right)
     ctx.font = '12px "DotGothic16", monospace';
     ctx.textAlign = 'right';
@@ -2819,6 +2847,15 @@ export class NavComputer {
   _handleClick(e) {
     if (this._anim) return; // suppress clicks during drill animation
     const p = this._getCanvasPos(e);
+
+    // Check autopilot button click
+    if (this._autopilotButtonRect) {
+      const r = this._autopilotButtonRect;
+      if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+        if (this._onAutopilotToggle) this._onAutopilotToggle(!this._autopilotActive);
+        return;
+      }
+    }
 
     // Check tab clicks
     const tabH = 32;
