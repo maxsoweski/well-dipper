@@ -5254,20 +5254,48 @@ if (mobileControls) {
     if (!btn || btn === fab) return;
 
     const action = btn.dataset.action;
-    if (action === 'new') {
+    if (action === 'warp') {
+      autoSelectWarpTarget();
       beginWarpTurn();
-    } else if (action === 'back') {
-      focusPlanet(-1);
+    } else if (action === 'nav') {
+      if (_navComputerOpen) closeNavComputer();
+      else openNavComputer();
+    } else if (action === 'autonav-toggle') {
+      if (autoNav.isActive) {
+        stopFlythrough();
+        btn.classList.remove('active');
+      } else if (system) {
+        idleTimer = 0;
+        startFlythrough();
+        btn.classList.add('active');
+      }
     } else if (action === 'prev') {
+      // Cycle through all bodies in autopilot order (star → planets → moons)
       if (!system) return;
-      const n = system.planets.length;
-      if (n === 0) return;
-      focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
+      if (autoNav.isActive && flythrough.active) {
+        const stop = autoNav.advance(-1);
+        if (stop?.bodyRef) {
+          flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+          updateFocusFromStop(stop);
+        }
+      } else {
+        const n = system.planets.length;
+        if (n === 0) return;
+        focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
+      }
     } else if (action === 'next') {
       if (!system) return;
-      const n = system.planets.length;
-      if (n === 0) return;
-      focusPlanet((focusIndex + 1) % n);
+      if (autoNav.isActive && flythrough.active) {
+        const stop = autoNav.advance(1);
+        if (stop?.bodyRef) {
+          flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+          updateFocusFromStop(stop);
+        }
+      } else {
+        const n = system.planets.length;
+        if (n === 0) return;
+        focusPlanet((focusIndex + 1) % n);
+      }
     } else if (action === 'orbits') {
       toggleOrbits();
       btn.classList.toggle('active', orbitsVisible);

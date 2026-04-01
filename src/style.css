@@ -77,6 +77,12 @@ html, body {
   transform: scale(0.92);
 }
 
+.mobile-autopilot-btn.active {
+  border-color: rgba(100, 180, 255, 0.6);
+  color: rgba(100, 180, 255, 0.9);
+  background: rgba(100, 180, 255, 0.1);
+}
+
 /* ── FAB: Floating Action Button ── */
 .mobile-fab {
   position: fixed;
