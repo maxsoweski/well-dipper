@@ -183,24 +183,23 @@ export class NavComputer {
   }
 
   /** Open directly to the system view for the current system. */
-  openToCurrentSystem() {
-    const nearest = this._findNearestStar();
-    if (nearest) {
-      this._systemStar = nearest;
-      this._selectedNavStar = nearest;
-      this._externalTarget = { x: nearest.wx, y: nearest.wy, z: nearest.wz, name: nearest.name || '' };
-      // Use actual system data if available
-      if (this._currentSystemData) {
-        this._systemData = this._currentSystemData;
-      } else {
-        this._systemData = null; // will regenerate in _renderSystem
-      }
-      this._hoveredBody = null;
-      this._systemMode = 'system';
-      this._systemZoom = 1.0;
-      this._clearCommitSelection();
-      this._levelIndex = 4;
-    }
+  /** Open directly to the system view.
+   *  @param {object} [starData] — star entry with wx/wy/wz/seed/name/spectral (bypasses async _localStars search)
+   *  @param {object} [systemData] — actual spawned system data (guarantees moon index alignment) */
+  openToCurrentSystem(starData, systemData) {
+    const star = starData || this._findNearestStar();
+    if (!star) return;
+    if (!star.color) star.color = NavComputer._SPECTRAL_COLORS[star.spectral] || '#ffefb0';
+    this._systemStar = star;
+    this._selectedNavStar = star;
+    this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
+    this._systemData = systemData || this._currentSystemData || null;
+    if (systemData) this._currentSystemData = systemData;
+    this._hoveredBody = null;
+    this._systemMode = 'system';
+    this._systemZoom = 1.0;
+    this._clearCommitSelection();
+    this._levelIndex = 4;
   }
 
   _resizeCanvas() {
@@ -2844,7 +2843,9 @@ export class NavComputer {
             this._systemStar = nearest;
             this._selectedNavStar = nearest;
             this._externalTarget = { x: nearest.wx, y: nearest.wy, z: nearest.wz, name: nearest.name || '' };
-            this._systemData = null;
+            // Use actual system data if returning to current system
+            this._systemData = (this._isCurrentSystem() && this._currentSystemData)
+              ? this._currentSystemData : null;
             this._hoveredBody = null;
             this._systemMode = 'system';
             this._systemZoom = 1.0;

@@ -307,7 +307,7 @@ function startIntroSequence() {
     musicManager.play('title').then(() => {
       if (!titleScreenActive) return;
       const titleDur = musicManager.getDuration('title');
-      const titleLoops = 4;
+      const titleLoops = 2; // title track is ~19s — 2 loops ≈ 38s title screen
       const silenceGap = 3000;
       if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
       if (titleDur > 0) {
@@ -435,8 +435,21 @@ function openNavComputer() {
   _navComputer.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 }, null);
   _navComputer._currentSystemName = _currentSystemName || 'Unknown';
   _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
-  if (system) _navComputer.setCurrentSystemData(system._systemData || null);
-  _navComputer.openToCurrentSystem();
+
+  // Build star entry from currentGalaxyStar — bypasses async _localStars search.
+  // This guarantees the nav opens to the correct system immediately.
+  let currentStar = null;
+  const sysData = system?._systemData || null;
+  if (currentGalaxyStar) {
+    const gs = currentGalaxyStar;
+    currentStar = {
+      wx: gs.worldX, wy: gs.worldY, wz: gs.worldZ,
+      name: _currentSystemName || '',
+      spectral: gs.type || sysData?.star?.type || 'G',
+      seed: gs.seed, dist: 0, distPc: '0',
+    };
+  }
+  _navComputer.openToCurrentSystem(currentStar, sysData);
 
   // Pass existing warp target for display
   if (warpTarget.direction && galacticMap) {
