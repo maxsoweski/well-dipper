@@ -4218,10 +4218,17 @@ function animate() {
           flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger * settings.get('tourLingerMultiplier'));
           updateFocusFromStop(stop);
         } else {
-          // Manual burn: hand camera back to orbit controller at destination
+          // Manual burn: hand camera back to orbit controller at destination body.
+          // Use focusOn with the body's position so the orbit center is correct.
+          const body = flythrough._travelToBody;
+          const dist = flythrough._travelToOrbitDist || 2.0;
           flythrough.stop();
           cameraController.bypassed = false;
-          cameraController.restoreFromWorldState(camera.position.clone());
+          if (body) {
+            cameraController.focusOn(body.position, Math.max(dist, 1.0));
+          } else {
+            cameraController.restoreFromWorldState(camera.position.clone());
+          }
         }
       }
     } else if (!autoNav.isActive) {
