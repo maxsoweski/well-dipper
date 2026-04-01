@@ -224,11 +224,14 @@ export class ShipCameraSystem {
     this._returningToOrbit = false;
 
     const dx = this.camera.position.x - position.x;
+    const dy = this.camera.position.y - position.y;
     const dz = this.camera.position.z - position.z;
+    const horizDist = Math.sqrt(dx * dx + dz * dz);
     this.yaw = Math.atan2(dx, dz);
     this.smoothedYaw = this.yaw;
-    this.pitch = 0.15;
-    this.smoothedPitch = 0.15;
+    // Derive pitch from current camera position relative to body (no snap)
+    this.pitch = Math.atan2(dy, horizDist);
+    this.smoothedPitch = this.pitch;
     this.distance = viewDistance;
     this.zoomSpeed = 0;
 
