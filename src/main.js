@@ -485,6 +485,12 @@ function dispatchNavAction(action) {
   console.log(`[NAV DISPATCH] type=${action.type}, target=${action.target}, star=${action.star?.name} seed=${action.star?.seed}`);
 
   if (action.type === 'burn') {
+    // Stop autopilot so the travelComplete handler uses the manual path
+    // (otherwise it orbits autoNav's current stop, not the burn target)
+    if (autoNav.isActive) {
+      flythrough.stop();
+      autoNav.stop();
+    }
     // In-system transit — same focus functions as Tab/1-9 keys
     if (action.target === 'star') focusStar(action.starIndex || 0);
     else if (action.target === 'planet') focusPlanet(action.planetIndex);
