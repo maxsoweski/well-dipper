@@ -3498,7 +3498,9 @@ function focusPlanet(index) {
     focusIndex = index;
     const entry = system.planets[index];
     const bodyRadius = entry.planet.data.radius;
-    const orbitDist = bodyRadius * 6;
+    // Orbit distance must be large enough for the camera to see the planet
+    // (planet scene radii can be < 0.1 units; camera needs breathing room)
+    const orbitDist = Math.max(bodyRadius * 6, 2.0);
     // Smooth cinematic travel instead of instant snap
     cameraController.bypassed = true;
     flythrough.beginTravelFrom(entry.planet.mesh, orbitDist, bodyRadius);
@@ -3538,6 +3540,7 @@ function focusStar(starIdx) {
     viewDist = Math.min(idealDist, innerOrbit * 0.4);
   }
   // Smooth cinematic travel instead of instant snap
+  viewDist = Math.max(viewDist, 2.0);
   const bodyRadius = starObj.data.radius;
   cameraController.bypassed = true;
   flythrough.beginTravelFrom(starObj.mesh, viewDist, bodyRadius);
@@ -3563,8 +3566,8 @@ function focusMoon(planetIndex, moonIndex) {
   if (moonIndex < 0 || moonIndex >= entry.moons.length) return;
 
   const moon = entry.moons[moonIndex];
-  // Close enough to see the moon mesh (not just billboard), with a floor so we don't clip
-  const viewDist = Math.max(moon.data.radius * 5, 0.08);
+  // Floor at 1.0 scene units — planet/moon scene radii can be < 0.1
+  const viewDist = Math.max(moon.data.radius * 5, 1.0);
   focusIndex = planetIndex;
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;
