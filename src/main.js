@@ -3505,7 +3505,7 @@ function focusPlanet(index) {
     const bodyRadius = entry.planet.data.radius;
     // Orbit distance must be large enough for the camera to see the planet
     // (planet scene radii can be < 0.1 units; camera needs breathing room)
-    const orbitDist = Math.max(bodyRadius * 6, 2.0);
+    const orbitDist = Math.max(bodyRadius * 6, 0.1);
     // Smooth cinematic travel instead of instant snap
     cameraController.bypassed = true;
     flythrough.beginTravelFrom(entry.planet.mesh, orbitDist, bodyRadius);
@@ -3571,8 +3571,8 @@ function focusMoon(planetIndex, moonIndex) {
   if (moonIndex < 0 || moonIndex >= entry.moons.length) return;
 
   const moon = entry.moons[moonIndex];
-  // Floor at 1.0 scene units — planet/moon scene radii can be < 0.1
-  const viewDist = Math.max(moon.data.radius * 5, 1.0);
+  // 5x radius gives a good framing; floor at 0.05 prevents near-plane clipping
+  const viewDist = Math.max(moon.data.radius * 5, 0.05);
   focusIndex = planetIndex;
   focusMoonIndex = moonIndex;
   focusStarIndex = -1;
@@ -4225,7 +4225,8 @@ function animate() {
           flythrough.stop();
           cameraController.bypassed = false;
           if (body) {
-            cameraController.focusOn(body.position, Math.max(dist, 1.0));
+            // Use the flythrough's orbit distance — it's already scaled to body size
+            cameraController.focusOn(body.position, Math.max(dist, 0.05));
           } else {
             cameraController.restoreFromWorldState(camera.position.clone());
           }
