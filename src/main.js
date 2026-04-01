@@ -400,6 +400,7 @@ function toggleKeybinds() {
 
 // ── Nav Computer ──
 let _navComputerOpen = false;
+let _manualBurnOrbiting = false; // true when camera is in post-burn slow orbit (flythrough active, autoNav off)
 let _navComputer = null;
 let _navAnimFrame = null;
 
@@ -3230,6 +3231,7 @@ function stopFlythrough() {
 
   flythrough.stop();
   autoNav.stop();
+  _manualBurnOrbiting = false;
 
   if (!system) {
     cameraController.bypassed = false;
@@ -4219,37 +4221,46 @@ function animate() {
       }
 
       if (result.travelComplete) {
-        // Arrived at next body
-        console.log(`[TRAVEL COMPLETE] autoNav=${autoNav.isActive}, flythrough.active=${flythrough.active}, body=${flythrough._travelToBody?.position?.x?.toFixed(2)}`);
-        const stop = autoNav.isActive ? autoNav.getCurrentStop() : null;
-        if (stop && stop.bodyRef) {
-          // Autopilot mode: begin orbit and continue tour
-          const upcoming = autoNav.getNextStop();
-          flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-          flythrough.beginOrbit(stop.bodyRef, stop.orbitDistance, stop.bodyRadius, stop.linger * settings.get('tourLingerMultiplier'));
-          updateFocusFromStop(stop);
+        // Arrived at next body — unified arrival: approach → slow orbit
+        const body = flythrough._travelToBody;
+        const dist = flythrough._travelToOrbitDist || 2.0;
+        const bodyR = flythrough._travelToRadius || 0.01;
+
+        if (autoNav.isActive) {
+          // Autopilot: approach → one slow orbit → advance to next body
+          const stop = autoNav.getCurrentStop();
+          if (stop && stop.bodyRef) {
+            const upcoming = autoNav.getNextStop();
+            flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+            flythrough.beginApproach(stop.bodyRef, stop.orbitDistance, stop.bodyRadius,
+              stop.linger * settings.get('tourLingerMultiplier'));
+            updateFocusFromStop(stop);
+          }
+        } else if (body) {
+          // Manual burn: approach → indefinite slow orbit (until input or idle timer)
+          flythrough.beginApproach(body, dist, bodyR, 99999);
+          _manualBurnOrbiting = true;
         } else {
-          // Manual burn: hand camera back to orbit controller at destination body.
-          // Use focusOn with the body's position so the orbit center is correct.
-          const body = flythrough._travelToBody;
-          const dist = flythrough._travelToOrbitDist || 2.0;
+          // No body (shouldn't happen) — hand to manual
           flythrough.stop();
           cameraController.bypassed = false;
-          if (body) {
-            // Use the flythrough's orbit distance — it's already scaled to body size
-            const finalDist = Math.max(dist, 0.02);
-            const bodyR = flythrough._travelToRadius || 0;
-            console.log(`[BURN ARRIVE] bodyRadius=${bodyR.toFixed(4)}, orbitDist=${dist.toFixed(4)}, finalDist=${finalDist.toFixed(4)}, ratio=${(finalDist/Math.max(bodyR,0.001)).toFixed(1)}x`);
-            cameraController.focusOn(body.position, finalDist);
-          } else {
-            cameraController.restoreFromWorldState(camera.position.clone());
-          }
+          cameraController.restoreFromWorldState(camera.position.clone());
         }
       }
     } else if (!autoNav.isActive) {
       // No warp, no flythrough, no autopilot — run idle timer
       idleTimer += deltaTime;
       if (idleTimer >= settings.get('idleTimeout')) {
+        _manualBurnOrbiting = false;
+        startFlythrough();
+      }
+    }
+
+    // Also run idle timer during manual burn orbit (flythrough active but no autoNav)
+    if (_manualBurnOrbiting && !autoNav.isActive) {
+      idleTimer += deltaTime;
+      if (idleTimer >= settings.get('idleTimeout')) {
+        _manualBurnOrbiting = false;
         startFlythrough();
       }
     }

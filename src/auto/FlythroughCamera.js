@@ -23,7 +23,7 @@ import * as THREE from 'three';
  * departing body recede → gazing forward → watching the destination grow.
  */
 
-const State = { DESCEND: 0, ORBIT: 1, TRAVEL: 2 };
+const State = { DESCEND: 0, ORBIT: 1, TRAVEL: 2, APPROACH: 3 };
 
 // Reusable vectors to avoid per-frame allocations
 const _v1 = new THREE.Vector3();
@@ -90,6 +90,20 @@ export class FlythroughCamera {
     // Warp arrival mode (set by beginTravelFrom with warpArrival option)
     this._warpArrival = false;
 
+    // ── APPROACH state (pause → close-in → transition to orbit) ──
+    this._approachElapsed = 0;
+    this._approachPauseDur = 1.5;    // seconds to hold before closing
+    this._approachCloseDur = 3.0;    // seconds to close in
+    this._approachStartDist = 10;    // distance at start of close phase
+    this._approachTargetDist = 5;    // final distance (body fills ~60% of frame)
+    this._approachBodyRef = null;
+    this._approachBodyRadius = 1;
+    this._approachOrbitDist = 10;    // orbit distance for subsequent orbit
+    this._approachOrbitDuration = 75; // orbit duration after approach
+
+    // Orbit speed scale (1.0 = normal autopilot, 0.2 = slow cinematic)
+    this._orbitSpeedScale = 1.0;
+
     // ── DESCEND state ──
     this.descendStart = new THREE.Vector3();
     this.descendElapsed = 0;
@@ -130,12 +144,14 @@ export class FlythroughCamera {
    * This means the camera naturally peels off toward the next destination
    * when the orbit ends — no direction change at departure.
    */
-  beginOrbit(bodyRef, orbitDistance, bodyRadius, duration) {
+  beginOrbit(bodyRef, orbitDistance, bodyRadius, duration, options = {}) {
     this.state = State.ORBIT;
     this.bodyRef = bodyRef;
     this.bodyRadius = bodyRadius;
     this.orbitDistance = orbitDistance;
     this.orbitDistBase = orbitDistance;
+    // Slow orbit: 5× slower rotation, breathing, and pitch oscillation
+    this._orbitSpeedScale = options.slowOrbit ? 0.2 : 1.0;
     this.orbitElapsed = 0;
     this.orbitDuration = duration || 15;
     this._targetingSignaled = false;
@@ -238,6 +254,32 @@ export class FlythroughCamera {
 
   /**
    * Begin travelling from current position to the next body.
+  /**
+   * Begin the approach sequence: pause → close-in → auto-transition to orbit.
+   * @param {THREE.Object3D} bodyRef — the body to approach
+   * @param {number} orbitDist — orbit distance for the subsequent orbit
+   * @param {number} bodyRadius — body radius (for approach target calculation)
+   * @param {number} [orbitDuration=75] — seconds for one orbit rotation after approach
+   */
+  beginApproach(bodyRef, orbitDist, bodyRadius, orbitDuration = 75) {
+    this.active = true;
+    this.state = State.APPROACH;
+    this._approachBodyRef = bodyRef;
+    this._approachBodyRadius = bodyRadius;
+    this._approachOrbitDist = orbitDist;
+    this._approachOrbitDuration = orbitDuration;
+    this._approachElapsed = 0;
+
+    // Current distance from the body
+    this._approachStartDist = this.camera.position.distanceTo(bodyRef.position);
+    // Target: body fills ~60% of frame (2.6× radius), capped at orbit distance
+    this._approachTargetDist = Math.max(bodyRadius * 2.6, 0.02);
+    // Don't close in more than the orbit distance (stay outside for clean orbit entry)
+    this._approachTargetDist = Math.min(this._approachTargetDist, orbitDist);
+  }
+
+  /**
+   * Begin travel from current body to the next (during an active tour or manual tab-advance).
    * Long trips use tangential departure (perpendicular to orbit radius).
    * Short trips (planet↔moon) use direct 3D path to the destination.
    * Both use double-smootherstep easing for slow-fast-slow motion.
@@ -412,6 +454,8 @@ export class FlythroughCamera {
         return this._updateOrbit(deltaTime);
       case State.TRAVEL:
         return this._updateTravel(deltaTime);
+      case State.APPROACH:
+        return this._updateApproach(deltaTime);
     }
     return { orbitComplete: false, travelComplete: false, targetingReady: false };
   }
@@ -465,18 +509,18 @@ export class FlythroughCamera {
     // ── Constant speed orbit ──
     // Slow, relaxed pace — no acceleration. The orbit does ~1-2
     // revolutions (aligned to departure angle) at constant speed.
-    this.orbitYaw += this.orbitYawSpeed * this.orbitDirection * deltaTime;
+    this.orbitYaw += this.orbitYawSpeed * this._orbitSpeedScale * this.orbitDirection * deltaTime;
 
     // Pitch: blend from entry pitch to oscillating orbit pitch
     const minPitch = 0.087;   // 5°
     const maxPitch = 0.436;   // 25°
     const midPitch = (minPitch + maxPitch) / 2;
     const ampPitch = (maxPitch - minPitch) / 2;
-    const oscPitch = midPitch + ampPitch * Math.sin(this.orbitElapsed * 0.52 + this.orbitPitchPhase);
+    const oscPitch = midPitch + ampPitch * Math.sin(this.orbitElapsed * 0.52 * this._orbitSpeedScale + this.orbitPitchPhase);
     this.orbitPitch = this._entryPitch + (oscPitch - this._entryPitch) * entryFactor;
 
     // Distance: blend from entry distance to breathing orbit distance
-    const breathe = 1 + 0.05 * entryFactor * Math.sin(this.orbitElapsed * 0.785 + this.orbitDistPhase);
+    const breathe = 1 + 0.05 * entryFactor * Math.sin(this.orbitElapsed * 0.785 * this._orbitSpeedScale + this.orbitDistPhase);
     let dist = this._entryDist + (this.orbitDistBase * breathe - this._entryDist) * entryFactor;
 
     // ── Gentle pull-out near departure ──
@@ -579,6 +623,39 @@ export class FlythroughCamera {
       bodyPos.y + this._arrivalDist * Math.sin(this._arrivalPitch),
       bodyPos.z + this._arrivalDist * Math.cos(yaw) * cp,
     );
+  }
+
+  _updateApproach(deltaTime) {
+    this._approachElapsed += deltaTime;
+    const body = this._approachBodyRef;
+    if (!body) return { orbitComplete: false, travelComplete: false, targetingReady: false };
+
+    const bodyPos = body.position;
+    const pauseDur = this._approachPauseDur;
+    const closeDur = this._approachCloseDur;
+    const totalDur = pauseDur + closeDur;
+
+    if (this._approachElapsed < pauseDur) {
+      // Pause phase: hold position, look at body
+      this.camera.lookAt(bodyPos);
+    } else if (this._approachElapsed < totalDur) {
+      // Close phase: move radially toward body using smootherstep
+      const closeT = (this._approachElapsed - pauseDur) / closeDur;
+      const eased = this._ease(closeT);
+      const dist = this._approachStartDist + (this._approachTargetDist - this._approachStartDist) * eased;
+
+      // Move camera along the current direction to body at the interpolated distance
+      _v1.subVectors(this.camera.position, bodyPos).normalize();
+      this.camera.position.copy(bodyPos).addScaledVector(_v1, dist);
+      this.camera.lookAt(bodyPos);
+    } else {
+      // Approach complete — transition to slow orbit
+      this.beginOrbit(body, this._approachOrbitDist, this._approachBodyRadius,
+        this._approachOrbitDuration, { slowOrbit: true });
+      return { orbitComplete: false, travelComplete: false, targetingReady: false };
+    }
+
+    return { orbitComplete: false, travelComplete: false, targetingReady: false };
   }
 
   _updateTravel(deltaTime) {
