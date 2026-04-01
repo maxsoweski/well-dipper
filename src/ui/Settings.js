@@ -27,6 +27,7 @@ const DEFAULTS = {
   orbitSpeedMultiplier: 1.0,  // 1× = default, 0.25× = slow, 4× = fast
 
   // Camera
+  fov: 70,                    // field of view in degrees
   autoRotateSpeed: 0.67,      // degrees/sec
   zoomSensitivity: 1.5,       // matches CameraController default
 

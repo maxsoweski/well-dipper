@@ -67,7 +67,7 @@ const scene = new THREE.Scene();
 // behind empty space (but NOT behind dark shadows).
 
 // ── Camera ──
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 200000);
+const camera = new THREE.PerspectiveCamera(settings.get('fov'), window.innerWidth / window.innerHeight, 0.01, 200000);
 
 // ── Ship Spawner ──
 const shipSpawner = new ShipSpawner();
@@ -602,6 +602,7 @@ function formatSettingValue(key, value) {
   if (key === 'idleTimeout' || key === 'titleAutoDismiss') return `${value}s`;
   if (key === 'deepSkyChance') return `${value}%`;
   if (key === 'tourLingerMultiplier') return `${value.toFixed(1)}x`;
+  if (key === 'fov') return `${value}°`;
   if (key === 'autoRotateSpeed') return `${value.toFixed(1)}`;
   if (key === 'orbitSpeedMultiplier') return `${value.toFixed(2)}x`;
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
@@ -656,6 +657,10 @@ function applySettingChange(key, value) {
       break;
     case 'autoRotateSpeed':
       cameraController.autoRotateSpeed = value;
+      break;
+    case 'fov':
+      camera.fov = value;
+      camera.updateProjectionMatrix();
       break;
     case 'zoomSensitivity':
       cameraController.scrollSensitivity = value;

@@ -92,7 +92,8 @@ export class MusicManager {
         if (!resp.ok) continue;
         const arrayBuf = await resp.arrayBuffer();
         const decoded = await ctx.decodeAudioData(arrayBuf);
-        this._applyLoopFade(decoded);
+        // Only apply loop fade to tracks that will loop (not one-shots like intro)
+        if (name !== 'intro') this._applyLoopFade(decoded);
         this._buffers[name] = decoded;
         break;
       } catch {
