@@ -307,7 +307,7 @@ function startIntroSequence() {
     musicManager.play('title').then(() => {
       if (!titleScreenActive) return;
       const titleDur = musicManager.getDuration('title');
-      const titleLoops = 2; // title track is ~19s — 2 loops ≈ 38s title screen
+      const titleLoops = 4; // title track is ~19s — 4 loops ≈ 77s title screen
       const silenceGap = 3000;
       if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
       if (titleDur > 0) {
