@@ -356,6 +356,7 @@ function dismissTitleScreen() {
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
   musicManager.stop(0.5);
+  _autopilotEnabled = true; // title screen always leads to autopilot screensaver
   // Galaxy glow stays hidden until warp (restored in onSwapSystem)
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
@@ -401,6 +402,7 @@ function toggleKeybinds() {
 // ── Nav Computer ──
 let _navComputerOpen = false;
 let _manualBurnOrbiting = false; // true when camera is in post-burn slow orbit (flythrough active, autoNav off)
+let _autopilotEnabled = false;   // persists through warps (independent of autoNav.isActive)
 let _navComputer = null;
 let _navAnimFrame = null;
 
@@ -3168,10 +3170,9 @@ function updateFocusFromStop(stop) {
  */
 function startFlythrough() {
   if (!system) return;
-  // Don't start autopilot during warp — the warp pipeline owns the camera
-  // and warpRevealSystem will start the tour for the new system.
   if (warpEffect.isActive) return;
   soundEngine.play('autopilotOn');
+  _autopilotEnabled = true;
 
   if (system._navigable) {
     // Navigable deep sky: tour between stars (like star system)
@@ -3232,6 +3233,7 @@ function stopFlythrough() {
   flythrough.stop();
   autoNav.stop();
   _manualBurnOrbiting = false;
+  _autopilotEnabled = false;
 
   if (!system) {
     cameraController.bypassed = false;
@@ -3391,7 +3393,8 @@ function warpRevealSystem() {
   let firstStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
   if (firstStopIdx < 0) firstStopIdx = 0;
   autoNav.currentIndex = firstStopIdx;
-  autoNav.start();
+  // Only start autoNav if autopilot was enabled before warp
+  if (_autopilotEnabled) autoNav.start();
 
   const firstStop = autoNav.getCurrentStop();
   if (firstStop && firstStop.bodyRef) {
