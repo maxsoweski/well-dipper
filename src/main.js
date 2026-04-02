@@ -3453,7 +3453,8 @@ function warpRevealSystem() {
   console.log('Warp: coasting into new system');
 
   // Schedule ambient system music (15-30s after arriving)
-  _scheduleSystemMusic(15, 30);
+  // 20-35s after warp reveal (accounts for ~5s coast + buffer before music)
+  _scheduleSystemMusic(20, 35);
 }
 
 /**
