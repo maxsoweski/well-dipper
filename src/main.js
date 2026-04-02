@@ -532,6 +532,10 @@ function dispatchNavAction(action) {
     else if (action.target === 'planet') focusPlanet(action.planetIndex);
     else if (action.target === 'moon') focusMoon(action.planetIndex, action.moonIndex);
   } else if (action.type === 'warp') {
+    // Stop any active flythrough/orbit before warping
+    if (flythrough.active) flythrough.stop();
+    if (autoNav.isActive) autoNav.stop();
+    _manualBurnOrbiting = false;
     // Inter-system warp
     _setWarpTargetFromNavStar({
       worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,

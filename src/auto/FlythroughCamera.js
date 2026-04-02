@@ -272,10 +272,8 @@ export class FlythroughCamera {
 
     // Current distance from the body
     this._approachStartDist = this.camera.position.distanceTo(bodyRef.position);
-    // Target: body fills ~60% of frame (2.6× radius), capped at orbit distance
-    this._approachTargetDist = Math.max(bodyRadius * 2.6, 0.02);
-    // Don't close in more than the orbit distance (stay outside for clean orbit entry)
-    this._approachTargetDist = Math.min(this._approachTargetDist, orbitDist);
+    // Approach closes to the orbit distance so orbit starts seamlessly (no pulse)
+    this._approachTargetDist = Math.max(orbitDist, 0.02);
   }
 
   /**
@@ -520,7 +518,8 @@ export class FlythroughCamera {
     this.orbitPitch = this._entryPitch + (oscPitch - this._entryPitch) * entryFactor;
 
     // Distance: blend from entry distance to breathing orbit distance
-    const breathe = 1 + 0.05 * entryFactor * Math.sin(this.orbitElapsed * 0.785 * this._orbitSpeedScale + this.orbitDistPhase);
+    const breatheAmp = 0.05 * this._orbitSpeedScale; // scale amplitude with speed (tiny for slow orbits)
+    const breathe = 1 + breatheAmp * entryFactor * Math.sin(this.orbitElapsed * 0.785 * this._orbitSpeedScale + this.orbitDistPhase);
     let dist = this._entryDist + (this.orbitDistBase * breathe - this._entryDist) * entryFactor;
 
     // ── Gentle pull-out near departure ──
