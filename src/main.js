@@ -1234,9 +1234,8 @@ warpEffect.onSwapSystem = () => {
 // When warp exit finishes, reveal the new system and restart autopilot
 warpEffect.onComplete = () => {
   soundEngine.play('warpExit');
-  // Switch to explore or deepsky track based on destination type
-  const isDeepSky = system?.type && system.type !== 'star-system';
-  musicManager.play(isDeepSky ? 'deepsky' : 'explore', 2.0);
+  // System music is handled by _scheduleSystemMusic in warpRevealSystem
+  // (periodic one-shots with gaps, not looping BGM)
   warpRevealSystem();
 };
 
