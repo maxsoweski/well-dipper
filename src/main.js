@@ -406,6 +406,31 @@ let _autopilotEnabled = false;   // persists through warps (independent of autoN
 let _navComputer = null;
 let _navAnimFrame = null;
 
+// ── System ambient music (periodic, with gaps) ──
+let _systemMusicTimer = null;
+
+function _scheduleSystemMusic(minDelay, maxDelay) {
+  if (_systemMusicTimer) clearTimeout(_systemMusicTimer);
+  const delay = (minDelay + Math.random() * (maxDelay - minDelay)) * 1000;
+  _systemMusicTimer = setTimeout(() => {
+    if (warpEffect.isActive || splashActive || titleScreenActive) {
+      // Not the right time — reschedule
+      _scheduleSystemMusic(5, 15);
+      return;
+    }
+    musicManager.playOnce('explore', 0.6);
+    // After the track plays (~94s), schedule the next one with a gap
+    const trackDur = musicManager.getDuration('explore') || 94;
+    _systemMusicTimer = setTimeout(() => {
+      _scheduleSystemMusic(15, 60);
+    }, trackDur * 1000);
+  }, delay);
+}
+
+function _cancelSystemMusic() {
+  if (_systemMusicTimer) { clearTimeout(_systemMusicTimer); _systemMusicTimer = null; }
+}
+
 // ── Nav Computer: open / close / dispatch (separated concerns) ──
 
 function _initNavComputer() {
@@ -3271,6 +3296,7 @@ function warpSwapSystem() {
   // Stop autopilot (don't restore camera — warp controls it)
   flythrough.stop();
   autoNav.stop();
+  _cancelSystemMusic(); // stop ambient music during warp
   // Cancel any stale deep sky linger timer from the previous system
   // (e.g., title screen auto-dismiss sets this during warp)
   _deepSkyLingerTimer = -1;
@@ -3421,6 +3447,9 @@ function warpRevealSystem() {
   }
 
   console.log('Warp: coasting into new system');
+
+  // Schedule ambient system music (15-30s after arriving)
+  _scheduleSystemMusic(15, 30);
 }
 
 /**
