@@ -72,9 +72,10 @@ export class AutopilotNavSequence {
       return;
     }
 
-    console.log(`[NAV-SEQ] Style: ${style} | Destination: ${dest.label} (${dest.x.toFixed(1)}, ${dest.z.toFixed(1)})`);
+    console.log(`[NAV-SEQ] Style: ${style} | Destination: ${dest.label} (${dest.x.toFixed(1)}, ${dest.z.toFixed(1)}) | needsFar=${needsFarDest}`);
 
     this._openNav();
+    console.log(`[NAV-SEQ] Nav opened, levelIndex=${this._nav._levelIndex}`);
 
     this._delay(300, () => {
       if (this._aborted) return;
@@ -303,6 +304,8 @@ export class AutopilotNavSequence {
       this._nav._hoveredTile = null;
       this._nav._autoCursor = null;
 
+      console.log(`[NAV-SEQ] Drilling to column: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) regionSize=${regionSize.toFixed(4)} currentLevel=${this._nav._levelIndex}`);
+
       this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
       this._nav._localCubeSize = Math.max(0.003, regionSize * 0.5);
       this._nav._localRadius = 0.0015;
@@ -328,6 +331,7 @@ export class AutopilotNavSequence {
       );
       if (this._soundEngine) this._soundEngine.play('navDrill3');
 
+      console.log(`[NAV-SEQ] Drill anim started → level 3, waiting for stars...`);
       // Wait for stars to load, then select
       this._delay(2000 + Math.random() * 500, () => this._selectStar(dest));
     });
@@ -335,6 +339,7 @@ export class AutopilotNavSequence {
 
   /** Set up column view directly (no animation from 2D level) */
   _setupColumnView(dest) {
+    console.log(`[NAV-SEQ] _setupColumnView: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) prevLevel=${this._nav._levelIndex}`);
     this._nav._levelIndex = 3;
     this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
     this._nav._localCubeSize = 0.01;
@@ -362,13 +367,25 @@ export class AutopilotNavSequence {
     if (this._aborted) return;
 
     const stars = this._nav._localStars;
-    if ((!stars || stars.length === 0) && retries < 10) {
+    const levelIdx = this._nav._levelIndex;
+    const hasAnim = !!this._nav._anim;
+
+    console.log(`[NAV-SEQ] _selectStar retry=${retries} stars=${stars?.length || 0} level=${levelIdx} anim=${hasAnim} dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) localCenter=(${this._nav._localCenter?.x?.toFixed(2)},${this._nav._localCenter?.z?.toFixed(2)}) viewStack[2]=${JSON.stringify(this._nav._viewStack?.[2]?.center)}`);
+
+    // If still animating or not on column level, wait
+    if ((hasAnim || levelIdx !== 3) && retries < 20) {
+      this._delay(300, () => this._selectStar(dest, retries + 1));
+      return;
+    }
+
+    if ((!stars || stars.length === 0) && retries < 20) {
       this._delay(300, () => this._selectStar(dest, retries + 1));
       return;
     }
 
     if (!stars || stars.length === 0) {
-      console.warn('[NAV-SEQ] No stars loaded after retries, aborting');
+      console.warn(`[NAV-SEQ] No stars loaded after ${retries} retries — level=${levelIdx} anim=${hasAnim}. Aborting.`);
+      this._nav._autoCursor = null;
       this._finish();
       return;
     }

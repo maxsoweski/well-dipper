@@ -171,6 +171,7 @@ export class FlythroughCamera {
     // to prevent visible bounce when approach distance ≠ orbit distance.
     // The approach already moved us to the right distance smoothly.
     this._entryDist = options.slowOrbit ? orbitDistance : actualDist;
+    console.log(`[ORBIT] begin: actualDist=${actualDist.toFixed(2)} orbitDist=${orbitDistance.toFixed(2)} _entryDist=${this._entryDist.toFixed(2)} slowOrbit=${!!options.slowOrbit} bodyRadius=${bodyRadius.toFixed(2)}`);
     this.orbitPitch = this._entryPitch;
 
     this._randomizeOrbit();
@@ -277,6 +278,7 @@ export class FlythroughCamera {
     this._approachStartDist = this.camera.position.distanceTo(bodyRef.position);
     // Approach closes to the orbit distance so orbit starts seamlessly (no pulse)
     this._approachTargetDist = Math.max(orbitDist, 0.02);
+    console.log(`[APPROACH] begin: startDist=${this._approachStartDist.toFixed(2)} targetDist=${this._approachTargetDist.toFixed(2)} orbitDist=${orbitDist.toFixed(2)} bodyRadius=${bodyRadius.toFixed(2)}`);
   }
 
   /**
@@ -663,6 +665,8 @@ export class FlythroughCamera {
       this.camera.lookAt(bodyPos);
     } else {
       // Approach complete — transition to slow orbit
+      const finalDist = this.camera.position.distanceTo(bodyPos);
+      console.log(`[APPROACH] complete → orbit: finalDist=${finalDist.toFixed(2)} orbitDist=${this._approachOrbitDist.toFixed(2)} bodyRadius=${this._approachBodyRadius.toFixed(2)}`);
       this.beginOrbit(body, this._approachOrbitDist, this._approachBodyRadius,
         this._approachOrbitDuration, { slowOrbit: true });
       return { orbitComplete: false, travelComplete: false, targetingReady: false };
