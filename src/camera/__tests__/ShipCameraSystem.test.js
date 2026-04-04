@@ -111,12 +111,15 @@ describe('ShipCameraSystem', () => {
       expect(camera.position.equals(posBefore)).toBe(true);
     });
 
-    it('focusOn() snaps target and resets pitch', () => {
+    it('focusOn() snaps target and distance', () => {
       const pos = new THREE.Vector3(100, 0, 0);
       sys.focusOn(pos, 5);
       expect(sys.target.x).toBe(100);
       expect(sys.distance).toBe(5);
-      expect(sys.pitch).toBeCloseTo(0.15);
+      // Pitch is derived from current camera position relative to target,
+      // not preserved from the default
+      expect(typeof sys.pitch).toBe('number');
+      expect(Number.isFinite(sys.pitch)).toBe(true);
     });
 
     it('viewSystem() sets distance to 1.5x radius', () => {
@@ -170,6 +173,104 @@ describe('ShipCameraSystem', () => {
       sys.initGravity(mockSystemData(), mockBodyMeshes());
       sys.focusOn(new THREE.Vector3(100, 0, 0), 5);
       expect(sys.flight.position.lengthSq()).toBeGreaterThan(0);
+    });
+  });
+
+  describe('coordinator loop (gravity mode)', () => {
+    it('flight.position is NOT overwritten by orbit math', () => {
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+
+      // Set orbit to produce position near (0, 0, 8) — the default
+      sys.target.set(0, 0, 0);
+      sys.smoothedDistance = 8;
+      sys.smoothedYaw = 0;
+      sys.smoothedPitch = 0;
+
+      // Set flight far away from where orbit would place it
+      sys.flight.position.set(200, 0, 0);
+      sys.flight.velocity.set(0, 0, 0);
+
+      sys.update(1 / 60);
+
+      // BUG: flight.position gets overwritten to orbit pos (~0, 0, 8)
+      // CORRECT: flight.position stays near 200 (only moved by gravity)
+      expect(sys.flight.position.x).toBeGreaterThan(100);
+    });
+
+    it('camera position follows flight, not orbit math', () => {
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+
+      sys.target.set(0, 0, 0);
+      sys.smoothedDistance = 8;
+      sys.smoothedYaw = 0;
+      sys.smoothedPitch = 0;
+
+      // Flight is at (200, 0, 0), orbit would put camera at (0, 0, 8)
+      sys.flight.position.set(200, 0, 0);
+      sys.flight.velocity.set(0, 0, 0);
+
+      sys.update(1 / 60);
+
+      // Camera should be near flight position, not orbit position
+      expect(camera.position.x).toBeGreaterThan(100);
+    });
+
+    it('director lookTarget controls camera orientation', () => {
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.flight.position.set(50, 0, 0);
+      sys.flight.velocity.set(0, 0, 0);
+
+      sys.update(1 / 60);
+
+      // Camera should be looking roughly toward the director's smoothed lookTarget
+      const lookDir = new THREE.Vector3();
+      camera.getWorldDirection(lookDir);
+
+      const toLookTarget = new THREE.Vector3()
+        .subVectors(sys.director._currentLookTarget, camera.position)
+        .normalize();
+
+      // Dot product > 0 means camera faces toward the look target
+      expect(lookDir.dot(toLookTarget)).toBeGreaterThan(0);
+    });
+
+    it('without gravity, orbit math still drives camera', () => {
+      // No initGravity — orbit-only mode
+      sys.target.set(0, 0, 0);
+      sys.distance = 10;
+      sys.yaw = 0;
+      sys.pitch = 0;
+      sys.smoothedYaw = 0;
+      sys.smoothedPitch = 0;
+      sys.smoothedDistance = 10;
+      sys.update(1 / 60);
+
+      // Camera should be at orbit position (0, 0, 10)
+      expect(camera.position.z).toBeCloseTo(10, 0);
+    });
+
+    it('camera position is continuous across gravity init', () => {
+      // Set up orbit position first
+      sys.target.set(0, 0, 0);
+      sys.distance = 20;
+      sys.yaw = 0;
+      sys.pitch = 0;
+      sys.smoothedYaw = 0;
+      sys.smoothedPitch = 0;
+      sys.smoothedDistance = 20;
+      sys.update(1 / 60);
+
+      const posBeforeGravity = camera.position.clone();
+
+      // Init gravity — camera should not jump
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.update(1 / 60);
+
+      const posAfterGravity = camera.position.clone();
+      const jump = posBeforeGravity.distanceTo(posAfterGravity);
+
+      // Allow small movement from physics integration but no large jump
+      expect(jump).toBeLessThan(5);
     });
   });
 

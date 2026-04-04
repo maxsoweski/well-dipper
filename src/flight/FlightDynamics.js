@@ -95,6 +95,11 @@ export class FlightDynamics {
       return;
     }
 
+    // 0. Run approach auto-thrust (sets thrustVector before it's consumed below)
+    if (this.state === FlightState.APPROACH) {
+      this._updateApproach(clampedDt);
+    }
+
     // 1. Query gravity at current position
     const gravResult = this.gravityField.accelerationAt(this.position);
     this.lastGravResult = gravResult;

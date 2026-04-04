@@ -28,6 +28,157 @@ import { CinematicDirector, CompositionState } from './CinematicDirector.js';
 // Reusable scratch vectors
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _prevQuat = new THREE.Quaternion();
+
+// ═══════════════════════════════════════════════════════════════════
+//  FRAME DIAGNOSTICS — ring buffer for detecting jumps, NaN, divergence
+// ═══════════════════════════════════════════════════════════════════
+
+const DIAG_BUFFER_SIZE = 120; // 2 seconds at 60fps
+
+class FrameDiagnostics {
+  constructor() {
+    this.frames = new Array(DIAG_BUFFER_SIZE);
+    this.index = 0;
+    this.count = 0;
+    this.anomalies = [];   // recent anomalies (capped at 50)
+    this._prevCamPos = new THREE.Vector3();
+    this._prevCamQuat = new THREE.Quaternion();
+    this._initialized = false;
+
+    // Thresholds
+    this.jumpThreshold = 100;     // scene units per frame — anything above is a teleport
+    this.rotSnapThreshold = 0.95; // quat dot below this = orientation snap
+    this.divergeThreshold = 50;   // flight vs camera position divergence
+  }
+
+  record(camera, flight, director, gravityMode, deltaTime, bypassed) {
+    const camPos = camera.position;
+    const frame = {
+      t: performance.now(),
+      dt: deltaTime,
+      mode: bypassed ? 'BYPASSED' : (gravityMode ? 'GRAVITY' : 'ORBIT'),
+      camX: camPos.x, camY: camPos.y, camZ: camPos.z,
+      posDelta: 0,
+      quatDot: 1,
+      flightState: flight ? flight.state : null,
+      flightDiverge: 0,
+      hasNaN: false,
+      anomaly: null,
+    };
+
+    // NaN check
+    if (isNaN(camPos.x) || isNaN(camPos.y) || isNaN(camPos.z)) {
+      frame.hasNaN = true;
+      frame.anomaly = 'NaN_POSITION';
+    }
+
+    if (this._initialized) {
+      // Position delta
+      frame.posDelta = Math.sqrt(
+        (camPos.x - this._prevCamPos.x) ** 2 +
+        (camPos.y - this._prevCamPos.y) ** 2 +
+        (camPos.z - this._prevCamPos.z) ** 2
+      );
+
+      // Orientation continuity (quaternion dot product)
+      frame.quatDot = Math.abs(camera.quaternion.dot(this._prevCamQuat));
+
+      // Flight/camera divergence (gravity mode only)
+      // Measures unexpected divergence: cam should be at flight.pos + director.offset
+      if (gravityMode && flight && !bypassed) {
+        const expectedX = flight.position.x + (director ? director._currentOffset.x : 0);
+        const expectedY = flight.position.y + (director ? director._currentOffset.y : 0);
+        const expectedZ = flight.position.z + (director ? director._currentOffset.z : 0);
+        frame.flightDiverge = Math.sqrt(
+          (camPos.x - expectedX) ** 2 +
+          (camPos.y - expectedY) ** 2 +
+          (camPos.z - expectedZ) ** 2
+        );
+      }
+
+      // Anomaly detection
+      if (!frame.anomaly) {
+        if (frame.posDelta > this.jumpThreshold && frame.mode !== 'BYPASSED') {
+          frame.anomaly = 'JUMP';
+        } else if (frame.quatDot < this.rotSnapThreshold && frame.mode !== 'BYPASSED') {
+          frame.anomaly = 'ROTATION_SNAP';
+        } else if (frame.flightDiverge > this.divergeThreshold) {
+          frame.anomaly = 'FLIGHT_DIVERGE';
+        }
+      }
+    }
+
+    // Store anomaly
+    if (frame.anomaly) {
+      this.anomalies.push({ ...frame, frameIndex: this.count });
+      if (this.anomalies.length > 50) this.anomalies.shift();
+    }
+
+    // Save to ring buffer
+    this.frames[this.index] = frame;
+    this.index = (this.index + 1) % DIAG_BUFFER_SIZE;
+    this.count++;
+
+    // Update previous state
+    this._prevCamPos.copy(camPos);
+    this._prevCamQuat.copy(camera.quaternion);
+    this._initialized = true;
+  }
+
+  /** Get summary for external query (e.g., from Playwright evaluate) */
+  getSummary() {
+    const filled = Math.min(this.count, DIAG_BUFFER_SIZE);
+    if (filled === 0) return { frames: 0, ok: true };
+
+    let maxPosDelta = 0;
+    let minQuatDot = 1;
+    let maxDiverge = 0;
+    let nanCount = 0;
+    let jumpCount = 0;
+    let snapCount = 0;
+    let divergeCount = 0;
+    let avgPosDelta = 0;
+
+    for (let i = 0; i < filled; i++) {
+      const f = this.frames[i];
+      if (!f) continue;
+      if (f.posDelta > maxPosDelta) maxPosDelta = f.posDelta;
+      if (f.quatDot < minQuatDot) minQuatDot = f.quatDot;
+      if (f.flightDiverge > maxDiverge) maxDiverge = f.flightDiverge;
+      if (f.hasNaN) nanCount++;
+      if (f.anomaly === 'JUMP') jumpCount++;
+      if (f.anomaly === 'ROTATION_SNAP') snapCount++;
+      if (f.anomaly === 'FLIGHT_DIVERGE') divergeCount++;
+      avgPosDelta += f.posDelta;
+    }
+    avgPosDelta /= filled;
+
+    return {
+      frames: filled,
+      totalRecorded: this.count,
+      maxPosDelta: +maxPosDelta.toFixed(4),
+      avgPosDelta: +avgPosDelta.toFixed(4),
+      minQuatDot: +minQuatDot.toFixed(4),
+      maxFlightDiverge: +maxDiverge.toFixed(4),
+      nanCount,
+      jumpCount,
+      snapCount,
+      divergeCount,
+      anomalies: this.anomalies.slice(-10), // last 10
+      ok: nanCount === 0 && jumpCount === 0 && snapCount === 0 && divergeCount === 0,
+      currentMode: filled > 0 ? this.frames[(this.index - 1 + DIAG_BUFFER_SIZE) % DIAG_BUFFER_SIZE]?.mode : null,
+    };
+  }
+
+  /** Reset all data */
+  reset() {
+    this.index = 0;
+    this.count = 0;
+    this.anomalies = [];
+    this._initialized = false;
+  }
+}
 
 export class ShipCameraSystem {
   constructor(camera, canvas) {
@@ -126,6 +277,9 @@ export class ShipCameraSystem {
     // ── Whether gravity-driven mode is active ──
     this._gravityMode = false;
 
+    // ── Frame diagnostics ──
+    this._diagnostics = new FrameDiagnostics();
+
     this._setupListeners();
     this._applyOrbit();
   }
@@ -155,6 +309,13 @@ export class ShipCameraSystem {
       // Sync flight position with current camera position
       this.flight.position.copy(this.camera.position);
       this.flight.velocity.set(0, 0, 0);
+
+      // Run one zero-dt physics tick to populate lastGravResult (needed
+      // by circularize), then auto-circularize so the ship starts in a
+      // stable orbit instead of falling into the star from zero velocity.
+      this.gravityField.tick();
+      this.flight.update(0); // dt=0 → no movement, just queries gravity
+      this.flight.circularize();
     } catch (e) {
       console.warn('ShipCameraSystem: gravity init failed, using orbit mode', e);
       this._gravityMode = false;
@@ -385,13 +546,38 @@ export class ShipCameraSystem {
     this._flightBoosting = boost;
     this._flightActive = hasInput || this._flightVelocity.lengthSq() > 0.0001;
 
-    if (hasInput && !hadInput && !this.isFreeLooking) {
+    // In gravity mode, route input to FlightDynamics.thrustVector (physics engine)
+    // instead of the orbit-mode _flightVelocity system
+    if (this._gravityMode && this.flight && hasInput) {
+      const boostMult = boost ? this._flightBoostMult : 1;
+
+      // Convert camera-relative input to world-space thrust direction
+      const fwd = _v1.set(0, 0, 0);
+      this.camera.getWorldDirection(fwd);
+      fwd.y = 0;
+      fwd.normalize();
+      const rt = _v2.crossVectors(fwd, this.camera.up).normalize();
+
+      // Build thrust: forward component + right component
+      this.flight.thrustVector.set(0, 0, 0);
+      this.flight.thrustVector.addScaledVector(fwd, -this._flightInput.z); // forward
+      this.flight.thrustVector.addScaledVector(rt, this._flightInput.x);   // right
+      this.flight.thrustVector.normalize().multiplyScalar(
+        this.flight.thrustForce * boostMult
+      );
+    }
+
+    // In gravity mode, director controls camera orientation — skip free-look
+    if (!this._gravityMode && hasInput && !hadInput && !this.isFreeLooking) {
       this._flightFreeLook = true;
       this.enterFreeLook();
     }
   }
 
   get isFlying() {
+    if (this._gravityMode && this.flight) {
+      return this.flight.velocity.lengthSq() > 0.0001;
+    }
     return this._flightVelocity.lengthSq() > 0.0001;
   }
 
@@ -442,7 +628,13 @@ export class ShipCameraSystem {
   // ═══════════════════════════════════════════════════════════════════
 
   update(deltaTime) {
-    if (this.bypassed) return;
+    if (this.bypassed) {
+      this._diagnostics.record(
+        this.camera, this.flight, this.director,
+        this._gravityMode, deltaTime, true
+      );
+      return;
+    }
 
     // Tick gravity field (update body positions from meshes)
     if (this._gravityMode && this.gravityField) {
@@ -505,8 +697,8 @@ export class ShipCameraSystem {
     const logTarget = Math.log(this.distance);
     this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
 
-    // WASD free-flight physics
-    if (this._flightEnabled && (this._flightActive || this._flightVelocity.lengthSq() > 0.0001)) {
+    // WASD free-flight physics (orbit mode only — gravity mode routes through FlightDynamics)
+    if (!this._gravityMode && this._flightEnabled && (this._flightActive || this._flightVelocity.lengthSq() > 0.0001)) {
       const distScale = Math.max(0.1, this.smoothedDistance * 0.5);
       const boostMult = this._flightBoosting ? this._flightBoostMult : 1;
       const thrust = this._flightThrust * distScale * boostMult;
@@ -548,18 +740,13 @@ export class ShipCameraSystem {
       }
     }
 
-    // Apply orbit positioning
-    this._applyOrbit();
-
-    // Update FlightDynamics + CinematicDirector if gravity mode is active
     if (this._gravityMode && this.flight && this.director) {
-      // Sync flight position from camera (orbit mode drives camera position)
-      this.flight.position.copy(this.camera.position);
+      // ── Gravity mode: flight dynamics drive camera ──
 
       // Update flight dynamics (gravity integration, state detection)
       this.flight.update(deltaTime);
 
-      // Update cinematic director
+      // Update cinematic director (framing, look target)
       this.director.update(
         deltaTime,
         this.flight.position,
@@ -571,7 +758,23 @@ export class ShipCameraSystem {
           lastGravResult: this.flight.lastGravResult,
         }
       );
+
+      // Camera position = flight position + director offset
+      this.camera.position.copy(this.flight.position);
+      this.camera.position.add(this.director._currentOffset);
+
+      // Camera orientation = look at director's smoothed target
+      this.camera.lookAt(this.director._currentLookTarget);
+    } else {
+      // ── Orbit mode: legacy orbit math drives camera ──
+      this._applyOrbit();
     }
+
+    // Record post-update diagnostics
+    this._diagnostics.record(
+      this.camera, this.flight, this.director,
+      this._gravityMode, deltaTime, false
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════
