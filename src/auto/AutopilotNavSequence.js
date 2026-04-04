@@ -15,33 +15,24 @@
  * - Minimum distance from current position for visual variety
  */
 
-// Interesting galactic regions to visit (kpc coordinates)
-// Covers different arms, core, rim, and above/below the plane
-const DESTINATIONS = [
-  // Sagittarius Arm (inner)
-  { x: 5.5, z: 1.5, label: 'Sagittarius Arm' },
-  { x: 6.0, z: -2.0, label: 'Sagittarius Arm (far)' },
-  // Perseus Arm (outer)
-  { x: 10.5, z: 1.0, label: 'Perseus Arm' },
-  { x: 11.0, z: -2.5, label: 'Perseus Arm (far)' },
-  // Scutum-Centaurus Arm
-  { x: 4.0, z: 3.0, label: 'Scutum-Centaurus Arm' },
-  { x: 3.5, z: -1.0, label: 'Scutum-Centaurus Arm (near)' },
-  // Norma Arm (inner)
-  { x: 3.0, z: 0.5, label: 'Norma Arm' },
-  // Outer Arm
-  { x: 13.0, z: 0.0, label: 'Outer Arm' },
-  { x: 12.0, z: 3.0, label: 'Outer Arm (north)' },
-  // Near the galactic core
-  { x: 1.5, z: 0.5, label: 'Near Core' },
-  { x: 2.0, z: -0.5, label: 'Inner Galaxy' },
-  // Local neighborhood variations
-  { x: 8.5, z: 0.5, label: 'Local Spur' },
-  { x: 7.5, z: -0.5, label: 'Orion Arm (inward)' },
-  { x: 9.0, z: -1.5, label: 'Orion Arm (outward)' },
-  // Above/below the plane
-  { x: 8.0, z: 0.0, y: 0.3, label: 'Above the Disk' },
-  { x: 7.0, z: 1.0, y: -0.2, label: 'Below the Disk' },
+/**
+ * Dynamic destination picker — uses the GalacticMap's spiral arm geometry
+ * to sample real locations along arms, in the core, and in the outskirts.
+ * Each call produces a fresh destination, avoiding recent visits.
+ *
+ * Strategy categories (rotated through for maximum diversity):
+ *  1. Random point on a named spiral arm (6 arms)
+ *  2. Near the galactic core (R < 2 kpc)
+ *  3. Galactic rim (R = 12-14 kpc)
+ *  4. Above or below the disk plane
+ *  5. Opposite side of the galaxy from current position
+ */
+const STRATEGY_NAMES = [
+  'arm', 'arm', 'arm',  // arms get 3 slots (6 arms, most of the galaxy)
+  'core',               // dense inner galaxy
+  'rim',                // sparse outer edge
+  'vertical',           // above/below the plane
+  'opposite',           // far side from player
 ];
 
 export class AutopilotNavSequence {
@@ -68,7 +59,9 @@ export class AutopilotNavSequence {
     this._active = false;
     this._aborted = false;
     this._timers = [];
-    this._visitedIndex = -1; // track which destination was last used
+    this._recentDests = [];    // last 5 destinations (avoid repeats)
+    this._strategyIndex = -1;  // rotates through STRATEGY_NAMES
+    this._armIndex = -1;       // rotates through spiral arms
   }
 
   get isActive() { return this._active; }
@@ -304,26 +297,122 @@ export class AutopilotNavSequence {
   _pickDestination() {
     const px = this._playerPos.x || 8;
     const pz = this._playerPos.z || 0;
+    const py = this._playerPos.y || 0;
 
-    // Filter out destinations too close to current position (< 2 kpc)
-    const candidates = DESTINATIONS.filter(d => {
-      const dx = d.x - px;
-      const dz = d.z - pz;
-      return Math.sqrt(dx * dx + dz * dz) > 2.0;
-    });
+    // Rotate through strategies for diversity
+    this._strategyIndex = ((this._strategyIndex ?? -1) + 1) % STRATEGY_NAMES.length;
+    const strategy = STRATEGY_NAMES[this._strategyIndex];
 
-    if (candidates.length === 0) return DESTINATIONS[0]; // fallback
-
-    // Pick randomly, but avoid repeating the last destination
-    let pick;
+    let dest = null;
     let attempts = 0;
-    do {
-      pick = candidates[Math.floor(Math.random() * candidates.length)];
-      attempts++;
-    } while (pick === DESTINATIONS[this._visitedIndex] && attempts < 5 && candidates.length > 1);
 
-    this._visitedIndex = DESTINATIONS.indexOf(pick);
-    return pick;
+    while (!dest && attempts < 10) {
+      attempts++;
+      const candidate = this._generateCandidate(strategy, px, pz, py);
+      if (!candidate) continue;
+
+      // Must be > 2 kpc from current position
+      const dx = candidate.x - px;
+      const dz = candidate.z - pz;
+      if (Math.sqrt(dx * dx + dz * dz) < 2.0) continue;
+
+      // Must be within galaxy bounds (R < 15 kpc)
+      const R = Math.sqrt(candidate.x * candidate.x + candidate.z * candidate.z);
+      if (R > 14.5 || R < 0.3) continue;
+
+      // Check it's not too close to a recent destination
+      const tooClose = this._recentDests.some(rd => {
+        const ddx = rd.x - candidate.x;
+        const ddz = rd.z - candidate.z;
+        return Math.sqrt(ddx * ddx + ddz * ddz) < 3.0;
+      });
+      if (tooClose && attempts < 8) continue; // relax on later attempts
+
+      dest = candidate;
+    }
+
+    if (!dest) {
+      // Fallback: opposite side of galaxy from player
+      const angle = Math.atan2(pz, px) + Math.PI;
+      const R = 6 + Math.random() * 4;
+      dest = { x: R * Math.cos(angle), z: R * Math.sin(angle), y: 0, label: 'Far Side' };
+    }
+
+    // Track recent destinations (keep last 5)
+    this._recentDests.push({ x: dest.x, z: dest.z });
+    if (this._recentDests.length > 5) this._recentDests.shift();
+
+    return dest;
+  }
+
+  _generateCandidate(strategy, px, pz, py) {
+    const gm = this._gm;
+    if (!gm) return this._fallbackCandidate(px, pz);
+
+    switch (strategy) {
+      case 'arm': {
+        // Pick a random spiral arm and sample a point along it
+        const arms = gm.arms || [];
+        if (arms.length === 0) return this._fallbackCandidate(px, pz);
+
+        // Rotate through arms using a sub-counter
+        this._armIndex = ((this._armIndex ?? -1) + 1) % arms.length;
+        const arm = arms[this._armIndex];
+
+        // Pick a random distance along the arm (R = 2-13 kpc)
+        const R = 2 + Math.random() * 11;
+        // Logarithmic spiral: theta = k * ln(R/R0) + offset
+        const k = 1 / Math.tan(0.22); // ~12.5° pitch angle
+        const theta = k * Math.log(R / 4.0) + arm.offset;
+        // Add scatter perpendicular to arm (±1 kpc)
+        const scatter = (Math.random() - 0.5) * 2.0;
+        const x = R * Math.cos(theta) + scatter * Math.sin(theta);
+        const z = R * Math.sin(theta) - scatter * Math.cos(theta);
+
+        return { x, z, y: 0, label: arm.name };
+      }
+
+      case 'core': {
+        // Near the galactic center (R = 0.5-2.5 kpc)
+        const angle = Math.random() * Math.PI * 2;
+        const R = 0.5 + Math.random() * 2.0;
+        return { x: R * Math.cos(angle), z: R * Math.sin(angle), y: 0, label: 'Galactic Core' };
+      }
+
+      case 'rim': {
+        // Outer edge of the galaxy (R = 12-14 kpc)
+        const angle = Math.random() * Math.PI * 2;
+        const R = 12 + Math.random() * 2;
+        return { x: R * Math.cos(angle), z: R * Math.sin(angle), y: 0, label: 'Galactic Rim' };
+      }
+
+      case 'vertical': {
+        // Above or below the galactic plane
+        const angle = Math.random() * Math.PI * 2;
+        const R = 4 + Math.random() * 6;
+        const y = (Math.random() > 0.5 ? 1 : -1) * (0.15 + Math.random() * 0.3);
+        const side = y > 0 ? 'Above' : 'Below';
+        return { x: R * Math.cos(angle), z: R * Math.sin(angle), y, label: `${side} the Disk` };
+      }
+
+      case 'opposite': {
+        // Opposite side of galaxy from current position
+        const angle = Math.atan2(pz, px) + Math.PI + (Math.random() - 0.5) * 0.8;
+        const currentR = Math.sqrt(px * px + pz * pz);
+        // Vary the radius so it's not always the same distance from center
+        const R = Math.max(2, Math.min(13, currentR + (Math.random() - 0.5) * 6));
+        return { x: R * Math.cos(angle), z: R * Math.sin(angle), y: 0, label: 'Far Side' };
+      }
+
+      default:
+        return this._fallbackCandidate(px, pz);
+    }
+  }
+
+  _fallbackCandidate(px, pz) {
+    const angle = Math.random() * Math.PI * 2;
+    const R = 3 + Math.random() * 8;
+    return { x: R * Math.cos(angle), z: R * Math.sin(angle), y: 0, label: 'Deep Space' };
   }
 
   // ── Utilities ──
