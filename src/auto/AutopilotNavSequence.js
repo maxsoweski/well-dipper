@@ -223,15 +223,19 @@ export class AutopilotNavSequence {
     if (this._aborted) return;
     const sector = this._sectorForDest(dest);
 
-    // Simulate hover on the target sector (shows blue highlight like a player mousing over)
+    // Simulate hover + cursor on the target sector
     const sectors = this._nav._sectors;
     if (sectors) {
       const match = sectors.getSectorAt?.({ x: dest.x, z: dest.z });
-      if (match) this._nav._hoveredTile = { sector: match };
+      if (match) {
+        this._nav._hoveredTile = { sector: match };
+        // Position cursor at sector center on canvas
+        this._setCursorAtGalactic(dest.x, dest.z);
+      }
     }
 
-    // Hover visible for 600ms, then drill
-    this._delay(600, () => {
+    // Hover + cursor visible for 800ms, then drill
+    this._delay(800, () => {
       if (this._aborted) return;
       this._nav._viewStack[1] = { center: { x: sector.cx, z: sector.cz }, size: sector.size };
       this._nav._startDrillAnim(
@@ -240,6 +244,7 @@ export class AutopilotNavSequence {
         1, 600
       );
       this._nav._hoveredTile = null;
+      this._nav._autoCursor = null;
       if (this._soundEngine) this._soundEngine.play('navDrill1');
 
       // Pause at sector level (1.5-2.5s)
@@ -259,8 +264,11 @@ export class AutopilotNavSequence {
     const row = Math.max(0, Math.min(gn - 1, Math.floor((dest.z - (parentCz - ext)) / tileSize)));
     this._nav._hoveredTile = { col, row };
 
-    // Hover visible for 500ms, then drill
-    this._delay(500, () => {
+    // Set cursor on the tile
+    this._setCursorAtTile(col, row, gn, parentCx, parentCz, parentSize);
+
+    // Hover + cursor visible for 700ms, then drill
+    this._delay(700, () => {
       if (this._aborted) return;
       this._nav._viewStack[2] = { center: { x: region.cx, z: region.cz }, size: region.size };
       this._nav._startDrillAnim(
@@ -269,6 +277,7 @@ export class AutopilotNavSequence {
         2, 500
       );
       this._nav._hoveredTile = null;
+      this._nav._autoCursor = null;
       if (this._soundEngine) this._soundEngine.play('navDrill2');
 
       // Pause at region (1.5-2s), then hover target tile and drill to column
@@ -279,18 +288,20 @@ export class AutopilotNavSequence {
   _hoverThenDrillColumn(dest, regionCx, regionCz, regionSize) {
     if (this._aborted) return;
 
-    // Simulate hover on the target tile in region view
+    // Simulate hover + cursor on the target tile in region view
     const gn = 16;
     const tileSize = regionSize / gn;
     const ext = regionSize / 2;
     const col = Math.max(0, Math.min(gn - 1, Math.floor((dest.x - (regionCx - ext)) / tileSize)));
     const row = Math.max(0, Math.min(gn - 1, Math.floor((dest.z - (regionCz - ext)) / tileSize)));
     this._nav._hoveredTile = { col, row };
+    this._setCursorAtTile(col, row, gn, regionCx, regionCz, regionSize);
 
-    // Hover visible for 500ms, then drill to column
-    this._delay(500, () => {
+    // Hover + cursor visible for 700ms, then drill to column
+    this._delay(700, () => {
       if (this._aborted) return;
       this._nav._hoveredTile = null;
+      this._nav._autoCursor = null;
 
       this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
       this._nav._localCubeSize = Math.max(0.003, regionSize * 0.5);
@@ -324,9 +335,6 @@ export class AutopilotNavSequence {
 
   /** Set up column view directly (no animation from 2D level) */
   _setupColumnView(dest) {
-    const px = this._playerPos.x || 8;
-    const pz = this._playerPos.z || 0;
-
     this._nav._levelIndex = 3;
     this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
     this._nav._localCubeSize = 0.01;
@@ -338,9 +346,14 @@ export class AutopilotNavSequence {
     this._nav._resetColumnLoad();
 
     // Set view state so the column renders properly
+    // _viewStack[2] must have center matching the column position
+    // (used by _ensureStarsLoaded for block center)
     this._nav._viewCenter = { x: dest.x, z: dest.z };
     this._nav._viewSize = 0.01;
-    this._nav._viewStack = [];
+    this._nav._viewStack = [
+      undefined, undefined,
+      { center: { x: dest.x, z: dest.z }, size: 0.01 },
+    ];
   }
 
   // ── Star selection ──
@@ -571,6 +584,40 @@ export class AutopilotNavSequence {
     const a = Math.random() * Math.PI * 2;
     const R = 3 + Math.random() * 8;
     return { x: R * Math.cos(a), z: R * Math.sin(a), y: 0, label: 'Deep Space' };
+  }
+
+  // ── Cursor positioning helpers ──
+
+  /** Set blinking cursor at a galactic position (for galaxy view) */
+  _setCursorAtGalactic(gx, gz) {
+    const canvas = this._nav._canvas;
+    if (!canvas) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    const drawH = h - 50; // tab bar height
+    const size = Math.min(w, drawH) * 0.85;
+    const ox = (w - size) / 2;
+    const oy = (drawH - size) / 2;
+    // Galaxy coords: -22 to +22 kpc mapped to canvas
+    const px = ox + ((gx + 22) / 44) * size;
+    const py = oy + ((-gz + 22) / 44) * size;
+    this._nav._autoCursor = { x: px, y: py };
+  }
+
+  /** Set blinking cursor at a tile position (for sector/region views) */
+  _setCursorAtTile(col, row, gridN, viewCx, viewCz, viewSize) {
+    const canvas = this._nav._canvas;
+    if (!canvas) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    const drawH = h - 50;
+    const size = Math.min(w, drawH) * 0.85;
+    const ox = (w - size) / 2;
+    const oy = (drawH - size) / 2;
+    const tileW = size / gridN;
+    const px = ox + (col + 0.5) * tileW;
+    const py = oy + (row + 0.5) * tileW;
+    this._nav._autoCursor = { x: px, y: py };
   }
 
   // ── Utilities ──

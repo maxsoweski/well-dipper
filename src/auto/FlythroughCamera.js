@@ -167,7 +167,10 @@ export class FlythroughCamera {
 
     this.orbitYaw = Math.atan2(dx, dz);
     this._entryPitch = Math.asin(Math.max(-1, Math.min(1, dy / actualDist)));
-    this._entryDist = actualDist;
+    // For slow orbits (approach→orbit transition), skip the entry distance blend
+    // to prevent visible bounce when approach distance ≠ orbit distance.
+    // The approach already moved us to the right distance smoothly.
+    this._entryDist = options.slowOrbit ? orbitDistance : actualDist;
     this.orbitPitch = this._entryPitch;
 
     this._randomizeOrbit();

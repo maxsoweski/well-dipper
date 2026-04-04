@@ -2754,6 +2754,34 @@ export class NavComputer {
     }
 
     ctx.textAlign = 'left';
+
+    // ── Autopilot cursor (blinking crosshair set by AutopilotNavSequence) ──
+    if (this._autoCursor) {
+      const blink = Math.sin(Date.now() * 0.006) > 0; // ~3Hz blink
+      if (blink) {
+        const { x: cx, y: cy } = this._autoCursor;
+        const s = 10; // crosshair arm length
+        ctx.strokeStyle = '#55ff88';
+        ctx.lineWidth = 2;
+        // Crosshair
+        ctx.beginPath();
+        ctx.moveTo(cx - s, cy); ctx.lineTo(cx - 3, cy);
+        ctx.moveTo(cx + 3, cy); ctx.lineTo(cx + s, cy);
+        ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy - 3);
+        ctx.moveTo(cx, cy + 3); ctx.lineTo(cx, cy + s);
+        ctx.stroke();
+        // Corner brackets
+        ctx.strokeStyle = '#55ff88';
+        ctx.lineWidth = 1.5;
+        const b = s + 4;
+        ctx.beginPath();
+        ctx.moveTo(cx - b, cy - b + 4); ctx.lineTo(cx - b, cy - b); ctx.lineTo(cx - b + 4, cy - b);
+        ctx.moveTo(cx + b - 4, cy - b); ctx.lineTo(cx + b, cy - b); ctx.lineTo(cx + b, cy - b + 4);
+        ctx.moveTo(cx + b, cy + b - 4); ctx.lineTo(cx + b, cy + b); ctx.lineTo(cx + b - 4, cy + b);
+        ctx.moveTo(cx - b + 4, cy + b); ctx.lineTo(cx - b, cy + b); ctx.lineTo(cx - b, cy + b - 4);
+        ctx.stroke();
+      }
+    }
   }
 
   // ════════════════════════════════════════════════════
