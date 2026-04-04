@@ -209,6 +209,8 @@ const flythrough = new FlythroughCamera(camera);
 window._flythrough = flythrough;
 window._autoNav = autoNav;
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
+window._startFlythrough = () => startFlythrough();
+window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1) });
 let idleTimer = 0;
 
 // ── Warp transition (system-to-system) ──
