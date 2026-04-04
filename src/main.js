@@ -205,6 +205,8 @@ const bodyInfo = new BodyInfo();
 // ── Autopilot (cinematic flythrough) ──
 const autoNav = new AutoNavigator();
 const flythrough = new FlythroughCamera(camera);
+window._flythrough = flythrough;
+window._autoNav = autoNav;
 let idleTimer = 0;
 
 // ── Warp transition (system-to-system) ──

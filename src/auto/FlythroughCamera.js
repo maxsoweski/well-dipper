@@ -634,17 +634,28 @@ export class FlythroughCamera {
     const closeDur = this._approachCloseDur;
     const totalDur = pauseDur + closeDur;
 
+    // All phases: maintain camera position relative to the body.
+    // The body orbits its parent, so the camera must follow or it drifts away.
+    _v1.subVectors(this.camera.position, bodyPos).normalize();
+    const currentDist = this.camera.position.distanceTo(bodyPos);
+
     if (this._approachElapsed < pauseDur) {
-      // Pause phase: hold position, look at body
+      // Pause phase: hold relative position, look at body
+      // Re-anchor camera at its current distance along the body direction
+      // (keeps camera at same angular position as body orbits)
+      this.camera.position.copy(bodyPos).addScaledVector(_v1, currentDist);
       this.camera.lookAt(bodyPos);
     } else if (this._approachElapsed < totalDur) {
       // Close phase: move radially toward body using smootherstep
       const closeT = (this._approachElapsed - pauseDur) / closeDur;
       const eased = this._ease(closeT);
+      // Use live distance on first close frame so we don't rely on stale _approachStartDist
+      if (closeT < deltaTime / closeDur + 0.001) {
+        this._approachStartDist = currentDist;
+      }
       const dist = this._approachStartDist + (this._approachTargetDist - this._approachStartDist) * eased;
 
       // Move camera along the current direction to body at the interpolated distance
-      _v1.subVectors(this.camera.position, bodyPos).normalize();
       this.camera.position.copy(bodyPos).addScaledVector(_v1, dist);
       this.camera.lookAt(bodyPos);
     } else {
