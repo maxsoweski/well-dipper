@@ -307,7 +307,9 @@ export class AutopilotNavSequence {
       console.log(`[NAV-SEQ] Drilling to column: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) regionSize=${regionSize.toFixed(4)} currentLevel=${this._nav._levelIndex}`);
 
       this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
-      this._nav._localCubeSize = Math.max(0.003, regionSize * 0.5);
+      // Use adaptive cube sizing like the real nav (targets ~150 stars)
+      // instead of raw regionSize which can be huge in dense areas
+      this._nav._localCubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || regionSize * 0.1);
       this._nav._localRadius = 0.0015;
       this._nav._localGridCell = 0.001;
       this._nav._localStars = [];
@@ -339,10 +341,11 @@ export class AutopilotNavSequence {
 
   /** Set up column view directly (no animation from 2D level) */
   _setupColumnView(dest) {
-    console.log(`[NAV-SEQ] _setupColumnView: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) prevLevel=${this._nav._levelIndex}`);
+    const cubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || 0.005);
+    console.log(`[NAV-SEQ] _setupColumnView: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) prevLevel=${this._nav._levelIndex} cubeSize=${cubeSize.toFixed(4)}`);
     this._nav._levelIndex = 3;
     this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
-    this._nav._localCubeSize = 0.01;
+    this._nav._localCubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || 0.005);
     this._nav._localRadius = 0.0015;
     this._nav._localGridCell = 0.001;
     this._nav._localRotX = 0.5;
