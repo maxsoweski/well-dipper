@@ -89,6 +89,8 @@ window._cam = camera;
 window._cc = cameraController;
 window._scene = scene;
 window._retroRenderer = retroRenderer;
+window._autoNav = autoNav;
+window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 
 // Toggle in-system objects (planets, moons, orbits, labels) for sky debugging.
 // Call from console: window._skyOnly()  or  window._skyOnly(false) to restore.
