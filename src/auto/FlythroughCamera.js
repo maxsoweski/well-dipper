@@ -167,10 +167,9 @@ export class FlythroughCamera {
 
     this.orbitYaw = Math.atan2(dx, dz);
     this._entryPitch = Math.asin(Math.max(-1, Math.min(1, dy / actualDist)));
-    // For slow orbits (approach→orbit transition), skip the entry distance blend
-    // to prevent visible bounce when approach distance ≠ orbit distance.
-    // The approach already moved us to the right distance smoothly.
-    this._entryDist = options.slowOrbit ? orbitDistance : actualDist;
+    // Always use actual camera distance as entry — the orbit blend will smoothly
+    // close the gap to orbitDistance over the 2s entry period.
+    this._entryDist = actualDist;
     console.log(`[ORBIT] begin: actualDist=${actualDist.toFixed(2)} orbitDist=${orbitDistance.toFixed(2)} _entryDist=${this._entryDist.toFixed(2)} slowOrbit=${!!options.slowOrbit} bodyRadius=${bodyRadius.toFixed(2)}`);
     this.orbitPitch = this._entryPitch;
 
