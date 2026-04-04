@@ -35,6 +35,7 @@ import { SeededRandom } from './generation/SeededRandom.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
+import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
@@ -230,18 +231,49 @@ const warpTarget = {
   lockBlinkFrames: 0, // frame counter for rapid lock-on blink
 };
 
-// When the tour visits every body, auto-select a visible star and warp toward it.
-// Brackets blink for 1.5s, then camera turns to face it, then warp fires.
+// When the tour visits every body, use the nav computer for a cinematic warp sequence.
+// The nav computer opens, drills down through galaxy levels, picks a star, and warps.
 autoNav.onTourComplete = () => {
-  autoSelectWarpTarget();
-  // Only begin warp if we actually found a target star
-  if (warpTarget.navStarData || warpTarget.featureData || warpTarget.galaxyData) {
-    setTimeout(() => {
-      beginWarpTurn();
-    }, 1500);
-  } else {
-    console.warn('[WARP] autoSelectWarpTarget found no star — skipping auto-warp');
+  // Initialize the nav sequence if needed
+  if (!_autopilotNavSequence) {
+    _autopilotNavSequence = new AutopilotNavSequence({
+      navComputer: _navComputer,
+      galacticMap: galacticMap,
+      openNavComputer: openNavComputer,
+      closeNavComputer: closeNavComputer,
+      soundEngine: soundEngine,
+      playerPos: playerGalacticPos,
+      onWarpReady: (star) => {
+        // Set warp target from the nav sequence's selected star
+        warpTarget.navStarData = star;
+        warpTarget.name = star.name;
+        warpTarget.destType = null;
+        warpTarget.featureData = null;
+        warpTarget.galaxyData = null;
+        // Close nav computer (dispatches the pending warp action)
+        closeNavComputer();
+      },
+      onComplete: () => {
+        // If the sequence aborted without finding a star, fall back to old behavior
+        if (!warpTarget.navStarData) {
+          autoSelectWarpTarget();
+          if (warpTarget.navStarData || warpTarget.featureData || warpTarget.galaxyData) {
+            setTimeout(() => beginWarpTurn(), 1500);
+          }
+        }
+      },
+    });
   }
+
+  // Ensure nav computer is initialized
+  if (!_navComputer) _initNavComputer();
+
+  // Update player position for destination picking
+  _autopilotNavSequence._playerPos = playerGalacticPos || { x: 8, y: 0, z: 0 };
+  _autopilotNavSequence._nav = _navComputer;
+
+  // Start the cinematic sequence
+  _autopilotNavSequence.start();
 };
 
 // Deep sky contemplation: camera stays fixed, timer triggers next warp.
@@ -407,6 +439,7 @@ let _manualBurnOrbiting = false; // true when camera is in post-burn slow orbit 
 let _autopilotEnabled = false;   // persists through warps (independent of autoNav.isActive)
 let _navComputer = null;
 let _navAnimFrame = null;
+let _autopilotNavSequence = null; // cinematic nav drill-down for autopilot warps
 
 // ── System ambient music (periodic, with gaps) ──
 let _systemMusicTimer = null;
@@ -3265,8 +3298,14 @@ function startFlythrough() {
  * Stop the flythrough and hand camera back to manual orbit control.
  */
 function stopFlythrough() {
-  if (!autoNav.isActive && !flythrough.active) return;
+  if (!autoNav.isActive && !flythrough.active && !(_autopilotNavSequence && _autopilotNavSequence.isActive)) return;
   soundEngine.play('autopilotOff');
+
+  // Abort any in-progress nav sequence
+  if (_autopilotNavSequence && _autopilotNavSequence.isActive) {
+    _autopilotNavSequence.abort();
+    if (_navComputerOpen) closeNavComputer();
+  }
 
   flythrough.stop();
   autoNav.stop();
