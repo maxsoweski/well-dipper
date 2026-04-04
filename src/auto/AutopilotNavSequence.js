@@ -142,8 +142,8 @@ export class AutopilotNavSequence {
     this._nav._resetColumnLoad();
     if (this._soundEngine) this._soundEngine.play('navDrill1');
 
-    // Pause at sector (1.5-2.5s)
-    this._delay(1500 + Math.random() * 1000, () => this._drillToRegion(dest, sector.cx, sector.cz, sector.size));
+    // Pause at sector (1.5-2.5s), then hover+drill to region
+    this._delay(1500 + Math.random() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
   }
 
   // ── Style: Region Browse (start at region level) ──
@@ -165,8 +165,8 @@ export class AutopilotNavSequence {
     this._nav._resetColumnLoad();
     if (this._soundEngine) this._soundEngine.play('navDrill2');
 
-    // Pause at region (1.5-2s)
-    this._delay(1500 + Math.random() * 500, () => this._drillToColumn(dest, region.cx, region.cz, region.size));
+    // Pause at region (1.5-2s), then hover+drill to column
+    this._delay(1500 + Math.random() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
   }
 
   // ── Style: Column Scroll (open column, scroll Y, pick star) ──
@@ -223,60 +223,103 @@ export class AutopilotNavSequence {
     if (this._aborted) return;
     const sector = this._sectorForDest(dest);
 
-    this._nav._viewStack[1] = { center: { x: sector.cx, z: sector.cz }, size: sector.size };
-    this._nav._startDrillAnim(
-      { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
-      { x: sector.cx, z: sector.cz }, sector.size,
-      1, 600
-    );
-    if (this._soundEngine) this._soundEngine.play('navDrill1');
+    // Simulate hover on the target sector (shows blue highlight like a player mousing over)
+    const sectors = this._nav._sectors;
+    if (sectors) {
+      const match = sectors.getSectorAt?.({ x: dest.x, z: dest.z });
+      if (match) this._nav._hoveredTile = { sector: match };
+    }
 
-    this._delay(2000 + Math.random() * 600, () => this._drillToRegion(dest, sector.cx, sector.cz, sector.size));
+    // Hover visible for 600ms, then drill
+    this._delay(600, () => {
+      if (this._aborted) return;
+      this._nav._viewStack[1] = { center: { x: sector.cx, z: sector.cz }, size: sector.size };
+      this._nav._startDrillAnim(
+        { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
+        { x: sector.cx, z: sector.cz }, sector.size,
+        1, 600
+      );
+      this._nav._hoveredTile = null;
+      if (this._soundEngine) this._soundEngine.play('navDrill1');
+
+      // Pause at sector level (1.5-2.5s)
+      this._delay(1500 + Math.random() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
+    });
   }
 
-  _drillToRegion(dest, parentCx, parentCz, parentSize) {
+  _hoverThenDrillRegion(dest, parentCx, parentCz, parentSize) {
     if (this._aborted) return;
     const region = this._regionForDest(dest, parentCx, parentCz, parentSize);
 
-    this._nav._viewStack[2] = { center: { x: region.cx, z: region.cz }, size: region.size };
-    this._nav._startDrillAnim(
-      { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
-      { x: region.cx, z: region.cz }, region.size,
-      2, 500
-    );
-    if (this._soundEngine) this._soundEngine.play('navDrill2');
+    // Simulate hover on the target tile (blue highlight)
+    const gn = 16;
+    const tileSize = parentSize / gn;
+    const ext = parentSize / 2;
+    const col = Math.max(0, Math.min(gn - 1, Math.floor((dest.x - (parentCx - ext)) / tileSize)));
+    const row = Math.max(0, Math.min(gn - 1, Math.floor((dest.z - (parentCz - ext)) / tileSize)));
+    this._nav._hoveredTile = { col, row };
 
-    this._delay(1800 + Math.random() * 500, () => this._drillToColumn(dest, region.cx, region.cz, region.size));
+    // Hover visible for 500ms, then drill
+    this._delay(500, () => {
+      if (this._aborted) return;
+      this._nav._viewStack[2] = { center: { x: region.cx, z: region.cz }, size: region.size };
+      this._nav._startDrillAnim(
+        { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
+        { x: region.cx, z: region.cz }, region.size,
+        2, 500
+      );
+      this._nav._hoveredTile = null;
+      if (this._soundEngine) this._soundEngine.play('navDrill2');
+
+      // Pause at region (1.5-2s), then hover target tile and drill to column
+      this._delay(1500 + Math.random() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
+    });
   }
 
-  _drillToColumn(dest, regionCx, regionCz, regionSize) {
+  _hoverThenDrillColumn(dest, regionCx, regionCz, regionSize) {
     if (this._aborted) return;
 
-    this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
-    this._nav._localCubeSize = Math.max(0.003, regionSize * 0.5);
-    this._nav._localRadius = 0.0015;
-    this._nav._localGridCell = 0.001;
-    this._nav._localStars = [];
-    this._nav._resetColumnLoad();
+    // Simulate hover on the target tile in region view
+    const gn = 16;
+    const tileSize = regionSize / gn;
+    const ext = regionSize / 2;
+    const col = Math.max(0, Math.min(gn - 1, Math.floor((dest.x - (regionCx - ext)) / tileSize)));
+    const row = Math.max(0, Math.min(gn - 1, Math.floor((dest.z - (regionCz - ext)) / tileSize)));
+    this._nav._hoveredTile = { col, row };
 
-    this._nav._localRotX = Math.PI / 2;
-    this._nav._localRotY = 0;
-    this._nav._tiltAnim = {
-      startTime: performance.now(),
-      duration: 600,
-      from: Math.PI / 2,
-      to: 0.5,
-    };
+    // Hover visible for 500ms, then drill to column
+    this._delay(500, () => {
+      if (this._aborted) return;
+      this._nav._hoveredTile = null;
 
-    const localSize = regionSize * 0.8;
-    this._nav._startDrillAnim(
-      { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
-      { x: dest.x, z: dest.z }, localSize,
-      3, 600
-    );
-    if (this._soundEngine) this._soundEngine.play('navDrill3');
+      this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
+      this._nav._localCubeSize = Math.max(0.003, regionSize * 0.5);
+      this._nav._localRadius = 0.0015;
+      this._nav._localGridCell = 0.001;
+      this._nav._localStars = [];
+      this._nav._resetColumnLoad();
 
-    this._delay(2000 + Math.random() * 500, () => this._selectStar(dest));
+      // Tilt from top-down to angled (like entering 3D view)
+      this._nav._localRotX = Math.PI / 2;
+      this._nav._localRotY = 0;
+      this._nav._tiltAnim = {
+        startTime: performance.now(),
+        duration: 600,
+        from: Math.PI / 2,
+        to: 0.5,
+      };
+
+      const localSize = regionSize * 0.8;
+      this._nav._startDrillAnim(
+        { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
+        { x: dest.x, z: dest.z }, localSize,
+        3, 600
+      );
+      if (this._soundEngine) this._soundEngine.play('navDrill3');
+
+      // Wait for stars to load, then select
+      this._delay(2000 + Math.random() * 500, () => this._selectStar(dest));
+    });
   }
 
   /** Set up column view directly (no animation from 2D level) */
