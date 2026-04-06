@@ -363,9 +363,10 @@ function startIntroSequence() {
   }, 8000);
 }
 
-// Splash screen click handler — hold D for debug skip
-document.getElementById('splash-screen')?.addEventListener('click', () => {
+// Splash screen click/touch handler — hold D for debug skip
+function _handleSplashDismiss(e) {
   if (!splashActive) return;
+  if (e.type === 'touchend') { e.preventDefault(); }
   if (_heldKeys.has('KeyD')) {
     // Debug skip: bypass intro + title, go straight to gameplay
     const splash = document.getElementById('splash-screen');
@@ -382,7 +383,9 @@ document.getElementById('splash-screen')?.addEventListener('click', () => {
     return;
   }
   startIntroSequence();
-});
+}
+document.getElementById('splash-screen')?.addEventListener('click', _handleSplashDismiss);
+document.getElementById('splash-screen')?.addEventListener('touchend', _handleSplashDismiss);
 
 // ── Title screen ──
 let titleScreenActive = false;
@@ -667,14 +670,20 @@ function _navRenderLoop() {
   _navAnimFrame = requestAnimationFrame(_navRenderLoop);
 }
 
-// Wire up nav computer close button + backdrop click
+// Wire up nav computer close button + backdrop click/touch
 {
   const navEl = document.getElementById('nav-computer-overlay');
   if (navEl) {
     const closeBtn = navEl.querySelector('.overlay-close');
-    if (closeBtn) closeBtn.addEventListener('click', toggleNavComputer);
+    if (closeBtn) {
+      closeBtn.addEventListener('click', toggleNavComputer);
+      closeBtn.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); toggleNavComputer(); });
+    }
     navEl.addEventListener('click', (e) => {
       if (e.target === navEl) toggleNavComputer();
+    });
+    navEl.addEventListener('touchend', (e) => {
+      if (e.target === navEl) { e.preventDefault(); toggleNavComputer(); }
     });
   }
 }
@@ -831,14 +840,17 @@ function applySettingChange(key, value) {
       populateSettingsUI();
     });
 
-    // Close button
-    settingsEl.querySelector('.overlay-close')?.addEventListener('click', () => {
-      toggleSettings();
-    });
+    // Close button (click + touch)
+    const settingsClose = settingsEl.querySelector('.overlay-close');
+    settingsClose?.addEventListener('click', () => { toggleSettings(); });
+    settingsClose?.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); toggleSettings(); });
 
     // Tap backdrop to close
     settingsEl.addEventListener('click', (e) => {
       if (e.target === settingsEl) toggleSettings();
+    });
+    settingsEl.addEventListener('touchend', (e) => {
+      if (e.target === settingsEl) { e.preventDefault(); toggleSettings(); }
     });
 
     // Update fullscreen checkbox when fullscreen state changes
@@ -853,13 +865,16 @@ function applySettingChange(key, value) {
 {
   const keybindsEl = document.getElementById('keybinds-overlay');
   if (keybindsEl) {
-    keybindsEl.querySelector('.overlay-close')?.addEventListener('click', () => {
-      toggleKeybinds();
-    });
+    const keybindsClose = keybindsEl.querySelector('.overlay-close');
+    keybindsClose?.addEventListener('click', () => { toggleKeybinds(); });
+    keybindsClose?.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); toggleKeybinds(); });
 
     // Tap backdrop to close
     keybindsEl.addEventListener('click', (e) => {
       if (e.target === keybindsEl) toggleKeybinds();
+    });
+    keybindsEl.addEventListener('touchend', (e) => {
+      if (e.target === keybindsEl) { e.preventDefault(); toggleKeybinds(); }
     });
   }
 }
@@ -965,11 +980,14 @@ function toggleSoundTest() {
 {
   const soundTestEl = document.getElementById('soundtest-overlay');
   if (soundTestEl) {
-    soundTestEl.querySelector('.overlay-close')?.addEventListener('click', () => {
-      toggleSoundTest();
-    });
+    const soundTestClose = soundTestEl.querySelector('.overlay-close');
+    soundTestClose?.addEventListener('click', () => { toggleSoundTest(); });
+    soundTestClose?.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); toggleSoundTest(); });
     soundTestEl.addEventListener('click', (e) => {
       if (e.target === soundTestEl) toggleSoundTest();
+    });
+    soundTestEl.addEventListener('touchend', (e) => {
+      if (e.target === soundTestEl) { e.preventDefault(); toggleSoundTest(); }
     });
   }
 }
@@ -992,15 +1010,18 @@ function togglePretextLab() {
   }
 }
 
-// Pretext Lab close button + backdrop
+// Pretext Lab close button + backdrop (click + touch)
 {
   const labEl = document.getElementById('pretext-lab-overlay');
   if (labEl) {
-    labEl.querySelector('.overlay-close')?.addEventListener('click', () => {
-      togglePretextLab();
-    });
+    const labClose = labEl.querySelector('.overlay-close');
+    labClose?.addEventListener('click', () => { togglePretextLab(); });
+    labClose?.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); togglePretextLab(); });
     labEl.addEventListener('click', (e) => {
       if (e.target === labEl) togglePretextLab();
+    });
+    labEl.addEventListener('touchend', (e) => {
+      if (e.target === labEl) { e.preventDefault(); togglePretextLab(); }
     });
   }
 }

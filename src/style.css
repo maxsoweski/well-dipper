@@ -44,7 +44,7 @@ html, body {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 95;
+  z-index: 700;
   height: 56px;
   display: flex;
   justify-content: center;
@@ -101,7 +101,7 @@ html, body {
   pointer-events: auto;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  z-index: 101;
+  z-index: 701;
   transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: 0 0 16px rgba(100, 180, 255, 0.08);
 }
@@ -122,7 +122,7 @@ html, body {
   position: fixed;
   bottom: 64px;
   right: 16px;
-  z-index: 100;
+  z-index: 700;
   pointer-events: none;
 }
 
@@ -1036,6 +1036,13 @@ html, body {
   top: -40px;
   right: 0;
   z-index: 10;
+}
+
+@media (pointer: coarse) {
+  .nav-computer-panel .overlay-close {
+    top: 8px;
+    right: 8px;
+  }
 }
 
 #nav-computer-canvas {
