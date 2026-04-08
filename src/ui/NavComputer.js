@@ -1792,8 +1792,8 @@ export class NavComputer {
       this._selectedNavStar = this._systemStar;
     }
     if (this._selectedBody && this._commitAction) {
-      // Draw COMMIT button
-      const btnText = isCurrent ? '[ COMMIT BURN ]' : '[ COMMIT WARP ]';
+      // Draw commit button — click commits the pending action
+      const btnText = isCurrent ? '[ BURN ]' : '[ WARP ]';
       const btnColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
       const btnW = 180, btnH = 28;
       const btnX = (w - btnW) / 2, btnY = drawH - 52;
@@ -2063,9 +2063,9 @@ export class NavComputer {
 
     // ── Hint ──
     ctx.font = '10px "DotGothic16", monospace';
-    // ── COMMIT button + hint ──
+    // ── BURN button + hint ──
     if (isCurrent && this._selectedBody && this._commitAction) {
-      const btnText = '[ COMMIT BURN ]';
+      const btnText = '[ BURN ]';
       const btnW = 180, btnH = 28;
       const btnX = (w - btnW) / 2, btnY = drawH - 52;
       ctx.fillStyle = 'rgba(0, 255, 128, 0.1)';

@@ -39,6 +39,7 @@ import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
+import { TargetingReticle } from './ui/TargetingReticle.js';
 import { SoundEngine } from './audio/SoundEngine.js';
 import { MusicManager } from './audio/MusicManager.js';
 import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
@@ -207,6 +208,41 @@ let systemMap = null;
 
 // ── Body Info HUD ──
 const bodyInfo = new BodyInfo();
+
+// ── Targeting Reticle (in-system body selection HUD) ──
+// Three visual states: none, tentative (hover), selected (committed).
+// Owns rendering only — main.js owns the state (_hoverTarget, _selectedTarget).
+const targetingReticle = new TargetingReticle(camera);
+// Debug hook — inspect reticle state from DevTools / Playwright
+window._reticle = targetingReticle;
+window._getReticleState = () => ({
+  enabled: targetingReticle.enabled,
+  hover: _hoverTarget ? { kind: _hoverTarget.kind, name: _hoverTarget.name } : null,
+  selected: _selectedTarget ? { kind: _selectedTarget.kind, name: _selectedTarget.name } : null,
+});
+window._hitTestBodies = (x, y, t) => hitTestBodies(x, y, t);
+
+// Reticle state — single source of truth for selection
+let _hoverTarget = null;     // body under the mouse (tentative reticle)
+let _selectedTarget = null;  // committed/selected body (selected reticle + commit button)
+
+/**
+ * Clear both reticle targets. Called on warp, system swap, deselect, etc.
+ */
+function _clearReticleTargets() {
+  _hoverTarget = null;
+  _selectedTarget = null;
+}
+
+/** True if two target descriptors refer to the same in-system body. */
+function _isSameTarget(a, b) {
+  if (!a || !b) return false;
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'star') return a.starIndex === b.starIndex;
+  if (a.kind === 'planet') return a.planetIndex === b.planetIndex;
+  if (a.kind === 'moon') return a.planetIndex === b.planetIndex && a.moonIndex === b.moonIndex;
+  return false;
+}
 
 // ── Autopilot (cinematic flythrough) ──
 const autoNav = new AutoNavigator();
@@ -620,6 +656,14 @@ function dispatchNavAction(action) {
       flythrough.stop();
       autoNav.stop();
     }
+    // Update the in-system reticle's selected target BEFORE calling
+    // focus*() — those trigger travel, and we want the reticle locked
+    // on the destination throughout the burn.
+    let burnTarget = null;
+    if (action.target === 'star') burnTarget = _makeTarget('star', { starIndex: action.starIndex || 0 });
+    else if (action.target === 'planet') burnTarget = _makeTarget('planet', { planetIndex: action.planetIndex });
+    else if (action.target === 'moon') burnTarget = _makeTarget('moon', { planetIndex: action.planetIndex, moonIndex: action.moonIndex });
+    if (burnTarget) _selectedTarget = burnTarget;
     // In-system transit — same focus functions as Tab/1-9 keys
     if (action.target === 'star') focusStar(action.starIndex || 0);
     else if (action.target === 'planet') focusPlanet(action.planetIndex);
@@ -1403,6 +1447,140 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
       if (d2 < bestDistSq) {
         bestDistSq = d2;
         best = { info, mesh };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Build a target descriptor for a star/planet/moon in the current system.
+ * Returns the same shape the TargetingReticle expects, with everything
+ * needed for display + selection dispatch.
+ */
+function _makeTarget(kind, indices) {
+  if (!system) return null;
+  if (kind === 'star') {
+    const starIdx = indices.starIndex || 0;
+    const starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
+    if (!starObj) return null;
+    const name = system.names
+      ? (starIdx === 1 ? system.names.star2 : system.names.star)
+      : null;
+    return {
+      kind: 'star',
+      starIndex: starIdx,
+      mesh: starObj.mesh,
+      radius: starObj.data.radius,
+      name: name || 'Star',
+      type: `${starObj.data.type || 'G'}-class Star`,
+    };
+  }
+  if (kind === 'planet') {
+    const pIdx = indices.planetIndex;
+    const entry = system.planets?.[pIdx];
+    if (!entry) return null;
+    return {
+      kind: 'planet',
+      planetIndex: pIdx,
+      mesh: entry.planet.mesh,
+      radius: entry.planet.data.radius,
+      name: system.names?.planets?.[pIdx]?.name || `Planet ${pIdx + 1}`,
+      type: entry.planet.data.type || 'planet',
+    };
+  }
+  if (kind === 'moon') {
+    const pIdx = indices.planetIndex;
+    const mIdx = indices.moonIndex;
+    const entry = system.planets?.[pIdx];
+    const moon = entry?.moons?.[mIdx];
+    if (!moon) return null;
+    return {
+      kind: 'moon',
+      planetIndex: pIdx,
+      moonIndex: mIdx,
+      mesh: moon.mesh,
+      radius: moon.data.radius,
+      name: system.names?.planets?.[pIdx]?.moons?.[mIdx] || `Moon ${mIdx + 1}`,
+      type: moon.data.type || 'moon',
+    };
+  }
+  return null;
+}
+
+/**
+ * Forgiving screen-space hit test for in-system bodies. Projects every
+ * selectable body (stars, planets, moons) and picks the one whose screen
+ * center is closest to the mouse, provided it's within an adaptive
+ * threshold based on the body's projected screen radius.
+ *
+ * Unlike the raycaster path, this uses screen distance (not pixel-perfect
+ * geometry intersection) so billboarded tiny planets / distant moons are
+ * still clickable. The threshold grows with near-field bodies so huge
+ * foreground planets can still be clicked at their edges.
+ *
+ * In-system bodies take priority over the starfield because this function
+ * is called before `trySelectWarpTarget` in the click pipeline.
+ *
+ * @param {number} minThresholdPx — minimum click radius in CSS pixels (default 24)
+ */
+function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
+  if (!system) return null;
+  camera.updateMatrixWorld(true);
+
+  const rect = canvas.getBoundingClientRect();
+  const hw = rect.width * 0.5;
+  const hh = rect.height * 0.5;
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+
+  // Precompute FOV scalar for projected radius calculation
+  const fovRad = (camera.fov * Math.PI) / 180;
+  const halfHeight = rect.height * 0.5;
+
+  let best = null;
+  let bestDistSq = Infinity;
+
+  const tryBody = (target) => {
+    if (!target || !target.mesh) return;
+    // Project center to screen
+    _projVec.copy(target.mesh.position).project(camera);
+    if (_projVec.z > 1 || _projVec.z < -1) return; // behind camera or past far plane
+    const sx = (_projVec.x * hw) + hw;
+    const sy = (-_projVec.y * hh) + hh;
+
+    // Adaptive threshold: body's projected pixel radius + 12px margin,
+    // clamped to at least `minThresholdPx`.
+    const dist = camera.position.distanceTo(target.mesh.position);
+    let pixelRadius = 0;
+    if (dist > 1e-6 && target.radius > 0) {
+      const angularRadius = Math.atan(target.radius / dist);
+      pixelRadius = (angularRadius / (fovRad * 0.5)) * halfHeight;
+    }
+    const threshold = Math.max(minThresholdPx, pixelRadius + 12);
+
+    const dx = localX - sx;
+    const dy = localY - sy;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < threshold * threshold && d2 < bestDistSq) {
+      bestDistSq = d2;
+      best = target;
+    }
+  };
+
+  // Primary star
+  tryBody(_makeTarget('star', { starIndex: 0 }));
+  // Binary companion
+  if (system.star2) tryBody(_makeTarget('star', { starIndex: 1 }));
+  // Planets
+  if (system.planets) {
+    for (let i = 0; i < system.planets.length; i++) {
+      tryBody(_makeTarget('planet', { planetIndex: i }));
+      const entry = system.planets[i];
+      if (entry.moons) {
+        for (let m = 0; m < entry.moons.length; m++) {
+          tryBody(_makeTarget('moon', { planetIndex: i, moonIndex: m }));
+        }
       }
     }
   }
@@ -3420,6 +3598,8 @@ function warpSwapSystem() {
   // Cancel any stale deep sky linger timer from the previous system
   // (e.g., title screen auto-dismiss sets this during warp)
   _deepSkyLingerTimer = -1;
+  // Clear reticle state — old body references are about to be disposed
+  _clearReticleTargets();
 
   // Create new system using pre-generated data (GPU resource creation only).
   // seedCounter was already incremented in onPrepareSystem.
@@ -3643,6 +3823,115 @@ function findClosestBody() {
 function _syncNavBody() {
   if (_navComputerOpen && _navComputer) {
     _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  }
+}
+
+/**
+ * Soft-select an in-system body. Sets the reticle's selected target,
+ * rotates the camera to face the body (without traveling), and reveals
+ * the COMMIT BURN button. Does NOT begin travel — that happens when
+ * commitBurn() is called (via button click or Enter key).
+ *
+ * @param {Object} target — target descriptor from _makeTarget()
+ */
+function selectTarget(target) {
+  if (!target) {
+    _selectedTarget = null;
+    _updateCommitBurnButton();
+    return;
+  }
+  _selectedTarget = target;
+  soundEngine.play('select');
+
+  // Aim the camera at the selected body without moving the camera position.
+  // Toy Box orbit math aims via `this.target`; rotating the orbit around a
+  // new point is the natural way to "face" the body.
+  if (target.mesh && !cameraController.bypassed) {
+    // Transition the orbit target smoothly to the selected body's position.
+    // We keep the current distance/yaw/pitch but shift `target` (the orbit
+    // pivot) to the body. This re-centers the view on the body without
+    // any sudden jump.
+    cameraController._targetGoal.copy(target.mesh.position);
+    cameraController._transitioning = true;
+    cameraController._transitionSpeed = 0.06;
+  }
+
+  _updateCommitBurnButton();
+}
+
+/**
+ * Deselect the currently selected target. Hides the commit burn button.
+ */
+function deselectTarget() {
+  _selectedTarget = null;
+  _updateCommitBurnButton();
+}
+
+/**
+ * Actually begin travel to the currently selected target. Called by the
+ * BURN button or the Space key. Routes to the existing focusPlanet /
+ * focusStar / focusMoon travel logic.
+ */
+function commitBurn() {
+  const t = _selectedTarget;
+  if (!t) return;
+  // Stop any current flythrough so the new burn takes over cleanly
+  if (autoNav.isActive || flythrough.active) stopFlythrough();
+  if (t.kind === 'star') focusStar(t.starIndex);
+  else if (t.kind === 'planet') focusPlanet(t.planetIndex);
+  else if (t.kind === 'moon') focusMoon(t.planetIndex, t.moonIndex);
+  // Keep the selection active through travel; burn-in-progress state is
+  // implied by flythrough.active. Button hides while burning.
+  _updateCommitBurnButton();
+}
+
+/**
+ * Universal commit — Space key or any "go now" shortcut.
+ *  - In-system body selected → burn to it (in-system transit)
+ *  - Warp target set (via nav computer or click) → warp
+ *  - Nothing selected → no-op
+ * Returns true if an action was committed.
+ */
+function commitSelection() {
+  if (warpEffect.isActive || warpTarget.turning) return false;
+  if (_selectedTarget) {
+    commitBurn();
+    return true;
+  }
+  if (warpTarget.direction) {
+    beginWarpTurn();
+    return true;
+  }
+  return false;
+}
+
+/** Show/hide + update the BURN HUD button based on current state. */
+function _updateCommitBurnButton() {
+  const btn = document.getElementById('commit-burn-btn');
+  if (!btn) return;
+  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning;
+  const visible = !!_selectedTarget && !burning;
+  btn.style.display = visible ? 'block' : 'none';
+  if (visible) {
+    const label = _selectedTarget.name || 'TARGET';
+    btn.textContent = `BURN → ${label.toUpperCase()}`;
+  }
+}
+
+// Wire the commit burn button's click handler once
+{
+  const btn = document.getElementById('commit-burn-btn');
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      commitBurn();
+    });
+    btn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      commitBurn();
+    });
   }
 }
 
@@ -4564,6 +4853,22 @@ function animate() {
   debugPanel.setFocus(focusIndex, focusMoonIndex);
   debugPanel.update(deltaTime);
 
+  // ── Targeting reticle (tentative hover + selected committed target) ──
+  // Refresh the selected-target descriptor each frame so its name/type/
+  // radius stay correct if the underlying system data changes. The mesh
+  // reference stays valid; only the distance moves.
+  if (_selectedTarget) {
+    // The body's mesh position updates each frame — distance recomputes
+    // inside the reticle renderer, so no need to rebuild the descriptor.
+  }
+  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning;
+  targetingReticle.enabled = !!system && !warpEffect.isActive && !splashActive && !titleScreenActive && !galleryMode;
+  targetingReticle.update({
+    hoverTarget: burning ? null : _hoverTarget, // hide hover during travel
+    selectedTarget: _selectedTarget,
+  });
+  _updateCommitBurnButton();
+
   // ── Update HUD ──
   // During flythrough, compute yaw from camera position relative to origin
   const hudYaw = cameraController.bypassed
@@ -4657,6 +4962,11 @@ window.addEventListener('keydown', (e) => {
     const kb = document.getElementById('keybinds-overlay');
     if (kb && kb.style.display !== 'none') {
       kb.style.display = 'none';
+      return;
+    }
+    // Nothing else to dismiss: use Escape to deselect the current target
+    if (_selectedTarget) {
+      deselectTarget();
       return;
     }
   }
@@ -4870,7 +5180,9 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.code === 'Space') {
       e.preventDefault();
-      beginWarpTurn();
+      // Universal commit — burns the in-system selection OR warps, whichever
+      // is set. In autopilot this also stops the flythrough via commitBurn.
+      commitSelection();
     } else if (e.code === 'Tab') {
       e.preventDefault();
       // Jump tour forward/back — begin travel to the new stop
@@ -4910,7 +5222,9 @@ window.addEventListener('keydown', (e) => {
 
   if (e.code === 'Space') {
     e.preventDefault();
-    beginWarpTurn();
+    // Universal commit — in-system selection → burn; warp target → warp;
+    // nothing → no-op.
+    commitSelection();
   } else if (e.code === 'Escape' || e.code === 'Backquote') {
     focusPlanet(-1);
   } else if (e.code === 'Tab') {
@@ -4999,44 +5313,28 @@ function trySelect(clientX, clientY) {
 
   raycaster.setFromCamera(_mouse, camera);
 
-  // 1. Try scene objects (planets, stars, moons)
-  const meshes = Array.from(clickTargets.keys());
-  const hits = raycaster.intersectObjects(meshes, false);
-
-  // Find the first hit on a VISIBLE object.
-  // Both mesh and billboard are in clickTargets, but LOD hides one at a time.
-  // Also check parent visibility — planet meshes are inside a Group.
-  for (const hit of hits) {
-    if (!hit.object.visible) continue;
-    if (hit.object.parent && !hit.object.parent.visible) continue;
-
-    const info = clickTargets.get(hit.object);
-    if (!info) continue;
-
-    // Stop autopilot when clicking a body (needed for navigable deep sky
-    // where forceFreeLook is off but flythrough may be driving the camera)
-    if (autoNav.isActive || flythrough.active) {
-      stopFlythrough();
-    }
-
-    if (info.type === 'star') {
-      focusStar(info.starIndex);
-    } else if (info.type === 'planet') {
-      focusPlanet(info.planetIndex);
-    } else if (info.type === 'moon') {
-      focusMoon(info.planetIndex, info.moonIndex);
-    }
-    return; // scene object hit — done
+  // 1. Try in-system body picking (forgiving screen-space).
+  // This takes priority over the starfield so clicking near a billboarded
+  // planet doesn't fall through to "nearest background star".
+  const bodyHit = hitTestBodies(clientX, clientY);
+  if (bodyHit) {
+    selectTarget(bodyHit);
+    return;
   }
 
   // 1b. Try orbit lines (screen-space distance check)
   const orbitHit = hitTestOrbits(clientX, clientY, 6);
   if (orbitHit) {
+    let target = null;
     if (orbitHit.info.type === 'planet') {
-      focusPlanet(orbitHit.info.planetIndex);
+      target = _makeTarget('planet', { planetIndex: orbitHit.info.planetIndex });
     } else if (orbitHit.info.type === 'moon') {
-      focusMoon(orbitHit.info.planetIndex, orbitHit.info.moonIndex);
+      target = _makeTarget('moon', {
+        planetIndex: orbitHit.info.planetIndex,
+        moonIndex: orbitHit.info.moonIndex,
+      });
     }
+    if (target) selectTarget(target);
     return;
   }
 
@@ -5228,6 +5526,21 @@ canvas.addEventListener('mousemove', (e) => {
   const freeLookDrag = _middleMouseDown || (cameraController.forceFreeLook && cameraController._leftFreeLooking);
   if (flythrough.active && freeLookDrag) {
     flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
+  }
+
+  // ── In-system body hover (tentative reticle) ──
+  // Runs regardless of orbit line hover (it's a separate overlay).
+  if (system && !warpEffect.isActive && !galleryMode) {
+    const bodyHit = hitTestBodies(e.clientX, e.clientY);
+    // Don't show tentative reticle on the currently selected target —
+    // the selected reticle already covers it, and stacking both is noisy.
+    if (bodyHit && _selectedTarget && _isSameTarget(bodyHit, _selectedTarget)) {
+      _hoverTarget = null;
+    } else {
+      _hoverTarget = bodyHit;
+    }
+    // Cursor feedback: pointer when we can click a body
+    if (bodyHit) canvas.style.cursor = 'pointer';
   }
 
   // ── Orbit line hover highlight (screen-space, throttled to ~30 Hz) ──

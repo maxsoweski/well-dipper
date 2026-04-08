@@ -647,6 +647,38 @@ html, body {
   animation: cursor-blink 0.6s step-end infinite;
 }
 
+/* ── Commit Burn Button (in-system target selection) ── */
+#commit-burn-btn {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  font-family: 'DotGothic16', monospace;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  color: rgba(140, 255, 160, 1.0);
+  background: rgba(0, 20, 5, 0.65);
+  border: 1.5px solid rgba(100, 255, 130, 0.85);
+  padding: 10px 24px;
+  cursor: pointer;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 18px rgba(60, 200, 90, 0.25);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.08s;
+  outline: none;
+}
+
+#commit-burn-btn:hover {
+  background: rgba(20, 60, 25, 0.85);
+  box-shadow: 0 0 28px rgba(100, 255, 140, 0.5);
+}
+
+#commit-burn-btn:active {
+  transform: translateX(-50%) translateY(1px);
+}
+
 .body-info-cursor.blinking {
   display: inline;
 }
