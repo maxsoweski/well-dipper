@@ -28,7 +28,7 @@ if (typeof globalThis.DeviceOrientationEvent === 'undefined') {
   globalThis.DeviceOrientationEvent = class {};
 }
 
-const { ShipCameraSystem } = await import('../ShipCameraSystem.js');
+const { ShipCameraSystem, CameraMode } = await import('../ShipCameraSystem.js');
 
 // Minimal mock canvas for event listeners
 function mockCanvas() {
@@ -84,11 +84,12 @@ describe('ShipCameraSystem', () => {
     sys = new ShipCameraSystem(camera, canvas);
   });
 
-  describe('orbit mode (no gravity)', () => {
+  describe('toy box mode (no gravity)', () => {
     it('creates with default orbit state', () => {
       expect(sys.distance).toBe(8);
       expect(sys.bypassed).toBe(false);
-      expect(sys._gravityMode).toBe(false);
+      expect(sys._hasGravity).toBe(false);
+      expect(sys.cameraMode).toBe(CameraMode.TOY_BOX);
     });
 
     it('update() moves camera to orbit position', () => {
@@ -144,22 +145,71 @@ describe('ShipCameraSystem', () => {
     });
   });
 
-  describe('gravity mode', () => {
-    it('initGravity() creates gravity subsystem', () => {
+  describe('gravity subsystem', () => {
+    it('initGravity() creates gravity subsystem but does not change camera mode', () => {
       sys.initGravity(mockSystemData(), mockBodyMeshes());
-      expect(sys._gravityMode).toBe(true);
+      expect(sys._hasGravity).toBe(true);
       expect(sys.gravityField).not.toBeNull();
       expect(sys.flight).not.toBeNull();
       expect(sys.director).not.toBeNull();
+      // initGravity no longer auto-switches to Flight mode — the user
+      // (or persisted localStorage) controls that independently.
+      expect(sys.cameraMode).toBe(CameraMode.TOY_BOX);
     });
 
-    it('clearGravity() tears down subsystem', () => {
+    it('clearGravity() tears down subsystem but preserves cameraMode intent', () => {
       sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.setCameraMode(CameraMode.FLIGHT);
       sys.clearGravity();
-      expect(sys._gravityMode).toBe(false);
+      expect(sys._hasGravity).toBe(false);
       expect(sys.gravityField).toBeNull();
       expect(sys.flight).toBeNull();
       expect(sys.director).toBeNull();
+      // cameraMode is user intent — preserved through deep sky
+      expect(sys.cameraMode).toBe(CameraMode.FLIGHT);
+      // But effective state drops to non-flight because no gravity
+      expect(sys.isFlightMode).toBe(false);
+    });
+
+    it('effective Flight mode resumes when gravity is re-initialized', () => {
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.setCameraMode(CameraMode.FLIGHT);
+      sys.clearGravity();
+      expect(sys.isFlightMode).toBe(false);
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+      expect(sys.cameraMode).toBe(CameraMode.FLIGHT);
+      expect(sys.isFlightMode).toBe(true);
+    });
+
+    it('setCameraMode(FLIGHT) without gravity sets intent but effective state is not flight', () => {
+      sys.setCameraMode(CameraMode.FLIGHT);
+      expect(sys.cameraMode).toBe(CameraMode.FLIGHT);
+      expect(sys.isFlightMode).toBe(false);
+    });
+
+    it('setCameraMode(FLIGHT) with gravity succeeds', () => {
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.setCameraMode(CameraMode.FLIGHT);
+      expect(sys.cameraMode).toBe(CameraMode.FLIGHT);
+      expect(sys.isFlightMode).toBe(true);
+    });
+
+    it('toggleCameraMode() flips between modes', () => {
+      sys.initGravity(mockSystemData(), mockBodyMeshes());
+      expect(sys.cameraMode).toBe(CameraMode.TOY_BOX);
+      sys.toggleCameraMode();
+      expect(sys.cameraMode).toBe(CameraMode.FLIGHT);
+      sys.toggleCameraMode();
+      expect(sys.cameraMode).toBe(CameraMode.TOY_BOX);
+    });
+
+    it('isMobile option forces TOY_BOX regardless of setCameraMode', () => {
+      const mobileCanvas = mockCanvas();
+      const mobileCam = new THREE.PerspectiveCamera(70, 1, 0.01, 200000);
+      const mobileSys = new ShipCameraSystem(mobileCam, mobileCanvas, { isMobile: true });
+      mobileSys.initGravity(mockSystemData(), mockBodyMeshes());
+      mobileSys.setCameraMode(CameraMode.FLIGHT);
+      expect(mobileSys.cameraMode).toBe(CameraMode.TOY_BOX);
     });
 
     it('update() with gravity ticks the field and flight', () => {
@@ -176,9 +226,10 @@ describe('ShipCameraSystem', () => {
     });
   });
 
-  describe('coordinator loop (gravity mode)', () => {
+  describe('coordinator loop (Flight mode)', () => {
     it('flight.position is NOT overwritten by orbit math', () => {
       sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.setCameraMode(CameraMode.FLIGHT);
 
       // Set orbit to produce position near (0, 0, 8) — the default
       sys.target.set(0, 0, 0);
@@ -199,6 +250,7 @@ describe('ShipCameraSystem', () => {
 
     it('camera position follows flight, not orbit math', () => {
       sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.setCameraMode(CameraMode.FLIGHT);
 
       sys.target.set(0, 0, 0);
       sys.smoothedDistance = 8;
@@ -217,6 +269,7 @@ describe('ShipCameraSystem', () => {
 
     it('director lookTarget controls camera orientation', () => {
       sys.initGravity(mockSystemData(), mockBodyMeshes());
+      sys.setCameraMode(CameraMode.FLIGHT);
       sys.flight.position.set(50, 0, 0);
       sys.flight.velocity.set(0, 0, 0);
 

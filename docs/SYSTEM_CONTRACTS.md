@@ -80,21 +80,55 @@ Every warp must resolve to a real position in the galaxy:
 
 ## 5. Camera and Control
 
-Three systems can drive the camera. Only one at a time.
+The camera has **two modes** (Toy Box / Flight) that are orthogonal to the **drive states** (Manual / Autopilot / Warp). Mode = how the camera feels. Drive state = who is writing to it this frame.
 
-| Mode | What drives the camera | Player can... |
-|------|----------------------|---------------|
-| **Manual** | ShipCameraSystem (orbit, WASD flight, zoom) | Explore freely, click bodies, open nav |
-| **Autopilot** | FlythroughCamera (cinematic Hermite spline paths between bodies) | Watch the tour, interrupt with any input |
-| **Warp** | Direct camera manipulation during the warp turn + tunnel sequence | Wait for arrival |
+### 5.1 Camera Modes
 
-**Transitions:**
-- Manual → Autopilot: idle timer expires (30s default) or player presses autopilot key
-- Autopilot → Manual: any player input (click, WASD, scroll)
-- Any → Warp: Space key, COMMIT WARP, or autopilot tour completion
-- Warp → Autopilot: warp exit completes, new system loaded, tour begins
+| Mode | What drives the camera | Intended feel |
+|------|------------------------|---------------|
+| **TOY_BOX** | `ShipCameraSystem._applyOrbit()` — yaw/pitch/distance around a focus point | Spin a body around like a model in your hands. Default for screensaver MVP. |
+| **FLIGHT** | `FlightDynamics` drives ship position, `CinematicDirector` composes framing, player adds a decaying look offset | Piloting a ship through a gravity field. Director picks the shot, player nudges it. |
 
-**COMMIT BURN** (fly to a body in the current system) uses FlythroughCamera for smooth cinematic travel, then hands back to manual orbit on arrival. It calls the same `focusPlanet()`/`focusStar()`/`focusMoon()` functions as the Tab/1-9 keyboard shortcuts.
+`ShipCameraSystem.cameraMode` is the single source of truth. `setCameraMode(mode)` handles smooth handoff — it snapshots the world position/quaternion, switches the path, and re-derives the target mode's state so the visual is continuous.
+
+**Mode invariants:**
+- TOY_BOX is the default at boot.
+- FLIGHT requires a gravity field. `clearGravity()` forces mode back to TOY_BOX.
+- Deep sky scenes (no star system) are TOY_BOX only — F key is ignored there.
+- Mobile devices are TOY_BOX only — F key is not bound.
+- In TOY_BOX, `flight` and `director` do not tick (CPU savings, no state drift).
+- Mode persists across warps and system loads. Only `setCameraMode` (F key, or localStorage on boot) changes it.
+
+### 5.2 Input Routing
+
+|                     | TOY_BOX                           | FLIGHT                                             |
+|---------------------|-----------------------------------|----------------------------------------------------|
+| Mouse drag (left)   | Rotate orbit (`yaw`, `pitch`)     | Add decaying look offset (±90° yaw / ±60° pitch)   |
+| Scroll wheel        | Zoom (`distance`)                 | Change chase distance (director offset length)     |
+| WASD                | Ignored                           | Thrust the ship via `flight.thrustVector`          |
+| Free-look (middle)  | Available                         | Unavailable (director owns orientation)            |
+| Click body          | Focus and orbit it                | Focus it; camera follows ship through approach     |
+
+**Look offset decay (FLIGHT only):** When the player stops dragging, `_lookOffsetYaw/Pitch` exponentially decay to zero over ~2s (`offset *= exp(-dt / 2.0)` each frame, snap to 0 under 0.001 rad). Applied *after* the director writes its transform — rotates the look vector around the current camera position. Director remains unaware of player input; contract clean.
+
+### 5.3 Drive States
+
+The drive state determines who owns the camera *this frame*:
+
+| Drive State | What writes the camera |
+|-------------|------------------------|
+| **Manual**  | `ShipCameraSystem.update()` (respects mode) |
+| **Autopilot** | `FlythroughCamera` takes over during system tours and BURN arrivals |
+| **Warp**    | `WarpEffect` drives the camera through the turn + tunnel sequence |
+
+**Manual → Autopilot:** idle timer expires (30s default) or player presses the autopilot key.
+**Autopilot → Manual:** depends on mode. In TOY_BOX, any mouse/scroll/WASD input stops autopilot. In FLIGHT, only WASD thrust or explicit autopilot-off kills it — mouse drag just layers a look offset on top of the flythrough.
+**Any → Warp:** Space key, COMMIT WARP, or autopilot tour completion.
+**Warp → Autopilot:** warp exit completes, new system loaded, tour begins.
+
+Mode is preserved across all drive-state transitions (including warp in/out).
+
+**COMMIT BURN** (fly to a body in the current system) uses FlythroughCamera for smooth cinematic travel, then hands back to manual on arrival. It calls the same `focusPlanet()`/`focusStar()`/`focusMoon()` functions as the Tab/1-9 keyboard shortcuts. Arrival mode matches the player's current mode.
 
 ---
 

@@ -94,12 +94,16 @@ export class FlythroughCamera {
     this._approachElapsed = 0;
     this._approachPauseDur = 1.5;    // seconds to hold before closing
     this._approachCloseDur = 3.0;    // seconds to close in
-    this._approachStartDist = 10;    // distance at start of close phase
+    this._approachStartDist = 10;    // initial body distance at approach start
     this._approachTargetDist = 5;    // final distance (body fills ~60% of frame)
     this._approachBodyRef = null;
     this._approachBodyRadius = 1;
     this._approachOrbitDist = 10;    // orbit distance for subsequent orbit
     this._approachOrbitDuration = 75; // orbit duration after approach
+    // Initial direction (unit vector) from body to camera at approach start.
+    // Preserved throughout the approach so the camera rides with the body
+    // as it orbits, instead of drifting as the body moves past a fixed point.
+    this._approachInitialDir = new THREE.Vector3();
 
     // Orbit speed scale (1.0 = normal autopilot, 0.2 = slow cinematic)
     this._orbitSpeedScale = 1.0;
@@ -152,6 +156,11 @@ export class FlythroughCamera {
     this.orbitDistBase = orbitDistance;
     // Slow orbit: 5× slower rotation, breathing, and pitch oscillation
     this._orbitSpeedScale = options.slowOrbit ? 0.2 : 1.0;
+    // Hold mode (manual burn arrival): clean circular orbit — constant
+    // pitch, constant distance, constant yaw rate (one rev per ~2 min).
+    // Used when the player wants to SIT at a body indefinitely. Skips
+    // the cinematic bob/breathe/pull-out animation.
+    this._holdOnly = !!options.holdOnly;
     this.orbitElapsed = 0;
     this.orbitDuration = duration || 15;
     this._targetingSignaled = false;
@@ -264,17 +273,30 @@ export class FlythroughCamera {
    * @param {number} bodyRadius — body radius (for approach target calculation)
    * @param {number} [orbitDuration=75] — seconds for one orbit rotation after approach
    */
-  beginApproach(bodyRef, orbitDist, bodyRadius, orbitDuration = 75) {
+  beginApproach(bodyRef, orbitDist, bodyRadius, orbitDuration = 75, options = {}) {
     this.active = true;
     this.state = State.APPROACH;
     this._approachBodyRef = bodyRef;
     this._approachBodyRadius = bodyRadius;
     this._approachOrbitDist = orbitDist;
     this._approachOrbitDuration = orbitDuration;
+    this._approachHoldOnly = !!options.holdOnly;
     this._approachElapsed = 0;
 
-    // Current distance from the body
-    this._approachStartDist = this.camera.position.distanceTo(bodyRef.position);
+    // Capture the current body→camera direction + distance ONCE at approach
+    // start. During pause + close, the camera rides with the body along this
+    // fixed direction, varying only the distance. This prevents the "body
+    // orbits past a static camera" bounce bug where the pause phase held
+    // absolute position while the body moved tangentially.
+    this._approachInitialDir.subVectors(this.camera.position, bodyRef.position);
+    this._approachStartDist = this._approachInitialDir.length();
+    if (this._approachStartDist > 1e-6) {
+      this._approachInitialDir.divideScalar(this._approachStartDist); // normalize
+    } else {
+      // Degenerate: camera already at body position. Pick arbitrary direction.
+      this._approachInitialDir.set(0, 0, 1);
+      this._approachStartDist = Math.max(orbitDist, 0.02);
+    }
     // Approach closes to the orbit distance so orbit starts seamlessly (no pulse)
     this._approachTargetDist = Math.max(orbitDist, 0.02);
     console.log(`[APPROACH] begin: startDist=${this._approachStartDist.toFixed(2)} targetDist=${this._approachTargetDist.toFixed(2)} orbitDist=${orbitDist.toFixed(2)} bodyRadius=${bodyRadius.toFixed(2)}`);
@@ -502,6 +524,25 @@ export class FlythroughCamera {
 
     const bodyPos = this.bodyRef.position;
 
+    // ── Hold-only orbit (manual burn arrival) ──
+    // Clean circular orbit: constant pitch, constant distance, constant
+    // yaw rate. One revolution per ~120s. No entry blend, no oscillation,
+    // no breathing, no pull-out. Camera tracks the body as it orbits its
+    // parent, and the player can interrupt at any time with mouse input.
+    if (this._holdOnly) {
+      const HOLD_YAW_RATE = (2 * Math.PI) / 120; // rad/sec — one rev per 120s
+      this.orbitYaw += HOLD_YAW_RATE * this.orbitDirection * deltaTime;
+      const cosP = Math.cos(this._entryPitch);
+      this.camera.position.set(
+        bodyPos.x + this.orbitDistBase * Math.sin(this.orbitYaw) * cosP,
+        bodyPos.y + this.orbitDistBase * Math.sin(this._entryPitch),
+        bodyPos.z + this.orbitDistBase * Math.cos(this.orbitYaw) * cosP,
+      );
+      this._currentDist = this.orbitDistBase;
+      this._applyFreeLookAndLookAt(bodyPos);
+      return { orbitComplete: false, travelComplete: false, targetingReady: false };
+    }
+
     // ── Entry blend (first 2s): smooth transition from arrival ──
     const entryDur = 2;
     const entryFactor = this.orbitElapsed < entryDur
@@ -638,36 +679,29 @@ export class FlythroughCamera {
     const closeDur = this._approachCloseDur;
     const totalDur = pauseDur + closeDur;
 
-    // All phases: maintain camera position relative to the body.
-    // The body orbits its parent, so the camera must follow or it drifts away.
-    _v1.subVectors(this.camera.position, bodyPos).normalize();
-    const currentDist = this.camera.position.distanceTo(bodyPos);
+    // The fixed direction captured at approach start. Camera rides the body
+    // at this direction — preserving the arrival angle.
+    const dir = this._approachInitialDir;
 
     if (this._approachElapsed < pauseDur) {
-      // Pause phase: hold relative position, look at body
-      // Re-anchor camera at its current distance along the body direction
-      // (keeps camera at same angular position as body orbits)
-      this.camera.position.copy(bodyPos).addScaledVector(_v1, currentDist);
+      // Pause phase: camera follows body rigidly at initial distance.
+      // Distance stays constant, angle stays constant, camera tracks the
+      // body as it orbits its parent.
+      this.camera.position.copy(bodyPos).addScaledVector(dir, this._approachStartDist);
       this.camera.lookAt(bodyPos);
     } else if (this._approachElapsed < totalDur) {
-      // Close phase: move radially toward body using smootherstep
+      // Close phase: shrink distance along the same initial direction.
       const closeT = (this._approachElapsed - pauseDur) / closeDur;
       const eased = this._ease(closeT);
-      // Use live distance on first close frame so we don't rely on stale _approachStartDist
-      if (closeT < deltaTime / closeDur + 0.001) {
-        this._approachStartDist = currentDist;
-      }
       const dist = this._approachStartDist + (this._approachTargetDist - this._approachStartDist) * eased;
-
-      // Move camera along the current direction to body at the interpolated distance
-      this.camera.position.copy(bodyPos).addScaledVector(_v1, dist);
+      this.camera.position.copy(bodyPos).addScaledVector(dir, dist);
       this.camera.lookAt(bodyPos);
     } else {
       // Approach complete — transition to slow orbit
       const finalDist = this.camera.position.distanceTo(bodyPos);
-      console.log(`[APPROACH] complete → orbit: finalDist=${finalDist.toFixed(2)} orbitDist=${this._approachOrbitDist.toFixed(2)} bodyRadius=${this._approachBodyRadius.toFixed(2)}`);
+      console.log(`[APPROACH] complete → orbit: finalDist=${finalDist.toFixed(2)} orbitDist=${this._approachOrbitDist.toFixed(2)} bodyRadius=${this._approachBodyRadius.toFixed(2)} holdOnly=${this._approachHoldOnly}`);
       this.beginOrbit(body, this._approachOrbitDist, this._approachBodyRadius,
-        this._approachOrbitDuration, { slowOrbit: true });
+        this._approachOrbitDuration, { slowOrbit: true, holdOnly: this._approachHoldOnly });
       return { orbitComplete: false, travelComplete: false, targetingReady: false };
     }
 

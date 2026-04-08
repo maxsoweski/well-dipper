@@ -28,7 +28,45 @@ import { CinematicDirector, CompositionState } from './CinematicDirector.js';
 // Reusable scratch vectors
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _v3 = new THREE.Vector3();
+const _v4 = new THREE.Vector3();
+const _q1 = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
 const _prevQuat = new THREE.Quaternion();
+
+// ═══════════════════════════════════════════════════════════════════
+//  CAMERA MODES
+// ═══════════════════════════════════════════════════════════════════
+//
+// TOY_BOX — orbit a focused body. Mouse drag spins, scroll zooms.
+//           Legacy _applyOrbit() math. Default for screensaver MVP.
+//           Mobile is always TOY_BOX. Deep sky scenes force TOY_BOX.
+//
+// FLIGHT  — FlightDynamics drives ship through gravity field.
+//           CinematicDirector composes the shot. Mouse drag adds a
+//           decaying look offset, scroll adjusts chase distance,
+//           WASD thrusts. Requires gravity subsystem.
+//
+// Mode is persisted in localStorage under STORAGE_KEY, restored on
+// boot unless mobile (mobile forces TOY_BOX regardless of saved value).
+//
+export const CameraMode = Object.freeze({
+  TOY_BOX: 'toy_box',
+  FLIGHT: 'flight',
+});
+
+// Look offset tuning (Flight mode) — tweak here to adjust feel
+const LOOK_OFFSET_MAX_YAW = Math.PI / 2;     // ±90° horizontal
+const LOOK_OFFSET_MAX_PITCH = Math.PI / 3;   // ±60° vertical
+const LOOK_OFFSET_DECAY_TAU = 2.0;           // seconds to return to center (~63%)
+const LOOK_OFFSET_SNAP_THRESHOLD = 0.001;    // snap to 0 under this (rad)
+
+// Chase distance scale bounds (Flight mode scroll wheel)
+const CHASE_SCALE_MIN = 0.3;
+const CHASE_SCALE_MAX = 4.0;
+const CHASE_SCALE_STEP = 0.1;                // per wheel tick
+
+const STORAGE_KEY = 'wd_cameraMode';
 
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME DIAGNOSTICS — ring buffer for detecting jumps, NaN, divergence
@@ -181,14 +219,23 @@ class FrameDiagnostics {
 }
 
 export class ShipCameraSystem {
-  constructor(camera, canvas) {
+  /**
+   * @param {THREE.Camera} camera
+   * @param {HTMLCanvasElement} canvas
+   * @param {object} [options]
+   * @param {boolean} [options.isMobile=false] - Forces TOY_BOX, disables Flight mode
+   */
+  constructor(camera, canvas, options = {}) {
     this.camera = camera;
     this.canvas = canvas;
+    this.isMobile = !!options.isMobile;
 
     // ── Gravity subsystem (null until a star system is spawned) ──
     this.gravityField = null;
     this.flight = null;
     this.director = null;
+    // True iff gravity subsystem has been initialized (independent of cameraMode)
+    this._hasGravity = false;
 
     // ── Orbit state (simple fallback when gravity is not available) ──
     this.target = new THREE.Vector3(0, 0, 0);
@@ -274,14 +321,121 @@ export class ShipCameraSystem {
     this._lastPinchDist = 0;
     this._touchCount = 0;
 
-    // ── Whether gravity-driven mode is active ──
-    this._gravityMode = false;
+    // ── Camera Mode (TOY_BOX | FLIGHT) ──
+    // This field is USER INTENT, not effective state. Restored from
+    // localStorage on boot; mobile forces TOY_BOX regardless. The
+    // effective "is flight driving the camera?" check is `isFlightMode`,
+    // which also requires `_hasGravity` — so deep sky scenes render
+    // Toy-Box-style while preserving the user's Flight preference for
+    // when they return to a star system.
+    this.cameraMode = this._loadPersistedMode();
+
+    // ── Flight-mode look offset (decaying cinematic look-around) ──
+    this._lookOffsetYaw = 0;    // rad, clamped ±LOOK_OFFSET_MAX_YAW
+    this._lookOffsetPitch = 0;  // rad, clamped ±LOOK_OFFSET_MAX_PITCH
+
+    // ── Flight-mode chase distance scale (scroll wheel in Flight) ──
+    this._chaseScale = 1.0;
+
+    // ── Mode change observers (main.js hooks HUD, autopilot gates, etc.) ──
+    this.onModeChange = null;
 
     // ── Frame diagnostics ──
     this._diagnostics = new FrameDiagnostics();
 
     this._setupListeners();
     this._applyOrbit();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  CAMERA MODE CONTROL
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Switch camera mode with a smooth handoff. Preserves world-space
+   * camera position/orientation — the new mode re-derives its own state
+   * from the current camera so the visual is continuous.
+   *
+   * `cameraMode` is USER INTENT. Effective Flight state also requires
+   * `_hasGravity` — the `isFlightMode` getter handles that. Calling this
+   * with FLIGHT when there's no gravity still sets intent, so when the
+   * player warps into a star system Flight re-engages automatically.
+   *
+   * Mobile is the only absolute constraint (mobile can never be Flight).
+   */
+  setCameraMode(mode) {
+    // Mobile is hard-locked to Toy Box
+    if (this.isMobile) mode = CameraMode.TOY_BOX;
+    // No-op
+    if (mode === this.cameraMode) return this.cameraMode;
+
+    const prev = this.cameraMode;
+    this.cameraMode = mode;
+
+    if (mode === CameraMode.TOY_BOX) {
+      // Leaving Flight → Toy Box. Derive yaw/pitch/distance from the
+      // current camera→target vector so _applyOrbit picks up right where
+      // the director left off. Caller is expected to call focusOn() or
+      // restoreFromWorldState() afterward to bind to a specific body;
+      // here we just make sure the orbit math starts sane.
+      const offset = _v1.copy(this.camera.position).sub(this.target);
+      const dist = offset.length();
+      if (dist > 1e-6) {
+        this.yaw = Math.atan2(offset.x, offset.z);
+        this.pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / dist)));
+        this.distance = dist;
+        this.smoothedYaw = this.yaw;
+        this.smoothedPitch = this.pitch;
+        this.smoothedDistance = dist;
+      }
+      this._lookOffsetYaw = 0;
+      this._lookOffsetPitch = 0;
+    } else {
+      // Entering Flight. Sync flight position to current camera position,
+      // zero velocity so you start from rest. Director will compose from
+      // there on the next update tick.
+      if (this.flight) {
+        this.flight.position.copy(this.camera.position);
+        this.flight.velocity.set(0, 0, 0);
+      }
+      this._chaseScale = 1.0;
+      this._lookOffsetYaw = 0;
+      this._lookOffsetPitch = 0;
+      // Drop out of free-look if active — director owns orientation in Flight
+      if (this.isFreeLooking) this.exitFreeLook(false);
+    }
+
+    this._persistMode(mode);
+    if (this.onModeChange) this.onModeChange(mode, prev);
+    return this.cameraMode;
+  }
+
+  /** Toggle between TOY_BOX and FLIGHT. Returns the new effective mode. */
+  toggleCameraMode() {
+    const next = this.cameraMode === CameraMode.FLIGHT
+      ? CameraMode.TOY_BOX
+      : CameraMode.FLIGHT;
+    return this.setCameraMode(next);
+  }
+
+  /** True if we're currently in Flight mode AND gravity is wired up. */
+  get isFlightMode() {
+    return this.cameraMode === CameraMode.FLIGHT && this._hasGravity;
+  }
+
+  _loadPersistedMode() {
+    if (this.isMobile) return CameraMode.TOY_BOX;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === CameraMode.FLIGHT || saved === CameraMode.TOY_BOX) return saved;
+    } catch { /* private mode, quota, etc. */ }
+    return CameraMode.TOY_BOX;
+  }
+
+  _persistMode(mode) {
+    try {
+      localStorage.setItem(STORAGE_KEY, mode);
+    } catch { /* ignore */ }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -304,7 +458,7 @@ export class ShipCameraSystem {
         maxSpeed: 500,
       });
       this.director = new CinematicDirector(this.camera, this.gravityField);
-      this._gravityMode = true;
+      this._hasGravity = true;
 
       // Sync flight position with current camera position
       this.flight.position.copy(this.camera.position);
@@ -313,26 +467,37 @@ export class ShipCameraSystem {
       // Run one zero-dt physics tick to populate lastGravResult (needed
       // by circularize), then auto-circularize so the ship starts in a
       // stable orbit instead of falling into the star from zero velocity.
+      // Only useful if we might enter Flight mode — harmless in Toy Box.
       this.gravityField.tick();
       this.flight.update(0); // dt=0 → no movement, just queries gravity
       this.flight.circularize();
     } catch (e) {
-      console.warn('ShipCameraSystem: gravity init failed, using orbit mode', e);
-      this._gravityMode = false;
+      console.warn('ShipCameraSystem: gravity init failed', e);
+      this._hasGravity = false;
       this.gravityField = null;
       this.flight = null;
       this.director = null;
+      // Don't touch cameraMode — it's user intent. isFlightMode already
+      // returns false without _hasGravity, so rendering falls back to
+      // Toy Box automatically.
     }
   }
 
   /**
    * Tear down the gravity subsystem (e.g., when switching to deep sky).
+   * Preserves `cameraMode` (user intent). Effective rendering falls back
+   * to Toy Box because `isFlightMode` requires `_hasGravity`.
    */
   clearGravity() {
-    this._gravityMode = false;
+    this._hasGravity = false;
     this.gravityField = null;
     this.flight = null;
     this.director = null;
+    // Reset Flight-mode transient state so it doesn't bleed if the
+    // player re-enters a system with Flight as their preference.
+    this._lookOffsetYaw = 0;
+    this._lookOffsetPitch = 0;
+    this._chaseScale = 1.0;
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -397,9 +562,9 @@ export class ShipCameraSystem {
     this.smoothedDistance = viewDistance; // snap — no lerp blip on arrival
     this.zoomSpeed = 0;
 
-    // If gravity mode is active, also position the flight system
-    if (this._gravityMode && this.flight) {
-      // Compute where the camera will be after orbit is applied
+    // If gravity is wired up, also keep the flight system in sync so
+    // a later switch to Flight mode starts from the right place.
+    if (this._hasGravity && this.flight) {
       const d = viewDistance;
       const cosPitch = Math.cos(this.pitch);
       _v1.set(
@@ -419,7 +584,7 @@ export class ShipCameraSystem {
     this.distance = systemRadius * 1.5;
     this.zoomSpeed = 0;
 
-    if (this._gravityMode && this.flight) {
+    if (this._hasGravity && this.flight) {
       const d = this.distance;
       const cosPitch = Math.cos(this.pitch);
       _v1.set(
@@ -531,24 +696,37 @@ export class ShipCameraSystem {
     this.smoothedDistance = dist;
     this.zoomSpeed = 0;
 
-    if (this._gravityMode && this.flight) {
+    if (this._hasGravity && this.flight) {
       this.flight.setPositionVelocity(this.camera.position.clone());
     }
   }
 
   // ── WASD free-flight ──
+  //
+  // TOY_BOX: WASD is ignored. The Toy Box is for examining bodies, not
+  //          flying through them. Input is silently dropped.
+  // FLIGHT:  Routes forward/right thrust into FlightDynamics.thrustVector.
+  //          Director owns camera orientation, so no free-look entry.
 
   setFlightInput(forward, right, boost) {
-    const hadInput = this._flightInput.lengthSq() > 0;
-    const hasInput = (forward !== 0 || right !== 0);
+    // Toy Box: WASD does nothing. Keep state clean.
+    if (this.cameraMode !== CameraMode.FLIGHT) {
+      this._flightInput.set(0, 0, 0);
+      this._flightBoosting = false;
+      this._flightActive = false;
+      if (this.flight) this.flight.thrustVector.set(0, 0, 0);
+      return;
+    }
 
+    const hasInput = (forward !== 0 || right !== 0);
     this._flightInput.set(right, 0, -forward);
     this._flightBoosting = boost;
-    this._flightActive = hasInput || this._flightVelocity.lengthSq() > 0.0001;
+    this._flightActive = hasInput || (this.flight && this.flight.velocity.lengthSq() > 0.0001);
 
-    // In gravity mode, route input to FlightDynamics.thrustVector (physics engine)
-    // instead of the orbit-mode _flightVelocity system
-    if (this._gravityMode && this.flight && hasInput) {
+    // Flight mode requires the gravity subsystem; guard against race on boot
+    if (!this._hasGravity || !this.flight) return;
+
+    if (hasInput) {
       const boostMult = boost ? this._flightBoostMult : 1;
 
       // Convert camera-relative input to world-space thrust direction
@@ -558,24 +736,20 @@ export class ShipCameraSystem {
       fwd.normalize();
       const rt = _v2.crossVectors(fwd, this.camera.up).normalize();
 
-      // Build thrust: forward component + right component
       this.flight.thrustVector.set(0, 0, 0);
       this.flight.thrustVector.addScaledVector(fwd, -this._flightInput.z); // forward
       this.flight.thrustVector.addScaledVector(rt, this._flightInput.x);   // right
       this.flight.thrustVector.normalize().multiplyScalar(
         this.flight.thrustForce * boostMult
       );
-    }
-
-    // In gravity mode, director controls camera orientation — skip free-look
-    if (!this._gravityMode && hasInput && !hadInput && !this.isFreeLooking) {
-      this._flightFreeLook = true;
-      this.enterFreeLook();
+    } else {
+      // No input: clear thrust so drag can settle the ship
+      this.flight.thrustVector.set(0, 0, 0);
     }
   }
 
   get isFlying() {
-    if (this._gravityMode && this.flight) {
+    if (this.isFlightMode && this.flight) {
       return this.flight.velocity.lengthSq() > 0.0001;
     }
     return this._flightVelocity.lengthSq() > 0.0001;
@@ -628,21 +802,30 @@ export class ShipCameraSystem {
   // ═══════════════════════════════════════════════════════════════════
 
   update(deltaTime) {
+    const flightMode = this.isFlightMode;
+
     if (this.bypassed) {
       this._diagnostics.record(
         this.camera, this.flight, this.director,
-        this._gravityMode, deltaTime, true
+        flightMode, deltaTime, true
       );
       return;
     }
 
-    // Tick gravity field (update body positions from meshes)
-    if (this._gravityMode && this.gravityField) {
+    // Tick gravity field only when Flight mode needs it. In Toy Box the
+    // director/flight systems don't run, so body positions only need to
+    // be queried at the moments main.js calls focusOn/trackTarget.
+    if (flightMode && this.gravityField) {
       this.gravityField.tick();
     }
 
-    // Auto-drift
-    if (this.autoRotateActive && !this.isDragging) {
+    // Decay flight-mode look offset back to center (no-op in Toy Box)
+    if (flightMode && !this.isDragging) {
+      this._decayLookOffset(deltaTime);
+    }
+
+    // Auto-drift (Toy Box only — Flight is composed by the director)
+    if (!flightMode && this.autoRotateActive && !this.isDragging) {
       this.yaw += this.autoRotateSpeed * (Math.PI / 180) * deltaTime;
     }
 
@@ -697,8 +880,11 @@ export class ShipCameraSystem {
     const logTarget = Math.log(this.distance);
     this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
 
-    // WASD free-flight physics (orbit mode only — gravity mode routes through FlightDynamics)
-    if (!this._gravityMode && this._flightEnabled && (this._flightActive || this._flightVelocity.lengthSq() > 0.0001)) {
+    // Legacy WASD free-flight physics. This path is dead weight now that
+    // WASD is ignored in Toy Box and routed to FlightDynamics in Flight.
+    // Kept behind an `if (false)` guard for reference until we're sure
+    // nothing else reaches it. TODO: remove after Phase 2 ships.
+    if (false && !flightMode && this._flightEnabled && (this._flightActive || this._flightVelocity.lengthSq() > 0.0001)) {
       const distScale = Math.max(0.1, this.smoothedDistance * 0.5);
       const boostMult = this._flightBoosting ? this._flightBoostMult : 1;
       const thrust = this._flightThrust * distScale * boostMult;
@@ -740,8 +926,8 @@ export class ShipCameraSystem {
       }
     }
 
-    if (this._gravityMode && this.flight && this.director) {
-      // ── Gravity mode: flight dynamics drive camera ──
+    if (flightMode) {
+      // ── FLIGHT MODE: flight dynamics drive camera, director composes ──
 
       // Update flight dynamics (gravity integration, state detection)
       this.flight.update(deltaTime);
@@ -759,22 +945,72 @@ export class ShipCameraSystem {
         }
       );
 
-      // Camera position = flight position + director offset
+      // Camera position = flight position + (director offset × chase scale)
       this.camera.position.copy(this.flight.position);
-      this.camera.position.add(this.director._currentOffset);
+      this.camera.position.addScaledVector(this.director._currentOffset, this._chaseScale);
 
-      // Camera orientation = look at director's smoothed target
+      // Base orientation = look at director's smoothed target
       this.camera.lookAt(this.director._currentLookTarget);
+
+      // Then nudge the look direction by the player's decaying offset
+      if (this._lookOffsetYaw !== 0 || this._lookOffsetPitch !== 0) {
+        this._applyLookOffset();
+      }
     } else {
-      // ── Orbit mode: legacy orbit math drives camera ──
+      // ── TOY_BOX MODE: legacy orbit math drives camera ──
       this._applyOrbit();
     }
 
     // Record post-update diagnostics
     this._diagnostics.record(
       this.camera, this.flight, this.director,
-      this._gravityMode, deltaTime, false
+      flightMode, deltaTime, false
     );
+  }
+
+  /**
+   * Rotate the camera's look direction by the player's decaying offset
+   * (Flight mode only). Runs AFTER the director writes its transform so
+   * the director stays unaware of player input.
+   *
+   * Technique: pull the current look vector, rotate by yaw around local
+   * up then pitch around local right, reconstruct a new look target at
+   * the same distance, and re-lookAt.
+   */
+  _applyLookOffset() {
+    const pos = this.camera.position;
+
+    // Current look vector (director wrote camera.lookAt(_currentLookTarget))
+    const look = _v1.subVectors(this.director._currentLookTarget, pos);
+    const dist = look.length();
+    if (dist < 1e-6) return;
+    look.divideScalar(dist);
+
+    // Yaw rotates around world up (keeps the horizon level)
+    const worldUp = _v2.set(0, 1, 0);
+    _q1.setFromAxisAngle(worldUp, this._lookOffsetYaw);
+    look.applyQuaternion(_q1);
+
+    // Pitch rotates around the ship's local right axis (post-yaw)
+    const right = _v3.crossVectors(look, worldUp);
+    if (right.lengthSq() > 1e-8) {
+      right.normalize();
+      _q2.setFromAxisAngle(right, this._lookOffsetPitch);
+      look.applyQuaternion(_q2);
+    }
+
+    // Re-aim the camera at a point along the rotated look vector
+    _v4.copy(pos).addScaledVector(look, dist);
+    this.camera.lookAt(_v4);
+  }
+
+  /** Exponentially decay the look offset back to center. */
+  _decayLookOffset(deltaTime) {
+    const factor = Math.exp(-deltaTime / LOOK_OFFSET_DECAY_TAU);
+    this._lookOffsetYaw *= factor;
+    this._lookOffsetPitch *= factor;
+    if (Math.abs(this._lookOffsetYaw) < LOOK_OFFSET_SNAP_THRESHOLD) this._lookOffsetYaw = 0;
+    if (Math.abs(this._lookOffsetPitch) < LOOK_OFFSET_SNAP_THRESHOLD) this._lookOffsetPitch = 0;
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -822,6 +1058,7 @@ export class ShipCameraSystem {
     });
 
     window.addEventListener('mousemove', (e) => {
+      // Free-look path: unchanged (deep sky / middle-mouse look-around)
       if (this.isFreeLooking) {
         this.yaw -= e.movementX * this.dragSensitivity;
         this.pitch += e.movementY * this.dragSensitivity;
@@ -831,15 +1068,36 @@ export class ShipCameraSystem {
         return;
       }
       if (!this.isDragging) return;
-      this.yaw -= e.movementX * this.dragSensitivity;
-      this.pitch += e.movementY * this.dragSensitivity;
-      const limit = (85 * Math.PI) / 180;
-      this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+
+      if (this.isFlightMode) {
+        // Flight: drag adds a decaying first-person look offset.
+        // Convention: mouse right → look right (yaw-), mouse down → look down (pitch+).
+        this._lookOffsetYaw   -= e.movementX * this.dragSensitivity;
+        this._lookOffsetPitch += e.movementY * this.dragSensitivity;
+        this._lookOffsetYaw = Math.max(-LOOK_OFFSET_MAX_YAW,
+                              Math.min(LOOK_OFFSET_MAX_YAW, this._lookOffsetYaw));
+        this._lookOffsetPitch = Math.max(-LOOK_OFFSET_MAX_PITCH,
+                                Math.min(LOOK_OFFSET_MAX_PITCH, this._lookOffsetPitch));
+      } else {
+        // Toy Box: drag rotates the orbit (legacy behavior, now alive again)
+        this.yaw -= e.movementX * this.dragSensitivity;
+        this.pitch += e.movementY * this.dragSensitivity;
+        const limit = (85 * Math.PI) / 180;
+        this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+      }
     });
 
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.zoomSpeed += Math.sign(e.deltaY) * this.scrollSensitivity;
+      if (this.isFlightMode) {
+        // Flight: scroll changes chase distance scale (pull camera in/out)
+        const step = -Math.sign(e.deltaY) * CHASE_SCALE_STEP;
+        this._chaseScale = Math.max(CHASE_SCALE_MIN,
+                           Math.min(CHASE_SCALE_MAX, this._chaseScale + step));
+      } else {
+        // Toy Box: scroll changes orbit distance
+        this.zoomSpeed += Math.sign(e.deltaY) * this.scrollSensitivity;
+      }
     }, { passive: false });
 
     // ── Touch controls ──

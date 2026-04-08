@@ -15,7 +15,7 @@ import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
 import { GravityWellMap } from './ui/GravityWellMap.js';
 // import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
-import { ShipCameraSystem } from './camera/ShipCameraSystem.js';
+import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
@@ -83,7 +83,12 @@ retroRenderer.setColorPalette(settings.get('colorPalette'));
 let textureBaker = null; // lazy-init on first use (needs renderer)
 
 // ── Camera Controller ──
-const cameraController = new ShipCameraSystem(camera, canvas);
+// Mobile forces TOY_BOX mode (no Flight mode on phones). The full
+// `_isMobile` flag is declared further down; we compute the touch-detect
+// inline here so ShipCameraSystem can gate Flight mode at construction.
+const cameraController = new ShipCameraSystem(camera, canvas, {
+  isMobile: 'ontouchstart' in window,
+});
 // Debug access for Playwright/console
 window._cam = camera;
 window._cc = cameraController;
@@ -363,12 +368,51 @@ function startIntroSequence() {
   }, 8000);
 }
 
-// Splash screen click/touch handler — hold D for debug skip
+/**
+ * Debug helper: teleport to a known system (Sol, etc.) and set up all the
+ * state the nav computer / glow layer / debug panel need. This bypasses
+ * the normal warp flow which is what sets `currentGalaxyStar` /
+ * `_currentSystemName` under normal gameplay. Without those, the nav
+ * computer can't identify the current system and opens to column view.
+ *
+ * @param {Object} knownSys — entry from KnownSystems.findAt()
+ * @param {{x:number,y:number,z:number}} pos — galactic position (kpc)
+ */
+function _debugEnterKnownSystem(knownSys, pos) {
+  playerGalacticPos = { ...pos };
+  if (skyRenderer._glowLayer?.setPlayerPosition) {
+    skyRenderer._glowLayer.setPlayerPosition(playerGalacticPos);
+  }
+
+  const sysData = knownSys.generate();
+  sysData._knownSystemNames = knownSys.names;
+
+  // Set currentGalaxyStar so openNavComputer can build a starData entry
+  // for openToCurrentSystem (which gates the jump to system view).
+  currentGalaxyStar = {
+    worldX: pos.x,
+    worldY: pos.y,
+    worldZ: pos.z,
+    seed: knownSys.seed || knownSys.name || 'known',
+    type: sysData.star?.type || 'G',
+    name: knownSys.name,
+    isReal: true,
+  };
+  _currentSystemName = knownSys.name || 'Unknown';
+
+  spawnSystem({ forWarp: false, systemData: sysData });
+  debugPanel.setPlayerPos(playerGalacticPos);
+  console.log(`[DEBUG] Entered known system: ${knownSys.name}`);
+}
+
+// Splash screen click/touch handler — hold D for debug skip.
+// D-hold-begin: dismiss splash/title AND immediately spawn the Sol system
+// (no warp animation) so the tester lands in a known reference system in
+// one click instead of waiting through a warp. Shift+N randomizes the system.
 function _handleSplashDismiss(e) {
   if (!splashActive) return;
   if (e.type === 'touchend') { e.preventDefault(); }
   if (_heldKeys.has('KeyD')) {
-    // Debug skip: bypass intro + title, go straight to gameplay
     const splash = document.getElementById('splash-screen');
     if (splash) splash.style.display = 'none';
     const titleEl = document.getElementById('title-screen');
@@ -379,7 +423,15 @@ function _handleSplashDismiss(e) {
     // Clear D key so it doesn't trigger WASD flight after skip
     _heldKeys.delete('KeyD');
     _heldKeys.delete('d');
-    console.log('[DEBUG] Skipped intro — direct to gameplay');
+    // Spawn Sol directly — known reference system
+    const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
+    const knownSol = KnownSystems.findAt(solPos);
+    if (knownSol) {
+      _debugEnterKnownSystem(knownSol, solPos);
+    } else {
+      console.warn('[DEBUG] Sol not found in KnownSystems — falling back to random star system');
+      _debugSpawnType('star-system');
+    }
     return;
   }
   startIntroSequence();
@@ -4346,8 +4398,15 @@ function animate() {
             updateFocusFromStop(stop);
           }
         } else if (body) {
-          // Manual burn: approach → indefinite slow orbit (until input or idle timer)
-          flythrough.beginApproach(body, dist, bodyR, 99999);
+          // Manual burn: skip the approach pause and flow directly into a
+          // clean circular hold orbit. Travel arrived at `dist` from the
+          // body already (pre-orbit blend targets it), and beginOrbit
+          // re-derives yaw/pitch from the current camera position so
+          // there's no visible jump — the camera simply starts rotating.
+          flythrough.beginOrbit(body, dist, bodyR, 99999, {
+            slowOrbit: true,
+            holdOnly: true,
+          });
           _manualBurnOrbiting = true;
         } else {
           // No body (shouldn't happen) — hand to manual
@@ -4554,8 +4613,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // N key: toggle nav computer (blocked during warp)
-  if (e.code === 'KeyN' && !titleScreenActive && !warpEffect.isActive) {
+  // N key: toggle nav computer (blocked during warp). Shift+N is debug respawn.
+  if (e.code === 'KeyN' && !e.shiftKey && !titleScreenActive && !warpEffect.isActive) {
     toggleNavComputer();
     return;
   }
@@ -4713,29 +4772,28 @@ window.addEventListener('keydown', (e) => {
   // Block all input during warp transition or pre-warp turn
   if (warpEffect.isActive || warpTarget.turning) return;
 
+  // Shift+N: DEBUG — spawn a fresh random star system (no warp animation).
+  // Quick iteration shortcut for testing Toy Box camera / orbit / burn bugs.
+  if (e.code === 'KeyN' && e.shiftKey) {
+    if (galleryMode) return;
+    _debugSpawnType('star-system');
+    console.log('[DEBUG] Respawned random star system');
+    return;
+  }
+
   // Shift+L: DEBUG — teleport to Earth's Moon (for LOD testing)
   if (e.code === 'KeyL' && e.shiftKey) {
     console.log('Debug: teleporting to Earth\'s Moon...');
 
-    // Step 1: Spawn the Solar System if not already present
+    // Step 1: Spawn the Solar System via the shared helper (sets
+    // currentGalaxyStar + _currentSystemName so nav computer works).
     const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
     const knownSol = KnownSystems.findAt(solPos);
     if (!knownSol) {
       console.warn('Debug: Sol not found in KnownSystems!');
       return;
     }
-
-    // Update player position to Sol
-    playerGalacticPos = { ...solPos };
-    if (skyRenderer._glowLayer?.setPlayerPosition) {
-      skyRenderer._glowLayer.setPlayerPosition(playerGalacticPos);
-    }
-
-    // Generate and spawn the Solar System
-    const solarData = knownSol.generate();
-    solarData._knownSystemNames = knownSol.names;
-    spawnSystem({ forWarp: false, systemData: solarData });
-    debugPanel.setPlayerPos(playerGalacticPos);
+    _debugEnterKnownSystem(knownSol, solPos);
 
     // Step 2: Focus camera on Earth's Moon (Earth = index 2, Moon = index 0)
     // Use requestAnimationFrame to let the system finish spawning first
@@ -4772,6 +4830,23 @@ window.addEventListener('keydown', (e) => {
     } else if (!minimapVisible && !gravityWellVisible) {
       retroRenderer.setHud(null, null);
     }
+    return;
+  }
+
+  // F key: toggle camera mode (Toy Box ↔ Flight). Desktop only.
+  // Guards: no mobile (ShipCameraSystem enforces but short-circuit here),
+  // no warp, no splash/title, must have a gravity field (system active).
+  if (e.code === 'KeyF') {
+    if (_isMobile) return;
+    if (warpEffect.isActive || warpTarget.turning) return;
+    if (splashActive || titleScreenActive) return;
+    // Deep sky scenes don't have flight. Flight requires a star system.
+    if (!system || system._navigable || (system.type && system.type !== 'star-system')) {
+      console.log('[MODE] Flight mode unavailable — no star system');
+      return;
+    }
+    const newMode = cameraController.toggleCameraMode();
+    console.log(`[MODE] Camera → ${newMode}`);
     return;
   }
 
@@ -5229,8 +5304,14 @@ canvas.addEventListener('mousedown', (e) => {
     cameraController.autoRotateActive = true;
     _deepSkyLingerTimer = 15;
   }
-  // Left-click drag turns off autopilot (but not during warp, turn, or deep sky free-look)
-  if (e.button === 0 && autoNav.isActive && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
+  // Left-click drag turns off autopilot/manual-burn-orbit (but not during
+  // warp, turn, or deep sky free-look). In FLIGHT mode, mouse drag only
+  // adds a look offset — flythrough keeps running. Only WASD / explicit
+  // toggle stops flythrough in Flight.
+  if (e.button === 0 && (autoNav.isActive || _manualBurnOrbiting)
+      && !warpEffect.isActive && !warpTarget.turning
+      && !cameraController.forceFreeLook
+      && cameraController.cameraMode !== CameraMode.FLIGHT) {
     stopFlythrough();
   }
   if (!autoNav.isActive) {
@@ -5239,9 +5320,13 @@ canvas.addEventListener('mousedown', (e) => {
   }
 });
 
-// Scroll wheel resets idle timer
+// Scroll wheel resets idle timer.
+// In TOY_BOX, wheel kills autopilot (old behavior). In FLIGHT, wheel
+// just changes chase distance (handled inside ShipCameraSystem) and
+// leaves the autopilot tour running.
 canvas.addEventListener('wheel', () => {
-  if (autoNav.isActive || _manualBurnOrbiting) {
+  if ((autoNav.isActive || _manualBurnOrbiting)
+      && cameraController.cameraMode !== CameraMode.FLIGHT) {
     stopFlythrough();
   }
   idleTimer = 0;
@@ -5302,8 +5387,9 @@ canvas.addEventListener('touchstart', (e) => {
     _touchStart.x = e.touches[0].clientX;
     _touchStart.y = e.touches[0].clientY;
   }
-  // Stop autopilot on tap (matches mousedown behavior for desktop)
-  if (autoNav.isActive && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
+  // Stop autopilot or manual-burn-orbit on tap (matches mousedown behavior
+  // for desktop). Mobile is always Toy Box, so no Flight-mode carve-out needed.
+  if ((autoNav.isActive || _manualBurnOrbiting) && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
     stopFlythrough();
     // Update the speed dial button state
     const autonBtn = mobileControls?.querySelector('[data-action="autonav"]');

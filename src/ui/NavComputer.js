@@ -262,6 +262,24 @@ export class NavComputer {
     this._currentSystemData = data;
   }
 
+  /**
+   * Get the display name for a planet. Prefers the real name from
+   * `_knownSystemNames` (for known systems like Sol) and falls back to
+   * the procedural "Star-N" pattern for random systems.
+   */
+  _planetDisplayName(idx, starName) {
+    const known = this._systemData?._knownSystemNames?.planets?.[idx]?.name;
+    if (known) return known;
+    return `${starName}-${idx + 1}`;
+  }
+
+  /** Get the display name for a moon (same pattern). */
+  _moonDisplayName(pIdx, mIdx, starName) {
+    const known = this._systemData?._knownSystemNames?.planets?.[pIdx]?.moons?.[mIdx];
+    if (known) return known;
+    return `${starName}-${pIdx + 1}${String.fromCharCode(97 + mIdx)}`;
+  }
+
   /** Find the star nearest to the player's position in _localStars. */
   _findNearestStar() {
     if (!this._localStars || this._localStars.length === 0) return null;
@@ -1560,7 +1578,7 @@ export class NavComputer {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(`${starName}-${i + 1}`, sp.x, sp.y + baseR + 12);
+      ctx.fillText(this._planetDisplayName(i, starName), sp.x, sp.y + baseR + 12);
 
       // Hover detection
       const mdx = this._mouseX - sp.x, mdy = this._mouseY - sp.y;
@@ -1589,7 +1607,7 @@ export class NavComputer {
       if (hb.type === 'planet') {
         const p = planets[hb.index];
         const pd = p.planetData;
-        title = `${starName}-${hb.index + 1}`;
+        title = this._planetDisplayName(hb.index, starName);
         lines = [
           `${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕`,
           `${p.orbitRadiusAU.toFixed(2)} AU`,
@@ -1922,7 +1940,7 @@ export class NavComputer {
         `${(moon.radiusEarth || 0.1).toFixed(2)} R⊕`,
       ];
       if (moon.isPlanetMoon) lines.push('Planet-class moon');
-      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, `${starName}-${idx + 1}${String.fromCharCode(97 + this._hoveredBody.index)}`, lines);
+      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, this._moonDisplayName(idx, this._hoveredBody.index, starName), lines);
     }
 
     // ── Ship position indicator + trajectory line (planet detail) ──
@@ -2016,7 +2034,7 @@ export class NavComputer {
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
-    ctx.fillText(`${starName}-${idx + 1}`, 16, 24);
+    ctx.fillText(this._planetDisplayName(idx, starName), 16, 24);
     ctx.font = '11px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
     ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
