@@ -1541,6 +1541,15 @@ function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
   let best = null;
   let bestDistSq = Infinity;
 
+  // Tie-breaking: when two bodies project to nearly the same screen pixel
+  // (within 3 px), prefer the larger object (star > planet > moon). This
+  // stops a moon from "winning" a click when it's visually overlapping
+  // its parent planet at the same point — without affecting the case
+  // where the moon is visibly offset from the planet, in which case the
+  // closest-to-mouse rule still applies.
+  const TIE_PIXELS_SQ = 9; // 3 px tolerance
+  const kindRank = (k) => (k === 'star' ? 3 : k === 'planet' ? 2 : 1);
+
   const tryBody = (target) => {
     if (!target || !target.mesh) return;
     // Project center to screen
@@ -1562,9 +1571,18 @@ function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
     const dx = localX - sx;
     const dy = localY - sy;
     const d2 = dx * dx + dy * dy;
-    if (d2 < threshold * threshold && d2 < bestDistSq) {
+    if (d2 >= threshold * threshold) return;
+
+    if (best === null || d2 < bestDistSq - TIE_PIXELS_SQ) {
+      // Clearly closer to the mouse than the current best.
       bestDistSq = d2;
       best = target;
+    } else if (d2 <= bestDistSq + TIE_PIXELS_SQ) {
+      // Effectively a tie — prefer the larger kind (star > planet > moon).
+      if (kindRank(target.kind) > kindRank(best.kind)) {
+        bestDistSq = d2;
+        best = target;
+      }
     }
   };
 

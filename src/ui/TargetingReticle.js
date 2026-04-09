@@ -24,6 +24,11 @@
  */
 
 import * as THREE from 'three';
+import { SOLAR_RADIUS_AU, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleConstants.js';
+
+// 1 R☉ ≈ 4.65 scene units, 1 R⊕ ≈ 0.0426 scene units
+const SOLAR_RADIUS_SCENE = SOLAR_RADIUS_AU * AU_TO_SCENE;
+const EARTH_RADIUS_SCENE = EARTH_RADIUS_AU * AU_TO_SCENE;
 
 // Colors
 const COLOR_TENTATIVE = 'rgba(120, 255, 120, 0.45)'; // dim, semi-transparent green
@@ -241,11 +246,40 @@ export class TargetingReticle {
     const lines = [];
     if (target.name) lines.push(target.name.toUpperCase());
     if (target.type) lines.push(target.type);
-    if (isSelected && target.mesh) {
-      const dist = this.camera.position.distanceTo(target.mesh.position);
-      lines.push(this._formatDistance(dist));
+    if (isSelected) {
+      const size = this._formatSize(target);
+      if (size) lines.push(size);
+      if (target.mesh) {
+        const dist = this.camera.position.distanceTo(target.mesh.position);
+        lines.push(this._formatDistance(dist));
+      }
     }
     return lines;
+  }
+
+  /**
+   * Format a body's physical radius for display.
+   *   Stars            → solar radii  (R☉)
+   *   Planets / moons  → Earth radii  (R⊕)
+   *   Tiny bodies      → kilometers   (R⊕ < 0.1 falls back to km)
+   */
+  _formatSize(target) {
+    const sceneRadius = target.radius || 0;
+    if (sceneRadius <= 0) return null;
+
+    if (target.kind === 'star') {
+      const rSun = sceneRadius / SOLAR_RADIUS_SCENE;
+      if (rSun >= 100) return `${rSun.toFixed(0)} R☉`;
+      if (rSun >= 10)  return `${rSun.toFixed(1)} R☉`;
+      return `${rSun.toFixed(2)} R☉`;
+    }
+
+    // Planets, moons — Earth radii, falling back to km for tiny bodies.
+    const rEarth = sceneRadius / EARTH_RADIUS_SCENE;
+    if (rEarth >= 10)  return `${rEarth.toFixed(1)} R⊕`;
+    if (rEarth >= 0.1) return `${rEarth.toFixed(2)} R⊕`;
+    const km = sceneRadius * 149600;
+    return `${km.toFixed(0)} km`;
   }
 
   /**
