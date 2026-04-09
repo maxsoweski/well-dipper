@@ -130,6 +130,59 @@ Mode is preserved across all drive-state transitions (including warp in/out).
 
 **COMMIT BURN** (fly to a body in the current system) uses FlythroughCamera for smooth cinematic travel, then hands back to manual on arrival. It calls the same `focusPlanet()`/`focusStar()`/`focusMoon()` functions as the Tab/1-9 keyboard shortcuts. Arrival mode matches the player's current mode.
 
+### 5.4 In-System Targeting and Selection
+
+Selecting a body inside a system is **decoupled from travel**. Click ≠ go.
+This matches Elite Dangerous and gives the player a moment to confirm intent
+before committing to a burn.
+
+**Selection has three states:**
+
+| State       | What it means                              | Visual                                                  |
+|-------------|--------------------------------------------|---------------------------------------------------------|
+| None        | Nothing under the mouse, nothing committed | No reticle drawn                                        |
+| Tentative   | Mouse hover over a clickable body          | Dim, semi-transparent green corner brackets + name      |
+| Selected    | Player clicked a body — soft-locked        | Bright opaque green brackets + info block + BURN button |
+
+**Click pipeline (`pointerdown` → `pointerup` in `main.js`):**
+
+1. `hitTestBodies(clientX, clientY)` projects every star/planet/moon in the
+   current system to screen-space and picks the closest body within an adaptive
+   threshold (`max(24px, projectedRadius + 12px)`). When two bodies are within
+   3 px of each other, the larger kind wins (star > planet > moon).
+2. If hit found → `selectTarget(target)`. The camera's orbit target transitions
+   to the body, the BURN button appears in the HUD, the reticle goes Selected.
+   No travel yet.
+3. If no in-system hit, fall through to `trySelectWarpTarget` (sky stars). The
+   in-system path always runs first, so an in-system body shadows a behind-it
+   star.
+
+**Commit pipeline (BURN button or Space key):**
+
+- `commitSelection()` is the universal commit entry point.
+- If an in-system body is soft-selected → `commitBurn()` → routes to
+  `focusPlanet/Star/Moon`, which kicks off `flythrough.beginTravelFrom`. This
+  is the moment the cinematic burn animation starts.
+- Else if a sky warp target is set → `beginWarpTurn()`.
+- Else → no-op.
+
+The Space key is bound to `commitSelection()` (replacing the older
+"Space always warps" binding). This unifies all "go to thing" intent under
+one keystroke regardless of whether the target is in-system or out-of-system.
+
+**The reticle is a pure view.** `src/ui/TargetingReticle.js` draws what main.js
+tells it to draw. It doesn't know about input, hit testing, or the burn
+state — main.js owns `_hoverTarget` and `_selectedTarget` and calls
+`reticle.update({ hoverTarget, selectedTarget })` once per frame. This keeps
+the reticle's contract trivial: project two world positions to screen space,
+draw brackets and an info block.
+
+**Stale-target invariants:**
+- `warpSwapSystem` clears `_hoverTarget` and `_selectedTarget` so meshes from
+  the disposed system can never leak into the new system's reticle draw.
+- The hit test uses live `mesh.position`, not cached values, so bodies that
+  orbit during a paused or stalled frame don't desync.
+
 ---
 
 ## 6. Nav Computer
