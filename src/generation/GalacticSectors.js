@@ -46,7 +46,18 @@ export class GalacticSectors {
     const R = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
     if (R > GalacticMap.GALAXY_RADIUS * 1.2) return null;
 
-    // Find nearest sector center
+    // Bounds-based lookup — find the sector that actually contains this position.
+    // Sectors are density-adaptive grid cells with varying sizes, so nearest-center
+    // can return a small sector whose bounds don't contain the position.
+    for (const sector of this._sectors) {
+      if (pos.x >= sector.minX && pos.x < sector.maxX &&
+          pos.z >= sector.minZ && pos.z < sector.maxZ) {
+        return sector;
+      }
+    }
+
+    // Fallback to nearest center for positions in gaps (outer halo edges
+    // where some cells were pruned during generation)
     let best = null;
     let bestDist = Infinity;
     for (const sector of this._sectors) {
