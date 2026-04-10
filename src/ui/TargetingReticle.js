@@ -42,22 +42,25 @@ const COLOR_SELECTED_GLOW = 'rgba(180, 255, 200, 0.35)';
 const BRACKET_MIN_HALF = 16;  // px — smallest half-width of bracket square
 const BRACKET_MARGIN   = 12;  // px — gap between bracket square and body edge
 const BRACKET_EDGE_MARGIN = 40; // px — keep brackets this far from viewport edge
-const BRACKET_ARM_LEN = 10;   // px — length of each L arm
-const BRACKET_THICK_TENT = 1.5;
-const BRACKET_THICK_SEL  = 2.5;
+const BRACKET_ARM_LEN = 12;   // px — length of each L arm
+const BRACKET_THICK_TENT = 3;
+const BRACKET_THICK_SEL  = 4;
 
 // Ghost reticle (sub-pixel bodies): fixed size independent of body radius,
 // so every distant body reads as the same quiet marker. Sized for a chunky
 // retro feel so it doesn't get lost against the starfield.
 const GHOST_HALF      = 14;   // px — half-width of ghost bracket square
-const GHOST_ARM_LEN   = 6;    // px — length of each L arm
-const GHOST_THICK     = 2;    // px — line thickness
+const GHOST_ARM_LEN   = 8;    // px — length of each L arm
+const GHOST_THICK     = 3;    // px — line thickness (matches retro pixelScale)
+
+// Pixel grid size — brackets snap to this for retro chunky look
+const PX = 3; // matches retro renderer pixelScale
 
 // Name label style — centered in the negative space below the bottom brackets
-const NAME_FONT = '12px "DotGothic16", monospace';
+const NAME_FONT = '16px "Pixelify Sans", system-ui';
 const NAME_COLOR_SELECTED  = 'rgba(160, 255, 180, 0.95)';
 const NAME_COLOR_TENTATIVE = 'rgba(140, 220, 140, 0.75)';
-const NAME_BOTTOM_PAD = 4;    // px — gap between bottom bracket edge and name baseline
+const NAME_BOTTOM_PAD = 6;    // px — gap between bottom bracket edge and name baseline
 
 // Reusable scratch objects
 const _v = new THREE.Vector3();
@@ -74,6 +77,14 @@ function _isSameBody(a, b) {
   if (a.kind === 'planet') return a.planetIndex === b.planetIndex;
   if (a.kind === 'moon') return a.planetIndex === b.planetIndex && a.moonIndex === b.moonIndex;
   return false;
+}
+
+/** Stable string key for a target (used for animation tracking). */
+function _targetKey(t) {
+  if (t.kind === 'star') return `s${t.starIndex}`;
+  if (t.kind === 'planet') return `p${t.planetIndex}`;
+  if (t.kind === 'moon') return `m${t.planetIndex}_${t.moonIndex}`;
+  return '';
 }
 
 export class TargetingReticle {
@@ -101,6 +112,12 @@ export class TargetingReticle {
 
     // Hidden by default — shown when enabled
     this.enabled = true;
+
+    // Ghost bracket lock-in animation: track when each ghost first appeared
+    // so we can animate brackets from loose (far apart) to locked (default).
+    this._ghostEntryTimes = new Map(); // key → timestamp (ms)
+    this._ghostLockDuration = 400;     // ms — how long the lock-in takes
+    this._ghostLockScale = 2.5;        // start at N× default half-width
   }
 
   _resize() {
@@ -149,31 +166,45 @@ export class TargetingReticle {
   }
 
   /**
-   * Draw a set of corner brackets of half-width `half` centered at (cx, cy).
-   * Corner brackets are four L-shapes at the corners of a square.
+   * Draw pixelated staircase corner brackets centered at (cx, cy).
+   * Each bracket is drawn as filled pixel blocks (PX × PX) snapped to a grid,
+   * with a diagonal step at the corner for a retro targeting reticle feel.
+   *
+   * Top-left corner shape (others mirrored):
+   *   ██████████          ← horizontal arm along outer edge
+   *    █                  ← step: offset 1 block inward on both axes
+   *    █                  ← vertical arm continues inward
+   *    █
    */
   _drawBrackets(cx, cy, half, armLen, thickness, color) {
     const ctx = this.ctx;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = thickness;
-    ctx.lineCap = 'square';
-    ctx.beginPath();
+    ctx.fillStyle = color;
+    const h = Math.round(half / PX) * PX;
+    const arm = Math.max(3, Math.round(armLen / PX));
+    const t = Math.max(1, Math.round(thickness / PX)) * PX;
 
-    const corners = [
-      { x: cx - half, y: cy - half, hx: 1,  vy: 1 },   // top-left
-      { x: cx + half, y: cy - half, hx: -1, vy: 1 },   // top-right
-      { x: cx - half, y: cy + half, hx: 1,  vy: -1 },  // bottom-left
-      { x: cx + half, y: cy + half, hx: -1, vy: -1 },  // bottom-right
-    ];
-    for (const c of corners) {
-      // Horizontal arm
-      ctx.moveTo(c.x, c.y);
-      ctx.lineTo(c.x + c.hx * armLen, c.y);
-      // Vertical arm
-      ctx.moveTo(c.x, c.y);
-      ctx.lineTo(c.x, c.y + c.vy * armLen);
+    // Four corners: sx/sy point from center toward the corner
+    const signs = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+    for (const [sx, sy] of signs) {
+      // Outer corner point
+      const ox = cx + sx * h;
+      const oy = cy + sy * h;
+
+      // Horizontal arm: along the outer edge, running inward (toward center)
+      for (let i = 0; i < arm; i++) {
+        const bx = ox - sx * i * PX;
+        ctx.fillRect(bx - (sx > 0 ? 0 : t - PX), oy - (sy > 0 ? 0 : t - PX), t, t);
+      }
+
+      // Vertical arm: offset 1 block inward on the horizontal axis,
+      // running inward (toward center) on the vertical axis.
+      // Starts 1 block from the corner (block 0 is the step/gap).
+      for (let i = 1; i < arm; i++) {
+        const by = oy - sy * i * PX;
+        const vx = ox + sx * PX; // 1 block inward on X
+        ctx.fillRect(vx - (sx > 0 ? 0 : t - PX), by - (sy > 0 ? 0 : t - PX), t, t);
+      }
     }
-    ctx.stroke();
   }
 
   /**
@@ -216,12 +247,25 @@ export class TargetingReticle {
     // Ghost pass first: small dim empty brackets for every sub-pixel body
     // that isn't currently being hovered or selected. Hover/select states
     // take visual priority and render on top.
+    const now = performance.now();
+    const activeKeys = new Set();
     if (ghostTargets && ghostTargets.length) {
       for (const ghost of ghostTargets) {
         if (_isSameBody(ghost, hoverTarget)) continue;
         if (_isSameBody(ghost, selectedTarget)) continue;
-        this._drawGhost(ghost);
+        const key = _targetKey(ghost);
+        activeKeys.add(key);
+        // Record entry time for new ghosts
+        if (!this._ghostEntryTimes.has(key)) {
+          this._ghostEntryTimes.set(key, now);
+        }
+        const age = now - this._ghostEntryTimes.get(key);
+        this._drawGhost(ghost, age);
       }
+    }
+    // Prune entry times for ghosts that disappeared
+    for (const key of this._ghostEntryTimes.keys()) {
+      if (!activeKeys.has(key)) this._ghostEntryTimes.delete(key);
     }
 
     // Tentative (hover) — only if not already the selected target
@@ -238,14 +282,24 @@ export class TargetingReticle {
    * no name — just marks that something is there. Hover/click still work
    * because main.js's hitTestBodies uses mesh.position, not mesh.visible.
    */
-  _drawGhost(target) {
+  _drawGhost(target, age) {
     if (!target || !target.mesh) return;
     const screen = this._project(target.mesh.position);
     if (!screen) return;
     const ctx = this.ctx;
     ctx.save();
     ctx.scale(this._dpr, this._dpr);
-    this._drawBrackets(screen.x, screen.y, GHOST_HALF, GHOST_ARM_LEN, GHOST_THICK, COLOR_GHOST);
+
+    // Lock-in animation: brackets start loose and tighten to default size.
+    // easeOutCubic gives a snappy lock-in feel.
+    const t = Math.min(1, age / this._ghostLockDuration);
+    const eased = 1 - (1 - t) * (1 - t) * (1 - t); // easeOutCubic
+    const half = GHOST_HALF * (this._ghostLockScale - (this._ghostLockScale - 1) * eased);
+    // Fade opacity in during lock-in so brackets don't pop
+    const alpha = 0.30 * Math.min(1, age / (this._ghostLockDuration * 0.5));
+    const color = `rgba(120, 255, 140, ${alpha.toFixed(3)})`;
+
+    this._drawBrackets(screen.x, screen.y, half, GHOST_ARM_LEN, GHOST_THICK, color);
     ctx.restore();
   }
 
@@ -272,8 +326,7 @@ export class TargetingReticle {
     ctx.scale(this._dpr, this._dpr);
 
     if (isSelected) {
-      // Draw outer glow first
-      this._drawBrackets(screen.x, screen.y, half + 2, BRACKET_ARM_LEN + 2, BRACKET_THICK_SEL + 1.5, COLOR_SELECTED_GLOW);
+      // Single-tone bright green — no glow layer
       this._drawBrackets(screen.x, screen.y, half, BRACKET_ARM_LEN, BRACKET_THICK_SEL, COLOR_SELECTED);
       if (target.name) {
         this._drawNameBelow(screen.x, screen.y, half, target.name.toUpperCase(), NAME_COLOR_SELECTED);

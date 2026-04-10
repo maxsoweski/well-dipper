@@ -1784,6 +1784,7 @@ function _hideCurrentSystem() {
         scene.remove(entry.moons[m].mesh);
         if (entry.moons[m]._clickProxy) scene.remove(entry.moons[m]._clickProxy);
         entry.moonBillboards[m].removeFrom(scene);
+        if (entry.moons[m]._planetBillboard) entry.moons[m]._planetBillboard.removeFrom(scene);
       }
       for (const line of entry.moonOrbitLines) scene.remove(line.mesh);
     }
@@ -1870,6 +1871,10 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
             entry.moons[m]._clickProxy.material.dispose();
           }
           entry.moonBillboards[m].dispose();
+          if (entry.moons[m]._planetBillboard) {
+            entry.moons[m]._planetBillboard.removeFrom(scene);
+            entry.moons[m]._planetBillboard.dispose();
+          }
         }
         for (const line of entry.moonOrbitLines) line.dispose();
       }
@@ -2061,6 +2066,14 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       const moonBb = new Billboard(billboardColor(moonData.baseColor), 2);
       moonBb.addTo(scene);
       moonBillboards.push(moonBb);
+
+      // Shader billboard dot for moons (same system as planet billboards)
+      const moonPb = new PlanetBillboard(
+        billboardColor(moonData.baseColor),
+        moonData.radiusScene
+      );
+      moonPb.addTo(scene);
+      moon._planetBillboard = moonPb;
 
       // Moon orbit line — centered on planet, tilted by inclination
       const moonLine = new OrbitLine(moonData.orbitRadius, 0x00bb00);
@@ -4590,6 +4603,8 @@ function animate() {
     // NOTE: entry.billboard / entry.moonBillboards (Billboard.js) are DEAD
     // CODE — their sprites are force-hidden below. Kept for dispose path.
     const PLANET_BILLBOARD_RANGE = 15; // billboard visible within N× orbit radius
+    const PLANET_GHOST_RANGE = 10000; // planet brackets visible within 10 AU (10000 scene units)
+    const MOON_GHOST_RANGE = 20;      // moon brackets visible within N× moon orbit radius from parent planet
     _ghostTargets.length = 0;
     _occluders.length = 0;
     {
@@ -4626,10 +4641,10 @@ function animate() {
           pBb.mesh.visible = false;
         }
 
-        if (pIsGhost) {
+        if (pIsGhost && pDist < PLANET_GHOST_RANGE) {
           const ghost = _makeTarget('planet', { planetIndex: pi });
           if (ghost) _ghostTargets.push(ghost);
-        } else {
+        } else if (!pIsGhost) {
           // Visible planet can occlude other reticles behind it.
           _occluders.push({ mesh: entry.planet.mesh, radius: entry.planet.data.radius });
         }
@@ -4648,10 +4663,25 @@ function animate() {
           moonBb.sprite.visible = false;
           // Keep click proxy in sync with moon position
           if (moon._clickProxy) moon._clickProxy.position.copy(moon.mesh.position);
-          if (mIsGhost) {
+          // Moon brackets + billboard: only show when camera is near the parent planet.
+          const moonOrbitR = moon.data.orbitRadius || 1;
+          const distToPlanet = camera.position.distanceTo(entry.planet.mesh.position);
+          const moonNearby = distToPlanet < moonOrbitR * MOON_GHOST_RANGE;
+          // Moon billboard dot
+          const mPb = moon._planetBillboard;
+          if (mPb) {
+            if (mIsGhost && moonNearby) {
+              mPb.mesh.position.copy(moon.mesh.position);
+              mPb.mesh.visible = true;
+              mPb.update(camera);
+            } else {
+              mPb.mesh.visible = false;
+            }
+          }
+          if (mIsGhost && moonNearby) {
             const ghost = _makeTarget('moon', { planetIndex: pi, moonIndex: m });
             if (ghost) _ghostTargets.push(ghost);
-          } else {
+          } else if (!mIsGhost) {
             // Visible moon can occlude other reticles behind it.
             _occluders.push({ mesh: moon.mesh, radius: moon.data.radius });
           }

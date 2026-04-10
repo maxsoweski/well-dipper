@@ -146,7 +146,7 @@ export function generateSolarSystem() {
       rotationSpeed: -0.01,    // retrograde, very slow
       axialTilt: 3.1,          // ~177° (nearly upside down)
       rings: null,
-      clouds: { color: [0.9, 0.82, 0.65], density: 0.7, scale: 2.5 },
+      clouds: null,
       atmosphere: { color: [0.9, 0.8, 0.5], strength: 0.6 },
       moons: [],
       profileId: 'sol-venus',
@@ -165,7 +165,7 @@ export function generateSolarSystem() {
       rotationSpeed: 0.1,
       axialTilt: 0.41,         // 23.4°
       rings: null,
-      clouds: { color: [0.95, 0.95, 0.97], density: 0.45, scale: 3.0 },
+      clouds: { color: [0.95, 0.95, 0.97], density: 0.85, scale: 3.0 },
       atmosphere: { color: [0.4, 0.6, 1.0], strength: 0.4 },
       profileId: 'sol-earth',
       moons: [
@@ -196,7 +196,7 @@ export function generateSolarSystem() {
       rotationSpeed: 0.1,
       axialTilt: 0.44,         // 25.2°
       rings: null,
-      clouds: { color: [0.75, 0.55, 0.35], density: 0.15, scale: 2.0 },
+      clouds: null,
       atmosphere: { color: [0.8, 0.5, 0.3], strength: 0.15 },
       profileId: 'sol-mars',
       moons: [
@@ -394,7 +394,7 @@ export function generateSolarSystem() {
           accentColor: [0.60, 0.48, 0.25],
           noiseScale: 2.5,
           inclination: 0.005,
-          clouds: { color: [0.75, 0.60, 0.35], density: 0.6, scale: 3.0 },
+          clouds: null,
           atmosphere: { color: [0.7, 0.55, 0.3], strength: 0.5 },
           profileId: 'sol-titan',
         },
@@ -529,7 +529,7 @@ export function generateSolarSystem() {
         opacity: 0.12,           // extremely faint
         tiltX: 0, tiltZ: 0,
       },
-      clouds: { color: [0.6, 0.7, 0.9], density: 0.25, scale: 2.0 },
+      clouds: null,
       atmosphere: { color: [0.3, 0.5, 0.9], strength: 0.5 },
       profileId: 'sol-neptune',
       moons: [

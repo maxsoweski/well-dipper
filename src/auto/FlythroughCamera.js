@@ -91,6 +91,10 @@ export class FlythroughCamera {
     this._arrivalCaptureDir = 1;
     this._arrivalYawSpeed = 0.3;
 
+    // Telemetry: records distance-to-target each frame during travel.
+    // Dumped to console on travel completion for oscillation analysis.
+    this._telemetry = null; // null = off, array = recording
+
     // Current orbit distance (saved each frame for short-trip detection)
     this._currentDist = 10;
 
@@ -325,6 +329,7 @@ export class FlythroughCamera {
     // Store forward direction at departure for smooth lookAt blend
     this.camera.getWorldDirection(this.departureDir);
 
+    this._telemetry = []; // start recording
     this._arrivalComputed = false;
     this._hermiteStartPos.copy(this.departurePos);
     this.travelElapsed = 0;
@@ -351,8 +356,11 @@ export class FlythroughCamera {
       _v1.subVectors(nextBodyRef.position, this.departurePos).normalize();
       this._departureTangent.copy(_v1);
 
-      // Small tangent magnitude = nearly straight path (no wide arc)
-      const tangentMag = dist * 0.25;
+      // Small tangent magnitude = nearly straight path (no wide arc).
+      // Kept small (10%) to match the arrival tangent (5%) — prevents
+      // the Hermite curve from curving away from the straight approach
+      // and causing zoom oscillation during the arrival blend.
+      const tangentMag = dist * 0.1;
       this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
     } else {
       // ── Long trip: tangential departure with velocity matching ──
@@ -375,6 +383,14 @@ export class FlythroughCamera {
     this._travelToBody = nextBodyRef;
     this._travelToRadius = nextBodyRadius;
     this._travelToOrbitDist = nextOrbitDistance;
+
+    // Snapshot camera orientation for smooth rotation blend during travel.
+    // Without this, the camera snaps instantly to face the lookAt target
+    // on the first frame — visible as a fast "whip" when leaving orbit.
+    this._initialQuat.copy(this.camera.quaternion);
+    // Autopilot has departure lookback (camera watches departing body), so
+    // the rotation is gentler — 1s blend is enough.
+    this._rotBlendDuration = 1.0;
   }
 
   /**
@@ -438,11 +454,12 @@ export class FlythroughCamera {
       // a short in-system hop.
       _v1.subVectors(nextBodyRef.position, this.departurePos).normalize();
       this._departureTangent.copy(_v1);
-      const tangentMag = dist * 0.25;
+      const tangentMag = dist * 0.1;
       this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
       this._isShortTrip = true;
     }
 
+    this._telemetry = []; // start recording
     this._arrivalComputed = false;
     this._hermiteStartPos.copy(this.departurePos);
     this.travelElapsed = 0;
@@ -461,6 +478,12 @@ export class FlythroughCamera {
     this._travelToBody = nextBodyRef;
     this._travelToRadius = nextBodyRadius;
     this._travelToOrbitDist = nextOrbitDistance;
+
+    // Scale rotation blend to travel duration — burns can require large
+    // rotations (e.g. moon is behind the camera) and the default 1s is
+    // too fast, producing a "whip" effect. Use 40% of travel time, capped
+    // at 2.5s so long trips still settle quickly.
+    this._rotBlendDuration = Math.min(this.travelDuration * 0.4, 2.5);
   }
 
   /**
@@ -822,15 +845,18 @@ export class FlythroughCamera {
     const remDist = this._hermiteStartPos.distanceTo(_v1);
 
     if (this._isShortTrip) {
-      // Short trip: arrive from full 3D approach direction.
-      // Uses current start→endpoint direction so the tangent tracks
-      // the moon's actual position, not where it was at trip start.
-      const arrMag = remDist * 0.25;
+      // Short trip: nearly straight approach to destination.
+      // A small tangent (5% of distance) keeps the curve linear enough
+      // that the Hermite path matches the pre-orbit circle distance
+      // throughout the arrival blend — preventing zoom oscillation.
+      const arrMag = remDist * 0.05;
       _v3.subVectors(_v1, this._hermiteStartPos).normalize();
       this._arrivalTangentScaled.copy(_v3).multiplyScalar(arrMag);
     } else {
-      // Long trip: arrive tangent to orbit (graceful curved entry)
-      const arrMag = remDist * 0.6;
+      // Long trip: arrive tangent to orbit (graceful curved entry).
+      // Kept moderate (25%) to prevent the Hermite curve from overshooting
+      // the orbit distance during the arrival blend.
+      const arrMag = remDist * 0.25;
       this._arrivalTangentScaled.set(arrTanX, 0, arrTanZ)
         .multiplyScalar(captureDir).normalize()
         .multiplyScalar(arrMag);
@@ -851,9 +877,11 @@ export class FlythroughCamera {
     );
     this.camera.position.copy(_v6);
 
-    // ── Arrival blend (last 3.5s): Hermite curve → pre-orbit ──
+    // ── Arrival blend: Hermite curve → pre-orbit ──
     // Gravitational capture: the curved cruise bends into orbit.
-    const ARRIVE_BLEND = 3.5;
+    // Proportional: last 40% of trip (min 2s, max 3.5s) so short trips
+    // don't start repositioning at 12% elapsed.
+    const ARRIVE_BLEND = Math.max(2, Math.min(3.5, this.travelDuration * 0.4));
     const arriveStart = this.travelDuration - ARRIVE_BLEND;
     if (this.travelElapsed > arriveStart) {
       const blend = this._ease(
@@ -877,8 +905,10 @@ export class FlythroughCamera {
       ? 1 - this._ease(Math.min(1, this.travelElapsed / DEPART_LOOK_DUR))
       : 0;
     // Weight: arriving body (fades in from 35% to 70%).
-    // Warp arrival: always look at the star (camera was already facing it).
-    const wArrive = this._warpArrival
+    // Warp arrival or manual burn (no departure body): always look at the
+    // target. The slerp blend handles the smooth rotation from the pre-burn
+    // orientation — no need for a heading phase that pulls off-center.
+    const wArrive = (this._warpArrival || !fromBody)
       ? 1
       : this._ease(Math.max(0, Math.min(1, (transferT - 0.35) / 0.35)));
     // Weight: forward heading (fills the gap — peaks mid-transfer)
@@ -930,7 +960,7 @@ export class FlythroughCamera {
     // quintic _ease — quintic is heavily front/back-loaded which felt
     // mechanical ("stuck then rushed"). Sine gives a gentler acceleration
     // that reads as natural camera motion over the full second.
-    if (this._isShortTrip && this.travelElapsed < this._rotBlendDuration) {
+    if (this.travelElapsed < this._rotBlendDuration) {
       const blendT = this.travelElapsed / this._rotBlendDuration;
       const eased = 0.5 * (1 - Math.cos(Math.PI * blendT)); // inOutSine
       // slerp(initialQuat, 1 - eased) pulls the current quat BACK toward
@@ -939,10 +969,43 @@ export class FlythroughCamera {
       this.camera.quaternion.slerp(this._initialQuat, 1 - eased);
     }
 
+    // ── Telemetry: record distance-to-target each frame ──
+    if (this._telemetry) {
+      const distToTarget = this.camera.position.distanceTo(nextPos);
+      this._telemetry.push({
+        t: this.travelElapsed.toFixed(3),
+        dist: distToTarget.toFixed(4),
+        wH: wHeading.toFixed(3),
+        wA: wArrive.toFixed(3),
+      });
+    }
+
     if (t >= 1) {
       // Store entry yaw and capture direction for seamless orbit start
       this.orbitYaw = this._arrivalYaw;
       this._arrivalOrbitDir = this._arrivalCaptureDir;
+      // Dump telemetry
+      if (this._telemetry && this._telemetry.length > 0) {
+        const dists = this._telemetry.map(r => parseFloat(r.dist));
+        let oscillations = 0;
+        for (let i = 2; i < dists.length; i++) {
+          // Detect direction changes (was decreasing, now increasing)
+          if (dists[i] > dists[i - 1] && dists[i - 1] < dists[i - 2]) oscillations++;
+        }
+        const minD = Math.min(...dists).toFixed(4);
+        const maxD = Math.max(...dists).toFixed(4);
+        const finalD = dists[dists.length - 1].toFixed(4);
+        console.log(`[TRAVEL TELEMETRY] ${this._telemetry.length} frames, `
+          + `dist: ${maxD} → ${minD} (final: ${finalD}), `
+          + `oscillations: ${oscillations}, `
+          + `short: ${this._isShortTrip}, duration: ${this.travelDuration.toFixed(1)}s`);
+        if (oscillations > 0) {
+          console.warn(`[TRAVEL TELEMETRY] ⚠️ ${oscillations} distance oscillation(s) detected`);
+          console.table(this._telemetry);
+        }
+        window._lastTravelTelemetry = this._telemetry;
+      }
+      this._telemetry = null;
       return { orbitComplete: false, travelComplete: true };
     }
 
