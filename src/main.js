@@ -13,6 +13,7 @@ import { DebugPanel } from './ui/DebugPanel.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
+import { PlanetBillboard } from './objects/PlanetBillboard.js';
 import { GravityWellMap } from './ui/GravityWellMap.js';
 // import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
@@ -1481,6 +1482,7 @@ let _orbitLineTargets = new Map(); // orbit line mesh → { type, planetIndex, m
 let _hoveredOrbitLine = null;      // currently hovered orbit line mesh
 let _lastOrbitHoverTime = 0;       // throttle timer for hover check
 const _mouseDown = { x: 0, y: 0 };
+let _autopilotClickPending = false; // deferred autopilot exit — see mousedown/mouseup
 let clickTargets = new Map();
 const _projVec = new THREE.Vector3(); // reusable for screen projection
 
@@ -1777,6 +1779,7 @@ function _hideCurrentSystem() {
     for (const entry of system.planets) {
       scene.remove(entry.planet.mesh);
       entry.billboard.removeFrom(scene);
+      entry.planetBillboard.removeFrom(scene);
       for (let m = 0; m < entry.moons.length; m++) {
         scene.remove(entry.moons[m].mesh);
         if (entry.moons[m]._clickProxy) scene.remove(entry.moons[m]._clickProxy);
@@ -1858,6 +1861,8 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       for (const entry of system.planets) {
         entry.planet.dispose();
         entry.billboard.dispose();
+        entry.planetBillboard.removeFrom(scene);
+        entry.planetBillboard.dispose();
         for (let m = 0; m < entry.moons.length; m++) {
           entry.moons[m].dispose();
           if (entry.moons[m]._clickProxy) {
@@ -1993,6 +1998,13 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     const billboard = new Billboard(billboardColor(scenePlanetData.baseColor));
     billboard.addTo(scene);
 
+    // Shader billboard dot (Space Engine-style — visible at medium distance)
+    const planetBillboard = new PlanetBillboard(
+      billboardColor(scenePlanetData.baseColor),
+      scenePlanetData.radius
+    );
+    planetBillboard.addTo(scene);
+
     // Scene-unit moon data: override radius and orbitRadius for 3D rendering.
     // Scale noiseScale like planets — compensate for smaller geometry.
     const sceneMoons = entry.moons.map(m => ({
@@ -2071,6 +2083,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     planets.push({
       planet,
       billboard,
+      planetBillboard,
       moons,
       moonBillboards,
       moonOrbitLines,
@@ -2867,6 +2880,7 @@ function _setSystemVisible(visible) {
     for (const entry of system.planets) {
       entry.planet.mesh.visible = visible;
       entry.billboard.sprite.visible = visible;
+      entry.planetBillboard.mesh.visible = false; // LOD loop controls this
       for (const m of entry.moons) m.mesh.visible = visible;
       for (const bb of entry.moonBillboards) bb.sprite.visible = visible;
       for (const ml of entry.moonOrbitLines) ml.mesh.visible = visible;
@@ -4562,19 +4576,20 @@ function animate() {
       }
     }
 
-    // ── LOD: ghost reticle vs mesh ──
-    // When a planet/moon is too small to resolve at render resolution, hide
-    // the mesh AND its billboard sprite, and emit a "ghost target" so the
-    // TargetingReticle draws a small dim empty bracket at the body's
-    // projected position (Elite Dangerous-style). This keeps the sense of
-    // scale honest: distant bodies don't masquerade as on-screen dots.
-    // Hover/click still work because hitTestBodies uses mesh.position,
-    // not mesh.visible.
+    // ── LOD: ghost reticle vs mesh vs planet billboard ──
+    // Three-tier distance model for planets:
+    //   Close: full 3D mesh (pPixels >= 3)
+    //   Medium: shader billboard dot — radius-scaled, dimmer than stars
+    //           (pPixels < 3, distance < orbit * PLANET_BILLBOARD_RANGE)
+    //   Far: ghost reticle only (pPixels < 3, beyond billboard range)
+    //
+    // Stars are always visible as billboards. Planet billboards have a
+    // distance cutoff so they don't cluster around the star dot at extreme
+    // zoom. Ghost reticles stay active for hover/click at all distances.
     //
     // NOTE: entry.billboard / entry.moonBillboards (Billboard.js) are DEAD
-    // CODE FOR NOW — their sprites are force-hidden below. Kept allocated
-    // so the dispose path still works. Max may revive them with a
-    // distance-based reactivation; do not delete without checking with him.
+    // CODE — their sprites are force-hidden below. Kept for dispose path.
+    const PLANET_BILLBOARD_RANGE = 15; // billboard visible within N× orbit radius
     _ghostTargets.length = 0;
     _occluders.length = 0;
     {
@@ -4599,9 +4614,18 @@ function animate() {
           || flythroughDest === pMesh || flythroughDest === pSurf);
         const pIsGhost = !isFocusedPlanet && !isFlythroughTarget && pPixels < 3;
         entry.planet.mesh.visible = !pIsGhost;
-        // Billboard sprite retired — ghost reticle replaces it. Kept on the
-        // entry so the dispose path still has something to clean up.
-        entry.billboard.sprite.visible = false;
+        entry.billboard.sprite.visible = false; // old Billboard.js — dead code
+
+        // Planet billboard dot: show when sub-pixel but within range
+        const pBb = entry.planetBillboard;
+        if (pIsGhost && pDist < entry.orbitRadius * PLANET_BILLBOARD_RANGE) {
+          pBb.mesh.position.copy(entry.planet.mesh.position);
+          pBb.mesh.visible = true;
+          pBb.update(camera);
+        } else {
+          pBb.mesh.visible = false;
+        }
+
         if (pIsGhost) {
           const ghost = _makeTarget('planet', { planetIndex: pi });
           if (ghost) _ghostTargets.push(ghost);
@@ -5062,7 +5086,10 @@ function animate() {
     const g = _ghostTargets[i];
     if (!_isReticleOccluded(g)) _visibleGhostTargets.push(g);
   }
-  const _hoverForReticle = (burning || !_hoverTarget || _isReticleOccluded(_hoverTarget)) ? null : _hoverTarget;
+  // Allow hover reticles during flythrough so you can preview targets
+  // without stopping autopilot. Only suppress during warp/turn.
+  const suppressHover = warpEffect.isActive || warpTarget.turning;
+  const _hoverForReticle = (suppressHover || !_hoverTarget || _isReticleOccluded(_hoverTarget)) ? null : _hoverTarget;
   const _selectedForReticle = (_selectedTarget && !_isReticleOccluded(_selectedTarget)) ? _selectedTarget : null;
 
   targetingReticle.update({
@@ -5839,12 +5866,15 @@ canvas.addEventListener('mousedown', (e) => {
   // warp, turn, or deep sky free-look). In FLIGHT mode, mouse drag only
   // adds a look offset — flythrough keeps running. Only WASD / explicit
   // toggle stops flythrough in Flight.
-  if (e.button === 0 && (autoNav.isActive || _manualBurnOrbiting)
+  //
+  // Deferred to mouseup: clicking a target (within 5px of mousedown)
+  // selects it without stopping autopilot. Only drag (> 5px movement)
+  // stops autopilot. Flag is set here and checked at mouseup.
+  _autopilotClickPending = e.button === 0
+      && (autoNav.isActive || _manualBurnOrbiting)
       && !warpEffect.isActive && !warpTarget.turning
       && !cameraController.forceFreeLook
-      && cameraController.cameraMode !== CameraMode.FLIGHT) {
-    stopFlythrough();
-  }
+      && cameraController.cameraMode !== CameraMode.FLIGHT;
   if (!autoNav.isActive) {
     idleTimer = 0;
     _deepSkyLingerTimer = -1;
@@ -5903,7 +5933,21 @@ canvas.addEventListener('mouseup', (e) => {
   }
   const dx = e.clientX - _mouseDown.x;
   const dy = e.clientY - _mouseDown.y;
-  if (dx * dx + dy * dy > 25) return;
+  const isDrag = dx * dx + dy * dy > 25;
+
+  if (_autopilotClickPending) {
+    _autopilotClickPending = false;
+    if (isDrag) {
+      // Intentional drag during autopilot → stop autopilot
+      stopFlythrough();
+    } else {
+      // Simple click during autopilot → select target, keep flying
+      trySelect(e.clientX, e.clientY);
+    }
+    return;
+  }
+
+  if (isDrag) return;
   trySelect(e.clientX, e.clientY);
 });
 
