@@ -3,6 +3,17 @@ import * as THREE from 'three';
 /**
  * Billboard — a screen-space retro pixel indicator for distant bodies.
  *
+ * ⚠️ DEAD CODE (2026-04-09): Planet/moon billboards are currently replaced
+ * by the TargetingReticle ghost state (small empty bracket reticles) so
+ * the sense of scale feels honest — distant bodies no longer masquerade
+ * as visible dots. This class is still allocated/disposed with the
+ * system lifecycle (entry.billboard, entry.moonBillboards) and the
+ * sprites are force-hidden every frame in main.js's LOD loop. Max may
+ * revive billboards with a distance-based reactivation (e.g. show
+ * billboards only within X distance of the star) — in which case this
+ * class will come back into service. If you're about to delete it,
+ * check with Max first.
+ *
  * When a planet or moon is too small to resolve at render resolution
  * (sub-pixel or just a couple of pixels), its Billboard appears as a
  * small colored dot — similar in size to the background starfield points.

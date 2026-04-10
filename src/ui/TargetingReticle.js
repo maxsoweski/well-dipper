@@ -2,15 +2,22 @@
  * TargetingReticle — canvas overlay that draws corner-bracket reticles
  * over selectable in-system bodies.
  *
- * Three visual states per body:
+ * Four visual states per body:
  *   - None      — no reticle
- *   - Tentative — dim, semi-transparent (mouse hover)
- *   - Selected  — bright, fully opaque + info line (clicked target;
- *                 persists through the burn travel and into orbit)
+ *   - Ghost     — small dim empty brackets for sub-pixel bodies (Elite-
+ *                 style). Main.js hides the mesh and emits the body as a
+ *                 ghost target so it's still clickable. No name shown.
+ *   - Tentative — dim, semi-transparent (mouse hover) + name
+ *   - Selected  — bright, fully opaque (clicked target; persists through
+ *                 the burn travel and into orbit) + name
+ *
+ * The reticle only draws the name of the body — full body details
+ * (type, size, distance, habitability, etc.) are shown in the upper-left
+ * HUD (BodyInfo) on initial click and in the NavComputer for reference.
  *
  * The renderer is driven by main.js each frame. It does NOT track state
- * itself — main.js owns `hoverTarget` and `selectedTarget` and passes
- * them in. This keeps the reticle a pure view: no business logic.
+ * itself — main.js owns `hoverTarget`, `selectedTarget`, and `ghostTargets`
+ * and passes them in. This keeps the reticle a pure view: no business logic.
  *
  * Coordinate flow:
  *   world → camera.projectToScreen (NDC) → canvas pixels
@@ -24,13 +31,9 @@
  */
 
 import * as THREE from 'three';
-import { SOLAR_RADIUS_AU, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleConstants.js';
-
-// 1 R☉ ≈ 4.65 scene units, 1 R⊕ ≈ 0.0426 scene units
-const SOLAR_RADIUS_SCENE = SOLAR_RADIUS_AU * AU_TO_SCENE;
-const EARTH_RADIUS_SCENE = EARTH_RADIUS_AU * AU_TO_SCENE;
 
 // Colors
+const COLOR_GHOST     = 'rgba(120, 255, 140, 0.30)'; // very dim — "something there"
 const COLOR_TENTATIVE = 'rgba(120, 255, 120, 0.45)'; // dim, semi-transparent green
 const COLOR_SELECTED  = 'rgba(100, 255, 130, 1.0)';  // bright, opaque green
 const COLOR_SELECTED_GLOW = 'rgba(180, 255, 200, 0.35)';
@@ -43,14 +46,35 @@ const BRACKET_ARM_LEN = 10;   // px — length of each L arm
 const BRACKET_THICK_TENT = 1.5;
 const BRACKET_THICK_SEL  = 2.5;
 
-// Info line style
-const INFO_FONT = '11px "DotGothic16", monospace';
-const INFO_COLOR_SELECTED = 'rgba(160, 255, 180, 0.95)';
-const INFO_COLOR_TENTATIVE = 'rgba(140, 220, 140, 0.75)';
-const INFO_LINE_HEIGHT = 13;
+// Ghost reticle (sub-pixel bodies): fixed size independent of body radius,
+// so every distant body reads as the same quiet marker. Sized for a chunky
+// retro feel so it doesn't get lost against the starfield.
+const GHOST_HALF      = 14;   // px — half-width of ghost bracket square
+const GHOST_ARM_LEN   = 6;    // px — length of each L arm
+const GHOST_THICK     = 2;    // px — line thickness
+
+// Name label style — centered in the negative space below the bottom brackets
+const NAME_FONT = '12px "DotGothic16", monospace';
+const NAME_COLOR_SELECTED  = 'rgba(160, 255, 180, 0.95)';
+const NAME_COLOR_TENTATIVE = 'rgba(140, 220, 140, 0.75)';
+const NAME_BOTTOM_PAD = 4;    // px — gap between bottom bracket edge and name baseline
 
 // Reusable scratch objects
 const _v = new THREE.Vector3();
+
+/**
+ * True if two target descriptors refer to the same in-system body.
+ * Used to skip ghost-drawing bodies that are currently hovered or
+ * selected (those get rendered by the full tentative/selected pass).
+ */
+function _isSameBody(a, b) {
+  if (!a || !b) return false;
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'star') return a.starIndex === b.starIndex;
+  if (a.kind === 'planet') return a.planetIndex === b.planetIndex;
+  if (a.kind === 'moon') return a.planetIndex === b.planetIndex && a.moonIndex === b.moonIndex;
+  return false;
+}
 
 export class TargetingReticle {
   constructor(camera) {
@@ -153,26 +177,18 @@ export class TargetingReticle {
   }
 
   /**
-   * Draw the info block anchored at the bottom-right of the bracket square.
-   * First line (name) is at the baseline aligned with the bracket's bottom
-   * edge; subsequent lines (type, distance) are indented and stack downward.
+   * Draw the name label centered horizontally on the body, sitting just
+   * below the bottom edge of the bracket square (in the negative space
+   * between the bottom-left and bottom-right corner brackets).
    */
-  _drawInfoLine(cx, cy, half, lines, color) {
-    if (!lines || lines.length === 0) return;
+  _drawNameBelow(cx, cy, half, text, color) {
+    if (!text) return;
     const ctx = this.ctx;
-    ctx.font = INFO_FONT;
+    ctx.font = NAME_FONT;
     ctx.fillStyle = color;
-    ctx.textAlign = 'left';
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    // Anchor: just to the right of the bracket's bottom-right corner,
-    // slightly below so the first line aligns with the bottom bracket arms.
-    const tx = cx + half + 6;
-    const ty = cy + half - INFO_LINE_HEIGHT + 2;
-    const indentPx = 8; // indent for secondary lines (type, distance)
-    for (let i = 0; i < lines.length; i++) {
-      const x = i === 0 ? tx : tx + indentPx;
-      ctx.fillText(lines[i], x, ty + i * INFO_LINE_HEIGHT);
-    }
+    ctx.fillText(text, cx, cy + half + NAME_BOTTOM_PAD);
   }
 
   /**
@@ -181,6 +197,10 @@ export class TargetingReticle {
    * @param {Object} state
    *   @param {Object|null} state.hoverTarget  — the body under the mouse
    *   @param {Object|null} state.selectedTarget — the locked target
+   *   @param {Object[]} [state.ghostTargets] — sub-pixel bodies whose mesh
+   *     is hidden; drawn as small dim empty brackets. Bodies that are
+   *     currently hovered or selected are skipped (they get the
+   *     tentative/selected state instead).
    *   Each target: { mesh, radius, name, type, kind } (kind='star'|'planet'|'moon')
    */
   update(state) {
@@ -191,15 +211,42 @@ export class TargetingReticle {
     this._clear();
     if (!state) return;
 
-    const { hoverTarget, selectedTarget } = state;
+    const { hoverTarget, selectedTarget, ghostTargets } = state;
 
-    // Draw tentative first (so selected always overlays if they coincide)
+    // Ghost pass first: small dim empty brackets for every sub-pixel body
+    // that isn't currently being hovered or selected. Hover/select states
+    // take visual priority and render on top.
+    if (ghostTargets && ghostTargets.length) {
+      for (const ghost of ghostTargets) {
+        if (_isSameBody(ghost, hoverTarget)) continue;
+        if (_isSameBody(ghost, selectedTarget)) continue;
+        this._drawGhost(ghost);
+      }
+    }
+
+    // Tentative (hover) — only if not already the selected target
     if (hoverTarget && hoverTarget !== selectedTarget) {
       this._drawTarget(hoverTarget, false);
     }
     if (selectedTarget) {
       this._drawTarget(selectedTarget, true);
     }
+  }
+
+  /**
+   * Draw a small dim empty reticle for a sub-pixel body. Fixed size,
+   * no name — just marks that something is there. Hover/click still work
+   * because main.js's hitTestBodies uses mesh.position, not mesh.visible.
+   */
+  _drawGhost(target) {
+    if (!target || !target.mesh) return;
+    const screen = this._project(target.mesh.position);
+    if (!screen) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.scale(this._dpr, this._dpr);
+    this._drawBrackets(screen.x, screen.y, GHOST_HALF, GHOST_ARM_LEN, GHOST_THICK, COLOR_GHOST);
+    ctx.restore();
   }
 
   _drawTarget(target, isSelected) {
@@ -228,80 +275,17 @@ export class TargetingReticle {
       // Draw outer glow first
       this._drawBrackets(screen.x, screen.y, half + 2, BRACKET_ARM_LEN + 2, BRACKET_THICK_SEL + 1.5, COLOR_SELECTED_GLOW);
       this._drawBrackets(screen.x, screen.y, half, BRACKET_ARM_LEN, BRACKET_THICK_SEL, COLOR_SELECTED);
-      // Info line
-      const lines = this._buildInfoLines(target, true);
-      this._drawInfoLine(screen.x, screen.y, half, lines, INFO_COLOR_SELECTED);
+      if (target.name) {
+        this._drawNameBelow(screen.x, screen.y, half, target.name.toUpperCase(), NAME_COLOR_SELECTED);
+      }
     } else {
       this._drawBrackets(screen.x, screen.y, half, BRACKET_ARM_LEN, BRACKET_THICK_TENT, COLOR_TENTATIVE);
-      // Tentative info: just the name (if available)
       if (target.name) {
-        this._drawInfoLine(screen.x, screen.y, half, [target.name], INFO_COLOR_TENTATIVE);
+        this._drawNameBelow(screen.x, screen.y, half, target.name.toUpperCase(), NAME_COLOR_TENTATIVE);
       }
     }
 
     ctx.restore();
-  }
-
-  _buildInfoLines(target, isSelected) {
-    const lines = [];
-    if (target.name) lines.push(target.name.toUpperCase());
-    if (target.type) lines.push(target.type);
-    if (isSelected) {
-      const size = this._formatSize(target);
-      if (size) lines.push(size);
-      if (target.mesh) {
-        const dist = this.camera.position.distanceTo(target.mesh.position);
-        lines.push(this._formatDistance(dist));
-      }
-    }
-    return lines;
-  }
-
-  /**
-   * Format a body's physical radius for display.
-   *   Stars            → solar radii  (R☉)
-   *   Planets / moons  → Earth radii  (R⊕)
-   *   Tiny bodies      → kilometers   (R⊕ < 0.1 falls back to km)
-   */
-  _formatSize(target) {
-    const sceneRadius = target.radius || 0;
-    if (sceneRadius <= 0) return null;
-
-    if (target.kind === 'star') {
-      const rSun = sceneRadius / SOLAR_RADIUS_SCENE;
-      if (rSun >= 100) return `${rSun.toFixed(0)} R☉`;
-      if (rSun >= 10)  return `${rSun.toFixed(1)} R☉`;
-      return `${rSun.toFixed(2)} R☉`;
-    }
-
-    // Planets, moons — Earth radii, falling back to km for tiny bodies.
-    const rEarth = sceneRadius / EARTH_RADIUS_SCENE;
-    if (rEarth >= 10)  return `${rEarth.toFixed(1)} R⊕`;
-    if (rEarth >= 0.1) return `${rEarth.toFixed(2)} R⊕`;
-    const km = sceneRadius * 149600;
-    return `${km.toFixed(0)} km`;
-  }
-
-  /**
-   * Format a scene-unit distance into a human-readable label.
-   * 1 AU = 1000 scene units = 1.496e8 km = 149.6 Mm (megameters).
-   *
-   * Thresholds:
-   *   < 100 km      → "X km"      (very close, tens of km)
-   *   < 1000 km     → "X km"      (hundreds of km)
-   *   < 100,000 km  → "X Mm"      (megameters — close orbital distances)
-   *   < 0.5 AU      → "X Mm"      (still use Mm for fractional AU)
-   *   otherwise     → "X AU"
-   */
-  _formatDistance(sceneUnits) {
-    const KM_PER_SCENE = 149600; // 1 scene unit = 149,600 km
-    const km = sceneUnits * KM_PER_SCENE;
-    if (km < 1000)     return `${km.toFixed(0)} km`;
-    if (km < 100000)   return `${(km / 1000).toFixed(1)} Mm`;
-    const au = sceneUnits / 1000;
-    if (au < 0.5)      return `${(km / 1000).toFixed(0)} Mm`;
-    if (au < 10)       return `${au.toFixed(3)} AU`;
-    return `${au.toFixed(2)} AU`;
   }
 
   _clear() {

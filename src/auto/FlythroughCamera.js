@@ -73,6 +73,13 @@ export class FlythroughCamera {
     this._hermiteStartPos = new THREE.Vector3();      // Hermite curve start position (= departurePos)
     this._orbitStartYaw = 0;                          // yaw at orbit start (for revolution counting)
     this._isShortTrip = false;                          // planet↔moon nearby trip
+    // Pre-burn camera rotation, captured by beginTravelFrom so _updateTravel
+    // can slerp the camera smoothly from its initial orientation to the
+    // travel lookAt during the first second. Without this the first frame
+    // of travel calls camera.lookAt() and the scene snaps — reads as a
+    // "position jump" even though camera.position is unchanged.
+    this._initialQuat = new THREE.Quaternion();
+    this._rotBlendDuration = 1.0; // seconds over which to smooth the handoff
     this._arrivalOrbitDir = null;  // orbit direction from slingshot capture
     this._nearbyDeparture = false; // true when next body is nearby (skip stale departure alignment)
 
@@ -385,26 +392,56 @@ export class FlythroughCamera {
 
     this.departurePos.copy(this.camera.position);
     this.camera.getWorldDirection(this.departureDir);
+    // Snapshot the camera's current orientation so _updateTravel can slerp
+    // from this initial quat into the flythrough's intended lookAt during
+    // the first ~0.6s — no more instant rotation snap on burn start.
+    this._initialQuat.copy(this.camera.quaternion);
 
-    // Departure tangent: camera forward direction (no orbit to derive from)
-    this._departureTangent.copy(this.departureDir);
-    this._departureTangent.y = 0;
-    this._departureTangent.normalize();
-
-    // If camera points away from destination, blend toward it to prevent loops
-    _v1.subVectors(nextBodyRef.position, this.departurePos);
-    _v1.y = 0;
-    _v1.normalize();
-    const alignment = this._departureTangent.x * _v1.x + this._departureTangent.z * _v1.z;
-    if (alignment < 0.2) {
-      this._departureTangent.lerp(_v1, 0.5).normalize();
-    }
-
-    // ── Scale departure tangent for Hermite curve ──
     const dist = this.departurePos.distanceTo(nextBodyRef.position);
-    const tangentMag = dist * 0.6;
-    this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
-    this._departTangentScaled.y = tangentMag * 0.03;
+
+    if (this._warpArrival) {
+      // ── Warp arrival: keep the old flattened camera-forward tangent ──
+      // Warp entry rotates the camera to face the destination before the
+      // coast begins, so departureDir already points roughly at the star.
+      // Flatten Y for the classic "level-out and cruise" departure feel.
+      this._departureTangent.copy(this.departureDir);
+      this._departureTangent.y = 0;
+      this._departureTangent.normalize();
+
+      _v1.subVectors(nextBodyRef.position, this.departurePos);
+      _v1.y = 0;
+      _v1.normalize();
+      const alignment = this._departureTangent.x * _v1.x + this._departureTangent.z * _v1.z;
+      if (alignment < 0.2) {
+        this._departureTangent.lerp(_v1, 0.5).normalize();
+      }
+
+      const tangentMag = dist * 0.6;
+      this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
+      this._departTangentScaled.y = tangentMag * 0.03;
+      this._isShortTrip = false;
+    } else {
+      // ── In-system burn (manual commit + autopilot engage) ──
+      // Mirror beginTravel's short-trip branch: point the departure tangent
+      // directly at the target in full 3D with a small magnitude. The old
+      // code used the camera's current forward direction flattened to Y=0
+      // with a wide arc (dist * 0.6), which produced an S-curve whenever
+      // the camera wasn't already aimed at the target. Combined with
+      // _travelFromBody = null (no look-back phase), _updateTravel would
+      // fall back to wHeading=1 and snap the camera to follow the curve
+      // direction instead of the target — the "wonky" feel Max reported.
+      //
+      // Using direct cam→target tangent means wHeading naturally points at
+      // the target from t=0, so the camera tracks the destination smoothly
+      // through the whole burn. Matches beginTravel's short-trip aesthetic
+      // (planet↔moon hops) since a free-camera BURN is always essentially
+      // a short in-system hop.
+      _v1.subVectors(nextBodyRef.position, this.departurePos).normalize();
+      this._departureTangent.copy(_v1);
+      const tangentMag = dist * 0.25;
+      this._departTangentScaled.copy(this._departureTangent).multiplyScalar(tangentMag);
+      this._isShortTrip = true;
+    }
 
     this._arrivalComputed = false;
     this._hermiteStartPos.copy(this.departurePos);
@@ -415,8 +452,9 @@ export class FlythroughCamera {
       // Warp arrival: short 3s coast with leftover momentum feel
       this.travelDuration = 3;
     } else {
-      // Normal: distance-based duration
-      this.travelDuration = Math.max(8, Math.min(15, 10 * Math.sqrt(dist / 500)));
+      // In-system burn: 4s minimum (matches beginTravel's nearby branch),
+      // scaled up to 15s for longer trips across a system.
+      this.travelDuration = Math.max(4, Math.min(15, 10 * Math.sqrt(dist / 500)));
     }
 
     this._travelFromBody = null;
@@ -880,6 +918,26 @@ export class FlythroughCamera {
     this.lookAtTarget.normalize().multiplyScalar(100).add(this.camera.position);
 
     this._applyFreeLookAndLookAt(this.lookAtTarget);
+
+    // ── Smooth rotation handoff from pre-burn orientation ──
+    // _applyFreeLookAndLookAt overwrote camera.quaternion with the lookAt
+    // result. For short in-system burns (where the camera is likely coming
+    // from a user-controlled orbit that wasn't pointed at the target), slerp
+    // back toward the pre-burn quat during the first _rotBlendDuration so
+    // the transition looks like a smooth turn rather than an instant snap.
+    //
+    // Uses inOutSine easing (classical fluid-motion curve) instead of the
+    // quintic _ease — quintic is heavily front/back-loaded which felt
+    // mechanical ("stuck then rushed"). Sine gives a gentler acceleration
+    // that reads as natural camera motion over the full second.
+    if (this._isShortTrip && this.travelElapsed < this._rotBlendDuration) {
+      const blendT = this.travelElapsed / this._rotBlendDuration;
+      const eased = 0.5 * (1 - Math.cos(Math.PI * blendT)); // inOutSine
+      // slerp(initialQuat, 1 - eased) pulls the current quat BACK toward
+      // the initial orientation. eased=0 → full pull to initial;
+      // eased=1 → no pull, stays at lookAt target.
+      this.camera.quaternion.slerp(this._initialQuat, 1 - eased);
+    }
 
     if (t >= 1) {
       // Store entry yaw and capture direction for seamless orbit start

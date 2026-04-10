@@ -226,6 +226,81 @@ window._hitTestBodies = (x, y, t) => hitTestBodies(x, y, t);
 let _hoverTarget = null;     // body under the mouse (tentative reticle)
 let _selectedTarget = null;  // committed/selected body (selected reticle + commit button)
 
+// HUD master toggle (H key). Hides brackets, body-info printout, BURN button,
+// and the minimap all at once. Camera/selection state is preserved — this is
+// purely a visual toggle for taking in the scene without HUD clutter.
+let _hudVisible = true;
+function _applyHudVisibility() {
+  if (typeof document !== 'undefined') {
+    document.body.classList.toggle('hud-hidden', !_hudVisible);
+  }
+  // Minimap lives inside the RetroRenderer HUD pass, not the DOM — blank it
+  // while the HUD is hidden and restore it from the saved minimapVisible
+  // state when the HUD comes back.
+  if (!_hudVisible) {
+    retroRenderer.setHud(null, null);
+  } else if (system && !gravityWellVisible && minimapVisible && systemMap) {
+    retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  } else if (system && gravityWellVisible && gravityWell) {
+    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
+  }
+}
+// Ghost reticles for sub-pixel bodies: rebuilt every frame by the LOD loop,
+// then passed to TargetingReticle.update() so each tiny planet/moon shows as
+// a small dim empty bracket (Elite-style). Hover/click use the normal
+// hitTestBodies path, which doesn't check mesh.visible.
+const _ghostTargets = [];
+// Occluders: visible body meshes that can block a reticle. Reticles render
+// on a 2D overlay that doesn't participate in the WebGL depth buffer, so we
+// do an analytical ray/sphere test against this list to hide reticles that
+// would otherwise draw "through" a planet or star. Rebuilt every frame in
+// the LOD loop. Each entry: { mesh, radius }.
+const _occluders = [];
+// Output of the per-frame ghost occlusion filter — only ghosts that are
+// actually visible from the camera's perspective get passed to the reticle.
+const _visibleGhostTargets = [];
+
+/**
+ * Analytical ray/sphere occlusion test. Returns true if any occluder's
+ * sphere intersects the ray from camera → target strictly before the
+ * target itself, meaning the target reticle should be hidden.
+ *
+ * Self-occlusion is skipped by mesh reference — if the target's own mesh
+ * is in the occluder list (because it's currently visible), it doesn't
+ * block itself.
+ */
+const _occDir = new THREE.Vector3();
+function _isReticleOccluded(target) {
+  if (!target?.mesh) return false;
+  _occDir.subVectors(target.mesh.position, camera.position);
+  const targetDist = _occDir.length();
+  if (targetDist < 1e-6) return false;
+  _occDir.divideScalar(targetDist);
+  const cx = camera.position.x;
+  const cy = camera.position.y;
+  const cz = camera.position.z;
+  for (let i = 0; i < _occluders.length; i++) {
+    const occ = _occluders[i];
+    if (occ.mesh === target.mesh) continue;
+    const ox = occ.mesh.position.x - cx;
+    const oy = occ.mesh.position.y - cy;
+    const oz = occ.mesh.position.z - cz;
+    // Project occluder center onto the ray
+    const t = ox * _occDir.x + oy * _occDir.y + oz * _occDir.z;
+    if (t <= 0 || t >= targetDist) continue; // behind camera or past target
+    // Perpendicular distance from occluder center to the ray
+    const px = cx + _occDir.x * t;
+    const py = cy + _occDir.y * t;
+    const pz = cz + _occDir.z * t;
+    const dx = occ.mesh.position.x - px;
+    const dy = occ.mesh.position.y - py;
+    const dz = occ.mesh.position.z - pz;
+    const perpSq = dx * dx + dy * dy + dz * dz;
+    if (perpSq < occ.radius * occ.radius) return true;
+  }
+  return false;
+}
+
 /**
  * Clear both reticle targets. Called on warp, system swap, deselect, etc.
  */
@@ -548,10 +623,10 @@ function _scheduleSystemMusic(minDelay, maxDelay) {
       return;
     }
     musicManager.playOnce('explore', 0.6);
-    // After the track plays (~94s), schedule the next one with a gap
+    // After the track plays, wait a 2-minute gap before the next play
     const trackDur = musicManager.getDuration('explore') || 94;
     _systemMusicTimer = setTimeout(() => {
-      _scheduleSystemMusic(15, 60);
+      _scheduleSystemMusic(120, 120);
     }, trackDur * 1000);
   }, delay);
 }
@@ -733,6 +808,11 @@ function _setWarpTargetFromNavStar(navStar) {
 
   // Compute direction vector (same space as camera directions)
   const direction = new THREE.Vector3(dx / len, dy / len, dz / len);
+
+  // Single-selection invariant: picking a star via the nav computer cancels
+  // any in-system body selection so Space commits the warp rather than a
+  // stale body burn.
+  if (_selectedTarget) deselectTarget();
 
   // Set up warp target — attach the exact nav star data so warp resolution
   // can go directly to this star without a direction-based fallback search.
@@ -3852,14 +3932,70 @@ function _syncNavBody() {
  *
  * @param {Object} target — target descriptor from _makeTarget()
  */
+/**
+ * Clear any pending starfield warp target. Used by selectTarget() to
+ * enforce single-selection: picking an in-system body must cancel any
+ * previously picked background star so Space only ever commits one thing.
+ */
+function _clearWarpTargetSelection() {
+  warpTarget.direction = null;
+  warpTarget.name = null;
+  warpTarget.starIndex = -1;
+  warpTarget.navStarData = null;
+  warpTarget.destType = null;
+  warpTarget.featureData = null;
+  warpTarget.galaxyData = null;
+  warpTarget.blinkTimer = 0;
+  warpTarget.blinkOn = true;
+}
+
 function selectTarget(target) {
   if (!target) {
     _selectedTarget = null;
     _updateCommitBurnButton();
     return;
   }
+  // Single-selection invariant: picking a body cancels any pending
+  // starfield warp target so Space commits the body (burn) rather than
+  // the stale warp pick.
+  _clearWarpTargetSelection();
   _selectedTarget = target;
   soundEngine.play('select');
+
+  // Show the full body-info printout in the upper-left HUD on initial
+  // selection. The reticle itself only shows the name; if Max wants the
+  // details he reads them here or opens the NavComputer. BodyInfo auto-
+  // fades on its own timer so this is a one-shot on click.
+  if (system) {
+    if (target.kind === 'planet') {
+      const entry = system.planets?.[target.planetIndex];
+      if (entry) {
+        const pName = system.names?.planets?.[target.planetIndex]?.name ?? null;
+        bodyInfo.showPlanet(entry.planet.data, target.planetIndex, pName);
+      }
+    } else if (target.kind === 'moon') {
+      const entry = system.planets?.[target.planetIndex];
+      const moon = entry?.moons?.[target.moonIndex];
+      if (moon) {
+        const mName = system.names?.planets?.[target.planetIndex]?.moons?.[target.moonIndex] ?? null;
+        bodyInfo.showMoon(moon.data, target.planetIndex, mName);
+      }
+    } else if (target.kind === 'star') {
+      const starIdx = target.starIndex || 0;
+      let starObj;
+      if (system._navigable && system.extraStars && starIdx >= 2) {
+        starObj = system.extraStars[starIdx - 2] || system.star;
+      } else {
+        starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
+      }
+      if (starObj) {
+        const sName = system.names
+          ? (starIdx === 1 ? system.names.star2 : system.names.star)
+          : null;
+        bodyInfo.showStar(starObj.data, sName);
+      }
+    }
+  }
 
   // Aim the camera at the selected body without moving the camera position.
   // Toy Box orbit math aims via `this.target`; rotating the orbit around a
@@ -4426,17 +4562,28 @@ function animate() {
       }
     }
 
-    // ── LOD: billboard vs mesh ──
-    // When a body is too small to see at render resolution, hide the mesh
-    // and show a fixed-size billboard dot instead. This ensures planets
-    // and moons are always visible from any distance.
+    // ── LOD: ghost reticle vs mesh ──
+    // When a planet/moon is too small to resolve at render resolution, hide
+    // the mesh AND its billboard sprite, and emit a "ghost target" so the
+    // TargetingReticle draws a small dim empty bracket at the body's
+    // projected position (Elite Dangerous-style). This keeps the sense of
+    // scale honest: distant bodies don't masquerade as on-screen dots.
+    // Hover/click still work because hitTestBodies uses mesh.position,
+    // not mesh.visible.
+    //
+    // NOTE: entry.billboard / entry.moonBillboards (Billboard.js) are DEAD
+    // CODE FOR NOW — their sprites are force-hidden below. Kept allocated
+    // so the dispose path still works. Max may revive them with a
+    // distance-based reactivation; do not delete without checking with him.
+    _ghostTargets.length = 0;
+    _occluders.length = 0;
     {
       const fovRad = camera.fov * Math.PI / 180;
       const renderHeight = window.innerHeight / retroRenderer.pixelScale;
       const projScale = renderHeight / (2 * Math.tan(fovRad / 2));
 
       // During flythrough, protect both the current body and travel destination
-      // from billboarding (bodyRef = current/departure, nextBodyRef = destination)
+      // from ghosting (bodyRef = current/departure, nextBodyRef = destination)
       const flythroughBody = flythrough.active ? flythrough.bodyRef : null;
       const flythroughDest = flythrough.active ? flythrough.nextBodyRef : null;
 
@@ -4450,29 +4597,52 @@ function animate() {
         const pSurf = entry.planet.surface;
         const isFlythroughTarget = (flythroughBody === pMesh || flythroughBody === pSurf
           || flythroughDest === pMesh || flythroughDest === pSurf);
-        const pShowBillboard = !isFocusedPlanet && !isFlythroughTarget && pPixels < 3;
-        entry.planet.mesh.visible = !pShowBillboard;
-        entry.billboard.sprite.visible = pShowBillboard;
-        entry.billboard.sprite.position.copy(entry.planet.mesh.position);
-        entry.billboard.update(camera, retroRenderer.pixelScale);
+        const pIsGhost = !isFocusedPlanet && !isFlythroughTarget && pPixels < 3;
+        entry.planet.mesh.visible = !pIsGhost;
+        // Billboard sprite retired — ghost reticle replaces it. Kept on the
+        // entry so the dispose path still has something to clean up.
+        entry.billboard.sprite.visible = false;
+        if (pIsGhost) {
+          const ghost = _makeTarget('planet', { planetIndex: pi });
+          if (ghost) _ghostTargets.push(ghost);
+        } else {
+          // Visible planet can occlude other reticles behind it.
+          _occluders.push({ mesh: entry.planet.mesh, radius: entry.planet.data.radius });
+        }
 
         // Moon LOD
         for (let m = 0; m < entry.moons.length; m++) {
           const moon = entry.moons[m];
           const mDist = camera.position.distanceTo(moon.mesh.position);
           const mPixels = (moon.data.radius * 2) * projScale / mDist;
-          // Always show mesh for the focused moon (never swap to billboard up close)
+          // Always show mesh for the focused moon (never swap to ghost up close)
           const isFocusedMoon = (focusIndex === pi && focusMoonIndex === m);
           const isMoonFlythroughTarget = (flythroughBody === moon.mesh || flythroughDest === moon.mesh);
-          const mShowBillboard = !isFocusedMoon && !isMoonFlythroughTarget && mPixels < 3;
-          moon.mesh.visible = !mShowBillboard;
+          const mIsGhost = !isFocusedMoon && !isMoonFlythroughTarget && mPixels < 3;
+          moon.mesh.visible = !mIsGhost;
           const moonBb = entry.moonBillboards[m];
-          moonBb.sprite.visible = mShowBillboard;
-          moonBb.sprite.position.copy(moon.mesh.position);
-          moonBb.update(camera, retroRenderer.pixelScale);
+          moonBb.sprite.visible = false;
           // Keep click proxy in sync with moon position
           if (moon._clickProxy) moon._clickProxy.position.copy(moon.mesh.position);
+          if (mIsGhost) {
+            const ghost = _makeTarget('moon', { planetIndex: pi, moonIndex: m });
+            if (ghost) _ghostTargets.push(ghost);
+          } else {
+            // Visible moon can occlude other reticles behind it.
+            _occluders.push({ mesh: moon.mesh, radius: moon.data.radius });
+          }
         }
+      }
+
+      // Stars always render as full meshes and are typically huge — they
+      // absolutely occlude reticles behind them. Add them to the occluder
+      // list so binary secondaries and distant planets get properly hidden
+      // when the primary is in the way.
+      if (system.star?.mesh && system.star.mesh.visible) {
+        _occluders.push({ mesh: system.star.mesh, radius: system.star.data.radius });
+      }
+      if (system.star2?.mesh && system.star2.mesh.visible) {
+        _occluders.push({ mesh: system.star2.mesh, radius: system.star2.data.radius });
       }
     }
 
@@ -4880,10 +5050,25 @@ function animate() {
     // inside the reticle renderer, so no need to rebuild the descriptor.
   }
   const burning = flythrough.active || warpEffect.isActive || warpTarget.turning;
-  targetingReticle.enabled = !!system && !warpEffect.isActive && !splashActive && !titleScreenActive && !galleryMode;
+  targetingReticle.enabled = _hudVisible && !!system && !warpEffect.isActive && !splashActive && !titleScreenActive && !galleryMode;
+
+  // Occlusion pass: reticles draw on a 2D overlay and don't share the depth
+  // buffer, so we analytically test each candidate reticle against the
+  // occluder list (visible planets/moons/stars built in the LOD loop above).
+  // Any reticle whose target is behind a visible body is dropped from the
+  // update — makes "see reticles through a planet" go away.
+  _visibleGhostTargets.length = 0;
+  for (let i = 0; i < _ghostTargets.length; i++) {
+    const g = _ghostTargets[i];
+    if (!_isReticleOccluded(g)) _visibleGhostTargets.push(g);
+  }
+  const _hoverForReticle = (burning || !_hoverTarget || _isReticleOccluded(_hoverTarget)) ? null : _hoverTarget;
+  const _selectedForReticle = (_selectedTarget && !_isReticleOccluded(_selectedTarget)) ? _selectedTarget : null;
+
   targetingReticle.update({
-    hoverTarget: burning ? null : _hoverTarget, // hide hover during travel
-    selectedTarget: _selectedTarget,
+    hoverTarget: _hoverForReticle,
+    selectedTarget: _selectedForReticle,
+    ghostTargets: _visibleGhostTargets,
   });
   _updateCommitBurnButton();
 
@@ -5072,6 +5257,16 @@ window.addEventListener('keydown', (e) => {
     } else {
       enterGallery();
     }
+    return;
+  }
+
+  // H key: HUD master toggle — hides brackets, body-info printout, BURN
+  // button, and minimap all at once. Works in both normal and autopilot
+  // modes (placed above the autopilot branch). Camera/selection state
+  // is preserved; it's purely visual.
+  if (e.code === 'KeyH') {
+    _hudVisible = !_hudVisible;
+    _applyHudVisibility();
     return;
   }
 
@@ -5384,6 +5579,11 @@ function trySelect(clientX, clientY) {
 function trySelectWarpTarget(rayDir) {
   const result = starfield.findNearestStar(rayDir);
   if (!result) return; // no star close enough to the click
+
+  // Single-selection invariant: picking a background star cancels any
+  // in-system body selection so Space commits the warp rather than a
+  // stale body burn.
+  if (_selectedTarget) deselectTarget();
 
   soundEngine.play('warpTarget');
   warpTarget.direction = result.direction;
@@ -5894,4 +6094,4 @@ if (mobileControls) {
 // ── Start ──
 animate();
 console.log('Well Dipper — Star System');
-console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=orbits, G=gravity wells, A=autopilot, Middle-click=free look, Click/tap=select');
+console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=orbits, G=gravity wells, H=toggle HUD, A=autopilot, Middle-click=free look, Click/tap=select');

@@ -679,6 +679,18 @@ html, body {
   transform: translateX(-50%) translateY(1px);
 }
 
+/* ── HUD master toggle (H key) ──
+   When body.hud-hidden is set, all in-game HUD overlays disappear while
+   camera/selection state is preserved. The targeting reticle (#targeting-overlay)
+   also stops rendering via TargetingReticle.enabled in main.js. The
+   minimap (drawn into the RetroRenderer HUD pass) is blanked separately.
+*/
+body.hud-hidden #body-info,
+body.hud-hidden #commit-burn-btn,
+body.hud-hidden #targeting-overlay {
+  display: none !important;
+}
+
 .body-info-cursor.blinking {
   display: inline;
 }

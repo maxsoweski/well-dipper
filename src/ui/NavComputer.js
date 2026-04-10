@@ -772,6 +772,29 @@ export class NavComputer {
         ctx.stroke();
       }
 
+      // "You are here" — highlight the grid cell containing the player
+      // in cyan. Replaces the old player marker (pulsing ring) which was
+      // too detailed at this zoom level. The highlighted cell + the
+      // density backdrop tells the user where they are; the green target
+      // diamond (below) tells them where they're going.
+      const tileSize = viewSize / gn;
+      const rawCol = Math.floor((this._playerX - (cx - ext)) / tileSize);
+      const rawRow = Math.floor(((cz + ext) - this._playerZ) / tileSize);
+      // Clamp to [0, gn-1]: when the player sits exactly on a tile edge
+      // (e.g. playerZ = cz - ext), floor produces gn which is one past the
+      // last valid tile. Clamping snaps it to the nearest in-bounds cell.
+      // If the player is genuinely outside the view (col/row far out of
+      // range), the wider bounds check below prevents a false highlight.
+      const playerCol = Math.max(0, Math.min(gn - 1, rawCol));
+      const playerRow = Math.max(0, Math.min(gn - 1, rawRow));
+      if (rawCol >= -1 && rawCol <= gn && rawRow >= -1 && rawRow <= gn) {
+        ctx.fillStyle = 'rgba(0, 212, 255, 0.08)';
+        ctx.fillRect(ox + playerCol * tileW, oy + playerRow * tileW, tileW, tileW);
+        ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ox + playerCol * tileW, oy + playerRow * tileW, tileW, tileW);
+      }
+
       // Hovered tile
       if (this._hoveredTile) {
         const { col, row } = this._hoveredTile;
@@ -780,7 +803,6 @@ export class NavComputer {
         ctx.strokeRect(ox + col * tileW, oy + row * tileW, tileW, tileW);
 
         // Tile info
-        const tileSize = viewSize / gn;
         const tileCx = cx - ext + (col + 0.5) * tileSize;
         const tileCz = cz + ext - (row + 0.5) * tileSize;
         const label = `(${tileCx.toFixed(1)}, ${tileCz.toFixed(1)})`;
@@ -792,15 +814,9 @@ export class NavComputer {
       }
     }
 
-    // Player marker
-    const px = ox + (this._playerX - cx + ext) / viewSize * drawSize;
-    const pz = oy + (-(this._playerZ - cz) + ext) / viewSize * drawSize;
-    if (px >= ox - 20 && px <= ox + drawSize + 20 && pz >= oy - 20 && pz <= oy + drawSize + 20) {
-      this._drawPlayerMarker(ctx, px, pz);
-    } else {
-      // Arrow pointing toward player
-      this._drawPlayerArrow(ctx, ox, oy, drawSize, px, pz);
-    }
+    // No player marker at 2D levels — the highlighted cell (above) or
+    // sector (galaxy level) serves as the "you are here" indicator.
+    // Only the green warp-target diamond is drawn here.
 
     // External warp target indicator (green diamond)
     const target = this._externalTarget;
@@ -942,9 +958,11 @@ export class NavComputer {
       const bx = ox + (s.minX - cx + ext) / (ext * 2) * drawSize;
       const by = oy + (-(s.maxZ - cz) + ext) / (ext * 2) * drawSize;
 
-      // Highlight current sector
+      // Highlight current sector — cyan "you are here" cell
       if (this._currentSector && s.id === this._currentSector.id) {
-        ctx.strokeStyle = 'rgba(0, 255, 128, 0.4)';
+        ctx.fillStyle = 'rgba(0, 212, 255, 0.08)';
+        ctx.fillRect(bx, by, sw, sw);
+        ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
         ctx.lineWidth = 2;
         ctx.strokeRect(bx, by, sw, sw);
       } else {
@@ -1138,6 +1156,27 @@ export class NavComputer {
     this._hoveredLocalStar = null;
     const hitDist = 12;
 
+    // Find the current-system star. Two strategies:
+    // 1. Match by name (reliable for known/real stars like Sol, Alpha
+    //    Centauri — _currentSystemName is set from main.js and the real
+    //    star catalog merge gives _localStars entries the same name).
+    // 2. Fall back to _findNearestStar() for hash grid systems where the
+    //    generated name might differ between main.js and the column view.
+    //
+    // Position-based matching fails here because the player's galactic
+    // coordinates (_playerX/Y/Z) don't exactly match the hash grid star
+    // that represents their system — in a dense field of 43K+ stars,
+    // a different nearby star can be closer.
+    let currentSystemStar = null;
+    if (this._currentSystemName) {
+      currentSystemStar = this._localStars.find(
+        s => s.name === this._currentSystemName
+      );
+    }
+    if (!currentSystemStar) {
+      currentSystemStar = this._findNearestStar();
+    }
+
     for (const { star, starP, planeP } of projected) {
       // Vertical reference line (subtle)
       ctx.setLineDash([2, 5]);
@@ -1196,6 +1235,20 @@ export class NavComputer {
         ctx.beginPath(); ctx.arc(starP.x, starP.y, 6, 0, Math.PI * 2); ctx.stroke();
       }
 
+      // Current-system "you are here" highlight: cyan pulsing ring around
+      // the star matching the player's position. Distinct color (#00d4ff)
+      // from the green warp-target highlight so they read differently.
+      if (star === currentSystemStar) {
+        const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.2;
+        ctx.strokeStyle = '#00d4ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(starP.x, starP.y, (baseRadius + 5) * pulse, 0, Math.PI * 2); ctx.stroke();
+        // Subtle inner ring
+        ctx.strokeStyle = 'rgba(0, 212, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(starP.x, starP.y, baseRadius + 3, 0, Math.PI * 2); ctx.stroke();
+      }
+
       // Hover check
       const dx = this._mouseX - starP.x, dy = this._mouseY - starP.y;
       if (dx * dx + dy * dy < hitDist * hitDist) {
@@ -1203,9 +1256,13 @@ export class NavComputer {
       }
     }
 
-    // Player marker
-    const playerP = project(this._playerX, this._playerY, this._playerZ);
-    this._drawPlayerMarker(ctx, playerP.x, playerP.y, 8);
+    // Player marker — only if no star at the player's position (column not
+    // loaded yet, or player between systems). Otherwise the cyan "you are
+    // here" ring on the matched star already shows the player's location.
+    if (!currentSystemStar) {
+      const playerP = project(this._playerX, this._playerY, this._playerZ);
+      this._drawPlayerMarker(ctx, playerP.x, playerP.y, 8);
+    }
 
     // Selected star info banner (shown below HUD)
     if (this._selectedNavStar) {
@@ -2196,14 +2253,14 @@ export class NavComputer {
     ctx.lineTo(camScreenX + camFwd * 6, camScreenY - fwdLen);
     ctx.stroke();
 
-    // Player home position
+    // Player home position — cyan to match "you are here" convention
     const playerDX = (this._playerX - blockCenter.x) / cubeHalf;
     const playerDZ = (this._playerZ - blockCenter.z) / cubeHalf;
     const playerRight = playerDX * cosC + playerDZ * sinC;
     const playerScreenX = mapX + xzSize / 2 + playerRight * xzSize / 2;
     const playerScreenY = mapY + ySize * (1 - (this._playerY - minStarY) / yRange);
 
-    ctx.fillStyle = '#00ff80';
+    ctx.fillStyle = '#00d4ff';
     ctx.beginPath();
     ctx.arc(playerScreenX, playerScreenY, 2.5, 0, Math.PI * 2);
     ctx.fill();
@@ -2479,15 +2536,15 @@ export class NavComputer {
   // ════════════════════════════════════════════════════
 
   _drawPlayerMarker(ctx, x, y, size = 10) {
+    // Pulsing cyan ring + center dot. Cyan (#00d4ff) distinguishes "you
+    // are here" from the green (#00ff80) warp-target markers across all
+    // nav levels. Cross lines were removed — they overlapped star icons
+    // in column view and read as a "weird reticle over the star".
     const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.2;
-    ctx.strokeStyle = '#00ff80';
+    ctx.strokeStyle = '#00d4ff';
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(x, y, (size - 2) * pulse, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x - size, y); ctx.lineTo(x + size, y);
-    ctx.moveTo(x, y - size); ctx.lineTo(x, y + size);
-    ctx.stroke();
-    ctx.fillStyle = '#00ff80';
+    ctx.fillStyle = '#00d4ff';
     ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
   }
 
@@ -2546,19 +2603,19 @@ export class NavComputer {
   }
 
   _drawPlayerArrow(ctx, ox, oy, size, px, pz) {
-    // Clamp to edge and draw arrow
+    // Clamp to edge and draw arrow — cyan to match "you are here" color
     const cx = ox + size / 2, cy = oy + size / 2;
     const angle = Math.atan2(pz - cy, px - cx);
     const edgeX = cx + Math.cos(angle) * (size / 2 - 10);
     const edgeY = cy + Math.sin(angle) * (size / 2 - 10);
 
-    ctx.fillStyle = '#00ff80';
+    ctx.fillStyle = '#00d4ff';
     ctx.beginPath();
     ctx.arc(edgeX, edgeY, 4, 0, Math.PI * 2);
     ctx.fill();
 
     // Small arrow
-    ctx.strokeStyle = '#00ff80';
+    ctx.strokeStyle = '#00d4ff';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(edgeX, edgeY);
