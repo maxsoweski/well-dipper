@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Galaxy Glow Viewer — ProceduralGlowLayer Test Bed</title>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #000;
+      color: #0f0;
+      font-family: 'DotGothic16', monospace;
+      overflow: hidden;
+    }
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 13px; line-height: 1.6;
+      text-shadow: 0 0 8px #000, 0 0 16px #000;
+      pointer-events: none; z-index: 10;
+    }
+    #fps {
+      position: fixed; top: 12px; right: 12px;
+      font-size: 14px; color: #0f0;
+      text-shadow: 0 0 8px #000;
+      z-index: 10;
+    }
+
+    #panel {
+      position: fixed; bottom: 12px; left: 12px;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(0, 255, 0, 0.35);
+      padding: 10px 12px;
+      font-size: 12px; line-height: 1.9;
+      z-index: 10;
+      max-width: 360px;
+      border-radius: 3px;
+    }
+    #panel .group { margin-bottom: 8px; }
+    #panel .group-title {
+      color: #0a0; font-size: 10px; letter-spacing: 0.05em;
+      margin-bottom: 3px;
+    }
+    #panel label { display: block; cursor: pointer; white-space: nowrap; }
+    #panel input[type=range] { width: 160px; vertical-align: middle; }
+    #panel .btn {
+      background: rgba(0, 255, 0, 0.08);
+      border: 1px solid rgba(0, 255, 0, 0.5);
+      color: #0f0;
+      font-family: inherit; font-size: 11px;
+      padding: 4px 8px; cursor: pointer;
+      margin: 2px 3px 2px 0;
+    }
+    #panel .btn:hover { background: rgba(0, 255, 0, 0.2); }
+    #panel .btn.active {
+      background: rgba(0, 255, 0, 0.35);
+      color: #fff;
+    }
+    #status {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px; z-index: 20;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud"></div>
+  <div id="fps">FPS: --</div>
+  <div id="status">LOADING…</div>
+
+  <div id="panel" style="display:none;">
+    <div class="group">
+      <div class="group-title">GALACTIC POSITION (kpc)</div>
+      <button class="btn" data-pos="sun">Sun R=8</button>
+      <button class="btn" data-pos="core">Core R=1</button>
+      <button class="btn" data-pos="above">Above y=10</button>
+      <button class="btn" data-pos="rim">Rim R=14</button>
+      <button class="btn" data-pos="outside">Outside R=20</button>
+      <button class="btn" data-pos="inarm">Deep in arm R=6</button>
+      <button class="btn" data-pos="interarm">Inter-arm R=6</button>
+    </div>
+    <div class="group">
+      <div class="group-title">MOLECULAR CLOUDS</div>
+      <label>Cloud: <input type="range" id="uCloud" min="0" max="2.0" step="0.01" value="1.0"> <span id="uCloudVal">1.00</span></label>
+      <label>Scale: <input type="range" id="uCloudScale" min="0.2" max="3.0" step="0.05" value="1.0"> <span id="uCloudScaleVal">1.00</span></label>
+      <label>Arm Bias: <input type="range" id="uCloudArmBias" min="0" max="3.0" step="0.05" value="1.0"> <span id="uCloudArmBiasVal">1.00</span></label>
+      <button class="btn" id="toggleClouds">Clouds: ON</button>
+    </div>
+    <div class="group">
+      <div class="group-title">VIEW</div>
+      <label>Brightness: <input type="range" id="brightMax" min="0.1" max="1.5" step="0.05" value="0.6"> <span id="brightMaxVal">0.60</span></label>
+      <div style="font-size:10px; color:#0a0; margin-top:2px;">drag = look around &nbsp; scroll = fov</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GalacticMap } from './src/generation/GalacticMap.js';
+    import { ProceduralGlowLayer } from './src/rendering/sky/ProceduralGlowLayer.js';
+
+    const canvas = document.getElementById('canvas');
+    const hudEl = document.getElementById('hud');
+    const fpsEl = document.getElementById('fps');
+    const statusEl = document.getElementById('status');
+    const panelEl = document.getElementById('panel');
+
+    // ── Renderer / scene / camera ──
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.01, 10000);
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+    // ── Galaxy + glow layer ──
+    const galacticMap = new GalacticMap('well-dipper-galaxy-1');
+
+    // ProceduralGlowLayer signature: (radius, brightnessRange, galacticMap)
+    const GLOW_RADIUS = 1000;
+    const glowLayer = new ProceduralGlowLayer(
+      GLOW_RADIUS,
+      { min: 0.0, max: 0.6 },
+      galacticMap
+    );
+    scene.add(glowLayer.mesh);
+
+    // Default position — Sun-like
+    const POSITIONS = {
+      sun:      { x: 8.0,  y: 0.025, z: 0.0,  label: 'Sun (R=8, y=0.025)' },
+      core:     { x: 1.0,  y: 0.0,   z: 0.0,  label: 'Core (R=1)' },
+      above:    { x: 0.0,  y: 10.0,  z: 0.0,  label: 'Above disk (y=10)' },
+      rim:      { x: 14.0, y: 0.05,  z: 0.0,  label: 'Outer rim (R=14)' },
+      outside:  { x: 20.0, y: 5.0,   z: 0.0,  label: 'Outside (R=20, y=5)' },
+      // Deep inside a major arm: Scutum-Centaurus at R=6
+      // theta_arm = 0 + pitchK * ln(6/4) ≈ 4.705 * 0.405 ≈ 1.906 rad
+      inarm:    { x: 6.0 * Math.cos(4.705 * Math.log(6.0 / 4.0)),
+                  y: 0.0,
+                  z: 6.0 * Math.sin(4.705 * Math.log(6.0 / 4.0)),
+                  label: 'Deep in Scutum arm (R=6)' },
+      // Inter-arm at R=6 — offset by 90° from the above
+      interarm: { x: 6.0 * Math.cos(4.705 * Math.log(6.0 / 4.0) + Math.PI / 2),
+                  y: 0.0,
+                  z: 6.0 * Math.sin(4.705 * Math.log(6.0 / 4.0) + Math.PI / 2),
+                  label: 'Inter-arm (R=6)' },
+    };
+
+    let currentPosKey = 'sun';
+    let currentPos = POSITIONS.sun;
+    glowLayer.setPlayerPosition(currentPos);
+
+    function teleport(key) {
+      currentPosKey = key;
+      currentPos = POSITIONS[key];
+      glowLayer.setPlayerPosition(currentPos);
+      document.querySelectorAll('#panel .btn[data-pos]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.pos === key);
+      });
+      updateHud();
+    }
+    document.querySelectorAll('#panel .btn[data-pos]').forEach(btn => {
+      btn.onclick = () => teleport(btn.dataset.pos);
+    });
+
+    // ── Orbit camera (mouse drag to look around) ──
+    let yaw = 0, pitch = 0.0;
+    const CAM_DIST = 10;
+    let dragging = false, lastX = 0, lastY = 0;
+
+    function updateCamera() {
+      const cy = Math.cos(pitch), sy = Math.sin(pitch);
+      const cx = Math.cos(yaw), sx = Math.sin(yaw);
+      camera.position.set(CAM_DIST * cy * sx, CAM_DIST * sy, CAM_DIST * cy * cx);
+      camera.lookAt(0, 0, 0);
+      if (glowLayer.update) glowLayer.update(camera.position);
+    }
+    updateCamera();
+
+    canvas.addEventListener('mousedown', (e) => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      yaw -= dx * 0.005;
+      pitch = Math.max(-1.4, Math.min(1.4, pitch + dy * 0.005));
+      updateCamera();
+    });
+    window.addEventListener('mouseup', () => { dragging = false; });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      camera.fov = Math.max(20, Math.min(100, camera.fov + e.deltaY * 0.03));
+      camera.updateProjectionMatrix();
+    }, { passive: false });
+
+    // ── Controls wiring ──
+    function bindSlider(id, setter) {
+      const el = document.getElementById(id);
+      const out = document.getElementById(id + 'Val');
+      const apply = () => {
+        const v = parseFloat(el.value);
+        out.textContent = v.toFixed(2);
+        setter(v);
+      };
+      el.oninput = apply;
+      return apply;
+    }
+    const applyCloud = bindSlider('uCloud', (v) => glowLayer.setCloudOpacity(v));
+    const applyCloudScale = bindSlider('uCloudScale', (v) => glowLayer.setCloudScale(v));
+    const applyCloudArmBias = bindSlider('uCloudArmBias', (v) => glowLayer.setCloudArmBias(v));
+    bindSlider('brightMax', (v) => glowLayer.setBrightnessMax(v));
+
+    // Apply defaults
+    applyCloud();
+    applyCloudScale();
+    applyCloudArmBias();
+    glowLayer.setBrightnessMax(0.6);
+
+    // A/B toggle
+    let cloudsOn = true;
+    let cloudsSavedValue = 1.0;
+    document.getElementById('toggleClouds').onclick = (e) => {
+      cloudsOn = !cloudsOn;
+      if (cloudsOn) {
+        document.getElementById('uCloud').value = cloudsSavedValue;
+      } else {
+        cloudsSavedValue = parseFloat(document.getElementById('uCloud').value);
+        document.getElementById('uCloud').value = 0;
+      }
+      document.getElementById('uCloud').dispatchEvent(new Event('input'));
+      e.target.textContent = 'Clouds: ' + (cloudsOn ? 'ON' : 'OFF');
+      e.target.classList.toggle('active', cloudsOn);
+    };
+
+    // ── HUD + FPS ──
+    function updateHud() {
+      hudEl.innerHTML =
+        `Well Dipper — Galaxy Glow Viewer<br>` +
+        `Position: ${currentPos.label}<br>` +
+        `Coords: (${currentPos.x.toFixed(2)}, ${currentPos.y.toFixed(2)}, ${currentPos.z.toFixed(2)}) kpc<br>` +
+        `Yaw: ${yaw.toFixed(2)} &nbsp; Pitch: ${pitch.toFixed(2)}`;
+    }
+
+    let frameCount = 0;
+    let fpsTimer = performance.now();
+    function updateFps() {
+      frameCount++;
+      const now = performance.now();
+      if (now - fpsTimer >= 500) {
+        const fps = (frameCount * 1000 / (now - fpsTimer)).toFixed(1);
+        fpsEl.textContent = `FPS: ${fps}`;
+        frameCount = 0;
+        fpsTimer = now;
+      }
+    }
+
+    // ── Render loop ──
+    function loop() {
+      updateCamera();
+      renderer.render(scene, camera);
+      updateFps();
+      requestAnimationFrame(loop);
+    }
+
+    statusEl.style.display = 'none';
+    panelEl.style.display = 'block';
+    teleport('sun');
+    updateHud();
+
+    // Expose for debugging / playwright automation
+    window._viewer = {
+      teleport,
+      setCloud: (v) => { glowLayer.setCloudOpacity(v); document.getElementById('uCloud').value = v; applyCloud(); },
+      setCloudScale: (v) => { glowLayer.setCloudScale(v); document.getElementById('uCloudScale').value = v; applyCloudScale(); },
+      setCloudArmBias: (v) => { glowLayer.setCloudArmBias(v); document.getElementById('uCloudArmBias').value = v; applyCloudArmBias(); },
+      setYawPitch: (y, p) => { yaw = y; pitch = p; updateCamera(); updateHud(); },
+      camera, glowLayer, galacticMap,
+    };
+
+    loop();
+  </script>
+</body>
+</html>

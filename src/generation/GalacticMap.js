@@ -93,6 +93,21 @@ export class GalacticMap {
   static SOLAR_R = 8.0;              // kpc from center
   static SOLAR_Z = 0.025;            // kpc above plane
 
+  // ── Molecular cloud constants — single source of truth ──
+  // The molecular cloud layer is the dust/ISM component. These constants
+  // drive BOTH cloud placement (CPU side) and cloud rendering (GPU shaders).
+  // Anything tuning the look of clouds should pull from here, not hardcode.
+  static MOLECULAR_RING_PEAK_R = 5.0;     // kpc — peak of the molecular ring
+  static MOLECULAR_RING_SIGMA = 3.0;      // kpc — radial width of the ring
+  static DUST_SCALE_HEIGHT = 0.08;        // kpc — vertical scale height of dust (thinner than stars)
+  static CLOUD_INNER_R = 1.5;             // kpc — no clouds inside the bulge
+  static CLOUD_OUTER_R = 14.0;            // kpc — clouds fade past this radius
+  static CLOUD_TARGET_COUNT = 140;        // total clouds across the galaxy
+  static CLOUD_MIN_RADIUS = 0.060;        // kpc — smallest cloud (~60 pc / Coalsack scale)
+  static CLOUD_MAX_RADIUS = 0.400;        // kpc — largest cloud (~400 pc / Cepheus-Cass complex scale)
+  static CLOUD_SIZE_POWER = 2.0;          // power-law exponent — higher = more small clouds, fewer big
+  static CLOUD_ARM_BIAS = 0.72;           // 0 = uniform placement, 1 = arms only
+
   // ── Component star-type weights (single source of truth) ──
   // Used by both _deriveStarWeights (system generation) and
   // starTypeDensityMultiplier (hash grid per-type density).
@@ -172,6 +187,155 @@ export class GalacticMap {
       }
       this._knownObjectsByRegion.get(regionKey).push({ key, profile });
     }
+
+    // Molecular clouds — generated eagerly (small list, used by both the
+    // glow shader and the nav map luminosity renderer).
+    this._clouds = null; // lazy, built on first access
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // MOLECULAR CLOUDS — discrete CPU-side dust clouds
+  //
+  // Seeded from masterSeed so two GalacticMap instances with the same
+  // seed produce identical cloud lists. Arm-biased (clouds concentrate
+  // near spiral arms), midplane-concentrated (exponential falloff in z),
+  // and radially weighted around the molecular ring (peak at ~5 kpc).
+  //
+  // Each cloud is a (center, radius, density, shape-seed) tuple. The
+  // shader uses the list to render near clouds volumetrically (per-cloud
+  // ray march with local FBM) and far clouds as flat occluders (ray/sphere
+  // intersection attenuating the integrated stellar glow).
+  // ════════════════════════════════════════════════════════════
+
+  /**
+   * Lazy accessor for the galactic cloud list. Generates on first call.
+   * @returns {Array<{center:{x,y,z}, radius:number, density:number, seed:number}>}
+   */
+  getClouds() {
+    if (this._clouds) return this._clouds;
+    this._clouds = this._generateClouds();
+    return this._clouds;
+  }
+
+  _generateClouds() {
+    const rng = new SeededRandom(this.masterSeed + '-clouds');
+    const clouds = [];
+    const target = GalacticMap.CLOUD_TARGET_COUNT;
+    const maxAttempts = target * 12;
+    let attempts = 0;
+
+    while (clouds.length < target && attempts < maxAttempts) {
+      attempts++;
+
+      // ── Sample a candidate position ──
+      // Gaussian in R around the molecular ring peak, uniform in theta,
+      // Gaussian in z around the midplane.
+      let R = rng.gaussian(GalacticMap.MOLECULAR_RING_PEAK_R, GalacticMap.MOLECULAR_RING_SIGMA);
+      if (R < GalacticMap.CLOUD_INNER_R || R > GalacticMap.CLOUD_OUTER_R) continue;
+      const theta = rng.range(0, 2 * Math.PI);
+      const z = rng.gaussian(0, GalacticMap.DUST_SCALE_HEIGHT);
+      if (Math.abs(z) > GalacticMap.DUST_SCALE_HEIGHT * 4) continue; // hard clamp
+
+      // ── Arm-bias rejection sample ──
+      // Acceptance probability is (1 - armBias) + armBias * armStrength.
+      // At armBias = 1.0, clouds exist only in arms; at 0, placement is
+      // uniform in the annulus.
+      const armStr = this.spiralArmStrength(R, theta);
+      const accept = (1 - GalacticMap.CLOUD_ARM_BIAS) + GalacticMap.CLOUD_ARM_BIAS * Math.min(armStr, 1);
+      if (rng.float() > accept) continue;
+
+      // ── Power-law radius ──
+      // Used as the "thin axis" of the cloud ellipsoid (the perpendicular
+      // and vertical extent). The long axis along the arm tangent is set
+      // separately below.
+      const u = rng.float();
+      const radius = GalacticMap.CLOUD_MIN_RADIUS
+                   + (GalacticMap.CLOUD_MAX_RADIUS - GalacticMap.CLOUD_MIN_RADIUS)
+                   * Math.pow(u, GalacticMap.CLOUD_SIZE_POWER);
+
+      const center = {
+        x: R * Math.cos(theta),
+        y: z,
+        z: R * Math.sin(theta),
+      };
+
+      // ── Arm-tangent orientation ──
+      // Clouds are stretched along the spiral arm tangent so they form
+      // "dashes" along the arms rather than spherical blobs. The arm is
+      // a logarithmic spiral: theta_arm(R) = offset + pitchK * log(R/Rref).
+      // Its tangent at (R, theta) points in a direction that combines
+      // radial outflow + azimuthal rotation at the pitch angle.
+      //
+      // Tangent direction (unit vector in the disk plane):
+      //   radial component: sin(pitchAngle)
+      //   azimuthal component: cos(pitchAngle)
+      const sinP = Math.sin(this.pitchAngle);
+      const cosP = Math.cos(this.pitchAngle);
+      // Unit vectors at this position
+      const radialX = Math.cos(theta);
+      const radialZ = Math.sin(theta);
+      const aziX = -Math.sin(theta);
+      const aziZ = Math.cos(theta);
+      // Arm tangent unit vector
+      const tangentX = sinP * radialX + cosP * aziX;
+      const tangentZ = sinP * radialZ + cosP * aziZ;
+      // Aspect ratio varies per cloud so they look different — some short,
+      // some long. Mean 5:1, range 3:1 to 10:1.
+      const aspect = rng.gaussianClamped(5.0, 2.0, 3.0, 10.0);
+      // Long axis = radius * aspect (along the arm tangent)
+      const halfLong = radius * aspect;
+      // Perpendicular axis = radius (in the disk plane, across the arm)
+      const halfPerp = radius;
+      // Vertical axis = radius * 0.4 (clouds are thinner vertically than horizontally)
+      const halfVert = radius * 0.4;
+
+      // Density varies modestly — mostly uniform, some dimmer/denser outliers
+      const density = rng.gaussianClamped(1.0, 0.22, 0.4, 1.6);
+
+      // Shape seed — used by the shader for local FBM detail
+      const seed = rng.float() * 1000;
+
+      clouds.push({
+        center,
+        radius,          // legacy — represents the perpendicular radius
+        halfLong,
+        halfPerp,
+        halfVert,
+        tangent: { x: tangentX, z: tangentZ },
+        density,
+        seed,
+      });
+    }
+
+    return clouds;
+  }
+
+  /**
+   * Return clouds whose bounding sphere comes within `maxDistance` of `position`.
+   * Results are sorted nearest-first, truncated to `maxCount`.
+   *
+   * @param {{x,y,z}} position — in galactic coords (kpc)
+   * @param {number} maxDistance — search radius (kpc)
+   * @param {number} [maxCount=16] — cap on returned clouds
+   * @returns {Array<{center, radius, density, seed, distance, insideFeature}>}
+   */
+  findCloudsInVolume(position, maxDistance, maxCount = 16) {
+    const clouds = this.getClouds();
+    const results = [];
+    for (const c of clouds) {
+      const dx = c.center.x - position.x;
+      const dy = c.center.y - position.y;
+      const dz = c.center.z - position.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      // Cull against the LONGEST semi-axis so elongated clouds aren't
+      // missed when the query point is close to one of their ends.
+      const boundingRadius = Math.max(c.halfLong || c.radius, c.halfPerp || c.radius, c.halfVert || c.radius);
+      if (dist < maxDistance + boundingRadius) {
+        results.push({ ...c, distance: dist, insideFeature: dist < boundingRadius });
+      }
+    }
+    results.sort((a, b) => a.distance - b.distance);
+    return results.slice(0, maxCount);
   }
 
   // ════════════════════════════════════════════════════════════

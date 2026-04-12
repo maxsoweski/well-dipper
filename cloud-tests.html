@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Molecular Cloud Tests</title>
+  <style>
+    body {
+      background: #0a0a0a; color: #dfe; font-family: monospace;
+      padding: 20px; font-size: 13px; line-height: 1.5;
+    }
+    h1 { color: #0f0; font-size: 18px; margin-bottom: 10px; }
+    h2 { color: #5bf; font-size: 14px; margin-top: 18px; }
+    .pass { color: #3f8; }
+    .fail { color: #f55; font-weight: bold; }
+    .info { color: #888; }
+    .summary {
+      margin-top: 20px; padding: 10px 14px;
+      border: 1px solid #444; border-radius: 3px;
+    }
+    .summary.all-pass { border-color: #3f8; background: rgba(51,255,136,0.08); }
+    .summary.any-fail { border-color: #f55; background: rgba(255,85,85,0.08); }
+    code { color: #fcd; }
+  </style>
+</head>
+<body>
+  <h1>Molecular Cloud Verification Suite</h1>
+  <div id="results">Loading...</div>
+
+  <script type="module">
+    import { GalacticMap } from './src/generation/GalacticMap.js';
+
+    const results = document.getElementById('results');
+    let passCount = 0, failCount = 0;
+    const log = [];
+
+    function section(title) {
+      log.push(`<h2>${title}</h2>`);
+    }
+
+    function check(name, fn) {
+      try {
+        const result = fn();
+        if (result === true) {
+          passCount++;
+          log.push(`<div class="pass">✓ ${name}</div>`);
+        } else {
+          failCount++;
+          log.push(`<div class="fail">✗ ${name} — ${result}</div>`);
+        }
+      } catch (e) {
+        failCount++;
+        log.push(`<div class="fail">✗ ${name} — threw: ${e.message}</div>`);
+      }
+    }
+
+    function info(msg) {
+      log.push(`<div class="info">  ${msg}</div>`);
+    }
+
+    // ── Test 1: Cloud generation produces non-empty list ──
+    section('1. Cloud generation');
+    const galaxy = new GalacticMap('well-dipper-galaxy-1');
+    const clouds = galaxy.getClouds();
+    info(`Generated ${clouds.length} clouds`);
+
+    check('Cloud count is within 10% of target', () => {
+      const target = GalacticMap.CLOUD_TARGET_COUNT;
+      const delta = Math.abs(clouds.length - target);
+      return delta < target * 0.1 || `got ${clouds.length}, target ${target}`;
+    });
+
+    check('Each cloud has {center, radius, density, seed}', () => {
+      for (const c of clouds) {
+        if (typeof c.center?.x !== 'number') return 'missing center.x';
+        if (typeof c.center?.y !== 'number') return 'missing center.y';
+        if (typeof c.center?.z !== 'number') return 'missing center.z';
+        if (typeof c.radius !== 'number') return 'missing radius';
+        if (typeof c.density !== 'number') return 'missing density';
+        if (typeof c.seed !== 'number') return 'missing seed';
+      }
+      return true;
+    });
+
+    check('All cloud radii within declared bounds', () => {
+      const lo = GalacticMap.CLOUD_MIN_RADIUS;
+      const hi = GalacticMap.CLOUD_MAX_RADIUS;
+      for (const c of clouds) {
+        if (c.radius < lo || c.radius > hi) return `radius ${c.radius} out of [${lo}, ${hi}]`;
+      }
+      return true;
+    });
+
+    // ── Test 2: Seed determinism ──
+    section('2. Seed determinism');
+
+    const galaxy2 = new GalacticMap('well-dipper-galaxy-1');
+    const clouds2 = galaxy2.getClouds();
+    check('Same seed produces same cloud count', () => {
+      return clouds.length === clouds2.length || `${clouds.length} vs ${clouds2.length}`;
+    });
+    check('Same seed produces identical cloud positions', () => {
+      for (let i = 0; i < clouds.length; i++) {
+        const a = clouds[i], b = clouds2[i];
+        if (a.center.x !== b.center.x || a.center.y !== b.center.y || a.center.z !== b.center.z) {
+          return `index ${i} differs`;
+        }
+      }
+      return true;
+    });
+
+    const galaxyDifferent = new GalacticMap('different-seed');
+    const cloudsDifferent = galaxyDifferent.getClouds();
+    check('Different seed produces different cloud layout', () => {
+      // Check that at least one cloud center differs significantly
+      const n = Math.min(clouds.length, cloudsDifferent.length);
+      for (let i = 0; i < n; i++) {
+        const dx = clouds[i].center.x - cloudsDifferent[i].center.x;
+        const dz = clouds[i].center.z - cloudsDifferent[i].center.z;
+        if (Math.hypot(dx, dz) > 0.5) return true;
+      }
+      return 'all cloud positions too similar';
+    });
+
+    // ── Test 3: Midplane concentration ──
+    section('3. Midplane concentration (dust scale height ~80 pc)');
+
+    const zValues = clouds.map(c => Math.abs(c.center.y));
+    const meanZ = zValues.reduce((s, v) => s + v, 0) / zValues.length;
+    const maxZ = Math.max(...zValues);
+    const withinScaleHeight = zValues.filter(v => v <= GalacticMap.DUST_SCALE_HEIGHT).length;
+    const outsideTwoSigma = zValues.filter(v => v > GalacticMap.DUST_SCALE_HEIGHT * 2).length;
+
+    info(`Mean |z|: ${meanZ.toFixed(3)} kpc, max |z|: ${maxZ.toFixed(3)} kpc`);
+    info(`Within ±${GalacticMap.DUST_SCALE_HEIGHT} kpc (1σ): ${withinScaleHeight}/${zValues.length} (${(100*withinScaleHeight/zValues.length).toFixed(0)}%)`);
+    info(`Beyond ±${GalacticMap.DUST_SCALE_HEIGHT*2} kpc (2σ): ${outsideTwoSigma}/${zValues.length}`);
+
+    check('Mean |z| is less than the dust scale height', () => {
+      return meanZ < GalacticMap.DUST_SCALE_HEIGHT * 1.1 || `mean ${meanZ.toFixed(3)} vs scale ${GalacticMap.DUST_SCALE_HEIGHT}`;
+    });
+    check('At least 60% of clouds within 1σ of midplane', () => {
+      const pct = withinScaleHeight / zValues.length;
+      return pct > 0.60 || `${(pct*100).toFixed(0)}%`;
+    });
+    check('Max |z| is within hard clamp (4σ)', () => {
+      return maxZ <= GalacticMap.DUST_SCALE_HEIGHT * 4 || `${maxZ.toFixed(3)}`;
+    });
+
+    // ── Test 4: Molecular ring radial distribution ──
+    section('4. Radial distribution (peak ~5 kpc)');
+
+    const radialR = clouds.map(c => Math.sqrt(c.center.x ** 2 + c.center.z ** 2));
+    const meanR = radialR.reduce((s, v) => s + v, 0) / radialR.length;
+    const inRing = radialR.filter(r => Math.abs(r - GalacticMap.MOLECULAR_RING_PEAK_R) < GalacticMap.MOLECULAR_RING_SIGMA).length;
+
+    info(`Mean R: ${meanR.toFixed(2)} kpc (target: ${GalacticMap.MOLECULAR_RING_PEAK_R})`);
+    info(`Within ±${GalacticMap.MOLECULAR_RING_SIGMA} kpc of ring peak: ${inRing}/${radialR.length} (${(100*inRing/radialR.length).toFixed(0)}%)`);
+
+    check('Mean R is near the molecular ring peak', () => {
+      const target = GalacticMap.MOLECULAR_RING_PEAK_R;
+      return Math.abs(meanR - target) < 1.5 || `mean ${meanR.toFixed(2)} vs peak ${target}`;
+    });
+    check('No clouds inside the bulge exclusion', () => {
+      return radialR.every(r => r >= GalacticMap.CLOUD_INNER_R) || 'found cloud inside CLOUD_INNER_R';
+    });
+    check('No clouds beyond the outer disk', () => {
+      return radialR.every(r => r <= GalacticMap.CLOUD_OUTER_R) || 'found cloud beyond CLOUD_OUTER_R';
+    });
+
+    // ── Test 5: Arm bias ──
+    section('5. Arm bias (clouds cluster in spiral arms)');
+
+    // Compute spiral arm strength for each cloud
+    const armStrengths = clouds.map(c => {
+      const R = Math.sqrt(c.center.x ** 2 + c.center.z ** 2);
+      const theta = Math.atan2(c.center.z, c.center.x);
+      return galaxy.spiralArmStrength(R, theta);
+    });
+
+    const meanArmStr = armStrengths.reduce((s, v) => s + v, 0) / armStrengths.length;
+    const inArm = armStrengths.filter(s => s > 0.4).length;
+    const deepArm = armStrengths.filter(s => s > 0.7).length;
+
+    info(`Mean arm strength at cloud positions: ${meanArmStr.toFixed(3)}`);
+    info(`In arm (strength > 0.4): ${inArm}/${clouds.length} (${(100*inArm/clouds.length).toFixed(0)}%)`);
+    info(`Deep in arm (strength > 0.7): ${deepArm}/${clouds.length} (${(100*deepArm/clouds.length).toFixed(0)}%)`);
+
+    // Compare to uniform random placement (would average ~0.15 arm strength in the disk)
+    check('Mean arm strength > 0.25 (biased toward arms)', () => {
+      return meanArmStr > 0.25 || `mean ${meanArmStr.toFixed(3)}`;
+    });
+    check('At least 30% of clouds in arms (strength > 0.4)', () => {
+      const pct = inArm / clouds.length;
+      return pct > 0.30 || `${(pct*100).toFixed(0)}%`;
+    });
+
+    // ── Test 6: findCloudsInVolume query ──
+    section('6. findCloudsInVolume query behavior');
+
+    const sunPos = { x: 8, y: 0.025, z: 0 };
+    const abovePos = { x: 0, y: 10, z: 0 };
+
+    const sunResults = galaxy.findCloudsInVolume(sunPos, 20, 16);
+    const aboveResults = galaxy.findCloudsInVolume(abovePos, 20, 16);
+
+    info(`From Sun (8,0.025,0), within 20 kpc: ${sunResults.length} returned`);
+    if (sunResults[0]) info(`  Closest: ${sunResults[0].distance.toFixed(2)} kpc, radius ${(sunResults[0].radius*1000).toFixed(0)} pc`);
+    info(`From above (0,10,0), within 20 kpc: ${aboveResults.length} returned`);
+    if (aboveResults[0]) info(`  Closest: ${aboveResults[0].distance.toFixed(2)} kpc`);
+
+    check('Sun finds at least 10 nearby clouds', () => {
+      return sunResults.length >= 10 || `only ${sunResults.length}`;
+    });
+    check('Sun results are sorted nearest-first', () => {
+      for (let i = 1; i < sunResults.length; i++) {
+        if (sunResults[i].distance < sunResults[i-1].distance) return `out of order at ${i}`;
+      }
+      return true;
+    });
+    check('Above position still finds clouds (below the player in the disk)', () => {
+      return aboveResults.length >= 10 || `only ${aboveResults.length}`;
+    });
+    check('Query cap is respected (maxCount = 16)', () => {
+      return sunResults.length <= 16 && aboveResults.length <= 16 || 'exceeded cap';
+    });
+
+    // ── Test 7: Size distribution (power-law skew) ──
+    section('7. Size distribution (power-law skew toward small)');
+
+    const sizeMin = GalacticMap.CLOUD_MIN_RADIUS;
+    const sizeMax = GalacticMap.CLOUD_MAX_RADIUS;
+    const sizeMid = (sizeMin + sizeMax) / 2;
+    const belowMid = clouds.filter(c => c.radius < sizeMid).length;
+    const pctBelowMid = belowMid / clouds.length;
+
+    info(`Below mid-size (<${(sizeMid*1000).toFixed(0)} pc): ${belowMid}/${clouds.length} (${(pctBelowMid*100).toFixed(0)}%)`);
+
+    check('More than 65% of clouds are below mid-size (power-law)', () => {
+      return pctBelowMid > 0.65 || `${(pctBelowMid*100).toFixed(0)}%`;
+    });
+
+    // ── Render ──
+    const totalTests = passCount + failCount;
+    const allPass = failCount === 0;
+    const summaryClass = allPass ? 'all-pass' : 'any-fail';
+    const header = `<div class="summary ${summaryClass}">
+      <strong>Summary:</strong> ${passCount} / ${totalTests} passed
+      ${allPass ? '— ALL PASS ✓' : `— ${failCount} FAIL`}
+    </div>`;
+
+    results.innerHTML = header + log.join('\n');
+
+    window._cloudTestResults = { pass: passCount, fail: failCount, total: totalTests };
+  </script>
+</body>
+</html>

@@ -25,6 +25,24 @@ export class ProceduralGlowLayer {
   constructor(radius, brightnessRange, galacticMap) {
     this.radius = radius;
     this._brightnessRange = brightnessRange;
+    this._galacticMap = galacticMap;
+
+    // Derive a stable per-galaxy seed offset for the cloud field so two
+    // galaxies with different master seeds get different cloud layouts.
+    // Hash the master seed string into three float offsets.
+    let hashX = 0, hashY = 0, hashZ = 0;
+    const seedStr = (galacticMap && galacticMap.masterSeed) || 'default';
+    for (let i = 0; i < seedStr.length; i++) {
+      const c = seedStr.charCodeAt(i);
+      hashX = ((hashX * 31) + c * 7) | 0;
+      hashY = ((hashY * 37) + c * 11) | 0;
+      hashZ = ((hashZ * 41) + c * 13) | 0;
+    }
+    this._cloudSeed = {
+      x: (hashX % 1000) * 0.13,
+      y: (hashY % 1000) * 0.17,
+      z: (hashZ % 1000) * 0.19,
+    };
 
     // Extract arm data from GalacticMap
     const arms = galacticMap.arms || [];
@@ -69,6 +87,21 @@ export class ProceduralGlowLayer {
         uFeatureRadii: { value: new Float32Array(8) },
         uFeatureAbsorption: { value: new Float32Array(8) },
         uFeatureCount: { value: 0 },
+        // Molecular clouds — discrete list from GalacticMap.findCloudsInVolume
+        // xyz = center (kpc), w = max semi-axis (bounding radius)
+        uClouds: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+        // xy = arm tangent direction in (X, Z), z = halfLong, w = halfPerp
+        uCloudAxes: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+        // x = density, y = seed, z = halfVert, w reserved
+        uCloudProps: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+        uCloudCount: { value: 0 },
+        uCloud: { value: 0.0 },
+        uCloudScale: { value: 1.0 },
+        uCloudArmBias: { value: 1.0 },
+        uCloudSeedX: { value: 0.0 },
+        uCloudSeedY: { value: 0.0 },
+        uCloudSeedZ: { value: 0.0 },
+        uCloudDebug: { value: 0 },
       },
 
       vertexShader: /* glsl */ `
@@ -105,6 +138,23 @@ export class ProceduralGlowLayer {
         // no longer read by the shader — nebula billboards handle absorption
         // via premultiplied alpha blending now.
         uniform int uFeatureCount;
+
+        // Molecular cloud discrete-list pass
+        // Up to 16 nearby clouds from GalacticMap.findCloudsInVolume, uploaded
+        // as arrays. xyz = cloud center in galactic coords, w = cloud radius.
+        // uCloudProps[i].x = density, .y = shape seed, .zw reserved.
+        #define MAX_CLOUDS 16
+        uniform vec4 uClouds[MAX_CLOUDS];     // xyz = center, w = bounding radius
+        uniform vec4 uCloudAxes[MAX_CLOUDS];  // xy = tangent (X,Z), z = halfLong, w = halfPerp
+        uniform vec4 uCloudProps[MAX_CLOUDS]; // x = density, y = seed, z = halfVert, w reserved
+        uniform int  uCloudCount;
+        uniform float uCloud;          // 0 = disabled, 1 = default opacity
+        uniform float uCloudScale;     // FBM frequency multiplier
+        uniform float uCloudArmBias;   // arm envelope strength
+        uniform float uCloudSeedX;     // per-galaxy seed offset
+        uniform float uCloudSeedY;
+        uniform float uCloudSeedZ;
+        uniform int uCloudDebug;       // 0=off, 1=show density field, 2=show shaped density
 
         varying vec3 vWorldDir;
 
@@ -212,6 +262,243 @@ export class ProceduralGlowLayer {
             }
           }
           return vec2(bestAlong, bestDist);
+        }
+
+        // ── Continuous molecular cloud field ──
+        //
+        // A 3D density field sampled at each ray-march sample. Features
+        // stretch along spiral arms because the FBM is sampled in
+        // arm-local coordinates (alongArm, perpArm, z) with different
+        // frequencies per axis. Gated by arm strength, midplane, and
+        // radial (molecular ring) envelopes — same physics-driven gates
+        // as before, just now driving a continuous field instead of
+        // a discrete cloud list.
+        //
+        // Seed uniform keeps the field distinct per-galaxy. Continuous
+        // sampling means the field naturally has fractal substructure
+        // at all scales, so adjacent dense regions merge, filaments
+        // branch, and outlines are irregular — no smooth ellipsoids.
+        float cloudFieldDensity(vec3 p, float R, float z, float theta, float armStr) {
+          if (R < 1.0 || R > 14.5) return 0.0;
+
+          // Midplane envelope — dust is thin, ~100 pc scale height
+          float zEnv = exp(-z * z / (2.0 * DUST_HEIGHT * DUST_HEIGHT * 2.5));
+          if (zEnv < 0.02) return 0.0;
+
+          // Radial envelope — Gaussian around the molecular ring peak
+          float ringDist = R - 5.0;
+          float radialEnv = exp(-0.5 * ringDist * ringDist / 10.0);
+          radialEnv *= smoothstep(14.5, 11.0, R);
+          if (radialEnv < 0.02) return 0.0;
+
+          // Arm envelope — strongly biased toward arms but non-zero between
+          float armEnv = 0.25 + max(armStr, 0.0) * uCloudArmBias * 1.4;
+
+          // ── Compute arm-local coordinates ──
+          // For each arm, project the position onto its spiral path to get
+          // (alongArm, perpArm). Use the arm whose perp distance is smallest.
+          float logR = log(max(R, 0.01));
+          float sinPitch = sin(12.0 * PI / 180.0);
+          float bestPerp = 1000.0;
+          float bestAlong = 0.0;
+          float absBestPerp = 1000.0;
+          for (int i = 0; i < 8; i++) {
+            if (i >= uArmCount) break;
+            float armTheta = uArmOffsets[i] + uPitchK * logR;
+            float dTheta = mod(theta - armTheta + 3.0 * PI, 2.0 * PI) - PI;
+            float perpDist = dTheta * R * sinPitch;
+            if (abs(perpDist) < absBestPerp) {
+              absBestPerp = abs(perpDist);
+              bestPerp = perpDist;
+              // Along-arm arc length — roughly R × theta for the logarithmic spiral
+              bestAlong = R * theta;
+            }
+          }
+
+          // ── Hierarchical density field: two scales composed ──
+          //
+          // LOW-FREQUENCY "complex" field (ridged noise) — defines the
+          // large-scale backbone of cloud complexes as sharp curving
+          // filaments. Ridged noise (1 - abs(2*fbm - 1)) converts
+          // blob-shaped isosurfaces into ridge-shaped ones, giving
+          // filament backbones rather than cheetah spots.
+          //
+          // HIGH-FREQUENCY "core" field (standard FBM) — modulates the
+          // complex field at ~4x smaller scale to produce clumpy dense
+          // cores within the filaments. Without this, the complex field
+          // alone would be too uniform in texture.
+          //
+          // Density = complex_ridge × (floor + core_variation)
+          //
+          // This gives hierarchical structure: large filaments at the
+          // complex scale, clumpy cores at the core scale, with the core
+          // field's floor preventing the filament from vanishing in
+          // regions where core noise is low.
+
+          // Arm-local coordinates with per-galaxy seed offset
+          vec3 q = vec3(bestAlong * 0.4, bestPerp * 1.9, z * 14.0);
+          q *= uCloudScale;
+          q += vec3(uCloudSeedX, uCloudSeedY, uCloudSeedZ);
+
+          // Domain warp for organic, flowing structure
+          vec3 warp = vec3(
+            noise3D(q * 0.8 + vec3(17.3, 0.0, 0.0)),
+            noise3D(q * 0.8 + vec3(0.0, 13.7, 0.0)),
+            noise3D(q * 0.8 + vec3(0.0, 0.0, 21.1))
+          );
+          warp = (warp - 1.5) / 1.5;
+          vec3 qw = q + warp * 1.3;
+
+          // ── Complex field (low frequency — defines where complexes exist) ──
+          float fbmC = fbm(qw, 3) / 3.0;
+          float complexField = smoothstep(0.48, 0.76, fbmC);
+
+          // ── Core field (high frequency — clumps within complexes) ──
+          vec3 qCore = qw * 4.5;
+          float fbmK = fbm(qCore, 2) / 3.0;
+          float coreField = smoothstep(0.45, 0.68, fbmK);
+
+          // Combine hierarchically: complex gates WHERE clouds exist,
+          // core modulates the density within those regions.
+          float density = complexField * (0.3 + coreField * 0.85);
+
+          return density * radialEnv * zEnv * armEnv;
+        }
+
+        // ── Discrete molecular clouds (DEPRECATED — kept as stub) ──
+        //
+        // Clouds are a CPU-side list driven by GalacticMap.getClouds(). This
+        // shader receives up to 16 nearest clouds as uniform arrays. Each ray
+        // tests against each cloud in two modes:
+        //
+        //   1. Volumetric (close clouds, or ray enters the cloud):
+        //      Ray-march between entry and exit points, sampling a local FBM
+        //      anchored to the cloud's center. This gives the wispy,
+        //      Coalsack-style filamentary detail you see when a cloud is
+        //      close enough to spatially resolve.
+        //
+        //   2. Flat occlusion (far clouds the ray merely passes through):
+        //      Single ray-sphere intersection, attenuation proportional to
+        //      path length through the sphere. Used when the cloud is too
+        //      far for per-cloud detail to matter — it's just a darker
+        //      patch on the integrated stellar glow.
+        //
+        // Both modes use the same (center, radius, density, seed) data so
+        // nothing is inconsistent between near and far views.
+
+        // Ray-sphere intersection — returns vec2(tNear, tFar).
+        // If no hit, tFar < tNear (signals miss).
+        vec2 raySphereIntersect(vec3 ro, vec3 rd, vec3 center, float radius) {
+          vec3 oc = ro - center;
+          float b = dot(oc, rd);
+          float c = dot(oc, oc) - radius * radius;
+          float h = b * b - c;
+          if (h < 0.0) return vec2(1.0, -1.0);  // miss
+          h = sqrt(h);
+          return vec2(-b - h, -b + h);
+        }
+
+        // Ray-ellipsoid intersection in world coords.
+        // The ellipsoid is defined by:
+        //   center
+        //   tangent2D — unit vector in the (X, Z) galactic plane, long-axis direction
+        //   halfLong — semi-axis along tangent2D
+        //   halfPerp — semi-axis perpendicular to tangent in the disk plane
+        //   halfVert — semi-axis along Y (galactic vertical)
+        //
+        // Transform the ray into ellipsoid-local space where the ellipsoid
+        // becomes a unit sphere, do ray-sphere intersection, then return
+        // the (tNear, tFar) in ORIGINAL (unscaled) world units. Local
+        // sphere has unit radius, but the transform preserves t only
+        // approximately — we renormalize by the world-space ray direction
+        // after intersection.
+        vec2 rayEllipsoidIntersect(
+          vec3 ro, vec3 rd, vec3 center,
+          vec2 tangent2D, float halfLong, float halfPerp, float halfVert
+        ) {
+          // Local basis in world-space. Long axis in disk plane, perp axis
+          // in disk plane (rotated 90° from tangent), vertical axis is Y.
+          vec3 T = vec3(tangent2D.x, 0.0, tangent2D.y);
+          vec3 P = vec3(-tangent2D.y, 0.0, tangent2D.x);
+          vec3 V = vec3(0.0, 1.0, 0.0);
+
+          // World → ellipsoid-local transform: dot with basis, then scale
+          // by inverse semi-axes so the ellipsoid becomes a unit sphere.
+          vec3 oc = ro - center;
+          vec3 localRo = vec3(
+            dot(oc, T) / halfLong,
+            dot(oc, V) / halfVert,
+            dot(oc, P) / halfPerp
+          );
+          vec3 localRd = vec3(
+            dot(rd, T) / halfLong,
+            dot(rd, V) / halfVert,
+            dot(rd, P) / halfPerp
+          );
+          float rdLen = length(localRd);
+          if (rdLen < 1e-6) return vec2(1.0, -1.0);
+          vec3 localRdN = localRd / rdLen;
+
+          // Unit sphere intersection in local space
+          float b = dot(localRo, localRdN);
+          float c = dot(localRo, localRo) - 1.0;
+          float h = b * b - c;
+          if (h < 0.0) return vec2(1.0, -1.0);
+          h = sqrt(h);
+          // Convert local t → world t by dividing out the scale factor
+          // introduced by normalizing localRd.
+          return vec2((-b - h) / rdLen, (-b + h) / rdLen);
+        }
+
+        // Per-cloud local density field — called during volumetric pass.
+        // "local" is the sample position relative to cloud center, in kpc.
+        // "cloudRadius" gates the falloff; "seed" picks a unique FBM offset
+        // per cloud so no two clouds look identical.
+        //
+        // Produces wispy filamentary structure via a domain-warped FBM,
+        // smoothstep-shaped to make the edges feathered rather than hard.
+        // Multiplied by a radial falloff so density smoothly reaches zero
+        // at the cloud's bounding sphere surface.
+        float cloudLocalDensity(vec3 local, float cloudRadius, float seed) {
+          // Radial falloff: 1 near center, fading to 0 at bounding sphere.
+          // The core (inner 60%) stays at full density so the cloud has a
+          // solid-looking center; the outer 40% fades with a warped edge
+          // for wispy silhouettes.
+          float r = length(local);
+          if (r >= cloudRadius) return 0.0;
+
+          // Per-cloud FBM offset so each cloud has its own shape.
+          // Frequency of 7 cycles per cloud radius — small enough cells
+          // (~14% of radius = ~6 pc for a 45 pc cloud) that adjacent rays
+          // genuinely see different noise values, breaking up the silhouette.
+          float invRad = 1.0 / max(cloudRadius, 0.01);
+          vec3 q = local * invRad * 7.0 * uCloudScale + vec3(seed * 7.17, seed * 3.41, seed * 11.73);
+
+          // Domain warp for filamentary edges
+          vec3 warp = vec3(
+            noise3D(q * 1.5 + vec3(17.3, 0.0, 0.0)),
+            noise3D(q * 1.5 + vec3(0.0, 13.7, 0.0)),
+            noise3D(q * 1.5 + vec3(0.0, 0.0, 21.1))
+          );
+          warp = (warp - 1.5) / 1.5;
+
+          // FBM in [0,1] roughly, normalized so its mean is ~0.48
+          float base = fbm(q + warp * 1.2, 3) / 3.0;
+
+          // Aggressive edge warping — the FBM shifts the "effective radius"
+          // by up to 90% of the cloud size, so some rays see a much bigger
+          // cloud (wispy extension) and others see a much smaller one
+          // (indentation). This is what breaks up the circular silhouette.
+          float edgeNoise = (base - 0.48) * 2.0;
+          float effectiveR = r + edgeNoise * cloudRadius * 0.45;
+
+          // Soft radial falloff on the warped radius — dense core, feathered edge
+          float density = 1.0 - smoothstep(cloudRadius * 0.40, cloudRadius * 1.05, effectiveR);
+
+          // Interior variation: toned-down FBM-modulated density so the
+          // cloud core isn't a uniform block
+          float interiorVariation = 0.55 + smoothstep(0.35, 0.70, base) * 0.45;
+          return density * interiorVariation;
         }
 
         // ── Total density at a point (simplified for shader) ──
@@ -351,6 +638,16 @@ export class ProceduralGlowLayer {
           float glow = 0.0;
           vec3 colorAccum = vec3(0.0);
           float weightAccum = 0.0;
+          // Cloud transmittance accumulates across samples. Each sample's
+          // stellar contribution is scaled by the running transmittance so
+          // stars behind dust are correctly occluded.
+          float cloudTransmittance = 1.0;
+          float cloudAccum = 0.0;
+          // Per-ray weighted average of cloud color, so we can paint the
+          // cloud with a hue that varies per sample based on local density
+          // and local arm strength (more blue near young-star regions).
+          vec3 cloudColorAccum = vec3(0.0);
+          float cloudColorWeight = 0.0;
 
           // Find disk plane crossing: cam.y + dir.y * t = 0
           // Only use adaptive sampling when clearly above/below the disk
@@ -358,11 +655,13 @@ export class ProceduralGlowLayer {
           float tCross = (abs(dir.y) > 0.01) ? (-cam.y / dir.y) : -1.0;
           bool hasCrossing = tCross > NEAR_FADE && tCross < MAX_DIST && abs(cam.y) > 0.5;
 
-          // When above the disk (hasCrossing): only dense samples at the disk crossing.
-          // No coarse samples — they can accidentally hit the disk at wrong (R,theta),
-          // creating ghost arm artifacts.
+          // When above the disk (hasCrossing): 16 dense samples tightly
+          // concentrated at the disk crossing. Tight 40 pc spacing means
+          // each ray gets 4–6 samples inside the ~160 pc dust layer,
+          // enough to resolve continuous cloud structure instead of
+          // sparse leopard spots.
           // When in the disk (!hasCrossing): uniform samples along the full ray.
-          int numSamples = hasCrossing ? 8 : NUM_STEPS;
+          int numSamples = NUM_STEPS;
 
           for (int i = 0; i < NUM_STEPS; i++) {
             if (i >= numSamples) break;
@@ -371,9 +670,11 @@ export class ProceduralGlowLayer {
             float effStep;
 
             if (hasCrossing) {
-              // Dense samples only: ±0.35 kpc around the disk crossing
-              t = tCross + (float(i) - 3.5) * 0.1;
-              effStep = 0.1;
+              // Dense samples at the crossing: ±0.32 kpc, 40 pc spacing.
+              // This is tight enough that the dust layer is resolved even
+              // from straight-overhead viewpoints.
+              t = tCross + (float(i) - 7.5) * 0.04;
+              effStep = 0.04;
             } else {
               // Uniform samples along the full ray
               t = (float(i) + 0.5) * (MAX_DIST / float(NUM_STEPS));
@@ -395,7 +696,46 @@ export class ProceduralGlowLayer {
             float density = totalDensity(R, z, theta);
             float armStr = spiralArmStrength(R, theta);
 
-            float contribution = density * nearFade * effStep;
+            // ── Continuous cloud density ──
+            // Evaluate the arm-warped FBM field at this sample point.
+            // Multiply per-sample stellar contribution by the running
+            // cloud transmittance so clouds correctly occlude distant
+            // stars in depth order.
+            if (uCloud > 0.0) {
+              float cloudD = cloudFieldDensity(p, R, z, theta, armStr);
+              // Extinction coefficient tuned so dense regions block ~75%
+              // of the glow behind them over a typical 0.1 kpc sample.
+              float extinction = cloudD * effStep * 14.0 * uCloud;
+              cloudAccum += cloudD * cloudTransmittance * effStep;
+              cloudTransmittance *= exp(-extinction);
+              // Clamp minimum transmittance so no ray ever fully blacks
+              // out — real clouds always scatter some light through.
+              cloudTransmittance = max(cloudTransmittance, 0.10);
+
+              // Per-sample cloud color based on local density.
+              // Low-density: warm cream (slight reddening of starlight)
+              // Medium-density: rust/amber (moderate reddening)
+              // High-density: deep red-brown (heavy reddening, opaque core)
+              // Plus a blue reflection hint where arm strength is high
+              // (young hot stars illuminating the dust from outside).
+              vec3 colThin  = vec3(0.95, 0.80, 0.58);  // warm cream
+              vec3 colMed   = vec3(0.85, 0.38, 0.12);  // amber rust
+              vec3 colDense = vec3(0.40, 0.08, 0.03);  // deep red-brown
+              vec3 colRefl  = vec3(0.40, 0.58, 1.00);  // blue reflection
+              vec3 c1 = mix(colThin, colMed, smoothstep(0.15, 0.5, cloudD));
+              vec3 c2 = mix(c1, colDense, smoothstep(0.5, 0.85, cloudD));
+              // Blue reflection mixed in where stellar density is high AND
+              // cloud density is low-to-medium (reflecting light, not buried)
+              float reflMix = smoothstep(0.3, 0.9, armStr) * (1.0 - smoothstep(0.3, 0.7, cloudD)) * 0.25;
+              vec3 sampleCloudColor = mix(c2, colRefl, reflMix);
+              // Weight by density × transmittance so dense nearby clouds
+              // dominate the color more than wispy distant ones
+              float cw = cloudD * cloudTransmittance * effStep;
+              cloudColorAccum += sampleCloudColor * cw;
+              cloudColorWeight += cw;
+            }
+
+            float contribution = density * nearFade * effStep * cloudTransmittance;
             glow += contribution;
 
             // Color weighted by contribution and bulge luminosity
@@ -407,6 +747,19 @@ export class ProceduralGlowLayer {
             weightAccum += contribution * lumWeight;
           }
 
+          // ── Smooth dust column for above-disk views ──
+          // Computed here (before tone mapping uses it) so the variable
+          // is declared before its first use in GLSL.
+          float smoothDustDim = 1.0;
+          if (hasCrossing && uCloud > 0.0) {
+            vec3 crossP = cam + dir * tCross;
+            float crossR = sqrt(crossP.x * crossP.x + crossP.z * crossP.z);
+            float crossTheta = atan(crossP.z, crossP.x + 0.0001);
+            float smoothDust = dustDensitySimple(crossR, 0.0, crossTheta);
+            smoothDustDim = exp(-smoothDust * 0.16 * uCloud * 3.0);
+            smoothDustDim = max(smoothDustDim, 0.15);
+          }
+
           // ── Tone mapping ──
           // Brightness adapts to viewing angle.
           // From above: looking through full disk = bright.
@@ -415,22 +768,76 @@ export class ProceduralGlowLayer {
           float brightness = glow * 6.0;
           brightness = 1.0 - exp(-brightness);
           brightness *= aboveFactor;
+          // Smooth dust dimming — pure brightness reduction, no color shift
+          brightness *= smoothDustDim;
+
+          // Cloud transmittance was accumulated inline in the stellar
+          // ray march above. No separate cloud pass — the continuous
+          // field is sampled at the same points as stellar density so
+          // depth-ordering is correct and clouds properly occlude stars
+          // behind them.
+
+          // ── Smooth dust column boost for above-disk views ──
+          //
+          // From inside the disk, the 18 kpc ray path integrates through
+          // many clouds and accumulates rich extinction. From above the
+          // disk, the ray only crosses ~160 pc of dust — 100× less path
+          // length, so 100× less extinction. Physically correct, but
+          // visually wrong: real face-on galaxy photos show prominent
+          // dust lanes because the column density is high.
+          //
+          // Fix: when hasCrossing is true (above-disk view), add the
+          // smooth arm-correlated dust column from dustDensitySimple at
+          // the crossing point. This represents the STATISTICAL AVERAGE
+          // extinction through the full disk thickness that the FBM
+          // samples are too sparse to capture. It fills in between the
+          // clumpy FBM features so the galaxy looks "full of dust" from
+          // above without changing the in-disk view at all (hasCrossing
+          // is false in-disk, so this term never fires there).
+          // (smooth dust dim already computed above, before tone mapping)
+
+          // Debug visualization: show accumulated cloud field
+          if (uCloudDebug == 2) {
+            gl_FragColor = vec4(vec3(1.0 - cloudTransmittance), 1.0);
+            return;
+          }
 
           // Feature absorption removed — nebula billboards now handle their own
           // glow blocking via premultiplied alpha + Beer-Lambert transmittance.
           // The old shader-based dimming is no longer needed.
 
-          if (brightness < 0.005) discard;
+          // Per-ray weighted average cloud color. If no cloud along the
+          // ray, this is black and doesn't contribute.
+          vec3 avgCloudColor = cloudColorWeight > 0.0
+            ? cloudColorAccum / cloudColorWeight
+            : vec3(0.0);
 
-          // ── Color: warm center, silvery elsewhere ──
+          // Cloud self-emission: dense clouds get a small brightness
+          // floor so silhouettes don't vanish. Scaled by the amount of
+          // absorption (1 - transmittance) so clear rays get no glow.
+          float cloudSelfBright = clamp((1.0 - cloudTransmittance) * 0.22, 0.0, 0.22);
+          float totalBright = brightness + cloudSelfBright;
+          if (totalBright < 0.005) discard;
+
+          // ── Stellar color ──
           vec3 toCenter = normalize(-cam);
           float centerDot = dot(dir, toCenter);
           float centerInfluence = smoothstep(0.6, 0.97, centerDot);
-          vec3 color = mix(
+          vec3 stellarColor = mix(
             vec3(0.95, 0.93, 0.90),          // silvery white (disk)
             vec3(1.0, 0.78, 0.45),            // warm golden (center)
             centerInfluence * 0.45
           );
+
+          // ── Blend stellar color toward the per-ray cloud color ──
+          // Where cloud absorption is high, cloud color dominates.
+          // Where absorption is low, stellar color dominates.
+          // Because avgCloudColor varies per-ray based on local density,
+          // adjacent rays get different hues → no uniform rust tint.
+          float tintAmount = clamp(1.0 - cloudTransmittance, 0.0, 0.92);
+          vec3 color = mix(stellarColor, avgCloudColor, tintAmount);
+
+          brightness = totalBright;
 
           // ── Retro dithering ──
           vec2 ditherCoord = floor(gl_FragCoord.xy / 3.0);
@@ -488,13 +895,52 @@ export class ProceduralGlowLayer {
   }
 
   /**
-   * Update camera position (galactic coordinates in kpc).
+   * Update camera position (galactic coordinates in kpc). Also refreshes
+   * the cloud list so nearby clouds are uploaded to the shader.
    * @param {{ x, y, z }} galacticPos
    */
   setPlayerPosition(galacticPos) {
     this._sphere.material.uniforms.uPlayerPos.value.set(
       galacticPos.x, galacticPos.y, galacticPos.z
     );
+    // Upload seed offsets — static per galaxy but uploaded on first
+    // setPlayerPosition call so we don't need a dedicated init path.
+    const u = this._sphere.material.uniforms;
+    u.uCloudSeedX.value = this._cloudSeed.x;
+    u.uCloudSeedY.value = this._cloudSeed.y;
+    u.uCloudSeedZ.value = this._cloudSeed.z;
+
+    // Legacy: cloud list upload is a no-op now (continuous field doesn't
+    // need discrete data). Kept for nav-map consistency story later.
+    if (this._galacticMap && this._galacticMap.findCloudsInVolume) {
+      const clouds = this._galacticMap.findCloudsInVolume(galacticPos, 20.0, 16);
+      this._uploadClouds(clouds);
+    }
+  }
+
+  _uploadClouds(clouds) {
+    const u = this._sphere.material.uniforms;
+    const uClouds = u.uClouds.value;
+    const uProps = u.uCloudProps.value;
+    const uAxes = u.uCloudAxes.value;
+    const count = Math.min(clouds.length, 16);
+    for (let i = 0; i < 16; i++) {
+      if (i < count) {
+        const c = clouds[i];
+        // xyz = center, w = max semi-axis (conservative bounding radius)
+        const maxAxis = Math.max(c.halfLong, c.halfPerp, c.halfVert);
+        uClouds[i].set(c.center.x, c.center.y, c.center.z, maxAxis);
+        // xy = tangent direction (in XZ plane), z = halfLong, w = halfPerp
+        uAxes[i].set(c.tangent.x, c.tangent.z, c.halfLong, c.halfPerp);
+        // x = density, y = seed, z = halfVert, w reserved
+        uProps[i].set(c.density, c.seed, c.halfVert, 0);
+      } else {
+        uClouds[i].set(0, 0, 0, 0);
+        uAxes[i].set(0, 0, 0, 0);
+        uProps[i].set(0, 0, 0, 0);
+      }
+    }
+    u.uCloudCount.value = count;
   }
 
   setOpacity(opacity) {
@@ -504,6 +950,26 @@ export class ProceduralGlowLayer {
   setBrightnessMax(max) {
     this._brightnessRange.max = max;
     this._sphere.material.uniforms.uBrightnessMax.value = max;
+  }
+
+  /** Overall molecular cloud opacity (0 = disabled, 1 = default, 2 = heavy). */
+  setCloudOpacity(v) {
+    this._sphere.material.uniforms.uCloud.value = v;
+  }
+
+  /** FBM frequency multiplier — higher values give smaller cloud structures. */
+  setCloudScale(v) {
+    this._sphere.material.uniforms.uCloudScale.value = v;
+  }
+
+  /** How strongly spiral arms boost cloud probability. */
+  setCloudArmBias(v) {
+    this._sphere.material.uniforms.uCloudArmBias.value = v;
+  }
+
+  /** Debug: 0=off, 1=show raw FBM (blue=low, gray=mid, red=high), 2=show shaped density. */
+  setCloudDebug(v) {
+    this._sphere.material.uniforms.uCloudDebug.value = v;
   }
 
   update(cameraPosition) {
