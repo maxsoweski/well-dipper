@@ -143,11 +143,11 @@ export class ProceduralGlowLayer {
         // Up to 16 nearby clouds from GalacticMap.findCloudsInVolume, uploaded
         // as arrays. xyz = cloud center in galactic coords, w = cloud radius.
         // uCloudProps[i].x = density, .y = shape seed, .zw reserved.
-        #define MAX_CLOUDS 16
-        uniform vec4 uClouds[MAX_CLOUDS];     // xyz = center, w = bounding radius
-        uniform vec4 uCloudAxes[MAX_CLOUDS];  // xy = tangent (X,Z), z = halfLong, w = halfPerp
-        uniform vec4 uCloudProps[MAX_CLOUDS]; // x = density, y = seed, z = halfVert, w reserved
-        uniform int  uCloudCount;
+        // Cloud list uniforms removed from GLSL — the continuous-field
+        // approach doesn't use per-cloud data. The JS code still uploads
+        // them (Three.js silently ignores uploads to non-existent
+        // uniforms) so the CPU-side cloud list remains intact for future
+        // nav-map use without shader bloat.
         uniform float uCloud;          // 0 = disabled, 1 = default opacity
         uniform float uCloudScale;     // FBM frequency multiplier
         uniform float uCloudArmBias;   // arm envelope strength
@@ -903,18 +903,26 @@ export class ProceduralGlowLayer {
     this._sphere.material.uniforms.uPlayerPos.value.set(
       galacticPos.x, galacticPos.y, galacticPos.z
     );
-    // Upload seed offsets — static per galaxy but uploaded on first
-    // setPlayerPosition call so we don't need a dedicated init path.
+    // Upload seed offsets and enable clouds.
     const u = this._sphere.material.uniforms;
     u.uCloudSeedX.value = this._cloudSeed.x;
     u.uCloudSeedY.value = this._cloudSeed.y;
     u.uCloudSeedZ.value = this._cloudSeed.z;
 
-    // Legacy: cloud list upload is a no-op now (continuous field doesn't
-    // need discrete data). Kept for nav-map consistency story later.
-    if (this._galacticMap && this._galacticMap.findCloudsInVolume) {
-      const clouds = this._galacticMap.findCloudsInVolume(galacticPos, 20.0, 16);
-      this._uploadClouds(clouds);
+    // Auto-enable clouds on first position update
+    if (u.uCloud.value === 0) {
+      u.uCloud.value = 1.0;
+    }
+
+    // Cloud list upload (continuous field doesn't need this data but
+    // keeps the CPU-side list populated for future nav-map use).
+    try {
+      if (this._galacticMap && this._galacticMap.findCloudsInVolume) {
+        const clouds = this._galacticMap.findCloudsInVolume(galacticPos, 20.0, 16);
+        this._uploadClouds(clouds);
+      }
+    } catch (e) {
+      console.warn('[GLOW] Cloud list upload failed:', e.message);
     }
   }
 
