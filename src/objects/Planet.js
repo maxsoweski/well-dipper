@@ -635,10 +635,15 @@ float getSurfacePattern(vec3 pos) {
     node = pow(node, 0.8);
     n = cracks + node * 0.5;
   } else if (planetType == 13) {
-    // Crystal: angular Voronoi facets with gemstone coloring
+    // Crystal: angular Voronoi facets with gemstone coloring.
+    // Tracks F1 (nearest) and F2 (second-nearest) Voronoi feature distances
+    // so we can draw a crisp edge wherever F2-F1 is small — which is exactly
+    // the border between two cells. Previously only tracked F1, so edges
+    // were implicit and washed out; now facets have visible seams.
     vec3 scaledPos = pos * noiseScale * 2.5;
     vec3 cellBase = floor(scaledPos);
-    float minDist = 10.0;
+    float f1 = 10.0;
+    float f2 = 10.0;
     float cellValue = 0.0;
     for (int dx = -1; dx <= 1; dx++) {
       for (int dy = -1; dy <= 1; dy++) {
@@ -650,24 +655,39 @@ float getSurfacePattern(vec3 pos) {
             dot(neighbor, vec3(113.5, 271.9, 124.6))
           )) * 43758.5453) * 0.8 + 0.1;
           float d = length(scaledPos - point);
-          if (d < minDist) {
-            minDist = d;
+          if (d < f1) {
+            f2 = f1;
+            f1 = d;
             cellValue = fract(sin(dot(neighbor, vec3(43.34, 85.17, 67.89))) * 4758.5);
+          } else if (d < f2) {
+            f2 = d;
           }
         }
       }
     }
-    n = cellValue;
+    // F2-F1 approaches 0 at cell borders and grows toward cell interiors.
+    // Mix 70% facet-edge with 30% cell color to keep variety while sharpening seams.
+    float edgeProximity = 1.0 - smoothstep(0.0, 0.18, f2 - f1);
+    n = cellValue * 0.3 + edgeProximity * 0.7;
   } else if (planetType == 14) {
-    // Fungal: dark base with bioluminescent glow-spot clusters
+    // Fungal: dark base with bioluminescent glow-spot clusters.
+    // Spots now drift + pulse via the shared time uniform so glow
+    // clusters breathe rather than sit static. Two spot layers use
+    // different drift speeds (0.03, 0.045) so they don't move in
+    // lockstep — creates a more organic rolling flicker.
     float terrain = snoise(pos * noiseScale) * 0.3 + 0.3;
-    float spots1 = snoise(pos * noiseScale * 4.0);
-    float spots2 = snoise(pos * noiseScale * 6.0 + vec3(100.0));
+    vec3 drift1 = vec3(0.0, time * 0.03, time * 0.02);
+    vec3 drift2 = vec3(time * 0.045, 0.0, time * 0.025);
+    float spots1 = snoise(pos * noiseScale * 4.0 + drift1);
+    float spots2 = snoise(pos * noiseScale * 6.0 + vec3(100.0) + drift2);
     float clusterMask = snoise(pos * noiseScale * 0.8) * 0.5 + 0.5;
     clusterMask = smoothstep(0.3, 0.7, clusterMask);
     float glow = max(spots1, spots2);
     glow = pow(max(glow, 0.0), 3.0) * clusterMask;
-    n = terrain + glow * 1.5;
+    // Slow global pulse (~3s period) on top of the drift so brightness
+    // visibly breathes — not just moves.
+    float breathe = 0.75 + 0.25 * sin(time * 2.0);
+    n = terrain + glow * 1.5 * breathe;
   } else if (planetType == 15) {
     // Machine: rectangular circuit grid with lit/dark cells
     vec3 gridPos = pos * noiseScale * 4.0;
