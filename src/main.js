@@ -1345,26 +1345,40 @@ function togglePretextLab() {
 }
 
 // ── Debug Gallery Mode ──
-// Press D to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
+// Press G to enter/exit. ↑/↓ cycle types, ←/→ cycle seeds.
 // Shows deep sky objects, stars, planets, and moons one at a time for evaluation.
+// Planet entries render side-by-side: Planet.js procedural shader (left) vs
+// baked MaterialBodyShader via TextureBaker (right). Moon and known-feature
+// entries auto-skip seeds that produce nothing renderable.
 const GALLERY_TYPES = [
-  // Known object profiles (all 37 real Messier/NGC objects)
+  // Known catalog — 37 real Messier/NGC profiles rendered via SkyFeatureLayer
   'known-feature',
-  // Deep sky (distant view)
+
+  // Deep sky billboards (distant view — Nebula.js / Galaxy.js)
   'spiral-galaxy', 'elliptical-galaxy',
   'emission-nebula', 'planetary-nebula',
   'globular-cluster',
-  // Deep sky (navigable — fly inside)
-  'volumetric-nebula-test',
+
+  // Navigable fly-throughs — synthetic previews of renderers that are
+  // currently unused in live gameplay (see legacy note near
+  // NavigableNebulaGenerator/NavigableClusterGenerator). Kept so the
+  // renderers can still be eyeballed if we revisit that path.
+  'volumetric-nebula-preview',
   'nav-planetary-nebula', 'nav-emission-nebula',
   'nav-open-cluster',
-  // Star system objects
+
+  // Stars
   'star-flare',
+
+  // Planets — natural types (picked by PlanetGenerator._pickType)
   'planet-rocky', 'planet-terrestrial', 'planet-ocean', 'planet-ice',
   'planet-lava', 'planet-venus', 'planet-carbon', 'planet-eyeball',
   'planet-gas-giant', 'planet-hot-jupiter', 'planet-sub-neptune',
-  'planet-hex', 'planet-shattered', 'planet-crystal', 'planet-fungal', 'planet-machine',
-  'planet-city-lights', 'planet-ecumenopolis',
+
+  // Planets — exotic overlays (applied post-generation by ExoticOverlay.js)
+  'planet-hex', 'planet-shattered', 'planet-crystal', 'planet-fungal',
+  'planet-machine', 'planet-city-lights', 'planet-ecumenopolis',
+
   'moon',
 ];
 
@@ -3335,8 +3349,9 @@ function gallerySpawn() {
     return;  // Skip the default overlay update at the bottom of gallerySpawn
   }
 
-  // ── Volumetric nebula test (Points-based gas cloud) ──
-  if (type === 'volumetric-nebula-test') {
+  // ── Volumetric nebula preview (Points-based gas cloud) ──
+  // Synthetic test data — this renderer isn't wired to live gameplay today.
+  if (type === 'volumetric-nebula-preview') {
     const testData = _generateVolumetricTestData(rng);
     galleryObject = new VolumetricNebula(testData);
     galleryObject.addTo(scene);
@@ -3348,12 +3363,12 @@ function gallerySpawn() {
     infoText = `${testData.particleCount} particles  |  r=${radius.toFixed(0)}  |  scroll to fly inside`;
   }
 
-  // ── Navigable nebulae (gallery preview using beautiful billboard renderer) ──
-  // The VolumetricNebula (Points) renderer is used during actual warp fly-through.
-  // For gallery preview, we use the Nebula.js billboard renderer which looks far
-  // better — it creates wispy cloud structures via layered noise planes.
-  // We also embed the navigable Star objects (scaled to match) so you can see
-  // the stars you'd fly between during actual navigation.
+  // ── Navigable nebulae (synthetic preview of a legacy rendering path) ──
+  // NavigableNebulaGenerator is not used during live warp fly-through today
+  // (see the "legacy dead code" note in galaxy-navigation code). These entries
+  // exist so the generator's star placement can still be inspected alongside
+  // a Nebula.js billboard at matching scale. If the navigable-nebula path is
+  // revived, this preview is the reference for how it should look.
   else if (type === 'nav-planetary-nebula' || type === 'nav-emission-nebula') {
     const nebulaType = type === 'nav-planetary-nebula' ? 'planetary-nebula' : 'emission-nebula';
 
@@ -3679,9 +3694,12 @@ function gallerySpawn() {
 
       infoText = `type: ${moonData.type}  |  ${moonData.radiusEarth.toFixed(3)} R⊕`;
     } else {
-      infoText = 'no moons in this seed — try another';
-      camera.position.set(0, 1, 10);
-      camera.lookAt(0, 0, 0);
+      // No moons in this seed — auto-skip to the next one (mirrors the
+      // known-feature skip pattern). Bounded because StarSystemGenerator
+      // produces at least some moons across any realistic seed range.
+      gallerySeed += _gallerySkipDir || 1;
+      gallerySpawn();
+      return;
     }
   }
 
