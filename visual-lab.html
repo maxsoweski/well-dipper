@@ -62,15 +62,22 @@
       color: #0a0; background: rgba(0, 20, 0, 0.3);
       cursor: pointer;
       user-select: none;
+      transition: background 0.1s, color 0.1s;
     }
+    #panel .toggle:hover { color: #0f0; border-color: rgba(0, 255, 0, 0.6); }
     #panel .toggle.active {
       color: #000; background: rgba(0, 255, 0, 0.85);
       border-color: #0f0;
     }
-    #panel .toggle.disabled {
-      color: #444; border-color: rgba(80, 80, 80, 0.35);
-      background: rgba(20, 20, 20, 0.3);
-      cursor: not-allowed;
+    #panel .toggle.pending {
+      color: #880;
+      border-color: rgba(200, 200, 0, 0.45);
+      background: rgba(60, 60, 0, 0.2);
+    }
+    #panel .toggle.pending:hover { color: #ff0; }
+    #panel .toggle.pending.active {
+      color: #000; background: rgba(255, 220, 0, 0.85);
+      border-color: #ff0;
     }
     #panel .note {
       color: #a80; font-size: 10px; margin-top: 2px;
@@ -114,27 +121,27 @@
 
     <div class="group">
       <div class="group-title">PR2 — Retro Pipeline</div>
-      <span class="toggle disabled" data-pr="2" data-key="P">P · Pixelation</span>
-      <span class="toggle disabled" data-pr="2" data-key="V">V · Vignette</span>
-      <span class="toggle disabled" data-pr="2" data-key="A">A · ACES curve</span>
+      <span class="toggle pending" data-pr="2" data-key="P">P · Pixelation</span>
+      <span class="toggle pending" data-pr="2" data-key="V">V · Vignette</span>
+      <span class="toggle pending" data-pr="2" data-key="A">A · ACES curve</span>
       <div class="note">wired in PR2</div>
     </div>
 
     <div class="group">
       <div class="group-title">PR3 — Exotic Planet Upgrades</div>
-      <span class="toggle disabled" data-pr="3" data-key="X">X · Exotic upgrades</span>
+      <span class="toggle pending" data-pr="3" data-key="X">X · Exotic upgrades</span>
       <div class="note">wired in PR3</div>
     </div>
 
     <div class="group">
       <div class="group-title">PR4 — Gas Giant Storms</div>
-      <span class="toggle disabled" data-pr="4" data-key="S">S · Storm wiring</span>
+      <span class="toggle pending" data-pr="4" data-key="S">S · Storm wiring</span>
       <div class="note">wired in PR4</div>
     </div>
 
     <div class="group">
       <div class="group-title">PR5 — Vertex Displacement</div>
-      <span class="toggle disabled" data-pr="5" data-key="D">D · Displacement</span>
+      <span class="toggle pending" data-pr="5" data-key="D">D · Displacement</span>
       <div class="note">wired in PR5</div>
     </div>
   </div>
@@ -311,13 +318,41 @@
       pitch = Math.max(-1.4, Math.min(1.4, pitch + dy * 0.005));
     });
     window.addEventListener('mouseup', () => { dragging = false; });
-    canvas.addEventListener('wheel', (e) => {
+    // Wheel listener on window so zoom works regardless of mouse position
+    // (panel would otherwise intercept when hovered).
+    window.addEventListener('wheel', (e) => {
+      // Don't hijack scroll within the body list
+      if (e.target.closest && e.target.closest('#body-list')) return;
       e.preventDefault();
       camDist = Math.max(1, Math.min(5000, camDist * (1 + e.deltaY * 0.001)));
     }, { passive: false });
 
+    // ── PR-toggle UI state (no effect wired yet; each PR attaches its own) ──
+    const toggleState = { P: false, V: false, A: false, X: false, S: false, D: false };
+    function wireToggles() {
+      document.querySelectorAll('#panel .toggle').forEach(el => {
+        const k = el.dataset.key;
+        el.addEventListener('click', () => {
+          toggleState[k] = !toggleState[k];
+          el.classList.toggle('active', toggleState[k]);
+          // Effect wiring point — each PR will read toggleState[k] and apply
+          // its effect. For now, just the visual state flip.
+        });
+      });
+    }
+    wireToggles();
+
     // ── Keyboard ────────────────────────────────────────────────────────
     window.addEventListener('keydown', (e) => {
+      // PR-toggle hotkeys — flip the UI state (effects wire in their PRs)
+      const keyMap = { KeyP: 'P', KeyV: 'V', KeyA: 'A', KeyX: 'X', KeyS: 'S', KeyD: 'D' };
+      if (keyMap[e.code]) {
+        const k = keyMap[e.code];
+        toggleState[k] = !toggleState[k];
+        const el = document.querySelector(`#panel .toggle[data-key="${k}"]`);
+        if (el) el.classList.toggle('active', toggleState[k]);
+        return;
+      }
       // Body cycle
       if (e.code === 'ArrowUp') {
         bodyIdx = (bodyIdx + 1) % LAB_BODIES.length;
@@ -336,7 +371,6 @@
       } else if (e.code === 'KeyR') {
         spawn();
       }
-      // PR2-6 toggle keys — currently no-ops; each PR will wire its own effect.
     });
 
     // ── FPS counter ─────────────────────────────────────────────────────
