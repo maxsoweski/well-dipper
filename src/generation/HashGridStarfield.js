@@ -104,6 +104,28 @@ export class HashGridStarfield {
   static realFeatureCatalog = null;
 
   static generate(galacticMap, playerPos, skyRadius = 500) {
+    const iter = this._generateIterator(galacticMap, playerPos, skyRadius);
+    let r = iter.next();
+    while (!r.done) r = iter.next();
+    return r.value;
+  }
+
+  /**
+   * Async variant — yields to the browser between each spectral-type search.
+   * Each _searchType call is hundreds of ms of grid iteration; yielding
+   * between them keeps the main thread responsive during warp FOLD.
+   */
+  static async generateAsync(galacticMap, playerPos, skyRadius = 500) {
+    const iter = this._generateIterator(galacticMap, playerPos, skyRadius);
+    let r = iter.next();
+    while (!r.done) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      r = iter.next();
+    }
+    return r.value;
+  }
+
+  static *_generateIterator(galacticMap, playerPos, skyRadius = 500) {
     const threshold = this.VISIBILITY_THRESHOLD;
     const stars = [];
 
@@ -116,10 +138,13 @@ export class HashGridStarfield {
       : [];
     const cachedFeatures = [...proceduralFeatures, ...realFeatures];
 
-    // Search each spectral type independently at its own grid resolution
+    // Search each spectral type independently at its own grid resolution.
+    // Delegate to the iterator form so its per-shell yields bubble up —
+    // a single type (O-stars at 10 kpc) can otherwise dominate a chunk.
     for (const type of ALL_TYPES) {
+      yield;
       const cfg = TYPE_CONFIG[type];
-      this._searchType(
+      yield* this._searchTypeIterator(
         galacticMap, playerPos, stars, cachedFeatures,
         type, cfg, threshold
       );
@@ -182,9 +207,21 @@ export class HashGridStarfield {
   }
 
   /**
-   * Search for visible stars of a single spectral type.
+   * Search for visible stars of a single spectral type — synchronous wrapper
+   * for non-async callers. Drives the generator form to completion.
    */
   static _searchType(galacticMap, playerPos, results, cachedFeatures, type, cfg, threshold) {
+    const iter = this._searchTypeIterator(galacticMap, playerPos, results, cachedFeatures, type, cfg, threshold);
+    while (!iter.next().done) { /* spin until done */ }
+  }
+
+  /**
+   * Generator form of _searchType. Yields every 4 radial shells so async
+   * callers get frame-rate breathing room even within a single type search.
+   * All star data is written into `results` by reference (iterator's
+   * return value is not used — the yields are for pacing only).
+   */
+  static *_searchTypeIterator(galacticMap, playerPos, results, cachedFeatures, type, cfg, threshold) {
     const px = playerPos.x, py = playerPos.y, pz = playerPos.z;
     const cellSize = cfg.cell;
     const maxDist = cfg.maxDist;
@@ -202,6 +239,7 @@ export class HashGridStarfield {
     const typeOffset = ALL_TYPES.indexOf(type) * 100003;
 
     for (let r = 0; r <= searchRadius; r++) {
+      if (r > 0 && (r & 3) === 0) yield; // yield every 4 shells
       // Distance of this shell
       const shellDist = Math.max(0, (r - 1)) * cellSize;
 

@@ -117,12 +117,30 @@ export class StarfieldGenerator {
   // Reference to the loaded real star catalog (set from main.js)
   static realStarCatalog = null;
 
+  /**
+   * Async variant — defers to HashGridStarfield.generateAsync so the
+   * 1+ second hash-grid search can be spread across frames. Call this
+   * from the warp FOLD phase (via SkyRenderer.prepareForPositionAsync).
+   */
+  static async generateAsync(galacticMap, playerPos, baseCount = 6000, radius = 500) {
+    const gridData = await HashGridStarfield.generateAsync(galacticMap, playerPos, radius);
+    return this._finalizeFromGridData(galacticMap, playerPos, baseCount, radius, gridData);
+  }
+
   static generate(galacticMap, playerPos, baseCount = 6000, radius = 500) {
     // ── Hash-grid star generation ──
     // Every visible star is deterministically computed from the gravitational
     // potential field. No sectors, no caching — just the density at each
     // grid point determining whether a star exists there.
     const gridData = HashGridStarfield.generate(galacticMap, playerPos, radius);
+    return this._finalizeFromGridData(galacticMap, playerPos, baseCount, radius, gridData);
+  }
+
+  /**
+   * Finalize starfield data given pre-computed hash-grid data. Runs the
+   * lightweight merge/pack work that both sync and async paths share.
+   */
+  static _finalizeFromGridData(galacticMap, playerPos, baseCount, radius, gridData) {
 
     // ── Real star overlay ──
     // If the HYG catalog is loaded, find visible real stars and merge them

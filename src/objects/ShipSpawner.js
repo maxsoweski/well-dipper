@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { loadManifest, availableArchetypes, loadShipModel } from './ShipLoader.js';
+import { shipHullToScene } from '../core/ScaleConstants.js';
 
 /**
  * ShipSpawner — places procedural ships as flavor objects in star systems.
  *
- * Ships orbit near planets at a fixed distance, slowly rotating.
- * They're tiny compared to planets (fighter-scale), purely decorative.
+ * Ships render at realistic real-world scale per Game Bible §10 Scale System.
+ * Hull length comes from `SHIP_HULL_LENGTHS_M` keyed by archetype. They may
+ * appear sub-pixel at typical orbit distances — augmented vision (upcoming
+ * ship billboard / periscope magnifier) is the UX solution.
  *
  * Usage:
  *   const spawner = new ShipSpawner();
@@ -16,8 +19,6 @@ import { loadManifest, availableArchetypes, loadShipModel } from './ShipLoader.j
  *   // on system change:
  *   spawner.clear(scene);
  */
-
-const SHIP_SCALE_FACTOR = 0.003;  // ships are tiny relative to scene units (planet radii ~0.01-3.5)
 
 export class ShipSpawner {
   constructor() {
@@ -65,11 +66,13 @@ export class ShipSpawner {
         const model = await loadShipModel(archetype, undefined, rng);
         if (!model) continue;
 
-        // Scale the ship to be visible but small relative to planets.
-        // Planet scene radii range from ~0.004 (small moons) to ~3.5 (gas giants).
-        // We want ships at roughly 1/10 to 1/5 of the planet radius.
+        // Scale the ship to its realistic hull length per Game Bible §8A.
+        // shipHullToScene returns meters-to-scene-unit conversion keyed by
+        // archetype ('fighters', 'cruisers', etc. — same keys as manifest).
+        // Assumes the .glb model's native geometry is ~1 unit long; scale
+        // multiplier then equals the target scene-unit length directly.
         const planetRadius = entry.planet.data?.radius || 0.5;
-        const shipSize = Math.max(0.002, planetRadius * (0.05 + rng() * 0.1));
+        const shipSize = shipHullToScene(archetype);
         model.scale.setScalar(shipSize);
 
         // Enable flat shading on all materials in the model for retro look

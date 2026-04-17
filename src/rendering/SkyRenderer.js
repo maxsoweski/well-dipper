@@ -64,6 +64,12 @@ export class SkyRenderer {
     this._featureLayer = null;
     this._starfieldLayer = null;
 
+    // Origin layers — kept alive during warp crossover, disposed on completeWarpTransition()
+    this._originStarfieldLayer = null;
+    this._originGlowLayer = null;
+    this._originFeatureLayer = null;
+    this._crossoverActive = false;
+
     // Glow texture manager — handles loading + caching panoramas
     this._glowManager = new GlowTextureManager();
 
@@ -83,10 +89,18 @@ export class SkyRenderer {
   prepareForPosition(playerPos) {
     this._playerPos = playerPos;
 
-    // Update procedural glow with new position (if already activated)
-    if (this._glowLayer && this._glowLayer.setPlayerPosition) {
-      this._glowLayer.setPlayerPosition(playerPos);
-    }
+    // IMPORTANT: do NOT update the live glow layer here.
+    // prepareForPosition runs at warp FOLD start — but the player is still
+    // physically in the origin system (camera hasn't entered the tunnel yet).
+    // Updating _glowLayer.setPlayerPosition(destinationPos) would push the
+    // destination's glow pattern into the origin system's sky, visible as
+    // "galactic glow changes in system A before going into tunnel" (Max
+    // report 2026-04-16).
+    //
+    // The new position is applied to the glow only at activate() time, which
+    // runs when the destination scene takes over (post-swap INSIDE crossing
+    // in dual-portal mode). Until then, the existing glow continues showing
+    // the origin system view.
 
     if (this._galacticMap && this._starfieldGenerator) {
       this._pendingData = this._starfieldGenerator.generate(
@@ -104,10 +118,34 @@ export class SkyRenderer {
   }
 
   /**
+   * Async variant — defers the heavy HashGridStarfield search to
+   * StarfieldGenerator.generateAsync, which yields between spectral-type
+   * searches. Call during warp FOLD so the ~1s of sky generation doesn't
+   * stall the main thread. Semantics otherwise identical to prepareForPosition.
+   */
+  async prepareForPositionAsync(playerPos) {
+    this._playerPos = playerPos;
+    if (this._galacticMap && this._starfieldGenerator) {
+      this._pendingData = await this._starfieldGenerator.generateAsync(
+        this._galacticMap,
+        playerPos,
+        this._starDensity,
+        this._starfieldRadius
+      );
+      this._pendingFeatures = this._galacticMap.findNearbyFeatures(playerPos, 3.0);
+    } else {
+      this._pendingData = null;
+      this._pendingFeatures = null;
+    }
+  }
+
+  /**
    * Create/recreate GPU resources from prepared data.
    * Call during warp HYPER phase (hidden behind tunnel) or at startup.
    */
   activate() {
+    // Safety: if an interrupted warp left origin layers alive, dispose them first
+    this._disposeOriginLayers();
     // Dispose old layers
     this._clearScene();
 
@@ -183,6 +221,13 @@ export class SkyRenderer {
     if (this._featureLayer) {
       this._featureLayer.update(camera.position);
     }
+    // Keep origin sky spheres locked to the camera during the crossover —
+    // otherwise they'd fall behind as the camera flies forward through HYPER.
+    if (this._crossoverActive) {
+      if (this._originStarfieldLayer) this._originStarfieldLayer.update(camera.position);
+      if (this._originGlowLayer)      this._originGlowLayer.update(camera.position);
+      if (this._originFeatureLayer)   this._originFeatureLayer.update(camera.position);
+    }
   }
 
   /**
@@ -222,6 +267,191 @@ export class SkyRenderer {
   setWarpUniforms(foldAmount, brightness, riftCenterNDC) {
     if (this._starfieldLayer) {
       this._starfieldLayer.setWarpUniforms(foldAmount, brightness, riftCenterNDC);
+    }
+  }
+
+  // ── Dual-layer warp tunnel lifecycle ──
+  //
+  // During a system-swap warp, the old (origin) sky layers are kept alive
+  // alongside the newly built (destination) layers. The tunnel warp deforms
+  // both sets; the crossover uniforms clip origin stars ahead of a sweeping
+  // plane and destination stars behind it, producing a blended transition
+  // zone instead of a hard cut at tunnel destruction.
+  //
+  //   beginWarpTransition()     — at onSwapSystem (end of FOLD): build new
+  //                               destination layers from _pendingData,
+  //                               move current layers to origin slots,
+  //                               and configure the crossover.
+  //   completeWarpTransition()  — at onComplete (after EXIT): dispose origin
+  //                               layers and reset the crossover state.
+
+  /**
+   * Build destination layers from _pendingData WITHOUT disposing the current
+   * layers. The current layers are moved into origin slots and continue to
+   * render (still clipped/deformed by the tunnel uniforms) until the warp
+   * completes.
+   */
+  beginWarpTransition() {
+    // Safety: if a previous warp never completed (interrupted), discard
+    // those origin layers before starting a new transition.
+    this._disposeOriginLayers();
+
+    // Move current layers into the origin slots. They stay in _scene;
+    // we just stop referencing them from the primary fields.
+    this._originStarfieldLayer = this._starfieldLayer;
+    this._originGlowLayer      = this._glowLayer;
+    this._originFeatureLayer   = this._featureLayer;
+    this._starfieldLayer = null;
+    this._glowLayer = null;
+    this._featureLayer = null;
+
+    const data = this._pendingData;
+
+    if (data) {
+      this._glowLayer = new ProceduralGlowLayer(
+        this._glowRadius,
+        this._brightnessConfig.glow,
+        this._galacticMap,
+      );
+      if (this._playerPos) {
+        this._glowLayer.setPlayerPosition(this._playerPos);
+      }
+      window._glowLayer = this._glowLayer;
+      if (this._pendingTargetMarker && this._glowLayer) {
+        this._glowLayer.setTargetMarker(this._pendingTargetMarker);
+      }
+
+      this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);
+      if (this._pendingFeatures && this._pendingFeatures.length > 0) {
+        this._featureLayer.setFeatures(this._pendingFeatures, this._playerPos);
+      }
+
+      this._starfieldLayer = new StarfieldLayer(
+        data,
+        this._starfieldRadius,
+        this._brightnessConfig.stars
+      );
+    } else {
+      // Legacy/random destination — unusual during warp, but handle it.
+      this._starfieldLayer = new StarfieldLayer(
+        this._starDensity,
+        this._starfieldRadius,
+        this._brightnessConfig.stars
+      );
+    }
+
+    if (this._glowLayer) {
+      this._glowLayer.mesh.renderOrder = 0;
+      this._scene.add(this._glowLayer.mesh);
+    }
+    if (this._featureLayer) {
+      this._scene.add(this._featureLayer.mesh);
+    }
+    this._starfieldLayer.mesh.renderOrder = 3;
+    this._scene.add(this._starfieldLayer.mesh);
+
+    // Configure crossover — origin clips ahead, destination clips behind,
+    // the sweeping plane starts far in front and moves behind the camera.
+    if (this._originStarfieldLayer) {
+      this._originStarfieldLayer.setClipSide(0);
+      this._originStarfieldLayer.setCrossoverAlong(600);
+    }
+    this._starfieldLayer.setClipSide(1);
+    this._starfieldLayer.setCrossoverAlong(600);
+
+    this._crossoverActive = true;
+
+    this._pendingData = null;
+    this._pendingFeatures = null;
+  }
+
+  /**
+   * Dispose origin layers and reset crossover to a permissive state so the
+   * destination starfield renders without clipping.
+   */
+  completeWarpTransition() {
+    this._disposeOriginLayers();
+    this._crossoverActive = false;
+    if (this._starfieldLayer) {
+      this._starfieldLayer.setClipSide(0);
+      this._starfieldLayer.setCrossoverAlong(1e6);
+    }
+  }
+
+  _disposeOriginLayers() {
+    if (this._originGlowLayer) {
+      this._scene.remove(this._originGlowLayer.mesh);
+      this._originGlowLayer.dispose();
+      this._originGlowLayer = null;
+    }
+    if (this._originFeatureLayer) {
+      this._scene.remove(this._originFeatureLayer.mesh);
+      this._originFeatureLayer.dispose();
+      this._originFeatureLayer = null;
+    }
+    if (this._originStarfieldLayer) {
+      this._scene.remove(this._originStarfieldLayer.mesh);
+      this._originStarfieldLayer.dispose();
+      this._originStarfieldLayer = null;
+    }
+  }
+
+  // ── Tunnel / crossover delegators ──
+  // When _crossoverActive, origin + destination layers are both driven so
+  // the deformation and clip sweep stay in lockstep.
+
+  setTunnelPhase(v) {
+    if (this._starfieldLayer) this._starfieldLayer.setTunnelPhase(v);
+    if (this._glowLayer && this._glowLayer.setTunnelPhase) this._glowLayer.setTunnelPhase(v);
+    if (this._crossoverActive) {
+      if (this._originStarfieldLayer) this._originStarfieldLayer.setTunnelPhase(v);
+      if (this._originGlowLayer && this._originGlowLayer.setTunnelPhase) this._originGlowLayer.setTunnelPhase(v);
+    }
+  }
+
+  setTunnelForward(vec3) {
+    if (this._starfieldLayer) this._starfieldLayer.setTunnelForward(vec3);
+    if (this._glowLayer && this._glowLayer.setTunnelForward) this._glowLayer.setTunnelForward(vec3);
+    if (this._crossoverActive) {
+      if (this._originStarfieldLayer) this._originStarfieldLayer.setTunnelForward(vec3);
+      if (this._originGlowLayer && this._originGlowLayer.setTunnelForward) this._originGlowLayer.setTunnelForward(vec3);
+    }
+  }
+
+  setTunnelScroll(v) {
+    if (this._starfieldLayer) this._starfieldLayer.setTunnelScroll(v);
+    if (this._crossoverActive && this._originStarfieldLayer) {
+      this._originStarfieldLayer.setTunnelScroll(v);
+    }
+  }
+
+  setTunnelRadius(v) {
+    if (this._starfieldLayer) this._starfieldLayer.setTunnelRadius(v);
+    if (this._glowLayer && this._glowLayer.setTunnelRadius) this._glowLayer.setTunnelRadius(v);
+    if (this._crossoverActive) {
+      if (this._originStarfieldLayer) this._originStarfieldLayer.setTunnelRadius(v);
+      if (this._originGlowLayer && this._originGlowLayer.setTunnelRadius) this._originGlowLayer.setTunnelRadius(v);
+    }
+  }
+
+  setTunnelLength(v) {
+    if (this._starfieldLayer) this._starfieldLayer.setTunnelLength(v);
+    if (this._crossoverActive && this._originStarfieldLayer) {
+      this._originStarfieldLayer.setTunnelLength(v);
+    }
+  }
+
+  setCrossoverAlong(v) {
+    if (this._starfieldLayer) this._starfieldLayer.setCrossoverAlong(v);
+    if (this._crossoverActive && this._originStarfieldLayer) {
+      this._originStarfieldLayer.setCrossoverAlong(v);
+    }
+  }
+
+  setClipSide(side) {
+    if (this._starfieldLayer) this._starfieldLayer.setClipSide(side);
+    if (this._crossoverActive && this._originStarfieldLayer) {
+      this._originStarfieldLayer.setClipSide(side);
     }
   }
 
@@ -294,6 +524,8 @@ export class SkyRenderer {
   }
 
   dispose() {
+    this._disposeOriginLayers();
+    this._crossoverActive = false;
     this._clearScene();
     if (this._glowManager) {
       this._glowManager.dispose();

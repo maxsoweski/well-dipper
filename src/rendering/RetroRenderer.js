@@ -47,6 +47,7 @@ export class RetroRenderer {
       canvas,
       antialias: false,
       logarithmicDepthBuffer: true,
+      stencil: true,
     });
     this.renderer.setPixelRatio(1);
     this.renderer.autoClear = false; // We manage clearing per-pass
@@ -181,6 +182,23 @@ export class RetroRenderer {
     }
   }
 
+  /** Set tunnel-related uniforms for the composite shader hyperspace pass. */
+  setTunnelUniforms(recession, bridgeMix, originSeed, destSeed) {
+    const u = this._compositeMesh.material.uniforms;
+    u.uTunnelRecession.value = recession;
+    u.uHyperBridgeMix.value = bridgeMix;
+    if (originSeed) u.uHyperOriginSeed.value.copy(originSeed);
+    if (destSeed) u.uHyperDestSeed.value.copy(destSeed);
+  }
+
+  /** Set portal screen-space lensing uniforms (called when 3D portal is visible). */
+  setPortalLensing(centerUV, screenRadius, strength) {
+    const u = this._compositeMesh.material.uniforms;
+    if (centerUV) u.uPortalCenter.value.copy(centerUV);
+    u.uPortalScreenRadius.value = screenRadius;
+    if (strength !== undefined) u.uPortalLensStrength.value = strength;
+  }
+
   /**
    * Set warp target bracket uniforms (called by main.js each frame).
    * @param {THREE.Vector2} uv    — screen UV of selected star (0-1)
@@ -218,6 +236,14 @@ export class RetroRenderer {
         uHyperTime: { value: 0.0 },
         uFoldGlow: { value: 0.0 },
         uExitReveal: { value: 0.0 },
+        uTunnelRecession: { value: 0.0 },              // 0 during HYPER, 0→1 during EXIT (walls expand)
+        uHyperBridgeMix: { value: 0.0 },               // 0 = origin stars, 1 = destination stars
+        uHyperOriginSeed: { value: new THREE.Vector3(123.34, 456.21, 45.32) },
+        uHyperDestSeed: { value: new THREE.Vector3(271.67, 891.43, 73.11) },
+        // Gravitational lensing around the 3D portal (active during FOLD/ENTER)
+        uPortalCenter: { value: new THREE.Vector2(0.5, 0.5) },     // portal's screen UV
+        uPortalScreenRadius: { value: 0.0 },                       // portal's apparent UV radius (0 = inactive)
+        uPortalLensStrength: { value: 0.04 },                      // distortion strength
         uRiftCenter: { value: new THREE.Vector2(0.5, 0.5) },  // UV space (0 to 1)
         // Warp target selection brackets
         uTargetUV: { value: new THREE.Vector2(0.5, 0.5) },    // UV of selected star
@@ -253,6 +279,13 @@ export class RetroRenderer {
         uniform float uHyperTime;
         uniform float uFoldGlow;
         uniform float uExitReveal;
+        uniform float uTunnelRecession;
+        uniform float uHyperBridgeMix;
+        uniform vec3  uHyperOriginSeed;
+        uniform vec3  uHyperDestSeed;
+        uniform vec2  uPortalCenter;
+        uniform float uPortalScreenRadius;
+        uniform float uPortalLensStrength;
         uniform vec2 uRiftCenter;
         // Warp target brackets
         uniform vec2 uTargetUV;
@@ -326,27 +359,77 @@ export class RetroRenderer {
           return col;
         }
 
-        // ── Hyperspace tunnel (3D raymarched cylinder) ──
-        // Real 3D ray-cylinder intersection so the tunnel has true
-        // perspective depth. Future-proofed for freelook / rail-flying.
+        // ── Hyperspace tunnel (procedural starfield walls + recession for EXIT) ──
+        // Hash-based starfield textures the cone walls. uTunnelRecession (0 during
+        // HYPER, 0→1 during EXIT) scales tunnelR up so walls recede outward.
+        // Bridge: uHyperBridgeMix shifts walls from origin → destination star pattern.
+
+        float Hash21H(vec2 p, vec3 seed) {
+          p = fract(p * seed.xy);
+          p += dot(p, p + seed.z);
+          return fract(p.x * p.y);
+        }
+
+        float StarH(vec2 uv, float flare) {
+          float d = length(uv);
+          float m = 0.02 / d;
+          float rays = max(0.0, 1.0 - abs(uv.x * uv.y * 1000.0));
+          m += rays * flare;
+          float c = cos(0.7854), s = sin(0.7854);
+          vec2 r = mat2(c, -s, s, c) * uv;
+          rays = max(0.0, 1.0 - abs(r.x * r.y * 1000.0));
+          m += rays * 0.3 * flare;
+          m *= smoothstep(0.6, 0.2, d);
+          return m;
+        }
+
+        vec3 StarColorH(float rand, float destMix) {
+          float hotness = fract(rand * 1603.8);
+          vec3 originCol = (hotness < 0.6)
+            ? vec3(1.0, hotness / 0.6, hotness * 0.9)
+            : vec3(1.0 - (hotness - 0.6) / 0.4, 1.0 - (hotness - 0.6) / 0.4, 1.0);
+          vec3 destCol = (hotness < 0.6)
+            ? vec3(hotness * 0.9, hotness * 0.95, 1.0)
+            : vec3(1.0 - (hotness - 0.6) / 0.4, 0.8, 1.0);
+          return mix(originCol, destCol, destMix);
+        }
+
+        vec3 StarLayerH(vec2 uv, vec3 seed, float destMix, float circCells, float t) {
+          vec3 col = vec3(0.0);
+          vec2 gv = fract(uv) - 0.5;
+          vec2 id = floor(uv);
+          for (int y = -1; y <= 1; y++) {
+            for (int x = -1; x <= 1; x++) {
+              vec2 offs = vec2(float(x), float(y));
+              vec2 cellId = id + offs;
+              cellId.x = mod(cellId.x, circCells);
+              float n = Hash21H(cellId, seed);
+              float n2 = fract(n * 345.32);
+              float size = n2;
+              vec2 sub = vec2(n, fract(n * 42.0)) - 0.5;
+              float flare = smoothstep(0.92, 1.0, size) * 0.6;
+              float star = StarH(gv - offs - sub, flare);
+              vec3 c = StarColorH(n, destMix);
+              star *= 0.75 + 0.25 * sin(t * 2.0 + n * 6.2831);
+              col += star * size * c;
+            }
+          }
+          return col;
+        }
+
         vec3 hyperspace(vec2 uv, float time) {
-          // ── Ray setup: camera at origin looking down +Z ──
           vec2 centered = uv - 0.5;
           float aspect = resolution.x / resolution.y;
           centered.x *= aspect;
 
-          // Perspective ray (matches ~70° FOV)
           vec3 rd = normalize(vec3(centered * 1.4, 1.0));
 
-          // Tunnel parameters
-          float tunnelR = 4.0;        // Radius at camera (wide opening)
-          float taper = 0.15;         // Cone narrowing rate (0 = cylinder)
-          float speed = time * 12.0;  // Forward scroll speed
-          float ringGap = 3.5;       // Spacing between ring planes
+          // Tunnel parameters — radius scales up during EXIT (uTunnelRecession 0→1)
+          // Walls "recede outward" for the opening-into-destination feel.
+          float tunnelR = 4.0 * (1.0 + uTunnelRecession * 4.0);  // 4 → 20
+          float taper = 0.15 * (1.0 - uTunnelRecession * 0.7);    // 0.15 → 0.045
+          float speed = time * 12.0;
 
-          // ── Ray–cone intersection ──
-          // Cone along Z, radius tunnelR at z=0, narrowing to a point at z=R/taper≈27.
-          // Solving gives: t = R / (rdXY + taper * rd.z)
           float rdXY = length(rd.xy);
           float denom = rdXY + taper * rd.z;
           if (denom < 0.001) {
@@ -354,48 +437,56 @@ export class RetroRenderer {
           }
           float tWall = tunnelR / denom;
           vec3 hitPos = rd * tWall;
-          float wallZ = hitPos.z;  // How far down tunnel the hit is
+          float wallZ = hitPos.z;
 
-          // Normalized depth: 0 = near camera, 1 = at the cone apex
-          float maxZ = tunnelR / taper;  // cone apex distance (~27)
+          float maxZ = tunnelR / taper;
           float depthNorm = clamp(wallZ / maxZ, 0.0, 1.0);
 
-          // ── Anaglyph 3D ring bands (red/cyan offset like old 3D glasses) ──
-          float zWorld = wallZ + speed;
-          float offset = 0.45;  // how far apart red and blue rings are
+          // ── Procedural starfield on tunnel walls ──
+          // Cylindrical UV: theta around tunnel + scrolling Z
+          float theta = atan(hitPos.y, hitPos.x);
+          float thetaUV = theta / 6.2832 + 0.5;
+          float zUV = (wallZ + speed) * 0.05;
 
-          // Red channel ring band (shifted forward)
-          float redPhase = fract((zWorld + offset) / ringGap);
-          float redBand = smoothstep(0.0, 0.08, redPhase)
-                        * (1.0 - smoothstep(0.35, 0.45, redPhase));
+          float CIRC_CELLS = 32.0;
+          float depthFade = 1.0 - depthNorm * depthNorm * 0.7;
 
-          // Blue/cyan channel ring band (shifted backward)
-          float bluPhase = fract((zWorld - offset) / ringGap);
-          float bluBand = smoothstep(0.0, 0.08, bluPhase)
-                        * (1.0 - smoothstep(0.35, 0.45, bluPhase));
+          // Origin starfield
+          vec3 colOrigin = vec3(0.0);
+          float t = time * 0.02;
+          for (float i = 0.0; i < 3.0; i += 1.0) {
+            float depth = fract(i / 3.0 + t);
+            float scale = mix(1.5, 0.5, depth);
+            float fade = depth * smoothstep(1.0, 0.9, depth);
+            vec2 uvL = vec2(thetaUV * CIRC_CELLS, zUV * 16.0) * scale + i * 453.2;
+            colOrigin += StarLayerH(uvL, uHyperOriginSeed, 0.0, CIRC_CELLS * scale, time) * fade;
+          }
 
-          // Depth fade: rings fade toward the cone apex
-          float depthFade = 1.0 - depthNorm * depthNorm;
-          redBand *= depthFade;
-          bluBand *= depthFade;
+          // Destination starfield (different hash seed)
+          vec3 colDest = vec3(0.0);
+          for (float i = 0.0; i < 3.0; i += 1.0) {
+            float depth = fract(i / 3.0 + t);
+            float scale = mix(1.5, 0.5, depth);
+            float fade = depth * smoothstep(1.0, 0.9, depth);
+            vec2 uvL = vec2(thetaUV * CIRC_CELLS, zUV * 16.0) * scale + i * 453.2;
+            colDest += StarLayerH(uvL, uHyperDestSeed, 1.0, CIRC_CELLS * scale, time) * fade;
+          }
 
-          // ── Wall shading: bright near edges, dark toward cone apex ──
-          vec3 nearColor = vec3(0.95, 0.93, 0.9);   // bright cream near camera
-          vec3 farColor  = vec3(0.35, 0.33, 0.38);   // dark grey-purple at apex
-          float depthCurve = depthNorm * depthNorm;
-          vec3 wallColor = mix(nearColor, farColor, depthCurve);
-          wallColor *= 1.0 - rdXY * 0.15;
+          // Bridge: uHyperBridgeMix sweeps origin → destination during HYPER (0→1)
+          vec3 col = mix(colOrigin, colDest, uHyperBridgeMix);
 
-          // ── Compose: apply red and blue as separate channels ──
-          // Where they overlap → bright white/pink. Where they don't → pure color fringe.
-          vec3 col = wallColor;
-          col.r = mix(col.r, 0.9, redBand * 0.55);
-          col.gb = mix(col.gb, vec2(0.85, 0.9), bluBand * 0.55);
+          // Boost stars significantly so they pop on tunnel walls
+          col *= 4.0 * depthFade;
 
-          // ── Vanishing point glow ──
+          // Very dim wall base only at the very edges (low depthNorm = closer)
+          // Avoid swamping stars with a base color
+          float baseFade = (1.0 - depthNorm) * (1.0 - depthNorm) * 0.15;
+          col += vec3(0.05, 0.06, 0.12) * baseFade;
+
+          // Vanishing point glow (destination star coming through)
           float centerDist = length(centered);
           float centerGlow = smoothstep(0.15, 0.0, centerDist);
-          col = mix(col, vec3(1.0), centerGlow * 0.6);
+          col = mix(col, vec3(1.0, 0.95, 0.9), centerGlow * 0.5);
 
           return col;
         }
@@ -412,6 +503,32 @@ export class RetroRenderer {
           if (uSceneFade > 0.0) {
             float fadeScene = scene.a * (1.0 - uSceneFade);
             result = mix(bg.rgb, scene.rgb, fadeScene);
+          }
+
+          // ── Gravitational lensing around the 3D portal ──
+          // When portal is active (radius > 0), distort sky behind it.
+          // Static effect — strength is constant, no animation.
+          if (uPortalScreenRadius > 0.001) {
+            vec2 toPortal = vUv - uPortalCenter;
+            float portalAspect = resolution.x / resolution.y;
+            vec2 aspectCorrP = vec2(toPortal.x * portalAspect, toPortal.y);
+            float dPortal = length(aspectCorrP);
+            // Only distort OUTSIDE the portal aperture
+            if (dPortal > uPortalScreenRadius) {
+              float edgeDist = dPortal - uPortalScreenRadius;
+              float softness = 0.04;
+              float deflection = uPortalLensStrength / pow(edgeDist + softness, 1.5);
+              deflection = min(deflection, 0.25);
+              vec2 dirP = length(toPortal) > 0.001 ? normalize(toPortal) : vec2(0.0);
+              vec2 lensedUV = clamp(vUv + dirP * deflection, 0.0, 1.0);
+              vec4 lensedBg = texture2D(bgTexture, lensedUV);
+              vec4 lensedSc = texture2D(sceneTexture, lensedUV);
+              float fadeScene2 = lensedSc.a * (1.0 - uSceneFade);
+              result = mix(lensedBg.rgb, lensedSc.rgb, fadeScene2);
+              // Subtle Einstein ring brightness at the very edge
+              float ringGlow = smoothstep(0.04, 0.0, edgeDist) * 0.4;
+              result += ringGlow * vec3(0.7, 0.85, 1.0);
+            }
           }
 
           // ── Fold portal: chromatic aberration at portal edge ──
@@ -655,7 +772,13 @@ export class RetroRenderer {
     this.sceneTarget = new THREE.WebGLRenderTarget(renderWidth, renderHeight, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
+      depthBuffer: true,
+      stencilBuffer: true,
     });
+    // Explicit depth+stencil texture for proper stencil support
+    this.sceneTarget.depthTexture = new THREE.DepthTexture(renderWidth, renderHeight);
+    this.sceneTarget.depthTexture.format = THREE.DepthStencilFormat;
+    this.sceneTarget.depthTexture.type = THREE.UnsignedInt248Type;
 
     this.hudTarget = new THREE.WebGLRenderTarget(this._hudSize, this._hudSize, {
       minFilter: THREE.NearestFilter,

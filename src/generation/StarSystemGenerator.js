@@ -69,11 +69,45 @@ export class StarSystemGenerator {
   static SPECTRAL_SEQUENCE = ['O', 'B', 'A', 'F', 'G', 'K', 'M'];
 
   /**
-   * Generate a complete star system from a seed string.
+   * Generate a complete star system from a seed string. Synchronous — runs the
+   * internal generator to completion in one call. Caller-safe for sync paths
+   * (tests, startup, any non-warp spawn). For the warp's FOLD-phase
+   * pre-generation, use generateAsync() to avoid main-thread stalls.
    * @param {string} seed
    * @returns {object} system data
    */
   static generate(seed, galaxyContext = null) {
+    const iter = this._generateIterator(seed, galaxyContext);
+    let r = iter.next();
+    while (!r.done) r = iter.next();
+    return r.value;
+  }
+
+  /**
+   * Async variant — yields to the browser between heavy chunks (each planet,
+   * each moon, migration, asteroid belts, trojan clusters, exotic overlay).
+   * Use this when generation happens during animated phases (warp FOLD) where
+   * a single long synchronous call would stall the render thread.
+   *
+   * Returns the same systemData as generate(), just spread across several
+   * event-loop turns. Test: `await StarSystemGenerator.generateAsync(seed, ctx)`.
+   */
+  static async generateAsync(seed, galaxyContext = null) {
+    const iter = this._generateIterator(seed, galaxyContext);
+    let r = iter.next();
+    while (!r.done) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      r = iter.next();
+    }
+    return r.value;
+  }
+
+  /**
+   * Internal generator. All the system-generation logic lives here so the
+   * sync and async wrappers share one source of truth. `yield` points are
+   * chosen at the boundaries of heavy work (per-planet, per-moon, per-belt).
+   */
+  static *_generateIterator(seed, galaxyContext = null) {
     const rng = new SeededRandom(seed);
 
     // ── Primary Star ──
@@ -298,6 +332,7 @@ export class StarSystemGenerator {
     let currentOrbitAU = adjustedInnerAU;
     let prevSpacing = 0;
     for (let i = 0; i < planetCount; i++) {
+      yield;  // yield before each planet — PlanetGenerator is the heaviest per-body work
       const planetRng = rng.child(`planet-${i}`);
 
       // Log-normal spacing with peas-in-a-pod correlation
@@ -342,6 +377,7 @@ export class StarSystemGenerator {
       // Generate moons
       const moons = [];
       for (let m = 0; m < planetData.moonCount; m++) {
+        if (m > 0) yield;  // yield between moons — first moon rides the planet's chunk
         const moonRng = planetRng.child(`moon-${m}`);
         const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount, parentZone, zones);
         moons.push(moonData);
@@ -360,6 +396,7 @@ export class StarSystemGenerator {
       });
     }
 
+    yield;  // post-planet-loop yield — migration + resonance walk the full planets array
     // ── Planetary Migration (PhysicsEngine §5) ──
     // Gas giants beyond the frost line may migrate inward, scattering inner planets.
     const migrationResult = computeMigration(planets, formation.diskMass, frostLineAU, rng.float());
@@ -422,6 +459,7 @@ export class StarSystemGenerator {
       binaryStability = { stabilityLimitAU, cbHZ };
     }
 
+    yield;  // pre-belt yield — belts can contain hundreds of asteroid entries
     // ── Asteroid Belts — Physics-driven (PhysicsEngine §12) ──
     // Belts only form where gas giant resonances prevented planet accretion.
     // No giant = no belt. Migration destroys belts.
@@ -443,6 +481,7 @@ export class StarSystemGenerator {
       asteroidBelts.push(beltData);
     }
 
+    yield;  // pre-kuiper yield — same reason as main belt
     // ── Kuiper Belt (PhysicsEngine §12) ──
     const kuiperPhysics = shouldOuterBeltExist(planets, formation.diskMass);
     if (kuiperPhysics) {
@@ -458,6 +497,7 @@ export class StarSystemGenerator {
       asteroidBelts.push(kuiperData);
     }
 
+    yield;  // pre-trojan yield — one iteration per gas giant, each spawns 50-200 trojans
     // ── Trojan Asteroids (PhysicsEngine §12) ──
     // L4/L5 clusters for each gas giant
     for (let i = 0; i < planets.length; i++) {
@@ -545,6 +585,7 @@ export class StarSystemGenerator {
       binaryStability,
     };
 
+    yield;  // pre-overlay yield — ExoticOverlay walks the planets array again
     // ── Exotic/civilized overlay ──
     // Post-processing pass: rare alien anomalies, civilized worlds,
     // geological formations. Modifies planets array in-place.

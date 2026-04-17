@@ -1,3 +1,9 @@
+import {
+  foldPeakSpeedScenePerSec,
+  hyperTraversalScenePerSec,
+  exitPeakSpeedScenePerSec,
+} from '../core/ScaleConstants.js';
+
 /**
  * WarpEffect — manages the warp transition between star systems.
  *
@@ -20,11 +26,30 @@ export class WarpEffect {
     this.elapsed = 0;      // seconds into current phase
     this.progress = 0;     // 0→1 within current phase
 
-    // Phase durations (seconds)
+    // Phase durations (seconds).
+    //
+    // HYPER_DUR returned to 3.0 when tunnelLength dropped from 540 → 200
+    // during the 2026-04-16 scale pass (Max: "5× ship size, appears within
+    // a kilometer of the player"). Post-swap camera travel budget =
+    // (HYPER_DUR - 0.15) × 80 + EXIT avg + coast must exceed tunnelLength
+    // for OUTSIDE_B crossing to fire before warp ends.
+    // With 3.0s: (2.85 × 80) + 40 + 60 = 328u > 200u tunnel — ample margin.
     this.FOLD_DUR = 4.0;
     this.ENTER_DUR = 1.5;
     this.HYPER_DUR = 3.0;
     this.EXIT_DUR = 2.0;
+
+    // All four phase speeds derive from ship-scale + durations — keeps the
+    // whole warp at consistent ship scale (no abstract hyperspace units).
+    //   FOLD: 0 → _foldPeakSpeed over FOLD_DUR (quadratic ramp)
+    //   ENTER: _foldPeakSpeed → _enterPeakSpeed = 2× (same ramp shape)
+    //   HYPER: constant _hyperSpeed; covers tunnel exactly in HYPER_DUR
+    //   EXIT: _exitPeakSpeed → 0 (linear decay); covers postExit distance
+    // Speed drops at HYPER→EXIT (ship leaves hyperspace, decelerates).
+    this._foldPeakSpeed = foldPeakSpeedScenePerSec(this.FOLD_DUR);
+    this._enterPeakSpeed = this._foldPeakSpeed * 2;
+    this._hyperSpeed = hyperTraversalScenePerSec(this.HYPER_DUR);
+    this._exitPeakSpeed = exitPeakSpeedScenePerSec(this.EXIT_DUR);
 
     // ── Uniform values (read by Starfield + RetroRenderer each frame) ──
     this.foldAmount = 0;          // 0 = normal, 1 = fully folded to center
@@ -36,6 +61,13 @@ export class WarpEffect {
     this.foldGlow = 0;            // 0 = no portal, >0.25 = portal visible, >1 during ENTER
     this.exitReveal = 0;          // 0 = no opening, 1 = full opening (exit only)
     this.cameraForwardSpeed = 0;  // units/s to push camera (HYPER/EXIT only)
+
+    // ── Portal state (3D stencil portal for FOLD/ENTER phases) ──
+    this.portalVisible = false;       // true during FOLD + ENTER, false otherwise
+    this.portalRimIntensity = 0;      // rim glow intensity (0→1 during FOLD, holds 1 during ENTER)
+    this.portalApproach = 0;          // 0 at FOLD start → 1 at handoff (ENTER end)
+    this.portalBridgeMix = 0;         // tunnel bridge blend (0 = origin stars, 1 = destination)
+    this.tunnelWallRecession = 0;     // 0 during HYPER, 0→1 during EXIT (tunnel widens)
 
     // ── Rift direction (world-space, for future star selection) ──
     this.riftDirection = null;  // THREE.Vector3 or null (null = camera forward)
@@ -121,38 +153,38 @@ export class WarpEffect {
       if (this.onPrepareSystem) this.onPrepareSystem();
     }
 
-    // Stars fold inward — use progress² (not smootherstep) so it starts
-    // immediately and ramps up visibly. Stars should be moving from frame 1.
-    this.foldAmount = this.progress * this.progress;
-
-    // Stars get much brighter as they compress (light accretes at center)
-    this.starBrightness = 1 + this.foldAmount * 4.0;  // up to 5x brightness
-
-    // Scene objects visible early, start fading in last 30% of fold
-    // as camera accelerates past them. Objects ahead fly past naturally;
-    // this fade catches anything to the sides or behind.
+    // No star folding — portal handles the entire visual effect.
+    // Stars stay normal, scene visible, camera flies forward toward portal.
+    this.foldAmount = 0;
+    this.starBrightness = 1;
     this.sceneFade = Math.max(0, (this.progress - 0.7) / 0.3);  // 0→1 over last 30%
 
-    // Portal frontier. Tracks where stars have been significantly
-    // consumed (localFold ≈ 0.5 in the starfield shader).
-    // No portal until foldAmount > 0.175 — nearest stars must converge
-    // before any opening appears. The shader adds a further gate at
-    // foldGlow > 0.25 so portalRadius only > 0 once stars are fully cleared.
-    // frontier = (foldAmount - 0.175) / 0.7 matches the starfield's
-    // pullStart = dist * 0.7, pullEnd = pullStart + 0.35.
-    const frontier = Math.max(0, (this.foldAmount - 0.175) / 0.7);
-    this.foldGlow = Math.min(1, frontier);
+    // Old portal frontier system off — 3D portal mesh handles the opening visual.
+    this.foldGlow = 0;
 
-    // Camera accelerates forward during fold — we fly toward the portal,
-    // passing scene objects (planets, stars) along the way. Starts gentle,
-    // ramps up with progress² so early fold is mostly star-folding visual.
-    this.cameraForwardSpeed = this.progress * this.progress * 40;  // 0 → 40
+    // Camera accelerates forward — fly toward the portal.
+    // Quadratic ramp from 0 to _foldPeakSpeed; derived from preview distance
+    // so camera reaches Portal A at the end of FOLD at any ship scale.
+    this.cameraForwardSpeed = this.progress * this.progress * this._foldPeakSpeed;
+
+    // ── Portal state during FOLD ──
+    // Portal + rim instantly visible at full intensity from frame 1.
+    // No "opening" animation — portal just appears.
+    this.portalVisible = true;
+    this.portalRimIntensity = 1.0;
+    this.portalApproach = this.progress * this.progress;  // camera flies toward portal
 
     // Transition to ENTER
     if (this.elapsed >= this.FOLD_DUR) {
       this.state = 'enter';
       this.elapsed = 0;
     }
+  }
+
+  /** Smootherstep easing for portal intensity */
+  _smootherstep(t) {
+    t = Math.max(0, Math.min(1, t));
+    return t * t * t * (t * (t * 6 - 15) + 10);
   }
 
   _updateEnter() {
@@ -175,8 +207,9 @@ export class WarpEffect {
     // Scene fully faded (camera already past them from FOLD acceleration)
     this.sceneFade = 1;
 
-    // Camera continues accelerating into the portal — 40 → 80
-    this.cameraForwardSpeed = 40 + this.progress * 40;
+    // Camera continues accelerating into the portal — FOLD-peak → ENTER-peak.
+    // ENTER-peak = 2× FOLD-peak, keeping the original 40→80 ratio.
+    this.cameraForwardSpeed = this._foldPeakSpeed + this.progress * this._foldPeakSpeed;
 
     // No white flash — the portal IS the transition
     this.whiteFlash = 0;
@@ -188,6 +221,13 @@ export class WarpEffect {
     // sole circular wipe; it reaches the corners at ~65% progress.
     this.hyperPhase = 0;
 
+    // ── Portal during ENTER ──
+    // Portal visible, rim at full intensity, camera flies INTO the portal.
+    // portalApproach grows past 1 — portal "grows" to envelop the camera.
+    this.portalVisible = true;
+    this.portalRimIntensity = 1.0;
+    this.portalApproach = 1 + this.progress;  // 1 → 2 (past camera)
+
     // Transition to HYPER
     if (this.elapsed >= this.ENTER_DUR) {
       this.state = 'hyper';
@@ -197,7 +237,10 @@ export class WarpEffect {
       this.foldAmount = 0;
       this.foldGlow = 0;
       this.starBrightness = 0;
-      this.cameraForwardSpeed = 80;  // Match hyper phase speed
+      this.cameraForwardSpeed = this._hyperSpeed;  // Jump to hyperspace tunnel speed
+      // Portal hands off to composite shader tunnel
+      this.portalVisible = false;
+      this.portalRimIntensity = 0;
     }
   }
 
@@ -212,7 +255,15 @@ export class WarpEffect {
     this.foldAmount = 0;
     this.foldGlow = 0;
     this.starBrightness = 0;
-    this.cameraForwardSpeed = 80;  // Maintain forward momentum through hyperspace
+    this.cameraForwardSpeed = this._hyperSpeed;  // Maintain hyperspace tunnel speed
+
+    // Portal is hidden during HYPER — composite shader takes over
+    this.portalVisible = false;
+    this.portalRimIntensity = 0;
+
+    // Bridge: origin stars → destination stars sweeps during middle of HYPER
+    // 0 at start (all origin), 1 at end (all destination)
+    this.portalBridgeMix = this._smootherstep(this.progress);
 
     // Fire system swap after a few frames of HYPER — give the tunnel
     // time to render so the GPU stall from mesh/shader creation is hidden
@@ -242,13 +293,21 @@ export class WarpEffect {
     // sqrt gives a strong ease-out curve: fast open → gradual completion.
     this.exitReveal = Math.sqrt(this.progress);
 
+    // Tunnel walls recede outward (tunnelR scales up) — "opens outward" feel
+    this.tunnelWallRecession = this.progress * this.progress;
+
+    // Portal stays hidden during EXIT — composite shader handles the reveal
+    this.portalVisible = false;
+    this.portalRimIntensity = 0;
+    this.portalBridgeMix = 1;  // fully destination by now
+
     // NO reverse fold — stars are normal, we see them through the hole
     this.foldAmount = 0;
     this.starBrightness = 1;
     this.foldGlow = 0;
 
     // Camera decelerates as we approach the portal
-    this.cameraForwardSpeed = 80 * (1 - t);
+    this.cameraForwardSpeed = this._exitPeakSpeed * (1 - t);
 
     // Scene is fully visible from the start — the exit hole mask controls
     // what you see through. No fade needed; the star is immediately visible
@@ -274,5 +333,11 @@ export class WarpEffect {
     this.exitReveal = 0;
     this.cameraForwardSpeed = 0;
     this.riftDirection = null;
+    // Portal state
+    this.portalVisible = false;
+    this.portalRimIntensity = 0;
+    this.portalApproach = 0;
+    this.portalBridgeMix = 0;
+    this.tunnelWallRecession = 0;
   }
 }

@@ -102,13 +102,53 @@ export class ProceduralGlowLayer {
         uCloudSeedY: { value: 0.0 },
         uCloudSeedZ: { value: 0.0 },
         uCloudDebug: { value: 0 },
+        // ── Tunnel deformation (for warp transitions) ──
+        // At phase=0 the icosphere is a normal sky sphere. At phase=1 every
+        // vertex collapses onto a cylinder of radius uTunnelRadius aligned
+        // with uTunnelForward, stretching the galaxy band onto the tunnel
+        // walls. Glow is diffuse — no scroll, no taper, just radial pull.
+        uTunnelPhase:   { value: 0.0 },
+        uTunnelForward: { value: new THREE.Vector3(0.0, 0.0, -1.0) },
+        uTunnelRadius:  { value: 300.0 },
       },
 
       vertexShader: /* glsl */ `
+        uniform float uTunnelPhase;
+        uniform vec3  uTunnelForward;
+        uniform float uTunnelRadius;
         varying vec3 vWorldDir;
+
+        // Stable pseudo-random from vec3 — used to give on-axis vertices
+        // a deterministic azimuth when their perpendicular component vanishes.
+        float glowTunnelHash(vec3 p) {
+          return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        }
+
         void main() {
-          vWorldDir = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vec3 finalPos = position;
+
+          if (uTunnelPhase > 0.0) {
+            vec3 F = normalize(uTunnelForward);
+            float along = dot(position, F);
+            vec3 perp = position - along * F;
+            float perpLen = length(perp);
+            vec3 perpDir;
+            if (perpLen > 0.001) {
+              perpDir = perp / perpLen;
+            } else {
+              float h = glowTunnelHash(position);
+              float ang = h * 6.2831853;
+              vec3 up = abs(F.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+              vec3 right = normalize(cross(F, up));
+              vec3 fup = normalize(cross(right, F));
+              perpDir = right * cos(ang) + fup * sin(ang);
+            }
+            vec3 tunnelPos = perpDir * uTunnelRadius + F * along;
+            finalPos = mix(position, tunnelPos, uTunnelPhase);
+          }
+
+          vWorldDir = finalPos;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(finalPos, 1.0);
         }
       `,
 
@@ -978,6 +1018,21 @@ export class ProceduralGlowLayer {
   /** Debug: 0=off, 1=show raw FBM (blue=low, gray=mid, red=high), 2=show shaped density. */
   setCloudDebug(v) {
     this._sphere.material.uniforms.uCloudDebug.value = v;
+  }
+
+  /** Warp tunnel deformation phase (0 = sphere, 1 = cylinder). */
+  setTunnelPhase(v) {
+    this._sphere.material.uniforms.uTunnelPhase.value = v;
+  }
+
+  /** Tunnel forward axis (world space, normalized by shader). */
+  setTunnelForward(vec3) {
+    this._sphere.material.uniforms.uTunnelForward.value.copy(vec3);
+  }
+
+  /** Tunnel cylinder radius in world units (defaults to 300). */
+  setTunnelRadius(v) {
+    this._sphere.material.uniforms.uTunnelRadius.value = v;
   }
 
   update(cameraPosition) {

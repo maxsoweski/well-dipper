@@ -87,24 +87,129 @@ export class StarfieldLayer {
         uRiftCenter: { value: new THREE.Vector2(0.0, 0.0) },
         uBrightnessMin: { value: this._brightnessRange.min },
         uBrightnessMax: { value: this._brightnessRange.max },
+
+        // ── Tunnel warp (angular-to-depth remap onto a cylinder) ──
+        // uTunnelPhase = 0 bypasses all tunnel code — rendering is identical
+        // to the pre-port StarfieldLayer. Only when phase > 0 does the
+        // vertex shader remap stars onto the tunnel walls.
+        uTunnelPhase:   { value: 0.0 },
+        uTunnelScroll:  { value: 0.0 },
+        uTunnelForward: { value: new THREE.Vector3(0.0, 0.0, -1.0) },
+        uTunnelRadius:  { value: 300.0 },
+        uTunnelLength:  { value: 2400.0 },
+
+        // ── Split-tunnel crossover (for dual-layer origin/destination) ──
+        // uClipSide 0: visible behind crossoverAlong  (origin layer)
+        // uClipSide 1: visible ahead of crossoverAlong (destination layer)
+        // uClipSide 2: visible between [crossoverAlong, crossoverAlongB] (bridge)
+        // Setting uCrossoverAlong = +1e6 with uClipSide=0 → full starfield.
+        uCrossoverAlong:  { value: 1.0e6 },
+        uCrossoverAlongB: { value: 1.0e6 },
+        uClipSide:        { value: 0 },
+
+        // Per-layer tint multiplier — lets origin/destination render with
+        // distinguishable colors while debugging the crossover.
+        uTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
       },
 
       vertexShader: /* glsl */ `
         attribute float aSize;
         uniform float uFoldAmount;
         uniform vec2 uRiftCenter;
+
+        // Tunnel warp
+        uniform float uTunnelPhase;
+        uniform float uTunnelScroll;
+        uniform vec3  uTunnelForward;
+        uniform float uTunnelRadius;
+        uniform float uTunnelLength;
+
+        // Split-tunnel crossover
+        uniform float uCrossoverAlong;
+        uniform float uCrossoverAlongB;
+        uniform int   uClipSide;
+
         varying vec3 vColor;
         varying float vSize;
         varying float vConverge;
+        varying float vTunnelAmt;
+        varying float vClipped;
+
+        // Stable pseudo-random from vec3 — gives on-axis stars a deterministic
+        // azimuth when their perp component vanishes.
+        float starTunnelHash(vec3 p) {
+          return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        }
 
         void main() {
           vColor = color;
           vSize = aSize;
-          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          vTunnelAmt = uTunnelPhase;
+          vClipped = 0.0;
+
+          // ── Tunnel warp (angular-to-depth remap) ──
+          // At phase=0 this branch is skipped entirely and finalPos = position,
+          // matching pre-port behavior byte-for-byte.
+          vec3 finalPos = position;
+          float scrolled = 0.0;
+
+          if (uTunnelPhase > 0.0) {
+            vec3 F = normalize(uTunnelForward);
+            vec3 dir = normalize(position);
+            float cosTheta = dot(dir, F);
+            float theta = acos(clamp(cosTheta, -1.0, 1.0));
+
+            vec3 perp = dir - cosTheta * F;
+            float perpLen = length(perp);
+            vec3 perpDir;
+            if (perpLen > 0.001) {
+              perpDir = perp / perpLen;
+            } else {
+              float h = starTunnelHash(position);
+              float ang = h * 6.2831853;
+              vec3 up = abs(F.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+              vec3 right = normalize(cross(F, up));
+              vec3 fup = normalize(cross(right, F));
+              perpDir = right * cos(ang) + fup * sin(ang);
+            }
+
+            float PI = 3.14159265;
+            float L = uTunnelLength;
+            float normalizedAngle = theta / PI;
+            float tunnelZ = mix(L * 0.5, -L * 0.25, normalizedAngle);
+            scrolled = tunnelZ - uTunnelScroll;
+            scrolled = mod(scrolled + L * 0.5, L) - L * 0.5;
+
+            // Crossover clip — soft fade of stars across the boundary plane.
+            float tw = 200.0;
+            if (uClipSide == 0) {
+              vClipped = smoothstep(-tw, tw, scrolled - uCrossoverAlong);
+            } else if (uClipSide == 1) {
+              vClipped = 1.0 - smoothstep(-tw, tw, scrolled - uCrossoverAlong);
+            } else {
+              float clipA = smoothstep(-tw, tw, uCrossoverAlong - scrolled);
+              float clipB = smoothstep(-tw, tw, scrolled - uCrossoverAlongB);
+              vClipped = max(clipA, clipB);
+            }
+
+            // Perspective taper — distant stars shrink toward vanishing point.
+            float taperStart = L * 0.15;
+            float taperEnd   = L * 0.45;
+            float ahead = max(scrolled, 0.0);
+            float taper = 1.0 - smoothstep(taperStart, taperEnd, ahead) * 0.95;
+            float warpedR = uTunnelRadius * taper;
+
+            vec3 tunnelPos = perpDir * warpedR + F * scrolled;
+            finalPos = mix(position, tunnelPos, uTunnelPhase);
+          }
+
+          vec4 mvPos = modelViewMatrix * vec4(finalPos, 1.0);
           gl_Position = projectionMatrix * mvPos;
 
+          // ── Legacy fold (NDC-space pull toward rift center) ──
+          // Dormant during warp because WarpEffect sets foldAmount=0.
+          // Kept for any non-warp caller that still passes a non-zero amount.
           float convergeFactor = 1.0;
-
           if (uFoldAmount > 0.0) {
             vec2 ndc = gl_Position.xy / gl_Position.w;
             vec2 toCenter = ndc - uRiftCenter;
@@ -123,7 +228,12 @@ export class StarfieldLayer {
           vConverge = convergeFactor;
 
           float baseSize = aSize > 5.0 ? aSize * 2.0 : aSize;
-          gl_PointSize = baseSize * convergeFactor;
+          float depthScale = 1.0;
+          if (uTunnelPhase > 0.0) {
+            float depthNorm = clamp(scrolled / (uTunnelLength * 0.5), 0.0, 1.0);
+            depthScale = mix(1.8, 0.12, depthNorm * depthNorm);
+          }
+          gl_PointSize = baseSize * convergeFactor * (1.0 + uTunnelPhase * 0.3) * depthScale;
         }
       `,
 
@@ -132,9 +242,12 @@ export class StarfieldLayer {
         uniform float uFoldAmount;
         uniform float uBrightnessMin;
         uniform float uBrightnessMax;
+        uniform vec3  uTint;
         varying vec3 vColor;
         varying float vSize;
         varying float vConverge;
+        varying float vTunnelAmt;
+        varying float vClipped;
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -152,6 +265,9 @@ export class StarfieldLayer {
         }
 
         void main() {
+          // Crossover clip: discard fully clipped stars before any work.
+          if (vClipped >= 0.99) discard;
+
           vec2 center = gl_PointCoord - 0.5;
           float dist = length(center);
 
@@ -168,10 +284,10 @@ export class StarfieldLayer {
           if (shape < cutoff * 0.5) discard;
 
           // ── Direct brightness from vertex color ──
-          // The generator sets per-star color+brightness from apparent magnitude
-          // and spectral type. No budget remapping needed — the physics determines
-          // the brightness. Bright O-class stars should look BRIGHT.
-          vec3 col = vColor * uBrightness * shape;
+          // At rest (uTint=1, vTunnelAmt=0, vClipped=0) this collapses to the
+          // pre-port expression: vColor * uBrightness * shape.
+          vec3 col = vColor * uTint * uBrightness * shape * (1.0 + vTunnelAmt * 0.3);
+          col *= (1.0 - vClipped);
 
           gl_FragColor = vec4(min(col, vec3(1.0)), 1.0);
         }
@@ -193,6 +309,25 @@ export class StarfieldLayer {
       u.uRiftCenter.value.copy(riftCenterNDC);
     }
   }
+
+  // ── Tunnel deformation (driven by warp loop during HYPER) ──
+  setTunnelPhase(v)   { this.mesh.material.uniforms.uTunnelPhase.value = v; }
+  setTunnelScroll(v)  { this.mesh.material.uniforms.uTunnelScroll.value = v; }
+  setTunnelForward(vec3) {
+    this.mesh.material.uniforms.uTunnelForward.value.copy(vec3);
+  }
+  setTunnelRadius(v)  { this.mesh.material.uniforms.uTunnelRadius.value = v; }
+  setTunnelLength(v)  { this.mesh.material.uniforms.uTunnelLength.value = v; }
+
+  // ── Split-tunnel crossover (origin/destination dual-layer transition) ──
+  /** 0 = visible behind crossoverAlong (origin layer)
+   *  1 = visible ahead of crossoverAlong (destination layer)
+   *  2 = visible between crossoverAlong and crossoverAlongB (bridge layer) */
+  setClipSide(side)        { this.mesh.material.uniforms.uClipSide.value = side; }
+  setCrossoverAlong(v)     { this.mesh.material.uniforms.uCrossoverAlong.value = v; }
+  setCrossoverAlongB(v)    { this.mesh.material.uniforms.uCrossoverAlongB.value = v; }
+  /** Per-layer color tint — leave (1,1,1) unless debugging the crossover. */
+  setTint(r, g, b)         { this.mesh.material.uniforms.uTint.value.set(r, g, b); }
 
   /**
    * Find the nearest starfield point to a given ray direction.

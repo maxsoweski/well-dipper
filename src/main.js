@@ -38,6 +38,8 @@ import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
+import { WarpPortal } from './effects/WarpPortal.js';
+import { portalPreviewDistanceScene, postExitDistanceScene } from './core/ScaleConstants.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
@@ -70,7 +72,7 @@ const scene = new THREE.Scene();
 // behind empty space (but NOT behind dark shadows).
 
 // ── Camera ──
-const camera = new THREE.PerspectiveCamera(settings.get('fov'), window.innerWidth / window.innerHeight, 0.01, 200000);
+const camera = new THREE.PerspectiveCamera(settings.get('fov'), window.innerWidth / window.innerHeight, 1e-9, 200000);
 
 // ── Ship Spawner ──
 const shipSpawner = new ShipSpawner();
@@ -327,12 +329,147 @@ window._flythrough = flythrough;
 window._autoNav = autoNav;
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
-window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1) });
+window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
 let idleTimer = 0;
 
 // ── Warp transition (system-to-system) ──
 const warpEffect = new WarpEffect();
+const warpPortal = new WarpPortal();
+scene.add(warpPortal.group);  // add to the main scene (not sky scene)
+
+// Dual-portal stencil traversal — replaces the fullscreen composite hyperspace
+// with the lab's 3-state (OUTSIDE_A / INSIDE / OUTSIDE_B) mesh traversal.
+// Toggle to false to fall back to the legacy composite path for comparison.
+const _useDualPortal = true;
+
+// Portal lab mode — diagnostic-only warp. Strips ALL extraneous effects
+// (sounds, music, rim pulsing, flythrough reveal on arrival) so Max can
+// see the raw portal + tunnel mesh behavior. Enable with `?portalLab` in
+// the URL. When active, two-stage spacebar flow:
+//   1. Target a star + press Space: portal OPENS at the rift direction but
+//      the camera stays still. Player eyeballs the portal + tunnel mesh.
+//   2. Press Space again: normal warp sequence fires (camera flies through
+//      A → INSIDE → B), but sound/music/autopilot are suppressed. After the
+//      warp completes, Portal B stays at its landing position in the new
+//      system so Max can fly around it and inspect.
+const _portalLabMode = new URLSearchParams(location.search).has('portalLab');
+
+// Lab-mode 3-stage spacebar state machine:
+//   'idle'      — ready for Space #1: open portal preview
+//   'preview'   — portal open, ready for Space #2: align camera + light strip
+//   'aligning'  — camera slerping + crosses lighting up; next Space fires warp
+// The 'aligning' state covers both "animation in progress" and "animation
+// finished, waiting for the third Space press" — mashing Space during the
+// animation skips straight to firing the warp (the warp loop does its own
+// slerp during FOLD so cutting the preview-align short isn't visually harsh).
+let _portalLabState = 'idle';
+// Distance from camera to Portal A when opened in lab-mode preview.
+// Realistic ship-scale (post-scale-audit): portal sits 50× player-ship
+// lengths ahead of camera (1 km for a 20 m ship). Derived from
+// ScaleConstants so any change to SHIP_HULL_LENGTHS_M.player or
+// PORTAL_PREVIEW_TO_SHIP propagates here. The FOLD camera ramp in
+// WarpEffect.js crosses this distance over FOLD_DUR via its quadratic
+// speed ramp (see foldPeakSpeedScenePerSec).
+const _portalLabPreviewDistance = portalPreviewDistanceScene();
+// Alignment animation state (drives camera slerp + entry-strip progress)
+const _portalLabAlignDuration = 1.5;
+let _portalLabAlignElapsed = 0;
+const _portalLabAlignStartQuat = new THREE.Quaternion();
+const _portalLabAlignTargetQuat = new THREE.Quaternion();
+const _portalLabAlignLookMatrix = new THREE.Matrix4();
+
+// Lab arrival slerp: after the warp completes, the camera is past Portal B
+// and facing forward (away from the portal). Before handing control back to
+// the orbit controller — whose lookAt(target) would snap the camera 180°
+// instantly to face Portal B — we smoothly slerp the camera to face Portal B
+// over _labArrivalDuration seconds. Orbit handoff happens when the slerp
+// completes (quaternion dot exceeds threshold).
+let _labArriving = false;
+let _labArrivalElapsed = 0;
+const _labArrivalDuration = 1.5;  // seconds
+const _labArrivalTarget = new THREE.Vector3();
+const _labArrivalTargetQuat = new THREE.Quaternion();
+const _labArrivalStartQuat = new THREE.Quaternion();
+const _labArrivalLookMatrix = new THREE.Matrix4();
+
+// When the camera crosses Portal A's plane mid-warp, fire the system swap.
+// Geometric trigger replaces the WarpEffect.js:244 timer (`elapsed > 0.15`).
+//
+// `warpSwapSystem()` teleports the camera to the destination star's vicinity
+// with camera.lookAt(starPos). After that teleport, Portal A (at the old
+// camera's vicinity) is far away and Portal B is nowhere near the new
+// flight path — the subsequent OUTSIDE_B crossing would never fire.
+//
+// Fix: re-anchor the portal at the new camera position, aligned with the
+// new camera's forward direction. Portal A ends up just behind the new
+// camera (so we're still INSIDE for one frame) and Portal B ends up
+// tunnelLength ahead, which the camera will then fly through during HYPER
+// → EXIT. The visual jump is invisible because the tunnel is rendering
+// unconditionally in INSIDE mode — the player sees only tunnel walls.
+const _swapNewForward = new THREE.Vector3();
+const _swapPortalAPos = new THREE.Vector3();
+// Arrival forward direction — captured once at warp onComplete, used by
+// the per-frame Portal B follow logic so Portal B stays in a FIXED world
+// direction behind the ship (camera can freely rotate to find it) instead
+// of always "behind whatever the camera is currently facing."
+const _arrivalForward = new THREE.Vector3();
+const _portalFollowPos = new THREE.Vector3();
+const _portalFollowTarget = new THREE.Vector3();
+warpPortal.onTraversal = (mode) => {
+  console.log(`[WARP-PORTAL] traversal → ${mode}`);
+  if (mode === 'INSIDE' && !warpEffect._swapFired && warpEffect.onSwapSystem) {
+    warpEffect._swapFired = true;
+    warpEffect.onSwapSystem();
+
+    // Re-anchor portal at new camera's position + forward. Offset Portal A
+    // a tiny amount (~15 mm) behind camera so the INSIDE-mode invariant
+    // holds (camera on +forward side of Portal A), without eating into
+    // the HYPER+EXIT travel budget. Critical at ship-scale: the old
+    // `-1 scene unit` offset (= 150,000 km) was larger than the entire
+    // 1 km tunnel, which left Portal B ~150k km behind camera post-warp.
+    camera.getWorldDirection(_swapNewForward);
+    _swapPortalAPos.copy(camera.position).addScaledVector(_swapNewForward, -1e-10);
+    warpPortal.resetTraversal();
+    warpPortal.open(_swapPortalAPos, _swapNewForward);
+    // Force the mode back to INSIDE (resetTraversal set it to OUTSIDE_A)
+    warpPortal.setTraversalMode('INSIDE');
+    // Dot history will re-seed on next updateTraversal call
+    warpPortal._prevDotA = null;
+    warpPortal._prevDotB = null;
+  }
+};
+
+window._warpPortal = warpPortal;  // DEBUG: expose for console testing
+window._warpEffect = warpEffect;  // DEBUG: expose warp state + .start(dir) for console/Playwright
+window._skyRenderer = skyRenderer;  // DEBUG: inspect origin/destination layers during crossover
+// NOTE: warpTarget + commitSelection are exposed further down in the file,
+// AFTER their declarations (they're in the TDZ here and trying to read them
+// throws "Cannot access 'warpTarget' before initialization").
+
+// Warp debug HUD — enable by appending ?warpDebug to the URL.
+// Shows state, progress, and the sky-layer uniforms driven by the seamless
+// tunnel code so the crossover + deformation are visible at a glance.
+if (new URLSearchParams(location.search).has('warpDebug')) {
+  const hud = document.createElement('div');
+  hud.id = 'warp-debug-hud';
+  hud.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;background:rgba(0,0,0,0.75);color:#0f0;font:11px/1.4 "Courier New",monospace;padding:8px 12px;border:1px solid #0f0;white-space:pre;pointer-events:none;min-width:300px';
+  document.body.appendChild(hud);
+  window._warpDebugHUD = hud;
+}
+window._togglePortal = () => {
+  if (warpPortal.group.visible) {
+    warpPortal.close();
+    console.log('[DEBUG] Portal closed');
+  } else {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    const pos = camera.position.clone().addScaledVector(dir, 30);
+    warpPortal.open(pos, dir);
+    console.log('[DEBUG] Portal opened at', pos, 'facing', dir);
+  }
+};
 let pendingSystemData = null; // pre-generated data cached during fold phase
+let pendingSystemDataPromise = null; // in-flight generation promise; onSwapSystem awaits before spawn
 
 // ── Warp target selection ──
 // Tracks which background star the user clicked (or auto-selected).
@@ -350,6 +487,7 @@ const warpTarget = {
   turnTimer: 0,      // seconds into the turn
   lockBlinkFrames: 0, // frame counter for rapid lock-on blink
 };
+window._warpTarget = warpTarget;  // DEBUG: expose warp target for Playwright driving
 
 // When the tour visits every body, use the nav computer for a cinematic warp sequence.
 // The nav computer opens, drills down through galaxy levels, picks a star, and warps.
@@ -470,8 +608,11 @@ function startIntroSequence() {
           _titleAutoTimer = setTimeout(() => {
             if (titleScreenActive) {
               dismissTitleScreen();
-              // Always select a real hash grid star before warping
-              setTimeout(() => { autoSelectWarpTarget(); beginWarpTurn(); }, 1500);
+              // Always select a real hash grid star before warping — but skip
+              // the auto-warp in portal-lab diagnostic mode (player drives).
+              if (!_portalLabMode) {
+                setTimeout(() => { autoSelectWarpTarget(); beginWarpTurn(); }, 1500);
+              }
             }
           }, silenceGap);
         }, titleDur * titleLoops * 1000);
@@ -1245,6 +1386,12 @@ const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for galler
 // Also clean up the old system here so GC pressure happens during FOLD
 // (lots of visual activity to mask any hitch), not during ENTER.
 warpEffect.onPrepareSystem = () => {
+  // Heavy generation (StarSystemGenerator.generateAsync + skyRenderer
+  // .prepareForPositionAsync) runs inside this IIFE. The promise is stored
+  // on pendingSystemDataPromise; onSwapSystem awaits it before spawnSystem.
+  // Sync setup (sound, music, seed counter) runs immediately before the
+  // first await, so FOLD-start feedback is instantaneous.
+  pendingSystemDataPromise = (async () => {
   bodyInfo.hide();
   soundEngine.play('warpCharge');
   musicManager.stop(0.5);
@@ -1269,7 +1416,7 @@ warpEffect.onPrepareSystem = () => {
     pendingSystemData._warpTargetName = gal.name;
     pendingSystemData._isExternalGalaxy = true; // flag for "strayed from home" prompt
     // Don't update playerGalacticPos — we're not actually IN the other galaxy
-    skyRenderer.prepareForPosition(playerGalacticPos);
+    await skyRenderer.prepareForPositionAsync(playerGalacticPos);
     console.log(`Warp: external galaxy ${gal.name} (${galType})`);
     warpTarget.destType = null;
     warpTarget.galaxyData = null;
@@ -1297,11 +1444,11 @@ warpEffect.onPrepareSystem = () => {
       if (feat.context.metallicity !== undefined) galaxyContext.metallicity = feat.context.metallicity;
       if (feat.context.age !== undefined) galaxyContext.age = feat.context.age;
     }
-    pendingSystemData = StarSystemGenerator.generate(feat.seed, galaxyContext);
+    pendingSystemData = await StarSystemGenerator.generateAsync(feat.seed, galaxyContext);
     pendingSystemData._destType = 'star-system';
     pendingSystemData._warpTargetName = warpTarget.name || null;
     pendingSystemData._insideFeature = feat;
-    skyRenderer.prepareForPosition(playerGalacticPos);
+    await skyRenderer.prepareForPositionAsync(playerGalacticPos);
     console.log(`Warp: routed to feature ${feat.type} → system at feature center (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)})`);
     warpTarget.destType = null;
     warpTarget.featureData = null;
@@ -1355,11 +1502,11 @@ warpEffect.onPrepareSystem = () => {
         if (foundFeature.context.metallicity !== undefined) galaxyContext.metallicity = foundFeature.context.metallicity;
         if (foundFeature.context.age !== undefined) galaxyContext.age = foundFeature.context.age;
       }
-      pendingSystemData = StarSystemGenerator.generate(foundFeature.seed, galaxyContext);
+      pendingSystemData = await StarSystemGenerator.generateAsync(foundFeature.seed, galaxyContext);
       pendingSystemData._destType = 'star-system';
       pendingSystemData._warpTargetName = warpTarget.name || null;
       pendingSystemData._insideFeature = foundFeature;
-      skyRenderer.prepareForPosition(playerGalacticPos);
+      await skyRenderer.prepareForPositionAsync(playerGalacticPos);
       console.log(`Warp: DestinationPicker rolled ${destType} → feature ${foundFeature.type} at center`);
       return;
     }
@@ -1427,7 +1574,7 @@ warpEffect.onPrepareSystem = () => {
       pendingSystemData._warpTargetName = knownWarp.name;
       console.log(`[WARP] Known system override: ${knownWarp.name}`);
     } else {
-      pendingSystemData = StarSystemGenerator.generate(seed, galaxyContext);
+      pendingSystemData = await StarSystemGenerator.generateAsync(seed, galaxyContext);
     }
   } else if (destType.includes('galaxy')) {
     // External galaxy Easter egg — player warped to a distant galaxy visible in the sky.
@@ -1438,27 +1585,51 @@ warpEffect.onPrepareSystem = () => {
     // Any other destType that wasn't caught above — should not happen in production.
     // Fall back to a star system at the current position rather than using legacy generators.
     console.warn(`[WARP] Unexpected destType '${destType}', falling back to star-system`);
-    pendingSystemData = StarSystemGenerator.generate(seed);
+    pendingSystemData = await StarSystemGenerator.generateAsync(seed);
   }
   pendingSystemData._destType = destType;
   // Carry the warp target's name into the new system so it matches what was shown
   pendingSystemData._warpTargetName = warpTarget.name || null;
-  // Pre-generate sky data for new galactic position (CPU only, no GPU resources)
-  skyRenderer.prepareForPosition(playerGalacticPos);
+  // Pre-generate sky data for new galactic position (async — HashGrid search yields between spectral types)
+  await skyRenderer.prepareForPositionAsync(playerGalacticPos);
   const _sfCount = skyRenderer._pendingData?.count ?? 'NO DATA';
   console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold | pos=(${playerGalacticPos.x.toFixed(3)},${playerGalacticPos.y.toFixed(3)},${playerGalacticPos.z.toFixed(3)}) | starfield=${_sfCount} stars`);
+  })();  // end async IIFE — promise stored on pendingSystemDataPromise
 };
 
 // System swap at hyper start (tunnel is opaque, hides any GPU resource creation)
-warpEffect.onSwapSystem = () => {
-  soundEngine.play('warpEnter');
-  musicManager.play('hyperspace', 0.3);
+warpEffect.onSwapSystem = async () => {
+  // Await in-flight async generation kicked off in onPrepareSystem. In the
+  // common case, FOLD+ENTER (~6s) have already absorbed generation's ~4s
+  // wall-clock work and the promise is resolved — await returns immediately.
+  // If generation ran long, HYPER waits a tick before spawning rather than
+  // spawning with null data. onPrepareSystem guarantees this promise is set
+  // before HYPER begins (WarpEffect's state machine enforces the ordering).
+  if (pendingSystemDataPromise) {
+    try { await pendingSystemDataPromise; }
+    catch (e) { console.error('[WARP] onPrepareSystem failed:', e); }
+  }
+  if (!_portalLabMode) {
+    soundEngine.play('warpEnter');
+    musicManager.play('hyperspace', 0.3);
+  }
   warpSwapSystem();
 
   // ── Regenerate sky for new galactic position ──
-  // SkyRenderer was pre-loaded during FOLD (prepareForPosition).
-  // Now create GPU resources — hidden behind the opaque warp tunnel.
-  skyRenderer.activate();
+  // Dual-portal: the mesh tunnel visually hides the transition, so we
+  // synchronously dispose the old sky layers and build the new ones via
+  // activate(). No dual-layer crossover — destination stars render
+  // un-clipped as soon as the camera exits Portal B and sees the sky.
+  //
+  // Legacy path: beginWarpTransition keeps the old layers alive alongside
+  // new ones so the crossover sweep (in the warp update block) can fade
+  // origin → destination while the player is inside the fullscreen shader
+  // tunnel. Not needed here.
+  if (_useDualPortal) {
+    skyRenderer.activate();
+  } else {
+    skyRenderer.beginWarpTransition();
+  }
   skyRenderer.update(camera, 0);
   // Restore galaxy glow (hidden during title screen)
   if (skyRenderer._glowLayer?.mesh) {
@@ -1469,6 +1640,35 @@ warpEffect.onSwapSystem = () => {
 
 // When warp exit finishes, reveal the new system and restart autopilot
 warpEffect.onComplete = () => {
+  skyRenderer.completeWarpTransition();
+
+  // Capture arrival direction so the per-frame Portal B follow below can
+  // keep Portal B in a FIXED world-space direction behind the ship. Without
+  // this, warpRevealSystem's post-warp tour flies the camera far from
+  // wherever Portal B was anchored — player can never find it. Using the
+  // camera's current view direction (instead of a captured direction)
+  // would move Portal B with every look-around, which is the original bug.
+  camera.getWorldDirection(_arrivalForward);
+  warpPortal.setTraversalMode('OUTSIDE_B');
+
+  if (_portalLabMode) {
+    // Diagnostic mode: start a smooth slerp from camera's current forward
+    // orientation (looking away from Portal B) to facing Portal B. The
+    // cameraController stays bypassed during the slerp — otherwise its
+    // orbit update's camera.lookAt(target) would snap the rotation in one
+    // frame (that's the "freeze then suddenly different direction" pop).
+    // Orbit handoff happens in the animation loop once the slerp completes.
+    warpPortal._discB.updateMatrixWorld();
+    _labArrivalTarget.setFromMatrixPosition(warpPortal._discB.matrixWorld);
+    _labArrivalLookMatrix.lookAt(camera.position, _labArrivalTarget, camera.up);
+    _labArrivalTargetQuat.setFromRotationMatrix(_labArrivalLookMatrix);
+    _labArrivalStartQuat.copy(camera.quaternion);
+    _labArrivalElapsed = 0;
+    _labArriving = true;
+    _portalLabState = 'idle';  // ready for a new Space #1 preview next warp
+    return;
+  }
+
   soundEngine.play('warpExit');
   // System music is handled by _scheduleSystemMusic in warpRevealSystem
   // (periodic one-shots with gaps, not looping BGM)
@@ -3730,6 +3930,7 @@ function warpSwapSystem() {
   // seedCounter was already incremented in onPrepareSystem.
   spawnSystem({ forWarp: true, systemData: pendingSystemData });
   pendingSystemData = null;
+  pendingSystemDataPromise = null;
 
   // Position camera so it ends up approaching the first tour stop when
   // EXIT finishes. The post-warp flythrough then coasts the remaining distance.
@@ -3762,11 +3963,20 @@ function warpSwapSystem() {
       camera.position.set(0, 2, travelDist + finalDist + driftExtra);
       camera.lookAt(0, 0, 0);
     } else {
-      // Star system: approach toward the star
+      // Star system: approach toward the star.
+      // orbitDist sets the final camera-to-star distance post-EXIT (travel
+      // and coast terms cancel with starting position). The multiplier is
+      // tuned so the StarFlare bloom (plane size = radius × 30) subtends
+      // ~17° of the 50° FOV — star reads as large and prominent without
+      // dominating the sky. No innerOrbit cap: in compact systems the cap
+      // previously put the camera inside the flare plane, which made the
+      // star fill the whole view on arrival (2026-04-16 fix). If
+      // radius × 100 happens to exceed the first planet's orbit, that's
+      // fine — we arrive slightly outside the innermost planet, which
+      // still reads as a system-overview entry.
       const star = system.star;
       const starPos = star.mesh.position;
-      const innerOrbit = system.planets.length > 0 ? system.planets[0].orbitRadius : star.data.radius * 10;
-      const orbitDist = Math.min(star.data.radius * 8, innerOrbit * 0.6);
+      const orbitDist = star.data.radius * 100;
 
       camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
       camera.lookAt(starPos);
@@ -4073,8 +4283,60 @@ function commitBurn() {
  *  - Nothing selected → no-op
  * Returns true if an action was committed.
  */
+window._commitSelection = () => commitSelection();  // DEBUG: Playwright can exercise the space-key flow
 function commitSelection() {
   if (warpEffect.isActive || warpTarget.turning) return false;
+
+  // Portal-lab diagnostic flow: 3-stage spacebar (see _portalLabState comment).
+  //   #1 (idle → preview):      open portal in place, entry strip dark
+  //   #2 (preview → aligning):  start camera slerp + sequentially light crosses
+  //   #3 (aligning → warp):     fire warp (cuts short any in-progress alignment)
+  if (_portalLabMode && warpTarget.direction) {
+    if (_portalLabState === 'idle') {
+      // Stop autopilot AND bypass the orbit controller so camera stays put
+      // during preview + aligning. Two effects to stop:
+      //   (1) flythrough/autoNav: move the camera along autopilot's tour path
+      //   (2) cameraController.update(): when not bypassed, _applyOrbit()
+      //       overwrites camera.quaternion every frame based on orbit state,
+      //       so the Space #2 alignment slerp gets clobbered. Without this,
+      //       the warp starts with the orbit controller's orientation (not
+      //       the aligned one), camera flies along a curved path off the
+      //       tunnel axis, and the Portal A crossing never fires.
+      flythrough.stop();
+      autoNav.stop();
+      cameraController.killFlightVelocity();
+      cameraController.bypassed = true;
+      const previewPos = camera.position.clone().addScaledVector(warpTarget.direction, _portalLabPreviewDistance);
+      warpPortal.resetTraversal();
+      warpPortal.open(previewPos, warpTarget.direction);
+      warpPortal.setRimIntensity(1.0);
+      warpPortal.setEntryStripProgress(0);  // all crosses dark; lit by Space #2
+      _portalLabState = 'preview';
+      return true;
+    }
+    if (_portalLabState === 'preview') {
+      // Capture start quaternion + target quaternion for the alignment slerp.
+      // Target looks from camera toward `camera + warpTarget.direction` (i.e.,
+      // camera rotates to face the portal direction directly).
+      _portalLabAlignStartQuat.copy(camera.quaternion);
+      const lookTarget = camera.position.clone().add(warpTarget.direction);
+      _portalLabAlignLookMatrix.lookAt(camera.position, lookTarget, camera.up);
+      _portalLabAlignTargetQuat.setFromRotationMatrix(_portalLabAlignLookMatrix);
+      _portalLabAlignElapsed = 0;
+      _portalLabState = 'aligning';
+      return true;
+    }
+    // State is 'aligning' — Space #3. Fire warp (cut short any in-progress
+    // alignment; the warp's own FOLD/ENTER slerp finishes the alignment).
+    _portalLabState = 'idle';
+    warpPortal.setEntryStripProgress(1);  // all crosses lit as we enter
+    _tunnelForward.copy(warpTarget.direction);
+    cameraController.killFlightVelocity();
+    cameraController.bypassed = true;
+    warpEffect.start(warpTarget.direction);
+    return true;
+  }
+
   if (_selectedTarget) {
     commitBurn();
     return true;
@@ -4278,6 +4540,19 @@ const _star2Pos = new THREE.Vector3();
 // Warp rift projection
 const _riftPoint = new THREE.Vector3();
 const _riftNDC = new THREE.Vector2();
+const _portalProj = new THREE.Vector3();
+const _portalScreenUV = new THREE.Vector2(0.5, 0.5);
+// Tunnel forward axis — captured at warp start so the tunnel deformation stays
+// aligned even as the camera slerps during FOLD. Drives the vertex warp in
+// StarfieldLayer/ProceduralGlowLayer via skyRenderer.setTunnelForward().
+const _tunnelForward = new THREE.Vector3(0, 0, -1);
+
+// Portal test mode (Shift+W to enter, SPACE to advance)
+let _portalTestMode = false;
+let _portalTestPhase = 'idle';  // idle | open | flying | arrived
+const _portalTestForward = new THREE.Vector3(0, 0, -1);
+const _portalTestStartPos = new THREE.Vector3();
+let _portalTestFlightStart = 0;
 const _riftUV = new THREE.Vector2();
 const _targetQuat = new THREE.Quaternion();
 const _lookMatrix = new THREE.Matrix4();
@@ -4363,8 +4638,9 @@ function animate() {
     }
     // Camera controller handles both auto-rotation and manual drag orbit
     cameraController.update(deltaTime);
-    // Dynamic near-plane — same formula as the main render loop
-    camera.near = Math.max(0.0001, Math.min(1.0, cameraController.smoothedDistance * 0.01));
+    // Fixed 1e-9 near (~15 cm) — log depth buffer handles precision across range.
+    // Sized so 20 m ship / 100 m portal / 500 m station don't clip on close approach.
+    camera.near = 1e-9;
     camera.updateProjectionMatrix();
     skyRenderer.update(camera, deltaTime);
     retroRenderer.setTime(timer.getElapsed());
@@ -4734,6 +5010,10 @@ function animate() {
           const dir = warpTarget.direction;
           warpTarget.direction = null;
           warpTarget.turning = false;
+          // Capture stable tunnel axis at warp start. Camera will continue to
+          // slerp toward `dir` during FOLD, but the tunnel deformation stays
+          // locked to this vector so the cylinder axis is coherent.
+          _tunnelForward.copy(dir);
           warpEffect.start(dir);
         }
       } else {
@@ -4771,6 +5051,34 @@ function animate() {
       retroRenderer.setTargetUniforms(null, 0, 0);
     }
 
+    // ── Portal test mode (Shift+W + spacebar control) ──
+    // When in test mode, drive the portal/camera manually based on phase.
+    if (_portalTestMode) {
+      // Drive rim time so it animates
+      warpPortal.update(deltaTime);
+
+      if (_portalTestPhase === 'flying') {
+        // Camera flies forward along the recorded portal direction at 40 units/sec
+        const speed = 40;
+        camera.position.addScaledVector(_portalTestForward, speed * deltaTime);
+        // After 15 seconds, mark as arrived
+        const elapsed = (performance.now() - _portalTestFlightStart) / 1000;
+        if (elapsed > 15) _portalTestPhase = 'arrived';
+      }
+
+      // Drive lensing while portal is visible in test mode
+      if (warpPortal.group.visible) {
+        _portalProj.copy(warpPortal.group.position).project(camera);
+        _portalScreenUV.set((_portalProj.x + 1) * 0.5, (_portalProj.y + 1) * 0.5);
+        const distToPortal = camera.position.distanceTo(warpPortal.group.position);
+        const fovRad = camera.fov * Math.PI / 180;
+        const screenRadius = Math.atan(8 / Math.max(distToPortal, 1)) / fovRad;
+        retroRenderer.setPortalLensing(_portalScreenUV, screenRadius, 0.12);
+      } else {
+        retroRenderer.setPortalLensing(null, 0, 0);
+      }
+    }
+
     // ── Warp transition ──
     if (warpEffect.isActive) {
       const prevState = warpEffect.state;
@@ -4780,14 +5088,22 @@ function animate() {
       // by now (camera flew past them during FOLD) or will fade quickly.
       // Exception: distant deep sky flying TOWARD (no target) — stays visible
       // through ENTER (growing on screen). Hidden at HYPER start.
-      if (prevState === 'fold' && warpEffect.state === 'enter') {
+      //
+      // CRITICAL: gate on `!warpEffect._swapFired`. In dual-portal mode the
+      // geometric INSIDE crossing fires during ENTER (at Portal A plane),
+      // which triggers warpSwapSystem → spawnSystem. That replaces `system`
+      // with the NEW destination system. If we then call _hideCurrentSystem()
+      // at either boundary, we'd rip the new system's meshes out of the scene.
+      // Without this gate, the destination system appears invisible after
+      // warp — Max reported this 2026-04-16.
+      if (prevState === 'fold' && warpEffect.state === 'enter' && !warpEffect._swapFired) {
         const isDistantDS = system && system.type && system.type !== 'star-system' && !system._navigable;
         const flyingToward = isDistantDS && warpEffect.riftDirection === null;
         if (!flyingToward) {
           _hideCurrentSystem();
         }
       }
-      if (prevState === 'enter' && warpEffect.state === 'hyper') {
+      if (prevState === 'enter' && warpEffect.state === 'hyper' && !warpEffect._swapFired) {
         // Catch any remaining objects (distant deep sky flying toward) — tunnel is opaque
         _hideCurrentSystem();
       }
@@ -4808,7 +5124,98 @@ function animate() {
       );
 
       // ── Pass rift center + warp uniforms to shaders ──
-      starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness, _riftNDC);
+      // Legacy starfield fold (stars folding toward a rift point) is the
+      // pre-dual-portal visual. With the mesh tunnel doing the work, we
+      // leave the starfield untouched during warp — no fold, full brightness.
+      if (_useDualPortal) {
+        starfield.setWarpUniforms(0, 1, null);
+      } else {
+        starfield.setWarpUniforms(warpEffect.foldAmount, warpEffect.starBrightness, _riftNDC);
+      }
+
+      // ── Seamless tunnel sky deformation (legacy — pre-dual-portal) ──
+      // tunnelPhase deforms the sky sphere into a cylinder and a crossover
+      // plane sweeps to blend origin/destination starfields. That was the
+      // sole hyperspace visual before the physical mesh tunnel existed.
+      // In dual-portal mode it must be OFF — the sky should stay a normal
+      // sphere in both systems, and the mesh tunnel carries the transition.
+      //
+      // Without this gate, EXIT un-deforms the cylinder back to a sphere
+      // (the "starfield warps from tunnel shape into default" Max saw) and
+      // the crossover sweep fades origin stars out + destination stars in
+      // on top of the mesh exit.
+      if (_useDualPortal) {
+        skyRenderer.setTunnelPhase(0);
+        skyRenderer.setCrossoverAlong(1e6);
+      } else {
+        // NOTE: WarpEffect.foldAmount stays at 0 during FOLD (the 3D portal
+        // is the primary FOLD visual). Use warpEffect.progress for the FOLD
+        // ramp so the sky deformation actually animates 0→1 across the phase.
+        let _tunnelPhase = 0;
+        if (warpEffect.state === 'fold') {
+          _tunnelPhase = warpEffect.progress;
+        } else if (warpEffect.state === 'enter' || warpEffect.state === 'hyper') {
+          _tunnelPhase = 1;
+        } else if (warpEffect.state === 'exit') {
+          _tunnelPhase = 1 - warpEffect.progress;
+        }
+        skyRenderer.setTunnelPhase(_tunnelPhase);
+        skyRenderer.setTunnelForward(_tunnelForward);
+
+        if (warpEffect.state === 'hyper') {
+          const xoFar = 600, xoBack = -600;
+          const xoPos = xoFar + (xoBack - xoFar) * warpEffect.progress;
+          skyRenderer.setCrossoverAlong(xoPos);
+        }
+      }
+
+      // ── Dual-portal traversal (warp-through mesh) ──
+      // Both portals stay in the world for the entire warp. Portal A opens
+      // 30u ahead of the starting camera along _tunnelForward at FOLD t=0;
+      // Portal B sits `tunnelLength` further along the same axis. Camera
+      // flies forward through OUTSIDE_A → INSIDE → OUTSIDE_B; plane-
+      // crossing detection in `warpPortal.updateTraversal()` flips render
+      // state and fires `onTraversal('INSIDE')` → warpEffect.onSwapSystem.
+      if (_useDualPortal) {
+        if (!warpPortal.group.visible) {
+          // Portal spawn distance tied to ship scale via ScaleConstants.
+          // Same distance as lab preview so FOLD ramp lands the camera at
+          // Portal A by end of FOLD at any ship scale.
+          const portalAPos = camera.position.clone()
+            .addScaledVector(_tunnelForward, portalPreviewDistanceScene());
+          warpPortal.resetTraversal();
+          warpPortal.open(portalAPos, _tunnelForward);
+        }
+        // Keep rim visible throughout the warp (legacy portalRimIntensity
+        // falls to 0 during HYPER; the dual-portal needs the rings visible).
+        // Portal-lab mode: hold rim steady — no pulsing, no modulation.
+        warpPortal.setRimIntensity(_portalLabMode ? 1.0 : Math.max(0.6, warpEffect.portalRimIntensity));
+        warpPortal.setBridgeMix(warpEffect.portalBridgeMix);
+        warpPortal.updateTraversal(camera);
+        // No screen-space lens — the tunnel mesh IS the hyperspace visual.
+        retroRenderer.setPortalLensing(null, 0, 0);
+      } else if (warpEffect.portalVisible) {
+        // Legacy single-portal path (kept for A/B comparison via _useDualPortal=false)
+        if (!warpPortal.group.visible) {
+          const portalPos = camera.position.clone()
+            .addScaledVector(riftDir, portalPreviewDistanceScene());
+          warpPortal.open(portalPos, riftDir);
+        }
+        warpPortal.setRimIntensity(warpEffect.portalRimIntensity);
+        warpPortal.setBridgeMix(warpEffect.portalBridgeMix);
+        _portalProj.copy(warpPortal.group.position).project(camera);
+        _portalScreenUV.set(
+          (_portalProj.x + 1) * 0.5,
+          (_portalProj.y + 1) * 0.5,
+        );
+        const distToPortal = camera.position.distanceTo(warpPortal.group.position);
+        const fovRad = camera.fov * Math.PI / 180;
+        const screenRadius = Math.atan(8 / Math.max(distToPortal, 1)) / fovRad;
+        retroRenderer.setPortalLensing(_portalScreenUV, screenRadius, 0.12);
+      } else {
+        if (warpPortal.group.visible) warpPortal.close();
+        retroRenderer.setPortalLensing(null, 0, 0);
+      }
 
       // Deep sky objects: override sceneFade in certain phases.
       // - Distant deep sky flying TOWARD (no target): keep visible during FOLD/ENTER
@@ -4823,6 +5230,13 @@ function animate() {
       if (warpEffect.state === 'exit' && system && system.type && system.type !== 'star-system') {
         effectiveSceneFade = 0;
       }
+      // Dual-portal: the tunnel mesh IS the HYPER visual. Never fade the
+      // scene (that would hide the tunnel along with the system meshes).
+      // Tunnel walls occlude the destination-system meshes at their own
+      // depth, so leaving the full scene visible doesn't leak them.
+      if (_useDualPortal) {
+        effectiveSceneFade = 0;
+      }
 
       // During EXIT phase, the camera has repositioned for the new system.
       // The old riftDirection now projects off-center. Force the exit reveal
@@ -4831,18 +5245,53 @@ function animate() {
         ? _riftUV.set(0.5, 0.5)
         : _riftUV;
 
+      // Suppress the old screen-space portal circle during FOLD/ENTER — the 3D
+      // portal owns those phases now. Pass foldGlow=0 to disable the composite
+      // shader's portal aperture and chromatic aberration ring.
+      const composFoldGlow = (warpEffect.state === 'fold' || warpEffect.state === 'enter')
+        ? 0
+        : warpEffect.foldGlow;
+
+      // With dual-portal active the tunnel mesh replaces the fullscreen
+      // hyperspace composite — zero its drivers so it doesn't render on top.
+      const composHyperPhase = _useDualPortal ? 0 : warpEffect.hyperPhase;
+      const composExitReveal = _useDualPortal ? 0 : warpEffect.exitReveal;
       retroRenderer.setWarpUniforms(
         effectiveSceneFade,
         warpEffect.whiteFlash,
-        warpEffect.hyperPhase,
+        composHyperPhase,
         warpEffect.hyperTime,
-        warpEffect.foldGlow,
-        warpEffect.exitReveal,
+        composFoldGlow,
+        composExitReveal,
         warpUV,
       );
 
+      // Drive new composite-shader tunnel uniforms (procedural starfield walls,
+      // bridge blend, exit recession). Keeps the visual style consistent with
+      // the 3D portal's tunnel during HYPER, then walls recede during EXIT.
+      // In dual-portal mode the physical tunnel mesh IS the visual, so zero
+      // these out — otherwise the composite shader draws an expanding
+      // procedural tunnel on top of the real scene during EXIT, which looks
+      // like "stars fading in from the side" as the fullscreen tunnel pattern
+      // recedes and reveals the real destination system underneath.
+      if (_useDualPortal) {
+        retroRenderer.setTunnelUniforms(0, 0, null, null);
+      } else {
+        retroRenderer.setTunnelUniforms(
+          warpEffect.tunnelWallRecession,
+          warpEffect.portalBridgeMix,
+          null,  // origin seed — keep default
+          null,  // destination seed — keep default (could be derived from pendingSystemData)
+        );
+      }
+
       // ── Camera slerp: rotate to face the rift during fold/enter ──
-      if (warpEffect.state === 'fold' || warpEffect.state === 'enter') {
+      // After onSwapSystem fires (dual-portal INSIDE transition), camera is
+      // teleported to the new system and re-oriented via lookAt(starPos).
+      // The old riftDir now points somewhere meaningless in the new frame, so
+      // skip the slerp — otherwise it rotates the camera away from Portal B's
+      // axis and the OUTSIDE_B plane crossing never fires.
+      if ((warpEffect.state === 'fold' || warpEffect.state === 'enter') && !warpEffect._swapFired) {
         _riftPoint.copy(camera.position).addScaledVector(riftDir, 10);
         _lookMatrix.lookAt(camera.position, _riftPoint, camera.up);
         _targetQuat.setFromRotationMatrix(_lookMatrix);
@@ -4879,6 +5328,54 @@ function animate() {
       // Reset warp uniforms when not warping
       starfield.setWarpUniforms(0, 1, null);
       retroRenderer.setWarpUniforms(0, 0, 0, 0, 0, 0, null);
+      // Return sky layers to rest: no tunnel deformation, no crossover clip.
+      // Cheap uniform writes; safe even when a warp was never started.
+      skyRenderer.setTunnelPhase(0);
+      skyRenderer.setCrossoverAlong(1e6);
+      skyRenderer.setClipSide(0);
+      // Portal B follows the ship post-warp: always postExitDistance (100 m)
+      // behind the camera in the ARRIVAL direction (captured at onComplete).
+      // Using arrival direction — not camera.getWorldDirection() — means
+      // rotating the ship/view reveals Portal B instead of dragging it
+      // along behind the view.
+      if (warpPortal.group.visible && warpPortal._traversalMode === 'OUTSIDE_B') {
+        _portalFollowPos.copy(camera.position)
+          .addScaledVector(_arrivalForward, warpPortal._tunnelLength - postExitDistanceScene());
+        warpPortal.group.position.copy(_portalFollowPos);
+        _portalFollowTarget.copy(_portalFollowPos).add(_arrivalForward);
+        warpPortal.group.lookAt(_portalFollowTarget);
+      }
+
+      // Post-arrival camera slerp in lab mode: smoothly rotate from the
+      // forward-facing post-warp orientation to facing Portal B. Once the
+      // slerp finishes, hand control to the orbit controller. Controller
+      // stays bypassed during the slerp so its lookAt(target) snap doesn't
+      // fight our rotation.
+      if (_labArriving) {
+        _labArrivalElapsed += deltaTime;
+        const t = Math.min(1, _labArrivalElapsed / _labArrivalDuration);
+        // Smootherstep ease: t³(t(t·6−15)+10). Gentle start + gentle stop.
+        const eased = t * t * t * (t * (t * 6 - 15) + 10);
+        camera.quaternion.copy(_labArrivalStartQuat).slerp(_labArrivalTargetQuat, eased);
+        if (t >= 1) {
+          _labArriving = false;
+          cameraController.restoreFromWorldState(_labArrivalTarget);
+        }
+      }
+
+      // Lab-mode alignment animation (Space #2 → Space #3 window).
+      // Camera slerps from current orientation toward facing Portal A, AND
+      // the entry-strip crosses light up sequentially from ship toward
+      // portal over the same duration. Runs outside the warp-active branch
+      // because the preview + alignment happen before warpEffect.start().
+      if (_portalLabState === 'aligning') {
+        _portalLabAlignElapsed += deltaTime;
+        const t = Math.min(1, _portalLabAlignElapsed / _portalLabAlignDuration);
+        const eased = t * t * t * (t * (t * 6 - 15) + 10);
+        camera.quaternion.copy(_portalLabAlignStartQuat).slerp(_portalLabAlignTargetQuat, eased);
+        warpPortal.setEntryStripProgress(t);
+        // Stay in 'aligning' even after t reaches 1 — waiting for Space #3.
+      }
     }
 
     // ── Autopilot (cinematic flythrough) ──
@@ -4987,7 +5484,8 @@ function animate() {
     // ── Deep sky contemplation timer ──
     // After the timer, auto-warp away.
     // Paused during title screen (title has its own 30s dismiss timer).
-    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !splashActive && !titleScreenActive) {
+    // Paused in portal-lab diagnostic mode (no auto-warps; player drives).
+    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !splashActive && !titleScreenActive && !_portalLabMode) {
       _deepSkyLingerTimer -= deltaTime;
       if (_deepSkyLingerTimer <= 0) {
         _deepSkyLingerTimer = -1;
@@ -5067,33 +5565,64 @@ function animate() {
 
   cameraController.update(deltaTime);
 
-  // ── Dynamic near clipping plane ──
-  // Scale near plane with camera distance to the nearest tracked body so
-  // tiny moons/planets don't clip when orbiting close. During flythrough,
-  // use the closest of departure body, destination body, and next body —
-  // this prevents frustum culling planets during travel approach.
-  {
-    let nearDist = cameraController.smoothedDistance;
-    if (flythrough.active) {
-      nearDist = Infinity;
-      if (flythrough.bodyRef) {
-        nearDist = Math.min(nearDist, camera.position.distanceTo(flythrough.bodyRef.position));
-      }
-      if (flythrough.nextBodyRef) {
-        nearDist = Math.min(nearDist, camera.position.distanceTo(flythrough.nextBodyRef.position));
-      }
-      if (!isFinite(nearDist)) nearDist = cameraController.smoothedDistance;
-    } else if (cameraController.bypassed && cameraController.target) {
-      nearDist = camera.position.distanceTo(cameraController.target);
-    }
-    camera.near = Math.max(0.0001, Math.min(1.0, nearDist * 0.01));
-    camera.updateProjectionMatrix();
-  }
+  // ── Near clipping plane ──
+  // Fixed at 1e-9 scene units (~15 cm at AU_TO_SCENE=1000 scale). The
+  // renderer has `logarithmicDepthBuffer: true` (RetroRenderer.js), so
+  // depth buffer precision stays uniform across orders of magnitude —
+  // we don't need to scale near-plane with camera distance.
+  //
+  // Sizing: the realistic-scale audit (docs/SCALE_AUDIT.md Task 3) showed
+  // that anything smaller than ~26 km diameter would be sliced by a near
+  // plane at 0.0001. At 1e-9, the 20 m player ship, 100 m portal aperture,
+  // and 500 m stations all render without clipping at close approach.
+  // Cockpit/first-person geometry (0.5–2 m) also works.
+  //
+  // Log depth buffer handles near=1e-9 ↔ far=200,000 comfortably (~17 bits
+  // of log range across 24-bit depth buffer).
+  //
+  // If camera world-coords grow past ~1e7 scene units (deep halo of the
+  // galaxy), float-precision jitter becomes visible — fix that with
+  // camera-origin rebasing, not a near-plane cap.
+  camera.near = 1e-9;
+  camera.updateProjectionMatrix();
 
   skyRenderer.update(camera, deltaTime);
+  warpPortal.update(deltaTime);
   lodManager.update();
   debugPanel.setFocus(focusIndex, focusMoonIndex);
   debugPanel.update(deltaTime);
+
+  if (window._warpDebugHUD) {
+    const we = warpEffect;
+    const sr = skyRenderer;
+    const sfU = sr._starfieldLayer?.mesh.material.uniforms;
+    const orU = sr._originStarfieldLayer?.mesh.material.uniforms;
+    const glU = sr._glowLayer?.mesh.material.uniforms;
+    const fmt = (v, d = 2) => (v ?? 0).toFixed(d);
+    // Portal-camera separation along _tunnelForward, useful for debugging
+    // whether the camera is actually crossing the portal planes on schedule.
+    const camToPortalA = warpPortal.group.visible
+      ? camera.position.distanceTo(warpPortal.group.position).toFixed(1)
+      : '—';
+    window._warpDebugHUD.textContent =
+      'WARP DEBUG (?warpDebug)\n' +
+      (_portalLabMode ? `LAB MODE — stage: ${_portalLabState}\n` : '') +
+      `state:       ${we.state}  active=${we.isActive}\n` +
+      `progress:    ${fmt(we.progress, 3)}\n` +
+      `foldAmount:  ${fmt(we.foldAmount, 3)}\n` +
+      `hyperPhase:  ${fmt(we.hyperPhase, 3)}\n` +
+      '\n── Dual-portal ────────────\n' +
+      `portalVisible:  ${warpPortal.group.visible}\n` +
+      `traversalMode:  ${warpPortal._traversalMode}\n` +
+      `cam→PortalA:    ${camToPortalA}\n` +
+      `tunnelLength:   ${warpPortal._tunnelLength}\n` +
+      '\n── Sky layers ─────────────\n' +
+      `crossoverActive: ${sr._crossoverActive}\n` +
+      `originPresent:   ${!!sr._originStarfieldLayer}\n\n` +
+      `tunnelPhase sf=${fmt(sfU?.uTunnelPhase?.value)} glow=${fmt(glU?.uTunnelPhase?.value)}${orU ? ` orig=${fmt(orU.uTunnelPhase.value)}` : ''}\n` +
+      `crossover   sf=${fmt(sfU?.uCrossoverAlong?.value, 0)}${orU ? ` orig=${fmt(orU.uCrossoverAlong.value, 0)}` : ''}\n` +
+      `clipSide    sf=${sfU?.uClipSide?.value}${orU ? ` orig=${orU.uClipSide.value}` : ''}`;
+  }
 
   // ── Targeting reticle (tentative hover + selected committed target) ──
   // Refresh the selected-target descriptor each frame so its name/type/
@@ -5351,6 +5880,64 @@ window.addEventListener('keydown', (e) => {
 
   // Block all input during warp transition or pre-warp turn
   if (warpEffect.isActive || warpTarget.turning) return;
+
+  // Shift+W: DEBUG — enter portal test mode (or exit if already in)
+  // Then SPACEBAR advances test phases: open portal → fly through tunnel → reset
+  if (e.code === 'KeyW' && e.shiftKey) {
+    if (_portalTestMode) {
+      // Exit test mode, restore camera
+      _portalTestMode = false;
+      _portalTestPhase = 'idle';
+      warpPortal.close();
+      if (window._cc) window._cc.bypassed = false;
+      console.log('[PORTAL TEST] Exited test mode');
+    } else {
+      // Enter test mode — freeze camera, prepare for spacebar control
+      _portalTestMode = true;
+      _portalTestPhase = 'idle';
+      if (window._autoNav) window._autoNav.stop();
+      if (window._cc) window._cc.bypassed = true;
+      console.log('[PORTAL TEST] Entered test mode. Press SPACE to open portal.');
+    }
+    return;
+  }
+
+  // SPACEBAR while in portal test mode: advance phase
+  if (_portalTestMode && e.code === 'Space') {
+    e.preventDefault();
+    if (_portalTestPhase === 'idle') {
+      // Phase 1: Open portal in front of camera, freeze movement
+      camera.updateMatrixWorld();
+      const m = camera.matrixWorld.elements;
+      const fwd = new THREE.Vector3(-m[8], -m[9], -m[10]);
+      _portalTestForward.copy(fwd);
+      _portalTestStartPos.copy(camera.position);
+      const portalPos = camera.position.clone().addScaledVector(fwd, 30);
+      warpPortal.open(portalPos, fwd);
+      _portalTestPhase = 'open';
+      console.log('[PORTAL TEST] Phase 1: Portal open. Press SPACE to fly through.');
+    } else if (_portalTestPhase === 'open') {
+      // Phase 2: Start camera flight forward through tunnel
+      // Disable stencil on tunnel so it keeps rendering when camera is inside.
+      // (Stencil only writes where the disc is visible; once camera passes
+      //  the disc, no stencil = no tunnel. Without stencil, the cylinder
+      //  is a normal mesh we fly through.)
+      warpPortal._tunnel.material.stencilWrite = false;
+      warpPortal._tunnel.material.needsUpdate = true;
+      _portalTestPhase = 'flying';
+      _portalTestFlightStart = performance.now();
+      console.log('[PORTAL TEST] Phase 2: Flying through tunnel...');
+    } else if (_portalTestPhase === 'flying' || _portalTestPhase === 'arrived') {
+      // Phase 3: Reset
+      _portalTestPhase = 'idle';
+      warpPortal._tunnel.material.stencilWrite = true;  // restore stencil
+      warpPortal._tunnel.material.needsUpdate = true;
+      warpPortal.close();
+      camera.position.copy(_portalTestStartPos);
+      console.log('[PORTAL TEST] Reset. Press SPACE to open portal again, or Shift+W to exit test mode.');
+    }
+    return;
+  }
 
   // Shift+N: DEBUG — spawn a fresh random star system (no warp animation).
   // Quick iteration shortcut for testing Toy Box camera / orbit / burn bugs.
@@ -5740,6 +6327,7 @@ function autoSelectWarpTarget() {
   warpTarget.blinkTimer = 0;
   warpTarget.blinkOn = true;
 }
+window._autoSelectWarpTarget = autoSelectWarpTarget;  // DEBUG
 
 /**
  * Begin the pre-warp camera turn. If a warp target is selected,
@@ -5749,7 +6337,7 @@ function autoSelectWarpTarget() {
 function beginWarpTurn() {
   if (warpEffect.isActive) return;   // already warping
   if (warpTarget.turning) return;    // already turning
-  soundEngine.play('warpLockOn');
+  if (!_portalLabMode) soundEngine.play('warpLockOn');
 
   // Kill any WASD flight momentum before warping
   cameraController.killFlightVelocity();
@@ -5775,6 +6363,7 @@ function beginWarpTurn() {
   warpTarget.turnTimer = 0;
   warpTarget.lockBlinkFrames = 0;
 }
+window._beginWarpTurn = beginWarpTurn;  // DEBUG
 
 // Idle tracking — any mouse movement resets idle timer (but no free-look)
 canvas.addEventListener('mousemove', (e) => {
@@ -6166,6 +6755,19 @@ if (mobileControls) {
 }
 
 // ── Start ──
+// Pre-compile all shaders for meshes currently in the scene — includes
+// the hidden WarpPortal group (discs, rims, tunnel, entry/landing strips),
+// the title-screen deep sky, HashGrid starfield, and any HUD meshes.
+// Without this, the first warp stalls ~1 second compiling the portal +
+// tunnel shaders on first render. `compile()` iterates scene.traverse
+// and compiles materials regardless of visibility flag.
+//
+// Note: this only covers shaders for objects that EXIST in the scene
+// right now. The destination star system's planet/moon/star shaders are
+// compiled when spawnSystem creates those meshes — that's a separate
+// stall tracked in `well-dipper-progress.md` and addressed by moving
+// GPU work into the FOLD phase (onPrepareSystem), not here.
+retroRenderer.renderer.compile(scene, camera);
 animate();
 console.log('Well Dipper — Star System');
 console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=orbits, G=gravity wells, H=toggle HUD, A=autopilot, Middle-click=free look, Click/tap=select');

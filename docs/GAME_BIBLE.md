@@ -1050,6 +1050,31 @@ A targeting loupe for selecting background stars. Bridges to macOS and mobile wh
 - Mobile: does this replace tap-to-select entirely, or augment it?
 - Animation: how fast does the circle expand? Instant or ~200-300ms ease-out?
 
+### Periscope / Gravitational-Lens Magnifier [BOTH]
+
+A companion to the click-and-hold magnifier, scoped to any known-but-unresolved object — not just background stars. The UX layer that makes realistic-scale space legible (see §10 Scale System).
+
+**How it works:**
+- Player has a scan return — from galactic survey (pre-arrival), star-wave scan (on arrival), or direct scan — that places a planet / moon / ship / station / anomaly at a known position in the active system
+- The object is too far to visually resolve at the ambient camera distance (sub-pixel or very few pixels)
+- Player opens a periscope window over the object's reported position
+- Inside the window, the object is rendered at a magnified apparent size at its correct orientation and relative motion
+- Closing the window returns to the ambient view
+
+**In-universe explanation:** The ship generates an ad-hoc gravitational lens — a compact, controllable spacetime distortion tuned to magnify incoming light from a specific vector. Scion-tier exotic tech (see §8H). Baseline corporate ships don't have this — they use conventional optics and live with the visibility limits.
+
+**Relation to click-and-hold magnifier:** The click-and-hold magnifier operates on the already-rendered sky — it's a UX affordance for clicking small stars. The periscope operates on known-object data — it renders the object synthetically at magnified scale using scan/tracking data. Both can coexist; they solve adjacent problems.
+
+**Relation to scale system:** The periscope is the visibility patch that makes realistic-scale combat and exploration playable. Without it, anything below ~1 km at medium range is invisible.
+
+**Design questions to flesh out:**
+- Magnification strength — fixed, variable, or tied to scan quality?
+- Window shape — circular lens, rectangular HUD viewport, or multiple concurrent windows (e.g., track multiple hostiles)?
+- Visual treatment — retro CRT scanlines? Edge distortion to read as "gravitational lens" vs "optical scope"?
+- Activation — click object icon on nav computer, right-click in space, dedicated key?
+- Combat interaction — range cap? Can the periscope designate targets for weapons lock?
+- Cost — does lensing draw ship power (a Rotor drain, see §9)?
+
 ### Future Vision: Navigation Computer [GAME]
 
 **Replace all current map overlays** with a single toggleable screen that looks like a retro CRT navigation computer. Think: the ship's onboard computer displaying a schematic of the star system.
@@ -1129,6 +1154,24 @@ Everything built by intelligent beings — human or alien. Ships, stations, base
 - **Cruisers** (1-2 patrol)
 - **Capitals** (0-1, 20% of systems, deep space)
 - **Explorers** (0-1, outer system)
+
+#### Ship Scale (Realistic Baseline) [BOTH]
+
+Ships render at realistic real-world scale. No visibility-based inflation at the scene level (see §10 Scale System for the rationale; augmented vision — billboards + periscope — handles the "I can't see it from here" problem).
+
+Target hull lengths by archetype:
+
+- **Fighter** — ~50 m (reference: X-wing 12.5 m, TIE 7.2 m; sci-fi padding for legibility)
+- **Shuttle** — ~50 m (Space Shuttle Orbiter: 37 m)
+- **Freighter** — ~300 m (supertanker: 400 m)
+- **Cruiser** — ~500 m (Iowa-class battleship: 270 m; sci-fi cruiser scaled up)
+- **Capital** — ~2 km (Star Destroyer: 1.6 km; rare — showpiece)
+- **Explorer** — ~200 m (long-range survey vessel)
+- **Player hull (scion ship)** — **~20 m (house-sized; *unusually small*)**. The scion ship is conspicuously smaller than fighters, freighters, cruisers, and stations — a design choice, not an accident. The breakaway line's exotic engineering achieves through density and craft what corporate fleets need bulk for. Compact reactors, personal fold generator (see §8H), hand-integrated systems — all packed into a vessel the size of a family house. In-universe: opponents routinely underestimate the player on first contact, which the ship's capabilities immediately correct.
+
+The existing `ShipSpawner.js` multiplier formula (`planetRadius × 0.05–0.15`) produced ships 300–10,770 km across — 30–2,000× too large. Replacement: pick an archetype, pull the target length from a `SHIP_HULL_SIZES` table (to be added in `ScaleConstants.js` per `docs/SCALE_AUDIT.md` Task 5), convert via `metersToScene()`. Ship size becomes independent of the planet it spawns near.
+
+Spawning distance (how close the ship is to its parent planet) can remain a function of planet radius — that's orbit placement, not ship size.
 
 **Ship population reflects system properties:**
 - Compact-rocky systems → mining ships, surveyors
@@ -1515,6 +1558,46 @@ Higher-level navigation. See your position in the galaxy, pick destinations, see
 - **Deterministic seeds:** Same seed → identical system. `.child()` creates independent sub-streams.
 - **Per-object dithering:** Bayer dithering in each object's fragment shader, not a screen filter.
 - **Dual-resolution rendering:** Scene at low res, starfield at full res, composited with alpha-based shader.
+
+### Scale System [BOTH]
+
+**The spatial unit:** `1 AU = 1000 scene units`. So `1 scene unit = 149,598 km`. See `src/core/ScaleConstants.js` for the conversion helpers (`solarRadiiToScene`, `earthRadiiToScene`, `auToScene`). See `docs/SCALE_AUDIT.md` for the full catalog of what every object measures and for target sizes by archetype.
+
+**Rule: everything is rendered at realistic scale.** Stars, planets, moons, ships, stations, portals — all sized to real-world kilometers and converted through the ScaleConstants helpers. No "exaggerate to stay visible" fudges in the scene layer. The minimap HUD is the sole exception: it carries a parallel set of compressed values (`mapRadius`, `orbitRadius` on the data objects) for the legacy 2D overlay, and never mixes with the scene-unit frame.
+
+**Reference sizes (realistic baseline — authoritative):**
+- **Player ship hull (scion ship): ~20 m (house-sized) = 0.000000134 scene units — *unusually small*, by design (see §8A)**
+- Fighter: ~50 m = 0.000000334
+- Shuttle: ~50 m = 0.000000334
+- Freighter: ~300 m = 0.000002
+- Cruiser: ~500 m = 0.00000334
+- Capital: ~2 km = 0.0000134
+- Explorer: ~200 m = 0.00000134
+- Small station (outpost): ~500 m = 0.00000334
+- Large station (rotating habitat): ~10 km = 0.0000669
+- Portal aperture: 5× player ship = ~100 m = 0.000000669
+
+**The visibility problem (and its answer — Augmented Vision):** At realistic scale, a 50 m fighter is a single pixel at ~62 km. A 20 m player ship is a single pixel at ~25 km. Naked-eye viewing breaks down fast at interstellar distances. Well Dipper already has two tiers of augmented vision in place, and adds a third:
+
+1. **StarFlare bloom** (`src/objects/StarFlare.js`) — stars render with a ×30 radius cross-bloom so they stay visible as points of light at interstellar distance. Automatic.
+2. **Constant-screen-size billboards** (`src/objects/Billboard.js`, `PlanetBillboard.js`) — planets and moons past their sub-pixel threshold swap to a screen-space-stable sprite. Automatic.
+3. **Periscope / gravitational-lens magnifier** (see §7) — manual magnification window the player opens over a scanned-but-visually-unresolved object. In-universe: the ship generates an ad-hoc gravitational lens.
+
+**Combat and close encounters:** Gameplay combat takes place at unrealistically close ranges (sub-kilometer to low-km) where ships are visually legible at their real size. The in-universe explanation is that scion-tier exotic propulsion and navigation tech (see §8H) lets the player's ship engage at ranges impossible for baseline corporate vessels — everything inside the combat envelope is a live demonstration of the breakaway line's superiority. This is lore, not a visual fudge: ships really are ~50 m fighters; they're just really close when it matters.
+
+**Precision ceiling (deferred work):** Float32 (~7 sig figs) limits ship-scale precision when world coordinates grow large. Symptom first observed 2026-04-16: Portal B's 100 m post-warp offset dissolves into FP noise once camera is more than ~10 scene units from origin. Does NOT affect today's screensaver or warp mechanics. **Required** before ship combat, docking, on-foot, or landing features ship. Solution (deferred): world-origin rebasing. Full plan in `docs/PLAN_world-origin-rebasing.md`.
+
+**Rule for adding features:** all physical dimensions pull from `ScaleConstants.js` helpers. Never hardcode a "looks right" scene-unit value.
+
+Concretely — what to use where:
+
+- Any physical length in meters → `metersToScene(m)` / `sceneToMeters(s)`
+- A body at a solar/Earth radius → `solarRadiiToScene(r)` / `earthRadiiToScene(r)`
+- A ship or station hull → `shipHullToScene('fighters')` / `stationHullToScene('outpost')`, with archetypes defined in `SHIP_HULL_LENGTHS_M` / `STATION_HULL_LENGTHS_M`
+- A portal dimension → `portalApertureScene()`, `portalPreviewDistanceScene()`; ratios in `PORTAL_APERTURE_TO_SHIP` / `PORTAL_PREVIEW_TO_SHIP`
+- Warp camera speeds → `foldPeakSpeedScenePerSec(foldDur)` for the FOLD approach, `HYPER_TRAVERSAL_SCENE_PER_S` for the hyperspace tunnel
+
+If a new ship class is added, add it to `SHIP_HULL_LENGTHS_M` in `src/core/ScaleConstants.js`. Plural key matches `assets/ships/manifest.json`.
 
 ### Development Philosophy [BOTH]
 
