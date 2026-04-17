@@ -1613,7 +1613,7 @@ warpEffect.onSwapSystem = async () => {
     soundEngine.play('warpEnter');
     musicManager.play('hyperspace', 0.3);
   }
-  await warpSwapSystem();
+  warpSwapSystem();
 
   // ── Regenerate sky for new galactic position ──
   // Dual-portal: the mesh tunnel visually hides the transition, so we
@@ -2009,7 +2009,7 @@ function _hideCurrentSystem() {
  * @param {boolean} options.forWarp  — if true, skip camera setup + flythrough start (warp handles that)
  * @param {Object} options.systemData — pre-generated data from StarSystemGenerator (skips re-generation)
  */
-async function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCamera = false } = {}) {
+function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCamera = false } = {}) {
   // ── Reset state ──
   warpTarget.direction = null;
   warpTarget.name = null;
@@ -2165,13 +2165,10 @@ async function spawnSystem({ forWarp = false, systemData: preGenData = null, deb
   }
 
   // ── Create planets, moons, and orbit lines ──
-  // Yield between planets so the ~300ms of mesh creation + shader upload
-  // doesn't block a single frame. Spread across HYPER phase instead.
   const planets = [];
   const orbitLines = [];
 
   for (let i = 0; i < systemData.planets.length; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, 0));  // yield between planets
     const entry = systemData.planets[i];
 
     // Scene-unit planet data: override radius for 3D rendering.
@@ -2310,10 +2307,8 @@ async function spawnSystem({ forWarp = false, systemData: preGenData = null, deb
   }
 
   // ── Create asteroid belts (scene-unit positions) ──
-  // Belts can have hundreds of asteroid instances — yield before each.
   const asteroidBelts = [];
   for (const beltData of systemData.asteroidBelts) {
-    await new Promise(r => setTimeout(r, 0));
     // Scale asteroid positions from map units to scene units
     const beltScaleRatio = beltData.centerRadiusScene / beltData.centerRadius;
     const sceneBeltData = {
@@ -3920,7 +3915,7 @@ function stopFlythrough() {
  * Called at hyper start — tunnel is fully opaque, hides everything.
  * System data was pre-generated during FOLD phase (onPrepareSystem).
  */
-async function warpSwapSystem() {
+function warpSwapSystem() {
   // Stop autopilot (don't restore camera — warp controls it)
   flythrough.stop();
   autoNav.stop();
@@ -3933,10 +3928,7 @@ async function warpSwapSystem() {
 
   // Create new system using pre-generated data (GPU resource creation only).
   // seedCounter was already incremented in onPrepareSystem.
-  // spawnSystem is now async — yields between planets/belts so the ~300ms
-  // of mesh creation + shader upload spreads across HYPER frames instead
-  // of blocking a single frame (freeze 2).
-  await spawnSystem({ forWarp: true, systemData: pendingSystemData });
+  spawnSystem({ forWarp: true, systemData: pendingSystemData });
   pendingSystemData = null;
   pendingSystemDataPromise = null;
 
