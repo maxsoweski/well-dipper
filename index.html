@@ -200,7 +200,16 @@
       <div style="font-size:20px; font-weight:bold;">OBJECT GALLERY</div>
       <div id="gallery-info" style="font-size:14px; margin-top:4px;"></div>
       <div style="font-size:12px; margin-top:8px; color:#0a0;">
-        ←/→ cycle seeds &nbsp; ↑/↓ cycle types &nbsp; drag to orbit &nbsp; G = exit
+        ←/→ seeds &nbsp; ↑/↓ type &nbsp; Shift+↑/↓ family &nbsp; M menu &nbsp; Esc exit
+      </div>
+    </div>
+    <!-- Gallery family menu (modal, shown on G or M, hidden on number key or Esc) -->
+    <div id="gallery-menu" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.94); z-index:1100; font-family:'DotGothic16',monospace; color:#0f0; padding:5vh 6vw; box-sizing:border-box; text-shadow:0 0 6px #000, 0 0 12px #000;">
+      <div style="font-size:28px; font-weight:bold; color:#ff0; margin-bottom:8px;">GALLERY</div>
+      <div style="font-size:12px; color:#0a0; margin-bottom:24px;">press a number to jump to that family, or ↑/↓ to cycle from current</div>
+      <div id="gallery-menu-list" style="font-size:18px; line-height:2.1;"></div>
+      <div style="position:absolute; bottom:5vh; left:6vw; right:6vw; font-size:12px; color:#0a0; border-top:1px solid #0a0; padding-top:8px;">
+        1-7 jump &nbsp; M / G close menu &nbsp; Esc exit gallery &nbsp; click items to jump
       </div>
     </div>
     <!-- Side-by-side comparison labels (hidden by default) -->

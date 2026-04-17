@@ -1382,12 +1382,42 @@ const GALLERY_TYPES = [
   'moon',
 ];
 
+// Gallery families — groups GALLERY_TYPES into browsable sections for the
+// menu UI. Each family spans from its startIdx until the next family's
+// startIdx (or end of array). `displayCount` overrides the derived type
+// count — used for `known-feature` which is 1 type but 37 profiles.
+const GALLERY_FAMILIES = [
+  { key: '1', name: 'Known Catalog',       startIdx: 0,  displayCount: 37, unit: 'profiles' },
+  { key: '2', name: 'Deep Sky Billboards', startIdx: 1 },
+  { key: '3', name: 'Navigable Previews',  startIdx: 6,  note: 'legacy' },
+  { key: '4', name: 'Stars',               startIdx: 10 },
+  { key: '5', name: 'Natural Planets',     startIdx: 11 },
+  { key: '6', name: 'Exotic Planets',      startIdx: 22 },
+  { key: '7', name: 'Moons',               startIdx: 29 },
+];
+
+function _galleryFamilyAt(typeIdx) {
+  for (let i = GALLERY_FAMILIES.length - 1; i >= 0; i--) {
+    if (typeIdx >= GALLERY_FAMILIES[i].startIdx) return { family: GALLERY_FAMILIES[i], familyIdx: i };
+  }
+  return { family: GALLERY_FAMILIES[0], familyIdx: 0 };
+}
+
+function _galleryFamilyCount(familyIdx) {
+  const fam = GALLERY_FAMILIES[familyIdx];
+  const end = familyIdx < GALLERY_FAMILIES.length - 1
+    ? GALLERY_FAMILIES[familyIdx + 1].startIdx
+    : GALLERY_TYPES.length;
+  return end - fam.startIdx;
+}
+
 // Pre-built list of known object profile keys for gallery cycling
 const _knownProfileKeys = Object.keys(KNOWN_OBJECT_PROFILES);
 
 // Shared SkyFeatureLayer instance for gallery billboard creation
 let _gallerySkyFeatureLayer = null;
 let galleryMode = false;
+let galleryMenuOpen = false;
 let gallerySeed = 1;
 let galleryTypeIdx = 0;
 let _gallerySkipDir = 1;
@@ -3101,20 +3131,21 @@ function _setSystemVisible(visible) {
       for (const s of system.extraStars) s.mesh.visible = visible;
     }
   } else {
-    // Star system: stars, planets, moons, billboards, orbit lines, asteroid belts
-    if (system.star) system.star.mesh.visible = visible;
-    if (system.star2) system.star2.mesh.visible = visible;
-    for (const entry of system.planets) {
-      entry.planet.mesh.visible = visible;
-      entry.billboard.sprite.visible = visible;
-      entry.planetBillboard.mesh.visible = false; // LOD loop controls this
-      for (const m of entry.moons) m.mesh.visible = visible;
-      for (const bb of entry.moonBillboards) bb.sprite.visible = visible;
-      for (const ml of entry.moonOrbitLines) ml.mesh.visible = visible;
+    // Star system: stars, planets, moons, billboards, orbit lines, asteroid belts.
+    // Null-guarded because async spawn may leave entries partially populated.
+    if (system.star?.mesh) system.star.mesh.visible = visible;
+    if (system.star2?.mesh) system.star2.mesh.visible = visible;
+    for (const entry of (system.planets || [])) {
+      if (entry.planet?.mesh) entry.planet.mesh.visible = visible;
+      if (entry.billboard?.sprite) entry.billboard.sprite.visible = visible;
+      if (entry.planetBillboard?.mesh) entry.planetBillboard.mesh.visible = false;
+      for (const m of (entry.moons || [])) if (m.mesh) m.mesh.visible = visible;
+      for (const bb of (entry.moonBillboards || [])) if (bb.sprite) bb.sprite.visible = visible;
+      for (const ml of (entry.moonOrbitLines || [])) if (ml.mesh) ml.mesh.visible = visible;
     }
-    for (const line of system.orbitLines) line.mesh.visible = visible;
-    for (const line of (system.starOrbitLines || [])) line.mesh.visible = visible;
-    for (const belt of (system.asteroidBelts || [])) belt.mesh.visible = visible;
+    for (const line of (system.orbitLines || [])) if (line.mesh) line.mesh.visible = visible;
+    for (const line of (system.starOrbitLines || [])) if (line.mesh) line.mesh.visible = visible;
+    for (const belt of (system.asteroidBelts || [])) if (belt.mesh) belt.mesh.visible = visible;
   }
 }
 
@@ -3162,6 +3193,60 @@ function exitGallery() {
   }
 
   cameraController.bypassed = false;
+}
+
+/** Open the gallery family menu modal. Works whether or not a body is
+ *  currently spawned — if not, the first family pick starts the gallery;
+ *  if yes, the pick jumps to that family within the existing session. */
+function openGalleryMenu() {
+  galleryMenuOpen = true;
+  const menu = document.getElementById('gallery-menu');
+  const list = document.getElementById('gallery-menu-list');
+  if (!menu || !list) return;
+
+  const current = _galleryFamilyAt(galleryTypeIdx).familyIdx;
+
+  list.innerHTML = GALLERY_FAMILIES.map((fam, i) => {
+    const count = fam.displayCount !== undefined ? fam.displayCount : _galleryFamilyCount(i);
+    const unit = fam.unit || (count === 1 ? 'type' : 'types');
+    const note = fam.note ? `<span style="color:#a80;"> · ${fam.note}</span>` : '';
+    const marker = i === current ? '<span style="color:#ff0;"> ▸ here</span>' : '';
+    const rowStyle = i === current ? 'color:#ff0; font-weight:bold;' : 'color:#0f0;';
+    return `<div data-family-idx="${i}" style="cursor:pointer; ${rowStyle}">` +
+      `<span style="color:#ff0; display:inline-block; width:2em;">${fam.key}</span>` +
+      `<span style="display:inline-block; min-width:20em;">${fam.name}</span>` +
+      `<span style="color:#888;">(${count} ${unit})</span>${note}${marker}` +
+      `</div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-family-idx]').forEach(el => {
+    el.onclick = () => _jumpToGalleryFamily(parseInt(el.dataset.familyIdx, 10));
+  });
+
+  menu.style.display = 'block';
+}
+
+function closeGalleryMenu() {
+  galleryMenuOpen = false;
+  const menu = document.getElementById('gallery-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+// Debug hooks for gallery menu
+window._openGalleryMenu = openGalleryMenu;
+window._closeGalleryMenu = closeGalleryMenu;
+window._galleryState = () => ({ galleryMode, galleryMenuOpen, galleryTypeIdx, gallerySeed });
+
+function _jumpToGalleryFamily(familyIdx) {
+  if (familyIdx < 0 || familyIdx >= GALLERY_FAMILIES.length) return;
+  closeGalleryMenu();
+  galleryTypeIdx = GALLERY_FAMILIES[familyIdx].startIdx;
+  gallerySeed = 1;
+  if (!galleryMode) {
+    enterGallery();
+  } else {
+    gallerySpawn();
+  }
 }
 
 /** Clean up any gallery-spawned objects */
@@ -3708,10 +3793,13 @@ function gallerySpawn() {
 
   // Update info overlay — always update even if something went wrong above
   const label = type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const { family, familyIdx } = _galleryFamilyAt(galleryTypeIdx);
+  const posInFamily = galleryTypeIdx - family.startIdx + 1;
+  const familyCount = _galleryFamilyCount(familyIdx);
   const overlay = document.getElementById('gallery-overlay');
   const info = document.getElementById('gallery-info');
   if (overlay) overlay.style.display = 'block'; // ensure visible
-  if (info) info.textContent = `${label}  |  seed: ${gallerySeed}  |  ${infoText}`;
+  if (info) info.textContent = `[${family.name}] ${label}  ·  ${posInFamily}/${familyCount}  |  seed: ${gallerySeed}  |  ${infoText}`;
   console.log(`Gallery: ${label} (seed "${seed}")`);
 }
 
@@ -5854,13 +5942,24 @@ window.addEventListener('keydown', (e) => {
   // Old Shift+number and Shift+letter debug shortcuts removed.
   // All debug spawning/teleporting is now handled via the debug panel (Down Arrow key).
 
-  // G key: toggle debug gallery (was D — moved to free WASD for movement)
-  if (e.code === 'KeyG') {
-    if (galleryMode) {
-      exitGallery();
-    } else {
-      enterGallery();
+  // Gallery menu modal: absorb input while the family menu is open.
+  // Number keys jump to a family, M/G close the menu, Esc exits gallery.
+  if (galleryMenuOpen) {
+    if (e.code === 'Escape') {
+      closeGalleryMenu();
+      if (galleryMode) exitGallery();
+    } else if (e.code === 'KeyG' || e.code === 'KeyM') {
+      closeGalleryMenu();
+    } else if (/^Digit[1-9]$/.test(e.code)) {
+      const idx = parseInt(e.code.slice(5), 10) - 1;
+      _jumpToGalleryFamily(idx);
     }
+    return;
+  }
+
+  // G key: open gallery family menu (was D — moved to free WASD for movement)
+  if (e.code === 'KeyG') {
+    openGalleryMenu();
     return;
   }
 
@@ -5874,9 +5973,19 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Gallery mode: arrow keys cycle types/seeds
+  // Gallery mode: arrow keys cycle types/seeds; Shift jumps family; M / Esc
   if (galleryMode) {
-    if (e.code === 'ArrowRight') {
+    if (e.code === 'Escape') {
+      exitGallery();
+    } else if (e.code === 'KeyM') {
+      openGalleryMenu();
+    } else if (e.code === 'ArrowUp' && e.shiftKey) {
+      const cur = _galleryFamilyAt(galleryTypeIdx).familyIdx;
+      _jumpToGalleryFamily((cur + 1) % GALLERY_FAMILIES.length);
+    } else if (e.code === 'ArrowDown' && e.shiftKey) {
+      const cur = _galleryFamilyAt(galleryTypeIdx).familyIdx;
+      _jumpToGalleryFamily((cur - 1 + GALLERY_FAMILIES.length) % GALLERY_FAMILIES.length);
+    } else if (e.code === 'ArrowRight') {
       gallerySeed++;
       _gallerySkipDir = 1;
       gallerySpawn();
