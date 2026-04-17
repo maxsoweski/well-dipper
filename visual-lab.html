@@ -198,10 +198,87 @@
     const BODY_SCALE = 2.0;
     const CAM_DEFAULT = BODY_SCALE * 3;
 
+    // ── PR2 post-process pipeline ──────────────────────────────────────
+    // Scene renders into sceneRT, then a fullscreen quad reads sceneRT
+    // through postMaterial and emits to the canvas. Toggles P/V/A mutate
+    // uniforms: pixelation (UV-snap to coarse grid), ACES tonemap, vignette.
+    // Kept entirely inside the lab so production renderer (RetroRenderer)
+    // is untouched — this pass is for visual-PR review only.
+    const sceneRT = new THREE.WebGLRenderTarget(
+      window.innerWidth, window.innerHeight,
+      { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }
+    );
+    const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const postScene = new THREE.Scene();
+    const postMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse:     { value: sceneRT.texture },
+        uResolution:  { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        uPixelate:    { value: 0 },
+        uPixelSize:   { value: 4.0 },
+        uACES:        { value: 0 },
+        uVignette:    { value: 0 },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tDiffuse;
+        uniform vec2 uResolution;
+        uniform int uPixelate;
+        uniform float uPixelSize;
+        uniform int uACES;
+        uniform int uVignette;
+        varying vec2 vUv;
+
+        // ACES filmic tonemap — Narkowicz 2015 approximation.
+        // Compresses HDR-ish values into LDR display range in a
+        // visually pleasing way: preserves highlight detail and
+        // gives shadows a gentle toe.
+        vec3 ACESFilm(vec3 x) {
+          float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+          return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+        }
+
+        void main() {
+          vec2 uv = vUv;
+          // Pixelation: UV-snap to coarse grid so N adjacent screen
+          // pixels sample the same scene texel → chunky PS1/Saturn look.
+          if (uPixelate == 1) {
+            vec2 grid = uResolution / uPixelSize;
+            uv = (floor(uv * grid) + 0.5) / grid;
+          }
+          vec4 color = texture2D(tDiffuse, uv);
+          // Apply ACES BEFORE posterization — object-level posterize is
+          // already baked into each body shader, so at the lab level we
+          // just need the tonemap compression.
+          if (uACES == 1) color.rgb = ACESFilm(color.rgb);
+          // Vignette: radial darkening from screen center.
+          // smoothstep(0.3, 0.85) starts falloff outside the inner 30%
+          // of the screen and reaches full darkness near the corners.
+          // 0.85 multiplier sets max darken = 85% (never fully black).
+          if (uVignette == 1) {
+            vec2 c = vUv - 0.5;
+            float d = length(c);
+            color.rgb *= 1.0 - smoothstep(0.3, 0.85, d) * 0.85;
+          }
+          gl_FragColor = color;
+        }
+      `,
+    });
+    const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial);
+    postScene.add(postQuad);
+
     window.addEventListener('resize', () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
+      sceneRT.setSize(window.innerWidth, window.innerHeight);
+      postMaterial.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
     });
 
     // Star lights: primary warm, secondary dim cool fill so dark sides don't
@@ -429,7 +506,15 @@
         currentMesh.update(dt, ZERO_VEC);
       }
 
+      // PR2 post-process pipeline: scene → sceneRT → post shader → canvas.
+      // Uniforms mirror the toggleState so each effect is independent.
+      postMaterial.uniforms.uPixelate.value = toggleState.P ? 1 : 0;
+      postMaterial.uniforms.uACES.value     = toggleState.A ? 1 : 0;
+      postMaterial.uniforms.uVignette.value = toggleState.V ? 1 : 0;
+      renderer.setRenderTarget(sceneRT);
       renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+      renderer.render(postScene, postCamera);
 
       frameCount++;
       const now = performance.now();
