@@ -174,13 +174,24 @@ float getSurfacePattern(vec3 pos) {
   n += snoise(pos * noiseScale * 2.0) * noiseDetail * 0.5;
 
   if (planetType == 1) {
-    // Gas giant: Jupiter-like with multiple bands, turbulence, storms
-    float lat = pos.y * noiseScale;
+    // Gas giant: Jupiter-like with multiple bands, turbulence, storms.
+    //
+    // Domain warp: offset the latitude by a low-frequency noise field so
+    // bands remain structurally horizontal but flow around zones — jet
+    // streams visibly deform zonal boundaries in real gas-giant imagery.
+    // warpY is scaled to ~15% of the band period (2π/3.5 ≈ 1.8 in lat
+    // space, ~0.5 in pos.y space), enough to wiggle without flattening.
+    vec3 warpCoord = pos * noiseScale * 0.8;
+    float warpY = snoise(warpCoord + vec3(0.0, 5.0, 10.0)) * 0.15;
+    float warpX = snoise(warpCoord + vec3(13.0, 0.0, 7.0)) * 0.2;
+    float lat = (pos.y + warpY) * noiseScale;
     float bands = sin(lat * 3.5) * 0.5
                 + sin(lat * 7.0 + 0.5) * 0.3
                 + sin(lat * 13.0) * 0.12;
-    float turb = snoise(pos * noiseScale * 2.0) * 0.35
-               + snoise(pos * noiseScale * 4.0) * 0.15;
+    // Sample turbulence with warped X so swirl shape follows the band flow.
+    vec3 turbPos = pos + vec3(warpX, 0.0, 0.0);
+    float turb = snoise(turbPos * noiseScale * 2.0) * 0.35
+               + snoise(turbPos * noiseScale * 4.0) * 0.15;
     bands += turb * (1.0 - abs(bands));
     float storm = snoise(pos * noiseScale * 0.5 + vec3(50.0, 0.0, 0.0));
     storm = pow(max(storm, 0.0), 4.0);
