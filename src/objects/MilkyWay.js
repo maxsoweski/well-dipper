@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BAYER4, HASH22 } from '../rendering/shaders/common.glsl.js';
 
 /**
  * MilkyWay — hybrid galaxy renderer: particles + glow plane + volumetric dust.
@@ -76,15 +77,7 @@ export class MilkyWay {
           uniform float uBrightness, uSpread, uDither;
 
           // 4x4 Bayer matrix
-          float bayer4(vec2 p) {
-            vec2 c = mod(floor(p), 4.0);
-            float t = 0.0;
-            if (c.y < 0.5)      { t = (c.x<0.5)?0.0:(c.x<1.5)?8.0:(c.x<2.5)?2.0:10.0; }
-            else if (c.y < 1.5) { t = (c.x<0.5)?12.0:(c.x<1.5)?4.0:(c.x<2.5)?14.0:6.0; }
-            else if (c.y < 2.5) { t = (c.x<0.5)?3.0:(c.x<1.5)?11.0:(c.x<2.5)?1.0:9.0; }
-            else                { t = (c.x<0.5)?15.0:(c.x<1.5)?7.0:(c.x<2.5)?13.0:5.0; }
-            return t / 16.0;
-          }
+          ${BAYER4}
 
           void main() {
             float d = length(gl_PointCoord - 0.5);
@@ -93,7 +86,7 @@ export class MilkyWay {
 
             // Dither: threshold against Bayer pattern to break up smooth gradients
             if (uDither > 0.0) {
-              float threshold = bayer4(gl_FragCoord.xy) * uDither;
+              float threshold = bayerDither(gl_FragCoord.xy) * uDither;
               if (a < threshold) discard;
               // Snap surviving pixels to full brightness for that retro stippled look
               a = max(a, threshold);
@@ -157,7 +150,7 @@ export class MilkyWay {
         uniform float uPitchK;
         varying vec3 vWorldPos;
 
-        vec2 hash22(vec2 p) { p = vec2(dot(p, vec2(127.1,311.7)), dot(p, vec2(269.5,183.3))); return fract(sin(p)*43758.5453); }
+        ${HASH22}
         float noise(vec2 p) {
           vec2 i=floor(p), f=fract(p), u=f*f*(3.0-2.0*f);
           float a=dot(hash22(i)-0.5,f), b=dot(hash22(i+vec2(1,0))-0.5,f-vec2(1,0));

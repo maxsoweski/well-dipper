@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BAYER4, POSTERIZE } from './common.glsl.js';
 
 /**
  * MaterialBodyShader — universal display shader for baked material channels.
@@ -171,26 +172,8 @@ export function createMaterialBodyMaterial(options = {}) {
       }
 
       // ── Bayer dither + posterize ──
-      float bayerDither(vec2 coord) {
-        vec2 p = mod(floor(coord), 4.0);
-        float t = 0.0;
-        if (p.y < 0.5) {
-          t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-        } else if (p.y < 1.5) {
-          t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-        } else if (p.y < 2.5) {
-          t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-        } else {
-          t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-        }
-        return t / 16.0;
-      }
-
-      vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
-        float dither = bayerDither(fragCoord) - 0.5;
-        vec3 dithered = color + dither * edgeWidth / levels;
-        return floor(dithered * levels + 0.5) / levels;
-      }
+      ${BAYER4}
+      ${POSTERIZE}
 
       // ── Height → normal perturbation ──
       // Samples R channel at neighboring texels for surface relief

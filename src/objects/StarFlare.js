@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BAYER4 } from '../rendering/shaders/common.glsl.js';
 
 /**
  * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
@@ -77,20 +78,7 @@ export class StarFlare {
         varying vec2 vUv;
 
         // 4x4 Bayer dithering threshold (matches StarfieldLayer / Planet.js)
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
+        ${BAYER4}
 
         void main() {
           vec2 center = vUv - 0.5;
@@ -184,20 +172,7 @@ export class StarFlare {
         varying vec2 vUv;
 
         // 4x4 Bayer dithering threshold (matches Planet.js / rest of the game)
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
+        ${BAYER4}
 
         // Compute a single spike's contribution at a given point.
         float spikeBrightness(float perpDist, float along, float spikeWidth) {

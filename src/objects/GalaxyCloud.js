@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HASH22 } from '../rendering/shaders/common.glsl.js';
 
 /**
  * GalaxyCloud — renders the galaxy as layered transparent cloud planes.
@@ -141,10 +142,7 @@ export class GalaxyCloud {
           varying vec3 vWorldPos;
 
           // ── Noise (same as Nebula.js) ──
-          vec2 hash22(vec2 p) {
-            p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-            return fract(sin(p) * 43758.5453);
-          }
+          ${HASH22}
           float noise(vec2 p) {
             vec2 i = floor(p);
             vec2 f = fract(p);

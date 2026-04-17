@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BAYER4 } from './shaders/common.glsl.js';
 
 /**
  * NavGalaxyRenderer — GPU-accelerated top-down galaxy view for the nav computer.
@@ -163,20 +164,7 @@ export class NavGalaxyRenderer {
         }
 
         // ── Bayer dithering (retro aesthetic) ──
-        float bayerDither(vec2 pos) {
-          int x = int(mod(pos.x, 4.0));
-          int y = int(mod(pos.y, 4.0));
-          int idx = x + y * 4;
-          float bayer[16];
-          bayer[0]  =  0.0/16.0; bayer[1]  =  8.0/16.0; bayer[2]  =  2.0/16.0; bayer[3]  = 10.0/16.0;
-          bayer[4]  = 12.0/16.0; bayer[5]  =  4.0/16.0; bayer[6]  = 14.0/16.0; bayer[7]  =  6.0/16.0;
-          bayer[8]  =  3.0/16.0; bayer[9]  = 11.0/16.0; bayer[10] =  1.0/16.0; bayer[11] =  9.0/16.0;
-          bayer[12] = 15.0/16.0; bayer[13] =  7.0/16.0; bayer[14] = 13.0/16.0; bayer[15] =  5.0/16.0;
-          for (int i = 0; i < 16; i++) {
-            if (i == idx) return bayer[i];
-          }
-          return 0.0;
-        }
+        ${BAYER4}
 
         void main() {
           // Map UV to galactic coordinates

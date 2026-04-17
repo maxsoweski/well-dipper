@@ -5,6 +5,7 @@ import {
   TUNNEL_LENGTH_SCENE,
   TUNNEL_INTERIOR_RADIUS_SCENE,
 } from '../core/ScaleConstants.js';
+import { HASH_DH } from '../rendering/shaders/common.glsl.js';
 
 /**
  * WarpPortal — a dual-portal stencil traversal effect.
@@ -503,18 +504,14 @@ export class WarpPortal {
         uniform float uIntensity;
         varying vec2 vUv;
 
-        float hash21(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
+        ${HASH_DH}
         float valueNoise(vec2 p) {
           vec2 i = floor(p);
           vec2 f = fract(p);
           vec2 u = f * f * (3.0 - 2.0 * f);
           return mix(
-            mix(hash21(i), hash21(i + vec2(1, 0)), u.x),
-            mix(hash21(i + vec2(0, 1)), hash21(i + vec2(1, 1)), u.x),
+            mix(hash(i), hash(i + vec2(1, 0)), u.x),
+            mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x),
             u.y
           );
         }

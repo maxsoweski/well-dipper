@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BAYER4 } from '../rendering/shaders/common.glsl.js';
 
 /**
  * GravityWellMap — 3D gravity well visualization for the HUD minimap.
@@ -151,20 +152,7 @@ export class GravityWellMap {
         varying float vRadius;
 
         // 4×4 Bayer dither matrix
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
+        ${BAYER4}
 
         void main() {
           // Circular boundary

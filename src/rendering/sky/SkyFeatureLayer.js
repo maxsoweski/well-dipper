@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BAYER4, HASH_DH } from '../shaders/common.glsl.js';
 
 /**
  * SkyFeatureLayer — renders nearby galactic features as sky overlays.
@@ -308,11 +309,7 @@ export class SkyFeatureLayer {
         varying vec2 vUv;
 
         // Simple noise for shape
-        float hash(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
+        ${HASH_DH}
         float noise(vec2 p) {
           vec2 i = floor(p);
           vec2 f = fract(p);
@@ -467,11 +464,7 @@ export class SkyFeatureLayer {
         varying vec2 vUv;
 
         // Simple hash-based noise
-        float hash(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
+        ${HASH_DH}
         float noise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p);
           f = f * f * (3.0 - 2.0 * f);
@@ -489,20 +482,7 @@ export class SkyFeatureLayer {
         }
 
         // 4x4 Bayer dithering
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
+        ${BAYER4}
 
         void main() {
           vec2 centered = vUv - 0.5;
@@ -860,11 +840,7 @@ export class SkyFeatureLayer {
         uniform float uOpacity;
         varying vec2 vUv;
 
-        float hash(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
+        ${HASH_DH}
         float noise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p);
           f = f * f * (3.0 - 2.0 * f);
@@ -881,20 +857,7 @@ export class SkyFeatureLayer {
           return v;
         }
 
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
+        ${BAYER4}
 
         void main() {
           vec2 centered = vUv - 0.5;
@@ -1096,20 +1059,7 @@ export class SkyFeatureLayer {
         uniform float uBrightness;
         varying vec2 vUv;
 
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
+        ${BAYER4}
 
         void main() {
           vec2 centered = vUv - 0.5;
@@ -1188,11 +1138,7 @@ export class SkyFeatureLayer {
         uniform int uFilamentary;
         varying vec2 vUv;
 
-        float hash(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
+        ${HASH_DH}
         float noise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p);
           f = f * f * (3.0 - 2.0 * f);
@@ -1209,20 +1155,7 @@ export class SkyFeatureLayer {
           return v;
         }
 
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
+        ${BAYER4}
 
         void main() {
           vec2 centered = vUv - 0.5;
