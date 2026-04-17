@@ -189,7 +189,14 @@
     renderer.setClearColor(0x000000);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 50000);
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 50000);
+
+    // All bodies normalize to this scene-unit radius so camera framing + zoom
+    // behave consistently regardless of the body's real earth-radius. In-game
+    // scale would vary wildly (a 0.4 R⊕ rocky vs. a 14 R⊕ gas giant); in the
+    // lab we always want a viewable silhouette at a predictable distance.
+    const BODY_SCALE = 2.0;
+    const CAM_DEFAULT = BODY_SCALE * 3;
 
     window.addEventListener('resize', () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -197,12 +204,13 @@
       camera.updateProjectionMatrix();
     });
 
-    // Simple ambient-ish star light fixture for body shaders
+    // Star lights: primary warm, secondary dim cool fill so dark sides don't
+    // render pitch black when the camera circles to the night hemisphere.
     const starInfo = {
       color1: [1.0, 0.96, 0.92],
       brightness1: 1.0,
-      color2: [0, 0, 0],
-      brightness2: 0,
+      color2: [0.35, 0.45, 0.7],
+      brightness2: 0.18,
     };
     const lightDir = new THREE.Vector3(0.5, 0.3, 0.8).normalize();
 
@@ -219,24 +227,30 @@
     function spawnPlanet(entry) {
       const rng = new SeededRandom(`lab-${entry.id}-${seed}`);
       const data = PlanetGenerator.generate(rng, 1.0, [0, 0, 1], null, entry.type);
-      const mapToSceneRatio = data.radius / data.radiusScene;
+      // Normalize: rescale every scene-unit field by the ratio needed to put
+      // the body at BODY_SCALE. Shader features that depend on world scale
+      // (noiseScale, cloud scale, rings) move with it.
+      const scaleFactor = BODY_SCALE / data.radiusScene;
       const sceneData = {
         ...data,
-        radius: data.radiusScene,
-        noiseScale: data.noiseScale * mapToSceneRatio,
+        radius: BODY_SCALE,
+        noiseScale: data.noiseScale * (1 / scaleFactor) * (data.radius / data.radiusScene),
         clouds: data.clouds
-          ? { ...data.clouds, scale: data.clouds.scale * mapToSceneRatio }
+          ? { ...data.clouds, scale: data.clouds.scale * (1 / scaleFactor) * (data.radius / data.radiusScene) }
+          : null,
+        rings: data.rings
+          ? {
+              ...data.rings,
+              innerRadius: data.rings.innerRadius * scaleFactor,
+              outerRadius: data.rings.outerRadius * scaleFactor,
+            }
           : null,
       };
       const planet = new Planet(sceneData, starInfo);
       planet._lightDir.copy(lightDir);
       planet.addTo(scene);
 
-      const r = sceneData.radius;
-      camera.position.set(0, r * 0.3, r * 3);
-      camera.lookAt(0, 0, 0);
-      camDist = r * 3;
-
+      camDist = CAM_DEFAULT;
       currentMesh = planet;
       return { info: `${entry.type}  ·  ${data.radiusEarth.toFixed(2)} R⊕` };
     }
@@ -251,15 +265,18 @@
       if (!moonData) {
         return { info: 'no moons in this seed — try ←/→' };
       }
-      const galleryMoonData = { ...moonData, orbitRadius: 0, orbitSpeed: 0 };
+      const scaleFactor = BODY_SCALE / moonData.radius;
+      const galleryMoonData = {
+        ...moonData,
+        radius: BODY_SCALE,
+        orbitRadius: 0,
+        orbitSpeed: 0,
+      };
       const starInfoBright = { ...starInfo, brightness1: 2.0 };
       const moon = new Moon(galleryMoonData, lightDir, null, starInfoBright);
       moon.addTo(scene);
 
-      const r = galleryMoonData.radius;
-      camera.position.set(0, r * 0.3, r * 3);
-      camera.lookAt(0, 0, 0);
-      camDist = r * 3;
+      camDist = CAM_DEFAULT;
 
       currentMesh = moon;
       return { info: `${moonData.type}  ·  ${moonData.radiusEarth.toFixed(3)} R⊕` };
@@ -267,6 +284,11 @@
 
     function spawn() {
       clearBody();
+      // Reset camera orbit so the lit hemisphere is visible on spawn. Without
+      // this, yaw drifts from the auto-orbit and the next body appears
+      // mid-rotation — often on the dark side at close zoom.
+      yaw = 0;
+      pitch = 0.15;
       const entry = LAB_BODIES[bodyIdx];
       let result;
       if (entry.kind === 'planet') result = spawnPlanet(entry);
@@ -319,13 +341,24 @@
     });
     window.addEventListener('mouseup', () => { dragging = false; });
     // Wheel listener on window so zoom works regardless of mouse position
-    // (panel would otherwise intercept when hovered).
-    window.addEventListener('wheel', (e) => {
+    // (panel would otherwise intercept when hovered). Must be non-passive
+    // and in capture phase to beat any default scroll behavior.
+    // Zoom clamps keep the camera between "just outside the body surface" and
+    // "body is a distant dot." Without the inner clamp the camera would pass
+    // through the body; without the outer, the body vanishes beyond frustum.
+    const ZOOM_MIN = BODY_SCALE * 1.05;   // close-pass (surface skim)
+    const ZOOM_MAX = BODY_SCALE * 25;     // far pullback
+    function onWheel(e) {
       // Don't hijack scroll within the body list
-      if (e.target.closest && e.target.closest('#body-list')) return;
+      if (e.target && e.target.closest && e.target.closest('#body-list')) return;
       e.preventDefault();
-      camDist = Math.max(1, Math.min(5000, camDist * (1 + e.deltaY * 0.001)));
-    }, { passive: false });
+      e.stopPropagation();
+      camDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, camDist * (1 + e.deltaY * 0.002)));
+    }
+    window.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    document.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    // Debug accessor
+    window._getCamDist = () => camDist;
 
     // ── PR-toggle UI state (no effect wired yet; each PR attaches its own) ──
     const toggleState = { P: false, V: false, A: false, X: false, S: false, D: false };
@@ -379,6 +412,10 @@
 
     // ── Animation loop ──────────────────────────────────────────────────
     const clock = new THREE.Clock();
+    // Moon.update(dt, parentPosition) throws on undefined parentPosition.
+    // In the lab we want the moon centered at origin, so pass a shared zero vector.
+    // Planet.update ignores extra args, so the same signature works for both.
+    const ZERO_VEC = new THREE.Vector3(0, 0, 0);
     function animate() {
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
@@ -387,9 +424,9 @@
       if (!dragging) yaw += dt * 0.15;
       updateCamera();
 
-      // Body animation (Planet.update() takes elapsed time)
+      // Body animation (Planet.update(dt) / Moon.update(dt, parentPos))
       if (currentMesh && currentMesh.update) {
-        currentMesh.update(dt);
+        currentMesh.update(dt, ZERO_VEC);
       }
 
       renderer.render(scene, camera);
