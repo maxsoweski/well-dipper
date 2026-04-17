@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   portalApertureScene,
+  portalPreviewDistanceScene,
   TUNNEL_LENGTH_SCENE,
   TUNNEL_INTERIOR_RADIUS_SCENE,
 } from '../core/ScaleConstants.js';
@@ -413,21 +414,26 @@ export class WarpPortal {
     const srcSprite = this._landingStrip.children[0];
     const mat = srcSprite.material;
 
-    // All lengths proportional to `radius` so the strip tracks ship scale
-    // automatically. Span = count × spacing = 5 × 2× radius = 10× radius =
-    // 50× ship length, which matches the preview-distance target
-    // (PORTAL_PREVIEW_TO_SHIP = 50).
+    // Crosses span the camera↔portal distance with a ~10% margin on each end,
+    // so the nearest cross sits in front of the ship and the farthest cross
+    // sits in front of Portal A — regardless of what PORTAL_PREVIEW_TO_SHIP
+    // happens to be. Previously the spacing was hard-tied to `radius` (2R,
+    // 4R, ..., 10R) assuming preview distance ≈ 12R; when preview shrank to
+    // 5R, three of five crosses ended up BEHIND the camera.
     const count = 5;
-    const spacing = radius * 2.0;
+    const previewDist = portalPreviewDistanceScene();  // ship-to-portal distance during Space #1
+    const margin = previewDist * 0.1;                  // padding at each end
+    const span = previewDist - margin * 2;             // usable span between portal and camera
+    const spacing = count > 1 ? span / (count - 1) : 0;
     const scale = radius * 0.5;
     const sideOffset = radius * 2.0;
     const strip = new THREE.Group();
     // Crosses at group local +Z side of Portal A (which is at z=0). Camera
-    // will be positioned at z ≈ (count + 2) * spacing (20u with defaults)
-    // during lab-mode preview so the first cross sits near-ship and the
-    // last cross sits just in front of Portal A.
+    // will be positioned at z ≈ previewDist during the preview stage, so
+    // i=0 sits near-portal (small z), i=count-1 sits near-ship (close to
+    // previewDist).
     for (let i = 0; i < count; i++) {
-      const z = (i + 1) * spacing;  // i=0 → z=10 (near portal), i=count-1 → z=120 (near ship)
+      const z = margin + i * spacing;
       const left = new THREE.Sprite(mat);
       left.position.set(-sideOffset, 0, z);
       left.scale.setScalar(scale);
@@ -446,9 +452,9 @@ export class WarpPortal {
    * camera sits just past the last cross on the preview.
    */
   get entryStripLength() {
-    // count=5 × spacing=(radius × 2) = radius × 10. Matches PORTAL_PREVIEW_TO_SHIP
-    // at 5× aperture ratio (50× ship length total, i.e. the preview distance).
-    return this._radius * 10;
+    // Strip now spans from (previewDist × 0.1) to (previewDist × 0.9),
+    // so the ship-side end is at previewDist × 0.9.
+    return portalPreviewDistanceScene() * 0.9;
   }
 
   /**
