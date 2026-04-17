@@ -4287,11 +4287,12 @@ window._commitSelection = () => commitSelection();  // DEBUG: Playwright can exe
 function commitSelection() {
   if (warpEffect.isActive || warpTarget.turning) return false;
 
-  // Portal-lab diagnostic flow: 3-stage spacebar (see _portalLabState comment).
+  // 3-stage spacebar preview flow (now the default for all warp targets).
   //   #1 (idle → preview):      open portal in place, entry strip dark
   //   #2 (preview → aligning):  start camera slerp + sequentially light crosses
   //   #3 (aligning → warp):     fire warp (cuts short any in-progress alignment)
-  if (_portalLabMode && warpTarget.direction) {
+  // `_portalLabState` survives across warps — onComplete resets it to 'idle'.
+  if (warpTarget.direction) {
     if (_portalLabState === 'idle') {
       // Stop autopilot AND bypass the orbit controller so camera stays put
       // during preview + aligning. Two effects to stop:
@@ -4341,10 +4342,9 @@ function commitSelection() {
     commitBurn();
     return true;
   }
-  if (warpTarget.direction) {
-    beginWarpTurn();
-    return true;
-  }
+  // (No reachable `beginWarpTurn()` path here anymore — the 3-stage preview
+  // block above consumes any `warpTarget.direction` before we get here.
+  // `beginWarpTurn` is still reachable from autopilot exit callbacks.)
   return false;
 }
 
