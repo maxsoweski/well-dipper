@@ -415,25 +415,37 @@ const _swapPortalAPos = new THREE.Vector3();
 const _arrivalForward = new THREE.Vector3();
 const _portalFollowPos = new THREE.Vector3();
 const _portalFollowTarget = new THREE.Vector3();
-warpPortal.onTraversal = (mode) => {
+// onTraversal must be async: onSwapSystem awaits pendingSystemDataPromise
+// then calls warpSwapSystem which TELEPORTS the camera to the new system.
+// Pre-2026-04-17, this callback was synchronous: it invoked onSwapSystem
+// (fire-and-forget) and then re-anchored Portal A at the *pre-teleport*
+// camera position. Once the async body resolved and warpSwapSystem ran,
+// the camera jumped thousands of scene units away, leaving the tunnel
+// mesh orphaned in the old world — HYPER rendered ~40 black frames
+// because the camera was nowhere near the tunnel walls (measured: 10,499
+// scene units offset vs a 200-unit tunnel length).
+//
+// Fix: await the full swap before re-anchoring. The await resolves after
+// warpSwapSystem's camera.position.set(...), so Portal A is placed at the
+// correct new-world camera position and the tunnel properly surrounds the
+// camera for the rest of HYPER.
+warpPortal.onTraversal = async (mode) => {
   console.log(`[WARP-PORTAL] traversal → ${mode}`);
   if (mode === 'INSIDE' && !warpEffect._swapFired && warpEffect.onSwapSystem) {
     warpEffect._swapFired = true;
-    warpEffect.onSwapSystem();
+    await warpEffect.onSwapSystem();
 
-    // Re-anchor portal at new camera's position + forward. Offset Portal A
-    // a tiny amount (~15 mm) behind camera so the INSIDE-mode invariant
-    // holds (camera on +forward side of Portal A), without eating into
-    // the HYPER+EXIT travel budget. Critical at ship-scale: the old
-    // `-1 scene unit` offset (= 150,000 km) was larger than the entire
-    // 1 km tunnel, which left Portal B ~150k km behind camera post-warp.
+    // Re-anchor Portal A at the post-teleport camera position. Offset a
+    // tiny amount (~15 mm = 1e-10 scene units) behind camera so the
+    // INSIDE-mode invariant holds (camera on +forward side of Portal A)
+    // without eating into the HYPER+EXIT travel budget.
     camera.getWorldDirection(_swapNewForward);
     _swapPortalAPos.copy(camera.position).addScaledVector(_swapNewForward, -1e-10);
     warpPortal.resetTraversal();
     warpPortal.open(_swapPortalAPos, _swapNewForward);
-    // Force the mode back to INSIDE (resetTraversal set it to OUTSIDE_A)
+    // resetTraversal sets mode to OUTSIDE_A; force back to INSIDE for HYPER.
     warpPortal.setTraversalMode('INSIDE');
-    // Dot history will re-seed on next updateTraversal call
+    // Dot history re-seeds on next updateTraversal call.
     warpPortal._prevDotA = null;
     warpPortal._prevDotB = null;
   }
