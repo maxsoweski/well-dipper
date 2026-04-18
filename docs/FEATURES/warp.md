@@ -138,8 +138,8 @@ The Director will flag any V1 design decision that forecloses a V-later path.
 
 - **FOLD** — portal appearance works okay today.
 - **ENTER** — **weakest link.** 1–2 second freeze at the initial slowdown. This is the primary bug blocking V1.
-- **HYPER** — first half of the tunnel works; **second half of the tunnel is broken.**
-- **EXIT** — a working version was implemented at some point but may have been reverted during patch-thrash. **Current state uncertain; forensics needed** (working-Claude or warp-session to confirm whether EXIT is currently in the codebase).
+- **HYPER** — visible, bright, wall-textured starfield tunnel per §"Phase-level criteria (V1) HYPER." Reached through three commits this session: `10642b2` (orphan fix — re-anchor Portal A after async system swap), `a1ff634` (uScroll + per-warp seed differentiation on OUTSIDE→INSIDE handoff), `81dda69` (INSIDE-mode tunnel mesh scaled so AU-scale geometry no longer collapses the per-pixel `vUv` projection into axis streaks). Remaining HYPER gaps are tuning-level (streak length, density, relativistic blue/red shift — V-later) and an autopilot seed-threading regression flagged as followup `warp-seed-threading-all-paths`. Also: scaled INSIDE mesh drops rAF rate below 30 fps during the ~3 s HYPER window on RTX 5080 — followup `warp-hyper-perf-inside-shader`.
+- **EXIT** — working in the current tree. Forensics during the `81dda69` shipped Sol→procedural warp confirmed the crowning transition per §"Phase sequence EXIT" renders cleanly; no black frames, no missing crowning. Sol-as-destination not yet separately verified — followup `warp-dimness-sol-dest-verify`.
 
 ## Open questions
 

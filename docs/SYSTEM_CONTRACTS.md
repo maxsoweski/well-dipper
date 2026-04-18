@@ -288,6 +288,18 @@ Per `docs/FEATURES/warp.md`: the tunnel is a 2D hole into a 3D tunnel. The tunne
 
 Any rendering path that allows the tunnel mesh to be seen from outside the portal volume is a contract violation. Stencil-masked portal rendering, render-to-texture, or fullscreen screen-space composition (during HYPER when the portal fills the view) are the compatible approaches. A future feature that attaches the tunnel to the world as a visible 3D cylinder is wrong by spec, not by taste.
 
+### 9.6 Uniform-input parity invariant
+
+`starfield-cylinder-lab.html` is the canonical visual reference for the HYPER tunnel. If a change to the shader, the uniform surface, or the pipeline feeding the uniforms causes the production HYPER tunnel to visibly diverge from the lab rendering the same inputs, that is a regression — not a tuning choice. The lab↔prod comparison at matched seeds, matched camera-to-wall distance, and matched scroll phase is the ground-truth check. "Looks fine in production" does not close the check.
+
+The uniform surface is the declared contract: `uScroll`, `uHashSeed`, `uDestHashSeed`, plus the tunnel mesh's geometry parameters. Adding brightness multipliers, exposure knobs, or `uDimnessCompensator`-style hacks to paper over a divergence is a Principle 2 tack-on and a Principle 6 patch — find the actually-divergent input instead.
+
+### 9.7 INSIDE-mode tunnel scale invariant
+
+The tunnel mesh is constructed at ship-scale (radius ≈ 1.34e-7 AU, length ≈ 6.7e-5 AU for a 20m player ship) because OUTSIDE_A/OUTSIDE_B stencil-clip it to a ship-scale portal disc and warp-nav timing assumes ship-scale geometry. But during INSIDE rendering the stencil is off and the camera sits essentially on the cylinder axis. At AU-scale scene units a ship-scale `DoubleSide` cylinder with the camera at its center produces a degenerate per-pixel `vUv` projection — each screen pixel samples a huge radial swath of `(theta, z)`, collapsing the procedural starfield into ~6 axis-radiating streaks.
+
+Invariant: in INSIDE mode the tunnel mesh must be scaled so the camera-to-wall distance is meaningful relative to the shader's sampling (not ship-scale). OUTSIDE_A/OUTSIDE_B must reset scale to `(1, 1, 1)` so stencil alignment, portal aperture, and warp-nav timing remain ship-scale. Geometry parameters stay ship-scale; only `mesh.scale` changes at mode transitions. Any renderer change that removes the INSIDE scaling without replacing the geometry with a lab-equivalent-sized cylinder regresses HYPER to axis-streak dimness. (Commits `81dda69`, 2026-04-18.)
+
 ---
 
 ## Approved Exceptions
