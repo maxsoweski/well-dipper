@@ -271,5 +271,27 @@ one commit (orphan fix), optionally one commit (brightness polish).
 Update this brief's Status line to `Shipped` with the commit SHAs.
 
 ## Status
-Drafted by PM 2026-04-18. Ready for working-Claude execution. Director
-audit requested.
+
+**Shipped 2026-04-18.** Director audited both ACs passed in-session.
+
+Commits:
+
+- **Orphan fix (ACs #1–#3).** `10642b2` — *Fix HYPER tunnel orphaning by
+  awaiting onSwapSystem before re-anchoring Portal A.* Evidence:
+  `screenshots/warp-hyper-window-onDisk-fix-2026-04-18.png` (procedural
+  destination), `screenshots/warp-hyper-SOL-onDisk-fix-2026-04-18.png`
+  (Sol destination via the `KnownSystems` / `SolarSystemData` path).
+- **Brightness polish (AC #4).** `a1ff634` — *polish(warp): animate tunnel
+  walls (uScroll) + differentiate per-warp seeds.* Evidence: 3 back-to-back
+  warps captured in the commit body filmstrips;
+  `screenshots/tunnel-brightness-prod-sol-2026-04-18.png`,
+  `screenshots/tunnel-brightness-prod-proc-a-2026-04-18.png`.
+
+**Carryover flagged honestly in `a1ff634`'s commit body:** *"Dimness
+carryover not addressed in this commit — production HYPER still looks
+dimmer than the isolated lab with identical shader inputs. Tracked as a
+separate PM workstream."* That workstream is
+`docs/WORKSTREAMS/warp-hyper-dimness-2026-04-18.md`.
+
+SYSTEM_CONTRACTS §Warp gap (flagged above) confirmed by Director as a real
+gap to fill this session separately; not blocking close-out of this brief.
