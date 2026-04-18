@@ -232,6 +232,64 @@ At any point, the player can take control. When they go idle again, the loop res
 
 ---
 
+## 9. Warp
+
+Warp is the only drive state that teleports the camera across thousands of scene units mid-sequence. That teleport is the contract's center of gravity — every invariant below exists because something in the pipeline assumes the camera is where it was last frame, and warp is the one place that assumption breaks.
+
+Target resolution is §4. UX and phase feel are `docs/FEATURES/warp.md`. This section is invariants only.
+
+### 9.1 Phase state machine
+
+Warp runs a fixed ordered sequence. No phase is skipped, no phase repeats:
+
+```
+FOLD → ENTER → HYPER → EXIT
+```
+
+- **FOLD** — portal opens ~500m ahead of the camera in origin-system world space. Portal A is anchored in the origin system's scene graph.
+- **ENTER** — camera accelerates through Portal A's threshold. The INSIDE traversal event fires when the camera crosses the portal plane.
+- **HYPER** — camera traverses the tunnel interior. The system swap happens during this phase.
+- **EXIT** — camera emerges through Portal B in the destination system; warp drive state hands back to Autopilot or Manual.
+
+### 9.2 Callback contract
+
+`WarpEffect` exposes three callbacks that `main.js` wires up. Each owns a specific concern:
+
+| Callback | Phase | Owns |
+|----------|-------|------|
+| `onPrepareSystem` | FOLD | Kick off destination-system generation; cache the in-flight promise in `pendingSystemDataPromise`. Non-blocking. |
+| `onSwapSystem` | HYPER (inside-traversal) | `await pendingSystemDataPromise`, then call `warpSwapSystem(destSystem)` which disposes the origin scene, spawns the destination, and **teleports the camera** to post-swap coordinates. Async. |
+| `onTraversal('INSIDE' \| 'OUTSIDE')` | HYPER | Fire once when the camera crosses Portal A's plane (INSIDE) or Portal B's plane (OUTSIDE). Drives the scene swap and the Portal A re-anchor. |
+
+### 9.3 Async-ordering invariant (load-bearing)
+
+**Portal A must not be re-anchored until `onSwapSystem` has resolved and the camera has been teleported to post-swap coordinates.**
+
+`onTraversal` is `async`. On `mode === 'INSIDE'` it **must `await warpEffect.onSwapSystem()` before re-anchoring Portal A**. `onSwapSystem` internally awaits `warpSwapSystem(destSystem)` in `main.js`, which calls `camera.position.set(...)` to teleport the camera into the destination system's coordinate frame. Only after that resolves can Portal A be re-anchored against the camera's new world position.
+
+Any future edit that converts `onTraversal` back to synchronous fire-and-forget, or that re-anchors Portal A before the teleport resolves, is a contract violation. The failure mode is concrete: the tunnel mesh orphans at pre-teleport coordinates while the camera sits thousands of scene units away in post-swap space, and HYPER renders ~40 black frames (measured: 10,499 scene units offset vs 200-unit tunnel length).
+
+See `src/main.js:447` for the canonical `async onTraversal` + `await onSwapSystem` wiring. Three prior sessions patched this same orphan-bug shape before the invariant was named; do not regress it. (Commit `10642b2`, 2026-04-18.)
+
+### 9.4 Portal scene-anchoring
+
+Two portals exist; they live in different scene graphs at different phases:
+
+- **Portal A** (origin-side) — anchored in the origin system's scene graph during FOLD and ENTER. On INSIDE traversal, after the async swap resolves, Portal A is re-anchored at the post-teleport camera position in the destination scene graph for the remainder of HYPER.
+- **Portal B** (destination-side) — anchored in the destination system's scene graph. Positioned `tunnelLength` ahead of the post-swap camera along the arrival forward direction. Camera exits through Portal B during EXIT.
+
+Portal B's world position is held in a **fixed arrival-forward direction** captured at warp `onComplete`, not "behind whatever the camera is currently facing" — the player can rotate freely during HYPER/EXIT without dragging Portal B around the sky.
+
+**Floating-point precision note:** Portal B exhibits FP drift at large destination-system coordinates. The fix is blocked on world-origin rebasing; see `docs/PLAN_world-origin-rebasing.md`. Do not attempt a local patch — the precision limit is structural.
+
+### 9.5 Non-Euclidean tunnel visibility
+
+Per `docs/FEATURES/warp.md`: the tunnel is a 2D hole into a 3D tunnel. The tunnel exists only through its portal opening. It is **not** an object observable from the side.
+
+Any rendering path that allows the tunnel mesh to be seen from outside the portal volume is a contract violation. Stencil-masked portal rendering, render-to-texture, or fullscreen screen-space composition (during HYPER when the portal fills the view) are the compatible approaches. A future feature that attaches the tunnel to the world as a visible 3D cylinder is wrong by spec, not by taste.
+
+---
+
 ## Approved Exceptions
 
 These are the only places where content is NOT derived from the galactic pipeline:
