@@ -458,5 +458,181 @@ from the sibling brief is explicit, and it applies here too.
 
 ## Status
 
-Drafted by PM 2026-04-18. Ready for working-Claude execution. Director
-audit requested at close.
+**Shipped 2026-04-18** — commit `81dda69` (`fix(warp): pipeline — tunnel
+mesh scale in INSIDE mode — restore HYPER starfield`) on `master`. Fork
+decided: **pipeline**. Divergent input: tunnel mesh scale relative to
+camera position in INSIDE mode. Pure `_tunnel.scale` edit in
+`setTraversalMode('INSIDE'/'OUTSIDE_*')` — no shader edit, no uniform
+edit, no geometry parameter change.
+
+Drafted by PM 2026-04-18. Executed by working-Claude 2026-04-18. Director
+audit requested at close (see Close-out findings below).
+
+## Close-out findings
+
+### Root cause (captured from commit `81dda69` body)
+
+`WarpPortal` constructs the tunnel as a `CylinderGeometry` at ship scale
+(radius ≈ 1.34e-7 AU, length ≈ 6.7e-5 AU for a 20m player ship). In
+OUTSIDE_A/OUTSIDE_B the stencil clips the tunnel to the ship-scale
+portal disc, which is fine. In INSIDE mode the stencil is off and the
+camera sits essentially at the cylinder axis. At AU-scale scene units a
+1.3e-7-radius `DoubleSide` cylinder with the camera at its center
+produces a degenerate per-pixel `vUv` projection: each screen pixel
+samples a huge radial swath of `(theta, z)` cells, collapsing the
+procedural starfield into ~6 sparse streaks radiating from the tunnel
+axis instead of a wall-textured starfield. The shader and uniforms were
+correct; the lab↔prod delta was geometry-scale-vs-camera-position,
+pure Principle 5 "Pipeline Carries" layer — the inputs the runtime
+actually delivered to the renderer diverged from what the lab fed.
+
+Fix shape: in `setTraversalMode('INSIDE')` scale `_tunnel.scale` by
+`(1.5e7, 1.5e7, 1.5e5)`; reset to `(1, 1, 1)` in OUTSIDE_A / OUTSIDE_B.
+Mesh-scale change only.
+
+### Acceptance criteria — final status
+
+- **AC #1 (controlled comparison before any `WarpPortal.js` edit) —
+  PASSED.** Lab↔prod captured at matched seeds. Fork decided: pipeline.
+  Specific divergent input named: tunnel mesh scale relative to camera
+  position in INSIDE mode. Evidence pair:
+  `screenshots/tunnel-dimness-lab-inside-prodseeds-2026-04-18.png` (lab
+  with matched prod seeds, camera inside tunnel — bright starfield)
+  vs. `screenshots/tunnel-dimness-prod-matched-2026-04-18.png` (prod
+  mid-HYPER via `_commitSelection × 3` from Sol with seeds
+  `[688.193, 912.131, 511.289]` — six sparse streaks on mostly black).
+  The visible divergence at matched seeds drove the fork to pipeline.
+  Supporting baseline:
+  `screenshots/tunnel-dimness-lab-inside-defaultseeds-2026-04-18.png`.
+
+- **AC #2 (real-flow filmstrip, not `_warpEffect.start()`) — PARTIAL.**
+  Real flow used: `_commitSelection × 3` after `_autoSelectWarpTarget`,
+  autopilot off — the production state machine, not the synthetic
+  entry point. `~/.claude/helpers/filmstrip.js` capture was attempted
+  but the scaled mesh dropped rAF rate during INSIDE below ~30fps, so
+  the filmstrip undersampled. Single matched mid-HYPER screenshots
+  substituted as evidence. Honestly: the filmstrip evidence the AC
+  asked for is not in hand; still-frame evidence at matched runtime
+  moments is. The frame-rate drop itself is a followup candidate
+  (see below).
+
+- **AC #3 (side-by-side matched comparison) — PASSED (via single
+  matched screenshots, not filmstrips).** Same reason as AC #2. The
+  matched pair is inlined in the `81dda69` commit body and shows the
+  before/after at production's actual runtime seeds.
+
+- **AC #4 (Sol and procedural both tested) — PARTIAL.** Sol-as-ORIGIN
+  tested — real seed `[688.193, 912.131, 511.289]` captured, fix
+  visible in the post-fix screenshot. Sol-as-DESTINATION was **not**
+  separately tested; the dev shortcut spawns Sol and warps out to
+  procedural. The mesh-scale fix is path-agnostic (same mesh, same
+  `setTraversalMode` call site for both paths), so there is no
+  structural reason Sol-destination would differ — but the empirical
+  check is deferred. Named as a followup below.
+
+- **AC #5 (EXIT forensics finding) — PASSED.** See EXIT forensics
+  paragraph below.
+
+- **AC #6 (one commit) — PASSED.** `81dda69` is the sole commit. No
+  streak-length, blue-shift, or density tuning bundled.
+
+### EXIT forensics finding (AC #5)
+
+During the shipped warp (Sol origin → procedural destination), the
+post-INSIDE transition to OUTSIDE_B rendered cleanly: the crowning
+transition per feature doc §"Phase sequence EXIT" fired, the
+"coasting into new system" arrival log appeared in the expected
+window, and no black frames or missing-crowning artifacts were
+observed. **EXIT is not broken in the current tree.** This is
+forensics-only per the brief's scope — no EXIT work performed, no
+EXIT fix bundled. If a future regression surfaces, spin a separate
+workstream.
+
+### Followup workstream candidates (surfaced during iteration, NOT
+bundled per AC #6)
+
+1. **`warp-hyper-perf-inside-shader`** — INSIDE-mode framerate. The
+   scaled mesh now covers a large fraction of the screen with a
+   3-layer procedural star shader × `DoubleSide` × Bayer dither.
+   Casual measurement on RTX 5080 suggests an FPS drop during the
+   ~3 s HYPER window (concrete enough that `filmstrip.js` undersampled
+   at fps:30). Acceptable-for-now for a transient phase; worth
+   profiling before any work that increases per-fragment cost
+   (streak-length, density-tuning, relativistic blue/red shift).
+
+2. **`warp-seed-threading-all-paths`** — Autopilot auto-warp seed
+   threading. The seed setters at `main.js:4346-4347`
+   (`setOriginSeed`/`setDestinationSeed`) are only called in the
+   `_portalLabState === 'idle'` branch of the manual 3-stage flow.
+   Autopilot's auto-fire path (and possibly nav-computer dispatch)
+   bypasses this and leaves seeds at the `WarpPortal` constructor
+   placeholders. This is a functional regression against `a1ff634`'s
+   AC #4 (seed differentiation per warp). Production users in
+   autopilot mode see identical placeholder-seeded walls regardless
+   of origin/destination. Not load-bearing for this dimness fix
+   (which was about geometry scale, not seed content), but a live
+   gap against the sibling brief's ACs.
+
+3. **`warp-dimness-sol-dest-verify`** — Sol-as-destination visual
+   verification. Close the brief's AC #4 partial. Should be <30 min:
+   spawn any non-Sol system, nav to Sol, real-flow + screenshot
+   through HYPER. Named because it closes an existing brief's AC
+   cleanly, not because it's expected to surface a new bug.
+
+4. **`warp-tunnel-scale-derivation`** — Tunnel mesh scale derivation
+   from first principles. The shipped fix uses magic numbers
+   `1.5e7 / 1.5e5` chosen empirically to produce lab-equivalent
+   dimensions. A cleaner derivation would compute the scale from
+   `TUNNEL_INTERIOR_RADIUS_SCENE` and a desired effective radius
+   expressed as an explicit constant. Not load-bearing for the bug
+   fix; listed as cleanup so the magic numbers don't sit unexplained.
+
+### PM-proposed diff to `docs/FEATURES/warp.md` §"Current state snapshot (2026-04-18)"
+
+**Do not apply this diff — `docs/FEATURES/warp.md` is Director-owned.**
+Proposed for Director to merge or edit as they see fit.
+
+Current HYPER line (pre-session):
+> *"first half of the tunnel works; second half of the tunnel is
+> broken."*
+
+Proposed replacement:
+> HYPER first half works. HYPER second half visible, bright, and
+> wall-textured as a starfield tunnel per §"Phase-level criteria (V1)
+> HYPER" — achieved across three commits this session:
+> `10642b2` (second-half orphan fix — re-anchor through the handoff),
+> `a1ff634` (second-half visibility / brightness polish for the
+> OUTSIDE→INSIDE handoff uniforms), and `81dda69` (INSIDE-mode tunnel
+> mesh scaled so the AU-scale cylinder geometry no longer collapses
+> the per-pixel `vUv` projection into six sparse axis-streaks when
+> the camera is on-axis). EXIT forensics during the shipped
+> Sol→procedural warp this session confirm the crowning transition
+> per §"Phase sequence EXIT" still renders cleanly; EXIT is not
+> broken in the current tree. Remaining HYPER gaps are tuning-level
+> (streak length / density / relativistic shift — V-later) and
+> autopilot seed threading (see `warp-seed-threading-all-paths`
+> followup).
+
+### SYSTEM_CONTRACTS.md §Warp — uniform-input parity invariant
+
+Director added the §Warp section earlier this session in `df45944`.
+**Flag to Director:** confirm whether the "Uniform-input parity
+invariant" drafted in this brief's §"SYSTEM_CONTRACTS.md gaps" was
+included. If not, the dimness investigation itself is a worked
+example of the invariant being violated silently — the shader and
+uniforms were "correct" yet the production tunnel diverged from the
+lab because mesh geometry relative to camera position was the
+actually-divergent input. The invariant, if still missing, should
+be captured as a Director followup, not folded into the PM's next
+work.
+
+### Director audit request
+
+Audit requested for:
+1. This close-out section (AC statuses honestly labeled PARTIAL where
+   the filmstrip evidence is not in hand — is that the right call, or
+   should AC #2/#4 block Shipped status until filmstrips land?).
+2. The proposed diff to `docs/FEATURES/warp.md` §"Current state
+   snapshot (2026-04-18)" above.
+3. The followup-candidates list — are the four surfaced items the
+   right carve-up, or should any be merged / split / declined?
