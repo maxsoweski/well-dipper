@@ -1,10 +1,11 @@
 ---
-status: DRAFT — interview capture, pending merge with active warp-session work
+status: ACTIVE — promoted 2026-04-18 from _drafts/warp.md by PM to unblock workstream brief
 captured: 2026-04-18
 captured_by: Director (channeled via working-Claude), interview with Max
+promoted_by: PM, 2026-04-18 (Director out of session; draft self-marked "pending merge" — PM bootstrap per persona rules)
 related_plan: docs/PLAN_warp-tunnel-v2.md
 related_bible: docs/GAME_BIBLE.md §"The Warp as Sacred Experience"
-promotion_path: mv docs/FEATURES/_drafts/warp.md docs/FEATURES/warp.md
+pending_bible_diff: docs/FEATURES/_drafts/GAME_BIBLE_diff_warp.md (not yet merged into GAME_BIBLE.md — Director action)
 ---
 
 # Warp
@@ -147,6 +148,8 @@ The Director will flag any V1 design decision that forecloses a V-later path.
 - **Destination-star-visible timing:** at what fraction through HYPER should the destination star first become visible? Max said "doesn't have to be visible the entire traversal" — so it can appear partway. Exact timing is a tuning decision, probably during visual-lab iteration.
 - **Audio transition shape:** the bible specifies `warp-charge`, `hyperspace`, `arrival` tracks with crossfades. Does the camera-shake period correspond to `warp-charge` or does it cross into `hyperspace`? Probably answered by sound designer / Max during music integration.
 
-## Related work streams
+## Workstreams
 
-*(To be populated by PM once work streams are authored.)*
+Child workstream briefs (PM-owned) that carry this feature forward:
+
+- **`docs/WORKSTREAMS/warp-hyper-orphan-fix-and-tunnel-brightness-2026-04-18.md`** — land the HYPER-phase Portal A orphan fix (on-disk `async onTraversal` + `await onSwapSystem` in `main.js:432-452`) and polish tunnel wall brightness (wire `uScroll` per HYPER frame, wire `uHashSeed`/`uDestHashSeed` from origin + destination system seeds). Primary attack on the "HYPER second half is broken" failure in the Current-state snapshot above. Does NOT re-attempt Freeze 2 or the ENTER freeze.
