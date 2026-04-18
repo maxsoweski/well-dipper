@@ -189,14 +189,17 @@
     renderer.setClearColor(0x000000);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 50000);
+    // Near-plane set very small to accommodate the smallest bodies at true scale
+    // (moonlets at ~0.02 R⊕ ≈ 0.00085 scene units). Logarithmic-depth-buffer
+    // elsewhere in the project handles the huge near/far range.
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.0001, 50000);
 
-    // All bodies normalize to this scene-unit radius so camera framing + zoom
-    // behave consistently regardless of the body's real earth-radius. In-game
-    // scale would vary wildly (a 0.4 R⊕ rocky vs. a 14 R⊕ gas giant); in the
-    // lab we always want a viewable silhouette at a predictable distance.
-    const BODY_SCALE = 2.0;
-    const CAM_DEFAULT = BODY_SCALE * 3;
+    // Bodies render at their generator-produced scene radius (Principle 5 —
+    // Model → Pipeline → Renderer one-directional). Camera framing adapts to
+    // each body's actual size instead of forcing a normalized display radius.
+    // Prior BODY_SCALE=2.0 normalization retired 2026-04-18 after it was
+    // identified as a Principle-5 violation in the PM interview.
+    let currentBodyRadius = 1;  // Updated in spawn; drives camDist + zoom clamps
 
     // ── PR2 post-process pipeline ──────────────────────────────────────
     // Scene renders into sceneRT, then a fullscreen quad reads sceneRT
@@ -304,22 +307,26 @@
     function spawnPlanet(entry) {
       const rng = new SeededRandom(`lab-${entry.id}-${seed}`);
       const data = PlanetGenerator.generate(rng, 1.0, [0, 0, 1], null, entry.type);
-      // Normalize: rescale every scene-unit field by the ratio needed to put
-      // the body at BODY_SCALE. Shader features that depend on world scale
-      // (noiseScale, cloud scale, rings) move with it.
-      const scaleFactor = BODY_SCALE / data.radiusScene;
+      // Use generator-produced scene radius directly. noiseScale is calibrated
+      // for the generator's map-scale coordinates, so rescale by (radius /
+      // radiusScene) to put it in scene-space frequency — same pattern main.js
+      // uses for production planet rendering. Rings and other generator-scale
+      // fields are consumed as-is (produced already in scene-space).
+      const mapToSceneRatio = data.radius / data.radiusScene;
       const sceneData = {
         ...data,
-        radius: BODY_SCALE,
-        noiseScale: data.noiseScale * (1 / scaleFactor) * (data.radius / data.radiusScene),
+        radius: data.radiusScene,
+        noiseScale: data.noiseScale * mapToSceneRatio,
         clouds: data.clouds
-          ? { ...data.clouds, scale: data.clouds.scale * (1 / scaleFactor) * (data.radius / data.radiusScene) }
+          ? { ...data.clouds, scale: data.clouds.scale * mapToSceneRatio }
           : null,
+        // Rings: generator produces inner/outerRadius in the same map-scale
+        // space as radius, so scale them down by the same ratio.
         rings: data.rings
           ? {
               ...data.rings,
-              innerRadius: data.rings.innerRadius * scaleFactor,
-              outerRadius: data.rings.outerRadius * scaleFactor,
+              innerRadius: data.rings.innerRadius / mapToSceneRatio,
+              outerRadius: data.rings.outerRadius / mapToSceneRatio,
             }
           : null,
       };
@@ -327,9 +334,10 @@
       planet._lightDir.copy(lightDir);
       planet.addTo(scene);
 
-      camDist = CAM_DEFAULT;
+      currentBodyRadius = data.radiusScene;
+      camDist = currentBodyRadius * 3;
       currentMesh = planet;
-      return { info: `${entry.type}  ·  ${data.radiusEarth.toFixed(2)} R⊕` };
+      return { info: `${entry.type}  ·  ${data.radiusEarth.toFixed(2)} R⊕  ·  ${data.radiusScene.toFixed(4)} scn` };
     }
 
     function spawnMoon() {
@@ -342,10 +350,15 @@
       if (!moonData) {
         return { info: 'no moons in this seed — try ←/→' };
       }
-      const scaleFactor = BODY_SCALE / moonData.radius;
+      // Same map→scene conversion as planets; moon generator produces both.
+      const mapToSceneRatio = moonData.radius / moonData.radiusScene;
       const galleryMoonData = {
         ...moonData,
-        radius: BODY_SCALE,
+        radius: moonData.radiusScene,
+        noiseScale: moonData.noiseScale * mapToSceneRatio,
+        clouds: moonData.clouds
+          ? { ...moonData.clouds, scale: moonData.clouds.scale * mapToSceneRatio }
+          : null,
         orbitRadius: 0,
         orbitSpeed: 0,
       };
@@ -353,10 +366,11 @@
       const moon = new Moon(galleryMoonData, lightDir, null, starInfoBright);
       moon.addTo(scene);
 
-      camDist = CAM_DEFAULT;
+      currentBodyRadius = moonData.radiusScene;
+      camDist = currentBodyRadius * 3;
 
       currentMesh = moon;
-      return { info: `${moonData.type}  ·  ${moonData.radiusEarth.toFixed(3)} R⊕` };
+      return { info: `${moonData.type}  ·  ${moonData.radiusEarth.toFixed(3)} R⊕  ·  ${moonData.radiusScene.toFixed(4)} scn` };
     }
 
     function spawn() {
@@ -420,17 +434,17 @@
     // Wheel listener on window so zoom works regardless of mouse position
     // (panel would otherwise intercept when hovered). Must be non-passive
     // and in capture phase to beat any default scroll behavior.
-    // Zoom clamps keep the camera between "just outside the body surface" and
-    // "body is a distant dot." Without the inner clamp the camera would pass
-    // through the body; without the outer, the body vanishes beyond frustum.
-    const ZOOM_MIN = BODY_SCALE * 1.05;   // close-pass (surface skim)
-    const ZOOM_MAX = BODY_SCALE * 25;     // far pullback
+    // Zoom clamps scale with the current body's true radius so every body
+    // (from moonlets at ~0.001 scene units to hot-jupiters at ~0.5) has
+    // sensible zoom range. 1.05× radius = surface skim; 25× = distant dot.
     function onWheel(e) {
       // Don't hijack scroll within the body list
       if (e.target && e.target.closest && e.target.closest('#body-list')) return;
       e.preventDefault();
       e.stopPropagation();
-      camDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, camDist * (1 + e.deltaY * 0.002)));
+      const zoomMin = currentBodyRadius * 1.05;
+      const zoomMax = currentBodyRadius * 25;
+      camDist = Math.max(zoomMin, Math.min(zoomMax, camDist * (1 + e.deltaY * 0.002)));
     }
     window.addEventListener('wheel', onWheel, { passive: false, capture: true });
     document.addEventListener('wheel', onWheel, { passive: false, capture: true });
