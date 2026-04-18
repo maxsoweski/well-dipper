@@ -598,6 +598,9 @@ export class WarpPortal {
   update(deltaTime) {
     if (!this.group.visible) return;
     this._tunnel.material.uniforms.uTime.value += deltaTime;
+    // Advance uScroll so tunnel walls stream past the camera during HYPER.
+    // Matches starfield-cylinder-lab.html's playScroll rate (0.5 units/sec).
+    this._tunnel.material.uniforms.uScroll.value += deltaTime * 0.5;
     this._rimA.material.uniforms.uTime.value += deltaTime;
     this._rimB.material.uniforms.uTime.value += deltaTime;
   }

@@ -197,6 +197,21 @@ const starfield = {
 // ── System State ──
 let seedCounter = 0;
 let _currentSystemName = '';
+
+// Deterministic string → vec3 hash for the tunnel uHashSeed uniforms.
+// Triple FNV-1a walk; output in [100, 1000] matching lab seed magnitude.
+function _seedStringToVec3(s) {
+  const str = String(s || '');
+  let h1 = 2166136261, h2 = 16777619, h3 = 374761393;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619);
+    h2 = Math.imul(h2 ^ c, 2246822519);
+    h3 = Math.imul(h3 ^ c, 3266489917);
+  }
+  const m = v => 100 + ((v >>> 0) % 900000) / 1000;
+  return [m(h1), m(h2), m(h3)];
+}
 let system = null;
 let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
@@ -4324,6 +4339,12 @@ function commitSelection() {
       warpPortal.open(previewPos, warpTarget.direction);
       warpPortal.setRimIntensity(1.0);
       warpPortal.setEntryStripProgress(0);  // all crosses dark; lit by Space #2
+      // Thread real origin + destination seeds into tunnel starfield.
+      // Replaces placeholder so walls differ per-warp (AC#4).
+      const [ox, oy, oz] = _seedStringToVec3(_currentSystemName || 'origin');
+      const [dx, dy, dz] = _seedStringToVec3(warpTarget?.name || `dest-${seedCounter}`);
+      warpPortal.setOriginSeed(ox, oy, oz);
+      warpPortal.setDestinationSeed(dx, dy, dz);
       _portalLabState = 'preview';
       return true;
     }
