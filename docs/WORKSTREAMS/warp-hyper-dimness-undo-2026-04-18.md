@@ -470,6 +470,26 @@ sentence.
 
 ## Status
 
-**Drafted by PM 2026-04-18.** Awaiting working-Claude execution.
-Status transitions expected: `Drafted` → `In progress` → `VERIFIED_
-PENDING_MAX <sha>` → `Shipped <sha>` (on Max-recording sign-off).
+**VERIFIED_PENDING_MAX 0cb717c** — revert shipped 2026-04-18 as commit
+`0cb717c` ("revert(warp): un-do 81dda69 INSIDE-mode tunnel mesh scale —
+restore compositor-owned HYPER experience"). Code un-do complete; sibling
+brief has its `## Re-open notice` appended in the same commit. Awaiting
+Max's OS-level screen recording of a full warp (FOLD → EXIT) to
+evaluate ACs #1–#5 against the authored experience. Drop path per
+`docs/MAX_RECORDING_PROTOCOL.md`:
+`screenshots/max-recordings/warp-hyper-dimness-undo-2026-04-18.<ext>`.
+
+Director-owned doc reversals pending (not blocking Shipped on this
+brief, but wanted same-session per the miss response):
+- `docs/SYSTEM_CONTRACTS.md` §9.7 INSIDE-mode tunnel scale invariant —
+  REVERSE.
+- `docs/FEATURES/warp.md` §"Current state snapshot (2026-04-18)" HYPER
+  and EXIT lines — REVERSE.
+- `docs/WORKSTREAMS/warp-hyper-dimness-2026-04-18.md` §"Status" line —
+  flip from `Shipped` to `Re-opened — see warp-hyper-dimness-undo-2026-04-18.md`.
+- Optionally: §9.6 framing re-anchor per the PM's pushback — §9.6 was
+  framed as validated by `81dda69` when in fact it is validated by the
+  un-do.
+
+Drafted by PM 2026-04-18. Executed by working-Claude 2026-04-18.
+Shipped flips on Max-recording sign-off per AC #6 + MAX_RECORDING_PROTOCOL.
