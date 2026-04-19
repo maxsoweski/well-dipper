@@ -123,15 +123,25 @@ decided in `## In scope` below.
    (one sentence is enough). Edit lands inline; Max's eyeball invited in
    the commit message.
 
-6. **Cross-project validation: a canvas recording is captured on a
-   non-Well-Dipper project using only the global helpers.** PM
-   recommends **Shader Lab** as the target — reasoning in `## In scope`
-   Deliverable 6 below. Working-Claude installs `canvas-recorder.js` on
-   Shader Lab's primary canvas, captures ≥3s of animation, runs
-   `contact-sheet.sh`, and records the resulting contact-sheet path in
-   this brief's close-out section. Pass = recording + contact sheet
-   both exist and are non-empty; fail = any helper needs a project-specific
-   patch to work.
+6. **Cross-project validation — canvas-heavy target only.** This
+   workstream's validation covers the **canvas-rendered** path of the
+   Shipped gate. The target is **Shader Lab** (`~/projects/shader-lab/`),
+   a WebGL-canvas-at-60Hz project — the strictest test available for
+   the agent-initiated canvas path. Working-Claude installs
+   `canvas-recorder.js` on Shader Lab's primary canvas, captures ≥3s
+   of animation, runs `contact-sheet.sh`, and records the resulting
+   contact-sheet path in this brief's close-out section. Pass =
+   recording + contact sheet both exist and are non-empty; fail = any
+   helper needs a project-specific patch to work.
+   **Out of scope for this AC:** validating the **DOM-only** Max-driven
+   path on a DOM-only project, and validating a **hybrid canvas+DOM**
+   project (e.g., Approaching Vividness, which mixes `<canvas>` and
+   DOM across lessons). Those validations belong to a future workstream
+   — see `## Out of scope` §"Hybrid + DOM-only validation (future
+   workstream)." The cross-project *claim* this workstream
+   substantiates is therefore narrower than "works on any project":
+   it is "works on any canvas-heavy project." That is what the
+   deliverables in this brief actually build and test.
 
 7. **Two commits, one per owning tree.** One Well Dipper commit stages
    `docs/MAX_RECORDING_PROTOCOL.md`, this brief, and any updates to the
@@ -239,9 +249,17 @@ are feature-oriented and not directly relevant here.)
   until it hits the classifier.
   **Guard:** Deliverable 1's contract names download-trigger
   explicitly. Helper source includes a comment at the top stating
-  "DO NOT return blob data from stop(); use download-trigger. See
-  2026-04-18/19 classifier refusal." Protocol doc repeats the
-  warning in the failure-modes section.
+  the **general rule** — *"do not retrieve large binary payloads via
+  `evaluate_script` return values; route them through filesystem
+  (download-trigger → Downloads folder → WSL `cp`)."* — alongside the
+  specific case it was learned from: *"DO NOT return blob data from
+  stop(); use download-trigger. See 2026-04-18/19 classifier refusal."*
+  The general rule covers future binary-payload shapes that haven't
+  been encountered yet (audio buffers, depth textures, frame
+  sequences, etc.). Protocol doc repeats the warning in the
+  failure-modes section, and the header comment of
+  `canvas-recorder.js` carries the general rule so future
+  maintainers see it without having to trace back through this brief.
 
 - **Risk: Forgetting the DOM-only fallback.** `captureStream(30)`
   only reaches canvas content. DOM-only features (forms, layouts,
@@ -257,6 +275,33 @@ are feature-oriented and not directly relevant here.)
   explicitly. Protocol doc has two named paths (agent-initiated for
   canvas; Max-driven for DOM) with a one-sentence boundary rule
   between them.
+
+- **Risk: Agent over-reliance on captured recordings.** The new
+  capability makes it trivial for working-Claude to always capture
+  recordings, including for cases where a static screenshot would be
+  cheaper and equally valid. If working-Claude now captures 15 MB
+  webms for every trivial UI change, that's a new failure mode
+  introduced by this workstream — cheap-to-invoke tools develop a
+  gravity of their own, and bytes + review-time that could have been
+  zero become the new default.
+  **Why it happens:** with the helper installed and the save path
+  automated, the *marginal* cost of "also capture a recording" feels
+  like zero to working-Claude. The actual cost lands on Max —
+  attention budget for reviewing a 30s webm when a single frame
+  would have settled the AC — and on the project's `screenshots/`
+  tree, which bloats with redundant motion evidence. The sibling
+  brief's Shipped gate applies to *phased / animated / time-windowed*
+  features; extending recording to every change is scope inflation
+  of the gate itself.
+  **Guard:** Protocol doc (Deliverable 4) names the trigger
+  criterion explicitly — recording is for *phased / animated /
+  time-windowed* changes per the Shipped-gate scope inherited from
+  the sibling brief; static UI changes remain a PNG screenshot
+  (Playwright `browser_take_screenshot`). Rule of thumb stated in
+  the protocol doc: *if a single frame can settle the AC, a
+  recording is wasted bytes.* The canvas-recorder helper is a tool
+  for the cases where motion is the thing under test, not a
+  replacement for static screenshot capture.
 
 - **Risk: Framerate mismatch misleads Max on evaluation.**
   `captureStream(30)` samples at a fixed 30 Hz; the page may render
@@ -299,9 +344,14 @@ Global helper, mirrors `filmstrip.js` shape. Contract:
   MediaRecorder support is uneven and a partial success is worse
   than a clean fallback.
 - **Header comment block** names: (a) the purpose, (b) the
-  classifier-refusal history (2026-04-18/19 session, see Drift
-  risks above), (c) why download-trigger instead of eval-return,
-  (d) why VP9 webm, (e) why canvas-only (DOM-overlay bleed
+  **general rule** — *"do not retrieve large binary payloads via
+  `evaluate_script` return values; route them through filesystem
+  (download-trigger → Downloads folder → WSL `cp`)"* — stated at
+  the top so future maintainers see it before they see the specific
+  case, (c) the classifier-refusal history (2026-04-18/19 session,
+  see Drift risks above) as the concrete instance the general rule
+  was learned from, (d) why download-trigger instead of eval-return,
+  (e) why VP9 webm, (f) why canvas-only (DOM-overlay bleed
   explanation — debug panels / HUDs that shouldn't contaminate
   evaluation frames).
 
@@ -378,6 +428,17 @@ Edits to `docs/MAX_RECORDING_PROTOCOL.md`:
   SVG-only features), DOM-only path. When in doubt, start with canvas;
   if `captureStream` fails on the selector, fall back to DOM-only
   without ceremony.
+- **New §"When to record vs. when to screenshot":** names the
+  recording-trigger criterion inherited from the sibling brief —
+  recording is for *phased / animated / time-windowed* changes
+  (warp phases, transitions, reveals, sequenced motion). Static UI
+  changes (a menu label swap, a static HUD adjustment, a stable
+  shader still) remain a PNG screenshot via Playwright
+  `browser_take_screenshot`. **Rule of thumb:** *if a single frame
+  can settle the AC, a recording is wasted bytes.* This section
+  guards against the over-capture drift risk above — the new
+  helper is a precision tool for motion evaluation, not a
+  default-for-everything capture mechanism.
 - **Updated §"How Max signals delivery":** canvas path eliminates
   delivery signal — agent produced the file, agent knows where it
   is. DOM-only path preserves the plain-text chat convention from
@@ -526,6 +587,17 @@ the contract).
 - **Broader Dev Collab OS rewrite.** Only the Shipped-gate paragraph
   is edited in Deliverable 5. The rest of §"Development Collaboration
   OS" is untouched.
+- **Hybrid + DOM-only validation (future workstream).** AC #6 covers
+  a canvas-heavy target (Shader Lab) only. Validating the agent
+  workflow against a **hybrid canvas+DOM project** (e.g., Approaching
+  Vividness — mixes `<canvas>` lessons and DOM lessons) and
+  validating the DOM-only Max-driven path end-to-end on a **DOM-only
+  project** (e.g., Pretext Lab, easymaking-site) are explicitly
+  deferred. A future validation workstream may carry those cases if
+  the workflow is adopted on a hybrid or DOM-only project and a
+  previously-unseen failure shows up. Named here so the scope is
+  honest — this workstream substantiates the *canvas-heavy* cross-
+  project claim, not a blanket "works everywhere" claim.
 
 ## PM decision: download-trigger vs. POST endpoint
 

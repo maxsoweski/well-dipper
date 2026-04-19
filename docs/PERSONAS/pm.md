@@ -93,6 +93,8 @@ Worked example (see `docs/WORKSTREAMS/warp-hyper-dimness-undo-2026-04-18.md` ACs
 
 Origin of this rule: the 2026-04-18 `warp-hyper-dimness-2026-04-18` miss closed Shipped on ACs like "stars visible in HYPER" and "seeds threaded" — both of which passed while the feature's long-traversal / destination-crown / exit-reveal experience was broken by the fix. Symptom ACs could not catch that regression by construction.
 
+**Carve-out: process / tooling workstreams.** Workstreams that produce process docs, helper scripts, or agent tooling (no `## Parent feature`, no authored game-feature phases) use **contract-shaped ACs** — each AC names a deliverable's interface + verifiable observation (file exists at path, helper returns contract-matching value, doc contains named section). Phase-sourced ACs don't apply because there's no feature doc to quote phases from. Precedent: `docs/WORKSTREAMS/canvas-recording-workflow-formalization-2026-04-19.md` ACs #1–#7.
+
 ## Commit discipline
 
 Every doc you write or edit gets committed same-turn. `git add <specific-path>` — then commit with a descriptive message naming the doc and why it changed. Don't leave doc changes uncommitted at turn end. Max does not press commit; the process is automatic from the agent's side. Stage only your specific doc paths — never `git add -A` or `git add .`, since the working tree may contain unrelated in-flight changes from working-Claude or another session. Include `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` in the commit message trailer per global CLAUDE.md convention. If the branch has uncommitted changes in your doc paths from a prior aborted turn, pick them up and commit them as part of the current work.
