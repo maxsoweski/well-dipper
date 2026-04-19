@@ -6,17 +6,6 @@ import {
   TUNNEL_INTERIOR_RADIUS_SCENE,
 } from '../core/ScaleConstants.js';
 
-// INSIDE-mode tunnel mesh scale — applied in setTraversalMode('INSIDE').
-// See the block comment in setTraversalMode for the rationale. Scale factors
-// bring the ship-scale cylinder (radius ~1.34e-7 AU, length ~6.68e-5 AU) up
-// to lab-equivalent dimensions (~2 AU radius, ~10 AU length) during HYPER
-// rendering only — the shader's procedural starfield is already validated
-// at those dimensions in starfield-cylinder-lab.html. Outside of INSIDE
-// mode the scale resets to 1 so warp navigation timing, stencil alignment,
-// and portal aperture geometry remain ship-scale.
-const TUNNEL_INSIDE_RADIUS_SCALE = 1.5e7;
-const TUNNEL_INSIDE_LENGTH_SCALE = 1.5e5;
-
 /**
  * WarpPortal — a dual-portal stencil traversal effect.
  *
@@ -678,28 +667,6 @@ export class WarpPortal {
     if (this._tunnel.material.stencilWrite !== stencilOn) {
       this._tunnel.material.stencilWrite = stencilOn;
       this._tunnel.material.needsUpdate = true;
-    }
-
-    // INSIDE-mode tunnel scaling ("TARDIS bigger on the inside" — see the
-    // constructor comment). The tunnel geometry is constructed at ship-scale
-    // (radius = player ship length, length = 500× ship) so that in OUTSIDE
-    // modes the portal aperture is ship-scale and the warp-timing physics
-    // stay consistent. But at ship-scale the cylinder is microscopic in AU
-    // scene units (radius ~1.3e-7 AU for a 20m ship), and when the camera
-    // sits essentially at the cylinder's axis during HYPER the DoubleSide
-    // fragment shader's per-pixel vUv sampling degenerates into radial
-    // streaks instead of a wall-textured starfield — the dimness bug. Scale
-    // the mesh up only for INSIDE rendering so the starfield shader sees
-    // the camera at a meaningful distance from walls; reset to 1 in OUTSIDE
-    // modes so the disc-clipped view remains crisp and warp nav timing is
-    // unaffected. Scale factors target lab-equivalent dimensions
-    // (~2 unit radius, ~13 unit length) which the standalone
-    // starfield-cylinder-lab.html has already validated as producing a
-    // correctly-bright procedural starfield at the same uniform inputs.
-    if (mode === 'INSIDE') {
-      this._tunnel.scale.set(TUNNEL_INSIDE_RADIUS_SCALE, TUNNEL_INSIDE_RADIUS_SCALE, TUNNEL_INSIDE_LENGTH_SCALE);
-    } else {
-      this._tunnel.scale.set(1, 1, 1);
     }
 
     // Per-side visibility: each portal is only visible from ITS system's

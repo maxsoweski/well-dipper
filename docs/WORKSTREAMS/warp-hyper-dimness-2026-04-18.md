@@ -636,3 +636,33 @@ Audit requested for:
    snapshot (2026-04-18)" above.
 3. The followup-candidates list — are the four surfaced items the
    right carve-up, or should any be merged / split / declined?
+
+## Re-open notice (2026-04-18 — appended post-revert)
+
+**This workstream was re-opened the same day it shipped.** Max reviewed
+the live game after the close-out and identified that `81dda69` had made
+the symptom (dim stars) better but broke the feature (long-traversal
+feel with destination-star crowning and exit reveal). Verbatim Max:
+
+> *"The tunnel works looks worse than before once you get into it.
+> Previously it did look like a very long tunnel and eventually the
+> resulting star would crown and you would get closer and closer and
+> then exit the tunnel. Now it looks like once we're fully in the
+> tunnel that we're just in a static scene with an animated tunnel and
+> then eventually the tunnel disappears."*
+
+**Director re-audit (2026-04-18):** HYPER has two concurrent tunnel
+renderings. The **compositor** (`src/rendering/RetroRenderer.js`
+`hyperspace()` at L420–492) owns the ray-cone depth, the destination-
+star crown (L486–489), and the EXIT recession (`uTunnelRecession` /
+`uExitReveal`). The 3D `WarpPortal` mesh is cosmetic. `81dda69` scaled
+the mesh to fill the screen and its opaque `DoubleSide` procedural
+starfield wrote into `sceneTexture` in a way that visually occluded the
+compositor's authored HYPER/EXIT experience. The Shipped close rested
+on mid-HYPER static PNGs that could answer *are stars visible* but not
+*does HYPER read as the authored experience* — a proxy failure.
+
+**Un-do workstream:** `docs/WORKSTREAMS/warp-hyper-dimness-undo-2026-04-18.md`.
+Director-owned doc reversals pending (SYSTEM_CONTRACTS §9.7, feature
+doc §"Current state snapshot" HYPER+EXIT lines, and this brief's Status
+line flip).
