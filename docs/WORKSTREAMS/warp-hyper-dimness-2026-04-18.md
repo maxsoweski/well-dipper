@@ -458,12 +458,20 @@ from the sibling brief is explicit, and it applies here too.
 
 ## Status
 
-**Shipped 2026-04-18** — commit `81dda69` (`fix(warp): pipeline — tunnel
-mesh scale in INSIDE mode — restore HYPER starfield`) on `master`. Fork
-decided: **pipeline**. Divergent input: tunnel mesh scale relative to
-camera position in INSIDE mode. Pure `_tunnel.scale` edit in
-`setTraversalMode('INSIDE'/'OUTSIDE_*')` — no shader edit, no uniform
-edit, no geometry parameter change.
+**Re-opened 2026-04-18** — see
+`docs/WORKSTREAMS/warp-hyper-dimness-undo-2026-04-18.md` (`0cb717c`
+reverted `81dda69`). The original Shipped close below is preserved for
+history; the Re-open notice at the bottom of this brief records why
+the ship was wrong and routes to the un-do workstream.
+
+---
+
+**Original Shipped status (superseded 2026-04-18):** commit `81dda69`
+(`fix(warp): pipeline — tunnel mesh scale in INSIDE mode — restore
+HYPER starfield`) on `master`. Fork decided: **pipeline**. Divergent
+input: tunnel mesh scale relative to camera position in INSIDE mode.
+Pure `_tunnel.scale` edit in `setTraversalMode('INSIDE'/'OUTSIDE_*')` —
+no shader edit, no uniform edit, no geometry parameter change.
 
 Drafted by PM 2026-04-18. Executed by working-Claude 2026-04-18. Director
 audit requested at close (see Close-out findings below).
