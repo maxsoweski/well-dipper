@@ -83,6 +83,16 @@ first, what to avoid, what "done" looks like, what artifacts to produce
 
 The brief is **living** — you update it as the workstream evolves. Directors and future sessions read it as ground truth for the workstream's intent.
 
+## Per-phase AC rule
+
+For **phased / animated / progressive features** (warp phases, transitions, reveals, any sequenced motion), every AC must cite the feature-doc phase section it verifies. Symptom-class ACs ("stars are visible," "no black frames") do not evaluate the authored experience and can pass while the feature regresses. Phase-sourced ACs make the authored experience the testable criterion.
+
+Template shape: `[Phase] — [criterion phrase verbatim from feature doc] (per <feature-doc-path> §"<section name>")`.
+
+Worked example (see `docs/WORKSTREAMS/warp-hyper-dimness-undo-2026-04-18.md` ACs #1–#5): each AC names the warp phase it covers (HYPER, ENTER, EXIT, Seamless) and quotes the `docs/FEATURES/warp.md` §"Phase-level criteria (V1)" phrasing directly. A workstream touching a rendering path must carry one AC per phase the path can reach; skipping a phase is a scoping decision that belongs in `## Out of scope`, not a silent omission.
+
+Origin of this rule: the 2026-04-18 `warp-hyper-dimness-2026-04-18` miss closed Shipped on ACs like "stars visible in HYPER" and "seeds threaded" — both of which passed while the feature's long-traversal / destination-crown / exit-reveal experience was broken by the fix. Symptom ACs could not catch that regression by construction.
+
 ## Commit discipline
 
 Every doc you write or edit gets committed same-turn. `git add <specific-path>` — then commit with a descriptive message naming the doc and why it changed. Don't leave doc changes uncommitted at turn end. Max does not press commit; the process is automatic from the agent's side. Stage only your specific doc paths — never `git add -A` or `git add .`, since the working tree may contain unrelated in-flight changes from working-Claude or another session. Include `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` in the commit message trailer per global CLAUDE.md convention. If the branch has uncommitted changes in your doc paths from a prior aborted turn, pick them up and commit them as part of the current work.
