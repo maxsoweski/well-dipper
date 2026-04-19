@@ -470,26 +470,71 @@ sentence.
 
 ## Status
 
-**VERIFIED_PENDING_MAX 0cb717c** — revert shipped 2026-04-18 as commit
-`0cb717c` ("revert(warp): un-do 81dda69 INSIDE-mode tunnel mesh scale —
-restore compositor-owned HYPER experience"). Code un-do complete; sibling
-brief has its `## Re-open notice` appended in the same commit. Awaiting
-Max's OS-level screen recording of a full warp (FOLD → EXIT) to
-evaluate ACs #1–#5 against the authored experience. Drop path per
-`docs/MAX_RECORDING_PROTOCOL.md`:
-`screenshots/max-recordings/warp-hyper-dimness-undo-2026-04-18.<ext>`.
+**Shipped 2026-04-19** — commit `0cb717c` (revert) verified via
+agent-captured canvas recording at
+`screenshots/max-recordings/warp-hyper-dimness-undo-2026-04-18.webm`
+(3.67 MB, ~13s, VP9). Max evaluated ACs on the recording:
 
-Director-owned doc reversals pending (not blocking Shipped on this
-brief, but wanted same-session per the miss response):
-- `docs/SYSTEM_CONTRACTS.md` §9.7 INSIDE-mode tunnel scale invariant —
-  REVERSE.
-- `docs/FEATURES/warp.md` §"Current state snapshot (2026-04-18)" HYPER
-  and EXIT lines — REVERSE.
-- `docs/WORKSTREAMS/warp-hyper-dimness-2026-04-18.md` §"Status" line —
-  flip from `Shipped` to `Re-opened — see warp-hyper-dimness-undo-2026-04-18.md`.
-- Optionally: §9.6 framing re-anchor per the PM's pushback — §9.6 was
-  framed as validated by `81dda69` when in fact it is validated by the
-  un-do.
+- **AC #1 HYPER tunnel geometry cylindrical:** PASS (compositor ray-cone
+  walls reading correctly; sparse streaks acknowledged as placeholder
+  content, acceptable for V1 per Max).
+- **AC #2 HYPER destination visible at far end:** PASS — *"the crowning
+  event happens well."*
+- **AC #3 EXIT crowning transition, camera continuous:** PASS with a
+  polish note — *"the event of coming out of the warp could be a little
+  bit more dramatic maybe."* Logged as followup `warp-exit-drama-polish`.
+- **AC #4 ENTER continuous through threshold:** PASS structurally; see
+  new freeze finding below.
+- **AC #5 Seamless — no framerate change:** PARTIAL pass — three
+  framerate issues visible in the recording, each logged as its own
+  followup below. The issues are pre-existing, NOT introduced by the
+  un-do; the un-do closes as Shipped regardless.
 
-Drafted by PM 2026-04-18. Executed by working-Claude 2026-04-18.
-Shipped flips on Max-recording sign-off per AC #6 + MAX_RECORDING_PROTOCOL.
+Director-owned doc reversals completed earlier session:
+- `6888459` — SYSTEM_CONTRACTS §9.7 removed (codified wrong approach);
+  `warp.md` §"Current state snapshot" HYPER/EXIT lines revised.
+- `a869c84` — sibling `warp-hyper-dimness-2026-04-18.md` Status flipped
+  from `Shipped` to `Re-opened`.
+- `bde5850`'s §9.6 parity invariant kept as-is (reads cleanly without
+  `81dda69` anchoring).
+
+## Followups surfaced during verification
+
+New followups named during Max's video review:
+
+1. **`warp-fold-fps-hitch`** — framerate chugs at warp initiate (FOLD
+   phase), camera flying toward portal. Visible in the recording's
+   first 2–3 seconds.
+2. **`warp-inside-entry-freeze`** — brief freeze at tunnel entry
+   (ENTER → INSIDE transition). Everything stops momentarily. Visible
+   around the mid-point of the recording.
+3. **`warp-exit-smoothness`** — exit produces a fly-out → slowdown →
+   speed-back-up arc into orbit that reads as stuttery. Smooth the
+   deceleration profile.
+4. **`warp-exit-drama-polish`** — exit event could be more dramatic.
+   V-later polish; lower priority than the three perf items above.
+5. **`autopilot-star-orbit-distance`** — autopilot post-warp ends up
+   way too close to destination star. Autopilot should treat star
+   orbits differently from planet orbits — wider berth around stars.
+   Not a warp issue per se; autopilot concern. Flag for Director to
+   route to the appropriate feature doc (autopilot / post-warp
+   arrival / star orbit).
+
+**Design note surfaced during review (for Director):** the dark /
+sparse HYPER tunnel walls are **acceptable placeholder content**, not
+a bug to fix. Max's design intent: tunnel walls will eventually be
+papered with starfield stars (non-animated; the camera's motion
+through the tunnel produces natural star-rushing parallax). This
+means the "bright starfield tunnel walls" goal that animated the
+original `warp-hyper-dimness-2026-04-18` workstream was actually
+targeting the wrong mechanism — the animated-walls approach is not
+the spec. Future wall-content workstreams should paper static
+starfield stars onto tunnel geometry, letting camera-motion produce
+the rush, rather than shader-animate the walls. Flag for Director to
+update `docs/FEATURES/warp.md` with this design intent.
+
+Drafted by PM 2026-04-18. Executed + verified + shipped by working-
+Claude across 2026-04-18/19. Recording verification via agent-
+captured `canvas.captureStream` + `MediaRecorder` (new capability
+validated this session — PM workstream to formalize at
+`docs/WORKSTREAMS/canvas-recording-workflow-formalization-<date>.md`).
