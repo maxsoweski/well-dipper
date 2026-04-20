@@ -355,12 +355,20 @@ Autopilot-drive-state transitions extend §5.3's table with the feature-doc togg
 | Transition | Trigger |
 |---|---|
 | System-load → Autopilot | Default. Autopilot is **on at system-load**, not opt-in. |
-| Autopilot → Manual | Player input (any of): click upper-left status indicator, press autopilot-toggle key, WASD thrust input, target-click + `commitSelection()`. |
-| Manual → Autopilot | **Explicit only** — click status indicator or press toggle key. **No auto-resume from idle.** This is a change from the previous "30s idle → autopilot resumes" pattern. |
+| Autopilot → Manual | Player input (any of): click upper-left status indicator, press autopilot-toggle key (`Tab`, **provisional** — see §10.4.1), WASD thrust input, target-click + `commitSelection()`. |
+| Manual → Autopilot | **Explicit only** — click status indicator or press toggle key (`Tab`, **provisional** — see §10.4.1). **No auto-resume from idle.** This is a change from the previous "30s idle → autopilot resumes" pattern. |
 | Autopilot → Warp | Tour-complete → warp-select. See Warp §9. |
 | Warp → Autopilot | Warp exit. `ENTRY` ship-axis phase. The warp-exit forward vector is the continuity anchor — see §10.5. |
 
 **Idle-resume retired.** The "30s idle → autopilot resumes" path in today's `ShipCameraSystem` is retired by this feature. Re-engagement requires explicit input. This is a load-bearing UX decision — any reintroduction of auto-resume violates the feature's "no auto-resume after toggle-off" criterion.
+
+### 10.4.1 Autopilot-toggle keybinding (provisional)
+
+**Current binding:** `Tab`. **Provisional** — there is a real conflict with the existing next-planet cycler at `src/main.js:6076` / `:6120` (control docstring `src/main.js:6806`: *"Tab=next planet, 1-9=planet#"*). The Director's first candidate `P` is taken (settings-panel toggle at `src/main.js:5738`).
+
+Max's call (2026-04-20): accept the `Tab` conflict as a temporary measure; the full keyboard-shortcut redesign is a separate tracked GTD task and is the right place to settle autopilot-toggle + next-planet cycling + any other accreted overlaps in one pass. Until the redesign lands, `Tab` = autopilot toggle and next-planet-cycling is temporarily displaced.
+
+**Contract note:** because this binding is provisional, a future edit that *changes* `Tab`'s autopilot role is NOT a contract violation — it's the expected resolution of the redesign. What IS a contract violation: silently reintroducing idle-auto-resume (§10.4 rule) or removing the autopilot-toggle key entirely without an equivalent affordance. See `docs/FEATURES/autopilot.md` §Keybinding for the feature-side narrative.
 
 ### 10.5 Warp-exit handoff (continuity-critical)
 

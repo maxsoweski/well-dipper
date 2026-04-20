@@ -109,7 +109,7 @@ Current code (`AutoNavigator.buildQueue`) visits inner-to-outer. Director's note
 - **Warp-exit-vector arrival pose** — `ENTRY` start is derived from the warp forward direction, not a fixed above-the-plane origin.
 - **Ship/camera decoupling architecture** — the two-axis structure must be in place at V1 even though only `ESTABLISHING` is exercised on the camera axis.
 - **`ESTABLISHING` camera mode** — paces independently of ship phase, can linger/pan.
-- **Toggle UI** — status indicator upper-left + keybinding (not `A`; see Open questions).
+- **Toggle UI** — status indicator upper-left + keybinding (`Tab`, **provisional** — see §Keybinding below).
 - **Default-ON state** — autopilot is the default, not opt-in.
 - **Manual override with inertial continuity** — toggling off preserves angular momentum; no snap-stop.
 - **HUD hide-during-autopilot / reappear-on-interaction.**
@@ -139,8 +139,19 @@ Each V-later item requires a specific extension hook **built into V1** even if n
 
 - **Default state:** ON. Autopilot is the default mode from system-load, not opt-in.
 - **Toggle off:** clickable **status indicator in upper-left of screen** OR a keybinding. The indicator is a small element, clickable, integrates with the existing HUD layer.
-- **Keybinding constraint:** NOT `A` — WASD is reserved for manual flight. **Open question** (see below).
+- **Keybinding constraint:** NOT `A` — WASD is reserved for manual flight.
+- **Current binding (provisional):** `Tab`. This **conflicts** with the existing next-planet cycler at `src/main.js:6076` / `:6120` (docstring at `src/main.js:6806`: *"Tab=next planet, 1-9=planet#"*). `P` was the Director's first candidate but is already bound (settings-panel toggle at `src/main.js:5738`). Max's call: accept the `Tab` conflict provisionally; the full keyboard-shortcut redesign is tracked as a separate GTD task and is the right vehicle to settle next-planet cycling + autopilot toggle + any other overlaps in one pass. See §Keybinding below.
 - **Toggle on (after being off):** must be **explicit** — no auto-resume. Player must click the indicator or press the key.
+
+## Keybinding (provisional — pending keyboard-shortcut redesign)
+
+**Current binding:** `Tab` — autopilot on/off toggle.
+
+**Why provisional:** `Tab` is already bound at `src/main.js:6076` / `:6120` to cycle to the next planet (control docstring at `src/main.js:6806`: *"Tab=next planet, 1-9=planet#"*). The first candidate `P` was already taken (settings-panel toggle at `src/main.js:5738`). Max's decision (2026-04-20, exact words): *"This does impact the user experience when on autopilot and when in manual control. But for the time being, let's just reassign Tab to be autopilot on off."*
+
+**Durable fix:** a full keyboard-shortcut redesign across autopilot + in-system navigation (`Tab`, `1-9` planet jumps, anything else that's accreted). Tracked as a GTD task by working-Claude. Until that workstream lands, the `Tab`-autopilot-overlap is accepted cost and next-planet-cycling is temporarily displaced.
+
+**Honest naming in this doc.** Don't hide the conflict at code-time. The redesign workstream is the place to settle it; this doc flags it so the redesign scope is concrete when that workstream opens.
 
 ## End-state + next-system loop
 
@@ -237,7 +248,7 @@ Decisions parked for implementation-time or Max-time, not resolved in this doc:
 - **"Relativistic speeds" in `CRUISE`** — literal (Doppler / aberration effects implied) or just visually fast? **Director call:** V1 is **visually fast** only. Literal relativistic visual effects (blue-shift ahead / red-shift behind) are already `V-later` on the warp feature (`docs/FEATURES/warp.md` §V-later). Autopilot CRUISE shouldn't outrun warp's own polish.
 - **`STATION` orbit-speed ratio** — what's a specific measurable? **Director call:** unresolved at vision-time; this is an implementation-tuning value best set during a visual-lab iteration. The criterion is perceptual ("fast relative to planet size" AND "not so fast the planet feels small"). Escalate to Max only if the tuning range is genuinely ambiguous after lab iteration.
 - **First-planet selection — innermost-out vs. most-interesting.** Max flagged this one. **Director call:** V1 stays on innermost-out (existing code + no OOI-registry dependency). V-later revisits when the OOI runtime registry from `docs/WORKSTREAMS/ooi-capture-and-exposure-system-2026-04-20.md` is live. Captured as V-later explicitly in triage above.
-- **Keybinding for autopilot-toggle** — not `A`. **Director call:** candidate is `P` (autopilot mnemonic; not in WASD; not conflicting with common browser/game bindings). Working-Claude should confirm against existing bindings before landing.
+- **Keybinding for autopilot-toggle** — not `A`. **Director call (2026-04-20, revised):** `Tab`, **provisional**. Original candidate was `P` (autopilot mnemonic), but working-Claude's bindings-audit found `P` already toggles the settings panel at `src/main.js:5738`. `Tab` was chosen next despite a real conflict with the next-planet cycler (`src/main.js:6076` / `:6120`; control docstring `src/main.js:6806`: *"Tab=next planet, 1-9=planet#"*). Max accepted the conflict as a temporary measure with Max's stated reasoning: *"We are going to have to totally redo the keyboard shortcuts for automatically moving around in the planet system. For the time being, let's just reassign Tab to be autopilot on/off."* The overlap **is real** and affects both autopilot and manual-mode UX — naming it honestly rather than hiding it. **The durable fix is the keyboard-shortcut redesign workstream** (tracked in GTD by working-Claude), which settles autopilot-toggle + next-planet-cycling + any other overlapping binding in one pass. Until that lands, `Tab` is the autopilot toggle and next-planet-cycling is temporarily displaced.
 - **Event-surface shape** (single event with state enum vs. three typed events). **Director call above:** three typed events (`phase-change`, `camera-mode-change`, `toggle`). Flag if implementation reveals a subscriber pattern that argues the other way.
 - **`AutoNavigator` role-split** — does it cleanly map to the "navigation subsystem" role or need restructuring? Escalated to working-Claude as implementation-time question; this doc asserts the two-layer split is required, not that `AutoNavigator` as-written is the vehicle.
 - **Selection-system API for manual-mode object-picking** — exists today or greenfield? Reticle system exists (`docs/SYSTEM_CONTRACTS.md` §5.4) and already does hover/soft-select/commit. Manual-mode "burn to" likely wires through the existing `commitSelection()` + `commitBurn()` path; the question is whether burn-target-resolution needs to re-derive motion from inertial state (it does — the ship already has angular momentum). Flag for working-Claude.
