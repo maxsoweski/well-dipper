@@ -6,31 +6,46 @@ Scoped — awaiting working-Claude execution.
 
 ## Parent feature
 
-**Gap flagged.** There is no `docs/FEATURES/autopilot.md`. `ls
-docs/FEATURES/` returns only `warp.md` and the `_drafts/` directory.
-`docs/FEATURE_AUDIT.md` does not contain the string "autopilot". The
-Director's routing note cites "§Autopilot" in `docs/SYSTEM_CONTRACTS.md`
-but no such section exists — autopilot appears as a cross-reference
-inside §2 Star Systems (L46), §5 Camera and Control (L83, L121–127), and
-§9 Warp (L252), not as its own section.
+**`docs/FEATURES/autopilot.md`** — **§ENTRY** (primary) and **§STATION**
+(contrast). Authored by Director at commit `bdeb0ff` (2026-04-20) from
+a heart's-desire → V1 interview with Max.
 
-PM call: bootstrap the autopilot feature doc is **out of scope for this
-workstream** — writing it properly is a Director session, and blocking
-on it would keep a small fix stuck behind a large articulation. For this
-brief the parent reference is §2 + §5.3 of SYSTEM_CONTRACTS (autopilot
-as a drive state that tours generated bodies) and the `AutoNavigator`
-contract articulated in `src/auto/AutoNavigator.js` docstring:
+- **§ENTRY criterion — *"Holds safe distance — the ship can't get too
+  close to a star/binary. … the post-warp arrival orbit should read as
+  'a long respectful look at a stellar body,' not 'skimming the
+  photosphere.'"*** The 20× radius-multiplier candidate this brief
+  targets is the operationalization of that criterion for stars
+  specifically. The feature doc's §V1 / must-ship list names this
+  workstream by path under *"Star-orbit safe-distance rule — the
+  star-orbit-distance workstream lands against this criterion."*
+- **§STATION criterion — *"Tight orbit, immersive — close enough that
+  the planet is 'ground' and the starfield is 'sky.'"*** This is the
+  ratio-contrast framing: planet STATION is deliberately close
+  (immersive-ground); star STATION must be deliberately far
+  (respectful-look). The two-recording verification pair (AC #6) is
+  the evidence that this contrast reads at the shipped multipliers —
+  one recording for each pole.
+- **§Failure criteria — *"Star-approach `STATION` skims the
+  photosphere — failure of the safe-distance rule. (This is the
+  symptom the star-orbit-distance workstream fixes.)"*** The feature
+  doc explicitly names this workstream as the fix for that failure
+  mode; the ship-gate demo is where Max confirms the fix.
 
-> *"Builds a visit queue from the current system. Each stop stores a
-> reference to the Three.js mesh so the FlythroughCamera can orbit/
-> travel to it. The navigator manages the queue order and timing.
-> FlythroughCamera handles all the actual camera motion."*
+Primary contracts: **`docs/SYSTEM_CONTRACTS.md` §10 Autopilot**
+(bootstrapped by Director in the same `bdeb0ff` commit — autopilot's
+structural invariants, the two-layer architecture that separates
+cinematography from navigation-subsystem, and the warp-exit handoff
+criteria). Secondary contracts: §2 Star Systems (autopilot as consumer
+of generator output) and §5.3 Drive States (autopilot as a camera-
+writer during system tours). The numeric change this workstream ships
+fits entirely within §10's navigation-subsystem layer — safe-distance
+rules around bodies — and does not touch cinematography-layer
+concerns.
 
-**Flag for Director (separate turn, not this commit):** bootstrap
-`docs/FEATURES/autopilot.md` and add an Autopilot section to
-SYSTEM_CONTRACTS with a constants table covering orbit-distance
-formulas per body class. This workstream will cite that feature doc
-retroactively once it lands.
+**Prior contract citation (pre-landing legacy, kept for history):**
+this brief was originally scoped parenting against §2 + §5.3 of
+SYSTEM_CONTRACTS before the feature doc and §10 existed. The
+retroactive tightening above supersedes that scoping.
 
 ## Implementation plan
 
