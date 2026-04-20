@@ -8,37 +8,63 @@ workstream — see Principle-2 guard below).
 
 ## Parent feature
 
-**Gap flagged.** There is no `docs/FEATURES/autopilot.md` on disk
-(`ls docs/FEATURES/` returns `warp.md` and `_drafts/` only, same state
-as sibling brief `autopilot-star-orbit-distance-2026-04-20.md`). The
-autopilot feature doc is being authored by the Director in a parallel
-session; this workstream is spawned from that feature-doc interview.
-
+**`docs/FEATURES/autopilot.md`** — authored by Director at commit
+`bdeb0ff` (2026-04-20) from a heart's-desire → V1 interview with Max.
 The OOI system is not a feature in its own right — it is **shared
-infrastructure in service of Autopilot (first consumer) and later
-consumers** (see Deliverable 4). The parent reference is therefore:
+infrastructure whose first consumer is autopilot's camera-axis V-later
+modes**. Three load-bearing sections of the feature doc anchor this
+workstream:
 
-- **Authoritative when it lands:** `docs/FEATURES/autopilot.md` §Camera
-  axis — the SHOWCASE and ROVING camera modes are the load-bearing
-  consumers that make this workstream non-speculative. Until that doc
-  is on disk, cite it by name as the expected parent.
-- **Bible anchor:** `docs/GAME_BIBLE.md` §1 Vision / Core Experience /
-  **Discover** (L41) — *"Every system is different. Finding a
-  terrestrial world or an alien megastructure is rare and meaningful."*
-  The autopilot's camera cannot make a moment "meaningful" without
-  knowing what's worth looking at. Exposing OOIs is the substrate
-  under that felt experience.
-- **Bible anchor for ontology breadth:** §4 Star Systems (binary
-  stars, rings, moons), §4B Rings, §4C Asteroid Belts, §5 Natural
-  Planet Types, §6 Overlay Systems (exotic, civilized, megastructures),
-  §12 Galaxy-Scale Generation (nebulae, globular clusters, disk
-  plane) — the union of these sections defines the OOI space.
+- **§Camera axis — `SHOWCASE` and `ROVING` modes.** The feature doc
+  defines these as the V-later camera modes that *"cannot be
+  hard-coded — they need to discover nearby interesting things at
+  runtime and frame them."* `SHOWCASE` = *"framed compositional beats
+  — crescent, eclipse, ring-shadow, transit"*; `ROVING` = *"player-eye
+  freedom, 360° turn-head-toward-OOI."* Both query `docs/OBJECTS_OF_INTEREST.md`
+  at runtime. This workstream ships the substrate they consume.
+  **Dependency is explicit:** autopilot V-later cannot ship without
+  this workstream's runtime-registry spec being implemented by a
+  first-consumer workstream (see §Followups §3).
+- **§V-later triage — *"OOI runtime registry (the query substrate
+  `SHOWCASE` and `ROVING` consume at runtime — workstream at
+  `docs/WORKSTREAMS/ooi-capture-and-exposure-system-2026-04-20.md`)."***
+  The feature doc names this workstream by path as the V-later
+  architectural-affordance owner. That inbound reference is this
+  workstream's authoritative parenting anchor.
+- **§V1 architectural affordances for V-later items — OOI runtime
+  registry.** The feature doc mandates *"the camera update loop
+  queries *through* a lookup interface (stub in V1), not directly
+  from scene globals. V1 interface returns `null` / empty for
+  `getNearbyOOIs()` and `getActiveEvents()`; V-later implementation
+  lights those up without changing the caller."* This constrains the
+  runtime-registry spec (Deliverable 3) — the API surface must be
+  stub-able from autopilot V1 before this workstream's registry is
+  implemented, which means the interface shape must be nailed down
+  now, even though no code lands.
 
-**Flag for Director (separate turn, not this commit):** once
-`docs/FEATURES/autopilot.md` lands, add a `## Workstreams` entry
-pointing to this brief and the sibling
-`autopilot-star-orbit-distance-2026-04-20.md` brief. This brief's
-Parent Feature line gets retroactively tightened to cite the section.
+Autopilot V1 ships the stub-able interface per `docs/SYSTEM_CONTRACTS.md`
+§10.9 OOI query interface. This workstream ships the schema and spec
+that interface conforms to; a **separate** future workstream
+(§Followups §3) implements the registry as the first consumer —
+autopilot V-later — comes online.
+
+**Future consumers named in Deliverable 4 (ROVING, SHOWCASE, HUD,
+scanner, narrative, screenshot, BPM-hooks)** are explicit V-later
+dependents of this workstream. Autopilot ROVING + SHOWCASE are the
+*load-bearing* V-later consumers — the ones whose design constraints
+shape the spec now — because they are the named V-later items in the
+feature doc's §V-later triage. Other future consumers are shape-
+constraints only; they do not have feature docs today.
+
+**Bible anchors** (ontology breadth — unchanged from prior scoping):
+§1 Vision / Core Experience / **Discover** (L41), §4 Star Systems, §4B
+Rings, §4C Asteroid Belts, §5 Natural Planet Types, §6 Overlay Systems,
+§12 Galaxy-Scale Generation.
+
+**Prior scoping note (superseded):** this brief was originally scoped
+parenting against the autopilot feature doc by name before it landed,
+with an explicit invitation to tighten once the doc was on disk. That
+tightening is now applied above.
 
 ## Implementation plan
 
