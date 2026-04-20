@@ -791,8 +791,9 @@ lesson pages carry the canvas.
 
 ## Status
 
-**Shipped** — all seven ACs met. Verified against Shader Lab recording
-at `~/projects/shader-lab/screenshots/max-recordings/shader-lab-l10-contact.png`
+**Shipped 80ed571** — all seven ACs met. Verified against Shader Lab
+recording at
+`~/projects/shader-lab/screenshots/max-recordings/shader-lab-l10-contact.png`
 + source webm at
 `~/projects/shader-lab/screenshots/max-recordings/shader-lab-l10-domain-warping-2026-04-20.webm`.
 Director approved in this session (greenlight conditional on AC #6
