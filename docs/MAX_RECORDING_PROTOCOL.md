@@ -1,72 +1,110 @@
-# Max-recording drop protocol
+# Recording protocol (canvas + DOM-only)
 
-The Shipped-gate artifact for any visible / animated / phased feature is a Max-driven OS-level screen recording. This doc names how Max captures, where he drops the file, how he signals delivery, and how working-Claude picks it up. Authored 2026-04-18 as part of `warp-shipped-gate-process-fix-2026-04-18`; consumed first by `warp-hyper-dimness-undo-2026-04-18`.
+The Shipped-gate artifact for any visible / animated / phased feature is a video recording of the feature, evaluated by Max. Two paths exist depending on what the feature renders to:
 
-## Why OS-level, not Playwright
+- **Canvas path (default for `<canvas>`-rendered features):** agent captures via `~/.claude/helpers/canvas-recorder.js`, file lands in project via `~/.local/bin/fetch-canvas-recording.sh`, Max evaluates on playback or via contact sheet.
+- **DOM-only path (fallback for features outside `<canvas>`):** Max captures via OS-level tool, drops file at a known path, agent picks up metadata only.
 
-Playwright's video recorder captures inside the headless/extension-driven browser. When a fix regresses framerate or GPU throughput (exact failure mode of the 2026-04-18 dimness miss), Playwright undersamples or stalls — the tool being used to evaluate the fix is degraded by the fix itself. OS-level capture is outside the browser process, so any rendering the player would actually see, the recording sees. Max is also the evaluator of record; the artifact being Max-driven keeps him in the loop, which is the whole point of the gate.
+Both paths close the same `VERIFIED_PENDING_MAX <sha>` → `Shipped <sha> — verified against <recording-path>` status transition. The principle — motion evidence, Max-evaluated, not author/auditor proxy — is identical across paths. The mechanism differs only in who authors the capture.
 
-## How Max captures (Windows)
+Authored 2026-04-18 (DOM-only version) and 2026-04-19 (canvas path added). See `docs/WORKSTREAMS/warp-shipped-gate-process-fix-2026-04-18.md` + `docs/WORKSTREAMS/canvas-recording-workflow-formalization-2026-04-19.md` for the full provenance.
 
-Any of the below — pick whichever is available and convenient. All produce acceptable artifacts.
+## Which path applies
 
-1. **Xbox Game Bar (built-in, preferred).** `Win+G` opens the Game Bar overlay. Click the record button (or press `Win+Alt+R`) to start, same to stop. Output lands in `C:\Users\Max\Videos\Captures\` as `.mp4`. Zero setup; always available on Windows 11.
-2. **Snipping Tool recording (built-in, fallback).** `Win+Shift+R` starts a region-select recording. Save to the project `screenshots/max-recordings/` directly. Output is `.mp4`.
-3. **OBS Studio (heavy fallback).** Use if already installed and configured. Scene: Display Capture of the monitor showing the Well Dipper tab. Output container: `.mp4` or `.mkv`.
+- Feature renders to a `<canvas>` element (any WebGL / WebGPU / 2D-canvas game, shader project, procedural art app) → **canvas path**.
+- Feature renders to DOM (forms, layouts, typography projects, SVG-only visuals) → **DOM-only path**.
+- When in doubt, start with canvas. If `captureStream` fails on the selector (no `<canvas>` matches) the agent falls back to DOM-only without ceremony.
 
-Any format in `{.mp4, .mov, .webm}` works for downstream. `.mkv` is fine if OBS defaults to it; rename to `.mp4` or leave as-is — the extension is informational, not validated.
+## When to record vs. when to screenshot
 
-## Drop path convention
+Recording is for **phased / animated / time-windowed** changes — warp phases, transitions, reveals, sequenced motion, anything where the authored experience unfolds across frames.
 
-`screenshots/max-recordings/<workstream-slug>-<YYYY-MM-DD>.<ext>`
+Static UI changes (a menu label swap, a static HUD adjustment, a stable shader still) remain a Playwright `browser_take_screenshot`. The recorder is a precision tool for motion evaluation; it is not the default for any visual change.
 
-- `<workstream-slug>` matches the workstream brief filename without the `.md` and without the trailing date. E.g., `warp-hyper-dimness-undo` for `docs/WORKSTREAMS/warp-hyper-dimness-undo-2026-04-18.md`.
-- `<YYYY-MM-DD>` is the recording date, same convention as the workstream brief.
-- Multiple recordings per workstream (re-takes) are suffixed: `-v2`, `-v3`. Latest wins.
+**Rule of thumb: if a single frame can settle the AC, a recording is wasted bytes.**
 
-The `screenshots/max-recordings/` directory doesn't need to pre-exist — `mkdir -p` equivalent behavior; Max drops into whatever path, working-Claude finds it.
+This section guards against over-capture — the agent-initiated recorder lowered capture cost to near-zero, which invites using it for changes where a PNG would be cheaper and equally valid.
 
-## How Max signals delivery
+## Capture path — canvas features (default)
 
-Plain-text chat message with the file path. No JSON, no ceremony. Examples:
+Agent-initiated. Max's role is evaluator only; no capture action from Max.
 
-- *"Recording at `screenshots/max-recordings/warp-hyper-dimness-undo-2026-04-18.mp4`."*
-- *"Dropped the warp recording — `screenshots/max-recordings/warp-hyper-dimness-undo-2026-04-18-v2.mp4` is the good take."*
-- *"Recording in `C:\Users\Max\Videos\Captures\Well Dipper 2026-04-18 23-47-15.mp4` — haven't moved it yet, but it's done."* (Working-Claude can read from that path too; a copy into `screenshots/max-recordings/` happens on demand.)
+### How the agent captures
 
-## How working-Claude verifies
+1. Install the recorder helper via `browser_evaluate` / `evaluate_script`. The helper lives at `~/.claude/helpers/canvas-recorder.js`; paste its IIFE body into the eval. Install is idempotent.
+2. Trigger the feature under test (click destination, Space ×3, whatever the workflow is). Real-flow input per `feedback_test-actual-user-flow.md`.
+3. `await window.__canvasRecorder.stop()` — returns `{ sizeBytes, mimeType, filename, chunkCount }`. The blob is download-triggered to Chrome's Downloads folder; the agent does not receive the bytes.
+4. From WSL: `fetch-canvas-recording.sh <filename> <project>/screenshots/max-recordings/`. The script polls Chrome's Downloads for up to 30s (Chrome's download flush is variable), then copies the file into the project.
 
-**Working-Claude cannot watch the video.** The verification step is not visual; it is:
+### Drop path convention
 
-1. **File existence.** `ls -la <path>` or equivalent. If the file is missing or zero bytes, ask Max to re-export.
-2. **File size sanity.** Recordings of 5–10 seconds of a Well Dipper warp at 1080p or similar should be in the range of a few MB to a few tens of MB. A 100-byte file is broken; a 2 GB file is likely a full screen recording that accidentally wasn't stopped — ask Max.
-3. **Format recognition.** Extension in `{.mp4, .mov, .webm, .mkv}`. If something exotic (`.flv`, `.avi`) lands, note it but don't refuse — Max sees the file, Max evaluates the ACs.
+`screenshots/max-recordings/<workstream-slug>-<YYYY-MM-DD>.webm`
 
-Max is the evaluator. Working-Claude's role on the recording is custodial: confirm the file is where Max said it is, note file metadata, flag if anything is obviously wrong. The AC evaluation itself ("did you see the destination-star crown?") is Max's call, reported back in chat.
+- `<workstream-slug>` matches the brief filename without `.md` and without its trailing date.
+- Multiple captures per workstream are suffixed: `-v2`, `-v3`. Latest wins.
+- Target directory is auto-created by the fetch script.
 
-## What working-Claude does after verification
+### How the agent verifies
 
-1. Update the workstream brief's `## Status` line from `VERIFIED_PENDING_MAX <commit-sha>` to `Shipped <commit-sha> — verified against <recording-path>`.
-2. Commit the brief-status edit with a message like `status(workstreams): <brief-slug> shipped — Max recording verified`.
-3. If any AC fails per Max's evaluation, escalate — the workstream may need iteration or a follow-up workstream. Do not re-open Shipped on one-off feedback; scope the iteration properly.
+- `fetch-canvas-recording.sh` exits 0 and prints `<size-bytes> <target-path>`.
+- Size > 0 bytes. A zero-byte file is a broken capture — re-run.
+- For AC evaluation, the agent can extract a contact sheet (`~/.local/bin/contact-sheet.sh <video> <cols>x<rows> <fps> <output.png>`) or a single frame at a specific timestamp (`~/.local/bin/frame-at.sh <video> <mm:ss.fff> <output.png>`).
+- The agent surfaces the contact sheet and any specific-timestamp frames to Max in chat. Max evaluates. Agent flips `VERIFIED_PENDING_MAX` → `Shipped` on Max's pass.
 
-## Missing-file / zero-byte fallback
+### Failure modes — canvas path
 
-- **If Max says a path in chat but the file isn't there:** reply with the `ls -la` output (or absence thereof), ask for the actual path or a re-export.
-- **If the file is zero bytes:** *"Recording at `<path>` exists but is 0 bytes — can you re-export? Xbox Game Bar sometimes corrupts on fast stop-start."*
-- **If Max drops a Playwright filmstrip or a set of screenshots instead of an OS recording:** flag it. *"That looks like a filmstrip / screenshot series, not an OS-level recording. The Shipped gate requires OS-level capture — can you do a Game Bar recording instead?"* — unless Max explicitly overrides the gate for this case, in which case honor the override and note in the Status line.
+- **Timeout fetching from Downloads.** Chrome's flush latency occasionally exceeds 30s. Increase the fetch timeout (third arg) or re-run `stop()` to re-trigger the download.
+- **`captureStream` selector mismatch.** The helper's `start()` returns `{ error: "no element matches selector ..." }` if no canvas matches. Adjust the selector (e.g., `#game-canvas`) or fall back to DOM-only.
+- **Content-classifier refusal on `evaluate_script` return.** Do not retrieve blob data via eval-return — the 2026-04-18/19 incident was a 1M-char base64 chunk tripping a content classifier on Opus. The helper's contract is that `stop()` returns only metadata; route bytes through filesystem (download-trigger). If a future change to the helper accidentally returns blob bytes, it will hit this failure mode. General rule for all such helpers: *do not retrieve large binary payloads via `evaluate_script` return values; route them through the filesystem.*
+- **Framerate mismatch.** If the page renders below the requested `fps`, the recording's timestamps are stretched. Not usually a correctness problem for Max's evaluation, but note if phase durations are AC-relevant.
 
-## Scope of this gate
+## Capture path — DOM-only features (fallback)
+
+Max-driven. Used when the feature renders to DOM and `captureStream` has no canvas to target.
+
+### How Max captures (Windows)
+
+Any of the below — pick whichever is convenient.
+
+1. **Xbox Game Bar (preferred).** `Win+G` opens the overlay; record button or `Win+Alt+R` to toggle. Output lands in `C:\Users\Max\Videos\Captures\` as `.mp4`.
+2. **Snipping Tool recording (fallback).** `Win+Shift+R` region-select recording. Save to the drop path directly.
+3. **OBS Studio (heavy fallback).** Use if already configured.
+
+Any format in `{.mp4, .mov, .webm, .mkv}` works for downstream.
+
+### Drop path + delivery signal
+
+Same path convention as the canvas path: `screenshots/max-recordings/<workstream-slug>-<YYYY-MM-DD>.<ext>`.
+
+Max signals delivery in chat as plain text: *"Recording at `<path>`."*
+
+### How the agent verifies — DOM-only path
+
+- `ls -la <path>` — file existence and size sanity (few MB for 5–10s of 1080p).
+- Format recognized (extension in the supported list).
+- Agent **cannot watch the video**; Max is the evaluator. Agent's role is custodial: confirm the file exists, note metadata, flag anything obviously wrong.
+
+### Failure modes — DOM-only path
+
+- **Missing file at the named path.** `ls -la` returns nothing — ask Max for the actual path or a re-export.
+- **Zero-byte file.** Xbox Game Bar occasionally corrupts on fast stop-start. Ask Max to re-export.
+- **Exotic format.** Extensions outside `{.mp4, .mov, .webm, .mkv}` land — note it, don't refuse; Max sees the file.
+- **Max drops screenshots or a filmstrip instead.** Flag it. *"That looks like a screenshot set, not an OS-level recording. Want to re-capture via Game Bar, or do you want to override the gate for this case?"* Honor explicit overrides; note in Status.
+
+## Scope of the gate
 
 Applies to: **visible, animated, or phased feature workstreams.** Warp phases, transitions, any animation sequence, progressive reveals, visual mechanics.
 
-Does NOT apply to: pure-docs workstreams, refactors with no visual surface, bug fixes in non-visual code paths, infrastructure / tooling work. The `warp-shipped-gate-process-fix-2026-04-18` workstream (this doc's authoring context) is itself doc-only and does not require a Max-recording to close.
+Does NOT apply to: pure-docs workstreams, refactors with no visual surface, bug fixes in non-visual code paths, infrastructure / tooling work. The workstreams that authored this protocol (`warp-shipped-gate-process-fix-2026-04-18` and `canvas-recording-workflow-formalization-2026-04-19`) are themselves doc/tooling and do not require a recording to close.
 
 Director and PM decide per-workstream whether the gate applies. Default to yes when in doubt; cheap to add, expensive to retroactively insist on.
 
 ## See also
 
-- `~/.claude/CLAUDE.md` §"Development Collaboration OS" — `VERIFIED_PENDING_MAX` → `Shipped` status transition that this protocol feeds.
-- `docs/PERSONAS/pm.md` §"Per-phase AC rule" — the companion rule for AC authoring (phase-sourced ACs from feature docs) that the recording verifies against.
-- `docs/WORKSTREAMS/warp-shipped-gate-process-fix-2026-04-18.md` — the workstream that authored this doc.
-- `docs/WORKSTREAMS/warp-hyper-dimness-undo-2026-04-18.md` — the first workstream to consume this protocol.
+- `~/.claude/helpers/canvas-recorder.js` — agent-side capture helper.
+- `~/.local/bin/fetch-canvas-recording.sh` — WSL-side save helper.
+- `~/.local/bin/contact-sheet.sh`, `~/.local/bin/frame-at.sh` — ffmpeg review helpers.
+- `~/.claude/CLAUDE.md` §"Development Collaboration OS" — `VERIFIED_PENDING_MAX` → `Shipped` status transition this protocol feeds.
+- `docs/PERSONAS/pm.md` §"Per-phase AC rule" — companion rule for AC authoring (phase-sourced ACs from feature docs) that recordings verify against.
+- `docs/WORKSTREAMS/warp-shipped-gate-process-fix-2026-04-18.md` — original DOM-only protocol authorship.
+- `docs/WORKSTREAMS/canvas-recording-workflow-formalization-2026-04-19.md` — canvas path formalization.

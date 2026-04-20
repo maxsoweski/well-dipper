@@ -758,9 +758,42 @@ sheet, this brief Status line flipped to Shipped. No Max-recording
 required — this workstream is process / tooling only; the gate does
 not apply to itself (same carve-out as the sibling brief).
 
+## Shader Lab cross-project validation (AC #6) — 2026-04-20
+
+Executed against live `https://easymaking.io/shader-lab/10-domain-warping.html`
+(no local server needed — the project is deployed; this sidestepped the
+WSL2 port-forwarding limitation that blocked a first attempt at local
+serving, where only port 5173 auto-forwards to Windows Chrome in this
+environment). Primary `<canvas id="canvas">` element at 945×531 px.
+
+- **Install:** IIFE pasted via `mcp__chrome-devtools__evaluate_script`,
+  returned `"installed"` first call; idempotency not re-tested here
+  because the first-load case is the worst case.
+- **Capture:** `start({ selector: '#canvas', fps: 30, filename: 'shader-lab-l10-domain-warping-2026-04-20.webm' })`
+  returned `{ started: true, mimeType: 'video/webm;codecs=vp9', canvasW: 945, canvasH: 531 }`.
+  3s wait. `await stop()` returned `{ sizeBytes: 172963, chunkCount: 28 }`.
+- **Fetch:** `fetch-canvas-recording.sh` copied the webm into
+  `~/projects/shader-lab/screenshots/max-recordings/shader-lab-l10-domain-warping-2026-04-20.webm`
+  (173 KB).
+- **Contact sheet:** `contact-sheet.sh <video> 3x2 2
+  ~/projects/shader-lab/screenshots/max-recordings/shader-lab-l10-contact.png` →
+  96 KB PNG, non-empty.
+
+Pass — no helper patch required. The `captureStream` / download-trigger
+flow worked unchanged on a second project. Principle-2 holds: the
+helpers have no Well-Dipper-specific coupling, and AC #6 confirmed
+this empirically rather than by self-certification.
+
+Note for future hybrid/DOM-only validations (deferred per `## Out of
+scope`): easymaking.io/av landing was checked and had zero `<canvas>`
+elements — the AV course is DOM-only, as expected. Shader Lab's
+lesson pages carry the canvas.
+
 ## Status
 
-**Drafted by PM 2026-04-19.** Awaiting working-Claude execution.
-Status transitions expected: `Drafted` → `In progress` → `Shipped
-<sha>` on all seven ACs met, including the Shader Lab cross-project
-validation producing a non-empty contact sheet.
+**Shipped** — all seven ACs met. Verified against Shader Lab recording
+at `~/projects/shader-lab/screenshots/max-recordings/shader-lab-l10-contact.png`
++ source webm at
+`~/projects/shader-lab/screenshots/max-recordings/shader-lab-l10-domain-warping-2026-04-20.webm`.
+Director approved in this session (greenlight conditional on AC #6
+running; AC #6 ran and passed).
