@@ -1282,9 +1282,33 @@ Fixed installations that create stable fold points for long-distance interstella
 
 The player's ship runs on something different. Not antimatter fusion, not a bigger version of what everyone else has — a **different principle entirely.** Pre-collapse technology from the breakaway line's centuries of independent development. More elegant, more efficient, less dependent on rare fuel. The specifics are deliberately vague (this is lore seed territory, not hard spec), but the key properties are:
 
-- **Personal warp/fold capability** — the ship carries its own fold generator. Gates are infrastructure; the player's ship IS its own gate. This is what most people outside the larger corporate fleets don't have access to.
-- **Superior efficiency** — goes farther on less, whatever "less" means for its exotic fuel source
+- **Gravity drive for in-system motion** — the ship maintains inertial neutrality during cinematic maneuvers (see *Gravity Drive (In-System Propulsion)* below). This is what permits the ship to make the kind of purposeful, composed moves that the autopilot tour leans on.
+- **Personal warp/fold capability** — the ship carries its own fold generator for interstellar jumps. Gates are infrastructure; the player's ship IS its own gate. This is what most people outside the larger corporate fleets don't have access to.
+- **Superior efficiency** — goes farther on less, whatever "less" means for its exotic fuel source.
 - **Old and temperamental** — generational wealth in hardware form. It works beautifully when it works. Maintenance is part of the experience.
+
+#### Gravity Drive (In-System Propulsion)
+
+The player's ship uses a **gravity drive** for in-system motion. Rather than pushing exhaust out the back, the drive warps the local gravitational field so the ship "falls" in the desired direction. The ship is always in freefall relative to its own compensating field, so the crew feels no acceleration regardless of how fast the ship changes velocity.
+
+This is what permits the cinematic flight language the autopilot feature leans on. Purposeful turns, rapid accelerations, tight holding-orbits, and the long graceful curves of the tour are physically plausible in-fiction precisely because the gravity drive is between the ship's frame of reference and the motion it's executing. The player is not watching a ship that would crush its occupants — they're watching a ship whose drive is what makes smooth cinematic flight possible.
+
+**The compensation envelope has a limit.** The drive maintains inertial neutrality during smooth motion — this is the default and it's silent. When the ship's motion becomes **abrupt** — sudden direction change, aggressive deceleration, a transition that exceeds the drive's smoothing capacity — the compensation *lags* the motion.
+
+**The lag renders as visible ship-body shake.** This is the cinematic tell: the shake is the in-fiction signal that the drive is working past its envelope. Abrupt transitions feel abrupt; the ship shakes; the drive audibly and visibly labors to re-establish neutrality; then things smooth out again.
+
+**Design rule that follows from the lore:**
+
+- Default cinematic motion is smooth — no shake. Shake is not a frame-punch effect.
+- When motion *is* genuinely abrupt (warp-exit velocity mismatch with the destination, emergency avoidance, player manual-override mid-maneuver), the shake fires.
+- Shake magnitude is a function of motion-abruptness (motion discontinuity), not an authored per-moment effect.
+- Over-using shake violates the "inertial neutrality is the norm" contract and drains meaning from the tell.
+
+**Research origin:** see `docs/RESEARCH_transit-propulsion.md` §2.5 *Gravity Drives / Inertialess Drives* for the research-stage treatment. The Bible resolves the research-stage "con" that gravity drives "remove the drama of acceleration/deceleration" by introducing the compensation-envelope limit: the drama is still there — it lives in the shake, and in the implied authority of smooth motion that isn't shaking.
+
+**Contract surface:** `docs/SYSTEM_CONTRACTS.md` §10.8 *Gravity-drive shake invariant* formalizes the implementation invariants (shake fires on genuine motion abruptness only; shake magnitude is derived from motion signal, not authored; the mechanism is additive input to camera / ship-mesh).
+
+**Feature anchor:** `docs/FEATURES/autopilot.md` §Gravity drives — the primary consumer of this lore. Every cinematic turn the autopilot composes is permitted by this drive; every abrupt moment the autopilot produces is marked by its shake.
 
 #### Time Debt
 

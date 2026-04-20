@@ -150,6 +150,23 @@ Rocky/airless bodies use Planet.js `ROCKY_BODY` plus Moon.js:
 - Aurora is one of the few places where physics → shader is cleanly wired. It's the model to copy for future physics-derived surface features.
 - `StarFlare` is used for foreground stars, but deep-sky star points in `SkyFeatureLayer` get a simpler 4-spike shader. No chromatic aberration on background stars.
 
+### 1.7 Cross-scale systems / presentation orchestration
+
+Systems that don't belong to a single rendering scale but instead orchestrate *how* the rendered content is presented to the player. Listed here so the audit map is complete.
+
+| System | Where | Feature doc | Current state |
+|---|---|---|---|
+| **Warp** | `src/effects/WarpEffect.js`, `src/rendering/RetroRenderer.js` `hyperspace()` | `docs/FEATURES/warp.md` | Active, V1 in flight — see feature doc §Current state snapshot. |
+| **Autopilot** | `src/auto/FlythroughCamera.js`, `src/auto/AutoNavigator.js` | `docs/FEATURES/autopilot.md` | **V1 scoped 2026-04-20.** Two-axis rewrite: ship axis (ENTRY → CRUISE → APPROACH → STATION) + camera axis (ESTABLISHING V1, SHOWCASE/ROVING V-later). Retires today's `FlythroughCamera.State = { DESCEND, ORBIT, TRAVEL, APPROACH }`. Greenfield on ship-motion layer; existing flythrough code is the rewrite surface. V1 scope line: all 4 ship phases + ESTABLISHING, default-on toggle, manual-override with inertial continuity, gravity-drive shake on abrupt transitions, audio event-surface hook (no subscribers), HUD hide-during-autopilot. |
+| **OOI catalog + registry** | `docs/OBJECTS_OF_INTEREST.md` (catalog) + `src/*` TBD (runtime registry) | — (infrastructure, not a feature) | v0 catalog live 2026-04-20. Runtime-registry spec scoped at `docs/WORKSTREAMS/ooi-capture-and-exposure-system-2026-04-20.md`. First consumer: autopilot V-later SHOWCASE/ROVING. |
+| **Nav computer** | `src/nav/*` | — (contract at `docs/SYSTEM_CONTRACTS.md` §6) | Active. 5-level zoom into the galaxy model. |
+| **Targeting + selection** | `src/ui/TargetingReticle.js`, `main.js` pointer pipeline | — (contract at `docs/SYSTEM_CONTRACTS.md` §5.4) | Active. Decoupled from travel (click ≠ go) per contract. |
+
+**Observations**
+- Autopilot is the load-bearing "see the galaxy" feature — §2 Star Systems and §3 The Sky both produce content whose *visible impact per trip* is gated by how autopilot composes the tour. A scale-rich galaxy that no autopilot tour lingers on is wasted procedural budget.
+- The OOI catalog exists today but has no runtime consumer. It's V-later for autopilot; V1 autopilot ships with a stub interface ready for the registry to land underneath it.
+- `AutoNavigator` today conflates cinematography (tour-queue orchestration) and navigation-subsystem (A-to-B motion execution). The autopilot V1 feature splits these into two layers; the split is a refactor requirement, not optional. See `docs/SYSTEM_CONTRACTS.md` §10.3.
+
 ---
 
 ## 2. Procedural data that isn't expressed

@@ -296,6 +296,137 @@ The uniform surface is the declared contract: `uScroll`, `uHashSeed`, `uDestHash
 
 ---
 
+## 10. Autopilot
+
+Autopilot is the game's cinematic tour mode: the drive state that writes to the camera during system tours. Feel, phases, and felt-experience criteria are `docs/FEATURES/autopilot.md`. This section is invariants only — the structural rules the implementation cannot violate.
+
+### 10.1 Two-axis state machine
+
+Autopilot's state is two orthogonal axes. The state machine that today lives in `src/auto/FlythroughCamera.js` (`State = { DESCEND, ORBIT, TRAVEL, APPROACH }`) is retired by the autopilot feature and replaced by this structure.
+
+**Ship axis** (4 phases — what the ship is doing):
+
+```
+ENTRY → CRUISE → APPROACH → STATION
+```
+
+- `ENTRY` — arrival along the warp-exit vector. Replaces `DESCEND`.
+- `CRUISE` — sustained travel between bodies.
+- `APPROACH` — deceleration + attitude change as target fills frame.
+- `STATION` — holding-orbit near a body. Ship remains in motion. Replaces the ship-holding half of the retired `ORBIT`.
+
+Ship phases progress linearly per tour stop. Within a tour, the sequence is `ENTRY` once (on warp-exit), then `CRUISE → APPROACH → STATION` per body in the queue, then tour-complete → warp.
+
+**Camera axis** (3 modes — what the player's eyes are doing):
+
+```
+ESTABLISHING | SHOWCASE | ROVING
+```
+
+- `ESTABLISHING` — wide/slow framing that follows ship phases but paces independently. V1.
+- `SHOWCASE` — framed compositional beats (crescent, eclipse, ring-shadow). V-later.
+- `ROVING` — player-eye freedom, 360° turn-head-toward-OOI. V-later.
+
+Camera mode is selected per-moment, orthogonal to ship phase. Any state encoding that forces camera mode to be a function of ship phase is a contract violation.
+
+### 10.2 `ORBIT` retirement (migration-load-bearing)
+
+The current `FlythroughCamera.State.ORBIT` conflated two concerns: ship holding-orbit (ship axis) + camera framing (camera axis). Autopilot's feature doc retires this single state.
+
+**Migration invariant:** any replacement code must not reintroduce a single combined state. `STATION` lives on the ship axis; `SHOWCASE` lives on the camera axis. A future refactor that folds them back together for "simplicity" forecloses `V-later` `SHOWCASE` and `ROVING` — that's a rewrite cost, not a cosmetic choice.
+
+### 10.3 Two-layer architecture (cinematography + navigation subsystem)
+
+Autopilot has two layers. The toggle controls one of them.
+
+| Layer | Scope | Toggleable? |
+|---|---|---|
+| Cinematography | Tour orchestration — queue building, camera choreography, ship-phase selection, per-body framing composition. | Yes. This is what the autopilot toggle switches. |
+| Navigation subsystem | Motion execution — accelerate from A to B, arrive in stable orbit around B, honor safe-distance rules. | **No. Always available.** |
+
+**Invariant:** manual-mode "burn to body" uses the **same navigation subsystem** autopilot uses. Autopilot-off does not kill the navigation subsystem; it swaps the caller from cinematography-orchestrator to direct-user-command.
+
+`AutoNavigator` today owns both layers. Splitting them cleanly is a refactor requirement, not optional. Any V1 autopilot implementation must surface the split explicitly — workstream ACs are expected to include "motion-execution remains functional with cinematography layer disabled" as a verification.
+
+### 10.4 Drive-state transitions (extends §5.3)
+
+Autopilot-drive-state transitions extend §5.3's table with the feature-doc toggle rules:
+
+| Transition | Trigger |
+|---|---|
+| System-load → Autopilot | Default. Autopilot is **on at system-load**, not opt-in. |
+| Autopilot → Manual | Player input (any of): click upper-left status indicator, press autopilot-toggle key, WASD thrust input, target-click + `commitSelection()`. |
+| Manual → Autopilot | **Explicit only** — click status indicator or press toggle key. **No auto-resume from idle.** This is a change from the previous "30s idle → autopilot resumes" pattern. |
+| Autopilot → Warp | Tour-complete → warp-select. See Warp §9. |
+| Warp → Autopilot | Warp exit. `ENTRY` ship-axis phase. The warp-exit forward vector is the continuity anchor — see §10.5. |
+
+**Idle-resume retired.** The "30s idle → autopilot resumes" path in today's `ShipCameraSystem` is retired by this feature. Re-engagement requires explicit input. This is a load-bearing UX decision — any reintroduction of auto-resume violates the feature's "no auto-resume after toggle-off" criterion.
+
+### 10.5 Warp-exit handoff (continuity-critical)
+
+`ENTRY` is the warp → autopilot handoff boundary. Three invariants govern it:
+
+1. **Velocity preservation.** The camera's velocity at the end of warp `EXIT` is the starting velocity of autopilot `ENTRY`. No snap-to-zero. No pop-to-a-new-speed.
+2. **Start-pose derivation.** The arrival pose is derived from the **warp-exit forward vector**, not a fixed above-the-plane origin. Today's `DESCEND` hard-codes "from above"; this is a contract violation in the new model.
+3. **Cinematography handoff happens within a frame.** Warp `EXIT` and autopilot `ENTRY` are two adjacent contracts, but the visual is one motion. No black frame, no reload stutter, no pose-jump between them. This extends the warp feature's seamlessness criterion past `EXIT` into `ENTRY`.
+
+A regression here looks like: player arrives at a new system, warp ends, ship snaps to "above the plane" and begins a fresh descend animation with its own velocity profile. This is the failure mode the rename and start-pose rule are written against.
+
+### 10.6 HUD visibility during autopilot
+
+- HUD hides during autopilot.
+- HUD reappears on player interaction (cursor motion to an object, keyboard input, commit-selection event).
+- **Exception:** the upper-left autopilot-status indicator remains visible — it's the toggle affordance.
+
+If HUD elements need to appear during autopilot (e.g. warp-select menu after tour-complete), the feature doc §End-state describes the three valid resolutions. Any implementation that makes generic HUD visible during autopilot is a contract violation; that's a surface the feature doc explicitly hides.
+
+### 10.7 Audio event-surface hook
+
+Autopilot emits state-transition events on an event-surface so a future BGM layer can subscribe. **V1 ships the emitter with zero subscribers.**
+
+**Event shape** (pending implementation review — feature-doc open question logged):
+
+```
+autopilotEvents.on('phase-change', ({ from, to, shipPhase|cameraMode }) => …)
+autopilotEvents.on('camera-mode-change', ({ from, to }) => …)
+autopilotEvents.on('toggle', ({ state: 'on' | 'off' }) => …)
+```
+
+Three typed events, not one event with an enum, because the three axes (ship-phase / camera-mode / toggle) are three signals a subscriber would crossfade against differently. If an implementation-time discovery argues for a single event, the Director revisits.
+
+**Invariant:** a V1 change that adds a *subscriber* inside this codebase is scope creep. V1 emits; V-later (separate workstream) subscribes.
+
+### 10.8 Gravity-drive shake invariant
+
+The ship uses a gravity drive (Bible §8H). The drive maintains inertial neutrality during smooth motion; shake is the cinematic tell that the compensation envelope was exceeded.
+
+**Invariant:** shake fires **only** when the ship motion is **genuinely abrupt** — exceeding a smoothing threshold the drive can't absorb. Shake as a frame-punch effect without an underlying abrupt motion is a contract violation. It breaks the inertial-neutrality contract and makes future abruptness-triggered shake meaningless.
+
+**Implementation shape:** camera / ship-mesh accepts an **additive shake input**. The shake magnitude is computed from motion discontinuity (second derivative of velocity, or a dedicated "abruptness" signal produced by the navigation subsystem), not authored per-phase-transition.
+
+V1 ships the mechanism. V1 flight is smooth enough that shake rarely fires — but the mechanism exists for manual-override hand-back (player grabs control at speed), unexpected avoidance, and warp-exit velocity mismatches.
+
+### 10.9 OOI query interface (stub in V1, implementation V-later)
+
+Autopilot queries `docs/OBJECTS_OF_INTEREST.md` through a lookup interface. V1 implements the interface as a stub; V-later (the OOI capture-and-exposure-system workstream) lights it up.
+
+```
+getNearbyOOIs(camera, radius) → []             // V1 returns [] (stub)
+getActiveEvents(now, horizon)  → []            // V1 returns [] (stub)
+```
+
+**Invariant:** autopilot's `SHOWCASE` / `ROVING` code paths read through the interface, not from scene globals. V-later implementation of the OOI runtime registry does not require autopilot-side changes.
+
+V1 exercises neither `SHOWCASE` nor `ROVING`, so the stub interface has no effective call sites in V1. But the interface must exist at V1, and the dispatch from camera mode to interface-query must exist at V1, so V-later is a wire-up and not a restructure.
+
+### 10.10 Contract precedence
+
+When an autopilot invariant and a §5 Camera and Control invariant appear to conflict, §5 governs the **mode/drive-state orthogonality** (Toy-Box/Flight × Manual/Autopilot/Warp); §10 governs the **autopilot drive-state internal structure**. The intersection is the autopilot column of §5.3 Drive States — this section refines it, does not override it.
+
+§10 also does not override §9 Warp; the warp → autopilot handoff contract at §10.5 is written to be compatible with §9's phase sequence and callback contract. If a future implementation reveals a genuine conflict between §9 and §10.5, escalate to the Director before resolving; this boundary is load-bearing for warp seamlessness.
+
+---
+
 ## Approved Exceptions
 
 These are the only places where content is NOT derived from the galactic pipeline:
