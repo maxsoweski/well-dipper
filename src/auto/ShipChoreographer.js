@@ -63,15 +63,15 @@ export const ShipPhase = Object.freeze({
 // ────────────────────────────────────────────────────────────────────────
 
 // Scalar `|d|v|/dt|` below this is considered "smooth" — zero shake.
-// Units: scene-units/s². Typical Sol-tour values: 0 during orbit
-// (constant speed, only direction changes), ~20-100 during Hermite
-// travel mid-curve, much higher at abrupt moments.
-const DSPEED_DEADZONE = 20.0;
+// Units: scene-units/s². Round-7: lowered from 20 → 5 so modest
+// cruise-mid accelerations still register (observed typical 50-180).
+const DSPEED_DEADZONE = 5.0;
 
 // Scalar |d|v|/dt| that produces full-amplitude shake. Above this,
-// amplitude clamps. Keep above typical cruise-mid peaks so steady
-// travel doesn't saturate.
-const DSPEED_FULL_SCALE = 300.0;
+// amplitude clamps. Round-7: lowered from 300 → 150 — observed
+// Sol-tour peak `|d|v|/dt|` during real cruise is ~180, so 150
+// as full-scale lets peak velocity changes saturate the drive.
+const DSPEED_FULL_SCALE = 150.0;
 
 // Low-pass filter α per frame — how fast smoothed speed-derivative
 // tracks the raw signal. α=1 → no smoothing (raw); α near 0 → very
@@ -80,9 +80,10 @@ const DSPEED_FULL_SCALE = 300.0;
 const DSPEED_SMOOTHING = 0.15;
 
 // Peak view-angle for the shake bob (radians). At full-scale speed
-// change, the vertical bob subtends this much view angle. Tunable.
-// 0.02 rad ≈ 1.15° — visible tremor, below whipsaw territory.
-const SHAKE_VIEW_ANGLE_MAX = 0.02;
+// change, the vertical bob subtends this much view angle. Round-7:
+// bumped from 0.02 → 0.05 rad (1.15° → 2.86°) — the 1.15° cap was
+// below the perceptual floor on compressed recordings.
+const SHAKE_VIEW_ANGLE_MAX = 0.05;
 
 // Vertical-bob carrier frequency (Hz). Boat-bob register: too slow
 // reads as sea-sick heave; too fast reads as buzzy vibration. 6 Hz
@@ -95,9 +96,11 @@ const BOB_FREQUENCY = 6.0;
 const SECONDARY_AXIS_RATIO = 0.20;
 
 // Hard ceiling on shake offset in scene units (for star-class bodies
-// where orbitDistance is large). Prevents view-breaking offsets at
-// huge framings even if SHAKE_VIEW_ANGLE_MAX were tuned aggressive.
-const SHAKE_MAX_AMPLITUDE = 2.0;
+// where camera-to-target is large). Prevents view-breaking offsets
+// at huge framings even if SHAKE_VIEW_ANGLE_MAX were tuned aggressive.
+// Round-7: bumped from 2 → 20 because cameraToTargetDistance during
+// CRUISE can be 50-200 units and view-angle × distance would clip.
+const SHAKE_MAX_AMPLITUDE = 20.0;
 
 // ────────────────────────────────────────────────────────────────────────
 
@@ -225,15 +228,21 @@ export class ShipChoreographer {
       this._shakeDrive = Math.min(1, (this._smoothedAbsDSpeed - DSPEED_DEADZONE) / range);
     }
 
-    // ── Compute shake amplitude (view-angle bounded, orbit-scale-coupled) ──
+    // ── Compute shake amplitude (view-angle bounded, camera-scale-coupled) ──
     // Target view angle swings from 0 at shakeDrive=0 to SHAKE_VIEW_ANGLE_MAX
-    // at shakeDrive=1. Shake-offset magnitude = view-angle * orbitDistance
-    // (inverse of the `atan(offset/d) ≈ offset/d` amplification that
-    // round-5's Director audit surfaced). Capped at SHAKE_MAX_AMPLITUDE
-    // absolute ceiling for star-class bodies.
+    // at shakeDrive=1. Shake-offset magnitude = view-angle × camera-to-target
+    // distance (the actual view scale). Round-7 fix: previously scaled by
+    // `orbitDistance`, but during CRUISE the camera is far from the target
+    // while orbitDistance refers to the upcoming orbit — so a tiny offset
+    // vs. a huge cam-to-target distance gave ~0° visible view angle.
+    // Using cam2tgt keeps view-angle roughly uniform across all phases.
     const viewAngleRad = this._shakeDrive * SHAKE_VIEW_ANGLE_MAX;
-    const orbitDist = this.nav.orbitDistance || 1;
-    const shakeAmp = Math.min(viewAngleRad * orbitDist, SHAKE_MAX_AMPLITUDE);
+    const lookAt = motionFrame.lookAtTarget;
+    const dx = currPos.x - lookAt.x;
+    const dy = currPos.y - lookAt.y;
+    const dz = currPos.z - lookAt.z;
+    const cam2tgt = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    const shakeAmp = Math.min(viewAngleRad * cam2tgt, SHAKE_MAX_AMPLITUDE);
 
     // ── Emit the offset ──
     if (shakeAmp <= 1e-6) {
