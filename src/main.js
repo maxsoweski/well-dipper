@@ -36,6 +36,7 @@ import { SeededRandom } from './generation/SeededRandom.js';
 import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
+import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
 import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
@@ -339,9 +340,11 @@ function _isSameTarget(a, b) {
 
 // ── Autopilot (cinematic flythrough) ──
 const autoNav = new AutoNavigator();
-const flythrough = new FlythroughCamera(camera);
+const navSubsystem = new NavigationSubsystem();
+const flythrough = new FlythroughCamera(camera, navSubsystem);
 window._flythrough = flythrough;
 window._autoNav = autoNav;
+window._navSubsystem = navSubsystem;
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
@@ -3841,6 +3844,33 @@ function updateFocusFromStop(stop) {
 }
 
 /**
+ * Begin a tour-leg motion plan toward the given stop. Used by the autopilot
+ * loop after orbitComplete and by Tab / number-key / minimap jumps during
+ * an active tour. The prior-orbit body is snapshotted by the caller before
+ * invocation so the orbit-tangential departure math uses the correct
+ * reference (beginMotion overwrites `navSubsystem.bodyRef`).
+ */
+function _beginTourLegMotion(stop, priorBody) {
+  if (!stop || !stop.bodyRef) return;
+  const upcoming = autoNav.getNextStop();
+  navSubsystem.beginMotion({
+    fromPosition: camera.position.clone(),
+    fromOrientation: camera.quaternion.clone(),
+    fromOrbitBody: priorBody,
+    toBody: stop.bodyRef,
+    toOrbitDistance: stop.orbitDistance,
+    toBodyRadius: stop.bodyRadius,
+    nextBody: upcoming ? upcoming.bodyRef : null,
+    nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
+    arrivalOptions: {
+      approachFirst: true,
+      slowOrbit: true,
+      approachOrbitDuration: stop.linger * settings.get('tourLingerMultiplier'),
+    },
+  });
+}
+
+/**
  * Start the cinematic flythrough tour.
  * Engages from wherever the camera is — picks a random body and
  * begins flying toward it. No teleport, no descend.
@@ -3882,16 +3912,24 @@ function startFlythrough() {
   // Bypass manual camera — flythrough drives camera directly
   cameraController.bypassed = true;
 
-  // Set next body ref for the upcoming orbit's departure direction
+  // Begin travel from current camera position to the random body,
+  // with cinematic approach + slow orbit on arrival (autopilot tour).
   const upcoming = autoNav.getNextStop();
-  flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-
-  // Begin travel from current camera position to the random body
-  flythrough.beginTravelFrom(
-    firstStop.bodyRef,
-    firstStop.orbitDistance,
-    firstStop.bodyRadius,
-  );
+  navSubsystem.beginMotion({
+    fromPosition: camera.position.clone(),
+    fromOrientation: camera.quaternion.clone(),
+    fromOrbitBody: null,
+    toBody: firstStop.bodyRef,
+    toOrbitDistance: firstStop.orbitDistance,
+    toBodyRadius: firstStop.bodyRadius,
+    nextBody: upcoming ? upcoming.bodyRef : null,
+    nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
+    arrivalOptions: {
+      approachFirst: true,
+      slowOrbit: true,
+      approachOrbitDuration: firstStop.linger * settings.get('tourLingerMultiplier'),
+    },
+  });
 
   // "Now targeting" — blink the destination on minimap
   updateFocusFromStop(firstStop);
@@ -4065,14 +4103,22 @@ function warpRevealSystem() {
     const firstStop = autoNav.getCurrentStop();
     if (firstStop && firstStop.bodyRef) {
       const upcoming = autoNav.getNextStop();
-      flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-
-      flythrough.beginTravelFrom(
-        firstStop.bodyRef,
-        firstStop.orbitDistance,
-        firstStop.bodyRadius,
-        { warpArrival: true },
-      );
+      navSubsystem.beginMotion({
+        fromPosition: camera.position.clone(),
+        fromOrientation: camera.quaternion.clone(),
+        fromOrbitBody: null,
+        toBody: firstStop.bodyRef,
+        toOrbitDistance: firstStop.orbitDistance,
+        toBodyRadius: firstStop.bodyRadius,
+        nextBody: upcoming ? upcoming.bodyRef : null,
+        nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
+        arrivalOptions: {
+          approachFirst: true,
+          slowOrbit: true,
+          approachOrbitDuration: firstStop.linger * settings.get('tourLingerMultiplier'),
+        },
+        launchOptions: { warpExit: true },
+      });
 
       updateFocusFromStop(firstStop);
     }
@@ -4095,14 +4141,22 @@ function warpRevealSystem() {
   const firstStop = autoNav.getCurrentStop();
   if (firstStop && firstStop.bodyRef) {
     const upcoming = autoNav.getNextStop();
-    flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-
-    flythrough.beginTravelFrom(
-      firstStop.bodyRef,
-      firstStop.orbitDistance,
-      firstStop.bodyRadius,
-      { warpArrival: true },
-    );
+    navSubsystem.beginMotion({
+      fromPosition: camera.position.clone(),
+      fromOrientation: camera.quaternion.clone(),
+      fromOrbitBody: null,
+      toBody: firstStop.bodyRef,
+      toOrbitDistance: firstStop.orbitDistance,
+      toBodyRadius: firstStop.bodyRadius,
+      nextBody: upcoming ? upcoming.bodyRef : null,
+      nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
+      arrivalOptions: {
+        approachFirst: true,
+        slowOrbit: true,
+        approachOrbitDuration: firstStop.linger * settings.get('tourLingerMultiplier'),
+      },
+      launchOptions: { warpExit: true },
+    });
 
     updateFocusFromStop(firstStop);
     if (systemMap) systemMap.triggerBlink();
@@ -4442,7 +4496,20 @@ function focusPlanet(index) {
     const orbitDist = Math.max(bodyRadius * 6, 0.02);
     console.log(`[BURN START] planet: radius=${bodyRadius.toFixed(4)}, orbitDist=${orbitDist.toFixed(4)}, ratio=${(orbitDist/Math.max(bodyRadius,0.001)).toFixed(1)}x`);
     cameraController.bypassed = true;
-    flythrough.beginTravelFrom(entry.planet.mesh, orbitDist, bodyRadius);
+    navSubsystem.beginMotion({
+      fromPosition: camera.position.clone(),
+      fromOrientation: camera.quaternion.clone(),
+      fromOrbitBody: null,
+      toBody: entry.planet.mesh,
+      toOrbitDistance: orbitDist,
+      toBodyRadius: bodyRadius,
+      arrivalOptions: {
+        approachFirst: false,
+        holdOnly: true,
+        slowOrbit: true,
+        orbitDuration: 99999,
+      },
+    });
     const pName = system.names?.planets?.[index]?.name ?? null;
     bodyInfo.showPlanet(entry.planet.data, index, pName);
     console.log(`Focus: planet ${index + 1} ${pName || ''} (${entry.planet.data.type})`);
@@ -4482,7 +4549,20 @@ function focusStar(starIdx) {
   viewDist = Math.max(viewDist, 2.0);
   const bodyRadius = starObj.data.radius;
   cameraController.bypassed = true;
-  flythrough.beginTravelFrom(starObj.mesh, viewDist, bodyRadius);
+  navSubsystem.beginMotion({
+    fromPosition: camera.position.clone(),
+    fromOrientation: camera.quaternion.clone(),
+    fromOrbitBody: null,
+    toBody: starObj.mesh,
+    toOrbitDistance: viewDist,
+    toBodyRadius: bodyRadius,
+    arrivalOptions: {
+      approachFirst: false,
+      holdOnly: true,
+      slowOrbit: true,
+      orbitDuration: 99999,
+    },
+  });
   const sName = system.names
     ? (starIdx === 1 ? system.names.star2 : system.names.star)
     : null;
@@ -4514,7 +4594,20 @@ function focusMoon(planetIndex, moonIndex) {
   // Smooth cinematic travel instead of instant snap
   const bodyRadius = moon.data.radius;
   cameraController.bypassed = true;
-  flythrough.beginTravelFrom(moon.mesh, viewDist, bodyRadius);
+  navSubsystem.beginMotion({
+    fromPosition: camera.position.clone(),
+    fromOrientation: camera.quaternion.clone(),
+    fromOrbitBody: null,
+    toBody: moon.mesh,
+    toOrbitDistance: viewDist,
+    toBodyRadius: bodyRadius,
+    arrivalOptions: {
+      approachFirst: false,
+      holdOnly: true,
+      slowOrbit: true,
+      orbitDuration: 99999,
+    },
+  });
   const mName = system.names?.planets?.[planetIndex]?.moons?.[moonIndex] ?? null;
   bodyInfo.showMoon(moon.data, planetIndex, mName);
   console.log(`Focus: moon ${moonIndex + 1} ${mName || ''} of planet ${planetIndex + 1} (${moon.data.type})`);
@@ -4922,9 +5015,10 @@ function animate() {
       const projScale = renderHeight / (2 * Math.tan(fovRad / 2));
 
       // During flythrough, protect both the current body and travel destination
-      // from ghosting (bodyRef = current/departure, nextBodyRef = destination)
-      const flythroughBody = flythrough.active ? flythrough.bodyRef : null;
-      const flythroughDest = flythrough.active ? flythrough.nextBodyRef : null;
+      // from ghosting (bodyRef = current/departure, nextBodyRef = destination).
+      // Post-refactor: read via the navigation subsystem (source of truth).
+      const flythroughBody = flythrough.active ? navSubsystem.bodyRef : null;
+      const flythroughDest = flythrough.active ? navSubsystem.nextBodyRef : null;
 
       for (let pi = 0; pi < system.planets.length; pi++) {
         const entry = system.planets[pi];
@@ -5416,13 +5510,16 @@ function animate() {
     if (warpEffect.isActive || splashActive || titleScreenActive) {
       // Warp, splash, or title screen is active — don't start autopilot
     } else if (flythrough.active) {
-      // Flythrough runs whether autoNav is active or not (manual burns use it too)
+      // Flythrough runs whether autoNav is active or not (manual burns use it too).
+      // Per-leg motion flow is encapsulated in the navigation subsystem: a single
+      // beginMotion call covers travel → (approach if requested) → orbit; main.js
+      // only reacts to orbitComplete to advance the tour and kick off the next leg.
       const result = flythrough.update(deltaTime);
       if (result.travelComplete || result.orbitComplete) {
-        console.log(`[FLYTHROUGH] travelComplete=${result.travelComplete}, orbitComplete=${result.orbitComplete}, state=${flythrough.state}`);
+        console.log(`[FLYTHROUGH] travelComplete=${result.travelComplete}, orbitComplete=${result.orbitComplete}, phase=${result.phase}`);
       }
 
-      // "Now targeting" — 2s before orbit ends, blink the next target
+      // "Now targeting" — ~4s before orbit ends, blink the next target
       if (result.targetingReady) {
         const previewStop = autoNav.getNextStop();
         if (previewStop) {
@@ -5431,49 +5528,36 @@ function animate() {
         }
       }
 
-      if (result.orbitComplete) {
-        // Orbit finished — begin travel to next body
-        const nextStop = autoNav.advanceToNext();
-        if (nextStop && nextStop.bodyRef) {
-          flythrough.beginTravel(nextStop.bodyRef, nextStop.orbitDistance, nextStop.bodyRadius);
-          const upcoming = autoNav.getNextStop();
-          flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-          updateFocusFromStop(nextStop);
-        }
+      // Manual-burn hold-orbit detection: when the subsystem's internal
+      // travel→orbit transition fires (travelComplete) and autopilot is OFF,
+      // we've entered the post-burn circular hold — arm the idle re-engage.
+      if (result.travelComplete && !autoNav.isActive && navSubsystem.bodyRef) {
+        _manualBurnOrbiting = true;
       }
 
-      if (result.travelComplete) {
-        // Arrived at next body — unified arrival: approach → slow orbit
-        const body = flythrough._travelToBody;
-        const dist = flythrough._travelToOrbitDist || 2.0;
-        const bodyR = flythrough._travelToRadius || 0.01;
-
-        if (autoNav.isActive) {
-          // Autopilot: approach → one slow orbit → advance to next body
-          const stop = autoNav.getCurrentStop();
-          if (stop && stop.bodyRef) {
-            const upcoming = autoNav.getNextStop();
-            flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-            flythrough.beginApproach(stop.bodyRef, stop.orbitDistance, stop.bodyRadius,
-              stop.linger * settings.get('tourLingerMultiplier'));
-            updateFocusFromStop(stop);
-          }
-        } else if (body) {
-          // Manual burn: skip the approach pause and flow directly into a
-          // clean circular hold orbit. Travel arrived at `dist` from the
-          // body already (pre-orbit blend targets it), and beginOrbit
-          // re-derives yaw/pitch from the current camera position so
-          // there's no visible jump — the camera simply starts rotating.
-          flythrough.beginOrbit(body, dist, bodyR, 99999, {
-            slowOrbit: true,
-            holdOnly: true,
+      if (result.orbitComplete) {
+        // Orbit cycle finished — advance tour and begin motion to the next stop.
+        // Snapshot prior-orbit body BEFORE beginMotion (subsystem will overwrite).
+        const priorBody = navSubsystem.bodyRef;
+        const nextStop = autoNav.advanceToNext();
+        if (nextStop && nextStop.bodyRef) {
+          const upcoming = autoNav.getNextStop();
+          navSubsystem.beginMotion({
+            fromPosition: camera.position.clone(),
+            fromOrientation: camera.quaternion.clone(),
+            fromOrbitBody: priorBody,
+            toBody: nextStop.bodyRef,
+            toOrbitDistance: nextStop.orbitDistance,
+            toBodyRadius: nextStop.bodyRadius,
+            nextBody: upcoming ? upcoming.bodyRef : null,
+            nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
+            arrivalOptions: {
+              approachFirst: true,
+              slowOrbit: true,
+              approachOrbitDuration: nextStop.linger * settings.get('tourLingerMultiplier'),
+            },
           });
-          _manualBurnOrbiting = true;
-        } else {
-          // No body (shouldn't happen) — hand to manual
-          flythrough.stop();
-          cameraController.bypassed = false;
-          cameraController.restoreFromWorldState(camera.position.clone());
+          updateFocusFromStop(nextStop);
         }
       }
     } else if (!autoNav.isActive) {
@@ -6075,29 +6159,20 @@ window.addEventListener('keydown', (e) => {
       commitSelection();
     } else if (e.code === 'Tab') {
       e.preventDefault();
-      // Jump tour forward/back — begin travel to the new stop
+      // Jump tour forward/back — begin new motion leg to the new stop.
+      const priorBody = navSubsystem.bodyRef;
       const stop = autoNav.advance(e.shiftKey ? -1 : 1);
-      if (stop && stop.bodyRef) {
-        flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
-        const upcoming = autoNav.getNextStop();
-        flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-      }
+      _beginTourLegMotion(stop, priorBody);
     } else if (e.key === '1') {
+      const priorBody = navSubsystem.bodyRef;
       const stop = autoNav.jumpToStar();
-      if (stop && stop.bodyRef) {
-        flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
-        const upcoming = autoNav.getNextStop();
-        flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-      }
+      _beginTourLegMotion(stop, priorBody);
     } else if (e.key >= '2' && e.key <= '9') {
       const planetIdx = parseInt(e.key) - 2;
       if (system && planetIdx < system.planets.length) {
+        const priorBody = navSubsystem.bodyRef;
         const stop = autoNav.jumpToPlanet(planetIdx);
-        if (stop && stop.bodyRef) {
-          flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
-          const upcoming = autoNav.getNextStop();
-          flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
-        }
+        _beginTourLegMotion(stop, priorBody);
       }
     }
     // O, V still work normally during autopilot
@@ -6172,9 +6247,8 @@ function trySelect(clientX, clientY) {
             stop = autoNav.jumpToPlanet(hit.planetIndex);
           }
           if (stop && stop.bodyRef) {
-            flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
-            const upcoming = autoNav.getNextStop();
-            flythrough.nextBodyRef = upcoming ? upcoming.bodyRef : null;
+            const priorBody = navSubsystem.bodyRef;
+            _beginTourLegMotion(stop, priorBody);
             updateFocusFromStop(stop);
           }
           // Update minimap focus ring
@@ -6707,9 +6781,10 @@ if (mobileControls) {
       // Cycle through all bodies in autopilot order (star → planets → moons)
       if (!system) return;
       if (autoNav.isActive && flythrough.active) {
+        const priorBody = navSubsystem.bodyRef;
         const stop = autoNav.advance(-1);
         if (stop?.bodyRef) {
-          flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+          _beginTourLegMotion(stop, priorBody);
           updateFocusFromStop(stop);
         }
       } else {
@@ -6720,9 +6795,10 @@ if (mobileControls) {
     } else if (action === 'next') {
       if (!system) return;
       if (autoNav.isActive && flythrough.active) {
+        const priorBody = navSubsystem.bodyRef;
         const stop = autoNav.advance(1);
         if (stop?.bodyRef) {
-          flythrough.beginTravel(stop.bodyRef, stop.orbitDistance, stop.bodyRadius);
+          _beginTourLegMotion(stop, priorBody);
           updateFocusFromStop(stop);
         }
       } else {
