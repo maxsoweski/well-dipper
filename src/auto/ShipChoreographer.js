@@ -87,8 +87,8 @@ export class ShipChoreographer {
     // shake during smooth motion" invariant). Max may tune looser (lower
     // threshold → more sensitive shake) or tighter (higher threshold →
     // shake reserved for extreme events only) during recording review.
-    this._abruptnessThreshold = 50.0;
-    this._abruptnessMax = 500.0;
+    this._abruptnessThreshold = 200.0;
+    this._abruptnessMax = 2000.0;
 
     // ── Shake offset (additive perturbation vector) ──
     this._shakeOffset = new THREE.Vector3();
