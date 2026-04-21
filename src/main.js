@@ -351,16 +351,82 @@ window._navSubsystem = navSubsystem;
 window._shipChoreographer = shipChoreographer;
 
 // WS 2 / shake-redesign debug hooks — exposed for AC #4 + AC #5 shake-
-// verification recordings. debugAccelImpulse / debugDecelImpulse fire the
-// two sign-distinct impulse envelopes; debugAbruptTransition is retained
-// as an alias for decel-side (legacy WS 2 recordings continue to work).
+// verification recordings + AC #9 telemetry recorder (round-3 amendment).
+// debugAccelImpulse / debugDecelImpulse fire the two sign-distinct impulse
+// envelopes; debugAbruptTransition is retained as an alias for decel-side
+// (legacy WS 2 recordings continue to work).
+// telemetry.start/stop records per-frame camera + shake + phase state for
+// programmatic anomaly analysis without visual review — per Max 2026-04-21
+// round-3: "some way of you being able to see the coordinates of what's
+// going on with the camera ... so that you can see what's happening."
+const _telemetryState = {
+  active: false,
+  samples: null,
+};
+const _tmpFwd = new THREE.Vector3();
 window._autopilot = {
   debugAccelImpulse:     () => shipChoreographer.debugAccelImpulse(),
   debugDecelImpulse:     () => shipChoreographer.debugDecelImpulse(),
   debugAbruptTransition: () => shipChoreographer.debugAbruptTransition(),
   getShipPhase:          () => shipChoreographer.currentPhase,
   getAbruptness:         () => shipChoreographer.abruptness,
+
+  telemetry: {
+    /**
+     * Begin per-frame sampling of camera + autopilot state. Called by
+     * the animation loop via `_telemetryState.active`. Any prior run's
+     * samples are discarded.
+     */
+    start() {
+      _telemetryState.samples = [];
+      _telemetryState.active = true;
+      return { started: true, startedAt: performance.now() };
+    },
+    /**
+     * Halt sampling and return the collected samples array.
+     * @returns {Array<Object>} per-frame snapshots, each shaped
+     *   { t, camPos:[x,y,z], camFwd:[x,y,z], shipPhase, navPhase,
+     *     shakeOffset:[x,y,z], shakeMag, abruptness }
+     */
+    stop() {
+      _telemetryState.active = false;
+      const out = _telemetryState.samples || [];
+      _telemetryState.samples = null;
+      return out;
+    },
+    /** Is telemetry currently sampling? */
+    isActive() { return _telemetryState.active; },
+    /** Peek current sample count without stopping. */
+    count() { return (_telemetryState.samples || []).length; },
+  },
 };
+
+/**
+ * Capture one telemetry sample. Called from the animation loop when
+ * `_telemetryState.active`. Fields match AC #9 spec in the shake-redesign
+ * brief's Round-3 amendment. All vec3 fields are plain [x,y,z] arrays to
+ * keep the JSON serializable for post-run analysis.
+ */
+function _captureTelemetrySample() {
+  if (!_telemetryState.active || !_telemetryState.samples) return;
+  _tmpFwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  const shakeOff = shipChoreographer.shakeOffset;
+  const shakeMag = Math.sqrt(
+    shakeOff.x * shakeOff.x +
+    shakeOff.y * shakeOff.y +
+    shakeOff.z * shakeOff.z,
+  );
+  _telemetryState.samples.push({
+    t:           performance.now(),
+    camPos:      [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
+    camFwd:      [+_tmpFwd.x.toFixed(4),         +_tmpFwd.y.toFixed(4),         +_tmpFwd.z.toFixed(4)],
+    shipPhase:   shipChoreographer.currentPhase,
+    navPhase:    navSubsystem.getCurrentPlan().phase,
+    shakeOffset: [+shakeOff.x.toFixed(4), +shakeOff.y.toFixed(4), +shakeOff.z.toFixed(4)],
+    shakeMag:    +shakeMag.toFixed(4),
+    abruptness:  +shipChoreographer.abruptness.toFixed(4),
+  });
+}
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
@@ -5559,6 +5625,7 @@ function animate() {
       // frame's abruptness drives next-frame's shake via the provider
       // hook into FlythroughCamera) is imperceptible at 60 fps.
       shipChoreographer.update(deltaTime, result);
+      _captureTelemetrySample();  // AC #9 — sampled when window._autopilot.telemetry.active
       if (result.travelComplete || result.orbitComplete) {
         console.log(`[FLYTHROUGH] travelComplete=${result.travelComplete}, orbitComplete=${result.orbitComplete}, phase=${result.phase}, ship=${shipChoreographer.currentPhase}`);
       }

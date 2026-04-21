@@ -138,6 +138,15 @@ export class ShipChoreographer {
 
     this._timeAccum = 0;                // monotonic time accumulator
 
+    // Prior-frame phase — for AC #8 arrival-timing decel detection.
+    // The decel impulse fires on the `approaching → orbiting` transition
+    // (the moment of arrival at STATION), not at the travel→approaching
+    // boundary (which is halfway-through, not arrival). Per Max 2026-04-21
+    // round-3 feedback: sci-fi gravity-drive decel happens at arrival, not
+    // halfway. Ref: docs/WORKSTREAMS/autopilot-shake-redesign-2026-04-21.md
+    // §Round-3 amendment AC #8.
+    this._prevFramePhase = 'idle';
+
     // ── Output vector (camera consumes via setShakeProvider hook) ──
     this._shakeOffset = new THREE.Vector3();
   }
@@ -164,6 +173,7 @@ export class ShipChoreographer {
   beginTour({ fromWarp }) {
     this._fromWarp = !!fromWarp;
     this._phase = fromWarp ? ShipPhase.ENTRY : ShipPhase.CRUISE;
+    this._prevFramePhase = 'idle';
     this._resetSignal();
     this._endImpulseTrain();
   }
@@ -211,22 +221,25 @@ export class ShipChoreographer {
     this._prevPosition.copy(currPos);
     this._hasPrevPos = true;
 
-    // ── Phase-boundary onset detection (per Max 2026-04-21 redesign) ──
-    // Trigger shake at the MOMENTS where speed magnitude changes onset:
-    //   - motionStarted entering 'traveling' = "just began accelerating"  → +1 sign
-    //   - travelComplete one-shot           = "just began decelerating"  → -1 sign
-    // These are the felt-experience moments — Max: "right when you're first
-    // accelerating, and when you begin braking, or decelerating." Sustained
-    // smooth motion in between does NOT shake; the discontinuity-onset is
-    // the drive's compensation moment.
-    if (motionFrame.motionStarted && motionFrame.phase === 'traveling') {
-      // Begin acceleration impulse
+    // ── Phase-boundary onset detection (per Max 2026-04-21 round-3 redesign) ──
+    // Trigger shake at the MOMENTS where the gravity-drive compensates for
+    // a genuine speed-magnitude transition:
+    //   - motionStarted entering 'traveling' = "just began accelerating" → +1 sign
+    //   - prior-frame 'approaching' → current 'orbiting' = "ship settles into STATION"
+    //     = arrival-compensation per Bible §8H (sci-fi drive brakes at arrival,
+    //     not halfway) → -1 sign
+    // Sustained smooth motion does NOT shake; the discontinuity-onset is
+    // the drive's compensation moment. `travelComplete` is explicitly NOT
+    // the decel trigger (it fires at the traveling→approaching boundary,
+    // ~4.5s before the actual arrival — "way earlier than expected" per Max).
+    // Ref: docs/WORKSTREAMS/autopilot-shake-redesign-2026-04-21.md §Round-3 AC #8.
+    const currPhase = motionFrame.phase;
+    if (motionFrame.motionStarted && currPhase === 'traveling') {
       this._beginImpulseTrain(_velocity, +1, 1.0);
-    } else if (motionFrame.travelComplete) {
-      // Begin deceleration impulse (subsystem is internally about to enter
-      // approach or orbit phase — the ship "hits the wall of ether")
+    } else if (this._prevFramePhase === 'approaching' && currPhase === 'orbiting') {
       this._beginImpulseTrain(_velocity, -1, 1.0);
     }
+    this._prevFramePhase = currPhase;
 
     // ── Debug-hook boost (still bypasses for AC #4 + AC #5 recordings) ──
     if (this._abruptnessDebugBoost > 0) {
@@ -418,6 +431,7 @@ export class ShipChoreographer {
   stop() {
     this._phase = ShipPhase.IDLE;
     this._fromWarp = false;
+    this._prevFramePhase = 'idle';
     this._endImpulseTrain();
     this._abruptnessDebugBoost = 0;
     this._debugForcedSign = 0;
