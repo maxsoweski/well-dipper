@@ -83,6 +83,29 @@ first, what to avoid, what "done" looks like, what artifacts to produce
 
 The brief is **living** — you update it as the workstream evolves. Directors and future sessions read it as ground truth for the workstream's intent.
 
+## Dev-collab gate bootstrap (2026-04-21)
+
+A PreToolUse hook (`~/.claude/hooks/dev-collab-gate.sh`) blocks working-Claude's code edits once ≥2 have accumulated for the active workstream without a fresh Director audit. The hook consults `~/.claude/state/dev-collab/active-workstream` to know which workstream is live.
+
+**When you create or activate a workstream brief, you MUST set the gate state** so the hook operates on the right workstream:
+
+1. Write the brief to `docs/WORKSTREAMS/<slug>.md` as usual.
+2. Write the slug (brief filename without `.md`) to `~/.claude/state/dev-collab/active-workstream` on one line, no whitespace.
+3. Initialize the entry in `~/.claude/state/dev-collab/state.json`:
+   ```json
+   "<slug>": { "edits": 0, "last_audit_sha": "" }
+   ```
+
+**When a workstream closes** (Status: `Shipped ...`), clear the active slug so the hook goes dormant:
+```
+echo > ~/.claude/state/dev-collab/active-workstream
+```
+Leave the state.json entry in place as history.
+
+**If you're re-activating an existing workstream** (e.g., Max reopens a brief), update the active-workstream file but do NOT zero out `edits` or `last_audit_sha` — the history tells the Director whether a fresh audit is needed.
+
+If no workstream is active, the hook allows all edits (non-Dev-Collab work). This is fine for trivial one-shot fixes; the hook is only load-bearing when a brief exists.
+
 ## Per-phase AC rule
 
 For **phased / animated / progressive features** (warp phases, transitions, reveals, any sequenced motion), every AC must cite the feature-doc phase section it verifies. Symptom-class ACs ("stars are visible," "no black frames") do not evaluate the authored experience and can pass while the feature regresses. Phase-sourced ACs make the authored experience the testable criterion.
