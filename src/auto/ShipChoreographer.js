@@ -123,8 +123,8 @@ export class ShipChoreographer {
     //     constant even though direction changes sharply — this is the
     //     whole point of the signal change: direction change at constant
     //     speed does not shake).
-    this._abruptnessThreshold = 40.0;
-    this._abruptnessMax = 400.0;
+    this._abruptnessThreshold = 10000.0;
+    this._abruptnessMax = 100000.0;
 
     // ── Debug boost (AC #5 + AC #4 shake-verification hooks) ──
     // Debug hooks force an onset event without requiring a real signal
