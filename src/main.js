@@ -350,11 +350,16 @@ window._autoNav = autoNav;
 window._navSubsystem = navSubsystem;
 window._shipChoreographer = shipChoreographer;
 
-// WS 2 debug hooks — exposed for AC #5 shake-verification recording.
+// WS 2 / shake-redesign debug hooks — exposed for AC #4 + AC #5 shake-
+// verification recordings. debugAccelImpulse / debugDecelImpulse fire the
+// two sign-distinct impulse envelopes; debugAbruptTransition is retained
+// as an alias for decel-side (legacy WS 2 recordings continue to work).
 window._autopilot = {
+  debugAccelImpulse:     () => shipChoreographer.debugAccelImpulse(),
+  debugDecelImpulse:     () => shipChoreographer.debugDecelImpulse(),
   debugAbruptTransition: () => shipChoreographer.debugAbruptTransition(),
-  getShipPhase: () => shipChoreographer.currentPhase,
-  getAbruptness: () => shipChoreographer.abruptness,
+  getShipPhase:          () => shipChoreographer.currentPhase,
+  getAbruptness:         () => shipChoreographer.abruptness,
 };
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
