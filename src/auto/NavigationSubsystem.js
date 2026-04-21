@@ -33,6 +33,8 @@ import * as THREE from 'three';
  * @property {boolean} orbitComplete       — one-shot: orbit cycle just ended
  * @property {boolean} targetingReady      — one-shot: ~4s before orbit end
  * @property {number} abruptness           — V1 = 0.0; V2 consumer of §10.8 shake
+ * @property {boolean} isShortTrip         — true for legs below the short/long distance threshold
+ * @property {boolean} warpExit            — true if this leg is the 3s warp-exit coast
  *
  * Public property `rotBlendDuration` is set per motion start. Camera reads
  * it to time its own orientation slerp from pre-motion quaternion → lookAt-
@@ -267,6 +269,8 @@ export class NavigationSubsystem {
       orbitComplete:  this._orbitCompleteOneShot,
       targetingReady: this._targetingReadyOneShot,
       abruptness:     this._abruptness,
+      isShortTrip:    !!this._isShortTrip,
+      warpExit:       !!this._warpArrival,
     };
   }
 
