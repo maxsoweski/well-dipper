@@ -2,7 +2,7 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX <pending-commit>` — **round-7 amplitude retune on round-6 mechanism.** Max on round-6 ("I don't see any shake at all now"). Diagnosis: mechanism right, amplitude below perceptual floor.
+`VERIFIED_PENDING_MAX d02db8f` — **round-7 amplitude retune on round-6 mechanism.** Max on round-6 ("I don't see any shake at all now"). Diagnosis: mechanism right, amplitude below perceptual floor.
 
 **Round-7 fixes (tuning-only; mechanism unchanged):**
 1. **Scale coupling `orbitDistance` → `cameraToTargetDistance`.** During CRUISE the camera sits 20-200 scene-units from the target while `orbitDistance` refers to the upcoming orbit (moon=0.06). `amp = viewAngle × orbitDist` gave 0.0007-unit offsets vs. 30+-unit view distances = ~0.002° view swing (invisible). Swapping to `cam2tgt` makes view-angle uniform across all phases, as Max's "pilot-felt shake" intent requires.
