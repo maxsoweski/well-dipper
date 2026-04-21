@@ -43,6 +43,23 @@ full sequence.
   **name-collision between new ship-axis `ENTRY/CRUISE/APPROACH/STATION`
   phases and the subsystem's internal `descending/traveling/approaching/orbiting`
   enum** — they are orthogonal, not a rename.
+- **2026-04-21 — Director re-audit post-WS-1-ship.** Three surgical
+  amendments: (1) **AC #5** updated — abruptness is produced by the
+  ship choreographer, NOT by `NavigationSubsystem` (subsystem emits
+  `0.0` stub; the choreographer owns the authored ship-axis sequence
+  and therefore the abruptness math). Prior wording incorrectly
+  pointed at the subsystem. (2) **AC #7** updated — post-WS-1
+  `FlythroughCamera` has no state enum to edit (162 lines,
+  orientation-only). The expected integration is the ship
+  choreographer driving `subsystem.beginMotion` per ship-axis phase,
+  the camera consuming `frame.position` via existing plumbing. No
+  follow-mode hook needed; escalate to Director if one seems
+  required. (3) **Drift risk added** — `nextBody` semantic collision
+  between manual-burn's `nextBody: target` quirk (WS 1 preserved)
+  and tour-phase's `nextBody: lookahead`. Both are legal
+  `beginMotion` inputs with different emergent behaviors; the
+  choreographer must use the lookahead pattern, not the manual-burn
+  convention. Scope / principles / drift-risks #1–#6 all unchanged.
 
 ## Parent feature
 
@@ -273,8 +290,14 @@ own AC. All six are evaluated against a single canvas recording
    together prove the mechanism works and is correctly gated.
    Implementation shape per §10.8: additive shake input, magnitude
    computed from motion discontinuity (second derivative of
-   velocity or a dedicated "abruptness" signal from the navigation
-   subsystem), not authored per-phase-transition.
+   velocity or a dedicated "abruptness" signal produced by **the
+   ship choreographer** — NOT by `NavigationSubsystem`, which
+   currently emits a `0.0` stub per `MotionFrame.abruptness`).
+   Rationale: abruptness is a function of the authored four-phase
+   ship-axis sequence (which the choreographer owns), not of the
+   subsystem's internal motion math (which doesn't know about the
+   ship-axis model). See Handoff §4a for the full contract. Not
+   authored per-phase-transition as a visual beat.
 
 6. **Motion evidence at ship-gate** — **one primary recording
    covering a full tour at Sol plus one debug-shake recording.** Per
@@ -300,18 +323,27 @@ own AC. All six are evaluated against a single canvas recording
    verdict against the recordings, not on agent inspection of
    velocity values in the console.
 
-7. **Camera is unchanged — `FlythroughCamera` coupled to ship
-   choreographer as debug follow-mode, no camera-axis work.** WS 3
-   retires `FlythroughCamera.State`. This workstream couples the
-   existing camera to the ship's new motion via a minimal
-   "camera follows ship" follow-mode (the debug camera sits
-   behind and slightly above the ship, pointing forward along
-   ship velocity). The recording for AC #6 shows ship motion,
-   not yet cinematic camera — this is expected and the brief is
-   explicit about it with Max. Verified by reading the diff:
-   `FlythroughCamera.js` receives minimally-invasive additions
-   (a debug follow-mode) and no changes to the state enum or
-   existing methods.
+7. **Camera is unchanged — orientation-authoring layer stays
+   orientation-authoring; no camera-axis work.** WS 1 already
+   retired the `FlythroughCamera.State` enum — the post-WS-1
+   camera module is 162 lines of orientation-only (free-look,
+   lookAt + slerp against `MotionFrame.lookAtTarget`). WS 3
+   will author the `ESTABLISHING / SHOWCASE / ROVING` dispatch
+   on top of this module. This workstream's expected camera
+   integration: the ship choreographer drives the subsystem via
+   `subsystem.beginMotion` per ship-axis phase transition (see
+   Handoff §4a), the subsystem produces `frame.position`, the
+   camera already consumes `frame.position` via its existing
+   update loop. **No follow-mode hook needed** — the existing
+   plumbing is the follow-mode. If working-Claude finds the
+   choreographer needs to write ship position NOT through the
+   subsystem (e.g., a greenfield ENTRY curve that the subsystem
+   can't express), escalate to Director before adding a camera-
+   side hook; the escalation may redraw the split between
+   choreographer and subsystem for V1. Verified by reading the
+   diff: `FlythroughCamera.js` receives zero or near-zero edits;
+   zero new branches on ship-axis phase; zero direct writes to
+   `camera.position` outside the subsystem's output path.
 
 8. **Warp-exit handoff honors §10.5** — no black frame, no
    pose-jump, no pop-to-a-new-speed between warp EXIT and
@@ -506,6 +538,35 @@ V-later, if ever).
   (named per §In scope — proposed `src/auto/ShipChoreographer.js`),
   NOT in `FlythroughCamera.js`. The two APPROACHes are
   separate phases in separate axes per §10.1.
+
+- **Risk: `nextBody` semantic collision with WS 1's manual-burn
+  preservation quirk.** WS 1's post-ship fix (`3d53825`) preserved
+  the pre-refactor accidental-but-load-bearing behavior that manual
+  burns pass `nextBody: target` (identity) — the
+  `_updateTravel` entry-yaw picker takes the degenerate branch
+  (`nnPos - nextPos == 0`) in that case, which produced a specific
+  emergent orbit-side. See `src/main.js:4506–4510` (`focusPlanet`)
+  for the documented convention. The ship choreographer's tour-
+  driven `beginMotion` calls — `ENTRY → CRUISE` onto firstPlanet,
+  `CRUISE → APPROACH → STATION` at each stop, then the next
+  `CRUISE` onto the subsequent stop — must pass `nextBody = the
+  actual next tour stop` (lookahead), **not** `nextBody = current
+  target` (the manual-burn convention). The two vocabularies are
+  distinct: manual-burn's `nextBody = target` is a specific
+  degenerate-branch selector; tour-phase's `nextBody = lookahead`
+  is the real departure-aligned-orbit hint.
+  **Why it happens:** working-Claude reads `focusPlanet` as
+  precedent for "how to call `beginMotion`" and copies the
+  `nextBody: target` quirk into the tour path, breaking the
+  departure-aligned orbit math that AC #2's C1-continuity at
+  CRUISE → APPROACH depends on.
+  **Guard:** the ship choreographer's tour-path `beginMotion`
+  calls pass `nextBody` from `autoNav.getNextStop()?.bodyRef`
+  (the pattern already used at `src/main.js:3917` for first-stop
+  pickup, and at `:4105` and `:4143` for warp-reveal). If the
+  choreographer's ENTRY-completion / CRUISE-initiation handoff
+  writes `nextBody: firstStop.bodyRef` (the current target),
+  that's the quirk leaking — escalate to Director.
 
 - **Risk: Phase-name collision with `NavigationSubsystem`'s
   internal phase enum.** WS 1's refactor carried over the
