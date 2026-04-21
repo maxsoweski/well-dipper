@@ -89,8 +89,16 @@ const DECEL_AMPS = [1.00, 0.55, 0.30, 0.17];
 // planets (moderate), stars (large orbit → full-scale peak). A round-3
 // scene-unit-absolute amplitude (0.6) produced ±84° view swing at moon
 // orbits (d=0.06) — scale-coupling eliminates the pathological case.
-// TUNABLE during recording review. Suggested range [0.05, 0.15].
-const SHAKE_AMPLITUDE_FRACTION = 0.10;
+// TUNABLE during recording review.
+//
+// **Round-5 insight (Director-audited 2026-04-21):** because camera.lookAt()
+// re-pivots the camera at the body after position is shaken, the VIEW ANGLE
+// in radians per bump is approximately `shakeOffset / orbitDistance` — which
+// equals SHAKE_AMPLITUDE_FRACTION. So this fraction is literally the peak
+// view-pitch swing per bump in radians. 0.10 rad = 5.7° per bump; with
+// 4 alternating-sign bumps in <1s that reads as violent camera whip.
+// Dropped to 0.02 rad = 1.15° per bump — visible tremor, not whipsaw.
+const SHAKE_AMPLITUDE_FRACTION = 0.02;
 
 // Ceiling on scale-coupled peak amplitude (absolute scene units). Prevents
 // a pathologically large orbitDistance (e.g., star orbit = 40 units) from
@@ -384,15 +392,17 @@ export class ShipChoreographer {
     this._shakeActive = true;
     this._shakeOnsetTime = this._timeAccum;
     // AC #10: whole envelope scales together (drift risk #1 guard).
-    // Pre-multiply every entry of _shakeAmps by the frozen peakAmp so
-    // downstream per-frame reads are already scaled. This preserves
-    // `shakeAmps[n]/shakeAmps[0]` ratios across body classes (the log-
-    // decay between impulses stays the same; only absolute amplitude
-    // changes).
-    this._shakeScale = peakAmp;  // retained for telemetry / debugging
+    // Pre-multiply every entry of _shakeAmps by the frozen peakAmp.
+    this._shakeScale = peakAmp;
     this._shakeTimes = times;
     this._shakeAmps = amps.map(a => a * peakAmp);
     this._shakeWidths = widths;
+    // Round-5: track train sign so _sampleImpulseTrain can differentiate
+    // accel (alternating bump signs — pebble skipping) from decel
+    // (monotonic bumps — boat hits the wall then settles). Whip-crack
+    // alternating-sign on decel was Director-audited 2026-04-21 as
+    // contributing to the perceived violence at arrival.
+    this._shakeTrainSign = sign;
   }
 
   /**
@@ -415,11 +425,15 @@ export class ShipChoreographer {
         // Half-sine bump, peaks at center
         const bumpT = (tRel - start) / (end - start);  // 0..1
         const bumpAmp = this._shakeAmps[n] * Math.sin(Math.PI * bumpT);
-        // Alternate bump direction for visible "skipping" — each bump
-        // swings the opposite way of the previous. Keeps the shake
-        // visibly oscillating across zero (like a pebble bouncing
-        // above/below the water surface).
-        const swingSign = (n % 2 === 0) ? 1 : -1;
+        // Accel (+1): alternate bump direction — pebble skipping across
+        // water surface, each bump opposite the last.
+        // Decel (-1): monotonic same-direction bumps — boat slams into the
+        // wall of ether then settles; no whip-crack reversal.
+        // Round-5 (Director 2026-04-21): decel's alternation was a major
+        // contributor to "violent shake at arrival" perception.
+        const swingSign = this._shakeTrainSign >= 0
+          ? ((n % 2 === 0) ? 1 : -1)
+          : 1;
         return bumpAmp * swingSign;
       }
     }
