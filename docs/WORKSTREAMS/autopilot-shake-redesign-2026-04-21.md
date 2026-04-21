@@ -2,7 +2,18 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX 3031afc` — round-4 fixes landed. Shake amplitude scale-coupled to current-target `orbitDistance` (frozen at onset). Post-fix ratio verification at Sol body-class debug triggers: moon 0.063, planet 0.085, star 0.062 — all within target [0.05, 0.15] range. Compared to round-3 at a moon: shake was 0.6 scene units (60× moon radius — view-flipping lurch). Round-4: 0.0038 scene units (~0.4× moon radius — bounded bob). Recording at `screenshots/max-recordings/autopilot-shake-redesign-round4-2026-04-21.webm` (12 MB, ~30s, includes natural moon arrival + per-body debug impulses). Awaiting Max's verdict.
+`VERIFIED_PENDING_MAX 04056b9` — round-5 tuning pass after round-4 recording failed Max's verdict ("camera does not stay put at the moon ... shakes around violently all crazy"). Director audit (2026-04-21) surfaced the root cause: `atan(shakeOffset/orbitDistance) ≈ shakeOffset/orbitDistance` for small angles, so scale-coupling via `SHAKE_AMPLITUDE_FRACTION * orbitDistance` produces a per-body-class-UNIFORM view-angle swing of `SHAKE_AMPLITUDE_FRACTION` radians per bump. `FRACTION=0.10` meant 5.7°/bump everywhere; 4 alternating-sign decel bumps in <1s = whip-crack camera rotation.
+
+**Round-5 fixes (both tuning-level — no scope change):**
+1. `SHAKE_AMPLITUDE_FRACTION = 0.10 → 0.02`. Peak view angle per bump: **5.7° → 1.15°**. Reads as camera tremor, not whipsaw.
+2. Decel envelope: sign-alternation suppressed. Accel bumps still alternate (pebble-skip metaphor); decel bumps are now monotonic impact-then-settle (boat-slam-into-wall metaphor). Matches the round-1 design intent.
+
+**Post-round-5 verification** (pathological-case moon trigger, 20ms sampling):
+- peak shake magnitude: 0.00122 scene units (was 0.0038 at round-4)
+- peak view angle: **1.17°** (was 5.72° at round-4)
+- Y-swing range: 0.00120 (all positive samples — monotonic decel confirmed)
+
+Recording at `screenshots/max-recordings/autopilot-shake-redesign-round5-2026-04-21.webm` (12.8 MB, ~30s, natural moon arrival + per-body debug impulses). Awaiting Max's verdict.
 
 **Round-3 telemetry evidence (34s Sol capture, post-`64a7725`):**
 - **Decel fires at arrival, not halfway.** Phase transition `approaching → orbiting` at t=19.71s; decel impulse fires at t=19.78s (70ms after arrival). AC #8 verified.
