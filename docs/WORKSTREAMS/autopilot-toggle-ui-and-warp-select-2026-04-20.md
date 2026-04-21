@@ -286,20 +286,33 @@ grep/code-read verifiable.
    cinematic frame is clean. The status indicator from AC #2
    is the exception.
 
-7. **HUD reappears on player interaction** (per `docs/FEATURES/autopilot.md`
-   §"HUD": *"Reappears on player interaction — cursor moves to
-   select an object, keyboard input, autopilot-off toggle, etc."*).
-   The exact trigger list is soft in the feature doc and this
-   workstream pins it — **V1 trigger list:** (a) cursor motion to
-   a selectable body (existing reticle hover behavior), (b) any
-   keyboard input that maps to an in-game action (Tab, WASD, 1-9,
-   Escape, etc. — not modifier keys alone), (c) commitSelection
-   event fired from reticle path, (d) menu-open (settings,
-   warp-select). Verified in Max's primary recording via
-   scripted-or-keyboard interaction mid-autopilot: HUD returns.
-   Working-Claude documents the chosen trigger set in code
-   comments and this brief is updated at Shipped if the set
-   changed during implementation.
+7. **HUD reappears on player interaction OR tour-complete** (per
+   `docs/FEATURES/autopilot.md` §"HUD": *"Reappears on player
+   interaction — cursor moves to select an object, keyboard
+   input, autopilot-off toggle, etc."*). The exact trigger list
+   is soft in the feature doc and this workstream pins it —
+   **V1 trigger list (four player-side + one system-side):**
+   - **Player-side:** (a) cursor motion to a selectable body
+     (existing reticle hover behavior), (b) any keyboard input
+     that maps to an in-game action (Tab, WASD, 1-9, Escape,
+     etc. — not modifier keys alone), (c) commitSelection event
+     fired from reticle path, (d) menu-open (settings,
+     warp-select).
+   - **System-side:** (e) tour-complete — the cinematography
+     layer's queue-exhaust event is itself a HUD-restore trigger
+     per AC #10's resolution (b). Distinguished from the four
+     player-side triggers because it isn't initiated by player
+     input; it's initiated by the cinematography layer reaching
+     the end of its queue. This trigger is what opens the
+     warp-select handoff; Director added it in the 2026-04-20
+     audit so AC #7 and AC #10 align explicitly rather than
+     AC #10 pinning a behavior AC #7 doesn't list.
+
+   Verified in Max's primary recording via scripted-or-keyboard
+   interaction mid-autopilot: HUD returns on each of the five
+   triggers. Working-Claude documents the chosen trigger set in
+   code comments and this brief is updated at Shipped if the
+   set changed during implementation.
 
 8. **Manual-override preserves ship angular momentum** (per
    `docs/FEATURES/autopilot.md` §"Manual override": *"Ship
