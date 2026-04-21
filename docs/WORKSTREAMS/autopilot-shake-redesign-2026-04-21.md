@@ -2,25 +2,35 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX deb5056` — single-axis log-impulse shake mechanism implemented per Max's pebble/boat/ether design intent. Threshold tuned post-capture so smooth tour motion stays at abruptness=0; debug hooks fire visible asymmetric impulse trains. Awaiting Max's verdict on the recording. Combined Shipped flip with WS 2 (`autopilot-ship-axis-motion-2026-04-20.md` currently `VERIFIED_PENDING_MAX cfd6df0`).
+`VERIFIED_PENDING_MAX 8a9161f` — single-axis log-impulse shake mechanism implemented per Max's pebble/boat/ether design intent, with three round-2 fixes after Max's first-recording feedback (vertical-axis primary, phase-boundary trigger, synchronized-minor-secondary horizontal axis). Awaiting Max's verdict on the recording. Combined Shipped flip with WS 2 (`autopilot-ship-axis-motion-2026-04-20.md` currently `VERIFIED_PENDING_MAX cfd6df0`).
 
-**Commit arc (2 commits):**
-- `7a7370f` — `feat(autopilot): single-axis log-impulse shake per Max's pebble/boat/ether design` — full redesign (signal change + shape change). The 3-sine continuous-noise wobble replaced with a precomputed log-spaced impulse train, single-axis perpendicular-to-velocity, asymmetric accel/decel envelopes (`[0.30, 1.00, 0.70, 0.35, 0.10]` crescendo-then-fade vs. `[1.00, 0.55, 0.30, 0.17]` impact-then-decay). Trigger swapped from `‖d²x/dt²‖` to scalar `d|v|/dt` (sign discriminates accel/decel). Two new debug hooks: `debugAccelImpulse()` + `debugDecelImpulse()`; legacy `debugAbruptTransition()` retained as alias for decel.
-- `deb5056` — `tune: threshold 40→10000` — Hermite cruise still triggered onset events at threshold=40 (Hermite-curve travel ramps |v| from ~0 at STATION to peak mid-trip and back, producing sustained `d|v|/dt` ~400+ units/s²). Bumped to 10000/100000 so smooth tour motion stays at abruptness=0; debug hooks (boost=1.0 directly) still fire cleanly.
+**Commit arc (3 commits):**
+- `7a7370f` — `feat(autopilot): single-axis log-impulse shake per Max's pebble/boat/ether design` — first redesign pass. Log-spaced impulse train, asymmetric accel/decel amplitude envelopes, scalar-`d|v|/dt` trigger, two new debug hooks.
+- `deb5056` — `tune: threshold 40→10000` — first tuning pass; Hermite cruise was still firing on threshold-based gate.
+- `8a9161f` — `fix: vertical-axis shake + phase-boundary trigger per Max's 2026-04-21 feedback` — round-2 redesign after Max watched first recording: (a) primary axis flipped from horizontal-perpendicular to **world Y** (boat bobbing up-and-down, not side-to-side); (b) added secondary horizontal-perpendicular axis at 20% amplitude carrying the SAME envelope (synchronized minor companion shake); (c) replaced threshold gating with **phase-boundary detection** — shake fires at `motionStarted && phase === 'traveling'` (begin-accel) and `travelComplete` (begin-decel), nowhere else. Sustained smooth motion no longer gates on a magnitude threshold; the discontinuity-onset is the trigger. Removed obsolete `_abruptnessThreshold`/`_abruptnessMax`/`_dSpeedDt`/`_prevSpeed`/`_hasPrevSpeed`/`ONSET_TRIGGER_THRESHOLD`.
 
-**Recording (drop path):** `screenshots/max-recordings/autopilot-shake-redesign-2026-04-21.webm` (7.1 MB, 15s). 4-segment sequence per AC #7: smooth baseline (3s) → `debugAccelImpulse()` fires (5s — accel envelope ringout) → smooth gap (2s) → `debugDecelImpulse()` fires (5s — decel envelope ringout). Captured at Sol via non-warp `_startFlythrough()` engage so the baseline segments are real-CRUISE motion, not frozen state.
+**Recording (drop path):** `screenshots/max-recordings/autopilot-shake-redesign-2026-04-21.webm` (6.4 MB, 14s). 4-segment sequence per AC #7: smooth baseline (3s — possibly includes a natural travelComplete decel impulse if the autopilot crosses a phase boundary in this window) → `debugAccelImpulse()` fires (4s — accel envelope ringout, vertical bob with minor companion sway) → smooth gap (2s) → `debugDecelImpulse()` fires (5s — decel envelope ringout, vertical bob with minor companion sway). Captured at Sol via non-warp `_startFlythrough()` engage. Recorded against commit `8a9161f` (round-2 redesign).
 
 **Director-owned doc edits already landed (2026-04-21):**
 - Bible §8H Gravity Drive — ether metaphor extension paragraph (commit `cde2d7f`).
 - SYSTEM_CONTRACTS §10.8 — trigger refined to scalar `d|v|/dt`; envelope refined to log-impulse train; accel/decel asymmetry formalized (commit `cde2d7f`).
 - WS 2 brief §"Parking-lot — shake redesign" — updated to link forward to this brief; Shipped-flip gate updated to require BOTH recordings approved by Max (commit `cde2d7f`).
 
-**Telemetry probes** (post-tune, pre-recording, in-browser via chrome-devtools):
-- Smooth tour baseline (10s sample): max abruptness = 0.000, max shake magnitude = 0.031 (residual from earlier impulse-tail only).
-- Debug accel impulse (3s sample at 100ms): peak shake magnitude ≈ 0.37 (sampling catches mid-bump not exact peak); 6 impulse peaks captured — log-spaced impulse train confirmed visible.
-- Single-axis confirmation: all shake samples have `sy = 0`; `sx`/`sz` proportional with stable ratio across the impulse train — confirmed perpendicular-to-velocity axis frozen at onset.
+**Telemetry probes** (post-`8a9161f`, pre-recording, in-browser via chrome-devtools):
+- Smooth tour baseline (CRUISE phase, 2s sample): all shake offsets = 0. AC #5 invariant preserved.
+- Natural phase-boundary fire at autopilot's travel→approach transition: shake fires with `sy = -0.312` (PRIMARY: vertical bob), `sz = 0.062` (SECONDARY: horizontal-perp, 20% of primary, synchronized), `sx = 0.002` (negligible — depends on velocity orientation at onset). Vertical-axis dominance confirmed.
+- Subsequent samples in the impulse train decay log-shaped (mag 0.319 → 0.065 across 800ms).
 
-**Tuning note for Max:** thresholds in `src/auto/ShipChoreographer.js` (`_abruptnessThreshold = 10000.0`, `_abruptnessMax = 100000.0`) are conservative for V1. If you want warp-exit transitions or other real-motion discontinuities to fire shake on top of debug hooks, lower threshold during recording review. All envelope shape parameters (`IMPULSE_SPACING_RATIO = 1.8`, `IMPULSE_INITIAL_GAP = 0.08`, `ACCEL_AMPS`, `DECEL_AMPS`, `SHAKE_MAX_AMPLITUDE = 0.6`) are named constants at the top of the file for visible tuning.
+**Tuning note for Max:** the trigger is now phase-boundary-only (no threshold knob). Tunables at the top of `src/auto/ShipChoreographer.js`:
+  - `IMPULSE_SPACING_RATIO = 1.8` — log-spacing growth ratio (φ; >1 → gaps grow each impulse)
+  - `IMPULSE_INITIAL_GAP = 0.08` — seconds from onset to first impulse peak
+  - `IMPULSE_WIDTH_RATIO = 0.5` — bump width as fraction of leading gap (controls how sharp/blurry each bump reads)
+  - `ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]` — accel envelope (crescendo-then-fade)
+  - `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]` — decel envelope (impact-then-decay)
+  - `SHAKE_MAX_AMPLITUDE = 0.6` — primary-axis (Y) magnitude scale
+  - `SECONDARY_AXIS_RATIO = 0.20` — secondary-axis (horizontal-perp) magnitude as fraction of primary
+
+If shake feels too punchy or too gentle, scale `SHAKE_MAX_AMPLITUDE`. If the secondary horizontal sway is invisible/distracting, scale `SECONDARY_AXIS_RATIO`. Envelope shape changes (asymmetry, bounce count) edit the AMPS arrays directly.
 
 ## Revision history
 
