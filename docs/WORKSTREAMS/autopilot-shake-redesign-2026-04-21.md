@@ -2,6 +2,25 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX 46ca75e` — round-8 code committed. Bible §8H asymmetric log-impulse envelope restored on continuous `d|v|/dt` trigger. Director re-audit at `755000e` RELEASED the gate scoped to `ShipChoreographer.js`; code commit `46ca75e` is that scoped work.
+
+**Telemetry verification (in-browser, live autopilot):**
+- Accel envelope (cam2tgt=187.7 at ENTRY, peakAmp=9.39): peaks 3.04 / 9.70 / 6.75 / 3.36 / 0.96 at t=0.08 / 0.22 / 0.48 / 0.94 / 1.79 s. Within 3% of `ACCEL_AMPS × peakAmp` = [2.82, 9.39, 6.57, 3.28, 0.94].
+- Decel envelope (cam2tgt=100, peakAmp=5.0): peaks 5.06 / 2.83 / 1.54 / 0.87 at t=0.08 / 0.22 / 0.48 / 0.95 s. Within 3% of `DECEL_AMPS × peakAmp` = [5.00, 2.75, 1.50, 0.85].
+- AC #2 ✓ — discrete peaks, log-spaced, log-decaying (not continuous carrier).
+- AC #4 ✓ — accel (crescendo at peak 2) vs decel (max at peak 1) visibly asymmetric.
+- AC #10 drift-risk 2 ✓ — `cam2tgt` frozen at onset; per-event peakAmp constant through ringout.
+
+**Recording drop path:** `screenshots/max-recordings/autopilot-shake-redesign-round8-2026-04-21.webm` (3.4 MB, 11.5s). Sol debug sequence: smooth baseline (3s) → `debugAccelImpulse()` (2.5s) → smooth gap (2s) → `debugDecelImpulse()` (2s) → smooth closer (2s).
+
+**Contact sheet:** `screenshots/max-recordings/autopilot-shake-redesign-round8-2026-04-21-contactsheet.png` (6×4 grid @ 2 fps).
+
+Awaiting Max's verdict.
+
+---
+
+**Historical: HELD state (superseded by round-8 code commit 46ca75e).**
+
 `HELD — ROUND 8 PIVOT (path A, restore canon)` — Director HELD the workstream at `8a21830` after auditing round-7. Audit at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md`. Gate is still engaged; code does not resume until Director re-audits this amendment.
 
 **The problem.** Rounds 6 and 7 silently replaced the Bible-canonical asymmetric log-impulse envelope with a continuous sinusoidal bob (`Math.sin(_timeAccum × 6Hz × 2π) × smoothed amplitude`, `Math.abs(dSpeed)` discarding sign). AC #2 (3–5 discrete bounces, log-spaced, log-decaying) and AC #4 (accel vs. decel visibly asymmetric) went to zero in code while still live in the brief. Neither pivot went through PM or Director. The round-6 Status block retroactively framed the continuous-drive shape as the intent; it wasn't — it was unauthorized abandonment of the envelope work that had been in flight since round-1.
