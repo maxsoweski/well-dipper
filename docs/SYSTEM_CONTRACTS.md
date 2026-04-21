@@ -346,7 +346,9 @@ Autopilot has two layers. The toggle controls one of them.
 
 **Invariant:** manual-mode "burn to body" uses the **same navigation subsystem** autopilot uses. Autopilot-off does not kill the navigation subsystem; it swaps the caller from cinematography-orchestrator to direct-user-command.
 
-`AutoNavigator` today owns both layers. Splitting them cleanly is a refactor requirement, not optional. Any V1 autopilot implementation must surface the split explicitly — workstream ACs are expected to include "motion-execution remains functional with cinematography layer disabled" as a verification.
+**Today's entanglement (2026-04-20 correction):** the two layers are tangled inside `FlythroughCamera.js`, not inside `AutoNavigator.js`. `AutoNavigator.js` is already cinematography-only (queue building, queue-index state, linger heuristics, `onTourComplete` callback — zero motion execution). `FlythroughCamera.beginDescend` / `beginOrbit` / `beginTravel` / `beginTravelFrom` / `beginApproach` co-mingle **motion execution** (position/velocity integration, Hermite curves, orbit arc math, approach close-in, descend path) with **camera state** (yaw/pitch, quaternion slerp, free-look offset, lookAt blending, FOV framing). Splitting them cleanly is a refactor requirement, not optional: motion execution lifts into a new navigation-subsystem module that produces motion plans; camera state stays in the camera module and consumes the plans. Any V1 autopilot implementation must surface the split explicitly — workstream ACs are expected to include "motion-execution remains functional with cinematography layer disabled" as a verification, and "manual-mode burn path reaches the subsystem without touching the cinematography layer" as a second.
+
+*Earlier versions of this §10.3 named `AutoNavigator` as the monolith. That was wrong — the monolith is `FlythroughCamera`. Corrected 2026-04-20 after working-Claude's pre-execution read of the code surfaced the inversion.*
 
 ### 10.4 Drive-state transitions (extends §5.3)
 
