@@ -412,7 +412,10 @@ The ship uses a gravity drive (Bible §8H). The drive maintains inertial neutral
 
 **Invariant:** shake fires **only** when the ship motion is **genuinely abrupt** — exceeding a smoothing threshold the drive can't absorb. Shake as a frame-punch effect without an underlying abrupt motion is a contract violation. It breaks the inertial-neutrality contract and makes future abruptness-triggered shake meaningless.
 
-**Implementation shape:** camera / ship-mesh accepts an **additive shake input**. The shake magnitude is computed from motion discontinuity (second derivative of velocity, or a dedicated "abruptness" signal produced by the navigation subsystem), not authored per-phase-transition.
+**Implementation shape:** camera / ship-mesh accepts an **additive shake input**. The shake magnitude is computed from motion discontinuity, not authored per-phase-transition. Two specifics:
+
+- **Trigger signal is the scalar speed-magnitude derivative `d|v|/dt`** — NOT vector acceleration magnitude `‖d²x/dt²‖`. Centripetal acceleration — direction change at constant `|v|` — does NOT fire shake by design. This follows from the Bible §8H ether metaphor: the shake renders friction against the medium during *speed* changes; pure direction change is the ship redirecting through the medium without changing its density relationship, so no friction pileup, no shake.
+- **Magnitude envelope is a logarithmic-spaced discrete impulse train with logarithmically-decaying amplitudes** — 3–5 countable bounces per event, not continuous high-frequency noise. Accel and decel produce temporally mirrored envelopes discriminated by `sign(d|v|/dt)`: accel is crescendo-then-fade (ship pushing INTO the medium, waves building then releasing); decel is impact-then-decay (ship slamming into the wall of medium, ringout). The two shapes must be visibly distinct in playback.
 
 V1 ships the mechanism. V1 flight is smooth enough that shake rarely fires — but the mechanism exists for manual-override hand-back (player grabs control at speed), unexpected avoidance, and warp-exit velocity mismatches.
 

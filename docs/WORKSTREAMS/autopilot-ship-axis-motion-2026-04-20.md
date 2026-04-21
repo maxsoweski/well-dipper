@@ -53,17 +53,24 @@ boost=1.0 and will continue to fire regardless of tuning.
 
 **Parking-lot — shake redesign (Max flagged 2026-04-21 during recording
 review).** Current shake implementation produces random high-frequency
-motion that is light-motion-sickness-inducing. Redesign asks captured
-in GTD inbox: (1) shake shape should look like a "pebble skipping
-across a pond's surface" — directional impulse + ease-out bounces,
-not continuous sine noise; (2) shake trigger should be on scalar
-speed-magnitude change (d|v|/dt), not vector acceleration magnitude
-(d²x/dt²) — turning at constant speed shouldn't shake. Followup
-workstream tracks the redesign; the plumbing (additive provider hook,
-debug trigger, abruptness-signal-driven magnitude) is correct per §10.8
-and survives the redesign. Workstream still Shipped-gateable on the
-recording review if Max judges the current shake acceptable as interim;
-otherwise the redesign lands first.
+motion that is light-motion-sickness-inducing. The redesign is now
+scoped in a dedicated follow-up workstream:
+**`docs/WORKSTREAMS/autopilot-shake-redesign-2026-04-21.md`**. That
+brief owns the redesign's pebble/boat/ether framing, the scalar-`d|v|/dt`
+trigger, the logarithmic impulse-train envelope, and the accel/decel
+asymmetry; read it there. The plumbing this workstream landed (additive
+provider hook via `FlythroughCamera.setShakeProvider`, `shakeOffset`
+Vector3, debug-hook pattern, tour-lifecycle surface) is correct per
+§10.8 and is preserved by the redesign — only the magnitude-from-signal
+mapping and the shake-offset shape change.
+
+**Shipped-flip gate updated (2026-04-21):** WS 2's Shipped flip now
+blocks on BOTH recordings being approved by Max in the same review —
+this workstream's primary Sol tour (`screenshots/max-recordings/autopilot-ship-axis-motion-2026-04-20.webm`,
+already captured, unchanged by the redesign) AND the shake-redesign
+workstream's verification recording (`screenshots/max-recordings/autopilot-shake-redesign-2026-04-21.webm`,
+new capture per that brief's AC #7). Current status `VERIFIED_PENDING_MAX cfd6df0`
+holds until the combined verdict lands.
 
 See `docs/FEATURES/autopilot.md` §"Workstreams" for the full V1
 autopilot sequence (WS 3 — camera-axis retirement; WS 4 — toggle UI
