@@ -45,7 +45,18 @@ export class FlythroughCamera {
     // ── Free-look offset (middle-mouse drag) ──
     this.freeLookYaw = 0;
     this.freeLookPitch = 0;
+
+    // ── Shake provider hook (WS 2 — gravity-drive shake per §10.8) ──
+    // Optional. If set, `update()` reads `provider.shakeOffset` (Vector3)
+    // and adds it to `camera.position` after the subsystem's authored
+    // position is written. V1 provider is ShipChoreographer; default is
+    // smooth motion (provider emits zero offset). Per AC #7, this is the
+    // only ship-axis-motion-related change to this module.
+    this._shakeProvider = null;
   }
+
+  /** Optional: set a shake-offset provider (e.g., ShipChoreographer). */
+  setShakeProvider(provider) { this._shakeProvider = provider; }
 
   /**
    * Is motion currently planned / executing?
@@ -100,6 +111,14 @@ export class FlythroughCamera {
 
     // Write position from subsystem plan.
     this.camera.position.copy(frame.position);
+
+    // Additive shake offset from choreographer (V2 shake mechanism per
+    // §10.8). Applied after the subsystem's authored position so shake is
+    // a ship-body perturbation on top of smooth cinematic motion, not a
+    // replacement for it. Default provider emits zero for smooth motion.
+    if (this._shakeProvider) {
+      this.camera.position.add(this._shakeProvider.shakeOffset);
+    }
 
     // Author orientation: free-look-applied lookAt toward the subsystem's
     // target-look point.
