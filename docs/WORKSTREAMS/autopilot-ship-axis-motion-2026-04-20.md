@@ -2,10 +2,72 @@
 
 ## Status
 
-Scoped — **dependency cleared 2026-04-21; ready for working-Claude
-execution.** Second of four sequential workstreams delivering V1
-autopilot. See `docs/FEATURES/autopilot.md` §"Workstreams" for the
-full sequence.
+`VERIFIED_PENDING_MAX cfd6df0` — ship-axis motion implemented, shake
+mechanism wired, abruptness tuned. Second of four sequential workstreams
+delivering V1 autopilot. Awaiting Max's verdict on the primary + shake-
+verify canvas recordings.
+
+**Commit arc (5 commits):**
+- `318c4a2` — `feat(autopilot): ship choreographer` — new module, phase
+  tracking + abruptness producer, no game integration yet.
+- `104763e` — `feat(autopilot): gravity-drive shake` — FlythroughCamera
+  provider hook + additive shake-offset add (15 lines, per AC #7).
+- `8b22a89` — `refactor(autopilot): wire ship choreographer into main.js`
+  — imports, instantiation, beginTour at warpRevealSystem + startFlythrough,
+  per-frame update, onLegAdvanced at tour advance, stop(), debug hooks
+  on window._autopilot.
+- `4d99bd5` — `tune: threshold 5→50` — first tuning pass after initial
+  capture showed CRUISE arrival-blend peaks registering as shake.
+- `cfd6df0` — `tune: threshold 50→200` — second pass; primary recording
+  now shows zero shake outside warp-exit.
+
+**Recordings (drop paths):**
+- Primary (75s Sol tour — warp → ENTRY → CRUISE → APPROACH → STATION):
+  `screenshots/max-recordings/autopilot-ship-axis-motion-2026-04-20.webm`
+  (34 MB). Covers all 4 ship-axis phases plus the first transition into
+  a planet STATION. For recording-cadence tuning, star-stop linger was
+  shortened from 35s → 12s via a one-off `autoNav.queue[*].linger` write
+  before `autoNav.start()` (capture-only, not a code change).
+- Shake-verify (debug-triggered abrupt event):
+  `screenshots/max-recordings/autopilot-ship-axis-motion-2026-04-20-shake.webm`
+  (2.1 MB). Shows smooth baseline + debug-hook-triggered shake rise +
+  decay.
+
+**Telemetry summary (primary recording at threshold=200):**
+- t=12 (ENTRY/traveling, warp-exit transition): abruptness=1.0.
+  Legitimate shake per feature-doc §"Gravity drives" (warp-exit velocity
+  mismatches are a named legitimate trigger).
+- t=15–54 (ENTRY approach → STATION at star): abruptness=0.
+- t=57–69 (CRUISE to planet): mostly 0, with brief peak 0.57→0.96 at
+  mid-curve / arrival-blend (threshold 200 still partially catches
+  Hermite peak on this particular trip — TUNABLE).
+- t=72–75 (APPROACH + STATION at planet): abruptness=0.
+
+**Tuning note for Max:** `_abruptnessThreshold` + `_abruptnessMax` at
+`src/auto/ShipChoreographer.js` L89–90 are tunable (currently 200 /
+2000). If the primary recording's cruise-arrival shake reads as
+misplaced, raise threshold (e.g., 500); if other transitions should
+shake that don't, lower it. Debug hook
+(`window._autopilot.debugAbruptTransition()`) bypasses threshold via
+boost=1.0 and will continue to fire regardless of tuning.
+
+**Parking-lot — shake redesign (Max flagged 2026-04-21 during recording
+review).** Current shake implementation produces random high-frequency
+motion that is light-motion-sickness-inducing. Redesign asks captured
+in GTD inbox: (1) shake shape should look like a "pebble skipping
+across a pond's surface" — directional impulse + ease-out bounces,
+not continuous sine noise; (2) shake trigger should be on scalar
+speed-magnitude change (d|v|/dt), not vector acceleration magnitude
+(d²x/dt²) — turning at constant speed shouldn't shake. Followup
+workstream tracks the redesign; the plumbing (additive provider hook,
+debug trigger, abruptness-signal-driven magnitude) is correct per §10.8
+and survives the redesign. Workstream still Shipped-gateable on the
+recording review if Max judges the current shake acceptable as interim;
+otherwise the redesign lands first.
+
+See `docs/FEATURES/autopilot.md` §"Workstreams" for the full V1
+autopilot sequence (WS 3 — camera-axis retirement; WS 4 — toggle UI
++ manual-override integration + warp-select tour-complete handoff).
 
 **Dependency graph at execution time (2026-04-21):**
 
