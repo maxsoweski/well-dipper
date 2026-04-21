@@ -2,24 +2,75 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX 46ca75e` — round-8 code committed. Bible §8H asymmetric log-impulse envelope restored on continuous `d|v|/dt` trigger. Director re-audit at `755000e` RELEASED the gate scoped to `ShipChoreographer.js`; code commit `46ca75e` is that scoped work.
+`HELD — ROUND 9 PIVOT (phase-boundary events, short-hop silenced, warp-exit coast)` — Director HELD the workstream after Max rejected round-8's continuous-`d|v|/dt`-onset firing model on 2026-04-21. Round-8 closed at `VERIFIED_PENDING_MAX 46ca75e`; that block is retained below as "Historical: round-8 (superseded by round-9 pivot)." Gate is engaged; code does not resume until Director re-audits this amendment.
 
-**Telemetry verification (in-browser, live autopilot):**
-- Accel envelope (cam2tgt=187.7 at ENTRY, peakAmp=9.39): peaks 3.04 / 9.70 / 6.75 / 3.36 / 0.96 at t=0.08 / 0.22 / 0.48 / 0.94 / 1.79 s. Within 3% of `ACCEL_AMPS × peakAmp` = [2.82, 9.39, 6.57, 3.28, 0.94].
-- Decel envelope (cam2tgt=100, peakAmp=5.0): peaks 5.06 / 2.83 / 1.54 / 0.87 at t=0.08 / 0.22 / 0.48 / 0.95 s. Within 3% of `DECEL_AMPS × peakAmp` = [5.00, 2.75, 1.50, 0.85].
-- AC #2 ✓ — discrete peaks, log-spaced, log-decaying (not continuous carrier).
-- AC #4 ✓ — accel (crescendo at peak 2) vs decel (max at peak 1) visibly asymmetric.
-- AC #10 drift-risk 2 ✓ — `cam2tgt` frozen at onset; per-event peakAmp constant through ringout.
+**What round-9 fixes.** Round-8 restored the Bible §8H asymmetric log-impulse envelope and passed its own telemetry ACs — but when Max watched the full tour recording, the continuous `|d|v|/dt|`-onset model caught real-but-not-dramatic speed changes. Orbit-phase pitch modulation + breathing + arrival-distance settle each produced small `|d|v|/dt|` spikes that fired the onset detector; shake bled into orbit where it doesn't belong. The signal-driven mental model is fundamentally wrong for what Max wants: he wants shake ONLY on dramatic accel/decel between distant objects, not on any speed-change event the math can legitimately detect.
 
-**Recording drop path:** `screenshots/max-recordings/autopilot-shake-redesign-round8-2026-04-21.webm` (3.4 MB, 11.5s). Sol debug sequence: smooth baseline (3s) → `debugAccelImpulse()` (2.5s) → smooth gap (2s) → `debugDecelImpulse()` (2s) → smooth closer (2s).
+**Max's ruling (2026-04-21, verbatim):**
 
-**Contact sheet:** `screenshots/max-recordings/autopilot-shake-redesign-round8-2026-04-21-contactsheet.png` (6×4 grid @ 2 fps).
+> *"what matters is that this shaking/rumbling should only happen when accelerating or decellerating dramatically. Only then. This will not happen in orbit, only when blasting off from one system object to another, if far enough apart. Let me know if you have questions about this."*
 
-Awaiting Max's verdict.
+**Max's Q&A follow-up (three questions surfaced by Director's first round-9 direction pass, 2026-04-21):**
+
+- **Q1 (distance gate metric).** *"If we have to travel sufficiently close to the speed of light and accelerate to that speed sufficiently fast (or vice-versa), then there's turbulence."* Long legs → ship reaches near-c → sharp accel/decel → shake. Short hops → ship never gets there → no shake. Operationalization delegated.
+- **Q2 (additional qualifier).** Q1 answers Q2; no second qualifier needed.
+- **Q3 (warp exit).** *"Remain at constant speed when exiting portal, until we slow down to get into the star's orbit."* No accel at ENTRY start (portal handed the ship its cruise speed already). Decel fires at arrival into the first body's orbit, same as any other arrival.
+
+**Director operationalization (delegated by Max, captured in the audit's §Round-9 PM direction).**
+
+- **"Sufficiently long leg" = `!_isShortTrip`.** `NavigationSubsystem._isShortTrip = dist < Math.max(_currentDist * 5, 30)` at line 357 is already the canonical short/long discriminator inside the subsystem that produces these legs. Reuse it — no new threshold, no new constant.
+- **Accel fires** on the frame `NavigationSubsystem` enters `TRAVELING` for a leg where `!_isShortTrip` AND `warpExit === false`.
+- **Decel fires** on the frame `travelComplete` one-shot raises for a leg where `!_isShortTrip` (warp-exit arrival included — the warp-exit distinction lives only on the accel side).
+
+**What round-9 preserves from round-8 (load-bearing, do NOT re-derive).**
+
+- Envelope arrays verbatim: `ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]` (crescendo-then-fade, 5 bounces) and `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]` (impact-then-decay, 4 bounces).
+- Log-spaced impulse timing: `IMPULSE_INITIAL_GAP = 0.08`, `IMPULSE_SPACING_RATIO = 1.8`.
+- Gaussian bump shape per bounce.
+- Single-axis shake perpendicular to velocity (AC #1).
+- Atomic `_startImpulseTrain()` freezes `_shakeOnsetCam2Tgt` + event-type flag + `_shakeOnsetTime` + axis vector at event fire. No per-frame re-scale of `cam2tgt` — round-4 drift-risk 2 invariant still canon.
+- `debugAccelImpulse()` / `debugDecelImpulse()` distinct entry points; both ignore `_isShortTrip` and `warpExit` gates (debug fire = unconditional).
+- `_pendingDebugFire` mechanism that lets debug hooks enqueue an event for the next update tick.
+
+**What round-9 removes from round-8 (retire entirely).**
+
+- `ONSET_THRESHOLD` constant — no more "is `|d|v|/dt|` above X" check. Events fire from phase transitions, not signal crossings.
+- `ONSET_REFRACTORY` window — phase transitions are naturally one-shot per leg; no refractory needed.
+- `subThreshold` timer — dead with the threshold.
+- The signal-driven onset path in `ShipChoreographer.update()` that reads continuous `dSpeed`, smooths it, compares to threshold, and calls `_startImpulseTrain` autonomously. Deleted. `_startImpulseTrain` becomes callable only by (a) phase-transition listener, (b) `_pendingDebugFire` consumer.
+- `_signedDSpeed` as envelope discriminator — replaced by the event type itself (the firing code path knows whether it's accel or decel by which branch called it). If `_signedDSpeed` is kept at all, it's as logged telemetry only, not as a trigger input.
+- Continuous `dSpeed` smoothing math if unused elsewhere (PM notes: working-Claude checks; if it's only feeding the deleted onset detector, remove it).
+
+**Per-phase firing rules (table, authoritative):**
+
+| Phase transition | Leg condition | Event fired |
+|---|---|---|
+| → `TRAVELING` (ordinary depart from orbit) | `!_isShortTrip && !warpExit` | ACCEL envelope |
+| → `TRAVELING` (warp-exit coast) | `!_isShortTrip && warpExit === true` | **No event.** Ship is already at cruise speed; portal did the acceleration. |
+| `travelComplete` (arrival into orbit/approach) | `!_isShortTrip` (any leg type, warp-exit or ordinary) | DECEL envelope |
+| Any boundary | `_isShortTrip === true` | **No event.** Short hops silent. |
+| `ORBITING` (any sub-state) | — | **No event, by construction.** Orbit phase is not an event surface at all; the trigger mechanism cannot fire here regardless of what continuous signals would report. |
+
+**Bible §8H stays as written.** Per Director's re-read: §8H line 1303 already names "warp-exit velocity mismatch" and "a transition that exceeds the drive's smoothing capacity" as firing conditions — phase boundaries on long legs are exactly those transitions. Line 1304: "Shake magnitude is a function of motion-abruptness (motion discontinuity), not an authored per-moment effect" — phase boundaries ARE motion discontinuities under the event model. Line 1307 canonizes the asymmetric accel-vs-decel lore (round-9 preserves both envelopes). Line 1309 explicitly canonizes decel-at-arrival: *"the friction-against-ether event is the arrival event itself, because that is where the drive exerts its compensation impulse."* This is the decel gate verbatim — Max's Q3 answer (decel at orbit entry, not portal exit) is already Bible canon.
+
+Round-9 is the more faithful implementation of what §8H already says. Rounds 6–8's continuous-signal mental model was itself the reading that diverged from §8H. No Bible edit is required — future readers of this brief should not re-open the question.
 
 ---
 
-**Historical: HELD state (superseded by round-8 code commit 46ca75e).**
+**Historical: round-8 (superseded by round-9 pivot).**
+
+Round-8 closed at `VERIFIED_PENDING_MAX 46ca75e` — the Bible §8H asymmetric log-impulse envelope was restored on a continuous `d|v|/dt` onset-detection trigger. Director re-audit at `755000e` RELEASED the gate scoped to `ShipChoreographer.js`; code commit `46ca75e` was that scoped work. Max watched the recording and rejected the continuous-signal firing model because it fired shake during orbit (pitch modulation / breathing / arrival settle produce legitimate but not-dramatic `|d|v|/dt|` events). Round-9 retires the signal-driven trigger entirely in favor of phase-boundary events gated on `!_isShortTrip`. The envelope-shape work from round-8 (AMPS arrays, timing constants, Gaussian bumps, atomic onset freeze) carries forward verbatim; only the trigger surface changes.
+
+Round-8 telemetry at the time it closed:
+- Accel envelope (cam2tgt=187.7 at ENTRY, peakAmp=9.39): peaks 3.04 / 9.70 / 6.75 / 3.36 / 0.96 at t=0.08 / 0.22 / 0.48 / 0.94 / 1.79 s. Within 3% of `ACCEL_AMPS × peakAmp` = [2.82, 9.39, 6.57, 3.28, 0.94].
+- Decel envelope (cam2tgt=100, peakAmp=5.0): peaks 5.06 / 2.83 / 1.54 / 0.87 at t=0.08 / 0.22 / 0.48 / 0.95 s. Within 3% of `DECEL_AMPS × peakAmp` = [5.00, 2.75, 1.50, 0.85].
+- Recording at `screenshots/max-recordings/autopilot-shake-redesign-round8-2026-04-21.webm` (3.4 MB, 11.5s). Contact sheet at `...-round8-2026-04-21-contactsheet.png`.
+
+Those telemetry numbers remain a valid shape-verification artifact for round-9's envelope math — the envelope did not regress at round-8, the trigger did.
+
+---
+
+**Historical: round-8 HELD state (superseded by round-8 code commit 46ca75e, now itself superseded by round-9).**
 
 `HELD — ROUND 8 PIVOT (path A, restore canon)` — Director HELD the workstream at `8a21830` after auditing round-7. Audit at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md`. Gate is still engaged; code does not resume until Director re-audits this amendment.
 
@@ -147,6 +198,7 @@ If shake feels too punchy or too gentle, scale `SHAKE_MAX_AMPLITUDE`. If the sec
 - **2026-04-21 — Round 3 amendment** landed by PM on Director direction after Max's feedback on the round-2 recording (commit `8a9161f`). Adds AC #8 (arrival-timing decel trigger — fire on `approaching→orbiting` phase transition, not `travelComplete`) and AC #9 (telemetry recorder for programmatic state inspection). Flags §Round-3 director actions (Bible §8H arrival-compensation clause extension, SYSTEM_CONTRACTS §10.8 trigger-phase refinement). Orbit-phase wobble code stays out-of-scope pending post-fix telemetry capture — hypothesis is the orbit wobble is itself a symptom of the mistimed decel impulse, to be validated or disproved by AC #9's telemetry.
 - **2026-04-21 — Round 4 amendment** landed by PM on Director direction after Max's feedback on the round-3 recording (commit `64a7725`, recording `screenshots/max-recordings/autopilot-shake-redesign-2026-04-21.webm`). Director-audited root cause: shake amplitude expressed in scene-unit absolutes against a 666× orbit-distance spread (Sol moon d=0.06 → star d=40) — a 0.6-unit world-Y bump is a minor nudge at the star and a view-flipping ±84° lurch at a moon. Adds AC #10 (amplitude scale-coupled to current-target orbit-distance, frozen at onset), AC #11 (multi-body stress-test telemetry — extends `window._autopilot.telemetry` samples with `currentTargetOrbitDistance`, `currentTargetBodyRadius`, `cameraToTargetDistance`, `currentTargetType`; adds `window._autopilot.debugArrivalAt('moon')` pathological-case entry point), AC #12 (round-4 recording MUST include at least one moon arrival at the drop path `screenshots/max-recordings/autopilot-shake-redesign-round4-2026-04-21.webm`). Flags §Round-4 director action (SYSTEM_CONTRACTS §10.8 scale-coupling invariant clause). The round-3 recording becomes the before-state against which round-4 is measured.
 - **2026-04-21 — Round 8 pivot amendment** landed by PM on Director audit (held gate at `8a21830`; audit at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md`). Context: rounds 6 and 7 silently replaced the Bible §8H asymmetric log-impulse envelope with a continuous sinusoidal bob; ACs #2 and #4 went to zero in code while staying live in the brief; the round-6 Status block reframed the regression as the design. Pivot picks **Path A — restore canon**, not Path B — there is no basis for a canon-change escalation in Max's round-5 feedback, and Bible §8H (lines 1307–1309) is active canon Max co-authored the same day. Scope: revert the continuous-bob code (`Math.sin(_timeAccum × BOB_FREQUENCY × 2π)`, `Math.abs(dSpeed)` sign-discard); restore round-5-era asymmetric log-impulse-train precompute (`ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]`, `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]`, log-spaced timing); preserve round-6's correct continuous `d|v|/dt` signal source as the event-onset trigger; preserve round-7's `cam2tgt` scale insight but freeze it at impulse onset per round-4 drift-risk 2. ACs #2 and #4 reaffirmed as-is. No Bible or SYSTEM_CONTRACTS edits needed — code drifted, canon didn't. Gate stays held pending Director re-audit of this amendment.
+- **2026-04-21 — Round 9 pivot amendment** landed by PM on Director direction (audit at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md` §"Round-9 PM direction"). Context: round-8 closed at `VERIFIED_PENDING_MAX 46ca75e`; Max watched the recording and rejected the continuous-`d|v|/dt`-onset firing model because it fired shake during orbit phases where orbit pitch/breathe/settle produces legitimate but non-dramatic speed changes. Verbatim ruling: *"this shaking/rumbling should only happen when accelerating or decellerating dramatically ... only when blasting off from one system object to another, if far enough apart."* Max answered three Director-surfaced questions: distance gate is physics-grounded ("sufficiently close to the speed of light and accelerate to that speed sufficiently fast"), no additional qualifier needed beyond phase-boundary + distance, warp exit has NO accel (portal handed ship cruise speed already) but DOES have decel at arrival into orbit. Director operationalized: reuse existing `NavigationSubsystem._isShortTrip` (line 357) as the distance gate; accel fires on `TRAVELING` enter with `!_isShortTrip && !warpExit`; decel fires on `travelComplete` one-shot with `!_isShortTrip` (warp-exit included). Scope: delete continuous-signal onset path + `ONSET_THRESHOLD` + `ONSET_REFRACTORY` + `subThreshold` timer; keep envelope arrays, timing constants, Gaussian bumps, atomic onset freeze, `cam2tgt`-freeze invariant, debug hooks all verbatim. AC #3 rewritten from signal-driven to event-driven; ACs #1, #2, #4 unchanged (shape is correct; trigger changed); ACs #5, #6, #7 added for orbit-silence, short-hop-silence, and warp-exit-asymmetry invariants. Bible §8H stays as written — lines 1303 and 1309 already canonize the round-9 model; the continuous-signal reading was the drift. Gate stays held pending Director re-audit of this amendment.
 
 ## Max's design intent (verbatim, 2026-04-21)
 
@@ -433,4 +485,138 @@ Minimum three per Director's assignment; PM adds a fourth based on the implement
 
 **Artifacts expected at close:** 2 commits (signal + shape, separable per §In scope); 1 canvas recording at the path in AC #7; this brief at `Shipped <sha> — verified against <recording-path>`; Director's two doc edits on master (Bible §8H + Contract §10.8) AND Director's minor revision to WS 2 brief's parking-lot paragraph. WS 2's Shipped flip happens in the same loop.
 
-Drafted by PM 2026-04-21 as the redesign follow-up to WS 2 of the V1 autopilot sequence.
+## Round-9 amendment (2026-04-21)
+
+**Context.** Max watched the round-8 recording (commit `46ca75e`, drop path `screenshots/max-recordings/autopilot-shake-redesign-round8-2026-04-21.webm`) and rejected the continuous-`d|v|/dt`-onset firing model. Round-8's envelope math was correct — the telemetry probe confirmed 3–5 discrete peaks with log-decay ratios per AC #2 and visible accel/decel asymmetry per AC #4. What failed was the trigger surface: a threshold-crossing detector on smoothed `|d|v|/dt|` legitimately fires on orbit-phase pitch modulation, breathing, and arrival-distance settle — all real speed changes, none of them dramatic. Max's feedback makes the trigger-class decision unambiguous: the shake is a narrative event (*blasting off, arriving at a distant body*), not a signal-derived effect.
+
+**Max's verbatim ruling:**
+
+> *"what matters is that this shaking/rumbling should only happen when accelerating or decellerating dramatically. Only then. This will not happen in orbit, only when blasting off from one system object to another, if far enough apart. Let me know if you have questions about this."*
+
+**Max's Q&A follow-up** (three questions Director surfaced in the initial round-9 direction pass; Max answered each):
+
+- **Q1 (distance metric).** *"If we have to travel sufficiently close to the speed of light and accelerate to that speed sufficiently fast (or vice-versa), then there's turbulence."* Physics framing. Long legs → near-c → sharp endpoints → shake. Short hops → ship never reaches that regime → no shake. Operationalization delegated.
+- **Q2 (additional qualifier beyond phase-boundary + distance).** Q1 answers Q2. No second qualifier.
+- **Q3 (warp exit).** *"Remain at constant speed when exiting portal, until we slow down to get into the star's orbit."* No accel at ENTRY start (portal pre-loaded cruise speed). Decel at arrival into first body's orbit fires same as any other arrival.
+
+**Director operationalization (delegated by Max, owned by Director, captured in the audit's §Round-9 PM direction; PM accepts verbatim).**
+
+- **"Sufficiently long leg" = `!_isShortTrip`.** `NavigationSubsystem._isShortTrip = dist < Math.max(_currentDist * 5, 30)` at line 357 is already the canonical short/long discriminator the subsystem computes per-leg. Reusing it costs zero code surface and keeps the scoping decision inside the subsystem that owns the leg model. No new threshold constant. Distance-below-30-scene-units → "too close for turbulence"; distance-below-5×-current-orbit-distance → "we're bouncing around the same body, not blasting off to a new one."
+- **Accel event fire point.** `NavigationSubsystem.phase` transitions into `TRAVELING` on a leg where `!_isShortTrip && warpExit === false`. Detectable choreographer-side via `motionFrame.motionStarted && motionFrame.phase === 'traveling'` (one-shot raised in NavigationSubsystem.js line 31; see also lines 199, 238–239).
+- **Decel event fire point.** `motionFrame.travelComplete` one-shot raises on the frame travel ends (NavigationSubsystem.js line 32, raised at line 834 inside `_updateTravel`). Gate on `!_isShortTrip`. Fires for ordinary arrivals AND warp-exit arrivals — identical path; warp-exit distinction lives only on the accel side.
+
+### Round-9 model — trigger is phase-boundary, shape is unchanged
+
+**1. Structural model.** Phase-boundary-triggered events, not signal-triggered. Gated on `!_isShortTrip`. Asymmetric accel (crescendo-then-fade) / decel (impact-then-decay) envelope shapes from round-8 preserved verbatim. Max's physics framing is honored structurally: long legs are exactly the legs where the ship would reach near-c, and the phase boundaries (`TRAVELING` enter, `travelComplete`) are exactly the accel/decel moments.
+
+**2. Per-phase firing rules (authoritative — repeated from Status block for AC-author reference):**
+
+| Phase transition | Leg condition | Event fired |
+|---|---|---|
+| → `TRAVELING` (ordinary depart from orbit) | `!_isShortTrip && !warpExit` | ACCEL envelope |
+| → `TRAVELING` (warp-exit coast) | `!_isShortTrip && warpExit === true` | **No event.** Ship is already at cruise speed; portal did the acceleration. |
+| `travelComplete` (arrival into orbit/approach) | `!_isShortTrip` (any leg type, warp-exit or ordinary) | DECEL envelope |
+| Any boundary | `_isShortTrip === true` | **No event.** Short hops silent. |
+| `ORBITING` (any sub-state) | — | **No event, by construction.** Orbit phase is not an event surface at all; the trigger mechanism cannot fire here regardless of what continuous signals would report. |
+
+**3. Trigger-surface wiring inside `src/auto/ShipChoreographer.js`.** `ShipChoreographer.update(dt, motionFrame)` already receives the MotionFrame (WS 2 integration). The round-9 trigger reads three fields:
+- `motionFrame.motionStarted` (one-shot, line 31 of NavigationSubsystem.js) — fires on the first frame after `beginMotion`.
+- `motionFrame.travelComplete` (one-shot, line 32) — fires on the frame `travelElapsed ≥ travelDuration` in `_updateTravel` (line 834).
+- `motionFrame.phase` (string, line 30, values `'idle' | 'descending' | 'traveling' | 'approaching' | 'orbiting'` per line 30 doc and line 273 `_phaseName`).
+
+`!_isShortTrip` and `warpExit` are NOT currently on MotionFrame. Two interface-shape options — working-Claude picks and cites in commit message:
+- **(A) Extend MotionFrame** with `legIsShort: boolean` and `legIsWarpExit: boolean`. Lowest-complexity consumer API; touches `NavigationSubsystem.js` to add the fields to `getCurrentPlan()` (lines 259–270) and populate them inside `_beginTravel` (alongside existing `_isShortTrip` / `_warpArrival` assignments at lines 358, 396, 407, and 334). **PM note:** this IS a cross-file edit (touches NavigationSubsystem.js), which the round-1 brief §Drift-risk-4 and §Out-of-scope both named as scope-creep. Round-9 explicitly authorizes the field additions as the minimum viable interface — two one-line additions in `getCurrentPlan()`, two one-line assignments in `_beginTravel` — because option (B) is worse on ownership grounds.
+- **(B) ShipChoreographer reaches into `NavigationSubsystem` directly** for `_isShortTrip` and `_warpArrival` private fields. Zero MotionFrame surface change but violates encapsulation — `_` prefix marks those as subsystem-private, and the choreographer becoming a second consumer of private state is exactly the "add-a-tack-on-query" path Principle 2 guards against.
+
+PM's recommendation: **option (A)**. The MotionFrame extension is a two-field, doc-one-line change; `NavigationSubsystem` already has `_isShortTrip` and `_warpArrival` computed and ready to read; the fields are observables about the leg the frame belongs to, which is exactly what MotionFrame is for. Working-Claude can override to (B) only if it surfaces a specific reason in the commit message.
+
+**4. What stays from round-8 (load-bearing, DO NOT re-derive):**
+
+- `ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]` — crescendo-then-fade, 5 bounces.
+- `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]` — impact-then-decay, 4 bounces.
+- `IMPULSE_INITIAL_GAP = 0.08`, `IMPULSE_SPACING_RATIO = 1.8` — log-spaced timing.
+- Gaussian bump envelope shape per bounce.
+- Atomic `_startImpulseTrain()` freezes `_shakeOnsetCam2Tgt` + event-type flag + `_shakeOnsetTime` + axis vector in one operation at event fire. No per-frame re-scale of `cam2tgt` — round-4 drift-risk 2 invariant is still canon.
+- Single-axis shake, perpendicular to velocity (AC #1 unchanged).
+- `debugAccelImpulse()` / `debugDecelImpulse()` distinct entry points; both ignore `_isShortTrip` and `warpExit` gates (debug fire is unconditional — this is diagnostic scaffolding, it fires on-demand).
+- `_pendingDebugFire` mechanism that lets debug hooks enqueue an event for the next update tick.
+- `SHAKE_VIEW_ANGLE_MAX = 0.05` (round-7's insight, carried through round-8) as the `viewAngleTarget` for per-impulse peak amplitude `peakAmp = viewAngleTarget × _shakeOnsetCam2Tgt`.
+
+**5. What goes from round-8 (retire entirely):**
+
+- `ONSET_THRESHOLD` constant — no more "is `|d|v|/dt|` above X" check. Events fire from phase transitions, not signal crossings.
+- `ONSET_REFRACTORY` window — phase transitions are naturally one-shot per leg; refractory is meaningless.
+- `subThreshold` timer — dead with the threshold.
+- The signal-driven onset path in `ShipChoreographer.update()` that reads continuous `dSpeed`, smooths it, compares to threshold, calls `_startImpulseTrain` autonomously. Delete. `_startImpulseTrain` becomes callable only by (a) phase-transition listener, (b) `_pendingDebugFire` consumer.
+- `_signedDSpeed` as envelope discriminator — replaced by event type (which branch called `_startImpulseTrain`). If kept at all, it's as logged telemetry, not as a trigger input. Recommend removal unless the round-8 telemetry probe still consumes it for post-run analysis.
+- Continuous `dSpeed` smoothing math (`DSPEED_SMOOTHING = 0.15` low-pass filter, `_prevSpeed` tracking for `dSpeed = (currSpeed - _prevSpeed) / dt`) — if unused elsewhere, remove. Working-Claude checks; if it's only feeding the deleted onset detector, delete.
+
+### Round-9 ACs
+
+ACs #1, #2, and #4 from the original brief are **reaffirmed verbatim** — the response shape did not change, only the trigger did. AC #3 is **rewritten** from signal-driven to event-driven. ACs #8, #9, #10, #11, #12 from rounds 3 and 4 carry forward unchanged (telemetry scaffolding, scale-coupling, drift-risk guards). Three new ACs (#13 orbit-silence, #14 short-hop-silence, #15 warp-exit-asymmetry) are added as invariants the round-9 trigger must preserve by construction.
+
+1. **[UNCHANGED] Single-axis shake — the shake offset is a scalar amplitude × one unit vector, not a 3D cloud.** (Original AC #1; reaffirmed verbatim.)
+2. **[UNCHANGED] Logarithmic impulse-train envelope — the shake manifests as 3–5 discrete bounces with logarithmically-spaced timing AND logarithmically-decaying amplitude.** (Original AC #2; reaffirmed verbatim. Round-8 telemetry already demonstrated this passes for both envelopes.)
+3. **[REWRITTEN] Trigger is phase-boundary event (leg-start `TRAVELING` enter for accel; `travelComplete` for decel), gated by `!_isShortTrip`. The continuous `d|v|/dt` signal is no longer a trigger surface — it may remain as telemetry but does not cause shake.** Verified: (a) a smooth autopilot tour in which every leg has `_isShortTrip === false` produces exactly one accel impulse on each non-warp-exit `TRAVELING` enter and exactly one decel impulse on each `travelComplete`; (b) no shake fires between those two boundaries (mid-CRUISE is silent); (c) no shake fires during any `_phase === ORBITING` or `_phase === APPROACHING` frame regardless of `|d|v|/dt|` magnitude; (d) the code path from MotionFrame to `_startImpulseTrain` has exactly two call sites (accel branch + decel branch), not a continuous-signal path.
+4. **[UNCHANGED] Accel shake pattern and decel shake pattern are visibly, temporally asymmetric.** (Original AC #4; reaffirmed verbatim. Back-to-back `debugAccelImpulse()` / `debugDecelImpulse()` in the round-9 recording remains the eyeball-evaluable artifact.)
+5–12. [UNCHANGED from rounds 1–4.] WS 2 invariants (AC #5), Director actions flagged (AC #6), motion evidence recording (AC #7), arrival-timing decel trigger (AC #8), telemetry recorder (AC #9), amplitude scale-coupling (AC #10), multi-body stress-test telemetry (AC #11), moon-arrival recording (AC #12) — all preserved. Round-9 trigger change is compatible with each: AC #8's "decel at arrival" IS the `travelComplete` fire point; AC #10's scale-coupling is orthogonal to trigger class; AC #12's moon recording becomes the long-leg dramatic-transit test by construction since the Sol tour includes at least one leg with `!_isShortTrip` into a moon.
+13. **[NEW] Orbit-silence invariant.** Shake amplitude is zero for every frame where `motionFrame.phase === 'orbiting'`, regardless of `|d|v|/dt|` magnitude, orbit pitch oscillation, orbit breathing, or any other motion signal. Enforced by construction: orbit/station phases do not call `_startImpulseTrain`; the code path does not exist. Verified via telemetry probe per AC #9: sustained-orbit window of ≥4s produces `shakeOffset === (0,0,0)` on every sample. This is the invariant that failed round-8 and is load-bearing for round-9 acceptance.
+14. **[NEW] Short-hop-silence invariant.** Shake does not fire on any leg where `_isShortTrip === true`. Enforced at the phase-transition listener: the `!_isShortTrip` predicate is evaluated before `_startImpulseTrain` is called. Verified via telemetry on a short-hop scenario (e.g., moon → neighboring moon around the same planet — `dist < Math.max(_currentDist * 5, 30)`): no accel on the `TRAVELING` enter, no decel on `travelComplete`, `shakeOffset === (0,0,0)` throughout.
+15. **[NEW] Warp-exit asymmetry invariant.** A warp-exit leg (`warpExit === true`) fires NO accel envelope at `TRAVELING` enter — the ship coasts at cruise speed from the portal per Max's Q3 answer and Bible §8H line 1309's "arrival-is-the-event" canon. The decel envelope on `travelComplete` fires normally per AC #3's gating (distance-gated, not warp-flag-gated). Verified via a Sol warp-arrival scenario: `shakeOffset` is `(0,0,0)` across the ENTRY/TRAVELING frames (warp coast); the decel envelope fires at the `travelComplete` boundary as the ship brakes into the first body's orbit.
+
+### Round-9 director actions (NOT done in this amendment; Director owns)
+
+**No Bible edit required.** Per Director's read of §8H in the audit direction note: line 1303 already names "warp-exit velocity mismatch" and "a transition that exceeds the drive's smoothing capacity" as firing conditions — phase boundaries on long legs ARE those transitions. Line 1304 reads "Shake magnitude is a function of motion-abruptness (motion discontinuity), not an authored per-moment effect" — phase boundaries are motion discontinuities under the event model. Line 1307 canonizes the asymmetric accel-vs-decel lore (round-9 preserves both envelopes verbatim). Line 1309 *explicitly* canonizes decel-at-arrival: *"the friction-against-ether event is the arrival event itself, because that is where the drive exerts its compensation impulse."* This is the decel gate verbatim. Max's Q3 answer (decel at orbit entry, not portal exit) is already Bible canon. The continuous-signal mental model that led to rounds 6–8 was itself the reading that diverged from §8H; round-9 is the more faithful implementation.
+
+**Optional §10.8 parenthetical (Director's call, not Director-required).** A single clarifying bullet in `docs/SYSTEM_CONTRACTS.md` §10.8 *Gravity-drive shake invariant* could pin the event-model explicitly — e.g., *"Shake fires on phase-boundary events (`TRAVELING` enter for accel, `travelComplete` for decel), gated on leg distance via `!_isShortTrip`. It does not fire on continuous `|d|v|/dt|` threshold crossings."* This would prevent a future reader from replaying the rounds 6–8 signal-chasing pattern. Director decides; PM does not recommend either way — there's an argument for keeping §10.8 implementation-agnostic (the shape is invariant; the trigger is one valid implementation of §8H's "motion discontinuity") and there's an argument for pinning the implementation so this specific drift class cannot recur. Not a gate condition for round-9 release.
+
+### Round-9 in scope
+
+- **Rework `src/auto/ShipChoreographer.js` `update()`** to delete the continuous-signal onset path (the branch that reads `dSpeed`, smooths, compares to `ONSET_THRESHOLD`, and calls `_startImpulseTrain` autonomously). Replace with two gated phase-transition listeners reading `motionFrame.motionStarted && motionFrame.phase === 'traveling'` (accel branch) and `motionFrame.travelComplete` (decel branch), each gated on `!motionFrame.legIsShort` (+ `!motionFrame.legIsWarpExit` on the accel side only).
+- **Extend `src/auto/NavigationSubsystem.js` MotionFrame** with `legIsShort: boolean` and `legIsWarpExit: boolean`. Two field additions to `getCurrentPlan()` (lines 259–270) reading from existing `this._isShortTrip` and `this._warpArrival` state (already set in `_beginTravel` at lines 334, 358, 396, 407). Update the `@typedef {Object} MotionFrame` block (lines 26–35) to document both fields. This IS a cross-file edit; explicitly authorized by this amendment per §3 option (A).
+- **Delete retired round-8 surface.** `ONSET_THRESHOLD`, `ONSET_REFRACTORY`, `subThreshold` timer variable, continuous `dSpeed` smoothing (`DSPEED_SMOOTHING`, `_prevSpeed`, `dSpeed = ...` derivation if unused elsewhere). If `_signedDSpeed` isn't referenced outside the deleted onset path, remove it too. Working-Claude cites what was deleted in the commit message for bisect reference.
+- **Preserve from round-8 verbatim.** `ACCEL_AMPS`, `DECEL_AMPS`, `IMPULSE_INITIAL_GAP`, `IMPULSE_SPACING_RATIO`, `SHAKE_VIEW_ANGLE_MAX`, Gaussian bump shape, atomic `_startImpulseTrain()` with onset freeze (`_shakeOnsetCam2Tgt` + event-type flag + `_shakeOnsetTime` + axis), `debugAccelImpulse()` / `debugDecelImpulse()` entry points, `_pendingDebugFire` mechanism.
+- **One commit.** Suggested message: `feat(autopilot): phase-boundary shake trigger gated on !_isShortTrip, warp-exit coast (round 9)`. Scope: the `ShipChoreographer.js` trigger rework + the two `NavigationSubsystem.js` MotionFrame field additions. Cites ACs #3 (rewritten), #13, #14, #15.
+- **One canvas recording at `screenshots/max-recordings/autopilot-shake-redesign-round9-2026-04-21.webm`.** Sol, full tour engaged, at least one long-leg (e.g., star → outer planet) to fire accel + decel at phase boundaries, at least one short-hop (e.g., moon → neighboring moon) to demonstrate short-hop silence, at least one `debugAccelImpulse()` + `debugDecelImpulse()` pair to demonstrate the envelope asymmetry eyeball-evaluably. Capture via `~/.claude/helpers/canvas-recorder.js` + `~/.local/bin/fetch-canvas-recording.sh`. Contact sheet via `~/.local/bin/contact-sheet.sh` resized ≤1800px per axis (per `feedback_image-size-caps.md`).
+- **Telemetry self-audit before closing.** Using `window._autopilot.telemetry.start()` / `.stop()` per AC #9 — run a Sol tour that includes at least one long-leg arrival, at least one short-hop, and a sustained orbit window. Verify programmatically: (a) `shakeOffset === (0,0,0)` across every `navPhase === 'orbiting'` frame (AC #13); (b) `shakeOffset === (0,0,0)` across legs where `legIsShort === true` (AC #14); (c) accel envelope fires exactly at the `motionStarted && !legIsWarpExit && !legIsShort` frame and not before or after (AC #3); (d) decel envelope fires exactly at the `travelComplete && !legIsShort` frame (AC #3, AC #8). This is working-Claude self-audit, not the Shipped artifact — Max evaluates the recording.
+- **Update this brief's Status line** on commit from `HELD — ROUND 9 PIVOT ...` → `VERIFIED_PENDING_MAX <sha>` (when commit lands + recording on disk) → `Shipped <sha> — verified against screenshots/max-recordings/autopilot-shake-redesign-round9-2026-04-21.webm` (after Max's verdict).
+
+### Round-9 out of scope
+
+- **Bible §8H edit.** Per Director's read (above), §8H stays as written. Not re-opening this question. If a future rendering pass reveals a §8H gap the round-9 model exposes, that's a fresh Director-owned audit, not a slipstream into round-9.
+- **SYSTEM_CONTRACTS §10.8 edit.** Optional per Director's call; not a gate condition. PM does not recommend either way. If Director picks "yes, pin the event-model," that's a Director-owned edit landing independently of round-9 commit.
+- **Re-tuning envelope arrays or timing constants.** Round-8's `ACCEL_AMPS`, `DECEL_AMPS`, `IMPULSE_INITIAL_GAP`, `IMPULSE_SPACING_RATIO`, `SHAKE_VIEW_ANGLE_MAX` all passed round-8 telemetry. Round-9 preserves them verbatim. If the round-9 recording shows the envelope needs tuning, that's a round-10 amendment, not an in-flight tune.
+- **Adding additional phase-boundary events.** E.g., firing a small tremor on `approaching → orbiting` (round-3's AC #8 style). Round-9 explicitly does NOT add this: Max's ruling was dramatic accel/decel between distant bodies, period. APPROACH → STATION is NOT a dramatic transition in Max's framing (the ship is already within the body's orbit frame, decel has already fired at `travelComplete`). Adding a secondary APPROACH-end tremor would re-introduce the "shake fires during orbit approach" pattern Max just retired.
+- **Re-visiting `_isShortTrip` threshold.** The existing `dist < Math.max(_currentDist * 5, 30)` at line 357 is the distance gate. Max did not flag this threshold as wrong; Director operationalization reuses it verbatim. If post-round-9 recording shows the threshold is off (e.g., Sol's innermost planets qualify as short-hop and miss shake where Max expected it), that's a round-10 discussion about the threshold constant, not a round-9 scoping question.
+- **Moving `_isShortTrip` / `_warpArrival` out of private state.** The round-9 MotionFrame extension exposes them as `legIsShort` / `legIsWarpExit` on the output frame; the subsystem-internal fields remain `_`-prefixed. No broader visibility refactor.
+- **Separate module for shake.** Still V-later per round-1 drift-risk 4. Round-9 targets one trigger rework in one file (+ two-field MotionFrame extension). If the itch to refactor returns, file a future workstream — not this round.
+
+### Round-9 drift risks
+
+- **Risk: Trigger wired to the wrong phase enum value.** NavigationSubsystem's phase names (`'idle' | 'descending' | 'traveling' | 'approaching' | 'orbiting'`, line 30) do not map 1:1 onto the WS 2 ship-axis phase names (ENTRY / CRUISE / APPROACH / STATION). The ship-axis phase labels in prior rounds of this brief loosely correspond to navigation-phase names (e.g., "ENTRY" ≈ navigation's warp-exit TRAVELING coast, "CRUISE" ≈ post-coast TRAVELING, "APPROACH" ≈ APPROACHING, "STATION" ≈ ORBITING). Round-9 fires on navigation phases, not ship-axis phases — the accel trigger is `motionFrame.phase === 'traveling'` (the navigation phase), not a WS 2 ShipAxisMotion state.
+  **Why it happens:** the round-1 brief's preserve-vs-change table (line 192) mentions "ENTRY / CRUISE / APPROACH / STATION per WS 2's ShipAxisMotion state machine" in the AC #5 context, inviting a reading where the trigger should match those phase names.
+  **Guard:** the trigger reads `motionFrame.phase` (line 30 of NavigationSubsystem.js, values per `_phaseName()` at line 273). The choreographer does NOT read WS 2 ship-axis phase names for this trigger. If working-Claude's code references `ShipAxisMotion.State` or imports ENTRY/CRUISE/APPROACH/STATION constants for the trigger, that's the anti-pattern — escalate to PM.
+- **Risk: Warp-exit accel slips through because `warpExit` is checked on the wrong leg.** `_warpArrival` is set inside `_beginTravel` (line 334) from the `warpExit` input to `beginMotion()`. The ordering is: `beginMotion` receives `warpExit=true`, `_beginTravel` sets `_warpArrival = true` and configures a 3s coast, `_updateTravel` runs until `travelElapsed >= travelDuration`, at which point `travelComplete` raises. If MotionFrame.legIsWarpExit is populated from `this._warpArrival` inside `getCurrentPlan()`, the field reads correctly on every frame of the warp-exit leg — including the `motionStarted` frame (where the accel trigger would otherwise fire). Good. But if `_warpArrival` is reset to `false` between `travelComplete` and the next leg's `beginMotion` (which it isn't today — `_warpArrival` is only reset via the next `_beginTravel` call), the invariant holds by construction.
+  **Why it happens:** a future refactor could move `_warpArrival` reset into `stop()` or into the `travelComplete` handler, which would zero the field mid-frame on the arrival tick, making the decel-side check see `warpExit=false` when it should see `warpExit=true` — except decel's gate is `!_isShortTrip` only, no warp check, so this drift doesn't affect decel. It affects accel only, and accel has already fired on `motionStarted` before `_warpArrival` could be reset.
+  **Guard:** the MotionFrame `legIsWarpExit` field populates from `this._warpArrival` inside `getCurrentPlan()` (read-only; does not mutate the field). The accel branch in ShipChoreographer reads `motionFrame.legIsWarpExit` on the `motionStarted` frame — exactly when `_warpArrival` is freshly set by `_beginTravel` and has not been reset. Director audit flag for the MotionFrame wiring.
+- **Risk: Short-hop gate implemented as a magnitude check rather than `!_isShortTrip`.** Tempting minimal edit: compare `motionFrame.legDistance > 30` or similar, instead of reading `motionFrame.legIsShort`. But `_isShortTrip = dist < Math.max(_currentDist * 5, 30)` has TWO terms (relative to current orbit distance AND absolute floor); duplicating only the absolute-floor check would drift the gate away from the subsystem's canonical definition.
+  **Why it happens:** `legIsShort` as a MotionFrame field is a new surface; a bare-`dist` field feels equivalent and the derivation feels obvious.
+  **Guard:** MotionFrame exposes `legIsShort: boolean` directly — precomputed inside the subsystem from `_isShortTrip`. ShipChoreographer reads the boolean, does not re-derive. If working-Claude's code computes a short-trip condition from `motionFrame.legDistance` or any other raw distance value, that's the anti-pattern — the subsystem owns the definition of "short," the choreographer consumes it.
+- **Risk: `travelComplete` one-shot missed because listener polls instead of reading the one-shot atomically.** The `travelComplete` one-shot raises for exactly one frame — the frame where travel ends and the next phase (`_beginOrbit` or `_beginApproach`) starts. ShipChoreographer's `update()` receives `motionFrame` once per frame; reading `motionFrame.travelComplete` synchronously within that update is correct. But if working-Claude wraps the trigger logic in a polling mechanism that samples MotionFrame at a different cadence (e.g., a `setInterval` or async handler), the one-shot may be missed.
+  **Why it happens:** defensive coding — "let me check the one-shot is still true before firing, maybe via a debounce."
+  **Guard:** the trigger listener runs inside `ShipChoreographer.update(dt, motionFrame)` synchronously; reads `motionFrame.travelComplete` once per call; calls `_startImpulseTrain(DECEL)` if true + `!motionFrame.legIsShort`. No polling, no debounce, no async wrapper. The same pattern applies to `motionStarted`. If working-Claude's code introduces a timer or schedules the trigger for a future frame, that's the anti-pattern — the one-shot is atomic to its frame.
+
+### Gate release condition
+
+Director re-audits this amendment (fourth audit on this workstream) and verifies against the audit's §Round-9 PM direction:
+1. Phase-transition trigger surface is unambiguous (§Round-9 model #3).
+2. `!_isShortTrip` gate is pinned by line reference into `NavigationSubsystem` (line 357 — amendment cites verbatim).
+3. Warp-exit carve-out is explicit on the accel side (§Round-9 model #2 table row 2 + AC #15).
+4. ACs #13, #14, #15 authored per audit spec (or equivalent phrasing Director accepts).
+5. Round-4 drift-risk-2 guard (`cam2tgt` freeze at onset) remains preserved (§Round-9 model #4 bullet 5).
+6. Round-8 envelope arrays + timing constants carry verbatim (§Round-9 model #4).
+7. No Bible edit in this amendment; §8H reconciliation noted as "stays as written" with line citations (1303, 1304, 1307, 1309).
+
+If the audit passes, gate releases scoped to the round-9 commit only. State updates to `{ "edits": 0, "last_audit_sha": "<pm-amendment-sha>" }` on release. Working-Claude does NOT edit code until Director audit lands.
+
+Drafted by PM 2026-04-21 as the round-9 pivot amendment, following Max's ruling on the round-8 recording and Director's operationalization of his Q&A answers.
