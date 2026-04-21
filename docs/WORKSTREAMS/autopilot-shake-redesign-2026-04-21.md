@@ -2,7 +2,25 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX 04056b9` — round-5 tuning pass after round-4 recording failed Max's verdict ("camera does not stay put at the moon ... shakes around violently all crazy"). Director audit (2026-04-21) surfaced the root cause: `atan(shakeOffset/orbitDistance) ≈ shakeOffset/orbitDistance` for small angles, so scale-coupling via `SHAKE_AMPLITUDE_FRACTION * orbitDistance` produces a per-body-class-UNIFORM view-angle swing of `SHAKE_AMPLITUDE_FRACTION` radians per bump. `FRACTION=0.10` meant 5.7°/bump everywhere; 4 alternating-sign decel bumps in <1s = whip-crack camera rotation.
+`VERIFIED_PENDING_MAX 1636be8` — **round-6 restructure.** After round-5 recording failed Max's verdict ("rumble is still all weird and happens all at the end once we're already in orbit ... this should be an effect that is applied based on how quickly the velocity of the ship changes"), the impulse-train model was abandoned wholesale. Rounds 1-5 fired discrete impulse trains at phase boundaries; round-6 drives shake amplitude **continuously from smoothed `|d|v|/dt|`** — shake is a direct function of how fast the ship's speed is changing, not a one-shot event tied to a phase transition.
+
+**Round-6 mechanism:**
+1. Compute `|d|v|/dt|` each frame from position deltas.
+2. Low-pass filter (α = 0.15) to reject frame-level noise.
+3. Normalize [0, 1] via `DSPEED_DEADZONE = 20` / `DSPEED_FULL_SCALE = 300` scene-units/s².
+4. Map drive → target view angle (cap `SHAKE_VIEW_ANGLE_MAX = 0.02 rad = 1.15°`).
+5. Shake magnitude = view-angle × `orbitDistance` (scale-coupled, per round-4 invariant), capped at `SHAKE_MAX_AMPLITUDE = 2.0` for star-class.
+6. Sinusoidal vertical bob at `BOB_FREQUENCY = 6 Hz`, primary world-Y, secondary horizontal-perp at 20%.
+
+**Round-6 telemetry evidence (30s Sol tour):**
+- CRUISE/traveling: shake peak 0.00090, avg 0.00037 — shake rises and falls with Hermite velocity ramp.
+- APPROACH: peak shake 0 — velocity stable during body-ride close-in.
+- STATION/orbiting: peak shake 0 — constant speed, only direction changes, `d|v|/dt ≈ 0`.
+- At planet (orbitDist=0.046): drive 0.65-0.82 during mid-cruise, sy alternating via sin() carrier (bob, not whipsaw).
+
+Recording at `screenshots/max-recordings/autopilot-shake-redesign-round6-2026-04-21.webm` (13 MB, 30s). Awaiting Max's verdict.
+
+**Historical note** (rounds 1-5): the impulse-train model struggled through 5 rounds of increasing amplitude and timing fixes because the model itself was wrong for what Max wanted. Director audit (2026-04-21, post-round-5): `atan(shakeOffset/orbitDistance) ≈ shakeOffset/orbitDistance` for small angles, so scale-coupling via `SHAKE_AMPLITUDE_FRACTION * orbitDistance` produces a per-body-class-UNIFORM view-angle swing of `SHAKE_AMPLITUDE_FRACTION` radians per bump. `FRACTION=0.10` meant 5.7°/bump everywhere; 4 alternating-sign decel bumps in <1s = whip-crack camera rotation. Round-6 continuous-drive eliminates both problems structurally.
 
 **Round-5 fixes (both tuning-level — no scope change):**
 1. `SHAKE_AMPLITUDE_FRACTION = 0.10 → 0.02`. Peak view angle per bump: **5.7° → 1.15°**. Reads as camera tremor, not whipsaw.
