@@ -2,10 +2,47 @@
 
 ## Status
 
-Scoped — awaiting working-Claude execution. Second of four sequential
-workstreams delivering V1 autopilot. **Depends on
-`autopilot-navigation-subsystem-split-2026-04-20.md`** landing first.
-See `docs/FEATURES/autopilot.md` §"Workstreams" for the full sequence.
+Scoped — **dependency cleared 2026-04-21; ready for working-Claude
+execution.** Second of four sequential workstreams delivering V1
+autopilot. See `docs/FEATURES/autopilot.md` §"Workstreams" for the
+full sequence.
+
+**Dependency graph at execution time (2026-04-21):**
+
+- **WS 1 `autopilot-navigation-subsystem-split-2026-04-20.md`:
+  `Shipped 3d53825`** (refactor originally `c394e1e`, two pre-ship
+  issues corrected via telemetry per `docs/REFACTOR_VERIFICATION_PROTOCOL.md`).
+  This workstream's primary dependency — the `NavigationSubsystem`
+  API + MotionFrame contract are on master. See §"Handoff to working-
+  Claude" step 4a for the concrete surface.
+- **WS `autopilot-star-orbit-distance-2026-04-20.md`: Scoped
+  (not yet executed).** AC #1 ENTRY and AC #4 STATION both reference
+  the multiplier that workstream tunes. Per AC wording below,
+  ship-axis-motion consumes whatever value currently ships — it does
+  NOT block on star-orbit-distance landing. If star-orbit tuning
+  ships after this workstream, the numeric value changes; the ship-
+  motion behavior does not.
+- **WS `warp-phase-perf-pass-2026-04-20.md`: Brief authored, not
+  yet executed.** AC #8 (warp-exit → ENTRY handoff) straddles that
+  workstream's EXIT phase and this workstream's ENTRY phase. Per
+  AC #8 wording below, inherit any residual EXIT stutter and flag
+  in the recording review — do not attempt to fix both sides here.
+
+**Not blocked on either sibling workstream.** Proceed.
+
+## Revision history
+
+- **2026-04-20 — authored** by PM as WS 2 of 4 (commit `2be6f37`).
+- **2026-04-21 — dependency graph confirmed, concrete NavigationSubsystem
+  API surface folded in** by PM after WS 1 shipped at `3d53825`. Status
+  line flipped from "awaiting WS 1" to "ready for execution."
+  `## Handoff to working-Claude` step 4 was expanded with the
+  MotionFrame contract, the `beginMotion({ from, to, arrivalOptions,
+  launchOptions })` signature, and the `abruptness` V1 = 0.0 handoff
+  point (AC #5 wires the actual math). Drift risk added:
+  **name-collision between new ship-axis `ENTRY/CRUISE/APPROACH/STATION`
+  phases and the subsystem's internal `descending/traveling/approaching/orbiting`
+  enum** — they are orthogonal, not a rename.
 
 ## Parent feature
 
@@ -470,6 +507,32 @@ V-later, if ever).
   NOT in `FlythroughCamera.js`. The two APPROACHes are
   separate phases in separate axes per §10.1.
 
+- **Risk: Phase-name collision with `NavigationSubsystem`'s
+  internal phase enum.** WS 1's refactor carried over the
+  pre-refactor single-axis phase model: `NavigationSubsystem`
+  internally tracks `descending / traveling / approaching /
+  orbiting` (lowercase, emitted as `MotionFrame.phase`). This
+  workstream authors a NEW, orthogonal axis —
+  `ENTRY / CRUISE / APPROACH / STATION` — that the ship
+  choreographer owns. They are NOT a rename of each other;
+  they are two separate vocabularies on separate layers.
+  **Why it happens:** working-Claude reads the subsystem's
+  four-phase enum and the brief's four-phase ACs and assumes
+  they're the same four phases with a case change.
+  **Guard:** the ship choreographer's phase state is its own
+  variable on its own module, independent of `MotionFrame.phase`.
+  Subsystem may be `traveling` (its TRAVEL hermite-curve phase)
+  while ship choreographer is in `CRUISE` (the authored ship-
+  axis phase) — these are allowed to correlate but MUST NOT
+  be the same variable. A ship-axis transition (e.g.,
+  `CRUISE → APPROACH`) may or may not coincide with a subsystem
+  transition; the choreographer decides its phase based on
+  felt-experience criteria (reticle-to-disk timing, safe
+  distance reached, etc.), not by reading `MotionFrame.phase`
+  as ground truth. If the choreographer's logic looks like
+  `if (frame.phase === 'approaching') shipPhase = 'APPROACH'`,
+  the orthogonality is being collapsed — escalate to Director.
+
 ## In scope
 
 - **New module `src/auto/ShipChoreographer.js`** (name provisional;
@@ -610,9 +673,57 @@ Read this brief first. Then, in order:
    made visible.
 
 4. **`docs/WORKSTREAMS/autopilot-navigation-subsystem-split-2026-04-20.md`**
-   — WS 1's brief + output. The navigation subsystem from WS 1
-   is this workstream's primary dependency. Understand its API
+   — WS 1's brief + output. `Shipped 3d53825`. The navigation
+   subsystem is this workstream's primary dependency. Read it
    before designing the ship choreographer.
+
+   **4a. Concrete API surface (on master at HEAD, confirmed
+   2026-04-21).** Read `src/auto/NavigationSubsystem.js` — top
+   JSDoc block through line ~230. Key contract points that
+   shape this workstream:
+
+   - **Entry method:** `beginMotion(input)`. Single signature —
+     autopilot and manual-burn both pass through this. Shape:
+     `{ fromPosition, fromOrientation, fromOrbitBody, toBody,
+     toBodyRadius, toOrbitDistance, nextBody, nextOrbitDistance,
+     arrivalOptions: { approachFirst, holdOnly, slowOrbit,
+     orbitDuration, approachOrbitDuration }, launchOptions:
+     { warpExit, descentVector, outerOrbitRadius } }`. The ship
+     choreographer calls `beginMotion` to start each leg of the
+     tour; it does NOT drive motion by directly writing to the
+     subsystem's internals.
+
+   - **Per-frame contract:** call `subsystem.update(dt)`; it
+     returns a `MotionFrame` with `{ position, velocity,
+     lookAtTarget, phase, motionStarted, travelComplete,
+     orbitComplete, targetingReady, abruptness }`. The ship
+     choreographer reads this per frame to know ship pose.
+
+   - **Subsystem-internal phase enum:** `descending /
+     traveling / approaching / orbiting` (note the lowercase
+     names in the MotionFrame). This is the **legacy single-
+     axis carve inherited from pre-refactor `FlythroughCamera`**
+     — NOT the new ship-axis `ENTRY / CRUISE / APPROACH /
+     STATION`. The two vocabularies are orthogonal. See drift-
+     risk "Phase-name collision with subsystem internals"
+     below. WS 3 may retire the subsystem's internal names;
+     this workstream does not.
+
+   - **`abruptness` field:** V1 emits `0.0` per subsystem JSDoc
+     L24/L35 (*"V1 = 0.0; V2 wires d²x/dt² math (§10.8
+     consumer)"*). **This workstream's AC #5 is where the
+     actual math lands.** The ship choreographer produces the
+     abruptness signal (position second-derivative, velocity
+     discontinuity, or per-phase-transition-driven trigger),
+     and the shake mechanism consumes it. The subsystem's
+     `_abruptness = 0` stays as a default; the ship
+     choreographer writes the real value.
+
+   - **`rotBlendDuration`:** public property the subsystem sets
+     per motion-start (1.0s for tour departures, proportional-
+     to-travel-duration capped at 2.5s for warp/manual-burn).
+     Camera follow-mode reads this for its orientation slerp.
+     Don't fight it.
 
 5. **`docs/WORKSTREAMS/autopilot-star-orbit-distance-2026-04-20.md`**
    — the multiplier input for ENTRY / STATION around stars.
