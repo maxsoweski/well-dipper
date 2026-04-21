@@ -2,6 +2,28 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX 992cbb2` — round-9 code committed after PM amendment `d710700` and Director re-audit RELEASE. Signal-driven onset-detection fully retired; trigger is now phase-boundary one-shots (`motionStarted` accel / `travelComplete` decel), gated on `!isShortTrip` with warp-exit accel carve-out. Orbit silence is architectural — the signal path that fired round-8's orbit-bouncing no longer exists in code.
+
+**Telemetry verification (in-browser, live autopilot):**
+- Debug accel impulse: 5 crescendo-fade peaks at expected log-spaced times.
+- Debug decel impulse: 4 impact-decay peaks.
+- Natural Sol tour (27s, autopilot short-hop legs — `isShortTrip === true` throughout): zero auto-fires. AC #14 ✓.
+- STATION phase sampling: zero shake across 60+ frames. AC #13 ✓ (architectural).
+- Warp-exit path not exercised in this recording path (D-shortcut spawns in-system). AC #15 depends on the `warpExit` gate in code; telemetry for that invariant comes from a future warp-tour recording.
+
+**Recording drop paths:**
+- `screenshots/max-recordings/autopilot-shake-redesign-round9-2026-04-21.webm` (9.9 MB, 27s): natural Sol tour + back-to-back debug pair at t≈20-27s. Demonstrates orbit + short-hop silence.
+- `screenshots/max-recordings/autopilot-shake-redesign-round9-envelope-demo-2026-04-21.webm` (3 MB, 11s): envelope demo at forced `c2t=50` via `debugImpulseAtOrbitDistance(50, ±1)` for visible-scale AC #2 + AC #4 evaluation.
+- Contact sheet: `...-round9-envelope-demo-2026-04-21-contactsheet.png` (6×4 grid @ 3 fps).
+
+Diff stats: +119 lines, −168 lines (net code reduction of 49 lines). ShipChoreographer lost its signal-processing loop entirely.
+
+Awaiting Max's verdict.
+
+---
+
+**Historical: HELD state (superseded by round-9 code commit 992cbb2).**
+
 `HELD — ROUND 9 PIVOT (phase-boundary events, short-hop silenced, warp-exit coast)` — Director HELD the workstream after Max rejected round-8's continuous-`d|v|/dt`-onset firing model on 2026-04-21. Round-8 closed at `VERIFIED_PENDING_MAX 46ca75e`; that block is retained below as "Historical: round-8 (superseded by round-9 pivot)." Gate is engaged; code does not resume until Director re-audits this amendment.
 
 **What round-9 fixes.** Round-8 restored the Bible §8H asymmetric log-impulse envelope and passed its own telemetry ACs — but when Max watched the full tour recording, the continuous `|d|v|/dt|`-onset model caught real-but-not-dramatic speed changes. Orbit-phase pitch modulation + breathing + arrival-distance settle each produced small `|d|v|/dt|` spikes that fired the onset detector; shake bled into orbit where it doesn't belong. The signal-driven mental model is fundamentally wrong for what Max wants: he wants shake ONLY on dramatic accel/decel between distant objects, not on any speed-change event the math can legitimately detect.
