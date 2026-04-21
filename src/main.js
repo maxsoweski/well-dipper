@@ -37,6 +37,7 @@ import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
+import { ShipChoreographer } from './auto/ShipChoreographer.js';
 import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
@@ -342,9 +343,19 @@ function _isSameTarget(a, b) {
 const autoNav = new AutoNavigator();
 const navSubsystem = new NavigationSubsystem();
 const flythrough = new FlythroughCamera(camera, navSubsystem);
+const shipChoreographer = new ShipChoreographer(navSubsystem);
+flythrough.setShakeProvider(shipChoreographer);
 window._flythrough = flythrough;
 window._autoNav = autoNav;
 window._navSubsystem = navSubsystem;
+window._shipChoreographer = shipChoreographer;
+
+// WS 2 debug hooks — exposed for AC #5 shake-verification recording.
+window._autopilot = {
+  debugAbruptTransition: () => shipChoreographer.debugAbruptTransition(),
+  getShipPhase: () => shipChoreographer.currentPhase,
+  getAbruptness: () => shipChoreographer.abruptness,
+};
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
@@ -3868,6 +3879,9 @@ function _beginTourLegMotion(stop, priorBody) {
       approachOrbitDuration: stop.linger * settings.get('tourLingerMultiplier'),
     },
   });
+  // Ship-axis tour-leg advance — flips ENTRY→CRUISE on first post-ENTRY
+  // call; 1:1 mapping thereafter.
+  shipChoreographer.onLegAdvanced();
 }
 
 /**
@@ -3930,6 +3944,8 @@ function startFlythrough() {
       approachOrbitDuration: firstStop.linger * settings.get('tourLingerMultiplier'),
     },
   });
+  // Ship-axis: non-warp engage → first leg is CRUISE (not ENTRY).
+  shipChoreographer.beginTour({ fromWarp: false });
 
   // "Now targeting" — blink the destination on minimap
   updateFocusFromStop(firstStop);
@@ -3953,6 +3969,7 @@ function stopFlythrough() {
 
   flythrough.stop();
   autoNav.stop();
+  shipChoreographer.stop();
   _manualBurnOrbiting = false;
   _autopilotEnabled = false;
 
@@ -4119,6 +4136,8 @@ function warpRevealSystem() {
         },
         launchOptions: { warpExit: true },
       });
+      // Ship-axis ENTRY — warp-exit is the continuity-anchor per §10.5.
+      shipChoreographer.beginTour({ fromWarp: true });
 
       updateFocusFromStop(firstStop);
     }
@@ -4157,6 +4176,8 @@ function warpRevealSystem() {
       },
       launchOptions: { warpExit: true },
     });
+    // Ship-axis ENTRY — warp-exit is the continuity-anchor per §10.5.
+    shipChoreographer.beginTour({ fromWarp: true });
 
     updateFocusFromStop(firstStop);
     if (systemMap) systemMap.triggerBlink();
@@ -5528,8 +5549,13 @@ function animate() {
       // beginMotion call covers travel → (approach if requested) → orbit; main.js
       // only reacts to orbitComplete to advance the tour and kick off the next leg.
       const result = flythrough.update(deltaTime);
+      // WS 2 ship-axis layer: compute ship-axis phase + abruptness + shake
+      // from the just-written motion frame. 1-frame shake latency (this-
+      // frame's abruptness drives next-frame's shake via the provider
+      // hook into FlythroughCamera) is imperceptible at 60 fps.
+      shipChoreographer.update(deltaTime, result);
       if (result.travelComplete || result.orbitComplete) {
-        console.log(`[FLYTHROUGH] travelComplete=${result.travelComplete}, orbitComplete=${result.orbitComplete}, phase=${result.phase}`);
+        console.log(`[FLYTHROUGH] travelComplete=${result.travelComplete}, orbitComplete=${result.orbitComplete}, phase=${result.phase}, ship=${shipChoreographer.currentPhase}`);
       }
 
       // "Now targeting" — ~4s before orbit ends, blink the next target
@@ -5570,6 +5596,10 @@ function animate() {
               approachOrbitDuration: nextStop.linger * settings.get('tourLingerMultiplier'),
             },
           });
+          // Ship-axis: first post-ENTRY advance flips ENTRY→CRUISE. After
+          // that, the phase mapping is 1:1 traveling/approaching/orbiting
+          // ↔ CRUISE/APPROACH/STATION.
+          shipChoreographer.onLegAdvanced();
           updateFocusFromStop(nextStop);
         }
       }
