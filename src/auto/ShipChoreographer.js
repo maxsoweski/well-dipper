@@ -9,41 +9,58 @@ import * as THREE from 'three';
  *
  * **Responsibilities:**
  *   - Ship-axis phase tracking (ENTRY/CRUISE/APPROACH/STATION/IDLE).
- *   - Gravity-drive shake — **continuous-amplitude, velocity-change-driven**.
+ *   - Gravity-drive shake — **asymmetric log-impulse envelope** fired
+ *     on continuous `|d|v|/dt|` onset-detection, per Bible §8H.
  *
- * **Shake design (round-6, 2026-04-21 — Max's final guidance):**
+ * ──────────────────────────────────────────────────────────────────
+ *  Shake design (round-8 restoration of canon — 2026-04-21)
+ * ──────────────────────────────────────────────────────────────────
  *
- *   *"This should be an effect that is applied based on how quickly the
- *   velocity of the ship changes."*
+ * **Bible §8H, lines 1307–1309 (canon, unchanged):** The gravity drive's
+ * coupling to the ether produces two *visibly asymmetric* physical
+ * events — accel (ship pushing INTO the medium from rest: waves build,
+ * then release) and decel (ship slamming into the wall of accumulated
+ * medium: impact first, then rings out). Shake is the rider's felt
+ * signature of that coupling.
  *
- * The shake magnitude is a direct function of `|d|v|/dt|` (scalar speed
- * derivative) — smoothed slightly to reject frame-to-frame noise. No
- * impulse trains, no phase-boundary triggers, no log-spaced envelopes.
- * When the ship accelerates or decelerates, shake amplitude rises
- * proportionally. When the ship is at constant speed (orbit, coast,
- * stationary), shake amplitude is zero.
+ * **Signal source (preserved from round-6):** shake is driven from
+ * `d|v|/dt` — the scalar rate of change of ship speed — computed from
+ * position deltas each frame. This signal is continuous and low-pass-
+ * filtered (α=0.15) to reject per-frame noise. Max's round-5 verdict
+ * fixed the signal source: shake fires from how the ship's speed is
+ * changing, not from phase-boundary one-shots.
  *
- * The shake itself is a sinusoidal **vertical bob** (world-Y primary
- * axis) with a minor synchronized horizontal-perpendicular companion
- * (20% of primary), per Max's "boat cuts through water: vertical
- * bob, minor side roll synchronized with the disturbances."
+ * **Envelope shape (restored from rounds 1–5, per Bible §8H):** when
+ * the smoothed signal crosses an onset threshold from below, a single
+ * discrete **impulse-train event** fires. The event runs a precomputed
+ * envelope of 3–5 log-spaced bounces with log-decaying amplitude. The
+ * sign of `dSpeed` at onset selects which envelope:
+ *   - `sign > 0` (accel) → `ACCEL_AMPS` (crescendo-then-fade)
+ *   - `sign < 0` (decel) → `DECEL_AMPS` (impact-then-decay)
  *
- * Earlier iterations (rounds 1–5) used an impulse-train model that
- * fired on phase boundaries. Those failed successive recording
- * reviews because (a) the discrete-event timing read as disconnected
- * from the ship's actual motion, and (b) alternating-bump signs with
- * view-angle amplification read as "violent camera whip." Round-6
- * abandons the impulse-train model in favor of continuous-amplitude
- * driven directly by the signal Max named.
+ * Once fired, the event's envelope runs to completion on frozen state
+ * (axis, camera-to-target distance, sign, onset time). Subsequent
+ * signal variation does not re-trigger mid-ringout. A new event can
+ * fire only after the prior event completes AND the signal has been
+ * below threshold for a refractory window.
  *
- * **View-angle bounding.** At an orbit of distance `d`, a world-Y
- * shake of magnitude `s` causes a view-angle swing of `atan(s/d) ≈
- * s/d` radians (camera.lookAt(target) re-pivots). To keep the swing
- * perceptually stable across body classes (Sol orbits span 0.06 →
- * 40 scene units), the shake magnitude is scaled by `orbitDistance`
- * so view-angle = (fraction of orbit) / 1 = roughly constant radian
- * target. The tunable `SHAKE_VIEW_ANGLE_MAX` caps the view-angle at
- * its peak.
+ * **Per-event peak amplitude:** `peakAmp = SHAKE_VIEW_ANGLE_MAX × cam2tgt`,
+ * where `cam2tgt` is the camera-to-lookAt-target distance **frozen at
+ * onset** (per round-4 drift-risk-2 guard). This makes the peak view-
+ * angle uniform across body scales (moon=0.06 → star=40 in Sol).
+ *
+ * **Axes:** primary is world-Y (vertical bob — "boat-bob" per Max).
+ * Secondary is the horizontal-perpendicular to ship velocity at onset,
+ * carrying the same envelope at 20% amplitude (synchronized minor
+ * companion). Both axes freeze at onset.
+ *
+ * **Why round-6/7 regressed and had to be reverted:** round-6 replaced
+ * the envelope with a continuous `Math.sin(t × 6Hz)` carrier modulated
+ * by the smoothed signal. This collapsed AC #2 (3–5 discrete bounces)
+ * and AC #4 (accel/decel asymmetric) into a single symmetric continuous
+ * bob. Round-7 tuned four constants simultaneously on top of the
+ * regressed shape. Director audit 2026-04-21 and PM Path-A amendment
+ * (commit 755000e) restore canon; this file is the round-8 restoration.
  *
  * Integration: main.js calls `shipChoreographer.update(dt, motionFrame)`
  * after `flythrough.update(dt)`; FlythroughCamera reads `shakeOffset`
@@ -59,55 +76,60 @@ export const ShipPhase = Object.freeze({
 });
 
 // ────────────────────────────────────────────────────────────────────────
-//  SHAKE TUNABLES (Round 6)
+//  SHAKE TUNABLES (Round 8 — canon-restored)
 // ────────────────────────────────────────────────────────────────────────
 
-// Scalar `|d|v|/dt|` below this is considered "smooth" — zero shake.
-// Units: scene-units/s². Round-7: lowered from 20 → 5 so modest
-// cruise-mid accelerations still register (observed typical 50-180).
-const DSPEED_DEADZONE = 5.0;
-
-// Scalar |d|v|/dt| that produces full-amplitude shake. Above this,
-// amplitude clamps. Round-7: lowered from 300 → 150 — observed
-// Sol-tour peak `|d|v|/dt|` during real cruise is ~180, so 150
-// as full-scale lets peak velocity changes saturate the drive.
-const DSPEED_FULL_SCALE = 150.0;
-
-// Low-pass filter α per frame — how fast smoothed speed-derivative
-// tracks the raw signal. α=1 → no smoothing (raw); α near 0 → very
-// slow tracking. 0.15 ≈ ~6-frame time constant at 60fps — enough
-// to reject per-frame noise but still responsive to real changes.
+// Signal smoothing (preserved from round-6).
 const DSPEED_SMOOTHING = 0.15;
 
-// Peak view-angle for the shake bob (radians). At full-scale speed
-// change, the vertical bob subtends this much view angle. Round-7:
-// bumped from 0.02 → 0.05 rad (1.15° → 2.86°) — the 1.15° cap was
-// below the perceptual floor on compressed recordings.
+// Onset threshold on smoothed `|d|v|/dt|`. Above this, a new impulse-train
+// event fires (subject to refractory and not-already-active checks).
+// Below this, the event-active latch clears and the refractory timer
+// starts. Value chosen to sit above typical orbit pitch/yaw modulation
+// noise (observed ~5-30) and below mid-cruise Hermite peaks (observed
+// ~100-180). scene-units/s².
+const ONSET_THRESHOLD = 35.0;
+
+// Seconds the signal must be continuously below ONSET_THRESHOLD before
+// a new event can fire. Prevents stutter-firing on noisy signals and
+// gives each event a clean ringout window.
+const ONSET_REFRACTORY = 0.15;
+
+// Peak view-angle the impulse-train bob subtends at `peakAmp` (radians).
+// 0.05 rad ≈ 2.86°. Per-impulse peak amplitude = this × cam2tgt (frozen
+// at onset). Round-7 established this range; round-8 keeps it.
 const SHAKE_VIEW_ANGLE_MAX = 0.05;
 
-// Vertical-bob carrier frequency (Hz). Boat-bob register: too slow
-// reads as sea-sick heave; too fast reads as buzzy vibration. 6 Hz
-// ≈ pond-ripple / small-boat-rocking tempo.
-const BOB_FREQUENCY = 6.0;
+// Asymmetric envelope amplitude arrays (normalized to peakAmp=1).
+// Accel: crescendo-then-fade (5 bounces) — ship pushing INTO medium.
+// Decel: impact-then-decay (4 bounces) — ship slamming INTO wall.
+const ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10];
+const DECEL_AMPS = [1.00, 0.55, 0.30, 0.17];
 
-// Secondary-axis amplitude as a fraction of primary. Per Max
-// 2026-04-21: "x-axis mostly consistent, minor shakes synchronized
-// with the greatest disturbances across the y-axis."
+// Log-spacing: gap[n] = IMPULSE_INITIAL_GAP × IMPULSE_SPACING_RATIO^n.
+// Initial gap = seconds from onset to first peak. Subsequent gaps
+// grow geometrically.
+const IMPULSE_INITIAL_GAP = 0.08;
+const IMPULSE_SPACING_RATIO = 1.8;
+
+// Per-impulse bump width = IMPULSE_WIDTH_RATIO × leading-gap. Controls
+// how sharp vs smeared each bump reads. Bumps overlap slightly at
+// defaults (width 0.5×gap → ~2% bleed from neighbor at peak).
+const IMPULSE_WIDTH_RATIO = 0.5;
+
+// Secondary-axis amplitude as a fraction of primary. Synchronized
+// companion per Max's round-2 direction ("minor shakes synchronized
+// with the greatest disturbances across the y-axis").
 const SECONDARY_AXIS_RATIO = 0.20;
-
-// Hard ceiling on shake offset in scene units (for star-class bodies
-// where camera-to-target is large). Prevents view-breaking offsets
-// at huge framings even if SHAKE_VIEW_ANGLE_MAX were tuned aggressive.
-// Round-7: bumped from 2 → 20 because cameraToTargetDistance during
-// CRUISE can be 50-200 units and view-angle × distance would clip.
-const SHAKE_MAX_AMPLITUDE = 20.0;
 
 // ────────────────────────────────────────────────────────────────────────
 
 // Reusable vectors (avoid per-frame allocation)
 const _velocity = new THREE.Vector3();
 const _tmpVec = new THREE.Vector3();
-const _perp = new THREE.Vector3();
+
+// Module-scoped world-up for perpendicular computation
+const _UP = new THREE.Vector3(0, 1, 0);
 
 export class ShipChoreographer {
   /**
@@ -123,36 +145,56 @@ export class ShipChoreographer {
     this._prevPosition = new THREE.Vector3();
     this._prevSpeed = 0;
     this._hasPrev = 0;  // 0 = no history, 1 = have position, 2 = have speed
-    // Smoothed |d|v|/dt| — the signal driving shake amplitude.
     this._smoothedAbsDSpeed = 0;
-    // Signed dSpeed/dt (for debug telemetry; not used as a gate anymore)
     this._signedDSpeed = 0;
-    // Normalized [0, 1] shake drive (for telemetry + debug UI)
-    this._shakeDrive = 0;
-
-    // ── Debug-hook injection (AC #4 — rolls the smoothed signal) ──
-    // Debug hooks temporarily inject a speed-derivative spike so Max
-    // can eyeball the effect without waiting for a natural phase.
-    this._debugInjectedAbsDSpeed = 0;
-
-    // ── Shake bob state ──
     this._timeAccum = 0;
-    // Horizontal-perpendicular axis: recomputed per frame from current
-    // velocity (cheap; no need to freeze — the axis only mattered in the
-    // impulse-train model where events were discrete).
-    this._secondaryAxis = new THREE.Vector3(1, 0, 0);
+
+    // ── Impulse-train event state (frozen at onset; const through ringout) ──
+    this._eventActive = false;
+    this._shakeOnsetTime = 0;        // _timeAccum at event fire
+    this._shakeOnsetCam2Tgt = 0;     // camera-to-target distance at onset
+    this._shakeOnsetSign = 0;        // +1 accel, -1 decel
+    this._shakePeakAmp = 0;          // view-angle × cam2tgt = scene-unit peak
+    this._shakeAmps = null;          // which array (ACCEL_AMPS or DECEL_AMPS)
+    this._shakeImpulseTimes = null;  // seconds-from-onset per peak
+    this._shakeWidths = null;        // per-impulse Gaussian width
+    this._shakeEventDuration = 0;    // event ends when t > this
+    this._shakeSecondaryAxis = new THREE.Vector3(1, 0, 0);
+
+    // ── Refractory timer ──
+    // Time since signal last crossed below ONSET_THRESHOLD. Must exceed
+    // ONSET_REFRACTORY before a new event can fire.
+    this._subThresholdTime = ONSET_REFRACTORY;  // start ready-to-fire
+
+    // ── Output ──
     this._shakeOffset = new THREE.Vector3();
+
+    // ── Debug-hook: when non-null, the update loop consumes this as the
+    //    next onset instead of waiting for the natural signal. ──
+    this._pendingDebugFire = null;  // { sign: ±1, cam2tgt: number|null }
   }
 
   // ── Public surface ──
 
   get isActive() { return this._phase !== ShipPhase.IDLE; }
   get currentPhase() { return this._phase; }
-  get abruptness() { return this._shakeDrive; }  // normalized [0,1]; legacy name preserved
+  /** True while an impulse-train event is running; 0/1 for legacy telemetry. */
+  get abruptness() { return this._eventActive ? 1 : 0; }
   get shakeOffset() { return this._shakeOffset; }
-
   /** Per-frame smoothed |d|v|/dt| (for telemetry). */
   get smoothedAbsDSpeed() { return this._smoothedAbsDSpeed; }
+  /** Signed dSpeed (for telemetry — the discriminator before onset). */
+  get signedDSpeed() { return this._signedDSpeed; }
+  /** True when an impulse-train event is running. */
+  get eventActive() { return this._eventActive; }
+  /** Seconds since the current event fired (0 when no event). */
+  get eventTime() {
+    return this._eventActive ? (this._timeAccum - this._shakeOnsetTime) : 0;
+  }
+  /** Frozen cam-to-target at onset of current event (0 when no event). */
+  get onsetCam2Tgt() { return this._eventActive ? this._shakeOnsetCam2Tgt : 0; }
+  /** Frozen sign at onset of current event (+1 accel / -1 decel / 0 idle). */
+  get onsetSign() { return this._eventActive ? this._shakeOnsetSign : 0; }
 
   beginTour({ fromWarp }) {
     this._fromWarp = !!fromWarp;
@@ -172,13 +214,12 @@ export class ShipChoreographer {
   update(deltaTime, motionFrame) {
     if (this._phase === ShipPhase.IDLE) {
       this._shakeOffset.set(0, 0, 0);
-      this._shakeDrive = 0;
       return;
     }
 
     this._timeAccum += deltaTime;
 
-    // Map subsystem phase → ship-axis phase (unchanged from round-3+)
+    // Map subsystem phase → ship-axis phase
     const subPhase = motionFrame.phase;
     if (this._fromWarp) {
       this._phase = ShipPhase.ENTRY;
@@ -191,7 +232,6 @@ export class ShipChoreographer {
 
     // ── Compute |d|v|/dt| from position deltas ──
     const currPos = motionFrame.position;
-    let rawAbsDSpeed = 0;
     if (deltaTime > 1e-6 && this._hasPrev >= 1) {
       _velocity.set(
         (currPos.x - this._prevPosition.x) / deltaTime,
@@ -203,96 +243,158 @@ export class ShipChoreographer {
       if (this._hasPrev >= 2) {
         const dSpeed = (currSpeed - this._prevSpeed) / deltaTime;
         this._signedDSpeed = dSpeed;
-        rawAbsDSpeed = Math.abs(dSpeed);
+        const rawAbsDSpeed = Math.abs(dSpeed);
+        this._smoothedAbsDSpeed += (rawAbsDSpeed - this._smoothedAbsDSpeed) * DSPEED_SMOOTHING;
       }
       this._prevSpeed = currSpeed;
     }
     this._prevPosition.copy(currPos);
     if (this._hasPrev < 2) this._hasPrev++;
 
-    // ── Debug-hook injection (decays quickly) ──
-    if (this._debugInjectedAbsDSpeed > 0) {
-      rawAbsDSpeed = Math.max(rawAbsDSpeed, this._debugInjectedAbsDSpeed);
-      this._debugInjectedAbsDSpeed *= 0.85;  // decay ~6-frame half-life
-      if (this._debugInjectedAbsDSpeed < 1) this._debugInjectedAbsDSpeed = 0;
-    }
-
-    // ── Low-pass filter the raw signal ──
-    this._smoothedAbsDSpeed += (rawAbsDSpeed - this._smoothedAbsDSpeed) * DSPEED_SMOOTHING;
-
-    // ── Normalize to [0, 1] shake drive ──
-    if (this._smoothedAbsDSpeed <= DSPEED_DEADZONE) {
-      this._shakeDrive = 0;
+    // ── Refractory timer: accumulate below-threshold time ──
+    if (this._smoothedAbsDSpeed < ONSET_THRESHOLD) {
+      this._subThresholdTime += deltaTime;
     } else {
-      const range = DSPEED_FULL_SCALE - DSPEED_DEADZONE;
-      this._shakeDrive = Math.min(1, (this._smoothedAbsDSpeed - DSPEED_DEADZONE) / range);
+      this._subThresholdTime = 0;
     }
 
-    // ── Compute shake amplitude (view-angle bounded, camera-scale-coupled) ──
-    // Target view angle swings from 0 at shakeDrive=0 to SHAKE_VIEW_ANGLE_MAX
-    // at shakeDrive=1. Shake-offset magnitude = view-angle × camera-to-target
-    // distance (the actual view scale). Round-7 fix: previously scaled by
-    // `orbitDistance`, but during CRUISE the camera is far from the target
-    // while orbitDistance refers to the upcoming orbit — so a tiny offset
-    // vs. a huge cam-to-target distance gave ~0° visible view angle.
-    // Using cam2tgt keeps view-angle roughly uniform across all phases.
-    const viewAngleRad = this._shakeDrive * SHAKE_VIEW_ANGLE_MAX;
+    // ── Onset-detection: fire a new event if conditions align ──
     const lookAt = motionFrame.lookAtTarget;
     const dx = currPos.x - lookAt.x;
     const dy = currPos.y - lookAt.y;
     const dz = currPos.z - lookAt.z;
     const cam2tgt = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-    const shakeAmp = Math.min(viewAngleRad * cam2tgt, SHAKE_MAX_AMPLITUDE);
 
-    // ── Emit the offset ──
-    if (shakeAmp <= 1e-6) {
-      this._shakeOffset.set(0, 0, 0);
-    } else {
-      // Primary: world-Y vertical bob via sinusoidal carrier.
-      const carrier = Math.sin(this._timeAccum * BOB_FREQUENCY * Math.PI * 2);
-      const primaryMag = shakeAmp * carrier;
+    if (this._pendingDebugFire !== null) {
+      // Debug hook trumps natural onset gating.
+      const sign = this._pendingDebugFire.sign;
+      const c2t = this._pendingDebugFire.cam2tgt ?? cam2tgt;
+      this._pendingDebugFire = null;
+      this._startImpulseTrain(sign, c2t);
+    } else if (
+      !this._eventActive
+      && this._smoothedAbsDSpeed >= ONSET_THRESHOLD
+      && this._subThresholdTime >= ONSET_REFRACTORY
+    ) {
+      const sign = this._signedDSpeed >= 0 ? +1 : -1;
+      this._startImpulseTrain(sign, cam2tgt);
+    }
 
-      // Secondary: horizontal-perpendicular to current velocity.
-      // Synchronized sign with primary (same carrier) but reduced amplitude.
-      const horizSpeedSq = _velocity.x * _velocity.x + _velocity.z * _velocity.z;
-      if (horizSpeedSq > 1e-6) {
-        const hm = Math.sqrt(horizSpeedSq);
-        _tmpVec.set(_velocity.x / hm, 0, _velocity.z / hm);
-        this._secondaryAxis.crossVectors(_tmpVec, _UP).normalize();
+    // ── Sample envelope if an event is running ──
+    if (this._eventActive) {
+      const t = this._timeAccum - this._shakeOnsetTime;
+      if (t > this._shakeEventDuration) {
+        this._eventActive = false;
+        this._shakeOffset.set(0, 0, 0);
       } else {
-        this._secondaryAxis.set(1, 0, 0);
-      }
-      const secondaryMag = primaryMag * SECONDARY_AXIS_RATIO;
+        // Sum Gaussian bumps: ∑ A[i] × exp(-((t - t_peak[i])/width[i])²)
+        let envelope = 0;
+        const times = this._shakeImpulseTimes;
+        const amps = this._shakeAmps;
+        const widths = this._shakeWidths;
+        for (let i = 0; i < times.length; i++) {
+          const diff = t - times[i];
+          const w = widths[i];
+          envelope += amps[i] * Math.exp(-(diff * diff) / (w * w));
+        }
+        const primaryMag = envelope * this._shakePeakAmp;
 
-      this._shakeOffset.set(0, primaryMag, 0)
-        .addScaledVector(this._secondaryAxis, secondaryMag);
+        // Primary: world-Y. Secondary: horizontal-perp axis frozen at onset.
+        // Same envelope on both axes (synchronized companion).
+        const secondaryMag = primaryMag * SECONDARY_AXIS_RATIO;
+        this._shakeOffset
+          .set(0, primaryMag, 0)
+          .addScaledVector(this._shakeSecondaryAxis, secondaryMag);
+      }
+    } else {
+      this._shakeOffset.set(0, 0, 0);
     }
   }
 
-  // ── Debug hooks (AC #4 + AC #5) ──
+  // ── Internal: atomic event-onset freeze ──
 
   /**
-   * Force a brief speed-derivative spike so the shake effect is visible
-   * on demand (for AC #5 verification recording). The injected value
-   * rolls into the raw |d|v|/dt| each frame and decays quickly.
+   * Fire a new impulse-train event. Atomically freezes:
+   *   - sign (selects ACCEL_AMPS vs DECEL_AMPS)
+   *   - cam-to-target distance (sets per-event peak amplitude)
+   *   - onset time (envelope x-axis zero)
+   *   - secondary axis (horizontal-perpendicular to velocity at this instant)
+   *
+   * These values are const for the duration of the event's ringout, per
+   * round-4 drift-risk guards (axis frozen, scale frozen).
    */
-  debugAbruptTransition() {
-    this._debugInjectedAbsDSpeed = DSPEED_FULL_SCALE * 1.5;
+  _startImpulseTrain(sign, cam2tgtAtOnset) {
+    this._eventActive = true;
+    this._shakeOnsetTime = this._timeAccum;
+    this._shakeOnsetSign = sign;
+    this._shakeOnsetCam2Tgt = cam2tgtAtOnset;
+    this._shakePeakAmp = SHAKE_VIEW_ANGLE_MAX * cam2tgtAtOnset;
+    this._shakeAmps = (sign >= 0) ? ACCEL_AMPS : DECEL_AMPS;
+
+    // Log-spaced impulse peaks
+    const n = this._shakeAmps.length;
+    const times = new Array(n);
+    const widths = new Array(n);
+    let gap = IMPULSE_INITIAL_GAP;
+    let t = 0;
+    for (let i = 0; i < n; i++) {
+      t += gap;
+      times[i] = t;
+      widths[i] = gap * IMPULSE_WIDTH_RATIO;
+      gap *= IMPULSE_SPACING_RATIO;
+    }
+    this._shakeImpulseTimes = times;
+    this._shakeWidths = widths;
+    // Event duration: last peak + 4σ of its Gaussian tail = negligible after
+    this._shakeEventDuration = times[n - 1] + 4 * widths[n - 1];
+
+    // Freeze horizontal-perpendicular axis
+    const hsq = _velocity.x * _velocity.x + _velocity.z * _velocity.z;
+    if (hsq > 1e-6) {
+      const hm = Math.sqrt(hsq);
+      _tmpVec.set(_velocity.x / hm, 0, _velocity.z / hm);
+      this._shakeSecondaryAxis.crossVectors(_tmpVec, _UP).normalize();
+    } else {
+      this._shakeSecondaryAxis.set(1, 0, 0);
+    }
+
+    // Reset refractory so we can't immediately re-fire after this event ends
+    this._subThresholdTime = 0;
   }
 
-  // Round-4 API surface preserved for backward compat with existing
-  // callers in main.js; all three just call debugAbruptTransition now.
-  debugAccelImpulse() { this.debugAbruptTransition(); }
-  debugDecelImpulse() { this.debugAbruptTransition(); }
+  // ── Debug hooks ──
 
   /**
-   * AC #11 round-4 (preserved): force a speed-change spike scaled to a
-   * specified orbit distance. Previously fired a decel-envelope at a
-   * specified scale; in round-6 it's equivalent to `debugAbruptTransition`
-   * since scale-coupling happens automatically per-frame via nav.orbitDistance.
+   * Fire an accel-envelope event (crescendo-then-fade) next update.
+   * Uses current cam2tgt unless overridden via debugImpulseAtOrbitDistance.
    */
-  debugImpulseAtOrbitDistance(/* orbitDistance, sign */) {
-    this.debugAbruptTransition();
+  debugAccelImpulse() {
+    this._pendingDebugFire = { sign: +1, cam2tgt: null };
+  }
+
+  /**
+   * Fire a decel-envelope event (impact-then-decay) next update.
+   */
+  debugDecelImpulse() {
+    this._pendingDebugFire = { sign: -1, cam2tgt: null };
+  }
+
+  /**
+   * Generic spike that picks sign from current signal. Retained for
+   * back-compat with round-6's `debugAbruptTransition` caller in main.js.
+   */
+  debugAbruptTransition() {
+    const sign = this._signedDSpeed >= 0 ? +1 : -1;
+    this._pendingDebugFire = { sign, cam2tgt: null };
+  }
+
+  /**
+   * Fire at a specified cam2tgt scale (for per-body-class verification).
+   * AC #11 preserved from round-4.
+   */
+  debugImpulseAtOrbitDistance(orbitDistance, sign) {
+    const s = (sign === undefined || sign === null) ? -1 : (sign >= 0 ? +1 : -1);
+    this._pendingDebugFire = { sign: s, cam2tgt: orbitDistance };
   }
 
   stop() {
@@ -300,7 +402,7 @@ export class ShipChoreographer {
     this._fromWarp = false;
     this._resetSignal();
     this._shakeOffset.set(0, 0, 0);
-    this._debugInjectedAbsDSpeed = 0;
+    this._pendingDebugFire = null;
   }
 
   _resetSignal() {
@@ -309,9 +411,12 @@ export class ShipChoreographer {
     this._hasPrev = 0;
     this._smoothedAbsDSpeed = 0;
     this._signedDSpeed = 0;
-    this._shakeDrive = 0;
+    this._timeAccum = 0;
+    this._eventActive = false;
+    this._subThresholdTime = ONSET_REFRACTORY;
+    this._shakeOnsetTime = 0;
+    this._shakeOnsetCam2Tgt = 0;
+    this._shakeOnsetSign = 0;
+    this._shakePeakAmp = 0;
   }
 }
-
-// Module-scoped world-up for perpendicular computation (avoids per-call alloc)
-const _UP = new THREE.Vector3(0, 1, 0);
