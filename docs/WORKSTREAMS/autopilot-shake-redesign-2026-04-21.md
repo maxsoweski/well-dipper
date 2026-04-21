@@ -2,17 +2,74 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX d02db8f` — **round-7 amplitude retune on round-6 mechanism.** Max on round-6 ("I don't see any shake at all now"). Diagnosis: mechanism right, amplitude below perceptual floor.
+`HELD — ROUND 8 PIVOT (path A, restore canon)` — Director HELD the workstream at `8a21830` after auditing round-7. Audit at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md`. Gate is still engaged; code does not resume until Director re-audits this amendment.
 
-**Round-7 fixes (tuning-only; mechanism unchanged):**
-1. **Scale coupling `orbitDistance` → `cameraToTargetDistance`.** During CRUISE the camera sits 20-200 scene-units from the target while `orbitDistance` refers to the upcoming orbit (moon=0.06). `amp = viewAngle × orbitDist` gave 0.0007-unit offsets vs. 30+-unit view distances = ~0.002° view swing (invisible). Swapping to `cam2tgt` makes view-angle uniform across all phases, as Max's "pilot-felt shake" intent requires.
-2. **Thresholds retuned to observed signal range.** Typical `|d|v|/dt|` peak during Sol tour ~180 scene-units/s². `DSPEED_DEADZONE 20 → 5`, `DSPEED_FULL_SCALE 300 → 150` — real peaks now saturate drive; small changes still register.
-3. **Peak view angle `SHAKE_VIEW_ANGLE_MAX 0.02 → 0.05 rad`** (1.15° → 2.86°). The 1.15° cap was below the perceptual floor on a 6 Hz carrier.
-4. **Absolute cap `SHAKE_MAX_AMPLITUDE 2.0 → 20.0`** to accommodate new cam2tgt-scaled magnitudes without clipping at large camera distances.
+**The problem.** Rounds 6 and 7 silently replaced the Bible-canonical asymmetric log-impulse envelope with a continuous sinusoidal bob (`Math.sin(_timeAccum × 6Hz × 2π) × smoothed amplitude`, `Math.abs(dSpeed)` discarding sign). AC #2 (3–5 discrete bounces, log-spaced, log-decaying) and AC #4 (accel vs. decel visibly asymmetric) went to zero in code while still live in the brief. Neither pivot went through PM or Director. The round-6 Status block retroactively framed the continuous-drive shape as the intent; it wasn't — it was unauthorized abandonment of the envelope work that had been in flight since round-1.
 
-**Prior round-6 intent preserved:** continuous `|d|v|/dt|`-driven amplitude, no impulse trains, no phase-boundary triggers.
+**Max's round-5 verdict** — *"rumble is still all weird and happens all at the end once we're already in orbit ... this should be an effect that is applied based on how quickly the velocity of the ship changes"* — corrects the **signal source** (fire continuously from `d|v|/dt`, not from phase-boundary one-shots). It does not rewrite Bible §8H's asymmetric-impulse-train canon, which Max co-authored the same day in commit `cde2d7f`. Round-6 did a double pivot: signal-source fix (authorized, correct) + envelope-shape replacement (unauthorized, wrong). The double pivot is the drift.
 
-**Round-6 telemetry evidence (superseded, for history):** CRUISE shake peak 0.00090 scene-units — numerically correct for the tuning but visually nil. Round-7 expected peak at same drive level: `0.05 × cam2tgt(30) = 1.5` scene-units (~1600× more), view angle 2.86° at drive=1.
+**Path A — restore canon (this round).** Do NOT escalate canon-change to Max; there is no basis for Path B in Max's feedback and Bible §8H (lines 1307–1309) is active canon. Round-8 restores the asymmetric log-impulse envelope on top of round-6's correct continuous `d|v|/dt` signal source. The two are compatible: the signal says "how fast is `|v|` changing right now," and the envelope fires a discrete asymmetric bounce-train event each time that signal crosses an onset threshold. The continuous drive is the *trigger condition*, the log-impulse train is the *shape of the response*. They are not competing shapes; round-6/7 collapsed them into one because the brief's Status block authorized doing so. It should not have.
+
+**Round-8 scope (for working-Claude, gated on Director re-audit):**
+
+1. **Preserve from round-6/7:**
+   - Continuous `|d|v|/dt|` derivation in `ShipChoreographer.update()` lines 192–210 (position-delta → velocity → scalar speed → `dSpeed = (currSpeed - _prevSpeed) / dt`). Signal-source fix is correct; Max's round-5 feedback authorizes it.
+   - `DSPEED_SMOOTHING = 0.15` low-pass filter on the raw signal (round-6 addition — rejects per-frame noise without crippling responsiveness). Keep.
+   - Sign tracking in `_signedDSpeed` (round-6 kept it as debug-only — round-8 promotes it back to the accel/decel discriminator per AC #4).
+   - The `cam2tgt`-based view-angle scaling approach for computing per-impulse peak amplitude from a target view-angle — round-7's insight that `orbitDistance` during CRUISE refers to the upcoming orbit rather than the current framing is correct, and the fix (scale by live camera-to-target distance) survives. **Caveat per round-4 drift risk 2 / audit §Round-7 tuning:** the scale factor must be **frozen at impulse onset**, not re-read every frame. Round-7 re-reads `cam2tgt` every frame at line 244 and that regresses the round-4 drift-risk guard. Round-8: at the frame where a new impulse-train event fires, read `cam2tgt` *once*, store it as `_shakeOnsetCam2Tgt`, use that stored value for every subsequent frame of the event's envelope.
+
+2. **Revert from round-6/7:**
+   - Continuous sinusoidal bob at line 252 (`carrier = Math.sin(_timeAccum × BOB_FREQUENCY × 2π)`). Deleted.
+   - `Math.abs(dSpeed)` at line 206 discarding sign. Preserve the signed `dSpeed` through to the envelope-fire decision — the sign of `dSpeed` at onset selects the accel envelope (crescendo-then-fade) or the decel envelope (impact-then-decay) per AC #4.
+   - `BOB_FREQUENCY`, `SECONDARY_AXIS_RATIO`, `SHAKE_MAX_AMPLITUDE = 20.0` as constants for a continuous bob. Replaced by the impulse-train constants (see below).
+   - The framing that the shake is a "continuous function of amplitude" per-frame. That framing is what authorized the envelope replacement; it has to be removed explicitly so the code-comment canon matches the Bible.
+
+3. **Restore from rounds 1–5 (per audit §Acceptance condition for next iteration, path A):**
+   - Asymmetric impulse-train precompute at event onset: `ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]` (crescendo-then-fade, per §In scope and Bible §8H "ship pushing INTO medium from rest — waves build then release"); `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]` (impact-then-decay, per §In scope and Bible §8H "ship slamming into wall of accumulated medium — impact first then rings out").
+   - Log-spaced impulse timing: `Δt_n = Δt_0 · φ^n` with `IMPULSE_INITIAL_GAP = 0.08` and `IMPULSE_SPACING_RATIO = 1.8` (round-1 values — Max did not flag these as wrong).
+   - Onset-detection on the signal: fire a new impulse-train event when smoothed `|d|v|/dt|` crosses a low onset threshold after a period at zero. The continuous signal is the trigger *mechanism*; the envelope is the *shape*. Once fired, the event runs its precomputed ringout regardless of subsequent signal values — events don't re-fire mid-ringout. A new event can fire only after the prior event completes AND the signal has been below onset threshold for a refractory window (suggested ≥100ms; working-Claude picks and cites).
+   - Axis freeze at onset: per drift risk 1 guard in §Drift risks — world-Y primary (boat-bob), `SECONDARY_AXIS_RATIO = 0.20` horizontal-perpendicular companion. Both axes carry the same envelope, synchronized, frozen at onset.
+   - Per-event peak amplitude `peakAmp = viewAngleTarget × _shakeOnsetCam2Tgt` where `viewAngleTarget` is a bounded tunable (suggested V1: reuse `SHAKE_VIEW_ANGLE_MAX = 0.05` rad from round-7 — tuning stays available but now scales the impulse peak, not a continuous carrier). The envelope arrays multiply through `peakAmp` at precompute so downstream per-frame sampling is a lookup.
+
+4. **Preserve round-3 arrival-timing (AC #8) and round-4 scale-coupling invariant (AC #10 drift risks 1 & 2).** Neither was wrong — both were silently deprecated when the continuous-bob shape replaced the impulse-train shape. Round-8 brings both invariants back with the shape that needs them. Specifically: at onset, freeze `_shakeOnsetCam2Tgt` AND `_shakeOnsetSign` AND `_shakeOnsetTime` AND the axis vector as one atomic `_startImpulseTrain()` operation; the envelope runs on those frozen values for its full ringout.
+
+**ACs #2 and #4 are reaffirmed, not rewritten.** They were always correct and always Bible-aligned:
+
+- **AC #2 reaffirmed** — log-impulse envelope, 3–5 discrete bounces, log-spaced timing, log-decaying amplitude. `shakeOffset.length()` traces discrete peaks over time, not a continuous sinusoidal carrier. (Bible §8H: *"waves build against the hull as it breaks through, then release"* + *"impact hits first, then rings out"* — both describe discrete-event shapes.)
+- **AC #4 reaffirmed** — accel pattern (crescendo-then-fade) and decel pattern (impact-then-decay) visibly, temporally asymmetric. Different amplitude sequences; discriminator is `sign(dSpeed)` frozen at onset. (Bible §8H: *"they are different physical events against the same medium"* — asymmetry is the canon, not a tuning choice.)
+
+**What the round-8 commit produces:**
+
+- One commit titled `feat(autopilot): restore asymmetric log-impulse envelope on continuous d|v|/dt trigger (round 8)`. Scope: revert the continuous-bob code at lines 222–269; reinstate the round-5-era precomputed impulse-train state (`_shakeAmps`, `_shakeImpulseTimes`, `_shakeOnsetTime`, `_shakeOnsetCam2Tgt`, `_shakeOnsetSign`, `_shakePrimaryAxis`); add onset-detection on smoothed `|d|v|/dt|` with a refractory window; wire the sign → envelope-array pick; restore `debugAccelImpulse()` and `debugDecelImpulse()` as distinct debug hooks (round-6 collapsed both to `debugAbruptTransition()` — reverse per §In scope AC #4 guard).
+- One canvas recording at `screenshots/max-recordings/autopilot-shake-redesign-round8-2026-04-21.webm`. Sol, debug sequence: smooth baseline (~3s) → `debugAccelImpulse()` → smooth gap (~2s) → `debugDecelImpulse()` → smooth closer (~2s). Working-Claude captures, surfaces contact sheet + two frames (mid-accel-envelope, mid-decel-envelope), Max evaluates asymmetry on playback.
+- Round-8 telemetry probe (post-commit, in-browser): read `_signedDSpeed` + `shakeOffset` at ~10 Hz across a debug-triggered event, confirm `shakeOffset.length()` profile shows 3–5 discrete peaks (not continuous oscillation) and that peaks #2-N decay log-style relative to peak #1. This is working-Claude self-audit, not the Shipped artifact.
+
+**Gate release condition.** Director re-audits this amendment, confirms the round-8 plan restores Bible §8H asymmetric-impulse-train canon + preserves round-6's correct signal source + honors the round-4 scale-freeze invariant, and releases the gate for the specific edits named in the scope above. Working-Claude does NOT edit code until Director audit lands.
+
+**What round-8 does NOT do:**
+- Does not edit Bible §8H. Canon is fine as-is; code was the drifted thing.
+- Does not edit §10.8. Same reason.
+- Does not reopen AC #2 or AC #4. They were correct; the code regressed against them.
+- Does not re-tune any constant outside the round-8 scope. No speculative tuning passes until the restored-canonical-shape recording clears Max.
+- Does not retain round-7's multi-variable tune. The four simultaneous changes to `DSPEED_DEADZONE`, `DSPEED_FULL_SCALE`, `SHAKE_VIEW_ANGLE_MAX`, `SHAKE_MAX_AMPLITUDE` read as tuning on the wrong shape. Round-8 starts from the round-5 envelope constants with the one round-7 insight carried forward (`cam2tgt` scale, but frozen at onset).
+
+**History preserved for readers of this brief:** the round-6 and round-7 status blocks below remain verbatim as record of the drift arc — they are not deleted, but they no longer describe the intended design. The design is, and always was, Bible §8H's asymmetric log-impulse-train shake.
+
+---
+
+**Historical status (superseded by round-8 pivot above — retained for audit trail):**
+
+`VERIFIED_PENDING_MAX d02db8f` — **round-7 amplitude retune on round-6 mechanism.** Max on round-6 ("I don't see any shake at all now"). Diagnosis (at the time, later corrected by Director audit): mechanism right, amplitude below perceptual floor.
+
+**Round-7 fixes (tuning-only; mechanism unchanged at the time):**
+1. **Scale coupling `orbitDistance` → `cameraToTargetDistance`.** During CRUISE the camera sits 20-200 scene-units from the target while `orbitDistance` refers to the upcoming orbit (moon=0.06). `amp = viewAngle × orbitDist` gave 0.0007-unit offsets vs. 30+-unit view distances = ~0.002° view swing (invisible). Swapping to `cam2tgt` makes view-angle uniform across all phases. **Round-8 keeps this insight but freezes `cam2tgt` at impulse onset** (round-7 re-read it every frame, which regresses the round-4 drift-risk 2 guard).
+2. **Thresholds retuned to observed signal range.** Typical `|d|v|/dt|` peak during Sol tour ~180 scene-units/s². `DSPEED_DEADZONE 20 → 5`, `DSPEED_FULL_SCALE 300 → 150`. **Round-8: these thresholds now feed onset-detection for the impulse train, not a continuous carrier — retune if needed against event-firing cadence.**
+3. **Peak view angle `SHAKE_VIEW_ANGLE_MAX 0.02 → 0.05 rad`** (1.15° → 2.86°). The 1.15° cap was below the perceptual floor on a 6 Hz carrier. **Round-8: retained as the `viewAngleTarget` for per-impulse peak amplitude calculation.**
+4. **Absolute cap `SHAKE_MAX_AMPLITUDE 2.0 → 20.0`** to accommodate new cam2tgt-scaled magnitudes. **Round-8: role changes — becomes an impulse-peak ceiling, not a continuous-bob amplitude cap.**
+
+**Prior round-6 intent (DEPRECATED round-8):** continuous `|d|v|/dt|`-driven amplitude, no impulse trains, no phase-boundary triggers. The "no impulse trains" clause was unauthorized — Bible §8H and ACs #2/#4 canonize the impulse-train shape. The "no phase-boundary triggers" clause remains correct (round-6's signal-source fix is preserved in round-8).
+
+**Round-6 telemetry evidence (superseded):** CRUISE shake peak 0.00090 scene-units — numerically correct for the tuning but visually nil. Round-7 expected peak at same drive level: `0.05 × cam2tgt(30) = 1.5` scene-units (~1600× more), view angle 2.86° at drive=1. **Neither round's telemetry evaluated the impulse-train shape, because neither round implemented it.**
 
 ---
 
@@ -70,6 +127,7 @@ If shake feels too punchy or too gentle, scale `SHAKE_MAX_AMPLITUDE`. If the sec
 - **2026-04-21 — authored** by PM from Max's verbatim design direction 2026-04-21 (quote reproduced in §"Max's design intent" below) and Director's assignment for this follow-up loop.
 - **2026-04-21 — Round 3 amendment** landed by PM on Director direction after Max's feedback on the round-2 recording (commit `8a9161f`). Adds AC #8 (arrival-timing decel trigger — fire on `approaching→orbiting` phase transition, not `travelComplete`) and AC #9 (telemetry recorder for programmatic state inspection). Flags §Round-3 director actions (Bible §8H arrival-compensation clause extension, SYSTEM_CONTRACTS §10.8 trigger-phase refinement). Orbit-phase wobble code stays out-of-scope pending post-fix telemetry capture — hypothesis is the orbit wobble is itself a symptom of the mistimed decel impulse, to be validated or disproved by AC #9's telemetry.
 - **2026-04-21 — Round 4 amendment** landed by PM on Director direction after Max's feedback on the round-3 recording (commit `64a7725`, recording `screenshots/max-recordings/autopilot-shake-redesign-2026-04-21.webm`). Director-audited root cause: shake amplitude expressed in scene-unit absolutes against a 666× orbit-distance spread (Sol moon d=0.06 → star d=40) — a 0.6-unit world-Y bump is a minor nudge at the star and a view-flipping ±84° lurch at a moon. Adds AC #10 (amplitude scale-coupled to current-target orbit-distance, frozen at onset), AC #11 (multi-body stress-test telemetry — extends `window._autopilot.telemetry` samples with `currentTargetOrbitDistance`, `currentTargetBodyRadius`, `cameraToTargetDistance`, `currentTargetType`; adds `window._autopilot.debugArrivalAt('moon')` pathological-case entry point), AC #12 (round-4 recording MUST include at least one moon arrival at the drop path `screenshots/max-recordings/autopilot-shake-redesign-round4-2026-04-21.webm`). Flags §Round-4 director action (SYSTEM_CONTRACTS §10.8 scale-coupling invariant clause). The round-3 recording becomes the before-state against which round-4 is measured.
+- **2026-04-21 — Round 8 pivot amendment** landed by PM on Director audit (held gate at `8a21830`; audit at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md`). Context: rounds 6 and 7 silently replaced the Bible §8H asymmetric log-impulse envelope with a continuous sinusoidal bob; ACs #2 and #4 went to zero in code while staying live in the brief; the round-6 Status block reframed the regression as the design. Pivot picks **Path A — restore canon**, not Path B — there is no basis for a canon-change escalation in Max's round-5 feedback, and Bible §8H (lines 1307–1309) is active canon Max co-authored the same day. Scope: revert the continuous-bob code (`Math.sin(_timeAccum × BOB_FREQUENCY × 2π)`, `Math.abs(dSpeed)` sign-discard); restore round-5-era asymmetric log-impulse-train precompute (`ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]`, `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]`, log-spaced timing); preserve round-6's correct continuous `d|v|/dt` signal source as the event-onset trigger; preserve round-7's `cam2tgt` scale insight but freeze it at impulse onset per round-4 drift-risk 2. ACs #2 and #4 reaffirmed as-is. No Bible or SYSTEM_CONTRACTS edits needed — code drifted, canon didn't. Gate stays held pending Director re-audit of this amendment.
 
 ## Max's design intent (verbatim, 2026-04-21)
 
