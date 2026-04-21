@@ -371,6 +371,35 @@ window._autopilot = {
   getShipPhase:          () => shipChoreographer.currentPhase,
   getAbruptness:         () => shipChoreographer.abruptness,
 
+  /**
+   * AC #11 round-4: force a decel impulse at the orbit-distance of a
+   * body of the specified class (pathological-case reproducer).
+   * @param {'star'|'planet'|'moon'} bodyType
+   */
+  debugArrivalAt(bodyType) {
+    if (!system) return { error: 'no system spawned' };
+    let orbitDist = null;
+    if (bodyType === 'star') {
+      orbitDist = Math.min((system.star?.data?.radius || 5) * 8,
+        system.planets.length > 0 ? system.planets[0].orbitRadius * 0.6 : Infinity);
+    } else if (bodyType === 'planet') {
+      // First planet — representative
+      const p = system.planets[0];
+      if (p) orbitDist = p.planet.data.radius * 2.8;
+    } else if (bodyType === 'moon') {
+      // Find first moon across all planets
+      for (const entry of system.planets) {
+        if (entry.moons && entry.moons.length > 0) {
+          orbitDist = Math.max(entry.moons[0].data.radius * 3, 0.06);
+          break;
+        }
+      }
+    }
+    if (orbitDist === null) return { error: `no ${bodyType} found in system` };
+    shipChoreographer.debugImpulseAtOrbitDistance(orbitDist, -1);
+    return { bodyType, orbitDistance: orbitDist };
+  },
+
   telemetry: {
     /**
      * Begin per-frame sampling of camera + autopilot state. Called by
@@ -416,6 +445,28 @@ function _captureTelemetrySample() {
     shakeOff.y * shakeOff.y +
     shakeOff.z * shakeOff.z,
   );
+
+  // AC #11 round-4: per-sample target-scale fields for ratio-based
+  // scale-coupling verification. `shakeMag / currentTargetOrbitDistance`
+  // must stay bounded across body classes (AC #10 verification).
+  let targetOrbitDist = null;
+  let targetBodyRadius = null;
+  let targetCamDist = null;
+  let targetType = null;
+  const navActive = navSubsystem.isActive;
+  if (navActive && navSubsystem.bodyRef) {
+    targetOrbitDist = +navSubsystem.orbitDistance.toFixed(4);
+    targetBodyRadius = +navSubsystem.bodyRadius.toFixed(4);
+    const bp = navSubsystem.bodyRef.position;
+    const dx = camera.position.x - bp.x;
+    const dy = camera.position.y - bp.y;
+    const dz = camera.position.z - bp.z;
+    targetCamDist = +Math.sqrt(dx * dx + dy * dy + dz * dz).toFixed(4);
+    // Classify target type from autoNav queue (nav subsystem doesn't store type).
+    const stop = autoNav.getCurrentStop();
+    if (stop) targetType = stop.type;
+  }
+
   _telemetryState.samples.push({
     t:           performance.now(),
     camPos:      [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
@@ -425,6 +476,11 @@ function _captureTelemetrySample() {
     shakeOffset: [+shakeOff.x.toFixed(4), +shakeOff.y.toFixed(4), +shakeOff.z.toFixed(4)],
     shakeMag:    +shakeMag.toFixed(4),
     abruptness:  +shipChoreographer.abruptness.toFixed(4),
+    // Round-4 AC #11 extensions:
+    currentTargetOrbitDistance: targetOrbitDist,
+    currentTargetBodyRadius:    targetBodyRadius,
+    cameraToTargetDistance:     targetCamDist,
+    currentTargetType:          targetType,
   });
 }
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };

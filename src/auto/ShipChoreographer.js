@@ -82,8 +82,22 @@ const ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10];
 // Shape [large, medium, small, tiny].
 const DECEL_AMPS = [1.00, 0.55, 0.30, 0.17];
 
-// Scale of the impulse-train peak (scene-units at full-strength event).
-const SHAKE_MAX_AMPLITUDE = 0.6;
+// ── AC #10 (Round 4) — amplitude scale-coupled to target orbitDistance ──
+// Peak impulse amplitude = orbitDistanceAtOnset * SHAKE_AMPLITUDE_FRACTION,
+// frozen at impulse onset (not re-scaled per frame). This keeps the shake
+// proportional to the body being framed: moons (small orbit, small peak),
+// planets (moderate), stars (large orbit → full-scale peak). A round-3
+// scene-unit-absolute amplitude (0.6) produced ±84° view swing at moon
+// orbits (d=0.06) — scale-coupling eliminates the pathological case.
+// TUNABLE during recording review. Suggested range [0.05, 0.15].
+const SHAKE_AMPLITUDE_FRACTION = 0.10;
+
+// Ceiling on scale-coupled peak amplitude (absolute scene units). Prevents
+// a pathologically large orbitDistance (e.g., star orbit = 40 units) from
+// producing a view-breaking bump. Acts as a soft cap: `peakAmp =
+// min(orbitDistance * fraction, SHAKE_MAX_AMPLITUDE)`. Sized to stay
+// visible but not disorienting at star-class orbit distances.
+const SHAKE_MAX_AMPLITUDE = 6.0;
 
 // Secondary-axis amplitude as a fraction of primary. The primary axis
 // (world Y, vertical) carries the main shake; the secondary axis (horizontal
@@ -121,6 +135,7 @@ export class ShipChoreographer {
     // ── Debug-hook flags (AC #4 + AC #5 — shake-verification recordings) ──
     this._abruptnessDebugBoost = 0;
     this._debugForcedSign = 0;          // +1 = accel, -1 = decel, 0 = none
+    this._debugForcedOrbitDist = 0;     // AC #11: debugArrivalAt sets this
 
     // ── Impulse-train state (precomputed at onset, read per frame) ──
     this._shakeActive = false;
@@ -233,39 +248,55 @@ export class ShipChoreographer {
     // the decel trigger (it fires at the traveling→approaching boundary,
     // ~4.5s before the actual arrival — "way earlier than expected" per Max).
     // Ref: docs/WORKSTREAMS/autopilot-shake-redesign-2026-04-21.md §Round-3 AC #8.
+    // ── AC #10: scale factor frozen at onset from current target orbitDistance ──
+    // Read from subsystem — this is the target's authored framing distance,
+    // which tracks body class (moons small, stars large). Drift risk #2
+    // guard: frozen at ONSET, not re-read per frame during ringout.
+    const onsetOrbitDist = this.nav.orbitDistance || 10;
+
     const currPhase = motionFrame.phase;
     if (motionFrame.motionStarted && currPhase === 'traveling') {
-      this._beginImpulseTrain(_velocity, +1, 1.0);
+      this._beginImpulseTrain(_velocity, +1, onsetOrbitDist);
     } else if (this._prevFramePhase === 'approaching' && currPhase === 'orbiting') {
-      this._beginImpulseTrain(_velocity, -1, 1.0);
+      this._beginImpulseTrain(_velocity, -1, onsetOrbitDist);
     }
     this._prevFramePhase = currPhase;
 
     // ── Debug-hook boost (still bypasses for AC #4 + AC #5 recordings) ──
     if (this._abruptnessDebugBoost > 0) {
       const sign = this._debugForcedSign !== 0 ? this._debugForcedSign : -1;
-      this._beginImpulseTrain(_velocity, sign, 1.0);
+      // Debug hook may pre-set _debugForcedOrbitDist (for debugArrivalAt);
+      // otherwise use current-target orbitDistance
+      const debugOrbitDist = this._debugForcedOrbitDist > 0
+        ? this._debugForcedOrbitDist
+        : onsetOrbitDist;
+      this._beginImpulseTrain(_velocity, sign, debugOrbitDist);
       this._abruptnessDebugBoost = 0;
       this._debugForcedSign = 0;
+      this._debugForcedOrbitDist = 0;
     }
 
-    // Abruptness is now the live shake intensity (envelope sample), not a
-    // gating signal. Useful for telemetry / future audio coupling.
-    this._abruptness = this._shakeActive
-      ? Math.min(1, this._shakeOffset.length() / SHAKE_MAX_AMPLITUDE)
+    // Abruptness is now the live shake intensity (envelope sample) normalized
+    // against this train's frozen peak amplitude — so abruptness is [0, 1]
+    // regardless of body class. Useful for telemetry / future audio coupling.
+    this._abruptness = this._shakeActive && this._shakeScale > 0
+      ? Math.min(1, this._shakeOffset.length() / this._shakeScale)
       : 0;
 
     // ── Per-frame impulse-train sample ──
+    // AC #10 (round-4): envelope amplitudes are already pre-scaled in
+    // `_shakeAmps` at onset (`peakAmp = onsetOrbitDistance * fraction`,
+    // clamped to SHAKE_MAX_AMPLITUDE ceiling). Per-frame sample just reads
+    // the envelope value directly — no additional scale multiplication.
     if (this._shakeActive) {
       const tRel = this._timeAccum - this._shakeOnsetTime;
       const envelope = this._sampleImpulseTrain(tRel);
 
       if (envelope === null) {
-        // Train exhausted; end
         this._endImpulseTrain();
       } else {
         // Primary axis (world Y) gets full envelope
-        const primaryMag = envelope * this._shakeScale * SHAKE_MAX_AMPLITUDE;
+        const primaryMag = envelope;
         // Secondary axis (horizontal-perp) gets fractional envelope, same sign
         // → "synchronized minor shake" per Max's design intent
         const secondaryMag = primaryMag * SECONDARY_AXIS_RATIO;
@@ -298,7 +329,23 @@ export class ShipChoreographer {
    *     bobs. If velocity is purely vertical (rare), secondary falls back
    *     to world-X.
    */
-  _beginImpulseTrain(velocity, sign, scale) {
+  /**
+   * @param {THREE.Vector3} velocity — current ship velocity (for axis derivation)
+   * @param {number} sign — +1 accel envelope, -1 decel envelope
+   * @param {number} onsetOrbitDistance — scale factor source (AC #10 round-4).
+   *        Computed as `onsetOrbitDistance * SHAKE_AMPLITUDE_FRACTION`,
+   *        capped at `SHAKE_MAX_AMPLITUDE`, frozen for duration of train.
+   *        Scene-unit-absolute; multiplied into every entry of the impulse
+   *        train's amplitude precompute so the log-decay ratios between
+   *        impulses are preserved (drift risk #1 guard).
+   */
+  _beginImpulseTrain(velocity, sign, onsetOrbitDistance) {
+    // AC #10 scale-coupled peak amplitude (frozen at onset)
+    const peakAmp = Math.min(
+      onsetOrbitDistance * SHAKE_AMPLITUDE_FRACTION,
+      SHAKE_MAX_AMPLITUDE,
+    );
+
     // Primary: world Y (always)
     this._shakePrimaryAxis.set(0, 1, 0);
 
@@ -336,9 +383,15 @@ export class ShipChoreographer {
 
     this._shakeActive = true;
     this._shakeOnsetTime = this._timeAccum;
-    this._shakeScale = scale;
+    // AC #10: whole envelope scales together (drift risk #1 guard).
+    // Pre-multiply every entry of _shakeAmps by the frozen peakAmp so
+    // downstream per-frame reads are already scaled. This preserves
+    // `shakeAmps[n]/shakeAmps[0]` ratios across body classes (the log-
+    // decay between impulses stays the same; only absolute amplitude
+    // changes).
+    this._shakeScale = peakAmp;  // retained for telemetry / debugging
     this._shakeTimes = times;
-    this._shakeAmps = amps.slice();
+    this._shakeAmps = amps.map(a => a * peakAmp);
     this._shakeWidths = widths;
   }
 
@@ -414,6 +467,19 @@ export class ShipChoreographer {
   debugDecelImpulse() {
     this._abruptnessDebugBoost = 1.0;
     this._debugForcedSign = -1;
+    if (this._shakeActive) this._endImpulseTrain();
+  }
+
+  /**
+   * AC #11 round-4: force a decel-envelope impulse at an explicit scale factor.
+   * Used by `window._autopilot.debugArrivalAt(bodyType)` to reproduce the
+   * pathological moon-arrival case without waiting for the natural tour cadence.
+   * @param {number} orbitDistance — the scale factor to apply (scene units)
+   */
+  debugImpulseAtOrbitDistance(orbitDistance, sign = -1) {
+    this._abruptnessDebugBoost = 1.0;
+    this._debugForcedSign = sign;
+    this._debugForcedOrbitDist = orbitDistance;
     if (this._shakeActive) this._endImpulseTrain();
   }
 
