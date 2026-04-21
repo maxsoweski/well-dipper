@@ -85,10 +85,13 @@ const DECEL_AMPS = [1.00, 0.55, 0.30, 0.17];
 // Scale of the impulse-train peak (scene-units at full-strength event).
 const SHAKE_MAX_AMPLITUDE = 0.6;
 
-// Abruptness onset threshold — `_abruptness` must cross this from zero
-// to trigger a new impulse train. Cross-threshold gates against smooth
-// motion re-triggering shake during its own tail.
-const ONSET_TRIGGER_THRESHOLD = 0.05;
+// Secondary-axis amplitude as a fraction of primary. The primary axis
+// (world Y, vertical) carries the main shake; the secondary axis (horizontal
+// perpendicular to velocity) carries a minor synchronized companion shake.
+// Per Max 2026-04-21: "the x-axis is going to be pretty consistent, maybe
+// with minor shakes ... synchronized with the greatest disturbances across
+// the y-axis."
+const SECONDARY_AXIS_RATIO = 0.20;
 
 // ────────────────────────────────────────────────────────────────────────
 
@@ -107,40 +110,31 @@ export class ShipChoreographer {
     this._phase = ShipPhase.IDLE;
     this._fromWarp = false;
 
-    // ── Abruptness signal state (scalar d|v|/dt per §10.8 refinement) ──
+    // ── Position tracking (used for velocity derivation at impulse onset) ──
     this._prevPosition = new THREE.Vector3();
-    this._prevSpeed = 0;               // scalar |velocity| at prev frame
     this._hasPrevPos = false;
-    this._hasPrevSpeed = false;
-    this._dSpeedDt = 0;                // signed: + = accel, - = decel
-    this._abruptness = 0;              // normalized [0, 1]; feeds shake onset
 
-    // d|v|/dt scalar thresholds (TUNABLE during recording review).
-    // Tuned empirically against the WS 2 primary recording post-refactor:
-    //   - Smooth motion: |d|v|/dt| typically < 30 units/s²
-    //   - Warp-exit transition (authored deceleration spike): >>300 units/s²
-    //   - Centripetal during curved CRUISE: ~0 (velocity magnitude nearly
-    //     constant even though direction changes sharply — this is the
-    //     whole point of the signal change: direction change at constant
-    //     speed does not shake).
-    this._abruptnessThreshold = 10000.0;
-    this._abruptnessMax = 100000.0;
+    // Live shake intensity readout (envelope sample, normalized [0,1]).
+    // Informational; future BGM/audio coupling reads this. NOT a gate.
+    this._abruptness = 0;
 
-    // ── Debug boost (AC #5 + AC #4 shake-verification hooks) ──
-    // Debug hooks force an onset event without requiring a real signal
-    // spike. The boost sets `_abruptness = 1.0` once, and forces the
-    // next onset-check branch to use the chosen sign.
+    // ── Debug-hook flags (AC #4 + AC #5 — shake-verification recordings) ──
     this._abruptnessDebugBoost = 0;
-    this._debugForcedSign = 0;         // +1 = accel, -1 = decel, 0 = none
+    this._debugForcedSign = 0;          // +1 = accel, -1 = decel, 0 = none
 
     // ── Impulse-train state (precomputed at onset, read per frame) ──
     this._shakeActive = false;
-    this._shakeOnsetTime = 0;           // absolute time at onset (accumulator seconds)
-    this._shakeAxis = new THREE.Vector3();  // frozen perpendicular-to-velocity unit vector
-    this._shakeScale = 0;               // overall magnitude scale for this train (0..1)
-    this._shakeTimes = [];              // precomputed impulse peak times (relative to onset)
-    this._shakeAmps = [];               // precomputed impulse peak amplitudes (normalized)
-    this._shakeWidths = [];             // precomputed impulse bump widths
+    this._shakeOnsetTime = 0;            // absolute time at onset (accumulator seconds)
+    // Primary axis = world Y (vertical bob — boat cuts up-down through water).
+    // Frozen at onset for the duration of the impulse train.
+    this._shakePrimaryAxis = new THREE.Vector3(0, 1, 0);
+    // Secondary axis = horizontal perpendicular to velocity at onset (cross with Y).
+    // Carries a minor synchronized companion shake at SECONDARY_AXIS_RATIO.
+    this._shakeSecondaryAxis = new THREE.Vector3(1, 0, 0);
+    this._shakeScale = 0;                // overall magnitude scale for this train (0..1)
+    this._shakeTimes = [];               // precomputed impulse peak times (relative to onset)
+    this._shakeAmps = [];                // precomputed impulse peak amplitudes (normalized)
+    this._shakeWidths = [];              // precomputed impulse bump widths
 
     this._timeAccum = 0;                // monotonic time accumulator
 
@@ -203,56 +197,50 @@ export class ShipChoreographer {
       else this._phase = ShipPhase.IDLE;
     }
 
-    // ── Compute d|v|/dt (scalar speed derivative) per §10.8 ──
+    // ── Track velocity (still used for axis derivation at onset) ──
     const currPos = motionFrame.position;
-    let signedDSpeed = 0;  // signed d|v|/dt this frame
-    if (deltaTime > 1e-6) {
-      if (this._hasPrevPos) {
-        // Velocity vector (for axis derivation + speed magnitude)
-        _velocity.set(
-          (currPos.x - this._prevPosition.x) / deltaTime,
-          (currPos.y - this._prevPosition.y) / deltaTime,
-          (currPos.z - this._prevPosition.z) / deltaTime,
-        );
-        const currSpeed = _velocity.length();
+    if (deltaTime > 1e-6 && this._hasPrevPos) {
+      _velocity.set(
+        (currPos.x - this._prevPosition.x) / deltaTime,
+        (currPos.y - this._prevPosition.y) / deltaTime,
+        (currPos.z - this._prevPosition.z) / deltaTime,
+      );
+    } else {
+      _velocity.set(0, 0, 0);
+    }
+    this._prevPosition.copy(currPos);
+    this._hasPrevPos = true;
 
-        if (this._hasPrevSpeed) {
-          signedDSpeed = (currSpeed - this._prevSpeed) / deltaTime;
-          this._dSpeedDt = signedDSpeed;
-
-          // Normalize |d|v|/dt| to [0, 1] via threshold/max tuning.
-          const absDSpeed = Math.abs(signedDSpeed);
-          const range = this._abruptnessMax - this._abruptnessThreshold;
-          const normalized = Math.max(0, (absDSpeed - this._abruptnessThreshold) / range);
-          this._abruptness = Math.min(1, normalized);
-        }
-
-        this._prevSpeed = currSpeed;
-        this._hasPrevSpeed = true;
-      }
-      this._prevPosition.copy(currPos);
-      this._hasPrevPos = true;
+    // ── Phase-boundary onset detection (per Max 2026-04-21 redesign) ──
+    // Trigger shake at the MOMENTS where speed magnitude changes onset:
+    //   - motionStarted entering 'traveling' = "just began accelerating"  → +1 sign
+    //   - travelComplete one-shot           = "just began decelerating"  → -1 sign
+    // These are the felt-experience moments — Max: "right when you're first
+    // accelerating, and when you begin braking, or decelerating." Sustained
+    // smooth motion in between does NOT shake; the discontinuity-onset is
+    // the drive's compensation moment.
+    if (motionFrame.motionStarted && motionFrame.phase === 'traveling') {
+      // Begin acceleration impulse
+      this._beginImpulseTrain(_velocity, +1, 1.0);
+    } else if (motionFrame.travelComplete) {
+      // Begin deceleration impulse (subsystem is internally about to enter
+      // approach or orbit phase — the ship "hits the wall of ether")
+      this._beginImpulseTrain(_velocity, -1, 1.0);
     }
 
-    // ── Debug boost (forces onset regardless of real signal) ──
+    // ── Debug-hook boost (still bypasses for AC #4 + AC #5 recordings) ──
     if (this._abruptnessDebugBoost > 0) {
-      this._abruptness = Math.max(this._abruptness, this._abruptnessDebugBoost);
-      this._abruptnessDebugBoost = 0;  // one-shot; consumed here
+      const sign = this._debugForcedSign !== 0 ? this._debugForcedSign : -1;
+      this._beginImpulseTrain(_velocity, sign, 1.0);
+      this._abruptnessDebugBoost = 0;
+      this._debugForcedSign = 0;
     }
 
-    // ── Onset detection: new impulse train if _abruptness crosses trigger ──
-    // Re-trigger only if we're NOT currently in an active shake (events don't
-    // stack) OR if a new debug boost just forced a higher onset.
-    if (!this._shakeActive && this._abruptness >= ONSET_TRIGGER_THRESHOLD) {
-      let sign;
-      if (this._debugForcedSign !== 0) {
-        sign = this._debugForcedSign;
-        this._debugForcedSign = 0;  // consumed
-      } else {
-        sign = signedDSpeed >= 0 ? 1 : -1;
-      }
-      this._beginImpulseTrain(_velocity, sign, this._abruptness);
-    }
+    // Abruptness is now the live shake intensity (envelope sample), not a
+    // gating signal. Useful for telemetry / future audio coupling.
+    this._abruptness = this._shakeActive
+      ? Math.min(1, this._shakeOffset.length() / SHAKE_MAX_AMPLITUDE)
+      : 0;
 
     // ── Per-frame impulse-train sample ──
     if (this._shakeActive) {
@@ -263,9 +251,14 @@ export class ShipChoreographer {
         // Train exhausted; end
         this._endImpulseTrain();
       } else {
-        this._shakeOffset.copy(this._shakeAxis).multiplyScalar(
-          envelope * this._shakeScale * SHAKE_MAX_AMPLITUDE,
-        );
+        // Primary axis (world Y) gets full envelope
+        const primaryMag = envelope * this._shakeScale * SHAKE_MAX_AMPLITUDE;
+        // Secondary axis (horizontal-perp) gets fractional envelope, same sign
+        // → "synchronized minor shake" per Max's design intent
+        const secondaryMag = primaryMag * SECONDARY_AXIS_RATIO;
+        this._shakeOffset
+          .copy(this._shakePrimaryAxis).multiplyScalar(primaryMag)
+          .addScaledVector(this._shakeSecondaryAxis, secondaryMag);
       }
     }
 
@@ -279,28 +272,37 @@ export class ShipChoreographer {
   // ────────────────────────────────────────────────────────────────────
 
   /**
-   * Begin a new impulse-train event. Freezes the axis, sign, onset time;
-   * precomputes the train's impulse times + amplitudes + widths per
-   * the log envelope parameters.
+   * Begin a new impulse-train event. Freezes the axes, sign, onset time;
+   * precomputes the train's impulse times + amplitudes + widths.
+   *
+   * Axes (per Max 2026-04-21 redesign):
+   *   - Primary axis = world Y (vertical). The boat-cuts-through-water
+   *     analogy: forward motion is on the horizontal plane, the bob-shake
+   *     is up-and-down. Frozen at world-up regardless of ship orientation.
+   *   - Secondary axis = horizontal perpendicular to velocity. Carries a
+   *     minor synchronized companion shake at SECONDARY_AXIS_RATIO of
+   *     primary amplitude — the ship rolls slightly side-to-side as it
+   *     bobs. If velocity is purely vertical (rare), secondary falls back
+   *     to world-X.
    */
   _beginImpulseTrain(velocity, sign, scale) {
-    // ── Pick perpendicular-to-velocity axis (stable, in the world-up plane) ──
-    // `velocity × worldUp` gives a horizontal sideways vector. If velocity
-    // is nearly parallel to world-up, fall back to a world-X perpendicular.
-    const speed = velocity.length();
-    if (speed > 1e-4) {
-      _tmpVec.copy(velocity).divideScalar(speed);  // unit velocity
-      _perp.crossVectors(_tmpVec, new THREE.Vector3(0, 1, 0));
-      if (_perp.lengthSq() < 1e-6) {
-        // Velocity parallel to Y — use X-axis fallback
-        _perp.crossVectors(_tmpVec, new THREE.Vector3(1, 0, 0));
-      }
+    // Primary: world Y (always)
+    this._shakePrimaryAxis.set(0, 1, 0);
+
+    // Secondary: horizontal perpendicular to ship's horizontal velocity component.
+    // Project velocity onto the X-Z plane, then take cross with Y to get
+    // a stable horizontal sideways vector.
+    const horizSpeedSq = velocity.x * velocity.x + velocity.z * velocity.z;
+    if (horizSpeedSq > 1e-6) {
+      const horizMag = Math.sqrt(horizSpeedSq);
+      _tmpVec.set(velocity.x / horizMag, 0, velocity.z / horizMag);
+      _perp.crossVectors(_tmpVec, this._shakePrimaryAxis);  // perpendicular in X-Z plane
       _perp.normalize();
     } else {
-      // No velocity known — default to world-X (imparts a left-right shake)
+      // No horizontal velocity — fall back to world-X
       _perp.set(1, 0, 0);
     }
-    this._shakeAxis.copy(_perp);
+    this._shakeSecondaryAxis.copy(_perp);
 
     // ── Pick amplitude sequence per sign ──
     const amps = sign >= 0 ? ACCEL_AMPS : DECEL_AMPS;
@@ -424,10 +426,7 @@ export class ShipChoreographer {
 
   _resetSignal() {
     this._hasPrevPos = false;
-    this._hasPrevSpeed = false;
     this._prevPosition.set(0, 0, 0);
-    this._prevSpeed = 0;
-    this._dSpeedDt = 0;
     this._abruptness = 0;
   }
 }
