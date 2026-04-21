@@ -77,11 +77,18 @@ export class ShipChoreographer {
     this._abruptness = 0;              // normalized [0, 1]; consumed by shake
     this._abruptnessDebugBoost = 0;    // debug-hook additive (AC #5 shake-verify)
 
-    // Thresholds — scene-units/s² (tune during recording review if needed).
-    // Conservative defaults: normal cinematic motion has accelerations well
-    // under 5 units/s². Debug hook overrides via _abruptnessDebugBoost.
-    this._abruptnessThreshold = 5.0;
-    this._abruptnessMax = 50.0;
+    // Thresholds — scene-units/s² (TUNABLE during recording review).
+    // Initial empirical values from WS 2 2026-04-21 capture:
+    //   - Smooth Hermite travel: peak ~20–40 units/s² at arrival blend
+    //   - Orbit around star/planet: <2 units/s² (centripetal, low)
+    //   - Warp-exit deceleration: >>500 units/s² (genuinely abrupt)
+    //   - Debug hook (AC #5): abruptness=1.0 directly, bypasses threshold
+    // Threshold=50 places default motion at ≈0 abruptness (AC #5's "zero
+    // shake during smooth motion" invariant). Max may tune looser (lower
+    // threshold → more sensitive shake) or tighter (higher threshold →
+    // shake reserved for extreme events only) during recording review.
+    this._abruptnessThreshold = 50.0;
+    this._abruptnessMax = 500.0;
 
     // ── Shake offset (additive perturbation vector) ──
     this._shakeOffset = new THREE.Vector3();
