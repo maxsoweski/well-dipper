@@ -2,7 +2,13 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX 8a9161f` — single-axis log-impulse shake mechanism implemented per Max's pebble/boat/ether design intent, with three round-2 fixes after Max's first-recording feedback (vertical-axis primary, phase-boundary trigger, synchronized-minor-secondary horizontal axis). Awaiting Max's verdict on the recording. Combined Shipped flip with WS 2 (`autopilot-ship-axis-motion-2026-04-20.md` currently `VERIFIED_PENDING_MAX cfd6df0`).
+`VERIFIED_PENDING_MAX 64a7725` — round-3 fixes landed (AC #8 arrival-timing decel trigger + AC #9 telemetry recorder). Awaiting Max's verdict on the new recording. Combined Shipped flip with WS 2 (`autopilot-ship-axis-motion-2026-04-20.md` currently `VERIFIED_PENDING_MAX cfd6df0`).
+
+**Round-3 telemetry evidence (34s Sol capture, post-`64a7725`):**
+- **Decel fires at arrival, not halfway.** Phase transition `approaching → orbiting` at t=19.71s; decel impulse fires at t=19.78s (70ms after arrival). AC #8 verified.
+- **Sustained orbit = zero shake.** 4.4s window of STATION (t=20.6 to t=25.0): zero shake events. Residual-wobble hypothesis from round 2 disproven.
+- **CRUISE + APPROACH = zero shake.** 2623 CRUISE samples + 971 APPROACH samples all at `shakeMag=0`.
+- **Debug hooks fire correctly.** `debugAccelImpulse()` at t=25.07s triggers crescendo-then-fade; `debugDecelImpulse()` at t=29.07s triggers impact-then-decay.
 
 **Commit arc (3 commits):**
 - `7a7370f` — `feat(autopilot): single-axis log-impulse shake per Max's pebble/boat/ether design` — first redesign pass. Log-spaced impulse train, asymmetric accel/decel amplitude envelopes, scalar-`d|v|/dt` trigger, two new debug hooks.
