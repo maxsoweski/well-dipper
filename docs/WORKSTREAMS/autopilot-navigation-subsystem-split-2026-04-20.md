@@ -2,8 +2,27 @@
 
 ## Status
 
-Scoped — awaiting working-Claude execution. First of four sequential
-workstreams delivering V1 autopilot. See
+VERIFIED_PENDING_MAX `c394e1e` — refactor landed, AC #1–#7 verified
+by working-Claude + Director audit. Awaiting Max's evaluation of the
+two regression recordings (pre/post) before flip to Shipped.
+
+Regression evidence:
+- Pre-refactor: `screenshots/max-recordings/autopilot-navigation-subsystem-split-2026-04-20-before.webm`
+- Post-refactor: `screenshots/max-recordings/autopilot-navigation-subsystem-split-2026-04-20-after.webm`
+- Contact sheets (5×2, 1 fps): `before-contact-sheet.png` / `after-contact-sheet.png`
+
+Capture protocol: D-hold splash → Sol spawn → explicit
+`camera.position.set(100, 40, 200)` + `lookAt(0, 0, 0)` → seeded
+Math.random (LCG, seed=42, first call = 0 → star picked as first stop)
+→ `_startFlythrough()` + recorder start in same microtask → 10s capture.
+Both pre and post ran under identical controls.
+
+Measured equivalence: travelDuration = 6.74s in both; phase
+sequence TRAVEL(t=1–6) → APPROACH(t=7+) in both; contact sheets
+show matching star trajectory + 4-point glint development +
+distance progression cell-by-cell.
+
+First of four sequential workstreams delivering V1 autopilot. See
 `docs/FEATURES/autopilot.md` §"Workstreams" for the full sequence.
 
 **Revision history:**
