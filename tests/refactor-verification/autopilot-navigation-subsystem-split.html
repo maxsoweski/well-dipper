@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Refactor Verification — Autopilot Navigation Subsystem Split</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0a;
+      color: #0f0;
+      font-family: 'DotGothic16', 'Courier New', monospace;
+      padding: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 16px; margin-bottom: 12px; color: #6f6; }
+    h2 { font-size: 14px; margin: 16px 0 8px 0; color: #4f4; }
+    .btn {
+      background: rgba(0, 255, 0, 0.08);
+      border: 1px solid rgba(0, 255, 0, 0.5);
+      color: #0f0;
+      font-family: inherit; font-size: 12px;
+      padding: 6px 12px; cursor: pointer;
+      margin: 2px 4px 2px 0;
+    }
+    .btn:hover { background: rgba(0, 255, 0, 0.2); }
+    .btn.pass { border-color: #0f0; color: #0f0; }
+    .btn.fail { border-color: #f00; color: #f00; }
+    pre {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid #333;
+      padding: 10px;
+      margin: 8px 0;
+      max-height: 400px;
+      overflow: auto;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .summary { padding: 10px; border: 1px solid #333; margin: 10px 0; }
+    .summary.pass { border-color: #0f0; }
+    .summary.fail { border-color: #f44; color: #f88; }
+    .mode-banner {
+      padding: 6px 12px; border: 1px solid #444;
+      margin-bottom: 12px; background: rgba(255, 255, 0, 0.05);
+      color: #ff8;
+    }
+  </style>
+</head>
+<body>
+  <h1>Refactor Verification — Autopilot Navigation Subsystem Split</h1>
+  <div id="mode-banner" class="mode-banner">Detecting current code mode…</div>
+
+  <h2>Run scenarios</h2>
+  <div>
+    <button class="btn" onclick="_harness.run('scenario1', _harness.getSlot())">Scenario 1 — Engage from free camera → star (with next-body hint)</button>
+    <button class="btn" onclick="_harness.run('scenario2', _harness.getSlot())">Scenario 2 — Warp arrival → star</button>
+    <button class="btn" onclick="_harness.run('scenario3', _harness.getSlot())">Scenario 3 — Manual burn to planet (no approach, hold orbit)</button>
+  </div>
+
+  <h2>Slot selection (which run this captures)</h2>
+  <div>
+    <label><input type="radio" name="slot" value="before" id="slot-before"> before (pre-refactor)</label>
+    <label><input type="radio" name="slot" value="after" checked id="slot-after"> after (post-refactor)</label>
+  </div>
+
+  <h2>Diff</h2>
+  <div>
+    <button class="btn" onclick="_harness.diffAll()">Diff all scenarios (before vs after)</button>
+    <button class="btn" onclick="_harness.clearStorage()">Clear stored telemetry</button>
+  </div>
+
+  <div id="output"></div>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    const LOG = (msg, cls='') => {
+      const el = document.createElement('pre');
+      if (cls) el.className = cls;
+      el.textContent = msg;
+      document.getElementById('output').appendChild(el);
+      console.log(msg);
+    };
+
+    const SUMMARY = (msg, pass) => {
+      const el = document.createElement('div');
+      el.className = 'summary ' + (pass ? 'pass' : 'fail');
+      el.textContent = msg;
+      document.getElementById('output').appendChild(el);
+    };
+
+    // ── Detect mode: pre-refactor (no NavigationSubsystem.js) or post-refactor ──
+    let mode = 'unknown';
+    let NavigationSubsystem = null;
+    let FlythroughCamera = null;
+
+    // Dynamic imports with @vite-ignore so Vite skips static analysis
+    // (NavigationSubsystem.js doesn't exist in pre-refactor mode; Vite
+    // would fail the HTML parse at compile time without the hint).
+    const navPath = '../../src/auto/NavigationSubsystem.js';
+    const fcPath = '../../src/auto/FlythroughCamera.js';
+    try {
+      const navMod = await import(/* @vite-ignore */ navPath);
+      NavigationSubsystem = navMod.NavigationSubsystem;
+      mode = 'post-refactor';
+    } catch (e) {
+      mode = 'pre-refactor';
+    }
+
+    const fcMod = await import(/* @vite-ignore */ fcPath);
+    FlythroughCamera = fcMod.FlythroughCamera;
+
+    document.getElementById('mode-banner').textContent =
+      `Mode: ${mode.toUpperCase()} (${mode === 'post-refactor' ? 'NavigationSubsystem + reduced FlythroughCamera' : 'Original FlythroughCamera monolith'})`;
+
+    // ── Seeded RNG ──
+    function withSeededRandom(fn, seed = 42) {
+      const realRandom = Math.random;
+      let s = seed;
+      Math.random = () => {
+        s = (s * 1664525 + 1013904223) >>> 0;
+        return s / 0x100000000;
+      };
+      try { return fn(); }
+      finally { Math.random = realRandom; }
+    }
+
+    // ── Scenario definitions ──
+    // Each scenario returns a function that, given an FC instance and optional
+    // nav-subsystem ref, kicks off the initial motion. The driver loop then
+    // steps update(dt) for N frames.
+
+    function makeStubCamera() {
+      const cam = new THREE.PerspectiveCamera(70, 1.78, 0.01, 10000);
+      cam.position.set(100, 40, 200);
+      cam.lookAt(0, 0, 0);
+      cam.updateMatrixWorld(true);
+      return cam;
+    }
+
+    function makeStubMesh(x, y, z) {
+      const m = new THREE.Object3D();
+      m.position.set(x, y, z);
+      m.updateMatrixWorld(true);
+      return m;
+    }
+
+    const SCENARIOS = {
+      scenario1: {
+        name: 'Engage from free camera → star (with next-body hint)',
+        // Models startFlythrough: tour pickup from free camera, travel to star,
+        // approach, slow orbit. nextBody hint is the first planet.
+        setup: () => {
+          const camera = makeStubCamera();
+          const star = makeStubMesh(0, 0, 0);
+          const nextPlanet = makeStubMesh(3000, 0, 0);
+
+          let fc, nav;
+          if (mode === 'post-refactor') {
+            nav = new NavigationSubsystem();
+            fc = new FlythroughCamera(camera, nav);
+            nav.beginMotion({
+              fromPosition: camera.position.clone(),
+              fromOrientation: camera.quaternion.clone(),
+              fromOrbitBody: null,
+              toBody: star,
+              toOrbitDistance: 40,
+              toBodyRadius: 4.65,
+              nextBody: nextPlanet,
+              nextOrbitDistance: 2.8,
+              arrivalOptions: {
+                approachFirst: true,
+                slowOrbit: true,
+                approachOrbitDuration: 35,
+              },
+            });
+          } else {
+            fc = new FlythroughCamera(camera);
+            // Mirror main.js ordering: beginTravelFrom first (sets
+            // nextBodyRef = target internally), THEN overwrite with the
+            // next-next body hint. See main.js startFlythrough L3890-ish.
+            fc.beginTravelFrom(star, 40, 4.65);
+            fc.nextBodyRef = nextPlanet;
+            fc.nextOrbitDistance = 2.8;
+            // Pre-refactor: simulate main.js's autopilot loop —
+            // on travelComplete → beginApproach(same body, same params, linger*mult=35).
+            fc._pendingApproach = { body: star, dist: 40, radius: 4.65, duration: 35 };
+          }
+          return { camera, fc, nav };
+        },
+      },
+
+      scenario2: {
+        name: 'Warp arrival → star (3s coast)',
+        setup: () => {
+          const camera = makeStubCamera();
+          const star = makeStubMesh(0, 0, 0);
+          const nextPlanet = makeStubMesh(3000, 0, 0);
+
+          let fc, nav;
+          if (mode === 'post-refactor') {
+            nav = new NavigationSubsystem();
+            fc = new FlythroughCamera(camera, nav);
+            nav.beginMotion({
+              fromPosition: camera.position.clone(),
+              fromOrientation: camera.quaternion.clone(),
+              fromOrbitBody: null,
+              toBody: star,
+              toOrbitDistance: 40,
+              toBodyRadius: 4.65,
+              nextBody: nextPlanet,
+              nextOrbitDistance: 2.8,
+              arrivalOptions: {
+                approachFirst: true,
+                slowOrbit: true,
+                approachOrbitDuration: 35,
+              },
+              launchOptions: { warpExit: true },
+            });
+          } else {
+            fc = new FlythroughCamera(camera);
+            fc.beginTravelFrom(star, 40, 4.65, { warpArrival: true });
+            fc.nextBodyRef = nextPlanet;
+            fc.nextOrbitDistance = 2.8;
+            fc._pendingApproach = { body: star, dist: 40, radius: 4.65, duration: 35 };
+          }
+          return { camera, fc, nav };
+        },
+      },
+
+      scenario3: {
+        name: 'Manual burn to planet (no approach, hold orbit)',
+        setup: () => {
+          const camera = makeStubCamera();
+          const planet = makeStubMesh(500, 0, 100);
+
+          let fc, nav;
+          if (mode === 'post-refactor') {
+            nav = new NavigationSubsystem();
+            fc = new FlythroughCamera(camera, nav);
+            nav.beginMotion({
+              fromPosition: camera.position.clone(),
+              fromOrientation: camera.quaternion.clone(),
+              fromOrbitBody: null,
+              toBody: planet,
+              toOrbitDistance: 3,
+              toBodyRadius: 1,
+              // Mirror pre-refactor manual-burn: nextBody = target (accidental
+              // assignment via beginTravelFrom's param naming; never overridden
+              // by main.js in focusPlanet/Star/Moon).
+              nextBody: planet,
+              nextOrbitDistance: 3,
+              arrivalOptions: {
+                approachFirst: false,
+                holdOnly: true,
+                slowOrbit: true,
+                orbitDuration: 99999,
+              },
+            });
+          } else {
+            fc = new FlythroughCamera(camera);
+            fc.beginTravelFrom(planet, 3, 1);
+            // Pre-refactor manual burn relies on main.js's travelComplete
+            // handler to call beginOrbit. We simulate that inline: step
+            // until travelComplete, then beginOrbit with holdOnly.
+            // We'll handle this in the driver — see runScenario.
+            fc._pendingHoldOrbit = { body: planet, dist: 3, radius: 1 };
+          }
+          return { camera, fc, nav };
+        },
+      },
+    };
+
+    // ── Driver loop ──
+
+    const DT = 1 / 60;
+    const N_FRAMES = 600; // 10 seconds of simulated motion
+
+    function runScenario(scenarioId) {
+      const scenario = SCENARIOS[scenarioId];
+      if (!scenario) throw new Error(`no scenario: ${scenarioId}`);
+
+      return withSeededRandom(() => {
+        const { camera, fc, nav } = scenario.setup();
+
+        const telemetry = [];
+
+        for (let i = 0; i < N_FRAMES; i++) {
+          const result = fc.update(DT);
+
+          // PRE-REFACTOR: simulate main.js's autopilot loop's response to
+          // one-shot transitions, since pre-refactor FlythroughCamera doesn't
+          // self-transition and main.js isn't in the harness.
+          if (mode === 'pre-refactor' && result.travelComplete) {
+            if (fc._pendingApproach) {
+              const { body, dist, radius, duration } = fc._pendingApproach;
+              fc.beginApproach(body, dist, radius, duration);
+              fc._pendingApproach = null;
+            } else if (fc._pendingHoldOrbit) {
+              const { body, dist, radius } = fc._pendingHoldOrbit;
+              fc.beginOrbit(body, dist, radius, 99999, { slowOrbit: true, holdOnly: true });
+              fc._pendingHoldOrbit = null;
+            }
+          }
+
+          // POST-REFACTOR: the subsystem handles travel → approach/orbit
+          // transitions internally (beginMotion specified the arrival
+          // behavior upfront); no external trigger needed.
+
+          // Capture camera state (the thing both versions drive)
+          const cp = camera.position;
+          const cq = camera.quaternion;
+          // Forward direction (encodes where camera is looking)
+          const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cq);
+
+          telemetry.push({
+            frame: i,
+            t: +(i * DT).toFixed(6),
+            pos: [+cp.x.toFixed(6), +cp.y.toFixed(6), +cp.z.toFixed(6)],
+            quat: [+cq.x.toFixed(6), +cq.y.toFixed(6), +cq.z.toFixed(6), +cq.w.toFixed(6)],
+            fwd: [+fwd.x.toFixed(6), +fwd.y.toFixed(6), +fwd.z.toFixed(6)],
+            travelComplete: !!result.travelComplete,
+            orbitComplete: !!result.orbitComplete,
+            targetingReady: !!result.targetingReady,
+          });
+        }
+
+        return { scenario: scenarioId, mode, frames: N_FRAMES, telemetry };
+      });
+    }
+
+    // ── Storage + diff ──
+
+    const STORAGE_KEY = (slot, scenarioId) => `ws1-telem.${slot}.${scenarioId}`;
+
+    function storeTelemetry(slot, scenarioId, data) {
+      try {
+        localStorage.setItem(STORAGE_KEY(slot, scenarioId), JSON.stringify(data));
+        return true;
+      } catch (e) {
+        LOG(`localStorage write failed: ${e.message}`);
+        return false;
+      }
+    }
+
+    function loadTelemetry(slot, scenarioId) {
+      const raw = localStorage.getItem(STORAGE_KEY(slot, scenarioId));
+      return raw ? JSON.parse(raw) : null;
+    }
+
+    const EPSILON = 1e-6;
+
+    function diffTelemetry(before, after) {
+      if (!before || !after) return { error: 'missing telemetry' };
+      if (before.telemetry.length !== after.telemetry.length) {
+        return {
+          error: `frame count mismatch: before=${before.telemetry.length} after=${after.telemetry.length}`,
+        };
+      }
+
+      const divergent = [];
+      const numericFields = ['pos', 'quat', 'fwd'];
+      const boolFields = ['travelComplete', 'orbitComplete', 'targetingReady'];
+
+      for (let i = 0; i < before.telemetry.length; i++) {
+        const b = before.telemetry[i];
+        const a = after.telemetry[i];
+
+        for (const field of numericFields) {
+          const bv = b[field], av = a[field];
+          for (let j = 0; j < bv.length; j++) {
+            if (Math.abs(bv[j] - av[j]) > EPSILON) {
+              divergent.push({
+                frame: i, t: b.t, field: `${field}[${j}]`,
+                before: bv[j], after: av[j], delta: av[j] - bv[j],
+              });
+            }
+          }
+        }
+
+        for (const field of boolFields) {
+          if (b[field] !== a[field]) {
+            divergent.push({
+              frame: i, t: b.t, field,
+              before: b[field], after: a[field],
+            });
+          }
+        }
+      }
+
+      return {
+        frameCount: before.telemetry.length,
+        divergent,
+        firstDivergentFrame: divergent[0]?.frame ?? null,
+      };
+    }
+
+    // ── Public API ──
+
+    window._harness = {
+      run(scenarioId, slot) {
+        slot = slot || 'after';
+        LOG(`\n=== Running ${scenarioId} (${SCENARIOS[scenarioId].name}) → slot '${slot}' | mode=${mode} ===`);
+        const result = runScenario(scenarioId);
+        const ok = storeTelemetry(slot, scenarioId, result);
+        LOG(`Captured ${result.frames} frames. First 3: ` +
+          JSON.stringify(result.telemetry.slice(0, 3), null, 2));
+        LOG(`Last frame: ` + JSON.stringify(result.telemetry[result.telemetry.length - 1], null, 2));
+        LOG(`Stored at localStorage key '${STORAGE_KEY(slot, scenarioId)}' (${ok ? 'ok' : 'FAILED'})`);
+        return result;
+      },
+
+      diff(scenarioId) {
+        const before = loadTelemetry('before', scenarioId);
+        const after = loadTelemetry('after', scenarioId);
+        LOG(`\n--- Diff ${scenarioId} ---`);
+        if (!before) { LOG(`NO BEFORE telemetry stored. Run with slot=before first.`); return; }
+        if (!after)  { LOG(`NO AFTER telemetry stored. Run with slot=after first.`); return; }
+        if (before.mode === after.mode) {
+          LOG(`⚠️ Both runs were captured in ${before.mode} mode. Diff will show 0 divergences trivially. You need to git-dance between runs so one is pre-refactor and one is post.`);
+        }
+        const r = diffTelemetry(before, after);
+        if (r.error) { LOG(`DIFF ERROR: ${r.error}`); return r; }
+        const pass = r.divergent.length === 0;
+        SUMMARY(
+          `${scenarioId}: ${pass ? 'PASS' : 'FAIL'} — ${r.divergent.length} divergent field(s) across ${r.frameCount} frames`
+            + (r.firstDivergentFrame !== null ? `; first divergence at frame ${r.firstDivergentFrame}` : ''),
+          pass,
+        );
+        if (!pass) {
+          LOG(`First 10 divergences:\n` + JSON.stringify(r.divergent.slice(0, 10), null, 2));
+        }
+        return r;
+      },
+
+      diffAll() {
+        LOG(`\n======= Running all scenario diffs =======`);
+        const results = {};
+        for (const scenarioId of Object.keys(SCENARIOS)) {
+          results[scenarioId] = this.diff(scenarioId);
+        }
+        const totalDivergent = Object.values(results)
+          .reduce((sum, r) => sum + (r?.divergent?.length || 0), 0);
+        const allPass = totalDivergent === 0;
+        SUMMARY(
+          `\n>>> OVERALL: ${allPass ? 'PASS' : 'FAIL'} — ${totalDivergent} divergent field(s) across ${Object.keys(SCENARIOS).length} scenarios <<<`,
+          allPass,
+        );
+        return results;
+      },
+
+      getSlot() {
+        const radio = document.querySelector('input[name="slot"]:checked');
+        return radio ? radio.value : 'after';
+      },
+
+      clearStorage() {
+        for (const slot of ['before', 'after']) {
+          for (const scenarioId of Object.keys(SCENARIOS)) {
+            localStorage.removeItem(STORAGE_KEY(slot, scenarioId));
+          }
+        }
+        LOG(`Cleared all ws1-telem.* localStorage keys.`);
+      },
+
+      runAll(slot) {
+        slot = slot || 'after';
+        const results = {};
+        for (const scenarioId of Object.keys(SCENARIOS)) {
+          results[scenarioId] = this.run(scenarioId, slot);
+        }
+        return results;
+      },
+
+      mode, SCENARIOS,
+    };
+
+    LOG(`Harness ready in ${mode} mode. Available: _harness.run(id, slot), _harness.diff(id), _harness.diffAll(), _harness.runAll(slot), _harness.clearStorage().`);
+    LOG(`Scenarios: ${Object.keys(SCENARIOS).join(', ')}`);
+  </script>
+</body>
+</html>

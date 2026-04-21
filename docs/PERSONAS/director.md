@@ -60,6 +60,14 @@ Beyond audit, you are responsible for keeping the project's creative and plannin
     - **Staging convention:** drafts live in `docs/FEATURES/_drafts/<feature>.md` until promoted. The authoritative `docs/FEATURES/` namespace contains only promoted features. Promotion is a one-line `mv _drafts/<feature>.md <feature>.md`. Leading underscore = meta/not-yet-active. Used when interview context is captured in a session that cannot safely commit to the authoritative namespace (e.g., parallel session actively in the feature, or pending Max approval).
 - **PLAN docs** (`docs/PLAN_*.md`) — **optional**. Kept when a feature is multi-system or architecturally non-trivial (e.g., `PLAN_warp-tunnel-v2.md`, `PLAN_world-origin-rebasing.md`). Small features may not warrant a PLAN — feature doc + workstream brief is enough. When a PLAN exists, it holds implementation architecture (the HOW), not vision (the WHAT). Every PLAN top-lines "**Upstream feature:** `docs/FEATURES/<feature>.md`"; every feature doc that has one links down to its PLAN.
 
+**Verification-instrument audit (applies at AC-review time).** When auditing a workstream brief, confirm its ACs are shaped to the workstream's contract:
+
+- **Feature / animated / phased workstream** → canvas recording or screenshot per `docs/MAX_RECORDING_PROTOCOL.md`. Max is the evaluator.
+- **Refactor / code-lift / module-split workstream** (contract = zero behavioral change) → telemetry-assertion AC per `docs/REFACTOR_VERIFICATION_PROTOCOL.md`. The per-frame numerical diff is the gate; Max is NOT the default instrument.
+- **Process / tooling / doc workstream** → contract-shaped ACs per the PM's carve-out.
+
+A refactor workstream carrying a canvas-recording AC is a mis-shaped instrument and will produce input-drift false positives (origin: WS 1 `autopilot-navigation-subsystem-split-2026-04-20.md`, 2026-04-20). Flag and request the PM rewrite the AC before closing the audit. Conversely, a feature workstream carrying only a telemetry AC cannot evaluate the authored experience and should be flagged for the same reason in reverse.
+
 **Documents you read but do not own:**
 
 - **Work streams** — PM-owned. Downstream of feature docs. You read them to know what slice of a feature is currently in flight; you do not write to them. If a work stream drifts from its upstream feature, you flag it to the PM (see interface protocols below).

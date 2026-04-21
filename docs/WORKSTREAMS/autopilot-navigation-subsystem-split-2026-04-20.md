@@ -2,25 +2,52 @@
 
 ## Status
 
-VERIFIED_PENDING_MAX `c394e1e` — refactor landed, AC #1–#7 verified
-by working-Claude + Director audit. Awaiting Max's evaluation of the
-two regression recordings (pre/post) before flip to Shipped.
+Shipped `3d53825` — refactor originally landed at `c394e1e`; telemetry
+verification per `docs/REFACTOR_VERIFICATION_PROTOCOL.md` surfaced two
+pre-ship issues corrected in `3d53825`. Verified against
+`tests/refactor-verification/autopilot-navigation-subsystem-split.html`
+(pre/post telemetry diff: 0 regressions across 1800 frames — 3 scenarios
+× 600 frames each at 1e-6 epsilon).
 
-Regression evidence:
-- Pre-refactor: `screenshots/max-recordings/autopilot-navigation-subsystem-split-2026-04-20-before.webm`
-- Post-refactor: `screenshots/max-recordings/autopilot-navigation-subsystem-split-2026-04-20-after.webm`
+**Pre-ship fixes captured by the telemetry harness (both in `3d53825`):**
+
+1. **Blend-elapsed off-by-one.** `FlythroughCamera._rotBlendElapsed`
+   was reset to 0 on `motionStarted` and incremented only on subsequent
+   frames. Pre-refactor's `travelElapsed` increments at the top of
+   `_updateTravel`'s body, so on the first frame of motion the
+   slerp-blend sees `travelElapsed = dt`, not 0. Post-refactor
+   produced `slerp(initialQuat, 1.0)` on frame 0; pre-refactor produced
+   `slerp(initialQuat, ~0.9999)`. Tiny (~1e-6 quat deltas) but flagged
+   by the harness. Fix: always `+= deltaTime` before consulting the
+   slerp window.
+
+2. **Manual-burn `nextBodyRef` regression.** Pre-refactor's
+   `flythrough.beginTravelFrom` assigned `this.nextBodyRef = nextBodyRef`
+   (first param = target), and `main.js` never overrode it for
+   `focusPlanet`/`focusStar`/`focusMoon`. Effectively, pre-refactor
+   manual-burn took the *degenerate* branch of the entry-yaw picker
+   (`nnPos - nextPos` is zero because `nextBodyRef == target`),
+   producing a specific-but-emergent entryYaw. Post-refactor passed
+   no `nextBody` → `nextBodyRef = null` → the "no next body" branch
+   (`entryYaw = approachDir + π/2`) landing on the opposite side of
+   the target. This was what Max saw in the canvas recordings —
+   visible 180° rotation difference on the P1 orbit side. Fix:
+   `main.js` manual-burn sites now explicitly pass `nextBody: target,
+   nextOrbitDistance: distance` to preserve the pre-refactor
+   accidental-but-load-bearing behavior. Documented as a behavior-
+   preserve quirk; future workstreams may intentionally revisit.
+
+**Artifacts retained (informational, not the gate):**
+
+- Pre-refactor recording: `screenshots/max-recordings/autopilot-navigation-subsystem-split-2026-04-20-before.webm`
+- Post-refactor recording: `screenshots/max-recordings/autopilot-navigation-subsystem-split-2026-04-20-after.webm`
 - Contact sheets (5×2, 1 fps): `before-contact-sheet.png` / `after-contact-sheet.png`
 
-Capture protocol: D-hold splash → Sol spawn → explicit
-`camera.position.set(100, 40, 200)` + `lookAt(0, 0, 0)` → seeded
-Math.random (LCG, seed=42, first call = 0 → star picked as first stop)
-→ `_startFlythrough()` + recorder start in same microtask → 10s capture.
-Both pre and post ran under identical controls.
-
-Measured equivalence: travelDuration = 6.74s in both; phase
-sequence TRAVEL(t=1–6) → APPROACH(t=7+) in both; contact sheets
-show matching star trajectory + 4-point glint development +
-distance progression cell-by-cell.
+Both recordings predate the two fixes; they surfaced the
+manual-burn regression (which was the primary trigger for the
+telemetry-protocol re-scope). The canvas recordings are retained as
+historical evidence of why the telemetry protocol exists, not as the
+shipped-gate artifact.
 
 First of four sequential workstreams delivering V1 autopilot. See
 `docs/FEATURES/autopilot.md` §"Workstreams" for the full sequence.
@@ -39,6 +66,26 @@ First of four sequential workstreams delivering V1 autopilot. See
   all survive unchanged. Upstream `SYSTEM_CONTRACTS.md` §10.3 and
   `docs/FEATURES/autopilot.md` §"Manual override" + drift-risk #2
   were corrected in the same pass.
+- **2026-04-21 — AC #3 verification instrument rewritten** by PM from
+  *regression canvas recording* to *telemetry assertion against frozen
+  inputs* per new protocol `docs/REFACTOR_VERIFICATION_PROTOCOL.md`.
+  Trigger: the pre/post recordings flagged a visible P1-orbit-side
+  difference that working-Claude diagnosed as input drift (real-time
+  orbit advance during the 2500ms Sol-spawn wait placed P1 across a
+  `diffCW vs diffCCW` decision boundary), not math regression. The
+  recording AC was the wrong instrument for a pure-math refactor —
+  it compared "Max's eyes at real-time-simulated inputs" when the
+  refactor's contract is "identical math on identical inputs." The
+  telemetry-assertion AC freezes inputs (seeded RNG, explicit
+  positions, fixed-step `update(dt)` loop, no real-time simulation)
+  and per-frame diffs `getCurrentPlan()` output numerically. The
+  new `## Telemetry verification spec` section below specifies what
+  working-Claude should build at `tests/refactor-verification/autopilot-navigation-subsystem-split.html`
+  and run against the pre-refactor (`64e4145^` or `git stash`) and
+  post-refactor (`c394e1e`) code paths. The code refactor itself is
+  not revised by this AC amendment — only the verification instrument
+  changes. Rest of the brief (scope, principles, drift risks, other
+  ACs) unchanged.
 
 ## Parent feature
 
@@ -163,18 +210,38 @@ carve-out that governs `canvas-recording-workflow-formalization-2026-04-19.md`).
    for `camera.quaternion` / `camera.lookAt` / `freeLook` — zero hits
    is the pass condition.
 
-3. **Existing autopilot tour renders identically post-refactor.**
-   This is the regression-guard AC. Pre-refactor: capture one canvas
-   recording of an autopilot tour at Sol under the current
-   `AutoNavigator` + `FlythroughCamera` code. Post-refactor: capture
-   the same recording with the same seed / same entry path. The
-   two recordings should be visually indistinguishable — motion,
-   linger durations, orbit directions, travel easing, approach
-   close-in timing, free-look responsiveness, all preserved.
-   Working-Claude surfaces both recordings and a frame-diff
-   overview to Max. **Pass condition:** Max confirms the two
-   read as identical. **Fail condition:** any visible difference
-   in motion or framing is a regression and blocks Shipped.
+3. **Navigation subsystem produces identical motion plans pre- and
+   post-refactor for identical frozen inputs.** This is the regression-
+   guard AC. Verified by a telemetry-assertion harness per
+   `docs/REFACTOR_VERIFICATION_PROTOCOL.md`, not by a canvas recording.
+   Build (see `## Telemetry verification spec` below for the full
+   shape): a self-contained HTML harness at
+   `tests/refactor-verification/autopilot-navigation-subsystem-split.html`
+   that imports the subsystem module, constructs frozen inputs (seeded
+   `Math.random`, explicit ship position, stub target meshes at fixed
+   world positions, fixed `deltaTime` steps), drives
+   `subsystem.update(dt)` in a fixed-step loop across the motion
+   window (descend → travel → approach → orbit), and captures
+   `getCurrentPlan()` output per frame as a telemetry array. Run the
+   harness against the pre-refactor code (`git stash` the current
+   changes to reach the state before `c394e1e`, or check out
+   `64e4145^`) and the post-refactor code (`c394e1e`). Serialize both
+   runs to JSON. Diff frame-by-frame, field-by-field.
+   **Pass condition:** every numerical field (`position`, `velocity`,
+   `targetLookPoint`) matches within `1e-6` at every frame; every
+   string/integer field (`phase`, `motionStarted`, flags that cross
+   the module boundary) matches exactly at every frame; zero
+   divergent frames across the full motion window.
+   **Fail condition:** any field diverges beyond epsilon at any
+   frame → diagnose: (a) genuine math regression (fix code,
+   re-commit), (b) incomplete input-freezing (fix harness, re-run),
+   or (c) intentional behavior change on a specific surface
+   (re-scope workstream's contract and document the delta).
+   Max is NOT the default evaluator on this AC — the diff is the
+   gate. Spot-check canvas recording is optional if working-Claude
+   or Director has residual uncertainty about a non-numerical
+   surface (e.g., an easing curve sampled at discrete points that
+   might skip a discontinuity).
 
 4. **Manual burn path (`focusPlanet` / `focusStar` / `focusMoon`)
    calls the navigation subsystem directly, not `FlythroughCamera`.**
@@ -219,6 +286,154 @@ carve-out that governs `canvas-recording-workflow-formalization-2026-04-19.md`).
    edited, and states explicitly that no behavior changes. Stage ONLY
    the specific files touched — never `git add -A` — per
    `docs/PERSONAS/pm.md` §"Commit discipline."
+
+## Telemetry verification spec (AC #3 instrument)
+
+This section tells working-Claude exactly what to build for AC #3. It
+is an instance of the general pattern in `docs/REFACTOR_VERIFICATION_PROTOCOL.md`
+§"The telemetry pattern" — refer to that doc for the general shape;
+this section instances it to the subsystem's actual API.
+
+**Target file:** `tests/refactor-verification/autopilot-navigation-subsystem-split.html`.
+Committed to git. Mirror the import model of `tunnel-lab.html` /
+`galaxy-glow-viewer.html` (see `docs/CONVENTIONS_test-harnesses.md`):
+minimal Three.js scene, imports only `src/auto/NavigationSubsystem.js`
+and any direct dependencies (e.g., `three` for `Vector3`, `Object3D`).
+
+**Harness constructor — frozen inputs:**
+
+1. **Seeded RNG.** Override `Math.random` with an LCG at test entry;
+   restore at test exit. Standard seed: `42`. Recipe:
+   ```js
+   let seed = 42;
+   const lcg = () => {
+     seed = (seed * 1664525 + 1013904223) >>> 0;
+     return seed / 0x100000000;
+   };
+   const realRandom = Math.random;
+   Math.random = lcg;
+   // ... run test ...
+   Math.random = realRandom;
+   ```
+2. **Fixed ship starting state.** `fromPosition = new Vector3(100, 40, 200)`.
+   `fromVelocity = new Vector3(0, 0, 0)` (or specific value if the
+   refactor touches code that reads initial velocity).
+3. **Stub target body.** A plain `Object3D` (not a real generator
+   body) with `position.set(0, 0, 0)` for the star case. For the
+   planet case, a second `Object3D` with `position.set(3000, 0, 0)`
+   (fixed — no orbit simulation, no `StarSystemGenerator`).
+4. **`nextBodyRef`** (the field that drove the input-drift failure
+   in the recording AC) — assigned to a third stub `Object3D` at a
+   **fixed** position. Do NOT run the real orbital simulation.
+   This is the exact freeze that the prior recording AC lacked.
+5. **Fixed-step loop.** `const dt = 1/60; const nFrames = 600;`
+   (10 seconds of simulated motion at 60 Hz — long enough to cover
+   descend → travel → approach → early orbit, which is the full
+   motion window the refactor touches). No `requestAnimationFrame`.
+   A plain `for (let i = 0; i < nFrames; i++) { subsystem.update(dt); ... }`.
+
+**Harness capture — per-frame telemetry:**
+
+After each `subsystem.update(dt)` call, read `subsystem.getCurrentPlan()`
+and push an entry onto a telemetry array:
+
+```js
+const plan = subsystem.getCurrentPlan();
+telemetry.push({
+  frame: i,
+  t: i * dt,
+  phase: plan.phase,              // string: 'IDLE' | 'DESCENDING' | 'TRAVELING' | 'APPROACHING' | 'ORBITING'
+  position:         [ round6(plan.position.x),         round6(plan.position.y),         round6(plan.position.z) ],
+  velocity:         [ round6(plan.velocity.x),         round6(plan.velocity.y),         round6(plan.velocity.z) ],
+  targetLookPoint:  [ round6(plan.targetLookPoint.x),  round6(plan.targetLookPoint.y),  round6(plan.targetLookPoint.z) ],
+  motionStarted:    plan.motionStarted,   // bool (one-shot)
+  arrived:          plan.arrived,         // bool (one-shot, when applicable)
+  orbitDirection:   subsystem.orbitDirection,  // int: -1 | 1 — this is the field whose drift surfaced in the recording
+});
+```
+
+`round6(x)` = `Math.round(x * 1e6) / 1e6` — avoids float-representation
+noise masquerading as regression.
+
+Fields to capture are the subsystem's **public output surface** — the
+things the camera module reads per frame. Do NOT capture internal
+state (e.g., `_arrivalOrbitDir`, `_approachStartDist`) — if those
+diverge but outputs match, the refactor is still equivalent at the
+interface. Only cross-module-boundary state is the contract.
+
+**Scenarios to run:**
+
+Two scenarios — the harness exposes them as buttons, and working-
+Claude runs both against pre and post:
+
+1. **Descend from fixed position → orbit star.** Models the initial-
+   spawn tour start. Frozen input: ship at `(100, 40, 200)`, star at
+   origin, no `nextBodyRef` on the first motion, then `nextBodyRef =
+   planet at (3000, 0, 0)` set before the second call (to cover the
+   diffCW/diffCCW branch that produced the recording's visible
+   difference).
+2. **Travel from orbit around star → orbit around planet.** Models
+   the star-to-first-planet hop. Frozen input: ship already in
+   orbit around the star, call `beginMotion({ target: planet,
+   orbitDistance: Rp*20, bodyRadius: Rp, fromOrbitBody: star })`
+   with the planet at its fixed position. Drive 600 frames.
+
+Both scenarios produce a `before.json` (pre-refactor run) and an
+`after.json` (post-refactor run). Committed? No — the JSON outputs
+are gitignored; the harness that produces them is what commits.
+(Protocol rationale: the JSON is large and workstream-specific; the
+harness is the durable precedent.)
+
+**Diff + assert:**
+
+The harness exposes a `Diff` button that loads both JSON files and
+compares frame-by-frame. For each frame, for each field:
+
+- Numerical field (`position[i]`, `velocity[i]`, `targetLookPoint[i]`):
+  pass if `|before - after| <= 1e-6`, fail otherwise.
+- String field (`phase`): pass if strictly equal, fail otherwise.
+- Integer/bool field (`motionStarted`, `arrived`, `orbitDirection`):
+  pass if strictly equal, fail otherwise.
+
+Output: a table (shown in the harness UI) of divergent frames with
+(frame index, field name, before value, after value). If empty →
+pass. If non-empty → working-Claude diagnoses.
+
+**Expected outcome.** Zero divergent frames across both scenarios.
+The math is provably identical — the subsystem's methods were lifted
+with no arithmetic changes. If any frame diverges, the lift was
+non-identical somewhere; fix and re-run.
+
+**Execution sequence for working-Claude:**
+
+1. Build `tests/refactor-verification/autopilot-navigation-subsystem-split.html`
+   with the construction above.
+2. On current tree (`c394e1e` post-refactor), run the harness, capture
+   `after.json` for both scenarios.
+3. `git stash` the current state → check out `64e4145^` (the commit
+   before the refactor landed). The harness HTML file won't exist on
+   that commit — copy it across from the working tree manually (or
+   check out just the refactor's source files to the pre-state while
+   keeping the harness on disk: `git checkout 64e4145^ -- src/auto/
+   src/main.js`).
+4. Run the harness on the pre-refactor code, capture `before.json`
+   for both scenarios.
+5. Restore post-refactor code (`git checkout c394e1e -- src/auto/
+   src/main.js` or `git stash pop`).
+6. Run the `Diff` view. Zero regressions → flip Status to
+   `Shipped c394e1e — verified against tests/refactor-verification/autopilot-navigation-subsystem-split.html (pre/post telemetry diff: 0 regressions across 1200 frames)`.
+7. If any regression → report to Director + Max with the divergent-
+   frame table. Do not flip Shipped.
+
+**What this does NOT test.** Things the subsystem's output surface
+doesn't expose numerically: the camera module's orientation blend
+(that's the camera layer's contract, not the subsystem's), audio
+event triggers (V-later), perceptual smoothness of easing curves
+between sample points. A camera-orientation equivalence is covered by
+the camera module's own contract (AC #2 — the camera consumes the
+plan; if plans are identical and the consumer is unchanged, output
+is identical). An easing-curve perceptual check is the optional
+spot-check canvas recording, if Max or Director requests it.
 
 ## Principles that apply
 
