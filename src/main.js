@@ -4503,6 +4503,13 @@ function focusPlanet(index) {
       toBody: entry.planet.mesh,
       toOrbitDistance: orbitDist,
       toBodyRadius: bodyRadius,
+      // Manual-burn: pre-refactor `beginTravelFrom` assigned nextBodyRef =
+      // target as a side-effect of its parameter naming; main.js never
+      // overrode it. Preserve that accidental-but-load-bearing behavior so
+      // the `_updateTravel` entry-yaw pick matches (verified by telemetry
+      // harness). See tests/refactor-verification/autopilot-navigation-subsystem-split.html.
+      nextBody: entry.planet.mesh,
+      nextOrbitDistance: orbitDist,
       arrivalOptions: {
         approachFirst: false,
         holdOnly: true,
@@ -4556,6 +4563,9 @@ function focusStar(starIdx) {
     toBody: starObj.mesh,
     toOrbitDistance: viewDist,
     toBodyRadius: bodyRadius,
+    // Preserve pre-refactor manual-burn nextBodyRef = target accident.
+    nextBody: starObj.mesh,
+    nextOrbitDistance: viewDist,
     arrivalOptions: {
       approachFirst: false,
       holdOnly: true,
@@ -4601,6 +4611,9 @@ function focusMoon(planetIndex, moonIndex) {
     toBody: moon.mesh,
     toOrbitDistance: viewDist,
     toBodyRadius: bodyRadius,
+    // Preserve pre-refactor manual-burn nextBodyRef = target accident.
+    nextBody: moon.mesh,
+    nextOrbitDistance: viewDist,
     arrivalOptions: {
       approachFirst: false,
       holdOnly: true,

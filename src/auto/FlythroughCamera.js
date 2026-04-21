@@ -82,13 +82,21 @@ export class FlythroughCamera {
     }
 
     // On motion start: snapshot current orientation + read blend duration hint.
+    // Reset blend counter so the subsequent `+= deltaTime` lands at exactly
+    // deltaTime on this first frame — matching pre-refactor's `travelElapsed`
+    // semantics (pre-refactor `_updateTravel` increments its elapsed counter
+    // at the top of its body before consulting for the slerp). Off-by-one
+    // here produced ~1e-6 quat deltas at motion start caught by
+    // tests/refactor-verification/autopilot-navigation-subsystem-split.html.
     if (frame.motionStarted) {
       this._initialQuat.copy(this.camera.quaternion);
       this._rotBlendElapsed = 0;
       this._rotBlendDuration = this.navigation.rotBlendDuration;
-    } else {
-      this._rotBlendElapsed += deltaTime;
     }
+
+    // Advance blend timer every frame (including the motionStarted frame, so
+    // blendT = deltaTime / rotBlendDuration on frame 0, matching pre-refactor).
+    this._rotBlendElapsed += deltaTime;
 
     // Write position from subsystem plan.
     this.camera.position.copy(frame.position);
