@@ -9,70 +9,68 @@ import * as THREE from 'three';
  *
  * **Responsibilities:**
  *   - Ship-axis phase tracking (ENTRY/CRUISE/APPROACH/STATION/IDLE).
- *   - Gravity-drive shake — **phase-boundary triggered impulse events**,
- *     gated on `!isShortTrip`, with a warp-exit carve-out on the accel side.
+ *   - Gravity-drive shake — **rotation-only sustained tremor**, signal-gated
+ *     to `phase === 'traveling' && !isShortTrip`, per Bible §8H round-10.
  *
  * ──────────────────────────────────────────────────────────────────
- *  Shake design (round-9, 2026-04-21 — Max's event-based ruling)
+ *  Shake design (round-10, 2026-04-21 — tremor over carrier)
  * ──────────────────────────────────────────────────────────────────
  *
- * **Max's ruling (2026-04-21):** shake fires ONLY when the ship is
- * accelerating or decelerating dramatically between distant objects.
- * Never during settled orbit (pitch/breathe modulation is authored
- * cinematography, not a motion-abruptness event). Never on short hops
- * between close-together bodies. On warp exit: no accel (portal already
- * handed the ship its cruise velocity); decel fires when the ship brakes
- * into the first body's orbit.
+ * **Bible §8H (amended round-10):** the friction-against-ether event
+ * renders as a **high-frequency small-amplitude sustained tremor**
+ * during the sharp-motion window — not discrete bounces at phase
+ * boundaries. The player's felt experience is aircraft turbulence:
+ * a subtle 1–2s judder in the camera while the drive is cutting
+ * across a density spike in the medium. Accel/decel asymmetry lives
+ * in the **amplitude envelope shape** over the tremor's duration
+ * (accel crescendo-then-fade, decel impact-then-decay), not in a
+ * bounce count. The primary surface is camera **rotation** (pitch/
+ * yaw/roll offsets applied to camera orientation), not camera
+ * position — translating the camera moves every framed object, which
+ * reads as the scene bouncing rather than the cockpit juddering.
  *
- * **Bible §8H (lines 1290-1316, unchanged):** shake is the rider's
- * signature of the drive coupling with the ether. Two asymmetric
- * physical events: accel (crescendo-then-fade — ship pushing INTO the
- * medium from rest) and decel (impact-then-decay — ship slamming INTO
- * the accumulated medium wall). §8H line 1303 already names "warp-exit
- * velocity mismatch" and "a transition that exceeds the drive's
- * smoothing capacity" — phase boundaries on long legs ARE those
- * transitions. §8H line 1309: "the friction-against-ether event is
- * the arrival event itself." Round-9 is the more faithful reading.
+ * **Trigger model.** Continuous `|d|v|/dt|` signal derived from
+ * position-delta per frame, smoothed α=0.15, phase-gated to
+ * `motionFrame.phase === 'traveling' && !motionFrame.isShortTrip`.
+ * Outside that gate, no signal derivation, no onset check. An event
+ * fires when the smoothed signal crosses `SIGNAL_ONSET_THRESHOLD`.
+ * Sign of `dSpeed` at onset picks `accel` vs `decel` envelope.
+ * `motionFrame.warpExit === true` suppresses accel-side firing only
+ * (the sharp-accel happened inside the portal). Between same-type
+ * events on the same leg, `SIGNAL_EVENT_COOLDOWN` seconds of silence
+ * is required so a single sharp window doesn't fire twice.
  *
- * **Trigger surface.** Events fire on NavigationSubsystem's phase
- * transition one-shots read from the MotionFrame each update():
+ * **Envelope shape.** `amplitude(t) = env_curve(t) × peak_per_axis`
+ * where `env_curve` is:
+ *   - ACCEL: smoothstep ramp-in [0, 0.6 × dur] to peak, smoothstep
+ *     ramp-out [0.6 × dur, dur] to 0 (crescendo-then-fade).
+ *   - DECEL: smoothstep fast ramp-in [0, 0.1 × dur] to peak,
+ *     exponential decay thereafter (impact-then-decay).
  *
- * | Trigger | Gate | Event |
- * |---|---|---|
- * | `motionStarted && phase === 'traveling'` | `!isShortTrip && !warpExit` | ACCEL envelope |
- * | `travelComplete` | `!isShortTrip` (any leg) | DECEL envelope |
- * | Any transition | `isShortTrip === true` | No event |
- * | Any orbit/station frame | — | No event, by construction |
+ * **Carrier.** Three independent sinusoidal carriers, one per axis,
+ * with slight frequency detuning (pitch 20Hz, yaw 22Hz, roll 19Hz)
+ * AND random phase offsets at event onset. Detuning + phase scatter
+ * prevents Lissajous lock-in that would read as mechanical wobble.
  *
- * No continuous signal detection. No `|d|v|/dt|` threshold. Rounds 6–8
- * used signal-onset detection which fired on legitimate-but-not-
- * dramatic speed changes (orbit pitch modulation, distance breathe,
- * Hermite cruise ramp). Round-9 retires that mechanism entirely —
- * the envelope shape from round-8 is preserved verbatim, but the
- * trigger comes from NavigationSubsystem's phase-transition one-shots.
+ * **Surface.** Emits `shakeEuler = { pitch, yaw, roll }` in radians.
+ * FlythroughCamera composes this onto `camera.quaternion` AFTER
+ * `camera.lookAt()` has run — rotation in camera-local space, not
+ * world space. **`camera.position` is NEVER mutated by the shake
+ * mechanism** (AC #19 invariant — programmatically asserted).
  *
- * **Preserved from round-8:**
- *   - `ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]` (5 crescendo-fade peaks)
- *   - `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]` (4 impact-decay peaks)
- *   - Log-spaced impulse timing (`0.08 × 1.8^n` seconds from onset)
- *   - Gaussian bump shape per peak, `width = 0.5 × leading-gap`
- *   - Atomic `_startImpulseTrain()` freezes `cam2tgt` + sign + onset-time
- *     + secondary axis at event fire. Envelope runs on frozen state
- *     through ringout (round-4 drift-risk-2 invariant).
- *   - Per-event peak amplitude = `SHAKE_VIEW_ANGLE_MAX × cam2tgt` (at onset)
- *   - `debugAccelImpulse()` / `debugDecelImpulse()` — both ignore the
- *     short-hop/warp-exit gates (debug fire is unconditional).
+ * **Belt-and-suspenders phase gate.** Both trigger and sampling
+ * surfaces check phase. If the ship transitions out of `traveling`
+ * mid-event, the event aborts and shakeEuler resets to zero.
  *
- * **Removed from round-8:**
- *   - `ONSET_THRESHOLD`, `ONSET_REFRACTORY`, `DSPEED_SMOOTHING` constants
- *   - `_smoothedAbsDSpeed` / `_signedDSpeed` / `_prevPosition` /
- *     `_prevSpeed` / `_hasPrev` / `_subThresholdTime` state
- *   - Position-delta velocity / speed / `|d|v|/dt|` computation loop
- *   - Signal-driven auto-onset branch (`if dSpeed >= threshold → fire`)
+ * **Retired from round-8/9:** ACCEL_AMPS, DECEL_AMPS,
+ * IMPULSE_INITIAL_GAP, IMPULSE_SPACING_RATIO, SHAKE_VIEW_ANGLE_MAX,
+ * `_shakeOnsetCam2Tgt`, `_shakeOnsetSign`, Gaussian-bump log-impulse
+ * machinery, `debugImpulseAtOrbitDistance(c2t, sign)`. Surface changed
+ * from `shakeOffset: Vector3` to `shakeEuler: {pitch, yaw, roll}`.
  *
  * Integration: main.js calls `shipChoreographer.update(dt, motionFrame)`
- * after `flythrough.update(dt)`; FlythroughCamera reads `shakeOffset`
- * via the provider hook and adds it to camera.position.
+ * after `flythrough.update(dt)`; FlythroughCamera reads `shakeEuler`
+ * via the provider hook and composes it onto camera.quaternion.
  */
 
 export const ShipPhase = Object.freeze({
@@ -83,39 +81,119 @@ export const ShipPhase = Object.freeze({
   STATION:  'STATION',
 });
 
+// ════════════════════════════════════════════════════════════════════════
+//  SHAKE TUNABLES (Round 10 — rotation-only sustained tremor)
+//
+//  These are authored at top-of-file per Max's "configurable so we can
+//  adjust" ask. Inline docs name each constant's role, suggested range,
+//  and V1 seed. Max edits during review via F12.
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tremor event total duration in seconds.
+ * Max's ask: 1-2 second shake, subtle. V1 seed = 1.5s.
+ * Bounded [1.0, 2.0].
+ */
+const TREMOR_ENVELOPE_DURATION = 1.5;
+
+/**
+ * Minimum seconds of sub-threshold signal between two same-type events
+ * on the same leg. Prevents stutter-firing within a single sharp window.
+ * V1 seed = 0.5s. Bounded [0.3, 1.0].
+ */
+const SIGNAL_EVENT_COOLDOWN = 0.5;
+
+/**
+ * `|d|v|/dt|` magnitude that triggers a new event. Scene-units/s².
+ * Sol tour typical peak during Hermite sharp-motion is ~180.
+ * V1 seed 35 sits well above orbit pitch/breathe noise (~5-30) and
+ * well below sharp-cruise peak (~180).
+ */
+const SIGNAL_ONSET_THRESHOLD = 35.0;
+
+/**
+ * Low-pass smoothing α per frame for the raw `|d|v|/dt|` signal.
+ * α=1 → raw, α near 0 → very slow. 0.15 ≈ 6-frame time constant
+ * at 60fps. Enough to reject per-frame jitter without lag.
+ */
+const SIGNAL_SMOOTHING = 0.15;
+
+/**
+ * Peak pitch (camera-local X) rotation amplitude at envelope max, in degrees.
+ * V1 seed 1.0°. Bounded [0.3, 2.0]. Head-nod axis.
+ */
+const TREMOR_PITCH_PEAK_DEG = 1.0;
+
+/**
+ * Peak yaw (camera-local Y) rotation amplitude at envelope max, in degrees.
+ * V1 seed 1.0°. Bounded [0.3, 2.0]. Head-shake axis.
+ */
+const TREMOR_YAW_PEAK_DEG = 1.0;
+
+/**
+ * Peak roll (camera-local Z) rotation amplitude at envelope max, in degrees.
+ * V1 seed 0.5°. Bounded [0.2, 1.5]. Cockpit-banking cue; smaller default
+ * since large roll reads as ship tilt rather than pilot tremor.
+ */
+const TREMOR_ROLL_PEAK_DEG = 0.5;
+
+/**
+ * Per-axis carrier frequencies in Hz. Slight detuning across axes
+ * prevents Lissajous-lock patterns (three identical freqs would
+ * trace a repeating figure that reads as mechanical wobble).
+ * V1 seeds roughly 20Hz ± a few.
+ */
+const PITCH_FREQ_HZ = 20;
+const YAW_FREQ_HZ   = 22;
+const ROLL_FREQ_HZ  = 19;
+
+// Convenience conversions
+const DEG_TO_RAD = Math.PI / 180;
+const TWO_PI = Math.PI * 2;
+
 // ────────────────────────────────────────────────────────────────────────
-//  SHAKE TUNABLES (Round 9 — phase-boundary trigger, envelope unchanged)
+//  Envelope curves — amplitude(t) shapes per event type
 // ────────────────────────────────────────────────────────────────────────
 
-// Peak view-angle each impulse-train event subtends at its crest.
-// Per-event peak amplitude in scene units = this × cam2tgt frozen at onset.
-// 0.05 rad ≈ 2.86°. Round-7 range preserved.
-const SHAKE_VIEW_ANGLE_MAX = 0.05;
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
 
-// Asymmetric envelope amplitude arrays (normalized to peakAmp = 1).
-// Accel: crescendo-then-fade (5 bounces) — ship pushing INTO medium.
-// Decel: impact-then-decay (4 bounces) — ship slamming INTO wall.
-const ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10];
-const DECEL_AMPS = [1.00, 0.55, 0.30, 0.17];
+/**
+ * Accel envelope: crescendo-then-fade.
+ * Slow ramp-in to peak, then fade out.
+ * env(0) = 0, env(0.6·dur) ≈ 1, env(dur) = 0.
+ */
+function accelEnvelope(t, duration) {
+  const u = t / duration;
+  if (u <= 0 || u >= 1) return 0;
+  // Crescendo: smoothstep 0→1 over [0, 0.6]
+  // Fade:      smoothstep 1→0 over [0.6, 1]
+  const crescendo = smoothstep(0, 0.6, u);
+  const fade = 1 - smoothstep(0.6, 1, u);
+  return crescendo * fade;
+}
 
-// Log-spacing: gap[n] = IMPULSE_INITIAL_GAP × IMPULSE_SPACING_RATIO^n.
-const IMPULSE_INITIAL_GAP = 0.08;
-const IMPULSE_SPACING_RATIO = 1.8;
-
-// Per-impulse bump width = IMPULSE_WIDTH_RATIO × leading-gap (Gaussian σ-like).
-const IMPULSE_WIDTH_RATIO = 0.5;
-
-// Secondary-axis amplitude as a fraction of primary. Synchronized companion.
-const SECONDARY_AXIS_RATIO = 0.20;
+/**
+ * Decel envelope: impact-then-decay.
+ * Fast ramp-in to peak, then exponential ring-out.
+ * env(0) = 0, env(0.1·dur) ≈ 1, env(dur) → small.
+ */
+function decelEnvelope(t, duration) {
+  const u = t / duration;
+  if (u <= 0 || u >= 1) return 0;
+  if (u < 0.1) {
+    return smoothstep(0, 0.1, u);
+  }
+  // Exponential decay with time constant chosen so env(1.0) ≈ 0.03
+  return Math.exp(-3.5 * (u - 0.1));
+}
 
 // ────────────────────────────────────────────────────────────────────────
 
-// Reusable vectors (avoid per-frame allocation)
-const _tmpVec = new THREE.Vector3();
+// Reusable vectors
 const _velTmp = new THREE.Vector3();
-
-// Module-scoped world-up for perpendicular computation
-const _UP = new THREE.Vector3(0, 1, 0);
 
 export class ShipChoreographer {
   /**
@@ -130,47 +208,68 @@ export class ShipChoreographer {
     // ── Frame bookkeeping ──
     this._timeAccum = 0;
 
-    // ── Impulse-train event state (frozen at onset; const through ringout) ──
+    // ── Signal tracking (position-delta velocity, scalar dSpeed) ──
+    this._prevPosition = new THREE.Vector3();
+    this._prevSpeed = 0;
+    this._hasPrev = 0;  // 0 = no history, 1 = have pos, 2 = have speed
+    this._smoothedAbsDSpeed = 0;
+    this._signedDSpeed = 0;
+
+    // ── Cooldown state (separate per event type so accel + decel can
+    //    fire on the same leg without blocking each other) ──
+    this._lastAccelEndTime = -Infinity;
+    this._lastDecelEndTime = -Infinity;
+
+    // ── Current event state (frozen at onset; const through ringout) ──
     this._eventActive = false;
-    this._shakeOnsetTime = 0;        // _timeAccum at event fire
-    this._shakeOnsetCam2Tgt = 0;     // camera-to-target distance at onset
-    this._shakeOnsetSign = 0;        // +1 accel, -1 decel
-    this._shakePeakAmp = 0;          // view-angle × cam2tgt = scene-unit peak
-    this._shakeAmps = null;          // which array (ACCEL_AMPS or DECEL_AMPS)
-    this._shakeImpulseTimes = null;  // seconds-from-onset per peak
-    this._shakeWidths = null;        // per-impulse Gaussian width
-    this._shakeEventDuration = 0;    // event ends when t > this
-    this._shakeSecondaryAxis = new THREE.Vector3(1, 0, 0);
+    this._eventType = null;       // 'accel' | 'decel'
+    this._eventOnsetTime = 0;
+    this._eventDuration = 0;
+    this._pitchPhase = 0;
+    this._yawPhase = 0;
+    this._rollPhase = 0;
 
-    // ── Output ──
-    this._shakeOffset = new THREE.Vector3();
+    // ── Output (rotation-only; position is NEVER mutated) ──
+    this._shakeEuler = { pitch: 0, yaw: 0, roll: 0 };
 
-    // ── Debug-hook: when non-null, the update loop consumes this on the
-    //    next tick and fires immediately, bypassing short-hop/warp-exit gates. ──
-    this._pendingDebugFire = null;  // { sign: ±1, cam2tgt: number|null }
+    // ── Debug-hook: when non-null, bypasses phase/short-hop/warp-exit gates. ──
+    this._pendingDebugFire = null;  // { type: 'accel' | 'decel' }
+    // Current event's provenance — natural (signal-triggered) vs debug
+    // (test scaffolding bypassing gates). AC #17 (signal-coincidence)
+    // only evaluates natural events; debug events intentionally fire
+    // outside the signal window so Max can eyeball shape on demand.
+    this._eventIsDebug = false;
   }
 
   // ── Public surface ──
 
   get isActive() { return this._phase !== ShipPhase.IDLE; }
   get currentPhase() { return this._phase; }
-  /** 0/1 for legacy telemetry; 1 while an event is ringing out. */
-  get abruptness() { return this._eventActive ? 1 : 0; }
-  get shakeOffset() { return this._shakeOffset; }
+  /** Rotation-only output per round-10. Read-only externally. */
+  get shakeEuler() { return this._shakeEuler; }
+  /** Legacy property kept as identity Vector3 for any residual callers;
+   *  shake is rotation-only in round-10. AC #19 requires position be
+   *  untouched by shake. */
+  get shakeOffset() { return _ZERO_V3; }
+  /** Telemetry: true while a tremor event is running. */
   get eventActive() { return this._eventActive; }
-  /** Seconds since the current event fired (0 when no event). */
+  get eventType() { return this._eventActive ? this._eventType : null; }
+  get eventOnsetTime() { return this._eventOnsetTime; }
+  get eventDuration() { return this._eventDuration; }
+  /** True when the current event was debug-fired (bypasses gates). */
+  get eventIsDebug() { return this._eventActive && this._eventIsDebug; }
   get eventTime() {
-    return this._eventActive ? (this._timeAccum - this._shakeOnsetTime) : 0;
+    return this._eventActive ? (this._timeAccum - this._eventOnsetTime) : 0;
   }
-  /** Frozen cam-to-target at onset of current event (0 when no event). */
-  get onsetCam2Tgt() { return this._eventActive ? this._shakeOnsetCam2Tgt : 0; }
-  /** Frozen sign at onset (+1 accel / -1 decel / 0 idle). */
-  get onsetSign() { return this._eventActive ? this._shakeOnsetSign : 0; }
+  get smoothedAbsDSpeed() { return this._smoothedAbsDSpeed; }
+  get signedDSpeed() { return this._signedDSpeed; }
+  /** 0/1 for legacy telemetry code that reads `abruptness`. */
+  get abruptness() { return this._eventActive ? 1 : 0; }
 
   beginTour({ fromWarp }) {
     this._fromWarp = !!fromWarp;
     this._phase = fromWarp ? ShipPhase.ENTRY : ShipPhase.CRUISE;
-    this._resetEventState();
+    this._resetState();
   }
 
   onLegAdvanced() {
@@ -184,7 +283,7 @@ export class ShipChoreographer {
    */
   update(deltaTime, motionFrame) {
     if (this._phase === ShipPhase.IDLE) {
-      this._shakeOffset.set(0, 0, 0);
+      this._zeroShake();
       return;
     }
 
@@ -201,169 +300,235 @@ export class ShipChoreographer {
       else this._phase = ShipPhase.IDLE;
     }
 
-    // ── Phase-boundary trigger checks (authoritative event source) ──
+    // ════════════════════════════════════════════════════════════════════
+    //  BELT-AND-SUSPENDERS PHASE GATE (sampling side)
     //
-    // 1. Debug hooks fire unconditionally (ignore short-hop/warp-exit gates).
-    // 2. Natural accel: motionStarted && phase==='traveling' && !isShortTrip && !warpExit.
-    // 3. Natural decel: travelComplete && !isShortTrip (warp-exit arrival included).
-    //
-    // No signal thresholds. Orbit-phase `|d|v|/dt|` cannot fire events — the
-    // code path to consume that signal no longer exists.
-
-    if (this._pendingDebugFire !== null) {
-      const cam2tgtNow = this._computeCam2Tgt(motionFrame);
-      const sign = this._pendingDebugFire.sign;
-      const c2t = this._pendingDebugFire.cam2tgt ?? cam2tgtNow;
-      this._pendingDebugFire = null;
-      this._startImpulseTrain(sign, c2t, motionFrame);
-    } else if (
-      motionFrame.motionStarted
-      && subPhase === 'traveling'
-      && !motionFrame.isShortTrip
-      && !motionFrame.warpExit
-    ) {
-      const cam2tgt = this._computeCam2Tgt(motionFrame);
-      this._startImpulseTrain(+1, cam2tgt, motionFrame);
-    } else if (
-      motionFrame.travelComplete
-      && !motionFrame.isShortTrip
-    ) {
-      const cam2tgt = this._computeCam2Tgt(motionFrame);
-      this._startImpulseTrain(-1, cam2tgt, motionFrame);
+    //  If the ship is not in `traveling` phase, silence any in-flight
+    //  event immediately. Catches any stale ringout that trigger-side
+    //  can't touch (e.g., event started correctly but phase transitioned
+    //  before its envelope completed). AC #13 + #16 invariant.
+    // ════════════════════════════════════════════════════════════════════
+    if (subPhase !== 'traveling') {
+      if (this._eventActive) {
+        this._eventActive = false;
+        this._eventType = null;
+        this._eventIsDebug = false;
+      }
+      // Debug-fires still honored (they bypass gates), but even so:
+      // we reset the output and only fire if a pending debug is present.
+      this._zeroShake();
+      if (this._pendingDebugFire !== null) {
+        const { type } = this._pendingDebugFire;
+        this._pendingDebugFire = null;
+        this._startTremorEvent(type, /* isDebug */ true);
+      }
+      // Fall through to sample envelope if a debug fire is now active
+      if (!this._eventActive) return;
     }
 
-    // ── Sample envelope if an event is running ──
-    if (this._eventActive) {
-      const t = this._timeAccum - this._shakeOnsetTime;
-      if (t > this._shakeEventDuration) {
-        this._eventActive = false;
-        this._shakeOffset.set(0, 0, 0);
-      } else {
-        let envelope = 0;
-        const times = this._shakeImpulseTimes;
-        const amps = this._shakeAmps;
-        const widths = this._shakeWidths;
-        for (let i = 0; i < times.length; i++) {
-          const diff = t - times[i];
-          const w = widths[i];
-          envelope += amps[i] * Math.exp(-(diff * diff) / (w * w));
+    // ════════════════════════════════════════════════════════════════════
+    //  SIGNAL DERIVATION + ONSET DETECTION (trigger-side gate)
+    //
+    //  Only runs if phase === 'traveling' AND !isShortTrip. Outside this
+    //  gate, no signal is derived and no event fires.
+    // ════════════════════════════════════════════════════════════════════
+    const insideTriggerGate = (subPhase === 'traveling') && !motionFrame.isShortTrip;
+
+    if (insideTriggerGate) {
+      // Derive |d|v|/dt| from position deltas
+      const currPos = motionFrame.position;
+      let rawAbsDSpeed = 0;
+      if (deltaTime > 1e-6 && this._hasPrev >= 1) {
+        _velTmp.set(
+          (currPos.x - this._prevPosition.x) / deltaTime,
+          (currPos.y - this._prevPosition.y) / deltaTime,
+          (currPos.z - this._prevPosition.z) / deltaTime,
+        );
+        const currSpeed = _velTmp.length();
+        if (this._hasPrev >= 2) {
+          const dSpeed = (currSpeed - this._prevSpeed) / deltaTime;
+          this._signedDSpeed = dSpeed;
+          rawAbsDSpeed = Math.abs(dSpeed);
         }
-        const primaryMag = envelope * this._shakePeakAmp;
-        const secondaryMag = primaryMag * SECONDARY_AXIS_RATIO;
-        this._shakeOffset
-          .set(0, primaryMag, 0)
-          .addScaledVector(this._shakeSecondaryAxis, secondaryMag);
+        this._prevSpeed = currSpeed;
+      }
+      this._prevPosition.copy(currPos);
+      if (this._hasPrev < 2) this._hasPrev++;
+
+      // Smooth
+      this._smoothedAbsDSpeed += (rawAbsDSpeed - this._smoothedAbsDSpeed) * SIGNAL_SMOOTHING;
+
+      // Onset detection: fire a new event if
+      //   - no event currently active
+      //   - smoothed signal crossed threshold
+      //   - cooldown window has passed for this type
+      //   - accel-side: warpExit === false
+      if (!this._eventActive && this._smoothedAbsDSpeed >= SIGNAL_ONSET_THRESHOLD) {
+        const sign = this._signedDSpeed;
+        const type = (sign >= 0) ? 'accel' : 'decel';
+        const lastEnd = (type === 'accel') ? this._lastAccelEndTime : this._lastDecelEndTime;
+        const cooldownOk = (this._timeAccum - lastEnd) >= SIGNAL_EVENT_COOLDOWN;
+        const warpExitOk = (type === 'decel') || !motionFrame.warpExit;
+        if (cooldownOk && warpExitOk) {
+          this._startTremorEvent(type, /* isDebug */ false);
+        }
       }
     } else {
-      this._shakeOffset.set(0, 0, 0);
+      // Outside the trigger gate — keep signal state frozen (we'll re-init
+      // position tracking on next gate entry). Reset history so first frame
+      // after re-entering the gate doesn't compute a spurious spike.
+      this._hasPrev = 0;
+      // Do NOT zero smoothedAbsDSpeed here — we want telemetry to show it
+      // decaying naturally if a recent signal window just ended. But also
+      // we don't want stale values — practical compromise: reset to 0.
+      this._smoothedAbsDSpeed = 0;
+      this._signedDSpeed = 0;
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  DEBUG-HOOK CONSUMPTION
+    //
+    //  Debug fires bypass all gates. They fire even outside 'traveling'
+    //  phase so Max can eyeball envelope shape from a reference state
+    //  (typically in orbit around a body at a known distance). The
+    //  belt-and-suspenders phase gate above ALREADY handled this case
+    //  for outside-traveling. Here we handle the inside-traveling case.
+    // ════════════════════════════════════════════════════════════════════
+    if (this._pendingDebugFire !== null && subPhase === 'traveling') {
+      const { type } = this._pendingDebugFire;
+      this._pendingDebugFire = null;
+      // Debug fires replace any active event
+      this._startTremorEvent(type, /* isDebug */ true);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  SAMPLE ENVELOPE × CARRIER
+    // ════════════════════════════════════════════════════════════════════
+    if (this._eventActive) {
+      const t = this._timeAccum - this._eventOnsetTime;
+      if (t >= this._eventDuration) {
+        // Event completed — record end time for cooldown and go idle
+        if (this._eventType === 'accel') {
+          this._lastAccelEndTime = this._timeAccum;
+        } else {
+          this._lastDecelEndTime = this._timeAccum;
+        }
+        this._eventActive = false;
+        this._eventType = null;
+        this._eventIsDebug = false;
+        this._zeroShake();
+      } else {
+        const envValue = (this._eventType === 'accel')
+          ? accelEnvelope(t, this._eventDuration)
+          : decelEnvelope(t, this._eventDuration);
+
+        // Per-axis sinusoidal carriers, phase-scattered at onset,
+        // frequency-detuned across axes to prevent Lissajous lock.
+        const pitchCarrier = Math.sin(TWO_PI * PITCH_FREQ_HZ * t + this._pitchPhase);
+        const yawCarrier   = Math.sin(TWO_PI * YAW_FREQ_HZ   * t + this._yawPhase);
+        const rollCarrier  = Math.sin(TWO_PI * ROLL_FREQ_HZ  * t + this._rollPhase);
+
+        this._shakeEuler.pitch = envValue * TREMOR_PITCH_PEAK_DEG * DEG_TO_RAD * pitchCarrier;
+        this._shakeEuler.yaw   = envValue * TREMOR_YAW_PEAK_DEG   * DEG_TO_RAD * yawCarrier;
+        this._shakeEuler.roll  = envValue * TREMOR_ROLL_PEAK_DEG  * DEG_TO_RAD * rollCarrier;
+      }
+    } else {
+      this._zeroShake();
     }
   }
 
   // ── Internal helpers ──
 
-  _computeCam2Tgt(motionFrame) {
-    const p = motionFrame.position;
-    const la = motionFrame.lookAtTarget;
-    const dx = p.x - la.x, dy = p.y - la.y, dz = p.z - la.z;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+  _zeroShake() {
+    this._shakeEuler.pitch = 0;
+    this._shakeEuler.yaw = 0;
+    this._shakeEuler.roll = 0;
   }
 
   /**
-   * Fire a new impulse-train event. Atomically freezes:
-   *   - sign (selects ACCEL_AMPS vs DECEL_AMPS)
-   *   - cam-to-target distance (sets per-event peak amplitude)
-   *   - onset time (envelope x-axis zero)
-   *   - secondary axis (horizontal-perpendicular to velocity at this instant)
+   * Fire a new tremor event. Atomically freezes type, onset time,
+   * duration, and per-axis carrier phases at onset.
    *
-   * Values const for the ringout duration per round-4 drift-risk-2 guard.
+   * Envelope duration is clamped to fit within remaining TRAVELING-phase
+   * time (AC #18 invariant). If remaining < 0.5s, the event is suppressed
+   * entirely (a tremor shorter than 0.5s won't read as turbulence).
+   *
+   * @param {'accel'|'decel'} type
+   * @param {boolean} isDebug — true if fired from debug hook (bypass gates)
    */
-  _startImpulseTrain(sign, cam2tgtAtOnset, motionFrame) {
+  _startTremorEvent(type, isDebug) {
+    let duration = TREMOR_ENVELOPE_DURATION;
+
+    // AC #18: clamp to fit remaining traveling-phase time (if we're in one).
+    // Debug fires from outside 'traveling' bypass this — they always use
+    // the full authored duration since there's no traveling-phase window
+    // to overflow.
+    if (this._phase === ShipPhase.CRUISE && this.nav && typeof this.nav.travelDuration === 'number') {
+      const remaining = this.nav.travelDuration - (this.nav.travelElapsed || 0);
+      if (remaining > 0 && remaining < duration) {
+        if (remaining < 0.5) {
+          // Don't fire a sub-0.5s tremor — too brief to read as turbulence
+          return;
+        }
+        duration = remaining;
+      }
+    }
+
     this._eventActive = true;
-    this._shakeOnsetTime = this._timeAccum;
-    this._shakeOnsetSign = sign;
-    this._shakeOnsetCam2Tgt = cam2tgtAtOnset;
-    this._shakePeakAmp = SHAKE_VIEW_ANGLE_MAX * cam2tgtAtOnset;
-    this._shakeAmps = (sign >= 0) ? ACCEL_AMPS : DECEL_AMPS;
+    this._eventType = type;
+    this._eventIsDebug = !!isDebug;
+    this._eventOnsetTime = this._timeAccum;
+    this._eventDuration = duration;
 
-    // Log-spaced impulse peaks
-    const n = this._shakeAmps.length;
-    const times = new Array(n);
-    const widths = new Array(n);
-    let gap = IMPULSE_INITIAL_GAP;
-    let t = 0;
-    for (let i = 0; i < n; i++) {
-      t += gap;
-      times[i] = t;
-      widths[i] = gap * IMPULSE_WIDTH_RATIO;
-      gap *= IMPULSE_SPACING_RATIO;
-    }
-    this._shakeImpulseTimes = times;
-    this._shakeWidths = widths;
-    this._shakeEventDuration = times[n - 1] + 4 * widths[n - 1];
-
-    // Freeze horizontal-perpendicular axis from MotionFrame velocity if
-    // available; else from fallback.
-    const v = motionFrame?.velocity;
-    const vx = v?.x || 0, vz = v?.z || 0;
-    const hsq = vx * vx + vz * vz;
-    if (hsq > 1e-6) {
-      const hm = Math.sqrt(hsq);
-      _tmpVec.set(vx / hm, 0, vz / hm);
-      this._shakeSecondaryAxis.crossVectors(_tmpVec, _UP).normalize();
-    } else {
-      this._shakeSecondaryAxis.set(1, 0, 0);
-    }
+    // Randomize per-axis phases so consecutive events don't pattern-match
+    this._pitchPhase = Math.random() * TWO_PI;
+    this._yawPhase   = Math.random() * TWO_PI;
+    this._rollPhase  = Math.random() * TWO_PI;
   }
 
-  // ── Debug hooks ──
+  // ── Debug hooks (bypass all gates) ──
 
-  /**
-   * Fire an accel-envelope event next update. Ignores short-hop/warp-exit
-   * gates — debug fire is unconditional.
-   */
+  /** Fire an accel tremor event next update. */
   debugAccelImpulse() {
-    this._pendingDebugFire = { sign: +1, cam2tgt: null };
+    this._pendingDebugFire = { type: 'accel' };
   }
 
-  /**
-   * Fire a decel-envelope event next update. Ignores short-hop/warp-exit
-   * gates — debug fire is unconditional.
-   */
+  /** Fire a decel tremor event next update. */
   debugDecelImpulse() {
-    this._pendingDebugFire = { sign: -1, cam2tgt: null };
+    this._pendingDebugFire = { type: 'decel' };
   }
 
-  /**
-   * Generic spike (sign defaults to decel). Retained for back-compat with
-   * callers in main.js that used the round-6 `debugAbruptTransition` API.
-   */
+  /** Back-compat — fire a decel tremor. */
   debugAbruptTransition() {
-    this._pendingDebugFire = { sign: -1, cam2tgt: null };
-  }
-
-  /**
-   * Fire at a specified cam2tgt scale (for per-body-class verification).
-   * AC #11 preserved from round-4.
-   */
-  debugImpulseAtOrbitDistance(orbitDistance, sign) {
-    const s = (sign === undefined || sign === null) ? -1 : (sign >= 0 ? +1 : -1);
-    this._pendingDebugFire = { sign: s, cam2tgt: orbitDistance };
+    this._pendingDebugFire = { type: 'decel' };
   }
 
   stop() {
     this._phase = ShipPhase.IDLE;
     this._fromWarp = false;
-    this._resetEventState();
-    this._shakeOffset.set(0, 0, 0);
+    this._resetState();
+    this._zeroShake();
     this._pendingDebugFire = null;
   }
 
-  _resetEventState() {
+  _resetState() {
     this._timeAccum = 0;
+    this._prevPosition.set(0, 0, 0);
+    this._prevSpeed = 0;
+    this._hasPrev = 0;
+    this._smoothedAbsDSpeed = 0;
+    this._signedDSpeed = 0;
     this._eventActive = false;
-    this._shakeOnsetTime = 0;
-    this._shakeOnsetCam2Tgt = 0;
-    this._shakeOnsetSign = 0;
-    this._shakePeakAmp = 0;
+    this._eventType = null;
+    this._eventIsDebug = false;
+    this._eventOnsetTime = 0;
+    this._eventDuration = 0;
+    this._lastAccelEndTime = -Infinity;
+    this._lastDecelEndTime = -Infinity;
   }
 }
+
+// Legacy compat — a zero-vector singleton returned by `shakeOffset` getter
+// in case any call site still reads it. Round-10 shake is rotation-only;
+// this exists only to keep the old property name from returning undefined.
+const _ZERO_V3 = new THREE.Vector3(0, 0, 0);

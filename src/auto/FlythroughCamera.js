@@ -22,6 +22,7 @@ import * as THREE from 'three';
 
 // Reusable vectors to avoid per-frame allocations
 const _v1 = new THREE.Vector3();
+const _euler = new THREE.Euler();
 const _v2 = new THREE.Vector3();
 
 export class FlythroughCamera {
@@ -47,12 +48,15 @@ export class FlythroughCamera {
     this.freeLookPitch = 0;
 
     // ── Shake provider hook (WS 2 — gravity-drive shake per §10.8) ──
-    // Optional. If set, `update()` reads `provider.shakeOffset` (Vector3)
-    // and adds it to `camera.position` after the subsystem's authored
-    // position is written. V1 provider is ShipChoreographer; default is
-    // smooth motion (provider emits zero offset). Per AC #7, this is the
-    // only ship-axis-motion-related change to this module.
+    // Optional. If set, `update()` reads `provider.shakeEuler` ({pitch,
+    // yaw, roll} in radians) and composes it onto `camera.quaternion`
+    // AFTER `camera.lookAt()` has run — rotation in camera-local space.
+    // V1 provider is ShipChoreographer; default is smooth motion (provider
+    // emits zero rotation). Round-10 rotation-only surface: `camera.position`
+    // is NEVER mutated by the shake mechanism (AC #19 invariant).
     this._shakeProvider = null;
+    // Reusable quaternion for shake composition
+    this._shakeQuat = new THREE.Quaternion();
   }
 
   /** Optional: set a shake-offset provider (e.g., ShipChoreographer). */
@@ -109,16 +113,10 @@ export class FlythroughCamera {
     // blendT = deltaTime / rotBlendDuration on frame 0, matching pre-refactor).
     this._rotBlendElapsed += deltaTime;
 
-    // Write position from subsystem plan.
+    // Write position from subsystem plan. Round-10 invariant: shake does
+    // NOT mutate position. Pinned geometry stays pinned in world-space;
+    // only camera orientation jitters below.
     this.camera.position.copy(frame.position);
-
-    // Additive shake offset from choreographer (V2 shake mechanism per
-    // §10.8). Applied after the subsystem's authored position so shake is
-    // a ship-body perturbation on top of smooth cinematic motion, not a
-    // replacement for it. Default provider emits zero for smooth motion.
-    if (this._shakeProvider) {
-      this.camera.position.add(this._shakeProvider.shakeOffset);
-    }
 
     // Author orientation: free-look-applied lookAt toward the subsystem's
     // target-look point.
@@ -133,6 +131,20 @@ export class FlythroughCamera {
       // slerp(initialQuat, 1 - eased): eased=0 → full pull to initial;
       // eased=1 → no pull, stays at lookAt result.
       this.camera.quaternion.slerp(this._initialQuat, 1 - eased);
+    }
+
+    // Shake composition — rotation-only, applied LAST in camera-local space
+    // (post-multiply onto camera.quaternion so pitch/yaw/roll live in the
+    // camera's own axes, not world axes). Round-10 surface per Bible §8H
+    // amendment and AC #19. Default provider emits zero rotation.
+    if (this._shakeProvider && this._shakeProvider.shakeEuler) {
+      const { pitch, yaw, roll } = this._shakeProvider.shakeEuler;
+      if (pitch !== 0 || yaw !== 0 || roll !== 0) {
+        // Euler XYZ order: pitch (camera-local X), yaw (Y), roll (Z)
+        _euler.set(pitch, yaw, roll, 'XYZ');
+        this._shakeQuat.setFromEuler(_euler);
+        this.camera.quaternion.multiply(this._shakeQuat);
+      }
     }
 
     return frame;

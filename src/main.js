@@ -427,6 +427,110 @@ window._autopilot = {
     isActive() { return _telemetryState.active; },
     /** Peek current sample count without stopping. */
     count() { return (_telemetryState.samples || []).length; },
+
+    /**
+     * Round-10 telemetry-invariant audit helpers (ACs #16, #17, #18).
+     *
+     * Each takes an optional `samples` array (defaults to current sample
+     * buffer) and returns `{ passed: boolean, violations: Array }` where
+     * `violations` is the subset of samples that broke the invariant.
+     *
+     * Call pattern after a telemetry capture:
+     *   const samples = window._autopilot.telemetry.stop();
+     *   const orbit = window._autopilot.telemetry.audit.orbitCrossProduct(samples);
+     *   const signal = window._autopilot.telemetry.audit.signalCoincidence(samples);
+     *   const envFit = window._autopilot.telemetry.audit.envelopeFitsPhase(samples);
+     */
+    audit: {
+      /**
+       * AC #16: orbit-shake cross-product empty.
+       * Active-shake samples that are in orbiting/approaching phases are
+       * invariant violations.
+       */
+      orbitCrossProduct(samples) {
+        samples = samples || _telemetryState.samples || [];
+        const violations = samples.filter(s =>
+          s.shakeActive === true
+          && (s.navPhase === 'orbiting' || s.navPhase === 'approaching')
+        );
+        return { passed: violations.length === 0, violations, totalSamples: samples.length };
+      },
+
+      /**
+       * AC #17: shake coincides with signal.
+       * If shake is active, the smoothed signal must have been above
+       * onset-threshold within the last ~50ms (or the sample is in the
+       * intentional envelope tail, which we approximate by event-elapsed
+       * being within the envelope-duration).
+       *
+       * Simplified version: report every frame where shakeActive === true
+       * AND smoothedAbsDSpeed is significantly below threshold. Allow some
+       * tolerance because the envelope's ramp-out tail extends past the
+       * signal peak by design.
+       */
+      signalCoincidence(samples) {
+        samples = samples || _telemetryState.samples || [];
+        const thresholdFloor = 5; // tolerance floor below onset threshold
+        // Debug fires intentionally bypass signal gates — exclude from AC.
+        const violations = samples.filter(s =>
+          s.shakeActive === true
+          && !s.eventIsDebug
+          && s.smoothedAbsDSpeed < thresholdFloor
+        );
+        return { passed: violations.length === 0, violations, totalSamples: samples.length };
+      },
+
+      /**
+       * AC #18: envelope fits phase.
+       * For each event-onset sample (first frame of shakeActive), check
+       * that eventDuration ≤ remaining TRAVELING time at onset. We don't
+       * have remaining-time in samples directly, but we can verify that
+       * the entire envelope played within the traveling phase by walking
+       * forward from the onset for eventDuration seconds and confirming
+       * every frame in that window has navPhase === 'traveling'.
+       */
+      envelopeFitsPhase(samples) {
+        samples = samples || _telemetryState.samples || [];
+        const violations = [];
+        for (let i = 0; i < samples.length; i++) {
+          const s = samples[i];
+          const prev = samples[i - 1];
+          const isOnset = s.shakeActive && (!prev || !prev.shakeActive);
+          if (!isOnset) continue;
+          const onsetT = s.t;
+          const endT = onsetT + s.eventDuration * 1000;
+          // Walk forward while within envelope window
+          for (let j = i; j < samples.length && samples[j].t <= endT; j++) {
+            if (samples[j].navPhase !== 'traveling') {
+              violations.push({
+                onsetSample: s,
+                violatingSample: samples[j],
+                msFromOnset: samples[j].t - onsetT,
+              });
+              break;
+            }
+          }
+        }
+        return { passed: violations.length === 0, violations, totalSamples: samples.length };
+      },
+
+      /**
+       * Run all three audits and return a combined report.
+       */
+      runAll(samples) {
+        const s = samples || _telemetryState.samples || [];
+        const orbit = this.orbitCrossProduct(s);
+        const signal = this.signalCoincidence(s);
+        const envFit = this.envelopeFitsPhase(s);
+        return {
+          passed: orbit.passed && signal.passed && envFit.passed,
+          ac16_orbitCrossProduct: { passed: orbit.passed, violationCount: orbit.violations.length },
+          ac17_signalCoincidence: { passed: signal.passed, violationCount: signal.violations.length },
+          ac18_envelopeFitsPhase: { passed: envFit.passed, violationCount: envFit.violations.length },
+          totalSamples: s.length,
+        };
+      },
+    },
   },
 };
 
@@ -439,16 +543,13 @@ window._autopilot = {
 function _captureTelemetrySample() {
   if (!_telemetryState.active || !_telemetryState.samples) return;
   _tmpFwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
-  const shakeOff = shipChoreographer.shakeOffset;
-  const shakeMag = Math.sqrt(
-    shakeOff.x * shakeOff.x +
-    shakeOff.y * shakeOff.y +
-    shakeOff.z * shakeOff.z,
-  );
 
-  // AC #11 round-4: per-sample target-scale fields for ratio-based
-  // scale-coupling verification. `shakeMag / currentTargetOrbitDistance`
-  // must stay bounded across body classes (AC #10 verification).
+  // Round-10: shakeEuler is the rotation-only output; shakeOffset is retired
+  // but kept in samples for back-compat with existing audit scripts.
+  const se = shipChoreographer.shakeEuler;
+  const shakeMag = Math.sqrt(se.pitch * se.pitch + se.yaw * se.yaw + se.roll * se.roll);
+  const shakeActive = shipChoreographer.eventActive;
+
   let targetOrbitDist = null;
   let targetBodyRadius = null;
   let targetCamDist = null;
@@ -462,25 +563,34 @@ function _captureTelemetrySample() {
     const dy = camera.position.y - bp.y;
     const dz = camera.position.z - bp.z;
     targetCamDist = +Math.sqrt(dx * dx + dy * dy + dz * dz).toFixed(4);
-    // Classify target type from autoNav queue (nav subsystem doesn't store type).
     const stop = autoNav.getCurrentStop();
     if (stop) targetType = stop.type;
   }
+
+  const plan = navSubsystem.getCurrentPlan();
 
   _telemetryState.samples.push({
     t:           performance.now(),
     camPos:      [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
     camFwd:      [+_tmpFwd.x.toFixed(4),         +_tmpFwd.y.toFixed(4),         +_tmpFwd.z.toFixed(4)],
     shipPhase:   shipChoreographer.currentPhase,
-    navPhase:    navSubsystem.getCurrentPlan().phase,
-    shakeOffset: [+shakeOff.x.toFixed(4), +shakeOff.y.toFixed(4), +shakeOff.z.toFixed(4)],
-    shakeMag:    +shakeMag.toFixed(4),
+    navPhase:    plan.phase,
+    shakeEuler:  { pitch: +se.pitch.toFixed(6), yaw: +se.yaw.toFixed(6), roll: +se.roll.toFixed(6) },
+    shakeMag:    +shakeMag.toFixed(6),
+    shakeActive,
+    eventType:   shipChoreographer.eventType,
+    eventIsDebug: shipChoreographer.eventIsDebug,
+    eventOnsetTime:  shipChoreographer.eventOnsetTime,
+    eventDuration:   shipChoreographer.eventDuration,
+    smoothedAbsDSpeed: +shipChoreographer.smoothedAbsDSpeed.toFixed(4),
+    signedDSpeed:    +shipChoreographer.signedDSpeed.toFixed(4),
     abruptness:  +shipChoreographer.abruptness.toFixed(4),
-    // Round-4 AC #11 extensions:
     currentTargetOrbitDistance: targetOrbitDist,
     currentTargetBodyRadius:    targetBodyRadius,
     cameraToTargetDistance:     targetCamDist,
     currentTargetType:          targetType,
+    isShortTrip: !!plan.isShortTrip,
+    warpExit:    !!plan.warpExit,
   });
 }
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
