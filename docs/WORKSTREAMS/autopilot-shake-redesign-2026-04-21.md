@@ -2,6 +2,54 @@
 
 ## Status
 
+`HELD — ROUND 11 PIVOT (per-leg fire budget: 1 accel + 1 decel max per TRAVELING phase)` — Director held the workstream after Max watched round-10 and reported the shake firing 3–4 times per planet-planet transit instead of the intended 2 (once at burn-start, once at burn-end).
+
+**Max's round-10 feedback (2026-04-22, verbatim):**
+
+> "there is a slight 'jump' that happens now after we have arrived at a planet's orbit... at the moment when the ship stops, between the arrival and orbiting phases, there's a little hitch. otherwise, this is looking a lot better--the shake effect works well. but I notice it happens something like 3 times in each planet-planet transit, sometimes 4. it should really only happen twice--once when the 'burn' really commences to get us into cruise, then once again to take us out of cruise once we're almost at the planet."
+
+**Director's diagnosis (full at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md`):**
+The Hermite travel's arrival-blend window (`ARRIVE_BLEND = 2-3.5s` before travel-end, in `NavigationSubsystem._updateTravel` lines 758–767) produces **two distinct `|d|v|/dt|` peaks during decel** — one at blend-start (Hermite deceleration + arrival-curve introduction), one at blend-complete (`blend → 1` and orbit-tangential motion dominates). Combined with the accel-fire at leg-start, that's 3 natural fires. On longer legs the two decel peaks separate enough to produce a 4th pattern. The round-10 `SIGNAL_EVENT_COOLDOWN = 0.5s` is short enough that the second decel peak crosses threshold after the first event's cooldown has elapsed, allowing a second decel fire within the same leg.
+
+**Round-11 fix (surgical, ~5 lines):**
+
+Add a per-leg fire budget on top of the existing cooldown. Reset on the `motionStarted` one-shot from MotionFrame (new leg begins); at most 1 accel-type and 1 decel-type event may fire per TRAVELING phase of a single leg. Debug fires bypass the budget (unconditional scaffolding).
+
+Implementation:
+
+1. `ShipChoreographer` constructor: add `this._firedThisLeg = { accel: false, decel: false }`.
+2. `ShipChoreographer.update()` top-of-loop: when `motionFrame.motionStarted === true`, reset `this._firedThisLeg.accel = false; this._firedThisLeg.decel = false`.
+3. Onset-detection branch: in addition to `cooldownOk && warpExitOk`, gate on `!this._firedThisLeg[type]`.
+4. `_startTremorEvent(type, isDebug)`: if `!isDebug`, set `this._firedThisLeg[type] = true`.
+5. `_resetState()`: zero the per-leg flags alongside other state.
+
+Encodes Max's stated model literally: "once when the burn commences, once to take us out of cruise." No mechanism redesign — Max's feedback said "otherwise this is looking a lot better." Round-11 is a single-constraint tightening.
+
+**Bible §8H stays unchanged.** §8H canon is "shake fires on sharp-motion transitions"; per-leg budget is an implementation refinement to honor the authored "once per transition edge" intent, not a canonical change.
+
+**Round-11 ACs:**
+
+- **Reaffirm AC #3** with budget refinement: at most 1 natural accel event AND 1 natural decel event per TRAVELING phase. Debug fires do not consume budget. Budget resets on `motionStarted`.
+- **Add AC #20: per-leg fire budget.** Across any telemetry capture, for each contiguous TRAVELING segment (between a `motionStarted === true` frame and the next phase transition), count distinct natural event onsets (`eventIsDebug === false`, filtered by `eventType`). Assert: accel-count ≤ 1 AND decel-count ≤ 1 for every such segment. Programmatic: new `window._autopilot.telemetry.audit.perLegFireBudget()` returning `{passed, violations: [{legStartTime, accelCount, decelCount}, ...]}`. Debug fires are excluded by construction (`eventIsDebug === true` filter).
+
+**Round-11 scope (working-Claude authorization):**
+
+- `src/auto/ShipChoreographer.js` — add `_firedThisLeg` state + reset + gate + event-fire-set. ~5–8 lines total.
+- `src/main.js` — add `.audit.perLegFireBudget()` helper + include in `.audit.runAll()`. ~20 lines.
+- No changes to `FlythroughCamera.js`, `NavigationSubsystem.js`, or the round-10 envelope/carrier/surface math.
+
+**Round-11 recording drop path:** same file as round-10 for append or a fresh round-11 file. Max's hand-evaluated check is "2 shakes per long leg, not 3–4." Programmatic AC #20 covers the same check.
+
+**The hitch Max also flagged is NOT in round-11 scope.** Director's diagnosis: it's a pre-existing nav-layer velocity discontinuity at APPROACH→ORBIT transition (near-zero radial velocity at approach-end, instant-nonzero tangential velocity at orbit frame 1). Round-9's violent shake masked it; round-10's subtle shake surfaced it. A separate workstream brief at `docs/WORKSTREAMS/autopilot-approach-orbit-continuity-2026-04-22.md` covers the fix; it is NOT a shake-redesign dependency and does NOT block the shake-redesign Shipped flip.
+
+Gate is engaged. Code does not resume until Director re-audits this amendment.
+
+*(Brief authored in degraded-mode by working-Claude on 2026-04-22 after the PM agent's stream timed out mid-amendment. Director direction from audit file is the canonical source; this amendment is working-Claude's PM-proxy authoring. Any disagreement between this text and the Director audit → Director audit wins.)*
+
+---
+
+**Historical: VERIFIED_PENDING_MAX (round-10, superseded by round-11 pivot).**
+
 `VERIFIED_PENDING_MAX 34d6d98` — round-10 code committed. Rotation-only sustained tremor, signal-gated to TRAVELING phase with belt-and-suspenders sampling gate. Canonical surface: `camera.position` is never mutated by shake — a quaternion post-multiply is applied AFTER `camera.lookAt()`, so only the viewport heading jitters.
 
 **Self-audit results (all four round-10 telemetry ACs passed programmatically before recording surfaced):**
