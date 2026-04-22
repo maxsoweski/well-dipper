@@ -269,6 +269,34 @@ Future workstreams (not yet scoped) that will advance this feature:
 - Audio event-surface hook — the emit-without-subscribers V1 surface.
 - Gravity-drive shake mechanism — camera / ship-mesh additive perturbation system.
 
+## Parking lot
+
+Issues observed but consciously **parked** — not yet a scoped workstream, not merged into an adjacent one, preserved here so they don't rot.
+
+### Travel-feel speed-field — planet↔moon "one gear / arrives too far / accelerating too quickly" (parked 2026-04-22)
+
+**Felt issue.** Max, verbatim: *"one gear / arrive-too-far / accelerating too quickly"* — observing the planet→moon (and moon→moon) legs of the tour. Restated: the ship seems to have a single travel gear regardless of leg length; short hops feel over-powered (too much acceleration for the distance), and the arrival `STATION` sits farther out than the body's size + visual intimacy warrant. The motion reads mechanical rather than *considered*.
+
+**Code-level mechanics driving the feel.** Four couplings combine to produce it:
+
+- **Travel-duration √-compression + 4s floor.** The tour scales leg duration by `sqrt(distance)` and floors short legs at ~4s. Short legs (planet↔moon) get the floor, which means the drive must cover a small distance in a fixed minimum time — enforcing a uniform-feeling gear.
+- **Linear tangent magnitude.** The Hermite travel curve uses a tangent magnitude that scales linearly with leg distance, not with a speed-envelope that respects what the scene "wants" at that scale.
+- **0.06 orbit-distance floor at moons.** `STATION` around moons clamps at a 0.06 orbit-distance floor, which at moon sizes reads as "too far" — the body doesn't fill the frame the way the `STATION` criteria call for.
+- **Non-zero Hermite start-tangent.** The travel curve's start-tangent is non-zero by design (continuity across legs), which means there's no easing-in on `|v|` — velocity magnitude is already non-trivial at leg start, contributing to the "accelerating too quickly" read on short hops.
+
+**Reference point.** Elite Dangerous Supercruise models top-speed as a **field over space** — a function of proximity to gravity wells, not a scalar constant. Ships slow *automatically* near mass; the speed envelope itself is part of the world. What Well Dipper's autopilot currently exposes is a single-gear approximation of this; the felt gap is the gap between a scalar drive and a speed-field drive.
+
+**Park-or-scope decision.** Parked. Not merged into the continuity workstream (different concern — continuity is about cross-phase handoffs, not speed-field shape). Not scoped as a new workstream yet — the articulation needs to happen at the **feature level** first (what *is* the speed field, what does it couple to, what does top-speed mean at what scales) before a PM brief can sensibly scope execution. Revisit after **shake-redesign Shipped + WS 3 greenlight** — that's the natural next gate where the travel layer gets fresh attention and a speed-field re-scope has the right context.
+
+**Future-workstream scope IF activated.** Feature-level questions to answer before any PM scoping:
+- Speed-field *shape*: is top-speed a smooth function of distance from the nearest / dominant attractor, or a piecewise envelope (intra-body / intra-system / inter-system tiers)?
+- Top-speed envelope at each scale: what's the felt upper bound near moons vs. planets vs. clear space vs. near a star?
+- Gravity-well coupling: does the field fall off with `1/r`, `1/r²`, or some game-feel curve? Multi-body superposition or dominant-attractor-only?
+- How does the field interact with the existing `STATION` orbit-distance clamps — does the clamp become emergent from the field, or stay as an independent floor?
+- Does this replace the √-compression / 4s floor outright, or compose with them?
+
+Once those answers exist at the feature level, a PM workstream can scope the travel-layer rewrite with acceptance criteria tied to the felt outcomes (short hops *feel short*, `STATION` *feels intimate*, the drive *reads considered*).
+
 ## See also
 
 - `docs/GAME_BIBLE.md` §1 Core Experience (vision anchor), §8H Propulsion & Travel Landscape (gravity-drive lore), §2 Aesthetic (60s/70s register).
