@@ -2,33 +2,52 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX 992cbb2` — round-9 code committed after PM amendment `d710700` and Director re-audit RELEASE. Signal-driven onset-detection fully retired; trigger is now phase-boundary one-shots (`motionStarted` accel / `travelComplete` decel), gated on `!isShortTrip` with warp-exit accel carve-out. Orbit silence is architectural — the signal path that fired round-8's orbit-bouncing no longer exists in code.
+`HELD — ROUND 10 PIVOT (rotation-only sustained tremor, signal-gated to traveling phase)` — Director REJECTED round-9 (`992cbb2`) after Max watched all three recordings. Telemetry-as-spec passed; the felt experience failed on three concrete bugs plus a fundamental reframe (quotes reproduced in §"Round-10 amendment" below). Round-9's VERIFIED_PENDING_MAX block is retired in full — it's retained under §"Historical: round-9 (superseded by round-10 pivot)" for audit-trail continuity. Gate is engaged; code does not resume until Director re-audits this amendment.
 
-**Telemetry verification (in-browser, live autopilot):**
-- Debug accel impulse: 5 crescendo-fade peaks at expected log-spaced times.
-- Debug decel impulse: 4 impact-decay peaks.
-- Natural Sol tour (27s, autopilot short-hop legs — `isShortTrip === true` throughout): zero auto-fires. AC #14 ✓.
-- STATION phase sampling: zero shake across 60+ frames. AC #13 ✓ (architectural).
-- Warp-exit path verified in supplementary recording (captured same session, post-Director direction). Telemetry:
-  - t=1.77s: warp begins
-  - t=13.0s: warp ends; ship in ENTRY/TRAVELING with `warpExit=true`, `isShort=false` — **no accel event fires** (gated off by `!warpExit` condition). AC #15 coast invariant ✓.
-  - t=16.05s: `travelComplete` at ENTRY→APPROACH transition — **decel envelope fires** (sign=-1, c2t=100). AC #15 decel-on-arrival invariant ✓.
-  - t=18.0s: decel ringout complete.
-  - t=20.5s: ship reaches orbit; silent thereafter.
+**What round-10 changes — in one sentence.** Retire the phase-boundary one-shot trigger and the 4–5-bounce discrete log-impulse envelope; replace with a continuous `|d|v|/dt|` signal phase-gated to `phase === 'traveling' && !legIsShort`, driving a **1–2 second subtle sustained tremor** on a **high-frequency small-amplitude carrier** applied as **rotation-only** offsets (pitch/yaw/roll quaternion delta) to the camera AFTER the `lookAt` composition — fixing both Max's "shaking at wrong moment" timing critique (fires DURING sharp motion, not at the boundary that ends a travel segment) and his "planets are bouncing" surface critique (camera rotation leaves framed geometry fixed in world-space; only the viewport heading judders).
 
-**Recording drop paths:**
-- `screenshots/max-recordings/autopilot-shake-redesign-round9-2026-04-21.webm` (9.9 MB, 27s): natural Sol tour + back-to-back debug pair at t≈20-27s. Demonstrates orbit + short-hop silence.
-- `screenshots/max-recordings/autopilot-shake-redesign-round9-envelope-demo-2026-04-21.webm` (3 MB, 11s): envelope demo at forced `c2t=50` via `debugImpulseAtOrbitDistance(50, ±1)` for visible-scale AC #2 + AC #4 evaluation.
-- `screenshots/max-recordings/autopilot-shake-redesign-round9-warpexit-2026-04-21.webm` (9.1 MB, 25s): warp-arrival Sol tour — portal traversal, ENTRY coast (silent), decel at ENTRY→APPROACH boundary, orbit settle. AC #15 observational evidence.
-- Contact sheet: `...-round9-envelope-demo-2026-04-21-contactsheet.png` (6×4 grid @ 3 fps).
+**What round-10 preserves from round-9.**
+- `!legIsShort` gate — the existing `NavigationSubsystem._isShortTrip` (line 357) stays as the distance discriminator; shake still silent on short hops.
+- `legIsWarpExit` carve-out — warp-exit legs still fire no accel-window tremor (portal pre-loaded cruise speed; no sharp-accel event); decel window on arrival fires normally per §8H line 1309.
+- `motionFrame.legIsShort` / `motionFrame.legIsWarpExit` MotionFrame extension (round-9's authorized cross-file edit) — retained; round-10 also reads them.
+- `debugAccelImpulse()` / `debugDecelImpulse()` debug entry points — retained but re-shaped: each now enqueues a 1.5s tremor event of the correct envelope shape rather than starting a log-impulse train. Debug fire remains unconditional (bypasses gates per round-9's scaffolding convention).
+- `window._autopilot.telemetry` capture shape — extended, not replaced (see AC #16 below for the four new telemetry-invariant fields).
+- Round-4 drift-risk-2 `cam2tgt` freeze-at-onset invariant — no longer materially applicable (rotation-only surface doesn't scale to scene-unit offsets), but the principle carries: any per-event parameter that needs freezing is frozen at onset atomically in `_startTremorEvent()`.
 
-Diff stats: +119 lines, −168 lines (net code reduction of 49 lines). ShipChoreographer lost its signal-processing loop entirely.
+**What round-10 retires from rounds 8/9 (verbatim, for bisect readers).**
+- `ACCEL_AMPS = [0.30, 1.00, 0.70, 0.35, 0.10]` — dead. Crescendo-fade now lives as a **continuous amplitude envelope** over the tremor carrier, not a 5-element discrete-bounce array.
+- `DECEL_AMPS = [1.00, 0.55, 0.30, 0.17]` — dead. Impact-decay now lives as a continuous amplitude envelope over the tremor carrier.
+- `IMPULSE_INITIAL_GAP = 0.08`, `IMPULSE_SPACING_RATIO = 1.8` — dead. No log-spacing; tremor has a carrier frequency, not inter-bounce gaps.
+- Gaussian bump per bounce — dead. Replaced by the carrier's natural sinusoidal (or filtered-noise) shape.
+- `SHAKE_VIEW_ANGLE_MAX = 0.05` as peak impulse-view-angle — dead in that role. Peak view angle per-axis is now a small rotation tunable (suggested V1 seed: 0.5–1.5° per axis, Max-tunable — see §Round-10 scope for the exposed constant surface).
+- `_shakeOnsetCam2Tgt` — dead. Rotational shake doesn't need a distance scale; scale-coupling was a scene-unit-translation artifact.
+- `_shakeOnsetSign` — dead. The signed signal directly shapes the amplitude envelope; no sign-branch at envelope pick time.
+- `shakeOffset` Vector3 position-offset API on ShipChoreographer — **retired or repurposed** (working-Claude picks). New API is a rotation quaternion or Euler-triple; FlythroughCamera composes it into `camera.quaternion` AFTER `lookAt`, not into `camera.position`. Named explicitly so working-Claude does not reflexively preserve the old name.
 
-Awaiting Max's verdict.
+Awaiting Director re-audit of this amendment.
 
 ---
 
-**Historical: HELD state (superseded by round-9 code commit 992cbb2).**
+**Historical: round-9 (superseded by round-10 pivot).**
+
+Round-9 closed at `VERIFIED_PENDING_MAX 992cbb2` — phase-boundary triggers gated on `!_isShortTrip` with warp-exit accel carve-out. Telemetry self-audit passed all AC #3/#13/#14/#15 invariants (debug accel: 5 crescendo-fade peaks log-spaced; debug decel: 4 impact-decay peaks; natural Sol tour 27s all `isShortTrip === true`, zero auto-fires; STATION sampling zero shake 60+ frames; warp-exit path verified — ENTRY coast silent, decel fires at `travelComplete` into first-body orbit). Three recordings at the drop paths below. Max's verdict: *"awful, way off the mark"* — concrete bugs:
+
+1. Shake fires when the ship reaches the moon (end of a leg, not DURING the sharp-motion event).
+2. Violent shake persists while the ship is orbiting the moon ("a dog with fleas shaking its head").
+3. Shake fires right as the ship comes to a stop in front of a star ("a car hitting the brakes").
+
+Plus a felt-experience reframe load-bearing for round-10: *"it happens AS THE SHIP DECELERATES OR ACCELERATES SHARPLY. So it wouldn't shake while in orbit around a moon, or right at the point when the trajectory toward the star is almost slowed to a stop. And besides — the overall effect looks comedic, it's like the planets are bouncing around. Is the ship shaking? Because it's should just be a little judder happening in the camera — as if the player is experiencing turbulence, not as if the ship is on a rubber band attached to a zipline."*
+
+**Round-9 recording drop paths (retained for archival / round-10 before-state):**
+- `screenshots/max-recordings/autopilot-shake-redesign-round9-2026-04-21.webm` (9.9 MB, 27s)
+- `screenshots/max-recordings/autopilot-shake-redesign-round9-envelope-demo-2026-04-21.webm` (3 MB, 11s)
+- `screenshots/max-recordings/autopilot-shake-redesign-round9-warpexit-2026-04-21.webm` (9.1 MB, 25s)
+
+**Why round-9 telemetry missed the felt-experience failure.** The telemetry asserted that the code did what the round-9 brief said — and it did. What the spec did *not* assert: (a) shake-envelope duration must complete before the next phase transition (round-9 envelope ~1.9s rings out into APPROACHING/ORBITING on small bodies); (b) `shakeOffset > ε` must not overlap any frame where `phase ∈ {'orbiting', 'approaching'}` (the round-9 test sampled these independently, never crossed them); (c) shake must coincide with sharp-motion signal, not fire AFTER it (Hermite-ease `|d|v|/dt|` peaks mid-segment at `t ∈ [0.3, 0.7]`, not at `t=1` where `travelComplete` fired round-9's decel); (d) surface must be rotation not translation (a 2.86° view-angle offset applied as world-Y position shifts every framed object, reads as rubber-band not judder). Round-10 encodes all four as telemetry-invariant ACs that run programmatically against a capture — see §Round-10 ACs #16–#19.
+
+---
+
+**Historical: HELD state (superseded by round-9 code commit 992cbb2, itself superseded by round-10 pivot).**
 
 `HELD — ROUND 9 PIVOT (phase-boundary events, short-hop silenced, warp-exit coast)` — Director HELD the workstream after Max rejected round-8's continuous-`d|v|/dt`-onset firing model on 2026-04-21. Round-8 closed at `VERIFIED_PENDING_MAX 46ca75e`; that block is retained below as "Historical: round-8 (superseded by round-9 pivot)." Gate is engaged; code does not resume until Director re-audits this amendment.
 
@@ -648,3 +667,148 @@ Director re-audits this amendment (fourth audit on this workstream) and verifies
 If the audit passes, gate releases scoped to the round-9 commit only. State updates to `{ "edits": 0, "last_audit_sha": "<pm-amendment-sha>" }` on release. Working-Claude does NOT edit code until Director audit lands.
 
 Drafted by PM 2026-04-21 as the round-9 pivot amendment, following Max's ruling on the round-8 recording and Director's operationalization of his Q&A answers.
+
+## Round-10 amendment (2026-04-21)
+
+**Context.** Max watched the three round-9 recordings and rejected the result as *"awful, way off the mark."* Three concrete bugs + one felt-experience reframe (both verbatim blocks reproduced in §Status above). Director audited, classified the miss as a spec-class failure ("telemetry asserted the code did what the brief said; the brief did not assert what Max asked for"), and issued round-10 direction at `~/.claude/state/dev-collab/audits/autopilot-shake-redesign-2026-04-21.md` §"Round-9 REJECTED — retry." PM surfaced three questions to Max (envelope duration + register; envelope shape — tremor vs. discrete bumps; axis choice); Max answered all three:
+
+> *"1. What I want is a 1-2 second shake that's subtle, not all over the place.*
+> *2. High-frequency small-amplitude tremor, like aircraft turbulence.*
+> *3. Honestly I'm not sure...let's try both from here but make it configurable so we can adjust"*
+
+**What Max's answers settle.**
+
+- **Duration + register (Q1).** 1–2 second event, subtle. Not violent, not view-flipping. Named as a tunable envelope duration in round-10 scope below (`TREMOR_ENVELOPE_DURATION = 1.5` seconds as V1 seed, bounded `[1.0, 2.0]`).
+- **Shape (Q2).** Aircraft turbulence — high-frequency small-amplitude sustained tremor during the sharp-motion window, NOT discrete log-spaced bumps. This retires §8H's 4–5-bounce impulse-train rendering canon (addressed via Bible amendment — see §"Bible §8H amendment" below).
+- **Axes (Q3).** Try pitch + yaw + roll, expose each as a configurable tunable so Max can dial individual axes up/down during review.
+
+**Bible §8H amendment — committed in the same PM pass, separately.** Max's Q1+Q2 answers are definitive enough to canonize. Keeping §8H as 4–5-bounce discrete-impulse canon while round-10 implements a sustained tremor would force every future reader of §8H into rounds 6–8's reconciliation spiral (*"the Bible says bounces, the code says tremor, which is load-bearing?"*). PM's call: **amend §8H** to add a "Rendering shape — sustained tremor, not discrete bounces" paragraph after the existing ether paragraph. Load-bearing structure preserved verbatim (ether metaphor, compensation lag, asymmetric accel/decel as different physical events, arrival-is-the-event for decel); rendering shape refined so the asymmetry lives as an amplitude envelope over the tremor's duration rather than as bounce-count and bounce-amplitude arrays. Primary surface (camera rotation, not translation) also pinned in §8H, because the "planets bouncing" failure mode in round-9 was a rendering-surface error that §8H did not previously exclude. Bible commit lands separately from the brief commit (Director-owned artifact; PM bootstraps on Director's behalf per round-10 authorization, citing the audit's §"Round-9 REJECTED" direction as basis).
+
+### Round-10 model
+
+**1. Trigger model — continuous signal phase-gated to `traveling`.** Retire the phase-boundary one-shots from round-9 entirely (`motionStarted`-accel + `travelComplete`-decel). Replace with **continuous `|d|v|/dt|` signal, phase-gated**: onset detector runs ONLY while `motionFrame.phase === 'traveling' && !motionFrame.legIsShort`. Outside that phase-gate, the onset detector does not run — no sampling, no threshold comparison, no fire. This combines round-6's correct signal source (`|d|v|/dt|` derived from speed-delta, which is Bible §8H's "motion-abruptness" per line 1304) with round-9's correct phase-gate (orbit silence architectural, not by hope). Sharp-decel happens mid-Hermite (Hermite-ease `|d|v|/dt|` peaks at `t ∈ [0.3, 0.7]` of the travel segment, not at `t=1`); the tremor fires exactly there — *during* the sharp-motion event, as Max's reframe requires. Sharp-accel happens at the cruise-ramp-up moment on ordinary departures (leg-start-plus-small-epsilon, still inside `phase === 'traveling'`); fires there identically. Warp-exit legs (`legIsWarpExit === true`) suppress accel-side firing (the sharp-accel event happened inside the portal, not in this leg) — easiest surface: add `&& (!motionFrame.legIsWarpExit || _tremorInDecelBand)` to the onset-gate, where `_tremorInDecelBand` is derived from signed `dSpeed` at onset. Decel on warp-exit arrival fires normally. Short hops (`legIsShort`) remain silent at the architectural level (phase-gate includes `!legIsShort`).
+
+**2. Surface model — rotation-only on camera, not translation.** ShipChoreographer's shake output API changes: instead of a `shakeOffset: Vector3` positional offset, it emits `shakeQuaternion` (or equivalently `shakeEuler: {pitch, yaw, roll}` — working-Claude picks the representation that composes cleanly with existing camera math; PM leans toward Euler-triple for trivial axis-weight tunability but defers to whoever writes the FlythroughCamera composition). `FlythroughCamera` consumes the rotation and composes it into `camera.quaternion` **AFTER `lookAt()` has run** — post-multiply the shake rotation onto the look-at-derived camera orientation so the shake lives in camera-local space (pitch in camera-local x, yaw in camera-local y, roll in camera-local z), not world space. `camera.position` is NEVER mutated by the shake mechanism — this is the invariant that fixes "planets are bouncing." A pinned background star should render at the same world-space pixel location across a tremor-active frame and a pre-tremor frame; only the camera's heading jitters. AC #19 below is the programmatic check for this invariant.
+
+**3. Envelope model — 1–2s sustained tremor with ramp-in/ramp-out, asymmetric amplitude curve.** The authored experience per event:
+
+```
+amplitude(t) = env_curve(t) × carrier(t, freq, phase)
+```
+
+where:
+- `env_curve(t)` is a smooth amplitude envelope over the event's duration (V1 seed duration: `TREMOR_ENVELOPE_DURATION = 1.5` seconds, tunable `[1.0, 2.0]`). For **accel events** (crescendo-then-fade): ramp-in `[0, 0.25]` of duration from 0 → peak × 0.3, sustain `[0.25, 0.6]` at peak × 1.0 (the "breaking through" window), ramp-out `[0.6, 1.0]` at peak × (1.0 → 0). For **decel events** (impact-then-decay): fast ramp-in `[0, 0.1]` from 0 → peak × 1.0 (the "impact" window), long ramp-out `[0.1, 1.0]` from peak × 1.0 → 0 following a smoothstep or exponential decay (the "rings out" window). These curves encode the §8H asymmetry as envelope-shape, not as bounce-count. Exact shapes at authored numeric form live at the top of `ShipChoreographer.js` — see §4 tunable surface.
+- `carrier(t, freq, phase)` is the high-frequency tremor itself. Director's V1 estimate: **15–25 Hz visual carrier frequency** per axis (high enough to read as turbulence, low enough to stay observable on 60fps capture). Per-axis phase is independently offset so pitch and yaw don't synchronize into an obvious oval — use `Math.sin(2π × freq × t + phase_offset[axis])` or a cheaper band-limited noise; implementation detail for working-Claude.
+
+Per-event state frozen atomically at `_startTremorEvent()`: event-type (accel|decel), onset-time, duration, peak-amplitude-per-axis (snapshot of the tunable constants at onset — Max might edit them mid-tour, but an in-flight event runs on the values it started with).
+
+**4. Tunable surface — exposed constants for Max's "configurable so we can adjust" ask.** At the top of `src/auto/ShipChoreographer.js`, named and documented:
+
+- `TREMOR_ENVELOPE_DURATION = 1.5` — seconds. Bounded `[1.0, 2.0]` per Max's Q1.
+- `TREMOR_CARRIER_FREQ_HZ = 20` — carrier frequency per axis. V1 seed; Max tunes during review.
+- `TREMOR_PITCH_PEAK_DEG = 1.0` — peak pitch (camera-local x) rotation amplitude. V1 seed `[0.5, 1.5]`.
+- `TREMOR_YAW_PEAK_DEG = 1.0` — peak yaw (camera-local y) rotation amplitude. V1 seed `[0.5, 1.5]`.
+- `TREMOR_ROLL_PEAK_DEG = 0.5` — peak roll (camera-local z) rotation amplitude. Smaller default since roll reads as a "cockpit banking" cue that Max may want subtler than pitch/yaw.
+- `TREMOR_ACCEL_SHAPE = 'crescendo-fade'` (or the curve-constant name): identifies the accel envelope shape.
+- `TREMOR_DECEL_SHAPE = 'impact-decay'`: identifies the decel envelope shape.
+- `SIGNAL_ONSET_THRESHOLD` — `|d|v|/dt|` magnitude that triggers a new event. Tuned against Sol tour's typical peak `|d|v|/dt|` (the round-6/7 era threshold range is a V1 starting point; working-Claude tunes empirically via telemetry).
+- `SIGNAL_EVENT_COOLDOWN = 0.5` — seconds. Minimum gap between consecutive events of the same type on the same leg, to prevent a single sharp-motion window from firing multiple tremors.
+
+Each constant is **documented in a comment block** with its role, bounded range, and Max-tunes-during-review note, so Max can `F12` into the source and edit during playback review. This is the "configurable so we can adjust" deliverable.
+
+**5. Belt-and-suspenders sampling gate.** Round-9's failure #2 (dog-with-fleas orbit shake) happened because the trigger surface correctly declined to fire in orbit, but the sampling loop didn't check: an event that fired at the end of a `traveling` segment kept ringing out as the phase transitioned into `approaching` → `orbiting`. Round-10 guards at BOTH surfaces:
+
+- **Trigger-side gate** (§1 above): `phase === 'traveling' && !legIsShort` gates onset-detection — new events can't start outside `traveling`.
+- **Sampling-side gate** (new in round-10): `ShipChoreographer.update(dt, motionFrame)` — if `motionFrame.phase !== 'traveling'` AND a tremor event is currently active, the event aborts immediately. `shakeQuaternion` is reset to identity (zero rotation); the event's remaining duration is discarded. This catches any in-flight ringout that the trigger-side gate can't touch (because the event was started correctly in `traveling` but the phase transitioned mid-event). Belt-and-suspenders: an event can't start outside `traveling`, AND an event that somehow outlived `traveling` is silenced at sampling time.
+
+**6. Debug hooks — re-shaped for tremor events.** `debugAccelImpulse()` / `debugDecelImpulse()` entry points on `window._autopilot` retained as the eyeball-evaluable evaluation surface for AC #4 asymmetry (now refined to "asymmetric envelope-shape over the tremor carrier"). Each call enqueues a `_startTremorEvent(type)` at the next update tick with the full envelope duration + carrier + peak amplitudes pulled from the tunable constants. Debug fires bypass the phase-gate and distance-gate (unconditional, per scaffolding convention from round-8/9). The `debugImpulseAtOrbitDistance(c2t, sign)` entry point from round-9 is retired — `c2t` was a scene-unit-translation scaling concept and has no role in rotation-only shake.
+
+### Round-10 ACs
+
+ACs #1, #5–#12 from prior rounds either retire or reaffirm; ACs #2 and #4 are rewritten; AC #3 is rewritten again; ACs #13, #14, #15 from round-9 carry forward with minor rewording; ACs #16–#19 are new — the four telemetry-invariant ACs Director mandated to close the round-9 spec-class gap.
+
+1. **[RETIRED — superseded by #17 + #18].** Single-axis shake. Round-10 is three-axis rotation (pitch + yaw + roll), not one axis; single-axis was a concept tied to the pebble/boat translation metaphor. The new surface-invariant AC is #19 (rotation-not-translation), and the new axis-semantics AC is #17 (shake coincides with signal, not stray ringout).
+2. **[RETIRED — superseded by #4 reaffirmed + §8H amendment].** 3–5 discrete log-spaced bounces. Max retired the bounce-count semantics via Q2; §8H amended to canonize tremor rendering. New envelope-shape ACs are the reaffirmed #4 (asymmetric envelope curves) + #16 (event duration).
+3. **[REWRITTEN — round-10 form].** Trigger is **continuous `|d|v|/dt|` signal, phase-gated to `motionFrame.phase === 'traveling' && !motionFrame.legIsShort`**. Accel-event trigger additionally requires `!motionFrame.legIsWarpExit` (portal pre-loaded the sharp-accel); decel-event trigger has no warp-flag condition. The signal is computed as `|d|v|/dt|` from position-delta over the frame; the sign of `d|v|/dt` at onset picks accel vs. decel envelope. Verified: (a) an autopilot leg with `!legIsShort && !legIsWarpExit` fires an accel tremor mid-ramp-up (at or just after the Hermite-ease's `t ∈ [0.2, 0.4]` sharp-accel window) and a decel tremor mid-ramp-down (at or just after `t ∈ [0.6, 0.8]` sharp-decel window), not at segment boundaries; (b) a leg with `legIsShort === true` fires neither; (c) a leg with `legIsWarpExit === true` fires no accel but fires decel on the arrival-side sharp-motion window; (d) the code path from MotionFrame to `_startTremorEvent` runs ONLY while `phase === 'traveling'` — the onset-detector does not execute outside that phase-gate.
+4. **[REWRITTEN — envelope-shape form].** Accel tremor and decel tremor are **visibly, temporally asymmetric in their amplitude envelope over the tremor carrier**. Accel envelope: crescendo-then-fade — slow ramp-in, sustain at peak, ramp-out. Decel envelope: impact-then-decay — fast ramp-in to peak, long exponential/smoothstep ramp-out. The underlying carrier (high-frequency tremor) is the same; what differs is the envelope curve multiplying it. Verified: back-to-back `debugAccelImpulse()` / `debugDecelImpulse()` recording shows the accel event building up and tapering while the decel event hits hard and rings out. Diagnostic backup via AC #16 telemetry: the `amplitude_envelope(t)` profile sampled at 60fps across the event's duration matches the authored shape within tuned tolerance.
+5. **[UNCHANGED from round-1].** WS 2 invariants preserved — zero shake during smooth motion, debug hooks trigger visible shake, FlythroughCamera integration unchanged AT ITS INPUT contract (the consumer now reads a rotation instead of a position offset, which IS a contract change — but the `setShakeProvider` hook pattern and the tour-lifecycle calls stay). The "zero shake during smooth motion" clause is now: the rotation delta from shake is identity (zero rotation) during smooth motion frames.
+6. **[UNCHANGED].** Bible + Contract refinement flagged for Director. Round-10 already landed the Bible §8H tremor-shape amendment (committed in the same PM pass as this brief amendment) — listed under §"Round-10 director actions" below for symmetry. `docs/SYSTEM_CONTRACTS.md` §10.8 update to reflect the rotation-surface and continuous-phase-gated-signal trigger remains optional Director-owned work.
+7. **[UPDATED — round-10 recording gate].** Motion evidence at ship-gate — one or more canvas recordings per Shipped-gate protocol. Drop path: `screenshots/max-recordings/autopilot-shake-redesign-round10-2026-04-21.webm`. Sequence requirement: at least one full Sol tour with `!legIsShort` legs that exercises natural accel + decel tremor firing, at least one short-hop leg demonstrating silence, at least one debug-triggered `debugAccelImpulse() / debugDecelImpulse()` back-to-back pair for envelope-asymmetry eyeball review. Multiple recordings fine (one for tour, one for debug, one for warp-exit) per round-9's split convention. Working-Claude captures + surfaces contact sheet at ≤1800px per axis; Max evaluates.
+8. **[UNCHANGED — round-3 arrival-timing, now subsumed by #3].** Decel tremor fires during the sharp-decel window (mid-to-late Hermite-ease, not at segment-end boundary). Round-10's continuous-signal-during-`traveling` model naturally fires decel during the Hermite's sharp-decel peak, not at the `t=1` boundary where `travelComplete` raises. AC #8's original "fire at orbit-settle, not at approach-start" concern is moot in round-10 — the event fires mid-Hermite, finishes before the Hermite ends, and the ship's actual orbit-entry is shake-silent by phase-gate.
+9. **[UNCHANGED].** Telemetry recorder (`window._autopilot.telemetry.start()` / `.stop()`) — extended with four new fields for round-10 (see #16–#19 verification).
+10. **[RETIRED — scale-coupling no longer applies].** `orbitDistance`-scaled amplitude. Rotation-only surface doesn't need scene-unit scaling — a 1° pitch rotation reads as the same view-angle regardless of what the camera is framing. The round-4 scale-coupling invariant is retired alongside the translation surface it was guarding.
+11. **[UPDATED — telemetry fields re-scoped].** Multi-body stress-test telemetry. Round-4's `currentTargetOrbitDistance` / `currentTargetBodyRadius` / `cameraToTargetDistance` / `currentTargetType` fields stay as useful context for debugging, but they no longer verify an AC by themselves (AC #10 retired). `shakeQuaternion` / `shakeEuler` replaces `shakeOffset` / `shakeMag` in the sample shape. `|d|v|/dt|` sample (`dSpeed`) retained as the trigger-signal log.
+12. **[UPDATED — round-10 recording covers moon arrival].** Moon-arrival in recording still required, for the rotation-on-small-body evaluation (a 1° rotation at a moon is the same view-angle as at a star, but if there's any residual translation contamination it would amplify most at small bodies).
+13. **[REAFFIRMED — round-9 orbit-silence, now architectural at BOTH trigger + sampling surfaces].** Shake is inactive (`shakeQuaternion === identity`) for every frame where `motionFrame.phase ∈ {'orbiting', 'approaching', 'descending', 'idle'}`, regardless of `|d|v|/dt|` magnitude, orbit pitch oscillation, orbit breathing, or any other motion signal. Enforced by construction: (a) the onset-detector does not run outside `phase === 'traveling'`; (b) the sampling loop aborts any in-flight event if phase transitions out of `traveling`. See AC #16.
+14. **[REAFFIRMED — short-hop silence].** Shake does not fire on any leg where `motionFrame.legIsShort === true`. Enforced at the phase-gate: the `!legIsShort` predicate is part of the onset-detector's enabling condition. Verified via telemetry on a short-hop scenario: `shakeQuaternion === identity` throughout.
+15. **[REAFFIRMED — warp-exit asymmetry].** A warp-exit leg (`motionFrame.legIsWarpExit === true`) fires NO accel tremor — the ship coasts at cruise speed from the portal per Max's prior Q3 answer and Bible §8H line 1309's arrival-is-the-event canon. The decel tremor fires normally on the arrival-side sharp-decel window. Verified via a Sol warp-arrival recording: `shakeQuaternion === identity` across the ENTRY/TRAVELING coast; the decel tremor fires mid-decel-ramp.
+
+**[NEW — telemetry-invariant ACs encoding Director's round-10 direction.]**
+
+16. **[NEW] Orbit-shake cross-product is empty.** Across any tour capture, the set of frames where `shakeActive === true` (equivalently: `|shakeEuler.length() | > ε` for a small `ε` — exact ε TBD during implementation, suggest `0.001 rad`) intersected with `motionFrame.phase ∈ {'orbiting', 'approaching'}` must be **empty**. Programmatic check: iterate telemetry samples, filter for `shakeActive && (phase === 'orbiting' || phase === 'approaching')`, assert `.length === 0`. Catches round-9's dog-with-fleas regression class structurally. Runs against any recording capture via `window._autopilot.telemetry.audit.orbitCrossProduct()` (new helper method introduced in the round-10 telemetry extension — returns `{passed: bool, violations: Array<Sample>}` for Director audit).
+17. **[NEW] Shake coincides with signal.** Frames where `shakeActive === true` AND `smoothedAbsDSpeed < SIGNAL_ONSET_THRESHOLD` (computed on the same frame or within a small lag window, suggest ±3 frames = 50ms at 60fps) must be **empty**. Catches round-9's "shake at near-zero velocity" bugs (the ship coasting to a stop in front of a star, with the decel tremor firing AFTER the sharp motion has finished). Programmatic check via `window._autopilot.telemetry.audit.signalCoincidence()` — returns violations where shake was active but no significant signal was present. Note: the asymmetric envelope will ring out somewhat beyond the signal peak (the "fade" and "decay" tails are audibly intentional) — the threshold for this AC accounts for envelope-ringout by measuring the signal envelope itself, not the instantaneous value. Exact phrasing: "shake-event ONSETS must coincide with signal onsets; shake-event RINGOUTS may trail the signal by up to the envelope's ramp-out window."
+18. **[NEW] Envelope completion constraint.** At any `_startTremorEvent` call, the event's duration at onset must be ≤ remaining `traveling`-phase time at that moment. If the ship is at `t=0.8` of a 10-second travel (2 seconds remaining), envelope duration must be ≤ 2 seconds. Programmatic check: at each event onset, telemetry logs `eventOnsetTime`, `eventDuration`, and `travelingPhaseRemainingTime` (computable from `navigationSubsystem._travelEase` state); audit asserts `eventDuration ≤ travelingPhaseRemainingTime` for every event-start frame. If an event would run past the phase boundary, `_startTremorEvent` must either shorten the event's duration to fit OR decline to fire (working-Claude picks — PM suggests shortening with a minimum-duration floor of 0.5s below which the event is suppressed, since a tremor shorter than 0.5s won't read as turbulence). Catches round-9's "decel envelope rings out into APPROACHING/ORBITING" class. `window._autopilot.telemetry.audit.envelopeFitsPhase()` runs this as a post-capture check.
+19. **[NEW] Surface-invariant — rotation not translation.** ShipChoreographer's shake API is `shakeQuaternion` (or `shakeEuler`), NOT `shakeOffset: Vector3` applied to `camera.position`. Programmatic check: working-Claude's telemetry self-audit captures `camera.position` across a tremor-active frame and a pre-tremor frame with the camera on a stable tour-leg (same body target, same `lookAt`, same frame-of-reference). Pinned-star pixel-position comparison should show the background star rendering at the same canvas pixel in both frames (within sub-pixel tolerance for floating-point drift); the camera's orientation — measured as `camera.quaternion` or derived `camera.rotation` — should differ between the two frames. If the pinned-star pixel-position shifts, translation contamination is present and the AC fails. Additional code-level assertion: grep the diff for `camera.position.add(` or `camera.position.copy(... + shake...)` or equivalent — the only writes to `camera.position` in the session's diff should be the orbit-camera / tour-camera math, never a shake-sourced one. Working-Claude includes the grep result in the commit message.
+
+### Round-10 director actions
+
+- **`docs/GAME_BIBLE.md` §8H Gravity Drive — tremor-rendering-shape amendment.** LANDED in the same PM pass as this brief amendment. Commit: `14e1204`. Paragraph inserted after the existing ether paragraph, canonizing (a) rendering as sustained tremor during sharp-motion window not discrete bounces at boundaries, (b) asymmetry as envelope curve over tremor carrier, (c) primary surface as camera rotation not translation. Load-bearing so future rendering-pass readers don't re-open rounds 6–8's reconciliation spiral.
+- **`docs/SYSTEM_CONTRACTS.md` §10.8 Gravity-drive shake invariant — optional implementation refinement.** Director's call. The §8H amendment alone could carry round-10 canon; pinning the event-model + rotation-surface in §10.8 would prevent future rendering passes from re-implementing as translation shake. PM does not recommend either way — both are legitimate. Not a gate condition for round-10 release.
+
+### Round-10 in scope
+
+- **Rework `src/auto/ShipChoreographer.js`** — delete the round-9 phase-boundary-listener branches; install continuous `|d|v|/dt|` signal derivation + onset-detector gated on `motionFrame.phase === 'traveling' && !motionFrame.legIsShort` (+ `!motionFrame.legIsWarpExit` on accel-side only); introduce `_startTremorEvent(type, onsetTime, duration)` as the atomic event-starter freezing the event-type, onset-time, duration, per-axis peak amplitudes. Implement the per-frame sampling: if event active AND still in `traveling` phase, emit `shakeEuler = (env(t) × pitch_carrier, env(t) × yaw_carrier, env(t) × roll_carrier)`. If phase transitions out of `traveling`, abort event.
+- **Change `shakeOffset` API to `shakeEuler` (or `shakeQuaternion`) on `ShipChoreographer`.** Rename the public property; update JSDoc. Working-Claude picks representation (quaternion composes cleanly; Euler-triple trivially exposes per-axis tunables — PM leans Euler but working-Claude owns the choice).
+- **Rework `src/FlythroughCamera.js` shake composition.** Consumer reads the new rotation API. Compose onto `camera.quaternion` AFTER `camera.lookAt(...)` — so the shake lives in camera-local space, not world space. `camera.position` is never mutated by the shake surface. This IS a cross-file edit; explicitly authorized by this amendment. Round-1's drift-risk-4 ("Redesign bleeds into a module rewrite") is preserved — the FlythroughCamera edit is bounded to the shake-composition lines, not a broader refactor.
+- **Retire round-8/9 surface** — `ACCEL_AMPS`, `DECEL_AMPS`, `IMPULSE_INITIAL_GAP`, `IMPULSE_SPACING_RATIO`, `SHAKE_VIEW_ANGLE_MAX` (in its round-8 role), `_shakeOnsetCam2Tgt`, `_shakeOnsetSign`, Gaussian bump machinery, `debugImpulseAtOrbitDistance(c2t, sign)`. Working-Claude cites what was deleted in commit message for bisect reference.
+- **Extend `window._autopilot.telemetry`** — sample shape additions: `shakeEuler: {pitch, yaw, roll}` (replaces `shakeOffset`); `shakeActive: boolean`; `smoothedAbsDSpeed`: scalar; `eventOnsetTime`, `eventDuration`, `eventType` (when an event is active). Add three audit helpers: `.audit.orbitCrossProduct()` (AC #16), `.audit.signalCoincidence()` (AC #17), `.audit.envelopeFitsPhase()` (AC #18). Each returns `{passed: bool, violations: Array<Sample>}`.
+- **Expose the tunable constants** at the top of `ShipChoreographer.js` per §4 of round-10 model. Documented inline for Max's review-time tuning.
+- **One commit**, suggested message: `feat(autopilot): rotation-only sustained-tremor shake, signal-gated to traveling phase (round 10)`. Scope: `ShipChoreographer.js` full rework + `FlythroughCamera.js` shake-composition rework + telemetry extension in `main.js`. Single commit because the three files are mutually dependent (old API is fully retired, new API is the only path through).
+- **Recording(s) at `screenshots/max-recordings/autopilot-shake-redesign-round10-2026-04-21.webm`** (multiple files permitted per round-9 convention — tour, envelope-demo, warp-exit).
+- **Telemetry self-audit BEFORE recording Max sees.** Working-Claude runs the three `.audit.*()` helpers + the AC #19 pinned-star pixel check against a test capture, confirms all four round-10 telemetry-invariant ACs pass programmatically. If any fail, iterate on code before recording Max sees. This is the round-10 guard against the round-9 spec-class miss.
+- **Update this brief's Status line** on commit-land from `HELD — ROUND 10 PIVOT ...` → `VERIFIED_PENDING_MAX <sha>` (when commit + recordings + telemetry-audit-passing capture land) → `Shipped <sha> — verified against <recording-paths>` (after Max's verdict).
+
+### Round-10 out of scope
+
+- **Retuning envelope constants after initial authoring.** V1 seed values (`TREMOR_ENVELOPE_DURATION = 1.5s`, `TREMOR_CARRIER_FREQ_HZ = 20`, peak degrees `[1.0, 1.0, 0.5]`) are Max-tunable at review time. If the recording shows they need Max's adjustment, that's Max editing the constants during review — not a round-11 patch.
+- **Porting shake to other camera surfaces.** Only `FlythroughCamera` consumes the shake. Free-flight camera, manual-override camera, etc. are V-later.
+- **Audio coupling.** Shake events raising audio-trigger events for a future sting/rumble cue are still V-later (round-1 §Out of scope).
+- **`NavigationSubsystem.js` changes beyond what round-9 authorized.** MotionFrame's `legIsShort` and `legIsWarpExit` fields are already in place from round-9 (commit `992cbb2`). Round-10 does not add new MotionFrame fields. If the implementation needs something else from the subsystem, that's scope drift — escalate to PM.
+- **New `ShakeEngine` module.** Still V-later per round-1 drift-risk 4.
+
+### Round-10 drift risks
+
+- **Risk: Translation contamination — a single `camera.position.add(shake...)` slips in during the FlythroughCamera rework and AC #19 fails.**
+  **Why it happens:** "composing shake into the camera" is a single mental operation that has two very different code realizations (position vs. orientation); the off-the-shelf camera-shake code in most engines does translation, and autocomplete/muscle-memory favors that path.
+  **Guard:** AC #19 is the programmatic check. Working-Claude greps the diff for any `camera.position.` write path introduced in the shake code, confirms it's zero, cites the grep in the commit message. Pinned-star pixel check runs as telemetry self-audit before Max sees the recording.
+
+- **Risk: Signal onset-detection fires inside orbit because the phase-gate is implemented as a guard after signal derivation, not as an early return.**
+  **Why it happens:** defensive coding order — "derive the signal for telemetry, then check the gate" feels cleaner than "gate first, derive only inside the gate." But in practice, an exception or a bug in the gate-check could leave a signal-derivation sneaking a `_startTremorEvent` call through before the gate short-circuits.
+  **Guard:** the onset-detector's entry branch is `if (motionFrame.phase !== 'traveling' || motionFrame.legIsShort) return;` at the TOP of the function. Signal-derivation runs only inside the gate. AC #16 catches any leak programmatically.
+
+- **Risk: Sampling-gate aborts an in-flight event but forgets to reset `shakeEuler` to identity, leaving stale values on the camera.**
+  **Why it happens:** the "abort event" mental operation is one thing; the "zero the output" mental operation is another; they must both happen but code-wise they can be separated.
+  **Guard:** the abort path in `update()` does both in the same code block: `this._tremorEventActive = false; this.shakeEuler = {pitch: 0, yaw: 0, roll: 0};` (or `this.shakeQuaternion.identity()`). AC #13 telemetry catches any frame where phase is not `'traveling'` but `shakeEuler.length() > ε`.
+
+- **Risk: Envelope duration hard-coded at 1.5s overflows short `traveling` phases.**
+  **Why it happens:** short-but-non-short-hop legs exist (the `_isShortTrip` predicate is a threshold; a leg with `dist = 31` is `!isShortTrip` but its `traveling` phase could be <1.5s). The event would start, run, and ringout past the phase boundary.
+  **Guard:** AC #18 encodes this invariant and the event-starter consults `travelingPhaseRemainingTime` at onset, either shortening to fit or suppressing below the 0.5s floor.
+
+- **Risk: Per-axis carrier frequencies synchronize into a visually obvious oval or circle pattern.**
+  **Why it happens:** three identical-frequency sines with incidental phase relationships produce Lissajous figures; 20Hz + 20Hz + 20Hz without varied phase offsets will lock into a repeating orbit-shape that reads as a mechanical wobble, not turbulence.
+  **Guard:** per-axis phase offsets (e.g., `Math.sin(2π × freq × t + pitch_phase)`, different phases for yaw and roll). Alternative: per-axis slight frequency detuning (`pitch_freq = 20Hz`, `yaw_freq = 22Hz`, `roll_freq = 19Hz`) which naturally decorrelates. Working-Claude picks; PM's V1 suggestion is phase-offset detuning since that's cheaper and easier to tune.
+
+### Gate release condition
+
+Director re-audits this amendment (fifth audit on this workstream) and verifies:
+1. Trigger model (continuous signal phase-gated to `traveling`) is unambiguous — §Round-10 model #1.
+2. Surface model (rotation on camera, not translation) is pinned with AC #19 as the programmatic gate.
+3. Envelope model (sustained tremor with asymmetric amplitude envelope over high-frequency carrier) replaces the round-8/9 log-impulse-train verbatim — §Round-10 model #3.
+4. Tunable constants are exposed per §Round-10 model #4 to honor Max's "configurable so we can adjust" ask.
+5. Belt-and-suspenders sampling gate is present — §Round-10 model #5.
+6. ACs #16, #17, #18, #19 are authored as the telemetry-invariant close for the round-9 spec-class gap.
+7. Bible §8H amendment is committed (LANDED at `14e1204`).
+
+If audit passes, gate releases scoped to the round-10 commit. State updates to `{ "edits": 0, "last_audit_sha": "<pm-amendment-sha>" }` on release. Working-Claude does NOT edit code until Director audit lands.
+
+Drafted by PM 2026-04-21 as the round-10 pivot amendment, following Max's three verbatim Q&A answers (envelope 1–2s subtle; shape sustained tremor like aircraft turbulence; axes pitch/yaw/roll configurable) and Director's §"Round-9 REJECTED — retry" direction. Bible §8H committed separately at `14e1204`.
