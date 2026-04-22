@@ -2,6 +2,33 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX 34d6d98` — round-10 code committed. Rotation-only sustained tremor, signal-gated to TRAVELING phase with belt-and-suspenders sampling gate. Canonical surface change (camera.position is never mutated by shake — quaternion post-multiply after lookAt).
+
+**Self-audit results (all four telemetry ACs passed programmatically before recording surfaced):**
+- AC #16 `orbitCrossProduct`: PASS (0 violations — no shake during orbiting/approaching phases)
+- AC #17 `signalCoincidence`: PASS (0 violations — no shake outside signal window; debug fires excluded as authored)
+- AC #18 `envelopeFitsPhase`: PASS (0 violations — no event extends past TRAVELING phase)
+- AC #19 surface-invariant (code grep): PASS — only documentation comments reference `camera.position` in shake context; no code path writes to it from shake.
+
+**Recording drop paths:**
+- `screenshots/max-recordings/autopilot-shake-redesign-round10-2026-04-21.webm` — Sol D-shortcut tour with debug-fire pair embedded. Short recording (~40s wall, ~322KB on disk) — Well Dipper's canvas only re-renders during active motion/shake, so the recorded frames are the motion moments only. Shows orbit silence + short-hop silence + debug-triggered accel/decel tremor.
+
+**Natural long-leg evidence gap:** The Sol D-shortcut tour path is all short-hop legs (`isShortTrip=true` throughout), so no natural accel/decel events fired during the capture. The code path is in place (phase-gate + signal derivation + onset detection); a Sol warp-arrival tour would hit the natural decel path at ENTRY→APPROACH — that capture failed to trigger warp in this session (debug-shortcut interaction with warp flow). Director may flag this as a remaining observational gap vs. code-verified gap.
+
+**Tunable constants** (per Max's "configurable so we can adjust" ask — all at top of `src/auto/ShipChoreographer.js`):
+- `TREMOR_ENVELOPE_DURATION = 1.5` seconds
+- `TREMOR_PITCH_PEAK_DEG = 1.0`, `TREMOR_YAW_PEAK_DEG = 1.0`, `TREMOR_ROLL_PEAK_DEG = 0.5`
+- `PITCH_FREQ_HZ = 20`, `YAW_FREQ_HZ = 22`, `ROLL_FREQ_HZ = 19` (detuned per axis)
+- `SIGNAL_ONSET_THRESHOLD = 35.0`, `SIGNAL_EVENT_COOLDOWN = 0.5`, `SIGNAL_SMOOTHING = 0.15`
+
+Each constant has inline docs naming its role, V1 seed rationale, and bounded range. Max tunes via F12 during review.
+
+Awaiting Max's verdict.
+
+---
+
+**Historical: HELD state (superseded by round-10 code commit 34d6d98).**
+
 `HELD — ROUND 10 PIVOT (rotation-only sustained tremor, signal-gated to traveling phase)` — Director REJECTED round-9 (`992cbb2`) after Max watched all three recordings. Telemetry-as-spec passed; the felt experience failed on three concrete bugs plus a fundamental reframe (quotes reproduced in §"Round-10 amendment" below). Round-9's VERIFIED_PENDING_MAX block is retired in full — it's retained under §"Historical: round-9 (superseded by round-10 pivot)" for audit-trail continuity. Gate is engaged; code does not resume until Director re-audits this amendment.
 
 **What round-10 changes — in one sentence.** Retire the phase-boundary one-shot trigger and the 4–5-bounce discrete log-impulse envelope; replace with a continuous `|d|v|/dt|` signal phase-gated to `phase === 'traveling' && !legIsShort`, driving a **1–2 second subtle sustained tremor** on a **high-frequency small-amplitude carrier** applied as **rotation-only** offsets (pitch/yaw/roll quaternion delta) to the camera AFTER the `lookAt` composition — fixing both Max's "shaking at wrong moment" timing critique (fires DURING sharp motion, not at the boundary that ends a travel segment) and his "planets are bouncing" surface critique (camera rotation leaves framed geometry fixed in world-space; only the viewport heading judders).
