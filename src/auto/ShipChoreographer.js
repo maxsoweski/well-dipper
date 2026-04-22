@@ -239,6 +239,17 @@ export class ShipChoreographer {
     // only evaluates natural events; debug events intentionally fire
     // outside the signal window so Max can eyeball shape on demand.
     this._eventIsDebug = false;
+
+    // Per-leg fire budget (round-11, AC #20). Max's stated model is
+    // "once when the burn commences, once to take us out of cruise" —
+    // i.e., at most 1 accel + 1 decel per TRAVELING phase of a leg.
+    // The Hermite arrival-blend window produces two distinct |d|v|/dt|
+    // peaks during decel (blend-start and blend-complete); the 0.5s
+    // cooldown alone isn't enough to suppress the second. Per-leg budget
+    // is the authoritative gate; cooldown stays as belt-and-suspenders
+    // against noise re-firing. Debug fires bypass this budget
+    // (unconditional, per scaffolding convention).
+    this._firedThisLeg = { accel: false, decel: false };
   }
 
   // ── Public surface ──
@@ -288,6 +299,14 @@ export class ShipChoreographer {
     }
 
     this._timeAccum += deltaTime;
+
+    // Round-11: reset per-leg fire budget on new-leg one-shot. A single
+    // beginMotion → TRAVELING → APPROACHING → ORBITING cycle constitutes
+    // one leg; each new leg gets a fresh accel + decel budget.
+    if (motionFrame.motionStarted) {
+      this._firedThisLeg.accel = false;
+      this._firedThisLeg.decel = false;
+    }
 
     // Map subsystem phase → ship-axis phase
     const subPhase = motionFrame.phase;
@@ -369,7 +388,10 @@ export class ShipChoreographer {
         const lastEnd = (type === 'accel') ? this._lastAccelEndTime : this._lastDecelEndTime;
         const cooldownOk = (this._timeAccum - lastEnd) >= SIGNAL_EVENT_COOLDOWN;
         const warpExitOk = (type === 'decel') || !motionFrame.warpExit;
-        if (cooldownOk && warpExitOk) {
+        // Round-11 AC #20: per-leg budget — at most 1 natural accel + 1
+        // natural decel event per TRAVELING phase. Debug fires bypass.
+        const budgetOk = !this._firedThisLeg[type];
+        if (cooldownOk && warpExitOk && budgetOk) {
           this._startTremorEvent(type, /* isDebug */ false);
         }
       }
@@ -480,6 +502,12 @@ export class ShipChoreographer {
     this._eventOnsetTime = this._timeAccum;
     this._eventDuration = duration;
 
+    // Round-11 AC #20: natural fires consume the per-leg budget.
+    // Debug fires leave the budget untouched (unconditional scaffolding).
+    if (!isDebug) {
+      this._firedThisLeg[type] = true;
+    }
+
     // Randomize per-axis phases so consecutive events don't pattern-match
     this._pitchPhase = Math.random() * TWO_PI;
     this._yawPhase   = Math.random() * TWO_PI;
@@ -525,6 +553,8 @@ export class ShipChoreographer {
     this._eventDuration = 0;
     this._lastAccelEndTime = -Infinity;
     this._lastDecelEndTime = -Infinity;
+    this._firedThisLeg.accel = false;
+    this._firedThisLeg.decel = false;
   }
 }
 

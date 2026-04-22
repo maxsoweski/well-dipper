@@ -449,8 +449,10 @@ window._autopilot = {
        */
       orbitCrossProduct(samples) {
         samples = samples || _telemetryState.samples || [];
+        // Debug fires bypass phase gates by design (test scaffolding). Exclude.
         const violations = samples.filter(s =>
           s.shakeActive === true
+          && !s.eventIsDebug
           && (s.navPhase === 'orbiting' || s.navPhase === 'approaching')
         );
         return { passed: violations.length === 0, violations, totalSamples: samples.length };
@@ -497,6 +499,8 @@ window._autopilot = {
           const prev = samples[i - 1];
           const isOnset = s.shakeActive && (!prev || !prev.shakeActive);
           if (!isOnset) continue;
+          // Debug fires bypass phase gates by design. Exclude.
+          if (s.eventIsDebug) continue;
           const onsetT = s.t;
           const endT = onsetT + s.eventDuration * 1000;
           // Walk forward while within envelope window
@@ -515,18 +519,64 @@ window._autopilot = {
       },
 
       /**
-       * Run all three audits and return a combined report.
+       * AC #20 (round-11): per-leg fire budget.
+       * Across any telemetry capture, for each contiguous TRAVELING
+       * segment bounded by a MotionFrame `motionStarted===true` (leg
+       * start), count distinct NATURAL event onsets per type. Assert
+       * at most 1 accel + 1 decel per leg. Debug fires (eventIsDebug
+       * === true) are excluded by construction.
+       */
+      perLegFireBudget(samples) {
+        samples = samples || _telemetryState.samples || [];
+        // Walk samples grouped by "leg." A leg starts on a motionStarted
+        // one-shot; samples don't carry that flag directly, but we can
+        // infer leg boundaries from navPhase 'idle' → 'descending'/'traveling'
+        // transitions OR from re-entries into 'traveling' after any other
+        // phase. Simplified: any navPhase change from non-'traveling' → 'traveling'
+        // begins a new leg for budget purposes.
+        const violations = [];
+        let currentLeg = null;
+        for (let i = 0; i < samples.length; i++) {
+          const s = samples[i];
+          const prev = samples[i - 1];
+          const enteringTraveling = s.navPhase === 'traveling' && (!prev || prev.navPhase !== 'traveling');
+          if (enteringTraveling) {
+            if (currentLeg && (currentLeg.accelCount > 1 || currentLeg.decelCount > 1)) {
+              violations.push(currentLeg);
+            }
+            currentLeg = { legStartTime: s.t, accelCount: 0, decelCount: 0, onsets: [] };
+          }
+          if (currentLeg) {
+            // Onset = first frame of shakeActive for a new event
+            const isOnset = s.shakeActive && (!prev || !prev.shakeActive || prev.eventOnsetTime !== s.eventOnsetTime);
+            if (isOnset && !s.eventIsDebug) {
+              if (s.eventType === 'accel') currentLeg.accelCount++;
+              else if (s.eventType === 'decel') currentLeg.decelCount++;
+              currentLeg.onsets.push({ t: s.t, type: s.eventType, smoothedAbsDSpeed: s.smoothedAbsDSpeed });
+            }
+          }
+        }
+        if (currentLeg && (currentLeg.accelCount > 1 || currentLeg.decelCount > 1)) {
+          violations.push(currentLeg);
+        }
+        return { passed: violations.length === 0, violations, totalSamples: samples.length };
+      },
+
+      /**
+       * Run all four audits and return a combined report.
        */
       runAll(samples) {
         const s = samples || _telemetryState.samples || [];
         const orbit = this.orbitCrossProduct(s);
         const signal = this.signalCoincidence(s);
         const envFit = this.envelopeFitsPhase(s);
+        const perLeg = this.perLegFireBudget(s);
         return {
-          passed: orbit.passed && signal.passed && envFit.passed,
+          passed: orbit.passed && signal.passed && envFit.passed && perLeg.passed,
           ac16_orbitCrossProduct: { passed: orbit.passed, violationCount: orbit.violations.length },
           ac17_signalCoincidence: { passed: signal.passed, violationCount: signal.violations.length },
           ac18_envelopeFitsPhase: { passed: envFit.passed, violationCount: envFit.violations.length },
+          ac20_perLegFireBudget: { passed: perLeg.passed, violationCount: perLeg.violations.length },
           totalSamples: s.length,
         };
       },
