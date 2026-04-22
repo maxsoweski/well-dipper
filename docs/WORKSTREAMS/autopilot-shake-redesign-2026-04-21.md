@@ -2,6 +2,29 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX 1bb5eb2` — round-11 code committed. Per-leg fire budget in place: at most 1 accel + 1 decel natural event per TRAVELING phase, reset on `motionStarted` one-shot. Debug fires bypass (unconditional scaffolding).
+
+**Self-audit results (all four telemetry ACs passed programmatically):**
+- AC #16 `orbitCrossProduct`: PASS (0 violations — natural shake outside orbit/approach empty).
+- AC #17 `signalCoincidence`: PASS (0 violations — natural shake coincides with signal window).
+- AC #18 `envelopeFitsPhase`: PASS (0 violations — natural events stay within TRAVELING phase).
+- AC #20 `perLegFireBudget`: PASS (0 violations — natural events ≤1 accel + ≤1 decel per leg).
+
+(Debug-fire false-positives fixed in same commit: AC #16 and #18 now exclude `eventIsDebug === true` samples consistently with AC #17 and #20 — debug fires bypass phase gates by design; audits now reflect that.)
+
+**Recording drop path:**
+- `screenshots/max-recordings/autopilot-shake-redesign-round11-2026-04-22.webm` (~13 MB, 30s Sol D-shortcut tour + debug-fire pair).
+
+Max's hand-evaluated check is "2 fires per long leg, not 3–4." Programmatic AC #20 covers the same invariant. The round-11 capture hit 1 natural leg (short-hop-heavy tour path); debug fires visible at end for envelope-shape eyeball review.
+
+**Hitch at APPROACH→ORBIT** is still present — **not round-11 scope**. Covered by separate workstream at `docs/WORKSTREAMS/autopilot-approach-orbit-continuity-2026-04-22.md` (drafted, pending Director audit + Max greenlight).
+
+Awaiting Max's verdict on the round-11 recording.
+
+---
+
+**Historical: HELD state (superseded by round-11 code commit 1bb5eb2).**
+
 `HELD — ROUND 11 PIVOT (per-leg fire budget: 1 accel + 1 decel max per TRAVELING phase)` — Director held the workstream after Max watched round-10 and reported the shake firing 3–4 times per planet-planet transit instead of the intended 2 (once at burn-start, once at burn-end).
 
 **Max's round-10 feedback (2026-04-22, verbatim):**
