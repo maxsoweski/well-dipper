@@ -9,11 +9,17 @@
 - Debug decel impulse: 4 impact-decay peaks.
 - Natural Sol tour (27s, autopilot short-hop legs — `isShortTrip === true` throughout): zero auto-fires. AC #14 ✓.
 - STATION phase sampling: zero shake across 60+ frames. AC #13 ✓ (architectural).
-- Warp-exit path not exercised in this recording path (D-shortcut spawns in-system). AC #15 depends on the `warpExit` gate in code; telemetry for that invariant comes from a future warp-tour recording.
+- Warp-exit path verified in supplementary recording (captured same session, post-Director direction). Telemetry:
+  - t=1.77s: warp begins
+  - t=13.0s: warp ends; ship in ENTRY/TRAVELING with `warpExit=true`, `isShort=false` — **no accel event fires** (gated off by `!warpExit` condition). AC #15 coast invariant ✓.
+  - t=16.05s: `travelComplete` at ENTRY→APPROACH transition — **decel envelope fires** (sign=-1, c2t=100). AC #15 decel-on-arrival invariant ✓.
+  - t=18.0s: decel ringout complete.
+  - t=20.5s: ship reaches orbit; silent thereafter.
 
 **Recording drop paths:**
 - `screenshots/max-recordings/autopilot-shake-redesign-round9-2026-04-21.webm` (9.9 MB, 27s): natural Sol tour + back-to-back debug pair at t≈20-27s. Demonstrates orbit + short-hop silence.
 - `screenshots/max-recordings/autopilot-shake-redesign-round9-envelope-demo-2026-04-21.webm` (3 MB, 11s): envelope demo at forced `c2t=50` via `debugImpulseAtOrbitDistance(50, ±1)` for visible-scale AC #2 + AC #4 evaluation.
+- `screenshots/max-recordings/autopilot-shake-redesign-round9-warpexit-2026-04-21.webm` (9.1 MB, 25s): warp-arrival Sol tour — portal traversal, ENTRY coast (silent), decel at ENTRY→APPROACH boundary, orbit settle. AC #15 observational evidence.
 - Contact sheet: `...-round9-envelope-demo-2026-04-21-contactsheet.png` (6×4 grid @ 3 fps).
 
 Diff stats: +119 lines, −168 lines (net code reduction of 49 lines). ShipChoreographer lost its signal-processing loop entirely.
