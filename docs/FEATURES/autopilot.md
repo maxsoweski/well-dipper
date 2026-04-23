@@ -260,14 +260,15 @@ Child workstream briefs (PM-owned) that carry this feature forward:
 - **`docs/WORKSTREAMS/autopilot-star-orbit-distance-2026-04-20.md`** — **Scoped 2026-04-20.** Widens the autopilot's star-approach `STATION` distance so arrival at a star reads as a comfortable long look rather than photosphere-skim. Attacks the `STATION` "safe distance" criterion specifically on star-class bodies. Parent-feature reference in that brief is legacy (§2 + §5.3 of SYSTEM_CONTRACTS) because this feature doc didn't exist when it was authored — **retroactive citation update is tracked as a followup in that brief, not this one.**
 - **`docs/WORKSTREAMS/ooi-capture-and-exposure-system-2026-04-20.md`** — **Scoped 2026-04-20.** Ships the OOI catalog + repeatable-process trigger + runtime-registry spec. This feature doc is named as the parent; the PM brief's parent-feature line refers to this doc by name in advance of it landing. **Director action:** on the next audit of that brief, confirm the parent-feature line tightens to cite §Camera axis and §V-later triage specifically.
 - **`docs/WORKSTREAMS/warp-phase-perf-pass-2026-04-20.md`** — **Active 2026-04-20.** Not a direct autopilot workstream, but the `ENTRY` phase is the warp→autopilot handoff; perf hitches at the warp-exit moment break the `ENTRY` "velocity preserved as continuity anchor" criterion. Flagged for cross-reference; no scope overlap.
+- **`docs/WORKSTREAMS/autopilot-camera-axis-retirement-2026-04-23.md`** — **Scoped 2026-04-23.** WS 3 of 4 in the V1 autopilot sequence. Lands the `CameraMode` enum as a first-class dispatch surface (§10.1 / §133), ships `ESTABLISHING` as the V1 authored camera mode (independent pacing, linger on receding subjects, pan-forward toward incoming targets), wires the §10.9 OOI query stub interface, and emits `camera-mode-change` on the autopilot event-surface per §10.7. `SHOWCASE` and `ROVING` are architecturally present but unexercised. Premise note: WS 1 already retired the legacy `FlythroughCamera.State` enum — this workstream's actual work is the camera-axis dispatch + ESTABLISHING authoring, not the enum removal described in an earlier framing.
 
 Future workstreams (not yet scoped) that will advance this feature:
 
-- Ship-motion greenfield — the four ship-axis phases as a motion system, replacing today's single-axis `FlythroughCamera`.
-- Camera-axis decoupling — the two-axis dispatch, shipping `ESTABLISHING` as the V1 camera mode.
+- Ship-motion greenfield — the four ship-axis phases as a motion system, replacing today's single-axis `FlythroughCamera`. **Landed by WS 2 `autopilot-ship-axis-motion-2026-04-20.md` + `autopilot-shake-redesign-2026-04-21.md`.**
+- Camera-axis decoupling — the two-axis dispatch, shipping `ESTABLISHING` as the V1 camera mode. **Scoped 2026-04-23 as `autopilot-camera-axis-retirement-2026-04-23.md` (above).**
 - Autopilot-toggle UI — the upper-left status indicator + keybinding.
-- Audio event-surface hook — the emit-without-subscribers V1 surface.
-- Gravity-drive shake mechanism — camera / ship-mesh additive perturbation system.
+- Audio event-surface hook — the emit-without-subscribers V1 surface. **Partially landed by WS 3 above (`camera-mode-change` event). `phase-change` + `toggle` events remain — WS 4 scope.**
+- Gravity-drive shake mechanism — camera / ship-mesh additive perturbation system. **Landed by WS 2 shake-redesign at `1bb5eb2`.**
 
 ## Parking lot
 
