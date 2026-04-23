@@ -38,6 +38,15 @@ import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
 import { ShipChoreographer } from './auto/ShipChoreographer.js';
+import { CameraChoreographer } from './auto/CameraChoreographer.js';
+// Note: `CameraMode` already imported from ./camera/ShipCameraSystem.js on
+// line ~19 with different semantics (flight/autopilot/spawn for the ship-
+// camera controller). The autopilot camera-axis dispatch has its own
+// CameraMode enum (ESTABLISHING/SHOWCASE/ROVING) — alias it to avoid the
+// identifier clash.
+import { CameraMode as AutopilotCameraMode } from './auto/CameraMode.js';
+import { OOIRegistry } from './auto/OOIRegistry.js';
+import { AutopilotEvents } from './auto/AutopilotEvents.js';
 import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
@@ -345,10 +354,27 @@ const navSubsystem = new NavigationSubsystem();
 const flythrough = new FlythroughCamera(camera, navSubsystem);
 const shipChoreographer = new ShipChoreographer(navSubsystem);
 flythrough.setShakeProvider(shipChoreographer);
+
+// WS 3 — camera-axis dispatch per §10.1. The camera choreographer authors
+// which target the camera looks at each frame (ESTABLISHING: linger on
+// receding subjects, pan forward toward incoming targets). OOIRegistry is
+// the §10.9 stub that SHOWCASE / ROVING branches reference even though V1
+// never exercises them. autopilotEvents is the §10.7 event surface —
+// camera-mode-change emits on transitions with zero V1 subscribers.
+const autopilotEvents = new AutopilotEvents();
+const ooiRegistry = new OOIRegistry();
+const cameraChoreographer = new CameraChoreographer(
+  shipChoreographer, navSubsystem, ooiRegistry, autopilotEvents,
+);
+flythrough.setCameraChoreographer(cameraChoreographer);
+
 window._flythrough = flythrough;
 window._autoNav = autoNav;
 window._navSubsystem = navSubsystem;
 window._shipChoreographer = shipChoreographer;
+window._cameraChoreographer = cameraChoreographer;
+window._autopilotEvents = autopilotEvents;
+window._ooiRegistry = ooiRegistry;
 
 // WS 2 / shake-redesign debug hooks — exposed for AC #4 + AC #5 shake-
 // verification recordings + AC #9 telemetry recorder (round-3 amendment).
@@ -370,6 +396,18 @@ window._autopilot = {
   debugAbruptTransition: () => shipChoreographer.debugAbruptTransition(),
   getShipPhase:          () => shipChoreographer.currentPhase,
   getAbruptness:         () => shipChoreographer.abruptness,
+
+  // WS 3 — camera-axis dispatch debug hooks per brief §"In scope".
+  // Exposed so Max (or working-Claude) can exercise the dispatch
+  // manually during review. `setCameraMode('SHOWCASE')` routes the
+  // dispatch through the SHOWCASE branch (which falls back to
+  // ESTABLISHING via §10.9 stub returning []); same for ROVING.
+  getCameraMode: () => cameraChoreographer.currentMode,
+  setCameraMode: (mode) => cameraChoreographer.setCameraMode(mode),
+  getFramingState: () => cameraChoreographer.framingState,
+  getLingerElapsed: () => cameraChoreographer.lingerElapsed,
+  getPanAheadBias: () => cameraChoreographer.panAheadBias,
+  AutopilotCameraMode,  // export autopilot's camera-axis enum for manual console use
 
   /**
    * AC #11 round-4: force a decel impulse at the orbit-distance of a

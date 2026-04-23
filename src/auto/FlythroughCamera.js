@@ -57,10 +57,24 @@ export class FlythroughCamera {
     this._shakeProvider = null;
     // Reusable quaternion for shake composition
     this._shakeQuat = new THREE.Quaternion();
+
+    // ── Camera choreographer hook (WS 3 — camera-axis dispatch per §10.1) ──
+    // Optional. If set, `update()` calls `choreographer.update(dt, frame)`
+    // and reads `choreographer.currentLookAtTarget` for the camera's
+    // look target instead of `frame.lookAtTarget`. The choreographer
+    // authors the framing (ESTABLISHING linger / pan-forward / SHOWCASE /
+    // ROVING); this module stays the orientation-write surface —
+    // `camera.lookAt` is called here, never in the mode objects. That
+    // preserves the shake-composition ordering from the round-10 shake
+    // redesign (position → lookAt → rot-blend → shake) — WS 3 AC #3.
+    this._cameraChoreographer = null;
   }
 
   /** Optional: set a shake-offset provider (e.g., ShipChoreographer). */
   setShakeProvider(provider) { this._shakeProvider = provider; }
+
+  /** Optional: set a camera-mode dispatch provider (e.g., CameraChoreographer). */
+  setCameraChoreographer(choreographer) { this._cameraChoreographer = choreographer; }
 
   /**
    * Is motion currently planned / executing?
@@ -114,13 +128,24 @@ export class FlythroughCamera {
     this._rotBlendElapsed += deltaTime;
 
     // Write position from subsystem plan. Round-10 invariant: shake does
-    // NOT mutate position. Pinned geometry stays pinned in world-space;
-    // only camera orientation jitters below.
+    // NOT mutate position. WS 3 invariant: choreographer does NOT mutate
+    // position either — that's the motion-produces pipeline (§5.3 /
+    // Principle 5). Pinned geometry stays pinned in world-space; only
+    // camera orientation jitters below.
     this.camera.position.copy(frame.position);
 
-    // Author orientation: free-look-applied lookAt toward the subsystem's
-    // target-look point.
-    this._applyFreeLookAndLookAt(frame.lookAtTarget);
+    // WS 3: advance camera choreographer and use its authored target.
+    // Fallback to subsystem's lookAtTarget when no choreographer is set
+    // (e.g., during early init or if disabled).
+    let lookTarget = frame.lookAtTarget;
+    if (this._cameraChoreographer) {
+      this._cameraChoreographer.update(deltaTime, frame);
+      lookTarget = this._cameraChoreographer.currentLookAtTarget;
+    }
+
+    // Author orientation: free-look-applied lookAt toward the
+    // choreographer's (or subsystem's fallback) target-look point.
+    this._applyFreeLookAndLookAt(lookTarget);
 
     // Orientation-blend slerp — pull the just-authored orientation BACK
     // toward the pre-motion quaternion for the first rotBlendDuration,
