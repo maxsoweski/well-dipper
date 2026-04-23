@@ -2,6 +2,26 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX 3b926aa` — WS 3 code committed in two commits (`e6c5201` dispatch + ESTABLISHING + wiring; `3b926aa` OOI stub + event surface). All ACs programmatically verified in 60s Sol D-shortcut tour:
+
+- **AC #1** first-class dispatch: `CameraMode = Object.freeze({ESTABLISHING, SHOWCASE, ROVING})` exported from `src/auto/CameraMode.js`. Dispatch is `switch(this._mode)` in `CameraChoreographer.update()`; SHOWCASE + ROVING branches exist, reference OOI stub via `getNearbyOOIs` + `getActiveEvents`, fall back through dispatch to ESTABLISHING.
+- **AC #2** mode-transition idempotent emission: 3 distinct `setCameraMode` calls → 3 `camera-mode-change` events; 2 same-mode calls → 0 events; invalid mode → 0 events + console warn.
+- **AC #3** shake composition preserved: all four shake ACs (#16–20) PASS on the 60s capture. `camera.lookAt` stays in `FlythroughCamera._applyFreeLookAndLookAt`; mode only produces the target.
+- **AC #4/#5/#6** ESTABLISHING authored: linger observed at STATION→CRUISE edge (1.749s; > 1.0s rot-blend). Pan-ahead periods: 2, peak bias 0.35 (authored PAN_AHEAD_FRACTION). Camera-framing transitions decoupled from ship-phase transitions.
+- **AC #7** OOI stub signature + dispatch-side references: `getNearbyOOIs` and `getActiveEvents` called from SHOWCASE/ROVING dispatch branches (grep-findable).
+- **AC #8** two-axis decoupling: `EstablishingMode.update()` switches on `_framingState ∈ {TRACKING, LINGERING, PANNING_AHEAD}`, NOT on `ShipPhase`. Ship phase consulted only for transition-edge detection, as an input signal.
+- **AC #10** separable commits landed: `e6c5201` + `3b926aa` + (this Status flip).
+
+**Recording drop path:** `screenshots/max-recordings/autopilot-camera-axis-retirement-2026-04-23.webm` (~20 MB, 60s Sol tour). Shows a full STATION→CRUISE linger + CRUISE pan-ahead + arrival sequence with shake mechanism intact.
+
+**Tunable surface** at top of `src/auto/CameraChoreographer.js`: `LINGER_DURATION = 1.8s`, `PAN_AHEAD_FRACTION = 0.35`, `PAN_AHEAD_RAMP = 0.8/s`, `PAN_AHEAD_DECAY = 2.0/s`. Max edits during review via F12.
+
+Awaiting Max's verdict.
+
+---
+
+**Historical: Scoped state (superseded by commits e6c5201 + 3b926aa).**
+
 `Scoped 2026-04-23` — third of four sequential workstreams delivering
 V1 autopilot. Parent feature `docs/FEATURES/autopilot.md` (Director-
 authored 2026-04-20 at commit `bdeb0ff`). Predecessors:
