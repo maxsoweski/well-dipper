@@ -31,6 +31,8 @@ Round-2 patched EstablishingMode per Director option (a) — direct code patch, 
 
 **Residual finding (NOT WS 3 scope, flagged for continuity/follow-up):** one mid-TRACKING frame showed a ~99.9 unit `camLookAt` delta with `framingState` stable. Per Director's attribution rule, a non-transition jump = nav-layer target-composition issue (`motionFrame.lookAtTarget` jumped; WS 3 faithfully reflected it). Likely the nav subsystem's heading-composition seam at a leg-advance. Not a WS 3 regression.
 
+**PANNING_AHEAD / APPROACH head-turn finding (reckoning appendix 2026-04-24, deferred to loop (a) of `docs/WORKSTREAMS/autopilot-live-feedback-2026-04-24.md`).** The reckoning telemetry's `cameraViewAngularContinuity` audit flagged 11 violations on a fresh Sol D-shortcut tour against this workstream's Shipped code (top: 35,384°/sec yaw at t=48.16s during PANNING_AHEAD / APPROACH / ESTABLISHING), and `bodyInFrameChanges` flagged 18 quarter-second-glance violations at the planet↔moon transition crossover. These were below the prior audit's observability floor (`camLookAt` position-delta vs angular rate on `camFwd`). WS 3 stays Shipped at `b7699de`; the fix is a frame-to-frame angular-rate clamp in `EstablishingMode` (loop a of the live-feedback workstream), which adds a rate-limiter on the composition output without altering WS 3's authored linger / pan-ahead / independent-pacing behavior per ACs #4–#6.
+
 Awaiting Max's re-verdict.
 
 ---

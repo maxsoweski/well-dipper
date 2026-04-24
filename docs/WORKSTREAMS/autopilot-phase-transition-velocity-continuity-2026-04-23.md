@@ -2,7 +2,7 @@
 
 ## Status
 
-`HELD — REJECTED on 2026-04-24, telemetry insufficient.` Max viewed the 2026-04-23 recording and reported specific visible issues the telemetry self-audit did NOT catch:
+`HELD — REJECTED on 2026-04-24, telemetry insufficient. Superseded (partially) by autopilot-live-feedback-2026-04-24 — loop (b) replaces the velocity-blend mechanism's seam-blend target with a live-per-body read, resolving the moon-motion reconciliation class of bug this workstream's T₀-captured extrapolation cannot address. VelocityBlend machinery (window + smoothstep ramp) stays; the blend target moves from captured-extrapolation to live-per-body. Continuity re-audit runs against the new pipeline after the live-feedback workstream Ships; this workstream's Shipped flip waits on that re-audit.` Max viewed the 2026-04-23 recording and reported specific visible issues the telemetry self-audit did NOT catch:
 
 > *"After arriving at the planet, there's a weird head turn motion that happens, and then there's a weird pause followed by a small zoom in, zoom out, then return. Then the orbit commences pretty normally. Then there's a transition to a moon and there's like another weird kind of like jerky motion."*
 

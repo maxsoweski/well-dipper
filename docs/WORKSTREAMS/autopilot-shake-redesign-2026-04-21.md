@@ -17,6 +17,7 @@
 **Adjacent items surfaced during review, parked separately (not shake-redesign scope):**
 - `docs/WORKSTREAMS/autopilot-approach-orbit-continuity-2026-04-22.md` — Drafted workstream for nav-layer velocity continuity at APPROACH→ORBIT. Max reported the hitch as "seems fixed" at round-11 review — the continuity brief may be moot or reduced scope; re-evaluate when activated.
 - `docs/FEATURES/autopilot.md` §"Parking lot" (commit `79cdf4e`) — Travel-feel speed-field issue (planet↔moon "one gear" feel per Max, reference Elite Dangerous Supercruise). Parked at feature-doc level; awaits speed-field articulation before PM scopes execution.
+- **Shake-at-random concern (Max, 2026-04-24 continuity review):** *"The camera shake does not seem to be at all choreographed with the acceleration and deceleration. It feels like it happens kind of at random points."* **Deferred to loop (c) of `docs/WORKSTREAMS/autopilot-live-feedback-2026-04-24.md`** — the live-feedback workstream augments the round-10/11 onset gate with a local-maximum detector on `_smoothedAbsDSpeed` so onsets fire at actual velocity-change peaks, not at any threshold crossing. Shake mechanism (envelope shape, carrier frequency, rotation surface, per-leg budget, cooldown) is NOT changed — only the signal-trigger predicate. This workstream does NOT reopen; the fix lives in the live-feedback workstream's scope per Principle 2 (one trigger-signal change, not a mechanism re-author).
 
 **Ship summary:**
 - Final code commit: `1bb5eb2` (per-leg fire budget).
