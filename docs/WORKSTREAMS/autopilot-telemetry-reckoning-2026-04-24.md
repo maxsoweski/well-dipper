@@ -2,6 +2,32 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX f652a40` — reckoning telemetry shipped in one code commit (`f652a40`: ScaleConstants ly helpers + 6 telemetry fields + 3 reckoning audits, observer-only; no behavioral code changes). Director audit at `ce970b3` released the gate; per-audit amendments applied pre-release.
+
+## Retroactive diagnosis appendix (AC #12)
+
+Run against the Sol D-shortcut tour on the WS 3 / continuity / shake Shipped code — the telemetry's job is to detect the issues Max named, not to pass-green. Default thresholds (no tuning). 90s tour, 21,607 samples at ~240Hz.
+
+**AC #8 `cameraViewAngularContinuity`: FAILED — 11 violations** at the default 600°/sec threshold. Max's "head turn on arrival" verified: top violation is **35,384°/sec yaw rate** at t=48.16s during `PANNING_AHEAD` / `APPROACH` / `ESTABLISHING`. Next four violations same time cluster (48.32–48.33s) with 1,700–20,000°/sec rates — a chain of camera-view snaps, not a single anomaly. Second cluster at t=86.8s around the moon transition. The prior audits missed these by measuring `camLookAt` position-delta (registered < 0.03 units) rather than `camFwd` angular change (registered thousands of °/sec).
+
+**AC #9 `bodyInFrameChanges`: FAILED — 18 quarter-second-glance violations** at the default 0.5s window. Pattern: during `PANNING_AHEAD` at `APPROACH`, centered body flips `Moon → Planet → Moon → Planet ...` in rapid succession (4–17ms per flip). First cluster at t=48.3s, larger cluster at t=86.8–87.0s. This IS the "weird head turn" Max described — the camera oscillating its view between two candidate targets for fractions of a second, then settling. Comes from `PANNING_AHEAD` bias smoothly crossing the threshold where the most-centered body changes.
+
+**AC #10 `shakeVelocityCorrelation`: passed (trivially — 0 natural shake events).** D-shortcut tour is all short-hops (`isShortTrip=true`), so the shake's `!isShortTrip` gate prevented natural fires. Max's "shake fires at random points" concern is not evaluated by this tour; a long-leg / warp-arrival capture is the next-session task.
+
+**Shake ACs #16–20: all pass.** No regression from reckoning work — observer-only.
+
+## What this tells us about the WS 3 / continuity / shake state
+
+- **WS 3 ESTABLISHING camera axis is the source of the head-turn and body-flip events.** `PANNING_AHEAD` + `APPROACH` is where `cameraChoreographer` is lerping the target between `motionFrame.lookAtTarget` and `nav.nextBodyRef.position` while the ship is itself approaching a body. The combination produces camera-view angular rates up to 35,000°/sec. Max was right that something was happening at arrival; the prior telemetry was looking at the wrong axis.
+- **Continuity's velocity-blend work is not the head-turn source.** The angular spikes at t=48s are inside APPROACHING after the continuity blend completes. The head-turn is camera-axis, not ship-motion.
+- **Max's shake-at-random concern remains unvalidated** until we capture a tour that actually fires natural shake events (warp-arrival or long-leg). Next-session task.
+
+After Shipped on this reckoning workstream: continuity re-audit runs against expanded telemetry; WS 3 gets its own refinement workstream for the PANNING_AHEAD/APPROACH head-turn; shake-correlation gets a separate capture-and-evaluate pass.
+
+---
+
+**Historical: HELD state (superseded by commit f652a40).**
+
 `HELD — pending Director audit.`
 
 Stop-the-line workstream. **Supersedes** the drafted
