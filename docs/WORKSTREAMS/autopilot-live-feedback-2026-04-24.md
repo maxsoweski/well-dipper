@@ -2,7 +2,13 @@
 
 ## Status
 
-`HELD — pending Director audit.`
+`Released 2026-04-24 (Director audit `d81a982`) — execution begins with loop (b).` Director audit: scope clean, three loops carve distinct ACs with non-overlapping invariants, loop order (b → c → a) load-bearing and justified, Principle 5/6/2 framing explicit with grep-enforced AC #10 guard. Loop-specific rulings:
+
+- **Loop (b):** `VelocityBlend` machinery stays; blend target moves from captured-extrapolation to live-per-body. Committed formula shape (drift-risk guard): `_seamEntryPosition + (body.position − bodyPositionAtSeamEntry) × elapsed/duration` — continuity at blend-start (elapsed=0) preserved.
+- **Loop (c):** Local-maximum detector as ADDITIONAL predicate on existing threshold (PM lean accepted); three-point peak with two-point percentile fallback if AC #5 fails at 100%.
+- **Loop (a):** Per-frame angular-delta clamp on raw target pre-commit (not velocity-integrating, no clamp-side oscillation risk). Starting constant `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 600` per brief; working-Claude should consider opening tighter (300–450°/sec range — above authored pan-ahead rate, well below the 35,384°/sec violation peak) on first pass and widen only if authored pan-ahead visibly clips. Mid-workstream pause between (c) and (a) surfaces the chosen value + recording evidence for Director re-check before (a) commits.
+
+`~/.claude/state/dev-collab/active-workstream` flipped to `autopilot-live-feedback-2026-04-24`; `state.json[...].last_audit_sha` = `d81a982`.
 
 Foundational scope-expansion workstream. Promotes the reckoning
 telemetry (shipped at `f652a40`, `VERIFIED_PENDING_MAX 516bb90`) from
