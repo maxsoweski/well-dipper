@@ -2,17 +2,19 @@
 
 ## Status
 
-`Released 2026-04-24 (Director audit `d81a982`) — execution begins with loop (b).` Director audit: scope clean, three loops carve distinct ACs with non-overlapping invariants, loop order (b → c → a) load-bearing and justified, Principle 5/6/2 framing explicit with grep-enforced AC #10 guard. Loop-specific rulings:
+`Loop (b) Shipped 3ba1159 — VERIFIED_PENDING_MAX.` `Loop (c) Shipped 273e725 — VERIFIED_PENDING_MAX.` **`Loop (a) cycle-4 REDESIGN IN PROGRESS — target-position critically-damped spring per Director's 2026-04-24 §5 closure.`** Cycles 1–3 of Loop (a) are closed (mechanism class abandoned); cycles-1/2/3 code in `src/auto/CameraChoreographer.js` is slated for full removal per §5.7 of the Director's 2026-04-24 cycle-4 redesign scoping audit.
 
-- **Loop (b):** `VelocityBlend` machinery stays; blend target moves from captured-extrapolation to live-per-body. **Committed formula shape revised 2026-04-24 post-first-pass to Option 4 (two-anchor blend)** per Director's ruling after mid-window geometric artifact surfaced in test capture (AC #9: 18→554 violations). See AC #1 for verbatim formula: `ship_extrap` (momentum-anchored) and `body_tracked` (body-frame-anchored) are computed independently every frame; `ramp = elapsed/duration` controls only the mix. Continuity at blend-start (`ramp=0` → ship_extrap → _seamEntryPosition at elapsed=0) and frame-lock at blend-end (`ramp=1` → body_tracked) are both satisfied by construction. Restores `capturedVelocity` capture at seam entry. See Revision history 2026-04-24 loop-(b) formula revision entry for the full audit trail.
-- **Loop (c):** Local-maximum detector as ADDITIONAL predicate on existing threshold (PM lean accepted); three-point peak with two-point percentile fallback if AC #5 fails at 100%.
-- **Loop (a):** Per-frame angular-delta clamp on raw target pre-commit (not velocity-integrating, no clamp-side oscillation risk). Starting constant `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 600` per brief; working-Claude should consider opening tighter (300–450°/sec range — above authored pan-ahead rate, well below the 35,384°/sec violation peak) on first pass and widen only if authored pan-ahead visibly clips. Mid-workstream pause between (c) and (a) surfaces the chosen value + recording evidence for Director re-check before (a) commits.
+**Path-2 greenlight (Max, 2026-04-24, verbatim):** *"Let's go with path two per the director's feedback. Hand it back off to the director and PM, make sure that rebuilding this system from scratch is very well thought out, well planned, includes research if necessary about how movement in spacefaring games like this works in other games. Test criteria and so on."*
 
-`~/.claude/state/dev-collab/active-workstream` flipped to `autopilot-live-feedback-2026-04-24`; `state.json[...].last_audit_sha` = `89261d1c304687728a86140172d2a2957ce96035` (Loop (a) cycle-3 audit; supersedes prior cycle-2 `273e725`, cycle-1, and `d81a982` release audit).
+**Cycle-4 scoping audit:** `~/.claude/state/dev-collab/audits/autopilot-live-feedback-2026-04-24.md` §§1–8 + §5 closure (Director, 2026-04-24). `state.json[...].last_audit_sha` = `f63ec122a57895383720ddf4895d3256cd37b2ce` (HEAD unchanged — cycles 1–3 code still uncommitted).
 
-**Loop (a) cycle-2 (2026-04-24):** cycle-1 clamp at 450°/sec shipped as uncommitted edit in `src/auto/CameraChoreographer.js` L327–364 and shaped p99.9 angular rate to 540°/sec (under the 600°/sec AC #8 bar). 31 violations remained — all downstream of the clamp, caused by `three.js camera.lookAt()` numerical instability when `|target − shipPos| < 0.5u` (cluster 1 at 0.30u from PANNING_AHEAD blend output, cluster 2 at 0.46u from LINGERING direct write; cluster 3 a dt-sampling hitch). Director ruled **Option (A) — target-distance guard** — companion mechanism to the clamp (geometric precondition, not rate limit). AC #7 amended with co-mechanism clause; drift-risks extended with sub-2u composition-distortion risk. Cycle-1 recording: `recordings/loopa-clamp-450dps.webm`.
+**Mechanism class (Dana-informed, Director §5 closure).** Target-position critically-damped spring (Holden's `spring_damper_exact` / Lowe's Game Programming Gems 4 `SmoothDamp` form). The filter acts on a **Vector3 world-space point** (the raw lookAt target post-distance-guard), NOT on `camFwd`. Half-life parameterization. ζ = 1.0 hardcoded. Seed: `TARGET_HALF_LIFE_SEC = 0.35`. Distance guard (`MIN_TARGET_DISTANCE = 2.0`) remains as orthogonal co-mechanism and runs BEFORE the filter. Cycle-3's camFwd-rate clamp is removed in full — no secondary safety net (Director: *"a safety clamp on the filter's output fights the filter"*); the 10.47 rad/s ceiling survives only as a recording-assertion numerical invariant, not as runtime code.
 
-**Loop (a) cycle-3 (2026-04-24):** cycle-2 guard at `MIN_TARGET_DISTANCE = 2.0` eliminated 30 of 31 cycle-1 violations (clusters 1 + 2 closed; 75% of frames on the guard floor; 0.03% residual sub-1.95u frames are pre-blend-guarded / post-blend-unguarded mid-transition blend outputs, not mechanism failure). But cycle-2 capture failed AC #8 with **17 new-class violations**: sustained monotonic yawRate building from 9 → 13 rad/s during stable TRACKING/APPROACH frames with guard active and dt normal. Director's attribution (audit §"Diagnosis"): the cycle-1 raw-target-rate clamp measures the wrong quantity — it bounds the angle between last-frame's target and this-frame's target both measured from this frame's shipPos, but AC #8 measures camFwd rate, which depends on BOTH target AND ship-origin moving between frames. At 2.0u target distance, 7.3 u/sec of lateral ship velocity (ordinary APPROACH motion) produces 1.26°/frame excess parallax — the 146%-of-clamp-ceiling signature observed. Director ruled **Option (A') — replace the raw-target-rate clamp with a camFwd-rate clamp** (one-to-one AC-to-invariant encoding). Distance guard retained unchanged. AC #7 amended below: Mechanism 1 (angular-rate clamp) changes from raw-target-rate to camFwd-rate; `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 450` replaced by `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC = 10.47` (600°/sec, the AC #8 threshold by construction). New EstablishingMode state: `_priorCamFwdRendered`, `_hasValidPriorCamFwd`. Cycle-2 recording: `recordings/loopa-cycle2-distance-guard.webm`. Cycle-3 audit SHA: `89261d1c304687728a86140172d2a2957ce96035`.
+**Research input.** Dana's prior-art survey `research/autopilot-camera-motion-prior-art-2026-04-24.md` (2026-04-24) converged across Unity Cinemachine, Daniel Holden's spring-roll-call, Juckett's damped-springs, Allen Chou's slerp derivation, Nesky's GDC 2014 "50 Game Camera Mistakes," and Lowe's Game Programming Gems 4 `SmoothDamp`. Convergence quote (Dana §"Executive summary"): *"when a camera needs to track a moving subject smoothly, the dominant mechanism is a critically-damped spring applied to the look-at target's position (or to the camera's own position), not an angular-rate clamp on the camera's orientation. The orientation is then derived from the smoothed target — so jerk is absorbed upstream, before it ever becomes an angular-velocity problem."* Dana landmines #3 (per-axis rate clamping → staircase artifacts) and #6 (parallax-from-self-motion → clamp fights the spike, lags, then overshoots) directly indict the cycle-1/2/3 clamp-class shape.
+
+**Cycles 1–3 closed (mechanism class abandoned).** Prior status — cycle-1 (raw-target-rate clamp, 70 violations), cycle-2 (distance guard added, 31 → 17 new-class violations), cycle-3 (camFwd-rate clamp swap, 234 3D-rate violations) — is retained in revision history only. Director's cycle-3 post-mortem self-audit (§"Self-audit on my cycle-3 ruling"): *"I conflated 'true 3D angular rate of camFwd' with 'max of chart-decomposed yaw-rate and pitch-rate,' which are only equal at pitch=0."* Cycle-3 escalation ruled path 2 (full rebuild, not path-1 AC-metric revision with cycle-3 code shipping). Cycles-1/2/3 code remains uncommitted in `src/auto/CameraChoreographer.js`; the cycle-4 Attempt-1 implementation removes it.
+
+**Cycle budget.** 2 mechanism-class **attempts** (not cycles), up to 2 parameter-tuning passes per attempt, per Director §7 Stop A/B/C/D. Attempt 1 = target-position critically-damped spring. Attempt 2 is triggered only if Attempt 1 fails on mechanism-class grounds (not parameter tuning).
 
 Foundational scope-expansion workstream. Promotes the reckoning
 telemetry (shipped at `f652a40`, `VERIFIED_PENDING_MAX 516bb90`) from
@@ -122,6 +124,69 @@ after Director audit releases the gate.
   in-scope block updated; drift-risks extended with shake-contribution
   note; Handoff step 10 rewritten. Cycle-3 audit SHA:
   `89261d1c304687728a86140172d2a2957ce96035`.
+
+- **2026-04-24 — loop (a) cycle-4 REDESIGN (mechanism class
+  replaced; cycles 1–3 closed).** Max chose path 2 after the
+  cycle-3 escalation — verbatim greenlight: *"Let's go with path
+  two per the director's feedback. Hand it back off to the
+  director and PM, make sure that rebuilding this system from
+  scratch is very well thought out, well planned, includes
+  research if necessary about how movement in spacefaring games
+  like this works in other games. Test criteria and so on."*
+  Loop (a) is rebuilt from scratch as **Attempt 1** of a
+  mechanism-class redesign — not a fourth cycle of clamp tuning.
+
+  **Why cycles 1–3 failed.** Each cycle landed a different
+  placement of a rate ceiling on a camera-forward / raw-target
+  direction. Dana's 2026-04-24 prior-art survey
+  (`research/autopilot-camera-motion-prior-art-2026-04-24.md`)
+  found the rate-clamp-on-look-direction mechanism class does not
+  appear as a primary mechanism in reputable camera literature;
+  where it appears it is a secondary safety net on top of a
+  damped target, and Dana landmines #3 (per-axis rate clamping
+  produces staircase artifacts) and #6 (parallax-from-self-motion
+  confounds angular-rate clamps — clamp fights the spike, lags,
+  then overshoots) explicitly indict the cycle-1/2/3 shape.
+  Director's cycle-3 post-mortem (cycle-3 audit §"Self-audit")
+  closed the clamp class with *"when ruling that an invariant
+  maps 1:1 to an AC, verify the AC's exact measurement expression,
+  not just its English description"* — the camFwd-rate clamp
+  location was the wrong place to encode the felt invariant.
+
+  **New mechanism class.** Target-position critically-damped
+  spring (Holden's `spring_damper_exact` / Lowe's `SmoothDamp`
+  form). Dana's convergence quote (§"Executive summary"):
+  *"when a camera needs to track a moving subject smoothly, the
+  dominant mechanism is a critically-damped spring applied to
+  the look-at target's position (or to the camera's own
+  position), not an angular-rate clamp on the camera's
+  orientation. The orientation is then derived from the smoothed
+  target — so jerk is absorbed upstream, before it ever becomes
+  an angular-velocity problem."* The filter acts on a Vector3
+  world-space point (the raw lookAt target post-distance-guard),
+  NOT on camFwd. Half-life parameterization; ζ = 1.0 hardcoded;
+  seed `TARGET_HALF_LIFE_SEC = 0.35`. Distance guard
+  (`MIN_TARGET_DISTANCE = 2.0`) retained as orthogonal
+  co-mechanism, runs BEFORE the filter. Cycle-3's camFwd-rate
+  clamp is removed in full — Director §5.7: *"Not 'downgrade to
+  secondary safety net.' The removal is load-bearing, not
+  cosmetic."* The 10.47 rad/s ceiling survives only as a
+  recording-assertion numerical invariant (not runtime code).
+  AC #8 acceptance revised: ceiling 10.47 rad/s hard invariant,
+  p99 ≤ 3.5 rad/s soft invariant, plus an angular-jerk smoothness
+  companion (threshold set empirically during Attempt-1 first
+  capture with Director review). AC #7 fully rewritten below.
+  Drift-risks for Loop (a) rewritten (distance-guard risk kept;
+  new filter-speed, filter-initialization, and transition-reset
+  risks added; shake-contribution risk removed — no longer
+  relevant without a camFwd clamp). Handoff steps 9–12 rewritten
+  as the Attempt-1 implementation playbook; new step 13 is
+  Director re-audit before commit. Cycle budget reshaped per
+  Director §7: 2 mechanism-class attempts, ≤ 2 parameter-tuning
+  passes per attempt, Stop A/B/C/D. Cycle-4 scoping audit SHA:
+  `f63ec122a57895383720ddf4895d3256cd37b2ce` (HEAD at audit;
+  cycles-1/2/3 code still uncommitted, to be removed in
+  Attempt-1 implementation).
 
 - **2026-04-24 — loop (b) formula revised to Option 4 (two-anchor
   blend).** First-pass implementation of loop (b) used the Director's
@@ -528,103 +593,153 @@ predicate changes.
 
 ### Loop (a) — body-in-frame flip → camera damper
 
-**AC #7 — `EstablishingMode` frame-to-frame camera-forward angular
-delta is rate-limited AND the raw target clears a minimum distance
-from the camera (two co-mechanisms).** `CameraChoreographer.
-EstablishingMode.update()` applies **both** of the following to the
-raw target before it commits to `_currentLookAtTarget`:
+**AC #7 — `EstablishingMode`'s raw lookAt target is smoothed by a
+target-position critically-damped spring, with the distance guard
+as an orthogonal geometric precondition (two co-mechanisms).**
+`CameraChoreographer.EstablishingMode.update()` applies **both** of
+the following, in order:
 
-**Mechanism 1 — per-frame camFwd-rate clamp (cycle 3 — replaces
-cycle-1 raw-target-rate clamp).** A clamp on the angular delta
-between the **prior frame's actually-rendered camera-forward
-direction** and **this frame's candidate camera-forward direction**,
-at `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC = 10.47` (600°/sec = AC #8
-threshold by construction; see audit §"Ceiling" for why this is at
-the threshold, not a margin below).
+1. **Distance guard** — runs first, on the raw target.
+2. **Target-position critically-damped spring** — runs second, on
+   the guard's output. Produces the smoothed point that
+   `camera.lookAt` consumes.
 
-*Why this clamp encodes AC #8 directly:* `main.js` telemetry samples
-`camFwd = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion)`,
-where `camera.quaternion` is the output of `camera.lookAt(
-_currentLookAtTarget)` with `camera.position = motionFrame.position`.
-Frame-to-frame rate of that `camFwd` equals frame-to-frame rate of
-`normalize(target − cameraPos)` — which is the quantity this clamp
-bounds at the source. The clamp is a one-to-one encoding of AC #8,
-not a proxy.
+Cycle-3's camFwd-rate clamp is **removed in full** (§5.7 of the
+Director's 2026-04-24 cycle-4 redesign scoping audit). No secondary
+safety net, no post-filter clamp. The 10.47 rad/s ceiling survives
+as a recording-assertion invariant (see AC #8 below), not as runtime
+code.
 
-*Why cycle-1's raw-target-rate clamp failed:* the raw-target clamp
-measured `normalize(target_n − shipPos_n)` vs `normalize(target_{n-1}
-− shipPos_n)` — both from this frame's shipPos. It did not bound
-`normalize(target_n − shipPos_n)` vs `normalize(target_{n-1} −
-shipPos_{n-1})`, i.e., the camFwd delta across different camera
-origins between frames. At 2.0u target distance, ship lateral
-velocity of ~7.3 u/sec (ordinary APPROACH motion) produced ~1.26°/
-frame of camFwd parallax that the raw-target clamp never saw.
-Cycle-3 substitutes the clamp's target of measurement; it does not
-stack on top of cycle-1.
+**Mechanism 1 — target-position critically-damped spring (cycle 4
+Attempt 1; replaces cycles 1–3 entirely).**
+
+*Signal filtered.* The **raw lookAt target** produced by
+`EstablishingMode`'s framing-state switch (TRACKING / LINGERING /
+PANNING_AHEAD branches, after the switch statement's closing brace
+writes `_prevRawTargetFrame`), then after the distance guard runs on
+it, and **before** the transition-blend step consumes it.
+
+The filter acts on a **Vector3 world-space point**, not on `camFwd`,
+not on a quaternion, not on per-axis angles. This is load-bearing
+per Director §5.2 and Dana's landmines #3 (per-axis rate clamping →
+staircase artifacts) and #6 (parallax-from-self-motion → clamp
+fights the spike, lags, overshoots). Damping the world-space target
+point absorbs jerk upstream; orientation is derived from the smooth
+point by `camera.lookAt(smoothedTarget)` each frame.
+
+*Filter form.* Holden's `spring_damper_exact` / Lowe's Game
+Programming Gems 4 `SmoothDamp` — the canonical analytical form of
+a critically-damped second-order filter. **Frame-rate independent by
+construction** (closed-form update per frame using `deltaTime`; no
+`lerp(x, target, 0.1)` naive form — Dana landmine #5). ζ = 1.0
+hardcoded (we are not tuning overshoot in V1; Director §5.5).
+
+Reference implementations (working-Claude reads these before
+implementing, per Dana §Citations and Director §5.9):
+- Daniel Holden, *"Spring-It-On: The Game Developer's Spring-Roll-
+  Call"* — canonical `spring_damper_exact`, half-life
+  parameterization, frame-rate-independent forms.
+  <https://theorangeduck.com/page/spring-roll-call>
+- Ryan Juckett, *"Damped Springs"* — derivation + practical code.
+  <https://www.ryanjuckett.com/damped-springs/>
+- Thomas Lowe, *"Critically Damped Ease-In/Ease-Out Smoothing,"*
+  Game Programming Gems 4 (cited as the basis of Unity's
+  `SmoothDamp`).
+
+*Tunable constant.*
+`TARGET_HALF_LIFE_SEC = 0.35` at the top of `CameraChoreographer.js`
+alongside `LINGER_DURATION`, `PAN_AHEAD_FRACTION`, and
+`MIN_TARGET_DISTANCE`. The name is load-bearing for the felt
+time-constant: *"the smoothed target closes half the remaining gap
+to raw in 0.35s."* At critical damping, the filter reaches ~63% of
+setpoint in one half-life and ~95% in ~3 half-lives — seed gives
+~1s total settling on a TRACKING → LINGERING flip, inside the
+"Blue Danube" / 2001 station-dock musical phrasing range (§"How
+it fits the bigger picture" / Director §5.5 derivation).
+
+One tuning knob in V1. ζ = 1.0 hardcoded. No per-phase variants; no
+dispatch on `ShipPhase`.
+
+*State additions on `EstablishingMode`.*
+- `_filteredTarget: Vector3` — the filter's position state. The
+  smoothed point `camera.lookAt` consumes. Replaces direct use of
+  `_prevRawTargetFrame` in the transition blend and in
+  `_currentLookAtTarget` assignment.
+- `_filteredTargetVelocity: Vector3` — the filter's velocity state
+  (the `spring_damper_exact` / `SmoothDamp` signature requires it;
+  it holds the inertia that produces the "camera wrist" feel).
+  **PERSISTS across framing-state transitions** (TRACKING ↔
+  LINGERING ↔ PANNING_AHEAD) — do NOT zero on flip. Persistence is
+  the structural mechanism for continuity-at-flip (Director §6a M5
+  + §5.4).
 
 *Mechanism (in order, inside `EstablishingMode.update()`, after the
-distance guard and before the blend):*
+framing-state switch's closing brace):*
 
-1. Compute this-frame's ship position: `shipPos_n =
-   motionFrame.position`.
-2. Compute the prior frame's actually-rendered camFwd anchor —
-   stored at end of prior update as `_priorCamFwdRendered`:
-   `_priorCamFwdRendered.subVectors(_currentLookAtTarget_{n-1},
-   _prevShipPos).normalize()` (written at the tail of last frame's
-   `update()`).
-3. Compute this frame's candidate camFwd, from the
-   already-distance-guarded raw target:
-   `_camFwdCandidate.subVectors(_prevRawTargetFrame, shipPos_n).
-   normalize()`.
-4. If `_hasValidPriorCamFwd && deltaTime > 1e-6`:
-   - `ang = acos(clamp(_priorCamFwdRendered.dot(_camFwdCandidate),
-     -1, 1))`.
-   - `maxAng = MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC × deltaTime`.
-   - If `ang > maxAng`, slerp `_priorCamFwdRendered` →
-     `_camFwdCandidate` by `t = maxAng / ang`, producing
-     `_camFwdClamped`. Reconstruct the raw target from the clamped
-     direction at the candidate's original distance:
-     `_prevRawTargetFrame = shipPos_n + _camFwdClamped ×
-     |_prevRawTargetFrame − shipPos_n|`.
-5. At end of `update()`, after the blend resolves
-   `_currentLookAtTarget`: write the **actually-rendered** camFwd
-   anchor for the next frame — `_priorCamFwdRendered.subVectors(
-   _currentLookAtTarget, shipPos_n).normalize()`, then `_prevShipPos.
-   copy(shipPos_n)`, then `_hasValidPriorCamFwd = true`.
+1. The framing-state switch has already written
+   `_prevRawTargetFrame` (the raw lookAt target for this frame, per
+   existing branch logic).
+2. **Distance guard runs** on `_prevRawTargetFrame` (Mechanism 2
+   below — unchanged from cycle 2).
+3. **Filter update.** Call `spring_damper_exact` (or `SmoothDamp`
+   equivalent) with:
+   - current position = `_filteredTarget`
+   - current velocity = `_filteredTargetVelocity`
+   - goal = `_prevRawTargetFrame` (the guarded raw target)
+   - half-life = `TARGET_HALF_LIFE_SEC`
+   - dt = `deltaTime`
 
-*New state fields (on `EstablishingMode`):*
-- `_priorCamFwdRendered: Vector3` — prior frame's rendered camera-
-  forward direction (the anchor the clamp compares against).
-- `_prevShipPos: Vector3` — prior frame's ship position, required
-  because camFwd is `normalize(target − cameraPos)` and the anchor
-  must be computed from the ship-origin that rendered it. Initialized
-  from `motionFrame.position` on the first valid frame; updated at
-  the tail of `update()`.
-- `_hasValidPriorCamFwd: bool` — false on first frame and after any
-  blend-state reset; true once an anchor has been written.
+   Both state fields are mutated in place per the standard signature
+   (Holden / Unity). Because the filter acts on a Vector3, the
+   update is three independent scalar spring updates (one per
+   component) — mathematically equivalent to a spring on the 3D
+   point because critically-damped analytical updates commute with
+   linear vector spaces.
+4. **Downstream consumption.** The transition blend (which
+   previously consumed `_prevRawTargetFrame`) and the
+   `_currentLookAtTarget` assignment now consume `_filteredTarget`.
+   `camera.lookAt(_filteredTarget)` is the effective render call.
 
-*Degenerate fallbacks:*
-- **First frame / after blend state reset:** `_hasValidPriorCamFwd`
-  is false — skip clamp, write `_priorCamFwdRendered` and
-  `_prevShipPos` at frame end.
-- **Framing-state transition (active blend):** clamp still applies —
-  the blend output IS the rendered camFwd; clamping during blend is
-  required for AC #8 to hold through transitions.
-- **Distance guard interaction:** guard runs BEFORE clamp so the
-  clamp sees a numerically-stable target (non-zero `|target −
-  shipPos|`). The guard's outward-push fallback chain from cycle-2
-  Mechanism 2 ensures `_prevRawTargetFrame` is well-defined at the
-  clamp's entry.
-- **`|candidate|` numerically zero:** guard prevents this; if guard
-  fails (theoretically impossible given `MIN_TARGET_DISTANCE = 2.0`
-  and fallback chain), skip clamp this frame and rely on next frame's
-  re-anchor.
+*Initialization rule (first frame / ESTABLISHING entry).*
+On the first frame after ESTABLISHING becomes active, **snap the
+filter state to the current raw-guarded target** — no transient
+catch-up:
+```
+_filteredTarget.copy(_prevRawTargetFrame)  // post-guard
+_filteredTargetVelocity.set(0, 0, 0)
+```
+Then run the filter update from the next frame onward. Director §6a
+M5: *"On ESTABLISHING entry, the filter state snaps to the current
+camera forward direction (no transient catch-up)."* The
+same-first-frame "snap to raw-guarded target" satisfies this for a
+target-position filter.
 
-*Cycle-1's `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 450` constant is
-deleted* — camFwd is downstream of raw target, so bounding camFwd
-implicitly bounds raw target. Two clamps on the same pipeline with
-different invariants is one-too-many; working-Claude should not have
-to reason about which clamp owns what failure mode.
+*Framing-state transition rule (TRACKING ↔ LINGERING ↔
+PANNING_AHEAD).*
+The filter state **is NOT reset** on framing-state flip. The switch
+writes a new raw target (e.g., LINGERING → TRACKING replaces the
+linger-target-ref with the next subject); the filter picks it up as
+a new setpoint and smoothly pulls toward it, with
+`_filteredTargetVelocity` providing inertial continuity. This is
+the Director §6a M5 / §5.4 canonical behavior: *"the filter state
+is CONTINUOUS — no state reset. The new setpoint is picked up from
+wherever the filter currently is."*
+
+If the cycle-4 Attempt-1 capture reveals that continuity-at-flip
+looks sluggish (the camera chases the new subject instead of
+picking it up cleanly), the discussion is whether to change the
+rule — surface to Director, do not patch in-place (this is
+explicitly an Attempt-1 design question per Director §5.4 +
+drift-risk below).
+
+*Degenerate fallback — active blend overlaps filter.*
+If the existing transition-blend machinery (cross-fading between
+framing-state outputs) is downstream of the filter, the blend
+consumes `_filteredTarget` as its input. The filter itself is not
+bypassed during a blend. If working-Claude finds the blend's shape
+interacts poorly with the filter's smoothing (two smoothers in
+series), surface to Director — the question is whether the blend
+itself becomes redundant under the filter.
 
 **Mechanism 2 — target-distance guard (cycle 2, retained unchanged).**
 A geometric precondition on the raw target ensuring
@@ -637,105 +752,245 @@ amplifies sub-unit-magnitude perturbations on target position into
 large unit-direction swings. The floor keeps the vector magnitude
 comfortably larger than per-frame body-orbit and ship-integration
 wobble (~1e-2 to 1e-3 scene units) so the forward direction is
-numerically stable. Constant value is Director-specified
-(*"observed clusters sit at 0.30 and 0.46; 2.0 gives 4–6× margin and
-puts per-frame wobble at <1% of vector magnitude — out of the
-`normalize`-amplification regime"*). Director cycle-3 ruling on
-retention: *"Keeps the cycle-2 distance guard. The camFwd clamp
-does not obsolete the distance guard — the guard addresses a
-different failure mode (three.js lookAt numerical stability below
-~0.5u)."*
+numerically stable.
 
-**Guard placement (load-bearing, cycle-2).** The distance guard sits
-**after the switch statement's closing brace** in
-`EstablishingMode.update()` (every framing-state branch has finished
-writing `_prevRawTargetFrame`) and **before** the camFwd-rate clamp
-block. This single-point placement covers both observed
-degenerate-cluster sources:
-- **Cluster 1** — PANNING_AHEAD branch (~L285), where the pan-ahead
-  blend output can sit at 0.30u from ship on small-moon APPROACH.
-- **Cluster 2** — LINGERING branch (~L262), where the direct write
-  `_prevRawTargetFrame.copy(this._lingerTargetRef.position)` can put
-  the target at 0.46u from ship when linger body is near camera.
+Director §5.6 confirms retention against the cycle-4 redesign:
+*"The damping doesn't know the difference between 'setpoint is a
+valid-geometry point 0.5u away' and 'setpoint is a valid-geometry
+point 5u away'; it smooths in either case, and the lookAt matrix
+still blows up in the close case."* Dana landmines #1 (colinear up
+and look direction → degenerate `lookAt`) and #2 (target coincident
+with camera → zero-length target vector) independently document
+these as failure modes distinct from — and not obsoleted by —
+damping.
 
-Branch-local placement would miss Cluster 2; the single post-switch
-site is the correct location.
+**Mechanism order inside `EstablishingMode.update()`:**
+```
+raw target  (from framing-state switch: TRACKING | LINGERING | PANNING_AHEAD)
+  └→ distance guard (MIN_TARGET_DISTANCE = 2.0 — unchanged)
+       └→ spring_damper_exact(state, guardedTarget, halfLife, dt)
+            └→ _filteredTarget  (camera.lookAt consumes this)
+```
 
-**Clamp placement (load-bearing, cycle-3).** The camFwd-rate clamp
-sits **after the distance guard** (so the clamp sees a
-numerically-stable `_prevRawTargetFrame`) and **before the blend**
-(so the clamp's reconstructed target is what the blend consumes).
-The `_priorCamFwdRendered` + `_prevShipPos` write at the **tail of
-`update()`** — after the blend resolves `_currentLookAtTarget` — so
-the anchor tracks the actually-rendered camFwd, not an intermediate
-pre-blend candidate.
+One smoothing stage. Guard first, filter second. `camera.lookAt` is
+the only place orientation is derived, and it is derived from the
+smoothed point.
 
-**Degenerate direction fallback (distance guard, sub-sub-case).** If
-`|_prevRawTargetFrame − shipPos| < ε` (numerically zero direction
-vector — target is coincident with camera), use the following
-fallback chain:
-1. `normalize(_currentLookAtTarget − shipPos)` (prior-frame
-   committed direction).
-2. If that is also `< ε`, fall back to camera forward:
-   `new Vector3(0, 0, -1).applyQuaternion(camera.quaternion)`.
+**Mechanism-level requirements (Director §6a M1–M6).**
 
-Document the fallback path chosen per frame (if telemetry is cheap)
-or in the commit message (if not).
+- **M1 — Single authored smoothing stage.** The camera's rendered
+  forward direction is the output of exactly one smoothing stage
+  (the spring). No downstream clamp, no upstream clamp. Distance
+  guard is a separate, earlier geometric precondition.
+- **M2 — Setpoint/state separation.** The filter has explicit
+  internal state (`_filteredTarget`, `_filteredTargetVelocity`)
+  distinct from its input (setpoint = raw target post-guard). State
+  persists across frames; setpoint is recomputed per-frame.
+- **M3 — Camera-axis-only.** `TARGET_HALF_LIFE_SEC` is a module
+  constant. Not dispatched on `ShipPhase`. If phase-dependent feel
+  is wanted later, routed through `_framingState` (camera-axis),
+  not `ShipPhase` — see drift-risk "Soft re-coupling to ShipPhase."
+- **M4 — Graceful at dt boundaries.** The filter is stable at the
+  observed dt range (~3ms to ~45ms including hitches) because
+  `spring_damper_exact` uses the analytical closed-form, not
+  forward Euler. Working-Claude confirms the implementation uses
+  Holden's exact form (not a custom ad-hoc integration).
+- **M5 — Initial-condition handling.** On ESTABLISHING entry,
+  filter state snaps to current raw-guarded target (no transient).
+  On framing-state transitions (TRACKING ↔ LINGERING ↔
+  PANNING_AHEAD), filter state is CONTINUOUS — no reset. See
+  "Initialization rule" and "Framing-state transition rule" above.
+- **M6 — Distance guard runs before the filter.** Guard operates on
+  the raw target; filter operates on the guarded setpoint. See
+  mechanism-order diagram above.
+
+**What cycle-3 state and code is slated for removal** (per Director
+§5.7; working-Claude executes during Handoff step 9):
+- `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC = 10.47` (module-level
+  constant) — delete.
+- `EstablishingMode._priorCamFwdRendered`, `_hasValidPriorCamFwd`
+  (state fields) — delete.
+- `CameraChoreographer.js:428–455` (camFwd-rate clamp block with
+  slerp fallback) — delete.
+- `CameraChoreographer.js:475` (`_prevShipPos` snapshot after
+  blend, added cycle-3) — delete IF its only reader was the clamp;
+  retain if Loop (b) or (c) now reads it. Working-Claude verifies
+  during implementation (Director §5.7 notes this).
+- `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 450` (cycle-1 constant) —
+  already slated for deletion per cycle-3 amendment; confirm it is
+  in fact absent after cycle-4 Attempt-1 edit.
 
 Verified by:
 - Grep of `src/auto/CameraChoreographer.js` for
-  `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC = 10.47` and
-  `MIN_TARGET_DISTANCE = 2.0` as named constants at the top of the
-  module alongside `LINGER_DURATION` and `PAN_AHEAD_FRACTION`. The
-  prior `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC` constant is absent
-  (deleted per cycle-3).
-- Grep of `EstablishingMode` for new fields `_priorCamFwdRendered`,
-  `_prevShipPos`, `_hasValidPriorCamFwd`.
-- Grep of `EstablishingMode.update()` for both mechanisms in order:
+  `TARGET_HALF_LIFE_SEC = 0.35` and `MIN_TARGET_DISTANCE = 2.0` as
+  named constants at the top of the module alongside
+  `LINGER_DURATION` and `PAN_AHEAD_FRACTION`. The prior
+  `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC` and
+  `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC` constants are **absent**.
+- Grep of `EstablishingMode` for new fields `_filteredTarget`,
+  `_filteredTargetVelocity`. Prior cycle-3 fields
+  `_priorCamFwdRendered`, `_prevShipPos` (if its only reader was
+  the clamp), `_hasValidPriorCamFwd` are **absent**.
+- Grep of `EstablishingMode.update()` confirms mechanism order:
   the distance-guard `if (|v| < MIN_TARGET_DISTANCE && |v| > ε)
   { push outward }` sits **after** the switch's closing brace and
-  **before** the camFwd-rate clamp block; the camFwd-rate clamp
-  sits **after** the distance guard and **before** the blend; the
-  anchor write sits at the **tail** of `update()`.
-- The clamp is applied **on the raw target before it commits** to
-  `_currentLookAtTarget`, not as a post-hoc smoothing filter on
-  `_currentLookAtTarget` itself (Principle 6 — live-read at the
-  input, not smoothing on the output). The camFwd-rate clamp
-  reconstructs `_prevRawTargetFrame` from the clamped direction at
-  the candidate's original distance, which is still an input-site
-  precondition on `camera.lookAt` — not a quaternion filter.
-- Both mechanisms act on `_prevRawTargetFrame` pre-commit at the same
-  composition site; guard runs first, clamp runs second (order:
-  fix the geometric precondition, then rate-limit the delta).
+  **before** the filter update; the filter update sits **after**
+  the distance guard and produces `_filteredTarget`;
+  `_filteredTarget` is what the transition blend and
+  `_currentLookAtTarget` assignment consume.
+- No downstream clamp on `_filteredTarget`,
+  `_currentLookAtTarget`, `camFwd`, or `camera.quaternion` in
+  `CameraChoreographer.js` or `FlythroughCamera.js` (Director §5.7:
+  *"no secondary safety net"*; drift-risk "Clamp creep" below).
 
-**Acceptance:** AC #8 `cameraViewAngularContinuity` returns zero
-violations at 10.47 rad/s (600°/sec) audit bar on the cycle-3
-capture. **Exception: single-violation dt-sampling artifacts**
-(frame-timing jitter where dt < 1ms after a long-dt hitch, as in
-cycle-1's Cluster 3) may remain — the dt-sampling carve-out from
-cycle 2 is retained. Director will rule accept-as-artifact vs.
-dt-floor per capture. If more than one dt-sampling artifact persists,
-footnote each in the commit and flag to Director.
+**Acceptance.** Three layers, per Director §6 — all three must
+pass for Attempt-1 to complete:
 
-**AC #8 — head-turn on arrival resolved in reckoning audit.** Per
+1. **Mechanism-level (M1–M6).** Grep + diff review confirms each
+   requirement above.
+2. **AC-level (AC #8 revised — see AC #8 below).** Fresh Sol
+   D-shortcut tour capture passes the revised ceiling, p99, and
+   jerk-companion invariants.
+3. **Recording-level (AC #9 — six visual check-points below).**
+   Fresh Sol tour recording passes Max's evaluation against each
+   check-point.
+
+**dt-sampling carve-out** (inherited from cycle-2): single-violation
+frames where dt < 1ms after a long-dt hitch are accept-as-artifact
+with Director per-capture ruling. If more than one dt-sampling
+artifact persists, footnote each in the commit and flag to Director.
+
+**AC #8 — ESTABLISHING camera angular motion falls inside the
+redesigned numerical envelope (cycle-4 Attempt-1 revised invariants;
+recording-assertion, not runtime enforcement).** Per
 `docs/FEATURES/autopilot.md` §"Camera axis — ESTABLISHING (V1)" —
 *"slow angular velocity, composed framing."* A fresh Sol D-shortcut
-tour capture, post-loop-(a), running `window._autopilot.telemetry.
-audit.cameraViewAngularContinuity`:
-- Zero violations above 600°/sec (the reckoning default threshold).
-  The retroactive-diagnosis appendix's top violation (35,384°/sec
-  yaw at t=48.16s during PANNING_AHEAD / APPROACH) resolves.
-- Zero `bodyInFrameChanges` quarter-second-glance violations
-  during PANNING_AHEAD / APPROACH at the planet↔moon transition
-  crossover. The appendix's 18 violations resolve.
+tour capture, post-cycle-4-Attempt-1, running the revised
+`window._autopilot.telemetry.audit.cameraViewAngularContinuity`
+audit (metric + thresholds below):
 
-**AC #9 — head-turn + glance resolved in Max's canvas recording.**
-Per `docs/MAX_RECORDING_PROTOCOL.md`. A fresh Sol tour recording
-post-loop-(a) shows the on-arrival framing as a composed camera
-motion — no visible "head turn" on arrival, no fractional-second
-glance between planet and moon during PANNING_AHEAD. Max is
-evaluator. Linger + pan-ahead authored behavior (WS 3 ACs #5 + #6)
-is preserved — only angular rate is clamped, composition is not.
+**AC #8 — revised measurement.** The audit uses the **true 3D
+angular rate** between consecutive rendered camera-forward
+vectors:
+```
+ω_3D = acos(clamp(camFwd_t · camFwd_{t-1}, -1, 1)) / deltaSec
+```
+The prior chart-decomposed `max(|Δyaw_chart|, |Δpitch_chart|)`
+metric from `src/main.js:1038–1057` is **retired** from AC #8 (per
+cycle-3 audit §2 — chart decomposition compresses yaw by
+`1/cos(pitch)` off-equator and is undefined at the poles; Dana
+landmine #3 independently names per-axis rate reasoning as a
+staircase-artifact source). The chart fields stay as diagnostic
+telemetry; they do not gate AC #8. `main.js` is updated to
+compute and emit `camAngRate3D` on the per-frame sample, and the
+audit at `src/main.js:~L666` reads it.
+
+**AC #8 — thresholds (recording-assertion invariants, not runtime
+clamps).** Per Director §§5.7 + 6b + 5a answer #4:
+
+- **Hard ceiling (recording invariant).** `ω_3D ≤ 10.47 rad/s
+  (600°/sec)` on every frame. Zero violations across the full
+  recording. This is a **post-hoc numerical assertion** the audit
+  runs against the captured telemetry — NOT a runtime clamp. The
+  filter's natural smoothness is what keeps `ω_3D` under the
+  ceiling; a violation means the mechanism class or parameters are
+  wrong, per §7 Stop A/B (surface to Director, do not add a clamp).
+- **Typical-case soft invariant.** `ω_3D` p99 ≤ 3.5 rad/s
+  (~200°/sec) during TRACKING / LINGERING frames; `ω_3D` p99.9 ≤
+  10.47 rad/s overall. This encodes §"How it fits the bigger
+  picture" / feature-doc's *"slow angular velocity, composed
+  framing"* as a numerical criterion. Rationale (Director §6b): a
+  professional camera operator on a dolly rig tops out around
+  200°/sec for a "pan-follow" move; the 600°/sec ceiling is the
+  safety envelope for genuinely fast motion, the expected body is
+  much slower. Half-life 0.35s gives a theoretical peak of
+  ~3.7 rad/s on the worst realistic setpoint jump (Director §5.5
+  derivation) — consistent with p99 ≤ 3.5 and confirmed if the
+  capture delivers it.
+- **Smoothness companion — angular jerk (new, cycle-4).** The time
+  derivative of angular acceleration of `camFwd`:
+  ```
+  jerk = (ω_3D_t − 2·ω_3D_{t-1} + ω_3D_{t-2}) / deltaSec²
+  ```
+  or the equivalent from the filter's `_filteredTargetVelocity`
+  state. A smooth filter's jerk sits near zero most of the time
+  with brief bounded excursions; a clamp-driven mechanism's jerk
+  shows sharp spikes at clamp-activation boundaries. **Threshold
+  TBD by Director during cycle-4 Attempt-1 first-capture review**
+  (Director §6b: *"threshold to be set empirically during cycle-4
+  first capture, with Director review before fixing it. This is
+  the numerical signature of 'no visible snap' distinct from 'no
+  violation of rate ceiling.'"*). Working-Claude emits the `jerk`
+  field on the per-frame sample and surfaces the p50 / p95 / p99 /
+  max to Director at the first-capture audit boundary; Director
+  fixes the threshold in this brief before Attempt-1 commit.
+
+  *Placeholder threshold flag for working-Claude.* If Director is
+  temporarily unavailable at first-capture boundary, record the
+  observed distribution in the commit message and open a follow-up
+  audit request rather than picking a threshold unilaterally.
+
+**AC #8 — historical context.** Cycles 1–3 never hit the ceiling
+invariant cleanly. Cycle-1: 70 violations (raw-target-rate clamp
+at 450°/sec). Cycle-2: 17 new-class violations (distance guard
+added; clamp still at 450°/sec raw-target). Cycle-3: 216 violations
+(camFwd-rate clamp at 10.47 rad/s, chart-decomposed AC metric).
+Cycle-4 Attempt-1 is the first capture expected to hit zero
+ceiling-violations by construction of the filter's natural
+smoothness, and the first capture to be measured against the
+revised `ω_3D` metric. A cycle-4 Attempt-1 capture with violations
+above the ceiling triggers Director §7 Stop A/B (mechanism-class
+or parameter-tuning question), NOT a clamp addition.
+
+**AC #9 — head-turn + glance resolved in Max's canvas recording
+(six visual check-points, cycle-4 Attempt-1).** Per
+`docs/MAX_RECORDING_PROTOCOL.md`. A fresh Sol tour recording
+post-cycle-4-Attempt-1 (full tour, Sol default autopilot,
+uninterrupted from system-load through at least one full
+planet-moon cycle, ideally to tour-complete). Director
+pre-commits to the following visual check-points (§6c):
+
+1. **Arrival frame at a small moon (Category: Jupiter's Io-class
+   or Saturn's Mimas-class).** Camera responds to the
+   reticle-to-disk transition smoothly. No head-turn spike. No
+   "camera snapped to follow the body" visible tell. The body
+   enters the frame and the camera gradually centers it over
+   0.5–1.5 seconds.
+2. **Linger on a receding subject.** After the ship leaves STATION
+   and begins CRUISE, the camera stays on the body for the full
+   `LINGER_DURATION`, then gradually pans forward. The pan is
+   continuous; there is no moment where the camera "unstuck" from
+   the lingering target and snapped to the next.
+3. **PANNING_AHEAD during CRUISE.** The camera leads the ship
+   toward the next target at a rate consistent with §"How it fits
+   the bigger picture" / feature-doc's *"slow, composed"*
+   qualitative criterion. The pan is one continuous motion, not a
+   series of catch-up steps.
+4. **Approach to a large body (Category: gas giant).** The close-in
+   phase does not produce parallax-driven spikes. (This is the
+   case cycle-3 failed: large bodies, close approach, parallax
+   from ship motion. Dana landmine #6 names the mechanism the
+   filter absorbs.)
+5. **Approach to a small body (Category: sub-0.1u moon).** Distance
+   guard holds; `ω_3D` stays in the slow-composed envelope; no
+   "looking past" the body from guard interaction (see drift-risk
+   "sub-2u framing composition distortion" — unchanged from
+   cycle 2).
+6. **Tour-complete → warp-select handoff.** Not strictly a Loop (a)
+   concern but the recording should reach it and show no Loop (a)
+   regression at the moment the HUD reappears.
+
+Max is evaluator per the motion-evidence-for-motion-features rule
+(`feedback_motion-evidence-for-motion-features.md` /
+`docs/MAX_RECORDING_PROTOCOL.md`). Linger + pan-ahead authored
+behavior (WS 3 ACs #5 + #6) is preserved — only the filter's
+smoothing is new, composition / duration / direction authoring is
+unchanged.
+
+**AC #9 acceptance.** All six check-points pass Max's evaluation.
+Any check-point failure triggers Director §7 Stop A/B/C/D analysis
+(is it a parameter-tune question, a mechanism-class question, or a
+perceptual criterion the numerical ACs didn't capture).
 
 ### Workstream-level ACs
 
@@ -803,26 +1058,149 @@ pipeline-early helper.
 
 ## Drift risks
 
-- **Risk: Loop (a) oscillation under wrong damping constant.** The
-  angular-rate clamp is a rate-limiter on a feedback-adjacent
-  composition (ESTABLISHING reads next-frame predicted azimuth →
-  clamps delta → writes `_currentLookAtTarget` → next frame reads
-  from the clamped output to predict again). If the damper is too
-  tight, the camera lags the scene perceptibly (reads as "camera is
-  sticky"); if too loose, the head-turn Max named is not resolved;
-  if tuned against the wrong signal altitude (scalar rate vs
-  axis-decomposed rate), the clamp can oscillate at the boundary.
-  **Why it happens:** damping constants always need tuning, and
-  without motion-evidence feedback (recording + Max review) the
-  tuning loop is internal.
-  **Guard:** loop (a) is the LAST loop. (b) and (c) land and are
-  recording-verified first, so the pipeline (a) damps against is
-  known-stable. (a)'s damping constant starts at ~600°/sec (the
-  reckoning AC #8 threshold) — above this is "head turn" Max named
-  as visible; below this is authored pan-ahead. Working-Claude
-  surfaces the chosen value + evidence from a capture; Director
-  audits. A single mid-workstream recording review before loop (a)
-  commits is expected.
+- **Risk: Loop (a) filter half-life too slow (camera lags visibly
+  on flips).** If `TARGET_HALF_LIFE_SEC` is too large, the filter
+  closes the gap to the raw target too slowly; the camera
+  perceptibly chases the subject instead of holding it composed.
+  Most visible at framing-state flips: the LINGER anchor appears
+  to "chase" a receding body instead of following it gracefully,
+  or PANNING_AHEAD during CRUISE feels sluggish relative to the
+  ship's forward motion.
+  **Why it happens:** at critical damping, filter response is
+  monotonic to setpoint; half-life directly parameterizes response
+  time. Seed `0.35s` is principled (§"How it fits the bigger
+  picture" / Director §5.5 Blue-Danube phrasing derivation) but
+  Attempt-1 capture is the falsification event.
+  **Guard:** AC #8 soft invariant `p99 ≤ 3.5 rad/s` is a numerical
+  proxy — if the measured p99 sits well below 3.5 rad/s AND Max's
+  recording reads as sluggish, the filter is under-responsive.
+  Attempt-1 first capture surfaces the observed p50/p95/p99
+  `ω_3D` distribution to Director; if Max's recording review
+  agrees the camera is "draggy," tune `TARGET_HALF_LIFE_SEC`
+  downward (e.g., 0.25s, 0.20s) inside the 2-parameter-tune budget
+  per Attempt 1 (Director §7). Do not add a clamp as a
+  "responsiveness booster" — that's clamp creep (separate
+  drift-risk below).
+
+- **Risk: Loop (a) filter half-life too fast (residual clamp-class
+  pathologies survive).** If `TARGET_HALF_LIFE_SEC` is too small,
+  the filter barely smooths; the camera responds almost at the
+  raw-target's frame-to-frame rate, preserving parallax spikes and
+  arrival jerks that cycles 1–3 were trying to clamp. Small jerks
+  on arrival and head-turn on framing-state flip return — the
+  mechanism-class signature Max already rejected in path-2
+  escalation.
+  **Why it happens:** tuning pressure to "make the camera more
+  responsive" is the intuitive fix for the too-slow risk; tuning
+  too far the other direction undoes the mechanism's point.
+  **Guard:** AC #8 hard ceiling (10.47 rad/s, zero violations) AND
+  the angular-jerk smoothness companion are the numerical
+  falsifiers — a filter tuned too fast shows jerk spikes
+  indistinguishable from a clamp-activation boundary. If Attempt-1
+  capture shows jerk distributions with sharp per-frame
+  excursions, the half-life is too small — widen it. If widening
+  still shows jerk spikes at specific events (arrival, flip), the
+  mechanism class may be wrong — surface to Director for §7 Stop
+  B Attempt-2 analysis, do not keep tuning.
+
+- **Risk: Filter initialization at first frame (undefined state on
+  ESTABLISHING entry).** The spring has no prior state on the
+  first frame after ESTABLISHING becomes active —
+  `_filteredTarget` and `_filteredTargetVelocity` are
+  fresh-constructed `Vector3` objects. If they default to (0,0,0)
+  and `_filteredTarget` is used directly by `camera.lookAt`, the
+  first-frame camera aims at world-origin (likely far from the
+  intended subject), producing a visible one-frame snap to the
+  correct direction on frame 2.
+  **Why it happens:** `new THREE.Vector3()` defaults to (0,0,0);
+  zero-initializing filter state and running the filter update on
+  frame 1 gives `_filteredTarget = exponential_blend(0,0,0 →
+  realTarget)` which lands somewhere between origin and subject.
+  **Guard:** explicit init rule per AC #7 — on the first frame
+  after ESTABLISHING entry, `_filteredTarget.copy(
+  _prevRawTargetFrame)` (the guarded raw target) and
+  `_filteredTargetVelocity.set(0, 0, 0)`, THEN run the filter from
+  frame 2 onward. Director §6a M5: *"On ESTABLISHING entry, the
+  filter state snaps to the current camera forward direction (no
+  transient catch-up)."* Verified by grep for the init branch in
+  `EstablishingMode.update()` or in an `onActivate` hook.
+
+- **Risk: Framing-state transition reset question (flip behavior
+  ambiguous in §5.4 for non-adjacent setpoints).** Director §§5.4 +
+  6a M5 specify that `_filteredTargetVelocity` PERSISTS across
+  framing-state transitions (TRACKING ↔ LINGERING ↔
+  PANNING_AHEAD) — no reset on flip. This is the structural
+  mechanism for continuity-at-flip and is canonical for the
+  redesign. **However,** if Attempt-1 capture shows that a
+  specific flip class (e.g., LINGERING → TRACKING when the new
+  target is 180° from the prior target) produces a noticeable
+  camera swing with inertia carrying it past the new setpoint,
+  the persistence rule may be over-permissive for discontinuous
+  setpoint jumps. This is explicitly an Attempt-1 design question,
+  not a mechanism-class failure.
+  **Why it happens:** `_filteredTargetVelocity` is inertia; a
+  large setpoint jump at a frame boundary makes the spring's
+  critically-damped response interact with pre-existing velocity
+  in a way that looks "like the camera is still headed the wrong
+  way for a beat." Whether that reads as natural inertial
+  handoff or as a visible flaw is a perceptual question.
+  **Guard:** do not unilaterally add a velocity-reset rule.
+  Surface the observed behavior to Director at Attempt-1
+  first-capture audit; Director §5.4 says *"Do not zero on flip"*
+  as the canonical ruling, and deviating requires an explicit
+  audit entry. If a flip-reset rule is ultimately needed, it is
+  authored in a follow-up amendment, not inlined.
+
+- **Risk: Clamp creep (the cycle-1/2/3 shape returning as a
+  "safety net").** The temptation is to keep a safety clamp on
+  `_filteredTarget` or on `camera.quaternion`'s frame-delta *"just
+  for the ceiling invariant."* Director §5.7 forecloses this:
+  *"A safety clamp on the filter's output fights the filter. Pick
+  one."* The cycles-1/2/3 shape was an externally-enforced rate
+  ceiling on a raw-physics direction — the redesign replaces that
+  shape; reintroducing a clamp layer below the filter reinstates
+  the shape under a new name.
+  **Why it happens:** if Attempt-1 capture shows even one ceiling
+  violation, the intuitive fix is *"add a clamp that only fires
+  above 10.47 rad/s — won't affect normal motion."* That clamp is
+  exactly the mechanism class §7 Stop A/B is designed to send to
+  Attempt 2, not to patch.
+  **Guard:** AC #8 hard ceiling is a **recording-assertion
+  invariant**, not a clamp spec. If the recording shows a
+  violation, the filter parameters are wrong (widen half-life
+  toward too-slow zone, see risk above) OR the mechanism class is
+  wrong (surface to Director for §7 Stop B Attempt-2). Grep of
+  `CameraChoreographer.js` and `FlythroughCamera.js` post-cycle-4
+  for any `slerp`, `lerp`, or angular-threshold check on
+  `_filteredTarget`, `_currentLookAtTarget`, or `camera.quaternion`
+  that gates on a ceiling is a falsification test — if found,
+  remove or escalate.
+
+- **Risk: Soft re-coupling to ShipPhase.** If PM or working-Claude
+  finds themselves wanting to switch filter parameters based on
+  ship phase (*"stiffer during APPROACH, looser during CRUISE"*),
+  that's a re-coupling against the feature doc's two-axis
+  structure — the Bible invariant `docs/GAME_BIBLE.md` §"Authored
+  camera" is a camera-axis concern. Filter parameters depending
+  on `ShipPhase` would make camera-axis behavior derivable from
+  ship-axis state.
+  **Why it happens:** different ship phases have different
+  apparent-target-rate distributions (APPROACH's close parallax
+  vs CRUISE's far-range pans); a constant half-life may feel
+  different in each. The fix looks trivial: switch half-life on
+  phase.
+  **Guard:** per Director §3 out-of-scope list — "the camera-axis
+  architecture (feature doc §two-axis phase structure).
+  `ESTABLISHING` stays camera-axis-only; the redesign does NOT
+  re-couple to `ShipPhase`. Keep gains global or derived from
+  observable camera-side quantities, not from ship-axis state."
+  Any phase-dependent behavior must route through
+  `_framingState` (TRACKING / LINGERING / PANNING_AHEAD — all
+  camera-axis), not through `ShipPhase` (STATION / CRUISE /
+  TRAVEL / APPROACH — ship-axis). If Attempt-1 capture argues
+  for phase-variant half-lives, surface to Director; this is a
+  mechanism-class decision (two-state filter) not a parameter
+  tune.
 
 - **Risk: sub-2u framing composition distortion (Loop (a) cycle-2
   guard).** The `MIN_TARGET_DISTANCE = 2.0` floor is a safety
@@ -859,33 +1237,6 @@ pipeline-early helper.
   (how to compose on a sub-2u-radius body cinematically) is a
   separate concern. Loop (a) adds a numerical-stability floor only;
   it is NOT a framing-authoring mechanism.
-
-- **Risk: shake contribution to camFwd rate (Loop (a) cycle-3
-  clamp).** The cycle-3 camFwd-rate clamp limits the lookAt-driven
-  orientation before shake is composed in `FlythroughCamera.
-  update()`. Shake rotation (pitch/yaw/roll around camera-local
-  axes) could add to the frame-to-frame camFwd rate that the AC #8
-  telemetry actually samples (since telemetry reads
-  `camera.quaternion` after shake has been applied). Shake is
-  rotation-only, and its peak derivative is bounded by the AC #10
-  `shakeVelocityCorrelation` audit's signal-coincidence window, so
-  the expected contribution to camFwd rate is negligible under
-  ordinary tour conditions.
-  **Why it happens:** the clamp operates inside
-  `EstablishingMode.update()` at the lookAt input site (Principle
-  6-correct — bound the renderer's input); shake is a downstream
-  quaternion composition in `FlythroughCamera.update()`. Two
-  additive rotation sources on the same frame's quaternion mean
-  post-shake camFwd rate ≤ clamp ceiling + shake peak rate.
-  **Guard:** cycle-3 capture is the falsification event. If cycle-3
-  passes AC #8 with no clamp-ceiling approach margin to spare — AND
-  AC #10 margin is simultaneously tight enough that combined clamp
-  + shake post-composition rate still exceeds the 600°/sec audit
-  bar on any frame — Director will rule on a post-shake clamp
-  (operate in `FlythroughCamera.update()` on the final quaternion,
-  after shake composes). Until that failure surfaces, the in-
-  `EstablishingMode` placement is correct and the Principle 6
-  encoding holds.
 
 - **Risk: Principle 5 bending without it breaking.** The wire-up is
   within the rules (read from earlier stage), but it's tempting to
@@ -1020,33 +1371,45 @@ pipeline-early helper.
   `_signedDSpeed` sign at onset). Local-maximum detector is the
   single additional predicate.
 
-- **Loop (a) — `CameraChoreographer.js:EstablishingMode.update()`**
-  extended with TWO co-mechanisms on the raw target before commit
-  to `_currentLookAtTarget` (cycle-3 mechanism-1 substitution):
-    1. **camFwd-rate clamp** (`MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_
-       SEC = 10.47` = 600°/sec, cycle 3). Clamps the angular delta
-       between the prior frame's actually-rendered camera-forward
-       direction (`_priorCamFwdRendered`, anchored at last frame's
-       tail using last frame's `_prevShipPos`) and this frame's
-       candidate camera-forward direction (`normalize(
-       _prevRawTargetFrame − motionFrame.position)`). On clamp,
-       slerp prior → candidate by `maxAng / ang`, then reconstruct
-       `_prevRawTargetFrame = shipPos + clampedDir × originalDist`.
-       Replaces cycle-1's `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 450`
-       raw-target-rate clamp (deleted). New state fields:
-       `_priorCamFwdRendered` (Vector3), `_prevShipPos` (Vector3),
-       `_hasValidPriorCamFwd` (bool). Anchor write at tail of
-       `update()` after blend resolves `_currentLookAtTarget`.
-    2. **Target-distance guard** (`MIN_TARGET_DISTANCE = 2.0` scene
-       units, cycle 2, unchanged). Ensures `|_prevRawTargetFrame −
-       shipPos| ≥ MIN_TARGET_DISTANCE`; if closer, push outward
-       along current direction with the degenerate fallback chain
-       (prior-frame direction → camera forward) from AC #7.
-  Both constants exposed at top of module as named tunables
-  alongside `LINGER_DURATION` and `PAN_AHEAD_FRACTION`. Both apply
-  to TRACKING, PANNING_AHEAD, and LINGERING→TRACKING fall-through
-  via single-point placement after the switch's closing brace
-  (guard first, then clamp, then blend; anchor-write at tail).
+- **Loop (a) cycle-4 Attempt 1 —
+  `CameraChoreographer.js:EstablishingMode.update()`** rebuilt
+  from scratch. Two co-mechanisms, in order:
+    1. **Target-distance guard** (`MIN_TARGET_DISTANCE = 2.0`
+       scene units, cycle 2, retained unchanged). Ensures
+       `|_prevRawTargetFrame − shipPos| ≥ MIN_TARGET_DISTANCE`;
+       if closer, push outward along current direction with the
+       degenerate fallback chain (prior-frame direction → camera
+       forward) from AC #7. Runs first.
+    2. **Target-position critically-damped spring**
+       (`TARGET_HALF_LIFE_SEC = 0.35`, ζ = 1.0 hardcoded,
+       Holden's `spring_damper_exact` / Lowe's `SmoothDamp`
+       analytical form). Acts on the **Vector3 world-space point**
+       that is the post-guard raw lookAt target. New
+       `EstablishingMode` state fields: `_filteredTarget`
+       (Vector3, position state), `_filteredTargetVelocity`
+       (Vector3, velocity state — persists across framing-state
+       transitions per §5.4). Init on ESTABLISHING entry:
+       `_filteredTarget.copy(_prevRawTargetFrame)`,
+       `_filteredTargetVelocity.set(0, 0, 0)`. Per-frame update
+       mutates both fields in place. Downstream:
+       `_currentLookAtTarget` assignment and the transition blend
+       consume `_filteredTarget` (not `_prevRawTargetFrame`
+       directly). `camera.lookAt(_filteredTarget)` is the
+       effective render call.
+  Constants exposed at top of module as named tunables alongside
+  `LINGER_DURATION` and `PAN_AHEAD_FRACTION`. Both co-mechanisms
+  apply to TRACKING, PANNING_AHEAD, and LINGERING→TRACKING
+  fall-through via single-point placement after the switch's
+  closing brace (guard first, filter second, then blend).
+  **Removed in full from cycle 3:**
+  `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC = 10.47` constant, the
+  camFwd-rate clamp block at `CameraChoreographer.js:428–455`,
+  state fields `_priorCamFwdRendered` and `_hasValidPriorCamFwd`,
+  the tail `_prevShipPos` snapshot at `CameraChoreographer.js:475`
+  (if its only reader was the clamp — working-Claude verifies
+  during implementation per §5.7), and cycle-1's long-dead
+  `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 450`. No post-filter
+  clamp is added back (§5.7; drift-risk "Clamp creep").
 
 - **Motion evidence per AC #3, AC #6, AC #9.** Three canvas
   recordings (or one composite Sol tour that covers all three
@@ -1127,6 +1490,61 @@ pipeline-early helper.
 
 - **OOI-infrastructure work.** Separate workstream; this one
   doesn't touch `getNearbyOOIs` / `getActiveEvents` interfaces.
+
+### Cycle-4 Loop (a) redesign out-of-scope perimeter (Director §3)
+
+Per Director's cycle-4 redesign scoping §3 — any PR that crosses
+these lines is out of scope for the cycle-4 Loop (a) redesign and
+triggers a Director hold:
+
+- **Loops (b) and (c).** Both `VERIFIED_PENDING_MAX`
+  (`3ba1159`, `273e725`). Their mechanisms (VelocityBlend
+  two-anchor; local-maximum shake-onset detector) are untouched
+  by the cycle-4 redesign. If Attempt-1 capture surfaces AC #9 or
+  AC #10 regressions caused by interaction with the new filter,
+  those are flagged to Max, not patched inside this workstream.
+- **The orbit subsystem.** STATION-phase orbit-distance-floor
+  (feature-doc parking-lot travel-feel item) is a separate parked
+  concern.
+- **The nav-produced `lookAtTarget`.** Upstream producer of raw
+  target directions. The redesign consumes whatever the nav
+  subsystem emits; it does not revise the emission contract.
+  A smoothing filter on the *input* side is in-scope for the
+  filter's job; revising the *producer* is out.
+- **The motion-produces-target pipeline boundary.**
+  `ShipChoreographer` → `NavigationSubsystem.nextTarget(...)` →
+  `CameraChoreographer`. Redesign lives strictly inside
+  `CameraChoreographer.EstablishingMode`. The pipeline shape is
+  preserved.
+- **The camera-axis / two-axis camera architecture** (feature
+  doc §"two-axis phase structure"). `ESTABLISHING` stays
+  camera-axis-only; the redesign does NOT re-couple to
+  `ShipPhase`. Filter parameters are global constants or routed
+  through `_framingState` (camera-axis), never through
+  `ShipPhase` directly — see drift-risk "Soft re-coupling to
+  ShipPhase."
+- **The Bible invariant that the camera is authored, not derived
+  from raw physics** (`docs/GAME_BIBLE.md` §"Authored camera").
+  The redesign implements a smoother/filter — this IS authored
+  camera motion (the filter is the authoring). Any proposal whose
+  mechanism is "pass through raw physics with a final clamp"
+  fails this invariant by construction and is rejected at
+  scoping time.
+- **AC #8 as a threshold quantity.** The value and the
+  definition-of-what-it-measures are revisable (and are revised
+  for cycle 4: `camAngRate3D` replacing chart decomposition).
+  The idea of *having* a numerical invariant that bounds camera
+  angular rate stays — that's the Max-greenlight context for
+  measuring 3D rate.
+- **The distance guard (`MIN_TARGET_DISTANCE = 2.0`).** Keep.
+  Orthogonal to rate; Dana's landmines #1 and #2 independently
+  confirm the guard's geometric-precondition role as distinct
+  from damping.
+- **Telemetry (reckoning fields).** The redesign reads reckoning
+  fields freely but does not alter their definitions. AC #8's
+  measurement formula in the audit helper is revised (3D rate);
+  that's a different change in the same file, in scope for the
+  cycle-4 amendment.
 
 ## Handoff to working-Claude
 
@@ -1280,105 +1698,214 @@ two-anchor blend).**
   value with evidence).
 - Any recording-observation that changes the loop-(a) shape.
 
-**Loop (a) — frame-to-frame camFwd-rate clamp (cycle-3
-mechanism-1 substitution) + retained distance guard.**
+**Loop (a) cycle-4 Attempt 1 — target-position critically-damped
+spring (retained distance guard).**
 
-9. **Delete** the cycle-1 constant `MAX_FRAME_ANGULAR_RATE_DEG_PER_
-   SEC` and its raw-target-rate clamp block (~L396–433 of the
-   uncommitted cycle-1/cycle-2 edit). **Add** constant
-   `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC = 10.47` (600°/sec = AC
-   #8 threshold by construction) at the top of
-   `CameraChoreographer.js` alongside `MIN_TARGET_DISTANCE`. The
-   cycle-2 distance-guard block (~L349–394) and its
-   `MIN_TARGET_DISTANCE = 2.0` constant are retained unchanged.
-10. **Implement the camFwd-rate clamp** between the distance guard
-    and the blend in `EstablishingMode.update()`:
-    - Add `EstablishingMode` fields:
-      `_priorCamFwdRendered: Vector3`, `_prevShipPos: Vector3`,
-      `_hasValidPriorCamFwd: bool = false`. Initialize the two
-      vectors as fresh `Vector3()` instances on construction.
-    - Between the guard's closing brace and the blend's opening
-      brace, compute `_camFwdCandidate =
-      normalize(_prevRawTargetFrame − motionFrame.position)`. If
-      `_hasValidPriorCamFwd && deltaTime > 1e-6`, compute `ang =
-      acos(clamp(_priorCamFwdRendered.dot(_camFwdCandidate), -1,
-      1))` and `maxAng =
-      MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC × deltaTime`. If `ang
-      > maxAng`, slerp `_priorCamFwdRendered → _camFwdCandidate`
-      by `t = maxAng / ang` and reconstruct `_prevRawTargetFrame =
-      motionFrame.position + _camFwdClamped × originalDist`
-      (where `originalDist = |_prevRawTargetFrame − motionFrame.
-      position|` captured before the slerp).
-    - At the **tail of `update()`**, after the blend resolves
-      `_currentLookAtTarget`: write `_priorCamFwdRendered =
-      normalize(_currentLookAtTarget − motionFrame.position)`,
-      `_prevShipPos.copy(motionFrame.position)`,
-      `_hasValidPriorCamFwd = true`. On any framing-state reset
-      that invalidates the blend, also set `_hasValidPriorCamFwd
-      = false` so the next frame skips the clamp.
-    - Reuse three pre-allocated `Vector3` temporaries
-      (`_loopATmpA`, `_loopATmpB`, `_loopATmpC`) rather than
-      allocating in the hot path. Slerp via
-      `Vector3.lerpVectors` on the pre-slerp directions followed
-      by normalize is acceptable given the angular bounds involved
-      (≤ 600°/sec × 16ms ≈ 5.5°/frame); for tighter tolerance use
-      `slerp`-via-quaternion-pair (`setFromUnitVectors`).
-11. Run `window._autopilot.telemetry.audit.
-    cameraViewAngularContinuity` + `bodyInFrameChanges` on a fresh
-    Sol D-shortcut tour. Verify AC #8 — zero violations at 10.47
-    rad/s (600°/sec) bar. Pitch rate and yaw rate both inherit the
-    bound (the clamp is on 3D direction, not per-axis).
+Canonical source for these steps: Director's 2026-04-24 cycle-4
+redesign scoping audit (`~/.claude/state/dev-collab/audits/autopilot-
+live-feedback-2026-04-24.md` §§1–8 + §5 closure). Quote §5 closure
+verbatim when implementation detail is load-bearing.
+
+9. **Remove cycle-3 (and residual cycle-1) code from
+   `src/auto/CameraChoreographer.js`** per §5.7:
+   - Delete module-level constant
+     `MAX_FRAME_CAM_ANGULAR_RATE_RAD_PER_SEC = 10.47`.
+   - Delete `EstablishingMode` state fields
+     `_priorCamFwdRendered` and `_hasValidPriorCamFwd`.
+   - Delete the camFwd-rate clamp block (`CameraChoreographer.js`:
+     428–455 in the uncommitted cycle-3 edit — slerp-with-fallback
+     block between the distance guard and the blend).
+   - Delete the tail `_prevShipPos` snapshot at
+     `CameraChoreographer.js:475` **IF** its only reader was the
+     clamp. Grep `_prevShipPos` across `src/auto/` and
+     `src/main.js` to verify — retain only if Loop (b) or (c) now
+     reads it (unlikely per §5.7).
+   - Confirm cycle-1's `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 450`
+     is absent (it was slated for deletion in the cycle-3
+     amendment; double-check).
+   - The cycle-2 distance guard (`MIN_TARGET_DISTANCE = 2.0` plus
+     the post-switch guard block) is **retained unchanged**.
+
+10. **Implement the target-position critically-damped spring** in
+    `EstablishingMode`:
+    - **Add module-level constant**
+      `TARGET_HALF_LIFE_SEC = 0.35` at the top of
+      `CameraChoreographer.js` alongside `LINGER_DURATION`,
+      `PAN_AHEAD_FRACTION`, and `MIN_TARGET_DISTANCE`.
+    - **Add `EstablishingMode` state fields:**
+      `_filteredTarget: Vector3`, `_filteredTargetVelocity:
+      Vector3`. Initialize as fresh `new Vector3()` instances on
+      construction (zero defaults).
+    - **Add an `isActive` / `onActivate` initialization path.** On
+      the first frame after ESTABLISHING becomes active:
+      `_filteredTarget.copy(_prevRawTargetFrame)` (after the
+      distance guard has run on `_prevRawTargetFrame`) and
+      `_filteredTargetVelocity.set(0, 0, 0)`. Working-Claude
+      picks the cleanest place to detect first-frame — either an
+      explicit `_hasInitialized` flag set at the end of the first
+      `update()`, or an `onActivate` hook invoked when
+      ESTABLISHING flips on. Document the choice in the commit.
+    - **Implement `spring_damper_exact`** (Holden) or equivalent
+      `SmoothDamp` (Lowe). Reference: Holden's "Spring-It-On" —
+      <https://theorangeduck.com/page/spring-roll-call>. Write the
+      analytical closed-form update, NOT a forward-Euler
+      approximation. Three independent scalar updates on x/y/z
+      components of the Vector3 (equivalent to a spring on the 3D
+      point for linear spaces). Signature takes current position,
+      current velocity (mutated), goal, half-life, dt; mutates
+      position and velocity in place.
+    - **Wire it in:** after the distance guard's closing brace and
+      before the transition-blend step in
+      `EstablishingMode.update()`, call the spring update with
+      `_filteredTarget`, `_filteredTargetVelocity`,
+      `_prevRawTargetFrame` (the guarded raw target),
+      `TARGET_HALF_LIFE_SEC`, `deltaTime`. Downstream, replace
+      every reference to `_prevRawTargetFrame` in the blend and
+      in the final `_currentLookAtTarget` assignment with
+      `_filteredTarget`.
+    - **Preallocate temporaries.** If the spring update needs
+      scratch Vector3s, reuse module-scope or instance-scope
+      temporaries rather than allocating in the hot path.
+    - **Do NOT add any post-filter clamp.** §5.7 forecloses this;
+      drift-risk "Clamp creep" is the falsification test.
+
+11. **Update the AC #8 audit metric.** In `src/main.js`
+    (`_captureTelemetrySample` around L1034–1057 per cycle-3
+    audit §2), compute and emit `camAngRate3D = acos(clamp(
+    camFwd · camFwd_prev, -1, 1)) / deltaSec` on the per-frame
+    sample. In the AC #8 audit helper (`cameraViewAngularContinuity`
+    at `src/main.js:~L666`), switch the violation check from the
+    chart-decomposed `max(|camYawRate|, |camPitchRate|)` to
+    `camAngRate3D`. Emit companion fields `camAngJerk3D` (the
+    second-difference / time-derivative of `camAngRate3D`) for
+    Director's Attempt-1 first-capture threshold-setting review.
+    The chart-decomposed fields remain as diagnostic telemetry;
+    they no longer gate AC #8.
+
+12. **Run Attempt-1 capture.** Fresh Sol D-shortcut tour via
+    MCP chrome-devtools. Run
+    `window._autopilot.telemetry.audit.cameraViewAngularContinuity`
+    with the revised metric. Evaluate:
+    - **AC #8 hard ceiling:** zero violations `ω_3D > 10.47 rad/s`.
+    - **AC #8 soft invariant:** p99 `ω_3D` during TRACKING /
+      LINGERING ≤ 3.5 rad/s; p99.9 overall ≤ 10.47 rad/s.
+    - **Jerk distribution:** emit p50 / p95 / p99 / max of
+      `camAngJerk3D` for Director's threshold-setting review.
+    - **AC #9 six visual check-points:** capture the tour as a
+      canvas recording via `~/.claude/helpers/canvas-recorder.js`;
+      drop at
+      `screenshots/max-recordings/autopilot-live-feedback-loop-a-
+      cycle4-attempt1-2026-04-24.webm`.
+    - **M1–M6 grep + diff audit:** verify each mechanism-level
+      requirement from AC #7 / Director §6a.
     dt-sampling-artifact carve-out from cycle 2 is retained.
-12. Capture the AC #9 recording. Commit loop (a) per AC #12
-    commit 3. Commit message names the mechanism substitution
-    (raw-target-rate → camFwd-rate clamp), distance-guard
-    retention, and cites cycle-3 audit SHA
-    `89261d1c304687728a86140172d2a2957ce96035`.
+
+13. **Director re-audit before commit.** Surface to Director with:
+    - The `ω_3D` distribution (p50/p95/p99/max).
+    - The `camAngJerk3D` distribution (p50/p95/p99/max — for
+      threshold-setting).
+    - The M1–M6 grep + diff results.
+    - The Attempt-1 recording.
+    - Any observed anomalies (flip-transition handoff quality,
+      sub-2u framing composition, filter-speed feel).
+    Director audits against AC #7 / AC #8 / AC #9 and either:
+    - **Closes Attempt 1** with jerk threshold written into AC #8
+      and a `VERIFIED_PENDING_MAX <sha>` commit greenlight; OR
+    - **Triggers a parameter-tune pass** (≤ 2 per Attempt 1,
+      Director §7) — adjust `TARGET_HALF_LIFE_SEC` and re-capture;
+      OR
+    - **Triggers Stop B Attempt 2** — mechanism-class failure;
+      re-scope in a new audit entry with a different class
+      (Cinemachine Body+Aim two-stage; first-order EMA on target;
+      look-ahead composition onto spring — candidates named in
+      §5.3 rejected list, re-evaluated on Attempt-1 evidence).
+
+14. **Commit Attempt 1 on Director greenlight.** Commit message
+    names cycle-4 Attempt-1 mechanism-class substitution
+    (clamp-class → target-position critically-damped spring),
+    cites cycle-4 scoping audit SHA
+    `f63ec122a57895383720ddf4895d3256cd37b2ce`, names Dana's
+    research file `research/autopilot-camera-motion-prior-art-
+    2026-04-24.md`, and notes the cycle-3 code removals per §5.7.
+    Close `VERIFIED_PENDING_MAX <sha>` for Loop (a)
+    specifically.
 
 **Workstream close.**
 
-13. Run `runAllReckoning` + all four shake audits + the continuity
+15. Run `runAllReckoning` + all four shake audits + the continuity
     audits on a consolidated fresh tour. Verify AC #11.
-14. Update this brief's `## Status` with per-loop Shipped SHAs and
+16. Update this brief's `## Status` with per-loop Shipped SHAs and
     recording paths.
-15. Close at `VERIFIED_PENDING_MAX <final-sha>` — Max evaluates
+17. Close at `VERIFIED_PENDING_MAX <final-sha>` — Max evaluates
     against the three recordings. On pass → `Shipped <sha> —
     verified against <recording-paths>`. On fail → diagnose per
-    failure class (damper too tight / too loose for loop a;
-    local-maximum detector too strict for loop c; per-seam body
-    ref wrong for loop b).
+    failure class (filter half-life too tight / too loose for
+    loop (a) Attempt 1; mechanism-class fail triggers Attempt 2
+    per Stop B below; local-maximum detector too strict for
+    loop (c); per-seam body ref wrong for loop (b)).
+
+**Cycle-4 Attempt-1 stop conditions (Director §7).**
+
+- **Stop A — continue to tune.** Attempt-1 capture shows the
+  filter's jerk signature is fundamentally different from a
+  clamp-driven one (no sharp spikes at activation boundaries) AND
+  the numerical ACs pass OR fall narrowly below target with a
+  clear tuning path. Working-Claude proceeds into the
+  2-parameter-tune budget: adjust `TARGET_HALF_LIFE_SEC` (not ζ,
+  which is hardcoded at 1.0) and re-capture. Stop A's budget is
+  ≤ 2 tuning passes per Attempt 1; before a third tuning pass,
+  working-Claude surfaces to Director.
+
+- **Stop B — mechanism class wrong; trigger Attempt 2.** Attempt-1
+  capture shows the mechanism class itself is wrong (e.g., filter
+  oscillates because the setpoint itself is discontinuous; large
+  setpoint jumps produce visible overshoot that critical damping
+  should have precluded; jerk signature shows filter-internal
+  spikes not attributable to clamp class). Director re-scopes in
+  a new audit entry with a different mechanism class — candidates
+  from §5.3's rejected list (Cinemachine Body+Aim two-stage;
+  first-order EMA on target; look-ahead composition onto spring).
+  No auto-resume — Attempt 2 is a fresh scoping cycle.
+
+- **Stop C — both attempts fail; escalate to Max.** Attempt 2
+  also fails. Escalate to Max with a full audit of both attempts
+  + Dana's research + Director's recommendation for next action.
+  No Attempt 3 without Max's direction. The full-rebuild budget
+  is exhausted; the question returns to Max for vision-level
+  re-direction.
+
+- **Stop D — numerical ACs pass but §6c recording fails.** Not a
+  mechanism-class failure; likely a perceptual criterion the
+  numerical ACs didn't capture. Director + Max collaborate on a
+  new numerical AC that encodes what Max saw (e.g., if
+  flip-transition handoff looks wrong, a flip-specific
+  ω_3D-during-first-200ms-post-flip AC), then re-tune. This is a
+  learning outcome, not a budget failure — Attempt 1 is not
+  consumed; the re-capture runs against the new AC with the same
+  filter parameters.
 
 **If the diff to any consumer reads from `window._autopilot.
 telemetry.samples` or equivalent sampler output, stop and
 escalate to Director.** AC #10 / Principle 5 violation — the
 fix is to extract the live-state derivation into a shared early-
-stage helper.
-
-**If cycle-3 capture still fails AC #8 at zero violations AND the
-camFwd clamp is correctly placed, stop (cycle-3 stop condition per
-audit).** The invariant-to-AC mapping is one-to-one; if the clamp
-is correct and violations still occur, either (i) the capture
-pipeline's `camYawRate` computation differs from the clamp's camFwd
-delta (check the sampler's camFwd derivation vs the clamp's), or
-(ii) there's a second `lookAt` call downstream of
-`EstablishingMode.update()` that escapes the clamp, or (iii) shake
-composition in `FlythroughCamera.update()` adds post-clamp rate
-(the shake-contribution drift-risk above). Escalate to Director —
-do not tune the ceiling; it is the AC #8 threshold by construction.
-
-**If the camFwd clamp visibly slows authored camera pans below
-subjective acceptability (pans feel "heavy" or "draggy"), stop.**
-This is an AC problem, not a mechanism problem — escalate to Max
-for AC #8 threshold re-negotiation.
-
-**No cycle-4 without Max's explicit direction.** Three cycles on a
-single loop is already budget-expansion; a fourth would be redesign
-territory, not iteration.
+stage helper. (Unchanged from pre-cycle-4 stop condition.)
 
 **If loop (c)'s local-maximum detector is introducing >1-frame
 event-onset lag (AC #5 passes but shake onset perceptibly lags
 Max's felt peak in the recording), stop and escalate to Director.**
-The two-point variant may be needed.
+The two-point variant may be needed. (Unchanged — Loop (c) scope
+is not touched by the cycle-4 redesign.)
+
+**If the filter visibly slows authored camera pans below
+subjective acceptability (pans feel "heavy" or "draggy"), stop
+and surface to Director.** This is the "half-life too slow"
+drift-risk; fix is to reduce `TARGET_HALF_LIFE_SEC` within the
+Stop-A tuning budget, not to add a responsiveness clamp
+(drift-risk "Clamp creep").
+
+**No Attempt 3 without Max's explicit direction.** Two
+mechanism-class attempts is the full-rebuild budget; a third
+attempt requires fresh vision-level re-direction (Stop C).
 
 Artifacts expected at close: 3–4 commits (one per loop + optional
 shared-helper extraction); three (or one composite) canvas
@@ -1406,7 +1933,7 @@ three-loop ruling.
 ---
 
 **Proxy-authoring flag (cycle-3 amendment, 2026-04-24).** The cycle-3
-amendment above (Status cycle-3 paragraph; cycle-3 revision-history
+amendment (Status cycle-3 paragraph; cycle-3 revision-history
 entry; AC #7 Mechanism 1 rewrite; In-scope Loop (a) block update;
 shake-contribution drift-risk addition; Handoff steps 9–12 rewrite;
 cycle-3 stop-condition replacement) was authored by working-Claude
@@ -1416,5 +1943,43 @@ audit at `~/.claude/state/dev-collab/audits/autopilot-live-feedback-
 2026-04-24.md` (commit SHA `89261d1c304687728a86140172d2a2957ce96035`).
 All mechanism substitution terms (constant names, state field
 names, placement order, degenerate fallbacks, stop conditions, "keep
-the cycle-2 distance guard" ruling) are transcribed from the audit,
-not authored on working-Claude's judgment.
+the cycle-2 distance guard" ruling) were transcribed from the audit,
+not authored on working-Claude's judgment. **Superseded by cycle-4
+redesign amendment (below) — the cycle-3 Mechanism-1 rewrite is
+closed; Loop (a) cycle-3 code is slated for removal per §5.7.**
+
+---
+
+**PM authorship (cycle-4 redesign amendment, 2026-04-24).** The
+cycle-4 redesign amendment (Status block rewrite for Loop (a) to
+"cycle-4 REDESIGN IN PROGRESS"; cycle-4 revision-history entry
+with Max's path-2 greenlight + Dana's convergence quote + Director's
+§5 closure cite; full AC #7 rewrite for target-position
+critically-damped spring; full AC #8 rewrite with revised metric +
+ceiling/p99/jerk invariants as recording-assertion; AC #9 rewrite
+with six visual check-points from §6c; Loop (a) drift-risks rewrite
+(new: filter-too-slow, filter-too-fast, filter-initialization,
+transition-reset, clamp-creep, soft-re-coupling; removed:
+shake-contribution); In-scope Loop (a) block rewrite; cycle-4
+out-of-scope perimeter from §3; Handoff steps 9–14 rewrite as
+Attempt-1 implementation playbook; Workstream-close renumbering
+15–17; cycle-4 Stop A/B/C/D conditions replacing cycle-3 stop
+conditions) was authored by the PM agent per Director's cycle-4
+redesign scoping audit (`~/.claude/state/dev-collab/audits/autopilot-
+live-feedback-2026-04-24.md` §§1–8 + §5 closure,
+HEAD at audit `f63ec122a57895383720ddf4895d3256cd37b2ce`). Director
+§5 closure (§§5.1–5.9) quoted verbatim in the mechanism section;
+§5a answers quoted verbatim in the revision entry as the
+audit-direction cite. Dana's research file
+`research/autopilot-camera-motion-prior-art-2026-04-24.md` is cited
+as the load-bearing input to §5 mechanism-class finalization.
+
+Authorial scope granted by Director §5.9: *"PM is cleared to
+author the brief amendment against this scoping as-is. §§1–8 of
+this audit are the canonical direction; §5 as written here is the
+mechanism-class section PM will transcribe into AC #7's
+formulation."* Jerk-threshold placeholder flagged in AC #8 per
+§6b *"threshold to be set empirically during cycle-4 first
+capture, with Director review before fixing it"* — working-Claude
+surfaces the distribution for Director to fix before Attempt-1
+commit.
