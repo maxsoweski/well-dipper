@@ -2,7 +2,11 @@
 
 ## Status
 
-`VERIFIED_PENDING_MAX b7699de` — **round-2 patch** after Max's round-1 review reported "either the camera or the ship are jumping around weirdly." Director authorized option (a) — direct code patch under current workstream — scoped to EstablishingMode implementation defects (no mechanism change, no brief amendment). Three fixes:
+`Shipped b7699de — verified against screenshots/max-recordings/autopilot-camera-axis-retirement-round2-2026-04-23.webm + Max's own tour playback 2026-04-23.` Max explicit verdict 2026-04-23: *"Let's go with director's rec"* accepting Director's call that WS 3 is clean — the residual jerks Max reported at departure / arrival seams are **pre-existing nav-layer velocity-direction flips** that the round-10 subtle shake + round-2 transition-smooth camera finally made visible. Director's diagnosis: three seams (STATION→CRUISE, TRAVEL→APPROACH, APPROACH→ORBIT) share one class of bug — phase-transition velocity hand-off — that pre-dates WS 1. WS 1's telemetry-equivalence passed because it verified "no change from pre-WS-1," but pre-WS-1 had the same bugs. WS 2/3 earlier rounds' violent shake/camera-bounce masked them. Not WS 3 regressions. Follow-up: expanded `autopilot-approach-orbit-continuity-2026-04-22` workstream to cover all three seams.
+
+**Round-2 patch summary (what landed):**
+
+Round-2 patched EstablishingMode per Director option (a) — direct code patch, no mechanism change, no brief amendment. Three fixes:
 
 1. **Cache `_lastStationBodyRef`** each frame `shipPhase === 'STATION'`. Use it on STATION→CRUISE edge instead of live `nav.bodyRef` (which has been replaced with the next target by leg-advance before the edge is detected).
 2. **Fall-through from LINGERING → TRACKING/PANNING_AHEAD** when linger completes — recomputes camLookAt the same frame instead of leaving stale linger target on the wire.
