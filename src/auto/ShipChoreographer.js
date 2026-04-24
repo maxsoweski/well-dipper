@@ -119,6 +119,22 @@ const SIGNAL_ONSET_THRESHOLD = 35.0;
 const SIGNAL_SMOOTHING = 0.15;
 
 /**
+ * Loop (c) — fraction of the running leg-max that the signal must pull
+ * back by before a shake event is eligible to fire. 0.20 = 20% drop
+ * from peak. 5% was too aggressive: it fired on the first small dip
+ * of a double-humped decel envelope (capture 2026-04-24: decel event
+ * fired at signal=1464 ≈ 95% of a local peak 1542, but the true
+ * envelope peak was 2100 ≈ 500ms later — resulting in a 70%-of-peak
+ * onset that leads the felt deceleration). 20% requires a meaningful
+ * pullback so transient dips during multi-stage decel profiles
+ * (e.g. Hermite terminal + arrival blend) don't prematurely fire.
+ * Tradeoff: fires at ~80% of peak on descent, with ~200-400ms lag
+ * from true peak, which is still imperceptible at 60fps but avoids
+ * the pre-peak premature-fire failure mode.
+ */
+const PEAK_PULLBACK_FRAC = 0.20;
+
+/**
  * Peak pitch (camera-local X) rotation amplitude at envelope max, in degrees.
  * V1 seed 1.0°. Bounded [0.3, 2.0]. Head-nod axis.
  */
@@ -214,6 +230,32 @@ export class ShipChoreographer {
     this._hasPrev = 0;  // 0 = no history, 1 = have pos, 2 = have speed
     this._smoothedAbsDSpeed = 0;
     this._signedDSpeed = 0;
+    // Live-feedback loop (c): per-sign leg-max pullback peak detector
+    // for the shake onset gate. Each sign of signedDSpeed (positive =
+    // accelerating, negative = decelerating) has its own running
+    // maximum; each max updates only while the current sign matches.
+    // A shake event fires when the current signal has pulled back by
+    // `PEAK_PULLBACK_FRAC` from the running max of its matching sign.
+    //
+    // Director 2026-04-24 cycle-4 ruling chose per-sign separation over
+    // a single `_signalLegMax`. Prior iterations:
+    //   cycle 1 (3-point trailing peak): noise-sensitive, fired on
+    //     sub-unit wobbles during the rise.
+    //   cycle 2 (single legMax, 5% pullback): single-hump envelopes
+    //     worked (94% of peak, +232ms lag), double-hump envelopes
+    //     failed (fired on first small dip at 70% of true peak).
+    //   cycle 3 (single legMax, 20% pullback): 7/8 events healthy,
+    //     but one decel fired at 6.4% of peak because the preceding
+    //     big acceleration envelope on the same leg left
+    //     `_signalLegMax = 2118` while accel budget was already spent;
+    //     the eventual decel sign-flip fired immediately on the stale
+    //     accel peak's pullback predicate.
+    // Per-sign separation: one scalar was being asked to represent
+    // the peak of two distinct physical envelopes that can coexist
+    // above threshold on the same leg. Per-sign maxes make each
+    // envelope's peak detectable independently.
+    this._accelLegMax = 0;
+    this._decelLegMax = 0;
 
     // ── Cooldown state (separate per event type so accel + decel can
     //    fire on the same leg without blocking each other) ──
@@ -377,22 +419,59 @@ export class ShipChoreographer {
       // Smooth
       this._smoothedAbsDSpeed += (rawAbsDSpeed - this._smoothedAbsDSpeed) * SIGNAL_SMOOTHING;
 
+      // Live-feedback loop (c): per-sign leg-max pullback peak detection.
+      // Each sign of signedDSpeed tracks its own running max, updated
+      // only while the current sign matches. Falling below threshold
+      // resets BOTH maxes (disarm between event rounds on the same leg).
+      if (this._smoothedAbsDSpeed < SIGNAL_ONSET_THRESHOLD) {
+        this._accelLegMax = 0;
+        this._decelLegMax = 0;
+      }
+      const sign = this._signedDSpeed;
+      if (sign >= 0 && this._smoothedAbsDSpeed > this._accelLegMax) {
+        this._accelLegMax = this._smoothedAbsDSpeed;
+      } else if (sign < 0 && this._smoothedAbsDSpeed > this._decelLegMax) {
+        this._decelLegMax = this._smoothedAbsDSpeed;
+      }
+
+      // Peak-pullback predicate per sign. Fire type comes from which
+      // sign's max triggered the pullback — NOT from the current sign
+      // of signedDSpeed, which may flicker near zero during transitions.
+      const accelPullback =
+        this._accelLegMax >= SIGNAL_ONSET_THRESHOLD &&
+        this._smoothedAbsDSpeed <= this._accelLegMax * (1 - PEAK_PULLBACK_FRAC);
+      const decelPullback =
+        this._decelLegMax >= SIGNAL_ONSET_THRESHOLD &&
+        this._smoothedAbsDSpeed <= this._decelLegMax * (1 - PEAK_PULLBACK_FRAC);
+
       // Onset detection: fire a new event if
       //   - no event currently active
-      //   - smoothed signal crossed threshold
-      //   - cooldown window has passed for this type
+      //   - an accel-side OR decel-side peak has pulled back
+      //   - cooldown window has passed for the firing type
       //   - accel-side: warpExit === false
-      if (!this._eventActive && this._smoothedAbsDSpeed >= SIGNAL_ONSET_THRESHOLD) {
-        const sign = this._signedDSpeed;
-        const type = (sign >= 0) ? 'accel' : 'decel';
+      //   - per-leg fire budget (AC #20) not yet spent for that type
+      // If both sides qualify on the same frame, prefer the one whose
+      // peak magnitude is larger — that's the stronger physical event.
+      if (!this._eventActive && (accelPullback || decelPullback)) {
+        let type = null;
+        if (accelPullback && decelPullback) {
+          type = this._accelLegMax >= this._decelLegMax ? 'accel' : 'decel';
+        } else if (accelPullback) {
+          type = 'accel';
+        } else {
+          type = 'decel';
+        }
         const lastEnd = (type === 'accel') ? this._lastAccelEndTime : this._lastDecelEndTime;
         const cooldownOk = (this._timeAccum - lastEnd) >= SIGNAL_EVENT_COOLDOWN;
         const warpExitOk = (type === 'decel') || !motionFrame.warpExit;
-        // Round-11 AC #20: per-leg budget — at most 1 natural accel + 1
-        // natural decel event per TRAVELING phase. Debug fires bypass.
         const budgetOk = !this._firedThisLeg[type];
         if (cooldownOk && warpExitOk && budgetOk) {
           this._startTremorEvent(type, /* isDebug */ false);
+          // Disarm the firing sign's detector; the OTHER sign's max is
+          // preserved so a subsequent opposite-sign envelope on the
+          // same leg can still fire its own peak.
+          if (type === 'accel') this._accelLegMax = 0;
+          else                  this._decelLegMax = 0;
         }
       }
     } else {
@@ -405,6 +484,10 @@ export class ShipChoreographer {
       // we don't want stale values — practical compromise: reset to 0.
       this._smoothedAbsDSpeed = 0;
       this._signedDSpeed = 0;
+      // Loop (c): reset both per-sign maxes so a new leg's peaks are
+      // tracked fresh.
+      this._accelLegMax = 0;
+      this._decelLegMax = 0;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -546,6 +629,8 @@ export class ShipChoreographer {
     this._hasPrev = 0;
     this._smoothedAbsDSpeed = 0;
     this._signedDSpeed = 0;
+    this._accelLegMax = 0;
+    this._decelLegMax = 0;
     this._eventActive = false;
     this._eventType = null;
     this._eventIsDebug = false;
