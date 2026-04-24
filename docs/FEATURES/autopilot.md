@@ -71,6 +71,7 @@ These are felt-experience criteria, not acceptance criteria. Workstream ACs cite
 - Elegant initiation from the attractor `STATION` — linger, pan, burn.
 - Picks up to **relativistic speeds** toward the target (see Open questions: literal-or-felt).
 - Target's reticle/billboard is still ahead in the frame for most of the phase; the handoff to `APPROACH` is the moment it starts resolving into real geometry.
+- **Entry continuity (STATION → CRUISE).** The ship's velocity at CRUISE frame 1 reads as continuous with the prior STATION's terminal velocity — no visible hitch at the moment the ship leaves orbit. The transition is a camera + choreography moment, not a hard cut (restated from `ENTRY`'s §"Elegantly initiates `CRUISE`").
 
 ### `APPROACH` — deceleration
 
@@ -78,6 +79,7 @@ These are felt-experience criteria, not acceptance criteria. Workstream ACs cite
 - Progressive deceleration. No sudden speed step; the drive compensates smoothly (see §Gravity drives).
 - Body fills more and more of the frame.
 - Seamless handoff to `STATION`.
+- **Entry continuity (CRUISE → APPROACH).** The ship's velocity at APPROACH frame 1 reads as continuous with CRUISE's terminal velocity — the "progressive deceleration" criterion above is violated the moment the velocity direction flips rather than bends. No visible hitch at the moment travel ends and close-in begins.
 
 ### `STATION` — holding pattern
 
@@ -85,6 +87,7 @@ These are felt-experience criteria, not acceptance criteria. Workstream ACs cite
 - **Orbit speed fast relative to planet size** (dynamic feel — the planet rotates visibly beneath the observer during the hold).
 - **But not so fast the planet feels small.** Tight orbit, immersive — close enough that the planet is "ground" and the starfield is "sky."
 - **Arc sees more than the arrival view** — the camera + ship motion together reveal surface / cloud patterns / terminator line that the `APPROACH` frame didn't.
+- **Entry continuity (APPROACH → STATION).** The ship's velocity at STATION frame 1 reads as continuous with APPROACH's terminal velocity — restatement of the `APPROACH` phase's "Seamless handoff to `STATION`" criterion at the velocity-derivative level. No visible hitch as the ship settles into orbit.
 
 ### First-planet selection
 
@@ -116,6 +119,7 @@ Current code (`AutoNavigator.buildQueue`) visits inner-to-outer. Director's note
 - **Audio event-surface hook** — future BGM layer can subscribe to autopilot-state changes. The hook ships in V1; the modulation doesn't.
 - **Gravity-drive shake on abrupt transitions** — the cinematic tell (see §Gravity drives).
 - **Star-orbit safe-distance rule** — the star-orbit-distance workstream lands against this criterion.
+- **Ship phase transitions must feel continuous** — no visible hitch at `STATION → CRUISE`, `CRUISE → APPROACH`, or `APPROACH → STATION`. Each transition satisfies its per-phase entry-continuity criterion above. The phase-transition velocity continuity workstream (`docs/WORKSTREAMS/autopilot-phase-transition-velocity-continuity-2026-04-23.md`) lands against this bullet.
 
 ### V-later — polish, must graft on without architectural rewrite
 
