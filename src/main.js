@@ -703,6 +703,11 @@ function _captureTelemetrySample() {
     navBodyPos:     navBP ? [+navBP.x.toFixed(4), +navBP.y.toFixed(4), +navBP.z.toFixed(4)] : null,
     navNextBodyPos: navNBP ? [+navNBP.x.toFixed(4), +navNBP.y.toFixed(4), +navNBP.z.toFixed(4)] : null,
     navPlanLookAt:  navPlanLA ? [+navPlanLA.x.toFixed(4), +navPlanLA.y.toFixed(4), +navPlanLA.z.toFixed(4)] : null,
+    // Continuity-workstream AC #7: per-frame ship velocity vector for
+    // seam-transition velocity-magnitude + direction analysis.
+    shipVelocity: plan.shipVelocity
+      ? [+plan.shipVelocity.x.toFixed(4), +plan.shipVelocity.y.toFixed(4), +plan.shipVelocity.z.toFixed(4)]
+      : null,
   });
 }
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
