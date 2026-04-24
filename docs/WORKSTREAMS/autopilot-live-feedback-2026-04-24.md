@@ -8,7 +8,9 @@
 - **Loop (c):** Local-maximum detector as ADDITIONAL predicate on existing threshold (PM lean accepted); three-point peak with two-point percentile fallback if AC #5 fails at 100%.
 - **Loop (a):** Per-frame angular-delta clamp on raw target pre-commit (not velocity-integrating, no clamp-side oscillation risk). Starting constant `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 600` per brief; working-Claude should consider opening tighter (300–450°/sec range — above authored pan-ahead rate, well below the 35,384°/sec violation peak) on first pass and widen only if authored pan-ahead visibly clips. Mid-workstream pause between (c) and (a) surfaces the chosen value + recording evidence for Director re-check before (a) commits.
 
-`~/.claude/state/dev-collab/active-workstream` flipped to `autopilot-live-feedback-2026-04-24`; `state.json[...].last_audit_sha` = `d81a982`.
+`~/.claude/state/dev-collab/active-workstream` flipped to `autopilot-live-feedback-2026-04-24`; `state.json[...].last_audit_sha` = `273e725be9bf6cf8132e64feaf9999c421101d63` (Loop (a) cycle-2 audit; supersedes prior `d81a982` release audit and the Loop (a) cycle-1 audit).
+
+**Loop (a) cycle-2 (2026-04-24):** cycle-1 clamp at 450°/sec shipped as uncommitted edit in `src/auto/CameraChoreographer.js` L327–364 and shaped p99.9 angular rate to 540°/sec (under the 600°/sec AC #8 bar). 31 violations remained — all downstream of the clamp, caused by `three.js camera.lookAt()` numerical instability when `|target − shipPos| < 0.5u` (cluster 1 at 0.30u from PANNING_AHEAD blend output, cluster 2 at 0.46u from LINGERING direct write; cluster 3 a dt-sampling hitch). Director ruled **Option (A) — target-distance guard** — companion mechanism to the clamp (geometric precondition, not rate limit). AC #7 amended below with co-mechanism clause; drift-risks extended with sub-2u composition-distortion risk. Cycle-1 recording: `recordings/loopa-clamp-450dps.webm`.
 
 Foundational scope-expansion workstream. Promotes the reckoning
 telemetry (shipped at `f652a40`, `VERIFIED_PENDING_MAX 516bb90`) from
@@ -39,6 +41,46 @@ after Director audit releases the gate.
   this brief with loop-order discipline (non-oscillation-risk loops
   first, oscillation-risk loop last). Drafted by PM 2026-04-24 after
   Director's loop articulation.
+
+- **2026-04-24 — loop (a) cycle-2 co-mechanism added (target-distance
+  guard).** Cycle-1 of Loop (a) landed the Director-specified per-frame
+  angular-rate clamp on the raw target at `MAX_FRAME_ANGULAR_RATE_DEG_
+  PER_SEC = 450` in `src/auto/CameraChoreographer.js` L327–364. The
+  clamp behaved as specified — p99.9 of camera angular rate fell to
+  540°/sec (under the AC #8 600°/sec bar) — but 31 violations remained
+  in the cycle-1 capture (`recordings/loopa-clamp-450dps.webm`).
+  Diagnosis (working-Claude, Director-confirmed): all 31 violations
+  are downstream of the clamp. Cause is `three.js camera.lookAt()`
+  numerical instability when `|target − shipPos| < 0.5` scene units.
+  `lookAt` builds the camera quaternion from `normalize(target −
+  cameraPos)`; at sub-unit distance, millimeter-scale per-frame
+  perturbations on `target.position` (body-orbit animation + ship
+  position integration) amplify into large swings in the unit
+  direction. No clamp value can fix this — the failure is geometric,
+  not rate-limited. Two distinct degenerate clusters were observed:
+  **Cluster 1** at `distance ≈ 0.30u` (PANNING_AHEAD branch L295–299,
+  pan-ahead blend output near small-moon APPROACH); **Cluster 2** at
+  `distance ≈ 0.46u` (LINGERING branch L262, `_lingerTargetRef.
+  position` write during camera linger on a receding small moon).
+  Cluster 3 (single-frame dt-sampling artifact after a 44.9ms hitch)
+  is acceptable-as-artifact per Director's cycle-2 ruling. Director
+  ruled Option (A) — target-distance guard — verbatim: *"Your
+  diagnosis holds: the 31 violations are degenerate-lookAt geometry
+  downstream of the clamp, not clamp-escape. Tuning doesn't close
+  them. (B) is the Principle-6 anti-pattern the brief explicitly
+  named; (C) would scope-invert AC #8."* Ruling details: guard sits
+  after the switch's closing brace in `EstablishingMode.update()`
+  (covering both Cluster 1 and Cluster 2 write sites) and before the
+  angular-rate clamp; `MIN_TARGET_DISTANCE = 2.0` scene units (gives
+  4–6× margin over observed clusters; puts per-frame wobble at <1% of
+  vector magnitude, out of the `normalize`-amplification regime);
+  keep the 450°/sec clamp (shaping p99.9 correctly — lowering clips
+  authored pan-ahead, raising eats AC #8 headroom). Mechanism class
+  is **additive** (co-mechanism — clamp is a rate limit, guard is a
+  geometric precondition); nothing in the existing brief is retracted.
+  AC #7 extended with the co-mechanism clause; drift-risks extended
+  with a sub-2u composition-distortion risk + falsification signal.
+  Cycle-2 audit SHA: `273e725be9bf6cf8132e64feaf9999c421101d63`.
 
 - **2026-04-24 — loop (b) formula revised to Option 4 (two-anchor
   blend).** First-pass implementation of loop (b) used the Director's
@@ -446,20 +488,85 @@ predicate changes.
 ### Loop (a) — body-in-frame flip → camera damper
 
 **AC #7 — `EstablishingMode` frame-to-frame angular delta is
-rate-limited.** `CameraChoreographer.EstablishingMode.update()` (or
-equivalent composition site) applies a clamp on the angular delta
-between the prior-frame `_currentLookAtTarget` and this-frame's raw
-computed target. Verified by:
-- Grep of `src/auto/CameraChoreographer.js` for the new clamp logic
-  (named constant like `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC`,
-  working-Claude's naming).
+rate-limited AND the raw target clears a minimum distance from the
+camera (two co-mechanisms).** `CameraChoreographer.EstablishingMode.
+update()` applies **both** of the following to the raw target before
+it commits to `_currentLookAtTarget`:
+
+**Mechanism 1 — per-frame angular-rate clamp (cycle 1).** A clamp on
+the angular delta between the prior-frame `_currentLookAtTarget` and
+this-frame's raw computed target at `MAX_FRAME_ANGULAR_RATE_DEG_PER_
+SEC = 450`. The clamp landed in cycle 1 and is **retained unchanged**
+— it shapes p99.9 of camera angular rate under the AC #8 bar
+(observed 540°/sec post-clamp vs. 35,384°/sec pre-clamp). Director
+ruling on the constant: *"Shaping p99.9 correctly; lowering would
+clip authored pan-ahead, raising would eat AC #8 headroom."*
+
+**Mechanism 2 — target-distance guard (cycle 2).** A geometric
+precondition on the raw target ensuring `|_prevRawTargetFrame −
+shipPos| ≥ MIN_TARGET_DISTANCE = 2.0` scene units. If the raw target
+is closer than the floor, push it outward along its current direction
+to `shipPos + direction × MIN_TARGET_DISTANCE`. Rationale: `three.js
+camera.lookAt()` builds the camera quaternion from `normalize(target
+− cameraPos)`, which amplifies sub-unit-magnitude perturbations on
+target position into large unit-direction swings. The floor keeps the
+vector magnitude comfortably larger than per-frame body-orbit and
+ship-integration wobble (~1e-2 to 1e-3 scene units) so the forward
+direction is numerically stable. Constant value is Director-specified
+(*"observed clusters sit at 0.30 and 0.46; 2.0 gives 4–6× margin and
+puts per-frame wobble at <1% of vector magnitude — out of the
+`normalize`-amplification regime"*).
+
+**Guard placement (load-bearing).** The guard sits **after the
+switch statement's closing brace** in `EstablishingMode.update()`
+(every framing-state branch has finished writing `_prevRawTargetFrame`)
+and **before** the angular-rate clamp block. This single-point
+placement covers both observed degenerate-cluster sources:
+- **Cluster 1** — PANNING_AHEAD branch (~L285), where the pan-ahead
+  blend output can sit at 0.30u from ship on small-moon APPROACH.
+- **Cluster 2** — LINGERING branch (~L262), where the direct write
+  `_prevRawTargetFrame.copy(this._lingerTargetRef.position)` can put
+  the target at 0.46u from ship when linger body is near camera.
+
+Branch-local placement would miss Cluster 2; the single post-switch
+site is the correct location.
+
+**Degenerate direction fallback (sub-sub-case).** If
+`|_prevRawTargetFrame − shipPos| < ε` (numerically zero direction
+vector — target is coincident with camera), use the following
+fallback chain:
+1. `normalize(_currentLookAtTarget − shipPos)` (prior-frame
+   committed direction).
+2. If that is also `< ε`, fall back to camera forward:
+   `new Vector3(0, 0, -1).applyQuaternion(camera.quaternion)`.
+
+Document the fallback path chosen per frame (if telemetry is cheap)
+or in the commit message (if not).
+
+Verified by:
+- Grep of `src/auto/CameraChoreographer.js` for `MAX_FRAME_ANGULAR_
+  RATE_DEG_PER_SEC = 450` and `MIN_TARGET_DISTANCE = 2.0` as named
+  constants at the top of the module alongside `LINGER_DURATION` and
+  `PAN_AHEAD_FRACTION`.
+- Grep of `EstablishingMode.update()` for both mechanisms: the
+  distance-guard `if (|v| < MIN_TARGET_DISTANCE && |v| > ε) { push
+  outward }` sits **after** the switch's closing brace and **before**
+  the angular-rate clamp block.
 - The clamp is applied **on the raw target before it commits** to
   `_currentLookAtTarget`, not as a post-hoc smoothing filter on
   `_currentLookAtTarget` itself (Principle 6 — live-read at the
   input, not smoothing on the output).
-- The damping constant is a single named tunable at the top of
-  `CameraChoreographer.js` alongside `LINGER_DURATION` and
-  `PAN_AHEAD_FRACTION`.
+- Both mechanisms act on `_prevRawTargetFrame` pre-commit at the same
+  composition site; guard runs first, clamp runs second (order:
+  fix the geometric precondition, then rate-limit the delta).
+
+**Acceptance:** AC #8 `cameraViewAngularContinuity` returns zero
+violations at 10.47 rad/s (600°/sec) audit bar on the cycle-2
+capture. **Exception: single-violation dt-sampling artifacts** (frame-
+timing jitter where dt < 1ms after a long-dt hitch, as in cycle-1's
+Cluster 3) may remain — Director will rule accept-as-artifact vs.
+dt-floor per capture. If more than one dt-sampling artifact persists,
+footnote each in the commit and flag to Director.
 
 **AC #8 — head-turn on arrival resolved in reckoning audit.** Per
 `docs/FEATURES/autopilot.md` §"Camera axis — ESTABLISHING (V1)" —
@@ -567,6 +674,42 @@ pipeline-early helper.
   surfaces the chosen value + evidence from a capture; Director
   audits. A single mid-workstream recording review before loop (a)
   commits is expected.
+
+- **Risk: sub-2u framing composition distortion (Loop (a) cycle-2
+  guard).** The `MIN_TARGET_DISTANCE = 2.0` floor is a safety
+  precondition against `three.js lookAt` numerical instability — it
+  does NOT encode a design intent about where the camera should
+  frame. If LINGER engages on a body whose *body radius* itself is
+  smaller than 2.0 scene units (small Sol moons: Phobos, Deimos-scale
+  bodies, possibly some Jovian moons at close approach), the guard
+  could push the look-at target **past** the body, outward along the
+  camera-to-body direction. The resulting framing would visibly
+  "look past" the body — the camera's forward axis crosses through
+  the body and lands in empty space beyond it.
+  **Why it happens:** the guard's outward-push direction is the
+  unit-vector from camera to current target. If current target is
+  the body's center and the body's surface is at 0.5u from camera,
+  pushing to 2.0u from camera puts the look-at point 1.5u past the
+  body along the same line-of-sight. Perceptually the body is still
+  roughly centered — the lookAt direction only changes magnitude, not
+  direction in the nominal case — but frame composition (body's
+  apparent size, relative position of any secondary body in frame)
+  shifts.
+  **Guard:** cycle-2 capture is the falsification event. In the
+  cycle-2 recording, LINGER motions on small bodies should still
+  look like the camera is composed **on** the body, not on the
+  body's peripheral neighborhood. If Max or Director sees LINGER
+  visibly "looking past" a small moon — the body floats off-center
+  while the camera holds a pose toward empty space behind it —
+  reduce `MIN_TARGET_DISTANCE` to `1.0` and re-capture. If `1.0`
+  still visibly distorts framing, escalate to Director — the
+  outward-push **direction** is wrong (not the magnitude), and the
+  guard needs a different mechanism class (Director's cycle-2 audit
+  named this escalation explicitly).
+  **Out-of-scope reminder:** small-moon LINGER framing authoring
+  (how to compose on a sub-2u-radius body cinematically) is a
+  separate concern. Loop (a) adds a numerical-stability floor only;
+  it is NOT a framing-authoring mechanism.
 
 - **Risk: Principle 5 bending without it breaking.** The wire-up is
   within the rules (read from earlier stage), but it's tempting to
@@ -702,10 +845,22 @@ pipeline-early helper.
   single additional predicate.
 
 - **Loop (a) — `CameraChoreographer.js:EstablishingMode.update()`**
-  extended with a frame-to-frame angular-delta clamp on the raw
-  target before commit to `_currentLookAtTarget`. Clamp constant
-  exposed at top of module as a named tunable. Applied to
-  TRACKING, PANNING_AHEAD, and LINGERING→TRACKING fall-through.
+  extended with TWO co-mechanisms on the raw target before commit
+  to `_currentLookAtTarget`:
+    1. **Angular-rate clamp** (`MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC
+       = 450`, cycle 1). Clamps the angular delta between the
+       prior-frame `_currentLookAtTarget` and this-frame's raw
+       computed target.
+    2. **Target-distance guard** (`MIN_TARGET_DISTANCE = 2.0` scene
+       units, cycle 2). Ensures `|_prevRawTargetFrame − shipPos| ≥
+       MIN_TARGET_DISTANCE`; if closer, push outward along current
+       direction with the degenerate fallback chain (prior-frame
+       direction → camera forward) from AC #7.
+  Both constants exposed at top of module as named tunables
+  alongside `LINGER_DURATION` and `PAN_AHEAD_FRACTION`. Both apply
+  to TRACKING, PANNING_AHEAD, and LINGERING→TRACKING fall-through
+  via single-point placement after the switch's closing brace
+  (guard first, then clamp).
 
 - **Motion evidence per AC #3, AC #6, AC #9.** Three canvas
   recordings (or one composite Sol tour that covers all three
