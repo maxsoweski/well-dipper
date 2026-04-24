@@ -657,6 +657,23 @@ function _captureTelemetrySample() {
 
   const plan = navSubsystem.getCurrentPlan();
 
+  // ── WS 3 diagnostic telemetry (2026-04-23) ──
+  // Six read-only fields authorized by Director option (a) to attribute
+  // a visible jump Max saw in the WS 3 recording to camera-axis vs
+  // nav-layer vs shake. No new audits, no behavior changes. Attribution rule:
+  //   camPos discontinuous                → camera translation glitch
+  //   camPos smooth + camLookAt disc + framingState changed
+  //                                       → framing-transition disc (WS 3)
+  //   camPos + camLookAt smooth but navBodyPos / navNextBodyPos disc
+  //                                       → pre-existing nav-layer issue
+  //   navPlanLookAt disc but navBodyPos smooth
+  //                                       → nav subsystem target-composition issue
+  //   all smooth but visible jump         → visual artifact (LOD / FOV / stars)
+  const cLa = cameraChoreographer.currentLookAtTarget;
+  const navBP = navSubsystem.bodyRef?.position || null;
+  const navNBP = navSubsystem.nextBodyRef?.position || null;
+  const navPlanLA = plan.lookAtTarget || null;
+
   _telemetryState.samples.push({
     t:           performance.now(),
     camPos:      [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
@@ -679,6 +696,13 @@ function _captureTelemetrySample() {
     currentTargetType:          targetType,
     isShortTrip: !!plan.isShortTrip,
     warpExit:    !!plan.warpExit,
+    // WS 3 diagnostic fields (camera-axis + nav-layer attribution):
+    camLookAt:    [+cLa.x.toFixed(4), +cLa.y.toFixed(4), +cLa.z.toFixed(4)],
+    framingState: cameraChoreographer.framingState,
+    cameraMode:   cameraChoreographer.currentMode,
+    navBodyPos:     navBP ? [+navBP.x.toFixed(4), +navBP.y.toFixed(4), +navBP.z.toFixed(4)] : null,
+    navNextBodyPos: navNBP ? [+navNBP.x.toFixed(4), +navNBP.y.toFixed(4), +navNBP.z.toFixed(4)] : null,
+    navPlanLookAt:  navPlanLA ? [+navPlanLA.x.toFixed(4), +navPlanLA.y.toFixed(4), +navPlanLA.z.toFixed(4)] : null,
   });
 }
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };

@@ -85,6 +85,18 @@ const PAN_AHEAD_RAMP = 0.8;
  */
 const PAN_AHEAD_DECAY = 2.0;
 
+/**
+ * Duration (seconds) of the camLookAt blend when framingState transitions
+ * between states with different target-computation rules (TRACKING/
+ * PANNING_AHEAD use `navPlanLookAt + bias`; LINGERING uses the cached
+ * body center — these differ by ~100 units by design). Without blending,
+ * the target snaps by that distance in one frame.
+ *
+ * V1 seed 0.4s — smooth enough to read as authored, fast enough that the
+ * linger still reads as a deliberate beat rather than a slow wipe.
+ */
+const TRANSITION_BLEND_DURATION = 0.4;
+
 // ══════════════════════════════════════════════════════════════════════
 
 // Reusable vectors
@@ -117,11 +129,31 @@ class EstablishingMode {
     this._lingerTargetRef = null;  // body.group ref (updates position via .position)
     this._lingerElapsed = 0;
     this._prevShipPhase = 'IDLE';   // detect STATION → CRUISE transition edge
+    // Round-2 (2026-04-23): cache the body the ship is currently orbiting
+    // while `shipPhase === 'STATION'`. When the autopilot advances the leg,
+    // `nav.bodyRef` is replaced BEFORE the STATION → CRUISE edge is detected,
+    // so reading `nav.bodyRef` at transition time pins the linger to the NEXT
+    // target (wrong body). This cached ref is always the body we were just
+    // orbiting — the receding subject per AC #5. Per session 2026-04-23
+    // diagnostic telemetry: without this cache, `camLookAt` jumped ~13500
+    // scene units at the TRACKING→LINGERING frame.
+    this._lastStationBodyRef = null;
     // Pan-ahead bias ramps smoothly — 0 when not panning, up to
     // PAN_AHEAD_FRACTION during CRUISE with a next-body target.
     this._panAheadBias = 0;
     // Output: final lookAtTarget for this frame.
     this._currentLookAtTarget = new THREE.Vector3();
+
+    // Round-2 (2026-04-23): transition blend state. The raw target produced
+    // by each framing-state's rule (body-center for LINGERING vs
+    // navPlanLookAt+bias for TRACKING/PANNING_AHEAD) differs by ~100 units
+    // by design. Snap-jumps between them read as "camera jumping weirdly."
+    // Fix: capture the previous frame's camLookAt at each framing-state
+    // transition and lerp from it toward the new rule's raw target over
+    // TRANSITION_BLEND_DURATION seconds.
+    this._blendFromTarget = new THREE.Vector3();
+    this._blendElapsed = TRANSITION_BLEND_DURATION;  // start "blend already completed"
+    this._prevRawTargetFrame = new THREE.Vector3();  // scratch for raw-target capture
   }
 
   get currentLookAtTarget() { return this._currentLookAtTarget; }
@@ -134,7 +166,9 @@ class EstablishingMode {
     this._lingerTargetRef = null;
     this._lingerElapsed = 0;
     this._prevShipPhase = 'IDLE';
+    this._lastStationBodyRef = null;
     this._panAheadBias = 0;
+    this._blendElapsed = TRANSITION_BLEND_DURATION;
   }
 
   /**
@@ -144,18 +178,50 @@ class EstablishingMode {
    * @param {NavigationSubsystem} nav — access to bodyRef / nextBodyRef.
    */
   update(deltaTime, motionFrame, shipPhase, nav) {
+    const prevFramingState = this._framingState;
+
+    // ── Cache the currently-orbited body each STATION frame ──
+    // Per round-2 diagnostic (2026-04-23): by the time STATION→CRUISE is
+    // detected below, the autopilot has already advanced the leg and
+    // `nav.bodyRef` points at the NEXT target. Caching the body each frame
+    // the ship is in STATION gives us a stable handle to the receding
+    // subject — the correct linger anchor per AC #5.
+    if (shipPhase === 'STATION' && nav && nav.bodyRef) {
+      this._lastStationBodyRef = nav.bodyRef;
+    }
+
     // ── Transition detection (ship-phase-AS-INPUT-SIGNAL, not selector) ──
     // When the ship leaves STATION and begins CRUISE, queue a linger on
     // the body just left. This is the AC #5 linger-on-receding-subject.
+    // Use the cached `_lastStationBodyRef` (captured while the ship was
+    // actually in STATION), NOT the live `nav.bodyRef` (which by now has
+    // been replaced with the next target by the leg-advance).
     if (this._prevShipPhase === 'STATION' && shipPhase === 'CRUISE') {
-      if (nav && nav.bodyRef) {
+      if (this._lastStationBodyRef) {
         this._framingState = FramingState.LINGERING;
-        this._lingerTargetRef = nav.bodyRef;
+        this._lingerTargetRef = this._lastStationBodyRef;
         this._lingerElapsed = 0;
       }
     }
 
+    // ── Round-2 transition blend: if framing state just changed, capture
+    // the previous frame's camLookAt as the blend-from anchor so the new
+    // state's raw target is lerped toward over TRANSITION_BLEND_DURATION.
+    // Without this, LINGERING's body-center target and TRACKING/
+    // PANNING_AHEAD's navPlanLookAt-based target differ by ~100 units
+    // by design, producing a visible one-frame snap.
+    if (this._framingState !== prevFramingState) {
+      this._blendFromTarget.copy(this._currentLookAtTarget);
+      this._blendElapsed = 0;
+    }
+    this._blendElapsed += deltaTime;
+
     // ── Primary dispatch: switch(_framingState), NOT switch(shipPhase) ──
+    // Each branch writes its raw target into `_prevRawTargetFrame`. After
+    // the switch, we blend from `_blendFromTarget` toward the raw target
+    // by `_blendElapsed / TRANSITION_BLEND_DURATION` so framing-state
+    // transitions (body-center vs navPlanLookAt) don't snap by ~100 units.
+    let rawTargetWritten = true;
     switch (this._framingState) {
       case FramingState.LINGERING: {
         this._lingerElapsed += deltaTime;
@@ -163,24 +229,31 @@ class EstablishingMode {
         // away naturally; camera stays pinned on the body — that's the
         // visual reading of a "linger" per AC #5).
         if (this._lingerTargetRef && this._lingerTargetRef.position) {
-          this._currentLookAtTarget.copy(this._lingerTargetRef.position);
+          this._prevRawTargetFrame.copy(this._lingerTargetRef.position);
         } else {
           // Body ref was lost (e.g., system re-spawned mid-linger) — fall
           // through to TRACKING so we don't null-deref.
           this._framingState = FramingState.TRACKING;
-          this._currentLookAtTarget.copy(motionFrame.lookAtTarget);
-        }
-        if (this._lingerElapsed >= LINGER_DURATION) {
-          // Linger complete — transition to TRACKING; pan-ahead may engage
-          // naturally next frame if we're in CRUISE.
-          this._framingState = FramingState.TRACKING;
-          this._lingerTargetRef = null;
-          this._lingerElapsed = 0;
+          this._prevRawTargetFrame.copy(motionFrame.lookAtTarget);
         }
         // Pan-ahead bias decays during linger (we're not panning forward —
         // we're holding back on the receding subject).
         this._panAheadBias = Math.max(0, this._panAheadBias - PAN_AHEAD_DECAY * deltaTime);
-        break;
+        if (this._lingerElapsed >= LINGER_DURATION) {
+          // Linger complete — transition to TRACKING AND fall through so
+          // TRACKING's computation runs THIS FRAME (not next frame).
+          // Capture the blend-from anchor as the linger's final raw target
+          // so the fall-through's raw target is blended from there.
+          this._blendFromTarget.copy(this._prevRawTargetFrame);
+          this._blendElapsed = 0;
+          this._framingState = FramingState.TRACKING;
+          this._lingerTargetRef = null;
+          this._lingerElapsed = 0;
+          // Intentional fall-through — no break here.
+        } else {
+          break;
+        }
+        // falls through
       }
 
       case FramingState.TRACKING:
@@ -209,16 +282,28 @@ class EstablishingMode {
             this._framingState = FramingState.TRACKING;
           }
         }
-        this._currentLookAtTarget.copy(_tmpTarget);
+        this._prevRawTargetFrame.copy(_tmpTarget);
         break;
       }
 
       default: {
         // Unknown state — fail safe to subsystem default.
         this._framingState = FramingState.TRACKING;
-        this._currentLookAtTarget.copy(motionFrame.lookAtTarget);
+        this._prevRawTargetFrame.copy(motionFrame.lookAtTarget);
         break;
       }
+    }
+
+    // ── Blend from pre-transition anchor toward raw target ──
+    // During active blend (_blendElapsed < TRANSITION_BLEND_DURATION),
+    // camLookAt = lerp(blendFromAnchor, rawTarget, smoothstep(t)). After
+    // the blend window, camLookAt = rawTarget unconditionally.
+    if (this._blendElapsed >= TRANSITION_BLEND_DURATION) {
+      this._currentLookAtTarget.copy(this._prevRawTargetFrame);
+    } else {
+      const u = this._blendElapsed / TRANSITION_BLEND_DURATION;
+      const smoothU = u * u * (3 - 2 * u);  // smoothstep for gentle ease
+      this._currentLookAtTarget.copy(this._blendFromTarget).lerp(this._prevRawTargetFrame, smoothU);
     }
 
     // Save for next frame's transition detection.
