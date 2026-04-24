@@ -4,7 +4,7 @@
 
 `Released 2026-04-24 (Director audit `d81a982`) — execution begins with loop (b).` Director audit: scope clean, three loops carve distinct ACs with non-overlapping invariants, loop order (b → c → a) load-bearing and justified, Principle 5/6/2 framing explicit with grep-enforced AC #10 guard. Loop-specific rulings:
 
-- **Loop (b):** `VelocityBlend` machinery stays; blend target moves from captured-extrapolation to live-per-body. Committed formula shape (drift-risk guard): `_seamEntryPosition + (body.position − bodyPositionAtSeamEntry) × elapsed/duration` — continuity at blend-start (elapsed=0) preserved.
+- **Loop (b):** `VelocityBlend` machinery stays; blend target moves from captured-extrapolation to live-per-body. **Committed formula shape revised 2026-04-24 post-first-pass to Option 4 (two-anchor blend)** per Director's ruling after mid-window geometric artifact surfaced in test capture (AC #9: 18→554 violations). See AC #1 for verbatim formula: `ship_extrap` (momentum-anchored) and `body_tracked` (body-frame-anchored) are computed independently every frame; `ramp = elapsed/duration` controls only the mix. Continuity at blend-start (`ramp=0` → ship_extrap → _seamEntryPosition at elapsed=0) and frame-lock at blend-end (`ramp=1` → body_tracked) are both satisfied by construction. Restores `capturedVelocity` capture at seam entry. See Revision history 2026-04-24 loop-(b) formula revision entry for the full audit trail.
 - **Loop (c):** Local-maximum detector as ADDITIONAL predicate on existing threshold (PM lean accepted); three-point peak with two-point percentile fallback if AC #5 fails at 100%.
 - **Loop (a):** Per-frame angular-delta clamp on raw target pre-commit (not velocity-integrating, no clamp-side oscillation risk). Starting constant `MAX_FRAME_ANGULAR_RATE_DEG_PER_SEC = 600` per brief; working-Claude should consider opening tighter (300–450°/sec range — above authored pan-ahead rate, well below the 35,384°/sec violation peak) on first pass and widen only if authored pan-ahead visibly clips. Mid-workstream pause between (c) and (a) surfaces the chosen value + recording evidence for Director re-check before (a) commits.
 
@@ -39,6 +39,35 @@ after Director audit releases the gate.
   this brief with loop-order discipline (non-oscillation-risk loops
   first, oscillation-risk loop last). Drafted by PM 2026-04-24 after
   Director's loop articulation.
+
+- **2026-04-24 — loop (b) formula revised to Option 4 (two-anchor
+  blend).** First-pass implementation of loop (b) used the Director's
+  originally-specified formula
+  `_seamEntryPosition + (body.position − bodyPositionAtSeamEntry) ×
+  (elapsed / duration)` — ramp-scaled body-delta on top of the seam
+  entry position. Test capture against the new AC #8/#9 audits
+  surfaced a geometric artifact mid-window: at ramp=0.5, the ship
+  ended up ~4× farther from the body than the approach-endpoint
+  orbit distance (approach-endpoint 0.06 → first-frame-of-ORBIT
+  captured 0.27). Telemetry deltas: AC #8 improved (11 → 5
+  `cameraViewAngularContinuity` violations), **but AC #9
+  catastrophically regressed (18 → 554 `bodyInFrameChanges`
+  violations)** — the
+  body re-crossed every frame threshold as the captured position
+  orbited the true body position at the wrong radius. Record-scratch
+  visual artifact worsened (amplitude 0.068 → 0.078, coverage
+  13% → 30%). Director ruled Option 4 verbatim: *"Your framing is
+  correct: the ramp conflates two independent continuities (momentum
+  at t=0, body-relative frame at t=duration) into one scalar. The
+  mid-window artifact is the geometric cost of collapsing them.
+  Blend between the two anchors explicitly — ship-extrapolation
+  satisfies C1-at-start by construction, body-tracked satisfies
+  frame-lock at end, ramp controls only the mix. Seam 3's zero
+  leaving-velocity falls out naturally. PM picks up for brief
+  revision."* Formula replaced in AC #1 and in the drift-risk guard
+  below. The capturedVelocity capture that was removed for the
+  simplified first-pass formula is restored. Loop (b) commits (c)
+  and (a) are unchanged in scope.
 
 ## Parent feature
 
@@ -267,24 +296,70 @@ feature-doc phase sections verbatim. The workstream-level ACs (#10,
 
 ### Loop (b) — live per-body read at seam-blend anchor
 
-**AC #1 — blend target reads live body position.**
-`NavigationSubsystem.update()` lines 310–317 (the blend-apply region)
-is refactored so that during an active `_velocityBlend`, the ship
-position is lerped toward a target computed from the **live**
-position of the seam's reference body this frame — not from
-`_seamEntryPosition + _velocityBlend.capturedVelocity × elapsed`.
+**AC #1 — blend target is a two-anchor mix of ship-extrapolation and
+body-tracked position (Option 4).** `NavigationSubsystem.update()`
+lines 310–317 (the blend-apply region) is refactored so that during
+an active `_velocityBlend`, the captured ship position each frame is
+computed as an **explicit blend between two independent anchors**
+rather than a ramp-scaled body-delta on top of the seam entry:
+
+```
+ship_extrap  = _seamEntryPosition + capturedVelocity × elapsed
+body_tracked = _seamEntryPosition + (body.position − bodyPositionAtSeamEntry)
+//              ^ full body-delta, NO ramp
+capturedPos  = ship_extrap + (body_tracked − ship_extrap) × ramp
+//              ^ ramp = elapsed / duration (or smoothstep), controls
+//                ONLY the mix between anchors
+```
+
+Why two anchors, not one ramp-scaled delta:
+- **ship_extrap** satisfies C1 continuity at `elapsed=0` by
+  construction — the momentum the ship had entering the seam carries
+  it forward exactly as captured. At `ramp=0` the captured position
+  equals `ship_extrap`, which equals `_seamEntryPosition` at the
+  first frame (when `elapsed=0`).
+- **body_tracked** satisfies frame-lock at `elapsed=duration` — the
+  captured position ends the blend window locked to the same
+  body-relative offset it had at seam entry, so the next frame's
+  ORBIT handoff starts with the ship in the body's frame, not
+  lagging behind it.
+- `ramp` controls **only the mix**, not the magnitude of body-
+  tracking. The previous formula (ramp-scaled body-delta) conflated
+  the two continuities into one scalar, producing the mid-window
+  geometric artifact that blew up AC #9 (see revision history,
+  2026-04-24 loop-(b) formula revision).
+
+Seam 3 (APPROACH→ORBIT) note: leaving velocity is zero by design
+(approach decelerates to a stop before ORBIT). At `capturedVelocity
+= 0`, `ship_extrap` degenerates to `_seamEntryPosition`, and
+`capturedPos` reduces to pure body-tracking (`_seamEntryPosition +
+(body.position − bodyPositionAtSeamEntry) × ramp` scaled by the
+ship_extrap→body_tracked blend). This is the correct behavior at
+zero leaving velocity and is not a special case in the formula — it
+falls out of the two-anchor shape naturally.
+
+Implementation note: `capturedVelocity` must be computed at seam
+entry from `(this._position − this._prevPosition) / deltaTime` and
+stored on the seam-capture object (the first-pass Loop (b)
+implementation removed this capture when simplifying; restore it).
+`bodyPositionAtSeamEntry` is similarly captured at seam-entry time.
+
 Verified by:
-- Grep of `src/auto/NavigationSubsystem.js` for `addScaledVector(this.
-  _velocityBlend.capturedVelocity, this._velocityBlend.elapsed)` or
-  equivalent captured-velocity extrapolation returns **zero**
-  references inside `update()` (may still appear in the VelocityBlend
-  class itself as machinery).
-- The blend-apply region reads `this.bodyRef.position` (or the
-  equivalent phase-appropriate reference; working-Claude documents
-  the choice per-seam).
+- Grep of `src/auto/NavigationSubsystem.js` blend-apply region
+  (lines 310–317 post-fix) for the two-anchor pattern — both
+  `ship_extrap` (or equivalent named intermediate using
+  `capturedVelocity`) and `body_tracked` (or equivalent named
+  intermediate using `body.position − bodyPositionAtSeamEntry` with
+  NO ramp multiplier) are computed, and the final `capturedPos`
+  (or equivalent) is a lerp from the first to the second using
+  `ramp = elapsed / duration` (or the smoothstep of that).
+- `capturedVelocity` is captured at seam entry (grep for a write to
+  the seam-capture object that derives from `_position` and
+  `_prevPosition` or equivalent per-frame delta source).
 - `_velocityBlend.begin()` + `.advance()` + `.blendT` remain
   unchanged — the blend window / smoothstep ramp machinery is
-  preserved.
+  preserved; only the blend-*target* computation at the apply site
+  changes shape.
 
 **AC #2 — moon-motion reconciliation resolved in telemetry.**
 Per `docs/FEATURES/autopilot.md` §"Phase-transition velocity
@@ -299,6 +374,25 @@ the existing continuity audits:
 - Velocity-direction angle at seam ≤ 15° preserved (continuity AC
   #1c/#2c/#3c; AC #2 does not regress the angle, it holds the
   continuity while fixing the moving-target issue).
+- **ORBIT-entry geometric bound (Director-added 2026-04-24 after
+  Option 4 ruling).** During any window where `_velocityBlend.
+  active && _shipMode === 'ORBIT'` (i.e., the Seam 3
+  APPROACH→ORBIT blend window), the audit asserts `distToBody ≤
+  1.5 × approachEndpointOrbitDistance`. The approach-endpoint
+  orbit distance is the `distToBody` value at the last frame of
+  APPROACH (before the ORBIT transition). The 1.5× ceiling bounds
+  the mid-window geometry: if the captured position departs from
+  the approach-endpoint distance by more than 50%, the blend
+  formula has a geometric artifact and must be fixed before
+  Shipping. (Origin: first-pass Loop (b) formula produced ~4×
+  departure — 0.06 approach-endpoint → 0.27 mid-ORBIT — which
+  this bound would have caught immediately.) The bound is not a
+  new top-level AC by Director direction; it lives here in AC #2
+  because this is the telemetry audit where `bodyInFrameChanges`
+  and continuity are already asserted, and the geometric bound is
+  a direct companion to both. Working-Claude implements the audit
+  as an extension of the `bodyInFrameChanges` pass so it runs on
+  the same per-frame sample stream.
 
 **AC #3 — moon-motion reconciliation resolved in Max's canvas
 recording.** Per `docs/MAX_RECORDING_PROTOCOL.md`. A fresh Sol
@@ -525,28 +619,35 @@ pipeline-early helper.
   new per-frame full-scene read.
 
 - **Risk: Loop (b) regresses the C1 continuity the velocity-blend
-  machinery provides.** The blend's smoothstep ramp (`VelocityBlend.
-  blendT`, line 78–82) is authored for position-derivative continuity
-  at both ends of the 0.3–0.5s window. Replacing the extrapolation
-  target with a live-per-body read could, if naively implemented,
-  produce a kink at the blend start or end because the live-per-body
-  position and the captured T₀-extrapolation are not equal at the
-  blend-start frame (they diverge over the blend window because the
-  moon moves).
-  **Why it happens:** the implementation instinct is "replace the
-  addScaledVector with the body-position" — at blend-start (t=0),
-  the seam entry position is the correct thing; only as elapsed
-  grows does the moon-motion matter.
-  **Guard:** loop (b)'s implementation must produce the **same
-  position at blend-start (elapsed=0) as the current machinery
-  does** — `_seamEntryPosition + capturedVelocity × 0 = _seam
-  EntryPosition`. The divergence happens as elapsed grows; the
-  correct shape is something like `_seamEntryPosition + (body.
-  position - bodyPositionAtSeamEntry) × elapsed / duration` —
-  that is, lerp the captured extrapolation toward the live body
-  offset over the blend window. Working-Claude documents the
-  chosen formula; Director audits. AC #2's velocity-direction
-  angle ≤ 15° at seam remains the regression guard.
+  machinery provides, OR introduces a mid-window geometric
+  artifact.** The blend's smoothstep ramp (`VelocityBlend.blendT`,
+  line 78–82) is authored for position-derivative continuity at
+  both ends of the 0.3–0.5s window. A single-anchor formula that
+  ramp-scales body-delta on top of the seam entry (the original
+  first-pass shape) satisfies C1 at blend-start but drifts off the
+  body-relative radius mid-window — the captured position tracks
+  an orbit at the wrong radius, which blows up `bodyInFrameChanges`
+  as the body crosses every frame threshold (observed: AC #9
+  18→554 violations, 2026-04-24 test capture). That was the
+  origin of the Option 4 ruling.
+  **Why it happens:** collapsing two independent continuities
+  (momentum-at-start, body-frame-at-end) into one scalar ramp is
+  structurally lossy — the mid-window geometry is the geometric
+  cost of the collapse. Ramp-scaling the body-delta keeps the
+  ship on a small-radius arc around the seam-entry position
+  instead of on (or near) the approach-endpoint orbit radius
+  around the body.
+  **Guard:** the committed formula shape is the two-anchor
+  Option 4 blend (see AC #1 verbatim). Both anchors must be
+  computed independently every frame; `ramp` controls only the
+  mix. `capturedVelocity` is restored to the seam-capture object
+  so `ship_extrap` is well-defined. The ORBIT-entry geometric
+  bound sub-criterion under AC #2 (distToBody ≤ 1.5× approach-
+  endpoint during `_velocityBlend.active && _shipMode ===
+  'ORBIT'`) is the direct regression guard — it would have caught
+  the first-pass artifact on capture #1 instead of waiting on
+  `bodyInFrameChanges` to amplify the symptom. AC #2's velocity-
+  direction angle ≤ 15° at seam remains the C1-continuity guard.
 
 - **Risk: Loop (c)'s local-maximum detector introduces one-frame
   lag.** A three-point peak detector (`prev < curr < next`) requires
@@ -757,7 +858,8 @@ Read this brief first. Then, in order:
 
 Then, in loop order (NOT in numeric AC order):
 
-**Loop (b) — live per-body read at seam-blend anchor.**
+**Loop (b) — live per-body read at seam-blend anchor (Option 4
+two-anchor blend).**
 
 1. Identify the per-seam body ref. Seam 1 (STATION→CRUISE)
    captures in `_updateOrbit` on `orbitComplete`; the blend
@@ -768,15 +870,45 @@ Then, in loop order (NOT in numeric AC order):
    (APPROACH→ORBIT) captures at approach-end; blend target is
    `this.bodyRef` (same body). Document the per-seam mapping in
    the commit message.
-2. Refactor `update()` L310–317 to read the live per-body
-   position this frame. Preserve `_seamEntryPosition +
-   capturedVelocity × 0 = _seamEntryPosition` at blend-start
-   (drift-risk guard). The live-read correction kicks in as
-   elapsed grows.
-3. Run `window._autopilot.telemetry.audit.bodyInFrameChanges` +
+2. **Restore the `capturedVelocity` capture** at seam entry.
+   The simplified first-pass Loop (b) removed it when the formula
+   was single-anchor; Option 4 needs it back. Compute at seam
+   entry as `(this._position.clone().sub(this._prevPosition)).
+   divideScalar(deltaTime)` (or equivalent live per-frame delta
+   source) and store on the seam-capture / `_velocityBlend`
+   object alongside `_seamEntryPosition` and
+   `bodyPositionAtSeamEntry`.
+3. Refactor `update()` L310–317 to implement the Option 4
+   two-anchor blend per AC #1 verbatim:
+
+   ```
+   ship_extrap  = _seamEntryPosition + capturedVelocity × elapsed
+   body_tracked = _seamEntryPosition + (body.position − bodyPositionAtSeamEntry)
+   capturedPos  = ship_extrap + (body_tracked − ship_extrap) × ramp
+   // ramp = elapsed / duration (or the smoothstep of that via _velocityBlend.blendT)
+   ```
+
+   Both anchors are computed independently every frame. Do NOT
+   ramp-scale the body-delta; `ramp` controls only the mix.
+   At `ramp=0`, capturedPos = ship_extrap (satisfies C1 at start
+   by construction). At `ramp=1`, capturedPos = body_tracked
+   (frame-locked to body at end). At Seam 3 (APPROACH→ORBIT)
+   where `capturedVelocity = 0`, ship_extrap degenerates to
+   `_seamEntryPosition` and the formula reduces naturally to
+   body-tracked mixing — this is correct, not a special case.
+4. Run `window._autopilot.telemetry.audit.bodyInFrameChanges` +
    continuity audits on a fresh Sol D-shortcut tour. Verify
-   AC #2.
-4. Capture the AC #3 recording. Commit loop (b) per AC #12
+   AC #2 including the **ORBIT-entry geometric bound sub-
+   criterion** (distToBody ≤ 1.5× approach-endpoint during
+   `_velocityBlend.active && _shipMode === 'ORBIT'`). If the
+   geometric bound fails, the formula has an artifact — do NOT
+   ship loop (b) until it passes. Target telemetry deltas from
+   first-pass baseline: AC #8 violations ≤ 5 (first-pass hit
+   this), AC #9 violations near zero (first-pass was 554 —
+   the regression the two-anchor shape is designed to fix),
+   record-scratch amplitude/coverage at or below the pre-loop-
+   (b) baseline.
+5. Capture the AC #3 recording. Commit loop (b) per AC #12
    commit 1. Close `VERIFIED_PENDING_MAX <sha>` for loop (b)
    specifically.
 
