@@ -2,6 +2,22 @@
 
 ## Status
 
+`HELD — REJECTED on 2026-04-24, telemetry insufficient.` Max viewed the 2026-04-23 recording and reported specific visible issues the telemetry self-audit did NOT catch:
+
+> *"After arriving at the planet, there's a weird head turn motion that happens, and then there's a weird pause followed by a small zoom in, zoom out, then return. Then the orbit commences pretty normally. Then there's a transition to a moon and there's like another weird kind of like jerky motion."*
+
+Plus: *"The camera shake does not seem to be at all choreographed with the acceleration and deceleration. It feels like it happens kind of at random points."*
+
+**Director owned the telemetry miss** (session 2026-04-24 audit). AC #1c / #2c / #3c measured velocity-direction angle between velocity vectors, NOT angular change of camera-view direction frame-to-frame. A 0.03-unit `camLookAt` shift at a target 0.3 units away = ~5.7° of view swing — a head turn — but the AC rubric registered it as "smooth." Same gap on shake: AC #17 checked shake is active when signal is above floor, but did NOT verify shake onset correlates with signal peaks; a random fire at a quiet moment would pass.
+
+**Workstream stays HELD.** Code at `f90ae2e` is preserved in git history but does NOT ship without re-audit against expanded telemetry. The new `autopilot-telemetry-reckoning-2026-04-24` workstream (supersedes the drafted `autopilot-telemetry-coverage-2026-04-23`) blocks this workstream's re-audit; WS 4 waits behind both.
+
+Max's verbatim ultimatum (2026-04-24): *"If the telemetry system right now, as it is, is supposed to give me all of these points of information that I care about ... if it doesn't do that today, then we need to stop, and I need you to actually implement a system that does those things."*
+
+---
+
+**Historical: VERIFIED_PENDING_MAX claim (rejected 2026-04-24, retained for audit trail):**
+
 `VERIFIED_PENDING_MAX f90ae2e` — continuity workstream code committed in two commits (`b630873` VelocityBlend helper; `f90ae2e` NavigationSubsystem integration at all three seams + main.js telemetry extension). Director audit at `14835cc` released the gate; implementation follows the unified velocity-blend pattern Director specified.
 
 **Telemetry verification (60s Sol D-shortcut tour, 4024 samples at ~68Hz):**
