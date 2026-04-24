@@ -2,6 +2,37 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX b7699de` — **round-2 patch** after Max's round-1 review reported "either the camera or the ship are jumping around weirdly." Director authorized option (a) — direct code patch under current workstream — scoped to EstablishingMode implementation defects (no mechanism change, no brief amendment). Three fixes:
+
+1. **Cache `_lastStationBodyRef`** each frame `shipPhase === 'STATION'`. Use it on STATION→CRUISE edge instead of live `nav.bodyRef` (which has been replaced with the next target by leg-advance before the edge is detected).
+2. **Fall-through from LINGERING → TRACKING/PANNING_AHEAD** when linger completes — recomputes camLookAt the same frame instead of leaving stale linger target on the wire.
+3. **Transition blend** (`TRANSITION_BLEND_DURATION = 0.4s`) smoothstep-lerps from pre-transition camLookAt to the new state's raw target. Closes the inherent ~100-unit gap between LINGERING's body-center target and TRACKING/PANNING_AHEAD's `navPlanLookAt + bias` target.
+
+**Round-1 vs round-2 telemetry (camLookAt delta across framing transitions):**
+- Round-1: 13,499 / 13,416 / 99.4 / 99.2 units (visible jumps Max saw).
+- Round-2: **0.029 / 0.001 / 0.003 / 0.005 / 0.001** units across 5 transitions (~465,000× reduction at the worst case).
+
+**Round-1 WS 3 ACs verified in round-2:**
+- AC #1 first-class dispatch: structural, no change.
+- AC #2 camera-mode-change idempotence: structural, no change.
+- AC #3 shake preservation: **all four shake ACs (#16–20) PASS** in round-2 telemetry. Round-10/11 shake mechanism NOT regressed.
+- AC #4/#5/#6 ESTABLISHING authored: linger observed on CORRECT (receding) body at ~1.8s; pan-ahead bias peaks at 0.35 with smooth ramp in/out.
+- AC #7 OOI stub: structural, no change.
+- AC #8 two-axis decoupling: `switch(_framingState)`, not `switch(shipPhase)`. No change.
+- AC #10 separable commits: round-1 `e6c5201` + `3b926aa` + round-2 `b7699de` — three behavioral commits.
+
+**Also added in round-2 (at Director option-a authorization):** six diagnostic telemetry fields in `src/main.js` `_captureTelemetrySample` — `camLookAt`, `framingState`, `cameraMode`, `navBodyPos`, `navNextBodyPos`, `navPlanLookAt`. Read-only, no behavior changes. Subset of the fields the autopilot-telemetry-coverage workstream (`4f9e1bb`, Drafted) will formalize with audit helpers.
+
+**Recording:** `screenshots/max-recordings/autopilot-camera-axis-retirement-round2-2026-04-23.webm` (~19 MB, 60s Sol D-shortcut tour).
+
+**Residual finding (NOT WS 3 scope, flagged for continuity/follow-up):** one mid-TRACKING frame showed a ~99.9 unit `camLookAt` delta with `framingState` stable. Per Director's attribution rule, a non-transition jump = nav-layer target-composition issue (`motionFrame.lookAtTarget` jumped; WS 3 faithfully reflected it). Likely the nav subsystem's heading-composition seam at a leg-advance. Not a WS 3 regression.
+
+Awaiting Max's re-verdict.
+
+---
+
+**Historical: round-1 VERIFIED_PENDING_MAX (rejected 2026-04-23 — superseded by round-2 at `b7699de`).**
+
 `VERIFIED_PENDING_MAX 3b926aa` — WS 3 code committed in two commits (`e6c5201` dispatch + ESTABLISHING + wiring; `3b926aa` OOI stub + event surface). All ACs programmatically verified in 60s Sol D-shortcut tour:
 
 - **AC #1** first-class dispatch: `CameraMode = Object.freeze({ESTABLISHING, SHOWCASE, ROVING})` exported from `src/auto/CameraMode.js`. Dispatch is `switch(this._mode)` in `CameraChoreographer.update()`; SHOWCASE + ROVING branches exist, reference OOI stub via `getNearbyOOIs` + `getActiveEvents`, fall back through dispatch to ESTABLISHING.
