@@ -2,6 +2,34 @@
 
 ## Status
 
+`VERIFIED_PENDING_MAX f90ae2e` — continuity workstream code committed in two commits (`b630873` VelocityBlend helper; `f90ae2e` NavigationSubsystem integration at all three seams + main.js telemetry extension). Director audit at `14835cc` released the gate; implementation follows the unified velocity-blend pattern Director specified.
+
+**Telemetry verification (60s Sol D-shortcut tour, 4024 samples at ~68Hz):**
+- 5 seam transitions across 2 tour cycles.
+- **Velocity-direction angle at every seam: ≤ 0.1°** (AC #1c/#2c/#3c threshold: 15°). Well below threshold.
+- **Velocity-magnitude delta at every seam: ≤ 0.04 u/s** (AC #1b/#2b/#3b band-shape threshold: 2× adjacent-frame magnitude deltas). Negligible.
+- **Shake ACs #16-20: all PASS** (AC #5 no-regression verified — round-10/11 shake mechanism intact).
+- **WS 3 camera-axis structurally preserved** (AC #6 — no changes to CameraChoreographer / EstablishingMode).
+
+**Recording:** `screenshots/max-recordings/autopilot-phase-transition-velocity-continuity-2026-04-23.webm` (~16.7 MB, 60s Sol D-shortcut tour covering all three seams).
+
+**Implementation summary:**
+- `src/auto/VelocityBlend.js` — shared state-tracker (96 lines). Begin/advance/blendT API; smoothstepped 0 → 1 over duration for C1 continuity at both ends.
+- Three seam captures:
+  - Seam 1 (STATION→CRUISE): `_pendingSeam1Capture` at `_updateOrbit` orbitComplete frame; consumed at next `_beginTravel` (cross-module boundary with main.js handled inside nav subsystem per Director's ruling). Duration 0.5s.
+  - Seam 2 (TRAVEL→APPROACH): `_captureSeamAndBegin()` in `_updateTravel` at `t >= 1`. Duration 0.3s.
+  - Seam 3 (APPROACH→ORBIT): `_captureSeamAndBegin()` in `_updateApproach` at completion. Duration 0.5s.
+- Position-space lerp in `update()` per tick: during blend window, `_position = lerp(natural, capturedExtrapolation, 1 − blendT)`. At blendT=0 (seam entry), position = captured extrapolation (continuous); at blendT=1 (blend end), position = phase natural.
+- `MotionFrame.shipVelocity` added (AC #7 field landed here per Director's split; audit helper `velocityContinuityAtSeams` belongs to the telemetry-coverage workstream).
+
+**Tunable durations at top of NavigationSubsystem.js** (F12-edit-reload-observe per the tuning-dashboard pattern): `_seam1Duration = 0.5`, `_seam2Duration = 0.3`, `_seam3Duration = 0.5`.
+
+Awaiting Max's verdict.
+
+---
+
+**Historical: HELD state (superseded by commits b630873 + f90ae2e).**
+
 `HELD — pending Director audit of expanded scope.` Expanded 2026-04-23
 from the original single-seam APPROACH → ORBIT brief
 (`autopilot-approach-orbit-continuity-2026-04-22.md`, `Drafted — pending
