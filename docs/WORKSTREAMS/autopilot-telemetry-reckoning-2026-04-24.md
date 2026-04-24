@@ -320,11 +320,9 @@ phase sections verbatim.
      (magnitude of `shipVelocity`).
    - Samples carry `shipSpeedLightYearsPerSec: number` (converted
      from scene-units via the documented `SCENE_PER_LY` constant).
-   - Per Director ruling, either `src/core/ScaleConstants.js` is
-     extended with `LIGHT_YEAR_AU = 63241.077` +
-     `lyToScene(ly)` / `sceneToLy(scene)` helpers (preferred,
-     one-site source of truth), OR the constant is inlined with
-     a comment citing the derivation. Flag to Director if blocked.
+   - Extend `src/core/ScaleConstants.js` with `LIGHT_YEAR_AU = 63241.077`
+     + `lyToScene(ly)` + `sceneToLy(scene)` helpers. Use `sceneToLy`
+     at the telemetry site. No Bible edit.
    - Verification: synthetic test — `shipVelocity = [1, 0, 0]`
      (1 u/s) → `shipSpeedSceneUnitsPerSec = 1`,
      `shipSpeedLightYearsPerSec ≈ 1.58 × 10⁻⁸`.
@@ -384,12 +382,11 @@ phase sections verbatim.
      (`sqrt(camYawRate² + camPitchRate²) × deltaT`) exceeds a
      tunable threshold. Default: `10° / frame` ≈ 0.175 rad/frame
      (600°/s at 60 Hz). Name the constant at the top of the audit.
-   - Filters out authored-rotation windows: working-Claude must
-     determine how to detect these (candidates:
-     `cameraChoreographer.framingState === 'LINGERING'` or any
-     non-`TRACKING`; an exposed `FlythroughCamera.isRotBlending`
-     getter; a transition-frame boolean added to samples). Working-
-     Claude's design choice; document it in the audit's JSDoc.
+   - Reports all frames above threshold with full classifying context
+     (`framingState`, `shipPhase`, `navPhase`, `cameraMode`). Max is
+     the first-pass filter. If a later workstream needs programmatic
+     authored-window exemption, it authors that against concrete
+     violation-distribution evidence.
    - Each violation record: `{ sampleIndex, t, angularDeltaRad, framingState, shipPhase, navPhase, cameraMode }`.
    - **Retroactive diagnosis on the 2026-04-24 rejected recording.**
      The recording path
@@ -538,21 +535,10 @@ no aesthetic surface, no audio / BPM).
   shipped code. The continuity re-audit uses these violations as
   input; silencing them is a scope inversion.
 
-- **Risk: Authored-rotation-window exemption becomes a catch-all.**
-  The `cameraViewAngularContinuity` audit needs to exempt authored
-  rotations (ROT_BLEND, framing transitions, warp). The easy mistake
-  is exempting "any non-TRACKING framing state," which swallows the
-  head-turn-on-arrival (which happens at or just after a TRACKING
-  → LINGERING → TRACKING transition — the question is whether the
-  angular change *during* that transition exceeds the authored
-  blend's envelope).
-  **Why it happens:** the exemption logic is fiddly; a broad
-  filter is the path of least resistance.
-  **Guard:** AC #8 requires documenting the exemption logic in
-  JSDoc. Diff review: if the exemption is "framingState !==
-  'TRACKING' → skip," escalate — that's too broad. Correct shape:
-  "skip frames inside an active `FlythroughCamera._rotBlend*`
-  window whose expected envelope duration covers them."
+- **Risk: Threshold tuned high enough to miss the head-turn Max saw.**
+  Guard: AC #8's default threshold (`10°/frame ≈ 0.175 rad/frame`) is
+  named at the audit head; tuning it upward without a diagnostic
+  reason is a scope inversion.
 
 - **Risk: All-bodies snapshot access path is unclear.** The module-
   local `system` variable inside `main.js` is not currently exposed
@@ -600,12 +586,11 @@ no aesthetic surface, no audio / BPM).
   between sites.
   **Why it happens:** inlining feels cheaper than a dependency
   extension.
-  **Guard:** AC #4 names the two options; flag to Director for
-  the ruling. My recommendation is to extend `ScaleConstants.js`
-  with `LIGHT_YEAR_AU = 63241.077` and
-  `lyToScene` / `sceneToLy` helpers, because the constant *will*
-  be needed for future nav-computer / OOI-distance displays and
-  a single source of truth is load-bearing for Principle 2.
+  **Guard:** AC #4 requires extending `ScaleConstants.js` with
+  `LIGHT_YEAR_AU = 63241.077` and `lyToScene` / `sceneToLy` helpers,
+  and using `sceneToLy` at the telemetry site. Single source of
+  truth is load-bearing for Principle 2; future nav-computer /
+  OOI-distance displays inherit the same helpers.
 
 ## In scope
 
@@ -623,9 +608,8 @@ no aesthetic surface, no audio / BPM).
   (`f90ae2e` continuity baseline; recording at
   `screenshots/max-recordings/autopilot-phase-transition-velocity-continuity-2026-04-23.webm`).
   Produce the `## Status` appendix per AC #12.
-- **Optional `ScaleConstants.js` extension** with
-  `LIGHT_YEAR_AU` + `lyToScene` / `sceneToLy` helpers (per
-  Director ruling on AC #4 flag).
+- **`ScaleConstants.js` extension** with `LIGHT_YEAR_AU` +
+  `lyToScene` / `sceneToLy` helpers (per AC #4).
 - **Commits per AC #14** (two minimum, fields + audits).
 
 ## Out of scope
@@ -706,11 +690,8 @@ Read this brief first. Then, in order:
    check confirms `system` is visible in module scope;
    `_captureTelemetrySample` can close over it the same way.
 7. **`src/auto/FlythroughCamera.js` L40–155** — the `_rotBlendDuration`
-   window and how it interacts with motion-start. AC #8's
-   exemption logic needs this to work; consider whether the
-   camera should expose `isRotBlending: boolean` (read-only) as a
-   getter, or whether the audit can derive it from sampled fields
-   (probably needs the getter — flag for Director if unsure).
+   window and how it interacts with motion-start. Context for
+   interpreting what the audit reports, not a surface to build against.
 8. **`src/auto/CameraChoreographer.js`** — public getters
    (`currentMode`, `currentLookAtTarget`, `framingState`). The
    angular-continuity audit filters on these.
@@ -736,9 +717,7 @@ Read this brief first. Then, in order:
 
 Then, in order of execution:
 
-1. **Flag AC #4 to Director (blocking).** Before coding: ask whether
-   to extend `ScaleConstants.js` with `LIGHT_YEAR_AU` + helpers, or
-   inline the constant. My recommendation: extend. Director chooses.
+1. **Extend `ScaleConstants.js` per AC #4.**
 2. **Extend `_captureTelemetrySample()` with the six new fields**
    (ACs #1-#6). Verify the existing shake + WS 3 diagnostic audits
    still pass on a fresh Sol tour capture — back-compat check, not
@@ -747,11 +726,11 @@ Then, in order of execution:
    tour and inspecting `shakeEvents`; expect ≥ 1 event with
    `eventType ∈ {'accel', 'decel'}` and matching `onsetT` within
    the samples timeline.
-4. **Implement `cameraViewAngularContinuity`** (AC #8). Define the
-   authored-rotation-window exemption carefully per drift-risk #3.
-   Run against a fresh Sol tour; **expect violations** on the
-   Shipped code (head-turn-on-arrival); preserve them, do not tune
-   thresholds to make them disappear.
+4. **Implement `cameraViewAngularContinuity`** (AC #8). Report all
+   violations above threshold; do not build exemption logic. Run
+   against a fresh Sol tour; **expect violations** on the Shipped
+   code (head-turn-on-arrival); preserve them, do not tune thresholds
+   to make them disappear.
 5. **Implement `bodyInFrameChanges`** (AC #9). Same retroactive-
    diagnosis pattern; expect violations at the moon-transition moment.
 6. **Implement `shakeVelocityCorrelation`** (AC #10). Expect some
@@ -783,10 +762,6 @@ of the three issues Max named produces a violation — stop and
 escalate to Director. The audits are at the wrong altitude. Do NOT
 conclude *"the issue wasn't real"*; Max saw it. The audit is the
 wrong instrument.
-
-**If the angular-continuity exemption logic swallows more than
-~20% of frames**, stop. The exemption is too broad; recalibrate
-per drift-risk #3.
 
 **If you find yourself proposing a fourth audit ("also cover
 curvature jumps")**, stop. That's a followup workstream once the
