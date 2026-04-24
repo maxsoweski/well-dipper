@@ -68,6 +68,25 @@ export function sceneToAu(scene) {
   return scene / AU_TO_SCENE;
 }
 
+// ── Light-Year Conversion ──
+//
+// Per Game Bible §Scale System: 1 light-year = 63241.077 AU (IAU 2012
+// Julian year × c). Added 2026-04-24 for the telemetry-reckoning
+// workstream so ship speed can be reported in fraction-of-light-year/sec
+// alongside scene-units/sec — the scale Max's felt-intuition maps to.
+
+export const LIGHT_YEAR_AU = 63241.077;
+
+/** Convert light-years to scene units. */
+export function lyToScene(ly) {
+  return ly * LIGHT_YEAR_AU * AU_TO_SCENE;
+}
+
+/** Convert scene units to light-years. */
+export function sceneToLy(scene) {
+  return scene / (LIGHT_YEAR_AU * AU_TO_SCENE);
+}
+
 // ── Meter Conversion ──
 
 // 1 AU is defined as exactly 149,597,870,700 meters (IAU 2012).

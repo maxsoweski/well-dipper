@@ -50,7 +50,7 @@ import { AutopilotEvents } from './auto/AutopilotEvents.js';
 import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
-import { portalPreviewDistanceScene, postExitDistanceScene } from './core/ScaleConstants.js';
+import { portalPreviewDistanceScene, postExitDistanceScene, sceneToLy } from './core/ScaleConstants.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
@@ -388,6 +388,15 @@ window._ooiRegistry = ooiRegistry;
 const _telemetryState = {
   active: false,
   samples: null,
+  // Reckoning workstream 2026-04-24: shake-event log for AC #7. Per-frame
+  // samples can be dense and lose the onset-vs-ringout distinction; a
+  // separate log records only the onset moments (eventOnsetTime transitions)
+  // + signal value at onset, for correlation with peak signal.
+  shakeEvents: null,
+  // Used to detect onset transitions (eventOnsetTime change).
+  _lastEventOnsetTime: 0,
+  // Scratch for per-frame prev camFwd (angular-rate computation).
+  _prevCamFwd: null,
 };
 const _tmpFwd = new THREE.Vector3();
 window._autopilot = {
@@ -446,6 +455,9 @@ window._autopilot = {
      */
     start() {
       _telemetryState.samples = [];
+      _telemetryState.shakeEvents = [];
+      _telemetryState._lastEventOnsetTime = 0;
+      _telemetryState._prevCamFwd = null;
       _telemetryState.active = true;
       return { started: true, startedAt: performance.now() };
     },
@@ -458,7 +470,16 @@ window._autopilot = {
     stop() {
       _telemetryState.active = false;
       const out = _telemetryState.samples || [];
+      // Attach shake events as a non-enumerable sidecar so existing
+      // consumers that iterate samples aren't surprised by an extra key.
+      Object.defineProperty(out, 'shakeEvents', {
+        value: _telemetryState.shakeEvents || [],
+        enumerable: false,
+        configurable: true,
+      });
       _telemetryState.samples = null;
+      _telemetryState.shakeEvents = null;
+      _telemetryState._prevCamFwd = null;
       return out;
     },
     /** Is telemetry currently sampling? */
@@ -618,6 +639,195 @@ window._autopilot = {
           totalSamples: s.length,
         };
       },
+
+      // ═══════════════════════════════════════════════════════════════
+      //  Reckoning audits (2026-04-24). Max rejected the pre-reckoning
+      //  self-audits because they measured adjacent quantities, not the
+      //  failures his eye was catching. These three specifically answer
+      //  "head turn?", "quarter-second glance at different body?",
+      //  "shake fires at peaks or at median?".
+      // ═══════════════════════════════════════════════════════════════
+
+      /**
+       * AC #8 — Camera-view angular continuity. Reports every frame where
+       * |camYawRate| or |camPitchRate| exceeds threshold (default
+       * 10°/frame at 60fps ≈ 600°/sec ≈ 10.47 rad/sec). Reports with full
+       * classifying context (framingState, shipPhase, navPhase,
+       * cameraMode) so Max is first-pass filter for authored vs unauthored.
+       *
+       * @param {Array} samples
+       * @param {number} thresholdRadPerSec — default 10.47 rad/s ≈ 600°/s.
+       */
+      cameraViewAngularContinuity(samples, thresholdRadPerSec) {
+        samples = samples || _telemetryState.samples || [];
+        const thr = thresholdRadPerSec !== undefined ? thresholdRadPerSec : 10.47;
+        const violations = [];
+        for (const s of samples) {
+          const yawMag = Math.abs(s.camYawRate || 0);
+          const pitchMag = Math.abs(s.camPitchRate || 0);
+          if (yawMag > thr || pitchMag > thr) {
+            violations.push({
+              t: s.t,
+              yawRate: s.camYawRate,
+              pitchRate: s.camPitchRate,
+              yawDeg: +(yawMag * 180 / Math.PI).toFixed(1),
+              pitchDeg: +(pitchMag * 180 / Math.PI).toFixed(1),
+              framingState: s.framingState,
+              shipPhase: s.shipPhase,
+              navPhase: s.navPhase,
+              cameraMode: s.cameraMode,
+            });
+          }
+        }
+        return { passed: violations.length === 0, violations, totalSamples: samples.length, thresholdRadPerSec: thr };
+      },
+
+      /**
+       * AC #9 — Body-in-frame flip detection. For each sample, the body
+       * nearest camera-forward (smallest offAxis) is the "centered body."
+       * A flip = centered body changes, then changes back to the previous
+       * body within `flipWindowSec` (default 0.5s). This is the
+       * "quarter-second glance" detector Max named.
+       *
+       * Bodies >90° off-axis (behind camera) don't count as centered.
+       *
+       * @param {Array} samples
+       * @param {number} flipWindowSec — default 0.5s.
+       */
+      bodyInFrameChanges(samples, flipWindowSec) {
+        samples = samples || _telemetryState.samples || [];
+        const windowMs = (flipWindowSec !== undefined ? flipWindowSec : 0.5) * 1000;
+        const CENTER_LIMIT_RAD = Math.PI / 2;  // 90° — behind = not centered
+
+        // Compute centered-body-name per sample
+        const centered = samples.map(s => {
+          if (!s.perBody || s.perBody.length === 0) return null;
+          let best = null, bestOff = Infinity;
+          for (const b of s.perBody) {
+            if (b.offAxis > CENTER_LIMIT_RAD) continue;
+            if (b.offAxis < bestOff) { bestOff = b.offAxis; best = b.name; }
+          }
+          return best;
+        });
+
+        // Scan for flip-back events: i0 has body A, [i0+1..i1] has body B,
+        // i1+1 has body A again, with (t[i1+1] - t[i0+1]) <= windowMs.
+        const violations = [];
+        for (let i = 1; i < samples.length; i++) {
+          if (centered[i] === centered[i-1]) continue;
+          // Transition from A → B at i. Look ahead within windowMs for B → A.
+          const a = centered[i-1];
+          const b = centered[i];
+          if (!a || !b) continue;
+          const tStart = samples[i].t;
+          for (let j = i + 1; j < samples.length; j++) {
+            const dtMs = samples[j].t - tStart;
+            if (dtMs > windowMs) break;
+            if (centered[j-1] === b && centered[j] === a) {
+              violations.push({
+                tFlipIn: tStart,
+                tFlipBack: samples[j].t,
+                durationMs: dtMs,
+                fromBody: a,
+                viaBody: b,
+                framingState: samples[i].framingState,
+                shipPhase: samples[i].shipPhase,
+                cameraMode: samples[i].cameraMode,
+              });
+              break;
+            }
+          }
+        }
+        return { passed: violations.length === 0, violations, totalSamples: samples.length, flipWindowSec: (flipWindowSec !== undefined ? flipWindowSec : 0.5) };
+      },
+
+      /**
+       * AC #10 — Shake-velocity correlation. For each shake onset in the
+       * event log, compute max smoothedAbsDSpeed in a ±windowSec window
+       * around onset and report its percentile within the tour's overall
+       * signal distribution. Violation = onset window's peak falls below
+       * the Nth-percentile bar (default 80%). Debug-fired events excluded.
+       *
+       * @param {Array} samples
+       * @param {number} windowSec — default 0.5s.
+       * @param {number} percentileFloor — default 0.80.
+       */
+      shakeVelocityCorrelation(samples, windowSec, percentileFloor) {
+        samples = samples || _telemetryState.samples || [];
+        const events = samples.shakeEvents || (_telemetryState.shakeEvents || []);
+        const window = (windowSec !== undefined ? windowSec : 0.5) * 1000;
+        const floor = percentileFloor !== undefined ? percentileFloor : 0.80;
+
+        // Collect all signal values for percentile computation
+        const signalValues = samples.map(s => s.smoothedAbsDSpeed || 0);
+        if (signalValues.length === 0) {
+          return { passed: true, violations: [], totalEvents: 0, note: 'no samples' };
+        }
+        const sortedSignals = [...signalValues].sort((a, b) => a - b);
+        const floorValue = sortedSignals[Math.floor(sortedSignals.length * floor)];
+
+        // For each natural onset, compute peak signal in ±windowSec window
+        const violations = [];
+        let evaluated = 0;
+        for (const ev of events) {
+          if (ev.isDebug) continue;  // debug fires bypass by design
+          evaluated++;
+          let peak = 0;
+          for (const s of samples) {
+            if (Math.abs(s.t - ev.t) > window) continue;
+            if ((s.smoothedAbsDSpeed || 0) > peak) peak = s.smoothedAbsDSpeed;
+          }
+          if (peak < floorValue) {
+            violations.push({
+              eventT: ev.t,
+              eventType: ev.type,
+              peakInWindow: +peak.toFixed(2),
+              percentileFloor: floor,
+              floorValue: +floorValue.toFixed(2),
+            });
+          }
+        }
+        return {
+          passed: violations.length === 0,
+          violations,
+          totalEvents: evaluated,
+          percentileFloor: floor,
+          floorValue: +floorValue.toFixed(2),
+        };
+      },
+
+      /**
+       * Combined reckoning report — all three reckoning audits plus
+       * sample-count reporting. Mirrors the shape of `runAll` for the
+       * shake audits.
+       */
+      runAllReckoning(samples) {
+        const s = samples || _telemetryState.samples || [];
+        const angular = this.cameraViewAngularContinuity(s);
+        const bodyFlip = this.bodyInFrameChanges(s);
+        const shakeCorr = this.shakeVelocityCorrelation(s);
+        return {
+          passed: angular.passed && bodyFlip.passed && shakeCorr.passed,
+          ac8_cameraViewAngularContinuity: {
+            passed: angular.passed,
+            violationCount: angular.violations.length,
+            sample: angular.violations.slice(0, 5),
+          },
+          ac9_bodyInFrameChanges: {
+            passed: bodyFlip.passed,
+            violationCount: bodyFlip.violations.length,
+            sample: bodyFlip.violations.slice(0, 5),
+          },
+          ac10_shakeVelocityCorrelation: {
+            passed: shakeCorr.passed,
+            violationCount: shakeCorr.violations.length,
+            totalEvents: shakeCorr.totalEvents,
+            sample: shakeCorr.violations.slice(0, 5),
+          },
+          totalSamples: s.length,
+          totalShakeEvents: (s.shakeEvents || _telemetryState.shakeEvents || []).length,
+        };
+      },
     },
   },
 };
@@ -709,6 +919,166 @@ function _captureTelemetrySample() {
       ? [+plan.shipVelocity.x.toFixed(4), +plan.shipVelocity.y.toFixed(4), +plan.shipVelocity.z.toFixed(4)]
       : null,
   });
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  Reckoning workstream 2026-04-24: extend the just-pushed sample with
+  //  the six new fields Max specified so the telemetry represents what's
+  //  happening in the 3D scene, not just nav-state scalars.
+  //  AC #1 (all bodies), AC #2 (camera angular rates), AC #3 (FOV),
+  //  AC #4 (ship speed in ly/s), AC #5 (per-body distance + approach),
+  //  AC #6 (per-body azimuth + altitude in view).
+  // ══════════════════════════════════════════════════════════════════════
+  const sample = _telemetryState.samples[_telemetryState.samples.length - 1];
+
+  // AC #1 — all-bodies snapshot. Enumerate star + planets + moons.
+  const bodies = [];
+  if (system && system.star) {
+    const sp = system.star.mesh ? system.star.mesh.position : null;
+    if (sp) bodies.push({
+      name: system.star.data?.name || 'Star',
+      type: 'star',
+      position: [+sp.x.toFixed(4), +sp.y.toFixed(4), +sp.z.toFixed(4)],
+      radius:   +(system.star.data?.radius ?? 0).toFixed(4),
+    });
+  }
+  if (system && system.planets) {
+    for (const entry of system.planets) {
+      const pp = entry.planet?.mesh ? entry.planet.mesh.position
+              : entry.planet?.position || null;
+      if (pp) bodies.push({
+        name: entry.planet?.data?.name || 'Planet',
+        type: 'planet',
+        position: [+pp.x.toFixed(4), +pp.y.toFixed(4), +pp.z.toFixed(4)],
+        radius:   +(entry.planet?.data?.radius ?? 0).toFixed(4),
+      });
+      if (entry.moons) {
+        for (const moon of entry.moons) {
+          const mp = moon.mesh ? moon.mesh.position : moon.position || null;
+          if (mp) bodies.push({
+            name: moon.data?.name || 'Moon',
+            type: 'moon',
+            position: [+mp.x.toFixed(4), +mp.y.toFixed(4), +mp.z.toFixed(4)],
+            radius:   +(moon.data?.radius ?? 0).toFixed(4),
+          });
+        }
+      }
+    }
+  }
+  sample.bodies = bodies;
+
+  // AC #2 — camera angular rates (yaw + pitch per second).
+  // Decompose camFwd into yaw (atan2 of Z,X, per standard THREE convention
+  // where camera looks down -Z) and pitch (asin of Y). Per-frame delta ÷ dt.
+  // First frame of a new capture has no prev → yaw/pitch rates = 0.
+  const fwd = _tmpFwd;  // already set above to camera-forward
+  const yaw = Math.atan2(-fwd.x, -fwd.z);  // -Z forward convention
+  const pitch = Math.asin(Math.max(-1, Math.min(1, fwd.y)));
+  const prevFwd = _telemetryState._prevCamFwd;
+  let camYawRate = 0, camPitchRate = 0;
+  const deltaT = sample.t - (_telemetryState.samples.length > 1
+    ? _telemetryState.samples[_telemetryState.samples.length - 2].t : sample.t);
+  const deltaSec = deltaT / 1000;
+  if (prevFwd && deltaSec > 1e-6) {
+    const prevYaw = Math.atan2(-prevFwd[0], -prevFwd[2]);
+    const prevPitch = Math.asin(Math.max(-1, Math.min(1, prevFwd[1])));
+    // Unwrap yaw delta across ±π boundary
+    let dy = yaw - prevYaw;
+    while (dy > Math.PI) dy -= 2 * Math.PI;
+    while (dy < -Math.PI) dy += 2 * Math.PI;
+    camYawRate = dy / deltaSec;
+    camPitchRate = (pitch - prevPitch) / deltaSec;
+  }
+  _telemetryState._prevCamFwd = [fwd.x, fwd.y, fwd.z];
+  sample.camYawRate = +camYawRate.toFixed(4);
+  sample.camPitchRate = +camPitchRate.toFixed(4);
+
+  // AC #3 — FOV (captures any camera-zoom cycles like the pause-zoom-in-
+  // zoom-out Max reported).
+  sample.camFov = +(camera.fov ?? 0).toFixed(3);
+
+  // AC #4 — ship speed in scene/s AND light-years/s. The ly/s number gives
+  // Max's felt-intuition anchor (e.g. "we're at 0.03 c" from scale context).
+  let shipSpeedScene = 0;
+  if (plan.shipVelocity) {
+    const sv = plan.shipVelocity;
+    shipSpeedScene = Math.sqrt(sv.x * sv.x + sv.y * sv.y + sv.z * sv.z);
+  }
+  sample.shipSpeedScene = +shipSpeedScene.toFixed(4);
+  sample.shipSpeedLy = +sceneToLy(shipSpeedScene).toExponential(3);
+
+  // AC #5 + AC #6 — per-body distance, approach rate, azimuth, altitude.
+  // Per-body records are small and there are typically <20 bodies in a
+  // system, so this is cheap even at 60Hz sampling.
+  const perBody = [];
+  for (const b of bodies) {
+    const bx = b.position[0], by = b.position[1], bz = b.position[2];
+    const dx = bx - camera.position.x;
+    const dy = by - camera.position.y;
+    const dz = bz - camera.position.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+
+    // Approach rate: dot(shipVelocity, unit direction to body). Positive =
+    // approaching, negative = receding.
+    let approach = 0;
+    if (plan.shipVelocity) {
+      const ux = dx / dist, uy = dy / dist, uz = dz / dist;
+      approach = plan.shipVelocity.x * ux + plan.shipVelocity.y * uy + plan.shipVelocity.z * uz;
+    }
+
+    // Azimuth + altitude of body in camera-forward's coordinate frame.
+    // Azimuth = signed angle in camFwd's horizontal plane (right = +).
+    // Altitude = signed angle from horizontal plane (up = +).
+    // Compute unit vector to body, then decompose against camFwd.
+    const ux = dx / dist, uy = dy / dist, uz = dz / dist;
+    // Angle between camFwd and body-direction (unsigned)
+    const dot = fwd.x * ux + fwd.y * uy + fwd.z * uz;
+    const offAxis = Math.acos(Math.max(-1, Math.min(1, dot)));
+
+    // Decompose using camFwd-yaw/pitch basis. Simpler: project body unit
+    // into the world frame, subtract camFwd component, split remainder.
+    // For Max's "what body is in center of frame" check the off-axis angle
+    // alone is enough; we additionally compute azimuth sign from the sign
+    // of the X component in the camFwd-local frame.
+    // Quick approximation: azimuth ≈ camYawFromBody - camYaw, altitude ≈
+    // camPitchFromBody - camPitch.
+    const bodyYaw = Math.atan2(-ux, -uz);
+    const bodyPitch = Math.asin(Math.max(-1, Math.min(1, uy)));
+    let azimuth = bodyYaw - yaw;
+    while (azimuth > Math.PI) azimuth -= 2 * Math.PI;
+    while (azimuth < -Math.PI) azimuth += 2 * Math.PI;
+    const altitude = bodyPitch - pitch;
+
+    perBody.push({
+      name: b.name,
+      type: b.type,
+      dist: +dist.toFixed(4),
+      approach: +approach.toFixed(4),
+      azimuth: +azimuth.toFixed(4),   // rad; 0 = straight ahead (horizontal)
+      altitude: +altitude.toFixed(4), // rad; 0 = on eye level
+      offAxis: +offAxis.toFixed(4),   // rad; 0 = perfectly centered in view
+    });
+  }
+  sample.perBody = perBody;
+
+  // AC #7 — shake-event log. Detect onset as change in eventOnsetTime
+  // (transitions to a fresh value when _startTremorEvent fires). Only
+  // record onsets (not ringout frames) so the log is sparse and matches
+  // the brief's intent.
+  const onsetTime = shipChoreographer.eventOnsetTime;
+  const shakeActiveNow = shipChoreographer.eventActive;
+  if (shakeActiveNow
+      && onsetTime !== _telemetryState._lastEventOnsetTime
+      && onsetTime > 0) {
+    _telemetryState._lastEventOnsetTime = onsetTime;
+    _telemetryState.shakeEvents.push({
+      t: sample.t,
+      onsetTime,
+      type: shipChoreographer.eventType,
+      isDebug: shipChoreographer.eventIsDebug,
+      signalAtOnset: sample.smoothedAbsDSpeed,
+      duration: shipChoreographer.eventDuration,
+    });
+  }
 }
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
