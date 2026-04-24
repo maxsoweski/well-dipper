@@ -742,6 +742,59 @@ window._autopilot = {
       },
 
       /**
+       * Live-feedback loop (b) Option 4 — ORBIT-entry geometric bound.
+       * Companion audit to bodyInFrameChanges under AC #2's neighborhood
+       * (Director 2026-04-24: "Add to AC #9's neighborhood, not a new
+       * top-level AC"; AC #2 is the continuity audit in the reckoning
+       * brief, which is where this belongs).
+       *
+       * Spec: during any sample where velocityBlendActive && navPhase
+       * === 'orbiting', assert cameraToTargetDistance ≤ 1.5 ×
+       * currentTargetOrbitDistance. Bounds the mid-window geometry of
+       * the two-anchor blend regardless of future seam additions — if
+       * the blend formula ever reintroduces a ramp-scaling artifact
+       * (the original loop-b regression), the ship will sit too far
+       * from the body during the ORBIT-entry window and this audit
+       * will flag it.
+       *
+       * @param {Array} samples
+       * @param {number} overshootFactor — default 1.5.
+       */
+      orbitEntryGeometricBound(samples, overshootFactor) {
+        samples = samples || _telemetryState.samples || [];
+        const factor = overshootFactor !== undefined ? overshootFactor : 1.5;
+        const violations = [];
+        let windowSamples = 0;
+        for (const s of samples) {
+          if (!s.velocityBlendActive) continue;
+          if (s.navPhase !== 'orbiting') continue;
+          const orbitDist = s.currentTargetOrbitDistance;
+          const camDist = s.cameraToTargetDistance;
+          if (!(orbitDist > 0) || !(camDist > 0)) continue;
+          windowSamples++;
+          const bound = orbitDist * factor;
+          if (camDist > bound) {
+            violations.push({
+              t: s.t,
+              cameraToTargetDistance: camDist,
+              currentTargetOrbitDistance: orbitDist,
+              bound: +bound.toFixed(4),
+              overshootRatio: +(camDist / orbitDist).toFixed(3),
+              navPhase: s.navPhase,
+              framingState: s.framingState,
+            });
+          }
+        }
+        return {
+          passed: violations.length === 0,
+          violations,
+          totalSamples: samples.length,
+          orbitEntryWindowSamples: windowSamples,
+          overshootFactor: factor,
+        };
+      },
+
+      /**
        * AC #10 — Shake-velocity correlation. For each shake onset in the
        * event log, compute max smoothedAbsDSpeed in a ±windowSec window
        * around onset and report its percentile within the tour's overall
@@ -805,9 +858,10 @@ window._autopilot = {
         const s = samples || _telemetryState.samples || [];
         const angular = this.cameraViewAngularContinuity(s);
         const bodyFlip = this.bodyInFrameChanges(s);
+        const orbitEntryBound = this.orbitEntryGeometricBound(s);
         const shakeCorr = this.shakeVelocityCorrelation(s);
         return {
-          passed: angular.passed && bodyFlip.passed && shakeCorr.passed,
+          passed: angular.passed && bodyFlip.passed && orbitEntryBound.passed && shakeCorr.passed,
           ac8_cameraViewAngularContinuity: {
             passed: angular.passed,
             violationCount: angular.violations.length,
@@ -817,6 +871,13 @@ window._autopilot = {
             passed: bodyFlip.passed,
             violationCount: bodyFlip.violations.length,
             sample: bodyFlip.violations.slice(0, 5),
+          },
+          loopB_orbitEntryGeometricBound: {
+            passed: orbitEntryBound.passed,
+            violationCount: orbitEntryBound.violations.length,
+            orbitEntryWindowSamples: orbitEntryBound.orbitEntryWindowSamples,
+            overshootFactor: orbitEntryBound.overshootFactor,
+            sample: orbitEntryBound.violations.slice(0, 5),
           },
           ac10_shakeVelocityCorrelation: {
             passed: shakeCorr.passed,
@@ -918,6 +979,9 @@ function _captureTelemetrySample() {
     shipVelocity: plan.shipVelocity
       ? [+plan.shipVelocity.x.toFixed(4), +plan.shipVelocity.y.toFixed(4), +plan.shipVelocity.z.toFixed(4)]
       : null,
+    // Live-feedback loop (b) Option 4: true while a seam blend is mid-window.
+    // Consumed by the ORBIT-entry geometric-bound sub-criterion under AC #2.
+    velocityBlendActive: !!plan.velocityBlendActive,
   });
 
   // ══════════════════════════════════════════════════════════════════════

@@ -37,6 +37,7 @@ import { VelocityBlend } from './VelocityBlend.js';
  * @property {boolean} isShortTrip         — true for legs below the short/long distance threshold
  * @property {boolean} warpExit            — true if this leg is the 3s warp-exit coast
  * @property {THREE.Vector3} shipVelocity  — per-frame ΔP/Δt, for continuity-workstream AC #7 telemetry
+ * @property {boolean} velocityBlendActive — live-feedback loop (b): true while a seam's velocity blend is mid-window
  *
  * Public property `rotBlendDuration` is set per motion start. Camera reads
  * it to time its own orientation slerp from pre-motion quaternion → lookAt-
@@ -159,11 +160,11 @@ export class NavigationSubsystem {
     //  the blend window. At blend end, the phase authors unblended.
     // ──────────────────────────────────────────────────────────────
     this._velocityBlend = new VelocityBlend();
-    // Position at seam entry, needed to compute captured-velocity
-    // extrapolation during the blend window.
+    // Position at seam entry, needed as the anchor for the blend-position
+    // formula during the blend window.
     this._seamEntryPosition = new THREE.Vector3();
-    // Previous-frame position + delta-time, used to derive terminal
-    // velocity at seam-entry moments (V = ΔP / Δt).
+    // Previous-frame position + delta-time (legacy — kept for terminal-velocity
+    // computation; the live-feedback workstream's loop (b) does NOT consume it).
     this._prevPosition = new THREE.Vector3();
     this._prevDeltaTime = 1 / 60;
     // When true, a seam-1 (STATION→CRUISE) capture was taken at the
@@ -172,6 +173,20 @@ export class NavigationSubsystem {
     // on orbitComplete), so capture happens here and consumption happens
     // on the next beginMotion → _beginTravel — one frame later.
     this._pendingSeam1Capture = null;
+
+    // Live-feedback workstream 2026-04-24 — loop (b): capture the body-ref
+    // and its live position at seam entry, so the blend's "captured
+    // extrapolation" target tracks the body's actual motion instead of
+    // extrapolating via a T₀-snapshot velocity. Per Director's formula:
+    //   capturedPos = _seamEntryPosition
+    //               + (seamBody.position − _seamBodyPositionAtEntry) × elapsed/duration
+    // At elapsed=0, capturedPos = _seamEntryPosition (continuous).
+    // At elapsed=duration, capturedPos = _seamEntryPosition + full body delta
+    // (ship tracks where the body has moved to). This resolves the
+    // moon-motion reconciliation class of bug (continuity round-1 captured
+    // a velocity at T₀ and applied it for Δ; moon moved during Δ).
+    this._seamBodyRef = null;  // THREE.Object3D whose position changes live
+    this._seamBodyPositionAtEntry = new THREE.Vector3();
     // AC #7: expose ship velocity to telemetry. Written at end of
     // update() via _prevPosition + deltaTime.
     this._shipVelocity = new THREE.Vector3();
@@ -300,20 +315,55 @@ export class NavigationSubsystem {
       case Phase.ORBITING:     this._updateOrbit(deltaTime); break;
     }
 
-    // Apply velocity-blend position-space lerp if active (continuity
-    // workstream 2026-04-23). After the phase's update sets `_position`
-    // to its natural formula output, we lerp toward the captured-velocity
-    // extrapolation from the seam entry point. blendT ramps 0 → 1 over
-    // the blend window; at t=0 the lerp fully commits to captured velocity
-    // (position == seam entry on frame 1), at t=1 it fully commits to the
-    // phase's natural formula.
+    // Apply velocity-blend position-space lerp if active.
+    //
+    // Option 4 (Director 2026-04-24, revising loop b's first pass). The
+    // original single-anchor ramp-scaled formula
+    //   capturedPos = _seamEntryPosition + bodyDelta × ramp
+    // collapsed two independent continuities (C1-at-start, frame-lock-at-end)
+    // into one scalar and produced a mid-window geometric artifact — at
+    // ramp=0.5 the ship sat 4× farther from the body than it should
+    // (AC #9 18 → 554 regression, record-scratch 0.068 → 0.078 / 13% → 30%).
+    //
+    // Option 4 blends two independent anchors explicitly:
+    //   ship_extrap  = _seamEntryPosition + capturedVelocity × elapsed
+    //                  (momentum prediction — C1-at-start by construction)
+    //   body_tracked = _seamEntryPosition + (body.position − bodyAtEntry)
+    //                  (full body-delta, NOT ramp-scaled — frame-lock at end)
+    //   capturedPos  = ship_extrap + (body_tracked − ship_extrap) × ramp
+    // Ramp controls only the mix; neither anchor is scaled by it. At
+    // ramp=0 the ship sits on its momentum trajectory; at ramp=1 it is
+    // frame-locked to the body. Seam 3's zero leaving-velocity degenerates
+    // ship_extrap to _seamEntryPosition, so capturedPos reduces to pure
+    // body-tracking — naturally correct for the zero-velocity seam.
+    //
+    // If no seam body is set (idle / descend / warp-exit edge cases),
+    // body_tracked degenerates to _seamEntryPosition → capturedPos reduces
+    // to pure ship_extrap, which is the correct continuation when there is
+    // nothing to frame-lock to.
     if (this._velocityBlend.active) {
       this._velocityBlend.advance(deltaTime);
       const t = this._velocityBlend.blendT;
+      const dur = Math.max(1e-6, this._velocityBlend.duration);
+      const ramp = Math.min(1, this._velocityBlend.elapsed / dur);
+
+      // ship_extrap = seamEntry + capturedVelocity × elapsed
       _v1.copy(this._seamEntryPosition)
         .addScaledVector(this._velocityBlend.capturedVelocity, this._velocityBlend.elapsed);
+
+      // body_tracked = seamEntry + full body-delta (no ramp)
+      if (this._seamBodyRef && this._seamBodyRef.position) {
+        _v2.copy(this._seamBodyRef.position).sub(this._seamBodyPositionAtEntry)
+          .add(this._seamEntryPosition);
+      } else {
+        _v2.copy(this._seamEntryPosition);
+      }
+
+      // capturedPos = ship_extrap + (body_tracked − ship_extrap) × ramp
+      _v3.subVectors(_v2, _v1).multiplyScalar(ramp).add(_v1);
+
       // lerp(this, other, alpha): alpha=0 keeps this (natural), alpha=1 → other (captured)
-      this._position.lerp(_v1, 1 - t);
+      this._position.lerp(_v3, 1 - t);
     }
 
     // AC #7: expose current ship velocity + track prevPosition for
@@ -330,21 +380,39 @@ export class NavigationSubsystem {
   }
 
   /**
-   * Seam-capture helper: snapshot current terminal velocity + position
-   * and begin a velocity blend. Called from phase-end hooks for Seams 2
-   * and 3 (internal transitions). Seam 1 (STATION→CRUISE) captures via
-   * `_pendingSeam1Capture` at orbit-complete frame and consumes in the
-   * next `_beginTravel` call, one frame later.
+   * Seam-capture helper: snapshot the seam body ref + its live position
+   * + ship position at the transition instant, and begin a blend.
+   * Called from phase-end hooks for Seams 2 and 3 (internal transitions).
+   * Seam 1 (STATION→CRUISE) captures via `_pendingSeam1Capture` at the
+   * orbit-complete frame and consumes in the next `_beginTravel` call,
+   * one frame later.
+   *
+   * Per loop (b)'s Option 4 revision (Director 2026-04-24): the blend
+   * requires BOTH the leaving phase's terminal velocity (for ship_extrap,
+   * the momentum anchor satisfying C1-at-start) AND the seam body's live
+   * position (for body_tracked, the frame-lock anchor satisfying
+   * frame-lock-at-end). Compute terminal velocity from _prevPosition /
+   * _prevDeltaTime at the seam instant; capture body ref + its position.
    *
    * @param {number} duration — blend window in seconds.
+   * @param {THREE.Object3D|null} bodyRef — body whose motion the blend tracks.
    */
-  _captureSeamAndBegin(duration) {
+  _captureSeamAndBegin(duration, bodyRef) {
+    this._seamEntryPosition.copy(this._position);
+    this._seamBodyRef = bodyRef || null;
+    if (bodyRef && bodyRef.position) {
+      this._seamBodyPositionAtEntry.copy(bodyRef.position);
+    } else {
+      this._seamBodyPositionAtEntry.set(0, 0, 0);
+    }
+    // Terminal velocity of the leaving phase: (P_now − P_prev) / Δt_prev.
+    // Zero when _prevDeltaTime is sub-epsilon (IDLE→first-tick edge cases).
     if (this._prevDeltaTime > 1e-6) {
-      _v1.subVectors(this._position, this._prevPosition).divideScalar(this._prevDeltaTime);
+      _v1.subVectors(this._position, this._prevPosition)
+        .divideScalar(this._prevDeltaTime);
     } else {
       _v1.set(0, 0, 0);
     }
-    this._seamEntryPosition.copy(this._position);
     this._velocityBlend.begin(_v1, duration);
   }
 
@@ -363,6 +431,7 @@ export class NavigationSubsystem {
       isShortTrip:    !!this._isShortTrip,
       warpExit:       !!this._warpArrival,
       shipVelocity:   this._shipVelocity,
+      velocityBlendActive: this._velocityBlend.active,
     };
   }
 
@@ -437,8 +506,12 @@ export class NavigationSubsystem {
     // capture is stale (e.g., idle before motion).
     if (this._pendingSeam1Capture && !warpExit) {
       const cap = this._pendingSeam1Capture;
-      _v1.set(cap.vx, cap.vy, cap.vz);
       this._seamEntryPosition.set(cap.px, cap.py, cap.pz);
+      this._seamBodyRef = cap.bodyRef || null;
+      this._seamBodyPositionAtEntry.set(cap.bodyX || 0, cap.bodyY || 0, cap.bodyZ || 0);
+      // Option 4 restores capturedVelocity: vx/vy/vz were captured in
+      // _updateOrbit at orbit-complete as the orbit-phase terminal velocity.
+      _v1.set(cap.vx || 0, cap.vy || 0, cap.vz || 0);
       this._velocityBlend.begin(_v1, this._seam1Duration);
     }
     this._pendingSeam1Capture = null;
@@ -756,13 +829,23 @@ export class NavigationSubsystem {
       // The next _beginTravel call will consume this pending capture to
       // start the Hermite travel with a velocity-blend from orbit's
       // pull-out radial velocity toward the Hermite's flat-tangent start.
-      if (this._prevDeltaTime > 1e-6) {
+      // Loop (b): capture the STATION body ref and its live position at
+      // orbit-complete. The blend-application will track this body's
+      // motion during the 0.5s blend window as the ship departs — so the
+      // Hermite's first frames blend from "anchored to the body we just
+      // left (which is still moving)" to "Hermite's authored trajectory."
+      // Velocity fields (vx/vy/vz) preserved informational-only.
+      if (this._prevDeltaTime > 1e-6 && this.bodyRef && this.bodyRef.position) {
         const velX = (this._position.x - this._prevPosition.x) / this._prevDeltaTime;
         const velY = (this._position.y - this._prevPosition.y) / this._prevDeltaTime;
         const velZ = (this._position.z - this._prevPosition.z) / this._prevDeltaTime;
         this._pendingSeam1Capture = {
           vx: velX, vy: velY, vz: velZ,
           px: this._position.x, py: this._position.y, pz: this._position.z,
+          bodyRef: this.bodyRef,
+          bodyX: this.bodyRef.position.x,
+          bodyY: this.bodyRef.position.y,
+          bodyZ: this.bodyRef.position.z,
         };
       }
     }
@@ -790,9 +873,10 @@ export class NavigationSubsystem {
       this._lookAtTarget.copy(bodyPos);
     } else {
       // Approach complete → transition to slow orbit (Seam 3: APPROACH→ORBIT).
-      // Capture approach's terminal velocity + position so orbit's frame-1
-      // tangential motion doesn't create a direction flip at zero speed.
-      this._captureSeamAndBegin(this._seam3Duration);
+      // Loop (b): track the approach body's motion during the blend window
+      // so orbit's frame-1 tangential composition doesn't pull the ship
+      // off a live-moving target.
+      this._captureSeamAndBegin(this._seam3Duration, body);
       this._beginOrbit(body, this._approachOrbitDist, this._approachBodyRadius,
         this._approachOrbitDuration, true /* slowOrbit */, this._approachHoldOnly);
     }
@@ -968,12 +1052,13 @@ export class NavigationSubsystem {
       //                              manual-burn hold): blend orbit's tangential
       //                              against Hermite's terminal tangent.
       const pa = this._pendingArrival || { approachFirst: false, holdOnly: false, slowOrbit: false, orbitDuration: 15, approachOrbitDuration: 75 };
+      // Loop (b): track the target body's motion during the blend window.
       if (pa.approachFirst) {
-        this._captureSeamAndBegin(this._seam2Duration);
+        this._captureSeamAndBegin(this._seam2Duration, this._travelToBody);
         this._beginApproach(this._travelToBody, this._travelToOrbitDist,
           this._travelToRadius, pa.approachOrbitDuration, pa.holdOnly);
       } else {
-        this._captureSeamAndBegin(this._seam3Duration);
+        this._captureSeamAndBegin(this._seam3Duration, this._travelToBody);
         this._beginOrbit(this._travelToBody, this._travelToOrbitDist,
           this._travelToRadius, pa.orbitDuration, pa.slowOrbit, pa.holdOnly);
       }
