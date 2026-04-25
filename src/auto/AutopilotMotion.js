@@ -413,13 +413,31 @@ export class AutopilotMotion {
       this._ship.setOrientation(_v1);
     }
     this._cruiseDir.copy(_v1);
-    this._cameraLookDir.copy(_v1);
 
     // Cap movement so we land at most exactly at the approach radius.
     const wantMove = this._cruiseSpeed * deltaTime;
     const maxMove = distToBody - approachRadius;
     const actualMove = Math.min(wantMove, maxMove);
     this._position.addScaledVector(_v1, actualMove);
+
+    // §T2 fix: camera-authored direction must be sourced from the
+    // ship's POST-MOVE position, not pre-move. Camera reads
+    // motionFrame.position (= post-move _position) and
+    // motionFrame.cameraLookDir each frame; if cameraLookDir is
+    // computed from pre-move geometry, the camera's direction lags
+    // the camera's position by `displacement / distance`. Catches
+    // on small-body APPROACH where displacement/dist is large.
+    // AC #5a's `dot ≥ 0.9999` requires the post-move pursuit-curve
+    // direction. Ship-axis `_v1` (orientation, _cruiseDir) is
+    // intentionally pre-move per §A4 (re-aim toward where the body
+    // IS, then traverse along that aim).
+    _v2.subVectors(this._target.position, this._position);
+    const postMoveDist = _v2.length();
+    if (postMoveDist > 1e-6) {
+      this._cameraLookDir.copy(_v2).divideScalar(postMoveDist);
+    } else {
+      this._cameraLookDir.copy(_v1);
+    }
 
     // APPROACH-onset gate. We hit it if movement was capped by the
     // approach radius, OR by the cruise-distance ceiling fallback.
@@ -466,9 +484,21 @@ export class AutopilotMotion {
     if (dlen > 1e-6) {
       _v2.divideScalar(dlen);
       this._holdEndpoint.copy(this._target.position).addScaledVector(_v2, -this._holdDistance);
-      this._cameraLookDir.copy(_v2);
     }
     this._position.lerpVectors(this._approachStartPos, this._holdEndpoint, eased);
+
+    // §T2 fix: source camera-authored direction from POST-MOVE
+    // position. APPROACH compresses ship-to-body distance over its
+    // duration; pre-move source produced angular lag that AC #5a
+    // caught (worst case ~4.3° at sub-0.015u distances). The
+    // _holdEndpoint computation above intentionally still uses
+    // pre-move geometry to plan the deceleration trajectory; only
+    // the camera's authored direction is post-move.
+    _v2.subVectors(this._target.position, this._position);
+    const postMoveDist = _v2.length();
+    if (postMoveDist > 1e-6) {
+      this._cameraLookDir.copy(_v2).divideScalar(postMoveDist);
+    }
 
     if (t >= 1) {
       this._enterStationA(this._target.position);
@@ -570,9 +600,17 @@ export class AutopilotMotion {
       _v1.set(0, 0, -1);
     }
 
-    // Cubic ease-out on lerp progress.
+    // Smoothstep on lerp progress. §T2 caught that cubic ease-out
+    // (`1 - (1-t)³`) has slope 3 at t=0; first-frame angDelta
+    // ≈ 3 × (dt/duration) × totalSwapAngle, which fails AC #14's
+    // 0.5° entry-continuity bound for swaps above ~15° (Sol-tour
+    // swaps are routinely 80°+). Smoothstep `t² × (3−2t)` has zero
+    // slope at BOTH boundaries by construction, satisfying AC #14
+    // entry AND exit continuity. Same s-curve shape as the existing
+    // CameraChoreographer transition-blend at line 304 — consistent
+    // with project style.
     const t = Math.min(1, this._lhokonElapsed / LHOKON_TIMEOUT_SEC);
-    const eased = 1 - Math.pow(1 - t, 3);
+    const eased = t * t * (3 - 2 * t);
 
     // Normalized lerp from start direction toward end direction.
     // Use _v2 as scratch so we can both compute the lerp output and
