@@ -10,6 +10,10 @@ related_catalog: docs/OBJECTS_OF_INTEREST.md (v0, 2026-04-20 — source-of-truth
 
 # Autopilot
 
+## Revision history
+
+- **2026-04-24 — V1 motion-model reframe to STATION-hold (this amendment).** Director-run interview with Max (script + verbatim answers recorded in `~/.claude/state/dev-collab/audits/autopilot-live-feedback-2026-04-24.md` §"Feature-Doc Amendment Interview Script (Max)", lines 1515–1694; answers appended post-interview). The (α) stub at `screenshots/max-recordings/stub-saturn-v4-2026-04-24.fixed.webm` is the felt referent. Change set is structural, not a tune: §Ship axis V1 collapses to CRUISE → DECEL → HOLD; §Camera axis V1 collapses to "camera looks down the ship's forward vector plus shake on top" — linger, pan-ahead, and the composed-with-ship-arc `ESTABLISHING` accent are demoted to V-later with no authored shape. `STATION` bifurcates into `STATION-A` (V1 hold) and `STATION-B` (V-later opt-in orbit); the prior "`STATION` is stationary" failure line flips into V1 spec. A new precondition surfaces: ship model requires a defined front/back/top/bottom orientation because the V1 camera reads ship-forward. Q11 ("most-interesting-first") unchanged; stays V-later behind OOI registry. Q10 (V-later orbit shape) deferred to the ORBIT-mode scoping pass. See §V-later carve for what was moved there.
+
 ## One-sentence feature
 
 Autopilot is the game's **cinematic tour mode**: the ship flies itself through each system with purpose and elegance while the camera — the player's eyes — takes in the system independently, showing the player the most interesting things in their immediate environment, different every trip.
@@ -39,7 +43,8 @@ Autopilot's phase model is **two orthogonal taxonomies** that compose per-moment
 | `ENTRY` | renamed from `DESCEND` | Arrive along the warp-exit vector. Today's DESCEND assumes "from above" — wrong. Start pose is **derived from the warp-exit forward direction**, not from a fixed above-the-plane origin. |
 | `CRUISE` | renamed from `TRAVEL` | Sustained travel between bodies at high fraction-of-c speeds. Elegant, purposeful, unhurried by default. |
 | `APPROACH` | kept | Deceleration + attitude change as the target body's reticle/billboard expands into a real disk. |
-| `STATION` | retired `ORBIT` | Holding pattern near a body. Ship is in motion throughout (not stationary) — orbital arc with dynamic feel. |
+| `STATION-A` | retired `ORBIT` (V1) | **Held position** near a body. Ship comes to rest close enough that the body fills the frame (~60% of screen, felt-fill). No orbital motion. Held until the next mode activates — manually or automatically. |
+| `STATION-B` | V-later | **Opt-in orbital motion** around a held body. Engaged from `STATION-A`. Shape (speed ratio, framing rule, entry/exit discipline) scoped in the future ORBIT-mode workstream, not authored here. |
 
 **Camera axis** (3 modes — what are the player's eyes doing, orthogonal to ship axis):
 
@@ -49,9 +54,9 @@ Autopilot's phase model is **two orthogonal taxonomies** that compose per-moment
 | `SHOWCASE` | V-later | The cinematographer beat. Framed shots of crescent, eclipse, ring-shadow, moon transit, light on terrain. Queries `docs/OBJECTS_OF_INTEREST.md` §5 Light & composition. |
 | `ROVING` | V-later | Player-eye freedom, 360°, curious. "Turn head" toward nearby objects of interest. Queries `docs/OBJECTS_OF_INTEREST.md` §1–§6. |
 
-**Taxonomies compose.** Camera mode is selected per-moment, not per-ship-phase. `STATION + SHOWCASE` = eclipse framing while ship arcs around a body. `CRUISE + ROVING` = looking out the window en route. `ENTRY + ESTABLISHING` = arrival reveal.
+**Taxonomies compose.** Camera mode is selected per-moment, not per-ship-phase. `STATION-A + SHOWCASE` (V-later) = eclipse framing on a held body. `CRUISE + ROVING` (V-later) = looking out the window en route. `ENTRY + ESTABLISHING` = arrival reveal. V1 only exercises `ESTABLISHING` on the camera axis, and V1's `ESTABLISHING` is deliberately thin (see §Per-phase criterion — camera axis (V1) below).
 
-**`ORBIT` is retired.** The current conflated state is rewritten by this feature. `STATION` lives on the ship axis; `SHOWCASE` lives on the camera axis; the old fusion of the two is gone. Any new code that reintroduces a single combined "orbit-and-frame" state is a regression against this structure.
+**`ORBIT` is retired.** The current conflated state is rewritten by this feature. `STATION-A` / `STATION-B` live on the ship axis; `SHOWCASE` lives on the camera axis; the old fusion of the two is gone. Any new code that reintroduces a single combined "orbit-and-frame" state is a regression against this structure.
 
 ## Per-phase criteria — ship axis
 
@@ -68,26 +73,32 @@ These are felt-experience criteria, not acceptance criteria. Workstream ACs cite
 
 ### `CRUISE` — sustained travel
 
-- Elegant initiation from the attractor `STATION` — linger, pan, burn.
+- **Aim-once-at-intercept, fly straight.** At CRUISE onset, the ship aims at the target body's current position and flies a straight line. **No per-frame re-aim** during the phase. Max (2026-04-24): *"unless we're playing at unrealistically exaggerated speeds... that should never really be required, but still, let's just do it on principle, B."* Re-aim from a drifted target is a V-later concern only, and only if playtesting surfaces a felt gap.
 - Picks up to **relativistic speeds** toward the target (see Open questions: literal-or-felt).
-- Target's reticle/billboard is still ahead in the frame for most of the phase; the handoff to `APPROACH` is the moment it starts resolving into real geometry.
-- **Entry continuity (STATION → CRUISE).** The ship's velocity at CRUISE frame 1 reads as continuous with the prior STATION's terminal velocity — no visible hitch at the moment the ship leaves orbit. The transition is a camera + choreography moment, not a hard cut (restated from `ENTRY`'s §"Elegantly initiates `CRUISE`").
+- Target's reticle/billboard is still ahead in the frame for most of the phase; the handoff to `DECEL` (see next phase) is the moment it starts resolving into real geometry.
+- **ACCEL shake at CRUISE onset.** Gravity-drive shake fires at the start of CRUISE (departure), as a pure reverse of the DECEL shake (see §Gravity drives + §Per-phase criteria — `DECEL` below). No shake *during* cruise — only at the onset boundary.
+- **Entry continuity (STATION-A → CRUISE) — V1.** The ship leaves the hold with an acceleration onset, not a snap to cruise velocity. The ACCEL shake boundary marks the drive pushing the ship out of the held frame.
 
-### `APPROACH` — deceleration
+### `APPROACH` — aggressive deceleration at fixed range
 
+- **Onset rule: fixed distance from the body.** APPROACH begins when the ship reaches **10× the body's radius** (V1 starting value — tunable during lab iteration, not expected to vary at shipping). No ramp, no gradual; CRUISE → APPROACH is a hard velocity onset at the 10R threshold.
+- **DECEL shake fires at the onset.** The gravity-drive-over-envelope tell (see §Gravity drives). Pure forward image of the CRUISE-onset ACCEL shake.
+- **Aggressive deceleration, not progressive.** The drive is being pushed past its envelope on purpose — that's why the shake fires. The ship scrubs velocity hard over a short interval.
 - **The reticle→disk transition is load-bearing.** The moment the target stops being a billboard and becomes a real 3D body is itself part of the felt experience — not a technical detail. LOD handoff timing is a phase criterion, not a rendering implementation detail to hide.
-- Progressive deceleration. No sudden speed step; the drive compensates smoothly (see §Gravity drives).
-- Body fills more and more of the frame.
-- Seamless handoff to `STATION`.
-- **Entry continuity (CRUISE → APPROACH).** The ship's velocity at APPROACH frame 1 reads as continuous with CRUISE's terminal velocity — the "progressive deceleration" criterion above is violated the moment the velocity direction flips rather than bends. No visible hitch at the moment travel ends and close-in begins.
+- **Jumpscare arrival.** Max's verbatim V1 acceptance felt-criterion for the APPROACH → STATION-A transition (2026-04-24): *"You are zooming straight towards the planet or the moon, whatever it is. It gets closer and closer to you and right where it feels like you're about to slam into it and blow up. The camera shakes and you decelerate extremely quickly, such that it's almost like it jumpscares, like it jumps up into your vision. And then you're just hanging there in front of the planet. It looms huge in front of you. And you just stay there. You stay stationary until the next mode activates, either manually or automatically."* This is the shape of the transition. Implementations that read as a gentle glide-in are failing the V1 spec.
 
-### `STATION` — holding pattern
+### `STATION-A` — held position (V1)
 
-- **Orbit, not stationary.** Ship is in motion throughout.
-- **Orbit speed fast relative to planet size** (dynamic feel — the planet rotates visibly beneath the observer during the hold).
-- **But not so fast the planet feels small.** Tight orbit, immersive — close enough that the planet is "ground" and the starfield is "sky."
-- **Arc sees more than the arrival view** — the camera + ship motion together reveal surface / cloud patterns / terminator line that the `APPROACH` frame didn't.
-- **Entry continuity (APPROACH → STATION).** The ship's velocity at STATION frame 1 reads as continuous with APPROACH's terminal velocity — restatement of the `APPROACH` phase's "Seamless handoff to `STATION`" criterion at the velocity-derivative level. No visible hitch as the ship settles into orbit.
+- **Stationary, by design.** The ship has come to rest at the end of APPROACH and remains at rest for the duration of `STATION-A`. This is the V1 spec; the prior "orbit, not stationary" authored criterion is superseded by this amendment (see §Revision history 2026-04-24).
+- **Felt-fill framing, not numeric ratio.** The body fills **~60% of the screen** at hold. Max's reasoning: numeric distance ratios scale wrong for small bodies (moons especially) — felt-fill is what the tour actually wants. This resolves the prior-attempt complaint about hold distance "never feeling close enough to moons."
+- **Body looms huge in frame.** The held pose is immersive. Planet / moon is "ground"; the starfield is "sky."
+- **Held until the next mode activates.** Either manually (player input) or automatically (autopilot advances to the next tour subject). The hold has no timer authored here.
+- **Camera is pointed at the body's surface** (inherited from APPROACH's final aim; `ESTABLISHING` camera mode does not re-orient during the hold in V1).
+- **Entry continuity (APPROACH → STATION-A).** The ship decelerates to zero; velocity continuity is trivially satisfied (terminal velocity = 0). The shake that fires at APPROACH onset is the marker of the high d|v|/dt, not a continuity violation.
+
+### `STATION-B` — opt-in orbital motion (V-later)
+
+Engaged from `STATION-A` by explicit action (player opt-in, or — future question — automatic advance after a beat). Orbital shape, speed ratio, tight-orbit framing rule, and the transition discipline from `STATION-A` to `STATION-B` and back are **not authored here**. Scoped in the future ORBIT-mode workstream. Q10 in the 2026-04-24 interview deferred this deliberately.
 
 ### First-planet selection
 
@@ -95,40 +106,58 @@ Current code (`AutoNavigator.buildQueue`) visits inner-to-outer. Director's note
 
 ## Per-phase criterion — camera axis (V1)
 
-### `ESTABLISHING` — wide/slow framing that follows ship phases independently
+### `ESTABLISHING` — camera looks down the ship's forward vector, plus shake (V1)
 
-- Default camera mode for V1. Paces with the ship phase but **is not coupled to it frame-for-frame.**
-- Can **linger** on a receding subject as the ship begins the next phase (e.g. on the planet the ship just finished `STATION`-ing, while the ship starts `CRUISE` toward the next body).
-- Can **pan forward** toward the direction the ship is heading, ahead of the ship's arrival.
-- Wide FOV, slow angular velocity, composed framing.
-- **Does NOT** rove 90° off-path to look at a nebula for its own sake. That's `ROVING` (V-later).
-- **Does NOT** zoom to a specific compositional beat like a crescent-at-terminator. That's `SHOWCASE` (V-later).
+V1 `ESTABLISHING` is deliberately thin. Max (2026-04-24): *"Let's not even worry about that right now. Let's just get the basic navigation working. Let's just have the camera look straight ahead towards the front of the ship. ... It's good that we have a separate camera system that is not identical to the ship's movement. But aside from the shake, let's not have it do anything else right now. That's separate from the ship's movement."*
+
+V1 camera axis:
+
+- **Looks down the ship's forward vector.** The camera orientation is derived from the ship's defined forward direction, not from the target body or from any independent compositional anchor.
+- **Receives shake on top.** ACCEL shake at CRUISE onset, DECEL shake at APPROACH onset. Shake is the only authored behavior that distinguishes V1 `ESTABLISHING` from "camera rigidly bolted to ship forward."
+- **Does NOT linger on a receding subject.** V-later.
+- **Does NOT pan forward toward an incoming target.** V-later.
+- **Does NOT author a departure arc.** V-later.
+- **Does NOT rove 90° off-path.** That's `ROVING` (V-later, unchanged).
+- **Does NOT zoom to a specific compositional beat.** That's `SHOWCASE` (V-later, unchanged).
+
+**Two-axis architecture stays.** The camera being thin in V1 is not the two-axis structure failing — it's the V1 camera mode authoring almost nothing beyond "point where the ship points + shake." The `CameraMode` dispatch (§V1 architectural affordances) still ships; V-later `SHOWCASE` / `ROVING` / richer `ESTABLISHING` graft on without rewrite.
+
+### Precondition — ship orientation is load-bearing
+
+V1's camera reads the ship's forward vector. This requires the ship model to have a **defined front/back/top/bottom orientation** in the scene graph. The orientation does not have to be visible to the player (no chevrons, no decals required), but it must exist as an authored property of the ship object, not derived per-frame from motion direction. This is a **new precondition** surfaced by the 2026-04-24 amendment and does not exist in the V1 workstream sequence authored prior. The next PM workstream scopes this explicitly.
 
 ## V1 / V-later triage
 
 ### V1 — must ship
 
-- **All 4 ship phases** (`ENTRY`, `CRUISE`, `APPROACH`, `STATION`) — ship motion is greenfield; it doesn't exist today.
+- **All 4 ship phases** (`ENTRY`, `CRUISE`, `APPROACH`, `STATION-A`) — ship motion is greenfield; it doesn't exist today.
 - **Warp-exit-vector arrival pose** — `ENTRY` start is derived from the warp forward direction, not a fixed above-the-plane origin.
-- **Ship/camera decoupling architecture** — the two-axis structure must be in place at V1 even though only `ESTABLISHING` is exercised on the camera axis.
-- **`ESTABLISHING` camera mode** — paces independently of ship phase, can linger/pan.
+- **CRUISE: aim-once-at-intercept + straight-line flight** (per Q3 of the 2026-04-24 interview).
+- **APPROACH onset at 10× body radius** (fixed-distance rule; starting value tunable in lab, not expected to vary at ship).
+- **Aggressive decel + jumpscare arrival.** The APPROACH → STATION-A transition satisfies Max's verbatim felt-criterion quoted in §Per-phase criteria — `APPROACH`.
+- **STATION-A = held position, felt-fill ~60% of screen.** The body looms huge; no orbital motion; ship stays at rest until next mode activates.
+- **Ship orientation defined in the model** (new 2026-04-24 precondition — see §Per-phase criterion — camera axis (V1) §Precondition).
+- **Ship/camera decoupling architecture** — the two-axis structure must be in place at V1 even though only `ESTABLISHING` is exercised on the camera axis and V1's `ESTABLISHING` authors almost nothing.
+- **`ESTABLISHING` camera mode (V1 shape)** — camera looks down the ship's forward vector + receives shake. Linger, pan-ahead, and departure arc are V-later.
+- **Gravity-drive shake at both phase boundaries.** ACCEL shake at CRUISE onset (departure). DECEL shake at APPROACH onset (10R threshold). Pure reverse of each other per Q5. No shake during smooth phases.
 - **Toggle UI** — status indicator upper-left + keybinding (`Tab`, **provisional** — see §Keybinding below).
 - **Default-ON state** — autopilot is the default, not opt-in.
 - **Manual override with inertial continuity** — toggling off preserves angular momentum; no snap-stop.
 - **HUD hide-during-autopilot / reappear-on-interaction.**
 - **Audio event-surface hook** — future BGM layer can subscribe to autopilot-state changes. The hook ships in V1; the modulation doesn't.
-- **Gravity-drive shake on abrupt transitions** — the cinematic tell (see §Gravity drives).
-- **Star-orbit safe-distance rule** — the star-orbit-distance workstream lands against this criterion.
-- **Ship phase transitions must feel continuous** — no visible hitch at `STATION → CRUISE`, `CRUISE → APPROACH`, or `APPROACH → STATION`. Each transition satisfies its per-phase entry-continuity criterion above. The phase-transition velocity continuity workstream (`docs/WORKSTREAMS/autopilot-phase-transition-velocity-continuity-2026-04-23.md`) lands against this bullet.
+- **Star-orbit safe-distance rule** — the star-orbit-distance workstream lands against this criterion (applies to `ENTRY`'s `STATION-A` around the central attractor).
 
 ### V-later — polish, must graft on without architectural rewrite
 
+- **`STATION-B` opt-in orbital motion.** Speed ratio, tight-orbit framing, entry/exit discipline — authored in the ORBIT-mode workstream. The player-opt-in-vs-auto-advance question (whether V1-plus-one auto-transitions `STATION-A → STATION-B` after a beat, or requires explicit input) is deferred to that same workstream.
+- **Richer `ESTABLISHING` authoring.** Linger on a receding subject as the ship begins the next phase. Pan forward toward an incoming target ahead of arrival. Departure arc from `STATION-A` into `CRUISE`. The current V1 "looks down ship-forward + shake" minimum is the architectural placeholder; the authored camera moves graft on top of the same `CameraMode` dispatch.
+- **CRUISE per-frame re-aim from drift.** Not authored for V1 (Q3 decision: fly straight from one-time aim). Revisit only if playtesting surfaces a felt gap on unrealistically long / drift-sensitive legs.
 - `SHOWCASE` camera mode (framed compositional beats — crescent, eclipse, ring-shadow, transit).
 - `ROVING` camera mode (player-eye freedom, 360° turn-head-toward-OOI).
 - OOI runtime registry (the query substrate `SHOWCASE` and `ROVING` consume at runtime — workstream at `docs/WORKSTREAMS/ooi-capture-and-exposure-system-2026-04-20.md`).
 - Proactive OOI geometric-beat detectors (eclipse-upcoming, ring-plane crossing, moon-transit).
 - Actual autopilot→BGM integration (V1 ships the event-surface hook; V-later subscribes the music layer to it).
-- "Most interesting first" planet selection (replaces inner-to-outer queue).
+- "Most interesting first" planet selection (replaces inner-to-outer queue). Q11 (2026-04-24) unchanged from prior triage — stays V-later behind OOI registry.
 
 ### V1 architectural affordances for V-later items
 
@@ -205,7 +234,14 @@ Manual-mode object-selection + "burn to" uses the **same navigation subsystem** 
 
 **Default cinematic motion does NOT shake.** Shake is the marker of *"the drive is working harder than normal."* Over-using it breaks the "gravity drives maintain inertial neutrality" contract.
 
-**V1 scope:** the shake *mechanism* is V1 (camera / ship-mesh perturbation accepting an additive shake input, driven by a shake-strength value). V1 autopilot flight is smooth enough that the shake rarely fires — but the mechanism is ready for any phase transition that later tuning judges too abrupt, and for manual-override hand-back (the moment the player grabs control at speed the drive had been anticipating).
+**V1 scope — shake fires on two specific phase boundaries.** Per Q5 of the 2026-04-24 interview (Max: *"It's firing at ACCEL and at DECEL. That's acceleration and deceleration. The deceleration shake is at that 10× planet diameter point. And let's just have the acceleration match. Let's just have it be a pure reverse for now."*):
+
+- **ACCEL shake** — fires at **CRUISE onset** (departure from `STATION-A`). The drive is pushing the ship out of rest into cruise velocity — the high d|v|/dt is the trigger.
+- **DECEL shake** — fires at **APPROACH onset** (10× body radius). The drive is scrubbing cruise velocity aggressively toward zero — the jumpscare-arrival moment.
+- **ACCEL ≡ reverse(DECEL)** for V1. Same shape, opposite sign. Future tuning may differentiate the two; V1 does not.
+- **No shake during smooth motion** — no shake mid-CRUISE, no shake during `STATION-A` hold. The shake is the marker of the drive at-envelope, not a frame-punctuation gimmick.
+
+Shake mechanism (camera / ship-mesh additive perturbation) is the same system landed by WS 2 shake-redesign at `1bb5eb2`. This amendment re-specifies *when* it fires; it does not redesign the mechanism.
 
 ## OOI citation — what are valid tour subjects / showcase targets / rove candidates
 
@@ -222,27 +258,33 @@ If a rendering pipeline produces a new kind of thing that autopilot should notic
 The feature has failed if:
 
 - **Ship axis feels "running on rails"** — rigid, mechanical, monotonic. The purpose-and-elegance test is perceptual; if the tour reads as "planet 1, planet 2, planet 3" rather than "a considered passage through this system," the cinematography layer is underbuilt.
-- **Camera feels locked to ship** — the player's eyes can't linger, can't pan independently. Violates the two-axis decoupling.
+- **Camera is rigidly bolted to ship forward with no shake layer** — violates the two-axis decoupling. (V1 `ESTABLISHING` is deliberately thin, but the shake axis on top is the visible evidence that the camera is not hard-coded to the ship's transform.)
 - **`ENTRY` pose starts from "above the plane"** — the warp-exit vector has been ignored; the warp → autopilot handoff broke continuity.
-- **`STATION` is stationary** — violates "ship in motion throughout."
-- **`STATION` is too far** — planet doesn't feel like "ground"; starfield dominates. Failure of the immersion criterion.
-- **`STATION` is too fast** — planet feels small, whipped-around. Failure of the "dynamic but not frenetic" criterion.
-- **Star-approach `STATION` skims the photosphere** — failure of the safe-distance rule. (This is the symptom the star-orbit-distance workstream fixes.)
-- **Hard cut or jump between phases** — same seamlessness principle as warp: motion continuity across visual + audio + temporal axes.
+- **`STATION-A` reads as "glide in and settle"** — violates the jumpscare-arrival felt criterion (quoted in §Per-phase criteria — `APPROACH`). Gentle close-in with no visible deceleration beat is the failure mode.
+- **`STATION-A` body does not fill the frame** — felt-fill ~60% is the criterion. Held body that reads small, with starfield dominating, fails §Per-phase criteria — `STATION-A`.
+- **`STATION-A` has orbital motion** — V1 is a hold, not an orbit. Orbital motion in V1 is the `STATION-B` V-later authoring leaking into the wrong workstream.
+- **CRUISE re-aims per-frame at drifted target** — violates Q3's "aim once at intercept, fly straight" rule. Per-frame re-aim reintroduces Hermite-class complexity V1 discarded.
+- **APPROACH onset is earlier or later than 10× body radius** — violates Q4. The threshold is the V1 spec until lab tuning adjusts it.
+- **ACCEL or DECEL shake fails to fire at its boundary** — the cinematic tell is missing at the very moment it was specified (Q5). ACCEL omitted reads as "ship magically accelerates"; DECEL omitted breaks the jumpscare.
+- **Shake fires during smooth motion** — breaks the "inertial neutrality is the norm" lore rule; shake loses its meaning. No shake mid-CRUISE, no shake during `STATION-A`.
+- **Star-approach `STATION-A` skims the photosphere** — failure of the safe-distance rule. (The star-orbit-distance workstream lands against this; 10R starting value for APPROACH onset does not apply to stars — safe-distance rule supersedes for stellar bodies.)
+- **Camera orientation derives from motion direction rather than ship model's forward vector** — violates the §Precondition (ship orientation is load-bearing). When ship is momentarily at rest (`STATION-A`), a motion-derived camera has no forward direction to read; the model's authored forward vector is the stable source.
+- **Hard cut or jump between phases (other than the authored shake-punctuated boundaries)** — same seamlessness principle as warp. ACCEL and DECEL shakes are authored punctuation, *not* hard cuts in the motion field — velocity is still continuous through both, with a spike in d|v|/dt on the derivative axis.
 - **Manual override snap-stops the ship** — inertial continuity violated; the two-layer architecture leaked through.
 - **Autopilot-on-then-off-then-on auto-resumes** — the "toggle-on must be explicit" rule violated.
 - **HUD stays visible during the cinematic hold** — the cinematic frame is compromised.
-- **Gravity-drive shake fires during smooth motion** — breaks the "inertial neutrality is the norm" lore rule; shake loses its meaning.
-- **Gravity-drive shake fails to fire on genuinely abrupt motion** — the cinematic tell is missing; abruptness reads as a bug rather than an in-fiction event.
 
 ## Drift risks (Director watch list)
 
-1. **Re-coupling ship + camera axes** under "simplicity." The two-axis structure is V1-mandatory because `SHOWCASE` and `ROVING` require it. Any V1 implementation that bakes `ESTABLISHING` into ship-phase logic (because it's the only camera mode V1 exercises) is storing an architectural rewrite cost against V-later.
+1. **Re-coupling ship + camera axes** under "simplicity." The two-axis structure is V1-mandatory because `SHOWCASE` and `ROVING` require it. Any V1 implementation that bakes `ESTABLISHING` into ship-phase logic (because it's the only camera mode V1 exercises, and V1's `ESTABLISHING` is deliberately thin) is storing an architectural rewrite cost against V-later. The thin V1 camera authoring is *not* a license to collapse the dispatch — the `CameraMode` enum + dispatch ship regardless (§V1 architectural affordances).
 2. **Leaking camera state into the navigation subsystem.** `FlythroughCamera` today owns both motion execution and camera state. The refactor temptation is to drag camera state (yaw/pitch, orientation slerp, lookAt blending, free-look offset) into the subsystem along with motion, because today's `beginTravel`/`beginOrbit`/`beginApproach` touch both in one call. If the V1 split is implicit ("it kinda works today") rather than explicit, manual-mode "burn to" will have camera-state side-effects and autopilot-off will not cleanly hand the subsystem over. Clean line: subsystem produces motion plans (position + velocity over time + target framing data); camera module consumes plans and authors its own orientation blend. *Earlier version of this risk named `AutoNavigator` as the monolith — corrected after pre-execution code read.*
 3. **`ENTRY` pose reverting to "above the plane."** Today's `DESCEND` hard-codes this. The rename alone doesn't fix it — the start-pose derivation from warp-exit-vector is the substantive change.
 4. **Shake overused.** Shake is the marker of the drive working past its envelope. If a developer adds shake to make a transition feel "more impactful," it breaks the inertial-neutrality contract. Shake fires when the *motion* is abrupt, not when we want the *frame* to feel punchy.
 5. **"Most interesting first" implemented in V1.** Introduces an OOI-registry runtime dependency that V1 doesn't have. Stick to inner-to-outer queue for V1; revisit when OOI registry is live.
 6. **HUD reappears during `ENTRY`** because the warp-select menu closure is still animating or similar. The HUD-hide rule is load-bearing for the cinematic frame.
+7. **V-later camera authoring (linger / pan-ahead / departure arc) smuggled into V1.** The 2026-04-24 amendment collapsed V1 `ESTABLISHING` to a minimum. A well-meaning implementation pass that *partially* authors linger or pan-ahead "because the architecture is there" re-imports the V-later scope V1 deliberately discarded. V1 `ESTABLISHING` is: **forward vector + shake, nothing else.** New camera moves wait for their own workstream.
+8. **STATION-A drifts toward "orbit" by accident.** Keeping the ship exactly at rest in a scene full of moving bodies is fiddly — reference frames, origin rebasing, parent-body motion can all leak velocity into the held ship. If the held ship begins to drift (even slowly), the V1 spec is violated. Implementation must explicitly pin the ship to the held-pose reference frame, not just set `velocity = 0` once and let downstream subsystems re-author it.
+9. **Camera reads ship velocity instead of ship forward vector.** Convenient shortcut when the ship is moving; silently fails during `STATION-A` (no velocity → no forward direction). The ship model's authored forward vector is the correct source at all times, not a fallback for the rest case.
 
 ## Open questions
 
@@ -250,7 +292,8 @@ Decisions parked for implementation-time or Max-time, not resolved in this doc:
 
 - **Main attractor for binary systems:** primary star or barycenter? Both readings of "the system's main attractor" are legal; the felt experience is *"the ship centers itself on the gravitational heart of the system"* — the implementation choice depends on which reads more like that. **Director call:** defer to working-Claude's first implementation — start with barycenter for binaries (closer to the physics the game otherwise honors), but re-evaluate during playtesting if the visual feels unanchored.
 - **"Relativistic speeds" in `CRUISE`** — literal (Doppler / aberration effects implied) or just visually fast? **Director call:** V1 is **visually fast** only. Literal relativistic visual effects (blue-shift ahead / red-shift behind) are already `V-later` on the warp feature (`docs/FEATURES/warp.md` §V-later). Autopilot CRUISE shouldn't outrun warp's own polish.
-- **`STATION` orbit-speed ratio** — what's a specific measurable? **Director call:** unresolved at vision-time; this is an implementation-tuning value best set during a visual-lab iteration. The criterion is perceptual ("fast relative to planet size" AND "not so fast the planet feels small"). Escalate to Max only if the tuning range is genuinely ambiguous after lab iteration.
+- **`STATION-A` hold felt-fill tuning.** Q2 authored ~60% of screen as the V1 rule. Implementation-time question: what's the exact geometric target (angular diameter? silhouette bounding box? pixel coverage?) that reads as "60% of screen" across the variety of body sizes the game presents. **Director call:** pick the simplest measure that tracks felt intent across moons, Earth-size, and gas giants. Escalate only if felt-fill reads differently at different body scales after lab iteration.
+- **`STATION-B` orbit shape, speed ratio, entry/exit discipline.** Deferred to the future ORBIT-mode workstream per Q10 (2026-04-24). Not a V1 open question; noted here so it isn't forgotten at the feature level.
 - **First-planet selection — innermost-out vs. most-interesting.** Max flagged this one. **Director call:** V1 stays on innermost-out (existing code + no OOI-registry dependency). V-later revisits when the OOI runtime registry from `docs/WORKSTREAMS/ooi-capture-and-exposure-system-2026-04-20.md` is live. Captured as V-later explicitly in triage above.
 - **Keybinding for autopilot-toggle** — not `A`. **Director call (2026-04-20, revised):** `Tab`, **provisional**. Original candidate was `P` (autopilot mnemonic), but working-Claude's bindings-audit found `P` already toggles the settings panel at `src/main.js:5738`. `Tab` was chosen next despite a real conflict with the next-planet cycler (`src/main.js:6076` / `:6120`; control docstring `src/main.js:6806`: *"Tab=next planet, 1-9=planet#"*). Max accepted the conflict as a temporary measure with Max's stated reasoning: *"We are going to have to totally redo the keyboard shortcuts for automatically moving around in the planet system. For the time being, let's just reassign Tab to be autopilot on/off."* The overlap **is real** and affects both autopilot and manual-mode UX — naming it honestly rather than hiding it. **The durable fix is the keyboard-shortcut redesign workstream** (tracked in GTD by working-Claude), which settles autopilot-toggle + next-planet-cycling + any other overlapping binding in one pass. Until that lands, `Tab` is the autopilot toggle and next-planet-cycling is temporarily displaced.
 - **Event-surface shape** (single event with state enum vs. three typed events). **Director call above:** three typed events (`phase-change`, `camera-mode-change`, `toggle`). Flag if implementation reveals a subscriber pattern that argues the other way.
