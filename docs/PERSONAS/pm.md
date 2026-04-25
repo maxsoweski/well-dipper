@@ -83,28 +83,43 @@ first, what to avoid, what "done" looks like, what artifacts to produce
 
 The brief is **living** — you update it as the workstream evolves. Directors and future sessions read it as ground truth for the workstream's intent.
 
-## Dev-collab gate bootstrap (2026-04-21)
+## Dev-collab gate bootstrap (2026-04-21, project-scoped 2026-04-24)
 
-A PreToolUse hook (`~/.claude/hooks/dev-collab-gate.sh`) blocks working-Claude's code edits once ≥2 have accumulated for the active workstream without a fresh Director audit. The hook consults `~/.claude/state/dev-collab/active-workstream` to know which workstream is live.
+A PreToolUse hook (`~/.claude/hooks/dev-collab-gate.sh`) blocks working-Claude's code edits once ≥2 have accumulated for the active workstream without a fresh Director audit. The hook consults a **project-keyed** JSON map at `~/.claude/state/dev-collab/active-workstream.json` to know which workstream is live for the project that owns the file being edited:
+
+```json
+{
+  "well-dipper": "autopilot-shake-redesign-2026-04-21",
+  "navidson":    "house-and-hallway"
+}
+```
+
+The hook walks up from the edited file's path to find its `.git` root and uses that directory's basename as the project key. **Multiple projects can have active workstreams simultaneously without state collision** — each project's gate operates independently against its own slug.
 
 **When you create or activate a workstream brief, you MUST set the gate state** so the hook operates on the right workstream:
 
 1. Write the brief to `docs/WORKSTREAMS/<slug>.md` as usual.
-2. Write the slug (brief filename without `.md`) to `~/.claude/state/dev-collab/active-workstream` on one line, no whitespace.
-3. Initialize the entry in `~/.claude/state/dev-collab/state.json`:
+2. Set this project's active workstream via the helper:
+   ```
+   ~/.claude/state/dev-collab/set-active.sh <project-name> <slug>
+   ```
+   `project-name` = basename of the project's git root (e.g., `well-dipper`, `navidson`). `slug` = brief filename without `.md`. The helper merges into the existing JSON without disturbing other projects' entries.
+3. Initialize the entry in `~/.claude/state/dev-collab/state.json` (slugs share a single map across projects; ensure your slug is unique enough — datestamp suffixes like `-2026-04-21` help):
    ```json
    "<slug>": { "edits": 0, "last_audit_sha": "" }
    ```
 
-**When a workstream closes** (Status: `Shipped ...`), clear the active slug so the hook goes dormant:
+**When a workstream closes** (Status: `Shipped ...`), clear *this project's* active slug so the hook goes dormant for that project (others continue uninterrupted):
 ```
-echo > ~/.claude/state/dev-collab/active-workstream
+~/.claude/state/dev-collab/clear-active.sh <project-name>
 ```
 Leave the state.json entry in place as history.
 
-**If you're re-activating an existing workstream** (e.g., Max reopens a brief), update the active-workstream file but do NOT zero out `edits` or `last_audit_sha` — the history tells the Director whether a fresh audit is needed.
+**If you're re-activating an existing workstream** (e.g., Max reopens a brief), call `set-active.sh` again with the slug, but do NOT zero out `edits` or `last_audit_sha` in `state.json` — the history tells the Director whether a fresh audit is needed.
 
-If no workstream is active, the hook allows all edits (non-Dev-Collab work). This is fine for trivial one-shot fixes; the hook is only load-bearing when a brief exists.
+**Legacy fallback (transitional, 2026-04-24).** Both hooks check the new `active-workstream.json` first, falling back to the legacy single-line `~/.claude/state/dev-collab/active-workstream` file if the JSON has no entry for the current project. The legacy file will be retired once all running sessions migrate.
+
+If no workstream is active for the current project, the hook allows all edits (non-Dev-Collab work). This is fine for trivial one-shot fixes; the hook is only load-bearing when a brief exists.
 
 ## Per-phase AC rule
 
