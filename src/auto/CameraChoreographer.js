@@ -357,8 +357,16 @@ export class CameraChoreographer {
     this._turnStartDir = new THREE.Vector3(0, 0, -1);
     this._turnElapsed = Infinity; // > duration → no turn in progress
     this._turnDurationSec = 1.5;
-    this._tmpDir = new THREE.Vector3();
-    this._tmpTgtVec = new THREE.Vector3();
+    // Separate scratch vectors so tgtDir and lookDir are not aliased
+    this._tgtDirScratch = new THREE.Vector3();
+    this._tgtVecScratch = new THREE.Vector3();
+    this._lookDirScratch = new THREE.Vector3();
+    // Previous frame's actual look direction — used to seed
+    // turnStartDir on swap. Captures the visual direction at the
+    // end of the prior frame, before motion-frame advance smears
+    // the geometry on swap-frame.
+    this._prevLookDir = new THREE.Vector3();
+    this._prevLookDirValid = false;
   }
 
   /**
@@ -460,68 +468,65 @@ export class CameraChoreographer {
           // at the autopilot target body's current position each
           // frame (pursuit-curve).
           //
-          // Target-transition smoothing: when motionFrame.target
-          // changes (leg advance), capture the current look direction
-          // (unit vector from camPos to currentLookAt). nlerp from
-          // there to the new direction (camPos to new target) over
-          // _turnDurationSec with cubic ease-out. Output lookAt =
-          // camPos + interpDir × distanceToTarget so steady-state
-          // lookAt = target.position.
+          // Target-transition smoothing: at swap, seed turnStartDir
+          // with the PREVIOUS frame's actual look direction (captured
+          // at end of last update). nlerp from there to current
+          // target direction over _turnDurationSec with cubic ease-
+          // out. Output lookAt = camPos + interpDir × tgtLen so
+          // steady-state lookAt = target.position.
           //
-          // Direction-based interpolation is robust at small camera-
-          // to-body distances (small bodies / small hold distances).
-          // The earlier point-based lerp produced direction whip when
-          // camPos was near the body — any small movement of the
-          // lookAt point swung the angle by tens of degrees.
+          // Using prev-frame direction (not "current lookAt − camPos"
+          // computed on swap-frame) avoids the smearing that happens
+          // when camPos advances on the swap-frame's _tickCruise — at
+          // small hold distances the smear dominates the captured
+          // direction and the lerp starts from garbage.
+          //
+          // Separate scratch vectors so tgtDir and the lerp output
+          // are not aliased — THREE.Vector3.lerp is a no-op when
+          // `this === v`.
           const camPos = motionFrame.position;
 
-          // Vector from camera to target, plus its length + direction
-          this._tmpTgtVec.subVectors(motionFrame.target.position, camPos);
-          const tgtLen = this._tmpTgtVec.length();
-          const tgtDir = this._tmpDir;
+          // Compute target vector + length + direction
+          this._tgtVecScratch.subVectors(motionFrame.target.position, camPos);
+          const tgtLen = this._tgtVecScratch.length();
           if (tgtLen > 1e-6) {
-            tgtDir.copy(this._tmpTgtVec).divideScalar(tgtLen);
+            this._tgtDirScratch.copy(this._tgtVecScratch).divideScalar(tgtLen);
           } else {
-            tgtDir.set(0, 0, -1);
+            this._tgtDirScratch.set(0, 0, -1);
           }
 
           if (this._lastTargetRef !== motionFrame.target) {
-            // Capture current direction (camPos → current lookAt) at
-            // swap, OR fall back to tgtDir if undefined (first frame).
-            const curVec = this._tmpDir; // reuse — read it before overwriting tgtDir below
-            curVec.subVectors(this._currentLookAtTarget, camPos);
-            const curLen = curVec.length();
-            if (curLen > 1e-6) {
-              this._turnStartDir.copy(curVec).divideScalar(curLen);
+            if (this._prevLookDirValid) {
+              this._turnStartDir.copy(this._prevLookDir);
             } else {
-              this._turnStartDir.copy(tgtDir);
+              this._turnStartDir.copy(this._tgtDirScratch);
             }
             this._turnElapsed = 0;
             this._lastTargetRef = motionFrame.target;
           }
 
-          // Compute interpolated direction
-          let lookDir;
+          // Interpolate look direction
           if (this._turnElapsed < this._turnDurationSec) {
             this._turnElapsed += deltaTime;
             const t = Math.min(1, this._turnElapsed / this._turnDurationSec);
             const eased = 1 - Math.pow(1 - t, 3);
-            // nlerp: lerp + normalize. Close-enough to slerp for
-            // visual smoothness; cheap.
-            this._tmpDir.copy(this._turnStartDir).lerp(tgtDir, eased);
-            const len = this._tmpDir.length();
+            // nlerp into _lookDirScratch. Inputs are turnStartDir
+            // and tgtDirScratch — both distinct from output scratch.
+            this._lookDirScratch.copy(this._turnStartDir).lerp(this._tgtDirScratch, eased);
+            const len = this._lookDirScratch.length();
             if (len > 1e-6) {
-              this._tmpDir.divideScalar(len);
-              lookDir = this._tmpDir;
+              this._lookDirScratch.divideScalar(len);
             } else {
-              lookDir = tgtDir;
+              this._lookDirScratch.copy(this._tgtDirScratch);
             }
           } else {
-            lookDir = tgtDir;
+            this._lookDirScratch.copy(this._tgtDirScratch);
           }
 
-          // Place lookAt at target's distance in interpolated direction
-          this._currentLookAtTarget.copy(camPos).addScaledVector(lookDir, tgtLen);
+          // Place lookAt + remember direction for next frame
+          this._currentLookAtTarget.copy(camPos).addScaledVector(this._lookDirScratch, tgtLen);
+          this._prevLookDir.copy(this._lookDirScratch);
+          this._prevLookDirValid = true;
         } else if (this._ship) {
           // V1 §A4 caller without a target in the frame — fall back
           // to the legacy framing-state path. Should not happen for
