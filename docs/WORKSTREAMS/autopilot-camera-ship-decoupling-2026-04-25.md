@@ -2,6 +2,18 @@
 
 ## Status
 
+**`Active — amended 2026-04-25 (lhokon phase)`** — see §"Amendments —
+2026-04-25 (lhokon phase introduction)" below for the amendment shape
+and rationale. The V1 §A4 redesign authored under Director audit
+`autopilot-station-hold-redesign-2026-04-24` §A4 stands; this amendment
+inserts a new named phase, **`lhokon`**, between `STATION-A` and
+`CRUISE` to host the camera convergence that the prior implementation
+attempted to author *during* CRUISE (and that Tester verdict §T1 at
+HEAD `8f6623d` rejected as a structural conflict with AC #5a's
+"every CRUISE frame, all phases" bound).
+
+Original status framing follows.
+
 **`Active — pre-execution gate` (authored 2026-04-25 by PM under
 Director audit `autopilot-station-hold-redesign-2026-04-24` §A4 at
 `~/.claude/state/dev-collab/audits/autopilot-station-hold-redesign-
@@ -48,6 +60,225 @@ Director audit of this brief:**
 Working-Claude is **NOT** released to `Edit`/`Write` on production
 code paths until Director audits this brief. Audit happens next; PM
 flags Director when this brief lands.
+
+## Amendments — 2026-04-25 (lhokon phase introduction)
+
+### Why this amendment
+
+The §A4 redesign shipped with **AC #5a verbatim:** *"Camera tracks
+autopilot target body. Every frame, `camera.lookAt(target.current_
+position)`. This applies across the full leg — ENTRY, CRUISE, and
+APPROACH — and persists into STATION-A where the held pose is
+naturally body-centered. Shake stays additive on top of the body-
+tracking lookAt."* The bound: *"`dot(cameraForwardPreShake,
+expectedForward) ≥ 0.9999` every frame, all phases (ENTRY, CRUISE,
+APPROACH, STATION-A)."*
+
+Drift Risk #5 was authored explicitly to catch any swap-window
+smoothing: *"V-later camera authoring smuggled into V1... if the
+camera linger on a receding subject (target_n−1) for any frame after
+the leg to target_n has begun, dot(cameraForwardPreShake,
+expectedForward) fails for those frames. **The V-later moves are
+caught by construction.**"*
+
+Working-Claude implemented per-CRUISE-frame `lookAt(target)` plus a
+1.5s direction-nlerp on leg-swap to avoid a "tiny-body direction-
+whip" snap (commits `dc26cbd` + `70c4b09` + `8f6623d`). Tester verdict
+§T1 at HEAD `8f6623d`
+(`~/.claude/state/dev-collab/tester-audits/autopilot-camera-ship-
+decoupling-2026-04-25.md` §T1) **FAILed AC #5a:** 685/13362 (5.13%)
+CRUISE samples below the dot-0.9999 bound, all clustered at leg-swap
+windows, per-leg stabilization 658–1120 ms — matching the 1.5 s
+nlerp duration exactly. Live capture artifact at
+`recordings/autopilot-camera-ship-decoupling-v1-attempt1-telemetry.json`
+(16,952 samples).
+
+The smoothing is fine; the **placement** of the smoothing is what
+violated the brief. CRUISE under §A4 is the body-tracking leg by
+construction — it must satisfy `lookAt(target.current_position)`
+every frame. A smoothing window inside CRUISE conflicts structurally,
+not numerically (i.e., loosening the bound to "every frame except
+within 1.5 s of swap" would re-import V-later linger authoring into
+V1 by amendment, which is what Drift Risk #5 was authored to forbid).
+
+### What the amendment does
+
+The amendment **moves the smoothing out of CRUISE and into a new
+named phase, `lhokon`**, between `STATION-A` and `CRUISE`. Spelled
+"lhokon" — Max's chosen name; preserve verbatim, do not normalize
+casing, do not substitute. The lhokon phase is the **camera
+convergence beat**: ship is stationary at the STATION-A position;
+camera rotates from old-target-direction to new-target-direction;
+when the camera is centered on the new target, CRUISE begins.
+
+Phase order under this amendment:
+
+| # | Phase | Ship | Camera |
+|---|-------|------|--------|
+| 1 | `STATION-A` | At rest near old body. | `lookAt(old_target.current_position)`. |
+| 2 | **`lhokon`** *(new)* | **Stationary at STATION-A position. Velocity = 0.** | **Rotating from old-target-direction toward new-target-direction.** |
+| 3 | `CRUISE` | Burning toward new target (predicted-intercept solver, per §A4). | `lookAt(new_target.current_position)` every frame. |
+| 4 | `APPROACH` | (Unchanged.) | `lookAt(target.current_position)` every frame. |
+| 5 | `STATION-A` *(arrival)* | (Unchanged.) | (Unchanged.) |
+
+Because the ship is **stationary throughout `lhokon`** by spec, the
+prior Drift Risk #5 failure shape ("linger on a receding subject")
+becomes **structurally impossible**: there is no "receding subject"
+during lhokon — the ship is not yet moving toward the new target,
+and the old subject is not receding. The camera is mid-rotation by
+*design*; the new target is not yet on-axis by *design*. AC #5a's
+"every CRUISE frame, body-tracking" bound becomes enforceable on
+CRUISE specifically, where it remains the load-bearing contract.
+
+### CRUISE-entry gate (criterion choice)
+
+CRUISE begins only after lhokon completes. Three options were
+considered:
+
+- **(a) Pure dot-gate** — `dot(camera_forward_preshake,
+  normalize(new_target.current_position − camera.position)) ≥ 0.9999`.
+  Semantic match to AC #5a's bound. Failure mode: lhokon hangs if
+  FP noise asymptotes near dot 1.0, or if the rotation axis becomes
+  degenerate (prev and new directions nearly antiparallel). Silent
+  player-visible bug; no recovery.
+- **(b) Fixed duration** — exit lhokon after `_turnDurationSec`
+  (1.5 s) regardless of dot. Predictable, simple. Failure mode: if
+  the body's orbital motion shifts the new-target-direction during
+  the turn, lhokon ends with the camera ~degrees off; CRUISE then
+  begins off-center and AC #5a's first-CRUISE-frame measurement
+  flags it.
+- **(c) (a) OR (b)-as-timeout** — dot-gate normally; fixed-duration
+  timeout as a hang-prevention fallback. Empirically, working-
+  Claude's telemetry showed stabilization at 658–1120 ms on legs
+  1–3 (well under 1.5 s), so (a) carries lhokon's exit on every
+  realistic case; (b) is the safety net.
+
+**PM choice: (c) — dot-gate primary, fixed-duration timeout
+fallback.** Rationale: the failure mode for (a) alone is silent
+hang; the failure mode for (b) alone is caught immediately by AC
+#5a's first-CRUISE-frame measurement. (c) has neither failure mode
+at the cost of one branch. Telemetry pattern is mirrored on the
+solver's discriminant-fallback (§A4): the timeout is reported in
+the telemetry log as a flag for feature-doc review, not an
+auto-failure of any AC.
+
+**Tunable values:**
+
+- `lhokon_dot_threshold = 0.9999` (matches AC #5a's bound; the
+  semantic equivalence is intentional — lhokon's exit criterion *is*
+  AC #5a's entry criterion for CRUISE).
+- `lhokon_timeout_sec = 1.5` (matches the existing
+  `_turnDurationSec`; preserves the smoothing duration the
+  implementation already established).
+- Under FP precision, `0.9999` may prove tight at very small
+  rotation axes; PM-tunable to `0.99996` (`≤ 0.5°`) symmetric with
+  AC #5b's tolerance pathway. **Tunable, not Director-escalation-
+  class.**
+
+### Quoted prior-brief surfaces being amended
+
+For audit-trail integrity, the surfaces this amendment touches:
+
+1. **`## Acceptance criteria` §"AC #5a"** — phrase **"every frame,
+   all phases (ENTRY, CRUISE, APPROACH, STATION-A)"** narrows to
+   **"every CRUISE frame, every APPROACH frame, every STATION-A
+   frame"**; explicit lhokon carve-out added with rationale.
+2. **`## Acceptance criteria`** — four new ACs (#11 lhokon-onset, #12
+   lhokon-completion, #13 ship-stationary-during-lhokon, #14
+   smoothness-preserved) added.
+3. **`## Drift risks` §"Risk: V-later camera authoring smuggled into
+   V1"** — rewritten. The old framing (catch swap-window smoothing
+   by construction via AC #5a) is dissolved by the lhokon design;
+   the new framing watches for *the wrong failure mode under the
+   new design* (ship moving before lhokon completes; CRUISE entering
+   on a stale dot reading; etc.).
+4. **`## In scope`** — lhokon phase added; smoothing migration named
+   explicitly.
+5. **`## Out of scope`** — V-later linger / pan-ahead / departure
+   arc carve-out preserved verbatim. The lhokon phase is **not** a
+   linger on the receding subject (ship is stationary; old subject
+   is not receding); it is a camera-convergence beat on the new
+   subject. Distinct shape, distinct semantics.
+6. **`## Handoff to working-Claude`** — implementation-order step
+   for migrating the existing 1.5 s direction-nlerp from CRUISE-
+   entry into the new lhokon phase + adding the CRUISE-entry gate.
+
+### Cross-references
+
+- **Tester verdict §T1** at HEAD `8f6623d`:
+  `~/.claude/state/dev-collab/tester-audits/autopilot-camera-ship-
+  decoupling-2026-04-25.md`. Quoted: *"AC #5a — Camera tracks body —
+  **FAIL**... 685 / 13362 samples below threshold (5.13%)... per-leg
+  stabilization 658–1120 ms... This is the `_turnDurationSec = 1.5`
+  direction-nlerp at `CameraChoreographer.js:359` executing exactly
+  as designed — the smoothing block introduced by commits `70c4b09`
+  (direction-based turn smoothing), `dc26cbd` (smooth camera turn
+  between targets), and `8f6623d` (seed with prev-frame direction).
+  The mechanism is intentional; the brief AC bound forbids it."*
+- **Live telemetry artifact:**
+  `recordings/autopilot-camera-ship-decoupling-v1-attempt1-telemetry.json`
+  (16,952 samples).
+- **Commits introducing the smoothing-in-CRUISE shape:**
+  `dc26cbd`, `70c4b09`, `8f6623d`. Working-Claude migrates the
+  smoothing into the lhokon phase rather than reverting these
+  commits wholesale; the underlying nlerp mechanism is reused at the
+  new phase site.
+- **Feature doc:** A feature-doc amendment introducing `lhokon` as
+  a named phase is **deferred** to working-Claude's same-session
+  feature-doc update under the 2026-04-25 Dev Collab OS restructure
+  (working-Claude owns `docs/FEATURES/*.md` updates same-session
+  with implementation). PM flags it here; working-Claude lands the
+  feature-doc edit alongside the implementation. The brief's ACs
+  carry the phase-sourced text in the interim and are valid against
+  the to-be-amended feature doc.
+
+### Deferred decisions (flagged for Max)
+
+- **Feature-doc revision-history wording for the lhokon
+  introduction.** PM defers the §"Revision history" entry phrasing
+  to working-Claude's same-session feature-doc edit. Suggested
+  shape: *"2026-04-25 — `lhokon` phase introduction (§A5
+  amendment). Camera convergence beat between STATION-A and CRUISE,
+  ship stationary, camera rotates from old-target-direction to
+  new-target-direction. CRUISE entry gated on dot ≥ 0.9999 (with
+  fixed-duration timeout fallback). Resolves the structural conflict
+  Tester verdict §T1 surfaced between in-CRUISE smoothing and AC
+  #5a's per-frame body-tracking bound."*
+- **AC #5a numerical bound during APPROACH at very small ship-to-
+  body distances.** APPROACH terminates at ~0.6 × hold-distance
+  geometry where the body's apparent angular size grows rapidly
+  per frame. The dot-bound holds in principle (camera tracks body
+  current position; geometry doesn't enter the bound), but FP
+  precision at sub-0.001u distances may warrant the 0.5° relaxation
+  pathway already named in AC #5b. **PM-tunable, not
+  amendment-blocking.**
+
+### What stays unchanged
+
+- AC #1 (ship intercepts body within tolerance) — unchanged.
+- AC #2 (APPROACH onset at min(10R, cruise-distance ceiling)) —
+  unchanged.
+- AC #3 (STATION-A felt-fill ~60%) — unchanged.
+- AC #4 (STATION-A body-lock invariance) — unchanged.
+- AC #5b (ship aims at predicted intercept) — unchanged. CRUISE-
+  only bound; lhokon does not gate AC #5b because ship is
+  stationary during lhokon (AC #5b applies *during CRUISE*, where
+  the ship is burning).
+- AC #6 (shake event placement) — unchanged. Shake fires at CRUISE
+  onset (= lhokon-completion boundary, structurally) and at
+  APPROACH onset.
+- AC #7 (ship orientation set by autopilot, read by shake only) —
+  unchanged. During lhokon, autopilot still writes `ship.forward`
+  each frame (likely to the predicted-intercept direction toward
+  the new target, anticipating CRUISE; or to last-written value
+  from STATION-A — working-Claude's call as long as the accessor
+  surface holds).
+- AC #8 (jumpscare-arrival felt experience) — **stays
+  `VERIFIED_PENDING_MAX`.** Recording recapture deferred until the
+  lhokon implementation lands at a new HEAD. The amended brief is
+  the spec the recording will be evaluated against.
+- AC #9 (stub scaffolding removal) — unchanged.
+- AC #10 (two-axis architecture preserved) — unchanged.
 
 ## Parent feature
 
@@ -386,13 +617,31 @@ min(distToBody) ≤ 0.001 scene units`** over a minimum 5-second hold
 window. The held ship does not drift relative to the body, does not
 orbit, does not wobble.
 
-### AC #5a — Camera tracks body (per `docs/FEATURES/autopilot.md` §"Per-phase criterion — camera axis (V1)" §ESTABLISHING §A4 redesign; **new under §A4 — 2026-04-25**)
+### AC #5a — Camera tracks body (per `docs/FEATURES/autopilot.md` §"Per-phase criterion — camera axis (V1)" §ESTABLISHING §A4 redesign; **amended 2026-04-25 — narrowed to non-lhokon phases**)
 
-Quoted criterion: *"Camera tracks autopilot target body. Every frame,
-`camera.lookAt(target.current_position)`. This applies across the
-full leg — ENTRY, CRUISE, and APPROACH — and persists into STATION-A
-where the held pose is naturally body-centered. Shake stays additive
-on top of the body-tracking lookAt."*
+Quoted criterion (feature-doc §A4): *"Camera tracks autopilot target
+body. Every frame, `camera.lookAt(target.current_position)`. This
+applies across the full leg — ENTRY, CRUISE, and APPROACH — and
+persists into STATION-A where the held pose is naturally body-
+centered. Shake stays additive on top of the body-tracking lookAt."*
+
+**Phase scope (amended 2026-04-25):** the bound applies on
+**`CRUISE`, `APPROACH`, `STATION-A`, and `ENTRY`** — every frame on
+those phases. The bound **does not apply on the new `lhokon` phase**
+(introduced by the 2026-04-25 amendment as the camera-convergence
+beat between STATION-A and CRUISE). During lhokon, the camera is
+mid-rotation by design — it does not `lookAt(target.current_position)`
+every frame; instead it follows a smooth angular interpolation from
+old-target-direction toward new-target-direction. The
+prior-attempt's failure shape that this carve-out admits — a
+camera that is not on-axis with the new target during the swap
+window — is structurally bounded because **the ship is stationary
+throughout lhokon** (AC #13). Drift Risk #5's old failure shape
+("linger on a receding subject after leg-swap") becomes
+structurally impossible: there is no receding subject during
+lhokon (ship is not moving toward the new target; old subject is
+not receding). The lhokon phase is the camera-convergence beat on
+the new subject, distinct semantics from V-later linger.
 
 Verification: per-frame telemetry samples `cameraForwardPreShake`
 (unit) — read from `camera.quaternion` immediately after
@@ -406,18 +655,29 @@ expectedForward = normalize(target.current_position − camera.position)
 ```
 
 **Bound: `dot(cameraForwardPreShake, expectedForward) ≥ 0.9999`
-every frame, all phases (ENTRY, CRUISE, APPROACH, STATION-A).** The
-pre-shake basis is the contract surface; post-shake `camera.forward`
-is not measured here (shake is additive; AC #5a measures the body-
-tracking pursuit-curve, not the shake perturbation). Verified across
-the Sol tour, full leg coverage.
+every frame, on phases `{ENTRY, CRUISE, APPROACH, STATION-A}`** —
+i.e., **excluding `lhokon`**. The pre-shake basis is the contract
+surface; post-shake `camera.forward` is not measured here (shake is
+additive; AC #5a measures the body-tracking pursuit-curve, not the
+shake perturbation). Verified across the Sol tour, full leg coverage
+on the in-scope phases.
 
-**Negative criterion the bound catches by construction:** if the
-camera reads stale target position (snapshot capture, copied Vector3,
-parent-frame mismatch — drift risk #9), the body drifts off-center
-during the leg and `expectedForward` diverges from
-`cameraForwardPreShake` by more than the bound. Per-frame measurement
-catches the drift class within frames of onset.
+**The first CRUISE frame after lhokon completion is in scope of
+this bound.** That is, lhokon's exit gate must deliver the camera
+to the AC #5a-passing regime; if lhokon's timeout (1.5 s fallback)
+fires with the dot still below 0.9999, the first CRUISE frame
+captures the violation. This is the hand-off contract: lhokon's
+exit *is* AC #5a's entry. AC #12 (lhokon-completion) bounds the
+lhokon side; AC #5a bounds the CRUISE side. They meet at the phase
+boundary.
+
+**Negative criterion the bound catches by construction (during
+in-scope phases):** if the camera reads stale target position
+(snapshot capture, copied Vector3, parent-frame mismatch — drift
+risk #9), the body drifts off-center during the leg and
+`expectedForward` diverges from `cameraForwardPreShake` by more
+than the bound. Per-frame measurement catches the drift class
+within frames of onset.
 
 ### AC #5b — Ship aims at predicted intercept (per `docs/FEATURES/autopilot.md` §"Per-phase criteria — ship axis" §CRUISE §A4 redesign; **new under §A4 — 2026-04-25**)
 
@@ -579,6 +839,151 @@ mode itself collapses to "lookAt(target.current_position) + shake on
 top" but routes through the dispatch, not an if-branch. Director
 audits at the audit gate.
 
+### AC #11 — lhokon onset at STATION-A → next-target-selected boundary (per amendment 2026-04-25 — `lhokon` phase introduction)
+
+Quoted criterion (this brief §"Amendments — 2026-04-25 (lhokon phase
+introduction)"): *"`lhokon` is the camera-convergence beat: ship is
+stationary at the STATION-A position; camera rotates from
+old-target-direction to new-target-direction; when the camera is
+centered on the new target, CRUISE begins."*
+
+Verification: phase-transition telemetry. The ship's phase field
+transitions from `STATION-A` to `lhokon` **on the same frame** that
+the autopilot's queue advances to the next target (i.e., the frame
+on which `_target` reference changes from old body to new body, or
+equivalently the frame on which `autoNav.getCurrentStop()` transitions).
+
+**Bound: phase transition `STATION-A → lhokon` occurs within 1
+frame of next-target selection.** No `STATION-A → CRUISE` direct
+transitions in the per-leg phase-transition log; the only path from
+`STATION-A` out of the held state is via `lhokon`.
+
+**Negative criterion the bound catches:** if working-Claude wires
+the new-target advance to fire `STATION-A → CRUISE` directly (the
+old phase order, prior to the amendment), the phase log shows the
+direct transition; AC #11 fails immediately. Verified across the
+Sol tour: every leg-swap shows `STATION-A → lhokon → CRUISE`,
+never `STATION-A → CRUISE`.
+
+### AC #12 — lhokon completion gates CRUISE entry (per amendment 2026-04-25 — `lhokon` phase introduction; CRUISE-entry gate (c) — dot-gate primary, fixed-duration timeout fallback)
+
+Quoted criterion (this brief §"Amendments — 2026-04-25 (lhokon phase
+introduction)" §"CRUISE-entry gate"): *"CRUISE begins only after
+lhokon completes. Dot-gate primary (`dot(camera_forward_preshake,
+normalize(new_target.current_position − camera.position)) ≥
+lhokon_dot_threshold`); fixed-duration timeout fallback
+(`lhokon_timeout_sec`). Tunable values: `lhokon_dot_threshold =
+0.9999`, `lhokon_timeout_sec = 1.5`."*
+
+Verification: per-frame telemetry samples `cameraForwardPreShake`,
+`new_target.current_position`, `camera.position`, and the
+`lhokon_elapsed_sec` accumulator. On the frame `lhokon → CRUISE`
+transitions, **at least one** of the following must hold:
+
+- **Dot-gate path:** `dot(cameraForwardPreShake,
+  normalize(new_target.current_position − camera.position)) ≥
+  lhokon_dot_threshold` (default `0.9999`, PM-tunable to `0.99996`
+  symmetric with AC #5b's tolerance pathway).
+- **Timeout path:** `lhokon_elapsed_sec ≥ lhokon_timeout_sec`
+  (default `1.5`).
+
+If the timeout path fires, the telemetry pipeline records a
+`lhokon_timeout` flag for the leg; **the flag is not an automatic
+AC failure**, but if it fires under realistic playable conditions
+(Sol tour, normal cruise speeds), AC #5a's first-CRUISE-frame bound
+likely also fails — the timeout firing is a flag for feature-doc
+§"Failure criteria" review, mirroring the discriminant-fallback
+shape on AC #5b.
+
+**Bound:** the `lhokon → CRUISE` transition occurs **only** on a
+frame where one of the two gate conditions holds. **No `lhokon →
+CRUISE` transitions on any other frame.** Verified across the Sol
+tour; expected pattern (per Tester §T1 telemetry on legs 1–3):
+dot-gate carries every leg at ~658–1120 ms elapsed, timeout never
+fires.
+
+**Negative criterion the bound catches:** if the implementation
+swaps to a fixed-duration-only gate (option (b) in the amendment),
+the dot-gate side fails to ever fire and lhokon always exits on
+timeout; the per-leg telemetry shows `lhokon_elapsed_sec ≈ 1.5` for
+every leg without ever recording a sub-1.5s exit. If the
+implementation swaps to a pure-dot-only gate (option (a)) and a
+degenerate axis case hangs lhokon indefinitely, the per-leg
+telemetry shows `lhokon` extending past 1.5 s without exiting; AC
+#12 catches the hang within frames of the timeout boundary.
+
+### AC #13 — Ship stationary during lhokon (per amendment 2026-04-25 — `lhokon` phase introduction)
+
+Quoted criterion (this brief §"Amendments — 2026-04-25 (lhokon phase
+introduction)"): *"Ship remains stationary at the STATION-A
+position. Velocity = 0."*
+
+Verification: per-frame telemetry samples `ship.velocity` (or
+finite-differenced `(ship.position_now − ship.position_prev) / dt`
+if velocity is not exposed) and `ship.position` during lhokon.
+
+**Bound: `|ship.velocity| ≤ 0.0001 scene units / second` for every
+frame on phase `lhokon`** (numerical tolerance for FP drift in
+parent-frame transforms; same order of magnitude as AC #4's
+STATION-A body-lock invariance bound). Equivalently, **`max
+|ship.position − ship.position_at_lhokon_onset| ≤ 0.0001 scene
+units` across the lhokon duration.** Verified across the Sol tour.
+
+**Negative criterion the bound catches:** if working-Claude lands
+the lhokon phase but the ship begins to accelerate before
+lhokon-completion (e.g., the predicted-intercept solver fires its
+`_tickCruise` path during lhokon), the receding-subject linger
+failure mode reappears — old subject becomes a receding subject as
+the ship moves away from STATION-A while the camera is still
+mid-convergence. AC #13 catches the velocity onset within frames;
+AC #5a's CRUISE-side bound catches the consequence on the first
+CRUISE frame.
+
+### AC #14 — Smoothness preserved at lhokon entry/exit (per amendment 2026-04-25 — `lhokon` phase introduction)
+
+Quoted criterion (this brief §"Amendments — 2026-04-25 (lhokon phase
+introduction)"): *"No per-frame angular-velocity discontinuity at
+lhokon entry/exit (i.e., no visible snap at either boundary)."*
+
+Verification: per-frame telemetry samples `cameraForwardPreShake`;
+compute frame-to-frame angular delta:
+```
+angularDelta_n = angle(cameraForwardPreShake_n,
+                        cameraForwardPreShake_{n-1})
+```
+where `angle` is the unit-vector angle (`acos(dot)` clamped).
+
+**Bounds:**
+
+- **At lhokon entry** (last STATION-A frame → first lhokon frame):
+  `angularDelta_lhokon_entry ≤ 0.5°`. The camera's last-held pose
+  on STATION-A is `lookAt(old_target.current_position)`; the
+  lhokon's first frame begins the rotation from that pose. The
+  rotation must start from the held pose with continuous angular
+  velocity, not snap to a new direction.
+- **At lhokon exit** (last lhokon frame → first CRUISE frame):
+  `angularDelta_lhokon_exit ≤ 0.5°`. CRUISE begins with
+  `lookAt(new_target.current_position)`; lhokon's last frame must
+  be at or near that direction (AC #12 enforces the dot-bound;
+  AC #14 enforces the *continuity* of the transition).
+- **Within lhokon:** the angular-velocity envelope is the
+  smoothing curve's authored shape (nlerp / ease — implementation
+  choice). No bound on magnitude (working-Claude's smoothing
+  function authors the shape); only on continuity at the
+  boundaries.
+
+**Tolerance:** `0.5°` per-frame at 60 fps corresponds to angular
+velocity `≤ 30°/s` — well below the swap-frame snap (~180°)
+working-Claude's commits `70c4b09` were authored to suppress.
+
+**Negative criterion the bound catches:** if the implementation
+lands lhokon as a phase that does not seed from the prior-frame's
+camera direction (i.e., it computes the rotation from a
+to-be-named "swap reference direction" that doesn't equal
+old-target-direction at lhokon-entry), AC #14's lhokon-entry bound
+catches the discontinuity. Symmetric argument at lhokon-exit
+against CRUISE's first-frame `lookAt(new_target.current_position)`.
+
 ## Principles that apply
 
 From `docs/GAME_BIBLE.md` §11 Development Philosophy:
@@ -701,22 +1106,93 @@ From `docs/GAME_BIBLE.md` §11 Development Philosophy:
   available, working-Claude switches paths; surface to PM with the
   rationale.
 
-- **Risk: V-later camera authoring smuggled into V1** (preserved from
-  prior workstream). Linger on receding subject, pan-ahead toward
-  incoming target, departure arc — all V-later per feature doc §A4
-  redesign which preserves the V-later carve explicitly: *"V-later
-  authoring may add a brief linger on the receding subject before
-  re-targeting; V1 does not."* **Why it happens:** the existing
-  `CameraChoreographer` has LINGERING / TRACKING / PANNING_AHEAD
-  branches from WS 3; under §A4 the V1 ESTABLISHING dispatch site
-  changes its inside but leaves the dispatch shape intact. A
-  well-meaning implementation pass might "use" the existing branches
-  to author smoother target hand-offs at leg boundaries. **Guard:**
-  AC #5a's bound applies across the full leg; if the camera linger
-  on a receding subject (target_n−1) for any frame after the leg
-  to target_n has begun, `dot(cameraForwardPreShake, expectedForward)`
-  fails for those frames. The V-later moves are caught by
-  construction.
+- **Risk: V-later camera authoring smuggled into V1** (rewritten
+  under 2026-04-25 amendment — `lhokon` phase introduction). The
+  feature-doc carve preserves V-later linger on receding subjects,
+  pan-ahead toward incoming targets, and departure arcs as
+  out-of-V1 explicitly: *"V-later authoring may add a brief linger
+  on the receding subject before re-targeting; V1 does not."* The
+  prior framing of this risk caught swap-window smoothing during
+  CRUISE by construction via AC #5a. The 2026-04-25 amendment
+  introduces `lhokon` as the legitimate phase for camera
+  convergence between legs — but this is **not a license** to
+  re-import V-later linger / pan-ahead / departure-arc authoring
+  into V1 under the lhokon banner. The lhokon phase is **the
+  camera-convergence beat on the new subject** (camera rotates
+  *toward* the new target while the ship is stationary); it is
+  **not a linger on the receding subject** (which would require
+  the ship to be moving away from the old target while the camera
+  follows it). The two are structurally distinct: lhokon's
+  ship-velocity = 0 (AC #13) makes "receding subject" semantically
+  impossible. **Why it happens:** the existing `CameraChoreographer`
+  retains LINGERING / TRACKING / PANNING_AHEAD branches from WS 3;
+  a well-meaning implementation pass might land the lhokon phase
+  by routing through the LINGERING branch (because the visual
+  shape — camera holds on a subject as a phase boundary crosses
+  — feels superficially similar). It is not the same shape;
+  LINGERING authors a camera that holds on a subject as the *ship
+  moves away*; lhokon authors a camera that *rotates toward a new
+  subject while the ship holds*. **Guard:** AC #13's
+  ship-stationary-during-lhokon bound is the structural
+  enforcement (LINGERING-as-lhokon would not violate AC #13 by
+  itself; the violation surfaces on the first CRUISE frame when
+  AC #5a's bound activates and the camera is still angularly
+  off-axis from the new target because the LINGERING branch was
+  authored against the *old* target's motion, not the new
+  target's geometry). AC #5a's first-CRUISE-frame bound (per
+  AC #12's gate) catches this within one frame of CRUISE entry.
+  Additionally: if working-Claude is tempted to author *both*
+  lhokon (per amendment) *and* a brief linger on the receding
+  subject during lhokon's first 200–500 ms, that is the V-later
+  scope the carve forbids. AC #14's lhokon-entry continuity bound
+  catches a held-on-old-subject opening (zero angular velocity at
+  lhokon entry implies the camera is not yet rotating toward the
+  new target, which fails AC #12's exit gate within `lhokon_timeout_sec`).
+
+- **Risk: Ship moves before lhokon completes (new under 2026-04-25
+  amendment).** The lhokon phase is defined by **ship.velocity = 0**
+  (AC #13). If the per-frame predicted-intercept solver fires its
+  `_tickCruise` write path while the phase is still `lhokon`, the
+  ship begins to accelerate toward the new target — and the
+  receding-subject linger failure mode reappears (old subject
+  recedes from the moving ship while the camera is still
+  mid-convergence on the new). **Why it happens:** the V1 §A4
+  predicted-intercept solver is wired into `_tickCruise`; if the
+  amendment's phase routing fires `_tickCruise` on `lhokon` (instead
+  of a new `_tickLhokon` that holds position + advances camera
+  rotation), velocity onset is silent. **Guard:** AC #13's
+  per-frame velocity bound catches the onset within frames; AC
+  #5a's CRUISE-side bound catches the consequence on first CRUISE
+  frame. Implementation pattern: `lhokon` phase has its own tick
+  function (or a guarded branch in the dispatch) that **does not**
+  call the predicted-intercept solver; the camera-rotation update
+  is the only authoring on lhokon; the ship's position is held at
+  the STATION-A onset position via the same hold-frame mechanism
+  STATION-A uses (AC #4's body-lock invariance bound is the
+  precedent).
+
+- **Risk: CRUISE-entry gate hangs (new under 2026-04-25
+  amendment).** Pure-dot-gate option (a) was rejected in favor of
+  (c) (dot-gate primary + fixed-duration timeout fallback)
+  because (a)'s failure mode is a silent hang — if FP noise
+  asymptotes the dot near 0.9999 without crossing it, or if the
+  rotation axis is degenerate (prev and new directions nearly
+  antiparallel), lhokon never exits and CRUISE never begins;
+  player sees a frozen ship. **Why it happens:** option (a)
+  feels semantically cleanest and the implementation might
+  arrive at (a) by simplification ("we don't need the timeout —
+  the dot always converges"). It does not always converge under
+  FP precision. **Guard:** the timeout fallback is **not
+  optional** in the amendment's gate criterion (c); landing
+  pure-(a) is a Drift Risk #5-class violation. AC #12's
+  bound enforces *one of* the two gate conditions; if the
+  timeout path is removed, the per-leg telemetry shows `lhokon`
+  extending past 1.5 s on degenerate cases, AC #12 fails. PM
+  ruling: if the timeout path *fires* on a leg under realistic
+  conditions (dot-gate didn't carry within 1.5 s), surface to PM
+  + working-Claude — likely a feature doc §"Failure criteria"
+  flag, mirroring the discriminant-fallback shape on §A4's
+  predicted-intercept solver.
 
 - **Risk: Stub-creep returning** (preserved from prior workstream's
   Drift risk #1). AC #9 is now dead (`window._stub*` already removed),
@@ -757,6 +1233,27 @@ From `docs/GAME_BIBLE.md` §11 Development Philosophy:
 - Implementation of V1 §A4 camera axis ESTABLISHING: per-frame
   `lookAt(target.current_position)` in `CameraChoreographer.js`,
   dropping the `ship.forward × 100` write.
+- **Implementation of the `lhokon` phase (2026-04-25 amendment).**
+  New named phase between `STATION-A` and `CRUISE` that hosts
+  camera convergence on the next target while the ship is
+  stationary. Includes:
+  - Phase enum extension (`STATION-A → lhokon → CRUISE` order;
+    AC #11).
+  - CRUISE-entry gate (dot-gate primary + fixed-duration timeout
+    fallback per amendment §"CRUISE-entry gate"; AC #12).
+  - Ship-stationary enforcement during lhokon (AC #13).
+  - Boundary-continuity at lhokon entry/exit (AC #14).
+  - **Migration of the existing 1.5 s direction-nlerp** from
+    its current CRUISE-entry placement (commits `dc26cbd` +
+    `70c4b09` + `8f6623d`) into the new lhokon phase. The nlerp
+    mechanism is reused; only the phase that hosts it changes.
+  - **Same-session feature-doc edit** introducing `lhokon` as a
+    named phase in `docs/FEATURES/autopilot.md` §"Per-phase
+    criteria — ship axis" + §"Per-phase criterion — camera axis
+    (V1)" + §"Revision history". Working-Claude owns the
+    feature-doc update under the 2026-04-25 Dev Collab OS
+    restructure (working-Claude updates `docs/FEATURES/*.md`
+    same-session; PM does not author the feature-doc edit).
 - Body-velocity exposure surface: Path A (analytic `velocity_at(t)`)
   if cleanly derivable from the orbital model; Path B (finite-
   difference) as V1-acceptable fallback. Working-Claude surfaces the
@@ -782,7 +1279,15 @@ From `docs/GAME_BIBLE.md` §11 Development Philosophy:
   subject, pan-forward toward incoming target, departure arc from
   STATION-A into CRUISE, `SHOWCASE` camera mode, `ROVING` camera
   mode — explicitly V-later per feature doc §"Per-phase criterion —
-  camera axis (V1)" §A4 redesign.
+  camera axis (V1)" §A4 redesign. **The 2026-04-25 lhokon amendment
+  does NOT relax this carve.** The lhokon phase is the
+  camera-convergence beat *toward the new subject while the ship
+  is stationary*; it is structurally distinct from V-later's
+  *linger on the receding subject as the ship moves away* (see
+  Drift Risk #5 rewritten under the amendment for the failure
+  shape that distinguishes lhokon from LINGERING). Pan-ahead,
+  departure-arc, and SHOWCASE / ROVING remain V-later regardless
+  of the lhokon phase's existence.
 - **Pre-extraction of the predicted-intercept solver or pursuit-curve
   camera read** into shared modules like `src/auto/InterceptSolver.js`
   or `src/auto/PursuitCurve.js`. Director ruling: inline-but-clean
@@ -899,6 +1404,37 @@ From `docs/GAME_BIBLE.md` §11 Development Philosophy:
    `motionFrame` populated by `AutopilotMotion`). Drop the dependency
    on `_ship` for the V1 ESTABLISHING lookAt direction; preserve the
    `setShip` accessor (shake still uses the ship reference).
+4a. **lhokon phase migration (2026-04-25 amendment).** Add a new
+   `lhokon` value to the autopilot phase enum (between `STATION-A`
+   and `CRUISE`). Wire the phase-transition path: on next-target
+   selection, `STATION-A → lhokon` (AC #11); during lhokon, ship
+   is held stationary at the STATION-A onset position (AC #13;
+   reuse the same hold-frame mechanism STATION-A's body-lock uses
+   per AC #4); during lhokon, camera rotates from
+   old-target-direction to new-target-direction via the existing
+   1.5 s direction-nlerp (currently at `CameraChoreographer.js:359`,
+   commits `dc26cbd` + `70c4b09` + `8f6623d`); on each frame,
+   evaluate the CRUISE-entry gate (AC #12) — if `dot ≥ 0.9999`
+   **OR** `lhokon_elapsed_sec ≥ 1.5`, transition `lhokon →
+   CRUISE` and begin the predicted-intercept solver path. **Do
+   not** call the predicted-intercept solver during lhokon; the
+   ship is stationary by AC #13. AC #14's continuity bounds
+   constrain the boundary frames. Add the lhokon-side telemetry:
+   per-frame `cameraForwardPreShake` + `lhokon_elapsed_sec` +
+   `lhokon_timeout_fired` flag.
+
+   Same-session, edit `docs/FEATURES/autopilot.md` to introduce
+   `lhokon` as a named phase. Suggested touch-points: §"Per-phase
+   criteria — ship axis" (insert lhokon between STATION-A and
+   CRUISE on the ship axis with "stationary, hold position" as
+   the ship behavior); §"Per-phase criterion — camera axis (V1)"
+   §ESTABLISHING (note that ESTABLISHING's body-tracking applies
+   on `{ENTRY, CRUISE, APPROACH, STATION-A}` and that lhokon hosts
+   a camera-rotation-toward-new-target sub-mode); §"Revision
+   history" 2026-04-25 entry (per Suggested shape in §"Amendments —
+   2026-04-25 (lhokon phase introduction)" §"Deferred decisions").
+   Working-Claude lands the feature-doc edit alongside the
+   implementation in the same commit / commit-set.
 5. **Burn-button visibility extension in `src/main.js`.** One-line
    edit at the `burning` flag computation.
 6. **Telemetry-driven AC verification.** Run `runAllReckoning`
@@ -913,17 +1449,28 @@ From `docs/GAME_BIBLE.md` §11 Development Philosophy:
 
 **"Done" looks like:**
 
-- A commit or commit set on main that lands V1 §A4 redesign:
-  predicted-intercept solver + body-velocity exposure + camera-
-  decoupled ESTABLISHING + burn-button visibility extension.
-- `runAllReckoning` passes ACs #1, #2, #3, #4, #5a, #5b, #6, #10
-  against a Sol tour capture.
+- A commit or commit set on main that lands V1 §A4 redesign +
+  the 2026-04-25 lhokon-phase amendment: predicted-intercept
+  solver + body-velocity exposure + camera-decoupled ESTABLISHING
+  + lhokon phase + lhokon CRUISE-entry gate + burn-button
+  visibility extension.
+- `runAllReckoning` passes ACs #1, #2, #3, #4, #5a (narrowed to
+  non-lhokon phases per amendment), #5b, #6, #10, **#11
+  (lhokon-onset), #12 (lhokon-completion gate), #13 (ship-
+  stationary-during-lhokon), #14 (smoothness preserved at lhokon
+  boundaries)** against a Sol tour capture.
 - AC #7 (consumer-set narrowed: camera no longer reads ship.forward)
-  audited by Director at implementation sites.
+  re-verified by Tester at implementation sites at the new HEAD.
 - AC #8 (jumpscare-arrival felt experience + body remains centered
-  in frame) — canvas recording on disk at a known path, PM +
-  Director audit closes at `VERIFIED_PENDING_MAX <sha>`, Max watches
-  and confirms.
+  in frame) — canvas recording on disk at a known path, Tester
+  audit closes at `VERIFIED_PENDING_MAX <sha>`, Max watches and
+  confirms. Recording recapture is **deferred until the lhokon
+  implementation lands at a new HEAD**, per the amendment.
+- Feature-doc edit (`docs/FEATURES/autopilot.md`) introducing
+  `lhokon` as a named phase landed in the same commit / commit-
+  set as the implementation, per the 2026-04-25 Dev Collab OS
+  restructure (working-Claude owns same-session feature-doc
+  updates).
 - Status flips to `Shipped <sha> — verified against <recording-path>`
   only after Max's confirmation.
 
@@ -954,4 +1501,15 @@ speculation; the function-shape carry-forward is the affordance.
 ---
 
 *Authored by PM under Director audit §A4 (2026-04-25); audit
-verdicts quoted verbatim.*
+verdicts quoted verbatim. Amended 2026-04-25 by PM (lhokon phase
+introduction) under Tester verdict §T1 at HEAD `8f6623d`; verdict
+quoted verbatim and cross-referenced. The amendment moves swap-
+window camera smoothing from CRUISE (where it conflicted with AC
+#5a's per-frame body-tracking bound) into a new named phase
+`lhokon` between STATION-A and CRUISE; ship is stationary during
+lhokon, so the receding-subject linger failure mode that Drift Risk
+#5 was authored to catch is structurally impossible. CRUISE-entry
+gate is dot-gate primary (`≥ 0.9999`, semantic match to AC #5a's
+bound) with fixed-duration timeout fallback (`1.5 s`, matching the
+existing `_turnDurationSec`). See §"Amendments — 2026-04-25
+(lhokon phase introduction)" for the full amendment trail.*
