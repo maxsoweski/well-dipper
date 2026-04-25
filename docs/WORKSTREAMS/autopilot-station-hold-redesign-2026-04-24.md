@@ -2,37 +2,36 @@
 
 ## Status
 
-**`Active — V1 Attempt 1 closing — pending VERIFIED_PENDING_MAX flip
-after AC #5 re-sample + commit` (V1 Attempt-1 closing audit landed
-2026-04-25; amendments §A3 applied this commit).**
+**`VERIFIED_PENDING_MAX e6659d0` (V1 Attempt-1 closing — code +
+docs + AC #5 pre-shake re-sample bundled at `e6659d0`; awaiting
+Max's recording review for AC #8 before flip to Shipped).**
 
-V1 Attempt 1 close-out gates (Director audit 2026-04-25, status flip
-**AUTHORIZED at `VERIFIED_PENDING_MAX <commit-sha>`** subject to):
+V1 Attempt 1 close-out gates (Director audit 2026-04-25 §A3) status:
 
-- AC #2 brief amendment landed (this PM commit — see §A3).
-- AC #5 brief amendment landed (this PM commit — see §A3).
-- AC #5 pre-shake telemetry re-sample passes `≥ 0.9999` for Pattern B
-  (working-Claude is running this now).
-- AC #1 / #3 / #4 / #6 / #7 / #9 already PASS in
+- ✅ AC #2 brief amendment landed (`min(10R, cruise-distance ceiling)`
+  per §A3; commit `e6659d0`).
+- ✅ AC #5 brief amendment landed (pre-shake basis per §A3;
+  commit `e6659d0`).
+- ✅ AC #5 pre-shake telemetry re-sample run — Pattern B cleared
+  (15 → 0 violations attributable to shake measurement artifact;
+  see `recordings/v1-ac5-preshake-report.json`).
+- ✅ AC #1 / #3 / #4 / #6 / #7 / #9 PASS in
   `recordings/v1-attempt1-ac-report.json`.
-- AC #10 contract-confirmed: `CameraChoreographer.setShip` preserves
-  legacy framing-state path (the `CameraMode` enum dispatch is
-  intact; V1 selects `ESTABLISHING`).
-- AC #8 stays `VERIFIED_PENDING_MAX` pending Max's morning recording
-  review.
+- ✅ AC #10 contract-confirmed: `CameraChoreographer.setShip`
+  preserves legacy framing-state path (the `CameraMode` enum
+  dispatch is intact; V1 selects `ESTABLISHING`).
+- ⏸ AC #8 awaits Max's morning recording review at
+  `recordings/autopilot-station-hold-v1-attempt1.webm` (127 MB,
+  ~4 min @ 30 fps).
 
-Pattern A (single-frame leg-boundary orientation spike — 12 single-
-sample dot violations across 12 legs in V1 Attempt 1 telemetry) is
-**punted to a follow-up workstream stub** at
+Pattern A (single-frame leg-boundary orientation spike) **persisted
+post-resample** at 2 spikes across 3 legs in the pre-shake re-sample
+(`recordings/v1-ac5-preshake-report.json`) — confirms it is a real
+ordering bug, not a sample-timing artifact. Per Director audit §A3:
+*"do not block status flip on it (it's punted to follow-up)."* The
+follow-up workstream stub at
 `docs/WORKSTREAMS/autopilot-leg-boundary-orientation-spike-followup.md`
-— conditional on whether the AC #5 pre-shake re-sample reveals the
-spike is a sample-timing artifact (close stub) or a real ordering
-bug (light up stub). Director rationale: *"The leg-boundary spike
-is one frame — it is below the threshold of perceptual evidence in
-the AC #8 jumpscare-arrival recording. Path 1 [pre-shake basis
-sampling] may also clean up Pattern A if the spike is a sample-
-timing artifact rather than a real ordering bug. Verify after the
-AC #5 re-sample."*
+**lights up** as the next workstream.
 
 ---
 
