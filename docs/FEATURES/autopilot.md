@@ -12,6 +12,8 @@ related_catalog: docs/OBJECTS_OF_INTEREST.md (v0, 2026-04-20 — source-of-truth
 
 ## Revision history
 
+- **2026-04-25 — Camera/ship axis decoupling re-scope (§A4 amendment).** Director audit §A4 at `~/.claude/state/dev-collab/audits/autopilot-station-hold-redesign-2026-04-24.md` reverses the 2026-04-24 collapse of V1 camera-axis to "look down ship-forward + shake." Camera and ship are now genuinely independent on V1: **camera axis = pursuit-curve on autopilot target body** (every frame, `lookAt(target.current_position)`); **ship axis = predicted-intercept** (closed-form quadratic solver re-aiming `ship.forward` each frame at where the body will be when the ship arrives, given current body velocity + cruise speed). The 2026-04-24 §CRUISE *"aim-once-at-intercept, fly straight"* rule (Max Q3 reasoning: *"unless we're playing at unrealistically exaggerated speeds... that should never really be required, but still, let's just do it on principle, B."*) is reversed — the §A4 audit found that aim-once produces visible camera mis-framing of moving bodies under realistic CRUISE durations, and that ship-axis re-aim is the correct fix once camera-axis is no longer reading ship.forward for its lookAt direction. AC #5 invalidated and split into AC #5a (camera tracks body) + AC #5b (ship aims at predicted intercept). AC #1 redrawn as a hit-the-target tolerance bound, no longer a straight-line-path bound. AC #7 preserved — ship orientation is still authored (autopilot writes `ship.forward` each frame, just to a different value: predicted-intercept direction, not aim-once direction); shake still reads `ship.forward` and `ship.up` for its perturbation axis. Camera no longer reads `ship.forward` for the lookAt direction. The two-axis architecture is preserved and *more* independent under §A4 than under the 2026-04-24 reframe.
+
 - **2026-04-24 — V1 motion-model reframe to STATION-hold (this amendment).** Director-run interview with Max (script + verbatim answers recorded in `~/.claude/state/dev-collab/audits/autopilot-live-feedback-2026-04-24.md` §"Feature-Doc Amendment Interview Script (Max)", lines 1515–1694; answers appended post-interview). The (α) stub at `screenshots/max-recordings/stub-saturn-v4-2026-04-24.fixed.webm` is the felt referent. Change set is structural, not a tune: §Ship axis V1 collapses to CRUISE → DECEL → HOLD; §Camera axis V1 collapses to "camera looks down the ship's forward vector plus shake on top" — linger, pan-ahead, and the composed-with-ship-arc `ESTABLISHING` accent are demoted to V-later with no authored shape. `STATION` bifurcates into `STATION-A` (V1 hold) and `STATION-B` (V-later opt-in orbit); the prior "`STATION` is stationary" failure line flips into V1 spec. A new precondition surfaces: ship model requires a defined front/back/top/bottom orientation because the V1 camera reads ship-forward. Q11 ("most-interesting-first") unchanged; stays V-later behind OOI registry. Q10 (V-later orbit shape) deferred to the ORBIT-mode scoping pass. See §V-later carve for what was moved there.
 
 ## One-sentence feature
@@ -73,7 +75,17 @@ These are felt-experience criteria, not acceptance criteria. Workstream ACs cite
 
 ### `CRUISE` — sustained travel
 
-- **Aim-once-at-intercept, fly straight.** At CRUISE onset, the ship aims at the target body's current position and flies a straight line. **No per-frame re-aim** during the phase. Max (2026-04-24): *"unless we're playing at unrealistically exaggerated speeds... that should never really be required, but still, let's just do it on principle, B."* Re-aim from a drifted target is a V-later concern only, and only if playtesting surfaces a felt gap.
+- **Predicted-intercept re-aim each frame** (§A4 amendment 2026-04-25 — see §Revision history). Each frame, the ship re-aims `ship.forward` at the predicted intercept point — *where the target body will be when the ship arrives*, given current body velocity and cruise speed. The 2026-04-24 *"aim-once-at-intercept, fly straight"* rule is reversed by §A4. Max's Q3 reasoning (*"unless we're playing at unrealistically exaggerated speeds... that should never really be required"*) is preserved in this revision history entry as the honest record of why the spec changed: the §A4 audit found that aim-once produces visible camera mis-framing of moving bodies during realistic CRUISE legs, and the correct fix is ship-axis re-aim now that camera-axis is decoupled from ship.forward (see §"Per-phase criterion — camera axis (V1)" §ESTABLISHING below).
+- **Closed-form quadratic solver** for the predicted intercept point. Solve for time-to-arrival `t`:
+  ```
+  |R + V·t|² = (s·t)²
+  (V·V - s²)·t² + 2(R·V)·t + R·R = 0
+  where R = body.position - ship.position
+        V = body.velocity
+        s = cruiseSpeed (ship's scalar cruise velocity)
+  ```
+  Pick the smaller positive root. The intercept point is `body.position + V·t`; aim `ship.forward` at it.
+- **Solver edge case — graceful fallback.** If the quadratic discriminant is negative, the ship cannot intercept at the current cruise speed (body is moving away faster than the ship can close). Fallback: re-aim `ship.forward` at `body.current_position` (the aim-at-current-position degenerate case). This is also surfaced in §"Failure criteria" as a flag if it fires under realistic playable conditions.
 - Picks up to **relativistic speeds** toward the target (see Open questions: literal-or-felt).
 - Target's reticle/billboard is still ahead in the frame for most of the phase; the handoff to `DECEL` (see next phase) is the moment it starts resolving into real geometry.
 - **ACCEL shake at CRUISE onset.** Gravity-drive shake fires at the start of CRUISE (departure), as a pure reverse of the DECEL shake (see §Gravity drives + §Per-phase criteria — `DECEL` below). No shake *during* cruise — only at the onset boundary.
@@ -106,25 +118,29 @@ Current code (`AutoNavigator.buildQueue`) visits inner-to-outer. Director's note
 
 ## Per-phase criterion — camera axis (V1)
 
-### `ESTABLISHING` — camera looks down the ship's forward vector, plus shake (V1)
+### `ESTABLISHING` — camera tracks autopilot target body (V1, §A4 redesign)
 
-V1 `ESTABLISHING` is deliberately thin. Max (2026-04-24): *"Let's not even worry about that right now. Let's just get the basic navigation working. Let's just have the camera look straight ahead towards the front of the ship. ... It's good that we have a separate camera system that is not identical to the ship's movement. But aside from the shake, let's not have it do anything else right now. That's separate from the ship's movement."*
+**§A4 redesign (2026-04-25).** V1 `ESTABLISHING` no longer reads `ship.forward` for its lookAt direction. The camera follows a **pursuit curve on the autopilot target body**: every frame, `camera.lookAt(target.current_position)`. This applies across the full leg — `ENTRY`, `CRUISE`, and `APPROACH` — and persists into `STATION-A` where the held pose is naturally body-centered. Shake stays additive on top of the body-tracking lookAt.
 
 V1 camera axis:
 
-- **Looks down the ship's forward vector.** The camera orientation is derived from the ship's defined forward direction, not from the target body or from any independent compositional anchor.
-- **Receives shake on top.** ACCEL shake at CRUISE onset, DECEL shake at APPROACH onset. Shake is the only authored behavior that distinguishes V1 `ESTABLISHING` from "camera rigidly bolted to ship forward."
-- **Does NOT linger on a receding subject.** V-later.
-- **Does NOT pan forward toward an incoming target.** V-later.
-- **Does NOT author a departure arc.** V-later.
+- **Looks at the autopilot target body each frame.** `camera.lookAt(target.current_position)` is the authored compositional rule. Target body's CURRENT position, not a captured-at-onset snapshot, not the ship's forward vector.
+- **Receives shake on top** (additive perturbation). ACCEL shake at CRUISE onset, DECEL shake at APPROACH onset. The body-tracking lookAt is the base; the shake is layered on top — the body remains framed during the shake event.
+- **Does NOT linger on a receding subject** (the body the ship is *leaving*). The camera tracks the *next* target as soon as the leg starts. V-later authoring may add a brief linger on the receding subject before re-targeting; V1 does not.
+- **Does NOT pan forward toward an incoming target before the leg starts.** V-later.
+- **Does NOT author a departure arc** off the held subject as `STATION-A` releases. V-later.
 - **Does NOT rove 90° off-path.** That's `ROVING` (V-later, unchanged).
 - **Does NOT zoom to a specific compositional beat.** That's `SHOWCASE` (V-later, unchanged).
 
-**Two-axis architecture stays.** The camera being thin in V1 is not the two-axis structure failing — it's the V1 camera mode authoring almost nothing beyond "point where the ship points + shake." The `CameraMode` dispatch (§V1 architectural affordances) still ships; V-later `SHOWCASE` / `ROVING` / richer `ESTABLISHING` graft on without rewrite.
+**The V-later carve is preserved by §A4.** The redesign does not re-import linger / pan-ahead / departure-arc authoring into V1 — it changes what V1's *minimum* is. V1's minimum is now "track the autopilot target body" rather than "look down ship-forward." Both are thin authoring; §A4 swaps the compositional anchor from ship-forward to body-current-position.
 
-### Precondition — ship orientation is load-bearing
+**Two-axis architecture stays — and is more independent under §A4.** Under the 2026-04-24 reframe, camera-axis read ship-axis (ship.forward) — a coupling. Under §A4, camera-axis reads target-body-position directly; ship-axis writes `ship.forward` for the predicted intercept (read by shake for its perturbation axis, not by camera for its lookAt). The `CameraMode` dispatch (§V1 architectural affordances) still ships; V-later `SHOWCASE` / `ROVING` / richer `ESTABLISHING` graft on without rewrite.
 
-V1's camera reads the ship's forward vector. This requires the ship model to have a **defined front/back/top/bottom orientation** in the scene graph. The orientation does not have to be visible to the player (no chevrons, no decals required), but it must exist as an authored property of the ship object, not derived per-frame from motion direction. This is a **new precondition** surfaced by the 2026-04-24 amendment and does not exist in the V1 workstream sequence authored prior. The next PM workstream scopes this explicitly.
+### Precondition — ship orientation is still load-bearing (rationale updated by §A4)
+
+Ship orientation remains an authored property of the ship object. The ship model has a **defined front/back/top/bottom orientation** in the scene graph. The orientation does not have to be visible to the player (no chevrons, no decals required), but it must exist as an authored property of the ship object, not derived per-frame from motion direction.
+
+**§A4 update (2026-04-25):** the **camera no longer reads ship.forward** for its lookAt direction. The precondition is preserved because the **shake mechanism** still reads `ship.forward` and `ship.up` to author its perturbation axis (camera/ship-mesh additive perturbation, anchored to the ship's body frame). Under §A4, the autopilot still writes `ship.forward` each frame — to the predicted-intercept direction (§CRUISE) — and the ship holds the written orientation through `STATION-A`'s rest; shake reads it. The accessor surface (`forward`/`up`) is unchanged from the 2026-04-24 contract; only the consumer set narrows (camera dropped, shake retained).
 
 ## V1 / V-later triage
 
@@ -132,13 +148,13 @@ V1's camera reads the ship's forward vector. This requires the ship model to hav
 
 - **All 4 ship phases** (`ENTRY`, `CRUISE`, `APPROACH`, `STATION-A`) — ship motion is greenfield; it doesn't exist today.
 - **Warp-exit-vector arrival pose** — `ENTRY` start is derived from the warp forward direction, not a fixed above-the-plane origin.
-- **CRUISE: aim-once-at-intercept + straight-line flight** (per Q3 of the 2026-04-24 interview).
+- **CRUISE: predicted-intercept re-aim** (per §A4 amendment 2026-04-25 — see §Revision history; reverses the 2026-04-24 Q3 aim-once rule). Closed-form quadratic solver (see §CRUISE ship-axis above); aim `ship.forward` each frame at the predicted intercept point. Graceful fallback if discriminant < 0.
 - **APPROACH onset at 10× body radius** (fixed-distance rule; starting value tunable in lab, not expected to vary at ship).
 - **Aggressive decel + jumpscare arrival.** The APPROACH → STATION-A transition satisfies Max's verbatim felt-criterion quoted in §Per-phase criteria — `APPROACH`.
 - **STATION-A = held position, felt-fill ~60% of screen.** The body looms huge; no orbital motion; ship stays at rest until next mode activates.
 - **Ship orientation defined in the model** (new 2026-04-24 precondition — see §Per-phase criterion — camera axis (V1) §Precondition).
 - **Ship/camera decoupling architecture** — the two-axis structure must be in place at V1 even though only `ESTABLISHING` is exercised on the camera axis and V1's `ESTABLISHING` authors almost nothing.
-- **`ESTABLISHING` camera mode (V1 shape)** — camera looks down the ship's forward vector + receives shake. Linger, pan-ahead, and departure arc are V-later.
+- **`ESTABLISHING` camera mode (V1 shape, §A4 redesign 2026-04-25)** — camera tracks autopilot target body each frame (`camera.lookAt(target.current_position)`); receives shake on top. Linger, pan-ahead, and departure arc remain V-later. The 2026-04-24 "look down ship-forward + shake" V1 rule is reversed by §A4 (see §Revision history).
 - **Gravity-drive shake at both phase boundaries.** ACCEL shake at CRUISE onset (departure). DECEL shake at APPROACH onset (10R threshold). Pure reverse of each other per Q5. No shake during smooth phases.
 - **Toggle UI** — status indicator upper-left + keybinding (`Tab`, **provisional** — see §Keybinding below).
 - **Default-ON state** — autopilot is the default, not opt-in.
@@ -263,12 +279,12 @@ The feature has failed if:
 - **`STATION-A` reads as "glide in and settle"** — violates the jumpscare-arrival felt criterion (quoted in §Per-phase criteria — `APPROACH`). Gentle close-in with no visible deceleration beat is the failure mode.
 - **`STATION-A` body does not fill the frame** — felt-fill ~60% is the criterion. Held body that reads small, with starfield dominating, fails §Per-phase criteria — `STATION-A`.
 - **`STATION-A` has orbital motion** — V1 is a hold, not an orbit. Orbital motion in V1 is the `STATION-B` V-later authoring leaking into the wrong workstream.
-- **CRUISE re-aims per-frame at drifted target** — violates Q3's "aim once at intercept, fly straight" rule. Per-frame re-aim reintroduces Hermite-class complexity V1 discarded.
+- **Body drifts off-center during CRUISE/APPROACH** — camera failed to track the autopilot target. Under §A4, the camera reads `target.current_position` each frame; if the body drifts toward the edge of frame as the ship cruises, the per-frame `lookAt` is broken (stale snapshot, wrong target object, or `lookAt` not invoked).
+- **Ship overshoots or undershoots target body** — predicted-intercept solver did not converge under realistic cruise speeds and body velocities. Either the quadratic discriminant fell negative under playable conditions (the graceful-fallback at-current-position path fired when it shouldn't have) or the smaller-positive-root selection was wrong. Either failure mode produces a ship that misses its target; AC #1's hit-the-target tolerance bound captures it.
 - **APPROACH onset is earlier or later than 10× body radius** — violates Q4. The threshold is the V1 spec until lab tuning adjusts it.
 - **ACCEL or DECEL shake fails to fire at its boundary** — the cinematic tell is missing at the very moment it was specified (Q5). ACCEL omitted reads as "ship magically accelerates"; DECEL omitted breaks the jumpscare.
 - **Shake fires during smooth motion** — breaks the "inertial neutrality is the norm" lore rule; shake loses its meaning. No shake mid-CRUISE, no shake during `STATION-A`.
 - **Star-approach `STATION-A` skims the photosphere** — failure of the safe-distance rule. (The star-orbit-distance workstream lands against this; 10R starting value for APPROACH onset does not apply to stars — safe-distance rule supersedes for stellar bodies.)
-- **Camera orientation derives from motion direction rather than ship model's forward vector** — violates the §Precondition (ship orientation is load-bearing). When ship is momentarily at rest (`STATION-A`), a motion-derived camera has no forward direction to read; the model's authored forward vector is the stable source.
 - **Hard cut or jump between phases (other than the authored shake-punctuated boundaries)** — same seamlessness principle as warp. ACCEL and DECEL shakes are authored punctuation, *not* hard cuts in the motion field — velocity is still continuous through both, with a spike in d|v|/dt on the derivative axis.
 - **Manual override snap-stops the ship** — inertial continuity violated; the two-layer architecture leaked through.
 - **Autopilot-on-then-off-then-on auto-resumes** — the "toggle-on must be explicit" rule violated.
@@ -284,7 +300,7 @@ The feature has failed if:
 6. **HUD reappears during `ENTRY`** because the warp-select menu closure is still animating or similar. The HUD-hide rule is load-bearing for the cinematic frame.
 7. **V-later camera authoring (linger / pan-ahead / departure arc) smuggled into V1.** The 2026-04-24 amendment collapsed V1 `ESTABLISHING` to a minimum. A well-meaning implementation pass that *partially* authors linger or pan-ahead "because the architecture is there" re-imports the V-later scope V1 deliberately discarded. V1 `ESTABLISHING` is: **forward vector + shake, nothing else.** New camera moves wait for their own workstream.
 8. **STATION-A drifts toward "orbit" by accident.** Keeping the ship exactly at rest in a scene full of moving bodies is fiddly — reference frames, origin rebasing, parent-body motion can all leak velocity into the held ship. If the held ship begins to drift (even slowly), the V1 spec is violated. Implementation must explicitly pin the ship to the held-pose reference frame, not just set `velocity = 0` once and let downstream subsystems re-author it.
-9. **Camera reads ship velocity instead of ship forward vector.** Convenient shortcut when the ship is moving; silently fails during `STATION-A` (no velocity → no forward direction). The ship model's authored forward vector is the correct source at all times, not a fallback for the rest case.
+9. **Camera reads stale target position.** Under §A4, the pursuit-curve must read the body's **current** position each frame, not a captured-at-onset snapshot. Variants of the failure: target reference captured at CRUISE onset and never refreshed; lookAt invoked with a copied Vector3 instead of a live reference; the body's parent frame moves but the lookAt target wasn't reparented. All produce a body that drifts off-frame mid-leg. Verification: per-frame camera-to-body angular error (`angle(camera.forward, normalize(body.current_position − camera.position))`) stays below tolerance across the leg.
 
 ## Open questions
 
