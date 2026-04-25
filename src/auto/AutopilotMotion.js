@@ -301,26 +301,20 @@ export class AutopilotMotion {
   // ── Internal: phase tickers ──
 
   _tickCruise(deltaTime) {
-    // Per-frame pursuit re-aim. Each frame: aim ship at the body's
-    // CURRENT position. Translate along that direction by
-    // cruiseSpeed × deltaTime. For static/slow bodies, trajectory
-    // is essentially straight. For fast-orbiting moons, trajectory
-    // smoothly curves to chase the moving body — body stays centered
-    // throughout cruise.
-    //
-    // Note (§A9 design correction): the linear predicted-intercept
-    // formula (interceptPoint = bodyPos + V·t_solve) was geometrically
-    // wrong for circular orbits — bodies do not move in a straight
-    // line, so the linear extrapolation places the intercept on the
-    // wrong side of the parent for fast-orbiting moons, producing a
-    // "fly past then zoom in" trajectory. Pure pursuit (aim at body's
-    // current position, re-aim each frame) is correct for ANY orbit
-    // shape and produces the visual Max wants.
+    // Per-frame pursuit re-aim. Each frame: aim ship at body's
+    // current position; translate along that direction. Per-frame
+    // movement is CAPPED to (distToBody - approachRadius) so ship
+    // cannot overshoot the approach sphere, even for tiny bodies
+    // where cruiseSpeed × dt would naively exceed the entire 10R
+    // gap in one frame. Without this cap, ship blows past the body
+    // and the camera direction flips 180° at APPROACH onset.
     const bodyPos = this._target.position;
     const shipPos = this._position;
     _v1.subVectors(bodyPos, shipPos);
     const distToBody = _v1.length();
-    if (distToBody < 1e-6) {
+    const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
+
+    if (distToBody < 1e-6 || distToBody <= approachRadius) {
       this._enterApproach(this._position);
       return;
     }
@@ -329,14 +323,18 @@ export class AutopilotMotion {
     if (this._ship) {
       this._ship.setOrientation(_v1);
     }
-    this._position.addScaledVector(_v1, this._cruiseSpeed * deltaTime);
     this._cruiseDir.copy(_v1);
 
-    // APPROACH-onset gate. Primary rule (AC #2): distance to body
-    // ≤ 10R. Fallback: ship has traveled the planned cruise distance.
-    const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
+    // Cap movement so we land at most exactly at the approach radius.
+    const wantMove = this._cruiseSpeed * deltaTime;
+    const maxMove = distToBody - approachRadius;
+    const actualMove = Math.min(wantMove, maxMove);
+    this._position.addScaledVector(_v1, actualMove);
+
+    // APPROACH-onset gate. We hit it if movement was capped by the
+    // approach radius, OR by the cruise-distance ceiling fallback.
     const distTraveled = this._startPos.distanceTo(this._position);
-    if (distToBody <= approachRadius || distTraveled >= this._cruiseDistance) {
+    if (actualMove >= maxMove - 1e-9 || distTraveled >= this._cruiseDistance) {
       this._enterApproach(this._position);
     }
   }
