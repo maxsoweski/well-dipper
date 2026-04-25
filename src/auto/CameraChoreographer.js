@@ -345,16 +345,20 @@ export class CameraChoreographer {
     this._currentLookAtTarget = new THREE.Vector3();
 
     // Target-transition smoothing. When motionFrame.target changes
-    // (autopilot tour advances to next body), lerp the lookAt
-    // smoothly from the old target's last position to the new
-    // target's current position over TARGET_TURN_SEC. Without this,
-    // the camera direction snaps in one frame at every leg boundary
-    // (visible "teleport"); with it, the camera turns smoothly while
-    // the ship begins its CRUISE engagement.
+    // (autopilot tour advances to next body), interpolate the LOOK
+    // DIRECTION (unit vector) from the direction-at-swap to the
+    // direction-to-new-target over TARGET_TURN_SEC. Direction-based
+    // interpolation is robust regardless of camera-to-body distance;
+    // lerping the lookAt POINT (earlier approach) produced direction
+    // whip when the camera was near the body (small bodies / small
+    // hold distances). Output: lookAt = camPos + interpDir ×
+    // distanceToTarget so steady-state lookAt = target.position.
     this._lastTargetRef = null;
-    this._turnStartLookAt = new THREE.Vector3();
+    this._turnStartDir = new THREE.Vector3(0, 0, -1);
     this._turnElapsed = Infinity; // > duration → no turn in progress
     this._turnDurationSec = 1.5;
+    this._tmpDir = new THREE.Vector3();
+    this._tmpTgtVec = new THREE.Vector3();
   }
 
   /**
@@ -457,30 +461,67 @@ export class CameraChoreographer {
           // frame (pursuit-curve).
           //
           // Target-transition smoothing: when motionFrame.target
-          // changes (leg advance), capture current lookAt as turn
-          // start. Lerp smoothly to new target over _turnDurationSec
-          // with cubic ease-out. Eliminates the camera-direction
-          // snap at leg boundaries that read as "teleporting" —
-          // user sees the reticle activate on the new body, then
-          // the camera turns smoothly toward it.
+          // changes (leg advance), capture the current look direction
+          // (unit vector from camPos to currentLookAt). nlerp from
+          // there to the new direction (camPos to new target) over
+          // _turnDurationSec with cubic ease-out. Output lookAt =
+          // camPos + interpDir × distanceToTarget so steady-state
+          // lookAt = target.position.
+          //
+          // Direction-based interpolation is robust at small camera-
+          // to-body distances (small bodies / small hold distances).
+          // The earlier point-based lerp produced direction whip when
+          // camPos was near the body — any small movement of the
+          // lookAt point swung the angle by tens of degrees.
+          const camPos = motionFrame.position;
+
+          // Vector from camera to target, plus its length + direction
+          this._tmpTgtVec.subVectors(motionFrame.target.position, camPos);
+          const tgtLen = this._tmpTgtVec.length();
+          const tgtDir = this._tmpDir;
+          if (tgtLen > 1e-6) {
+            tgtDir.copy(this._tmpTgtVec).divideScalar(tgtLen);
+          } else {
+            tgtDir.set(0, 0, -1);
+          }
+
           if (this._lastTargetRef !== motionFrame.target) {
-            this._turnStartLookAt.copy(this._currentLookAtTarget);
+            // Capture current direction (camPos → current lookAt) at
+            // swap, OR fall back to tgtDir if undefined (first frame).
+            const curVec = this._tmpDir; // reuse — read it before overwriting tgtDir below
+            curVec.subVectors(this._currentLookAtTarget, camPos);
+            const curLen = curVec.length();
+            if (curLen > 1e-6) {
+              this._turnStartDir.copy(curVec).divideScalar(curLen);
+            } else {
+              this._turnStartDir.copy(tgtDir);
+            }
             this._turnElapsed = 0;
             this._lastTargetRef = motionFrame.target;
           }
 
+          // Compute interpolated direction
+          let lookDir;
           if (this._turnElapsed < this._turnDurationSec) {
             this._turnElapsed += deltaTime;
             const t = Math.min(1, this._turnElapsed / this._turnDurationSec);
             const eased = 1 - Math.pow(1 - t, 3);
-            this._currentLookAtTarget.lerpVectors(
-              this._turnStartLookAt,
-              motionFrame.target.position,
-              eased,
-            );
+            // nlerp: lerp + normalize. Close-enough to slerp for
+            // visual smoothness; cheap.
+            this._tmpDir.copy(this._turnStartDir).lerp(tgtDir, eased);
+            const len = this._tmpDir.length();
+            if (len > 1e-6) {
+              this._tmpDir.divideScalar(len);
+              lookDir = this._tmpDir;
+            } else {
+              lookDir = tgtDir;
+            }
           } else {
-            this._currentLookAtTarget.copy(motionFrame.target.position);
+            lookDir = tgtDir;
           }
+
+          // Place lookAt at target's distance in interpolated direction
+          this._currentLookAtTarget.copy(camPos).addScaledVector(lookDir, tgtLen);
         } else if (this._ship) {
           // V1 §A4 caller without a target in the frame — fall back
           // to the legacy framing-state path. Should not happen for
