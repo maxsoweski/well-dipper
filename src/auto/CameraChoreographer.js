@@ -343,6 +343,18 @@ export class CameraChoreographer {
 
     // V1 output: the lookAtTarget for FlythroughCamera to consume.
     this._currentLookAtTarget = new THREE.Vector3();
+
+    // Target-transition smoothing. When motionFrame.target changes
+    // (autopilot tour advances to next body), lerp the lookAt
+    // smoothly from the old target's last position to the new
+    // target's current position over TARGET_TURN_SEC. Without this,
+    // the camera direction snaps in one frame at every leg boundary
+    // (visible "teleport"); with it, the camera turns smoothly while
+    // the ship begins its CRUISE engagement.
+    this._lastTargetRef = null;
+    this._turnStartLookAt = new THREE.Vector3();
+    this._turnElapsed = Infinity; // > duration → no turn in progress
+    this._turnDurationSec = 1.5;
   }
 
   /**
@@ -442,14 +454,33 @@ export class CameraChoreographer {
         if (this._ship && motionFrame && motionFrame.target) {
           // §A4 ESTABLISHING (camera/ship decoupled): camera looks
           // at the autopilot target body's current position each
-          // frame (pursuit-curve). Replaces the §A3 "look down
-          // ship.forward × 100" rule. AC #5a: dot(camera.forward,
-          // normalize(target.pos - camera.pos)) ≥ 0.9999 pre-shake.
-          // Ship.forward is now driven by predicted-intercept and
-          // is structurally different from camera.forward —
-          // measurement against ship.forward is no longer the
-          // contract.
-          this._currentLookAtTarget.copy(motionFrame.target.position);
+          // frame (pursuit-curve).
+          //
+          // Target-transition smoothing: when motionFrame.target
+          // changes (leg advance), capture current lookAt as turn
+          // start. Lerp smoothly to new target over _turnDurationSec
+          // with cubic ease-out. Eliminates the camera-direction
+          // snap at leg boundaries that read as "teleporting" —
+          // user sees the reticle activate on the new body, then
+          // the camera turns smoothly toward it.
+          if (this._lastTargetRef !== motionFrame.target) {
+            this._turnStartLookAt.copy(this._currentLookAtTarget);
+            this._turnElapsed = 0;
+            this._lastTargetRef = motionFrame.target;
+          }
+
+          if (this._turnElapsed < this._turnDurationSec) {
+            this._turnElapsed += deltaTime;
+            const t = Math.min(1, this._turnElapsed / this._turnDurationSec);
+            const eased = 1 - Math.pow(1 - t, 3);
+            this._currentLookAtTarget.lerpVectors(
+              this._turnStartLookAt,
+              motionFrame.target.position,
+              eased,
+            );
+          } else {
+            this._currentLookAtTarget.copy(motionFrame.target.position);
+          }
         } else if (this._ship) {
           // V1 §A4 caller without a target in the frame — fall back
           // to the legacy framing-state path. Should not happen for

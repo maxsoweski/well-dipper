@@ -301,78 +301,39 @@ export class AutopilotMotion {
   // ── Internal: phase tickers ──
 
   _tickCruise(deltaTime) {
-    // §A4 predicted-intercept re-aim. Each frame: solve t such that
-    // |bodyPos + bodyVel·t - shipPos| = cruiseSpeed·t. Re-aim
-    // ship.forward at body.position(t). Ship moves along the
-    // re-aimed direction.
+    // Per-frame pursuit re-aim. Each frame: aim ship at the body's
+    // CURRENT position. Translate along that direction by
+    // cruiseSpeed × deltaTime. For static/slow bodies, trajectory
+    // is essentially straight. For fast-orbiting moons, trajectory
+    // smoothly curves to chase the moving body — body stays centered
+    // throughout cruise.
+    //
+    // Note (§A9 design correction): the linear predicted-intercept
+    // formula (interceptPoint = bodyPos + V·t_solve) was geometrically
+    // wrong for circular orbits — bodies do not move in a straight
+    // line, so the linear extrapolation places the intercept on the
+    // wrong side of the parent for fast-orbiting moons, producing a
+    // "fly past then zoom in" trajectory. Pure pursuit (aim at body's
+    // current position, re-aim each frame) is correct for ANY orbit
+    // shape and produces the visual Max wants.
     const bodyPos = this._target.position;
     const shipPos = this._position;
-
-    // R = body.position - ship.position
     _v1.subVectors(bodyPos, shipPos);
-
-    // V = body velocity in world frame (analytical from orbital
-    // model). Null callback → V = 0 → solver degenerates to "aim at
-    // body's current position", which IS the right fallback for
-    // moonless tests / static targets.
-    if (this._getBodyVelocity) {
-      this._getBodyVelocity(this._velocityScratch);
-    } else {
-      this._velocityScratch.set(0, 0, 0);
+    const distToBody = _v1.length();
+    if (distToBody < 1e-6) {
+      this._enterApproach(this._position);
+      return;
     }
-    const V = this._velocityScratch;
-    const s = this._cruiseSpeed;
+    _v1.divideScalar(distToBody);  // _v1 is now the unit aim direction
 
-    // Predicted intercept point. interceptPoint = bodyPos + V·t.
-    // If solver fails (discriminant < 0 / no positive root), fall
-    // back to aiming at body's current position. This is also the
-    // graceful behavior when ship is too slow to catch a fast-moving
-    // body — exceedingly rare at realistic cruise speeds vs body
-    // orbital speeds, but handled.
-    const t = this._solveInterceptTime(_v1, V, s);
-    let aimDir;
-    if (t > 0) {
-      // _v2 = interceptPoint = bodyPos + V·t
-      _v2.copy(bodyPos).addScaledVector(V, t);
-      // aimDir = (interceptPoint - shipPos).normalize()
-      _v2.sub(shipPos);
-      const len = _v2.length();
-      if (len > 1e-6) {
-        _v2.divideScalar(len);
-        aimDir = _v2;
-      } else {
-        // Already at intercept point; treat as approach.
-        this._enterApproach(this._position);
-        return;
-      }
-    } else {
-      // Fallback: aim at body's current position.
-      const len = _v1.length();
-      if (len < 1e-6) {
-        this._enterApproach(this._position);
-        return;
-      }
-      _v1.divideScalar(len);
-      aimDir = _v1;
-    }
-
-    // Update ship.forward (re-aim per frame). Camera no longer reads
-    // this under §A4 — only the shake module does (AC #7 narrowed).
     if (this._ship) {
-      this._ship.setOrientation(aimDir);
+      this._ship.setOrientation(_v1);
     }
-    // Translate along the re-aimed direction.
-    this._position.addScaledVector(aimDir, s * deltaTime);
-    // Track cruise direction for APPROACH inheritance + APPROACH
-    // onset distance computation.
-    this._cruiseDir.copy(aimDir);
+    this._position.addScaledVector(_v1, this._cruiseSpeed * deltaTime);
+    this._cruiseDir.copy(_v1);
 
     // APPROACH-onset gate. Primary rule (AC #2): distance to body
-    // ≤ 10R. Fallback: ship has traveled the planned cruise distance
-    // (cruise-distance ceiling, preserved from §A3 for asteroid-class
-    // bodies where 10R is sub-frame-tiny).
-    _v1.subVectors(bodyPos, this._position);
-    const distToBody = _v1.length();
+    // ≤ 10R. Fallback: ship has traveled the planned cruise distance.
     const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
     const distTraveled = this._startPos.distanceTo(this._position);
     if (distToBody <= approachRadius || distTraveled >= this._cruiseDistance) {
