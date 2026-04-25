@@ -37,6 +37,8 @@ import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
+import { AutopilotMotion } from './auto/AutopilotMotion.js';
+import { Ship } from './core/Ship.js';
 import { ShipChoreographer } from './auto/ShipChoreographer.js';
 import { CameraChoreographer } from './auto/CameraChoreographer.js';
 // Note: `CameraMode` already imported from ./camera/ShipCameraSystem.js on
@@ -71,7 +73,6 @@ import { PretextLab } from './ui/PretextLab.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
-
 // ── Audio ──
 const soundEngine = new SoundEngine(settings);
 const musicManager = new MusicManager(soundEngine, settings);
@@ -355,6 +356,15 @@ const flythrough = new FlythroughCamera(camera, navSubsystem);
 const shipChoreographer = new ShipChoreographer(navSubsystem);
 flythrough.setShakeProvider(shipChoreographer);
 
+// V1 STATION-hold redesign (2026-04-25) — first-class ship object +
+// thin per-leg motion evaluator. AutopilotMotion replaces the
+// autopilot-tour callers of NavigationSubsystem; the latter remains
+// dormant for manual-burn + warp-arrival paths until those are
+// scoped into a follow-on workstream. See `docs/WORKSTREAMS/
+// autopilot-station-hold-redesign-2026-04-24.md`.
+const ship = new Ship();
+const autopilotMotion = new AutopilotMotion();
+
 // WS 3 — camera-axis dispatch per §10.1. The camera choreographer authors
 // which target the camera looks at each frame (ESTABLISHING: linger on
 // receding subjects, pan forward toward incoming targets). OOIRegistry is
@@ -367,6 +377,9 @@ const cameraChoreographer = new CameraChoreographer(
   shipChoreographer, navSubsystem, ooiRegistry, autopilotEvents,
 );
 flythrough.setCameraChoreographer(cameraChoreographer);
+// V1 STATION-hold redesign — wire ship into the camera dispatch so
+// V1 ESTABLISHING collapses to "camera = ship.forward + shake" (AC #5).
+cameraChoreographer.setShip(ship);
 
 window._flythrough = flythrough;
 window._autoNav = autoNav;
@@ -399,6 +412,9 @@ const _telemetryState = {
   _prevCamFwd: null,
 };
 const _tmpFwd = new THREE.Vector3();
+// V1 STATION-hold autopilot animate-loop scratch (shake composition).
+const _v_euler = new THREE.Euler();
+const _v_shakeQuat = new THREE.Quaternion();
 window._autopilot = {
   debugAccelImpulse:     () => shipChoreographer.debugAccelImpulse(),
   debugDecelImpulse:     () => shipChoreographer.debugDecelImpulse(),
@@ -662,24 +678,85 @@ window._autopilot = {
         samples = samples || _telemetryState.samples || [];
         const thr = thresholdRadPerSec !== undefined ? thresholdRadPerSec : 10.47;
         const violations = [];
+        const carvedFrames = [];
+        // Loop (a) cycle 4 — AC #8 metric on true 3D angular rate
+        // `camAngRate3D` (per cycle-4 brief amendment 4e40c02).
+        // Chart-decomposed yaw/pitch fields stay as diagnostic
+        // telemetry; they no longer gate this audit.
+        //
+        // Post-(Q) carve-out (Director 2026-04-24 close-approach audit):
+        // frames where the ship is in APPROACH or STATION phase AND
+        // the post-filter distance guard is saturated (camLookAt to
+        // camPos at ~MIN_TARGET_DISTANCE = 2.0) are exempt from the
+        // 10.47 rad/s ceiling. In this regime the body sits inside
+        // the guard floor (orbit distance < 2.0 for small bodies),
+        // the guarded target rotates at the body's apparent angular
+        // rate (`v_perp / dist_to_body`), and the filter cannot
+        // reduce this — it's narrow-triangle geometry, not a filter
+        // pathology. Feature doc §21 cites 2001's Orion/Station V
+        // sequence as the touchstone: cinematography holds on this
+        // kind of accelerating apparent rotation during close dockings.
+        // Carved frames are bounded instead by a softer secondary
+        // invariant (p99 ≤ 20 rad/s, p99.9 ≤ 25 rad/s) so the
+        // carve-out stays cinematic and not unbounded.
+        const GUARD_FLOOR = 2.0 + 1e-4;
         for (const s of samples) {
-          const yawMag = Math.abs(s.camYawRate || 0);
-          const pitchMag = Math.abs(s.camPitchRate || 0);
-          if (yawMag > thr || pitchMag > thr) {
-            violations.push({
-              t: s.t,
-              yawRate: s.camYawRate,
-              pitchRate: s.camPitchRate,
-              yawDeg: +(yawMag * 180 / Math.PI).toFixed(1),
-              pitchDeg: +(pitchMag * 180 / Math.PI).toFixed(1),
-              framingState: s.framingState,
-              shipPhase: s.shipPhase,
-              navPhase: s.navPhase,
-              cameraMode: s.cameraMode,
-            });
+          const rate3D = s.camAngRate3D || 0;
+          if (rate3D <= thr) continue;
+          // Compute dist(camLookAt, camPos) to detect guard saturation.
+          const dx = s.camLookAt[0] - s.camPos[0];
+          const dy = s.camLookAt[1] - s.camPos[1];
+          const dz = s.camLookAt[2] - s.camPos[2];
+          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          const closeApproach =
+            (s.shipPhase === 'APPROACH' || s.shipPhase === 'STATION') &&
+            dist <= GUARD_FLOOR;
+          const entry = {
+            t: s.t,
+            rate3D,
+            rateDegPerSec: +(rate3D * 180 / Math.PI).toFixed(1),
+            dist: +dist.toFixed(3),
+            yawRate_chart: s.camYawRate,
+            pitchRate_chart: s.camPitchRate,
+            framingState: s.framingState,
+            shipPhase: s.shipPhase,
+            navPhase: s.navPhase,
+            cameraMode: s.cameraMode,
+          };
+          if (closeApproach) {
+            carvedFrames.push(entry);
+          } else {
+            violations.push(entry);
           }
         }
-        return { passed: violations.length === 0, violations, totalSamples: samples.length, thresholdRadPerSec: thr };
+        // Secondary invariant on carved frames: p99 ≤ 20, p99.9 ≤ 25.
+        let carveP99 = null, carveP999 = null, carveMax = null;
+        if (carvedFrames.length > 0) {
+          const carveRates = carvedFrames
+            .map(c => c.rate3D)
+            .sort((a,b) => a - b);
+          carveP99 = +carveRates[Math.floor(carveRates.length * 0.99)].toFixed(3);
+          carveP999 = +carveRates[Math.floor(carveRates.length * 0.999)].toFixed(3);
+          carveMax = +carveRates[carveRates.length - 1].toFixed(3);
+        }
+        const carvePasses =
+          (carveP99 === null || carveP99 <= 20) &&
+          (carveP999 === null || carveP999 <= 25);
+        return {
+          passed: violations.length === 0 && carvePasses,
+          violations,
+          totalSamples: samples.length,
+          thresholdRadPerSec: thr,
+          carveOut: {
+            count: carvedFrames.length,
+            p99: carveP99,
+            p999: carveP999,
+            max: carveMax,
+            p99_bar: 20,
+            p999_bar: 25,
+            passed: carvePasses,
+          },
+        };
       },
 
       /**
@@ -1042,6 +1119,7 @@ function _captureTelemetrySample() {
   const deltaT = sample.t - (_telemetryState.samples.length > 1
     ? _telemetryState.samples[_telemetryState.samples.length - 2].t : sample.t);
   const deltaSec = deltaT / 1000;
+  let camAngRate3D = 0;
   if (prevFwd && deltaSec > 1e-6) {
     const prevYaw = Math.atan2(-prevFwd[0], -prevFwd[2]);
     const prevPitch = Math.asin(Math.max(-1, Math.min(1, prevFwd[1])));
@@ -1051,10 +1129,37 @@ function _captureTelemetrySample() {
     while (dy < -Math.PI) dy += 2 * Math.PI;
     camYawRate = dy / deltaSec;
     camPitchRate = (pitch - prevPitch) / deltaSec;
+    // Loop (a) cycle 4 AC #8 — true 3D angular rate between
+    // consecutive rendered camera-forward vectors. Unlike the
+    // chart-decomposed per-axis rates above, this is invariant under
+    // arbitrary camera orientations (no 1/cos(pitch) compression and
+    // no pole-singularity). AC #8's ceiling + p99/p99.9 invariants
+    // run against this metric; the chart fields stay diagnostic.
+    const dot = Math.max(-1, Math.min(1, fwd.x * prevFwd[0] + fwd.y * prevFwd[1] + fwd.z * prevFwd[2]));
+    camAngRate3D = Math.acos(dot) / deltaSec;
   }
   _telemetryState._prevCamFwd = [fwd.x, fwd.y, fwd.z];
   sample.camYawRate = +camYawRate.toFixed(4);
   sample.camPitchRate = +camPitchRate.toFixed(4);
+  sample.camAngRate3D = +camAngRate3D.toFixed(4);
+  // Loop (a) cycle 4 — angular jerk companion (third derivative of
+  // orientation). Computed as second-difference of camAngRate3D over
+  // the last three samples. Filter-driven mechanisms produce small
+  // bounded jerk; clamp-driven mechanisms show sharp spikes at
+  // clamp-activation boundaries. Director sets a threshold during
+  // Attempt-1 first-capture review.
+  let camAngJerk3D = 0;
+  const s_prev1 = _telemetryState.samples.length >= 2
+    ? _telemetryState.samples[_telemetryState.samples.length - 2] : null;
+  const s_prev2 = _telemetryState.samples.length >= 3
+    ? _telemetryState.samples[_telemetryState.samples.length - 3] : null;
+  if (s_prev1 && s_prev2 && deltaSec > 1e-6) {
+    const r0 = camAngRate3D;
+    const r1 = s_prev1.camAngRate3D || 0;
+    const r2 = s_prev2.camAngRate3D || 0;
+    camAngJerk3D = (r0 - 2 * r1 + r2) / (deltaSec * deltaSec);
+  }
+  sample.camAngJerk3D = +camAngJerk3D.toFixed(4);
 
   // AC #3 — FOV (captures any camera-zoom cycles like the pause-zoom-in-
   // zoom-out Max reported).
@@ -1147,6 +1252,7 @@ function _captureTelemetrySample() {
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
+
 let idleTimer = 0;
 
 // ── Warp transition (system-to-system) ──
@@ -4643,29 +4749,23 @@ function updateFocusFromStop(stop) {
 }
 
 /**
- * Begin a tour-leg motion plan toward the given stop. Used by the autopilot
- * loop after orbitComplete and by Tab / number-key / minimap jumps during
- * an active tour. The prior-orbit body is snapshotted by the caller before
- * invocation so the orbit-tangential departure math uses the correct
- * reference (beginMotion overwrites `navSubsystem.bodyRef`).
+ * Begin a tour-leg motion plan toward the given stop. V1 STATION-hold
+ * redesign (2026-04-25): autopilot-tour legs route through
+ * `AutopilotMotion`, not the legacy `NavigationSubsystem`. Used by
+ * the autopilot loop after motionComplete and by Tab / number-key /
+ * minimap jumps during an active tour. The prior-body parameter is
+ * preserved on the function signature for caller compatibility but
+ * the V1 motion model does not consume it (V1 has no
+ * orbit-tangential departure math — straight-line aim-once).
  */
 function _beginTourLegMotion(stop, priorBody) {
   if (!stop || !stop.bodyRef) return;
-  const upcoming = autoNav.getNextStop();
-  navSubsystem.beginMotion({
+  autopilotMotion.beginMotion({
     fromPosition: camera.position.clone(),
-    fromOrientation: camera.quaternion.clone(),
-    fromOrbitBody: priorBody,
     toBody: stop.bodyRef,
-    toOrbitDistance: stop.orbitDistance,
-    toBodyRadius: stop.bodyRadius,
-    nextBody: upcoming ? upcoming.bodyRef : null,
-    nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
-    arrivalOptions: {
-      approachFirst: true,
-      slowOrbit: true,
-      approachOrbitDuration: stop.linger * settings.get('tourLingerMultiplier'),
-    },
+    bodyRadius: stop.bodyRadius,
+    ship,
+    fovDegrees: settings.get('fov'),
   });
   // Ship-axis tour-leg advance — flips ENTRY→CRUISE on first post-ENTRY
   // call; 1:1 mapping thereafter.
@@ -4714,23 +4814,15 @@ function startFlythrough() {
   // Bypass manual camera — flythrough drives camera directly
   cameraController.bypassed = true;
 
-  // Begin travel from current camera position to the random body,
-  // with cinematic approach + slow orbit on arrival (autopilot tour).
-  const upcoming = autoNav.getNextStop();
-  navSubsystem.beginMotion({
+  // V1 STATION-hold redesign (2026-04-25): autopilot tour begins via
+  // AutopilotMotion — straight-line CRUISE → 10R APPROACH → STATION-A
+  // hold. Felt-fill hold distance derived from FOV.
+  autopilotMotion.beginMotion({
     fromPosition: camera.position.clone(),
-    fromOrientation: camera.quaternion.clone(),
-    fromOrbitBody: null,
     toBody: firstStop.bodyRef,
-    toOrbitDistance: firstStop.orbitDistance,
-    toBodyRadius: firstStop.bodyRadius,
-    nextBody: upcoming ? upcoming.bodyRef : null,
-    nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
-    arrivalOptions: {
-      approachFirst: true,
-      slowOrbit: true,
-      approachOrbitDuration: firstStop.linger * settings.get('tourLingerMultiplier'),
-    },
+    bodyRadius: firstStop.bodyRadius,
+    ship,
+    fovDegrees: settings.get('fov'),
   });
   // Ship-axis: non-warp engage → first leg is CRUISE (not ENTRY).
   shipChoreographer.beginTour({ fromWarp: false });
@@ -6327,6 +6419,96 @@ function animate() {
       }
     }
 
+    // ── V1 STATION-hold autopilot (2026-04-25) ──
+    // Authoritative per-leg motion path for autopilot tour. Runs when
+    // AutopilotMotion has an active leg. Cruise → 10R approach → hold;
+    // body-locked station-A; auto-advances tour on motionComplete.
+    // Camera looks down ship.forward (AC #5); shake composes on top
+    // (AC #6 ACCEL/DECEL fires at phase boundaries).
+    //
+    // The legacy `flythrough.update` path (below) handles non-V1
+    // callers: warp-arrival velocity-continuity + manual-burn from
+    // reticle selection. V1 doesn't replicate those paths' velocity
+    // semantics; retire-followup workstream migrates them.
+    if (autopilotMotion.isActive && !warpEffect.isActive && !splashActive && !titleScreenActive) {
+      const frame = autopilotMotion.update(deltaTime);
+      // Position write: motion-produces pipeline (Principle 5).
+      camera.position.copy(frame.position);
+
+      // ACCEL / DECEL shake fires at phase boundaries. Per feature
+      // doc §"Gravity drives" V1 scope:
+      //   - ACCEL at CRUISE onset (departure from STATION-A or IDLE)
+      //   - DECEL at APPROACH onset (10R threshold)
+      // No shake during smooth motion.
+      if (frame.phaseChanged) {
+        if (frame.phase === 'CRUISE' && frame.prevPhase !== 'CRUISE') {
+          shipChoreographer.debugAccelImpulse();
+        } else if (frame.phase === 'APPROACH' && frame.prevPhase === 'CRUISE') {
+          shipChoreographer.debugDecelImpulse();
+        }
+      }
+
+      // Camera-axis dispatch (AC #10): route through
+      // CameraChoreographer's CameraMode dispatch. V1 ESTABLISHING is
+      // collapsed (returns ship.forward × 100) when ship is wired —
+      // see CameraChoreographer.setShip / EstablishingMode collapse.
+      // The motionFrame here is the V1 frame (position + phase + one-
+      // shots); cameraChoreographer.update reads `motionFrame.position`
+      // for the look-at offset origin.
+      cameraChoreographer.update(deltaTime, frame);
+      camera.lookAt(cameraChoreographer.currentLookAtTarget);
+
+      // ShipChoreographer drives the shake envelope state. Pass a
+      // minimal frame compatible with its existing signal-derivation
+      // (it reads frame.position + a few flags). subPhase = 'traveling'
+      // during CRUISE/APPROACH so shake events can fire; 'orbiting'
+      // during STATION-A so shake decays to zero (no shake during
+      // hold per AC #6).
+      const subPhase = (frame.phase === 'STATION-A') ? 'orbiting' :
+                       (frame.phase === 'IDLE') ? 'idle' : 'traveling';
+      const shipFrame = {
+        position: camera.position,
+        velocity: { x: 0, y: 0, z: 0 },
+        lookAtTarget: cameraChoreographer.currentLookAtTarget,
+        phase: subPhase,
+        motionStarted: frame.motionStarted,
+        travelComplete: false,
+        orbitComplete: false,
+        targetingReady: false,
+        abruptness: 0,
+        isShortTrip: false,
+        warpExit: false,
+        shipVelocity: { x: 0, y: 0, z: 0 },
+        velocityBlendActive: false,
+      };
+      shipChoreographer.update(deltaTime, shipFrame);
+      // Apply shake rotation post-lookAt (mirror of FlythroughCamera's
+      // composition). Camera-local Euler XYZ.
+      const se = shipChoreographer.shakeEuler;
+      if (se && (se.pitch !== 0 || se.yaw !== 0 || se.roll !== 0)) {
+        _v_euler.set(se.pitch, se.yaw, se.roll, 'XYZ');
+        _v_shakeQuat.setFromEuler(_v_euler);
+        camera.quaternion.multiply(_v_shakeQuat);
+      }
+
+      _captureTelemetrySample();
+
+      // Tour advance: motionComplete fires after STATION-A hold timer.
+      if (frame.motionComplete) {
+        const nextStop = autoNav.advanceToNext();
+        if (nextStop && nextStop.bodyRef) {
+          autopilotMotion.beginMotion({
+            fromPosition: camera.position.clone(),
+            toBody: nextStop.bodyRef,
+            bodyRadius: nextStop.bodyRadius,
+            ship,
+            fovDegrees: settings.get('fov'),
+          });
+          shipChoreographer.onLegAdvanced();
+          updateFocusFromStop(nextStop);
+        }
+      }
+    } else
     // ── Autopilot (cinematic flythrough) ──
     // Skip idle timer during warp or title screen (title has its own 30s timer)
     if (warpEffect.isActive || splashActive || titleScreenActive) {
@@ -6364,26 +6546,20 @@ function animate() {
       }
 
       if (result.orbitComplete) {
-        // Orbit cycle finished — advance tour and begin motion to the next stop.
-        // Snapshot prior-orbit body BEFORE beginMotion (subsystem will overwrite).
-        const priorBody = navSubsystem.bodyRef;
+        // V1 STATION-hold redesign (2026-04-25): autopilot-tour
+        // advance migrated to AutopilotMotion. The legacy navSubsystem
+        // is stopped here so it doesn't compete; subsequent legs run
+        // entirely on V1. (Warp-arrival path uses navSubsystem for
+        // its first leg and hands off here.)
         const nextStop = autoNav.advanceToNext();
         if (nextStop && nextStop.bodyRef) {
-          const upcoming = autoNav.getNextStop();
-          navSubsystem.beginMotion({
+          if (navSubsystem.stop) navSubsystem.stop();
+          autopilotMotion.beginMotion({
             fromPosition: camera.position.clone(),
-            fromOrientation: camera.quaternion.clone(),
-            fromOrbitBody: priorBody,
             toBody: nextStop.bodyRef,
-            toOrbitDistance: nextStop.orbitDistance,
-            toBodyRadius: nextStop.bodyRadius,
-            nextBody: upcoming ? upcoming.bodyRef : null,
-            nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
-            arrivalOptions: {
-              approachFirst: true,
-              slowOrbit: true,
-              approachOrbitDuration: nextStop.linger * settings.get('tourLingerMultiplier'),
-            },
+            bodyRadius: nextStop.bodyRadius,
+            ship,
+            fovDegrees: settings.get('fov'),
           });
           // Ship-axis: first post-ENTRY advance flips ENTRY→CRUISE. After
           // that, the phase mapping is 1:1 traveling/approaching/orbiting
@@ -6512,7 +6688,12 @@ function animate() {
     }
   }
 
-  cameraController.update(deltaTime);
+  // Skip cameraController.update when V1 autopilot motion is active —
+  // V1 fully owns camera.position and camera.lookAt; cameraController
+  // would otherwise overwrite them with its own orbit math.
+  if (!autopilotMotion.isActive) {
+    cameraController.update(deltaTime);
+  }
 
   // ── Near clipping plane ──
   // Fixed at 1e-9 scene units (~15 cm at AU_TO_SCENE=1000 scale). The

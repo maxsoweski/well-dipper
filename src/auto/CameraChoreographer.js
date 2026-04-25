@@ -331,9 +331,28 @@ export class CameraChoreographer {
     this._mode = CameraMode.ESTABLISHING;
     this._establishing = new EstablishingMode();
 
+    // V1 STATION-hold redesign (2026-04-25). When a Ship reference
+    // is set via setShip(), V1 ESTABLISHING collapses to "look down
+    // ship-forward" — no framing-state machinery, no linger/pan-
+    // ahead/arc. Per feature doc §"Per-phase criterion — camera axis
+    // (V1)" + drift-risk #7. AC #5: camera-forward ≡ ship-forward
+    // dot ≥ 0.9999. The legacy framing-state path remains for
+    // non-V1 callers (warp-arrival, manual-burn through
+    // NavigationSubsystem) until the retire-followup workstream.
+    this._ship = null;
+
     // V1 output: the lookAtTarget for FlythroughCamera to consume.
     this._currentLookAtTarget = new THREE.Vector3();
   }
+
+  /**
+   * Set the Ship reference for V1 collapse. When non-null, the
+   * V1 ESTABLISHING path is taken (camera.lookAt = camera.position
+   * + ship.forward × 100). When null, legacy framing-state path is
+   * taken. V1 path callers should call this once at autopilot
+   * start; legacy callers should not call it.
+   */
+  setShip(ship) { this._ship = ship; }
 
   get currentMode() { return this._mode; }
   get currentLookAtTarget() { return this._currentLookAtTarget; }
@@ -420,8 +439,21 @@ export class CameraChoreographer {
 
       case CameraMode.ESTABLISHING:
       default: {
-        this._establishing.update(deltaTime, motionFrame, shipPhase, this._nav);
-        this._currentLookAtTarget.copy(this._establishing.currentLookAtTarget);
+        if (this._ship) {
+          // V1 STATION-hold ESTABLISHING collapse: camera looks down
+          // the ship's forward vector (feature doc §"Per-phase
+          // criterion — camera axis (V1)"). No linger, no pan-ahead,
+          // no departure arc — V-later. AC #5: camera-forward ≡
+          // ship-forward (dot ≥ 0.9999). The 100-unit lookAt offset
+          // is far enough that camera.lookAt() produces a numerically
+          // stable quaternion regardless of ship-relative geometry.
+          this._currentLookAtTarget.copy(motionFrame.position).addScaledVector(this._ship.forward, 100);
+        } else {
+          // Legacy framing-state path for warp-arrival + manual-burn
+          // callers. Retire when those paths migrate to AutopilotMotion.
+          this._establishing.update(deltaTime, motionFrame, shipPhase, this._nav);
+          this._currentLookAtTarget.copy(this._establishing.currentLookAtTarget);
+        }
         break;
       }
     }

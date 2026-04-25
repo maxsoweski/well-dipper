@@ -2,6 +2,21 @@ import * as THREE from 'three';
 import { VelocityBlend } from './VelocityBlend.js';
 
 /**
+ * RETIRE PENDING (2026-04-25, Director ruling on the V1 STATION-hold
+ * redesign workstream). NavigationSubsystem is no longer used for
+ * autopilot-tour motion — that path runs through `AutopilotMotion.js`
+ * (V1 thinner motion evaluator). Remaining live callers in
+ * `src/main.js`:
+ *   - manual-burn paths (L5572 plant, L5632 star, L5680 moon)
+ *   - warp-arrival paths (L4984, L5175, L5215)
+ * These rely on velocity-continuity and warp-exit-vector arrival
+ * pose that V1 AutopilotMotion does not replicate. Retire becomes
+ * a follow-on workstream once the warp-handoff + manual-burn-
+ * continuity scope is authored. Until then: do NOT extend this
+ * file. Audit at `~/.claude/state/dev-collab/audits/autopilot-
+ * station-hold-redesign-2026-04-24.md` §"Director ruling on
+ * NavigationSubsystem retire scope (2026-04-25)".
+ *
  * NavigationSubsystem — produces motion plans for moving the ship toward a
  * target body and holding a stable orbit around it.
  *
