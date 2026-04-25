@@ -439,15 +439,24 @@ export class CameraChoreographer {
 
       case CameraMode.ESTABLISHING:
       default: {
-        if (this._ship) {
-          // V1 STATION-hold ESTABLISHING collapse: camera looks down
-          // the ship's forward vector (feature doc §"Per-phase
-          // criterion — camera axis (V1)"). No linger, no pan-ahead,
-          // no departure arc — V-later. AC #5: camera-forward ≡
-          // ship-forward (dot ≥ 0.9999). The 100-unit lookAt offset
-          // is far enough that camera.lookAt() produces a numerically
-          // stable quaternion regardless of ship-relative geometry.
-          this._currentLookAtTarget.copy(motionFrame.position).addScaledVector(this._ship.forward, 100);
+        if (this._ship && motionFrame && motionFrame.target) {
+          // §A4 ESTABLISHING (camera/ship decoupled): camera looks
+          // at the autopilot target body's current position each
+          // frame (pursuit-curve). Replaces the §A3 "look down
+          // ship.forward × 100" rule. AC #5a: dot(camera.forward,
+          // normalize(target.pos - camera.pos)) ≥ 0.9999 pre-shake.
+          // Ship.forward is now driven by predicted-intercept and
+          // is structurally different from camera.forward —
+          // measurement against ship.forward is no longer the
+          // contract.
+          this._currentLookAtTarget.copy(motionFrame.target.position);
+        } else if (this._ship) {
+          // V1 §A4 caller without a target in the frame — fall back
+          // to the legacy framing-state path. Should not happen for
+          // autopilot tour (frame.target is always set when V1
+          // active); this branch guards against partial wiring.
+          this._establishing.update(deltaTime, motionFrame, shipPhase, this._nav);
+          this._currentLookAtTarget.copy(this._establishing.currentLookAtTarget);
         } else {
           // Legacy framing-state path for warp-arrival + manual-burn
           // callers. Retire when those paths migrate to AutopilotMotion.

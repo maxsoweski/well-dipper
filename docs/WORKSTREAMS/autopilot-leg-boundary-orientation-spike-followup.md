@@ -2,40 +2,54 @@
 
 ## Status
 
-**`Stub — conditional, awaiting V1 AC #5 pre-shake re-sample
-outcome` (authored 2026-04-25 by PM under Director audit
-autopilot-station-hold-redesign-2026-04-24 §A3.3).**
+**`Closed — AC #5 invalidated under §A4 redesign (camera/ship
+decoupling)` (closed 2026-04-25 by PM under Director audit
+autopilot-station-hold-redesign-2026-04-24 §A4).**
 
-This workstream is a **stub**. It exists to capture a Pattern A
-observation surfaced during V1 Attempt 1 telemetry analysis but
-**punted** to a follow-up because the failure class is below the
-perceptual-evidence threshold of the parent workstream's AC #8
-jumpscare-arrival recording. The stub is **conditional**:
+Pattern A was a measurement issue against an AC that no longer
+exists. The original AC #5 from the parent workstream (camera
+forward ≡ ship forward, dot ≥ 0.9999) is **invalidated** under
+§A4 — camera no longer reads `ship.forward` for the lookAt
+direction at all. The single-frame leg-boundary orientation spike
+captured by this stub was an order-of-write transient between the
+`motionStarted` handler (which writes a new `ship.forward` at the
+start of each leg) and the V1 ESTABLISHING look-at (which read
+the ship.forward to compute the camera's lookAt target). Under
+§A4, ESTABLISHING reads **target.current_position** directly —
+there is no order-of-write between motionStarted and ESTABLISHING
+look-at to misalign, because ESTABLISHING is no longer reading the
+freshly-written ship.forward at all. The failure class is
+structurally dissolved.
 
-- **If** V1 Attempt 1's AC #5 pre-shake re-sample (running now,
-  per parent workstream §A3.4) shows Pattern A **disappears** —
-  the spike was a sample-timing artifact of the post-shake
-  measurement, and the pre-shake basis sampling cleans it up by
-  construction. **Close this stub** with a note recording the
-  resolution.
-- **If** the re-sample shows Pattern A **persists** — the spike is
-  a real frame-ordering bug between the V1 ESTABLISHING look-at
-  and the upstream `ship.forward` write at leg boundaries. **Light
-  up this stub** as an active workstream, scope an Attempt 1, run
-  through the standard PM-brief / Director-audit / working-Claude
-  cycle.
+The pre-shake re-sample evidence in
+`recordings/v1-ac5-preshake-report.json` (Pattern A persisted at
+2 spikes across 3 legs in pre-shake re-sample, confirming the
+ordering bug was real under the prior V1 spec) is now an artifact
+of an invalidated spec — preserved in git for archaeology, no
+longer load-bearing.
 
-Telemetry artifact (Pattern A observation):
-`recordings/v1-attempt1-ac-report.json` — 12 single-sample dot
-violations across 12 legs (single-frame transients at leg
-boundaries). Re-sample telemetry (pending):
-`recordings/autopilot-station-hold-v1-attempt1-preshake-telemetry.json`.
+The new workstream
+(`docs/WORKSTREAMS/autopilot-camera-ship-decoupling-2026-04-25.md`)
+carries the §A4 redesign. Its AC #5a (camera tracks body) measures
+`dot(cameraForwardPreShake, normalize(target.current_position −
+camera.position)) ≥ 0.9999` per frame — a body-tracking pursuit
+curve, not a ship-forward alignment, and not vulnerable to the
+write-order class that produced Pattern A.
 
-**Trigger to light up:** working-Claude or Director compares pre-
-shake re-sample against the original Pattern A signature; if the
-single-frame violations remain at leg boundaries with the same
-12-of-12 cadence (or any non-zero count that recurs across legs
-rather than dispersing into noise), this stub activates.
+**No follow-up scope remains.** Drift risk #1 from this stub
+(zombie work) is closed by this status flip. If a leg-boundary
+artifact reappears under §A4 (e.g., camera reads stale
+target.current_position at leg boundaries because the target
+reference is captured-at-onset rather than read-each-frame), that's
+the new workstream's Drift risk #9 (camera reads stale target
+position) — *not* a re-light of this stub.
+
+---
+
+**Prior status (preserved for history): `Stub — conditional,
+awaiting V1 AC #5 pre-shake re-sample outcome` (authored 2026-04-25
+by PM under Director audit autopilot-station-hold-redesign-2026-04-24
+§A3.3).**
 
 ## Parent feature
 

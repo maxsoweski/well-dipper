@@ -365,6 +365,67 @@ flythrough.setShakeProvider(shipChoreographer);
 const ship = new Ship();
 const autopilotMotion = new AutopilotMotion();
 
+// §A4 body-velocity resolver. Reads orbit params from the active
+// system and writes the body's world-frame velocity into `out`.
+// Bound to autopilotMotion at init so beginMotion calls don't need
+// to thread the callback per-leg. Analytical (Path A) — derived
+// from orbital model: planet velocity = r·ω·tangent in the orbital
+// plane; moon velocity = parent_velocity + r·ω·tangent (rotated
+// by inclination). Static fallback (out=zero) for unmatched bodies
+// or pre-system-load state — predicted-intercept solver
+// degenerates to "aim at body's current position", which IS
+// correct for static targets.
+const _v_orbVelScratch = new THREE.Vector3();
+function _resolveBodyVelocity(target, out) {
+  out.set(0, 0, 0);
+  if (!target || !system || !system.planets) return;
+  for (const entry of system.planets) {
+    if (entry.planet && entry.planet.mesh === target) {
+      // Planet velocity: r·ω·[-sin(θ), 0, cos(θ)]
+      const sin = Math.sin(entry.orbitAngle);
+      const cos = Math.cos(entry.orbitAngle);
+      const speed = entry.orbitSpeed * entry.orbitRadius;
+      out.set(-sin * speed, 0, cos * speed);
+      return;
+    }
+    if (!entry.moons) continue;
+    for (const moon of entry.moons) {
+      if (moon.mesh === target) {
+        // Parent planet velocity
+        const pSin = Math.sin(entry.orbitAngle);
+        const pCos = Math.cos(entry.orbitAngle);
+        const pSpeed = entry.orbitSpeed * entry.orbitRadius;
+        const planetVx = -pSin * pSpeed;
+        const planetVz = pCos * pSpeed;
+        // Moon's relative velocity (tangent of inclined orbit)
+        const mAngle = moon.orbitAngle;
+        const mOrbSpeed = (moon.isPlanetMoon ? moon.data.orbitSpeed : moon.data.orbitSpeed) || 0;
+        const mOrbRadius = (moon.data.orbitRadius) || 0;
+        const incl = moon.data.inclination || 0;
+        const mTangSpeed = mOrbSpeed * mOrbRadius;
+        const mSin = Math.sin(mAngle);
+        const mCos = Math.cos(mAngle);
+        // d/dt of position formula:
+        //   pos = parent + [cos(θ)·r, -sin(incl)·sin(θ)·r, cos(incl)·sin(θ)·r]
+        //   vel_rel = ω·r·[-sin(θ), -sin(incl)·cos(θ), cos(incl)·cos(θ)]
+        out.set(
+          planetVx + (-mSin * mTangSpeed),
+          -Math.sin(incl) * mCos * mTangSpeed,
+          planetVz + (Math.cos(incl) * mCos * mTangSpeed),
+        );
+        return;
+      }
+    }
+  }
+  // Star or unmatched mesh — leave at zero. Stars are static under
+  // V1 (binary star orbital motion is rare enough to defer to
+  // V-later if it surfaces a problem).
+}
+// Bind once — AutopilotMotion's beginMotion preserves this across
+// legs (§A4 amendment to AutopilotMotion.js, beginMotion does not
+// overwrite when input.getBodyVelocity is undefined).
+autopilotMotion._getBodyVelocity = (out) => _resolveBodyVelocity(autopilotMotion._target, out);
+
 // WS 3 — camera-axis dispatch per §10.1. The camera choreographer authors
 // which target the camera looks at each frame (ESTABLISHING: linger on
 // receding subjects, pan forward toward incoming targets). OOIRegistry is
@@ -5343,7 +5404,14 @@ function commitSelection() {
 function _updateCommitBurnButton() {
   const btn = document.getElementById('commit-burn-btn');
   if (!btn) return;
-  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning;
+  // §A4: autopilotMotion.isActive subsumes the V1 autopilot tour. The
+  // legacy flythrough.active flag may be false during V1 since V1
+  // doesn't call into the legacy flythrough module — extend the
+  // suppress check explicitly. Without this, the BURN→<target>
+  // button appears during the autopilot tour because _selectedTarget
+  // is set to the autopilot target (which makes the reticle bracket
+  // it) but flythrough.active is false.
+  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning || autopilotMotion.isActive;
   const visible = !!_selectedTarget && !burning;
   btn.style.display = visible ? 'block' : 'none';
   if (visible) {
@@ -6437,6 +6505,22 @@ function animate() {
       const frame = autopilotMotion.update(deltaTime);
       // Position write: motion-produces pipeline (Principle 5).
       camera.position.copy(frame.position);
+
+      // TROUBLESHOOTING (2026-04-25): surface the autopilot target as
+      // the selected reticle so Max can verify whether the camera is
+      // centered on the body during cruise/approach/station-A. The
+      // commit-burn button is suppressed during flythrough.active so
+      // setting _selectedTarget here doesn't trigger the burn UI.
+      // Reticle re-targets when the tour advances to next leg.
+      const _curStop = autoNav.getCurrentStop?.();
+      if (_curStop) {
+        const _tgt = _makeTarget(_curStop.type, {
+          starIndex: _curStop.starIndex,
+          planetIndex: _curStop.planetIndex,
+          moonIndex: _curStop.moonIndex,
+        });
+        if (_tgt) _selectedTarget = _tgt;
+      }
 
       // ACCEL / DECEL shake fires at phase boundaries. Per feature
       // doc §"Gravity drives" V1 scope:

@@ -118,11 +118,20 @@ export class AutopilotMotion {
     this._position = new THREE.Vector3();
 
     // ── Ship orientation reference (set in beginMotion) ──
-    // The autopilot WRITES `_ship.setOrientation(...)` at phase
-    // boundaries. The Ship object holds the written orientation
-    // until the next write (no per-frame motion-direction
-    // derivation — AC #7 contract item 2).
+    // The autopilot WRITES `_ship.setOrientation(...)` each frame
+    // during CRUISE under the §A4 redesign (predicted-intercept
+    // re-aim). Camera no longer reads ship.forward; the shake
+    // module is the only consumer (AC #7 with consumer-set narrowed).
     this._ship = null;
+
+    // ── Body velocity callback (§A4 predicted-intercept solver) ──
+    // Returns the autopilot target's world-frame velocity. Set per
+    // beginMotion. Analytical (Path A): orbital model exposes
+    // r·ω·tangent for planets and parent_velocity + r·ω·tangent for
+    // moons. main.js wires this. If null, solver falls back to
+    // aim-at-body's-current-position (AC #5b graceful fallback).
+    this._getBodyVelocity = null;
+    this._velocityScratch = new THREE.Vector3();
 
     // ── One-shot signals ──
     this._motionStartPending = false;
@@ -157,46 +166,51 @@ export class AutopilotMotion {
    * @param {number} input.bodyRadius           — target body's radius in scene units.
    * @param {Ship}   input.ship                 — the Ship object whose orientation the autopilot writes.
    * @param {number} [input.fovDegrees=70]      — camera FOV used to compute hold distance.
+   * @param {Function} [input.getBodyVelocity]  — () => Vector3, body's world-frame velocity. §A4 predicted-intercept solver. Null → aim-at-current-position fallback.
    */
   beginMotion(input) {
     this._target = input.toBody;
     this._targetRadius = input.bodyRadius || 1;
     this._ship = input.ship || null;
+    // Velocity callback is persistent across legs — main.js binds
+    // once at init via direct assignment. Only overwrite when the
+    // caller explicitly passes one in (per-leg override path).
+    if (input.getBodyVelocity) {
+      this._getBodyVelocity = input.getBodyVelocity;
+    }
     this._fovRadians = ((input.fovDegrees || 70) * Math.PI) / 180;
 
     // Hold distance from felt-fill: 2 atan(r / d) = ratio × FOV → d = r / tan(0.5 × ratio × FOV)
     this._holdDistance = this._targetRadius / Math.tan(0.5 * FELT_FILL_RATIO * this._fovRadians);
 
-    // Capture trajectory anchors. Aim once at the body's current
-    // position; the trajectory does not re-aim mid-flight (V1
-    // canonical aim-once-at-intercept rule, feature doc §CRUISE).
+    // Capture start anchor. Initial trajectory aims at the body's
+    // current position; per-frame predicted-intercept re-aim takes
+    // over in _tickCruise (feature doc §A4 §CRUISE).
     this._startPos.copy(input.fromPosition);
     const targetPos = this._target.position;
 
-    // Cruise direction = unit vector from startPos toward target.
+    // Initial cruise direction = unit vector from startPos toward
+    // target's current position. Per-frame re-aim updates this each
+    // tick. Sized at beginMotion only for cruise-distance + cruise-
+    // speed computation.
     _v1.subVectors(targetPos, this._startPos);
     const totalDistToBody = _v1.length();
     if (totalDistToBody < 1e-6) {
-      // Already at the body. Skip cruise + approach; go straight to
-      // STATION-A. Edge case for back-to-back beginMotion calls or
-      // legs starting essentially on top of the next subject.
       this._enterStationA(targetPos);
       return;
     }
     this._cruiseDir.copy(_v1).divideScalar(totalDistToBody);
 
-    // Approach onset = point on the cruise line at 10R from body.
-    // approachStart = body.position - cruiseDir × (10R)  [NOTE: cruiseDir points TOWARD body]
+    // APPROACH-onset distance threshold (10R) and cruise-distance
+    // ceiling. Under §A4 the path is curved (predicted-intercept
+    // re-aim), so cruise-distance is computed from the initial
+    // straight-line distance for sizing purposes only — the actual
+    // travel curves toward the body's predicted position.
     const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
     this._approachStartPos.copy(targetPos)
       .addScaledVector(this._cruiseDir, -approachRadius);
-
-    // Cruise distance = how far the ship travels during CRUISE
-    // before APPROACH onset.
     this._cruiseDistance = this._startPos.distanceTo(this._approachStartPos);
     if (this._cruiseDistance < 1e-3) {
-      // Already inside the 10R sphere. Skip cruise; go directly to
-      // APPROACH from current position.
       this._enterApproach(this._startPos);
       this._motionStartPending = true;
       return;
@@ -209,7 +223,8 @@ export class AutopilotMotion {
     );
     this._cruiseSpeed = this._cruiseDistance / targetDuration;
 
-    // Set ship forward at CRUISE onset — aim-once write per AC #1.
+    // Initial ship.forward = aim toward target's current position.
+    // _tickCruise re-aims per frame at predicted intercept (§A4).
     if (this._ship) {
       this._ship.setOrientation(this._cruiseDir);
     }
@@ -219,6 +234,39 @@ export class AutopilotMotion {
     this._motionStartPending = true;
     this._approachElapsed = 0;
     this._holdTimer = 0;
+  }
+
+  /**
+   * Solve predicted-intercept time t. Closed-form quadratic per
+   * Director audit §A4: |R + V·t|² = (s·t)².
+   *   (V·V - s²)·t² + 2(R·V)·t + R·R = 0
+   *
+   * @param {THREE.Vector3} R — body.position - ship.position
+   * @param {THREE.Vector3} V — body.velocity (world frame)
+   * @param {number}        s — ship cruise speed (scalar)
+   * @returns {number} t — predicted intercept time. Returns -1 if
+   *   unreachable (discriminant < 0 or no positive root) — caller
+   *   treats as fallback (aim at body's current position).
+   */
+  _solveInterceptTime(R, V, s) {
+    const a = V.dot(V) - s * s;
+    const b = 2 * R.dot(V);
+    const c = R.dot(R);
+    if (Math.abs(a) < 1e-9) {
+      // Degenerate: linear in t. b·t + c = 0 → t = -c/b.
+      if (Math.abs(b) < 1e-9) return -1;
+      const tLin = -c / b;
+      return tLin > 0 ? tLin : -1;
+    }
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return -1;
+    const sqrtDisc = Math.sqrt(disc);
+    const t1 = (-b - sqrtDisc) / (2 * a);
+    const t2 = (-b + sqrtDisc) / (2 * a);
+    if (t1 > 0 && t2 > 0) return Math.min(t1, t2);
+    if (t1 > 0) return t1;
+    if (t2 > 0) return t2;
+    return -1;
   }
 
   /**
@@ -259,20 +307,77 @@ export class AutopilotMotion {
   // ── Internal: phase tickers ──
 
   _tickCruise(deltaTime) {
-    // Linear translate along cruise direction.
-    const distThisFrame = this._cruiseSpeed * deltaTime;
-    this._position.addScaledVector(this._cruiseDir, distThisFrame);
+    // §A4 predicted-intercept re-aim. Each frame: solve t such that
+    // |bodyPos + bodyVel·t - shipPos| = cruiseSpeed·t. Re-aim
+    // ship.forward at body.position(t). Ship moves along the
+    // re-aimed direction.
+    const bodyPos = this._target.position;
+    const shipPos = this._position;
 
-    // APPROACH-onset gate. Primary rule (AC #2): distance to body ≤
-    // 10R (feature doc §APPROACH). Fallback: ship has traveled the
-    // planned cruise distance — handles the case where the body
-    // drifts laterally during cruise (V1 aim-once-at-intercept rule
-    // does not re-aim) and the ship misses the 10R sphere on the
-    // initial trajectory. Without this fallback, missed-sphere legs
-    // sit in CRUISE indefinitely. Director-named drift-risk-class:
-    // "drift-from-aim-once" — V1 acceptable as a guard, V-later
-    // proper fix is per-frame re-aim or predicted-intercept.
-    _v1.subVectors(this._target.position, this._position);
+    // R = body.position - ship.position
+    _v1.subVectors(bodyPos, shipPos);
+
+    // V = body velocity in world frame (analytical from orbital
+    // model). Null callback → V = 0 → solver degenerates to "aim at
+    // body's current position", which IS the right fallback for
+    // moonless tests / static targets.
+    if (this._getBodyVelocity) {
+      this._getBodyVelocity(this._velocityScratch);
+    } else {
+      this._velocityScratch.set(0, 0, 0);
+    }
+    const V = this._velocityScratch;
+    const s = this._cruiseSpeed;
+
+    // Predicted intercept point. interceptPoint = bodyPos + V·t.
+    // If solver fails (discriminant < 0 / no positive root), fall
+    // back to aiming at body's current position. This is also the
+    // graceful behavior when ship is too slow to catch a fast-moving
+    // body — exceedingly rare at realistic cruise speeds vs body
+    // orbital speeds, but handled.
+    const t = this._solveInterceptTime(_v1, V, s);
+    let aimDir;
+    if (t > 0) {
+      // _v2 = interceptPoint = bodyPos + V·t
+      _v2.copy(bodyPos).addScaledVector(V, t);
+      // aimDir = (interceptPoint - shipPos).normalize()
+      _v2.sub(shipPos);
+      const len = _v2.length();
+      if (len > 1e-6) {
+        _v2.divideScalar(len);
+        aimDir = _v2;
+      } else {
+        // Already at intercept point; treat as approach.
+        this._enterApproach(this._position);
+        return;
+      }
+    } else {
+      // Fallback: aim at body's current position.
+      const len = _v1.length();
+      if (len < 1e-6) {
+        this._enterApproach(this._position);
+        return;
+      }
+      _v1.divideScalar(len);
+      aimDir = _v1;
+    }
+
+    // Update ship.forward (re-aim per frame). Camera no longer reads
+    // this under §A4 — only the shake module does (AC #7 narrowed).
+    if (this._ship) {
+      this._ship.setOrientation(aimDir);
+    }
+    // Translate along the re-aimed direction.
+    this._position.addScaledVector(aimDir, s * deltaTime);
+    // Track cruise direction for APPROACH inheritance + APPROACH
+    // onset distance computation.
+    this._cruiseDir.copy(aimDir);
+
+    // APPROACH-onset gate. Primary rule (AC #2): distance to body
+    // ≤ 10R. Fallback: ship has traveled the planned cruise distance
+    // (cruise-distance ceiling, preserved from §A3 for asteroid-class
+    // bodies where 10R is sub-frame-tiny).
+    _v1.subVectors(bodyPos, this._position);
     const distToBody = _v1.length();
     const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
     const distTraveled = this._startPos.distanceTo(this._position);
@@ -374,6 +479,9 @@ export class AutopilotMotion {
       motionStarted: this._motionStartedOneShot,
       phaseChanged: this._phaseChangedOneShot,
       motionComplete: this._motionCompleteOneShot,
+      // §A4: camera reads target body's current position (pursuit-
+      // curve), no longer derived from ship.forward.
+      target: this._target,
     };
   }
 }

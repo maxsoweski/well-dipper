@@ -2,9 +2,63 @@
 
 ## Status
 
-**`VERIFIED_PENDING_MAX e6659d0` (V1 Attempt-1 closing — code +
-docs + AC #5 pre-shake re-sample bundled at `e6659d0`; awaiting
-Max's recording review for AC #8 before flip to Shipped).**
+**`Closed — superseded by autopilot-camera-ship-decoupling-2026-04-25
+(Director audit §A4, 2026-04-25)`.**
+
+The recording captured at V1 Attempt 1 close
+(`recordings/autopilot-station-hold-v1-attempt1.webm`) **passes the
+V1-Attempt-1 ACs as written** — AC #1 path-linearity, AC #2 onset
+at `min(10R, cruise-distance ceiling)`, AC #3 felt-fill, AC #4 body-
+lock, AC #5 (pre-shake basis) Pattern B, AC #6 shake placement, AC
+#7 ship-orientation contract, AC #9 stub removal, AC #10 dispatch
+preserved all evaluate to PASS in
+`recordings/v1-attempt1-ac-report.json` + the pre-shake re-sample
+report `recordings/v1-ac5-preshake-report.json`. **But the V1 spec
+itself was wrong.** The 2026-04-24 Q3 *aim-once-at-intercept, fly
+straight* rule on the ship axis composed with the V1 ESTABLISHING
+*"camera looks down ship.forward + shake on top"* rule on the camera
+axis to produce a tour where bodies drift toward the edge of frame
+during cruise legs — the recording shows the correct AC behavior
+of a wrong spec.
+
+Director audit §A4 (2026-04-25) reverses both halves of the
+coupling: camera reads target-body position directly each frame
+(pursuit-curve); ship re-aims at predicted intercept each frame
+(closed-form quadratic solver). The two-axis architecture is
+preserved and *more* independent under §A4 than under the 2026-04-24
+reframe. AC #1 redrawn as a hit-the-target tolerance bound; AC #5
+invalidated and split into AC #5a (camera tracks body) + AC #5b
+(ship aims at predicted intercept); AC #7 preserved with consumer
+set narrowed (camera dropped, shake retained).
+
+**Do NOT flip this workstream to Shipped.** The Attempt 1 commits
+stay in git as the prior-cycle reference, but the workstream's
+acceptance gate is dissolved by the §A4 redesign — Shipped on this
+brief would record passage of an invalidated spec. The next
+implementation pass against the §A4-redesigned ACs lives in the
+new workstream:
+
+- **`docs/WORKSTREAMS/autopilot-camera-ship-decoupling-2026-04-25.md`**
+  — V1 §A4 redesign (camera = pursuit-curve on target body; ship =
+  predicted-intercept re-aim). Authored 2026-04-25 by PM under
+  Director audit §A4.
+
+The `(α)` stub recording at
+`screenshots/max-recordings/stub-saturn-v4-2026-04-24.fixed.webm`
+remains the felt-experience reference for STATION-A jumpscare
+arrival; the new workstream's AC #8 inherits that reference.
+
+The Pattern A leg-boundary spike captured by the follow-up stub
+(`docs/WORKSTREAMS/autopilot-leg-boundary-orientation-spike-followup.md`)
+is **structurally dissolved** under §A4 — see closure note in that
+brief.
+
+---
+
+**Prior closing status (preserved for history): `VERIFIED_PENDING_MAX
+e6659d0` (V1 Attempt-1 closing — code + docs + AC #5 pre-shake
+re-sample bundled at `e6659d0`; awaiting Max's recording review for
+AC #8 before flip to Shipped).**
 
 V1 Attempt 1 close-out gates (Director audit 2026-04-25 §A3) status:
 
