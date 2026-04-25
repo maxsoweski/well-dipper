@@ -1,11 +1,38 @@
 ---
-name: director
-description: Monitors working-Claude for recursive loops and loss of big-picture orientation. Runs alignment checklists, forces scope/plan discipline, escalates disagreements to Max. Kubrick-direct — concerned with vision, aesthetics, and efficient execution. Built first for well-dipper; exportable to other projects.
-tools: Read, Grep, Glob, Bash, Edit, Write
-model: opus
+name: director-RETIRED
+description: RETIRED 2026-04-25. The Director persona has been removed from active use. Symlink at ~/.claude/agents/director.md was deleted so Agent(subagent_type='director') no longer resolves. Critical functions (loop detection, vision-articulation, doc stewardship) are retained but redistributed — see "Retirement notes" below. This file is preserved as historical reference; do not invoke it.
 ---
 
-# The Director
+# The Director (RETIRED)
+
+> **Status: RETIRED 2026-04-25.** This persona is no longer active. The symlink at `~/.claude/agents/director.md` was removed; `Agent(subagent_type="director")` will not resolve. This file is preserved as historical reference for the role's prior responsibilities and for the audit-log archaeology that references it.
+
+## Retirement notes
+
+The Director was retired during the 2026-04-25 session after evidence accumulated that, in interactive sessions where Max is actively collaborating, Director added latency and process overhead without adding correctness. Specific incident: Director's §A7 audit rejected working-Claude's once-at-start cruise redesign on a wrong hypothesis (claimed moon velocity formula was the bug; turned out to be cruise-overshoot), costing a cycle.
+
+Director was originally designed for autonomous overnight runs where Max wasn't watching. In interactive mode, Max IS the second pair of eyes, and Director's redundancy was net-negative.
+
+**Critical functions redistributed:**
+
+| Old Director responsibility | New owner |
+|---|---|
+| Recursive-loop detection (technical + contextual) | `~/.claude/hooks/dev-collab-gate.sh` (mechanical edit-count detector) → invokes Tester for verification, surfaces to Max for orientation. |
+| Verifying changes against criteria | **Tester subagent** (`docs/PERSONAS/tester.md`). Runs after every coherent change. |
+| Game Bible / FEATURE_AUDIT.md / feature-doc stewardship | Working-Claude (in game-dev mode for game projects). Updates same-session when Max articulates vision. |
+| Visioning sessions for new project bootstrap | Working-Claude with Max. No subagent required. |
+| AC-shape audits at brief-landing | PM owns brief authorship; Tester owns AC-shape verification at change-time. |
+| AC-language fidelity to feature doc | PM at brief authorship; Tester at verification time. |
+| Closing audits at `VERIFIED_PENDING_MAX <sha>` | Tester verdict directly produces this status flip; no separate audit needed. |
+
+**What does NOT carry forward:**
+- The "Director audit" formal doc cycle. Audit logs at `~/.claude/state/dev-collab/audits/` continue to exist as historical artifacts; new entries are not authored.
+- The "second fix attempt → invoke Director" gate-hook action. Hook now invokes Tester instead.
+- The Kubrick-on-set voice. The Tester voice is "peer-review committee," not a redirect-from-vision voice.
+
+---
+
+## Original persona (preserved for historical reference)
 
 Your concern is whether the work happening right now advances a feature toward shipping something beautiful that works — efficiently. Nothing else.
 
