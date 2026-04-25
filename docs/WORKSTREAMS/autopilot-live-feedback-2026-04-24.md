@@ -2,7 +2,15 @@
 
 ## Status
 
-`Loop (b) Shipped 3ba1159 — VERIFIED_PENDING_MAX.` `Loop (c) Shipped 273e725 — VERIFIED_PENDING_MAX.` **`Loop (a) cycle-4 REDESIGN IN PROGRESS — target-position critically-damped spring per Director's 2026-04-24 §5 closure.`** Cycles 1–3 of Loop (a) are closed (mechanism class abandoned); cycles-1/2/3 code in `src/auto/CameraChoreographer.js` is slated for full removal per §5.7 of the Director's 2026-04-24 cycle-4 redesign scoping audit.
+**Workstream closed 2026-04-24 — 2/3 loops Shipped, 1/3 SUPERSEDED.**
+
+- `Loop (b) Shipped 3ba1159 — verified against recordings/loopb-option4-sol-tour-v2.fixed.webm.` Two-anchor velocity blend (Option 4) with live per-body read at the seam-blend anchor. Orbit-entry geometric bound holds at zero violations across the captured Sol tour. Mechanism carries forward as substrate for the new workstream — *read live per-body position rather than T₀ extrapolation* is the input to CRUISE re-aim under the simpler model.
+- `Loop (c) Shipped 273e725 — verified against recordings/loopc-per-sign-legmax.fixed.webm.` Per-sign legMax pullback shake-onset trigger. Mechanism carries forward as substrate — Loop (c)'s shake-onset detector is exactly the gate for the CRUISE→DECEL shake under the simpler model.
+- `Loop (a) SUPERSEDED 2026-04-24 by autopilot-station-hold-redesign-2026-04-24.` Cycles 1–4 of Loop (a) are retired by reframe, not patched. The cycle-4 spring-filter implementation (P + Q + U passes) is **stashed at `git stash@{0}` — not committed, not deleted** — preserved as prior-art for the V-later STATION-B / ORBIT-mode follow-on. Validating capture for the supersede: `screenshots/max-recordings/stub-saturn-v4-2026-04-24.fixed.webm` (the simplified Elite-Dangerous-style stub Max watched and confirmed *"that works very well"*).
+
+**Live-feedback close-out direction:** Director's audit at `~/.claude/state/dev-collab/audits/autopilot-live-feedback-2026-04-24.md` §"Stub Confirmation + Restructure Scoping" §2d (2026-04-24, post-(α)-watch). See `## Close-out (2026-04-24)` section below for full close-out — lessons, what carries forward, what got abandoned, forward pointers to the new workstream slug.
+
+**Pre-close-out status (preserved for archaeology):** `Loop (b) Shipped 3ba1159 — VERIFIED_PENDING_MAX.` `Loop (c) Shipped 273e725 — VERIFIED_PENDING_MAX.` `Loop (a) cycle-4 REDESIGN IN PROGRESS — target-position critically-damped spring per Director's 2026-04-24 §5 closure.` That status was the state at the moment Max watched the stub recording and reframed the problem. Cycles 1–4 work was **directionally wrong, not failed** — see Director's step-back retrospective §1 quoted in the close-out section below.
 
 **Path-2 greenlight (Max, 2026-04-24, verbatim):** *"Let's go with path two per the director's feedback. Hand it back off to the director and PM, make sure that rebuilding this system from scratch is very well thought out, well planned, includes research if necessary about how movement in spacefaring games like this works in other games. Test criteria and so on."*
 
@@ -1983,3 +1991,267 @@ formulation."* Jerk-threshold placeholder flagged in AC #8 per
 capture, with Director review before fixing it"* — working-Claude
 surfaces the distribution for Director to fix before Attempt-1
 commit.
+
+---
+
+## Close-out (2026-04-24)
+
+**Authority.** PM-owned per CLAUDE.md `Editing docs/WORKSTREAMS/**`
+rule. Direction taken verbatim from Director's audit
+`~/.claude/state/dev-collab/audits/autopilot-live-feedback-2026-04-24.md`
+§"Stub Confirmation + Restructure Scoping" §§2d + 6 (the step-back
+retrospective). No additional Director audit gate is opened by this
+addendum — the direction is already on disk.
+
+### Per-loop close-out
+
+**Loop (b) — Shipped `3ba1159`.** Two-anchor velocity blend (Option
+4) with live per-body read at the seam-blend anchor.
+*Verified against:* `recordings/loopb-option4-sol-tour-v2.fixed.webm`.
+The orbit-entry geometric bound sub-criterion under AC #2
+(`distToBody ≤ 1.5× approach-endpoint during _velocityBlend.active &&
+_shipMode === 'ORBIT'`) holds at zero violations across the captured
+Sol tour — the formula's mid-window geometry is correct. AC #1, AC #2,
+AC #3 closed.
+
+**Carry-forward into the new workstream:** Loop (b)'s mechanism is
+*read live per-body position rather than T₀ extrapolation*. Under the
+Elite-Dangerous-style simpler motion model the new workstream is
+authoring, "seam-blend target" reduces in scope (seams collapse to
+single-signal transitions) but the mechanism itself becomes the input
+to **CRUISE re-aim** — re-aim each frame to the body's current
+position is exactly what Loop (b) made possible. Director §2d
+verbatim: *"its mechanism is still consistent with the simpler model
+... Shipped flip is consistent."*
+
+**Loop (c) — Shipped `273e725`.** Per-sign legMax pullback shake-onset
+trigger.
+*Verified against:* `recordings/loopc-per-sign-legmax.fixed.webm`. AC
+#4, AC #5, AC #6 closed.
+
+**Carry-forward into the new workstream:** Loop (c)'s local-maximum
+detector on `smoothedAbsDSpeed` is exactly the gate the simpler model
+needs. The canonical shake case under STATION-hold V1 is the
+CRUISE→DECEL boundary — a sharp `|d|v|/dt|` event by construction.
+Director §2d verbatim: *"the gate's triggering case becomes more
+well-formed, not less."*
+
+**Loop (a) — `SUPERSEDED 2026-04-24` by `autopilot-station-hold-redesign-2026-04-24` (slug per Director §2b).**
+Cycles 1–4 retired by reframe, not failed. The cycle-4 spring-filter
+implementation (P + Q + U passes against world-space target,
+ship-relative offset, APPROACH/STATION/guard-saturated AC carve-outs)
+is **stashed at `git stash@{0}`** — not committed, not deleted.
+
+*Stash message (verbatim, on `git stash list`):*
+> `Loop (a) cycle-4 spring filter — superseded 2026-04-24 by stub. See ~/.claude/state/dev-collab/audits/autopilot-live-feedback-2026-04-24.md §Stub Confirmation. Preserved as ORBIT-mode prior-art for the autopilot-station-hold-redesign workstream.`
+
+*Validating capture for the supersede:*
+`screenshots/max-recordings/stub-saturn-v4-2026-04-24.fixed.webm`
+(straight-line CRUISE → cubic-eased DECEL → body-locked HOLD at
+`2.5 × radius`). Max's read on the stub, verbatim: *"That works very
+well."* Numerically (Director §1): body-lock distance stable to
+`0.00005u` over multiple HOLD samples; max per-frame camera position
+jump at decel→HOLD boundary `0.0006u` — *"bulk distribution and
+seam-continuity numbers exceed any cycle-1-through-4 result on Loop
+(a) by margin of class."*
+
+Companion calibration capture (the (E) experiment that preceded the
+stub, supports the Director's §2c "Dana not before V1" call):
+`screenshots/max-recordings/autopilot-experiment-E-orbit-0.1x-2026-04-24.fixed.webm`
+(orbit-speed flat between 0.1× and 1.0× — answered the hypothesis
+that slower orbits flatten the close-approach narrow-triangle
+singularity class; Max's read: *"I can't really tell a difference"*,
+which is the result that retired path (B)).
+
+### Workstream-level close
+
+The workstream closes at **2/3 loops Shipped, 1/3 SUPERSEDED**. This
+is **not a clean close** — the workstream's third deliverable was
+retired by reframe rather than completed against its acceptance
+criteria. Naming this honestly is the documentation-drift class the
+Director persona is built to catch (Director §2b verbatim: *"the
+live-feedback workstream's premise was 'promote the reckoning
+telemetry from observer to pipeline input at three named consumer
+sites,' and Loop (a) inside it specifically scoped the camera-side
+smoothing of the existing composed-signal pipeline. Both premises
+retire under Max's model. Continuing to amend the live-feedback brief
+would smuggle a 'restructure the autopilot motion model' scope
+inside a workstream titled 'live-feedback.' That is the precise
+documentation-drift class the Director persona is built to catch."*).
+
+The new workstream `autopilot-station-hold-redesign-2026-04-24`
+carries the actual Loop (a)-class work forward under correct framing
+(see `## Forward pointers` below).
+
+### Lessons (for future-Max + future-PM + future-Director)
+
+**1. Cycles 1–4 of Loop (a) were directionally wrong, not failed.**
+Director's rulings at C1 (raw-target-rate clamp), C2 (distance guard
+co-mechanism), C3 (camFwd-rate clamp swap), and C4 (target-position
+critically-damped spring) were each technically defensible at their
+audit point — the evidence on the table at each cycle's audit
+boundary supported the ruling that was issued. But the cumulative
+shape of the iteration was patching a model that the simplification
+proved unnecessary. The stub validated in one afternoon what 4 cycles
+of mechanism-class iteration could not reach. Director's step-back
+retrospective §1 names this honestly, verbatim:
+
+> *"Each audit was individually defensible against the evidence on
+> the table at that moment. Each surfaced a class the prior model
+> did not contain. The meta-pattern is that **every patch is against
+> a symptom class**, and the symptom classes are not converging —
+> they are being generated by something upstream that keeps producing
+> new geometries the filter can't gracefully handle."*
+>
+> *"Where my audits have been going is a stack of geometric carve-outs
+> against a signal I don't control. The filter is downstream of a
+> raw-target composition that keeps producing pathological inputs."*
+
+The retrospective tone is: cycles 1–4 were correct under their
+premise; the premise was the wrong size. This is not a critique of
+the audits — it is a recognition that local correctness can compound
+into global drift when the upstream is itself the bug.
+
+**2. The stub's V1 acceptance criteria become the new workstream's V1
+ACs.** Specifically (per Director §"Stub Confirmation" §1 and the
+Elite-Dangerous-Mode Simplification appendix §4):
+- Straight-line CRUISE with per-frame re-aim at the target body's
+  current position (Loop (b)'s live per-body read is the input).
+- Cubic-ease-out DECEL onset at 30% of trip duration (V1 articulation
+  pending Director's feature-doc amendment session with Max — Director
+  §2a §2 names the open questions: hold-distance rule "2.5× body
+  radius" vs. "fills 60% of FOV"; CRUISE re-aim each frame vs.
+  predicted-intercept; DECEL onset 30% vs. distance-based vs.
+  ship-deceleration-rate).
+- Body-locked HOLD at `2.5 × body.radius` distance (numerical anchor
+  from the stub; semantic articulation pending feature-doc amendment).
+- Shake fires once at the CRUISE→DECEL boundary (Loop (c)'s detector
+  is the gate). Max's articulation in the ED simplification appendix
+  §1 verbatim: *"the camera suddenly shakes as we decelerate a whole
+  lot all at once"* — same placement as the existing shake mechanism,
+  to be confirmed in the feature-doc amendment.
+
+These articulations are now load-bearing for the new workstream's
+spec — pending Director's feature-doc amendment session with Max,
+which is the gate before the new workstream brief can be authored at
+full-AC depth.
+
+**3. What survived: telemetry infrastructure.** The infrastructure
+investments built during this workstream and its parent reckoning
+workstream all carry forward as substrate, independent of the Loop
+(a) reframe:
+- The reckoning audits (`runAllReckoning`) — `cameraViewAngular
+  Continuity`, `bodyInFrameChanges`, `shakeVelocityCorrelation`, and
+  the rest — remain valid measurement infrastructure under any motion
+  model.
+- The per-frame `camAngRate3D` and `camAngJerk3D` telemetry fields
+  added during cycle-4 (in `src/main.js:_captureTelemetrySample`) are
+  sound 3D-rate metrics that don't depend on the cycle-4 mechanism
+  class. They stay as diagnostic telemetry.
+- The `velocityBlendActive` per-frame field added for Loop (b) is
+  consumed by the orbit-entry geometric bound audit (AC #2) and stays
+  as the canonical signal for "we are inside a velocity-blend
+  window."
+- Loop (b)'s orbit-entry geometric bound audit (`distToBody ≤
+  1.5 × approach-endpoint during _velocityBlend.active && _shipMode
+  === 'ORBIT'`) was a load-bearing regression guard — it would have
+  caught the first-pass single-anchor-formula 4× geometry artifact on
+  capture #1 instead of waiting on `bodyInFrameChanges` to amplify
+  the symptom. Pattern carries forward.
+
+**4. What got abandoned: the rate-clamp-on-look-direction mechanism
+class entirely.** Per Dana's prior-art research
+(`research/autopilot-camera-motion-prior-art-2026-04-24.md`) and
+Director's cycle-3 + cycle-4 + step-back analyses, *"angular-rate
+clamping on the camera's look direction does not appear as a primary
+mechanism anywhere reputable"* (Dana §"Executive summary"). The new
+workstream avoids this class by construction — the simpler motion
+model emits a single authored target signal (held planet, or held
+planet + camera-mode-authored linger/pan anchor) with no
+re-author-per-frame, so the smoother has nothing to smooth and the
+clamp class has nothing to clamp. Director's §"What gets simpler?"
+table in the ED appendix §4 verbatim: *"Cycle-1-through-3 camFwd
+angular-rate clamping (Loop (a)) — Likely unneeded. If the camera
+target is a single source ... there is no composed signal for the
+smoother to smooth — because there is no re-author-per-frame. The
+33-violation cluster is a property of the current composed-signal
+shape; change the signal, the violations don't manifest. This is the
+strongest structural argument for Max's model."*
+
+### Forward pointers
+
+**New workstream slug:** `autopilot-station-hold-redesign-2026-04-24`
+(per Director §2b — *"hyphenated lowercase per the project
+convention; date-stamped. PM is free to revise the slug — the
+structural point is new file, not amendment."*).
+
+The new workstream brief is **NOT drafted by this addendum.** Per
+Director's sequencing §3:
+1. Director runs an interview-shaped feature-doc amendment session
+   with Max (STATION-A vs STATION-B definitions, hold-distance
+   authoring, CRUISE re-aim semantics, DECEL onset rule, gravity-drive
+   shake placement, camera linger/pan-ahead under the simpler model).
+2. Director edits `docs/FEATURES/autopilot.md` same-session under
+   `Editing docs/FEATURES/**` authority.
+3. PM authors the new workstream brief against the amended feature
+   doc.
+
+PM is welcome to author a partial scope-statement-only draft of the
+new brief in advance of the feature-doc amendment (Director §3:
+*"PM is welcome to invoke me with questions; ... PM decides whether
+to author the brief in two passes (scope/premise now, ACs after the
+feature-doc amendment) or one pass (wait on the amendment). I have no
+preference."*). That is **not** in scope for this close-out addendum.
+
+**Reasoning trail for the supersede:** Director's audit
+`~/.claude/state/dev-collab/audits/autopilot-live-feedback-2026-04-24.md`
+- §"Stub Confirmation + Restructure Scoping" §§1–6 (post-(α)-watch
+  direction).
+- §"Cycle-4 Step-Back Analysis" §§1–6 (the retrospective Max asked
+  for; names the iteration pattern honestly).
+- §"Elite-Dangerous Mode Simplification Conversation" §§1–6
+  (Max's reframe + the structural argument for the simpler model).
+- §"Traffic-Controller Framing Note from Max" (Max's V-later
+  architectural frame; relevant to ORBIT-mode follow-on, not to V1).
+
+**Cycle-4 stash bookkeeping.** The stash at `git stash@{0}` will be
+unpopped (or `git stash drop`'d) by the new workstream when it is
+clear how much of the spring-filter machinery is reusable for the
+future ORBIT-mode follow-on (STATION-B). Until then it stays; per
+Director §2e verbatim: *"Do not `git stash drop`. Do not commit
+cycle-4 code to a branch — the branch would be code that does not
+match any feature-doc criterion, and would invite the next session
+to 'just merge it in' without re-deriving against the new spec."*
+
+**Stub temp scaffolding (`window._stubFly`, `window._stubAutopilot`,
+`window._listBodies`, `window._stubStop`, `window._settings`,
+`window._system`) stays in tree** until the new workstream's first
+`VERIFIED_PENDING_MAX` recording matches the (α) recording's felt
+experience under Max's eye. Per Director §2f, the stub IS the
+calibration reference; cleaning it out before the restructure is the
+known-loss class. Removal is an explicit deliverable of the new
+workstream brief, in the same commit that lands the restructure.
+
+### What this addendum is NOT
+
+- Not the new workstream brief itself.
+- Not a Director audit. Direction is already on disk; this is PM-owned
+  status update + lessons + forward pointers.
+- Not a relitigation of the cycle-by-cycle decisions. Director's
+  audits stand. Cycles 1–4 were correct under their premise; the
+  premise was the wrong size.
+- Not an authorization for working-Claude to start implementation on
+  the new workstream. Implementation is gated on the new workstream
+  brief, which is gated on the feature-doc amendment, per Director's
+  sequencing §3.
+
+### Post-close-out gate sync
+
+After this addendum lands, working-Claude syncs gate state to clear
+the active-workstream tracking. The next gate cut happens when PM
+authors the new workstream brief at
+`docs/WORKSTREAMS/autopilot-station-hold-redesign-2026-04-24.md`.
+
+Drafted by PM 2026-04-24 from Director's "Stub Confirmation +
+Restructure Scoping" direction (audit §§2d + 6). Direction quoted
+verbatim where load-bearing.
