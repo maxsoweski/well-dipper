@@ -6461,30 +6461,51 @@ function animate() {
       cameraChoreographer.update(deltaTime, frame);
       camera.lookAt(cameraChoreographer.currentLookAtTarget);
 
+      // V1 AC #5 telemetry hook: snapshot camera quaternion AFTER lookAt
+      // and BEFORE shake-multiply. Director audit 2026-04-25 ruled the
+      // AC #5 contract holds at the pre-shake basis (shake is additive
+      // on top per V1 spec). Verifier reads this for the dot ≥ 0.9999
+      // check; post-shake dot is structurally bounded by shake amplitude
+      // and only constrained by the spec's escape clause (≥ 0.99 if
+      // shake is implemented as rotation, which it is here).
+      window._cam_preshake_quat_x = camera.quaternion.x;
+      window._cam_preshake_quat_y = camera.quaternion.y;
+      window._cam_preshake_quat_z = camera.quaternion.z;
+      window._cam_preshake_quat_w = camera.quaternion.w;
+
       // ShipChoreographer drives the shake envelope state. Pass a
       // minimal frame compatible with its existing signal-derivation
       // (it reads frame.position + a few flags). subPhase = 'traveling'
       // during CRUISE/APPROACH so shake events can fire; 'orbiting'
       // during STATION-A so shake decays to zero (no shake during
       // hold per AC #6).
-      const subPhase = (frame.phase === 'STATION-A') ? 'orbiting' :
-                       (frame.phase === 'IDLE') ? 'idle' : 'traveling';
-      const shipFrame = {
-        position: camera.position,
-        velocity: { x: 0, y: 0, z: 0 },
-        lookAtTarget: cameraChoreographer.currentLookAtTarget,
-        phase: subPhase,
-        motionStarted: frame.motionStarted,
-        travelComplete: false,
-        orbitComplete: false,
-        targetingReady: false,
-        abruptness: 0,
-        isShortTrip: false,
-        warpExit: false,
-        shipVelocity: { x: 0, y: 0, z: 0 },
-        velocityBlendActive: false,
-      };
-      shipChoreographer.update(deltaTime, shipFrame);
+      //
+      // Skip update when autopilotMotion is in its one-frame IDLE
+      // window between motionComplete and the next leg's beginMotion.
+      // ShipChoreographer.update has an early-return when its own
+      // phase is IDLE — passing 'idle' here would set the phase to
+      // IDLE permanently and the subsequent leg's CRUISE/STATION
+      // updates would never run. The skip preserves shake-envelope
+      // continuity across the leg boundary.
+      if (frame.phase !== 'IDLE') {
+        const subPhase = (frame.phase === 'STATION-A') ? 'orbiting' : 'traveling';
+        const shipFrame = {
+          position: camera.position,
+          velocity: { x: 0, y: 0, z: 0 },
+          lookAtTarget: cameraChoreographer.currentLookAtTarget,
+          phase: subPhase,
+          motionStarted: frame.motionStarted,
+          travelComplete: false,
+          orbitComplete: false,
+          targetingReady: false,
+          abruptness: 0,
+          isShortTrip: false,
+          warpExit: false,
+          shipVelocity: { x: 0, y: 0, z: 0 },
+          velocityBlendActive: false,
+        };
+        shipChoreographer.update(deltaTime, shipFrame);
+      }
       // Apply shake rotation post-lookAt (mirror of FlythroughCamera's
       // composition). Camera-local Euler XYZ.
       const se = shipChoreographer.shakeEuler;

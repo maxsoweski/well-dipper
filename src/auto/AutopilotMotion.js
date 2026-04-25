@@ -263,11 +263,20 @@ export class AutopilotMotion {
     const distThisFrame = this._cruiseSpeed * deltaTime;
     this._position.addScaledVector(this._cruiseDir, distThisFrame);
 
-    // APPROACH-onset gate: distance to body ≤ 10R.
+    // APPROACH-onset gate. Primary rule (AC #2): distance to body ≤
+    // 10R (feature doc §APPROACH). Fallback: ship has traveled the
+    // planned cruise distance — handles the case where the body
+    // drifts laterally during cruise (V1 aim-once-at-intercept rule
+    // does not re-aim) and the ship misses the 10R sphere on the
+    // initial trajectory. Without this fallback, missed-sphere legs
+    // sit in CRUISE indefinitely. Director-named drift-risk-class:
+    // "drift-from-aim-once" — V1 acceptable as a guard, V-later
+    // proper fix is per-frame re-aim or predicted-intercept.
     _v1.subVectors(this._target.position, this._position);
     const distToBody = _v1.length();
     const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
-    if (distToBody <= approachRadius) {
+    const distTraveled = this._startPos.distanceTo(this._position);
+    if (distToBody <= approachRadius || distTraveled >= this._cruiseDistance) {
       this._enterApproach(this._position);
     }
   }

@@ -16,6 +16,10 @@ dist-ssr
 .claude/
 .plan
 
+# Local dev artifacts — recordings, telemetry dumps, screenshots from
+# canvas-recorder / chrome-devtools captures. Not source.
+recordings/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

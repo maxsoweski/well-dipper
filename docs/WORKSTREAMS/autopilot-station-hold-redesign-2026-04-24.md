@@ -2,9 +2,44 @@
 
 ## Status
 
-**`APPROVED — Director audit landed 2026-04-24` (authored 2026-04-24
-by PM; audit at `~/.claude/state/dev-collab/audits/autopilot-station-
-hold-redesign-2026-04-24.md`; amendments §A1 + §A2 applied this
+**`Active — V1 Attempt 1 closing — pending VERIFIED_PENDING_MAX flip
+after AC #5 re-sample + commit` (V1 Attempt-1 closing audit landed
+2026-04-25; amendments §A3 applied this commit).**
+
+V1 Attempt 1 close-out gates (Director audit 2026-04-25, status flip
+**AUTHORIZED at `VERIFIED_PENDING_MAX <commit-sha>`** subject to):
+
+- AC #2 brief amendment landed (this PM commit — see §A3).
+- AC #5 brief amendment landed (this PM commit — see §A3).
+- AC #5 pre-shake telemetry re-sample passes `≥ 0.9999` for Pattern B
+  (working-Claude is running this now).
+- AC #1 / #3 / #4 / #6 / #7 / #9 already PASS in
+  `recordings/v1-attempt1-ac-report.json`.
+- AC #10 contract-confirmed: `CameraChoreographer.setShip` preserves
+  legacy framing-state path (the `CameraMode` enum dispatch is
+  intact; V1 selects `ESTABLISHING`).
+- AC #8 stays `VERIFIED_PENDING_MAX` pending Max's morning recording
+  review.
+
+Pattern A (single-frame leg-boundary orientation spike — 12 single-
+sample dot violations across 12 legs in V1 Attempt 1 telemetry) is
+**punted to a follow-up workstream stub** at
+`docs/WORKSTREAMS/autopilot-leg-boundary-orientation-spike-followup.md`
+— conditional on whether the AC #5 pre-shake re-sample reveals the
+spike is a sample-timing artifact (close stub) or a real ordering
+bug (light up stub). Director rationale: *"The leg-boundary spike
+is one frame — it is below the threshold of perceptual evidence in
+the AC #8 jumpscare-arrival recording. Path 1 [pre-shake basis
+sampling] may also clean up Pattern A if the spike is a sample-
+timing artifact rather than a real ordering bug. Verify after the
+AC #5 re-sample."*
+
+---
+
+**Prior status (preserved for history): `APPROVED — Director audit
+landed 2026-04-24` (authored 2026-04-24 by PM; audit at
+`~/.claude/state/dev-collab/audits/autopilot-station-hold-redesign-
+2026-04-24.md`; amendments §A1 + §A2 applied at brief-landing
 commit).**
 
 Director audit verdict: **APPROVED with two amendments + four
@@ -271,7 +306,7 @@ aim-once write happens at CRUISE-onset (the autopilot writes
 once at phase entry); the trajectory does not re-aim mid-flight.
 *Director ruling 2026-04-24 settles the ambiguity in this AC.*
 
-### AC #2 — APPROACH onset at 10× body radius (per `docs/FEATURES/autopilot.md` §"Per-phase criteria — ship axis" §APPROACH)
+### AC #2 — APPROACH onset at min(10R, cruise-distance ceiling) (per `docs/FEATURES/autopilot.md` §"Per-phase criteria — ship axis" §APPROACH; **amended §A3 — 2026-04-25 V1 Attempt 1 closing audit**)
 
 Quoted criterion: *"Onset rule: fixed distance from the body.
 APPROACH begins when the ship reaches 10× the body's radius (V1
@@ -279,14 +314,36 @@ starting value — tunable during lab iteration, not expected to vary
 at shipping). No ramp, no gradual; CRUISE → APPROACH is a hard
 velocity onset at the 10R threshold."*
 
+**Amended onset rule (V1 Attempt 1):** APPROACH onset at **`min(10R,
+cruise-distance ceiling)`**. The fallback gate in
+`_tickCruise` (`distTraveled >= this._cruiseDistance`) is the cruise-
+distance ceiling and is a correct V1 guard against the drift-from-
+aim-once mode for asteroid-class bodies where 10R is sub-frame-tiny.
+The feature doc §APPROACH already accepts the rule as *"tunable
+during lab iteration"*; the cruise-distance ceiling is exactly that
+tune — a body-scale-aware floor on the geometric threshold. Director
+audit verdict (2026-04-25, V1 Attempt 1 closing): **APPROVED.** The
+amendment is workstream-local; feature doc §APPROACH stands without
+edit (it already authors the threshold as tunable).
+
+Empirical surface (V1 Attempt 1 telemetry, 12-leg complete sample,
+`recordings/v1-attempt1-ac-report.json`): leg-24 telemetry shows
+`distAtTrans = 1.17u`, `10R = 0.0072u` — the 10R threshold is sub-
+frame-tiny for asteroid-class bodies, and the cruise-distance
+ceiling provides the body-scale-aware floor. The ceiling fires
+when 10R would be unreachable within a sane cruise-traversal
+budget; otherwise the 10R rule fires, preserving the original
+intent for moon-class and larger bodies.
+
 Verification: per-frame telemetry capture. In the same frame window
-where `distance(ship, body) ≤ 10 × body.radius` first holds, the
-phase field transitions from `CRUISE` to `APPROACH` **and** the
-shake-event log records one DECEL shake event. Tolerance: within
-1 frame of the geometric threshold crossing (dt-sampling artifact).
-No APPROACH entry **before** the 10R crossing; no APPROACH entry
-**more than 1 frame after**. Verified across every leg of the Sol
-tour capture.
+where `distance(ship, body) ≤ 10 × body.radius` **OR** `distTraveled
+≥ cruiseDistance` first holds (whichever fires first), the phase
+field transitions from `CRUISE` to `APPROACH` **and** the shake-
+event log records one DECEL shake event. Tolerance: within 1 frame
+of the geometric threshold crossing (dt-sampling artifact). No
+APPROACH entry **before** either threshold crossing; no APPROACH
+entry **more than 1 frame after**. Verified across every leg of the
+Sol tour capture.
 
 ### AC #3 — STATION-A felt-fill ~60% of screen (per `docs/FEATURES/autopilot.md` §"Per-phase criteria — ship axis" §STATION-A)
 
@@ -319,25 +376,38 @@ offset from the body as the body moves through world space
 (moon-orbit, planet-orbit-around-star). The held ship does not
 drift relative to the body, does not orbit, does not wobble.
 
-### AC #5 — Camera forward ≡ ship forward (per `docs/FEATURES/autopilot.md` §"Per-phase criterion — camera axis (V1)" §ESTABLISHING)
+### AC #5 — Camera forward ≡ ship forward (pre-shake basis) (per `docs/FEATURES/autopilot.md` §"Per-phase criterion — camera axis (V1)" §ESTABLISHING; **amended §A3 — 2026-04-25 V1 Attempt 1 closing audit**)
 
 Quoted criterion: *"Looks down the ship's forward vector. The
 camera orientation is derived from the ship's defined forward
 direction, not from the target body or from any independent
 compositional anchor."*
 
-Verification: per-frame telemetry samples both `ship.forward` and
-`camera.forward` (unit vectors). **Bound: `dot(ship.forward,
-camera.forward) ≥ 0.9999` every frame, all phases (CRUISE,
-APPROACH, STATION-A).** Shake perturbation is applied as additive
-displacement to camera position, not as rotation of the camera's
-forward axis — per feature doc §"Per-phase criterion — camera axis
-(V1)" the shake is the only authored behavior that distinguishes
-V1 `ESTABLISHING` from "camera rigidly bolted to ship forward";
-shake applied as position perturbation preserves the forward-axis
-invariant. If shake is implemented as rotation, this AC's bound
-relaxes to `≥ 0.99` (small-angle perturbation). Working-Claude
-documents the shake-as-position-vs-rotation choice in the commit.
+**Amended threshold contract (V1 Attempt 1):** AC #5 measures
+**pre-shake camera basis** — `camera.quaternion` snapshotted **after**
+`camera.lookAt(cameraChoreographer.currentLookAtTarget)` and **before**
+the shake-quaternion multiply. The implementation chose rotation
+(not position-additive) for shake, which is contemplated in the
+original AC text ("If shake is implemented as rotation, this AC's
+bound relaxes to ≥ 0.99 (small-angle perturbation)"); the pre-shake
+basis is the cleaner contract because the feature doc §"Per-phase
+criterion — camera axis (V1)" + AC #5's own text already author
+shake as additive-on-top of the look-at orientation. Director audit
+verdict (2026-04-25, V1 Attempt 1 closing): **APPROVED.** Sampling
+pre-shake gives the load-bearing measurement (does the camera's
+ship-forward alignment hold under the V1 contract?) without the
+small-angle perturbation eating the bound's headroom.
+
+Verification: per-frame telemetry samples `ship.forward` (unit) and
+`cameraForwardPreShake` (unit) — the latter read from
+`camera.quaternion` **immediately after**
+`camera.lookAt(cameraChoreographer.currentLookAtTarget)` and
+**immediately before** the shake-quaternion multiply (main.js
+animate loop, V1 STATION-hold branch). **Bound: `dot(shipForward,
+cameraForwardPreShake) ≥ 0.9999` every frame, all phases (CRUISE,
+APPROACH, STATION-A).** Working-Claude documents the pre-shake
+sampling site in the commit; the post-shake `camera.forward` is
+not the contract surface and is not measured here.
 
 ### AC #6 — Shake event placement (per `docs/FEATURES/autopilot.md` §"Gravity drives" V1 scope)
 
@@ -912,11 +982,108 @@ would mean the motion-model spec itself needs re-examination.
 Escalate to Director at that point; do not iterate within this
 workstream.
 
+## Amendment history
+
+Canonical record of Director audit verdicts applied to this brief.
+Audit log: `~/.claude/state/dev-collab/audits/autopilot-station-
+hold-redesign-2026-04-24.md` (the file accumulates audits across
+this workstream's lifecycle; verdicts are appended to the audit
+log by working-Claude at the same commit that lands the brief
+amendments).
+
+### §A1 — 2026-04-24 (Director audit on brief landing)
+
+AC #9.10 added: function-body removal of the stub-comment-bracketed
+block at `src/main.js` L1251–L1413, beyond the `window.X = …`
+accessor lines covered by AC #9.1–#9.7. Closes the ambiguity in
+the original AC #9 about whether function bodies survived after
+accessor removal.
+
+### §A2 — 2026-04-24 (Director audit on brief landing)
+
+§A2.1 — AC #1 *Note* tightened to drop rescope contingency. Aim-once
+is canonical for V1 (settled by Director ruling); per-frame re-aim
+is V-later.
+
+§A2.2 — AC #7 contract item 2 tightened to "settable, not derived"
+semantics. The autopilot **sets** orientation by writing the
+accessor; the ship holds the written orientation until the next
+write. Camera reads SET orientation.
+
+§A2.3 — `NavigationSubsystem.js` **retire** ruling (not repurpose).
+The Hermite travel-curve + seam-blend + orbit-arc machinery is dead
+by construction under V1. Replace with a thinner V1 motion evaluator;
+`git rm` the old file in the same commit set.
+
+§A2.4 — Ship-object-location TBD resolved into definite answer:
+no first-class player-ship object exists at HEAD `690ea81`;
+`camera.position` IS the ship's effective position; AC #7 implies
+authoring a thin orientation-bearing ship-object surface, in
+scope, minimum surface = `forward` / `up` accessors (Vector3, unit).
+
+### §A3 — 2026-04-25 (Director audit on V1 Attempt 1 closing)
+
+**§A3.1 — AC #2 amendment APPROVED.** Threshold clarified to
+"APPROACH onset at **`min(10R, cruise-distance ceiling)`**". Director
+rationale (verbatim): *"The fallback gate in `_tickCruise`
+(`distTraveled >= this._cruiseDistance`) is a correct V1 guard
+against the drift-from-aim-once mode for asteroid-class bodies where
+10R is sub-frame-tiny. The feature doc §APPROACH already accepts the
+rule as 'tunable during lab iteration'; this is exactly that — a
+body-scale-aware floor on the geometric threshold."* Empirical
+surface: `recordings/v1-attempt1-ac-report.json` leg-24 telemetry
+shows `distAtTrans = 1.17u`, `10R = 0.0072u` (12-leg complete-leg
+sample, V1 Attempt 1 capture). Workstream-local amendment; feature
+doc §APPROACH unchanged (already authors the threshold as tunable).
+
+**§A3.2 — AC #5 amendment APPROVED.** Threshold contract clarified
+to **pre-shake camera basis**. Director rationale (verbatim): *"The
+feature doc §'Per-phase criterion — camera axis (V1)' + AC #5's own
+text already authors shake-as-additive-on-top: 'Shake perturbation
+is applied as additive displacement to camera position, not as
+rotation of the camera's forward axis ... If shake is implemented
+as rotation, this AC's bound relaxes to ≥ 0.99 (small-angle
+perturbation).'"* The implementation chose rotation; pre-shake
+basis sampling is the cleaner contract. AC #5 verifier reads
+`camera.quaternion` snapshotted **after**
+`camera.lookAt(cameraChoreographer.currentLookAtTarget)` and
+**before** the shake-quaternion multiply (main.js animate loop, V1
+STATION-hold branch). Bound: `dot(shipForward, cameraForwardPreShake)
+≥ 0.9999`.
+
+**§A3.3 — Pattern A PUNTED to follow-up workstream stub.** Single-
+frame leg-boundary orientation spike (12 single-sample dot
+violations across 12 legs in V1 Attempt 1 telemetry,
+`recordings/v1-attempt1-ac-report.json`). Director rationale
+(verbatim): *"The leg-boundary spike is one frame — it is below
+the threshold of perceptual evidence in the AC #8 jumpscare-arrival
+recording. Path 1 [pre-shake basis sampling] may also clean up
+Pattern A if the spike is a sample-timing artifact rather than a
+real ordering bug. Verify after the AC #5 re-sample."* Stub
+authored at
+`docs/WORKSTREAMS/autopilot-leg-boundary-orientation-spike-followup.md`
+— conditional on V1 AC #5 re-sample outcome (close stub if pre-
+shake re-sample shows Pattern A is sample-timing artifact; light up
+stub if Pattern A persists as real ordering bug).
+
+**§A3.4 — Status flip AUTHORIZED at `VERIFIED_PENDING_MAX
+<commit-sha>`.** Subject to: §A3.1 + §A3.2 brief amendments landed
+(this commit), AC #5 pre-shake re-sample passes ≥ 0.9999 for
+Pattern B (working-Claude running this now), AC #1 / #3 / #4 / #6 /
+#7 / #9 already PASS in `recordings/v1-attempt1-ac-report.json`,
+AC #10 contract-confirmed (CameraChoreographer.setShip preserves
+legacy framing-state path), AC #8 stays `VERIFIED_PENDING_MAX`
+pending Max's morning recording review.
+
+*Authored by PM under Director audit autopilot-station-hold-redesign-
+2026-04-24 (2026-04-25); audit verdicts quoted verbatim.*
+
 ---
 
 *This brief is PM-authored, authored per CLAUDE.md `Editing
 docs/WORKSTREAMS/**` rule. Director audit landed 2026-04-24
-(verdict: APPROVED with amendments §A1 + §A2, applied this commit).
-Working-Claude proceeds to handoff §1 read-only steps; first
-substantive edit (AC #7 ship-orientation contract on its own commit)
-follows after read.*
+(verdict: APPROVED with amendments §A1 + §A2, applied at brief-
+landing commit). V1 Attempt 1 closing audit landed 2026-04-25
+(amendments §A3 applied this commit). Working-Claude commits this
+brief amendment + the AC #5 pre-shake re-sample telemetry +
+the gate state update together.*
