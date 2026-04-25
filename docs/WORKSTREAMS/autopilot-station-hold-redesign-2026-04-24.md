@@ -2,17 +2,38 @@
 
 ## Status
 
-**`HELD — pending Director audit` (authored 2026-04-24 by PM).**
+**`APPROVED — Director audit landed 2026-04-24` (authored 2026-04-24
+by PM; audit at `~/.claude/state/dev-collab/audits/autopilot-station-
+hold-redesign-2026-04-24.md`; amendments §A1 + §A2 applied this
+commit).**
 
-Execution begins only after Director releases the gate. Director audit
-scope: (a) the new ship-orientation precondition framing in this brief;
-(b) AC #9's stub-removal deliverable (Director §2f kept the stub in
-tree during supersede — this workstream retires it in the same commit
-that lands V1); (c) the NavigationSubsystem architectural call
-(retire vs. repurpose the Hermite-curve machinery, which the simpler
-motion model does not need); (d) any AC-phrasing tightening Director
-wants against the amended feature doc `20ef423`. No implementation
-starts before that audit lands.
+Director audit verdict: **APPROVED with two amendments + four
+substantive rulings on the surfaced items.** The four PM-surfaced
+items resolved as: (a) ship-orientation precondition — `forward`/`up`
+accessors on the ship object are the right contract shape; orientation
+is **settable by the autopilot**, not derived (AC #7 contract item 2
+tightened §A2.2); (b) AC #9 stub-removal contract — accurate; one
+scope addition added as AC #9.10 (§A1) covering function-body removal,
+not just the `window.X = …` accessor lines; (c) `NavigationSubsystem`
+retention call — **retire**, do not repurpose; replace with a thinner
+V1 motion evaluator, `git rm` the old file in the same commit set
+(§A2.3); (d) AC phrasing fidelity — all nine phase-sourced ACs match
+the feature doc at `20ef423` verbatim; AC #1 *Note* tightened to drop
+rescope contingency (aim-once is canonical for V1, settled by Director
+ruling) (§A2.1). Handoff §11 ship-object-location TBD resolved by
+PM code-read into a definite answer (§A2.4).
+
+**Cycle-budget framing — Director-confirmed.** V1 = one Attempt 1
+with parameter-tune budget for AC #3 (felt-fill 60%) and AC #2
+(DECEL cubic-ease curve constants). No multi-cycle budget. Trigger
+for Attempt 2: mechanism-class failure only (escalate to Director;
+do not iterate within this workstream).
+
+**Director check-in cadence.** Director audits next at first
+`VERIFIED_PENDING_MAX <sha>`. No mid-execution checkpoint required.
+Surface to PM if working-Claude hits unanticipated structural
+surface (e.g., ship-object location entangled with warp-exit handoff);
+PM decides whether to bring Director in early.
 
 **Structural reframe, not a cycle continuation.** This workstream is
 **not** cycle 5 of Loop (a). Cycles 1–4 of the live-feedback Loop (a)
@@ -91,25 +112,30 @@ code read + Director audit):
   branch at L6595–L6893 + gate at L6893). V1 replaces the stub with
   the production autopilot path; stub scaffolding is removed in the
   same commit set per AC #9.
-- **`src/auto/NavigationSubsystem.js`** — open architectural call
-  (Director audit item). The Hermite travel-curve + seam-blend
-  machinery is not required by the V1 CRUISE→DECEL→HOLD model. Two
-  candidate directions:
-  - **Retire.** Motion plan becomes a straight-line CRUISE + cubic-
-    ease DECEL authored directly (nav subsystem collapses into a
-    per-phase motion evaluator).
-  - **Repurpose.** Subsystem stays as a produces-motion-plan
-    surface; V1 plan is the straight-line-plus-cubic-ease shape; the
-    Hermite-curve path becomes V-later infrastructure for STATION-B
-    / richer camera authoring that needs per-frame curve parameters.
-
-  PM leans "retire" — the feature doc §"Failure criteria" includes
-  *"CRUISE re-aims per-frame at drifted target — violates Q3's 'aim
-  once at intercept, fly straight' rule. Per-frame re-aim
-  reintroduces Hermite-class complexity V1 discarded,"* and the
-  close-out lesson #4 notes the filter-class (and by extension the
-  Hermite-composed-signal class) was abandoned by the reframe. But
-  the call is load-bearing; Director audit resolves.
+- **`src/auto/NavigationSubsystem.js`** — **Director ruling
+  2026-04-24: retire.** The Hermite travel-curve + seam-blend +
+  orbit-arc machinery is dead by construction under V1: feature doc
+  §CRUISE (aim-once, fly straight) and §APPROACH (hard-onset 10R +
+  cubic-ease) do not need Hermite curves, seam-blend across phase
+  boundaries, or composed-with-orbit-arc shape. The 1117-line file's
+  purpose-of-existing was the multi-phase composed-motion model V1
+  explicitly abandons. Replace with a thinner V1 motion evaluator
+  (working-Claude names the new module — e.g., `MotionPlanner.js`
+  or `AutopilotMotion.js`, or a renamed thinner module). Preserve
+  any target-body-resolution / intercept-point / unit-conversion
+  shape during the lift; do **not** lift the Hermite-curve /
+  orbit-arc / seam-blend code. `git rm` the old file in the same
+  commit set. Bookkeeping note: the cycle-4 spring filter at
+  `git stash@{0}` is preserved separately for the V-later
+  STATION-B / ORBIT-mode workstream; the retired
+  `NavigationSubsystem.js` itself is committed-removed (git history
+  preserves it for V-later reference; an explicit stash is
+  unnecessary). If working-Claude's first-pass code read surfaces
+  evidence that contradicts retire (e.g., critical substrate V1
+  cannot cleanly re-derive in a thin module), surface to PM +
+  Director — the ruling can revise to "repurpose with stripped
+  Hermite layer" if evidence demands it. Default direction is
+  retire.
 - **`src/auto/CameraChoreographer.js`** — V1 `ESTABLISHING` collapses
   to "camera looks down ship-forward + shake on top." Existing
   framing-state machinery (LINGERING / TRACKING / PANNING_AHEAD) is
@@ -232,18 +258,18 @@ body's position slightly; re-aim is CRUISE-onset only, so the
 straight-line bound holds against the CRUISE-onset aim, not against
 the moving target.
 
-*Note.* Feature doc §CRUISE does also read *"No per-frame re-aim
-during the phase"* — this AC measures that rule as a geometric
-consequence (straight-line path, not per-frame re-aim-induced
-curvature). The stub used per-frame re-aim for Loop (b)'s
-substrate-preserving demonstration; V1 canonical rule is aim-once-
-at-intercept. Director audit item: confirm the stub's per-frame
-re-aim read is compatible with this AC's aim-once measurement, OR
-rescope AC #1 to match whatever the amended feature doc authors as
-the canonical rule. (PM read of `20ef423`: aim-once is load-bearing,
-per-frame re-aim is a V-later-only concern per feature doc
-§"V-later" — *"CRUISE per-frame re-aim from drift. Not authored
-for V1."*)
+*Note.* Feature doc L76 is canonical: aim-once-at-intercept is
+the V1 rule; per-frame re-aim is explicit V-later (feature doc
+L154). The stub used per-frame re-aim as Loop (b) substrate-
+preserving demonstration; V1 reverts to aim-once. AC #1's
+path-linearity bound measures the aim-once geometry directly:
+aim-once produces a straight path (deviation ≤ 0.05u against the
+CRUISE-onset aim-line); per-frame re-aim curves the path toward
+the moving body and would fail this bound by construction. The
+aim-once write happens at CRUISE-onset (the autopilot writes
+`ship.forward = (target.position − ship.position).normalize()`
+once at phase entry); the trajectory does not re-aim mid-flight.
+*Director ruling 2026-04-24 settles the ambiguity in this AC.*
 
 ### AC #2 — APPROACH onset at 10× body radius (per `docs/FEATURES/autopilot.md` §"Per-phase criteria — ship axis" §APPROACH)
 
@@ -350,7 +376,13 @@ Contract (all must hold):
    position. At rest, `forward` returns the authored forward axis.
    Between frames, `forward` can change only via explicit
    orientation update (phase transition, player override), not via
-   motion-direction re-derivation.
+   motion-direction re-derivation. The autopilot **sets**
+   orientation by writing the accessor; the ship holds the written
+   orientation until the next write. The implementation site choice
+   (where the orientation state lives, which subsystem writes it)
+   is working-Claude's call as long as the accessor surface holds.
+   Camera reads the SET orientation; orientation is not computed
+   on-the-fly from velocity, and not inferred from motion state.
 3. The `CameraChoreographer` reads the accessors; it does not
    fall back to `normalize(velocity)` or `normalize(position -
    prevPosition)` at any code path.
@@ -444,9 +476,21 @@ Contract (all must hold at the commit that lands V1):
    `!window._stubAutopilot?.active` check) removed — the
    production camera update path is no longer conditionally
    suppressed.
+10. The stub-comment-bracketed function block at `src/main.js`
+    L1251–L1413 (encompassing the `window._stubFly` definition,
+    the `window._stubAutopilot` initialization, the
+    `window._stubStop` definition, the `window._listBodies`
+    definition, and the `window._stubFlyIdx` definition) is
+    removed in its entirety. No orphan function bodies survive.
+    Items 1–7 above remove the `window.X = …` accessor lines;
+    this item removes the underlying function bodies + comment
+    bracket so no dead code remains attached to the
+    no-longer-exposed names.
 
 Verification: grep-based contract audit at the commit. Director
-walks the grep output, confirms zero residuals. Commit message
+walks the grep output, confirms zero residuals. Specifically:
+`grep -n "window\._stub" src/main.js` returns zero hits
+post-commit (today: 13 hits at `690ea81`). Commit message
 names AC #9 explicitly.
 
 ### AC #10 — Two-axis architecture preserved (per `docs/FEATURES/autopilot.md` §"V1 architectural affordances")
@@ -707,13 +751,18 @@ From `docs/GAME_BIBLE.md` §11 Development Philosophy:
 
 ## Handoff to working-Claude
 
-**Precondition: Director audit.** This brief is `HELD — pending
-Director audit`. Execution begins only after Director releases the
-gate. If Director pushes back on (a) the ship-orientation
-precondition scoping, (b) AC #9's stub-removal contract, (c) the
-NavigationSubsystem retention call, or (d) any AC phrasing,
-iterate the brief before starting code. Director edit to
-`state.json[...].last_audit_sha` is the release signal.
+**Precondition: Director audit landed.** Audit at
+`~/.claude/state/dev-collab/audits/autopilot-station-hold-redesign-
+2026-04-24.md` released the gate to read-only handoff steps (§1
+code reads, §4 stub recording watch, §12 recording protocol read).
+Post-amendment commit (this one) is the HEAD working-Claude syncs
+to before first `Edit`/`Write` on production code paths. The four
+Director rulings are baked into this brief: (a) `forward`/`up`
+accessor contract with settable-not-computed semantics (AC #7), (b)
+AC #9.10 function-body removal added (§A1), (c)
+NavigationSubsystem retire ruling (Implementation plan), (d) AC #1
+*Note* tightened, ship-object-location resolved (§11). No further
+audit iteration needed before code begins.
 
 **Read this brief first.** Then, in order:
 
@@ -763,11 +812,30 @@ iterate the brief before starting code. Director edit to
 10. **`src/auto/CameraMode.js`** — the camera-mode dispatch
     surface. V1 selects `ESTABLISHING`; preserve the enum + dispatch
     for AC #10.
-11. **Ship-object location (TBD — first-pass code read).** Locate
-    where the ship is represented in the scene graph. The
-    orientation contract (AC #7) lives here. If the ship doesn't
-    have a clean object surface to attach orientation to, surface
-    to PM — that may be a structural scoping item.
+11. **Ship-object location.** PM-confirmed code read at HEAD
+    `690ea81`: there is **no first-class player-ship object** in
+    `src/main.js` today. `camera.position` IS the ship's effective
+    position (82 references in `src/main.js`). `playerShip*`
+    references in `src/core/ScaleConstants.js` (L156, L173, L179,
+    L186, L201, L206) are scale-helper exports for portal/tunnel
+    sizing math, not a scene-graph object. There is no `Ship`
+    class, no `class Ship`, no `new Ship(…)` instantiation, no
+    `window.ship` accessor, no `playerShip` object attached
+    anywhere in the scene graph. **AC #7 implies authoring a thin
+    orientation-bearing ship-object surface.** This is in scope;
+    surface to PM only if the work expands beyond what AC #7's
+    precondition requires — e.g., visual ship-mesh rendering,
+    chevrons, decals, orientation-reticle (all explicitly out of
+    scope per §"Out of scope" — visible ship-orientation
+    indicators). The minimum surface AC #7 requires: an object with
+    `forward` / `up` (Vector3, unit) accessors, written by the
+    autopilot, read by `CameraChoreographer` + `ShipChoreographer`.
+    Position can remain on `camera.position` for V1 if working-
+    Claude judges that the simpler shape, or migrate to the new
+    object — the AC doesn't constrain that choice. (Director
+    audit 2026-04-24 §A2.4: PM clarifies this in the brief so
+    working-Claude's first implementation step has a definite
+    answer rather than a TBD.)
 12. **`docs/MAX_RECORDING_PROTOCOL.md`** — canvas-recording path
     for the Sol tour capture (AC #8). Agent-initiated via
     `~/.claude/helpers/canvas-recorder.js`; fetch via
@@ -847,5 +915,8 @@ workstream.
 ---
 
 *This brief is PM-authored, authored per CLAUDE.md `Editing
-docs/WORKSTREAMS/**` rule. Director audit gate is open; execution
-blocked until audit lands.*
+docs/WORKSTREAMS/**` rule. Director audit landed 2026-04-24
+(verdict: APPROVED with amendments §A1 + §A2, applied this commit).
+Working-Claude proceeds to handoff §1 read-only steps; first
+substantive edit (AC #7 ship-orientation contract on its own commit)
+follows after read.*
