@@ -344,29 +344,17 @@ export class CameraChoreographer {
     // V1 output: the lookAtTarget for FlythroughCamera to consume.
     this._currentLookAtTarget = new THREE.Vector3();
 
-    // Target-transition smoothing. When motionFrame.target changes
-    // (autopilot tour advances to next body), interpolate the LOOK
-    // DIRECTION (unit vector) from the direction-at-swap to the
-    // direction-to-new-target over TARGET_TURN_SEC. Direction-based
-    // interpolation is robust regardless of camera-to-body distance;
-    // lerping the lookAt POINT (earlier approach) produced direction
-    // whip when the camera was near the body (small bodies / small
-    // hold distances). Output: lookAt = camPos + interpDir ×
-    // distanceToTarget so steady-state lookAt = target.position.
-    this._lastTargetRef = null;
-    this._turnStartDir = new THREE.Vector3(0, 0, -1);
-    this._turnElapsed = Infinity; // > duration → no turn in progress
-    this._turnDurationSec = 1.5;
-    // Separate scratch vectors so tgtDir and lookDir are not aliased
-    this._tgtDirScratch = new THREE.Vector3();
+    // Per the 2026-04-25 lhokon amendment, AutopilotMotion is the
+    // single source of truth for the camera's authored look
+    // direction. The previous in-CRUISE direction-nlerp lived here
+    // — it produced the AC #5a FAIL by smoothing during ship-burn,
+    // which the brief forbade. The smoothing now lives in
+    // AutopilotMotion._tickLhokon, gated by a phase that runs while
+    // the ship is stationary (AC #13). This module reads
+    // motionFrame.cameraLookDir each frame and places the lookAt
+    // point along that direction. Scratch vector for distance-to-
+    // target placement.
     this._tgtVecScratch = new THREE.Vector3();
-    this._lookDirScratch = new THREE.Vector3();
-    // Previous frame's actual look direction — used to seed
-    // turnStartDir on swap. Captures the visual direction at the
-    // end of the prior frame, before motion-frame advance smears
-    // the geometry on swap-frame.
-    this._prevLookDir = new THREE.Vector3();
-    this._prevLookDirValid = false;
   }
 
   /**
@@ -464,69 +452,35 @@ export class CameraChoreographer {
       case CameraMode.ESTABLISHING:
       default: {
         if (this._ship && motionFrame && motionFrame.target) {
-          // §A4 ESTABLISHING (camera/ship decoupled): camera looks
-          // at the autopilot target body's current position each
-          // frame (pursuit-curve).
+          // §A4 ESTABLISHING + 2026-04-25 lhokon amendment: the
+          // camera applies the authored look direction supplied by
+          // AutopilotMotion on the motion frame. During CRUISE /
+          // APPROACH / STATION-A this equals the pursuit-curve
+          // direction (unit(target.position − camPos)) — i.e.,
+          // strict per-frame body-tracking per AC #5a. During
+          // LHOKON this is the in-flight nlerp output, smoothly
+          // converging to the new pursuit-curve direction over
+          // LHOKON_TIMEOUT_SEC while the ship is anchored.
           //
-          // Target-transition smoothing: at swap, seed turnStartDir
-          // with the PREVIOUS frame's actual look direction (captured
-          // at end of last update). nlerp from there to current
-          // target direction over _turnDurationSec with cubic ease-
-          // out. Output lookAt = camPos + interpDir × tgtLen so
-          // steady-state lookAt = target.position.
-          //
-          // Using prev-frame direction (not "current lookAt − camPos"
-          // computed on swap-frame) avoids the smearing that happens
-          // when camPos advances on the swap-frame's _tickCruise — at
-          // small hold distances the smear dominates the captured
-          // direction and the lerp starts from garbage.
-          //
-          // Separate scratch vectors so tgtDir and the lerp output
-          // are not aliased — THREE.Vector3.lerp is a no-op when
-          // `this === v`.
+          // Output: lookAt = camPos + cameraLookDir × tgtLen, where
+          // tgtLen is the camPos→target distance. The placement
+          // distance doesn't affect the look direction (camera.lookAt
+          // normalizes anyway) but keeps the world-space look point
+          // on or near the target's surface for any downstream
+          // consumer that reads currentLookAtTarget directly.
           const camPos = motionFrame.position;
-
-          // Compute target vector + length + direction
           this._tgtVecScratch.subVectors(motionFrame.target.position, camPos);
           const tgtLen = this._tgtVecScratch.length();
-          if (tgtLen > 1e-6) {
-            this._tgtDirScratch.copy(this._tgtVecScratch).divideScalar(tgtLen);
+          const lookDir = motionFrame.cameraLookDir;
+          if (lookDir) {
+            this._currentLookAtTarget.copy(camPos).addScaledVector(lookDir, Math.max(tgtLen, 1));
           } else {
-            this._tgtDirScratch.set(0, 0, -1);
+            // Fallback: AutopilotMotion didn't supply cameraLookDir
+            // (e.g., partial wiring). Apply strict pursuit-curve
+            // direction directly — matches AC #5a's "every frame,
+            // camera.lookAt(target.current_position)" by construction.
+            this._currentLookAtTarget.copy(motionFrame.target.position);
           }
-
-          if (this._lastTargetRef !== motionFrame.target) {
-            if (this._prevLookDirValid) {
-              this._turnStartDir.copy(this._prevLookDir);
-            } else {
-              this._turnStartDir.copy(this._tgtDirScratch);
-            }
-            this._turnElapsed = 0;
-            this._lastTargetRef = motionFrame.target;
-          }
-
-          // Interpolate look direction
-          if (this._turnElapsed < this._turnDurationSec) {
-            this._turnElapsed += deltaTime;
-            const t = Math.min(1, this._turnElapsed / this._turnDurationSec);
-            const eased = 1 - Math.pow(1 - t, 3);
-            // nlerp into _lookDirScratch. Inputs are turnStartDir
-            // and tgtDirScratch — both distinct from output scratch.
-            this._lookDirScratch.copy(this._turnStartDir).lerp(this._tgtDirScratch, eased);
-            const len = this._lookDirScratch.length();
-            if (len > 1e-6) {
-              this._lookDirScratch.divideScalar(len);
-            } else {
-              this._lookDirScratch.copy(this._tgtDirScratch);
-            }
-          } else {
-            this._lookDirScratch.copy(this._tgtDirScratch);
-          }
-
-          // Place lookAt + remember direction for next frame
-          this._currentLookAtTarget.copy(camPos).addScaledVector(this._lookDirScratch, tgtLen);
-          this._prevLookDir.copy(this._lookDirScratch);
-          this._prevLookDirValid = true;
         } else if (this._ship) {
           // V1 §A4 caller without a target in the frame — fall back
           // to the legacy framing-state path. Should not happen for
