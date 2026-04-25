@@ -1252,6 +1252,9 @@ function _captureTelemetrySample() {
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
+// V1 STATION-hold redesign — debug accessors (remove after Director audit).
+window._autopilotMotion = autopilotMotion;
+window._ship = ship;
 
 let idleTimer = 0;
 
