@@ -191,8 +191,8 @@ export class AutopilotMotion {
 
     // Initial cruise direction = unit vector from startPos toward
     // target's current position. Per-frame re-aim updates this each
-    // tick. Sized at beginMotion only for cruise-distance + cruise-
-    // speed computation.
+    // tick (§A4 mechanism). Sized at beginMotion only for cruise-
+    // distance + cruise-speed computation.
     _v1.subVectors(targetPos, this._startPos);
     const totalDistToBody = _v1.length();
     if (totalDistToBody < 1e-6) {
@@ -201,11 +201,6 @@ export class AutopilotMotion {
     }
     this._cruiseDir.copy(_v1).divideScalar(totalDistToBody);
 
-    // APPROACH-onset distance threshold (10R) and cruise-distance
-    // ceiling. Under §A4 the path is curved (predicted-intercept
-    // re-aim), so cruise-distance is computed from the initial
-    // straight-line distance for sizing purposes only — the actual
-    // travel curves toward the body's predicted position.
     const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
     this._approachStartPos.copy(targetPos)
       .addScaledVector(this._cruiseDir, -approachRadius);
@@ -216,7 +211,6 @@ export class AutopilotMotion {
       return;
     }
 
-    // Cruise speed sized to hit a target total leg duration.
     const targetDuration = Math.max(
       CRUISE_MIN_SEC,
       Math.min(CRUISE_MAX_SEC, CRUISE_TARGET_SEC * Math.sqrt(this._cruiseDistance / 1000)),
@@ -410,6 +404,20 @@ export class AutopilotMotion {
     // Cubic ease-out: position progresses fast then slow → high
     // initial velocity decelerating to zero. p(t) = 1 - (1-t)³.
     const eased = 1 - Math.pow(1 - t, 3);
+
+    // §A7 fix: re-derive _holdEndpoint each frame from body's
+    // CURRENT position. Original §A4 captured _holdEndpoint at
+    // APPROACH onset; for fast-orbiting moons the body drifts
+    // during the 1.8s approach, causing the lerp to land at a stale
+    // position (AC #1 overshoot up to 7%). Re-deriving each frame
+    // makes the endpoint track the moving body. Direction (body -
+    // ship's current position) is recomputed so the ship pursues.
+    _v2.subVectors(this._target.position, this._position);
+    const dlen = _v2.length();
+    if (dlen > 1e-6) {
+      _v2.divideScalar(dlen);
+      this._holdEndpoint.copy(this._target.position).addScaledVector(_v2, -this._holdDistance);
+    }
     this._position.lerpVectors(this._approachStartPos, this._holdEndpoint, eased);
 
     if (t >= 1) {

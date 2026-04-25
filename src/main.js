@@ -6887,7 +6887,12 @@ function animate() {
   // without stopping autopilot. Only suppress during warp/turn.
   const suppressHover = warpEffect.isActive || warpTarget.turning;
   const _hoverForReticle = (suppressHover || !_hoverTarget || _isReticleOccluded(_hoverTarget)) ? null : _hoverTarget;
-  const _selectedForReticle = (_selectedTarget && !_isReticleOccluded(_selectedTarget)) ? _selectedTarget : null;
+  // §A8 fix: when autopilot is burning toward the selected target,
+  // skip the occlusion check. The autopilot target reticle must
+  // remain visible even if a foreground body is between camera and
+  // target — Max needs to see what we're flying toward at all times
+  // during the burn. Hover/ghost reticles keep their occlusion logic.
+  const _selectedForReticle = (_selectedTarget && (autopilotMotion.isActive || !_isReticleOccluded(_selectedTarget))) ? _selectedTarget : null;
 
   targetingReticle.update({
     hoverTarget: _hoverForReticle,
