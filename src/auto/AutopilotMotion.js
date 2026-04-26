@@ -97,20 +97,26 @@ const CRUISE_TARGET_SEC = 4.5;
 const CRUISE_MIN_SEC = 2.0;
 // Cruise duration ceiling — very long legs cap here.
 const CRUISE_MAX_SEC = 12.0;
-// lhokon dot-gate threshold (per amendment 2026-04-25 §"CRUISE-entry
-// gate"). When the camera's authored look direction reaches this
-// dot-product with the unit vector toward the new target's current
-// position, lhokon completes and CRUISE begins. Default matches AC
-// #5a's bound; PM-tunable to 0.99996 if APPROACH-side FP precision
-// needs the relaxation pathway from AC #5b.
-const LHOKON_DOT_THRESHOLD = 0.9999;
-// lhokon timeout (per amendment 2026-04-25 §"CRUISE-entry gate"). If
-// the dot-gate hasn't fired by this elapsed time, lhokon exits on
-// timeout — safety net against degenerate-geometry hangs (near-
-// antiparallel start/end directions). Telemetry pipeline records a
-// lhokon_timeout flag; firing under realistic conditions is a flag
-// for feature-doc review, not an automatic AC failure.
-const LHOKON_TIMEOUT_SEC = 1.5;
+// lhokon dot-gate threshold (per amendment §A5 2026-04-25 §"CRUISE-entry
+// gate"; tuning locked in §A6 2026-04-26). When the camera's authored
+// look direction reaches this dot-product with the unit vector toward
+// the new target's current position, lhokon completes and CRUISE
+// begins. §A6 picked `0.999999` (≈ 0.08° angular error, sub-pixel at
+// 1280×722 / 70°FOV) over the §A5 default `0.9999` (≈ 0.81°, ~15 px
+// of "almost-centered" miss the §T3-PASS-but-Max-felt-miss test
+// surfaced). Max evaluated empirically in `autopilot-lab.html` at
+// `3ced806`; the lab is the verification artifact for this value.
+const LHOKON_DOT_THRESHOLD = 0.999999;
+// lhokon timeout (§A5 2026-04-25 / tuned §A6 2026-04-26). With the
+// §A6 dot-threshold tightened to `0.999999`, the lhokon curve tail
+// reaches the threshold late in its own duration; `3.0s` gives
+// cubic-out (the §A6 ease curve) the time to land cleanly. Timeout
+// fires only on degenerate geometry (near-antiparallel) — Max's
+// orbit-on observation in the lab confirmed cubic-out's firmer
+// landing doesn't depend on the timeout backstop under normal
+// conditions. The `_lhokonTimeoutFlag` still surfaces in telemetry
+// for the V-later orbit-mode evaluation envelope.
+const LHOKON_TIMEOUT_SEC = 3.0;
 
 export class AutopilotMotion {
   constructor() {
@@ -195,9 +201,16 @@ export class AutopilotMotion {
     this.lhokonDotThreshold = LHOKON_DOT_THRESHOLD;
     this.lhokonTimeoutSec = LHOKON_TIMEOUT_SEC;
     // Ease curve: takes raw progress t ∈ [0, 1], returns eased ∈ [0, 1].
-    // Default = smoothstep (slope 0 at both boundaries — AC #14 by
-    // construction). Lab swaps in cubic-ease-out / sinusoidal / etc.
-    this.lhokonEaseFn = (t) => t * t * (3 - 2 * t);
+    // §A6 2026-04-26: cubic ease-out (`1 - (1-t)³`). Slope-3 at t=0
+    // (designed first-frame impulse — AC #14 entry-frame is carved out
+    // by §A6 framing (b)); slope-0 at t=1 (firm landing — satisfies
+    // AC #14 exit `≤ 0.5°` by construction). Replaces the §A5 default
+    // smoothstep `t² × (3−2t)` after Max evaluated curves in
+    // `autopilot-lab.html` (commit `3ced806`) and selected cubic-out
+    // for its firmer terminal landing — smoothstep's asymptotic tail
+    // produced the "almost-centered" felt-miss the §T3-PASS recording
+    // showed.
+    this.lhokonEaseFn = (t) => 1 - Math.pow(1 - t, 3);
 
     // ── Camera FOV reference (for felt-fill hold distance) ──
     // Captured at beginMotion() so the held distance reflects the

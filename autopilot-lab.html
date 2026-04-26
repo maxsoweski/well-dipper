@@ -81,14 +81,14 @@
     </section>
 
     <section>
-      <label>lhokon dot threshold <span class="v" id="dot-v">0.9999</span></label>
-      <input type="range" id="dot" min="0" max="100" value="50">
-      <label>lhokon timeout (s) <span class="v" id="timeout-v">1.50</span></label>
-      <input type="range" id="timeout" min="0.30" max="3.00" step="0.05" value="1.50">
+      <label>lhokon dot threshold <span class="v" id="dot-v">0.999999</span></label>
+      <input type="range" id="dot" min="0" max="100" value="100">
+      <label>lhokon timeout (s) <span class="v" id="timeout-v">3.00</span></label>
+      <input type="range" id="timeout" min="0.30" max="3.00" step="0.05" value="3.00">
       <label>ease curve</label>
       <select id="ease">
-        <option value="smoothstep">smoothstep — t²(3−2t) (current production)</option>
-        <option value="cubic-out">cubic ease-out — 1−(1−t)³</option>
+        <option value="cubic-out">cubic ease-out — 1−(1−t)³ (current production, §A6)</option>
+        <option value="smoothstep">smoothstep — t²(3−2t) (prior §A5 default)</option>
         <option value="sin">sinusoidal — ½(1−cos πt)</option>
         <option value="quintic">quintic smoothstep — t³(6t²−15t+10)</option>
         <option value="linear">linear — t</option>
@@ -219,10 +219,28 @@ const lineOld  = makeLine(0xff3333); // old-body direction (red)
 const lineNew  = makeLine(0x33ff33); // new-body direction (green)
 [lineLook, lineOld, lineNew].forEach(l => { l.visible = false; scene.add(l); });
 
+// Render the line as a ray FROM near the camera POINTING toward toV.
+// Starting at camera.position puts the line origin inside the near-clip
+// plane → invisible. Start it 60 units along the direction so it
+// renders just past the near plane and extends outward.
+const _lineDir = new THREE.Vector3();
 function setLineEndpoints(line, fromV, toV) {
+  _lineDir.subVectors(toV, fromV);
+  const len = _lineDir.length();
+  if (len < 1e-6) { line.visible = false; return; }
+  _lineDir.divideScalar(len);
   const a = line.geometry.attributes.position.array;
-  a[0] = fromV.x; a[1] = fromV.y; a[2] = fromV.z;
-  a[3] = toV.x;   a[4] = toV.y;   a[5] = toV.z;
+  // Start: camera + dir × 60 (just past near plane).
+  a[0] = fromV.x + _lineDir.x * 60;
+  a[1] = fromV.y + _lineDir.y * 60;
+  a[2] = fromV.z + _lineDir.z * 60;
+  // End: project a long way along the direction so the line extends
+  // visibly past the body too (helps see misalignment between
+  // camera-look and target).
+  const reach = Math.max(len * 1.4, 4000);
+  a[3] = fromV.x + _lineDir.x * reach;
+  a[4] = fromV.y + _lineDir.y * reach;
+  a[5] = fromV.z + _lineDir.z * reach;
   line.geometry.attributes.position.needsUpdate = true;
   line.visible = true;
 }
@@ -426,7 +444,15 @@ function frame() {
   const showOld = $('show-old').checked;
   const showLines = $('show-lines').checked;
   oldBodyMarker.visible = showOld && phase === 'lhokon' && oldBodyForLhokon != null;
-  if (oldBodyMarker.visible) oldBodyMarker.position.copy(oldBodyForLhokon.position);
+  if (oldBodyMarker.visible) {
+    oldBodyMarker.position.copy(oldBodyForLhokon.position);
+    // Scale by distance to camera so the wireframe marker is always
+    // visually similar size — without this, distant old-body markers
+    // (e.g., previous body across the system) are sub-pixel.
+    const distToCam = oldBodyMarker.position.distanceTo(camera.position);
+    const baseSize = Math.max(distToCam / 60, 25);
+    oldBodyMarker.scale.setScalar(baseSize / 15); // mesh radius is 15
+  }
 
   if (showLines && phase === 'lhokon') {
     // yellow: ship → current camera look point (where camera IS pointed)
