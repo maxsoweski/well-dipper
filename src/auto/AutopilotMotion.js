@@ -184,6 +184,21 @@ export class AutopilotMotion {
     this._lhokonElapsed = 0;
     this._lhokonTimeoutFlag = false;
 
+    // Instance-tunable lhokon parameters. Defaults match production
+    // (the module-level constants above); the autopilot-lab.html harness
+    // mutates these live to A/B different felt-experience configurations
+    // without rebuilding. AC bounds (#12 dot-gate, #14 boundary continuity)
+    // hold for any sane combination, but felt-experience tuning is Max's
+    // call. If Max picks different defaults, update LHOKON_DOT_THRESHOLD /
+    // LHOKON_TIMEOUT_SEC / the smoothstep curve below to match — this
+    // surface is for iteration, not for permanent runtime overrides.
+    this.lhokonDotThreshold = LHOKON_DOT_THRESHOLD;
+    this.lhokonTimeoutSec = LHOKON_TIMEOUT_SEC;
+    // Ease curve: takes raw progress t ∈ [0, 1], returns eased ∈ [0, 1].
+    // Default = smoothstep (slope 0 at both boundaries — AC #14 by
+    // construction). Lab swaps in cubic-ease-out / sinusoidal / etc.
+    this.lhokonEaseFn = (t) => t * t * (3 - 2 * t);
+
     // ── Camera FOV reference (for felt-fill hold distance) ──
     // Captured at beginMotion() so the held distance reflects the
     // FOV in effect at that moment. If FOV changes during hold, V1
@@ -600,17 +615,15 @@ export class AutopilotMotion {
       _v1.set(0, 0, -1);
     }
 
-    // Smoothstep on lerp progress. §T2 caught that cubic ease-out
-    // (`1 - (1-t)³`) has slope 3 at t=0; first-frame angDelta
-    // ≈ 3 × (dt/duration) × totalSwapAngle, which fails AC #14's
-    // 0.5° entry-continuity bound for swaps above ~15° (Sol-tour
-    // swaps are routinely 80°+). Smoothstep `t² × (3−2t)` has zero
-    // slope at BOTH boundaries by construction, satisfying AC #14
-    // entry AND exit continuity. Same s-curve shape as the existing
-    // CameraChoreographer transition-blend at line 304 — consistent
-    // with project style.
-    const t = Math.min(1, this._lhokonElapsed / LHOKON_TIMEOUT_SEC);
-    const eased = t * t * (3 - 2 * t);
+    // Ease progress is computed from instance-tunable timeout +
+    // ease-curve. Default smoothstep `t² × (3−2t)` has slope 0 at
+    // BOTH boundaries by construction, satisfying AC #14 entry AND
+    // exit continuity (§T2 caught that cubic-ease-out had slope 3
+    // at t=0, blowing AC #14's 0.5° entry bound for swaps > ~15°).
+    // The lab harness can swap in cubic-out / sinusoidal / etc. to
+    // A/B felt experience.
+    const t = Math.min(1, this._lhokonElapsed / this.lhokonTimeoutSec);
+    const eased = this.lhokonEaseFn(t);
 
     // Normalized lerp from start direction toward end direction.
     // Use _v2 as scratch so we can both compute the lerp output and
@@ -633,11 +646,11 @@ export class AutopilotMotion {
 
     // Exit gates.
     const dot = _v2.dot(_v1);
-    if (dot >= LHOKON_DOT_THRESHOLD) {
+    if (dot >= this.lhokonDotThreshold) {
       this._exitLhokonToCruise(_v1);
       return;
     }
-    if (this._lhokonElapsed >= LHOKON_TIMEOUT_SEC) {
+    if (this._lhokonElapsed >= this.lhokonTimeoutSec) {
       this._lhokonTimeoutFlag = true;
       // Snap to the perfect end direction so AC #5a's first CRUISE
       // frame passes by construction. AC #14's exit-continuity bound
