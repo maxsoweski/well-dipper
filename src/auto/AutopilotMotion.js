@@ -55,11 +55,15 @@ const Phase = Object.freeze({
   CRUISE:     'CRUISE',
   APPROACH:   'APPROACH',
   STATION_A:  'STATION-A',
-  // Camera-convergence beat between STATION-A and CRUISE. Ship is
-  // stationary at the STATION-A position; camera rotates from
-  // old-target-direction toward new-target-direction. CRUISE begins
-  // only after the camera is centered on the new target. Lowercase
-  // 'lhokon' preserved verbatim per the 2026-04-25 amendment.
+  // Camera-convergence beat between STATION-A and CRUISE. Ship
+  // remains body-locked to the OLD body (the body it was just
+  // stationed at) throughout this phase; camera direction rotates
+  // from old-target-direction toward new-target-direction. CRUISE
+  // begins only after the camera is centered on the new target.
+  // Lowercase 'lhokon' preserved verbatim per the 2026-04-25
+  // amendment. Position rule changed from world-frozen anchor
+  // (§A5/§A6) to old-body-locked under §A7 (2026-04-26) — see
+  // `_tickLhokon` body-lock comment.
   LHOKON:     'lhokon',
 });
 
@@ -181,12 +185,31 @@ export class AutopilotMotion {
     // direction over LHOKON_TIMEOUT_SEC.
     this._cameraLookDir = new THREE.Vector3(0, 0, -1);
     // Captured once at lhokon onset — direction the camera was
-    // pointing on the last STATION-A frame. nlerp source.
+    // pointing on the last STATION-A frame. nlerp source. Under
+    // §A7 the ship and old body are co-moving (both translate at
+    // the orbital tangent), so unit(oldBody.pos − ship.pos) stays
+    // constant throughout lhokon — capturing once at onset is
+    // still correct.
     this._lhokonStartLookDir = new THREE.Vector3(0, 0, -1);
-    // Anchor position for lhokon — captured at lhokon onset, held
-    // throughout. AC #13 enforces |ship.velocity| ≈ 0 during lhokon
-    // by having _tickLhokon NOT write _position.
-    this._lhokonAnchorPos = new THREE.Vector3();
+    // ── §A7 (2026-04-26) — Old-body refs for lhokon body-lock. ──
+    // Replaces the §A5/§A6 `_lhokonAnchorPos` (world-frozen
+    // snapshot). Captured at lhokon entry in `beginMotion`'s
+    // isInterLegSwap branch BEFORE `_target` is overwritten with
+    // the new target. Read each frame in `_tickLhokon` to compute
+    // `_position = oldBody.position + oldHoldOffset` — the ship
+    // remains stationed on the old body through the camera pivot,
+    // matching the player's STATION-A frame-of-reference model.
+    // See workstream brief
+    // `docs/WORKSTREAMS/autopilot-camera-ship-decoupling-2026-04-25.md`
+    // §"Amendments — 2026-04-26 (§A7 lhokon body-lock to old body)"
+    // for the full spec + rationale + AC #13 rewrite.
+    //
+    // Null outside of an active lhokon swap. Exported on the
+    // motion frame (`lhokonOldBody`, `lhokonOldHoldOffset`) for
+    // Tester's AC #13 verification; consumers must treat both as
+    // read-only.
+    this._lhokonOldBody = null;
+    this._lhokonOldHoldOffset = new THREE.Vector3();
     this._lhokonElapsed = 0;
     this._lhokonTimeoutFlag = false;
 
@@ -251,12 +274,17 @@ export class AutopilotMotion {
     const isInterLegSwap = (this._target !== null && this._phase === Phase.STATION_A);
     if (isInterLegSwap) {
       // Capture pre-swap look direction (current authored value)
-      // and current world-space position as lhokon anchors. _position
-      // here is the body-locked STATION-A pose for the OLD target;
-      // we freeze it in world space for the lhokon duration so the
-      // ship is genuinely stationary (AC #13).
+      // and old-body refs (per §A7 2026-04-26 — body-lock through
+      // lhokon instead of world-freezing). The old body is the
+      // body the ship was just stationed at = current `_target`
+      // BEFORE the assignment below overwrites it; the old hold
+      // offset is the holdOffset captured at this body's STATION-A
+      // entry. _tickLhokon will read both each frame to recompute
+      // `_position = oldBody.position + oldHoldOffset`, keeping
+      // the ship body-locked to A throughout the camera pivot.
       this._lhokonStartLookDir.copy(this._cameraLookDir);
-      this._lhokonAnchorPos.copy(this._position);
+      this._lhokonOldBody = this._target;
+      this._lhokonOldHoldOffset.copy(this._holdOffset);
     }
 
     this._target = input.toBody;
@@ -275,11 +303,21 @@ export class AutopilotMotion {
 
     // Cruise prep is computed from the actual start of CRUISE motion.
     // For an initial leg, that's input.fromPosition. For an inter-leg
-    // swap, the ship doesn't move during lhokon — so CRUISE begins
-    // from the lhokon anchor. (The fromPosition value passed in for
-    // an inter-leg call should equal _position anyway, but the
-    // anchor is the authoritative source.)
-    const cruiseStartPos = isInterLegSwap ? this._lhokonAnchorPos : input.fromPosition;
+    // swap, the ship is body-locked to the old body throughout
+    // lhokon (§A7), so the ship's position will be `oldBody.position
+    // + oldHoldOffset` at lhokon exit — which is `this._position`
+    // at this moment (the last STATION-A frame's value, identical
+    // to the body-locked formula). The cruise prep computed here
+    // is *preliminary*: under §A7, `_exitLhokonToCruise` recomputes
+    // `_startPos` / `_cruiseDistance` / `_cruiseSpeed` /
+    // `_approachStartPos` from the actual post-lhokon ship position
+    // (the old body has orbited during lhokon). The preliminary
+    // computation here still drives the degenerate-geometry checks
+    // (`totalDistToBody < 1e-6`, `_cruiseDistance < 1e-3`) that
+    // route directly to STATION-A or APPROACH without entering
+    // lhokon — those gates are tolerant of the lhokon-duration
+    // drift (≤ 2 u worst case).
+    const cruiseStartPos = isInterLegSwap ? this._position : input.fromPosition;
     this._startPos.copy(cruiseStartPos);
     const targetPos = this._target.position;
 
@@ -321,10 +359,14 @@ export class AutopilotMotion {
     }
 
     if (isInterLegSwap) {
-      // Enter lhokon. Ship anchored in world space; camera rotates.
-      // _position stays at the lhokon anchor; _tickLhokon does NOT
-      // write _position (AC #13). Cruise prep above is staged for
-      // _exitLhokonToCruise() to consume on completion.
+      // Enter lhokon. Ship body-locked to OLD body throughout
+      // (§A7); _tickLhokon writes `_position = oldBody.position
+      // + oldHoldOffset` each frame. AC #13 enforces per-frame
+      // body-lock tracking ≤ 0.001 u; AC #13's per-run bound
+      // (visible translation > 0.01 u on at least one fast-orbit
+      // leg) catches a §A5 regression. Cruise prep above is the
+      // preliminary computation; `_exitLhokonToCruise` recomputes
+      // it from the actual post-lhokon ship position.
       this._lhokonElapsed = 0;
       this._lhokonTimeoutFlag = false;
       this._stationHoldComplete = false;
@@ -413,6 +455,11 @@ export class AutopilotMotion {
     this._stationHoldComplete = false;
     this._lhokonElapsed = 0;
     this._lhokonTimeoutFlag = false;
+    // §A7: drop old-body ref so a stopped autopilot can't leak a
+    // mesh reference into telemetry consumers. Offset stays
+    // allocated (Vector3 reused on next swap) but cleared.
+    this._lhokonOldBody = null;
+    this._lhokonOldHoldOffset.set(0, 0, 0);
   }
 
   // ── Internal: phase tickers ──
@@ -596,30 +643,57 @@ export class AutopilotMotion {
 
   /**
    * lhokon — camera-convergence beat between STATION-A and CRUISE
-   * (per amendment 2026-04-25 §"In scope"). Ship is anchored in
-   * world space (AC #13: |ship.velocity| ≈ 0). Camera direction is
-   * a normalized lerp from `_lhokonStartLookDir` (last STATION-A
-   * frame) toward the unit vector pointing at the new target's
+   * (per amendment 2026-04-25 §"In scope"; ship-position rule
+   * rewritten under §A7 2026-04-26 §"What the amendment does").
+   *
+   * Ship is BODY-LOCKED to the OLD body throughout this phase
+   * (§A7) — `_position = oldBody.position + oldHoldOffset` every
+   * frame. The §A5/§A6 contract was world-frozen at lhokon entry
+   * (`_position = lhokonAnchorPos`); §A7 changes the position rule
+   * only — the camera-direction lerp, the dot-gate, the timeout,
+   * and the cubic-out ease are all unchanged.
+   *
+   * Why §A7: under the §A5 world-freeze, the player's frame of
+   * reference silently switched at lhokon onset (orbital frame
+   * during STATION-A → world frame during lhokon). Max watched
+   * the live Sol tour after §A6 landed and reported "ship
+   * movement before the camera moves to center the target" — the
+   * silent frame-switch reads as ship motion. Under §A7, the
+   * ship remains stationed on A throughout the camera pivot;
+   * the ship leaves A only when CRUISE begins.
+   *
+   * Camera direction is a normalized lerp from `_lhokonStartLookDir`
+   * (last STATION-A frame's authored direction toward A — constant
+   * throughout lhokon because the ship and old body are co-moving,
+   * so unit(oldBody.pos − ship.pos) is invariant) toward the unit
+   * vector from current ship position toward the new target's
    * current position. End-direction is re-derived each frame so
-   * the lerp tracks an orbiting body. Cubic ease-out on lerp
-   * progress matches the prior in-CRUISE smoothing curve.
+   * the lerp tracks an orbiting body. Cubic-out ease (§A6).
    *
    * Exit: dot-gate primary (≥ LHOKON_DOT_THRESHOLD), timeout
    * fallback (≥ LHOKON_TIMEOUT_SEC). Per amendment §"CRUISE-entry
-   * gate" option (c).
+   * gate" option (c). On exit, `_exitLhokonToCruise` recomputes
+   * cruise prep from the actual post-lhokon ship position (which
+   * has drifted with the old body during lhokon).
    */
   _tickLhokon(deltaTime) {
     this._lhokonElapsed += deltaTime;
 
-    // _position stays at the lhokon anchor — write it explicitly so
-    // any external mutation between frames is corrected. AC #13's
-    // bound is `|ship.position − ship.position_at_lhokon_onset| ≤
-    // 0.0001`; this assignment makes the bound exact.
-    this._position.copy(this._lhokonAnchorPos);
+    // §A7 body-lock: ship position = old body's CURRENT position
+    // + the hold offset captured at the old body's STATION-A entry.
+    // Each frame the old body has orbited slightly; the ship moves
+    // with it. AC #13's per-frame bound asserts
+    // `|ship.position − (oldBody.position + oldHoldOffset)| ≤ 0.001 u`;
+    // this assignment makes the bound exact (within FP noise of
+    // the parent-frame transforms).
+    this._position.copy(this._lhokonOldBody.position).add(this._lhokonOldHoldOffset);
 
-    // End direction: unit vector from anchor toward new target's
-    // current position. Re-derived each frame to track orbital
-    // motion of the new body.
+    // End direction: unit vector from current ship position toward
+    // new target's current position. Re-derived each frame to
+    // track orbital motion of BOTH bodies (the new target orbits,
+    // and the ship drifts with the old body — so both endpoints
+    // shift slightly each frame; AC #14's continuity bound on
+    // frame 2 onward catches any miscomputation here).
     _v1.subVectors(this._target.position, this._position);
     const tgtLen = _v1.length();
     if (tgtLen > 1e-6) {
@@ -629,12 +703,8 @@ export class AutopilotMotion {
     }
 
     // Ease progress is computed from instance-tunable timeout +
-    // ease-curve. Default smoothstep `t² × (3−2t)` has slope 0 at
-    // BOTH boundaries by construction, satisfying AC #14 entry AND
-    // exit continuity (§T2 caught that cubic-ease-out had slope 3
-    // at t=0, blowing AC #14's 0.5° entry bound for swaps > ~15°).
-    // The lab harness can swap in cubic-out / sinusoidal / etc. to
-    // A/B felt experience.
+    // ease-curve (§A6 cubic-out). The lab harness can swap in
+    // smoothstep / sinusoidal / etc. to A/B felt experience.
     const t = Math.min(1, this._lhokonElapsed / this.lhokonTimeoutSec);
     const eased = this.lhokonEaseFn(t);
 
@@ -678,27 +748,84 @@ export class AutopilotMotion {
 
   /**
    * Transition LHOKON → CRUISE. Called from _tickLhokon when one of
-   * the two exit gates fires. The cruise prep state (_startPos,
-   * _cruiseDir, _cruiseDistance, _cruiseSpeed, _approachStartPos)
-   * was staged in beginMotion() at lhokon onset; this method just
-   * flips the phase and fires the motionStart one-shot so the shake
-   * module's CRUISE-onset event lands on the actual ship-burn frame.
+   * the two exit gates fires.
+   *
+   * Under §A7 (2026-04-26), the ship has body-locked-translated
+   * with the old body during lhokon, so the ship's actual position
+   * at this exit moment differs from `beginMotion`'s preliminary
+   * cruise-prep snapshot (which used the lhokon-entry position).
+   * Recompute cruise prep here from `this._position` (the actual
+   * post-lhokon ship position) so `_startPos`, `_cruiseDir`,
+   * `_approachStartPos`, `_cruiseDistance`, and `_cruiseSpeed`
+   * reflect the real CRUISE start. Mirrors the math in
+   * `beginMotion` lines that compute these from `cruiseStartPos`.
+   *
+   * The drift over a 3-second lhokon is bounded by old-body
+   * orbital velocity × lhokon duration — sub-2 u worst case on a
+   * fast inner moon. Without the recompute, `_cruiseDistance`
+   * would be off by that much (feeding the APPROACH-onset gate
+   * and CRUISE burn-rate selection); the recompute keeps the
+   * gate semantics exact at workstream-AC tolerances.
    *
    * @param {THREE.Vector3} finalDir — the unit dir-to-target on the
    *   exit frame. Used to refresh _cruiseDir so the first CRUISE
-   *   tick begins from the converged direction (mostly a no-op
-   *   since _tickCruise re-derives every frame, but explicit here
-   *   for AC #14 exit continuity).
+   *   tick begins from the converged direction.
    */
   _exitLhokonToCruise(finalDir) {
-    this._cruiseDir.copy(finalDir);
+    // Recompute cruise prep from actual post-lhokon ship position.
+    // Mirrors beginMotion's cruise-prep math; just runs from the
+    // body-locked-drifted ship position rather than the lhokon-
+    // entry snapshot.
+    this._startPos.copy(this._position);
+    const targetPos = this._target.position;
+    _v1.subVectors(targetPos, this._startPos);
+    const totalDistToBody = _v1.length();
+    if (totalDistToBody > 1e-6) {
+      this._cruiseDir.copy(_v1).divideScalar(totalDistToBody);
+    } else {
+      // Degenerate: target is at ship position. Fall back to the
+      // dot-gate's finalDir (which has unit-length guarantees).
+      this._cruiseDir.copy(finalDir);
+    }
+
+    const approachRadius = this._targetRadius * APPROACH_RADIUS_FACTOR;
+    this._approachStartPos.copy(targetPos)
+      .addScaledVector(this._cruiseDir, -approachRadius);
+    this._cruiseDistance = this._startPos.distanceTo(this._approachStartPos);
+    if (this._cruiseDistance < 1e-3) {
+      // Already inside (or essentially at) the approach radius
+      // post-lhokon. Skip CRUISE entirely — _enterApproach will
+      // run its own onset logic and APPROACH ticking proceeds
+      // normally. This mirrors beginMotion's same check.
+      this._enterApproach(this._position);
+      this._motionStartPending = true;
+      // Drop old-body refs: lhokon is done.
+      this._lhokonOldBody = null;
+      this._lhokonOldHoldOffset.set(0, 0, 0);
+      return;
+    }
+
+    const targetDuration = Math.max(
+      CRUISE_MIN_SEC,
+      Math.min(CRUISE_MAX_SEC, CRUISE_TARGET_SEC * Math.sqrt(this._cruiseDistance / 1000)),
+    );
+    this._cruiseSpeed = this._cruiseDistance / targetDuration;
+
     if (this._ship) {
-      this._ship.setOrientation(finalDir);
+      this._ship.setOrientation(this._cruiseDir);
     }
     this._phase = Phase.CRUISE;
     this._motionStartPending = true;
     this._approachElapsed = 0;
     this._holdTimer = 0;
+
+    // Drop old-body refs: lhokon is done. Telemetry consumers will
+    // see `lhokonOldBody = null` on the first CRUISE frame. The
+    // captured offset Vector3 stays allocated (reused on next
+    // swap); cleared so a stale value can't leak into a downstream
+    // computation.
+    this._lhokonOldBody = null;
+    this._lhokonOldHoldOffset.set(0, 0, 0);
   }
 
   _emitFrame() {
@@ -723,6 +850,16 @@ export class AutopilotMotion {
       // for AC #11 / #12 / #13 / #14 verification harnesses.
       lhokonElapsed: this._lhokonElapsed,
       lhokonTimeoutFlag: this._lhokonTimeoutFlag,
+      // §A7 (2026-04-26) — old-body refs for AC #13 verification.
+      // During non-lhokon phases `lhokonOldBody` is null. During
+      // lhokon it references the body the ship was just stationed
+      // at; Tester computes the body-lock bound as
+      // `|frame.position − (frame.lhokonOldBody.position +
+      //   frame.lhokonOldHoldOffset)| ≤ 0.001 u`.
+      // The offset Vector3 reference is live (cleared between
+      // swaps); consumers must treat both as read-only.
+      lhokonOldBody: this._lhokonOldBody,
+      lhokonOldHoldOffset: this._lhokonOldHoldOffset,
     };
   }
 }
