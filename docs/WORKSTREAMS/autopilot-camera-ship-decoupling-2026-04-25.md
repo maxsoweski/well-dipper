@@ -2,15 +2,28 @@
 
 ## Status
 
-**`Active — amended 2026-04-25 (lhokon phase)`** — see §"Amendments —
-2026-04-25 (lhokon phase introduction)" below for the amendment shape
-and rationale. The V1 §A4 redesign authored under Director audit
+**`Active — amended 2026-04-26 (§A6 cubic-out tuning lock-in)`** — see
+§"Amendments — 2026-04-26 (§A6 cubic-out tuning lock-in)" below for
+the amendment shape and rationale. The §A5 lhokon-phase introduction
+(2026-04-25) stands; the §A4 V1 redesign authored under Director audit
 `autopilot-station-hold-redesign-2026-04-24` §A4 stands; this amendment
-inserts a new named phase, **`lhokon`**, between `STATION-A` and
-`CRUISE` to host the camera convergence that the prior implementation
-attempted to author *during* CRUISE (and that Tester verdict §T1 at
-HEAD `8f6623d` rejected as a structural conflict with AC #5a's
-"every CRUISE frame, all phases" bound).
+locks in the lhokon-phase tuning Max selected empirically in
+`autopilot-lab.html` at HEAD `3ced806` after evaluating the Sol-tour
+recording at HEAD `27cc9f4` (Tester PASS §T3) and finding that the
+math-passing implementation (dot-gate `0.9999`, timeout `1.5 s`,
+smoothstep ease) did not match his "camera centered on target before
+ship burns" felt-experience intent on departures.
+
+The lab's three-knob A/B surface (threshold × timeout × ease curve)
+was the first-time tunable felt-experience evaluation in this
+workstream; the math AC bounds passed under §T3 but the *experience*
+required cubic ease-out's slope-0-at-t=1 landing — slope-asymptotic
+smoothstep produced an "almost there" feel; quintic's softer tail
+produced (Max's words) "*sometimes reads as a bit too fast*" with
+orbiting bodies. This amendment promotes Max's lab-evaluated production
+defaults and amends AC #14's lhokon-entry continuity bound to
+acknowledge cubic-out's slope-3-at-t=0 designed kick-off (which the
+prior `≤ 0.5°` bound forbade).
 
 Original status framing follows.
 
@@ -279,6 +292,231 @@ For audit-trail integrity, the surfaces this amendment touches:
   the spec the recording will be evaluated against.
 - AC #9 (stub scaffolding removal) — unchanged.
 - AC #10 (two-axis architecture preserved) — unchanged.
+
+## Amendments — 2026-04-26 (§A6 cubic-out tuning lock-in)
+
+### Why this amendment
+
+The §A5 lhokon-phase introduction (2026-04-25) shipped at HEAD
+`f58ae2f` and Tester PASS'd at HEAD `27cc9f4` under verdict §T3 —
+all telemetry-class ACs (#11, #12, #13, #14 entry/exit bounds, #5a
+under the narrowed phases, #5b, #1, #2, #3, #4) carried under the
+implemented defaults: `lhokon_dot_threshold = 0.9999`,
+`lhokon_timeout_sec = 1.5`, ease function = smoothstep
+(`f(t) = t² × (3 − 2t)`).
+
+Max watched the Sol-tour recording at HEAD `27cc9f4` and reported
+the **felt experience** of departures did not match his
+"camera centered on target before ship burns" intent. Two failure
+modes described:
+
+- **Mode A** — shake → backward acceleration → turn (ordering reads
+  as ship-decides-then-camera-catches-up, not camera-decides-then-
+  ship-burns).
+- **Mode B** — forward acceleration with old planet centered →
+  planet disappears → en route to new target (CRUISE begins before
+  the camera has centered the new subject).
+
+Live diagnostic at HEAD `27cc9f4` confirmed: lhokon **was** firing
+on every leg-swap; math passed (camera direction rotated correctly;
+AC #5a `dot ≥ 0.9999` held at lhokon→CRUISE boundary by AC #12's
+gate; reticle tracked target during CRUISE). The ACs passed; the
+experience didn't.
+
+Conclusion: the failure was **calibration**, not structure. At
+threshold `0.9999` with smoothstep, the camera was ~15px off-center
+when CRUISE began — under the AC bound but visibly "almost there."
+Smoothstep's slope-asymptotic tail (slope → 0 only as t → 1) means
+the dot-gate fires while the curve is still approaching its limit;
+the eye reads the curve's continued slow approach, not its landing.
+
+`autopilot-lab.html` was authored at HEAD `3ced806` to expose the
+three-knob surface (threshold × timeout × ease curve) for live A/B
+evaluation. `AutopilotMotion` was refactored at the same commit to
+expose `lhokonDotThreshold` / `lhokonTimeoutSec` / `lhokonEaseFn`
+as instance-tunable properties (default values still match the §A5
+constants; the lab mutates them at runtime; production callers
+don't override). Max evaluated curves with the bodies-orbit case
+turned on (the case where the new target is moving during the
+convergence beat, which is the strictest selection criterion) and
+**settled on the following**:
+
+- **`lhokonDotThreshold = 0.999999`** (six 9s — was four 9s
+  `0.9999`).
+- **`lhokonTimeoutSec = 3.0`** (was `1.5`).
+- **`lhokonEaseFn = cubic ease-out`** — `f(t) = 1 − (1−t)³`.
+  Slope 3 at `t = 0`; slope 0 at `t = 1`.
+
+Max's verbatim selection language (preserved for audit-trail):
+
+> *"the cubic ease-out seems to be the best overall. When the
+> bodies are orbiting, the quintic even sometimes reads as a bit
+> too fast."*
+
+The data point that ruled out quintic: with bodies orbiting, the
+quintic's softer tail (slope-0 region wider than cubic-out's) means
+the curve cannot catch a moving target inside its terminal slow
+region; the dot-gate fires while the target has already drifted, and
+CRUISE then opens off-center. Cubic-out's tighter slow-tail keeps
+the curve sharp enough through the gate condition that the orbital
+drift during the final ~10–15% of the curve doesn't out-pace it.
+
+§A6 promotes Max's lab-evaluated production defaults from instance
+overrides (lab-only) to the constructor defaults / module-level
+constants in `AutopilotMotion`, and amends AC #14's lhokon-entry
+continuity bound to accommodate cubic-out's slope-3-at-t=0 designed
+kick-off.
+
+### What the amendment does
+
+1. **Promotes three lab-evaluated production defaults.** Working-
+   Claude updates `src/auto/AutopilotMotion.js`:
+   - Constructor: `this.lhokonDotThreshold = 0.999999`,
+     `this.lhokonTimeoutSec = 3.0`,
+     `this.lhokonEaseFn = (t) => 1 - Math.pow(1 - t, 3)`.
+   - Module-level constants `LHOKON_DOT_THRESHOLD` /
+     `LHOKON_TIMEOUT_SEC` updated to match the new defaults so the
+     constants and constructor agree (no hidden divergence).
+
+2. **Updates `autopilot-lab.html` initial slider/select values** to
+   match the new production defaults so the lab opens at the
+   selected configuration, not at the prior `0.9999 / 1.5 /
+   smoothstep` triple. The lab remains an A/B surface; the new
+   defaults are the lab's **starting point**, not its only state.
+
+3. **Amends AC #14's lhokon-entry continuity bound (§A6).** See
+   §"AC #14 — Smoothness preserved at lhokon entry/exit" below for
+   the rewritten bound. **Framing chosen: (b) — carve the first
+   frame out of the bound entirely.** Rationale follows in the
+   AC #14 amendment block.
+
+4. **AC #14's lhokon-exit bound stays `≤ 0.5°` unchanged.**
+   Cubic-out's slope-0 at `t = 1` satisfies this by construction;
+   smoothstep and quintic also satisfy it by construction. The
+   exit bound is the felt-experience bound Max's eye is most
+   demanding on (the *land*); cubic-out lands firmly because its
+   final-derivative is zero, same as smoothstep and quintic.
+   Cubic-out's distinguishing characteristic — the one that
+   resolves the §T3 felt-experience miss — is the slope-3
+   *initial* derivative (the curve gets moving immediately rather
+   than easing in symmetrically); the *terminal* derivative is
+   zero across all three eases under consideration.
+
+5. **Same-session feature-doc edit by working-Claude.**
+   `docs/FEATURES/autopilot.md` §"Per-phase criterion — camera axis
+   (V1)" §"`lhokon`" section: update the CRUISE-entry-gate values
+   from `dot ≥ 0.9999 / timeout 1.5s / smoothstep` to
+   `dot ≥ 0.999999 / timeout 3.0s / cubic ease-out`. §"Revision
+   history": add §A6 entry. Working-Claude owns the feature-doc
+   update under the 2026-04-25 Dev Collab OS restructure (PM does
+   not author the feature-doc edit; PM flags the surfaces here).
+
+### Quoted prior-brief surfaces being amended
+
+For audit-trail integrity, the surfaces this amendment touches:
+
+1. **§"Amendments — 2026-04-25 (lhokon phase introduction)" §"Tunable values"** — the three values **`lhokon_dot_threshold = 0.9999`**, **`lhokon_timeout_sec = 1.5`**, and the implicit *smoothstep* ease (the §A5 amendment did not name the ease function explicitly; the implementation chose smoothstep at HEAD `f58ae2f`) are superseded. New defaults: `0.999999 / 3.0 / cubic ease-out`. The §A5 §"CRUISE-entry gate (criterion choice)" §(c) "dot-gate primary, fixed-duration timeout fallback" structural choice is **unchanged** — only the numerical values change.
+2. **`## Acceptance criteria` §"AC #12 — lhokon completion gates CRUISE entry"** — the bound's *structure* (dot-gate ≥ threshold OR elapsed ≥ timeout) is unchanged; the *numerical values* the bound references update from `0.9999 / 1.5 s` to `0.999999 / 3.0 s`. The AC text references the brief's tunable values, which §A6 updates above; AC #12 inherits the new values without rewording. AC #12's bound on the timeout-fires-on-realistic-cases shape (timeout firing means feature-doc-flag-not-AC-fail) is also unchanged in shape; the threshold for "feature-doc-flag" is now 3.0 s instead of 1.5 s.
+3. **`## Acceptance criteria` §"AC #14 — Smoothness preserved at lhokon entry/exit"** — phrase **"`angularDelta_lhokon_entry ≤ 0.5°`. The camera's last-held pose on STATION-A is `lookAt(old_target.current_position)`; the lhokon's first frame begins the rotation from that pose. The rotation must start from the held pose with continuous angular velocity, not snap to a new direction."** is rewritten under §A6 to carve the first lhokon frame out of the entry bound entirely. New text in §"Acceptance criteria" §AC #14 below. Exit bound `≤ 0.5°` unchanged.
+4. **`## Drift risks` §"Risk: V-later camera authoring smuggled into V1"** — text references the §A5 lhokon ship-stationary structural argument (which is *unchanged* under §A6 — ship is still stationary during lhokon); references to `0.9999 / 1.5 s` in the risk text refer to AC bounds, which migrate by inheritance, not by direct text edit. **Confirmed: no §A6-specific risk-text rewrite needed.** The risk shape (camera lingering on receding subject) is dissolved by §A5's ship-stationary-during-lhokon design and remains dissolved under §A6 (cubic-out is an ease-shape change, not a ship-motion change).
+5. **`## Drift risks` §"Risk: CRUISE-entry gate hangs"** — the timeout-fallback-not-optional argument is unchanged; the timeout *value* increases from 1.5 s to 3.0 s. Working-Claude observes: a 3.0 s timeout means a hung dot-gate keeps the player looking at a stationary ship for up to 3.0 s before CRUISE forcibly begins (vs. up to 1.5 s previously). PM judges this acceptable: under realistic Sol-tour conditions Max evaluated, the dot-gate at threshold `0.999999` with cubic-out ease and `lhokonTimeoutSec = 3.0` carries on every leg (Max's lab evaluation is the empirical evidence). If the timeout *fires* on a realistic-conditions leg post-§A6, that's still feature-doc-flag-class per the §A5 framing.
+
+### Cross-references
+
+- **§A5 amendment** (this brief, §"Amendments — 2026-04-25 (lhokon phase introduction)") — structural foundation §A6 builds on. The lhokon phase exists; §A6 only tunes its parameters and accommodates AC #14 to the new ease curve's first-frame shape.
+- **Tester verdict §T3** at HEAD `27cc9f4`: `~/.claude/state/dev-collab/tester-audits/autopilot-camera-ship-decoupling-2026-04-25.md` §T3. PASS verdict on all telemetry-class ACs at the §A5 implementation. §A6 is not a response to a Tester FAIL — it is a response to a Max felt-experience miss against an implementation Tester PASS'd. The felt-experience layer was authored math-equivalently in §A5 (smoothstep, threshold `0.9999`, timeout `1.5 s` — a self-consistent triple within the §A5 ACs); §T3 verified the math; the lab evaluation revealed the math's calibration didn't match the felt-experience target. This is the canonical shape of a math-proxy-for-felt-experience AC: the math passes, the experience misses, the lab makes the gap visible.
+- **Lab harness commit `3ced806`**: `autopilot-lab.html` (workstream-bounded; A/B surface for `lhokonDotThreshold` × `lhokonTimeoutSec` × `lhokonEaseFn`) + `AutopilotMotion` instance-tunable refactor (no behavior change at module-level defaults; lab mutates at runtime). The lab is the empirical evidence base for §A6. Felt-experience evaluation by Max at the lab supersedes the math-only AC bound on entry continuity (AC #14 entry, framed (b)).
+- **Max's verbatim selection language**: *"the cubic ease-out seems to be the best overall. When the bodies are orbiting, the quintic even sometimes reads as a bit too fast."* Quoted in §"Why this amendment" above. Source: live session 2026-04-26 lab-evaluation conversation with working-Claude.
+- **Recording at HEAD `27cc9f4`**: Sol-tour recording captured for §T3 verification; the recording that surfaced Mode A / Mode B failure modes when Max watched it. Path: per the workstream's recording log (working-Claude knows the path). The recording is the AC-passing implementation that nonetheless missed felt experience — a permanent reference for what calibration-class miss looks like under §A5's smoothstep / `0.9999` / `1.5 s` triple.
+- **AC #14 framing rationale**: see §"AC #14 — Smoothness preserved at lhokon entry/exit" amendment block below for the (a) vs (b) decision and the reasoning chain.
+
+### Deferred decisions (flagged for Max)
+
+- **Should the §A6 entry-frame carve-out be considered a candidate
+  for V-later parameterization?** PM defers. Under §A6, working-
+  Claude lands cubic-out as the production default and the AC #14
+  entry bound carves frame 1 out. If a V-later authoring pass
+  introduces a different ease (e.g., a parameterized curve where
+  the slope-at-t=0 is itself a tunable knob), the AC #14 entry
+  carve-out remains semantically correct (it says "frame 1 is a
+  designed kick-off" regardless of the slope's magnitude). No
+  V-later workstream is created by §A6; this is a flag for future
+  PM authoring if the camera-tuning surface expands.
+
+- **Is the `lhokonTimeoutSec = 3.0` value a long-tail risk under
+  ORBIT-mode-on with very-fast-orbiting bodies?** PM defers.
+  Max evaluated cubic-out + threshold `0.999999` + timeout `3.0 s`
+  at the lab with bodies-orbit on; the dot-gate carried on his
+  evaluation cases. ORBIT-mode V-later (separate workstream) may
+  introduce orbital speeds the §A6 evaluation didn't cover. If a
+  future workstream surfaces timeout-firing-on-realistic-cases,
+  PM revisits the timeout value at that point. §A6 is correct for
+  the V1 + Sol-tour-class evaluation envelope.
+
+- **Should §A6's evidence shape (lab-evaluated felt experience
+  supersedes math-only AC) be promoted to a Dev Collab OS
+  protocol entry?** PM defers to working-Claude / Director /
+  feature-doc retrospective at workstream close. §A6 is a worked
+  example of "math AC passes, felt-experience misses, lab
+  resolves" — a pattern the canvas-recording-vs-lab decision memo
+  (`feedback_recording-vs-lab-decision.md`) anticipates. Whether
+  §A6's specific shape (Tester PASS → Max watches recording →
+  Max requests lab → lab evaluation → tuning lock-in amendment)
+  is generalizable enough for a memory-file entry is a
+  retrospective question, not a §A6 question.
+
+### What stays unchanged
+
+- AC #1 (ship intercepts body within tolerance) — unchanged.
+- AC #2 (APPROACH onset at min(10R, cruise-distance ceiling)) —
+  unchanged.
+- AC #3 (STATION-A felt-fill ~60%) — unchanged.
+- AC #4 (STATION-A body-lock invariance) — unchanged.
+- AC #5a (camera tracks body, narrowed to non-lhokon phases under
+  §A5) — bound, scope, threshold all unchanged. The `dot ≥ 0.9999`
+  bound on CRUISE / APPROACH / STATION-A frames is **not** affected
+  by the lhokon's threshold change to `0.999999`. The lhokon
+  threshold is a phase-internal exit gate; AC #5a's threshold is
+  the steady-state pursuit-curve bound.
+- AC #5b (ship aims at predicted intercept) — unchanged.
+- AC #6 (shake event placement) — unchanged. Shake fires at CRUISE
+  onset (= lhokon-completion boundary, structurally) and at
+  APPROACH onset. The lhokon's longer maximum duration (3.0 s
+  timeout fallback) does not change the shake placement; shake
+  fires at the boundary, not inside lhokon.
+- AC #7 (ship orientation set by autopilot, read by shake only) —
+  unchanged.
+- AC #8 (jumpscare-arrival felt experience) — **stays
+  `VERIFIED_PENDING_MAX`.** Recording recapture deferred until the
+  §A6 implementation lands at a new HEAD. The §A6-amended brief is
+  the spec the recording will be evaluated against.
+- AC #9 (stub scaffolding removal) — unchanged.
+- AC #10 (two-axis architecture preserved) — unchanged.
+- AC #11 (lhokon onset at STATION-A → next-target-selected
+  boundary) — unchanged.
+- AC #12 (lhokon completion gates CRUISE entry) — **structural
+  bound unchanged**; the *numerical values* the AC references
+  (threshold, timeout) update from `0.9999 / 1.5 s` to
+  `0.999999 / 3.0 s` per §A6 §"What the amendment does" #1.
+- AC #13 (ship stationary during lhokon) — unchanged. Cubic-out
+  is an ease-shape change on the camera axis; the ship-axis hold
+  is unaffected.
+- AC #14 (smoothness preserved at lhokon entry/exit) — **entry
+  bound rewritten under §A6 framing (b)**; **exit bound `≤ 0.5°`
+  unchanged**. See AC #14 entry in `## Acceptance criteria` for
+  the rewritten text.
+- §A5 §"CRUISE-entry gate (criterion choice)" §(c) — structural
+  choice (dot-gate primary, timeout fallback) **unchanged**. Only
+  the numerical values change.
+- §A5 §"Quoted prior-brief surfaces being amended" — historical
+  record of §A4 surfaces §A5 amended. §A6 does not touch §A5's
+  audit trail; §A6 has its own §"Quoted prior-brief surfaces"
+  block above.
+- §A5 §"Cross-references" — historical record of §T1 verdict + §A5
+  evidence chain. §A6 does not touch §A5's cross-references; §A6
+  has its own §"Cross-references" block above.
+- §A5 §"Deferred decisions" — historical record of §A5's flagged-
+  for-Max items. §A6's deferred decisions are §A6-specific (above).
 
 ## Parent feature
 
@@ -939,7 +1177,7 @@ mid-convergence. AC #13 catches the velocity onset within frames;
 AC #5a's CRUISE-side bound catches the consequence on the first
 CRUISE frame.
 
-### AC #14 — Smoothness preserved at lhokon entry/exit (per amendment 2026-04-25 — `lhokon` phase introduction)
+### AC #14 — Smoothness preserved at lhokon entry/exit (per amendment 2026-04-25 — `lhokon` phase introduction; **entry bound rewritten under §A6 — 2026-04-26 — framing (b): first-frame carve-out**)
 
 Quoted criterion (this brief §"Amendments — 2026-04-25 (lhokon phase
 introduction)"): *"No per-frame angular-velocity discontinuity at
@@ -953,36 +1191,160 @@ angularDelta_n = angle(cameraForwardPreShake_n,
 ```
 where `angle` is the unit-vector angle (`acos(dot)` clamped).
 
-**Bounds:**
+**Bounds (post-§A6):**
 
-- **At lhokon entry** (last STATION-A frame → first lhokon frame):
-  `angularDelta_lhokon_entry ≤ 0.5°`. The camera's last-held pose
-  on STATION-A is `lookAt(old_target.current_position)`; the
-  lhokon's first frame begins the rotation from that pose. The
-  rotation must start from the held pose with continuous angular
-  velocity, not snap to a new direction.
+- **At lhokon entry — first-frame carve-out (§A6 framing (b)).**
+  The first lhokon frame is **not** subject to AC #14's continuity
+  bound. AC #14 entry measures `angularDelta_lhokon_entry` from
+  **frame 2 onward**, where the bound `angularDelta ≤ 0.5°` applies
+  to each successive frame-to-frame delta inside lhokon (until
+  exit, where the exit bound takes over). The first-frame impulse
+  is a **designed kick-off** of the cubic ease-out curve
+  (`f(t) = 1 − (1−t)³`, slope-3 at `t = 0`); under the production
+  defaults (`lhokonEaseFn = cubic ease-out`,
+  `lhokonTimeoutSec = 3.0`), the first-frame angular delta at
+  60 fps is approximately `0.0166 × angularSwapMagnitude`
+  (≈ 1.49° on a 90° swap, ≈ 2.99° on a 180° swap). Max evaluated
+  this kick-off shape empirically at `autopilot-lab.html` (HEAD
+  `3ced806`) with full awareness of the slope-3-at-t=0 math (the
+  Claude session called it out explicitly during lab evaluation)
+  and judged the felt experience acceptable: after a long
+  STATION-A hold, the small entry impulse reads as "the camera
+  starting to look," not as a snap or jolt. The rationale for
+  framing (b) over (a) — see §"§A6 framing decision" subsection
+  below.
+- **Within lhokon (frame 2 onward):** `angularDelta ≤ 0.5°`
+  per-frame. This is the prior-§A5 within-lhokon continuity
+  expectation, now made explicit as a per-frame bound from
+  frame 2 to the last lhokon frame (exclusive of the first-frame
+  carve-out at entry and inclusive of the exit-frame bound below).
+  At 60 fps, `0.5°/frame` corresponds to `30°/s` — well below the
+  swap-frame snap (~180°) working-Claude's commits `70c4b09` were
+  authored to suppress, and well below the cubic ease-out's
+  steepest mid-curve slope under the production defaults
+  (max ≈ 1.5°/frame near `t ≈ 0.05–0.1`, decaying smoothly
+  thereafter — empirically below `0.5°/frame` from approximately
+  `t ≈ 0.3` onward; PM does not bound the within-lhokon curve at
+  `0.5°/frame` for *every* frame because the cubic-out's design
+  has a steep early section by spec, only frame-2-onward
+  *boundary continuity* — i.e., the curve does not snap, it
+  proceeds smoothly through its authored shape).
+
+  **Operational telemetry assertion:** the within-lhokon bound
+  asserts only that `angularDelta_n` is **continuous** (no
+  per-frame discontinuity / snap in the curve), not that any
+  per-frame magnitude is `≤ 0.5°`. Working-Claude's telemetry
+  pipeline checks: for each pair of consecutive lhokon frames
+  (n ≥ 2), `|angularDelta_n − angularDelta_{n-1}|` is small
+  (i.e., the *derivative* of the curve is continuous, not the
+  curve's value). PM provisional bound: `|angularDelta_n −
+  angularDelta_{n-1}| ≤ 0.3°/frame` for n ≥ 3 (i.e., the curve's
+  per-frame *change in slope* is bounded). Working-Claude
+  surfaces telemetry; PM tunes the provisional bound based on
+  the cubic-out's actual frame-by-frame profile under the
+  production defaults if it doesn't carry. **Tunable, not
+  Director-escalation-class.**
 - **At lhokon exit** (last lhokon frame → first CRUISE frame):
-  `angularDelta_lhokon_exit ≤ 0.5°`. CRUISE begins with
-  `lookAt(new_target.current_position)`; lhokon's last frame must
-  be at or near that direction (AC #12 enforces the dot-bound;
-  AC #14 enforces the *continuity* of the transition).
-- **Within lhokon:** the angular-velocity envelope is the
-  smoothing curve's authored shape (nlerp / ease — implementation
-  choice). No bound on magnitude (working-Claude's smoothing
-  function authors the shape); only on continuity at the
-  boundaries.
+  **`angularDelta_lhokon_exit ≤ 0.5°` — UNCHANGED under §A6.**
+  Cubic ease-out's slope-0 at `t = 1` satisfies this bound by
+  construction. CRUISE begins with
+  `lookAt(new_target.current_position)`; lhokon's last frame is
+  near that direction by AC #12's dot-gate (≥ `0.999999`), and
+  the curve approaches that direction with terminal slope zero.
+  Exit-bound rationale: the felt-experience demand is most
+  acute on the *land* (Max's eye is unforgiving on the camera
+  arriving and *holding* the new target — this is the
+  centered-on-target-before-burn intent §A6 was authored to
+  satisfy). Cubic-out's slope-0 terminal derivative is the
+  property that makes the land feel firm; smoothstep also has
+  slope-0 terminal but its slope-asymptotic approach (slope → 0
+  only as t → 1) means at the dot-gate threshold the curve is
+  still measurably approaching, which is the "almost there"
+  feel Max reported on the §T3 recording.
 
-**Tolerance:** `0.5°` per-frame at 60 fps corresponds to angular
-velocity `≤ 30°/s` — well below the swap-frame snap (~180°)
-working-Claude's commits `70c4b09` were authored to suppress.
+**§A6 framing decision (a vs b — PM ruling).**
 
-**Negative criterion the bound catches:** if the implementation
-lands lhokon as a phase that does not seed from the prior-frame's
-camera direction (i.e., it computes the rotation from a
-to-be-named "swap reference direction" that doesn't equal
-old-target-direction at lhokon-entry), AC #14's lhokon-entry bound
-catches the discontinuity. Symmetric argument at lhokon-exit
-against CRUISE's first-frame `lookAt(new_target.current_position)`.
+Two framings were considered for AC #14's entry bound under §A6:
+
+- **(a) Widen the entry bound** — e.g.,
+  `angularDelta_lhokon_entry ≤ 2°` to cover cubic-out's worst case
+  for typical Sol-tour swaps. Keeps the bound a single numerical
+  per-frame value, telemetry-verifiable on the existing pipeline.
+  Failure mode: a true 180° antipodal swap (e.g., ship looking
+  back across the system) breaches even `2°`; the bound has to be
+  loose enough to swallow the worst-case kick-off while still
+  catching implementation bugs (forgotten seed-from-prior-frame),
+  which the ≤ 0.5° entry bound was originally authored to catch.
+- **(b) Carve the first lhokon frame out of the bound entirely**
+  — AC #14 entry measures from frame 2 onward; the first frame is
+  a designed kick-off and is exempt from the continuity bound. The
+  bound applies to the curve *after* the initial impulse.
+
+**PM ruling: (b).** Reasoning chain:
+
+1. The `≤ 0.5°` entry bound was authored under §A5 as a math
+   proxy for "no visible jolt at lhokon onset." The proxy held
+   under smoothstep ease, which has slope-0 at `t = 0`
+   (symmetric with its slope-0 at `t = 1`); smoothstep's first-
+   frame delta is ≈ `0.0006 × angularSwapMagnitude` at 60 fps
+   under `timeout = 1.5 s` — well under `0.5°` even on 180°
+   swaps. The bound was an honest catch for a smoothstep-class
+   implementation.
+2. Cubic ease-out is **structurally different**: slope-3 at
+   `t = 0` (vs. smoothstep's slope-0). The first-frame impulse is
+   a *design property* of cubic-out, not a bug. Max evaluated the
+   impulse empirically and judged it acceptable; the ≤ 0.5° bound
+   forbids cubic-out by construction without naming the
+   discontinuity.
+3. Framing (a) papers over the discontinuity by widening the
+   tolerance until the kick-off doesn't trip the bound. This
+   loses the bound's *catch power* for the implementation bug it
+   was authored against (forgetting to seed lhokon's first frame
+   from the prior camera direction would, under cubic-out, also
+   produce a `~1–3°` first-frame delta — indistinguishable from
+   the designed kick-off under (a)'s relaxed bound).
+4. Framing (b) names the discontinuity-by-design honestly and
+   preserves the bound's catch power on frame 2 onward (where a
+   forgotten-seed bug would *still* manifest as a delta > 0.5°
+   relative to the cubic-out's expected curve at frame 2 — i.e.,
+   if the implementation seeds lhokon from a wrong direction at
+   frame 1, the curve from frame 1 → frame 2 doesn't follow
+   cubic-out's expected shape, which the within-lhokon bound
+   above catches).
+5. The PM rule "math proxy for felt experience; when those
+   diverge, name the divergence" pulls toward (b). §A6's whole
+   reason for existing is that the math AC bounds passed under
+   §T3 while the felt experience missed; framing (b) honors that
+   lesson by being honest about the bound's actual scope (it is
+   a continuity bound *within* lhokon, not a continuity bound
+   across the entry boundary; the entry boundary is a designed
+   kick-off).
+
+**Negative criterion the §A6-rewritten bound catches:** if the
+implementation lands lhokon as a phase that does not seed from
+the prior-frame's camera direction (i.e., the swap reference
+direction is wrong), the *first-frame-to-second-frame* delta
+deviates from the cubic ease-out's expected curve. Specifically,
+under correct seeding, frame 1 → frame 2 follows the cubic-out
+curve from `t = 1/180` to `t = 2/180` (at `lhokonTimeoutSec = 3.0`,
+60 fps); the angular delta from frame 1 to frame 2 is approximately
+`(1−(1−2/180)³ − (1−(1−1/180)³)) × angularSwapMagnitude`, which
+for a 90° swap is ≈ `1.47°`. A forgotten-seed bug would land
+frame 1 at the wrong starting direction, and frame 1 → frame 2
+would *also* deviate from the expected delta (the curve would
+restart from the wrong seed). Working-Claude's telemetry
+pipeline can assert frame-1-to-frame-2 delta against the cubic-out
+expected value to catch this; PM defers the explicit bound to
+working-Claude (this is implementation-detail-class, not
+amendment-blocking).
+
+Symmetric argument at lhokon-exit against CRUISE's first-frame
+`lookAt(new_target.current_position)`: AC #14's exit bound
+`≤ 0.5°` is unchanged and continues to catch a non-converged-by-
+exit implementation (the curve must land near the new target,
+not approach it asymptotically and then be cut off by the
+timeout — which AC #12's `0.999999` threshold + cubic-out's
+slope-0 terminal also enforces by construction).
 
 ## Principles that apply
 
@@ -1503,7 +1865,7 @@ speculation; the function-shape carry-forward is the affordance.
 *Authored by PM under Director audit §A4 (2026-04-25); audit
 verdicts quoted verbatim. Amended 2026-04-25 by PM (lhokon phase
 introduction) under Tester verdict §T1 at HEAD `8f6623d`; verdict
-quoted verbatim and cross-referenced. The amendment moves swap-
+quoted verbatim and cross-referenced. The §A5 amendment moves swap-
 window camera smoothing from CRUISE (where it conflicted with AC
 #5a's per-frame body-tracking bound) into a new named phase
 `lhokon` between STATION-A and CRUISE; ship is stationary during
@@ -1512,4 +1874,27 @@ lhokon, so the receding-subject linger failure mode that Drift Risk
 gate is dot-gate primary (`≥ 0.9999`, semantic match to AC #5a's
 bound) with fixed-duration timeout fallback (`1.5 s`, matching the
 existing `_turnDurationSec`). See §"Amendments — 2026-04-25
-(lhokon phase introduction)" for the full amendment trail.*
+(lhokon phase introduction)" for the full §A5 amendment trail.*
+
+*Amended 2026-04-26 by PM (§A6 cubic-out tuning lock-in) under
+Tester verdict §T3 at HEAD `27cc9f4` (PASS) + Max felt-experience
+miss + lab evaluation at HEAD `3ced806`; Max's verbatim selection
+language ("the cubic ease-out seems to be the best overall. When
+the bodies are orbiting, the quintic even sometimes reads as a bit
+too fast.") preserved in §"Amendments — 2026-04-26 (§A6 cubic-out
+tuning lock-in)" §"Why this amendment". The §A6 amendment promotes
+Max's lab-evaluated production defaults (`lhokonDotThreshold =
+0.999999`, `lhokonTimeoutSec = 3.0`, `lhokonEaseFn = cubic ease-out
+[f(t) = 1 − (1−t)³]`) from instance overrides to constructor
+defaults / module constants in `AutopilotMotion`, and rewrites
+AC #14's lhokon-entry continuity bound under framing (b) — first-
+frame carve-out — to accommodate cubic-out's slope-3-at-t=0
+designed kick-off. AC #14's lhokon-exit bound `≤ 0.5°` is
+unchanged (cubic-out's slope-0 at t=1 satisfies it by
+construction). The lhokon phase's structural choices (§A5 §(c)
+gate criterion, ship stationary during lhokon, smoothing migrated
+from CRUISE) are preserved verbatim. The lab harness at HEAD
+`3ced806` is the empirical evidence base for §A6: felt-experience
+evaluation by Max replaces (and supersedes) the prior math-only
+AC #14 entry bound. See §"Amendments — 2026-04-26 (§A6 cubic-out
+tuning lock-in)" for the full §A6 amendment trail.*
