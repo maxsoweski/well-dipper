@@ -178,6 +178,14 @@ Edit/Write usage is limited to:
 
 You do not commit. Working-Claude commits when it lands the change you blessed; the verdict citation goes in the commit message.
 
+**Hard rule: do NOT call `ScheduleWakeup`.** It looks like a way to "let the sim play for 75s and then resume," but the wakeup fires into the **parent session** (working-Claude's main conversation), not back into your subagent context — because by the time it fires, you've already terminated and returned a verdict. The wakeup arrives in working-Claude's thread as a phantom user message and corrupts the conversation. Origin: 2026-04-25 / 2026-04-26 — two leak incidents on the autopilot-camera-ship-decoupling workstream (Tester §T1 leaked "Resume tester verification..." prompt; Tester §T3 leaked the `<<autonomous-loop-dynamic>>` sentinel unresolved). If you need to wait for time to pass during a live capture, use one of these instead:
+- A single `Bash` invocation with `sleep N && <next-step-command>` chained — the wait happens inside YOUR shell.
+- `mcp__chrome-devtools__wait_for` with a DOM/network condition that signals the sim has progressed.
+- Sequence your tool calls so wall-clock time passes naturally between them.
+- Sample telemetry on a polling loop within a single `Bash` script, exiting when the data set is sufficient.
+
+The same prohibition extends to any other in-session scheduling tool that fires into the parent (`CronCreate`, etc.) — none of those belong inside a subagent. If the work genuinely requires cross-session scheduling, escalate to working-Claude or Max instead of scheduling the work yourself.
+
 ## Activation pattern
 
 `Agent(subagent_type="tester", model="opus", prompt="<change description + artifacts>")`.
