@@ -2,6 +2,25 @@
 
 ## Status
 
+**`Active — amended 2026-04-26 (§A7 lhokon body-lock to old body)`** —
+see §"Amendments — 2026-04-26 (§A7 lhokon body-lock to old body)"
+below for the amendment shape and rationale. The §A6 cubic-out tuning
+lock-in stands; the §A5 lhokon-phase introduction stands; the §A4 V1
+redesign stands. §A7 changes the lhokon-phase **position rule only**:
+ship is body-locked to the *old* body (the body the ship was just
+stationed at) throughout lhokon, instead of world-frozen at
+`lhokonAnchorPos`. Camera direction continues to lerp via the §A6
+cubic-out (unchanged); camera position remains `== ship.position`
+(unchanged — V1 architecture). The change resolves a felt-experience
+miss Max reported on the live Sol autopilot loop after §A6: *"the
+main issue i'm seeing is ship movement before the camera moves to
+center the target."* Working-Claude diagnosed empirically — STATION-A
+is body-locked to A and silently translates with A's orbital motion
+(0.01–0.67 u/s across Sol bodies); lhokon's world-freeze at
+`lhokonAnchorPos` switches the ship's frame of reference at lhokon
+onset (orbital frame → world frame), and the player perceives the
+silent frame change as ship motion before the camera centers.
+
 **`Active — amended 2026-04-26 (§A6 cubic-out tuning lock-in)`** — see
 §"Amendments — 2026-04-26 (§A6 cubic-out tuning lock-in)" below for
 the amendment shape and rationale. The §A5 lhokon-phase introduction
@@ -517,6 +536,410 @@ For audit-trail integrity, the surfaces this amendment touches:
   has its own §"Cross-references" block above.
 - §A5 §"Deferred decisions" — historical record of §A5's flagged-
   for-Max items. §A6's deferred decisions are §A6-specific (above).
+
+## Amendments — 2026-04-26 (§A7 lhokon body-lock to old body)
+
+### Why this amendment
+
+The §A6 cubic-out tuning lock-in shipped and Tester PASS'd at HEAD
+`9726e5f` (§T4). All telemetry-class ACs carried; the lhokon
+machinery is mechanically correct under §A5/§A6 spec — `maxDriftFrom
+Start = 0` for every lhokon run on the live Sol tour, zero positional
+jump at STATION-A → lhokon entry, zero positional jump at lhokon →
+CRUISE exit. AC #13 ("|ship.velocity| ≈ 0 during lhokon") held bit-
+for-bit under the §A5 contract.
+
+Max watched the live Sol autopilot loop after §A6 landed and reported,
+verbatim:
+
+> *"the main issue i'm seeing is ship movement before the camera
+> moves to center the target."*
+
+Working-Claude diagnosed empirically with telemetry instrumentation
+on the live page (per-frame phase + camPos + look-direction-error).
+Findings:
+
+- **STATION-A on Sol drifts.** During STATION-A, the ship is body-
+  locked to current planet (`position = planet.position +
+  holdOffset`). As the planet orbits, the ship/camera translate
+  *with* it. Measured STATION-A position drift on a single Sol
+  capture: **0.01–0.67 u/s across 10 different bodies** — slow on
+  outer planets, fast on inner moons. AC #4's body-lock invariance
+  bound (`max(distToBody) − min(distToBody) ≤ 0.001 u` over a 5 s
+  window) is an *invariance against the body*, not an *invariance
+  against the world frame*; it does not see this drift because the
+  drift is body-aligned by construction.
+- **`autopilot-lab.html` hid the drift.** The lab harness used
+  `bodiesOrbit = false` by default — Max's §A6 evaluation never saw
+  the orbital-frame translation, only the rotation curve. The lab's
+  felt-experience evidence base was correct *for the rotation*; it
+  was silent *on the frame-of-reference*.
+- **At lhokon onset, the ship's frame of reference silently switches.**
+  Under §A5, `_tickLhokon` sets `this._position.copy(this.
+  _lhokonAnchorPos)` — a world-frozen snapshot taken at lhokon
+  entry. STATION-A's body-locked position (orbital frame, drifting
+  with A) becomes a world-frozen position (world frame, not moving)
+  at the lhokon boundary. The player perceives this as "I was
+  stationed at A and now suddenly I'm not — A is leaving me as the
+  camera looks for B." That **frame-of-reference change** is what
+  reads as "ship movement before camera centers."
+
+The §A5/§A6 mechanism is mathematically correct and felt-wrong
+because the math contract (`world-stationary during lhokon`)
+contradicts the *implicit player model* established by STATION-A
+(`stationed *on* A, drifts *with* A`). The fix is a one-rule swap:
+keep ship body-locked to OLD body (the body the ship was just
+stationed at) throughout lhokon, instead of world-freezing. The
+player remains stationed at A throughout the camera pivot; the ship
+leaves A only when CRUISE begins.
+
+### What the amendment does
+
+The amendment **changes the lhokon-phase position rule only**.
+Camera direction continues to lerp via the §A6 cubic-out (unchanged);
+camera POSITION remains `== ship.position` (unchanged — V1
+architecture, `camera.position.copy(frame.position)` at
+`main.js:6507`); the two-axis decoupling stays clean.
+
+Per-axis design table under §A7:
+
+| Phase | Ship POSITION | Ship ORIENTATION | Camera POSITION | Camera DIRECTION |
+|---|---|---|---|---|
+| STATION on A | `A.position + holdOffset` (body-locked, drifts with A) | toward A | `== ship.position` | toward A (`= ship.forward`) |
+| **lhokon (CHANGED under §A7)** | **`A.position + holdOffset` — still body-locked to A; drifts with A throughout lhokon** | toward B (invisible — no mesh; can stay snapped) | `== ship.position` (drifts with A) | lerps "toward A" → "toward B" via §A6 cubic-out |
+| CRUISE to B | translates toward B (leaves A) | toward B | `== ship.position` | toward B (`= ship.forward`) |
+
+Architectural framing Max emphasized verbatim:
+
+> *"Let's make the camera and ship work independently, although their
+> positions should still be anchored to the same point so that the
+> camera never leaves the ship."*
+
+Camera POSITION is bolted to ship position (V1 architecture). Camera
+DIRECTION is independent of ship orientation (already true today via
+`cameraLookDir` vs `ship.forward`). §A7 does **not** introduce camera-
+position decoupling, separate camera trajectories, orbital-shot
+machinery, or any V-later authoring surface. It is a one-rule swap
+on the lhokon-phase ship-position formula plus the bookkeeping for
+old-body refs and cruise-prep recompute.
+
+### Implementation outline
+
+PM authors the amendment shape; working-Claude lands the code under
+the new spec. Implementation outline (for working-Claude's reference,
+not amendment-blocking):
+
+1. **Capture old-body refs at lhokon entry.** In
+   `src/auto/AutopilotMotion.js`, add instance state
+   `_lhokonOldBody` (Object3D ref) and `_lhokonOldHoldOffset`
+   (Vector3) — captured at lhokon entry in `beginMotion`'s
+   `isInterLegSwap` branch (the same branch that already captures
+   `_lhokonAnchorPos`). The old-body ref is the body the ship was
+   just stationed at — i.e., the previous leg's target.
+2. **Replace world-freeze with body-lock in `_tickLhokon`.**
+   Replace `this._position.copy(this._lhokonAnchorPos)` with
+   `this._position.copy(this._lhokonOldBody.position).add(this.
+   _lhokonOldHoldOffset)`. Every lhokon frame, ship position is
+   recomputed from the old body's *current* position plus the
+   captured hold offset.
+3. **`_lhokonAnchorPos` becomes vestigial under the new contract.**
+   Working-Claude's call: remove (clean) or keep as a telemetry-
+   only field for V-later (audit trail of the world-frozen baseline).
+   Recommendation: remove unless a telemetry consumer needs it; the
+   §A7 contract has no production use for it.
+4. **Recompute cruise prep at lhokon exit.** Cruise prep
+   (`_startPos`, `_cruiseDistance`, `_cruiseSpeed`,
+   `_approachStartPos`) was computed in `beginMotion` from
+   `cruiseStartPos = lhokonAnchorPos`. Under §A7, ship has moved
+   from that snapshot during lhokon (because the old body has
+   orbited). **Recompute cruise prep at lhokon exit** in
+   `_exitLhokonToCruise` using the actual ship position
+   (`this._position` at the moment of exit). The alternative —
+   accept the small estimation drift since `_tickCruise` re-derives
+   direction every frame — is rejected: PM picks correctness over
+   the micro-economy of skipping a recompute. The recompute uses
+   the same math `beginMotion` used; just run it from the post-
+   lhokon ship position.
+
+This is the implementation outline; working-Claude tunes specifics
+(naming, telemetry surface, vestigial-field decision) at landing
+time.
+
+### Quoted prior-brief surfaces being amended
+
+For audit-trail integrity, the surfaces this amendment touches:
+
+1. **§"Amendments — 2026-04-25 (lhokon phase introduction)" §"What
+   the amendment does" §"Phase order" table** — phase-2 row
+   (`lhokon`) cell **"Stationary at STATION-A position. Velocity =
+   0."** is superseded under §A7. New cell: **"Body-locked to OLD
+   body (the body the ship was just stationed at). Position =
+   `oldBody.position + oldHoldOffset` every frame; velocity =
+   `oldBody.velocity` (matches the old body's orbital tangent)."**
+   The §A5 structural framing (camera convergence beat between
+   STATION-A and CRUISE; ship not yet burning toward new target;
+   old subject not receding) is **unchanged** — §A7 only changes
+   the *frame of reference* for "ship is not yet burning toward
+   new target" from world-frozen to old-body-locked.
+2. **§"Amendments — 2026-04-25 (lhokon phase introduction)" §"What
+   the amendment does" §"Because the ship is stationary throughout
+   `lhokon` by spec..."** — phrase **"stationary throughout
+   `lhokon`"** narrows under §A7 to **"body-locked to the old body
+   throughout `lhokon`"**. The Drift Risk #5 dissolution argument
+   ("there is no receding subject during lhokon — the ship is not
+   yet moving toward the new target, and the old subject is not
+   receding") is **preserved**: the old subject is still not
+   receding under §A7 (the ship and the old body are co-moving in
+   the orbital frame, distance is bounded by AC #4's `holdOffset`
+   construction); the new target is still not yet on-axis by
+   design. The dissolution holds; the frame just changes from world
+   to orbital.
+3. **`## Acceptance criteria` §"AC #13 — Ship stationary during
+   lhokon"** — entire AC rewritten under §A7. New AC name:
+   **"AC #13 — Ship body-locked to old body during lhokon"**. Old
+   bound (`|ship.velocity| ≤ 0.0001 u/s`, equivalent
+   `max|ship.position − ship.position_at_lhokon_onset| ≤ 0.0001 u`)
+   is **superseded**. New bound: per-frame
+   `|ship.position − (oldBody.position + oldHoldOffset)| ≤ 0.001 u`
+   (body-locked tracking; tolerance matches AC #4's STATION-A
+   body-lock invariance bound order of magnitude). New within-run
+   bound: `max(|ship.position − ship.position_at_lhokon_onset|) > 0`
+   on at least one lhokon run in the Sol-tour capture, proving the
+   body-lock is *visibly translating* in world frame (not
+   accidentally still world-frozen). Full text in §"AC #13" below.
+4. **`## Acceptance criteria` §"AC #5a — Camera tracks body" §"Phase
+   scope (amended 2026-04-25)"** — phrase **"the ship is stationary
+   throughout lhokon (AC #13)"** is updated to **"the ship is body-
+   locked to the old body throughout lhokon (AC #13)"** by
+   inheritance — AC #5a's lhokon carve-out rationale references AC
+   #13's contract; §A7 changes AC #13's contract; AC #5a's carve-
+   out reasoning still holds (the lhokon phase remains the camera-
+   convergence beat; the camera is not on-axis with the new target
+   by design; the structural reason for the carve-out is unchanged).
+   No direct text edit to AC #5a is required — the inheritance
+   carries the new framing. PM flags the inheritance for working-
+   Claude's same-session feature-doc edit.
+5. **`## Drift risks` §"Risk: V-later camera authoring smuggled into
+   V1"** — text references the §A5 lhokon ship-stationary structural
+   argument. Under §A7, "ship-stationary" becomes "ship-body-locked-
+   to-old-body." The drift risk shape (camera lingering on receding
+   subject) **remains dissolved** under §A7: the old subject is not
+   receding (ship is co-moving with old body); the new subject is
+   not yet on-axis by design. **No risk-text rewrite required.**
+6. **`## Drift risks` §"Risk: CRUISE-entry gate hangs"** — text
+   references lhokon's "ship stationary" framing. Under §A7, the
+   ship moves with the old body during lhokon, but the rate is
+   bounded by the old body's orbital velocity (sub-1 u/s on Sol).
+   The gate-hang failure mode is unchanged in shape (degenerate
+   rotation axis, FP asymptote near dot 1.0); §A7 does not introduce
+   new gate-hang surfaces. **No risk-text rewrite required.**
+
+### CRUISE-prep recomputation note
+
+Under §A5, `cruiseStartPos = lhokonAnchorPos` (a world-frozen point)
+was a valid start-of-cruise position because the ship was at that
+point at lhokon exit. Under §A7, the ship has moved from
+`lhokonAnchorPos` during lhokon (because the old body has orbited);
+`lhokonAnchorPos` is no longer the ship's position at lhokon exit.
+The cruise-prep variables (`_startPos`, `_cruiseDistance`,
+`_cruiseSpeed`, `_approachStartPos`) computed in `beginMotion` from
+the stale `cruiseStartPos` will be off by the lhokon-duration drift
+of the old body — small in absolute terms (≤ 0.67 u/s × 3 s ≈ 2 u
+worst case on a fast inner moon), large enough to matter for
+`_cruiseDistance` (which feeds the APPROACH-onset gate) and
+`_cruiseSpeed` (which feeds the CRUISE burn-rate selection).
+
+PM directive: **recompute cruise prep at lhokon exit** in
+`_exitLhokonToCruise` using the actual ship position (post-lhokon).
+The recompute is mechanical (same math `beginMotion` ran, run from
+the new starting position); the cost is one extra computation at
+the lhokon → CRUISE boundary. The alternative (accept the
+estimation drift, rely on `_tickCruise`'s every-frame direction
+re-derivation to absorb the offset) trades a tiny code-economy for
+a non-trivial AC-coverage gap on the APPROACH-onset gate. PM
+picks the recompute.
+
+### Cross-references
+
+- **§A6 amendment** (this brief, §"Amendments — 2026-04-26 (§A6
+  cubic-out tuning lock-in)") — structural foundation §A7 builds
+  on. The lhokon phase exists with cubic-out ease and the lock-in
+  defaults; §A7 changes only the position rule within the same
+  phase. Camera-direction lerp, dot-gate threshold, timeout, ease
+  function — all unchanged.
+- **Tester verdict §T4** at HEAD `9726e5f`:
+  `~/.claude/state/dev-collab/tester-audits/autopilot-camera-ship-
+  decoupling-2026-04-25.md` §T4. PASS verdict on §A6 implementation;
+  AC #13 PASSed under the §A5 contract (`world-stationary during
+  lhokon`). §A7 is **not** a response to a Tester FAIL — it is a
+  response to a Max felt-experience miss against an implementation
+  Tester PASS'd. This is the second canonical instance in this
+  workstream of the math-proxy-for-felt-experience pattern (§A6
+  was the first); the AC math was correct for the §A5 contract;
+  the §A5 contract itself silently contradicted the player's STATION-
+  A frame-of-reference model.
+- **Live Sol diagnostic at HEAD `9726e5f`**: working-Claude
+  instrumented per-frame `(phase, camPos, look-direction-error)`
+  on the live page; surfaced STATION-A drift 0.01–0.67 u/s across
+  10 Sol bodies (single capture) and the silent frame-of-reference
+  change at lhokon entry. The diagnostic is the empirical evidence
+  base for §A7.
+- **`autopilot-lab.html` (HEAD `3ced806`) `bodiesOrbit = false`
+  default**: the lab's evaluation of §A6's cubic-out ease was
+  correct *for the rotation curve*, silent *on the frame-of-
+  reference change*. PM observes: a future workstream lab change —
+  enable `bodiesOrbit = true` by default in `autopilot-lab.html` —
+  would catch this class of frame-of-reference miss. Not §A7's
+  scope; flagged below in §"Deferred decisions."
+- **Camera-position-bolted-to-ship-position contract** at
+  `main.js:6507` (`camera.position.copy(frame.position)`): the V1
+  architectural anchor §A7 explicitly preserves. Max's verbatim
+  framing on this point: *"Let's make the camera and ship work
+  independently, although their positions should still be anchored
+  to the same point so that the camera never leaves the ship."*
+  §A7 is consistent with this contract — camera position drifts
+  with the old body (because ship position drifts with the old
+  body, and camera position copies ship position).
+
+### Deferred decisions (flagged for Max)
+
+- **Should `autopilot-lab.html` flip `bodiesOrbit = true` by
+  default?** PM defers. The §A7 diagnostic surfaced a class of
+  miss the lab is silent on under its current default. A flip
+  would catch this class on future lab evaluations but would also
+  change the lab's evaluation surface for the rotation curve
+  itself (the §A6 ease evaluation was simpler under static
+  bodies). PM recommends a workstream-out-of-scope follow-up:
+  add an `bodiesOrbit` toggle prominently in the lab UI rather
+  than flipping the default silently. Not §A7's scope; flag for
+  next-lab-touching workstream.
+
+- **Should `_lhokonAnchorPos` be removed (clean) or kept as a
+  telemetry-only field?** PM defers to working-Claude. Under §A7,
+  it has no production use. Recommendation: remove unless a
+  Tester telemetry consumer wants it preserved as the world-frozen
+  baseline for diff calculations. Working-Claude's call at
+  landing time.
+
+- **Does §A7's cruise-prep recompute introduce a measurable
+  perf cost?** PM defers. The recompute is one set of vector
+  math at the lhokon → CRUISE boundary (once per leg, not per
+  frame). Expected to be negligible. If working-Claude's
+  implementation notices a perf regression at that site, surface
+  to PM/Director; otherwise, ship.
+
+- **Should the §A7 frame-of-reference lesson be promoted to a
+  Dev Collab OS protocol entry?** PM defers to working-Claude /
+  feature-doc retrospective at workstream close. §A7 is the second
+  worked example in this workstream of "math AC passes, felt-
+  experience misses" (§A6 was the first); §A7's specific shape —
+  *math AC's contract was internally consistent but contradicted
+  the player's implicit model established by an adjacent phase* —
+  is a distinct sub-pattern from §A6's *math AC's calibration was
+  too loose for the felt target*. Whether the sub-pattern merits
+  a memory-file entry is a retrospective question.
+
+### What stays unchanged
+
+- AC #1 (ship intercepts body within tolerance) — unchanged.
+  CRUISE behavior untouched.
+- AC #2 (APPROACH onset at min(10R, cruise-distance ceiling)) —
+  unchanged. The cruise-prep recompute at lhokon exit uses the
+  same math as `beginMotion`; APPROACH-onset semantics are
+  preserved.
+- AC #3 (STATION-A felt-fill ~60%) — unchanged.
+- AC #4 (STATION-A body-lock invariance) — unchanged. AC #4 is the
+  *source* of the player's frame-of-reference model that §A7
+  honors during lhokon.
+- AC #5a (camera tracks body, narrowed to non-lhokon phases under
+  §A5) — **unchanged**. Lhokon carve-out reasoning still holds
+  under §A7's body-lock contract (camera is not on-axis with new
+  target by design; the structural reason for the carve-out is
+  unchanged). The phrase "the ship is stationary throughout
+  lhokon (AC #13)" inherits §A7's new framing
+  ("body-locked to old body throughout lhokon (AC #13)") by
+  reference; no direct text edit required.
+- AC #5a's first-CRUISE-frame bound — **unchanged**. CRUISE begins
+  with `lookAt(new_target.current_position)`; the dot-bound on the
+  first CRUISE frame is still gated by AC #12's threshold. §A7's
+  cruise-prep recompute lands the ship at its actual post-lhokon
+  position before CRUISE direction is derived, so the CRUISE
+  pursuit-curve starts from the correct position.
+- AC #5b (ship aims at predicted intercept) — unchanged. CRUISE-
+  only bound; lhokon ship-orientation is not measured by AC #5b
+  (the ship's orientation during lhokon can stay snapped toward B
+  or hold from STATION-A — working-Claude's call as long as it
+  doesn't violate AC #7).
+- AC #6 (shake event placement) — unchanged. Shake fires at the
+  CRUISE-onset boundary (= lhokon-completion); the fact that the
+  ship is body-locked to old body during lhokon doesn't move the
+  shake event.
+- AC #7 (ship orientation set by autopilot, read by shake only) —
+  unchanged. Autopilot still writes `ship.forward` each frame
+  during lhokon (toward B is recommended; toward last-STATION-A
+  pose also acceptable; working-Claude's call).
+- AC #8 (jumpscare-arrival felt experience) — **stays
+  `VERIFIED_PENDING_MAX`.** Recording recapture deferred until the
+  §A7 implementation lands at a new HEAD. The §A7-amended brief
+  is the spec the recording will be evaluated against.
+- AC #9 (stub scaffolding removal) — unchanged.
+- AC #10 (two-axis architecture preserved) — unchanged. **§A7
+  explicitly preserves this contract.** Camera POSITION remains
+  `== ship.position` (V1 architecture, `main.js:6507`); only the
+  ship-position formula during lhokon changes. Camera DIRECTION
+  remains independent of ship orientation (cubic-out lerp toward
+  B, regardless of `ship.forward`). The decoupling stays clean.
+- AC #11 (lhokon onset at STATION-A → next-target-selected
+  boundary) — unchanged.
+- AC #12 (lhokon completion gates CRUISE entry) — unchanged.
+  Threshold `0.999999`, timeout `3.0 s`, cubic-out ease — all
+  unchanged. The dot-gate measures camera direction vs. expected
+  direction-to-new-target; both quantities are independent of the
+  ship-position formula. **The expected direction is recomputed
+  every frame from the new target's current position and the
+  *current* ship position (which now drifts with the old body)
+  — working-Claude must thread this correctly so the dot-gate
+  measures direction from the actual current ship position, not
+  from `lhokonAnchorPos`.** PM flags: a stale `lhokonAnchorPos`
+  in the dot-gate computation would produce a slowly-drifting
+  expected direction during lhokon, potentially preventing the
+  gate from firing on time. Working-Claude updates the dot-gate
+  computation site to read current ship position.
+- AC #14 (smoothness preserved at lhokon entry/exit, §A6 framing)
+  — unchanged. AC #14 measures *angular* continuity of camera
+  direction; §A7 changes ship POSITION only. The camera-direction
+  lerp shape (cubic-out from old-target-direction to new-target-
+  direction) is unchanged. The cubic-out's first-frame impulse
+  (slope-3 at t=0) and terminal-zero slope at t=1 are preserved.
+  The within-lhokon and exit bounds carry by inheritance.
+  - **Subtle interaction:** because the ship drifts with the old
+    body during lhokon, the *expected camera direction toward A*
+    at frame 1 vs. frame N differs slightly (A has moved during
+    lhokon, but the camera *forward* direction at frame 1 is set
+    from `lookAt(A.position_at_frame_1)`, and the lerp endpoint
+    "toward A" needs a frame-of-reference choice). PM directive:
+    the lerp endpoints are the *direction-from-current-ship-
+    position-to-A-current-position* at the lerp-start anchor and
+    the *direction-from-current-ship-position-to-B-current-
+    position* at the lerp-end anchor; both endpoints are
+    recomputed every frame from current bodies. This is the
+    "`lookAt(target.current_position)`" semantic AC #5a
+    establishes for non-lhokon phases, applied to the lerp
+    endpoints during lhokon. AC #14's continuity bound on frame
+    2 onward will catch any implementation that recomputes the
+    endpoints incorrectly (the curve's per-frame delta would
+    deviate from cubic-out's expected shape).
+- §A6 §"CRUISE-entry gate (criterion choice)" §(c) — structural
+  choice (dot-gate primary, timeout fallback) **unchanged**.
+- §A6 §"Quoted prior-brief surfaces being amended" — historical
+  record. §A7 does not touch §A6's audit trail; §A7 has its own
+  §"Quoted prior-brief surfaces" block above.
+- §A6 §"Cross-references" — historical record. §A7 has its own
+  §"Cross-references" block above.
+- §A5 §"Quoted prior-brief surfaces being amended" — historical
+  record. §A7's surface-1 / surface-2 entries above amend the
+  same §A5 phase-table cell §A5 originally introduced; the §A5
+  audit trail is left in place.
 
 ## Parent feature
 
@@ -1150,32 +1573,93 @@ degenerate axis case hangs lhokon indefinitely, the per-leg
 telemetry shows `lhokon` extending past 1.5 s without exiting; AC
 #12 catches the hang within frames of the timeout boundary.
 
-### AC #13 — Ship stationary during lhokon (per amendment 2026-04-25 — `lhokon` phase introduction)
+### AC #13 — Ship body-locked to old body during lhokon (per amendment 2026-04-25 — `lhokon` phase introduction; **rewritten under §A7 — 2026-04-26 — body-lock to old body**)
 
-Quoted criterion (this brief §"Amendments — 2026-04-25 (lhokon phase
-introduction)"): *"Ship remains stationary at the STATION-A
-position. Velocity = 0."*
+Quoted criterion (this brief §"Amendments — 2026-04-26 (§A7 lhokon
+body-lock to old body)" §"What the amendment does"): *"Ship is body-
+locked to the old target body throughout lhokon.
+ship.position == oldBody.position + oldHoldOffset every frame.
+ship.velocity == oldBody.velocity (matches the orbital tangent of
+the body the ship was just stationed at)."*
 
-Verification: per-frame telemetry samples `ship.velocity` (or
-finite-differenced `(ship.position_now − ship.position_prev) / dt`
-if velocity is not exposed) and `ship.position` during lhokon.
+Verification: per-frame telemetry samples `ship.position`,
+`oldBody.position`, and `oldHoldOffset` (the holdOffset captured at
+lhokon entry — Tester reads this from a telemetry field exported on
+the motionFrame; working-Claude lands the export site). Telemetry
+runs across one full lhokon run on the live Sol tour, with
+`bodiesOrbit = true` (default in production).
 
-**Bound: `|ship.velocity| ≤ 0.0001 scene units / second` for every
-frame on phase `lhokon`** (numerical tolerance for FP drift in
-parent-frame transforms; same order of magnitude as AC #4's
-STATION-A body-lock invariance bound). Equivalently, **`max
-|ship.position − ship.position_at_lhokon_onset| ≤ 0.0001 scene
-units` across the lhokon duration.** Verified across the Sol tour.
+**Per-frame bound (body-lock tracking):** for every frame on phase
+`lhokon`,
+```
+|ship.position − (oldBody.position + oldHoldOffset)| ≤ 0.001
+  scene units
+```
+(numerical tolerance for FP drift in parent-frame transforms; same
+order of magnitude as AC #4's STATION-A body-lock invariance
+bound). Verified across the Sol tour, all leg-swap lhokon runs.
 
-**Negative criterion the bound catches:** if working-Claude lands
-the lhokon phase but the ship begins to accelerate before
-lhokon-completion (e.g., the predicted-intercept solver fires its
-`_tickCruise` path during lhokon), the receding-subject linger
-failure mode reappears — old subject becomes a receding subject as
-the ship moves away from STATION-A while the camera is still
-mid-convergence. AC #13 catches the velocity onset within frames;
-AC #5a's CRUISE-side bound catches the consequence on the first
-CRUISE frame.
+**Per-run bound (visible translation):** for at least one lhokon
+run in the Sol-tour capture,
+```
+max(|ship.position − ship.position_at_lhokon_onset|) > 0
+```
+across the lhokon duration. This is the **inverse** of the §A5
+`maxDriftFromStart = 0` bound — under §A7, the body-lock is
+*supposed* to translate visibly in world frame as the old body
+orbits. A `maxDriftFromStart = 0` reading on every Sol-tour lhokon
+run would prove the implementation is still world-freezing (the
+§A5 contract regression). PM picks "at least one run shows
+visible translation" rather than "every run shows visible
+translation" because the magnitude scales with the old body's
+orbital velocity × lhokon duration — a leg-swap from a stationary
+or near-stationary body (e.g., Sol itself, distant outer body
+during a brief lhokon) might produce ≤ 0.001 u of drift,
+indistinguishable from FP noise. As long as one fast-orbit body
+in the tour produces measurable drift, the implementation is
+correctly body-locked.
+
+**Recommended Tester telemetry-assertion shape:** capture per-frame
+`(phase, camPos, oldBodyPos, oldHoldOffset)` for one full Sol-tour
+autopilot loop. For each lhokon frame, assert the per-frame bound
+above. For the run as a whole, assert
+`maxDriftFromEntry = max(|ship.position −
+ship.position_at_lhokon_onset|) > 0.01 u` for **at least one
+lhokon run** in the tour (the `0.01 u` threshold is well above
+FP noise and well below any reasonable body's lhokon-duration
+drift on a fast inner moon at `lhokonTimeoutSec = 3.0`). The
+body-lock-tracking assertion is the load-bearing one; the visible-
+translation assertion is the regression catch.
+
+**Negative criterion the rewritten bound catches (a):** if working-
+Claude lands §A7 but forgets to capture `_lhokonOldBody` /
+`_lhokonOldHoldOffset` at lhokon entry (e.g., uses *current target*
+instead of *old target* by mistake), the per-frame bound fails
+immediately — `oldBody.position + oldHoldOffset` evaluated against
+the wrong body produces a divergent ship position that fails the
+≤ 0.001 u bound on frame 1 of lhokon.
+
+**Negative criterion the rewritten bound catches (b):** if
+working-Claude lands §A7 but accidentally regresses to the §A5
+world-freeze (e.g., leaves `this._position.copy(this.
+_lhokonAnchorPos)` in place), the per-frame bound fails on every
+lhokon frame after frame 1 (because `oldBody.position` has moved
+but `_lhokonAnchorPos` hasn't). Equivalently, the per-run bound
+fails (`maxDriftFromEntry = 0` on every run).
+
+**Negative criterion the rewritten bound does NOT catch:** the
+camera-direction lerp endpoint computation. AC #14 catches that.
+AC #13 measures position only.
+
+**Inheritance from §A5:** the original §A5 AC #13 caught the case
+where the ship begins to accelerate *toward the new target* before
+lhokon completes (the `_tickCruise` path firing during lhokon).
+That negative criterion is **still caught** under §A7 by inheritance:
+if `_tickCruise`'s burn-toward-B path fires during lhokon, the
+ship's position diverges from `oldBody.position + oldHoldOffset`
+on the first frame after the burn begins, failing the per-frame
+bound. The §A7 bound catches the same drift class with a different
+reference frame.
 
 ### AC #14 — Smoothness preserved at lhokon entry/exit (per amendment 2026-04-25 — `lhokon` phase introduction; **entry bound rewritten under §A6 — 2026-04-26 — framing (b): first-frame carve-out**)
 
