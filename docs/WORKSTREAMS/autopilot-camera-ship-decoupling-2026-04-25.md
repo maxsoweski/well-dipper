@@ -2,6 +2,23 @@
 
 ## Status
 
+**`Active — amended 2026-04-26 (§A8 shake gate during lhokon + intensity ×0.2)`** —
+see §"Amendments — 2026-04-26 (§A8 shake gate during lhokon + intensity ×0.2)"
+below for the amendment shape and rationale. §A8 closes the shake
+signal-derivation gate during phase=`lhokon` (parallel to STATION-A)
+and reduces shake amplitude by 80% across all three axes. The change
+resolves two issues working-Claude diagnosed empirically against §A7
+on the live Sol tour at HEAD `01caf00` (post-§T5 PASS): (1) DECEL
+shake events firing during lhokon at lhokon-elapsed ~1.7–2.0s, caused
+by §A7's body-lock to old body producing a non-trivial `|d|v|/dt|`
+signal during fast-orbiting moon legs (the §A7 brief incorrectly
+asserted "AC #6 unchanged — shake event placement … doesn't move";
+empirically false on moons), and (2) Max's verbatim ask: *"Let's
+reduce the intensity of the shaking effect by 80%."* The §A7 lhokon
+body-lock stands; the §A6 cubic-out tuning lock-in stands; the §A5
+lhokon-phase introduction stands; the §A4 V1 redesign stands. §A8 is
+a parameter+gate tune, no architectural change.
+
 **`Active — amended 2026-04-26 (§A7 lhokon body-lock to old body)`** —
 see §"Amendments — 2026-04-26 (§A7 lhokon body-lock to old body)"
 below for the amendment shape and rationale. The §A6 cubic-out tuning
@@ -940,6 +957,339 @@ picks the recompute.
   record. §A7's surface-1 / surface-2 entries above amend the
   same §A5 phase-table cell §A5 originally introduced; the §A5
   audit trail is left in place.
+
+## Amendments — 2026-04-26 (§A8 shake gate during lhokon + intensity ×0.2)
+
+### Why this amendment
+
+§A7 (lhokon body-lock to old body) shipped and Tester PASS'd at HEAD
+`01caf00` (§T5). All telemetry-class ACs carried under §A7's new
+contract; AC #13's position rule (`|ship.position − (oldBody.position
++ oldHoldOffset)| ≤ 0.001 u` per frame) held bit-for-bit; AC #14's
+smoothness bounds carried under the cubic-out endpoints recomputed
+from current-ship-position. Gate released at §T5 PASS.
+
+Two follow-up items surfaced against the §A7 implementation on the
+live Sol autopilot loop:
+
+**(1) Empirical follow-up — shake fires during lhokon, before ship
+begins flying.** Working-Claude instrumented per-frame shake telemetry
+on a 30 s Sol-tour capture at HEAD `01caf00`. Of 10 captured shake
+start transitions:
+
+- **3 were DECEL events that fired during phase=`lhokon`** at
+  lhokon-elapsed positions ~1.7–2.0 s (well before lhokon exit).
+- 6 were ACCEL/DECEL events at the authored CRUISE-onset / APPROACH-
+  onset boundaries (1–2 frames after the phase transition — correct
+  timing).
+- 1 was an ACCEL at a CRUISE-onset boundary on a slow body
+  (no anomaly).
+
+The DECEL-during-lhokon events are the bug. Working-Claude traced the
+mechanism (telemetry-confirmed):
+
+- `ShipChoreographer.js:396` — signal-derivation gate is
+  `(subPhase === 'traveling') && !motionFrame.isShortTrip`.
+- `main.js:6575` — `const subPhase = (frame.phase === 'STATION-A') ?
+  'orbiting' : 'traveling';` — only STATION-A is classified
+  `'orbiting'`. Lhokon falls into `'traveling'` → the gate is OPEN
+  during lhokon.
+- Under §A5 (world-frozen lhokon), the open gate during lhokon was
+  harmless because position was world-frozen → zero deltas → no
+  signal.
+- Under §A7 (body-locked to old body), position changes every frame
+  at the old body's orbital velocity. **For moons specifically, world
+  velocity oscillates** because the parent-planet velocity vector
+  rotates relative to the moon-local velocity vector → compound effect
+  produces a non-trivial `|d|v|/dt|` signal. The `peak-pullback`
+  detector at `ShipChoreographer.js:443–446` reads this oscillation
+  and fires a DECEL event.
+
+**§A7's brief was empirically wrong on AC #6.** The §A7 amendment
+§"What stays unchanged" lines 873–876 claimed:
+
+> *"AC #6 (shake event placement) — unchanged. Shake fires at the
+> CRUISE-onset boundary (= lhokon-completion); the fact that the ship
+> is body-locked to old body during lhokon doesn't move the shake
+> event."*
+
+This was correct as a statement about the *authored* impulses
+(`debugAccelImpulse` at CRUISE onset, `debugDecelImpulse` at APPROACH
+onset, both fired from `main.js:6531–6535` independent of the signal
+gate). It was **wrong** as a statement about the *signal-derived*
+shake events: §A7's body-lock-to-old-body rule introduced an
+oscillating world-velocity signal during lhokon that the peak-pullback
+detector latches onto. AC #6 needs an amendment under §A8 to specify
+lhokon-suppressed shake.
+
+**(2) Max's verbatim ask — reduce shake intensity by 80%.** During
+the live Sol-tour evaluation, Max said verbatim:
+
+> *"Let's reduce the intensity of the shaking effect by 80%."*
+
+The current shake amplitudes in `ShipChoreographer.js:138–154` are
+documented as Max-tunable:
+
+- `TREMOR_PITCH_PEAK_DEG = 1.0`
+- `TREMOR_YAW_PEAK_DEG = 1.0`
+- `TREMOR_ROLL_PEAK_DEG = 0.5`
+
+No AC bound exists on the absolute amplitude (AC #6's bounds are on
+*placement* — CRUISE-onset / APPROACH-onset — and on *shape*
+— ACCEL ≡ reverse(DECEL), no shake during smooth motion). The
+intensity tune is a parameter change within the existing AC envelope.
+
+§A8 bundles both: close the lhokon gate (corrects §A7's empirical
+miss) + reduce intensity ×0.2 (Max parameter tune). Both changes are
+parameter-class; no architectural surfaces touched.
+
+### What the amendment does
+
+**(a) Close the shake signal-derivation gate during lhokon.** Update
+`main.js:6575` from:
+
+```js
+const subPhase = (frame.phase === 'STATION-A') ? 'orbiting' : 'traveling';
+```
+
+to:
+
+```js
+const subPhase = (frame.phase === 'STATION-A' || frame.phase === 'lhokon') ? 'orbiting' : 'traveling';
+```
+
+This closes the signal-derivation gate during lhokon (parallel to the
+closed state during STATION-A). The peak-pullback detector at
+`ShipChoreographer.js:443–446` no longer reads the body-lock-to-old-
+body oscillation signal during lhokon. **Authored impulses remain
+fired**: `debugAccelImpulse` at CRUISE onset (`main.js:6531–6535`)
+and `debugDecelImpulse` at APPROACH onset (same site) trigger from
+phase-transition events, not from the signal gate, so AC #6's
+authored shake placement is unchanged.
+
+**(b) Reduce shake amplitude per axis by 80%.** Update three constants
+in `ShipChoreographer.js`:
+
+- Line 141: `TREMOR_PITCH_PEAK_DEG: 1.0 → 0.2`
+- Line 147: `TREMOR_YAW_PEAK_DEG: 1.0 → 0.2`
+- Line 154: `TREMOR_ROLL_PEAK_DEG: 0.5 → 0.1`
+
+Update the inline-comment doc on each constant to reflect the new
+seed values (e.g., `/** Peak pitch amplitude during ACCEL/DECEL. V1
+seed 1.0°; reduced to 0.2° under §A8 (Max felt-experience tune,
+2026-04-26). */`). If the file maintains an amendment trail, log §A8.
+
+### AC #6 amendment
+
+The original AC #6 text (lines 1379–1391) stays in place for
+**authored** placement (CRUISE-onset / APPROACH-onset). §A8 adds a
+new clause for **signal-derived** suppression during lhokon, plus
+a sub-AC for the intensity reduction.
+
+**New clause appended to AC #6 verification:**
+
+> Shake's signal-derivation gate is **suppressed during phase=`lhokon`**
+> (parallel to STATION-A; gate closed via `main.js:6575` `subPhase`
+> classification). No `shakeStart` events fire from signal during
+> lhokon under any system, including fast-orbiting moons whose body-
+> locked oscillating world velocity would otherwise trigger the
+> `peak-pullback` detector. Authored impulses (`debugAccelImpulse` at
+> CRUISE onset, `debugDecelImpulse` at APPROACH onset) are unchanged
+> — they fire from phase-transition events, not from the signal gate.
+
+**Tester telemetry assertion (AC #6 lhokon-suppression):** zero
+`shakeStart` transitions captured with `phase === 'lhokon'` across a
+full Sol-tour capture (≥ 30 s, includes at least one fast-orbit moon
+leg — e.g., a Jovian moon, or any inner-planet body where the body-
+locked oscillation amplitude is non-trivial). Per-leg, the shake-event
+log still contains exactly two entries: ACCEL at CRUISE-onset, DECEL
+at APPROACH-onset (per the unchanged authored-placement clause).
+
+**New sub-AC for shake intensity (under AC #6):**
+
+> **AC #6.1 — Shake amplitude per axis (post-§A8 reduction).** Peak
+> per-axis rotation during any ACCEL or DECEL event satisfies:
+> pitch ≤ 0.20°, yaw ≤ 0.20°, roll ≤ 0.10°.
+>
+> **Tester telemetry assertion (AC #6.1):** maximum
+> `shakeMag = sqrt(pitch² + yaw² + roll²)` measured across a full
+> Sol-tour capture **≤ 0.30°** (envelope bound: `pitch² + yaw² +
+> roll² ≤ 0.09 deg² = 0.0000274 rad²`). Per-axis peaks measured
+> independently must satisfy the per-axis bounds above.
+
+The envelope bound `≤ 0.30°` is the L2 norm of the per-axis caps
+(`sqrt(0.20² + 0.20² + 0.10²) = sqrt(0.09) = 0.30`); a real shake
+event reading near the cap on all three axes simultaneously is
+allowed, but exceeding `0.30°` total magnitude indicates a constant
+not landed correctly.
+
+### Quoted prior-brief surfaces being amended
+
+For audit-trail integrity, the surfaces this amendment touches:
+
+1. **§"Amendments — 2026-04-26 (§A7 lhokon body-lock to old body)"
+   §"What stays unchanged" — the AC #6 entry (lines 873–876).** The
+   §A7 claim — *"AC #6 (shake event placement) — unchanged. Shake
+   fires at the CRUISE-onset boundary (= lhokon-completion); the fact
+   that the ship is body-locked to old body during lhokon doesn't
+   move the shake event."* — is **superseded for the signal-derived
+   sub-clause** under §A8. The §A7 claim was correct for *authored*
+   shake placement (CRUISE-onset and APPROACH-onset impulses fire
+   from phase transitions, unaffected by the body-lock contract); it
+   was wrong for *signal-derived* shake events (the body-lock-to-old-
+   body rule produces an oscillating world-velocity signal during
+   lhokon on fast-orbiting moons, which the peak-pullback detector
+   latches onto). §A8 adds the lhokon-suppression clause to AC #6
+   to close this gap; the authored-placement clause stands.
+
+2. **`## Acceptance criteria` §"AC #6 — Shake event placement"
+   (lines 1379–1391).** The original criterion text is **preserved
+   verbatim** for authored placement. §A8 **appends** the lhokon-
+   suppression clause and the new sub-AC #6.1 (shake amplitude per
+   axis). No replacement of existing text; only addition.
+
+### Cross-references
+
+- **§A7 implementation HEAD `01caf00`** — the empirical evidence base
+  for §A8. §A7 introduced the body-lock-to-old-body rule that produced
+  the oscillating world-velocity signal during lhokon on fast-orbiting
+  moons; §A8 closes the gate that was reading the signal.
+- **Tester verdict §T5** at HEAD `01caf00`:
+  `~/.claude/state/dev-collab/tester-audits/autopilot-camera-ship-
+  decoupling-2026-04-25.md` §T5. PASS verdict on §A7 implementation;
+  AC #13 PASSed under the §A7 body-lock contract. §A8 is **not** a
+  response to a Tester FAIL — it is a response to a working-Claude
+  empirical follow-up against §A7's mechanism. This is the third
+  canonical instance in this workstream of the math-AC-passes-and-
+  felt-experience-or-mechanism-side-effect-misses pattern (§A6 was
+  the first, §A7 the second). The recurring shape: a math AC bounds
+  the named contract, the contract is internally consistent, but a
+  side effect or felt-experience dimension outside the AC's named
+  scope produces a regression. §A8's specific shape — *§A7's new
+  ship-position contract introduces a signal that an adjacent
+  subsystem (shake) reads through an unaltered gate, producing
+  out-of-spec shake events* — is a fresh sub-pattern: cross-subsystem
+  side effect across subsystems whose ACs do not co-bound their
+  shared signal surface.
+- **Working-Claude per-frame telemetry trace (2026-04-26)** — the
+  diagnostic capture: 30 s Sol tour at HEAD `01caf00`, per-frame
+  `(phase, shakeStart-event, lhokon-elapsed, body-velocity)`.
+  Surfaced 3 DECEL events at lhokon-elapsed ~1.7–2.0 s on
+  fast-orbiting moon legs. The trace is the empirical evidence base
+  for the §A8 shake-gate-during-lhokon clause. (Trace lives in the
+  working-Claude session log, not committed to repo; cited here for
+  audit-trail completeness.)
+- **Max's verbatim intensity ask (live tour evaluation, 2026-04-26):**
+  *"Let's reduce the intensity of the shaking effect by 80%."* The
+  empirical evidence base for the §A8 intensity-×0.2 clause (no AC
+  measurement against a target — Max's selection is the criterion).
+
+### Implementation outline
+
+PM authors the amendment shape; working-Claude lands the code under
+the new spec. Implementation outline (for working-Claude's reference,
+not amendment-blocking):
+
+1. **Close the signal-derivation gate during lhokon** —
+   `src/main.js:6575`. One-line change: add `|| frame.phase === 'lhokon'`
+   to the `subPhase` ternary's `'orbiting'` arm. No state, no new
+   surface, no follow-on edits in `ShipChoreographer.js` (the gate
+   in `ShipChoreographer.js:396` reads `subPhase` and works as-is).
+2. **Reduce shake amplitude ×0.2** —
+   `src/auto/ShipChoreographer.js:141, 147, 154`. Three constant
+   tweaks (1.0 → 0.2, 1.0 → 0.2, 0.5 → 0.1). Update inline-comment
+   docs to reflect new seeds. If the file maintains an amendment
+   trail comment block, log §A8 (Max felt-experience tune,
+   2026-04-26).
+3. **No architectural changes.** No new state, no new accessor, no
+   new telemetry surface. Existing telemetry on
+   `shakeStart`-events is sufficient for the Tester assertion on
+   AC #6's lhokon-suppression clause; existing telemetry on per-axis
+   peak amplitude is sufficient for AC #6.1.
+
+The two file:line surfaces are the entire change footprint:
+`src/main.js:6575` and `src/auto/ShipChoreographer.js:141, 147, 154`.
+
+### Deferred decisions (flagged for Max)
+
+- **Moon overshoot during APPROACH** — Max reported on the live
+  tour that some bodies "overshoot" during APPROACH. Working-Claude's
+  telemetry on the 30 s capture surfaced no overshoot in the 3
+  captured APPROACH→STATION-A transitions (all monotonic distance-
+  decrease), but the bodies in those 3 transitions were small/slow.
+  **Investigation deferred.** Note: the realistic-celestial-motion
+  workstream PM is authoring in parallel may resolve this by side
+  effect — moons barely move in 1.8 s of APPROACH at realistic
+  speeds, which would eliminate the parent-orbital-velocity component
+  that compounds with APPROACH deceleration. PM flags: revisit
+  moon-overshoot diagnostics after the realistic-celestial-motion
+  workstream lands; if overshoot persists, scope a fresh workstream.
+
+- **Should the §A8 cross-subsystem-side-effect lesson be promoted to
+  a Dev Collab OS protocol entry?** PM defers to working-Claude /
+  feature-doc retrospective at workstream close. §A8 surfaces a
+  third sub-pattern of the math-AC-passes-but-something-misses class
+  (§A6, §A7, §A8 each represent a distinct sub-pattern). The §A8
+  shape — *cross-subsystem side effect: subsystem A's contract
+  change produces a signal subsystem B reads through an unaltered
+  gate; A's AC bounds A's contract correctly, B's AC bounds B's
+  output correctly, but the cross-subsystem signal surface is
+  unbounded* — is a distinct architectural lesson worth retrospect.
+  Not §A8's scope; flag for workstream-close retrospective.
+
+### What stays unchanged
+
+- AC #1 (ship intercepts body within tolerance) — unchanged.
+- AC #2 (APPROACH onset at min(10R, cruise-distance ceiling)) —
+  unchanged.
+- AC #3 (STATION-A felt-fill ~60%) — unchanged.
+- AC #4 (STATION-A body-lock invariance) — unchanged.
+- AC #5a (camera tracks body) — unchanged.
+- AC #5b (ship aims at predicted intercept) — unchanged.
+- **AC #6 (shake event placement, authored sub-clause)** —
+  **unchanged**. Authored ACCEL at CRUISE-onset and DECEL at
+  APPROACH-onset still fire from phase-transition events at
+  `main.js:6531–6535`. §A8 adds a *new* signal-derived
+  suppression-during-lhokon clause and a new amplitude sub-AC #6.1;
+  the original authored-placement criterion stands verbatim.
+- AC #7 (ship orientation set by autopilot, read by shake only) —
+  unchanged. Shake still reads `ship.forward`/`ship.up` for
+  perturbation axis; consumer set is unchanged. The amplitude
+  reduction is a perturbation-magnitude tune, not a consumer-set
+  change.
+- AC #8 (jumpscare-arrival felt experience) — **stays
+  `VERIFIED_PENDING_MAX`.** Recording recapture deferred until §A8
+  lands at a new HEAD, alongside any pending §A7 recapture. The
+  reduced shake amplitude will be visible in the recording — Max's
+  jumpscare-arrival evaluation includes the felt intensity of the
+  shake, so the §A8 amplitude tune is in-scope for AC #8's
+  re-evaluation when the recording lands.
+- AC #9 (stub scaffolding removal) — unchanged.
+- AC #10 (two-axis architecture preserved) — unchanged. §A8 does
+  **not** touch camera/ship coupling. Camera POSITION remains
+  `== ship.position`; camera DIRECTION remains independent of
+  `ship.forward`. Shake authoring axis (`ship.forward`/`ship.up`)
+  is unchanged.
+- AC #11 (lhokon onset at STATION-A → next-target-selected
+  boundary) — unchanged.
+- AC #12 (lhokon completion gates CRUISE entry) — unchanged.
+  Threshold `0.999999`, timeout `3.0 s`, cubic-out ease — all
+  unchanged.
+- **AC #13 (ship body-locked to old body during lhokon, §A7
+  framing)** — **unchanged**. §A7's position rule (`|ship.position −
+  (oldBody.position + oldHoldOffset)| ≤ 0.001 u` per frame) is the
+  load-bearing contract change of this workstream; §A8 does not
+  touch the position rule, only the shake-gate's read of the
+  resulting signal.
+- AC #14 (smoothness preserved at lhokon entry/exit, §A6 framing)
+  — unchanged.
+- §A7 §"Cross-references" — historical record. §A8 does not touch
+  §A7's audit trail; §A8 has its own §"Cross-references" block above.
+- §A7 §"CRUISE-prep recomputation note" — historical record.
+  Cruise-prep recompute at lhokon exit is unchanged.
+- §A6 §"CRUISE-entry gate (criterion choice)" — historical record.
+- §A5 §"Quoted prior-brief surfaces being amended" — historical
+  record.
 
 ## Parent feature
 
@@ -2382,3 +2732,25 @@ from CRUISE) are preserved verbatim. The lab harness at HEAD
 evaluation by Max replaces (and supersedes) the prior math-only
 AC #14 entry bound. See §"Amendments — 2026-04-26 (§A6 cubic-out
 tuning lock-in)" for the full §A6 amendment trail.*
+
+*Amended 2026-04-26 by PM (§A8 shake gate during lhokon + intensity
+×0.2) under Tester verdict §T5 at HEAD `01caf00` (PASS on §A7) +
+working-Claude empirical follow-up + Max verbatim intensity ask. §A8
+closes the shake signal-derivation gate during phase=`lhokon`
+(`main.js:6575` ternary update — adds `'lhokon'` to the `'orbiting'`
+arm parallel to STATION-A) and reduces shake amplitude per axis by
+80% (`ShipChoreographer.js:141, 147, 154` — `TREMOR_PITCH_PEAK_DEG`
+and `TREMOR_YAW_PEAK_DEG: 1.0 → 0.2`, `TREMOR_ROLL_PEAK_DEG: 0.5 →
+0.1`). §A8 corrects the §A7 brief's "AC #6 unchanged" claim that was
+empirically wrong on fast-orbiting moons (§A7's body-lock-to-old-body
+rule produced an oscillating world-velocity signal during lhokon
+that the peak-pullback detector latched onto, firing 3 DECEL events
+during lhokon-elapsed ~1.7–2.0 s on a 30 s Sol-tour capture). AC #6's
+authored-placement clause stands verbatim; §A8 appends a lhokon-
+suppression clause (Tester telemetry assertion: zero `shakeStart`
+events with `phase === 'lhokon'`) and a new sub-AC #6.1 bounding
+amplitude (per-axis: pitch ≤ 0.20°, yaw ≤ 0.20°, roll ≤ 0.10°;
+envelope: `shakeMag ≤ 0.30°`). Position rule (AC #13 / §A7) is
+preserved. No architectural change; pure parameter+gate tune. See
+§"Amendments — 2026-04-26 (§A8 shake gate during lhokon + intensity
+×0.2)" for the full §A8 amendment trail.*
