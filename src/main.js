@@ -2014,7 +2014,13 @@ function formatSettingValue(key, value) {
   if (key === 'tourLingerMultiplier') return `${value.toFixed(1)}x`;
   if (key === 'fov') return `${value}°`;
   if (key === 'autoRotateSpeed') return `${value.toFixed(1)}`;
-  if (key === 'orbitSpeedMultiplier') return `${value.toFixed(2)}x`;
+  if (key === 'celestialTimeMultiplier') {
+    // Realistic-celestial-motion-2026-04-27: multiplier ranges 1×–10000×
+    // log-scale. Format with sig-fig-aware precision.
+    if (value >= 100) return `${Math.round(value)}×`;
+    if (value >= 10)  return `${value.toFixed(1)}×`;
+    return `${value.toFixed(2)}×`;
+  }
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
   if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
   if (key === 'masterVolume' || key === 'musicVolume' || key === 'sfxVolume')
@@ -2037,7 +2043,14 @@ function populateSettingsUI() {
     } else if (input.tagName === 'SELECT') {
       input.value = String(value);
     } else {
-      input.value = value;
+      // celestialTimeMultiplier slider stores raw position 0–40 in the
+      // DOM, mapped to multiplier 10^(pos/10) (= 1× at 0, 10000× at 40).
+      // Per workstream realistic-celestial-motion-2026-04-27.
+      if (key === 'celestialTimeMultiplier') {
+        input.value = Math.log10(Math.max(1, value)) * 10;
+      } else {
+        input.value = value;
+      }
       const label = input.nextElementSibling;
       if (label?.classList.contains('setting-value')) {
         label.textContent = formatSettingValue(key, value);
@@ -2127,6 +2140,11 @@ function applySettingChange(key, value) {
         value = input.checked;
       } else if (input.tagName === 'SELECT') {
         value = parseInt(input.value, 10);
+      } else if (key === 'celestialTimeMultiplier') {
+        // Slider position 0–40 → multiplier 10^(pos/10) (log scale,
+        // 1× at pos 0, 10× at 10, 100× at 20, 1000× at 30, 10000× at 40).
+        // Per workstream realistic-celestial-motion-2026-04-27.
+        value = Math.pow(10, parseFloat(input.value) / 10);
       } else {
         value = parseFloat(input.value);
       }
@@ -5785,12 +5803,16 @@ function animate() {
     // ── Star system updates (skip for deep sky) ──
     if (!system.type || system.type === 'star-system') {
 
-    // ── Orbit speed multiplier (from settings slider) ──
-    const orbitDt = deltaTime * settings.get('orbitSpeedMultiplier');
+    // ── Celestial time multiplier (from settings slider) ──
+    // Per workstream realistic-celestial-motion-2026-04-27: at 1× the
+    // base body data is realistic (Earth-orbit 1 year, Earth-rotation
+    // 24 hours). Slider scales celestial time across orbit + rotation
+    // + asteroid + binary uniformly.
+    const celestialDt = deltaTime * settings.get('celestialTimeMultiplier');
 
     // ── Binary star orbit ──
     if (system.isBinary) {
-      system.binaryOrbitAngle += system.binaryOrbitSpeed * orbitDt;
+      system.binaryOrbitAngle += system.binaryOrbitSpeed * celestialDt;
       const q = system.binaryMassRatio;
       const sep = system.binarySeparation;
       const r1 = sep * q / (1 + q);
@@ -5807,7 +5829,7 @@ function animate() {
 
     // ── Update each planet's orbit, position, and lighting ──
     for (const entry of system.planets) {
-      entry.orbitAngle += entry.orbitSpeed * orbitDt;
+      entry.orbitAngle += entry.orbitSpeed * celestialDt;
       const px = Math.cos(entry.orbitAngle) * entry.orbitRadius;
       const pz = Math.sin(entry.orbitAngle) * entry.orbitRadius;
       entry.planet.mesh.position.set(px, 0, pz);
@@ -5829,14 +5851,14 @@ function animate() {
       }
 
       // Planet rotation + clouds
-      entry.planet.update(deltaTime);
+      entry.planet.update(deltaTime, celestialDt);
 
       // Moons orbit around the planet
       for (const moon of entry.moons) {
         if (moon.isPlanetMoon) {
           // Planet-class moons: handle orbital positioning externally
           // (Planet.js has no orbit logic — Moon.js does it internally)
-          moon.orbitAngle += moon.data.orbitSpeed * orbitDt;
+          moon.orbitAngle += moon.data.orbitSpeed * celestialDt;
           const r = moon.data.orbitRadius;
           const angle = moon.orbitAngle;
           const incl = moon.data.inclination || 0;
@@ -5851,7 +5873,7 @@ function animate() {
           if (system.isBinary) moon.planet._lightDir2.copy(entry.planet._lightDir2);
           moon.planet.update(deltaTime);
         } else {
-          moon.update(orbitDt, entry.planet.mesh.position);
+          moon.update(deltaTime, entry.planet.mesh.position, celestialDt);
         }
       }
 
@@ -5941,7 +5963,7 @@ function animate() {
 
     // ── Update asteroid belts ──
     for (const belt of system.asteroidBelts) {
-      belt.update(orbitDt);
+      belt.update(deltaTime, celestialDt);
       // Update star positions for per-fragment lighting (binary)
       if (system.isBinary) {
         belt.updateStarPositions(system.star.mesh.position, system.star2.mesh.position);
@@ -5949,7 +5971,7 @@ function animate() {
     }
 
     // ── Update flavor ships orbiting planets ──
-    shipSpawner.update(orbitDt, system.planets);
+    shipSpawner.update(celestialDt, system.planets);
 
     // ── Update gravity well minimap positions (map-unit coords) ──
     if (gravityWell && gravityWellVisible && gravityWellPlanets) {

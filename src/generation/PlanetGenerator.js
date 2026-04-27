@@ -4,6 +4,7 @@ import {
   equilibriumTemperature, tidalLockTimescale, checkTidalLock,
   habitabilityScore, computeSurfaceHistory, generateRingPhysics,
 } from './PhysicsEngine.js';
+import { realisticRotationSpeed as rot } from '../core/CelestialTime.js';
 
 /**
  * PlanetGenerator — produces data describing a single planet.
@@ -391,7 +392,7 @@ export class PlanetGenerator {
       radiusEarth, massEarth, orbitAU: orbitRadiusAU,
       luminosityRel, ageGyr,
       ironFraction: composition.ironFraction,
-      rotationSpeed: tidalState.locked ? 0 : 0.1,
+      rotationSpeed: tidalState.locked ? 0 : rot(0.1),
       type,
     });
 
@@ -659,9 +660,9 @@ export class PlanetGenerator {
     if (tidalState.locked && tidalState.lockType === 'synchronous') {
       rotationSpeed = 0;
     } else if (tidalState.locked && tidalState.lockType === '3:2-resonance') {
-      rotationSpeed = 0.02; // slow spin, not zero
+      rotationSpeed = rot(0.02); // slow spin, not zero
     } else {
-      rotationSpeed = rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1);
+      rotationSpeed = rot(rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1));
     }
 
     // Sun direction: use provided direction (from system generator) or random fallback

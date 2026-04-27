@@ -24,7 +24,12 @@ const DEFAULTS = {
   showGravityWells: false,
 
   // Simulation
-  orbitSpeedMultiplier: 1.0,  // 1× = default, 0.25× = slow, 4× = fast
+  // Per workstream realistic-celestial-motion-2026-04-27:
+  // 1× = realistic (Earth-orbit 1 year, Earth-rotation 24 hours).
+  // Slider extends log-scale to 10000× (Earth-orbit ~53 min,
+  // Earth-rotation ~8.6 s) so the user can speed motion up.
+  // Scales orbital revolution AND axial rotation AND asteroid orbits.
+  celestialTimeMultiplier: 1.0,
 
   // Camera
   fov: 70,                    // field of view in degrees
@@ -98,6 +103,18 @@ export class Settings {
         // Migrate stale idleTimeout from old 20s default to new 300s default
         if (saved.idleTimeout !== undefined && saved.idleTimeout < 60) {
           this._values.idleTimeout = DEFAULTS.idleTimeout;
+          this._save();
+        }
+        // §realistic-celestial-motion-2026-04-27: rename
+        // `orbitSpeedMultiplier` → `celestialTimeMultiplier`. Old key
+        // had a narrow 0.25–4× linear range against accelerated base
+        // speeds; new key spans 1×–10000× log against realistic base
+        // speeds. We don't try to translate the old value — the
+        // semantic register changed (the multiplier now means "how
+        // much faster than realistic"). Drop the old value cleanly so
+        // the user lands on the new realistic default.
+        if (saved.orbitSpeedMultiplier !== undefined) {
+          delete saved.orbitSpeedMultiplier;
           this._save();
         }
       }

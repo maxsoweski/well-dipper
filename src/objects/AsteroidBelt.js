@@ -196,9 +196,15 @@ export class AsteroidBelt {
 
   /**
    * Advance orbital positions and tumble rotations.
+   * @param {number} deltaTime  raw frame dt — kept for caller backward
+   *   compat; internally converted to celestialDt.
+   * @param {number} [celestialDt=deltaTime]  user-time-scaled celestial dt
+   *   (= deltaTime × celestialTimeMultiplier). Both orbital advance and
+   *   tumble rotation are celestial-class motion (per workstream
+   *   realistic-celestial-motion-2026-04-27) and consume celestialDt.
    */
-  update(deltaTime) {
-    this._elapsedTime += deltaTime;
+  update(deltaTime, celestialDt = deltaTime) {
+    this._elapsedTime += celestialDt;
 
     const mat = this._tempMatrix;
     const pos = this._tempPos;
@@ -211,7 +217,7 @@ export class AsteroidBelt {
         const a = group.batch[i];
 
         // Advance orbital position
-        a.angle += a.orbitSpeed * deltaTime;
+        a.angle += a.orbitSpeed * celestialDt;
 
         // Position on the orbit
         const x = Math.cos(a.angle) * a.radius;

@@ -1267,12 +1267,18 @@ export class Planet {
     return types.indexOf(this.data.type);
   }
 
-  /** Call every frame. Rotates the surface and ring. */
-  update(deltaTime) {
-    this.surface.rotation.y += this.data.rotationSpeed * (Math.PI / 180) * deltaTime;
+  /**
+   * Call every frame. Rotates the surface and ring; advances shader time.
+   * @param {number} deltaTime  raw frame dt — used for shader animation only.
+   * @param {number} [celestialDt=deltaTime]  user-time-scaled celestial dt
+   *   (= deltaTime × celestialTimeMultiplier). Used for axial rotation.
+   *   Per workstream realistic-celestial-motion-2026-04-27.
+   */
+  update(deltaTime, celestialDt = deltaTime) {
+    this.surface.rotation.y += this.data.rotationSpeed * (Math.PI / 180) * celestialDt;
 
     if (this.ring) {
-      this.ring.rotation.y += this.data.rotationSpeed * 0.3 * (Math.PI / 180) * deltaTime;
+      this.ring.rotation.y += this.data.rotationSpeed * 0.3 * (Math.PI / 180) * celestialDt;
     }
 
     const mat = this.surface.material;

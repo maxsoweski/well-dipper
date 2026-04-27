@@ -3,6 +3,7 @@ import { PlanetGenerator } from './PlanetGenerator.js';
 import { MoonGenerator } from './MoonGenerator.js';
 import { AsteroidBeltGenerator } from './AsteroidBeltGenerator.js';
 import { ExoticOverlay } from './ExoticOverlay.js';
+import { realisticOrbitSpeed as orb } from '../core/CelestialTime.js';
 import {
   SOLAR_RADIUS_AU, EARTH_RADIUS_AU, AU_TO_SCENE,
   solarRadiiToScene, earthRadiiToScene, auToScene,
@@ -355,7 +356,7 @@ export class StarSystemGenerator {
 
       const orbitAngle = planetRng.range(0, Math.PI * 2);
       // Kepler's 3rd law: period ∝ distance^1.5
-      const orbitSpeed = (0.00125 / Math.pow(orbitRadius / adjustedMapBase, 1.5)) * planetRng.range(0.8, 1.2);
+      const orbitSpeed = orb((0.00125 / Math.pow(orbitRadius / adjustedMapBase, 1.5)) * planetRng.range(0.8, 1.2));
 
       // Planet position in world space (initial) — using map coords for now
       const px = Math.cos(orbitAngle) * orbitRadius;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js';
 
 /**
  * Moon — a small sphere that orbits a parent planet.
@@ -567,12 +568,16 @@ export class Moon {
 
   /**
    * Update orbital position around the parent planet's world position.
-   * @param {number} deltaTime
-   * @param {THREE.Vector3} parentPosition - the planet's world position
+   * @param {number} deltaTime  raw frame dt — used for shader animation only
+   * @param {THREE.Vector3} parentPosition  the planet's world position
+   * @param {number} [celestialDt=deltaTime]  user-time-scaled celestial dt
+   *   (= deltaTime × celestialTimeMultiplier). Used for orbital advance +
+   *   axial rotation. Defaults to raw deltaTime for backwards-compat with
+   *   any callers that haven't been updated to pass it.
    */
-  update(deltaTime, parentPosition) {
+  update(deltaTime, parentPosition, celestialDt = deltaTime) {
     // orbitSpeed is in rad/s (consistent with planet-moon path in main.js)
-    this.orbitAngle += this.data.orbitSpeed * deltaTime;
+    this.orbitAngle += this.data.orbitSpeed * celestialDt;
 
     const r = this.data.orbitRadius;
     const angle = this.orbitAngle;
@@ -587,10 +592,14 @@ export class Moon {
       parentPosition.z + Math.cos(incl) * Math.sin(angle) * r,
     );
 
-    // Slow self-rotation
-    this.mesh.rotation.y += 0.167 * (Math.PI / 180) * deltaTime;
+    // Slow self-rotation. Per workstream realistic-celestial-motion-2026-04-27,
+    // moon rotation reads `data.rotationSpeed` if MoonGenerator carries one;
+    // falls back to the realistic Moon-equivalent default (≈ 1.5e-4 deg/s,
+    // 27.3-day tidally-locked period).
+    const moonRotSpeed = this.data.rotationSpeed ?? MOON_ROTATION_DEFAULT_DEG_PER_SEC;
+    this.mesh.rotation.y += moonRotSpeed * (Math.PI / 180) * celestialDt;
 
-    // Animate clouds (terrestrial moons)
+    // Animate clouds (terrestrial moons) — shader-time, not celestial.
     if (this.data.clouds) {
       this.mesh.material.uniforms.time.value += deltaTime;
     }

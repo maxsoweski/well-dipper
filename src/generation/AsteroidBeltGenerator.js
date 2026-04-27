@@ -1,4 +1,5 @@
 import { auToScene } from '../core/ScaleConstants.js';
+import { realisticOrbitSpeed as orb } from '../core/CelestialTime.js';
 
 /**
  * AsteroidBeltGenerator — produces data for an asteroid belt.
@@ -118,8 +119,10 @@ export class AsteroidBeltGenerator {
       const az = rng.range(-1, 1);
       const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
 
-      // Orbital speed: Kepler-ish with slight variation
-      const baseSpeed = 0.00125 / Math.pow(r / innerOrbit, 1.5);
+      // Orbital speed: Kepler-ish with slight variation. Wrapped with
+      // `orb()` for realistic baseline (per workstream
+      // realistic-celestial-motion-2026-04-27).
+      const baseSpeed = orb(0.00125 / Math.pow(r / innerOrbit, 1.5));
       const orbitSpeed = baseSpeed * rng.range(0.85, 1.15);
 
       asteroids.push({

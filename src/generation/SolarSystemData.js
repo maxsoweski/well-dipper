@@ -1,4 +1,8 @@
 import { solarRadiiToScene, earthRadiiToScene, auToScene } from '../core/ScaleConstants.js';
+import {
+  realisticOrbitSpeed as orb,
+  realisticRotationSpeed as rot,
+} from '../core/CelestialTime.js';
 
 /**
  * SolarSystemData — hardcoded data for our real Solar System.
@@ -41,16 +45,19 @@ function mapPlanetRadius(type, radiusEarth) {
   return range[0] + t * (range[1] - range[0]);
 }
 
-// Orbital speed using Kepler's 3rd law, scaled to match the engine
+// Orbital speed using Kepler's 3rd law, scaled to match the engine.
+// Wrapped with `orb()` (= × ORBIT_REALISM_FACTOR) so the data on each
+// body is born realistic. Per workstream `realistic-celestial-motion-2026-04-27`.
 function keplerSpeed(orbitMapRadius) {
-  return 0.00125 / Math.pow(orbitMapRadius / MAP_BASE, 1.5);
+  return orb(0.00125 / Math.pow(orbitMapRadius / MAP_BASE, 1.5));
 }
 
 // Moon orbital speed — scaled to match MoonGenerator's values
-// Inner moons fastest, outer moons slower
+// Inner moons fastest, outer moons slower. Wrapped with `orb()` for
+// realistic baseline.
 function moonSpeed(index, total) {
   const base = 0.025 + (0.052 - 0.025) * (1 - index / Math.max(1, total - 1));
-  return base / (1.0 + index * 0.4);
+  return orb(base / (1.0 + index * 0.4));
 }
 
 // Generate asteroid belt data
@@ -72,7 +79,9 @@ function generateBelt(centerAU, widthAU, count, colorFn) {
     const az = Math.random() - 0.5;
     const len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
 
-    const baseSpeed = 0.00125 / Math.pow(r / center, 1.5);
+    // Asteroid baseSpeed wrapped with `orb()` for realistic baseline
+    // (per workstream realistic-celestial-motion-2026-04-27).
+    const baseSpeed = orb(0.00125 / Math.pow(r / center, 1.5));
     asteroids.push({
       angle, radius: r, height: y, size, color,
       tumbleAxis: [ax / len, ay / len, az / len],
@@ -126,7 +135,7 @@ export function generateSolarSystem() {
       moonCount: 0,
       noiseScale: 4.0,
       noiseDetail: 0.6,
-      rotationSpeed: 0.04,     // very slow (59 Earth days)
+      rotationSpeed: rot(0.04),     // very slow (59 Earth days)
       axialTilt: 0.03,         // ~2°
       rings: null, clouds: null, atmosphere: null,
       moons: [],
@@ -143,7 +152,7 @@ export function generateSolarSystem() {
       moonCount: 0,
       noiseScale: 2.0,
       noiseDetail: 0.3,
-      rotationSpeed: -0.01,    // retrograde, very slow
+      rotationSpeed: rot(-0.01),    // retrograde, very slow
       axialTilt: 3.1,          // ~177° (nearly upside down)
       rings: null,
       clouds: null,
@@ -162,7 +171,7 @@ export function generateSolarSystem() {
       moonCount: 1,
       noiseScale: 3.0,
       noiseDetail: 0.5,
-      rotationSpeed: 0.1,
+      rotationSpeed: rot(0.1),
       axialTilt: 0.41,         // 23.4°
       rings: null,
       clouds: { color: [0.95, 0.95, 0.97], density: 0.85, scale: 3.0 },
@@ -193,7 +202,7 @@ export function generateSolarSystem() {
       moonCount: 2,
       noiseScale: 3.5,
       noiseDetail: 0.55,
-      rotationSpeed: 0.1,
+      rotationSpeed: rot(0.1),
       axialTilt: 0.44,         // 25.2°
       rings: null,
       clouds: null,
@@ -233,7 +242,7 @@ export function generateSolarSystem() {
       moonCount: 0,
       noiseScale: 5.0,
       noiseDetail: 0.5,
-      rotationSpeed: 0.11,       // 9.07 hours
+      rotationSpeed: rot(0.11),       // 9.07 hours
       axialTilt: 0.07,           // ~4°
       rings: null, clouds: null, atmosphere: null,
       moons: [],
@@ -249,7 +258,7 @@ export function generateSolarSystem() {
       moonCount: 5,
       noiseScale: 2.0,
       noiseDetail: 0.4,
-      rotationSpeed: 0.167,     // fastest spinner (~10 hours)
+      rotationSpeed: rot(0.167),     // fastest spinner (~10 hours)
       axialTilt: 0.05,          // 3.1°
       rings: null, clouds: null, atmosphere: null,
       profileId: 'sol-jupiter',
@@ -321,7 +330,7 @@ export function generateSolarSystem() {
       moonCount: 9,
       noiseScale: 1.8,
       noiseDetail: 0.35,
-      rotationSpeed: 0.155,
+      rotationSpeed: rot(0.155),
       axialTilt: 0.47,          // 26.7°
       rings: {
         innerRadius: 1.24,      // D ring inner edge
@@ -442,7 +451,7 @@ export function generateSolarSystem() {
       moonCount: 5,
       noiseScale: 1.5,
       noiseDetail: 0.25,
-      rotationSpeed: -0.12,    // retrograde
+      rotationSpeed: rot(-0.12),    // retrograde
       axialTilt: 1.71,         // 97.8° — rolls on its side
       rings: {
         innerRadius: 1.6,
@@ -519,7 +528,7 @@ export function generateSolarSystem() {
       moonCount: 2,
       noiseScale: 1.8,
       noiseDetail: 0.3,
-      rotationSpeed: 0.13,
+      rotationSpeed: rot(0.13),
       axialTilt: 0.49,          // 28.3°
       rings: {
         innerRadius: 1.7,
@@ -568,7 +577,7 @@ export function generateSolarSystem() {
       moonCount: 1,
       noiseScale: 4.5,
       noiseDetail: 0.5,
-      rotationSpeed: -0.04,      // retrograde, 6.4 day period
+      rotationSpeed: rot(-0.04),      // retrograde, 6.4 day period
       axialTilt: 2.14,           // 122.5° — significantly tilted
       rings: null, clouds: null,
       atmosphere: { color: [0.5, 0.5, 0.6], strength: 0.1 },  // tenuous N2
@@ -598,7 +607,7 @@ export function generateSolarSystem() {
       moonCount: 0,
       noiseScale: 4.0,
       noiseDetail: 0.4,
-      rotationSpeed: 0.25,       // incredibly fast — 3.9 hours!
+      rotationSpeed: rot(0.25),       // incredibly fast — 3.9 hours!
       axialTilt: 2.2,            // heavily tilted
       rings: {
         innerRadius: 1.85,       // ring at ~2287 km from center
@@ -622,7 +631,7 @@ export function generateSolarSystem() {
       moonCount: 0,
       noiseScale: 4.5,
       noiseDetail: 0.45,
-      rotationSpeed: 0.06,       // 22.8 hours
+      rotationSpeed: rot(0.06),       // 22.8 hours
       axialTilt: 0.5,
       rings: null, clouds: null, atmosphere: null,
       moons: [],
@@ -638,7 +647,7 @@ export function generateSolarSystem() {
       moonCount: 1,
       noiseScale: 4.0,
       noiseDetail: 0.4,
-      rotationSpeed: 0.05,       // ~25.9 hours
+      rotationSpeed: rot(0.05),       // ~25.9 hours
       axialTilt: 1.34,           // ~78°
       rings: null, clouds: null, atmosphere: null,
       moons: [
@@ -710,7 +719,7 @@ export function generateSolarSystem() {
             moonCount: 0,
             noiseScale: m.noiseScale,
             noiseDetail: 0.4,
-            rotationSpeed: 0.05,
+            rotationSpeed: rot(0.05),
             axialTilt: 0.1,
             sunDirection: sunDir,
             profileId: m.profileId || null,

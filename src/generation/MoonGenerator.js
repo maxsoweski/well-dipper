@@ -1,5 +1,6 @@
 import { earthRadiiToScene, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleConstants.js';
 import { PlanetGenerator } from './PlanetGenerator.js';
+import { realisticOrbitSpeed as orb } from '../core/CelestialTime.js';
 
 /**
  * MoonGenerator — produces data describing moons orbiting a planet.
@@ -139,9 +140,9 @@ export class MoonGenerator {
     const mapBaseOrbit = planetData.radius * (2.0 + moonIndex * 1.8);
     const orbitRadius = mapBaseOrbit + rng.range(-0.3, 0.5) * planetData.radius;
 
-    // Orbital speed: inner moons faster
-    // Fastest inner moon ≈ 0.052 rad/s → ~2 min full orbit
-    const orbitSpeed = rng.range(0.025, 0.052) / (1.0 + moonIndex * 0.6);
+    // Orbital speed: inner moons faster. Wrapped with `orb()` for
+    // realistic baseline (per workstream realistic-celestial-motion-2026-04-27).
+    const orbitSpeed = orb(rng.range(0.025, 0.052) / (1.0 + moonIndex * 0.6));
 
     // Orbital inclination: regular moons ~0, captured moons can be tilted
     const inclination = type === 'captured'
@@ -259,8 +260,9 @@ export class MoonGenerator {
     const mapBaseOrbit = planetData.radius * (2.0 + moonIndex * 1.8);
     const orbitRadius = mapBaseOrbit + rng.range(-0.3, 0.5) * planetData.radius;
 
-    // Planet-moons orbit a bit slower than regular moons
-    const orbitSpeed = rng.range(0.019, 0.038) / (1.0 + moonIndex * 0.6);
+    // Planet-moons orbit a bit slower than regular moons. Wrapped with
+    // `orb()` for realistic baseline.
+    const orbitSpeed = orb(rng.range(0.019, 0.038) / (1.0 + moonIndex * 0.6));
     const inclination = rng.range(-0.15, 0.15);
     const startAngle = rng.range(0, Math.PI * 2);
 
