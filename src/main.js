@@ -6572,7 +6572,16 @@ function animate() {
       // updates would never run. The skip preserves shake-envelope
       // continuity across the leg boundary.
       if (frame.phase !== 'IDLE') {
-        const subPhase = (frame.phase === 'STATION-A') ? 'orbiting' : 'traveling';
+        // §A8 (2026-04-27): include 'lhokon' in 'orbiting' classification
+        // so ShipChoreographer's signal-derivation gate is closed during
+        // the camera-pivot window. Without this, body-locked-to-old-body
+        // position changes during lhokon (per §A7) drive a phantom
+        // |d|v|/dt| signal — for moons the compound parent+local
+        // orbital velocity oscillates enough to trigger peak-pullback
+        // and fire a DECEL shake mid-pivot. Authored CRUISE-onset and
+        // APPROACH-onset shakes (lines below + the explicit triggers
+        // ~line 6531) are unaffected — they don't depend on the gate.
+        const subPhase = (frame.phase === 'STATION-A' || frame.phase === 'lhokon') ? 'orbiting' : 'traveling';
         const shipFrame = {
           position: camera.position,
           velocity: { x: 0, y: 0, z: 0 },

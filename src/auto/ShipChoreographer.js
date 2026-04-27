@@ -136,22 +136,26 @@ const PEAK_PULLBACK_FRAC = 0.20;
 
 /**
  * Peak pitch (camera-local X) rotation amplitude at envelope max, in degrees.
- * V1 seed 1.0°. Bounded [0.3, 2.0]. Head-nod axis.
+ * V1 seed 1.0°; §A8 (2026-04-27) reduced to 0.2° per Max's verbatim
+ * "reduce the intensity of the shaking effect by 80%". Head-nod axis.
+ * AC #6.1 bounds peak amplitude post-§A8.
  */
-const TREMOR_PITCH_PEAK_DEG = 1.0;
+const TREMOR_PITCH_PEAK_DEG = 0.2;
 
 /**
  * Peak yaw (camera-local Y) rotation amplitude at envelope max, in degrees.
- * V1 seed 1.0°. Bounded [0.3, 2.0]. Head-shake axis.
+ * V1 seed 1.0°; §A8 (2026-04-27) reduced to 0.2° (×0.2). Head-shake axis.
+ * AC #6.1 bounds peak amplitude post-§A8.
  */
-const TREMOR_YAW_PEAK_DEG = 1.0;
+const TREMOR_YAW_PEAK_DEG = 0.2;
 
 /**
  * Peak roll (camera-local Z) rotation amplitude at envelope max, in degrees.
- * V1 seed 0.5°. Bounded [0.2, 1.5]. Cockpit-banking cue; smaller default
- * since large roll reads as ship tilt rather than pilot tremor.
+ * V1 seed 0.5°; §A8 (2026-04-27) reduced to 0.1° (×0.2). Cockpit-banking
+ * cue; smaller default since large roll reads as ship tilt rather than
+ * pilot tremor. AC #6.1 bounds peak amplitude post-§A8.
  */
-const TREMOR_ROLL_PEAK_DEG = 0.5;
+const TREMOR_ROLL_PEAK_DEG = 0.1;
 
 /**
  * Per-axis carrier frequencies in Hz. Slight detuning across axes
