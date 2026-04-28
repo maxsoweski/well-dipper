@@ -2,6 +2,15 @@
 
 ## Status
 
+**`Shipped ecbefb2 (§A8 PASS via Tester §T6 — 2026-04-27)`** — Max
+felt-experience evaluation 2026-04-28: *"looks good."* §A7 + §A8 land
+as the camera/ship-axis decoupling V1 contract. Workstream closed;
+brief retained as historical record. Parking-lot followup captured
+at `docs/PARKING_LOT.md` §P2 (APPROACH-overshoot reproduction at
+high `celestialTimeMultiplier`).
+
+---
+
 **`Active — amended 2026-04-26 (§A8 shake gate during lhokon + intensity ×0.2)`** —
 see §"Amendments — 2026-04-26 (§A8 shake gate during lhokon + intensity ×0.2)"
 below for the amendment shape and rationale. §A8 closes the shake

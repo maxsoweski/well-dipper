@@ -1,6 +1,16 @@
 # Workstream: realistic-celestial-motion-2026-04-27
 
-**Status:** Active — scoped 2026-04-27, awaiting working-Claude greenlight after sister §A8 amendment commits.
+**Status:** **`Shipped a89e454 (Tester §T2 PASS — 2026-04-27)`** — Max
+felt-experience evaluation 2026-04-28: *"looks good."* Implementation
+landed across two commits (`326e8a4` initial + `a89e454` Earth-anchor
+fix per Tester §T1 catch). All 9 ACs PASS. Parking-lot followup
+captured at `docs/PARKING_LOT.md` §P1 (per-moon authored
+`rotationSpeed` for `MoonGenerator` + Sol hand-authored moons).
+Workstream closed.
+
+---
+
+**Status (historical):** Active — scoped 2026-04-27, awaiting working-Claude greenlight after sister §A8 amendment commits.
 **Authored:** 2026-04-27 by PM at HEAD `01caf00`.
 **Active-pointer note:** This brief is authored in parallel with the §A8 amendment to `autopilot-camera-ship-decoupling-2026-04-25`. Per Director's standing direction, the active-workstream pointer at `~/.claude/state/dev-collab/active-workstream.json` stays on `autopilot-camera-ship-decoupling-2026-04-25` until §A8 implementation + Tester verdict complete. Working-Claude flips the active pointer to this slug when it picks up implementation.
 
