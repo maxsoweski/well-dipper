@@ -4990,7 +4990,7 @@ function startFlythrough() {
  * Stop the flythrough and hand camera back to manual orbit control.
  */
 function stopFlythrough() {
-  if (!autoNav.isActive && !flythrough.active && !(_autopilotNavSequence && _autopilotNavSequence.isActive)) return;
+  if (!autoNav.isActive && !flythrough.active && !autopilotMotion.isActive && !(_autopilotNavSequence && _autopilotNavSequence.isActive)) return;
   soundEngine.play('autopilotOff');
 
   // Abort any in-progress nav sequence
@@ -5002,6 +5002,7 @@ function stopFlythrough() {
   flythrough.stop();
   autoNav.stop();
   shipChoreographer.stop();
+  autopilotMotion.stop();
   _manualBurnOrbiting = false;
   _autopilotEnabled = false;
 
