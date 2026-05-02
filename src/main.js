@@ -450,6 +450,44 @@ flythrough.setCameraChoreographer(cameraChoreographer);
 // V1 ESTABLISHING collapses to "camera = ship.forward + shake" (AC #5).
 cameraChoreographer.setShip(ship);
 
+// ── World-origin rebasing — auto-shift cached world positions ──
+// Each controller below holds Vector3 state in absolute world coords.
+// When `_maybeWorldRebase` fires, every tracked Vector3 receives the same
+// `.sub(offset)` the scene-graph children received, so the controller's
+// cached state stays consistent with the new rendering frame. Field
+// lists are explicit + auditable; if a controller adds a new cached
+// position it must be added here too. Direction-only Vector3s
+// (`_cruiseDir`, `departureDir`, `_velocityScratch`, etc.) and ship-
+// relative offsets (`_holdOffset`, `_lhokonOldHoldOffset`) are NOT
+// tracked — they're scale-invariant or ship-frame, not world-frame.
+// See docs/PLAN_world-origin-rebasing.md §"Touch list / Camera controllers".
+function _trackControllerCaches(controller, fieldNames, label) {
+  for (const name of fieldNames) {
+    const v = controller[name];
+    if (v && v.isVector3) {
+      _trackForWorldRebase(v);
+    } else if (v !== undefined) {
+      console.warn(`[WorldOrigin] ${label}.${name} is not a Vector3 — skipped (was: ${v?.constructor?.name})`);
+    }
+  }
+}
+_trackControllerCaches(autopilotMotion, [
+  '_startPos', '_approachStartPos', '_holdEndpoint', '_position',
+], 'autopilotMotion');
+_trackControllerCaches(navSubsystem, [
+  '_position', '_lookAtTarget', 'departurePos', '_hermiteStartPos',
+  '_seamEntryPosition', '_prevPosition', '_seamBodyPositionAtEntry',
+], 'navSubsystem');
+_trackControllerCaches(cameraChoreographer, [
+  '_currentLookAtTarget', '_blendFromTarget',
+], 'cameraChoreographer');
+_trackControllerCaches(cameraController, [
+  'target', '_targetGoal',
+  '_freeLookAnchor', '_freeLookTrackPos',
+  '_returnTrackPos', '_returnLookTarget',
+  '_prevCamPos',
+], 'cameraController');
+
 window._flythrough = flythrough;
 window._autoNav = autoNav;
 window._navSubsystem = navSubsystem;
@@ -5786,6 +5824,36 @@ function animate() {
   }
 
   if (system) {
+    // ── World-origin rebasing ──
+    // Subtracts camera world position from every scene-graph top-level
+    // child (and tracked controller caches) once camera drifts past
+    // `REBASE_THRESHOLD_SQ` (= 100² scene units, ~15 M km), keeping the
+    // rendering origin near the camera so float32 precision (~7 sig figs)
+    // remains sufficient for ship-scale per-frame motion (10⁻⁷ scene
+    // units). Without this, `camera.position.addScaledVector(forward, dt
+    // × ship-scale-speed)` rounds to zero at world coord ~32,000
+    // (precision there ≈ 4e-3) and warp's FOLD/ENTER motion never
+    // happens. Runs at the top of the per-frame system branch — after
+    // the previous frame's controller updates landed in `camera.position`,
+    // before this frame's body / sky / render logic consumes it.
+    // Controller caches subscribed to onRebase via `_trackControllerCaches`
+    // calls at controller-instantiation time (search this file for
+    // `_trackControllerCaches`).
+    // See docs/PLAN_world-origin-rebasing.md and src/core/WorldOrigin.js.
+    if (_maybeWorldRebase(camera, scene)) {
+      // Telemetry hook: record rebase events for the diagnostic harness.
+      // Bounded — capped at 200 entries — per the canvas-recorder
+      // fps-trap lesson on per-frame buffers.
+      if (window.__diag) {
+        window.__diag._rebaseEvents = window.__diag._rebaseEvents || [];
+        window.__diag._rebaseEvents.push({
+          t: performance.now(),
+          worldOrigin: [_worldOriginVec.x, _worldOriginVec.y, _worldOriginVec.z],
+        });
+        if (window.__diag._rebaseEvents.length > 200) window.__diag._rebaseEvents.shift();
+      }
+    }
+
     // ── Deep sky destination update ──
     if (system.type && system.type !== 'star-system') {
       if (system.destination) system.destination.update(deltaTime, camera);
