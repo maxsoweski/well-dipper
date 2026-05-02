@@ -84,3 +84,47 @@ moon-overshoot report under its §"Deferred decisions" with the same
 "may resolve via realistic-celestial side effect" note. This
 parking-lot entry supersedes — telemetry didn't conclusively show
 side-effect resolution.
+
+---
+
+## P3 — Galactic features (nebulae, etc.) disappear when very near
+
+**Origin:** Max observation, 2026-05-01 (warp-features regression
+investigation session). Recorded for future scoping.
+
+**Symptom:** When the player gets very close to or inside a galactic
+feature like a nebula, the feature disappears instead of being
+visible huge on the horizon or surrounding the camera. Expectation
+is that proximity should make the feature dominate the view, not
+cull it out.
+
+**Hypothesis surface (not investigated):**
+- Distance-based LOD or culling threshold treats the camera-inside
+  case the same as camera-far-away (both fall outside the "render
+  band").
+- Nebula geometry is a billboard or shell rendered only when viewed
+  from outside; no near-field representation.
+- Frustum / depth-write interaction — if the nebula is a shell with
+  inverted normals or a single-sided billboard, entering it puts the
+  camera on the wrong side of the geometry.
+- Galactic-feature volumetric rendering may depend on a horizon
+  distance assumption that breaks at zero distance.
+
+**What a follow-up would do:**
+1. Inventory how galactic features are currently rendered (probable
+   files: `src/rendering/sky/*`, galactic-feature generation in
+   `src/generation/`, any nebula-specific shader). Identify the
+   distance-based render gate.
+2. Decide design intent for near-field galactic feature rendering.
+   Options: volumetric shader that holds at all distances; tiered
+   representation (far billboard → mid shell → near volumetric);
+   particle-cloud near representation; force-perspective scaling so
+   the player never actually enters the feature even when nominally
+   inside its bounds.
+3. Implement and verify with an in-feature flythrough at multiple
+   nebula sizes / types.
+
+**Scope:** likely a feature-doc-class question first (what is the
+intended near-field experience), then a sub-feature implementation.
+Cross-feature scope — touches galactic-feature rendering AND any
+other large galactic-scale phenomena that share the same gate.
