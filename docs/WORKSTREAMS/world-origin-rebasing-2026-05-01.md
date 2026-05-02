@@ -2,13 +2,36 @@
 
 ## Status
 
-Active 2026-05-01 — greenlit by Max in this session after diagnosis of the
-warp regression on `7c80c94`. Implementation reference is the existing
+VERIFIED_PENDING_MAX `e3504a1` (2026-05-01).
+
+Tester §T4 PASS for all directly-verifiable ACs (#5, #7, #8, #9, #10, #11)
+at `e3504a1`. AC #5 quantitatively confirmed: idle-portal world-true drift
+of 5.80×10⁻⁷ scene units across 200 rebase events vs. camera world-true
+drift of 1.88×10⁷ — drift ratio 3.09×10⁻¹⁴, fourteen orders of magnitude
+below the "follows camera" threshold. AC #7 + AC #8 spot-check confirms
+no controller-cache drift across rebase events. AC #9 harness scenarios
+both PASS at 0 field-invariance diff.
+
+Pending Max recording evaluation for ACs #1, #2, #3, #4, #6:
+- `screenshots/max-recordings/world-origin-rebasing-warp-from-sol-2026-05-01.webm`
+- `screenshots/max-recordings/world-origin-rebasing-warp-from-far-2026-05-01.webm`
+
+§T4 caveat: AC #6 (Stage 2 alignment slerp visibly reorients camera) was
+state-inspection-inconclusive. While evaluating the recordings, watch the
+Stage 2 → Stage 3 window (~1.5 s before FOLD begins) specifically for
+visible camera reorientation toward the warp direction. If the warp begins
+with camera still in its Stage 1 orientation, AC #6 is failing — needs
+follow-up investigation of `_portalLabAlignTargetQuat` capture at
+`src/main.js:5460–5467` (whether it's reading a stale or null
+`warpTarget.direction`, possibly a lifecycle interaction with the autopilot
+tour).
+
+Workstream history: greenlit by Max 2026-05-01 after diagnosis of the warp
+regression on `7c80c94` showed the precision ceiling had crossed from
+"deferred" to "blocking V1 warp" in practice. Implementation reference is
 `docs/PLAN_world-origin-rebasing.md`, previously deferred per
 `memory/well-dipper-rebasing-plan.md` and the Bible §10 "Precision ceiling
-(deferred work)" note. Work begins now because the precision ceiling has
-become **observable in V1 warp behavior** at non-trivial world coordinates,
-not because a downstream feature (combat / docking / on-foot) has begun.
+(deferred work)" note (now Shipped per AC #10).
 
 ## Parent feature
 
