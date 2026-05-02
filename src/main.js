@@ -53,6 +53,14 @@ import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
 import { portalPreviewDistanceScene, postExitDistanceScene, sceneToLy } from './core/ScaleConstants.js';
+import {
+  maybeRebase as _maybeWorldRebase,
+  worldOrigin as _worldOriginVec,
+  onRebase as _onWorldRebase,
+  trackForRebase as _trackForWorldRebase,
+  resetWorldOrigin as _resetWorldOrigin,
+  _debugState as _worldOriginDebugState,
+} from './core/WorldOrigin.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
