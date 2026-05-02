@@ -478,15 +478,39 @@ _trackControllerCaches(navSubsystem, [
   '_position', '_lookAtTarget', 'departurePos', '_hermiteStartPos',
   '_seamEntryPosition', '_prevPosition', '_seamBodyPositionAtEntry',
 ], 'navSubsystem');
+// CameraChoreographer wraps an inner EstablishingMode that holds its own
+// world-frame caches (`_currentLookAtTarget`, `_blendFromTarget`). Outer
+// class also has `_currentLookAtTarget` — copied from inner each frame —
+// so both must be tracked. §T2 audit (2026-05-01) found `_blendFromTarget`
+// silently undefined when only the outer was subscribed.
 _trackControllerCaches(cameraChoreographer, [
-  '_currentLookAtTarget', '_blendFromTarget',
+  '_currentLookAtTarget',
 ], 'cameraChoreographer');
+_trackControllerCaches(cameraChoreographer._establishing, [
+  '_currentLookAtTarget', '_blendFromTarget',
+], 'cameraChoreographer._establishing');
 _trackControllerCaches(cameraController, [
   'target', '_targetGoal',
   '_freeLookAnchor', '_freeLookTrackPos',
   '_returnTrackPos', '_returnLookTarget',
-  '_prevCamPos',
 ], 'cameraController');
+// `_prevCamPos` lives on FrameDiagnostics, the diagnostic-instrument
+// inside ShipCameraSystem. §T2 audit found it silently undefined when
+// addressed via the outer class.
+if (cameraController._diagnostics) {
+  _trackControllerCaches(cameraController._diagnostics, [
+    '_prevCamPos',
+  ], 'cameraController._diagnostics');
+}
+// ShipChoreographer caches `_prevPosition` for ship-frame velocity
+// computation (`(currPos − _prevPosition) / dt`). §T2 audit flagged that
+// at a rebase frame this delta becomes ~`offset/dt` (giant fake velocity
+// driving the live-feedback signal-event detector). Tracking the field
+// applies the same `.sub(offset)` to the stored prev position so the
+// next-frame delta stays at true ship-scale magnitude.
+_trackControllerCaches(shipChoreographer, [
+  '_prevPosition',
+], 'shipChoreographer');
 
 window._flythrough = flythrough;
 window._autoNav = autoNav;
