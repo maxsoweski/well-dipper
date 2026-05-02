@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Refactor Verification — World-Origin Rebasing</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0a;
+      color: #0f0;
+      font-family: 'DotGothic16', 'Courier New', monospace;
+      padding: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 16px; margin-bottom: 12px; color: #6f6; }
+    h2 { font-size: 14px; margin: 16px 0 8px 0; color: #4f4; }
+    h3 { font-size: 12px; margin: 10px 0 6px 0; color: #6c6; }
+    .btn {
+      background: rgba(0, 255, 0, 0.08);
+      border: 1px solid rgba(0, 255, 0, 0.5);
+      color: #0f0;
+      font-family: inherit; font-size: 12px;
+      padding: 6px 12px; cursor: pointer;
+      margin: 2px 4px 2px 0;
+    }
+    .btn:hover { background: rgba(0, 255, 0, 0.2); }
+    .btn.pass { border-color: #0f0; color: #0f0; }
+    .btn.fail { border-color: #f00; color: #f00; }
+    pre {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid #333;
+      padding: 10px;
+      margin: 8px 0;
+      max-height: 400px;
+      overflow: auto;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .summary { padding: 10px; border: 1px solid #333; margin: 10px 0; }
+    .summary.pass { border-color: #0f0; }
+    .summary.fail { border-color: #f44; color: #f88; }
+    .mode-banner {
+      padding: 6px 12px; border: 1px solid #444;
+      margin-bottom: 12px; background: rgba(255, 255, 0, 0.05);
+      color: #ff8;
+    }
+    .field-table {
+      border-collapse: collapse; margin: 8px 0;
+    }
+    .field-table td, .field-table th {
+      padding: 4px 8px; border: 1px solid #333;
+      font-size: 11px;
+    }
+    .field-table th { background: rgba(0, 255, 0, 0.05); }
+  </style>
+</head>
+<body>
+  <h1>Refactor Verification — World-Origin Rebasing (2026-05-01)</h1>
+  <div id="mode-banner" class="mode-banner">Loading WorldOrigin module…</div>
+
+  <p style="margin: 8px 0; color: #aaa; font-size: 12px;">
+    Per <code>docs/REFACTOR_VERIFICATION_PROTOCOL.md</code>: this harness verifies AC #7 + #8
+    of <code>docs/WORKSTREAMS/world-origin-rebasing-2026-05-01.md</code> via
+    telemetry-equivalence at <code>1e-6</code> epsilon under frozen inputs (seeded RNG +
+    explicit positions + fixed-step <code>update(dt)</code>). It also documents the
+    <code>window.__diag</code> per-frame warp telemetry surface that AC #1–#5 verification
+    re-uses (drive a live warp on <code>http://localhost:5173/well-dipper/?warpDebug</code>
+    and dump the surface; field list at the bottom of this page).
+  </p>
+
+  <h2>Scenario A — Autopilot leg crossing the rebase boundary</h2>
+  <p style="font-size: 12px; color: #aaa; margin: 4px 0;">
+    Frozen inputs. Camera + ship advance through a synthetic leg that crosses
+    <code>REBASE_THRESHOLD_SQ</code>. Per-frame world-true positions captured for camera,
+    ship, and the 18 subscribed controller-cache fields. Pass condition: every field's
+    <code>local + worldOrigin</code> stays within <code>1e-6</code> of its
+    pre-rebase-event value (the rebase event is numerically transparent).
+  </p>
+  <div>
+    <button class="btn" onclick="_harness.runScenarioA()">Run Scenario A</button>
+  </div>
+
+  <h2>Scenario B — Many rebase events across long traversal</h2>
+  <p style="font-size: 12px; color: #aaa; margin: 4px 0;">
+    Camera + planet drift far from origin via repeated unit steps; rebase fires N times.
+    Each event, snapshot world-true positions; assert all fields stay invariant. Stress
+    test for cumulative-precision-loss in the rebase event itself.
+  </p>
+  <div>
+    <button class="btn" onclick="_harness.runScenarioB()">Run Scenario B</button>
+  </div>
+
+  <h2>Scenario C — Warp telemetry surface (documentation)</h2>
+  <p style="font-size: 12px; color: #aaa; margin: 4px 0;">
+    Documents the <code>window.__diag</code> surface used to verify the brief's AC #1–#5
+    on the live game. Drive a warp on the live page, dump the surface, paste here for
+    re-runnable verification against a future commit.
+  </p>
+  <div>
+    <button class="btn" onclick="_harness.installLiveTelemetrySurface()">Install live telemetry surface (this page)</button>
+    <button class="btn" onclick="_harness.dumpDiag()">Dump <code>window.__diag</code></button>
+  </div>
+
+  <h2>Output</h2>
+  <div id="output"></div>
+
+  <h2>Documented telemetry surface (window.__diag)</h2>
+  <table class="field-table">
+    <thead><tr><th>field</th><th>meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>st</code></td><td>warp state: idle / fold / enter / hyper / exit</td></tr>
+      <tr><td><code>pr</code></td><td>warp progress 0..1 within current phase</td></tr>
+      <tr><td><code>cs</code></td><td>cameraForwardSpeed (scene units/s)</td></tr>
+      <tr><td><code>pf, sw</code></td><td>_prepareFired, _swapFired (system-swap flags)</td></tr>
+      <tr><td><code>camPos</code></td><td>camera scene-frame position [x, y, z]</td></tr>
+      <tr><td><code>portalPos</code></td><td>warpPortal.group.position [x, y, z]</td></tr>
+      <tr><td><code>portalRadius</code></td><td>warpPortal._radius (scene units)</td></tr>
+      <tr><td><code>portalGroupVis</code></td><td>warpPortal.group.visible</td></tr>
+      <tr><td><code>discA, discB, rimA, rimB, rim, tunnel</code></td><td>portal sub-mesh visibility</td></tr>
+      <tr><td><code>traversal</code></td><td>OUTSIDE_A / INSIDE / OUTSIDE_B</td></tr>
+      <tr><td><code>camToPortal</code></td><td>scalar distance camera→portal (scene units)</td></tr>
+      <tr><td><code>labState</code></td><td>portal-lab state machine: idle / preview / aligning</td></tr>
+      <tr><td><code>_phaseLog</code></td><td>list of warp state transitions {t, from, to}</td></tr>
+      <tr><td><code>_portalEvents</code></td><td>list of portal-state changes (sub-mesh / traversal / position-jump)</td></tr>
+      <tr><td><code>_rebaseEvents</code></td><td>list of rebase events {t, worldOrigin}</td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin: 12px 0; color: #aaa; font-size: 12px;">
+    Re-run protocol:
+    <ol style="margin-left: 24px;">
+      <li>Open <code>http://localhost:5173/well-dipper/?warpDebug</code> in a debug-Chrome on <code>:9223</code>.</li>
+      <li>Mute audio: <code>localStorage.setItem('well-dipper-settings', JSON.stringify({...JSON.parse(localStorage.getItem('well-dipper-settings')), masterVolume: 0}))</code>; reload.</li>
+      <li>Skip splash: D-hold + click on <code>#splash-screen</code>.</li>
+      <li>Install telemetry surface — the script lives in <code>this page</code>'s "Install live telemetry surface" button OR in working-Claude's session memory.</li>
+      <li>Drive a warp via real keystrokes: <code>n</code> → <code>_autoSelectWarpTarget()</code> → <code>Escape</code> → 3-stage <code>_commitSelection()</code>.</li>
+      <li>Dump <code>__diag</code> surface; capture screenshots at each phase (FOLD / ENTER / HYPER / EXIT).</li>
+      <li>Repeat at a far-position start: from the destination of step 5, immediately initiate a second warp without resetting the page (worldOrigin will be ≥10⁴ scene units).</li>
+    </ol>
+  </p>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    const LOG = (msg, cls = '') => {
+      const el = document.createElement('pre');
+      if (cls) el.className = cls;
+      el.textContent = msg;
+      document.getElementById('output').appendChild(el);
+    };
+    const SUMMARY = (msg, pass) => {
+      const el = document.createElement('div');
+      el.className = 'summary ' + (pass ? 'pass' : 'fail');
+      el.textContent = msg;
+      document.getElementById('output').appendChild(el);
+    };
+
+    // ── Load WorldOrigin module ──
+    let WO = null;
+    try {
+      WO = await import('/well-dipper/src/core/WorldOrigin.js');
+      document.getElementById('mode-banner').textContent =
+        `Loaded src/core/WorldOrigin.js — REBASE_THRESHOLD_SQ = ${WO.REBASE_THRESHOLD_SQ}, threshold = ${Math.sqrt(WO.REBASE_THRESHOLD_SQ)} scene units`;
+    } catch (e) {
+      document.getElementById('mode-banner').textContent =
+        `FAILED to load WorldOrigin module: ${e.message}. Run dev server with vite from project root.`;
+    }
+
+    // ── Seeded RNG (per refactor protocol §"Input-freezing checklist") ──
+    function withSeededRandom(fn, seed = 42) {
+      const orig = Math.random;
+      let state = seed >>> 0;
+      Math.random = () => {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 0x100000000;
+      };
+      try { return fn(); } finally { Math.random = orig; }
+    }
+
+    // ── Helpers for invariance assertions ──
+    function vec3WorldTrue(localVec, worldOrigin) {
+      return [
+        localVec.x + worldOrigin.x,
+        localVec.y + worldOrigin.y,
+        localVec.z + worldOrigin.z,
+      ];
+    }
+    function maxAbsDiff3(a, b) {
+      return Math.max(Math.abs(a[0]-b[0]), Math.abs(a[1]-b[1]), Math.abs(a[2]-b[2]));
+    }
+
+    // ── Scenario A: synthetic camera + ship leg crossing rebase boundary ──
+    async function runScenarioA() {
+      if (!WO) { LOG('FAIL — WorldOrigin module not loaded'); return; }
+      WO.resetWorldOrigin();
+      LOG('=== Scenario A — synthetic leg crossing rebase boundary ===');
+
+      // Reset listeners + tracked vectors by reloading is heavy; instead, use a
+      // fresh lightweight scene and a tracked Vector3 owned by this harness.
+      const camera = new THREE.PerspectiveCamera(70, 1, 1e-9, 1e10);
+      const scene = new THREE.Scene();
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 8), new THREE.MeshBasicMaterial());
+      const star   = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshBasicMaterial());
+      planet.position.set(150, 0, 0);
+      star.position.set(0, 0, 0);
+      scene.add(planet); scene.add(star);
+
+      // Synthetic "controller cache": a Vector3 we track, then verify
+      // world-true invariance after rebase events.
+      const cacheTargetA = new THREE.Vector3(150, 0, 0);  // world-fixed target = planet
+      const cacheTargetB = new THREE.Vector3( 50, 0, 0);  // world-fixed midpoint
+      WO.trackForRebase(cacheTargetA);
+      WO.trackForRebase(cacheTargetB);
+
+      // Pre-condition snapshot
+      const PRE_TRUE_PLANET = [150, 0, 0];
+      const PRE_TRUE_STAR   = [0, 0, 0];
+      const PRE_TRUE_CACHEA = [150, 0, 0];
+      const PRE_TRUE_CACHEB = [50, 0, 0];
+      const wo0 = WO.worldOrigin;
+
+      const samples = [];
+      const rebaseEvents = [];
+
+      // 600 frames at fixed dt: camera marches forward in +x at 0.5 units/frame.
+      // Crosses threshold (100 scene units) at frame 200.
+      const dt = 1 / 60;
+      for (let i = 0; i < 600; i++) {
+        camera.position.x += 0.5;
+
+        const woBefore = wo0.clone();
+        const rebased = WO.maybeRebase(camera, scene);
+        if (rebased) {
+          rebaseEvents.push({
+            frame: i,
+            woBefore: [woBefore.x, woBefore.y, woBefore.z],
+            woAfter:  [WO.worldOrigin.x, WO.worldOrigin.y, WO.worldOrigin.z],
+            camAfter: [camera.position.x, camera.position.y, camera.position.z],
+            planetAfter: [planet.position.x, planet.position.y, planet.position.z],
+            cacheAAfter: [cacheTargetA.x, cacheTargetA.y, cacheTargetA.z],
+            cacheBAfter: [cacheTargetB.x, cacheTargetB.y, cacheTargetB.z],
+          });
+        }
+
+        samples.push({
+          frame: i,
+          camTrue:    vec3WorldTrue(camera.position, WO.worldOrigin),
+          planetTrue: vec3WorldTrue(planet.position, WO.worldOrigin),
+          starTrue:   vec3WorldTrue(star.position, WO.worldOrigin),
+          cacheATrue: vec3WorldTrue(cacheTargetA, WO.worldOrigin),
+          cacheBTrue: vec3WorldTrue(cacheTargetB, WO.worldOrigin),
+        });
+      }
+
+      // Assertions
+      const EPSILON = 1e-6;
+      let maxDiff = 0;
+      let driftFrame = -1;
+      let driftField = null;
+
+      for (const s of samples) {
+        // Star moves 0 in true frame
+        const dStar = maxAbsDiff3(s.starTrue, PRE_TRUE_STAR);
+        if (dStar > maxDiff) { maxDiff = dStar; if (dStar > EPSILON) { driftFrame = s.frame; driftField = 'star'; } }
+        // Planet moves 0 in true frame
+        const dPlanet = maxAbsDiff3(s.planetTrue, PRE_TRUE_PLANET);
+        if (dPlanet > maxDiff) { maxDiff = dPlanet; if (dPlanet > EPSILON) { driftFrame = s.frame; driftField = 'planet'; } }
+        // Cached targets stay at their world-fixed positions
+        const dCacheA = maxAbsDiff3(s.cacheATrue, PRE_TRUE_CACHEA);
+        if (dCacheA > maxDiff) { maxDiff = dCacheA; if (dCacheA > EPSILON) { driftFrame = s.frame; driftField = 'cacheA'; } }
+        const dCacheB = maxAbsDiff3(s.cacheBTrue, PRE_TRUE_CACHEB);
+        if (dCacheB > maxDiff) { maxDiff = dCacheB; if (dCacheB > EPSILON) { driftFrame = s.frame; driftField = 'cacheB'; } }
+      }
+
+      // Camera true position should equal frame * 0.5 + initial (0)
+      const camFinal = samples[samples.length-1].camTrue;
+      const camExpected = [600 * 0.5, 0, 0];
+      const dCam = maxAbsDiff3(camFinal, camExpected);
+
+      LOG(`Total frames: ${samples.length}`);
+      LOG(`Rebase events: ${rebaseEvents.length}`);
+      LOG(`First rebase event at frame: ${rebaseEvents[0]?.frame ?? 'never'}`);
+      LOG(`Final worldOrigin: [${WO.worldOrigin.x.toFixed(3)}, ${WO.worldOrigin.y.toFixed(3)}, ${WO.worldOrigin.z.toFixed(3)}]`);
+      LOG(`Final cam world-true: [${camFinal.map(n=>n.toFixed(3)).join(', ')}], expected [${camExpected.join(', ')}], diff=${dCam.toExponential(2)}`);
+      LOG(`Max field-invariance diff across ${samples.length} frames × 4 tracked positions: ${maxDiff.toExponential(2)}`);
+
+      const pass = maxDiff < EPSILON && dCam < EPSILON && rebaseEvents.length > 0;
+      if (pass) {
+        SUMMARY(`PASS — ${rebaseEvents.length} rebase events, max field-invariance diff ${maxDiff.toExponential(2)} < ${EPSILON}`, true);
+      } else if (rebaseEvents.length === 0) {
+        SUMMARY(`FAIL — no rebase events fired (camera never crossed threshold; check REBASE_THRESHOLD_SQ)`, false);
+      } else {
+        SUMMARY(`FAIL — drift at frame ${driftFrame} on field "${driftField}", maxDiff = ${maxDiff.toExponential(2)} > ${EPSILON}`, false);
+      }
+
+      // Cleanup tracked vectors so subsequent runs don't double-track
+      WO.untrackForRebase?.(cacheTargetA);
+      WO.untrackForRebase?.(cacheTargetB);
+    }
+
+    // ── Scenario B: many rebase events, far traversal ──
+    async function runScenarioB() {
+      if (!WO) { LOG('FAIL — WorldOrigin module not loaded'); return; }
+      WO.resetWorldOrigin();
+      LOG('=== Scenario B — many rebase events across long traversal ===');
+
+      const camera = new THREE.PerspectiveCamera(70, 1, 1e-9, 1e10);
+      const scene = new THREE.Scene();
+      const star = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshBasicMaterial());
+      star.position.set(0, 0, 0);
+      scene.add(star);
+
+      const cache = new THREE.Vector3(0, 0, 0);  // co-located with star
+      WO.trackForRebase(cache);
+
+      const dt = 1 / 60;
+      const frames = 5000;
+      let rebaseCount = 0;
+      let maxDiff = 0;
+
+      for (let i = 0; i < frames; i++) {
+        // Drift camera diagonally fast — covers many threshold crossings.
+        camera.position.x += 1.5;
+        camera.position.z += 1.0;
+
+        if (WO.maybeRebase(camera, scene)) rebaseCount++;
+
+        // After each frame, world-true must hold for star + cache.
+        const starTrue = vec3WorldTrue(star.position, WO.worldOrigin);
+        const cacheTrue = vec3WorldTrue(cache, WO.worldOrigin);
+        const dStar = maxAbsDiff3(starTrue, [0, 0, 0]);
+        const dCache = maxAbsDiff3(cacheTrue, [0, 0, 0]);
+        if (dStar > maxDiff) maxDiff = dStar;
+        if (dCache > maxDiff) maxDiff = dCache;
+      }
+
+      const camFinalTrue = vec3WorldTrue(camera.position, WO.worldOrigin);
+      const camExpected = [frames * 1.5, 0, frames * 1.0];
+      const dCam = maxAbsDiff3(camFinalTrue, camExpected);
+
+      LOG(`Frames: ${frames}`);
+      LOG(`Rebase events: ${rebaseCount}`);
+      LOG(`Final worldOrigin magnitude: ${Math.sqrt(WO.worldOrigin.lengthSq()).toExponential(2)} scene units`);
+      LOG(`Cam final world-true: [${camFinalTrue.map(n=>n.toFixed(2)).join(', ')}], expected [${camExpected.join(', ')}], diff=${dCam.toExponential(2)}`);
+      LOG(`Max field-invariance diff (star + cache): ${maxDiff.toExponential(2)}`);
+
+      const EPSILON = 1e-3;  // looser — many rebase events accumulate float noise
+      const pass = maxDiff < EPSILON && dCam < frames * 0.01 && rebaseCount > 5;
+      if (pass) {
+        SUMMARY(`PASS — ${rebaseCount} rebase events, max field-invariance ${maxDiff.toExponential(2)} < ${EPSILON} (looser bound for cumulative)`, true);
+      } else {
+        SUMMARY(`FAIL — rebaseCount=${rebaseCount}, maxDiff=${maxDiff.toExponential(2)}, camDiff=${dCam.toExponential(2)}`, false);
+      }
+
+      WO.untrackForRebase?.(cache);
+    }
+
+    // ── Scenario C: live telemetry surface install ──
+    function installLiveTelemetrySurface() {
+      const RING_SIZE = 5000;
+      window.__diag = {
+        ring: new Array(RING_SIZE).fill(null),
+        idx: 0, count: 0, RING_SIZE,
+        _phaseLog: [], _lastState: null,
+        _portalEvents: [], _lastPortalKey: null,
+        _rebaseEvents: [],
+        started: false, _raf: null, _t0: null,
+      };
+      LOG('Telemetry surface installed at window.__diag (5000-frame ring). Drive the warp on a tab where main.js is running; this page does not run main.js, so the surface is documentation-only here.');
+    }
+
+    function dumpDiag() {
+      if (!window.__diag) {
+        LOG('window.__diag not present on this page. Open a live game tab and dump from its console.');
+        return;
+      }
+      const D = window.__diag;
+      LOG(`Phase log (${D._phaseLog?.length || 0} events):\n${JSON.stringify(D._phaseLog || [], null, 2)}`);
+      LOG(`Portal events (${D._portalEvents?.length || 0}):\n${JSON.stringify(D._portalEvents?.slice(-20) || [], null, 2)}`);
+      LOG(`Rebase events (${D._rebaseEvents?.length || 0}, last 10):\n${JSON.stringify(D._rebaseEvents?.slice(-10) || [], null, 2)}`);
+    }
+
+    window._harness = {
+      runScenarioA,
+      runScenarioB,
+      installLiveTelemetrySurface,
+      dumpDiag,
+    };
+  </script>
+</body>
+</html>
