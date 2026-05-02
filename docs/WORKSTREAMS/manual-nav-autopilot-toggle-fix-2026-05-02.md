@@ -2,7 +2,29 @@
 
 ## Status
 
-**Active — scoped 2026-05-02 against HEAD `e11fc4b`.**
+**VERIFIED_PENDING_MAX — to-be-shipped at HEAD `f674ced`** (or successor commit
+that bundles addendum + recording with the AC #1 fix).
+
+**ACs #1, #3, #4, #5, #6, #7, #11, #12 verified by working-Claude telemetry
++ source-read.** Tester §T1 PASS on AC #1 at `f674ced`. ACs #2/#8 verified
+without code change (warp test produced 0 motion=true samples; pre-fix
+observation was residual leakage now closed by AC #1). ACs #9/#10/#11
+documented in DIAGNOSIS.md addendum (callsite enumeration, caller intent
+table, gate-var probe results).
+
+**AC #13 recording:** `screenshots/max-recordings/manual-nav-autopilot-toggle-fix-2026-05-02.webm`
+captured at HEAD `f674ced` (~21.5s at 30fps; 5.0 MB). Covers the
+seamlessness arc — Q-engage → 10s tour → W-interrupt → 5s manual flight
+→ Q re-engage → 5s new leg.
+
+**Awaiting:** Max's recording verdict on the felt-experience gate per
+`feedback_motion-evidence-for-motion-features.md`. Note caveat in
+DIAGNOSIS.md addendum §"Felt-experience caveat for AC #13" — the
+WASD-interrupt path produces a `restoreFromWorldState` snap-to-closest-body
+pose change rather than a smooth handoff. AC #1+#4 are mechanically
+satisfied; the *transition feel* is Max's call.
+
+Original scoping: 2026-05-02 against HEAD `e11fc4b`.
 
 ## Parent feature
 
