@@ -2,7 +2,7 @@
 
 ## Status
 
-**Shipped — well-dipper `c13c308` + kit @ motion-test-kit:b2b0473.**
+**Shipped — well-dipper `28feba2` + kit @ motion-test-kit:b2b0473.**
 
 All 5 phases verified by Tester. §T1 PASSed Phases 1+2 at `c6486b0`;
 §T-final PASSed Phases 3-5 + well-dipper integration at `d79d01c`.
