@@ -1379,6 +1379,67 @@ function _captureTelemetrySample() {
       duration: shipChoreographer.eventDuration,
     });
   }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  motion-test-kit shape augmentation (AC #22 of motion-test-kit-2026-05-02).
+  //  Adds kit-standard fields (frame, dt, anchor, target, input, state)
+  //  alongside the existing rich-format fields. ADDITIVE — existing
+  //  consumers see the same sample shape they always did, plus new
+  //  fields a kit-driven verifier can read.
+  //
+  //  Note: under the current variable-dt loop, `dt` is real-frame time,
+  //  not sim-tick time. Predicates that depend on fixed-step semantics
+  //  (e.g., transformHashEquivalence for golden-trajectory regression)
+  //  will see noise from frame-time variance until the well-dipper
+  //  fixed-timestep migration ships
+  //  (docs/WORKSTREAMS/welldipper-fixed-timestep-migration-2026-05-03.md).
+  //  Predicates that DON'T depend on fixed-step (deltaMagnitudeBound,
+  //  monotonicityScore, signStability, approachPhaseInvariant,
+  //  zeroInputNullAction, velocityBound which divides by dt) work fine
+  //  on variable-dt samples.
+  // ══════════════════════════════════════════════════════════════════════
+  const _kitPrev = _telemetryState.samples[_telemetryState.samples.length - 2] || null;
+  const _kitDt = _kitPrev ? (sample.t - _kitPrev.t) : 0;
+  sample.frame = _telemetryState.samples.length - 1;
+  sample.dt = _kitDt;
+  sample.anchor = {
+    pos: [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
+    quat: [+camera.quaternion.x.toFixed(6), +camera.quaternion.y.toFixed(6),
+           +camera.quaternion.z.toFixed(6), +camera.quaternion.w.toFixed(6)],
+  };
+  if (navBP && navSubsystem.bodyRef) {
+    const bq = navSubsystem.bodyRef.quaternion;
+    sample.target = {
+      pos: [+navBP.x.toFixed(4), +navBP.y.toFixed(4), +navBP.z.toFixed(4)],
+      quat: bq ? [+bq.x.toFixed(6), +bq.y.toFixed(6), +bq.z.toFixed(6), +bq.w.toFixed(6)]
+               : [0, 0, 0, 1],
+    };
+  } else {
+    sample.target = null;
+  }
+  // Input snapshot — list of currently-held key codes. Reads the
+  // module-scoped _heldKeys Set populated by the keydown listener at
+  // main.js:7055-7058. Pure-data: array of strings, JSON-safe.
+  sample.input = {
+    keys: Array.from(_heldKeys),
+  };
+  // State snapshot — the lifecycle booleans + phase strings that the
+  // kit's stateTransitionWellFormed predicate (and any host-specific
+  // assertions) read. Free-form per kit shape; convention is to include
+  // any boolean / phase the AC vocabulary names.
+  sample.state = {
+    shipPhase: shipChoreographer.currentPhase,
+    navPhase: plan.phase,
+    autoNavActive: autoNav.isActive,
+    autopilotMotionActive: autopilotMotion.isActive,
+    autopilotEnabled: _autopilotEnabled,
+    flightEnabled: cameraController._flightEnabled,
+    bypassed: cameraController.bypassed,
+    framingState: cameraChoreographer.framingState,
+    cameraMode: cameraChoreographer.currentMode,
+    warpActive: warpEffect.isActive,
+    warpTurning: warpTarget.turning,
+  };
 }
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();

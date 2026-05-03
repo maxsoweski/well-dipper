@@ -2,8 +2,21 @@
 
 ## Status
 
-Scoped 2026-05-02 against well-dipper HEAD `679321b` (post toggle-fix
-landing, pending Max recording verdict).
+**VERIFIED_PENDING_TESTER — all 5 phases landed.** Awaiting Tester
+§T-final on the to-be-shipped state.
+
+- Kit repo: `~/projects/motion-test-kit/` at `b2b0473` (5 phases
+  committed — `dce61b1` → `c6486b0` → `d0a6202` → `f645d2e` →
+  `b2b0473`).
+- well-dipper-side integration: pending commit on `master` after
+  Tester verdict.
+
+74/74 self-tests pass under `npm test` in the kit. Tester §T1 issued
+PASS at `c6486b0` (Phases 1+2). §T-final to verify Phases 3-5 + the
+well-dipper integration.
+
+Originally scoped 2026-05-02 against well-dipper HEAD `679321b` (post
+toggle-fix landing, pending Max recording verdict).
 
 ## Parent feature
 

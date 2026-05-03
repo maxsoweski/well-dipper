@@ -1,0 +1,3 @@
+[submodule "vendor/motion-test-kit"]
+	path = vendor/motion-test-kit
+	url = /home/ax/projects/motion-test-kit
