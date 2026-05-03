@@ -2,8 +2,34 @@
 
 ## Status
 
-**VERIFIED_PENDING_MAX — to-be-shipped at HEAD `f674ced`** (or successor commit
-that bundles addendum + recording with the AC #1 fix).
+**Shipped `f674ced` — verified against motion-test-kit predicates run
+at d79d01c (post-AC-#22 target-wiring fixup).**
+
+The kit's `deltaMagnitudeBound` and `monotonicityScore` predicates run
+against the original 2026-05-02 morning diagnostic captures show the
+toggle-fix's bug class is structurally caught:
+
+- Sol A pre-fix: 3145 violations on Z, including a 255-unit single-
+  frame spike. monotonicityScore flagged 2976 violating spans.
+- Sol B pre-fix: 6924-unit Z spike captured; 695 violations.
+- Same predicates against post-fix dogfood (`d79d01c`): monotonicityScore
+  PASSES (0 violating spans on the autopilot CRUISE path); 4
+  deltaMagnitudeBound violations remain — all rebase-related, NOT
+  oscillation. The AC #1 fix's contract (autopilotMotion releases on
+  stopFlythrough, manual-flight gate releases under all autopilot-off
+  conditions) holds.
+
+The 145 `approachPhaseInvariant` violations the kit also surfaced are
+**a separate bug class** (rebase × celestial-motion interaction —
+diagnostic at
+`screenshots/diagnostics/rebase-celestial-interaction-2026-05-03/ANALYSIS.md`).
+Carved as new workstream. Not in this brief's scope; flagged as the
+workstream's external reference.
+
+Pre-Shipped status: VERIFIED_PENDING_MAX at `679321b` since 2026-05-02
+PM. The recording-class AC #13 ("seamlessness arc") was captured at
+`f674ced`; Max's recording verdict + the kit-driven post-fix
+verification together close the gate.
 
 **ACs #1, #3, #4, #5, #6, #7, #11, #12 verified by working-Claude telemetry
 + source-read.** Tester §T1 PASS on AC #1 at `f674ced`. ACs #2/#8 verified

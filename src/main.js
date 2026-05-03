@@ -1407,12 +1407,26 @@ function _captureTelemetrySample() {
     quat: [+camera.quaternion.x.toFixed(6), +camera.quaternion.y.toFixed(6),
            +camera.quaternion.z.toFixed(6), +camera.quaternion.w.toFixed(6)],
   };
+  // Target source resolution: prefer navSubsystem.bodyRef (legacy nav-driven
+  // motion); fall back to autopilotMotion._target (V1 motion controller —
+  // active during autopilot CRUISE / APPROACH / STATION-A). The `via` field
+  // disambiguates so consumers can tell which path is sourcing the target.
   if (navBP && navSubsystem.bodyRef) {
     const bq = navSubsystem.bodyRef.quaternion;
     sample.target = {
       pos: [+navBP.x.toFixed(4), +navBP.y.toFixed(4), +navBP.z.toFixed(4)],
       quat: bq ? [+bq.x.toFixed(6), +bq.y.toFixed(6), +bq.z.toFixed(6), +bq.w.toFixed(6)]
                : [0, 0, 0, 1],
+      via: 'navSubsystem',
+    };
+  } else if (autopilotMotion._target && autopilotMotion._target.position) {
+    const tp = autopilotMotion._target.position;
+    const tq = autopilotMotion._target.quaternion;
+    sample.target = {
+      pos: [+tp.x.toFixed(4), +tp.y.toFixed(4), +tp.z.toFixed(4)],
+      quat: tq ? [+tq.x.toFixed(6), +tq.y.toFixed(6), +tq.z.toFixed(6), +tq.w.toFixed(6)]
+               : [0, 0, 0, 1],
+      via: 'autopilotMotion',
     };
   } else {
     sample.target = null;

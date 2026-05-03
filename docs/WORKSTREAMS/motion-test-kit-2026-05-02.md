@@ -2,21 +2,26 @@
 
 ## Status
 
-**VERIFIED_PENDING_TESTER — all 5 phases landed.** Awaiting Tester
-§T-final on the to-be-shipped state.
+**Shipped — well-dipper `c13c308` + kit @ motion-test-kit:b2b0473.**
 
-- Kit repo: `~/projects/motion-test-kit/` at `b2b0473` (5 phases
-  committed — `dce61b1` → `c6486b0` → `d0a6202` → `f645d2e` →
-  `b2b0473`).
-- well-dipper-side integration: pending commit on `master` after
-  Tester verdict.
+All 5 phases verified by Tester. §T1 PASSed Phases 1+2 at `c6486b0`;
+§T-final PASSed Phases 3-5 + well-dipper integration at `d79d01c`.
 
-74/74 self-tests pass under `npm test` in the kit. Tester §T1 issued
-PASS at `c6486b0` (Phases 1+2). §T-final to verify Phases 3-5 + the
-well-dipper integration.
+74/74 kit self-tests pass under `npm test`. Dogfood (AC #23) ran live
+at `d79d01c` + target-wiring patch and produced two findings:
+1. **Kit's value proposition validated.** `approachPhaseInvariant`
+   flagged 145 frame-level violations of "distance to target
+   non-increasing during APPROACH" — the bug class Max saw visually
+   (planet jittering, camera-inside-body color-fill).
+2. **Surfaced bug:** the rebasing × realistic-celestial-motion
+   interaction. Body orbital writes overwrite world-origin rebase
+   shifts each frame. Diagnosed at
+   `screenshots/diagnostics/rebase-celestial-interaction-2026-05-03/ANALYSIS.md`.
+   Carved as new workstream — out of scope here.
 
-Originally scoped 2026-05-02 against well-dipper HEAD `679321b` (post
-toggle-fix landing, pending Max recording verdict).
+Originally scoped 2026-05-02 against well-dipper HEAD `679321b`. AC #22
+target-wiring landed in this fixup commit (sourcing `target` from
+`autopilotMotion._target` when `navSubsystem.bodyRef` is null).
 
 ## Parent feature
 
