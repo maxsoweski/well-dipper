@@ -2,8 +2,19 @@
 
 ## Status
 
-Active — scoped 2026-05-03 by PM at HEAD `<motion-test-kit Shipped commit>`.
-Surfaced by the motion-test-kit dogfood (first production catch by the kit).
+**Shipped `97c64e9` — Tester §T1 PASS at 97c64e9.**
+
+3 captures totaling 11,543 samples; 0 rebase-band `approachPhaseInvariant`
+violations (pre-fix baseline: 145). Max distance discontinuity at
+rebase events: 1.55 units (pre-fix signature: ~99 units). Audit log:
+`~/.claude/state/dev-collab/tester-audits/rebase-celestial-frame-fix-2026-05-03.md`.
+
+Originally scoped 2026-05-03 by PM at HEAD `f284ce0` (post-kit-Shipped).
+Surfaced by the motion-test-kit dogfood — first production catch by
+the kit. Kit's lifecycle on this bug: surface → quantify → localize →
+verify-fix, all via predicates.
+
+Post-fix verification: `screenshots/diagnostics/rebase-celestial-interaction-2026-05-03/POST-FIX-VERIFICATION.md`.
 
 ## Parent feature
 
