@@ -5987,6 +5987,13 @@ function animate() {
     const celestialDt = deltaTime * settings.get('celestialTimeMultiplier');
 
     // ── Binary star orbit ──
+    // Bodies' orbital math computes positions in the un-rebased true-world
+    // frame (origin = system center). The renderer reads positions in the
+    // rebased local frame. Subtract `_worldOriginVec` at each per-frame
+    // body write site so positions land in the renderer's frame. See
+    // `docs/WORKSTREAMS/rebase-celestial-frame-fix-2026-05-03.md` and
+    // `screenshots/diagnostics/rebase-celestial-interaction-2026-05-03/ANALYSIS.md`
+    // for the bug class this guards against.
     if (system.isBinary) {
       system.binaryOrbitAngle += system.binaryOrbitSpeed * celestialDt;
       const q = system.binaryMassRatio;
@@ -5996,10 +6003,14 @@ function animate() {
       const angle = system.binaryOrbitAngle;
 
       system.star.mesh.position.set(
-        Math.cos(angle) * r1, 0, Math.sin(angle) * r1,
+        Math.cos(angle) * r1 - _worldOriginVec.x,
+        0 - _worldOriginVec.y,
+        Math.sin(angle) * r1 - _worldOriginVec.z,
       );
       system.star2.mesh.position.set(
-        -Math.cos(angle) * r2, 0, -Math.sin(angle) * r2,
+        -Math.cos(angle) * r2 - _worldOriginVec.x,
+        0 - _worldOriginVec.y,
+        -Math.sin(angle) * r2 - _worldOriginVec.z,
       );
     }
 
@@ -6008,7 +6019,11 @@ function animate() {
       entry.orbitAngle += entry.orbitSpeed * celestialDt;
       const px = Math.cos(entry.orbitAngle) * entry.orbitRadius;
       const pz = Math.sin(entry.orbitAngle) * entry.orbitRadius;
-      entry.planet.mesh.position.set(px, 0, pz);
+      entry.planet.mesh.position.set(
+        px - _worldOriginVec.x,
+        0 - _worldOriginVec.y,
+        pz - _worldOriginVec.z,
+      );
 
       // Primary sun direction: from planet toward star 1
       if (system.isBinary) {
@@ -6053,9 +6068,15 @@ function animate() {
         }
       }
 
-      // Moon orbit lines follow the parent planet
+      // Moon orbit lines follow the parent planet (in the rebased frame —
+      // px/pz are absolute orbital coords, subtract `_worldOriginVec` to
+      // land in the renderer's frame).
       for (const line of entry.moonOrbitLines) {
-        line.mesh.position.set(px, 0, pz);
+        line.mesh.position.set(
+          px - _worldOriginVec.x,
+          0 - _worldOriginVec.y,
+          pz - _worldOriginVec.z,
+        );
       }
     }
 
