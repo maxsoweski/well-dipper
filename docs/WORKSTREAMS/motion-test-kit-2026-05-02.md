@@ -587,6 +587,10 @@ load-bearing 2-3 for *this* work, not blanket-listing.)
   substantial workstream (touches autopilot, ship choreographer, camera
   controller, audio, BPM clock, every `update(dt)` call). Land the kit
   first; migrate well-dipper second.
+  **Sibling brief:** `docs/WORKSTREAMS/welldipper-fixed-timestep-
+  migration-2026-05-03.md` (authored 2026-05-03 alongside this brief —
+  together they form "Path B" per Max's 2026-05-02 direction). The
+  sibling does NOT begin until this kit brief is `Shipped`.
 - **Godot adapter.** Architecture supports it; building it is a future
   workstream when Max moves engines.
 - **Other three.js projects beyond well-dipper.** The cross-project
