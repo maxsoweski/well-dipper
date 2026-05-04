@@ -14,6 +14,8 @@
  * galaxy, sometimes we just scroll through local stars, sometimes we hop sectors.
  */
 
+import { simClockMs } from '../core/SimClock.js';
+
 // ── Navigation styles with weights ──
 // Higher weight = more likely to be picked. Weighted random, not rotation.
 const NAV_STYLES = [
@@ -319,7 +321,7 @@ export class AutopilotNavSequence {
       this._nav._localRotX = Math.PI / 2;
       this._nav._localRotY = 0;
       this._nav._tiltAnim = {
-        startTime: performance.now(),
+        startTime: simClockMs(),
         duration: 600,
         from: Math.PI / 2,
         to: 0.5,
@@ -409,7 +411,7 @@ export class AutopilotNavSequence {
     this._nav._externalTarget = { x: pick.wx, y: pick.wy, z: pick.wz, name: pick.name || '' };
 
     this._nav._systemZoomAnim = {
-      startTime: performance.now(),
+      startTime: simClockMs(),
       duration: 500,
       fromRadius: this._nav._localRadius,
       toRadius: this._nav._localRadius * 0.1,

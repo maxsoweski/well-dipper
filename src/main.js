@@ -63,6 +63,7 @@ import {
 } from './core/WorldOrigin.js';
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
 import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
+import { _advanceSimClock } from './core/SimClock.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
@@ -7324,6 +7325,7 @@ function renderFrame(alpha) {
 const _animateController = bindToRAF({
   accumulator: _simAccumulator,
   simUpdate: (stepMs) => {
+    _advanceSimClock(stepMs);
     _shiftInterpPrevToCurr();
     timer.update();
     simStep(stepMs / 1000);

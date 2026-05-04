@@ -5,6 +5,7 @@ import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
 import alea from 'alea';
+import { simClockMs } from '../core/SimClock.js';
 
 /**
  * NavComputer — 5-level interactive galaxy navigation.
@@ -446,7 +447,7 @@ export class NavComputer {
    */
   _startDrillAnim(fromCenter, fromSize, toCenter, toSize, toLevel, duration = 400) {
     this._anim = {
-      startTime: performance.now(),
+      startTime: simClockMs(),
       duration,
       fromCenter: { ...fromCenter },
       fromSize,
@@ -462,7 +463,7 @@ export class NavComputer {
    */
   _updateAnim() {
     if (!this._anim) return false;
-    const elapsed = performance.now() - this._anim.startTime;
+    const elapsed = simClockMs() - this._anim.startTime;
     let t = Math.min(1.0, elapsed / this._anim.duration);
 
     // Ease-in-out (smootherstep for polished feel)
@@ -492,7 +493,7 @@ export class NavComputer {
     // System zoom animation (column → system transition)
     if (this._systemZoomAnim) {
       const za = this._systemZoomAnim;
-      const elapsed = performance.now() - za.startTime;
+      const elapsed = simClockMs() - za.startTime;
       let t = Math.min(1.0, elapsed / za.duration);
       t = t * t; // ease-in (accelerate into the star)
       this._localRadius = za.fromRadius + (za.toRadius - za.fromRadius) * t;
@@ -508,8 +509,8 @@ export class NavComputer {
 
     // Tilt animation (region → column transition)
     if (this._tiltAnim && this._levelIndex === 3) {
-      if (!this._tiltAnim.startTime) this._tiltAnim.startTime = performance.now();
-      const elapsed = performance.now() - this._tiltAnim.startTime;
+      if (!this._tiltAnim.startTime) this._tiltAnim.startTime = simClockMs();
+      const elapsed = simClockMs() - this._tiltAnim.startTime;
       let t = Math.min(1.0, elapsed / this._tiltAnim.duration);
       t = t * t * (3 - 2 * t); // smoothstep
       this._localRotX = this._tiltAnim.from + (this._tiltAnim.to - this._tiltAnim.from) * t;
@@ -3108,7 +3109,7 @@ export class NavComputer {
       this._clearCommitSelection();
       // Zoom animation: shrink column view radius toward the star, then switch
       this._systemZoomAnim = {
-        startTime: performance.now(),
+        startTime: simClockMs(),
         duration: 400,
         fromRadius: this._localRadius,
         toRadius: this._localRadius * 0.1,
