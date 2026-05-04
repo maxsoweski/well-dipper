@@ -6050,8 +6050,9 @@ function simStep(deltaTime) {
         entry.planet._lightDir2.copy(_sunDir2);
       }
 
-      // Planet rotation + clouds
-      entry.planet.update(deltaTime, celestialDt);
+      // Planet axial rotation + ring rotation (sim part of Phase 3 wrap
+      // decomp; render part — shader uniforms.time — fires in renderFrame).
+      entry.planet.updateSim(deltaTime, celestialDt);
 
       // Moons orbit around the planet
       for (const moon of entry.moons) {
@@ -6071,9 +6072,9 @@ function simStep(deltaTime) {
           // Sync light direction from parent planet
           moon.planet._lightDir.copy(entry.planet._lightDir);
           if (system.isBinary) moon.planet._lightDir2.copy(entry.planet._lightDir2);
-          moon.planet.update(deltaTime);
+          moon.planet.updateSim(deltaTime);
         } else {
-          moon.update(deltaTime, entry.planet.mesh.position, celestialDt);
+          moon.updateSim(deltaTime, entry.planet.mesh.position, celestialDt);
         }
       }
 
@@ -7151,6 +7152,24 @@ function _updateRenderVisuals(renderDt) {
       for (const s of system.extraStars) {
         if (s.update) s.update(renderDt, camera);
         if (s.updateGlow) s.updateGlow(camera);
+      }
+    }
+  }
+  // Planet + moon shader-time uniforms (Phase 3 wrap decomp render-half).
+  // Sim part — orbit / rotation / position writes — runs in simStep.
+  // updateRender advances `mat.uniforms.time` for cloud drift / surface
+  // noise so the visible animation runs at display refresh, not sim tick.
+  if (system.planets) {
+    for (const entry of system.planets) {
+      if (entry.planet?.updateRender) entry.planet.updateRender(renderDt);
+      if (entry.moons) {
+        for (const moon of entry.moons) {
+          if (moon.isPlanetMoon) {
+            if (moon.planet?.updateRender) moon.planet.updateRender(renderDt);
+          } else if (moon.updateRender) {
+            moon.updateRender(renderDt);
+          }
+        }
       }
     }
   }

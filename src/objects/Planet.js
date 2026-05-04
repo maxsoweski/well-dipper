@@ -1268,26 +1268,54 @@ export class Planet {
   }
 
   /**
-   * Call every frame. Rotates the surface and ring; advances shader time.
-   * @param {number} deltaTime  raw frame dt — used for shader animation only.
-   * @param {number} [celestialDt=deltaTime]  user-time-scaled celestial dt
-   *   (= deltaTime × celestialTimeMultiplier). Used for axial rotation.
-   *   Per workstream realistic-celestial-motion-2026-04-27.
+   * Sim-tick advance (axial rotation of surface + ring). Per Phase 3 wrap
+   * decomposition (welldipper-fixed-timestep-migration-2026-05-03 AC #10):
+   * orbit/rotation advance is sim-classified — must run on fixed sim dt
+   * inside the accumulator's simUpdate callback so the autopilot path-
+   * planner sees deterministic body orientations.
+   *
+   * @param {number} simDt  fixed sim dt (16.667 ms @ 60 Hz).
+   * @param {number} [celestialDt=simDt]  simDt × celestialTimeMultiplier per
+   *   workstream realistic-celestial-motion-2026-04-27.
    */
-  update(deltaTime, celestialDt = deltaTime) {
+  updateSim(simDt, celestialDt = simDt) {
     this.surface.rotation.y += this.data.rotationSpeed * (Math.PI / 180) * celestialDt;
 
     if (this.ring) {
       this.ring.rotation.y += this.data.rotationSpeed * 0.3 * (Math.PI / 180) * celestialDt;
     }
+  }
 
+  /**
+   * Render-tick advance (shader animation uniforms). Time-based shader
+   * effects (cloud drift, surface noise scroll) are render-classified —
+   * they advance at display refresh rate so the visible animation looks
+   * smooth on high-refresh displays instead of stair-stepped at 60 Hz.
+   *
+   * @param {number} renderDt  variable real wall-clock dt.
+   */
+  updateRender(renderDt) {
     const mat = this.surface.material;
     if (mat.uniforms.time) {
-      mat.uniforms.time.value += deltaTime;
-      // Wrap to prevent float32 precision loss after hours of runtime
-      // 10000s is ~2.8 hours — noise patterns tile seamlessly at this scale
+      mat.uniforms.time.value += renderDt;
+      // Wrap to prevent float32 precision loss after hours of runtime.
+      // 10000s ≈ 2.8 h — noise patterns tile seamlessly at this scale.
       if (mat.uniforms.time.value > 10000) mat.uniforms.time.value -= 10000;
     }
+  }
+
+  /**
+   * Convenience orchestrator: invokes updateSim + updateRender with the
+   * same dt for both. Use the split methods directly for sim/render-
+   * decoupled call paths (per Phase 3 migration); use this for legacy
+   * call sites that consume a single dt (e.g., gallery preview mode).
+   *
+   * @param {number} deltaTime
+   * @param {number} [celestialDt=deltaTime]
+   */
+  update(deltaTime, celestialDt = deltaTime) {
+    this.updateSim(deltaTime, celestialDt);
+    this.updateRender(deltaTime);
   }
 
   addTo(scene) {

@@ -567,15 +567,16 @@ export class Moon {
   }
 
   /**
-   * Update orbital position around the parent planet's world position.
-   * @param {number} deltaTime  raw frame dt — used for shader animation only
-   * @param {THREE.Vector3} parentPosition  the planet's world position
-   * @param {number} [celestialDt=deltaTime]  user-time-scaled celestial dt
-   *   (= deltaTime × celestialTimeMultiplier). Used for orbital advance +
-   *   axial rotation. Defaults to raw deltaTime for backwards-compat with
-   *   any callers that haven't been updated to pass it.
+   * Sim-tick advance (orbit + position + axial rotation). Per Phase 3
+   * wrap decomposition (welldipper-fixed-timestep-migration-2026-05-03
+   * AC #10): orbital state and position writes are sim-classified.
+   *
+   * @param {number} simDt  fixed sim dt (16.667 ms @ 60 Hz).
+   * @param {THREE.Vector3} parentPosition  the planet's world position.
+   * @param {number} [celestialDt=simDt]  simDt × celestialTimeMultiplier
+   *   per workstream realistic-celestial-motion-2026-04-27.
    */
-  update(deltaTime, parentPosition, celestialDt = deltaTime) {
+  updateSim(simDt, parentPosition, celestialDt = simDt) {
     // orbitSpeed is in rad/s (consistent with planet-moon path in main.js)
     this.orbitAngle += this.data.orbitSpeed * celestialDt;
 
@@ -598,11 +599,34 @@ export class Moon {
     // 27.3-day tidally-locked period).
     const moonRotSpeed = this.data.rotationSpeed ?? MOON_ROTATION_DEFAULT_DEG_PER_SEC;
     this.mesh.rotation.y += moonRotSpeed * (Math.PI / 180) * celestialDt;
+  }
 
-    // Animate clouds (terrestrial moons) — shader-time, not celestial.
+  /**
+   * Render-tick advance (cloud shader animation for terrestrial moons).
+   * Render-classified — advances at display refresh so cloud drift looks
+   * smooth on high-refresh displays.
+   *
+   * @param {number} renderDt  variable real wall-clock dt.
+   */
+  updateRender(renderDt) {
     if (this.data.clouds) {
-      this.mesh.material.uniforms.time.value += deltaTime;
+      this.mesh.material.uniforms.time.value += renderDt;
     }
+  }
+
+  /**
+   * Convenience orchestrator: invokes updateSim + updateRender with the
+   * same dt for both. Use the split methods directly for sim/render-
+   * decoupled call paths (per Phase 3 migration); use this for legacy
+   * call sites that consume a single dt (e.g., gallery preview mode).
+   *
+   * @param {number} deltaTime
+   * @param {THREE.Vector3} parentPosition
+   * @param {number} [celestialDt=deltaTime]
+   */
+  update(deltaTime, parentPosition, celestialDt = deltaTime) {
+    this.updateSim(deltaTime, parentPosition, celestialDt);
+    this.updateRender(deltaTime);
   }
 
   addTo(scene) {

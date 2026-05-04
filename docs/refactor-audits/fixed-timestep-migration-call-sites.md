@@ -170,7 +170,7 @@ src/rendering/*.js src/camera/*.js`.
 
 | Line | Call | Classification | Rationale |
 |------|------|----------------|-----------|
-| 206 | `update(deltaTime, celestialDt)` | **wrap** | Sim: asteroid positions advance. Render: shader uniforms (if any). Decompose. |
+| 206 | `update(deltaTime, celestialDt)` | **sim** (reclassified Phase 3 Group 3D) | Initial audit predicted "wrap" with a render-side shader-shimmer half. Source review during Phase 3 wrap decomp confirmed the method has NO render-classified work — `_elapsedTime`, per-asteroid `angle`, tumble quaternion, instance-matrix writes are all sim-classified state advance. The shader's `starPos1` / `starPos2` uniforms are written separately via `setStarPosition()` (sim data write). Reclassified to pure **sim** — no decomposition needed; the existing call site `belt.update(deltaTime, celestialDt)` from `simStep` already feeds simDt correctly. Audit row left as a row-of-record. |
 
 ## src/objects/ShipSpawner.js
 
