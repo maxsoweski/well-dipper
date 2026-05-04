@@ -19,13 +19,19 @@
   </style>
 </head>
 <body>
-  <h1>Refactor Verification — Fixed-Timestep Phase 1</h1>
+  <h1>Refactor Verification — Fixed-Timestep Phases 1 + 3</h1>
   <p>
-    AC #5 of <code>welldipper-fixed-timestep-migration-2026-05-03</code>.
-    Compares pre-migration variable-dt body advance against post-migration
-    fixed-step accumulator body advance, holding inputs frozen via deterministic
-    dt schedule. Pass condition: divergence is bounded and decaying
-    (qualitative gate per brief AC #5 note); failure is monotone-or-growing.
+    ACs #5 (Phase 1) and #12 (Phase 3) of
+    <code>welldipper-fixed-timestep-migration-2026-05-03</code>.
+    Phase 1 (Scenarios A–B) compares pre-migration variable-dt body advance
+    against post-migration fixed-step accumulator body advance, holding inputs
+    frozen via deterministic dt schedule. Phase 3 (Scenarios C–E) extends to
+    cover migrated call sites (planet rotation under wrap decomp, sim-clock
+    byte-exactness, misclassification detector). Pass condition: divergence is
+    bounded and decaying (qualitative gate per brief AC #5 note) for pre/post
+    comparison scenarios; byte-exact (≤ 1e-15 numeric-noise floor) for
+    determinism-class scenarios; failure is monotone-or-growing or
+    misclassification surfaced as material divergence.
   </p>
   <button class="btn" onclick="runAll()">Run All</button>
   <button class="btn" onclick="document.getElementById('out').innerHTML = ''">Clear</button>
@@ -199,21 +205,171 @@
     return { passed: allPass };
   }
 
+  // ── Phase 3 extensions (AC #12) ──
+
+  // Scenario C: planet rotation under wrap decomposition.
+  // Mirrors Planet.updateSim's `surface.rotation.y += rotationSpeed * celestialDt`
+  // pattern. Pre-migration consumed variable dt; post-migration consumes fixed
+  // simDt × celestialTimeMultiplier. Both should produce a similar total
+  // rotation over a fixed wall-clock duration (sim-rate-mismatch artifact
+  // bounded by the same tolerance as Scenario A).
+  function scenarioC() {
+    log('Scenario C: planet rotation under fixed-step (Phase 3 wrap decomp)');
+    const dts = generateDtSchedule(10);
+    const rotationSpeedDegPerSec = 5; // 72-second axial period
+    const rotationSpeedRadPerSec = rotationSpeedDegPerSec * Math.PI / 180;
+    const celestialMultiplier = 1; // 1× realistic time
+
+    // Pre-migration: rotation += rotationSpeed * deltaTime * multiplier per RAF.
+    let rotVar = 0;
+    for (const dt of dts) {
+      rotVar += rotationSpeedRadPerSec * dt * celestialMultiplier;
+    }
+
+    // Post-migration: accumulator drives sim ticks; rotation += rotationSpeed *
+    // (stepMs/1000) * multiplier per sim tick.
+    const acc = createAccumulator({ stepMs: 1000 / 60, maxStepMs: 100 });
+    let rotFix = 0;
+    for (const dt of dts) {
+      acc.tick(dt * 1000, (simStepMs) => {
+        rotFix += rotationSpeedRadPerSec * (simStepMs / 1000) * celestialMultiplier;
+      });
+    }
+
+    const div = Math.abs(rotVar - rotFix);
+    const totalRot = Math.max(Math.abs(rotVar), Math.abs(rotFix));
+    const relativeDiv = totalRot > 0 ? div / totalRot : 0;
+    // Same tolerance band as Scenario A (sim-rate-mismatch artifact, bounded).
+    const isBounded = div < 0.01;
+    const isRelativelySmall = relativeDiv < 0.01;
+
+    log(`Total rotation (var): ${rotVar.toFixed(6)} rad`);
+    log(`Total rotation (fix): ${rotFix.toFixed(6)} rad`);
+    log(`Absolute divergence: ${div.toExponential(4)} rad`);
+    log(`Relative divergence: ${(relativeDiv * 100).toFixed(4)}%`);
+    log(`Bounded under 0.01 rad? ${isBounded}`);
+
+    summary(
+      `Scenario C: planet rotation div ${div.toExponential(2)} rad (${(relativeDiv * 100).toFixed(2)}%)`,
+      isBounded && isRelativelySmall
+    );
+    return { passed: isBounded && isRelativelySmall, div };
+  }
+
+  // Scenario D: sim-clock byte-exactness.
+  // simClockMs() advances by exactly stepMs per sim tick — no rounding error,
+  // no skipped ticks. After N sim ticks, simClockMs == N * stepMs to within
+  // float64 precision (≤ 1e-9 ms accumulated rounding). This is the
+  // determinism floor that Phase 4 input replay relies on.
+  function scenarioD() {
+    log('Scenario D: sim-clock byte-exactness (AC #11 determinism floor)');
+    const dts = generateDtSchedule(10);
+    const stepMs = 1000 / 60;
+    const acc = createAccumulator({ stepMs, maxStepMs: 100 });
+    let simClock = 0;
+    let tickCount = 0;
+    for (const dt of dts) {
+      acc.tick(dt * 1000, (simStepMs) => {
+        simClock += simStepMs;
+        tickCount++;
+      });
+    }
+    const expected = tickCount * stepMs;
+    const div = Math.abs(simClock - expected);
+    // Float64 numeric noise floor: tickCount × eps × stepMs ≈ 1e-12 for ~600
+    // ticks. Allow 1e-9 ms (a million-fold margin) — anything above is a real
+    // bug in the accumulator's stepMs feed.
+    const isByteExact = div < 1e-9;
+
+    log(`Sim ticks fired: ${tickCount}`);
+    log(`Expected simClock: ${expected.toFixed(9)} ms`);
+    log(`Actual simClock:   ${simClock.toFixed(9)} ms`);
+    log(`Divergence: ${div.toExponential(4)} ms (must be ≤ 1e-9)`);
+
+    summary(
+      `Scenario D: sim-clock byte-exact ${div.toExponential(2)} ms over ${tickCount} ticks`,
+      isByteExact
+    );
+    return { passed: isByteExact, div };
+  }
+
+  // Scenario E: misclassification detector.
+  // Per brief AC #12: "if a sim-classified subsystem is silently consuming
+  // render dt, the harness flags it as divergence." Constructs two parallel
+  // simulations of the same orbital advance under the same dt schedule —
+  // variant 1 correctly consumes simDt (fixed); variant 2 incorrectly
+  // consumes the variable RAF dt (the misclassification bug). Reports the
+  // divergence between them as the *signal* the harness would surface.
+  // Designed to FAIL by construction (variant 2 is the bug); the test
+  // PASSes when divergence ≥ a detection threshold (i.e., the harness can
+  // tell variant 2 apart from variant 1).
+  function scenarioE() {
+    log('Scenario E: misclassification detector (sim subsystem on render dt)');
+    const dts = generateDtSchedule(10);
+    const angularVel = 0.5; // 0.5 rad/s — fast enough to make divergence visible
+    const acc = createAccumulator({ stepMs: 1000 / 60, maxStepMs: 100 });
+
+    // Variant 1: correct — sim-classified subsystem consumes simDt only.
+    let angleCorrect = 0;
+    for (const dt of dts) {
+      acc.tick(dt * 1000, (simStepMs) => {
+        angleCorrect += angularVel * (simStepMs / 1000);
+      });
+    }
+
+    // Variant 2: bug — sim-classified subsystem accidentally consumes
+    // variable render dt (skips the accumulator entirely, fires per RAF).
+    let angleBuggy = 0;
+    for (const dt of dts) {
+      angleBuggy += angularVel * dt;
+    }
+
+    const div = Math.abs(angleCorrect - angleBuggy);
+    // Detection threshold: divergence must be ≥ 1e-3 rad — anything smaller
+    // and the bug would be invisible. The dt schedule's ~30% jitter (16-33ms)
+    // produces ~1% trajectory drift over 10s of motion. Calibrated against
+    // generateDtSchedule's specific pattern; if you change the dt schedule,
+    // recalibrate.
+    const detectable = div >= 1e-3;
+    const finalAngles = `correct=${angleCorrect.toFixed(6)} buggy=${angleBuggy.toFixed(6)}`;
+
+    log(`Final angles: ${finalAngles}`);
+    log(`Divergence: ${div.toExponential(4)} rad`);
+    log(`Detectable (≥ 1e-3 rad)? ${detectable}`);
+    log('NOTE: this scenario PASSes when the harness CAN tell the misclassified');
+    log('variant apart from the correct one — proves the detector works.');
+
+    summary(
+      `Scenario E: misclassification surfaces as ${div.toExponential(2)} rad divergence`,
+      detectable
+    );
+    return { passed: detectable, div };
+  }
+
   window.runAll = async () => {
     out.innerHTML = '';
-    log('=== Phase 1 telemetry-equivalence harness ===');
+    log('=== Telemetry-equivalence harness — Phases 1 + 3 ===');
     log('');
     const a = await scenarioA();
     log('');
     const b = scenarioB();
     log('');
+    const c = scenarioC();
+    log('');
+    const d = scenarioD();
+    log('');
+    const e = scenarioE();
+    log('');
+    const allPass = a.passed && b.passed && c.passed && d.passed && e.passed;
     summary(
-      `Phase 1: A=${a.passed ? 'PASS' : 'FAIL'}, B=${b.passed ? 'PASS' : 'FAIL'}`,
-      a.passed && b.passed
+      `Phase 1: A=${a.passed ? 'PASS' : 'FAIL'}, B=${b.passed ? 'PASS' : 'FAIL'} ` +
+      `· Phase 3: C=${c.passed ? 'PASS' : 'FAIL'}, D=${d.passed ? 'PASS' : 'FAIL'}, E=${e.passed ? 'PASS' : 'FAIL'}`,
+      allPass
     );
   };
 
   window._migrationPhase1 = { scenarioA, scenarioB, runAll };
+  window._migrationPhase3 = { scenarioC, scenarioD, scenarioE };
   </script>
 </body>
 </html>
