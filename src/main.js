@@ -61,6 +61,8 @@ import {
   resetWorldOrigin as _resetWorldOrigin,
   _debugState as _worldOriginDebugState,
 } from './core/WorldOrigin.js';
+import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
+import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
@@ -5871,11 +5873,31 @@ function isWarpTargetOccluded(targetDir) {
   return false;
 }
 
-function animate() {
-  requestAnimationFrame(animate);
+// ── Fixed-timestep accumulator (welldipper-fixed-timestep-migration-2026-05-03) ──
+// Phase 1 of the migration: the animate loop is now driven by the
+// motion-test-kit's `bindToRAF` accumulator. Sim runs at fixed 60 Hz
+// (16.667 ms step); render runs every RAF using whatever sim state was
+// last written. Phase 1 is conservative — the existing animate body
+// runs entirely inside `simStep(dt)` (called by `simUpdate(stepMs)`)
+// and only the renderer pass moves to `render(alpha)`. Phase 2 decomposes
+// render-only work into the render callback with `alpha`-blended
+// interpolation. Phase 3 finishes the per-call-site migration per
+// `docs/refactor-audits/fixed-timestep-migration-call-sites.md`.
+//
+// Per AC #4 + WorldOrigin.maybeRebase doc + world-origin-rebasing-2026-05-01
+// Drift Risk #2: world-origin rebase fires at the **start of each sim
+// tick**, BEFORE any sim subsystem reads world positions. NEVER inside
+// the render path (interpolated render state would jump mid-render-frame).
+const _simAccumulator = createAccumulator({ stepMs: 1000 / 60, maxStepMs: 100 });
 
-  timer.update();
-  const deltaTime = Math.min(timer.getDelta(), 0.1);
+function simStep(deltaTime) {
+  // World-origin rebase event timing rule (AC #4):
+  // *"Rebase must happen before any per-frame logic that uses world
+  //   positions that frame."*
+  // Per docs/PLAN_world-origin-rebasing.md §"Risks / gotchas" #2 and
+  // docs/WORKSTREAMS/world-origin-rebasing-2026-05-01.md Drift risk
+  // *"Rebase event timing wrong relative to per-frame logic."*
+  if (system) _maybeWorldRebase(camera, scene);
 
   // ── Sky debug mode: free-look camera, render only sky scene ──
   if (window._skyDebug) {
@@ -7140,10 +7162,40 @@ function animate() {
   if (gravityWell && gravityWellVisible) {
     gravityWell.update(hudYaw);
   }
+}
+
+// Render callback — runs every RAF. Phase 1 is conservative: only the
+// renderer pass + setTime live here. State writes (camera position,
+// body positions, sky uniforms, HUD) happen inside `simStep()` above and
+// the renderer reads the state as it stands at this moment. Phase 2
+// will alpha-blend prev/curr sim state for smoothness at high refresh
+// rates; Phase 1 accepts the visible jitter at >60 Hz refresh per brief
+// AC #1 ("no interpolation yet — visible jitter at 144 Hz is acceptable,
+// will be fixed in Phase 2").
+function renderFrame(_alpha) {
+  // Sky-debug + gallery branches do their own rendering inside simStep
+  // and early-return; skip the main render in those cases so we don't
+  // overwrite their direct render calls.
+  if (window._skyDebug || galleryMode) return;
 
   retroRenderer.setTime(timer.getElapsed());
   retroRenderer.render();
 }
+
+// Drive the loop via the kit's bindToRAF. simUpdate receives stepMs
+// from the accumulator; simStep takes deltaTime in seconds for code-
+// compat with all existing dt-consuming sites. The accumulator handles
+// catch-up under load (multiple sim ticks per RAF) and skip under spare
+// time (zero ticks per RAF on high-refresh displays). Per brief AC #1.
+const _animateController = bindToRAF({
+  accumulator: _simAccumulator,
+  simUpdate: (stepMs) => {
+    timer.update();
+    simStep(stepMs / 1000);
+  },
+  render: renderFrame,
+});
+_animateController.start();
 
 // ── Handle Window Resize ──
 window.addEventListener('resize', () => retroRenderer.resize());
@@ -8231,6 +8283,9 @@ if (mobileControls) {
 // stall tracked in `well-dipper-progress.md` and addressed by moving
 // GPU work into the FOLD phase (onPrepareSystem), not here.
 retroRenderer.renderer.compile(scene, camera);
-animate();
+// Loop kickoff is handled by `_animateController.start()` invoked at
+// the binding site (see fixed-timestep accumulator wire-up earlier in
+// this file). The legacy `animate()` direct call has been removed —
+// bindToRAF schedules its own RAF chain.
 console.log('Well Dipper — Star System');
 console.log('Controls: Space=new system, Tab=next planet, 1-9=planet#, Esc=overview, O=orbits, G=gravity wells, H=toggle HUD, A=autopilot, Middle-click=free look, Click/tap=select');
