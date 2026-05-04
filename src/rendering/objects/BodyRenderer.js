@@ -328,14 +328,51 @@ export class BodyRenderer {
 
   // ── Delegate passthrough ──
 
-  update(deltaTime, ...args) {
-    if (this._delegate.update) {
-      this._delegate.update(deltaTime, ...args);
+  /**
+   * Sim-tick advance — delegates to underlying body's updateSim (Phase 3
+   * wrap decomp). Falls back to legacy `update(...)` if the delegate
+   * hasn't been migrated; logs once so the gap is visible.
+   */
+  updateSim(...args) {
+    if (this._delegate.updateSim) {
+      this._delegate.updateSim(...args);
+    } else if (this._delegate.update) {
+      // Legacy delegate — calls update() with sim dt for both halves.
+      // Render half (texture-baked time uniform) is then double-fired
+      // when updateRender runs, so a delegate that hasn't migrated will
+      // animate at 2× rate. Visible signal that migration is incomplete.
+      if (\!this._sawLegacyUpdateWarn) {
+        this._sawLegacyUpdateWarn = true;
+        console.warn('[BodyRenderer] delegate has no updateSim — legacy update() path');
+      }
+      this._delegate.update(...args);
     }
-    // Update time uniform on textured material (for animated clouds)
+  }
+
+  /**
+   * Render-tick advance — texture-baked material time uniform (animated
+   * clouds) + delegate passthrough for sub-class render-half work
+   * (Planet/Moon expose updateRender for procedural-material time
+   * uniforms).
+   */
+  updateRender(renderDt) {
+    if (this._delegate.updateRender) {
+      this._delegate.updateRender(renderDt);
+    }
+    // Texture-baked clouds shader time — render-classified per Phase 3.
     if (this._texturedMaterial?.uniforms?.time) {
-      this._texturedMaterial.uniforms.time.value += deltaTime;
+      this._texturedMaterial.uniforms.time.value += renderDt;
     }
+  }
+
+  /**
+   * Convenience orchestrator: invokes updateSim + updateRender with the
+   * same dt for both. Use the split methods for sim/render-decoupled
+   * call paths; use this for legacy callers (gallery preview mode).
+   */
+  update(deltaTime, ...args) {
+    this.updateSim(deltaTime, ...args);
+    this.updateRender(deltaTime);
   }
 
   /**
