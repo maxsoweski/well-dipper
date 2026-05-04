@@ -7074,94 +7074,12 @@ function simStep(deltaTime) {
   camera.near = 1e-9;
   camera.updateProjectionMatrix();
 
-  skyRenderer.update(camera, deltaTime);
+  // skyRenderer / lodManager / debugPanel / warpDebugHUD / targetingReticle
+  // / systemMap / gravityWell migrated to renderFrame (Phase 3 Group 3A,
+  // welldipper-fixed-timestep-migration AC #10). They're render-classified
+  // per docs/refactor-audits/fixed-timestep-migration-call-sites.md and
+  // now consume renderDt (variable real dt) instead of fixed simDt.
   warpPortal.update(deltaTime);
-  lodManager.update();
-  debugPanel.setFocus(focusIndex, focusMoonIndex);
-  debugPanel.update(deltaTime);
-
-  if (window._warpDebugHUD) {
-    const we = warpEffect;
-    const sr = skyRenderer;
-    const sfU = sr._starfieldLayer?.mesh.material.uniforms;
-    const orU = sr._originStarfieldLayer?.mesh.material.uniforms;
-    const glU = sr._glowLayer?.mesh.material.uniforms;
-    const fmt = (v, d = 2) => (v ?? 0).toFixed(d);
-    // Portal-camera separation along _tunnelForward, useful for debugging
-    // whether the camera is actually crossing the portal planes on schedule.
-    const camToPortalA = warpPortal.group.visible
-      ? camera.position.distanceTo(warpPortal.group.position).toFixed(1)
-      : '—';
-    window._warpDebugHUD.textContent =
-      'WARP DEBUG (?warpDebug)\n' +
-      (_portalLabMode ? `LAB MODE — stage: ${_portalLabState}\n` : '') +
-      `state:       ${we.state}  active=${we.isActive}\n` +
-      `progress:    ${fmt(we.progress, 3)}\n` +
-      `foldAmount:  ${fmt(we.foldAmount, 3)}\n` +
-      `hyperPhase:  ${fmt(we.hyperPhase, 3)}\n` +
-      '\n── Dual-portal ────────────\n' +
-      `portalVisible:  ${warpPortal.group.visible}\n` +
-      `traversalMode:  ${warpPortal._traversalMode}\n` +
-      `cam→PortalA:    ${camToPortalA}\n` +
-      `tunnelLength:   ${warpPortal._tunnelLength}\n` +
-      '\n── Sky layers ─────────────\n' +
-      `crossoverActive: ${sr._crossoverActive}\n` +
-      `originPresent:   ${!!sr._originStarfieldLayer}\n\n` +
-      `tunnelPhase sf=${fmt(sfU?.uTunnelPhase?.value)} glow=${fmt(glU?.uTunnelPhase?.value)}${orU ? ` orig=${fmt(orU.uTunnelPhase.value)}` : ''}\n` +
-      `crossover   sf=${fmt(sfU?.uCrossoverAlong?.value, 0)}${orU ? ` orig=${fmt(orU.uCrossoverAlong.value, 0)}` : ''}\n` +
-      `clipSide    sf=${sfU?.uClipSide?.value}${orU ? ` orig=${orU.uClipSide.value}` : ''}`;
-  }
-
-  // ── Targeting reticle (tentative hover + selected committed target) ──
-  // Refresh the selected-target descriptor each frame so its name/type/
-  // radius stay correct if the underlying system data changes. The mesh
-  // reference stays valid; only the distance moves.
-  if (_selectedTarget) {
-    // The body's mesh position updates each frame — distance recomputes
-    // inside the reticle renderer, so no need to rebuild the descriptor.
-  }
-  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning;
-  targetingReticle.enabled = _hudVisible && !!system && !warpEffect.isActive && !splashActive && !titleScreenActive && !galleryMode;
-
-  // Occlusion pass: reticles draw on a 2D overlay and don't share the depth
-  // buffer, so we analytically test each candidate reticle against the
-  // occluder list (visible planets/moons/stars built in the LOD loop above).
-  // Any reticle whose target is behind a visible body is dropped from the
-  // update — makes "see reticles through a planet" go away.
-  _visibleGhostTargets.length = 0;
-  for (let i = 0; i < _ghostTargets.length; i++) {
-    const g = _ghostTargets[i];
-    if (!_isReticleOccluded(g)) _visibleGhostTargets.push(g);
-  }
-  // Allow hover reticles during flythrough so you can preview targets
-  // without stopping autopilot. Only suppress during warp/turn.
-  const suppressHover = warpEffect.isActive || warpTarget.turning;
-  const _hoverForReticle = (suppressHover || !_hoverTarget || _isReticleOccluded(_hoverTarget)) ? null : _hoverTarget;
-  // §A8 fix: when autopilot is burning toward the selected target,
-  // skip the occlusion check. The autopilot target reticle must
-  // remain visible even if a foreground body is between camera and
-  // target — Max needs to see what we're flying toward at all times
-  // during the burn. Hover/ghost reticles keep their occlusion logic.
-  const _selectedForReticle = (_selectedTarget && (autopilotMotion.isActive || !_isReticleOccluded(_selectedTarget))) ? _selectedTarget : null;
-
-  targetingReticle.update({
-    hoverTarget: _hoverForReticle,
-    selectedTarget: _selectedForReticle,
-    ghostTargets: _visibleGhostTargets,
-  });
-  _updateCommitBurnButton();
-
-  // ── Update HUD ──
-  // During flythrough, compute yaw from camera position relative to origin
-  const hudYaw = cameraController.bypassed
-    ? Math.atan2(camera.position.x, camera.position.z)
-    : cameraController.smoothedYaw;
-  if (systemMap) {
-    systemMap.update(camera, hudYaw, focusIndex, deltaTime);
-  }
-  if (gravityWell && gravityWellVisible) {
-    gravityWell.update(hudYaw);
-  }
 }
 
 // ── Phase 2: render-time interpolation (welldipper-fixed-timestep-migration) ──
@@ -7258,10 +7176,26 @@ _onWorldRebase((offset) => {
 // directly; orbital math writes body positions directly), so the
 // interpolated values written here at render time are overwritten by
 // the next simStep — no restore step needed.
+//
+// Phase 3 (Group 3A): render-classified subsystems (skyRenderer, lodManager,
+// debugPanel, warpDebugHUD, targetingReticle, systemMap, gravityWell) run
+// here on real renderDt. Per docs/refactor-audits/fixed-timestep-migration-
+// call-sites.md. They must come AFTER the interpolation block so they read
+// the alpha-blended camera state, and BEFORE retroRenderer.render() so their
+// shader uniform writes / HUD overlays land in the same frame.
+let _lastRenderT = -1;
+
 function renderFrame(alpha) {
   // Sky-debug + gallery branches do their own rendering inside simStep
   // and early-return; skip the main render in those cases.
   if (window._skyDebug || galleryMode) return;
+
+  // Real wall-clock render delta for render-side time-based updates.
+  // Per Glenn Fiedler "Free the Physics" — render uses real dt, sim uses
+  // fixed dt. Initialized on first call to avoid a giant first-frame dt.
+  const _now = performance.now();
+  const renderDt = _lastRenderT < 0 ? 1 / 60 : Math.min((_now - _lastRenderT) / 1000, 0.1);
+  _lastRenderT = _now;
 
   if (_interpInitialized) {
     camera.position.lerpVectors(_prevCamPos, _currCamPos, alpha);
@@ -7272,6 +7206,84 @@ function renderFrame(alpha) {
         mesh.position.lerpVectors(mesh._interpPrev, mesh._interpCurr, alpha);
       }
     });
+  }
+
+  // ── Render-classified subsystem updates (migrated from simStep Phase 3) ──
+  skyRenderer.update(camera, renderDt);
+  lodManager.update();
+  debugPanel.setFocus(focusIndex, focusMoonIndex);
+  debugPanel.update(renderDt);
+
+  if (window._warpDebugHUD) {
+    const we = warpEffect;
+    const sr = skyRenderer;
+    const sfU = sr._starfieldLayer?.mesh.material.uniforms;
+    const orU = sr._originStarfieldLayer?.mesh.material.uniforms;
+    const glU = sr._glowLayer?.mesh.material.uniforms;
+    const fmt = (v, d = 2) => (v ?? 0).toFixed(d);
+    // Portal-camera separation along _tunnelForward, useful for debugging
+    // whether the camera is actually crossing the portal planes on schedule.
+    const camToPortalA = warpPortal.group.visible
+      ? camera.position.distanceTo(warpPortal.group.position).toFixed(1)
+      : '—';
+    window._warpDebugHUD.textContent =
+      'WARP DEBUG (?warpDebug)\n' +
+      (_portalLabMode ? `LAB MODE — stage: ${_portalLabState}\n` : '') +
+      `state:       ${we.state}  active=${we.isActive}\n` +
+      `progress:    ${fmt(we.progress, 3)}\n` +
+      `foldAmount:  ${fmt(we.foldAmount, 3)}\n` +
+      `hyperPhase:  ${fmt(we.hyperPhase, 3)}\n` +
+      '\n── Dual-portal ────────────\n' +
+      `portalVisible:  ${warpPortal.group.visible}\n` +
+      `traversalMode:  ${warpPortal._traversalMode}\n` +
+      `cam→PortalA:    ${camToPortalA}\n` +
+      `tunnelLength:   ${warpPortal._tunnelLength}\n` +
+      '\n── Sky layers ─────────────\n' +
+      `crossoverActive: ${sr._crossoverActive}\n` +
+      `originPresent:   ${!!sr._originStarfieldLayer}\n\n` +
+      `tunnelPhase sf=${fmt(sfU?.uTunnelPhase?.value)} glow=${fmt(glU?.uTunnelPhase?.value)}${orU ? ` orig=${fmt(orU.uTunnelPhase.value)}` : ''}\n` +
+      `crossover   sf=${fmt(sfU?.uCrossoverAlong?.value, 0)}${orU ? ` orig=${fmt(orU.uCrossoverAlong.value, 0)}` : ''}\n` +
+      `clipSide    sf=${sfU?.uClipSide?.value}${orU ? ` orig=${orU.uClipSide.value}` : ''}`;
+  }
+
+  // ── Targeting reticle (tentative hover + selected committed target) ──
+  targetingReticle.enabled = _hudVisible && !!system && !warpEffect.isActive && !splashActive && !titleScreenActive && !galleryMode;
+
+  // Occlusion pass: reticles draw on a 2D overlay and don't share the depth
+  // buffer, so we analytically test each candidate reticle against the
+  // occluder list. Any reticle whose target is behind a visible body is
+  // dropped from the update — makes "see reticles through a planet" go away.
+  _visibleGhostTargets.length = 0;
+  for (let i = 0; i < _ghostTargets.length; i++) {
+    const g = _ghostTargets[i];
+    if (!_isReticleOccluded(g)) _visibleGhostTargets.push(g);
+  }
+  // Allow hover reticles during flythrough so you can preview targets
+  // without stopping autopilot. Only suppress during warp/turn.
+  const suppressHover = warpEffect.isActive || warpTarget.turning;
+  const _hoverForReticle = (suppressHover || !_hoverTarget || _isReticleOccluded(_hoverTarget)) ? null : _hoverTarget;
+  // §A8 fix: when autopilot is burning toward the selected target, skip the
+  // occlusion check. The autopilot target reticle must remain visible even
+  // if a foreground body is between camera and target.
+  const _selectedForReticle = (_selectedTarget && (autopilotMotion.isActive || !_isReticleOccluded(_selectedTarget))) ? _selectedTarget : null;
+
+  targetingReticle.update({
+    hoverTarget: _hoverForReticle,
+    selectedTarget: _selectedForReticle,
+    ghostTargets: _visibleGhostTargets,
+  });
+  _updateCommitBurnButton();
+
+  // ── HUD (yaw + system map + gravity well) ──
+  // During flythrough, compute yaw from camera position relative to origin.
+  const hudYaw = cameraController.bypassed
+    ? Math.atan2(camera.position.x, camera.position.z)
+    : cameraController.smoothedYaw;
+  if (systemMap) {
+    systemMap.update(camera, hudYaw, focusIndex, renderDt);
+  }
+  if (gravityWell && gravityWellVisible) {
+    gravityWell.update(hudYaw);
   }
 
   retroRenderer.setTime(timer.getElapsed());
