@@ -5976,27 +5976,13 @@ function simStep(deltaTime) {
       }
     }
 
-    // ── Deep sky destination update ──
-    if (system.type && system.type !== 'star-system') {
-      if (system.destination) system.destination.update(deltaTime, camera);
-      // Navigable deep sky: update gas cloud + extra star glows
-      if (system.gasCloud) system.gasCloud.update(deltaTime, camera);
-      if (system._deepSkyGas) system._deepSkyGas.update(deltaTime, camera);
-      if (system._deepSkyStars) {
-        for (const s of system._deepSkyStars) s.update(deltaTime, camera);
-      }
-      if (system.extraStars) {
-        for (const s of system.extraStars) {
-          if (s.update) s.update(deltaTime, camera);
-          if (s.updateGlow) s.updateGlow(camera);
-        }
-      }
-      // Primary star update + glow
-      if (system.star && system.star.update) system.star.update(deltaTime, camera);
-      if (system.star && system.star.updateGlow) system.star.updateGlow(camera);
-      if (system.star2 && system.star2.update) system.star2.update(deltaTime, camera);
-      if (system.star2 && system.star2.updateGlow) system.star2.updateGlow(camera);
-    }
+    // Deep-sky visual subsystems (destination / gasCloud / _deepSkyGas /
+    // _deepSkyStars / extraStars) and the primary-star flare/glow updates
+    // migrated to renderFrame's `_updateRenderVisuals(renderDt)` (Phase 3
+    // Group 3B). Render-classified per docs/refactor-audits/fixed-timestep-
+    // migration-call-sites.md — they consume real renderDt and read the
+    // alpha-blended camera position so glow uniforms track the smooth
+    // interpolated camera, not the post-sim-step camera.
 
     // ── Star system updates (skip for deep sky) ──
     if (!system.type || system.type === 'star-system') {
@@ -6172,13 +6158,13 @@ function simStep(deltaTime) {
       }
     }
 
-    // ── Update stars (billboarding, LOD, glow) ──
-    if (system.star.update) system.star.update(deltaTime, camera);
-    system.star.updateGlow(camera);
-    if (system.star2) {
-      if (system.star2.update) system.star2.update(deltaTime, camera);
-      system.star2.updateGlow(camera);
-    }
+    // In-system StarFlare animation + glow migrated to renderFrame's
+    // `_updateRenderVisuals(renderDt)` (Phase 3 Group 3B). Star shadow
+    // uniforms used by the planet-loop above (planet/moon material
+    // shadowPlanetPos / starPos1 / starPos2) are still written here at
+    // sim-tick rate — those are sim-classified data writes feeding the
+    // shadow shader. Only the visual-only flare animation + camera-tracking
+    // glow uniforms moved to render.
 
     // ── Update asteroid belts ──
     for (const belt of system.asteroidBelts) {
@@ -7131,6 +7117,44 @@ function _forEachInterpMesh(fn) {
   }
 }
 
+// Render-side visual subsystem updates (Phase 3 Group 3B). Walks the
+// system structure and updates render-classified visuals with renderDt and
+// the alpha-blended camera position. Migrated from simStep where they ran
+// at sim-tick rate and read non-interpolated camera state — wrong for glow
+// uniforms and StarFlare billboarding which both need to track the camera
+// per render frame, not per sim tick. Per docs/refactor-audits/fixed-
+// timestep-migration-call-sites.md.
+//
+// Star shadow uniforms (planet/moon material starPos1, starPos2,
+// shadowPlanetPos, shadowPlanetRadius) are NOT touched here — those are
+// sim-side data writes that happen inside simStep's planet-loop and
+// drive the shadow shader from authoritative sim state.
+function _updateRenderVisuals(renderDt) {
+  if (!system) return;
+  // Star flare animation + glow tracking the alpha-blended camera. Fires
+  // for both star-system (single + binary primaries) and deep-sky modes
+  // (where system.star may exist as the deep-sky star representation).
+  if (system.star?.update) system.star.update(renderDt, camera);
+  if (system.star?.updateGlow) system.star.updateGlow(camera);
+  if (system.star2?.update) system.star2.update(renderDt, camera);
+  if (system.star2?.updateGlow) system.star2.updateGlow(camera);
+  // Deep-sky-only objects.
+  if (system.type && system.type !== 'star-system') {
+    if (system.destination) system.destination.update(renderDt, camera);
+    if (system.gasCloud) system.gasCloud.update(renderDt, camera);
+    if (system._deepSkyGas) system._deepSkyGas.update(renderDt, camera);
+    if (system._deepSkyStars) {
+      for (const s of system._deepSkyStars) s.update(renderDt, camera);
+    }
+    if (system.extraStars) {
+      for (const s of system.extraStars) {
+        if (s.update) s.update(renderDt, camera);
+        if (s.updateGlow) s.updateGlow(camera);
+      }
+    }
+  }
+}
+
 function _shiftInterpPrevToCurr() {
   if (!_interpInitialized) {
     _prevCamPos.copy(camera.position);
@@ -7209,6 +7233,7 @@ function renderFrame(alpha) {
   }
 
   // ── Render-classified subsystem updates (migrated from simStep Phase 3) ──
+  _updateRenderVisuals(renderDt);
   skyRenderer.update(camera, renderDt);
   lodManager.update();
   debugPanel.setFocus(focusIndex, focusMoonIndex);
