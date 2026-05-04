@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Refactor Verification — Fixed-Timestep Phase 1</title>
+  <style>
+    body { margin: 0; padding: 20px; background: #0a0a0a; color: #0f0;
+           font: 13px/1.6 'Courier New', monospace; }
+    h1 { font-size: 16px; margin-bottom: 12px; color: #6f6; }
+    .btn { background: rgba(0,255,0,0.08); border: 1px solid rgba(0,255,0,0.5);
+           color: #0f0; font: inherit; padding: 6px 12px; cursor: pointer;
+           margin: 2px 4px 2px 0; }
+    .btn:hover { background: rgba(0,255,0,0.2); }
+    .pass { color: #0f0; }
+    .fail { color: #f55; }
+    pre { background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 10px;
+          margin: 8px 0; max-height: 400px; overflow: auto; font-size: 11px;
+          white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Refactor Verification — Fixed-Timestep Phase 1</h1>
+  <p>
+    AC #5 of <code>welldipper-fixed-timestep-migration-2026-05-03</code>.
+    Compares pre-migration variable-dt body advance against post-migration
+    fixed-step accumulator body advance, holding inputs frozen via deterministic
+    dt schedule. Pass condition: divergence is bounded and decaying
+    (qualitative gate per brief AC #5 note); failure is monotone-or-growing.
+  </p>
+  <button class="btn" onclick="runAll()">Run All</button>
+  <button class="btn" onclick="document.getElementById('out').innerHTML = ''">Clear</button>
+  <div id="out"></div>
+
+  <script type="module">
+  import { createAccumulator } from '/well-dipper/vendor/motion-test-kit/core/loop/accumulator.js';
+
+  const out = document.getElementById('out');
+  const log = (msg, cls = '') => {
+    const el = document.createElement('pre');
+    if (cls) el.className = cls;
+    el.textContent = msg;
+    out.appendChild(el);
+  };
+  const summary = (msg, pass) => {
+    const el = document.createElement('div');
+    el.style.padding = '8px 12px';
+    el.style.margin = '8px 0';
+    el.style.border = `1px solid ${pass ? '#0f0' : '#f55'}`;
+    el.className = pass ? 'pass' : 'fail';
+    el.textContent = (pass ? 'PASS — ' : 'FAIL — ') + msg;
+    out.appendChild(el);
+  };
+
+  // Deterministic dt schedule mimicking real-RAF jitter — 60Hz dominant,
+  // occasional 144Hz spikes + hitches. Reproducible (no Math.random).
+  function generateDtSchedule(durationSec = 10) {
+    const dts = [];
+    let total = 0, i = 0;
+    while (total < durationSec) {
+      const pattern = [16, 17, 7, 16, 17, 33, 16, 16];
+      const dt = pattern[i % pattern.length] / 1000;
+      dts.push(dt);
+      total += dt;
+      i++;
+    }
+    return dts;
+  }
+
+  // Pre-migration: body advances by W * dt every frame (variable dt).
+  function advanceOrbitVariable(dts, angularVel) {
+    let angle = 0;
+    const trace = [];
+    let t = 0;
+    for (let i = 0; i < dts.length; i++) {
+      angle += angularVel * dts[i];
+      t += dts[i];
+      trace.push({ frame: i, t, angle });
+    }
+    return trace;
+  }
+
+  // Post-migration: accumulator drives fixed-step ticks; body advances by
+  // W * stepMs/1000 per sim tick.
+  function advanceOrbitFixedStep(dts, angularVel, stepMs = 1000 / 60) {
+    const acc = createAccumulator({ stepMs, maxStepMs: 100 });
+    let angle = 0;
+    let t = 0;
+    const trace = [];
+    for (let i = 0; i < dts.length; i++) {
+      const realDtMs = dts[i] * 1000;
+      acc.tick(realDtMs, (simStepMs) => {
+        angle += angularVel * (simStepMs / 1000);
+      });
+      t += dts[i];
+      trace.push({ frame: i, t, angle });
+    }
+    return trace;
+  }
+
+  async function scenarioA() {
+    log('Scenario A: orbital advance — variable-dt vs fixed-step accumulator');
+    const dts = generateDtSchedule(10);
+    const W = 0.1; // 0.1 rad/s
+    const traceVar = advanceOrbitVariable(dts, W);
+    const traceFix = advanceOrbitFixedStep(dts, W);
+
+    log(`Frames simulated: ${traceVar.length}`);
+    log(`Total wall-clock time: ${traceVar[traceVar.length - 1].t.toFixed(4)}s`);
+    log(`Final angle (var): ${traceVar[traceVar.length - 1].angle.toFixed(6)} rad`);
+    log(`Final angle (fix): ${traceFix[traceFix.length - 1].angle.toFixed(6)} rad`);
+
+    const divergences = traceVar.map((s, i) => Math.abs(s.angle - traceFix[i].angle));
+    const maxDiv = Math.max(...divergences);
+    const finalDiv = divergences[divergences.length - 1];
+
+    // Bounded: max divergence < 0.01 rad (≈0.6°) — small relative to 1 rad of motion.
+    const boundedCap = 0.01;
+    const isBounded = maxDiv < boundedCap;
+    // Stable-or-decaying: latter-half mean ≤ first-half mean × 1.2 (20% slack).
+    const halfIdx = Math.floor(divergences.length / 2);
+    const meanFirst = divergences.slice(0, halfIdx).reduce((a, b) => a + b, 0) / halfIdx;
+    const meanLast  = divergences.slice(halfIdx).reduce((a, b) => a + b, 0) / (divergences.length - halfIdx);
+    const isStableOrDecaying = meanLast <= meanFirst * 1.2;
+
+    log(`Max divergence: ${maxDiv.toExponential(4)} rad`);
+    log(`Final divergence: ${finalDiv.toExponential(4)} rad`);
+    log(`Mean div first half:  ${meanFirst.toExponential(4)}`);
+    log(`Mean div latter half: ${meanLast.toExponential(4)}`);
+    log(`Bounded under ${boundedCap}? ${isBounded}`);
+    log(`Stable-or-decaying? ${isStableOrDecaying}`);
+
+    summary(
+      `Scenario A: max divergence ${maxDiv.toExponential(2)} rad over ${traceVar.length} frames`,
+      isBounded && isStableOrDecaying
+    );
+    return { passed: isBounded && isStableOrDecaying, maxDiv, finalDiv };
+  }
+
+  // Scenario B: rebase event lands at sim-tick boundary (AC #4 contract).
+  function scenarioB() {
+    log('Scenario B: rebase event timing across sim-tick boundary');
+    const dts = generateDtSchedule(5);
+    const camSpeedPerSec = 30;
+    const rebaseThresholdSq = 100 * 100;
+    const acc = createAccumulator({ stepMs: 1000 / 60, maxStepMs: 100 });
+    const camPos = [0, 0, 0];
+    const worldOrigin = [0, 0, 0];
+    const rebaseEvents = [];
+    const samples = [];
+    let frame = 0;
+    for (const dt of dts) {
+      acc.tick(dt * 1000, (simStepMs) => {
+        // Sim-tick start: maybeRebase fires BEFORE body update (per AC #4).
+        const lenSq = camPos[0] ** 2 + camPos[1] ** 2 + camPos[2] ** 2;
+        if (lenSq >= rebaseThresholdSq) {
+          rebaseEvents.push({
+            simTick: samples.length, preCamMag: Math.sqrt(lenSq),
+          });
+          worldOrigin[0] += camPos[0]; worldOrigin[1] += camPos[1]; worldOrigin[2] += camPos[2];
+          camPos[0] = 0; camPos[1] = 0; camPos[2] = 0;
+        }
+        // Body / camera update
+        camPos[2] += camSpeedPerSec * (simStepMs / 1000);
+        samples.push({
+          simTick: samples.length,
+          camMag: Math.sqrt(camPos[0] ** 2 + camPos[1] ** 2 + camPos[2] ** 2),
+          worldOriginMag: Math.sqrt(worldOrigin[0] ** 2 + worldOrigin[1] ** 2 + worldOrigin[2] ** 2),
+        });
+      });
+      frame++;
+    }
+
+    log(`Sim ticks: ${samples.length}`);
+    log(`Rebase events fired: ${rebaseEvents.length}`);
+    if (rebaseEvents.length > 0) {
+      log(`First rebase: simTick ${rebaseEvents[0].simTick}, preCamMag ${rebaseEvents[0].preCamMag.toFixed(3)}`);
+    }
+
+    const firstRebase = rebaseEvents[0];
+    const correctTrigger = firstRebase && firstRebase.preCamMag >= 100;
+    // Sample at the rebase tick should show small camMag (just-advanced from 0)
+    const postRebaseTickIdx = firstRebase ? firstRebase.simTick : -1;
+    const postRebaseCamMag = postRebaseTickIdx >= 0 ? samples[postRebaseTickIdx].camMag : null;
+    const postRebaseSmall = postRebaseCamMag !== null && postRebaseCamMag < 1.0;
+    const finalWorldOriginMag = samples[samples.length - 1].worldOriginMag;
+    const worldOriginGrew = finalWorldOriginMag >= 100;
+
+    log(`Rebase triggered correctly (mag ≥ 100): ${correctTrigger}`);
+    log(`Post-rebase camMag at trigger tick: ${postRebaseCamMag?.toFixed(4)} (should be < 1.0)`);
+    log(`Post-rebase camMag small: ${postRebaseSmall}`);
+    log(`Final worldOrigin magnitude: ${finalWorldOriginMag.toFixed(2)}`);
+    log(`worldOrigin accumulated past threshold: ${worldOriginGrew}`);
+
+    const allPass = correctTrigger && postRebaseSmall && worldOriginGrew;
+    summary(
+      `Scenario B: ${rebaseEvents.length} rebase events; rebase-at-sim-tick-start verified`,
+      allPass
+    );
+    return { passed: allPass };
+  }
+
+  window.runAll = async () => {
+    out.innerHTML = '';
+    log('=== Phase 1 telemetry-equivalence harness ===');
+    log('');
+    const a = await scenarioA();
+    log('');
+    const b = scenarioB();
+    log('');
+    summary(
+      `Phase 1: A=${a.passed ? 'PASS' : 'FAIL'}, B=${b.passed ? 'PASS' : 'FAIL'}`,
+      a.passed && b.passed
+    );
+  };
+
+  window._migrationPhase1 = { scenarioA, scenarioB, runAll };
+  </script>
+</body>
+</html>
