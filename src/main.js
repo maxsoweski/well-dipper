@@ -7164,34 +7164,133 @@ function simStep(deltaTime) {
   }
 }
 
-// Render callback — runs every RAF. Phase 1 is conservative: only the
-// renderer pass + setTime live here. State writes (camera position,
-// body positions, sky uniforms, HUD) happen inside `simStep()` above and
-// the renderer reads the state as it stands at this moment. Phase 2
-// will alpha-blend prev/curr sim state for smoothness at high refresh
-// rates; Phase 1 accepts the visible jitter at >60 Hz refresh per brief
-// AC #1 ("no interpolation yet — visible jitter at 144 Hz is acceptable,
-// will be fixed in Phase 2").
-function renderFrame(_alpha) {
+// ── Phase 2: render-time interpolation (welldipper-fixed-timestep-migration) ──
+// Glenn Fiedler's "Free the Physics" pattern: sim writes authoritative
+// state at fixed rate; render reads two-state snapshots (prev + curr)
+// and interpolates by `alpha` (the accumulator's fractional position
+// between sim ticks, [0, 1]). Per brief ACs #6, #7, #8.
+//
+// Registered subjects: camera (position + quaternion) and every body
+// in system.planets (the planet mesh + each moon mesh). Stars in single-
+// star systems don't move; binary stars + asteroid belts are visible
+// but lower-priority — left for a follow-up if interpolation gaps are
+// felt-experience visible there.
+//
+// Rebase resilience: when worldOrigin shifts, all tracked positions
+// shift too (subscribed via onRebase). Without this, a rebase event
+// would produce a one-frame interpolation jump because prev = pre-rebase
+// coords, curr = post-rebase coords.
+const _prevCamPos = new THREE.Vector3();
+const _currCamPos = new THREE.Vector3();
+const _prevCamQuat = new THREE.Quaternion();
+const _currCamQuat = new THREE.Quaternion();
+const _scratchInterpQuat = new THREE.Quaternion();
+let _interpInitialized = false;
+
+// Per-mesh prev/curr lives on the mesh itself via _interpPrev / _interpCurr
+// fields (Vector3). Walking system.planets each tick to snapshot is O(N)
+// where N ≈ 30; trivial cost.
+function _ensureMeshInterp(mesh) {
+  if (!mesh._interpPrev) {
+    mesh._interpPrev = new THREE.Vector3().copy(mesh.position);
+    mesh._interpCurr = new THREE.Vector3().copy(mesh.position);
+  }
+}
+
+function _forEachInterpMesh(fn) {
+  if (!system) return;
+  if (system.star?.mesh) fn(system.star.mesh);
+  if (system.star2?.mesh) fn(system.star2.mesh);
+  if (system.planets) {
+    for (const entry of system.planets) {
+      if (entry.planet?.mesh) fn(entry.planet.mesh);
+      if (entry.moons) {
+        for (const moon of entry.moons) {
+          if (moon.mesh) fn(moon.mesh);
+        }
+      }
+    }
+  }
+}
+
+function _shiftInterpPrevToCurr() {
+  if (!_interpInitialized) {
+    _prevCamPos.copy(camera.position);
+    _currCamPos.copy(camera.position);
+    _prevCamQuat.copy(camera.quaternion);
+    _currCamQuat.copy(camera.quaternion);
+    _interpInitialized = true;
+  } else {
+    _prevCamPos.copy(_currCamPos);
+    _prevCamQuat.copy(_currCamQuat);
+  }
+  _forEachInterpMesh((mesh) => {
+    _ensureMeshInterp(mesh);
+    mesh._interpPrev.copy(mesh._interpCurr);
+  });
+}
+
+function _snapshotInterpCurrFromLive() {
+  _currCamPos.copy(camera.position);
+  _currCamQuat.copy(camera.quaternion);
+  _forEachInterpMesh((mesh) => {
+    _ensureMeshInterp(mesh);
+    mesh._interpCurr.copy(mesh.position);
+  });
+}
+
+// Subscribe to rebase events so interpolation snapshots stay coherent
+// across coordinate-frame shifts. Without this, a rebase between sim
+// ticks would produce a visible interpolation jump.
+_onWorldRebase((offset) => {
+  _prevCamPos.sub(offset);
+  _currCamPos.sub(offset);
+  _forEachInterpMesh((mesh) => {
+    _ensureMeshInterp(mesh);
+    mesh._interpPrev.sub(offset);
+    mesh._interpCurr.sub(offset);
+  });
+});
+
+// Render callback — runs every RAF. Reads prev/curr snapshots and lerps
+// to alpha for camera + body positions; slerps for camera quaternion;
+// then renders. Sim writes are absolute (autopilotMotion writes camera
+// directly; orbital math writes body positions directly), so the
+// interpolated values written here at render time are overwritten by
+// the next simStep — no restore step needed.
+function renderFrame(alpha) {
   // Sky-debug + gallery branches do their own rendering inside simStep
-  // and early-return; skip the main render in those cases so we don't
-  // overwrite their direct render calls.
+  // and early-return; skip the main render in those cases.
   if (window._skyDebug || galleryMode) return;
+
+  if (_interpInitialized) {
+    camera.position.lerpVectors(_prevCamPos, _currCamPos, alpha);
+    _scratchInterpQuat.copy(_prevCamQuat).slerp(_currCamQuat, alpha);
+    camera.quaternion.copy(_scratchInterpQuat);
+    _forEachInterpMesh((mesh) => {
+      if (mesh._interpPrev && mesh._interpCurr) {
+        mesh.position.lerpVectors(mesh._interpPrev, mesh._interpCurr, alpha);
+      }
+    });
+  }
 
   retroRenderer.setTime(timer.getElapsed());
   retroRenderer.render();
 }
 
-// Drive the loop via the kit's bindToRAF. simUpdate receives stepMs
-// from the accumulator; simStep takes deltaTime in seconds for code-
-// compat with all existing dt-consuming sites. The accumulator handles
-// catch-up under load (multiple sim ticks per RAF) and skip under spare
-// time (zero ticks per RAF on high-refresh displays). Per brief AC #1.
+// Drive the loop via the kit's bindToRAF. simUpdate's wrapper handles
+// the prev/curr snapshot swap that Phase 2's interpolation depends on:
+// BEFORE simStep, prev ← curr (sim is about to advance state); AFTER
+// simStep, curr ← live state (the just-advanced authoritative values).
+// renderFrame runs every RAF and reads (prev, curr) + alpha to produce
+// smooth motion at refresh rates above the 60 Hz sim tick.
 const _animateController = bindToRAF({
   accumulator: _simAccumulator,
   simUpdate: (stepMs) => {
+    _shiftInterpPrevToCurr();
     timer.update();
     simStep(stepMs / 1000);
+    _snapshotInterpCurrFromLive();
   },
   render: renderFrame,
 });
