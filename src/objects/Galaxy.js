@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { simRandom } from '../core/SimRandom.js';
 
 /**
  * Galaxy — renders galaxies and star clusters as a cloud of point sprites.
@@ -233,7 +234,7 @@ export class Galaxy {
 
     if (candidates.length === 0) return null;
 
-    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const pick = candidates[Math.floor(simRandom() * candidates.length)];
     const p = pick * 3;
     _worldPos.set(positions[p], positions[p + 1], positions[p + 2]);
     this.mesh.localToWorld(_worldPos);

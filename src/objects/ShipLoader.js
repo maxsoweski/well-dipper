@@ -1,4 +1,5 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { simRandom } from '../core/SimRandom.js';
 
 const SHIPS_BASE = 'assets/ships/';
 const loader = new GLTFLoader();
@@ -56,7 +57,7 @@ export async function loadShipModel(archetype, index, rng) {
 
   const entries = manifest[archetype];
   if (index === undefined) {
-    const r = rng ? rng() : Math.random();
+    const r = rng ? rng() : simRandom();
     index = Math.floor(r * entries.length);
   }
   index = Math.min(index, entries.length - 1);

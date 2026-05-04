@@ -64,6 +64,7 @@ import {
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
 import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
 import { _advanceSimClock } from './core/SimClock.js';
+import { simRandom } from './core/SimRandom.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
@@ -3657,19 +3658,19 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     // Normal mode: set up hero shot camera
     if (planets.length > 0) {
       // Randomly focus a planet or moon
-      const heroIndex = Math.floor(Math.random() * planets.length);
+      const heroIndex = Math.floor(simRandom() * planets.length);
       const hero = planets[heroIndex];
 
       let heroMoonIndex = -1;
-      if (hero.moons.length > 0 && Math.random() < 0.3) {
-        heroMoonIndex = Math.floor(Math.random() * hero.moons.length);
+      if (hero.moons.length > 0 && simRandom() < 0.3) {
+        heroMoonIndex = Math.floor(simRandom() * hero.moons.length);
       }
 
-      const yawOffset = (Math.random() - 0.5) * 0.25;
+      const yawOffset = (simRandom() - 0.5) * 0.25;
       cameraController.setTarget(hero.planet.mesh.position.clone());
       cameraController.yaw = hero.orbitAngle + yawOffset;
       cameraController.smoothedYaw = cameraController.yaw;
-      cameraController.pitch = 0.08 + Math.random() * 0.12;
+      cameraController.pitch = 0.08 + simRandom() * 0.12;
       cameraController.smoothedPitch = cameraController.pitch;
       cameraController.autoRotateActive = true;
 
@@ -3691,7 +3692,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       focusIndex = -1;
       focusMoonIndex = -1;
       cameraController.setTarget(new THREE.Vector3(0, 0, 0));
-      cameraController.yaw = Math.random() * Math.PI * 2;
+      cameraController.yaw = simRandom() * Math.PI * 2;
       cameraController.smoothedYaw = cameraController.yaw;
       cameraController.pitch = 0.1;
       cameraController.smoothedPitch = cameraController.pitch;
@@ -5035,7 +5036,7 @@ function startFlythrough() {
   autoNav.start();
 
   // Pick a random starting stop from the tour queue
-  const startIdx = Math.floor(Math.random() * autoNav.queue.length);
+  const startIdx = Math.floor(simRandom() * autoNav.queue.length);
   autoNav.currentIndex = startIdx;
 
   const firstStop = autoNav.getCurrentStop();

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VelocityBlend } from './VelocityBlend.js';
+import { simRandom } from '../core/SimRandom.js';
 
 /**
  * RETIRE PENDING (2026-04-25, Director ruling on the V1 STATION-hold
@@ -948,7 +949,7 @@ export class NavigationSubsystem {
       this._arrivalDist = this._travelToOrbitDist;
       this._arrivalPitch = entryPitch;
       this._arrivalCaptureDir = captureDir;
-      this._arrivalYawSpeed = 0.25 + Math.random() * 0.15;
+      this._arrivalYawSpeed = 0.25 + simRandom() * 0.15;
     }
 
     const remDist = this._hermiteStartPos.distanceTo(_v1);
@@ -1085,11 +1086,11 @@ export class NavigationSubsystem {
   // ════════════════════════════════════════════════════════════════════════
 
   _randomizeOrbit() {
-    this.orbitDirection = Math.random() < 0.5 ? 1 : -1;
-    this.orbitYawSpeed = 0.35 + Math.random() * 0.15;
-    this.orbitPitchPhase = Math.random() * Math.PI * 2;
-    this.orbitDistPhase = Math.random() * Math.PI * 2;
-    this.orbitPitch = 0.09 + Math.random() * 0.17;
+    this.orbitDirection = simRandom() < 0.5 ? 1 : -1;
+    this.orbitYawSpeed = 0.35 + simRandom() * 0.15;
+    this.orbitPitchPhase = simRandom() * Math.PI * 2;
+    this.orbitDistPhase = simRandom() * Math.PI * 2;
+    this.orbitPitch = 0.09 + simRandom() * 0.17;
   }
 
   _ease(t) {

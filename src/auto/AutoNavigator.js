@@ -1,3 +1,5 @@
+import { simRandom } from '../core/SimRandom.js';
+
 /**
  * AutoNavigator — autopilot mode that tours the star system.
  *
@@ -122,7 +124,7 @@ export class AutoNavigator {
         bodyRef: null,
         orbitDistance: system._navRadius * 0.9,  // 90% of structure = overview (far enough to see the whole nebula/cluster)
         bodyRadius: system._navRadius * 0.05,    // prevents camera from getting too close
-        linger: 12 + Math.random() * 5,          // 12-17s overview
+        linger: 12 + simRandom() * 5,          // 12-17s overview
         _isOverview: true,                        // flag for reference
       });
     }
@@ -135,7 +137,7 @@ export class AutoNavigator {
         bodyRef: null,       // populated by populateNavigableQueueRefs
         orbitDistance: 0,
         bodyRadius: 0,
-        linger: 30 + Math.random() * 10,  // 30-40s per star
+        linger: 30 + simRandom() * 10,  // 30-40s per star
       });
     }
   }

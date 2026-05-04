@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { simRandom } from '../core/SimRandom.js';
 
 /**
  * ShipChoreographer — the ship-axis layer on top of `NavigationSubsystem`.
@@ -596,9 +597,9 @@ export class ShipChoreographer {
     }
 
     // Randomize per-axis phases so consecutive events don't pattern-match
-    this._pitchPhase = Math.random() * TWO_PI;
-    this._yawPhase   = Math.random() * TWO_PI;
-    this._rollPhase  = Math.random() * TWO_PI;
+    this._pitchPhase = simRandom() * TWO_PI;
+    this._yawPhase   = simRandom() * TWO_PI;
+    this._rollPhase  = simRandom() * TWO_PI;
   }
 
   // ── Debug hooks (bypass all gates) ──

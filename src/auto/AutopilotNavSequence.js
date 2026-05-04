@@ -15,6 +15,7 @@
  */
 
 import { simClockMs } from '../core/SimClock.js';
+import { simRandom } from '../core/SimRandom.js';
 
 // ── Navigation styles with weights ──
 // Higher weight = more likely to be picked. Weighted random, not rotation.
@@ -129,7 +130,7 @@ export class AutopilotNavSequence {
     if (this._soundEngine) this._soundEngine.play('navDrill0');
 
     // Pause at galaxy (2-3s)
-    this._delay(2000 + Math.random() * 1000, () => this._drillToSector(dest));
+    this._delay(2000 + simRandom() * 1000, () => this._drillToSector(dest));
   }
 
   // ── Style: Sector Hop (skip galaxy, start at sector level) ──
@@ -146,7 +147,7 @@ export class AutopilotNavSequence {
     if (this._soundEngine) this._soundEngine.play('navDrill1');
 
     // Pause at sector (1.5-2.5s), then hover+drill to region
-    this._delay(1500 + Math.random() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
+    this._delay(1500 + simRandom() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
   }
 
   // ── Style: Region Browse (start at region level) ──
@@ -169,7 +170,7 @@ export class AutopilotNavSequence {
     if (this._soundEngine) this._soundEngine.play('navDrill2');
 
     // Pause at region (1.5-2s), then hover+drill to column
-    this._delay(1500 + Math.random() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
+    this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
   }
 
   // ── Style: Column Scroll (open column, scroll Y, pick star) ──
@@ -184,9 +185,9 @@ export class AutopilotNavSequence {
       if (this._aborted) return;
 
       // Scroll Y axis for 3-5 seconds
-      const scrollDuration = 3000 + Math.random() * 2000;
-      const scrollDir = Math.random() > 0.5 ? 1 : -1; // up or down
-      const scrollSpeed = (0.0002 + Math.random() * 0.0003) * scrollDir; // kpc per 50ms
+      const scrollDuration = 3000 + simRandom() * 2000;
+      const scrollDir = simRandom() > 0.5 ? 1 : -1; // up or down
+      const scrollSpeed = (0.0002 + simRandom() * 0.0003) * scrollDir; // kpc per 50ms
 
       console.log(`[NAV-SEQ] Scrolling ${scrollDir > 0 ? 'up' : 'down'} for ${(scrollDuration / 1000).toFixed(1)}s`);
 
@@ -251,7 +252,7 @@ export class AutopilotNavSequence {
       if (this._soundEngine) this._soundEngine.play('navDrill1');
 
       // Pause at sector level (1.5-2.5s)
-      this._delay(1500 + Math.random() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
+      this._delay(1500 + simRandom() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
     });
   }
 
@@ -284,7 +285,7 @@ export class AutopilotNavSequence {
       if (this._soundEngine) this._soundEngine.play('navDrill2');
 
       // Pause at region (1.5-2s), then hover target tile and drill to column
-      this._delay(1500 + Math.random() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
+      this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
     });
   }
 
@@ -337,7 +338,7 @@ export class AutopilotNavSequence {
 
       console.log(`[NAV-SEQ] Drill anim started → level 3, waiting for stars...`);
       // Wait for stars to load, then select
-      this._delay(2000 + Math.random() * 500, () => this._selectStar(dest));
+      this._delay(2000 + simRandom() * 500, () => this._selectStar(dest));
     });
   }
 
@@ -402,7 +403,7 @@ export class AutopilotNavSequence {
       return da - db;
     });
     const pool = Math.min(8, sorted.length);
-    const pick = sorted[Math.floor(Math.random() * pool)];
+    const pick = sorted[Math.floor(simRandom() * pool)];
 
     console.log(`[NAV-SEQ] Selected star: ${pick.name} (${pick.spectral})`);
 
@@ -421,7 +422,7 @@ export class AutopilotNavSequence {
     if (this._soundEngine) this._soundEngine.play('navDrill4');
 
     // Pause at system view then warp
-    this._delay(2000 + Math.random() * 500, () => this._initiateWarp(pick));
+    this._delay(2000 + simRandom() * 500, () => this._initiateWarp(pick));
   }
 
   _initiateWarp(star) {
@@ -480,7 +481,7 @@ export class AutopilotNavSequence {
   // ── Style picker ──
 
   _pickStyle() {
-    let roll = Math.random() * TOTAL_WEIGHT;
+    let roll = simRandom() * TOTAL_WEIGHT;
     for (const style of NAV_STYLES) {
       roll -= style.weight;
       if (roll <= 0) {
@@ -488,7 +489,7 @@ export class AutopilotNavSequence {
         if (style.name === this._lastStyle && NAV_STYLES.length > 1) {
           // Pick any other style
           const others = NAV_STYLES.filter(s => s.name !== this._lastStyle);
-          return others[Math.floor(Math.random() * others.length)].name;
+          return others[Math.floor(simRandom() * others.length)].name;
         }
         return style.name;
       }
@@ -532,7 +533,7 @@ export class AutopilotNavSequence {
 
     if (!dest) {
       const angle = Math.atan2(pz, px) + Math.PI;
-      const R = 6 + Math.random() * 4;
+      const R = 6 + simRandom() * 4;
       dest = { x: R * Math.cos(angle), z: R * Math.sin(angle), y: 0, label: 'Far Side' };
     }
 
@@ -547,8 +548,8 @@ export class AutopilotNavSequence {
     const pz = this._playerPos.z || 0;
     const py = this._playerPos.y || 0;
     // Nearby: within 0.5-2 kpc, random direction
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 0.5 + Math.random() * 1.5;
+    const angle = simRandom() * Math.PI * 2;
+    const dist = 0.5 + simRandom() * 1.5;
     return {
       x: px + dist * Math.cos(angle),
       z: pz + dist * Math.sin(angle),
@@ -567,10 +568,10 @@ export class AutopilotNavSequence {
         if (arms.length === 0) return this._fallback(px, pz);
         this._armIndex = ((this._armIndex ?? -1) + 1) % arms.length;
         const arm = arms[this._armIndex];
-        const R = 2 + Math.random() * 11;
+        const R = 2 + simRandom() * 11;
         const k = 1 / Math.tan(0.22);
         const theta = k * Math.log(R / 4.0) + arm.offset;
-        const scatter = (Math.random() - 0.5) * 2.0;
+        const scatter = (simRandom() - 0.5) * 2.0;
         return {
           x: R * Math.cos(theta) + scatter * Math.sin(theta),
           z: R * Math.sin(theta) - scatter * Math.cos(theta),
@@ -578,24 +579,24 @@ export class AutopilotNavSequence {
         };
       }
       case 'core': {
-        const a = Math.random() * Math.PI * 2;
-        const R = 0.5 + Math.random() * 2.0;
+        const a = simRandom() * Math.PI * 2;
+        const R = 0.5 + simRandom() * 2.0;
         return { x: R * Math.cos(a), z: R * Math.sin(a), y: 0, label: 'Galactic Core' };
       }
       case 'rim': {
-        const a = Math.random() * Math.PI * 2;
-        const R = 12 + Math.random() * 2;
+        const a = simRandom() * Math.PI * 2;
+        const R = 12 + simRandom() * 2;
         return { x: R * Math.cos(a), z: R * Math.sin(a), y: 0, label: 'Galactic Rim' };
       }
       case 'vertical': {
-        const a = Math.random() * Math.PI * 2;
-        const R = 4 + Math.random() * 6;
-        const y = (Math.random() > 0.5 ? 1 : -1) * (0.15 + Math.random() * 0.3);
+        const a = simRandom() * Math.PI * 2;
+        const R = 4 + simRandom() * 6;
+        const y = (simRandom() > 0.5 ? 1 : -1) * (0.15 + simRandom() * 0.3);
         return { x: R * Math.cos(a), z: R * Math.sin(a), y, label: `${y > 0 ? 'Above' : 'Below'} the Disk` };
       }
       case 'opposite': {
-        const a = Math.atan2(pz, px) + Math.PI + (Math.random() - 0.5) * 0.8;
-        const R = Math.max(2, Math.min(13, Math.sqrt(px * px + pz * pz) + (Math.random() - 0.5) * 6));
+        const a = Math.atan2(pz, px) + Math.PI + (simRandom() - 0.5) * 0.8;
+        const R = Math.max(2, Math.min(13, Math.sqrt(px * px + pz * pz) + (simRandom() - 0.5) * 6));
         return { x: R * Math.cos(a), z: R * Math.sin(a), y: 0, label: 'Far Side' };
       }
       default: return this._fallback(px, pz);
@@ -603,8 +604,8 @@ export class AutopilotNavSequence {
   }
 
   _fallback(px, pz) {
-    const a = Math.random() * Math.PI * 2;
-    const R = 3 + Math.random() * 8;
+    const a = simRandom() * Math.PI * 2;
+    const R = 3 + simRandom() * 8;
     return { x: R * Math.cos(a), z: R * Math.sin(a), y: 0, label: 'Deep Space' };
   }
 
