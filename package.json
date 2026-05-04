@@ -11,7 +11,9 @@
     "generate-glow": "node scripts/generate-galaxy-glow.mjs",
     "generate-glow:test": "node scripts/generate-galaxy-glow.mjs --test",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify-golden": "node tests/golden-trajectories/run-golden.mjs",
+    "rebless-golden": "node tests/golden-trajectories/run-golden.mjs --record"
   },
   "devDependencies": {
     "pngjs": "^7.0.0",
