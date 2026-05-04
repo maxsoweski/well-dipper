@@ -276,3 +276,41 @@ would jump rendered camera position.
 Each of these gets a per-row Tester ruling at Phase 3 commit. The
 brief's AC #2 is satisfied by this audit being committed; per-site
 sign-off happens during Phase 3 execution.
+
+## Parking-lot — classification gaps deferred (Phase 3 closeout 2026-05-04)
+
+These sites are inside the accumulator's callbacks (so AC #10's
+"every consuming line is either inside the simUpdate callback or
+the render(alpha) callback" verifiable PASSes), but classification-
+pure migration is deferred. Functionally indistinguishable from
+correctly-classified state under unpaused real-time sim — visual
+behavior is identical. Listed for completeness; not blocking AC #10.
+
+1. **Gallery-mode + sky-debug-mode whole-branch** in simStep
+   (`src/main.js:5903-5946`). Currently early-return from simStep with
+   their own `retroRenderer.render()` calls. Classification: both
+   modes are render-class (visual preview / free-look camera, no sim
+   physics). Move would be: extract mode-handlers in renderFrame,
+   make simStep a no-op when in those modes. Pre-existing latent bug
+   in gallery path (`obj.update(deltaTime, camera)` at line 5933
+   passes `camera` as `celestialDt` arg → NaN rotation) is OUT OF
+   SCOPE and tracked separately.
+
+2. **`warpTarget.blinkTimer += deltaTime`** at `src/main.js:6362`
+   (warp-target turn-loop). Visual blink at 2 Hz wall-clock —
+   `Math.floor(blinkTimer * 4) % 2` clamps to 2 Hz regardless of dt
+   feed. Functionally equivalent under sim or render dt. Drives
+   `retroRenderer.setTargetUniforms` which is render-side. Move
+   would require splitting the warp-target turn block.
+
+3. **`_labArrivalElapsed += deltaTime`** at `src/main.js:6708` and
+   **`_portalLabAlignElapsed += deltaTime`** at `src/main.js:6725`.
+   Drive lerps over a duration in lab/debug modes. Functionally
+   equivalent under sim or render dt — the lerp completes in the same
+   wall-clock duration either way.
+
+These three (1, 2+3) are independent — items 2+3 are trivial 1-line
+moves; item 1 is a mode-handler refactor. All can be picked up in a
+follow-up sub-workstream (or as cleanup before Phase 4 begins, since
+none affect Phase 4's seeded-RNG / input-replay / golden-trajectory
+work).
