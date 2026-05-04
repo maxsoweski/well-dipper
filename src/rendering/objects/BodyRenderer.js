@@ -341,7 +341,7 @@ export class BodyRenderer {
       // Render half (texture-baked time uniform) is then double-fired
       // when updateRender runs, so a delegate that hasn't migrated will
       // animate at 2× rate. Visible signal that migration is incomplete.
-      if (\!this._sawLegacyUpdateWarn) {
+      if (!this._sawLegacyUpdateWarn) {
         this._sawLegacyUpdateWarn = true;
         console.warn('[BodyRenderer] delegate has no updateSim — legacy update() path');
       }
