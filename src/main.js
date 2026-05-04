@@ -64,7 +64,12 @@ import {
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
 import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
 import { _advanceSimClock } from './core/SimClock.js';
-import { simRandom } from './core/SimRandom.js';
+import { simRandom, simRandomSeed } from './core/SimRandom.js';
+import {
+  initRecording, initReplay, recordingTick, replayTickPre,
+  downloadRecording, makeWelldipperApplyEvent, isRecordingActive,
+  isReplayActive,
+} from './core/InputReplay.js';
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
@@ -7342,18 +7347,38 @@ function renderFrame(alpha) {
 // simStep, curr ← live state (the just-advanced authoritative values).
 // renderFrame runs every RAF and reads (prev, curr) + alpha to produce
 // smooth motion at refresh rates above the 60 Hz sim tick.
+// Force SimRandom init so the recorder + replay machinery can capture
+// the seed before any sim-side code runs.
+simRandom();
+const _resolvedSimSeed = simRandomSeed();
+const _stepMsForRecord = 1000 / 60;
+
+initRecording({ rngSeed: _resolvedSimSeed, stepMs: _stepMsForRecord });
+const _replayApplyEvent = makeWelldipperApplyEvent(_heldKeys);
+// Replay init is async (fetches the JSON). Start the loop only after
+// replay frame-0 events (rngSeed restore) have applied — otherwise the
+// first sim ticks run with the wrong seed.
+const _replayReady = initReplay(_replayApplyEvent).catch((err) => {
+  console.error('[InputReplay] replay init failed:', err);
+  return false;
+});
+
 const _animateController = bindToRAF({
   accumulator: _simAccumulator,
   simUpdate: (stepMs) => {
+    // AC #14 sequencing: replay events for the upcoming frame fire
+    // BEFORE the sim tick; recorder advances frame counter AFTER.
+    replayTickPre();
     _advanceSimClock(stepMs);
     _shiftInterpPrevToCurr();
     timer.update();
     simStep(stepMs / 1000);
     _snapshotInterpCurrFromLive();
+    recordingTick();
   },
   render: renderFrame,
 });
-_animateController.start();
+_replayReady.then(() => _animateController.start());
 
 // ── Handle Window Resize ──
 window.addEventListener('resize', () => retroRenderer.resize());
@@ -7363,6 +7388,13 @@ window.addEventListener('keydown', (e) => {
   _heldKeys.add(e.key);
   // Also track e.code so WASD works reliably regardless of Shift state
   _heldKeys.add(e.code);
+
+  // F9: dump active input recording (AC #14 ?recordInput=1 mode).
+  if (e.code === 'F9' && isRecordingActive()) {
+    downloadRecording();
+    e.preventDefault();
+    return;
+  }
 
   // K key: toggle keybinds overlay (works always — title, gameplay, warp)
   if (e.code === 'KeyK') {
