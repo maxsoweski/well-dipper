@@ -175,6 +175,18 @@ export function captureEntrySnapshot(scenarioName) {
       isActive: !!window._autopilotMotion?.isActive,
       enabled: !!window._autopilotEnabled,
       autoNavActive: !!window._autoNav?.isActive,
+      // V1 motion controller's body-lock surface. navSubsystem.bodyRef
+      // is the legacy-nav-driven surface and stays null in V1 mode;
+      // _autopilotMotion._target is V1. Capture identity (name may be
+      // empty for auto-generated planet meshes) + existence + position
+      // so predicates can verify body lock structurally.
+      targetBodyName: window._autopilotMotion?._target?.name ?? null,
+      targetBodyExists: !!window._autopilotMotion?._target,
+      targetBodyPos: (() => {
+        const t = window._autopilotMotion?._target;
+        if (!t?.position) return null;
+        return { x: t.position.x, y: t.position.y, z: t.position.z };
+      })(),
       lastTelemetry: window._autopilot?.telemetry?.samples?.at?.(-1) ?? null,
     })),
     warp: _safeRead(() => ({
@@ -192,7 +204,9 @@ export function captureEntrySnapshot(scenarioName) {
     overlays: _overlayRegistry ? _overlayRegistry.snapshot() : null,
     state: _safeRead(() => window._getState?.()),
     shipWorld: _safeRead(() => {
-      const cam = window._scene?.children?.find?.((c) => c.isCamera) || null;
+      // window._cam is the camera (debug-exposed in main.js:126). Camera is
+      // NOT in scene.children. Read it directly.
+      const cam = window._cam;
       return cam?.position ? { x: cam.position.x, y: cam.position.y, z: cam.position.z } : null;
     }),
   };
@@ -260,15 +274,27 @@ function _lockFirstPlanet() {
 }
 
 export async function setupScenario1Sol() {
-  // Warp-from-Sol: Sol loaded, target locked, ship near origin, warp idle.
+  // Warp-from-Sol: Sol loaded, autopilot tour active locked on first
+  // planet (Earth in Sol's planet sequence), ship near origin, warp idle.
+  // jumpToPlanet is a no-op when autoNav is inactive — start the tour
+  // first so the body lock takes effect. Max presses Space to initiate
+  // the warp.
   if (typeof window._lab?.enterSol !== 'function') {
     console.warn('[LabMode] scenario 1: window._lab.enterSol unavailable');
     return captureEntrySnapshot('warp-from-sol');
   }
   window._lab.enterSol();
   await _waitFor(() => window._lab.isInSystem());
-  _lockFirstPlanet();
-  // Don't trigger warp — Max presses Space to commit.
+  if (typeof window._lab?.beginAutopilotTour === 'function') {
+    window._lab.beginAutopilotTour();
+  }
+  await _waitFor(() => window._autoNav?.isActive === true, 2000);
+  if (typeof window._autoNav?.jumpToPlanet === 'function') {
+    try { window._autoNav.jumpToPlanet(0); } catch (e) {
+      console.warn('[LabMode] scenario 1: jumpToPlanet(0) threw -', e);
+    }
+  }
+  await _waitFor(() => !!window._navSubsystem?.bodyRef, 2000);
   return captureEntrySnapshot('warp-from-sol');
 }
 
