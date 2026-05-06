@@ -1607,6 +1607,65 @@ warpPortal.onTraversal = async (mode) => {
 
 window._warpPortal = warpPortal;  // DEBUG: expose for console testing
 window._warpEffect = warpEffect;  // DEBUG: expose warp state + .start(dir) for console/Playwright
+
+// Lab-mode debug surface (welldipper-lab-mode-2026-05-05). Wraps module-
+// private bootstrap functions (_debugEnterKnownSystem, splash dismiss,
+// etc.) so LabMode.js scenarios can drive deterministic state setup
+// through documented surfaces only. Per the lab-mode brief Drift risk #4,
+// this is the explicit "ADD it to the debug surface" path; scenarios
+// MUST NOT reach around it.
+window._lab = {
+  /** Skip splash + intro and land in Sol immediately. Idempotent. */
+  enterSol() {
+    if (splashActive || titleScreenActive) {
+      const splash = document.getElementById('splash-screen');
+      if (splash) splash.style.display = 'none';
+      const titleEl = document.getElementById('title-screen');
+      if (titleEl) titleEl.style.display = 'none';
+      splashActive = false;
+      titleScreenActive = false;
+      if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+    }
+    const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
+    const knownSol = KnownSystems.findAt(solPos);
+    if (knownSol) {
+      _debugEnterKnownSystem(knownSol, solPos);
+      return { ok: true, name: knownSol.name || 'Sol' };
+    }
+    return { ok: false, reason: 'KnownSystems.findAt(Sol) returned null' };
+  },
+
+  /** Whether the in-system gameplay loop is active (post-splash, post-title). */
+  isInSystem() {
+    return !splashActive && !titleScreenActive && !!system;
+  },
+
+  /** Stop autopilot + autopilotMotion in one call. Used by scenario 5. */
+  stopAutopilot() {
+    if (autoNav.isActive) stopFlythrough();
+    if (autopilotMotion.isActive) autopilotMotion.stop();
+    _autopilotEnabled = false;
+  },
+
+  /** Begin autopilot from current position. Returns the queue length. */
+  beginAutopilotTour() {
+    if (!system) return { ok: false, reason: 'no system loaded — call enterSol() first' };
+    idleTimer = 0;
+    startFlythrough();
+    return { ok: !!autoNav.isActive };
+  },
+
+  /** Currently-loaded system metadata. */
+  systemInfo() {
+    if (!system) return null;
+    return {
+      name: _currentSystemName,
+      hasPlanets: !!(system.planets && system.planets.length),
+      planetCount: system.planets?.length ?? 0,
+      destinationName: system?.destination?.data?.name ?? null,
+    };
+  },
+};
 window._skyRenderer = skyRenderer;  // DEBUG: inspect origin/destination layers during crossover
 // NOTE: warpTarget + commitSelection are exposed further down in the file,
 // AFTER their declarations (they're in the TDZ here and trying to read them

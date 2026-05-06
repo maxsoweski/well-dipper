@@ -211,34 +211,193 @@ function _safeRead(fn) {
   try { return fn(); } catch { return null; }
 }
 
-// ─── Scenario stubs (Phase 2 will implement actual setup logic) ─────────
+// ─── Phase 2 — scenario implementations ──────────────────────────────────
+//
+// Each scenario uses the documented window._lab debug surface in main.js
+// + window._autoNav / _warpEffect / _autopilotMotion exposures. Async
+// scenarios poll for state convergence via _waitFor; the snapshot capture
+// fires AFTER state has converged (or after timeout, whichever first).
 
-export function setupScenario1Sol() {
-  // TODO Phase 2: load Sol, lock Earth as warp target, position ship near origin.
+const DEFAULT_TIMEOUT_MS = 4000;
+const POLL_MS = 50;
+
+/**
+ * Poll predicate at POLL_MS intervals; resolve when truthy or after timeoutMs.
+ * Resolves regardless — never rejects, so callers can capture a snapshot
+ * even if the scenario didn't fully converge (the snapshot itself captures
+ * what state IS, not what the scenario hoped for).
+ *
+ * @returns {Promise<{ converged: boolean, elapsedMs: number }>}
+ */
+function _waitFor(predicate, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      let ok = false;
+      try { ok = !!predicate(); } catch { ok = false; }
+      if (ok) { resolve({ converged: true, elapsedMs: performance.now() - t0 }); return; }
+      if (performance.now() - t0 >= timeoutMs) {
+        resolve({ converged: false, elapsedMs: performance.now() - t0 });
+        return;
+      }
+      setTimeout(tick, POLL_MS);
+    };
+    tick();
+  });
+}
+
+/**
+ * Lock an autopilot tour-stop without starting motion. Returns the planet
+ * index used (0 = first planet) or null if no planets available.
+ */
+function _lockFirstPlanet() {
+  const sysInfo = window._lab?.systemInfo?.();
+  if (!sysInfo?.planetCount) return null;
+  if (typeof window._autoNav?.jumpToPlanet === 'function') {
+    try { window._autoNav.jumpToPlanet(0); } catch { /* may fail if autopilot inactive */ }
+  }
+  return 0;
+}
+
+export async function setupScenario1Sol() {
+  // Warp-from-Sol: Sol loaded, target locked, ship near origin, warp idle.
+  if (typeof window._lab?.enterSol !== 'function') {
+    console.warn('[LabMode] scenario 1: window._lab.enterSol unavailable');
+    return captureEntrySnapshot('warp-from-sol');
+  }
+  window._lab.enterSol();
+  await _waitFor(() => window._lab.isInSystem());
+  _lockFirstPlanet();
+  // Don't trigger warp — Max presses Space to commit.
   return captureEntrySnapshot('warp-from-sol');
 }
-export function setupScenario2Far() {
-  // TODO Phase 2: position ship at >=10000 scene units, lock Sol-system body.
+
+export async function setupScenario2Far() {
+  // Warp-from-far: Sol loaded + camera teleported to a far position
+  // (>= 10000 scene units from origin) so the warp scenario crosses
+  // REBASE_THRESHOLD_SQ during HYPER. World-origin rebase fires at ~100
+  // units; bumping to 12000 puts the ship well past several rebase cycles
+  // worth of distance in the un-rebased frame. The rebase system will
+  // eventually pull the camera back; capturing snapshot quickly so we
+  // observe the far state.
+  if (typeof window._lab?.enterSol !== 'function') {
+    return captureEntrySnapshot('warp-from-far');
+  }
+  window._lab.enterSol();
+  await _waitFor(() => window._lab.isInSystem());
+  const cam = window._cam;
+  if (cam?.position) {
+    cam.position.set(12000, 0, -3000);
+    if (typeof cam.updateMatrixWorld === 'function') cam.updateMatrixWorld(true);
+  }
+  _lockFirstPlanet();
   return captureEntrySnapshot('warp-from-far');
 }
-export function setupScenario3MidCruise() {
-  // TODO Phase 2: start autopilot leg, advance to mid-CRUISE.
+
+export async function setupScenario3MidCruise() {
+  // Mid-CRUISE on autopilot leg: load Sol, begin autopilot, wait for the
+  // V1 motion controller to enter CRUISE phase. AutopilotMotion exposes
+  // _phase via prototype (currentPhase) but our snapshot reads _phase
+  // directly per the brief's published-surface convention.
+  if (typeof window._lab?.enterSol !== 'function') {
+    return captureEntrySnapshot('mid-cruise');
+  }
+  window._lab.enterSol();
+  await _waitFor(() => window._lab.isInSystem());
+  if (typeof window._lab?.beginAutopilotTour === 'function') {
+    window._lab.beginAutopilotTour();
+  }
+  await _waitFor(() => window._autopilotMotion?._phase === 'CRUISE', 6000);
   return captureEntrySnapshot('mid-cruise');
 }
-export function setupScenario4MidHyper() {
-  // TODO Phase 2: start warp, advance through fold/enter into hyper, leave running.
+
+export async function setupScenario4MidHyper() {
+  // Mid-HYPER warp tunnel: load Sol, trigger warp directly via warpEffect
+  // .start(direction), wait for hyper state. Per the brief's open question
+  // #1, we let the warp run rather than pause it (lab-mode is interactive
+  // motion, not paused frame). Max has the ~3-second hyper window.
+  if (typeof window._lab?.enterSol !== 'function') {
+    return captureEntrySnapshot('mid-hyper');
+  }
+  window._lab.enterSol();
+  await _waitFor(() => window._lab.isInSystem());
+  // Construct a Vector3 by cloning an existing scene-graph position.
+  // Camera-forward direction is fine; warp travels along it.
+  const cam = window._cam;
+  const sceneAny = window._scene;
+  if (cam && window._warpEffect?.start && sceneAny?.children?.[0]?.position?.constructor) {
+    const V = sceneAny.children[0].position.constructor;
+    const dir = new V(0, 0, -1);
+    try { window._warpEffect.start(dir); } catch (e) {
+      console.warn('[LabMode] scenario 4: warpEffect.start threw —', e);
+    }
+  }
+  await _waitFor(() => window._warpEffect?.state === 'hyper', 8000);
   return captureEntrySnapshot('mid-hyper');
 }
-export function setupScenario5ManualFlight() {
-  // TODO Phase 2: stop autopilot, position ship, enable WASD.
+
+export async function setupScenario5ManualFlight() {
+  // Manual-flight: Sol loaded, autopilot disabled, ship hovering.
+  if (typeof window._lab?.enterSol !== 'function') {
+    return captureEntrySnapshot('manual-flight');
+  }
+  window._lab.enterSol();
+  await _waitFor(() => window._lab.isInSystem());
+  if (typeof window._lab?.stopAutopilot === 'function') {
+    window._lab.stopAutopilot();
+  }
   return captureEntrySnapshot('manual-flight');
 }
-export function setupScenario6StationHold() {
-  // TODO Phase 2: autopilot tour to first STATION transition.
+
+export async function setupScenario6StationHold() {
+  // STATION-A hold: load Sol, autopilot tour, wait for STATION-A phase.
+  // V1 motion controller's _phase enum: IDLE / CRUISE / APPROACH / STATION-A /
+  // STATION-B / LHOKON. Wait for any STATION-prefix phase.
+  if (typeof window._lab?.enterSol !== 'function') {
+    return captureEntrySnapshot('station-hold');
+  }
+  window._lab.enterSol();
+  await _waitFor(() => window._lab.isInSystem());
+  if (typeof window._lab?.beginAutopilotTour === 'function') {
+    window._lab.beginAutopilotTour();
+  }
+  await _waitFor(() => {
+    const p = window._autopilotMotion?._phase;
+    return typeof p === 'string' && p.startsWith('STATION');
+  }, 30000);  // STATION arrival can take a while across CRUISE + APPROACH
   return captureEntrySnapshot('station-hold');
 }
-export function setupScenario7ReticlePersist() {
-  // TODO Phase 2: warp to body, complete to idle, leave reticle/runway visible.
+
+export async function setupScenario7ReticlePersist() {
+  // Reticle/runway-persist reproducer: warp to body, let it complete to
+  // idle, leave camera in post-warp state with reticle/runway overlay
+  // visible. The regression Max reported 2026-05-05 — overlay persists
+  // when it should hide. Snapshot captures overlay visibility state so
+  // working-Claude can diagnose.
+  if (typeof window._lab?.enterSol !== 'function') {
+    return captureEntrySnapshot('reticle-persist');
+  }
+  window._lab.enterSol();
+  await _waitFor(() => window._lab.isInSystem());
+  // Trigger warp same way as scenario 4
+  const cam = window._cam;
+  const sceneAny = window._scene;
+  if (cam && window._warpEffect?.start && sceneAny?.children?.[0]?.position?.constructor) {
+    const V = sceneAny.children[0].position.constructor;
+    const dir = new V(0, 0, -1);
+    try { window._warpEffect.start(dir); } catch (e) {
+      console.warn('[LabMode] scenario 7: warpEffect.start threw —', e);
+    }
+  }
+  // Wait for warp to fully complete (state returns to idle AFTER going
+  // non-idle). Use a small state-machine guard so we don't capture before
+  // warp even started.
+  let sawNonIdle = false;
+  await _waitFor(() => {
+    const st = window._warpEffect?.state;
+    if (st && st !== 'idle') sawNonIdle = true;
+    return sawNonIdle && st === 'idle';
+  }, 15000);
   return captureEntrySnapshot('reticle-persist');
 }
 
