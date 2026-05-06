@@ -575,22 +575,43 @@ the exception path.
     `window._warpEffect` API. Three scenarios:
 
     - **warp-Sol** (warp from a near-origin start position to Sol's
-      Earth) — assert phase ordering `IDLE → ENTER → HYPER → EXIT →
-      IDLE` preserved across the post-migration sim path; assert
-      `WarpEffect.phase` advances monotonically; assert no phase is
-      skipped or revisited.
+      Earth) — assert phase ordering preserved across the post-
+      migration sim path; assert `WarpEffect.state` advances
+      monotonically; assert no phase is skipped or revisited.
+      **Reconciled phase enum (amended 2026-05-06):** the actual
+      `WarpEffect` enum at `src/effects/WarpEffect.js` line 25 is
+      `'idle' | 'fold' | 'enter' | 'hyper' | 'exit'` — six phases
+      counting `idle` at start and end. The harness asserts the
+      actual sequence `idle → fold → enter → hyper → exit → idle`,
+      not the brief's earlier aspirational five-phase sequence. The
+      Phase 5 harnesses Tester §T13 PASSed already use the actual
+      six-phase enum; this AC text is reconciled to match.
     - **warp-far** (warp from a position ≥10,000 scene units from
       origin to a destination across a `REBASE_THRESHOLD_SQ`
-      crossing) — same phase-ordering assertion AND assert at least
-      one rebase event fires during HYPER without breaking phase
-      ordering (this is the rebasing-workstream's two-position
-      requirement, retained as a telemetry assertion rather than a
-      visual one).
-    - **autopilot-tour** (Sol multi-stop tour) — assert phase
-      sequence `IDLE → ENTRY → CRUISE → APPROACH → STATION` per
-      tour stop; assert per-leg `motionComplete` events fire in
-      order; assert telemetry sample rate ≈ 60 Hz at sim-tick
-      fidelity (per AC #9).
+      crossing) — same phase-ordering assertion (six-phase enum per
+      reconciliation above) AND assert at least one rebase event
+      fires during `hyper` without breaking phase ordering (this is
+      the rebasing-workstream's two-position requirement, retained as
+      a telemetry assertion rather than a visual one).
+    - **autopilot-tour** (Sol multi-stop tour) — assert structural
+      phase progression per tour stop with per-leg `motionComplete`
+      events firing in order; assert telemetry sample rate ≈ 60 Hz
+      at sim-tick fidelity (per AC #9).
+      **Reconciled phase enum (amended 2026-05-06):** autopilot V1
+      exposes only `CRUISE` and `STATION` at the published
+      `_autopilot.shipPhase` field — the brief's aspirational
+      five-phase sequence (`IDLE → ENTRY → CRUISE → APPROACH →
+      STATION`) is not the V1 published surface. `ENTRY` and
+      `APPROACH` may exist as internal `AutopilotMotion` phase
+      markers (not yet published). The harness asserts the
+      structural property at the published surface — well-formed
+      `CRUISE ↔ STATION` transitions, `motionComplete` events
+      present per leg, sim-tick fidelity sample rate — and
+      self-discloses the published-vs-aspirational substitution in
+      its UI. Tester §T13 PASSed on the structural property; this AC
+      text is reconciled to match. Future autopilot V2 work that
+      publishes `ENTRY`/`APPROACH` at `shipPhase` lands a follow-up
+      tightening of this AC's assertion set.
 
     Each scenario's assertions ship as a self-contained harness at
     `tests/refactor-verification/welldipper-fixed-timestep-phase5-{warp-sol,warp-far,autopilot-tour}.html`,
@@ -1484,3 +1505,17 @@ workstream slug explicitly.
 **Recordings are NOT abolished.** They remain the exception path for
 transient bugs that resist interactive lab reproduction. The
 amendment changes the default; it doesn't remove the tool.
+
+### 2026-05-06 — AC #17 Layer A phase-name reconciliation (WarpEffect six-phase enum + autopilot CRUISE/STATION-only published surface)
+
+**Trigger:** Tester §T13 surfaced two non-blocking brief-vs-implementation phase-name aspirational-vs-actual gaps when PASSing Phase 5 at HEAD `89a6c116`. The Phase 5 harnesses asserted the actual implementation phase enums (and Tester PASSed against them); the brief's AC #17 Layer A text still named the aspirational enums. This amendment reconciles the brief text to the implementation, preserving the structural verification intent while removing the aspirational-vs-actual mismatch.
+
+**Reconciliations:**
+
+- **WarpEffect actual enum has `fold` between `idle` and `enter`.** AC #17 Layer A's warp-Sol and warp-far scenarios were authored with the five-phase aspirational sequence (`IDLE → ENTER → HYPER → EXIT → IDLE`) but the actual `WarpEffect` enum at `src/effects/WarpEffect.js` line 25 is `'idle' | 'fold' | 'enter' | 'hyper' | 'exit'` — six phases counting `idle` at start and end. The Phase 5 harnesses asserted the actual six-phase sequence and Tester §T13 PASSed on that. AC #17 Layer A text (warp-Sol + warp-far bullets) is updated to name the six-phase enum.
+
+- **Autopilot V1 `shipPhase` published surface is CRUISE+STATION only.** AC #17 Layer A's autopilot-tour scenario was authored with the aspirational five-phase sequence (`IDLE → ENTRY → CRUISE → APPROACH → STATION`) but the V1 published surface at `_autopilot.shipPhase` exposes only `CRUISE` and `STATION`. `ENTRY` / `APPROACH` may exist as internal `AutopilotMotion` phase markers but aren't published. The autopilot-tour harness asserted the structural property (well-formed CRUISE↔STATION transitions, motion events present per leg, sim-tick fidelity sample rate) and self-disclosed the published-vs-aspirational substitution in its UI; Tester §T13 PASSed on the structural property. AC #17 Layer A text (autopilot-tour bullet) is updated to name the published surface explicitly and flag a future autopilot V2 follow-up that would publish `ENTRY`/`APPROACH` and tighten the AC's assertion set.
+
+**Why this is a brief-text amendment, not a re-verification trigger:** the implementation, the harnesses, and the Tester verdict are unchanged at HEAD `89a6c116` — only the AC #17 Layer A text drifts from the implementation. The Phase 5 Shipped flip stands. This amendment closes the textual drift so future readers of the brief don't have to reconcile aspirational text against actual harness output. Doc-only; no code changes.
+
+**Reference:** `~/.claude/projects/-home-ax/memory/session-2026-05-05-phase5-shipped-and-rule-shift.md` §"Two non-blocking brief-vs-implementation reconciliations Tester surfaced" names this exact follow-up.
