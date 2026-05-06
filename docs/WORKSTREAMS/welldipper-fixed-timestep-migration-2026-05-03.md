@@ -2,6 +2,8 @@
 
 ## Status
 
+**Shipped `89a6c116` — verified against telemetry-only evidence per amended brief (2026-05-05).** Tester §T13 PASS at HEAD `89a6c116e27138aa9175d9582829a9eb1ffeaf8c`. All 20 ACs satisfied; full test ladder (Phases 1-5) closed under the new rule (`feedback_lab-modes-not-recordings.md`). Two non-blocking brief-vs-implementation phase-name reconciliations surfaced for next-session PM amendment (WarpEffect's actual `fold` phase between `idle/enter`; autopilot V1 exposes CRUISE+STATION only — not the brief's aspirational ENTRY/CRUISE/APPROACH/STATION). Sibling workstreams `motion-test-kit-scene-inventory-2026-05-05` + `welldipper-lab-mode-2026-05-05` carry the deferred rich-evaluation work.
+
 Scoped 2026-05-03 against well-dipper HEAD `679321b` (post toggle-fix
 landing, pending Max recording verdict) + `e3504a1` (post world-origin
 rebasing Shipped 2026-05-02). Authored as **sibling** to
