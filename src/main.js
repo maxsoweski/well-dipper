@@ -87,6 +87,7 @@ import { TextureBaker, getBakeType } from './rendering/TextureBaker.js';
 import { createTexturedBodyMaterial } from './rendering/shaders/TexturedBodyShader.js';
 import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/MaterialBodyShader.js';
 import { PretextLab } from './ui/PretextLab.js';
+import * as LabMode from './debug/LabMode.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -127,6 +128,18 @@ window._cam = camera;
 window._cc = cameraController;
 window._scene = scene;
 window._retroRenderer = retroRenderer;
+
+// Lab-mode bootstrap: only when ?lab=1 is in URL. Per
+// docs/WORKSTREAMS/welldipper-lab-mode-2026-05-05.md AC #1, the import is
+// unconditional but init is gated. Without the gate, window._labMode stays
+// undefined and lab keybinds + HUD do nothing.
+if (LabMode.isLabModeEnabled()) {
+  LabMode.init({
+    scene,
+    camera,
+    renderer: retroRenderer?.renderer,
+  });
+}
 
 // Toggle in-system objects (planets, moons, orbits, labels) for sky debugging.
 // Call from console: window._skyOnly()  or  window._skyOnly(false) to restore.
@@ -7396,19 +7409,20 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Shift+L: lab-mode stub panel (welldipper-fixed-timestep-migration AC #17 Layer B).
-  // Full lab-mode keybinds 1-7 land in sibling workstream welldipper-lab-mode-2026-05-05;
-  // this is the stub placeholder. Gated behind ?lab=1 URL param.
-  if (e.code === 'KeyL' && e.shiftKey && new URLSearchParams(location.search).has('lab')) {
-    let panel = document.getElementById('lab-stub-panel');
-    if (panel) { panel.remove(); return; }
-    panel = document.createElement('div');
-    panel.id = 'lab-stub-panel';
-    panel.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:100000; padding:24px 32px; background:rgba(0,0,0,0.92); border:1px solid #0f0; color:#0f0; font:13px/1.5 "Courier New", monospace; max-width:520px; text-align:center;';
-    panel.textContent = 'Lab mode stub — full keybinds 1–7 land in welldipper-lab-mode-2026-05-05. For now, use the live app’s normal flows to reach the canonical scenarios; telemetry assertions in Layer A cover structural correctness.';
-    document.body.appendChild(panel);
-    e.preventDefault();
-    return;
+  // Lab-mode keybinds (welldipper-lab-mode-2026-05-05). Gated behind ?lab=1
+  // URL param + Shift modifier so digit keys 1-9 still flow to the existing
+  // _autoNav.jumpToStar / focusPlanet handlers when not in lab mode.
+  if (e.shiftKey && window._labMode) {
+    if (e.code === 'KeyL') { window._labMode.toggleHud(); e.preventDefault(); return; }
+    // Shift+1..Shift+7 -> dispatch scenario N. e.code stays 'Digit1' etc.
+    // even with Shift held; e.key changes to '!' '@' etc., so use e.code.
+    const m = /^Digit([1-7])$/.exec(e.code);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      window._labMode.runScenario(n);
+      e.preventDefault();
+      return;
+    }
   }
 
   // K key: toggle keybinds overlay (works always — title, gameplay, warp)
