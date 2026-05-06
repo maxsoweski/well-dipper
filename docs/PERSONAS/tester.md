@@ -350,7 +350,67 @@ When you reach for transform-hash regression against well-dipper, flag
 that the migration is the precondition. The variable-dt limit isn't a
 kit defect.
 
-## History
+### Production-grade verification (post-migration)
+
+Added 2026-05-05 as part of the well-dipper fixed-timestep migration
+workstream
+(`docs/WORKSTREAMS/welldipper-fixed-timestep-migration-2026-05-03.md`).
+The migration plus its sibling kit workstream
+(`docs/WORKSTREAMS/motion-test-kit-2026-05-02.md`) compose into **Path
+B** per Max's 2026-05-02 direction: the kit lands the predicate /
+replay / hash / recorder library and the accumulator pattern itself in
+a lab; the migration lands the accumulator INTO well-dipper's
+`src/main.js` animate loop so all 5 kit techniques are fully operational
+against well-dipper proper, not lab-only for techniques #2 / #3 / #4.
+
+Post-migration, the pre-migration limit above no longer constrains
+verification — the kit's full vocabulary runs against the real product.
+The "Pre-migration limit" subsection remains as historical record for
+work performed against pre-migration HEADs.
+
+#### Bug-class → technique mapping (real well-dipper invocation)
+
+*Amended 2026-05-05 — felt-experience-class added as top row, lab-mode replaces recordings as the default felt-experience surface per `~/.claude/projects/-home-ax/memory/feedback_lab-modes-not-recordings.md`.*
+
+| Bug class | Right technique against well-dipper proper |
+|---|---|
+| **Felt-experience-class** | Lab-mode keybind (per sibling workstream `welldipper-lab-mode-2026-05-05`) that teleports Max to the test scenario; Max plays the scenario interactively and renders his felt-experience verdict. Recording is the EXCEPTION path, reserved for transient bugs that resist interactive lab reproduction. |
+| **Invariant-class** | Predicates from `motion-test-kit/core/predicates/index.js` run against per-sim-tick well-dipper telemetry. Concrete example: the toggle-fix bug class — `deltaMagnitudeBound` / `monotonicityScore` / `signStability` predicates against post-W-press window samples (60 Hz sim tick, no render interpolation contamination). The migration's AC #16 dogfood is the canonical post-migration invocation. |
+| **Regression-class** | Transform-hash golden trajectory at `tests/golden-trajectories/canonical-scenario.golden.json` (committed by the migration's AC #15 — canonical scenario: warp to Sol, autopilot to Earth, manual disengage). Run `npm run verify-golden` to assert hash-equivalence in <30 wall-clock seconds; per-frame mismatch diagnostics on FAIL. |
+| **Reproducibility-class** | Seeded RNG via `?seed=N` URL param (migration AC #13 threads `mulberry32` through every sim-classified `Math.random()` call site) plus input replay via `?recordInput=1` capture and `?replayInput=path` playback (migration AC #14, using the kit's `adapters/dom/keyboard-mouse-bridge.js`). Two URL loads with the same seed + same replay produce byte-equivalent telemetry. |
+| **Structural-visibility-class** | Scene-inventory snapshots — which meshes are visible, which DOM overlays are present, which post-effect passes are active per phase. *Forward dependency:* not yet implemented in the kit; lands in sibling workstream `motion-test-kit-scene-inventory-2026-05-05` as kit technique #6. Until that workstream Ships, Tester uses telemetry-only structural assertions for phase-boundary verification (e.g., assert `WarpEffect.phase` advances `IDLE → ENTER → HYPER → EXIT → IDLE` monotonically without skipping). |
+
+For motion-class, visual, and phased-feature verification, Tester defaults to **telemetry + scene-inventory + lab-mode**; recordings are reserved for the exception path documented in `~/.claude/projects/-home-ax/memory/feedback_lab-modes-not-recordings.md`.
+
+#### Default-load rule (post-migration, amended 2026-05-05)
+
+Motion-class verification's **first verification attempt uses (1) telemetry predicates from the kit, (2) scene-inventory snapshots at phase boundaries, (3) lab-mode keybinds for Max's interactive felt-experience evaluation.** Recordings are the EXCEPTION path — used only when an interactive lab cannot reproduce a fleeting transient bug (e.g., a frame-pacing-dependent transient that won't fire under chrome-devtools driving). Per `~/.claude/projects/-home-ax/memory/feedback_lab-modes-not-recordings.md` (2026-05-05), recordings are no longer the default felt-experience-gate artifact.
+
+This rule supersedes the pre-migration carve where transform-hash and replay were lab-only — post-migration, both run against the real sim path. Ad-hoc telemetry remains the fallback only when the kit doesn't yet have a predicate for the AC's invariant; the gap gets flagged to PM so the kit grows.
+
+The §"Felt-experience-vs-invariant-class distinction" subsection above still applies post-migration in its structural framing — predicates measure whether something holds; they don't measure whether motion *feels* right. Game-feel gates (juice, cinematic continuity, perceptual smoothness) now flow through **lab-mode keybinds + Max's interactive evaluation**, not recordings + scrubbed playback. The migration does not collapse the structural-vs-feel split; it relocates the felt-experience surface from recording to lab-mode.
+
+#### When to invoke each technique against well-dipper
+
+- **Predicates against live telemetry** (most common): connect to dev
+  server via chrome-devtools, drive scenario, capture
+  `window._autopilot.telemetry.samples` or equivalent kit-shape sample
+  stream, run `runAll(samples, [...])` per the §"Invocation pattern"
+  above. The samples now come from the sim tick (60 Hz, fixed-step) so
+  predicates that previously needed lab harnesses (e.g., zero-input
+  drift detection without RAF jitter) are reliable against the real
+  loop.
+- **Golden trajectory regression check**: `cd ~/projects/well-dipper &&
+  npm run verify-golden`. Use this whenever a refactor's contract is
+  zero-behavior-change at the canonical scenario. PASS = trajectory
+  unchanged at byte-precision; FAIL emits per-frame mismatch.
+- **Seeded replay reproduction**: when a bug fires intermittently and
+  Max can't repro on demand, capture inputs via `?recordInput=1` during
+  the next firing, save the recording, then replay against the same
+  `?seed=N` to drive deterministic re-execution. The replay produces
+  identical telemetry — predicates / hash compare against that.
+
+
 
 Created 2026-04-25 after the camera-turn-snap incident. Working-Claude shipped a "smooth turn" fix to Max without telemetry-verifying it actually worked; Max called it out. The Tester persona exists to make that mistake harder to repeat.
 

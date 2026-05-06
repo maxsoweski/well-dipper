@@ -7396,6 +7396,21 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Shift+L: lab-mode stub panel (welldipper-fixed-timestep-migration AC #17 Layer B).
+  // Full lab-mode keybinds 1-7 land in sibling workstream welldipper-lab-mode-2026-05-05;
+  // this is the stub placeholder. Gated behind ?lab=1 URL param.
+  if (e.code === 'KeyL' && e.shiftKey && new URLSearchParams(location.search).has('lab')) {
+    let panel = document.getElementById('lab-stub-panel');
+    if (panel) { panel.remove(); return; }
+    panel = document.createElement('div');
+    panel.id = 'lab-stub-panel';
+    panel.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:100000; padding:24px 32px; background:rgba(0,0,0,0.92); border:1px solid #0f0; color:#0f0; font:13px/1.5 "Courier New", monospace; max-width:520px; text-align:center;';
+    panel.textContent = 'Lab mode stub — full keybinds 1–7 land in welldipper-lab-mode-2026-05-05. For now, use the live app’s normal flows to reach the canonical scenarios; telemetry assertions in Layer A cover structural correctness.';
+    document.body.appendChild(panel);
+    e.preventDefault();
+    return;
+  }
+
   // K key: toggle keybinds overlay (works always — title, gameplay, warp)
   if (e.code === 'KeyK') {
     toggleKeybinds();

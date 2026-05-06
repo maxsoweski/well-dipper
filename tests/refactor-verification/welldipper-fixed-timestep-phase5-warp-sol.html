@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Refactor Verification — Phase 5 / AC #17 Layer A — warp-sol</title>
+  <style>
+    body { margin:0; padding:20px; background:#0a0a0a; color:#0f0; font:13px/1.6 'Courier New', monospace; max-width:980px; }
+    h1 { font-size:16px; color:#6f6; }
+    .btn { background:rgba(0,255,0,0.08); border:1px solid rgba(0,255,0,0.5); color:#0f0; font:inherit; padding:6px 12px; cursor:pointer; margin-right:6px; }
+    .btn:hover { background:rgba(0,255,0,0.2); }
+    .pass { color:#0f0; }
+    .fail { color:#f55; }
+    pre { background:rgba(0,0,0,0.5); border:1px solid #333; padding:10px; margin:8px 0; max-height:480px; overflow:auto; font-size:11px; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>AC #17 Layer A — warp-sol — telemetry phase-ordering assertion</h1>
+  <p>
+    Loads captured warpEffect phase samples from
+    <code>../../qa-results/phase5-ac17/warp-sol/samples.json</code>
+    (captured 2026-05-05 against HEAD <code>af06a55</code>, post-Phase-4
+    fixed-timestep migration). Asserts:
+  </p>
+  <ul>
+    <li>Phase ordering <code>idle &rarr; fold &rarr; enter &rarr; hyper &rarr; exit &rarr; idle</code> preserved.</li>
+    <li><code>WarpEffect.state</code> advances monotonically through the sequence (no skipping, no reverting until the post-warp idle).</li>
+    <li>Each non-idle phase has positive duration (no zero-duration phases).</li>
+    <li>Capture sample rate &asymp; 60 Hz (sim-tick fidelity).</li>
+  </ul>
+  <button class="btn" onclick="run()">Run</button>
+  <button class="btn" onclick="document.getElementById('out').innerHTML = ''">Clear</button>
+  <div id="out"></div>
+
+  <script>
+  const out = document.getElementById('out');
+  const log = (m, c='') => { const e = document.createElement('pre'); if(c) e.className=c; e.textContent=m; out.appendChild(e); };
+  const summary = (m, p) => {
+    const e = document.createElement('div');
+    e.style.cssText = `padding:8px 12px; margin:8px 0; border:1px solid ${p?'#0f0':'#f55'}`;
+    e.className = p?'pass':'fail';
+    e.textContent = (p?'PASS — ':'FAIL — ') + m;
+    out.appendChild(e);
+  };
+
+  async function run() {
+    out.innerHTML = '';
+    const resp = await fetch('../../qa-results/phase5-ac17/warp-sol/samples.json');
+    if (!resp.ok) { summary('cannot fetch samples.json', false); return; }
+    const data = await resp.json();
+    const samples = data.samples;
+    log(`Loaded ${samples.length} samples (capture from ${data.captured_at}, HEAD ${data.git_head}).`);
+
+    // Capture started post-warp.start() so initial idle is omitted; full live sequence is idle->fold->enter->hyper->exit->idle.
+    const expectedSeq = ['fold','enter','hyper','exit','idle'];
+    const observedSeq = [];
+    let lastState = null;
+    for (const s of samples) {
+      if (s.state !== lastState) { observedSeq.push(s.state); lastState = s.state; }
+    }
+    log(`Observed phase sequence: ${observedSeq.join(' -> ')}`);
+    log(`Expected phase sequence: ${expectedSeq.join(' -> ')}`);
+
+    // Assertion 1: sequence matches expected
+    const seqMatch = observedSeq.length === expectedSeq.length && observedSeq.every((s, i) => s === expectedSeq[i]);
+
+    // Assertion 2: monotonic — no state revisit except final idle
+    const seen = new Set();
+    let monotone = true;
+    let backtrack = null;
+    for (let i = 0; i < observedSeq.length - 1; i++) { // skip final idle
+      const s = observedSeq[i];
+      if (seen.has(s) && s !== 'idle') { monotone = false; backtrack = s; break; }
+      seen.add(s);
+    }
+
+    // Assertion 3: each non-idle phase has positive duration
+    const phaseDur = {};
+    for (let i = 1; i < samples.length; i++) {
+      const ph = samples[i-1].state;
+      const dt = samples[i].t - samples[i-1].t;
+      phaseDur[ph] = (phaseDur[ph] || 0) + dt;
+    }
+    log(`Phase durations (ms): ${JSON.stringify(phaseDur, null, 2)}`);
+    const positiveDuration = ['fold','enter','hyper','exit'].every(p => (phaseDur[p] || 0) > 0);
+
+    // Assertion 4: sample rate ~60Hz (allow 30-100Hz tolerance — capture interval was 16ms target)
+    const span = samples[samples.length-1].t - samples[0].t;
+    const rate = (samples.length - 1) / (span / 1000);
+    log(`Capture rate: ${rate.toFixed(2)} samples/sec across ${(span/1000).toFixed(2)}s.`);
+    const rateOk = rate >= 30 && rate <= 100;
+
+    if (seqMatch) summary(`phase ordering preserved (${observedSeq.join('->')})`, true);
+    else summary(`phase ordering mismatch — observed [${observedSeq.join(',')}] vs expected [${expectedSeq.join(',')}]`, false);
+
+    if (monotone) summary('monotonic advance (no phase revisit before final idle)', true);
+    else summary(`monotonicity violated — '${backtrack}' revisited`, false);
+
+    if (positiveDuration) summary('all non-idle phases have positive duration', true);
+    else summary(`zero-duration phase: ${JSON.stringify(phaseDur)}`, false);
+
+    if (rateOk) summary(`capture rate ${rate.toFixed(2)} Hz within tolerance (30-100 Hz)`, true);
+    else summary(`capture rate ${rate.toFixed(2)} Hz outside tolerance`, false);
+
+    const allPass = seqMatch && monotone && positiveDuration && rateOk;
+    summary(allPass ? 'AC #17 Layer A warp-sol — ALL ASSERTIONS PASS' : 'AC #17 Layer A warp-sol — at least one assertion failed', allPass);
+  }
+  </script>
+</body>
+</html>

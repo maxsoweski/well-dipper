@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Refactor Verification — Fixed-Timestep Phase 5 Audio Clock Isolation</title>
+  <style>
+    body { margin: 0; padding: 20px; background: #0a0a0a; color: #0f0;
+           font: 13px/1.6 'Courier New', monospace; max-width: 980px; }
+    h1 { font-size: 16px; margin-bottom: 12px; color: #6f6; }
+    .btn { background: rgba(0,255,0,0.08); border: 1px solid rgba(0,255,0,0.5);
+           color: #0f0; font: inherit; padding: 6px 12px; cursor: pointer;
+           margin: 2px 4px 2px 0; }
+    .btn:hover { background: rgba(0,255,0,0.2); }
+    .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+    .pass { color: #0f0; }
+    .fail { color: #f55; }
+    .warn { color: #fa0; }
+    pre { background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 10px;
+          margin: 8px 0; max-height: 480px; overflow: auto; font-size: 11px;
+          white-space: pre-wrap; }
+    .progress { font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>Refactor Verification — Fixed-Timestep Phase 5 / AC #19 — Audio Clock Isolation</h1>
+  <p>
+    AC #19 of
+    <code>welldipper-fixed-timestep-migration-2026-05-03</code>.
+    Confirms fixed-step sim does not back-pressure the AudioContext clock.
+    The audit-list ruling
+    (<code>docs/refactor-audits/fixed-timestep-migration-call-sites.md</code> &sect;<i>Audio
+    clock domain</i>) documents zero sim-&gt;audio rate-pushing sites; this
+    harness verifies the architectural property empirically by measuring
+    <code>audioContext.currentTime</code> relative to <code>performance.now()</code>
+    over a 60-second window while a synthetic looping tone is active and
+    a simulated sim load occupies the JS main thread at &gt; 50% utilisation.
+  </p>
+  <p>
+    <strong>Pass condition</strong> (qualitative, per brief AC #5 precedent):
+    drift slope is bounded near zero and not monotone-growing across the
+    window. Per-sample peaks are dominated by <code>setInterval</code>
+    scheduling jitter (the JS event loop firing late under sim load) and do
+    not represent audio-clock motion. A slope-based pass criterion is the
+    right metric because audio drift induced by sim coupling would manifest
+    as a sustained linear or accelerating divergence; per-sample noise
+    cannot.
+  </p>
+  <p>
+    <strong>Pass thresholds:</strong>
+    |slope| &le; 1 ms/sec (over 60 s, projects to &le; 60 ms accumulated
+    end-to-end drift &mdash; comfortably under typical consumer audio device
+    crystal variance of ~0.1 % / 100 ms per minute).
+    End-to-end drift &le; 10 ms.
+    No monotone-growth signature in cumulative drift.
+  </p>
+  <button class="btn" id="run-btn" onclick="run()">Run 60-second harness</button>
+  <button class="btn" onclick="document.getElementById('out').innerHTML = ''">Clear</button>
+  <div id="out"></div>
+
+  <script>
+  const out = document.getElementById('out');
+  const log = (msg, cls = '') => {
+    const el = document.createElement('pre');
+    if (cls) el.className = cls;
+    el.textContent = msg;
+    out.appendChild(el);
+  };
+  const summary = (msg, pass) => {
+    const el = document.createElement('div');
+    el.style.padding = '8px 12px';
+    el.style.margin = '8px 0';
+    el.style.border = `1px solid ${pass ? '#0f0' : '#f55'}`;
+    el.className = pass ? 'pass' : 'fail';
+    el.textContent = (pass ? 'PASS — ' : 'FAIL — ') + msg;
+    out.appendChild(el);
+  };
+
+  // Synthetic sim load: occupy the JS main thread for `budgetMs` per RAF
+  // tick. Reproduces the steady-state worst case of well-dipper running
+  // a full autopilot tour with celestial bodies advancing, sky shader
+  // updating, telemetry sampling, etc.
+  let _simLoadActive = false;
+  function startSimLoad(budgetMs = 10) {
+    _simLoadActive = true;
+    let scratch = new Float64Array(2048);
+    function tick() {
+      if (!_simLoadActive) return;
+      const start = performance.now();
+      while (performance.now() - start < budgetMs) {
+        for (let i = 0; i < scratch.length; i++) {
+          scratch[i] = Math.sin(scratch[i] * 1.0001 + i) * 0.999 + 0.001;
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  function stopSimLoad() { _simLoadActive = false; }
+
+  // Synthetic tone — proxy for "audio active (background music track playing)".
+  // 4-beats-per-second click pattern through a quiet 220 Hz carrier.
+  // The AudioContext's job here is exactly the same whether the buffer is
+  // synthesized clicks or a real music track: schedule samples for output at
+  // currentTime, advance currentTime as the audio thread processes them.
+  function startTone(ctx, gainDb = -30) {
+    const sr = ctx.sampleRate;
+    const dur = 4;
+    const buf = ctx.createBuffer(1, sr * dur, sr);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < buf.length; i++) {
+      const t = i / sr;
+      const phase = (t * 4) % 1;
+      const env = phase < 0.03 ? Math.pow(1 - phase / 0.03, 2) : 0;
+      data[i] = env * Math.sin(2 * Math.PI * 220 * t);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const g = ctx.createGain();
+    g.gain.value = Math.pow(10, gainDb / 20);
+    src.connect(g);
+    g.connect(ctx.destination);
+    src.start();
+    return { src, g };
+  }
+
+  async function run() {
+    document.getElementById('run-btn').disabled = true;
+    out.innerHTML = '';
+
+    log('[setup] Booting AudioContext + synthetic tone...');
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') await ctx.resume();
+    const tone = startTone(ctx);
+    log(`[setup] AudioContext sampleRate=${ctx.sampleRate}, state=${ctx.state}`);
+
+    log('[setup] Starting simulated sim load (10 ms / RAF tick busy work)...');
+    startSimLoad(10);
+
+    log('[warmup] Allowing 5 s for AudioContext startup transient + sim load to stabilise...');
+    await new Promise(r => setTimeout(r, 5000));
+
+    log('[run] 60-second sample window starting. Sampling clock pair every 1 s.');
+    const targetMs = 60000;
+    const samples = [];
+    const ac0 = ctx.currentTime;
+    const pn0 = performance.now();
+    samples.push({ i: 0, ac: ac0, pn: pn0, drift_ms: 0 });
+
+    await new Promise(resolve => {
+      let i = 0;
+      const interval = setInterval(() => {
+        i++;
+        const ac = ctx.currentTime;
+        const pn = performance.now();
+        const drift_ms = (ac - ac0) * 1000 - (pn - pn0);
+        samples.push({ i, ac, pn, drift_ms });
+        if (pn - pn0 >= targetMs) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 1000);
+    });
+
+    stopSimLoad();
+    try { tone.src.stop(); } catch {}
+
+    // Stats
+    const drifts = samples.map(s => s.drift_ms);
+    const abs = drifts.map(Math.abs);
+    const max_abs_drift_ms = Math.max(...abs);
+    const mean_drift_ms = drifts.reduce((a, b) => a + b, 0) / drifts.length;
+    const final_drift_ms = drifts[drifts.length - 1];
+    const elapsed_s = (samples[samples.length - 1].pn - samples[0].pn) / 1000;
+
+    // Linear regression — slope is the load-bearing metric.
+    const n = drifts.length;
+    const xMean = (n - 1) / 2;
+    const yMean = mean_drift_ms;
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) {
+      num += (i - xMean) * (drifts[i] - yMean);
+      den += (i - xMean) ** 2;
+    }
+    const slope_ms_per_sec = num / den;
+
+    // Per-sample step (first-derivative). Big steps = setInterval misfire,
+    // not audio motion.
+    const steps = [];
+    for (let i = 1; i < drifts.length; i++) steps.push(drifts[i] - drifts[i - 1]);
+    const max_abs_step_ms = Math.max(...steps.map(Math.abs));
+    const mean_abs_step_ms = steps.map(Math.abs).reduce((a, b) => a + b, 0) / steps.length;
+
+    // Monotonicity check: do consecutive samples all drift in the same
+    // direction? A monotone signal is the defect signature.
+    let positive_runs = 0, negative_runs = 0, max_run = 0, cur_run = 0, cur_sign = 0;
+    for (const d of drifts) {
+      const sign = Math.sign(d);
+      if (sign === cur_sign) { cur_run++; } else { cur_run = 1; cur_sign = sign; }
+      if (cur_run > max_run) max_run = cur_run;
+      if (sign > 0) positive_runs++;
+      if (sign < 0) negative_runs++;
+    }
+
+    log([
+      `samples: ${n}`,
+      `elapsed_s: ${elapsed_s.toFixed(3)}`,
+      `max_abs_drift_ms: ${max_abs_drift_ms.toFixed(2)}`,
+      `mean_drift_ms: ${mean_drift_ms.toFixed(3)}`,
+      `final_drift_ms (end-to-end): ${final_drift_ms.toFixed(2)}`,
+      `slope_ms_per_sec: ${slope_ms_per_sec.toFixed(4)}  (projected end-to-end if sustained = ${(slope_ms_per_sec * 60).toFixed(2)} ms / min)`,
+      `max_abs_step_ms (interval jitter): ${max_abs_step_ms.toFixed(2)}`,
+      `mean_abs_step_ms: ${mean_abs_step_ms.toFixed(2)}`,
+      `monotone-run max length: ${max_run}  (signal is ${max_run > n * 0.8 ? 'monotone — DEFECT SIGNATURE' : 'bounded oscillation — expected'})`,
+      `positive_samples: ${positive_runs}, negative_samples: ${negative_runs}`,
+    ].join('\n'));
+
+    log(['First 10 drifts (ms):', ...drifts.slice(0, 10).map((d, i) => `  i=${i}: ${d.toFixed(2)}`)].join('\n'));
+    log(['Last 10 drifts (ms):', ...drifts.slice(-10).map((d, idx) => `  i=${n - 10 + idx}: ${d.toFixed(2)}`)].join('\n'));
+
+    // Verdict
+    const slopeOk = Math.abs(slope_ms_per_sec) <= 1.0;
+    const endToEndOk = Math.abs(final_drift_ms) <= 10.0;
+    const notMonotone = max_run < n * 0.8;
+    const pass = slopeOk && endToEndOk && notMonotone;
+
+    if (pass) {
+      summary([
+        `audio clock independent of sim`,
+        `slope=${slope_ms_per_sec.toFixed(4)} ms/sec  (|slope|≤1.0)`,
+        `end-to-end drift=${final_drift_ms.toFixed(2)} ms  (|drift|≤10)`,
+        `no monotone-growth signature  (max-run=${max_run}/${n})`,
+      ].join('  ·  '), true);
+    } else {
+      const reasons = [];
+      if (!slopeOk) reasons.push(`|slope|=${Math.abs(slope_ms_per_sec).toFixed(3)} > 1.0 ms/sec — possible sim-induced drift`);
+      if (!endToEndOk) reasons.push(`|end-to-end|=${Math.abs(final_drift_ms).toFixed(2)} > 10 ms — investigate`);
+      if (!notMonotone) reasons.push(`monotone signal (run=${max_run}/${n}) — DEFECT signature`);
+      summary(reasons.join('  ·  '), false);
+    }
+
+    // Expose data on window for capture via chrome-devtools / harness automation.
+    window._phase5AudioDriftSamples = samples;
+    window._phase5AudioDriftStats = {
+      sample_count: n,
+      elapsed_s,
+      max_abs_drift_ms,
+      mean_drift_ms,
+      final_drift_ms,
+      slope_ms_per_sec,
+      max_abs_step_ms,
+      mean_abs_step_ms,
+      max_run,
+      pass,
+    };
+    log('[done] window._phase5AudioDriftSamples + window._phase5AudioDriftStats populated.');
+
+    document.getElementById('run-btn').disabled = false;
+  }
+  </script>
+</body>
+</html>

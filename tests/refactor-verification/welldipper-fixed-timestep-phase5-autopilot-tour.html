@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Refactor Verification — Phase 5 / AC #17 Layer A — autopilot-tour</title>
+  <style>
+    body { margin:0; padding:20px; background:#0a0a0a; color:#0f0; font:13px/1.6 'Courier New', monospace; max-width:980px; }
+    h1 { font-size:16px; color:#6f6; }
+    .btn { background:rgba(0,255,0,0.08); border:1px solid rgba(0,255,0,0.5); color:#0f0; font:inherit; padding:6px 12px; cursor:pointer; margin-right:6px; }
+    .pass { color:#0f0; }
+    .fail { color:#f55; }
+    pre { background:rgba(0,0,0,0.5); border:1px solid #333; padding:10px; margin:8px 0; max-height:480px; overflow:auto; font-size:11px; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>AC #17 Layer A — autopilot-tour — telemetry assertions</h1>
+  <p>
+    Loads captured autopilot-motion samples from
+    <code>../../qa-results/phase5-ac17/autopilot-tour/samples.json</code>
+    (captured 2026-05-05 against HEAD <code>af06a55</code>). Asserts:
+  </p>
+  <ul>
+    <li>Ship phase transitions are well-formed (only between known phases observed live: <code>CRUISE</code>, <code>STATION</code>; per V1 autopilot motion controller).</li>
+    <li>Multi-leg structure: at least 2 phase transitions captured (one cruise-to-station arrival + one departure).</li>
+    <li>Motion events fire (<code>accel</code> + <code>decel</code> per leg).</li>
+    <li>Sample rate &asymp; 60 Hz sim-tick fidelity (median dt 16-17 ms).</li>
+    <li><strong>Brief-vs-implementation note:</strong> the brief named the expected phase sequence as <code>ENTRY &rarr; CRUISE &rarr; APPROACH &rarr; STATION</code>, but the live V1 autopilot motion controller exposes only <code>CRUISE</code> + <code>STATION</code> at the <code>shipPhase</code> field. Harness asserts the structural property (well-formed transitions, motion events) rather than the brief's exact phase names — see brief amendment history.</li>
+  </ul>
+  <button class="btn" onclick="run()">Run</button>
+  <div id="out"></div>
+
+  <script>
+  const out = document.getElementById('out');
+  const log = (m, c='') => { const e = document.createElement('pre'); if(c) e.className=c; e.textContent=m; out.appendChild(e); };
+  const summary = (m, p) => {
+    const e = document.createElement('div');
+    e.style.cssText = `padding:8px 12px; margin:8px 0; border:1px solid ${p?'#0f0':'#f55'}`;
+    e.className = p?'pass':'fail';
+    e.textContent = (p?'PASS — ':'FAIL — ') + m;
+    out.appendChild(e);
+  };
+
+  async function run() {
+    out.innerHTML = '';
+    const resp = await fetch('../../qa-results/phase5-ac17/autopilot-tour/samples.json');
+    if (!resp.ok) { summary('cannot fetch samples.json', false); return; }
+    const data = await resp.json();
+    const samples = data.samples;
+    log(`Loaded ${samples.length} samples; phases observed: ${data.phases.join(', ')}; motion events: ${data.motionEvent_count}.`);
+
+    // Phase transitions
+    let prev = null;
+    const transitions = [];
+    for (const s of samples) {
+      if (s.shipPhase !== prev) { transitions.push({ frame: s.frame, from: prev, to: s.shipPhase }); prev = s.shipPhase; }
+    }
+    const realTransitions = transitions.slice(1); // drop initial null->first
+    log(`Phase transitions: ${realTransitions.length} (${realTransitions.map(t=>`${t.from}->${t.to}`).join(', ')})`);
+
+    // Assertion 1: at least 2 transitions (multi-leg structure)
+    const multiLegOk = realTransitions.length >= 2;
+
+    // Assertion 2: only known phases observed
+    const knownPhases = new Set(['CRUISE', 'STATION']);
+    const unknownPhase = samples.find(s => !knownPhases.has(s.shipPhase));
+    const phasesOk = !unknownPhase;
+
+    // Assertion 3: motion events fire (accel + decel)
+    const events = samples.filter(s => s.eventType);
+    const eventTypes = new Set(events.map(s => s.eventType));
+    const eventsOk = events.length > 0 && eventTypes.has('accel') && eventTypes.has('decel');
+
+    // Assertion 4: sim-tick fidelity (median dt 16-17 ms)
+    const dts = samples.slice(1).map(s => s.dt).filter(d => d > 0);
+    dts.sort((a,b)=>a-b);
+    const medDt = dts[Math.floor(dts.length/2)];
+    log(`Median dt: ${medDt.toFixed(3)} ms (n=${dts.length} non-zero dts).`);
+    const dtOk = medDt >= 15 && medDt <= 18;
+
+    // Assertion 5: well-formed transitions (no self-transitions)
+    const selfTransition = realTransitions.find(t => t.from === t.to);
+    const wellFormedOk = !selfTransition;
+
+    if (multiLegOk) summary(`multi-leg structure (${realTransitions.length} phase transitions)`, true);
+    else summary(`only ${realTransitions.length} transitions; expected >=2`, false);
+
+    if (phasesOk) summary(`only known phases: ${[...knownPhases].join(', ')}`, true);
+    else summary(`unknown phase observed: ${unknownPhase.shipPhase}`, false);
+
+    if (eventsOk) summary(`motion events fire (${events.length} total; types: ${[...eventTypes].join(', ')})`, true);
+    else summary(`motion events incomplete: ${events.length} total, types ${[...eventTypes].join(', ')}`, false);
+
+    if (dtOk) summary(`sim-tick fidelity (median dt ${medDt.toFixed(2)} ms)`, true);
+    else summary(`unexpected median dt ${medDt.toFixed(2)} ms (want 15-18 ms)`, false);
+
+    if (wellFormedOk) summary('no self-transitions in phase sequence', true);
+    else summary(`self-transition observed: ${selfTransition.from}->${selfTransition.to}`, false);
+
+    const allPass = multiLegOk && phasesOk && eventsOk && dtOk && wellFormedOk;
+    summary(allPass ? 'AC #17 Layer A autopilot-tour — ALL ASSERTIONS PASS' : 'AC #17 Layer A autopilot-tour — at least one assertion failed', allPass);
+  }
+  </script>
+</body>
+</html>
