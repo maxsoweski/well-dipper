@@ -378,7 +378,7 @@ work performed against pre-migration HEADs.
 | **Invariant-class** | Predicates from `motion-test-kit/core/predicates/index.js` run against per-sim-tick well-dipper telemetry. Concrete example: the toggle-fix bug class — `deltaMagnitudeBound` / `monotonicityScore` / `signStability` predicates against post-W-press window samples (60 Hz sim tick, no render interpolation contamination). The migration's AC #16 dogfood is the canonical post-migration invocation. |
 | **Regression-class** | Transform-hash golden trajectory at `tests/golden-trajectories/canonical-scenario.golden.json` (committed by the migration's AC #15 — canonical scenario: warp to Sol, autopilot to Earth, manual disengage). Run `npm run verify-golden` to assert hash-equivalence in <30 wall-clock seconds; per-frame mismatch diagnostics on FAIL. |
 | **Reproducibility-class** | Seeded RNG via `?seed=N` URL param (migration AC #13 threads `mulberry32` through every sim-classified `Math.random()` call site) plus input replay via `?recordInput=1` capture and `?replayInput=path` playback (migration AC #14, using the kit's `adapters/dom/keyboard-mouse-bridge.js`). Two URL loads with the same seed + same replay produce byte-equivalent telemetry. |
-| **Structural-visibility-class** | Scene-inventory snapshots — which meshes are visible, which DOM overlays are present, which post-effect passes are active per phase. *Forward dependency:* not yet implemented in the kit; lands in sibling workstream `motion-test-kit-scene-inventory-2026-05-05` as kit technique #6. Until that workstream Ships, Tester uses telemetry-only structural assertions for phase-boundary verification (e.g., assert `WarpEffect.phase` advances `IDLE → ENTER → HYPER → EXIT → IDLE` monotonically without skipping). |
+| **Structural-visibility-class** | Scene-inventory snapshots from kit technique #6 (`motion-test-kit/core/inventory/predicates`). Run `meshVisibleAt` / `overlayVisibleAt` / `passEnabledAt` / `drawCallBudget` against per-phase inventories captured via `withPhaseBoundaryInventory` or `snapshotAtPhaseBoundaries`. Diff API (`diffInventories`) names which meshes / overlays / passes appeared or disappeared between two phase boundaries — load-bearing for warp-style "what changed between HYPER and EXIT" verification. See `~/projects/motion-test-kit/runbooks/06-scene-inventory.md` for invocation patterns; see `docs/WORKSTREAMS/motion-test-kit-scene-inventory-2026-05-05.md` for technique origin. |
 
 For motion-class, visual, and phased-feature verification, Tester defaults to **telemetry + scene-inventory + lab-mode**; recordings are reserved for the exception path documented in `~/.claude/projects/-home-ax/memory/feedback_lab-modes-not-recordings.md`.
 
@@ -409,6 +409,60 @@ The §"Felt-experience-vs-invariant-class distinction" subsection above still ap
   the next firing, save the recording, then replay against the same
   `?seed=N` to drive deterministic re-execution. The replay produces
   identical telemetry — predicates / hash compare against that.
+
+#### Inventory invocation pattern
+
+For Structural-visibility-class assertions (which meshes are visible,
+which overlays present, which passes enabled per phase):
+
+```js
+import { takeSceneInventory, withPhaseBoundaryInventory } from 'motion-test-kit/adapters/three/scene-inventory';
+import { createOverlayRegistry } from 'motion-test-kit/adapters/dom/overlay-registry';
+import {
+  meshVisibleAt,
+  overlayHiddenAt,
+  passEnabledAt,
+  drawCallBudget,
+  snapshotAtPhaseBoundaries,
+} from 'motion-test-kit/core/inventory/predicates';
+import { diffInventories } from 'motion-test-kit/core/inventory/diff';
+
+// 1) Host registers UI overlays at startup.
+const overlayRegistry = createOverlayRegistry();
+overlayRegistry.register('reticle', '#hud-reticle');
+overlayRegistry.register('navComputer', '#nav-panel');
+
+// 2) Wrap the recorder with phase-boundary inventory capture. Sub-ms cost
+//    per phase boundary; zero cost between transitions.
+const recorder = withPhaseBoundaryInventory({
+  recorder: bindCaptureToBuffer({ buffer }),
+  scene, camera, composer, overlayRegistry, renderer,
+  stateFieldPath: 'warpState',
+});
+// Caller drives recorder.tick(t, anchor, { state, ... }) per sim tick.
+
+// 3) After scenario, predicates run over phase-keyed inventories.
+const samples = buffer.snapshot();
+const invs = snapshotAtPhaseBoundaries(samples, ['HYPER', 'EXIT'], 'warpState');
+
+assert.equal(meshVisibleAt(invs,    { phaseKey: 'HYPER', meshName: 'tunnelMesh'   }).passed, true);
+assert.equal(overlayHiddenAt(invs,  { phaseKey: 'HYPER', overlayId: 'reticle'     }).passed, true);
+assert.equal(passEnabledAt(invs,    { phaseKey: 'EXIT',  passName: 'GlowPass'     }).passed, true);
+assert.equal(drawCallBudget(invs,   { phaseKey: 'EXIT',  max: 50                  }).passed, true);
+
+// 4) Diff API — what changed structurally between phases.
+const delta = diffInventories(invs.get('HYPER'), invs.get('EXIT'));
+assert.deepEqual(delta.disappearedMeshes, ['tunnelMesh']);
+assert.deepEqual(delta.appearedOverlays, ['reticle']);
+```
+
+Pitfalls (full list in `motion-test-kit/runbooks/06-scene-inventory.md`):
+unnamed meshes break assertions silently (run `verbose: true` once at
+host integration); manual-frustum unreliable for skinned/instanced
+meshes (v1 carve); phase-boundary cadence misses intra-phase regressions
+(use `everyN(N=6)` or `everyFrame` when AC names a transient property);
+overlay registry stale after DOM detach/reattach (use lazy resolver
+function instead of selector string).
 
 
 
