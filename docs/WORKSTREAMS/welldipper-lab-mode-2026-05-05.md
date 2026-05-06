@@ -2,6 +2,8 @@
 
 ## Status
 
+**Shipped `775797b8` 2026-05-06** — Tester §T2 PASS confirms all 12 ACs satisfied. Lab IS the felt-experience surface (no recording suffix). Phase 1+3 at `8b32298`, Phase 2 at `2eea663`, Tester-directed fixes at `775797b`. Audit log at `~/.claude/state/dev-collab/tester-audits/welldipper-lab-mode-2026-05-05.md` (§T1 FAIL → §T2 PASS). PM amendment recommended (non-blocking) to update AC #4's verifiable text from legacy `_navSubsystem.bodyRef` to "either V1 `_autopilotMotion._target` OR legacy `_navSubsystem.bodyRef`" — same brief-vs-implementation reconciliation pattern as the migration brief's autopilot V1 amendment-history.
+
 **Scoped 2026-05-06 against well-dipper HEAD `3345e40`** (post fixed-timestep migration Shipped `89a6c116` + Phase 5 amendment + Shipped flip). Authored as **parallel sibling** to `motion-test-kit-scene-inventory-2026-05-05` (kit-side technique #6). Both are queued for the same execution window. This brief does NOT block on the kit's scene-inventory shipping — Phase 1 below carves a telemetry-only fallback for scenario-entry verification. Full payoff lands when both ship; partial payoff (interactive felt-experience surface) lands as soon as this workstream ships.
 
 This is the workstream the fixed-timestep migration's AC #17 Layer B placeholder pointed at. The Shift+L stub panel currently in `src/main.js` (lines ~7399-7412) is replaced by the full keybind layer + HUD overlay this brief delivers.
