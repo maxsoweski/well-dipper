@@ -2,6 +2,8 @@
 
 ## Status
 
+**Shipped `1b79c785` + welldipper@`656a5854` — kit @ motion-test-kit:`1b79c785`** (Tester §T1 PASS 2026-05-06). All 20 verifiable ACs satisfied; AC #21 cross-workstream check deferred per the brief carve until `welldipper-lab-mode-2026-05-05` ships. 159 kit self-tests pass (74 baseline + 85 new). Engine-purity grep on `core/inventory/` returns zero matches — Drift risk #1 guard held.
+
 **Scoped 2026-05-06 against motion-test-kit @ `b2b0473` + well-dipper HEAD `3345e40`.** Authored as **parallel sibling** to `welldipper-lab-mode-2026-05-05` (well-dipper-side keybind layer). Both queued for the same execution window. Each ships independently:
 
 - This workstream is standalone kit infrastructure — usable by any host project, not just well-dipper. It does NOT need lab-mode to ship to be useful.
