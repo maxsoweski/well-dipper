@@ -103,6 +103,26 @@ export function assignName(obj, info) {
 }
 
 /**
+ * Re-tag an already-named Object3D as an "origin" snapshot during multi-
+ * instance lifecycles (warp crossover demotes current layers to origin
+ * slots while new destination layers are constructed). Overrides the id
+ * segment to `origin` so the inspection layer can distinguish demoted
+ * snapshots from the live layer.
+ *
+ * Example: `sky.starfield.main` -> `sky.starfield.origin`.
+ *
+ * No-op if the object has no pre-existing userData.category / kind.
+ *
+ * @param {object} obj
+ */
+export function markAsOrigin(obj) {
+  if (!obj || !obj.userData?.category || !obj.userData?.kind) return;
+  if (!obj.userData.priorId) obj.userData.priorId = obj.userData.id;
+  obj.userData.id = 'origin';
+  obj.name = `${obj.userData.category}.${obj.userData.kind}.origin`;
+}
+
+/**
  * Assign a body name (planet / moon / asteroid-belt / star) given the data
  * record. Convenience wrapper around resolveBodyId + assignName.
  *

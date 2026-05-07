@@ -3,6 +3,7 @@ import { GalaxyGlowLayer } from './sky/GalaxyGlowLayer.js';
 import { ProceduralGlowLayer } from './sky/ProceduralGlowLayer.js';
 import { SkyFeatureLayer } from './sky/SkyFeatureLayer.js';
 import { StarfieldLayer } from './sky/StarfieldLayer.js';
+import { markAsOrigin } from '../util/scene-naming.js';
 import { GlowTextureManager } from './sky/GlowTextureManager.js';
 
 /**
@@ -301,6 +302,13 @@ export class SkyRenderer {
     this._originStarfieldLayer = this._starfieldLayer;
     this._originGlowLayer      = this._glowLayer;
     this._originFeatureLayer   = this._featureLayer;
+    // Disambiguate demoted layers from the destination layers about to be
+    // constructed. Without this, the inspection layer sees two
+    // 'sky.starfield.main' entries during the crossover and predicates
+    // can't tell origin-snapshot from live-destination apart.
+    if (this._originStarfieldLayer) markAsOrigin(this._originStarfieldLayer.mesh);
+    if (this._originGlowLayer)      markAsOrigin(this._originGlowLayer.mesh);
+    if (this._originFeatureLayer && this._originFeatureLayer.mesh) markAsOrigin(this._originFeatureLayer.mesh);
     this._starfieldLayer = null;
     this._glowLayer = null;
     this._featureLayer = null;
