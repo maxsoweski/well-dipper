@@ -691,6 +691,13 @@ export function generateSolarSystem() {
       axialTilt: p.axialTilt,
       sunDirection: sunDir,
       profileId: p.profileId || null,
+      // Inspection-layer naming metadata. profileId carries canonical
+      // names for bodies in KnownBodyProfiles; _canonicalName is the
+      // fallback for bodies (Ceres, Haumea, Makemake, Eris) that have a
+      // canonical proper name but no KnownBodyProfiles entry.
+      _systemSeed: 'sol',
+      _ordinal: i,
+      _canonicalName: p.name ? p.name.toLowerCase().replace(/\s+/g, '-') : null,
     };
 
     // Build moons
@@ -718,11 +725,20 @@ export function generateSolarSystem() {
             atmosphere: m.atmosphere || null,
             moonCount: 0,
             noiseScale: m.noiseScale,
+            _systemSeed: 'sol',
+            _ordinal: `${i}.pm.${mi}`,
+            _canonicalName: m.name ? m.name.toLowerCase().replace(/\s+/g, '-') : null,
             noiseDetail: 0.4,
             rotationSpeed: rot(0.05),
             axialTilt: 0.1,
             sunDirection: sunDir,
             profileId: m.profileId || null,
+        _systemSeed: 'sol',
+        _ordinal: `${i}.${mi}`,
+        _canonicalName: m.name ? m.name.toLowerCase().replace(/\s+/g, '-') : null,
+            _systemSeed: 'sol',
+            _ordinal: `${i}.${mi}`,
+            _canonicalName: m.name ? m.name.toLowerCase().replace(/\s+/g, '-') : null,
           },
           radiusEarth: moonRadiusEarth,
           radiusScene: moonRadiusScene,
@@ -766,6 +782,9 @@ export function generateSolarSystem() {
         clouds: null,
         atmosphere: null,
         profileId: m.profileId || null,
+        _systemSeed: 'sol',
+        _ordinal: `${i}.${mi}`,
+        _canonicalName: m.name ? m.name.toLowerCase().replace(/\s+/g, '-') : null,
       };
     });
 

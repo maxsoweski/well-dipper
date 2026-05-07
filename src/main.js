@@ -3371,8 +3371,10 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   }
 
   // ── Create star(s) ──
-  // Scene-unit star data: override radius with radiusScene for 3D rendering
-  const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene };
+  // Scene-unit star data: override radius with radiusScene for 3D rendering.
+  // Phase 2 of welldipper-scene-inspection-layer: propagate systemData.seed
+  // so StarFlare can name itself 'effect.starflare.<systemId>' (e.g. 'sol').
+  const sceneStarData = { ...systemData.star, radius: systemData.star.radiusScene, _systemSeed: systemData.seed };
   // Always use StarFlare for the primary system star(s) — gives the full
   // diffraction spike effect that matches the desired visual look.
   const star = new StarFlare(sceneStarData);
@@ -3382,7 +3384,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   const starOrbitLines = [];
 
   if (systemData.isBinary) {
-    const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene };
+    const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene, _systemSeed: systemData.seed };
     console.log(`[BINARY] star2: radius=${sceneStarData2.radius?.toFixed(2)}, type=${sceneStarData2.type}, color=[${sceneStarData2.color}], sep=${systemData.binarySeparationScene?.toFixed(2)}`);
     star2 = new StarFlare(sceneStarData2);
     star2.addTo(scene);
@@ -3479,6 +3481,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
           clouds: moonData.planetData.clouds
             ? { ...moonData.planetData.clouds, scale: moonData.planetData.clouds.scale * pmRatio }
             : null,
+          // Propagate stable id-deriving metadata for the inspection layer.
+          // Without these, Planet.js falls back to 'unseeded' for procedural
+          // planet-class moons.
+          _systemSeed: systemData.seed,
+          _ordinal: `pm-${moonData._ordinal}`,
         };
         // Slightly dim planet-moons so they don't outshine regular moons
         // (Planet.js uses smooth diffuse vs Moon.js's contrasty smoothstep)
@@ -4715,7 +4722,7 @@ function gallerySpawn() {
   // ── Star (lens flare / diffraction spikes) ──
   else if (type === 'star-flare') {
     const systemData = StarSystemGenerator.generate(seed);
-    const starData = { ...systemData.star, radius: systemData.star.radiusScene };
+    const starData = { ...systemData.star, radius: systemData.star.radiusScene, _systemSeed: systemData.seed };
     const star = new StarFlare(starData);
     star.addTo(scene);
     _galleryMeshes.push(star);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { assignName, resolveBodyId } from '../util/scene-naming.js';
+import { assignName, resolveStarId } from '../util/scene-naming.js';
 
 /**
  * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
@@ -21,8 +21,8 @@ export class StarFlare {
     this.data = starData;
     this._renderRadius = renderRadius !== null ? renderRadius : starData.radius;
     this.mesh = new THREE.Group();
-    const _flareId = resolveBodyId(starData).id;
-    assignName(this.mesh, { category: 'effect', kind: 'starflare', id: _flareId, systemSeed: starData?._systemSeed });
+    const _flareInfo = resolveStarId(starData);
+    assignName(this.mesh, { category: 'effect', kind: 'starflare', id: _flareInfo.id, systemSeed: starData?._systemSeed, fullHash: _flareInfo.fullHash });
 
     // Invisible sphere for click raycasting (star systems register
     // star.surface as a click target — needs to be a real mesh).

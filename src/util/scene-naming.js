@@ -57,6 +57,13 @@ export function resolveBodyId(bodyData, fallbackOrdinal) {
     // Non-Sol profile id (future canonical sets) — use as-is.
     return { id: profileId, fullHash: null, isCanonical: true };
   }
+  // Canonical-name fallback: bodies that have a real name (Sol's Ceres,
+  // Haumea, Makemake, Eris) but no KnownBodyProfiles entry. Use the name
+  // directly so the inventory reads naturally.
+  const canonical = bodyData?._canonicalName;
+  if (typeof canonical === 'string' && canonical.length > 0) {
+    return { id: canonical, fullHash: null, isCanonical: true };
+  }
   // Procedural — derive from systemSeed + ordinal. Both are required for
   // determinism. Falls through to a noisy default when missing so it's
   // visible in the inventory rather than silently anonymous.
@@ -100,6 +107,28 @@ export function assignName(obj, info) {
   };
   if (info.systemSeed != null) obj.userData.systemSeed = info.systemSeed;
   if (info.fullHash) obj.userData.fullHash = info.fullHash;
+}
+
+/**
+ * Resolve a stable id segment for a star, given its system context.
+ * Stars are named after their containing system (one star per system).
+ *
+ * @param {object} starData
+ *   - `_systemSeed`: string ('sol') OR number (procedural). Required for
+ *      stable naming.
+ * @returns {{ id: string, fullHash: string|null, isCanonical: boolean }}
+ */
+export function resolveStarId(starData) {
+  const seed = starData?._systemSeed;
+  if (typeof seed === 'string' && seed.length > 0) {
+    // Canonical (e.g. 'sol') — use as-is.
+    return { id: seed, fullHash: null, isCanonical: true };
+  }
+  if (seed != null) {
+    const fullHex = toHex(fnv1aString(String(seed)));
+    return { id: fullHex.slice(0, 6), fullHash: fullHex, isCanonical: false };
+  }
+  return { id: 'unseeded', fullHash: null, isCanonical: false };
 }
 
 /**
