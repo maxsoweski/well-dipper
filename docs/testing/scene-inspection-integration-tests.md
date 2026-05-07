@@ -436,6 +436,27 @@ NOTE: Phase 3's installSceneInspector currently checks `import.meta.env.DEV || ?
 
 ---
 
+## Group H + I — Now auto-runnable via runWarpSuite()
+
+Updated 2026-05-07: H1 + H2 + I1 + I1b are exercised together by `await __wd.runWarpSuite()`. The suite drives a real warp via `window._beginWarpTurn()` (the entry point the keypress handler invokes internally), samples inventory at 100ms cadence through the full lifecycle, and returns:
+
+```
+{
+  passed, failed, total,           // layer-functionality count (4/4 expected)
+  distinctPhases,                  // ["idle", "fold", "enter", "hyper", "exit"]
+  durationSec,
+  results,                         // per-test PASS/FAIL with evidence
+  samples,                         // raw 100ms samples
+  regressions,                     // diagnostic findings — separate from PASS/FAIL
+}
+```
+
+The key reframing: **PASS/FAIL** measures the inspection layer's machinery (does sampling work, did phases advance, can we observe the relevant meshes). **regressions[]** records the FINDINGS — bugs in the rendering code that the layer correctly surfaced. A clean layer can report regressions without itself failing.
+
+Current live output (Sol → procedural target):
+- Layer functionality: **4/4 PASS**.
+- Regressions detected: `warp-tunnel-second-half-not-rendering` (tunnel never live during 30 HYPER samples) + `reticle-persists-after-warp` (landing-strip live in 5/5 post-warp samples). Both correspond to parked bugs the workstream brief explicitly called out as triage targets.
+
 ## Group H — Warp lifecycle observability
 
 ### H1. Warp phase transitions visible in inventory

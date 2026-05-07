@@ -103,6 +103,10 @@ export function installSceneInspector(engines) {
       const m = await import('./integration-suite.js');
       return m.runIntegrationSuite();
     },
+    runWarpSuite: async (opts) => {
+      const m = await import('./integration-suite.js');
+      return m.runWarpSuite(opts);
+    },
     togglePanel,
     panelOpen: () => !!_state.panelEl?.isConnected,
   };
