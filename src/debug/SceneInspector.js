@@ -54,6 +54,7 @@ export function installSceneInspector(engines) {
     phases: () => ({}),
     audio: () => [],
     input: () => ({}),
+    syntheticLights: () => deriveSyntheticLights(engines),
     panelEl: null,
     panelExpanded: false,
     lastInventory: null,
@@ -96,6 +97,7 @@ export function installSceneInspector(engines) {
     setPhasesProvider: (fn) => { _state.phases = fn; },
     setAudioProvider: (fn) => { _state.audio = fn; },
     setInputProvider: (fn) => { _state.input = fn; },
+    setLightsProvider: (fn) => { _state.syntheticLights = fn; },
     togglePanel,
     panelOpen: () => !!_state.panelEl?.isConnected,
   };
@@ -136,6 +138,24 @@ function takeInventoryNow(opts) {
     ...(opts?.options || {}),
   });
 
+  // Synthesize lights for hosts that use shader-based lighting instead of
+  // THREE.Light. The lights category from kit-side traversal stays accurate
+  // (.isLight === true objects); these synthetic entries are appended.
+  const synthetic = _state.syntheticLights();
+  if (Array.isArray(synthetic) && synthetic.length > 0) {
+    inv.lights = (inv.lights || []).concat(synthetic);
+  }
+
+  // Append named container Objects (Groups that carry userData.category but
+  // have no geometry — kit's takeSceneInventory filters by geometry, so
+  // these named containers don't show up otherwise. Brief calls them out
+  // explicitly: AsteroidBelt parent Group, ShipSpawner outer model wrapper,
+  // GravityWellMap container, etc. — load-bearing for predicate lookups.)
+  const namedContainers = collectNamedContainers(scenes);
+  if (namedContainers.length > 0) {
+    inv.meshes = (inv.meshes || []).concat(namedContainers);
+  }
+
   _state.lastInventory = inv;
   return inv;
 }
@@ -156,6 +176,41 @@ function saveGolden(scenarioName) {
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   } catch (_) {}
   return golden;
+}
+
+function collectNamedContainers(scenes) {
+  // Walk each scene and collect every Object3D that has userData.category
+  // set AND no geometry (kit's mesh array already covers geometried ones).
+  // Emits inventory-mesh-shaped entries so predicates / diff continue to
+  // work uniformly. inFrustum is conservative true (containers don't have
+  // bounding spheres; assume in-frustum unless host overrides).
+  const out = [];
+  for (const { name: source, scene } of scenes) {
+    if (!scene?.traverse) continue;
+    scene.traverse((obj) => {
+      if (!obj || obj.geometry) return;             // geometried already covered
+      if (!obj.userData?.category) return;          // unnamed container — skip
+      const mwE = obj.matrixWorld?.elements;
+      const worldPos = mwE
+        ? [mwE[12], mwE[13], mwE[14]]
+        : [obj.position?.x ?? 0, obj.position?.y ?? 0, obj.position?.z ?? 0];
+      out.push({
+        name: obj.name || '',
+        type: obj.type || 'Group',
+        uuid: obj.uuid || '',
+        source,
+        visible: obj.visible !== false,
+        frustumCulled: obj.frustumCulled !== false,
+        inFrustum: true,
+        worldPos,
+        layer: (obj.layers?.mask) ?? 1,
+        materialUuid: '',
+        geometryUuid: '',
+        isContainer: true,
+      });
+    });
+  }
+  return out;
 }
 
 function diffLatest(prev) {
@@ -243,6 +298,53 @@ function deriveAudio(engines) {
     currentTime: engines.audioCtx.currentTime ?? 0,
     volume: typeof engines.audioCtx.destination?.gain?.value === 'number' ? engines.audioCtx.destination.gain.value : 1,
   }];
+}
+
+function deriveSyntheticLights(engines) {
+  // well-dipper uses shader-based lighting (no THREE.Light instances). Read
+  // the current systemData via the host-supplied provider and emit
+  // SyntheticLight entries so lightActiveAt(...) has data to assert against.
+  const sd = engines.systemDataProvider ? engines.systemDataProvider() : null;
+  if (!sd) return [];
+  const out = [];
+  if (sd.star) {
+    const star = sd.star;
+    const sysId = sd.seed != null ? String(sd.seed) : 'unseeded';
+    const color = colorArrayToHex(sd.starInfo?.color1 || star.color);
+    out.push({
+      name: 'light.star.' + sysId,
+      type: 'SyntheticLight',
+      uuid: 'synthetic-star-' + sysId,
+      source: 'main',
+      visible: true,
+      intensity: typeof sd.starInfo?.brightness1 === 'number' ? sd.starInfo.brightness1 : 1.0,
+      color,
+      worldPos: [0, 0, 0],
+    });
+  }
+  if (sd.isBinary && sd.star2) {
+    const sysId = sd.seed != null ? String(sd.seed) : 'unseeded';
+    const color = colorArrayToHex(sd.starInfo?.color2 || sd.star2.color);
+    out.push({
+      name: 'light.star2.' + sysId,
+      type: 'SyntheticLight',
+      uuid: 'synthetic-star2-' + sysId,
+      source: 'main',
+      visible: true,
+      intensity: typeof sd.starInfo?.brightness2 === 'number' ? sd.starInfo.brightness2 : 0.0,
+      color,
+      worldPos: [0, 0, 0],
+    });
+  }
+  return out;
+}
+
+function colorArrayToHex(c) {
+  if (!Array.isArray(c) || c.length < 3) return '';
+  const r = Math.round(Math.min(1, Math.max(0, c[0])) * 255);
+  const g = Math.round(Math.min(1, Math.max(0, c[1])) * 255);
+  const b = Math.round(Math.min(1, Math.max(0, c[2])) * 255);
+  return ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
 }
 
 function deriveInput(engines) {

@@ -1624,6 +1624,9 @@ if (import.meta.env.DEV) {
       warpPortal,
       labMode: window._labMode,
       audioCtx: window._audioCtx || null,
+      // Provider so SceneInspector can synthesize lights from the current
+      // system. systemData is exposed on window._systemData by spawnSystem.
+      systemDataProvider: () => window._systemData,
     });
   }).catch((e) => {
     console.warn('[SceneInspector] install skipped:', e);
@@ -3381,6 +3384,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   cameraController.forceFreeLook = false;
 
   const systemData = preGenData || StarSystemGenerator.generate(seed);
+  // Phase 2-followup of welldipper-scene-inspection-layer: expose
+  // current systemData so SceneInspector's lights synthesizer can read it.
+  window._systemData = systemData;
 
   // ── Generate names for star system ──
   // Known systems use pre-defined real names. Otherwise generate from seed.

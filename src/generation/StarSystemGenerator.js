@@ -485,6 +485,9 @@ export class StarSystemGenerator {
       );
       // Attach physics data to the belt
       beltData.physics = beltPhysics;
+      beltData._systemSeed = seed;
+      beltData._ordinal = 'main';
+      beltData._canonicalName = 'main';
       asteroidBelts.push(beltData);
     }
 
@@ -501,6 +504,9 @@ export class StarSystemGenerator {
       );
       kuiperData.physics = kuiperPhysics;
       kuiperData.isKuiper = true;
+      kuiperData._systemSeed = seed;
+      kuiperData._ordinal = 'kuiper';
+      kuiperData._canonicalName = 'kuiper';
       asteroidBelts.push(kuiperData);
     }
 

@@ -90,6 +90,16 @@ export class ShipSpawner {
         const orbitInclination = (rng() - 0.5) * 0.3;  // slight random tilt
         const rotSpeed = (0.5 + rng() * 1.5) * (rng() < 0.5 ? 1 : -1);
 
+        // Phase 2-followup of welldipper-scene-inspection-layer: name the
+        // outer GLTF wrapper so the inspection layer can query individual
+        // NPCs. The model's interior nodes go through the GLTF loader and
+        // get name-mangled per the brief's GLTF caveat; only this outer
+        // Object3D is reliably-named.
+        model.name = 'ship.npc.' + archetype + '.' + i + '-' + s;
+        model.userData = Object.assign({}, model.userData, {
+          category: 'ship', kind: 'npc', id: archetype + '.' + i + '-' + s,
+          archetype, planetIndex: i, spawnIndex: s, generation: 0,
+        });
         scene.add(model);
 
         this.ships.push({

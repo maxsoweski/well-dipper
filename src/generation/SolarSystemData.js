@@ -815,6 +815,15 @@ export function generateSolarSystem() {
     return [base * 0.95, base, base * 1.05];
   });
 
+  // Phase 2-followup of welldipper-scene-inspection-layer: tag id-deriving
+  // metadata for naming. Sol's belts have canonical 'main' / 'kuiper' ids.
+  mainBelt._systemSeed = 'sol';
+  mainBelt._ordinal = 'main';
+  mainBelt._canonicalName = 'main';
+  kuiperBelt._systemSeed = 'sol';
+  kuiperBelt._ordinal = 'kuiper';
+  kuiperBelt._canonicalName = 'kuiper';
+  kuiperBelt.isKuiper = true;
   const asteroidBelts = [mainBelt, kuiperBelt];
 
   // ── Star info ──

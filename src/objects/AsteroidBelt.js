@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignBodyName } from '../util/scene-naming.js';
 
 /**
  * AsteroidBelt — renders a belt of asteroids using InstancedMesh.
@@ -24,6 +25,14 @@ export class AsteroidBelt {
 
     // Create one InstancedMesh per shape variant
     this._groups = this._createGroups();
+
+    // Phase 2-followup of welldipper-scene-inspection-layer: wrap shape-
+    // variant InstancedMeshes in a parent Group so the inspection layer
+    // can name + query the belt as a single load-bearing entity. Per
+    // brief: "container only; per-shape InstancedMesh children unnamed".
+    this.mesh = new THREE.Group();
+    for (const g of this._groups) this.mesh.add(g.mesh);
+    assignBodyName(this.mesh, 'asteroid-belt', beltData);
 
     // Pre-allocate reusable objects for update()
     this._tempMatrix = new THREE.Matrix4();
@@ -240,15 +249,11 @@ export class AsteroidBelt {
   }
 
   addTo(scene) {
-    for (const group of this._groups) {
-      scene.add(group.mesh);
-    }
+    scene.add(this.mesh);
   }
 
   removeFrom(scene) {
-    for (const group of this._groups) {
-      scene.remove(group.mesh);
-    }
+    scene.remove(this.mesh);
   }
 
   dispose() {
