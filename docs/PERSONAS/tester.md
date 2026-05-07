@@ -518,6 +518,64 @@ meshes (v1 carve); phase-boundary cadence misses intra-phase regressions
 overlay registry stale after DOM detach/reattach (use lazy resolver
 function instead of selector string).
 
+#### Multi-scene + 9 categories invocation (post-2026-05-07)
+
+Per the welldipper-scene-inspection-layer-2026-05-06 workstream, the
+inventory now supports multi-scene capture with `source` tagging plus 9
+new host-supplied categories (cameras / lights / materials / clocks /
+modes / renderTargets / phases / audio / input). When verifying ACs that
+involve cross-scene visibility (sky vs main), per-phase uniform values,
+or state-machine coherence, use the new shape:
+
+```js
+const inv = takeSceneInventory({
+  scenes: [
+    { name: 'main', scene: mainScene, camera: mainCamera },
+    { name: 'sky',  scene: skyScene,  camera: skyCamera  },
+  ],
+  composer, overlayRegistry, renderer,
+  materials: [{ role: 'warp.tunnel', material: tunnelMat, watch: ['uTime', 'uPhase'] }],
+  clocks: { warp: warpEffect.elapsed },
+  modes: { 'sky.crossover': skyRenderer._crossoverActive ? 'active' : 'idle' },
+  phases: { warp: warpEffect.state, autopilot: autopilot.mode },
+  audio: [{ track: 'bgm', isPlaying: true, currentTime: 12.4, volume: 0.8 }],
+  input: { 'held-keys': [...heldKeys] },
+});
+
+// New predicates: cameraConfigAt, lightActiveAt, uniformValueAt,
+// clockProgressedSince, modeIs, renderTargetSize, phaseEquals,
+// audioPlayingAt, inputContains. Mesh predicates accept optional
+// `{ source }` to scope by scene.
+assert.equal(meshVisibleAt(invs, { phaseKey: 'HYPER', meshName: 'sky.starfield.main', source: 'sky' }).passed, true);
+assert.equal(uniformValueAt(invs, { phaseKey: 'HYPER', materialRole: 'warp.tunnel', uniformName: 'uPhase', expected: 'hyper' }).passed, true);
+assert.equal(phaseEquals(invs, { phaseKey: 'HYPER', system: 'autopilot', expected: 'WARP' }).passed, true);
+```
+
+#### Live inspection via `window.__wd` (Phase 3 of well-dipper)
+
+In well-dipper, the host installs a runtime inspector that pre-wires
+takeSceneInventory with main + sky scenes, the composer, the overlay
+registry, the renderer, and host-supplied collectors. Tester drives it
+through chrome-devtools rather than rebuilding the wiring per scenario:
+
+```js
+// chrome-devtools evaluate_script
+const inv = window.__wd.takeSceneInventory();          // full multi-scene inventory
+const earth = window.__wd.getNamed('body.planet.earth'); // direct Object3D ref
+window.__wd.togglePanel();                              // or press Shift+I in real keypress
+const golden = window.__wd.serializeForGolden();        // canonical-form for diff
+```
+
+`window.__wd` is gated by `import.meta.env.DEV` — only in the dev bundle.
+Production runs of well-dipper don't expose it. Use the `?debug=1` URL
+param if Tester ever needs to verify against the production build (the
+inspector module is then loaded explicitly via that gate).
+
+`Shift+I` is the real-keypress path for the in-page inspector panel.
+Per `feedback_test-actual-user-flow.md`, drive via real keypress when
+verifying a keypress-bound feature; `togglePanel()` is for assertion
+reads in scenarios where the panel is incidental.
+
 
 
 Created 2026-04-25 after the camera-turn-snap incident. Working-Claude shipped a "smooth turn" fix to Max without telemetry-verifying it actually worked; Max called it out. The Tester persona exists to make that mistake harder to repeat.
