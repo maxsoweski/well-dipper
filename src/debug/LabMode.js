@@ -69,7 +69,7 @@ export function init(opts) {
   // Host can extend via opts.overlayIds.
   _overlayRegistry = createOverlayRegistry();
   const defaults = {
-    'reticle': '#targeting-reticle',
+    'targeting-overlay': '#targeting-overlay',
     'hud': '#hud',
     'keybinds-panel': '#keybinds-overlay',
     'lab-hud': '#lab-hud',

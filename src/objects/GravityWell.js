@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignName } from '../util/scene-naming.js';
 
 /**
  * GravityWell — a grid on the equatorial (XZ) plane that warps downward
@@ -210,6 +211,7 @@ export class GravityWell {
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
+    assignName(this.mesh, { category: 'hud', kind: 'gravity-well', id: 'main' });
   }
 
   /**

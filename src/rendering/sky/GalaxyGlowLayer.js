@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignName } from '../../util/scene-naming.js';
 
 /**
  * GalaxyGlowLayer — diffuse glow representing billions of unresolved stars.
@@ -78,6 +79,7 @@ export class GalaxyGlowLayer {
 
     this._sphere = new THREE.Mesh(geometry, material);
     this.mesh = this._sphere;
+    assignName(this.mesh, { category: 'sky', kind: 'glow', id: 'galaxy' });
   }
 
   /**

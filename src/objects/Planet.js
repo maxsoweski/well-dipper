@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignBodyName } from '../util/scene-naming.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fragment shader split into HEADER + per-category BODY + FOOTER.
@@ -998,6 +999,7 @@ export class Planet {
   constructor(planetData, starInfo = null) {
     this.data = planetData;
     this.mesh = new THREE.Group();
+    assignBodyName(this.mesh, 'planet', planetData);
     this._lightDir = new THREE.Vector3(...planetData.sunDirection).normalize();
     this._lightDir2 = new THREE.Vector3(0, 0, 0); // second star (binary systems)
 

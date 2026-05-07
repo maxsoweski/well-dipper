@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignBodyName } from '../util/scene-naming.js';
 import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js';
 
 /**
@@ -17,6 +18,7 @@ export class Moon {
     this.orbitAngle = moonData.startAngle;
 
     this.mesh = this._createMesh(lightDir, lightDir2, starInfo);
+    assignBodyName(this.mesh, 'moon', moonData);
   }
 
   _createMesh(lightDir, lightDir2, starInfo) {

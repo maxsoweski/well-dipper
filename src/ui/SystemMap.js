@@ -23,6 +23,8 @@ export class SystemMap {
    */
   constructor(systemData, systemState) {
     this.scene = new THREE.Scene();
+    this.scene.name = 'hud.system-map';
+    this.scene.userData = { category: 'hud', kind: 'system-map', id: 'main', generation: 0 };
     this.systemState = systemState;
 
     // Conversion: sceneUnits → mapUnits

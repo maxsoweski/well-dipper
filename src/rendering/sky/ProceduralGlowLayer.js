@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignName } from '../../util/scene-naming.js';
 
 /**
  * ProceduralGlowLayer — real-time galaxy glow from density integration.
@@ -932,6 +933,7 @@ export class ProceduralGlowLayer {
 
     this._sphere = new THREE.Mesh(geometry, material);
     this.mesh = this._sphere;
+    assignName(this.mesh, { category: 'sky', kind: 'glow', id: 'procedural' });
   }
 
   /**

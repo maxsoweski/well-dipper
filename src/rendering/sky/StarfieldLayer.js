@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignName } from '../../util/scene-naming.js';
 
 /**
  * StarfieldLayer — background stars on a sky sphere.
@@ -27,10 +28,12 @@ export class StarfieldLayer {
       this.count = countOrData.count;
       this.realStars = countOrData.realStars || [];
       this.mesh = this._buildMesh(countOrData.positions, countOrData.colors, countOrData.sizes);
+      assignName(this.mesh, { category: 'sky', kind: 'starfield', id: 'main' });
     } else {
       this.count = countOrData;
       this.realStars = [];
       this.mesh = this._createRandom();
+      assignName(this.mesh, { category: 'sky', kind: 'starfield', id: 'main' });
     }
   }
 

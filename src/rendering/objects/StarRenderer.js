@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignBodyName } from '../../util/scene-naming.js';
 
 /**
  * StarRenderer — type-branched star rendering based on stellar evolution.
@@ -84,6 +85,7 @@ class StarRendererBase {
     this.data = starData;
     this._renderRadius = renderRadius;
     this.mesh = new THREE.Group();
+    assignBodyName(this.mesh, 'star', starData);
     this.surface = null; // set by subclasses — used for raycasting
     this.type = 'unknown';
   }

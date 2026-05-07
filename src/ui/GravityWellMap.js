@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignName } from '../util/scene-naming.js';
 
 /**
  * GravityWellMap — 3D gravity well visualization for the HUD minimap.
@@ -226,6 +227,7 @@ export class GravityWellMap {
     const geometry = new THREE.PlaneGeometry(extent * 2, extent * 2, 150, 150);
     geometry.rotateX(-Math.PI / 2);
     this.mesh = new THREE.Mesh(geometry, this.material);
+    assignName(this.mesh, { category: 'hud', kind: 'gravity-well-map', id: 'main' });
     this.scene.add(this.mesh);
 
     // ── 45° angled orthographic camera ──

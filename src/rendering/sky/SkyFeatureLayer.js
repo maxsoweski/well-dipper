@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignName } from '../../util/scene-naming.js';
 
 /**
  * SkyFeatureLayer — renders nearby galactic features as sky overlays.
@@ -54,6 +55,7 @@ export class SkyFeatureLayer {
   constructor(brightnessRange) {
     this._brightnessRange = brightnessRange;
     this._group = new THREE.Group();
+    assignName(this._group, { category: 'sky', kind: 'feature-layer', id: 'main' });
 
     // Active feature meshes (disposed + recreated on position change)
     this._meshes = [];

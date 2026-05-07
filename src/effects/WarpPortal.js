@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assignName } from '../util/scene-naming.js';
 import {
   portalApertureScene,
   portalPreviewDistanceScene,
@@ -96,6 +97,7 @@ export class WarpPortal {
     // Portal A — origin system entry (near end of tunnel, normal +Z)
     this._discA = new THREE.Mesh(discGeo, makeDiscMat());
     this._discA.renderOrder = 10;
+    assignName(this._discA, { category: 'effect', kind: 'warp', id: 'portal-a' });
     // Back-compat alias — legacy code refers to warpPortal._disc
     this._disc = this._discA;
 
@@ -104,6 +106,7 @@ export class WarpPortal {
     this._discB.position.set(0, 0, -tunnelLength);
     this._discB.rotation.y = Math.PI;
     this._discB.renderOrder = 10;
+    assignName(this._discB, { category: 'effect', kind: 'warp', id: 'portal-b' });
 
     // ── Tunnel interior (stencil-masked, star-textured walls) ──
     // Uniform-radius cylinder spanning both portals. Stencil read when outside,
@@ -299,7 +302,9 @@ export class WarpPortal {
     // geometry is absent and stars are at infinity so there's no parallax
     // cue. Visibility is gated to OUTSIDE_B in setTraversalMode so the
     // crosses don't show through Portal A's stencil view.
+    if (this._tunnel) assignName(this._tunnel, { category: 'effect', kind: 'warp', id: 'tunnel' });
     this._landingStrip = this._createLandingStrip(radius, tunnelLength);
+    assignName(this._landingStrip, { category: 'effect', kind: 'warp', id: 'landing-strip' });
 
     // ── Origin-side "entry strip" ──
     // Two parallel rows of green cross sprites between the camera and
@@ -310,12 +315,14 @@ export class WarpPortal {
     // sits just past Portal A — caller controls how far the first cross
     // sits from the camera by picking the portal open distance.
     this._entryStrip = this._createEntryStrip(radius);
+    assignName(this._entryStrip, { category: 'effect', kind: 'warp', id: 'entry-strip' });
     // Individual cross visibility is managed by setEntryStripProgress(t).
     // Starts fully invisible so the strip appears dark until Space #2.
     this.setEntryStripProgress(0);
 
     // ── Group all meshes together ──
     this.group = new THREE.Group();
+    assignName(this.group, { category: 'effect', kind: 'warp', id: 'portal-group' });
     this.group.add(this._discA);
     this.group.add(this._discB);
     this.group.add(this._tunnel);

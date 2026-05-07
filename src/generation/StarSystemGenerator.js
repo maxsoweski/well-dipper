@@ -366,6 +366,10 @@ export class StarSystemGenerator {
 
       // Generate planet using zone-based type selection (zones are in AU now)
       const planetData = PlanetGenerator.generate(planetRng, orbitRadiusAU, sunDirection, zones);
+      // Phase 2 (welldipper-scene-inspection-layer): tag stable id-deriving
+      // metadata so renderers can name procedural bodies via fnv1a(seed:ordinal).
+      planetData._systemSeed = seed;
+      planetData._ordinal = i;
 
       // Determine parent planet's orbital zone for moon type logic
       const parentZone =
@@ -381,6 +385,8 @@ export class StarSystemGenerator {
         if (m > 0) yield;  // yield between moons — first moon rides the planet's chunk
         const moonRng = planetRng.child(`moon-${m}`);
         const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount, parentZone, zones);
+        moonData._systemSeed = seed;
+        moonData._ordinal = `${i}.${m}`;
         moons.push(moonData);
       }
 

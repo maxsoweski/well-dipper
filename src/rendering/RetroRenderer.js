@@ -49,6 +49,12 @@ export class RetroRenderer {
       logarithmicDepthBuffer: true,
       stencil: true,
     });
+    // Phase 2 of welldipper-scene-inspection-layer: stop three.js from auto-
+    // resetting the renderer.info aggregates each render() call. The
+    // inspection layer reads info.calls/triangles to assert per-phase budgets;
+    // it requires non-zero values that survive into the snapshot. Hosts that
+    // need per-frame resets call this.renderer.info.reset() explicitly.
+    this.renderer.info.autoReset = false;
     this.renderer.setPixelRatio(1);
     this.renderer.autoClear = false; // We manage clearing per-pass
 
