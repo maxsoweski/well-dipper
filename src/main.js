@@ -1608,6 +1608,28 @@ warpPortal.onTraversal = async (mode) => {
 window._warpPortal = warpPortal;  // DEBUG: expose for console testing
 window._warpEffect = warpEffect;  // DEBUG: expose warp state + .start(dir) for console/Playwright
 
+// ── Scene Inspector (Phase 3 of welldipper-scene-inspection-layer) ──
+// Tier 1 (window.__wd) + Tier 2 (Shift+I panel). Wrapped in
+// `if (import.meta.env.DEV)` so vite dead-code-eliminates BOTH the install
+// call AND the inspector module from the production bundle. Verified by
+// scripts/check-prod-no-inspector.sh.
+if (import.meta.env.DEV) {
+  import('./debug/SceneInspector.js').then(({ installSceneInspector }) => {
+    installSceneInspector({
+      scene,
+      skyRenderer,
+      retroRenderer,
+      warpEffect,
+      autopilot: window._autopilot,
+      warpPortal,
+      labMode: window._labMode,
+      audioCtx: window._audioCtx || null,
+    });
+  }).catch((e) => {
+    console.warn('[SceneInspector] install skipped:', e);
+  });
+}
+
 // Lab-mode debug surface (welldipper-lab-mode-2026-05-05). Wraps module-
 // private bootstrap functions (_debugEnterKnownSystem, splash dismiss,
 // etc.) so LabMode.js scenarios can drive deterministic state setup
