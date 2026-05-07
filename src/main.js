@@ -1495,6 +1495,7 @@ scene.add(warpPortal.group);  // add to the main scene (not sky scene)
 // with the lab's 3-state (OUTSIDE_A / INSIDE / OUTSIDE_B) mesh traversal.
 // Toggle to false to fall back to the legacy composite path for comparison.
 const _useDualPortal = true;
+window._useDualPortal = _useDualPortal;  // expose for SceneInspector modes capture
 
 // Portal lab mode — diagnostic-only warp. Strips ALL extraneous effects
 // (sounds, music, rim pulsing, flythrough reveal on arrival) so Max can

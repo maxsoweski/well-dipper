@@ -98,6 +98,11 @@ export function installSceneInspector(engines) {
     setAudioProvider: (fn) => { _state.audio = fn; },
     setInputProvider: (fn) => { _state.input = fn; },
     setLightsProvider: (fn) => { _state.syntheticLights = fn; },
+    // Integration test suite. Lazy-loaded so module isn't installed unless used.
+    runIntegrationSuite: async () => {
+      const m = await import('./integration-suite.js');
+      return m.runIntegrationSuite();
+    },
     togglePanel,
     panelOpen: () => !!_state.panelEl?.isConnected,
   };
@@ -264,6 +269,10 @@ function registerCanonicalMaterials(engines) {
 
 function deriveClocks(engines) {
   return {
+    // Always-advancing clock so consumers have a stable reference. performance.now()
+    // counts since page load; converting to seconds keeps it in the same unit as other
+    // clocks. Useful as the second arg to clockProgressedSince for sanity checks.
+    wall: (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() / 1000 : 0,
     warp: typeof engines.warpEffect?.elapsed === 'number' ? engines.warpEffect.elapsed : 0,
     'audio.context': typeof engines.audioCtx?.currentTime === 'number' ? engines.audioCtx.currentTime : 0,
     'autopilot.tour': engines.autopilot?.telemetry?.elapsed ?? 0,
