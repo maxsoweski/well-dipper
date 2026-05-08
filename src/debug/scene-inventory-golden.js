@@ -50,12 +50,32 @@ export function serializeForGolden(inv) {
   if (Array.isArray(inv.materials)) out.materials = sortByKey(inv.materials, 'role');
   if (Array.isArray(inv.renderTargets)) out.renderTargets = sortByKey(inv.renderTargets, 'name').map(stripUuid);
   if (Array.isArray(inv.audio)) out.audio = sortByKey(inv.audio, 'track');
-  if (inv.clocks) out.clocks = sortRecord(inv.clocks);
+  // Strip continuously-advancing temporal fields so goldens are deterministic
+  // for diff comparison. Wall clock changes every microsecond; rendererInfo
+  // draw counts accumulate with each frame (autoReset=false). Keeping them
+  // would make every diff non-empty and goldens useless. Semantic clocks
+  // (warp / audio.context / autopilot.tour) stay because their values are
+  // structurally meaningful (0 in idle, advancing during the named activity).
+  // Renderer structural counts (programs/geometries/textures) stay;
+  // accumulating counts (calls/triangles/points/lines) are stripped.
+  if (inv.clocks) out.clocks = sortRecord(stripWallClock(inv.clocks));
   if (inv.modes) out.modes = sortRecord(inv.modes);
   if (inv.phases) out.phases = sortRecord(inv.phases);
   if (inv.input) out.input = sortRecord(inv.input);
-  if (inv.rendererInfo) out.rendererInfo = inv.rendererInfo;
+  if (inv.rendererInfo) out.rendererInfo = stripAccumulating(inv.rendererInfo);
   return out;
+}
+
+function stripWallClock(clocks) {
+  if (typeof clocks !== 'object' || clocks === null) return clocks;
+  const { wall: _wall, ...rest } = clocks;
+  return rest;
+}
+
+function stripAccumulating(info) {
+  if (typeof info !== 'object' || info === null) return info;
+  const { drawCalls: _, triangles: __, points: ___, lines: ____, ...rest } = info;
+  return rest;
 }
 
 function sortRecord(rec) {

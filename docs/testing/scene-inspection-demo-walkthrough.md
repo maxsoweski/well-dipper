@@ -215,15 +215,35 @@ const { meshVisibleAt, lightActiveAt, phaseEquals, modeIs } =
 
 **You do:**
 ```js
-const golden = __wd.serializeForGolden();
+const g1 = __wd.serializeForGolden();
+const g2 = __wd.serializeForGolden();
 ({
-  size: JSON.stringify(golden).length,
-  hasUuid: 'uuid' in golden.meshes[0],
-  firstThreeMeshes: golden.meshes.slice(0, 3).map(m => m.name),
+  size: JSON.stringify(g1).length,
+  hasUuid: 'uuid' in g1.meshes[0],
+  firstThreeMeshes: g1.meshes.slice(0, 3).map(m => m.name),
+  // Determinism check: two consecutive captures of the same scene state
+  // produce byte-identical JSON. If false, temporal fields (wall clock,
+  // accumulating renderer counts) are leaking into the golden — diff
+  // comparisons would then never be empty.
+  deterministic: JSON.stringify(g1) === JSON.stringify(g2),
+  clocksKept: Object.keys(g1.clocks ?? {}),       // semantic clocks only
+  rendererInfoKept: Object.keys(g1.rendererInfo ?? {}),  // structural counts only
 })
 ```
 
-**You'll see:** `{ size: ~12000, hasUuid: false, firstThreeMeshes: [sorted names] }`.
+**You'll see:** roughly:
+```
+{
+  size: ~19000,                               // varies with ship count + LOD state
+  hasUuid: false,
+  firstThreeMeshes: [...sorted names; first few often '' (anti-criteria meshes)...],
+  deterministic: true,
+  clocksKept: ['audio.context', 'autopilot.tour', 'warp'],
+  rendererInfoKept: ['programs', 'geometries', 'textures'],
+}
+```
+
+`wall` (page-load reference timestamp) and `rendererInfo.{drawCalls,triangles,points,lines}` (accumulating counts with autoReset=false) are stripped from the golden so diff comparisons against committed baselines are stable. Semantic clocks and structural renderer counts pass through.
 
 To save as a download:
 ```js
