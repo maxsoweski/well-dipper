@@ -61,8 +61,11 @@ Per the new three-layer framework. Project conventions per `docs/TESTING_CONVENT
 ## In scope
 
 - Sequential execution of items 1-6.
-- Cosmetic defects logged as follow-up workstreams; brief stays open until all 6 items have a recorded outcome.
-- Blocking defects fixed in-line; the affected item re-verifies before moving to next.
+- **Defects classified by LAYER, not severity** (per Max's correction 2026-05-07, captured in `feedback_layer-routes-defect-resolution.md`):
+  - **Unit-layer defects** (test missing, test wrong, build broken) → working-Claude fixes in-stream when within ability. Affected item re-verifies before moving to next.
+  - **Integration-layer defects** (suite captures wrong data, predicate misclassifies, doc snippet's expected output is misleading) → working-Claude fixes in-stream when within ability. Same re-verify rule.
+  - **UAT-layer defects** (felt-experience friction — typography too small, motion too slow, ergonomics weird) → log for follow-up workstream + continue. These need Max's judgment; in-stream fixing risks Claude making cosmetic decisions Max didn't sanction.
+  - **Blocking defects regardless of layer** → pause workstream, scope a fix workstream, resume after fix lands.
 - Findings written into Tester verdict's "Summary for Max" section per item.
 
 ## Out of scope

@@ -42,10 +42,49 @@ Expected: `['main', 'sky']`. If `false` or `undefined`, the inspector didn't ins
 
 **You do:** paste in console:
 ```js
-__wd.takeSceneInventory().meshes.filter(m => m.name).map(m => m.name).sort().slice(0, 25)
+const arr = __wd.takeSceneInventory().meshes.filter(m => m.name).map(m => m.name).sort();
+({
+  totalNamed: arr.length,
+  byCategory: {
+    'body.planet': arr.filter(n => n.startsWith('body.planet.')).length,
+    'body.moon': arr.filter(n => n.startsWith('body.moon.')).length,
+    'body.asteroid-belt': arr.filter(n => n.startsWith('body.asteroid-belt.')).length,
+    'effect.warp': arr.filter(n => n.startsWith('effect.warp.')).length,
+    'effect.starflare': arr.filter(n => n.startsWith('effect.starflare.')).length,
+    'sky': arr.filter(n => n.startsWith('sky.')).length,
+    'hud': arr.filter(n => n.startsWith('hud.')).length,
+    'ship.npc': arr.filter(n => n.startsWith('ship.npc.')).length,
+  },
+  spotChecks: {
+    earth: arr.includes('body.planet.earth'),
+    mars: arr.includes('body.planet.mars'),
+    luna: arr.includes('body.moon.luna'),
+    'starflare.sol': arr.includes('effect.starflare.sol'),
+    'warp.tunnel': arr.includes('effect.warp.tunnel'),
+    'starfield.main': arr.includes('sky.starfield.main'),
+  },
+});
 ```
 
-**You'll see:** an array starting with sorted names like `body.asteroid-belt.kuiper`, `body.moon.luna`, `body.planet.earth`, `effect.starflare.sol`, `effect.warp.entry-strip`, etc.
+**You'll see** (in Sol with default debug-camera state):
+```
+{
+  totalNamed: ~78,
+  byCategory: {
+    body.planet: 14,        // 9 canonical + 4 hash-named outer-Sol + Titan-as-planet
+    body.moon: ~24,         // 7 canonical + ~17 hash-named smaller moons
+    body.asteroid-belt: 2,  // main + kuiper
+    effect.warp: 5,         // portal-a/b/tunnel/landing-strip/entry-strip
+    effect.starflare: 1,    // effect.starflare.sol
+    sky: 3,                 // starfield.main, glow.procedural, feature-layer.main
+    hud: 0,                 // HUD only renders when targeting active
+    'ship.npc': <varies>,   // ShipSpawner spawns 0-3 per planet
+  },
+  spotChecks: { earth: true, mars: true, luna: true, 'starflare.sol': true, ... },
+}
+```
+
+All `spotChecks` should be `true`. `hud: 0` and `ship.npc: <varies>` are expected — HUD is conditional, ship spawn count varies by run. `body.star.sol` is intentionally absent — the star is represented as `effect.starflare.sol` since `StarRenderer.create()` was documented in the brief but never invoked in production (per scene-inspection commit `da3d4a2`).
 
 **Why it matters:** Before this workstream, scene state was anonymous Object3D references. Now every body, effect, sky layer, and HUD element has a queryable name. `meshVisibleAt('body.planet.earth', ...)` resolves.
 
