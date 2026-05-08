@@ -3413,7 +3413,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   const starOrbitLines = [];
 
   if (systemData.isBinary) {
-    const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene, _systemSeed: systemData.seed };
+    const sceneStarData2 = { ...systemData.star2, radius: systemData.star2.radiusScene, _systemSeed: systemData.seed, _isSecondary: true };
     console.log(`[BINARY] star2: radius=${sceneStarData2.radius?.toFixed(2)}, type=${sceneStarData2.type}, color=[${sceneStarData2.color}], sep=${systemData.binarySeparationScene?.toFixed(2)}`);
     star2 = new StarFlare(sceneStarData2);
     star2.addTo(scene);

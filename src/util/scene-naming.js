@@ -121,8 +121,16 @@ export function assignName(obj, info) {
 export function resolveStarId(starData) {
   const seed = starData?._systemSeed;
   if (typeof seed === 'string' && seed.length > 0) {
-    // Canonical (e.g. 'sol') — use as-is.
-    return { id: seed, fullHash: null, isCanonical: true };
+    // Short canonical seeds (e.g. 'sol') pass through verbatim — short, readable.
+    // Long composite seeds (e.g. galactic-feature systems with 60+ char names) get
+    // hashed to 6-char hex for tractability — predicates and console queries
+    // shouldn't have to type unwieldy names. Full seed remains queryable via
+    // userData.systemSeed for cross-reference.
+    if (seed.length <= 16) {
+      return { id: seed, fullHash: null, isCanonical: true };
+    }
+    const fullHex = toHex(fnv1aString(seed));
+    return { id: fullHex.slice(0, 6), fullHash: fullHex, isCanonical: false };
   }
   if (seed != null) {
     const fullHex = toHex(fnv1aString(String(seed)));

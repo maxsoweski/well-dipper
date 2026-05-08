@@ -75,11 +75,17 @@ export class ShipSpawner {
         const shipSize = shipHullToScene(archetype);
         model.scale.setScalar(shipSize);
 
-        // Enable flat shading on all materials in the model for retro look
+        // Enable flat shading on all materials in the model for retro look.
+        // Also clear GLTF-given child names — only the wrapper Group is named
+        // (ship.npc.<archetype>.<i>-<s>); GLTF interior nodes have leftover
+        // generic names like 'mesh_0' / 'Cube' which leak into the inventory's
+        // anti-criteria carve-out (interior is opaque, only container is named).
+        // Per welldipper-inspection-layer-uat-2026-05-07 Item 1 / Demo 6.
         model.traverse(child => {
           if (child.isMesh && child.material) {
             child.material.flatShading = true;
             child.material.needsUpdate = true;
+            child.name = '';
           }
         });
 

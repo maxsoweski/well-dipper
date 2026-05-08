@@ -22,7 +22,8 @@ export class StarFlare {
     this._renderRadius = renderRadius !== null ? renderRadius : starData.radius;
     this.mesh = new THREE.Group();
     const _flareInfo = resolveStarId(starData);
-    assignName(this.mesh, { category: 'effect', kind: 'starflare', id: _flareInfo.id, systemSeed: starData?._systemSeed, fullHash: _flareInfo.fullHash });
+    const _flareKind = starData?._isSecondary ? 'starflare2' : 'starflare';
+    assignName(this.mesh, { category: 'effect', kind: _flareKind, id: _flareInfo.id, systemSeed: starData?._systemSeed, fullHash: _flareInfo.fullHash });
 
     // Invisible sphere for click raycasting (star systems register
     // star.surface as a click target — needs to be a real mesh).

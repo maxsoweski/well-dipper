@@ -256,7 +256,10 @@ function registerCanonicalMaterials(engines) {
     _state.materials.push({
       role: 'warp.tunnel',
       material: tunnelMat,
-      watch: ['uTime', 'uPhase', 'uHyperPhase', 'uExitReveal', 'uFoldAmount'],
+      // Actual uniforms on WarpPortal._tunnel material (per src/effects/WarpPortal.js:142-151).
+      // The earlier list (uPhase, uHyperPhase, uExitReveal, uFoldAmount) was speculative
+      // and produced null entries; corrected during welldipper-inspection-layer-uat-2026-05-07 Item 1.
+      watch: ['uTime', 'uScroll', 'uDestMix', 'uBridgeCenter', 'uBridgeWidth'],
     });
   }
   const galaxyMat = engines.skyRenderer?._glowLayer?.mesh?.material;
@@ -264,7 +267,10 @@ function registerCanonicalMaterials(engines) {
     _state.materials.push({
       role: 'sky.galaxyglow',
       material: galaxyMat,
-      watch: ['uTime', 'uPlayerPos', 'uBrightness'],
+      // Actual uniforms on the active glow layer's material (ProceduralGlowLayer per
+      // src/rendering/sky/ProceduralGlowLayer.js:70-83). 'uBrightness' was speculative;
+      // actual name is 'uBrightnessMax'. Corrected during welldipper-inspection-layer-uat-2026-05-07 Item 1.
+      watch: ['uTime', 'uPlayerPos', 'uBrightnessMax', 'uOpacity'],
     });
   }
 }
