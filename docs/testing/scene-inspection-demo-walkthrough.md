@@ -127,7 +127,26 @@ const inv = __wd.takeSceneInventory();
 })
 ```
 
-**You'll see:** ~117 meshes, 1 camera, 1 light (synthetic Sol), materials `['warp.tunnel', 'sky.galaxyglow']`, clocks with wall + warp + audio + autopilot, modes including `warp.pipeline: 'dual-portal'`, phases `{warp: 'idle', autopilot: 'idle'}`.
+**You'll see** (in Sol with default debug-camera state):
+```
+{
+  meshes: ~178,                        // includes named-Group containers + ship.npc.*; varies
+  cameras: 1,                          // main world camera
+  lights: 1,                           // synthetic light.star.sol (host-derived)
+  materials: ['warp.tunnel', 'sky.galaxyglow'],
+  clocks: {
+    wall: <large>,                     // performance.now()/1000; grows monotonically
+    warp: 0,                           // 0 in idle (gated by phases.warp); current elapsed when warping
+    'audio.context': 0,                // well-dipper doesn't expose AudioContext on window
+    'autopilot.tour': 0,               // 0 in idle
+  },
+  modes: { 'sky.crossover': 'idle', 'autopilot.camera': 'ESTABLISHING', 'warp.pipeline': 'dual-portal' },
+  phases: { warp: 'idle', autopilot: 'idle' },
+  rendererInfo: { calls: <large>, triangles: <large> },  // accumulating; autoReset=false
+}
+```
+
+Mesh count varies by ship spawn rate + camera state. `audio.context` is 0 in well-dipper because the host doesn't expose its AudioContext globally; the `audio` category is opt-in via `__wd.setAudioProvider(fn)` for hosts that want richer audio observability. Empty `audio: []` is expected here.
 
 **Why it matters:** Each category has a matching predicate so you can write assertions across all of them.
 

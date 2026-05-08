@@ -110,6 +110,10 @@ Followed by overall verdict line. Specific to well-dipper, the typical outcome f
 
 **The two parked regressions** (`warp-tunnel-second-half-not-rendering`, `reticle-persists-after-warp`) are auto-detected by `__wd.runWarpSuite()` via the regression-detection-as-diagnostic pattern (per `feedback_pass-fail-vs-diagnostic.md`). They will become unit + integration assertions once a triage workstream lands fixes.
 
+**The `audio` inventory category is opt-in for well-dipper.** The host's audio engine doesn't expose its AudioContext on `window`, so the inspector's default deriveAudio returns `[]`. Workstreams that need richer audio observability (e.g., asserting BGM is playing during a particular scenario, or that warp-rumble fires at HYPER) should call `__wd.setAudioProvider(() => [...])` once at workstream start. The `clocks['audio.context']` field is 0 for the same reason; gate predicates that depend on it accordingly.
+
+**The `clocks.warp` field reports 0 in idle.** The `WarpEffect` engine doesn't reset its internal `.elapsed` field on transition to idle — leftover residual from the prior warp persists. The inspector gates `clocks.warp` by `phases.warp === 'idle'` to keep `clockProgressedSince` predicates honest (residual values would produce negative or misleading deltas across snapshots). Documented at SceneInspector.js's deriveClocks. If a future use case wants raw engine state, read `__wd.getNamed`-equivalent or read `_warpEffect.elapsed` directly.
+
 ---
 
 ## Cross-references

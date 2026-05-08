@@ -272,12 +272,21 @@ function registerCanonicalMaterials(engines) {
 // ── Auto-derive engine state ─────────────────────────────────────────────
 
 function deriveClocks(engines) {
+  // warp clock contract: reflects current warp's elapsed time when running;
+  // 0 when state === 'idle'. The engine doesn't reset .elapsed on transition
+  // to idle (residual leftover from prior warp). Gating here keeps
+  // clockProgressedSince predicates honest — they compare deltas across
+  // snapshots, and a residual non-zero idle value can produce negative or
+  // misleading deltas when a new warp starts. Found 2026-05-07 during
+  // welldipper-inspection-layer-uat-2026-05-07 Item 1 / Demo 3.
+  const warpElapsed = typeof engines.warpEffect?.elapsed === 'number' ? engines.warpEffect.elapsed : 0;
+  const warpState = engines.warpEffect?.state;
   return {
     // Always-advancing clock so consumers have a stable reference. performance.now()
     // counts since page load; converting to seconds keeps it in the same unit as other
     // clocks. Useful as the second arg to clockProgressedSince for sanity checks.
     wall: (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() / 1000 : 0,
-    warp: typeof engines.warpEffect?.elapsed === 'number' ? engines.warpEffect.elapsed : 0,
+    warp: warpState === 'idle' ? 0 : warpElapsed,
     'audio.context': typeof engines.audioCtx?.currentTime === 'number' ? engines.audioCtx.currentTime : 0,
     'autopilot.tour': engines.autopilot?.telemetry?.elapsed ?? 0,
   };
