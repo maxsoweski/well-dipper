@@ -2,6 +2,29 @@
 
 **Shipped `c24d3f1` 2026-05-07** — kit `motion-test-kit:7be6857`. Tester PASS at the to-be-shipped commit (verdict T4 in `~/.claude/state/dev-collab/tester-audits/welldipper-scene-inspection-layer-2026-05-06.md`). Phase 1-4 all landed. Three deliberate carve-outs (AsteroidBelt naming + ShipSpawner naming + lights category) are documented in commit bodies; flagged for follow-up if/when the brief's predicates need them. Two parked regressions (reticle-persists-after-warp, warp-tunnel-second-half-not-rendering) remain parked but are now diagnose-able via `window.__wd.takeSceneInventory()` + `meshVisibleAt('effect.warp.tunnel', ...)` — triage workstream pending.
 
+## Test Coverage Plan (retroactive annotation, 2026-05-07)
+
+Added retroactively to validate the new three-layer testing framework (per `feedback_three-layer-test-coverage.md`) on real shipped material. Maps the work that already happened (verdicts T1-T4) to the unit / integration / UAT vocabulary. Citations point at well-dipper's `docs/TESTING_CONVENTIONS.md`.
+
+| Phase | Unit coverage | Integration coverage | UAT coverage |
+|---|---|---|---|
+| Phase 1 (kit-side, 7be6857) | Kit's `tests/scene-inventory-phase1-2026-05-06.test.js` (30 new) + `tests/hash.test.js` bit-stable cases (9 new). 191/191 pass. **Unit: PASS.** | Kit's `tests/inventory-predicates.test.js` covers predicate composition; 161 baseline preserved. Cross-project smoke test in `examples/three-vite-smoke/` (per AC #19 of motion-test-kit-scene-inventory-2026-05-05). **Integration: PASS** at the kit-side scope. | N/A — kit Phase 1 is library code; no UI. Tester verdict T1 noted "no real-browser path for Phase 1." **UAT: N/A (per brief — engineering-only at this phase).** |
+| Phase 2 (well-dipper, bdb872f → da3d4a2) | No new vitest files; relies on existing well-dipper unit suite (233/237 baseline preserved). **Unit: PASS** by regression-prevention. | `__wd.takeSceneInventory()` driven via chrome-devtools verifies canonical-name presence in Sol. Eventually subsumed by recording-replay (Phase 0 queued in well-dipper-progress.md). **Integration: PASS** via in-session smoke. | Tester verdict T2 drove canonical-name probe in real Chrome:9223 + reported findings; Max ran the snippets to confirm. **UAT: PASS — Max-confirmed live in Sol** during fixup #2 verification. |
+| Phase 3 (well-dipper, c24d3f1) | No new vitest files; production-bundle drift guard (`scripts/check-prod-no-inspector.sh`) is unit-flavored grep over build output. **Unit: PASS** + drift guard PASS. | `__wd.runIntegrationSuite()` (19 tests, Groups A-F) + `__wd.runWarpSuite()` (4 layer-functionality + 2 regressions detected) — both runners shipped IN this phase + verified in-session. **Integration: PASS** at the inspection-layer scope; the warp suite simultaneously revealed the two parked regressions as expected diagnostics. | Tester verdict T3 verified Tier 1 surface + Shift+I panel + golden serializer + production drift guard via chrome-devtools. **UAT: PASS — Max-confirmed live in Sol** for `__wd` surface; Shift+I panel UX explicitly deferred to Max in next session per `well-dipper-progress.md` "PENDING MAX UAT" section. |
+| Phase 4 (docs + AC #21 close) | grep assertions on persona docs + runbook 06 + AC #21 annotation. **Unit: PASS** (file presence + content greps clean). | N/A — doc-only phase; no behavioral integration to verify. **Integration: N/A (per phase — doc-only).** | Max reads the updated PERSONAS docs in next session. **UAT: deferred to Max** for legibility check. |
+
+### Coverage gaps surfaced by the new lens
+
+1. **No record-replay integration tests yet.** Phase 0 queued in `well-dipper-progress.md` "Next-up testing roadmap." The current integration coverage is in-session console runners, not CI-autonomous. This is documented gap, not a regression of the workstream.
+2. **Goldens scaffold present but no goldens captured.** `__wd.saveGolden(scenarioName)` works; canonical scenarios not yet committed to `tests/golden/scene-inventory/`. Next-up triage workstream uses this surface.
+3. **Phase 4's UAT items remain pending.** Max's review of the updated PERSONAS docs + the inspection-layer demo walkthrough doc happens in next session(s); the workstream is "Shipped structurally, pending Max UAT" until then per `well-dipper-progress.md` 2026-05-07 entry.
+
+### Why the retroactive annotation matters
+
+Without this section, the new lens (`feedback_three-layer-test-coverage.md`) is purely theoretical — written as policy, never validated on real material. Annotating one shipped brief shows the vocabulary actually fits how the workstream was verified. Future briefs use the new shape from the start; this annotation is the bridge.
+
+---
+
 ## Why we care
 
 Max's words (verbatim, 2026-05-06):

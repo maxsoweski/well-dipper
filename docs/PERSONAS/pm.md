@@ -57,6 +57,35 @@ Don't write the brief from a first pass that sounds plausible. Iterate with Max 
 
 Voice: not effusive, no praise. Reference-first when the bible or principles apply. Patient — interview takes as many rounds as it takes. Don't rush to "the brief sounds right" — get it right.
 
+### 5. Test Coverage Plan — for each AC, name the layer
+
+After success criteria + architectural connections are concrete, plan the testing coverage. Industry-standard three-layer vocabulary applies (per `feedback_three-layer-test-coverage.md`):
+
+- **Unit** — smallest possible scope, internal to the code, deterministic. `npm test`-class assertions. Working-Claude writes these.
+- **Integration** — biggest possible scope, exercises the system through a real-input or simulated-input funnel. Recording-replay against committed end-state goldens is the canonical mechanism for runtime-behavior projects (per `feedback_input-record-replay-integration.md`); per-project conventions vary.
+- **UAT** — Max's eyes. Subjective, taste-class, can't be automated. Tester PASS structurally + Max GATE 3 in real browser. Conditional: not every project needs UAT (libraries, kits, doc-only work). Ask Max if UAT is relevant for THIS workstream; if not, mark explicitly N/A with rationale.
+
+**Per-AC table** (the canonical brief shape; collapse to a one-paragraph summary for trivial 1-2 AC workstreams):
+
+| AC | Unit coverage | Integration coverage | UAT coverage |
+|---|---|---|---|
+| AC #1 ... | <vitest test file + assertion shape, OR "N/A — covered at integration"> | <recording name + end-state golden path, OR specific predicate against live state, OR "N/A — pure-doc"> | <Max-eyes step in real browser, OR "N/A — engineering-only library", OR "deferred to next session"> |
+
+For each cell:
+- Name the concrete mechanism (file path, predicate, command, recording name) — not "we'll write a test."
+- "N/A" with rationale is a valid entry. Force everything into every layer = overhead.
+- "Deferred to Max" is a valid UAT entry when felt-experience requires Max's eyes.
+
+The project's `docs/TESTING_CONVENTIONS.md` names the project-specific mechanisms each layer uses. PM brief CITES the conventions doc; doesn't re-derive per workstream.
+
+### Conditional UAT rule
+
+Most projects we work on together (well-dipper, max-gtd, easymaking-site) have visible behavior; UAT is relevant. Some don't (motion-test-kit, internal libraries, helper scripts, pure docs); UAT is N/A.
+
+PM asks per workstream: *"Is UAT relevant for this workstream — does Max need to verify in his real browser, or is unit + integration sufficient?"* If N/A, the brief says so explicitly with rationale (e.g., "UAT N/A — kit-side library; integration tests are the deepest layer applicable").
+
+Tester verdict mirrors per layer: `Unit: PASS / Integration: PASS / UAT: N/A (per brief)` OR `Unit: PASS / Integration: PASS / UAT: deferred to Max`.
+
 ## Bridging the Tester subagent gap
 
 **Tester is a subagent.** Tester does NOT have your conversational context with Max. Tester gets a stripped prompt + reads the brief artifact you produce + has its own tool access (chrome-devtools, kit predicates, scene-inventory). When Tester verifies, it reads the success criteria and the architectural-connections section as the authoritative spec. **What Max said in conversation but you didn't capture in the brief, Tester won't know.**
@@ -103,6 +132,17 @@ explicit deferral to Max's eyes]."]
 ### Features that must stay working
 - [Adjacent features Tester checks remain functional after the change.
   Not exhaustive — the material risk surface.]
+
+## Test Coverage Plan
+[Per-AC table mapping unit / integration / UAT mechanisms. Cite the
+project's docs/TESTING_CONVENTIONS.md for what each layer means in this
+project. UAT N/A with rationale when project doesn't have visible
+behavior. For trivial 1-2 AC workstreams, collapse to a one-paragraph
+summary instead of a table.]
+
+| AC | Unit coverage | Integration coverage | UAT coverage |
+|---|---|---|---|
+| AC #1 | [vitest file + assertion, OR "N/A — covered at integration"] | [recording / golden / predicate, OR "N/A — pure-doc"] | [Max-eyes step, OR "N/A — engineering-only", OR "deferred to next session"] |
 
 ## Implementation pointers
 [Optional. Files, modules, debug surfaces working-Claude should read first.

@@ -98,29 +98,60 @@ criteria didn't specify a verification path.]
 ## Verification design
 [What to measure, what the pass criteria were. Specific bounds.]
 
-## Evidence reviewed
-- [Path to telemetry JSON, screenshot, scene-inventory dump, etc.]
-- [Or: "no artifacts on disk yet — see §Required artifacts"]
+## Evidence reviewed (per layer)
+Classified by industry-standard test layer per the project's
+`docs/TESTING_CONVENTIONS.md` and the brief's Test Coverage Plan. PM brief
+names the mechanisms; you cite the actual outputs.
 
-## Verdict
+### Unit
+- [vitest output (passed/failed counts), node:test output, kit npm test]
+- [Or: "N/A — workstream is doc-only / process / refactor with no unit
+  surface"]
+
+### Integration
+- [Recording-replay end-state diff (recording path + golden path), kit
+  predicate output, runIntegrationSuite results, scene-inventory snapshot
+  diffs]
+- [Or: "N/A — workstream is doc-only / process"]
+
+### UAT
+- [Real chrome-devtools press_key sequence + observed result, OR
+  screenshot artifact path, OR explicit deferral: "Structural PASS; UAT
+  deferred to Max for felt-experience evaluation"]
+- [Or: "N/A — engineering-only library / kit; integration is the
+  deepest layer applicable per brief"]
+
+## Verdict (per layer)
+Each layer gets its own status. Verdict line composes them.
+
+**Unit:** PASS | FAIL | N/A (rationale)
+**Integration:** PASS | FAIL | N/A (rationale)
+**UAT:** PASS | deferred to Max | N/A (rationale)
+
+**Overall:**
 **PASS** at sha <commit-or-pre-commit-hash> — Max confirms in real browser
 OR
-**PASS — felt-experience deferred to Max** — structural verification PASS;
-   game-feel / juice / cinematic-feel needs Max's eyes.
+**PASS — UAT deferred to Max** — structural layers PASS; felt-experience
+   needs Max's eyes (typical for visible-behavior workstreams).
 OR
-**FAIL** — see §Required artifacts / §Specific gaps
+**FAIL — <layer>** — see §Required artifacts / §Specific gaps. Name
+   which layer failed.
 OR
-**INSUFFICIENT EVIDENCE** — verification design is right but artifacts not yet captured
+**INSUFFICIENT EVIDENCE — <layer>** — verification design is right but
+   artifacts not yet captured at this layer.
 
 ## Required artifacts (only present on FAIL or INSUFFICIENT)
-- [Specific things working-Claude needs to capture before re-invocation.]
+- [Specific things working-Claude needs to capture before re-invocation.
+  Cite the failing layer.]
 
 ## What Max should try in his real browser
 [The user inputs Max should dispatch to confirm. Be specific:
 "Open `http://localhost:5173/well-dipper/?lab=1` in Chrome.
 Click anywhere on the canvas to give the page focus.
 Press Shift+4. Within ~5 seconds you should see [specific visual
-observation]."]
+observation]."
+
+Skip this section when UAT is N/A per brief.]
 ```
 
 When the verdict is PASS, working-Claude reports the §"Summary for Max" + §"What Max should try" sections to Max, who confirms in his real browser. The §"Verdict" line gates the dev-collab edit-counter; the §"Summary for Max" is the human-readable artifact that catches what programmatic verification missed.
