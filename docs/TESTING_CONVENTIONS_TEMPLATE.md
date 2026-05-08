@@ -65,13 +65,21 @@ If **Yes** (web apps, games, CLIs with output, anything a user observes), UAT is
 ### UAT (conditional)
 **Applicable in this project?** [Yes / No / Per-workstream]
 
-**Mechanism (if applicable):** [chrome-devtools press_key + Max in real browser / Tester drives + Max confirms / screenshot diff posted to Discord / ...]
+**UAT presupposes integration is GREEN** (added 2026-05-08). UAT is for ergonomics / navigation / workflow of features whose integration tests have CONFIRMED FUNCTIONAL — not for catching feature bugs. If integration reports regressions for the SUT, UAT cannot run on that SUT. See `feedback_three-layer-test-coverage.md` (updated 2026-05-08), `feedback_integration-must-cover-visible.md`, `feedback_pass-fail-vs-diagnostic.md` (rewritten 2026-05-08).
+
+**For visible-behavior projects:** integration must catch every visible defect programmatically before UAT runs. If a defect can only be detected by asking the user to look at the screen, that's an integration coverage gap, not a UAT-layer surface. See `feedback_research-game-dev-testing-standards.md` for industry-standard mechanisms by dimension (screen-space, frame timing, cross-event state, pixel buffer, etc.).
+
+**Drive-vs-watch litmus** (added 2026-05-08): UAT requires the user actually driving in their own environment with their own hands. Working-Claude or Tester driving via chrome-devtools is INTEGRATION, not UAT — even if the user reads the result. See `feedback_drive-vs-watch-distinction.md`.
+
+**Mechanism (if applicable):** [Max with his own hands in his real browser / lab-mode keybinds in his Chrome / similar — explicitly user-driven]
 
 **Lives at:** [`docs/uat/` / inline in workstream briefs / Tester verdict's "What Max should try" section]
 
-**Felt-experience handoff:** Max's eyes are the load-bearing instrument. Tester PASSes structurally; Max GATE 3 confirms in real environment. UAT items in the brief explicitly flag whether they require Max's eyes (e.g., visual layout, motion smoothness, copy clarity) versus deferable to a deterministic check.
+**Felt-experience handoff:** Max's eyes are the load-bearing instrument for ergonomics evaluation of WORKING features. Tester PASSes integration structurally; Max GATE 3 confirms ergonomics in real environment. UAT items in the brief explicitly flag whether they require Max's eyes-AND-hands.
 
 **When N/A:** rationale required (e.g., "engineering-only library; no user-facing surface").
+
+**When BLOCKED:** integration is FAIL for the SUT; UAT cannot run. Workstream is integration-extension or triage, not UAT. Re-classify before greenlighting.
 
 ---
 

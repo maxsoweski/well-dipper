@@ -149,3 +149,34 @@ Writing a system-wide template doesn't mean other projects will adopt it. Theore
 After implementation, **Tester verifies per the Test Coverage Plan above** — most assertions are file-presence + grep-style + diff-style. UAT items defer to Max in next session(s) as he uses the new shape.
 
 After Tester PASS, the workstream flips to Shipped. The framework's first real test will be the next workstream Max scopes — that brief uses the new shape, that Tester verdict uses the new shape, and Max can adjust the templates if anything feels wrong in practice.
+
+
+---
+
+## 2026-05-08 framework correction — what this workstream got WRONG
+
+The framework artifacts (PM persona §Test Coverage Plan, Tester persona §Verdict per-layer, TESTING_CONVENTIONS template + well-dipper instance, feedback_three-layer-test-coverage.md, feedback_pass-fail-vs-diagnostic.md) shipped Tester PASS T1, but the UAT definition encoded in them was **wrong**. Surfaced 2026-05-08 during `welldipper-inspection-layer-uat-2026-05-07` Items 5/9 when Max corrected:
+
+**What was wrong:**
+
+1. **UAT definition.** This workstream framed UAT as the catch-all for "anything Max's eyes catch that automated tests miss." That treats UAT as the safety net for missing integration coverage. Per Max's correction: UAT is for ergonomics / navigation / workflow of features whose integration tests have CONFIRMED FUNCTIONAL. UAT is not for catching feature bugs.
+
+2. **Regressions-as-diagnostics framing.** `feedback_pass-fail-vs-diagnostic.md` (original 2026-05-07) said regressions reported by integration tests were "diagnostic findings, not layer failures." Wrong. Regressions reported are integration FAILURES for the SUT. The workstream covering the SUT cannot ship until they're resolved. Memo rewritten 2026-05-08.
+
+3. **Drive-vs-watch confusion.** The framework didn't distinguish between working-Claude / Tester driving probes and the user driving with their own hands. Both got called "verification." Per `feedback_drive-vs-watch-distinction.md` (added 2026-05-08): probes are integration; user-driven is UAT. The litmus is who initiates the action.
+
+4. **Visible-coverage bar absent.** The framework didn't name the bar that for visible-behavior projects, integration must cover everything the user could observe. Added 2026-05-08 via `feedback_integration-must-cover-visible.md`.
+
+5. **No pre-scoping research requirement.** The framework let workstreams be PM-scoped from conversation alone, without checking industry-standard testing mechanisms. The original inspection-layer workstream missed screen-space / frame-timing / cross-event-state because no research surfaced them. Added 2026-05-08 via `feedback_research-game-dev-testing-standards.md`.
+
+**Corrections applied 2026-05-08:**
+
+- PM persona at `docs/PERSONAS/pm.md` — UAT-presupposes-integration rule + integration-must-cover-visible reference + drive-vs-watch litmus + don't-quote-clock-time.
+- Tester persona at `docs/PERSONAS/tester.md` — UAT BLOCKED state when integration FAIL; regression = integration failure framing; drive-vs-watch evidence requirement.
+- TESTING_CONVENTIONS template + well-dipper instance — full coverage bar named; UAT-presupposes-integration rule; drive-vs-watch litmus.
+- Five new memos: `feedback_integration-must-cover-visible.md`, `feedback_drive-vs-watch-distinction.md`, `feedback_research-game-dev-testing-standards.md`, `feedback_per-fix-regression-discipline.md`, `feedback_no-time-estimates.md`.
+- Two existing memos rewritten: `feedback_pass-fail-vs-diagnostic.md`, `feedback_three-layer-test-coverage.md`.
+
+**This workstream's shipped artifacts now reflect the corrected framework.** No re-Tester needed for this meta-workstream itself — the corrections are doc-only and embed the fix.
+
+**The bigger consequence:** every workstream authored under the original framework needs to be re-evaluated against the corrected one. Any workstream that claimed UAT PASS while its SUT had unresolved regressions, OR while integration coverage didn't include visible-coverage primitives, needs reclassification. See `docs/PLAN_inspection-layer-v2.md` for the queued reclassifications.

@@ -142,3 +142,42 @@ If a blocking defect surfaces mid-item, working-Claude:
 - If non-trivial: pause workstream, scope a fix workstream, resume after fix lands.
 
 Done state: all 6 items have a recorded UAT outcome. Tester verdict is composed. Workstream flips to Shipped end-to-end OR Shipped-with-known-deferrals (cosmetic defect follow-ups filed).
+
+
+---
+
+## 2026-05-08 — MISSCOPED-CLOSED
+
+Closed without a Shipped flip. The brief was misframed at authoring: it called itself a "UAT workstream" but the items were a mix of UAT, integration testing dressed up as UAT, and investigation that revealed coverage gaps. Per Max's 2026-05-08 corrections, this workstream's items reclassify as:
+
+**Real UAT (Max-with-his-hands), PASSED:**
+- Item 2 — Shift+I panel UX. Max actually pressed Shift+I in his real Chrome, evaluated layout / typography / ergonomics. PASS.
+- Item 3 — runWarpSuite felt experience. Max watched the warp animation play out, observed felt-experience. Outcomes: visible defects detected (see "Investigation outcomes" below).
+- Demo 6 of Item 1 — Max ran the panel toggle in his real Chrome, evaluated 7 ergonomic checks. PASS.
+
+**Integration testing of the partial inspection layer (dressed up as UAT), need re-running under new bar:**
+- Item 1 demos 1-5 + 7-10 — working-Claude drove every snippet via chrome-devtools-9223; Max read reports. Per `feedback_drive-vs-watch-distinction.md`, that's integration testing with Max as reviewer, not UAT. Many of these tests need re-running once Phases A-D of inspection-layer-v2 land — the partial layer's coverage didn't include screen-space / frame-timing / cross-event-state, so passing the existing tests doesn't mean the integration was complete.
+- Item 4 — saveGolden workflow. Not done; defer.
+- Item 8 — runIntegrationSuite. PASSed against PARTIAL coverage. Re-run after Phase A.
+
+**Investigation that revealed coverage gaps (NOT UAT, NOT integration of inspection layer — these were inputs to inspection-layer-v2):**
+- Item 5 — triage reticle-persists with layer. Outcome: layer was insufficient (caught only 1 of multiple defect-classes in landing-strip behavior). Surfaced cross-event-state-accumulation as a coverage gap → Phase C of inspection-layer-v2.
+- Item 9 (renamed from Item 3 watch) — runWarpSuite felt-experience watch. Outcome: 3 visible defects (no fold-in, mid-warp freeze, landing-strip accumulation) + 1 mystery (camera-rendered-vs-data-reported) that integration tests didn't catch. Surfaced screen-space, frame-timing, cross-event-state, animation-fidelity as coverage gaps → Phases A-D of inspection-layer-v2.
+
+**Items not done:**
+- Item 6 — dev-workflow self-report. Defer to post-Phase-G when primitives are mature; meaningful self-report needs Max to have actually USED the primitives in real debugging, which presupposes they exist.
+
+**In-stream defect fixes that DID land cleanly (committed under this workstream's pointer):**
+- Demo 1 lexsort doc fix (`9d42822`).
+- Demo 3 clocks.warp residual + audio opt-in (`7566f19`).
+- Demo 6 four findings — starflare2 / uniform watchlist / long-seed hashing / mesh_0 (`aa6bd4d`).
+- Demo 7 golden non-determinism (`d92deec`).
+- Inspection layer integration-suite re-runs (verified clean across all four fixes).
+
+These commits are valid integration-layer fixes; they remain in master.
+
+**Closure rationale:** the workstream as scoped cannot Ship — UAT cannot proceed against features whose integration is INCOMPLETE (per `feedback_three-layer-test-coverage.md` updated 2026-05-08). The valid UAT outcomes (panel ergonomics PASS, warp-watch identified visible defects) are preserved in this audit. The investigation outcomes feed `docs/PLAN_inspection-layer-v2.md` Phases A-G as inputs.
+
+**No re-Tester for this workstream.** The reclassification is doc-only.
+
+**Active workstream pointer cleared 2026-05-08.** Next workstream in this lineage will be `inspection-layer-v2-phase-a-cheap-analytic-primitives-<date>` per the plan.

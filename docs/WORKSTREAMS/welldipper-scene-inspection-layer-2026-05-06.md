@@ -420,3 +420,18 @@ Each phase: working-Claude commits → reports to Max → Max confirms hand-off 
 ---
 
 *Brief authored by Claude (in PM step-into role) 2026-05-06 against well-dipper HEAD `651bdab` + motion-test-kit HEAD `1b79c78`. Per `feedback_one-feature-at-a-time.md`, this is one workstream — no near-autonomous multi-workstream campaigns. Three-Max-gate loop applies: PM persona ↔ Max → brief → working-Claude executes one phase → reports to Max → Max confirms hand-off → Tester verifies → Max confirms in real browser → next phase.*
+
+
+---
+
+## 2026-05-08 status correction — Shipped PARTIAL
+
+After UAT in `welldipper-inspection-layer-uat-2026-05-07` revealed visible defects (no fold-in animation, mid-warp freeze, landing-strip accumulation, Sol-not-rendered) that this workstream's shipped artifacts didn't catch programmatically, this workstream is reclassified:
+
+**Shipped partial.** Current dimensions (mesh / camera / light naming, multi-scene tagging, 9 inventory categories, predicate library, golden-snapshot scaffold) are GREEN within their original scope. But for visible-behavior projects the integration coverage bar is "anything the user can see, programmatically catchable" (per `feedback_integration-must-cover-visible.md`). This workstream did NOT include screen-space / frame-timing / cross-event-state / pixel-buffer coverage — leaving large gaps.
+
+**The proper extension is `docs/PLAN_inspection-layer-v2.md` Phases A-G.** Phases A-D add the missing primitives; Phase E re-authors warp-feature integration tests using them; Phase F triages bugs caught by E; Phase G applies primitives to other features.
+
+**Tester verdicts T1-T4** were valid against the ACs as authored — they correctly verified the shipped scope. They did NOT verify "integration coverage is complete enough for visible features" because that wasn't an explicit AC. The misframe was at brief-time.
+
+**No re-Tester needed:** the shipped artifacts work as designed within their dimensions. The work to do is Phases A-G of inspection-layer-v2.

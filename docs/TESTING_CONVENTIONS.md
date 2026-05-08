@@ -62,9 +62,13 @@ Vite + Three.js (vanilla JS, ES modules). Vendored `motion-test-kit` submodule a
 
 ### UAT (conditional — applicable for visible-behavior workstreams)
 
-**Mechanism:** chrome-devtools `press_key` / `click` driven by Tester subagent for structural verification, then Max in his real browser (port 5174 dev server, real RTX 5080) confirms felt-experience.
+**UAT presupposes integration is GREEN.** Per the 2026-05-08 correction, UAT is for ergonomics / navigation / workflow of features whose integration tests have confirmed FUNCTIONAL — not for catching feature bugs. If integration reports regressions for the SUT, UAT is BLOCKED. See `feedback_three-layer-test-coverage.md` (updated 2026-05-08), `feedback_integration-must-cover-visible.md`, `feedback_pass-fail-vs-diagnostic.md` (rewritten 2026-05-08).
 
-**Felt-experience handoff:** Tester PASSes structurally; Max GATE 3 confirms in real environment. The framework's "PASS — UAT deferred to Max" verdict is the explicit handoff.
+**For well-dipper specifically:** anything broken at a level Max can see is an integration failure for that feature, NOT a UAT-layer surface. The inspection layer (`__wd`) exists to make visible defects programmatically catchable. Inspection-layer coverage is currently PARTIAL (covers naming + categories + predicates + golden-snapshot scaffold; missing screen-space + frame-timing + cross-event-state). See `~/projects/well-dipper/docs/PLAN_inspection-layer-v2.md` for the active extension plan (Phases A-G). Until those phases land, integration coverage of visible features is INCOMPLETE; UAT items that depend on full visible coverage should defer or downgrade.
+
+**Mechanism (Max-driven, the only thing that counts as UAT per `feedback_drive-vs-watch-distinction.md`):** Max in his real browser at `http://localhost:5174/well-dipper/`. Real RTX 5080. Max with his own hands clicking / pressing keys / observing layout / ergonomics. Watching working-Claude or Tester drive a chrome-devtools probe is NOT UAT — that's integration with Max as reviewer.
+
+**Felt-experience handoff:** Tester PASSes integration structurally. Max GATE 3 confirms in real environment. The framework's "PASS — UAT deferred to Max" verdict is the explicit handoff.
 
 **Concrete examples:**
 - Visual layout / typography (Shift+I inspector panel sizing, color palette, JSON-tree expansion ergonomics).

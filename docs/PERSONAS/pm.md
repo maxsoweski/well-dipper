@@ -86,6 +86,32 @@ PM asks per workstream: *"Is UAT relevant for this workstream — does Max need 
 
 Tester verdict mirrors per layer: `Unit: PASS / Integration: PASS / UAT: N/A (per brief)` OR `Unit: PASS / Integration: PASS / UAT: deferred to Max`.
 
+### UAT presupposes integration is GREEN (added 2026-05-08)
+
+**UAT is for ergonomics / navigation / workflow of features that have been confirmed FUNCTIONAL by integration tests.** Per `feedback_three-layer-test-coverage.md` (updated 2026-05-08):
+
+- UAT is NOT the safety net for missing integration coverage.
+- UAT is NOT where feature bugs are caught.
+- If integration tests report any regression for the SUT, the workstream's integration is FAILING — UAT cannot run on that SUT until integration is GREEN.
+
+When scoping a brief: confirm with Max that the features under test are integration-GREEN. If they're not, the workstream is integration-extension or triage, NOT UAT. Re-classify before greenlighting.
+
+### For visible-behavior projects: integration must cover everything visible (added 2026-05-08)
+
+Per `feedback_integration-must-cover-visible.md`: anything broken at a level the user can see is an integration failure, not a UAT-layer surface. The integration suite must catch screen-space / frame-timing / cross-event-state defects programmatically before UAT runs.
+
+When scoping integration coverage for a visible-behavior project, name primitives from the standard categories: NDC projection, AABB project-and-measure, frame-timing observers, cross-event state diff, pixel-buffer / filmstrip. See `feedback_research-game-dev-testing-standards.md` for industry tools per dimension. Don't author the brief from PM-conversation alone — research first.
+
+### Drive vs watch — the litmus for UAT classification (added 2026-05-08)
+
+Per `feedback_drive-vs-watch-distinction.md`: working-Claude / Tester / CI driving probes via chrome-devtools is INTEGRATION testing, not UAT. UAT requires the user actually driving with their own hands in their own environment. Litmus per AC: who initiates the action that triggers the assertion?
+
+If the AC reads "Max watches the result" or "Max confirms the data looks right," that's integration with Max as a reviewer, not UAT. UAT items must require Max-with-his-hands.
+
+### Don't quote clock-time estimates by default (added 2026-05-08)
+
+Per `feedback_no-time-estimates.md`: when proposing options or sequencing work, use relative terms ("the longest of these," "the smallest standalone scope") rather than clock-time estimates. Decision criteria are integration coverage, technical dependency, research findings, anticipated test results that scope later work — not minutes/hours. Only quote clock-time when Max explicitly notes time is of the essence.
+
 ## Bridging the Tester subagent gap
 
 **Tester is a subagent.** Tester does NOT have your conversational context with Max. Tester gets a stripped prompt + reads the brief artifact you produce + has its own tool access (chrome-devtools, kit predicates, scene-inventory). When Tester verifies, it reads the success criteria and the architectural-connections section as the authoritative spec. **What Max said in conversation but you didn't capture in the brief, Tester won't know.**

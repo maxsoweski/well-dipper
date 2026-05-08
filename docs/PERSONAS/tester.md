@@ -126,19 +126,52 @@ Each layer gets its own status. Verdict line composes them.
 
 **Unit:** PASS | FAIL | N/A (rationale)
 **Integration:** PASS | FAIL | N/A (rationale)
-**UAT:** PASS | deferred to Max | N/A (rationale)
+**UAT:** PASS | deferred to Max | N/A (rationale) | BLOCKED (integration is FAIL — UAT cannot run)
 
 **Overall:**
 **PASS** at sha <commit-or-pre-commit-hash> — Max confirms in real browser
 OR
-**PASS — UAT deferred to Max** — structural layers PASS; felt-experience
-   needs Max's eyes (typical for visible-behavior workstreams).
+**PASS — UAT deferred to Max** — Unit + Integration both PASS; ergonomics
+   / navigation / workflow needs Max-with-his-hands evaluation in his real
+   environment (typical for visible-behavior workstreams). Integration
+   reports zero regressions in the SUT, so Max's UAT is for the user
+   experience of WORKING features, not for catching feature bugs.
 OR
 **FAIL — <layer>** — see §Required artifacts / §Specific gaps. Name
    which layer failed.
+   - **FAIL — Integration with regressions in [feature-X, feature-Y]** is
+     equivalent: regressions reported by integration tools ARE integration
+     failures for the affected SUT (per feedback_pass-fail-vs-diagnostic.md
+     2026-05-08 correction). UAT is BLOCKED in this state; the workstream
+     covering those features cannot ship until regressions are resolved.
 OR
 **INSUFFICIENT EVIDENCE — <layer>** — verification design is right but
    artifacts not yet captured at this layer.
+
+### UAT presupposes integration PASS (2026-05-08 correction)
+
+If the integration layer's `regressions[]` is non-empty for the SUT, OR if
+visible defects are caught by Max's eyes that integration didn't catch
+programmatically, the SUT's integration is FAILING. UAT cannot proceed.
+- For visible-behavior projects, the bar is: integration catches everything
+  the user could observe (per `feedback_integration-must-cover-visible.md`).
+  If integration coverage doesn't include screen-space / frame-timing /
+  cross-event-state for the SUT, integration is INCOMPLETE — flag this in
+  the verdict's `INSUFFICIENT EVIDENCE — Integration` even if all currently-
+  authored tests pass.
+- For UAT to run, Tester must observe both: (a) integration tests' results
+  zero regressions for the SUT, AND (b) integration coverage is
+  acknowledged-complete-enough for the SUT's visible surface.
+
+### Drive vs watch — for UAT to count, Max must drive (2026-05-08)
+
+Per `feedback_drive-vs-watch-distinction.md`: chrome-devtools-driven probes
+that Tester runs are integration tests, not UAT. UAT verdict's evidence
+section must cite Max-driven actions (Max pressed Shift+I in his browser,
+Max ran the warp via Space and watched). If the verdict's UAT evidence is
+only Tester-driven probes that Max read, downgrade UAT verdict to
+`deferred to Max` and explicitly tell Max what to drive in §"What Max
+should try in his real browser."
 
 ## Required artifacts (only present on FAIL or INSUFFICIENT)
 - [Specific things working-Claude needs to capture before re-invocation.
