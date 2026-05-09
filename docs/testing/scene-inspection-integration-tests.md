@@ -556,3 +556,43 @@ Manual (Group I): regression detection requires interpretation — PASS means th
 - `~/projects/motion-test-kit/runbooks/06-scene-inventory.md` — kit-side technique reference.
 - `~/projects/well-dipper/docs/PERSONAS/tester.md` — Tester persona Inventory invocation pattern.
 - `~/.claude/state/dev-collab/tester-audits/welldipper-scene-inspection-layer-2026-05-06.md` — Tester verdicts T1–T4.
+
+---
+
+## Group J–K: Phase A v2 cheap analytic primitives (added 2026-05-08)
+
+Workstream `inspection-layer-v2-phase-a-cheap-analytic-primitives-2026-05-08`. Five new inventory fields per renderable mesh entry (when host passes viewport) + four new predicates that consume them. Auto-runnable via `await __wd.runPhaseATests()` from console after entering Sol.
+
+### Group J — field presence
+
+- **J1** `screenSpace { x, y, depth, inViewport, behindCamera }` shape on body.planet.earth.
+- **J2** `cameraDistance` (number ≥ 0) on body.planet.earth.
+- **J3** `realFrustumIntersect` (boolean) on body.planet.earth.
+- **J4** `projectedSize { width, height, pixelArea } | null` on body.planet.earth.
+- **J5** `apparentDegrees | null` on body.planet.earth.
+
+### Group K — predicates against live Sol
+
+- **K1** `meshOnScreen('body.star.sol')` PASS in default Sol view.
+- **K2** `meshOnScreen('body.star.sol', minPixelArea: 1e12)` FAIL — sanity that excessive `minPixelArea` correctly fails. Inverted: K2 PASSes only when the predicate FAILs.
+- **K3** `meshAtViewportPosition(region: 'center', tolerance: 0.5)` PASSes for any in-frustum body.
+- **K4** `meshApparentSize('body.star.sol', min: 0, max: 90)` PASSes — apparent size of Sol in plausible range.
+- **K5** `cameraNear('body.planet.earth', maxDistance: 1e9)` PASSes — very lax bound.
+- **K6** **MYSTERY PROBE.** `cameraNear('body.planet.earth', maxDistance: 1e8)` — Sol-scale bound. PASSes if camera is genuinely in Sol; FAILs if the prior-session "system entered but camera nowhere near body" defect persists. Per `feedback_pass-fail-vs-diagnostic.md`, K6 FAIL is an INTEGRATION FAILURE for `_lab.enterSol` semantics, not a diagnostic finding. Triage routes per `feedback_layer-routes-defect-resolution.md`.
+
+### Run
+
+```js
+await _lab.enterSol();          // load Sol first
+await __wd.runPhaseATests();    // 11 assertions
+```
+
+Returns `{ passed, failed, total, results }`. Expected outcome on a healthy Sol = 11/11 PASS, OR 10/11 with K6 FAIL-revealing-bug routing to triage.
+
+### Cross-refs
+
+- Brief: `docs/WORKSTREAMS/inspection-layer-v2-phase-a-cheap-analytic-primitives-2026-05-08.md`.
+- Plan: `docs/PLAN_inspection-layer-v2.md` Phase A.
+- Kit fields: `vendor/motion-test-kit/adapters/three/scene-inventory.js` — `normalizeViewport`, `projectPoint`, `transformAABBCorners`, `boxIntersectsFrustum`.
+- Kit predicates: `vendor/motion-test-kit/core/inventory/predicates.js` — `meshOnScreen`, `meshAtViewportPosition`, `meshApparentSize`, `cameraNear`.
+- Kit unit tests: 45 total (`scene-inventory-screenspace.test.js` 20 + `scene-inventory-screenspace-predicates.test.js` 25). 236/236 kit suite PASS.

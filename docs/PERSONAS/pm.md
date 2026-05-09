@@ -233,13 +233,18 @@ Origin (2026-04-20 autopilot phase-reconsideration): Max chose `ENTRY / CRUISE /
 
 Operational check: before finalizing a brief, ask — *is the scope shape driven by what the feature needs, or by what current code surface makes cheap?* If the latter, rescope toward the feature; surface the cost honestly so Max chooses the trade-off explicitly.
 
-## Dev-collab gate bootstrap
+## Active-workstream pointer (post-gate-retirement)
 
-A PreToolUse hook (`~/.claude/hooks/dev-collab-gate.sh`) blocks working-Claude's code edits once ≥ 2 have accumulated for the active workstream without a fresh Tester verdict. The hook consults `~/.claude/state/dev-collab/active-workstream.json`, project-keyed:
+The PreToolUse edit-count gate was retired 2026-05-08 (see `~/.claude/CLAUDE.md` Dev Collab OS section). What persists is `~/.claude/state/dev-collab/active-workstream.json`, project-keyed:
 
 ```json
 { "well-dipper": "<slug>", "navidson": "<other-slug>" }
 ```
+
+The pointer remains useful for:
+- Tester invocation: Tester reads the active slug to know which workstream's audit log to append to.
+- Telemetry: PostToolUse `dev-collab-track.sh` increments `state.json` edits counter (informational only — no longer blocks).
+- The forthcoming `wsstatus.sh` CLI: reports workstream stage at the unit/integration/UAT layer, sourced from active-workstream + tester-audits.
 
 When you (PM persona) author a brief that opens a new workstream:
 
@@ -248,6 +253,8 @@ When you (PM persona) author a brief that opens a new workstream:
 3. Initialize `~/.claude/state/dev-collab/state.json` entry: `"<slug>": { "edits": 0, "last_audit_sha": "" }`.
 
 When the workstream Ships, run `~/.claude/state/dev-collab/clear-active.sh <project-name>` to clear that project's slug. State.json entry stays as history.
+
+**Tester invocation is now driven by the trigger rules in `~/.claude/CLAUDE.md` (after each coherent unit of implementation; before any Shipped flip), not by an edit-count threshold.**
 
 ## Bible / source-of-truth discipline
 

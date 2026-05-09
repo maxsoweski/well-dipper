@@ -107,6 +107,17 @@ export function installSceneInspector(engines) {
       const m = await import('./integration-suite.js');
       return m.runWarpSuite(opts);
     },
+    runPhaseATests: async () => {
+      const m = await import('./integration-suite.js');
+      return m.runPhaseATests();
+    },
+    // Live viewport (canvas client size). Used by Phase A integration tests
+    // and any predicate that needs region-mode viewport math.
+    getViewport: () => {
+      const canvas = _state?.engines?.retroRenderer?.renderer?.domElement;
+      if (!canvas) return null;
+      return { width: canvas.clientWidth, height: canvas.clientHeight };
+    },
     togglePanel,
     panelOpen: () => !!_state.panelEl?.isConnected,
   };
@@ -133,17 +144,28 @@ function takeInventoryNow(opts) {
   const engines = _state.engines;
   const scenes = (opts?.scenes) || listScenes(engines);
 
+  // Phase A v2: pass the live viewport so every mesh entry gets screen-space,
+  // projectedSize, apparentDegrees, cameraDistance, realFrustumIntersect.
+  // Read from the renderer's canvas (real pixel size, accounting for DPR via
+  // clientWidth/Height). Caller-supplied opts.options.viewport overrides.
+  const renderer = engines.retroRenderer?.renderer;
+  const canvas = renderer?.domElement;
+  const autoViewport = (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0)
+    ? { width: canvas.clientWidth, height: canvas.clientHeight }
+    : undefined;
+
   const inv = takeSceneInventory({
     scenes,
     composer: engines.retroRenderer?.composer || engines.retroRenderer?._composer,
     overlayRegistry: engines.labMode?._overlayRegistry || window._labMode?._overlayRegistry,
-    renderer: engines.retroRenderer?.renderer,
+    renderer,
     materials: _state.materials,
     clocks: _state.clocks(),
     modes: _state.modes(),
     phases: _state.phases(),
     audio: _state.audio(),
     input: _state.input(),
+    viewport: autoViewport,
     ...(opts?.options || {}),
   });
 

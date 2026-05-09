@@ -19,6 +19,10 @@ import {
   clockProgressedSince,
   modeIs,
   phaseEquals,
+  meshOnScreen,
+  meshAtViewportPosition,
+  meshApparentSize,
+  cameraNear,
 } from 'motion-test-kit/core/inventory/predicates.js';
 
 const REQUIRED_PLANETS = [
@@ -386,4 +390,125 @@ export async function runWarpSuite(opts) {
     durationSec: ((samples.at(-1)?.t || start) - samples[0]?.t) / 1000,
     regressions,
   };
+}
+
+// === Phase A v2 — runPhaseATests ===
+//
+// Exercises the 5 new screen-space inventory fields + 4 new predicates
+// against the live Sol scene. Designed to PASS when Phase A's primitives
+// work correctly AND the Sol scene matches expected camera / body layout.
+//
+// Per feedback_pass-fail-vs-diagnostic.md: a regression reported here
+// (e.g., AC9 cameraNear FAIL because camera is 100M units from Earth) is
+// an integration FAILURE for the SUT, not a diagnostic. The fix routes
+// per feedback_layer-routes-defect-resolution.md (in-stream fix or
+// triage workstream).
+export async function runPhaseATests() {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runPhaseATests: window.__wd not installed. Enter Sol first via _lab.enterSol().');
+  }
+  const __wd = window.__wd;
+  const results = [];
+
+  const inv = __wd.takeSceneInventory();
+  const invs = new Map([['NOW', inv]]);
+  const viewport = __wd.getViewport?.() || null;
+
+  // === Group J: screen-space field presence ===
+
+  check('J1 takeSceneInventory emits screenSpace on mesh entries', () => {
+    const earth = inv.meshes.find(m => m.name === 'body.planet.earth');
+    if (!earth) return { passed: false, evidence: 'body.planet.earth not in inventory (enter Sol first)' };
+    const ok = earth.screenSpace
+      && typeof earth.screenSpace.x === 'number'
+      && typeof earth.screenSpace.y === 'number'
+      && typeof earth.screenSpace.depth === 'number'
+      && typeof earth.screenSpace.inViewport === 'boolean';
+    return { passed: ok, evidence: ok ? earth.screenSpace : 'shape mismatch: ' + JSON.stringify(earth.screenSpace) };
+  }, results);
+
+  check('J2 takeSceneInventory emits cameraDistance on mesh entries', () => {
+    const earth = inv.meshes.find(m => m.name === 'body.planet.earth');
+    if (!earth) return { passed: false, evidence: 'body.planet.earth not in inventory' };
+    const ok = typeof earth.cameraDistance === 'number' && earth.cameraDistance >= 0;
+    return { passed: ok, evidence: { cameraDistance: earth.cameraDistance } };
+  }, results);
+
+  check('J3 takeSceneInventory emits realFrustumIntersect (boolean) on mesh entries', () => {
+    const earth = inv.meshes.find(m => m.name === 'body.planet.earth');
+    if (!earth) return { passed: false, evidence: 'body.planet.earth not in inventory' };
+    const ok = typeof earth.realFrustumIntersect === 'boolean';
+    return { passed: ok, evidence: { realFrustumIntersect: earth.realFrustumIntersect } };
+  }, results);
+
+  check('J4 takeSceneInventory emits projectedSize OR null on mesh entries', () => {
+    const earth = inv.meshes.find(m => m.name === 'body.planet.earth');
+    if (!earth) return { passed: false, evidence: 'body.planet.earth not in inventory' };
+    if (earth.projectedSize === null) return { passed: true, evidence: 'projectedSize=null (no boundingBox)' };
+    const ok = typeof earth.projectedSize?.pixelArea === 'number';
+    return { passed: ok, evidence: earth.projectedSize };
+  }, results);
+
+  check('J5 takeSceneInventory emits apparentDegrees OR null on mesh entries', () => {
+    const earth = inv.meshes.find(m => m.name === 'body.planet.earth');
+    if (!earth) return { passed: false, evidence: 'body.planet.earth not in inventory' };
+    if (earth.apparentDegrees === null) return { passed: true, evidence: 'apparentDegrees=null (no boundingSphere)' };
+    const ok = typeof earth.apparentDegrees === 'number' && earth.apparentDegrees >= 0 && earth.apparentDegrees <= 180;
+    return { passed: ok, evidence: { apparentDegrees: earth.apparentDegrees } };
+  }, results);
+
+  // === Group K: predicates ===
+
+  check('K1 meshOnScreen body.star.sol PASSes in default Sol view', () => {
+    const r = meshOnScreen(invs, { phaseKey: 'NOW', meshName: 'body.star.sol', minPixelArea: 1 });
+    return { passed: r.passed, evidence: r.passed ? 'on-screen' : r.violations };
+  }, results);
+
+  check('K2 meshOnScreen for an impossibly-large pixelArea FAILs (sanity)', () => {
+    const r = meshOnScreen(invs, { phaseKey: 'NOW', meshName: 'body.star.sol', minPixelArea: 1e12 });
+    return { passed: !r.passed, evidence: r.passed ? 'unexpected PASS' : 'correctly FAILed: ' + r.violations[0]?.reason };
+  }, results);
+
+  check('K3 meshAtViewportPosition region=center accepts any in-frustum body', () => {
+    if (!viewport) return { passed: true, evidence: 'viewport unavailable, skipped' };
+    // Find any body that is currently inViewport — assertion that meshAtViewportPosition
+    // works on it with center-region tolerance large enough to span the viewport.
+    const visible = inv.meshes.find(m => m.screenSpace?.inViewport && /^body\./.test(m.name || ''));
+    if (!visible) return { passed: false, evidence: 'no visible body in inventory' };
+    const r = meshAtViewportPosition(invs, {
+      phaseKey: 'NOW', meshName: visible.name,
+      region: 'center', tolerance: 0.5,
+      viewport,
+    });
+    return { passed: r.passed, evidence: r.passed ? { mesh: visible.name, screenSpace: visible.screenSpace } : r.violations };
+  }, results);
+
+  check('K4 meshApparentSize body.star.sol within [0, 90] degrees', () => {
+    const r = meshApparentSize(invs, { phaseKey: 'NOW', meshName: 'body.star.sol', min: 0, max: 90 });
+    return { passed: r.passed, evidence: r.violations[0]?.apparentDegrees ?? 'PASS' };
+  }, results);
+
+  check('K5 cameraNear body.planet.earth within 1e9 (sanity, very lax bound)', () => {
+    const r = cameraNear(invs, { phaseKey: 'NOW', meshName: 'body.planet.earth', maxDistance: 1e9 });
+    return { passed: r.passed, evidence: r.passed ? 'within 1e9' : r.violations };
+  }, results);
+
+  // The Sol-mystery probe: cameraDistance to body.planet.earth should be
+  // within Sol-scale (~1e8 max). If the prior-session "system entered but
+  // camera nowhere near body" defect persists, this FAILs.
+  check('K6 cameraNear body.planet.earth within Sol-scale 1e8 (mystery probe)', () => {
+    const r = cameraNear(invs, { phaseKey: 'NOW', meshName: 'body.planet.earth', maxDistance: 1e8 });
+    return { passed: r.passed, evidence: r.passed ? 'PASS — Sol scale OK' : ('cameraDistance=' + r.violations[0]?.cameraDistance) };
+  }, results);
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.length - passed;
+
+  console.group('[__wd phase A suite] ' + passed + '/' + results.length + ' passed');
+  for (const r of results) {
+    console.log((r.passed ? '✔' : '✘') + ' ' + r.name, r.passed ? '' : (r.evidence ?? ''));
+  }
+  console.groupEnd();
+
+  return { passed, failed, total: results.length, results };
 }

@@ -187,7 +187,7 @@ observation]."
 Skip this section when UAT is N/A per brief.]
 ```
 
-When the verdict is PASS, working-Claude reports the §"Summary for Max" + §"What Max should try" sections to Max, who confirms in his real browser. The §"Verdict" line gates the dev-collab edit-counter; the §"Summary for Max" is the human-readable artifact that catches what programmatic verification missed.
+When the verdict is PASS, working-Claude reports the §"Summary for Max" + §"What Max should try" sections to Max, who confirms in his real browser. The §"Verdict" line is the machine-readable artifact (per-layer pass/fail); the §"Summary for Max" is the human-readable artifact that catches what programmatic verification missed. (The dev-collab edit-count gate that previously consumed the verdict to release further edits was retired 2026-05-08; Tester invocation is now driven by the trigger rules in `~/.claude/CLAUDE.md`.)
 
 ## How you run verification
 
