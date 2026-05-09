@@ -531,3 +531,161 @@ export async function runPhaseATests() {
 
   return { passed, failed, total: results.length, results };
 }
+
+// === Reticle inspection — runReticleInspectionTests ===
+//
+// Exercises the new ui.reticle.* synthetic mesh entries + uiReticleOverlay
+// frame aggregate emitted by SceneInspector when TargetingReticle's probe
+// is wired. Covers AC1, AC2, AC4, AC6 from the workstream brief
+// (docs/WORKSTREAMS/reticle-ghosting-fix-and-ui-overlay-inspection-2026-05-09.md).
+// AC3 (selected body screenSpace tracks projection) and AC5 (reticleDrawCount
+// predicate) ride on _lab.selectBody — see `R3`. AC7/AC8 are the regression
+// runner, separate function.
+export async function runReticleInspectionTests() {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runReticleInspectionTests: window.__wd not installed. Enter Sol first via _lab.enterSol().');
+  }
+  if (!window._lab || typeof window._lab.selectBody !== 'function') {
+    throw new Error('runReticleInspectionTests: _lab.selectBody unavailable — system not loaded?');
+  }
+  const __wd = window.__wd;
+  const _lab = window._lab;
+  const results = [];
+
+  // Wait one frame so the reticle has updated at least once after any
+  // pre-test scene change (e.g., entering Sol mid-render).
+  await new Promise(r => requestAnimationFrame(() => r()));
+
+  // R1: when at least one reticle has drawn this frame, ui.reticle.* entries appear.
+  // The default Sol scene paints ghost reticles for sub-pixel bodies, so
+  // entries should be present without an explicit selection. If not, force
+  // a selection.
+  let inv = __wd.takeSceneInventory();
+  let reticleEntries = (inv.meshes || []).filter(m => (m.name || '').startsWith('ui.reticle.'));
+  if (reticleEntries.length === 0) {
+    _lab.selectBody('planet', 0);
+    await new Promise(r => requestAnimationFrame(() => r()));
+    inv = __wd.takeSceneInventory();
+    reticleEntries = (inv.meshes || []).filter(m => (m.name || '').startsWith('ui.reticle.'));
+  }
+
+  check('R1 takeSceneInventory emits ui.reticle.* entries when reticles draw', () => {
+    return {
+      passed: reticleEntries.length > 0,
+      evidence: { count: reticleEntries.length, names: reticleEntries.map(m => m.name).slice(0, 5) },
+    };
+  }, results);
+
+  check('R2 each ui.reticle.* entry has required shape', () => {
+    if (reticleEntries.length === 0) return { passed: false, evidence: 'no entries to check' };
+    const allowed = new Set(['ghost', 'tentative', 'selected']);
+    for (const e of reticleEntries) {
+      if (!allowed.has(e.reticleState)) return { passed: false, evidence: 'bad state: ' + e.reticleState + ' on ' + e.name };
+      if (!e.screenSpace || typeof e.screenSpace.x !== 'number' || typeof e.screenSpace.y !== 'number') {
+        return { passed: false, evidence: 'bad screenSpace on ' + e.name + ': ' + JSON.stringify(e.screenSpace) };
+      }
+      if (e.label !== null && typeof e.label !== 'string') {
+        return { passed: false, evidence: 'bad label on ' + e.name + ': ' + typeof e.label };
+      }
+      if (typeof e.bracketHalf !== 'number' || e.bracketHalf <= 0) {
+        return { passed: false, evidence: 'bad bracketHalf on ' + e.name + ': ' + e.bracketHalf };
+      }
+      if (typeof e.frameDrawCount !== 'number' || e.frameDrawCount < 1) {
+        return { passed: false, evidence: 'bad frameDrawCount on ' + e.name + ': ' + e.frameDrawCount };
+      }
+    }
+    return { passed: true, evidence: { sample: reticleEntries[0] } };
+  }, results);
+
+  // R3: a selected body's reticle screen-space tracks the projection of the
+  // body's mesh entry within tolerance. The two entries are produced via
+  // independent paths (_recordDraw via canvas projection vs. inventory
+  // via clip-matrix projection), so an exact match is too strict; ±2 CSS px
+  // covers DPR rounding + sub-pixel tolerance.
+  _lab.selectBody('planet', 0);
+  await new Promise(r => requestAnimationFrame(() => r()));
+  const invSel = __wd.takeSceneInventory();
+  const selectedReticle = (invSel.meshes || []).find(m =>
+    (m.name || '').startsWith('ui.reticle.') && m.reticleState === 'selected'
+  );
+  // Find the corresponding body mesh entry. Selected ui.reticle name is
+  // ui.reticle.planet.<bodyname>; corresponding body entry is body.planet.<bodyname>.
+  let bodyEntry = null;
+  if (selectedReticle) {
+    const expected = selectedReticle.name.replace(/^ui\.reticle\./, 'body.');
+    bodyEntry = (invSel.meshes || []).find(m => m.name === expected);
+  }
+
+  check('R3 selected reticle screenSpace tracks body projection within ±2 px', () => {
+    if (!selectedReticle) return { passed: false, evidence: 'no selected reticle entry — selectBody failed?' };
+    if (!bodyEntry || !bodyEntry.screenSpace) {
+      return { passed: false, evidence: 'no matching body entry for ' + selectedReticle.name + ' (or no screenSpace)' };
+    }
+    const dx = Math.abs(selectedReticle.screenSpace.x - bodyEntry.screenSpace.x);
+    const dy = Math.abs(selectedReticle.screenSpace.y - bodyEntry.screenSpace.y);
+    const within = dx <= 2 && dy <= 2;
+    return {
+      passed: within,
+      evidence: {
+        reticle: selectedReticle.screenSpace,
+        body: bodyEntry.screenSpace,
+        delta: { dx, dy },
+      },
+    };
+  }, results);
+
+  // R4: empty case — disable the reticle, take inventory, expect zero entries.
+  _lab.deselectBody();
+  // TargetingReticle.update() with !state still draws ghosts. To force the
+  // empty case, bypass via window._reticle.enabled = false momentarily.
+  const reticleHandle = window._reticle;
+  const wasEnabled = reticleHandle ? reticleHandle.enabled : null;
+  if (reticleHandle) reticleHandle.enabled = false;
+  await new Promise(r => requestAnimationFrame(() => r()));
+  await new Promise(r => requestAnimationFrame(() => r()));
+  const invEmpty = __wd.takeSceneInventory();
+  const emptyEntries = (invEmpty.meshes || []).filter(m => (m.name || '').startsWith('ui.reticle.'));
+  if (reticleHandle) reticleHandle.enabled = wasEnabled;
+
+  check('R4 no ui.reticle.* entries when overlay disabled', () => ({
+    passed: emptyEntries.length === 0,
+    evidence: { count: emptyEntries.length, names: emptyEntries.map(m => m.name) },
+  }), results);
+
+  // R5: frame-aggregate consistency — uiReticleOverlay.drawCallsThisFrame
+  // equals the count of ui.reticle.* entries in the same inventory.
+  await new Promise(r => requestAnimationFrame(() => r()));
+  const invAgg = __wd.takeSceneInventory();
+  const aggCount = (invAgg.meshes || []).filter(m => (m.name || '').startsWith('ui.reticle.'))
+    .reduce((sum, e) => sum + (e.frameDrawCount || 0), 0);
+  const reportedDrawCalls = invAgg.uiReticleOverlay?.drawCallsThisFrame ?? null;
+
+  check('R5 uiReticleOverlay.drawCallsThisFrame equals sum of frameDrawCount', () => ({
+    passed: reportedDrawCalls === aggCount,
+    evidence: { reportedDrawCalls, summedFrameDrawCount: aggCount, ui: invAgg.uiReticleOverlay },
+  }), results);
+
+  // R6: lastClearAt advances per update — take two snapshots a frame apart
+  // and assert lastClearAt strictly increased (canvas was cleared between).
+  await new Promise(r => requestAnimationFrame(() => r()));
+  const invAfter = __wd.takeSceneInventory();
+  check('R6 lastClearAt advances between frames', () => {
+    const a = invAgg.uiReticleOverlay?.lastClearAt ?? -1;
+    const b = invAfter.uiReticleOverlay?.lastClearAt ?? -1;
+    return {
+      passed: b > a,
+      evidence: { before: a, after: b, delta: b - a },
+    };
+  }, results);
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.length - passed;
+
+  console.group('[__wd reticle inspection] ' + passed + '/' + results.length + ' passed');
+  for (const r of results) {
+    console.log((r.passed ? '✔' : '✘') + ' ' + r.name, r.passed ? '' : (r.evidence ?? ''));
+  }
+  console.groupEnd();
+
+  return { passed, failed, total: results.length, results };
+}

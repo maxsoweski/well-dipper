@@ -118,6 +118,20 @@ export class TargetingReticle {
     this._ghostEntryTimes = new Map(); // key → timestamp (ms)
     this._ghostLockDuration = 400;     // ms — how long the lock-in takes
     this._ghostLockScale = 2.5;        // start at N× default half-width
+
+    // Inspection-layer probe: per-update draw state so the dev-only inspection
+    // layer can surface synthetic ui.reticle.* entries via SceneInspector.
+    // Reset at the start of update(); populated as ghost/tentative/selected
+    // draws fire. See docs/WORKSTREAMS/reticle-ghosting-fix-and-ui-overlay-
+    // inspection-2026-05-09.md.
+    this._lastFrame = {
+      drawCallsThisFrame: 0,
+      lastClearAt: 0,
+      entries: [],  // { state, kind, bodyName, label, x, y, bracketHalf, frameDrawCount }
+      canvasW: 0,
+      canvasH: 0,
+      dpr: this._dpr,
+    };
   }
 
   _resize() {
@@ -235,6 +249,15 @@ export class TargetingReticle {
    *   Each target: { mesh, radius, name, type, kind } (kind='star'|'planet'|'moon')
    */
   update(state) {
+    // Reset probe state at the start of every update so frameDrawCount
+    // counts draws within THIS update only. Multiple update() calls per
+    // RAF tick are allowed; what we forbid is paint-without-clear.
+    this._lastFrame.entries = [];
+    this._lastFrame.drawCallsThisFrame = 0;
+    this._lastFrame.canvasW = this._cssW;
+    this._lastFrame.canvasH = this._cssH;
+    this._lastFrame.dpr = this._dpr;
+
     if (!this.enabled) {
       this._clear();
       return;
@@ -301,6 +324,7 @@ export class TargetingReticle {
 
     this._drawBrackets(screen.x, screen.y, half, GHOST_ARM_LEN, GHOST_THICK, color);
     ctx.restore();
+    this._recordDraw('ghost', target, screen, half, null);
   }
 
   _drawTarget(target, isSelected) {
@@ -325,24 +349,82 @@ export class TargetingReticle {
     ctx.save();
     ctx.scale(this._dpr, this._dpr);
 
+    let label = null;
     if (isSelected) {
       // Single-tone bright green — no glow layer
       this._drawBrackets(screen.x, screen.y, half, BRACKET_ARM_LEN, BRACKET_THICK_SEL, COLOR_SELECTED);
       if (target.name) {
-        this._drawNameBelow(screen.x, screen.y, half, target.name.toUpperCase(), NAME_COLOR_SELECTED);
+        label = target.name.toUpperCase();
+        this._drawNameBelow(screen.x, screen.y, half, label, NAME_COLOR_SELECTED);
       }
     } else {
       this._drawBrackets(screen.x, screen.y, half, BRACKET_ARM_LEN, BRACKET_THICK_TENT, COLOR_TENTATIVE);
       if (target.name) {
-        this._drawNameBelow(screen.x, screen.y, half, target.name.toUpperCase(), NAME_COLOR_TENTATIVE);
+        label = target.name.toUpperCase();
+        this._drawNameBelow(screen.x, screen.y, half, label, NAME_COLOR_TENTATIVE);
       }
     }
 
     ctx.restore();
+    this._recordDraw(isSelected ? 'selected' : 'tentative', target, screen, half, label);
   }
 
   _clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this._lastFrame.lastClearAt = performance.now();
+  }
+
+  /**
+   * Inspection-layer probe accessor. Returns a serializable snapshot of
+   * the most recent update() call's draw state. SceneInspector reads
+   * this via setReticleProvider to surface ui.reticle.* synthetic
+   * entries in takeSceneInventory().
+   *
+   * The returned object is a fresh shallow copy; entries are referentially
+   * stable within a single update() but should not be mutated by callers.
+   */
+  getLastFrameState() {
+    return {
+      canvasW: this._lastFrame.canvasW,
+      canvasH: this._lastFrame.canvasH,
+      dpr: this._lastFrame.dpr,
+      lastClearAt: this._lastFrame.lastClearAt,
+      drawCallsThisFrame: this._lastFrame.drawCallsThisFrame,
+      entries: this._lastFrame.entries.slice(),
+    };
+  }
+
+  _recordDraw(state, target, screen, half, label) {
+    if (!target) return;
+    const kind = target.kind || 'unknown';
+    const rawName = (target.name || '').toString();
+    const bodyName = rawName ? rawName.toLowerCase().replace(/\s+/g, '_') : _targetKey(target);
+    let existing = null;
+    for (const e of this._lastFrame.entries) {
+      if (e.kind === kind && e.bodyName === bodyName) { existing = e; break; }
+    }
+    if (existing) {
+      existing.frameDrawCount += 1;
+      // The latest draw "wins" for reported state/position — same as
+      // visually the latest draw is what the user sees on top.
+      existing.state = state;
+      existing.x = screen.x;
+      existing.y = screen.y;
+      existing.bracketHalf = half;
+      existing.label = label || null;
+    } else {
+      this._lastFrame.entries.push({
+        state,
+        kind,
+        bodyName,
+        label: label || null,
+        x: screen.x,
+        y: screen.y,
+        bracketHalf: half,
+        frameDrawCount: 1,
+      });
+    }
+    this._lastFrame.drawCallsThisFrame += 1;
   }
 
   dispose() {

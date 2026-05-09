@@ -1629,6 +1629,12 @@ if (import.meta.env.DEV) {
       // system. systemData is exposed on window._systemData by spawnSystem.
       systemDataProvider: () => window._systemData,
     });
+    // Reticle inspection provider: surfaces the targeting overlay's per-update
+    // draw state as ui.reticle.* synthetic mesh entries in takeSceneInventory.
+    // Per docs/WORKSTREAMS/reticle-ghosting-fix-and-ui-overlay-inspection-2026-05-09.md.
+    if (window.__wd?.setReticleProvider) {
+      window.__wd.setReticleProvider(() => targetingReticle.getLastFrameState());
+    }
   }).catch((e) => {
     console.warn('[SceneInspector] install skipped:', e);
   });
@@ -1690,6 +1696,27 @@ window._lab = {
       planetCount: system.planets?.length ?? 0,
       destinationName: system?.destination?.data?.name ?? null,
     };
+  },
+
+  /** Programmatically select a body by kind + index. Drives the same
+   * selectTarget() path the click handler uses. Returns { ok, target }.
+   * Used by integration tests (e.g., reticle inspection) to pin a known
+   * selection without requiring synthetic mouse events. */
+  selectBody(kind, idx, moonIdx) {
+    if (!system) return { ok: false, reason: 'no system loaded' };
+    const indices = (kind === 'moon')
+      ? { planetIndex: idx ?? 0, moonIndex: moonIdx ?? 0 }
+      : { planetIndex: idx ?? 0 };
+    const target = _makeTarget(kind, indices);
+    if (!target) return { ok: false, reason: 'kind=' + kind + ' idx=' + idx + ' returned no target' };
+    selectTarget(target);
+    return { ok: true, target: { kind: target.kind, name: target.name } };
+  },
+
+  /** Clear the current selection. */
+  deselectBody() {
+    deselectTarget();
+    return { ok: true };
   },
 };
 window._skyRenderer = skyRenderer;  // DEBUG: inspect origin/destination layers during crossover

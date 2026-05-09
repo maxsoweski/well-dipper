@@ -62,6 +62,7 @@ export function installSceneInspector(engines) {
     audio: () => [],
     input: () => ({}),
     syntheticLights: () => deriveSyntheticLights(engines),
+    reticleProvider: () => null,
     panelEl: null,
     panelExpanded: false,
     lastInventory: null,
@@ -105,6 +106,7 @@ export function installSceneInspector(engines) {
     setAudioProvider: (fn) => { _state.audio = fn; },
     setInputProvider: (fn) => { _state.input = fn; },
     setLightsProvider: (fn) => { _state.syntheticLights = fn; },
+    setReticleProvider: (fn) => { _state.reticleProvider = fn; },
     // Integration test suite. Lazy-loaded so module isn't installed unless used.
     runIntegrationSuite: async () => {
       const m = await import('./integration-suite.js');
@@ -117,6 +119,10 @@ export function installSceneInspector(engines) {
     runPhaseATests: async () => {
       const m = await import('./integration-suite.js');
       return m.runPhaseATests();
+    },
+    runReticleInspectionTests: async () => {
+      const m = await import('./integration-suite.js');
+      return m.runReticleInspectionTests();
     },
     // Live viewport (canvas client size). Used by Phase A integration tests
     // and any predicate that needs region-mode viewport math.
@@ -196,6 +202,53 @@ function takeInventoryNow(opts) {
   const namedContainers = collectNamedContainers(scenes, autoViewport);
   if (namedContainers.length > 0) {
     inv.meshes = (inv.meshes || []).concat(namedContainers);
+  }
+
+  // UI overlay: surface targeting-reticle draw state as synthetic
+  // ui.reticle.<kind>.<bodyName> mesh entries + a frame-aggregate
+  // uiReticleOverlay top-level field. The reticle is a 2D Canvas overlay
+  // (TargetingReticle.js) outside the Three.js scene graph; without this
+  // bridge, takeSceneInventory can't see it. See docs/WORKSTREAMS/
+  // reticle-ghosting-fix-and-ui-overlay-inspection-2026-05-09.md.
+  const reticleFrame = _state.reticleProvider();
+  if (reticleFrame && Array.isArray(reticleFrame.entries)) {
+    inv.uiReticleOverlay = {
+      canvasW: reticleFrame.canvasW,
+      canvasH: reticleFrame.canvasH,
+      dpr: reticleFrame.dpr,
+      lastClearAt: reticleFrame.lastClearAt,
+      drawCallsThisFrame: reticleFrame.drawCallsThisFrame,
+    };
+    if (reticleFrame.entries.length > 0) {
+      const reticleEntries = reticleFrame.entries.map((e) => ({
+        name: 'ui.reticle.' + e.kind + '.' + e.bodyName,
+        type: 'UiReticle',
+        uuid: 'synthetic-reticle-' + e.kind + '-' + e.bodyName,
+        source: 'ui',
+        visible: true,
+        frustumCulled: false,
+        inFrustum: true,
+        worldPos: [e.x, e.y, 0],   // 2D screen-space x/y; z padded
+        layer: 1,
+        materialUuid: '',
+        geometryUuid: '',
+        isContainer: false,
+        // UI-overlay-specific fields
+        reticleState: e.state,
+        bodyKind: e.kind,
+        bodyName: e.bodyName,
+        label: e.label,
+        bracketHalf: e.bracketHalf,
+        frameDrawCount: e.frameDrawCount,
+        screenSpace: { x: e.x, y: e.y, depth: 0, inViewport: true, behindCamera: false },
+        cameraDistance: 0,
+        apparentDegrees: null,
+        estimatedPixelCoverage: null,
+        projectedSize: null,
+        realFrustumIntersect: false,
+      }));
+      inv.meshes = (inv.meshes || []).concat(reticleEntries);
+    }
   }
 
   _state.lastInventory = inv;
@@ -511,6 +564,18 @@ function onKeyDown(e) {
       run: async () => {
         await ensureSystemLoaded();
         return window.__wd.runWarpSuite();
+      },
+    });
+    return;
+  }
+  if (e.key === 'F6') {
+    e.preventDefault();
+    e.stopPropagation();
+    runUatToast({
+      label: 'Reticle inspection',
+      run: async () => {
+        await ensureSystemLoaded();
+        return window.__wd.runReticleInspectionTests();
       },
     });
     return;
