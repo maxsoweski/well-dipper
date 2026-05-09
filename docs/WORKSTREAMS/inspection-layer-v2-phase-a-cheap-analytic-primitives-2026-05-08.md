@@ -124,3 +124,7 @@ Per the new three-layer framework (`docs/TESTING_CONVENTIONS.md`). Phase A is a 
 **Push-on-shipped:** well-dipper is established-deploy. Shipped flip → `git push origin master` → verify deploy. Per `feedback_push-on-shipped.md`.
 
 **Queued downstream:** Phase B (frame timing) is the next-most-decoupled phase; can be PM-scoped in parallel with Phase A's execution if Max wants. Phase C-G wait for predecessors per the dependency tree in `docs/PLAN_inspection-layer-v2.md`.
+
+## Status
+
+**Shipped `781a5f2` — 2026-05-09.** Tester PASS at `08c0560` (substantive Phase A surface) + Tester PASS at `781a5f2` (UAT-keybind scaffold polish). Max UAT GATE 3 evidence (real Chrome, localhost:5174): F2 → 11/11 Phase A; F3 → 19/19 integration; F4 → H/I diagnostic-class as designed. Polish commits since first PASS: `66d88fb` (Shift+P + toast), `ca2e8d0` (F-key migration), `781a5f2` (enterSol gate + copy button).
