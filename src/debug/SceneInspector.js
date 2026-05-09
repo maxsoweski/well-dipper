@@ -485,10 +485,7 @@ function onKeyDown(e) {
     runUatToast({
       label: 'Phase A',
       run: async () => {
-        if (window._lab && typeof window._lab.enterSol === 'function') {
-          await window._lab.enterSol();
-          await new Promise(r => setTimeout(r, 250));
-        }
+        await ensureSystemLoaded();
         return window.__wd.runPhaseATests();
       },
     });
@@ -500,10 +497,7 @@ function onKeyDown(e) {
     runUatToast({
       label: 'Integration',
       run: async () => {
-        if (window._lab && typeof window._lab.enterSol === 'function') {
-          await window._lab.enterSol();
-          await new Promise(r => setTimeout(r, 250));
-        }
+        await ensureSystemLoaded();
         return window.__wd.runIntegrationSuite();
       },
     });
@@ -515,14 +509,28 @@ function onKeyDown(e) {
     runUatToast({
       label: 'Warp suite',
       run: async () => {
-        if (window._lab && typeof window._lab.enterSol === 'function') {
-          await window._lab.enterSol();
-          await new Promise(r => setTimeout(r, 250));
-        }
+        await ensureSystemLoaded();
         return window.__wd.runWarpSuite();
       },
     });
     return;
+  }
+}
+
+// ── UAT prerequisites ────────────────────────────────────────────────────
+//
+// Test runners require a loaded system (window.__wd installed). On a fresh
+// page (splash/title), we boot into Sol. If a system is already loaded, we
+// leave it alone — re-entering Sol triggers a teardown/rebuild that Max
+// experiences as an unwanted scene transition mid-UAT.
+
+async function ensureSystemLoaded() {
+  if (window._lab && typeof window._lab.isInSystem === 'function' && window._lab.isInSystem()) {
+    return;
+  }
+  if (window._lab && typeof window._lab.enterSol === 'function') {
+    await window._lab.enterSol();
+    await new Promise(r => setTimeout(r, 250));
   }
 }
 
@@ -561,14 +569,39 @@ function showToast({ label, state, summary, details }) {
   head.style.cssText = 'font-weight: 600; display: flex; justify-content: space-between; gap: 12px;';
   head.innerHTML = `<span>${state === 'pass' ? '✓' : state === 'fail' ? '✗' : '…'} ${label}</span><span style="color:#7d8590">${summary}</span>`;
   t.appendChild(head);
-  let detailsEl;
+  let detailsWrap;
   if (details) {
-    detailsEl = document.createElement('pre');
-    detailsEl.style.cssText = 'display: none; margin: 8px 0 0; font-size: 11px; max-height: 240px; overflow: auto; white-space: pre-wrap;';
+    detailsWrap = document.createElement('div');
+    detailsWrap.style.cssText = 'display: none; margin: 8px 0 0;';
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy';
+    copyBtn.style.cssText = `
+      display: block; margin-bottom: 6px;
+      background: #1f2937; color: #e6edf3;
+      border: 1px solid #6e7681; border-radius: 3px;
+      padding: 3px 10px; font: inherit; font-size: 11px;
+      cursor: pointer;
+    `;
+    copyBtn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(details);
+        const prev = copyBtn.textContent;
+        copyBtn.textContent = 'Copied ✓';
+        setTimeout(() => { copyBtn.textContent = prev; }, 1200);
+      } catch (err) {
+        copyBtn.textContent = 'Copy failed';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      }
+    });
+    detailsWrap.appendChild(copyBtn);
+    const detailsEl = document.createElement('pre');
+    detailsEl.style.cssText = 'margin: 0; font-size: 11px; max-height: 240px; overflow: auto; white-space: pre-wrap;';
     detailsEl.textContent = details;
-    t.appendChild(detailsEl);
+    detailsWrap.appendChild(detailsEl);
+    t.appendChild(detailsWrap);
     t.addEventListener('click', () => {
-      detailsEl.style.display = detailsEl.style.display === 'none' ? 'block' : 'none';
+      detailsWrap.style.display = detailsWrap.style.display === 'none' ? 'block' : 'none';
     });
   }
   host.appendChild(t);
