@@ -456,12 +456,111 @@ function deriveInput(engines) {
 // ── Tier 2 panel ─────────────────────────────────────────────────────────
 
 function onKeyDown(e) {
-  if (e.key !== 'I' || !e.shiftKey) return;
+  if (!e.shiftKey) return;
   // No-op when text input focused.
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-  e.preventDefault();
-  togglePanel();
+  if (e.key === 'I') {
+    e.preventDefault();
+    togglePanel();
+    return;
+  }
+  if (e.key === 'P') {
+    // UAT shortcut: enter Sol + run Phase A integration tests + render result toast.
+    // Per feedback_uat-keybind-design.md — Max should not need DevTools to UAT
+    // dev/test tools. Future test runners (Phase B/C/W/etc.) follow this pattern.
+    e.preventDefault();
+    runUatToast({
+      label: 'Phase A',
+      run: async () => {
+        if (window._lab && typeof window._lab.enterSol === 'function') {
+          await window._lab.enterSol();
+          await new Promise(r => setTimeout(r, 250));
+        }
+        return window.__wd.runPhaseATests();
+      },
+    });
+    return;
+  }
+}
+
+// ── UAT toast surface ────────────────────────────────────────────────────
+//
+// Reusable result display for in-page UAT runs. Future keybinds (Shift+B,
+// Shift+W, etc. — per task #59) call runUatToast({ label, run }) to render
+// the standard pass/fail surface without DevTools. Auto-dismiss on PASS;
+// persistent on FAIL with click-to-expand details.
+
+function showToast({ label, state, summary, details }) {
+  let host = document.getElementById('__wd-uat-toast');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = '__wd-uat-toast';
+    host.style.cssText = `
+      position: fixed; top: 16px; right: 16px; z-index: 999999;
+      display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+    `;
+    document.body.appendChild(host);
+  }
+  const t = document.createElement('div');
+  t.style.cssText = `
+    pointer-events: auto;
+    background: #0e1216f0; color: #e6edf3;
+    border: 1px solid ${state === 'pass' ? '#38d39f' : state === 'fail' ? '#f97583' : '#6e7681'};
+    border-left: 4px solid ${state === 'pass' ? '#38d39f' : state === 'fail' ? '#f97583' : '#f0c674'};
+    padding: 10px 12px; min-width: 240px; max-width: 380px;
+    border-radius: 4px; box-shadow: 0 4px 12px #0008;
+    font-size: 12px; line-height: 1.4;
+    cursor: ${details ? 'pointer' : 'default'};
+  `;
+  const head = document.createElement('div');
+  head.style.cssText = 'font-weight: 600; display: flex; justify-content: space-between; gap: 12px;';
+  head.innerHTML = `<span>${state === 'pass' ? '✓' : state === 'fail' ? '✗' : '…'} ${label}</span><span style="color:#7d8590">${summary}</span>`;
+  t.appendChild(head);
+  let detailsEl;
+  if (details) {
+    detailsEl = document.createElement('pre');
+    detailsEl.style.cssText = 'display: none; margin: 8px 0 0; font-size: 11px; max-height: 240px; overflow: auto; white-space: pre-wrap;';
+    detailsEl.textContent = details;
+    t.appendChild(detailsEl);
+    t.addEventListener('click', () => {
+      detailsEl.style.display = detailsEl.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+  host.appendChild(t);
+  // Auto-dismiss: PASS after 12s (human read time); running shows until
+  // replaced; FAIL persists until clicked-out / new toast / explicit close.
+  if (state === 'pass') {
+    setTimeout(() => { try { t.remove(); } catch (_) {} }, 12000);
+  }
+  // Explicit close on any toast: meta-click closes (so FAIL toasts don't stack forever).
+  t.addEventListener('contextmenu', (e) => { e.preventDefault(); try { t.remove(); } catch (_) {} });
+  return t;
+}
+
+async function runUatToast({ label, run }) {
+  const running = showToast({ label, state: 'running', summary: 'running…' });
+  try {
+    const out = await run();
+    try { running.remove(); } catch (_) {}
+    if (out && typeof out.passed === 'number' && typeof out.total === 'number') {
+      const ok = out.failed === 0;
+      const detailLines = (out.results || []).map(r => `${r.passed ? '✓' : '✗'} ${r.name}${r.passed ? '' : '\n   ' + (typeof r.evidence === 'string' ? r.evidence : JSON.stringify(r.evidence))}`).join('\n');
+      showToast({
+        label,
+        state: ok ? 'pass' : 'fail',
+        summary: `${out.passed}/${out.total}`,
+        details: detailLines || null,
+      });
+    } else {
+      showToast({ label, state: 'pass', summary: 'done', details: JSON.stringify(out, null, 2) });
+    }
+  } catch (e) {
+    try { running.remove(); } catch (_) {}
+    showToast({ label, state: 'fail', summary: 'EXCEPTION', details: e?.stack || String(e) });
+  }
 }
 
 function togglePanel() {
