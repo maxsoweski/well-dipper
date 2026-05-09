@@ -14,7 +14,14 @@
 // tree-shakes the install call; Phase 3 ships a build-time grep test that
 // asserts the inspector strings don't leak into the prod bundle.
 
-import { takeSceneInventory } from 'motion-test-kit/adapters/three/scene-inventory.js';
+import {
+  takeSceneInventory,
+  projectPoint,
+  multiplyMatrix4,
+  invertMatrix4,
+  extractFrustumPlanes,
+  sphereIntersectsFrustum,
+} from 'motion-test-kit/adapters/three/scene-inventory.js';
 import { diffInventories } from 'motion-test-kit/core/inventory/diff.js';
 import { serializeForGolden, quickGoldenDiff } from './scene-inventory-golden.js';
 
@@ -182,7 +189,11 @@ function takeInventoryNow(opts) {
   // these named containers don't show up otherwise. Brief calls them out
   // explicitly: AsteroidBelt parent Group, ShipSpawner outer model wrapper,
   // GravityWellMap container, etc. — load-bearing for predicate lookups.)
-  const namedContainers = collectNamedContainers(scenes);
+  // Phase A v2: containers also receive screen-space + cameraDistance +
+  // realFrustumIntersect when viewport is available, so predicates like
+  // cameraNear / meshOnScreen work uniformly across geometried meshes and
+  // containers (e.g., body.planet.earth in well-dipper is a Group container).
+  const namedContainers = collectNamedContainers(scenes, autoViewport);
   if (namedContainers.length > 0) {
     inv.meshes = (inv.meshes || []).concat(namedContainers);
   }
@@ -209,15 +220,36 @@ function saveGolden(scenarioName) {
   return golden;
 }
 
-function collectNamedContainers(scenes) {
+function collectNamedContainers(scenes, viewport) {
   // Walk each scene and collect every Object3D that has userData.category
   // set AND no geometry (kit's mesh array already covers geometried ones).
   // Emits inventory-mesh-shaped entries so predicates / diff continue to
   // work uniformly. inFrustum is conservative true (containers don't have
   // bounding spheres; assume in-frustum unless host overrides).
+  // Phase A v2: when viewport is provided, attach screenSpace +
+  // cameraDistance + realFrustumIntersect to each container using the
+  // scene's camera projection. apparentDegrees / projectedSize stay null
+  // (no boundingSphere / boundingBox on containers).
   const out = [];
-  for (const { name: source, scene } of scenes) {
+  for (const { name: source, scene, camera } of scenes) {
     if (!scene?.traverse) continue;
+
+    // Build clip + camWorldPos once per scene if we'll project.
+    let clipE = null, camWorldPos = null;
+    if (viewport && camera?.projectionMatrix?.elements) {
+      let invE = camera.matrixWorldInverse?.elements;
+      if (!invE && camera.matrixWorld?.elements) {
+        invE = invertMatrix4(camera.matrixWorld.elements);
+      }
+      if (invE) {
+        clipE = multiplyMatrix4(camera.projectionMatrix.elements, invE);
+        const camMwE = camera.matrixWorld?.elements;
+        camWorldPos = camMwE
+          ? [camMwE[12], camMwE[13], camMwE[14]]
+          : (() => { const m = invertMatrix4(invE); return m ? [m[12], m[13], m[14]] : [0, 0, 0]; })();
+      }
+    }
+
     scene.traverse((obj) => {
       if (!obj || obj.geometry) return;             // geometried already covered
       if (!obj.userData?.category) return;          // unnamed container — skip
@@ -225,7 +257,7 @@ function collectNamedContainers(scenes) {
       const worldPos = mwE
         ? [mwE[12], mwE[13], mwE[14]]
         : [obj.position?.x ?? 0, obj.position?.y ?? 0, obj.position?.z ?? 0];
-      out.push({
+      const entry = {
         name: obj.name || '',
         type: obj.type || 'Group',
         uuid: obj.uuid || '',
@@ -238,7 +270,23 @@ function collectNamedContainers(scenes) {
         materialUuid: '',
         geometryUuid: '',
         isContainer: true,
-      });
+      };
+      if (clipE && camWorldPos) {
+        const dx = worldPos[0] - camWorldPos[0];
+        const dy = worldPos[1] - camWorldPos[1];
+        const dz = worldPos[2] - camWorldPos[2];
+        entry.cameraDistance = Math.hypot(dx, dy, dz);
+        entry.screenSpace = projectPoint(worldPos[0], worldPos[1], worldPos[2], clipE, viewport);
+        // No bounding volume on a Group — keep angular/area fields null.
+        entry.apparentDegrees = null;
+        entry.estimatedPixelCoverage = null;
+        entry.projectedSize = null;
+        // realFrustumIntersect: best we can do is point-in-frustum (treat as
+        // zero-radius sphere). Pull the planes from clipE.
+        const planes = extractFrustumPlanes(clipE);
+        entry.realFrustumIntersect = sphereIntersectsFrustum(worldPos[0], worldPos[1], worldPos[2], 0, planes);
+      }
+      out.push(entry);
     });
   }
   return out;
