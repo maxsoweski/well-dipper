@@ -456,20 +456,32 @@ function deriveInput(engines) {
 // ── Tier 2 panel ─────────────────────────────────────────────────────────
 
 function onKeyDown(e) {
-  if (!e.shiftKey) return;
   // No-op when text input focused.
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-  if (e.key === 'I') {
+
+  // Inspector panel — Shift+I. main.js does NOT bind KeyI today; safe to
+  // claim. stopPropagation defensively guards against future bindings.
+  if (e.shiftKey && e.key === 'I') {
     e.preventDefault();
+    e.stopPropagation();
     togglePanel();
     return;
   }
-  if (e.key === 'P') {
-    // UAT shortcut: enter Sol + run Phase A integration tests + render result toast.
-    // Per feedback_uat-keybind-design.md — Max should not need DevTools to UAT
-    // dev/test tools. Future test runners (Phase B/C/W/etc.) follow this pattern.
+
+  // Test-runner keybinds — F-keys. Chosen because main.js binds many
+  // single-letter codes (KeyP, KeyN, KeyT, KeyX, KeyL, KeyG, KeyH, KeyB)
+  // regardless of Shift state, so Shift+letter would collide with the
+  // existing letter handler. main.js explicitly ignores F-keys in its
+  // idleTimeout reset logic. F1/F5/F11/F12 are browser-reserved; F9 is
+  // bound to recording. Safe: F2 (Phase A), F3 (integration), F4 (warp),
+  // F6/F7/F8/F10 reserved for future runners.
+  // Per feedback_uat-keybind-design.md — Max should not need DevTools to
+  // UAT dev/test tools. Full UAT-keybind-scheme workstream queued (task #59)
+  // will replace per-key bindings with a Shift+U registry/menu.
+  if (e.key === 'F2') {
     e.preventDefault();
+    e.stopPropagation();
     runUatToast({
       label: 'Phase A',
       run: async () => {
@@ -478,6 +490,36 @@ function onKeyDown(e) {
           await new Promise(r => setTimeout(r, 250));
         }
         return window.__wd.runPhaseATests();
+      },
+    });
+    return;
+  }
+  if (e.key === 'F3') {
+    e.preventDefault();
+    e.stopPropagation();
+    runUatToast({
+      label: 'Integration',
+      run: async () => {
+        if (window._lab && typeof window._lab.enterSol === 'function') {
+          await window._lab.enterSol();
+          await new Promise(r => setTimeout(r, 250));
+        }
+        return window.__wd.runIntegrationSuite();
+      },
+    });
+    return;
+  }
+  if (e.key === 'F4') {
+    e.preventDefault();
+    e.stopPropagation();
+    runUatToast({
+      label: 'Warp suite',
+      run: async () => {
+        if (window._lab && typeof window._lab.enterSol === 'function') {
+          await window._lab.enterSol();
+          await new Promise(r => setTimeout(r, 250));
+        }
+        return window.__wd.runWarpSuite();
       },
     });
     return;
