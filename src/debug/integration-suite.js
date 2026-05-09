@@ -598,18 +598,28 @@ export async function runReticleInspectionTests() {
   }, results);
 
   // R3: a selected body's reticle screen-space tracks the projection of the
-  // body's mesh entry within tolerance. The two entries are produced via
-  // independent paths (_recordDraw via canvas projection vs. inventory
-  // via clip-matrix projection), so an exact match is too strict; ±2 CSS px
-  // covers DPR rounding + sub-pixel tolerance.
-  _lab.selectBody('planet', 0);
-  await new Promise(r => requestAnimationFrame(() => r()));
-  const invSel = __wd.takeSceneInventory();
-  const selectedReticle = (invSel.meshes || []).find(m =>
-    (m.name || '').startsWith('ui.reticle.') && m.reticleState === 'selected'
-  );
-  // Find the corresponding body mesh entry. Selected ui.reticle name is
-  // ui.reticle.planet.<bodyname>; corresponding body entry is body.planet.<bodyname>.
+  // body's mesh entry within tolerance. main.js:7454 occludes selected
+  // reticles whose target is behind another body, so we iterate planets
+  // until one produces a 'selected' entry — that's the visibility-respecting
+  // contract callers actually rely on.
+  let selectedReticle = null;
+  let selectedTry = -1;
+  const planetCount = window._lab.systemInfo()?.planetCount ?? 0;
+  for (let i = 0; i < planetCount; i++) {
+    const sb = _lab.selectBody('planet', i);
+    if (!sb.ok) continue;
+    await new Promise(r => requestAnimationFrame(() => r()));
+    const candidateInv = __wd.takeSceneInventory();
+    const found = (candidateInv.meshes || []).find(m =>
+      (m.name || '').startsWith('ui.reticle.') && m.reticleState === 'selected'
+    );
+    if (found) {
+      selectedReticle = found;
+      selectedTry = i;
+      var invSel = candidateInv;
+      break;
+    }
+  }
   let bodyEntry = null;
   if (selectedReticle) {
     const expected = selectedReticle.name.replace(/^ui\.reticle\./, 'body.');
@@ -617,7 +627,9 @@ export async function runReticleInspectionTests() {
   }
 
   check('R3 selected reticle screenSpace tracks body projection within ±2 px', () => {
-    if (!selectedReticle) return { passed: false, evidence: 'no selected reticle entry — selectBody failed?' };
+    if (!selectedReticle) {
+      return { passed: false, evidence: 'no planet produced a selected reticle entry across ' + planetCount + ' planets — all occluded? camera state?' };
+    }
     if (!bodyEntry || !bodyEntry.screenSpace) {
       return { passed: false, evidence: 'no matching body entry for ' + selectedReticle.name + ' (or no screenSpace)' };
     }
@@ -627,6 +639,7 @@ export async function runReticleInspectionTests() {
     return {
       passed: within,
       evidence: {
+        triedPlanetIndex: selectedTry,
         reticle: selectedReticle.screenSpace,
         body: bodyEntry.screenSpace,
         delta: { dx, dy },
@@ -634,20 +647,21 @@ export async function runReticleInspectionTests() {
     };
   }, results);
 
-  // R4: empty case — disable the reticle, take inventory, expect zero entries.
+  // R4: empty-targets case — call reticle.update({}) directly with no
+  // hover/selected/ghost targets and read inventory synchronously before
+  // the render loop's next frame can repopulate. main.js:7437 overrides
+  // .enabled every frame so the disable-flag approach fights the loop;
+  // the empty-state approach exercises the contract directly.
   _lab.deselectBody();
-  // TargetingReticle.update() with !state still draws ghosts. To force the
-  // empty case, bypass via window._reticle.enabled = false momentarily.
   const reticleHandle = window._reticle;
-  const wasEnabled = reticleHandle ? reticleHandle.enabled : null;
-  if (reticleHandle) reticleHandle.enabled = false;
-  await new Promise(r => requestAnimationFrame(() => r()));
-  await new Promise(r => requestAnimationFrame(() => r()));
+  if (reticleHandle && typeof reticleHandle.update === 'function') {
+    reticleHandle.update({});  // hover/selected/ghost all undefined → no draws
+  }
+  // Synchronous inventory read — must NOT await an animation frame here.
   const invEmpty = __wd.takeSceneInventory();
   const emptyEntries = (invEmpty.meshes || []).filter(m => (m.name || '').startsWith('ui.reticle.'));
-  if (reticleHandle) reticleHandle.enabled = wasEnabled;
 
-  check('R4 no ui.reticle.* entries when overlay disabled', () => ({
+  check('R4 no ui.reticle.* entries after reticle.update({}) with no targets', () => ({
     passed: emptyEntries.length === 0,
     evidence: { count: emptyEntries.length, names: emptyEntries.map(m => m.name) },
   }), results);
