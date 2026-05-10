@@ -1718,6 +1718,87 @@ window._lab = {
     deselectTarget();
     return { ok: true };
   },
+
+  /** Drive a synthetic camera-orbit drag deterministically. Used by the
+   * reticle ghosting regression test to reproduce a click-and-drag
+   * scenario without relying on chrome-devtools' real drag tool.
+   *
+   * Approach: set cameraController.isDragging = true (mimics mousedown),
+   * then dispatch N mousemove events with movementX/Y overridden via
+   * Object.defineProperty (the MouseEvent constructor's init dict does
+   * not honor movementX/Y, so they default to 0 and the drag has no
+   * effect — that bit my earlier synthetic test). Awaits one RAF between
+   * each event so the per-frame render loop processes the new yaw/pitch
+   * before the next event lands. Optionally streams probe state per
+   * frame so callers can assert on inventory shape.
+   *
+   * @param {Object} opts
+   * @param {number} [opts.frames=10] — number of mousemove events / frames
+   * @param {number} [opts.movementX=12] — px movement per frame (window.movementX)
+   * @param {number} [opts.movementY=5] — px movement per frame (window.movementY)
+   * @param {boolean} [opts.sampleProbe=false] — capture probe state per frame
+   * @param {number} [opts.startX] — initial clientX (default canvas center)
+   * @param {number} [opts.startY] — initial clientY (default canvas center)
+   * @returns {Promise<{ok:true, samples?:object[]}>} or {ok:false, reason}
+   */
+  async simulateDrag(opts) {
+    const o = opts || {};
+    const frames = o.frames ?? 10;
+    const dx = o.movementX ?? 12;
+    const dy = o.movementY ?? 5;
+    const sampleProbe = !!o.sampleProbe;
+    if (!canvas) return { ok: false, reason: 'no canvas' };
+    const rect = canvas.getBoundingClientRect();
+    let x = o.startX ?? (rect.left + rect.width * 0.5);
+    let y = o.startY ?? (rect.top + rect.height * 0.5);
+    const cc = cameraController;
+    if (!cc) return { ok: false, reason: 'no cameraController' };
+    const wasDragging = cc.isDragging;
+
+    // mousedown — let the canvas handler set state (autopilot exit, etc.)
+    canvas.dispatchEvent(new MouseEvent('mousedown', {
+      button: 0, clientX: x, clientY: y, bubbles: true,
+    }));
+    // Force isDragging in case the click was filtered (autopilot active, etc.).
+    cc.isDragging = true;
+
+    const samples = [];
+    for (let i = 0; i < frames; i++) {
+      x += dx;
+      y += dy;
+      const evt = new MouseEvent('mousemove', {
+        button: 0, buttons: 1, clientX: x, clientY: y, bubbles: true,
+      });
+      // MouseEvent init dict ignores movementX/Y; set explicitly.
+      Object.defineProperty(evt, 'movementX', { value: dx });
+      Object.defineProperty(evt, 'movementY', { value: dy });
+      window.dispatchEvent(evt);
+      canvas.dispatchEvent(evt.constructor === MouseEvent
+        ? new MouseEvent('mousemove', { button: 0, buttons: 1, clientX: x, clientY: y, bubbles: true })
+        : evt);
+      await new Promise(r => requestAnimationFrame(() => r()));
+      if (sampleProbe && window._reticle?.getLastFrameState) {
+        const fs = window._reticle.getLastFrameState();
+        samples.push({
+          frame: i,
+          x, y,
+          camYaw: cc.yaw, camPitch: cc.pitch,
+          drawCallsThisFrame: fs.drawCallsThisFrame,
+          entries: fs.entries.map(e => ({
+            kind: e.kind, bodyName: e.bodyName, state: e.state,
+            sx: e.x, sy: e.y, frameDrawCount: e.frameDrawCount, label: e.label,
+          })),
+        });
+      }
+    }
+
+    // mouseup — restore state cleanly
+    window.dispatchEvent(new MouseEvent('mouseup', {
+      button: 0, clientX: x, clientY: y, bubbles: true,
+    }));
+    cc.isDragging = wasDragging;
+    return { ok: true, samples: sampleProbe ? samples : undefined };
+  },
 };
 window._skyRenderer = skyRenderer;  // DEBUG: inspect origin/destination layers during crossover
 // NOTE: warpTarget + commitSelection are exposed further down in the file,
