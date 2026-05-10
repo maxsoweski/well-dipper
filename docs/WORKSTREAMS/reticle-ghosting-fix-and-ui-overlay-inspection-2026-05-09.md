@@ -117,3 +117,22 @@ The integration test for AC8 must FAIL at HEAD (RED) and PASS after the fix (GRE
 ---
 
 **PM-proxy authoring note (2026-05-09):** This brief authored by working-Claude as PM-proxy because the `pm` subagent type is not registered in the current harness (per Dev Collab OS degraded-mode rule). Structure mirrors the Phase A brief at `docs/WORKSTREAMS/inspection-layer-v2-phase-a-cheap-analytic-primitives-2026-05-08.md`. Per CLAUDE.md PM persona at `docs/PERSONAS/pm.md`, ACs are programmatically testable, OOS lines drawn, drift risks named, per-AC test layer specified. Max should review with sharper-than-usual scrutiny; if PM subagent comes back online during execution, re-invoke for revisions.
+
+## ⏸ PAUSED — bookmark 2026-05-09
+
+**State at pause:** Fix verified live by Max (real Chrome at localhost:5174/well-dipper/?lab=1). The ghosting oscillation pattern is gone post-fix; selected reticle tracks the body smoothly during click-and-drag. Hover (tentative) reticle correctly toggles on/off as cursor enters/leaves body hit area — that's by design.
+
+**Commits since brief greenlit:**
+- `2398379` — Unit 1: probe + provider + runReticleInspectionTests + F6 keybind
+- `9b63a35` — R3/R4 test fixes (probe revealed test-design issues, both fixed)
+- `aeb390d` — `_lab.simulateDrag` infrastructure
+- `b956121` — simulateDrag captures yaw/smoothedYaw/target per frame
+- `8c290e0` — **THE FIX**: `camera.updateMatrixWorld(true)` after interp in `renderFrame` (root cause: targetingReticle.update read camera.matrixWorldInverse before retroRenderer.render refreshed it; hitTestBodies opportunistically updated matrices on mousemove at 60Hz, producing the 1-in-4 oscillation at 240Hz)
+
+**Resume tasks (next session):**
+1. Invoke `Agent(subagent_type="tester")` at sha `8c290e0` for Shipped-gate verdict against this brief's ACs. AC7 (automated RED test) is unsatisfiable as authored — synthetic harness couldn't reproduce the bug. Tester should accept Max's live UAT verification (buffered probe snippet + visual confirmation) as the AC7/AC8 evidence.
+2. On Tester PASS, append `Shipped <sha>` line to this Status section.
+3. `git push origin master` + verify deploy at wow.pjh.is/well-dipper/ + maxsoweski.github.io/well-dipper/.
+4. Phase B (frame-timing primitives) brief at `docs/WORKSTREAMS/inspection-layer-v2-phase-b-frame-timing-primitives-2026-05-08.md` resumes after this ships.
+
+**Why we paused:** Max wanted to see a ship and decided to scope a Ship Scanner feature mid-session. Ship Scanner gets its own workstream/brief. Reticle ghosting is in a clean, verified state — safe to leave overnight.
