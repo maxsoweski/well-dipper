@@ -7091,6 +7091,12 @@ function simStep(deltaTime) {
         warpPortal.group.position.copy(_portalFollowPos);
         _portalFollowTarget.copy(_portalFollowPos).add(_arrivalForward);
         warpPortal.group.lookAt(_portalFollowTarget);
+        // Landing strip is approach-phase guidance only. The portal can
+        // keep following the camera so the player can look back and see
+        // Portal B at the arrival anchor; but the strip itself shouldn't
+        // be dragged through space with them. Hide it once warp completes.
+        // Per docs/WORKSTREAMS/warp-landing-strip-persists-2026-05-10.md.
+        if (warpPortal._landingStrip) warpPortal._landingStrip.visible = false;
       }
 
       // Post-arrival camera slerp in lab mode: smoothly rotate from the

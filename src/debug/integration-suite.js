@@ -392,6 +392,138 @@ export async function runWarpSuite(opts) {
   };
 }
 
+// === Warp Landing Strip Regression — runWarpLandingStripRegressionTest ===
+//
+// Drives a real warp (Sol → auto-selected destination) while sampling
+// inventory at high cadence. Asserts:
+//   L1 — at most ONE mesh named `effect.warp.landing-strip` exists at any
+//        sample point (no multiplication).
+//   L2 — post-warp (≥ 2s after final IDLE), no landing-strip mesh is
+//        visible+inFrustum (cleanup happens).
+//   L3 — during/after post-warp settle, landing-strip worldPos is stable
+//        in the world frame; does NOT track camera.position with high
+//        correlation (not "following the player").
+//
+// Per docs/WORKSTREAMS/warp-landing-strip-persists-2026-05-10.md AC1-3.
+// Slow test (~16-18s wall time). Initial expectation: at least one of
+// L1/L2/L3 FAILs at HEAD; iterate fix until all PASS.
+export async function runWarpLandingStripRegressionTest(opts) {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runWarpLandingStripRegressionTest: window.__wd not installed.');
+  }
+  const __wd = window.__wd;
+  const results = [];
+  const maxWallSeconds = (opts?.maxWallSeconds) || 14;
+
+  const pre = __wd.takeSceneInventory();
+  if (pre.phases?.warp !== 'idle') {
+    throw new Error('runWarpLandingStripRegressionTest: warp.state must be idle at start; got ' + pre.phases?.warp);
+  }
+  if (typeof window._autoSelectWarpTarget !== 'function') {
+    throw new Error('runWarpLandingStripRegressionTest: window._autoSelectWarpTarget not available — likely not in interactive Sol state');
+  }
+
+  window._autoSelectWarpTarget();
+  await new Promise(r => setTimeout(r, 100));
+
+  // Sample landing-strip count + worldPos + camera position every 100ms.
+  // Naming: a mesh named `effect.warp.landing-strip` should exist 0 or 1
+  // times across all phases. Multiple instances would prove "multiplying."
+  const samples = [];
+  const sampler = setInterval(() => {
+    const inv = __wd.takeSceneInventory();
+    const phase = inv.phases?.warp;
+    const stripMeshes = (inv.meshes || []).filter(m => m.name === 'effect.warp.landing-strip');
+    const liveStrip = stripMeshes.find(m => m.visible && m.inFrustum);
+    const cam = window._cam;
+    samples.push({
+      t: performance.now(),
+      phase,
+      stripCount: stripMeshes.length,
+      liveStripCount: stripMeshes.filter(m => m.visible && m.inFrustum).length,
+      stripWorldPos: liveStrip ? [...liveStrip.worldPos] : null,
+      cameraPos: cam ? [cam.position.x, cam.position.y, cam.position.z] : null,
+    });
+  }, 100);
+
+  if (typeof window._beginWarpTurn === 'function') {
+    window._beginWarpTurn();
+  } else {
+    clearInterval(sampler);
+    throw new Error('runWarpLandingStripRegressionTest: window._beginWarpTurn not available');
+  }
+
+  // Wait for warp to complete (returns to idle).
+  const start = performance.now();
+  while (performance.now() - start < maxWallSeconds * 1000) {
+    await new Promise(r => setTimeout(r, 200));
+    const last = samples.at(-1);
+    if (last && last.phase === 'idle' && samples.length > 10) break;
+  }
+  // Wait extra 3s for post-warp samples (cleanup window + settle).
+  await new Promise(r => setTimeout(r, 3000));
+  clearInterval(sampler);
+
+  // === L1: max stripCount across ALL samples should be ≤ 1.
+  const maxStripCount = samples.reduce((m, s) => Math.max(m, s.stripCount), 0);
+  check('L1 effect.warp.landing-strip mesh count ≤ 1 at all phases', () => ({
+    passed: maxStripCount <= 1,
+    evidence: { maxStripCount, sampleCount: samples.length, multiplyCount: samples.filter(s => s.stripCount > 1).length },
+  }), results);
+
+  // === L2: post-warp cleanup. Last 20 samples (=2s) should all have
+  // liveStripCount === 0.
+  const post = samples.slice(-20);
+  const livePostCount = post.filter(s => s.liveStripCount > 0).length;
+  check('L2 landing strip cleared in last 2s after warp completes', () => ({
+    passed: livePostCount === 0,
+    evidence: { postSampleCount: post.length, livePostCount, lastPhase: samples.at(-1)?.phase },
+  }), results);
+
+  // === L3: position stability — strip should NOT follow camera.
+  // Compute correlation between strip-worldPos-delta-from-first-post-sample
+  // and camera-position-delta-from-first-post-sample. Use the last 20
+  // samples (post-warp). High correlation (> 0.5) suggests strip follows
+  // camera; low (< 0.1) suggests stable in world frame.
+  // If liveStripCount drops to 0 during the post window (i.e., L2 passes),
+  // L3 is moot; pass with note.
+  const postWithStrip = post.filter(s => s.stripWorldPos && s.cameraPos);
+  let correlation = null;
+  if (postWithStrip.length >= 4) {
+    const sp0 = postWithStrip[0].stripWorldPos;
+    const cp0 = postWithStrip[0].cameraPos;
+    let sumSC = 0, sumS2 = 0, sumC2 = 0;
+    for (const s of postWithStrip) {
+      const sd = Math.hypot(s.stripWorldPos[0] - sp0[0], s.stripWorldPos[1] - sp0[1], s.stripWorldPos[2] - sp0[2]);
+      const cd = Math.hypot(s.cameraPos[0] - cp0[0], s.cameraPos[1] - cp0[1], s.cameraPos[2] - cp0[2]);
+      sumSC += sd * cd;
+      sumS2 += sd * sd;
+      sumC2 += cd * cd;
+    }
+    correlation = (sumS2 > 0 && sumC2 > 0) ? sumSC / Math.sqrt(sumS2 * sumC2) : 0;
+  }
+  check('L3 landing strip stable in world frame (does not follow camera)', () => {
+    if (postWithStrip.length < 4) {
+      return { passed: true, evidence: 'skipped (< 4 post-warp samples with live strip; L2 cleanup likely fired)' };
+    }
+    return {
+      passed: correlation < 0.5,
+      evidence: { correlation: +correlation.toFixed(4), threshold: 0.5, postWithStripSampleCount: postWithStrip.length },
+    };
+  }, results);
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.length - passed;
+
+  console.group('[__wd warp landing-strip regression] ' + passed + '/' + results.length + ' passed');
+  for (const r of results) {
+    console.log((r.passed ? '✔' : '✘') + ' ' + r.name, r.passed ? '' : (r.evidence ?? ''));
+  }
+  console.groupEnd();
+
+  return { passed, failed, total: results.length, results, samples };
+}
+
 // === Phase A v2 — runPhaseATests ===
 //
 // Exercises the 5 new screen-space inventory fields + 4 new predicates
