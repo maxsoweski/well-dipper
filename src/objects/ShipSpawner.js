@@ -84,6 +84,16 @@ export class ShipSpawner {
         model.traverse(child => {
           if (child.isMesh && child.material) {
             child.material.flatShading = true;
+            // Well-dipper has zero THREE.Light instances — planets/moons use
+            // custom shader-based lighting that ships' GLTF MeshStandardMaterial
+            // doesn't participate in. Without lights, MeshStandardMaterial
+            // renders black. Set emissive = color × 1.0 so ships are fully
+            // self-lit at base color. Per Max UAT 2026-05-09 ('totally black').
+            // Future enhancement: read star position uniform + apply diffuse
+            // shading for proper directional lighting.
+            if (child.material.color && child.material.emissive) {
+              child.material.emissive.copy(child.material.color);
+            }
             child.material.needsUpdate = true;
             child.name = '';
           }
@@ -150,8 +160,18 @@ export class ShipSpawner {
         pp.z + Math.cos(incl) * Math.sin(a) * r,
       );
 
-      // Spin the ship slowly
-      ship.mesh.rotation.y += ship.rotSpeed * deltaTime;
+      // Orient ship along orbital velocity vector. Per Max UAT 2026-05-09:
+      // 'the direction the ship is traveling in should be aligned with the
+      // front of the ship'. Compute a slight-future orbital position and
+      // lookAt it; Three.js lookAt makes -Z point at target, so the ship
+      // model's -Z (its native forward) faces the direction of travel.
+      // orbitSpeed sign flips the lookahead, so retrograde ships face
+      // their actual direction of motion too.
+      const aLookAhead = a + Math.sign(ship.orbitSpeed) * 0.001;
+      const lookX = pp.x + Math.cos(aLookAhead) * r;
+      const lookY = pp.y + Math.sin(incl) * Math.sin(aLookAhead) * r;
+      const lookZ = pp.z + Math.cos(incl) * Math.sin(aLookAhead) * r;
+      ship.mesh.lookAt(lookX, lookY, lookZ);
     }
   }
 

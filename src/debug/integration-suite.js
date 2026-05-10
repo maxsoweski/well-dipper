@@ -988,7 +988,9 @@ export async function runShipScannerInspectionTests() {
       const SHIP_HULL_LENGTHS_M = { player: 20, fighters: 50, shuttles: 50, freighters: 300, cruisers: 500, capitals: 2000, explorers: 200 };
       const METERS_PER_SCENE = 149597870700 / 1000;
       const hullLengthScene = (SHIP_HULL_LENGTHS_M[archetype] || 50) / METERS_PER_SCENE;
-      const expectedOrbitDist = (hullLengthScene * 0.5) / Math.tan(2.5 * Math.PI / 180);
+      // 45° angular size (close-up framing per Max UAT 2026-05-09).
+      // Half-angle = 22.5°. Match focusShip in main.js.
+      const expectedOrbitDist = (hullLengthScene * 0.5) / Math.tan(22.5 * Math.PI / 180);
 
       // Trigger burn.
       _lab.commitBurnNow();

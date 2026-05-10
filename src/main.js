@@ -3240,14 +3240,18 @@ function _makeTarget(kind, indices) {
     const archetype = ud.archetype || 'unknown';
     const rawId = ud.id || (sIdx + '');
     const idTail = rawId.startsWith(archetype + '.') ? rawId.slice(archetype.length + 1) : rawId;
+    // Ship "radius" — ship.mesh is a GLTF Group (no .geometry / boundingSphere
+    // at the top level), so fall back to shipHullToScene(archetype)/2 which
+    // is what focusShip uses for arrival framing. This gives the targeting
+    // reticle's bracket-half-width correct sizing relative to the ship's
+    // actual visual size at any camera distance.
+    let radius = ship.mesh.geometry?.boundingSphere?.radius || 0;
+    if (radius === 0) radius = shipHullToScene(archetype) * 0.5;
     return {
       kind: 'ship',
       shipIndex: sIdx,
       mesh: ship.mesh,
-      // Ship "radius" for hit-test threshold purposes — ships have very
-      // small bounding spheres, so use a fixed CSS-ish radius via the
-      // hit-test minThresholdPx instead.
-      radius: ship.mesh.geometry?.boundingSphere?.radius || 0,
+      radius,
       name: archetype + ' ' + idTail,
       type: archetype,
       archetype,
@@ -7292,7 +7296,12 @@ function simStep(deltaTime) {
     } else if (!autoNav.isActive) {
       // No warp, no flythrough, no autopilot — run idle timer
       idleTimer += deltaTime;
-      if (idleTimer >= settings.get('idleTimeout')) {
+      // Ship Scanner: when locked on a ship, idle-autopilot should NOT
+      // yank Max away. Per Max UAT 2026-05-09: 'we should just stay
+      // locked to the current ship'. Reset the timer instead of firing.
+      if (_selectedTarget?.kind === 'ship') {
+        idleTimer = 0;
+      } else if (idleTimer >= settings.get('idleTimeout')) {
         _manualBurnOrbiting = false;
         startFlythrough();
       }
@@ -7301,7 +7310,12 @@ function simStep(deltaTime) {
     // Also run idle timer during manual burn orbit (flythrough active but no autoNav)
     if (_manualBurnOrbiting && !autoNav.isActive) {
       idleTimer += deltaTime;
-      if (idleTimer >= settings.get('idleTimeout')) {
+      // Same ship-lock suppression here — ship burn-arrival sets
+      // _manualBurnOrbiting=true at travel-complete (line ~7263), so
+      // this branch is the active path post-arrival for ship targets.
+      if (_selectedTarget?.kind === 'ship') {
+        idleTimer = 0;
+      } else if (idleTimer >= settings.get('idleTimeout')) {
         _manualBurnOrbiting = false;
         startFlythrough();
       }
