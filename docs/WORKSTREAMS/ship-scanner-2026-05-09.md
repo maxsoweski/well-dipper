@@ -103,3 +103,7 @@ If Max UAT surfaces issues, route to in-feature fix (re-loop the affected unit) 
 ---
 
 **PM-proxy authoring note (2026-05-09):** Authored by working-Claude as PM-proxy because the `pm` subagent type is not registered in this harness. Greenlit inline by Max via AskUserQuestion before brief authoring; per-unit decomposition reflects his explicit choice "include your unit, then integration testing for each of these units in the feature, then I'll UAT after you've successfully iterated through this process for each of the units in the feature."
+
+## Status
+
+**Shipped `30aa1cf` — 2026-05-10.** Tester PASS at `30aa1cf` covering the four units + three UAT-round revisions (rotation/lighting/idle-lock fixes, ship-lock with drag-rotate). Max UAT GATE 3 confirmed end-to-end: scanner toggle, on-screen reticles, off-screen indicators, click-select + burn, ship-lock (camera follows ship's local frame so ship appears stationary), drag-rotate within ship-lock. Burn-arrival telemetry: apparent angular size 45.00° (target 45°), camera-to-ship distance variance 0% (std 5.989e-15) over 1s. All sibling suites green: reticle inspection 6/6, Phase A 11/11, integration 19/19. AC7 (formula-correct burn init), AC8 (arrival framing + stability), AC11 (Max felt-experience UAT) all satisfied.

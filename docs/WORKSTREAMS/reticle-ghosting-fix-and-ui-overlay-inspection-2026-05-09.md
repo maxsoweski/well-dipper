@@ -136,3 +136,7 @@ The integration test for AC8 must FAIL at HEAD (RED) and PASS after the fix (GRE
 4. Phase B (frame-timing primitives) brief at `docs/WORKSTREAMS/inspection-layer-v2-phase-b-frame-timing-primitives-2026-05-08.md` resumes after this ships.
 
 **Why we paused:** Max wanted to see a ship and decided to scope a Ship Scanner feature mid-session. Ship Scanner gets its own workstream/brief. Reticle ghosting is in a clean, verified state — safe to leave overnight.
+
+## Resumed 2026-05-10 — Shipped
+
+**Shipped `30aa1cf` — 2026-05-10** (fix at `8c290e0`, ride-along on Ship Scanner's HEAD commit since Ship Scanner shipped same session). Tester PASS at `30aa1cf` confirming the fix code intact in `src/main.js renderFrame()`, inspection layer 6/6 PASS, no regressions in Phase A / integration. AC7 (automated RED test) routed to Max's UAT GATE 3 buffered-probe data + visual confirmation per brief's drift-risk carve-out — the synthetic `MouseEvent` harness can't reproduce the host-polling-rate-dependent bug, as anticipated. AC8 structurally satisfied (test infrastructure exists, passes at HEAD). AC11 felt-experience UAT confirmed by Max during this session ("the visual ghosting is gone").
