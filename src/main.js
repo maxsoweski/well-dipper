@@ -290,6 +290,11 @@ let _selectedTarget = null;  // committed/selected body (selected reticle + comm
 // and the minimap all at once. Camera/selection state is preserved — this is
 // purely a visual toggle for taking in the scene without HUD clutter.
 let _hudVisible = true;
+
+// Ship Scanner mode toggle (Alt key). When ON, ships in the active system
+// get cyan reticles drawn over them via TargetingReticle.shipTargets.
+// Per docs/WORKSTREAMS/ship-scanner-2026-05-09.md Unit 1.
+let _shipScannerMode = false;
 function _applyHudVisibility() {
   if (typeof document !== 'undefined') {
     document.body.classList.toggle('hud-hidden', !_hudVisible);
@@ -1717,6 +1722,19 @@ window._lab = {
   deselectBody() {
     deselectTarget();
     return { ok: true };
+  },
+
+  /** Programmatically toggle Ship Scanner mode. Same effect as Alt-tap;
+   * exists for the integration test runner since dispatching a synthetic
+   * Alt keydown is more brittle than mutating the flag directly. */
+  setShipScannerMode(on) {
+    _shipScannerMode = !!on;
+    return { ok: true, on: _shipScannerMode };
+  },
+
+  /** Read current Ship Scanner mode. */
+  isShipScannerMode() {
+    return _shipScannerMode;
   },
 
   /** Drive a synthetic camera-orbit drag deterministically. Used by the
@@ -7547,10 +7565,39 @@ function renderFrame(alpha) {
   // if a foreground body is between camera and target.
   const _selectedForReticle = (_selectedTarget && (autopilotMotion.isActive || !_isReticleOccluded(_selectedTarget))) ? _selectedTarget : null;
 
+  // Ship Scanner (Unit 1): build shipTargets array when scanner mode is on.
+  // Each entry has the shape TargetingReticle's draw path expects:
+  // { kind, mesh, radius, name }. radius is computed from the ship's
+  // bounding sphere if available; falls back to 0 (sub-pixel reticle).
+  let _shipTargetsForReticle = null;
+  if (_shipScannerMode && system && shipSpawner && shipSpawner.ships?.length) {
+    _shipTargetsForReticle = [];
+    for (let i = 0; i < shipSpawner.ships.length; i++) {
+      const ship = shipSpawner.ships[i];
+      if (!ship?.mesh) continue;
+      const ud = ship.mesh.userData || {};
+      const archetype = ud.archetype || 'unknown';
+      // ud.id is already `archetype.<i>-<s>` (ShipSpawner.js:106). Strip the
+      // redundant archetype prefix so the displayed label reads
+      // "FIGHTERS 8-0" not "FIGHTERS FIGHTERS.8-0".
+      const rawId = ud.id || (i + '');
+      const idTail = rawId.startsWith(archetype + '.') ? rawId.slice(archetype.length + 1) : rawId;
+      _shipTargetsForReticle.push({
+        kind: 'ship',
+        mesh: ship.mesh,
+        radius: ship.mesh.geometry?.boundingSphere?.radius || 0,
+        name: archetype + ' ' + idTail,
+        archetype,
+        shipIndex: i,
+      });
+    }
+  }
+
   targetingReticle.update({
     hoverTarget: _hoverForReticle,
     selectedTarget: _selectedForReticle,
     ghostTargets: _visibleGhostTargets,
+    shipTargets: _shipTargetsForReticle,
   });
   _updateCommitBurnButton();
 
@@ -7621,6 +7668,16 @@ window.addEventListener('keydown', (e) => {
   // F9: dump active input recording (AC #14 ?recordInput=1 mode).
   if (e.code === 'F9' && isRecordingActive()) {
     downloadRecording();
+    e.preventDefault();
+    return;
+  }
+
+  // Alt: toggle Ship Scanner mode (Unit 1, ship-scanner-2026-05-09).
+  // Tap Alt → toggle on/off. Browser's default Alt behavior (focus menu
+  // bar on Win/Linux) is preempted by preventDefault. Don't fire on
+  // Alt+other-key combos (e.g. Alt+Tab).
+  if ((e.code === 'AltLeft' || e.code === 'AltRight') && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+    _shipScannerMode = !_shipScannerMode;
     e.preventDefault();
     return;
   }

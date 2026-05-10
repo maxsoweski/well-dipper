@@ -37,6 +37,13 @@ const COLOR_GHOST     = 'rgba(120, 255, 140, 0.30)'; // very dim — "something 
 const COLOR_TENTATIVE = 'rgba(120, 255, 120, 0.45)'; // dim, semi-transparent green
 const COLOR_SELECTED  = 'rgba(100, 255, 130, 1.0)';  // bright, opaque green
 const COLOR_SELECTED_GLOW = 'rgba(180, 255, 200, 0.35)';
+// Ship-scanner reticle (Unit 1). Cyan distinguishes ships from green body
+// reticles. Same bracket geometry, same label position — feels of a piece
+// with the body reticles but read instantly as a different category.
+const COLOR_SHIP_TENTATIVE = 'rgba(120, 220, 255, 0.55)';
+const COLOR_SHIP_SELECTED  = 'rgba(140, 230, 255, 1.0)';
+const NAME_COLOR_SHIP_TENTATIVE = 'rgba(160, 220, 255, 0.85)';
+const NAME_COLOR_SHIP_SELECTED  = 'rgba(180, 235, 255, 0.95)';
 
 // Bracket sizing (scales with projected body radius so big bodies get big brackets)
 const BRACKET_MIN_HALF = 16;  // px — smallest half-width of bracket square
@@ -265,7 +272,7 @@ export class TargetingReticle {
     this._clear();
     if (!state) return;
 
-    const { hoverTarget, selectedTarget, ghostTargets } = state;
+    const { hoverTarget, selectedTarget, ghostTargets, shipTargets } = state;
 
     // Ghost pass first: small dim empty brackets for every sub-pixel body
     // that isn't currently being hovered or selected. Hover/select states
@@ -291,12 +298,28 @@ export class TargetingReticle {
       if (!activeKeys.has(key)) this._ghostEntryTimes.delete(key);
     }
 
+    // Ship scanner pass — draw ship reticles for in-viewport ships when
+    // scanner mode is active (host signals via shipTargets array). Ships
+    // selected as the current _selectedTarget are skipped here; the
+    // selected pass below will draw them in selected-ship colors.
+    if (shipTargets && shipTargets.length) {
+      for (const ship of shipTargets) {
+        if (selectedTarget && ship === selectedTarget) continue;
+        this._drawShipReticle(ship, false);
+      }
+    }
+
     // Tentative (hover) — only if not already the selected target
     if (hoverTarget && hoverTarget !== selectedTarget) {
       this._drawTarget(hoverTarget, false);
     }
     if (selectedTarget) {
-      this._drawTarget(selectedTarget, true);
+      // Ships use ship-colored brackets even when selected.
+      if (selectedTarget.kind === 'ship') {
+        this._drawShipReticle(selectedTarget, true);
+      } else {
+        this._drawTarget(selectedTarget, true);
+      }
     }
   }
 
@@ -366,6 +389,53 @@ export class TargetingReticle {
     }
 
     ctx.restore();
+    this._recordDraw(isSelected ? 'selected' : 'tentative', target, screen, half, label);
+  }
+
+  /**
+   * Ship-scanner reticle. Mirror of _drawTarget but with cyan brackets +
+   * label, and probe-tagged `kind: 'ship'` so the inspection layer
+   * distinguishes ship reticles from body reticles in the inventory.
+   * Per docs/WORKSTREAMS/ship-scanner-2026-05-09.md Unit 1.
+   */
+  _drawShipReticle(target, isSelected) {
+    if (!target || !target.mesh) return;
+    const screen = this._project(target.mesh.position);
+    if (!screen) return;
+
+    // Same sizing logic as _drawTarget, but ships are typically tiny so
+    // bracketHalf usually falls to BRACKET_MIN_HALF — that's intentional,
+    // ships should read as "something to find" not "something looming."
+    const projR = this._projectedPixelRadius(target);
+    const rawHalf = Math.max(BRACKET_MIN_HALF, projR + BRACKET_MARGIN);
+    const maxHalfX = Math.max(BRACKET_MIN_HALF, Math.min(screen.x, this._cssW - screen.x) - BRACKET_EDGE_MARGIN);
+    const maxHalfY = Math.max(BRACKET_MIN_HALF, Math.min(screen.y, this._cssH - screen.y) - BRACKET_EDGE_MARGIN);
+    const half = Math.min(rawHalf, maxHalfX, maxHalfY);
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.scale(this._dpr, this._dpr);
+
+    let label = null;
+    if (isSelected) {
+      this._drawBrackets(screen.x, screen.y, half, BRACKET_ARM_LEN, BRACKET_THICK_SEL, COLOR_SHIP_SELECTED);
+      if (target.name) {
+        label = target.name.toUpperCase();
+        this._drawNameBelow(screen.x, screen.y, half, label, NAME_COLOR_SHIP_SELECTED);
+      }
+    } else {
+      this._drawBrackets(screen.x, screen.y, half, BRACKET_ARM_LEN, BRACKET_THICK_TENT, COLOR_SHIP_TENTATIVE);
+      if (target.name) {
+        label = target.name.toUpperCase();
+        this._drawNameBelow(screen.x, screen.y, half, label, NAME_COLOR_SHIP_TENTATIVE);
+      }
+    }
+
+    ctx.restore();
+    // Record with kind='ship' so SceneInspector emits ui.reticle.ship.<name>
+    // entries. The third arg to _recordDraw isn't kind directly — _recordDraw
+    // reads `target.kind`. Ship targets MUST set kind='ship' upstream; the
+    // host (main.js) ensures this when building shipTargets.
     this._recordDraw(isSelected ? 'selected' : 'tentative', target, screen, half, label);
   }
 
