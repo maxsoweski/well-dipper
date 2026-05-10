@@ -5952,8 +5952,10 @@ function focusShip(shipIndex) {
   // it's ~1.34e-5. Tiny in scene-unit terms — well within camera near
   // plane (1e-9). World-origin rebasing handles precision.
   const hullLengthScene = shipHullToScene(archetype);
-  // 5° angular size → distance = (hull/2) / tan(2.5°).
-  const TARGET_HALF_ANGLE_RAD = 2.5 * Math.PI / 180;
+  // 45° angular size → distance = (hull/2) / tan(22.5°).
+  // Per Max's UAT (2026-05-09): 5° was readable but felt small; 45°
+  // makes the ship dominate the view ("very big" framing).
+  const TARGET_HALF_ANGLE_RAD = 22.5 * Math.PI / 180;
   const orbitDist = (hullLengthScene * 0.5) / Math.tan(TARGET_HALF_ANGLE_RAD);
   const bodyRadius = hullLengthScene * 0.5;
 

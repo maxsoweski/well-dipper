@@ -1145,9 +1145,9 @@ export async function runShipScannerBurnArrivalTest() {
   const apparentRad = 2 * Math.atan((hullLengthScene * 0.5) / mean);
   const apparentDeg = apparentRad * 180 / Math.PI;
 
-  check('S12 ship subtends 3-7° at arrival (planet-equivalent framing)', () => ({
-    passed: apparentDeg >= 3 && apparentDeg <= 7,
-    evidence: { meanDist: mean, hullLengthScene, apparentDeg: +apparentDeg.toFixed(2), target: '5°' },
+  check('S12 ship subtends 40-50° at arrival (close-up framing)', () => ({
+    passed: apparentDeg >= 40 && apparentDeg <= 50,
+    evidence: { meanDist: mean, hullLengthScene, apparentDeg: +apparentDeg.toFixed(2), target: '45°' },
   }), results);
 
   check('S13 camera-to-ship distance stable over 1s (std/mean < 10%)', () => ({

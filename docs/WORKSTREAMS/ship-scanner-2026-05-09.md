@@ -31,10 +31,10 @@ Four coupled units, decomposed for per-unit unit + integration + Max UAT cycles:
 - The shared `selectTarget` / `_selectedTarget` pipeline accepts ships. The selected ship gets the `state: 'selected'` reticle treatment in scanner mode AND in normal mode (a ship that's been selected stays visible-as-selected even after scanner toggles off, until deselected).
 - Tentative (hover) state for ships in scanner mode is OPTIONAL — recommend implementing for parity with body reticles.
 
-### Unit 4 — Burn-to-ship with planet-equivalent arrival framing
+### Unit 4 — Burn-to-ship with close-up arrival framing
 - The existing burn system (autopilot manual burn) is invoked when Max presses Space (or clicks the BURN button) with a ship selected.
-- Arrival distance: compute the distance at which the ship's hull length subtends ~5° of view (matching a medium planet). Formula: `distance = hullLengthMeters / (2 * tan(2.5° in radians))` × scene-unit conversion factor.
-- The burn camera trajectory adapts to the new distance — ship fills view at arrival.
+- Arrival distance: compute the distance at which the ship's hull length subtends ~45° of view ("very big" close-up framing per Max's UAT 2026-05-09; original spec called for 5° / planet-equivalent which felt too small in practice). Formula: `distance = hullLengthMeters / (2 * tan(22.5° in radians))` × scene-unit conversion factor.
+- The burn camera trajectory adapts to the new distance — ship dominates view at arrival.
 
 ## Acceptance Criteria
 
@@ -46,8 +46,8 @@ Four coupled units, decomposed for per-unit unit + integration + Max UAT cycles:
 | 4 | When `_shipScannerMode === true` AND a ship is OUTSIDE viewport, an off-screen indicator entry appears in inventory: `ui.reticle.ship-offscreen.<archetype>.<index>` with `screenSpace` clamped to viewport edge and an `arrowAngle` field (radians, 0 = right) pointing from viewport center toward the ship. | 2 | Integration: drive camera off-axis, assert entries. Unit (kit-side): clamp + angle math. |
 | 5 | Clicking within `bracketHalf + 8 px` of an in-viewport ship reticle's center selects that ship. `_selectedTarget.kind === 'ship'`. The reticle entry's `state` flips from `'tentative'` to `'selected'`. | 3 | Integration: synthetic click + selection assertion. |
 | 6 | A ship that has been selected remains selected after toggling scanner mode OFF; its reticle stays visible. Toggling scanner OFF does NOT deselect a selected ship. | 3 | Integration. |
-| 7 | Pressing Space (or clicking BURN button) with a ship selected initiates the manual burn. The burn target distance is computed from ship hull length such that ship subtends ~5° at arrival. | 4 | Integration: telemetry assertion that burn initiated, target distance within tolerance of the formula. Unit: distance calculation across hull length range (10m → 500m). |
-| 8 | At burn arrival, ship's projected angular size is between 3° and 7° (allowing some tolerance around the 5° target). | 4 | Integration: post-burn inventory assertion on `apparentDegrees`. Max UAT: visual confirmation. |
+| 7 | Pressing Space (or clicking BURN button) with a ship selected initiates the manual burn. The burn target distance is computed from ship hull length such that ship subtends ~45° at arrival. | 4 | Integration: telemetry assertion that burn initiated, target distance within tolerance of the formula. Unit: distance calculation across hull length range (10m → 500m). |
+| 8 | At burn arrival, ship's projected angular size is between 40° and 50° (allowing tolerance around the 45° target). Camera-to-ship distance is stable (variance < 10% over 1s). | 4 | Integration: post-burn telemetry — `runShipScannerBurnArrivalTest` asserts apparent angular size + variance. Max UAT: visual confirmation that ship dominates the view at arrival and appears stationary as camera tracks ship orbital motion. |
 | 9 | Existing `__wd.runIntegrationSuite()` (19/19) and `__wd.runPhaseATests()` (11/11) continue to PASS. `__wd.runReticleInspectionTests()` (6/6) continues to PASS — scanner-mode entries are additive. | 1-4 | Integration regression. |
 | 10 | Production-bundle drift guard (`scripts/check-prod-no-inspector.sh`) still PASSes — scanner integration tests are dev-only. Scanner mode itself ships in production. | 1-4 | Build-time. |
 | 11 | Max UAT GATE 3 per unit: tap Alt, see reticles → select a ship → see selection indicator → press Space → ride the burn → ship fills view at arrival. Smooth and felt-experience-correct. | 1-4 | UAT, Max's hands. |
