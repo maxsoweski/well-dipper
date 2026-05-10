@@ -52,7 +52,7 @@ import { AutopilotEvents } from './auto/AutopilotEvents.js';
 import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
-import { portalPreviewDistanceScene, postExitDistanceScene, sceneToLy } from './core/ScaleConstants.js';
+import { portalPreviewDistanceScene, postExitDistanceScene, sceneToLy, shipHullToScene } from './core/ScaleConstants.js';
 import {
   maybeRebase as _maybeWorldRebase,
   worldOrigin as _worldOriginVec,
@@ -1758,6 +1758,27 @@ window._lab = {
       planetIndex: _selectedTarget.planetIndex,
       moonIndex: _selectedTarget.moonIndex,
       starIndex: _selectedTarget.starIndex,
+    };
+  },
+
+  /** Trigger commitBurn programmatically (Unit 4 testing). Same effect as
+   * Space-key or BURN button. */
+  commitBurnNow() {
+    commitBurn();
+    return { ok: true };
+  },
+
+  /** Snapshot of navSubsystem motion state — toBody name, toOrbitDistance,
+   * isActive. Used by Unit 4 integration tests to verify burn was
+   * initiated to the right target with the right arrival distance.
+   * AutopilotMotion stores the target mesh in _target (not toBody). */
+  navMotionSnapshot() {
+    if (!navSubsystem) return null;
+    return {
+      isActive: !!navSubsystem.isActive,
+      toBodyName: navSubsystem.bodyRef?.name || null,
+      toOrbitDistance: typeof navSubsystem.orbitDistance === 'number' ? navSubsystem.orbitDistance : null,
+      toBodyRadius: typeof navSubsystem.bodyRadius === 'number' ? navSubsystem.bodyRadius : null,
     };
   },
 
@@ -5782,6 +5803,7 @@ function commitBurn() {
   if (t.kind === 'star') focusStar(t.starIndex);
   else if (t.kind === 'planet') focusPlanet(t.planetIndex);
   else if (t.kind === 'moon') focusMoon(t.planetIndex, t.moonIndex);
+  else if (t.kind === 'ship') focusShip(t.shipIndex);
   // Keep the selection active through travel; burn-in-progress state is
   // implied by flythrough.active. Button hides while burning.
   _updateCommitBurnButton();
@@ -5905,6 +5927,59 @@ function _updateCommitBurnButton() {
 /**
  * Focus the camera on a specific planet (by index), or overview if -1.
  */
+/**
+ * Focus on a ship — Ship Scanner Unit 4. Burn-arrival distance computed
+ * so the ship subtends ~5° of view at arrival (planet-equivalent framing).
+ *
+ * Formula: distance = (hullLength / 2) / tan(2.5°), in scene units.
+ *
+ * Per docs/WORKSTREAMS/ship-scanner-2026-05-09.md AC7-AC8.
+ */
+function focusShip(shipIndex) {
+  if (!system || !shipSpawner?.ships) return;
+  const ship = shipSpawner.ships[shipIndex];
+  if (!ship?.mesh) return;
+  soundEngine.play('select');
+  cameraController.killFlightVelocity();
+  focusIndex = -1;     // ships don't fit the existing focusIndex domain;
+  focusMoonIndex = -1; // _selectedTarget tracks ship state separately.
+  focusStarIndex = -1;
+
+  const ud = ship.mesh.userData || {};
+  const archetype = ud.archetype || 'fighters';
+  // hullLengthScene = scene-unit hull length (meters / METERS_PER_SCENE).
+  // For a 50m fighter this is ~3.34e-7 scene units; for a 2km capital
+  // it's ~1.34e-5. Tiny in scene-unit terms — well within camera near
+  // plane (1e-9). World-origin rebasing handles precision.
+  const hullLengthScene = shipHullToScene(archetype);
+  // 5° angular size → distance = (hull/2) / tan(2.5°).
+  const TARGET_HALF_ANGLE_RAD = 2.5 * Math.PI / 180;
+  const orbitDist = (hullLengthScene * 0.5) / Math.tan(TARGET_HALF_ANGLE_RAD);
+  const bodyRadius = hullLengthScene * 0.5;
+
+  console.log(`[BURN START] ship: archetype=${archetype} hullScene=${hullLengthScene.toExponential(3)} orbitDist=${orbitDist.toExponential(3)} (~${(orbitDist * 149597870.7).toFixed(0)}m)`);
+  cameraController.bypassed = true;
+  navSubsystem.beginMotion({
+    fromPosition: camera.position.clone(),
+    fromOrientation: camera.quaternion.clone(),
+    fromOrbitBody: null,
+    toBody: ship.mesh,
+    toOrbitDistance: orbitDist,
+    toBodyRadius: bodyRadius,
+    // Same accidental-but-load-bearing assignment as focusPlanet (see comment
+    // there): pre-refactor `beginTravelFrom` set nextBodyRef = target.
+    nextBody: ship.mesh,
+    nextOrbitDistance: orbitDist,
+    arrivalOptions: {
+      approachFirst: false,
+      holdOnly: true,
+      slowOrbit: true,
+      orbitDuration: 99999,
+    },
+  });
+  _syncNavBody();
+}
+
 function focusPlanet(index) {
   if (!system) return;
   soundEngine.play('select');

@@ -970,6 +970,68 @@ export async function runShipScannerInspectionTests() {
       return { passed: true, evidence: { reticleName: stillSelected.name } };
     }, results);
 
+    // === Unit 4: burn-to-ship arrival framing (AC7) ===
+    // S10: focusShip computes orbit distance from formula; verify
+    //      navSubsystem.beginMotion was invoked with the expected toOrbitDistance.
+    //
+    // Re-select a ship (S9 deselected). Use the same candidate logic.
+    if (candidateIndices.length > 0) {
+      _lab.setShipScannerMode(true);
+      await new Promise(r => requestAnimationFrame(() => r()));
+      _lab.selectShip(candidateIndices[0]);
+      await new Promise(r => requestAnimationFrame(() => r()));
+
+      const shipMeta = window._shipSpawner.ships[candidateIndices[0]];
+      const archetype = shipMeta?.mesh?.userData?.archetype || 'fighters';
+      // Replicate the formula in JS for comparison. METERS_PER_SCENE inferred
+      // from the ScaleConstants module values (AU_TO_SCENE=1000 → 149597870.7).
+      const SHIP_HULL_LENGTHS_M = { player: 20, fighters: 50, shuttles: 50, freighters: 300, cruisers: 500, capitals: 2000, explorers: 200 };
+      const METERS_PER_SCENE = 149597870700 / 1000;
+      const hullLengthScene = (SHIP_HULL_LENGTHS_M[archetype] || 50) / METERS_PER_SCENE;
+      const expectedOrbitDist = (hullLengthScene * 0.5) / Math.tan(2.5 * Math.PI / 180);
+
+      // Trigger burn.
+      _lab.commitBurnNow();
+      // Burn motion engages immediately; sample state right after.
+      await new Promise(r => requestAnimationFrame(() => r()));
+      const navState = _lab.navMotionSnapshot?.();
+
+      check('S10 commitBurn for ship invokes navSubsystem with formula-computed orbit distance', () => {
+        if (!navState) return { passed: false, evidence: 'navMotionSnapshot returned null' };
+        if (!navState.isActive) return { passed: false, evidence: 'navSubsystem not active after commitBurnNow' };
+        if (navState.toOrbitDistance == null) return { passed: false, evidence: 'no toOrbitDistance' };
+        // 1% tolerance.
+        const tolerance = expectedOrbitDist * 0.01;
+        const delta = Math.abs(navState.toOrbitDistance - expectedOrbitDist);
+        return {
+          passed: delta <= tolerance,
+          evidence: {
+            archetype,
+            hullLengthScene,
+            expectedOrbitDist,
+            actualOrbitDist: navState.toOrbitDistance,
+            delta,
+            tolerance,
+          },
+        };
+      }, results);
+
+      check('S11 navSubsystem.toBody references the selected ship mesh', () => {
+        if (!navState) return { passed: false, evidence: 'no navState' };
+        const expectedShipName = shipMeta?.mesh?.name;
+        return {
+          passed: navState.toBodyName === expectedShipName,
+          evidence: { expected: expectedShipName, actual: navState.toBodyName },
+        };
+      }, results);
+
+      // Reset state — the burn is now active, leaving it active poisons
+      // subsequent test runs. Cancel via the legacy stopFlythrough path
+      // through a synthetic deselect + scanner-off.
+      _lab.deselectBody();
+      _lab.setShipScannerMode(false);
+    }
+
     // Reset for next test runs.
     _lab.deselectBody();
   }
