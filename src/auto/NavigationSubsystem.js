@@ -668,11 +668,22 @@ export class NavigationSubsystem {
     this._shipLockMode = bodyRef?.userData?.kind === 'npc';
     if (this._shipLockMode) {
       bodyRef.updateMatrixWorld(true);
-      // Local offset = inverse(ship.matrixWorld) × camera.position
       if (!this._shipLockOffset) this._shipLockOffset = new THREE.Vector3();
       if (!this._shipLockMatrix) this._shipLockMatrix = new THREE.Matrix4();
+      // Initial local offset (Cartesian) → spherical (yaw, pitch, dist).
+      // UAT round 3 — 2026-05-10: track in spherical so drag deltas
+      // applied via applyShipLockDragDelta rotate the camera around the
+      // ship in its local frame; per-frame _updateOrbit rebuilds Cartesian.
       this._shipLockMatrix.copy(bodyRef.matrixWorld).invert();
       this._shipLockOffset.copy(this._position).applyMatrix4(this._shipLockMatrix);
+      const lx = this._shipLockOffset.x;
+      const ly = this._shipLockOffset.y;
+      const lz = this._shipLockOffset.z;
+      this._shipLockDist = Math.sqrt(lx*lx + ly*ly + lz*lz);
+      this._shipLockYaw = Math.atan2(lx, lz);
+      this._shipLockPitch = this._shipLockDist > 1e-12
+        ? Math.asin(Math.max(-1, Math.min(1, ly / this._shipLockDist)))
+        : 0;
     }
 
     // Compute starting orbit parameters from current ship position (prevents snap
@@ -743,6 +754,20 @@ export class NavigationSubsystem {
     this._orbitStartYaw = this.orbitYaw;
   }
 
+  /** Apply user drag deltas (yaw, pitch in radians) to the ship-lock
+   * camera offset. Called from main.js's animate loop each frame while
+   * navSubsystem is active and shipLockMode is true. Rotates the local
+   * offset in ship's local frame so drag feels like orbiting the ship.
+   * Pitch is clamped to [-85°, +85°] to prevent gimbal flip. Per
+   * Ship Scanner UAT round 3 — 2026-05-10. */
+  applyShipLockDragDelta(yawDelta, pitchDelta) {
+    if (!this._shipLockMode) return;
+    this._shipLockYaw -= yawDelta;
+    this._shipLockPitch += pitchDelta;
+    const limit = (85 * Math.PI) / 180;
+    this._shipLockPitch = Math.max(-limit, Math.min(limit, this._shipLockPitch));
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   //   PHASE UPDATERS — per-frame advance.
   // ════════════════════════════════════════════════════════════════════════
@@ -780,12 +805,20 @@ export class NavigationSubsystem {
     const bodyPos = this.bodyRef.position;
 
     if (this._holdOnly) {
-      // Ship-lock branch — apply captured local offset through ship's
-      // current world matrix. Camera follows ship's full transform
-      // (position + orientation), so the ship appears stationary in
-      // the camera's view while the world moves around it.
+      // Ship-lock branch — rebuild Cartesian local offset from spherical
+      // (yaw, pitch, dist) so drag deltas applied via applyShipLockDragDelta
+      // are reflected this frame. Then transform local→world via ship's
+      // matrixWorld. Camera follows ship's full transform AND honors user
+      // drag rotation; ship appears stationary in view while user can
+      // examine it from any angle. Per UAT round 3 — 2026-05-10.
       if (this._shipLockMode && this.bodyRef) {
         this.bodyRef.updateMatrixWorld(true);
+        const cosP = Math.cos(this._shipLockPitch);
+        this._shipLockOffset.set(
+          this._shipLockDist * Math.sin(this._shipLockYaw) * cosP,
+          this._shipLockDist * Math.sin(this._shipLockPitch),
+          this._shipLockDist * Math.cos(this._shipLockYaw) * cosP,
+        );
         this._position.copy(this._shipLockOffset).applyMatrix4(this.bodyRef.matrixWorld);
         this._currentDist = this.orbitDistBase;
         this._lookAtTarget.copy(bodyPos);

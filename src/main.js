@@ -7457,6 +7457,27 @@ function simStep(deltaTime) {
     cameraController.update(deltaTime);
   }
 
+  // Ship Scanner UAT round 3 — 2026-05-10: wire user drag deltas into
+  // NavigationSubsystem's ship-lock orbit. cameraController.yaw/pitch
+  // accumulate from mousemove regardless of bypass state, so we read
+  // them here, compute deltas vs the previous frame, and pass to
+  // navSubsystem. Result: drag rotates camera around the ship in
+  // ship's local frame without exiting the orbit phase.
+  if (navSubsystem.isActive && navSubsystem._shipLockMode) {
+    if (typeof navSubsystem._shipLockPrevYaw === 'number') {
+      const yawDelta = cameraController.yaw - navSubsystem._shipLockPrevYaw;
+      const pitchDelta = cameraController.pitch - navSubsystem._shipLockPrevPitch;
+      if (yawDelta !== 0 || pitchDelta !== 0) {
+        navSubsystem.applyShipLockDragDelta(yawDelta, pitchDelta);
+      }
+    }
+    navSubsystem._shipLockPrevYaw = cameraController.yaw;
+    navSubsystem._shipLockPrevPitch = cameraController.pitch;
+  } else {
+    navSubsystem._shipLockPrevYaw = undefined;
+    navSubsystem._shipLockPrevPitch = undefined;
+  }
+
   // ── Near clipping plane ──
   // Fixed at 1e-9 scene units (~15 cm at AU_TO_SCENE=1000 scale). The
   // renderer has `logarithmicDepthBuffer: true` (RetroRenderer.js), so
@@ -8732,7 +8753,15 @@ canvas.addEventListener('mouseup', (e) => {
   if (_autopilotClickPending) {
     _autopilotClickPending = false;
     if (isDrag) {
-      // Intentional drag during autopilot → stop autopilot
+      // Ship Scanner UAT 2026-05-10: when ship-locked, drag should
+      // rotate camera around the ship WITHOUT exiting the orbit phase.
+      // The drag yaw/pitch already accumulated in cameraController gets
+      // consumed by NavigationSubsystem's ship-lock branch (see
+      // _updateOrbit). Only non-ship orbits exit on drag.
+      if (_selectedTarget?.kind === 'ship' && navSubsystem.isActive) {
+        return;
+      }
+      // Intentional drag during autopilot (non-ship) → stop autopilot
       stopFlythrough();
     } else {
       // Simple click during autopilot → select target, keep flying
