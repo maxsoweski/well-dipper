@@ -7475,6 +7475,16 @@ function renderFrame(alpha) {
         mesh.position.lerpVectors(mesh._interpPrev, mesh._interpCurr, alpha);
       }
     });
+    // Reticle ghosting fix (2026-05-09): targetingReticle.update() runs
+    // before retroRenderer.render() in this frame, so without an explicit
+    // updateMatrixWorld here the reticle projects through STALE camera
+    // matrices from the previous frame's render. hitTestBodies (called
+    // per mousemove) opportunistically refreshes matrices at native mouse
+    // polling rate (~60Hz), producing the 1-in-4 oscillation Max observed
+    // on his 240Hz display. Force matrix sync at interp-time so the
+    // reticle, scene render, and any same-frame projection consumers all
+    // see the same camera state.
+    camera.updateMatrixWorld(true);
   }
 
   // ── Render-classified subsystem updates (migrated from simStep Phase 3) ──
