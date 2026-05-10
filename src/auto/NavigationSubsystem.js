@@ -658,6 +658,23 @@ export class NavigationSubsystem {
     this.orbitDuration = duration || 15;
     this._targetingSignaled = false;
 
+    // Ship-lock detection (Ship Scanner UAT round 2 — 2026-05-09).
+    // For ship targets, the camera should lock to the ship's local frame:
+    // follow ship's translation AND rotation so the ship appears stationary
+    // in view while the world moves around it ('docked' feel). Detect via
+    // userData.kind set by ShipSpawner. Capture the camera's position in
+    // the ship's local frame ONCE at orbit entry; per-frame _updateOrbit
+    // re-applies that offset through the ship's current world matrix.
+    this._shipLockMode = bodyRef?.userData?.kind === 'npc';
+    if (this._shipLockMode) {
+      bodyRef.updateMatrixWorld(true);
+      // Local offset = inverse(ship.matrixWorld) × camera.position
+      if (!this._shipLockOffset) this._shipLockOffset = new THREE.Vector3();
+      if (!this._shipLockMatrix) this._shipLockMatrix = new THREE.Matrix4();
+      this._shipLockMatrix.copy(bodyRef.matrixWorld).invert();
+      this._shipLockOffset.copy(this._position).applyMatrix4(this._shipLockMatrix);
+    }
+
     // Compute starting orbit parameters from current ship position (prevents snap
     // at the slingshot → orbit transition).
     const bodyPos = bodyRef.position;
@@ -763,6 +780,20 @@ export class NavigationSubsystem {
     const bodyPos = this.bodyRef.position;
 
     if (this._holdOnly) {
+      // Ship-lock branch — apply captured local offset through ship's
+      // current world matrix. Camera follows ship's full transform
+      // (position + orientation), so the ship appears stationary in
+      // the camera's view while the world moves around it.
+      if (this._shipLockMode && this.bodyRef) {
+        this.bodyRef.updateMatrixWorld(true);
+        this._position.copy(this._shipLockOffset).applyMatrix4(this.bodyRef.matrixWorld);
+        this._currentDist = this.orbitDistBase;
+        this._lookAtTarget.copy(bodyPos);
+        return;
+      }
+      // Body-target branch (planets, moons, stars) — slow orbital yaw
+      // around the body. HOLD_YAW_RATE = 2π/120 ≈ 3°/sec gives a gentle
+      // sweep that lets Max see the body from multiple angles.
       const HOLD_YAW_RATE = (2 * Math.PI) / 120;
       this.orbitYaw += HOLD_YAW_RATE * this.orbitDirection * deltaTime;
       const cosP = Math.cos(this._entryPitch);

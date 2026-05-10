@@ -104,6 +104,20 @@ const scene = new THREE.Scene();
 // ── Camera ──
 const camera = new THREE.PerspectiveCamera(settings.get('fov'), window.innerWidth / window.innerHeight, 1e-9, 200000);
 
+// ── Ship lighting (per Ship Scanner UAT 2026-05-09) ──
+// Well-dipper uses shader-based lighting for stars/planets/moons (zero
+// THREE.Light instances historically). Ships use GLTF MeshStandardMaterial
+// which renders BLACK without lights. Adding a DirectionalLight + low
+// AmbientLight gives ships proper Lambertian shading from the star
+// direction; sky shaders / planet shaders / starfield don't respect
+// THREE.Light so they're unaffected. The DirectionalLight's position
+// updates each frame to track the active system's primary star.
+const shipDirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+shipDirLight.position.set(0, 0, 1);  // updated per frame in animate
+scene.add(shipDirLight);
+const shipAmbLight = new THREE.AmbientLight(0x404858, 0.6);  // dim cool fill
+scene.add(shipAmbLight);
+
 // ── Ship Spawner ──
 const shipSpawner = new ShipSpawner();
 shipSpawner.init();  // async, loads manifest in background — non-blocking
@@ -6558,6 +6572,19 @@ function simStep(deltaTime) {
 
     // ── Update flavor ships orbiting planets ──
     shipSpawner.update(celestialDt, system.planets);
+    // Track the primary star's position for ship lighting. The star sits
+    // at world origin in star-system mode, so the directional light
+    // points FROM the star TOWARD ships' average position. For simplicity
+    // (and parity with the artist intent of 'starlight from this side'),
+    // place the light at the star and aim it at scene origin — when ships
+    // orbit nearby planets they're far enough from origin that the
+    // direction reads as "from the star". For binary systems we use the
+    // primary; binary-secondary lighting is a future polish task.
+    if (system?.star?.mesh) {
+      shipDirLight.position.copy(system.star.mesh.position);
+      shipDirLight.target.position.set(0, 0, 0);
+      shipDirLight.target.updateMatrixWorld();
+    }
 
     // ── Update gravity well minimap positions (map-unit coords) ──
     if (gravityWell && gravityWellVisible && gravityWellPlanets) {

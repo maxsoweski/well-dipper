@@ -84,16 +84,11 @@ export class ShipSpawner {
         model.traverse(child => {
           if (child.isMesh && child.material) {
             child.material.flatShading = true;
-            // Well-dipper has zero THREE.Light instances — planets/moons use
-            // custom shader-based lighting that ships' GLTF MeshStandardMaterial
-            // doesn't participate in. Without lights, MeshStandardMaterial
-            // renders black. Set emissive = color × 1.0 so ships are fully
-            // self-lit at base color. Per Max UAT 2026-05-09 ('totally black').
-            // Future enhancement: read star position uniform + apply diffuse
-            // shading for proper directional lighting.
-            if (child.material.color && child.material.emissive) {
-              child.material.emissive.copy(child.material.color);
-            }
+            // Per Max UAT 2026-05-09 round 2: emissive override removed —
+            // we now have a scene-level DirectionalLight + AmbientLight
+            // (added in main.js Ship lighting section) that gives ships
+            // proper Lambertian shading from star direction. Emissive
+            // would over-brighten on top of that.
             child.material.needsUpdate = true;
             child.name = '';
           }
@@ -102,7 +97,12 @@ export class ShipSpawner {
         // Orbit parameters: ship orbits near the planet
         const orbitRadius = planetRadius * (2.5 + rng() * 3.0);
         const orbitAngle = rng() * Math.PI * 2;
-        const orbitSpeed = (0.15 + rng() * 0.3) * (rng() < 0.5 ? 1 : -1);
+        // Per Max UAT 2026-05-09: prior speed (0.15-0.45 rad/sec ≈ 14-42s
+        // orbital period) was so fast that planets seemed tiny in
+        // comparison. Reducing 10× to 0.015-0.045 rad/sec ≈ 140-420s
+        // (~2-7 min) period. Still slower than reality (real LEO is
+        // ~5500s) but reads as 'realistic motion' at screensaver pace.
+        const orbitSpeed = (0.015 + rng() * 0.03) * (rng() < 0.5 ? 1 : -1);
         const orbitInclination = (rng() - 0.5) * 0.3;  // slight random tilt
         const rotSpeed = (0.5 + rng() * 1.5) * (rng() < 0.5 ? 1 : -1);
 
