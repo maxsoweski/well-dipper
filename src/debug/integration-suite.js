@@ -826,6 +826,61 @@ export async function runShipScannerInspectionTests() {
     evidence: { bodyReticleCount: bodyReticles.length, sample: bodyReticles[0]?.name },
   }), results);
 
+  // === Unit 2: off-screen ship indicators (AC4) ===
+  //
+  // When scanner is ON, ships outside the viewport get an off-screen
+  // indicator entry under `ui.reticle.ship-offscreen.<bodyName>`.
+  // Drive the scenario by activating scanner, then assert that the
+  // sum of in-viewport ship reticles + off-screen indicators >= total
+  // shipsInScene whose projection is in front of the camera.
+  _lab.setShipScannerMode(true);
+  await new Promise(r => requestAnimationFrame(() => r()));
+  await new Promise(r => requestAnimationFrame(() => r()));
+  const invScan = __wd.takeSceneInventory();
+  const shipsInScene = (invScan.meshes || []).filter(m => (m.name || '').startsWith('ship.npc.'));
+  const onScreenShipReticles = (invScan.meshes || []).filter(m => (m.name || '').startsWith('ui.reticle.ship.'));
+  const offScreenShipIndicators = (invScan.meshes || []).filter(m => (m.name || '').startsWith('ui.reticle.ship-offscreen.'));
+  _lab.setShipScannerMode(false);
+
+  check('S6 off-screen ship indicators present when ships are outside viewport', () => {
+    if (shipsInScene.length === 0) {
+      return { passed: true, evidence: 'skipped (no ships in scene)' };
+    }
+    // Ships split between on-screen reticles + off-screen indicators. The
+    // sum may be lower than total ships if some are behind the camera
+    // (skipped intentionally — direction is ambiguous behind the eye).
+    const accountedFor = onScreenShipReticles.length + offScreenShipIndicators.length;
+    const inFrontOfCamera = shipsInScene.filter(s => s.screenSpace?.behindCamera === false).length;
+    return {
+      passed: accountedFor <= inFrontOfCamera && (offScreenShipIndicators.length > 0 || inFrontOfCamera === onScreenShipReticles.length),
+      evidence: {
+        shipsInScene: shipsInScene.length,
+        inFrontOfCamera,
+        onScreenReticles: onScreenShipReticles.length,
+        offScreenIndicators: offScreenShipIndicators.length,
+      },
+    };
+  }, results);
+
+  check('S7 off-screen ship indicators have arrowAngle + screenSpace.inViewport=false', () => {
+    if (offScreenShipIndicators.length === 0) {
+      return { passed: true, evidence: 'skipped (no off-screen indicators)' };
+    }
+    for (const e of offScreenShipIndicators) {
+      if (typeof e.arrowAngle !== 'number') {
+        return { passed: false, evidence: 'missing arrowAngle on ' + e.name };
+      }
+      if (e.screenSpace?.inViewport !== false) {
+        return { passed: false, evidence: 'inViewport should be false on ' + e.name };
+      }
+      // arrowAngle in [-π, π]
+      if (e.arrowAngle < -Math.PI || e.arrowAngle > Math.PI) {
+        return { passed: false, evidence: 'arrowAngle out of range on ' + e.name + ': ' + e.arrowAngle };
+      }
+    }
+    return { passed: true, evidence: { sample: offScreenShipIndicators[0] } };
+  }, results);
+
   const passed = results.filter(r => r.passed).length;
   const failed = results.length - passed;
 

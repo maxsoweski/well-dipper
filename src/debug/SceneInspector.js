@@ -224,33 +224,43 @@ function takeInventoryNow(opts) {
       drawCallsThisFrame: reticleFrame.drawCallsThisFrame,
     };
     if (reticleFrame.entries.length > 0) {
-      const reticleEntries = reticleFrame.entries.map((e) => ({
-        name: 'ui.reticle.' + e.kind + '.' + e.bodyName,
-        type: 'UiReticle',
-        uuid: 'synthetic-reticle-' + e.kind + '-' + e.bodyName,
-        source: 'ui',
-        visible: true,
-        frustumCulled: false,
-        inFrustum: true,
-        worldPos: [e.x, e.y, 0],   // 2D screen-space x/y; z padded
-        layer: 1,
-        materialUuid: '',
-        geometryUuid: '',
-        isContainer: false,
-        // UI-overlay-specific fields
-        reticleState: e.state,
-        bodyKind: e.kind,
-        bodyName: e.bodyName,
-        label: e.label,
-        bracketHalf: e.bracketHalf,
-        frameDrawCount: e.frameDrawCount,
-        screenSpace: { x: e.x, y: e.y, depth: 0, inViewport: true, behindCamera: false },
-        cameraDistance: 0,
-        apparentDegrees: null,
-        estimatedPixelCoverage: null,
-        projectedSize: null,
-        realFrustumIntersect: false,
-      }));
+      const reticleEntries = reticleFrame.entries.map((e) => {
+        const isOffscreen = e.offscreen === true;
+        const entry = {
+          name: 'ui.reticle.' + e.kind + '.' + e.bodyName,
+          type: 'UiReticle',
+          uuid: 'synthetic-reticle-' + e.kind + '-' + e.bodyName,
+          source: 'ui',
+          visible: true,
+          frustumCulled: false,
+          inFrustum: true,
+          worldPos: [e.x, e.y, 0],   // 2D screen-space x/y; z padded
+          layer: 1,
+          materialUuid: '',
+          geometryUuid: '',
+          isContainer: false,
+          // UI-overlay-specific fields
+          reticleState: e.state,
+          bodyKind: e.kind,
+          bodyName: e.bodyName,
+          label: e.label,
+          bracketHalf: e.bracketHalf,
+          frameDrawCount: e.frameDrawCount,
+          // For off-screen entries the position is the chevron's clamped
+          // viewport-edge position, NOT a true projection of the body.
+          screenSpace: { x: e.x, y: e.y, depth: 0, inViewport: !isOffscreen, behindCamera: false },
+          cameraDistance: 0,
+          apparentDegrees: null,
+          estimatedPixelCoverage: null,
+          projectedSize: null,
+          realFrustumIntersect: false,
+        };
+        if (isOffscreen) {
+          entry.offscreen = true;
+          entry.arrowAngle = e.arrowAngle;
+        }
+        return entry;
+      });
       inv.meshes = (inv.meshes || []).concat(reticleEntries);
     }
   }

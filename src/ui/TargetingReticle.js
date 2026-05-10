@@ -302,10 +302,17 @@ export class TargetingReticle {
     // scanner mode is active (host signals via shipTargets array). Ships
     // selected as the current _selectedTarget are skipped here; the
     // selected pass below will draw them in selected-ship colors.
+    // Per Unit 2 (ship-scanner-2026-05-09): off-screen ships get an edge
+    // arrow indicator instead of an in-viewport reticle. _drawShipReticle's
+    // _project returns null for off-screen positions, so we branch here:
+    // try the in-viewport draw first, fall back to off-screen arrow.
     if (shipTargets && shipTargets.length) {
       for (const ship of shipTargets) {
         if (selectedTarget && ship === selectedTarget) continue;
-        this._drawShipReticle(ship, false);
+        const drewInViewport = this._drawShipReticle(ship, false);
+        if (!drewInViewport) {
+          this._drawShipOffscreenArrow(ship);
+        }
       }
     }
 
@@ -399,9 +406,9 @@ export class TargetingReticle {
    * Per docs/WORKSTREAMS/ship-scanner-2026-05-09.md Unit 1.
    */
   _drawShipReticle(target, isSelected) {
-    if (!target || !target.mesh) return;
+    if (!target || !target.mesh) return false;
     const screen = this._project(target.mesh.position);
-    if (!screen) return;
+    if (!screen) return false;
 
     // Same sizing logic as _drawTarget, but ships are typically tiny so
     // bracketHalf usually falls to BRACKET_MIN_HALF — that's intentional,
@@ -437,6 +444,85 @@ export class TargetingReticle {
     // reads `target.kind`. Ship targets MUST set kind='ship' upstream; the
     // host (main.js) ensures this when building shipTargets.
     this._recordDraw(isSelected ? 'selected' : 'tentative', target, screen, half, label);
+    return true;
+  }
+
+  /**
+   * Off-screen ship indicator. For ships outside the viewport, project
+   * to NDC, drop the ones behind the camera, and draw a small chevron
+   * at the viewport edge pointing toward the ship's actual direction.
+   * Per docs/WORKSTREAMS/ship-scanner-2026-05-09.md Unit 2 (AC4).
+   *
+   * Records a synthetic inventory entry with kind='ship-offscreen' so
+   * SceneInspector emits `ui.reticle.ship-offscreen.<bodyName>` entries
+   * with `arrowAngle` field for predicate consumption.
+   */
+  _drawShipOffscreenArrow(target) {
+    if (!target || !target.mesh) return;
+    // Project ship to NDC. Bypass _project's culling to get the raw NDC.
+    _v.copy(target.mesh.position).project(this.camera);
+    // z > 1 means behind camera. Skip — direction is ambiguous (the body's
+    // projection inverts when behind the eye plane, producing nonsense
+    // arrow angles).
+    if (_v.z > 1 || _v.z < -1) return;
+
+    // Direction from viewport center to ship's projected position, in
+    // CSS-pixel space (NDC y is flipped vs screen y).
+    const dirX = _v.x;
+    const dirY = -_v.y;
+    const len = Math.hypot(dirX, dirY);
+    if (len < 1e-6) return;  // ship projects exactly to center; no direction
+
+    const nx = dirX / len;
+    const ny = dirY / len;
+
+    // Clamp to viewport edge with margin. Find the smaller t such that
+    // |nx * t| or |ny * t| reaches the edge minus margin.
+    const halfW = this._cssW * 0.5;
+    const halfH = this._cssH * 0.5;
+    const margin = 32;  // CSS pixels from viewport edge
+    const tX = Math.abs(nx) > 1e-6 ? (halfW - margin) / Math.abs(nx) : Infinity;
+    const tY = Math.abs(ny) > 1e-6 ? (halfH - margin) / Math.abs(ny) : Infinity;
+    const t = Math.min(tX, tY);
+
+    const screenX = halfW + nx * t;
+    const screenY = halfH + ny * t;
+    const arrowAngle = Math.atan2(ny, nx);
+
+    // Draw the chevron.
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.scale(this._dpr, this._dpr);
+    ctx.translate(screenX, screenY);
+    ctx.rotate(arrowAngle);
+    ctx.fillStyle = COLOR_SHIP_TENTATIVE;
+    // Filled triangle pointing in +X (then rotation places it correctly).
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-7, -7);
+    ctx.lineTo(-7, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Record the off-screen indicator as a synthetic inventory entry.
+    // kind='ship-offscreen' produces `ui.reticle.ship-offscreen.<bodyName>`
+    // via SceneInspector's existing naming convention.
+    const rawName = (target.name || '').toString();
+    const bodyName = rawName ? rawName.toLowerCase().replace(/\s+/g, '_') : _targetKey(target);
+    this._lastFrame.entries.push({
+      state: 'offscreen',
+      kind: 'ship-offscreen',
+      bodyName,
+      label: target.name ? target.name.toUpperCase() : null,
+      x: screenX,
+      y: screenY,
+      bracketHalf: 10,  // arrow's tip-extent; nominal value for predicate compatibility
+      frameDrawCount: 1,
+      arrowAngle,
+      offscreen: true,
+    });
+    this._lastFrame.drawCallsThisFrame += 1;
   }
 
   _clear() {
