@@ -1783,6 +1783,9 @@ window._lab = {
           frame: i,
           x, y,
           camYaw: cc.yaw, camPitch: cc.pitch,
+          smoothedYaw: cc.smoothedYaw, smoothedPitch: cc.smoothedPitch,
+          yawGap: cc.yaw - cc.smoothedYaw,
+          targetX: cc.target?.x, targetY: cc.target?.y, targetZ: cc.target?.z,
           drawCallsThisFrame: fs.drawCallsThisFrame,
           entries: fs.entries.map(e => ({
             kind: e.kind, bodyName: e.bodyName, state: e.state,
