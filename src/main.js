@@ -7490,6 +7490,19 @@ function _forEachInterpMesh(fn) {
       }
     }
   }
+  // Ships need interpolation too — without this, ship.mesh.position
+  // updates at sim tick (60Hz) but camera.position interpolates per RAF
+  // (240Hz on Max's display). Camera arrives at lerp(prev_camera, curr_camera,
+  // alpha) which is computed from navSubsystem._position = ship_pos + offset
+  // at each sim tick — but if ship.mesh.position itself isn't lerp'd to
+  // match the same alpha, camera and ship are evaluated at different alphas
+  // and burn-arrival distance oscillates by ship's per-tick travel.
+  // Per docs/WORKSTREAMS/ship-scanner-2026-05-09.md AC8 fix.
+  if (shipSpawner?.ships) {
+    for (const ship of shipSpawner.ships) {
+      if (ship?.mesh) fn(ship.mesh);
+    }
+  }
 }
 
 // Render-side visual subsystem updates (Phase 3 Group 3B). Walks the

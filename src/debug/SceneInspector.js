@@ -128,6 +128,10 @@ export function installSceneInspector(engines) {
       const m = await import('./integration-suite.js');
       return m.runShipScannerInspectionTests();
     },
+    runShipScannerBurnArrivalTest: async () => {
+      const m = await import('./integration-suite.js');
+      return m.runShipScannerBurnArrivalTest();
+    },
     // Live viewport (canvas client size). Used by Phase A integration tests
     // and any predicate that needs region-mode viewport math.
     getViewport: () => {

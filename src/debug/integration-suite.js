@@ -1047,3 +1047,133 @@ export async function runShipScannerInspectionTests() {
 
   return { passed, failed, total: results.length, results };
 }
+
+// === Ship Scanner — burn arrival telemetry test (AC8) ===
+//
+// Verifies the post-burn-completion behavior: ship subtends 3-7° of view
+// AND camera-to-ship distance is stable (mean variance < 10% over 1s).
+//
+// Slow test (~22s wall time): waits for travel-phase completion, then
+// settles for 3s, then samples for 1s. Separate runner so the regular
+// inspection suite stays fast. Per docs/WORKSTREAMS/ship-scanner-2026-05-09.md
+// AC7-8.
+//
+// Initial expectation: this test FAILS at HEAD because ships move faster
+// than the autopilot can track at the planet-equivalent orbit distance.
+// The fix iterates until S12+S13 PASS.
+export async function runShipScannerBurnArrivalTest() {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runShipScannerBurnArrivalTest: window.__wd not installed.');
+  }
+  if (!window._lab?.selectShip || !window._lab?.commitBurnNow) {
+    throw new Error('runShipScannerBurnArrivalTest: _lab.selectShip/commitBurnNow unavailable.');
+  }
+  const _lab = window._lab;
+  const __wd = window.__wd;
+  const results = [];
+
+  // Setup: scanner on, find an in-viewport ship.
+  _lab.setShipScannerMode(true);
+  await new Promise(r => requestAnimationFrame(() => r()));
+  const inv = __wd.takeSceneInventory();
+  let visibleIdx = -1;
+  for (let i = 0; i < (window._shipSpawner?.ships?.length || 0); i++) {
+    const ship = window._shipSpawner.ships[i];
+    const expectedShipName = 'ship.npc.' + ship.mesh.userData.id;
+    const matched = (inv.meshes || []).find(s => s.name === expectedShipName && s.screenSpace?.inViewport);
+    if (matched) { visibleIdx = i; break; }
+  }
+  if (visibleIdx < 0) {
+    return {
+      passed: 0, failed: 0, total: 0,
+      results: [{ name: 'setup', passed: true, evidence: 'skipped (no in-viewport ship to burn toward)' }],
+    };
+  }
+
+  const ship = window._shipSpawner.ships[visibleIdx];
+  const shipMesh = ship.mesh;
+  const archetype = shipMesh.userData.archetype || 'fighters';
+
+  _lab.selectShip(visibleIdx);
+  await new Promise(r => requestAnimationFrame(() => r()));
+  _lab.commitBurnNow();
+
+  // Wait for ORBIT phase (Phase.ORBITING = 4) or timeout after 20s.
+  const burnStartT = performance.now();
+  let reachedOrbit = false;
+  while (performance.now() - burnStartT < 20000) {
+    await new Promise(r => setTimeout(r, 200));
+    if (window._navSubsystem?._phase === 4) { reachedOrbit = true; break; }
+  }
+
+  check('S12-pre travel reaches ORBIT phase within 20s', () => ({
+    passed: reachedOrbit,
+    evidence: reachedOrbit ? 'reached ORBIT phase' : 'travel did not complete in 20s; phase=' + window._navSubsystem?._phase,
+  }), results);
+
+  if (!reachedOrbit) {
+    _lab.deselectBody();
+    _lab.setShipScannerMode(false);
+    return {
+      passed: results.filter(r => r.passed).length,
+      failed: results.length - results.filter(r => r.passed).length,
+      total: results.length,
+      results,
+    };
+  }
+
+  // Settle for 3s, then sample 1s of distance.
+  await new Promise(r => setTimeout(r, 3000));
+  const distSamples = [];
+  const cam = window._cam;
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => requestAnimationFrame(() => r()));
+    const sp = shipMesh.position;
+    const cp = cam.position;
+    distSamples.push(Math.hypot(cp.x - sp.x, cp.y - sp.y, cp.z - sp.z));
+  }
+
+  const mean = distSamples.reduce((a, b) => a + b, 0) / distSamples.length;
+  const variance = distSamples.reduce((a, b) => a + (b - mean) ** 2, 0) / distSamples.length;
+  const std = Math.sqrt(variance);
+  const variancePct = (std / mean) * 100;
+
+  // Compute apparentDegrees from mean distance + hull length.
+  const SHIP_HULL_LENGTHS_M = { player: 20, fighters: 50, shuttles: 50, freighters: 300, cruisers: 500, capitals: 2000, explorers: 200 };
+  const METERS_PER_SCENE = 149597870700 / 1000;
+  const hullLengthScene = (SHIP_HULL_LENGTHS_M[archetype] || 50) / METERS_PER_SCENE;
+  const apparentRad = 2 * Math.atan((hullLengthScene * 0.5) / mean);
+  const apparentDeg = apparentRad * 180 / Math.PI;
+
+  check('S12 ship subtends 3-7° at arrival (planet-equivalent framing)', () => ({
+    passed: apparentDeg >= 3 && apparentDeg <= 7,
+    evidence: { meanDist: mean, hullLengthScene, apparentDeg: +apparentDeg.toFixed(2), target: '5°' },
+  }), results);
+
+  check('S13 camera-to-ship distance stable over 1s (std/mean < 10%)', () => ({
+    passed: variancePct < 10,
+    evidence: {
+      meanDist: mean.toExponential(3),
+      stdDev: std.toExponential(3),
+      variancePct: +variancePct.toFixed(2) + '%',
+      sampleCount: distSamples.length,
+      minDist: Math.min(...distSamples).toExponential(3),
+      maxDist: Math.max(...distSamples).toExponential(3),
+    },
+  }), results);
+
+  // Cleanup.
+  _lab.deselectBody();
+  _lab.setShipScannerMode(false);
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.length - passed;
+
+  console.group('[__wd ship scanner burn arrival] ' + passed + '/' + results.length + ' passed');
+  for (const r of results) {
+    console.log((r.passed ? '✔' : '✘') + ' ' + r.name, r.passed ? '' : (r.evidence ?? ''));
+  }
+  console.groupEnd();
+
+  return { passed, failed, total: results.length, results };
+}
