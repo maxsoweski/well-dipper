@@ -71,21 +71,26 @@ Four coupled units, decomposed for per-unit unit + integration + Max UAT cycles:
 
 ## Per-unit execution loop
 
-For each Unit (1, 2, 3, 4) in order:
+Working-Claude iterates through Units 1 → 2 → 3 → 4 autonomously. For EACH unit:
 
-1. Working-Claude implements the unit.
-2. Working-Claude writes/extends unit tests (kit-side where applicable).
-3. Working-Claude writes/extends integration tests (`__wd.runShipScannerInspectionTests()`).
-4. Working-Claude verifies all tests PASS via chrome-devtools at `localhost:5174/well-dipper/?lab=1`.
-5. Working-Claude takes a visual screenshot exercising the unit.
-6. Working-Claude demos to Max with concise summary; Max UATs in his real Chrome.
-7. On Max's "go" → commit + advance to next unit. On Max's pushback → iterate within the unit before advancing.
+1. Implement the unit.
+2. Write/extend unit tests (kit-side where applicable).
+3. Write/extend integration tests (`__wd.runShipScannerInspectionTests()`).
+4. Verify both unit + integration tests PASS via chrome-devtools at `localhost:5174/well-dipper/?lab=1`.
+5. Take a visual screenshot exercising the unit (visual QA gate satisfaction).
+6. Commit the unit.
+7. Advance to next unit.
 
-After Unit 4 lands and Max UATs end-to-end:
+If unit OR integration tests FAIL during a unit, working-Claude triages and iterates WITHIN that unit until both pass before advancing. No mid-feature handoff to Max for UAT.
 
-8. `Agent(subagent_type="tester")` for Shipped-gate verdict. (PM-proxy authored — Tester scrutinizes ACs against canonical persona doc.)
-9. On Tester PASS, append `Shipped <sha>` to this brief's Status section.
-10. Push origin master; verify deploy.
+**Once Units 1-4 ALL pass unit + integration tests:**
+
+8. Hand off to Max for end-to-end UAT (single demo covering all 4 units' acceptance criteria).
+9. On Max UAT pass → `Agent(subagent_type="tester")` for Shipped-gate verdict.
+10. On Tester PASS → append `Shipped <sha>` to this brief's Status section.
+11. Push origin master; verify deploy.
+
+If Max UAT surfaces issues, route to in-feature fix (re-loop the affected unit) before re-advancing to Tester.
 
 ## Handoff
 
