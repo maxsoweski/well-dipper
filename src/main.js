@@ -107,6 +107,7 @@ const camera = new THREE.PerspectiveCamera(settings.get('fov'), window.innerWidt
 // ── Ship Spawner ──
 const shipSpawner = new ShipSpawner();
 shipSpawner.init();  // async, loads manifest in background — non-blocking
+window._shipSpawner = shipSpawner;  // exposed for integration tests (Unit 3)
 
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
@@ -1737,6 +1738,29 @@ window._lab = {
     return _shipScannerMode;
   },
 
+  /** Programmatically select a ship by index (Unit 3). Mirrors the click
+   * pipeline (hitTestBodies → selectTarget) without dispatching synthetic
+   * events. */
+  selectShip(shipIndex) {
+    const t = _makeTarget('ship', { shipIndex });
+    if (!t) return { ok: false, reason: 'shipIndex=' + shipIndex + ' returned no target (scanner off? out of range?)' };
+    selectTarget(t);
+    return { ok: true, target: { kind: t.kind, name: t.name, shipIndex: t.shipIndex } };
+  },
+
+  /** Snapshot of the currently selected target (any kind), for tests. */
+  selectedTarget() {
+    if (!_selectedTarget) return null;
+    return {
+      kind: _selectedTarget.kind,
+      name: _selectedTarget.name,
+      shipIndex: _selectedTarget.shipIndex,
+      planetIndex: _selectedTarget.planetIndex,
+      moonIndex: _selectedTarget.moonIndex,
+      starIndex: _selectedTarget.starIndex,
+    };
+  },
+
   /** Drive a synthetic camera-orbit drag deterministically. Used by the
    * reticle ghosting regression test to reproduce a click-and-drag
    * scenario without relying on chrome-devtools' real drag tool.
@@ -3185,6 +3209,29 @@ function _makeTarget(kind, indices) {
       type: moon.data.type || 'moon',
     };
   }
+  if (kind === 'ship') {
+    // Ship Scanner Unit 3: ships participate in selection when scanner mode
+    // is on. shipIndex is the index into shipSpawner.ships[].
+    const sIdx = indices.shipIndex;
+    const ship = shipSpawner?.ships?.[sIdx];
+    if (!ship?.mesh) return null;
+    const ud = ship.mesh.userData || {};
+    const archetype = ud.archetype || 'unknown';
+    const rawId = ud.id || (sIdx + '');
+    const idTail = rawId.startsWith(archetype + '.') ? rawId.slice(archetype.length + 1) : rawId;
+    return {
+      kind: 'ship',
+      shipIndex: sIdx,
+      mesh: ship.mesh,
+      // Ship "radius" for hit-test threshold purposes — ships have very
+      // small bounding spheres, so use a fixed CSS-ish radius via the
+      // hit-test minThresholdPx instead.
+      radius: ship.mesh.geometry?.boundingSphere?.radius || 0,
+      name: archetype + ' ' + idTail,
+      type: archetype,
+      archetype,
+    };
+  }
   return null;
 }
 
@@ -3228,7 +3275,7 @@ function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
   // where the moon is visibly offset from the planet, in which case the
   // closest-to-mouse rule still applies.
   const TIE_PIXELS_SQ = 9; // 3 px tolerance
-  const kindRank = (k) => (k === 'star' ? 3 : k === 'planet' ? 2 : 1);
+  const kindRank = (k) => (k === 'star' ? 3 : k === 'planet' ? 2 : k === 'moon' ? 1 : 0);
 
   const tryBody = (target) => {
     if (!target || !target.mesh) return;
@@ -3279,6 +3326,14 @@ function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
         for (let m = 0; m < entry.moons.length; m++) {
           tryBody(_makeTarget('moon', { planetIndex: i, moonIndex: m }));
         }
+      }
+    }
+    // Ship Scanner Unit 3: ships are clickable only when scanner mode is on.
+    // Ships rank lower than bodies in the kindRank tie-break, so an
+    // overlapping body click goes to the body, not the ship.
+    if (_shipScannerMode && shipSpawner?.ships?.length) {
+      for (let s = 0; s < shipSpawner.ships.length; s++) {
+        tryBody(_makeTarget('ship', { shipIndex: s }));
       }
     }
   }
@@ -7566,30 +7621,14 @@ function renderFrame(alpha) {
   const _selectedForReticle = (_selectedTarget && (autopilotMotion.isActive || !_isReticleOccluded(_selectedTarget))) ? _selectedTarget : null;
 
   // Ship Scanner (Unit 1): build shipTargets array when scanner mode is on.
-  // Each entry has the shape TargetingReticle's draw path expects:
-  // { kind, mesh, radius, name }. radius is computed from the ship's
-  // bounding sphere if available; falls back to 0 (sub-pixel reticle).
+  // Uses _makeTarget('ship', ...) for consistency with hitTestBodies and
+  // selectTarget pipelines (Unit 3).
   let _shipTargetsForReticle = null;
   if (_shipScannerMode && system && shipSpawner && shipSpawner.ships?.length) {
     _shipTargetsForReticle = [];
     for (let i = 0; i < shipSpawner.ships.length; i++) {
-      const ship = shipSpawner.ships[i];
-      if (!ship?.mesh) continue;
-      const ud = ship.mesh.userData || {};
-      const archetype = ud.archetype || 'unknown';
-      // ud.id is already `archetype.<i>-<s>` (ShipSpawner.js:106). Strip the
-      // redundant archetype prefix so the displayed label reads
-      // "FIGHTERS 8-0" not "FIGHTERS FIGHTERS.8-0".
-      const rawId = ud.id || (i + '');
-      const idTail = rawId.startsWith(archetype + '.') ? rawId.slice(archetype.length + 1) : rawId;
-      _shipTargetsForReticle.push({
-        kind: 'ship',
-        mesh: ship.mesh,
-        radius: ship.mesh.geometry?.boundingSphere?.radius || 0,
-        name: archetype + ' ' + idTail,
-        archetype,
-        shipIndex: i,
-      });
+      const t = _makeTarget('ship', { shipIndex: i });
+      if (t) _shipTargetsForReticle.push(t);
     }
   }
 

@@ -881,6 +881,99 @@ export async function runShipScannerInspectionTests() {
     return { passed: true, evidence: { sample: offScreenShipIndicators[0] } };
   }, results);
 
+  // === Unit 3: ship-as-target click selection (AC5, AC6) ===
+  //
+  // S8: programmatically selecting a ship sets _selectedTarget.kind='ship'
+  //     and produces a ship reticle in 'selected' state.
+  // S9: a selected ship persists when scanner mode is toggled OFF.
+  if (typeof _lab.selectShip === 'function') {
+    // Find a ship that's in viewport (otherwise the selected reticle won't
+    // draw, which makes S8 brittle on default-Sol cameras).
+    _lab.setShipScannerMode(true);
+    await new Promise(r => requestAnimationFrame(() => r()));
+    const invForShipPick = __wd.takeSceneInventory();
+    const visibleShipReticles = (invForShipPick.meshes || []).filter(m =>
+      (m.name || '').startsWith('ui.reticle.ship.') && m.screenSpace?.inViewport
+    );
+
+    // Map ui.reticle.ship.<bodyName> → shipIndex via shipSpawner.ships.
+    // bodyName format is `<archetype>_<idTail>` (e.g., 'fighters_8-0').
+    const candidateIndices = [];
+    if (window._shipSpawner?.ships) {
+      for (let i = 0; i < window._shipSpawner.ships.length; i++) {
+        const ship = window._shipSpawner.ships[i];
+        if (!ship?.mesh) continue;
+        const ud = ship.mesh.userData || {};
+        const archetype = ud.archetype || '';
+        const rawId = ud.id || '';
+        const idTail = rawId.startsWith(archetype + '.') ? rawId.slice(archetype.length + 1) : rawId;
+        const expectedBodyName = (archetype + '_' + idTail).toLowerCase();
+        const matched = visibleShipReticles.find(r => r.bodyName === expectedBodyName);
+        if (matched) candidateIndices.push(i);
+      }
+    }
+
+    let selectedShipResult = null;
+    let selectedShipReticle = null;
+    if (candidateIndices.length > 0) {
+      selectedShipResult = _lab.selectShip(candidateIndices[0]);
+      await new Promise(r => requestAnimationFrame(() => r()));
+      const invSelShip = __wd.takeSceneInventory();
+      selectedShipReticle = (invSelShip.meshes || []).find(m =>
+        (m.name || '').startsWith('ui.reticle.ship.') && m.reticleState === 'selected'
+      );
+    }
+
+    check('S8 selectShip(idx) sets _selectedTarget.kind="ship" and produces selected ship reticle', () => {
+      if (candidateIndices.length === 0) {
+        return { passed: true, evidence: 'skipped (no in-viewport ship to select)' };
+      }
+      if (!selectedShipResult?.ok) {
+        return { passed: false, evidence: 'selectShip returned ' + JSON.stringify(selectedShipResult) };
+      }
+      const sel = _lab.selectedTarget?.();
+      if (!sel || sel.kind !== 'ship') {
+        return { passed: false, evidence: 'selectedTarget kind=' + (sel?.kind || 'null') };
+      }
+      if (!selectedShipReticle) {
+        return { passed: false, evidence: 'no selected ship reticle in inventory after selectShip' };
+      }
+      return {
+        passed: true,
+        evidence: { selectedKind: sel.kind, selectedName: sel.name, reticleName: selectedShipReticle.name },
+      };
+    }, results);
+
+    // S9: toggle scanner OFF — selected ship reticle should persist.
+    _lab.setShipScannerMode(false);
+    await new Promise(r => requestAnimationFrame(() => r()));
+    await new Promise(r => requestAnimationFrame(() => r()));
+    const invScannerOff = __wd.takeSceneInventory();
+    const stillSelected = (invScannerOff.meshes || []).find(m =>
+      (m.name || '').startsWith('ui.reticle.ship.') && m.reticleState === 'selected'
+    );
+    const stillSelTarget = _lab.selectedTarget?.();
+
+    check('S9 selected ship persists in selectedTarget AND reticle when scanner toggled OFF', () => {
+      if (candidateIndices.length === 0) {
+        return { passed: true, evidence: 'skipped (no ship was selected)' };
+      }
+      // _selectedTarget should still be the ship.
+      if (!stillSelTarget || stillSelTarget.kind !== 'ship') {
+        return { passed: false, evidence: 'selectedTarget cleared on scanner toggle: ' + JSON.stringify(stillSelTarget) };
+      }
+      // The reticle should still be drawn (selected ships render even when
+      // scanner mode is off — per AC6).
+      if (!stillSelected) {
+        return { passed: false, evidence: 'selected ship reticle disappeared when scanner toggled OFF' };
+      }
+      return { passed: true, evidence: { reticleName: stillSelected.name } };
+    }, results);
+
+    // Reset for next test runs.
+    _lab.deselectBody();
+  }
+
   const passed = results.filter(r => r.passed).length;
   const failed = results.length - passed;
 
