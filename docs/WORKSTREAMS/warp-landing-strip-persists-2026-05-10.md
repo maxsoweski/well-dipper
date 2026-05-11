@@ -106,3 +106,21 @@ Once Part A's RED test isolates the bug, fix in-stream. Re-run the regression te
 ---
 
 **PM-proxy authoring note (2026-05-10):** Authored by working-Claude as PM-proxy because the `pm` subagent type is not registered in this harness (per Dev Collab OS degraded-mode rule). Structure mirrors prior briefs in `docs/WORKSTREAMS/`. Symptoms drawn from Max's verbatim 2026-05-10 message; root-cause vectors drawn from light grep of WarpPortal.js. AC3 (position correlation) is the speculative new metric — adjust during execution if telemetry surfaces a cleaner signal.
+
+## ⏸ PAUSED — bookmark 2026-05-10
+
+**State at pause:** Fix landed at `e31ee65`. Tester verdict: **VERIFIED_PENDING_MAX**. All programmatic evidence clean (L1/L2/L3 PASS, runWarpSuite 4/4 with `reticle-persists-after-warp` regression removed from findings, sibling suites all green, prod-drift guard PASS). Awaiting Max UAT GATE 3 in real Chrome.
+
+**Commits this session:**
+- `d4a3923` — workstream brief authored (PM-proxy, greenlit GATE 1)
+- `e31ee65` — fix + new `runWarpLandingStripRegressionTest` (3/3 PASS) + `__wd.runWarpLandingStripRegressionTest` exposure
+
+**Diagnostic finding worth recording:** the "multiplying" Max perceived is actually visual interpretation of a SINGLE strip persisting + following the camera through space. L1 confirmed mesh count is correctly 1 at all phases. The strip's repeated cross sprites (it's a runway with several markers along its length) read as "multiple strips" when the strip itself is drifting through the player's field of view. With the fix, the strip is hidden post-warp so the multi-cross visual is correctly bounded to the brief exit-moment appearance.
+
+**Resume tasks (next session):**
+1. Max runs UAT GATE 3 in real Chrome — warp to a system, observe single brief strip appearance, no follow-camera, look-back shows Portal B without trailing strip. Warp again from new system, no carry-over.
+2. On Max PASS, append `Shipped e31ee65 — verified against Max UAT 2026-05-10` to this Status section.
+3. `git push origin master` (local is 1 commit ahead — `e31ee65`).
+4. Verify deploy at github.io + wow.pjh.is.
+
+**Note on `warp-tunnel-second-half-not-rendering` finding** still in `runWarpSuite.regressions`: explicitly out-of-scope per this brief's OOS section (Phase E concern). Track in a separate workstream when ready to address.
