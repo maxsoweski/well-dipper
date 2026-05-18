@@ -83,4 +83,47 @@ Per `HEART_OF_DESIRE.md` — the meta-purpose is **Max's confidence + capability
 
 ---
 
-**Source:** Authored 2026-05-18 by working-Claude alongside `HEART_OF_DESIRE.md` and `NOW.md`. Anchored to Game Bible §1A Three Development Layers taxonomy. Milestone percentages are estimates — adjust as the project's contour becomes visible.
+## Doc system completion (structural debt)
+
+Per Rule 1 (no empty folders) + Rule 7 (no transitional limbo): docs
+that should exist but don't yet, with reason and target trigger.
+
+**Migrate PARKING_LOT.md content to per-system Open Questions sections:**
+- **P1 (MoonGenerator rotationSpeed)** → `SYSTEMS/generation-moon/README.md`
+  Open Questions. Trigger: when generation-moon system gets first deep dive.
+- **P2 (APPROACH overshoot at high celestialTimeMultiplier)** →
+  `SYSTEMS/autopilot/README.md` Open Questions. Trigger: when autopilot
+  system gets first deep dive (likely soon — autopilot is named as
+  buggy in intake).
+- **P3 (Galactic features disappear when very near)** →
+  `SYSTEMS/galaxy-rendering/README.md` Open Questions. Trigger: when
+  galaxy-rendering system gets first deep dive (likely during
+  galaxy-rendering visual pass for F&F MVP).
+
+Delete `PARKING_LOT.md` once all three migrate.
+
+**Move `PLAN_inspection-layer-v2.md` content into ROADMAP:**
+- `SYSTEMS/inspection-layer/ROADMAP.md` (authored fresh from
+  `ARCHIVE/PLAN_inspection-layer-v2_LEGACY.md` reference). Trigger:
+  when inspection-layer system gets first deep dive.
+
+**Move `PLAN_world-origin-rebasing.md` content into ROADMAP:**
+- `SYSTEMS/world-coordinates/ROADMAP.md` (authored fresh from
+  `ARCHIVE/PLAN_world-origin-rebasing_LEGACY.md` reference). Trigger:
+  when world-coordinates system gets first deep dive OR before any
+  Layer-3 ship-scale features begin (whichever comes first; this is
+  architectural prerequisite).
+
+**Archive scene-inspection walkthroughs as canonical SYSTEMS doc inputs:**
+- `ARCHIVE/testing-scene-inspection-demo-walkthrough_LEGACY.md` +
+  `ARCHIVE/testing-scene-inspection-integration-tests_LEGACY.md` →
+  inform `SYSTEMS/inspection-layer/README.md` History + Test runners
+  sections when authored. Trigger: same as inspection-layer ROADMAP.
+
+**Split condition for this section:** if list exceeds ~20 items or
+churns weekly, split out to standalone `docs/STRUCTURAL_DEBT.md` doc.
+Currently at 5 items.
+
+---
+
+**Source:** Authored 2026-05-18 by working-Claude alongside `HEART_OF_DESIRE.md` and `NOW.md`. Anchored to Game Bible §1A Three Development Layers taxonomy. Milestone percentages are estimates — adjust as the project's contour becomes visible. Doc system completion section added 2026-05-18 Phase 9 of v5 migration.
