@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Pre-push hook for well-dipper — runs doc-rot project-wide.
+# Installed via scripts/install-hooks.sh.
+#
+# Per Rule 8 (PROTOCOLS/doc-updates-on-ship.md): warns loudly; does not
+# block push by default. Set WELL_DIPPER_DOC_ROT_BLOCK=true env var to
+# hard-block on rot.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ROT_SCRIPT="${REPO_ROOT}/scripts/doc-rot-check.sh"
+
+if [ ! -x "$ROT_SCRIPT" ]; then
+  echo "[pre-push] doc-rot-check.sh not executable; skipping" >&2
+  exit 0
+fi
+
+echo "[pre-push] running doc-rot project-wide..." >&2
+if "$ROT_SCRIPT"; then
+  echo "[pre-push] doc-rot clean — push proceeding" >&2
+  exit 0
+else
+  ROT_EXIT=$?
+  echo "[pre-push] doc-rot flagged issues (exit $ROT_EXIT)" >&2
+  if [ "${WELL_DIPPER_DOC_ROT_BLOCK:-}" = "true" ]; then
+    echo "[pre-push] WELL_DIPPER_DOC_ROT_BLOCK=true — blocking push" >&2
+    exit 1
+  else
+    echo "[pre-push] warning only (set WELL_DIPPER_DOC_ROT_BLOCK=true to block) — push proceeding" >&2
+    exit 0
+  fi
+fi

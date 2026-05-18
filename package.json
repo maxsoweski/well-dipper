@@ -13,9 +13,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify-golden": "node tests/golden-trajectories/run-golden.mjs",
-    "rebless-golden": "node tests/golden-trajectories/run-golden.mjs --record"
+    "rebless-golden": "node tests/golden-trajectories/run-golden.mjs --record",
+    "doc-rot": "bash scripts/doc-rot-check.sh",
+    "doc-graph": "node scripts/doc-graph.js",
+    "uat-status": "bash scripts/uat-status.sh",
+    "mood-bootstrap": "bash scripts/mood-index-bootstrap.sh"
   },
   "devDependencies": {
+    "madge": "^8.0.0",
     "pngjs": "^7.0.0",
     "vite": "^7.3.1",
     "vitest": "^4.1.0"
