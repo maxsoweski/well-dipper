@@ -1,5 +1,16 @@
 # Parking Lot
 
+**Transitional doc (2026-05-18).** Pre-v5 home for cross-workstream
+deferred items. Under v5 these belong in `SYSTEMS/<sys>/README.md`
+"Open Questions" sections. Each P-item below migrates to its target
+system doc when that system gets authored:
+- P1 (MoonGenerator rotationSpeed) → `SYSTEMS/generation-moon/README.md`
+- P2 (APPROACH overshoot) → `SYSTEMS/autopilot/README.md`
+- P3 (Galactic features disappear when near) → `SYSTEMS/galaxy-rendering/README.md`
+
+Tracked in `JOURNEY.md` "Doc system completion" structural debt.
+Delete this file once all three migrations complete.
+
 Cross-workstream deferred items. Each entry names the originating
 workstream and the specific surface that needs revisit. Future
 workstreams pull from here when their scope intersects.
