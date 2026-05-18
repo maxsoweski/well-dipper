@@ -1,0 +1,6 @@
+# Defensive — only index file lives in repo.
+# Actual image/video corpus stays at /mnt/c/Users/Max/Pictures/well-dipper/
+# (~126 files, 249 MB, not committed).
+*
+!.gitignore
+!README.md
