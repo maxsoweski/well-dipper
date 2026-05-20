@@ -4,33 +4,33 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-05-19 by working-Claude (end of v5 doc-system migration Phase 5 session).
+Last updated: 2026-05-19 by working-Claude (Phase 6 ship; v5 doc-system migration 8 of 11 phases shipped).
 
 ---
 
 ## Active workstream
 
-**Doc system v5 migration** — 7 of 11 phases shipped this session
-(commits `fd98f23` → `ac4b477`, all pushed to origin).
-
-Phase 5 (FEATURES.md authoring with Max) landed at `ac4b477`. 69-row
-Max-authoritative inventory: 40 F&F-MVP / 4 ENRICHED / 20 GAME / 5
-Infrastructure.
+**Doc system v5 migration** — 8 of 11 phases shipped (commits
+`fd98f23` → Phase 6 commit). Phase 6 (SYSTEMS.md + SYSTEMS/app-shell/)
+landed this session: 26-system flat map authored, `app-shell` deep dive
+with `(meta: orchestration)` flag, doc-graph + doc-rot pipelines
+verified end-to-end. Manual-claimed only `src/main.js` per Rule 1; the
+other 25 systems get their `SYSTEMS/<slug>/README.md` authored
+progressively as feature work touches them (117 `unclaimed-src` warns
+are expected baseline and will burn down over time).
 
 **Maps to journey:** Foundational structural work; not a SCREENSAVER MVP feature itself, but unblocks coherent F&F-MVP scoping going forward. After migration completes, focus shifts to Deep-sky cleanup (highest-priority F&F-MVP work surfaced by the audit).
 
 ## Next 1-3 queued (in priority order)
 
-1. **Phase 6 — Author SYSTEMS.md + SYSTEMS/app-shell/.** ~2-3 hours
-   working-Claude time. Judgment-heavy: ~25-30 systems to enumerate,
-   Module(s) ownership decisions for ~150 source files. See pass/fail
-   criteria below.
-2. **Phase 7 — Standardize FEATURES/{autopilot,warp}.md.** ~2-3 hours.
-   Mechanical; just template conformance. Depends on Phase 6 for
-   `**Systems touched:**` slug values.
-3. **Phase 11 — Workstream Scope frontmatter + archive migration
+1. **Phase 7 — Standardize FEATURES/{autopilot,warp}.md.** ~2-3 hours.
+   Mechanical; just template conformance. Phase 6 slugs are now
+   available for the `**Systems touched:**` lines.
+2. **Phase 11 — Workstream Scope frontmatter + archive migration
    artifacts.** ~2-3 hours mostly batch. Depends on Phase 5+6 for
    feature/system slug lookups. Closes the migration.
+3. **Phase 8 — Deep-sky cleanup PM-scoping** (only remaining audit
+   item; other three resolved by 2026-05-19 code sweep).
 
 After Phase 11, migration is done. Next workstream candidate:
 **Deep-sky cleanup** (F&F-MVP / ASAP per Max — kill dice-roll arrival
@@ -38,22 +38,6 @@ path; see `FEATURES.md` Deep-sky section + per-row notes for the 9
 usage sites with KEEP/REMOVE annotations).
 
 ## Remaining migration phases — PASS/FAIL criteria
-
-### Phase 6 — SYSTEMS.md + SYSTEMS/app-shell/
-
-**PASS criteria** (all must hold):
-- [ ] `docs/SYSTEMS.md` exists with: header section, system-of-systems diagram between `<!-- AUTO-GENERATED -->` markers, Systems table between `<!-- AUTO-GENERATED -->` markers, Manual overlays section
-- [ ] `docs/SYSTEMS.md` Manual overlays carries the required app-shell asymmetry annotation (per v5 Gap O fix): note that app-shell outward calls render in the diagram but are EXCLUDED from per-system "Called by" columns
-- [ ] `docs/SYSTEMS/app-shell/README.md` exists with: Purpose, Module(s) section listing orchestration files (each with `(meta: orchestration)` flag), Interface, Wiring, History, Open questions
-- [ ] `npm run doc-graph` runs to completion without errors; produces no `error: file in multiple Module(s)...` (Rule 10 strict 1-to-1 ownership clean)
-- [ ] `npm run doc-rot` flags no NEW `unclaimed-src` issues beyond baseline (some files may legitimately remain unclaimed during incremental SYSTEMS/<sys>/ rollout — those flagged are acceptable as long as tracked in JOURNEY structural debt)
-- [ ] Initial SYSTEMS.md row list covers all top-level src/ subdirs as systems-or-grouped (no entire subdir is undocumented)
-
-**FAIL signals:**
-- doc-graph errors (file in multiple Module(s) without `(scope: ...)` qualifier)
-- SYSTEMS.md graph regions are empty after doc-graph runs
-- Module(s) lines don't parse via `npm run doc-graph` (free-form prose where parseable list expected)
-- app-shell annotation missing → readers confused by asymmetry in tables
 
 ### Phase 7 — Standardize FEATURES/{autopilot,warp}.md
 
@@ -122,6 +106,7 @@ usage sites with KEEP/REMOVE annotations).
 
 ## Recently shipped (this session arc — 2026-05-18 → 2026-05-19)
 
+- **Phase 6 — SYSTEMS.md + SYSTEMS/app-shell/** (this session) — 26-system flat map, `app-shell` deep dive, doc-graph + doc-rot verified clean. Maps every `src/**/*.js` to a system slug; auto-table grows as deep dives author progressively.
 - `ac4b477` — **Phase 5 — FEATURES.md** Max-authoritative inventory (69 rows)
 - `5a97e41` — **Phase 9 — CLAUDE.md transform** (62 → 81 lines; under 120 budget) + JOURNEY structural-debt section
 - `81c9f22` — **Phase 4 — MOOD index** wired (66 root + 3 subfolders inventoried from Pictures folder)

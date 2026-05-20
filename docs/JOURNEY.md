@@ -89,16 +89,17 @@ Per Rule 1 (no empty folders) + Rule 7 (no transitional limbo): docs
 that should exist but don't yet, with reason and target trigger.
 
 **Migrate PARKING_LOT.md content to per-system Open Questions sections:**
-- **P1 (MoonGenerator rotationSpeed)** → `SYSTEMS/generation-moon/README.md`
-  Open Questions. Trigger: when generation-moon system gets first deep dive.
+- **P1 (MoonGenerator rotationSpeed)** → `SYSTEMS/generation-planet/README.md`
+  Open Questions (moon procgen lives in `generation-planet` per Phase 6
+  clustering). Trigger: when generation-planet gets first deep dive.
 - **P2 (APPROACH overshoot at high celestialTimeMultiplier)** →
   `SYSTEMS/autopilot/README.md` Open Questions. Trigger: when autopilot
   system gets first deep dive (likely soon — autopilot is named as
   buggy in intake).
 - **P3 (Galactic features disappear when very near)** →
-  `SYSTEMS/galaxy-rendering/README.md` Open Questions. Trigger: when
-  galaxy-rendering system gets first deep dive (likely during
-  galaxy-rendering visual pass for F&F MVP).
+  `SYSTEMS/rendering-galaxy/README.md` Open Questions. Trigger: when
+  rendering-galaxy system gets first deep dive (likely during
+  galactic visual pass for F&F MVP).
 
 Delete `PARKING_LOT.md` once all three migrate.
 
@@ -108,10 +109,11 @@ Delete `PARKING_LOT.md` once all three migrate.
   when inspection-layer system gets first deep dive.
 
 **Move `PLAN_world-origin-rebasing.md` content into ROADMAP:**
-- `SYSTEMS/world-coordinates/ROADMAP.md` (authored fresh from
-  `ARCHIVE/PLAN_world-origin-rebasing_LEGACY.md` reference). Trigger:
-  when world-coordinates system gets first deep dive OR before any
-  Layer-3 ship-scale features begin (whichever comes first; this is
+- `SYSTEMS/world-origin/ROADMAP.md` (authored fresh from
+  `ARCHIVE/PLAN_world-origin-rebasing_LEGACY.md` reference; system
+  slug is `world-origin` per Phase 6 clustering). Trigger: when
+  world-origin system gets first deep dive OR before any Layer-3
+  ship-scale features begin (whichever comes first; this is
   architectural prerequisite).
 
 **Archive scene-inspection walkthroughs as canonical SYSTEMS doc inputs:**
