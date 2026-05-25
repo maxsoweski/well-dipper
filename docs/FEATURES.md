@@ -90,7 +90,7 @@ Commit history is supporting evidence only, not authority.
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
 | Background starfield (procedural; density varies per galactic position) | F&F-MVP | shipped-confirmed ("strongest thing in the app, minus nebulae" — Max) | — | — |
-| Galactic rendering polish (combined: glow + GMC angular artifacts; bar artificial; color gradient should warm toward center) | F&F-MVP | in-flight | — | — |
+| Galactic rendering polish (combined: glow + GMC angular artifacts; bar artificial; color gradient should warm toward center) | F&F-MVP | in-flight | — | [FEATURES/galactic-rendering.md](FEATURES/galactic-rendering.md) |
 
 ## Nebulae
 
