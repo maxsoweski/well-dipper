@@ -4,6 +4,10 @@
 > system types that need musical/aesthetic identity. Sister doc to the
 > existing `Well-Dipper-Music-Guide.docx` (in repo root) and Bible §2 *Sound
 > Design / Music Tracks*.
+
+**Naming note (2026-05-25):** Nav computer Level 4 was renamed
+**COLUMN → PRISM** on 2026-05-25; the lone reference here has been
+updated. See `docs/FEATURES/nav-computer.md`.
 >
 > Vibe primer (from `docs/GAME_BIBLE.md` §2): late-90s retro synth — sparse
 > arrangements, warm drones, FM/analog synth pads in quiet moments;
@@ -335,7 +339,7 @@ IN-SYSTEM ───────► explore               (one-shot with 2min gap
 ## Questions to resolve with Max before final mix
 
 1. **`titleDismiss` SFX** — currently muted in code (`main.js:1701`). Keep it muted, or wire it back in once Christian delivers a final?
-2. **`cycle` SFX** — only fires from the sound-test panel today. Is there an intended in-game trigger we haven't wired up (e.g., palette-mode cycling, page-flip in nav-computer column view)?
+2. **`cycle` SFX** — only fires from the sound-test panel today. Is there an intended in-game trigger we haven't wired up (e.g., palette-mode cycling, page-flip in nav-computer prism view)?
 3. **`newSystem` SFX vs `warpExit`** — both could plausibly own the "you've arrived" beat. Confirm the split: is `newSystem` for non-warp arrivals (debug spawn, splash-D-hold)?
 4. **`deepsky` track wiring** — should this fire for *all* distant deep-sky destinations (external galaxies + distant globulars), or only external galaxies? Code path is `warpRevealSystem` (`main.js:5032`), and currently nothing plays — `explore` is also not scheduled for deep-sky reveals.
 5. **`warp-charge` and `arrival` stings** — confirm they should layer over their corresponding SFX (`warpCharge`, `warpExit`), not replace them.

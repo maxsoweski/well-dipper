@@ -1,5 +1,9 @@
 # Test Plan: Autopilot Nav Computer Sequence
 
+**Naming note (2026-05-25):** Nav computer Level 4 was renamed
+**COLUMN → PRISM** on 2026-05-25. References to the level in this
+plan have been updated. See `docs/FEATURES/nav-computer.md`.
+
 ## Feature
 When autopilot finishes touring a star system, the nav computer opens and visually drills down through galaxy levels before warping to a new destination. Showcases different parts of the Milky Way.
 
@@ -12,7 +16,7 @@ When autopilot finishes touring a star system, the nav computer opens and visual
 
 ### T1: Basic sequence fires after tour completion
 - **Steps:** Let autopilot tour an entire system (star + all planets + moons)
-- **Expected:** Nav computer opens automatically. Shows galaxy view (full spiral). After ~2.5s, drills to sector. After ~2s, drills to region. After ~2s, drills to column (3D stars). After ~2.5s, zooms into a star. After ~2s, nav closes and warp begins.
+- **Expected:** Nav computer opens automatically. Shows galaxy view (full spiral). After ~2.5s, drills to sector. After ~2s, drills to region. After ~2s, drills to prism (3D stars). After ~2.5s, zooms into a star. After ~2s, nav closes and warp begins.
 - **Total sequence:** ~13-15 seconds from nav open to warp start
 - **Pass criteria:** All 5 zoom levels visible in sequence, warp fires
 
@@ -37,7 +41,7 @@ When autopilot finishes touring a star system, the nav computer opens and visual
   - Galaxy view: Full Milky Way spiral visible
   - Sector view: Zoomed into one sector of the grid
   - Region view: Zoomed into one tile within the sector
-  - Column view: 3D star field with stars loading in
+  - Prism view: 3D star field with stars loading in
   - System view: Star's planetary system visible briefly
 - **Pass criteria:** Each level renders correctly, no blank/black frames
 
@@ -62,7 +66,7 @@ When autopilot finishes touring a star system, the nav computer opens and visual
 - **Pass criteria:** Touch overlays don't interfere, nav renders in overlay
 
 ## Known Limitations
-- Stars in column view load asynchronously — sequence retries up to 10 times (3s) if stars haven't loaded
+- Stars in prism view load asynchronously — sequence retries up to 10 times (3s) if stars haven't loaded
 - If no stars found in the target region after retries, sequence falls back to old random warp behavior
 - The nav computer overlay keyboard listeners activate during the sequence — intercepted input may need tuning
 - Destination list is static (16 hardcoded galactic regions) — could be dynamic based on galaxy model density

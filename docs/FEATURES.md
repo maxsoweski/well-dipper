@@ -191,7 +191,7 @@ Five distinct broken pieces from intake 2026-05-18:
 5. Second-half-not-rendering — dual-portal path relies entirely on WarpPortal mesh visibility post-INSIDE crossing
 
 ### Nav computer — Levels 2 + 3 (mid-zoom)
-Per intake: *"as you zoom closer and closer to the column view, you actually start to resolve more detail of the galaxy. We have not figured out a way to make that work in the nav screen... We don't have a working model for that."* Levels 2-3 currently show zoomed-in versions of the same Level 1 image. Unsolved design problem, not a bug.
+Per intake: *"as you zoom closer and closer to the column [PRISM] view, you actually start to resolve more detail of the galaxy. We have not figured out a way to make that work in the nav screen... We don't have a working model for that."* Levels 2-3 currently show zoomed-in versions of the same Level 1 image. Unsolved design problem, not a bug. (Editorial note: Level 4 renamed COLUMN → PRISM on 2026-05-25; the quoted "column" preserves Max's original word.)
 
 ### Deep-sky dice-roll mechanic (legacy state vs cleanup)
 **Code currently has dice-roll arrival alive at 15% default** (per `main.js:2918-2922` + `DestinationPicker.WEIGHTS`). Intake 2026-05-18 articulated the should-be: kill the dice-roll, keep title/gallery/Easter-egg uses only. **No workstream exists yet** to do this cleanup. Captured as the "Deep-sky cleanup" F&F-MVP row above; ASAP priority.

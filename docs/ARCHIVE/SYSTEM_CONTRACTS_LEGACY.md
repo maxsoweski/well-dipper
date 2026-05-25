@@ -2,6 +2,13 @@
 
 How the systems work together. Every feature, review, and code change must respect these contracts.
 
+**Naming note (2026-05-25):** Nav computer Level 4 was renamed
+**COLUMN → PRISM** on 2026-05-25. The Level-4 row in this doc has
+been updated. Unrelated table-column references (e.g. "autopilot
+column of §5.3 Drive States") are left as-is — those refer to
+columns in tables, not the nav level. See
+`docs/FEATURES/nav-computer.md`.
+
 ---
 
 ## The Big Picture
@@ -194,7 +201,7 @@ The nav computer is a 5-level zoom interface into the galaxy model:
 | 0 | Galaxy | GalacticMap density rendering |
 | 1 | Sector | GalacticMap sector grid |
 | 2 | Region | GalacticMap tile subdivision |
-| 3 | Column | HashGridStarfield.findStarsInColumn() — real stars in 3D |
+| 3 | Prism | HashGridStarfield.findStarsInPrism() — real stars in 3D |
 | 4 | System | StarSystemGenerator from star seed (or actual spawned data for current system) |
 
 **The nav computer is scene-agnostic.** It knows galactic coordinates, star seeds, planet indices. It does NOT know about Three.js meshes, cameras, or scene state. It communicates with the game through an action contract:

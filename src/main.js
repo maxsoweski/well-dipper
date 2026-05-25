@@ -2065,7 +2065,7 @@ function startIntroSequence() {
  * state the nav computer / glow layer / debug panel need. This bypasses
  * the normal warp flow which is what sets `currentGalaxyStar` /
  * `_currentSystemName` under normal gameplay. Without those, the nav
- * computer can't identify the current system and opens to column view.
+ * computer can't identify the current system and opens to prism view.
  *
  * @param {Object} knownSys — entry from KnownSystems.findAt()
  * @param {{x:number,y:number,z:number}} pos — galactic position (kpc)

@@ -4,11 +4,11 @@
  * Instead of always doing the same full drill-down, the sequence randomly picks
  * a NAVIGATION STYLE that determines how the nav computer is used:
  *
- *   "full_journey"  — Galaxy → Sector → Region → Column → Star (the grand tour)
- *   "sector_hop"    — Sector → Region → Column → Star (skip galaxy, faster)
- *   "column_scroll" — Column view, scroll Y axis up/down, then pick a star
- *   "nearby_pick"   — Stay in current column, just pick a different star quickly
- *   "region_browse"  — Region → Column → Star (mid-level zoom)
+ *   "full_journey"  — Galaxy → Sector → Region → Prism → Star (the grand tour)
+ *   "sector_hop"    — Sector → Region → Prism → Star (skip galaxy, faster)
+ *   "prism_scroll" — Prism view, scroll Y axis up/down, then pick a star
+ *   "nearby_pick"   — Stay in current prism, just pick a different star quickly
+ *   "region_browse"  — Region → Prism → Star (mid-level zoom)
  *
  * This creates visual diversity in the screensaver — sometimes we see the full
  * galaxy, sometimes we just scroll through local stars, sometimes we hop sectors.
@@ -22,9 +22,9 @@ import { simRandom } from '../core/SimRandom.js';
 const NAV_STYLES = [
   { name: 'full_journey',  weight: 3 },  // grand tour through all levels
   { name: 'sector_hop',    weight: 2 },  // skip galaxy, start at sector
-  { name: 'column_scroll', weight: 3 },  // scroll through column, pick star
-  { name: 'nearby_pick',   weight: 2 },  // quick pick from current column
-  { name: 'region_browse', weight: 2 },  // sector → region → column
+  { name: 'prism_scroll', weight: 3 },  // scroll through prism, pick star
+  { name: 'nearby_pick',   weight: 2 },  // quick pick from current prism
+  { name: 'region_browse', weight: 2 },  // sector → region → prism
 ];
 const TOTAL_WEIGHT = NAV_STYLES.reduce((s, ns) => s + ns.weight, 0);
 
@@ -64,7 +64,7 @@ export class AutopilotNavSequence {
     const style = this._pickStyle();
     this._lastStyle = style;
 
-    // For nearby_pick and column_scroll, we can use a destination near the player
+    // For nearby_pick and prism_scroll, we can use a destination near the player
     // For others, pick a diverse galactic destination
     const needsFarDest = (style === 'full_journey' || style === 'sector_hop' || style === 'region_browse');
     const dest = needsFarDest ? this._pickDestination() : this._pickNearbyDestination();
@@ -106,8 +106,8 @@ export class AutopilotNavSequence {
       case 'region_browse':
         this._startAtRegion(dest);
         break;
-      case 'column_scroll':
-        this._startColumnScroll(dest);
+      case 'prism_scroll':
+        this._startPrismScroll(dest);
         break;
       case 'nearby_pick':
         this._startNearbyPick(dest);
@@ -117,7 +117,7 @@ export class AutopilotNavSequence {
     }
   }
 
-  // ── Style: Full Journey (Galaxy → Sector → Region → Column → Star) ──
+  // ── Style: Full Journey (Galaxy → Sector → Region → Prism → Star) ──
 
   _startAtGalaxy(dest) {
     this._nav._levelIndex = 0;
@@ -126,7 +126,7 @@ export class AutopilotNavSequence {
     this._nav._viewStack = [];
     this._nav._hoveredTile = null;
     this._nav._localStars = [];
-    this._nav._resetColumnLoad();
+    this._nav._resetPrismLoad();
     if (this._soundEngine) this._soundEngine.play('navDrill0');
 
     // Pause at galaxy (2-3s)
@@ -143,7 +143,7 @@ export class AutopilotNavSequence {
     this._nav._viewStack = [undefined, { center: { x: sector.cx, z: sector.cz }, size: sector.size }];
     this._nav._hoveredTile = null;
     this._nav._localStars = [];
-    this._nav._resetColumnLoad();
+    this._nav._resetPrismLoad();
     if (this._soundEngine) this._soundEngine.play('navDrill1');
 
     // Pause at sector (1.5-2.5s), then hover+drill to region
@@ -166,18 +166,18 @@ export class AutopilotNavSequence {
     ];
     this._nav._hoveredTile = null;
     this._nav._localStars = [];
-    this._nav._resetColumnLoad();
+    this._nav._resetPrismLoad();
     if (this._soundEngine) this._soundEngine.play('navDrill2');
 
-    // Pause at region (1.5-2s), then hover+drill to column
-    this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
+    // Pause at region (1.5-2s), then hover+drill to prism
+    this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillPrism(dest, region.cx, region.cz, region.size));
   }
 
-  // ── Style: Column Scroll (open column, scroll Y, pick star) ──
+  // ── Style: Prism Scroll (open prism, scroll Y, pick star) ──
 
-  _startColumnScroll(dest) {
-    // Jump straight to column view at destination
-    this._setupColumnView(dest);
+  _startPrismScroll(dest) {
+    // Jump straight to prism view at destination
+    this._setupPrismView(dest);
     if (this._soundEngine) this._soundEngine.play('navDrill3');
 
     // Wait for stars to load
@@ -213,8 +213,8 @@ export class AutopilotNavSequence {
   // ── Style: Nearby Pick (quick pick from current neighborhood) ──
 
   _startNearbyPick(dest) {
-    // Open directly to column view near current position
-    this._setupColumnView(dest);
+    // Open directly to prism view near current position
+    this._setupPrismView(dest);
     if (this._soundEngine) this._soundEngine.play('navDrill3');
 
     // Short pause (1.5s) then pick
@@ -284,12 +284,12 @@ export class AutopilotNavSequence {
       this._nav._autoCursor = null;
       if (this._soundEngine) this._soundEngine.play('navDrill2');
 
-      // Pause at region (1.5-2s), then hover target tile and drill to column
-      this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillColumn(dest, region.cx, region.cz, region.size));
+      // Pause at region (1.5-2s), then hover target tile and drill to prism
+      this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillPrism(dest, region.cx, region.cz, region.size));
     });
   }
 
-  _hoverThenDrillColumn(dest, regionCx, regionCz, regionSize) {
+  _hoverThenDrillPrism(dest, regionCx, regionCz, regionSize) {
     if (this._aborted) return;
 
     // Simulate hover + cursor on the target tile in region view
@@ -301,13 +301,13 @@ export class AutopilotNavSequence {
     this._nav._hoveredTile = { col, row };
     this._setCursorAtTile(col, row, gn, regionCx, regionCz, regionSize);
 
-    // Hover + cursor visible for 700ms, then drill to column
+    // Hover + cursor visible for 700ms, then drill to prism
     this._delay(700, () => {
       if (this._aborted) return;
       this._nav._hoveredTile = null;
       this._nav._autoCursor = null;
 
-      console.log(`[NAV-SEQ] Drilling to column: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) regionSize=${regionSize.toFixed(4)} currentLevel=${this._nav._levelIndex}`);
+      console.log(`[NAV-SEQ] Drilling to prism: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) regionSize=${regionSize.toFixed(4)} currentLevel=${this._nav._levelIndex}`);
 
       this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
       // Use adaptive cube sizing like the real nav (targets ~150 stars)
@@ -316,7 +316,7 @@ export class AutopilotNavSequence {
       this._nav._localRadius = 0.0015;
       this._nav._localGridCell = 0.001;
       this._nav._localStars = [];
-      this._nav._resetColumnLoad();
+      this._nav._resetPrismLoad();
 
       // Tilt from top-down to angled (like entering 3D view)
       this._nav._localRotX = Math.PI / 2;
@@ -342,10 +342,10 @@ export class AutopilotNavSequence {
     });
   }
 
-  /** Set up column view directly (no animation from 2D level) */
-  _setupColumnView(dest) {
+  /** Set up prism view directly (no animation from 2D level) */
+  _setupPrismView(dest) {
     const cubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || 0.005);
-    console.log(`[NAV-SEQ] _setupColumnView: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) prevLevel=${this._nav._levelIndex} cubeSize=${cubeSize.toFixed(4)}`);
+    console.log(`[NAV-SEQ] _setupPrismView: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) prevLevel=${this._nav._levelIndex} cubeSize=${cubeSize.toFixed(4)}`);
     this._nav._levelIndex = 3;
     this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
     this._nav._localCubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || 0.005);
@@ -354,10 +354,10 @@ export class AutopilotNavSequence {
     this._nav._localRotX = 0.5;
     this._nav._localRotY = 0;
     this._nav._localStars = [];
-    this._nav._resetColumnLoad();
+    this._nav._resetPrismLoad();
 
-    // Set view state so the column renders properly
-    // _viewStack[2] must have center matching the column position
+    // Set view state so the prism renders properly
+    // _viewStack[2] must have center matching the prism position
     // (used by _ensureStarsLoaded for block center)
     this._nav._viewCenter = { x: dest.x, z: dest.z };
     this._nav._viewSize = 0.01;
@@ -378,7 +378,7 @@ export class AutopilotNavSequence {
 
     console.log(`[NAV-SEQ] _selectStar retry=${retries} stars=${stars?.length || 0} level=${levelIdx} anim=${hasAnim} dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) localCenter=(${this._nav._localCenter?.x?.toFixed(2)},${this._nav._localCenter?.z?.toFixed(2)}) viewStack[2]=${JSON.stringify(this._nav._viewStack?.[2]?.center)}`);
 
-    // If still animating or not on column level, wait
+    // If still animating or not on prism level, wait
     if ((hasAnim || levelIdx !== 3) && retries < 20) {
       this._delay(300, () => this._selectStar(dest, retries + 1));
       return;
@@ -542,7 +542,7 @@ export class AutopilotNavSequence {
     return dest;
   }
 
-  /** Pick a destination near the current position (for column_scroll / nearby_pick) */
+  /** Pick a destination near the current position (for prism_scroll / nearby_pick) */
   _pickNearbyDestination() {
     const px = this._playerPos.x || 8;
     const pz = this._playerPos.z || 0;

@@ -6,6 +6,13 @@ context limit. Destined for migration into the new doc structure (step 3
 of the structural overhaul). **Do not treat this as a finished feature
 inventory.** It's the source material for one.
 
+**Naming note (2026-05-25):** Nav computer Level 4 was renamed
+**COLUMN → PRISM** on 2026-05-25. Section headers and prose in this
+doc have been updated. Max-verbatim `>` quoted blocks preserve the
+original "column" wording (his actual words) with an inline `[PRISM]`
+editorial mark where Level 4 is referenced. See
+`docs/FEATURES/nav-computer.md` for the rename context.
+
 **Why this file exists:** The session compact summarized Max's feature
 status but lost specifics that matter for how we move forward. Max
 explicitly asked: "this is important information to have documented
@@ -248,12 +255,12 @@ Max walked through each zoom level:
 **Status:** SHIPPED-quality. The one nav computer view Max is happy
 with.
 
-### Zoom level 2 — between full-galaxy and column view
+### Zoom level 2 — between full-galaxy and PRISM view
 
 > "The zoomed in version of the individual cells between that
-> resolution and the column view need work. Right now, they're just
+> resolution and the column [PRISM] view need work. Right now, they're just
 > zoomed in versions of that one image. Really, what I would want is a
-> way that as you zoom closer and closer to the column view, you
+> way that as you zoom closer and closer to the column [PRISM] view, you
 > actually start to resolve more detail of the galaxy. We have not
 > figured out a way to make that work in the nav screen. We figured
 > out a pretty good image, like a PNG that we created of the galaxy
@@ -266,10 +273,10 @@ with.
 **Status:** UNSOLVED design problem. Not a polish item — Max says
 explicitly there is no working model for multi-resolution detail.
 
-### Zoom level 3 — column view (most zoomed in)
+### Zoom level 3 — PRISM view (most zoomed in)
 
 > "Speaking of the navigation computer, there's quite a few bugs that
-> have to do with the column view. We need to work that out."
+> have to do with the column [PRISM] view. We need to work that out."
 
 **Status:** Buggy. Specific bugs not enumerated — needs Max walkthrough.
 

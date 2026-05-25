@@ -20,8 +20,8 @@ import { simClockMs } from '../core/SimClock.js';
  * Panning supported at all 2D levels. Player position always visible.
  */
 
-const LEVELS = ['galaxy', 'sector', 'region', 'column', 'system'];
-const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'COLUMN', 'SYSTEM'];
+const LEVELS = ['galaxy', 'sector', 'region', 'prism', 'system'];
+const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
 const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
 
 function gridNForLevel(levelIndex) {
@@ -38,7 +38,7 @@ export class NavComputer {
     this._sectors = new GalacticSectors(galacticMap, 'well-dipper-galaxy-1');
 
     // Current level
-    this._levelIndex = 3; // start at COLUMN
+    this._levelIndex = 3; // start at PRISM
 
     // ── 2D view state (shared by levels 0-3) ──
     this._viewCenter = { x: 8, z: 0 }; // center of current 2D view (kpc)
@@ -57,15 +57,15 @@ export class NavComputer {
     this._localRotY = 0.3;
     this._hoveredLocalStar = null;
 
-    // ── On-demand column loading ──
+    // ── On-demand prism loading ──
     // Only loads stars within the visible Y range. Expands as user scrolls.
     this._loadedYMin = null; // lowest Y (kpc) we've queried
     this._loadedYMax = null; // highest Y (kpc) we've queried
     this._loadedSeen = new Set(); // dedup keys for stars already in _localStars
-    this._loadBlockCenter = null; // block center for current column
-    this._loadBlockHalf = null;   // block half-size for current column
+    this._loadBlockCenter = null; // block center for current prism
+    this._loadBlockHalf = null;   // block half-size for current prism
     this._bgLoadTimer = null;     // background expansion timer
-    this._estimatedBlockStars = null; // estimated total stars in full column
+    this._estimatedBlockStars = null; // estimated total stars in full prism
 
     // ── Player ──
     this._playerX = 8;
@@ -75,11 +75,11 @@ export class NavComputer {
     this._currentSector = null;
 
     // ── Warp target bridge ──
-    this._selectedNavStar = null;   // star selected BY user in column view { wx, wy, wz, seed, name }
+    this._selectedNavStar = null;   // star selected BY user in prism view { wx, wy, wz, seed, name }
     this._externalTarget = null;    // warp target SET from outside { x, y, z } in galactic kpc
 
     // ── System view (level 4) ──
-    this._systemStar = null;        // star data from column view click
+    this._systemStar = null;        // star data from prism view click
     this._systemData = null;        // StarSystemGenerator.generate() result
     this._hoveredBody = null;       // planet/star under cursor { type, index }
     this._systemRotX = 0.5;         // 3D view rotation (elevation)
@@ -218,7 +218,7 @@ export class NavComputer {
     document.removeEventListener('keydown', this._onKeyDown, true);
     document.removeEventListener('keyup', this._onKeyUp, true);
     this._heldKeys.clear();
-    this._resetColumnLoad();
+    this._resetPrismLoad();
   }
 
   /**
@@ -392,7 +392,7 @@ export class NavComputer {
     // Fixed grid cell size — 1 pc (0.001 kpc), like tiles on a floor
     this._localGridCell = 0.001;
     this._localStars = [];
-    this._resetColumnLoad();
+    this._resetPrismLoad();
     this._selectedNavStar = null; // clear any previous selection
 
     // Set up the view stack so all levels are centered on player
@@ -490,7 +490,7 @@ export class NavComputer {
     const w = this._canvas.width;
     const h = this._canvas.height;
 
-    // System zoom animation (column → system transition)
+    // System zoom animation (prism → system transition)
     if (this._systemZoomAnim) {
       const za = this._systemZoomAnim;
       const elapsed = simClockMs() - za.startTime;
@@ -507,7 +507,7 @@ export class NavComputer {
       }
     }
 
-    // Tilt animation (region → column transition)
+    // Tilt animation (region → prism transition)
     if (this._tiltAnim && this._levelIndex === 3) {
       if (!this._tiltAnim.startTime) this._tiltAnim.startTime = simClockMs();
       const elapsed = simClockMs() - this._tiltAnim.startTime;
@@ -517,7 +517,7 @@ export class NavComputer {
       if (t >= 1.0) this._tiltAnim = null;
     }
 
-    // WASD panning in column view
+    // WASD panning in prism view
     if (this._levelIndex === 3 && this._heldKeys.size > 0) {
       const panSpeed = this._localRadius * 0.01; // slow enough to see individual grid lines move
       const cosY = Math.cos(this._localRotY);
@@ -541,7 +541,7 @@ export class NavComputer {
       if (this._heldKeys.has('KeyR')) { this._localCenter.y += panSpeed; }
       if (this._heldKeys.has('KeyF')) { this._localCenter.y -= panSpeed; }
 
-      // Full column is queried once (all slices) — no re-query needed on Y scroll
+      // Full prism is queried once (all slices) — no re-query needed on Y scroll
 
       if (dx !== 0 || dz !== 0) {
         this._localCenter.x += dx;
@@ -567,7 +567,7 @@ export class NavComputer {
     const level = LEVELS[this._levelIndex];
     if (level === 'system') {
       this._renderSystem(ctx, w, h);
-    } else if (level === 'column') {
+    } else if (level === 'prism') {
       this._renderLocal(ctx, w, h);
     } else {
       this._render2DLevel(ctx, w, h);
@@ -584,7 +584,7 @@ export class NavComputer {
   handleEscape() {
     if (this._anim) return true; // ignore during animation
     if (this._levelIndex > 0) {
-      // System view: planet detail → system overview → column
+      // System view: planet detail → system overview → prism
       if (this._levelIndex === 4) {
         this._clearCommitSelection();
         if (this._systemMode === 'planet') {
@@ -593,7 +593,7 @@ export class NavComputer {
           return true;
         }
         this._levelIndex = 3;
-        // Stash binary status on the column star so column view can show a double-dot
+        // Stash binary status on the prism star so prism view can show a double-dot
         if (this._systemData?.isBinary && this._systemStar) {
           const match = this._localStars.find(s => s.seed === this._systemStar.seed);
           if (match) {
@@ -618,7 +618,7 @@ export class NavComputer {
           prevLevel, 400
         );
       } else {
-        // Instant switch (e.g., column→region, or missing stack entry)
+        // Instant switch (e.g., prism→region, or missing stack entry)
         if (this._onDrillSound) this._onDrillSound(prevLevel);
         this._levelIndex = prevLevel;
         this._applyLevelView();
@@ -626,7 +626,7 @@ export class NavComputer {
       }
       this._hoveredTile = null;
       this._localStars = [];
-      this._resetColumnLoad();
+      this._resetPrismLoad();
       return true;
     }
     return false;
@@ -1009,7 +1009,7 @@ export class NavComputer {
 
     // 3D projection — orbit around the block center, not the camera position.
     // The camera can WASD around within the block, but rotation always pivots
-    // around the column's central axis.
+    // around the prism's central axis.
     const blockCenter = this._viewStack[2]?.center || { x: cx, z: cz };
     const orbitX = blockCenter.x;
     const orbitZ = blockCenter.z;
@@ -1162,7 +1162,7 @@ export class NavComputer {
     //    Centauri — _currentSystemName is set from main.js and the real
     //    star catalog merge gives _localStars entries the same name).
     // 2. Fall back to _findNearestStar() for hash grid systems where the
-    //    generated name might differ between main.js and the column view.
+    //    generated name might differ between main.js and the prism view.
     //
     // Position-based matching fails here because the player's galactic
     // coordinates (_playerX/Y/Z) don't exactly match the hash grid star
@@ -1257,7 +1257,7 @@ export class NavComputer {
       }
     }
 
-    // Player marker — only if no star at the player's position (column not
+    // Player marker — only if no star at the player's position (prism not
     // loaded yet, or player between systems). Otherwise the cyan "you are
     // here" ring on the matched star already shows the player's location.
     if (!currentSystemStar) {
@@ -1295,8 +1295,8 @@ export class NavComputer {
       ctx.beginPath(); ctx.arc(sx, sy, 8, 0, Math.PI * 2); ctx.stroke();
     }
 
-    // Unified column minimap
-    this._renderColumnMinimap(ctx, w, drawH);
+    // Unified prism minimap
+    this._renderPrismMinimap(ctx, w, drawH);
   }
 
   // ════════════════════════════════════════════════════
@@ -2153,7 +2153,7 @@ export class NavComputer {
     ctx.textAlign = 'left';
   }
 
-  _renderColumnMinimap(ctx, w, h) {
+  _renderPrismMinimap(ctx, w, h) {
     // Guard: skip minimap when no stars are loaded
     if (this._localStars.length === 0) return;
 
@@ -2175,9 +2175,9 @@ export class NavComputer {
       yRange = 0.01;
     }
 
-    // Column minimap dimensions — tall and narrow, like the actual column shape
+    // Prism minimap dimensions — tall and narrow, like the actual prism shape
     const xzSize = 60;  // width of XZ plane representation
-    const ySize = 160;   // height of the full column
+    const ySize = 160;   // height of the full prism
     const mapX = w - xzSize - 20;
     const mapY = h - ySize - 60;
 
@@ -2188,18 +2188,18 @@ export class NavComputer {
     ctx.font = '9px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.textAlign = 'center';
-    ctx.fillText('COLUMN', mapX + xzSize / 2, mapY - 4);
+    ctx.fillText('PRISM', mapX + xzSize / 2, mapY - 4);
 
-    // Draw the column as a 3D-ish shape: front face + top face
+    // Draw the prism as a 3D-ish shape: front face + top face
     // Front face = XZ plane seen from the side (shows height + one horizontal axis)
     // We'll show it as a rectangle: width = XZ extent, height = Y extent
 
-    // Column outline
+    // Prism outline
     ctx.strokeStyle = 'rgba(100, 180, 255, 0.2)';
     ctx.lineWidth = 1;
     ctx.strokeRect(mapX, mapY, xzSize, ySize);
 
-    // Galactic plane line (y=0) — horizontal line across the column
+    // Galactic plane line (y=0) — horizontal line across the prism
     const planeScreenY = mapY + ySize * (1 - (0 - minStarY) / yRange);
     ctx.strokeStyle = 'rgba(100, 200, 150, 0.5)';
     ctx.lineWidth = 1;
@@ -2210,7 +2210,7 @@ export class NavComputer {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // The XZ position maps to horizontal position in the column
+    // The XZ position maps to horizontal position in the prism
     // We project both X and Z onto one horizontal axis using the camera angle
     // so the minimap "rotates" with your view
     const camAngle = this._localRotY;
@@ -2289,7 +2289,7 @@ export class NavComputer {
   }
 
   // ════════════════════════════════════════════════════
-  // ON-DEMAND COLUMN LOADING
+  // ON-DEMAND PRISM LOADING
   // ════════════════════════════════════════════════════
 
   static _SPECTRAL_COLORS = {
@@ -2357,7 +2357,7 @@ export class NavComputer {
 
     if (halfY <= 0) return;
 
-    const stars = HashGridStarfield.findStarsInColumn(
+    const stars = HashGridStarfield.findStarsInPrism(
       this._gm, { x: bc.x, y: centerY, z: bc.z }, bh, halfY, 50000
     );
 
@@ -2463,7 +2463,7 @@ export class NavComputer {
       if (expanded) {
         this._scheduleBgExpand(); // continue expanding
       } else {
-        console.log(`[NAV] Column fully loaded: ${this._localStars.length} stars`);
+        console.log(`[NAV] Prism fully loaded: ${this._localStars.length} stars`);
       }
     }, 0);
   }
@@ -2475,8 +2475,8 @@ export class NavComputer {
     }
   }
 
-  /** Full reset — clears all loaded stars and column state. */
-  _resetColumnLoad() {
+  /** Full reset — clears all loaded stars and prism state. */
+  _resetPrismLoad() {
     this._cancelBgExpand();
     this._loadedYMin = null;
     this._loadedYMax = null;
@@ -2487,7 +2487,7 @@ export class NavComputer {
   }
 
   /**
-   * Estimate total star count in the full block column by integrating
+   * Estimate total star count in the full block prism by integrating
    * the density model. Fast — just samples the potential, no hash grid.
    */
   _estimateBlockStarCount(blockCenter, blockHalf) {
@@ -2540,7 +2540,7 @@ export class NavComputer {
     // Pulsing cyan ring + center dot. Cyan (#00d4ff) distinguishes "you
     // are here" from the green (#00ff80) warp-target markers across all
     // nav levels. Cross lines were removed — they overlapped star icons
-    // in column view and read as a "weird reticle over the star".
+    // in prism view and read as a "weird reticle over the star".
     const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.2;
     ctx.strokeStyle = '#00d4ff';
     ctx.lineWidth = 1.5;
@@ -2880,7 +2880,7 @@ export class NavComputer {
     // Dragging
     if (this._dragging) {
       if (this._levelIndex === 3) {
-        // Column: orbit
+        // Prism: orbit
         const dx = p.x - this._dragStartX;
         const dy = p.y - this._dragStartY;
         this._localRotY = this._dragStartRotY + dx * 0.008;
@@ -3001,7 +3001,7 @@ export class NavComputer {
         this._hoveredTile = null;
         if (idx !== 3 && idx !== 4) {
           this._localStars = [];
-          this._resetColumnLoad();
+          this._resetPrismLoad();
         }
       }
       return;
@@ -3093,7 +3093,7 @@ export class NavComputer {
       return;
     }
 
-    // Column level — click a star to enter system view with zoom animation
+    // Prism level — click a star to enter system view with zoom animation
     if (this._levelIndex === 3 && this._hoveredLocalStar) {
       const star = this._hoveredLocalStar.star;
       console.log('[NAV] Entering system view for:', star.name, 'seed:', star.seed, 'type:', star.spectral);
@@ -3107,7 +3107,7 @@ export class NavComputer {
       this._systemMode = 'system';
       this._systemZoom = 1.0; // reset zoom for new system
       this._clearCommitSelection();
-      // Zoom animation: shrink column view radius toward the star, then switch
+      // Zoom animation: shrink prism view radius toward the star, then switch
       this._systemZoomAnim = {
         startTime: simClockMs(),
         duration: 400,
@@ -3161,7 +3161,7 @@ export class NavComputer {
         );
         this._hoveredTile = null;
       } else {
-        // Region (level 2) → Column (level 3) — zoom into tile then switch
+        // Region (level 2) → Prism (level 3) — zoom into tile then switch
         this._localCenter = { x: newCx, y: this._playerY, z: newCz };
         // Update viewStack so orbit center matches the tile center
         this._viewStack[2] = { center: { x: newCx, z: newCz }, size: tileSize };
@@ -3170,11 +3170,11 @@ export class NavComputer {
         this._localRadius = 0.0015;
         this._localGridCell = 0.001;
         this._localStars = [];
-        this._resetColumnLoad();
-        // Start column view top-down, then tilt to default angle
+        this._resetPrismLoad();
+        // Start prism view top-down, then tilt to default angle
         this._localRotX = Math.PI / 2; // top-down (matches 2D view)
         this._tiltAnim = { startTime: null, duration: 600, from: Math.PI / 2, to: 0.5 };
-        // Animate zoom into the tile, then switch to column at completion
+        // Animate zoom into the tile, then switch to prism at completion
         const localSize = tileSize * 0.5;
         if (this._onDrillSound) this._onDrillSound(3);
         this._startDrillAnim(

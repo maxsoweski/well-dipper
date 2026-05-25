@@ -591,7 +591,7 @@ export class HashGridStarfield {
   }
 
   /**
-   * Find all stars in a column: bounded XZ (block edges), tall Y (full disk).
+   * Find all stars in a prism: bounded XZ (block edges), tall Y (full disk).
    *
    * @param {GalacticMap} galacticMap
    * @param {{ x, y, z }} center
@@ -599,7 +599,7 @@ export class HashGridStarfield {
    * @param {number} yHalf — half-size in Y (kpc), typically much larger
    * @param {number} [maxResults=3000]
    */
-  static findStarsInColumn(galacticMap, center, xzHalf, yHalf, maxResults = 3000) {
+  static findStarsInPrism(galacticMap, center, xzHalf, yHalf, maxResults = 3000) {
     const cx = center.x, cy = center.y || 0, cz = center.z || 0;
     const results = [];
 

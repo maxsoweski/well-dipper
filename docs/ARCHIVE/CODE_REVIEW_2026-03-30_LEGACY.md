@@ -4,10 +4,15 @@
 **Date:** 2026-03-30
 **Files changed:** `src/ui/NavComputer.js`, `src/main.js`
 
+**Naming note (2026-05-25):** Nav computer Level 4 was renamed
+**COLUMN → PRISM** on 2026-05-25. This historical review references
+the level via "column"/"COLUMN"; those have been updated in prose to
+match current naming. See `docs/FEATURES/nav-computer.md`.
+
 **Summary of changes:**
 - Binary star rendering in system view (two offset stars, orbit rings, companion glow)
-- Binary star double-dot indicator in column view
-- Binary info in hover tooltips (column + system)
+- Binary star double-dot indicator in prism view
+- Binary info in hover tooltips (prism + system)
 - Ship position diamond indicator + trajectory line (system view + planet detail)
 - Moon orbit rendering changed from screen-space circles to 3D-projected orbits
 - Planet labels changed from type name to designation (e.g. "Vega-3")
@@ -60,7 +65,7 @@ When a star is clicked, `_selectedBody = { type: 'star' }` (no index). But `_hov
 
 ### [CLEANUP] Binary stash not triggered on tab switch
 **File:** `src/ui/NavComputer.js:2743-2750`
-When the user clicks the COLUMN tab to leave system view (instead of pressing ESC), the binary stash code (lines 526-532) does not execute. The `_systemStar` and `_systemData` are not cleared either. This means the column view won't show the binary double-dot indicator for that star if the user navigated away via tab.
+When the user clicks the PRISM tab to leave system view (instead of pressing ESC), the binary stash code (lines 526-532) does not execute. The `_systemStar` and `_systemData` are not cleared either. This means the prism view won't show the binary double-dot indicator for that star if the user navigated away via tab.
 
 ### State management for `_selectedBody`/`_commitAction` -- MOSTLY CLEAN
 - Cleared on ESC (line 519)

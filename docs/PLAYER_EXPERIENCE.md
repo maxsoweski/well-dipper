@@ -59,7 +59,7 @@ Key gaps:
   landing strip multiplies, exit broken, second half not rendering)
 - All rendering: placeholder quality; visual pass needed for every type
 - All SFX: placeholders made from title-theme clipping/pitch-shifting
-- Nav computer: column view bugs; mid-zoom level needs resolution-aware
+- Nav computer: PRISM view bugs (renamed from COLUMN 2026-05-25); mid-zoom level needs resolution-aware
   detail (unsolved design problem)
 - Galaxy rendering: angular artifacts, artificial-looking bar, uniform
   glow color
