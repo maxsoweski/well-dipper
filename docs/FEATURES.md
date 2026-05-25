@@ -74,16 +74,16 @@ Commit history is supporting evidence only, not authority.
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Planet generation pipeline (18 types — all wired end-to-end via BodyRenderer → Planet shader category dispatch; exotic visuals weak) | F&F-MVP | in-flight | — | — |
-| Higher-LOD planet rendering (**broken**: `lodLevel` uniform set but GLSL never reads it; procedural planets get zero LOD2; Moon LOD2 partial — rocky/captured only) | F&F-MVP | in-flight | — | — |
-| Exotic planet rendering (hex/crystal/machine flat-shaded — TODO at `Planet.js:857`; includes: expand thin palettes — hot-jupiter 4→15, exotic types 4→20) | F&F-MVP | in-flight | — | — |
-| Civilized planet rendering (city-lights lacks night-side emissive city glow; ecumenopolis flat grid w/o emissive; machine grid w/o dark-side emissive) | F&F-MVP | in-flight | — | — |
-| Visual polish — all planet types (placeholder → visually striking and interesting) | F&F-MVP | proposed | — | — |
-| Gas giant storms — wire generator `storms.spots` + `polarStorm` to shader (FEATURE_AUDIT §2.1; data on `planetData.storms` never reaches uniforms) | F&F-MVP | proposed | — | — |
-| Surface history → rocky/moon shaders (paired w/ crater density from bombardment; FEATURE_AUDIT §2.2 + §2.3) | F&F-MVP | proposed | — | — |
-| Moon generation + rendering (LOD2 partial — rocky/captured only; ice/volcanic/terrestrial moons get no LOD2) | F&F-MVP | shipped-code | — | — |
-| Rings — multi-band per physics (instantiate existing `RingRenderer` dead code; FEATURE_AUDIT §2.4 confirmed) | F&F-MVP | proposed | — | — |
-| Asteroid belts (multi-zone composition, Kirkwood gaps) | F&F-MVP | shipped-code | — | — |
+| Planet generation pipeline (18 types — all wired end-to-end via BodyRenderer → Planet shader category dispatch; exotic visuals weak) | F&F-MVP | in-flight | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Higher-LOD planet rendering (**broken**: `lodLevel` uniform set but GLSL never reads it; procedural planets get zero LOD2; Moon LOD2 partial — rocky/captured only) | F&F-MVP | in-flight | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Exotic planet rendering (hex/crystal/machine flat-shaded — TODO at `Planet.js:857`; includes: expand thin palettes — hot-jupiter 4→15, exotic types 4→20) | F&F-MVP | in-flight | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Civilized planet rendering (city-lights lacks night-side emissive city glow; ecumenopolis flat grid w/o emissive; machine grid w/o dark-side emissive) | F&F-MVP | in-flight | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Visual polish — all planet types (placeholder → visually striking and interesting) | F&F-MVP | proposed | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Gas giant storms — wire generator `storms.spots` + `polarStorm` to shader (FEATURE_AUDIT §2.1; data on `planetData.storms` never reaches uniforms) | F&F-MVP | proposed | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Surface history → rocky/moon shaders (paired w/ crater density from bombardment; FEATURE_AUDIT §2.2 + §2.3) | F&F-MVP | proposed | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Moon generation + rendering (LOD2 partial — rocky/captured only; ice/volcanic/terrestrial moons get no LOD2) | F&F-MVP | shipped-code | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Rings — multi-band per physics (instantiate existing `RingRenderer` dead code; FEATURE_AUDIT §2.4 confirmed) | F&F-MVP | proposed | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Asteroid belts (multi-zone composition, Kirkwood gaps) | F&F-MVP | shipped-code | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
 
 ## Sky / galactic rendering
 
