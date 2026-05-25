@@ -96,10 +96,10 @@ Commit history is supporting evidence only, not authority.
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Nebula rendering (visual quality — messy, repeated shapes; 6 procedural shape modes finite) | F&F-MVP | in-flight | — | — |
-| Nebula in-game presence (15% ambient tint exists when inside; immersive geometry-wrap unbuilt — `SkyFeatureLayer.js:95` "Future: immersive mode wraps the feature around you") | F&F-MVP | proposed | — | — |
-| Nebula-as-warp-target (select from starfield → warp outside → dominates view) | F&F-MVP | proposed | Nebula in-game presence | — |
-| Reflection nebulae (new object class; one `FEATURE_TYPES` dict entry; FEATURE_AUDIT §2.10 + §3.1) | F&F-MVP | proposed | — | — |
+| Nebula rendering (visual quality — messy, repeated shapes; 6 procedural shape modes finite) | F&F-MVP | in-flight | — | [FEATURES/nebulae.md](FEATURES/nebulae.md) |
+| Nebula in-game presence (15% ambient tint exists when inside; immersive geometry-wrap unbuilt — `SkyFeatureLayer.js:95` "Future: immersive mode wraps the feature around you") | F&F-MVP | proposed | — | [FEATURES/nebulae.md](FEATURES/nebulae.md) |
+| Nebula-as-warp-target (select from starfield → warp outside → dominates view) | F&F-MVP | proposed | Nebula in-game presence | [FEATURES/nebulae.md](FEATURES/nebulae.md) |
+| Reflection nebulae (new object class; one `FEATURE_TYPES` dict entry; FEATURE_AUDIT §2.10 + §3.1) | F&F-MVP | proposed | — | [FEATURES/nebulae.md](FEATURES/nebulae.md) |
 
 ## Nav computer (5 zoom levels)
 
