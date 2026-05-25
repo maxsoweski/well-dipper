@@ -105,11 +105,11 @@ Commit history is supporting evidence only, not authority.
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Nav computer — Level 1 GALAXY (full spiral + sector overlay) | F&F-MVP | shipped-confirmed | — | — |
-| Nav computer — Level 2 SECTOR (subdivided into districts) | F&F-MVP | proposed (mid-zoom unsolved design problem — no working multi-resolution model) | — | — |
-| Nav computer — Level 3 REGION (districts → density-adaptive blocks) | F&F-MVP | proposed (mid-zoom — same problem) | — | — |
-| Nav computer — Level 4 COLUMN (blocks → density-adaptive neighborhoods) | F&F-MVP | in-flight (column view buggy) | — | — |
-| Nav computer — Level 5 SYSTEM (3D star map, default view on open) | F&F-MVP | shipped-code | — | — |
+| Nav computer — Level 1 GALAXY (full spiral + sector overlay) | F&F-MVP | shipped-confirmed | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
+| Nav computer — Level 2 SECTOR (subdivided into districts) | F&F-MVP | proposed (mid-zoom unsolved design problem — no working multi-resolution model) | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
+| Nav computer — Level 3 REGION (districts → density-adaptive blocks) | F&F-MVP | proposed (mid-zoom — same problem) | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
+| Nav computer — Level 4 PRISM (blocks → density-adaptive neighborhoods; renamed from COLUMN 2026-05-25) | F&F-MVP | in-flight (PRISM view buggy: minimap, lag, transition) | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
+| Nav computer — Level 5 SYSTEM (3D star map; PRISM is the actual default-open level per code) | F&F-MVP | shipped-code | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
 
 ## Deep-sky
 
