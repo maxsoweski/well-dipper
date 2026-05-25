@@ -68,7 +68,7 @@ Commit history is supporting evidence only, not authority.
 |---|---|---|---|---|
 | Targeting reticle — in-system bodies (planets, moons; brackets + labels + off-screen arrows) | F&F-MVP | shipped-code (ghosting fix 30aa1cf 2026-05-09; "pretty good" per Max) | — | — |
 | Star reticles rework (sky-side selection behavior + info readout: system preview, distance, type) | F&F-MVP | proposed | — | — |
-| Ship reticle (cyan brackets for ships) | ENRICHED | shipped-code | — | — |
+| Ship reticle (cyan brackets for ships) | ENRICHED | shipped-code (effectively dormant in F&F — depends on Ship NPC spawning, which is disabled for F&F) | — | — |
 
 ## Planet generation + rendering
 
@@ -117,7 +117,7 @@ Commit history is supporting evidence only, not authority.
 |---|---|---|---|---|
 | **Deep-sky cleanup — remove dice-roll arrival path** (kill `main.js:2918-2922` deepSkyChance roll + `DestinationPicker.WEIGHTS` deep-sky entries; preserve title/gallery/Easter-egg uses) | F&F-MVP | proposed (**ASAP**) | — | — |
 | Deep-sky rendering — title screen + debug gallery + external-galaxy click | F&F-MVP | shipped-code (after cleanup ships) | Deep-sky cleanup | — |
-| Easter egg — "you've gone too far" / turn-back message on external-galaxy arrival (TODO at `main.js:3039`; `_isExternalGalaxy` flag set but never read) | ENRICHED | proposed | — | — |
+| Easter egg — "you've gone too far" / turn-back message on external-galaxy arrival (TODO at `main.js:3039`; `_isExternalGalaxy` flag set but never read) | F&F-MVP | proposed | — | — |
 
 ## Audio
 
