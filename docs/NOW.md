@@ -4,33 +4,31 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-05-19 by working-Claude (Phase 6 ship; v5 doc-system migration 8 of 11 phases shipped).
+Last updated: 2026-05-29 by working-Claude (Phase 7 ship — FEATURES/{autopilot,warp}.md standardized to v5; migration 9 of 11 phases shipped).
 
 ---
 
 ## Active workstream
 
-**Doc system v5 migration** — 8 of 11 phases shipped (commits
-`fd98f23` → Phase 6 commit). Phase 6 (SYSTEMS.md + SYSTEMS/app-shell/)
-landed this session: 26-system flat map authored, `app-shell` deep dive
-with `(meta: orchestration)` flag, doc-graph + doc-rot pipelines
-verified end-to-end. Manual-claimed only `src/main.js` per Rule 1; the
-other 25 systems get their `SYSTEMS/<slug>/README.md` authored
-progressively as feature work touches them (117 `unclaimed-src` warns
-are expected baseline and will burn down over time).
+**Doc system v5 migration** — 9 of 11 phases shipped (`fd98f23` →
+Phase 7). Phase 7 (this session): `FEATURES/autopilot.md` +
+`FEATURES/warp.md` standardized to the v5 template — `**Systems
+touched:**` lines (valid SYSTEMS.md slugs) + `## Player Beats`
+(F&F-MVP and ENRICHED/GAME) in Keith form with observable ACs; all
+prior prose preserved. `doc-rot` clean for both (no
+`orphan-systems-touched`, no `stale-deep-dive`). The 117
+`unclaimed-src` warns remain the expected baseline (burn down as
+SYSTEMS deep dives get authored). Open: Phases 11 and 8.
 
 **Maps to journey:** Foundational structural work; not a SCREENSAVER MVP feature itself, but unblocks coherent F&F-MVP scoping going forward. After migration completes, focus shifts to Deep-sky cleanup (highest-priority F&F-MVP work surfaced by the audit).
 
 ## Next 1-3 queued (in priority order)
 
-1. **Phase 7 — Standardize FEATURES/{autopilot,warp}.md.** ~2-3 hours.
-   Mechanical; just template conformance. Phase 6 slugs are now
-   available for the `**Systems touched:**` lines.
-2. **Phase 11 — Workstream Scope frontmatter + archive migration
+1. **Phase 11 — Workstream Scope frontmatter + archive migration
    artifacts.** ~2-3 hours mostly batch. Depends on Phase 5+6 for
    feature/system slug lookups. Closes the migration.
-3. **Phase 8 — Deep-sky cleanup PM-scoping** (only remaining audit
-   item; other three resolved by 2026-05-19 code sweep).
+2. **Phase 8 — Deep-sky cleanup PM-scoping** (only remaining audit
+   item; other three resolved by 2026-05-19 code sweep). PM-owned brief.
 
 After Phase 11, migration is done. Next workstream candidate:
 **Deep-sky cleanup** (F&F-MVP / ASAP per Max — kill dice-roll arrival
@@ -39,20 +37,13 @@ usage sites with KEEP/REMOVE annotations).
 
 ## Remaining migration phases — PASS/FAIL criteria
 
-### Phase 7 — Standardize FEATURES/{autopilot,warp}.md
+### Phase 7 — Standardize FEATURES/{autopilot,warp}.md — ✅ DONE 2026-05-29
 
-**PASS criteria** (all must hold for BOTH files):
-- [ ] `**Systems touched:**` line present near top; format = comma-separated slugs matching SYSTEMS.md row names
-- [ ] `## Player Beats` section present with per-tier subsections (SCREENSAVER / ENRICHED / GAME, only those applicable to the feature)
-- [ ] Every Player Beat uses Keith form: *"As a player/viewer, I want [X] so I can feel [Y]"* — both halves present (or explicit note "no felt outcome" for pure infra)
-- [ ] Every Player Beat has at least one observable acceptance criterion (pass/fail-able language; not just vibes)
-- [ ] Existing prose content from prior versions preserved (reshaped into template sections, not deleted)
-- [ ] `npm run doc-rot` flags neither file with `stale-deep-dive` (recent update) or `orphan-systems-touched` (slugs valid)
-
-**FAIL signals:**
-- Systems touched: line missing or free-form (not parseable)
-- Player Beats missing "feel" half
-- ACs are vague ("feels good", "looks right")
+All PASS criteria met for both files: `**Systems touched:**` lines with
+valid SYSTEMS.md slugs; `## Player Beats` (F&F-MVP + ENRICHED/GAME) in
+Keith form with observable ACs; prior prose preserved; `doc-rot` clean
+(no `orphan-systems-touched`, no `stale-deep-dive`). 7 beats/ACs on
+warp, 9 on autopilot.
 
 ### Phase 8 — Deep-sky cleanup PM-scoping (other audit items already resolved)
 
@@ -104,9 +95,11 @@ usage sites with KEEP/REMOVE annotations).
 - Existing archived workstreams' Scope fields claim files those workstreams
   didn't touch (validation: spot-check 2-3 with `git log --follow`)
 
-## Recently shipped (this session arc — 2026-05-18 → 2026-05-19)
+## Recently shipped
 
-- **Phase 6 — SYSTEMS.md + SYSTEMS/app-shell/** (this session) — 26-system flat map, `app-shell` deep dive, doc-graph + doc-rot verified clean. Maps every `src/**/*.js` to a system slug; auto-table grows as deep dives author progressively.
+- **Phase 7 — FEATURES/{autopilot,warp}.md standardized to v5** (2026-05-29) — `**Systems touched:**` lines + `## Player Beats` (F&F-MVP + ENRICHED/GAME, Keith form, observable ACs) added to both; all prior prose preserved; `doc-rot` clean. Migration now 9 of 11.
+- **4 net-new FEATURES deep dives** (2026-05-25, `0373d1f`→`039b52c`) — galactic-rendering, nebulae, planet-rendering, nav-computer authored in v5 template; nav-computer Level 4 COLUMN→PRISM rename (`039b52c`).
+- **Phase 6 — SYSTEMS.md + SYSTEMS/app-shell/** (2026-05-19, `cb1fc4d`) — 26-system flat map, `app-shell` deep dive, doc-graph + doc-rot verified clean. Maps every `src/**/*.js` to a system slug; auto-table grows as deep dives author progressively.
 - `ac4b477` — **Phase 5 — FEATURES.md** Max-authoritative inventory (69 rows)
 - `5a97e41` — **Phase 9 — CLAUDE.md transform** (62 → 81 lines; under 120 budget) + JOURNEY structural-debt section
 - `81c9f22` — **Phase 4 — MOOD index** wired (66 root + 3 subfolders inventoried from Pictures folder)

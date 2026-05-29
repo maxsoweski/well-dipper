@@ -10,6 +10,8 @@ related_catalog: docs/OBJECTS_OF_INTEREST.md (v0, 2026-04-20 — source-of-truth
 
 # Autopilot
 
+**Systems touched:** autopilot, camera, ship, ui-hud, audio, app-shell
+
 ## Revision history
 
 - **2026-04-26 — `lhokon` cubic-out tuning lock-in (§A6 amendment).** Felt-experience tuning lock-in for the §A5 lhokon phase, after Tester PASS at HEAD `27cc9f4` (§T3) failed to surface a felt miss Max watched in the Sol-tour recording: arrivals (jumpscare → STATION-A) felt right, departures didn't read as "camera centered on target before ship burns." Live trace at `27cc9f4` confirmed lhokon was firing and the math passed (camera direction reached new-target direction at lhokon→CRUISE boundary within FP precision). The miss was tuning calibration: at `dot threshold = 0.9999` the camera was ~15 px off-center when CRUISE began — under the AC bound but visibly "almost." The `autopilot-lab.html` harness landed at `3ced806` to expose the three lhokon tunables (`lhokonDotThreshold`, `lhokonTimeoutSec`, `lhokonEaseFn`) as live-mutatable instance properties. Max evaluated empirically and selected the production triple: **`lhokonDotThreshold = 0.999999`** (six 9s, ≈ 0.08° angular error / sub-pixel at 1280×722, 70° FOV) + **`lhokonTimeoutSec = 3.0`** (cubic-out's terminal landing needs the duration; timeout becomes the de-facto end-of-curve marker rather than a degenerate-geometry backstop) + **`lhokonEaseFn = cubic ease-out`** (`1 − (1−t)³`). Cubic-out replaced the §A5 default smoothstep because smoothstep's slope-0 terminal asymptotes — the camera creeps into the last fraction of a degree, producing the "almost-centered" felt-miss. Cubic-out lands firmly (slope-0 at t=1). The trade-off is cubic-out's slope-3 at t=0 — a designed first-frame impulse Max judged acceptable after lab evaluation. AC #14 entry-frame bound carved out under §A6 framing (b): the bound applies frame 2 onward; frame 1 is by-design discontinuous. Quintic smoothstep was tested as an alternative and ruled out by Max's verbatim observation: *"When the bodies are orbiting, the quintic even sometimes reads as a bit too fast."* Quintic's softer tail can't catch a moving target before CRUISE; cubic-out's firmer landing is robust to orbital motion. The lab harness is the verification artifact for §A6's empirical claims.
@@ -29,6 +31,120 @@ Autopilot is the game's **cinematic tour mode**: the ship flies itself through e
 Wonder and interest. Like a human navigator + cinematographer taking viewers on a tour of the galaxy, showing the most interesting things in their immediate environment. The ship moves with purpose and elegance; the camera moves in 360° independently of the ship, looking at nearby stars, galactic features (nebulas in the starfield), the disk of the galaxy, planets and their details, moons, planet-moon relationships, planet-star relationships, light playing across surfaces, crescents and eclipses at interesting angles.
 
 **Register:** 60s/70s space cinematography. Elite Dangerous autopilot vibe as a nearby reference. "Blue Danube" over 2001's station-docking sequence as the touchstone — not to imitate, but to match the sense of *ship as a body moving through a composed frame*, set against a world indifferent to the drama.
+
+## Player Beats — F&F-MVP
+
+The felt-outcome layer. Each beat names the experience; the detailed
+rubric lives in §Per-phase criteria, §V1 / V-later triage, and
+§Failure criteria below, which these beats cite.
+
+### Cinematic tour, never on rails
+
+- **As a viewer, I want the ship to fly itself through each system with
+  purpose and elegance while the camera takes in the most interesting
+  things around me — so I can feel like a passenger on a considered
+  cinematic tour, not a payload on a conveyor belt.**
+- **AC:** The tour reads as "a considered passage through this system,"
+  not "planet 1, planet 2, planet 3"; ship motion is purposeful and
+  unhurried by default. Fails if the tour reads rigid / mechanical /
+  monotonic. (See §One-sentence feature, §Failure criteria — "running
+  on rails".)
+
+### Ship and camera move independently (two-axis)
+
+- **As a viewer, I want the ship's body and the camera (my eyes) to
+  move independently — so I can feel the ship as a body moving through a
+  composed frame while my view dwells on what's worth seeing.**
+- **AC:** Camera tracks the autopilot target body each frame
+  (`camera.lookAt(target.current_position)`), not bolted to
+  `ship.forward`; shake is additive on top (visible evidence of
+  decoupling); the body stays framed across CRUISE / APPROACH. Fails if
+  the camera is rigidly bolted to ship-forward with no shake layer.
+  (See §Per-phase criterion — camera axis (V1), §Failure criteria.)
+
+### Jumpscare arrival, then the held loom
+
+- **As a viewer, I want to rush a body and decelerate so hard at the
+  last moment that it jumps huge into my vision, then hang stationary
+  before it — so I can feel the thrill and scale of arrival, then the
+  stillness of a world looming.**
+- **AC:** APPROACH onset at 10× body radius; aggressive (not
+  progressive) deceleration; DECEL shake fires at onset; STATION-A
+  holds stationary with the body at felt-fill ~60% of screen. Fails if
+  it reads as a gentle "glide in and settle," if the body reads small,
+  or if STATION-A has orbital motion. (See §Per-phase criteria —
+  APPROACH / STATION-A, §Failure criteria.)
+
+### Warp-exit continuity
+
+- **As a viewer, I want autopilot to pick up exactly where warp dropped
+  me, with my velocity preserved — so I can feel warp and the tour are
+  one continuous motion, not two stitched scenes.**
+- **AC:** ENTRY start pose is derived from the warp-exit forward vector
+  (not a fixed above-the-plane origin); velocity is preserved across
+  the handoff (no snap-to-zero, no pop-to-new-velocity). Fails if ENTRY
+  starts "from above the plane." (See §Per-phase criteria — ENTRY,
+  §Failure criteria.)
+
+### Camera convergence between legs (lhokon)
+
+- **As a viewer, I want the camera to settle onto the next target
+  before the ship burns toward it — so I can feel each leg begin from a
+  composed, centered frame rather than a lurch mid-swing.**
+- **AC:** Between STATION-A and the next CRUISE, the ship is anchored
+  (`|velocity| ≈ 0`) while the camera rotates to the new target
+  (cubic-ease-out; dot-gate ≥ 0.999999 or 3.0 s timeout); entry/exit
+  angular delta ≤ 0.5° (frame 2 onward). Initial leg has no lhokon.
+  (See §Per-phase criteria — `lhokon`, §Revision history §A5/§A6.)
+
+### Gravity-drive shake as a tell
+
+- **As a viewer, I want a shake only when the ship's drive is pushed
+  past its envelope (hard accel / decel) — so I can feel the in-fiction
+  physics: smooth cinematic flight is the norm, and the punctuation
+  means something.**
+- **AC:** ACCEL shake at CRUISE onset, DECEL shake at APPROACH onset
+  (pure reverse of each other); NO shake mid-CRUISE or during the
+  STATION-A hold. Fails if shake fires during smooth motion (breaks the
+  inertial-neutrality contract). (See §Gravity drives, §Failure
+  criteria.)
+
+### Default-on with clean manual override
+
+- **As a player, I want autopilot on by default and able to toggle off
+  into manual control without the ship snap-stopping — so I can feel I
+  can take the wheel at any moment and the world keeps its momentum.**
+- **AC:** Default-ON; toggle via upper-left status indicator or
+  keybinding (`Tab`, provisional); toggle-off preserves angular
+  momentum (no snap-stop); toggle-on must be explicit (no auto-resume);
+  HUD hides during autopilot while the status indicator persists. (See
+  §Trigger / toggle / UI, §Manual override, §Failure criteria.)
+
+## Player Beats — ENRICHED / GAME
+
+### V-later — SHOWCASE / ROVING camera + most-interesting-first
+
+- **As a viewer, I want the camera to seek composed beats (crescents,
+  eclipses, ring-shadows, transits) and rove curiously toward nearby
+  objects of interest, visiting the most interesting bodies first — so
+  I can feel a cinematographer's eye choosing my view, different every
+  trip.**
+- **AC:** SHOWCASE and ROVING camera modes graft onto the V1
+  `CameraMode` dispatch *without rewrite*; an OOI runtime registry
+  feeds `getNearbyOOIs()` / `getActiveEvents()`;
+  `AutoNavigator.buildQueue` accepts an OOI-weighted selector in place
+  of the V1 inner-to-outer default. (See §V-later triage, §V1
+  architectural affordances.)
+
+### V-later — STATION-B orbital motion + BGM integration
+
+- **As a viewer, I want the option of a slow orbit around a held body
+  and music that swells with the tour's phases — so I can feel the tour
+  breathe.**
+- **AC:** STATION-B opt-in orbit grafts from STATION-A (shape scoped in
+  the future ORBIT-mode workstream); the audio layer subscribes to the
+  V1 event-surface (`phase-change` / `camera-mode-change` / `toggle`)
+  without changing the emitters V1 already ships. (See §V-later, §Audio.)
 
 ## Source
 

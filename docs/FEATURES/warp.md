@@ -10,9 +10,96 @@ pending_bible_diff: docs/FEATURES/_drafts/GAME_BIBLE_diff_warp.md (not yet merge
 
 # Warp
 
+**Systems touched:** warp, rendering-retro, rendering-sky, world-origin, audio
+
 ## One-sentence feature
 
 The player seamlessly travels from their current star system to a selected destination star system via an exotic, continuous, no-cut passage through a tunnel of stars — a tube connecting two points in space, invisible except through its openings.
+
+## Player Beats — F&F-MVP
+
+The felt-outcome layer. Each beat names the experience; the detailed
+rubric lives in §Success criteria, §Phase sequence, and §Failure
+criteria below, which these beats cite.
+
+### Seamless passage (the primary criterion)
+
+- **As a player, I want to travel from one star system to another
+  through one continuous, uninterrupted motion — so I can feel that
+  warp is a single sacred passage, not a loading screen dressed up as
+  an effect.**
+- **AC:** No black frames, frozen moments, audio freeze, framerate
+  change, FOV change, or jarring speed / position change at ANY phase
+  or phase boundary (FOLD / ENTER / HYPER / EXIT). This is the
+  acceptance rubric for the whole feature. (See §Success criteria —
+  Primary criterion "seamless".)
+
+### FOLD — gravitational-lens opening
+
+- **As a player, I want the warp to open as a gravitational lens
+  dilating space ~500m ahead of my ship — so I can feel I'm tearing
+  open spacetime with an exotic drive, not stepping through a magic
+  doorway.**
+- **AC:** Portal reads as space-time bending (not a flat doorway); the
+  tunnel is visible through the 2D opening; the portal stays
+  world-locked ~500m ahead at all worldOrigin magnitudes (not
+  screen-locked). (See §Phase sequence FOLD, §Current state snapshot.)
+
+### ENTER — both-visible threshold crossing
+
+- **As a player, I want to see origin space *around* the hole AND the
+  tunnel *through* the hole at the moment I'm half-in — so I can feel
+  myself physically crossing a threshold, not cutting between two
+  scenes.**
+- **AC:** Both-visible partial-in moment occurs cleanly; camera stays
+  continuous through the threshold; no punch-through-water effect;
+  origin space drops away only once fully in. (See §Phase sequence
+  ENTER.)
+
+### HYPER — esophagus pull down the star tunnel
+
+- **As a player, I want to be pulled forward down a long cylinder of
+  stars toward a destination that resolves at the far end — so I can
+  feel carried by the tunnel itself, not flying under my own thrust.**
+- **AC:** Tunnel geometry is cylindrical and extends into the distance
+  (not the inside of a sphere); interior is a starfield tunnel; the
+  tunnel is never observable from the side (non-Euclidean spec);
+  destination star becomes visible at the far end at some point during
+  HYPER. (See §Phase sequence HYPER, §Failure criteria.)
+
+### EXIT — crowning out
+
+- **As a player, I want to crown out of the tunnel front-first into the
+  destination system — so I can feel I've arrived somewhere new through
+  one continuous emergence.**
+- **AC:** Crowning transition (front emerged into destination space
+  while rear still in tunnel); camera continuous; end state is flying
+  in the destination system. (See §Phase sequence EXIT.)
+
+## Player Beats — ENRICHED / GAME
+
+### V-later polish — relativistic shift, landing lights, shake, free look
+
+- **As a player, I want relativistic blue/red shift on the tunnel
+  stars, HUD landing lights during approach, acceleration shake, and
+  the freedom to look back at the receding origin — so I can feel the
+  physical intensity and disorientation of FTL travel.**
+- **AC:** Each item grafts onto V1 *without architectural rewrite* via
+  the named V1 affordances: HUD warp-phase states wired in V1; camera
+  is the "camera + additive offsets" pattern; the tunnel shader has a
+  color-transform injection point; look direction is decoupled from
+  travel direction. (See §V-later, §V1 architectural affordances.)
+
+### GAME — progression beyond the V1 baseline
+
+- **As a player, I want the warp to escalate over the game's arc
+  (anomalies mid-game, impossible spaces late) — so I can feel my
+  growing fold capability changing what the passage *is*.**
+- **AC:** This feature doc captures the early-game / V1 baseline; the
+  bible's progression (`docs/GAME_BIBLE.md` §"The Warp as Sacred
+  Experience") governs later content and must remain craftable on top
+  of the V1 phase machine without restructuring it. (See §Lore /
+  mechanism — Bible alignment.)
 
 ## Source
 
