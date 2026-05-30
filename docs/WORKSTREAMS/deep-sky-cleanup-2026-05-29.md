@@ -13,10 +13,9 @@ Scope:
 
 # Workstream: Deep-Sky Dice-Roll Arrival Cleanup
 
-**Status:** APPROVED — GATE 1 passed 2026-05-29 (Max approved; all open questions resolved toward CLEAN DELETE). Implementation is a separate, later session — not yet started.
+**Status:** **SHIPPED 2026-05-30** — verified live via chrome-devtools (GPU 9223), all 5 ACs PASS (AC1 zero random deep-sky arrivals across many real warps; AC2 title backdrop; AC3 gallery all 15 types; AC4 real external-galaxy click → `_isExternalGalaxy` cloud; AC5 code inspection, turn-back message stays out). Surgical removal as scoped — deep-sky renderer machinery preserved. −351 LOC. (GATE 1 passed 2026-05-29; GATE 3 Tester PASS this session; Max approved push to production GitHub Pages.)
 **Migration context:** Phase 8 of the doc-system v5 migration.
-**Created:** 2026-05-29.
-**Deliverable:** this brief. Implementation is a separate, later session.
+**Created:** 2026-05-29. **Shipped:** 2026-05-30.
 
 > This brief was rewritten 2026-05-29 against VERIFIED ground truth (two independent
 > code sweeps). An earlier draft was authored against GUESSED file paths

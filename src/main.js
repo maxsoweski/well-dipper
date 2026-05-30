@@ -1980,7 +1980,6 @@ let _deepSkyDrift = null;     // { startPos, endPos, duration, elapsed } — mom
 
 // Debug: force the next warp to a specific destination type.
 // Press comma/period/? then Space to force galaxy/nebula/cluster.
-let _forceNextDestType = null;
 const _heldKeys = new Set();
 
 // ── Splash + Intro sequence ──
@@ -2450,7 +2449,6 @@ let _settingsOpen = false;
 
 function formatSettingValue(key, value) {
   if (key === 'idleTimeout' || key === 'titleAutoDismiss') return `${value}s`;
-  if (key === 'deepSkyChance') return `${value}%`;
   if (key === 'tourLingerMultiplier') return `${value.toFixed(1)}x`;
   if (key === 'fov') return `${value}°`;
   if (key === 'autoRotateSpeed') return `${value.toFixed(1)}`;
@@ -2680,7 +2678,6 @@ const SOUNDTEST_BGM = [
   { name: 'title', label: 'Title' },
   { name: 'explore', label: 'Explore' },
   { name: 'hyperspace', label: 'Hyperspace' },
-  { name: 'deepsky', label: 'Deep Sky' },
   { name: 'warp-charge', label: 'Warp Charge (sting)' },
   { name: 'arrival', label: 'Arrival (sting)' },
 ];
@@ -2858,11 +2855,11 @@ warpEffect.onPrepareSystem = () => {
 
   seedCounter++;
   let seed = `system-${seedCounter}`;
-  const rng = new SeededRandom(seed);
   // ── Route based on what was clicked ──
   // If the player clicked a tagged galactic feature, route to a star inside it.
-  // Otherwise, use DestinationPicker (which may roll deep sky destinations).
-  let destType;
+  // Otherwise default to a real star-system. (The legacy deep-sky dice-roll that
+  // could override this was removed in deep-sky-cleanup-2026-05-29.)
+  let destType = 'star-system';
   if (warpTarget.destType === 'external-galaxy' && warpTarget.galaxyData) {
     // Clicked an external galaxy — Category C: view from outside.
     // Use the existing galaxy generator to create a particle cloud.
@@ -2910,69 +2907,6 @@ warpEffect.onPrepareSystem = () => {
     warpTarget.destType = null;
     warpTarget.featureData = null;
     return;
-  }
-
-  if (_forceNextDestType) {
-    destType = _forceNextDestType;
-  } else {
-    const dsChance = settings.get('deepSkyChance') / 100;
-    if (rng.float() >= dsChance) {
-      destType = 'star-system';
-    } else {
-      destType = DestinationPicker.pickDeepSky(rng);
-    }
-  }
-  _forceNextDestType = null; // clear after use
-
-  // ── Category A/B deep sky: route to a star inside the feature ──
-  // When DestinationPicker rolls a cluster/nebula/remnant and we have
-  // a galaxy active, find a real galactic feature of that type and route
-  // to a star inside it. The old particle-cloud generators are ONLY used
-  // as fallback when no galaxy is active (legacy screensaver mode).
-  const CATEGORY_AB_TYPES = [
-    'emission-nebula', 'planetary-nebula', 'open-cluster',
-    'globular-cluster', 'ob-association', 'supernova-remnant',
-  ];
-  // Map DestinationPicker names to GalacticMap feature type names
-  const DEST_TO_FEATURE = {
-    'emission-nebula': 'emission-nebula',
-    'planetary-nebula': 'emission-nebula', // no separate type in GalacticMap
-    'open-cluster': 'open-cluster',
-    'globular-cluster': 'globular-cluster',
-  };
-
-  if (CATEGORY_AB_TYPES.includes(destType) && galacticMap) {
-    // Try to find a real galactic feature of this type nearby
-    const featureType = DEST_TO_FEATURE[destType] || destType;
-    let foundFeature = null;
-    for (const radius of [3.0, 6.0, 10.0]) {
-      const features = galacticMap.findNearbyFeatures(playerGalacticPos, radius);
-      foundFeature = features.find(f => f.type === featureType);
-      if (foundFeature) break;
-    }
-
-    if (foundFeature) {
-      // Route to feature center (same logic as click routing)
-      playerGalacticPos = { ...foundFeature.position };
-      const galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      if (foundFeature.context) {
-        if (foundFeature.context.metallicity !== undefined) galaxyContext.metallicity = foundFeature.context.metallicity;
-        if (foundFeature.context.age !== undefined) galaxyContext.age = foundFeature.context.age;
-      }
-      pendingSystemData = await StarSystemGenerator.generateAsync(foundFeature.seed, galaxyContext);
-      pendingSystemData._destType = 'star-system';
-      pendingSystemData._warpTargetName = warpTarget.name || null;
-      pendingSystemData._insideFeature = foundFeature;
-      await skyRenderer.prepareForPositionAsync(playerGalacticPos);
-      console.log(`Warp: DestinationPicker rolled ${destType} → feature ${foundFeature.type} at center`);
-      return;
-    }
-    // No feature found — fall back to star system (the procedural model's domain).
-    // The old NavigableNebula/ClusterGenerators are legacy dead code that creates
-    // fake tournable objects outside the procedural galaxy model. All warp
-    // destinations must come from the hash grid or real feature catalog.
-    console.log(`Warp: DestinationPicker rolled ${destType} but no feature found nearby, falling back to star-system`);
-    destType = 'star-system';
   }
 
   if (destType === 'star-system') {
@@ -3033,11 +2967,6 @@ warpEffect.onPrepareSystem = () => {
     } else {
       pendingSystemData = await StarSystemGenerator.generateAsync(seed, galaxyContext);
     }
-  } else if (destType.includes('galaxy')) {
-    // External galaxy Easter egg — player warped to a distant galaxy visible in the sky.
-    // These are definitionally outside the Milky Way model, so GalaxyGenerator is correct.
-    // TODO: show "you've gone too far" message on arrival
-    pendingSystemData = GalaxyGenerator.generate(seed, destType);
   } else {
     // Any other destType that wasn't caught above — should not happen in production.
     // Fall back to a star system at the current position rather than using legacy generators.
@@ -3589,18 +3518,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
 
   // Deep sky objects get their own spawn path
   if (DestinationPicker.isDeepSky(destType)) {
-    // No gravity system for deep sky — fall back to orbit mode
+    // No gravity system for deep sky — fall back to orbit mode.
+    // Only the external-galaxy Easter egg reaches here now (distant, free-look).
     cameraController.clearGravity();
-    if (DestinationPicker.isNavigable(destType)) {
-      // Navigable deep sky: stars are clickable/orbitable — normal camera behavior
-      cameraController.forceFreeLook = false;
-      spawnNavigableDeepSky(preGenData, destType, forWarp);
-    } else {
-      // Non-navigable: distant view, free-look only (no orbit targets)
-      cameraController.forceFreeLook = true;
-      cameraController.autoRotateActive = true; // ensure auto-rotation for deep sky views
-      spawnDeepSky(preGenData, destType, forWarp);
-    }
+    cameraController.forceFreeLook = true;
+    cameraController.autoRotateActive = true; // ensure auto-rotation for deep sky views
+    spawnDeepSky(preGenData, destType, forWarp);
     return;
   }
 
@@ -4152,185 +4075,6 @@ function spawnDeepSky(data, destType, forWarp) {
   }
 }
 
-/**
- * Spawn a navigable deep sky destination (planetary/emission nebula, open cluster).
- * These are fly-inside-able, like star systems — multiple stars you can tour between,
- * and optionally a VolumetricNebula gas cloud you can fly through.
- */
-function spawnNavigableDeepSky(data, destType, forWarp) {
-  // ── Gas cloud (nebulae only — billboard layers scaled to navigable size) ──
-  let gasCloud = null;
-  if (data._billboardData) {
-    const bb = data._billboardData;
-    const scale = data.radius / bb.radius;
-
-    // Scale layer positions and sizes to navigable radius
-    const scaledLayers = bb.layers.map(l => ({
-      ...l,
-      position: [l.position[0] * scale, l.position[1] * scale, l.position[2] * scale],
-      size: l.size * scale,
-    }));
-
-    // Scale embedded star particle positions and sizes
-    const scaledStarPositions = new Float32Array(bb.starPositions.length);
-    const scaledStarSizes = new Float32Array(bb.starSizes.length);
-    for (let i = 0; i < bb.starCount; i++) {
-      scaledStarPositions[i * 3]     = bb.starPositions[i * 3] * scale;
-      scaledStarPositions[i * 3 + 1] = bb.starPositions[i * 3 + 1] * scale;
-      scaledStarPositions[i * 3 + 2] = bb.starPositions[i * 3 + 2] * scale;
-      scaledStarSizes[i] = bb.starSizes[i] * scale;
-    }
-
-    const scaledData = {
-      ...bb,
-      radius: data.radius,
-      layers: scaledLayers,
-      starPositions: scaledStarPositions,
-      starColors: bb.starColors,
-      starSizes: scaledStarSizes,
-      centralStar: null,  // navigable stars handle this — don't duplicate
-    };
-
-    gasCloud = new Nebula(scaledData);
-    gasCloud.addTo(scene);
-
-    // Extend camera far plane to fit the nebula — layers can be 2-3x radius
-    // in size, so vertices reach well beyond the default 200K far plane.
-    // Without this, most of each layer is frustum-clipped, and the clip
-    // boundary shifts with the camera, causing visible flicker.
-    const neededFar = data.radius * 4;
-    if (neededFar > camera.far) {
-      camera.far = neededFar;
-      camera.updateProjectionMatrix();
-    }
-  }
-
-  // ── Cluster gas layers (open clusters — reflection nebulosity) ──
-  if (!gasCloud && data.gasLayers && data.gasLayers.length > 0) {
-    const gasData = {
-      layers: data.gasLayers,
-      starPositions: new Float32Array(0),
-      starColors: new Float32Array(0),
-      starSizes: new Float32Array(0),
-    };
-    gasCloud = new Nebula(gasData);
-    gasCloud.addTo(scene);
-  }
-
-  // ── Cluster particle cloud (open clusters — adds ambient star particles) ──
-  let clusterCloud = null;
-  if (data._clusterParticles) {
-    const cp = data._clusterParticles;
-    // Scale particle positions to match navigable radius
-    const scale = data.radius / cp.radius;
-    const scaledPositions = new Float32Array(cp.positions.length);
-    for (let i = 0; i < cp.particleCount; i++) {
-      scaledPositions[i * 3]     = cp.positions[i * 3] * scale;
-      scaledPositions[i * 3 + 1] = cp.positions[i * 3 + 1] * scale;
-      scaledPositions[i * 3 + 2] = cp.positions[i * 3 + 2] * scale;
-    }
-    const scaledSizes = new Float32Array(cp.sizes.length);
-    for (let i = 0; i < cp.particleCount; i++) {
-      scaledSizes[i] = cp.sizes[i] * scale;
-    }
-    const scaledData = { ...cp, positions: scaledPositions, sizes: scaledSizes, radius: data.radius };
-    clusterCloud = new Galaxy(scaledData);
-    clusterCloud.addTo(scene);
-  }
-
-  // ── Extend far plane for large navigable destinations ──
-  const neededFar = data.radius * 3;
-  if (neededFar > camera.far) {
-    camera.far = neededFar;
-    camera.updateProjectionMatrix();
-  }
-
-  // ── Stars ──
-  const allStars = [];
-  const starInfo = {
-    color1: data.stars[0]?.color || [1, 1, 1],
-    brightness1: 1.0,
-    color2: data.stars.length > 1 ? data.stars[1].color : [0, 0, 0],
-    brightness2: data.stars.length > 1 ? 0.5 : 0,
-  };
-
-  // Clusters need bigger stars so they're visible as bright discs at typical
-  // viewing distances. Nebula stars need less exaggeration since the gas
-  // cloud provides visual context.
-  const isCluster = destType === 'open-cluster';
-  const minVisibleFrac = isCluster ? 0.006 : 0.0003;
-
-  for (const sData of data.stars) {
-    const minVisible = data.radius * minVisibleFrac;
-    const renderR = Math.max(sData.renderRadius || sData.radiusScene, minVisible);
-    // Cluster stars: brighten colors toward white so they pop against black sky.
-    // Raw B/A star colors (0.67, 0.75, 1.0) look dim as flat discs.
-    let color = sData.color;
-    if (isCluster) {
-      color = color.map(c => Math.min(1.0, c * 1.3 + 0.15));
-    }
-    const starObj = new StarFlare({ ...sData, radius: renderR, color }, renderR);
-    starObj.mesh.position.set(sData.position[0], sData.position[1], sData.position[2]);
-    starObj.addTo(scene);
-    allStars.push(starObj);
-  }
-
-  // ── Click targets (all stars are clickable) ──
-  clickTargets = new Map();
-  for (let i = 0; i < allStars.length; i++) {
-    clickTargets.set(allStars[i].surface, {
-      type: 'star',
-      starIndex: i,
-      label: `Star ${i + 1} (${data.stars[i].type})`,
-    });
-  }
-
-  // ── Build system object ──
-  // Shaped like a star system so autopilot/flythrough/selection code works
-  system = {
-    type: destType,
-    destination: clusterCloud,  // Galaxy particle cloud (open clusters) or null
-    gasCloud,              // Nebula billboard instance (nebulae) or null
-    extraStars: allStars.slice(1),  // all stars beyond the primary
-    star: allStars[0] || null,
-    star2: allStars[1] || null,
-    planets: [],
-    orbitLines: [],
-    asteroidBelts: [],
-    starOrbitLines: null,
-    isBinary: false,
-    _navigable: true,      // flag for navigable deep sky
-    _navRadius: data.radius,
-  };
-
-  const label = destType.replace(/-/g, ' ');
-  const starCount = allStars.length;
-  const gasInfo = gasCloud ? `, ${data._billboardData?.layers?.length || 0} billboard layers` : '';
-  console.log(`Navigable deep sky: ${label} (${starCount} stars${gasInfo}, r=${data.radius.toFixed(0)})`);
-
-  // During warp, skip camera setup — warpSwapSystem/warpRevealSystem handle that
-  if (forWarp) return;
-
-  // Non-warp opening: position camera to see the structure
-  if (allStars[0]) {
-    // Clusters: pull back to see the whole cluster (like the gallery view).
-    // Nebulae: closer, since the gas cloud provides visual context.
-    if (isCluster) {
-      // Orbit the cluster center, not a single star
-      const viewDist = data.radius * 0.6;
-      camera.position.set(0, viewDist * 0.3, viewDist);
-      camera.lookAt(0, 0, 0);
-      cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
-    } else {
-      // Nebulae: start well outside so you see the whole structure
-      const viewDist = data.radius * 0.9;
-      camera.position.set(0, viewDist * 0.2, viewDist);
-      camera.lookAt(0, 0, 0);
-      cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
-    }
-  }
-}
-
 // ── Debug Instant Spawn ────────────────────────────────────────
 // Jump directly to any system type without warping (Shift+1 through Shift+7).
 // Generates data the same way the warp pipeline does, then calls spawnSystem.
@@ -4339,22 +4083,27 @@ let _debugSeedCounter = 1000;
 function _debugSpawnType(destType) {
   if (galleryMode) exitGallery();
 
+  // Navigable deep-sky (emission/planetary nebula, open cluster) was removed as a
+  // spawnable destination (deep-sky-cleanup-2026-05-29) — it no longer has a warp
+  // renderer. View those types in the debug gallery instead.
+  if (destType === 'emission-nebula' || destType === 'planetary-nebula' || destType === 'open-cluster') {
+    console.warn(`Debug spawn: '${destType}' is no longer a spawnable destination — use the gallery.`);
+    return;
+  }
+
   _debugSeedCounter++;
   const seed = `debug-${destType}-${_debugSeedCounter}`;
   let preGenData;
 
   if (destType === 'star-system') {
     preGenData = StarSystemGenerator.generate(seed);
-  } else if (destType === 'emission-nebula' || destType === 'planetary-nebula') {
-    preGenData = NavigableNebulaGenerator.generate(seed, destType);
-    preGenData._billboardData = NebulaGenerator.generate(seed, destType);
-  } else if (destType === 'open-cluster') {
-    preGenData = NavigableClusterGenerator.generate(seed);
-    preGenData._clusterParticles = ClusterGenerator.generate(seed, 'open-cluster');
   } else if (destType.includes('galaxy')) {
     preGenData = GalaxyGenerator.generate(seed, destType);
   } else if (destType.includes('cluster')) {
     preGenData = ClusterGenerator.generate(seed, destType);
+  } else {
+    console.warn(`Debug spawn: unknown destType '${destType}'`);
+    return;
   }
   preGenData._destType = destType;
 
@@ -5227,9 +4976,6 @@ function populateQueueRefs() {
       // 3× radius fills ~60% of FOV — close enough to see surface detail.
       // Minimum 0.06 keeps tiny moons visible without near-plane clipping.
       stop.orbitDistance = Math.max(moon.data.radius * 3, 0.06);
-    } else if (stop.type === 'deepsky-poi') {
-      // Deep sky tour stop — bodyRef is the dummy Object3D created in spawnDeepSky
-      // orbitDistance and bodyRadius were set by buildDeepSkyQueue
     }
   }
 }
@@ -5306,12 +5052,6 @@ function updateFocusFromStop(stop) {
       const mName = system.names?.planets?.[stop.planetIndex]?.moons?.[stop.moonIndex] ?? null;
       bodyInfo.showMoon(entry.moons[stop.moonIndex].data, stop.planetIndex, mName);
     }
-  } else if (stop.type === 'deepsky-poi') {
-    // Deep sky: no minimap focus (HUD is hidden)
-    focusIndex = -1;
-    focusMoonIndex = -1;
-    focusStarIndex = -1;
-    bodyInfo.hide();
   }
 }
 
@@ -7984,19 +7724,6 @@ window.addEventListener('keydown', (e) => {
       dismissTitleScreen();
       return;
     }
-  }
-
-  // Debug destination override: set at any time (even during warp).
-  // The forced type persists until the next onPrepareSystem call.
-  if (e.key === ',') {
-    _forceNextDestType = 'spiral-galaxy';
-    console.log('Debug: next warp → spiral galaxy');
-  } else if (e.key === '.' && !e.shiftKey) {
-    _forceNextDestType = 'emission-nebula';
-    console.log('Debug: next warp → emission nebula');
-  } else if (e.key === '/' || e.key === '?') {
-    _forceNextDestType = 'globular-cluster';
-    console.log('Debug: next warp → globular cluster');
   }
 
   // Shift+B: test baked textures on the focused planet

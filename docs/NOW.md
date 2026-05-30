@@ -4,41 +4,38 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-05-29 by working-Claude (doc-system v5 migration COMPLETE — all 11 phases shipped; Phase 8 deep-sky-cleanup brief approved at GATE 1; Phase 11 closed: workstream Scope frontmatter + transitional-doc archive).
+Last updated: 2026-05-30 by working-Claude (deep-sky-cleanup SHIPPED — dice-roll arrival removed, all 5 ACs verified live, pushed to production).
 
 ---
 
 ## Active workstream
 
 **F&F-MVP screensaver completion.** The doc-system v5 migration is DONE
-(all 11 phases). Focus returns to shipping the screensaver MVP. Two
-concrete items are live:
+(all 11 phases). Focus is shipping the screensaver MVP. One concrete item
+is live:
 
 1. **`warp-landing-strip-persists-2026-05-10`** — landing-strip stops
    following the player post-warp. **Tester VERIFIED_PENDING_MAX @ `e31ee65`** —
    awaiting Max UAT. (Scope frontmatter added Phase 11.)
-2. **`deep-sky-cleanup-2026-05-29`** — **APPROVED at GATE 1 (2026-05-29)**,
-   ready to implement in a future session. Kill the random dice-roll
-   arrival; keep title backdrop / debug gallery / external-galaxy click.
-   All open questions resolved toward clean delete. **This is the next
-   implementation pickup.**
 
-**Maps to journey:** Both are 35% SCREENSAVER-MVP work. Deep-sky cleanup
-is the highest-priority F&F-MVP item surfaced by the 2026-05-18 audit.
+**Maps to journey:** 35% SCREENSAVER-MVP work.
 
 ## Next 1-3 queued (in priority order)
 
-1. **Implement `deep-sky-cleanup-2026-05-29`** — brief is GATE-1 approved;
-   surgical removal of the dice-roll arrival path (8-item removal list in
-   the brief). Re-locate line numbers at impl time (they drift). Tester
-   gate on the 5 ACs before Shipped.
-2. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
+1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
-3. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
+2. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
    warp regression; likely a Phase-E tunnel-pipeline rewrite.
 
 ## Recently shipped
 
+- **`deep-sky-cleanup-2026-05-29` SHIPPED** (2026-05-30) — removed the legacy
+  random dice-roll arrival (`deepSkyChance` roll + `DestinationPicker` deep-sky
+  weights/helpers + `spawnNavigableDeepSky` + `'deepsky'` audio track + autopilot
+  deep-sky tour stops); −351 LOC. Every warp now lands a real star-system or
+  explicit target. 3 KEEP paths intact (title backdrop, debug gallery,
+  external-galaxy click). All 5 ACs verified live (chrome-devtools GPU); pushed
+  to production GitHub Pages.
 - **Doc-system v5 migration COMPLETE** (2026-05-29) — Phase 8
   (deep-sky-cleanup PM-scoped + GATE-1 approved) and Phase 11 (Scope
   frontmatter on all 39 workstreams; 3 transitional docs archived to
@@ -66,7 +63,7 @@ is the highest-priority F&F-MVP item surfaced by the 2026-05-18 audit.
   each when its workstream is next touched. Not blocking.
 - **code-explorer + code-architect version control** — currently no git tracking. Max flagged for revisit. Options: `well-dipper/docs/PERSONAS/` + symlink up; separate `claude-agents` repo; accept untracked.
 - **Ship NPC spawning disable for F&F** — `ShipSpawner` turned off before F&F ship; preserve code for ENRICHED reactivation. Small follow-up workstream; not yet scoped.
-- **Christian (Max's brother) music tracks status** — `hyperspace / deepsky / warp-charge / arrival` wired in MusicManager but absent on disk. (Note: `deepsky` track slated for removal per deep-sky-cleanup GATE 1.) Status of brother's deliveries unknown.
+- **Christian (Max's brother) music tracks status** — `hyperspace / warp-charge / arrival` wired in MusicManager but absent on disk. (`deepsky` track removed from the list in deep-sky-cleanup, shipped 2026-05-30.) Status of brother's deliveries unknown.
 
 ## Deferred (deliberate)
 

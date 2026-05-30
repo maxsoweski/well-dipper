@@ -14,7 +14,6 @@
  *   /assets/music/title.ogg   (+ title.mp3 fallback)
  *   /assets/music/explore.ogg
  *   /assets/music/hyperspace.ogg
- *   /assets/music/deepsky.ogg
  *   etc.
  *
  * One-shot stings (warp-charge, arrival) are played with playOnce()
@@ -107,7 +106,7 @@ export class MusicManager {
    * Preload all known tracks.
    */
   async preloadAll() {
-    const tracks = ['intro', 'title', 'explore', 'hyperspace', 'deepsky', 'warp-charge', 'arrival'];
+    const tracks = ['intro', 'title', 'explore', 'hyperspace', 'warp-charge', 'arrival'];
     await Promise.all(tracks.map(t => this.preload(t)));
   }
 

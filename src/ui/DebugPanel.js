@@ -400,10 +400,9 @@ export class DebugPanel {
       { id: 'star-system', label: 'Star System' },
       { id: 'spiral-galaxy', label: 'Spiral Galaxy' },
       { id: 'elliptical-galaxy', label: 'Elliptical Galaxy' },
-      { id: 'emission-nebula', label: 'Emission Nebula' },
-      { id: 'planetary-nebula', label: 'Planetary Nebula' },
       { id: 'globular-cluster', label: 'Globular Cluster' },
-      { id: 'open-cluster', label: 'Open Cluster' },
+      // Navigable deep-sky (emission/planetary nebula, open cluster) removed as a
+      // spawnable destination (deep-sky-cleanup-2026-05-29) — view them in the gallery.
     ];
     for (const t of types) {
       html += `<button class="debug-btn" data-spawn="${t.id}">${t.label}</button>`;

@@ -115,8 +115,8 @@ Commit history is supporting evidence only, not authority.
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| **Deep-sky cleanup — remove dice-roll arrival path** (kill `main.js:2918-2922` deepSkyChance roll + `DestinationPicker.WEIGHTS` deep-sky entries; preserve title/gallery/Easter-egg uses) | F&F-MVP | proposed (**ASAP**) | — | — |
-| Deep-sky rendering — title screen + debug gallery + external-galaxy click | F&F-MVP | shipped-code (after cleanup ships) | Deep-sky cleanup | — |
+| **Deep-sky cleanup — remove dice-roll arrival path** (killed deepSkyChance roll + `DestinationPicker.WEIGHTS` deep-sky entries + `spawnNavigableDeepSky` + deepsky audio track + autopilot deep-sky tour stops; preserved title/gallery/Easter-egg uses) | F&F-MVP | shipped (`deep-sky-cleanup-2026-05-29`) | — | [WORKSTREAMS/deep-sky-cleanup-2026-05-29.md](WORKSTREAMS/deep-sky-cleanup-2026-05-29.md) |
+| Deep-sky rendering — title screen + debug gallery + external-galaxy click | F&F-MVP | shipped-code | — | — |
 | Easter egg — "you've gone too far" / turn-back message on external-galaxy arrival (TODO at `main.js:3039`; `_isExternalGalaxy` flag set but never read) | F&F-MVP | proposed | — | — |
 
 ## Audio
@@ -193,19 +193,22 @@ Five distinct broken pieces from intake 2026-05-18:
 ### Nav computer — Levels 2 + 3 (mid-zoom)
 Per intake: *"as you zoom closer and closer to the column [PRISM] view, you actually start to resolve more detail of the galaxy. We have not figured out a way to make that work in the nav screen... We don't have a working model for that."* Levels 2-3 currently show zoomed-in versions of the same Level 1 image. Unsolved design problem, not a bug. (Editorial note: Level 4 renamed COLUMN → PRISM on 2026-05-25; the quoted "column" preserves Max's original word.)
 
-### Deep-sky dice-roll mechanic (legacy state vs cleanup)
-**Code currently has dice-roll arrival alive at 15% default** (per `main.js:2918-2922` + `DestinationPicker.WEIGHTS`). Intake 2026-05-18 articulated the should-be: kill the dice-roll, keep title/gallery/Easter-egg uses only. **No workstream exists yet** to do this cleanup. Captured as the "Deep-sky cleanup" F&F-MVP row above; ASAP priority.
+### Deep-sky dice-roll mechanic (SHIPPED CLEAN — `deep-sky-cleanup-2026-05-29`)
+**The dice-roll arrival is GONE.** Shipped 2026-05-30: removed the `deepSkyChance` roll
++ `DestinationPicker.WEIGHTS` deep-sky entries + the dead Category-A/B + rolled-galaxy
+branches + `spawnNavigableDeepSky()` + the `'deepsky'` audio track + autopilot deep-sky
+tour stops. `onPrepareSystem` now hard-defaults `destType='star-system'`; deep-sky is
+reachable only via the two explicit KEEP gates (external-galaxy click, feature warp).
+All 5 ACs verified live (chrome-devtools GPU). Brief +
+[WORKSTREAMS/deep-sky-cleanup-2026-05-29.md](WORKSTREAMS/deep-sky-cleanup-2026-05-29.md).
 
-9 deep-sky usage sites mapped during 2026-05-19 code sweep:
-1. `main.js:2871` — external-galaxy click warp (KEEP — Easter egg)
-2. `main.js:2904` — `feature:<type>` warp routed to star inside (KEEP for nebula warps)
-3. `main.js:2944-2974` — DestinationPicker-rolled Category A/B (REMOVE)
-4. `main.js:3036-3040` — DestinationPicker-rolled spiral/elliptical galaxy (REMOVE — explicit TODO already in code: "show 'you've gone too far' message on arrival")
-5. `main.js:3404-3415` — title screen procedural background (KEEP)
-6. `main.js:2807-2826` — debug gallery GALLERY_TYPES (KEEP)
-7. `main.js:4061-4144` `spawnDeepSky()` — common path (audit which callers survive cleanup)
-8. `main.js:4156` `spawnNavigableDeepSky()` — navigable variant (audit similarly)
-9. `main.js:4943` — gallery internal switch (KEEP)
+The 3 KEEP paths still render: title-screen procedural background, debug gallery
+(`GALLERY_TYPES`, all types), and the deliberate external-galaxy click warp
+(`_isExternalGalaxy=true`). `spawnDeepSky()` survives as the external-galaxy spawn target.
+The turn-back "you've gone too far" message remains deliberately unbuilt (AC5 / row above).
+
+Follow-up (non-blocking): ~12 dead `system._navigable` reader sites in `main.js` (setter
+deleted in this cleanup; harmless reads of `undefined`).
 
 ### Ship NPC spawning — disable for F&F
 ShipSpawner currently spawns ships stochastically (~0-12 per system) per intake-correcting code sweep. Scene-level DirectionalLight + AmbientLight provide proper Lambertian shading (shipped 2026-05-10 commit `aa9ad23`; prior emissive-only workaround removed in same commit). Feature is NPC-ships-in-systems = ENRICHED tier. **Action item before F&F ship:** disable spawn (likely gate behind URL param or settings flag, or remove ShipSpawner instantiation from `main.js`); preserve code for ENRICHED reactivation later.

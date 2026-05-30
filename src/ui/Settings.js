@@ -15,7 +15,6 @@ const DEFAULTS = {
   // Screensaver
   idleTimeout: 300,           // seconds before autopilot starts (5 minutes)
   tourLingerMultiplier: 1.0,  // 0.5 = fast tours, 2.0 = slow tours
-  deepSkyChance: 15,          // % chance of deep sky destination per warp
   titleAutoDismiss: 30,       // seconds before title screen auto-dismisses
 
   // Display defaults
