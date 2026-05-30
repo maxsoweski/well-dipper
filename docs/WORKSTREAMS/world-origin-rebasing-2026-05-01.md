@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["world-origin"]
+---
+
 # Workstream: World-origin rebasing (2026-05-01)
 
 ## Status

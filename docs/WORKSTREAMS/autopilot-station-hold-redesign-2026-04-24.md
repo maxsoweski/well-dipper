@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: ["autopilot"]
+  systems: ["autopilot"]
+---
+
 # Workstream: Autopilot STATION-hold redesign — V1 motion-model implementation (2026-04-24)
 
 ## Status

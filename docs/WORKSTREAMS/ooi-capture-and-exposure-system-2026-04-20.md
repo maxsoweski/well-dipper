@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: []  # unverified — derive from shipped commit when this workstream is next touched
+---
+
 # Workstream: OOI capture-and-exposure system (2026-04-20)
 
 ## Status

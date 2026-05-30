@@ -53,14 +53,6 @@ which job each doc owns.
 | [ARCHIVE/](ARCHIVE/) | Pre-v5 docs (Game Bible, FEATURE_AUDIT, PLAN_*, dated audits, design docs v2-v4). Consulted as reference; not authoritative. |
 | [PARKING_LOT.md](PARKING_LOT.md) | Transitional — P1/P2/P3 deferred items migrate to per-system Open Questions when those systems get authored. Delete when migrations complete. |
 
-## Transitional artifacts (delete after v5 migration completes)
-
-| Doc | Lifecycle |
-|---|---|
-| _design-doc-system-v5.md | Active reference during migration; archives at Phase 11 |
-| _intake-2026-05-18-max-feature-status.md | Consumed during Phase 5 FEATURES.md authoring; archives at Phase 11 |
-| _migration-map-2026-05-18.md | Executed phase-by-phase; archives at Phase 11 |
-
 ## How docs are kept honest
 
 - **Tester PASS-on-Shipped triggers doc updates** (`PROTOCOLS/doc-updates-on-ship.md`)

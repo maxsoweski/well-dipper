@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: ["warp"]
+  systems: ["warp"]
+---
+
 # Workstream: Warp phase perf pass — FOLD hitch, INSIDE freeze, EXIT stutter (2026-04-20)
 
 ## Parent feature

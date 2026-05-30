@@ -1,3 +1,14 @@
+---
+Scope:
+  base: master
+  paths:
+    - src/effects/WarpPortal.js
+    - src/effects/WarpEffect.js
+    - src/main.js
+  features: ["warp"]
+  systems: ["warp", "app-shell"]
+---
+
 # Workstream: Warp landing strip persists + multiplies post-warp (2026-05-10)
 
 **Slug:** `warp-landing-strip-persists-2026-05-10`

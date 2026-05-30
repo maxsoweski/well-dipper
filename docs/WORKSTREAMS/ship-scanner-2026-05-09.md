@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["ui-hud", "ship-npc"]
+---
+
 # Workstream: Ship Scanner (2026-05-09)
 
 **Slug:** `ship-scanner-2026-05-09`

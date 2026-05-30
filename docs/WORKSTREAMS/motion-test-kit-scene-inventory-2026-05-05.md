@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["inspection-layer"]
+---
+
 # Workstream: Motion Test Kit — Scene-Inventory Snapshots (technique #6) (2026-05-05)
 
 ## Status

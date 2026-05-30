@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["inspection-layer"]
+---
+
 # Workstream: inspection-layer-v2 Phase A — cheap analytic primitives (2026-05-08)
 
 First phase of `docs/PLAN_inspection-layer-v2.md`. Establishes screen-space + camera-distance + real-frustum analytic primitives in the scene-inventory API. Foundation for Phases B-G; most subsequent phases compose against these primitives.

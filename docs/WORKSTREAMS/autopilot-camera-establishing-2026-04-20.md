@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: ["autopilot"]
+  systems: ["autopilot"]
+---
+
 # Workstream: Autopilot camera-axis restructure — ESTABLISHING mode (2026-04-20)
 
 ## Status

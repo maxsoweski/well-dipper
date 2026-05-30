@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: ["warp"]
+  systems: ["warp"]
+---
+
 # Workstream: Warp HYPER tunnel dimness — find the lab↔production delta (2026-04-18)
 
 ## Parent feature

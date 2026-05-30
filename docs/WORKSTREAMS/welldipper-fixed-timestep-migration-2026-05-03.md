@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["simulation"]
+---
+
 # Workstream: well-dipper fixed-timestep migration (2026-05-03)
 
 ## Status

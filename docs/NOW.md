@@ -4,140 +4,91 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-05-29 by working-Claude (Phase 7 ship — FEATURES/{autopilot,warp}.md standardized to v5; migration 9 of 11 phases shipped).
+Last updated: 2026-05-29 by working-Claude (doc-system v5 migration COMPLETE — all 11 phases shipped; Phase 8 deep-sky-cleanup brief approved at GATE 1; Phase 11 closed: workstream Scope frontmatter + transitional-doc archive).
 
 ---
 
 ## Active workstream
 
-**Doc system v5 migration** — 9 of 11 phases shipped (`fd98f23` →
-Phase 7). Phase 7 (this session): `FEATURES/autopilot.md` +
-`FEATURES/warp.md` standardized to the v5 template — `**Systems
-touched:**` lines (valid SYSTEMS.md slugs) + `## Player Beats`
-(F&F-MVP and ENRICHED/GAME) in Keith form with observable ACs; all
-prior prose preserved. `doc-rot` clean for both (no
-`orphan-systems-touched`, no `stale-deep-dive`). The 117
-`unclaimed-src` warns remain the expected baseline (burn down as
-SYSTEMS deep dives get authored). Open: Phases 11 and 8.
+**F&F-MVP screensaver completion.** The doc-system v5 migration is DONE
+(all 11 phases). Focus returns to shipping the screensaver MVP. Two
+concrete items are live:
 
-**Maps to journey:** Foundational structural work; not a SCREENSAVER MVP feature itself, but unblocks coherent F&F-MVP scoping going forward. After migration completes, focus shifts to Deep-sky cleanup (highest-priority F&F-MVP work surfaced by the audit).
+1. **`warp-landing-strip-persists-2026-05-10`** — landing-strip stops
+   following the player post-warp. **Tester VERIFIED_PENDING_MAX @ `e31ee65`** —
+   awaiting Max UAT. (Scope frontmatter added Phase 11.)
+2. **`deep-sky-cleanup-2026-05-29`** — **APPROVED at GATE 1 (2026-05-29)**,
+   ready to implement in a future session. Kill the random dice-roll
+   arrival; keep title backdrop / debug gallery / external-galaxy click.
+   All open questions resolved toward clean delete. **This is the next
+   implementation pickup.**
+
+**Maps to journey:** Both are 35% SCREENSAVER-MVP work. Deep-sky cleanup
+is the highest-priority F&F-MVP item surfaced by the 2026-05-18 audit.
 
 ## Next 1-3 queued (in priority order)
 
-1. **Phase 11 — Workstream Scope frontmatter + archive migration
-   artifacts.** ~2-3 hours mostly batch. Depends on Phase 5+6 for
-   feature/system slug lookups. Closes the migration.
-2. **Phase 8 — Deep-sky cleanup PM-scoping** (only remaining audit
-   item; other three resolved by 2026-05-19 code sweep). PM-owned brief.
-
-After Phase 11, migration is done. Next workstream candidate:
-**Deep-sky cleanup** (F&F-MVP / ASAP per Max — kill dice-roll arrival
-path; see `FEATURES.md` Deep-sky section + per-row notes for the 9
-usage sites with KEEP/REMOVE annotations).
-
-## Remaining migration phases — PASS/FAIL criteria
-
-### Phase 7 — Standardize FEATURES/{autopilot,warp}.md — ✅ DONE 2026-05-29
-
-All PASS criteria met for both files: `**Systems touched:**` lines with
-valid SYSTEMS.md slugs; `## Player Beats` (F&F-MVP + ENRICHED/GAME) in
-Keith form with observable ACs; prior prose preserved; `doc-rot` clean
-(no `orphan-systems-touched`, no `stale-deep-dive`). 7 beats/ACs on
-warp, 9 on autopilot.
-
-### Phase 8 — Deep-sky cleanup PM-scoping (other audit items already resolved)
-
-**Resolved by 2026-05-19 code sweep:**
-- ✅ Autopilot deep-sky target audit: confirmed stars-only
-- ✅ 18 planet types wiring audit: all wired
-- ✅ Easter egg turn-back message audit: confirmed NOT built (ENRICHED row added)
-
-**Remaining:** Deep-sky cleanup workstream needs PM-scoped brief.
-
-**PASS criteria:**
-- [ ] `docs/WORKSTREAMS/deep-sky-cleanup-<date>.md` exists, authored by PM agent
-- [ ] Brief includes YAML frontmatter `Scope:` block (per v5 Rule 14) with paths (likely `src/main.js`, `src/generation/DestinationPicker.js`), features (likely `deep-sky-cleanup`), systems (likely TBD pending Phase 6)
-- [ ] Brief enumerates the 9 deep-sky usage sites with KEEP / REMOVE annotation (per `FEATURES.md` per-row notes section); confirms each site's disposition
-- [ ] ACs specify: dice-roll path removed; title screen procedural background still works; debug gallery still works; external-galaxy click warp still works; turn-back message TODO remains (not in scope of this workstream)
-- [ ] Max GATE 1 approval on brief before execution begins
-
-**FAIL signals:**
-- Brief assumes deep-sky rendering is dead (it isn't entirely — title/gallery/Easter-egg uses survive)
-- Brief tries to also build the turn-back message (out of scope; ENRICHED)
-
-### Phase 11 — Workstream Scope frontmatter + archive migration artifacts
-
-**PASS criteria:**
-- [ ] **Active workstream** (`warp-landing-strip-persists-2026-05-10.md`):
-  YAML frontmatter `Scope:` block present at top, with `base: master`,
-  `paths:` (the warp files modified by the fix), `features:` (likely
-  `["warp"]`), `systems:` (TBD per Phase 6). Authored by working-Claude
-  from PM brief content; Max reviews
-- [ ] **`npm run doc-rot --workstream warp-landing-strip-persists-2026-05-10`**
-  produces a scoped report (filtered output for that workstream's downstream
-  doc surface), not the full project-wide report
-- [ ] **37 archived workstreams** have `Scope:` frontmatter added via batch
-  process; uncertain Scopes marked `# unverified` comment; not blocking on
-  perfection here
-- [ ] `docs/_intake-2026-05-18-max-feature-status.md` moved to
-  `docs/ARCHIVE/_intake-2026-05-18-max-feature-status_LEGACY.md`
-- [ ] `docs/_design-doc-system-v5.md` moved to
-  `docs/ARCHIVE/_design-doc-system-v5_LEGACY.md`
-- [ ] `docs/_migration-map-2026-05-18.md` moved to
-  `docs/ARCHIVE/_migration-map-2026-05-18_LEGACY.md`
-- [ ] `docs/NOW.md` updated to reflect post-migration state (active
-  workstream becomes the next real work, not the migration itself)
-- [ ] `docs/README.md` updated — the "Transitional artifacts" section
-  removed since those files are archived
-
-**FAIL signals:**
-- `npm run doc-rot --workstream <slug>` errors on missing/malformed YAML
-- Existing archived workstreams' Scope fields claim files those workstreams
-  didn't touch (validation: spot-check 2-3 with `git log --follow`)
+1. **Implement `deep-sky-cleanup-2026-05-29`** — brief is GATE-1 approved;
+   surgical removal of the dice-roll arrival path (8-item removal list in
+   the brief). Re-locate line numbers at impl time (they drift). Tester
+   gate on the 5 ACs before Shipped.
+2. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
+   browser, then flip to Shipped + push.
+3. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
+   warp regression; likely a Phase-E tunnel-pipeline rewrite.
 
 ## Recently shipped
 
-- **Phase 7 — FEATURES/{autopilot,warp}.md standardized to v5** (2026-05-29) — `**Systems touched:**` lines + `## Player Beats` (F&F-MVP + ENRICHED/GAME, Keith form, observable ACs) added to both; all prior prose preserved; `doc-rot` clean. Migration now 9 of 11.
-- **4 net-new FEATURES deep dives** (2026-05-25, `0373d1f`→`039b52c`) — galactic-rendering, nebulae, planet-rendering, nav-computer authored in v5 template; nav-computer Level 4 COLUMN→PRISM rename (`039b52c`).
-- **Phase 6 — SYSTEMS.md + SYSTEMS/app-shell/** (2026-05-19, `cb1fc4d`) — 26-system flat map, `app-shell` deep dive, doc-graph + doc-rot verified clean. Maps every `src/**/*.js` to a system slug; auto-table grows as deep dives author progressively.
+- **Doc-system v5 migration COMPLETE** (2026-05-29) — Phase 8
+  (deep-sky-cleanup PM-scoped + GATE-1 approved) and Phase 11 (Scope
+  frontmatter on all 39 workstreams; 3 transitional docs archived to
+  `ARCHIVE/*_LEGACY.md`; README "Transitional artifacts" section removed;
+  this NOW.md post-migration rewrite). All 11 phases done.
+- **Phase 7 — FEATURES/{autopilot,warp}.md standardized to v5** (2026-05-29, `a4ddc47`) — `**Systems touched:**` lines + `## Player Beats` (F&F-MVP + ENRICHED/GAME, Keith form, observable ACs); prior prose preserved; `doc-rot` clean.
+- **4 net-new FEATURES deep dives** (2026-05-25, `0373d1f`→`039b52c`) — galactic-rendering, nebulae, planet-rendering, nav-computer; nav-computer Level 4 COLUMN→PRISM rename (`039b52c`).
+- **Phase 6 — SYSTEMS.md + SYSTEMS/app-shell/** (2026-05-19, `cb1fc4d`) — 26-system flat map, `app-shell` deep dive, doc-graph + doc-rot clean.
 - `ac4b477` — **Phase 5 — FEATURES.md** Max-authoritative inventory (69 rows)
-- `5a97e41` — **Phase 9 — CLAUDE.md transform** (62 → 81 lines; under 120 budget) + JOURNEY structural-debt section
-- `81c9f22` — **Phase 4 — MOOD index** wired (66 root + 3 subfolders inventoried from Pictures folder)
-- `75c4a35` — **Phase 3 — Scripts** authored (doc-rot, doc-graph, uat-status, mood-bootstrap, pre-push hook); 4 npm scripts; madge installed
-- `8625a8a` — **Phase 2 — Infrastructure** authored (PILLARS, PLAYER_EXPERIENCE, 8 PROTOCOLS files, README)
-- `fd98f23` — **Phase 1 — Archive** (~50 file moves; Bible/audits/PLAN_*/etc. to ARCHIVE/; RESEARCH_* to research/)
-- `a021e99` — staged lingering deletion from Phase 1
-- **Phase 10** — pre-push hook installed + verified (fires `npm run doc-rot` on every push)
-- **Code sweep finding:** code-explorer + code-architect agents stolen from feature-dev plugin; saved to `~/.claude/agents/`; tweaked `model: opus`
+- `5a97e41` — **Phase 9 — CLAUDE.md transform** (62 → 81 lines) + JOURNEY structural-debt section
+- `81c9f22` — **Phase 4 — MOOD index** wired
+- `75c4a35` — **Phase 3 — Scripts** (doc-rot, doc-graph, uat-status, mood-bootstrap, pre-push hook)
+- `8625a8a` — **Phase 2 — Infrastructure** (PILLARS, PLAYER_EXPERIENCE, 8 PROTOCOLS, README)
+- `fd98f23` — **Phase 1 — Archive** (~50 file moves)
+- **Phase 10** — pre-push hook (fires `npm run doc-rot` on every push)
 
 ## Open structural decisions (from session)
 
-- **code-explorer + code-architect version control** — currently no git tracking. Max flagged for revisit. Options: move to `well-dipper/docs/PERSONAS/` + symlink up (matches PM/Tester pattern but ties cross-project tools to well-dipper); separate `claude-agents` repo; accept untracked.
-- **Ship NPC spawning disable for F&F** — `ShipSpawner` will be turned off before F&F ship; preserve code for ENRICHED reactivation. Small follow-up workstream; not yet scoped.
-- **Christian (Max's brother) music tracks status** — `hyperspace.mp3 / deepsky.mp3 / warp-charge.mp3 / arrival.mp3` wired in MusicManager but absent on disk. Status of brother's deliveries unknown.
+- **Historical-workstream Scope `# unverified` back-fill** — Phase 11
+  added Scope frontmatter to all 37 historical workstreams, but `paths:`
+  were left `[] # unverified` (not back-filled from shipped commits), and
+  6 process/ambiguous ones have `systems: [] # unverified`
+  (canvas-recording-workflow-formalization, dev-collab-three-layer-testing,
+  warp-shipped-gate-process-fix, ooi-capture-and-exposure-system). Back-fill
+  each when its workstream is next touched. Not blocking.
+- **code-explorer + code-architect version control** — currently no git tracking. Max flagged for revisit. Options: `well-dipper/docs/PERSONAS/` + symlink up; separate `claude-agents` repo; accept untracked.
+- **Ship NPC spawning disable for F&F** — `ShipSpawner` turned off before F&F ship; preserve code for ENRICHED reactivation. Small follow-up workstream; not yet scoped.
+- **Christian (Max's brother) music tracks status** — `hyperspace / deepsky / warp-charge / arrival` wired in MusicManager but absent on disk. (Note: `deepsky` track slated for removal per deep-sky-cleanup GATE 1.) Status of brother's deliveries unknown.
 
 ## Deferred (deliberate)
 
-- **Per-system SYSTEMS/<sys>/ROADMAPs** — `PLAN_world-origin-rebasing.md` + `PLAN_inspection-layer-v2.md` archived; ROADMAPs authored fresh when each system gets its first deep dive (per Rule 1 no empty folders).
+- **Per-system SYSTEMS/<sys>/ROADMAPs** — authored fresh when each system gets its first deep dive (Rule 1 no empty folders).
 - **Sol-naming triage** — `body.star.sol` not tagged in partial inspection layer.
-- **PARKING_LOT.md** — P1/P2/P3 deferred items still in transitional doc; migrate to per-system Open Questions when those systems get deep dives (tracked in JOURNEY structural debt).
+- **PARKING_LOT.md** — P1/P2/P3 deferred items; migrate to per-system Open Questions when those systems get deep dives (tracked in JOURNEY structural debt).
 
 ## What's NOT in the queue right now
 
-- Layer-3 GAME features (15+ rows in FEATURES.md GAME section) — gated by F&F MVP ship completion. Time-debt mechanic, propulsion tiers, combat (Rule of Three + Newtonian physics), on-foot, ship interior walk-around, scanner-4-layers, etc.
-- New ENRICHED work — gated by F&F MVP ship. 4 ENRICHED rows currently (Ship Scanner, Ship NPCs, Easter egg, Ship reticle).
-- Doc system v6 — not foreseen; v5 expected to hold for ≥6 months per v5 design uncertainty calibration.
+- Layer-3 GAME features (15+ rows in FEATURES.md GAME section) — gated by F&F MVP ship completion.
+- New ENRICHED work — gated by F&F MVP ship. 4 ENRICHED rows currently.
+- Doc system v6 — not foreseen; v5 expected to hold ≥6 months.
 
 ## Session checklist (start of each working session)
 
 1. Re-read `HEART_OF_DESIRE.md`
 2. Skim `JOURNEY.md` current-objective section
-3. Read THIS file's Active workstream + Next 1-3 + Remaining migration phases section
+3. Read THIS file's Active workstream + Next 1-3
 4. Check `~/.claude/state/dev-collab/active-workstream.json` matches Active workstream (if mismatched, this file is stale — update before proceeding)
 
 ## How this file updates
 
 - **Working-Claude updates at session end** per CLAUDE.md session-end protocol
 - **Max edits** when priorities shift, when items move in/out of queue, when deferred status changes
-- **Pass/fail criteria for migration phases** stay here until those phases complete; remove (or move to a phase-archive note) when migration done
-- Don't let this file grow past one screen. Currently denser than ideal; the migration-phase section comes out after Phase 11
+- Don't let this file grow past one screen.

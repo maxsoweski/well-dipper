@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: ["autopilot"]
+  systems: ["autopilot", "ui-hud"]
+---
+
 # Workstream: Manual nav ↔ autopilot toggle — lifecycle fix + adjacent code review (2026-05-02)
 
 ## Status

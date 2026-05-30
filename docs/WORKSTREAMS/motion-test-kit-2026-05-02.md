@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["inspection-layer"]
+---
+
 # Workstream: Motion Test Kit — cross-project library + well-dipper integration (2026-05-02)
 
 ## Status

@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["inspection-layer"]
+---
+
 # Workstream: well-dipper lab-mode keybinds (2026-05-05)
 
 ## Status

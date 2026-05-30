@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: []  # unverified — derive from shipped commit when this workstream is next touched
+---
+
 # Workstream: dev-collab three-layer testing framework (2026-05-07)
 
 Meta-workstream. Modifies the dev-collab framework itself rather than building a feature. Output: PM brief shape gains a Test Coverage Plan section; Tester verdict shape classifies evidence by layer; per-project TESTING_CONVENTIONS template + well-dipper instance. Cross-project applicable.

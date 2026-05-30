@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["inspection-layer"]
+---
+
 # Workstream: scene-inspection layer UAT (2026-05-07)
 
 First real workstream under the new three-layer testing framework (`feedback_three-layer-test-coverage.md`). Formally closes UAT on the inspection-layer features that shipped with Tester PASS T1-T4 but pending Max-eyes verification.

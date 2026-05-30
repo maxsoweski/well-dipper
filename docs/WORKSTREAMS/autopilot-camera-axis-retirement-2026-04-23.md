@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: ["autopilot"]
+  systems: ["autopilot"]
+---
+
 # Workstream: Autopilot camera-axis retirement — land `ESTABLISHING` + `CameraMode` dispatch (2026-04-23)
 
 ## Status

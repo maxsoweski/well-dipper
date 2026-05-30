@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["world-origin"]
+---
+
 # Workstream: rebase-celestial-frame-fix-2026-05-03
 
 ## Status

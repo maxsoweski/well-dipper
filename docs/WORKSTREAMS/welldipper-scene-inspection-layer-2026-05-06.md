@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["inspection-layer"]
+---
+
 # Workstream: scene-inspection layer (2026-05-06)
 
 **Shipped `c24d3f1` 2026-05-07** — kit `motion-test-kit:7be6857`. Tester PASS at the to-be-shipped commit (verdict T4 in `~/.claude/state/dev-collab/tester-audits/welldipper-scene-inspection-layer-2026-05-06.md`). Phase 1-4 all landed. Three deliberate carve-outs (AsteroidBelt naming + ShipSpawner naming + lights category) are documented in commit bodies; flagged for follow-up if/when the brief's predicates need them. Two parked regressions (reticle-persists-after-warp, warp-tunnel-second-half-not-rendering) remain parked but are now diagnose-able via `window.__wd.takeSceneInventory()` + `meshVisibleAt('effect.warp.tunnel', ...)` — triage workstream pending.

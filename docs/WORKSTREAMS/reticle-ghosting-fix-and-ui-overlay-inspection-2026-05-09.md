@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["ui-hud", "inspection-layer"]
+---
+
 # Workstream: Reticle ghosting fix + UI-overlay inspection layer (2026-05-09)
 
 **Slug:** `reticle-ghosting-fix-and-ui-overlay-inspection-2026-05-09`

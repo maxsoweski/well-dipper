@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: ["warp"]
+  systems: []  # unverified — derive from shipped commit when this workstream is next touched
+---
+
 # Workstream: Shipped-gate process fix — Max-recording protocol + per-phase ACs + VERIFIED_PENDING_MAX (2026-04-18)
 
 ## Parent feature

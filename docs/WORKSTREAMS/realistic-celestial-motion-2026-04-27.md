@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["physics", "celestial-bodies"]
+---
+
 # Workstream: realistic-celestial-motion-2026-04-27
 
 **Status:** **`Shipped a89e454 (Tester §T2 PASS — 2026-04-27)`** — Max

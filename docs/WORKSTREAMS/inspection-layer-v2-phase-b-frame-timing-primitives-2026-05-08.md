@@ -1,3 +1,11 @@
+---
+Scope:
+  base: master
+  paths: []  # unverified — historical workstream; paths not back-filled (Phase 11 batch)
+  features: []  # unverified
+  systems: ["inspection-layer"]
+---
+
 # Workstream: inspection-layer-v2 Phase B — frame timing primitives (2026-05-08)
 
 Second phase of `docs/PLAN_inspection-layer-v2.md`. Independent of Phase A; can execute in parallel. Adds frame-timing observability (LoAF + WebGL GPU timer queries) to the scene-inventory API.
