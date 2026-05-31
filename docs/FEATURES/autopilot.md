@@ -501,6 +501,14 @@ Issues observed but consciously **parked** — not yet a scoped workstream, not 
 
 Once those answers exist at the feature level, a PM workstream can scope the travel-layer rewrite with acceptance criteria tied to the felt outcomes (short hops *feel short*, `STATION` *feels intimate*, the drive *reads considered*).
 
+### Flight-mode-entry runaway from a stationary orbit (parked 2026-05-31)
+
+**Observed during audit-#3 WU1 verification.** Forcing the camera into Flight mode from a stationary Sol orbit (`window._cc.toggleCameraMode()` while idle in Toy Box) drives the ship into a runaway: position diverges to ~1e10 units within ~2–3 s, with per-frame `posDelta` in the billions. The gravity/flight integrator goes unstable on this entry path.
+
+**Why it's parked, not a bug ticket.** This is *not* the normal Flight-mode entry path — Flight is normally entered via warp arrival (`ENTRY` phase), where the ship arrives with a well-defined exit vector and velocity. Toggling Flight from a dead stop in an existing orbit is a synthetic/debug path. The runaway touches none of the WU1 code (FrameDiagnostics divergence ruler + `restoreFromWorldState` NaN guard) — confirmed by the divergence ruler reading 0 throughout the runaway. Lives here (autopilot doc) because manual Flight and autopilot share the `ShipCameraSystem` + `FlightDynamics` integrator stack.
+
+**Park-or-scope decision.** Parked. Revisit if/when manual Flight-mode entry from arbitrary states becomes a supported path, or during the autopilot redo (the shared integrator gets fresh attention then). Likely root cause to check first: gravity acceleration applied with no velocity-clamp / no soft-start when the ship is placed at rest deep in a gravity well, or a dt/feedback instability in the entry tick. Repro: `_lab.enterSol()` → wait for orbit settle → `window._cc.toggleCameraMode()` → watch `window._cc.flight.position` over ~3 s.
+
 ## See also
 
 - `docs/GAME_BIBLE.md` §1 Core Experience (vision anchor), §8H Propulsion & Travel Landscape (gravity-drive lore), §2 Aesthetic (60s/70s register).
