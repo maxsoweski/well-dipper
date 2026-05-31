@@ -466,8 +466,27 @@ export class BodyRenderer {
   }
 
   dispose() {
+    // The delegate disposes whichever material is currently assigned to the
+    // surface (textured after a swap, procedural otherwise). We own the rest:
+    // the textures we loaded (three.js does NOT free a material's textures on
+    // material.dispose()) and the saved material the delegate won't touch.
+    const surface = this._delegate.surface || this._delegate.mesh || null;
+    const liveMaterial = surface ? surface.material : null;
+    const tm = this._texturedMaterial;
+
+    if (tm?.uniforms) {
+      tm.uniforms.diffuseMap?.value?.dispose?.();
+      tm.uniforms.heightMap?.value?.dispose?.();
+    }
+
     if (this._delegate.dispose) {
       this._delegate.dispose();
+    }
+
+    // Dispose the saved materials the delegate didn't (the non-live one).
+    if (tm && tm !== liveMaterial) tm.dispose();
+    if (this._proceduralMaterial && this._proceduralMaterial !== liveMaterial) {
+      this._proceduralMaterial.dispose();
     }
   }
 }

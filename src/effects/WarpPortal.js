@@ -229,10 +229,7 @@ export class WarpPortal {
           }
 
           void main() {
-            vec2 uv = vec2(
-              vUv.x * uCircCells,
-              (vUv.y + uScroll) * uLengthCells
-            );
+            float scrollY = (vUv.y + uScroll) * uLengthCells;
 
             // ── Origin starfield ──
             vec3 colOrigin = vec3(0.0);
@@ -241,7 +238,12 @@ export class WarpPortal {
               float depth = fract(i / NUM_LAYERS + t);
               float scale = mix(1.5, 0.5, depth);
               float fade = depth * smoothstep(1.0, 0.9, depth);
-              colOrigin += StarLayer(uv * scale + i * 453.2, uHashSeed, 0.0, uCircCells * scale) * fade;
+              // Circumferential cell count must be an integer for mod() to wrap
+              // exactly at the seam (vUv.x 0↔1). uCircCells*scale is generally
+              // non-integer → misaligned wrap → visible seam, so round per layer.
+              float layerCells = max(1.0, floor(uCircCells * scale + 0.5));
+              vec2 luv = vec2(vUv.x * layerCells, scrollY * scale) + i * 453.2;
+              colOrigin += StarLayer(luv, uHashSeed, 0.0, layerCells) * fade;
             }
 
             // ── Destination starfield (different seed) ──
@@ -250,7 +252,9 @@ export class WarpPortal {
               float depth = fract(i / NUM_LAYERS + t);
               float scale = mix(1.5, 0.5, depth);
               float fade = depth * smoothstep(1.0, 0.9, depth);
-              colDest += StarLayer(uv * scale + i * 453.2, uDestHashSeed, 1.0, uCircCells * scale) * fade;
+              float layerCells = max(1.0, floor(uCircCells * scale + 0.5));
+              vec2 luv = vec2(vUv.x * layerCells, scrollY * scale) + i * 453.2;
+              colDest += StarLayer(luv, uDestHashSeed, 1.0, layerCells) * fade;
             }
 
             // ── Bridge blend: smoothstep along vUv.y offset by uDestMix ──
@@ -834,5 +838,18 @@ export class WarpPortal {
     this._rimA.material.dispose();
     this._rimB.geometry.dispose();
     this._rimB.material.dispose();
+
+    // Landing + entry strips share ONE SpriteMaterial + CanvasTexture (the
+    // entry strip reuses the landing strip's material). Dispose them once,
+    // then detach the ~50 cross sprites so the groups don't retain them.
+    // (Sprite geometry is a three.js-global singleton — never dispose it.)
+    const stripMat = this._landingStrip?.children?.[0]?.material;
+    if (stripMat) {
+      stripMat.map?.dispose();
+      stripMat.dispose();
+    }
+    this._landingStrip?.clear();
+    this._entryStrip?.clear();
+    this.group?.remove(this._landingStrip, this._entryStrip);
   }
 }

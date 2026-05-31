@@ -212,7 +212,8 @@ export class NavGalaxyRenderer {
       `,
     });
 
-    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this._material);
+    this._quadGeometry = new THREE.PlaneGeometry(2, 2);
+    const quad = new THREE.Mesh(this._quadGeometry, this._material);
     this._scene.add(quad);
 
     // Output canvas for drawImage()
@@ -297,5 +298,6 @@ export class NavGalaxyRenderer {
   dispose() {
     this._rt.dispose();
     this._material.dispose();
+    this._quadGeometry?.dispose();
   }
 }
