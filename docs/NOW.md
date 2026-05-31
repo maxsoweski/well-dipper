@@ -29,6 +29,14 @@ is live:
 
 ## Recently shipped
 
+- **deep-sky-cleanup dead-code follow-up** (2026-05-31, `d018c60`) — multi-agent
+  blast-radius audit of the cleanup found 0 bugs / all KEEP paths intact; only
+  residue was orphaned `_navigable` machinery (the deleted `spawnNavigableDeepSky`
+  was its sole writer). Removed `buildNavigableQueue`/`populateNavigableQueueRefs`,
+  7 always-false branches, 8 always-true conjuncts, orphaned `simRandom` import;
+  −160 LOC, no behavior change. Audit report:
+  `~/briefings/well-dipper-deepsky-blast-radius-audit-2f1a878.md`. (Audits #3 bug /
+  #2 architecture / #1 whole-codebase queued for later sessions.)
 - **`deep-sky-cleanup-2026-05-29` SHIPPED** (2026-05-30) — removed the legacy
   random dice-roll arrival (`deepSkyChance` roll + `DestinationPicker` deep-sky
   weights/helpers + `spawnNavigableDeepSky` + `'deepsky'` audio track + autopilot
