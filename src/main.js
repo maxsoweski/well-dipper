@@ -6049,19 +6049,30 @@ function simStep(deltaTime) {
         pz - _worldOriginVec.z,
       );
 
-      // Primary sun direction: from planet toward star 1
+      // Primary sun direction: from planet toward star 1.
+      // Use the planet's *rebased* position (p), not the raw orbit coords
+      // (px/pz). The star meshes are also rebased (lines ~6029-6038), so both
+      // operands must live in the same space for _worldOriginVec to cancel.
+      // Mixing rebased-star with raw-planet skews the light dir by
+      // _worldOriginVec far from origin — wrong terminator/specular in binary
+      // systems after a world-origin rebase. (WU5; see
+      // memory/well-dipper-rebasing-plan.md.)
+      const p = entry.planet.mesh.position;
       if (system.isBinary) {
         const s1 = system.star.mesh.position;
-        _sunDir.set(s1.x - px, 0, s1.z - pz).normalize();
+        _sunDir.set(s1.x - p.x, 0, s1.z - p.z).normalize();
       } else {
+        // Non-binary: the sole star sits at raw world origin, so its rebased
+        // position is -_worldOriginVec; (star_rebased - p) reduces exactly to
+        // (-px, -pz). Kept in this closed form (already rebase-invariant).
         _sunDir.set(-px, 0, -pz).normalize();
       }
       entry.planet._lightDir.copy(_sunDir);
 
-      // Secondary sun direction (binary only)
+      // Secondary sun direction (binary only) — same rebased-space fix.
       if (system.isBinary) {
         const s2 = system.star2.mesh.position;
-        _sunDir2.set(s2.x - px, 0, s2.z - pz).normalize();
+        _sunDir2.set(s2.x - p.x, 0, s2.z - p.z).normalize();
         entry.planet._lightDir2.copy(_sunDir2);
       }
 
