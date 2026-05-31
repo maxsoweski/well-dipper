@@ -1,5 +1,3 @@
-import { simRandom } from '../core/SimRandom.js';
-
 /**
  * AutoNavigator — autopilot mode that tours the star system.
  *
@@ -78,46 +76,6 @@ export class AutoNavigator {
           linger: 20,
         });
       }
-    }
-  }
-
-  /**
-   * Build tour queue for a navigable deep sky (nebulae, open clusters).
-   * Tours between the stars — each star gets a tour stop.
-   * @param {Object} system — the system object (with star, star2, extraStars)
-   */
-  buildNavigableQueue(system) {
-    this.queue = [];
-
-    // Count all stars
-    const allStars = [system.star];
-    if (system.star2) allStars.push(system.star2);
-    if (system.extraStars) allStars.push(...system.extraStars);
-
-    // Overview stop: camera sees the whole cluster/nebula before diving in.
-    // Uses first star as anchor but orbits at 30% of the structure radius.
-    if (system._navRadius && allStars.length > 2) {
-      this.queue.push({
-        type: 'star',
-        starIndex: 0,
-        bodyRef: null,
-        orbitDistance: system._navRadius * 0.9,  // 90% of structure = overview (far enough to see the whole nebula/cluster)
-        bodyRadius: system._navRadius * 0.05,    // prevents camera from getting too close
-        linger: 12 + simRandom() * 5,          // 12-17s overview
-        _isOverview: true,                        // flag for reference
-      });
-    }
-
-    // Each star gets a tour stop
-    for (let i = 0; i < allStars.length; i++) {
-      this.queue.push({
-        type: 'star',
-        starIndex: i,
-        bodyRef: null,       // populated by populateNavigableQueueRefs
-        orbitDistance: 0,
-        bodyRadius: 0,
-        linger: 30 + simRandom() * 10,  // 30-40s per star
-      });
     }
   }
 

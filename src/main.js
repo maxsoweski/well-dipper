@@ -2164,7 +2164,7 @@ function dismissTitleScreen() {
   // After the smooth transition settles, hand off to free-look orbit or autopilot.
   setTimeout(() => {
     if (!system) return;
-    const isDistantDeepSky = system.type && system.type !== 'star-system' && !system._navigable;
+    const isDistantDeepSky = system.type && system.type !== 'star-system';
     if (isDistantDeepSky) {
       // Free-look orbit (not bypassed) — user can drag to look around
       cameraController.autoRotateActive = true;
@@ -3540,7 +3540,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   let systemNames = null;
   if (systemData._knownSystemNames) {
     systemNames = systemData._knownSystemNames;
-  } else if (!systemData._navigable) {
+  } else {
     const nameRng = new SeededRandom(seed);
     systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null);
   }
@@ -4981,41 +4981,6 @@ function populateQueueRefs() {
 }
 
 /**
- * Populate body references for navigable deep sky queue stops.
- * Stars in navigable deep sky are stored in system.star, system.star2, system.extraStars.
- */
-function populateNavigableQueueRefs() {
-  const allStars = [system.star];
-  if (system.star2) allStars.push(system.star2);
-  if (system.extraStars) allStars.push(...system.extraStars);
-
-  // Compute nearest-neighbor distance for each star (for orbit distance scaling)
-  const nearestDist = allStars.map((s, i) => {
-    let minD = Infinity;
-    for (let j = 0; j < allStars.length; j++) {
-      if (i === j) continue;
-      const d = s.mesh.position.distanceTo(allStars[j].mesh.position);
-      if (d < minD) minD = d;
-    }
-    return minD;
-  });
-
-  for (const stop of autoNav.queue) {
-    if (stop.type === 'star') {
-      const starObj = allStars[stop.starIndex] || allStars[0];
-      stop.bodyRef = starObj.mesh;
-      // Overview stops keep their pre-set orbitDistance/bodyRadius
-      if (stop._isOverview) continue;
-      stop.bodyRadius = starObj.data.radius;
-      // Orbit at 15% of nearest-neighbor distance so you can see neighbors at scale,
-      // but at least 4× star radius (stay outside glow corona)
-      const nn = nearestDist[stop.starIndex] || starObj.data.radius * 8;
-      stop.orbitDistance = Math.max(starObj.data.radius * 4, nn * 0.15);
-    }
-  }
-}
-
-/**
  * Update focusIndex/focusMoonIndex/focusStarIndex from a queue stop.
  * Keeps the minimap focus ring in sync during autopilot.
  */
@@ -5025,12 +4990,7 @@ function updateFocusFromStop(stop) {
     focusStarIndex = stop.starIndex;
     focusMoonIndex = -1;
     // Show star info
-    let starObj;
-    if (system._navigable && system.extraStars && stop.starIndex >= 2) {
-      starObj = system.extraStars[stop.starIndex - 2] || system.star;
-    } else {
-      starObj = stop.starIndex === 1 && system.star2 ? system.star2 : system.star;
-    }
+    const starObj = stop.starIndex === 1 && system.star2 ? system.star2 : system.star;
     const starName = system.names
       ? (stop.starIndex === 1 ? system.names.star2 : system.names.star)
       : null;
@@ -5090,11 +5050,7 @@ function startFlythrough() {
   soundEngine.play('autopilotOn');
   _autopilotEnabled = true;
 
-  if (system._navigable) {
-    // Navigable deep sky: tour between stars (like star system)
-    autoNav.buildNavigableQueue(system);
-    populateNavigableQueueRefs();
-  } else if (system.type && system.type !== 'star-system') {
+  if (system.type && system.type !== 'star-system') {
     // Distant deep sky: no autopilot, orbit around center with free-look.
     const radius = system.destination.data.radius;
     const viewDist = radius * 1.25;
@@ -5216,14 +5172,7 @@ function warpSwapSystem() {
     const coastDist = 60;                                     // 3s post-warp approach
     const travelDist = foldDist + enterDist + hyperDist + exitDist;  // ~463
 
-    if (system._navigable) {
-      // Navigable deep sky: approach from well outside the structure
-      // so you see the whole nebula/cluster on arrival, not the interior
-      const navRadius = system._navRadius || 100000;
-      const orbitDist = navRadius * 0.9;
-      camera.position.set(0, 2, travelDist + orbitDist + coastDist);
-      camera.lookAt(0, 0, 0);
-    } else if (system.type && system.type !== 'star-system') {
+    if (system.type && system.type !== 'star-system') {
       // Distant deep sky: approach from far along +Z toward the structure center.
       // Final viewing distance is radius * 1.25 — start further out so the
       // momentum drift in warpRevealSystem has room to coast in.
@@ -5273,7 +5222,7 @@ function warpRevealSystem() {
   // ── Distant deep sky: contemplation view with momentum coast ──
   // Galaxies + globular clusters — camera drifts in with decelerating momentum,
   // then hands off to free-look orbit around the object.
-  if (system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
+  if (system.type && system.type !== 'star-system' && system.destination) {
     // Snap object back to origin (drifted with camera during warp)
     system.destination.mesh.position.set(0, 0, 0);
 
@@ -5295,43 +5244,6 @@ function warpRevealSystem() {
 
     const label = system.type.replace(/-/g, ' ');
     console.log(`Warp: coasting into ${label} (4s drift, then free-look)`);
-    return;
-  }
-
-  // ── Navigable deep sky: tour between stars (like a star system) ──
-  if (system._navigable) {
-    autoNav.buildNavigableQueue(system);
-    populateNavigableQueueRefs();
-    autoNav.currentIndex = 0;
-    autoNav.start();
-
-    const firstStop = autoNav.getCurrentStop();
-    if (firstStop && firstStop.bodyRef) {
-      const upcoming = autoNav.getNextStop();
-      navSubsystem.beginMotion({
-        fromPosition: camera.position.clone(),
-        fromOrientation: camera.quaternion.clone(),
-        fromOrbitBody: null,
-        toBody: firstStop.bodyRef,
-        toOrbitDistance: firstStop.orbitDistance,
-        toBodyRadius: firstStop.bodyRadius,
-        nextBody: upcoming ? upcoming.bodyRef : null,
-        nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
-        arrivalOptions: {
-          approachFirst: true,
-          slowOrbit: true,
-          approachOrbitDuration: firstStop.linger * settings.get('tourLingerMultiplier'),
-        },
-        launchOptions: { warpExit: true },
-      });
-      // Ship-axis ENTRY — warp-exit is the continuity-anchor per §10.5.
-      shipChoreographer.beginTour({ fromWarp: true });
-
-      updateFocusFromStop(firstStop);
-    }
-
-    const label = system.type.replace(/-/g, ' ');
-    console.log(`Warp: touring ${label} (${autoNav.queue.length} stops)`);
     return;
   }
 
@@ -5383,25 +5295,6 @@ function warpRevealSystem() {
  */
 function findClosestBody() {
   if (!system) return null;
-
-  // Navigable deep sky: find the closest star
-  if (system._navigable) {
-    const allStars = [system.star];
-    if (system.star2) allStars.push(system.star2);
-    if (system.extraStars) allStars.push(...system.extraStars);
-
-    let closest = null;
-    let closestDist = Infinity;
-    const camPos = camera.position;
-    for (let i = 0; i < allStars.length; i++) {
-      const d = camPos.distanceTo(allStars[i].mesh.position);
-      if (d < closestDist) {
-        closestDist = d;
-        closest = { position: allStars[i].mesh.position, focusIndex: -2, moonIndex: -1, starIndex: i };
-      }
-    }
-    return closest;
-  }
 
   // Non-navigable deep sky: orbit the center
   if (system.type && system.type !== 'star-system') {
@@ -5509,12 +5402,7 @@ function selectTarget(target) {
       }
     } else if (target.kind === 'star') {
       const starIdx = target.starIndex || 0;
-      let starObj;
-      if (system._navigable && system.extraStars && starIdx >= 2) {
-        starObj = system.extraStars[starIdx - 2] || system.star;
-      } else {
-        starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
-      }
+      const starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
       if (starObj) {
         const sName = system.names
           ? (starIdx === 1 ? system.names.star2 : system.names.star)
@@ -5808,16 +5696,10 @@ function focusStar(starIdx) {
   focusMoonIndex = -1;
   focusStarIndex = starIdx;
 
-  // For navigable deep sky, starIdx can go beyond 0/1 — check extraStars
-  let starObj;
-  if (system._navigable && system.extraStars && starIdx >= 2) {
-    starObj = system.extraStars[starIdx - 2] || system.star;
-  } else {
-    starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
-  }
+  const starObj = starIdx === 1 && system.star2 ? system.star2 : system.star;
 
   // Cap camera distance so it stays well inside the innermost planet orbit.
-  // For navigable deep sky (no planets), just use a reasonable multiple of star radius.
+  // For planetless systems, just use a reasonable multiple of star radius.
   const idealDist = starObj.data.radius * 6;
   let viewDist = idealDist;
   if (system.planets.length > 0) {
@@ -6584,7 +6466,7 @@ function simStep(deltaTime) {
       // Without this gate, the destination system appears invisible after
       // warp — Max reported this 2026-04-16.
       if (prevState === 'fold' && warpEffect.state === 'enter' && !warpEffect._swapFired) {
-        const isDistantDS = system && system.type && system.type !== 'star-system' && !system._navigable;
+        const isDistantDS = system && system.type && system.type !== 'star-system';
         const flyingToward = isDistantDS && warpEffect.riftDirection === null;
         if (!flyingToward) {
           _hideCurrentSystem();
@@ -6709,7 +6591,7 @@ function simStep(deltaTime) {
       // - Distant deep sky flying PAST (target selected): use normal sceneFade
       // - EXIT for all deep sky: keep visible (revealed through exit hole)
       let effectiveSceneFade = warpEffect.sceneFade;
-      const isDistantDS = system && system.type && system.type !== 'star-system' && !system._navigable;
+      const isDistantDS = system && system.type && system.type !== 'star-system';
       const flyingPastDS = isDistantDS && warpEffect.riftDirection !== null;
       if (isDistantDS && !flyingPastDS && (warpEffect.state === 'fold' || warpEffect.state === 'enter')) {
         effectiveSceneFade = 0; // flying toward — keep galaxy visible
@@ -6800,7 +6682,7 @@ function simStep(deltaTime) {
         //   * Background star selected: fly PAST the galaxy — it drifts behind you,
         //     but slowly (50% of camera speed) because of its vast scale. A planet
         //     would whoosh past at full speed; a galaxy is so immense it lingers.
-        if (system && system.type && system.type !== 'star-system' && system.destination && !system._navigable) {
+        if (system && system.type && system.type !== 'star-system' && system.destination) {
           const flyingPast = warpEffect.riftDirection !== null;
           const dsFactor = flyingPast ? 0.5 : 0.92;
           system.destination.mesh.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * dsFactor * deltaTime);
@@ -7947,7 +7829,7 @@ window.addEventListener('keydown', (e) => {
     if (warpEffect.isActive || warpTarget.turning) return;
     if (splashActive || titleScreenActive) return;
     // Deep sky scenes don't have flight. Flight requires a star system.
-    if (!system || system._navigable || (system.type && system.type !== 'star-system')) {
+    if (!system || (system.type && system.type !== 'star-system')) {
       console.log('[MODE] Flight mode unavailable — no star system');
       return;
     }
@@ -8125,7 +8007,7 @@ function trySelect(clientX, clientY) {
   }
 
   // 2. Distant deep sky (galaxy/globular): try selecting a particle as warp target
-  if (system && system.destination && system.destination.findNearestParticle && !system._navigable) {
+  if (system && system.destination && system.destination.findNearestParticle) {
     const dir = system.destination.findNearestParticle(raycaster.ray.direction, camera.position);
     if (dir) {
       warpTarget.direction = dir;
