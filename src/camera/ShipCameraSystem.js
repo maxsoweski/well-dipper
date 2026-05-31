@@ -90,7 +90,7 @@ class FrameDiagnostics {
     this.divergeThreshold = 50;   // flight vs camera position divergence
   }
 
-  record(camera, flight, director, gravityMode, deltaTime, bypassed) {
+  record(camera, flight, director, gravityMode, deltaTime, bypassed, chaseScale = 1) {
     const camPos = camera.position;
     const frame = {
       t: performance.now(),
@@ -123,11 +123,13 @@ class FrameDiagnostics {
       frame.quatDot = Math.abs(camera.quaternion.dot(this._prevCamQuat));
 
       // Flight/camera divergence (gravity mode only)
-      // Measures unexpected divergence: cam should be at flight.pos + director.offset
+      // Measures unexpected divergence: cam should be at
+      // flight.pos + director.offset × chaseScale (matches the write at the
+      // FLIGHT-mode position update — scrolling chase distance changes scale).
       if (gravityMode && flight && !bypassed) {
-        const expectedX = flight.position.x + (director ? director._currentOffset.x : 0);
-        const expectedY = flight.position.y + (director ? director._currentOffset.y : 0);
-        const expectedZ = flight.position.z + (director ? director._currentOffset.z : 0);
+        const expectedX = flight.position.x + (director ? director._currentOffset.x * chaseScale : 0);
+        const expectedY = flight.position.y + (director ? director._currentOffset.y * chaseScale : 0);
+        const expectedZ = flight.position.z + (director ? director._currentOffset.z * chaseScale : 0);
         frame.flightDiverge = Math.sqrt(
           (camPos.x - expectedX) ** 2 +
           (camPos.y - expectedY) ** 2 +
@@ -686,7 +688,7 @@ export class ShipCameraSystem {
     const offset = this.camera.position.clone().sub(targetPosition);
     const dist = offset.length();
     const yaw = Math.atan2(offset.x, offset.z);
-    const pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / dist)));
+    const pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / (dist || 1))));
 
     this.yaw = yaw;
     this.pitch = pitch;
@@ -880,52 +882,6 @@ export class ShipCameraSystem {
     const logTarget = Math.log(this.distance);
     this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
 
-    // Legacy WASD free-flight physics. This path is dead weight now that
-    // WASD is ignored in Toy Box and routed to FlightDynamics in Flight.
-    // Kept behind an `if (false)` guard for reference until we're sure
-    // nothing else reaches it. TODO: remove after Phase 2 ships.
-    if (false && !flightMode && this._flightEnabled && (this._flightActive || this._flightVelocity.lengthSq() > 0.0001)) {
-      const distScale = Math.max(0.1, this.smoothedDistance * 0.5);
-      const boostMult = this._flightBoosting ? this._flightBoostMult : 1;
-      const thrust = this._flightThrust * distScale * boostMult;
-      const maxSpd = this._flightMaxSpeed * distScale * boostMult;
-
-      if (this._flightInput.lengthSq() > 0) {
-        const fwd = new THREE.Vector3();
-        this.camera.getWorldDirection(fwd);
-        fwd.y = 0;
-        fwd.normalize();
-        const right = new THREE.Vector3();
-        right.crossVectors(fwd, this.camera.up).normalize();
-        const accel = new THREE.Vector3();
-        accel.addScaledVector(fwd, -this._flightInput.z);
-        accel.addScaledVector(right, this._flightInput.x);
-        accel.normalize();
-        this._flightVelocity.addScaledVector(accel, thrust * deltaTime);
-      }
-
-      const dragFactor = Math.exp(-this._flightDrag * deltaTime);
-      this._flightVelocity.multiplyScalar(dragFactor);
-      const speed = this._flightVelocity.length();
-      if (speed > maxSpd) {
-        this._flightVelocity.multiplyScalar(maxSpd / speed);
-      }
-
-      if (speed > 0.0001) {
-        const displacement = this._flightVelocity.clone().multiplyScalar(deltaTime);
-        this.target.add(displacement);
-        this._targetGoal.add(displacement);
-      }
-
-      const wasFlying = this._flightActive;
-      this._flightActive = this._flightInput.lengthSq() > 0
-                         || this._flightVelocity.lengthSq() > 0.0001;
-      if (wasFlying && !this._flightActive && this._flightFreeLook) {
-        this._flightFreeLook = false;
-        this.exitFreeLook(false);
-      }
-    }
-
     if (flightMode) {
       // ── FLIGHT MODE: flight dynamics drive camera, director composes ──
 
@@ -964,7 +920,7 @@ export class ShipCameraSystem {
     // Record post-update diagnostics
     this._diagnostics.record(
       this.camera, this.flight, this.director,
-      flightMode, deltaTime, false
+      flightMode, deltaTime, false, this._chaseScale
     );
   }
 
