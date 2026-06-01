@@ -47,6 +47,7 @@ const NAME_COLOR_SHIP_SELECTED  = 'rgba(180, 235, 255, 0.95)';
 
 // Bracket sizing (scales with projected body radius so big bodies get big brackets)
 const BRACKET_MIN_HALF = 16;  // px — smallest half-width of bracket square
+const BRACKET_MAX_HALF = 9999; // px — body fills screen (camera on body, dist<=0); callers clamp to viewport
 const BRACKET_MARGIN   = 12;  // px — gap between bracket square and body edge
 const BRACKET_EDGE_MARGIN = 40; // px — keep brackets this far from viewport edge
 const BRACKET_ARM_LEN = 12;   // px — length of each L arm

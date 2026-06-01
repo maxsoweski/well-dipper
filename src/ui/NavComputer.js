@@ -24,6 +24,12 @@ const LEVELS = ['galaxy', 'sector', 'region', 'prism', 'system'];
 const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
 const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
 
+// Bridge potentialDerivedDensity() units → actual stars/pc³ the hash grid renders.
+// GalacticMap calibrates potential density to ~0.065/pc³ at the solar neighborhood;
+// HashGridStarfield is tuned to produce ~0.14 stars/pc³ there. Tile sizing and the
+// block star-count estimate MUST use this same factor or they disagree (~2.15×).
+const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
+
 function gridNForLevel(levelIndex) {
   return levelIndex === 2 ? 16 : 8; // region = 16x16, sector = 8x8
 }
@@ -218,6 +224,7 @@ export class NavComputer {
     document.removeEventListener('keydown', this._onKeyDown, true);
     document.removeEventListener('keyup', this._onKeyUp, true);
     this._heldKeys.clear();
+    this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't fire after close
     this._resetPrismLoad();
   }
 
@@ -583,6 +590,7 @@ export class NavComputer {
 
   handleEscape() {
     if (this._anim) return true; // ignore during animation
+    this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't slam level 4 after ESC
     if (this._levelIndex > 0) {
       // System view: planet detail → system overview → prism
       if (this._levelIndex === 4) {
@@ -729,7 +737,7 @@ export class NavComputer {
     const density = this._galaxyDensity(x, z);
     if (density < 1e-10) return 0.02; // very sparse — large tiles
     // Approximate: starsPerPc3 ≈ density * calibrationFactor
-    const starsPerPc3 = Math.max(0.001, density * 0.14 / 0.065);
+    const starsPerPc3 = Math.max(0.001, density * DENSITY_TO_STARS_PER_PC3);
     const volumePc3 = targetStars / starsPerPc3;
     return Math.cbrt(volumePc3) / 1000; // pc to kpc
   }
@@ -2502,11 +2510,13 @@ export class NavComputer {
     for (let i = 0; i < SAMPLES; i++) {
       const y = -MAX_Y + (i + 0.5) * step;
       const d = this._gm.potentialDerivedDensity(R, y, theta);
-      totalDensity += d.totalDensity; // stars/pc³
+      totalDensity += d.totalDensity; // raw potential density (~0.065/pc³ at solar)
     }
 
-    // Average density × total volume, converting kpc³ to pc³
-    const avgDensity = totalDensity / SAMPLES; // stars/pc³
+    // Average density × total volume, converting kpc³ to pc³.
+    // Apply the same potential→stars/pc³ calibration as _computeTileSize so the
+    // estimate matches the stars the hash grid actually renders (else ~2.15× low).
+    const avgDensity = (totalDensity / SAMPLES) * DENSITY_TO_STARS_PER_PC3; // stars/pc³
     const totalVolPc3 = (blockHalf * 2 * 1000) * (blockHalf * 2 * 1000) * (MAX_Y * 2 * 1000);
     return Math.round(avgDensity * totalVolPc3);
   }
@@ -2968,6 +2978,7 @@ export class NavComputer {
       const tabW = this._canvas.width / LEVELS.length;
       const idx = Math.floor(p.x / tabW);
       if (idx >= 0 && idx < LEVELS.length) {
+        this._systemZoomAnim = null; // cancel in-flight zoom so a tab click isn't overridden by it landing on level 4
         const target = this._viewStack[idx];
         // Animate between 2D levels if both are 2D and have stack entries
         if (idx <= 2 && this._levelIndex <= 2 && target) {

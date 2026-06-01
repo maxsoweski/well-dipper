@@ -109,6 +109,7 @@ export class BodyInfo {
 
     // Stop any running typewriter
     clearTimeout(this._timer);
+    clearTimeout(this._hideTimer); // cancel a pending fade-out so it can't hide this fresh show
     clearInterval(this._typewriterTimer);
     clearInterval(this._blinkTimer);
 
@@ -167,7 +168,7 @@ export class BodyInfo {
       this._cursorEl.style.display = 'none';
     }
     this._el.classList.add('fading');
-    setTimeout(() => {
+    this._hideTimer = setTimeout(() => {
       if (this._el) this._el.style.display = 'none';
     }, 500);
   }
