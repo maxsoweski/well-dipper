@@ -296,6 +296,29 @@ export class ExoticOverlay {
       newType,    // force the exotic/civilized type
     );
 
+    // Rescale retained moons to the new parent radius (WU7-1). The swapped
+    // type has a different radius, so moons sized/positioned for the old
+    // parent would clip inside it or fling off. Earth-based fields scale by
+    // the radiusEarth ratio (earthRadiiToScene is linear — see
+    // core/ScaleConstants.js — so *Scene fields scale by the same kEarth);
+    // map-based fields scale by the radius ratio.
+    const moons = planetEntry.moons;
+    if (moons && moons.length > 0) {
+      const kEarth = newData.radiusEarth / oldData.radiusEarth;
+      const kMap = newData.radius / oldData.radius;
+      for (const moon of moons) {
+        moon.radiusEarth *= kEarth;
+        moon.radiusScene *= kEarth;
+        moon.orbitRadiusEarth *= kEarth;
+        moon.orbitRadiusScene *= kEarth;
+        moon.radius *= kMap;
+        moon.orbitRadius *= kMap;
+        // noiseScale is texture detail, not geometry — leave it alone.
+      }
+    }
+    // Keep moonCount honest: it must match the moons that survive the swap.
+    newData.moonCount = moons?.length ?? 0;
+
     planetEntry.planetData = newData;
   }
 }

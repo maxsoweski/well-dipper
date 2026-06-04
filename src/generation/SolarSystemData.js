@@ -213,6 +213,7 @@ export function generateSolarSystem() {
         {
           type: 'captured',
           radiusEarth: 0.0017,   // ~11 km
+          name: 'Phobos',
           orbitMultiple: 2.76,
           baseColor: [0.35, 0.30, 0.28],
           accentColor: [0.28, 0.25, 0.22],
@@ -223,6 +224,7 @@ export function generateSolarSystem() {
         {
           type: 'captured',
           radiusEarth: 0.001,    // ~6 km
+          name: 'Deimos',
           orbitMultiple: 6.9,
           baseColor: [0.38, 0.33, 0.30],
           accentColor: [0.30, 0.27, 0.24],
@@ -236,6 +238,7 @@ export function generateSolarSystem() {
     {
       type: 'rocky',
       radiusEarth: 0.074,        // 473 km radius
+      name: 'Ceres',
       orbitAU: 2.768,
       baseColor: [0.45, 0.42, 0.40],
       accentColor: [0.38, 0.36, 0.34],
@@ -267,6 +270,7 @@ export function generateSolarSystem() {
         {
           type: 'captured',
           radiusEarth: 0.013,    // ~84 km (irregular)
+          name: 'Amalthea',
           orbitMultiple: 2.54,   // 2.54 Jupiter radii
           baseColor: [0.55, 0.30, 0.20],  // reddish — sulfur from Io
           accentColor: [0.45, 0.25, 0.15],
@@ -347,6 +351,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.031,    // 198 km
+          name: 'Mimas',
           orbitMultiple: 3.08,
           baseColor: [0.78, 0.76, 0.72],
           accentColor: [0.65, 0.62, 0.58],
@@ -357,6 +362,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.04,     // 252 km
+          name: 'Enceladus',
           orbitMultiple: 3.95,
           baseColor: [0.95, 0.93, 0.90],
           accentColor: [0.85, 0.83, 0.80],
@@ -367,6 +373,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.083,    // 531 km
+          name: 'Tethys',
           orbitMultiple: 4.89,
           baseColor: [0.80, 0.78, 0.75],
           accentColor: [0.68, 0.65, 0.62],
@@ -377,6 +384,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.088,    // 562 km
+          name: 'Dione',
           orbitMultiple: 6.26,
           baseColor: [0.75, 0.73, 0.70],
           accentColor: [0.60, 0.58, 0.55],
@@ -387,6 +395,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.12,     // 764 km
+          name: 'Rhea',
           orbitMultiple: 8.74,
           baseColor: [0.72, 0.70, 0.67],
           accentColor: [0.58, 0.56, 0.52],
@@ -411,6 +420,7 @@ export function generateSolarSystem() {
         {
           type: 'captured',
           radiusEarth: 0.021,    // ~135 km (irregular)
+          name: 'Hyperion',
           orbitMultiple: 24.6,
           baseColor: [0.50, 0.45, 0.38],
           accentColor: [0.40, 0.35, 0.28],
@@ -421,6 +431,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.115,    // 735 km
+          name: 'Iapetus',
           orbitMultiple: 59.1,
           baseColor: [0.25, 0.22, 0.20],   // dark hemisphere dominant
           accentColor: [0.80, 0.78, 0.75], // bright hemisphere contrast
@@ -431,6 +442,7 @@ export function generateSolarSystem() {
         {
           type: 'captured',
           radiusEarth: 0.017,    // 107 km
+          name: 'Phoebe',
           orbitMultiple: 215,    // very far out
           baseColor: [0.22, 0.20, 0.18],
           accentColor: [0.18, 0.16, 0.14],
@@ -469,6 +481,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.037,    // 236 km
+          name: 'Miranda',
           orbitMultiple: 5.08,
           baseColor: [0.65, 0.62, 0.58],
           accentColor: [0.50, 0.48, 0.44],
@@ -479,6 +492,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.091,    // 579 km
+          name: 'Ariel',
           orbitMultiple: 7.47,
           baseColor: [0.70, 0.68, 0.65],
           accentColor: [0.58, 0.55, 0.52],
@@ -489,6 +503,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.092,    // 585 km
+          name: 'Umbriel',
           orbitMultiple: 10.4,
           baseColor: [0.38, 0.36, 0.34],
           accentColor: [0.30, 0.28, 0.26],
@@ -499,6 +514,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.124,    // 789 km
+          name: 'Titania',
           orbitMultiple: 17.1,
           baseColor: [0.60, 0.58, 0.55],
           accentColor: [0.48, 0.46, 0.42],
@@ -509,6 +525,7 @@ export function generateSolarSystem() {
         {
           type: 'ice',
           radiusEarth: 0.119,    // 761 km
+          name: 'Oberon',
           orbitMultiple: 22.8,
           baseColor: [0.48, 0.45, 0.42],
           accentColor: [0.38, 0.35, 0.32],
@@ -546,6 +563,7 @@ export function generateSolarSystem() {
         {
           type: 'captured',
           radiusEarth: 0.033,    // 210 km
+          name: 'Proteus',
           orbitMultiple: 4.75,
           baseColor: [0.30, 0.28, 0.26],
           accentColor: [0.25, 0.23, 0.20],
@@ -601,6 +619,7 @@ export function generateSolarSystem() {
     {
       type: 'ice',
       radiusEarth: 0.13,         // ~816 km mean radius (elongated)
+      name: 'Haumea',
       orbitAU: 43.22,
       baseColor: [0.85, 0.83, 0.80],  // very bright icy surface
       accentColor: [0.72, 0.70, 0.68],
@@ -625,6 +644,7 @@ export function generateSolarSystem() {
     {
       type: 'ice',
       radiusEarth: 0.112,        // ~715 km
+      name: 'Makemake',
       orbitAU: 45.79,
       baseColor: [0.78, 0.68, 0.58],  // reddish-brown tholins
       accentColor: [0.65, 0.55, 0.48],
@@ -641,6 +661,7 @@ export function generateSolarSystem() {
     {
       type: 'ice',
       radiusEarth: 0.182,        // 1163 km (nearly Pluto-sized)
+      name: 'Eris',
       orbitAU: 67.67,            // far out in the scattered disc
       baseColor: [0.88, 0.86, 0.84],  // extremely bright, white
       accentColor: [0.75, 0.73, 0.70],
@@ -655,6 +676,7 @@ export function generateSolarSystem() {
         {
           type: 'captured',
           radiusEarth: 0.05,     // ~350 km (estimated)
+          name: 'Dysnomia',
           orbitMultiple: 32,     // ~37,300 km from Eris
           baseColor: [0.35, 0.33, 0.30],
           accentColor: [0.28, 0.26, 0.23],

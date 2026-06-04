@@ -151,13 +151,19 @@ export class HashGridStarfield {
     }
 
     // ── Build output arrays ──
-    const count = stars.length;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
+    // Allocate at capacity, but compact with a write cursor `w` so skipped
+    // near-origin stars don't leave zero-init slots (WU7-5). `count` reports
+    // the number of emitted stars, and realStars.index matches the position
+    // buffer slot — downstream offsetting (StarfieldGenerator._finalizeFromGridData)
+    // and getGalaxyStarForIndex rely on that alignment.
+    const capacity = stars.length;
+    const positions = new Float32Array(capacity * 3);
+    const colors = new Float32Array(capacity * 3);
+    const sizes = new Float32Array(capacity);
     const realStars = [];
 
-    for (let i = 0; i < count; i++) {
+    let w = 0;
+    for (let i = 0; i < capacity; i++) {
       const s = stars[i];
       const dx = s.worldX - playerPos.x;
       const dy = s.worldY - playerPos.y;
@@ -165,10 +171,10 @@ export class HashGridStarfield {
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (dist < 0.0001) continue;
 
-      const i3 = i * 3;
-      positions[i3]     = (dx / dist) * skyRadius;
-      positions[i3 + 1] = (dy / dist) * skyRadius;
-      positions[i3 + 2] = (dz / dist) * skyRadius;
+      const w3 = w * 3;
+      positions[w3]     = (dx / dist) * skyRadius;
+      positions[w3 + 1] = (dy / dist) * skyRadius;
+      positions[w3 + 2] = (dz / dist) * skyRadius;
 
       // Color from spectral type and brightness — no overrides.
       // Stars inside features look different because the PHYSICS
@@ -176,18 +182,18 @@ export class HashGridStarfield {
       // young B/A in open clusters), not because we paint them.
       const baseCol = SPECTRAL_COLOR[s.type] || [1, 1, 1];
       const brightness = Math.max(0.1, 1.5 - (s.appMag / 5.0));
-      colors[i3]     = baseCol[0] * brightness;
-      colors[i3 + 1] = baseCol[1] * brightness;
-      colors[i3 + 2] = baseCol[2] * brightness;
+      colors[w3]     = baseCol[0] * brightness;
+      colors[w3 + 1] = baseCol[1] * brightness;
+      colors[w3 + 2] = baseCol[2] * brightness;
 
-      if (s.appMag < 0) sizes[i] = 10;
-      else if (s.appMag < 2) sizes[i] = 8;
-      else if (s.appMag < 4) sizes[i] = 6;
-      else if (s.appMag < 6) sizes[i] = 4;
-      else sizes[i] = 3;
+      if (s.appMag < 0) sizes[w] = 10;
+      else if (s.appMag < 2) sizes[w] = 8;
+      else if (s.appMag < 4) sizes[w] = 6;
+      else if (s.appMag < 6) sizes[w] = 4;
+      else sizes[w] = 3;
 
       realStars.push({
-        index: i,
+        index: w,
         starData: {
           worldX: s.worldX,
           worldY: s.worldY,
@@ -201,9 +207,11 @@ export class HashGridStarfield {
         estimatedType: s.type,
         apparentMagnitude: s.appMag,
       });
+
+      w++;
     }
 
-    return { positions, colors, sizes, count, realStars };
+    return { positions, colors, sizes, count: w, realStars };
   }
 
   /**
@@ -433,7 +441,7 @@ export class HashGridStarfield {
             if (EVOLVED_TYPES.has(type)) {
               const haloWeight = densities.halo || 0;
               const bulgeWeight = densities.bulge || 0;
-              const oldFraction = Math.min(1, (haloWeight + bulgeWeight) * 3 + 0.15);
+              const oldFraction = haloWeight + bulgeWeight * 0.8; // match render path (_searchTypeIterator) — WU7-5
               let featureGiantBoost = 1.0;
               for (const feat of cachedFeatures) {
                 if (feat.type !== 'globular-cluster') continue;
@@ -545,7 +553,7 @@ export class HashGridStarfield {
             if (EVOLVED_TYPES.has(type)) {
               const haloWeight = densities.halo || 0;
               const bulgeWeight = densities.bulge || 0;
-              const oldFraction = Math.min(1, (haloWeight + bulgeWeight) * 3 + 0.15);
+              const oldFraction = haloWeight + bulgeWeight * 0.8; // match render path (_searchTypeIterator) — WU7-5
               let featureGiantBoost = 1.0;
               for (const feat of cachedFeatures) {
                 if (feat.type !== 'globular-cluster') continue;
@@ -660,7 +668,7 @@ export class HashGridStarfield {
             if (EVOLVED_TYPES.has(type)) {
               const haloWeight = densities.halo || 0;
               const bulgeWeight = densities.bulge || 0;
-              const oldFraction = Math.min(1, (haloWeight + bulgeWeight) * 3 + 0.15);
+              const oldFraction = haloWeight + bulgeWeight * 0.8; // match render path (_searchTypeIterator) — WU7-5
               let featureGiantBoost = 1.0;
               for (const feat of cachedFeatures) {
                 if (feat.type !== 'globular-cluster') continue;

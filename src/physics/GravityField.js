@@ -316,9 +316,22 @@ export class GravityField {
       const dist = position.distanceTo(body.position);
 
       if (dist < body.soiRadius) {
-        // We're inside this body's SOI. If it's more specific than
-        // the current best (smaller SOI), prefer it.
-        if (body.soiRadius < bestBody.soiRadius) {
+        // A point is only truly inside this body's SOI if it's also inside
+        // the parent's SOI (WU7-7). A moon's SOI can poke outside its parent
+        // planet's SOI near the boundary; such points belong to the parent
+        // (or star), not the moon. The star (index 0) always contains.
+        if (body.parentIndex !== 0) {
+          const parent = this.bodies[body.parentIndex];
+          if (position.distanceTo(parent.position) >= parent.soiRadius) {
+            continue;
+          }
+        }
+
+        // We're inside this body's SOI. Prefer it if it's more specific
+        // (smaller SOI); on an exact SOI tie between overlapping bodies,
+        // the closer body wins.
+        if (body.soiRadius < bestBody.soiRadius
+            || (body.soiRadius === bestBody.soiRadius && dist < bestDist)) {
           bestBody = body;
           bestIndex = i;
           bestDist = dist;

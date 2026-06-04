@@ -963,7 +963,7 @@ export class GalacticMap {
     // Check if this position is inside any galactic feature.
     // Uses a small search radius (0.5 kpc) — only catches features we're actually inside.
     // Feature regions are cached, so repeated calls in the same area are fast.
-    const nearbyFeatures = this.findNearbyFeatures({ x, y, z }, 0.3);
+    const nearbyFeatures = this.findNearbyFeatures({ x, y, z }, 0.5);
     let featureContext = null;
     for (const feat of nearbyFeatures) {
       if (feat.insideFeature) {
@@ -1628,16 +1628,20 @@ export class GalacticMap {
     const typeWeights = [0.35, 0.30, 0.15, 0.20];
 
     for (let i = 0; i < count; i++) {
-      // Random direction on sphere (fixed per galaxy seed)
-      const theta = rng.range(0, Math.PI * 2);
-      const phi = Math.acos(rng.range(-1, 1));
-      const dirX = Math.sin(phi) * Math.cos(theta);
-      const dirY = Math.cos(phi);
-      const dirZ = Math.sin(phi) * Math.sin(theta);
-
-      // Avoid the galactic plane (Zone of Avoidance — dust blocks visibility)
-      // Re-roll if too close to the disk plane
-      if (Math.abs(dirY) < 0.15) continue;
+      // Random direction on sphere (fixed per galaxy seed).
+      // Avoid the galactic plane (Zone of Avoidance — dust blocks visibility):
+      // re-roll within this iteration so every i yields a galaxy (WU7-4). The
+      // old `continue` advanced i without re-rolling → undercounted galaxies,
+      // and dropped the i===0 "Andromeda" whenever i=0 landed in the ZoA.
+      let theta, phi, dirX, dirY, dirZ;
+      let attempts = 0;
+      do {
+        theta = rng.range(0, Math.PI * 2);
+        phi = Math.acos(rng.range(-1, 1));
+        dirX = Math.sin(phi) * Math.cos(theta);
+        dirY = Math.cos(phi);
+        dirZ = Math.sin(phi) * Math.sin(theta);
+      } while (Math.abs(dirY) < 0.15 && ++attempts < 16);
 
       // Pick type
       let roll = rng.float();

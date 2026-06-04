@@ -4788,7 +4788,9 @@ function gallerySpawn() {
     // Lower seaLevel = more land (desert world), higher = more ocean (archipelago)
     // Terrestrial range: 0.32 (arid, ~30% water) to 0.52 (oceanic, ~65% water)
     // Ocean worlds: always high water
-    const seaLevelHash = ((bakeSeed * 7919.0) % 1.0 + 1.0) % 1.0; // 0-1 from seed
+    // fract(sin(x)*k) hash — bakeSeed is integer-valued so a plain `% 1.0`
+    // is always exactly 0 (WU7-3). This restores seed-driven land/water variation.
+    const seaLevelHash = (() => { const s = Math.sin(bakeSeed * 12.9898) * 43758.5453; return s - Math.floor(s); })(); // 0-1 from seed
     const bakeSeaLevel = planetType === 'terrestrial' ? 0.32 + seaLevelHash * 0.20
                        : planetType === 'ocean' ? 0.50 + seaLevelHash * 0.10
                        : -1.0;

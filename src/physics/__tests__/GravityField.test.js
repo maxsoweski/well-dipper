@@ -153,6 +153,39 @@ describe('GravityField', () => {
       const dom = field.dominantBodyAt(nearJup);
       expect(dom.body.name).toBe('planet-1');
     });
+
+    // WU7-7: a moon's SOI can poke outside its parent planet's SOI near the
+    // SOI boundary. A point in the moon's SOI but OUTSIDE the planet's SOI must
+    // not be attributed to the moon (docstring: in SOI requires being within
+    // the body's soiRadius AND within the parent's SOI).
+    it('should NOT pick a moon when the point is outside the parent planet SOI', () => {
+      // Override geometry: planet-1 (idx 2) and its moon (idx 3, parentIndex 2).
+      field.bodies[1].position.set(50000, 0, 0); // park planet-0 far away
+      field.bodies[1].soiRadius = 10;
+      field.bodies[2].position.set(1000, 0, 0);  // planet-1
+      field.bodies[2].soiRadius = 10;            // planet SOI: 990..1010
+      field.bodies[3].position.set(1008, 0, 0);  // moon near planet SOI edge
+      field.bodies[3].soiRadius = 5;             // moon SOI: 1003..1013
+
+      // Point inside the moon SOI (dist 4 < 5) but outside the planet SOI (dist 12 > 10)
+      const p = new THREE.Vector3(1012, 0, 0);
+      const dom = field.dominantBodyAt(p);
+      expect(dom.body.name).toBe('star');
+    });
+
+    it('should still pick the moon when the point is inside BOTH moon and parent SOI', () => {
+      field.bodies[1].position.set(50000, 0, 0);
+      field.bodies[1].soiRadius = 10;
+      field.bodies[2].position.set(1000, 0, 0);
+      field.bodies[2].soiRadius = 10;
+      field.bodies[3].position.set(1008, 0, 0);
+      field.bodies[3].soiRadius = 5;
+
+      // dist to planet = 6 < 10 (inside), dist to moon = 2 < 5 (inside) → moon wins (smaller SOI)
+      const p = new THREE.Vector3(1006, 0, 0);
+      const dom = field.dominantBodyAt(p);
+      expect(dom.body.name).toBe('moon-1-0');
+    });
   });
 
   describe('accelerationAt', () => {

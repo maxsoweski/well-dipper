@@ -414,11 +414,6 @@ function _regionPrefixedName(rng, region) {
 function _catalogName(rng, sectorCode = 0) {
   const catalog = rng.pick(CATALOG_FORMATS);
 
-  // Some catalogs are single-word (like "Proxima")
-  if (catalog.minNum === null) {
-    return catalog.prefix;
-  }
-
   // Mix sector code into the number range for uniqueness across regions
   const range = catalog.maxNum - catalog.minNum;
   const baseNum = rng.int(catalog.minNum, catalog.maxNum);
