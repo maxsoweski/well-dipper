@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-04 by working-Claude (world-origin spawn-once-body centering SHIPPED — single-star + orbit-ring/belt now sit at the barycenter, verified live + Tester PASS, pushed to production; WU7a 3946dca rode along).
+Last updated: 2026-06-04 by working-Claude (rebasing bug review + `a1a01b6` single-canonical-rebase-call/telemetry fix committed-not-pushed; world-origin reset-on-swap workstream scoped `466a0c5`, awaiting GATE 1, queued behind MVP).
 
 ---
 
@@ -26,6 +26,12 @@ is live:
    browser, then flip to Shipped + push.
 2. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
    warp regression; likely a Phase-E tunnel-pipeline rewrite.
+3. **`world-origin-reset-on-system-swap-2026-06-04`** — SCOPED (`466a0c5`),
+   **awaiting GATE 1**, queued behind MVP. Structural fix to the rebasing
+   bug class (wire dead `resetWorldOrigin()` + invariant test). Full review:
+   `~/briefings/well-dipper-rebasing-review-2026-06-04.md`. (Rebasing fix
+   #2 — duplicate-call/telemetry — committed `a1a01b6`, not pushed, live
+   telemetry confirm pending.)
 
 ## Recently shipped
 
