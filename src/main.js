@@ -59,6 +59,7 @@ import {
   onRebase as _onWorldRebase,
   trackForRebase as _trackForWorldRebase,
   resetWorldOrigin as _resetWorldOrigin,
+  placeInRebasedFrame as _placeInRebasedFrame,
   _debugState as _worldOriginDebugState,
 } from './core/WorldOrigin.js';
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
@@ -3554,6 +3555,16 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   // diffraction spike effect that matches the desired visual look.
   const star = new StarFlare(sceneStarData);
   star.addTo(scene);
+  // Seed the sole star into the rebased render frame (-worldOrigin) so its
+  // true-frame position is the barycenter (0,0,0). Unlike planets and binary
+  // stars, a single star is never rewritten per-frame (see ~6040-6058), so
+  // without this it stays at the raw scene origin and is displaced from the
+  // orbital center by worldOrigin-at-spawn — off-center / "above the plane" in
+  // warp-reached systems. maybeRebase keeps it aligned thereafter. For binary
+  // systems this is immediately overwritten by the absolute placement at ~3575
+  // (then per-frame rebased), so it only affects the single-star case.
+  // See tests/orbit-ring-rebase.test.js + /tmp/well-dipper-star-displacement-handoff.md.
+  _placeInRebasedFrame(star.mesh);
 
   let star2 = null;
   const starOrbitLines = [];
@@ -3574,11 +3585,17 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     star.mesh.position.set(Math.cos(angle) * r1, 0, Math.sin(angle) * r1);
     star2.mesh.position.set(-Math.cos(angle) * r2, 0, -Math.sin(angle) * r2);
 
-    // Small orbit lines for the binary stars (hidden by default, toggled with 'O')
+    // Small orbit lines for the binary stars (hidden by default, toggled with 'O').
+    // Both circles are centered on the barycenter (true-frame origin), so they
+    // must be seeded in the rebased frame (-worldOrigin) — like the per-frame
+    // star writes (~6031) — or they spawn displaced by worldOrigin-at-spawn in
+    // warp-reached systems. maybeRebase keeps them aligned thereafter.
     const line1 = new OrbitLine(r1, 0x00dd00);
+    _placeInRebasedFrame(line1.mesh);
     line1.addTo(scene);
     line1.mesh.visible = orbitsVisible;
     const line2 = new OrbitLine(r2, 0x00dd00);
+    _placeInRebasedFrame(line2.mesh);
     line2.addTo(scene);
     line2.mesh.visible = orbitsVisible;
     starOrbitLines.push(line1, line2);
@@ -3712,8 +3729,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     // Carve ring gaps where moons orbit inside the ring (shepherd moon effect)
     planet.setRingGaps(sceneMoons);
 
-    // Create orbit line (hidden by default) — scene-unit radius
+    // Create orbit line (hidden by default) — scene-unit radius. Centered on
+    // the barycenter (true-frame origin), so seed it in the rebased frame
+    // (-worldOrigin) to match the per-frame planet writes (~6048); otherwise it
+    // spawns displaced by worldOrigin-at-spawn in warp-reached systems.
     const orbitLine = new OrbitLine(entry.orbitRadiusScene, 0x00ff00);
+    _placeInRebasedFrame(orbitLine.mesh);
     orbitLine.addTo(scene);
     orbitLine.mesh.visible = orbitsVisible;
     orbitLines.push(orbitLine);
@@ -3749,6 +3770,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       })),
     };
     const belt = new AsteroidBelt(sceneBeltData, systemData.starInfo);
+    // Belt annulus is centered on the barycenter (true-frame origin) and is
+    // only ever updated via per-instance matrices in its own local frame, so —
+    // like the orbit rings — seed the group into the rebased frame
+    // (-worldOrigin); otherwise it spawns displaced by worldOrigin-at-spawn in
+    // warp-reached systems. Always-visible (not gated behind the 'O' toggle).
+    _placeInRebasedFrame(belt.mesh);
     belt.addTo(scene);
     asteroidBelts.push(belt);
   }

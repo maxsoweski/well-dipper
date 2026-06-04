@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-05-30 by working-Claude (deep-sky-cleanup SHIPPED — dice-roll arrival removed, all 5 ACs verified live, pushed to production).
+Last updated: 2026-06-04 by working-Claude (world-origin spawn-once-body centering SHIPPED — single-star + orbit-ring/belt now sit at the barycenter, verified live + Tester PASS, pushed to production; WU7a 3946dca rode along).
 
 ---
 
@@ -29,6 +29,24 @@ is live:
 
 ## Recently shipped
 
+- **world-origin spawn-once-body centering** (2026-06-04) — single (non-binary)
+  system stars, planet orbit rings, and asteroid belts were spawned at the raw
+  scene origin and never rewritten per-frame, so in warp-reached systems they
+  were displaced from the barycenter by `worldOrigin`-at-spawn (star "above the
+  orbital plane"; rings/belts off-center). Fix: seed each into the rebased frame
+  at spawn via `WorldOrigin.placeInRebasedFrame` (`main.js` single star @3557,
+  binary-star rings, planet ring, belt; new `WorldOrigin.js` export). TDD'd
+  (`tests/orbit-ring-rebase.test.js` — star invariant + characterization), Tester
+  PASS, verified live: single-star `|planet−star| == orbitRadiusScene` 0% error +
+  coplanar, planet rings centered on star/barycenter with exact radii, binaries
+  unaffected. (WU7a `3946dca` deployed alongside — Tester PASS, planets render
+  clean.)
+- **Audit-3 remediation WU1 + WU3 + WU5** (2026-05-31) — three audit-3 bug-fix
+  work-units shipped to production, each one commit + Tester PASS + deploy green:
+  WU1 camera FrameDiagnostics ruler + NaN guard (`416a171`); WU3 disposal
+  completeness across renderers + tunnel star-wrap seam (`45866f9`); WU5
+  binary-system planet light-direction rebase fix (`fe9303a`). Plan + remaining
+  WU6-WU9 in `~/briefings/well-dipper-audit3-remediation-plan.md`.
 - **deep-sky-cleanup dead-code follow-up** (2026-05-31, `d018c60`) — multi-agent
   blast-radius audit of the cleanup found 0 bugs / all KEEP paths intact; only
   residue was orphaned `_navigable` machinery (the deleted `spawnNavigableDeepSky`

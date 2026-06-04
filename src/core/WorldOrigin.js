@@ -154,6 +154,23 @@ export function maybeRebase(camera, scene) {
 }
 
 /**
+ * Place a spawn-once static scene object (orbit ring, asteroid belt, …) into
+ * the current rebased render frame. Bodies are rewritten every frame as
+ * `trueOffset - worldOrigin`; objects that are placed once at spawn and then
+ * only carried by `maybeRebase`'s scene-graph subtract must be seeded at the
+ * rebased origin (`-worldOrigin`) so they line up with the bodies they relate
+ * to. Mutates `obj.position` in place; returns `obj`.
+ *
+ * @template {{ position: THREE.Vector3 }} T
+ * @param {T} obj  an Object3D (or anything with a `.position` Vector3)
+ * @returns {T}
+ */
+export function placeInRebasedFrame(obj) {
+  obj.position.copy(worldOrigin).negate();
+  return obj;
+}
+
+/**
  * Reset the worldOrigin to (0, 0, 0). For use at system swap (warp arrival)
  * or any other moment where the engine is moving the camera to a new place
  * via teleport rather than continuous motion. Resetting after a teleport
