@@ -5992,34 +5992,20 @@ function simStep(deltaTime) {
 
   if (system) {
     // ── World-origin rebasing ──
-    // Subtracts camera world position from every scene-graph top-level
-    // child (and tracked controller caches) once camera drifts past
-    // `REBASE_THRESHOLD_SQ` (= 100² scene units, ~15 M km), keeping the
+    // The rebase fires once per sim tick at the top of `simStep` (search
+    // `_maybeWorldRebase`), BEFORE any per-frame logic reads world positions.
+    // It subtracts the camera's world position from every top-level scene
+    // child (and tracked controller caches) once the camera drifts past
+    // `REBASE_THRESHOLD_SQ` (100² scene units, ~15 M km), keeping the
     // rendering origin near the camera so float32 precision (~7 sig figs)
-    // remains sufficient for ship-scale per-frame motion (10⁻⁷ scene
-    // units). Without this, `camera.position.addScaledVector(forward, dt
-    // × ship-scale-speed)` rounds to zero at world coord ~32,000
-    // (precision there ≈ 4e-3) and warp's FOLD/ENTER motion never
-    // happens. Runs at the top of the per-frame system branch — after
-    // the previous frame's controller updates landed in `camera.position`,
-    // before this frame's body / sky / render logic consumes it.
-    // Controller caches subscribed to onRebase via `_trackControllerCaches`
-    // calls at controller-instantiation time (search this file for
-    // `_trackControllerCaches`).
+    // stays sufficient for ship-scale per-frame motion (10⁻⁷ scene units).
+    // Without it, `camera.position.addScaledVector(forward, dt × ship-speed)`
+    // rounds to zero at world coord ~32,000 and warp's FOLD/ENTER motion
+    // never happens. Controller caches subscribe via `_trackControllerCaches`.
+    // Rebase-event telemetry (`window.__diag._rebaseEvents`) is captured by an
+    // `onRebase` listener (search `_rebaseEvents`) — it lives on the rebase
+    // event, not here, so it records from the single canonical call site.
     // See docs/PLAN_world-origin-rebasing.md and src/core/WorldOrigin.js.
-    if (_maybeWorldRebase(camera, scene)) {
-      // Telemetry hook: record rebase events for the diagnostic harness.
-      // Bounded — capped at 200 entries — per the canvas-recorder
-      // fps-trap lesson on per-frame buffers.
-      if (window.__diag) {
-        window.__diag._rebaseEvents = window.__diag._rebaseEvents || [];
-        window.__diag._rebaseEvents.push({
-          t: performance.now(),
-          worldOrigin: [_worldOriginVec.x, _worldOriginVec.y, _worldOriginVec.z],
-        });
-        if (window.__diag._rebaseEvents.length > 200) window.__diag._rebaseEvents.shift();
-      }
-    }
 
     // Deep-sky visual subsystems (destination / gasCloud / _deepSkyGas /
     // _deepSkyStars / extraStars) and the primary-star flare/glow updates
@@ -7330,6 +7316,22 @@ _onWorldRebase((offset) => {
     mesh._interpPrev.sub(offset);
     mesh._interpCurr.sub(offset);
   });
+});
+
+// Rebase-event telemetry for the diagnostic harness. Bounded at 200 entries
+// (canvas-recorder fps-trap lesson on per-frame buffers). Lives on the rebase
+// event so it records reliably from the single canonical call site — it
+// previously sat behind a duplicate `_maybeWorldRebase` call inside simStep
+// that always returned false (the camera had already been re-centered by the
+// call at the top of the tick), so nothing was ever recorded.
+_onWorldRebase((offset, origin) => {
+  if (!window.__diag) return;
+  window.__diag._rebaseEvents = window.__diag._rebaseEvents || [];
+  window.__diag._rebaseEvents.push({
+    t: performance.now(),
+    worldOrigin: [origin.x, origin.y, origin.z],
+  });
+  if (window.__diag._rebaseEvents.length > 200) window.__diag._rebaseEvents.shift();
 });
 
 // Render callback — runs every RAF. Reads prev/curr snapshots and lerps
