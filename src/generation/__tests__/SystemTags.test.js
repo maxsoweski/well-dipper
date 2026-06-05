@@ -91,3 +91,29 @@ describe('AC1 — deriveSystemTags', () => {
     }
   });
 });
+
+import { tagSummary, isShallowTags } from '../SystemTags.js';
+
+describe('isShallowTags', () => {
+  it('flags a cheap-tag set (rings/hab unknown) as shallow', () => {
+    expect(isShallowTags({ isBinary: true, primaryType: 'K', secondaryType: 'K', planetCount: 3, hasRings: null, hasHabitable: null })).toBe(true);
+  });
+  it('does not flag a fully-confirmed set', () => {
+    expect(isShallowTags({ isBinary: false, primaryType: 'G', secondaryType: null, planetCount: 8, hasRings: true, hasHabitable: true })).toBe(false);
+  });
+});
+
+describe('tagSummary', () => {
+  it('renders a confirmed single-star set with rings/hab suffixes', () => {
+    expect(tagSummary({ isBinary: false, primaryType: 'G', secondaryType: null, planetCount: 8, hasRings: true, hasHabitable: true }))
+      .toBe('G · 8p · rings · hab');
+  });
+  it('renders a confirmed binary', () => {
+    expect(tagSummary({ isBinary: true, primaryType: 'K', secondaryType: 'K', planetCount: 3, hasRings: true, hasHabitable: true }))
+      .toBe('K+K · bin · 3p · rings · hab');
+  });
+  it('marks a shallow set and omits the unconfirmed rings/hab', () => {
+    expect(tagSummary({ isBinary: true, primaryType: 'K', secondaryType: 'K', planetCount: 3, hasRings: null, hasHabitable: null }))
+      .toBe('~K+K · bin · 3p');
+  });
+});

@@ -69,3 +69,31 @@ export function deriveSystemTags(systemData) {
     archetype: systemData.archetype != null ? systemData.archetype : null,
   };
 }
+
+/**
+ * Is this tag set shallow (cheap fast-path)? Cheap tags leave the expensive
+ * keys as null (see StarSystemGenerator.deriveCheapTags) — they were never
+ * confirmed by per-planet generation.
+ * @param {object} tags
+ * @returns {boolean}
+ */
+export function isShallowTags(tags) {
+  return tags.hasRings === null || tags.hasHabitable === null;
+}
+
+/**
+ * Compact one-line summary of a tag set for a result/saved row.
+ * Shallow sets are prefixed '~' and omit the unconfirmed rings/hab tokens.
+ * @param {object} t — a tag set from deriveSystemTags or deriveCheapTags
+ * @returns {string}
+ */
+export function tagSummary(t) {
+  const parts = [];
+  parts.push(t.secondaryType ? `${t.primaryType}+${t.secondaryType}` : t.primaryType);
+  if (t.isBinary) parts.push('bin');
+  parts.push(`${t.planetCount}p`);
+  if (t.hasRings === true) parts.push('rings');
+  if (t.hasHabitable === true) parts.push('hab');
+  const s = parts.join(' · ');
+  return isShallowTags(t) ? `~${s}` : s;
+}

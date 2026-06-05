@@ -1,5 +1,5 @@
 import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
-import { deriveSystemTags } from '../generation/SystemTags.js';
+import { deriveSystemTags, tagSummary, isShallowTags } from '../generation/SystemTags.js';
 import { probeRegion } from '../generation/SystemProbe.js';
 import { SavedSystems } from '../state/SavedSystems.js';
 
@@ -926,13 +926,7 @@ export class DebugPanel {
 
   /** Short one-line tag summary for a result/saved row. */
   _tagSummary(t) {
-    const parts = [];
-    parts.push(t.secondaryType ? `${t.primaryType}+${t.secondaryType}` : t.primaryType);
-    if (t.isBinary) parts.push('bin');
-    parts.push(`${t.planetCount}p`);
-    if (t.hasRings === true) parts.push('rings');
-    if (t.hasHabitable === true) parts.push('hab');
-    return parts.join(' · ');
+    return tagSummary(t);
   }
 
   /** Read the probe tag-filter selects into a filter object. */
