@@ -71,12 +71,14 @@ function toNavStarData(star) {
  * @param {object} [options] — { scanDepth: 'shallow'|'deep' }
  * @returns {Array<{ navStarData, tags }>}
  */
-export function probeRegion(galacticMap, region, filter = {}, options = {}) {
+export function probeRegionDetailed(galacticMap, region, filter = {}, options = {}) {
   const scanDepth = options.scanDepth || 'shallow';
   const { cheap, expensive } = splitFilter(filter);
   const hasExpensive = Object.keys(expensive).length > 0;
 
   const stars = sweepRegion(galacticMap, region);
+  const cap = region.maxResults ?? (region.shape === 'prism' ? 3000 : 500);
+  const sweepCapped = stars.length >= cap;
   const results = [];
 
   for (const star of stars) {
@@ -102,5 +104,10 @@ export function probeRegion(galacticMap, region, filter = {}, options = {}) {
     }
   }
 
-  return results;
+  return { results, sweptCount: stars.length, sweepCapped };
+}
+
+/** Backward-compatible array-returning wrapper (existing callers/tests). */
+export function probeRegion(galacticMap, region, filter = {}, options = {}) {
+  return probeRegionDetailed(galacticMap, region, filter, options).results;
 }

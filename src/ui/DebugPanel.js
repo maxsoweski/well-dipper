@@ -1,6 +1,6 @@
 import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
 import { deriveSystemTags, tagSummary, isShallowTags } from '../generation/SystemTags.js';
-import { probeRegion } from '../generation/SystemProbe.js';
+import { probeRegion, probeRegionDetailed } from '../generation/SystemProbe.js';
 import { SavedSystems } from '../state/SavedSystems.js';
 import { generateFromNavStar } from '../generation/SystemResolver.js';
 
@@ -845,8 +845,12 @@ export class DebugPanel {
         setTimeout(() => {
           try {
             const region = { shape: 'radius', center, radiusKpc };
-            this._probeResults = probeRegion(this._galacticMap, region, filter, { scanDepth });
-            if (probeStatus) probeStatus.textContent = `${this._probeResults.length} match(es) in ${radiusKpc} kpc (${scanDepth}).`;
+            const detailed = probeRegionDetailed(this._galacticMap, region, filter, { scanDepth });
+            this._probeResults = detailed.results;
+            const capNote = detailed.sweepCapped
+              ? ` (scan capped at ${detailed.sweptCount} nearest stars — narrow the radius for full coverage)`
+              : '';
+            if (probeStatus) probeStatus.textContent = `${this._probeResults.length} match(es) in ${radiusKpc} kpc (${scanDepth})${capNote}.`;
           } catch (err) {
             this._probeResults = [];
             if (probeStatus) probeStatus.textContent = `Probe error: ${err.message}`;
@@ -989,6 +993,9 @@ export class DebugPanel {
     if (!results.length) { box.innerHTML = ''; return; }
     let h = '';
     const shown = results.slice(0, 50);
+    if (results.length > shown.length) {
+      h += `<span class="dg-label" style="color:#8cf">showing ${shown.length} of ${results.length}</span><span class="dg-val"></span>`;
+    }
     for (let i = 0; i < shown.length; i++) {
       const r = shown[i];
       h += `<span class="dg-label" title="seed ${r.navStarData.seed}">${this._tagSummary(r.tags)}</span>`;

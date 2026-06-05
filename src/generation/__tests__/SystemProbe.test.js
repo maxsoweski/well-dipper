@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { GalacticMap } from '../GalacticMap.js';
-import { probeRegion } from '../SystemProbe.js';
+import { probeRegion, probeRegionDetailed } from '../SystemProbe.js';
 import { generateFromNavStar } from '../SystemResolver.js';
 
 const map = new GalacticMap('well-dipper-galaxy-1');
@@ -112,4 +112,23 @@ describe('AC4 — scan depth (shallow vs deep)', () => {
     const b = probeRegion(map, region, filter, { scanDepth: 'deep' });
     expect(b).toEqual(a);
   }, 60000);
+});
+
+describe('UX-5 — probeRegionDetailed metadata', () => {
+  it('reports sweptCount and sweepCapped, with results === probeRegion output', () => {
+    const region = { shape: 'radius', center: CENTER, radiusKpc: 0.03, maxResults: 50 };
+    const detailed = probeRegionDetailed(map, region, {}, { scanDepth: 'shallow' });
+    expect(Array.isArray(detailed.results)).toBe(true);
+    expect(detailed.sweptCount).toBeGreaterThan(0);
+    // dense solar neighborhood overflows a 50-star cap
+    expect(detailed.sweepCapped).toBe(true);
+    expect(detailed.sweptCount).toBe(50);
+  }, 30000);
+
+  it('sweepCapped is false when the region fits under the cap', () => {
+    const region = { shape: 'radius', center: CENTER, radiusKpc: 0.0005, maxResults: 500 };
+    const detailed = probeRegionDetailed(map, region, {}, { scanDepth: 'shallow' });
+    expect(detailed.sweepCapped).toBe(false);
+    expect(detailed.results.length).toBe(detailed.sweptCount);
+  }, 30000);
 });
