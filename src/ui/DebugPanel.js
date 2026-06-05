@@ -2,6 +2,7 @@ import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
 import { deriveSystemTags, tagSummary, isShallowTags } from '../generation/SystemTags.js';
 import { probeRegion } from '../generation/SystemProbe.js';
 import { SavedSystems } from '../state/SavedSystems.js';
+import { generateFromNavStar } from '../generation/SystemResolver.js';
 
 /**
  * DebugPanel — developer tools overlay for Well Dipper.
@@ -881,9 +882,15 @@ export class DebugPanel {
         } else if (si != null) {
           const r = this._probeResults[Number(si)];
           if (r) {
-            this._savedSystems.save({ navStarData: r.navStarData, tags: r.tags, name: null });
+            // Confirm-on-save: regenerate the full system so the stored tags
+            // carry real rings/habitability, never the shallow nulls.
+            let tags = r.tags;
+            try {
+              if (this._galacticMap) tags = deriveSystemTags(generateFromNavStar(this._galacticMap, r.navStarData));
+            } catch { /* fall back to the probe-row tags if regen fails */ }
+            this._savedSystems.save({ navStarData: r.navStarData, tags, name: null });
             this._renderSavedList(container);
-            if (status) status.textContent = `Saved ${this._tagSummary(r.tags)}`;
+            if (status) status.textContent = `Saved ${this._tagSummary(tags)}`;
           }
         } else if (js != null) {
           const entry = this._savedSystems.list().find(x => x.id === js);
@@ -985,7 +992,9 @@ export class DebugPanel {
     for (let i = 0; i < shown.length; i++) {
       const r = shown[i];
       h += `<span class="dg-label" title="seed ${r.navStarData.seed}">${this._tagSummary(r.tags)}</span>`;
-      h += `<span class="dg-val"><button class="debug-btn" data-jump-result="${i}">jump</button> <button class="debug-btn" data-save-result="${i}">★</button></span>`;
+      const shallow = isShallowTags(r.tags);
+      const saveTitle = shallow ? 'Save — confirms rings/habitability by regenerating the system' : 'Save this system';
+      h += `<span class="dg-val"><button class="debug-btn" data-jump-result="${i}">jump</button> <button class="debug-btn" data-save-result="${i}" title="${saveTitle}">save</button></span>`;
     }
     box.innerHTML = h;
   }
