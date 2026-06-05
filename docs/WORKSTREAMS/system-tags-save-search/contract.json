@@ -1,0 +1,102 @@
+{
+  "workstream": "system-tags-save-search",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Phase 1 — debug/QA surface (player-facing UI is Phase 2, out of scope)",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-derive-tags",
+      "statement": "A pure tag-derivation pass turns a generated systemData into a tag set: isBinary, primary/secondary spectral type, planetCount, hasRings, hasHabitable, archetype.",
+      "verifyVia": {
+        "input": "Call deriveSystemTags(systemData) on known fixtures (e.g. Sol via KnownSystems, a seeded binary, a seeded ringed-giant system).",
+        "observable": "Returned tags match the fixture's actual contents — Sol: not binary, planetCount=8, hasHabitable=true; a binary fixture: isBinary=true with both star types; a ringed fixture: hasRings=true."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-cheap-fast-path",
+      "statement": "A cheap fast-path derives the early tags (isBinary, spectral type(s), planetCount, archetype) WITHOUT running the per-planet loop, and never perturbs the full generator's RNG draw order.",
+      "verifyVia": {
+        "input": "Call the cheap derivation for a seed+galaxyContext; separately call full StarSystemGenerator.generate(seed, ctx).",
+        "observable": "Cheap tags equal the full-generation values for those same fields; PlanetGenerator.generate is not invoked by the cheap path (spy/instrument); and a full generate(seed) before vs. after a cheap call produces an identical system (RNG order preserved)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-probe-shallow-search",
+      "statement": "A probe aimed at an arbitrary galactic region (prism/cube/radius via HashGridStarfield) sweeps that volume and returns systems matching a cheap-tag filter, deterministically.",
+      "verifyVia": {
+        "input": "Run a probe at a fixed center+volume with a cheap filter (e.g. isBinary=true), twice.",
+        "observable": "Both runs return the identical result list; every result lies within the requested volume and matches the filter; each result carries a navStarData snapshot + its tags."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC4-deep-scan-modes",
+      "statement": "Selectable scan depth: a 'deep' scan cheap-filters the region then fully generates the survivors to confirm expensive tags (hasRings, hasHabitable); 'shallow' does not.",
+      "verifyVia": {
+        "input": "Run the same probe+region with a hasRings filter at scan depth 'shallow' vs 'deep'.",
+        "observable": "Deep results contain only systems whose full generation confirms a ringed planet (verified by re-generating and scanning planets[]); shallow returns the cheap-tag candidate set (a superset or proxy), and the two result sets differ as expected for that mode."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC5-save-persists",
+      "statement": "Saving the current system writes a navStarData snapshot ({worldX,worldY,worldZ,seed,type}) + derived tags to a persisted store that survives a page reload.",
+      "verifyVia": {
+        "input": "Invoke 'save current system' while in a system, then reload the page and read the saved-systems store.",
+        "observable": "After reload, the store contains an entry with the system's navStarData + tags; the snapshot fields are non-empty and match the system that was active when saved."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC6-faithful-reload",
+      "statement": "Selecting a saved entry reproduces the IDENTICAL system via the existing Priority-1 navStarData warp path — not a near-miss.",
+      "verifyVia": {
+        "input": "Save a system, then reload it from the saved entry by feeding its navStarData back through the warp resolution path.",
+        "observable": "The regenerated systemData deep-equals the original on identity fields: same seed, same star.type/star2.type, same planetCount, same per-planet types and rings (determinism proof)."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC7-search-saved-list",
+      "statement": "The persisted saved-systems list is itself filterable by tag.",
+      "verifyVia": {
+        "input": "Populate the saved list with mixed systems, then filter by a tag (e.g. hasHabitable=true).",
+        "observable": "Only the saved entries whose tags match the filter are returned."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC8-debug-panel-uat",
+      "statement": "Max, with his hands in the debug panel, can see the current system's tags, save it, aim a probe at a region, run a tag-search, and warp to a result.",
+      "verifyVia": {
+        "input": "Max opens the debug panel in the running game, reads the current system's tags, clicks save, opens the probe, sets a region + tag filter, runs the search, and selects a result to warp to.",
+        "observable": "He sees the tags rendered; the saved entry appears; the probe returns a matching list; selecting a result warps him into that system — all without console errors."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "HashGridStarfield.findStarsInPrism / findStarsInCube / findStarsInRadius (region sweep over arbitrary center coords)",
+      "StarSystemGenerator.generate / generateAsync and its _generateIterator (full system; basis for the cheap fast-path)",
+      "GalacticMap.deriveGalaxyContext(position) — pure position->context (metallicity, age, starWeights, features)",
+      "navStarData shape {worldX,worldY,worldZ,seed,type} and the Priority-1 warp resolution path (main.js ~2920)",
+      "PlanetGenerator (rings @520, habitabilityScore @571) — the source of the expensive tags for deep scan"
+    ],
+    "outputs": [
+      "DebugPanel.js — new controls: show current-system tags, save system, probe region + scan-depth + tag filter, jump-to-result",
+      "a persisted saved-systems store (localStorage) keyed by navStarData snapshot + tags",
+      "deriveSystemTags() + cheap-tag API — the seam a Phase 2 player-facing share UI will consume"
+    ],
+    "mustStayWorking": [
+      "StarSystemGenerator determinism: same seed+galaxyContext -> identical system. The cheap fast-path MUST be read-only / replay the exact early Alea draws and must not change the full generator's draw order (Alea is sequential; out-of-order consumption changes everything downstream).",
+      "Existing warp resolution Priority 1 (navStarData) and Priority 2 (starIndex) — unchanged behavior",
+      "KnownSystems.findAt overrides (Sol etc.) still take precedence at their positions",
+      "spawnWithSeed debug path continues to work (it is the lossy bare-seed path; not the save/reload path)",
+      "scene-naming / _systemSeed body-id derivation unaffected"
+    ]
+  }
+}
