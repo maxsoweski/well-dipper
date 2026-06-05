@@ -501,15 +501,15 @@ export class DebugPanel {
     html += `<label class="dg-label">Center</label><span class="dg-val" id="debug-probe-center">${this._probeCenterLabel()}</span>`;
     html += '</div>';
     html += '<div class="debug-slider-row"><label class="dg-label">Radius (kpc)</label>';
-    html += '<input type="number" id="debug-probe-radius" class="debug-input" style="width:70px" min="0.01" max="2" step="0.01" value="0.1"></div>';
+    html += '<input type="number" id="debug-probe-radius" aria-label="Probe radius in kiloparsecs" class="debug-input" style="width:70px" min="0.01" max="2" step="0.01" value="0.1"></div>';
     html += '<div class="debug-slider-row"><label class="dg-label">Scan depth</label>';
-    html += '<select id="debug-probe-depth" class="debug-input" style="width:110px"><option value="shallow">shallow (fast)</option><option value="deep">deep (confirm rings/hab)</option></select></div>';
+    html += '<select id="debug-probe-depth" aria-label="Scan depth" class="debug-input" style="width:110px"><option value="shallow">shallow (fast)</option><option value="deep">deep (confirm rings/hab)</option></select></div>';
     // Tag filter
     html += '<div class="debug-grid" style="margin-top:4px">';
-    html += `<label class="dg-label">Binary</label><select id="debug-f-binary" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option><option value="false">no</option></select>`;
-    html += `<label class="dg-label">Star type</label><select id="debug-f-ptype" class="debug-input" style="width:90px"><option value="">any</option><option>O</option><option>B</option><option>A</option><option>F</option><option>G</option><option>K</option><option>M</option></select>`;
-    html += `<label class="dg-label">Has rings</label><select id="debug-f-rings" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
-    html += `<label class="dg-label">Habitable</label><select id="debug-f-hab" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
+    html += `<label class="dg-label">Binary</label><select id="debug-f-binary" aria-label="Filter: binary" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option><option value="false">no</option></select>`;
+    html += `<label class="dg-label">Star type</label><select id="debug-f-ptype" aria-label="Filter: star type" class="debug-input" style="width:90px"><option value="">any</option><option>O</option><option>B</option><option>A</option><option>F</option><option>G</option><option>K</option><option>M</option></select>`;
+    html += `<label class="dg-label">Has rings</label><select id="debug-f-rings" aria-label="Filter: has rings" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
+    html += `<label class="dg-label">Habitable</label><select id="debug-f-hab" aria-label="Filter: habitable" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
     html += '</div>';
     html += '<button class="debug-btn" id="debug-probe-run" style="margin-top:6px;width:100%">▶ Run probe</button>';
     html += '<div id="debug-probe-status" class="debug-find-status"></div>';
@@ -519,7 +519,7 @@ export class DebugPanel {
     // ── Saved Systems ──
     html += '<div class="debug-section"><h3>SAVED SYSTEMS</h3>';
     html += '<div class="debug-grid"><label class="dg-label">Filter</label>';
-    html += `<select id="debug-saved-filter" class="debug-input" style="width:130px"><option value="">all</option><option value="isBinary">binary</option><option value="hasRings">has rings</option><option value="hasHabitable">habitable</option></select></div>`;
+    html += `<select id="debug-saved-filter" aria-label="Saved-systems filter" class="debug-input" style="width:130px"><option value="">all</option><option value="isBinary">binary</option><option value="hasRings">has rings</option><option value="hasHabitable">habitable</option></select></div>`;
     html += '<div id="debug-saved-list" class="debug-grid" style="margin-top:4px"></div>';
     html += '</div>';
 
@@ -900,8 +900,14 @@ export class DebugPanel {
           const entry = this._savedSystems.list().find(x => x.id === js);
           if (entry) jumpTo(entry.navStarData);
         } else if (rm != null) {
-          this._savedSystems.remove(rm);
-          this._renderSavedList(container);
+          if (t.dataset.armed === '1') {
+            this._savedSystems.remove(rm);
+            this._renderSavedList(container);
+          } else {
+            t.dataset.armed = '1';
+            t.textContent = 'sure?';
+            setTimeout(() => { if (t.isConnected) { t.dataset.armed = '0'; t.textContent = '✕'; } }, 2500);
+          }
         }
       });
     }
@@ -929,7 +935,7 @@ export class DebugPanel {
     h += this._row('Planets', t.planetCount);
     h += this._row('Has rings', t.hasRings ? 'Yes' : 'No');
     h += this._row('Habitable', t.hasHabitable ? 'Yes' : 'No');
-    h += this._row('Archetype', t.archetype ?? '—');
+    h += this._row('Archetype', t.archetype ?? '(none)');
     return h;
   }
 
