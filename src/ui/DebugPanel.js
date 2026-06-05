@@ -60,6 +60,7 @@ export class DebugPanel {
     this._currentNavStar = nav
       ? { worldX: nav.worldX, worldY: nav.worldY, worldZ: nav.worldZ, seed: nav.seed, type: nav.type }
       : null;
+    this._refreshLiveSections();
   }
 
   // ── Data setters (called by main.js) ──
@@ -68,6 +69,7 @@ export class DebugPanel {
     this._system = system;
     this._systemData = systemData;
     this._stellarEvolution = systemData?.stellarEvolution || null;
+    this._refreshLiveSections();
   }
 
   setPlayerPos(pos) { this._playerPos = pos; }
@@ -918,6 +920,20 @@ export class DebugPanel {
     h += this._row('Habitable', t.hasHabitable ? 'Yes' : 'No');
     h += this._row('Archetype', t.archetype ?? '—');
     return h;
+  }
+
+  /**
+   * Re-render the system-dependent sections in place. Cheap (innerHTML of two
+   * small grids + button state); called only on system/nav change while the
+   * panel is open, never per frame.
+   */
+  _refreshLiveSections() {
+    if (!this._panelVisible || !this._panelEl) return;
+    const grid = this._panelEl.querySelector('#debug-tags-grid');
+    if (grid) grid.innerHTML = this._tagsRowsHtml();
+    const center = this._panelEl.querySelector('#debug-probe-center');
+    if (center) center.textContent = this._probeCenterLabel();
+    this._updateSaveButtonState();
   }
 
   _probeCenterLabel() {
