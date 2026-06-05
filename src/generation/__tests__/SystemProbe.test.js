@@ -125,10 +125,11 @@ describe('UX-5 — probeRegionDetailed metadata', () => {
     expect(detailed.sweptCount).toBe(50);
   }, 30000);
 
-  it('sweepCapped is false when the region fits under the cap', () => {
-    const region = { shape: 'radius', center: CENTER, radiusKpc: 0.0005, maxResults: 500 };
+  it('sweepCapped is false when a populated region fits under the cap', () => {
+    const region = { shape: 'radius', center: CENTER, radiusKpc: 0.005, maxResults: 500 };
     const detailed = probeRegionDetailed(map, region, {}, { scanDepth: 'shallow' });
+    expect(detailed.results.length).toBeGreaterThan(0); // genuinely populated, not a degenerate empty region
     expect(detailed.sweepCapped).toBe(false);
-    expect(detailed.results.length).toBe(detailed.sweptCount);
+    expect(detailed.results.length).toBe(detailed.sweptCount); // empty filter: every swept star is a result
   }, 30000);
 });
