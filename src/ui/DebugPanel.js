@@ -1,4 +1,7 @@
 import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
+import { deriveSystemTags } from '../generation/SystemTags.js';
+import { probeRegion } from '../generation/SystemProbe.js';
+import { SavedSystems } from '../state/SavedSystems.js';
 
 /**
  * DebugPanel — developer tools overlay for Well Dipper.
@@ -34,9 +37,29 @@ export class DebugPanel {
     this._stellarEvolution = null;
     this._systemData = null;
 
+    // ── System-tags / save / probe-search (system-tags-save-search) ──
+    // Persisted saved-systems store (localStorage). _currentNavStar is the
+    // EXACT {worldX,worldY,worldZ,seed,type} snapshot of the current system,
+    // set only on override-based spawn paths (warp / probe-jump) where reload
+    // is guaranteed faithful. _probeResults holds the last probe's hits.
+    this._savedSystems = new SavedSystems();
+    this._currentNavStar = null;
+    this._probeResults = [];
+
     // Create DOM elements
     this._createHUD();
     this._createPanel();
+  }
+
+  /**
+   * Record the navStarData snapshot of the current system. Called by main.js on
+   * faithful (override-based) spawns — warp Priority-1 and probe-jump. When set,
+   * "Save current system" round-trips identically; when null, save is disabled.
+   */
+  setCurrentNavStar(nav) {
+    this._currentNavStar = nav
+      ? { worldX: nav.worldX, worldY: nav.worldY, worldZ: nav.worldZ, seed: nav.seed, type: nav.type }
+      : null;
   }
 
   // ── Data setters (called by main.js) ──
@@ -460,6 +483,43 @@ export class DebugPanel {
     html += '<button class="debug-btn" id="debug-seed-go">GO</button>';
     html += '</div></div>';
 
+    // ── System Tags ──
+    html += '<div class="debug-section"><h3>SYSTEM TAGS</h3><div class="debug-grid" id="debug-tags-grid">';
+    html += this._tagsRowsHtml();
+    html += '</div>';
+    html += '<button class="debug-btn" id="debug-save-system" style="margin-top:6px;width:100%">★ Save current system</button>';
+    html += '<div id="debug-save-status" class="debug-find-status"></div>';
+    html += '</div>';
+
+    // ── Probe Search ──
+    html += '<div class="debug-section"><h3>PROBE SEARCH</h3>';
+    html += '<div style="font-size:10px;color:#8cf;margin-bottom:4px">Sweeps a region of the universe and filters by tag.</div>';
+    html += '<div class="debug-grid">';
+    html += `<label class="dg-label">Center</label><span class="dg-val" id="debug-probe-center">${this._probeCenterLabel()}</span>`;
+    html += '</div>';
+    html += '<div class="debug-slider-row"><label class="dg-label">Radius (kpc)</label>';
+    html += '<input type="number" id="debug-probe-radius" class="debug-input" style="width:70px" min="0.01" max="2" step="0.01" value="0.1"></div>';
+    html += '<div class="debug-slider-row"><label class="dg-label">Scan depth</label>';
+    html += '<select id="debug-probe-depth" class="debug-input" style="width:110px"><option value="shallow">shallow (fast)</option><option value="deep">deep (confirm rings/hab)</option></select></div>';
+    // Tag filter
+    html += '<div class="debug-grid" style="margin-top:4px">';
+    html += `<label class="dg-label">isBinary</label><select id="debug-f-binary" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option><option value="false">no</option></select>`;
+    html += `<label class="dg-label">primaryType</label><select id="debug-f-ptype" class="debug-input" style="width:90px"><option value="">any</option><option>O</option><option>B</option><option>A</option><option>F</option><option>G</option><option>K</option><option>M</option></select>`;
+    html += `<label class="dg-label">hasRings</label><select id="debug-f-rings" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
+    html += `<label class="dg-label">hasHabitable</label><select id="debug-f-hab" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
+    html += '</div>';
+    html += '<button class="debug-btn" id="debug-probe-run" style="margin-top:6px;width:100%">▶ Run probe</button>';
+    html += '<div id="debug-probe-status" class="debug-find-status"></div>';
+    html += '<div id="debug-probe-results" class="debug-grid" style="margin-top:4px"></div>';
+    html += '</div>';
+
+    // ── Saved Systems ──
+    html += '<div class="debug-section"><h3>SAVED SYSTEMS</h3>';
+    html += '<div class="debug-grid"><label class="dg-label">Filter</label>';
+    html += `<select id="debug-saved-filter" class="debug-input" style="width:130px"><option value="">all</option><option value="isBinary">binary</option><option value="hasRings">has rings</option><option value="hasHabitable">habitable</option></select></div>`;
+    html += '<div id="debug-saved-list" class="debug-grid" style="margin-top:4px"></div>';
+    html += '</div>';
+
     el.innerHTML = html;
 
     // ── Wire up interactive controls ──
@@ -747,9 +807,176 @@ export class DebugPanel {
         if (e.code === 'Enter') seedBtn.click();
       });
     }
+
+    // ── System-tags / save / probe (system-tags-save-search) ──
+
+    // Save current system
+    const saveBtn = container.querySelector('#debug-save-system');
+    const saveStatus = container.querySelector('#debug-save-status');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        if (!this._currentNavStar || !this._systemData) {
+          if (saveStatus) saveStatus.textContent = 'Warp or jump to a system first (faithful save needs its star snapshot).';
+          return;
+        }
+        const tags = deriveSystemTags(this._systemData);
+        const name = this._systemData?._knownSystemNames?.system || this._systemData?._warpTargetName || null;
+        this._savedSystems.save({ navStarData: this._currentNavStar, tags, name });
+        if (saveStatus) saveStatus.textContent = `Saved ${this._tagSummary(tags)}`;
+        this._renderSavedList(container);
+      });
+    }
+
+    // Run probe
+    const probeBtn = container.querySelector('#debug-probe-run');
+    const probeStatus = container.querySelector('#debug-probe-status');
+    if (probeBtn) {
+      probeBtn.addEventListener('click', () => {
+        if (!this._galacticMap) { if (probeStatus) probeStatus.textContent = 'No galaxy map.'; return; }
+        const center = this._playerPos ? { ...this._playerPos } : { x: 8, y: 0, z: 0 };
+        const radiusKpc = parseFloat(container.querySelector('#debug-probe-radius')?.value) || 0.1;
+        const scanDepth = container.querySelector('#debug-probe-depth')?.value || 'shallow';
+        const filter = this._readProbeFilter(container);
+        if (probeStatus) probeStatus.textContent = 'Scanning…';
+        // Defer so the "Scanning…" paint lands before a deep scan blocks.
+        setTimeout(() => {
+          try {
+            const region = { shape: 'radius', center, radiusKpc };
+            this._probeResults = probeRegion(this._galacticMap, region, filter, { scanDepth });
+            if (probeStatus) probeStatus.textContent = `${this._probeResults.length} match(es) in ${radiusKpc} kpc (${scanDepth}).`;
+          } catch (err) {
+            this._probeResults = [];
+            if (probeStatus) probeStatus.textContent = `Probe error: ${err.message}`;
+          }
+          this._renderProbeResults(container);
+        }, 0);
+      });
+    }
+
+    // Result + saved-list actions (event delegation). Wire ONCE — `container`
+    // (#debug-content) persists across panel re-populates, so attaching per
+    // populate would accumulate duplicate handlers. Elements are re-queried at
+    // click time because innerHTML is rebuilt on each open.
+    if (!this._tagsDelegationWired) {
+      this._tagsDelegationWired = true;
+      const jumpTo = (nav) => {
+        if (this._spawnCallbacks?.jumpToNavStar) {
+          this._spawnCallbacks.jumpToNavStar(nav);
+          this.togglePanel();
+        }
+      };
+      container.addEventListener('click', (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLElement)) return;
+        const ri = t.getAttribute('data-jump-result');
+        const si = t.getAttribute('data-save-result');
+        const js = t.getAttribute('data-jump-saved');
+        const rm = t.getAttribute('data-remove-saved');
+        const status = container.querySelector('#debug-probe-status');
+        if (ri != null) {
+          const r = this._probeResults[Number(ri)];
+          if (r) jumpTo(r.navStarData);
+        } else if (si != null) {
+          const r = this._probeResults[Number(si)];
+          if (r) {
+            this._savedSystems.save({ navStarData: r.navStarData, tags: r.tags, name: null });
+            this._renderSavedList(container);
+            if (status) status.textContent = `Saved ${this._tagSummary(r.tags)}`;
+          }
+        } else if (js != null) {
+          const entry = this._savedSystems.list().find(x => x.id === js);
+          if (entry) jumpTo(entry.navStarData);
+        } else if (rm != null) {
+          this._savedSystems.remove(rm);
+          this._renderSavedList(container);
+        }
+      });
+    }
+
+    // Saved-list filter + initial render
+    const savedFilter = container.querySelector('#debug-saved-filter');
+    if (savedFilter) savedFilter.addEventListener('change', () => this._renderSavedList(container));
+    this._renderSavedList(container);
   }
 
   _row(label, value) {
     return `<span class="dg-label">${label}</span><span class="dg-val">${value}</span>`;
+  }
+
+  // ── System-tags / save / probe helpers (system-tags-save-search) ──
+
+  /** Rows for the current system's derived tags. */
+  _tagsRowsHtml() {
+    if (!this._systemData) return this._row('Status', 'No system loaded');
+    const t = deriveSystemTags(this._systemData);
+    let h = '';
+    h += this._row('Binary', t.isBinary ? 'Yes' : 'No');
+    h += this._row('Star type', t.secondaryType ? `${t.primaryType}+${t.secondaryType}` : (t.primaryType ?? '?'));
+    h += this._row('Planets', t.planetCount);
+    h += this._row('Has rings', t.hasRings ? 'Yes' : 'No');
+    h += this._row('Habitable', t.hasHabitable ? 'Yes' : 'No');
+    h += this._row('Archetype', t.archetype ?? '—');
+    return h;
+  }
+
+  _probeCenterLabel() {
+    const p = this._playerPos;
+    return p ? `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})` : 'current position';
+  }
+
+  /** Short one-line tag summary for a result/saved row. */
+  _tagSummary(t) {
+    const parts = [];
+    parts.push(t.secondaryType ? `${t.primaryType}+${t.secondaryType}` : t.primaryType);
+    if (t.isBinary) parts.push('bin');
+    parts.push(`${t.planetCount}p`);
+    if (t.hasRings === true) parts.push('rings');
+    if (t.hasHabitable === true) parts.push('hab');
+    return parts.join(' · ');
+  }
+
+  /** Read the probe tag-filter selects into a filter object. */
+  _readProbeFilter(container) {
+    const filter = {};
+    const bin = container.querySelector('#debug-f-binary')?.value;
+    if (bin === 'true') filter.isBinary = true;
+    else if (bin === 'false') filter.isBinary = false;
+    const ptype = container.querySelector('#debug-f-ptype')?.value;
+    if (ptype) filter.primaryType = ptype;
+    if (container.querySelector('#debug-f-rings')?.value === 'true') filter.hasRings = true;
+    if (container.querySelector('#debug-f-hab')?.value === 'true') filter.hasHabitable = true;
+    return filter;
+  }
+
+  /** Render probe results into the results container with Jump buttons. */
+  _renderProbeResults(container) {
+    const box = container.querySelector('#debug-probe-results');
+    if (!box) return;
+    const results = this._probeResults;
+    if (!results.length) { box.innerHTML = ''; return; }
+    let h = '';
+    const shown = results.slice(0, 50);
+    for (let i = 0; i < shown.length; i++) {
+      const r = shown[i];
+      h += `<span class="dg-label" title="seed ${r.navStarData.seed}">${this._tagSummary(r.tags)}</span>`;
+      h += `<span class="dg-val"><button class="debug-btn" data-jump-result="${i}">jump</button> <button class="debug-btn" data-save-result="${i}">★</button></span>`;
+    }
+    box.innerHTML = h;
+  }
+
+  /** Render the saved-systems list (respecting the active filter) with Jump/✕. */
+  _renderSavedList(container) {
+    const box = container.querySelector('#debug-saved-list');
+    if (!box) return;
+    const filterKey = container.querySelector('#debug-saved-filter')?.value || '';
+    const entries = filterKey ? this._savedSystems.filterByTag({ [filterKey]: true }) : this._savedSystems.list();
+    if (!entries.length) { box.innerHTML = '<span class="dg-label">— none —</span><span class="dg-val"></span>'; return; }
+    let h = '';
+    for (const e of entries) {
+      const label = e.name || this._tagSummary(e.tags);
+      h += `<span class="dg-label" title="seed ${e.navStarData.seed}">${label}</span>`;
+      h += `<span class="dg-val"><button class="debug-btn" data-jump-saved="${e.id}">jump</button> <button class="debug-btn" data-remove-saved="${e.id}">✕</button></span>`;
+    }
+    box.innerHTML = h;
   }
 }

@@ -19,6 +19,7 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
+import { generateFromNavStar } from './generation/SystemResolver.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
 import { MoonGenerator } from './generation/MoonGenerator.js';
 import { DestinationPicker } from './generation/DestinationPicker.js';
@@ -2944,6 +2945,9 @@ warpEffect.onPrepareSystem = () => {
     if (resolvedStar) {
       playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
       currentGalaxyStar = resolvedStar;
+      // Record the exact star snapshot so the debug panel can faithfully save
+      // this system (warp Priority-1 is override-based → reload round-trips).
+      debugPanel.setCurrentNavStar(resolvedStar);
       galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
       // Hash grid already determined this star's type — pass it through
       // so StarSystemGenerator uses it instead of re-rolling from weights
@@ -4201,6 +4205,32 @@ debugPanel.setSpawnCallbacks({
     sysData._destType = 'star-system';
     spawnSystem({ forWarp: false, systemData: sysData });
     console.log(`Debug spawn with seed: "${seed}"`);
+  },
+  // Jump straight into a system from a navStarData snapshot (probe result or a
+  // saved system). Uses the canonical resolver, so the spawned system is
+  // IDENTICAL to what a warp to that star would produce — and records the
+  // snapshot so it can be saved faithfully from the panel.
+  jumpToNavStar: (nav) => {
+    if (!galacticMap) return;
+    if (galleryMode) exitGallery();
+    playerGalacticPos = { x: nav.worldX, y: nav.worldY, z: nav.worldZ };
+    currentGalaxyStar = nav;
+    if (skyRenderer._glowLayer?.setPlayerPosition) {
+      skyRenderer._glowLayer.setPlayerPosition(playerGalacticPos);
+    }
+    setTimeout(() => {
+      skyRenderer.prepareForPosition(playerGalacticPos);
+      skyRenderer.activate();
+      skyRenderer.update(camera, 0);
+      setTimeout(() => {
+        const sysData = generateFromNavStar(galacticMap, nav);
+        sysData._destType = 'star-system';
+        spawnSystem({ forWarp: false, systemData: sysData });
+        debugPanel.setPlayerPos(playerGalacticPos);
+        debugPanel.setCurrentNavStar(nav);
+        console.log(`Jump to nav star: seed=${nav.seed} type=${nav.type} @(${nav.worldX.toFixed(3)},${nav.worldY.toFixed(3)},${nav.worldZ.toFixed(3)})`);
+      }, 50);
+    }, 50);
   },
   findNearest: (targetType) => {
     if (!galacticMap) return { found: false, message: 'No galaxy active' };

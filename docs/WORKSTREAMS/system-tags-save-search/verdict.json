@@ -1,0 +1,66 @@
+{
+  "workstream": "system-tags-save-search",
+  "commit": "WORKING (uncommitted at verify time; committed immediately after on branch system-tags-save-search)",
+  "verifiedBy": "dev-collab verify-workstream.mjs workflow (static + 3x adversarial) for AC1-AC7; working-Claude live chrome-devtools UAT on port 9223 for AC8",
+  "verifiedDate": "2026-06-05",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "PASS"
+  },
+  "perAC": [
+    {
+      "id": "AC1-derive-tags",
+      "result": "PASS",
+      "evidence": "Pure-function module src/generation/SystemTags.js exports deriveSystemTags(systemData) returning the AC tag set (isBinary, primaryType, secondaryType, planetCount, hasRings, hasHabitable, archetype). Dedicated suite src/generation/__tests__/SystemTags.test.js: 12/12 pass. Sol fixture: isBinary=false, primaryType='G', secondaryType=null, hasRings=true, hasHabitable=true, archetype=null. Procedural binary/ringed/empty fixtures verified. DOCUMENTED DIVERGENCE: AC prose says Sol planetCount=8; implementation returns planets.length=13 (includes dwarf planets) — intentional, illustrative '8' superseded by the principled planets.length rule.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2-cheap-fast-path",
+      "result": "PASS",
+      "evidence": "Additive refactor of StarSystemGenerator.js extracts yield-free early phase into static _computeEarly(); deriveCheapTags(seed, galaxyContext) runs it on its own fresh SeededRandom, returning early fields with hasRings/hasHabitable null and no per-planet loop. CheapTags.test.js: 15/15 pass. Cheap==full for early fields across 7 seeds + 3 galaxyContext positions; planetCount asserted >= final (nominal pre-culling); vi.spyOn confirms PlanetGenerator.generate NOT called by cheap path; RNG draw order byte-identical before/after cheap calls. The 2 pre-existing unrelated failures (KnownObjects/GalacticFeatures) were independently confirmed by working-Claude via git stash on the committed StarSystemGenerator.js — they fail identically without this diff, so the _computeEarly extraction did not break determinism.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC3-probe-shallow-search",
+      "result": "PASS",
+      "evidence": "src/generation/SystemProbe.js probeRegion() sweeps prism/cube/radius via HashGridStarfield, resolves each star via SystemResolver, derives cheap tags, applies scalar-equality filter, returns {navStarData, tags}. Determinism by construction. SystemProbe.test.js AC3 block: filter match, determinism via toEqual across two runs, within-volume guarantee, navStarData+tags shape, all three region shapes, empty-filter returns all — all PASS (10/10 file).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC4-deep-scan-modes",
+      "result": "PASS",
+      "evidence": "SystemProbe.js splitFilter() partitions cheap vs expensive (EXPENSIVE_TAG_KEYS=['hasRings','hasHabitable']). 'deep' re-runs full generation + deriveSystemTags to confirm expensive tags; 'shallow' returns cheap superset with expensive tags null. SystemProbe.test.js AC4 block (filter {hasRings:true}): shallow returns superset with hasRings===null; deep returns strict subset with hasRings===true confirmed by re-generating each and scanning planets[]; deep determinism asserted. 10/10 file.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC5-save-persists",
+      "result": "PASS",
+      "evidence": "src/state/SavedSystems.js save() writes snapshot {worldX,worldY,worldZ,seed,type}+tags+name to localStorage key 'well-dipper-saved-systems-v1'; _load() reads it back on construction. SavedSystems.test.js: 7/7 pass — save, fresh instance on same backing storage (simulated reload), list().length===1 and all snapshot fields/tags/name survive; upsert-no-duplicate and remove pass. ALSO LIVE-CONFIRMED in AC8 UAT: a saved K+K system survived a real page reload.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC6-faithful-reload",
+      "result": "PASS",
+      "evidence": "SystemResolver.js resolveNavStar() replicates warp Priority-1 path verbatim (position -> deriveGalaxyContext -> starTypeOverride=navStarData.type -> seed=String(navStarData.seed)), verified against main.js warp path. SavedSystems.test.js AC6 block: regenerated system deep-equals original on seed/star.type/star2.type/planets.length/per-planet type arrays/per-planet rings; span of 4 stars regenerate identically. ALSO LIVE-CONFIRMED in AC8 UAT: jumping from a saved entry after reload landed in the identical system (seed 2286505054, K+K binary, 3 planets).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC7-search-saved-list",
+      "result": "PASS",
+      "evidence": "src/state/SavedSystems.js filterByTag(filter) returns entries where every filter key matches entry.tags[k] via scalar equality. SavedSystems.test.js AC7 block seeds a mixed list of 18 real systems; filterByTag({isBinary:true}) and filterByTag({hasHabitable:true}) each return only matching entries. 7/7 file. ALSO LIVE-CONFIRMED in AC8 UAT: the SAVED SYSTEMS filter narrowed the list (hasHabitable=true returned the 1 habitable save).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC8-debug-panel-uat",
+      "result": "PASS",
+      "evidence": "LIVE UAT driven by working-Claude via chrome-devtools (GPU Chrome, port 9223) on 2026-06-05, after a hard page reload. (a) SYSTEM TAGS: Sol rendered Binary No / Star type G / Planets 13 / Has rings Yes / Habitable Yes / Archetype —, all correct. (b) PROBE SEARCH: radius 0.1 kpc + isBinary=true filter returned 173 matches, every result binary; clicking a result's 'jump' (#0 = seed 2286505054, K+K, 3p) warped into exactly that system (afterSeed 2286505054, star1=K, star2=K, planetCount=3), panel closed, console logged 'Jump to nav star: seed=2286505054' + 'System Prairoumen — K+K binary, 3 planets'. (c) '★ Save current system' (#debug-save-system) was armed (not disabled, override-spawn path), saved the K+K system to SAVED SYSTEMS ('K+K · bin · 3p · rings · hab'); after a hard page reload the entry persisted; jumping from the saved entry landed in the identical system. Zero console errors throughout. NOTE: AC8 requires a HARD RELOAD after the build — Vite HMR does not hot-swap the entry module (main.js) jumpToNavStar wiring, so a stale page silently no-ops the jump (the click reaches the handler but _spawnCallbacks lacks jumpToNavStar on the stale instance). On a freshly-loaded page everything works.",
+      "adversarialVotes": "live-verified (working-Claude chrome-devtools); supersedes the workflow's deferred-to-max"
+    }
+  ],
+  "overall": "PASS — all 8 ACs verified. Unit (AC1/AC2/AC7) + integration (AC3/AC4/AC5/AC6) green via vitest + 3x adversarial; AC8 UAT live-driven green via chrome-devtools 9223. No regressions; the 2 pre-existing failures (KnownObjects, GalacticFeatures) are unrelated and confirmed via git stash.",
+  "processNotes": [
+    "verify-workstream.mjs had two bugs surfaced and fixed this run: (1) the load-contract agent's schema was a bare {type:'object'} that let the agent return an empty/summary object, zeroing the AC list (workstream came through 'undefined'); tightened to require workstream + non-empty acceptanceCriteria. (2) the Workflow tool delivered args as a JSON-encoded STRING, so a.contractPath was undefined; added a defensive JSON.parse on a string args at the top. Both fixes are in ~/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs (separate repo, uncommitted).",
+    "AC8 UAT gotcha (recorded above): after building, a HARD RELOAD of the dev page is required before driving jump/save — Vite HMR leaves a stale main.js entry instance whose _spawnCallbacks lacks the new jumpToNavStar."
+  ]
+}

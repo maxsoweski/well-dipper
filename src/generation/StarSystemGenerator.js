@@ -104,12 +104,53 @@ export class StarSystemGenerator {
   }
 
   /**
-   * Internal generator. All the system-generation logic lives here so the
-   * sync and async wrappers share one source of truth. `yield` points are
-   * chosen at the boundaries of heavy work (per-planet, per-moon, per-belt).
+   * Cheap fast-path: derive the early, loop-free tags for a system WITHOUT
+   * running the per-planet loop (no PlanetGenerator / MoonGenerator calls).
+   *
+   * Uses its OWN SeededRandom instance and shares _computeEarly verbatim with
+   * full generation, so (a) the early tags are byte-exact to what a full
+   * generate(seed, ctx) would produce, and (b) it can NEVER perturb a separate
+   * full generation's RNG stream.
+   *
+   * isBinary / primary+secondary spectral type / archetype are determined
+   * entirely in the early phase, so they are EXACT. planetCount is the NOMINAL
+   * (pre-culling) count: the per-planet loop can break on the orbit limit, and
+   * migration / binary-stability culling only ever REMOVE planets — so the
+   * nominal count is an exact-or-overcount upper bound on the final count.
+   * hasRings / hasHabitable need full per-planet generation, so they are null
+   * here (resolve them with a deep scan via deriveSystemTags).
+   *
+   * @param {string} seed
+   * @param {object|null} galaxyContext
+   * @returns {{isBinary, primaryType, secondaryType, planetCount, archetype, hasRings:null, hasHabitable:null}}
    */
-  static *_generateIterator(seed, galaxyContext = null) {
+  static deriveCheapTags(seed, galaxyContext = null) {
     const rng = new SeededRandom(seed);
+    const e = this._computeEarly(rng, seed, galaxyContext);
+    return {
+      isBinary: e.isBinary,
+      primaryType: e.star.type,
+      secondaryType: e.star2 ? e.star2.type : null,
+      planetCount: e.planetCount, // nominal (pre-culling) — see method doc
+      archetype: e.archetype.name,
+      hasRings: null,
+      hasHabitable: null,
+    };
+  }
+
+  /**
+   * Compute the early, yield-free phase of generation: primary star, binary
+   * companion, metallicity/age, formation/archetype, physical zones,
+   * orbital-spacing parameters, and the nominal planet count — everything
+   * decided BEFORE the per-planet loop. Shared verbatim by _generateIterator
+   * (full generation) and deriveCheapTags (cheap fast-path) so both advance the
+   * seeded RNG stream in the EXACT same order. Advances the caller-owned `rng`
+   * through the planet-count draw, leaving it positioned for the planet loop.
+   * @param {SeededRandom} rng — caller-owned stream
+   * @param {string} seed
+   * @param {object|null} galaxyContext
+   */
+  static _computeEarly(rng, seed, galaxyContext = null) {
 
     // ── Primary Star ──
     // If the hash grid already determined this star's type, use it directly.
@@ -325,6 +366,39 @@ export class StarSystemGenerator {
     const planetCount = rng.chance(0.08)
       ? 0
       : Math.round(rng.gaussianClamped(baseMean, 1.5, 1, maxPlanets));
+
+    return {
+      starType, star, star2, isBinary,
+      binarySeparationAU, binarySeparationScene, binarySeparation,
+      binaryMassRatio, binaryOrbitSpeed, binaryOrbitAngle,
+      metallicity, ageGyr, radiusSolarVaried,
+      formation, archetype,
+      frostLineAU, hzInnerAU, hzOuterAU,
+      adjustedInnerAU, spacingMu, spacingSigma, minSpacingRatio, maxOrbitAU,
+      adjustedMapBase, mapUnitsPerAU, starInfo, zones, planetCount,
+    };
+  }
+
+  /**
+   * Internal generator. All the system-generation logic lives here so the
+   * sync and async wrappers share one source of truth. `yield` points are
+   * chosen at the boundaries of heavy work (per-planet, per-moon, per-belt).
+   * The early, yield-free phase is delegated to _computeEarly so the cheap
+   * fast-path (deriveCheapTags) replays the EXACT same RNG draw order.
+   */
+  static *_generateIterator(seed, galaxyContext = null) {
+    const rng = new SeededRandom(seed);
+    const _early = this._computeEarly(rng, seed, galaxyContext);
+    const {
+      starType, star, star2, isBinary,
+      binarySeparationAU, binarySeparationScene, binarySeparation,
+      binaryMassRatio, binaryOrbitSpeed, binaryOrbitAngle,
+      metallicity, ageGyr, radiusSolarVaried,
+      formation, archetype,
+      frostLineAU, hzInnerAU, hzOuterAU,
+      adjustedInnerAU, spacingMu, spacingSigma, minSpacingRatio, maxOrbitAU,
+      adjustedMapBase, mapUnitsPerAU, starInfo, zones, planetCount,
+    } = _early;
 
     // ── Generate planets ──
     // Orbital spacing uses log-normal draws with peas-in-a-pod correlation.

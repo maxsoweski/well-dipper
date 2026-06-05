@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-04 by working-Claude (rebasing bug review + `a1a01b6` single-canonical-rebase-call/telemetry fix committed-not-pushed; world-origin reset-on-swap workstream scoped `466a0c5`, awaiting GATE 1, queued behind MVP).
+Last updated: 2026-06-05 by working-Claude (shipped `system-tags-save-search` Phase 1 — all 8 ACs verified: AC1–AC7 via the dev-collab verify-workflow + 3× adversarial, AC8 via live chrome-devtools UAT; verdict.json written; committed on branch `system-tags-save-search`. MVP items below remain the larger arc).
 
 ---
 
@@ -35,6 +35,22 @@ is live:
 
 ## Recently shipped
 
+- **`system-tags-save-search` Phase 1 — SHIPPED, all 8 ACs verified** (2026-06-05) —
+  tag-search over the universe + save/share specific systems (debug/QA surface;
+  player UI is Phase 2). New: `SystemTags.deriveSystemTags`, `StarSystemGenerator.deriveCheapTags`
+  (cheap fast-path via an extracted shared `_computeEarly` — RNG-order-safe),
+  `SystemProbe.probeRegion` (region sweep + shallow/deep scan), `SystemResolver`
+  (canonical navStarData→system), `state/SavedSystems` (localStorage), and DebugPanel
+  SYSTEM TAGS / PROBE SEARCH / SAVED SYSTEMS sections + `main.js` jumpToNavStar/
+  setCurrentNavStar. AC1–AC7 verified via the dev-collab verify-workflow (vitest +
+  3× adversarial, 44 tests across 4 new files); AC8 verified via live chrome-devtools
+  UAT (tags render, 173-match binary probe → jump landed in the exact system, save →
+  reload-persist → faithful saved-jump, zero console errors). `verdict.json` written
+  to the workstream dir. Trial of the dev-collab mechanism-match flow. Findings:
+  Sol planetCount=13 (incl. dwarfs, not contract's illustrative 8); cheap planetCount
+  is a nominal upper bound (binary/migration culling needs the planet loop); faithful
+  save requires an override-based spawn path; **AC8 UAT needs a hard page reload after
+  building** (Vite HMR doesn't hot-swap the main.js entry's jumpToNavStar wiring).
 - **world-origin spawn-once-body centering** (2026-06-04) — single (non-binary)
   system stars, planet orbit rings, and asteroid belts were spawned at the raw
   scene origin and never rewritten per-frame, so in warp-reached systems they
