@@ -76,6 +76,69 @@
         "observable": "He sees the tags rendered; the saved entry appears; the probe returns a matching list; selecting a result warps him into that system — all without console errors."
       },
       "layer": "uat"
+    },
+    {
+      "id": "UX-1-live-tag-refresh",
+      "statement": "While the panel is open, the SYSTEM TAGS grid, the Save-button enabled state, and the probe Center label re-render whenever the active system changes (warp / jump), without requiring a panel close+reopen.",
+      "verifyVia": {
+        "input": "Open panel in system A; trigger a system change (probe-jump or warp) while the panel stays open; read #debug-tags-grid.",
+        "observable": "The grid shows system B's tags (matching window._lab.systemInfo()), not A's, with no reopen."
+      },
+      "layer": "uat"
+    },
+    {
+      "id": "UX-2-save-guard-visible",
+      "statement": "When there is no faithful nav snapshot (_currentNavStar null), the Save button is visibly disabled with a persistent reason, instead of looking clickable and rejecting on click.",
+      "verifyVia": {
+        "input": "Enter a system via _lab.enterSol() (no warp); inspect #debug-save-system; then arrive via probe-jump and inspect again.",
+        "observable": "Disabled (greyed, not pointer, reason shown) before a faithful arrival; enabled after."
+      },
+      "layer": "uat"
+    },
+    {
+      "id": "UX-3-fidelity-marking",
+      "statement": "Tag summaries distinguish shallow (unconfirmed rings/hab) from confirmed sets; a pure tagSummary()/isShallowTags() pair produces the string and the flag. The '~' marker appears on unconfirmed probe result rows only.",
+      "verifyVia": {
+        "input": "Call tagSummary() on a cheap-tag set (hasRings:null) vs a full set; call isShallowTags() on each.",
+        "observable": "Shallow set is flagged and its summary carries the '~' marker + omits rings/hab; full set is not flagged and shows rings/hab."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "UX-4-distinct-save-affordance",
+      "statement": "The result-row save control is visually/labelled distinct from the top 'Save current system' control, and saving a result CONFIRMS it to full fidelity (regenerates the system) so saved entries are never shallow.",
+      "verifyVia": {
+        "input": "Run a SHALLOW probe; inspect a result row's save button; save a '~'-marked row; inspect the resulting saved entry.",
+        "observable": "Result save reads 'save' (text), not a bare '★'; the saved entry shows confirmed rings/hab tokens with NO '~' marker even though the probe row was shallow."
+      },
+      "layer": "uat"
+    },
+    {
+      "id": "UX-5-result-count-truth",
+      "statement": "Probe reporting tells the truth about truncation: the status names the matched count and whether the sweep hit its star cap, and the results list shows 'showing N of M'.",
+      "verifyVia": {
+        "input": "probeRegionDetailed() on a region denser than the sweep cap; run the probe in-panel.",
+        "observable": "Returns {results, sweptCount, sweepCapped}; status notes the cap; results header reads 'showing 50 of <matched>'."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "UX-6-human-filter-labels",
+      "statement": "Probe filter labels match the human labels used in SYSTEM TAGS (Binary / Star type / Has rings / Habitable), not raw field names.",
+      "verifyVia": {
+        "input": "Inspect probe filter row labels.",
+        "observable": "No 'isBinary'/'primaryType'/'hasRings'/'hasHabitable' code names shown to the user."
+      },
+      "layer": "uat"
+    },
+    {
+      "id": "UX-7-polish",
+      "statement": "Empty archetype renders a labelled '(none)' not a bare em-dash; removing a saved entry requires a confirm/arm step; new probe+saved form fields carry accessible labels (no a11y warning for them).",
+      "verifyVia": {
+        "input": "Inspect Sol's archetype row; click ✕ once then again; audit new fields for associated labels.",
+        "observable": "'(none)'; first ✕ arms, second removes; new selects/inputs have aria-label."
+      },
+      "layer": "uat"
     }
   ],
   "architecturalConnections": {
