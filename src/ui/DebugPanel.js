@@ -896,6 +896,7 @@ export class DebugPanel {
     // Saved-list filter + initial render
     const savedFilter = container.querySelector('#debug-saved-filter');
     if (savedFilter) savedFilter.addEventListener('change', () => this._renderSavedList(container));
+    this._updateSaveButtonState();
     this._renderSavedList(container);
   }
 
@@ -922,6 +923,21 @@ export class DebugPanel {
   _probeCenterLabel() {
     const p = this._playerPos;
     return p ? `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})` : 'current position';
+  }
+
+  /** Enable the Save button only when a faithful snapshot exists; else grey it
+   * out with a persistent reason (no more click-to-find-out-it-failed). */
+  _updateSaveButtonState() {
+    const btn = this._panelEl?.querySelector('#debug-save-system');
+    const status = this._panelEl?.querySelector('#debug-save-status');
+    if (!btn) return;
+    const ok = !!(this._currentNavStar && this._systemData);
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? '1' : '0.4';
+    btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+    btn.title = ok ? '' : 'Warp or jump to a system first — a faithful save needs its star snapshot.';
+    if (status && !ok) status.textContent = 'Save needs a warp/jump arrival (faithful star snapshot).';
+    else if (status && ok && status.textContent.startsWith('Save needs')) status.textContent = '';
   }
 
   /** Short one-line tag summary for a result/saved row. */
