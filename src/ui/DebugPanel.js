@@ -506,10 +506,10 @@ export class DebugPanel {
     html += '<select id="debug-probe-depth" class="debug-input" style="width:110px"><option value="shallow">shallow (fast)</option><option value="deep">deep (confirm rings/hab)</option></select></div>';
     // Tag filter
     html += '<div class="debug-grid" style="margin-top:4px">';
-    html += `<label class="dg-label">isBinary</label><select id="debug-f-binary" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option><option value="false">no</option></select>`;
-    html += `<label class="dg-label">primaryType</label><select id="debug-f-ptype" class="debug-input" style="width:90px"><option value="">any</option><option>O</option><option>B</option><option>A</option><option>F</option><option>G</option><option>K</option><option>M</option></select>`;
-    html += `<label class="dg-label">hasRings</label><select id="debug-f-rings" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
-    html += `<label class="dg-label">hasHabitable</label><select id="debug-f-hab" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
+    html += `<label class="dg-label">Binary</label><select id="debug-f-binary" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option><option value="false">no</option></select>`;
+    html += `<label class="dg-label">Star type</label><select id="debug-f-ptype" class="debug-input" style="width:90px"><option value="">any</option><option>O</option><option>B</option><option>A</option><option>F</option><option>G</option><option>K</option><option>M</option></select>`;
+    html += `<label class="dg-label">Has rings</label><select id="debug-f-rings" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
+    html += `<label class="dg-label">Habitable</label><select id="debug-f-hab" class="debug-input" style="width:90px"><option value="">any</option><option value="true">yes</option></select>`;
     html += '</div>';
     html += '<button class="debug-btn" id="debug-probe-run" style="margin-top:6px;width:100%">▶ Run probe</button>';
     html += '<div id="debug-probe-status" class="debug-find-status"></div>';
