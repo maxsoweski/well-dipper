@@ -151,3 +151,41 @@ secondary thread, separable from the entry-reliability fix.
 
 Telemetry for this addendum is committed (gated, zero-cost when `_trace` null);
 headless `tests/warp-tunnel-rebase.test.js` still 4/4.
+
+---
+
+## ADDENDUM 2026-06-06 (session 3) — Fix D IMPLEMENTED + live-verified 12/12
+
+**Change (one region, `src/main.js` ~6753):** the warp forward-motion now advances
+the camera **position** along the locked `_tunnelForward` axis instead of the
+camera's instantaneous `getWorldDirection` (`_sunDir`). The orientation slerp
+(6745) is untouched — the view still rotates toward `riftDir` for the dive-in feel;
+only position decouples onto the axis the portal is anchored to. Guarded:
+`const _advanceDir = warpEffect._swapFired ? _sunDir : _tunnelForward;` — post-swap
+the camera is teleported/re-aimed at the new star so `_tunnelForward` is stale, and
+we fall back to facing (toward Portal B), mirroring the slerp guard. The deep-sky
+parallax block (6770/6773) still uses `_sunDir` (facing) — unchanged. `_sunDir` is
+still populated by `getWorldDirection`, so nothing downstream breaks. Preserves AC2
+(real plane crossing, no forced INSIDE, no flag) ⇒ no contract change.
+
+**Result (live, GPU 9223, full speed):**
+- Fresh `enterSol` → **12/12 registered** (ALL_REGISTERED). Telemetry on every
+  warp: `latStable ≈ 0`, `fwdDotNormalA ≈ -1.0` — dead-on-axis, exactly as intended.
+- Continuing **13–24 consecutive** (never re-entered Sol) → **10/12** (2 off-axis
+  misses, `offaxisSuspect`). Pre-Fix-D baseline was fresh 7/7 → degrading to **all-miss**
+  by ~warp 7. Fix D is a decisive improvement; the residual deep-state misses are the
+  **finding-#4 turn-alignment accumulation** thread (deferred, separable — Fix D was
+  not scoped to fully solve it). Headless `warp-tunnel-rebase.test.js` still 4/4.
+
+### ⚠️ Live-testing gotcha that wasted most of this session
+The GPU Chrome window (9223) was **minimized/occluded**, so `requestAnimationFrame`
+was throttled to **~1 fps** — even though `document.hidden=false`,
+`visibilityState='visible'`, `document.hasFocus()=true` all lied. With the
+fixed-timestep accumulator (`bindToRAF`, 60 Hz sim + max-steps-per-frame clamp),
+1 fps means the game-clock crawls: 10 s pre-warp turns, FOLD barely progressing,
+and warps never completing inside a measurement window. This produced a **false
+2/12** reading and three confusing partial-trace captures before the cause was
+found. **Fix:** `mcp__chrome-devtools__select_page({pageId, bringToFront:true})`
+un-throttled it instantly (1 fps → 175–240 fps). **Always verify rAF fps**
+(`requestAnimationFrame` count over 1–2 s) **before trusting any live warp/perf
+telemetry** — `hasFocus`/`visibility` are not reliable signals for rAF throttling.

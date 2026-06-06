@@ -6753,7 +6753,18 @@ function simStep(deltaTime) {
       // ── Camera forward movement ──
       if (warpEffect.cameraForwardSpeed > 0) {
         camera.getWorldDirection(_sunDir);
-        camera.position.addScaledVector(_sunDir, warpEffect.cameraForwardSpeed * deltaTime);
+        // Fix D (2026-06-06): advance POSITION along the locked tunnel axis, not
+        // the camera's instantaneous facing. The view still slerps toward riftDir
+        // (above) for the dive-in feel, but decoupling position onto _tunnelForward
+        // keeps the flight path exactly on the axis Portal A is anchored to, so the
+        // 3u entry gate is crossed via a real geometric crossing (AC2 preserved)
+        // instead of curving off-axis when the pre-warp turn fired unaligned
+        // (warp-entry-rootcause addendum, finding #3). After onSwapSystem the camera
+        // is teleported to the new system and re-aimed at the new star, so
+        // _tunnelForward is stale — post-swap we advance along facing (toward Portal
+        // B), matching the slerp guard above.
+        const _advanceDir = warpEffect._swapFired ? _sunDir : _tunnelForward;
+        camera.position.addScaledVector(_advanceDir, warpEffect.cameraForwardSpeed * deltaTime);
 
         // Deep sky objects during warp:
         // - Navigable (nebulae, open clusters): stay fixed — camera flies past them
