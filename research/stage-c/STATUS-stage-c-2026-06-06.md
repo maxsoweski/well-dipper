@@ -82,13 +82,23 @@ Index §4 carries the original 7. Added during implementation:
 
 ---
 
-## Next session picks up at: **Step 2 — generation-side surfacings** (index §2)
-Step 1 (shared-libs foundation) is COMPLETE. Step 2 = the small `PlanetGenerator`
-derivations that bring the RESERVED uniforms alive: `surfaceGravity`,
-planet-`tidalHeat`, `volatileSpecies`, `liquidStability`/`liquidSpecies`,
-`precipitation`, pressure plumbing, `magneticField`. **`magneticField` (Max Q6) is
-an open decision — surface it before building generation-surfacing #3.** Then
-step 3 = **Relief** (widest gap; lands the shared Voronoi consumer + writes
-`canyonHeight`). After Relief, the domains fan out in parallel (worktree-isolated),
-each implementing directly from its `research/stage-b/RESEARCH_stage-b-<domain>-*.md`
-doc against this locked contract. Index §7 is the dependency-ordered sequence.
+## Step 2 — generation-side surfacings (index §2) — IN PROGRESS
+All derived in `deriveUniforms` (`planet-lod-lab-core.js`), TDD'd in
+`tests/planet-lod-generation.test.js`, presets carry the mirrored generator fields.
+
+| # | Field | Status |
+|---|---|---|
+| 1 | `surfaceGravity` (g = M/R²) | ✅ **DONE** — `be276e2` (4 tests) |
+| 2 | planet-level `tidalHeat` (Io-normalized self-heating) | ✅ **DONE** — `435f536` (5 tests) |
+| 3 | `liquidStability` + `liquidSpecies` (→ RESERVED `uLiquidStability`/`uLiquidSpecies`) | ⬜ next — read Fluvial doc for the D1+D2+D6 derivation; promote the existing `liquidWater` proto in `deriveUniforms`; flip the registry uniforms RESERVED→LIVE |
+| 4 | `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | ⬜ — read Cryo doc (JS selector, like Clouds' `cloudSpeciesFor()`) |
+| 5 | `precipitation` (D4) | ⬜ — from `computeAtmosphere` |
+| 6 | `atmosphere.physics.pressure` → shader | ⬜ — plumbing only |
+| 7 | `magneticField` (D13) | ⛔ **BLOCKED on Max-decision Q6** (surfacing ownership) — surface before building |
+
+## Next session picks up at: **Step 2 #3 — `liquidStability`/`liquidSpecies`**
+Then #4–#6, then Q6 for `magneticField`, then **step 3 = Relief** (widest gap;
+lands the shared Voronoi consumer + writes `canyonHeight`). After Relief, domains
+fan out in parallel (worktree-isolated), each from its
+`research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.
+Index §7 is the dependency-ordered sequence.
