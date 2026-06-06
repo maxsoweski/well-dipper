@@ -510,7 +510,10 @@
     fView.add(state, 'fwClamp').name('fwidth clamp');
     fView.add(state, 'pixelScale', 1, 6, 1).name('pixelScale ÷').onChange(() => rebuildTarget());
     fView.add(state, 'normalMode', { ANALYTIC: 0, 'FINITE-DIFF': 1 }).name('normals');
-    fView.add(state, 'spin').name('spin');
+
+    // ▸ Lab — harness mechanics, NOT planet features (spin is how you inspect, not what a planet is)
+    const fLab = gui.addFolder('Lab'); fLab.close();
+    fLab.add(state, 'spin').name('spin (slow auto-rotate)');
 
     // ▸ Envelope (open) — the A/B/C decision surface (spec §2.C). Values stay OPEN (§4):
     // this folder delivers the *controls*; settling per-type values is Max's playtesting.
@@ -637,7 +640,7 @@
 
     function frame(){
       t += 0.0025;
-      if (state.spin) planet.rotation.y += 0.0015;
+      if (state.spin) planet.rotation.y += 0.000375;   // 4x slower than the original 0.0015
 
       // Camera orbits the origin (yaw/pitch/distance) — mouse-driven, mirrors CameraController.
       const dist = state.distance * R;
