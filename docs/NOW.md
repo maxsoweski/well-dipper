@@ -4,21 +4,25 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-04 by working-Claude (rebasing bug review + `a1a01b6` single-canonical-rebase-call/telemetry fix committed-not-pushed; world-origin reset-on-swap workstream scoped `466a0c5`, awaiting GATE 1, queued behind MVP).
+Last updated: 2026-06-06 by working-Claude (warp pocket-traversal: contract recast `b33f41e`, reference labs `09199fa`, impl plan `31b3c93` — R1 approved by Max, execution = subagent-driven in a fresh session per `/tmp/well-dipper-warp-pocket-traversal-EXEC-handoff-2026-06-06.md`. All unpushed; master ~31 ahead).
 
 ---
 
 ## Active workstream
 
-**F&F-MVP screensaver completion.** The doc-system v5 migration is DONE
-(all 11 phases). Focus is shipping the screensaver MVP. One concrete item
-is live:
+**`warp-tunnel-pocket-traversal-2026-06-06`** — PLAN APPROVED, ready to
+execute (subagent-driven, fresh session). Replaces the microscopic
+camera-pinned tunnel (which failed Max UAT as `4285602`) with a
+human-scale ~60u pocket the camera flies through (into Portal A, real
+interior, out Portal B), load-adaptive HYPER. R1 resolved + approved.
+- Plan: `docs/superpowers/plans/2026-06-06-warp-tunnel-pocket-traversal.md` (`31b3c93`)
+- Exec handoff: `/tmp/well-dipper-warp-pocket-traversal-EXEC-handoff-2026-06-06.md`
+- Next: invoke `superpowers:subagent-driven-development`, start Task 0.
 
-1. **`warp-landing-strip-persists-2026-05-10`** — landing-strip stops
-   following the player post-warp. **Tester VERIFIED_PENDING_MAX @ `e31ee65`** —
-   awaiting Max UAT. (Scope frontmatter added Phase 11.)
+**Maps to journey:** Travel-loop signature moment (35% SCREENSAVER-MVP).
 
-**Maps to journey:** 35% SCREENSAVER-MVP work.
+### Also pending Max UAT (separate)
+- **`warp-landing-strip-persists-2026-05-10`** — VERIFIED_PENDING_MAX @ `e31ee65`.
 
 ## Next 1-3 queued (in priority order)
 
