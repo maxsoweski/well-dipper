@@ -392,6 +392,163 @@ export async function runWarpSuite(opts) {
   };
 }
 
+// === Repeat-Warp Regression — runRepeatWarpSuite ===
+//
+// Guards `warp-tunnel-orphaned-on-repeat-warp` (diagnosed 2026-06-06):
+// WarpEffect.onComplete leaves the dual portal VISIBLE in OUTSIDE_B for the
+// post-arrival fly-back feature. On a non-preview repeat warp (the autopilot
+// / _beginWarpTurn path), the FOLD-start guard `if (!warpPortal.group.visible)`
+// (main.js) reads the leftover-visible portal as "already set up for this warp"
+// and SKIPS the fresh resetTraversal()+open(). The tunnel never re-anchors onto
+// the new flight path → orphaned ~1500 scene units behind the camera →
+// off-frustum for the whole HYPER phase → black screen.
+//
+// runWarpSuite only does ONE warp (group.visible starts false on a fresh load,
+// so the first warp always works) — it cannot catch this. This suite drives
+// TWO consecutive warps and asserts the tunnel is LIVE (visible && inFrustum)
+// during the SECOND warp's HYPER.
+//
+// Expected at HEAD (pre-fix): RW1 PASS (first warp fine), RW2 PASS (broken
+// precondition present), RW3 FAIL (second-warp tunnel never live during HYPER).
+// After fix: all three PASS.
+//
+// Wall time: ~24-30s (two full warps). Real pass/fail — this is a regression
+// gate, not a diagnostic (the defect is screen-visible per
+// reference.md "integration must cover everything visible").
+export async function runRepeatWarpSuite(opts) {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runRepeatWarpSuite: window.__wd not installed. Enter Sol first via _lab.enterSol().');
+  }
+  const __wd = window.__wd;
+  const results = [];
+  const maxWallSeconds = (opts?.maxWallSeconds) || 16;
+
+  if (typeof window._autoSelectWarpTarget !== 'function') {
+    throw new Error('runRepeatWarpSuite: window._autoSelectWarpTarget not available — not in interactive Sol state');
+  }
+  if (typeof window._beginWarpTurn !== 'function') {
+    throw new Error('runRepeatWarpSuite: window._beginWarpTurn not available');
+  }
+
+  // Drive ONE warp via the non-preview state-machine entry point, sampling
+  // tunnel liveness at 100ms cadence. Resolves when warp returns to idle.
+  async function driveWarpAndSample(label) {
+    window._autoSelectWarpTarget();
+    await new Promise(r => setTimeout(r, 100));
+
+    const samples = [];
+    const sampler = setInterval(() => {
+      const inv = __wd.takeSceneInventory();
+      const tunnel = inv.meshes.find(m => m.name === 'effect.warp.tunnel');
+      samples.push({
+        phase: inv.phases?.warp,
+        // Deterministic mechanism signal: a CORRECT warp re-anchors the portal
+        // and reaches INSIDE during HYPER. A broken (orphaned) warp stays
+        // OUTSIDE_B because the FOLD-start guard skipped resetTraversal().
+        portalMode: window._warpPortal?.getTraversalMode?.() ?? null,
+        // User-visible symptom. Camera-geometry-dependent on a broken warp
+        // (the orphaned tunnel may or may not cross the frustum), so it's
+        // evidence, not the gate.
+        tunnelLive: !!(tunnel && tunnel.visible && tunnel.inFrustum),
+      });
+    }, 100);
+
+    window._beginWarpTurn();
+
+    // _beginWarpTurn starts a camera TURN first — warpEffect.state stays 'idle'
+    // until alignment completes (up to ~3s) and FOLD begins. Wait for the warp
+    // to actually leave idle BEFORE waiting for it to return, or we'd bail
+    // during the turn and miss the whole warp.
+    const turnWait = performance.now();
+    let started = false;
+    while (performance.now() - turnWait < 7000) {
+      await new Promise(r => setTimeout(r, 150));
+      const last = samples.at(-1);
+      if (last && last.phase && last.phase !== 'idle') { started = true; break; }
+    }
+
+    const start = performance.now();
+    while (performance.now() - start < maxWallSeconds * 1000) {
+      await new Promise(r => setTimeout(r, 200));
+      const last = samples.at(-1);
+      if (started && last && last.phase === 'idle') break;
+    }
+    clearInterval(sampler);
+
+    const hyperSamples = samples.filter(s => s.phase === 'hyper');
+    return {
+      label,
+      distinctPhases: [...new Set(samples.map(s => s.phase))],
+      hyperSampleCount: hyperSamples.length,
+      hyperModes: [...new Set(hyperSamples.map(s => s.portalMode))],
+      reachedInsideDuringHyper: hyperSamples.some(s => s.portalMode === 'INSIDE'),
+      tunnelLiveDuringHyper: hyperSamples.filter(s => s.tunnelLive).length,
+    };
+  }
+
+  // Pre-condition: must start idle AND with a clean (hidden) portal so warp #1
+  // is the clean baseline and warp #2 is the repeat case. A leftover-visible
+  // portal here means the page is contaminated by a prior warp — reload first.
+  const pre = __wd.takeSceneInventory();
+  if (pre.phases?.warp !== 'idle') {
+    throw new Error('runRepeatWarpSuite: warp.state must be idle at start; got ' + pre.phases?.warp);
+  }
+  const portalVisibleBeforeWarp1 = !!window._warpPortal?.group?.visible;
+
+  // ── Warp #1 (clean baseline) ──
+  const w1 = await driveWarpAndSample('warp-1');
+
+  // Capture the broken precondition: immediately after warp #1 returns to
+  // idle, onComplete has left the portal VISIBLE in OUTSIDE_B. This is the
+  // exact state that corrupts the next warp's FOLD-start guard.
+  const portalVisibleAtIdle = !!window._warpPortal?.group?.visible;
+  const portalModeAtIdle = window._warpPortal?.getTraversalMode?.() ?? null;
+
+  // ── Warp #2 — fired immediately (before the post-arrival tour can hide the
+  // portal). This is what exercises the bug. ──
+  const w2 = await driveWarpAndSample('warp-2');
+
+  check('RW1 first warp (clean baseline): portal re-anchors → reaches INSIDE during HYPER, tunnel LIVE', () => ({
+    // Guard against contamination: warp #1 must start from a hidden portal to
+    // be the clean baseline. If it doesn't reach INSIDE, the page was dirty —
+    // reload and re-run.
+    passed: !portalVisibleBeforeWarp1 && w1.reachedInsideDuringHyper && w1.tunnelLiveDuringHyper > 0,
+    evidence: { portalVisibleBeforeWarp1, ...w1 },
+  }), results);
+
+  check('RW2 broken precondition present (portal left visible OUTSIDE_B at idle after warp #1)', () => ({
+    // Documents that the test actually set up the trigger. If this FAILs, the
+    // portal got hidden before warp #2 and RW3 is inconclusive (re-run, or the
+    // fly-back/onComplete contract changed).
+    passed: portalVisibleAtIdle === true && portalModeAtIdle === 'OUTSIDE_B',
+    evidence: { portalVisibleAtIdle, portalModeAtIdle },
+  }), results);
+
+  check('RW3 SECOND consecutive warp: portal re-anchors → reaches INSIDE during HYPER (regression gate)', () => ({
+    // The deterministic mechanism gate. A broken repeat warp stays OUTSIDE_B
+    // (re-anchor skipped) → never INSIDE → tunnel orphaned → black screen.
+    passed: w2.reachedInsideDuringHyper && w2.tunnelLiveDuringHyper > 0,
+    evidence: {
+      ...w2,
+      preconditionMet: portalVisibleAtIdle,
+      finding: w2.reachedInsideDuringHyper
+        ? 'portal re-anchored on repeat warp (reached INSIDE) — tunnel rendered'
+        : 'PORTAL NEVER REACHED INSIDE ON REPEAT WARP — stuck ' + JSON.stringify(w2.hyperModes) + ' (warp-tunnel-orphaned-on-repeat-warp)',
+    },
+  }), results);
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.length - passed;
+
+  console.group('[__wd repeat-warp suite] ' + passed + '/' + results.length + ' passed');
+  for (const r of results) {
+    console.log((r.passed ? '✔' : '✘') + ' ' + r.name, r.passed ? '' : r.evidence);
+  }
+  console.groupEnd();
+
+  return { passed, failed, total: results.length, results, w1, w2, portalVisibleAtIdle, portalModeAtIdle };
+}
+
 // === Warp Landing Strip Regression — runWarpLandingStripRegressionTest ===
 //
 // Drives a real warp (Sol → auto-selected destination) while sampling

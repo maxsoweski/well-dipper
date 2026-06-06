@@ -1584,6 +1584,11 @@ const _labArrivalLookMatrix = new THREE.Matrix4();
 // unconditionally in INSIDE mode — the player sees only tunnel walls.
 const _swapNewForward = new THREE.Vector3();
 const _swapPortalAPos = new THREE.Vector3();
+// Per-frame HYPER re-anchor scratch (see the continuous-re-anchor block in the
+// warp update). Dedicated so it can't be clobbered by onSwapSystem's
+// _swapNewForward or the OUTSIDE_B follow's _portalFollow* in the same tick.
+const _hyperReanchorForward = new THREE.Vector3();
+const _hyperReanchorTarget = new THREE.Vector3();
 // Arrival forward direction — captured once at warp onComplete, used by
 // the per-frame Portal B follow logic so Portal B stays in a FIXED world
 // direction behind the ship (camera can freely rotate to find it) instead
@@ -1609,21 +1614,12 @@ warpPortal.onTraversal = async (mode) => {
   console.log(`[WARP-PORTAL] traversal → ${mode}`);
   if (mode === 'INSIDE' && !warpEffect._swapFired && warpEffect.onSwapSystem) {
     warpEffect._swapFired = true;
+    // onSwapSystem teleports the camera AND re-anchors the portal around it (see
+    // onSwapSystem). The re-anchor used to live here, but that coupled it to the
+    // geometric crossing only; the HYPER fallback timer (WarpEffect) also fires
+    // onSwapSystem and needs the same re-anchor. It now lives in onSwapSystem so
+    // every swap path re-anchors. See the comment block there.
     await warpEffect.onSwapSystem();
-
-    // Re-anchor Portal A at the post-teleport camera position. Offset a
-    // tiny amount (~15 mm = 1e-10 scene units) behind camera so the
-    // INSIDE-mode invariant holds (camera on +forward side of Portal A)
-    // without eating into the HYPER+EXIT travel budget.
-    camera.getWorldDirection(_swapNewForward);
-    _swapPortalAPos.copy(camera.position).addScaledVector(_swapNewForward, -1e-10);
-    warpPortal.resetTraversal();
-    warpPortal.open(_swapPortalAPos, _swapNewForward);
-    // resetTraversal sets mode to OUTSIDE_A; force back to INSIDE for HYPER.
-    warpPortal.setTraversalMode('INSIDE');
-    // Dot history re-seeds on next updateTraversal call.
-    warpPortal._prevDotA = null;
-    warpPortal._prevDotB = null;
   }
 };
 
@@ -3001,6 +2997,32 @@ warpEffect.onSwapSystem = async () => {
     musicManager.play('hyperspace', 0.3);
   }
   warpSwapSystem();
+
+  // ── Re-anchor the dual portal around the post-teleport camera ──
+  // warpSwapSystem() just TELEPORTED the camera to the destination. The HYPER
+  // tunnel must surround the camera, so Portal A is re-opened at the new camera
+  // position in INSIDE mode. This MUST run on every swap path: the geometric
+  // OUTSIDE_A→INSIDE crossing (warpPortal.onTraversal) AND the HYPER fallback
+  // timer (WarpEffect._updateHyper at elapsed>0.15) both call onSwapSystem, but
+  // only the geometric path used to re-anchor. When the timer won the race —
+  // e.g. on a repeat warp where a leftover-visible portal blocked the FOLD-start
+  // OUTSIDE_A open, so the crossing never fired — the swap teleported the camera
+  // but left the tunnel orphaned thousands of units away → black HYPER. Anchoring
+  // here, coupled to the teleport instead of to one trigger, fixes both cases.
+  if (_useDualPortal) {
+    camera.getWorldDirection(_swapNewForward);
+    // Offset a tiny amount (~1e-10 scene units) behind camera so the INSIDE-mode
+    // invariant holds (camera on +forward side of Portal A) without eating into
+    // the HYPER+EXIT travel budget.
+    _swapPortalAPos.copy(camera.position).addScaledVector(_swapNewForward, -1e-10);
+    warpPortal.resetTraversal();
+    warpPortal.open(_swapPortalAPos, _swapNewForward);
+    // resetTraversal sets mode to OUTSIDE_A; force back to INSIDE for HYPER.
+    warpPortal.setTraversalMode('INSIDE');
+    // Dot history re-seeds on next updateTraversal call.
+    warpPortal._prevDotA = null;
+    warpPortal._prevDotB = null;
+  }
 
   // ── Regenerate sky for new galactic position ──
   // Dual-portal: the mesh tunnel visually hides the transition, so we
@@ -6609,7 +6631,32 @@ function simStep(deltaTime) {
         // Portal-lab mode: hold rim steady — no pulsing, no modulation.
         warpPortal.setRimIntensity(_portalLabMode ? 1.0 : Math.max(0.6, warpEffect.portalRimIntensity));
         warpPortal.setBridgeMix(warpEffect.portalBridgeMix);
-        warpPortal.updateTraversal(camera);
+        if (warpEffect.state === 'hyper') {
+          // ── Continuous HYPER re-anchor (warp-tunnel-frame-reanchor) ──
+          // The HYPER tunnel mesh is microscopic (tunnelLength ~6.7e-5 scene
+          // units) and only renders by SURROUNDING the camera; the streaming
+          // motion is texture-driven (uScroll), and the camera is effectively
+          // static at scene scale during HYPER. A single swap-time anchor is
+          // unreliable across the repeat-warp / fallback-timer / teleport paths:
+          // when it lands even slightly off, the tiny tunnel sits hundreds of
+          // units from the camera and the player sees straight through to the
+          // starfield ("black HYPER", diagnosed live 2026-06-06).
+          //
+          // The POSITION re-anchor happens at RENDER time (renderFrame), AFTER
+          // the camera is interpolated, so the tunnel tracks the actually-
+          // rendered camera exactly — pinning here against the sim camera trails
+          // the interpolated render camera right after the swap teleport and
+          // re-orphans the tunnel for the first ~0.7s of HYPER. Here we only
+          // force INSIDE render mode (stencil off → unconditional draw) and SKIP
+          // updateTraversal: with the portals ~6.7e-5 apart the camera straddles
+          // both planes and the plane-crossing test is numerically unstable
+          // (can spuriously flip INSIDE→OUTSIDE_B and stencil-clip the tunnel).
+          // The geometric crossing is only needed during FOLD/ENTER (to fire
+          // onSwapSystem), which still runs updateTraversal in the else branch.
+          warpPortal.setTraversalMode('INSIDE');
+        } else {
+          warpPortal.updateTraversal(camera);
+        }
         // No screen-space lens — the tunnel mesh IS the hyperspace visual.
         retroRenderer.setPortalLensing(null, 0, 0);
       } else if (warpEffect.portalVisible) {
@@ -7403,6 +7450,23 @@ function renderFrame(alpha) {
     // reticle, scene render, and any same-frame projection consumers all
     // see the same camera state.
     camera.updateMatrixWorld(true);
+  }
+
+  // ── Continuous HYPER tunnel re-anchor (warp-tunnel-frame-reanchor) ──
+  // Pin the microscopic HYPER tunnel to the INTERPOLATED render camera every
+  // render frame so it surrounds the camera and renders. Must run here (after
+  // the camera interpolation above, before render below) rather than in simStep:
+  // the renderer lerps camera.position between sim snapshots, so a sim-time pin
+  // trails the rendered camera right after the swap teleport and leaves the tiny
+  // tunnel orphaned for the first ~0.7s of HYPER. Render-mode (INSIDE/stencil)
+  // and updateTraversal-skip are handled in the simStep warp block.
+  if (warpEffect.isActive && warpEffect.state === 'hyper'
+      && _useDualPortal && warpPortal.group.visible) {
+    warpPortal.group.position.copy(camera.position);
+    camera.getWorldDirection(_hyperReanchorForward);
+    _hyperReanchorTarget.copy(camera.position).sub(_hyperReanchorForward);
+    warpPortal.group.lookAt(_hyperReanchorTarget);
+    warpPortal.group.updateMatrixWorld(true);
   }
 
   // ── Render-classified subsystem updates (migrated from simStep Phase 3) ──
