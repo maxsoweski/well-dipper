@@ -25,3 +25,11 @@ export function autoOctaves(lodRamp, qualityTier = 1.0) {
   const full = mix(4.0, 9.0, lodRamp);
   return mix(4.0, full, qualityTier); // qualityTier<1 trims the LOD2 octaves on weak GPUs
 }
+
+// Hysteresis on the discrete "is this body LOD2-active" flag.
+// enter at 18 radii, exit at 22 radii — the 4-radius dead-band kills boundary flicker.
+// prevActive: the flag's previous value. Returns the new flag.
+export function lodHysteresis(distanceRadii, prevActive) {
+  if (prevActive) return distanceRadii < 22.0; // stay active until we retreat past 22
+  return distanceRadii < 18.0;                  // only activate once we're inside 18
+}
