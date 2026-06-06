@@ -43,6 +43,68 @@ export function qualityKnobs(qualityTier) {
   };
 }
 
+// ── voronoi3d — KEYSTONE shared primitive (integration-index §1) ─────────────
+// Seam-free 3D-domain cellular noise: relief craters (F2), cryo pits/polygons,
+// exotic hex/crystal/shatter all route through ONE of these (do NOT fork). Built
+// here as the CPU oracle the GLSL is transcribed from; the analytic gradient of
+// F1 is pinned against finite-diff so the shader normal can be trusted.
+//
+// 3D domain (sampled on object-space position) is inherently seamless on the
+// sphere — no UV seam, no pole pinch — which is the whole reason to pay for the
+// 27-cell search (spec Q3 / index §5 risk #1). Returns:
+//   f1       nearest jittered-center distance       (crater radial coordinate)
+//   f2       second-nearest distance                (F2−F1 = border proximity)
+//   cellId   integer lattice cell of the nearest    (per-cell hash: diameter, jitter)
+//   toCenter vector fragment→nearest center         (radial direction)
+//   grad     ∂f1/∂p = normalize(p − center)         (relief-normal contribution)
+//
+// hashCell mirrors the GLSL hash33 (sin-dot-fract) so JS and shader share shape.
+export function hashCell(ix, iy, iz) {
+  const dot = (a, b, c) => ix * a + iy * b + iz * c;
+  const sx = Math.sin(dot(127.1, 311.7, 74.7)) * 43758.5453123;
+  const sy = Math.sin(dot(269.5, 183.3, 246.1)) * 43758.5453123;
+  const sz = Math.sin(dot(113.5, 271.9, 124.6)) * 43758.5453123;
+  return [sx - Math.floor(sx), sy - Math.floor(sy), sz - Math.floor(sz)]; // [0,1)^3
+}
+
+// cells: 27 = full 3×3×3 neighbourhood (true global nearest, seam-free desktop path);
+//         9 = reduced cheap/mobile search (lossy, never closer — the fallback-ladder path).
+export function voronoi3d(p, cells = 27) {
+  const ix = Math.floor(p[0]), iy = Math.floor(p[1]), iz = Math.floor(p[2]);
+  const fx = p[0] - ix, fy = p[1] - iy, fz = p[2] - iz;       // fragment within its cell
+
+  // 27 → full neighbourhood. 9 → the centre slab (gz=0) 3×3 plus the two axis
+  // neighbours: a deliberately reduced lossy set for the untuned mobile tier.
+  const offs = [];
+  if (cells >= 27) {
+    for (let gz = -1; gz <= 1; gz++)
+      for (let gy = -1; gy <= 1; gy++)
+        for (let gx = -1; gx <= 1; gx++) offs.push([gx, gy, gz]);
+  } else {
+    for (let gy = -1; gy <= 1; gy++)
+      for (let gx = -1; gx <= 1; gx++) offs.push([gx, gy, 0]);
+  }
+
+  let f1 = Infinity, f2 = Infinity;
+  let nCell = [ix, iy, iz], nR = [0, 0, 0];
+  for (const [gx, gy, gz] of offs) {
+    const h = hashCell(ix + gx, iy + gy, iz + gz);
+    const cx = gx + h[0], cy = gy + h[1], cz = gz + h[2];     // center, relative to ix,iy,iz cell origin
+    const rx = cx - fx, ry = cy - fy, rz = cz - fz;           // fragment → center
+    const d = Math.sqrt(rx * rx + ry * ry + rz * rz);
+    if (d < f1) {
+      f2 = f1; f1 = d;
+      nCell = [ix + gx, iy + gy, iz + gz];
+      nR = [rx, ry, rz];
+    } else if (d < f2) {
+      f2 = d;
+    }
+  }
+  // grad f1 = ∂|p−c|/∂p = (p−c)/|p−c| = −toCenter / f1  (center constant within cell)
+  const inv = f1 > 1e-9 ? 1 / f1 : 0;
+  return { f1, f2, cellId: nCell, toCenter: nR, grad: [-nR[0] * inv, -nR[1] * inv, -nR[2] * inv] };
+}
+
 // deriveUniforms: physics driver-bundle -> flat semantic uniform values.
 // Generalizes the aurora/atmosphere precedent in PlanetGenerator.js:435-487
 // (fieldStrength = composition.ironFraction * (locked ? 0.2 : 1.0); NO planetType branch).
