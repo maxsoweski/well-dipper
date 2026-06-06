@@ -160,3 +160,40 @@ describe('volatileSpecies classifier (§2 #4 — feeds Cryo sublimation morpholo
     expect(v).toBe(0);
   });
 });
+
+describe('precipitation (§2 #5 — surfaces D4 rain as first-class; feeds Fluvial F11 channels)', () => {
+  // Rain needs BOTH a currently-stable liquid (liquidStability — covers water AND methane
+  // cycles) and a condensible-cycle atmosphere TYPE (n2-o2 full → co2-n2 partial → co2 trace
+  // → h2-he/none none). Composition strings come from computeAtmosphere. Past rain on a
+  // now-dry world is carried by riverRelict (a later surfacing), not this.
+  const earthlike = { T_eq: 290, composition: { volatileFraction: 0.3 }, atmosphere: { retained: true, pressure: 1.0, composition: 'n2-o2' } };
+
+  it('temperate world with an N₂-O₂ (water-cycle) atmosphere → precipitation > 0', () => {
+    expect(deriveUniforms(earthlike).precipitation).toBeGreaterThan(0);
+  });
+  it('airless world → no rain (precipitation 0)', () => {
+    expect(deriveUniforms({ ...earthlike, atmosphere: null }).precipitation).toBe(0);
+  });
+  it('hot world (no stable liquid) → no rain', () => {
+    expect(deriveUniforms({ ...earthlike, T_eq: 700 }).precipitation).toBe(0);
+  });
+  it('an N₂-O₂ atmosphere rains more than a thin CO₂ one, all else equal', () => {
+    const wet = deriveUniforms(earthlike).precipitation;
+    const dry = deriveUniforms({ ...earthlike, atmosphere: { retained: true, pressure: 1.0, composition: 'co2' } }).precipitation;
+    expect(wet).toBeGreaterThan(dry);
+  });
+  it('a gas (H₂-He) envelope has no surface rain', () => {
+    expect(deriveUniforms({ ...earthlike, atmosphere: { retained: true, pressure: 50, composition: 'h2-he' } }).precipitation).toBe(0);
+  });
+  it('a cold methane world (Titan) still precipitates (methane rain)', () => {
+    const titan = { T_eq: 94, composition: { volatileFraction: 0.4 }, atmosphere: { retained: true, pressure: 1.5, composition: 'n2-o2' } };
+    expect(deriveUniforms(titan).precipitation).toBeGreaterThan(0);
+  });
+  it('stays within [0,1], finite; empty bundle → 0', () => {
+    expect(deriveUniforms({}).precipitation).toBe(0);
+    const p = deriveUniforms(earthlike).precipitation;
+    expect(p).toBeGreaterThanOrEqual(0);
+    expect(p).toBeLessThanOrEqual(1);
+    expect(Number.isFinite(p)).toBe(true);
+  });
+});

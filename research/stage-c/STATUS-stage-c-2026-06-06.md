@@ -92,15 +92,15 @@ All derived in `deriveUniforms` (`planet-lod-lab-core.js`), TDD'd in
 | 2 | planet-level `tidalHeat` (Io-normalized self-heating) | ✅ **DONE** — `435f536` (5 tests) |
 | 3 | `liquidStability` + `liquidSpecies` (→ LIVE `uLiquidStability`/`uLiquidSpecies`) | ✅ **DONE** — D6+D2+D1 AND-gate; 8 TDD tests; promoted `liquidWater` proto; "Titan" preset added; registry RESERVED→LIVE. Live-verified `:9223` (Rocky 0.74/water, Ocean/Titan 1.0 — Titan species=1, Lava/Frozen 0; uniforms mirror `_derived`; console clean). |
 | 4 | `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | ✅ **DONE** — JS selector (enum 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂) from volatileFraction + T_eq bands; 8 TDD tests; `_derived`-only (Cryo declares the uniform in step 3). Live-verified `:9223` (Titan 94K→CO₂, Frozen 60K→CH₄, warm/dry→none). |
-| 5 | `precipitation` (D4) | ⬜ **next** — from `computeAtmosphere` |
-| 6 | `atmosphere.physics.pressure` → shader | ⬜ — plumbing only |
+| 5 | `precipitation` (D4) | ✅ **DONE** — `liquidStability` × rain-cycle composition factor (n2-o2 1.0/co2-n2 0.5/co2 0.2/h2-he·none 0); 7 TDD tests; `_derived`-only (Fluvial F11 reads in step 3). Presets carry atmosphere `composition`. Live-verified `:9223` (Rocky 0.74, Ocean/Titan 1.0 — Titan = methane rain, Lava/Frozen 0). |
+| 6 | `atmosphere.physics.pressure` → shader | ⬜ **next** — plumbing only |
 | 7 | `magneticField` (D13) | ⛔ **BLOCKED on Max-decision Q6** (surfacing ownership) — surface before building |
 
-## Next session picks up at: **Step 2 #5 — `precipitation` (D4)**
-From `computeAtmosphere` (composition implies rain): surface a `precipitation`
-scalar (n2-o2/temperate + T_eq in a rain window → high; dry/airless → 0) — Fluvial
-F11 channel-activity input. Then #6 pressure plumbing, then Q6 for `magneticField`,
-then **step 3 = Relief** (widest gap;
+## Next session picks up at: **Step 2 #6 — `atmosphere.physics.pressure` → shader (plumbing)**
+Surface the atmosphere pressure scalar (already on the preset atmosphere objects +
+real `computeAtmosphere` output) through `deriveUniforms` → a `pressure` field for
+Aeolian grain-transport (F15). Plumbing only — no new physics. Then Q6 for
+`magneticField` (BLOCKED — surface first), then **step 3 = Relief** (widest gap;
 lands the shared Voronoi consumer + writes `canyonHeight`). After Relief, domains
 fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

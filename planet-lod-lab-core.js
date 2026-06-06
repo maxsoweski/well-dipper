@@ -218,12 +218,27 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     T > 40  ? 3 :                    // CH₄ bladed/penitente (Pluto Tartarus Dorsa)
     4;                               // N₂ convection polygons (Triton / Sputnik Planitia)
 
+  // precipitation (#5): surfaces D4 "rain" as a first-class scalar (today only implied by
+  // atmosphere composition). Feeds Fluvial F11 channel activity. Rain needs BOTH a
+  // currently-stable liquid (liquidStability — covers water AND methane cycles) and an
+  // atmosphere of a condensible-cycle TYPE. Composition strings come from computeAtmosphere:
+  // n2-o2 (active cycle) full → co2-n2 partial → co2 (hot/dry) trace → h2-he (gas, no
+  // surface)/none none. PAST rain on a now-dry world is carried by riverRelict (a later #).
+  const atmoComp = atmo?.composition;
+  const rainFactor =
+    atmoComp === 'n2-o2'  ? 1.0 :
+    atmoComp === 'co2-n2' ? 0.5 :
+    atmoComp === 'co2'    ? 0.2 :
+    0.0;                             // h2-he (no surface), none, or unknown → no rain
+  const precipitation = clamp01(liquidStability * rainFactor);
+
   return {
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)
     liquidSpecies,                                              // 0=water, 1=methane/ethane (Optical glint IOR/tint)
     volatileSpecies,                                            // Cryo frost classifier 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂ (F18/F22)
+    precipitation,                                              // D4 rain 0..1 (Fluvial F11 channel activity)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen
