@@ -215,6 +215,12 @@ work that the discovery-collection Beat depends on.
 
 ## See also
 
+- [`planet-visual-features.md`](planet-visual-features.md) — **WHAT-side
+  companion** to this doc: the L0→L1→L2 causal inventory (drivers →
+  physical processes → observable features) of every terrain/climate
+  feature a planet can exhibit, type-agnostic. Use it to source
+  per-feature background HOW-research and to gap-spot via its coverage
+  matrix. This doc (player-experience + workstreams) is the HOW/WHY side.
 - `docs/FEATURES.md` — parent Planet section (10 rows).
 - `docs/FEATURES/galactic-rendering.md`, `docs/FEATURES/nebulae.md` —
   sibling sky-side deep dives sharing the "retro envelope but
