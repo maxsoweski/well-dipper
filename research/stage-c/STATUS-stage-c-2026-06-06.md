@@ -112,8 +112,8 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F# | Feature | Status |
 |---|---|---|
 | F2 | **Craters** (voronoi3d consumer + `surfaceGravity` reader) | ✅ **DONE** — first cellular feature live; see below |
-| F1 | Mountains / ranges (ridged multifractal, orogeny belts) | ◻ next |
-| F4 | Canyons / rifts (tectonic graben — **writes `canyonHeight`**) | ◻ |
+| F1 | **Mountains / ranges** (ridged multifractal, orogeny belts) | ✅ **DONE** — ridged base relief live; see below |
+| F4 | Canyons / rifts (tectonic graben — **writes `canyonHeight`**) | ◻ next |
 | F5 | Scarps & fault systems | ◻ |
 | F6 | Plateaus / highlands / tessera | ◻ |
 | F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ |
@@ -144,6 +144,48 @@ First consumer of the `voronoi3d` keystone + first reader of `surfaceGravity`.
   **peak-ring / multi-ring basin morphology deferred** (rarest visually, additive to
   add later — relief-doc §6 Q2). LOD2 posterize-level for cratered bodies stays at 6
   (Q1, the §4 tracked-open envelope decision).
+
+### F1 — Mountains / ranges (DONE)
+The ridged-multifractal BASE relief the other relief features layer on. No type
+branch — isotropic ridged hills ↔ anisotropic fold belts is a continuous blend.
+- **CPU oracle** `ridgedFold(value, grad, offset)` in `planet-lod-lab-core.js` →
+  `{value, grad}`: the per-octave fold `signal = offset − |value|`, sharpened
+  (`signal²`), with the **Decarpentier −sign(value) correction chain-ruled through
+  the square** (`2·signal·−sign·grad`). This is the relief-doc §5.4 / §5-risk-#4
+  silent-bug class (a dropped sign lights inverted ridge faces backward yet compiles
+  fine) — pinned against finite-diff across BOTH sign branches in tests. The
+  multifractal octave weighting is a locally-constant gain (Musgrave), not
+  differentiated, so the per-octave fold is the exactly-differentiable tested unit.
+- **deriveUniforms** surfaces `mountainAmp` (= `mix(0.25,0.6,1−erosion)`, eroded
+  worlds → rounded low ranges), `orogenyStrength` (= `habitability×(1−erosion)`, the
+  subduction proxy × young-age window — isotropic-ridged ↔ fold-belt blend), and
+  `orogenyAxis` (a seed-hashed unit-vec2 strike direction).
+- **GLSL** `fbmdRidged()` (ridged multifractal: fold + sharpen + `clamp(sq·gain,0,1)`
+  next-octave weighting → connected crestlines; **the SAME trailing-octave + fwidth
+  fade as `fbmd()`** — mandatory, the `abs()` fold aliases violently without it,
+  relief-doc §5.3 risk #3) + `mountainCombiner()` (early-out `uMountainAmp≤0` →
+  Stage-A base untouched). Anisotropic orogeny stretch = a symmetric linear map on
+  the xz-plane (the gradient transforms back by the same map, Sᵀ=S). Wired into
+  Stage-2 ahead of `craterCombiner`; new `▸ Mountains (F1)` lil-gui sub-folder.
+- **13 TDD tests** added to `tests/planet-lod-relief.test.js`; **105 lab tests green**
+  (`npx vitest run tests/planet-lod-*.test.js`).
+- **Live-verified `:9223`** (screenshots): isotropic ridged → coherent rugged
+  highland terrain (ridge/valley shadow structure at the terminator) ✓; orogeny=1 →
+  anisotropic elongated fold belts vs the isotropic blobs ✓; `uMountainAmp=0` → pure
+  Stage-A + F2 crater render restored (no regression) ✓; Frozen (amp 0.565 + density
+  0.81) → Moon-like cratered ridged highlands, mountains+craters compose correctly ✓;
+  console clean (favicon-404 only).
+- **Cycle-1 fix logged (think-before-acting):** first render was high-freq speckle —
+  root cause was the missing fwidth/trailing-octave fade in `fbmdRidged` (transcribed
+  from `fbmd` WITHOUT it). Adding the fade (relief-doc §5.3) resolved it in one cycle;
+  no parameter-thrashing.
+- **No new cross-domain shared uniform** — `mountainAmp`/`orogenyStrength`/
+  `orogenyAxis` are Relief-internal, so REGISTRY-canonical-uniforms.md is unchanged.
+- **Carry-forward (relief-doc, not blocking):** slope-damped erosion (`iqTurbulence`,
+  relief-doc §F1.a "free realism") DEFERRED — it's additive and complicates the
+  gradient; add as a `▸ Mountains` toggle later. Orogeny (P3 true fold belts) is
+  Max-open-question §6.3 (build fully or let generic ridged cover terrestrial); the
+  continuous-blend machinery is in place either way.
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

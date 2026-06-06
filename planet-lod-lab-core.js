@@ -195,6 +195,30 @@ export function craterProfile(r, opts = {}) {
   return { h: h * k, dhdr: dhdr * k };
 }
 
+// ── ridgedFold — F1 ridged-multifractal per-octave fold (relief doc §F1.a/§5.4) ─
+// The single highest silent-bug risk in the RELIEF domain (doc §5.4 risk #4): the
+// Decarpentier sign correction on the abs() fold. Given a noise sample's value and
+// its gradient (∂value/∂pos), the ridged signal is `s = offset − |value|`, then
+// SHARPENED by squaring (`s²`) so ridges read as crisp crestlines. The crest is at
+// value=0 (s=offset, the maximum); flanks fold downward as |value| grows.
+//
+//   value gradient d(s²)/dpos = 2·s·ds/dpos,  with ds/dpos = −sign(value)·grad
+//   (the chain rule through BOTH the square AND the |.| fold — the `−sign` is the
+//    correction; drop it and normals light inverted ridge faces backward, yet the
+//    shader compiles fine. This oracle pins it against finite-difference in tests.)
+//
+// The GLSL fbmdRidged() is transcribed from this; the multifractal octave-weighting
+// (weight = clamp(s·gain,0,1) applied to the NEXT octave) is a locally-constant gain
+// modulation, NOT differentiated — standard (Musgrave/Decarpentier), so the per-octave
+// fold here is the exactly-differentiable unit the finite-diff test pins.
+export function ridgedFold(value, grad, offset = 1.0) {
+  const signal = offset - Math.abs(value);
+  const sgn = Math.sign(value);                 // 0 at value=0 — the crest, where the kink lives
+  // d(s²)/dpos = 2·s·(−sign(value))·grad
+  const k = 2.0 * signal * -sgn;
+  return { value: signal * signal, grad: [k * grad[0], k * grad[1], k * grad[2]] };
+}
+
 // deriveUniforms: physics driver-bundle -> flat semantic uniform values.
 // Generalizes the aurora/atmosphere precedent in PlanetGenerator.js:435-487
 // (fieldStrength = composition.ironFraction * (locked ? 0.2 : 1.0); NO planetType branch).
@@ -321,7 +345,32 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const relaxWarmth = smoothstep(120, 273, T);
   const craterRelaxation = clamp01(volatileFraction * relaxWarmth * 2.0);
 
+  // ── F1 mountains / ranges (Stage-C step 3, Relief domain — relief doc §F1.b) ─
+  // Ridged-multifractal base relief, the layer every other relief feature sits on.
+  // mountainAmp: ranges GROW with tectonic/volcanic activity, SHRINK as the surface
+  // erodes (old worlds = rounded low ranges). The proxy for "young/active" is simply
+  // (1−erosion); a constant base scales it into a felt amplitude. Stays in 0..1.
+  const habitability = clamp01(d.habitability ?? 0);
+  const mountainAmp = clamp01(mix(0.25, 0.6, 1 - erosion));
+
+  // orogenyStrength: blends isotropic ridged hills (0) ↔ anisotropic linear fold
+  // BELTS (1, the "Himalaya" look). True fold-mountain belts need plate subduction,
+  // which water lubricates — so habitability (D15) is the subduction proxy — AND a
+  // young-age window (belts haven't eroded flat yet → ×(1−erosion)).
+  const orogenyStrength = clamp01(habitability * (1 - erosion));
+
+  // orogenyAxis: a stable per-planet strike direction (unit vec2) hashed from seed,
+  // so a planet's ranges share a coherent grain. Lab-tunable downstream via an angle
+  // knob; production passes the real planet seed. Deterministic, magnitude 1.
+  const seed = d.seed ?? 0;
+  const sa = Math.sin(seed * 12.9898 + 1.7) * 43758.5453;
+  const orogenyAngle = (sa - Math.floor(sa)) * Math.PI * 2;      // [0, 2π)
+  const orogenyAxis = [Math.cos(orogenyAngle), Math.sin(orogenyAngle)];
+
   return {
+    mountainAmp,                                                // F1 — ridged base relief amplitude (erosion-softened)
+    orogenyStrength,                                            // F1 — isotropic ridged ↔ anisotropic fold-belt blend
+    orogenyAxis,                                                // F1 — per-planet strike direction (unit vec2, seed-derived)
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)
