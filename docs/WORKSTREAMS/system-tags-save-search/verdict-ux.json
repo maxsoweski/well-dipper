@@ -11,7 +11,7 @@
   "perLayer": {
     "unit": "PASS",
     "integration": "PASS",
-    "uat": "PASS (driven live in main thread; see mainThreadUAT) — one caveat on UX-1"
+    "uat": "PASS (driven live in main thread; see mainThreadUAT) — UX-1 caveat resolved 2026-06-05b: fix applied + re-tested live"
   },
   "workflowVerdict": {
     "overall": "PASS — UAT deferred to Max",
@@ -22,7 +22,7 @@
     "harness": "chrome-devtools port 9223 (GPU), entered via _lab.enterSol() + stopAutopilot(), panel via ArrowDown",
     "results": [
       { "id": "AC8-debug-panel-uat", "result": "PASS", "evidence": "Full loop driven: tags rendered, probe run, jump warped into the result system, save persisted — no console errors (only an unrelated TRAVEL TELEMETRY oscillation warn)." },
-      { "id": "UX-1-live-tag-refresh", "result": "PASS-with-caveat", "evidence": "Warped Sol->Rouken with the panel OPEN; #debug-tags-grid updated in place to F-type/4-planets/archetype mixed, no reopen. CAVEAT (from adversarial static analysis, NOT re-driven live): setPlayerPos() does not call _refreshLiveSections and runs after setSystem at spawn, so the PROBE SEARCH 'Center' label may lag and show the previous position until the next setter. The tags grid (primary observable) passes; the Center label refresh is UNCONFIRMED and is a candidate one-line follow-up fix (call _refreshLiveSections from setPlayerPos, or reorder)." },
+      { "id": "UX-1-live-tag-refresh", "result": "PASS", "evidence": "Caveat resolved 2026-06-05b. ROOT CAUSE confirmed in code: the warp path's last position-relevant call is setPlayerPos (main.js:3851), which (pre-fix) did NOT refresh; the two earlier refreshes (setCurrentNavStar main.js:2950, setSystem main.js:3850) both run BEFORE the new _playerPos is set, so the Center label was stranded on the previous system. FIX: setPlayerPos now calls this._refreshLiveSections() (DebugPanel.js:76); _refreshLiveSections self-guards on _panelVisible (line 948) and is never per-frame, so it is a no-op when the panel is closed. RE-TESTED LIVE (chrome-devtools 9223, game muted): panel kept OPEN across warp, rootDisplay=flex throughout. Sol Center (8.00,0.03,0.00) -> warp to Tioxheixji (B+G binary, 2 planets) -> Center live-refreshed to (8.13,0.00,-0.16), paired same-tick with systemInfo().name, no reopen. Screenshot: screenshots/ux1-center-label-live-refresh-2026-06-05.jpeg. Both #debug-tags-grid AND #debug-probe-center refresh live now. Full vitest unchanged from baseline (4 pre-existing failures: KnownObjects x3, GalacticFeatures x1; no DebugPanel regression)." },
       { "id": "UX-2-save-guard-visible", "result": "PASS", "evidence": "In Sol via enterSol() (no warp): #debug-save-system disabled=true, opacity 0.4, cursor not-allowed, title + status reason shown. After warp to Rouken: disabled=false, opacity 1, cursor pointer." },
       { "id": "UX-4-distinct-save-affordance", "result": "PASS", "evidence": "Result rows render 'jump'/'save' (top button still '★ Save current system'). Saved a '~K+K · bin · 3p' shallow row; status line + saved entry came out 'K+K · bin · 3p · rings · hab' with NO '~' (confirm-on-save regenerated to full fidelity)." },
       { "id": "UX-5-result-count-truth", "result": "PASS", "evidence": "Unit: probeRegionDetailed 12/12. Live: status 'Probe... (scan capped at 500 nearest stars — narrow the radius for full coverage).' + results header 'showing 50 of 500'." },
@@ -37,8 +37,8 @@
     "Pre-existing full-suite failures unrelated to this work: KnownObjects.test.js x3, GalacticFeatures.test.js x1, 14 vendor/motion-test-kit files (identical at baseline 8b048cf)."
   ],
   "candidateFollowUps": [
-    "UX-1 Center-label lag: have setPlayerPos() trigger _refreshLiveSections (or reorder setSystem/setPlayerPos) so the probe Center label tracks the new position immediately. ~1 line.",
+    "DONE 2026-06-05b: UX-1 Center-label lag fixed (setPlayerPos now triggers _refreshLiveSections) + verified live.",
     "a11y cleanup of the 5 pre-existing unlabeled debug fields (out of this workstream's scope)."
   ],
-  "overall": "PASS — all unit + integration green (adversarially), all UI-layer ACs confirmed live, with one honest caveat: the UX-1 probe Center label refresh is unconfirmed and likely lags (candidate one-line fix). Tags-grid live refresh, save-guard, confirm-on-save, count-truth, labels, and polish all verified."
+  "overall": "PASS — all unit + integration green (adversarially), all UI-layer ACs confirmed live. The prior UX-1 caveat (probe Center label lag) is RESOLVED 2026-06-05b: one-line fix in DebugPanel.setPlayerPos, re-tested live (Sol->Tioxheixji, label refreshed in place). Tags-grid live refresh, Center-label live refresh, save-guard, confirm-on-save, count-truth, labels, and polish all verified."
 }

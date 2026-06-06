@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-05 by working-Claude (shipped `system-tags-save-search` Phase 1 — all 8 ACs verified: AC1–AC7 via the dev-collab verify-workflow + 3× adversarial, AC8 via live chrome-devtools UAT; verdict.json written; committed on branch `system-tags-save-search`. MVP items below remain the larger arc).
+Last updated: 2026-06-05 by working-Claude (`system-tags-save-search` Phase 1 + UX refinements UX-1..UX-7 — all ACs verified; the UX-1 probe Center-label live-refresh caveat is now resolved with a 1-line fix + live re-test. On branch `system-tags-save-search`, **unpushed**. MVP items below remain the larger arc).
 
 ---
 
@@ -35,6 +35,21 @@ is live:
 
 ## Recently shipped
 
+- **`system-tags-save-search` UX refinements (UX-1..UX-7)** (2026-06-05) —
+  debug-panel polish on the Phase-1 surface: live tag-grid refresh on warp,
+  visible save-guard state, distinct save affordance, truthful result counts,
+  human-readable filter labels, archetype label + arm-to-confirm ✕ + a11y
+  labels. Verified via dev-collab verify-workflow (unit/integration 3×
+  adversarial) + live chrome-devtools UAT. **UX-1 caveat resolved this
+  session:** the PROBE SEARCH "Center" label lagged after warp because
+  `DebugPanel.setPlayerPos` stored the new position without refreshing, and
+  the warp path's earlier refreshes (`setCurrentNavStar`/`setSystem`) run
+  before the new position is set. Fix: `setPlayerPos` now calls the
+  (panel-visibility-guarded) `_refreshLiveSections`. Re-tested live (game
+  muted): Sol→Tioxheixji with the panel open → Center refreshed in place
+  (screenshot `screenshots/ux1-center-label-live-refresh-2026-06-05.jpeg`).
+  No vitest regression (4 pre-existing failures only). Verdict:
+  `docs/WORKSTREAMS/system-tags-save-search/verdict-ux.json`. Branch unpushed.
 - **`system-tags-save-search` Phase 1 — SHIPPED, all 8 ACs verified** (2026-06-05) —
   tag-search over the universe + save/share specific systems (debug/QA surface;
   player UI is Phase 2). New: `SystemTags.deriveSystemTags`, `StarSystemGenerator.deriveCheapTags`

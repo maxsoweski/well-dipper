@@ -73,7 +73,7 @@ export class DebugPanel {
     this._refreshLiveSections();
   }
 
-  setPlayerPos(pos) { this._playerPos = pos; }
+  setPlayerPos(pos) { this._playerPos = pos; this._refreshLiveSections(); }
   getSearchTarget() { return this._searchTarget || null; }
   clearSearchTarget() { this._searchTarget = null; }
   setGalacticMap(gm) { this._galacticMap = gm; }
