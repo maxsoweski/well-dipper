@@ -207,3 +207,99 @@ describe('single (non-binary) system star placement under world-origin rebasing'
     expect(displacement.length()).toBeGreaterThan(1);
   });
 });
+
+// The structural fix (world-origin-reset-on-system-swap-2026-06-04): every warp
+// carries a nonzero worldOrigin into the new system, so EVERY spawn-once object
+// was a latent displacement bug until someone remembered placeInRebasedFrame.
+// Wiring the dead `resetWorldOrigin()` into spawnSystem's reset block zeroes
+// worldOrigin at the moment spawn-once objects are placed, so spawn coords ==
+// true coords structurally — manual seeding is no longer load-bearing, and the
+// next spawn-once author can't re-introduce the bug.
+//
+// These tests pin that invariant. The production reset lives in main.js
+// (spawnSystem), which is not unit-importable; here we model the swap as
+// `warpAccumulate3(...) ; resetWorldOrigin()` and assert the consequence. The
+// characterization half is the RED-on-revert encoded permanently: it documents
+// exactly the displaced state the system returns to if the reset is removed.
+describe('spawn-once placement under system-swap world-origin reset', () => {
+  beforeEach(() => {
+    resetWorldOrigin();
+  });
+
+  test('after a swap-reset, a spawn-once object left at the raw scene origin sits at the barycenter (reset makes manual seeding unnecessary)', () => {
+    const { scene, camera } = freshScene();
+
+    // A warp grows worldOrigin to a large value with a nonzero Y (the Y is what
+    // renders never-seeded objects "above the plane").
+    expect(warpAccumulate3(scene, camera, 250, 8, -120)).toBe(true);
+    expect(worldOrigin.length()).toBeGreaterThan(1);
+
+    // spawnSystem's reset block runs (the fix): worldOrigin → 0.
+    resetWorldOrigin();
+    expect(worldOrigin.lengthSq()).toBeCloseTo(0, 10);
+
+    // A spawn-once object placed at the RAW scene origin with NO manual seeding.
+    const obj = new THREE.Object3D();
+    scene.add(obj);
+
+    // Its true-frame position IS the barycenter — no placeInRebasedFrame needed.
+    const truePos = getWorldTrue(obj.position);
+    expect(truePos.length()).toBeCloseTo(0, 5);
+
+    // …and it renders coincident with the rebased barycenter (which, post-reset,
+    // is the scene origin since barycenterRenderPos == -worldOrigin == 0).
+    const bary = barycenterRenderPos();
+    expect(obj.position.distanceTo(bary)).toBeCloseTo(0, 5);
+  });
+
+  test('characterization (RED-on-revert): WITHOUT the swap-reset, the same raw-origin object is displaced by exactly worldOrigin-at-spawn', () => {
+    const { scene, camera } = freshScene();
+
+    expect(warpAccumulate3(scene, camera, 250, 8, -120)).toBe(true);
+    const spawnWorldOrigin = worldOrigin.clone();
+
+    // No reset (models the production state with resetWorldOrigin() reverted).
+    const obj = new THREE.Object3D();
+    scene.add(obj);
+
+    // The bug: true-frame position freezes at worldOrigin-at-spawn, not the barycenter.
+    const truePos = getWorldTrue(obj.position);
+    expect(truePos.distanceTo(spawnWorldOrigin)).toBeCloseTo(0, 5);
+
+    // Displacement from the rebased barycenter == worldOrigin-at-spawn, visibly off.
+    const displacement = obj.position.clone().sub(barycenterRenderPos());
+    expect(displacement.length()).toBeCloseTo(spawnWorldOrigin.length(), 5);
+    expect(displacement.length()).toBeGreaterThan(1);
+  });
+
+  test('after a swap-reset, the production placeInRebasedFrame seed is a defensive no-op (keeping the five seed calls stays correct)', () => {
+    const { scene, camera } = freshScene();
+
+    warpAccumulate3(scene, camera, 250, 8, -120);
+    resetWorldOrigin(); // the fix
+
+    // The five spawn-once sites still call placeInRebasedFrame; post-reset it
+    // negates a zero vector — a no-op that leaves the object at the barycenter.
+    const obj = new THREE.Object3D();
+    placeInRebasedFrame(obj);
+    scene.add(obj);
+
+    expect(obj.position.lengthSq()).toBeCloseTo(0, 10);
+    expect(getWorldTrue(obj.position).length()).toBeCloseTo(0, 5);
+  });
+
+  test('post-swap-reset spawn-once objects stay at the barycenter across a later in-system rebase', () => {
+    const { scene, camera } = freshScene();
+
+    warpAccumulate3(scene, camera, 250, 8, -120);
+    resetWorldOrigin();
+
+    const obj = new THREE.Object3D();
+    scene.add(obj); // at raw origin == barycenter post-reset
+
+    // Fly around in-system: a later rebase folds a new offset into worldOrigin
+    // and shifts the scene graph (including obj). The barycenter invariant holds.
+    expect(warpAccumulate3(scene, camera, 130, 0, 40)).toBe(true);
+    expect(getWorldTrue(obj.position).length()).toBeCloseTo(0, 5);
+  });
+});

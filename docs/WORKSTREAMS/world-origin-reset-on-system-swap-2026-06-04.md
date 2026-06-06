@@ -10,7 +10,49 @@ Scope:
 
 ## Status
 
-**SCOPED — awaiting GATE 1 (Max brief review).**
+**VERIFIED_PENDING_MAX (2026-06-06).** Built + integration-verified live on
+GPU Chrome 9223 by working-Claude. The one-line fix (`_resetWorldOrigin()` in
+the `spawnSystem` reset block) + AC #6 regression tests landed; all ACs
+integration-green. **UAT is Max's gate** — felt-experience confirmation in real
+Chrome still owed (see "Owed to Max's UAT" below).
+
+Evidence:
+- **AC #1 (gating)** PASS — live, 3 warps (Sol→GJ 5067→Glaercahae→Soeibtahex):
+  ‖worldOrigin‖ spiked to 2698–3064 mid-transit then collapsed to 168–395 each
+  arrival. No monotonic warp-over-warp growth → self-neutralization confirmed,
+  bare reset is safe, scope unchanged.
+- **AC #2** PASS — `window.__diag._spawnWorldOrigin` (new diagnostic): RED
+  2360.83 (reset reverted) → GREEN 0.0000 (reset wired). worldOrigin is exactly
+  0 at spawn-once placement; the five `placeInRebasedFrame` calls are now
+  defensive no-ops.
+- **AC #3 single** PASS — Flaumoil + Kappa Scorpii: star↔belt distance 0 (star
+  at barycenter), all planets coplanar with star (Y-spread 0).
+- **AC #3 binary** PASS — Koulbauler (2 stars, 6 planets): max Y-spread 0 across
+  stars+planets+belt; stars at 7.7/76.3 from belt-center summing to the 84-unit
+  separation (correct mass-weighted barycenter).
+- **AC #3 deep-sky** PASS by code-trace — `spawnDeepSky` + both warp deep-sky
+  sites (camera absolute coords `5211`, destination snapped `(0,0,0)` at `5256`)
+  read `worldOrigin` zero times; the reset provably cannot alter deep-sky
+  placement. (Live deep-sky warp owed to Max UAT — felt-experience path.)
+- **AC #4** PASS — warp to GJ 248: clean `idle→fold→enter→hyper→exit→idle`
+  lifecycle, no NaN in camera worldPos, largest frame-jump (71u) was idle→idle
+  autopilot coast, NOT at any phase boundary → no swap-induced snap.
+- **AC #5** PASS — `navMotionSnapshot` post-warp: autopilot active, targeting the
+  arrival star at a 213-unit orbit distance; no fake-velocity. (One pre-existing
+  `[TRAVEL TELEMETRY] distance oscillation` warning — not a rebase-band
+  violation, not attributable to the swap.)
+- **AC #6** PASS — `tests/orbit-ring-rebase.test.js` +4 tests (10/10 file,
+  251/255 suite; the 4 suite fails are pre-existing KnownObjects/vendor, baseline
+  identical). RED-on-revert demonstrated at integration level (AC #2 2360→0); the
+  characterization unit test permanently encodes the displaced no-reset state.
+
+### Owed to Max's UAT (felt-experience gate — no agent closes this)
+1. Warp into a single-star system — star centered, planets coplanar, belt encircling.
+2. Warp into a binary — both stars + orbit lines encircle the barycenter.
+3. One deep-sky (external-galaxy) warp — destination not displaced, coast camera unbroken.
+4. Warp arrival reads as smooth as before — no snap at the swap.
+
+### Original scope (below) — awaiting GATE 1 (Max brief review). [historical]
 
 Origin: architecture review (2026-06-04) following the
 `world-origin spawn-once-body centering` ship (`2d607de`). That ship

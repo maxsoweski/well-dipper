@@ -3440,6 +3440,21 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   warpTarget.destType = null;
   warpTarget.featureData = null;
   warpTarget.galaxyData = null;
+
+  // Zero the world-origin offset at the system-swap discontinuity. spawnSystem
+  // always rebuilds the scene graph from scratch, so the carried worldOrigin
+  // (nonzero on every warp arrival — it self-neutralizes per-frame but is large
+  // at spawn time) is meaningless for the new system's spawn-once objects.
+  // Resetting here makes spawn coords == true coords structurally: the five
+  // placeInRebasedFrame seed calls below negate a zero vector (defensive no-ops)
+  // and any future spawn-once object placed at the raw origin lands at the
+  // barycenter without manual seeding. Runs for warp AND non-warp spawns
+  // (title-screen / debug spawns already sit near zero, so it's a no-op there).
+  // resetWorldOrigin() does NOT fire onRebase listeners and does NOT touch scene
+  // children — safe because spawnSystem recreates them. See
+  // docs/WORKSTREAMS/world-origin-reset-on-system-swap-2026-06-04.md.
+  _resetWorldOrigin();
+
   const wasAutopilot = debugCamera ? false : autoNav.isActive;
 
   // Reset camera far plane (may have been extended for navigable nebulae)
@@ -3451,6 +3466,14 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     stopFlythrough();
   }
   idleTimer = 0;
+
+  // Diagnostic: worldOrigin at the moment spawn-once objects are placed.
+  // After the reset below it should read ≈ 0 on every spawn (warp or not), so
+  // the five placeInRebasedFrame seed calls become defensive no-ops rather than
+  // load-bearing. Surfaced for the world-origin-reset verification (AC #2).
+  if (typeof window !== 'undefined' && window.__diag) {
+    window.__diag._spawnWorldOrigin = [_worldOriginVec.x, _worldOriginVec.y, _worldOriginVec.z];
+  }
 
   // ── Clean up ships from previous system ──
   shipSpawner.clear(scene);
