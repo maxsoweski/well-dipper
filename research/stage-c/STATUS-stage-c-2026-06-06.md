@@ -94,22 +94,21 @@ All derived in `deriveUniforms` (`planet-lod-lab-core.js`), TDD'd in
 | 4 | `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | ✅ **DONE** — JS selector (enum 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂) from volatileFraction + T_eq bands; 8 TDD tests; `_derived`-only (Cryo declares the uniform in step 3). Live-verified `:9223` (Titan 94K→CO₂, Frozen 60K→CH₄, warm/dry→none). |
 | 5 | `precipitation` (D4) | ✅ **DONE** — `liquidStability` × rain-cycle composition factor (n2-o2 1.0/co2-n2 0.5/co2 0.2/h2-he·none 0); 7 TDD tests; `_derived`-only (Fluvial F11 reads in step 3). Presets carry atmosphere `composition`. Live-verified `:9223` (Rocky 0.74, Ocean/Titan 1.0 — Titan = methane rain, Lava/Frozen 0). |
 | 6 | `atmosphere.physics.pressure` → shader | ✅ **DONE** — pure passthrough of the bundle's atmosphere pressure; 4 TDD tests; `_derived`-only (Aeolian F15 reads in step 3). Live-verified `:9223` (Rocky 1.0 / Ocean·Titan 1.5 / Lava·Frozen 0 — mirrors preset values). |
-| 7 | `magneticField` (D13) | ⛔ **BLOCKED on Max-decision Q6** (surfacing ownership) — surface before building |
+| 7 | `magneticField` (D13) | ✅ **DONE** — Q6 RESOLVED (Max 2026-06-06: generation derives, Optical reads). `iron × lock-factor`, mirrors `PhysicsEngine.js:168` fieldStrength; `auroraIntensity` refactored to `magneticField × hasAtmo` (can't drift). 5 TDD tests. Live-verified `:9223` (Rocky 0.32, Lava 0.14 locked/aurora 0 airless, Ocean 0.28, Titan 0.18, Frozen 0.2/aurora 0). |
 
-## Step 2 is COMPLETE except #7 (`magneticField`, BLOCKED on Max-Q6).
-#1–#6 all done + live-verified. `deriveUniforms` now surfaces, beyond the Stage-A
-set: `surfaceGravity`, `tidalHeat`, `liquidStability`+`liquidSpecies` (LIVE uniforms),
-`volatileSpecies`, `precipitation`, `pressure`. Presets carry the mirrored generator
-fields (mass/radius, orbit, `volatileFraction`, atmosphere `retained`/`pressure`/
-`composition`). 71 lab tests green.
+## Step 2 is COMPLETE — all 7 surfacings done + live-verified.
+`deriveUniforms` now surfaces, beyond the Stage-A set: `surfaceGravity`, `tidalHeat`,
+`liquidStability`+`liquidSpecies` (LIVE uniforms), `volatileSpecies`, `precipitation`,
+`pressure`, `magneticField`. Presets carry the mirrored generator fields (mass/radius,
+orbit, `volatileFraction`, atmosphere `retained`/`pressure`/`composition`). **76 lab
+tests green.** Max-Q6 resolved 2026-06-06 (generation derives magneticField, Optical reads).
 
-## Next session picks up at: **Surface Max-Q6, then Step 3 = Relief**
-**Q6 (`magneticField` surfacing ownership — Optical vs separate workstream)** gates
-step-2 #7 and Optical's aurora F37; it's inline-computed twice today
-(`PhysicsEngine.js:168`, `PlanetGenerator.js:440`) and also drives atmosphere
-stripping. **Surface it to Max before building #7 — don't invent the answer.**
-Then **step 3 = Relief** (widest gap; lands the shared Voronoi consumer + writes
-`canyonHeight`). After Relief, domains
+## Next session picks up at: **Step 3 = Relief**
+The widest gap and the first VISIBLE domain. Lands the shared `voronoi3d` consumer
+(craters F2) + writes the `canyonHeight` accumulator (tectonic graben); reads
+`surfaceGravity` (crater simple→complex F2, edifice height F7) + `tidalHeat` (F8 lava).
+Wire `uVoroCells`/`craterCells` from `deriveUniforms`. **Screenshots required** (visible
+consumer — don't claim "should work"). After Relief, domains
 fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.
 Index §7 is the dependency-ordered sequence.

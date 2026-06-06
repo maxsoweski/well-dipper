@@ -232,6 +232,13 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     0.0;                             // h2-he (no surface), none, or unknown → no rain
   const precipitation = clamp01(liquidStability * rainFactor);
 
+  // magneticField (#7, D13): Q6-resolved — GENERATION derives, Optical reads (aurora F37);
+  // also drives atmosphere stripping. Mirrors PhysicsEngine.js:168 fieldStrength EXACTLY
+  // (ironFraction × lock-factor): a tidally-locked world spins slowly → weak dynamo → 0.2×.
+  // auroraIntensity is now expressed in terms of it (= field gated by atmosphere) so the
+  // two can't drift.
+  const magneticField = iron * (locked ? 0.2 : 1.0);
+
   return {
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
@@ -240,10 +247,11 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     volatileSpecies,                                            // Cryo frost classifier 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂ (F18/F22)
     precipitation,                                              // D4 rain 0..1 (Fluvial F11 channel activity)
     pressure,                                                   // atmosphere surface pressure passthrough (Aeolian grain transport F15)
+    magneticField,                                              // D13 dynamo strength (Optical aurora F37 + atmo stripping)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen
-    auroraIntensity: iron * (locked ? 0.2 : 1.0) * (hasAtmo ? 1 : 0),
+    auroraIntensity: magneticField * (hasAtmo ? 1 : 0),         // Optical reads the field; aurora needs an atmosphere to excite
     cloudCoverage: hasAtmo ? clamp01((d.habitability ?? 0) + 0.2) : 0,
     reliefAmplitude: mix(1.0, 0.6, erosion),                     // eroded worlds = softer relief
     ...qualityKnobs(qualityTier),

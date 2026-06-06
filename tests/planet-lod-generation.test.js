@@ -220,3 +220,34 @@ describe('pressure plumbing (§2 #6 — atmosphere surface pressure → shader; 
     expect(p).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('magneticField (§2 #7 — D13; Q6: generation derives, Optical reads aurora F37 + atmo stripping)', () => {
+  // Mirrors PhysicsEngine.js:168 fieldStrength = ironFraction × (locked ? 0.2 : 1.0): a
+  // tidally-locked world spins slowly → weak dynamo. Generation derives it (here); Optical
+  // consumes it (aurora). auroraIntensity stays defined as magneticField gated by atmosphere.
+  it('more iron core → stronger field', () => {
+    const lo = deriveUniforms({ composition: { ironFraction: 0.1 } }).magneticField;
+    const hi = deriveUniforms({ composition: { ironFraction: 0.5 } }).magneticField;
+    expect(hi).toBeGreaterThan(lo);
+  });
+  it('tidal lock weakens the field (slow rotation → weak dynamo)', () => {
+    const free   = deriveUniforms({ composition: { ironFraction: 0.4 }, tidalState: { locked: false } }).magneticField;
+    const locked = deriveUniforms({ composition: { ironFraction: 0.4 }, tidalState: { locked: true } }).magneticField;
+    expect(locked).toBeLessThan(free);
+  });
+  it('equals ironFraction × lock-factor (mirrors PhysicsEngine fieldStrength exactly)', () => {
+    expect(deriveUniforms({ composition: { ironFraction: 0.4 }, tidalState: { locked: false } }).magneticField).toBeCloseTo(0.4, 5);
+    expect(deriveUniforms({ composition: { ironFraction: 0.4 }, tidalState: { locked: true } }).magneticField).toBeCloseTo(0.08, 5);
+  });
+  it('auroraIntensity = magneticField gated by atmosphere (the two stay consistent)', () => {
+    const withAtmo = deriveUniforms({ composition: { ironFraction: 0.4 }, tidalState: { locked: false }, atmosphere: { retained: true, pressure: 1 } });
+    expect(withAtmo.auroraIntensity).toBeCloseTo(withAtmo.magneticField, 5);  // hasAtmo → equal
+    const airless = deriveUniforms({ composition: { ironFraction: 0.4 }, atmosphere: null });
+    expect(airless.auroraIntensity).toBe(0);                                  // no atmo → no aurora even with a field
+  });
+  it('finite, non-negative; default bundle → defined (no NaN/throw)', () => {
+    const m = deriveUniforms({}).magneticField;
+    expect(Number.isFinite(m)).toBe(true);
+    expect(m).toBeGreaterThanOrEqual(0);
+  });
+});
