@@ -98,7 +98,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis } from './planet-lod-lab-core.js';
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -135,6 +135,7 @@
 
       uniform float uNoiseScale;
       uniform float uOctaves;       // effective octave count
+      uniform float uLodRamp;       // 0 (far) .. 1 (closest) — one scalar drives all complexity
       uniform float uLevels;        // posterize levels
       uniform float uPerturb;       // relief strength
       uniform int   uNormalMode;    // 0 = analytic, 1 = finite-diff (production)
@@ -320,10 +321,12 @@
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
         } else {
-          // New analytic path
+          // New analytic path — relief amplitude grows with approach (lodRamp), so
+          // "one scalar drives all complexity" (spec §2.B): octaves AND detail depth.
           float fwBase = max(max(fwidth(vPos.x), fwidth(vPos.y)), fwidth(vPos.z));
           vec4 hd = fbmd(vPos, uOctaves, fwBase);
-          shadeN = perturbAnalytic(N, hd.yzw, uPerturb);
+          float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
+          shadeN = perturbAnalytic(N, hd.yzw, reliefAmp);
         }
 
         // ── Lighting — single star, mirrors Planet.js (diffuse + ambient 0.035) ──
@@ -340,6 +343,7 @@
     const uniforms = {
       uNoiseScale: { value: 4.0 },
       uOctaves:    { value: 4.0 },
+      uLodRamp:    { value: 0.0 },
       uLevels:     { value: 6.0 },
       uPerturb:    { value: 0.55 },
       uNormalMode: { value: 0 },
@@ -556,12 +560,15 @@
 
       const lod = lodRampOf(state.distance);
       const oct = state.octAuto ? autoOctaves(lod) : state.octaves;
+      // Discrete which-body-is-LOD2 flag, hysteresis-guarded (enter 18 / exit 22) to stop flicker.
+      state._lod2Active = lodHysteresis(state.distance, state._lod2Active ?? false);
 
       // Light dir into object space (sphere rotates; lighting math is object-space)
       invQuat.copy(planet.quaternion).invert();
       lightObj.copy(WORLD_LIGHT).applyQuaternion(invQuat);
 
       uniforms.uOctaves.value = oct;
+      uniforms.uLodRamp.value = lod;
       uniforms.uLevels.value = state.levels;
       uniforms.uPerturb.value = state.perturb;
       uniforms.uNormalMode.value = state.normalMode;
@@ -572,6 +579,7 @@
         `dist/radius : ${state.distance.toFixed(1)}\n` +
         `pixelScale  : ÷${state.pixelScale}  (cell ≈ ${state.pixelScale}px)\n` +
         `lodRamp     : ${lod.toFixed(3)}\n` +
+        `lod2 flag   : ${state._lod2Active ? 'ACTIVE' : 'off'}\n` +
         `octaves(eff): ${oct.toFixed(2)}${state.octAuto ? '  (auto)' : '  (manual)'}\n` +
         `posterize   : ${state.levels} levels\n` +
         `normals     : ${state.normalMode === 0 ? 'analytic' : 'finite-diff'}\n` +
