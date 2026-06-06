@@ -1,0 +1,44 @@
+{
+  "workstream": "system-tags-save-search",
+  "scope": "UX-1..UX-7 refinements (2026-06-05 UX-eval follow-up)",
+  "commit": "0d5f0be",
+  "branch": "system-tags-save-search",
+  "verifiedBy": [
+    "subagent-driven-development: per-task spec + code-quality reviews (T1-T7) + final integration review (all APPROVED)",
+    "dev-collab verify-workstream Workflow run wf_ea8ce10f-53f (mode=full, liveBranch=main, 62 agents) — full output: /tmp/claude-1000/-home-ax/4c6acb9c-509c-4079-b21b-2ff0dc7dd681/tasks/wo3qdfugh.output",
+    "live chrome-devtools UAT on port 9223 (main thread, this session)"
+  ],
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "PASS (driven live in main thread; see mainThreadUAT) — one caveat on UX-1"
+  },
+  "workflowVerdict": {
+    "overall": "PASS — UAT deferred to Max",
+    "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "deferred-to-max" },
+    "note": "Workflow ran with liveBranch=main so it did NOT drive the browser; all unit/integration ACs (AC1-7, UX-3, UX-5-unit) PASS 3/3 adversarial. The 6 uat ACs (AC8, UX-1/2/4/6/7) were deferred — they are closed below by the main-thread UAT."
+  },
+  "mainThreadUAT": {
+    "harness": "chrome-devtools port 9223 (GPU), entered via _lab.enterSol() + stopAutopilot(), panel via ArrowDown",
+    "results": [
+      { "id": "AC8-debug-panel-uat", "result": "PASS", "evidence": "Full loop driven: tags rendered, probe run, jump warped into the result system, save persisted — no console errors (only an unrelated TRAVEL TELEMETRY oscillation warn)." },
+      { "id": "UX-1-live-tag-refresh", "result": "PASS-with-caveat", "evidence": "Warped Sol->Rouken with the panel OPEN; #debug-tags-grid updated in place to F-type/4-planets/archetype mixed, no reopen. CAVEAT (from adversarial static analysis, NOT re-driven live): setPlayerPos() does not call _refreshLiveSections and runs after setSystem at spawn, so the PROBE SEARCH 'Center' label may lag and show the previous position until the next setter. The tags grid (primary observable) passes; the Center label refresh is UNCONFIRMED and is a candidate one-line follow-up fix (call _refreshLiveSections from setPlayerPos, or reorder)." },
+      { "id": "UX-2-save-guard-visible", "result": "PASS", "evidence": "In Sol via enterSol() (no warp): #debug-save-system disabled=true, opacity 0.4, cursor not-allowed, title + status reason shown. After warp to Rouken: disabled=false, opacity 1, cursor pointer." },
+      { "id": "UX-4-distinct-save-affordance", "result": "PASS", "evidence": "Result rows render 'jump'/'save' (top button still '★ Save current system'). Saved a '~K+K · bin · 3p' shallow row; status line + saved entry came out 'K+K · bin · 3p · rings · hab' with NO '~' (confirm-on-save regenerated to full fidelity)." },
+      { "id": "UX-5-result-count-truth", "result": "PASS", "evidence": "Unit: probeRegionDetailed 12/12. Live: status 'Probe... (scan capped at 500 nearest stars — narrow the radius for full coverage).' + results header 'showing 50 of 500'." },
+      { "id": "UX-6-human-filter-labels", "result": "PASS", "evidence": "Probe filter labels read Binary / Star type / Has rings / Habitable." },
+      { "id": "UX-7-polish", "result": "PASS", "evidence": "Sol archetype '(none)'. Saved-row ✕: first click -> 'sure?' (not removed, list len unchanged), second click -> removed. All 7 new fields carry aria-label in the live DOM. (29 'No label' DevTools issues remain = pre-existing out-of-scope fields debug-grain/star-bright/mouse-sens/seed-input/star-search, per plan.)" }
+    ]
+  },
+  "knownNonBlocking": [
+    "probeRegion is an unused import in DebugPanel.js (the wrapper is used by tests; harmless dead import in this module).",
+    "sweepCapped cap-default duplicated between sweepRegion and probeRegionDetailed (could DRY via a shared helper).",
+    "maxResults:0 would false-positive sweepCapped (unreachable from the panel).",
+    "Pre-existing full-suite failures unrelated to this work: KnownObjects.test.js x3, GalacticFeatures.test.js x1, 14 vendor/motion-test-kit files (identical at baseline 8b048cf)."
+  ],
+  "candidateFollowUps": [
+    "UX-1 Center-label lag: have setPlayerPos() trigger _refreshLiveSections (or reorder setSystem/setPlayerPos) so the probe Center label tracks the new position immediately. ~1 line.",
+    "a11y cleanup of the 5 pre-existing unlabeled debug fields (out of this workstream's scope)."
+  ],
+  "overall": "PASS — all unit + integration green (adversarially), all UI-layer ACs confirmed live, with one honest caveat: the UX-1 probe Center label refresh is unconfirmed and likely lags (candidate one-line fix). Tags-grid live refresh, save-guard, confirm-on-save, count-truth, labels, and polish all verified."
+}
