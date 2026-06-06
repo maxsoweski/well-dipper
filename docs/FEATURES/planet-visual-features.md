@@ -171,6 +171,32 @@ named). Tags reflect whether *any* consequence of the process renders now.
 | **P25** | Atmospheric escape / stripping | Weak field + high UV lets the stellar wind erode the atmosphere over time — **the gate that decides whether P8/P9/P18/P20 exist at all.** | **D13**, D6, D14, D1 | Cumulative over D16; can run to airless | fully retained … stripped to bare rock | `[current]` (modeled; consequence not visualized as such) |
 | **P26** | Optical / atmospheric scattering | Slant-path & aerosol scattering brighten the limb (rim glow / blue line), redden the terminator, and mirror the star off liquid (sunglint). | D5, aerosol, D6, geometry, surface liquid | Permanent rim/terminator; sunglint tracks geometry | sharp edge … thick glowing limb halo | `[current]` fresnel limb glow & terminator; `[aspirational]` sunglint |
 
+### L1c — Biotic / technogenic processes
+
+The four artificial/biotic EXOTIC types (`fungal`, `machine`,
+`city-lights`, `ecumenopolis`) have no geophysical formation — but their
+"process" is still a genuine **world-process that happens over time**, just
+an **agentive** one: a biosphere or technosphere colonizing a world. So it
+folds into the same L0→L1→L2 frame as a **parallel process track**, keeping
+the model symmetric (everything is driver→process→feature). Drivers are
+**D15 (habitability)** + **D16 (age, = time for life/tech to develop)**,
+not erosion physics.
+
+> **Compositing rule (the one thing that makes L1c special — a Phase-2
+> directive, not a model break).** A biotic/technogenic process **coats an
+> underlying base planet whose natural L0→L1→L2 chain still runs beneath
+> it.** An ecumenopolis sits on what *was* a terrestrial world; a fungal
+> world is a temperate ocean/terrestrial base with a living overlay. The
+> representation should therefore be **base-type + overlay layer**, so the
+> base world's oceans / weather / relief still show through wherever the
+> overlay doesn't fully cover — not a from-scratch generator that throws
+> the base away.
+
+| ID | Process | Physical description | Drivers | Timescale signature | Intensity axis | Status |
+|---|---|---|---|---|---|---|
+| **P27** | Biospheric colonization | A surface biosphere spreads across habitable terrain, coating it in living mats / bioluminescent structures. | D15, D6, D1 (temperate), D16 | Ecological spread; coverage tracks biosphere maturity | sparse patches … planet-spanning mat | `[current]` (fungal spots) |
+| **P28** | Technospheric development | A civilization develops and builds out, replacing/coating natural terrain with engineered structures and lighting the nightside; runs to planet-saturation (ecumenopolis). | D15→tech, D16, D7 (nightside lights) | Civilizational time; expansion to saturation | scattered structures/cities … planet-covering build-out | `[current]` (circuit grid, city lights, whole-surface glow) |
+
 ---
 
 ## L2 — Observable features
@@ -298,17 +324,17 @@ model is process-first.*
 | **F45** | Shattered / fractured crust | P15 | local fracture zone … globally shattered blocks | Miranda (analog) | shattered, rocky, ice | `[aspirational]` *(speculative)* |
 
 ### F-overlay — artificial / biotic surface coatings
-*These four EXOTIC types have **no geomorphic formation** — they are a
-**surface-coating layer over a base terrain**, driven by D15 (habitability)
-+ D16 (age), not erosion physics. See Appendix A note. Confidence:
-speculative game-construct.*
+*These four EXOTIC types have **no geomorphic formation** — they derive
+from the **L1c biotic/technogenic process track (P27, P28)** and
+**composite over a natural base planet** (see the L1c callout and Appendix
+A note). Confidence: speculative game-construct.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F46** | Bioluminescent / fungal mats | D15, D16, liquid | sparse patches … planet-spanning living mat | none confirmed | fungal | `[current]` (bioluminescent spots) |
-| **F47** | Machine / structured surface | D15→tech, D16 | scattered structures … fully machined crust (circuit grid) | Dyson-tier hypothetical | machine | `[current]` (circuit grid) |
-| **F48** | City lights | D15, D16, D7 (nightside) | scattered cities … continuous urban band; lit nightside | Earth-at-night (nascent) | city-lights, eyeball (nightside cities) | `[current]` (night-side city lights) |
-| **F49** | Ecumenopolis | D15, D16 | planet-covering megacity (whole-surface glow) | fictional (Coruscant) | ecumenopolis | `[current]` (whole-surface city glow) |
+| **F46** | Bioluminescent / fungal mats | P27 | sparse patches … planet-spanning living mat | none confirmed | fungal | `[current]` (bioluminescent spots) |
+| **F47** | Machine / structured surface | P28 | scattered structures … fully machined crust (circuit grid) | Dyson-tier hypothetical | machine | `[current]` (circuit grid) |
+| **F48** | City lights | P28 (+D7 nightside) | scattered cities … continuous urban band; lit nightside | Earth-at-night (nascent) | city-lights, eyeball (nightside cities) | `[current]` (night-side city lights) |
+| **F49** | Ecumenopolis | P28 (saturation) | planet-covering megacity (whole-surface glow) | fictional (Coruscant) | ecumenopolis | `[current]` (whole-surface city glow) |
 
 ### F-crosscutting — universal, type-agnostic
 *Render envelope + system-level features that apply across all bodies.*
@@ -349,13 +375,17 @@ with overlapping drivers should share features.
 | **city-lights** | EXOTIC | habitable + civilization (overlay) | F48 over a terrestrial base |
 | **ecumenopolis** | EXOTIC | advanced civilization (overlay) | F49 over a terrestrial base |
 
-> **Overlay-type design note (Phase-2 input).** `fungal`, `machine`,
-> `city-lights`, and `ecumenopolis` should be modeled as a **coating layer
-> applied over an underlying base terrain** (an ecumenopolis sits on what
-> *was* a terrestrial world), not as from-scratch landform generators.
-> Their meaningful drivers are D15 + D16, not erosion. `hex`, `crystal`,
-> and `shattered` are different — those have plausible *natural* physical
-> premises (P15) and can be driven by real L0 params.
+> **Overlay-type design note (Phase-2 input — RECOMMENDED FOLD).**
+> `fungal`, `machine`, `city-lights`, and `ecumenopolis` fold in as the
+> **L1c biotic/technogenic process track (P27, P28)**, driven by D15 + D16
+> — *not* as a special case outside the model, and *not* as from-scratch
+> landform generators. The representation is **base-type + overlay layer**:
+> the overlay composites over a natural base planet (an ecumenopolis over a
+> terrestrial world) whose own L0→L1→L2 chain still runs beneath, so base
+> oceans / weather / relief show through where the overlay doesn't cover.
+> `hex`, `crystal`, and `shattered` are different — those have plausible
+> *natural* physical premises (P15) and are driven by real L0 params, no
+> overlay needed.
 
 ---
 
@@ -404,8 +434,10 @@ largest coverage hole, and it lines up exactly with the LOD2 research spec.
 
 - **Phase 2 — representation design.** How L0→L1→L2 is stored and fed to
   generation + renderer so features derive from drivers, not type strings.
-  The overlay-type model (Appendix A note) and surfacing the magnetic-field
-  driver (D13) are inputs to it.
+  Named inputs to it: (a) the **base-type + overlay compositing model** for
+  the L1c artificial/biotic types (P27/P28 over a natural base — Appendix A
+  note); (b) **surfacing the magnetic-field driver (D13)** as a first-class
+  planet-data field rather than an inline local.
 - **Rotation-rate exposure.** `rotationSpeed` exists (`:697`) but confirm
   it (not just tidal-lock boolean) reaches anything that could drive band
   count / jet speed.
