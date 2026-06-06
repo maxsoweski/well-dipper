@@ -336,6 +336,22 @@
         return vec2(f1, f2);
       }
 
+      // ── emissiveBlackbody — shared incandescence color ramp (integration-index §1) ──
+      // ONE curve, two consumers: BANDS thermal (F32/F33) + EXOTIC magma (F41).
+      // Returns CHROMATICITY only (peak channel ≈1); caller scales brightness
+      // (uThermalStrength × starFacing). Transcribed from the CPU mirror in
+      // planet-lod-lab-core.js — same stops, same chained-mix smoothstep weights
+      // (a stylized Planckian-locus ramp anchored to real blackbody sRGB, not a
+      // spectral integration). Emissive-bypass term, so it's added AFTER posterize.
+      vec3 emissiveBlackbody(float tempK){
+        vec3 c = vec3(1.0, 0.18, 0.05);                                         // 800K deep dull red (floor)
+        c = mix(c, vec3(1.0, 0.42, 0.10), smoothstep( 800.0, 1500.0, tempK));   // -> orange
+        c = mix(c, vec3(1.0, 0.66, 0.32), smoothstep(1500.0, 2500.0, tempK));   // -> amber/yellow
+        c = mix(c, vec3(1.0, 0.85, 0.70), smoothstep(2500.0, 4000.0, tempK));   // -> warm white
+        c = mix(c, vec3(1.0, 0.98, 0.96), smoothstep(4000.0, 6500.0, tempK));   // -> white (ceiling)
+        return c;
+      }
+
       // ── NEW: variable-octave analytic FBM. Returns vec4(height, gradient.xyz). ──
       // octaves = mix(4,9,lodRamp); fractional trailing-octave weight = pop-free ramp;
       // fwidth clamp fades sub-pixel octaves to their mean (kills dither shimmer).
@@ -385,9 +401,15 @@
             dbg = vec3(1.0 - smoothstep(0.0, 0.06, ff.y - ff.x));    // F2-F1 crack mask (borders)
           } else if (uDebugMode == 3){
             dbg = hash33(vCell);                                     // flat per-cell color — SEAM TEST
-          } else {
-            vec3 pn = perturbAnalytic(N, vGrad, 0.5);               // mode 4: voronoi grad as lit relief
+          } else if (uDebugMode == 4){
+            vec3 pn = perturbAnalytic(N, vGrad, 0.5);               // voronoi grad as lit relief
             dbg = uBaseColor * (max(dot(pn, uLightDir), 0.0) + 0.05);
+          } else {
+            // mode 5: emissiveBlackbody ramp swatch — pole(500K)→pole(4000K)
+            // gradient. Confirms the GLSL transcription matches the CPU mirror:
+            // bottom deep-red, climbing through orange/amber to warm-white on top.
+            float tempK = mix(500.0, 4000.0, clamp(N.y * 0.5 + 0.5, 0.0, 1.0));
+            dbg = emissiveBlackbody(tempK);
           }
           gl_FragColor = vec4(dbg, 1.0);
           return;
@@ -608,7 +630,7 @@
     // exists to prove the KEYSTONE primitive is seam-free before any cellular feature
     // builds on it. Mode 3 (per-cell color) is the seam test — a seam shows as a line.
     const fDebug = gui.addFolder('Debug — voronoi3d spike'); fDebug.open();
-    fDebug.add(state, 'debugMode', { OFF: 0, 'F1 (cells)': 1, 'F2-F1 (borders)': 2, 'cell-id color (SEAM TEST)': 3, 'lit relief': 4 }).name('voronoi debug');
+    fDebug.add(state, 'debugMode', { OFF: 0, 'F1 (cells)': 1, 'F2-F1 (borders)': 2, 'cell-id color (SEAM TEST)': 3, 'lit relief': 4, 'blackbody ramp': 5 }).name('voronoi / bb debug');
     fDebug.add(state, 'voroScale', 1, 20, 0.5).name('cell density');
     fDebug.add(state, 'voroCells', { '27 (desktop)': 27, '9 (mobile)': 9 }).name('cell count');
 

@@ -105,6 +105,40 @@ export function voronoi3d(p, cells = 27) {
   return { f1, f2, cellId: nCell, toCenter: nR, grad: [-nR[0] * inv, -nR[1] * inv, -nR[2] * inv] };
 }
 
+// ── emissiveBlackbody — shared incandescence color ramp (integration-index §1) ─
+// ONE curve, two consumers: Bands thermal (F32/F33, 500–3000 K) and Exotic magma
+// (F41, 1500–4000 K). Returns CHROMATICITY only ([r,g,b] in 0..1, peak channel
+// ≈1); the caller scales brightness (uThermalStrength × starFacing). The GLSL
+// helper in planet-lod-lab.html is a transcription of these same stops.
+//
+// Stylized Planckian-locus ramp, not a spectral integration: piecewise-smooth
+// interpolation between color stops anchored to real blackbody sRGB appearance
+// (Mitchell Charity's blackbody datafile), normalized to the peak channel.
+// Red saturates first (~Draper point) and stays maxed; green then blue climb as
+// the body whitens. Posterize-bypass term, so banding isn't a concern — the
+// smoothness here is for the emissive glow's hue, not its quantization.
+const BB_STOPS = [
+  { T:  800, c: [1.0, 0.18, 0.05] },   // deep dull red
+  { T: 1500, c: [1.0, 0.42, 0.10] },   // orange
+  { T: 2500, c: [1.0, 0.66, 0.32] },   // amber / yellow
+  { T: 4000, c: [1.0, 0.85, 0.70] },   // warm white
+  { T: 6500, c: [1.0, 0.98, 0.96] },   // white (ceiling; magma stays below)
+];
+export function emissiveBlackbody(tempK) {
+  // Below the first / above the last stop → clamp to that stop (no runaway).
+  if (tempK <= BB_STOPS[0].T) return [...BB_STOPS[0].c];
+  const last = BB_STOPS[BB_STOPS.length - 1];
+  if (tempK >= last.T) return [...last.c];
+  // Find the bracketing segment and smoothstep-blend across it (matches the GLSL
+  // chained-mix form, where each segment's weight is smoothstep(Tlo,Thi,tempK)).
+  let c = [...BB_STOPS[0].c];
+  for (let i = 1; i < BB_STOPS.length; i++) {
+    const w = smoothstep(BB_STOPS[i - 1].T, BB_STOPS[i].T, tempK);
+    c = [mix(c[0], BB_STOPS[i].c[0], w), mix(c[1], BB_STOPS[i].c[1], w), mix(c[2], BB_STOPS[i].c[2], w)];
+  }
+  return c;
+}
+
 // deriveUniforms: physics driver-bundle -> flat semantic uniform values.
 // Generalizes the aurora/atmosphere precedent in PlanetGenerator.js:435-487
 // (fieldStrength = composition.ironFraction * (locked ? 0.2 : 1.0); NO planetType branch).
