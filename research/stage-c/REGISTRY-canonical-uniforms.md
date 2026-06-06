@@ -49,7 +49,7 @@ are NOT built in step 1 — listed here so the owner wires name→derivation tog
 
 | New field | Feeds | Notes |
 |---|---|---|
-| `surfaceGravity` (g = M/R²) | Relief (crater simple→complex F2, edifice height F7), Aeolian (dune scale F15) | Highest-value single addition; gates two domains. |
+| `surfaceGravity` (g = M/R²) | Relief (crater simple→complex F2, edifice height F7), Aeolian (dune scale F15) | **DONE** — computed in `deriveUniforms` from bundle `massEarth`/`radiusEarth`; 4 TDD tests (`tests/planet-lod-generation.test.js`); presets carry illustrative mass/radius. No shader consumer until Relief (step 3). |
 | planet-level `tidalHeat` | Relief (F8 lava, F7 edifices), Cryo (P7 cryovolcanism) | Existing `tidalHeating()` is moon-parameterized — add a planet-level value. |
 | `magneticField` (D13) | Optical (aurora F37) | **Max-decision Q6 open** — surfacing ownership (Optical vs separate generation workstream); also drives atmosphere stripping. Surface before generation-surfacing #3. |
 | `precipitation` (D4) | Fluvial (channel activity F11) | From `computeAtmosphere`. |

@@ -155,7 +155,18 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const hot = clamp01((T - 400) / 600);                          // 400K..1000K -> 0..1
   const liquidWater = (T > 250 && T < 330) ? 1 : 0;              // specular band
 
+  // ── §2 generation-side surfacings (index §2) ────────────────────────────────
+  // surfaceGravity (#1): g = M/R² in Earth-relative units. massEarth + radiusEarth
+  // are already in the generator's output (PhysicsEngine.estimateMassEarth), so
+  // this is a pure derivation, not a new generator field. Gates Relief (crater
+  // simple→complex transition F2, edifice height F7) + Aeolian (dune repose/scale
+  // F15). Defaults to 1 g when the bundle omits mass/radius (robust, finite).
+  const radiusEarth = d.radiusEarth ?? 1.0;
+  const massEarth = d.massEarth ?? 1.0;
+  const surfaceGravity = massEarth / (radiusEarth * radiusEarth);
+
   return {
+    surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: (hasAtmo && liquidWater) ? 0.8 : iron * 0.15,  // ocean specular vs faint metal sheen
