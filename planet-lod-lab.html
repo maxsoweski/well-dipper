@@ -207,6 +207,13 @@
       uniform float uPlateauLevels;    // mesa terrace count — lab knob
       uniform float uPlateauSoftness;  // terrace riser softness (0..1) — lab knob
 
+      // ── F6 tessera (Stage-C step 3, Relief) — crosscutting ridge-and-groove lattice ──
+      uniform float uTesseraStrength;  // 0..~0.15 lattice amplitude (high-stress gate; ≤0 early-outs)
+      uniform vec3  uTesseraAxis[2];   // 2 lattice orientations (unit; driven from seed)
+      uniform float uTesseraFreq;      // groove-train spatial frequency (lattice density) — lab knob
+      uniform float uTesseraWarp;      // groove-line sinuosity (warp amount) — lab knob
+      uniform float uTesseraWarpFreq;  // warp-noise domain frequency — lab knob
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -694,6 +701,53 @@
         grad += uPlateauStrength * tp.y * ph.yzw * uPlateauScale;
       }
 
+      // ── F6 ridgeWave — tessera ridge fold (Stage-C step 3) — transcribed from
+      // ridgeWave() in planet-lod-lab-core.js (same minus-abs-sin fold, vitest-pinned
+      // analytic derivative). value = 1 - |sin(phase)|; dvdphase = -sign(sin)*cos(phase).
+      // The -sign() correction across the |.| fold is the relief doc 5.4 silent-bug class
+      // (drop it and the groove walls light backward yet it compiles fine).
+      vec2 ridgeWave(float phase){
+        float s = sin(phase);
+        float value = 1.0 - abs(s);
+        float dvdphase = -sign(s) * cos(phase);
+        return vec2(value, dvdphase);
+      }
+
+      // F6 tessera combiner — Venus-style crosscutting ridge-and-groove lattice. TWO
+      // warped-iso-contour ridge fields (reusing the F5 scarp warp: dot(pos,axis) made
+      // sinuous by a noised() warp, EXACT field gradient axis + warp*warpFreq*noiseGrad)
+      // are each carved as a 1-|sin| ridge and MULTIPLIED: the product drops to 0 wherever
+      // EITHER field is in a groove, so grooves from BOTH orientations show -> the
+      // crosscutting lattice over a high crust. The two warps use different seeds
+      // (macro/detail offsets) so the groove sets decorrelate. Gradient = product rule
+      // across the two ridges. uTesseraStrength<=0 ⇒ early-out (Stage-A + F1/F2/F4/F5/plateau
+      // untouched). NB single-octave sin-trains (like F5), so no fwidth fade; keep
+      // uTesseraFreq modest to avoid the product shimmering.
+      void tesseraCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uTesseraStrength <= 0.0) return;
+        // axis 0 — warped with the macro seed
+        vec3 ax0 = normalize(uTesseraAxis[0]);
+        vec4 wn0 = noised(pos * uTesseraWarpFreq + uMacroOffset);
+        float field0  = dot(pos, ax0) + uTesseraWarp * wn0.x;
+        vec3  dfield0 = ax0 + uTesseraWarp * uTesseraWarpFreq * wn0.yzw;
+        float phase0  = field0 * uTesseraFreq;
+        vec2  rw0 = ridgeWave(phase0);                            // ridge value + d/dphase
+        vec3  dr0 = rw0.y * uTesseraFreq * dfield0;               // d(ridge0)/dpos
+        // axis 1 — warped with the detail seed (decorrelated groove set)
+        vec3 ax1 = normalize(uTesseraAxis[1]);
+        vec4 wn1 = noised(pos * uTesseraWarpFreq + uDetailOffset);
+        float field1  = dot(pos, ax1) + uTesseraWarp * wn1.x;
+        vec3  dfield1 = ax1 + uTesseraWarp * uTesseraWarpFreq * wn1.yzw;
+        float phase1  = field1 * uTesseraFreq;
+        vec2  rw1 = ridgeWave(phase1);
+        vec3  dr1 = rw1.y * uTesseraFreq * dfield1;
+        // product (union of grooves) + product-rule gradient
+        float prod = rw0.x * rw1.x;
+        vec3  dprod = rw1.x * dr0 + rw0.x * dr1;
+        h    += uTesseraStrength * (prod - 0.5);                  // -0.5 DC cosmetic (normal-only shading)
+        grad += uTesseraStrength * dprod;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -763,6 +817,7 @@
           canyonCombiner(vPos, h, canyonHeight, grad);
           scarpCombiner(vPos, h, grad);
           plateauCombiner(vPos, fwBase, h, grad);
+          tesseraCombiner(vPos, h, grad);
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
         }
@@ -889,6 +944,11 @@
       uPlateauOffset:    { value: 0.5 },   // ground-level stratification bias (lab-tunable)
       uPlateauLevels:    { value: 4.0 },   // mesa terrace count (lab-tunable)
       uPlateauSoftness:  { value: 0.4 },   // terrace riser softness (lab-tunable)
+      uTesseraStrength:  { value: 0.0 },   // crosscutting-lattice amplitude (driven; ≤0 early-outs)
+      uTesseraAxis:      { value: [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0)] },  // 2 lattice orientations (driven from seed)
+      uTesseraFreq:      { value: 5.0 },   // groove-train frequency / lattice density (lab-tunable)
+      uTesseraWarp:      { value: 0.5 },   // groove-line sinuosity (lab-tunable)
+      uTesseraWarpFreq:  { value: 2.0 },   // warp-noise domain frequency (lab-tunable)
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1025,6 +1085,11 @@
       plateauOffset: 0.5,
       plateauLevels: 4.0,
       plateauSoftness: 0.4,
+      tesseraStrength: 0.0,
+      tesseraAxes: [[1,0,0],[0,1,0]],
+      tesseraFreq: 5.0,
+      tesseraWarp: 0.5,
+      tesseraWarpFreq: 2.0,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1145,9 +1210,14 @@
       state.scarpAxis        = u.scarpAxis;
       uniforms.uScarpAxis.value.set(u.scarpAxis[0], u.scarpAxis[1], u.scarpAxis[2]);
       // F6 plateaus (Stage-C step 3) — derived strength flows into state (frame loop →
-      // uniform); scale/offset/levels/softness are lab knobs. (tesseraStrength/tesseraAxes
-      // are derived + tested but their combiner is deferred — no uniform reads them yet.)
+      // uniform); scale/offset/levels/softness are lab knobs.
       state.plateauStrength  = u.plateauStrength;
+      // F6 tessera (Stage-C step 3) — derived strength flows into state (frame loop →
+      // uniform); the 2 lattice axes copy straight to the uniform array (seeded, no GUI);
+      // freq/warp/warpFreq are lab knobs.
+      state.tesseraStrength  = u.tesseraStrength;
+      state.tesseraAxes      = u.tesseraAxes;
+      for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(u.tesseraAxes[i][0], u.tesseraAxes[i][1], u.tesseraAxes[i][2]);
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1203,6 +1273,15 @@
     fPlateaus.add(state, 'plateauOffset', 0, 1.2, 0.01).name('ground offset');
     fPlateaus.add(state, 'plateauLevels', 2, 10, 1).name('mesa steps');
     fPlateaus.add(state, 'plateauSoftness', 0.05, 0.9, 0.01).name('riser softness');
+    // ▸ Tessera (F6) — Venus crosscutting ridge-and-groove lattice. strength comes from
+    // the driver preset (high-stress gate, .listen()-synced); the 2 lattice axes are
+    // seeded (no GUI); freq/warp/warpFreq are lab knobs. Two warped 1-|sin| ridge fields
+    // multiplied → grooves crosscut in both directions over a high crust.
+    const fTessera = fRelief.addFolder('Tessera (F6)'); fTessera.open();
+    fTessera.add(state, 'tesseraStrength', 0, 0.3, 0.005).name('strength (lattice)').listen();
+    fTessera.add(state, 'tesseraFreq', 1, 16, 0.5).name('lattice density (freq)');
+    fTessera.add(state, 'tesseraWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
+    fTessera.add(state, 'tesseraWarpFreq', 0.5, 5, 0.1).name('warp freq');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1357,6 +1436,10 @@
       uniforms.uPlateauOffset.value    = state.plateauOffset;
       uniforms.uPlateauLevels.value    = state.plateauLevels;
       uniforms.uPlateauSoftness.value  = state.plateauSoftness;
+      uniforms.uTesseraStrength.value  = state.tesseraStrength;
+      uniforms.uTesseraFreq.value      = state.tesseraFreq;
+      uniforms.uTesseraWarp.value      = state.tesseraWarp;
+      uniforms.uTesseraWarpFreq.value  = state.tesseraWarpFreq;
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =

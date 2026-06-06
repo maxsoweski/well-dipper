@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -593,5 +593,64 @@ describe('tesseraAxes (F6 — two seeded lattice orientations)', () => {
     const a = deriveUniforms({ seed: 42 }).tesseraAxes[0];
     const b = deriveUniforms({ seed: 42 }).tesseraAxes[0];
     expect(a[0]).toBeCloseTo(b[0], 12);
+  });
+});
+
+// ── F6 ridgeWave — the tessera crosscutting-ridge primitive (relief doc §F6.a) ─
+// Tessera (Venus Ovda Regio) = two intersecting warped-iso-contour ridge fields,
+// carved as `1 − |sin(phase)|` ridges and MULTIPLIED so grooves from BOTH lattice
+// orientations show (the product → 0 wherever EITHER field is in a groove → the
+// crosscutting lattice). The `1 − |sin|` fold has the SAME silent-bug class as
+// F1's ridgedFold: its derivative `−sign(sin)·cos` carries a sign correction across
+// the |.| fold that a build can drop and still compile, lighting the groove walls
+// backward. So the ridge primitive is pinned vs finite-diff BEFORE the GLSL combiner.
+describe('ridgeWave — ridge shape invariants (relief doc §F6.a)', () => {
+  it('crests (value=1) at phase = nπ where sin=0', () => {
+    expect(ridgeWave(0.0).value).toBeCloseTo(1.0, 6);
+    expect(ridgeWave(Math.PI).value).toBeCloseTo(1.0, 6);
+    expect(ridgeWave(2 * Math.PI).value).toBeCloseTo(1.0, 6);
+  });
+
+  it('grooves (value=0) at phase = π/2 + nπ where |sin|=1', () => {
+    expect(ridgeWave(Math.PI / 2).value).toBeCloseTo(0.0, 6);
+    expect(ridgeWave(3 * Math.PI / 2).value).toBeCloseTo(0.0, 6);
+  });
+
+  it('stays in [0,1] across a full period', () => {
+    for (let p = 0; p < 2 * Math.PI; p += 0.05) {
+      const v = ridgeWave(p).value;
+      expect(v).toBeGreaterThanOrEqual(-1e-9);
+      expect(v).toBeLessThanOrEqual(1.0 + 1e-9);
+    }
+  });
+
+  it('is symmetric about a crest (phase=0): +δ and −δ give the same height', () => {
+    expect(ridgeWave(0.4).value).toBeCloseTo(ridgeWave(-0.4).value, 8);
+  });
+});
+
+describe('ridgeWave — analytic derivative vs finite-diff (relief doc §5.4 silent-bug gate)', () => {
+  const EPS = 1e-6;
+  // Sample STRICTLY inside smooth half-periods — avoid phase = nπ (the |sin| kink,
+  // where sin=0 and the derivative is discontinuous). Both the sin>0 and sin<0
+  // branches are exercised so the −sign(sin) correction is pinned on both sides.
+  const PTS = [0.3, 0.9, 1.4, 2.0, 2.6, 3.5, 4.2, 5.0, 5.8];
+
+  it('dvdphase matches central finite-difference of the value', () => {
+    for (const p of PTS) {
+      const { dvdphase } = ridgeWave(p);
+      const fd = (ridgeWave(p + EPS).value - ridgeWave(p - EPS).value) / (2 * EPS);
+      expect(dvdphase).toBeCloseTo(fd, 4);
+    }
+  });
+
+  it('would FAIL if the sign correction were dropped — detectable where sin>0', () => {
+    // On the sin>0 branch −sign(sin) = −1, so the correct derivative is −cos(phase);
+    // a build that forgets the −sign uses +cos(phase) — opposite sign, backward walls.
+    const p = 0.9;                                   // sin(0.9) > 0
+    expect(Math.sin(p)).toBeGreaterThan(0);
+    const { dvdphase } = ridgeWave(p);
+    expect(dvdphase).toBeCloseTo(-Math.cos(p), 6);   // correct
+    expect(dvdphase).not.toBeCloseTo(Math.cos(p), 4); // the naive (no −sign) bug
   });
 });

@@ -115,7 +115,7 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F1 | **Mountains / ranges** (ridged multifractal, orogeny belts) | ✅ **DONE** — ridged base relief live; see below |
 | F4 | **Canyons / rifts** (tectonic graben — **writes `canyonHeight`**) | ✅ **DONE** — first `canyonHeight` writer live; see below |
 | F5 | **Scarps & fault systems** (warped fault-block province) | ✅ **DONE** — warped soft-step cliffs live; see below |
-| F6 | **Plateaus / highlands / tessera** | ✅ **DONE (plateau core)** — HeteroTerrain + mesa terrace live; tessera deferred; see below |
+| F6 | **Plateaus / highlands / tessera** | ✅ **DONE** — HeteroTerrain + mesa terrace + crosscutting tessera lattice live; see below |
 | F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ next |
 | F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ |
 | F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ◻ |
@@ -286,13 +286,13 @@ deferred), exactly as F4 shipped the linear chasma and deferred the Voronoi web.
   could shimmer — kept modest (default 6) and verified clean; add an fwidth amplitude fade
   if a future preset pushes freq high.
 
-### F6 — Plateaus / highlands / tessera (DONE — plateau core; tessera deferred)
-Flat-topped highlands via **Musgrave HeteroTerrain + a mesa height-terrace**. I shipped
-the **plateau core** (the primary "plateaus / highlands" variant) and DEFERRED **tessera**
-(the rarer Venus crosscutting lattice) — mirroring F2 (deferred peak-ring basins), F4
-(deferred Voronoi web), F5 (deferred Voronoi scarp): ship the felt core, defer the rich/
-rare variant. Tessera's generation-side surfacings (`tesseraStrength`/`tesseraAxes`) are
-already derived + TDD'd, so its combiner is a small follow-up.
+### F6 — Plateaus / highlands / tessera (DONE)
+Flat-topped highlands via **Musgrave HeteroTerrain + a mesa height-terrace** (the plateau
+core), PLUS the **crosscutting tessera lattice** (the rarer Venus Ovda-Regio variant). The
+plateau core landed first (`42605e0`); the tessera combiner followed this session. Tessera
+took the **cheap warped-iso-contour ridge path** (research §F6.a / §F6.d), NOT the rich
+inverted-Voronoi-border path — so F6 needs NO `voronoi3d` edge-distance pass-2 (still
+deferred, shared with F4-web/F5-rich), exactly as F4/F5 shipped their cheap tiers.
 - **CPU oracle** `terraceProfile(h, levels, softness)` in `planet-lod-lab-core.js` →
   `{value, dvdh}`: quantizes a height into `levels` flat treads separated by SOFT risers
   (`smoothstep`) so the gradient exists (a hard `floor(h·N)/N` has none). `value` is
@@ -333,15 +333,52 @@ already derived + TDD'd, so its combiner is a small follow-up.
   it in one cycle; no parameter-thrashing.
 - **No new cross-domain shared uniform** — `plateauStrength`/`tesseraStrength`/`tesseraAxes`
   are Relief-internal, so REGISTRY-canonical-uniforms.md is unchanged.
-- **Carry-forward (relief-doc §F6, not blocking):** (1) **Tessera lattice combiner**
-  DEFERRED — the cheap path is two intersecting warped-iso-contour ridge fields (reuses F5's
-  warp at the 2 seeded `tesseraAxes`), the rich path the `voronoi3d` edge-distance pass-2
-  (shared with F4-web/F5-rich). The `tesseraStrength`/`tesseraAxes` derivations are LIVE +
-  tested; only the GLSL combiner + its `1−|sin|` ridge oracle remain. NB §F6.a notes EXOTIC
-  may own the cleaner P15 lattice — coordinate before building the rich tier. (2) **Rough
-  margins as a separate high-octave term** (true HeteroTerrain "rough-margined highlands"
-  with un-terraced fine detail riding the terraced base) DEFERRED — the capped-octave base
-  reads as broad plateaus now; layering fine roughness on the margins is additive.
+#### F6 tessera combiner (DONE — this session)
+The crosscutting ridge-and-groove lattice (the §F6.a cheap tier). EXOTIC coordination
+resolved: EXOTIC owns the geometric P15 lattice (hex/crystal/shatter via the shared
+`voronoi3d` primitive); the cheap warped-ridge path here is unambiguously Relief's own
+expression, touches no shared Voronoi pass-2, and EXOTIC hasn't landed (domains fan out
+after Relief).
+- **CPU oracle** `ridgeWave(phase)` in `planet-lod-lab-core.js` → `{value, dvdphase}`:
+  the per-axis ridge fold `value = 1 − |sin(phase)|` (crests at `phase=nπ`, grooves at
+  `π/2+nπ`), `dvdphase = −sign(sin)·cos(phase)`. The `−sign(sin)` correction across the
+  `|.|` fold is the SAME §5.4 silent-bug class as `ridgedFold` (drop it → groove walls
+  light backward yet it compiles); pinned vs central finite-diff INSIDE smooth half-periods
+  (the kink at `phase=nπ` is avoided), with both sign branches exercised + a sign-drop
+  regression guard. **6 TDD tests** added; **155 lab tests green**.
+- **GLSL** `ridgeWave()` + `tesseraCombiner()` (transcribed). TWO warped-iso-contour ridge
+  fields (reusing F5's exact warp: `dot(pos,axis) + warp·noised()`, EXACT field gradient
+  `axis + warp·warpFreq·noiseGrad`) at the 2 seeded `tesseraAxes`, each carved as a
+  `1−|sin|` ridge and **MULTIPLIED** → the product drops to 0 wherever EITHER field is in a
+  groove, so grooves from both orientations show (the crosscutting lattice over a high
+  crust). The two warps use different seeds (macro/detail offsets) to decorrelate the groove
+  sets. Gradient = product rule across the two ridges (`rw1·dr0 + rw0·dr1`, each
+  `dr = dvdphase·freq·dfield`). `−0.5` DC is cosmetic (normal-only shading). `uTesseraStrength≤0`
+  early-outs (Stage-A base + F1/F2/F4/F5/plateau untouched). Wired Stage-2 after
+  `plateauCombiner`; new `▸ Tessera (F6)` lil-gui folder (strength driven via `.listen()`;
+  freq/warp/warpFreq lab knobs). Axes copied to `uTesseraAxis[2]` in `applyDrivers`.
+- **Live-verified `:9223`** (screenshots `f6-tessera-01..04`): isolated tessera (other relief
+  zeroed) → crosscutting woven grooves across the surface ✓; low-freq orthogonal crosshatch
+  → unambiguous two-direction groove lattice ✓; `uTesseraStrength=0` → lattice vanishes, bare
+  FBM base restored (early-out regression) ✓; full relief stack (mountains+craters+chasma+
+  scarp+plateau+tessera at 0.05, near Ocean's derived 0.0408) → tessera composes as a fine
+  crosscutting weave without blowout, craters stay readable ✓; console clean (vite + benign
+  lil-gui form-field only). Generation gate confirmed live: Ocean derives 0.0408 (most active
+  natural preset), Rocky 0.0029 near-zero, Titan/Frozen 0 — the high-stress gate works.
+- **No new cross-domain shared uniform** — `uTesseraStrength`/`uTesseraAxis`/`uTesseraFreq`/
+  `uTesseraWarp`/`uTesseraWarpFreq` are Relief-internal, so REGISTRY-canonical-uniforms.md is
+  unchanged.
+
+- **Carry-forward (relief-doc §F6, not blocking):** (1) **Rich Voronoi-border tessera**
+  (the networked-fault rich tier, sharing the `voronoi3d` edge-distance pass-2 with F4-web/
+  F5-rich) DEFERRED — add the pass-2 once, for all three; NB §F6.a notes EXOTIC may own the
+  cleaner P15 lattice, so coordinate before building it. (2) **Rough margins as a separate
+  high-octave term** (true HeteroTerrain "rough-margined highlands" with un-terraced fine
+  detail riding the terraced base) DEFERRED — the capped-octave base reads as broad plateaus
+  now; layering fine roughness on the margins is additive. (3) **Tessera shimmer watch:** the
+  combiner is two single-octave `sin`-trains (like F5), so the §5.3 fwidth/trailing-octave
+  fade doesn't apply; at very high `uTesseraFreq` the product could shimmer — kept modest
+  (default 5) and verified clean; add an fwidth amplitude fade if a future preset pushes it.
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

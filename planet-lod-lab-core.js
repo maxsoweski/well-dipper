@@ -303,6 +303,28 @@ export function terraceProfile(h, levels = 4, softness = 0.4) {
   return { value, dvdh };
 }
 
+// ── ridgeWave — F6 tessera crosscutting-ridge primitive (relief doc §F6.a) ───
+// Tessera (Venus Ovda Regio) is rendered as TWO intersecting warped-iso-contour
+// ridge fields, MULTIPLIED so the grooves of both lattice orientations show (the
+// product → 0 wherever EITHER field is in a groove → the crosscutting lattice). The
+// per-axis ridge is this fold of the field's phase:
+//
+//   value(phase) = 1 − |sin(phase)|        crests (=1) at phase=nπ, grooves (=0) at π/2+nπ
+//   dvdphase     = −sign(sin(phase))·cos(phase)
+//
+// This is the SAME silent-bug class as ridgedFold (relief doc §5.4 risk #4): the
+// `−sign(sin)` correction across the |.| fold can be dropped and still compile, but
+// it lights the groove walls backward. Pinned vs finite-diff in tests; the GLSL
+// tesseraCombiner() chain-rules dvdphase through dphase/dpos = freq·dfield per axis
+// and applies the product rule across the two ridges. The kink lives at phase=nπ
+// (sin=0, the crest) — the finite-diff sweep stays strictly inside a smooth half-period.
+export function ridgeWave(phase) {
+  const s = Math.sin(phase);
+  const value = 1.0 - Math.abs(s);
+  const dvdphase = -Math.sign(s) * Math.cos(phase);   // chain rule through −|sin|
+  return { value, dvdphase };
+}
+
 // seededUnitVec3 — a deterministic ~uniform point on the unit sphere from a scalar seed.
 // z uniform in [-1,1], azimuth uniform in [0,2π) (the standard sphere-point sampler);
 // shape mirrors seedOffset()'s sin-fract hashing. Used for F4 rift-plane normals.
