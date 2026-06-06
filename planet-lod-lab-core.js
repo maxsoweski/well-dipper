@@ -247,6 +247,32 @@ export function grabenProfile(d, halfWidth = 0.12, floorFrac = 0.4) {
   return { depth, dddd };
 }
 
+// ── scarpProfile — F5 fault-scarp soft-step profile (relief doc §F5.a) ───────
+// A scarp is a ONE-SIDED cliff: a step in elevation across an iso-contour of some
+// smooth field. This profile is that step as a function of the field value:
+//
+//   height(field) = smoothstep(level − width, level + width, field)   (∈ [0,1])
+//     field ≤ level−width : height = 0     (the low block)
+//     level−width..+width : the cliff face, rising 0 → 1
+//     field ≥ level+width : height = 1     (the high block)
+//
+// dhdf = d(height)/dfield — the cliff-face SLOPE the GLSL combiner chain-rules into
+// the shading gradient (× dfield/dpos). Pinned vs finite-diff in tests (relief-doc
+// §5.4 silent-bug gate, like grabenProfile/craterProfile — a sign-wrong cliff face
+// lights the scarp backward yet compiles fine). Zero outside the band (flat blocks).
+// The GLSL scarpProfile() is transcribed from this (same smoothstep derivative).
+export function scarpProfile(field, level = 0.0, width = 0.15) {
+  const e0 = level - width, e1 = level + width;
+  const height = smoothstep(e0, e1, field);   // 0 below → 1 above, soft step over 2·width
+  let dhdf = 0.0;
+  const span = e1 - e0;                         // = 2·width
+  if (span > 1e-9 && field > e0 && field < e1) {
+    const t = (field - e0) / span;
+    dhdf = (6.0 * t * (1.0 - t)) / span;        // d/dfield of smoothstep
+  }
+  return { height, dhdf };
+}
+
 // seededUnitVec3 — a deterministic ~uniform point on the unit sphere from a scalar seed.
 // z uniform in [-1,1], azimuth uniform in [0,2π) (the standard sphere-point sampler);
 // shape mirrors seedOffset()'s sin-fract hashing. Used for F4 rift-plane normals.
@@ -429,6 +455,28 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const chasmaCount = 1 + Math.floor((cs - Math.floor(cs)) * 3);   // 1..3
   const chasmaAxes = [seededUnitVec3(seed + 1), seededUnitVec3(seed + 2), seededUnitVec3(seed + 3)];
 
+  // ── F5 scarps / fault systems (Stage-C step 3, Relief — relief doc §F5.b) ───
+  // Lobate contraction scarps form from GLOBAL COOLING/CONTRACTION as a planet ages
+  // (relief doc D11/D16) — a DISTINCT driver from the tectonic/tidal stress that drives
+  // chasma (F4). SMALLER bodies cool faster and contract more (Mercury's Discovery Rupes
+  // / the Moon's lobate scarps are the type localities), so smallness is the load-bearing
+  // axis; erosion wears scarps down over time (×(1−0.5·erosion)). 0.12 scales it into a
+  // subtle relief amplitude (scarps are small but read as hard lit/shadow EDGES under the
+  // posterizer — relief doc §F5.c). `smallness` ramps a big world (R≥1.3) to 0 and a small
+  // one (R≤0.3) to 1, but never fully zeroes terrestrial worlds (Earth has wrinkle ridges).
+  const smallness = clamp01((1.3 - radiusEarth) / 1.0);
+  const scarpStrength = clamp01(smallness * (1 - 0.5 * erosion)) * 0.12;
+
+  // scarpStyle (0=thrust↔1=normal): rock contracts → THRUST (compression) scarps; an icy
+  // shell EXTENDS → NORMAL (extension) faults (relief doc §F5.b, D2). volatileFraction is
+  // the rock↔ice axis; a fresh threshold (rocky vf≲0.15 → thrust, icy vf≳0.3 → normal),
+  // distinct from the liquid-gate's D2 ramp. The combiner flips the cliff polarity on it.
+  const scarpStyle = smoothstep(0.1, 0.3, volatileFraction);
+
+  // scarpAxis: a seeded unit-vec3; the scarp fronts are iso-contours of dot(pos, axis), so
+  // they run as parallel fault lines ⊥ this axis. Seed-deterministic (stable per planet).
+  const scarpAxis = seededUnitVec3(seed + 7);
+
   return {
     mountainAmp,                                                // F1 — ridged base relief amplitude (erosion-softened)
     orogenyStrength,                                            // F1 — isotropic ridged ↔ anisotropic fold-belt blend
@@ -436,6 +484,9 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     chasmaDepth,                                                // F4 — rift relief amplitude (tectonic activity × young-age) → canyonHeight
     chasmaCount,                                               // F4 — number of rifts (1..3, seed-derived)
     chasmaAxes,                                                // F4 — rift great-circle plane normals (3× unit vec3, seed-derived)
+    scarpStrength,                                             // F5 — fault-scarp relief amplitude (cooling-contraction × smallness, eroded-down)
+    scarpStyle,                                                // F5 — 0=thrust↔1=normal cliff polarity (rock vs ice, from volatileFraction)
+    scarpAxis,                                                 // F5 — scarp-front orientation axis (unit vec3, seed-derived)
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)

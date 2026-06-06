@@ -114,8 +114,8 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F2 | **Craters** (voronoi3d consumer + `surfaceGravity` reader) | ✅ **DONE** — first cellular feature live; see below |
 | F1 | **Mountains / ranges** (ridged multifractal, orogeny belts) | ✅ **DONE** — ridged base relief live; see below |
 | F4 | **Canyons / rifts** (tectonic graben — **writes `canyonHeight`**) | ✅ **DONE** — first `canyonHeight` writer live; see below |
-| F5 | Scarps & fault systems | ◻ next |
-| F6 | Plateaus / highlands / tessera | ◻ |
+| F5 | **Scarps & fault systems** (warped fault-block province) | ✅ **DONE** — warped soft-step cliffs live; see below |
+| F6 | Plateaus / highlands / tessera | ◻ next |
 | F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ |
 | F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ |
 | F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ◻ |
@@ -231,6 +231,60 @@ centre (a great circle); combine 1–3 for a rift system.
   a later refinement. The clean directional graben (the felt core) ships now; the web +
   strata layer on additively, mirroring F1 (deferred slope-erosion) / F2 (deferred
   peak-ring basins).
+
+### F5 — Scarps / fault systems (DONE)
+The warped fault-block province — lobate contraction scarps / horst-and-graben. A
+scarp is a ONE-SIDED cliff: a soft step across an iso-contour of a smooth field. I
+took the **warped-FBM iso-contour** path (research §F5.a / §F5.d cheap-tier), NOT the
+inverted-Voronoi-border path — so F5 needs NO `voronoi3d` edge-distance pass-2 (still
+deferred), exactly as F4 shipped the linear chasma and deferred the Voronoi web.
+- **CPU oracle** `scarpProfile(field, level, halfWidth)` in `planet-lod-lab-core.js`
+  → `{height, dhdf}`: `height = smoothstep(level−width, level+width, field)` ∈ [0,1]
+  (flat low block → soft cliff face → flat high block). `dhdf` = the cliff-face slope
+  the combiner chain-rules into the shading gradient; pinned vs central finite-diff
+  (relief-doc §5.4 silent-bug gate — a sign-wrong cliff lights the scarp backward yet
+  compiles). The finite-diff sweep stays strictly INSIDE the band (|f|<width); the
+  flat-block zero-slope is pinned by the shape-invariants test (sampling exactly on
+  ±width straddles the derivative discontinuity).
+- **deriveUniforms** surfaces `scarpStrength` (= `clamp01(smallness × (1−0.5·erosion))
+  × 0.12`, where `smallness = clamp01((1.3−radiusEarth)/1.0)` — SMALLER bodies cool/
+  contract more, the Mercury/Moon lobate-scarp driver D11/D16, a DISTINCT axis from F4's
+  tidal/plate stress; eroded-down; never fully zeroes a big world so Earth keeps faint
+  wrinkle ridges), `scarpStyle` (= `smoothstep(0.1,0.3,volatileFraction)` — rock→THRUST
+  0 ↔ ice→NORMAL 1, D2), `scarpAxis` (seeded unit-vec3 via `seededUnitVec3(seed+7)`,
+  the scarp-front orientation — fronts are iso-contours ⊥ this axis).
+- **GLSL** `scarpProfile()` + `scarpCombiner()` (transcribed). The field is a directional
+  `dot(pos, axis)` made sinuous by a single `noised()` warp; a periodic `sin`-train of
+  soft-steps raises/drops alternating fault blocks (each block edge = a one-sided cliff).
+  The field gradient is **EXACT** (`axis + warp·warpFreq·noiseGrad` — no domain-warp
+  Jacobian, unlike F1's orogeny stretch), so cliff faces light correctly via
+  `amp·sp.dhdf·cos(phase)·freq·dfield`. `uScarpStyle` flips polarity (thrust up ↔ normal
+  down); contribution centered on datum (`sp.x − 0.5`). `uScarpStrength≤0` early-outs
+  (Stage-A base + F1/F2/F4 untouched). Wired Stage-2 after `canyonCombiner`; new
+  `▸ Scarps (F5)` lil-gui sub-folder (strength/style driven via `.listen()`,
+  width/freq/warp/warpFreq lab knobs). Axis copied to `uScarpAxis` in `applyDrivers`.
+- **15 TDD tests** added to `tests/planet-lod-relief.test.js`; **134 lab tests green**
+  (`npx vitest run tests/planet-lod-*.test.js`).
+- **Live-verified `:9223`** (screenshots `f5-01..04`): isolated thrust scarps (mountains/
+  craters/rifts zeroed) → diagonal parallel fault-block bands across the surface ✓;
+  scarps off (`uScarpStrength=0`) → bands vanish, FBM base restored (no regression) ✓;
+  normal style (style=1) → lit/shadow polarity flips (lit ridges ↔ dark grabens) ✓;
+  Frozen preset (real bundle → derives `scarpStrength=0.0912`, `scarpStyle=1` icy-normal)
+  → subtle scarp texture composes with saturated craters + ridged mountains, Moon-like ✓;
+  console clean (vite + benign lil-gui form-field issue only).
+- **No new cross-domain shared uniform** — `scarpStrength`/`scarpStyle`/`scarpAxis` are
+  Relief-internal, so REGISTRY-canonical-uniforms.md is unchanged.
+- **Carry-forward (relief-doc §F5, not blocking, mirrors F1/F2/F4 deferrals):** (1) the
+  **inverted Voronoi-border scarp** (the rich networked-fault tier) DEFERRED — it shares
+  the `voronoi3d` edge-distance pass-2 with F4's graben web and F6; add that pass-2 once,
+  for all three. (2) **Asymmetric one-sided profile** (thrust = steep front + gentle back,
+  vs the current symmetric ±-polarity blocks) DEFERRED — a rich-tier refinement. (3)
+  **Wrinkle ridges** (narrow asymmetric ridges on lava plains, cross-ref F8) DEFERRED to
+  when F8 lands. The warped fault-block province (the felt core) ships now. **Watch:** the
+  scarp uses a single-octave field + `sin`-train (not a multi-octave abs-fold), so the
+  §5.3 fwidth/trailing-octave fade rule doesn't apply; at very high `uScarpFreq` the train
+  could shimmer — kept modest (default 6) and verified clean; add an fwidth amplitude fade
+  if a future preset pushes freq high.
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold, grabenProfile } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -363,5 +363,121 @@ describe('chasmaCount + chasmaAxes (F4 — seeded rift system geometry)', () => 
     const a = deriveUniforms({ seed: 1 }).chasmaAxes[0];
     const b = deriveUniforms({ seed: 9999 }).chasmaAxes[0];
     expect(Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])).toBeGreaterThan(1e-3);
+  });
+});
+
+// ── F5 scarpProfile() oracle — the fault-scarp soft-step profile (relief doc §F5.a) ─
+// The GLSL scarp combiner is transcribed from this. A scarp is a ONE-SIDED cliff: a
+// soft step in elevation across an iso-contour of a smooth field. height(field) =
+// smoothstep(level−width, level+width, field) ∈ [0,1] — 0 on the low block, ramping up
+// to 1 on the high block, FLAT outside the cliff band. dhdf = d(height)/dfield is the
+// cliff-face slope the combiner chain-rules into the shading gradient; pinned vs finite-
+// diff (relief-doc §5.4 silent-bug gate, like grabenProfile/craterProfile/ridgedFold).
+describe('scarpProfile — cliff shape invariants (relief doc §F5.a)', () => {
+  it('is 0 on the low block and 1 on the high block', () => {
+    expect(scarpProfile(-0.5, 0.0, 0.15).height).toBeCloseTo(0.0, 6);
+    expect(scarpProfile(0.5, 0.0, 0.15).height).toBeCloseTo(1.0, 6);
+  });
+
+  it('passes through 0.5 at the iso-level (the cliff midpoint)', () => {
+    expect(scarpProfile(0.0, 0.0, 0.15).height).toBeCloseTo(0.5, 6);
+    expect(scarpProfile(0.3, 0.3, 0.15).height).toBeCloseTo(0.5, 6);
+  });
+
+  it('rises monotonically across the cliff face', () => {
+    const a = scarpProfile(-0.05, 0.0, 0.15).height;   // low on the face
+    const b = scarpProfile(0.05, 0.0, 0.15).height;    // high on the face
+    expect(b).toBeGreaterThan(a);
+    expect(a).toBeGreaterThan(0.0);
+    expect(b).toBeLessThan(1.0);
+  });
+
+  it('has FLAT blocks: zero slope outside the cliff band', () => {
+    expect(scarpProfile(-0.5, 0.0, 0.15).dhdf).toBeCloseTo(0.0, 6);
+    expect(scarpProfile(0.5, 0.0, 0.15).dhdf).toBeCloseTo(0.0, 6);
+  });
+
+  it('stays in [0,1] everywhere (a bounded step)', () => {
+    for (let f = -0.6; f <= 0.6; f += 0.02) {
+      const h = scarpProfile(f, 0.0, 0.15).height;
+      expect(h).toBeGreaterThanOrEqual(-1e-9);
+      expect(h).toBeLessThanOrEqual(1 + 1e-9);
+    }
+  });
+});
+
+describe('scarpProfile — analytic gradient vs finite-diff (relief doc §5.4 silent-bug gate)', () => {
+  const EPS = 1e-5;
+  it('analytic dhdf matches central finite-difference of height (across the cliff)', () => {
+    // Sweep strictly INSIDE the cliff band (|f| < width = 0.15), where the slope is
+    // smooth and nonzero — sampling exactly on ±width would straddle the derivative's
+    // discontinuity (the flat-block zero-slope is pinned by the shape-invariants test).
+    for (let f = -0.145; f < 0.145; f += 0.0029) {
+      const { dhdf } = scarpProfile(f, 0.0, 0.15);
+      const fd = (scarpProfile(f + EPS, 0.0, 0.15).height - scarpProfile(f - EPS, 0.0, 0.15).height) / (2 * EPS);
+      expect(dhdf).toBeCloseTo(fd, 4);
+    }
+  });
+});
+
+// ── F5 scarp generation-side surfacings (relief doc §F5.b) ───────────────────
+// scarpStrength (the fault-scarp relief amplitude) grows as a body is SMALLER (cools/
+// contracts more — Mercury/Moon lobate scarps) and shrinks with erosion. scarpStyle
+// (0=thrust↔1=normal) tracks rock↔ice via volatileFraction. scarpAxis is a seeded unit
+// vec3 (the scarp-front orientation), deterministic per planet.
+describe('scarpStrength (F5 — cooling-contraction: smaller bodies scarp harder, eroded-down)', () => {
+  it('a small body scarps harder than a large one', () => {
+    const small = deriveUniforms({ radiusEarth: 0.4 }).scarpStrength;
+    const large = deriveUniforms({ radiusEarth: 1.1 }).scarpStrength;
+    expect(small).toBeGreaterThan(large);
+  });
+
+  it('erosion lowers the scarp amplitude (scarps wear down with age)', () => {
+    const fresh  = deriveUniforms({ radiusEarth: 0.5, surfaceHistory: { erosion: 0.0 } }).scarpStrength;
+    const eroded = deriveUniforms({ radiusEarth: 0.5, surfaceHistory: { erosion: 1.0 } }).scarpStrength;
+    expect(eroded).toBeLessThan(fresh);
+  });
+
+  it('a big eroded world still keeps faint scarps (Earth has wrinkle ridges) but stays subtle', () => {
+    const s = deriveUniforms({ radiusEarth: 1.0, surfaceHistory: { erosion: 0.4 } }).scarpStrength;
+    expect(s).toBeGreaterThan(0);
+    expect(s).toBeLessThan(0.06);
+  });
+
+  it('stays finite and ≥ 0 on an empty bundle', () => {
+    const s = deriveUniforms({}).scarpStrength;
+    expect(Number.isFinite(s)).toBe(true);
+    expect(s).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('scarpStyle (F5 — rock=thrust↔ice=normal from volatileFraction)', () => {
+  it('a rocky world faults THRUST (style → 0)', () => {
+    expect(deriveUniforms({ composition: { volatileFraction: 0.02 } }).scarpStyle).toBeLessThan(0.2);
+  });
+
+  it('an icy world faults NORMAL (style → 1)', () => {
+    expect(deriveUniforms({ composition: { volatileFraction: 0.4 } }).scarpStyle).toBeGreaterThan(0.8);
+  });
+});
+
+describe('scarpAxis (F5 — seeded scarp-front orientation)', () => {
+  it('is a unit vec3', () => {
+    const a = deriveUniforms({ seed: 1234 }).scarpAxis;
+    expect(a.length).toBe(3);
+    expect(Math.hypot(a[0], a[1], a[2])).toBeCloseTo(1.0, 6);
+  });
+
+  it('is deterministic for a given seed', () => {
+    const a = deriveUniforms({ seed: 42 }).scarpAxis;
+    const b = deriveUniforms({ seed: 42 }).scarpAxis;
+    expect(a[0]).toBeCloseTo(b[0], 12);
+    expect(a[2]).toBeCloseTo(b[2], 12);
+  });
+
+  it('differs from the rift axes (independent seed offset)', () => {
+    const scarp = deriveUniforms({ seed: 42 }).scarpAxis;
+    const rift  = deriveUniforms({ seed: 42 }).chasmaAxes[0];
+    expect(Math.abs(scarp[0] - rift[0]) + Math.abs(scarp[2] - rift[2])).toBeGreaterThan(1e-3);
   });
 });

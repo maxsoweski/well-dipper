@@ -191,6 +191,15 @@
       uniform float uChasmaWidth;      // trench half-width in unit-sphere units — lab knob
       uniform float uChasmaFloor;      // flat-floor fraction of half-width (0..1) — lab knob
 
+      // ── F5 scarps / fault systems (Stage-C step 3, Relief) — warped soft-step cliffs ──
+      uniform float uScarpStrength;    // 0..~0.12 fault-scarp relief amplitude (driven; ≤0 early-outs)
+      uniform float uScarpStyle;       // 0=thrust(up)↔1=normal(down) cliff polarity (driven)
+      uniform vec3  uScarpAxis;        // scarp-front orientation axis (unit; driven from seed)
+      uniform float uScarpWidth;       // cliff-face softness (smoothstep half-width, field units) — lab knob
+      uniform float uScarpFreq;        // fault-train spatial frequency (parallel scarp count) — lab knob
+      uniform float uScarpWarp;        // sinuosity: warp amount of the scarp fronts — lab knob
+      uniform float uScarpWarpFreq;    // warp-noise domain frequency — lab knob
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -571,6 +580,46 @@
         }
       }
 
+      // ── F5 scarp profile (Stage-C step 3, Relief) — transcribed from scarpProfile()
+      // in planet-lod-lab-core.js (same smoothstep step, vitest-pinned analytic slope).
+      // field = the smooth scalar whose iso-contour the cliff follows. Returns
+      // vec2(height ∈ [0,1], d(height)/dfield) — flat blocks, soft cliff face between.
+      vec2 scarpProfile(float field, float level, float width){
+        float e0 = level - width, e1 = level + width;
+        float height = smoothstep(e0, e1, field);
+        float dhdf = 0.0;
+        float span = e1 - e0;
+        if (span > 1e-6 && field > e0 && field < e1){
+          float t = (field - e0) / span;
+          dhdf = (6.0 * t * (1.0 - t)) / span;                  // d/dfield of smoothstep
+        }
+        return vec2(height, dhdf);
+      }
+
+      // F5 scarp combiner — warped fault-scarp province (lobate contraction scarps /
+      // horst-and-graben). The scarp fronts are iso-contours of a directional field
+      // dot(pos, axis) made sinuous by a noise warp; a periodic soft-step train along
+      // that field raises/drops alternating fault blocks (each block edge is a one-sided
+      // cliff that lights as a hard lit/shadow edge under the posterizer). The field's
+      // gradient is EXACT (axis + warp·noiseGrad — no domain-warp Jacobian), so the cliff
+      // faces light correctly. uScarpStyle flips polarity (thrust up ↔ normal down).
+      // uScarpStrength≤0 ⇒ early-out (Stage-A base + F1/F2/F4 untouched).
+      void scarpCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uScarpStrength <= 0.0) return;
+        vec3 ax = normalize(uScarpAxis);
+        vec4 wn = noised(pos * uScarpWarpFreq + uMacroOffset);    // analytic value+grad
+        float field  = dot(pos, ax) + uScarpWarp * wn.x;          // directional + warp
+        vec3  dfield = ax + uScarpWarp * uScarpWarpFreq * wn.yzw;  // EXACT field gradient
+        float phase = field * uScarpFreq;
+        float s = sin(phase);                                     // periodic fault train
+        vec2 sp = scarpProfile(s, 0.0, uScarpWidth);              // smoothed block step
+        float styleSign = mix(1.0, -1.0, clamp(uScarpStyle, 0.0, 1.0));  // thrust up / normal down
+        float amp = uScarpStrength * styleSign;
+        h += amp * (sp.x - 0.5);                                  // center on datum (±0.5 blocks)
+        // d(sp.x)/dpos = dh/ds · cos(phase) · uScarpFreq · dfield
+        grad += amp * sp.y * cos(phase) * uScarpFreq * dfield;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -632,11 +681,13 @@
           // (F2, voronoi3d consumer), then canyons (F4, tectonic graben → canyonHeight).
           // Each ADDS a height delta + chain-rule gradient onto the FBM base; the single
           // perturbAnalytic below bends the normal so crestlines/rims/bowls/central-peaks/
-          // trench-walls all light correctly. F4 writes the shared canyonHeight accumulator
-          // (Fluvial incised gorges + Cryo chasma ADD IN at stages 3/4). (Scarps F5 later.)
+          // trench-walls/scarp-faces all light correctly. F4 writes the shared canyonHeight
+          // accumulator (Fluvial incised gorges + Cryo chasma ADD IN at stages 3/4); F5
+          // scarps add fault-block relief onto h/grad (no shared accumulator).
           mountainCombiner(vPos, fwBase, h, grad);
           craterCombiner(vPos, h, grad);
           canyonCombiner(vPos, h, canyonHeight, grad);
+          scarpCombiner(vPos, h, grad);
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
         }
@@ -749,6 +800,14 @@
       uChasmaAxis:       { value: [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)] },  // rift plane normals (driven from seed)
       uChasmaWidth:      { value: 0.12 },  // trench half-width (unit-sphere units, lab-tunable)
       uChasmaFloor:      { value: 0.4 },   // flat-floor fraction of half-width (lab-tunable)
+      // ── F5 scarps / fault systems (Stage-C step 3, Relief) — warped soft-step cliffs ──
+      uScarpStrength:    { value: 0.0 },   // fault-scarp relief amplitude (driven; ≤0 early-outs)
+      uScarpStyle:       { value: 0.0 },   // 0=thrust(up)↔1=normal(down) (driven)
+      uScarpAxis:        { value: new THREE.Vector3(0, 1, 0) },  // scarp-front axis (driven from seed)
+      uScarpWidth:       { value: 0.3 },   // cliff-face softness (field units, lab-tunable)
+      uScarpFreq:        { value: 6.0 },   // parallel-scarp train frequency (lab-tunable)
+      uScarpWarp:        { value: 0.5 },   // front sinuosity (lab-tunable)
+      uScarpWarpFreq:    { value: 2.0 },   // warp-noise domain frequency (lab-tunable)
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -869,6 +928,15 @@
       chasmaWidth: 0.12,
       chasmaFloor: 0.4,
       chasmaAxes: [[1,0,0],[0,1,0],[0,0,1]],
+      // ── F5 scarps (Stage-C step 3, Relief) — derived (strength/style/axis from the
+      // preset+seed) + lab-tunable (width/freq/warp/warpFreq). axis mirrored as a list. ──
+      scarpStrength: 0.0,
+      scarpStyle: 0.0,
+      scarpWidth: 0.3,
+      scarpFreq: 6.0,
+      scarpWarp: 0.5,
+      scarpWarpFreq: 2.0,
+      scarpAxis: [0,1,0],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -981,6 +1049,13 @@
       state.chasmaCount      = u.chasmaCount;
       state.chasmaAxes       = u.chasmaAxes;
       for (let i = 0; i < 3; i++) uniforms.uChasmaAxis.value[i].set(u.chasmaAxes[i][0], u.chasmaAxes[i][1], u.chasmaAxes[i][2]);
+      // F5 scarps (Stage-C step 3) — derived strength + thrust↔normal style + seeded
+      // front axis. strength/style flow into state (frame loop → uniforms); axis copies
+      // straight to the uniform vec3 (no GUI control — a per-planet seed property).
+      state.scarpStrength    = u.scarpStrength;
+      state.scarpStyle       = u.scarpStyle;
+      state.scarpAxis        = u.scarpAxis;
+      uniforms.uScarpAxis.value.set(u.scarpAxis[0], u.scarpAxis[1], u.scarpAxis[2]);
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1017,6 +1092,16 @@
     fCanyons.add(state, 'chasmaCount', 0, 3, 1).name('rift count').listen();
     fCanyons.add(state, 'chasmaWidth', 0.02, 0.3, 0.005).name('half-width');
     fCanyons.add(state, 'chasmaFloor', 0, 0.9, 0.01).name('flat-floor frac');
+    // ▸ Scarps (F5) — warped fault-block province. strength/style come from the driver
+    // preset+seed (.listen()-synced); width/freq/warp are lab knobs. The scarp fronts are
+    // warped iso-contours of dot(pos, axis); freq sets how many parallel scarps.
+    const fScarps = fRelief.addFolder('Scarps (F5)'); fScarps.open();
+    fScarps.add(state, 'scarpStrength', 0, 0.3, 0.005).name('strength (contraction)').listen();
+    fScarps.add(state, 'scarpStyle', 0, 1, 0.01).name('style (thrust↔normal)').listen();
+    fScarps.add(state, 'scarpWidth', 0.05, 0.6, 0.01).name('cliff softness');
+    fScarps.add(state, 'scarpFreq', 1, 16, 0.5).name('fault count (freq)');
+    fScarps.add(state, 'scarpWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
+    fScarps.add(state, 'scarpWarpFreq', 0.5, 5, 0.1).name('warp freq');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1158,6 +1243,13 @@
       uniforms.uChasmaCount.value      = state.chasmaCount | 0;
       uniforms.uChasmaWidth.value      = state.chasmaWidth;
       uniforms.uChasmaFloor.value      = state.chasmaFloor;
+      // F5 scarps — strength/style driven; width/freq/warp lab-tunable; axis set in applyDrivers.
+      uniforms.uScarpStrength.value    = state.scarpStrength;
+      uniforms.uScarpStyle.value       = state.scarpStyle;
+      uniforms.uScarpWidth.value       = state.scarpWidth;
+      uniforms.uScarpFreq.value        = state.scarpFreq;
+      uniforms.uScarpWarp.value        = state.scarpWarp;
+      uniforms.uScarpWarpFreq.value    = state.scarpWarpFreq;
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
