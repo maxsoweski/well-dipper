@@ -1,0 +1,581 @@
+<!doctype html>
+<!--
+  PORTAL TRAVERSAL LAB — Navigable portal (enter + explore interior space)
+  ========================================================================
+  Extends the accretion disk lab with portal traversal. The portal is now
+  a one-way bubble: you can fly through the disc to enter the tunnel
+  interior as a separate space, navigate freely inside, and exit out the
+  far end.
+
+  Based on Metzler-Gilbertz 2021 (RPI) — dot product sign-flip detection
+  with bounding check inside disc radius.
+
+  Two modes:
+  - OUTSIDE: stencil-masked portal, can only see tunnel through disc
+  - INSIDE: camera is in tunnel interior, walls render unconditionally
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portal Traversal Lab — Well Dipper</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #000; color: #0f0; font-family: monospace; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 13px; line-height: 1.6;
+      text-shadow: 0 0 8px #000;
+      pointer-events: none; z-index: 10;
+      white-space: pre;
+    }
+    #controls {
+      position: fixed; bottom: 12px; left: 12px;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(0, 255, 0, 0.4);
+      padding: 10px; font-size: 12px; line-height: 1.6;
+    }
+    .btn {
+      background: rgba(0, 255, 0, 0.1);
+      border: 1px solid #0f0;
+      color: #0f0; padding: 5px 10px;
+      cursor: pointer; margin: 2px;
+      font-family: inherit;
+    }
+    .btn:hover { background: rgba(0, 255, 0, 0.25); }
+    .btn.on { background: rgba(0, 255, 0, 0.4); color: #fff; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud"></div>
+  <div id="controls">
+    <button class="btn" id="stencilToggle">Stencil: ON</button>
+    <button class="btn" id="debugDisc">Disc visible: OFF</button>
+    <button class="btn" id="resetCam">Reset camera (R)</button>
+    <br>
+    <b>Free-fly:</b> WASD move, QE up/down, Shift sprint, drag to look, F to toggle orbit mode.
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    const canvas = document.getElementById('canvas');
+    const hud = document.getElementById('hud');
+
+    // ── Renderer with stencil explicitly enabled ──
+    const renderer = new THREE.WebGLRenderer({
+      canvas, antialias: true, stencil: true,
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000012);
+
+    const gl = renderer.getContext();
+    const stencilBits = gl.getParameter(gl.STENCIL_BITS);
+    const isWebGL2 = renderer.capabilities.isWebGL2;
+
+    // ── Scene ──
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 5, 30);
+    camera.lookAt(0, 0, 0);
+
+    // ── System A objects (near camera's starting position, z ≥ 0) ──
+    const cubeGeo = new THREE.BoxGeometry(4, 4, 4);
+    const cubeA1 = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color: 0x0088ff, wireframe: true }));
+    cubeA1.position.set(15, 0, 0);
+    scene.add(cubeA1);
+    const cubeA2 = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color: 0xff8800, wireframe: true }));
+    cubeA2.position.set(-15, 0, 0);
+    scene.add(cubeA2);
+    const gridA = new THREE.GridHelper(40, 20, 0x006600, 0x003300);
+    gridA.position.set(0, -5, 10);
+    scene.add(gridA);
+    const systemAObjects = [cubeA1, cubeA2, gridA];
+
+    // ── System B objects (far side of tunnel, z < -60) ──
+    // Different colors so we can tell we've arrived in a new place.
+    const cubeB1 = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }));  // magenta
+    cubeB1.position.set(15, 0, -80);
+    scene.add(cubeB1);
+    const cubeB2 = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true }));  // yellow
+    cubeB2.position.set(-15, 0, -80);
+    scene.add(cubeB2);
+    const gridB = new THREE.GridHelper(40, 20, 0x660066, 0x330033);  // purple grid
+    gridB.position.set(0, -5, -80);
+    scene.add(gridB);
+    const systemBObjects = [cubeB1, cubeB2, gridB];
+
+    // ── PORTAL GROUP: disc + tunnel ──
+    const portalGroup = new THREE.Group();
+    portalGroup.position.set(0, 0, 0);
+    scene.add(portalGroup);
+
+    const STENCIL_REF = 1;
+
+    // Shared stencil writer material — reused for both Portal A and Portal B discs
+    function makeDiscMat(color) {
+      return new THREE.MeshBasicMaterial({
+        color,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        stencilWrite: true,
+        stencilRef: STENCIL_REF,
+        stencilFunc: THREE.AlwaysStencilFunc,
+        stencilZPass: THREE.ReplaceStencilOp,
+        stencilFail: THREE.KeepStencilOp,
+        stencilZFail: THREE.KeepStencilOp,
+      });
+    }
+    const discGeo = new THREE.CircleGeometry(3, 64);
+
+    // Portal A (entry — System A side, at z=0 facing +Z)
+    const discA = new THREE.Mesh(discGeo, makeDiscMat(0xff0000));  // red debug color
+    discA.renderOrder = 10;
+    portalGroup.add(discA);
+    const disc = discA;  // alias for legacy references
+    const discMat = discA.material;  // alias
+
+    // Portal B (exit — System B side, at z=-60 facing -Z)
+    const discB = new THREE.Mesh(discGeo, makeDiscMat(0x00ff00));  // green debug color
+    discB.position.set(0, 0, -60);
+    discB.rotation.y = Math.PI;  // face the opposite direction
+    discB.renderOrder = 10;
+    portalGroup.add(discB);
+
+    // Portal tunnel (stencil reader) — longer for 3-segment feel
+    const TUNNEL_LENGTH = 60;
+    const tunnelGeo = new THREE.CylinderGeometry(
+      3,       // both radii equal for consistent tunnel (both ends have portals)
+      3,       // NOT tapered — uniform cylinder between two portals
+      TUNNEL_LENGTH,
+      32, 1, true
+    );
+    tunnelGeo.rotateX(Math.PI / 2);
+    // Position tunnel so Portal A is at z=0, Portal B at z=-60
+    tunnelGeo.translate(0, 0, -TUNNEL_LENGTH / 2);
+
+    // Tunnel material: bright green with depth-based shading so we can see depth
+    // IMPORTANT: DoubleSide so the tunnel renders at any camera angle.
+    // Stencil masking clips the visible portion to only inside the portal disc.
+    const tunnelMat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      stencilWrite: true,
+      stencilRef: STENCIL_REF,
+      stencilFunc: THREE.EqualStencilFunc,
+      stencilFail: THREE.KeepStencilOp,
+      stencilZFail: THREE.KeepStencilOp,
+      stencilZPass: THREE.KeepStencilOp,
+      vertexShader: `
+        varying float vDepth;
+        void main() {
+          vDepth = -position.z / 20.0;  // 0 at near, 1 at far
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying float vDepth;
+        void main() {
+          // Rainbow based on depth so we can see the tunnel interior clearly
+          vec3 near = vec3(0.0, 1.0, 0.2);   // bright green near
+          vec3 far = vec3(0.1, 0.0, 0.4);    // dark purple far
+          gl_FragColor = vec4(mix(near, far, vDepth), 1.0);
+        }
+      `,
+    });
+    const tunnel = new THREE.Mesh(tunnelGeo, tunnelMat);
+    tunnel.renderOrder = 11;
+    portalGroup.add(tunnel);
+
+    // ── Accretion disk rim (additive glow around portal aperture) ──
+    // RingGeometry gives built-in UVs: vUv.x = angle/2π, vUv.y = 0 at inner edge, 1 at outer
+    const DISC_RADIUS = 3;  // matches the disc geometry above
+    const rimGeo = new THREE.RingGeometry(DISC_RADIUS * 0.92, DISC_RADIUS * 1.45, 96, 1);
+    const rimMat = new THREE.ShaderMaterial({
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      // NO stencil — rim renders everywhere, not just inside the portal mask
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new THREE.Color(0.3, 0.7, 1.0) },
+        uIntensity: { value: 1.0 },
+        uSwirlSpeed: { value: 1.0 },
+        uPeak: { value: 0.2 },  // where in the ring (0=inner, 1=outer) the brightness peaks
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform vec3 uColor;
+        uniform float uIntensity;
+        uniform float uSwirlSpeed;
+        uniform float uPeak;
+        varying vec2 vUv;
+
+        // Simple hash for pseudo-noise
+        float hash21(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+
+        float valueNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          float a = hash21(i);
+          float b = hash21(i + vec2(1, 0));
+          float c = hash21(i + vec2(0, 1));
+          float d = hash21(i + vec2(1, 1));
+          return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+        }
+
+        void main() {
+          // ── Radial falloff: brightest at uPeak, fading both ways ──
+          float dist = abs(vUv.y - uPeak);
+          float rim = 1.0 - smoothstep(0.0, 0.6, dist);
+          rim = pow(rim, 1.5);
+
+          // ── Polar spiral swirl (angle += radius creates inward spiral) ──
+          vec2 polar = vUv;
+          polar.x += polar.y * 0.5;              // spiral twist
+          polar.x += uTime * 0.03 * uSwirlSpeed;  // slow angular drift
+          polar.y -= uTime * 0.15 * uSwirlSpeed;  // inward radial flow (accretion feel)
+
+          // Layered noise for turbulent energy
+          float n1 = valueNoise(polar * vec2(12.0, 3.0));
+          float n2 = valueNoise(polar * vec2(24.0, 6.0) + 17.3);
+          float noise = 0.6 * n1 + 0.4 * n2;
+
+          rim *= (0.5 + 0.9 * noise);
+
+          // ── Layered pulsing (3 timescales — slow sin, fast noise, rare flare) ──
+          float breathe = 0.75 + 0.25 * sin(uTime * 0.8);
+          float flarePhase = fract(uTime * 0.12);
+          float flare = smoothstep(0.9, 1.0, flarePhase) * (1.0 - flarePhase) * 3.0;
+          rim *= breathe;
+          rim += flare * 0.3 * noise;
+
+          // Clamp + intensity
+          rim = clamp(rim, 0.0, 3.0) * uIntensity;
+
+          // ── Color ramp: hot core to cool edge ──
+          vec3 core = mix(uColor, vec3(1.0, 0.95, 1.0), smoothstep(0.5, 1.5, rim));
+          vec3 final = core * rim;
+
+          // ── Bayer 4x4 dither for retro aesthetic ──
+          int bx = int(mod(gl_FragCoord.x, 4.0));
+          int by = int(mod(gl_FragCoord.y, 4.0));
+          float bayer[16];
+          bayer[0]=0.0; bayer[1]=8.0; bayer[2]=2.0; bayer[3]=10.0;
+          bayer[4]=12.0; bayer[5]=4.0; bayer[6]=14.0; bayer[7]=6.0;
+          bayer[8]=3.0; bayer[9]=11.0; bayer[10]=1.0; bayer[11]=9.0;
+          bayer[12]=15.0; bayer[13]=7.0; bayer[14]=13.0; bayer[15]=5.0;
+          float threshold = bayer[bx + by * 4] / 16.0 - 0.5;
+          float levels = 5.0;
+          final = floor(final * levels + threshold) / levels;
+          final = clamp(final, 0.0, 1.0);
+
+          gl_FragColor = vec4(final, rim);
+        }
+      `,
+    });
+    const rim = new THREE.Mesh(rimGeo, rimMat);
+    rim.renderOrder = 12;  // after tunnel (stencil reader)
+    portalGroup.add(rim);
+
+    // Second rim for Portal B
+    const rimB = new THREE.Mesh(rimGeo.clone(), rimMat.clone());
+    rimB.position.set(0, 0, -60);
+    rimB.rotation.y = Math.PI;  // face System B side
+    rimB.renderOrder = 12;
+    // Use a different hue (green to match green disc)
+    rimB.material.uniforms = THREE.UniformsUtils.clone(rimMat.uniforms);
+    rimB.material.uniforms.uColor.value = new THREE.Color(0.3, 1.0, 0.5);
+    portalGroup.add(rimB);
+
+    // ── Free-fly navigation (WASD + mouse look) ──
+    // Portal stays at world origin. Camera can move freely in 3D space.
+    // Similar to spectator/free-cam mode in many 3D games.
+    // - Click and drag: rotate camera view (mouse look)
+    // - W/S: forward/backward along view direction
+    // - A/D: strafe left/right
+    // - Q/E: up/down
+    // - Shift: move 3x faster
+    // - R: reset camera to starting position
+    // - F: toggle between free-fly and orbit mode
+    let freeFly = true;
+    let yaw = 0;        // rotation around Y (left/right look)
+    let pitch = 0;      // rotation around X (up/down look)
+    let camDistance = 30;  // for orbit mode
+    let dragging = false, lastX = 0, lastY = 0;
+    const keys = new Set();
+    const camVelocity = new THREE.Vector3();
+    const startPos = new THREE.Vector3(0, 2, 20);  // starting viewpoint
+    camera.position.copy(startPos);
+    camera.lookAt(0, 0, 0);
+
+    // Mouse look
+    canvas.addEventListener('mousedown', e => {
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      canvas.style.cursor = 'grabbing';
+    });
+    canvas.addEventListener('mouseup', () => {
+      dragging = false;
+      canvas.style.cursor = 'grab';
+    });
+    canvas.style.cursor = 'grab';
+    canvas.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      if (freeFly) {
+        // In free-fly, mouse look rotates view
+        yaw -= dx * 0.003;
+        pitch -= dy * 0.003;
+        pitch = Math.max(-1.5, Math.min(1.5, pitch));
+      } else {
+        // In orbit mode, mouse orbits the portal
+        yaw += dx * 0.01;
+        pitch = Math.max(-1.3, Math.min(1.3, pitch + dy * 0.01));
+      }
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    canvas.addEventListener('wheel', e => {
+      if (freeFly) {
+        // In free-fly, wheel adjusts speed (via camVelocity multiplier in animate)
+      } else {
+        camDistance = Math.max(5, Math.min(200, camDistance + e.deltaY * 0.1));
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    // Keyboard
+    window.addEventListener('keydown', e => {
+      keys.add(e.code);
+      // Mode toggles
+      if (e.code === 'KeyF') {
+        freeFly = !freeFly;
+        if (freeFly) {
+          // Keep current camera state
+        } else {
+          // Reset orbit
+          yaw = 0; pitch = 0; camDistance = camera.position.length() || 30;
+        }
+      }
+      if (e.code === 'KeyR') {
+        camera.position.copy(startPos);
+        yaw = 0; pitch = 0; camDistance = 30;
+        camera.lookAt(0, 0, 0);
+        setMode('OUTSIDE_A');  // reset to starting system
+        prevDotA = null;
+        prevDotB = null;
+      }
+    });
+    window.addEventListener('keyup', e => keys.delete(e.code));
+
+    // ── Portal traversal state machine (3-state) ──
+    // OUTSIDE_A: camera in System A, sees tunnel through Portal A via stencil
+    // INSIDE:    camera inside tunnel, all outside objects hidden, stencil off
+    // OUTSIDE_B: camera in System B, sees tunnel through Portal B via stencil
+    let portalMode = 'OUTSIDE_A';
+    let prevDotA = null;  // sign-flip detection for Portal A plane
+    let prevDotB = null;  // sign-flip detection for Portal B plane
+
+    // Portal A at z=0 facing +Z (toward System A camera at z=+20)
+    const portalA_pos = new THREE.Vector3(0, 0, 0);
+    const portalA_normal = new THREE.Vector3(0, 0, 1);
+    // Portal B at z=-60 facing -Z (toward System B camera at z=-80)
+    const portalB_pos = new THREE.Vector3(0, 0, -60);
+    const portalB_normal = new THREE.Vector3(0, 0, -1);
+
+    function setMode(newMode) {
+      if (portalMode === newMode) return;
+      portalMode = newMode;
+      // Tunnel stencil: ON outside, OFF inside
+      tunnel.material.stencilWrite = (newMode !== 'INSIDE');
+      tunnel.material.needsUpdate = true;
+      // System A objects visible only in OUTSIDE_A
+      systemAObjects.forEach(o => { o.visible = (newMode === 'OUTSIDE_A'); });
+      // System B objects visible only in OUTSIDE_B
+      systemBObjects.forEach(o => { o.visible = (newMode === 'OUTSIDE_B'); });
+      // Discs visible only when viewing from their respective systems
+      discA.visible = (newMode !== 'INSIDE');  // visible in both OUTSIDE_A and OUTSIDE_B from their sides
+      discB.visible = (newMode !== 'INSIDE');
+      console.log(`[TRAVERSAL] Mode: ${newMode}`);
+    }
+
+    function updateTraversal() {
+      // Portal A plane crossing detection (active in OUTSIDE_A and INSIDE)
+      const toA = new THREE.Vector3().subVectors(camera.position, portalA_pos);
+      const dotA = toA.dot(portalA_normal);
+      if (prevDotA !== null) {
+        // Crossing from +Z side to -Z side (entering from System A into tunnel)
+        if (portalMode === 'OUTSIDE_A' && prevDotA > 0 && dotA <= 0) {
+          const lat = Math.sqrt(camera.position.x**2 + camera.position.y**2);
+          if (lat <= DISC_RADIUS) {
+            setMode('INSIDE');
+            camera.position.z -= 0.5;  // nudge past the plane to avoid flicker
+          }
+        }
+        // Crossing from -Z side to +Z side (backtracking out through Portal A)
+        if (portalMode === 'INSIDE' && prevDotA < 0 && dotA >= 0) {
+          const lat = Math.sqrt(camera.position.x**2 + camera.position.y**2);
+          if (lat <= DISC_RADIUS) {
+            setMode('OUTSIDE_A');
+            camera.position.z += 0.5;
+          }
+        }
+      }
+      prevDotA = dotA;
+
+      // Portal B plane crossing detection (active in INSIDE and OUTSIDE_B)
+      const toB = new THREE.Vector3().subVectors(camera.position, portalB_pos);
+      const dotB = toB.dot(portalB_normal);  // +dot = on System B side (z < -60)
+      if (prevDotB !== null) {
+        // Crossing from tunnel side (-dot) to System B side (+dot) — forward exit
+        if (portalMode === 'INSIDE' && prevDotB < 0 && dotB >= 0) {
+          const lat = Math.sqrt(camera.position.x**2 + camera.position.y**2);
+          if (lat <= DISC_RADIUS) {
+            setMode('OUTSIDE_B');
+            camera.position.z -= 0.5;  // nudge into System B
+          }
+        }
+        // Crossing from System B side back into tunnel (re-entering Portal B)
+        if (portalMode === 'OUTSIDE_B' && prevDotB > 0 && dotB <= 0) {
+          const lat = Math.sqrt(camera.position.x**2 + camera.position.y**2);
+          if (lat <= DISC_RADIUS) {
+            setMode('INSIDE');
+            camera.position.z += 0.5;
+          }
+        }
+      }
+      prevDotB = dotB;
+    }
+
+    // ── Controls ──
+    let stencilOn = true;
+    let discVisible = true;
+
+    document.getElementById('stencilToggle').addEventListener('click', (e) => {
+      stencilOn = !stencilOn;
+      tunnelMat.stencilWrite = stencilOn;
+      discMat.stencilWrite = stencilOn;
+      tunnelMat.needsUpdate = true;
+      discMat.needsUpdate = true;
+      e.target.textContent = `Stencil: ${stencilOn ? 'ON' : 'OFF'}`;
+      e.target.classList.toggle('on', stencilOn);
+    });
+    document.getElementById('debugDisc').addEventListener('click', (e) => {
+      discVisible = !discVisible;
+      if (discVisible) {
+        discMat.colorWrite = true;
+        discMat.color.set(0xff0000);
+      } else {
+        discMat.colorWrite = false;
+      }
+      discMat.needsUpdate = true;
+      e.target.textContent = `Disc visible: ${discVisible ? 'ON' : 'OFF'}`;
+      e.target.classList.toggle('on', discVisible);
+    });
+    document.getElementById('resetCam').addEventListener('click', () => {
+      camera.position.copy(startPos);
+      yaw = 0; pitch = 0; camDistance = 30;
+      camera.lookAt(0, 0, 0);
+    });
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+    // ── Expose for debugging ──
+    window._scene = scene;
+    window._camera = camera;
+    window._renderer = renderer;
+    window._portal = { group: portalGroup, disc, tunnel, discB, rimB };
+
+    // Initialize visibility to match starting mode (OUTSIDE_A)
+    setMode('OUTSIDE_A');
+
+    // ── Animate ──
+    // Note: call getDelta() ONLY — both getDelta and getElapsedTime mutate
+    // oldTime, so calling both gives ~0 for the second call.
+    const clock = new THREE.Clock();
+    let elapsedTime = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      elapsedTime += dt;
+
+      // Update rim shader time uniform
+      rim.material.uniforms.uTime.value = elapsedTime;
+      rimB.material.uniforms.uTime.value = elapsedTime;
+
+      if (freeFly) {
+        // ── Free-fly mode: WASD + mouse look ──
+        // Apply rotation from yaw/pitch
+        const euler = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+        camera.quaternion.setFromEuler(euler);
+
+        // Compute move direction from keys (relative to camera orientation)
+        const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 60 : 20;
+        const moveDir = new THREE.Vector3();
+        if (keys.has('KeyW')) moveDir.z -= 1;
+        if (keys.has('KeyS')) moveDir.z += 1;
+        if (keys.has('KeyA')) moveDir.x -= 1;
+        if (keys.has('KeyD')) moveDir.x += 1;
+        if (keys.has('KeyQ')) moveDir.y -= 1;
+        if (keys.has('KeyE')) moveDir.y += 1;
+        if (moveDir.lengthSq() > 0) {
+          moveDir.normalize().applyQuaternion(camera.quaternion);
+          camera.position.addScaledVector(moveDir, speed * dt);
+        }
+      } else {
+        // ── Orbit mode: camera orbits portal center ──
+        camera.position.set(
+          Math.sin(yaw) * Math.cos(pitch) * camDistance,
+          Math.sin(pitch) * camDistance,
+          Math.cos(yaw) * Math.cos(pitch) * camDistance
+        );
+        camera.lookAt(0, 0, 0);
+      }
+
+      // Update portal traversal state
+      updateTraversal();
+
+      // HUD
+      const camPos = camera.position;
+      const modeText = portalMode === 'OUTSIDE_A'
+        ? 'System A — Fly into Portal A (red) to enter tunnel'
+        : portalMode === 'INSIDE'
+          ? 'Tunnel — Fly forward to exit into System B'
+          : 'System B — Destination reached. Turn around to re-enter tunnel.';
+      hud.textContent = [
+        `PORTAL TRAVERSAL LAB (3-state)`,
+        `Mode: ${portalMode}  |  Nav: ${freeFly ? 'FREE-FLY' : 'ORBIT'} (F)`,
+        ``,
+        modeText,
+        ``,
+        `WASD: move  |  QE: up/down  |  Shift: sprint  |  Mouse drag: look  |  R: reset`,
+        ``,
+        `Camera: (${camPos.x.toFixed(1)}, ${camPos.y.toFixed(1)}, ${camPos.z.toFixed(1)})`,
+        `Distance to portal: ${camera.position.length().toFixed(1)}`,
+      ].join('\n');
+
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
