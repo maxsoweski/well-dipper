@@ -139,6 +139,62 @@ export function emissiveBlackbody(tempK) {
   return c;
 }
 
+// ── craterProfile — F2 analytic crater radial profile (relief doc §F2.a) ─────
+// The crater shape as a function of normalized radius r = dist(fragment,center) /
+// craterRadius, plus its analytic derivative dh/dr — the relief-normal term the
+// GLSL accumulates as dhdr·∂r/∂p into the shading gradient. The GLSL craterCombiner
+// is a transcription of this; pinning dhdr against finite-difference here is the
+// relief-doc §5.4 silent-bug guard (a sign-wrong gradient lights inverted faces
+// backward yet compiles fine — exactly what a CPU oracle catches before the shader).
+//
+//   cavity     parabolic bowl depth·(r²−1) inside r<1 (depth/diameter ≈0.2, simple)
+//   rim        gaussian peak at r≈1, raised ~rimH above datum, decaying both ways
+//   peak       morphology-gated central uplift (complex craters) — smoothstep bump
+//   terraces   morphology-gated cos rings on the inner wall (slumped terrace look)
+//   relaxation multiplies the whole profile → faint palimpsest (icy/old, F2.a)
+// Beyond r≈2 every term has decayed to ~0 (distant cells don't bleed in).
+const CRATER_DEPTH = 0.2, CRATER_RIM_H = 0.05, CRATER_PEAK_H = 0.14, CRATER_TERRACE_H = 0.02;
+export function craterProfile(r, opts = {}) {
+  const morphology = opts.morphology ?? 0;
+  const relaxation = opts.relaxation ?? 0;
+  const terraceCount = opts.terraceCount ?? 4;
+  let h = 0, dhdr = 0;
+
+  if (r < 1.0) {
+    // parabolic cavity: −depth at the center → 0 at the rim (r=1)
+    h    += CRATER_DEPTH * (r * r - 1.0);
+    dhdr += CRATER_DEPTH * 2.0 * r;
+
+    // central peak (complex): s(r) = smoothstep(0.4, 0, r) — 1 at the center, 0 by
+    // r=0.4. ds/dr = 6t(1−t)·dt/dr with t=(r−0.4)/(0−0.4), dt/dr = 1/(0−0.4).
+    const e0 = 0.4, e1 = 0.0;
+    const tt = (r - e0) / (e1 - e0);
+    if (tt > 0 && tt < 1) {
+      const s = tt * tt * (3 - 2 * tt);
+      const dsdr = 6 * tt * (1 - tt) * (1 / (e1 - e0));
+      h    += morphology * CRATER_PEAK_H * s;
+      dhdr += morphology * CRATER_PEAK_H * dsdr;
+    } else if (tt >= 1) {
+      h += morphology * CRATER_PEAK_H;       // r≈0 — fully on the peak (flat top)
+    }
+
+    // terraces: cos rings on the inner wall, morphology-gated (slumped rim look)
+    const tw = CRATER_TERRACE_H * morphology;
+    const w = 2 * Math.PI * terraceCount;
+    h    += tw * Math.cos(w * r);
+    dhdr += tw * -w * Math.sin(w * r);
+  }
+
+  // rim — gaussian around r=1, present just inside & just outside the cavity edge
+  const rs = (r - 1.0) / 0.18;
+  const rg = Math.exp(-(rs * rs));
+  h    += CRATER_RIM_H * rg;
+  dhdr += CRATER_RIM_H * rg * (-2.0 * (r - 1.0) / (0.18 * 0.18));
+
+  const k = 1 - relaxation;                  // relaxation flattens to palimpsest
+  return { h: h * k, dhdr: dhdr * k };
+}
+
 // deriveUniforms: physics driver-bundle -> flat semantic uniform values.
 // Generalizes the aurora/atmosphere precedent in PlanetGenerator.js:435-487
 // (fieldStrength = composition.ironFraction * (locked ? 0.2 : 1.0); NO planetType branch).
@@ -239,6 +295,32 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // two can't drift.
   const magneticField = iron * (locked ? 0.2 : 1.0);
 
+  // ── F2 craters (Stage-C step 3, Relief domain — relief doc §F2.b) ───────────
+  // The first VISIBLE Relief surfacing + first consumer of the voronoi3d keystone.
+  // craterDensity = surface AGE: bombardment net of resurfacing. An old, heavily
+  // bombarded surface is crater-saturated; Io-grade resurfacing (resurfacingRate→1)
+  // wipes it to a near-zero-age crater-free plain (P6).
+  const bombardment = clamp01(d.surfaceHistory?.bombardmentIntensity ?? 0.5);
+  const resurfacing = clamp01(d.surfaceHistory?.resurfacingRate ?? 0);
+  const craterDensity = clamp01(bombardment * (1 - resurfacing));
+
+  // craterComplexD: the simple→complex transition DIAMETER, ∝ g⁻¹ (Melosh ch.6).
+  // High-gravity worlds push craters complex at SMALLER sizes (Earth ~3 km vs Moon
+  // ~20 km) → a denser-g world has a smaller transition → MORE central-peak craters.
+  // k is switched by volatiles (icy crust is weaker — transitions at a smaller
+  // diameter → smaller k). Crater-radius units, lab-tunable; clamp g away from 0 so
+  // a zero-mass bundle can't divide-by-zero. The shader blends morphology with NO
+  // type branch: smoothstep(complexD·0.6, complexD, hashedDiameter).
+  const kRocky = 0.9, kIcy = 0.45;
+  const kMorph = mix(kRocky, kIcy, volatileGate);          // volatileGate = D2 bone-dry→volatile ramp (#3 above)
+  const craterComplexD = kMorph / Math.max(surfaceGravity, 0.05);
+
+  // craterRelaxation: viscous relaxation flattens craters into faint palimpsests on
+  // icy AND warm surfaces (Ganymede). Needs a volatile budget × warmth toward the
+  // ice-melt range — cold airless rock barely relaxes; warm ice ghosts its craters.
+  const relaxWarmth = smoothstep(120, 273, T);
+  const craterRelaxation = clamp01(volatileFraction * relaxWarmth * 2.0);
+
   return {
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
@@ -248,6 +330,10 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     precipitation,                                              // D4 rain 0..1 (Fluvial F11 channel activity)
     pressure,                                                   // atmosphere surface pressure passthrough (Aeolian grain transport F15)
     magneticField,                                              // D13 dynamo strength (Optical aurora F37 + atmo stripping)
+    craterDensity,                                              // F2 — Voronoi cell-fill probability (surface age)
+    craterComplexD,                                             // F2 — simple→complex transition diameter (g⁻¹, icy-switched)
+    craterRelaxation,                                           // F2 — icy/warm palimpsest flattening
+    terraceCount: 4,                                            // F2 — inner-wall terrace ring count (constant, lab-tunable)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen

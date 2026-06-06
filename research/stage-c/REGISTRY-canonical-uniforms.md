@@ -28,7 +28,7 @@ concept is here, use the canonical name.**
 
 | Concept | Canonical name | Kind | Default | Owner (derives) | Consumers (read) | Status | Where |
 |---|---|---|---|---|---|---|---|
-| 3D cellular primitive | `voronoi3d()` + `uVoroCells` | shader helper + uniform | 27 | Relief (canonical impl) | Cryo (pits/polygons), Exotic (hex/crystal/shatter) | **LIVE** | step 1.1, `262f63a` |
+| 3D cellular primitive | `voronoi3d()` + `uVoroCells` | shader helper + uniform | 27 | Relief (canonical impl) | Cryo (pits/polygons), Exotic (hex/crystal/shatter) | **LIVE** | step 1.1 `262f63a`; **first consumer = F2 craters, step 3** — `uVoroCells` now driver-wired from `deriveUniforms.craterCells` (qualityTier 27↔9) |
 | Blackbody emissive color | `emissiveBlackbody(tempK)` | shader helper (+ CPU mirror) | — | shared lib | Bands (F32/F33 thermal), Exotic (F41 magma) | **LIVE** | step 1.2, `304f998` |
 | Substellar angle (tidally-locked) | `vSubstellarAngle` | vertex **varying**, computed once | — | shared vertex calc | Bands (thermal), Clouds (F31f pupil/ring), Cryo (nightside cap), Optical (limb/terminator) | **LIVE** | step 1.4 |
 | Canyon/chasma depth accumulator | `canyonHeight` | fragment-local **accumulator** | 0.0 | Relief (tectonic graben) | Fluvial (incised gorge **adds in**), Cryo (cryo-chasma **adds in**) | **LIVE** (declared in `main()` stage 1) | step 1.5 |
@@ -49,7 +49,7 @@ are NOT built in step 1 — listed here so the owner wires name→derivation tog
 
 | New field | Feeds | Notes |
 |---|---|---|
-| `surfaceGravity` (g = M/R²) | Relief (crater simple→complex F2, edifice height F7), Aeolian (dune scale F15) | **DONE** — computed in `deriveUniforms` from bundle `massEarth`/`radiusEarth`; 4 TDD tests (`tests/planet-lod-generation.test.js`); presets carry illustrative mass/radius. No shader consumer until Relief (step 3). |
+| `surfaceGravity` (g = M/R²) | Relief (crater simple→complex F2, edifice height F7), Aeolian (dune scale F15) | **DONE** — computed in `deriveUniforms` from bundle `massEarth`/`radiusEarth`; 4 TDD tests (`tests/planet-lod-generation.test.js`); presets carry illustrative mass/radius. **First consumer LIVE: F2 craters (step 3)** — `craterComplexD = k/g` gates the simple→complex transition (low-g Titan/Frozen → big transition → simple bowls; high-g → central peaks). |
 | planet-level `tidalHeat` | Relief (F8 lava, F7 edifices), Cryo (P7 cryovolcanism) | **DONE** — `deriveUniforms` mirrors PhysicsEngine.tidalHeating()'s Io-normalized physics, star-parameterized (planet self-heating); raw scalar (huge range), consumers map to 0..1. 5 TDD tests. **Production TODO:** confirm eccentricity/starMass/orbit reach `planetData` (Relief §F8 flag). |
 | `magneticField` (D13) | Optical (aurora F37) | **DONE** — Q6 RESOLVED (Max 2026-06-06: generation derives, Optical reads). `deriveUniforms` = `iron × lock-factor`, mirrors `PhysicsEngine.js:168` fieldStrength; `auroraIntensity` refactored to `magneticField × hasAtmo`. 5 TDD tests. `_derived`-only (Optical declares the uniform in step 3+); also drives atmosphere stripping. |
 | `precipitation` (D4) | Fluvial (channel activity F11) | **DONE** — `deriveUniforms` = `liquidStability` × rain-cycle composition factor (n2-o2 1.0/co2-n2 0.5/co2 0.2/h2-he·none 0); 7 TDD tests. `_derived`-only (Fluvial reads in step 3). Presets carry atmosphere `composition`. |

@@ -103,12 +103,48 @@ All derived in `deriveUniforms` (`planet-lod-lab-core.js`), TDD'd in
 orbit, `volatileFraction`, atmosphere `retained`/`pressure`/`composition`). **76 lab
 tests green.** Max-Q6 resolved 2026-06-06 (generation derives magneticField, Optical reads).
 
-## Next session picks up at: **Step 3 = Relief**
+## Step 3 — Relief (index §7.3) — IN PROGRESS
 The widest gap and the first VISIBLE domain. Lands the shared `voronoi3d` consumer
 (craters F2) + writes the `canyonHeight` accumulator (tectonic graben); reads
 `surfaceGravity` (crater simple→complex F2, edifice height F7) + `tidalHeat` (F8 lava).
-Wire `uVoroCells`/`craterCells` from `deriveUniforms`. **Screenshots required** (visible
-consumer — don't claim "should work"). After Relief, domains
-fan out in parallel (worktree-isolated), each from its
+Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven step-2 pattern.
+
+| F# | Feature | Status |
+|---|---|---|
+| F2 | **Craters** (voronoi3d consumer + `surfaceGravity` reader) | ✅ **DONE** — first cellular feature live; see below |
+| F1 | Mountains / ranges (ridged multifractal, orogeny belts) | ◻ next |
+| F4 | Canyons / rifts (tectonic graben — **writes `canyonHeight`**) | ◻ |
+| F5 | Scarps & fault systems | ◻ |
+| F6 | Plateaus / highlands / tessera | ◻ |
+| F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ |
+| F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ |
+| F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ◻ |
+| F9/F10 | Chaos + ridged-icy (reads SHARED `uCryoActivity` from Cryo) | ◻ (cross-domain seam) |
+
+### F2 — Craters (DONE)
+First consumer of the `voronoi3d` keystone + first reader of `surfaceGravity`.
+- **CPU oracle** `craterProfile(r, {morphology, relaxation, terraceCount})` in
+  `planet-lod-lab-core.js` → `{h, dhdr}` — parabolic cavity + gaussian rim +
+  morphology-gated central peak + terrace rings, relaxation-flattened. Analytic
+  `dhdr` pinned vs central finite-diff (relief-doc §5.4 silent-bug gate).
+- **deriveUniforms** surfaces `craterDensity` (= `bombardment × (1−resurfacing)`,
+  surface age), `craterComplexD` (= `k/g`, the simple→complex transition ∝ g⁻¹,
+  `k` icy-switched), `craterRelaxation` (icy×warmth palimpsest), `terraceCount`.
+- **GLSL** `craterProfile()` + `craterCombiner()` (transcribed; consumes
+  `voronoi3d`, per-cell hash host-gate + radius, `morphology = smoothstep` on the
+  g⁻¹ transition — NO type branch), wired into Stage-2 of the mega-shader.
+  `uCraterDensity≤0` early-outs → Stage-A base untouched (regression-verified).
+- **16 TDD tests** (`tests/planet-lod-relief.test.js`); **92 lab tests green**.
+- **Live-verified `:9223`** (screenshots): Frozen (density 0.81, low-g → saturated
+  simple bowls, Moon-like) ✓; Lava (0.015, Io-resurfaced → crater-free) ✓; forced
+  complex (low complexD → central peaks + concentric terrace rings) ✓; `density=0`
+  → bare Stage-A base restored ✓; console clean (pre-existing favicon-404 only).
+- **Carry-forward / Max-decisions surfaced (relief-doc §6, taste — none block work):**
+  built the felt range (simple bowl + complex central-peak/terraces + palimpsest);
+  **peak-ring / multi-ring basin morphology deferred** (rarest visually, additive to
+  add later — relief-doc §6 Q2). LOD2 posterize-level for cratered bodies stays at 6
+  (Q1, the §4 tracked-open envelope decision).
+
+After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.
 Index §7 is the dependency-ordered sequence.

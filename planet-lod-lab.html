@@ -166,7 +166,15 @@
       // ── voronoi3d spike debug (index §5 risk #1 seam gate) ──
       uniform int   uDebugMode;     // 0 off, 1 F1, 2 F2-F1 border, 3 cell-id color, 4 voronoi relief
       uniform float uVoroScale;     // cell density (vPos * scale)
-      uniform int   uVoroCells;     // 27 (desktop) | 9 (mobile)
+      uniform int   uVoroCells;     // 27 (desktop) | 9 (mobile) — shared cellular knob (qualityTier)
+
+      // ── F2 craters (Stage-C step 3, Relief) — first voronoi3d consumer ──
+      uniform float uCraterDensity;    // 0..1 fraction of cells that host a crater (surface age)
+      uniform float uCraterComplexD;   // simple→complex transition diameter (g⁻¹, icy-switched)
+      uniform float uCraterRelaxation; // 0..1 icy/warm palimpsest flattening
+      uniform float uTerraceCount;     // inner-wall terrace ring count
+      uniform float uCraterScale;      // crater cell density (vPos * scale)
+      uniform float uCraterAmp;        // overall crater relief amplitude
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -396,6 +404,54 @@
         return perturbed;
       }
 
+      // ── F2 craters (Stage-C step 3, Relief) — transcribed from craterProfile()
+      // in planet-lod-lab-core.js (same constants, vitest-pinned analytic dhdr).
+      // r = dist(fragment,center)/craterRadius. Returns vec2(height, dh/dr).
+      vec2 craterProfile(float r, float morphology, float relaxation, float terraceCount){
+        float h = 0.0, dhdr = 0.0;
+        if (r < 1.0){
+          h    += 0.2 * (r*r - 1.0);                        // parabolic cavity (depth/diam ≈0.2)
+          dhdr += 0.2 * 2.0 * r;
+          float u = clamp(r/0.4, 0.0, 1.0);                 // central peak: s = 1 − smoothstep(0,0.4,r)
+          float s = 1.0 - (u*u*(3.0-2.0*u));
+          float dsdr = -(6.0*u*(1.0-u)) * (1.0/0.4);        // d/dr; auto-0 once clamped (u=1)
+          h    += morphology * 0.14 * s;
+          dhdr += morphology * 0.14 * dsdr;
+          float tw = 0.02 * morphology;                     // terraces: cos rings on the inner wall
+          float w  = 6.28318530718 * terraceCount;
+          h    += tw * cos(w*r);
+          dhdr += tw * (-w) * sin(w*r);
+        }
+        float rs = (r - 1.0)/0.18;                          // rim: gaussian peak at r≈1
+        float rg = exp(-(rs*rs));
+        h    += 0.05 * rg;
+        dhdr += 0.05 * rg * (-2.0*(r-1.0)/(0.18*0.18));
+        float k = 1.0 - relaxation;                         // relaxation → palimpsest
+        return vec2(h*k, dhdr*k);
+      }
+
+      // The crater combiner — first consumer of the voronoi3d keystone (index §1).
+      // Per cell: a hash gates whether it hosts a crater (uCraterDensity fraction)
+      // and hashes its radius; morphology = smoothstep on the g⁻¹ transition diameter
+      // (NO type branch). Accumulates the crater height delta + its chain-rule gradient.
+      // uCraterDensity≤0 ⇒ early-out, so the Stage-A base render is untouched.
+      void craterCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uCraterDensity <= 0.0) return;
+        vec3 cellId, voroGrad;
+        vec2 ff = voronoi3d(pos * uCraterScale, uVoroCells, cellId, voroGrad);
+        vec3 ch = hash33(cellId);                                   // per-cell hash: host gate + radius
+        float host = step(1.0 - uCraterDensity, ch.x);             // uCraterDensity fraction of cells crater
+        float craterRadius = mix(0.18, 0.55, ch.y);                // hashed size (cell units)
+        float diameter = 2.0 * craterRadius;
+        float morphology = smoothstep(uCraterComplexD*0.6, uCraterComplexD, diameter);
+        float r = ff.x / craterRadius;
+        vec2 prof = craterProfile(r, morphology, uCraterRelaxation, uTerraceCount);
+        float amp = uCraterAmp * host;
+        h    += amp * prof.x;
+        // d(h)/d(vPos) = dh/dr · (1/craterRadius) · d(f1)/d(vPos);  d(f1)/d(vPos) = voroGrad·uCraterScale
+        grad += amp * prof.y * (1.0/craterRadius) * voroGrad * uCraterScale;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -451,11 +507,18 @@
           // "one scalar drives all complexity" (spec §2.B): octaves AND detail depth.
           float fwBase = max(max(fwidth(vPos.x), fwidth(vPos.y)), fwidth(vPos.z));
           vec4 hd = fbmd(vPos, uOctaves, fwBase);
+          float h = hd.x;
+          vec3 grad = hd.yzw;
+          // ── Stage 2: RELIEF combiner — craters (voronoi3d consumer, F2) ──
+          // Adds the crater height delta + its chain-rule gradient onto the FBM base;
+          // perturbAnalytic then bends the normal so rims/bowls/central-peaks light
+          // correctly. (Mountains F1 / scarps F4-F5 / canyonHeight land in later commits.)
+          craterCombiner(vPos, h, grad);
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
-          shadeN = perturbAnalytic(N, hd.yzw, reliefAmp);
+          shadeN = perturbAnalytic(N, grad, reliefAmp);
         }
 
-        // ── Stage 2: RELIEF combiner — mountains, craters (voronoi3d), scarps; writes canyonHeight   [domain: Relief]
+        // ── Stage 2 (cont.): mountains / scarps; writes canyonHeight   [domain: Relief]
         // ── Stage 3: CRYO — frost-mask + sublimation pits; reads uCryoActivity; adds into canyonHeight [domain: Cryo]
         // ── Stage 4: FLUVIAL incision — channels/karst carve, add into canyonHeight; uLiquidMask cut at seaLevel [domain: Fluvial]
         // ── Stage 5: AEOLIAN — dunes (anisotropic relief mod); dust mantle SMOOTHS relief (runs AFTER stage 2) [domain: Aeolian]
@@ -542,7 +605,14 @@
       // ── voronoi3d spike debug (risk #1 seam gate) ──
       uDebugMode:    { value: 0 },                                  // 0 off, 1 F1, 2 border, 3 cell-color, 4 relief, 5 blackbody, 6 substellar
       uVoroScale:    { value: 5.0 },                                // cell density
-      uVoroCells:    { value: 27 },                                 // 27 desktop | 9 mobile
+      uVoroCells:    { value: 27 },                                 // 27 desktop | 9 mobile (shared cellular knob, set by qualityTier)
+      // ── F2 craters (Stage-C step 3, Relief) — first voronoi3d consumer ──
+      uCraterDensity:    { value: 0.0 },   // cell-fill fraction (driven by deriveUniforms surface age)
+      uCraterComplexD:   { value: 0.6 },   // simple→complex transition diameter (g⁻¹, driven)
+      uCraterRelaxation: { value: 0.0 },   // icy/warm palimpsest flatten (driven)
+      uTerraceCount:     { value: 4.0 },   // inner-wall terrace rings
+      uCraterScale:      { value: 6.0 },   // crater cell density (lab-tunable)
+      uCraterAmp:        { value: 0.9 },   // overall crater relief amplitude (lab-tunable)
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -640,6 +710,14 @@
       debugMode: 0,         // 0 off, 1 F1, 2 F2-F1 border, 3 cell-id color (seam test), 4 lit relief
       voroScale: 5.0,
       voroCells: 27,        // 27 desktop | 9 mobile
+      // ── F2 craters (Stage-C step 3, Relief) — derived (density/complexD/relaxation/
+      // terraceCount, set by applyDrivers from the preset) + lab-tunable (scale/amp) ──
+      craterDensity: 0.0,
+      craterComplexD: 0.6,
+      craterRelaxation: 0.0,
+      terraceCount: 4.0,
+      craterScale: 6.0,
+      craterAmp: 0.9,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -714,11 +792,11 @@
     // for the liquidStability/liquidSpecies master gate (§2 #3). "Titan (methane seas)"
     // exercises the cold methane species (1); "Frozen (airless)" proves the airless gate→0.
     const DRIVER_PRESETS = {
-      'Rocky (Earthlike)': { radiusEarth:1.0, massEarth:0.9, eccentricity:0.017, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.32,density:5.5,volatileFraction:0.15}, T_eq:288, tidalState:{locked:false}, atmosphere:{color:[0.5,0.6,0.9],retained:true,pressure:1.0,composition:'n2-o2'}, habitability:0.7, surfaceHistory:{erosion:0.4} },
-      'Lava (hot airless)': { radiusEarth:0.9, massEarth:0.65, eccentricity:0.15, starMassEarth:332946, orbitRadiusEarth:938, composition:{ironFraction:0.7,density:7,volatileFraction:0.02}, T_eq:950, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0} },
-      'Ocean (temperate)': { radiusEarth:1.1, massEarth:1.3, eccentricity:0.02, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.28,density:5,volatileFraction:0.35}, T_eq:295, tidalState:{locked:false}, atmosphere:{color:[0.4,0.6,0.95],retained:true,pressure:1.5,composition:'n2-o2'}, habitability:0.9, surfaceHistory:{erosion:0.6} },
-      'Titan (methane seas)': { radiusEarth:0.4, massEarth:0.025, eccentricity:0.03, starMassEarth:332946, orbitRadiusEarth:120000, composition:{ironFraction:0.18,density:1.9,volatileFraction:0.4}, T_eq:94, tidalState:{locked:false}, atmosphere:{color:[0.8,0.6,0.3],retained:true,pressure:1.5,composition:'n2-o2'}, habitability:0.05, surfaceHistory:{erosion:0.2} },
-      'Frozen (airless)': { radiusEarth:0.5, massEarth:0.07, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:117275, composition:{ironFraction:0.2,density:2.5,volatileFraction:0.3}, T_eq:60, tidalState:{locked:false}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.1} },
+      'Rocky (Earthlike)': { radiusEarth:1.0, massEarth:0.9, eccentricity:0.017, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.32,density:5.5,volatileFraction:0.15}, T_eq:288, tidalState:{locked:false}, atmosphere:{color:[0.5,0.6,0.9],retained:true,pressure:1.0,composition:'n2-o2'}, habitability:0.7, surfaceHistory:{erosion:0.4,bombardmentIntensity:0.55,resurfacingRate:0.1} },
+      'Lava (hot airless)': { radiusEarth:0.9, massEarth:0.65, eccentricity:0.15, starMassEarth:332946, orbitRadiusEarth:938, composition:{ironFraction:0.7,density:7,volatileFraction:0.02}, T_eq:950, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0.3,resurfacingRate:0.95} },
+      'Ocean (temperate)': { radiusEarth:1.1, massEarth:1.3, eccentricity:0.02, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.28,density:5,volatileFraction:0.35}, T_eq:295, tidalState:{locked:false}, atmosphere:{color:[0.4,0.6,0.95],retained:true,pressure:1.5,composition:'n2-o2'}, habitability:0.9, surfaceHistory:{erosion:0.6,bombardmentIntensity:0.4,resurfacingRate:0.3} },
+      'Titan (methane seas)': { radiusEarth:0.4, massEarth:0.025, eccentricity:0.03, starMassEarth:332946, orbitRadiusEarth:120000, composition:{ironFraction:0.18,density:1.9,volatileFraction:0.4}, T_eq:94, tidalState:{locked:false}, atmosphere:{color:[0.8,0.6,0.3],retained:true,pressure:1.5,composition:'n2-o2'}, habitability:0.05, surfaceHistory:{erosion:0.2,bombardmentIntensity:0.5,resurfacingRate:0.4} },
+      'Frozen (airless)': { radiusEarth:0.5, massEarth:0.07, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:117275, composition:{ironFraction:0.2,density:2.5,volatileFraction:0.3}, T_eq:60, tidalState:{locked:false}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.1,bombardmentIntensity:0.85,resurfacingRate:0.05} },
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -733,6 +811,13 @@
       // §2 #3 master liquid gate → RESERVED→LIVE uniforms (Fluvial owner; Optical/Aeolian/Cryo read in step 3+)
       if (uniforms.uLiquidStability) uniforms.uLiquidStability.value = u.liquidStability;
       if (uniforms.uLiquidSpecies)   uniforms.uLiquidSpecies.value   = u.liquidSpecies;
+      // F2 craters (Stage-C step 3) — derived surfacings flow into state (frame loop writes
+      // them to uniforms); uVoroCells = the qualityTier 27↔9 cellular knob (registry: Relief wires it).
+      state.craterDensity    = u.craterDensity;
+      state.craterComplexD   = u.craterComplexD;
+      state.craterRelaxation = u.craterRelaxation;
+      state.terraceCount     = u.terraceCount;
+      uniforms.uVoroCells.value = u.craterCells;
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -741,8 +826,17 @@
     fDrivers.add(driverUI, 'qualityTier', 0, 1, 0.01).name('qualityTier').onChange(applyDrivers);
 
     // ▸ Surface — Relief
-    const fRelief = gui.addFolder('Surface — Relief'); fRelief.close();
+    const fRelief = gui.addFolder('Surface — Relief'); fRelief.open();
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
+    // ▸ Craters (F2) — the derived fields (density/complexD/relaxation) come from the
+    // driver preset (.listen() syncs them on preset change); scale/amp are lab knobs.
+    const fCraters = fRelief.addFolder('Craters (F2)'); fCraters.open();
+    fCraters.add(state, 'craterDensity', 0, 1, 0.01).name('density (age)').listen();
+    fCraters.add(state, 'craterComplexD', 0.05, 2.0, 0.01).name('complexD (g⁻¹)').listen();
+    fCraters.add(state, 'craterRelaxation', 0, 1, 0.01).name('relaxation').listen();
+    fCraters.add(state, 'terraceCount', 2, 6, 1).name('terrace rings').listen();
+    fCraters.add(state, 'craterScale', 1, 20, 0.5).name('cell density');
+    fCraters.add(state, 'craterAmp', 0, 2, 0.01).name('amplitude');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -863,7 +957,15 @@
       uniforms.uTime.value = t;   // clouds drift + aurora rays animate (Task 7)
       uniforms.uDebugMode.value = state.debugMode | 0;
       uniforms.uVoroScale.value = state.voroScale;
-      uniforms.uVoroCells.value = state.voroCells | 0;
+      // uVoroCells set by applyDrivers (qualityTier) — the debug folder's voroCells
+      // still drives the spike viz; craters read the driver-set uVoroCells.
+      if (state.debugMode > 0) uniforms.uVoroCells.value = state.voroCells | 0;
+      uniforms.uCraterDensity.value    = state.craterDensity;
+      uniforms.uCraterComplexD.value   = state.craterComplexD;
+      uniforms.uCraterRelaxation.value = state.craterRelaxation;
+      uniforms.uTerraceCount.value     = state.terraceCount;
+      uniforms.uCraterScale.value      = state.craterScale;
+      uniforms.uCraterAmp.value        = state.craterAmp;
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
