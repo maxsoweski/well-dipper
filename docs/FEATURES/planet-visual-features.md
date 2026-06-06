@@ -430,20 +430,57 @@ largest coverage hole, and it lines up exactly with the LOD2 research spec.
 - `src/objects/Planet.js` — the live per-type shader (what `[current]`
   means).
 
-## Open threads (for Phase 2 and beyond)
+## Build sequence — the new planet rendering system
 
-- **Phase 2 — representation design.** How L0→L1→L2 is stored and fed to
-  generation + renderer so features derive from drivers, not type strings.
-  Named inputs to it: (a) the **base-type + overlay compositing model** for
-  the L1c artificial/biotic types (P27/P28 over a natural base — Appendix A
-  note); (b) **surfacing the magnetic-field driver (D13)** as a first-class
-  planet-data field rather than an inline local.
-- **Rotation-rate exposure.** `rotationSpeed` exists (`:697`) but confirm
-  it (not just tidal-lock boolean) reaches anything that could drive band
-  count / jet speed.
-- **Per-feature HOW-research.** Each `F#`/`P#` is a hook. Prioritize by the
-  Appendix-B gaps: F-relief and F-gradational are the widest holes.
-- **Posterization triage.** The `[subtle]` features (F38, F39, sprites, UV
-  Y-markings) need an explicit keep/stylize/drop call when their
-  HOW-research comes up — don't spend relief budget on effects the
-  6-level envelope crushes.
+This inventory is the **WHAT accounting** — the meta-prerequisite, now
+complete. It feeds a **ground-up new rendering system** that supports real
+LOD (the current system renders only 1 LOD beyond billboards). The new
+system builds **up** in complexity from the existing 1-LOD aesthetic
+foundation, keeps the retro/dithered envelope, and is wired **feature by
+feature**, each feature **driver-derived** (the `type`-int ladder in
+`Planet.js` does *not* carry forward — types become the Appendix-A
+driver-bundle presets). It exists to **change** the visuals, so there is
+**no parity-with-current goal**.
+
+The build is a pipeline:
+
+1. **Stage A — Finish the foundational / architectural research (gate, do
+   first).** The cross-cutting foundation every feature plugs into, before
+   any single feature is built. Two parts:
+   - **Resolve the gating decisions** that are Max's calls — the
+     retro-envelope **A/B/C decision** first (`RESEARCH_high-lod-planet-shaders`
+     §2, the spine of everything), then §6's open questions (sphere
+     flow-frame, crater Voronoi, posterizer level, mega-shader-vs-variants,
+     LOD2 scope, civilized bodies).
+   - **Lock the base architecture** — analytic-derivative noise base, the
+     `lodRamp` scalar + hysteresis, variable-octave FBM + fwidth clamp, and
+     the **driver→semantic-uniform scaffolding** (extend the existing
+     aurora/atmosphere precedent — derive L1 params CPU-side in the
+     generator, pass as semantic uniforms; this is the generation-side
+     foundation) — the shared base all features build up from.
+2. **Stage B — Per-feature research, by domain.** For each feature/domain,
+   research **both** (a) how to **render** it (the HOW, extending the
+   research spec) **and** (b) how to **generate** it / make its driving
+   data available to the renderer (which `D#` drivers → which `P#` process
+   computes the param → how it reaches the shader). Domains ≈ this doc's L2
+   families (relief, fluvial, aeolian, cryo/sublimation, bands/storms,
+   clouds/haze, optical, exotic/overlay).
+3. **Stage C — Implement in parallel in the lab.** As each major research
+   domain completes, **begin implementing its features in
+   `planet-lod-lab.html` in parallel** (while the next domain's research
+   proceeds). Isolated-harness-first (per MEMORY rule); verify visually via
+   chrome-devtools :9223.
+
+**Carry-forward notes:**
+- *Generation-side is first-class.* "How each feature is generated and made
+  available to the rendering system" is part of Stage-B per-feature
+  research — the old "representation/data-management" concern lives here
+  (per-feature) plus in the Stage-A scaffolding (foundation), not as a
+  separate abstraction. Surfacing the **magnetic-field driver (D13)** as a
+  first-class planet-data field is one such item.
+- *Rotation-rate exposure* — `rotationSpeed` exists (`:697`); confirm it
+  reaches any band/jet derivation.
+- *Posterization triage* — the `[subtle]` features (F38, F39, sprites, UV
+  Y-markings) need an explicit keep/stylize/drop call when their domain
+  comes up — don't spend relief budget on effects the 6-level envelope
+  crushes.
