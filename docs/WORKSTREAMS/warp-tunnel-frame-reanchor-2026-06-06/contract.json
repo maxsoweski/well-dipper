@@ -2,12 +2,12 @@
   "workstream": "warp-tunnel-frame-reanchor-2026-06-06",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
-  "phase": "One defect, two faces — Face A (swap-teleport re-anchor) already applied in working tree and kept; Face B (rebase/reset frame-shift during HYPER) is the new work. Re-anchor mechanism chosen at implementation per Max greenlight.",
+  "status": "UAT_FAILED_REOPENED 4285602 \u2014 fix removed black-HYPER but broke entry/exit choreography (Max UAT 2026-06-06): wrong entry angle, looking-backward inside, no emergence. Needs redesign, not a patch. See /tmp/well-dipper-warp-tunnel-reanchor-UAT-FAILED-handoff-2026-06-06.md",
+  "phase": "One defect, two faces \u2014 Face A (swap-teleport re-anchor) already applied in working tree and kept; Face B (rebase/reset frame-shift during HYPER) is the new work. Re-anchor mechanism chosen at implementation per Max greenlight.",
   "acceptanceCriteria": [
     {
       "id": "AC1-frame-shift-preserves-anchor",
-      "statement": "A coordinate-frame shift (a worldOrigin delta from rebase OR resetWorldOrigin) applied while warp is active leaves the tunnel pinned to the camera — the tunnel's camera-relative position is preserved, it does not orphan.",
+      "statement": "A coordinate-frame shift (a worldOrigin delta from rebase OR resetWorldOrigin) applied while warp is active leaves the tunnel pinned to the camera \u2014 the tunnel's camera-relative position is preserved, it does not orphan.",
       "verifyVia": {
         "input": "In a headless test (sibling to orbit-ring-rebase.test.js), put the warp into an active/HYPER state with the tunnel anchored at the camera, then simulate a worldOrigin shift of magnitude D (both a maybeRebase-style shift and a resetWorldOrigin-style zeroing).",
         "observable": "After the shift, the tunnel's position relative to the camera is unchanged (camera-relative offset within epsilon of pre-shift); absolute separation does NOT grow by ~D."
@@ -18,7 +18,7 @@
       "id": "AC2-repeat-warp-renders",
       "statement": "A second consecutive warp in the same session reaches portal mode INSIDE during HYPER with the tunnel mesh live at the camera (the Face-A path that used to lose to the fallback timer).",
       "verifyVia": {
-        "input": "Run window.__wd.runRepeatWarpSuite() — two consecutive warps via _beginWarpTurn (RW1 clean baseline, RW2 precondition present, RW3 regression gate).",
+        "input": "Run window.__wd.runRepeatWarpSuite() \u2014 two consecutive warps via _beginWarpTurn (RW1 clean baseline, RW2 precondition present, RW3 regression gate).",
         "observable": "On the repeat warp, portal mode reaches INSIDE during HYPER (insideAt non-null) and takeSceneInventory().meshes[name=='effect.warp.tunnel'].cameraDistance stays small (tunnel at camera, inFrustum), not orphaned."
       },
       "layer": "integration",
@@ -26,10 +26,10 @@
     },
     {
       "id": "AC3-mid-hyper-rebase-renders",
-      "statement": "A warp whose target triggers a rebase or resetWorldOrigin DURING HYPER still renders — the tunnel stays pinned to the camera through the frame shift instead of being left ~2800u behind.",
+      "statement": "A warp whose target triggers a rebase or resetWorldOrigin DURING HYPER still renders \u2014 the tunnel stays pinned to the camera through the frame shift instead of being left ~2800u behind.",
       "verifyVia": {
         "input": "Drive a warp to a far-enough target that a worldOrigin change fires during the INSIDE/HYPER window (sample tunnel cameraDistance / inFrustum / portal mode / worldOrigin per HYPER frame, per the prior session's ad-hoc probe pattern).",
-        "observable": "tunnel cameraDistance stays small across the whole HYPER window even on the frame(s) where worldOrigin changes; it never jumps to ~teleport-distance and the tunnel never leaves the frustum → no black HYPER."
+        "observable": "tunnel cameraDistance stays small across the whole HYPER window even on the frame(s) where worldOrigin changes; it never jumps to ~teleport-distance and the tunnel never leaves the frustum \u2192 no black HYPER."
       },
       "layer": "integration",
       "live": true
@@ -49,17 +49,17 @@
       "statement": "The clean single warp from Sol still renders the tunnel, and the post-arrival fly-back portal follow and warp-landing-strip behavior are unchanged.",
       "verifyVia": {
         "input": "Run a single clean warp from Sol; then let the arrival fly-back play out; observe the OUTSIDE_B portal reposition (main.js:6782) and the warp-landing-strip.",
-        "observable": "Single warp renders the tunnel during HYPER (RW1 baseline green); the fly-back portal still follows in OUTSIDE_B; the landing strip still persists/behaves as before — no new console errors."
+        "observable": "Single warp renders the tunnel during HYPER (RW1 baseline green); the fly-back portal still follows in OUTSIDE_B; the landing strip still persists/behaves as before \u2014 no new console errors."
       },
       "layer": "integration",
       "live": true
     },
     {
       "id": "AC6-warping-feels-reliable",
-      "statement": "Max warps repeatedly around the galaxy — repeat warps and far targets — and never hits a black HYPER; warping feels reliable as a whole.",
+      "statement": "Max warps repeatedly around the galaxy \u2014 repeat warps and far targets \u2014 and never hits a black HYPER; warping feels reliable as a whole.",
       "verifyVia": {
         "input": "Max plays the running game and performs a series of warps (several repeats in one session, plus jumps to distant targets), watching the HYPER phase each time.",
-        "observable": "Every warp shows the tunnel during HYPER; no black frames; the travel loop feels dependable. Holistic acceptance — deferred to Max."
+        "observable": "Every warp shows the tunnel during HYPER; no black frames; the travel loop feels dependable. Holistic acceptance \u2014 deferred to Max."
       },
       "layer": "uat"
     }
@@ -70,8 +70,8 @@
       "warpPortal traversal state machine: onTraversal('INSIDE') (main.js:1608) and the FOLD-start guard `if (!warpPortal.group.visible)` (~main.js:6621) that can skip resetTraversal()+open()",
       "WarpEffect.js HYPER fallback timer (WarpEffect.js:272): the alternate swap trigger that did NOT re-anchor before the Face-A fix",
       "WorldOrigin.js: maybeRebase (per-frame rebase past REBASE_THRESHOLD_SQ), resetWorldOrigin (zeroes worldOrigin, does NOT fire onRebase listeners), onRebase/trackForRebase, the worldOrigin vector",
-      "cc917c2 (in master, pending Max UAT): spawnSystem now calls resetWorldOrigin on swap — the source of the intermittent mid-HYPER frame shift",
-      "per-frame celestial-body rewrite (main.js:6075-6098): truePos - worldOrigin — the anchoring pattern bodies use that the tunnel currently does not"
+      "cc917c2 (in master, pending Max UAT): spawnSystem now calls resetWorldOrigin on swap \u2014 the source of the intermittent mid-HYPER frame shift",
+      "per-frame celestial-body rewrite (main.js:6075-6098): truePos - worldOrigin \u2014 the anchoring pattern bodies use that the tunnel currently does not"
     ],
     "outputs": [
       "warpPortal.group anchoring becomes frame-aware: re-anchored to the camera on every coordinate-frame change while warp is active (mechanism TBD at implementation: continuous re-anchor vs onRebase listener vs body-style rewrite)",
@@ -80,11 +80,11 @@
       "a headless tunnel-rebase test (sibling to tests/orbit-ring-rebase.test.js) for AC1"
     ],
     "mustStayWorking": [
-      "The clean single warp from Sol renders the tunnel during HYPER (the path that already worked — RW1 baseline)",
+      "The clean single warp from Sol renders the tunnel during HYPER (the path that already worked \u2014 RW1 baseline)",
       "Post-arrival fly-back portal follow: the OUTSIDE_B per-frame portal reposition (main.js:6782) and the leftover-visible portal left by onComplete (main.js:3039)",
-      "warp-landing-strip-persists behavior (separate, UAT-pending feature) — unchanged",
-      "World-origin rebasing for celestial bodies (the per-frame truePos - worldOrigin rewrite) — visually identical, unchanged",
-      "cc917c2 reset-on-swap semantics — this fix builds on it and must not regress system-swap body positioning",
+      "warp-landing-strip-persists behavior (separate, UAT-pending feature) \u2014 unchanged",
+      "World-origin rebasing for celestial bodies (the per-frame truePos - worldOrigin rewrite) \u2014 visually identical, unchanged",
+      "cc917c2 reset-on-swap semantics \u2014 this fix builds on it and must not regress system-swap body positioning",
       "The warp state machine phases (FOLD/ENTER/HYPER/exit) timing and the dual-portal _useDualPortal path"
     ]
   }
