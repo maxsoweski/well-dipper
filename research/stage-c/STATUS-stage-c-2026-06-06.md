@@ -93,15 +93,23 @@ All derived in `deriveUniforms` (`planet-lod-lab-core.js`), TDD'd in
 | 3 | `liquidStability` + `liquidSpecies` (→ LIVE `uLiquidStability`/`uLiquidSpecies`) | ✅ **DONE** — D6+D2+D1 AND-gate; 8 TDD tests; promoted `liquidWater` proto; "Titan" preset added; registry RESERVED→LIVE. Live-verified `:9223` (Rocky 0.74/water, Ocean/Titan 1.0 — Titan species=1, Lava/Frozen 0; uniforms mirror `_derived`; console clean). |
 | 4 | `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | ✅ **DONE** — JS selector (enum 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂) from volatileFraction + T_eq bands; 8 TDD tests; `_derived`-only (Cryo declares the uniform in step 3). Live-verified `:9223` (Titan 94K→CO₂, Frozen 60K→CH₄, warm/dry→none). |
 | 5 | `precipitation` (D4) | ✅ **DONE** — `liquidStability` × rain-cycle composition factor (n2-o2 1.0/co2-n2 0.5/co2 0.2/h2-he·none 0); 7 TDD tests; `_derived`-only (Fluvial F11 reads in step 3). Presets carry atmosphere `composition`. Live-verified `:9223` (Rocky 0.74, Ocean/Titan 1.0 — Titan = methane rain, Lava/Frozen 0). |
-| 6 | `atmosphere.physics.pressure` → shader | ⬜ **next** — plumbing only |
+| 6 | `atmosphere.physics.pressure` → shader | ✅ **DONE** — pure passthrough of the bundle's atmosphere pressure; 4 TDD tests; `_derived`-only (Aeolian F15 reads in step 3). Live-verified `:9223` (Rocky 1.0 / Ocean·Titan 1.5 / Lava·Frozen 0 — mirrors preset values). |
 | 7 | `magneticField` (D13) | ⛔ **BLOCKED on Max-decision Q6** (surfacing ownership) — surface before building |
 
-## Next session picks up at: **Step 2 #6 — `atmosphere.physics.pressure` → shader (plumbing)**
-Surface the atmosphere pressure scalar (already on the preset atmosphere objects +
-real `computeAtmosphere` output) through `deriveUniforms` → a `pressure` field for
-Aeolian grain-transport (F15). Plumbing only — no new physics. Then Q6 for
-`magneticField` (BLOCKED — surface first), then **step 3 = Relief** (widest gap;
-lands the shared Voronoi consumer + writes `canyonHeight`). After Relief, domains
+## Step 2 is COMPLETE except #7 (`magneticField`, BLOCKED on Max-Q6).
+#1–#6 all done + live-verified. `deriveUniforms` now surfaces, beyond the Stage-A
+set: `surfaceGravity`, `tidalHeat`, `liquidStability`+`liquidSpecies` (LIVE uniforms),
+`volatileSpecies`, `precipitation`, `pressure`. Presets carry the mirrored generator
+fields (mass/radius, orbit, `volatileFraction`, atmosphere `retained`/`pressure`/
+`composition`). 71 lab tests green.
+
+## Next session picks up at: **Surface Max-Q6, then Step 3 = Relief**
+**Q6 (`magneticField` surfacing ownership — Optical vs separate workstream)** gates
+step-2 #7 and Optical's aurora F37; it's inline-computed twice today
+(`PhysicsEngine.js:168`, `PlanetGenerator.js:440`) and also drives atmosphere
+stripping. **Surface it to Max before building #7 — don't invent the answer.**
+Then **step 3 = Relief** (widest gap; lands the shared Voronoi consumer + writes
+`canyonHeight`). After Relief, domains
 fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.
 Index §7 is the dependency-ordered sequence.

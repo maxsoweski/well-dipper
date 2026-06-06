@@ -239,6 +239,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     liquidSpecies,                                              // 0=water, 1=methane/ethane (Optical glint IOR/tint)
     volatileSpecies,                                            // Cryo frost classifier 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂ (F18/F22)
     precipitation,                                              // D4 rain 0..1 (Fluvial F11 channel activity)
+    pressure,                                                   // atmosphere surface pressure passthrough (Aeolian grain transport F15)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen

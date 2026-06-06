@@ -197,3 +197,26 @@ describe('precipitation (§2 #5 — surfaces D4 rain as first-class; feeds Fluvi
     expect(Number.isFinite(p)).toBe(true);
   });
 });
+
+describe('pressure plumbing (§2 #6 — atmosphere surface pressure → shader; Aeolian grain transport)', () => {
+  // Pure passthrough of the bundle's atmosphere pressure (already produced by
+  // computeAtmosphere) — no new physics. Aeolian maps it to grain-transport thresholds
+  // (F15) when it lands; here we only surface the scalar.
+  it('surfaces the atmosphere pressure scalar', () => {
+    expect(deriveUniforms({ atmosphere: { retained: true, pressure: 1.5 } }).pressure).toBe(1.5);
+  });
+  it('airless world / empty bundle → zero pressure', () => {
+    expect(deriveUniforms({ atmosphere: null }).pressure).toBe(0);
+    expect(deriveUniforms({}).pressure).toBe(0);
+  });
+  it('a thicker atmosphere reports higher pressure (monotone passthrough)', () => {
+    const thin  = deriveUniforms({ atmosphere: { retained: true, pressure: 0.1 } }).pressure;
+    const thick = deriveUniforms({ atmosphere: { retained: true, pressure: 90 } }).pressure;
+    expect(thick).toBeGreaterThan(thin);
+  });
+  it('is finite and non-negative', () => {
+    const p = deriveUniforms({ atmosphere: { retained: true, pressure: 50 } }).pressure;
+    expect(Number.isFinite(p)).toBe(true);
+    expect(p).toBeGreaterThanOrEqual(0);
+  });
+});
