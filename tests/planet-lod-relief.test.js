@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -251,5 +251,117 @@ describe('orogenyAxis (F1 — per-planet strike direction from seed)', () => {
     const a = deriveUniforms({ seed: 1 }).orogenyAxis;
     const b = deriveUniforms({ seed: 9999 }).orogenyAxis;
     expect(Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1])).toBeGreaterThan(1e-3);
+  });
+});
+
+// ── F4 grabenProfile() oracle — the tectonic-rift radial profile (relief doc §F4.a) ─
+// The GLSL graben combiner is transcribed from this. A linear rift on the sphere is a
+// flat-floored, steep-walled trench: depth as a function of perpendicular distance d to
+// the rift line (object-space, unit-sphere units). depth ≤ 0 (a trench, carved DOWN),
+// = -1 on the flat floor, ramping smoothly UP to 0 at the wall top (d = halfWidth) and
+// staying 0 outside. dddd = d(depth)/dd — the analytic wall slope the combiner chain-
+// rules into the shading gradient; pinned vs finite-diff (relief-doc §5.4 silent-bug gate,
+// same as craterProfile/ridgedFold — a sign-wrong wall lights the trench inside-out).
+describe('grabenProfile — trench shape invariants (relief doc §F4.a)', () => {
+  it('floor sits at -1 (fully carved) at the rift center', () => {
+    expect(grabenProfile(0.0, 0.12, 0.4).depth).toBeCloseTo(-1.0, 6);
+  });
+
+  it('returns to datum (0) at the wall top and beyond', () => {
+    expect(grabenProfile(0.12, 0.12, 0.4).depth).toBeCloseTo(0.0, 6);
+    expect(grabenProfile(0.5, 0.12, 0.4).depth).toBeCloseTo(0.0, 6);
+  });
+
+  it('has a FLAT floor: depth is constant (-1) across the floor band', () => {
+    const center = grabenProfile(0.0, 0.12, 0.4).depth;
+    const innerFloor = grabenProfile(0.02, 0.12, 0.4).depth;   // floorHalf = 0.048
+    expect(innerFloor).toBeCloseTo(center, 6);
+    expect(grabenProfile(0.02, 0.12, 0.4).dddd).toBeCloseTo(0.0, 6);  // flat → zero slope
+  });
+
+  it('walls rise monotonically from floor to datum', () => {
+    const a = grabenProfile(0.06, 0.12, 0.4).depth;   // on the wall
+    const b = grabenProfile(0.09, 0.12, 0.4).depth;   // higher on the wall
+    expect(b).toBeGreaterThan(a);
+    expect(a).toBeGreaterThan(-1.0);
+    expect(b).toBeLessThan(0.0);
+  });
+
+  it('is a trench everywhere (depth ≤ 0)', () => {
+    for (let d = 0; d <= 0.3; d += 0.01) {
+      expect(grabenProfile(d, 0.12, 0.4).depth).toBeLessThanOrEqual(1e-9);
+    }
+  });
+});
+
+describe('grabenProfile — analytic gradient vs finite-diff (relief doc §5.4 silent-bug gate)', () => {
+  const EPS = 1e-5;
+  it('analytic dddd matches central finite-difference of depth (across the wall)', () => {
+    for (let d = 0.001; d < 0.3; d += 0.003) {
+      const { dddd } = grabenProfile(d, 0.12, 0.4);
+      const fd = (grabenProfile(d + EPS, 0.12, 0.4).depth - grabenProfile(d - EPS, 0.12, 0.4).depth) / (2 * EPS);
+      expect(dddd).toBeCloseTo(fd, 4);
+    }
+  });
+});
+
+// ── F4 chasma generation-side surfacings (relief doc §F4.b) ──────────────────
+// chasmaDepth (the rift relief amplitude) grows with tectonic activity (resurfacing /
+// plate-tectonics proxy / tidal stress) and shrinks with erosion. Dead, uneroded-but-
+// inert worlds (Frozen) barely rift; tectonically-violent worlds (Lava: Io-grade tidal
+// + full resurfacing) rift hard. chasmaCount (1..3) + chasmaAxes (seeded unit vec3 plane
+// normals — the rift great circles) are seed-derived, deterministic.
+describe('chasmaDepth (F4 — rift amplitude: tectonic activity × young-age, eroded-down)', () => {
+  const LAVA = { eccentricity: 0.15, orbitRadiusEarth: 938, radiusEarth: 0.9, habitability: 0, surfaceHistory: { erosion: 0, resurfacingRate: 0.95 } };
+  const FROZEN = { eccentricity: 0.005, orbitRadiusEarth: 117275, radiusEarth: 0.5, habitability: 0.05, surfaceHistory: { erosion: 0.1, resurfacingRate: 0.05 } };
+
+  it('a tectonically-violent world rifts far deeper than a dead one', () => {
+    expect(deriveUniforms(LAVA).chasmaDepth).toBeGreaterThan(deriveUniforms(FROZEN).chasmaDepth * 4);
+  });
+
+  it('a dead inert world barely rifts (near zero)', () => {
+    expect(deriveUniforms(FROZEN).chasmaDepth).toBeLessThan(0.05);
+  });
+
+  it('erosion lowers the rift amplitude (rifts fill/round with age)', () => {
+    const fresh  = deriveUniforms({ habitability: 0.8, surfaceHistory: { erosion: 0.0, resurfacingRate: 0.2 } }).chasmaDepth;
+    const eroded = deriveUniforms({ habitability: 0.8, surfaceHistory: { erosion: 1.0, resurfacingRate: 0.2 } }).chasmaDepth;
+    expect(eroded).toBeLessThan(fresh);
+  });
+
+  it('stays finite and ≥ 0 on a bundle with no history', () => {
+    const d = deriveUniforms({}).chasmaDepth;
+    expect(Number.isFinite(d)).toBe(true);
+    expect(d).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('chasmaCount + chasmaAxes (F4 — seeded rift system geometry)', () => {
+  it('chasmaCount is an integer in 1..3', () => {
+    for (const seed of [0, 1, 42, 1234, 9999]) {
+      const n = deriveUniforms({ seed }).chasmaCount;
+      expect(Number.isInteger(n)).toBe(true);
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(n).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('chasmaAxes are 3 unit vec3 (rift-plane normals)', () => {
+    const ax = deriveUniforms({ seed: 1234 }).chasmaAxes;
+    expect(ax.length).toBe(3);
+    for (const a of ax) expect(Math.hypot(a[0], a[1], a[2])).toBeCloseTo(1.0, 6);
+  });
+
+  it('is deterministic for a given seed', () => {
+    const a = deriveUniforms({ seed: 42 }).chasmaAxes[0];
+    const b = deriveUniforms({ seed: 42 }).chasmaAxes[0];
+    expect(a[0]).toBeCloseTo(b[0], 12);
+    expect(a[2]).toBeCloseTo(b[2], 12);
+  });
+
+  it('different seeds give different rift orientations', () => {
+    const a = deriveUniforms({ seed: 1 }).chasmaAxes[0];
+    const b = deriveUniforms({ seed: 9999 }).chasmaAxes[0];
+    expect(Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])).toBeGreaterThan(1e-3);
   });
 });

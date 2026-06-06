@@ -184,6 +184,13 @@
       uniform vec2  uOrogenyAxis;      // per-planet strike direction (unit, from seed/angle)
       uniform float uMountainScale;    // mountain domain frequency (vPos * scale) — lab knob
 
+      // ── F4 canyons / rifts (Stage-C step 3, Relief) — tectonic graben → canyonHeight ──
+      uniform float uChasmaDepth;      // 0..~0.28 rift relief amplitude (driven; ≤0 early-outs)
+      uniform int   uChasmaCount;      // 1..3 number of rifts (driven from seed)
+      uniform vec3  uChasmaAxis[3];    // rift great-circle plane normals (unit; driven from seed)
+      uniform float uChasmaWidth;      // trench half-width in unit-sphere units — lab knob
+      uniform float uChasmaFloor;      // flat-floor fraction of half-width (0..1) — lab knob
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -525,6 +532,45 @@
         grad += amp * prof.y * (1.0/craterRadius) * voroGrad * uCraterScale;
       }
 
+      // ── F4 graben profile (Stage-C step 3, Relief) — transcribed from grabenProfile()
+      // in planet-lod-lab-core.js (same flat-floor trench, vitest-pinned analytic slope).
+      // d = perpendicular distance to the rift line. Returns vec2(depth ≤ 0, d(depth)/dd).
+      vec2 grabenProfile(float d, float halfWidth, float floorFrac){
+        float floorHalf = floorFrac * halfWidth;
+        float span = halfWidth - floorHalf;
+        float depth = smoothstep(floorHalf, halfWidth, d) - 1.0;   // -1 floor → 0 outside
+        float dddd = 0.0;
+        if (span > 1e-6 && d > floorHalf && d < halfWidth){
+          float t = (d - floorHalf) / span;
+          dddd = (6.0 * t * (1.0 - t)) / span;                     // d/dd of smoothstep
+        }
+        return vec2(depth, dddd);
+      }
+
+      // F4 canyon combiner — tectonic graben that WRITES the shared canyonHeight
+      // accumulator (registry §1; Fluvial incised gorges + Cryo chasma ADD IN later).
+      // Each rift is a great circle ⊥ a seeded plane normal: a surface point's signed
+      // distance to the plane is s = dot(pos, n) (pos on the unit sphere), so the
+      // perpendicular distance to the rift line is |s|, with a CONSTANT gradient
+      // ds/dpos = n. The graben profile carves a flat-floored trench; its wall slope
+      // chain-rules into the shading gradient as gp.y·sign(s)·n so the V-walls light
+      // correctly. uChasmaDepth≤0 ⇒ early-out (Stage-A base + F1/F2 untouched).
+      void canyonCombiner(vec3 pos, inout float h, inout float canyonHeight, inout vec3 grad){
+        if (uChasmaDepth <= 0.0) return;
+        for (int i = 0; i < 3; i++){
+          if (i >= uChasmaCount) break;
+          vec3 n = normalize(uChasmaAxis[i]);
+          float s = dot(pos, n);                                   // signed dist to rift plane
+          float d = abs(s);
+          vec2 gp = grabenProfile(d, uChasmaWidth, uChasmaFloor);  // (depth ≤ 0, d depth/dd)
+          float dep = uChasmaDepth * gp.x;                         // ≤ 0 — carved DOWN
+          canyonHeight += dep;                                     // ★ the shared accumulator
+          h            += dep;
+          // d(dep)/dpos = uChasmaDepth · gp.y · dd/ds · ds/dpos,  dd/ds = sign(s), ds/dpos = n
+          grad += uChasmaDepth * gp.y * sign(s) * n;
+        }
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -582,13 +628,15 @@
           vec4 hd = fbmd(vPos, uOctaves, fwBase);
           float h = hd.x;
           vec3 grad = hd.yzw;
-          // ── Stage 2: RELIEF combiners — mountains (F1, ridged base) then craters
-          // (F2, voronoi3d consumer). Each ADDS a height delta + chain-rule gradient
-          // onto the FBM base; the single perturbAnalytic below bends the normal so
-          // crestlines/rims/bowls/central-peaks all light correctly. (Scarps F4-F5 /
-          // canyonHeight land in later commits.)
+          // ── Stage 2: RELIEF combiners — mountains (F1, ridged base), craters
+          // (F2, voronoi3d consumer), then canyons (F4, tectonic graben → canyonHeight).
+          // Each ADDS a height delta + chain-rule gradient onto the FBM base; the single
+          // perturbAnalytic below bends the normal so crestlines/rims/bowls/central-peaks/
+          // trench-walls all light correctly. F4 writes the shared canyonHeight accumulator
+          // (Fluvial incised gorges + Cryo chasma ADD IN at stages 3/4). (Scarps F5 later.)
           mountainCombiner(vPos, fwBase, h, grad);
           craterCombiner(vPos, h, grad);
+          canyonCombiner(vPos, h, canyonHeight, grad);
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
         }
@@ -695,6 +743,12 @@
       uOrogenyStrength:  { value: 0.0 },   // isotropic ridged ↔ fold-belt (driven)
       uOrogenyAxis:      { value: new THREE.Vector2(1, 0) },  // strike direction (driven from angle)
       uMountainScale:    { value: 1.6 },   // mountain domain frequency (lab-tunable)
+      // ── F4 canyons / rifts (Stage-C step 3, Relief) — tectonic graben → canyonHeight ──
+      uChasmaDepth:      { value: 0.0 },   // rift relief amplitude (driven; ≤0 early-outs)
+      uChasmaCount:      { value: 1 },     // 1..3 rifts (driven from seed)
+      uChasmaAxis:       { value: [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)] },  // rift plane normals (driven from seed)
+      uChasmaWidth:      { value: 0.12 },  // trench half-width (unit-sphere units, lab-tunable)
+      uChasmaFloor:      { value: 0.4 },   // flat-floor fraction of half-width (lab-tunable)
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -808,6 +862,13 @@
       ridgeOffset: 1.0,
       ridgeGain: 2.0,
       mountainScale: 1.6,
+      // ── F4 canyons (Stage-C step 3, Relief) — derived (depth/count/axes from the
+      // preset+seed) + lab-tunable (width/floor). chasmaAxes mirrored as a flat list. ──
+      chasmaDepth: 0.0,
+      chasmaCount: 1,
+      chasmaWidth: 0.12,
+      chasmaFloor: 0.4,
+      chasmaAxes: [[1,0,0],[0,1,0],[0,0,1]],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -913,6 +974,13 @@
       state.mountainAmp      = u.mountainAmp;
       state.orogenyStrength  = u.orogenyStrength;
       state.orogenyAngle     = Math.atan2(u.orogenyAxis[1], u.orogenyAxis[0]);
+      // F4 canyons (Stage-C step 3) — derived depth + rift count + seeded plane normals.
+      // depth/count flow into state (frame loop → uniforms); axes copy straight to the
+      // uniform vec3 array (no GUI control — they're a per-planet seed property).
+      state.chasmaDepth      = u.chasmaDepth;
+      state.chasmaCount      = u.chasmaCount;
+      state.chasmaAxes       = u.chasmaAxes;
+      for (let i = 0; i < 3; i++) uniforms.uChasmaAxis.value[i].set(u.chasmaAxes[i][0], u.chasmaAxes[i][1], u.chasmaAxes[i][2]);
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -941,6 +1009,14 @@
     fMountains.add(state, 'ridgeOffset', 0.8, 1.2, 0.01).name('ridge offset');
     fMountains.add(state, 'ridgeGain', 1.5, 2.5, 0.01).name('ridge gain');
     fMountains.add(state, 'mountainScale', 0.5, 5, 0.1).name('domain freq');
+    // ▸ Canyons (F4) — tectonic graben, writes the shared canyonHeight accumulator.
+    // depth/count come from the driver preset+seed (.listen()-synced); width/floor are
+    // lab knobs. A rift is a great circle; combining 1–3 gives a rift system.
+    const fCanyons = fRelief.addFolder('Canyons (F4)'); fCanyons.open();
+    fCanyons.add(state, 'chasmaDepth', 0, 0.4, 0.005).name('depth (tectonic)').listen();
+    fCanyons.add(state, 'chasmaCount', 0, 3, 1).name('rift count').listen();
+    fCanyons.add(state, 'chasmaWidth', 0.02, 0.3, 0.005).name('half-width');
+    fCanyons.add(state, 'chasmaFloor', 0, 0.9, 0.01).name('flat-floor frac');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1077,6 +1153,11 @@
       uniforms.uOrogenyStrength.value  = state.orogenyStrength;
       uniforms.uOrogenyAxis.value.set(Math.cos(state.orogenyAngle), Math.sin(state.orogenyAngle));
       uniforms.uMountainScale.value    = state.mountainScale;
+      // F4 canyons — depth/count/width/floor driven+lab; axes set in applyDrivers (seed prop).
+      uniforms.uChasmaDepth.value      = state.chasmaDepth;
+      uniforms.uChasmaCount.value      = state.chasmaCount | 0;
+      uniforms.uChasmaWidth.value      = state.chasmaWidth;
+      uniforms.uChasmaFloor.value      = state.chasmaFloor;
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =

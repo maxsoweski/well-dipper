@@ -113,8 +113,8 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 |---|---|---|
 | F2 | **Craters** (voronoi3d consumer + `surfaceGravity` reader) | ✅ **DONE** — first cellular feature live; see below |
 | F1 | **Mountains / ranges** (ridged multifractal, orogeny belts) | ✅ **DONE** — ridged base relief live; see below |
-| F4 | Canyons / rifts (tectonic graben — **writes `canyonHeight`**) | ◻ next |
-| F5 | Scarps & fault systems | ◻ |
+| F4 | **Canyons / rifts** (tectonic graben — **writes `canyonHeight`**) | ✅ **DONE** — first `canyonHeight` writer live; see below |
+| F5 | Scarps & fault systems | ◻ next |
 | F6 | Plateaus / highlands / tessera | ◻ |
 | F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ |
 | F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ |
@@ -186,6 +186,51 @@ branch — isotropic ridged hills ↔ anisotropic fold belts is a continuous ble
   gradient; add as a `▸ Mountains` toggle later. Orogeny (P3 true fold belts) is
   Max-open-question §6.3 (build fully or let generic ridged cover terrestrial); the
   continuous-blend machinery is in place either way.
+
+### F4 — Canyons / rifts (DONE)
+The tectonic-graben variant + the **first writer of the shared `canyonHeight`
+accumulator** (registry §1 — Fluvial incised gorges + Cryo chasma ADD IN at
+stages 3/4). A rift is the intersection of the sphere with a plane through the
+centre (a great circle); combine 1–3 for a rift system.
+- **CPU oracle** `grabenProfile(d, halfWidth, floorFrac)` in `planet-lod-lab-core.js`
+  → `{depth, dddd}` — the trench cross-section vs perpendicular distance `d` to the
+  rift line: `depth = smoothstep(floorHalf, halfWidth, d) − 1` (∈ [−1,0], **flat
+  floor** at −1, smooth walls rising to 0 at the wall top, untouched outside). `dddd`
+  = the wall SLOPE (`d/dd` of the smoothstep) — pinned vs central finite-diff (relief-
+  doc §5.4 silent-bug gate, like `craterProfile`/`ridgedFold`; a sign-wrong wall lights
+  the trench inside-out yet compiles fine). Flat-floor → zero-slope tested explicitly.
+- **deriveUniforms** surfaces `chasmaDepth` (= `tectonicActivity × (1−0.4·erosion) ×
+  0.28`, where `tectonicActivity = clamp01(max(resurfacing, habitability·0.7) +
+  tidalProxy·0.5)` — the resurfacing / plate-tectonics-subduction / tidal-stress
+  proxy, eroded-down), `chasmaCount` (1..3, seeded), `chasmaAxes` (3× seeded unit-vec3
+  rift-plane normals via `seededUnitVec3`).
+- **GLSL** `grabenProfile()` + `canyonCombiner()` (transcribed; per rift `s = dot(pos,n)`
+  on the unit sphere → `d = |s|` with a **constant gradient** `ds/dpos = n`, so the wall
+  slope chain-rules in as `gp.y·sign(s)·n` — no domain-warp Jacobian needed). **Writes
+  `canyonHeight` += dep** (the shared accumulator) AND `h` AND `grad`. `uChasmaDepth≤0`
+  early-outs → Stage-A base + F1/F2 untouched. Wired into Stage-2 after `craterCombiner`;
+  new `▸ Canyons (F4)` lil-gui sub-folder (depth/count driven, width/floor lab knobs).
+- **14 TDD tests** added to `tests/planet-lod-relief.test.js`; **119 lab tests green**
+  (`npx vitest run tests/planet-lod-*.test.js`).
+- **Live-verified `:9223`** (screenshots): 3 rifts isolated (mountains/craters zeroed) →
+  great-circle trenches carve across with correctly-lit V-walls ✓; single rift at the
+  terminator → clean flat-floored trench, lit wall + shadowed floor ✓; `uChasmaDepth=0`
+  → rift vanishes, FBM base restored (no regression) ✓; Lava preset (real bundle →
+  derives `chasmaDepth=0.28` from Io-grade tidal + full resurfacing) → rift composes
+  with F1 ridged mountains + F2 (resurfaced, near-zero density) + emissive ✓; console
+  clean (favicon-404 only).
+- **Cross-domain:** `canyonHeight` registry row updated — Relief now WRITES the tectonic
+  term (was "declared, awaiting writer"). Fluvial/Cryo add into it when they land.
+- **Carry-forward (relief-doc §F4, not blocking):** (1) the **inverted Voronoi-border
+  graben web** (IQ edge-distance pass-2) — the networked-fault rich tier — DEFERRED; it
+  needs the perpendicular-edge-distance second pass added to `voronoi3d` (currently
+  returns f1/f2 only, not `dot(0.5(mr+r), normalize(r−mr))`), and §F4d lists the linear
+  chasma alone as the cheap-tier deliverable. (2) **Wall strata** (`floor(h·N)/N` exposed
+  layers) DEFERRED — additive height-banding, add as a `▸ Canyons` toggle later. (3)
+  Rifts are full great circles (not segment-gated) — a positional gate along the rift is
+  a later refinement. The clean directional graben (the felt core) ships now; the web +
+  strata layer on additively, mirroring F1 (deferred slope-erosion) / F2 (deferred
+  peak-ring basins).
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

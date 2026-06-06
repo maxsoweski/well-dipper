@@ -219,6 +219,45 @@ export function ridgedFold(value, grad, offset = 1.0) {
   return { value: signal * signal, grad: [k * grad[0], k * grad[1], k * grad[2]] };
 }
 
+// ── grabenProfile — F4 tectonic-rift radial profile (relief doc §F4.a) ───────
+// A linear rift on the sphere is the intersection of the sphere with a plane through
+// the centre (a great circle); a surface point's PERPENDICULAR distance to that rift
+// line is d = |dot(pos, planeNormal)| (pos on the unit sphere). This profile is the
+// trench cross-section as a function of d: a flat-floored, steep-walled graben.
+//
+//   depth(d) = -(1 - smoothstep(floorHalf, halfWidth, d))    (∈ [-1, 0], a trench)
+//     d ≤ floorHalf : depth = -1            (the flat down-dropped floor)
+//     floorHalf..halfWidth : smooth wall, rising -1 → 0
+//     d ≥ halfWidth : depth = 0             (untouched datum outside the rift)
+//   floorHalf = floorFrac · halfWidth
+//
+// dddd = d(depth)/dd = smoothstep'(floorHalf, halfWidth, d) — the wall SLOPE the GLSL
+// combiner chain-rules into the shading gradient (×sign(s)·planeNormal). Pinned vs
+// finite-diff in tests (relief-doc §5.4 silent-bug gate: a sign-wrong wall lights the
+// trench inside-out yet compiles fine — exactly what a CPU oracle catches first).
+export function grabenProfile(d, halfWidth = 0.12, floorFrac = 0.4) {
+  const floorHalf = floorFrac * halfWidth;
+  const span = halfWidth - floorHalf;
+  const depth = smoothstep(floorHalf, halfWidth, d) - 1.0;   // -1 floor → 0 outside
+  let dddd = 0.0;
+  if (span > 1e-9 && d > floorHalf && d < halfWidth) {
+    const t = (d - floorHalf) / span;
+    dddd = (6.0 * t * (1.0 - t)) / span;                     // d/dd of smoothstep
+  }
+  return { depth, dddd };
+}
+
+// seededUnitVec3 — a deterministic ~uniform point on the unit sphere from a scalar seed.
+// z uniform in [-1,1], azimuth uniform in [0,2π) (the standard sphere-point sampler);
+// shape mirrors seedOffset()'s sin-fract hashing. Used for F4 rift-plane normals.
+function seededUnitVec3(seed) {
+  const h = (n) => { const x = Math.sin(n) * 43758.5453; return x - Math.floor(x); };
+  const z = h(seed * 12.9898 + 1.1) * 2.0 - 1.0;
+  const phi = h(seed * 78.233 + 3.3) * Math.PI * 2.0;
+  const r = Math.sqrt(Math.max(0.0, 1.0 - z * z));
+  return [r * Math.cos(phi), r * Math.sin(phi), z];
+}
+
 // deriveUniforms: physics driver-bundle -> flat semantic uniform values.
 // Generalizes the aurora/atmosphere precedent in PlanetGenerator.js:435-487
 // (fieldStrength = composition.ironFraction * (locked ? 0.2 : 1.0); NO planetType branch).
@@ -367,10 +406,36 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const orogenyAngle = (sa - Math.floor(sa)) * Math.PI * 2;      // [0, 2π)
   const orogenyAxis = [Math.cos(orogenyAngle), Math.sin(orogenyAngle)];
 
+  // ── F4 canyons / rifts (Stage-C step 3, Relief domain — relief doc §F4.b) ───
+  // The tectonic-graben variant of canyons (I own this; Fluvial incised gorges + Cryo
+  // chasma ADD INTO the same shared `canyonHeight` accumulator downstream). A rift is a
+  // great-circle trench; its DEPTH scales with how tectonically active / stressed the
+  // crust is and shrinks as the surface erodes the rift shoulders down (relief doc D11/
+  // D12/D14). Proxy for "active": resurfacing (volcano-tectonic resurfacing rate),
+  // plate-tectonics (habitability is the subduction proxy, cf. orogenyStrength), and
+  // tidal stress (tidalProxy = Io-grade tidal heating clamped to 0..1). Dead, inert
+  // worlds (Frozen) barely rift; Io-grade worlds (Lava) rift hard. ×(1−0.4·erosion) so
+  // old eroded crust rounds/fills its rifts. 0.28 scales it into a relief amplitude
+  // (cf. mountainAmp's mix(0.25,0.6,…)); the lab `uChasmaDepth` reads it directly.
+  const tidalProxy = clamp01(tidalHeat);
+  const tectonicActivity = clamp01(Math.max(resurfacing, habitability * 0.7) + tidalProxy * 0.5);
+  const chasmaStrength = clamp01(tectonicActivity * (1 - 0.4 * erosion));
+  const chasmaDepth = chasmaStrength * 0.28;
+
+  // chasmaCount (1..3) + chasmaAxes (3 seeded unit-vec3 rift-plane normals — each great
+  // circle ⊥ its normal is a rift). Seed-deterministic so a planet's rift system is
+  // stable; production passes the real planet seed. The combiner uses chasmaCount rifts.
+  const cs = Math.sin(seed * 45.164 + 9.1) * 43758.5453;
+  const chasmaCount = 1 + Math.floor((cs - Math.floor(cs)) * 3);   // 1..3
+  const chasmaAxes = [seededUnitVec3(seed + 1), seededUnitVec3(seed + 2), seededUnitVec3(seed + 3)];
+
   return {
     mountainAmp,                                                // F1 — ridged base relief amplitude (erosion-softened)
     orogenyStrength,                                            // F1 — isotropic ridged ↔ anisotropic fold-belt blend
     orogenyAxis,                                                // F1 — per-planet strike direction (unit vec2, seed-derived)
+    chasmaDepth,                                                // F4 — rift relief amplitude (tectonic activity × young-age) → canyonHeight
+    chasmaCount,                                               // F4 — number of rifts (1..3, seed-derived)
+    chasmaAxes,                                                // F4 — rift great-circle plane normals (3× unit vec3, seed-derived)
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)
