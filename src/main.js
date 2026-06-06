@@ -1540,12 +1540,11 @@ const _portalLabMode = new URLSearchParams(location.search).has('portalLab');
 // slerp during FOLD so cutting the preview-align short isn't visually harsh).
 let _portalLabState = 'idle';
 // Distance from camera to Portal A when opened in lab-mode preview.
-// Realistic ship-scale (post-scale-audit): portal sits 50× player-ship
-// lengths ahead of camera (1 km for a 20 m ship). Derived from
-// ScaleConstants so any change to SHIP_HULL_LENGTHS_M.player or
-// PORTAL_PREVIEW_TO_SHIP propagates here. The FOLD camera ramp in
-// WarpEffect.js crosses this distance over FOLD_DUR via its quadratic
-// speed ramp (see foldPeakSpeedScenePerSec).
+// Fixed human-scale (post warp-pocket migration): Portal A sits half the
+// pocket length ahead of the camera (~30u), via portalPreviewDistanceScene()
+// in ScaleConstants, so any change to the pocket length propagates here. The
+// FOLD camera ramp in WarpEffect.js crosses this distance over FOLD_DUR via
+// its quadratic speed ramp (see foldPeakSpeedScenePerSec).
 const _portalLabPreviewDistance = portalPreviewDistanceScene();
 // Alignment animation state (drives camera slerp + entry-strip progress)
 const _portalLabAlignDuration = 1.5;

@@ -159,12 +159,14 @@ export function playerShipLengthScene() {
 
 // ── Portal Geometry Ratios ──
 //
-// Portal dimensions are all derived from the player ship length. Change the
-// ship size and everything else follows. See Game Bible §10 Scale System
-// and docs/SCALE_AUDIT.md Task 4 for the derivation.
+// The pocket's core dimensions — aperture/interior radius and tunnel length —
+// are now FIXED human-scale values (WARP_POCKET_RADIUS / WARP_POCKET_LENGTH),
+// not ship-derived; see portalApertureScene() / tunnelInteriorRadiusScene() /
+// tunnelLengthScene() below and the warp pocket migration. The ratios here are
+// the dimensions that REMAIN derived from the player ship length: the post-exit
+// rest distance and the destination-side landing strip span. See Game Bible §10
+// Scale System and docs/SCALE_AUDIT.md Task 4 for the original derivation.
 
-export const PORTAL_APERTURE_TO_SHIP       = 1;    // portal aperture radius = 1× ship length (20 m) — aperture just wider than ship
-export const PORTAL_PREVIEW_TO_SHIP        = 5;    // camera-to-portal preview distance = 5× ship length (100 m at 20 m ship)
 export const POST_EXIT_DISTANCE_TO_SHIP    = 5;    // final camera distance past Portal B on EXIT end — symmetric with preview
 export const PORTAL_LANDING_STRIP_TO_SHIP  = 100;  // span of the destination-side landing strip = 100× ship length
 

@@ -387,9 +387,9 @@ export class WarpPortal {
 
     // Layout: two rails offset ±sideOffset from the tunnel axis, first pair
     // one spacing past Portal B, then N pairs receding into the distance.
-    // All lengths proportional to `radius` so the strip tracks ship scale
-    // automatically. At PORTAL_APERTURE_TO_SHIP = 5× ship, the 20-cross
-    // landing strip spans count × radius = 20× radius = 100× ship length.
+    // All lengths proportional to `radius`, which is the fixed human-scale
+    // aperture (3u, WARP_POCKET_RADIUS). The 20-cross landing strip spans
+    // count × radius = 20 × 3u = 60u past Portal B.
     const sideOffset = radius * 2.0;
     const count = 20;
     const spacing = radius * 1.0;
@@ -426,10 +426,10 @@ export class WarpPortal {
 
     // Crosses span the camera↔portal distance with a ~10% margin on each end,
     // so the nearest cross sits in front of the ship and the farthest cross
-    // sits in front of Portal A — regardless of what PORTAL_PREVIEW_TO_SHIP
-    // happens to be. Previously the spacing was hard-tied to `radius` (2R,
-    // 4R, ..., 10R) assuming preview distance ≈ 12R; when preview shrank to
-    // 5R, three of five crosses ended up BEHIND the camera.
+    // sits in front of Portal A. The span is derived from the live preview
+    // distance (portalPreviewDistanceScene() = half the pocket length, ~30u)
+    // rather than hard-tied to `radius`, so the crosses always land between
+    // the camera and Portal A regardless of the pocket dimensions.
     const count = 5;
     const previewDist = portalPreviewDistanceScene();  // ship-to-portal distance during Space #1
     const margin = previewDist * 0.1;                  // padding at each end
