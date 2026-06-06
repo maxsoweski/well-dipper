@@ -175,6 +175,7 @@
       uniform float uTerraceCount;     // inner-wall terrace ring count
       uniform float uCraterScale;      // crater cell density (vPos * scale)
       uniform float uCraterAmp;        // overall crater relief amplitude
+      uniform vec3  uCraterOffset;     // 🎲 domain offset — default (0,0,0) = unchanged
 
       // ── F1 mountains / ranges (Stage-C step 3, Relief) — ridged base relief ──
       uniform float uMountainAmp;      // 0..1 ridged-relief amplitude (erosion-softened, driven)
@@ -183,6 +184,7 @@
       uniform float uOrogenyStrength;  // 0..1 isotropic ridged ↔ anisotropic fold-belt (driven)
       uniform vec2  uOrogenyAxis;      // per-planet strike direction (unit, from seed/angle)
       uniform float uMountainScale;    // mountain domain frequency (vPos * scale) — lab knob
+      uniform vec3  uMountainDomainOffset; // 🎲 domain offset — default (0,0,0) = unchanged
 
       // ── F4 canyons / rifts (Stage-C step 3, Relief) — tectonic graben → canyonHeight ──
       uniform float uChasmaDepth;      // 0..~0.28 rift relief amplitude (driven; ≤0 early-outs)
@@ -199,6 +201,7 @@
       uniform float uScarpFreq;        // fault-train spatial frequency (parallel scarp count) — lab knob
       uniform float uScarpWarp;        // sinuosity: warp amount of the scarp fronts — lab knob
       uniform float uScarpWarpFreq;    // warp-noise domain frequency — lab knob
+      uniform vec3  uScarpDomainOffset; // 🎲 domain offset — default (0,0,0) = unchanged
 
       // ── F6 plateaus / highlands (Stage-C step 3, Relief) — HeteroTerrain + mesa terrace ──
       uniform float uPlateauStrength;  // 0..~0.2 flat-topped highland amplitude (driven; ≤0 early-outs)
@@ -206,6 +209,7 @@
       uniform float uPlateauOffset;    // HeteroTerrain ground-level offset (stratification bias) — lab knob
       uniform float uPlateauLevels;    // mesa terrace count — lab knob
       uniform float uPlateauSoftness;  // terrace riser softness (0..1) — lab knob
+      uniform vec3  uPlateauDomainOffset; // 🎲 domain offset — default (0,0,0) = unchanged
 
       // ── F6 tessera (Stage-C step 3, Relief) — crosscutting ridge-and-groove lattice ──
       uniform float uTesseraStrength;  // 0..~0.15 lattice amplitude (high-stress gate; ≤0 early-outs)
@@ -213,6 +217,7 @@
       uniform float uTesseraFreq;      // groove-train spatial frequency (lattice density) — lab knob
       uniform float uTesseraWarp;      // groove-line sinuosity (warp amount) — lab knob
       uniform float uTesseraWarpFreq;  // warp-noise domain frequency — lab knob
+      uniform vec3  uTesseraDomainOffset; // 🎲 domain offset — default (0,0,0) = unchanged
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -471,7 +476,7 @@
           // not optional, for ridged terrain. fwBase is the SCALED input's footprint.
           float fade = clamp(octaves - float(i), 0.0, 1.0);
           if (uFwClamp == 1) fade *= 1.0 - smoothstep(0.4, 0.8, fwBase * freq);
-          vec4 n = noised(q * freq + uMacroOffset);               // share the macro seed
+          vec4 n = noised(q * freq + uMacroOffset + uMountainDomainOffset); // share macro seed (+🎲 offset)
           float signal = uRidgeOffset - abs(n.x);                 // fold
           float sq = signal * signal;                             // sharpen
           h    += amp * weight * fade * sq;
@@ -541,7 +546,7 @@
       void craterCombiner(vec3 pos, inout float h, inout vec3 grad){
         if (uCraterDensity <= 0.0) return;
         vec3 cellId, voroGrad;
-        vec2 ff = voronoi3d(pos * uCraterScale, uVoroCells, cellId, voroGrad);
+        vec2 ff = voronoi3d(pos * uCraterScale + uCraterOffset, uVoroCells, cellId, voroGrad);
         vec3 ch = hash33(cellId);                                   // per-cell hash: host gate + radius
         float host = step(1.0 - uCraterDensity, ch.x);             // uCraterDensity fraction of cells crater
         float craterRadius = mix(0.18, 0.55, ch.y);                // hashed size (cell units)
@@ -621,7 +626,7 @@
       void scarpCombiner(vec3 pos, inout float h, inout vec3 grad){
         if (uScarpStrength <= 0.0) return;
         vec3 ax = normalize(uScarpAxis);
-        vec4 wn = noised(pos * uScarpWarpFreq + uMacroOffset);    // analytic value+grad
+        vec4 wn = noised(pos * uScarpWarpFreq + uMacroOffset + uScarpDomainOffset); // analytic value+grad (+🎲 offset)
         float field  = dot(pos, ax) + uScarpWarp * wn.x;          // directional + warp
         vec3  dfield = ax + uScarpWarp * uScarpWarpFreq * wn.yzw;  // EXACT field gradient
         float phase = field * uScarpFreq;
@@ -644,7 +649,7 @@
       vec4 fbmdHetero(vec3 pos, float octaves, float fwBase, float offset){
         float freq = uNoiseScale * 0.3;
         float amp  = 0.5;
-        vec4 n0 = noised(pos * freq + uMacroOffset);
+        vec4 n0 = noised(pos * freq + uMacroOffset + uPlateauDomainOffset);
         float value = offset + amp * n0.x;                        // octave-0 ground level
         vec3  grad  = amp * freq * n0.yzw;
         float weight = value;                                     // height-stratification gain
@@ -654,7 +659,7 @@
           float w = clamp(octaves - float(i), 0.0, 1.0);
           if (uFwClamp == 1) w *= 1.0 - smoothstep(0.4, 0.8, fwBase * freq);
           vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;
-          vec4 n = noised(pos * freq + off);
+          vec4 n = noised(pos * freq + off + uPlateauDomainOffset);
           float cw = clamp(weight, 0.0, 1.0);                     // locally-const stratification weight
           value += amp * w * cw * n.x;
           grad  += amp * w * cw * freq * n.yzw;
@@ -727,7 +732,7 @@
         if (uTesseraStrength <= 0.0) return;
         // axis 0 — warped with the macro seed
         vec3 ax0 = normalize(uTesseraAxis[0]);
-        vec4 wn0 = noised(pos * uTesseraWarpFreq + uMacroOffset);
+        vec4 wn0 = noised(pos * uTesseraWarpFreq + uMacroOffset + uTesseraDomainOffset);
         float field0  = dot(pos, ax0) + uTesseraWarp * wn0.x;
         vec3  dfield0 = ax0 + uTesseraWarp * uTesseraWarpFreq * wn0.yzw;
         float phase0  = field0 * uTesseraFreq;
@@ -735,7 +740,7 @@
         vec3  dr0 = rw0.y * uTesseraFreq * dfield0;               // d(ridge0)/dpos
         // axis 1 — warped with the detail seed (decorrelated groove set)
         vec3 ax1 = normalize(uTesseraAxis[1]);
-        vec4 wn1 = noised(pos * uTesseraWarpFreq + uDetailOffset);
+        vec4 wn1 = noised(pos * uTesseraWarpFreq + uDetailOffset + uTesseraDomainOffset);
         float field1  = dot(pos, ax1) + uTesseraWarp * wn1.x;
         vec3  dfield1 = ax1 + uTesseraWarp * uTesseraWarpFreq * wn1.yzw;
         float phase1  = field1 * uTesseraFreq;
@@ -917,6 +922,7 @@
       uTerraceCount:     { value: 4.0 },   // inner-wall terrace rings
       uCraterScale:      { value: 6.0 },   // crater cell density (lab-tunable)
       uCraterAmp:        { value: 0.9 },   // overall crater relief amplitude (lab-tunable)
+      uCraterOffset:     { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
       // ── F1 mountains (Stage-C step 3, Relief) — ridged base relief ──
       uMountainAmp:      { value: 0.0 },   // ridged amplitude (driven by deriveUniforms, erosion-softened)
       uRidgeOffset:      { value: 1.0 },   // fold offset (lab-tunable)
@@ -924,6 +930,7 @@
       uOrogenyStrength:  { value: 0.0 },   // isotropic ridged ↔ fold-belt (driven)
       uOrogenyAxis:      { value: new THREE.Vector2(1, 0) },  // strike direction (driven from angle)
       uMountainScale:    { value: 1.6 },   // mountain domain frequency (lab-tunable)
+      uMountainDomainOffset: { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
       // ── F4 canyons / rifts (Stage-C step 3, Relief) — tectonic graben → canyonHeight ──
       uChasmaDepth:      { value: 0.0 },   // rift relief amplitude (driven; ≤0 early-outs)
       uChasmaCount:      { value: 1 },     // 1..3 rifts (driven from seed)
@@ -938,17 +945,20 @@
       uScarpFreq:        { value: 6.0 },   // parallel-scarp train frequency (lab-tunable)
       uScarpWarp:        { value: 0.5 },   // front sinuosity (lab-tunable)
       uScarpWarpFreq:    { value: 2.0 },   // warp-noise domain frequency (lab-tunable)
+      uScarpDomainOffset: { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
       // ── F6 plateaus / highlands (Stage-C step 3, Relief) — HeteroTerrain + mesa terrace ──
       uPlateauStrength:  { value: 0.0 },   // flat-topped highland amplitude (driven; ≤0 early-outs)
       uPlateauScale:     { value: 1.2 },   // HeteroTerrain domain frequency (lab-tunable)
       uPlateauOffset:    { value: 0.5 },   // ground-level stratification bias (lab-tunable)
       uPlateauLevels:    { value: 4.0 },   // mesa terrace count (lab-tunable)
       uPlateauSoftness:  { value: 0.4 },   // terrace riser softness (lab-tunable)
+      uPlateauDomainOffset: { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
       uTesseraStrength:  { value: 0.0 },   // crosscutting-lattice amplitude (driven; ≤0 early-outs)
       uTesseraAxis:      { value: [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0)] },  // 2 lattice orientations (driven from seed)
       uTesseraFreq:      { value: 5.0 },   // groove-train frequency / lattice density (lab-tunable)
       uTesseraWarp:      { value: 0.5 },   // groove-line sinuosity (lab-tunable)
       uTesseraWarpFreq:  { value: 2.0 },   // warp-noise domain frequency (lab-tunable)
+      uTesseraDomainOffset: { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1033,7 +1043,7 @@
       normalMode: 0,        // 0 analytic, 1 finite-diff
       octAuto: true,
       fwClamp: true,
-      spin: false,
+      spinSpeed: 0,         // rad/frame auto-rotate; 0 = stopped (preserves the old spin-off default)
       // ── Envelope (spec §2.C) — the A/B/C tunable surface; values stay OPEN (§4) ──
       ditherMode: 0,        // 0 Bayer, 1 IGN/triangular
       emissive: 0.0,        // lava/hot glow
@@ -1090,6 +1100,21 @@
       tesseraFreq: 5.0,
       tesseraWarp: 0.5,
       tesseraWarpFreq: 2.0,
+      // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
+      // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
+      cratersEnabled: true,
+      mountainsEnabled: true,
+      canyonsEnabled: true,
+      scarpsEnabled: true,
+      plateausEnabled: true,
+      tesseraEnabled: true,
+      // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
+      // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
+      craterOffset: [0,0,0],
+      mountainDomainOffset: [0,0,0],
+      scarpDomainOffset: [0,0,0],
+      plateauDomainOffset: [0,0,0],
+      tesseraDomainOffset: [0,0,0],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1109,6 +1134,18 @@
     }
     updateSeedUniforms();
 
+    // ── 🎲 randomize helpers (GUI-side, Math.random — NOT seeded; the rolls are
+    // transient, discarded on preset/qualityTier change via applyDrivers). Shapes
+    // mirror core.js seededUnitVec3() / seedOffset() so a roll lands in the same
+    // ranges the driven values do (unit sphere; per-component 0..256 noise offset). ──
+    function randUnitVec3(){
+      const z = Math.random() * 2.0 - 1.0;
+      const phi = Math.random() * Math.PI * 2.0;
+      const r = Math.sqrt(Math.max(0.0, 1.0 - z * z));
+      return [r * Math.cos(phi), r * Math.sin(phi), z];
+    }
+    function randOffset(){ return [Math.random() * 256.0, Math.random() * 256.0, Math.random() * 256.0]; }
+
     // ─────────────────────────────────────────────────────────────────────────
     // lil-gui control panel — folders mirror the driver-bundle model (spec §3).
     // Every control binds a `state` key; the frame loop writes state -> uniforms.
@@ -1125,10 +1162,9 @@
     fView.add(state, 'fwClamp').name('fwidth clamp');
     fView.add(state, 'pixelScale', 1, 6, 1).name('pixelScale ÷').onChange(() => rebuildTarget());
     fView.add(state, 'normalMode', { ANALYTIC: 0, 'FINITE-DIFF': 1 }).name('normals');
-
-    // ▸ Lab — harness mechanics, NOT planet features (spin is how you inspect, not what a planet is)
-    const fLab = gui.addFolder('Lab'); fLab.close();
-    fLab.add(state, 'spin').name('spin (slow auto-rotate)');
+    // Spin is how you INSPECT the planet (watch the terminator sweep), not what a planet is.
+    // 0 = stopped (the old spin-off default); 0.000375 (dead-center) = the original auto-rate.
+    fView.add(state, 'spinSpeed', 0, 0.00075, 0.000025).name('spin speed (rad/frame)');
 
     // ▸ Debug — voronoi3d seam-gate spike (index §5 risk #1). Temporary: this folder
     // exists to prove the KEYSTONE primitive is seam-free before any cellular feature
@@ -1218,6 +1254,10 @@
       state.tesseraStrength  = u.tesseraStrength;
       state.tesseraAxes      = u.tesseraAxes;
       for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(u.tesseraAxes[i][0], u.tesseraAxes[i][1], u.tesseraAxes[i][2]);
+      // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
+      // slate. Axes above already re-derive from the seed; reset the 5 domain offsets to 0.
+      state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
+      state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1237,6 +1277,8 @@
     fCraters.add(state, 'terraceCount', 2, 6, 1).name('terrace rings').listen();
     fCraters.add(state, 'craterScale', 1, 20, 0.5).name('cell density');
     fCraters.add(state, 'craterAmp', 0, 2, 0.01).name('amplitude');
+    fCraters.add(state, 'cratersEnabled').name('✓ enabled');
+    fCraters.add({ roll(){ state.craterOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     // ▸ Mountains (F1) — derived (amplitude/orogeny strength+strike from the preset,
     // .listen()-synced on preset change) + lab knobs (ridge fold offset/gain, scale).
     const fMountains = fRelief.addFolder('Mountains (F1)'); fMountains.open();
@@ -1246,6 +1288,8 @@
     fMountains.add(state, 'ridgeOffset', 0.8, 1.2, 0.01).name('ridge offset');
     fMountains.add(state, 'ridgeGain', 1.5, 2.5, 0.01).name('ridge gain');
     fMountains.add(state, 'mountainScale', 0.5, 5, 0.1).name('domain freq');
+    fMountains.add(state, 'mountainsEnabled').name('✓ enabled');
+    fMountains.add({ roll(){ state.orogenyAngle = Math.random() * 2.0 * Math.PI - Math.PI; state.mountainDomainOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     // ▸ Canyons (F4) — tectonic graben, writes the shared canyonHeight accumulator.
     // depth/count come from the driver preset+seed (.listen()-synced); width/floor are
     // lab knobs. A rift is a great circle; combining 1–3 gives a rift system.
@@ -1254,6 +1298,13 @@
     fCanyons.add(state, 'chasmaCount', 0, 3, 1).name('rift count').listen();
     fCanyons.add(state, 'chasmaWidth', 0.02, 0.3, 0.005).name('half-width');
     fCanyons.add(state, 'chasmaFloor', 0, 0.9, 0.01).name('flat-floor frac');
+    fCanyons.add(state, 'canyonsEnabled').name('✓ enabled');
+    // Axes aren't frame-synced (they're a per-planet seed prop written in applyDrivers),
+    // so the 🎲 writes the uniform directly — same as applyDrivers does.
+    fCanyons.add({ roll(){
+      state.chasmaAxes = [randUnitVec3(), randUnitVec3(), randUnitVec3()];
+      for (let i = 0; i < 3; i++) uniforms.uChasmaAxis.value[i].set(state.chasmaAxes[i][0], state.chasmaAxes[i][1], state.chasmaAxes[i][2]);
+    } }, 'roll').name('🎲 randomize');
     // ▸ Scarps (F5) — warped fault-block province. strength/style come from the driver
     // preset+seed (.listen()-synced); width/freq/warp are lab knobs. The scarp fronts are
     // warped iso-contours of dot(pos, axis); freq sets how many parallel scarps.
@@ -1264,6 +1315,12 @@
     fScarps.add(state, 'scarpFreq', 1, 16, 0.5).name('fault count (freq)');
     fScarps.add(state, 'scarpWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
     fScarps.add(state, 'scarpWarpFreq', 0.5, 5, 0.1).name('warp freq');
+    fScarps.add(state, 'scarpsEnabled').name('✓ enabled');
+    fScarps.add({ roll(){
+      state.scarpAxis = randUnitVec3();
+      uniforms.uScarpAxis.value.set(state.scarpAxis[0], state.scarpAxis[1], state.scarpAxis[2]);
+      state.scarpDomainOffset = randOffset();
+    } }, 'roll').name('🎲 randomize');
     // ▸ Plateaus (F6) — flat-topped highlands. strength comes from the driver preset
     // (.listen()-synced); scale/offset/levels/softness are lab knobs. HeteroTerrain makes
     // the rough-margined highs; the mesa terrace stacks them into flat treads.
@@ -1273,6 +1330,8 @@
     fPlateaus.add(state, 'plateauOffset', 0, 1.2, 0.01).name('ground offset');
     fPlateaus.add(state, 'plateauLevels', 2, 10, 1).name('mesa steps');
     fPlateaus.add(state, 'plateauSoftness', 0.05, 0.9, 0.01).name('riser softness');
+    fPlateaus.add(state, 'plateausEnabled').name('✓ enabled');
+    fPlateaus.add({ roll(){ state.plateauDomainOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     // ▸ Tessera (F6) — Venus crosscutting ridge-and-groove lattice. strength comes from
     // the driver preset (high-stress gate, .listen()-synced); the 2 lattice axes are
     // seeded (no GUI); freq/warp/warpFreq are lab knobs. Two warped 1-|sin| ridge fields
@@ -1282,6 +1341,12 @@
     fTessera.add(state, 'tesseraFreq', 1, 16, 0.5).name('lattice density (freq)');
     fTessera.add(state, 'tesseraWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
     fTessera.add(state, 'tesseraWarpFreq', 0.5, 5, 0.1).name('warp freq');
+    fTessera.add(state, 'tesseraEnabled').name('✓ enabled');
+    fTessera.add({ roll(){
+      state.tesseraAxes = [randUnitVec3(), randUnitVec3()];
+      for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(state.tesseraAxes[i][0], state.tesseraAxes[i][1], state.tesseraAxes[i][2]);
+      state.tesseraDomainOffset = randOffset();
+    } }, 'roll').name('🎲 randomize');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1338,7 +1403,7 @@
       return {
         pixelScale: state.pixelScale, octaves: state.octaves, octAuto: state.octAuto,
         levels: state.levels, perturb: state.perturb, normalMode: state.normalMode,
-        fwClamp: state.fwClamp, spin: state.spin,
+        fwClamp: state.fwClamp, spinSpeed: state.spinSpeed,
         macroSeed: state.macroSeed, detailSeed: state.detailSeed,
         yaw: +state.yaw.toFixed(4), pitch: +state.pitch.toFixed(4), distance: +state.distance.toFixed(2),
       };
@@ -1348,7 +1413,7 @@
     function applySettings(o){
       if (!o) return;
       const keys = ['pixelScale','octaves','levels','perturb','distance','yaw','pitch',
-                    'macroSeed','detailSeed','octAuto','fwClamp','spin','normalMode'];
+                    'macroSeed','detailSeed','octAuto','fwClamp','spinSpeed','normalMode'];
       for (const k of keys) if (o[k] != null) state[k] = o[k];
       if (o.pixelScale != null) rebuildTarget();
       updateSeedUniforms();
@@ -1365,7 +1430,7 @@
 
     function frame(){
       t += 0.0025;
-      if (state.spin) planet.rotation.y += 0.000375;   // 4x slower than the original 0.0015
+      planet.rotation.y += state.spinSpeed;   // 0 = stopped; 0.000375 (slider center) = the original rate
 
       // Camera orbits the origin (yaw/pitch/distance) — mouse-driven, mirrors CameraController.
       const dist = state.distance * R;
@@ -1405,41 +1470,47 @@
       // uVoroCells set by applyDrivers (qualityTier) — the debug folder's voroCells
       // still drives the spike viz; craters read the driver-set uVoroCells.
       if (state.debugMode > 0) uniforms.uVoroCells.value = state.voroCells | 0;
-      uniforms.uCraterDensity.value    = state.craterDensity;
+      uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity : 0.0;   // ✓ enable gate (preserves slider value)
       uniforms.uCraterComplexD.value   = state.craterComplexD;
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
       uniforms.uTerraceCount.value     = state.terraceCount;
       uniforms.uCraterScale.value      = state.craterScale;
       uniforms.uCraterAmp.value        = state.craterAmp;
       // F1 mountains — amplitude/orogeny driven; ridge fold + scale lab-tunable.
-      uniforms.uMountainAmp.value      = state.mountainAmp;
+      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp : 0.0;   // ✓ enable gate
       uniforms.uRidgeOffset.value      = state.ridgeOffset;
       uniforms.uRidgeGain.value        = state.ridgeGain;
       uniforms.uOrogenyStrength.value  = state.orogenyStrength;
       uniforms.uOrogenyAxis.value.set(Math.cos(state.orogenyAngle), Math.sin(state.orogenyAngle));
       uniforms.uMountainScale.value    = state.mountainScale;
       // F4 canyons — depth/count/width/floor driven+lab; axes set in applyDrivers (seed prop).
-      uniforms.uChasmaDepth.value      = state.chasmaDepth;
+      uniforms.uChasmaDepth.value      = state.canyonsEnabled ? state.chasmaDepth : 0.0;   // ✓ enable gate
       uniforms.uChasmaCount.value      = state.chasmaCount | 0;
       uniforms.uChasmaWidth.value      = state.chasmaWidth;
       uniforms.uChasmaFloor.value      = state.chasmaFloor;
       // F5 scarps — strength/style driven; width/freq/warp lab-tunable; axis set in applyDrivers.
-      uniforms.uScarpStrength.value    = state.scarpStrength;
+      uniforms.uScarpStrength.value    = state.scarpsEnabled ? state.scarpStrength : 0.0;   // ✓ enable gate
       uniforms.uScarpStyle.value       = state.scarpStyle;
       uniforms.uScarpWidth.value       = state.scarpWidth;
       uniforms.uScarpFreq.value        = state.scarpFreq;
       uniforms.uScarpWarp.value        = state.scarpWarp;
       uniforms.uScarpWarpFreq.value    = state.scarpWarpFreq;
       // F6 plateaus — strength driven; scale/offset/levels/softness lab-tunable.
-      uniforms.uPlateauStrength.value  = state.plateauStrength;
+      uniforms.uPlateauStrength.value  = state.plateausEnabled ? state.plateauStrength : 0.0;   // ✓ enable gate
       uniforms.uPlateauScale.value     = state.plateauScale;
       uniforms.uPlateauOffset.value    = state.plateauOffset;
       uniforms.uPlateauLevels.value    = state.plateauLevels;
       uniforms.uPlateauSoftness.value  = state.plateauSoftness;
-      uniforms.uTesseraStrength.value  = state.tesseraStrength;
+      uniforms.uTesseraStrength.value  = state.tesseraEnabled ? state.tesseraStrength : 0.0;   // ✓ enable gate
       uniforms.uTesseraFreq.value      = state.tesseraFreq;
       uniforms.uTesseraWarp.value      = state.tesseraWarp;
       uniforms.uTesseraWarpFreq.value  = state.tesseraWarpFreq;
+      // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
+      uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
+      uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);
+      uniforms.uScarpDomainOffset.value.set(state.scarpDomainOffset[0], state.scarpDomainOffset[1], state.scarpDomainOffset[2]);
+      uniforms.uPlateauDomainOffset.value.set(state.plateauDomainOffset[0], state.plateauDomainOffset[1], state.plateauDomainOffset[2]);
+      uniforms.uTesseraDomainOffset.value.set(state.tesseraDomainOffset[0], state.tesseraDomainOffset[1], state.tesseraDomainOffset[2]);
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
@@ -1493,9 +1564,9 @@
         <dt>Normals: ANALYTIC / FINITE-DIFF</dt><dd>A/B the new one-eval analytic-gradient normals vs the production 3-tap finite-difference path, at the same distance. Analytic should carry relief across the whole lit face; finite-diff goes flat in direct light (relief only near the terminator).</dd>
         <dt>Octaves: AUTO / MANUAL</dt><dd>AUTO = octaves ramp with distance: mix(4,9,lodRamp). MANUAL hands the octave slider control.</dd>
         <dt>fwidth clamp</dt><dd>Fades octaves that have shrunk below ~1 screen pixel to their mean, killing dither shimmer/aliasing on the far side. Off = see the raw shimmer.</dd>
-        <dt>Spin</dt><dd>Auto-rotates the planet so you can watch the terminator sweep. Default OFF — drag to rotate it yourself.</dd>
+        <dt>spin speed (rad/frame)</dt><dd>Auto-rotates the planet so you can watch the terminator sweep. 0 = stopped (default — drag to rotate it yourself); the slider center (0.000375 rad/frame) is the original auto-rate.</dd>
         <dt>Copy settings</dt><dd>Writes the live state (pixelScale, octaves, levels, perturb, toggles, yaw/pitch/distance) to the clipboard as JSON. Paste it back in chat so the next agent can reproduce the look.</dd>
-        <dt>Reset</dt><dd>Restores all defaults (distance 20, ÷3, analytic, auto octaves, clamp on, spin off).</dd>
+        <dt>Reset</dt><dd>Restores all defaults (distance 20, ÷3, analytic, auto octaves, clamp on, spin speed 0).</dd>
       </dl>
 
       <h3>HUD READOUTS (top-left)</h3>
