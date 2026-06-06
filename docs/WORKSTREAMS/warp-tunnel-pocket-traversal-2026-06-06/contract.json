@@ -1,0 +1,94 @@
+{
+  "workstream": "warp-tunnel-pocket-traversal-2026-06-06",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Pocket-traversal redesign. Stop placing the tunnel in microscopic system-space; make it its own human-scale pocket (~60u) the camera physically flies through (into Portal A, real interior, out Portal B). Real plane-crossings restore the entry/cruise/emergence choreography the 4285602 pin deleted. HYPER is load-adaptive: min-cruise + emergence gated on destination-ready. Reference impl: portal-traversal-lab.html. Design spec: docs/superpowers/specs/2026-06-06-warp-tunnel-pocket-traversal-design.md. Risk R1 (pocket rig <-> post-teleport world-coords reconciliation) resolved in the impl plan before TDD.",
+  "supersedes": "warp-tunnel-frame-reanchor-2026-06-06 (continuous re-anchor / camera-pin mechanism, commit 4285602) — UAT_FAILED_REOPENED; pin to be reverted.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-reliable-render",
+      "statement": "Every warp renders the tunnel during HYPER with no black screen, including repeat warps in the same session and warps to far targets.",
+      "verifyVia": {
+        "input": "Drive a chain of warps from Sol via _autoSelectWarpTarget() -> _beginWarpTurn(), including >=2 consecutive repeat warps (window.__wd.runRepeatWarpSuite()) and a far target; sample per HYPER frame.",
+        "observable": "On 10/10 warps, takeSceneInventory().meshes[name=='effect.warp.tunnel'] is present and inFrustum on every HYPER frame and portal mode reaches INSIDE during HYPER; zero black-HYPER frames across all runs (multi-run gate, not single-pass)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC2-entry-into-hole",
+      "statement": "Every warp flies INTO Portal A: the traversal goes OUTSIDE_A -> INSIDE via a real plane crossing, reached from OUTSIDE_A by the camera crossing the portal plane — not by a forced setTraversalMode('INSIDE').",
+      "verifyVia": {
+        "input": "Headless test (in tests/warp-tunnel-rebase.test.js, replacing the retired pin-invariant tests): construct the pocket rig + a synthetic camera at the OUTSIDE_A side and advance it forward along the pocket axis through Portal A's plane, calling WarpPortal.updateTraversal(camera) each step.",
+        "observable": "Traversal mode transitions OUTSIDE_A -> INSIDE; insideAt is recorded by updateTraversal (the plane-crossing path), and the transition is NOT produced by a forced setTraversalMode call."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-interior-forward-travel",
+      "statement": "During HYPER the camera physically advances forward through the pocket interior, facing forward — it reads as travelling a real interior, never looking backward.",
+      "verifyVia": {
+        "input": "Drive a live warp (chrome-devtools GPU 9223); sample the camera position projected onto the pocket axis and the camera forward vector each HYPER frame.",
+        "observable": "Axis-distance travelled increases monotonically across the HYPER window (real forward travel, not static texture-scroll); camera-forward dotted with the pocket axis stays positive throughout (no backward orientation)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-emergence-out-of-hole",
+      "statement": "Every warp emerges OUT through Portal B: the traversal goes INSIDE -> OUTSIDE_B via a real plane crossing, occurring BEFORE the EXIT phase completes — not a snap at onComplete.",
+      "verifyVia": {
+        "input": "Headless test (same suite, continuation of AC2): keep advancing the synthetic camera through the pocket past Portal B's plane, calling updateTraversal each step.",
+        "observable": "Traversal mode transitions INSIDE -> OUTSIDE_B; outsideBAt is recorded via the plane-crossing path, and the transition occurs before the EXIT-complete / onComplete callback fires (not coincident with it)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5-load-adaptive-emergence-gate",
+      "statement": "A slow background load extends the cruise rather than emerging into a half-loaded system: emergence is withheld until destination-ready is true, while a minimum cruise time is always honored.",
+      "verifyVia": {
+        "input": "Headless test: run the HYPER timing/gate logic with a stubbed destination-ready signal that resolves AFTER the minimum cruise time, and a control case where it resolves before.",
+        "observable": "Emergence (reaching Portal B / mode flip to OUTSIDE_B) does not occur until the ready flag is set: with a late-resolving stub the cruise duration extends past the minimum until ready; with an early-resolving stub the cruise lasts exactly the minimum. Min-cruise is never violated."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6-holistic-felt-journey",
+      "statement": "Riding the warp, the whole thing reads as into-hole -> travel -> out-of-hole: head-on approach into Portal A, a cruise that feels long, emergence out Portal B into the new system — no looking-backward, no freeze-then-snap.",
+      "verifyVia": {
+        "input": "Max rides several warps in the running game — including repeats in one session and jumps to distant targets — watching each phase.",
+        "observable": "Holistic acceptance — the warp feels like flying into and out of a hole in space, the cruise reads as long, nothing looks backward or snaps. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "WarpEffect.js phase machine (FOLD 4.0 / ENTER 1.5 / HYPER 3.0 / EXIT 2.0, WarpEffect.js:37-40) and the HYPER fallback swap timer (WarpEffect.js:272) — HYPER becomes min-cruise + ready-gated extend",
+      "WarpPortal.js traversal state machine: updateTraversal(camera) dot-product plane crossings, setTraversalMode/resetTraversal, open(pos,dir); mode flips drive disc/rim/landing-strip/stencil visibility (WarpPortal.js:672-814)",
+      "portal-traversal-lab.html (untracked, in tree) — the human-scale fly-through reference to port: Portal A z~=0, Portal B z~=-60, camera ~20u/s, same 3-state machine, systemA/B objects visible only in their OUTSIDE mode, tunnel stencil off only INSIDE",
+      "destination-ready signal: pendingSystemDataPromise (heavy procedural gen already async during FOLD via onPrepareSystem, usually done before HYPER) + a post-spawnSystem completion flag",
+      "warpSwapSystem -> spawnSystem({forWarp:true}) (main.js:5196): remaining sync cost is GPU resource creation + sky rebuild, buried mid-cruise",
+      "WorldOrigin.js: worldOrigin vector, maybeRebase, resetWorldOrigin — Risk R1: how the warp-local pocket rig reconciles with the post-teleport camera + rebased/zeroed world origin so the holes frame the correct system on each side"
+    ],
+    "outputs": [
+      "A warp-local pocket rig (~60u) decoupled from system/world coords that the camera physically flies through (R1 placement + reconciliation resolved in the impl plan, likely a dedicated warp-local rig)",
+      "Camera on-rails + subtle bank/sway drift driver during the warp, fixed forward-facing, no player WASD (signature cutscene moment)",
+      "Emergence ready-gate wiring: cruise extends until destination-ready; min-cruise enforced; GPU hitch stays buried mid-cruise",
+      "Reverted 4285602 choreography-killers in main.js (~6634-6659, ~7452): the per-frame group pin, the forced setTraversalMode('INSIDE') during HYPER, and the updateTraversal skip — traversal runs again",
+      "FOLD-start portal reset: warpPortal is reset/hidden at warp START so a fresh Portal A opens on every warp incl. repeats (fixes the leftover-visible Portal B blocking the if(!group.visible) guard at main.js:6620)",
+      "tests/warp-tunnel-rebase.test.js rewritten: the pin-invariant/characterization tests (which encoded the now-reverted pin) replaced by the OUTSIDE_A->INSIDE->OUTSIDE_B mode-sequence tests (AC2/AC4) + the ready-gate test (AC5)",
+      "runRepeatWarpSuite (src/debug/integration-suite.js) + its __wd wiring (src/debug/SceneInspector.js) KEPT as the AC1 reliability harness"
+    ],
+    "mustStayWorking": [
+      "The clean single warp from Sol renders the tunnel during HYPER (the path that already worked — RW1 baseline)",
+      "Post-arrival fly-back portal follow: the OUTSIDE_B per-frame portal reposition (main.js:6782) and the leftover-visible portal from onComplete (main.js:3039)",
+      "warp-landing-strip-persists behavior (separate, UAT-pending feature) — unchanged",
+      "World-origin rebasing for celestial bodies (the per-frame truePos - worldOrigin rewrite, main.js:6075-6098) — visually identical",
+      "cc917c2 reset-on-swap semantics (resetWorldOrigin wired into spawnSystem) — this builds on it and must not regress system-swap body positioning",
+      "The tunnel VISUAL shader: streaming wall starfield (uScroll), rim glow, origin->destination color-mix (uDestMix / portalBridgeMix), landing strip on OUTSIDE_B — unchanged",
+      "The dual-portal _useDualPortal path and overall FOLD/ENTER/HYPER/EXIT phase identity"
+    ]
+  }
+}
