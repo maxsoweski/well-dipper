@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -479,5 +479,119 @@ describe('scarpAxis (F5 — seeded scarp-front orientation)', () => {
     const scarp = deriveUniforms({ seed: 42 }).scarpAxis;
     const rift  = deriveUniforms({ seed: 42 }).chasmaAxes[0];
     expect(Math.abs(scarp[0] - rift[0]) + Math.abs(scarp[2] - rift[2])).toBeGreaterThan(1e-3);
+  });
+});
+
+// ── F6 terraceProfile() oracle — the mesa/plateau height-terrace (relief doc §F6.a) ─
+// The GLSL terrace is transcribed from this. Quantizes a height into `levels` flat treads
+// separated by SOFT risers (smoothstep) so the gradient exists (a hard floor(h·N)/N has
+// none). value is continuous across band boundaries; only dv/dh is kinked (tread↔riser),
+// pinned vs finite-diff INSIDE a riser (relief-doc §5.4 gate); flat-tread zero-slope tested.
+describe('terraceProfile — mesa-step shape invariants (relief doc §F6.a)', () => {
+  it('lands a tread value exactly on a band level at the tread', () => {
+    // h=0.10, levels=4 → scaled 0.4, idx 0, frac 0.4 < (1−0.4)=0.6 → tread, value 0
+    expect(terraceProfile(0.10, 4, 0.4).value).toBeCloseTo(0.0, 6);
+    // h=0.35 → scaled 1.4, idx 1, frac 0.4 tread → value 1/4
+    expect(terraceProfile(0.35, 4, 0.4).value).toBeCloseTo(0.25, 6);
+  });
+
+  it('flat treads have zero slope', () => {
+    expect(terraceProfile(0.10, 4, 0.4).dvdh).toBeCloseTo(0.0, 6);
+    expect(terraceProfile(0.35, 4, 0.4).dvdh).toBeCloseTo(0.0, 6);
+  });
+
+  it('the riser rises (nonzero slope between treads)', () => {
+    expect(terraceProfile(0.22, 4, 0.4).dvdh).toBeGreaterThan(0.0);   // frac 0.88, in riser
+  });
+
+  it('is monotonic non-decreasing in h', () => {
+    let prev = -Infinity;
+    for (let h = 0; h <= 1; h += 0.013) {
+      const v = terraceProfile(h, 4, 0.4).value;
+      expect(v).toBeGreaterThanOrEqual(prev - 1e-9);
+      prev = v;
+    }
+  });
+
+  it('is continuous across a band boundary (no value jump)', () => {
+    const below = terraceProfile(0.2499, 4, 0.4).value;   // top of band 0
+    const above = terraceProfile(0.2501, 4, 0.4).value;   // tread of band 1
+    expect(Math.abs(above - below)).toBeLessThan(1e-2);
+  });
+});
+
+describe('terraceProfile — analytic gradient vs finite-diff (relief doc §5.4 silent-bug gate)', () => {
+  const EPS = 1e-5;
+  it('analytic dvdh matches central finite-difference INSIDE a riser', () => {
+    // Sweep within band 0's riser: frac ∈ (0.6,1.0) ⇒ h ∈ (0.15,0.25); stay clear of
+    // the tread↔riser kink (h=0.15) and the band boundary (h=0.25) where dv/dh jumps.
+    for (let h = 0.16; h < 0.245; h += 0.002) {
+      const { dvdh } = terraceProfile(h, 4, 0.4);
+      const fd = (terraceProfile(h + EPS, 4, 0.4).value - terraceProfile(h - EPS, 4, 0.4).value) / (2 * EPS);
+      expect(dvdh).toBeCloseTo(fd, 4);
+    }
+  });
+});
+
+// ── F6 plateau / tessera generation-side surfacings (relief doc §F6.b) ───────
+// plateauStrength (flat-topped highland amplitude) grows with tectonic activity (crustal
+// thickening) and erodes down. tesseraStrength (Venus crosscutting lattice) fires ONLY on
+// the most tectonically stressed worlds (a high gate), eroded-down. tesseraAxes = 2 seeded
+// unit vec3 lattice orientations.
+describe('plateauStrength (F6 — tectonic thickening, eroded-down)', () => {
+  const ACTIVE = { habitability: 0.8, surfaceHistory: { erosion: 0.0, resurfacingRate: 0.5 } };
+  const DEAD   = { habitability: 0.05, surfaceHistory: { erosion: 0.1, resurfacingRate: 0.05 } };
+
+  it('an active world builds far more plateau than a dead one', () => {
+    expect(deriveUniforms(ACTIVE).plateauStrength).toBeGreaterThan(deriveUniforms(DEAD).plateauStrength * 3);
+  });
+
+  it('erosion lowers the plateau amplitude', () => {
+    const fresh  = deriveUniforms({ habitability: 0.8, surfaceHistory: { erosion: 0.0, resurfacingRate: 0.5 } }).plateauStrength;
+    const eroded = deriveUniforms({ habitability: 0.8, surfaceHistory: { erosion: 1.0, resurfacingRate: 0.5 } }).plateauStrength;
+    expect(eroded).toBeLessThan(fresh);
+  });
+
+  it('stays finite and ≥ 0 on an empty bundle', () => {
+    const s = deriveUniforms({}).plateauStrength;
+    expect(Number.isFinite(s)).toBe(true);
+    expect(s).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('tesseraStrength (F6 — only the most tectonically stressed worlds)', () => {
+  it('a violently active world (Io/Venus-grade) shows tessera', () => {
+    const lava = deriveUniforms({ eccentricity: 0.15, orbitRadiusEarth: 938, radiusEarth: 0.9, habitability: 0, surfaceHistory: { erosion: 0, resurfacingRate: 0.95 } });
+    expect(lava.tesseraStrength).toBeGreaterThan(0.05);
+  });
+
+  it('a mild/dead world shows essentially none (high gate)', () => {
+    const mild = deriveUniforms({ habitability: 0.3, surfaceHistory: { erosion: 0.2, resurfacingRate: 0.1 } });
+    expect(mild.tesseraStrength).toBeLessThan(0.02);
+  });
+
+  it('stays finite and ≥ 0 on an empty bundle', () => {
+    const s = deriveUniforms({}).tesseraStrength;
+    expect(Number.isFinite(s)).toBe(true);
+    expect(s).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('tesseraAxes (F6 — two seeded lattice orientations)', () => {
+  it('are 2 unit vec3', () => {
+    const ax = deriveUniforms({ seed: 1234 }).tesseraAxes;
+    expect(ax.length).toBe(2);
+    for (const a of ax) expect(Math.hypot(a[0], a[1], a[2])).toBeCloseTo(1.0, 6);
+  });
+
+  it('the two lattice axes differ (a real crosscutting grid)', () => {
+    const [a, b] = deriveUniforms({ seed: 1234 }).tesseraAxes;
+    expect(Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])).toBeGreaterThan(1e-3);
+  });
+
+  it('is deterministic for a given seed', () => {
+    const a = deriveUniforms({ seed: 42 }).tesseraAxes[0];
+    const b = deriveUniforms({ seed: 42 }).tesseraAxes[0];
+    expect(a[0]).toBeCloseTo(b[0], 12);
   });
 });

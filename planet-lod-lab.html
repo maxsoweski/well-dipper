@@ -200,6 +200,13 @@
       uniform float uScarpWarp;        // sinuosity: warp amount of the scarp fronts — lab knob
       uniform float uScarpWarpFreq;    // warp-noise domain frequency — lab knob
 
+      // ── F6 plateaus / highlands (Stage-C step 3, Relief) — HeteroTerrain + mesa terrace ──
+      uniform float uPlateauStrength;  // 0..~0.2 flat-topped highland amplitude (driven; ≤0 early-outs)
+      uniform float uPlateauScale;     // HeteroTerrain domain frequency — lab knob
+      uniform float uPlateauOffset;    // HeteroTerrain ground-level offset (stratification bias) — lab knob
+      uniform float uPlateauLevels;    // mesa terrace count — lab knob
+      uniform float uPlateauSoftness;  // terrace riser softness (0..1) — lab knob
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -620,6 +627,73 @@
         grad += amp * sp.y * cos(phase) * uScarpFreq * dfield;
       }
 
+      // ── F6 HeteroTerrain (Stage-C step 3, Relief — relief doc §F6.a) ──
+      // Musgrave height-stratified fBm: each octave's contribution is weighted by the
+      // RUNNING height (clamp(value,0,1)) so high areas grow rough and low areas stay
+      // smooth → broad flat-floored basins + rough-margined highlands (the plateau base).
+      // The weight is treated locally-constant per octave (Musgrave/Decarpentier, same as
+      // fbmdRidged's weight, so the gradient is the standard fbmd chain rule scaled by
+      // the weight. Carries fbmd's trailing-octave + fwidth fade (anti-shimmer, §5.3).
+      vec4 fbmdHetero(vec3 pos, float octaves, float fwBase, float offset){
+        float freq = uNoiseScale * 0.3;
+        float amp  = 0.5;
+        vec4 n0 = noised(pos * freq + uMacroOffset);
+        float value = offset + amp * n0.x;                        // octave-0 ground level
+        vec3  grad  = amp * freq * n0.yzw;
+        float weight = value;                                     // height-stratification gain
+        amp *= 0.5; freq *= 2.0;
+        for (int i = 1; i < 12; i++){
+          if (float(i) >= octaves) break;
+          float w = clamp(octaves - float(i), 0.0, 1.0);
+          if (uFwClamp == 1) w *= 1.0 - smoothstep(0.4, 0.8, fwBase * freq);
+          vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;
+          vec4 n = noised(pos * freq + off);
+          float cw = clamp(weight, 0.0, 1.0);                     // locally-const stratification weight
+          value += amp * w * cw * n.x;
+          grad  += amp * w * cw * freq * n.yzw;
+          weight = value;
+          amp *= 0.5; freq *= 2.0;
+        }
+        return vec4(value, grad);
+      }
+
+      // ── F6 mesa terrace (Stage-C step 3, Relief) — transcribed from terraceProfile()
+      // in planet-lod-lab-core.js (same soft-riser smoothstep, vitest-pinned slope).
+      // Returns vec2(terraced value, dv/dh) — flat treads, soft risers between.
+      vec2 terraceProfile(float h, float levels, float softness){
+        float scaled = h * levels;
+        float idx = floor(scaled);
+        float frac = scaled - idx;
+        float e0 = 1.0 - softness;
+        float riser = smoothstep(e0, 1.0, frac);
+        float value = (idx + riser) / levels;
+        float dvdh = 0.0;
+        float span = 1.0 - e0;
+        if (span > 1e-6 && frac > e0 && frac < 1.0){
+          float t = (frac - e0) / span;
+          dvdh = (6.0 * t * (1.0 - t)) / span;
+        }
+        return vec2(value, dvdh);
+      }
+
+      // F6 plateau combiner — flat-topped highlands. The HeteroTerrain height is run
+      // through the mesa terrace, so broad highs become stacked flat treads with steep
+      // risers (the plateau/mesa read). Chain rule: d(terrace)/dpos = dv/dh · dheight/dpos,
+      // and dheight/dpos = ph.grad · uPlateauScale. uPlateauStrength≤0 ⇒ early-out
+      // (Stage-A base + F1/F2/F4/F5 untouched). The −0.5 removes a DC bias (shading is
+      // normal-only, so the constant is cosmetic; the gradient is what lights).
+      void plateauCombiner(vec3 pos, float fwBase, inout float h, inout vec3 grad){
+        if (uPlateauStrength <= 0.0) return;
+        // Cap octaves so the terraced field stays BROAD — terracing a full multi-octave
+        // height chops fine detail into band-crossing noise instead of broad flat mesas.
+        // Plateaus are large features; they don't gain fine roughness at high LOD.
+        float plOct = min(uOctaves, 3.0);
+        vec4 ph = fbmdHetero(pos * uPlateauScale, plOct, fwBase * uPlateauScale, uPlateauOffset);
+        vec2 tp = terraceProfile(ph.x, uPlateauLevels, uPlateauSoftness);
+        h    += uPlateauStrength * (tp.x - 0.5);
+        grad += uPlateauStrength * tp.y * ph.yzw * uPlateauScale;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -688,6 +762,7 @@
           craterCombiner(vPos, h, grad);
           canyonCombiner(vPos, h, canyonHeight, grad);
           scarpCombiner(vPos, h, grad);
+          plateauCombiner(vPos, fwBase, h, grad);
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
         }
@@ -808,6 +883,12 @@
       uScarpFreq:        { value: 6.0 },   // parallel-scarp train frequency (lab-tunable)
       uScarpWarp:        { value: 0.5 },   // front sinuosity (lab-tunable)
       uScarpWarpFreq:    { value: 2.0 },   // warp-noise domain frequency (lab-tunable)
+      // ── F6 plateaus / highlands (Stage-C step 3, Relief) — HeteroTerrain + mesa terrace ──
+      uPlateauStrength:  { value: 0.0 },   // flat-topped highland amplitude (driven; ≤0 early-outs)
+      uPlateauScale:     { value: 1.2 },   // HeteroTerrain domain frequency (lab-tunable)
+      uPlateauOffset:    { value: 0.5 },   // ground-level stratification bias (lab-tunable)
+      uPlateauLevels:    { value: 4.0 },   // mesa terrace count (lab-tunable)
+      uPlateauSoftness:  { value: 0.4 },   // terrace riser softness (lab-tunable)
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -937,6 +1018,13 @@
       scarpWarp: 0.5,
       scarpWarpFreq: 2.0,
       scarpAxis: [0,1,0],
+      // ── F6 plateaus (Stage-C step 3, Relief) — derived (strength from the preset) +
+      // lab-tunable (scale/offset/levels/softness). ──
+      plateauStrength: 0.0,
+      plateauScale: 1.2,
+      plateauOffset: 0.5,
+      plateauLevels: 4.0,
+      plateauSoftness: 0.4,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1056,6 +1144,10 @@
       state.scarpStyle       = u.scarpStyle;
       state.scarpAxis        = u.scarpAxis;
       uniforms.uScarpAxis.value.set(u.scarpAxis[0], u.scarpAxis[1], u.scarpAxis[2]);
+      // F6 plateaus (Stage-C step 3) — derived strength flows into state (frame loop →
+      // uniform); scale/offset/levels/softness are lab knobs. (tesseraStrength/tesseraAxes
+      // are derived + tested but their combiner is deferred — no uniform reads them yet.)
+      state.plateauStrength  = u.plateauStrength;
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1102,6 +1194,15 @@
     fScarps.add(state, 'scarpFreq', 1, 16, 0.5).name('fault count (freq)');
     fScarps.add(state, 'scarpWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
     fScarps.add(state, 'scarpWarpFreq', 0.5, 5, 0.1).name('warp freq');
+    // ▸ Plateaus (F6) — flat-topped highlands. strength comes from the driver preset
+    // (.listen()-synced); scale/offset/levels/softness are lab knobs. HeteroTerrain makes
+    // the rough-margined highs; the mesa terrace stacks them into flat treads.
+    const fPlateaus = fRelief.addFolder('Plateaus (F6)'); fPlateaus.open();
+    fPlateaus.add(state, 'plateauStrength', 0, 0.4, 0.005).name('strength (thickening)').listen();
+    fPlateaus.add(state, 'plateauScale', 0.3, 4, 0.1).name('domain freq');
+    fPlateaus.add(state, 'plateauOffset', 0, 1.2, 0.01).name('ground offset');
+    fPlateaus.add(state, 'plateauLevels', 2, 10, 1).name('mesa steps');
+    fPlateaus.add(state, 'plateauSoftness', 0.05, 0.9, 0.01).name('riser softness');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1250,6 +1351,12 @@
       uniforms.uScarpFreq.value        = state.scarpFreq;
       uniforms.uScarpWarp.value        = state.scarpWarp;
       uniforms.uScarpWarpFreq.value    = state.scarpWarpFreq;
+      // F6 plateaus — strength driven; scale/offset/levels/softness lab-tunable.
+      uniforms.uPlateauStrength.value  = state.plateauStrength;
+      uniforms.uPlateauScale.value     = state.plateauScale;
+      uniforms.uPlateauOffset.value    = state.plateauOffset;
+      uniforms.uPlateauLevels.value    = state.plateauLevels;
+      uniforms.uPlateauSoftness.value  = state.plateauSoftness;
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =

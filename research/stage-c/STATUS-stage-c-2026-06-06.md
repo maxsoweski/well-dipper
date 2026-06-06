@@ -115,8 +115,8 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F1 | **Mountains / ranges** (ridged multifractal, orogeny belts) | ✅ **DONE** — ridged base relief live; see below |
 | F4 | **Canyons / rifts** (tectonic graben — **writes `canyonHeight`**) | ✅ **DONE** — first `canyonHeight` writer live; see below |
 | F5 | **Scarps & fault systems** (warped fault-block province) | ✅ **DONE** — warped soft-step cliffs live; see below |
-| F6 | Plateaus / highlands / tessera | ◻ next |
-| F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ |
+| F6 | **Plateaus / highlands / tessera** | ✅ **DONE (plateau core)** — HeteroTerrain + mesa terrace live; tessera deferred; see below |
+| F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ next |
 | F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ |
 | F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ◻ |
 | F9/F10 | Chaos + ridged-icy (reads SHARED `uCryoActivity` from Cryo) | ◻ (cross-domain seam) |
@@ -285,6 +285,63 @@ deferred), exactly as F4 shipped the linear chasma and deferred the Voronoi web.
   §5.3 fwidth/trailing-octave fade rule doesn't apply; at very high `uScarpFreq` the train
   could shimmer — kept modest (default 6) and verified clean; add an fwidth amplitude fade
   if a future preset pushes freq high.
+
+### F6 — Plateaus / highlands / tessera (DONE — plateau core; tessera deferred)
+Flat-topped highlands via **Musgrave HeteroTerrain + a mesa height-terrace**. I shipped
+the **plateau core** (the primary "plateaus / highlands" variant) and DEFERRED **tessera**
+(the rarer Venus crosscutting lattice) — mirroring F2 (deferred peak-ring basins), F4
+(deferred Voronoi web), F5 (deferred Voronoi scarp): ship the felt core, defer the rich/
+rare variant. Tessera's generation-side surfacings (`tesseraStrength`/`tesseraAxes`) are
+already derived + TDD'd, so its combiner is a small follow-up.
+- **CPU oracle** `terraceProfile(h, levels, softness)` in `planet-lod-lab-core.js` →
+  `{value, dvdh}`: quantizes a height into `levels` flat treads separated by SOFT risers
+  (`smoothstep`) so the gradient exists (a hard `floor(h·N)/N` has none). `value` is
+  CONTINUOUS at every band boundary (tread of band k+1 = top of band k) — only `dvdh` is
+  kinked (tread↔riser); pinned vs central finite-diff INSIDE a riser (relief-doc §5.4 gate),
+  flat-tread zero-slope tested separately. HeteroTerrain itself is GLSL-only (it reweights
+  the already-finite-diff-tested `noised()` octave — same status as `fbmd`/`fbmdRidged`).
+- **deriveUniforms** surfaces `plateauStrength` (= `clamp01(tectonicActivity ×
+  (1−0.4·erosion)) × 0.2` — crustal thickening grows highlands, eroded-down; reuses the F4
+  `tectonicActivity` proxy), `tesseraStrength` (= `clamp01(smoothstep(0.45,0.9,
+  tectonicActivity) × (1−0.4·erosion)) × 0.15` — a HIGH gate so only Venus/Io-grade worlds
+  show the lattice; tessera combiner deferred, but the field is live + tested),
+  `tesseraAxes` (2× seeded unit-vec3 lattice orientations via `seededUnitVec3(seed+8/+9)`).
+- **GLSL** `fbmdHetero()` (HeteroTerrain: per-octave contribution weighted by the running
+  height `clamp(value,0,1)` → high areas rough, low areas smooth/flat-floored; weight
+  locally-constant per octave like `fbmdRidged`'s, so the gradient is the standard fbmd
+  chain rule scaled by the weight; carries fbmd's trailing-octave + fwidth fade) +
+  `terraceProfile()` + `plateauCombiner()` (terraces the hetero height → mesa steps; chain
+  rule `dv/dh · ph.grad · uPlateauScale`). **Octaves CAPPED at 3** in the combiner — the
+  cycle-1 fix: terracing a FULL multi-octave height chops fine detail into band-crossing
+  noise instead of broad mesas; plateaus are large features that don't gain fine roughness
+  at high LOD. `uPlateauStrength≤0` early-outs (Stage-A base + F1/F2/F4/F5 untouched). Wired
+  Stage-2 after `scarpCombiner`; new `▸ Plateaus (F6)` lil-gui folder (strength driven via
+  `.listen()`; scale/offset/levels/softness lab knobs).
+- **15 TDD tests** added to `tests/planet-lod-relief.test.js`; **149 lab tests green**
+  (`npx vitest run tests/planet-lod-*.test.js`).
+- **Live-verified `:9223`** (screenshots `f6-01..04`): isolated plateau → broad flat-floored
+  lowlands vs rough-margined highlands (HeteroTerrain stratification) ✓; terrace cranked
+  (levels 7, sharp risers) → distinct stacked mesa-step contours, confirming the terrace
+  mechanism ✓; plateau off (`uPlateauStrength=0`) → bare FBM base restored (no regression) ✓;
+  Rocky preset (real bundle → derives `plateauStrength=0.0825`, `tesseraStrength=0.0029`
+  near-zero) → subtle broad plateau composes with complex craters + ridged mountains +
+  scarps + rift, full Earthlike stack, no blowout ✓; console clean (vite + benign lil-gui
+  form-field issue only).
+- **Cycle-1 fix logged (think-before-acting):** first render was uniform speckle — root
+  cause was terracing the full multi-octave hetero height (fine detail crossed terrace
+  bands everywhere → noise). Capping the plateau base to 3 octaves (broad field) resolved
+  it in one cycle; no parameter-thrashing.
+- **No new cross-domain shared uniform** — `plateauStrength`/`tesseraStrength`/`tesseraAxes`
+  are Relief-internal, so REGISTRY-canonical-uniforms.md is unchanged.
+- **Carry-forward (relief-doc §F6, not blocking):** (1) **Tessera lattice combiner**
+  DEFERRED — the cheap path is two intersecting warped-iso-contour ridge fields (reuses F5's
+  warp at the 2 seeded `tesseraAxes`), the rich path the `voronoi3d` edge-distance pass-2
+  (shared with F4-web/F5-rich). The `tesseraStrength`/`tesseraAxes` derivations are LIVE +
+  tested; only the GLSL combiner + its `1−|sin|` ridge oracle remain. NB §F6.a notes EXOTIC
+  may own the cleaner P15 lattice — coordinate before building the rich tier. (2) **Rough
+  margins as a separate high-octave term** (true HeteroTerrain "rough-margined highlands"
+  with un-terraced fine detail riding the terraced base) DEFERRED — the capped-octave base
+  reads as broad plateaus now; layering fine roughness on the margins is additive.
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

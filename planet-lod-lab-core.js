@@ -273,6 +273,36 @@ export function scarpProfile(field, level = 0.0, width = 0.15) {
   return { height, dhdf };
 }
 
+// ── terraceProfile — F6 mesa/plateau height-terrace (relief doc §F6.a) ───────
+// Plateaus/mesas read as STACKED FLAT TREADS separated by steep risers. This quantizes
+// a height into `levels` bands but with a SOFT riser (smoothstep) so the gradient exists
+// (a hard floor(h·N)/N has none). Returns the terraced value + its slope dv/dh:
+//
+//   scaled = h·levels ; idx = floor(scaled) ; frac = scaled − idx        (∈ [0,1))
+//   riser  = smoothstep(1−softness, 1, frac)   (0 on the flat tread, →1 at the band top)
+//   value  = (idx + riser) / levels            (continuous across band boundaries)
+//   dv/dh  = smoothstep'(1−softness, 1, frac)  (0 on the tread, peaks mid-riser)
+//
+// The value is CONTINUOUS at every band boundary (tread of band k+1 = top of band k), so
+// only the DERIVATIVE is kinked (tread↔riser). Pinned vs finite-diff INSIDE a riser
+// (relief-doc §5.4 silent-bug gate); the flat-tread zero-slope is a separate invariant.
+// The GLSL terraceProfile() is transcribed from this (same softstep riser).
+export function terraceProfile(h, levels = 4, softness = 0.4) {
+  const scaled = h * levels;
+  const idx = Math.floor(scaled);
+  const frac = scaled - idx;                    // [0,1)
+  const e0 = 1.0 - softness;                     // riser starts at this point in the band
+  const riser = smoothstep(e0, 1.0, frac);       // 0 on tread → 1 at band top
+  const value = (idx + riser) / levels;
+  let dvdh = 0.0;
+  const span = 1.0 - e0;                          // = softness
+  if (span > 1e-9 && frac > e0 && frac < 1.0) {
+    const t = (frac - e0) / span;
+    dvdh = (6.0 * t * (1.0 - t)) / span;          // d/dfrac of smoothstep = d/dh of value
+  }
+  return { value, dvdh };
+}
+
 // seededUnitVec3 — a deterministic ~uniform point on the unit sphere from a scalar seed.
 // z uniform in [-1,1], azimuth uniform in [0,2π) (the standard sphere-point sampler);
 // shape mirrors seedOffset()'s sin-fract hashing. Used for F4 rift-plane normals.
@@ -477,6 +507,24 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // they run as parallel fault lines ⊥ this axis. Seed-deterministic (stable per planet).
   const scarpAxis = seededUnitVec3(seed + 7);
 
+  // ── F6 plateaus / highlands / tessera (Stage-C step 3, Relief — relief doc §F6.b) ──
+  // Plateaus/highlands are THICKENED crust — they grow with tectonic activity (crustal
+  // thickening D11/D12) and erode down over time. The HeteroTerrain shader makes them
+  // flat-topped with rough margins; the terrace adds mesa steps. plateauStrength is the
+  // relief amplitude (×0.2 ceiling — felt but below mountains/chasma). Reuses the F4
+  // `tectonicActivity` proxy (resurfacing / plate-subduction / tidal-stress).
+  const plateauStrength = clamp01(tectonicActivity * (1 - 0.4 * erosion)) * 0.2;
+
+  // tessera (Venus Ovda Regio) = INTENSELY deformed crust — only the MOST tectonically
+  // stressed worlds show the crosscutting ridge lattice, so a high smoothstep gate on
+  // tectonicActivity (a dead/mild world shows none), eroded-down. ×0.15 scales the
+  // dual-axis intersecting-ridge lattice amplitude.
+  const tesseraStrength = clamp01(smoothstep(0.45, 0.9, tectonicActivity) * (1 - 0.4 * erosion)) * 0.15;
+
+  // tesseraAxes: 2 seeded unit-vec3 — the two lattice orientations whose intersecting
+  // warped ridges form the crosscutting tessera grid (seed-deterministic per planet).
+  const tesseraAxes = [seededUnitVec3(seed + 8), seededUnitVec3(seed + 9)];
+
   return {
     mountainAmp,                                                // F1 — ridged base relief amplitude (erosion-softened)
     orogenyStrength,                                            // F1 — isotropic ridged ↔ anisotropic fold-belt blend
@@ -487,6 +535,9 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     scarpStrength,                                             // F5 — fault-scarp relief amplitude (cooling-contraction × smallness, eroded-down)
     scarpStyle,                                                // F5 — 0=thrust↔1=normal cliff polarity (rock vs ice, from volatileFraction)
     scarpAxis,                                                 // F5 — scarp-front orientation axis (unit vec3, seed-derived)
+    plateauStrength,                                           // F6 — flat-topped highland relief amplitude (tectonic thickening, eroded-down)
+    tesseraStrength,                                           // F6 — crosscutting-lattice amplitude (high-stress gate, eroded-down)
+    tesseraAxes,                                               // F6 — 2 lattice orientations (unit vec3 ×2, seed-derived)
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)
