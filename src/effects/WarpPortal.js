@@ -29,44 +29,29 @@ import {
  */
 export class WarpPortal {
   /**
-   * Scale notes (Max 2026-04-16 "think from first principles"):
+   * Scale notes — human-scale "pocket" (2026-06-06 rebuild):
    *
-   * Ships spawn at `planetRadius × 0.05..0.15` (ShipSpawner.js:72), with a
-   * minimum of 0.002. A typical ship near an Earth-sized planet (0.042 radius)
-   * renders at ~0.005 scene units. Max's spec: portal ≈ 5× ship visible size,
-   * "way smaller than a planet," appearing close to the player.
+   * The warp tunnel is a FIXED human-scale pocket the camera physically flies
+   * through, matching portal-traversal-lab.html (60u tunnel, 3u disc/interior
+   * radius). The defaults resolve to those values via ScaleConstants'
+   * WARP_POCKET_* constants:
+   *   portalApertureScene()         → WARP_POCKET_RADIUS = 3
+   *   TUNNEL_LENGTH_SCENE           → WARP_POCKET_LENGTH = 60
+   *   TUNNEL_INTERIOR_RADIUS_SCENE  → WARP_POCKET_RADIUS = 3
    *
-   * Scale math:
-   *   5× ship (0.005) = 0.025 portal radius. For reference — this is smaller
-   *   than Earth (0.042), much smaller than Jupiter (0.48), but larger than
-   *   a small moon (0.004). A player looking at the portal sees something
-   *   ship-scale, not planet-scale.
+   * History: the rig was previously derived from player-ship length, which put
+   * it at AU/light-year scale (tunnel ≈ 6.68e-5u, aperture ≈ 1.3e-7u). A
+   * sub-micron pocket meant a slightly-off anchor left the camera entirely
+   * outside the geometry and the warp went black. The fixed pocket gives real,
+   * forgiving geometry the camera reliably enters and crosses.
    *
-   * Astronomical scale (previous values 8 / 540 / 130) was 300-400× too big —
-   * portal appeared past planetary orbits, landing strip spanned an AU.
+   * Aperture, tunnel interior, and the traversal gate now share one radius
+   * (3u) so the portal opening, the corridor walls, and the plane-crossing
+   * test all agree — clean portal/tunnel seam, no "bigger on the inside" trick.
    *
-   *   portal radius 0.025   → 5× typical ship, way < any planet
-   *   tunnel length 200     → unchanged; fits HYPER_DUR=3s × 80u/s = 240u budget
-   *   tunnel radius 0.025   → thin tube (aspect 8000:1) — camera on axis sees
-   *                            a converging hyperspace corridor from inside
-   *   preview distance 2    → close (portal 0.025 subtends ~0.7° at 2u, small
-   *                            but visible dot; camera reaches in first 0.3s
-   *                            of FOLD via the 40u/s peak ramp)
-   *   entry strip 5 × 0.4   → 2u span fits 2u preview
-   *   landing strip 20 × 0.2 → 4u "runway" past Portal B, local not astronomical
-   *
-   * Note: tunnel interior RADIUS is decoupled from portal APERTURE radius.
-   * Aperture is ship-scale per Max's spec (0.025 = 5× ship). Tunnel interior
-   * is larger (2.0 = "hyperspace corridor" scale) so the inside-the-tunnel
-   * visual reads as flying through a cylindrical space instead of a thread.
-   * The stencil mask of the disc clips the tunnel to the small aperture
-   * from outside, so viewers outside see a ship-scale portal. Once inside,
-   * stencil is off (setTraversalMode INSIDE) and the full wider cylinder
-   * renders — it's a TARDIS-style "bigger on the inside" effect.
-   *
-   * @param {number} [radius=0.025] — portal opening (aperture) radius in scene units
-   * @param {number} [tunnelLength=200] — distance between Portal A and Portal B
-   * @param {number} [tunnelRadius=2.0] — tunnel interior cylinder radius
+   * @param {number} [radius=3]        — portal opening (aperture) radius in scene units
+   * @param {number} [tunnelLength=60] — distance between Portal A and Portal B
+   * @param {number} [tunnelRadius=3]  — tunnel interior cylinder radius
    */
   constructor(
     radius = portalApertureScene(),
@@ -76,6 +61,14 @@ export class WarpPortal {
     this._radius = radius;
     this._tunnelLength = tunnelLength;
     this._tunnelRadius = tunnelRadius;
+
+    // Stable traversal gate radius — the radius the plane-crossing state
+    // machine uses to decide whether the camera passed THROUGH a portal disc
+    // (vs. outside its rim). It must NOT track the opening animation
+    // (this._discA.scale shrinks/grows while the portal animates open), or the
+    // gate would spuriously change size mid-warp. Fixed at the human-scale
+    // tunnel interior radius (≈3u, matching the lab's R=3 disc).
+    this._gateRadiusScene = tunnelRadius;
 
     const STENCIL_REF = 1;
 
@@ -756,8 +749,12 @@ export class WarpPortal {
     S.discBPos.setFromMatrixPosition(this._discB.matrixWorld);
     S.discBNormal.set(0, 0, 1).transformDirection(this._discB.matrixWorld);
 
-    // Effective disc radius in world space (respect scale)
-    const discRadius = this._radius * this._discA.scale.x;
+    // Stable human-scale gate radius (≈3u). Deliberately NOT
+    // `this._radius * this._discA.scale.x` — that tracks the opening animation
+    // and would shrink the gate while the portal animates open, which can let
+    // a frame's camera step skip "through" the disc test. The test fixture and
+    // portal-traversal-lab both use a fixed R=3 gate.
+    const discRadius = this._gateRadiusScene;
 
     // Advance the pure plane-crossing state machine. It returns a new state;
     // a mode change is mirrored into setTraversalMode below, which performs

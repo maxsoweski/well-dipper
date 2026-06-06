@@ -168,15 +168,18 @@ export const PORTAL_PREVIEW_TO_SHIP        = 5;    // camera-to-portal preview d
 export const POST_EXIT_DISTANCE_TO_SHIP    = 5;    // final camera distance past Portal B on EXIT end — symmetric with preview
 export const PORTAL_LANDING_STRIP_TO_SHIP  = 100;  // span of the destination-side landing strip = 100× ship length
 
-/** Portal aperture radius in scene units (for the canonical player ship). */
+/** Portal aperture radius in scene units. Human-scale to match the warp
+ *  pocket disc/interior (lab: 3u) so the portal opening, the tunnel interior,
+ *  and the traversal gate all share one radius. Warp-only. */
 export function portalApertureScene() {
-  return playerShipLengthScene() * PORTAL_APERTURE_TO_SHIP;
+  return WARP_POCKET_RADIUS;
 }
 
 /** Portal A preview distance in scene units — how far ahead of the ship
- *  Portal A opens when warp begins. */
+ *  Portal A opens when warp begins. Human-scale: ~half the pocket length
+ *  (30u) so the FOLD ramp lands the camera at Portal A (z=0). Warp-only. */
 export function portalPreviewDistanceScene() {
-  return playerShipLengthScene() * PORTAL_PREVIEW_TO_SHIP;
+  return tunnelLengthScene() * 0.5;
 }
 
 /** Distance past Portal B where the camera comes to rest at end of EXIT.
@@ -186,24 +189,29 @@ export function postExitDistanceScene() {
   return playerShipLengthScene() * POST_EXIT_DISTANCE_TO_SHIP;
 }
 
-// ── Hyperspace Tunnel (Ship-Scale) ──
+// ── Hyperspace Tunnel — Human-Scale "Pocket" ──
 //
-// Tunnel length and interior radius are derived from ship length. This
-// keeps the whole warp experience at consistent ship-scale — no abstract
-// hyperspace-unit speeds, and Portal B naturally lands 100 m behind the
-// camera at arrival (no per-frame follow needed).
+// The warp tunnel is a FIXED human-scale pocket the camera physically flies
+// through, matching portal-traversal-lab.html (60u long, 3u disc/interior
+// radius). It is NOT derived from ship length — deriving from ship scale put
+// the whole rig at AU/light-year scale (tunnel ≈ 6.68e-5u, aperture ≈ 1.3e-7u),
+// a sub-micron pocket the camera couldn't reliably stay inside, so the warp
+// rendered black. A fixed ~60u pocket gives real, forgiving geometry.
+//
+// These constants are warp-only — every caller of the functions below is part
+// of the warp/portal pipeline (WarpEffect, WarpPortal, main.js FOLD spawn).
 
-export const TUNNEL_LENGTH_TO_SHIP         = 500;  // 500× ship = 10 km tunnel — long for perspective depth
-export const TUNNEL_INTERIOR_RADIUS_TO_SHIP = 1;   // 1× ship = 20 m corridor — matches aperture radius so portal/tunnel seam is clean
+export const WARP_POCKET_LENGTH            = 60;   // scene units — fixed pocket length (lab: 60u)
+export const WARP_POCKET_RADIUS            = 3;    // scene units — fixed gate / interior / disc radius (lab: 3u)
 
-/** Tunnel length in scene units. */
+/** Tunnel length in scene units — fixed human-scale pocket (60u). */
 export function tunnelLengthScene() {
-  return playerShipLengthScene() * TUNNEL_LENGTH_TO_SHIP;
+  return WARP_POCKET_LENGTH;
 }
 
-/** Tunnel interior cylinder radius in scene units. */
+/** Tunnel interior cylinder radius in scene units — fixed human-scale (3u). */
 export function tunnelInteriorRadiusScene() {
-  return playerShipLengthScene() * TUNNEL_INTERIOR_RADIUS_TO_SHIP;
+  return WARP_POCKET_RADIUS;
 }
 
 // Legacy aliases (callers may still import these; keep them pointing at the
