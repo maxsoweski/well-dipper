@@ -177,6 +177,15 @@
       uniform float uCraterAmp;        // overall crater relief amplitude
       uniform vec3  uCraterOffset;     // 🎲 domain offset — default (0,0,0) = unchanged
 
+      // ── F3 ejecta & rays (Stage-C step 3, Relief) — wraps the SAME F2 craters ──
+      uniform float uEjectaStrength;   // 0..1 apron gate (driven; tracks craterDensity); ≤0 early-outs
+      uniform float uEjectaRampart;    // 0=dry skirt ↔ 1=fluidized rampart ridge (driven, D2)
+      uniform float uEjectaAmp;        // overall apron relief amplitude (lab-tunable)
+      uniform float uEjectaLump;       // 0..1 FBM lumpiness of the apron (lab-tunable)
+      uniform float uRayBrightness;    // 0..1 bright-ray albedo gate (driven; airless × young); ≤0 → no rays
+      uniform float uRayCount;         // number of radial ray streaks (lab-tunable)
+      uniform float uRaySharp;         // ray streak sharpness / pow exponent (lab-tunable)
+
       // ── F1 mountains / ranges (Stage-C step 3, Relief) — ridged base relief ──
       uniform float uMountainAmp;      // 0..1 ridged-relief amplitude (erosion-softened, driven)
       uniform float uRidgeOffset;      // ~1.0 fold offset (signal = offset − |n|) — lab knob
@@ -560,6 +569,80 @@
         grad += amp * prof.y * (1.0/craterRadius) * voroGrad * uCraterScale;
       }
 
+      // ── F3 ejecta apron (Stage-C step 3, Relief) — transcribed from ejectaProfile()
+      // in planet-lod-lab-core.js (same constants, vitest-pinned analytic dhdr §5.4).
+      // r = dist/craterRadius. Apron lives in 1<r<rOuter; F2 owns r≤1. rampart blends
+      // the dry 1/r² skirt (0) ↔ the fluidized lobate terminal ridge (1). vec2(h, dh/dr).
+      vec2 ejectaProfile(float r, float rampart, float rOuter){
+        if (r <= 1.0 || r >= rOuter) return vec2(0.0);
+        float invO2 = 1.0/(rOuter*rOuter);
+        float norm  = 1.0/(1.0 - invO2);                  // skirt(1)=1, skirt(rOuter)=0
+        float skirt  = (1.0/(r*r) - invO2) * norm;
+        float dskirt = (-2.0/(r*r*r)) * norm;
+        float rs = (r - 2.0)/0.3;                          // rampart ridge at r=2.0, w=0.3
+        float ridge  = exp(-(rs*rs));
+        float dridge = ridge * (-2.0*(r-2.0)/(0.3*0.3));
+        return vec2(skirt*(1.0-rampart) + ridge*rampart,
+                    dskirt*(1.0-rampart) + dridge*rampart);
+      }
+
+      // F3 ejecta combiner — WRAPS the same F2 voronoi3d craters (no new placement):
+      // identical scale/offset/host-gate/hashed-radius, so the apron rings exactly the
+      // F2 craters. The radial apron is modulated by an FBM lumpiness × a discontinuous-
+      // patch mask (relief doc §F3.a — continuous near the rim, breaking into patches
+      // outward) so it reads as broken ejecta, not a smooth donut. The radial slope is
+      // chain-ruled exactly (the §5.4-tested term); the FBM-lump gradient uses noised()'s
+      // analytic grad; the soft patch mask's r-derivative is treated locally-constant
+      // (the Musgrave convention this codebase already uses for octave weights).
+      // uEjectaStrength≤0 ⇒ early-out (Stage-A base + F1/F2/F4/F5/F6 untouched).
+      void ejectaCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uEjectaStrength <= 0.0) return;
+        vec3 cellId, voroGrad;
+        vec2 ff = voronoi3d(pos * uCraterScale + uCraterOffset, uVoroCells, cellId, voroGrad);
+        vec3 ch = hash33(cellId);                                   // SAME per-cell hash as F2
+        float host = step(1.0 - uCraterDensity, ch.x);             // SAME host gate
+        float craterRadius = mix(0.18, 0.55, ch.y);                // SAME hashed radius
+        float r = ff.x / craterRadius;
+        vec2 prof = ejectaProfile(r, uEjectaRampart, 2.5);
+        vec4 ln = noised(pos * (uCraterScale * 2.7) + uCraterOffset);  // .x value, .yzw grad
+        float fbm = 0.5 + 0.5 * ln.x;                              // 0..1
+        float patchMask = mix(1.0, smoothstep(0.35, 0.85, fbm), smoothstep(1.2, 2.2, r)); // patchy outward
+        float lump = mix(1.0, fbm, uEjectaLump);
+        float m = host * lump * patchMask;
+        float amp = uEjectaStrength * uEjectaAmp;
+        h += amp * m * prof.x;
+        // d(amp·m·prof.x)/dpos = amp·[ m·prof.y·dr/dpos + prof.x·dm/dpos ]
+        vec3 drdp = (1.0/craterRadius) * voroGrad * uCraterScale;  // dr/dpos (chain-ruled, exact)
+        vec3 dfbm = 0.5 * ln.yzw * (uCraterScale * 2.7);           // d(fbm)/dpos from noised()
+        vec3 dmdp = host * patchMask * uEjectaLump * dfbm;         // lump term (patchMask r-deriv held constant)
+        grad += amp * (m * prof.y * drdp + prof.x * dmdp);
+      }
+
+      // F3 bright rays — the ALBEDO exception (relief doc §F3.a): high-albedo streaks
+      // radiating from YOUNG AIRLESS craters. NOT relief (no height/grad) — returns a
+      // luminance brightening added to the surface BEFORE posterize (research: enough
+      // amplitude to cross a band or it gets crushed). Reuses the SAME F2 voronoi centers.
+      // Azimuth from a stable per-crater basis (e1,e2) — constant-azimuth = a ray line.
+      // uRayBrightness≤0 (driven airless×young gate) ⇒ 0. LIMITATION: rays truncate at
+      // Voronoi cell boundaries (a ray system physically overruns its cell) — carry-forward.
+      float rayField(vec3 pos){
+        if (uRayBrightness <= 0.0) return 0.0;
+        vec3 cellId, voroGrad;
+        vec2 ff = voronoi3d(pos * uCraterScale + uCraterOffset, uVoroCells, cellId, voroGrad);
+        vec3 ch = hash33(cellId);
+        float host = step(1.0 - uCraterDensity, ch.x);
+        float craterRadius = mix(0.18, 0.55, ch.y);
+        float r = ff.x / craterRadius;
+        vec3 dir = voroGrad;                                        // normalize(fragment - center): outward
+        vec3 e1 = normalize(hash33(cellId + 3.1) * 2.0 - 1.0);     // stable per-crater basis
+        vec3 ref = abs(e1.z) < 0.9 ? vec3(0.0,0.0,1.0) : vec3(1.0,0.0,0.0);
+        vec3 e2 = normalize(cross(e1, ref));
+        float az = atan(dot(dir, e2), dot(dir, e1));
+        float streaks = pow(max(0.5 + 0.5*sin(az*uRayCount + ch.z*6.2831853), 0.0), uRaySharp);
+        float radial = smoothstep(1.0, 1.3, r) * (1.0 - smoothstep(2.0, 6.0, r));  // start past rim, fade out
+        return uRayBrightness * host * streaks * radial * 0.35;
+      }
+
       // ── F4 graben profile (Stage-C step 3, Relief) — transcribed from grabenProfile()
       // in planet-lod-lab-core.js (same flat-floor trench, vitest-pinned analytic slope).
       // d = perpendicular distance to the rift line. Returns vec2(depth ≤ 0, d(depth)/dd).
@@ -819,6 +902,7 @@
           // scarps add fault-block relief onto h/grad (no shared accumulator).
           mountainCombiner(vPos, fwBase, h, grad);
           craterCombiner(vPos, h, grad);
+          ejectaCombiner(vPos, h, grad);            // F3 — apron wrapping the F2 craters
           canyonCombiner(vPos, h, canyonHeight, grad);
           scarpCombiner(vPos, h, grad);
           plateauCombiner(vPos, fwBase, h, grad);
@@ -842,7 +926,10 @@
         vec3 V = normalize(cameraPosition - vPos);
 
         // ── Stage 6: surface albedo / material (relief + cryo frost tint + liquid material) ──
-        vec3 surface = posterize(min(uBaseColor * (diff + ambient), vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
+        // F3 bright rays — fresh high-albedo ejecta streaks brighten the lit surface BEFORE
+        // posterize (the relief doc §F3.a albedo exception; only term here that's albedo not relief).
+        float rayBright = rayField(vPos) * diff;       // sunlit fresh material only
+        vec3 surface = posterize(min(uBaseColor * (diff + ambient) + uBaseColor * rayBright, vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
         //    lit color + landMask; renders LAST among surface terms, before the envelope split. [domain: Exotic]
@@ -923,6 +1010,14 @@
       uCraterScale:      { value: 6.0 },   // crater cell density (lab-tunable)
       uCraterAmp:        { value: 0.9 },   // overall crater relief amplitude (lab-tunable)
       uCraterOffset:     { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
+      // ── F3 ejecta & rays (Stage-C step 3, Relief) — wraps the F2 craters ──
+      uEjectaStrength:   { value: 0.0 },   // apron gate (driven; tracks craterDensity; ≤0 early-outs)
+      uEjectaRampart:    { value: 0.0 },   // 0=dry skirt ↔ 1=fluidized rampart (driven)
+      uEjectaAmp:        { value: 0.35 },  // apron relief amplitude (lab-tunable)
+      uEjectaLump:       { value: 0.6 },   // FBM lumpiness 0..1 (lab-tunable)
+      uRayBrightness:    { value: 0.0 },   // bright-ray albedo gate (driven; airless × young)
+      uRayCount:         { value: 6.0 },   // radial ray streak count (lab-tunable)
+      uRaySharp:         { value: 8.0 },   // ray streak sharpness (lab-tunable)
       // ── F1 mountains (Stage-C step 3, Relief) — ridged base relief ──
       uMountainAmp:      { value: 0.0 },   // ridged amplitude (driven by deriveUniforms, erosion-softened)
       uRidgeOffset:      { value: 1.0 },   // fold offset (lab-tunable)
@@ -1064,6 +1159,16 @@
       terraceCount: 4.0,
       craterScale: 6.0,
       craterAmp: 0.9,
+      // ── F3 ejecta & rays (Stage-C step 3, Relief) — derived (ejectaStrength/rampart/
+      // rayBrightness from the preset) + lab-tunable (amp/lump/ray count/sharpness).
+      // Placement reuses the F2 crater uniforms (scale/offset/density) — same craters. ──
+      ejectaStrength: 0.0,
+      ejectaRampart: 0.0,
+      ejectaAmp: 0.35,
+      ejectaLump: 0.6,
+      rayBrightness: 0.0,
+      rayCount: 6.0,
+      raySharp: 8.0,
       // ── F1 mountains (Stage-C step 3, Relief) — derived (mountainAmp/orogenyStrength/
       // orogenyAngle from the preset) + lab-tunable (ridgeOffset/ridgeGain/scale) ──
       mountainAmp: 0.0,
@@ -1103,6 +1208,7 @@
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
+      ejectaEnabled: true,
       mountainsEnabled: true,
       canyonsEnabled: true,
       scarpsEnabled: true,
@@ -1226,6 +1332,11 @@
       state.craterRelaxation = u.craterRelaxation;
       state.terraceCount     = u.terraceCount;
       uniforms.uVoroCells.value = u.craterCells;
+      // F3 ejecta & rays (Stage-C step 3) — derived strength/rampart/ray-brightness flow
+      // into state (frame loop → uniforms). Placement reuses the F2 crater uniforms.
+      state.ejectaStrength   = u.ejectaStrength;
+      state.ejectaRampart    = u.ejectaRampart;
+      state.rayBrightness    = u.rayBrightness;
       // F1 mountains (Stage-C step 3) — derived amplitude + orogeny belt strength/strike.
       // orogenyAxis (unit vec2) → an angle the GUI exposes + the frame loop rebuilds.
       state.mountainAmp      = u.mountainAmp;
@@ -1279,6 +1390,18 @@
     fCraters.add(state, 'craterAmp', 0, 2, 0.01).name('amplitude');
     fCraters.add(state, 'cratersEnabled').name('✓ enabled');
     fCraters.add({ roll(){ state.craterOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    // ▸ Ejecta & Rays (F3) — derived (strength/rampart/ray-brightness from the preset,
+    // .listen()-synced) + lab knobs (amp/lump, ray count/sharpness). Placement reuses the
+    // F2 crater uniforms (scale/offset/density) — the apron wraps the SAME craters.
+    const fEjecta = fRelief.addFolder('Ejecta & Rays (F3)'); fEjecta.open();
+    fEjecta.add(state, 'ejectaStrength', 0, 1, 0.01).name('apron strength').listen();
+    fEjecta.add(state, 'ejectaRampart', 0, 1, 0.01).name('rampart (icy)').listen();
+    fEjecta.add(state, 'ejectaAmp', 0, 1, 0.01).name('apron amplitude');
+    fEjecta.add(state, 'ejectaLump', 0, 1, 0.01).name('lumpiness');
+    fEjecta.add(state, 'rayBrightness', 0, 1, 0.01).name('ray brightness (airless)').listen();
+    fEjecta.add(state, 'rayCount', 2, 16, 1).name('ray count');
+    fEjecta.add(state, 'raySharp', 1, 24, 0.5).name('ray sharpness');
+    fEjecta.add(state, 'ejectaEnabled').name('✓ enabled');
     // ▸ Mountains (F1) — derived (amplitude/orogeny strength+strike from the preset,
     // .listen()-synced on preset change) + lab knobs (ridge fold offset/gain, scale).
     const fMountains = fRelief.addFolder('Mountains (F1)'); fMountains.open();
@@ -1476,6 +1599,14 @@
       uniforms.uTerraceCount.value     = state.terraceCount;
       uniforms.uCraterScale.value      = state.craterScale;
       uniforms.uCraterAmp.value        = state.craterAmp;
+      // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.
+      uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength : 0.0;   // ✓ enable gate
+      uniforms.uEjectaRampart.value    = state.ejectaRampart;
+      uniforms.uEjectaAmp.value        = state.ejectaAmp;
+      uniforms.uEjectaLump.value       = state.ejectaLump;
+      uniforms.uRayBrightness.value    = state.ejectaEnabled ? state.rayBrightness : 0.0;    // ✓ enable gate (rays share toggle)
+      uniforms.uRayCount.value         = state.rayCount;
+      uniforms.uRaySharp.value         = state.raySharp;
       // F1 mountains — amplitude/orogeny driven; ridge fold + scale lab-tunable.
       uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp : 0.0;   // ✓ enable gate
       uniforms.uRidgeOffset.value      = state.ridgeOffset;

@@ -116,8 +116,8 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F4 | **Canyons / rifts** (tectonic graben — **writes `canyonHeight`**) | ✅ **DONE** — first `canyonHeight` writer live; see below |
 | F5 | **Scarps & fault systems** (warped fault-block province) | ✅ **DONE** — warped soft-step cliffs live; see below |
 | F6 | **Plateaus / highlands / tessera** | ✅ **DONE** — HeteroTerrain + mesa terrace + crosscutting tessera lattice live; see below |
-| F3 | Ejecta & rays (reuses F2 Voronoi centers) | ◻ next |
-| F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ |
+| F3 | **Ejecta & rays** (reuses F2 Voronoi centers) | ✅ **DONE** — apron + rampart + bright rays live; see below |
+| F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ next |
 | F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ◻ |
 | F9/F10 | Chaos + ridged-icy (reads SHARED `uCryoActivity` from Cryo) | ◻ (cross-domain seam) |
 
@@ -379,6 +379,52 @@ after Relief).
   combiner is two single-octave `sin`-trains (like F5), so the §5.3 fwidth/trailing-octave
   fade doesn't apply; at very high `uTesseraFreq` the product could shimmer — kept modest
   (default 5) and verified clean; add an fwidth amplitude fade if a future preset pushes it.
+
+### F3 — Ejecta & rays (DONE)
+The apron that WRAPS the F2 craters — first relief feature to REUSE another feature's
+voronoi3d placement (no new centers): same `pos*uCraterScale+uCraterOffset` sample, same
+per-cell host gate + hashed radius, so the apron rings exactly the F2 craters. Three parts
+per relief-doc §F3: continuous/discontinuous ejecta blanket + fluidized rampart (relief),
+bright rays (the one ALBEDO exception). Secondary crater fields DEFERRED (rich tier).
+- **CPU oracle** `ejectaProfile(r, rampart, rOuter)` in `planet-lod-lab-core.js` →
+  `{h, dhdr}`: the radial apron OUTSIDE the rim (1<r<rOuter=2.5), blended by `rampart`:
+  the dry **normalized 1/r² skirt** `(1/r²−1/rOuter²)/(1−1/rOuter²)` (=1 at the rim → 0 at
+  rOuter) ↔ the fluidized **lobate terminal ridge** (gaussian bump at r=2.0; Mars ramparts,
+  D2 ground-ice). Zero for r≤1 (F2 owns) and r≥rOuter. `dhdr` pinned vs central finite-diff
+  for rampart=0/0.5/1 (relief-doc §5.4 silent-bug gate) + a sign-drop guard (dhdr<0 across
+  the dry skirt — a flipped 1/r² sign lights the apron outward, backward).
+- **deriveUniforms** surfaces (NO new driver — all from existing fields, relief-doc §F3.b):
+  `ejectaStrength` (= `craterDensity` — apron tracks crater count; resurfaced → 0),
+  `ejectaRampart` (= `smoothstep(0.15,0.4,volatileFraction)` — rocky dry ↔ icy rampart),
+  `rayBrightness` (= `clamp01(1−erosion) × (hasAtmo ? 0 : 1)` — the AIRLESS-only × young gate;
+  an atmosphere weathers rays away).
+- **GLSL** `ejectaProfile()` + `ejectaCombiner()` (wraps the F2 voronoi; radial slope chain-
+  ruled exactly via `voroGrad·uCraterScale`; FBM lumpiness × discontinuous-patch mask via
+  `noised()` with its analytic grad — patch mask's r-deriv held locally-constant, the Musgrave
+  convention this codebase already uses) + `rayField()` (the albedo term — radial streaks via
+  a stable per-crater basis + azimuth, added to surface luminance BEFORE posterize per §F3.a;
+  NOT relief, no height/grad). `uEjectaStrength≤0` early-outs (regression-safe); rays share the
+  enable toggle. Wired Stage-2 after `craterCombiner`; new `▸ Ejecta & Rays (F3)` lil-gui folder.
+- **15 TDD tests** (9 oracle + 6 surfacings) added to `tests/planet-lod-relief.test.js`;
+  **170 lab tests green** (`npx vitest run tests/planet-lod-*.test.js`).
+- **Live-verified `:9223`** (GPU Chrome): ejecta ON → lumpy apron wraps each crater, OFF →
+  bare F2 rims restored (enable-gate regression) ✓; rampart=1 → raised lobate terminal ring
+  encircling craters (vs the smooth decaying skirt) ✓; Frozen (airless) → bright radial ray
+  streaks fan from craters, A/B-gated by rayBrightness (rays vanish at 0) ✓; airless-derivation
+  gate confirmed live (Rocky w/ atmosphere → rayBrightness 0; Frozen airless → 0.9); full Rocky
+  relief stack (mountains+craters+ejecta+chasma+scarp+plateau+tessera) composes without blowout,
+  craters stay readable ✓; console clean (vite + benign lil-gui form-field only).
+- **No new cross-domain shared uniform** — `uEjectaStrength`/`uEjectaRampart`/`uEjectaAmp`/
+  `uEjectaLump`/`uRayBrightness`/`uRayCount`/`uRaySharp` are Relief-internal (placement reuses
+  the F2 crater uniforms), so REGISTRY-canonical-uniforms.md is unchanged.
+- **Carry-forward (relief-doc §F3, not blocking, mirrors F2/F4/F5/F6 deferrals):** (1) **Secondary
+  crater fields** (small clustered craters downrange, via a secondary Voronoi seeded off each
+  primary) DEFERRED — the rich-tier extra (§F3.d), purely additive. (2) **Ray cell-boundary
+  truncation:** rays render within the host crater's Voronoi cell, but a real ray system overruns
+  its cell — rays truncate at cell borders. The stylized within-cell streaks ship; full cross-cell
+  rays are a later refinement. (3) **Max-taste decision (index §4.4) — bright rays keep-stylized
+  vs drop:** built per the research "keep + stylize" rec (airless-gated, pre-posterize luminance
+  add); they're striking on young airless worlds but only there. Surface for Max's call.
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

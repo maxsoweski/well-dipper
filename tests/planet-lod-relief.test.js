@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave, ejectaProfile } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -652,5 +652,137 @@ describe('ridgeWave — analytic derivative vs finite-diff (relief doc §5.4 sil
     const { dvdphase } = ridgeWave(p);
     expect(dvdphase).toBeCloseTo(-Math.cos(p), 6);   // correct
     expect(dvdphase).not.toBeCloseTo(Math.cos(p), 4); // the naive (no −sign) bug
+  });
+});
+
+// ── F3 ejecta & rays — ejectaProfile oracle (relief doc §F3.a) ───────────────
+// The radial EJECTA height as a function of normalized radius r = dist/craterRadius,
+// for the apron OUTSIDE the crater rim (1 < r < rOuter). Two morphologies blended by
+// `rampart` (0..1): the dry SMOOTH 1/r²-decaying skirt (rampart=0) ↔ the fluidized
+// LOBATE TERMINAL RIDGE (rampart=1, Mars ramparts — the flow froze at a raised margin).
+// F2 owns the rim/cavity (r ≤ 1); ejecta is zero there and beyond rOuter. The GLSL
+// ejectaCombiner is transcribed from this; pinning dhdr vs finite-diff is the relief-doc
+// §5.4 silent-bug gate (a sign-wrong skirt lights the apron backward yet compiles).
+describe('ejectaProfile (F3 — radial ejecta apron, smooth-skirt ↔ rampart blend)', () => {
+  it('is zero inside the rim (r ≤ 1) — F2 owns the cavity/rim', () => {
+    for (const r of [0.0, 0.5, 1.0]) {
+      const { h, dhdr } = ejectaProfile(r, 0);
+      expect(h).toBeCloseTo(0, 9);
+      expect(dhdr).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('is zero beyond the outer radius (r ≥ rOuter)', () => {
+    for (const r of [2.5, 3.0, 5.0]) {
+      const { h, dhdr } = ejectaProfile(r, 0);
+      expect(h).toBeCloseTo(0, 9);
+      expect(dhdr).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('dry skirt (rampart=0) decays monotonically from rim to outer radius', () => {
+    const a = ejectaProfile(1.2, 0).h;
+    const b = ejectaProfile(1.8, 0).h;
+    const c = ejectaProfile(2.4, 0).h;
+    expect(a).toBeGreaterThan(b);
+    expect(b).toBeGreaterThan(c);
+    expect(c).toBeGreaterThan(0);          // still positive just inside rOuter
+  });
+
+  it('dry skirt is ~1 just past the rim and ~0 near the outer radius (normalized 1/r²)', () => {
+    expect(ejectaProfile(1.0001, 0).h).toBeCloseTo(1.0, 2);
+    expect(ejectaProfile(2.4999, 0).h).toBeCloseTo(0.0, 2);
+  });
+
+  it('rampart (rampart=1) builds a RAISED TERMINAL RIDGE — non-monotonic, peaks past mid', () => {
+    const inner = ejectaProfile(1.2, 1).h;
+    const ridge = ejectaProfile(2.0, 1).h;     // the terminal-ridge location
+    const outer = ejectaProfile(2.4, 1).h;
+    expect(ridge).toBeGreaterThan(inner);      // ridge stands above the inner apron
+    expect(ridge).toBeGreaterThan(outer);      // and drops off past the ridge
+  });
+
+  it('dry skirt is strictly DECREASING — dhdr < 0 across the apron (sign-drop guard)', () => {
+    // A build that flipped the 1/r² derivative sign would light the skirt backward
+    // (apron brightening outward instead of toward the rim) yet compile fine.
+    for (const r of [1.2, 1.6, 2.0, 2.3]) {
+      expect(ejectaProfile(r, 0).dhdr).toBeLessThan(0);
+    }
+  });
+});
+
+describe('ejectaProfile — analytic derivative vs finite-diff (relief doc §5.4 silent-bug gate)', () => {
+  const EPS = 1e-6;
+  // Sample STRICTLY inside the active band (1, rOuter) — avoid r=1 and r=rOuter where
+  // the profile clamps to zero (derivative discontinuity). Both morphologies pinned.
+  const PTS = [1.15, 1.4, 1.7, 2.0, 2.25, 2.4];
+
+  it('dhdr matches central finite-diff for the dry skirt (rampart=0)', () => {
+    for (const r of PTS) {
+      const { dhdr } = ejectaProfile(r, 0);
+      const fd = (ejectaProfile(r + EPS, 0).h - ejectaProfile(r - EPS, 0).h) / (2 * EPS);
+      expect(dhdr).toBeCloseTo(fd, 4);
+    }
+  });
+
+  it('dhdr matches central finite-diff for the rampart ridge (rampart=1)', () => {
+    for (const r of PTS) {
+      const { dhdr } = ejectaProfile(r, 1);
+      const fd = (ejectaProfile(r + EPS, 1).h - ejectaProfile(r - EPS, 1).h) / (2 * EPS);
+      expect(dhdr).toBeCloseTo(fd, 4);
+    }
+  });
+
+  it('dhdr matches central finite-diff at a partial rampart blend (rampart=0.5)', () => {
+    for (const r of PTS) {
+      const { dhdr } = ejectaProfile(r, 0.5);
+      const fd = (ejectaProfile(r + EPS, 0.5).h - ejectaProfile(r - EPS, 0.5).h) / (2 * EPS);
+      expect(dhdr).toBeCloseTo(fd, 4);
+    }
+  });
+});
+
+// ── F3 generation-side surfacings (relief doc §F3.b — no NEW driver, all derived) ──
+// ejectaStrength tied to craterDensity (more craters → more ejecta); ejectaRampart
+// from D2 volatiles (ground ice fluidizes ejecta → Mars ramparts); rayBrightness
+// AIRLESS-gated × young (an atmosphere weathers rays away; rays fade with erosion).
+describe('F3 ejecta/ray surfacings (deriveUniforms)', () => {
+  it('ejectaStrength scales with craterDensity (more craters → more ejecta)', () => {
+    const lo = deriveUniforms({ surfaceHistory: { bombardmentIntensity: 0.2, resurfacingRate: 0 } }).ejectaStrength;
+    const hi = deriveUniforms({ surfaceHistory: { bombardmentIntensity: 0.9, resurfacingRate: 0 } }).ejectaStrength;
+    expect(hi).toBeGreaterThan(lo);
+  });
+
+  it('ejectaStrength is ~0 on a fully resurfaced (crater-free) world', () => {
+    const u = deriveUniforms({ surfaceHistory: { bombardmentIntensity: 0.9, resurfacingRate: 1 } });
+    expect(u.ejectaStrength).toBeCloseTo(0, 5);
+  });
+
+  it('ejectaRampart is high on icy worlds and ~0 on bone-dry rock (D2 fluidization)', () => {
+    const rocky = deriveUniforms({ composition: { volatileFraction: 0.05 } }).ejectaRampart;
+    const icy   = deriveUniforms({ composition: { volatileFraction: 0.6 } }).ejectaRampart;
+    expect(rocky).toBeLessThan(0.1);
+    expect(icy).toBeGreaterThan(0.8);
+  });
+
+  it('rayBrightness is ZERO when an atmosphere is present (rays weather away)', () => {
+    const u = deriveUniforms({ atmosphere: { retained: true, pressure: 1.0 }, surfaceHistory: { erosion: 0 } });
+    expect(u.rayBrightness).toBeCloseTo(0, 6);
+  });
+
+  it('rayBrightness is high on a young AIRLESS world and fades with erosion', () => {
+    const young = deriveUniforms({ surfaceHistory: { erosion: 0.0 } }).rayBrightness;   // airless (no atmosphere)
+    const old   = deriveUniforms({ surfaceHistory: { erosion: 0.9 } }).rayBrightness;
+    expect(young).toBeGreaterThan(0.8);
+    expect(old).toBeLessThan(young);
+  });
+
+  it('all three stay in 0..1 and finite on an empty bundle', () => {
+    const u = deriveUniforms({});
+    for (const k of ['ejectaStrength', 'ejectaRampart', 'rayBrightness']) {
+      expect(Number.isFinite(u[k])).toBe(true);
+      expect(u[k]).toBeGreaterThanOrEqual(0);
+      expect(u[k]).toBeLessThanOrEqual(1);
+    }
   });
 });

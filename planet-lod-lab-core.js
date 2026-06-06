@@ -195,6 +195,38 @@ export function craterProfile(r, opts = {}) {
   return { h: h * k, dhdr: dhdr * k };
 }
 
+// ── ejectaProfile — F3 ejecta apron radial profile (relief doc §F3.a) ────────
+// The EJECTA height as a function of normalized radius r = dist(fragment,center) /
+// craterRadius, for the apron OUTSIDE the crater rim (1 < r < rOuter). F2 owns the
+// cavity/rim (r ≤ 1); ejecta is zero there and beyond rOuter (distant cells don't
+// bleed in). Two morphologies blended by `rampart` ∈ [0,1]:
+//
+//   skirt (dry, rampart=0): a NORMALIZED 1/r² apron — (1/r² − 1/rOuter²)/(1 − 1/rOuter²),
+//     = 1 at the rim (r=1, ejecta thickest) → 0 at rOuter. The classic monotonic-
+//     decaying continuous-ejecta blanket. d/dr = (−2/r³)·norm (always < 0 — the
+//     sign-drop guard: a flipped sign lights the apron brightening OUTWARD, backward).
+//   ridge (fluidized, rampart=1): a lobate TERMINAL RIDGE — a gaussian bump at
+//     EJECTA_RAMP_R (the frozen flow margin; Mars rampart craters, D2 ground-ice).
+//
+// The GLSL ejectaProfile() is transcribed from this; dhdr is pinned vs central
+// finite-diff in tests (relief-doc §5.4 silent-bug gate, like craterProfile/grabenProfile).
+// The combiner reuses F2's voronoi3d centers (no new placement) and chain-rules dr/dpos.
+const EJECTA_ROUTER = 2.5, EJECTA_RAMP_R = 2.0, EJECTA_RAMP_W = 0.3;
+export function ejectaProfile(r, rampart = 0, rOuter = EJECTA_ROUTER) {
+  if (r <= 1.0 || r >= rOuter) return { h: 0, dhdr: 0 };
+  const invO2 = 1.0 / (rOuter * rOuter);
+  const norm = 1.0 / (1.0 - invO2);                 // so skirt(1)=1, skirt(rOuter)=0
+  const skirt  = (1.0 / (r * r) - invO2) * norm;
+  const dskirt = (-2.0 / (r * r * r)) * norm;
+  const rs = (r - EJECTA_RAMP_R) / EJECTA_RAMP_W;   // rampart gaussian terminal ridge
+  const ridge  = Math.exp(-(rs * rs));
+  const dridge = ridge * (-2.0 * (r - EJECTA_RAMP_R) / (EJECTA_RAMP_W * EJECTA_RAMP_W));
+  return {
+    h:    skirt  * (1.0 - rampart) + ridge  * rampart,
+    dhdr: dskirt * (1.0 - rampart) + dridge * rampart,
+  };
+}
+
 // ── ridgedFold — F1 ridged-multifractal per-octave fold (relief doc §F1.a/§5.4) ─
 // The single highest silent-bug risk in the RELIEF domain (doc §5.4 risk #4): the
 // Decarpentier sign correction on the abs() fold. Given a noise sample's value and
@@ -462,6 +494,22 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const relaxWarmth = smoothstep(120, 273, T);
   const craterRelaxation = clamp01(volatileFraction * relaxWarmth * 2.0);
 
+  // ── F3 ejecta & rays (Stage-C step 3, Relief domain — relief doc §F3.b) ─────
+  // NO new driver surfacing — all three derive from existing fields (relief doc §F3.b).
+  // ejectaStrength: the apron exists wherever craters do, so it tracks craterDensity
+  // directly (more craters → more ejecta). The combiner wraps the SAME F2 voronoi3d
+  // centers, so a crater-free resurfaced world (density≈0) has no ejecta either.
+  const ejectaStrength = craterDensity;
+  // ejectaRampart (0=dry smooth skirt ↔ 1=fluidized lobate terminal ridge): ground ice
+  // fluidizes ejecta into rampart flows (Mars). volatileFraction is the rock↔ice axis;
+  // a fresh threshold (rocky vf≲0.15 → dry, icy vf≳0.4 → rampart), reusing the §F5 idea.
+  const ejectaRampart = smoothstep(0.15, 0.4, volatileFraction);
+  // rayBrightness: bright rays are the ALBEDO exception (relief doc §F3.a) — fresh
+  // high-albedo streaks from YOUNG craters, and AIRLESS-ONLY (an atmosphere weathers
+  // them away → gate hard on hasAtmo). Fade with erosion (rays are the first thing to
+  // go as a surface ages). Airless + pristine → bright; any atmosphere → 0.
+  const rayBrightness = clamp01(1 - erosion) * (hasAtmo ? 0 : 1);
+
   // ── F1 mountains / ranges (Stage-C step 3, Relief domain — relief doc §F1.b) ─
   // Ridged-multifractal base relief, the layer every other relief feature sits on.
   // mountainAmp: ranges GROW with tectonic/volcanic activity, SHRINK as the surface
@@ -572,6 +620,9 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     craterComplexD,                                             // F2 — simple→complex transition diameter (g⁻¹, icy-switched)
     craterRelaxation,                                           // F2 — icy/warm palimpsest flattening
     terraceCount: 4,                                            // F2 — inner-wall terrace ring count (constant, lab-tunable)
+    ejectaStrength,                                             // F3 — ejecta apron amplitude (tracks craterDensity)
+    ejectaRampart,                                             // F3 — 0=dry skirt ↔ 1=fluidized rampart ridge (D2 volatiles)
+    rayBrightness,                                             // F3 — bright-ray albedo strength (airless-only × young)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen
