@@ -6631,32 +6631,11 @@ function simStep(deltaTime) {
         // Portal-lab mode: hold rim steady — no pulsing, no modulation.
         warpPortal.setRimIntensity(_portalLabMode ? 1.0 : Math.max(0.6, warpEffect.portalRimIntensity));
         warpPortal.setBridgeMix(warpEffect.portalBridgeMix);
-        if (warpEffect.state === 'hyper') {
-          // ── Continuous HYPER re-anchor (warp-tunnel-frame-reanchor) ──
-          // The HYPER tunnel mesh is microscopic (tunnelLength ~6.7e-5 scene
-          // units) and only renders by SURROUNDING the camera; the streaming
-          // motion is texture-driven (uScroll), and the camera is effectively
-          // static at scene scale during HYPER. A single swap-time anchor is
-          // unreliable across the repeat-warp / fallback-timer / teleport paths:
-          // when it lands even slightly off, the tiny tunnel sits hundreds of
-          // units from the camera and the player sees straight through to the
-          // starfield ("black HYPER", diagnosed live 2026-06-06).
-          //
-          // The POSITION re-anchor happens at RENDER time (renderFrame), AFTER
-          // the camera is interpolated, so the tunnel tracks the actually-
-          // rendered camera exactly — pinning here against the sim camera trails
-          // the interpolated render camera right after the swap teleport and
-          // re-orphans the tunnel for the first ~0.7s of HYPER. Here we only
-          // force INSIDE render mode (stencil off → unconditional draw) and SKIP
-          // updateTraversal: with the portals ~6.7e-5 apart the camera straddles
-          // both planes and the plane-crossing test is numerically unstable
-          // (can spuriously flip INSIDE→OUTSIDE_B and stencil-clip the tunnel).
-          // The geometric crossing is only needed during FOLD/ENTER (to fire
-          // onSwapSystem), which still runs updateTraversal in the else branch.
-          warpPortal.setTraversalMode('INSIDE');
-        } else {
-          warpPortal.updateTraversal(camera);
-        }
+        // Run real plane-crossing traversal in every warp phase. The pocket is
+        // human-scale (~60u, Task 2) so the camera physically crosses Portal A
+        // (entry), cruises INSIDE, and crosses Portal B (emergence). No forced
+        // INSIDE, no per-frame pin — the 4285602 choreography-killers are gone.
+        warpPortal.updateTraversal(camera);
         // No screen-space lens — the tunnel mesh IS the hyperspace visual.
         retroRenderer.setPortalLensing(null, 0, 0);
       } else if (warpEffect.portalVisible) {
@@ -7450,23 +7429,6 @@ function renderFrame(alpha) {
     // reticle, scene render, and any same-frame projection consumers all
     // see the same camera state.
     camera.updateMatrixWorld(true);
-  }
-
-  // ── Continuous HYPER tunnel re-anchor (warp-tunnel-frame-reanchor) ──
-  // Pin the microscopic HYPER tunnel to the INTERPOLATED render camera every
-  // render frame so it surrounds the camera and renders. Must run here (after
-  // the camera interpolation above, before render below) rather than in simStep:
-  // the renderer lerps camera.position between sim snapshots, so a sim-time pin
-  // trails the rendered camera right after the swap teleport and leaves the tiny
-  // tunnel orphaned for the first ~0.7s of HYPER. Render-mode (INSIDE/stencil)
-  // and updateTraversal-skip are handled in the simStep warp block.
-  if (warpEffect.isActive && warpEffect.state === 'hyper'
-      && _useDualPortal && warpPortal.group.visible) {
-    warpPortal.group.position.copy(camera.position);
-    camera.getWorldDirection(_hyperReanchorForward);
-    _hyperReanchorTarget.copy(camera.position).sub(_hyperReanchorForward);
-    warpPortal.group.lookAt(_hyperReanchorTarget);
-    warpPortal.group.updateMatrixWorld(true);
   }
 
   // ── Render-classified subsystem updates (migrated from simStep Phase 3) ──
