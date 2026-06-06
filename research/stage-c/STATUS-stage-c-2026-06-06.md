@@ -90,14 +90,16 @@ All derived in `deriveUniforms` (`planet-lod-lab-core.js`), TDD'd in
 |---|---|---|
 | 1 | `surfaceGravity` (g = M/R²) | ✅ **DONE** — `be276e2` (4 tests) |
 | 2 | planet-level `tidalHeat` (Io-normalized self-heating) | ✅ **DONE** — `435f536` (5 tests) |
-| 3 | `liquidStability` + `liquidSpecies` (→ RESERVED `uLiquidStability`/`uLiquidSpecies`) | ⬜ next — read Fluvial doc for the D1+D2+D6 derivation; promote the existing `liquidWater` proto in `deriveUniforms`; flip the registry uniforms RESERVED→LIVE |
-| 4 | `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | ⬜ — read Cryo doc (JS selector, like Clouds' `cloudSpeciesFor()`) |
+| 3 | `liquidStability` + `liquidSpecies` (→ LIVE `uLiquidStability`/`uLiquidSpecies`) | ✅ **DONE** — D6+D2+D1 AND-gate; 8 TDD tests; promoted `liquidWater` proto; "Titan" preset added; registry RESERVED→LIVE. Live-verified `:9223` (Rocky 0.74/water, Ocean/Titan 1.0 — Titan species=1, Lava/Frozen 0; uniforms mirror `_derived`; console clean). |
+| 4 | `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | ⬜ **next** — read Cryo doc (JS selector, like Clouds' `cloudSpeciesFor()`) |
 | 5 | `precipitation` (D4) | ⬜ — from `computeAtmosphere` |
 | 6 | `atmosphere.physics.pressure` → shader | ⬜ — plumbing only |
 | 7 | `magneticField` (D13) | ⛔ **BLOCKED on Max-decision Q6** (surfacing ownership) — surface before building |
 
-## Next session picks up at: **Step 2 #3 — `liquidStability`/`liquidSpecies`**
-Then #4–#6, then Q6 for `magneticField`, then **step 3 = Relief** (widest gap;
+## Next session picks up at: **Step 2 #4 — `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O)**
+Read the Cryo doc for the JS selector (parallels Clouds' `cloudSpeciesFor()` — a
+JS branch, NOT a shader branch). Then #5 `precipitation`, #6 pressure plumbing,
+then Q6 for `magneticField`, then **step 3 = Relief** (widest gap;
 lands the shared Voronoi consumer + writes `canyonHeight`). After Relief, domains
 fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.

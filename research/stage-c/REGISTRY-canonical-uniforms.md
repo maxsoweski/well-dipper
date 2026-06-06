@@ -32,9 +32,9 @@ concept is here, use the canonical name.**
 | Blackbody emissive color | `emissiveBlackbody(tempK)` | shader helper (+ CPU mirror) | — | shared lib | Bands (F32/F33 thermal), Exotic (F41 magma) | **LIVE** | step 1.2, `304f998` |
 | Substellar angle (tidally-locked) | `vSubstellarAngle` | vertex **varying**, computed once | — | shared vertex calc | Bands (thermal), Clouds (F31f pupil/ring), Cryo (nightside cap), Optical (limb/terminator) | **LIVE** | step 1.4 |
 | Canyon/chasma depth accumulator | `canyonHeight` | fragment-local **accumulator** | 0.0 | Relief (tectonic graben) | Fluvial (incised gorge **adds in**), Cryo (cryo-chasma **adds in**) | **LIVE** (declared in `main()` stage 1) | step 1.5 |
-| Liquid on/off gate | `uLiquidStability` (0..1) | uniform float | 0.0 | Fluvial | Aeolian (`dryness = 1-liquidStability`), Cryo (freeze boundary), Optical (glint presence) | **RESERVED** | step 1.3 |
-| Liquid body mask | `uLiquidMask` | uniform float | 0.0 | Fluvial | Optical (sunglint F36) | **RESERVED** | step 1.3 |
-| Liquid material kind | `uLiquidSpecies` (enum: 0=water, 1=methane/ethane) | uniform int | 0 | Fluvial | Optical (glint IOR/tint) | **RESERVED** | step 1.3 |
+| Liquid on/off gate | `uLiquidStability` (0..1) | uniform float | 0.0 | Fluvial | Aeolian (`dryness = 1-liquidStability`), Cryo (freeze boundary), Optical (glint presence) | **LIVE** (derivation) | step 2 #3 |
+| Liquid body mask | `uLiquidMask` | uniform float | 0.0 | Fluvial | Optical (sunglint F36) | **RESERVED** | step 1.3 (shader-computed at `seaLevel`; lands with Fluvial step 3) |
+| Liquid material kind | `uLiquidSpecies` (enum: 0=water, 1=methane/ethane) | uniform int | 0 | Fluvial | Optical (glint IOR/tint) | **LIVE** (derivation) | step 2 #3 |
 | Icy-resurfacing activity | `uCryoActivity` (0..1) | uniform float | 0.0 | Cryo (D2/D12→P7) | Relief (F9/F10 chaos/ridged rendering) | **RESERVED** | step 1.3 |
 | Dry-region dressing | `dryness = 1 - uLiquidStability` + Fluvial `playaMask` | derived / uniform | — | Fluvial emits `playaMask` | Aeolian dresses it with dunes | **DEFERRED** (Fluvial) | — |
 | Terrestrial circulation bias | `latBias(lat)` | shader function | — | Bands | Clouds (F26/F31a placement) | **DEFERRED** (Bands) — NB currently coupled in `Planet.js:587-616`; **decouple** when Bands lands | — |
@@ -55,7 +55,7 @@ are NOT built in step 1 — listed here so the owner wires name→derivation tog
 | `precipitation` (D4) | Fluvial (channel activity F11) | From `computeAtmosphere`. |
 | `atmosphere.physics.pressure` → shader | Aeolian (grain transport) | Plumbing only. |
 | `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | Cryo (sublimation morphology + frost color) | Parallels Clouds' `cloudSpeciesFor()` JS selector (the only allowed branch — in JS, not shader). |
-| `liquidStability` + `liquidSpecies` | Fluvial (gates the whole fluvial/coastal/karst stack), Optical, Aeolian, Cryo | The master gate; feeds `uLiquidStability`/`uLiquidSpecies`. |
+| `liquidStability` + `liquidSpecies` | Fluvial (gates the whole fluvial/coastal/karst stack), Optical, Aeolian, Cryo | **DONE** — `deriveUniforms` AND's three gates (D6 retention via `atmosphere.retained`/`pressure` · D2 `composition.volatileFraction` bone-dry floor 0.05 · D1 soft T-windows: water ~273–373 K, methane ~90–112 K). `liquidSpecies` = which window T_eq fell in (0=water, 1=methane). 8 TDD tests; presets carry `volatileFraction`+`retained`/`pressure`; "Titan" preset exercises methane. Promoted the old `liquidWater` proto (now drives `specStrength` continuously). |
 
 ---
 

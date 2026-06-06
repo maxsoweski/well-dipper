@@ -69,3 +69,57 @@ describe('tidalHeat (§2 #2 — planet-level, feeds Relief F8 lava/F7 edifices +
     expect(deriveUniforms(close).tidalHeat).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('liquidStability + liquidSpecies (§2 #3 — the master liquid gate)', () => {
+  // Feeds RESERVED uLiquidStability/uLiquidSpecies (registry). Per the Fluvial doc's
+  // master gate, a thermodynamically stable RETAINED liquid requires three things
+  // AND'd together — D6 atmospheric retention, D2 volatile budget, D1 T_eq inside a
+  // liquid window for SOME species — any one zero ⇒ whole fluvial/coastal/karst stack
+  // bypassed. liquidSpecies enum: 0=water, 1=methane/ethane (registry contract);
+  // methane is stable only at the much colder Titan band (~90–112 K).
+  const temperate = { T_eq: 290, composition: { volatileFraction: 0.2 }, atmosphere: { retained: true, pressure: 1.0 } };
+
+  it('warm temperate world with atmosphere + volatiles → stable water (stability>0, species=0)', () => {
+    const u = deriveUniforms(temperate);
+    expect(u.liquidStability).toBeGreaterThan(0);
+    expect(u.liquidSpecies).toBe(0);
+  });
+
+  it('airless world → no stable surface liquid (stability 0), whatever the temperature', () => {
+    expect(deriveUniforms({ ...temperate, atmosphere: null }).liquidStability).toBe(0);
+  });
+
+  it('bone-dry world (volatileFraction < 0.05) → stability 0 (volatile gate)', () => {
+    expect(deriveUniforms({ ...temperate, composition: { volatileFraction: 0.01 } }).liquidStability).toBe(0);
+  });
+
+  it('hot world (T_eq above the water window) → stability 0 (temperature gate)', () => {
+    expect(deriveUniforms({ ...temperate, T_eq: 600 }).liquidStability).toBe(0);
+  });
+
+  it('cold world with a thick cold atmosphere → methane/ethane species (1), still stable', () => {
+    const titan = { T_eq: 94, composition: { volatileFraction: 0.4 }, atmosphere: { retained: true, pressure: 1.5 } };
+    const u = deriveUniforms(titan);
+    expect(u.liquidStability).toBeGreaterThan(0);
+    expect(u.liquidSpecies).toBe(1);
+  });
+
+  it('cold AND airless (frozen out → Cryo, not Fluvial) → stability 0', () => {
+    expect(deriveUniforms({ T_eq: 60, composition: { volatileFraction: 0.3 }, atmosphere: null }).liquidStability).toBe(0);
+  });
+
+  it('more volatiles → higher (or equal) stability, all else equal', () => {
+    const lo = deriveUniforms({ ...temperate, composition: { volatileFraction: 0.1 } }).liquidStability;
+    const hi = deriveUniforms({ ...temperate, composition: { volatileFraction: 0.4 } }).liquidStability;
+    expect(hi).toBeGreaterThanOrEqual(lo);
+  });
+
+  it('stability stays within [0,1], finite; empty bundle → 0 (no atmosphere)', () => {
+    const u = deriveUniforms({});
+    expect(u.liquidStability).toBe(0);
+    expect(Number.isFinite(u.liquidStability)).toBe(true);
+    const t = deriveUniforms(temperate).liquidStability;
+    expect(t).toBeGreaterThanOrEqual(0);
+    expect(t).toBeLessThanOrEqual(1);
+  });
+});

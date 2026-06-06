@@ -709,11 +709,16 @@
     // deriveUniforms reads them for surfaceGravity (§2 #1) + tidalHeat (§2 #2). Values are
     // illustrative + roughly consistent (rocky M≈R^3.7·0.9; 1 AU = 23455 RE) — lab-tunable,
     // the consumers (Relief F2/F7/F8, Aeolian F15, Cryo P7) land in step 3.
+    // composition.volatileFraction + atmosphere.retained/pressure mirror the generator's
+    // real planetData (deriveComposition / computeAtmosphere) — deriveUniforms reads them
+    // for the liquidStability/liquidSpecies master gate (§2 #3). "Titan (methane seas)"
+    // exercises the cold methane species (1); "Frozen (airless)" proves the airless gate→0.
     const DRIVER_PRESETS = {
-      'Rocky (Earthlike)': { radiusEarth:1.0, massEarth:0.9, eccentricity:0.017, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.32,density:5.5}, T_eq:288, tidalState:{locked:false}, atmosphere:{color:[0.5,0.6,0.9]}, habitability:0.7, surfaceHistory:{erosion:0.4} },
-      'Lava (hot airless)': { radiusEarth:0.9, massEarth:0.65, eccentricity:0.15, starMassEarth:332946, orbitRadiusEarth:938, composition:{ironFraction:0.7,density:7}, T_eq:950, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0} },
-      'Ocean (temperate)': { radiusEarth:1.1, massEarth:1.3, eccentricity:0.02, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.28,density:5}, T_eq:295, tidalState:{locked:false}, atmosphere:{color:[0.4,0.6,0.95]}, habitability:0.9, surfaceHistory:{erosion:0.6} },
-      'Frozen (airless)': { radiusEarth:0.5, massEarth:0.07, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:117275, composition:{ironFraction:0.2,density:2.5}, T_eq:60, tidalState:{locked:false}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.1} },
+      'Rocky (Earthlike)': { radiusEarth:1.0, massEarth:0.9, eccentricity:0.017, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.32,density:5.5,volatileFraction:0.15}, T_eq:288, tidalState:{locked:false}, atmosphere:{color:[0.5,0.6,0.9],retained:true,pressure:1.0}, habitability:0.7, surfaceHistory:{erosion:0.4} },
+      'Lava (hot airless)': { radiusEarth:0.9, massEarth:0.65, eccentricity:0.15, starMassEarth:332946, orbitRadiusEarth:938, composition:{ironFraction:0.7,density:7,volatileFraction:0.02}, T_eq:950, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0} },
+      'Ocean (temperate)': { radiusEarth:1.1, massEarth:1.3, eccentricity:0.02, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.28,density:5,volatileFraction:0.35}, T_eq:295, tidalState:{locked:false}, atmosphere:{color:[0.4,0.6,0.95],retained:true,pressure:1.5}, habitability:0.9, surfaceHistory:{erosion:0.6} },
+      'Titan (methane seas)': { radiusEarth:0.4, massEarth:0.025, eccentricity:0.03, starMassEarth:332946, orbitRadiusEarth:120000, composition:{ironFraction:0.18,density:1.9,volatileFraction:0.4}, T_eq:94, tidalState:{locked:false}, atmosphere:{color:[0.8,0.6,0.3],retained:true,pressure:1.5}, habitability:0.05, surfaceHistory:{erosion:0.2} },
+      'Frozen (airless)': { radiusEarth:0.5, massEarth:0.07, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:117275, composition:{ironFraction:0.2,density:2.5,volatileFraction:0.3}, T_eq:60, tidalState:{locked:false}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.1} },
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -725,6 +730,9 @@
       // cloudCoverage / auroraIntensity / craterCells / atmosphereModel consumed by Task 7 + Stage C
       if (uniforms.uCloudCoverage)  uniforms.uCloudCoverage.value  = u.cloudCoverage;
       if (uniforms.uAuroraIntensity) uniforms.uAuroraIntensity.value = u.auroraIntensity;
+      // §2 #3 master liquid gate → RESERVED→LIVE uniforms (Fluvial owner; Optical/Aeolian/Cryo read in step 3+)
+      if (uniforms.uLiquidStability) uniforms.uLiquidStability.value = u.liquidStability;
+      if (uniforms.uLiquidSpecies)   uniforms.uLiquidSpecies.value   = u.liquidSpecies;
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }

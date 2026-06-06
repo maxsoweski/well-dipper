@@ -153,7 +153,6 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const locked = !!d.tidalState?.locked;
 
   const hot = clamp01((T - 400) / 600);                          // 400K..1000K -> 0..1
-  const liquidWater = (T > 250 && T < 330) ? 1 : 0;              // specular band
 
   // ── §2 generation-side surfacings (index §2) ────────────────────────────────
   // surfaceGravity (#1): g = M/R² in Earth-relative units. massEarth + radiusEarth
@@ -180,12 +179,38 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     ? (ecc * ecc * starMassEarth * starMassEarth * Math.pow(radiusEarth, 5) / Math.pow(orbitRadiusEarth, 5)) / ioRef
     : 0;
 
+  // liquidStability + liquidSpecies (#3): the MASTER liquid gate (Fluvial owner;
+  // read by Aeolian dryness, Cryo freeze-boundary, Optical glint-presence). Per the
+  // Fluvial doc's master gate, a thermodynamically stable RETAINED liquid needs THREE
+  // things AND'd together — any one zero ⇒ the whole fluvial/coastal/karst stack is
+  // bypassed (the explicit "airless/bone-dry world skips this family" switch):
+  //   D6 retention — an atmosphere holds enough pressure (a vacuum world boils/
+  //                  sublimes any surface liquid away → 0).
+  //   D2 volatiles — a volatile budget above the bone-dry floor (vf<0.05 ⇒ 0).
+  //   D1 T-window  — T_eq sits inside a liquid window for SOME species.
+  // liquidSpecies (enum 0=water, 1=methane/ethane — registry contract) names which
+  // window T_eq landed in; methane/ethane is stable only at the cold Titan band.
+  // Soft-edged windows so stability is a continuous 0..1 (no magic binary).
+  const atmo = d.atmosphere;
+  const retained = atmo ? (atmo.retained !== false) : false;
+  const pressure = atmo ? (atmo.pressure ?? 1.0) : 0;            // bar-ish; presets mirror computeAtmosphere
+  const retentionGate = retained ? smoothstep(0.05, 0.3, pressure) : 0;     // D6
+  const volatileFraction = d.composition?.volatileFraction ?? 0.15;
+  const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05
+  const waterWindow   = smoothstep(248, 273, T) * (1 - smoothstep(373, 398, T));  // ~273–373 K plateau
+  const methaneWindow = smoothstep(85, 90, T) * (1 - smoothstep(112, 120, T));    // ~90–112 K Titan band
+  const tempWindow = Math.max(waterWindow, methaneWindow);                  // D1 — in-window for SOME species
+  const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);
+  const liquidSpecies = methaneWindow > waterWindow ? 1 : 0;               // 0=water, 1=methane/ethane
+
   return {
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
+    liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)
+    liquidSpecies,                                              // 0=water, 1=methane/ethane (Optical glint IOR/tint)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
-    specStrength: (hasAtmo && liquidWater) ? 0.8 : iron * 0.15,  // ocean specular vs faint metal sheen
+    specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen
     auroraIntensity: iron * (locked ? 0.2 : 1.0) * (hasAtmo ? 1 : 0),
     cloudCoverage: hasAtmo ? clamp01((d.habitability ?? 0) + 0.2) : 0,
     reliefAmplitude: mix(1.0, 0.6, erosion),                     // eroded worlds = softer relief
