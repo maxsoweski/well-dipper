@@ -119,11 +119,19 @@
     // Shader — sections mirror src/objects/Planet.js where marked VERBATIM
     // ─────────────────────────────────────────────────────────────────────────
     const vertexShader = /* glsl */ `
-      varying vec3 vPos;        // object-space position (noise domain — precision-safe)
-      varying vec3 vObjN;       // object-space geometric normal
+      varying vec3 vPos;            // object-space position (noise domain — precision-safe)
+      varying vec3 vObjN;           // object-space geometric normal
+      // ── Canonical shared varying (integration-index §1) — vSubstellarAngle ──
+      // Angle (rad) from the substellar point: 0 at the sub-star point, π at the
+      // antistellar point. Computed ONCE here so Bands (thermal), Clouds (F31f
+      // pupil/ring), Cryo (nightside cap), Optical (limb/terminator) all read the
+      // SAME value instead of each recomputing acos(dot(...)). Object-space light.
+      varying float vSubstellarAngle;
+      uniform vec3 uLightDir;       // object-space substellar direction (same uniform the frag reads)
       void main() {
         vPos = position;
         vObjN = normalize(position);
+        vSubstellarAngle = acos(clamp(dot(normalize(position), normalize(uLightDir)), -1.0, 1.0));
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `;
@@ -132,6 +140,7 @@
       precision highp float;
       varying vec3 vPos;
       varying vec3 vObjN;
+      varying float vSubstellarAngle;   // canonical shared varying (index §1) — see vertex shader
 
       uniform float uNoiseScale;
       uniform float uOctaves;       // effective octave count
@@ -404,19 +413,36 @@
           } else if (uDebugMode == 4){
             vec3 pn = perturbAnalytic(N, vGrad, 0.5);               // voronoi grad as lit relief
             dbg = uBaseColor * (max(dot(pn, uLightDir), 0.0) + 0.05);
-          } else {
-            // mode 5: emissiveBlackbody ramp swatch — pole(500K)→pole(4000K)
-            // gradient. Confirms the GLSL transcription matches the CPU mirror:
-            // bottom deep-red, climbing through orange/amber to warm-white on top.
+          } else if (uDebugMode == 5){
+            // emissiveBlackbody ramp swatch — pole(500K)→pole(4000K) gradient.
+            // Confirms the GLSL transcription matches the CPU mirror: bottom
+            // deep-red, climbing through orange/amber to warm-white on top.
             float tempK = mix(500.0, 4000.0, clamp(N.y * 0.5 + 0.5, 0.0, 1.0));
             dbg = emissiveBlackbody(tempK);
+          } else {
+            // mode 6: vSubstellarAngle varying — 0 (white, substellar) → π (black,
+            // antistellar). Confirms the shared varying is computed correctly:
+            // a bright sub-star spot fading to a dark antistellar hemisphere.
+            dbg = vec3(1.0 - vSubstellarAngle / 3.14159265);
           }
           gl_FragColor = vec4(dbg, 1.0);
           return;
         }
 
-        vec3 shadeN;
+        // ════════════════════════════════════════════════════════════════════
+        // §3 PIPELINE ORDER (integration-index) — the compositing contract.
+        // Each Stage-C domain inserts at its labeled stage; the foundation wires
+        // stages 1 / 6 / 8 / 9 + the ★ emissive channel, and leaves stages 2-5/7
+        // as placeholders the domains fill from their per-domain docs. The one
+        // hard invariant already honored: ★ emissive terms are added AFTER the
+        // posterize split so they don't band into gray steps (Stage-A §2.C).
+        // ════════════════════════════════════════════════════════════════════
 
+        // ── Stage 1: noised() height/derivative base (Stage-A foundation) ──
+        vec3 shadeN;
+        // canonical shared accumulator (index §1): Relief writes tectonic graben;
+        // Fluvial incised gorges + Cryo chasma ADD IN. Stages 2/3/4 consume it.
+        float canyonHeight = 0.0;
         if (uNormalMode == 1){
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
@@ -429,41 +455,56 @@
           shadeN = perturbAnalytic(N, hd.yzw, reliefAmp);
         }
 
+        // ── Stage 2: RELIEF combiner — mountains, craters (voronoi3d), scarps; writes canyonHeight   [domain: Relief]
+        // ── Stage 3: CRYO — frost-mask + sublimation pits; reads uCryoActivity; adds into canyonHeight [domain: Cryo]
+        // ── Stage 4: FLUVIAL incision — channels/karst carve, add into canyonHeight; uLiquidMask cut at seaLevel [domain: Fluvial]
+        // ── Stage 5: AEOLIAN — dunes (anisotropic relief mod); dust mantle SMOOTHS relief (runs AFTER stage 2) [domain: Aeolian]
+        //    (stages 2-5 reshape shadeN / height / canyonHeight; placeholders until their domains land.)
+
         // ── Envelope composite-split (spec §2.C) — each term is the A/B/C surface.
         // A bypassed term skips the quantizer => smooth glow over the posterized base.
         float diff = max(dot(shadeN, uLightDir), 0.0);
         float ambient = 0.035;
         vec2 fc = gl_FragCoord.xy;
-
-        // Surface (posterized) — single-star diffuse + ambient, as before
-        vec3 surface = posterize(min(uBaseColor * (diff + ambient), vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
-
-        // Emissive glow (lava/hot) — Lambert-independent (visible on the dark side)
-        vec3 emissive = uBaseColor * uEmissive;
-        emissive = (uEmissiveBypass == 1) ? emissive : posterize(emissive, uLevels, fc, 0.4, uDitherMode);
-
         // View vector — planet sits at origin, identity quaternion, so world==object space
         vec3 V = normalize(cameraPosition - vPos);
 
-        // Specular glint (ocean/ice) — Blinn-Phong, only on the lit side
-        vec3 H = normalize(uLightDir + V);
-        float spec = pow(max(dot(shadeN, H), 0.0), 48.0) * uSpecStrength * step(0.0001, diff);
-        vec3 specC = vec3(spec);
-        specC = (uSpecBypass == 1) ? specC : posterize(specC, uLevels, fc, 0.4, uDitherMode);
+        // ── Stage 6: surface albedo / material (relief + cryo frost tint + liquid material) ──
+        vec3 surface = posterize(min(uBaseColor * (diff + ambient), vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
-        // Limb / atmosphere rim glow (fresnel against the geometric normal, sun-weighted)
-        float limb = pow(1.0 - max(dot(N, V), 0.0), 3.0) * uLimbStrength * (diff + 0.15);
-        vec3 limbC = uBaseColor * limb;
-        limbC = (uLimbBypass == 1) ? limbC : posterize(limbC, uLevels, fc, 0.4, uDitherMode);
+        // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
+        //    lit color + landMask; renders LAST among surface terms, before the envelope split. [domain: Exotic]
+        //    (placeholder; maturity→0 must reveal the bare stage-6 base — the overlay-correctness test.)
 
-        // ── Clouds (analytic-FBM weather layer — animated, drifts via uTime; not determinism-bound) ──
-        // Samples the SAME analytic fbmd base as relief (Q7: off plain snoise, onto noised()).
+        // ── Stage 8: CLOUDS & HAZE — cloud-as-relief deck + haze muting (muting runs BEFORE final posterize);
+        //    AEOLIAN F40 storm veil wins the upper slot when both active. [domains: Clouds, Aeolian]
+        // Clouds (analytic-FBM weather layer — animated via uTime; off plain snoise, onto noised() — Q7).
         vec4 cw = fbmd(vPos * 1.7 + vec3(uTime * 0.02, 0.0, 0.0), 5.0, 0.0);
         float cloud = smoothstep(0.15, 0.5, cw.x) * uCloudCoverage * (diff + 0.05);
         vec3 cloudC = vec3(cloud);
         cloudC = posterize(cloudC, uLevels, fc, 0.4, uDitherMode);
 
-        // ── Aurora (night-side polar ring; rays from analytic noised(); smooth glow, skips quantizer) ──
+        // ── Stage 9: OPTICAL — limb/terminator scattering (additive-tint ONLY; must not double-darken). [domain: Optical]
+        // Limb / atmosphere rim glow (fresnel against the geometric normal, sun-weighted).
+        float limb = pow(1.0 - max(dot(N, V), 0.0), 3.0) * uLimbStrength * (diff + 0.15);
+        vec3 limbC = uBaseColor * limb;
+        limbC = (uLimbBypass == 1) ? limbC : posterize(limbC, uLevels, fc, 0.4, uDitherMode);
+
+        // ════════ posterize(surface) split — ★ EMISSIVE channel: all terms below BYPASS the quantizer ════════
+        // Owners: thermal Bands F32/F33 (emissiveBlackbody), magma Exotic F41 (emissiveBlackbody),
+        // city lights F48/49, bioluminescence F46, aurora Optical F37, sunglint Optical F36.
+
+        // ★ Emissive glow (lava/hot stand-in for F41/F32) — Lambert-independent (visible on the dark side).
+        vec3 emissive = uBaseColor * uEmissive;
+        emissive = (uEmissiveBypass == 1) ? emissive : posterize(emissive, uLevels, fc, 0.4, uDitherMode);
+
+        // ★ Specular glint (sunglint F36 stand-in) — Blinn-Phong, only on the lit side.
+        vec3 H = normalize(uLightDir + V);
+        float spec = pow(max(dot(shadeN, H), 0.0), 48.0) * uSpecStrength * step(0.0001, diff);
+        vec3 specC = vec3(spec);
+        specC = (uSpecBypass == 1) ? specC : posterize(specC, uLevels, fc, 0.4, uDitherMode);
+
+        // ★ Aurora (Optical F37 stand-in) — night-side polar ring; rays from analytic noised(); skips quantizer.
         float lat = N.y;                                       // -1..1 latitude proxy (object-space normal)
         float ringMask = exp(-pow((abs(lat) - 0.7) / 0.12, 2.0));
         float nightMask = smoothstep(0.1, -0.1, diff);         // visible in darkness/twilight
@@ -499,9 +540,22 @@
       uMacroOffset:  { value: new THREE.Vector3() },                // set from macroSeed
       uDetailOffset: { value: new THREE.Vector3() },                // set from detailSeed
       // ── voronoi3d spike debug (risk #1 seam gate) ──
-      uDebugMode:    { value: 0 },                                  // 0 off, 1 F1, 2 border, 3 cell-color, 4 relief
+      uDebugMode:    { value: 0 },                                  // 0 off, 1 F1, 2 border, 3 cell-color, 4 relief, 5 blackbody, 6 substellar
       uVoroScale:    { value: 5.0 },                                // cell density
       uVoroCells:    { value: 27 },                                 // 27 desktop | 9 mobile
+      // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
+      // The cross-domain shared semantic uniforms. Declared here (the central
+      // registry) at default-off so the 8 Stage-C domains read ONE agreed name
+      // instead of inventing their own. The OWNER domain wires its derivation
+      // (step 2, generation-side surfacings) + GLSL declaration when it lands;
+      // until then they sit at default. Full contract: research/stage-c/
+      // REGISTRY-canonical-uniforms.md. (vSubstellarAngle = varying, above;
+      // emissiveBlackbody/voronoi3d = shader helpers; latBias/storm arrays =
+      // per-domain, declared by their owner — see the registry doc.)
+      uLiquidStability: { value: 0.0 },   // 0..1 liquid on/off gate    — owner Fluvial; read by Aeolian/Cryo/Optical
+      uLiquidMask:      { value: 0.0 },   // liquid-body coverage mask   — owner Fluvial; read by Optical (sunglint F36)
+      uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
+      uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
     };
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
@@ -630,7 +684,7 @@
     // exists to prove the KEYSTONE primitive is seam-free before any cellular feature
     // builds on it. Mode 3 (per-cell color) is the seam test — a seam shows as a line.
     const fDebug = gui.addFolder('Debug — voronoi3d spike'); fDebug.open();
-    fDebug.add(state, 'debugMode', { OFF: 0, 'F1 (cells)': 1, 'F2-F1 (borders)': 2, 'cell-id color (SEAM TEST)': 3, 'lit relief': 4, 'blackbody ramp': 5 }).name('voronoi / bb debug');
+    fDebug.add(state, 'debugMode', { OFF: 0, 'F1 (cells)': 1, 'F2-F1 (borders)': 2, 'cell-id color (SEAM TEST)': 3, 'lit relief': 4, 'blackbody ramp': 5, 'substellar angle': 6 }).name('voronoi / bb / sub debug');
     fDebug.add(state, 'voroScale', 1, 20, 0.5).name('cell density');
     fDebug.add(state, 'voroCells', { '27 (desktop)': 27, '9 (mobile)': 9 }).name('cell count');
 

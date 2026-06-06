@@ -15,10 +15,14 @@ The contract the 8 domains build against. Lower-risk scaffolding EXCEPT sub-step
 | # | Sub-step | Status |
 |---|---|---|
 | 1.1 | **`voronoi3d()` keystone + seam-gate spike** (risk #1) | ✅ **DONE** — `262f63a` |
-| 1.2 | `emissiveBlackbody(tempK)` GLSL helper (shared: Bands thermal F32/F33, Exotic magma F41) | ⬜ next |
-| 1.3 | Canonical uniform registry (index §1's 11 shared-name rows — declare ONE name each) | ⬜ |
-| 1.4 | Single `vSubstellarAngle` varying, computed once (consumers: Bands, Clouds, Cryo, Optical) | ⬜ |
-| 1.5 | §3 pipeline-order skeleton in the mega-shader | ⬜ |
+| 1.2 | `emissiveBlackbody(tempK)` GLSL helper (shared: Bands thermal F32/F33, Exotic magma F41) | ✅ **DONE** — `304f998` |
+| 1.3 | Canonical uniform registry (index §1's shared-name rows — declare ONE name each) | ✅ **DONE** — step-1.3–1.5 commit |
+| 1.4 | Single `vSubstellarAngle` varying, computed once (consumers: Bands, Clouds, Cryo, Optical) | ✅ **DONE** — step-1.3–1.5 commit |
+| 1.5 | §3 pipeline-order skeleton in the mega-shader | ✅ **DONE** — step-1.3–1.5 commit |
+
+**→ Step 1 (shared-libs foundation) COMPLETE.** The contract the 8 domains build
+against is locked. Next: **step 2** (generation-side surfacings, index §2) then
+**step 3** (Relief — lands the shared Voronoi consumer + canyonHeight writer).
 
 ### 1.1 — voronoi3d keystone (DONE, `262f63a`)
 
@@ -31,10 +35,42 @@ The shared 3D cellular primitive three domains route through (relief craters F2,
 
 **→ Risk #1 (index §5, the single highest-priority spike) is CLEARED on cycle 1.** It gated every cellular feature; cellular work is now unblocked.
 
-### Carry-forward for sub-steps 1.2–1.5
-- The `▸ Debug — voronoi3d spike` folder is a **temporary harness tool** — remove (or fold into a permanent debug panel) once the foundation lands; it's not a planet feature.
-- `voronoi3d`'s `cells` param is the `qualityTier` 27↔9 knob's GPU side. Wire it to `uVoroCells`/`craterCells` from `deriveUniforms` when craters land (Stage-C step 3, Relief).
-- `emissiveBlackbody` should sit beside the noise/voronoi shared libs in the shader and (CPU-side, if a JS mirror earns a test) in `planet-lod-lab-core.js`.
+### 1.2 — emissiveBlackbody (DONE, `304f998`)
+Shared incandescence color ramp (index §1) — ONE curve, two consumers: Bands
+thermal (F32/F33), Exotic magma (F41). Returns **chromaticity only** (peak ≈1);
+caller scales brightness (`uThermalStrength × starFacing`). Stylized
+Planckian-locus ramp anchored to real blackbody sRGB (deep-red → orange → amber →
+warm-white), NOT a spectral integration — posterize-bypass term, so hue-smoothness
+not quantization is the point. CPU mirror in `planet-lod-lab-core.js` (chained
+smoothstep-mix over 5 stops) + 9 TDD tests (`tests/planet-lod-blackbody.test.js`,
+RED→GREEN); GLSL transcription beside the voronoi3d lib (same stops/weights).
+Live-verified on `:9223` via temporary **debug mode 5** (pole-to-pole swatch).
+
+### 1.3 / 1.4 / 1.5 — shared-libs contract (DONE)
+- **1.3 registry** — full contract in `research/stage-c/REGISTRY-canonical-uniforms.md`
+  (canonical name · kind · owner · consumers · status per index §1 row). The 4
+  cross-domain semantic uniforms (`uLiquidStability`, `uLiquidMask`,
+  `uLiquidSpecies`, `uCryoActivity`) are **RESERVED** in the central `uniforms`
+  object at default-off — owner domain wires derivation (step 2) + GLSL read
+  (step 3+). `latBias` + storm arrays = **DEFERRED** (per-domain; owner declares).
+- **1.4 vSubstellarAngle** — vertex **varying**, computed ONCE
+  (`acos(clamp(dot(normalize(pos), normalize(uLightDir)),-1,1))`), object-space.
+  Consumers: Bands/Clouds/Cryo/Optical. Live-verified via **debug mode 6**
+  (bright sub-star spot → dark antistellar).
+- **1.5 pipeline-order skeleton** — `main()` restructured to the index §3 fixed
+  compositing order as labeled **Stage 1–9** placeholders + the `canyonHeight`
+  accumulator (declared in stage 1; Relief writes, Fluvial/Cryo add in) + the
+  **★ emissive-after-posterize** channel block. Existing terms preserved exactly
+  (commutative final sum) — no-regression verified on the Rocky render.
+
+### Carry-forward (still open)
+- The `▸ Debug — voronoi3d spike` folder (now modes 1–6: voronoi + blackbody +
+  substellar) is a **temporary harness tool** — remove or fold into a permanent
+  debug panel once the domains land; it's not a planet feature.
+- `voronoi3d`'s `cells` param is the `qualityTier` 27↔9 knob's GPU side. Wire it
+  to `uVoroCells`/`craterCells` from `deriveUniforms` when craters land (step 3, Relief).
+- The 4 RESERVED uniforms go **LIVE** when their owner wires the step-2 generation
+  derivation + a consumer reads them — update the registry doc's Status column then.
 
 ---
 
@@ -46,5 +82,13 @@ Index §4 carries the original 7. Added during implementation:
 
 ---
 
-## Next session picks up at: **Step 1.2 — `emissiveBlackbody(tempK)`**, then the uniform registry (1.3).
-Each domain (after step 1 + the step-2 generation surfacings) implements directly from its `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc. Index §7 is the dependency-ordered sequence (Relief lands the shared Voronoi consumer first, then the parallel fan-out).
+## Next session picks up at: **Step 2 — generation-side surfacings** (index §2)
+Step 1 (shared-libs foundation) is COMPLETE. Step 2 = the small `PlanetGenerator`
+derivations that bring the RESERVED uniforms alive: `surfaceGravity`,
+planet-`tidalHeat`, `volatileSpecies`, `liquidStability`/`liquidSpecies`,
+`precipitation`, pressure plumbing, `magneticField`. **`magneticField` (Max Q6) is
+an open decision — surface it before building generation-surfacing #3.** Then
+step 3 = **Relief** (widest gap; lands the shared Voronoi consumer + writes
+`canyonHeight`). After Relief, the domains fan out in parallel (worktree-isolated),
+each implementing directly from its `research/stage-b/RESEARCH_stage-b-<domain>-*.md`
+doc against this locked contract. Index §7 is the dependency-ordered sequence.
