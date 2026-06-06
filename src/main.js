@@ -3059,6 +3059,7 @@ warpEffect.onComplete = () => {
   // would move Portal B with every look-around, which is the original bug.
   camera.getWorldDirection(_arrivalForward);
   warpPortal.setTraversalMode('OUTSIDE_B');
+  warpPortal._openedThisWarp = false;   // allow a fresh Portal A on the next warp
 
   if (_portalLabMode) {
     // Diagnostic mode: start a smooth slerp from camera's current forward
@@ -6617,7 +6618,13 @@ function simStep(deltaTime) {
       // crossing detection in `warpPortal.updateTraversal()` flips render
       // state and fires `onTraversal('INSIDE')` → warpEffect.onSwapSystem.
       if (_useDualPortal) {
-        if (!warpPortal.group.visible) {
+        // Open a fresh Portal A on the first frame of every warp (FOLD t=0),
+        // even if a leftover Portal B from the prior warp is still visible.
+        // Gated by a per-warp flag (cleared in onComplete) so it opens exactly
+        // once per warp — the old `!group.visible` guard let leftover post-warp
+        // visibility block the fresh open, staling the tunnel on repeat warps.
+        if (warpEffect.state === 'fold' && !warpPortal._openedThisWarp) {
+          warpPortal._openedThisWarp = true;
           // Portal spawn distance tied to ship scale via ScaleConstants.
           // Same distance as lab preview so FOLD ramp lands the camera at
           // Portal A by end of FOLD at any ship scale.
