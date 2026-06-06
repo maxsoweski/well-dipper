@@ -29,3 +29,43 @@ describe('surfaceGravity (§2 #1 — gates Relief crater morphology + Aeolian du
     expect(Number.isFinite(g)).toBe(true);
   });
 });
+
+describe('tidalHeat (§2 #2 — planet-level, feeds Relief F8 lava/F7 edifices + Cryo P7)', () => {
+  // The existing PhysicsEngine.tidalHeating() is moon-parameterized; this is the
+  // planet-level analog — a planet self-heats on an eccentric close orbit around
+  // its STAR (Relief risk #2: "eccentricity + close-orbit planets self-heat").
+  // Same Io-normalized physics shape (∝ e²·M_star²·R_planet⁵ / a⁵); raw scalar,
+  // the consuming domains map it to their own 0..1 (uLavaActivity / cryoActive).
+  // Driver fields mirror what should reach planetData: eccentricity, starMassEarth,
+  // orbitRadiusEarth, radiusEarth.
+  const close = { eccentricity: 0.1, starMassEarth: 332946, orbitRadiusEarth: 1200, radiusEarth: 1.0 };
+
+  it('a circular orbit produces zero tidal heat (e² term)', () => {
+    expect(deriveUniforms({ ...close, eccentricity: 0 }).tidalHeat).toBe(0);
+  });
+
+  it('more eccentric → more tidal heat (e² scaling)', () => {
+    const lo = deriveUniforms({ ...close, eccentricity: 0.05 }).tidalHeat;
+    const hi = deriveUniforms({ ...close, eccentricity: 0.20 }).tidalHeat;
+    expect(hi).toBeGreaterThan(lo);
+  });
+
+  it('closer orbit → more tidal heat (inverse fifth-power of semi-major axis)', () => {
+    const far  = deriveUniforms({ ...close, orbitRadiusEarth: 4000 }).tidalHeat;
+    const near = deriveUniforms({ ...close, orbitRadiusEarth: 1000 }).tidalHeat;
+    expect(near).toBeGreaterThan(far);
+  });
+
+  it('larger planet → more tidal heat (R⁵ scaling)', () => {
+    const small = deriveUniforms({ ...close, radiusEarth: 0.5 }).tidalHeat;
+    const big   = deriveUniforms({ ...close, radiusEarth: 2.0 }).tidalHeat;
+    expect(big).toBeGreaterThan(small);
+  });
+
+  it('is finite and non-negative; defaults to 0 (no NaN/throw) on a bundle without orbital data', () => {
+    const t = deriveUniforms({}).tidalHeat;
+    expect(t).toBe(0);
+    expect(Number.isFinite(deriveUniforms(close).tidalHeat)).toBe(true);
+    expect(deriveUniforms(close).tidalHeat).toBeGreaterThanOrEqual(0);
+  });
+});

@@ -165,8 +165,24 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const massEarth = d.massEarth ?? 1.0;
   const surfaceGravity = massEarth / (radiusEarth * radiusEarth);
 
+  // tidalHeat (#2): the planet-level analog of PhysicsEngine.tidalHeating() — a
+  // planet self-heats on an eccentric close orbit around its STAR (Relief risk #2).
+  // Same Io-normalized physics (∝ e²·M_parent²·R_body⁵ / a⁵), star-parameterized;
+  // raw scalar (huge dynamic range), the consumers map it to 0..1 (uLavaActivity
+  // F8 / uVolcanismStrength F7 / cryoActive P7). Constants mirror the moon fn's Io
+  // reference EXACTLY. Defaults to 0 (circular / no orbital data). Production TODO:
+  // confirm eccentricity + star mass + orbit reach planetData (Relief flag §F8).
+  const ecc = d.eccentricity ?? 0;
+  const starMassEarth = d.starMassEarth ?? 332946;             // 1 M_sun in Earth masses
+  const orbitRadiusEarth = d.orbitRadiusEarth ?? 23455;        // 1 AU in Earth radii
+  const ioRef = (0.0041 * 0.0041) * (317.8 * 317.8) * Math.pow(0.286, 5) / Math.pow(66, 5);
+  const tidalHeat = orbitRadiusEarth > 0
+    ? (ecc * ecc * starMassEarth * starMassEarth * Math.pow(radiusEarth, 5) / Math.pow(orbitRadiusEarth, 5)) / ioRef
+    : 0;
+
   return {
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
+    tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: (hasAtmo && liquidWater) ? 0.8 : iron * 0.15,  // ocean specular vs faint metal sheen
