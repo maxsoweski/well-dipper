@@ -203,11 +203,27 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);
   const liquidSpecies = methaneWindow > waterWindow ? 1 : 0;               // 0=water, 1=methane/ethane
 
+  // volatileSpecies (#4): the Cryo frost-species classifier — a JS selector (the ONLY
+  // allowed branch, in JS not shader), paralleling Clouds' cloudSpeciesFor(). Picks the
+  // characteristic SOLID volatile from D2 volatileFraction + D1 T_eq condensation bands.
+  // enum 0=none, 1=H₂O, 2=CO₂, 3=CH₄, 4=N₂ (descending condensation temp). Drives Cryo's
+  // sublimation-landform combiner (F18) + frost albedo/tint (F22) when Cryo lands (step 3).
+  // T_eq is the load-bearing axis (the doc's "D1 gates which species is solid"); a
+  // composition refinement within a band (CO₂-atmo vs CH₄-outer) is a Cryo-step-3 TODO.
+  const volatileSpecies =
+    volatileFraction < 0.05 ? 0 :   // no volatile budget → no characteristic frost
+    T > 273 ? 0 :                    // warm — liquid/Fluvial regime, no perennial frost
+    T > 150 ? 1 :                    // H₂O water-ice caps (Earth/Mars)
+    T > 90  ? 2 :                    // CO₂ dry-ice (Mars S-pole swiss-cheese)
+    T > 40  ? 3 :                    // CH₄ bladed/penitente (Pluto Tartarus Dorsa)
+    4;                               // N₂ convection polygons (Triton / Sputnik Planitia)
+
   return {
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)
     liquidSpecies,                                              // 0=water, 1=methane/ethane (Optical glint IOR/tint)
+    volatileSpecies,                                            // Cryo frost classifier 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂ (F18/F22)
     emissive: hot,                                               // lava glow on hot bodies
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen

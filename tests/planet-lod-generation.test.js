@@ -123,3 +123,40 @@ describe('liquidStability + liquidSpecies (§2 #3 — the master liquid gate)', 
     expect(t).toBeLessThanOrEqual(1);
   });
 });
+
+describe('volatileSpecies classifier (§2 #4 — feeds Cryo sublimation morphology + frost color)', () => {
+  // CPU JS selector (the only allowed branch — in JS, not a shader planetType branch),
+  // paralleling Clouds' cloudSpeciesFor(). Picks the characteristic SOLID volatile from
+  // D2 volatileFraction + D1 T_eq condensation bands. enum: 0=none, 1=H₂O, 2=CO₂, 3=CH₄,
+  // 4=N₂ — descending condensation temperature. Drives which sublimation landform (F18)
+  // + frost albedo (F22) Cryo renders in step 3.
+  const cold = (T) => ({ T_eq: T, composition: { volatileFraction: 0.3 } });
+
+  it('warm world (T_eq > 273) → no characteristic surface frost (none/0)', () => {
+    expect(deriveUniforms(cold(300)).volatileSpecies).toBe(0);
+  });
+  it('temperate-cold world (150–273 K) → water ice (H₂O/1)', () => {
+    expect(deriveUniforms(cold(210)).volatileSpecies).toBe(1);
+  });
+  it('Mars-cold world (90–150 K) → CO₂ dry ice (2)', () => {
+    expect(deriveUniforms(cold(140)).volatileSpecies).toBe(2);
+  });
+  it('Pluto-cold world (40–90 K) → methane ice (CH₄/3)', () => {
+    expect(deriveUniforms(cold(70)).volatileSpecies).toBe(3);
+  });
+  it('Triton-cold world (≤40 K) → nitrogen ice (N₂/4)', () => {
+    expect(deriveUniforms(cold(35)).volatileSpecies).toBe(4);
+  });
+  it('bone-dry world (volatileFraction < 0.05) → none (0), whatever the temperature', () => {
+    expect(deriveUniforms({ T_eq: 35, composition: { volatileFraction: 0.01 } }).volatileSpecies).toBe(0);
+  });
+  it('colder worlds select equal-or-colder-condensing species (monotonic banding)', () => {
+    const seq = [300, 210, 140, 70, 35].map(T => deriveUniforms(cold(T)).volatileSpecies);
+    for (let i = 1; i < seq.length; i++) expect(seq[i]).toBeGreaterThan(seq[i - 1]);
+  });
+  it('is an integer enum; empty bundle → defined (warm default → none/0, no NaN/throw)', () => {
+    const v = deriveUniforms({}).volatileSpecies;
+    expect(Number.isInteger(v)).toBe(true);
+    expect(v).toBe(0);
+  });
+});

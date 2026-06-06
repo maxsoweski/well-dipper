@@ -54,7 +54,7 @@ are NOT built in step 1 — listed here so the owner wires name→derivation tog
 | `magneticField` (D13) | Optical (aurora F37) | **Max-decision Q6 open** — surfacing ownership (Optical vs separate generation workstream); also drives atmosphere stripping. Surface before generation-surfacing #3. |
 | `precipitation` (D4) | Fluvial (channel activity F11) | From `computeAtmosphere`. |
 | `atmosphere.physics.pressure` → shader | Aeolian (grain transport) | Plumbing only. |
-| `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | Cryo (sublimation morphology + frost color) | Parallels Clouds' `cloudSpeciesFor()` JS selector (the only allowed branch — in JS, not shader). |
+| `volatileSpecies` classifier (N₂/CO₂/CH₄/H₂O) | Cryo (sublimation morphology + frost color) | **DONE** — `deriveUniforms` JS selector (enum 0=none/1=H₂O/2=CO₂/3=CH₄/4=N₂) from `composition.volatileFraction` + `T_eq` condensation bands; 8 TDD tests. `_derived`-only (per-domain — Cryo declares `uVolatileSpecies` when it lands in step 3). Composition refinement within a band is a Cryo TODO. |
 | `liquidStability` + `liquidSpecies` | Fluvial (gates the whole fluvial/coastal/karst stack), Optical, Aeolian, Cryo | **DONE** — `deriveUniforms` AND's three gates (D6 retention via `atmosphere.retained`/`pressure` · D2 `composition.volatileFraction` bone-dry floor 0.05 · D1 soft T-windows: water ~273–373 K, methane ~90–112 K). `liquidSpecies` = which window T_eq fell in (0=water, 1=methane). 8 TDD tests; presets carry `volatileFraction`+`retained`/`pressure`; "Titan" preset exercises methane. Promoted the old `liquidWater` proto (now drives `specStrength` continuously). |
 
 ---
