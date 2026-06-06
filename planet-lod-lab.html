@@ -140,6 +140,13 @@
       uniform float uPerturb;       // relief strength
       uniform int   uNormalMode;    // 0 = analytic, 1 = finite-diff (production)
       uniform int   uFwClamp;       // 1 = fwidth octave clamp on
+      uniform int   uDitherMode;    // 0 = Bayer, 1 = IGN
+      uniform float uEmissive;      // emissive glow strength
+      uniform float uSpecStrength;  // specular glint
+      uniform float uLimbStrength;  // limb/atmosphere rim glow
+      uniform int   uEmissiveBypass;
+      uniform int   uSpecBypass;
+      uniform int   uLimbBypass;
       uniform vec3  uLightDir;      // object-space light dir
       uniform vec3  uBaseColor;
       uniform vec3  uMacroOffset;   // macro seed -> noise-domain offset (octaves 0..2)
@@ -203,8 +210,16 @@
         else                { t = (p.x<0.5)?15.0:(p.x<1.5)?7.0 :(p.x<2.5)?13.0:5.0; }
         return t / 16.0;
       }
-      vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth){
-        float dither = bayerDither(fragCoord) - 0.5;
+      // Interleaved Gradient Noise (Jimenez 2014) — finer, less grid-patterned than
+      // Bayer; needed when posterize levels are pushed high (spec §2.C dither toggle).
+      float ignDither(vec2 coord){
+        return fract(52.9829189 * fract(dot(coord, vec2(0.06711056, 0.00583715))));
+      }
+      float ditherVal(vec2 coord, int mode){
+        return (mode == 1) ? ignDither(coord) : bayerDither(coord);
+      }
+      vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth, int mode){
+        float dither = ditherVal(fragCoord, mode) - 0.5;
         vec3 dithered = color + dither * edgeWidth / levels;
         return floor(dithered * levels + 0.5) / levels;
       }
@@ -329,14 +344,34 @@
           shadeN = perturbAnalytic(N, hd.yzw, reliefAmp);
         }
 
-        // ── Lighting — single star, mirrors Planet.js (diffuse + ambient 0.035) ──
+        // ── Envelope composite-split (spec §2.C) — each term is the A/B/C surface.
+        // A bypassed term skips the quantizer => smooth glow over the posterized base.
         float diff = max(dot(shadeN, uLightDir), 0.0);
         float ambient = 0.035;
-        vec3 surfaceColor = uBaseColor;
-        vec3 col = surfaceColor * (diff + ambient);
-        col = min(col, vec3(1.0));
-        col = posterize(col, uLevels, gl_FragCoord.xy, 0.4);
-        gl_FragColor = vec4(col, 1.0);
+        vec2 fc = gl_FragCoord.xy;
+
+        // Surface (posterized) — single-star diffuse + ambient, as before
+        vec3 surface = posterize(min(uBaseColor * (diff + ambient), vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
+
+        // Emissive glow (lava/hot) — Lambert-independent (visible on the dark side)
+        vec3 emissive = uBaseColor * uEmissive;
+        emissive = (uEmissiveBypass == 1) ? emissive : posterize(emissive, uLevels, fc, 0.4, uDitherMode);
+
+        // View vector — planet sits at origin, identity quaternion, so world==object space
+        vec3 V = normalize(cameraPosition - vPos);
+
+        // Specular glint (ocean/ice) — Blinn-Phong, only on the lit side
+        vec3 H = normalize(uLightDir + V);
+        float spec = pow(max(dot(shadeN, H), 0.0), 48.0) * uSpecStrength * step(0.0001, diff);
+        vec3 specC = vec3(spec);
+        specC = (uSpecBypass == 1) ? specC : posterize(specC, uLevels, fc, 0.4, uDitherMode);
+
+        // Limb / atmosphere rim glow (fresnel against the geometric normal, sun-weighted)
+        float limb = pow(1.0 - max(dot(N, V), 0.0), 3.0) * uLimbStrength * (diff + 0.15);
+        vec3 limbC = uBaseColor * limb;
+        limbC = (uLimbBypass == 1) ? limbC : posterize(limbC, uLevels, fc, 0.4, uDitherMode);
+
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -348,6 +383,14 @@
       uPerturb:    { value: 0.55 },
       uNormalMode: { value: 0 },
       uFwClamp:    { value: 1 },
+      // ── Envelope composite-split (spec §2.C) — the A/B/C tunable surface ──
+      uDitherMode:     { value: 0 },     // 0 = Bayer, 1 = IGN/triangular
+      uEmissive:       { value: 0.0 },   // emissive glow strength (lava/hot bodies)
+      uSpecStrength:   { value: 0.0 },   // specular glint (ocean/ice)
+      uLimbStrength:   { value: 0.0 },   // limb/atmosphere rim glow
+      uEmissiveBypass: { value: 0 },     // 1 = term skips the quantizer (smooth glow)
+      uSpecBypass:     { value: 0 },
+      uLimbBypass:     { value: 0 },
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
       uMacroOffset:  { value: new THREE.Vector3() },                // set from macroSeed
@@ -424,6 +467,14 @@
       octAuto: true,
       fwClamp: true,
       spin: false,
+      // ── Envelope (spec §2.C) — the A/B/C tunable surface; values stay OPEN (§4) ──
+      ditherMode: 0,        // 0 Bayer, 1 IGN/triangular
+      emissive: 0.0,        // lava/hot glow
+      specStrength: 0.0,    // ocean/ice specular glint
+      limbStrength: 0.0,    // atmosphere rim glow
+      emissiveBypass: false,
+      specBypass: false,
+      limbBypass: false,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -459,8 +510,19 @@
     fView.add(state, 'fwClamp').name('fwidth clamp');
     fView.add(state, 'pixelScale', 1, 6, 1).name('pixelScale ÷').onChange(() => rebuildTarget());
     fView.add(state, 'normalMode', { ANALYTIC: 0, 'FINITE-DIFF': 1 }).name('normals');
-    fView.add(state, 'levels', 2, 16, 1).name('posterize levels');   // relocates to ▸ Envelope in Task 5
     fView.add(state, 'spin').name('spin');
+
+    // ▸ Envelope (open) — the A/B/C decision surface (spec §2.C). Values stay OPEN (§4):
+    // this folder delivers the *controls*; settling per-type values is Max's playtesting.
+    const fEnv = gui.addFolder('Envelope'); fEnv.open();
+    fEnv.add(state, 'levels', 6, 16, 1).name('posterize levels');
+    fEnv.add(state, 'ditherMode', { Bayer: 0, 'IGN/triangular': 1 }).name('dither mode');
+    fEnv.add(state, 'emissive', 0, 1, 0.01).name('emissive (lava)');
+    fEnv.add(state, 'specStrength', 0, 1, 0.01).name('specular (ocean/ice)');
+    fEnv.add(state, 'limbStrength', 0, 1, 0.01).name('limb glow');
+    fEnv.add(state, 'emissiveBypass').name('emissive bypass quantizer');
+    fEnv.add(state, 'specBypass').name('spec bypass quantizer');
+    fEnv.add(state, 'limbBypass').name('limb bypass quantizer');
 
     // ▸ Surface — Relief
     const fRelief = gui.addFolder('Surface — Relief'); fRelief.close();
@@ -573,6 +635,13 @@
       uniforms.uPerturb.value = state.perturb;
       uniforms.uNormalMode.value = state.normalMode;
       uniforms.uFwClamp.value = state.fwClamp ? 1 : 0;
+      uniforms.uDitherMode.value = state.ditherMode;
+      uniforms.uEmissive.value = state.emissive;
+      uniforms.uSpecStrength.value = state.specStrength;
+      uniforms.uLimbStrength.value = state.limbStrength;
+      uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
+      uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
+      uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
