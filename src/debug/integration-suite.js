@@ -549,6 +549,186 @@ export async function runRepeatWarpSuite(opts) {
   return { passed, failed, total: results.length, results, w1, w2, portalVisibleAtIdle, portalModeAtIdle };
 }
 
+// === Warp Entry-Reliability Telemetry — runWarpEntrySuite ===
+//
+// Root-cause instrument for "entry crossing OUTSIDE_A→INSIDE is only ~2/3
+// reliable" (handoff 2026-06-06). The entry flip happens in 1-2 frames at the
+// FOLD→ENTER boundary — far finer than the 100ms inventory poll the other
+// suites use — so this drives N warps with WarpPortal's per-frame `_trace`
+// enabled and extracts the EXACT values the entry gate saw at the crossing.
+//
+// It distinguishes the two open hypotheses WITHOUT pre-judging:
+//   • Off-axis approach     → latStable genuinely > discRadius AND
+//                             |fwdDotNormalA| diverged from ~1 (camera flew
+//                             across the plane off-center).
+//   • float32 precision     → latBuggy >> latStable (catastrophic cancellation
+//                             in the production sqrt(d²−along²) form) at large
+//                             camLocalLen, with latStable still ≤ discRadius
+//                             (the camera was really on-axis; only the formula
+//                             said otherwise). Ties to world-origin rebasing.
+//
+// Returns a per-warp table + a verdict the caller reads to pick the fix.
+// Pure telemetry — no pass/fail gating (the AC gate is the later live suite).
+export async function runWarpEntrySuite(opts) {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runWarpEntrySuite: window.__wd not installed. Enter Sol first via _lab.enterSol().');
+  }
+  const wp = window._warpPortal;
+  if (!wp) throw new Error('runWarpEntrySuite: window._warpPortal not available.');
+  if (!('_trace' in wp)) throw new Error('runWarpEntrySuite: WarpPortal._trace hook missing — stale build? Reload.');
+  if (typeof window._autoSelectWarpTarget !== 'function' || typeof window._beginWarpTurn !== 'function') {
+    throw new Error('runWarpEntrySuite: warp driving globals not available — not in interactive Sol state.');
+  }
+  const __wd = window.__wd;
+  const warps = (opts?.warps) ?? 8;
+  const maxWallSeconds = (opts?.maxWallSeconds) || 16;
+
+  // Pull the single record that best characterises the entry attempt out of a
+  // full-warp per-frame trace: the registered crossing if there was one, else
+  // the gate-rejected crossing (camera passed the plane but mode stayed
+  // OUTSIDE_A), else the closest approach to the plane.
+  function analyzeEntry(trace, targetName, idx) {
+    const base = { idx, targetName, frames: trace.length };
+    if (!trace.length) return { ...base, outcome: 'NO_TRACE' };
+
+    // Only the current warp's approach matters. The fresh FOLD-start open
+    // (resetTraversal) seeds mode=OUTSIDE_A with prevDotA=null; take the trace
+    // from the LAST such seed so leftover OUTSIDE_B frames from a prior warp
+    // (or the post-swap INSIDE frames) don't pollute the analysis.
+    let seedIdx = 0;
+    for (let i = trace.length - 1; i >= 0; i--) {
+      if (trace[i].mode === 'OUTSIDE_A' && trace[i].prevDotA === null) { seedIdx = i; break; }
+    }
+    const approach = trace.slice(seedIdx);
+
+    // Rebase activity during the approach (worldOriginLen changes frame-to-frame).
+    let rebaseEvents = 0, maxRebaseJump = 0;
+    for (let i = 1; i < approach.length; i++) {
+      const d = Math.abs(approach[i].worldOriginLen - approach[i - 1].worldOriginLen);
+      if (d > 1e-6) { rebaseEvents++; maxRebaseJump = Math.max(maxRebaseJump, d); }
+    }
+
+    // Worst-case formula divergence anywhere near the plane (|dotA| small) —
+    // shows precision corruption even on frames that aren't the exact crossing.
+    let maxLatDivergence = 0, maxCamLocalNearPlane = 0;
+    for (const f of approach) {
+      if (Math.abs(f.dotA) <= 10) {
+        maxLatDivergence = Math.max(maxLatDivergence, Math.abs(f.latBuggy - f.latStable));
+        maxCamLocalNearPlane = Math.max(maxCamLocalNearPlane, f.camLocalLen);
+      }
+    }
+
+    const pick = (f, outcome) => ({
+      ...base, outcome, rebaseEvents, maxRebaseJump,
+      maxLatDivergence, maxCamLocalNearPlane,
+      atCrossing: {
+        dotA: f.dotA, prevDotA: f.prevDotA,
+        latBuggy: f.latBuggy, latStable: f.latStable, discRadius: f.discRadius,
+        gateBuggyPass: f.latBuggy <= f.discRadius,
+        gateStablePass: f.latStable <= f.discRadius,
+        fwdDotNormalA: f.fwdDotNormalA,
+        camLocalLen: f.camLocalLen, camWorldLen: f.camWorldLen, worldOriginLen: f.worldOriginLen,
+      },
+    });
+
+    const registered = approach.find(f => f.insideFlip);
+    if (registered) return pick(registered, 'REGISTERED');
+
+    // Missed: camera crossed the plane (sign flip) but gate rejected → still OUTSIDE_A.
+    const missed = approach.find(f => f.signFlipA && f.mode === 'OUTSIDE_A');
+    if (missed) return pick(missed, 'MISSED_GATE_REJECT');
+
+    // Never crossed: closest approach to the plane while still OUTSIDE_A.
+    let closest = null;
+    for (const f of approach) {
+      if (f.mode === 'OUTSIDE_A' && (closest === null || Math.abs(f.dotA) < Math.abs(closest.dotA))) closest = f;
+    }
+    return closest ? pick(closest, 'NEVER_CROSSED') : { ...base, outcome: 'NO_OUTSIDE_A_FRAMES' };
+  }
+
+  async function driveOneWarp() {
+    window._autoSelectWarpTarget();
+    await new Promise(r => setTimeout(r, 120));
+    const targetName = window._warpTarget?.name ?? '?';
+    wp._trace = [];
+    window._beginWarpTurn();
+    // Wait to LEAVE idle (turn can take ~3s), then wait to RETURN to idle.
+    const turnWait = performance.now();
+    let started = false;
+    while (performance.now() - turnWait < 7000) {
+      await new Promise(r => setTimeout(r, 150));
+      if ((__wd.takeSceneInventory().phases?.warp ?? 'idle') !== 'idle') { started = true; break; }
+    }
+    const start = performance.now();
+    while (performance.now() - start < maxWallSeconds * 1000) {
+      await new Promise(r => setTimeout(r, 200));
+      if (started && (__wd.takeSceneInventory().phases?.warp ?? 'idle') === 'idle') break;
+    }
+    const trace = wp._trace || [];
+    wp._trace = null;
+    return { trace, targetName };
+  }
+
+  const pre = __wd.takeSceneInventory();
+  if (pre.phases?.warp !== 'idle') {
+    throw new Error('runWarpEntrySuite: warp.state must be idle at start; got ' + pre.phases?.warp);
+  }
+
+  const rows = [];
+  for (let i = 0; i < warps; i++) {
+    const { trace, targetName } = await driveOneWarp();
+    rows.push(analyzeEntry(trace, targetName, i));
+    // Let the post-arrival settle a beat so the next _autoSelectWarpTarget is clean.
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  const registered = rows.filter(r => r.outcome === 'REGISTERED').length;
+  const missedGate = rows.filter(r => r.outcome === 'MISSED_GATE_REJECT').length;
+  const neverCrossed = rows.filter(r => r.outcome === 'NEVER_CROSSED').length;
+
+  // Verdict heuristic (evidence, not a fix decision):
+  //  - precision-suspect: any failure where stable gate WOULD have passed but
+  //    buggy gate rejected, or large latBuggy−latStable divergence near plane.
+  //  - offaxis-suspect: failure where even the stable gate rejects (latStable
+  //    truly > discRadius) — camera genuinely off-center.
+  const failures = rows.filter(r => r.outcome === 'MISSED_GATE_REJECT' || r.outcome === 'NEVER_CROSSED');
+  const precisionSuspect = failures.filter(r =>
+    r.atCrossing && (r.atCrossing.gateStablePass === true && r.atCrossing.gateBuggyPass === false
+      || r.maxLatDivergence > r.atCrossing.discRadius));
+  const offaxisSuspect = failures.filter(r =>
+    r.atCrossing && r.atCrossing.gateStablePass === false);
+
+  const summary = {
+    warps, registered, missedGate, neverCrossed,
+    reliability: registered + '/' + warps,
+    precisionSuspectFailures: precisionSuspect.length,
+    offaxisSuspectFailures: offaxisSuspect.length,
+    verdict:
+      failures.length === 0 ? 'ALL_REGISTERED'
+      : (precisionSuspect.length > 0 && offaxisSuspect.length === 0) ? 'PRECISION_DOMINANT'
+      : (offaxisSuspect.length > 0 && precisionSuspect.length === 0) ? 'OFFAXIS_DOMINANT'
+      : 'MIXED_OR_INCONCLUSIVE',
+  };
+
+  console.group('[__wd warp-entry suite] ' + summary.reliability + ' registered — verdict: ' + summary.verdict);
+  console.table(rows.map(r => ({
+    idx: r.idx, target: r.targetName, outcome: r.outcome,
+    latBuggy: r.atCrossing?.latBuggy?.toFixed(3),
+    latStable: r.atCrossing?.latStable?.toFixed(3),
+    gateBuggy: r.atCrossing?.gateBuggyPass,
+    gateStable: r.atCrossing?.gateStablePass,
+    fwdDotN: r.atCrossing?.fwdDotNormalA?.toFixed(3),
+    camLocal: r.atCrossing?.camLocalLen?.toFixed(0),
+    camWorld: r.atCrossing?.camWorldLen?.toFixed(0),
+    rebases: r.rebaseEvents,
+    maxDiverge: r.maxLatDivergence?.toFixed(3),
+  })));
+  console.log('summary', summary);
+  console.groupEnd();
+
+  return { summary, rows };
+}
+
 // === Warp Landing Strip Regression — runWarpLandingStripRegressionTest ===
 //
 // Drives a real warp (Sol → auto-selected destination) while sampling

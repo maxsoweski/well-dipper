@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { assignName } from '../util/scene-naming.js';
 import { createTraversal, stepTraversal } from './portalTraversal.js';
+import { worldOrigin } from '../core/WorldOrigin.js';
 import {
   portalApertureScene,
   portalPreviewDistanceScene,
@@ -341,6 +342,18 @@ export class WarpPortal {
     this._trav = createTraversal('OUTSIDE_A');
     this.onTraversal = null;  // optional callback: (newMode) => void
 
+    // ── Entry-reliability telemetry (debug-only, off by default) ──
+    // When `_trace` is a non-null array, updateTraversal appends one record
+    // per frame capturing EXACTLY what the entry gate sees: both the
+    // production (catastrophic-cancellation) lateral distance AND a
+    // numerically-stable perpendicular distance, plus coordinate magnitudes
+    // and rebase state. This lets a root-cause pass distinguish an off-axis
+    // approach (latStable genuinely > gate radius) from a float32-precision
+    // failure (latBuggy >> latStable at large local coords) without
+    // monkeypatching or screenshots. Set `_warpPortal._trace = []` before a
+    // warp, read it after, then set back to null. Zero cost when null.
+    this._trace = null;
+
     // Scratch vectors reused each frame to avoid allocation in the render loop.
     // World pose of each disc is recomputed here every frame and handed to the
     // pure plane-crossing state machine (portalTraversal.js).
@@ -349,6 +362,7 @@ export class WarpPortal {
       discANormal: new THREE.Vector3(),
       discBPos: new THREE.Vector3(),
       discBNormal: new THREE.Vector3(),
+      camForward: new THREE.Vector3(),
     };
   }
 
@@ -760,6 +774,7 @@ export class WarpPortal {
     // a mode change is mirrored into setTraversalMode below, which performs
     // the existing visibility flips and fires onTraversal(mode).
     const prevMode = this._trav.mode;
+    const prevDotA = this._trav.prevDotA;  // captured BEFORE the step overwrites it
     this._trav = stepTraversal(this._trav, {
       camPos: camera.position,
       aPos: S.discAPos, aNrm: S.discANormal,
@@ -768,6 +783,53 @@ export class WarpPortal {
     });
     if (this._trav.mode !== prevMode) {
       this.setTraversalMode(this._trav.mode);
+    }
+
+    // ── Per-frame entry-reliability trace (debug-only; see constructor) ──
+    if (this._trace) {
+      const cp = camera.position;
+      const ap = S.discAPos, an = S.discANormal;
+      // Offset from Portal A to the camera, in the same (rebased/local) frame
+      // the gate uses. dotA = signed distance along the portal normal.
+      const dx = cp.x - ap.x, dy = cp.y - ap.y, dz = cp.z - ap.z;
+      const along = dx * an.x + dy * an.y + dz * an.z;  // == this._trav.prevDotA
+      // latBuggy: the EXACT production formula (portalTraversal.js) — subtracts
+      // two near-equal large squares, so it loses precision at large coords.
+      const latBuggy = Math.sqrt(Math.max(0, dx * dx + dy * dy + dz * dz - along * along));
+      // latStable: perpendicular component vector magnitude — no cancellation.
+      const px = dx - along * an.x, py = dy - along * an.y, pz = dz - along * an.z;
+      const latStable = Math.sqrt(px * px + py * py + pz * pz);
+      // Coordinate magnitudes: local (rebased) vs true-world (precision proxy).
+      const camLocalLen = Math.sqrt(cp.x * cp.x + cp.y * cp.y + cp.z * cp.z);
+      const wx = cp.x + worldOrigin.x, wy = cp.y + worldOrigin.y, wz = cp.z + worldOrigin.z;
+      const camWorldLen = Math.sqrt(wx * wx + wy * wy + wz * wz);
+      const worldOriginLen = Math.sqrt(
+        worldOrigin.x * worldOrigin.x + worldOrigin.y * worldOrigin.y + worldOrigin.z * worldOrigin.z,
+      );
+      // Camera forward vs Portal A normal. Portal A's normal faces the
+      // approaching camera (≈ -flightDir), so forward·normal ≈ -1 when the
+      // camera flies straight at the portal; divergence → off-axis approach.
+      camera.getWorldDirection(S.camForward);
+      const fwdDotNormalA = S.camForward.x * an.x + S.camForward.y * an.y + S.camForward.z * an.z;
+      if (this._trace.length < 4000) {
+        this._trace.push({
+          mode: this._trav.mode,
+          prevMode,
+          dotA: along,
+          prevDotA,
+          // Did the camera cross Portal A's plane this frame (sign flip +→−)?
+          signFlipA: prevDotA !== null && prevDotA > 0 && along <= 0,
+          // Did that crossing actually register as entry, or get gate-rejected?
+          insideFlip: prevMode === 'OUTSIDE_A' && this._trav.mode === 'INSIDE',
+          latBuggy,
+          latStable,
+          discRadius,
+          camLocalLen,
+          camWorldLen,
+          worldOriginLen,
+          fwdDotNormalA,
+        });
+      }
     }
   }
 

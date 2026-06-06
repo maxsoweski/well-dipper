@@ -120,6 +120,10 @@ export function installSceneInspector(engines) {
       const m = await import('./integration-suite.js');
       return m.runRepeatWarpSuite(opts);
     },
+    runWarpEntrySuite: async (opts) => {
+      const m = await import('./integration-suite.js');
+      return m.runWarpEntrySuite(opts);
+    },
     runPhaseATests: async () => {
       const m = await import('./integration-suite.js');
       return m.runPhaseATests();
