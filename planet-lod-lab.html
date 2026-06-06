@@ -98,7 +98,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms } from './planet-lod-lab-core.js';
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -524,6 +524,33 @@
     fEnv.add(state, 'specBypass').name('spec bypass quantizer');
     fEnv.add(state, 'limbBypass').name('limb bypass quantizer');
 
+    // ▸ Drivers (open) — "types are driver-bundle PRESETS, not shader branches" (spec §2.D).
+    // A preset is a physics bundle; deriveUniforms() maps it to semantic uniforms with NO
+    // planetType branch — generalizing the aurora precedent in PlanetGenerator.js:435-487.
+    // This is the generation-side scaffolding Stage-B features plug into.
+    const DRIVER_PRESETS = {
+      'Rocky (Earthlike)': { composition:{ironFraction:0.32,density:5.5}, T_eq:288, tidalState:{locked:false}, atmosphere:{color:[0.5,0.6,0.9]}, habitability:0.7, surfaceHistory:{erosion:0.4} },
+      'Lava (hot airless)': { composition:{ironFraction:0.7,density:7}, T_eq:950, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0} },
+      'Ocean (temperate)': { composition:{ironFraction:0.28,density:5}, T_eq:295, tidalState:{locked:false}, atmosphere:{color:[0.4,0.6,0.95]}, habitability:0.9, surfaceHistory:{erosion:0.6} },
+      'Frozen (airless)': { composition:{ironFraction:0.2,density:2.5}, T_eq:60, tidalState:{locked:false}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.1} },
+    };
+    const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
+    function applyDrivers(){
+      const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
+      state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;
+      uniforms.uEmissive.value = u.emissive;
+      uniforms.uSpecStrength.value = u.specStrength;
+      uniforms.uLimbStrength.value = u.limbStrength;
+      // cloudCoverage / auroraIntensity / craterCells / atmosphereModel consumed by Task 7 + Stage C
+      if (uniforms.uCloudCoverage)  uniforms.uCloudCoverage.value  = u.cloudCoverage;
+      if (uniforms.uAuroraIntensity) uniforms.uAuroraIntensity.value = u.auroraIntensity;
+      state._derived = u;
+      gui.controllersRecursive().forEach(c => c.updateDisplay());
+    }
+    const fDrivers = gui.addFolder('Drivers'); fDrivers.open();
+    fDrivers.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('type preset').onChange(applyDrivers);
+    fDrivers.add(driverUI, 'qualityTier', 0, 1, 0.01).name('qualityTier').onChange(applyDrivers);
+
     // ▸ Surface — Relief
     const fRelief = gui.addFolder('Surface — Relief'); fRelief.close();
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
@@ -538,6 +565,8 @@
     const fPresets = gui.addFolder('Presets'); fPresets.close();
     fPresets.add({ copy(){ const j = JSON.stringify(gui.save()); window._lab._lastCopied = j; navigator.clipboard?.writeText(j).catch(()=>{}); } }, 'copy').name('Copy settings (JSON)');
     fPresets.add({ reset(){ gui.reset(); rebuildTarget(); updateSeedUniforms(); } }, 'reset').name('Reset to defaults');
+
+    applyDrivers();   // load the default driver bundle (Rocky) into the envelope uniforms
 
     // ─────────────────────────────────────────────────────────────────────────
     // Mouse orbit + zoom — ports src/camera/CameraController.js to the lab.
@@ -715,7 +744,9 @@
 
     // Expose for chrome-devtools verification (set state, read a frame)
     window._lab = { state, uniforms, planet, camera, lodRampOf, autoOctaves, rebuildTarget,
-                    settingsBlob, applySettings,
+                    settingsBlob, applySettings, driverUI, applyDrivers,
+                    setPreset(name){ if (DRIVER_PRESETS[name]) { driverUI.preset = name; applyDrivers(); } return state._derived; },
+                    setQuality(q){ driverUI.qualityTier = q; applyDrivers(); return state._derived; },
                     get sceneTarget(){ return sceneTarget; } };
   </script>
 </body>

@@ -33,3 +33,39 @@ export function lodHysteresis(distanceRadii, prevActive) {
   if (prevActive) return distanceRadii < 22.0; // stay active until we retreat past 22
   return distanceRadii < 18.0;                  // only activate once we're inside 18
 }
+
+// qualityTier 0 (mobile/cheap) -> 1 (desktop/full). Scales the cost knobs (spec §2.E).
+export function qualityKnobs(qualityTier) {
+  return {
+    craterCells: qualityTier >= 0.5 ? 27 : 9,                  // 3D 27-cell vs tangent 9-cell
+    atmosphereModel: qualityTier >= 0.5 ? 'raymarch' : 'fresnel',
+    maxOctaves: Math.round(mix(4, 9, qualityTier)),            // 4..9
+  };
+}
+
+// deriveUniforms: physics driver-bundle -> flat semantic uniform values.
+// Generalizes the aurora/atmosphere precedent in PlanetGenerator.js:435-487
+// (fieldStrength = composition.ironFraction * (locked ? 0.2 : 1.0); NO planetType branch).
+// Mapping CONSTANTS are lab-tunable; the tests pin the LOGIC (hot->emissive, airless->no
+// limb, etc.). Drivers schema mirrors PlanetGenerator's real fields.
+export function deriveUniforms(drivers, qualityTier = 1.0) {
+  const d = drivers || {};
+  const iron = d.composition?.ironFraction ?? 0.3;
+  const hasAtmo = !!d.atmosphere;
+  const T = d.T_eq ?? 280;
+  const erosion = d.surfaceHistory?.erosion ?? 0;
+  const locked = !!d.tidalState?.locked;
+
+  const hot = clamp01((T - 400) / 600);                          // 400K..1000K -> 0..1
+  const liquidWater = (T > 250 && T < 330) ? 1 : 0;              // specular band
+
+  return {
+    emissive: hot,                                               // lava glow on hot bodies
+    limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
+    specStrength: (hasAtmo && liquidWater) ? 0.8 : iron * 0.15,  // ocean specular vs faint metal sheen
+    auroraIntensity: iron * (locked ? 0.2 : 1.0) * (hasAtmo ? 1 : 0),
+    cloudCoverage: hasAtmo ? clamp01((d.habitability ?? 0) + 0.2) : 0,
+    reliefAmplitude: mix(1.0, 0.6, erosion),                     // eroded worlds = softer relief
+    ...qualityKnobs(qualityTier),
+  };
+}
