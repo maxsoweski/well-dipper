@@ -736,8 +736,14 @@ export class WarpPortal {
    * dedup'd in setTraversalMode.
    *
    * @param {THREE.Camera} camera
+   * @param {{forwardSpeed?: number, state?: string}} [debugCtx] — optional;
+   *   only read when `_trace` is on. Lets the trace attribute each frame's
+   *   dotA step to the warp's commanded forward speed + phase, so a root-cause
+   *   pass can prove whether a big single-step dotA jump came from the
+   *   (bounded) warp ramp or from a position discontinuity (teleport / rebase
+   *   desync). Zero cost when `_trace` is null.
    */
-  updateTraversal(camera) {
+  updateTraversal(camera, debugCtx) {
     if (!this.group.visible) {
       // Clear dot history so a fresh warp doesn't fire a stale crossing.
       this._trav = createTraversal(this._traversalMode);
@@ -828,6 +834,25 @@ export class WarpPortal {
           camWorldLen,
           worldOriginLen,
           fwdDotNormalA,
+          // ── Position-discontinuity attribution (handoff 2026-06-06 step) ──
+          // Full TRUE-WORLD vectors for BOTH the camera and Portal A's disc,
+          // so a per-step displacement can be decomposed and attributed:
+          //   • camera-true-world delta ≫ fwdSpeed·dt  → camera teleport
+          //   • portalA-true-world delta jumps          → portal teleport / rebase desync
+          //   • neither true-world delta jumps yet dotA jumps → frame mismatch
+          // (rebase shifts cp and ap by the same offset, so true-world = cp+worldOrigin
+          // should be CONTINUOUS across a rebase for both; a jump means a real move.)
+          camTrueX: wx, camTrueY: wy, camTrueZ: wz,
+          aTrueX: ap.x + worldOrigin.x, aTrueY: ap.y + worldOrigin.y, aTrueZ: ap.z + worldOrigin.z,
+          // Portal A normal (true-world == local; rebase is translation-only).
+          anX: an.x, anY: an.y, anZ: an.z,
+          // worldOrigin vector this frame — detect rebase events + direction.
+          woX: worldOrigin.x, woY: worldOrigin.y, woZ: worldOrigin.z,
+          // The warp's COMMANDED forward speed + phase this frame. The dotA
+          // step can be at most fwdSpeed·dt·|fwdDotNormalA| if the only mover
+          // is the warp ramp; anything larger is a discontinuity.
+          fwdSpeed: debugCtx?.forwardSpeed ?? null,
+          state: debugCtx?.state ?? null,
         });
       }
     }

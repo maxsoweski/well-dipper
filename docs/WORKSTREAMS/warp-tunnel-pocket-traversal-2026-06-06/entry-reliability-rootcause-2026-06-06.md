@@ -85,3 +85,69 @@ Reliability **4/6 registered (~67%)** — matches the handoff's "~2/3".
 Recommendation: **C** (simplest, robust, matches the already-robust timer-driven
 swap), accepting the AC2 contract change. A is the fallback if Max wants to keep
 a literal geometric crossing.
+
+---
+
+## ADDENDUM 2026-06-06 (session 2) — speed-source investigation REFRAMES the cause
+
+Max's next-task was "investigate WHY per-step velocity varies ~200× between warps
+FIRST." Extended the per-frame trace with the **true-world position vectors of
+both the camera and Portal A**, plus the warp's commanded `cameraForwardSpeed`
+and phase (`src/effects/WarpPortal.js` `updateTraversal(camera, debugCtx)` — gated,
+additive). Drove 30+ warps on GPU 9223. Findings overturn two premises above:
+
+### 1. The per-step approach velocity does NOT vary. The 200× premise is a misattribution.
+`cameraForwardSpeed` is a **fixed quadratic ramp** (`WarpEffect`: `progress²·_foldPeakSpeed`,
+`_foldPeakSpeed = 3·30/4 = 22.5 u/s`), identical for every warp. Max per-step is
+≤ 0.75u (ENTER) / ≤ 0.33u (HYPER). On clean warps the trace confirms it exactly:
+`dotA` decrements **~0.34/step**, `latStable ≈ 0.02`, `fwdN = −1.000` — dead-on,
+designed ramp. It is **mathematically impossible** for the warp-motion line
+(`addScaledVector(getWorldDirection, speed·dt)`) to produce a 52u step.
+
+### 2. The "52–16,849u single steps" conflate TWO unrelated discontinuities:
+- **(a) The system-swap teleport (expected, post-crossing).** The INSIDE crossing
+  *fires* `onSwapSystem` → the destination spawns and the camera is relocated to
+  the new system, `worldOrigin` resets, Portal B re-anchors. The trace shows this
+  as the frame right after `insideFlip`: `prevDotA:null`, `wo` jumps, `camTrue`
+  AND `portalTrue` teleport thousands of units. Its magnitude scales with
+  **destination distance** (nearby ≈ 2,800u; galactic Friordaran ≈ 16,849u). This
+  is choreographically fine on a good warp (entry already registered) — the
+  writeup's table mis-read it as a "warp-motion overshoot."
+- **(b) Genuine OFF-AXIS approach (the actual entry-miss cause).** On a missed
+  warp the camera flies **off the `_tunnelForward` axis** the portal is anchored
+  on (`fwdN` at the crossing −0.37…−0.84, latStable > 3u gate), so it crosses
+  Portal A's plane outside the disc → gate rejects → never INSIDE.
+
+### 3. Why off-axis: the pre-warp turn fires unaligned, via the 3 s TIMEOUT.
+`main.js:6450` fires `warpEffect.start` when `alignment > 0.999` **OR
+`turnTimer > 3.0`**. Missed warps fire via the timeout with the camera still
+mis-facing (FOLD frame-1 `fwdN` as poor as −0.37, even +0.59 = facing away).
+Position then advances along the camera's *instantaneous* `getWorldDirection`
+(`main.js:6755`) while orientation slerps toward `riftDir` — so the flight path
+curves off the straight `_tunnelForward` axis and misses the 3u gate.
+
+### 4. It is PROGRESSIVE across consecutive warps (not a flat 2/3).
+At identical 600 ms cadence: **fresh `enterSol` → 7/7 registered**; continuing
+→ **12/12 missed, the off-axis worsening** (FOLD-1 `fwdN` and dotStep degrade run
+over run). Same cadence both runs ⇒ driven by **accumulated state across warps**,
+not test cadence (a competing post-arrival `_labArriving` slerp would have hurt
+the fresh run too — it didn't). The writeup's "~2/3" was a transitional sample.
+*What* accumulates to break the turn alignment is not yet pinned (camera
+orientation / `_labArriving` / orbit-restore between warps are candidates) — a
+secondary thread, separable from the entry-reliability fix.
+
+### Revised fix menu (the speed finding opens a more surgical option)
+- **D — fly the camera straight along the locked `_tunnelForward` axis during
+  FOLD/ENTER** (advance position along `_tunnelForward`, not `getWorldDirection`;
+  let orientation slerp for the view only). The camera then stays exactly on the
+  axis the portal is anchored on → always passes the 3u gate → real geometric
+  crossing. **Preserves AC2** (no forced INSIDE, no flag) ⇒ likely **no contract
+  change**, ~1-line core change, and makes entry robust to the turn-alignment
+  degradation in #4. **New recommendation, pending Max.**
+- **A / C** as above remain valid; **C** still the fallback if Max prefers a
+  timeline-driven mode over a geometric crossing. **B / E** still insufficient.
+- Separately: investigate the #4 turn-alignment accumulation (own thread) — but
+  D makes the *feature* work regardless of it.
+
+Telemetry for this addendum is committed (gated, zero-cost when `_trace` null);
+headless `tests/warp-tunnel-rebase.test.js` still 4/4.

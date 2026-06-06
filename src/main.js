@@ -6642,7 +6642,7 @@ function simStep(deltaTime) {
         // human-scale (~60u, Task 2) so the camera physically crosses Portal A
         // (entry), cruises INSIDE, and crosses Portal B (emergence). No forced
         // INSIDE, no per-frame pin — the 4285602 choreography-killers are gone.
-        warpPortal.updateTraversal(camera);
+        warpPortal.updateTraversal(camera, { forwardSpeed: warpEffect.cameraForwardSpeed, state: warpEffect.state });
         // No screen-space lens — the tunnel mesh IS the hyperspace visual.
         retroRenderer.setPortalLensing(null, 0, 0);
       } else if (warpEffect.portalVisible) {
