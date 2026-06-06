@@ -3018,10 +3018,11 @@ warpEffect.onSwapSystem = async () => {
     warpPortal.resetTraversal();
     warpPortal.open(_swapPortalAPos, _swapNewForward);
     // resetTraversal sets mode to OUTSIDE_A; force back to INSIDE for HYPER.
+    // resetTraversal already cleared the pure detector's dot history
+    // (prevDotA/prevDotB = null in the fresh _trav), and setTraversalMode
+    // syncs _trav.mode to INSIDE without re-seeding it — so the first
+    // updateTraversal call after this just seeds fresh dot values.
     warpPortal.setTraversalMode('INSIDE');
-    // Dot history re-seeds on next updateTraversal call.
-    warpPortal._prevDotA = null;
-    warpPortal._prevDotB = null;
   }
 
   // ── Regenerate sky for new galactic position ──

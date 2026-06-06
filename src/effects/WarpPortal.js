@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName } from '../util/scene-naming.js';
+import { createTraversal, stepTraversal } from './portalTraversal.js';
 import {
   portalApertureScene,
   portalPreviewDistanceScene,
@@ -337,19 +338,24 @@ export class WarpPortal {
     this.group.visible = false;
 
     // ── Traversal state (3-state machine — see setTraversalMode) ──
+    // `_traversalMode` is the authoritative render-state mirror that
+    // setTraversalMode keys its visibility flips off. `_trav` is the pure
+    // plane-crossing detector's state (mode + prevDotA/prevDotB); see
+    // portalTraversal.js. updateTraversal advances `_trav` then mirrors its
+    // mode into setTraversalMode, so the two never drift (both reset together
+    // in resetTraversal).
     this._traversalMode = 'OUTSIDE_A';
-    this._prevDotA = null;
-    this._prevDotB = null;
+    this._trav = createTraversal('OUTSIDE_A');
     this.onTraversal = null;  // optional callback: (newMode) => void
 
-    // Scratch vectors reused each frame to avoid allocation in the render loop
+    // Scratch vectors reused each frame to avoid allocation in the render loop.
+    // World pose of each disc is recomputed here every frame and handed to the
+    // pure plane-crossing state machine (portalTraversal.js).
     this._scratch = {
       discAPos: new THREE.Vector3(),
       discANormal: new THREE.Vector3(),
       discBPos: new THREE.Vector3(),
       discBNormal: new THREE.Vector3(),
-      camToPortal: new THREE.Vector3(),
-      camLateral: new THREE.Vector3(),
     };
   }
 
@@ -672,6 +678,10 @@ export class WarpPortal {
   setTraversalMode(mode) {
     if (this._traversalMode === mode) return;
     this._traversalMode = mode;
+    // Keep the pure detector's mode in sync when the caller (or
+    // updateTraversal) flips state, so the next plane-crossing check starts
+    // from the authoritative mode without re-seeding dot history.
+    if (this._trav) this._trav.mode = mode;
 
     // Stencil ON outside, OFF inside
     const stencilOn = (mode !== 'INSIDE');
@@ -722,8 +732,8 @@ export class WarpPortal {
    */
   updateTraversal(camera) {
     if (!this.group.visible) {
-      this._prevDotA = null;
-      this._prevDotB = null;
+      // Clear dot history so a fresh warp doesn't fire a stale crossing.
+      this._trav = createTraversal(this._traversalMode);
       return;
     }
 
@@ -739,7 +749,8 @@ export class WarpPortal {
     // the group with +Z = -direction, Portal A's world normal = -direction
     // (pointing toward the origin system camera), and Portal B — rotated
     // 180° around Y in its local frame — has world normal = +direction
-    // (pointing toward the destination side).
+    // (pointing toward the destination side). Computed into scratch each
+    // frame; the pure state machine (portalTraversal.js) consumes them.
     S.discAPos.setFromMatrixPosition(this._discA.matrixWorld);
     S.discANormal.set(0, 0, 1).transformDirection(this._discA.matrixWorld);
     S.discBPos.setFromMatrixPosition(this._discB.matrixWorld);
@@ -748,60 +759,19 @@ export class WarpPortal {
     // Effective disc radius in world space (respect scale)
     const discRadius = this._radius * this._discA.scale.x;
 
-    // ── Portal A plane ──
-    S.camToPortal.subVectors(camera.position, S.discAPos);
-    const dotA = S.camToPortal.dot(S.discANormal);
-    if (this._prevDotA !== null) {
-      // Forward crossing: OUTSIDE_A → INSIDE (camera goes from +Z side to -Z side of A)
-      if (this._traversalMode === 'OUTSIDE_A' && this._prevDotA > 0 && dotA <= 0) {
-        if (this._lateralDistance(S.camToPortal, S.discANormal) <= discRadius) {
-          this.setTraversalMode('INSIDE');
-        }
-      }
-      // Backward crossing: INSIDE → OUTSIDE_A (camera backs out through Portal A)
-      if (this._traversalMode === 'INSIDE' && this._prevDotA < 0 && dotA >= 0) {
-        if (this._lateralDistance(S.camToPortal, S.discANormal) <= discRadius) {
-          this.setTraversalMode('OUTSIDE_A');
-        }
-      }
+    // Advance the pure plane-crossing state machine. It returns a new state;
+    // a mode change is mirrored into setTraversalMode below, which performs
+    // the existing visibility flips and fires onTraversal(mode).
+    const prevMode = this._trav.mode;
+    this._trav = stepTraversal(this._trav, {
+      camPos: camera.position,
+      aPos: S.discAPos, aNrm: S.discANormal,
+      bPos: S.discBPos, bNrm: S.discBNormal,
+      discRadius,
+    });
+    if (this._trav.mode !== prevMode) {
+      this.setTraversalMode(this._trav.mode);
     }
-    this._prevDotA = dotA;
-
-    // ── Portal B plane ──
-    S.camToPortal.subVectors(camera.position, S.discBPos);
-    const dotB = S.camToPortal.dot(S.discBNormal);
-    if (this._prevDotB !== null) {
-      // Forward crossing: INSIDE → OUTSIDE_B (camera emerges through Portal B)
-      // Portal B's normal points toward the destination side, so the camera
-      // reaches OUTSIDE_B when dotB flips from negative (inside) to positive.
-      if (this._traversalMode === 'INSIDE' && this._prevDotB < 0 && dotB >= 0) {
-        if (this._lateralDistance(S.camToPortal, S.discBNormal) <= discRadius) {
-          this.setTraversalMode('OUTSIDE_B');
-        }
-      }
-      // Backward crossing: OUTSIDE_B → INSIDE (camera re-enters Portal B)
-      if (this._traversalMode === 'OUTSIDE_B' && this._prevDotB > 0 && dotB <= 0) {
-        if (this._lateralDistance(S.camToPortal, S.discBNormal) <= discRadius) {
-          this.setTraversalMode('INSIDE');
-        }
-      }
-    }
-    this._prevDotB = dotB;
-  }
-
-  /**
-   * Perpendicular distance from (camera - portal) vector to the portal normal.
-   * This is the lateral (in-disc-plane) distance — used to reject crossings
-   * that happen outside the disc's radial footprint.
-   * @private
-   */
-  _lateralDistance(camToPortal, normal) {
-    const S = this._scratch;
-    // Project out the normal component; remainder is the in-plane vector
-    const alongNormal = camToPortal.dot(normal);
-    S.camLateral.copy(normal).multiplyScalar(alongNormal);
-    S.camLateral.subVectors(camToPortal, S.camLateral);
-    return S.camLateral.length();
   }
 
   /**
@@ -810,8 +780,7 @@ export class WarpPortal {
    */
   resetTraversal() {
     this._traversalMode = 'OUTSIDE_A';
-    this._prevDotA = null;
-    this._prevDotB = null;
+    this._trav = createTraversal('OUTSIDE_A');
     // Re-enable stencil for the starting state
     if (!this._tunnel.material.stencilWrite) {
       this._tunnel.material.stencilWrite = true;
