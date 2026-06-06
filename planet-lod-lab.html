@@ -147,6 +147,9 @@
       uniform int   uEmissiveBypass;
       uniform int   uSpecBypass;
       uniform int   uLimbBypass;
+      uniform float uCloudCoverage;   // 0..1 weather-layer density (Task 7)
+      uniform float uAuroraIntensity; // 0..1 night-side ring strength (Task 7)
+      uniform float uTime;            // animation clock (clouds drift, aurora rays)
       uniform vec3  uLightDir;      // object-space light dir
       uniform vec3  uBaseColor;
       uniform vec3  uMacroOffset;   // macro seed -> noise-domain offset (octaves 0..2)
@@ -371,7 +374,22 @@
         vec3 limbC = uBaseColor * limb;
         limbC = (uLimbBypass == 1) ? limbC : posterize(limbC, uLevels, fc, 0.4, uDitherMode);
 
-        gl_FragColor = vec4(min(surface + emissive + specC + limbC, vec3(1.0)), 1.0);
+        // ── Clouds (analytic-FBM weather layer — animated, drifts via uTime; not determinism-bound) ──
+        // Samples the SAME analytic fbmd base as relief (Q7: off plain snoise, onto noised()).
+        vec4 cw = fbmd(vPos * 1.7 + vec3(uTime * 0.02, 0.0, 0.0), 5.0, 0.0);
+        float cloud = smoothstep(0.15, 0.5, cw.x) * uCloudCoverage * (diff + 0.05);
+        vec3 cloudC = vec3(cloud);
+        cloudC = posterize(cloudC, uLevels, fc, 0.4, uDitherMode);
+
+        // ── Aurora (night-side polar ring; rays from analytic noised(); smooth glow, skips quantizer) ──
+        float lat = N.y;                                       // -1..1 latitude proxy (object-space normal)
+        float ringMask = exp(-pow((abs(lat) - 0.7) / 0.12, 2.0));
+        float nightMask = smoothstep(0.1, -0.1, diff);         // visible in darkness/twilight
+        float rays = 0.5 + 0.5 * noised(N * 8.0 + vec3(uTime * 0.1)).x;
+        float aurora = ringMask * nightMask * rays * uAuroraIntensity;
+        vec3 auroraC = vec3(0.3, 0.9, 0.5) * aurora * 0.6;
+
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC + cloudC + auroraC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -391,6 +409,9 @@
       uEmissiveBypass: { value: 0 },     // 1 = term skips the quantizer (smooth glow)
       uSpecBypass:     { value: 0 },
       uLimbBypass:     { value: 0 },
+      uCloudCoverage:  { value: 0.0 },   // weather-layer density (driven by deriveUniforms)
+      uAuroraIntensity:{ value: 0.0 },   // night-side ring strength (driven by deriveUniforms)
+      uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
       uMacroOffset:  { value: new THREE.Vector3() },                // set from macroSeed
@@ -674,6 +695,7 @@
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
+      uniforms.uTime.value = t;   // clouds drift + aurora rays animate (Task 7)
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
