@@ -1975,16 +1975,26 @@
     // Mouse-wheel/drag mutate state.distance/yaw/pitch directly; .listen() keeps
     // the GUI display synced. A "type" is a preset (Task 6), never a shader branch.
     // ─────────────────────────────────────────────────────────────────────────
-    const gui = new GUI({ title: 'PLANET LOD LAB — foundation' });
+    // Two panels (design 2026-06-07): LEFT = the rig, RIGHT = the rendered features.
+    const guiLeft  = new GUI({ title: 'PLANET LOD LAB — rig' });
+    guiLeft.domElement.style.left = '0px';
+    guiLeft.domElement.style.right = 'auto';
+    const guiRight = new GUI({ title: 'Features' });   // lil-gui default: pinned top-right
+    // Global panel ops must span BOTH guis (single-logical-model helpers).
+    const allGuis = [guiLeft, guiRight];
+    function syncDisplays(){ for (const g of allGuis) g.controllersRecursive().forEach(c => c.updateDisplay()); }
+    function saveAll(){ const a = guiLeft.save(), b = guiRight.save();
+      return { controllers: { ...a.controllers, ...b.controllers }, folders: { ...a.folders, ...b.folders } }; }
+    function resetAll(){ guiLeft.reset(); guiRight.reset(); }
 
     // ▸ Body filter — archetype-driven panel filtering + per-feature solo
     // (planet-archetypes.js). Created here so it sits at the TOP of the panel;
     // its controls are added below, once the feature folders exist.
     const filterUI = { filter: true, archetypeLabel: '—' };
-    const fFilter = gui.addFolder('Body filter'); fFilter.open();
+    const fFilter = guiLeft.addFolder('Body filter'); fFilter.open();
 
     // ▸ View & LOD (always open)
-    const fView = gui.addFolder('View & LOD'); fView.open();
+    const fView = guiLeft.addFolder('View & LOD'); fView.open();
     fView.add(state, 'distance', 1.1, 30, 0.1).name('distance (radii)').listen();
     fView.add(state, 'octaves', 1, 9, 0.1).name('octaves (manual)').listen();
     fView.add(state, 'octAuto').name('octaves AUTO (lodRamp)');
@@ -1998,14 +2008,14 @@
     // ▸ Debug — voronoi3d seam-gate spike (index §5 risk #1). Temporary: this folder
     // exists to prove the KEYSTONE primitive is seam-free before any cellular feature
     // builds on it. Mode 3 (per-cell color) is the seam test — a seam shows as a line.
-    const fDebug = gui.addFolder('Debug — voronoi3d spike'); fDebug.open();
+    const fDebug = guiLeft.addFolder('Debug — voronoi3d spike'); fDebug.open();
     fDebug.add(state, 'debugMode', { OFF: 0, 'F1 (cells)': 1, 'F2-F1 (borders)': 2, 'cell-id color (SEAM TEST)': 3, 'lit relief': 4, 'blackbody ramp': 5, 'substellar angle': 6 }).name('voronoi / bb / sub debug');
     fDebug.add(state, 'voroScale', 1, 20, 0.5).name('cell density');
     fDebug.add(state, 'voroCells', { '27 (desktop)': 27, '9 (mobile)': 9 }).name('cell count');
 
     // ▸ Envelope (open) — the A/B/C decision surface (spec §2.C). Values stay OPEN (§4):
     // this folder delivers the *controls*; settling per-type values is Max's playtesting.
-    const fEnv = gui.addFolder('Envelope'); fEnv.open();
+    const fEnv = guiLeft.addFolder('Envelope'); fEnv.open();
     fEnv.add(state, 'levels', 6, 16, 1).name('posterize levels');
     fEnv.add(state, 'ditherMode', { Bayer: 0, 'IGN/triangular': 1 }).name('dither mode');
     fEnv.add(state, 'emissive', 0, 1, 0.01).name('emissive (lava)');
@@ -2144,15 +2154,15 @@
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state._derived = u;
-      gui.controllersRecursive().forEach(c => c.updateDisplay());
+      syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
     }
-    const fDrivers = gui.addFolder('Drivers'); fDrivers.open();
+    const fDrivers = guiLeft.addFolder('Drivers'); fDrivers.open();
     fDrivers.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('type preset').onChange(applyDrivers);
     fDrivers.add(driverUI, 'qualityTier', 0, 1, 0.01).name('qualityTier').onChange(applyDrivers);
 
     // ▸ Surface — Relief
-    const fRelief = gui.addFolder('Surface — Relief'); fRelief.open();
+    const fRelief = guiRight.addFolder('Surface — Relief'); fRelief.open();
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
     // ▸ Craters (F2) — the derived fields (density/complexD/relaxation) come from the
     // driver preset (.listen() syncs them on preset change); scale/amp are lab knobs.
@@ -2368,7 +2378,7 @@
       for (const k of Object.keys(FEATURES)) {
         state[FEATURES[k].enableKey] = (soloKey === null) || (k === soloKey);
       }
-      gui.controllersRecursive().forEach(c => c.updateDisplay());
+      syncDisplays();
     }
     // The relevant feature set = UNION of featuresOf() over every archetype whose
     // presets include the current Drivers preset (Frozen maps to two → union).
@@ -2384,7 +2394,7 @@
       for (const [key, folder] of Object.entries(featureFolders)) {
         if (!filterUI.filter || set.has(key)) folder.show(); else folder.hide();
       }
-      gui.controllersRecursive().forEach(c => c.updateDisplay());
+      syncDisplays();
     }
     // One 🔆 solo button per feature folder (appended below its existing controls).
     for (const [key, folder] of Object.entries(featureFolders)) {
@@ -2397,15 +2407,15 @@
     fFilter.add({ clearSolo(){ setFeatureEnables(null); } }, 'clearSolo').name('clear solo');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
-    const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
+    const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
     fSeeds.add(state, 'macroSeed', 0, 10000, 1).name('macro seed').listen().onChange(updateSeedUniforms);
     fSeeds.add(state, 'detailSeed', 0, 10000, 1).name('detail seed').listen().onChange(updateSeedUniforms);
     fSeeds.add({ newPlanet(){ state.macroSeed = (Math.random()*10000)|0; state.detailSeed = (Math.random()*10000)|0; updateSeedUniforms(); } }, 'newPlanet').name('New planet (re-roll both)');
 
     // ▸ Presets — lil-gui save/load round-trips the whole panel as JSON
-    const fPresets = gui.addFolder('Presets'); fPresets.close();
-    fPresets.add({ copy(){ const j = JSON.stringify(gui.save()); window._lab._lastCopied = j; navigator.clipboard?.writeText(j).catch(()=>{}); } }, 'copy').name('Copy settings (JSON)');
-    fPresets.add({ reset(){ gui.reset(); rebuildTarget(); updateSeedUniforms(); } }, 'reset').name('Reset to defaults');
+    const fPresets = guiLeft.addFolder('Presets'); fPresets.close();
+    fPresets.add({ copy(){ const j = JSON.stringify(saveAll()); window._lab._lastCopied = j; navigator.clipboard?.writeText(j).catch(()=>{}); } }, 'copy').name('Copy settings (JSON)');
+    fPresets.add({ reset(){ resetAll(); rebuildTarget(); updateSeedUniforms(); } }, 'reset').name('Reset to defaults');
 
     applyDrivers();   // load the default driver bundle (Rocky) into the envelope uniforms
 
@@ -2465,7 +2475,7 @@
       for (const k of keys) if (o[k] != null) state[k] = o[k];
       if (o.pixelScale != null) rebuildTarget();
       updateSeedUniforms();
-      gui.controllersRecursive().forEach(c => c.updateDisplay());
+      syncDisplays();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
