@@ -7,6 +7,7 @@ import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
 import { createTraversal, stepTraversal } from '../src/effects/portalTraversal.js';
 import { WarpPortal } from '../src/effects/WarpPortal.js';
+import { WarpEffect } from '../src/effects/WarpEffect.js';
 import {
   worldOrigin,
   getWorldTrue,
@@ -235,5 +236,46 @@ describe('rebase-proof pocket: Portal B stays reachable across teleport+reset+re
     // The bug signature: Portal B is hundreds of units away, far past the 3u gate.
     expect(detached).toBeGreaterThan(700);
     resetWorldOrigin();
+  });
+});
+
+describe('load-adaptive emergence gate (AC5)', () => {
+  // Emergence is withheld until the destination is ready (spawn + shader
+  // pre-compile), while a minimum cruise is always honored. A slow load extends
+  // the cruise; a fast load lasts exactly the minimum. (onSwapSystem is null in
+  // these unit instances, so the swap callback is a no-op — we drive the gate
+  // logic directly via destinationReady.)
+  function runHyper(we, { readyAt, dt = 0.1, maxT = 60 }) {
+    we.state = 'hyper'; we.elapsed = 0; we.destinationReady = false;
+    let t = 0;
+    while (we.state === 'hyper' && t < maxT) {
+      t += dt;
+      if (t >= readyAt) we.destinationReady = true;
+      we.update(dt);
+    }
+    return t;
+  }
+
+  test('slow load extends the cruise past the minimum', () => {
+    const we = new WarpEffect();
+    const min = we.HYPER_MIN_CRUISE;
+    const t = runHyper(we, { readyAt: min + 2.0 });
+    expect(t).toBeGreaterThan(min + 1.9);
+  });
+
+  test('fast load: the cruise lasts ~exactly the minimum', () => {
+    const we = new WarpEffect();
+    const min = we.HYPER_MIN_CRUISE;
+    const t = runHyper(we, { readyAt: 0.05 });
+    expect(t).toBeGreaterThanOrEqual(min);
+    expect(t).toBeLessThan(min + 0.25);
+  });
+
+  test('a never-ready load still leaves HYPER via the safety ceiling (no infinite cruise)', () => {
+    const we = new WarpEffect();
+    const t = runHyper(we, { readyAt: Infinity, maxT: 60 });
+    // Bounded by the safety ceiling, not the 60s loop cap.
+    expect(t).toBeLessThan(60);
+    expect(we.state).not.toBe('hyper');
   });
 });

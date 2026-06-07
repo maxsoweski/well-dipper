@@ -39,6 +39,18 @@ export class WarpEffect {
     this.HYPER_DUR = 3.0;
     this.EXIT_DUR = 2.0;
 
+    // ── Load-adaptive HYPER (AC5) ──
+    // HYPER is no longer a fixed-duration phase. It runs a MINIMUM cruise so the
+    // pocket always reads as long, then holds until the destination is ready
+    // (system spawned AND its shaders pre-compiled — see main.js onSwapSystem),
+    // so a slow background load extends the cruise instead of emerging into a
+    // half-loaded system. A high safety ceiling (HYPER_DUR×4) guarantees HYPER
+    // can never hang forever if `destinationReady` is somehow never set.
+    // Min-cruise is the post-swap 60u-pocket travel budget: at _hyperSpeed
+    // (~20u/s) the camera needs ~3s to cover 60u, +0.15s pre-swap + margin.
+    this.HYPER_MIN_CRUISE = 3.5;
+    this.destinationReady = false;  // set true by main.js after spawn + compileAsync
+
     // All four phase speeds derive from ship-scale + durations — keeps the
     // whole warp at consistent ship scale (no abstract hyperspace units).
     //   FOLD: 0 → _foldPeakSpeed over FOLD_DUR (quadratic ramp)
@@ -97,6 +109,7 @@ export class WarpEffect {
     this.progress = 0;
     this._prepareFired = false;
     this._swapFired = false;
+    this.destinationReady = false;  // re-armed each warp; released after spawn+compile
     this._resetUniforms();
     // Set riftDirection AFTER _resetUniforms (which clears it)
     this.riftDirection = direction ? direction.clone().normalize() : null;
@@ -274,8 +287,16 @@ export class WarpEffect {
       if (this.onSwapSystem) this.onSwapSystem();
     }
 
-    // Transition to EXIT
-    if (this.elapsed >= this.HYPER_DUR) {
+    // ── Transition to EXIT (load-adaptive, AC5) ──
+    // Leave HYPER only once the minimum cruise has elapsed AND the destination
+    // is ready. A slow load holds the camera in the pocket past the minimum; a
+    // fast load leaves at exactly the minimum. The safety ceiling (HYPER_DUR×4 =
+    // 12s) guarantees HYPER can't hang forever if destinationReady never fires.
+    // The geometric INSIDE→OUTSIDE_B emergence crossing ALSO forces this exit
+    // (main.js wires the crossing → state='exit'); whichever fires first wins.
+    const minCruiseDone = this.elapsed >= this.HYPER_MIN_CRUISE;
+    const safetyCeiling = this.elapsed >= this.HYPER_DUR * 4;
+    if ((minCruiseDone && this.destinationReady) || safetyCeiling) {
       this.state = 'exit';
       this.elapsed = 0;
     }

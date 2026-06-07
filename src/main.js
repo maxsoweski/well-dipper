@@ -1604,6 +1604,11 @@ const _arrivalForward = new THREE.Vector3();
 // the Portal B axis so the 3u emergence gate is crossed geometrically.
 const _pocketAnchorTrue = new THREE.Vector3();
 const _destForward = new THREE.Vector3();
+// Scratch for the AC5 emergence clamp: hold the camera ~0.5u short of Portal B
+// until the load-adaptive gate opens, so the geometric crossing can't fire
+// before the destination is ready.
+const _clampDiscBWorld = new THREE.Vector3();
+const _clampToB = new THREE.Vector3();
 // onTraversal must be async: onSwapSystem awaits pendingSystemDataPromise
 // then calls warpSwapSystem which TELEPORTS the camera to the new system.
 // Pre-2026-04-17, this callback was synchronous: it invoked onSwapSystem
@@ -1628,6 +1633,17 @@ warpPortal.onTraversal = async (mode) => {
     // onSwapSystem and needs the same re-anchor. It now lives in onSwapSystem so
     // every swap path re-anchors. See the comment block there.
     await warpEffect.onSwapSystem();
+  }
+  // ── Emergence crossing drives EXIT (AC4 timing) ──
+  // The real INSIDE→OUTSIDE_B plane crossing — reached only once the
+  // destination is ready and the camera has flown the full pocket — ends the
+  // cruise, instead of the HYPER timer dumping you out on a clock. Guarded on
+  // state==='hyper' so the onComplete forced-flip (which runs at state 'idle')
+  // can't re-trigger it. The min-cruise gate in WarpEffect still bounds the
+  // earliest this can happen.
+  if (mode === 'OUTSIDE_B' && warpEffect.state === 'hyper') {
+    warpEffect.state = 'exit';
+    warpEffect.elapsed = 0;
   }
 };
 
@@ -3063,6 +3079,26 @@ warpEffect.onSwapSystem = async () => {
     skyRenderer._glowLayer.mesh._hiddenForTitle = false;
     skyRenderer._glowLayer.mesh.visible = true;
   }
+
+  // ── AC9: pre-pay the destination's first-render shader compile, then release
+  // the AC5 emergence gate ──
+  // three 0.183's compileAsync returns a Promise that resolves once every
+  // material now in the scene has its GPU program built + uploaded. Awaiting it
+  // here — camera INSIDE the tunnel, walls occluding the forward view — moves
+  // the measured ~324ms first-render hitch off the reveal frame and buries it
+  // mid-cruise. Only AFTER spawn (above) AND this compile do we mark the
+  // destination ready, which is the signal HYPER's load-adaptive gate waits on
+  // before emerging (a fast compile emerges at min-cruise; a slow one extends
+  // the cruise). Set unconditionally so the legacy A/B path (no compile) still
+  // releases the gate.
+  try {
+    if (retroRenderer.renderer.compileAsync) {
+      await retroRenderer.renderer.compileAsync(scene, camera);
+    }
+  } catch (e) {
+    console.warn('[WARP] compileAsync failed (continuing):', e);
+  }
+  warpEffect.destinationReady = true;
 };
 
 // When warp exit finishes, reveal the new system and restart autopilot
@@ -6797,7 +6833,29 @@ function simStep(deltaTime) {
         // the fixed axis keeps the camera inside the 3u gate so the emergence
         // crossing actually fires (mirrors entry-side Fix D).
         const _advanceDir = warpEffect._swapFired ? _destForward : _tunnelForward;
-        camera.position.addScaledVector(_advanceDir, warpEffect.cameraForwardSpeed * deltaTime);
+        let _step = warpEffect.cameraForwardSpeed * deltaTime;
+
+        // ── AC5 emergence clamp ──
+        // Post-swap, hold the camera ~0.5u short of Portal B's plane until the
+        // load-adaptive gate opens (min-cruise elapsed AND destination ready).
+        // Without this, the camera flies the 60u pocket in ~3s and crosses
+        // Portal B before a slow load finishes — the OUTSIDE_B crossing would
+        // fire early and emerge into a half-loaded system (defeating AC5). While
+        // the gate is closed we cap the step to the remaining axis-distance-to-B
+        // minus 0.5u; a slow load = a brief hold at the portal mouth. When the
+        // gate opens the cap lifts, the camera advances, crosses, and emerges.
+        if (warpEffect._swapFired && warpEffect.state === 'hyper') {
+          const gateOpen = warpEffect.elapsed >= warpEffect.HYPER_MIN_CRUISE
+            && warpEffect.destinationReady;
+          if (!gateOpen) {
+            // Portal B world pos (matrixWorld is current — updateTraversal
+            // refreshed it this frame after the rebase-proof group rewrite).
+            _clampDiscBWorld.setFromMatrixPosition(warpPortal._discB.matrixWorld);
+            const _axisToB = _clampToB.copy(_clampDiscBWorld).sub(camera.position).dot(_destForward);
+            _step = Math.min(_step, Math.max(0, _axisToB - 0.5));
+          }
+        }
+        camera.position.addScaledVector(_advanceDir, _step);
 
         // Deep sky objects during warp:
         // - Navigable (nebulae, open clusters): stay fixed — camera flies past them
