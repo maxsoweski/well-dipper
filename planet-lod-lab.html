@@ -87,6 +87,14 @@
     #help dt { color: #9f9; margin-top: 6px; }
     #help dd { color: #8a8; margin: 0 0 2px 10px; }
     #help code { color: #fff; }
+    /* title-bar feature toggle (design 2026-06-07): relocated lil-gui boolean
+       controller sits inline right of the folder name. lil-title is a <button>
+       holding a raw text node; space-between pushes the checkbox to the right.
+       Clicking the name still collapses; the checkbox stops propagation (JS). */
+    .lil-gui .lil-title.title-has-toggle { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .lil-gui .title-toggle { width: auto; min-width: 0; }
+    .lil-gui .title-toggle .lil-name { display: none; }   /* hide the controller's own '✓ enabled' label */
+    .lil-gui .title-toggle .lil-widget { min-width: 0; }
   </style>
 </head>
 <body>
@@ -2166,7 +2174,7 @@
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
     // ▸ Craters (F2) — the derived fields (density/complexD/relaxation) come from the
     // driver preset (.listen() syncs them on preset change); scale/amp are lab knobs.
-    const fCraters = fRelief.addFolder('Craters (F2)'); fCraters.open();
+    const fCraters = fRelief.addFolder('Craters (F2)'); fCraters.close();
     fCraters.add(state, 'craterDensity', 0, 1, 0.01).name('density (age)').listen();
     fCraters.add(state, 'craterComplexD', 0.05, 2.0, 0.01).name('complexD (g⁻¹)').listen();
     fCraters.add(state, 'craterRelaxation', 0, 1, 0.01).name('relaxation').listen();
@@ -2178,7 +2186,7 @@
     // ▸ Ejecta & Rays (F3) — derived (strength/rampart/ray-brightness from the preset,
     // .listen()-synced) + lab knobs (amp/lump, ray count/sharpness). Placement reuses the
     // F2 crater uniforms (scale/offset/density) — the apron wraps the SAME craters.
-    const fEjecta = fRelief.addFolder('Ejecta & Rays (F3)'); fEjecta.open();
+    const fEjecta = fRelief.addFolder('Ejecta & Rays (F3)'); fEjecta.close();
     fEjecta.add(state, 'ejectaStrength', 0, 1, 0.01).name('apron strength').listen();
     fEjecta.add(state, 'ejectaRampart', 0, 1, 0.01).name('rampart (icy)').listen();
     fEjecta.add(state, 'ejectaAmp', 0, 1, 0.01).name('apron amplitude');
@@ -2189,7 +2197,7 @@
     fEjecta.add(state, 'ejectaEnabled').name('✓ enabled');
     // ▸ Mountains (F1) — derived (amplitude/orogeny strength+strike from the preset,
     // .listen()-synced on preset change) + lab knobs (ridge fold offset/gain, scale).
-    const fMountains = fRelief.addFolder('Mountains (F1)'); fMountains.open();
+    const fMountains = fRelief.addFolder('Mountains (F1)'); fMountains.close();
     fMountains.add(state, 'mountainAmp', 0, 1, 0.01).name('amplitude (erosion)').listen();
     fMountains.add(state, 'orogenyStrength', 0, 1, 0.01).name('orogeny (fold belt)').listen();
     fMountains.add(state, 'orogenyAngle', -Math.PI, Math.PI, 0.01).name('strike angle').listen();
@@ -2201,7 +2209,7 @@
     // ▸ Canyons (F4) — tectonic graben, writes the shared canyonHeight accumulator.
     // depth/count come from the driver preset+seed (.listen()-synced); width/floor are
     // lab knobs. A rift is a great circle; combining 1–3 gives a rift system.
-    const fCanyons = fRelief.addFolder('Canyons (F4)'); fCanyons.open();
+    const fCanyons = fRelief.addFolder('Canyons (F4)'); fCanyons.close();
     fCanyons.add(state, 'chasmaDepth', 0, 0.4, 0.005).name('depth (tectonic)').listen();
     fCanyons.add(state, 'chasmaCount', 0, 3, 1).name('rift count').listen();
     fCanyons.add(state, 'chasmaWidth', 0.02, 0.3, 0.005).name('half-width');
@@ -2216,7 +2224,7 @@
     // ▸ Scarps (F5) — warped fault-block province. strength/style come from the driver
     // preset+seed (.listen()-synced); width/freq/warp are lab knobs. The scarp fronts are
     // warped iso-contours of dot(pos, axis); freq sets how many parallel scarps.
-    const fScarps = fRelief.addFolder('Scarps (F5)'); fScarps.open();
+    const fScarps = fRelief.addFolder('Scarps (F5)'); fScarps.close();
     fScarps.add(state, 'scarpStrength', 0, 0.3, 0.005).name('strength (contraction)').listen();
     fScarps.add(state, 'scarpStyle', 0, 1, 0.01).name('style (thrust↔normal)').listen();
     fScarps.add(state, 'scarpWidth', 0.05, 0.6, 0.01).name('cliff softness');
@@ -2232,7 +2240,7 @@
     // ▸ Plateaus (F6) — flat-topped highlands. strength comes from the driver preset
     // (.listen()-synced); scale/offset/levels/softness are lab knobs. HeteroTerrain makes
     // the rough-margined highs; the mesa terrace stacks them into flat treads.
-    const fPlateaus = fRelief.addFolder('Plateaus (F6)'); fPlateaus.open();
+    const fPlateaus = fRelief.addFolder('Plateaus (F6)'); fPlateaus.close();
     fPlateaus.add(state, 'plateauStrength', 0, 0.4, 0.005).name('strength (thickening)').listen();
     fPlateaus.add(state, 'plateauScale', 0.3, 4, 0.1).name('domain freq');
     fPlateaus.add(state, 'plateauOffset', 0, 1.2, 0.01).name('ground offset');
@@ -2244,7 +2252,7 @@
     // the driver preset (high-stress gate, .listen()-synced); the 2 lattice axes are
     // seeded (no GUI); freq/warp/warpFreq are lab knobs. Two warped 1-|sin| ridge fields
     // multiplied → grooves crosscut in both directions over a high crust.
-    const fTessera = fRelief.addFolder('Tessera (F6)'); fTessera.open();
+    const fTessera = fRelief.addFolder('Tessera (F6)'); fTessera.close();
     fTessera.add(state, 'tesseraStrength', 0, 0.3, 0.005).name('strength (lattice)').listen();
     fTessera.add(state, 'tesseraFreq', 1, 16, 0.5).name('lattice density (freq)');
     fTessera.add(state, 'tesseraWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
@@ -2259,7 +2267,7 @@
     // g⁻¹ height / shield↔strato come from the driver preset (.listen()-synced); scale (cell
     // density), amplitude, caldera radius are lab knobs. Cones at hashed Voronoi centers,
     // sparser than craters (uEdificeScale < uCraterScale) → fewer, bigger volcanoes.
-    const fEdifices = fRelief.addFolder('Edifices (F7)'); fEdifices.open();
+    const fEdifices = fRelief.addFolder('Edifices (F7)'); fEdifices.close();
     fEdifices.add(state, 'volcanismStrength', 0, 1, 0.01).name('volcanism (density)').listen();
     fEdifices.add(state, 'edificeMaxHeight', 0.2, 2.0, 0.01).name('max height (g⁻¹)').listen();
     fEdifices.add(state, 'shieldStratoMix', 0, 1, 0.01).name('shield↔strato').listen();
@@ -2272,7 +2280,7 @@
     // CRACKS (the headline) pulse via uTime through the emissive-bypass channel. coverage
     // (resurfacing) + activity (tidal glow) come from the driver preset (.listen()-synced);
     // region scale, wrinkle ridges, crack scale/width, glow rate are lab knobs.
-    const fLava = fRelief.addFolder('Lava plains (F8)'); fLava.open();
+    const fLava = fRelief.addFolder('Lava plains (F8)'); fLava.close();
     fLava.add(state, 'lavaCoverage', 0, 1, 0.01).name('coverage (smooths)').listen();
     fLava.add(state, 'lavaActivity', 0, 1, 0.01).name('activity (crack glow)').listen();
     fLava.add(state, 'lavaScale', 0.5, 4, 0.1).name('region scale');
@@ -2288,7 +2296,7 @@
     // in a rough refrozen matrix. COVERAGE is the SHARED uCryoActivity knob (below, owner Cryo —
     // a lab stub under option A); raft size/jitter/matrix are the driven shape. The cell scale +
     // raft jitter sync from the preset (.listen()); mask scale is a lab knob.
-    const fChaos = fRelief.addFolder('Chaos (F9)'); fChaos.open();
+    const fChaos = fRelief.addFolder('Chaos (F9)'); fChaos.close();
     fChaos.add(state, 'cryoActivity', 0, 1, 0.01).name('◀ ICY ACTIVITY (shared, Cryo)').listen();
     fChaos.add(state, 'chaosCellScale', 1, 12, 0.5).name('raft size').listen();
     fChaos.add(state, 'chaosRaftJitter', 0, 1, 0.01).name('raft jitter (∝1/g)').listen();
@@ -2299,7 +2307,7 @@
     // ▸ Ridged icy (F10) — double ridges (Europa) + grooved bands (Ganymede), gated by the same
     // SHARED uCryoActivity (the icy-activity knob in the Chaos folder). Ridge freq/offset/width +
     // band freq sync from the preset (.listen()); amplitude + sinuosity are lab knobs.
-    const fCryoRidge = fRelief.addFolder('Ridged icy (F10)'); fCryoRidge.open();
+    const fCryoRidge = fRelief.addFolder('Ridged icy (F10)'); fCryoRidge.close();
     fCryoRidge.add(state, 'cryoRidgeAmp', 0, 0.4, 0.01).name('ridge amp');
     fCryoRidge.add(state, 'doubleRidgeFreq', 0.5, 10, 0.25).name('double-ridge freq').listen();
     fCryoRidge.add(state, 'cryoRidgeOffset', 0.1, 0.9, 0.01).name('ridge flank offset').listen();
@@ -2313,7 +2321,7 @@
     // tempEq/locked are DRIVEN (sync from the preset via .listen()); latChill/lapse/edge/noise are lab
     // knobs. The ✓ enable gate zeroes the budget for a clean A/B. Showcase presets: Frozen / Titan /
     // Europa (full cap); Rocky / Ocean (warm worlds → cold-pole water caps).
-    const fFrost = fRelief.addFolder('Cryo / Frost (F23/F22)'); fFrost.open();
+    const fFrost = fRelief.addFolder('Cryo / Frost (F23/F22)'); fFrost.close();
     fFrost.add(state, 'frostMaxCoverage', 0, 1, 0.01).name('frost budget (D2)').listen();
     fFrost.add(state, 'frostCondensationT', 0, 273, 1).name('condensation T (K)').listen();
     fFrost.add(state, 'frostLatitudeBias', 0, 1, 0.01).name('lat bias (axial tilt)').listen();
@@ -2333,7 +2341,7 @@
 
     // ▸ Sublimation (F18) — RELIEF, morphology switched on volatileSpecies (the species dropdown
     // forces a morphology; presets drive it). Pits/polygons/blades/hollows; confined to the cold cap.
-    const fSub = fRelief.addFolder('Sublimation (F18)'); fSub.open();
+    const fSub = fRelief.addFolder('Sublimation (F18)'); fSub.close();
     fSub.add(state, 'subStrength', 0, 1, 0.01).name('sublimation gate (driven)').listen();
     fSub.add(state, 'volatileSpecies', { none: 0, 'H₂O hollows': 1, 'CO₂ swiss-cheese': 2, 'CH₄ penitentes': 3, 'N₂ polygons': 4 }).name('species (morphology)').listen();
     fSub.add(state, 'subAmp', 0, 0.3, 0.01).name('relief amp');
@@ -2350,7 +2358,7 @@
     // ▸ Glacial (F17) — slope-damped ice mantle (ponded in basins) + flow-aligned moraine/esker
     // lineations. Gate/flow-vigor are driven; mantle + lineation shape params are lab knobs.
     // Confined to the cold cap (same gate as frost/F18). U-valley/fjord carving DEFERRED (rich tier).
-    const fGlacial = fRelief.addFolder('Glacial (F17)'); fGlacial.open();
+    const fGlacial = fRelief.addFolder('Glacial (F17)'); fGlacial.close();
     fGlacial.add(state, 'glacialStrength', 0, 1, 0.01).name('glacial gate (driven)').listen();
     fGlacial.add(state, 'glacialFlowVigor', 0, 1, 0.01).name('flow vigor ∝1/g (driven)').listen();
     fGlacial.add(state, 'glacialAmp', 0, 0.3, 0.01).name('mantle amp');
@@ -2373,6 +2381,23 @@
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial,
     };
+    // Move each feature's enable controller out of the folder body and into its
+    // title bar (design 2026-06-07, mechanism b). The controller stays in the
+    // gui tree, so syncDisplays()/updateDisplay() keeps the title box synced when
+    // presets/solo/enable-all flip enables. stopPropagation → toggling the box
+    // doesn't collapse the folder.
+    function relocateEnableToTitle(folder, prop){
+      const ctrl = folder.controllers.find(c => c.property === prop);
+      if (!ctrl) return;
+      const title = folder.$title;
+      title.classList.add('title-has-toggle');
+      ctrl.domElement.classList.add('title-toggle');
+      ctrl.domElement.addEventListener('click', e => e.stopPropagation());
+      title.appendChild(ctrl.domElement);
+    }
+    for (const [key, folder] of Object.entries(featureFolders)) {
+      relocateEnableToTitle(folder, FEATURES[key].enableKey);
+    }
     // soloKey=null → enable ALL features; otherwise enable ONLY that feature.
     function setFeatureEnables(soloKey){
       for (const k of Object.keys(FEATURES)) {
