@@ -60,6 +60,8 @@ import {
   trackForRebase as _trackForWorldRebase,
   resetWorldOrigin as _resetWorldOrigin,
   placeInRebasedFrame as _placeInRebasedFrame,
+  getWorldTrue as _getWorldTrue,
+  fromWorldTrue as _fromWorldTrue,
   _debugState as _worldOriginDebugState,
 } from './core/WorldOrigin.js';
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
@@ -1593,8 +1595,15 @@ const _hyperReanchorTarget = new THREE.Vector3();
 // direction behind the ship (camera can freely rotate to find it) instead
 // of always "behind whatever the camera is currently facing."
 const _arrivalForward = new THREE.Vector3();
-const _portalFollowPos = new THREE.Vector3();
-const _portalFollowTarget = new THREE.Vector3();
+// Rebase-proof pocket (AC4): the pocket origin (== Portal A == camera at the
+// seam) captured in TRUE-WORLD coords once, then rewritten into the local frame
+// every warp frame as `anchorTrue - worldOrigin`. This survives the async
+// teleport / resetWorldOrigin <-> maybeRebase race that otherwise detached
+// Portal B 785-1730u away (warp-tunnel-pocket-traversal AC4 root cause). The
+// locked post-swap flight axis (mirrors entry-side Fix D) keeps the camera on
+// the Portal B axis so the 3u emergence gate is crossed geometrically.
+const _pocketAnchorTrue = new THREE.Vector3();
+const _destForward = new THREE.Vector3();
 // onTraversal must be async: onSwapSystem awaits pendingSystemDataPromise
 // then calls warpSwapSystem which TELEPORTS the camera to the new system.
 // Pre-2026-04-17, this callback was synchronous: it invoked onSwapSystem
@@ -3022,6 +3031,15 @@ warpEffect.onSwapSystem = async () => {
     // syncs _trav.mode to INSIDE without re-seeding it — so the first
     // updateTraversal call after this just seeds fresh dot values.
     warpPortal.setTraversalMode('INSIDE');
+    // ── Rebase-proof anchor (AC4) ──
+    // Capture the pocket origin (== Portal A == camera here) in TRUE-WORLD
+    // coords, and lock the post-swap flight axis. The warp update rewrites the
+    // group from this anchor every frame so the async teleport /
+    // resetWorldOrigin <-> maybeRebase race can't detach Portal B. Without this
+    // the group is left in a stale frame and Portal B drifts ~785-1730u away,
+    // so the camera never reaches the 3u emergence gate.
+    _destForward.copy(_swapNewForward);
+    _getWorldTrue(camera.position, _pocketAnchorTrue);
   }
 
   // ── Regenerate sky for new galactic position ──
@@ -6638,6 +6656,18 @@ function simStep(deltaTime) {
         // Portal-lab mode: hold rim steady — no pulsing, no modulation.
         warpPortal.setRimIntensity(_portalLabMode ? 1.0 : Math.max(0.6, warpEffect.portalRimIntensity));
         warpPortal.setBridgeMix(warpEffect.portalBridgeMix);
+        // ── Rebase-proof pocket placement (AC4) ──
+        // After the swap, the pocket is anchored in TRUE-WORLD (captured at the
+        // seam in onSwapSystem). Rewrite the group's local position from that
+        // anchor every frame — the same `trueOffset - worldOrigin` rewrite the
+        // celestial bodies use (~main.js:6075). This runs AFTER maybeRebase (top
+        // of simStep), so the group lands in the same frame as the freshly
+        // rebased camera, keeping Portal B a fixed 60u ahead instead of letting
+        // the async teleport/reset race fling it ~785-1730u away. Orientation is
+        // set once by open()'s lookAt; rebase is translation-only so it stays.
+        if (warpEffect._swapFired) {
+          _fromWorldTrue(_pocketAnchorTrue, warpPortal.group.position);
+        }
         // Run real plane-crossing traversal in every warp phase. The pocket is
         // human-scale (~60u, Task 2) so the camera physically crosses Portal A
         // (entry), cruises INSIDE, and crosses Portal B (emergence). No forced
@@ -6761,9 +6791,12 @@ function simStep(deltaTime) {
         // instead of curving off-axis when the pre-warp turn fired unaligned
         // (warp-entry-rootcause addendum, finding #3). After onSwapSystem the camera
         // is teleported to the new system and re-aimed at the new star, so
-        // _tunnelForward is stale — post-swap we advance along facing (toward Portal
-        // B), matching the slerp guard above.
-        const _advanceDir = warpEffect._swapFired ? _sunDir : _tunnelForward;
+        // _tunnelForward is stale — post-swap we advance along the LOCKED Portal B
+        // axis (_destForward, captured at the seam), not the camera's
+        // instantaneous facing. The view still faces the star, but advancing on
+        // the fixed axis keeps the camera inside the 3u gate so the emergence
+        // crossing actually fires (mirrors entry-side Fix D).
+        const _advanceDir = warpEffect._swapFired ? _destForward : _tunnelForward;
         camera.position.addScaledVector(_advanceDir, warpEffect.cameraForwardSpeed * deltaTime);
 
         // Deep sky objects during warp:
@@ -6795,22 +6828,16 @@ function simStep(deltaTime) {
       skyRenderer.setTunnelPhase(0);
       skyRenderer.setCrossoverAlong(1e6);
       skyRenderer.setClipSide(0);
-      // Portal B follows the ship post-warp: always postExitDistance (100 m)
-      // behind the camera in the ARRIVAL direction (captured at onComplete).
-      // Using arrival direction — not camera.getWorldDirection() — means
-      // rotating the ship/view reveals Portal B instead of dragging it
-      // along behind the view.
+      // AC7: the portal is frozen at its true-world exit anchor — NO camera
+      // follow. During the warp it's rewritten from _pocketAnchorTrue every
+      // frame (rebase-proof, see the dual-portal block); post-warp it's an
+      // ordinary scene child carried by maybeRebase's scene-graph subtract, so
+      // its world-true position holds while the camera coasts away and Portal B
+      // falls behind. The old per-frame follow fought that (it re-pinned the
+      // ring 60u behind the moving camera — Symptom A). Just retire the
+      // approach-only landing strip once emerged.
+      // Per docs/WORKSTREAMS/warp-landing-strip-persists-2026-05-10.md.
       if (warpPortal.group.visible && warpPortal._traversalMode === 'OUTSIDE_B') {
-        _portalFollowPos.copy(camera.position)
-          .addScaledVector(_arrivalForward, warpPortal._tunnelLength - postExitDistanceScene());
-        warpPortal.group.position.copy(_portalFollowPos);
-        _portalFollowTarget.copy(_portalFollowPos).add(_arrivalForward);
-        warpPortal.group.lookAt(_portalFollowTarget);
-        // Landing strip is approach-phase guidance only. The portal can
-        // keep following the camera so the player can look back and see
-        // Portal B at the arrival anchor; but the strip itself shouldn't
-        // be dragged through space with them. Hide it once warp completes.
-        // Per docs/WORKSTREAMS/warp-landing-strip-persists-2026-05-10.md.
         if (warpPortal._landingStrip) warpPortal._landingStrip.visible = false;
       }
 
