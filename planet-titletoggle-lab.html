@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>title-toggle spike</title>
+<style>
+  body { margin:0; background:#111; }
+  /* lil-gui 0.21 prefixes classes; .lil-title is a <button> holding a raw text
+     node. space-between pushes the relocated checkbox to the right of the name;
+     clicking the name still collapses, the checkbox stops propagation (JS). */
+  .lil-title.title-has-toggle { display:flex !important; align-items:center; justify-content:space-between; gap:6px; }
+  .title-toggle { width:auto !important; min-width:0; }
+  .title-toggle .lil-name { display:none; }        /* hide the boolean controller's own label */
+  .title-toggle .lil-widget { min-width:0; }
+</style></head>
+<body>
+<script type="module">
+import GUI from 'lil-gui';
+const state = { aEnabled:true, aFreq:3, bEnabled:false, bFreq:5 };
+const gui = new GUI({ title:'title-toggle spike' });
+
+const fA = gui.addFolder('Feature A'); fA.open();
+fA.add(state,'aEnabled').name('✓ enabled');
+fA.add(state,'aFreq',1,10,1).name('freq');
+const fB = gui.addFolder('Feature B'); fB.open();
+fB.add(state,'bEnabled').name('✓ enabled');
+fB.add(state,'bFreq',1,10,1).name('freq');
+
+function relocateEnableToTitle(folder, prop){
+  const ctrl = folder.controllers.find(c => c.property === prop);
+  const title = folder.$title;
+  title.classList.add('title-has-toggle');
+  ctrl.domElement.classList.add('title-toggle');
+  ctrl.domElement.addEventListener('click', e => e.stopPropagation());
+  title.appendChild(ctrl.domElement);   // move node out of body, into title
+  return ctrl;
+}
+relocateEnableToTitle(fA, 'aEnabled');
+relocateEnableToTitle(fB, 'bEnabled');
+
+// Check 4 hook: flip state in code + resync display (mirrors the preset/solo path)
+window.__spike = {
+  state,
+  flipAndSync(){ state.aEnabled = !state.aEnabled; state.bEnabled = !state.bEnabled;
+    gui.controllersRecursive().forEach(c => c.updateDisplay()); },
+};
+</script>
+</body></html>
