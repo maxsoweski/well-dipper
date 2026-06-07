@@ -367,228 +367,261 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 4: Repurpose the swap seam — place Portal B ahead of the post-teleport camera
+## STATUS — 2026-06-07 (C-lite arrival polish; AC4 root cause CORRECTED by live diagnosis)
+
+**Tasks 0–3 DONE** (commits `1427ebb`/`9c334c2`/`a16d617`/`7064478` + entry-side Fix D `1654dcb`). The 4285602 pin is gone — the render loop calls real `updateTraversal` (`main.js:6645`). AC2 entry crossing verified live (fires `onSwapSystem` during ENTER ~el 0.25).
+
+**Tasks 4–7 below were REWRITTEN 2026-06-07** after a live diagnosis (3 instrumented Sol→star warps, GPU 9223) that overturned the handoff's "place Portal B ahead" framing. Measured facts:
+
+- **AC4 is blocked by a teleport+rebase DETACHMENT, not by placement.** The seam re-anchor *already* plants Portal B exactly 60u ahead (measured `camToDiscB = 60`, mode INSIDE). But `warpSwapSystem` teleports the camera to a large coord + calls `resetWorldOrigin()` (which by design does **not** move scene children — `WorldOrigin.js:180`); the next frame's `maybeRebase` resets the camera to origin. Because `onSwapSystem` is **async (awaits before teleporting)**, its re-anchor races with `maybeRebase`, leaving the group and camera in different frames → Portal B ends up **785–1730u away** the whole cruise → camera never reaches the 3u gate → mode stays INSIDE → `OUTSIDE_B` is force-flipped at `onComplete` (the snap). **Max-approved fix: make the pocket rebase-proof** — anchor it in true-world coords + per-frame rewrite `group.position = anchorTrue − worldOrigin` (mirrors the celestial-body writes at `main.js:6075`).
+- **`exitPeakSpeed = 6.7e-7`** (stale microscopic-era value) → EXIT contributes ~0 forward travel. The emergence must fire **during HYPER** (post-swap HYPER travel `(3.0−0.15)×20 ≈ 57u` is also 3u short of 60u — fixed by AC5's longer min-cruise).
+- **AC9's 324ms freeze did NOT reproduce** with warm shaders (max real frame ~24ms). It's cold-shader / first-warp-of-session only — keep AC9 but expect it intermittent, not every-warp.
+
+> **Reusable probe (this session):** a per-frame sampler that wraps `_warpPortal.updateTraversal` (gives the camera ref), `setTraversalMode`, `onSwapSystem`, `onComplete` — recording `dt / state / elapsed / cameraForwardSpeed / _swapFired / _trav.mode / group.visible / _tunnel.visible / dotB / latB / camLen / camToDiscB`. Rebuild it for the AC4/AC7/AC9/AC10 live checks. **Testing how-to:** `memory/well-dipper-testing-reference.md` (GPU 9223; `select_page({bringToFront:true})` FIRST or fps lies; `window._lab.enterSol()`; `for(let i=0;i<5;i++)window._lab.stopAutopilot()`; `_autoSelectWarpTarget()` until `!_warpTarget.galaxyData`; `_beginWarpTurn()`).
+
+---
+
+## Task 4: True-world-anchored, rebase-proof pocket (AC4 reachability + AC7 stationarity) + locked post-swap axis
 
 **Files:**
-- Modify: `src/main.js` (`onSwapSystem` re-anchor block ~3001-3025)
+- Modify: `src/main.js` — WorldOrigin imports (~58-64); seam re-anchor (`onSwapSystem` ~3011-3025); new scratch vectors (~1596); the warp dual-portal block (rewrite group from anchor, ~6644 before the `updateTraversal` at 6645); the post-swap camera advance (~6766); REMOVE the per-frame portal-follow (~6803-6815)
+- Test: `tests/warp-tunnel-rebase.test.js` (headless: relative camera↔PortalB geometry survives a rebase offset)
 
-> Today the seam re-opens Portal A at the post-teleport camera and forces INSIDE. Repurpose it: after the teleport, keep the camera INSIDE (occluded), rebuild the pocket so Portal A is just behind the camera and **Portal B is `tunnelLength` ahead along the new forward** — so the camera will fly forward and cross Portal B for a real emergence.
+> The portal group must hold a fixed distance from the camera across the async teleport+`resetWorldOrigin`+`maybeRebase` seam. Stop relying on `maybeRebase`'s scene-child shift (it races with the swap). Store the pocket's true-world anchor once at the seam, rewrite the group's local position from it every warp frame — the exact `true − worldOrigin` pattern the celestial bodies use (`main.js:6075`). Rebase is translation-only, so orientation (set by `open()`'s `lookAt`) is unaffected — only `group.position` needs the rewrite.
 
-- [ ] **Step 1: Rewrite the seam re-anchor**
+- [ ] **Step 1: Import the true-world helpers in main.js**
 
-Replace the `if (_useDualPortal) { ... }` block at `main.js:3012-3025` with:
+In the `WorldOrigin.js` import block (`~58-64`), add `getWorldTrue as _getWorldTrue,` and `fromWorldTrue as _fromWorldTrue,` (alongside the existing `worldOrigin as _worldOriginVec`).
+
+- [ ] **Step 2: Add scratch vectors** (near `~1596`, by `_swapNewForward`):
 
 ```js
-  if (_useDualPortal) {
-    camera.getWorldDirection(_swapNewForward);
-    // Place the pocket so the camera is INSIDE near Portal A, with Portal B a
-    // full pocket-length AHEAD along the post-teleport forward. The walls
-    // occlude this reposition (we are mid-HYPER). The camera then flies forward
-    // and crosses Portal B for a REAL emergence (no forced OUTSIDE_B snap).
-    _swapPortalAPos.copy(camera.position).addScaledVector(_swapNewForward, -1e-3);
-    warpPortal.resetTraversal();
-    warpPortal.open(_swapPortalAPos, _swapNewForward);
-    warpPortal.setTraversalMode('INSIDE');   // we ARE inside at the seam
-    // Re-seed dot history so the next updateTraversal measures crossings from
-    // the new pocket pose (prevDot* null = no spurious crossing on frame 1).
-    warpPortal._trav = { mode: 'INSIDE', prevDotA: null, prevDotB: null };
-  }
+const _pocketAnchorTrue = new THREE.Vector3();  // pocket origin in TRUE-WORLD (rebase-proof)
+const _destForward = new THREE.Vector3();        // locked post-swap flight axis
 ```
 
-(Replaces the `_prevDotA/_prevDotB = null` lines with the pure-state re-seed from Task 1.)
+- [ ] **Step 3: Capture the true-world anchor + locked axis at the seam**
 
-- [ ] **Step 2: Confirm Portal B world pose is derived in `open()`**
+In `onSwapSystem`, inside `if (_useDualPortal) { ... }` (`~3011`), right after `camera.getWorldDirection(_swapNewForward);` and the `open()` call, add:
 
-In `WarpPortal.open(pos, dir)` (~589-594) confirm it sets `_portalBWorldPos = pos + dir*(-tunnelLength)` and `_portalBWorldNormal = -dir` (so Task 1's `updateTraversal` measures the B-plane correctly). If only Portal A pose is stored, add Portal B.
+```js
+    _destForward.copy(_swapNewForward);
+    _getWorldTrue(camera.position, _pocketAnchorTrue);  // group origin == Portal A == camera here
+```
 
-- [ ] **Step 3: Live verify the emergence crossing fires**
+- [ ] **Step 4: Rewrite the group from the anchor every warp frame (rebase-proof)**
 
-Live (GPU 9223): drive one warp from Sol. In console, sample `window._warpPortal._trav.mode` each second during HYPER/EXIT.
-Expected: sequence reaches `OUTSIDE_A` → `INSIDE` → `OUTSIDE_B` before `onComplete`. No black HYPER.
+In the dual-portal block, immediately BEFORE `warpPortal.updateTraversal(camera, ...)` (`~6645`), add:
 
-- [ ] **Step 4: Commit**
+```js
+        // Rebase-proof pocket: anchored in TRUE-WORLD at the seam; rewrite local
+        // position from the anchor every frame so the async teleport /
+        // resetWorldOrigin <-> maybeRebase race can't detach it (mirrors the
+        // per-frame `true - worldOrigin` body writes ~6075). Orientation is set
+        // once by open(); rebase is translation-only so it stays correct.
+        if (warpEffect._swapFired) {
+          _fromWorldTrue(_pocketAnchorTrue, warpPortal.group.position);
+        }
+```
+
+- [ ] **Step 5: Lock the post-swap advance axis (mirror entry-side Fix D)**
+
+At `~6766`, change `const _advanceDir = warpEffect._swapFired ? _sunDir : _tunnelForward;` to use the captured locked axis:
+
+```js
+        const _advanceDir = warpEffect._swapFired ? _destForward : _tunnelForward;
+```
+
+(View still faces the star; position advances straight down the Portal B axis, so the camera stays inside the 3u gate to the crossing.)
+
+- [ ] **Step 6: Remove the per-frame camera-follow (AC7)**
+
+Replace the OUTSIDE_B follow block (`~6803-6815`) with just the one-time landing-strip retire — the true-world anchor (Step 4) + normal post-warp `maybeRebase` already keep the portal frozen in place; the follow fought that:
+
+```js
+      // AC7: portal frozen at its true-world exit anchor; no camera-follow.
+      // (During warp it's rewritten from the anchor (Step 4); post-warp it's a
+      // scene child carried by normal maybeRebase.) Just retire the
+      // approach-only landing strip once emerged.
+      if (warpPortal.group.visible && warpPortal._traversalMode === 'OUTSIDE_B') {
+        if (warpPortal._landingStrip) warpPortal._landingStrip.visible = false;
+      }
+```
+
+Grep for now-dead scratch (`_portalFollowPos`, `_portalFollowTarget`) and remove their declarations if unused. **KEEP `_arrivalForward`** (read by the lab-mode slerp at `~3071`).
+
+- [ ] **Step 7: Headless test — relative geometry survives a rebase**
+
+Add a test asserting: given a pocket anchored at a true-world point and Portal B at `anchor + 60·axis`, after applying a `worldOrigin` offset and recomputing `group.position = fromWorldTrue(anchor)`, the camera↔PortalB local distance is unchanged. Run `npx vitest run tests/warp-tunnel-rebase.test.js`.
+
+- [ ] **Step 8: Live verify (GPU 9223)** — warp Sol→star; confirm post-swap `camToDiscB` stays ~60 (NOT 1730) and decreases toward 0 as the camera advances; mode reaches `OUTSIDE_B` BEFORE `onComplete`. (Emergence timing/gating finished in Task 5.)
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/main.js
-git commit -m "feat(warp): seam re-anchor places Portal B ahead for a real emergence crossing
+git add src/main.js tests/warp-tunnel-rebase.test.js
+git commit -m "feat(warp): rebase-proof true-world-anchored pocket + locked exit axis (AC4/AC7)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 5: Load-adaptive emergence gate (AC5)
+## Task 5: Load-adaptive emergence — gate (AC5) + shader pre-compile (AC9) + crossing-drives-EXIT (AC4 timing)
 
 **Files:**
-- Modify: `src/effects/WarpEffect.js` (`destinationReady` flag; HYPER min-cruise + ready-gated transition ~247-282)
-- Modify: `src/main.js` (set `warpEffect.destinationReady = true` after `spawnSystem` completes in `onSwapSystem`)
-- Test: `tests/warp-tunnel-rebase.test.js` (add AC5 describe block)
+- Modify: `src/effects/WarpEffect.js` (`HYPER_MIN_CRUISE`, `destinationReady`, the HYPER→EXIT trigger ~272-281)
+- Modify: `src/main.js` (`onSwapSystem`: `await compileAsync` then set `destinationReady`; warp camera-advance clamp ~6753-6767; wire the OUTSIDE_B crossing → `state='exit'`)
+- Test: `tests/warp-tunnel-rebase.test.js` (AC5 gate)
 
-> HYPER currently transitions to EXIT on a pure timer (`WarpEffect.js:278`). Make it transition only when BOTH the minimum cruise elapsed AND the destination is ready. The GPU `spawnSystem` is synchronous inside `onSwapSystem`, so set `destinationReady` right after it.
+> Reconciles AC4 (real geometric crossing) with AC5 (cruise that extends on slow load). Mechanism: the camera cruises forward; its advance is **clamped just short of Portal B** until the gate opens (`elapsed ≥ HYPER_MIN_CRUISE && destinationReady`); on open it crosses → real `INSIDE→OUTSIDE_B` emergence → that crossing drives HYPER→EXIT. `destinationReady` flips only after `spawnSystem` **and** the destination shaders are pre-compiled (AC9), so the 324ms first-render hitch is pre-paid during the occluded cruise.
 
-- [ ] **Step 1: Write the failing AC5 test**
-
-Add to `tests/warp-tunnel-rebase.test.js`:
+- [ ] **Step 1: Failing AC5 test** — add the gate test (late-resolving `destinationReady` extends cruise past min; early-resolving lasts exactly min):
 
 ```js
 import { WarpEffect } from '../src/effects/WarpEffect.js';
-
 describe('load-adaptive emergence gate (AC5)', () => {
   function runHyper(we, { readyAt, dt = 0.1, maxT = 30 }) {
     we.state = 'hyper'; we.elapsed = 0; we.destinationReady = false;
     let t = 0;
-    while (we.state === 'hyper' && t < maxT) {
-      t += dt;
-      if (t >= readyAt) we.destinationReady = true;
-      we.update(dt);
-    }
-    return t; // total HYPER time before it left HYPER
+    while (we.state === 'hyper' && t < maxT) { t += dt; if (t >= readyAt) we.destinationReady = true; we.update(dt); }
+    return t;
   }
-
-  test('emergence waits past the minimum cruise when the load is slow', () => {
-    const we = new WarpEffect();
-    const min = we.HYPER_MIN_CRUISE; // new constant
-    const t = runHyper(we, { readyAt: min + 2.0 });
-    expect(t).toBeGreaterThan(min + 1.9); // extended until ready
+  test('slow load extends cruise past the minimum', () => {
+    const we = new WarpEffect(); const min = we.HYPER_MIN_CRUISE;
+    expect(runHyper(we, { readyAt: min + 2.0 })).toBeGreaterThan(min + 1.9);
   });
-
-  test('with a fast load, HYPER lasts exactly the minimum cruise', () => {
-    const we = new WarpEffect();
-    const min = we.HYPER_MIN_CRUISE;
+  test('fast load: cruise lasts ~exactly the minimum', () => {
+    const we = new WarpEffect(); const min = we.HYPER_MIN_CRUISE;
     const t = runHyper(we, { readyAt: 0.05 });
-    expect(t).toBeGreaterThanOrEqual(min);
-    expect(t).toBeLessThan(min + 0.25); // no needless extension
+    expect(t).toBeGreaterThanOrEqual(min); expect(t).toBeLessThan(min + 0.25);
   });
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+Run `npx vitest run tests/warp-tunnel-rebase.test.js -t "load-adaptive"` → FAIL (`HYPER_MIN_CRUISE` undefined).
 
-Run: `npx vitest run tests/warp-tunnel-rebase.test.js -t "load-adaptive"`
-Expected: FAIL — `HYPER_MIN_CRUISE` undefined / HYPER ends on the old timer.
-
-- [ ] **Step 3: Implement the gate in WarpEffect**
-
-In `src/effects/WarpEffect.js`:
-- In the constructor add `this.HYPER_MIN_CRUISE = 3.5;` and `this.destinationReady = false;` and reset `destinationReady=false` in `start()`.
-- In `_updateHyper()` replace the transition guard (`if (this.elapsed >= this.HYPER_DUR)`) with:
+- [ ] **Step 2: WarpEffect gate** — constructor: `this.HYPER_MIN_CRUISE = 3.5; this.destinationReady = false;`; reset `destinationReady = false` in `start()`. In `_updateHyper` replace the `if (this.elapsed >= this.HYPER_DUR) { ... }` (~278) with:
 
 ```js
-    // Load-adaptive: leave HYPER only when the minimum cruise has elapsed AND
-    // the destination finished spawning. A slow load extends the cruise; a fast
-    // load leaves at exactly the minimum. Keeps the GPU hitch buried mid-cruise.
+    // Load-adaptive: leave HYPER only when the min cruise elapsed AND the
+    // destination is ready. (Also force-exit if the geometric emergence already
+    // flipped OUTSIDE_B — see main.js crossing->exit wiring.)
     if (this.elapsed >= this.HYPER_MIN_CRUISE && this.destinationReady) {
-      this.state = 'exit';
-      this.elapsed = 0;
+      this.state = 'exit'; this.elapsed = 0;
     }
 ```
 
-- [ ] **Step 4: Set the ready flag after spawn in main.js**
+(Keep a high safety ceiling so a never-ready load can't hang HYPER forever — e.g. `|| this.elapsed >= this.HYPER_DUR * 4`.)
 
-In `src/main.js` `onSwapSystem`, immediately after `warpSwapSystem();` (and the seam re-anchor) add:
+- [ ] **Step 3: AC9 pre-compile + release the gate** — in `onSwapSystem`, after `warpSwapSystem()` + the seam re-anchor + sky rebuild, add:
 
 ```js
-  // Destination scene is now spawned (warpSwapSystem ran spawnSystem
-  // synchronously). Release the emergence gate (WarpEffect AC5).
+  // AC9: pre-pay the destination's first-render shader compile during the
+  // occluded cruise (three 0.183 compileAsync -> Promise). Release the AC5
+  // emergence gate only once spawn AND compile are done.
+  try { await retroRenderer.renderer.compileAsync(scene, camera); }
+  catch (e) { console.warn('[WARP] compileAsync failed (continuing):', e); }
   warpEffect.destinationReady = true;
 ```
 
-- [ ] **Step 5: Run to verify the AC5 tests pass**
+(Confirm `scene` + `retroRenderer.renderer` are in scope — `retroRenderer.renderer.compile(scene, camera)` is already used at `main.js:8700`.)
 
-Run: `npx vitest run tests/warp-tunnel-rebase.test.js`
-Expected: all describe blocks (AC2/AC4 + AC5) PASS.
+- [ ] **Step 4: Clamp the camera short of Portal B until the gate opens** — in the warp camera-advance block (`~6753-6767`), gate the post-swap forward step on `elapsed ≥ HYPER_MIN_CRUISE && destinationReady`; while closed, cap the advance so axis-distance-to-Portal-B stays ≥ ~0.5u (compute from `warpPortal._discB` world pos vs camera along `_destForward`). When open, advance freely → camera crosses → `updateTraversal` flips `OUTSIDE_B`.
 
-- [ ] **Step 6: Live verify the gate under an artificial slow load**
+- [ ] **Step 5: Crossing drives EXIT** — where `warpPortal.onTraversal`/the INSIDE handler lives (`main.js:~1614`), add: on `mode === 'OUTSIDE_B'` during HYPER, set `warpEffect.state = 'exit'; warpEffect.elapsed = 0;` so emergence ends the cruise (instead of the timer).
 
-Live (GPU 9223): in console, temporarily wrap to delay readiness, e.g. set a flag the seam respects, or stub `pendingSystemDataPromise` to resolve after ~6s, then warp.
-Expected: HYPER cruise visibly extends (tunnel keeps streaming) until ready, then emerges — never emerges into a half-loaded system.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Run tests** (`npx vitest run`) → all green. **Step 7: Live verify** — fast load emerges at ~min-cruise; an artificially delayed `destinationReady` extends the cruise (camera holds just inside Portal B), then emerges. **Step 8: Commit**
 
 ```bash
 git add src/effects/WarpEffect.js src/main.js tests/warp-tunnel-rebase.test.js
-git commit -m "feat(warp): load-adaptive HYPER — min-cruise + destination-ready emergence gate (AC5)
+git commit -m "feat(warp): load-adaptive emergence gate + shader pre-compile + crossing-drives-exit (AC5/AC9/AC4)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 6: Camera on-rails + drift polish
+## Task 6: Portal close-tween (AC8)
 
 **Files:**
-- Modify: `src/main.js` (warp camera-motion block ~6759-6791)
+- Modify: `src/effects/WarpPortal.js` (REVERT the `:718` tunnel-hide stopgap; add `uFade` uniform + `transparent:true` to the tunnel material + alpha multiply in its frag shader; add `startClose()` / `updateClose(dt)`)
+- Modify: `src/main.js` (start the tween at the OUTSIDE_B crossing; drive `updateClose(dt)` each frame through the post-warp coast)
+- Test: `tests/warp-tunnel-rebase.test.js` (UPDATE the existing `makeFakePortal` `.call()` visibility-lifecycle tests → tween behavior)
 
-> The camera is already warp-driven and forward-facing. Add a subtle bank/sway drift so it reads as piloted, not locked — without inducing off-axis entry or backward-looking (spec R4: keep small, tune live). No WASD during warp (already suppressed via `cameraController.bypassed`).
+> Starting at the emergence crossing, the tunnel + ring shrink and fade over ~3s, then disappear — tunnel stays VISIBLE the whole close so a look-back shows it closing, not gone. Reverts the uncommitted force-hide.
 
-- [ ] **Step 1: Add a small drift offset during HYPER**
+- [ ] **Step 1: Revert the stopgap** — in `setTraversalMode` (`WarpPortal.js:718`) delete `this._tunnel.visible = (mode !== 'OUTSIDE_B');` (tunnel stays visible on OUTSIDE_B; the tween hides it). **Keep** the `resetTraversal` re-show at `:881`.
 
-In the warp camera block, after the forward-push, add a low-amplitude positional/rotational sway driven by `warpEffect.hyperTime` (e.g. `sin`/`cos` at ~0.3-0.6 Hz, amplitude a few tenths of a unit laterally + a fraction of a degree of bank). Keep the camera's forward axis dominant so Portal B stays ahead. Expose amplitude as `window._warpDriftAmp` for live tuning.
+- [ ] **Step 2: Tunnel fade lever** — the tunnel `ShaderMaterial` (`:126-147`) is opaque with no alpha lever. Add `transparent: true` and a `uFade: { value: 1 }` uniform; in its fragment shader multiply the output alpha by `uFade` at the final `gl_FragColor`. Add `setTunnelFade(v)` (`this._tunnel.material.uniforms.uFade.value = v`).
 
-- [ ] **Step 2: Live tune**
+- [ ] **Step 3: Close-tween API** — add to WarpPortal:
 
-Live (GPU 9223): warp and watch. Adjust `window._warpDriftAmp` until it reads "piloted" without the entry angle going off-head-on or any backward feel. Record the chosen value back into the code.
+```js
+  startClose() { this._closing = true; this._closeT = 0; }
+  updateClose(dt) {
+    if (!this._closing) return;
+    this._closeT += dt;
+    const CLOSE_DUR = 3.0;
+    const t = Math.min(1, this._closeT / CLOSE_DUR);
+    this.setRadius(this._radius * (1 - t));
+    this.setRimIntensity(Math.max(0, 1 - t));
+    this.setTunnelFade(1 - t);
+    if (t >= 1) { this._closing = false; this.close(); }   // close() hides the group
+  }
+```
 
-- [ ] **Step 3: Commit**
+(Init `this._closing = false` in the constructor; clear it in `resetTraversal` + restore `setTunnelFade(1)`, `setRadius(this._radius)`.)
+
+- [ ] **Step 4: Trigger + drive** — start the tween at the `INSIDE→OUTSIDE_B` crossing (in the same `onTraversal` handler as Task 5 Step 5: `warpPortal.startClose()`). Drive `warpPortal.updateClose(deltaTime)` every frame while `warpPortal._closing` — in BOTH the warp block and the post-warp `else` branch (the close spans EXIT + the start of free flight). Remove the forced `setTraversalMode('OUTSIDE_B')` at `onComplete:3061` (emergence is now a real crossing; replace with a warn-only fallback if still INSIDE at onComplete).
+
+- [ ] **Step 5: Update the makeFakePortal tests** — the current uncommitted tests assert `_tunnel.visible === false` on OUTSIDE_B (the stopgap). Rewrite to: OUTSIDE_B leaves the tunnel visible; `updateClose` drives radius/rim/fade monotonically to ~0 over 3s; only at completion does `close()` hide the group; `resetTraversal` restores fade/radius/visibility. Add `setTunnelFade`/`_tunnel.material.uniforms.uFade` to `makeFakeNode`/`makeFakePortal`.
+
+- [ ] **Step 6: tests green; Step 7: live verify** (radius/rim/fade fall to ~0 over ~3s, tunnel visible until close, look-back shows it closing); **Step 8: Commit**
 
 ```bash
-git add src/main.js
-git commit -m "feat(warp): subtle on-rails camera bank/sway drift (piloted feel)
+git add src/effects/WarpPortal.js src/main.js tests/warp-tunnel-rebase.test.js
+git commit -m "feat(warp): portal close-tween on emergence — shrink+fade over 3s (AC8)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 7: Live verification (AC1 reliability + AC3 forward-travel) + docs
+## Task 7: Swap-occlusion invariant (AC10) + live verification + docs
 
 **Files:**
-- Modify: `docs/FEATURES/warp.md`, `docs/NOW.md` (per CLAUDE.md Rule 3 doc-updates-on-ship)
-- Use: `window.__wd.runRepeatWarpSuite()`, `takeSceneInventory()`
+- Modify: `src/main.js` or `src/effects/WarpEffect.js` (AC10 runtime assertion at the swap)
+- Create/Use: an exit-side live harness (rebuild the session probe) in `src/debug/`
+- Modify: `docs/FEATURES/warp.md`, `docs/NOW.md`
 
-> The headless gates (AC2/AC4/AC5) are green from Tasks 1/5. AC1 (reliable render across repeats/far) and AC3 (monotonic forward travel) are live-integration — verify on GPU 9223, then this goes VERIFIED_PENDING_MAX for AC6 UAT.
+> Headless gates (AC2/AC4-math/AC5) are green from Tasks 1/4/5/6. AC1/AC3/AC4/AC7/AC8/AC9/AC10 are live-integration. Note `runWarpEntrySuite` is entry-only — the exit side is new ground.
 
-- [ ] **Step 1: AC1 — reliability across many runs**
+- [ ] **Step 1: AC10 invariant** — at the `onSwapSystem` swap point, assert `warpPortal._traversalMode === 'INSIDE' && warpPortal._tunnel.visible === true && <camera inside tunnel interior>`. On violation, `console.error('[WARP][AC10] swap exposed!', ...)` (loud, so a future camera/movement change that exposes the ~3000u teleport fails visibly). Assert headlessly too if the swap trigger is pure.
 
-Live: `window._lab.enterSol()`, then run `window.__wd.runRepeatWarpSuite()` and a manual chain of ≥8 warps (repeats + a far target). For each HYPER frame sample `takeSceneInventory().meshes.find(m=>m.name==='effect.warp.tunnel')` — assert present + `inFrustum` + `cameraDistance` small, and `window._warpPortal._trav.mode` reaches INSIDE.
-Expected: 10/10 warps render every HYPER frame; zero black HYPER.
+- [ ] **Step 2: AC1/AC3** — `window.__wd.runRepeatWarpSuite()` + a manual ≥8-warp chain (repeats + far target): every HYPER frame has `effect.warp.tunnel` present + inFrustum, mode reaches INSIDE, zero black HYPER; axis-distance monotonic, `camForward·axis > 0`.
 
-- [ ] **Step 2: AC3 — monotonic forward travel + forward facing**
+- [ ] **Step 3: AC4/AC7/AC8/AC9/AC10 live** (rebuild the session probe): AC4 `OUTSIDE_B` before `onComplete` (no warn); AC7 portal world-true (`getWorldTrue(group.position)`) constant across the coast while camera→portal distance grows; AC8 radius/rim/fade monotonic to ~0, tunnel visible until close; **AC9 on a COLD first warp of a fresh page load** no frame >~50ms in swap→emergence; AC10 invariant holds.
 
-Live: during one HYPER, sample per frame: camera position projected onto the pocket axis, and `cameraForward·axis`.
-Expected: axis-distance increases monotonically; `cameraForward·axis > 0` throughout (no backward orientation).
+- [ ] **Step 4: Headless suite** `npx vitest run` → green. **Step 5: Docs** — `docs/FEATURES/warp.md` (mechanism = rebase-proof pocket fly-through, load-adaptive HYPER, close-tween arrival), `docs/NOW.md` (workstream → VERIFIED_PENDING_MAX). `npm run doc-rot` clean. (NOTE: `docs/NOW.md` has unrelated uncommitted planet-lab edits — coordinate with Max before editing/committing it.)
 
-- [ ] **Step 3: Run the full headless suite once more**
-
-Run: `npx vitest run`
-Expected: all green.
-
-- [ ] **Step 4: Update docs**
-
-Update `docs/FEATURES/warp.md` (mechanism = human-scale pocket fly-through; load-adaptive HYPER) and `docs/NOW.md` (workstream → VERIFIED_PENDING_MAX). Run `npm run doc-rot` — must be clean.
-
-- [ ] **Step 5: Run the verify-workstream workflow**
+- [ ] **Step 6: verify-workstream** (full):
 
 ```
 Workflow({scriptPath:"/home/ax/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs",
-  args:{contractPath:"docs/WORKSTREAMS/warp-tunnel-pocket-traversal-2026-06-06/contract.json", mode:"full", commit:"<sha>", liveBranch:"main"}})
+  args:{contractPath:"docs/WORKSTREAMS/warp-tunnel-pocket-traversal-2026-06-06/contract.json", mode:"full", commit:"<sha>", liveBranch:"master"}})
 ```
-Expected: AC1-AC5 PASS (AC6 marked `deferred-to-max`). Then set workstream status `VERIFIED_PENDING_MAX <sha>`.
 
-- [ ] **Step 6: Commit**
+AC1-AC5/AC7-AC10 PASS, AC6 `deferred-to-max` → set workstream `VERIFIED_PENDING_MAX <sha>` → Max UAT.
 
-```bash
-git add docs/
-git commit -m "docs(warp): pocket-traversal verified (AC1-5); VERIFIED_PENDING_MAX
-
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
-```
+- [ ] **Step 7: Commit docs.**
 
 ---
 
-## Self-review notes
+## Self-review notes (2026-06-07 rewrite)
 
-- **Spec coverage:** AC1→Task7.1; AC2→Task1; AC3→Task7.2; AC4→Task1+Task4; AC5→Task5; AC6→Max UAT after Task7. Revert (spec §3.6)→Task0. FOLD-start fix (spec §3.6)→Task3. Human scale (spec §3.1)→Task2. Seam/R1 (spec §7 R1)→Task4 + R1 section. Load-adaptive (spec §3.4)→Task5. Drift (spec §3.3)→Task6. Keep-the-look (spec §3.5)→untouched shader (verify in Task7).
-- **Live-tuned values are concrete starting points** (60u, 20u/s, 3.5s min-cruise, small drift) with debug knobs — not placeholders; final values set in Task 6/7 + UAT.
-- **Type consistency:** the pure traversal state `{mode, prevDotA, prevDotB}` from `createTraversal`/`stepTraversal` is used identically in Task 1 (module + WarpPortal delegate + tests) and Task 4 (seam re-seed).
-- **Risk to flag to Max:** Task 1 Step 5 assumes `WarpPortal.open()` can store both portals' world poses; if the current class only tracks Portal A, that's a small add (noted in Task 4 Step 2). Everything else builds on verified-good existing structure.
+- **AC coverage:** AC1→T7.2; AC2→done (T1, verified live); AC3→T7.2; **AC4→T4 (rebase-proof reachability) + T5 (gated timing) + T6 Step 4 (remove forced flip)**; AC5→T5; AC6→Max UAT after T7; AC7→T4 (anchor + remove follow); AC8→T6; AC9→T5 Step 3; AC10→T7.1.
+- **Root-cause correction is load-bearing:** the original T4 ("place Portal B ahead") was necessary-but-insufficient — placement is already correct; the teleport+rebase race is the bug. T4 now fixes the race; do NOT revert to the old framing.
+- **Known follow-ups (NOT in scope here):** `exitPeakSpeed = 6.7e-7` is stale (file its own cleanup); FOLD-phase 150–255ms gen stutters (`onPrepareSystem` main-thread gen — separate workstream, time-slice/worker); AC9 is cold-shader-only (intermittent).
+- **Risk to flag to Max:** the AC5 "clamp camera short until gate" (T5 Step 4) is the one piece with felt-experience implications (a slow load = a brief hold at the portal mouth before emerging). Tune live; AC6 is Max's gate.
+

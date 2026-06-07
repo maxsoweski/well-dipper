@@ -72,3 +72,24 @@ their causes — and ruled out the heavier "Approach C" (no-teleport rebase inve
 - **"Disappear"** = the tunnel **force-hidden** + a **forced** `INSIDE→OUTSIDE_B` flip at
   onComplete (no real crossing) + the **per-frame portal-follow** dragging the ring. Fixed by
   the real emergence crossing (AC4 / Task 4) + stationary anchor (AC7) + close-tween (AC8).
+
+### AC4 root cause CORRECTED — 2026-06-07 second live diagnosis (Max-approved fix)
+
+A second, deeper diagnosis (3 instrumented Sol→star warps, GPU 9223) found the original Task 4
+framing ("place Portal B ahead") was **necessary-but-insufficient**: the seam re-anchor *already*
+plants Portal B exactly 60u ahead (measured `camToDiscB = 60`). The emergence still never fires
+because of a **teleport+rebase detachment**: `warpSwapSystem` teleports the camera to a large
+coord and calls `resetWorldOrigin()` (which does **not** move scene children); the next frame's
+`maybeRebase` resets the camera to origin; and because `onSwapSystem` is **async (awaits before
+teleporting)**, its re-anchor races with `maybeRebase` so the portal group and the camera end up
+in different frames → Portal B sits **785–1730u away** the whole cruise → camera never reaches
+the 3u gate → mode stays INSIDE → `OUTSIDE_B` force-flipped at onComplete.
+
+**Fix (Max-approved 2026-06-07): make the pocket rebase-proof** — anchor it in TRUE-WORLD coords
+at the seam and rewrite `group.position = anchorTrue − worldOrigin` every warp frame (mirrors the
+celestial-body per-frame writes, `main.js:6075`). The teleport stays (occluded, harmless to
+*see* — but its rebase was NOT consequence-free, which is what this corrects). Two supporting
+facts: `exitPeakSpeed = 6.7e-7` (stale microscopic-era value → ~0 EXIT travel, so emergence must
+fire during HYPER; AC5's longer min-cruise covers the budget), and AC9's 324ms freeze is
+**cold-shader/first-warp-only** (didn't reproduce warm). Full revised task breakdown:
+`docs/superpowers/plans/2026-06-06-warp-tunnel-pocket-traversal.md` (Tasks 4–7, rewritten).
