@@ -3,7 +3,7 @@
   "intentRef": "intent.md",
   "project": "well-dipper",
   "status": "building",
-  "phase": "Pocket-traversal redesign. Stop placing the tunnel in microscopic system-space; make it its own human-scale pocket (~60u) the camera physically flies through (into Portal A, real interior, out Portal B). Real plane-crossings restore the entry/cruise/emergence choreography the 4285602 pin deleted. HYPER is load-adaptive: min-cruise + emergence gated on destination-ready. Reference impl: portal-traversal-lab.html. Design spec: docs/superpowers/specs/2026-06-06-warp-tunnel-pocket-traversal-design.md. Risk R1 (pocket rig <-> post-teleport world-coords reconciliation) resolved in the impl plan before TDD.",
+  "phase": "Pocket-traversal redesign. Stop placing the tunnel in microscopic system-space; make it its own human-scale pocket (~60u) the camera physically flies through (into Portal A, real interior, out Portal B). Real plane-crossings restore the entry/cruise/emergence choreography the 4285602 pin deleted. HYPER is load-adaptive: min-cruise + emergence gated on destination-ready. Reference impl: portal-traversal-lab.html. Design spec: docs/superpowers/specs/2026-06-06-warp-tunnel-pocket-traversal-design.md. Risk R1 (pocket rig <-> post-teleport world-coords reconciliation) resolved in the impl plan before TDD. [2026-06-07 amendment] Live diagnosis (Sol->Shudpis, GPU 9223) showed the arrival 'freeze/teleport/disappear' = (a) a 324ms first-render shader-compile hitch at the swap, (b) an OCCLUDED ~3150u teleport (mode=INSIDE, tunnel visible throughout), (c) the tunnel force-hidden + a FORCED INSIDE->OUTSIDE_B flip at onComplete (no real crossing) + a per-frame portal-follow dragging the ring 60u behind the camera. 'Approach C' (the no-teleport rebase inversion) was found UNNECESSARY: the teleport is never visible and the freeze is shader-compile (identical cost teleport-or-rebase). Scope = the existing Tasks 4-7 emergence + arrival polish: AC7 stationary portal, AC8 close-tween, AC9 no-freeze (shader pre-compile in HYPER), AC10 swap-occlusion invariant guard. Tasks 0-3 (entry, Fix D) unchanged, pending Max UAT.",
   "supersedes": "warp-tunnel-frame-reanchor-2026-06-06 (continuous re-anchor / camera-pin mechanism, commit 4285602) — UAT_FAILED_REOPENED; pin to be reverted.",
   "acceptanceCriteria": [
     {
@@ -55,12 +55,52 @@
     },
     {
       "id": "AC6-holistic-felt-journey",
-      "statement": "Riding the warp, the whole thing reads as into-hole -> travel -> out-of-hole: head-on approach into Portal A, a cruise that feels long, emergence out Portal B into the new system — no looking-backward, no freeze-then-snap.",
+      "statement": "Riding the warp, the whole thing reads as into-hole -> travel -> out-of-hole: head-on approach into Portal A, a cruise that feels long, emergence out Portal B into the new system; the tunnel and portal ring sit STILL behind me and close over a few seconds as I fly away — if I turn and look back during exit I see them closing, not already gone — and nothing freezes, looks-backward, or snaps.",
       "verifyVia": {
-        "input": "Max rides several warps in the running game — including repeats in one session and jumps to distant targets — watching each phase.",
-        "observable": "Holistic acceptance — the warp feels like flying into and out of a hole in space, the cruise reads as long, nothing looks backward or snaps. Deferred to Max."
+        "input": "Max rides several warps in the running game — including repeats in one session and jumps to distant targets — watching each phase, and freelooking behind on exit at least once.",
+        "observable": "Holistic acceptance — the warp feels like flying into and out of a hole in space, the cruise reads as long, the portal sits still behind me and closes as I coast into the new system, nothing looks backward / freezes / snaps. Deferred to Max."
       },
       "layer": "uat"
+    },
+    {
+      "id": "AC7-portal-stationary-on-arrival",
+      "statement": "On arrival the tunnel and portal ring stay STILL at the exit point in world space — they do NOT follow / re-pin behind the moving camera. As the camera coasts into the new system the portal falls behind it (Symptom A fixed: the per-frame follow-reposition is removed).",
+      "verifyVia": {
+        "input": "Drive a live warp (chrome-devtools GPU 9223); after the INSIDE->OUTSIDE_B emergence crossing, sample the warpPortal group's world-true position (group.position + worldOrigin) and the camera each frame for ~3s as the camera coasts away.",
+        "observable": "The portal group's world-true position stays constant (within rebase tolerance) across the coast — NOT held at a fixed camera-relative offset; camera->portal distance increases monotonically; camera-forward . (portal - camera) goes negative (the portal ends up behind the camera). The per-frame follow-reposition code path no longer runs."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-portal-close-tween",
+      "statement": "Starting at the emergence crossing, the tunnel + portal ring close — shrink and fade — over ~3s, then disappear; the tunnel stays VISIBLE the whole time it is closing, so a look-back during exit shows it closing rather than already gone.",
+      "verifyVia": {
+        "input": "Live warp; from the INSIDE->OUTSIDE_B crossing, sample portal radius (WarpPortal._radius), rim intensity, tunnel material opacity, and _tunnel.visible each frame until the portal closes. (Tween driver math also unit-tested headless via the makeFakePortal .call() pattern.)",
+        "observable": "radius, rim intensity, and tunnel opacity decrease monotonically to ~0 over ~3s; _tunnel.visible remains true throughout the close and only becomes false when the tween completes (close()) — NOT force-hidden at the instant of the mode flip."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-no-arrival-freeze",
+      "statement": "The arrival does not freeze: the first-render cost of the new system (shader/material compilation + GPU upload) is pre-paid during HYPER, so no long frame lands at or after the system swap. (Baseline 2026-06-07: a 324ms frame on the first render of the spawned system — this AC eliminates it.)",
+      "verifyVia": {
+        "input": "Live warp with a per-frame dt sampler across the swap + emergence window (the onSwapSystem frame through the first ~30 frames after); compare to the median in-warp frame time.",
+        "observable": "No frame in the swap->emergence window exceeds ~50ms (about 3 dropped frames at 60fps); specifically the first-render-after-spawn frame is under the threshold. Destination-system shader programs are compiled before the reveal (e.g. renderer.compileAsync during HYPER), not on the first visible frame."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC10-swap-occlusion-invariant",
+      "statement": "Regression guard (protects future camera/movement changes): the system swap + camera teleport ONLY ever happens while the camera is INSIDE the tunnel with the tunnel occluding the forward view, so the ~3000u teleport is never visible. If a future change exposes it, this fails loudly.",
+      "verifyVia": {
+        "input": "Live warp; at the onSwapSystem callback frame, capture traversalMode, _tunnel.visible, and the camera's position relative to the tunnel interior bounds. (Also assertable headless as a timing invariant if the swap trigger logic is pure.)",
+        "observable": "At the swap frame: traversalMode === 'INSIDE' AND _tunnel.visible === true AND the camera is within the tunnel interior (walls between camera and the destination scene). The swap never fires during OUTSIDE_A / OUTSIDE_B or with the tunnel hidden."
+      },
+      "layer": "integration",
+      "live": true
     }
   ],
   "architecturalConnections": {
@@ -70,7 +110,10 @@
       "portal-traversal-lab.html (untracked, in tree) — the human-scale fly-through reference to port: Portal A z~=0, Portal B z~=-60, camera ~20u/s, same 3-state machine, systemA/B objects visible only in their OUTSIDE mode, tunnel stencil off only INSIDE",
       "destination-ready signal: pendingSystemDataPromise (heavy procedural gen already async during FOLD via onPrepareSystem, usually done before HYPER) + a post-spawnSystem completion flag",
       "warpSwapSystem -> spawnSystem({forWarp:true}) (main.js:5196): remaining sync cost is GPU resource creation + sky rebuild, buried mid-cruise",
-      "WorldOrigin.js: worldOrigin vector, maybeRebase, resetWorldOrigin — Risk R1: how the warp-local pocket rig reconciles with the post-teleport camera + rebased/zeroed world origin so the holes frame the correct system on each side"
+      "WorldOrigin.js: worldOrigin vector, maybeRebase, resetWorldOrigin — Risk R1: how the warp-local pocket rig reconciles with the post-teleport camera + rebased/zeroed world origin so the holes frame the correct system on each side",
+      "[2026-06-07 arrival amendment] Per-frame portal-follow reposition (src/main.js ~6803-6815, the OUTSIDE_B re-pin 60u behind the moving camera) — REMOVED (AC7 / Symptom A)",
+      "[2026-06-07] WarpPortal close API: setRadius (:614), setRimIntensity (:632), close (:610), _tunnel material opacity — driven by the new ~3s close-tween (AC8); the uncommitted WarpPortal.js:718 tunnel-hide stopgap to be REVERTED, the :881 resetTraversal re-show kept",
+      "[2026-06-07] three.js renderer.compileAsync / pre-warm of destination-system materials during HYPER to pre-pay first-render shader compile (AC9 — kills the measured 324ms hitch); WarpEffect.onSwapSystem as the occlusion-invariant probe point (AC10)"
     ],
     "outputs": [
       "A warp-local pocket rig (~60u) decoupled from system/world coords that the camera physically flies through (R1 placement + reconciliation resolved in the impl plan, likely a dedicated warp-local rig)",
@@ -79,11 +122,15 @@
       "Reverted 4285602 choreography-killers in main.js (~6634-6659, ~7452): the per-frame group pin, the forced setTraversalMode('INSIDE') during HYPER, and the updateTraversal skip — traversal runs again",
       "FOLD-start portal reset: warpPortal is reset/hidden at warp START so a fresh Portal A opens on every warp incl. repeats (fixes the leftover-visible Portal B blocking the if(!group.visible) guard at main.js:6620)",
       "tests/warp-tunnel-rebase.test.js rewritten: the pin-invariant/characterization tests (which encoded the now-reverted pin) replaced by the OUTSIDE_A->INSIDE->OUTSIDE_B mode-sequence tests (AC2/AC4) + the ready-gate test (AC5)",
-      "runRepeatWarpSuite (src/debug/integration-suite.js) + its __wd wiring (src/debug/SceneInspector.js) KEPT as the AC1 reliability harness"
+      "runRepeatWarpSuite (src/debug/integration-suite.js) + its __wd wiring (src/debug/SceneInspector.js) KEPT as the AC1 reliability harness",
+      "[2026-06-07] Removed per-frame portal-follow; portal frozen at the exit anchor in world space on OUTSIDE_B (AC7)",
+      "[2026-06-07] Close-tween driver (in WarpPortal or a small driver): ~3s radius shrink + rim/opacity fade -> close(), starting at the real INSIDE->OUTSIDE_B crossing, tunnel visible throughout (AC8)",
+      "[2026-06-07] Destination-system shader pre-compile wired into HYPER (AC9); a new exit-side verification harness (swap-frame dt sampler + occlusion probe + portal-anchor/coast sampler) — exit/close/emergence is new ground vs the entry-only runWarpEntrySuite (AC7/AC9/AC10)"
     ],
     "mustStayWorking": [
       "The clean single warp from Sol renders the tunnel during HYPER (the path that already worked — RW1 baseline)",
-      "Post-arrival fly-back portal follow: the OUTSIDE_B per-frame portal reposition (main.js:6782) and the leftover-visible portal from onComplete (main.js:3039)",
+      "[SUPERSEDED 2026-06-07 by AC7] The OUTSIDE_B per-frame portal reposition (main.js ~6803, formerly cited main.js:6782) is REMOVED, not preserved — it was Symptom A (the portal drags 60u behind the moving camera). Replaced by a stationary world-space anchor frozen at the exit point + the AC8 close-tween; the leftover-visible portal from onComplete (main.js:3039) folds into the close-tween lifecycle.",
+      "[2026-06-07] The OCCLUDED teleport: the system swap must stay INSIDE-occluded (now enforced by AC10) — keeping the teleport is deliberate. Do NOT expose it. Migration to a no-teleport rebase-spawn model (Full C) is deferred and only warranted if continuous no-cutscene interstellar flight is ever scoped; the shipped WorldOrigin rebase primitive makes that a clean future migration, not a rewrite.",
       "warp-landing-strip-persists behavior (separate, UAT-pending feature) — unchanged",
       "World-origin rebasing for celestial bodies (the per-frame truePos - worldOrigin rewrite, main.js:6075-6098) — visually identical",
       "cc917c2 reset-on-swap semantics (resetWorldOrigin wired into spawnSystem) — this builds on it and must not regress system-swap body positioning",

@@ -40,3 +40,35 @@ out Portal B's hole. Full design: `docs/superpowers/specs/2026-06-06-warp-tunnel
 - A slow background load extends the cruise rather than emerging into a
   half-loaded system.
 - The whole thing reads as into-hole → travel → out-of-hole. (Max's gate alone.)
+
+## Arrival polish (2026-06-07 amendment — verbatim)
+
+> "I want the tunnel and portal ring to be **stationary in the new system** once you
+> enter it (with the plan that it would **'close' and disappear after a few seconds**,
+> only visible at all if the player turns and **freelooks behind them** as they exit
+> into the new system)."
+
+Decomposed into observable success criteria (Max's language):
+
+- When I arrive, I've **flown out through the portal** — the tunnel and portal ring are
+  *behind* me, sitting still where I came out. They don't follow me or drag around the system.
+- If I turn / freelook behind me during the exit, I **see** the tunnel and portal ring there.
+- They **close** — shrink and fade — over a few seconds, then disappear (the tunnel stays
+  visible *while* it's closing, not yanked away the instant I arrive).
+- The arrival **doesn't freeze** and **doesn't teleport-snap** — one continuous flight from
+  the tunnel into the new system.
+
+### What the live diagnosis settled (so we don't over-build)
+
+Driving a real warp Sol→Shudpis (GPU 9223, 2026-06-07) measured the three felt faults and
+their causes — and ruled out the heavier "Approach C" (no-teleport rebase inversion):
+
+- **"Freeze"** = a single **324ms frame on first-render of the spawned system** (GPU
+  shader/material compile), not a coordinate jump. Fix: pre-compile during HYPER (AC9). This
+  cost is identical whether the camera teleports or rebases, so the inversion buys nothing here.
+- **"Teleport"** = a ~3150u camera jump that is **fully occluded** (camera INSIDE the tunnel,
+  walls up, the entire swap). Never visible → no inversion needed; guarded by AC10 so a future
+  camera/movement change can't silently expose it.
+- **"Disappear"** = the tunnel **force-hidden** + a **forced** `INSIDE→OUTSIDE_B` flip at
+  onComplete (no real crossing) + the **per-frame portal-follow** dragging the ring. Fixed by
+  the real emergence crossing (AC4 / Task 4) + stationary anchor (AC7) + close-tween (AC8).
