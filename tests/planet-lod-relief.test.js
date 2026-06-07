@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave, ejectaProfile, edificeProfile, doubleRidgeProfile } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave, ejectaProfile, edificeProfile, doubleRidgeProfile, bladeProfile } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -1066,5 +1066,70 @@ describe('F10 ridged-icy surfacings (deriveUniforms)', () => {
     expect(u.groovedBandFreq).toBeGreaterThan(u.doubleRidgeFreq);   // fine ridges within bands
     expect(u.cryoRidgeOffset).toBeGreaterThan(0);
     expect(u.cryoRidgeWidth).toBeGreaterThan(0);
+  });
+});
+
+// ── F18 sublimation — bladeProfile oracle (cryo-doc §2 F18, CH₄ penitentes) ───────
+// CH₄ penitente / bladed terrain (Pluto Tartarus Dorsa) renders as STRONGLY anisotropic
+// SHARP ridges — tall thin parallel blades. The blade cross-section is the F6 ridgeWave
+// (1−|sin|) SHARPENED by a power: value = pow(ridgeWave(phase), sharpness). Raising the
+// rounded ridge to a power>1 narrows the crest into a thin spike (the penitente). Reuses
+// the already-§5.4-pinned ridgeWave; the pow is chain-ruled through it:
+//   dvdphase = sharpness · pow(rw, sharpness−1) · rw_dvdphase
+// The −sign(sin) correction inside ridgeWave is INHERITED — the same silent-bug class
+// (relief doc §5.4 risk #4): drop it and the blade flanks light backward yet it compiles.
+// The GLSL bladeProfile() is transcribed from this; pinned vs finite-diff in tests.
+describe('bladeProfile — penitente blade shape invariants (cryo-doc §2 F18)', () => {
+  it('crests (value=1) at phase = nπ — the blade tips (ridgeWave crest, pow(1,s)=1)', () => {
+    expect(bladeProfile(0.0, 3).value).toBeCloseTo(1.0, 6);
+    expect(bladeProfile(Math.PI, 3).value).toBeCloseTo(1.0, 6);
+  });
+  it('grooves (value=0) at phase = π/2 + nπ — between blades (pow(0,s)=0)', () => {
+    expect(bladeProfile(Math.PI / 2, 3).value).toBeCloseTo(0.0, 6);
+    expect(bladeProfile(3 * Math.PI / 2, 3).value).toBeCloseTo(0.0, 6);
+  });
+  it('sharpness=1 reduces to the bare ridgeWave (pow(x,1)=x)', () => {
+    for (const p of [0.3, 0.9, 2.4, 4.1]) {
+      expect(bladeProfile(p, 1).value).toBeCloseTo(ridgeWave(p).value, 8);
+    }
+  });
+  it('higher sharpness NARROWS the blade (smaller value on the flank, crest unchanged)', () => {
+    const flankLo = bladeProfile(0.5, 1).value;   // rounded ridge
+    const flankHi = bladeProfile(0.5, 4).value;   // sharpened spike
+    expect(flankHi).toBeLessThan(flankLo);        // power>1 on a base<1 → smaller
+    expect(bladeProfile(0.0, 4).value).toBeCloseTo(1.0, 6);  // crest stays full height
+  });
+  it('stays in [0,1] across a full period (sharpness 3)', () => {
+    for (let p = 0; p < 2 * Math.PI; p += 0.05) {
+      const v = bladeProfile(p, 3).value;
+      expect(v).toBeGreaterThanOrEqual(-1e-9);
+      expect(v).toBeLessThanOrEqual(1.0 + 1e-9);
+    }
+  });
+});
+
+describe('bladeProfile — analytic derivative vs finite-diff (cryo-doc §2 F18 / relief §5.4 gate)', () => {
+  const EPS = 1e-6;
+  // Moderate-|sin| points strictly inside smooth half-periods — avoid phase=nπ (the |sin|
+  // crest kink) and steer clear of the π/2 grooves so the pow derivative is well-conditioned.
+  // Both sin>0 and sin<0 branches exercised → the inherited −sign(sin) correction is pinned.
+  const PTS = [0.3, 0.6, 0.9, 2.3, 2.5, 3.5, 3.8, 5.5];
+  for (const sharp of [1, 3]) {
+    it(`dvdphase matches central finite-difference of value (sharpness ${sharp})`, () => {
+      for (const p of PTS) {
+        const { dvdphase } = bladeProfile(p, sharp);
+        const fd = (bladeProfile(p + EPS, sharp).value - bladeProfile(p - EPS, sharp).value) / (2 * EPS);
+        expect(dvdphase).toBeCloseTo(fd, 4);
+      }
+    });
+  }
+  it('would FAIL if the inherited sign correction were dropped (detectable where sin>0)', () => {
+    const p = 0.6;                                    // sin(0.6) > 0
+    expect(Math.sin(p)).toBeGreaterThan(0);
+    const { dvdphase } = bladeProfile(p, 3);
+    // correct: 3·pow(rw,2)·(−cos p);  naive (no −sign): 3·pow(rw,2)·(+cos p) — opposite sign
+    const rw = ridgeWave(p).value;
+    expect(dvdphase).toBeCloseTo(3 * rw * rw * -Math.cos(p), 6);
+    expect(dvdphase).not.toBeCloseTo(3 * rw * rw * Math.cos(p), 4);
   });
 });

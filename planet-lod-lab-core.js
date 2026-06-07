@@ -357,6 +357,28 @@ export function ridgeWave(phase) {
   return { value, dvdphase };
 }
 
+// ── bladeProfile — F18 CH₄ penitente / bladed-terrain primitive (cryo-doc §2 F18) ─
+// Pluto's Tartarus Dorsa is tall, thin, sharp, parallel methane-ice blades (penitentes:
+// 3–5 km spacing, ~500 m deep — a large amplitude-to-spacing ratio, i.e. deep+sharp).
+// The blade cross-section is the F6 ridgeWave (1−|sin|) SHARPENED by a power: raising the
+// rounded ridge to sharpness>1 narrows the crest into a thin spike (the penitente), while
+// the crest height (1) and groove floor (0) are preserved. Reuses the already-§5.4-pinned
+// ridgeWave; the pow is chain-ruled through it:
+//   value    = pow(rw.value, sharpness)
+//   dvdphase = sharpness · pow(rw.value, sharpness−1) · rw.dvdphase
+// The −sign(sin) correction lives INSIDE ridgeWave and is INHERITED — the same silent-bug
+// class as ridgedFold / doubleRidgeProfile (relief doc §5.4 risk #4): drop it and the blade
+// flanks light backward yet it compiles. Pinned vs central finite-diff in tests (both sin
+// branches). The GLSL bladeProfile() is transcribed from this. The kink lives at phase=nπ
+// (the crest, sin=0); the finite-diff sweep stays strictly inside a smooth half-period.
+export function bladeProfile(phase, sharpness = 3.0) {
+  const rw = ridgeWave(phase);
+  const value = Math.pow(rw.value, sharpness);
+  // d(rw^s)/dphase = s·rw^(s−1)·d(rw)/dphase; at rw=0 (groove) pow(0,s−1)=0 for s>1 → 0 (smooth floor).
+  const dvdphase = sharpness * Math.pow(rw.value, sharpness - 1.0) * rw.dvdphase;
+  return { value, dvdphase };
+}
+
 // ── pldBands — F22 polar-layered-deposit strata (cryo-doc §2 F22 / §F17 PLD) ──
 // The perennial polar cap reads as STACKED bright/dark annular bands — preserved depositional
 // layers exposed in the cap. This is an ALBEDO/luminance banding (NOT relief: no height/grad, so no
@@ -797,6 +819,22 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const pldStrength = clamp01(frostMaxCoverage * (1.0 - resurfacing)) * 0.35;
   const pldLevels = 6;                             // number of annular strata bands (constant, lab-tunable)
 
+  // ── Cryo step 4: F18 sublimation-landscape relief gate (cryo-doc §2 F18) ──
+  // F18 is RELIEF (height/grad, finite-diff-pinned bladeProfile + radial grabenProfile pits) that
+  // exists ONLY where a volatile is SOLID and being etched. The MORPHOLOGY is switched in-shader on
+  // volatileSpecies (CO₂→swiss-cheese pits, N₂→convection polygons, CH₄→penitente blades, H₂O→mild
+  // hollows — the one allowed semantic-uniform switch, NOT a planetType branch). subStrength is the
+  // single per-planet AMOUNT gate the shader's sublimationCombiner reads (≤0 ⇒ early-out): the frost
+  // BUDGET (frostMaxCoverage, D2) × a species-active factor. CO₂/CH₄/N₂ (2/3/4) etch full landforms;
+  // H₂O (1) makes only MILD terrestrial sublimation hollows (×0.4); a warm world (0) makes none. The
+  // combiner spatially confines the relief to the cold cap in-shader (coldFactor, same as the frost
+  // mask) and scales to relief units via the uSubAmp lab knob — so subStrength stays a clean [0,1] gate.
+  const subActiveFactor =
+    volatileSpecies === 0 ? 0.0 :   // warm / bone-dry → no sublimation regime
+    volatileSpecies === 1 ? 0.4 :   // H₂O → mild hollows only
+    1.0;                            // CO₂ / CH₄ / N₂ → full sublimation landforms
+  const subStrength = clamp01(frostMaxCoverage) * subActiveFactor;
+
   // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief — relief doc §F9.b) ──
   // The COVERAGE of chaos is gated by the SHARED uCryoActivity (Cryo-owned — D2/D12→P7;
   // NOW DERIVED above as cryoActivity; the lab knob remains a manual override). Relief owns only the
@@ -853,6 +891,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     tempEq: T,                                                 // Cryo step 2 — T_eq passthrough for the shader localT field (uPlanetTempEq)
     pldStrength,                                               // Cryo step 3 — F22 PLD strata dark-band dip (cap budget × surface-age preservation); ≤0 ⇒ no banding
     pldLevels,                                                 // Cryo step 3 — F22 PLD annular band count (constant, lab-tunable)
+    subStrength,                                                // Cryo step 4 — F18 sublimation-relief gate (frost budget × species-active); ≤0 ⇒ combiner early-out
     chaosCellScale,                                            // F9 — raft size (voronoi3d frequency)
     chaosRaftJitter,                                           // F9 — raft height/tilt displacement (∝ 1/g — low-g moons displace more)
     chaosMatrixRough,                                          // F9 — refrozen inter-raft matrix roughness

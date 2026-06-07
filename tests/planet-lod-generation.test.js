@@ -449,3 +449,43 @@ describe('pldStrength surfacing (Cryo step 3 — F22 PLD gate: D1 cold + D2 budg
     expect(s).toBeLessThanOrEqual(1);
   });
 });
+
+describe('subStrength surfacing (Cryo step 4 — F18 sublimation-relief gate: frost budget × species)', () => {
+  // F18 sublimation landscapes are RELIEF that only exists where a volatile is solid and
+  // being etched. subStrength is the per-planet gate the shader's sublimationCombiner reads
+  // (≤0 ⇒ early-out): the frost BUDGET (frostMaxCoverage, D2) × a species-active factor —
+  // CO₂/CH₄/N₂ etch full landforms (swiss-cheese / blades / polygons), H₂O makes only MILD
+  // hollows, a warm world (species 0) makes none. The morphology itself is switched in-shader
+  // on volatileSpecies; subStrength is just "how much sublimation relief, if any."
+  const cold = (T, vf = 0.3) => ({ T_eq: T, composition: { volatileFraction: vf } });
+
+  it('warm world (species 0, no frost regime) → subStrength 0 (early-out)', () => {
+    expect(deriveUniforms(cold(300)).subStrength).toBe(0);
+  });
+  it('CO₂ world (species 2) with a frost budget → positive subStrength', () => {
+    expect(deriveUniforms(cold(140)).subStrength).toBeGreaterThan(0);
+  });
+  it('N₂ world (species 4) with a frost budget → positive subStrength', () => {
+    expect(deriveUniforms(cold(35)).subStrength).toBeGreaterThan(0);
+  });
+  it('H₂O world (species 1) makes only MILD hollows → weaker than CO₂ at the same budget', () => {
+    const water = deriveUniforms(cold(210)).subStrength;   // species 1, vf 0.3
+    const dryIce = deriveUniforms(cold(140)).subStrength;  // species 2, same vf 0.3
+    expect(water).toBeGreaterThan(0);
+    expect(water).toBeLessThan(dryIce);
+  });
+  it('bone-dry world (no budget) → subStrength 0 even when cold', () => {
+    expect(deriveUniforms(cold(35, 0.01)).subStrength).toBe(0);
+  });
+  it('scales with the frost budget (more volatile → more sublimation relief)', () => {
+    const lo = deriveUniforms(cold(140, 0.1)).subStrength;
+    const hi = deriveUniforms(cold(140, 0.4)).subStrength;
+    expect(hi).toBeGreaterThan(lo);
+  });
+  it('stays finite and in [0,1] (empty bundle → default warm world, no NaN/throw)', () => {
+    const s = deriveUniforms({}).subStrength;
+    expect(Number.isFinite(s)).toBe(true);
+    expect(s).toBeGreaterThanOrEqual(0);
+    expect(s).toBeLessThanOrEqual(1);
+  });
+});

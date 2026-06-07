@@ -617,7 +617,8 @@ sublimation landforms · F17 glacial relief) layers on the frost mask keystone; 
 | 1 | **`uCryoActivity` derivation (P7 cryovolcanism)** — OWNS the shared seam | ✅ **DONE** — see below |
 | 2 | **Frost-coverage mask (F23 / P22)** — the keystone every other cryo feature layers on | ✅ **DONE** — see below |
 | 3 | **F22 polar caps — PLD strata banding** (the frost mask + a layered-deposit overlay) | ✅ **DONE** — see below |
-| 4+ | F18 sublimation (species-switched relief) · F17 glacial relief | ⏳ next |
+| 4 | **F18 sublimation landscapes** (species-switched RELIEF: pits / polygons / blades / hollows) | ✅ **DONE** — see below |
+| 5+ | F17 glacial relief (U-valleys · fjords · moraines · eskers) | ⏳ next |
 
 ### Cryo step 1 — `uCryoActivity` derivation (DONE 2026-06-07)
 The icy-resurfacing activity gate F9/F10 read, now DERIVED (was an option-A lab-knob stub).
@@ -725,6 +726,66 @@ verified VISUALLY — exactly like the step-2 frost mask).
   (1) the natural-derived strength (0.06–0.27) is a **modest, physically-gated default** — Frozen's banding is
   faint under craters; whether the cap deserves a crisper, higher-contrast PLD is a tuning call (lab knob exposed).
   (2) bands ride `sin²(lat)` so rings space unevenly (wider near the pole) — a natural irregular look, not tuned.
+
+### Cryo step 4 — F18 sublimation landscapes (DONE 2026-06-07)
+The first Cryo **RELIEF** feature (steps 1–3 were activity-gate + albedo): WHICH solid volatile is being
+etched sets BOTH the landform AND the albedo. Per cryo-doc §2 F18 the morphology is a **uniform-selected
+combiner branch on `volatileSpecies`** (the one allowed semantic-uniform switch — UNIFORM control flow, not
+a `planetType` branch): CO₂→swiss-cheese pits, N₂→convection polygons, CH₄→penitente blades, H₂O→mild
+hollows. **Max-decision resolved this session (2026-06-07):** species coupling = **ONE global int now,
+province-aware combiner for free later** (per integration-index §8 — the reserved `uProvinceWeight` hook);
+**araneiform spiders DROPPED for v1** (cryo-doc §5 risk #4 / §6.2 — bake-or-drop, revisit if S-pole bodies
+feel empty). Built the F1–F10 way: **NO forked primitives** (cryo-doc §5 risk #2) — pits reuse the
+§5.4-pinned `grabenProfile` **radially** (d = normalized pit radius, halfWidth=1 → flat −1 floor → 0 rim),
+blades reuse `ridgeWave` via the one new oracle, polygons reuse `voronoi3d` borders (chaos cosmetic-grad
+convention). Pole-safe by the shared 3D `voronoi3d` keystone (cryo-doc §5 risk #2 mitigation).
+- **CPU oracle (new)** `bladeProfile(phase, sharpness)` (`planet-lod-lab-core.js`) → `{value, dvdphase}`:
+  the CH₄ penitente — `ridgeWave` (1−|sin|) **SHARPENED** by a power so the rounded ridge narrows into a thin
+  tall blade. The pow chain-rules through the already-§5.4-pinned `ridgeWave`; the **−sign(sin) correction is
+  INHERITED** (same silent-bug class as `ridgedFold`/`doubleRidgeProfile`). `value=pow(rw,s)`,
+  `dvdphase=s·pow(rw,s−1)·rw'`; at the groove (rw=0) `pow(0,s−1)=0` for s>1 → smooth floor.
+- **CPU surfacing (new)** `subStrength = clamp01(frostMaxCoverage) × subActiveFactor` — the per-planet AMOUNT
+  gate (≤0 ⇒ shader early-out): frost **budget** (D2) × species factor (**CO₂/CH₄/N₂ = 1.0** full landforms,
+  **H₂O = 0.4** mild hollows, **none = 0**). Morphology itself is the already-derived `volatileSpecies`
+  (re-used, not re-derived). All shape params (`subPitScale`/`subPolyScale`/`subFloorFrac`/`subPitDensity`/
+  `bladeFreq`/`bladeSharp`/`subColdGate`/`subAmp`) are GLSL uniforms with lab-knob defaults.
+- **GLSL** `bladeProfile()` (after `ridgeWave`) + `sublimationCombiner()` (after `cryoRidgeCombiner`, wired
+  into Stage-2 **before `lavaCombiner`** so lava still suppresses last). Branches on `uVolatileSpecies`:
+  CH₄ = warped sun-azimuth-aligned blade field carrying `bladeProfile` (EXACT grad); CO₂/N₂/H₂O = radial
+  `grabenProfile` pits on `voronoi3d` (host-gate + hashed radius, chain-ruled grad like `craterCombiner`),
+  CO₂ adds a **sun-facing-hemisphere depth asymmetry** (retreating scarps; held locally-constant), N₂ adds the
+  **polygon border-trough** (raised interiors, chaos cosmetic-grad). **Confined to the cold cap in-shader**
+  by mirroring `frostCoverage`'s `localT<condensationT` test (reuses the frost uniforms) so a *uniformly* cold
+  world (Pluto/Frozen) etches BROADLY while a warm-poled world etches only its cap — **live-found fix** (raw
+  latitude wrongly polar-restricted Frozen's equatorial bladed terrain; think-before-acting before screenshot).
+  **Province-aware per §8:** every contribution × `uProvinceWeight` (no-op 1.0 until Stage-D wires the spatial
+  field — F18 is the **first combiner to adopt the convention**; F1–F10 retrofit rides the Stage-D job).
+  11 uniforms + a `▸ Sublimation (F18)` lil-gui folder (species dropdown forces a morphology) + `✓ enable` +
+  🎲 offset. `uSubStrength≤0 || species 0 ⇒ early-out`.
+- **15 TDD tests** RED→GREEN (`bladeProfile`: crest/groove/sharpness-narrows/sharpness-1=ridgeWave/bounded +
+  finite-diff at sharpness {1,3} both flanks + sign-drop guard; `subStrength`: warm→0 / CO₂>0 / N₂>0 /
+  H₂O<CO₂ / bone-dry→0 / scales-with-budget / in-range). **250 lab tests green** (+15). Backtick parity even (30).
+- **Live-verified `:9223`** (GPU Chrome, screenshots `f18-01..06`): **CH₄ penitentes** (natural Frozen,
+  species 3) → anisotropic bladed relief, terminator self-shadowing ✓; **CO₂ swiss-cheese** (natural Titan,
+  species 2) → crisp dense circular flat-floored pits (golf-ball / Mars-S-pole) ✓; **N₂ convection polygons**
+  (forced 4, sub-45K localT) → cellular trough-border network + pit field (Sputnik-Planitia) ✓; **A/B enable
+  off** → all F18 relief vanishes, bare FBM base restored (early-out regression-safe) ✓; **natural Frozen
+  composed** (all relief + frost cap + PLD + F18 at default amp 0.10) → penitente texture rides under the
+  saturated craters without blowout, craters stay readable ✓; console clean (favicon-404). **Generation gates
+  confirmed live:** Rocky/Lava/Ocean → species 0 / subStrength 0 (no F18); Titan→CO₂ 1.0, Frozen→CH₄ 0.80,
+  Europa→CO₂ 1.0 (locked eyeball). **H₂O hollows** share the verified CO₂ pit code path at 0.4× strength
+  (not separately screenshotted — same `grabenProfile` radial pit minus the asymmetry).
+- **No registry change** — all F18 uniforms are Cryo-internal (placement reuses `voronoi3d`; `uProvinceWeight`
+  is the reserved Stage-D hook, already in the registry).
+- **Carry-forward (not blocking):** (1) **classifier is T_eq-only** (cryo-doc carry-forward #1) → Titan
+  classifies CO₂ (real Titan is methane dunes) and Europa CO₂ (real H₂O); a composition-aware refinement is a
+  queued Cryo TODO — directly affects which F18 morphology a body shows. (2) **N₂ center→edge pit-size grading**
+  (pits enlarge toward cell edges, Sputnik Planitia) DEFERRED — the cheap tier ships uniform pits + polygon
+  borders. (3) **CO₂ within-pit asymmetric scarp** (one wall steeper) DEFERRED — currently a per-hemisphere
+  depth bias. (4) **araneiform spiders** DROPPED for v1 (decal-bake later). (5) **blade-shimmer watch** (§5
+  risk #3): single warped sin-train, kept modest (default freq 18); push `bladeFreq` high → add an fwidth
+  amplitude fade (mirrors the scarp/tessera note). (6) default `subAmp` 0.10 reads subtle under heavy
+  cratering — a lab-knob tuning call if penitentes should be more prominent.
 
 ---
 

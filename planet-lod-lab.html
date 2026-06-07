@@ -290,6 +290,19 @@
       uniform float uPldLevels;         // number of annular strata bands (driven constant; lab-tunable)
       uniform float uPldSoftness;       // riser softness between layers (sharp↔soft band edge) — lab knob
 
+      // ── Cryo step 4: F18 sublimation landscapes — RELIEF, morphology SWITCHED on volatileSpecies ──
+      uniform float uSubStrength;       // 0..1 sublimation-relief gate (driven; ≤0 ⇒ early-out)
+      uniform int   uVolatileSpecies;   // 0=none 1=H₂O 2=CO₂ 3=CH₄ 4=N₂ — the morphology switch (driven)
+      uniform float uSubAmp;            // sublimation relief amplitude (relief units) — lab knob
+      uniform float uSubPitScale;       // swiss-cheese / hollow pit voronoi3d frequency — lab knob
+      uniform float uSubPolyScale;      // N₂ convection-polygon cell frequency — lab knob
+      uniform float uSubFloorFrac;      // flat-floor fraction of the pit radius (radial graben) — lab knob
+      uniform float uSubPitDensity;     // fraction of cells hosting a pit — lab knob
+      uniform float uBladeFreq;         // CH₄ penitente blade frequency (anisotropic, sun-aligned) — lab knob
+      uniform float uBladeSharp;        // CH₄ penitente blade sharpness (pow exponent) — lab knob
+      uniform float uSubColdGate;       // cold-cap confinement edge softness (× T_eq = K band on localT<condensationT) — lab knob
+      uniform vec3  uSubOffset;         // 🎲 domain offset — default (0,0,0) = unchanged
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -863,6 +876,18 @@
         return vec2(value, dvdphase);
       }
 
+      // F18 bladeProfile — CH₄ penitente / bladed terrain: the ridgeWave (1−|sin|) SHARPENED by a power
+      // so the rounded ridge narrows into a thin tall blade. Transcribed from the CPU bladeProfile()
+      // (finite-diff-pinned §5.4). The pow chain-rules through the already-pinned ridgeWave; the
+      // −sign(sin) correction lives inside ridgeWave and is INHERITED. value=pow(rw,sharp); at the
+      // groove (rw=0) pow(0,sharp−1)=0 for sharp>1 → a smooth floor. rw.x∈[0,1] so pow is well-defined.
+      vec2 bladeProfile(float phase, float sharpness){
+        vec2 rw = ridgeWave(phase);
+        float value = pow(rw.x, sharpness);
+        float dvdphase = sharpness * pow(rw.x, sharpness - 1.0) * rw.y;
+        return vec2(value, dvdphase);
+      }
+
       // F6 tessera combiner — Venus-style crosscutting ridge-and-groove lattice. TWO
       // warped-iso-contour ridge fields (reusing the F5 scarp warp: dot(pos,axis) made
       // sinuous by a noised() warp, EXACT field gradient axis + warp*warpFreq*noiseGrad)
@@ -1074,6 +1099,86 @@
         grad += bandAmp * rw.y * uGroovedBandFreq * bdfield;
       }
 
+      // ── F18 sublimation landscapes (Cryo step 4, cryo-doc §2 F18) — RELIEF, species-SWITCHED ──
+      // The MORPHOLOGY is switched on uVolatileSpecies (the ONE allowed semantic-uniform branch —
+      // UNIFORM control flow, not a planetType branch): CO₂→swiss-cheese pits, N₂→convection polygons,
+      // CH₄→penitente blades, H₂O→mild hollows. Pits/polygons route the SHARED voronoi3d keystone;
+      // blades use the §5.4-pinned bladeProfile — NO forked primitives (cryo-doc §5 risk #2). Relief is
+      // CONFINED to the cold cap in-shader (coldFactor, the same gate frostCoverage uses) so a warm
+      // world's equator stays bare. Province-aware per integration-index §8: the contribution is scaled
+      // by uProvinceWeight (the no-op 1.0 multiplier until Stage-D wires the spatial field — the
+      // FEATURE_ID-keyed provinceWeight() accessor rides with the Stage-D scoped job). uSubStrength≤0 OR
+      // species 0 ⇒ early-out (Stage-A base + all prior relief untouched — regression-safe).
+      void sublimationCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uSubStrength <= 0.0 || uVolatileSpecies == 0) return;
+        // cold-cap confinement: coldFactor 0 at the hot point (equator / substellar) → 1 at the cold
+        // point (pole / antistellar eyeball). Same field as frostCoverage so F18 sits inside the frost.
+        float coldFactor;
+        if (uFrostLocked == 1){
+          coldFactor = clamp(vSubstellarAngle / 3.14159265, 0.0, 1.0);
+        } else {
+          float sinLat = normalize(pos).y;
+          coldFactor = mix(sinLat * sinLat, 1.0, uFrostLatitudeBias * 0.6);
+        }
+        // confine to where the volatile is actually SOLID — mirror frostCoverage's localT<condensationT
+        // test (reusing the frost uniforms) so a UNIFORMLY cold world (Pluto/Frozen) etches broadly
+        // while a warm-poled world etches only its cold cap. Cosmetic-gradient mask (slowly varying,
+        // not chain-ruled). h is the accumulated relief this frame → free altitude lapse (frost climbs).
+        float localT  = uPlanetTempEq * (1.0 - uFrostLatChill * coldFactor) - h * uFrostLapseRate * uPlanetTempEq;
+        float coldnes = uFrostCondensationT - localT;                 // >0 ⇒ volatile is solid here
+        float band    = uSubColdGate * uPlanetTempEq;                 // confinement edge softness (K)
+        float capMask = smoothstep(-band, band, coldnes);
+        if (capMask <= 0.0) return;
+        float amp = uSubAmp * uSubStrength * capMask * uProvinceWeight;   // §8 province convention (no-op 1.0 for now)
+
+        if (uVolatileSpecies == 3){
+          // CH₄ penitentes — strongly anisotropic SHARP blades, aligned to the sun azimuth (penitentes
+          // lean toward noon). Blade axis = sun direction projected into the local tangent plane.
+          vec3 n = normalize(pos);
+          vec3 sunT = uLightDir - n * dot(uLightDir, n);
+          float sl = length(sunT);
+          vec3 bladeAxis = sl > 1e-4 ? sunT / sl : normalize(cross(n, vec3(0.0, 1.0, 0.0)) + vec3(1e-4));
+          vec4 wn = noised(pos * 1.7 + uSubOffset);
+          float field  = dot(pos, bladeAxis) + 0.15 * wn.x;            // mild warp (blades not perfectly straight)
+          vec3  dfield = bladeAxis + 0.15 * 1.7 * wn.yzw;
+          float phase = field * uBladeFreq;
+          vec2 bp = bladeProfile(phase, uBladeSharp);
+          h    += amp * (bp.x - 0.5);                                  // −0.5 DC (normal-only), blades stand up
+          grad += amp * bp.y * uBladeFreq * dfield;                    // dh/dphase · dphase/dpos (EXACT field grad)
+          return;
+        }
+
+        // CO₂ swiss-cheese (2), N₂ pits (4), H₂O hollows (1) — CARVE flat-floored radial pits via the
+        // §5.4-pinned grabenProfile (radial: d = normalized pit radius, halfWidth=1 → −1 floor → 0 rim).
+        float pitScale = (uVolatileSpecies == 4) ? uSubPolyScale * 1.7 : uSubPitScale;  // N₂ pits = a finer octave over the polygons
+        vec3 pCell, pGrad;
+        vec2 pf = voronoi3d(pos * pitScale + uSubOffset, uVoroCells, pCell, pGrad);
+        vec3 phh = hash33(pCell);
+        float host = step(1.0 - uSubPitDensity, phh.x);                // fraction of cells hosting a pit
+        float pitR = mix(0.35, 0.75, phh.y);                          // hashed pit radius (cell units)
+        float r = pf.x / pitR;
+        vec2 gp = grabenProfile(r, 1.0, uSubFloorFrac);               // depth ∈ [−1,0], gp.y = wall slope
+        // CO₂ scarps actively RETREAT → deeper on the sun-facing hemisphere (slowly-varying factor held
+        // locally-constant, the ejecta-patch-mask convention — its tiny gradient is cosmetic).
+        float asym = (uVolatileSpecies == 2)
+          ? 1.0 + 0.4 * clamp(dot(normalize(pos), normalize(uLightDir)), -1.0, 1.0)
+          : 1.0;
+        float pitAmp = amp * host * asym;
+        h    += pitAmp * gp.x;                                        // gp.x ≤ 0 → carves down
+        grad += pitAmp * gp.y * (1.0 / pitR) * pGrad * pitScale;      // dh/dr · dr/dpos (chain-ruled, EXACT)
+
+        // N₂ convection polygons — RAISED cell interiors with trough borders (Sputnik Planitia). The
+        // border relief uses the chaos-convention cosmetic gradient (voronoi3d returns ∂f1 only, not
+        // ∂(f2−f1)); the pit field above carries the exact chain-ruled relief. (Center→edge pit-size
+        // grading is the rich-tier refinement, deferred — cryo-doc §2 N₂.)
+        if (uVolatileSpecies == 4){
+          vec3 cCell, cGrad;
+          vec2 cf = voronoi3d(pos * uSubPolyScale + uSubOffset, uVoroCells, cCell, cGrad);
+          float interior = smoothstep(0.0, 0.12, cf.y - cf.x);        // 1 inside the cell → 0 at the trough border
+          h += amp * 0.6 * (interior - 0.5);                          // raised centers, trough borders (cosmetic grad)
+        }
+      }
+
       // ── Cryo frost-coverage mask (Stage-C Cryo step 2, F23/F22 — cryo-doc §2) ─────────────
       // THE keystone of the cryo domain: a per-fragment COVERAGE scalar ∈ [0,1] answering "is it
       // cold enough HERE for this volatile to be solid?" — a coverage test, NOT relief (no height
@@ -1213,6 +1318,7 @@
           edificeCombiner(vPos, h, grad);          // F7 — volcanic shield/strato cones + caldera
           chaosCombiner(vPos, h, grad);            // F9 — ice-shell chaos rafts (reads shared uCryoActivity)
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
+          sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
@@ -1429,6 +1535,19 @@
       uPldStrength:      { value: 0.0 },   // dark-band luminance dip (driven; ≤0 ⇒ no banding)
       uPldLevels:        { value: 6.0 },   // annular strata band count (driven constant; lab-tunable)
       uPldSoftness:      { value: 0.4 },   // riser softness between layers — lab knob
+
+      // ── Cryo step 4: F18 sublimation landscapes (RELIEF, species-switched) ──
+      uSubStrength:      { value: 0.0 },   // sublimation-relief gate (driven; ≤0 ⇒ early-out)
+      uVolatileSpecies:  { value: 0 },     // morphology switch (driven int: 0 none/1 H₂O/2 CO₂/3 CH₄/4 N₂)
+      uSubAmp:           { value: 0.10 },  // sublimation relief amplitude — lab knob
+      uSubPitScale:      { value: 8.0 },   // swiss-cheese / hollow pit voronoi freq — lab knob
+      uSubPolyScale:     { value: 4.0 },   // N₂ convection-polygon cell freq — lab knob
+      uSubFloorFrac:     { value: 0.45 },  // flat-floor fraction of the pit radius — lab knob
+      uSubPitDensity:    { value: 0.7 },   // fraction of cells hosting a pit — lab knob
+      uBladeFreq:        { value: 18.0 },  // CH₄ penitente blade freq (anisotropic) — lab knob
+      uBladeSharp:       { value: 3.0 },   // CH₄ penitente blade sharpness (pow) — lab knob
+      uSubColdGate:      { value: 0.15 },  // cold-cap confinement threshold — lab knob
+      uSubOffset:        { value: new THREE.Vector3() },   // 🎲 domain offset
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1642,6 +1761,18 @@
       pldStrength: 0.0,
       pldLevels: 6,
       pldSoftness: 0.4,
+      // ── Cryo step 4: F18 sublimation landscapes (RELIEF, species-switched) ──
+      subStrength: 0.0,          // driven gate (≤0 ⇒ early-out)
+      volatileSpecies: 0,        // driven morphology switch (0 none/1 H₂O/2 CO₂/3 CH₄/4 N₂)
+      subAmp: 0.10,
+      subPitScale: 8.0,
+      subPolyScale: 4.0,
+      subFloorFrac: 0.45,
+      subPitDensity: 0.7,
+      bladeFreq: 18.0,
+      bladeSharp: 3.0,
+      subColdGate: 0.15,
+      subOffset: [0,0,0],
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
@@ -1656,6 +1787,7 @@
       chaosEnabled: true,
       cryoRidgeEnabled: true,
       frostEnabled: true,
+      subEnabled: true,
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -1855,12 +1987,15 @@
       // Cryo step 3 F22 PLD strata — driven strength/levels flow into state; softness a lab knob.
       state.pldStrength        = u.pldStrength;
       state.pldLevels          = u.pldLevels;
+      // Cryo step 4 F18 sublimation — driven gate + species flow into state; shape params stay lab knobs.
+      state.subStrength        = u.subStrength;
+      state.volatileSpecies    = u.volatileSpecies;
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
       // slate. Axes above already re-derive from the seed; reset the domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
-      state.frostOffset = [0,0,0];
+      state.frostOffset = [0,0,0]; state.subOffset = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -2037,6 +2172,22 @@
     fFrost.add(state, 'pldSoftness', 0.05, 0.9, 0.01).name('PLD band softness');
     fFrost.add(state, 'frostEnabled').name('✓ enabled');
     fFrost.add({ roll(){ state.frostOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+
+    // ▸ Sublimation (F18) — RELIEF, morphology switched on volatileSpecies (the species dropdown
+    // forces a morphology; presets drive it). Pits/polygons/blades/hollows; confined to the cold cap.
+    const fSub = fRelief.addFolder('Sublimation (F18)'); fSub.open();
+    fSub.add(state, 'subStrength', 0, 1, 0.01).name('sublimation gate (driven)').listen();
+    fSub.add(state, 'volatileSpecies', { none: 0, 'H₂O hollows': 1, 'CO₂ swiss-cheese': 2, 'CH₄ penitentes': 3, 'N₂ polygons': 4 }).name('species (morphology)').listen();
+    fSub.add(state, 'subAmp', 0, 0.3, 0.01).name('relief amp');
+    fSub.add(state, 'subPitScale', 2, 16, 0.5).name('pit freq (CO₂/H₂O)');
+    fSub.add(state, 'subPolyScale', 1, 10, 0.5).name('polygon freq (N₂)');
+    fSub.add(state, 'subFloorFrac', 0.1, 0.9, 0.05).name('pit floor frac');
+    fSub.add(state, 'subPitDensity', 0, 1, 0.05).name('pit density');
+    fSub.add(state, 'bladeFreq', 4, 50, 1).name('blade freq (CH₄)');
+    fSub.add(state, 'bladeSharp', 1, 8, 0.5).name('blade sharpness (CH₄)');
+    fSub.add(state, 'subColdGate', 0.02, 0.9, 0.02).name('cold-cap softness');
+    fSub.add(state, 'subEnabled').name('✓ enabled');
+    fSub.add({ roll(){ state.subOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -2255,6 +2406,17 @@
       uniforms.uPldStrength.value        = state.frostEnabled ? state.pldStrength : 0.0;   // F22 PLD rides the ✓ enable gate
       uniforms.uPldLevels.value          = state.pldLevels;
       uniforms.uPldSoftness.value        = state.pldSoftness;
+      // Cryo step 4 F18 sublimation — ✓ enable gate zeroes the gate (clean A/B; shape knobs preserved)
+      uniforms.uSubStrength.value        = state.subEnabled ? state.subStrength : 0.0;   // ✓ enable gate
+      uniforms.uVolatileSpecies.value    = state.volatileSpecies;
+      uniforms.uSubAmp.value             = state.subAmp;
+      uniforms.uSubPitScale.value        = state.subPitScale;
+      uniforms.uSubPolyScale.value       = state.subPolyScale;
+      uniforms.uSubFloorFrac.value       = state.subFloorFrac;
+      uniforms.uSubPitDensity.value      = state.subPitDensity;
+      uniforms.uBladeFreq.value          = state.bladeFreq;
+      uniforms.uBladeSharp.value         = state.bladeSharp;
+      uniforms.uSubColdGate.value        = state.subColdGate;
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
       uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);
@@ -2265,6 +2427,7 @@
       uniforms.uLavaOffset.value.set(state.lavaOffset[0], state.lavaOffset[1], state.lavaOffset[2]);
       uniforms.uChaosOffset.value.set(state.chaosOffset[0], state.chaosOffset[1], state.chaosOffset[2]);
       uniforms.uCryoRidgeOffsetV.value.set(state.cryoRidgeOffsetV[0], state.cryoRidgeOffsetV[1], state.cryoRidgeOffsetV[2]);
+      uniforms.uSubOffset.value.set(state.subOffset[0], state.subOffset[1], state.subOffset[2]);
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
