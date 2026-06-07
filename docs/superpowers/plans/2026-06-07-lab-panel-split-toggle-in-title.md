@@ -10,6 +10,12 @@
 
 **Verification note:** This is single-file DOM/UI wiring, not unit-testable logic. The gate is the **spike harness** + **browser verification matrix** on `:9223`; the existing vitest suite must stay green (it's untouched). Do NOT fabricate unit tests for visual behavior.
 
+**Verified environment facts (confirmed live against the running lab, 2026-06-07 — selectors below depend on these):**
+- lil-gui **0.21.0** (stock; George Michael Brower). 0.21.0 **prefixes every CSS class with `lil-`**. Structural selectors: root = `.lil-gui.lil-root`; folder = nested `.lil-gui`; **title = `.lil-title` (a `<button>`, holds a raw text node, no inner name span)**; collapsed state = the folder element gets class `.lil-closed`; child container = `.lil-children`; controller = `.lil-controller` (+ type, e.g. `.lil-boolean`); controller label = `.lil-name`; widget = `.lil-widget`.
+- JS API confirmed present in the 0.21.0 dist: `folder.$title`, `folder.controllers` (array), `controller.property`, `controller.domElement`, `controller.updateDisplay()`, `gui.controllersRecursive()`.
+- **This lab exposes `window._lab` (state, uniforms, …), NOT `window.__wd`.** `window.__wd` is the GAME's accessor; the lab uses `window._lab`. Read feature enables via `window._lab.state.<enableKey>` (e.g. `window._lab.state.cratersEnabled`).
+- Custom classes this plan adds (`title-has-toggle` on the title button, `title-toggle` on the relocated controller) are unprefixed and ours; only lil-gui-internal selectors take the `lil-` prefix.
+
 **Testing prerequisites (every browser step):**
 - Max runs Vite — do NOT start servers. Check liveness with `mcp__chrome-devtools__list_pages`, never Bash curl (sandbox → `000`).
 - Use the `:9223` GPU Chrome (`--remote-debugging-port=9223 --user-data-dir="C:\temp\chrome-mcp-filmstrip"`), not Playwright. See `memory/chrome-devtools-9223-launch.md` + `memory/well-dipper-testing-reference.md`.
@@ -42,11 +48,12 @@ Create `planet-titletoggle-lab.html` with exactly this content:
 <head><meta charset="utf-8"><title>title-toggle spike</title>
 <style>
   body { margin:0; background:#111; }
-  /* title row becomes a flex line: name (flex:1, keeps collapse click) + relocated checkbox */
-  .title-has-toggle { display:flex !important; align-items:center; }
-  .title-has-toggle .name { flex:1 1 auto; }
-  .title-toggle { width:auto !important; padding:0 6px 0 0 !important; }
-  .title-toggle .name { display:none; }            /* hide the controller's own label */
+  /* lil-title is a <button> holding a raw text node; space-between pushes the
+     relocated checkbox to the right of the name. Name keeps the collapse click. */
+  .lil-title.title-has-toggle { display:flex !important; align-items:center; justify-content:space-between; gap:6px; }
+  .title-toggle { width:auto !important; min-width:0; }
+  .title-toggle .lil-name { display:none; }        /* hide the boolean controller's own label */
+  .title-toggle .lil-widget { min-width:0; }
 </style></head>
 <body>
 <script type="module">
@@ -93,7 +100,7 @@ Run (via `mcp__chrome-devtools__list_console_messages`): Expected: 0 errors.
 In ONE `evaluate_script`, return the layout facts, then screenshot:
 ```js
 () => {
-  const titles = [...document.querySelectorAll('.title.title-has-toggle')];
+  const titles = [...document.querySelectorAll('.lil-title.title-has-toggle')];
   return {
     titlesWithToggle: titles.length,                              // expect 2
     boxInTitle: titles.map(t => !!t.querySelector('.title-toggle input[type=checkbox]')), // expect [true,true]
@@ -103,17 +110,17 @@ In ONE `evaluate_script`, return the layout facts, then screenshot:
 Expected: `{ titlesWithToggle: 2, boxInTitle: [true, true] }`. Screenshot shows each folder title with a checkbox to the right of the name.
 - **Check 2 (manual via script):** click the relocated checkbox's input and confirm folder stays open:
 ```js
-() => { const f = document.querySelectorAll('.title.title-has-toggle')[0];
-  const box = f.querySelector('input[type=checkbox]'); const openBefore = !f.parentElement.classList.contains('closed');
-  box.click(); const openAfter = !f.parentElement.classList.contains('closed');
+() => { const f = document.querySelectorAll('.lil-title.title-has-toggle')[0];
+  const box = f.querySelector('input[type=checkbox]'); const openBefore = !f.parentElement.classList.contains('lil-closed');
+  box.click(); const openAfter = !f.parentElement.classList.contains('lil-closed');
   return { stateAEnabled: window.__spike.state.aEnabled, folderStayedOpen: openBefore===openAfter, openAfter }; }
 ```
 Expected: `stateAEnabled` flipped to `false`, `folderStayedOpen: true`.
-- **Check 3:** click the title `.name` (not the box) and confirm it DOES collapse:
+- **Check 3:** click the title button itself (not the box) and confirm it DOES collapse:
 ```js
-() => { const f = document.querySelectorAll('.title.title-has-toggle')[0];
-  const name = f.querySelector('.name'); const before = f.parentElement.classList.contains('closed');
-  name.click(); const after = f.parentElement.classList.contains('closed');
+() => { const f = document.querySelectorAll('.lil-title.title-has-toggle')[0];
+  const before = f.parentElement.classList.contains('lil-closed');
+  f.click(); const after = f.parentElement.classList.contains('lil-closed');
   return { collapsedToggled: before!==after }; }
 ```
 Expected: `{ collapsedToggled: true }`.
@@ -121,7 +128,7 @@ Expected: `{ collapsedToggled: true }`.
 - [ ] **Step 4: Verify check 4 — programmatic flip resyncs the box**
 
 ```js
-() => { const box = document.querySelectorAll('.title.title-has-toggle')[0].querySelector('input[type=checkbox]');
+() => { const box = document.querySelectorAll('.lil-title.title-has-toggle')[0].querySelector('input[type=checkbox]');
   const before = box.checked; window.__spike.flipAndSync(); const after = box.checked;
   return { boxResynced: before !== after, after, stateMatches: after === window.__spike.state.aEnabled }; }
 ```
@@ -217,8 +224,8 @@ Expected: NO matches (every `gui.` is now `guiLeft.`, `guiRight.`, or a helper).
 Confirm `:9223` up via `mcp__chrome-devtools__list_pages`; navigate to the lab URL. In ONE `evaluate_script` before a screenshot, return:
 ```js
 () => {
-  const guis = [...document.querySelectorAll('.lil-gui.root')];
-  const rects = guis.map(g => ({ title: g.querySelector('.title')?.textContent, left: g.getBoundingClientRect().left }));
+  const guis = [...document.querySelectorAll('.lil-gui.lil-root')];
+  const rects = guis.map(g => ({ title: g.querySelector('.lil-title')?.textContent, left: Math.round(g.getBoundingClientRect().left) }));
   return { rootPanels: guis.length, rects };
 }
 ```
@@ -252,13 +259,15 @@ EOF
 In the `<style>` block (before `</style>` at ~line 90), add:
 ```css
     /* title-bar feature toggle (design 2026-06-07): relocated lil-gui boolean
-       controller sits inline right of the folder name; name keeps collapse click. */
-    .lil-gui .title.title-has-toggle { display: flex; align-items: center; }
-    .lil-gui .title.title-has-toggle .name { flex: 1 1 auto; }
-    .lil-gui .title-toggle { width: auto; padding: 0 6px 0 0; }
-    .lil-gui .title-toggle > .name { display: none; }
+       controller sits inline right of the folder name. lil-title is a <button>
+       holding a raw text node; space-between pushes the checkbox to the right.
+       Clicking the name still collapses; the checkbox stops propagation (JS). */
+    .lil-gui .lil-title.title-has-toggle { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .lil-gui .title-toggle { width: auto; min-width: 0; }
+    .lil-gui .title-toggle .lil-name { display: none; }   /* hide the controller's own '✓ enabled' label */
+    .lil-gui .title-toggle .lil-widget { min-width: 0; }
 ```
-(If the spike settled different CSS, use the spike's verbatim instead.)
+(Use the exact CSS the spike settled on if it differs.)
 
 - [ ] **Step 2: Collapse the 14 feature folders by default**
 
@@ -295,9 +304,9 @@ After the `featureFolders` map and BEFORE/around the existing solo-button loop (
 Confirm `:9223` up; navigate to the lab URL. In ONE `evaluate_script` before a screenshot:
 ```js
 () => {
-  const right = [...document.querySelectorAll('.lil-gui.root')].find(g => /Features/.test(g.querySelector('.title')?.textContent||''));
-  const featTitles = [...right.querySelectorAll('.children .title.title-has-toggle')];
-  const allCollapsed = featTitles.every(t => t.parentElement.classList.contains('closed'));
+  const right = [...document.querySelectorAll('.lil-gui.lil-root')].find(g => /Features/.test(g.querySelector('.lil-title')?.textContent||''));
+  const featTitles = [...right.querySelectorAll('.lil-children .lil-title.title-has-toggle')];
+  const allCollapsed = featTitles.every(t => t.parentElement.classList.contains('lil-closed'));
   const allHaveBox = featTitles.every(t => !!t.querySelector('.title-toggle input[type=checkbox]'));
   return { featureFolders: featTitles.length, allCollapsed, allHaveBox };  // expect 14, true, true
 }
@@ -305,11 +314,11 @@ Confirm `:9223` up; navigate to the lab URL. In ONE `evaluate_script` before a s
 Expected: `{ featureFolders: 14, allCollapsed: true, allHaveBox: true }`. Screenshot: right panel = `Surface — Relief` open, `perturb` slider, then 14 collapsed rows each with a checkbox by the name.
 - **Toggle works + folder stays collapsed:**
 ```js
-() => { const right=[...document.querySelectorAll('.lil-gui.root')].find(g=>/Features/.test(g.querySelector('.title')?.textContent||''));
-  const t = right.querySelector('.children .title.title-has-toggle'); const box=t.querySelector('input[type=checkbox]');
-  const wasClosed=t.parentElement.classList.contains('closed'); const v0=window.__wd?.state?.cratersEnabled;
-  box.click(); return { stayedClosed: wasClosed && t.parentElement.classList.contains('closed'),
-    enableFlipped: window.__wd?.state?.cratersEnabled !== v0 }; }
+() => { const right=[...document.querySelectorAll('.lil-gui.lil-root')].find(g=>/Features/.test(g.querySelector('.lil-title')?.textContent||''));
+  const t = right.querySelector('.lil-children .lil-title.title-has-toggle'); const box=t.querySelector('input[type=checkbox]');
+  const wasClosed=t.parentElement.classList.contains('lil-closed'); const v0=window._lab.state.cratersEnabled;
+  box.click(); return { stayedClosed: wasClosed && t.parentElement.classList.contains('lil-closed'),
+    enableFlipped: window._lab.state.cratersEnabled !== v0 }; }
 ```
 Expected: `stayedClosed: true`, `enableFlipped: true`.
 - **Resync after preset+solo:** set Drivers preset to a different value and click one feature's `🔆 solo`, then read several title boxes' `.checked` and confirm they match `state[enableKey]` (only the soloed one checked). Expected: title boxes reflect the solo state (proves the `updateDisplay()` resync path). Console: 0 errors. Park tab on `about:blank`.
@@ -346,7 +355,7 @@ EOF
 Confirm `:9223` up; navigate to the lab URL. Do one consolidated `evaluate_script` + screenshot covering the design's test matrix:
 - Two panels render, left-pinned rig + right-pinned features, no overlap.
 - 14 feature folders collapsed; each shows a title checkbox.
-- Toggling a title checkbox enables/disables that feature (visible change via `window.__wd`) and does not collapse the folder.
+- Toggling a title checkbox enables/disables that feature (visible change via `window._lab.state`) and does not collapse the folder.
 - Switch Drivers preset, then `🔆 solo` one feature → title checkboxes resync to the new enable set.
 - `Body filter → filter to relevant` still shows/hides the right-column folders.
 - `Presets → Reset to defaults` restores both panels (resetAll) without console errors.
