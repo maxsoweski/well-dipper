@@ -248,6 +248,30 @@
       uniform float uCrackScale;        // emissive-crack Voronoi cell density — lab knob
       uniform float uCrackWidth;        // emissive-crack mask width (F2−F1 threshold) — lab knob
       uniform float uLavaGlowRate;      // emissive-crack pulse rate (× uTime) — lab knob
+      // ── Shared seam (registry §1): uCryoActivity — owner Cryo (D2/D12→P7); read by Relief F9/F10.
+      //    RESERVED at 0.0 until Cryo lands; under option A a lab knob drives it so F9/F10 are exercisable. ──
+      uniform float uCryoActivity;      // 0..1 icy-shell disruption — the F9/F10 master gate (≤0 ⇒ both early-out)
+      // ── Stage-D province hook (registry §1 / index §8): uProvinceWeight — owner Stage-D provinces.
+      //    RESERVED 2026-06-07 as a no-op multiplier (default 1.0). When Stage-D lands, EVERY combiner
+      //    multiplies its contribution by provinceWeight(FEATURE_ID); the global uniform read means no
+      //    combiner signature changes. Fan-out domains adopt the multiply now (no-op vs 1.0). ──
+      uniform float uProvinceWeight;    // per-region feature weight (1.0 = uniform/no-op until Stage-D wires the spatial field)
+      // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief) ──
+      uniform float uChaosCellScale;    // raft size (voronoi3d frequency; driven)
+      uniform float uChaosRaftJitter;   // raft height/tilt displacement (driven, ∝ 1/g)
+      uniform float uChaosMatrixRough;  // refrozen inter-raft matrix roughness (driven)
+      uniform float uChaosMaskScale;    // low-freq chaos-region mask scale — lab knob
+      uniform vec3  uChaosOffset;       // 🎲 domain offset — default (0,0,0) = unchanged
+      // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief) ──
+      uniform float uDoubleRidgeFreq;   // double-ridge line frequency (driven)
+      uniform float uCryoRidgeOffset;   // double-ridge flank position → doubleRidgeProfile (driven; ≠ F1 uRidgeOffset)
+      uniform float uCryoRidgeWidth;    // double-ridge crest sharpness → doubleRidgeProfile (driven)
+      uniform float uGroovedBandFreq;   // fine grooved-band ridge frequency (driven, Ganymede)
+      uniform float uCryoRidgeAmp;      // overall icy-ridge relief amplitude — lab knob
+      uniform float uCryoRidgeWarp;     // ridge-line sinuosity (domain warp) — lab knob
+      uniform vec3  uCryoRidgeAxis0;    // double-ridge line direction (driven, seed-derived unit vec3)
+      uniform vec3  uCryoRidgeAxis1;    // grooved-band direction (driven, seed-derived unit vec3)
+      uniform vec3  uCryoRidgeOffsetV;  // 🎲 domain offset — default (0,0,0) = unchanged
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -954,6 +978,85 @@
         return crackMask * region * glow * uLavaActivity * molten;
       }
 
+      // doubleRidgeProfile — F10 Europa double-ridge cross-line profile (transcribed from the
+      // planet-lod-lab-core.js oracle; constants DR_TROUGH_AMP=0.6, DR_TROUGH_W=0.5). Two
+      // gaussian ridge crests at a=±offset flanking a gaussian trough at the line center a=0;
+      // dh/dt folds through a=|t| via sign(t) (the §5.4 silent-bug correction, pinned in tests).
+      vec2 doubleRidgeProfile(float t, float offset, float width){
+        float a = abs(t);
+        float troughW = offset * 0.5;
+        float ridge  = exp(-(a - offset) * (a - offset) / (width * width));
+        float trough = exp(-(a / troughW) * (a / troughW));
+        float hh = ridge - 0.6 * trough;
+        float dridge_da  = ridge  * (-2.0 * (a - offset) / (width * width));
+        float dtrough_da = trough * (-2.0 * a / (troughW * troughW));
+        float dh_da = dridge_da - 0.6 * dtrough_da;
+        return vec2(hh, dh_da * sign(t));
+      }
+
+      // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief — relief doc §F9.a) ──
+      // Ice-shell chaos (Europa Conamara): inside disrupted regions the shell breaks into
+      // RAFTS — a voronoi3d cell field where each cell gets a flat per-cell hashed height
+      // AND a per-cell constant TILT (a hashed gradient that gives each raft a distinct
+      // NORMAL, so adjacent plates catch light differently — the "jigsaw of moved plates"
+      // look, not just bumpy). Between rafts (near cell borders) sits a lower, high-freq
+      // refrozen MATRIX. COVERAGE = the SHARED uCryoActivity (Cryo-owned) × a low-freq region
+      // mask. The relief NORMAL comes from the exact per-cell tilt + the matrix noised() grad
+      // (pinned); the region/interior masks are cosmetic-gradient like F8's flow mask.
+      // uCryoActivity<=0 ⇒ early-out (cheap tier: per-cell rotation matrix + subsidence
+      // basins + antipodal placement are DEFERRED to the rich tier, relief doc §F9.d).
+      void chaosCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uCryoActivity <= 0.0) return;
+        vec4 mn = noised(pos * uChaosMaskScale + uChaosOffset);
+        float region = smoothstep(1.0 - uCryoActivity, 1.0 - uCryoActivity + 0.3, 0.5 + 0.5 * mn.x);
+        if (region <= 0.0) return;
+        vec3 cId, vGrad;
+        vec2 ff = voronoi3d(pos * uChaosCellScale + uChaosOffset, uVoroCells, cId, vGrad);
+        vec3 rh = hash33(cId);                                   // per-cell randoms (height + tilt)
+        float interior = smoothstep(0.0, 0.10, ff.y - ff.x);     // 1 inside the raft, 0 on borders (matrix)
+        float raftH = (rh.x - 0.5) * 2.0 * uChaosRaftJitter;     // flat per-cell height (cosmetic grad)
+        vec3  tilt  = (rh - 0.5) * 2.0 * uChaosRaftJitter;       // per-cell CONSTANT tilt gradient (exact)
+        vec4  rn = noised(pos * uChaosCellScale * 2.7 + uChaosOffset);   // refrozen matrix roughness (pinned grad)
+        float matrixDepth = -0.4 * uChaosRaftJitter;
+        h    += region * (interior * raftH + (1.0 - interior) * (matrixDepth + uChaosMatrixRough * rn.x));
+        grad += region * (interior * tilt  + (1.0 - interior) * uChaosMatrixRough * rn.yzw);
+      }
+
+      // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief — relief doc §F10.a) ──
+      // The signature icy-moon look, gated by the SHARED uCryoActivity. TWO mechanisms:
+      // (1) DOUBLE RIDGES (Europa) — warped directional lines (like F6 tessera / F8 wrinkles)
+      //     carrying the doubleRidgeProfile [ridge | trough | ridge] cross-section. t=sin(phase)
+      //     is the signed cross-line coordinate; the profile's dh/dt chain-rules through
+      //     dt/dphase=cos(phase) and dphase/dpos=freq·dfield (EXACT field grad, no warp Jacobian).
+      // (2) GROOVED BANDS (Ganymede) — fine parallel ridgeWave (1−|sin|) ridges along a second
+      //     axis, confined to low-freq band envelopes. Bands' fine ridges reuse F6's pinned
+      //     ridgeWave; the band envelope is cosmetic-gradient. uCryoActivity<=0 ⇒ early-out
+      //     (cheap tier: lenticulae + refrozen-crack web DEFERRED, relief doc §F10.d).
+      void cryoRidgeCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uCryoActivity <= 0.0) return;
+        float amp = uCryoRidgeAmp * uCryoActivity;
+        // (1) double ridges — warped line field carrying the double-ridge profile
+        vec3 ax0 = normalize(uCryoRidgeAxis0);
+        vec4 wn = noised(pos * 2.0 + uCryoRidgeOffsetV);
+        float field  = dot(pos, ax0) + uCryoRidgeWarp * wn.x;
+        vec3  dfield = ax0 + uCryoRidgeWarp * 2.0 * wn.yzw;
+        float phase  = field * uDoubleRidgeFreq;
+        float t  = sin(phase);
+        vec2  dr = doubleRidgeProfile(t, uCryoRidgeOffset, uCryoRidgeWidth);
+        h    += amp * dr.x;
+        grad += amp * dr.y * cos(phase) * uDoubleRidgeFreq * dfield;   // dh/dt · dt/dphase · dphase/dpos
+        // (2) grooved bands — fine ridgeWave ridges in low-freq band envelopes (second axis)
+        vec3 ax1 = normalize(uCryoRidgeAxis1);
+        vec4 bn = noised(pos * 1.3 + uCryoRidgeOffsetV + uMacroOffset);
+        float bfield  = dot(pos, ax1) + uCryoRidgeWarp * bn.x;
+        vec3  bdfield = ax1 + uCryoRidgeWarp * 1.3 * bn.yzw;
+        float bandEnv = smoothstep(0.35, 0.65, 0.5 + 0.5 * sin(bfield * 2.0));   // where bands exist (cosmetic)
+        vec2  rw = ridgeWave(bfield * uGroovedBandFreq);
+        float bandAmp = amp * 0.5 * bandEnv;
+        h    += bandAmp * (rw.x - 0.5);                              // −0.5 DC cosmetic (normal-only shading)
+        grad += bandAmp * rw.y * uGroovedBandFreq * bdfield;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -1026,6 +1129,8 @@
           plateauCombiner(vPos, fwBase, h, grad);
           tesseraCombiner(vPos, h, grad);
           edificeCombiner(vPos, h, grad);          // F7 — volcanic shield/strato cones + caldera
+          chaosCombiner(vPos, h, grad);            // F9 — ice-shell chaos rafts (reads shared uCryoActivity)
+          cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
@@ -1197,6 +1302,22 @@
       uCrackScale:     { value: 9.0 },   // emissive-crack Voronoi cell density — lab-tunable
       uCrackWidth:     { value: 0.08 },  // emissive-crack mask width — lab-tunable
       uLavaGlowRate:   { value: 1.5 },   // emissive-crack pulse rate (× uTime) — lab-tunable
+      // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief) — reads shared uCryoActivity ──
+      uChaosCellScale:   { value: 5.0 },   // raft size (voronoi3d frequency, driven)
+      uChaosRaftJitter:  { value: 0.5 },   // raft height/tilt displacement (driven, ∝ 1/g)
+      uChaosMatrixRough: { value: 0.5 },   // refrozen inter-raft matrix roughness (driven)
+      uChaosMaskScale:   { value: 1.1 },   // low-freq chaos-region mask scale — lab-tunable
+      uChaosOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset
+      // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief) — reads shared uCryoActivity ──
+      uDoubleRidgeFreq:  { value: 3.0 },   // double-ridge line frequency (driven)
+      uCryoRidgeOffset:  { value: 0.45 },  // double-ridge flank position → doubleRidgeProfile (driven)
+      uCryoRidgeWidth:   { value: 0.18 },  // double-ridge crest sharpness → doubleRidgeProfile (driven)
+      uGroovedBandFreq:  { value: 14.0 },  // fine grooved-band ridge frequency (driven, Ganymede)
+      uCryoRidgeAmp:     { value: 0.12 },  // overall icy-ridge relief amplitude — lab-tunable
+      uCryoRidgeWarp:    { value: 0.3 },   // ridge-line sinuosity (domain warp) — lab-tunable
+      uCryoRidgeAxis0:   { value: new THREE.Vector3(1, 0, 0) },   // double-ridge line direction (driven)
+      uCryoRidgeAxis1:   { value: new THREE.Vector3(0, 1, 0) },   // grooved-band direction (driven)
+      uCryoRidgeOffsetV: { value: new THREE.Vector3() },   // 🎲 domain offset
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1210,6 +1331,13 @@
       uLiquidMask:      { value: 0.0 },   // liquid-body coverage mask   — owner Fluvial; read by Optical (sunglint F36)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
+      // ── Stage-D province hook (index §4 #8 / §8) — RESERVED 2026-06-07, no-op until Stage-D ──
+      // A per-region weight every combiner multiplies its contribution by. Default 1.0 = no-op
+      // (multiplier, NOT a 0.0 gate). Owner: Stage-D provinces; consumers: ALL combiners (F1–F10 +
+      // the 8 domains). Reserved BEFORE the fan-out so domains author province-aware combiners from
+      // day 1 (multiply by provinceWeight(FEATURE_ID)) — Stage-D then swaps the scalar for the
+      // spatial field WITHOUT changing any combiner signature. Convention spelled out in index §8.
+      uProvinceWeight:  { value: 1.0 },   // 1.0 = uniform/no-op — owner Stage-D provinces; read by ALL combiners (when wired)
     };
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
@@ -1369,6 +1497,22 @@
       crackScale: 9.0,
       crackWidth: 0.08,
       lavaGlowRate: 1.5,
+      // ── F9/F10 icy terrain (Stage-C step 3, Relief) — gated by the SHARED uCryoActivity
+      // (owner Cryo). Under option A, cryoActivity is a LAB KNOB stub-driver until Cryo lands;
+      // Relief derives the SHAPE (cellScale/jitter/matrixRough; ridge freqs/offset/width/axes). ──
+      cryoActivity: 0.0,    // ◀ SHARED seam stub (lab knob); Cryo will own this derivation
+      chaosCellScale: 5.0,
+      chaosRaftJitter: 0.5,
+      chaosMatrixRough: 0.5,
+      chaosMaskScale: 1.1,
+      doubleRidgeFreq: 3.0,
+      cryoRidgeOffset: 0.45,
+      cryoRidgeWidth: 0.18,
+      groovedBandFreq: 14.0,
+      cryoRidgeAmp: 0.12,
+      cryoRidgeWarp: 0.3,
+      cryoRidgeAxis0: [1,0,0],
+      cryoRidgeAxis1: [0,1,0],
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
@@ -1380,6 +1524,8 @@
       tesseraEnabled: true,
       edificesEnabled: true,
       lavaEnabled: true,
+      chaosEnabled: true,
+      cryoRidgeEnabled: true,
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -1389,6 +1535,8 @@
       tesseraDomainOffset: [0,0,0],
       edificeOffset: [0,0,0],
       lavaOffset: [0,0,0],
+      chaosOffset: [0,0,0],
+      cryoRidgeOffsetV: [0,0,0],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1479,6 +1627,12 @@
       'Ocean (temperate)': { radiusEarth:1.1, massEarth:1.3, eccentricity:0.02, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.28,density:5,volatileFraction:0.35}, T_eq:295, tidalState:{locked:false}, atmosphere:{color:[0.4,0.6,0.95],retained:true,pressure:1.5,composition:'n2-o2'}, habitability:0.9, surfaceHistory:{erosion:0.6,bombardmentIntensity:0.4,resurfacingRate:0.3} },
       'Titan (methane seas)': { radiusEarth:0.4, massEarth:0.025, eccentricity:0.03, starMassEarth:332946, orbitRadiusEarth:120000, composition:{ironFraction:0.18,density:1.9,volatileFraction:0.4}, T_eq:94, tidalState:{locked:false}, atmosphere:{color:[0.8,0.6,0.3],retained:true,pressure:1.5,composition:'n2-o2'}, habitability:0.05, surfaceHistory:{erosion:0.2,bombardmentIntensity:0.5,resurfacingRate:0.4} },
       'Frozen (airless)': { radiusEarth:0.5, massEarth:0.07, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:117275, composition:{ironFraction:0.2,density:2.5,volatileFraction:0.3}, T_eq:60, tidalState:{locked:false}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.1,bombardmentIntensity:0.85,resurfacingRate:0.05} },
+      // "Europa (icy moon)" exercises Cryo P7: tidal ENERGY (eccentric close orbit) + VOLATILE-rich
+      // (water-ice crust, vf 0.5) + COLD (T_eq 110 K, frozen shell) → derives cryoActivity≈1, the SHARED
+      // uCryoActivity gate F9/F10 read (chaos rafts + double ridges render from the preset, no lab knob).
+      // The lab models planet-around-STAR self-heating, so the close eccentric orbit stands in for a real
+      // moon's planet-sourced tidal flexing (the documented P7 seam) — same convention as "Lava" at orbit 938.
+      'Europa (icy moon)': { radiusEarth:0.5, massEarth:0.07, eccentricity:0.1, starMassEarth:332946, orbitRadiusEarth:2500, composition:{ironFraction:0.2,density:2.0,volatileFraction:0.5}, T_eq:110, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.05,bombardmentIntensity:0.3,resurfacingRate:0.6} },
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -1545,11 +1699,25 @@
       state.lavaCoverage = u.lavaCoverage;
       state.lavaActivity = u.lavaActivity;
       state.lavaAxis     = u.lavaAxis;
+      // F9/F10 icy terrain (Stage-C step 3) — Relief-owned SHAPE flows into state. The COVERAGE
+      // gate (cryoActivity) is now DERIVED by Cryo (P7 — registry LIVE) and flows in from the
+      // preset like every other driven field; the ◀ ICY ACTIVITY slider stays a manual override
+      // (drag overrides until the next preset/quality change re-derives — same as lavaActivity etc.).
+      state.cryoActivity = u.cryoActivity;
+      state.chaosCellScale = u.chaosCellScale;
+      state.chaosRaftJitter = u.chaosRaftJitter;
+      state.chaosMatrixRough = u.chaosMatrixRough;
+      state.doubleRidgeFreq = u.doubleRidgeFreq;
+      state.cryoRidgeOffset = u.cryoRidgeOffset;
+      state.cryoRidgeWidth = u.cryoRidgeWidth;
+      state.groovedBandFreq = u.groovedBandFreq;
+      state.cryoRidgeAxis0 = u.cryoRidgeAxes[0];
+      state.cryoRidgeAxis1 = u.cryoRidgeAxes[1];
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
       // slate. Axes above already re-derive from the seed; reset the domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
-      state.lavaOffset = [0,0,0];
+      state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1680,6 +1848,30 @@
     fLava.add(state, 'lavaGlowRate', 0, 5, 0.1).name('glow pulse rate');
     fLava.add(state, 'lavaEnabled').name('✓ enabled');
     fLava.add({ roll(){ state.lavaOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    // ▸ Chaos (F9) — ice-shell chaos rafts (Europa Conamara): tilted jittered Voronoi plates
+    // in a rough refrozen matrix. COVERAGE is the SHARED uCryoActivity knob (below, owner Cryo —
+    // a lab stub under option A); raft size/jitter/matrix are the driven shape. The cell scale +
+    // raft jitter sync from the preset (.listen()); mask scale is a lab knob.
+    const fChaos = fRelief.addFolder('Chaos (F9)'); fChaos.open();
+    fChaos.add(state, 'cryoActivity', 0, 1, 0.01).name('◀ ICY ACTIVITY (shared, Cryo)').listen();
+    fChaos.add(state, 'chaosCellScale', 1, 12, 0.5).name('raft size').listen();
+    fChaos.add(state, 'chaosRaftJitter', 0, 1, 0.01).name('raft jitter (∝1/g)').listen();
+    fChaos.add(state, 'chaosMatrixRough', 0, 1, 0.01).name('matrix roughness').listen();
+    fChaos.add(state, 'chaosMaskScale', 0.4, 3, 0.1).name('chaos-region scale');
+    fChaos.add(state, 'chaosEnabled').name('✓ enabled');
+    fChaos.add({ roll(){ state.chaosOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    // ▸ Ridged icy (F10) — double ridges (Europa) + grooved bands (Ganymede), gated by the same
+    // SHARED uCryoActivity (the icy-activity knob in the Chaos folder). Ridge freq/offset/width +
+    // band freq sync from the preset (.listen()); amplitude + sinuosity are lab knobs.
+    const fCryoRidge = fRelief.addFolder('Ridged icy (F10)'); fCryoRidge.open();
+    fCryoRidge.add(state, 'cryoRidgeAmp', 0, 0.4, 0.01).name('ridge amp');
+    fCryoRidge.add(state, 'doubleRidgeFreq', 0.5, 10, 0.25).name('double-ridge freq').listen();
+    fCryoRidge.add(state, 'cryoRidgeOffset', 0.1, 0.9, 0.01).name('ridge flank offset').listen();
+    fCryoRidge.add(state, 'cryoRidgeWidth', 0.05, 0.4, 0.01).name('ridge sharpness').listen();
+    fCryoRidge.add(state, 'groovedBandFreq', 4, 40, 1).name('grooved-band freq').listen();
+    fCryoRidge.add(state, 'cryoRidgeWarp', 0, 1.0, 0.01).name('ridge sinuosity');
+    fCryoRidge.add(state, 'cryoRidgeEnabled').name('✓ enabled');
+    fCryoRidge.add({ roll(){ state.cryoRidgeOffsetV = randOffset(); } }, 'roll').name('🎲 randomize');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1866,6 +2058,22 @@
       uniforms.uCrackScale.value   = state.crackScale;
       uniforms.uCrackWidth.value   = state.crackWidth;
       uniforms.uLavaGlowRate.value = state.lavaGlowRate;
+      // F9/F10 icy terrain — uCryoActivity is the SHARED seam (lab-knob stub, owner Cryo; gates
+      // BOTH combiners' early-out). Per-feature enables zero each feature's OWN amplitude for
+      // independent A/B (chaos → jitter+matrixRough to 0; ridges → amp to 0); SHAPE is driven.
+      uniforms.uCryoActivity.value     = state.cryoActivity;
+      uniforms.uChaosCellScale.value   = state.chaosCellScale;
+      uniforms.uChaosRaftJitter.value  = state.chaosEnabled ? state.chaosRaftJitter : 0.0;   // ✓ enable gate
+      uniforms.uChaosMatrixRough.value = state.chaosEnabled ? state.chaosMatrixRough : 0.0;  // ✓ enable gate
+      uniforms.uChaosMaskScale.value   = state.chaosMaskScale;
+      uniforms.uDoubleRidgeFreq.value  = state.doubleRidgeFreq;
+      uniforms.uCryoRidgeOffset.value  = state.cryoRidgeOffset;
+      uniforms.uCryoRidgeWidth.value   = state.cryoRidgeWidth;
+      uniforms.uGroovedBandFreq.value  = state.groovedBandFreq;
+      uniforms.uCryoRidgeAmp.value     = state.cryoRidgeEnabled ? state.cryoRidgeAmp : 0.0;   // ✓ enable gate
+      uniforms.uCryoRidgeWarp.value    = state.cryoRidgeWarp;
+      uniforms.uCryoRidgeAxis0.value.set(state.cryoRidgeAxis0[0], state.cryoRidgeAxis0[1], state.cryoRidgeAxis0[2]);
+      uniforms.uCryoRidgeAxis1.value.set(state.cryoRidgeAxis1[0], state.cryoRidgeAxis1[1], state.cryoRidgeAxis1[2]);
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
       uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);
@@ -1873,6 +2081,9 @@
       uniforms.uPlateauDomainOffset.value.set(state.plateauDomainOffset[0], state.plateauDomainOffset[1], state.plateauDomainOffset[2]);
       uniforms.uTesseraDomainOffset.value.set(state.tesseraDomainOffset[0], state.tesseraDomainOffset[1], state.tesseraDomainOffset[2]);
       uniforms.uEdificeOffset.value.set(state.edificeOffset[0], state.edificeOffset[1], state.edificeOffset[2]);
+      uniforms.uLavaOffset.value.set(state.lavaOffset[0], state.lavaOffset[1], state.lavaOffset[2]);
+      uniforms.uChaosOffset.value.set(state.chaosOffset[0], state.chaosOffset[1], state.chaosOffset[2]);
+      uniforms.uCryoRidgeOffsetV.value.set(state.cryoRidgeOffsetV[0], state.cryoRidgeOffsetV[1], state.cryoRidgeOffsetV[2]);
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =

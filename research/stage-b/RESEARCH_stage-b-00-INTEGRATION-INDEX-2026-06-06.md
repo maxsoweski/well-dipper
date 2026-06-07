@@ -118,6 +118,7 @@ Stage-A envelope.
 5. **Sunglint build timing** (F36) — build now behind a Fluvial `liquidMask` stub, or wait for Fluvial to land? *Optical asks.*
 6. **`magneticField` surfacing ownership** — is the D13 generation-side refactor Optical's job (sole visual consumer) or a separate generation workstream? It touches `PhysicsEngine.js` + `PlanetGenerator.js` + the stripping path.
 7. **Exotic/overlay taste latitude** — F41–F49 are speculative game-constructs; the most taste-laden domain. Expect heavier lab iteration.
+8. **Province-weight hook — ✅ RESERVED 2026-06-07** (Max chose: reserve before the fan-out). `uProvinceWeight` is declared as a no-op multiplier (default **1.0**) in the central `uniforms` object + a GLSL uniform decl + a registry row (RESERVED). The Stage-D province system multiplies each combiner's contribution by a shared per-region weight field; because it's a **global uniform read internally**, no combiner *signature* changes when Stage-D wires the spatial field. **Convention the fan-out adopts:** see §8 "What does NOT wait." (Original framing kept for history: cheapest insurance point is BEFORE the 8-domain fan-out, since each domain adds combiners. Done now.)
 
 ---
 
@@ -166,3 +167,56 @@ Driven by the dependency graph above, not by domain glamour:
 
 Each domain implements **directly from its per-domain doc**; this index is the contract that keeps the 8 from
 colliding.
+
+---
+
+## 8. Stage-D — geologic provinces / terranes (PLANNED, not scoped) — Max greenlit 2026-06-07
+
+**The problem (Max's observation, 2026-06-07).** Every relief/domain feature is **evenly distributed
+across the whole sphere**, gated only by a global strength scalar; the only spatial variation is each
+feature's own noise/Voronoi placement. There is **no shared large-scale partition**, so the surface reads
+as "every feature smeared everywhere" — slop laid over slop — instead of the **distinct areas** real bodies
+show (Moon maria-vs-highlands, Mars hemispheric dichotomy + Tharsis). This is an **architecture limitation,
+not a tuning problem** — no amount of per-feature parameter work fixes it, because the missing thing is a
+layer ABOVE the features.
+
+**Mechanism — soft province-weight field (splat-mapping generalized to a sphere).** A low-frequency
+partition of the sphere (large-scale Voronoi cells, or overlapping low-freq FBM thresholds) yields a
+per-feature **weight field**; each combiner multiplies its strength by that region's weight. Provinces are
+feature-*poor* (each shows a subset), not feature-complete.
+
+**Load-bearing constraint — provinces must be SOFT weight fields, NOT hard type-switches.** Stage-A's
+governing principle is "no `planetType` branch — one continuous shader, blend not branch." Hard province
+boundaries would reintroduce the spatial discreteness that frame forbids. Resolve provinces as continuous
+weight fields (smooth blends between regions) so the continuous-blend ethos holds. **This is a deliberate
+frame decision, not an accidental violation** — it must be made consciously when scoped.
+
+**Timing & sequencing.**
+- The per-feature work (F1–F10 + the 8 domains) builds the **vocabulary** (each combiner = a word); the
+  province system is the **grammar** (which features cluster where). You can't write the grammar until the
+  words exist → provinces are a **Stage D, after the 8 domains land**, and a PM-scope (`dev-collab-scope`)
+  job because they touch every combiner.
+- **What does NOT wait: the contract hook** (§4 decision #8) — ✅ **RESERVED 2026-06-07.** `uProvinceWeight`
+  is declared as a no-op multiplier (default uniform 1.0) in the central `uniforms` object + a GLSL uniform
+  decl + a RESERVED registry row — same cheap-insurance pattern as the RESERVED `cryoActivity`. Reserved
+  BEFORE the 8-domain fan-out so no combiner signature changes when provinces land (bolted on at the end →
+  every combiner gets re-touched).
+  - **CONVENTION every fan-out combiner adopts (author province-aware from day 1):** where a combiner today
+    adds its contribution as `h += delta; grad += dgrad;`, write it as `h += delta * provinceWeight(FEATURE_ID);
+    grad += dgrad * provinceWeight(FEATURE_ID);`. `provinceWeight(int feature)` is a GLSL accessor that
+    **Stage-D will define** — until then the convention is satisfied by multiplying by the no-op `uProvinceWeight`
+    (1.0), or simply by NOT regressing the readiness (the uniform name is reserved so nothing collides). The
+    `FEATURE_ID` arg exists because provinces are feature-*poor* (each region shows a subset), so weight is
+    per-feature, not one global scalar. Stage-D swaps the accessor body for the spatial field — combiner bodies
+    don't change.
+  - **NOT done now (rides with the Stage-D `dev-collab-scope` job):** the spatial weight field itself, the
+    `provinceWeight()` accessor definition, and retrofitting the F1–F10 relief combiners' multiplies (those
+    exist + are tested; mechanical retrofit + re-verify belongs to the scoped Stage-D unit). Only the NAME +
+    CONVENTION are locked now.
+- **Cheap falsifiable spike (~30 min, doesn't wait):** in the lab, multiply 2–3 existing combiners'
+  strengths by a single shared low-freq mask and A/B it vs the current uniform soup. Validates the
+  direction before committing to the full system. This is the right first move if Max wants to de-risk
+  early; the full system is still Stage-D.
+
+**Status: PLANNED — in the plan, not scoped, not started.** Do not build inline during F9/F10 or the domain
+fan-out. Full scope is a Stage-D `dev-collab-scope` job.

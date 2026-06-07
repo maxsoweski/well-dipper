@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave, ejectaProfile, edificeProfile } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave, ejectaProfile, edificeProfile, doubleRidgeProfile } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -958,5 +958,113 @@ describe('F8 lava-plains surfacings (deriveUniforms)', () => {
       expect(u[k], k).toBeGreaterThanOrEqual(0);
       expect(u[k], k).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// ── F9 chaos / disrupted terrain — generation-side surfacings (relief doc §F9.b) ─
+// F9 renders ice-shell chaos (Europa Conamara): a region of broken, height-jittered
+// Voronoi RAFTS in a low rough matrix, gated by the SHARED uCryoActivity (Cryo-owned,
+// stubbed via lab knob under option A). Relief owns only the rendering SHAPE: cell
+// scale (raft size), raft jitter (height/tilt displacement — DERIVED from g: low-g icy
+// moons displace blocks more dramatically), matrix roughness. The raft field itself is
+// a GLSL voronoi3d term with no CPU gradient to pin (like F8 cracks) — verified VISUALLY
+// on :9223; here we pin the surfacing LOGIC (g→jitter, ranges, finiteness).
+describe('F9 chaos surfacings (deriveUniforms)', () => {
+  it('chaosRaftJitter is higher on a low-g world (icy moons displace blocks more)', () => {
+    const lowG  = deriveUniforms({ radiusEarth: 1.0, massEarth: 0.15 }).chaosRaftJitter;  // ~0.15 g (Europa-ish)
+    const highG = deriveUniforms({ radiusEarth: 1.0, massEarth: 2.0 }).chaosRaftJitter;   // 2 g
+    expect(lowG).toBeGreaterThan(highG);
+  });
+
+  it('chaosCellScale is a positive raft-size constant', () => {
+    expect(deriveUniforms({}).chaosCellScale).toBeGreaterThan(0);
+  });
+
+  it('chaos surfacings are finite and in-range on an empty bundle', () => {
+    const u = deriveUniforms({});
+    expect(Number.isFinite(u.chaosCellScale)).toBe(true);
+    expect(u.chaosRaftJitter).toBeGreaterThan(0);
+    expect(u.chaosRaftJitter).toBeLessThanOrEqual(1);
+    expect(u.chaosMatrixRough).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ── F10 doubleRidgeProfile — the Europa double-ridge cross-line profile (relief doc §F10.a) ─
+// The signature icy feature: TWO parallel raised ridges flanking a central trough,
+// as a function of the signed cross-line coordinate t (driven in GLSL by sin(phase) of
+// a warped directional field, like F6 tessera / F8 wrinkles). Symmetric in t: a trough
+// dip at t=0, ridge peaks at t=±offset, decaying to 0 far from the line. The analytic
+// dh/dt is the relief-normal term the GLSL combiner chain-rules into shading; pinned vs
+// central finite-diff (relief doc §5.4 silent-bug gate — a sign-wrong ridge flank lights
+// the double-ridge inside-out yet compiles). The |t| fold's −sign(t) correction is the
+// same silent-bug class as ridgeWave / ridgedFold.
+describe('doubleRidgeProfile — cross-line shape invariants (relief doc §F10.a)', () => {
+  const OFF = 0.45, W = 0.18;
+  it('is a trough (h<0) at the line center t=0', () => {
+    expect(doubleRidgeProfile(0.0, OFF, W).h).toBeLessThan(0);
+  });
+  it('peaks (ridge crest, h>0) at t=±offset, flanking the trough', () => {
+    const peak = doubleRidgeProfile(OFF, OFF, W).h;
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeGreaterThan(doubleRidgeProfile(0.0, OFF, W).h);     // ridge above trough
+    expect(peak).toBeGreaterThan(doubleRidgeProfile(OFF * 0.5, OFF, W).h); // ridge above the inner slope
+  });
+  it('is symmetric in t (two flanking ridges)', () => {
+    expect(doubleRidgeProfile(0.3, OFF, W).h).toBeCloseTo(doubleRidgeProfile(-0.3, OFF, W).h, 8);
+    expect(doubleRidgeProfile(OFF, OFF, W).h).toBeCloseTo(doubleRidgeProfile(-OFF, OFF, W).h, 8);
+  });
+  it('decays toward 0 far from the line', () => {
+    expect(Math.abs(doubleRidgeProfile(1.5, OFF, W).h)).toBeLessThan(0.05);
+  });
+});
+
+describe('doubleRidgeProfile — analytic derivative vs finite-diff (relief doc §5.4 silent-bug gate)', () => {
+  const EPS = 1e-6, OFF = 0.45, W = 0.18;
+  // Sample BOTH sides of the line (t>0 and t<0) so the −sign(t) fold correction is pinned
+  // on both flanks; avoid t=0 (the |t| kink, where dh/dt is discontinuous).
+  const PTS = [-1.0, -0.6, -0.45, -0.3, -0.12, 0.12, 0.3, 0.45, 0.6, 1.0];
+  it('dhdt matches central finite-difference of h', () => {
+    for (const t of PTS) {
+      const { dhdt } = doubleRidgeProfile(t, OFF, W);
+      const fd = (doubleRidgeProfile(t + EPS, OFF, W).h - doubleRidgeProfile(t - EPS, OFF, W).h) / (2 * EPS);
+      expect(dhdt).toBeCloseTo(fd, 4);
+    }
+  });
+  it('would FAIL if the −sign(t) fold correction were dropped (backward flank on t<0)', () => {
+    const t = -0.3;                                  // inner slope on the negative flank
+    const { dhdt } = doubleRidgeProfile(t, OFF, W);
+    const fd = (doubleRidgeProfile(t + EPS, OFF, W).h - doubleRidgeProfile(t - EPS, OFF, W).h) / (2 * EPS);
+    expect(dhdt).toBeCloseTo(fd, 4);                 // correct (sign-folded)
+    expect(dhdt).not.toBeCloseTo(-fd, 4);            // the naive (no −sign(t)) bug flips it
+  });
+});
+
+// ── F10 ridged-icy — generation-side surfacings (relief doc §F10.b) ──────────────
+// Double ridges + grooved bands (Ganymede), gated by the SHARED uCryoActivity. Relief
+// owns the rendering SHAPE: ridge line frequency, ridge offset/width (→ doubleRidgeProfile),
+// grooved-band fine-ridge frequency, and two seeded axes (double-ridge line direction +
+// grooved-band direction). Densities are gated in-shader by uCryoActivity (Cryo-owned).
+describe('F10 ridged-icy surfacings (deriveUniforms)', () => {
+  it('cryoRidgeAxes are two deterministic unit vec3, seed-derived', () => {
+    const ax = deriveUniforms({ seed: 1234 }).cryoRidgeAxes;
+    expect(ax.length).toBe(2);
+    for (const a of ax) {
+      const len = Math.hypot(a[0], a[1], a[2]);
+      expect(len).toBeCloseTo(1.0, 5);
+    }
+  });
+  it('cryoRidgeAxes are deterministic for a fixed seed and vary with seed', () => {
+    const a = deriveUniforms({ seed: 42 }).cryoRidgeAxes[0];
+    const b = deriveUniforms({ seed: 42 }).cryoRidgeAxes[0];
+    const c = deriveUniforms({ seed: 9999 }).cryoRidgeAxes[0];
+    expect(a).toEqual(b);
+    expect(a).not.toEqual(c);
+  });
+  it('ridge shape constants are finite and in-range on an empty bundle', () => {
+    const u = deriveUniforms({});
+    expect(u.doubleRidgeFreq).toBeGreaterThan(0);
+    expect(u.groovedBandFreq).toBeGreaterThan(u.doubleRidgeFreq);   // fine ridges within bands
+    expect(u.cryoRidgeOffset).toBeGreaterThan(0);
+    expect(u.cryoRidgeWidth).toBeGreaterThan(0);
   });
 });

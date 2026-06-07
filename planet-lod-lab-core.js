@@ -393,6 +393,37 @@ export function edificeProfile(r, shieldStratoMix = 0.5, calderaR = EDIFICE_CALD
   return { h, dhdr };
 }
 
+// ── doubleRidgeProfile — F10 Europa double-ridge cross-line profile (relief doc §F10.a) ─
+// The signature icy-tectonic feature: TWO parallel raised ridges flanking a central
+// trough (NASA: cracks that open-and-close repeatedly build the flanking ridges, so the
+// DOUBLE profile is the right primitive). A function of the signed cross-line coordinate
+// t — in GLSL t = sin(phase) of a warped directional field, so the line repeats along the
+// surface like F6 tessera / F8 wrinkle ridges. Symmetric in t (a=|t|):
+//
+//   ridge  = exp(−((a−offset)/width)²)          gaussian crest peaking at a=offset
+//   trough = exp(−(a/(offset·TROUGH_W))²)        gaussian dip at the line center a=0
+//   h      = ridge − TROUGH_AMP·trough           crest (h≈1) at ±offset, dip (h<0) at 0
+//
+// dh/dt = dh/da·sign(t); the −sign(t) fold across |t| is the SAME silent-bug class as
+// ridgeWave / ridgedFold (relief doc §5.4 risk #4 — drop it and the t<0 flank lights
+// backward yet it compiles). Pinned vs central finite-diff in tests, both flanks. The
+// GLSL doubleRidgeProfile() is transcribed from this; the kink lives at t=0 (the trough
+// floor), avoided by the finite-diff sweep.
+const DR_TROUGH_AMP = 0.6, DR_TROUGH_W = 0.5;
+export function doubleRidgeProfile(t, offset = 0.45, width = 0.18) {
+  const a = Math.abs(t);
+  const sq = (x) => x * x;
+  const troughW = offset * DR_TROUGH_W;
+  const ridge  = Math.exp(-sq((a - offset) / width));
+  const trough = Math.exp(-sq(a / troughW));
+  const h = ridge - DR_TROUGH_AMP * trough;
+  const dridge_da  = ridge  * (-2.0 * (a - offset) / (width * width));
+  const dtrough_da = trough * (-2.0 * a / (troughW * troughW));
+  const dh_da = dridge_da - DR_TROUGH_AMP * dtrough_da;
+  const dhdt = dh_da * Math.sign(t);                    // chain rule through a=|t|
+  return { h, dhdt };
+}
+
 // seededUnitVec3 — a deterministic ~uniform point on the unit sphere from a scalar seed.
 // z uniform in [-1,1], azimuth uniform in [0,2π) (the standard sphere-point sampler);
 // shape mirrors seedOffset()'s sin-fract hashing. Used for F4 rift-plane normals.
@@ -678,6 +709,45 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // combiner carves a warped directional field ⊥ this axis, mirroring F5/F6's pattern.
   const lavaAxis = seededUnitVec3(seed + 12);
 
+  // ── Cryo step 1: cryoActivity (P7 cryovolcanism) — OWNS the shared uCryoActivity gate ──
+  // The icy-resurfacing activity F9/F10 read (registry RESERVED→LIVE; replaces the option-A
+  // lab-knob stub). THREE drivers AND'd as a product of gates: D12 tidal ENERGY (tidalProxy)
+  // drives the resurfacing; D2 VOLATILES (volatileGate) make that resurfacing CRYO (ice), not
+  // ROCK (lava); D1 COLD (T_eq below the water-ice point) keeps the volatiles a solid ice
+  // SHELL, not a warm liquid ocean. The product separates a Europa (tidal + icy + cold →
+  // chaos/ridges) from an Io (tidal but volatile-poor → F8 lava) and from a warm ocean world
+  // (tidal + icy + WARM → ocean, no shell). A dead frozen world (no tidal) → 0 — which is why
+  // the Frozen preset showed nothing until the option-A lab knob forced it.
+  const cryoColdGate = 1.0 - smoothstep(220, 273, T);   // 1 below 220K (frozen shell) → 0 above 273K (too warm for an ice shell)
+  const cryoActivity = clamp01(tidalProxy * volatileGate * cryoColdGate);
+
+  // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief — relief doc §F9.b) ──
+  // The COVERAGE of chaos is gated by the SHARED uCryoActivity (Cryo-owned — D2/D12→P7;
+  // NOW DERIVED above as cryoActivity; the lab knob remains a manual override). Relief owns only the
+  // rendering SHAPE of the rafts:
+  //   chaosCellScale — raft size (voronoi3d frequency; bigger value ⇒ smaller rafts).
+  //   chaosRaftJitter — height + tilt displacement of each raft. DERIVED from g: a low-g
+  //     icy moon (Europa g≈0.13) breaks into more dramatically displaced blocks than a
+  //     high-g world. Reuses surfaceGravity (already read by F2/F7), so it's Relief-owned,
+  //     not a Cryo overlap. Clamped to a visible band so even high-g chaos still reads.
+  //   chaosMatrixRough — high-freq roughness of the refrozen matrix between rafts.
+  const chaosCellScale = 5.0;
+  const chaosRaftJitter = mix(0.3, 0.8, 1.0 - clamp01(surfaceGravity));
+  const chaosMatrixRough = 0.5;
+
+  // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief — relief doc §F10.b) ──
+  // Double ridges (Europa) + grooved bands (Ganymede), gated in-shader by the SHARED
+  // uCryoActivity. Relief owns the rendering SHAPE constants + two seeded orientations:
+  //   doubleRidgeFreq — how many double-ridge lines wrap the surface.
+  //   ridgeOffset / ridgeWidth — feed doubleRidgeProfile (flank position / sharpness).
+  //   groovedBandFreq — the FINE parallel ridges inside a grooved band (≫ doubleRidgeFreq).
+  //   cryoRidgeAxes — [double-ridge line direction, grooved-band direction] (seeded unit vec3).
+  const doubleRidgeFreq = 3.0;
+  const cryoRidgeOffset = 0.45;   // NB distinct from F1's uRidgeOffset (ridged-multifractal fold)
+  const cryoRidgeWidth = 0.18;
+  const groovedBandFreq = 14.0;
+  const cryoRidgeAxes = [seededUnitVec3(seed + 13), seededUnitVec3(seed + 14)];
+
   return {
     mountainAmp,                                                // F1 — ridged base relief amplitude (erosion-softened)
     orogenyStrength,                                            // F1 — isotropic ridged ↔ anisotropic fold-belt blend
@@ -698,6 +768,15 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     lavaActivity,                                              // F8 — emissive-crack glow intensity (D12 tidal; cold plains vs glowing lava)
     channelDensity,                                            // F8 — leveed-channel/rille gate (seed × activity; _derived-only, combiner deferred)
     lavaAxis,                                                  // F8 — wrinkle-ridge strike direction (unit vec3, seed-derived)
+    cryoActivity,                                              // Cryo P7 — SHARED uCryoActivity gate (tidal×volatiles×cold); F9/F10 read it (registry LIVE)
+    chaosCellScale,                                            // F9 — raft size (voronoi3d frequency)
+    chaosRaftJitter,                                           // F9 — raft height/tilt displacement (∝ 1/g — low-g moons displace more)
+    chaosMatrixRough,                                          // F9 — refrozen inter-raft matrix roughness
+    doubleRidgeFreq,                                           // F10 — double-ridge line frequency
+    cryoRidgeOffset,                                           // F10 — double-ridge flank position (→ doubleRidgeProfile; ≠ F1 uRidgeOffset)
+    cryoRidgeWidth,                                            // F10 — double-ridge crest sharpness (→ doubleRidgeProfile)
+    groovedBandFreq,                                           // F10 — fine grooved-band ridge frequency (Ganymede)
+    cryoRidgeAxes,                                             // F10 — [double-ridge dir, grooved-band dir] (2× unit vec3, seed-derived)
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)

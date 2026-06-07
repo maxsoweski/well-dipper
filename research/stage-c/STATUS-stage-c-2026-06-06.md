@@ -119,7 +119,8 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F3 | **Ejecta & rays** (reuses F2 Voronoi centers) | ✅ **DONE** — apron + rampart + bright rays live; see below |
 | F7 | **Volcanic edifices** (reads `surfaceGravity`, `tidalHeat`) | ✅ **DONE** — shield/strato cones + summit caldera live; see below |
 | F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ✅ **DONE** — flood-basalt plains suppress relief + animated emissive cracks live; see below |
-| F9/F10 | Chaos + ridged-icy (reads SHARED `uCryoActivity` from Cryo) | ◻ (cross-domain seam — **last single-domain relief work; see F8 note re: uCryoActivity**) |
+| F9 | **Chaos / disrupted terrain** (ice-shell rafts; reads SHARED `uCryoActivity`) | ✅ **DONE** — tilted jittered Voronoi rafts + rough matrix live; see below |
+| F10 | **Ridged / grooved icy** (double ridges + grooved bands; reads SHARED `uCryoActivity`) | ✅ **DONE** — Europa double ridges + Ganymede bands live; see below |
 
 ### F2 — Craters (DONE)
 First consumer of the `voronoi3d` keystone + first reader of `surfaceGravity`.
@@ -543,11 +544,123 @@ emissive cracks; leveed channels / sinuous rilles / collapsed tube-pit chains DE
   **Quality-scalar cheap path** (§F8.d: drop the per-fragment Worley to a single flat emissive
   on mobile, or freeze `uTime`) — wire to `qualityTier` when the mobile tier is tuned.
 
-⚠️ **F9/F10 are the LAST single-domain relief work and read SHARED `uCryoActivity`** (owned
-by Cryo, which hasn't landed — RESERVED at default-off in the registry). Per the handoff:
-they may ship with a stubbed/default `uCryoActivity` OR wait for Cryo. **Flag for Max** —
-this is the decision point before the 8-domain fan-out.
+### F9 — Chaos / disrupted terrain (DONE)
+Ice-shell chaos (Europa Conamara). **Max-decision resolved 2026-06-07: option (A)** — ship now
+against a STUBBED `uCryoActivity` (the shared seam, owner Cryo, RESERVED at default-off). A lab
+knob (`state.cryoActivity`, the "◀ ICY ACTIVITY (shared, Cryo)" slider in the Chaos folder)
+drives it so F9/F10 are exercisable in isolation; Cryo's real D2/D12→P7 derivation lands later
+and feeds the SAME uniform — no rework (mirrors how `canyonHeight` shipped before its consumers).
+**Registry stays RESERVED** (consumer wired against the stub; flip to LIVE when Cryo derives it).
+- **No new finite-diff oracle** (like F8): reuses the pinned `voronoi3d` + `noised`. Inside a
+  low-freq chaos-region mask (extent ∝ `uCryoActivity`), each Voronoi cell is a RAFT — a flat
+  per-cell hashed height + a per-cell **constant TILT** (hashed gradient → each raft a distinct
+  normal, so adjacent plates catch light differently = "moved plates", not just bumpy) — sitting
+  in a lower, high-freq refrozen MATRIX near cell borders. Relief NORMAL = exact per-cell tilt +
+  matrix `noised()` grad (pinned); region/interior masks are cosmetic-gradient (the F8 pattern).
+- **deriveUniforms** surfaces `chaosCellScale` (raft size), `chaosRaftJitter` (= `mix(0.3,0.8,1−g)`
+  — DERIVED from surfaceGravity: low-g icy moons displace blocks more, Relief-owned not a Cryo
+  overlap), `chaosMatrixRough`. **3 surfacing tests** (g→jitter, ranges, finiteness).
+- **GLSL** `chaosCombiner()` wired Stage-2 **before `lavaCombiner`** (lava must stay LAST to keep
+  its suppress-all-accumulated-relief invariant); new `▸ Chaos (F9)` lil-gui folder; `uCryoActivity≤0`
+  ⇒ early-out. Cheap tier — **DEFERRED** (rich tier §F9.d): per-cell rotation matrix, subsidence
+  basins, antipodal-to-largest-basin placement.
+- **Live-verified `:9223`** (Frozen preset, `cryoActivity=1`, screenshots `f9-01..02`): chaos ON →
+  surface breaks into differently-lit tilted-raft facets; **enable OFF → smooth base restored**
+  (A/B regression-safe); console clean (favicon-404 only).
+
+### F10 — Ridged / grooved icy terrain (DONE)
+The signature icy-moon look, same SHARED `uCryoActivity` gate as F9 (option A stub). TWO mechanisms:
+- **NEW pinned oracle `doubleRidgeProfile(t, offset, width)`** → `{h, dhdt}`: the Europa **double
+  ridge** — two gaussian crests at `a=±offset` flanking a gaussian trough at the line center `a=0`,
+  as a function of the signed cross-line coordinate `t` (= `sin(phase)` of a warped directional
+  field in GLSL, like F6 tessera / F8 wrinkles). `dh/dt` folds through `a=|t|` via `sign(t)` — the
+  SAME §5.4 silent-bug class as `ridgeWave`/`ridgedFold`; **pinned vs central finite-diff both flanks
+  + a sign-drop guard + 4 shape-invariant tests.**
+- **Grooved bands (Ganymede):** fine parallel `ridgeWave` (1−|sin|, F6 — reused, no new oracle)
+  ridges along a SECOND seeded axis, confined to low-freq band envelopes (cosmetic-gradient).
+- **deriveUniforms** surfaces `doubleRidgeFreq`, `cryoRidgeOffset`/`cryoRidgeWidth` (→ the oracle;
+  NB **renamed** from `ridgeOffset`/`ridgeWidth` to avoid collision with F1's `uRidgeOffset`
+  ridged-multifractal fold), `groovedBandFreq`, `cryoRidgeAxes` (2× seeded unit vec3). **3 surfacing
+  tests** (seeded axes unit/deterministic/seed-varying, ranges).
+- **GLSL** `cryoRidgeCombiner()` + `doubleRidgeProfile()` (transcribed) wired Stage-2 before
+  `lavaCombiner`; new `▸ Ridged icy (F10)` lil-gui folder; `uCryoActivity≤0` ⇒ early-out. Cheap
+  tier — **DEFERRED** (§F10.d): lenticulae (diapir domes/pits), refrozen-crack web (shares the
+  deferred `voronoi3d` edge-distance pass-2 with F4-web/F5-rich).
+- **205 lab tests green** (+12: doubleRidgeProfile oracle 6, F9 surfacings 3, F10 surfacings 3).
+  Backtick parity even (30).
+- **Live-verified `:9223`** (Frozen, `cryoActivity=1`, `cryoRidgeAmp=0.28`, screenshots `f10-01..02`):
+  ridges ON → sinuous double-ridge lines (dark troughs + bright flanking ridges) + finer bands wrap
+  the surface; **enable OFF → smooth base restored** (A/B regression-safe); console clean.
+- **Latent F8 fix (drive-by):** the frame loop never pushed `uLavaOffset` (F8's 🎲 randomize was a
+  silent no-op) — added it alongside the F9/F10 offset pushes.
+
+✅ **RELIEF (F1–F10) IS COMPLETE.** The widest gap is closed. **Open Max-decision before the
+8-domain fan-out:** reserve the no-op `uProvinceWeight` contract hook now (integration-index §4
+decision #8 / §8 — the Stage-D province system Max greenlit 2026-06-07) so the domains' combiners
+don't all get re-touched later. After that (or in parallel), domains fan out (index §7).
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.
 Index §7 is the dependency-ordered sequence.
+
+---
+
+## Stage-C fan-out — Cryo / Sublimation domain (IN PROGRESS, started 2026-06-07)
+Doc: `research/stage-b/RESEARCH_stage-b-cryo-2026-06-06.md`. **Cryo went first** because it OWNS the
+shared `uCryoActivity` seam — deriving it flips F9/F10's option-A lab-knob stub to a real preset-driven
+gate (registry RESERVED→LIVE). Built in-thread (in-lab single-domain work, F1–F10 pattern — no
+`dev-collab-scope`). The domain's full feature set (F23 frost-coverage mask · F22 polar caps · F18
+sublimation landforms · F17 glacial relief) layers on the frost mask keystone; those are the next steps.
+
+| Step | Feature | Status |
+|---|---|---|
+| 1 | **`uCryoActivity` derivation (P7 cryovolcanism)** — OWNS the shared seam | ✅ **DONE** — see below |
+| 2 | **Frost-coverage mask (F23 / P22)** — the keystone every other cryo feature layers on | ⏳ next |
+| 3+ | F22 polar caps · F18 sublimation (species-switched) · F17 glacial relief | 📋 queued |
+
+### Cryo step 1 — `uCryoActivity` derivation (DONE 2026-06-07)
+The icy-resurfacing activity gate F9/F10 read, now DERIVED (was an option-A lab-knob stub).
+- **Derivation** (`deriveUniforms`, `planet-lod-lab-core.js`): `cryoActivity = clamp01(tidalProxy ×
+  volatileGate × cryoColdGate)` — D12 tidal ENERGY × D2 VOLATILES × D1 COLD (`cryoColdGate =
+  1 − smoothstep(220,273,T_eq)`). The product-of-gates separates **Europa** (tidal+icy+cold → cryo)
+  from **Io** (tidal but volatile-poor → F8 lava) and from a **warm ocean** (tidal+icy+warm → liquid,
+  no ice shell). Reuses the already-computed `tidalProxy`/`volatileGate`/`T`.
+- **6 TDD tests** (`tests/planet-lod-generation.test.js`, RED→GREEN): Europa>0 · circular-orbit=0 ·
+  volatile-poor=0 · warm=0 · monotonic-in-tidal · [0,1]+finite+empty=0. **211 lab tests green** (+6).
+- **Wired** `applyDrivers` (`planet-lod-lab.html`): preset→`state.cryoActivity`→`uCryoActivity` like every
+  driven field; the ◀ ICY ACTIVITY slider is now a **manual override** (option-A stub note retired).
+- **New "Europa (icy moon)" preset** exercises it (eccentric close orbit + vf 0.5 + T_eq 110 K → cryoActivity 1).
+- **Registry `uCryoActivity` flipped RESERVED→LIVE.**
+- **Live-verified `:9223`** (screenshots `cryo-step1-europa-01`, `cryo-step1-rocky-ab-02`): Europa preset →
+  cryoActivity 1 derived (tidalHeat 136.7), flows preset→state→uniform with **no lab knob**, F9 chaos rafts
+  + F10 double ridges render ✓; **A/B** — Rocky/Ocean/Lava/Frozen/Titan all derive cryoActivity **0** (Frozen &
+  Titan are cold+icy but tidally DEAD → the physically-correct reason Frozen needed the manual knob before) →
+  F9/F10 early-out, smooth base ✓; console clean (favicon-404 only). Backtick parity even (30).
+
+---
+
+## Stage-D — geologic provinces (PLANNED, Max greenlit 2026-06-07)
+
+Max identified the architecture limitation that every feature is **evenly distributed across the
+whole sphere** (no shared large-scale partition → "slop over slop"), and decided the province
+system goes **in the plan**. Full write-up landed in the governing contract:
+**integration index §8** (mechanism = soft per-region weight field; load-bearing constraint =
+SOFT weights not hard `planetType`-style switches; timing = Stage-D after the 8 domains, PM-scope
+`dev-collab-scope` job) + **§4 decision #8** (reserve the no-op `uProvinceWeight` contract hook
+BEFORE the domain fan-out — cheap insurance, Max's call on timing). A ~30-min lab A/B spike
+(2–3 combiners × one shared low-freq mask) is the cheap de-risk if Max wants it early.
+**Not scoped, not started — do NOT build inline during F9/F10 or the fan-out.**
+
+### Province contract hook — ✅ RESERVED 2026-06-07 (the one time-sensitive sub-decision)
+Max chose: reserve the hook before the fan-out. Landed:
+- `uProvinceWeight` no-op multiplier (default **1.0**, NOT a 0.0 gate) added to the central `uniforms`
+  object + a GLSL `uniform float uProvinceWeight;` decl, both in `planet-lod-lab.html`, in the
+  RESERVED-names block beside `uCryoActivity`.
+- Registry row added (`REGISTRY-canonical-uniforms.md`): RESERVED, owner Stage-D provinces, consumers = ALL combiners.
+- Convention spelled out in **integration-index §8** ("What does NOT wait"): every fan-out combiner multiplies
+  its contribution by `provinceWeight(FEATURE_ID)` (no-op vs 1.0 until Stage-D), so the spatial-field swap
+  changes no combiner signature. §4 #8 flipped to ✅ RESERVED.
+- **NOT done (rides with the Stage-D scoped job):** the spatial weight field, the `provinceWeight()` accessor
+  body, and retrofitting F1–F10's multiplies. Only the NAME + CONVENTION are locked. No code regression
+  (no combiner reads it yet → the uniform sits dormant at 1.0; lab unaffected). **Lab test count unchanged at
+  205** (a contract reservation, no new runtime behavior to test).

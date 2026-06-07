@@ -161,6 +161,45 @@ describe('volatileSpecies classifier (§2 #4 — feeds Cryo sublimation morpholo
   });
 });
 
+describe('cryoActivity (Cryo step 1 — P7 cryovolcanism; OWNS the shared uCryoActivity gate F9/F10 read)', () => {
+  // The icy-resurfacing activity gate (registry canonical name uCryoActivity). Cryo
+  // DERIVES it (flips the registry RESERVED→LIVE) from THREE drivers AND'd: D12 tidal
+  // ENERGY (tidalProxy = clamp01(tidalHeat)) drives the resurfacing; D2 VOLATILES make
+  // that resurfacing cryo (ice) not rock (lava); D1 COLD (T_eq) keeps the volatiles a
+  // solid ice SHELL, not a warm liquid ocean. This is what physically separates a
+  // Europa (tidal + icy + cold → chaos/ridges) from an Io (tidal + volatile-poor → F8
+  // lava) and from a warm ocean world (tidal + icy + WARM → ocean, no ice shell). F9
+  // chaosCombiner + F10 cryoRidgeCombiner read it; a dead frozen world (no tidal) → 0,
+  // which is why the Frozen preset showed nothing until the option-A lab knob forced it.
+  const tidal = { eccentricity: 0.1, starMassEarth: 332946, orbitRadiusEarth: 1200, radiusEarth: 1.0 };
+  const europa = { ...tidal, T_eq: 100, composition: { volatileFraction: 0.5 } };
+
+  it('tidally-heated cold icy world (Europa-like) → cryoActivity > 0', () => {
+    expect(deriveUniforms(europa).cryoActivity).toBeGreaterThan(0);
+  });
+  it('circular orbit (no tidal energy) → cryoActivity 0 — a dead frozen world is not cryo-active', () => {
+    expect(deriveUniforms({ ...europa, eccentricity: 0 }).cryoActivity).toBe(0);
+  });
+  it('tidally-heated but volatile-POOR (rocky, Io-like) → cryoActivity ~0 (it is lava, not cryo)', () => {
+    expect(deriveUniforms({ ...europa, composition: { volatileFraction: 0.02 } }).cryoActivity).toBe(0);
+  });
+  it('tidally-heated, volatile-rich, but WARM (above freezing) → cryoActivity 0 (liquid ocean, no ice shell)', () => {
+    expect(deriveUniforms({ ...europa, T_eq: 300 }).cryoActivity).toBe(0);
+  });
+  it('more tidal heat → more (or equal) cryoActivity, all else equal (monotonic in the energy driver)', () => {
+    const lo = deriveUniforms({ ...europa, eccentricity: 0.04 }).cryoActivity;
+    const hi = deriveUniforms({ ...europa, eccentricity: 0.16 }).cryoActivity;
+    expect(hi).toBeGreaterThanOrEqual(lo);
+  });
+  it('stays within [0,1], finite; empty bundle → 0 (no tidal, no volatiles)', () => {
+    expect(deriveUniforms({}).cryoActivity).toBe(0);
+    const c = deriveUniforms(europa).cryoActivity;
+    expect(c).toBeGreaterThanOrEqual(0);
+    expect(c).toBeLessThanOrEqual(1);
+    expect(Number.isFinite(c)).toBe(true);
+  });
+});
+
 describe('precipitation (§2 #5 — surfaces D4 rain as first-class; feeds Fluvial F11 channels)', () => {
   // Rain needs BOTH a currently-stable liquid (liquidStability — covers water AND methane
   // cycles) and a condensible-cycle atmosphere TYPE (n2-o2 full → co2-n2 partial → co2 trace
