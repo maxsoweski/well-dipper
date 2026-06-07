@@ -285,6 +285,10 @@
       uniform float uFrostNoiseAmp;     // fractal boundary breakup amplitude (× T_eq, K) — lab knob
       uniform float uFrostNoiseScale;   // boundary-breakup noise frequency — lab knob
       uniform vec3  uFrostOffset;       // 🎲 domain offset — default (0,0,0) = unchanged
+      // ── Cryo step 3: F22 polar-layered-deposit strata (cap banding — ALBEDO, not relief) ──
+      uniform float uPldStrength;       // 0..~0.35 dark-band luminance dip (driven; cap budget × surface-age); ≤0 ⇒ no banding
+      uniform float uPldLevels;         // number of annular strata bands (driven constant; lab-tunable)
+      uniform float uPldSoftness;       // riser softness between layers (sharp↔soft band edge) — lab knob
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -1079,7 +1083,8 @@
       // bright uFrostAlbedo) so the LUMINANCE lift survives posterize as a bright cap — the colour
       // TINT is the stylize/drop part (cryo-doc §2.a). uFrostMaxCoverage≤0 OR condensationT≤0 ⇒
       // early-out (bone-dry / hot worlds unchanged — regression-safe).
-      float frostCoverage(vec3 p, float heightField){
+      float frostCoverage(vec3 p, float heightField, out float bandCoord){
+        bandCoord = 0.0;                                                   // pole-distance coordinate for F22 PLD strata
         if (uFrostMaxCoverage <= 0.0 || uFrostCondensationT <= 0.0) return 0.0;
         // coldFactor ∈ [0,1]: 0 at the hot point (equator / substellar), 1 at the cold point
         // (pole / antistellar). Tidally-locked worlds freeze on the antistellar hemisphere (the
@@ -1093,6 +1098,9 @@
           // axial-tilt bias lifts the equatorial floor so high-obliquity worlds frost low latitudes
           coldFactor = mix(latCold, 1.0, uFrostLatitudeBias * 0.6);
         }
+        // F22 PLD band coordinate: coldFactor ramps SMOOTHLY pole-ward across the whole cap (the
+        // coverage itself saturates to the budget just past the snowline, so it can't carry rings).
+        bandCoord = coldFactor;
         // localT: equilibrium temp cooled toward the cold point, minus an altitude lapse (frost
         // climbs mountains — heightField is the accumulated relief, already computed this frame).
         float localT = uPlanetTempEq * (1.0 - uFrostLatChill * coldFactor)
@@ -1103,6 +1111,28 @@
         float band = uFrostEdgeSoftness * uPlanetTempEq;                   // soft snowline width in K
         float raw = smoothstep(-band, band, coldness + breakup);
         return raw * uFrostMaxCoverage;
+      }
+
+      // ── pldBands — F22 polar-layered-deposit strata (cryo-doc §2 F22) ──
+      // The perennial cap reads as STACKED bright/dark annular bands: preserved depositional layers
+      // exposed in the cap. ALBEDO banding, NOT relief (no height/grad — logic unit-tested, verified
+      // visually, like the step-2 frost mask). The caller passes a POLE-DISTANCE coordinate in [0,1]
+      // (coldFactor: 0 at the snowline edge → 1 at the pole / antistellar cold point) which ramps
+      // smoothly across the whole cap, so iso-value contours ARE the concentric rings. (The coverage
+      // itself can't carry rings — it saturates to the budget just past the snowline.) Slice into
+      // uPldLevels layers; adjacent layers alternate
+      // bright/dark by PARITY, crossfaded across the soft riser. Returns a luminance factor in
+      // [1−uPldStrength, 1] (even rings bright, odd rings dimmed). Transcribed from the CPU pldBands().
+      // uPldStrength≤0 OR uPldLevels<1 ⇒ 1.0 (no banding); coverage 0 ⇒ idx 0, parity 0 ⇒ 1.0.
+      float pldBands(float coverage){
+        if (uPldStrength <= 0.0 || uPldLevels < 1.0) return 1.0;
+        float phase = max(coverage, 0.0) * uPldLevels;
+        float idx = floor(phase);
+        float frac = phase - idx;
+        float e0 = 1.0 - uPldSoftness;
+        float riser = smoothstep(e0, 1.0, frac);
+        float parity = mix(mod(idx, 2.0), mod(idx + 1.0, 2.0), riser);
+        return 1.0 - uPldStrength * parity;
       }
 
       void main(){
@@ -1155,6 +1185,7 @@
         // Stage 3 CRYO frost-coverage (F23/F22) — albedo overlay, set in the analytic branch
         // (needs the accumulated height for the altitude lapse), consumed at Stage 6.
         float frostCover = 0.0;
+        float frostBandCoord = 0.0;   // F22 PLD pole-distance coordinate (set by frostCoverage)
         if (uNormalMode == 1){
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
@@ -1187,7 +1218,7 @@
           shadeN = perturbAnalytic(N, grad, reliefAmp);
           // ── Stage 3: CRYO frost-coverage mask (F23/F22) — coverage test, not relief; needs the
           // accumulated height h for the altitude lapse. Consumed at the Stage-6 albedo overlay.
-          frostCover = frostCoverage(vPos, h);
+          frostCover = frostCoverage(vPos, h, frostBandCoord);
         }
 
         // ── Stage 2 (cont.): mountains / scarps; writes canyonHeight   [domain: Relief]
@@ -1211,7 +1242,12 @@
         // Cryo frost (F23/F22): high-albedo overlay mixed into the base BEFORE posterize so the
         // luminance lift survives quantization as a bright cap (cryo-doc §2.a; the colour TINT is
         // the stylize/drop part). frostCover=0 ⇒ uBaseColor unchanged (regression-safe).
-        vec3 albedoCol = mix(uBaseColor, uFrostAlbedo, frostCover);
+        // F22 PLD strata: dim the frost albedo in alternating annular layers (pldBands), keyed on the
+        // pole-distance coordinate (frostBandCoord = coldFactor) which ramps smoothly across the whole
+        // cap — the coverage itself saturates to the budget past the snowline, so it cannot carry rings.
+        // The mix gates the strata to the cap (frostCover=0 ⇒ mix→uBaseColor, bare ground untouched).
+        vec3 frostShade = uFrostAlbedo * pldBands(frostBandCoord);
+        vec3 albedoCol = mix(uBaseColor, frostShade, frostCover);
         vec3 surface = posterize(min(albedoCol * (diff + ambient) + uBaseColor * rayBright, vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
@@ -1389,6 +1425,10 @@
       uFrostNoiseAmp:    { value: 0.06 },  // boundary breakup amplitude (× T_eq, K) — lab knob
       uFrostNoiseScale:  { value: 3.0 },   // boundary breakup noise frequency — lab knob
       uFrostOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset
+      // ── Cryo step 3: F22 polar-layered-deposit strata (cap banding) ──
+      uPldStrength:      { value: 0.0 },   // dark-band luminance dip (driven; ≤0 ⇒ no banding)
+      uPldLevels:        { value: 6.0 },   // annular strata band count (driven constant; lab-tunable)
+      uPldSoftness:      { value: 0.4 },   // riser softness between layers — lab knob
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1598,6 +1638,10 @@
       frostNoiseAmp: 0.06,
       frostNoiseScale: 3.0,
       frostOffset: [0,0,0],
+      // ── Cryo step 3: F22 PLD strata — pldStrength/pldLevels driven; softness a lab knob ──
+      pldStrength: 0.0,
+      pldLevels: 6,
+      pldSoftness: 0.4,
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
@@ -1808,6 +1852,9 @@
       state.frostAlbedo        = u.frostAlbedo;
       state.frostLocked        = u.frostLocked;
       state.tempEq             = u.tempEq;
+      // Cryo step 3 F22 PLD strata — driven strength/levels flow into state; softness a lab knob.
+      state.pldStrength        = u.pldStrength;
+      state.pldLevels          = u.pldLevels;
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
       // slate. Axes above already re-derive from the seed; reset the domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
@@ -1983,6 +2030,11 @@
     fFrost.add(state, 'frostNoiseAmp', 0, 0.2, 0.01).name('boundary breakup');
     fFrost.add(state, 'frostNoiseScale', 0.5, 8, 0.5).name('breakup freq');
     fFrost.addColor(state, 'frostAlbedo').name('frost tint').listen();
+    // F22 polar-layered-deposit strata — driven strength/levels (.listen() syncs from preset),
+    // softness a lab knob. Rides the frost cap, so the ✓ enable gate zeroes it too (frostCover→0).
+    fFrost.add(state, 'pldStrength', 0, 0.6, 0.01).name('PLD strata (F22)').listen();
+    fFrost.add(state, 'pldLevels', 1, 16, 1).name('PLD band count').listen();
+    fFrost.add(state, 'pldSoftness', 0.05, 0.9, 0.01).name('PLD band softness');
     fFrost.add(state, 'frostEnabled').name('✓ enabled');
     fFrost.add({ roll(){ state.frostOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
@@ -2200,6 +2252,9 @@
       uniforms.uFrostNoiseAmp.value      = state.frostNoiseAmp;
       uniforms.uFrostNoiseScale.value    = state.frostNoiseScale;
       uniforms.uFrostOffset.value.set(state.frostOffset[0], state.frostOffset[1], state.frostOffset[2]);
+      uniforms.uPldStrength.value        = state.frostEnabled ? state.pldStrength : 0.0;   // F22 PLD rides the ✓ enable gate
+      uniforms.uPldLevels.value          = state.pldLevels;
+      uniforms.uPldSoftness.value        = state.pldSoftness;
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
       uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);

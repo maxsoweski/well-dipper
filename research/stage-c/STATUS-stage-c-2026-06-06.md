@@ -616,7 +616,8 @@ sublimation landforms · F17 glacial relief) layers on the frost mask keystone; 
 |---|---|---|
 | 1 | **`uCryoActivity` derivation (P7 cryovolcanism)** — OWNS the shared seam | ✅ **DONE** — see below |
 | 2 | **Frost-coverage mask (F23 / P22)** — the keystone every other cryo feature layers on | ✅ **DONE** — see below |
-| 3+ | F22 polar caps · F18 sublimation (species-switched) · F17 glacial relief | ⏳ next |
+| 3 | **F22 polar caps — PLD strata banding** (the frost mask + a layered-deposit overlay) | ✅ **DONE** — see below |
+| 4+ | F18 sublimation (species-switched relief) · F17 glacial relief | ⏳ next |
 
 ### Cryo step 1 — `uCryoActivity` derivation (DONE 2026-06-07)
 The icy-resurfacing activity gate F9/F10 read, now DERIVED (was an option-A lab-knob stub).
@@ -682,6 +683,48 @@ F1–F10 in-lab way (CPU param-derivation + GLSL evaluation).
   read (per-species albedo, luminance-routed); surface for Max's call on whether Pluto/Triton N₂/CH₄
   coloration earns a `posterizeLevels` bump. (4) **Coverage curve** — `smoothstep(0.05,0.4,vf)` makes
   modest-volatile warm worlds (Rocky 0.198) faint; a more generous budget curve is a lab-knob tuning call.
+
+### Cryo step 3 — F22 polar caps: PLD strata banding (DONE 2026-06-07)
+The perennial polar cap reads as **stacked bright/dark annular bands** (polar-layered-deposit strata —
+Earth/Mars). Per the handoff + cryo-doc §2 F22, F22 **IS the step-2 frost mask + a layered-deposit
+overlay**: the other "variants" (high condensationT, near-white albedo, sharp snowline) are already the
+step-2 params, so the one genuinely-new mechanism is the **PLD banding**. Built as an **ALBEDO/luminance
+banding, NOT relief** (no height/grad → no finite-diff oracle; the banding LOGIC is unit-tested, the cap
+verified VISUALLY — exactly like the step-2 frost mask).
+- **CPU primitive** `pldBands(coord, levels, softness, strength)` (`planet-lod-lab-core.js`) → a luminance
+  factor ∈ [1−strength, 1]: slices a **pole-distance coordinate** into `levels` layers, adjacent layers
+  alternate bright/dark by **parity**, crossfaded across a soft riser (the same softened-floor quantizer
+  idea as `terraceProfile`/F6, reused not forked). `strength≤0 || levels<1 ⇒ 1` (no-op); `coord 0 ⇒ 1`.
+- **CPU surfacing** `pldStrength = clamp01(frostMaxCoverage·(1−resurfacing))·0.35` (+ constant `pldLevels=6`):
+  gated by a real cap existing (D2 budget) **× surface-age preservation** (`1−resurfacing`) — an ancient
+  cap (Mars/Frozen) shows strong strata, a young resurfaced ice shell (Europa) shows faint layering. **NOT
+  gated on axial tilt** — tilt drives the deferred seasonal advance/retreat (the weather layer, cryo-doc
+  §6 Q3), not the perennial layering (cryo-doc §2 F22 gen-path = D1 cold + D2 species).
+- **Key design fix (live-found):** the bands ride the **pole-distance coordinate** (`coldFactor`, returned
+  as a new `out` param from `frostCoverage`), NOT the coverage — the coverage **saturates to the budget just
+  past the snowline**, so it can't carry rings across the cap interior; `coldFactor` ramps smoothly
+  equator→pole (or substellar→antistellar for locked) so iso-value contours ARE the concentric rings.
+- **GLSL** `pldBands(coverage)` (transcribed; before `main()`, no hoisting) applied at **Stage-6**:
+  `frostShade = uFrostAlbedo · pldBands(frostBandCoord)`, `mix(uBaseColor, frostShade, frostCover)` — the
+  mix gates the strata to the cap (frostCover 0 ⇒ bare ground untouched). 3 new uniforms (`uPldStrength`
+  driven + `uPldLevels` driven + `uPldSoftness` lab knob); PLD controls added to the `▸ Cryo / Frost` folder;
+  rides the frost ✓ enable gate (`uPldStrength=0` when frost off).
+- **11 TDD tests** (`tests/planet-lod-generation.test.js`, RED→GREEN): pldBands (strength-0 no-op / coord-0
+  untouched / degenerate-levels / even-bright-odd-dim treads / both-bright-&-dim across the cap / bounded
+  [1−s,1]) + pldStrength (no-cap→0 / preserved-cap>0 / **resurfacing erases layering** / monotone-in-budget /
+  in-range). **235 lab tests green** (+11). Backtick parity even (30).
+- **Live-verified `:9223`** (screenshots `f22-pld-01..04`): **isolated** (Rocky cold-pole cap, gradient
+  snowline, cranked) → crisp **concentric annular strata** wrapping the pole ✓; **A/B PLD off**
+  (`uPldStrength=0`, frost cap kept) → uniform white cap, rings vanish (the strata come specifically from
+  PLD; regression-safe) ✓; **natural Frozen** (derived 0.267, no manual knobs) → full-disc CH₄ cap with
+  **subtle latitude layering** under the dense craters (live derivation gate — `uPldStrength` driven from
+  the preset) ✓; **Europa locked** (derived 0.140 < Frozen 0.267, the young-ice gradient) → bands concentric
+  around the **antistellar point** (the locked `bandCoord`=vSubstellarAngle path) ✓; console clean (favicon-404).
+- **No registry change** — PLD uniforms are Cryo-internal (`uCryoActivity` is the only Cryo shared seam, LIVE since step 1).
+- **Carry-forward (not blocking, surface for Max — the cryo-doc §6 taste-questions now come due, see handoff):**
+  (1) the natural-derived strength (0.06–0.27) is a **modest, physically-gated default** — Frozen's banding is
+  faint under craters; whether the cap deserves a crisper, higher-contrast PLD is a tuning call (lab knob exposed).
+  (2) bands ride `sin²(lat)` so rings space unevenly (wider near the pole) — a natural irregular look, not tuned.
 
 ---
 

@@ -357,6 +357,37 @@ export function ridgeWave(phase) {
   return { value, dvdphase };
 }
 
+// ── pldBands — F22 polar-layered-deposit strata (cryo-doc §2 F22 / §F17 PLD) ──
+// The perennial polar cap reads as STACKED bright/dark annular bands — preserved depositional
+// layers exposed in the cap. This is an ALBEDO/luminance banding (NOT relief: no height/grad, so no
+// finite-diff oracle — the banding LOGIC is unit-tested, the cap verified VISUALLY, exactly like the
+// step-2 frost mask). It rides the SAME softened-floor quantizer idea as terraceProfile (relief F6):
+// the band coordinate is a POLE-DISTANCE coordinate ∈ [0,1] (coldFactor: 0 at the snowline edge → 1
+// at the pole / antistellar cold point) ramping smoothly across the whole cap, so iso-value contours
+// ARE the concentric annular rings. (The coverage itself can't carry rings — it saturates to the
+// budget just past the snowline.) The coordinate is sliced into `levels`
+// layers; adjacent layers alternate bright/dark by PARITY, crossfaded across the soft riser so the
+// rings read smooth rather than hard-stepped. Returns a LUMINANCE FACTOR ∈ [1−strength, 1] the
+// shader multiplies into the frost albedo (even rings bright, odd rings dimmed):
+//   phase = coverage·levels ; idx = floor(phase) ; frac = phase − idx
+//   riser = smoothstep(1−softness, 1, frac)             (crossfade band idx → idx+1)
+//   parity = mix(idx&1, (idx+1)&1, riser)               (smooth 0↔1 alternation)
+//   factor = 1 − strength·parity
+// strength≤0 OR levels<1 ⇒ 1 (no-op, regression-safe); coverage≤0 ⇒ idx 0, parity 0 ⇒ 1 (bare
+// ground / cap edge untouched). The GLSL pldBands() is transcribed from this (same parity crossfade).
+export function pldBands(coverage, levels = 6, softness = 0.4, strength = 0.0) {
+  if (strength <= 0.0 || levels < 1) return 1.0;
+  const phase = Math.max(coverage, 0.0) * levels;
+  const idx = Math.floor(phase);
+  const frac = phase - idx;
+  const e0 = 1.0 - softness;
+  const riser = smoothstep(e0, 1.0, frac);
+  const parityThis = idx & 1;
+  const parityNext = (idx + 1) & 1;
+  const parity = mix(parityThis, parityNext, riser);
+  return 1.0 - strength * parity;
+}
+
 // ── edificeProfile — F7 volcanic-edifice radial profile (relief doc §F7.a) ───
 // A single volcano as a function of normalized radius r = dist(fragment,center) /
 // edificeRadius, plus its analytic dh/dr (the relief-normal term the GLSL combiner
@@ -756,6 +787,16 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     [0.93, 0.94, 0.96];                            // H₂O / default near-white
   const frostLocked = locked ? 1 : 0;              // tidally-locked → eyeball nightside cap (vSubstellarAngle)
 
+  // ── Cryo step 3: F22 polar-layered-deposit (PLD) strata — the perennial-cap banding (cryo-doc §2 F22) ──
+  // The cap reads as STACKED bright/dark annular layers (the pldBands albedo primitive). Gated by a
+  // real cap existing (frostMaxCoverage, D2) AND the surface being OLD enough to PRESERVE strata
+  // (1−resurfacing) — a young, resurfaced ice shell (Europa, resurfacingRate→1) shows little layering,
+  // an ancient cap (Mars/Frozen) shows strong strata. NOT gated on axial tilt — tilt drives the
+  // deferred seasonal advance/retreat (the non-deterministic weather layer, cryo-doc §6 Q3). The
+  // value IS the dark-band luminance dip amplitude (modest, ≤~0.35); ≤0 ⇒ shader pldBands early-out.
+  const pldStrength = clamp01(frostMaxCoverage * (1.0 - resurfacing)) * 0.35;
+  const pldLevels = 6;                             // number of annular strata bands (constant, lab-tunable)
+
   // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief — relief doc §F9.b) ──
   // The COVERAGE of chaos is gated by the SHARED uCryoActivity (Cryo-owned — D2/D12→P7;
   // NOW DERIVED above as cryoActivity; the lab knob remains a manual override). Relief owns only the
@@ -810,6 +851,8 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     frostAlbedo,                                               // Cryo step 2 — frost tint (vec3; luminance load-bearing, colour stylized) by species
     frostLocked,                                               // Cryo step 2 — 1 ⇒ tidally-locked eyeball cap (antistellar) via vSubstellarAngle
     tempEq: T,                                                 // Cryo step 2 — T_eq passthrough for the shader localT field (uPlanetTempEq)
+    pldStrength,                                               // Cryo step 3 — F22 PLD strata dark-band dip (cap budget × surface-age preservation); ≤0 ⇒ no banding
+    pldLevels,                                                 // Cryo step 3 — F22 PLD annular band count (constant, lab-tunable)
     chaosCellScale,                                            // F9 — raft size (voronoi3d frequency)
     chaosRaftJitter,                                           // F9 — raft height/tilt displacement (∝ 1/g — low-g moons displace more)
     chaosMatrixRough,                                          // F9 — refrozen inter-raft matrix roughness

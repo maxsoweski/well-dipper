@@ -4,7 +4,7 @@
 // (which mirrors PlanetGenerator's real output fields). Pin the LOGIC; the lab
 // tunes constants. Each surfacing is consumed by a Stage-C domain (step 3+).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveUniforms, pldBands } from '../planet-lod-lab-core.js';
 
 describe('surfaceGravity (§2 #1 — gates Relief crater morphology + Aeolian dune scale)', () => {
   // g = M/R² in Earth-relative units; massEarth + radiusEarth are both already in
@@ -370,5 +370,82 @@ describe('frost-coverage mask (Cryo step 2 — F23/F22, the keystone every cryo 
     expect(Number.isFinite(u.frostMaxCoverage)).toBe(true);
     expect(Number.isFinite(u.frostCondensationT)).toBe(true);
     expect(Number.isFinite(u.frostLatitudeBias)).toBe(true);
+  });
+});
+
+describe('pldBands (Cryo step 3 — F22 polar-layered-deposit strata, the cap banding primitive)', () => {
+  // The perennial polar cap reads as STACKED bright/dark annular bands — preserved depositional
+  // layers exposed in the cap. This is an ALBEDO/luminance banding (NOT relief; verified visually,
+  // logic unit-tested — like the step-2 frost mask), built on the SAME softened-floor quantizer as
+  // terraceProfile (relief F6). The band coordinate is a pole-distance coordinate ∈ [0,1] (coldFactor:
+  // 0 at the snowline edge → 1 at the pole) ramping smoothly across the cap, so iso-value contours ARE
+  // the annular rings; adjacent layers alternate bright/dark by parity, crossfaded across the soft
+  // riser. (Coverage itself saturates past the snowline, so it can't carry rings.) Returns a LUMINANCE FACTOR
+  // ∈ [1−strength, 1] applied to the frost albedo. These tests pin the banding LOGIC.
+  it('strength 0 → factor exactly 1 for any coverage (no-op / regression-safe)', () => {
+    for (const c of [0, 0.13, 0.5, 0.87, 1.0]) {
+      expect(pldBands(c, 6, 0.4, 0.0)).toBe(1.0);
+    }
+  });
+  it('coverage 0 (bare ground / cap edge) → factor 1 (untouched)', () => {
+    expect(pldBands(0, 6, 0.4, 0.3)).toBe(1.0);
+  });
+  it('degenerate levels (<1) → factor 1 (no banding)', () => {
+    expect(pldBands(0.5, 0, 0.4, 0.3)).toBe(1.0);
+  });
+  it('flat tread of an EVEN band is bright (factor 1); flat tread of an ODD band is dimmed (1−strength)', () => {
+    // levels 6, softness 0.4 → riser starts at frac 0.6; sampling mid-tread (frac 0.5) is flat.
+    const bright = pldBands(0.5 / 6, 6, 0.4, 0.3);   // band 0 (even) mid-tread
+    const dark = pldBands(1.5 / 6, 6, 0.4, 0.3);    // band 1 (odd)  mid-tread
+    expect(bright).toBeCloseTo(1.0, 6);
+    expect(dark).toBeCloseTo(0.7, 6);
+  });
+  it('across the cap the bands produce BOTH bright (~1) and dimmed (~1−strength) rings (the alternation)', () => {
+    const strength = 0.3;
+    const factors = [];
+    for (let i = 0; i <= 60; i++) factors.push(pldBands(i / 60, 6, 0.4, strength));
+    expect(Math.max(...factors)).toBeCloseTo(1.0, 2);
+    expect(Math.min(...factors)).toBeCloseTo(1.0 - strength, 2);
+  });
+  it('factor is always bounded within [1−strength, 1] (never brightens, never over-darkens)', () => {
+    const strength = 0.4;
+    for (let i = 0; i <= 100; i++) {
+      const f = pldBands(i / 100, 5, 0.35, strength);
+      expect(f).toBeLessThanOrEqual(1.0 + 1e-9);
+      expect(f).toBeGreaterThanOrEqual(1.0 - strength - 1e-9);
+    }
+  });
+});
+
+describe('pldStrength surfacing (Cryo step 3 — F22 PLD gate: D1 cold + D2 budget × surface-age preservation)', () => {
+  // Polar layered deposits are the perennial-cap signature (Earth/Mars). Gated by a real cap
+  // existing (frostMaxCoverage, D2) AND the surface being OLD enough to preserve strata
+  // (1−resurfacing) — a young resurfaced ice shell (Europa) shows little layering. NOT gated on
+  // axial tilt (that drives the deferred seasonal advance/retreat, cryo-doc §6 Q3).
+  const cap = (vf, resurf) => ({
+    T_eq: 60, composition: { volatileFraction: vf },
+    surfaceHistory: { resurfacingRate: resurf },
+  });
+  it('bone-dry world (no cap) → pldStrength 0 (no layers without a cap)', () => {
+    expect(deriveUniforms(cap(0.01, 0.05)).pldStrength).toBe(0);
+  });
+  it('a cold, well-preserved volatile cap → positive pldStrength', () => {
+    expect(deriveUniforms(cap(0.4, 0.05)).pldStrength).toBeGreaterThan(0);
+  });
+  it('heavy resurfacing erases layering: young ice shows LESS PLD than an old surface (all else equal)', () => {
+    const old = deriveUniforms(cap(0.4, 0.05)).pldStrength;   // ancient cap
+    const young = deriveUniforms(cap(0.4, 0.7)).pldStrength;   // Europa-grade resurfacing
+    expect(young).toBeLessThan(old);
+  });
+  it('more frost budget → stronger (or equal) layering, all else equal (monotone in D2 cap)', () => {
+    const lo = deriveUniforms(cap(0.1, 0.05)).pldStrength;
+    const hi = deriveUniforms(cap(0.4, 0.05)).pldStrength;
+    expect(hi).toBeGreaterThanOrEqual(lo);
+  });
+  it('pldStrength stays finite and in [0,1] (empty bundle → default world, no NaN/throw)', () => {
+    const s = deriveUniforms({}).pldStrength;
+    expect(Number.isFinite(s)).toBe(true);
+    expect(s).toBeGreaterThanOrEqual(0);
+    expect(s).toBeLessThanOrEqual(1);
   });
 });
