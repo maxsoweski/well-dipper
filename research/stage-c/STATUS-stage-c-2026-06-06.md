@@ -615,8 +615,8 @@ sublimation landforms · F17 glacial relief) layers on the frost mask keystone; 
 | Step | Feature | Status |
 |---|---|---|
 | 1 | **`uCryoActivity` derivation (P7 cryovolcanism)** — OWNS the shared seam | ✅ **DONE** — see below |
-| 2 | **Frost-coverage mask (F23 / P22)** — the keystone every other cryo feature layers on | ⏳ next |
-| 3+ | F22 polar caps · F18 sublimation (species-switched) · F17 glacial relief | 📋 queued |
+| 2 | **Frost-coverage mask (F23 / P22)** — the keystone every other cryo feature layers on | ✅ **DONE** — see below |
+| 3+ | F22 polar caps · F18 sublimation (species-switched) · F17 glacial relief | ⏳ next |
 
 ### Cryo step 1 — `uCryoActivity` derivation (DONE 2026-06-07)
 The icy-resurfacing activity gate F9/F10 read, now DERIVED (was an option-A lab-knob stub).
@@ -636,6 +636,52 @@ The icy-resurfacing activity gate F9/F10 read, now DERIVED (was an option-A lab-
   + F10 double ridges render ✓; **A/B** — Rocky/Ocean/Lava/Frozen/Titan all derive cryoActivity **0** (Frozen &
   Titan are cold+icy but tidally DEAD → the physically-correct reason Frozen needed the manual knob before) →
   F9/F10 early-out, smooth base ✓; console clean (favicon-404 only). Backtick parity even (30).
+
+### Cryo step 2 — frost-coverage mask (F23 / F22, DONE 2026-06-07)
+THE keystone of the cryo domain: a per-fragment COVERAGE scalar `frostCover ∈ [0,1]` answering
+*"is it cold enough HERE for this volatile to be solid?"* — a **coverage test, NOT relief** (no height
+delta, no gradient → no finite-diff oracle; the surfacing LOGIC is unit-tested, the mask verified
+visually). Every other cryo feature (F22 caps · F18 sublimation · F17 glacial) layers on it. Built the
+F1–F10 in-lab way (CPU param-derivation + GLSL evaluation).
+- **CPU derivation** (`deriveUniforms`, `planet-lod-lab-core.js`) — five surfacings from drivers:
+  `frostCondensationT` (per-species freeze point K: bone-dry 0 / **H₂O 273** [incl. species 0 warm worlds
+  — cold-pole water caps] / CO₂ 150 / CH₄ 90 / N₂ 45; reuses the step-2 `volatileSpecies` classifier),
+  `frostMaxCoverage` (= `clamp01(smoothstep(0.05,0.4,volatileFraction))` — the D2 budget; bone-dry → 0
+  early-out), `frostLatitudeBias` (= `clamp01(axialTilt/90)` — D3 high-obliquity → low-latitude seasonal
+  frost), `frostAlbedo` (vec3 per species — H₂O white / CO₂ grey-white / CH₄ tholin-pink / N₂ blue-white;
+  **luminance load-bearing, colour stylized**, cryo-doc §2.a/§6 Q1), `frostLocked` (1 ⇒ tidally-locked
+  eyeball cap) + `tempEq` (T_eq passthrough for the shader localT).
+- **GLSL** `frostCoverage(p, heightField)` — `localT = T_eq·(1 − latChill·coldFactor) − height·lapseRate·T_eq`
+  where `coldFactor` is **sin²(latitude)** (unlocked) or **vSubstellarAngle/π** (locked eyeball, reuses the
+  shared varying); frost deposits where `localT < condensationT`, softened to a **fractal snowline**
+  (`noised()` breakup, kills the drawn-on-circle tell). Routed through the **Stage-6 albedo** as
+  `mix(uBaseColor, uFrostAlbedo, frostCover)` BEFORE posterize → the luminance lift **survives quantization**
+  as a bright cap. `uFrostMaxCoverage≤0 || condensationT≤0` ⇒ early-out (bone-dry/hot worlds unchanged —
+  the shader's `localT<condensationT` test rejects a 950 K Lava world even if it had volatiles). New
+  `▸ Cryo / Frost (F23/F22)` lab folder (budget/condensationT/latBias/tint driven via `.listen()`;
+  latChill/lapse/edge/noise lab knobs; ✓ enable gate zeroes the budget; 🎲 offset).
+- **13 TDD tests** (`tests/planet-lod-generation.test.js`, RED→GREEN): budget bone-dry=0 / volatile-rich>0 /
+  monotonic-in-D2; condensationT per-species + monotone-non-increasing; latBias tracks axial tilt; albedo
+  bright (>0.8) + species-distinct (CH₄≠N₂); locked flag; tempEq passthrough; in-range/finite. **224 lab
+  tests green** (+13). Backtick parity even (30).
+- **Live-verified `:9223`** (screenshots `cryo-step2-frost-01..06`): **Frozen** (CH₄ species, T 60) → full
+  pinkish-tholin frost coat over craters (coverage 0.80) ✓, **A/B OFF** → bare grey cratered base restored
+  (enable-gate regression-safe) ✓; **Rocky** (warm, species-0 → water fallback) → cold-pole water frost,
+  latitude gradient confirmed (breakup-zeroed A/B: whiter pole, darker equator — the warm-world Earth-like
+  cap, faint at the modest 0.198 budget) ✓; **Europa** (locked) → `uFrostLocked=1` path wired + numerically
+  verified (frost keyed on vSubstellarAngle), natural render = fully ice-covered moon with F9/F10 chaos/ridges
+  reading through ✓; console clean (favicon-404 only).
+- **No registry change** — frost uniforms are Cryo-internal; `uCryoActivity` (the only Cryo shared seam)
+  already flipped LIVE in step 1.
+- **Carry-forward (not blocking, surface for Max):** (1) **volatileSpecies classifier is T_eq-only** —
+  Europa (T 110) classifies CO₂ (90–150 band) not its real H₂O; a composition-aware refinement
+  (CO₂-atmo vs H₂O-crust within a band) is a queued Cryo TODO (already flagged in the #4 derivation
+  comment). (2) **Eyeball melt-ring** — the bright terminator rim is OPTICAL-owned (a glow) + the antistellar
+  frost is intrinsically dark (night side); the frost SURFACE is computed, the bright payoff is the deferred
+  OPTICAL seam. (3) **Frost-tint keep/stylize/drop** (cryo-doc §6 Q1) — built per the "keep + stylize"
+  read (per-species albedo, luminance-routed); surface for Max's call on whether Pluto/Triton N₂/CH₄
+  coloration earns a `posterizeLevels` bump. (4) **Coverage curve** — `smoothstep(0.05,0.4,vf)` makes
+  modest-volatile warm worlds (Rocky 0.198) faint; a more generous budget curve is a lab-knob tuning call.
 
 ---
 

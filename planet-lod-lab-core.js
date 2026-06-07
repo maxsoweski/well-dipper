@@ -721,6 +721,41 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const cryoColdGate = 1.0 - smoothstep(220, 273, T);   // 1 below 220K (frozen shell) → 0 above 273K (too warm for an ice shell)
   const cryoActivity = clamp01(tidalProxy * volatileGate * cryoColdGate);
 
+  // ── Cryo step 2: frost-coverage mask (F23/F22 — THE keystone every cryo feature layers on) ──
+  // A per-fragment COVERAGE test ("is it cold enough here for this volatile to be solid?"), NOT
+  // relief — so no finite-diff oracle; the surfacing LOGIC is unit-tested, the mask itself verified
+  // VISUALLY. CPU derives the four params the shader's frostCoverage() evaluates against localT;
+  // the shader mixes the surface albedo toward frostAlbedo through LUMINANCE so the cap survives
+  // posterize (the colour TINT is the stylize/drop part, cryo-doc §2.a). Reuses the already-derived
+  // volatileSpecies classifier (#4) + the vSubstellarAngle varying (the tidally-locked eyeball cap).
+  //
+  // frostCondensationT — the freeze point of the characteristic frost. A volatile-bearing
+  // temperate/warm world still grows WATER caps at its cold poles (H₂O 273 K), so species 0 (T>273
+  // but vf≥floor) falls back to water; colder classifications carry their own colder ice. Bone-dry
+  // ⇒ 0 (shader early-out). The shader's localT<condensationT test does the hot-world rejection — a
+  // 950 K Lava world never frosts even if it had a volatile budget.
+  const frostCondensationT =
+    volatileFraction < 0.05 ? 0   :   // bone dry → no characteristic frost
+    volatileSpecies <= 1     ? 273 :   // H₂O water-ice (incl. warm worlds: cold-pole water caps)
+    volatileSpecies === 2    ? 150 :   // CO₂ dry-ice (Mars S-pole)
+    volatileSpecies === 3    ? 90  :   // CH₄ (Pluto Tartarus Dorsa)
+    45;                                // N₂ (Triton / Sputnik Planitia, ~45 K)
+  // frostMaxCoverage — the global frost BUDGET from the volatile fraction (D2); the localT field
+  // decides WHERE within that budget frost actually deposits. Bone-dry → 0 (early-out).
+  const frostMaxCoverage = clamp01(smoothstep(0.05, 0.4, volatileFraction));
+  // frostLatitudeBias — D3 axial tilt spreads frost to LOW latitudes (Mars-like seasonal caps);
+  // zero-tilt worlds hold sharp polar-symmetric caps. axialTilt in degrees (default 0).
+  const axialTilt = d.axialTilt ?? 0;
+  const frostLatitudeBias = clamp01(axialTilt / 90);
+  // frostAlbedo — luminance is load-bearing (bright → survives posterize); the TINT is the
+  // stylize/drop call (cryo-doc §6 Q1): H₂O white, CO₂ grey-white, CH₄ tholin-pink, N₂ blue-white.
+  const frostAlbedo =
+    volatileSpecies === 2 ? [0.88, 0.88, 0.90] :   // CO₂ grey-white
+    volatileSpecies === 3 ? [0.93, 0.84, 0.82] :   // CH₄ tholin-pink (irradiated methane)
+    volatileSpecies === 4 ? [0.84, 0.91, 0.93] :   // N₂ blue-white (fresh nitrogen)
+    [0.93, 0.94, 0.96];                            // H₂O / default near-white
+  const frostLocked = locked ? 1 : 0;              // tidally-locked → eyeball nightside cap (vSubstellarAngle)
+
   // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief — relief doc §F9.b) ──
   // The COVERAGE of chaos is gated by the SHARED uCryoActivity (Cryo-owned — D2/D12→P7;
   // NOW DERIVED above as cryoActivity; the lab knob remains a manual override). Relief owns only the
@@ -769,6 +804,12 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     channelDensity,                                            // F8 — leveed-channel/rille gate (seed × activity; _derived-only, combiner deferred)
     lavaAxis,                                                  // F8 — wrinkle-ridge strike direction (unit vec3, seed-derived)
     cryoActivity,                                              // Cryo P7 — SHARED uCryoActivity gate (tidal×volatiles×cold); F9/F10 read it (registry LIVE)
+    frostMaxCoverage,                                          // Cryo step 2 — frost BUDGET (D2 volatileFraction); ≤0 ⇒ shader early-out
+    frostCondensationT,                                        // Cryo step 2 — per-species freeze point (K); 0=bone-dry no-frost; localT<this ⇒ frost
+    frostLatitudeBias,                                         // Cryo step 2 — D3 axial-tilt: high obliquity → low-latitude seasonal frost
+    frostAlbedo,                                               // Cryo step 2 — frost tint (vec3; luminance load-bearing, colour stylized) by species
+    frostLocked,                                               // Cryo step 2 — 1 ⇒ tidally-locked eyeball cap (antistellar) via vSubstellarAngle
+    tempEq: T,                                                 // Cryo step 2 — T_eq passthrough for the shader localT field (uPlanetTempEq)
     chaosCellScale,                                            // F9 — raft size (voronoi3d frequency)
     chaosRaftJitter,                                           // F9 — raft height/tilt displacement (∝ 1/g — low-g moons displace more)
     chaosMatrixRough,                                          // F9 — refrozen inter-raft matrix roughness

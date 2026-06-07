@@ -290,3 +290,85 @@ describe('magneticField (§2 #7 — D13; Q6: generation derives, Optical reads a
     expect(m).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('frost-coverage mask (Cryo step 2 — F23/F22, the keystone every cryo feature layers on)', () => {
+  // A per-fragment COVERAGE test ("is it cold enough here for this volatile to be solid?"),
+  // NOT relief — so there is no finite-diff oracle; these tests pin the surfacing LOGIC and the
+  // shader mask is verified visually. CPU derives the frost BUDGET (volatileFraction, D2), the
+  // per-species condensation POINT (volatileSpecies, D2→D1), the snowline LATITUDE bias (axial
+  // tilt, D3), the albedo TINT (species), and the tidally-locked flag (eyeball-cap variant). The
+  // shader's localT < condensationT test is what rejects hot worlds — a volatile-bearing temperate
+  // world still grows WATER caps at its cold poles, so species 0 (T>273, vf≥floor) condenses water.
+  const cold = (T, vf = 0.3) => ({ T_eq: T, composition: { volatileFraction: vf } });
+
+  it('bone-dry world (volatileFraction < 0.05) → no frost budget (frostMaxCoverage 0)', () => {
+    expect(deriveUniforms(cold(60, 0.01)).frostMaxCoverage).toBe(0);
+  });
+  it('a volatile-rich world has a positive frost budget', () => {
+    expect(deriveUniforms(cold(60, 0.4)).frostMaxCoverage).toBeGreaterThan(0);
+  });
+  it('more volatiles → larger (or equal) frost budget, all else equal (monotonic in D2)', () => {
+    const lo = deriveUniforms(cold(60, 0.1)).frostMaxCoverage;
+    const hi = deriveUniforms(cold(60, 0.4)).frostMaxCoverage;
+    expect(hi).toBeGreaterThanOrEqual(lo);
+  });
+
+  it('bone-dry world → condensationT 0 (no characteristic frost, the shader early-out)', () => {
+    expect(deriveUniforms(cold(60, 0.01)).frostCondensationT).toBe(0);
+  });
+  it('temperate/warm volatile world condenses WATER (273 K — cold-pole caps on a warm world)', () => {
+    expect(deriveUniforms(cold(300)).frostCondensationT).toBe(273);  // species 0, but vf≥floor → water
+    expect(deriveUniforms(cold(210)).frostCondensationT).toBe(273);  // species 1 H₂O
+  });
+  it('colder classifications carry their own colder condensation point (CO₂/CH₄/N₂)', () => {
+    expect(deriveUniforms(cold(140)).frostCondensationT).toBe(150);  // CO₂
+    expect(deriveUniforms(cold(70)).frostCondensationT).toBe(90);    // CH₄
+    expect(deriveUniforms(cold(35)).frostCondensationT).toBe(45);    // N₂
+  });
+  it('colder worlds never condense at a HIGHER temperature (monotone non-increasing)', () => {
+    const seq = [300, 210, 140, 70, 35].map(T => deriveUniforms(cold(T)).frostCondensationT);
+    for (let i = 1; i < seq.length; i++) expect(seq[i]).toBeLessThanOrEqual(seq[i - 1]);
+  });
+
+  it('axial tilt biases frost toward low latitudes — zero tilt → no bias, high tilt → more', () => {
+    expect(deriveUniforms(cold(60)).frostLatitudeBias).toBe(0);  // no axialTilt field → 0
+    const lo = deriveUniforms({ ...cold(60), axialTilt: 10 }).frostLatitudeBias;
+    const hi = deriveUniforms({ ...cold(60), axialTilt: 70 }).frostLatitudeBias;
+    expect(hi).toBeGreaterThan(lo);
+    expect(hi).toBeLessThanOrEqual(1);
+  });
+
+  it('frostAlbedo is a bright 3-channel tint (luminance load-bearing) and differs by species', () => {
+    const co2 = deriveUniforms(cold(140)).frostAlbedo;   // grey-white
+    const ch4 = deriveUniforms(cold(70)).frostAlbedo;    // tholin-pink
+    const n2  = deriveUniforms(cold(35)).frostAlbedo;    // blue-white
+    for (const a of [co2, ch4, n2]) {
+      expect(a).toHaveLength(3);
+      expect(Math.max(...a)).toBeGreaterThan(0.8);       // bright = survives posterize
+    }
+    expect(ch4).not.toEqual(n2);                          // CH₄ pink ≠ N₂ blue (the stylize call)
+  });
+
+  it('surfaces the tidally-locked flag for the eyeball-cap variant (1 locked, 0 free)', () => {
+    expect(deriveUniforms({ ...cold(110), tidalState: { locked: true } }).frostLocked).toBe(1);
+    expect(deriveUniforms({ ...cold(110), tidalState: { locked: false } }).frostLocked).toBe(0);
+  });
+  it('passes T_eq through for the shader localT field (tempEq)', () => {
+    expect(deriveUniforms(cold(110)).tempEq).toBe(110);
+    expect(deriveUniforms({}).tempEq).toBe(280);  // default
+  });
+
+  it('an explicitly bone-dry world → no frost at all (both budget AND condensationT 0, the early-out)', () => {
+    const u = deriveUniforms(cold(60, 0.0));
+    expect(u.frostMaxCoverage).toBe(0);
+    expect(u.frostCondensationT).toBe(0);
+  });
+  it('all frost surfacings stay finite / in-range (empty bundle → default volatile world, no NaN/throw)', () => {
+    const u = deriveUniforms({});               // default world (volatileFraction 0.15, T 280) → water caps
+    expect(u.frostMaxCoverage).toBeGreaterThanOrEqual(0);
+    expect(u.frostMaxCoverage).toBeLessThanOrEqual(1);
+    expect(Number.isFinite(u.frostMaxCoverage)).toBe(true);
+    expect(Number.isFinite(u.frostCondensationT)).toBe(true);
+    expect(Number.isFinite(u.frostLatitudeBias)).toBe(true);
+  });
+});

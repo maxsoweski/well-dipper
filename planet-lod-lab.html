@@ -272,6 +272,19 @@
       uniform vec3  uCryoRidgeAxis0;    // double-ridge line direction (driven, seed-derived unit vec3)
       uniform vec3  uCryoRidgeAxis1;    // grooved-band direction (driven, seed-derived unit vec3)
       uniform vec3  uCryoRidgeOffsetV;  // 🎲 domain offset — default (0,0,0) = unchanged
+      // ── Cryo step 2: frost-coverage mask (F23/F22) — coverage test, NOT relief (albedo overlay) ──
+      uniform float uFrostMaxCoverage;  // 0..1 frost BUDGET (driven, D2 volatileFraction); ≤0 ⇒ early-out
+      uniform float uFrostCondensationT;// per-species freeze point K (driven); 0=bone-dry no-frost; localT<this ⇒ frost
+      uniform float uFrostLatitudeBias; // 0..1 axial-tilt low-latitude spread (driven, D3)
+      uniform vec3  uFrostAlbedo;       // frost tint (driven by species; luminance load-bearing, colour stylized)
+      uniform float uPlanetTempEq;      // T_eq (driven) — the localT baseline
+      uniform int   uFrostLocked;       // 1 ⇒ tidally-locked eyeball cap (antistellar via vSubstellarAngle)
+      uniform float uFrostLatChill;     // equator→pole temperature falloff fraction — lab knob
+      uniform float uFrostLapseRate;    // altitude snowline weight (frost climbs mountains) — lab knob
+      uniform float uFrostEdgeSoftness; // sharp↔diffuse snowline (× T_eq = band width in K) — lab knob
+      uniform float uFrostNoiseAmp;     // fractal boundary breakup amplitude (× T_eq, K) — lab knob
+      uniform float uFrostNoiseScale;   // boundary-breakup noise frequency — lab knob
+      uniform vec3  uFrostOffset;       // 🎲 domain offset — default (0,0,0) = unchanged
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -1057,6 +1070,41 @@
         grad += bandAmp * rw.y * uGroovedBandFreq * bdfield;
       }
 
+      // ── Cryo frost-coverage mask (Stage-C Cryo step 2, F23/F22 — cryo-doc §2) ─────────────
+      // THE keystone of the cryo domain: a per-fragment COVERAGE scalar ∈ [0,1] answering "is it
+      // cold enough HERE for this volatile to be solid?" — a coverage test, NOT relief (no height
+      // delta, no gradient; logic unit-tested, mask verified visually). localT is a substellar/
+      // latitude-driven temperature minus an altitude lapse; frost deposits where localT <
+      // condensationT, softened to a fractal snowline. Consumed at the albedo stage (mix toward the
+      // bright uFrostAlbedo) so the LUMINANCE lift survives posterize as a bright cap — the colour
+      // TINT is the stylize/drop part (cryo-doc §2.a). uFrostMaxCoverage≤0 OR condensationT≤0 ⇒
+      // early-out (bone-dry / hot worlds unchanged — regression-safe).
+      float frostCoverage(vec3 p, float heightField){
+        if (uFrostMaxCoverage <= 0.0 || uFrostCondensationT <= 0.0) return 0.0;
+        // coldFactor ∈ [0,1]: 0 at the hot point (equator / substellar), 1 at the cold point
+        // (pole / antistellar). Tidally-locked worlds freeze on the antistellar hemisphere (the
+        // "eyeball" cap) via the SHARED vSubstellarAngle varying; others by geographic latitude.
+        float coldFactor;
+        if (uFrostLocked == 1){
+          coldFactor = clamp(vSubstellarAngle / 3.14159265, 0.0, 1.0);     // 0 substellar(hot) → 1 antistellar(cold)
+        } else {
+          float sinLat = normalize(p).y;                                   // smooth geographic latitude (not the bumpy normal)
+          float latCold = sinLat * sinLat;                                 // 0 equator → 1 pole
+          // axial-tilt bias lifts the equatorial floor so high-obliquity worlds frost low latitudes
+          coldFactor = mix(latCold, 1.0, uFrostLatitudeBias * 0.6);
+        }
+        // localT: equilibrium temp cooled toward the cold point, minus an altitude lapse (frost
+        // climbs mountains — heightField is the accumulated relief, already computed this frame).
+        float localT = uPlanetTempEq * (1.0 - uFrostLatChill * coldFactor)
+                     - heightField * uFrostLapseRate * uPlanetTempEq;
+        float coldness = uFrostCondensationT - localT;                     // >0 ⇒ volatile freezes here
+        // fractal boundary breakup (kills the drawn-on latitude-circle tell), in Kelvin units
+        float breakup = noised(p * uFrostNoiseScale + uFrostOffset).x * uFrostNoiseAmp * uPlanetTempEq;
+        float band = uFrostEdgeSoftness * uPlanetTempEq;                   // soft snowline width in K
+        float raw = smoothstep(-band, band, coldness + breakup);
+        return raw * uFrostMaxCoverage;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -1104,6 +1152,9 @@
         // canonical shared accumulator (index §1): Relief writes tectonic graben;
         // Fluvial incised gorges + Cryo chasma ADD IN. Stages 2/3/4 consume it.
         float canyonHeight = 0.0;
+        // Stage 3 CRYO frost-coverage (F23/F22) — albedo overlay, set in the analytic branch
+        // (needs the accumulated height for the altitude lapse), consumed at Stage 6.
+        float frostCover = 0.0;
         if (uNormalMode == 1){
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
@@ -1134,6 +1185,9 @@
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
+          // ── Stage 3: CRYO frost-coverage mask (F23/F22) — coverage test, not relief; needs the
+          // accumulated height h for the altitude lapse. Consumed at the Stage-6 albedo overlay.
+          frostCover = frostCoverage(vPos, h);
         }
 
         // ── Stage 2 (cont.): mountains / scarps; writes canyonHeight   [domain: Relief]
@@ -1154,7 +1208,11 @@
         // F3 bright rays — fresh high-albedo ejecta streaks brighten the lit surface BEFORE
         // posterize (the relief doc §F3.a albedo exception; only term here that's albedo not relief).
         float rayBright = rayField(vPos) * diff;       // sunlit fresh material only
-        vec3 surface = posterize(min(uBaseColor * (diff + ambient) + uBaseColor * rayBright, vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
+        // Cryo frost (F23/F22): high-albedo overlay mixed into the base BEFORE posterize so the
+        // luminance lift survives quantization as a bright cap (cryo-doc §2.a; the colour TINT is
+        // the stylize/drop part). frostCover=0 ⇒ uBaseColor unchanged (regression-safe).
+        vec3 albedoCol = mix(uBaseColor, uFrostAlbedo, frostCover);
+        vec3 surface = posterize(min(albedoCol * (diff + ambient) + uBaseColor * rayBright, vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
         //    lit color + landMask; renders LAST among surface terms, before the envelope split. [domain: Exotic]
@@ -1318,6 +1376,19 @@
       uCryoRidgeAxis0:   { value: new THREE.Vector3(1, 0, 0) },   // double-ridge line direction (driven)
       uCryoRidgeAxis1:   { value: new THREE.Vector3(0, 1, 0) },   // grooved-band direction (driven)
       uCryoRidgeOffsetV: { value: new THREE.Vector3() },   // 🎲 domain offset
+      // ── Cryo step 2: frost-coverage mask (F23/F22) — albedo overlay, not relief ──
+      uFrostMaxCoverage: { value: 0.0 },   // frost budget (driven, D2; ≤0 early-outs)
+      uFrostCondensationT: { value: 0.0 }, // per-species freeze point K (driven; 0=no frost)
+      uFrostLatitudeBias:{ value: 0.0 },   // axial-tilt low-latitude spread (driven, D3)
+      uFrostAlbedo:      { value: new THREE.Color(0.93, 0.94, 0.96) },  // frost tint (driven by species)
+      uPlanetTempEq:     { value: 280.0 }, // T_eq baseline for localT (driven)
+      uFrostLocked:      { value: 0 },     // 1 = tidally-locked eyeball cap (driven)
+      uFrostLatChill:    { value: 0.35 },  // equator→pole temp falloff fraction — lab knob
+      uFrostLapseRate:   { value: 0.3 },   // altitude snowline weight — lab knob
+      uFrostEdgeSoftness:{ value: 0.08 },  // sharp↔diffuse snowline (× T_eq = K band) — lab knob
+      uFrostNoiseAmp:    { value: 0.06 },  // boundary breakup amplitude (× T_eq, K) — lab knob
+      uFrostNoiseScale:  { value: 3.0 },   // boundary breakup noise frequency — lab knob
+      uFrostOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1513,6 +1584,20 @@
       cryoRidgeWarp: 0.3,
       cryoRidgeAxis0: [1,0,0],
       cryoRidgeAxis1: [0,1,0],
+      // ── Cryo step 2: frost-coverage mask (F23/F22) — driven budget/condensationT/bias/albedo/
+      // locked/tempEq from the preset; latChill/lapse/edge/noise are lab knobs. ──
+      frostMaxCoverage: 0.0,
+      frostCondensationT: 0.0,
+      frostLatitudeBias: 0.0,
+      frostAlbedo: [0.93,0.94,0.96],
+      frostLocked: 0,
+      tempEq: 280.0,
+      frostLatChill: 0.35,
+      frostLapseRate: 0.3,
+      frostEdgeSoftness: 0.08,
+      frostNoiseAmp: 0.06,
+      frostNoiseScale: 3.0,
+      frostOffset: [0,0,0],
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
@@ -1526,6 +1611,7 @@
       lavaEnabled: true,
       chaosEnabled: true,
       cryoRidgeEnabled: true,
+      frostEnabled: true,
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -1537,6 +1623,7 @@
       lavaOffset: [0,0,0],
       chaosOffset: [0,0,0],
       cryoRidgeOffsetV: [0,0,0],
+      frostOffset: [0,0,0],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1713,11 +1800,20 @@
       state.groovedBandFreq = u.groovedBandFreq;
       state.cryoRidgeAxis0 = u.cryoRidgeAxes[0];
       state.cryoRidgeAxis1 = u.cryoRidgeAxes[1];
+      // Cryo step 2 frost-coverage (F23/F22) — driven budget/condensationT/bias/albedo/locked/tempEq
+      // flow into state (frame loop → uniforms); latChill/lapse/edge/noise stay lab knobs.
+      state.frostMaxCoverage   = u.frostMaxCoverage;
+      state.frostCondensationT = u.frostCondensationT;
+      state.frostLatitudeBias  = u.frostLatitudeBias;
+      state.frostAlbedo        = u.frostAlbedo;
+      state.frostLocked        = u.frostLocked;
+      state.tempEq             = u.tempEq;
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
       // slate. Axes above already re-derive from the seed; reset the domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
+      state.frostOffset = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1872,6 +1968,23 @@
     fCryoRidge.add(state, 'cryoRidgeWarp', 0, 1.0, 0.01).name('ridge sinuosity');
     fCryoRidge.add(state, 'cryoRidgeEnabled').name('✓ enabled');
     fCryoRidge.add({ roll(){ state.cryoRidgeOffsetV = randOffset(); } }, 'roll').name('🎲 randomize');
+    // ▸ Cryo / Frost (F23/F22) — the frost-coverage mask: an albedo OVERLAY (luminance-routed, not
+    // relief) painting a bright cap where localT < condensationT. Budget/condensationT/latBias/albedo/
+    // tempEq/locked are DRIVEN (sync from the preset via .listen()); latChill/lapse/edge/noise are lab
+    // knobs. The ✓ enable gate zeroes the budget for a clean A/B. Showcase presets: Frozen / Titan /
+    // Europa (full cap); Rocky / Ocean (warm worlds → cold-pole water caps).
+    const fFrost = fRelief.addFolder('Cryo / Frost (F23/F22)'); fFrost.open();
+    fFrost.add(state, 'frostMaxCoverage', 0, 1, 0.01).name('frost budget (D2)').listen();
+    fFrost.add(state, 'frostCondensationT', 0, 273, 1).name('condensation T (K)').listen();
+    fFrost.add(state, 'frostLatitudeBias', 0, 1, 0.01).name('lat bias (axial tilt)').listen();
+    fFrost.add(state, 'frostLatChill', 0, 0.8, 0.01).name('equator→pole chill');
+    fFrost.add(state, 'frostLapseRate', 0, 1, 0.01).name('altitude lapse');
+    fFrost.add(state, 'frostEdgeSoftness', 0.01, 0.4, 0.01).name('snowline softness');
+    fFrost.add(state, 'frostNoiseAmp', 0, 0.2, 0.01).name('boundary breakup');
+    fFrost.add(state, 'frostNoiseScale', 0.5, 8, 0.5).name('breakup freq');
+    fFrost.addColor(state, 'frostAlbedo').name('frost tint').listen();
+    fFrost.add(state, 'frostEnabled').name('✓ enabled');
+    fFrost.add({ roll(){ state.frostOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -2074,6 +2187,19 @@
       uniforms.uCryoRidgeWarp.value    = state.cryoRidgeWarp;
       uniforms.uCryoRidgeAxis0.value.set(state.cryoRidgeAxis0[0], state.cryoRidgeAxis0[1], state.cryoRidgeAxis0[2]);
       uniforms.uCryoRidgeAxis1.value.set(state.cryoRidgeAxis1[0], state.cryoRidgeAxis1[1], state.cryoRidgeAxis1[2]);
+      // Cryo step 2 frost-coverage — ✓ enable gate zeroes the BUDGET (clean A/B; shape/tint preserved)
+      uniforms.uFrostMaxCoverage.value   = state.frostEnabled ? state.frostMaxCoverage : 0.0;   // ✓ enable gate
+      uniforms.uFrostCondensationT.value = state.frostCondensationT;
+      uniforms.uFrostLatitudeBias.value  = state.frostLatitudeBias;
+      uniforms.uFrostAlbedo.value.setRGB(state.frostAlbedo[0], state.frostAlbedo[1], state.frostAlbedo[2]);
+      uniforms.uPlanetTempEq.value       = state.tempEq;
+      uniforms.uFrostLocked.value        = state.frostLocked;
+      uniforms.uFrostLatChill.value      = state.frostLatChill;
+      uniforms.uFrostLapseRate.value     = state.frostLapseRate;
+      uniforms.uFrostEdgeSoftness.value  = state.frostEdgeSoftness;
+      uniforms.uFrostNoiseAmp.value      = state.frostNoiseAmp;
+      uniforms.uFrostNoiseScale.value    = state.frostNoiseScale;
+      uniforms.uFrostOffset.value.set(state.frostOffset[0], state.frostOffset[1], state.frostOffset[2]);
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
       uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);
