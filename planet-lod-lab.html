@@ -99,6 +99,7 @@
     import * as THREE from 'three';
     import GUI from 'lil-gui';
     import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms } from './planet-lod-lab-core.js';
+    import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -1976,6 +1977,12 @@
     // ─────────────────────────────────────────────────────────────────────────
     const gui = new GUI({ title: 'PLANET LOD LAB — foundation' });
 
+    // ▸ Body filter — archetype-driven panel filtering + per-feature solo
+    // (planet-archetypes.js). Created here so it sits at the TOP of the panel;
+    // its controls are added below, once the feature folders exist.
+    const filterUI = { filter: true, archetypeLabel: '—' };
+    const fFilter = gui.addFolder('Body filter'); fFilter.open();
+
     // ▸ View & LOD (always open)
     const fView = gui.addFolder('View & LOD'); fView.open();
     fView.add(state, 'distance', 1.1, 30, 0.1).name('distance (radii)').listen();
@@ -2138,6 +2145,7 @@
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
+      applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
     }
     const fDrivers = gui.addFolder('Drivers'); fDrivers.open();
     fDrivers.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('type preset').onChange(applyDrivers);
@@ -2346,6 +2354,47 @@
     fGlacial.add(state, 'glacialColdGate', 0.02, 0.9, 0.02).name('cold-cap softness');
     fGlacial.add(state, 'glacialEnabled').name('✓ enabled');
     fGlacial.add({ roll(){ state.glacialOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+
+    // ── Archetype filter + per-feature solo ──────────────────────────────────
+    // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
+    const featureFolders = {
+      craters: fCraters, ejecta: fEjecta, mountains: fMountains, canyons: fCanyons,
+      scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
+      lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
+      sublimation: fSub, glacial: fGlacial,
+    };
+    // soloKey=null → enable ALL features; otherwise enable ONLY that feature.
+    function setFeatureEnables(soloKey){
+      for (const k of Object.keys(FEATURES)) {
+        state[FEATURES[k].enableKey] = (soloKey === null) || (k === soloKey);
+      }
+      gui.controllersRecursive().forEach(c => c.updateDisplay());
+    }
+    // The relevant feature set = UNION of featuresOf() over every archetype whose
+    // presets include the current Drivers preset (Frozen maps to two → union).
+    function relevantFeatureSet(){
+      const archs = Object.keys(ARCHETYPES).filter(a => ARCHETYPES[a].presets.includes(driverUI.preset));
+      const set = new Set();
+      for (const a of archs) for (const k of featuresOf(a)) set.add(k);
+      return { set, archs };
+    }
+    function applyArchetypeFilter(){
+      const { set, archs } = relevantFeatureSet();
+      filterUI.archetypeLabel = archs.map(a => ARCHETYPES[a].label).join(' + ') || '(none)';
+      for (const [key, folder] of Object.entries(featureFolders)) {
+        if (!filterUI.filter || set.has(key)) folder.show(); else folder.hide();
+      }
+      gui.controllersRecursive().forEach(c => c.updateDisplay());
+    }
+    // One 🔆 solo button per feature folder (appended below its existing controls).
+    for (const [key, folder] of Object.entries(featureFolders)) {
+      folder.add({ solo(){ setFeatureEnables(key); } }, 'solo').name('🔆 solo (isolate)');
+    }
+    // Header controls live in the top fFilter folder.
+    fFilter.add(filterUI, 'archetypeLabel').name('archetype').disable();
+    fFilter.add(filterUI, 'filter').name('filter to relevant').onChange(applyArchetypeFilter);
+    fFilter.add({ enableAll(){ setFeatureEnables(null); } }, 'enableAll').name('enable all');
+    fFilter.add({ clearSolo(){ setFeatureEnables(null); } }, 'clearSolo').name('clear solo');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -2674,6 +2723,11 @@
                     settingsBlob, applySettings, driverUI, applyDrivers,
                     setPreset(name){ if (DRIVER_PRESETS[name]) { driverUI.preset = name; applyDrivers(); } return state._derived; },
                     setQuality(q){ driverUI.qualityTier = q; applyDrivers(); return state._derived; },
+                    solo(key){ setFeatureEnables(key); }, enableAllFeatures(){ setFeatureEnables(null); },
+                    setFilter(on){ filterUI.filter = on; applyArchetypeFilter(); },
+                    featureVisible(key){ return !featureFolders[key]._hidden; },
+                    featureEnabled(key){ return !!state[FEATURES[key].enableKey]; },
+                    featureFolders, filterUI,
                     get sceneTarget(){ return sceneTarget; } };
   </script>
 </body>
