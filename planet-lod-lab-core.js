@@ -357,6 +357,42 @@ export function ridgeWave(phase) {
   return { value, dvdphase };
 }
 
+// ── edificeProfile — F7 volcanic-edifice radial profile (relief doc §F7.a) ───
+// A single volcano as a function of normalized radius r = dist(fragment,center) /
+// edificeRadius, plus its analytic dh/dr (the relief-normal term the GLSL combiner
+// chain-rules into the shading gradient). Two parts:
+//
+//   cone   pow(1−r, p) for r<1, p = mix(1.5, 4, shieldStratoMix): SHIELD (broad
+//          shallow, p=1.5 — Mauna Loa/Olympus) ↔ STRATO (steep narrow, p=4 — Fuji).
+//          Summit at r=0 (h=1), tapering to the base at r=1 (h=0).
+//   caldera a parabolic bowl subtracted at the summit (r<calderaR) — reuses the F2
+//          inverted-bowl shape: depth·((r/calderaR)²−1), = −depth at center → 0 at
+//          the caldera rim, so the very summit reads as a crater pit.
+//
+// Zero for r ≥ 1 (distant cells don't bleed in, like craterProfile/ejectaProfile).
+// The GLSL edificeProfile() is transcribed from this; dhdr is pinned vs central
+// finite-diff in tests (relief-doc §5.4 silent-bug gate — a sign-wrong cone face
+// lights the volcano inside-out yet compiles fine). The cone derivative
+// d(pow(1−r,p))/dr = −p·pow(1−r,p−1); the caldera's = depth·2r/calderaR².
+const EDIFICE_SHIELD_P = 1.5, EDIFICE_STRATO_P = 4.0;
+// Caldera depth must exceed the cone's drop across calderaR (steepest case: strato p=4
+// drops ~0.40 over r∈[0,0.12]) or the summit reads as a peak, not a pit. 0.5 clears it
+// for every mix with margin → a clean summit crater.
+const EDIFICE_CALDERA_R = 0.12, EDIFICE_CALDERA_DEPTH = 0.5;
+export function edificeProfile(r, shieldStratoMix = 0.5, calderaR = EDIFICE_CALDERA_R) {
+  if (r >= 1.0) return { h: 0, dhdr: 0 };
+  const p = mix(EDIFICE_SHIELD_P, EDIFICE_STRATO_P, clamp01(shieldStratoMix));
+  const omr = 1.0 - r;
+  let h = Math.pow(omr, p);
+  let dhdr = -p * Math.pow(omr, p - 1.0);                  // d(pow(1−r,p))/dr
+  if (r < calderaR) {                                      // summit caldera bowl (F2 cavity shape)
+    const s = r / calderaR;
+    h    += EDIFICE_CALDERA_DEPTH * (s * s - 1.0);         // −depth at center → 0 at rim
+    dhdr += EDIFICE_CALDERA_DEPTH * 2.0 * r / (calderaR * calderaR);
+  }
+  return { h, dhdr };
+}
+
 // seededUnitVec3 — a deterministic ~uniform point on the unit sphere from a scalar seed.
 // z uniform in [-1,1], azimuth uniform in [0,2π) (the standard sphere-point sampler);
 // shape mirrors seedOffset()'s sin-fract hashing. Used for F4 rift-plane normals.
@@ -595,6 +631,27 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // warped ridges form the crosscutting tessera grid (seed-deterministic per planet).
   const tesseraAxes = [seededUnitVec3(seed + 8), seededUnitVec3(seed + 9)];
 
+  // ── F7 volcanic edifices (Stage-C step 3, Relief — relief doc §F7.b) ────────
+  // volcanismStrength: the edifice density/size gate (≤0 ⇒ combiner early-out). Volcanic
+  // activity is driven by D12 tidal heating (Io self-heats → effusive shields) and D11
+  // young-age resurfacing (fresh volcanic plains), plus a modest subduction-arc proxy
+  // (habitability is this file's plate-tectonics proxy — Earth's arc volcanoes). A dead,
+  // cold, un-resurfaced world (Frozen) shows none; Io-grade tidal (Lava) saturates.
+  const volcanismStrength = clamp01(tidalProxy + resurfacing * 0.5 + habitability * 0.3);
+
+  // edificeMaxHeight (∝ 1/g, D14): low-gravity worlds grow GIANT shields — Olympus Mons
+  // is 22 km because Mars is ~0.38 g (a tall edifice would slump under Earth gravity).
+  // 1 g (Earth) → 1.0; clamped to [0.2, 2.0] so a near-zero-g bundle can't blow up the
+  // relief amplitude (registry range). The combiner scales cone height by this.
+  const edificeMaxHeight = Math.min(2.0, Math.max(0.2, 1.0 / Math.max(surfaceGravity, 0.05)));
+
+  // shieldStratoMix (0=effusive SHIELD ↔ 1=explosive STRATO): a magma-VISCOSITY proxy.
+  // Wet subduction-zone magma is silica-rich and viscous → steep stratovolcanoes (Earth);
+  // dry/hot basaltic magma is fluid → broad shields (Io, Mars, Hawaii). habitability is
+  // the wet-plate-tectonics proxy, so it doubles as the viscosity axis (dry world → 0,
+  // shield). The combiner blends the cone exponent pow(1−r, mix(1.5,4,this)).
+  const shieldStratoMix = clamp01(habitability);
+
   return {
     mountainAmp,                                                // F1 — ridged base relief amplitude (erosion-softened)
     orogenyStrength,                                            // F1 — isotropic ridged ↔ anisotropic fold-belt blend
@@ -608,6 +665,9 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     plateauStrength,                                           // F6 — flat-topped highland relief amplitude (tectonic thickening, eroded-down)
     tesseraStrength,                                           // F6 — crosscutting-lattice amplitude (high-stress gate, eroded-down)
     tesseraAxes,                                               // F6 — 2 lattice orientations (unit vec3 ×2, seed-derived)
+    volcanismStrength,                                         // F7 — edifice density/size gate (tidal + resurfacing + arc proxy)
+    edificeMaxHeight,                                          // F7 — edifice height scale ∝ 1/g, clamped [0.2,2.0] (low-g → giant shields)
+    shieldStratoMix,                                           // F7 — 0=effusive shield ↔ 1=explosive strato (viscosity/habitability proxy)
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)

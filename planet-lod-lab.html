@@ -228,6 +228,15 @@
       uniform float uTesseraWarpFreq;  // warp-noise domain frequency — lab knob
       uniform vec3  uTesseraDomainOffset; // 🎲 domain offset — default (0,0,0) = unchanged
 
+      // ── F7 volcanic edifices (Stage-C step 3, Relief) — shield/strato cones + caldera ──
+      uniform float uVolcanismStrength; // 0..1 edifice density gate (driven; ≤0 early-outs)
+      uniform float uEdificeMaxHeight;  // edifice height scale ∝ 1/g (driven, 0.2..2.0)
+      uniform float uShieldStratoMix;   // 0=effusive shield ↔ 1=explosive strato (driven, viscosity)
+      uniform float uEdificeScale;      // edifice cell density (vPos * scale) — lab knob (sparser than craters)
+      uniform float uEdificeAmp;        // overall edifice relief amplitude — lab knob
+      uniform float uEdificeCaldera;    // summit caldera radius fraction (0..1) — lab knob
+      uniform vec3  uEdificeOffset;     // 🎲 domain offset — default (0,0,0) = unchanged
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -836,6 +845,48 @@
         grad += uTesseraStrength * dprod;
       }
 
+      // ── F7 edifice profile (Stage-C step 3, Relief) — transcribed from edificeProfile()
+      // in planet-lod-lab-core.js (same constants, vitest-pinned analytic dhdr §5.4).
+      // r = dist/edificeRadius. Cone body pow(1-r, p), p = mix(1.5,4,shieldStratoMix)
+      // (shield broad ↔ strato steep), with a summit caldera bowl (F2 cavity shape)
+      // subtracted at r<calderaR. Zero for r>=1. Returns vec2(height, dh/dr).
+      vec2 edificeProfile(float r, float shieldStratoMix, float calderaR){
+        if (r >= 1.0) return vec2(0.0);
+        float p = mix(1.5, 4.0, clamp(shieldStratoMix, 0.0, 1.0));
+        float omr = 1.0 - r;
+        float h = pow(omr, p);
+        float dhdr = -p * pow(omr, p - 1.0);                      // d(pow(1-r,p))/dr
+        if (r < calderaR){                                        // summit caldera bowl
+          float s = r / calderaR;
+          h    += 0.5 * (s*s - 1.0);                              // -depth at center -> 0 at rim
+          dhdr += 0.5 * 2.0 * r / (calderaR*calderaR);
+        }
+        return vec2(h, dhdr);
+      }
+
+      // F7 edifice combiner — volcanic shield/strato cones at hashed Voronoi centers
+      // (a NEW placement, sparser than craters via uEdificeScale -> fewer, bigger cones).
+      // Each hosting cell gets a radial cone + summit caldera; uVolcanismStrength gates
+      // the host fraction (a low-activity world shows a few scattered volcanoes), and
+      // uEdificeMaxHeight scales the height (low-g worlds -> giant shields, the Olympus
+      // Mons driver). The radial slope chain-rules exactly via voroGrad*uEdificeScale
+      // (same as craterCombiner). uVolcanismStrength<=0 ⇒ early-out (Stage-A base +
+      // F1/F2/F3/F4/F5/F6 untouched, regression-safe).
+      void edificeCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uVolcanismStrength <= 0.0) return;
+        vec3 cellId, voroGrad;
+        vec2 ff = voronoi3d(pos * uEdificeScale + uEdificeOffset, uVoroCells, cellId, voroGrad);
+        vec3 ch = hash33(cellId);                                 // per-cell hash: host gate + radius
+        float host = step(1.0 - uVolcanismStrength, ch.x);        // volcanism fraction of cells host an edifice
+        float edificeRadius = mix(0.3, 0.7, ch.y);                // hashed size (cell units; bigger than craters)
+        float r = ff.x / edificeRadius;
+        vec2 prof = edificeProfile(r, uShieldStratoMix, uEdificeCaldera);
+        float amp = uEdificeAmp * uEdificeMaxHeight * host;
+        h    += amp * prof.x;
+        // d(h)/d(vPos) = dh/dr · (1/edificeRadius) · d(f1)/d(vPos); d(f1)/d(vPos)=voroGrad·uEdificeScale
+        grad += amp * prof.y * (1.0/edificeRadius) * voroGrad * uEdificeScale;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -907,6 +958,7 @@
           scarpCombiner(vPos, h, grad);
           plateauCombiner(vPos, fwBase, h, grad);
           tesseraCombiner(vPos, h, grad);
+          edificeCombiner(vPos, h, grad);          // F7 — volcanic shield/strato cones + caldera
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
         }
@@ -1054,6 +1106,14 @@
       uTesseraWarp:      { value: 0.5 },   // groove-line sinuosity (lab-tunable)
       uTesseraWarpFreq:  { value: 2.0 },   // warp-noise domain frequency (lab-tunable)
       uTesseraDomainOffset: { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
+      // ── F7 volcanic edifices (Stage-C step 3, Relief) — shield/strato cones + caldera ──
+      uVolcanismStrength: { value: 0.0 },  // edifice density gate (driven; ≤0 early-outs)
+      uEdificeMaxHeight:  { value: 1.0 },  // height scale ∝ 1/g (driven, 0.2..2.0)
+      uShieldStratoMix:   { value: 0.0 },  // 0=shield ↔ 1=strato (driven, viscosity)
+      uEdificeScale:      { value: 3.0 },  // edifice cell density — lab-tunable (sparser than craters)
+      uEdificeAmp:        { value: 0.2 },  // overall edifice relief amplitude (lab-tunable)
+      uEdificeCaldera:    { value: 0.12 }, // summit caldera radius fraction (lab-tunable)
+      uEdificeOffset:     { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1205,6 +1265,14 @@
       tesseraFreq: 5.0,
       tesseraWarp: 0.5,
       tesseraWarpFreq: 2.0,
+      // ── F7 volcanic edifices (Stage-C step 3, Relief) — derived (volcanismStrength/
+      // edificeMaxHeight/shieldStratoMix from the preset) + lab-tunable (scale/amp/caldera). ──
+      volcanismStrength: 0.0,
+      edificeMaxHeight: 1.0,
+      shieldStratoMix: 0.0,
+      edificeScale: 3.0,
+      edificeAmp: 0.2,
+      edificeCaldera: 0.12,
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
@@ -1214,6 +1282,7 @@
       scarpsEnabled: true,
       plateausEnabled: true,
       tesseraEnabled: true,
+      edificesEnabled: true,
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -1221,6 +1290,7 @@
       scarpDomainOffset: [0,0,0],
       plateauDomainOffset: [0,0,0],
       tesseraDomainOffset: [0,0,0],
+      edificeOffset: [0,0,0],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1365,10 +1435,16 @@
       state.tesseraStrength  = u.tesseraStrength;
       state.tesseraAxes      = u.tesseraAxes;
       for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(u.tesseraAxes[i][0], u.tesseraAxes[i][1], u.tesseraAxes[i][2]);
+      // F7 edifices (Stage-C step 3) — derived volcanism strength + g⁻¹ height scale +
+      // shield↔strato viscosity flow into state (frame loop → uniforms); scale/amp/caldera
+      // are lab knobs. Placement is its own sparse Voronoi (uEdificeScale < uCraterScale).
+      state.volcanismStrength = u.volcanismStrength;
+      state.edificeMaxHeight  = u.edificeMaxHeight;
+      state.shieldStratoMix   = u.shieldStratoMix;
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
-      // slate. Axes above already re-derive from the seed; reset the 5 domain offsets to 0.
+      // slate. Axes above already re-derive from the seed; reset the 6 domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
-      state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0];
+      state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1470,6 +1546,19 @@
       for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(state.tesseraAxes[i][0], state.tesseraAxes[i][1], state.tesseraAxes[i][2]);
       state.tesseraDomainOffset = randOffset();
     } }, 'roll').name('🎲 randomize');
+    // ▸ Edifices (F7) — volcanic shield/strato cones + summit caldera. volcanism strength /
+    // g⁻¹ height / shield↔strato come from the driver preset (.listen()-synced); scale (cell
+    // density), amplitude, caldera radius are lab knobs. Cones at hashed Voronoi centers,
+    // sparser than craters (uEdificeScale < uCraterScale) → fewer, bigger volcanoes.
+    const fEdifices = fRelief.addFolder('Edifices (F7)'); fEdifices.open();
+    fEdifices.add(state, 'volcanismStrength', 0, 1, 0.01).name('volcanism (density)').listen();
+    fEdifices.add(state, 'edificeMaxHeight', 0.2, 2.0, 0.01).name('max height (g⁻¹)').listen();
+    fEdifices.add(state, 'shieldStratoMix', 0, 1, 0.01).name('shield↔strato').listen();
+    fEdifices.add(state, 'edificeScale', 1, 10, 0.5).name('cell density');
+    fEdifices.add(state, 'edificeAmp', 0, 0.6, 0.01).name('amplitude');
+    fEdifices.add(state, 'edificeCaldera', 0.02, 0.3, 0.01).name('caldera radius');
+    fEdifices.add(state, 'edificesEnabled').name('✓ enabled');
+    fEdifices.add({ roll(){ state.edificeOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1636,12 +1725,20 @@
       uniforms.uTesseraFreq.value      = state.tesseraFreq;
       uniforms.uTesseraWarp.value      = state.tesseraWarp;
       uniforms.uTesseraWarpFreq.value  = state.tesseraWarpFreq;
+      // F7 edifices — volcanism/height/viscosity driven; scale/amp/caldera lab-tunable.
+      uniforms.uVolcanismStrength.value = state.edificesEnabled ? state.volcanismStrength : 0.0;   // ✓ enable gate
+      uniforms.uEdificeMaxHeight.value = state.edificeMaxHeight;
+      uniforms.uShieldStratoMix.value  = state.shieldStratoMix;
+      uniforms.uEdificeScale.value     = state.edificeScale;
+      uniforms.uEdificeAmp.value       = state.edificeAmp;
+      uniforms.uEdificeCaldera.value   = state.edificeCaldera;
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
       uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);
       uniforms.uScarpDomainOffset.value.set(state.scarpDomainOffset[0], state.scarpDomainOffset[1], state.scarpDomainOffset[2]);
       uniforms.uPlateauDomainOffset.value.set(state.plateauDomainOffset[0], state.plateauDomainOffset[1], state.plateauDomainOffset[2]);
       uniforms.uTesseraDomainOffset.value.set(state.tesseraDomainOffset[0], state.tesseraDomainOffset[1], state.tesseraDomainOffset[2]);
+      uniforms.uEdificeOffset.value.set(state.edificeOffset[0], state.edificeOffset[1], state.edificeOffset[2]);
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =

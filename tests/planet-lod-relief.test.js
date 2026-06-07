@@ -5,7 +5,7 @@
 // here we pin the LOGIC (gravity gates morphology, icy worlds relax, etc.) and the
 // analytic gradient (the relief-doc §5.4 silent-bug class — wrong normals compile fine).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave, ejectaProfile } from '../planet-lod-lab-core.js';
+import { deriveUniforms, craterProfile, ridgedFold, grabenProfile, scarpProfile, terraceProfile, ridgeWave, ejectaProfile, edificeProfile } from '../planet-lod-lab-core.js';
 
 // ── F2 crater generation-side surfacings (relief doc §F2.b) ──────────────────
 describe('craterDensity (F2 — surface age via bombardment net of resurfacing)', () => {
@@ -784,5 +784,126 @@ describe('F3 ejecta/ray surfacings (deriveUniforms)', () => {
       expect(u[k]).toBeGreaterThanOrEqual(0);
       expect(u[k]).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// ── F7 volcanic edifices — edificeProfile oracle (relief doc §F7.a) ───────────
+// A single volcano's radial profile h(r), r = dist(fragment,center)/edificeRadius.
+// A cone BODY (shield = broad pow(1−r,1.5) ↔ strato = steep pow(1−r,4), blended by
+// shieldStratoMix) with a summit CALDERA — a parabolic bowl subtracted at r<calderaR
+// (reuses the F2 inverted-bowl shape). Zero for r ≥ 1 (distant cells don't bleed in).
+// The GLSL edificeCombiner is transcribed from this; pinning dhdr vs central finite-
+// diff is the relief-doc §5.4 silent-bug gate (a sign-wrong cone face lights the
+// volcano inside-out yet compiles fine — exactly what a CPU oracle catches first).
+describe('edificeProfile (F7 — volcanic cone + summit caldera)', () => {
+  it('is zero at and beyond the base (r ≥ 1) — distant cells do not bleed in', () => {
+    for (const r of [1.0, 1.5, 3.0]) {
+      const { h, dhdr } = edificeProfile(r, 0.5);
+      expect(h).toBeCloseTo(0, 9);
+      expect(dhdr).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('shield (mix=0) is BROADER than strato (mix=1) — taller at mid-radius', () => {
+    const shield = edificeProfile(0.5, 0).h;     // broad shallow pow(1−r,1.5)
+    const strato = edificeProfile(0.5, 1).h;     // steep narrow pow(1−r,4)
+    expect(shield).toBeGreaterThan(strato);
+  });
+
+  it('summit caldera depresses the center below the caldera rim', () => {
+    // Without a caldera the cone decreases monotonically from r=0; the caldera bowl
+    // makes the very center LOWER than the caldera rim (the summit-crater read).
+    const center = edificeProfile(0.0, 0.5).h;
+    const rim    = edificeProfile(0.12, 0.5).h;   // ~ the caldera radius
+    expect(center).toBeLessThan(rim);
+  });
+
+  it('the flank decreases monotonically outside the caldera (r: calderaR → base)', () => {
+    const a = edificeProfile(0.2, 0.5).h;
+    const b = edificeProfile(0.5, 0.5).h;
+    const c = edificeProfile(0.9, 0.5).h;
+    expect(a).toBeGreaterThan(b);
+    expect(b).toBeGreaterThan(c);
+    expect(c).toBeGreaterThan(0);                 // still positive just inside the base
+  });
+});
+
+describe('edificeProfile — analytic derivative vs finite-diff (relief doc §5.4 silent-bug gate)', () => {
+  const EPS = 1e-6;
+  // FLANK strictly inside (calderaR, 1) — the smooth cone, avoiding the r=calderaR kink
+  // and the r=1 clamp. CALDERA strictly inside (0, calderaR). Both blends pinned (a
+  // sign-wrong cone or caldera lights the volcano backward yet compiles — §5.4 class).
+  const FLANK = [0.2, 0.4, 0.6, 0.85];
+  const CALDERA = [0.03, 0.06, 0.09];
+
+  for (const m of [0, 0.5, 1]) {
+    it(`dhdr matches central finite-diff on the flank (mix=${m})`, () => {
+      for (const r of FLANK) {
+        const { dhdr } = edificeProfile(r, m);
+        const fd = (edificeProfile(r + EPS, m).h - edificeProfile(r - EPS, m).h) / (2 * EPS);
+        expect(dhdr).toBeCloseTo(fd, 4);
+      }
+    });
+    it(`dhdr matches central finite-diff inside the caldera (mix=${m})`, () => {
+      for (const r of CALDERA) {
+        const { dhdr } = edificeProfile(r, m);
+        const fd = (edificeProfile(r + EPS, m).h - edificeProfile(r - EPS, m).h) / (2 * EPS);
+        expect(dhdr).toBeCloseTo(fd, 4);
+      }
+    });
+  }
+});
+
+// ── F7 generation-side surfacings (relief doc §F7.b) ──────────────────────────
+// volcanismStrength ← tidal heating + young-age resurfacing (+ subduction-arc proxy)
+// — the edifice density/size gate; edificeMaxHeight ∝ 1/g (low-g worlds grow GIANT
+// shields — Olympus Mons is huge because Mars is low-g, D14); shieldStratoMix ←
+// viscosity proxy (wet/habitable → explosive STRATO ↔ dry/tidal → effusive SHIELD).
+describe('F7 volcanic-edifice surfacings (deriveUniforms)', () => {
+  it('volcanismStrength rises with resurfacing rate (young volcanic plains, D11)', () => {
+    const lo = deriveUniforms({ surfaceHistory: { resurfacingRate: 0.0 } }).volcanismStrength;
+    const hi = deriveUniforms({ surfaceHistory: { resurfacingRate: 0.9 } }).volcanismStrength;
+    expect(hi).toBeGreaterThan(lo);
+  });
+
+  it('volcanismStrength is ~0 on an inert world (no tidal heat, no resurfacing, no plate activity)', () => {
+    const u = deriveUniforms({ eccentricity: 0, surfaceHistory: { resurfacingRate: 0 }, habitability: 0 });
+    expect(u.volcanismStrength).toBeCloseTo(0, 5);
+  });
+
+  it('volcanismStrength is high on an Io-grade tidal world (close eccentric orbit, D12)', () => {
+    const u = deriveUniforms({ eccentricity: 0.15, orbitRadiusEarth: 938, radiusEarth: 0.9 });
+    expect(u.volcanismStrength).toBeGreaterThan(0.8);
+  });
+
+  it('edificeMaxHeight scales INVERSELY with surface gravity (low-g → giant shields, D14)', () => {
+    const lowG  = deriveUniforms({ massEarth: 0.3, radiusEarth: 1.0 }).edificeMaxHeight;  // g=0.3
+    const highG = deriveUniforms({ massEarth: 2.0, radiusEarth: 1.0 }).edificeMaxHeight;  // g=2.0
+    expect(lowG).toBeGreaterThan(highG);
+  });
+
+  it('edificeMaxHeight stays clamped within [0.2, 2.0] at gravity extremes', () => {
+    const tiny = deriveUniforms({ massEarth: 0.01, radiusEarth: 1.0 }).edificeMaxHeight;  // g→0 (would blow up)
+    const huge = deriveUniforms({ massEarth: 50, radiusEarth: 1.0 }).edificeMaxHeight;    // g huge
+    expect(tiny).toBeLessThanOrEqual(2.0);
+    expect(huge).toBeGreaterThanOrEqual(0.2);
+  });
+
+  it('shieldStratoMix is high (explosive strato) on a wet/habitable world, low (effusive shield) on a dry one', () => {
+    const wet = deriveUniforms({ habitability: 0.9 }).shieldStratoMix;
+    const dry = deriveUniforms({ habitability: 0.0 }).shieldStratoMix;
+    expect(wet).toBeGreaterThan(dry);
+    expect(dry).toBeLessThan(0.1);
+  });
+
+  it('all three are finite and in-range on an empty bundle', () => {
+    const u = deriveUniforms({});
+    expect(Number.isFinite(u.volcanismStrength)).toBe(true);
+    expect(u.volcanismStrength).toBeGreaterThanOrEqual(0);
+    expect(u.volcanismStrength).toBeLessThanOrEqual(1);
+    expect(u.edificeMaxHeight).toBeGreaterThanOrEqual(0.2);
+    expect(u.edificeMaxHeight).toBeLessThanOrEqual(2.0);
+    expect(u.shieldStratoMix).toBeGreaterThanOrEqual(0);
+    expect(u.shieldStratoMix).toBeLessThanOrEqual(1);
   });
 });

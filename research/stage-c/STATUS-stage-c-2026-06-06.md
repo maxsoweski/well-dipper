@@ -117,7 +117,7 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F5 | **Scarps & fault systems** (warped fault-block province) | ✅ **DONE** — warped soft-step cliffs live; see below |
 | F6 | **Plateaus / highlands / tessera** | ✅ **DONE** — HeteroTerrain + mesa terrace + crosscutting tessera lattice live; see below |
 | F3 | **Ejecta & rays** (reuses F2 Voronoi centers) | ✅ **DONE** — apron + rampart + bright rays live; see below |
-| F7 | Volcanic edifices (reads `surfaceGravity`, `tidalHeat`) | ◻ next |
+| F7 | **Volcanic edifices** (reads `surfaceGravity`, `tidalHeat`) | ✅ **DONE** — shield/strato cones + summit caldera live; see below |
 | F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ◻ |
 | F9/F10 | Chaos + ridged-icy (reads SHARED `uCryoActivity` from Cryo) | ◻ (cross-domain seam) |
 
@@ -425,6 +425,57 @@ bright rays (the one ALBEDO exception). Secondary crater fields DEFERRED (rich t
   rays are a later refinement. (3) **Max-taste decision (index §4.4) — bright rays keep-stylized
   vs drop:** built per the research "keep + stylize" rec (airless-gated, pre-posterize luminance
   add); they're striking on young airless worlds but only there. Surface for Max's call.
+
+### F7 — Volcanic edifices (DONE)
+First reader of `surfaceGravity` AND `tidalHeat` together (both surfaced in step 2), and
+the first relief feature with its OWN sparse Voronoi placement (a NEW center set, not F2's
+— `uEdificeScale` < `uCraterScale` → fewer, bigger cones). Cheap tier per relief-doc §F7.d:
+shield/strato cones + summit caldera; corona/nova/arachnoid radial-fracture + pancake domes
+DEFERRED (rich tier).
+- **CPU oracle** `edificeProfile(r, shieldStratoMix, calderaR)` in `planet-lod-lab-core.js`
+  → `{h, dhdr}`: cone body `pow(1−r, p)` with `p = mix(1.5, 4, shieldStratoMix)` (SHIELD
+  broad-shallow ↔ STRATO steep-narrow), plus a summit **caldera** — a parabolic bowl
+  (reuses the F2 inverted-bowl shape) subtracted at `r<calderaR`. Zero for `r≥1` (distant
+  cells don't bleed). Analytic `dhdr` pinned vs central finite-diff for mix=0/0.5/1 on BOTH
+  the flank and inside the caldera (relief-doc §5.4 silent-bug gate). **Cycle-1 fix
+  (think-before-acting):** caldera depth 0.25 was too shallow to overcome the strato cone's
+  ~0.40 drop across `calderaR` → the summit read as a peak, not a pit; bumped to 0.5 (clears
+  every mix with margin). The shape-invariant test "summit depressed below the caldera rim"
+  caught it before the shader.
+- **deriveUniforms** surfaces `volcanismStrength` (= `clamp01(tidalProxy + resurfacing·0.5 +
+  habitability·0.3)` — D12 tidal + D11 young resurfacing + a modest subduction-arc proxy;
+  the edifice DENSITY gate), `edificeMaxHeight` (= `clamp(1/g, 0.2, 2.0)` — low-g worlds grow
+  GIANT shields, the Olympus Mons / D14 driver), `shieldStratoMix` (= `clamp01(habitability)`
+  — wet/habitable → viscous explosive STRATO ↔ dry/tidal → fluid effusive SHIELD).
+- **GLSL** `edificeProfile()` + `edificeCombiner()` (transcribed; OWN sparse voronoi3d at
+  `uEdificeScale`, per-cell hash host-gate by `uVolcanismStrength` + hashed radius
+  `mix(0.3,0.7)` — bigger than craters; radial slope chain-ruled exactly via
+  `voroGrad·uEdificeScale`; height scaled by `uEdificeAmp·uEdificeMaxHeight`).
+  `uVolcanismStrength≤0` early-outs → Stage-A base + F1/F2/F3/F4/F5/F6 untouched. Wired
+  Stage-2 after `tesseraCombiner`; new `▸ Edifices (F7)` lil-gui folder (volcanism/height/
+  shield↔strato driven via `.listen()`; scale/amp/caldera lab knobs).
+- **17 TDD tests** (10 oracle + 7 surfacings) added to `tests/planet-lod-relief.test.js`;
+  **187 lab tests green** (`npx vitest run tests/planet-lod-*.test.js`).
+- **Live-verified `:9223`** (GPU Chrome, screenshots `f7-01..05`): isolated shield cones
+  (broad raised domes, other relief zeroed) ✓; ON/OFF A/B (`uVolcanismStrength=0` → cones
+  vanish, bare FBM base restored = enable-gate regression-safe) ✓; the upper-left dome shows
+  a darker summit spot = the caldera pit reading correctly ✓; full Rocky stack (complex
+  craters + ridged mountains + modest stratovolcanoes at volc 0.26) composes without blowout,
+  craters stay readable ✓; console clean (favicon-404 only). Generation gates confirmed live:
+  **Lava** derives volc=1.0 / shield (mix=0, dry airless) / maxH=1.25 (low-g); **Rocky**
+  volc=0.26 / strato (mix=0.7, wet) / maxH=1.11 — the tidal/resurfacing density gate, the
+  g⁻¹ height scale, and the viscosity axis all read as designed.
+- **No new cross-domain shared uniform** — `uVolcanismStrength`/`uEdificeMaxHeight`/
+  `uShieldStratoMix`/`uEdificeScale`/`uEdificeAmp`/`uEdificeCaldera`/`uEdificeOffset` are
+  Relief-internal (own placement), so REGISTRY-canonical-uniforms.md is unchanged.
+- **Carry-forward (relief-doc §F7, not blocking, mirrors F2/F4/F5/F6 deferrals):** (1)
+  **Pancake domes** (Venus, thick-air D5 — flat-topped steep-sided, pressure-gated; reuses
+  the plateau-step primitive at small radius) DEFERRED — surface `uPancakeStrength` +
+  pressure gate when built. (2) **Corona/nova/arachnoid** (Venus plume uplift — concentric
+  + radial fracture, reuses F5 scarp grooves radially around a domed uplift; expensive
+  Voronoi) DEFERRED to the rich tier. (3) **Emissive summit/active lava** routes through the
+  emissive-bypass channel — lands with F8 (lava plains), not here. The shield/strato cones +
+  caldera (the felt core) ship now; pancake + corona layer on additively.
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.
