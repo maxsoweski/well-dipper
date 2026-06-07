@@ -1991,6 +1991,10 @@
     // Global panel ops must span BOTH guis (single-logical-model helpers).
     const allGuis = [guiLeft, guiRight];
     function syncDisplays(){ for (const g of allGuis) g.controllersRecursive().forEach(c => c.updateDisplay()); }
+    // Merge is safe ONLY because the two roots have DISJOINT top-level folder titles
+    // and no top-level controllers — last-wins spread would silently drop a collision
+    // (where a single gui.save() throws on a duplicate). Hold that invariant if this grows.
+    // Export-to-clipboard only today; no gui.load() consumer exists.
     function saveAll(){ const a = guiLeft.save(), b = guiRight.save();
       return { controllers: { ...a.controllers, ...b.controllers }, folders: { ...a.folders, ...b.folders } }; }
     function resetAll(){ guiLeft.reset(); guiRight.reset(); }

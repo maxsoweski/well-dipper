@@ -61,7 +61,7 @@ Each feature folder keeps its existing `f.add(state,'<x>Enabled')` controller (s
 After folders + `featureFolders` exist, relocate each enable controller into its folder's title:
 ```js
 function relocateEnableToTitle(folder, ctrl){
-  const title = folder.$title;                 // lil-gui 0.21 folder title <div>
+  const title = folder.$title;                 // lil-gui 0.21 folder title <button>
   title.classList.add('title-has-toggle');     // flex row via injected CSS
   ctrl.domElement.classList.add('title-toggle');
   ctrl.domElement.addEventListener('click', e => e.stopPropagation());  // don't collapse the folder
