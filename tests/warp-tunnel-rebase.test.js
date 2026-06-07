@@ -19,20 +19,35 @@ import {
 // visibility logic in setTraversalMode/resetTraversal without a WebGL/DOM
 // context (the real constructor builds canvas-textured strips). We invoke the
 // real methods via .call() so the test pins actual behavior, not a copy.
-function makeFakeNode() {
-  return { visible: true, material: { stencilWrite: false, needsUpdate: false } };
+function makeFakeNode(uniforms = {}) {
+  return {
+    visible: true,
+    scale: { _v: 1, setScalar(s) { this._v = s; } },
+    material: { stencilWrite: false, needsUpdate: false, transparent: false, uniforms },
+  };
 }
 function makeFakePortal(startMode = 'OUTSIDE_A') {
-  return {
+  const p = {
     _traversalMode: startMode,
     _trav: { mode: startMode },
-    _tunnel: makeFakeNode(),
+    _radius: 8,
+    _closing: false,
+    _closeT: 0,
+    _tunnel: makeFakeNode({ uFade: { value: 1 } }),
     _discA: makeFakeNode(), _discB: makeFakeNode(),
-    _rimA: makeFakeNode(), _rimB: makeFakeNode(),
+    _rimA: makeFakeNode({ uIntensity: { value: 1 } }),
+    _rimB: makeFakeNode({ uIntensity: { value: 1 } }),
     _landingStrip: makeFakeNode(), _entryStrip: makeFakeNode(),
+    group: { visible: true },
     onTraversal: null,
     setEntryStripProgress() {},
   };
+  // Bind the real prototype methods the close-tween exercises, so the tests
+  // pin actual behavior (not a copy) when invoked as p.startClose()/updateClose().
+  for (const m of ['setRadius', 'setRimIntensity', 'setTunnelFade', 'close', 'startClose', 'updateClose']) {
+    if (WarpPortal.prototype[m]) p[m] = WarpPortal.prototype[m];
+  }
+  return p;
 }
 
 // A 60u pocket on the -Z axis: Portal A at z=0 facing +Z, Portal B at z=-60
@@ -115,16 +130,16 @@ describe('pocket traversal mode sequence (AC2 entry / AC4 emergence)', () => {
   });
 });
 
-describe('tunnel visibility lifecycle (no tunnel-follow in destination)', () => {
-  // Bug A (2026-06-07): the tunnel mesh lives in warpPortal.group, the group is
-  // rigidly re-anchored to the camera post-warp (main.js) so the player can look
-  // back at Portal B — but the corridor was never hidden on emergence, so the
-  // whole tunnel trailed the ship around the destination system.
-  test('emerging into the destination (OUTSIDE_B) hides the tunnel', () => {
+describe('portal close-tween on emergence (AC8)', () => {
+  // The arrival reads as flying OUT through Portal B: the tunnel + ring stay
+  // VISIBLE on emergence and then shrink+fade over ~3s (a look-back during exit
+  // shows them closing, not already gone). Reverts the 2026-06-07 stopgap that
+  // force-hid the tunnel the instant the mode flipped to OUTSIDE_B.
+  test('emerging into the destination (OUTSIDE_B) leaves the tunnel VISIBLE', () => {
     const p = makeFakePortal('INSIDE');
     WarpPortal.prototype.setTraversalMode.call(p, 'OUTSIDE_B');
-    expect(p._tunnel.visible).toBe(false);   // corridor is behind you — gone
-    expect(p._discB.visible).toBe(true);     // Portal B ring stays as look-back anchor
+    expect(p._tunnel.visible).toBe(true);    // NOT force-hidden — the tween closes it
+    expect(p._discB.visible).toBe(true);     // Portal B ring is the look-back anchor
     expect(p._rimB.visible).toBe(true);
     expect(p._discA.visible).toBe(false);
   });
@@ -139,12 +154,49 @@ describe('tunnel visibility lifecycle (no tunnel-follow in destination)', () => 
     expect(b._tunnel.visible).toBe(true);
   });
 
-  test('resetTraversal re-shows the tunnel for the next warp after a prior OUTSIDE_B', () => {
+  test('updateClose drives radius, rim, and fade monotonically to ~0 over ~3s', () => {
     const p = makeFakePortal('OUTSIDE_B');
-    p._tunnel.visible = false; // left hidden by the previous warp's emergence
+    p.startClose();
+    expect(p._closing).toBe(true);
+    expect(p._tunnel.material.transparent).toBe(true); // alpha lever armed
+
+    let prevScale = p._discA.scale._v;
+    let prevRim = p._rimA.material.uniforms.uIntensity.value;
+    let prevFade = p._tunnel.material.uniforms.uFade.value;
+    // Drive ~2.9s in 0.1s steps; tunnel must stay VISIBLE the whole time.
+    for (let i = 0; i < 29; i++) {
+      p.updateClose(0.1);
+      expect(p._tunnel.visible).toBe(true);            // visible while closing
+      expect(p._discA.scale._v).toBeLessThanOrEqual(prevScale + 1e-9);
+      expect(p._rimA.material.uniforms.uIntensity.value).toBeLessThanOrEqual(prevRim + 1e-9);
+      expect(p._tunnel.material.uniforms.uFade.value).toBeLessThanOrEqual(prevFade + 1e-9);
+      prevScale = p._discA.scale._v;
+      prevRim = p._rimA.material.uniforms.uIntensity.value;
+      prevFade = p._tunnel.material.uniforms.uFade.value;
+    }
+    expect(p._tunnel.material.uniforms.uFade.value).toBeLessThan(0.1); // nearly gone
+  });
+
+  test('the tunnel hides ONLY when the tween completes (not at the mode flip)', () => {
+    const p = makeFakePortal('OUTSIDE_B');
+    p.startClose();
+    p.updateClose(1.5);                  // halfway
+    expect(p.group.visible).toBe(true);  // still open mid-close
+    p.updateClose(2.0);                  // past CLOSE_DUR (3s total)
+    expect(p._closing).toBe(false);
+    expect(p.group.visible).toBe(false); // close() fired at completion
+  });
+
+  test('resetTraversal cancels a close and restores fade/radius/visibility for the next warp', () => {
+    const p = makeFakePortal('OUTSIDE_B');
+    p.startClose();
+    p.updateClose(1.5);
     WarpPortal.prototype.resetTraversal.call(p);
     expect(p._traversalMode).toBe('OUTSIDE_A');
+    expect(p._closing).toBe(false);
     expect(p._tunnel.visible).toBe(true);
+    expect(p._tunnel.material.uniforms.uFade.value).toBe(1);
+    expect(p._discA.scale._v).toBe(1);   // radius restored to full (s = _radius/_radius)
   });
 });
 

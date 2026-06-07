@@ -1590,11 +1590,6 @@ const _swapPortalAPos = new THREE.Vector3();
 // _swapNewForward or the OUTSIDE_B follow's _portalFollow* in the same tick.
 const _hyperReanchorForward = new THREE.Vector3();
 const _hyperReanchorTarget = new THREE.Vector3();
-// Arrival forward direction — captured once at warp onComplete, used by
-// the per-frame Portal B follow logic so Portal B stays in a FIXED world
-// direction behind the ship (camera can freely rotate to find it) instead
-// of always "behind whatever the camera is currently facing."
-const _arrivalForward = new THREE.Vector3();
 // Rebase-proof pocket (AC4): the pocket origin (== Portal A == camera at the
 // seam) captured in TRUE-WORLD coords once, then rewritten into the local frame
 // every warp frame as `anchorTrue - worldOrigin`. This survives the async
@@ -1644,6 +1639,13 @@ warpPortal.onTraversal = async (mode) => {
   if (mode === 'OUTSIDE_B' && warpEffect.state === 'hyper') {
     warpEffect.state = 'exit';
     warpEffect.elapsed = 0;
+    // AC8: begin the arrival close-tween at the real emergence crossing. The
+    // tunnel + ring stay visible and shrink+fade over ~3s as the camera coasts
+    // into the new system (a look-back shows them closing). Driven each frame by
+    // warpPortal.updateClose(dt) in the warp + post-warp blocks. Skipped in
+    // portal-lab mode, which deliberately keeps Portal B persistent for the
+    // arrival-inspection slerp.
+    if (!_portalLabMode) warpPortal.startClose();
   }
 };
 
@@ -3105,14 +3107,17 @@ warpEffect.onSwapSystem = async () => {
 warpEffect.onComplete = () => {
   skyRenderer.completeWarpTransition();
 
-  // Capture arrival direction so the per-frame Portal B follow below can
-  // keep Portal B in a FIXED world-space direction behind the ship. Without
-  // this, warpRevealSystem's post-warp tour flies the camera far from
-  // wherever Portal B was anchored — player can never find it. Using the
-  // camera's current view direction (instead of a captured direction)
-  // would move Portal B with every look-around, which is the original bug.
-  camera.getWorldDirection(_arrivalForward);
-  warpPortal.setTraversalMode('OUTSIDE_B');
+  // AC4: emergence is now a real INSIDE→OUTSIDE_B plane crossing during the
+  // cruise (warpPortal.onTraversal), not a forced flip here. Warn-only fallback:
+  // if the camera somehow reaches onComplete still INSIDE (e.g. the HYPER safety
+  // ceiling fired before the gate opened, so the crossing never happened), force
+  // the mode + start the close so the player isn't left staring down a tunnel.
+  // A healthy warp never hits this.
+  if (warpPortal._traversalMode === 'INSIDE') {
+    console.warn('[WARP][AC4] onComplete reached still INSIDE — emergence crossing never fired; forcing OUTSIDE_B');
+    warpPortal.setTraversalMode('OUTSIDE_B');
+    if (!_portalLabMode && !warpPortal._closing) warpPortal.startClose();
+  }
   warpPortal._openedThisWarp = false;   // allow a fresh Portal A on the next warp
 
   if (_portalLabMode) {
@@ -6709,6 +6714,10 @@ function simStep(deltaTime) {
         // (entry), cruises INSIDE, and crosses Portal B (emergence). No forced
         // INSIDE, no per-frame pin — the 4285602 choreography-killers are gone.
         warpPortal.updateTraversal(camera, { forwardSpeed: warpEffect.cameraForwardSpeed, state: warpEffect.state });
+        // AC8 close-tween: once the emergence crossing starts the close (during
+        // EXIT), shrink+fade the tunnel each frame. The close spans EXIT (~2s) +
+        // ~1s of post-warp coast, so it's also driven in the post-warp else block.
+        if (warpPortal._closing) warpPortal.updateClose(deltaTime);
         // No screen-space lens — the tunnel mesh IS the hyperspace visual.
         retroRenderer.setPortalLensing(null, 0, 0);
       } else if (warpEffect.portalVisible) {
@@ -6898,6 +6907,11 @@ function simStep(deltaTime) {
       if (warpPortal.group.visible && warpPortal._traversalMode === 'OUTSIDE_B') {
         if (warpPortal._landingStrip) warpPortal._landingStrip.visible = false;
       }
+      // AC8: keep driving the close-tween into the post-warp coast. The tween
+      // started at the emergence crossing (during EXIT) and runs ~3s, so the
+      // last ~1s lands here after onComplete flips the warp inactive. updateClose
+      // hides the group via close() when it finishes.
+      if (warpPortal._closing) warpPortal.updateClose(deltaTime);
 
       // Post-arrival camera slerp in lab mode: smoothly rotate from the
       // forward-facing post-warp orientation to facing Portal B. Once the

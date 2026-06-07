@@ -144,6 +144,7 @@ export class WarpPortal {
           uDestMix: { value: 0 },        // 0 = all origin, 1 = all destination
           uBridgeCenter: { value: 0.5 }, // blend center position along tunnel
           uBridgeWidth: { value: 0.3 },  // blend zone width
+          uFade: { value: 1 },           // AC8 close-tween alpha (1 = opaque, 0 = gone)
         },
 
         vertexShader: /* glsl */ `
@@ -164,6 +165,7 @@ export class WarpPortal {
           uniform float uDestMix;
           uniform float uBridgeCenter;
           uniform float uBridgeWidth;
+          uniform float uFade;
 
           varying vec2 vUv;
 
@@ -277,7 +279,10 @@ export class WarpPortal {
             col = floor(col * levels + threshold) / levels;
             col = clamp(col, 0.0, 1.0);
 
-            gl_FragColor = vec4(col, 1.0);
+            // uFade is 1 for the whole approach/cruise (material is opaque, so
+            // alpha is ignored). The close-tween sets material.transparent=true
+            // and ramps uFade 1→0 to fade the walls out on arrival (AC8).
+            gl_FragColor = vec4(col, uFade);
           }
         `,
       })
@@ -341,6 +346,12 @@ export class WarpPortal {
     this._traversalMode = 'OUTSIDE_A';
     this._trav = createTraversal('OUTSIDE_A');
     this.onTraversal = null;  // optional callback: (newMode) => void
+
+    // ── Close-tween state (AC8) ── set by startClose(), advanced by
+    // updateClose(dt). The tunnel + ring shrink and fade over CLOSE_DUR on
+    // emergence, then close() hides the group. resetTraversal cancels + restores.
+    this._closing = false;
+    this._closeT = 0;
 
     // ── Entry-reliability telemetry (debug-only, off by default) ──
     // When `_trace` is a non-null array, updateTraversal appends one record
@@ -661,6 +672,45 @@ export class WarpPortal {
     this._tunnel.material.uniforms.uDestMix.value = v;
   }
 
+  /** Tunnel-wall alpha (AC8 close-tween). 1 = opaque, 0 = invisible. */
+  setTunnelFade(v) {
+    this._tunnel.material.uniforms.uFade.value = v;
+  }
+
+  /**
+   * Begin the arrival close-tween (AC8). Call at the INSIDE→OUTSIDE_B emergence
+   * crossing. The tunnel stays VISIBLE while it shrinks + fades over CLOSE_DUR;
+   * a look-back during exit shows it closing. Arms the alpha lever by flipping
+   * the tunnel material to transparent.
+   */
+  startClose() {
+    this._closing = true;
+    this._closeT = 0;
+    if (!this._tunnel.material.transparent) {
+      this._tunnel.material.transparent = true;
+      this._tunnel.material.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Advance the close-tween. Call every frame while `_closing`. Shrinks the
+   * disc radius, fades the rim glow + tunnel-wall alpha to 0 over ~3s, then
+   * hides the group via close(). No-op once the tween completes / is cancelled.
+   */
+  updateClose(dt) {
+    if (!this._closing) return;
+    this._closeT += dt;
+    const CLOSE_DUR = 3.0;
+    const t = Math.min(1, this._closeT / CLOSE_DUR);
+    this.setRadius(this._radius * (1 - t));   // discs shrink to a point
+    this.setRimIntensity(Math.max(0, 1 - t)); // rim glow fades out
+    this.setTunnelFade(1 - t);                // wall alpha fades out
+    if (t >= 1) {
+      this._closing = false;
+      this.close();                           // hide the group once fully closed
+    }
+  }
+
   // ── Traversal state machine ──────────────────────────────────────────────
   //
   // The player flies from the origin system, through the tunnel, into the
@@ -709,6 +759,11 @@ export class WarpPortal {
     this._discB.visible = (mode === 'OUTSIDE_B');
     this._rimA.visible  = (mode === 'OUTSIDE_A');
     this._rimB.visible  = (mode === 'OUTSIDE_B');
+    // Tunnel corridor stays VISIBLE on emergence (OUTSIDE_B) — the close-tween
+    // (startClose/updateClose) shrinks+fades it over ~3s so a look-back during
+    // exit shows it closing, not yanked away (AC8). The portal is frozen at its
+    // true-world exit anchor (AC7), so it falls behind as the camera coasts on.
+    // resetTraversal restores full visibility/fade/radius for the next warp.
     // Landing strip is destination-side reference. Per Max 2026-04-16:
     // "the walls of the tunnel and the portal should occlude everything
     // beyond them, including those crosses." Tunnel walls + Portal B cap
@@ -865,12 +920,24 @@ export class WarpPortal {
   resetTraversal() {
     this._traversalMode = 'OUTSIDE_A';
     this._trav = createTraversal('OUTSIDE_A');
+    // Cancel any in-flight close-tween (AC8) and restore the pocket to full
+    // visibility/radius/opacity for the next warp.
+    this._closing = false;
+    this._closeT = 0;
+    this.setRadius(this._radius);   // discs back to full scale
+    this.setRimIntensity(1);        // rim glow restored
+    this.setTunnelFade(1);          // wall alpha restored to opaque
+    if (this._tunnel.material.transparent) {
+      this._tunnel.material.transparent = false;  // back to opaque pass
+      this._tunnel.material.needsUpdate = true;
+    }
     // Re-enable stencil for the starting state
     if (!this._tunnel.material.stencilWrite) {
       this._tunnel.material.stencilWrite = true;
       this._tunnel.material.needsUpdate = true;
     }
     // Per-side visibility for starting OUTSIDE_A (see setTraversalMode)
+    this._tunnel.visible = true;  // re-show corridor (prior warp's close hid it)
     this._discA.visible = true;
     this._discB.visible = false;
     this._rimA.visible = true;
