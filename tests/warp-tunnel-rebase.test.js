@@ -331,3 +331,55 @@ describe('load-adaptive emergence gate (AC5)', () => {
     expect(we.state).not.toBe('hyper');
   });
 });
+
+describe('emergence-driven exit: the crossing, not the min-cruise timer, ends HYPER (AC4)', () => {
+  // Root cause #2 (2026-06-07 post-teleport-fix diagnosis): the AC5 clamp parks
+  // the camera ~0.5u short of Portal B during the whole min-cruise. The min-cruise
+  // TIMER-exit in _updateHyper (`elapsed >= HYPER_MIN_CRUISE`) fires the SAME frame
+  // the AC5 gate releases, flipping HYPER->EXIT before the camera can advance the
+  // final 0.5u and cross. EXIT then decelerates forward speed to ~0, so the
+  // geometric INSIDE->OUTSIDE_B crossing never fires and onComplete force-flips the
+  // mode every warp. The dual-portal path must let the CROSSING drive EXIT (the
+  // stated design, main.js onTraversal): `emergenceCrossingDrivesExit` suppresses
+  // the min-cruise timer-exit, leaving the safety ceiling as the only backstop.
+  function runHyperFlagged(we, { readyAt, dt = 0.1, maxT = 60 }) {
+    we.emergenceCrossingDrivesExit = true;
+    we.state = 'hyper'; we.elapsed = 0; we.destinationReady = false;
+    let t = 0;
+    while (we.state === 'hyper' && t < maxT) {
+      t += dt;
+      if (t >= readyAt) we.destinationReady = true;
+      we.update(dt);
+    }
+    return t;
+  }
+
+  test('with the flag set, HYPER does NOT timer-exit at min-cruise — it waits for the crossing', () => {
+    const we = new WarpEffect();
+    we.emergenceCrossingDrivesExit = true;
+    we.state = 'hyper'; we.elapsed = 0; we.destinationReady = true;
+    let t = 0;
+    const watchUntil = we.HYPER_MIN_CRUISE + 2.0; // past min-cruise, below the 12s ceiling
+    while (we.state === 'hyper' && t < watchUntil) { t += 0.1; we.update(0.1); }
+    expect(we.state).toBe('hyper');                  // still cruising — timer did NOT exit
+    expect(t).toBeGreaterThan(we.HYPER_MIN_CRUISE + 1.9);
+  });
+
+  test('the safety ceiling still bounds HYPER if the crossing never fires (no infinite cruise)', () => {
+    const we = new WarpEffect();
+    const t = runHyperFlagged(we, { readyAt: 0.05, maxT: 60 });
+    expect(t).toBeLessThan(60);                       // left via the safety ceiling
+    expect(t).toBeGreaterThan(we.HYPER_DUR * 4 - 0.5); // ~12s, not the 3.5s min-cruise
+    expect(we.state).not.toBe('hyper');
+  });
+
+  test('default (flag unset): the min-cruise timer-exit still fires (legacy / unit path)', () => {
+    const we = new WarpEffect();
+    expect(we.emergenceCrossingDrivesExit).toBeFalsy(); // default off
+    we.state = 'hyper'; we.elapsed = 0; we.destinationReady = true;
+    let t = 0;
+    while (we.state === 'hyper' && t < 30) { t += 0.1; we.update(0.1); }
+    expect(we.state).toBe('exit');
+    expect(t).toBeLessThan(we.HYPER_MIN_CRUISE + 0.3); // left at ~min-cruise, not the ceiling
+  });
+});

@@ -64,6 +64,7 @@ import {
   fromWorldTrue as _fromWorldTrue,
   _debugState as _worldOriginDebugState,
 } from './core/WorldOrigin.js';
+import { CameraInterpolator } from './core/CameraInterpolator.js';
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
 import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
 import { _advanceSimClock } from './core/SimClock.js';
@@ -1519,6 +1520,11 @@ scene.add(warpPortal.group);  // add to the main scene (not sky scene)
 // Toggle to false to fall back to the legacy composite path for comparison.
 const _useDualPortal = true;
 window._useDualPortal = _useDualPortal;  // expose for SceneInspector modes capture
+// Dual-portal: the geometric INSIDE->OUTSIDE_B crossing drives HYPER->EXIT (wired
+// in warpPortal.onTraversal). Tell WarpEffect to suppress its min-cruise
+// timer-exit so it can't preempt the crossing (AC4 root cause #2 — see the flag's
+// doc in WarpEffect). Legacy path leaves it false (timer-driven).
+warpEffect.emergenceCrossingDrivesExit = _useDualPortal;
 
 // Portal lab mode — diagnostic-only warp. Strips ALL extraneous effects
 // (sounds, music, rim pulsing, flythrough reveal on arrival) so Max can
@@ -5351,6 +5357,18 @@ function warpSwapSystem() {
       camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
       camera.lookAt(starPos);
     }
+    // ── Teleport discontinuity → resync the render interpolator (AC4) ──
+    // The lines above TELEPORT the camera to the destination. onSwapSystem is
+    // async, so this teleport lands AFTER the current sim tick's interp snapshot
+    // but BEFORE the next render. Without this, renderFrame's prev/curr blend
+    // (both still the pre-teleport pose) overwrites camera.position back to where
+    // it was — erasing the teleport. The camera then never reaches the anchored
+    // Portal B, the OUTSIDE_B emergence crossing never fires, and onComplete
+    // force-flips the mode every warp. Collapsing both snapshots onto the new
+    // pose makes the next blend a no-op so the teleport sticks. (Mirrors the
+    // rebase discontinuity hook, cameraInterp.shiftOnRebase.) Root cause pinned
+    // 2026-06-07; see src/core/CameraInterpolator.js + tests.
+    cameraInterp.resync(camera);
   }
 
   console.log('Warp: system swapped');
@@ -7360,12 +7378,11 @@ function simStep(deltaTime) {
 // shift too (subscribed via onRebase). Without this, a rebase event
 // would produce a one-frame interpolation jump because prev = pre-rebase
 // coords, curr = post-rebase coords.
-const _prevCamPos = new THREE.Vector3();
-const _currCamPos = new THREE.Vector3();
-const _prevCamQuat = new THREE.Quaternion();
-const _currCamQuat = new THREE.Quaternion();
-const _scratchInterpQuat = new THREE.Quaternion();
-let _interpInitialized = false;
+// Camera prev/curr snapshots + alpha blend live in CameraInterpolator, which
+// also owns the two discontinuity hooks (shiftOnRebase for world-origin rebase,
+// resync for teleports). Extracted from inline state so it is unit-testable —
+// see src/core/CameraInterpolator.js and tests/camera-interpolator.test.js.
+const cameraInterp = new CameraInterpolator();
 
 // Per-mesh prev/curr lives on the mesh itself via _interpPrev / _interpCurr
 // fields (Vector3). Walking system.planets each tick to snapshot is O(N)
@@ -7463,16 +7480,7 @@ function _updateRenderVisuals(renderDt) {
 }
 
 function _shiftInterpPrevToCurr() {
-  if (!_interpInitialized) {
-    _prevCamPos.copy(camera.position);
-    _currCamPos.copy(camera.position);
-    _prevCamQuat.copy(camera.quaternion);
-    _currCamQuat.copy(camera.quaternion);
-    _interpInitialized = true;
-  } else {
-    _prevCamPos.copy(_currCamPos);
-    _prevCamQuat.copy(_currCamQuat);
-  }
+  cameraInterp.shift(camera);
   _forEachInterpMesh((mesh) => {
     _ensureMeshInterp(mesh);
     mesh._interpPrev.copy(mesh._interpCurr);
@@ -7480,8 +7488,7 @@ function _shiftInterpPrevToCurr() {
 }
 
 function _snapshotInterpCurrFromLive() {
-  _currCamPos.copy(camera.position);
-  _currCamQuat.copy(camera.quaternion);
+  cameraInterp.snapshot(camera);
   _forEachInterpMesh((mesh) => {
     _ensureMeshInterp(mesh);
     mesh._interpCurr.copy(mesh.position);
@@ -7492,8 +7499,7 @@ function _snapshotInterpCurrFromLive() {
 // across coordinate-frame shifts. Without this, a rebase between sim
 // ticks would produce a visible interpolation jump.
 _onWorldRebase((offset) => {
-  _prevCamPos.sub(offset);
-  _currCamPos.sub(offset);
+  cameraInterp.shiftOnRebase(offset);
   _forEachInterpMesh((mesh) => {
     _ensureMeshInterp(mesh);
     mesh._interpPrev.sub(offset);
@@ -7544,10 +7550,8 @@ function renderFrame(alpha) {
   const renderDt = _lastRenderT < 0 ? 1 / 60 : Math.min((_now - _lastRenderT) / 1000, 0.1);
   _lastRenderT = _now;
 
-  if (_interpInitialized) {
-    camera.position.lerpVectors(_prevCamPos, _currCamPos, alpha);
-    _scratchInterpQuat.copy(_prevCamQuat).slerp(_currCamQuat, alpha);
-    camera.quaternion.copy(_scratchInterpQuat);
+  if (cameraInterp.initialized) {
+    cameraInterp.applyTo(camera, alpha);
     _forEachInterpMesh((mesh) => {
       if (mesh._interpPrev && mesh._interpCurr) {
         mesh.position.lerpVectors(mesh._interpPrev, mesh._interpCurr, alpha);

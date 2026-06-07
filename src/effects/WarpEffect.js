@@ -51,6 +51,18 @@ export class WarpEffect {
     this.HYPER_MIN_CRUISE = 3.5;
     this.destinationReady = false;  // set true by main.js after spawn + compileAsync
 
+    // When true (dual-portal path), the geometric INSIDE->OUTSIDE_B emergence
+    // crossing — wired in main.js onTraversal — is the authoritative HYPER->EXIT
+    // trigger. The min-cruise TIMER-exit below is suppressed so it can't preempt
+    // the crossing: the AC5 clamp parks the camera ~0.5u short of Portal B until
+    // the gate opens at HYPER_MIN_CRUISE, and the timer fires that SAME frame —
+    // flipping to EXIT before the camera can advance the final 0.5u and cross,
+    // after which EXIT speed -> ~0 strands it short forever (AC4 root cause #2,
+    // 2026-06-07). The safety ceiling still backstops a never-firing crossing.
+    // Left false for the legacy single-portal path + unit tests, which have no
+    // geometric crossing and rely on the min-cruise timer.
+    this.emergenceCrossingDrivesExit = false;
+
     // All four phase speeds derive from ship-scale + durations — keeps the
     // whole warp at consistent ship scale (no abstract hyperspace units).
     //   FOLD: 0 → _foldPeakSpeed over FOLD_DUR (quadratic ramp)
@@ -296,7 +308,12 @@ export class WarpEffect {
     // (main.js wires the crossing → state='exit'); whichever fires first wins.
     const minCruiseDone = this.elapsed >= this.HYPER_MIN_CRUISE;
     const safetyCeiling = this.elapsed >= this.HYPER_DUR * 4;
-    if ((minCruiseDone && this.destinationReady) || safetyCeiling) {
+    // On the dual-portal path the crossing drives EXIT, so suppress the
+    // min-cruise timer-exit (it would preempt the crossing — see the
+    // emergenceCrossingDrivesExit doc in the constructor). The safety ceiling
+    // always applies as the no-hang backstop.
+    const timerExit = minCruiseDone && this.destinationReady && !this.emergenceCrossingDrivesExit;
+    if (timerExit || safetyCeiling) {
       this.state = 'exit';
       this.elapsed = 0;
     }
