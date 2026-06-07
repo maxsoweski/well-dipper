@@ -3022,6 +3022,23 @@ warpEffect.onSwapSystem = async () => {
     soundEngine.play('warpEnter');
     musicManager.play('hyperspace', 0.3);
   }
+
+  // ── AC10 swap-occlusion invariant (regression guard) ──
+  // The system swap + ~3000u camera teleport (warpSwapSystem, next line) must
+  // ONLY ever fire while the camera is INSIDE the tunnel with the walls
+  // occluding the forward view, so the teleport is never visible. mode===INSIDE
+  // is the authoritative "camera is between the portal planes" signal (set by
+  // the real Portal A crossing), and _tunnel.visible===true means the walls are
+  // up. If a future camera/movement change exposes the teleport, fail loudly.
+  if (_useDualPortal) {
+    const insideOccluded = warpPortal._traversalMode === 'INSIDE' && warpPortal._tunnel.visible === true;
+    if (!insideOccluded) {
+      console.error(
+        '[WARP][AC10] swap exposed! mode=%s tunnelVisible=%s — the ~3000u teleport may be visible',
+        warpPortal._traversalMode, warpPortal._tunnel.visible,
+      );
+    }
+  }
   warpSwapSystem();
 
   // ── Re-anchor the dual portal around the post-teleport camera ──
