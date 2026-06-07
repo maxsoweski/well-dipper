@@ -62,7 +62,10 @@ describe('deriveUniforms (physics drivers → semantic uniforms, no type branch)
   const oceanWorld = { composition: { ironFraction: 0.3, density: 5 }, T_eq: 290, tidalState: { locked: false }, atmosphere: { color: [0.5, 0.5, 0.8] }, habitability: 0.8, surfaceHistory: { erosion: 0.6 } };
 
   it('hot body emits; cool body does not', () => {
-    expect(deriveUniforms(hotAirless).emissive).toBeGreaterThan(0.5);
+    // The flat `emissive` is a faint thermal FLOOR — since F8 the lava glow is SPATIAL
+    // (the crack-mask term driven by lavaActivity), so a hot body still emits (>0) but
+    // the magnitude moved to the crack channel. Cool bodies stay dark.
+    expect(deriveUniforms(hotAirless).emissive).toBeGreaterThan(0);
     expect(deriveUniforms(oceanWorld).emissive).toBeLessThan(0.1);
   });
   it('airless body has no limb glow; atmo body does', () => {

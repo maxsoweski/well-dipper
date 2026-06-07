@@ -907,3 +907,56 @@ describe('F7 volcanic-edifice surfacings (deriveUniforms)', () => {
     expect(u.shieldStratoMix).toBeLessThanOrEqual(1);
   });
 });
+
+// ── F8 lava plains & flows — generation-side surfacings (relief doc §F8.b) ────
+// lavaCoverage (← D11 resurfacing) suppresses base relief into smooth flood-basalt
+// plains; lavaActivity (← D12 tidal heating) drives the EMISSIVE crack glow (cold old
+// plains vs glowing active lava); channelDensity (seed × activity) gates the deferred
+// channel/rille combiner. The emissive crack mask itself is a GLSL Worley term with no
+// CPU gradient to pin (relief doc §F8.a) — verified VISUALLY on :9223; here we pin the
+// driver LOGIC (resurfacing→coverage, tidal→glow) + the flat-emissive modulation.
+describe('F8 lava-plains surfacings (deriveUniforms)', () => {
+  it('lavaCoverage tracks volcanic resurfacing rate (D11)', () => {
+    const lo = deriveUniforms({ surfaceHistory: { resurfacingRate: 0.0 } }).lavaCoverage;
+    const hi = deriveUniforms({ surfaceHistory: { resurfacingRate: 0.95 } }).lavaCoverage;
+    expect(hi).toBeGreaterThan(lo);
+    expect(lo).toBeCloseTo(0, 5);
+    expect(hi).toBeGreaterThan(0.8);
+  });
+
+  it('lavaActivity is high on a close, eccentric (tidally-heated) orbit', () => {
+    // Lava-preset orbit: e=0.15, a=938 R⊕, 1 M_sun star → Io-grade self-heating.
+    const hot = deriveUniforms({ eccentricity: 0.15, orbitRadiusEarth: 938, radiusEarth: 0.9 }).lavaActivity;
+    expect(hot).toBeGreaterThan(0.5);
+  });
+
+  it('lavaActivity is ~0 for a tidally-dead world (circular orbit)', () => {
+    const cold = deriveUniforms({ eccentricity: 0, orbitRadiusEarth: 23455, radiusEarth: 1.0 }).lavaActivity;
+    expect(cold).toBeCloseTo(0, 5);
+  });
+
+  it('channelDensity scales with activity — zero activity ⇒ no channels', () => {
+    const dead = deriveUniforms({ eccentricity: 0, surfaceHistory: { resurfacingRate: 0 } }).channelDensity;
+    const live = deriveUniforms({ eccentricity: 0.15, orbitRadiusEarth: 938, radiusEarth: 0.9, seed: 7 }).channelDensity;
+    expect(dead).toBeCloseTo(0, 5);
+    expect(live).toBeGreaterThan(0);
+    expect(live).toBeLessThanOrEqual(1);
+  });
+
+  it('flat emissive is DIMMED on a hot body so the spatial lava cracks lead (no double-count)', () => {
+    // Pre-F8 the flat emissive was the full `hot` proxy (≈0.92 at 950K); F8 makes the
+    // glow SPATIAL via the crack mask, so the flat term drops to a faint ember floor.
+    const u = deriveUniforms({ T_eq: 950 });
+    expect(u.emissive).toBeGreaterThan(0);     // hot body still has a faint thermal floor
+    expect(u.emissive).toBeLessThan(0.4);      // but dimmed — the cracks (lavaActivity) carry the lava glow
+  });
+
+  it('lava surfacings are finite and in-range on an empty bundle', () => {
+    const u = deriveUniforms({});
+    for (const k of ['lavaCoverage', 'lavaActivity', 'channelDensity']) {
+      expect(Number.isFinite(u[k]), k).toBe(true);
+      expect(u[k], k).toBeGreaterThanOrEqual(0);
+      expect(u[k], k).toBeLessThanOrEqual(1);
+    }
+  });
+});

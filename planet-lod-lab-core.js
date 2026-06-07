@@ -652,6 +652,32 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // shield). The combiner blends the cone exponent pow(1−r, mix(1.5,4,this)).
   const shieldStratoMix = clamp01(habitability);
 
+  // ── F8 lava plains & flows (Stage-C step 3, Relief — relief doc §F8.b) ───────
+  // lavaCoverage (D11): the volcanic-resurfacing fraction. Drives the flood-basalt
+  // plains that SMOOTH/suppress older relief (an Io-grade resurfaced world is mostly
+  // fresh smooth plain; an old cratered world has none). Direct passthrough of the
+  // resurfacing rate (the F2 craterDensity already reads (1−resurfacing), so the two
+  // are consistent: high resurfacing ⇒ few craters + broad lava plains).
+  const lavaCoverage = clamp01(resurfacing);
+
+  // lavaActivity (D12): the EMISSIVE driver — is the lava COLD (old solidified plains,
+  // tidal≈0) or GLOWING (active, tidally self-heated like Io)? tidalProxy is the same
+  // Io-normalized tidal-heat clamp F7 uses, so a close eccentric world's cracks glow.
+  // The GLSL crack mask multiplies this in; 0 ⇒ the spatial emissive term early-outs.
+  const lavaActivity = tidalProxy;
+
+  // channelDensity (seed × activity): gates the deferred leveed-channel / sinuous-rille
+  // combiner (relief doc §F8.a rich tier). _derived-only for now (no GLSL consumer until
+  // channels land), surfaced so the contract is complete — mirrors how precipitation /
+  // pressure were surfaced ahead of their Fluvial/Aeolian consumers. Dead world ⇒ 0.
+  const channelHash = (() => { const x = Math.sin((seed + 11) * 12.9898) * 43758.5453; return x - Math.floor(x); })();
+  const channelDensity = clamp01(lavaActivity * (0.5 + 0.5 * channelHash));
+
+  // lavaAxis: the wrinkle-ridge strike direction (seeded unit-vec3). Wrinkle ridges are
+  // linear compressional ridges on the basalt plain (deferred from F5 to F8); the GLSL
+  // combiner carves a warped directional field ⊥ this axis, mirroring F5/F6's pattern.
+  const lavaAxis = seededUnitVec3(seed + 12);
+
   return {
     mountainAmp,                                                // F1 — ridged base relief amplitude (erosion-softened)
     orogenyStrength,                                            // F1 — isotropic ridged ↔ anisotropic fold-belt blend
@@ -668,6 +694,10 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     volcanismStrength,                                         // F7 — edifice density/size gate (tidal + resurfacing + arc proxy)
     edificeMaxHeight,                                          // F7 — edifice height scale ∝ 1/g, clamped [0.2,2.0] (low-g → giant shields)
     shieldStratoMix,                                           // F7 — 0=effusive shield ↔ 1=explosive strato (viscosity/habitability proxy)
+    lavaCoverage,                                              // F8 — flood-basalt resurfacing fraction (D11; SMOOTHS/suppresses relief)
+    lavaActivity,                                              // F8 — emissive-crack glow intensity (D12 tidal; cold plains vs glowing lava)
+    channelDensity,                                            // F8 — leveed-channel/rille gate (seed × activity; _derived-only, combiner deferred)
+    lavaAxis,                                                  // F8 — wrinkle-ridge strike direction (unit vec3, seed-derived)
     surfaceGravity,                                             // Earth-relative g (Relief F2/F7, Aeolian F15)
     tidalHeat,                                                  // Io-normalized planet self-heating (Relief F8/F7, Cryo P7)
     liquidStability,                                            // master liquid gate (Fluvial owner; Aeolian/Cryo/Optical read)
@@ -683,7 +713,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     ejectaStrength,                                             // F3 — ejecta apron amplitude (tracks craterDensity)
     ejectaRampart,                                             // F3 — 0=dry skirt ↔ 1=fluidized rampart ridge (D2 volatiles)
     rayBrightness,                                             // F3 — bright-ray albedo strength (airless-only × young)
-    emissive: hot,                                               // lava glow on hot bodies
+    emissive: hot * 0.25,                                        // F8: faint thermal-floor only — the SPATIAL lava cracks (lavaActivity) now carry the glow (no double-count)
     limbStrength: hasAtmo ? 0.7 : 0.0,                           // rim glow needs an atmosphere
     specStrength: hasAtmo ? mix(iron * 0.15, 0.8, clamp01(liquidStability / 0.5)) : iron * 0.15,  // ocean specular vs faint metal sheen
     auroraIntensity: magneticField * (hasAtmo ? 1 : 0),         // Optical reads the field; aurora needs an atmosphere to excite

@@ -236,6 +236,18 @@
       uniform float uEdificeAmp;        // overall edifice relief amplitude — lab knob
       uniform float uEdificeCaldera;    // summit caldera radius fraction (0..1) — lab knob
       uniform vec3  uEdificeOffset;     // 🎲 domain offset — default (0,0,0) = unchanged
+      // ── F8 lava plains & flows (Stage-C step 3, Relief) ──
+      uniform float uLavaCoverage;      // 0..1 flood-basalt resurfacing fraction (driven; ≤0 early-outs) — SMOOTHS relief
+      uniform float uLavaActivity;      // 0..1 emissive-crack glow intensity (driven, D12 tidal; ≤0 ⇒ cracks dark)
+      uniform vec3  uLavaAxis;          // wrinkle-ridge strike direction (driven, seed-derived unit vec3)
+      uniform float uLavaScale;         // flow-region noise scale — lab knob
+      uniform vec3  uLavaOffset;        // 🎲 domain offset — default (0,0,0) = unchanged
+      uniform float uWrinkleAmp;        // wrinkle-ridge relief amplitude on the plain — lab knob
+      uniform float uWrinkleFreq;       // wrinkle-ridge spatial frequency — lab knob
+      uniform float uWrinkleWarp;       // wrinkle-ridge sinuosity (domain warp) — lab knob
+      uniform float uCrackScale;        // emissive-crack Voronoi cell density — lab knob
+      uniform float uCrackWidth;        // emissive-crack mask width (F2−F1 threshold) — lab knob
+      uniform float uLavaGlowRate;      // emissive-crack pulse rate (× uTime) — lab knob
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -887,6 +899,61 @@
         grad += amp * prof.y * (1.0/edificeRadius) * voroGrad * uEdificeScale;
       }
 
+      // ── F8 lava plains (Stage-C step 3, Relief — relief doc §F8.a flood-basalt) ──
+      // Flood basalt FILLS and FLATTENS older terrain: inside flow regions the accumulated
+      // relief (mountains/craters/edifices/…) is suppressed toward a smooth plain, and a
+      // gentle wrinkle-ridge texture (linear compression ridges, deferred from F5 to F8) is
+      // laid on top. The flow-region mask is a low-freq noised() threshold whose EXTENT grows
+      // with uLavaCoverage (Io-grade resurfacing → whole-world plains). F8 runs LAST in the
+      // combiner chain, so suppression is a simple attenuation of the accumulated grad (this is
+      // normal-perturbation, not a re-differentiated height — the mask's own gradient is
+      // cosmetic, not chain-ruled). Wrinkle ridges reuse F6's ridgeWave + F5's warped-field
+      // pattern (both §5.4-pinned), so no new finite-diff oracle. uLavaCoverage≤0 ⇒ early-out.
+      void lavaCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uLavaCoverage <= 0.0) return;
+        const float WRINKLE_WARP_FREQ = 2.0;
+        // flow-region mask — low-freq FBM, thresholded; extent ∝ coverage (1 ⇒ whole world)
+        vec4 rn = noised(pos * uLavaScale + uLavaOffset);
+        float fbm01 = 0.5 + 0.5 * rn.x;
+        float region = smoothstep(1.0 - uLavaCoverage, 1.0 - uLavaCoverage + 0.25, fbm01);
+        // SMOOTH: lava floods + flattens older relief inside the region
+        h    *= (1.0 - region);
+        grad *= (1.0 - region);
+        // wrinkle ridges — linear compression ridges on the fresh plain (only where flooded)
+        vec3 ax = normalize(uLavaAxis);
+        vec4 wn = noised(pos * WRINKLE_WARP_FREQ + uLavaOffset + uMacroOffset);
+        float field  = dot(pos, ax) + uWrinkleWarp * wn.x;          // sinuous directional field
+        vec3  dfield = ax + uWrinkleWarp * WRINKLE_WARP_FREQ * wn.yzw;  // EXACT field gradient
+        float phase  = field * uWrinkleFreq;
+        vec2  rw = ridgeWave(phase);                                // 1−|sin| ridge + d/dphase
+        float amp = uWrinkleAmp * region;
+        h    += amp * (rw.x - 0.5);                                 // −0.5 DC cosmetic (normal-only shading)
+        grad += amp * rw.y * uWrinkleFreq * dfield;
+      }
+
+      // ── F8 emissive lava cracks (Stage-C step 3, Relief — relief doc §F8.a, THE HEADLINE) ──
+      // Worley F2−F1 crack mask over the fresh basalt, pulsing via uTime, routed through the
+      // ★ emissive-bypass channel so the glow stays crisp over the posterized rock (the single
+      // best posterization-survivor in the domain — emissive + high contrast, §F8.c). Confined
+      // to the same flow regions as the plains (cracks live in the lava, not the highlands).
+      // uLavaActivity (D12 tidal) is the cold-vs-glowing gate: 0 ⇒ dark (old solidified plains).
+      // NOT relief — no height/grad, like rayField(). Molten color from the shared
+      // emissiveBlackbody ramp at ~1400 K (fresh-basalt incandescence). uTime drives the pulse.
+      vec3 lavaCrackEmissive(vec3 pos){
+        if (uLavaActivity <= 0.0 || uLavaCoverage <= 0.0) return vec3(0.0);
+        vec3 cId, cGrad;
+        vec2 cff = voronoi3d(pos * uCrackScale + uLavaOffset, uVoroCells, cId, cGrad);
+        float crackMask = 1.0 - smoothstep(0.0, uCrackWidth, cff.y - cff.x);   // bright on cell borders
+        // restrict to flooded regions (same mask basis as lavaCombiner)
+        vec4 rn = noised(pos * uLavaScale + uLavaOffset);
+        float fbm01 = 0.5 + 0.5 * rn.x;
+        float region = smoothstep(1.0 - uLavaCoverage, 1.0 - uLavaCoverage + 0.25, fbm01);
+        // animated glow — pulse phase varies spatially via the region FBM so cracks shimmer async
+        float glow = 0.5 + 0.5 * sin(uTime * uLavaGlowRate + fbm01 * 6.2831853);
+        vec3 molten = emissiveBlackbody(1400.0);
+        return crackMask * region * glow * uLavaActivity * molten;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -959,6 +1026,7 @@
           plateauCombiner(vPos, fwBase, h, grad);
           tesseraCombiner(vPos, h, grad);
           edificeCombiner(vPos, h, grad);          // F7 — volcanic shield/strato cones + caldera
+          lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
         }
@@ -1008,6 +1076,9 @@
         // ★ Emissive glow (lava/hot stand-in for F41/F32) — Lambert-independent (visible on the dark side).
         vec3 emissive = uBaseColor * uEmissive;
         emissive = (uEmissiveBypass == 1) ? emissive : posterize(emissive, uLevels, fc, 0.4, uDitherMode);
+        // ★ F8 lava cracks — ALWAYS bypass the quantizer (the canonical Option-C survivor, §F8.c):
+        // spatial Worley crack-mask glow that stays crisp over the posterized basalt.
+        emissive += lavaCrackEmissive(vPos);
 
         // ★ Specular glint (sunglint F36 stand-in) — Blinn-Phong, only on the lit side.
         vec3 H = normalize(uLightDir + V);
@@ -1114,6 +1185,18 @@
       uEdificeAmp:        { value: 0.2 },  // overall edifice relief amplitude (lab-tunable)
       uEdificeCaldera:    { value: 0.12 }, // summit caldera radius fraction (lab-tunable)
       uEdificeOffset:     { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
+      // ── F8 lava plains & flows (Stage-C step 3, Relief) ──
+      uLavaCoverage:   { value: 0.0 },   // flood-basalt resurfacing fraction (driven; ≤0 early-outs)
+      uLavaActivity:   { value: 0.0 },   // emissive-crack glow intensity (driven, D12 tidal)
+      uLavaAxis:       { value: new THREE.Vector3(0, 1, 0) },  // wrinkle-ridge strike (driven, seed-derived)
+      uLavaScale:      { value: 1.4 },   // flow-region noise scale — lab-tunable
+      uLavaOffset:     { value: new THREE.Vector3() },        // 🎲 domain offset (default 0 = unchanged)
+      uWrinkleAmp:     { value: 0.06 },  // wrinkle-ridge relief amplitude — lab-tunable
+      uWrinkleFreq:    { value: 14.0 },  // wrinkle-ridge spatial frequency — lab-tunable
+      uWrinkleWarp:    { value: 0.4 },   // wrinkle-ridge sinuosity (domain warp) — lab-tunable
+      uCrackScale:     { value: 9.0 },   // emissive-crack Voronoi cell density — lab-tunable
+      uCrackWidth:     { value: 0.08 },  // emissive-crack mask width — lab-tunable
+      uLavaGlowRate:   { value: 1.5 },   // emissive-crack pulse rate (× uTime) — lab-tunable
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1273,6 +1356,19 @@
       edificeScale: 3.0,
       edificeAmp: 0.2,
       edificeCaldera: 0.12,
+      // ── F8 lava plains & flows (Stage-C step 3, Relief) — derived (lavaCoverage/
+      // lavaActivity/lavaAxis from the preset+seed) + lab-tunable (scale/wrinkle/crack/glow).
+      // Plains SMOOTH relief; the emissive cracks (lavaActivity) are the headline. ──
+      lavaCoverage: 0.0,
+      lavaActivity: 0.0,
+      lavaAxis: [0,1,0],
+      lavaScale: 1.4,
+      wrinkleAmp: 0.06,
+      wrinkleFreq: 14.0,
+      wrinkleWarp: 0.4,
+      crackScale: 9.0,
+      crackWidth: 0.08,
+      lavaGlowRate: 1.5,
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
@@ -1283,6 +1379,7 @@
       plateausEnabled: true,
       tesseraEnabled: true,
       edificesEnabled: true,
+      lavaEnabled: true,
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -1291,6 +1388,7 @@
       plateauDomainOffset: [0,0,0],
       tesseraDomainOffset: [0,0,0],
       edificeOffset: [0,0,0],
+      lavaOffset: [0,0,0],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1441,10 +1539,17 @@
       state.volcanismStrength = u.volcanismStrength;
       state.edificeMaxHeight  = u.edificeMaxHeight;
       state.shieldStratoMix   = u.shieldStratoMix;
+      // F8 lava plains (Stage-C step 3) — derived coverage (resurfacing, SMOOTHS relief) +
+      // activity (tidal, drives the emissive cracks) + wrinkle-ridge axis flow into state;
+      // scale/wrinkle/crack/glow are lab knobs.
+      state.lavaCoverage = u.lavaCoverage;
+      state.lavaActivity = u.lavaActivity;
+      state.lavaAxis     = u.lavaAxis;
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
-      // slate. Axes above already re-derive from the seed; reset the 6 domain offsets to 0.
+      // slate. Axes above already re-derive from the seed; reset the domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
+      state.lavaOffset = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -1559,6 +1664,22 @@
     fEdifices.add(state, 'edificeCaldera', 0.02, 0.3, 0.01).name('caldera radius');
     fEdifices.add(state, 'edificesEnabled').name('✓ enabled');
     fEdifices.add({ roll(){ state.edificeOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    // ▸ Lava plains (F8) — flood-basalt plains SMOOTH/suppress older relief; the emissive
+    // CRACKS (the headline) pulse via uTime through the emissive-bypass channel. coverage
+    // (resurfacing) + activity (tidal glow) come from the driver preset (.listen()-synced);
+    // region scale, wrinkle ridges, crack scale/width, glow rate are lab knobs.
+    const fLava = fRelief.addFolder('Lava plains (F8)'); fLava.open();
+    fLava.add(state, 'lavaCoverage', 0, 1, 0.01).name('coverage (smooths)').listen();
+    fLava.add(state, 'lavaActivity', 0, 1, 0.01).name('activity (crack glow)').listen();
+    fLava.add(state, 'lavaScale', 0.5, 4, 0.1).name('region scale');
+    fLava.add(state, 'wrinkleAmp', 0, 0.2, 0.005).name('wrinkle amp');
+    fLava.add(state, 'wrinkleFreq', 2, 30, 0.5).name('wrinkle freq');
+    fLava.add(state, 'wrinkleWarp', 0, 1.5, 0.01).name('wrinkle sinuosity');
+    fLava.add(state, 'crackScale', 3, 20, 0.5).name('crack density');
+    fLava.add(state, 'crackWidth', 0.01, 0.25, 0.005).name('crack width');
+    fLava.add(state, 'lavaGlowRate', 0, 5, 0.1).name('glow pulse rate');
+    fLava.add(state, 'lavaEnabled').name('✓ enabled');
+    fLava.add({ roll(){ state.lavaOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -1732,6 +1853,19 @@
       uniforms.uEdificeScale.value     = state.edificeScale;
       uniforms.uEdificeAmp.value       = state.edificeAmp;
       uniforms.uEdificeCaldera.value   = state.edificeCaldera;
+      // F8 lava plains — coverage (SMOOTHS relief, gates region) + activity (emissive cracks)
+      // driven; wrinkle/crack/glow lab-tunable. The enable toggle gates BOTH the early-outs
+      // (uLavaCoverage zeroes the plains combiner AND the crack emissive's coverage guard).
+      uniforms.uLavaCoverage.value = state.lavaEnabled ? state.lavaCoverage : 0.0;   // ✓ enable gate
+      uniforms.uLavaActivity.value = state.lavaEnabled ? state.lavaActivity : 0.0;   // ✓ enable gate (cracks dark)
+      uniforms.uLavaAxis.value.set(state.lavaAxis[0], state.lavaAxis[1], state.lavaAxis[2]);
+      uniforms.uLavaScale.value    = state.lavaScale;
+      uniforms.uWrinkleAmp.value   = state.wrinkleAmp;
+      uniforms.uWrinkleFreq.value  = state.wrinkleFreq;
+      uniforms.uWrinkleWarp.value  = state.wrinkleWarp;
+      uniforms.uCrackScale.value   = state.crackScale;
+      uniforms.uCrackWidth.value   = state.crackWidth;
+      uniforms.uLavaGlowRate.value = state.lavaGlowRate;
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
       uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);

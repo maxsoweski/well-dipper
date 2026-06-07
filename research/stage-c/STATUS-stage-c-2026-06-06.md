@@ -118,8 +118,8 @@ Built feature-by-feature, each TDD'd + live-verified on `:9223` per the proven s
 | F6 | **Plateaus / highlands / tessera** | ✅ **DONE** — HeteroTerrain + mesa terrace + crosscutting tessera lattice live; see below |
 | F3 | **Ejecta & rays** (reuses F2 Voronoi centers) | ✅ **DONE** — apron + rampart + bright rays live; see below |
 | F7 | **Volcanic edifices** (reads `surfaceGravity`, `tidalHeat`) | ✅ **DONE** — shield/strato cones + summit caldera live; see below |
-| F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ◻ |
-| F9/F10 | Chaos + ridged-icy (reads SHARED `uCryoActivity` from Cryo) | ◻ (cross-domain seam) |
+| F8 | Lava plains & flows (emissive cracks, reads `tidalHeat`) | ✅ **DONE** — flood-basalt plains suppress relief + animated emissive cracks live; see below |
+| F9/F10 | Chaos + ridged-icy (reads SHARED `uCryoActivity` from Cryo) | ◻ (cross-domain seam — **last single-domain relief work; see F8 note re: uCryoActivity**) |
 
 ### F2 — Craters (DONE)
 First consumer of the `voronoi3d` keystone + first reader of `surfaceGravity`.
@@ -476,6 +476,77 @@ DEFERRED (rich tier).
   Voronoi) DEFERRED to the rich tier. (3) **Emissive summit/active lava** routes through the
   emissive-bypass channel — lands with F8 (lava plains), not here. The shield/strato cones +
   caldera (the felt core) ship now; pancake + corona layer on additively.
+
+### F8 — Lava plains & flows (DONE)
+The first relief feature whose **headline is EMISSIVE, not relief** — and the first to
+ROUTE through the ★ emissive-bypass channel rather than the height/grad path. Reads
+`tidalHeat` (step-2 `tidalProxy`) for the glow gate. Cheap tier per relief-doc §F8.d:
+flood-basalt plains (resurfacing-suppression) + wrinkle ridges + animated Worley
+emissive cracks; leveed channels / sinuous rilles / collapsed tube-pit chains DEFERRED
+(rich tier). TWO mechanisms in one feature:
+- **(1) Flood-basalt plains (relief SUPPRESSION).** A low-freq `noised()` flow-region
+  mask whose EXTENT grows with `uLavaCoverage` (Io-grade resurfacing → whole-world
+  plains) **attenuates the accumulated relief** (`h,grad *= (1−region)`) toward a smooth
+  plain — lava fills/flattens older terrain. `lavaCombiner` runs **LAST** in the combiner
+  chain (after F7), so the suppression is a simple attenuation of the *accumulated* grad
+  (normal-perturbation, not a re-differentiated height — the mask's own gradient is
+  cosmetic, not chain-ruled). + **wrinkle ridges** (linear compression ridges, **the F5→F8
+  deferral, now resolved**): a warped directional `dot(pos,axis)` field carved by the F6
+  `ridgeWave` `1−|sin|` primitive — **reuses F6's ridgeWave + F5's warped-field pattern,
+  both already §5.4-pinned, so NO new finite-diff oracle** (relief-doc §F8.a, and the
+  handoff's note: the emissive crack mask has no dhdr to pin).
+- **(2) Emissive cracks (THE HEADLINE).** A **Worley F2−F1 crack mask** `1 − smoothstep(0,
+  uCrackWidth, F2−F1)` (the same `voronoi3d` keystone, sampled at `uCrackScale`), confined
+  to the flooded regions, **animated** `0.5+0.5·sin(uTime·rate + fbm·TAU)`, in molten color
+  from the shared `emissiveBlackbody(1400K)` ramp, scaled by `uLavaActivity` (D12 tidal:
+  cold solidified plains vs glowing active lava). Returned by a `lavaCrackEmissive()` helper
+  (NOT relief — no height/grad, like `rayField`) and **added AFTER the posterize ternary so
+  it ALWAYS bypasses** the quantizer (the canonical Option-C survivor, §F8.c — crisp glow
+  over posterized basalt). `uTime` already existed (clouds/aurora drive it) — no new clock.
+- **deriveUniforms** surfaces `lavaCoverage` (= `clamp01(resurfacing)` — D11; SMOOTHS
+  relief, consistent with F2's `craterDensity = bombardment×(1−resurfacing)`), `lavaActivity`
+  (= `tidalProxy` — D12 emissive gate), `channelDensity` (= `clamp01(activity × seedHash)` —
+  **_derived-only**, the deferred channel combiner's gate, surfaced for contract
+  completeness like precipitation/pressure were), `lavaAxis` (seeded unit-vec3, wrinkle
+  strike). **Emissive double-count resolved:** the flat `emissive` dropped from `hot` to
+  `hot·0.25` (a faint thermal FLOOR) — the lava glow is now SPATIAL via the cracks, exactly
+  as the handoff predicted ("F8 modulates the flat emissive"). Only the Lava preset has
+  nonzero `hot` (T_eq 950), so no other preset is affected.
+- **GLSL** `lavaCombiner()` + `lavaCrackEmissive()` (+ 11 new uniforms, a `▸ Lava plains
+  (F8)` lil-gui folder, enable toggle gating BOTH early-outs, 🎲 offset). `uLavaCoverage≤0`
+  ⇒ plains early-out; `uLavaActivity≤0 || uLavaCoverage≤0` ⇒ cracks dark.
+- **6 TDD surfacing tests** (`tests/planet-lod-relief.test.js`) + **1 updated foundation
+  test** (`hot body emits` threshold `>0.5`→`>0`, reflecting the now-spatial glow — intent
+  preserved: hot emits, cool doesn't). **193 lab tests green** (`npx vitest run
+  tests/planet-lod-*.test.js`). Backtick parity even (30). The emissive crack mask + plains
+  suppression have NO CPU gradient to pin (relief-doc §F8.a) — verified VISUALLY, the
+  surfacing LOGIC is unit-tested.
+- **Live-verified `:9223`** (GPU Chrome, screenshots `f8-01..04`): Lava preset (derives
+  coverage 0.95 / activity 1.0 / emissive 0.23 dimmed) → **molten crack veins glow on the
+  night/terminator side** (Lambert-independent, the bypass working) over smooth wrinkled
+  plains ✓; **enable OFF** (`uLavaCoverage/uLavaActivity=0`) → cracks vanish, rougher rocky
+  relief restored, only the faint dimmed thermal floor remains (A/B regression-safe) ✓;
+  **plains-suppression money shot** (Frozen's saturated craters + forced `lavaCoverage=0.7`)
+  → smooth lava plains **flood and flatten** the cratered terrain across the disc while
+  craters survive in the un-flooded highlands (the §F8.a resurfacing mask) ✓; console clean
+  (favicon-404 only). Generation gates confirmed live: Lava → coverage 0.95/activity 1.0,
+  Frozen/Titan → activity 0 (tidally dead).
+- **No new cross-domain shared uniform** — all F8 uniforms (`uLavaCoverage`/`uLavaActivity`/
+  `uLavaAxis`/`uLavaScale`/`uWrinkle*`/`uCrack*`/`uLavaGlowRate`) are Relief-internal, so
+  REGISTRY-canonical-uniforms.md is unchanged. `channelDensity` is `_derived`-only (no GLSL
+  consumer until the deferred channel combiner lands).
+- **Carry-forward (relief-doc §F8, not blocking, mirrors F2–F7 deferrals):** (1) **Leveed
+  channels / sinuous rilles / collapsed tube-pit chains** (rich tier §F8.a — directional
+  carved channels with raised levees, meandering warped lines, periodic pit chains) DEFERRED;
+  `channelDensity` is already surfaced as their gate. (2) **True per-region flow-lobe FBM**
+  (the plains currently smooth + wrinkle; richer lobate flow fronts are additive). (3)
+  **Quality-scalar cheap path** (§F8.d: drop the per-fragment Worley to a single flat emissive
+  on mobile, or freeze `uTime`) — wire to `qualityTier` when the mobile tier is tuned.
+
+⚠️ **F9/F10 are the LAST single-domain relief work and read SHARED `uCryoActivity`** (owned
+by Cryo, which hasn't landed — RESERVED at default-off in the registry). Per the handoff:
+they may ship with a stubbed/default `uCryoActivity` OR wait for Cryo. **Flag for Max** —
+this is the decision point before the 8-domain fan-out.
 
 After Relief, domains fan out in parallel (worktree-isolated), each from its
 `research/stage-b/RESEARCH_stage-b-<domain>-*.md` doc against this locked contract.
