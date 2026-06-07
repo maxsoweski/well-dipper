@@ -835,6 +835,22 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     1.0;                            // CO₂ / CH₄ / N₂ → full sublimation landforms
   const subStrength = clamp01(frostMaxCoverage) * subActiveFactor;
 
+  // ── Cryo step 5: F17 glacial relief gate (cryo-doc §2 F17 — mantle + flow lineations) ──
+  // F17 glacial landforms (slope-damped ice mantle + flow-aligned moraine/esker lineations) are
+  // RELIEF that needs ENOUGH ice to FLOW, not just a thin frost coat. So glacialStrength uses a
+  // HIGHER volatile-budget threshold than the frost mask (smoothstep 0.15→0.5 vs frost's
+  // 0.05→0.4): an ice-rich cold world glaciates; a modest-volatile world only frosts. WHERE the
+  // ice sits is confined in-shader by the cold cap (the same localT<condensationT gate F18/frost
+  // use — a warm world glaciates only at its cold poles, a uniformly-cold Pluto broadly). Both
+  // pieces reuse §5.4-pinned primitives (mantle = a slope-damped noised()-reweighting like
+  // fbmdHetero; lineations = ridgeWave) → NO new finite-diff oracle. ≤0 ⇒ combiner early-out.
+  const glacialStrength = clamp01(smoothstep(0.15, 0.5, volatileFraction));
+  // glacialFlowVigor ∝ 1/g (D14): low-gravity worlds build THICKER, more sluggish ice sheets with
+  // more prominent flow lineations (a low-g moon's ice piles deep; a high-g world's ice is thin
+  // and sluggish to deform). mix(0.4,0.9) keeps even a high-g world's glaciers visible. Scales the
+  // lineation amplitude in-shader (the mantle amplitude is a flat lab knob — vigor reads on the flow texture).
+  const glacialFlowVigor = clamp01(mix(0.4, 0.9, 1.0 - clamp01(surfaceGravity)));
+
   // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief — relief doc §F9.b) ──
   // The COVERAGE of chaos is gated by the SHARED uCryoActivity (Cryo-owned — D2/D12→P7;
   // NOW DERIVED above as cryoActivity; the lab knob remains a manual override). Relief owns only the
@@ -892,6 +908,8 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     pldStrength,                                               // Cryo step 3 — F22 PLD strata dark-band dip (cap budget × surface-age preservation); ≤0 ⇒ no banding
     pldLevels,                                                 // Cryo step 3 — F22 PLD annular band count (constant, lab-tunable)
     subStrength,                                                // Cryo step 4 — F18 sublimation-relief gate (frost budget × species-active); ≤0 ⇒ combiner early-out
+    glacialStrength,                                            // Cryo step 5 — F17 glacial-relief gate (volatile budget, HIGHER threshold than frost); ≤0 ⇒ combiner early-out
+    glacialFlowVigor,                                          // Cryo step 5 — F17 flow-lineation amplitude ∝ 1/g (low-g → thicker sheets, bolder lineations)
     chaosCellScale,                                            // F9 — raft size (voronoi3d frequency)
     chaosRaftJitter,                                           // F9 — raft height/tilt displacement (∝ 1/g — low-g moons displace more)
     chaosMatrixRough,                                          // F9 — refrozen inter-raft matrix roughness

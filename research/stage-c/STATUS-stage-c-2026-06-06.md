@@ -618,7 +618,10 @@ sublimation landforms · F17 glacial relief) layers on the frost mask keystone; 
 | 2 | **Frost-coverage mask (F23 / P22)** — the keystone every other cryo feature layers on | ✅ **DONE** — see below |
 | 3 | **F22 polar caps — PLD strata banding** (the frost mask + a layered-deposit overlay) | ✅ **DONE** — see below |
 | 4 | **F18 sublimation landscapes** (species-switched RELIEF: pits / polygons / blades / hollows) | ✅ **DONE** — see below |
-| 5+ | F17 glacial relief (U-valleys · fjords · moraines · eskers) | ⏳ next |
+| 5 | **F17 glacial relief** (ice mantle + flow lineations; U-valleys/fjords DEFERRED per Max) | ✅ **DONE 2026-06-07** — see below |
+
+**→ CRYO DOMAIN COMPLETE.** All 5 cryo steps shipped (activity gate → frost mask → F22 PLD caps →
+F18 sublimation → F17 glacial). The next 7 domains fan out from the locked contract (integration-index §7).
 
 ### Cryo step 1 — `uCryoActivity` derivation (DONE 2026-06-07)
 The icy-resurfacing activity gate F9/F10 read, now DERIVED (was an option-A lab-knob stub).
@@ -786,6 +789,66 @@ convention). Pole-safe by the shared 3D `voronoi3d` keystone (cryo-doc §5 risk 
   risk #3): single warped sin-train, kept modest (default freq 18); push `bladeFreq` high → add an fwidth
   amplitude fade (mirrors the scarp/tessera note). (6) default `subAmp` 0.10 reads subtle under heavy
   cratering — a lab-knob tuning call if penitentes should be more prominent.
+
+### Cryo step 5 — F17 glacial relief: ice mantle + flow lineations (DONE 2026-06-07)
+The LAST cryo feature, closing the domain. **Max scoped v1 (AskUserQuestion 2026-06-07) to MANTLE +
+LINEATIONS**; U-valley/fjord flow-LINE carving DEFERRED to a rich tier (it's the §5 3-cycle-cap risk —
+genuinely-new flow-tracing — like F4's Voronoi-web / F18's araneiforms). PLD strata already shipped in
+step 3. Built the F1–F10 way; both pieces reuse §5.4-pinned primitives → **NO new finite-diff oracle**
+(like F8/F9): the mantle is a slope-damped `noised()`-reweighting (fbmdDamped, like fbmdHetero), the
+lineations reuse `ridgeWave`. The surfacing LOGIC is unit-tested; the relief verified VISUALLY.
+- **CPU surfacings (new, `deriveUniforms`)** — `glacialStrength = clamp01(smoothstep(0.15,0.5,
+  volatileFraction))`: a HIGHER volatile-budget threshold than the frost mask (0.05→0.4) — glaciers need
+  ENOUGH ice to FLOW, not a thin frost coat, so an ice-rich cold world glaciates while a modest-volatile
+  world only frosts (≤0 ⇒ combiner early-out). `glacialFlowVigor = clamp01(mix(0.4,0.9,1−g))`: ∝ 1/g
+  (D14) — low-g worlds build thicker, bolder-lineated sheets; scales the lineation amplitude in-shader.
+  WHERE the ice sits is confined in-shader by the cold cap (the SAME localT<condensationT gate F18/frost
+  use, reusing the frost uniforms) — a warm world glaciates only its cold poles, a uniformly-cold Pluto broadly.
+- **GLSL** `fbmdDamped()` (the erosion FBM `a += b·n.x/(1+k·dot(d,d))` — per-octave amplitude damped by
+  the gradient so far → smooth ice in flats, detailed exposed rock on steeps; locally-constant weight like
+  fbmdHetero → standard chain rule, carries the trailing-octave + fwidth fade) + `glacialCombiner(pos,
+  fwBase, …)` (after `sublimationCombiner`, wired Stage-2 **before `lavaCombiner`** so lava suppresses
+  LAST). Two pieces: **(1) ice mantle** — fbmdDamped ponded in LOW-slope basins (basinMask off the
+  regional slope); **(2) flow lineations** — flow-aligned `ridgeWave` ridges, across-flow axis ⊥ the
+  REGIONAL downhill. Both × `uProvinceWeight` (§8 convention, no-op 1.0). 12 uniforms + a `▸ Glacial (F17)`
+  lil-gui folder + `✓ enable` + 🎲. `uGlacialStrength≤0 ⇒ early-out`.
+- **Live-found fix (think-before-acting, cycle 1):** first render had INCOHERENT blotchy lineations —
+  root cause was deriving flow direction from the ACCUMULATED grad (every fbm octave contributes equally
+  to |grad| → a noisy direction). Fix = a **low-frequency flow proxy** (`noised(pos·0.7)`, the cryo-doc
+  §2 F17 "cheap flow proxy") for BOTH the flow direction and the basin slope — ALSO more physically
+  correct (ice flows down the REGIONAL slope, not every bump). Resolved in one cycle → coherent ice
+  mantle ponding in basins + exposed-rock margins + directional flow grain (screenshot `f17-03`).
+- **7 TDD surfacing tests** (`tests/planet-lod-generation.test.js`, RED→GREEN): glacialStrength bone-dry→0 /
+  ice-rich>0 / **needs more ice than frost (modest world frosts but doesn't glaciate)** / scales-with-budget /
+  in-range; glacialFlowVigor low-g>high-g / in-range. **257 lab tests green** (+7). Backtick parity even (30).
+- **Live-verified `:9223`** (GPU Chrome, screenshots `f17-01..06`): **isolated** (Frozen, other relief +
+  frost albedo off, cranked) → coherent ice mantle ponding in regional basins, detailed exposed rock on
+  margins, directional flow lineations inside the ice fields ✓; **A/B** — `glacialEnabled=false` drives
+  `uGlacialStrength→0` (confirmed numerically), the `≤0` early-out restores the base (the identical
+  proven F1–F10/F18 pattern) ✓; **natural Frozen composed** (all features on, derived glacial 0.394) →
+  glacial rides under saturated craters + the CH₄ frost cap without blowout, craters stay readable ✓;
+  console clean (vite + benign lil-gui form-field only). **Generation gates confirmed live across 6
+  presets:** Lava→0 (bone-dry), Rocky→0 (water just below the glacial budget — frosts only, the
+  frost-vs-glacial distinction), Ocean→0.61, Titan→0.80 (g0.16→vigor0.82), Frozen→0.39, Europa→1.0;
+  flowVigor monotone in 1/g.
+- **No registry change** — all F17 uniforms are Cryo-internal (`uProvinceWeight` is the reserved Stage-D
+  hook, already in the registry). `uCryoActivity` (the only Cryo shared seam) flipped LIVE in step 1.
+- **Carry-forward (not blocking):** (1) **U-valleys / fjords** (carved parabolic troughs along flow-LINES)
+  DEFERRED — Max's v1 scope choice; the genuinely-new flow-tracing, the §5 3-cycle-cap risk. (2) **Esker
+  meandering** — lineations are flow-ALIGNED (moraine signature); transverse-meandering eskers are a
+  refinement. (3) **classifier is T_eq-only** (cryo carry-forward #1) → affects which worlds read "icy".
+  (4) default mantle/lineation amps (0.06/0.05) read subtle under heavy cratering — a lab-knob tuning call.
+
+---
+
+## ⚠️ Lab UX / menu redesign — NEXT SESSION (Max requested 2026-06-07, scoped in the handoff)
+The single vertical lil-gui panel (now ~14 relief/cryo feature folders + envelope + drivers) is hard to
+manage for testing and giving actionable feedback, and the feature count keeps growing. Max wants a UX
+rethink for how the feature toggles/sliders/info are displayed/organized. **Key constraint Max named:**
+most planets/moons won't have ALL terrain features — features should be GROUPED/ASSOCIATED (by planet
+archetype / co-occurrence) so testing is efficient (test a "Europa-class" or "Mars-class" body's relevant
+features together, not scroll through 14 folders). **This is the next session's scoped task** — full
+context + the UX requirements in the handoff. NOT started; do the UX brainstorming/scoping first.
 
 ---
 

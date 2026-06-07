@@ -489,3 +489,47 @@ describe('subStrength surfacing (Cryo step 4 — F18 sublimation-relief gate: fr
     expect(s).toBeLessThanOrEqual(1);
   });
 });
+
+describe('glacialStrength + glacialFlowVigor surfacing (Cryo step 5 — F17 glacial relief gate)', () => {
+  // F17 glacial landforms (ice mantle + flow lineations) are RELIEF that needs ENOUGH ice to
+  // FLOW, not just a thin frost coat — so glacialStrength uses a HIGHER volatile-budget threshold
+  // than the frost mask (smoothstep 0.15→0.5 vs frost's 0.05→0.4): an ice-rich cold world glaciates,
+  // a modest-volatile world only frosts. glacialFlowVigor ∝ 1/g (D14): low-g worlds build thicker,
+  // more sluggish sheets with more prominent lineations. The shader confines WHERE (the cold cap,
+  // reusing the frost localT<condensationT gate); these are the per-planet AMOUNT gates (≤0 ⇒ early-out).
+  const cold = (T, vf = 0.3) => ({ T_eq: T, composition: { volatileFraction: vf } });
+
+  it('bone-dry world → glacialStrength 0 (early-out, no ice to flow)', () => {
+    expect(deriveUniforms(cold(140, 0.01)).glacialStrength).toBe(0);
+  });
+  it('ice-rich cold world → positive glacialStrength', () => {
+    expect(deriveUniforms(cold(140, 0.5)).glacialStrength).toBeGreaterThan(0);
+  });
+  it('needs MORE ice than frost: a modest-budget world frosts but does NOT glaciate', () => {
+    const u = deriveUniforms(cold(140, 0.1));   // vf 0.1: above frost floor (0.05), below glacial (0.15)
+    expect(u.frostMaxCoverage).toBeGreaterThan(0);  // a thin frost coat forms
+    expect(u.glacialStrength).toBe(0);              // but not enough to flow as a glacier
+  });
+  it('scales with the volatile budget (more ice → more glacial relief)', () => {
+    const lo = deriveUniforms(cold(140, 0.25)).glacialStrength;
+    const hi = deriveUniforms(cold(140, 0.45)).glacialStrength;
+    expect(hi).toBeGreaterThan(lo);
+  });
+  it('glacialStrength stays finite and in [0,1] (empty bundle → no NaN/throw)', () => {
+    const s = deriveUniforms({}).glacialStrength;
+    expect(Number.isFinite(s)).toBe(true);
+    expect(s).toBeGreaterThanOrEqual(0);
+    expect(s).toBeLessThanOrEqual(1);
+  });
+  it('glacialFlowVigor ∝ 1/g: low-gravity world > high-gravity world (thicker sheets)', () => {
+    const lowG  = deriveUniforms({ massEarth: 0.1, radiusEarth: 1.0 }).glacialFlowVigor;   // g 0.1
+    const highG = deriveUniforms({ massEarth: 2.0, radiusEarth: 1.0 }).glacialFlowVigor;   // g 2.0
+    expect(lowG).toBeGreaterThan(highG);
+  });
+  it('glacialFlowVigor stays finite and in [0,1]', () => {
+    const v = deriveUniforms({}).glacialFlowVigor;
+    expect(Number.isFinite(v)).toBe(true);
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThanOrEqual(1);
+  });
+});

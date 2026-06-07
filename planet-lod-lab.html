@@ -303,6 +303,20 @@
       uniform float uSubColdGate;       // cold-cap confinement edge softness (× T_eq = K band on localT<condensationT) — lab knob
       uniform vec3  uSubOffset;         // 🎲 domain offset — default (0,0,0) = unchanged
 
+      // ── Cryo step 5: F17 glacial relief — slope-damped ice mantle + flow-aligned lineations ──
+      uniform float uGlacialStrength;   // 0..1 glacial-relief gate (driven; budget, ≤0 ⇒ early-out)
+      uniform float uGlacialFlowVigor;  // 0..1 flow-lineation amplitude scale ∝ 1/g (driven)
+      uniform float uGlacialAmp;        // ice-mantle height amplitude (relief units) — lab knob
+      uniform float uGlacialScale;      // ice-mantle slope-damped FBM frequency — lab knob
+      uniform float uGlacialSlopeDamp;  // slope-damping strength (higher ⇒ smoother on steeps) — lab knob
+      uniform float uGlacialBasinThresh;// surface-slope above which ice flows off (low-slope basin gate) — lab knob
+      uniform float uLineationAmp;      // moraine/esker lineation amplitude — lab knob
+      uniform float uLineationFreq;     // lineation ridge spacing (flow-aligned) — lab knob
+      uniform float uLineationWarp;     // lineation directional-field warp — lab knob
+      uniform float uLineationWarpFreq; // lineation warp frequency — lab knob
+      uniform float uGlacialColdGate;   // cold-cap confinement edge softness (× T_eq, like uSubColdGate) — lab knob
+      uniform vec3  uGlacialOffset;     // 🎲 domain offset — default (0,0,0) = unchanged
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -827,6 +841,34 @@
         return vec4(value, grad);
       }
 
+      // ── F17 slope-damped FBM (Cryo step 5, glacial ice mantle — cryo-doc §2 F17) ──
+      // The "erosion FBM" a += b·n.x/(1+k·dot(d,d)) (relief research §3.1): each octave's
+      // amplitude is DAMPED by the gradient accumulated so far, so detail dies on steep slopes
+      // and survives in flats — ice fills basins smooth, exposed rock stays detailed (exactly
+      // the glaciated look). Like fbmdHetero the per-octave weight is locally-constant (the
+      // running gradient is held fixed for the octave), so the gradient is the standard fbmd
+      // chain rule scaled by that weight — NO new finite-diff oracle (it reweights the §5.4-pinned
+      // noised() octaves). Carries fbmd's trailing-octave + fwidth anti-shimmer fade.
+      vec4 fbmdDamped(vec3 pos, float octaves, float fwBase, float damp){
+        float freq = uNoiseScale * 0.3;
+        float amp  = 0.5;
+        float h = 0.0;
+        vec3 grad = vec3(0.0);
+        for (int i = 0; i < 12; i++){
+          if (float(i) >= octaves) break;
+          float w = clamp(octaves - float(i), 0.0, 1.0);          // trailing-octave fade
+          if (uFwClamp == 1) w *= 1.0 - smoothstep(0.4, 0.8, fwBase * freq);
+          float dampW = 1.0 / (1.0 + damp * dot(grad, grad));      // slope-damping (locally-const this octave)
+          vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;
+          vec4 n = noised(pos * freq + off + uGlacialOffset);
+          h    += amp * w * dampW * n.x;
+          grad += amp * w * dampW * freq * n.yzw;                  // chain rule, weight held constant
+          amp  *= 0.5;
+          freq *= 2.0;
+        }
+        return vec4(h, grad);
+      }
+
       // ── F6 mesa terrace (Stage-C step 3, Relief) — transcribed from terraceProfile()
       // in planet-lod-lab-core.js (same soft-riser smoothstep, vitest-pinned slope).
       // Returns vec2(terraced value, dv/dh) — flat treads, soft risers between.
@@ -1179,6 +1221,73 @@
         }
       }
 
+      // ── F17 glacial relief (Cryo step 5, cryo-doc §2 F17) — ice mantle + flow lineations ──
+      // The last cryo feature. TWO pieces (Max scoped v1 to mantle + lineations; U-valley/fjord
+      // flow-LINE carving DEFERRED to a rich tier, like F4's Voronoi-web / F18's araneiforms):
+      // (1) ICE MANTLE — a slope-damped FBM (fbmdDamped) ponded in LOW-slope basins (ice fills
+      //     flats smooth, flows off steeps), confined to the cold cap by the SAME localT<condensationT
+      //     gate F18/frost use (reuses the frost uniforms) — so a warm world glaciates only its cold
+      //     poles, a uniformly-cold Pluto broadly. The mantle ADDS gentle ice-surface relief.
+      // (2) FLOW LINEATIONS (moraine/esker) — flow-ALIGNED ridges: a warped directional field whose
+      //     base axis is the LOCAL across-flow direction (⊥ to downhill = −tangential grad), carried
+      //     by the §5.4-pinned ridgeWave (1−|sin|). The flow axis is held locally-constant (the
+      //     cryo-doc flow-proxy: no iteration, the cost-saver), so the gradient is EXACT for the field
+      //     given a fixed axis — the F8-wrinkle / F10-groove pattern, axis swapped global→local-flow.
+      // Both reuse pinned primitives → NO new finite-diff oracle. Province-aware (§8): ×uProvinceWeight.
+      // Wired before lavaCombiner so lava still suppresses LAST. uGlacialStrength≤0 ⇒ early-out.
+      void glacialCombiner(vec3 pos, float fwBase, inout float h, inout vec3 grad){
+        if (uGlacialStrength <= 0.0) return;
+        // cold-cap confinement — identical field to frostCoverage/sublimationCombiner (reuse frost uniforms)
+        float coldFactor;
+        if (uFrostLocked == 1){
+          coldFactor = clamp(vSubstellarAngle / 3.14159265, 0.0, 1.0);
+        } else {
+          float sinLat = normalize(pos).y;
+          coldFactor = mix(sinLat * sinLat, 1.0, uFrostLatitudeBias * 0.6);
+        }
+        float localT  = uPlanetTempEq * (1.0 - uFrostLatChill * coldFactor) - h * uFrostLapseRate * uPlanetTempEq;
+        float coldnes = uFrostCondensationT - localT;                 // >0 ⇒ ice is solid here
+        float band    = uGlacialColdGate * uPlanetTempEq;
+        float capMask = smoothstep(-band, band, coldnes);
+        if (capMask <= 0.0) return;
+
+        // Flow proxy — glacial ice flows down the REGIONAL slope, not every fine bump, so the flow
+        // direction comes from a LOW-frequency field (cryo-doc §2 F17 "cheap flow proxy", no iteration),
+        // NOT the accumulated grad (whose every fbm octave contributes equally to |grad| → a noisy,
+        // incoherent direction → blotchy lineations). The regional slope also drives the basin mask.
+        const float FLOW_SCALE = 0.7;
+        vec3  nrm = normalize(pos);
+        vec4  flow = noised(pos * FLOW_SCALE + uGlacialOffset);
+        vec3  fG  = flow.yzw * FLOW_SCALE;                            // regional height gradient (object space)
+        vec3  gT  = fG - nrm * dot(fG, nrm);                          // tangential component
+        float slope = length(gT);
+        float base = uGlacialStrength * capMask * uProvinceWeight;    // §8 province convention (no-op 1.0 for now)
+
+        // (1) ice mantle — slope-damped FBM, ponded where the REGIONAL surface is LOW-slope (basins).
+        // The basin mask is slowly-varying (held locally-constant, the chaos/ejecta cosmetic-grad convention).
+        float basinMask = 1.0 - smoothstep(uGlacialBasinThresh, uGlacialBasinThresh * 2.5, slope);
+        vec4  ice = fbmdDamped(pos * uGlacialScale, uOctaves, fwBase * uGlacialScale, uGlacialSlopeDamp);
+        float mAmp = uGlacialAmp * base * basinMask;
+        h    += mAmp * ice.x;
+        grad += mAmp * ice.yzw * uGlacialScale;
+
+        // (2) flow lineations (moraine/esker) — flow-aligned ridgeWave ridges. Across-flow axis ⊥
+        // regional downhill in the tangent plane; if the surface is flat (no flow), skip (lineations are
+        // a FLOW signature). Amplitude scales with flow vigor (∝ 1/g) — low-g sheets carry bolder lineations.
+        if (slope > 1e-4){
+          vec3 flowDir   = -gT / slope;                              // regional downhill unit vector (tangent)
+          vec3 acrossAx  = normalize(cross(nrm, flowDir));           // ⊥ flow in tangent plane (held const)
+          vec4 wn = noised(pos * uLineationWarpFreq + uGlacialOffset + uMacroOffset);
+          float field  = dot(pos, acrossAx) + uLineationWarp * wn.x; // ridges run ALONG flow (field varies across)
+          vec3  dfield = acrossAx + uLineationWarp * uLineationWarpFreq * wn.yzw;  // EXACT grad (axis held const)
+          float phase  = field * uLineationFreq;
+          vec2  rw = ridgeWave(phase);
+          float lAmp = uLineationAmp * base * uGlacialFlowVigor;
+          h    += lAmp * (rw.x - 0.5);                               // −0.5 DC cosmetic (normal-only shading)
+          grad += lAmp * rw.y * uLineationFreq * dfield;
+        }
+      }
+
       // ── Cryo frost-coverage mask (Stage-C Cryo step 2, F23/F22 — cryo-doc §2) ─────────────
       // THE keystone of the cryo domain: a per-fragment COVERAGE scalar ∈ [0,1] answering "is it
       // cold enough HERE for this volatile to be solid?" — a coverage test, NOT relief (no height
@@ -1319,6 +1428,7 @@
           chaosCombiner(vPos, h, grad);            // F9 — ice-shell chaos rafts (reads shared uCryoActivity)
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
+          glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
@@ -1548,6 +1658,19 @@
       uBladeSharp:       { value: 3.0 },   // CH₄ penitente blade sharpness (pow) — lab knob
       uSubColdGate:      { value: 0.15 },  // cold-cap confinement threshold — lab knob
       uSubOffset:        { value: new THREE.Vector3() },   // 🎲 domain offset
+      // ── Cryo step 5: F17 glacial relief — ice mantle + flow lineations ──
+      uGlacialStrength:  { value: 0.0 },   // glacial-relief gate (driven; ≤0 ⇒ early-out)
+      uGlacialFlowVigor: { value: 0.5 },   // flow-lineation amplitude scale ∝ 1/g (driven)
+      uGlacialAmp:       { value: 0.06 },  // ice-mantle height amplitude — lab knob
+      uGlacialScale:     { value: 1.6 },   // ice-mantle slope-damped FBM freq — lab knob
+      uGlacialSlopeDamp: { value: 8.0 },   // slope-damping strength — lab knob
+      uGlacialBasinThresh:{ value: 0.15 }, // surface-slope basin gate (ice flows off steeper) — lab knob
+      uLineationAmp:     { value: 0.05 },  // moraine/esker lineation amplitude — lab knob
+      uLineationFreq:    { value: 30.0 },  // lineation ridge spacing (flow-aligned) — lab knob
+      uLineationWarp:    { value: 0.25 },  // lineation directional-field warp — lab knob
+      uLineationWarpFreq:{ value: 2.5 },   // lineation warp frequency — lab knob
+      uGlacialColdGate:  { value: 0.15 },  // cold-cap confinement threshold (like uSubColdGate) — lab knob
+      uGlacialOffset:    { value: new THREE.Vector3() },   // 🎲 domain offset
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
@@ -1773,6 +1896,19 @@
       bladeSharp: 3.0,
       subColdGate: 0.15,
       subOffset: [0,0,0],
+      // ── Cryo step 5: F17 glacial relief (ice mantle + flow lineations) ──
+      glacialStrength: 0.0,      // driven gate (≤0 ⇒ early-out)
+      glacialFlowVigor: 0.5,     // driven lineation amplitude scale (∝ 1/g)
+      glacialAmp: 0.06,
+      glacialScale: 1.6,
+      glacialSlopeDamp: 8.0,
+      glacialBasinThresh: 0.15,
+      lineationAmp: 0.05,
+      lineationFreq: 30.0,
+      lineationWarp: 0.25,
+      lineationWarpFreq: 2.5,
+      glacialColdGate: 0.15,
+      glacialOffset: [0,0,0],
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
       cratersEnabled: true,
@@ -1788,6 +1924,7 @@
       cryoRidgeEnabled: true,
       frostEnabled: true,
       subEnabled: true,
+      glacialEnabled: true,
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -1990,12 +2127,15 @@
       // Cryo step 4 F18 sublimation — driven gate + species flow into state; shape params stay lab knobs.
       state.subStrength        = u.subStrength;
       state.volatileSpecies    = u.volatileSpecies;
+      // Cryo step 5 F17 glacial — driven gate + flow vigor flow into state; shape params stay lab knobs.
+      state.glacialStrength    = u.glacialStrength;
+      state.glacialFlowVigor   = u.glacialFlowVigor;
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
       // slate. Axes above already re-derive from the seed; reset the domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
-      state.frostOffset = [0,0,0]; state.subOffset = [0,0,0];
+      state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state._derived = u;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
@@ -2188,6 +2328,24 @@
     fSub.add(state, 'subColdGate', 0.02, 0.9, 0.02).name('cold-cap softness');
     fSub.add(state, 'subEnabled').name('✓ enabled');
     fSub.add({ roll(){ state.subOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+
+    // ▸ Glacial (F17) — slope-damped ice mantle (ponded in basins) + flow-aligned moraine/esker
+    // lineations. Gate/flow-vigor are driven; mantle + lineation shape params are lab knobs.
+    // Confined to the cold cap (same gate as frost/F18). U-valley/fjord carving DEFERRED (rich tier).
+    const fGlacial = fRelief.addFolder('Glacial (F17)'); fGlacial.open();
+    fGlacial.add(state, 'glacialStrength', 0, 1, 0.01).name('glacial gate (driven)').listen();
+    fGlacial.add(state, 'glacialFlowVigor', 0, 1, 0.01).name('flow vigor ∝1/g (driven)').listen();
+    fGlacial.add(state, 'glacialAmp', 0, 0.3, 0.01).name('mantle amp');
+    fGlacial.add(state, 'glacialScale', 0.5, 6, 0.1).name('mantle freq');
+    fGlacial.add(state, 'glacialSlopeDamp', 0, 30, 0.5).name('slope damping');
+    fGlacial.add(state, 'glacialBasinThresh', 0.02, 0.6, 0.02).name('basin slope gate');
+    fGlacial.add(state, 'lineationAmp', 0, 0.2, 0.01).name('lineation amp');
+    fGlacial.add(state, 'lineationFreq', 5, 80, 1).name('lineation freq');
+    fGlacial.add(state, 'lineationWarp', 0, 1, 0.02).name('lineation warp');
+    fGlacial.add(state, 'lineationWarpFreq', 0.5, 6, 0.1).name('lineation warp freq');
+    fGlacial.add(state, 'glacialColdGate', 0.02, 0.9, 0.02).name('cold-cap softness');
+    fGlacial.add(state, 'glacialEnabled').name('✓ enabled');
+    fGlacial.add({ roll(){ state.glacialOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = gui.addFolder('Seeds'); fSeeds.close();
@@ -2417,6 +2575,17 @@
       uniforms.uBladeFreq.value          = state.bladeFreq;
       uniforms.uBladeSharp.value         = state.bladeSharp;
       uniforms.uSubColdGate.value        = state.subColdGate;
+      uniforms.uGlacialStrength.value    = state.glacialEnabled ? state.glacialStrength : 0.0;   // ✓ enable gate
+      uniforms.uGlacialFlowVigor.value   = state.glacialFlowVigor;
+      uniforms.uGlacialAmp.value         = state.glacialAmp;
+      uniforms.uGlacialScale.value       = state.glacialScale;
+      uniforms.uGlacialSlopeDamp.value   = state.glacialSlopeDamp;
+      uniforms.uGlacialBasinThresh.value = state.glacialBasinThresh;
+      uniforms.uLineationAmp.value       = state.lineationAmp;
+      uniforms.uLineationFreq.value      = state.lineationFreq;
+      uniforms.uLineationWarp.value      = state.lineationWarp;
+      uniforms.uLineationWarpFreq.value  = state.lineationWarpFreq;
+      uniforms.uGlacialColdGate.value    = state.glacialColdGate;
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
       uniforms.uMountainDomainOffset.value.set(state.mountainDomainOffset[0], state.mountainDomainOffset[1], state.mountainDomainOffset[2]);
@@ -2428,6 +2597,7 @@
       uniforms.uChaosOffset.value.set(state.chaosOffset[0], state.chaosOffset[1], state.chaosOffset[2]);
       uniforms.uCryoRidgeOffsetV.value.set(state.cryoRidgeOffsetV[0], state.cryoRidgeOffsetV[1], state.cryoRidgeOffsetV[2]);
       uniforms.uSubOffset.value.set(state.subOffset[0], state.subOffset[1], state.subOffset[2]);
+      uniforms.uGlacialOffset.value.set(state.glacialOffset[0], state.glacialOffset[1], state.glacialOffset[2]);
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
