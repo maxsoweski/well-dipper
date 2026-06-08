@@ -2,8 +2,8 @@
 
 **Date:** 2026-06-07 · **Feature:** F11 (Fluvial domain, first of the
 gradational-landform campaign) · **Surface:** `planet-lod-lab.html`
-(`window._lab`) · **Status:** design APPROVED by Max 2026-06-07, pending
-audit by the implementing session.
+(`window._lab`) · **Status:** design APPROVED by Max 2026-06-07; **AUDITED
+2026-06-07** (implementing session — findings folded in below, see §Audit).
 
 **Campaign context:** first feature in the
 [planet-lod feature-completion campaign](../../FEATURES/planet-lod-campaign-tracker.md)
@@ -109,6 +109,20 @@ Relief; future F12–F16 land here too). Inside it, a `.close()`d
 `density`, `depth`, `meander`, `activity` (relict↔active override). New
 `riversEnabled` in `state`.
 
+### 5. Archetype-registry wiring (NEW — found in audit, NOT in original design)
+The lab's solo/filter/enable-all machinery is driven by a `FEATURES` registry in
+`planet-archetypes.js` (imported at lab :110) + a `featureFolders` bridge map
+(lab :2382). A new feature that skips this gets no solo button, no archetype
+filter, and **fails the `planet-archetypes` vitest** (it cross-checks `FEATURES`
+enableKeys ⇆ `.add(state,'xEnabled')` bindings bidirectionally). Required trio,
+all-or-none:
+- `planet-archetypes.js`: add `rivers: { label:'Rivers & valleys (F11)',
+  enableKey:'riversEnabled', archetypes:['tectonic-terrestrial','volatile-cold'] }`
+  (water worlds + Titan methane; both are real ARCHETYPES keys).
+- lab: bind `fRivers.add(state, 'riversEnabled')` (literal, so the test's regex
+  sees it) + add `rivers: fRivers` to the `featureFolders` map.
+- The existing `relocateEnableToTitle` / solo / 🎲 loops then pick it up for free.
+
 ## Variants coverage (F11 inventory)
 | Variant | How |
 |---|---|
@@ -134,19 +148,43 @@ Relief; future F12–F16 land here too). Inside it, a `.close()`d
   (was 30 last session — re-check after editing the shader template literal).
 - `npm run test -- planet-archetypes` stays green.
 
-## Risks / audit-these
-1. **Drainage primitive may not read as branching** at the retro resolution —
-   the whole feature rides on the spike harness succeeding. Auditor: confirm the
-   spike-first step is honored; don't let it skip straight to the big shader.
-2. **`canyonHeight` interaction with F4 canyons + Cryo chasma** — both write the
-   same accumulator; verify fluvial carve composes (doesn't double-deepen or
-   fight tectonic graben). Check ordering vs Stage-3 cryo.
-3. **Relict derivation** uses `surfaceHistory.erosion` — confirm that field
-   exists on all presets (some presets may lack it → guard).
-4. **Low-ground preference** must not cancel the network on flat worlds (Ocean
-   has low relief) — tune so flat worlds still show channels.
-5. **Performance:** drainage primitive adds 2 warped-noise octaves per fragment
-   — confirm frame cost acceptable on `:9223` GPU.
+## Audit (2026-06-07, implementing session) — resolutions
+
+Audited the spec against live `planet-lod-lab.html` + `planet-lod-lab-core.js` +
+`planet-archetypes.js`. Verdict: **sound; implement after these folds.**
+
+- **Anchors accurate** (minor line drift only): canyonHeight :1407, combiner site
+  :1429–1441, `canyonCombiner` :1432, fluvial placeholder :1451–1453, liquid
+  uniforms :1692–1694, presets :2054+. The lab has MANY more combiners now
+  (chaos/cryoRidge/sublimation/glacial/lava) — Stage-4 fluvial still slots after
+  `canyonCombiner`, before the `perturbAnalytic` at :1443.
+- **Drivers already surfaced — NO core-JS change needed.** `deriveUniforms()`
+  returns `precipitation` (D4 rain, core :582/:926), `surfaceGravity` (:514/:921),
+  `liquidStability`, `liquidSpecies`, `pressure`. Derive `uFluvial*` in
+  `applyDrivers` from `u.precipitation` / `u.surfaceGravity` / `u.liquidStability`.
+- **Risk #3 RESOLVED:** all 6 presets carry `surfaceHistory.erosion`. Read it raw
+  from `DRIVER_PRESETS[driverUI.preset].surfaceHistory?.erosion ?? 0` (it's a
+  local in core, not on the returned `u`). Keep the `?? 0` guard.
+- **Do NOT reuse `channelDensity`** (core :758): it's gated on *lava* activity
+  (F8 volcanic rilles), unrelated to rain. Derive a fresh `uFluvialDensity`.
+- **`fbmdRidged` (lab :564) exists** with an analytic gradient but is hardwired to
+  mountain uniforms — copy the fold/chain-rule *technique* into the new
+  `drainageField`, don't call it. (Channels are simpler: the near-zero band of a
+  warped field, `1 - smoothstep(0,w,|field|)`, grad `-step'·sign(field)·dfield`.)
+- **Registry wiring is mandatory** — see Component §5 (new; original design missed
+  it). The `planet-archetypes` test forces it.
+
+## Residual risks (verify during implement)
+1. **Drainage primitive may not read as branching** at retro resolution — the
+   whole feature rides on the spike harness. Honor spike-first; don't skip to the
+   big shader. 3-cycle cap, then fall back + flag.
+2. **`canyonHeight` co-tenancy** — F4 canyons + Cryo chasma + (now) Fluvial all
+   write it. Verify fluvial carve composes (doesn't double-deepen graben). Slot
+   fluvial AFTER `canyonCombiner`, and confirm it doesn't fight cryo chasma.
+3. **Low-ground preference** must not cancel the network on flat worlds (Ocean =
+   low relief) — tune `lowGround` so flat worlds still show channels.
+4. **Performance:** +2 warped-noise octaves/fragment — confirm frame cost on
+   `:9223` GPU. Mitigated by the `riversEnabled`→0 / `uFluvialDensity≤0` early-out.
 
 ## Out of scope (later features, do NOT build here)
 F12 deltas/fans, F13 outflow channels, F14 lake-filling of channels, F21 karst.
