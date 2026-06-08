@@ -30,8 +30,8 @@ Legend: ✅ done · 🟡 partial · ⬜ unbuilt (placeholder/aspirational) · �
 | — | Stage-A foundation (analytic noise, lodRamp, envelope split, driver→uniform) | foundation | ✅ |
 | F1–F10 | mountains, craters, ejecta, canyons(tectonic), scarps, plateaus, tessera, edifices, lava, chaos, ridged-icy | Relief | ✅ |
 | F17/F18/F22/F23 | glacial, sublimation, polar caps (PLD), frost mask | Cryo/volatile | ✅ |
-| **F11** | **River networks & valleys** | **Fluvial** | **▶️ current** |
-| F12 | Deltas & alluvial fans | Fluvial | ⬜ |
+| F11 | River networks & valleys | Fluvial | ✅ (lab; pending Max UAT) |
+| **F12** | **Deltas & alluvial fans** | **Fluvial** | **▶️ current** |
 | F13 | Outflow / megaflood channels | Fluvial | ⬜ |
 | F14 | Lakes & seas (standing liquid) | Fluvial | 🟡 (ocean water only) |
 | F21 | Karst / dissolution | Fluvial | ⬜ |
@@ -57,7 +57,7 @@ Legend: ✅ done · 🟡 partial · ⬜ unbuilt (placeholder/aspirational) · �
 
 | Feature | Spec | Plan | Commit(s) | Verified |
 |---|---|---|---|---|
-| F11 | [`2026-06-07-f11-fluvial-river-networks-design.md`](../superpowers/specs/2026-06-07-f11-fluvial-river-networks-design.md) (approved + audited `e2430ab`) | [`2026-06-07-f11-fluvial-river-networks.md`](../superpowers/plans/2026-06-07-f11-fluvial-river-networks.md) (6 tasks, spike-first) | _(next: implement)_ | |
+| F11 | [`…-f11-…-design.md`](../superpowers/specs/2026-06-07-f11-fluvial-river-networks-design.md) (approved + audited `e2430ab`) | [`…-f11-….md`](../superpowers/plans/2026-06-07-f11-fluvial-river-networks.md) (6 tasks, spike-first) | spike `172526d` · shader `2f3855a` · drivers `27155da` · GUI+registry `cd7f263` · tint+verify `573083e` | ✅ lab (`:9223`); pending Max UAT |
 
 ## Session pickup
 
