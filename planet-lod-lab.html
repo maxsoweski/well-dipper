@@ -2019,6 +2019,12 @@
       frostEnabled: true,
       subEnabled: true,
       glacialEnabled: true,
+      // F11 fluvial — riversEnabled gates the carve; activity/density/depth/meander are
+      // driven (applyDrivers); width/freq/warp/lowBias are lab shape knobs (proven spike defaults).
+      riversEnabled: true,
+      fluvialActivity: 1.0, fluvialDensity: 0.0, fluvialDepth: 0.12, fluvialMeander: 0.5,
+      fluvialWidth: 0.10, fluvialFreq: 2.3, fluvialWarp: 0.4, fluvialLowBias: 0.5,
+      fluvialOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -2250,6 +2256,21 @@
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
+      state.fluvialOffset = [0,0,0];
+      // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
+      // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
+      // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
+      // stability but erosion evidence) gets faint, softened channels via activity→erosion.
+      const _fp = DRIVER_PRESETS[driverUI.preset];
+      const _erosion = _fp.surfaceHistory?.erosion ?? 0;
+      const _stab = u.liquidStability, _rain = u.precipitation, _g = u.surfaceGravity;
+      const _clamp01 = x => Math.max(0, Math.min(1, x));
+      const _wet = _stab > 0.15;
+      state.fluvialActivity = _wet ? 1.0 : _clamp01(_erosion);              // relict if dried
+      state.fluvialDensity  = _wet ? _clamp01(_stab * (0.3 + 0.7 * _rain))  // active network
+                                   : 0.4 * _clamp01(_erosion);             // faint relict traces
+      state.fluvialDepth    = 0.08 + 0.10 * _rain + 0.04 * _clamp01(_g);
+      state.fluvialMeander  = 0.3 + 0.5 * _rain;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -2771,6 +2792,16 @@
       uniforms.uCryoRidgeOffsetV.value.set(state.cryoRidgeOffsetV[0], state.cryoRidgeOffsetV[1], state.cryoRidgeOffsetV[2]);
       uniforms.uSubOffset.value.set(state.subOffset[0], state.subOffset[1], state.subOffset[2]);
       uniforms.uGlacialOffset.value.set(state.glacialOffset[0], state.glacialOffset[1], state.glacialOffset[2]);
+      // F11 fluvial — riversEnabled gates density→0 (early-out), preserving the slider value.
+      uniforms.uFluvialDensity.value  = state.riversEnabled ? state.fluvialDensity : 0.0;
+      uniforms.uFluvialActivity.value = state.fluvialActivity;
+      uniforms.uFluvialDepth.value    = state.fluvialDepth;
+      uniforms.uFluvialMeander.value  = state.fluvialMeander;
+      uniforms.uFluvialWidth.value    = state.fluvialWidth;
+      uniforms.uFluvialFreq.value     = state.fluvialFreq;
+      uniforms.uFluvialWarpAmt.value  = state.fluvialWarp;
+      uniforms.uFluvialLowBias.value  = state.fluvialLowBias;
+      uniforms.uFluvialOffset.value.set(state.fluvialOffset[0], state.fluvialOffset[1], state.fluvialOffset[2]);
       uniforms.uLightDir.value.copy(lightObj);
 
       hud.textContent =
