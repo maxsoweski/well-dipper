@@ -57,7 +57,7 @@ Legend: ✅ done · 🟡 partial · ⬜ unbuilt (placeholder/aspirational) · �
 
 | Feature | Spec | Plan | Commit(s) | Verified |
 |---|---|---|---|---|
-| F11 | _(in progress)_ | | | |
+| F11 | [`2026-06-07-f11-fluvial-river-networks-design.md`](../superpowers/specs/2026-06-07-f11-fluvial-river-networks-design.md) (approved, pending audit) | _(next: writing-plans)_ | | |
 
 ## Session pickup
 
