@@ -340,6 +340,7 @@
       uniform float uFluvialLowBias;   // 0=channels everywhere … 1=low-ground only
       uniform float uFluvialHiGround;  // height above which channels fade (with LowBias)
       uniform vec3  uFluvialOffset;    // 🎲 domain offset — default (0,0,0) = unchanged
+      uniform int   uLiquidSpecies;    // 0=water 1=methane/ethane (first GLSL consumer = F11 floor-tint)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -1544,6 +1545,10 @@
         // The mix gates the strata to the cap (frostCover=0 ⇒ mix→uBaseColor, bare ground untouched).
         vec3 frostShade = uFrostAlbedo * pldBands(frostBandCoord);
         vec3 albedoCol = mix(uBaseColor, frostShade, frostCover);
+        // F11 species floor-tint — faint channel-floor albedo (water vs methane). Albedo only;
+        // fluvialWet=0 ⇒ unchanged. Kept subtle so it reads as a floor darkening through posterize.
+        vec3 fluvTint = (uLiquidSpecies == 1) ? vec3(0.30, 0.22, 0.10) : vec3(0.10, 0.14, 0.24);
+        albedoCol = mix(albedoCol, fluvTint, clamp(fluvialWet, 0.0, 1.0) * 0.35 * uFluvialDensity);
         vec3 surface = posterize(min(albedoCol * (diff + ambient) + uBaseColor * rayBright, vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
