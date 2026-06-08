@@ -1,0 +1,234 @@
+<!doctype html>
+<!--
+  FLUVIAL DRAINAGE SPIKE — isolated harness for the F11 drainageField primitive
+  =============================================================================
+  Purpose (spec 2026-06-07-f11-fluvial-river-networks-design.md §Risks #1):
+    Prove the drainage primitive reads as BRANCHING RIVERS on a simple sphere toy
+    BEFORE porting it into the big planet-lod-lab.html shader (memory rule
+    feedback_isolated-test-harnesses.md + 3-cycle cap). If it can't read here, it
+    can't read inside the 6-level posterize.
+
+  ACCEPTANCE (tune the knobs until all three hold on a :9223 screenshot):
+    (a) visible branching — connected network, tributaries joining trunks
+    (b) meanders read — raising `meander` visibly bends the channels
+    (c) gradient lights walls — viewMode=1 shows lit/shadow channel-wall edges
+
+  noised()/hash3() copied VERBATIM from planet-lod-lab.html (:428, :434) so the
+  primitive is byte-identical to what gets ported.
+
+  ── FINAL TUNED DEFAULTS (proven 2026-06-07, 2 cycles, on :9223) ──
+    meander 0.5 · width 0.10 · freq 2.3 · warpAmt 0.4 · warpFreq 1.5 ·
+    tribLac 2.6 · tribGate 0.35 (apron half-width) · depth 0.15 (viz only)
+  KEY GLSL FINDING: the zero-band of a SINGLE warped noise makes closed LOOPS, not
+  a branching tree. Cranking warp/freq just made it busier (marble, not rivers).
+  The fix (cycle 2) was the tributary combine: gate the finer octave to a WIDE
+  APRON approaching the trunk (1 - smoothstep(width, tribGate, |field|)) and UNION
+  it via max() — feeders then connect INTO trunks, reading as a dendritic network.
+  Gradient follows the winner of the union (chan>=chan2 ? dchan : dchan2); walls
+  light correctly at junctions. THIS combine is what gets ported to the lab.
+  Served by Vite at: http://localhost:5173/well-dipper/fluvial-drainage-lab.html
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fluvial Drainage Spike</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    canvas { display: block; }
+    #hud { position: fixed; left: 12px; bottom: 12px; color: #9fb; font: 12px monospace; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">F11 drainage spike — viewMode 0=mask 1=lit · drag to orbit · scroll to zoom</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import GUI from 'lil-gui';
+
+    const canvas = document.getElementById('c');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.01, 100);
+    camera.position.set(0, 0, 3);
+
+    // ── tunable params (these become the lab defaults once proven) ──
+    const params = {   // proven defaults (see header) — these become the lab uFluvial* defaults
+      meander: 0.5, width: 0.10, freq: 2.3, warpAmt: 0.4, warpFreq: 1.5,
+      tribLac: 2.6, tribGate: 0.35, depth: 0.15, viewMode: 0, autoRotate: true,
+    };
+
+    const uniforms = {
+      uMeander:  { value: params.meander },
+      uWidth:    { value: params.width },
+      uFreq:     { value: params.freq },
+      uWarpAmt:  { value: params.warpAmt },
+      uWarpFreq: { value: params.warpFreq },
+      uTribLac:  { value: params.tribLac },
+      uTribGate: { value: params.tribGate },
+      uDepth:    { value: params.depth },
+      uViewMode: { value: params.viewMode },
+      uLightDir: { value: new THREE.Vector3(0.6, 0.5, 0.7).normalize() },
+    };
+
+    const vert = /* glsl */`
+      varying vec3 vPos;
+      void main(){
+        vPos = position;                       // unit sphere, object space
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const frag = /* glsl */`
+      precision highp float;
+      varying vec3 vPos;
+      uniform float uMeander, uWidth, uFreq, uWarpAmt, uWarpFreq, uTribLac, uTribGate, uDepth;
+      uniform int   uViewMode;
+      uniform vec3  uLightDir;
+
+      // ── hash3 / noised — VERBATIM from planet-lod-lab.html (:428 / :434) ──
+      vec3 hash3(vec3 p){
+        p = vec3( dot(p, vec3(127.1, 311.7,  74.7)),
+                  dot(p, vec3(269.5, 183.3, 246.1)),
+                  dot(p, vec3(113.5, 271.9, 124.6)) );
+        return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+      }
+      vec4 noised(vec3 x){
+        vec3 p = floor(x);
+        vec3 w = fract(x);
+        vec3 u  = w*w*w*(w*(w*6.0-15.0)+10.0);
+        vec3 du = 30.0*w*w*(w*(w-2.0)+1.0);
+        vec3 ga = hash3(p+vec3(0.0,0.0,0.0));
+        vec3 gb = hash3(p+vec3(1.0,0.0,0.0));
+        vec3 gc = hash3(p+vec3(0.0,1.0,0.0));
+        vec3 gd = hash3(p+vec3(1.0,1.0,0.0));
+        vec3 ge = hash3(p+vec3(0.0,0.0,1.0));
+        vec3 gf = hash3(p+vec3(1.0,0.0,1.0));
+        vec3 gg = hash3(p+vec3(0.0,1.0,1.0));
+        vec3 gh = hash3(p+vec3(1.0,1.0,1.0));
+        float va = dot(ga, w-vec3(0.0,0.0,0.0));
+        float vb = dot(gb, w-vec3(1.0,0.0,0.0));
+        float vc = dot(gc, w-vec3(0.0,1.0,0.0));
+        float vd = dot(gd, w-vec3(1.0,1.0,0.0));
+        float ve = dot(ge, w-vec3(0.0,0.0,1.0));
+        float vf = dot(gf, w-vec3(1.0,0.0,1.0));
+        float vg = dot(gg, w-vec3(0.0,1.0,1.0));
+        float vh = dot(gh, w-vec3(1.0,1.0,1.0));
+        float v = va
+          + u.x*(vb-va) + u.y*(vc-va) + u.z*(ve-va)
+          + u.x*u.y*(va-vb-vc+vd) + u.y*u.z*(va-vc-ve+vg) + u.z*u.x*(va-vb-ve+vf)
+          + u.x*u.y*u.z*(-va+vb+vc-vd+ve-vf-vg+vh);
+        vec3 d = ga
+          + u.x*(gb-ga) + u.y*(gc-ga) + u.z*(ge-ga)
+          + u.x*u.y*(ga-gb-gc+gd) + u.y*u.z*(ga-gc-ge+gg) + u.z*u.x*(ga-gb-ge+gf)
+          + u.x*u.y*u.z*(-ga+gb+gc-gd+ge-gf-gg+gh)
+          + du * ( vec3(vb-va, vc-va, ve-va)
+                 + u.yzx*vec3(va-vb-vc+vd, va-vc-ve+vg, va-vb-ve+vf)
+                 + u.zxy*vec3(va-vb-ve+vf, va-vb-vc+vd, va-vc-ve+vg)
+                 + u.yzx*u.zxy*(-va+vb+vc-vd+ve-vf-vg+vh) );
+        return vec4(v, d);
+      }
+
+      // ── F11 drainage primitive (THE thing under test) ──
+      // Channels = near-zero band of a domain-warped FBM field; +1 gated tributary
+      // octave for the dendritic feeder look. Returns vec4(channel in [0,1], d/dpos).
+      vec4 drainageField(vec3 pos){
+        vec4 wn = noised(pos * uWarpFreq);
+        vec3 q  = pos + uMeander * uWarpAmt * wn.yzw;              // warp by noise grad
+        vec4 f      = noised(q * uFreq);
+        float field = f.x;
+        vec3  dfield = f.yzw * uFreq;
+        float af    = abs(field);
+        float chan  = 1.0 - smoothstep(0.0, uWidth, af);            // trunk channel
+        float dstep = (af < uWidth) ? (6.0*(af/uWidth)*(1.0-af/uWidth))/uWidth : 0.0;
+        vec3  dchan = -dstep * sign(field) * dfield;
+        // tributaries: a finer channel set, but ALLOWED ONLY in a wide apron approaching
+        // the trunk (the valley feeding it) → feeders that connect INTO trunks instead of
+        // decorating them. uTribGate sets the apron half-width. Union via max() so the
+        // feeder topology reads as a branching tree, not overlaid loops.
+        float apron = 1.0 - smoothstep(uWidth, uTribGate, af);      // 1 near trunk, 0 far
+        float w2    = uWidth * 0.6;
+        vec4 f2     = noised(q * uFreq * uTribLac);
+        float af2   = abs(f2.x);
+        float chan2 = (1.0 - smoothstep(0.0, w2, af2)) * apron;     // gated tributary
+        float dstep2 = (af2 < w2) ? (6.0*(af2/w2)*(1.0-af2/w2))/w2 : 0.0;
+        vec3  dchan2 = -dstep2 * sign(f2.x) * (f2.yzw * uFreq * uTribLac) * apron;
+        // union: the stronger of trunk vs tributary wins (gradient follows the winner)
+        float c  = max(chan, chan2);
+        vec3  dc = (chan >= chan2) ? dchan : dchan2;
+        return vec4(c, dc);
+      }
+
+      void main(){
+        vec3 pos = normalize(vPos);
+        vec4 d = drainageField(pos);
+        float chan = d.x;
+        vec3 dchan = d.yzw;
+        if (uViewMode == 0){
+          gl_FragColor = vec4(vec3(chan), 1.0);            // channel mask: white = channel
+          return;
+        }
+        // gradient-lit carved height — confirm the analytic gradient tilts the wall normals
+        vec3 N = normalize(pos);
+        vec3 grad = -uDepth * dchan;                       // height gradient of the carve
+        vec3 gT = grad - dot(grad, N) * N;                 // tangent component
+        vec3 Np = normalize(N - gT);                       // perturbed normal (analytic approx)
+        float diff = max(dot(Np, normalize(uLightDir)), 0.0);
+        vec3 base = mix(vec3(0.46,0.40,0.34), vec3(0.18,0.32,0.5), chan);  // channels bluish
+        gl_FragColor = vec4(base * (diff*0.9 + 0.1), 1.0);
+      }
+    `;
+
+    const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: vert, fragmentShader: frag });
+    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 64), mat);
+    scene.add(mesh);
+
+    // ── gui ──
+    const gui = new GUI({ title: 'Drainage knobs' });
+    const bind = (k, lo, hi, st) => gui.add(params, k, lo, hi, st).onChange(v => { if (uniforms['u'+k[0].toUpperCase()+k.slice(1)]) uniforms['u'+k[0].toUpperCase()+k.slice(1)].value = v; });
+    bind('meander', 0, 1, 0.01);
+    bind('width', 0.02, 0.4, 0.01);
+    bind('freq', 0.5, 8, 0.1);
+    bind('warpAmt', 0, 1, 0.02);
+    bind('warpFreq', 0.2, 6, 0.1);
+    bind('tribLac', 1.2, 5, 0.1);
+    bind('tribGate', 0.02, 0.8, 0.02);
+    bind('depth', 0, 0.4, 0.01);
+    gui.add(params, 'viewMode', { 'mask (0)': 0, 'lit (1)': 1 }).onChange(v => uniforms.uViewMode.value = +v);
+    gui.add(params, 'autoRotate');
+
+    // ── minimal orbit (drag yaw/pitch, wheel zoom) ──
+    let yaw = 0, pitch = 0, dist = 3, dragging = false, lx = 0, ly = 0;
+    canvas.addEventListener('mousedown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
+    addEventListener('mouseup', () => dragging = false);
+    addEventListener('mousemove', e => {
+      if (!dragging) return;
+      yaw += (e.clientX - lx) * 0.005; pitch += (e.clientY - ly) * 0.005;
+      pitch = Math.max(-1.5, Math.min(1.5, pitch)); lx = e.clientX; ly = e.clientY;
+    });
+    canvas.addEventListener('wheel', e => { dist = Math.max(1.3, Math.min(8, dist + e.deltaY * 0.002)); e.preventDefault(); }, { passive: false });
+
+    addEventListener('resize', () => {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    });
+
+    function tick(){
+      if (params.autoRotate && !dragging) yaw += 0.0025;
+      camera.position.set(
+        dist * Math.cos(pitch) * Math.sin(yaw),
+        dist * Math.sin(pitch),
+        dist * Math.cos(pitch) * Math.cos(yaw)
+      );
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    }
+    tick();
+
+    // expose for chrome-devtools driving
+    window._spike = { params, uniforms, set(k, v){ params[k] = v; const uk = 'u'+k[0].toUpperCase()+k.slice(1); if (uniforms[uk]) uniforms[uk].value = v; } };
+  </script>
+</body>
+</html>
