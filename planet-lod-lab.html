@@ -326,6 +326,21 @@
       uniform float uGlacialColdGate;   // cold-cap confinement edge softness (× T_eq, like uSubColdGate) — lab knob
       uniform vec3  uGlacialOffset;     // 🎲 domain offset — default (0,0,0) = unchanged
 
+      // ── F11 fluvial drainage (Stage-4, Fluvial domain) ──
+      uniform float uFluvialActivity;  // 0=relict/degraded … 1=sharp/active
+      uniform float uFluvialDensity;   // network strength + master gate; ≤0 → early-out
+      uniform float uFluvialDepth;     // channel carve depth (relief units)
+      uniform float uFluvialMeander;   // domain-warp amount (sinuosity)
+      uniform float uFluvialWidth;     // channel band half-width (shape knob)
+      uniform float uFluvialFreq;      // trunk-network frequency (shape knob)
+      uniform float uFluvialWarpAmt;   // warp displacement scale (shape knob)
+      uniform float uFluvialWarpFreq;  // warp-noise frequency (shape knob)
+      uniform float uFluvialTribLac;   // tributary lacunarity (shape knob)
+      uniform float uFluvialTribGate;  // tributary apron half-width vs trunk (shape knob)
+      uniform float uFluvialLowBias;   // 0=channels everywhere … 1=low-ground only
+      uniform float uFluvialHiGround;  // height above which channels fade (with LowBias)
+      uniform vec3  uFluvialOffset;    // 🎲 domain offset — default (0,0,0) = unchanged
+
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
       vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -597,6 +612,60 @@
         vec2 gxz = grad.xz;
         vec2 gReal = dot(gxz, ax) * ax + (dot(gxz, pe) * stretch) * pe;
         return vec4(h, gReal.x, grad.y, gReal.y);
+      }
+
+      // ── F11 drainage primitive (ported from fluvial-drainage-lab.html, proven on :9223) ──
+      // Pure, no side effects. Returns vec4(channelStrength in [0,1], d(channel)/dpos).
+      // Channels = near-zero band of a domain-warped FBM field (trunks); a finer tributary
+      // octave is gated to a WIDE APRON approaching the trunk and UNIONed via max(), so
+      // feeders connect INTO trunks (dendritic) instead of forming overlaid loops. The
+      // gradient follows the union winner (analytic, fbmdRidged fold/chain-rule discipline)
+      // so perturbAnalytic lights the channel walls — junctions included.
+      vec4 drainageField(vec3 pos){
+        vec4 wn = noised(pos * uFluvialWarpFreq + uFluvialOffset);
+        vec3 q  = pos + uFluvialMeander * uFluvialWarpAmt * wn.yzw;     // warp by noise grad (curl-free)
+        vec4 f       = noised(q * uFluvialFreq + uFluvialOffset);
+        float field  = f.x;
+        vec3  dfield = f.yzw * uFluvialFreq;
+        float af    = abs(field);
+        float chan  = 1.0 - smoothstep(0.0, uFluvialWidth, af);        // trunk channel
+        float dstep = (af < uFluvialWidth) ? (6.0*(af/uFluvialWidth)*(1.0-af/uFluvialWidth))/uFluvialWidth : 0.0;
+        vec3  dchan = -dstep * sign(field) * dfield;
+        // tributaries: finer channels allowed ONLY in a wide apron approaching the trunk
+        float apron = 1.0 - smoothstep(uFluvialWidth, uFluvialTribGate, af);  // 1 near trunk, 0 far
+        float w2    = uFluvialWidth * 0.6;
+        vec4 f2     = noised(q * uFluvialFreq * uFluvialTribLac + uFluvialOffset);
+        float af2   = abs(f2.x);
+        float chan2 = (1.0 - smoothstep(0.0, w2, af2)) * apron;
+        float dstep2 = (af2 < w2) ? (6.0*(af2/w2)*(1.0-af2/w2))/w2 : 0.0;
+        vec3  dchan2 = -dstep2 * sign(f2.x) * (f2.yzw * uFluvialFreq * uFluvialTribLac) * apron;
+        float c  = max(chan, chan2);                                    // union: branching tree
+        vec3  dc = (chan >= chan2) ? dchan : dchan2;                    // grad follows the winner
+        return vec4(c, dc);
+      }
+
+      // ── F11 fluvialCombiner (Stage-4) — carves the drainage network into the shared
+      // canyonHeight accumulator, biased toward low ground, bending grad so perturbAnalytic
+      // lights the walls. uFluvialDensity≤0 ⇒ early-out (Stage-A base untouched, regression-safe).
+      // Writes fluvialWet for the Stage-6 species floor-tint. Sharing canyonHeight lets a future
+      // F14 lake pass pool liquid in these channels for free.
+      void fluvialCombiner(vec3 pos, inout float h, inout float canyonHeight, inout vec3 grad, inout float fluvialWet){
+        if (uFluvialDensity <= 0.0) return;
+        // low-ground preference — mix between "channels everywhere" (flat worlds keep their
+        // network) and "low ground only" (rivers stay out of peaks), per uFluvialLowBias.
+        float lowGround = mix(1.0, smoothstep(uFluvialHiGround, 0.0, h), uFluvialLowBias);
+        vec4 d = drainageField(pos);
+        float chan = d.x;
+        vec3  dchan = d.yzw;
+        float depth = uFluvialDepth * mix(0.35, 1.0, uFluvialActivity);  // relict = shallower
+        float s = chan * lowGround * uFluvialDensity;
+        float carve = -s * depth;                                        // carve DOWN
+        canyonHeight += carve;
+        h            += carve;
+        // d(carve)/dpos ≈ -depth·uFluvialDensity·lowGround·dchan  (d(lowGround)/dh second-order,
+        // dropped — same chain-rule shortcut as scarp/glacial combiners).
+        grad += -depth * uFluvialDensity * lowGround * dchan;
+        fluvialWet = max(fluvialWet, s);
       }
 
       // F1 mountains combiner — ridged base relief layered onto the FBM continents.
@@ -1405,6 +1474,7 @@
         // canonical shared accumulator (index §1): Relief writes tectonic graben;
         // Fluvial incised gorges + Cryo chasma ADD IN. Stages 2/3/4 consume it.
         float canyonHeight = 0.0;
+        float fluvialWet = 0.0;   // F11 channel strength, consumed by the Stage-6 species floor-tint
         // Stage 3 CRYO frost-coverage (F23/F22) — albedo overlay, set in the analytic branch
         // (needs the accumulated height for the altitude lapse), consumed at Stage 6.
         float frostCover = 0.0;
@@ -1430,6 +1500,7 @@
           craterCombiner(vPos, h, grad);
           ejectaCombiner(vPos, h, grad);            // F3 — apron wrapping the F2 craters
           canyonCombiner(vPos, h, canyonHeight, grad);
+          fluvialCombiner(vPos, h, canyonHeight, grad, fluvialWet);   // F11 — channels carve into canyonHeight
           scarpCombiner(vPos, h, grad);
           plateauCombiner(vPos, fwBase, h, grad);
           tesseraCombiner(vPos, h, grad);
@@ -1680,6 +1751,20 @@
       uLineationWarpFreq:{ value: 2.5 },   // lineation warp frequency — lab knob
       uGlacialColdGate:  { value: 0.15 },  // cold-cap confinement threshold (like uSubColdGate) — lab knob
       uGlacialOffset:    { value: new THREE.Vector3() },   // 🎲 domain offset
+      // ── F11 fluvial drainage — shape defaults proven in fluvial-drainage-lab.html ──
+      uFluvialActivity: { value: 1.0 },
+      uFluvialDensity:  { value: 0.0 },   // off until applyDrivers/state drives it
+      uFluvialDepth:    { value: 0.12 },
+      uFluvialMeander:  { value: 0.5 },
+      uFluvialWidth:    { value: 0.10 },  // proven spike defaults ↓
+      uFluvialFreq:     { value: 2.3 },
+      uFluvialWarpAmt:  { value: 0.4 },
+      uFluvialWarpFreq: { value: 1.5 },
+      uFluvialTribLac:  { value: 2.6 },
+      uFluvialTribGate: { value: 0.35 },  // apron half-width (> uFluvialWidth)
+      uFluvialLowBias:  { value: 0.5 },
+      uFluvialHiGround: { value: 0.15 },
+      uFluvialOffset:   { value: new THREE.Vector3() },
       // ── Canonical shared registry (integration-index §1) — RESERVED NAMES ──
       // The cross-domain shared semantic uniforms. Declared here (the central
       // registry) at default-off so the 8 Stage-C domains read ONE agreed name
