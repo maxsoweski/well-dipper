@@ -4,20 +4,35 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-06 by working-Claude (warp pocket-traversal: contract recast `b33f41e`, reference labs `09199fa`, impl plan `31b3c93` — R1 approved by Max, execution = subagent-driven in a fresh session per `/tmp/well-dipper-warp-pocket-traversal-EXEC-handoff-2026-06-06.md`. All unpushed; master ~31 ahead).
+Last updated: 2026-06-07 by working-Claude (warp **cruise-visual tuning** in progress — runway-on-exit removed + WIP taper/darkening/park-back committed `fb36978`. Entry-reliability Fix D still VERIFIED_PENDING_MAX. All warp work unpushed; master ~33 ahead).
 
 ---
 
 ## Active workstream
 
-**`warp-tunnel-pocket-traversal-2026-06-06`** — PLAN APPROVED, ready to
-execute (subagent-driven, fresh session). Replaces the microscopic
-camera-pinned tunnel (which failed Max UAT as `4285602`) with a
-human-scale ~60u pocket the camera flies through (into Portal A, real
-interior, out Portal B), load-adaptive HYPER. R1 resolved + approved.
-- Plan: `docs/superpowers/plans/2026-06-06-warp-tunnel-pocket-traversal.md` (`31b3c93`)
-- Exec handoff: `/tmp/well-dipper-warp-pocket-traversal-EXEC-handoff-2026-06-06.md`
-- Next: invoke `superpowers:subagent-driven-development`, start Task 0.
+**`warp-tunnel-pocket-traversal-2026-06-06`** — **Now tuning the cruise visual
+(tuning, not a mystery — mechanism works, look needs dialing).** Committed `fb36978`:
+exit "runway" removed (Max UAT) + WIP far-taper / far-darkening / ~20u park-back
+(speculative, not yet visually dialed). Three problems remain (Max's words): (1)
+tunnel too short — must recede to infinite distance; (2) wall motion reverses
+halfway (drive `uScroll` from camera travel, not constant `dt*0.5`); (3) walls must
+occlude the destination (only the two end openings show out). Continuation +
+corrected diagnosis (walls DO render @99.7% — pixel readback, not eyeballed
+force-tests) in `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md`.
+
+Prior sub-state — **Tasks 0–3 DONE; entry-reliability
+Fix D implemented + live-verified, VERIFIED_PENDING_MAX (UAT).** Root cause was the
+off-axis approach (camera advanced along mid-slerp facing, missing the 3u gate).
+**Fix D** (`src/main.js` ~6753, UNCOMMITTED): advance camera *position* along the
+locked `_tunnelForward` axis (orientation slerp unchanged); guard falls back to
+facing post-swap. Preserves AC2 → no contract change. **Live result (GPU 9223, full
+speed): fresh enterSol → 12/12 ALL_REGISTERED; 13–24 consecutive → 10/12.** Headless
+`warp-tunnel-rebase.test.js` 4/4. Residual deep-state 2/12 = finding-#4 turn-alignment
+accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
+`docs/WORKSTREAMS/warp-tunnel-pocket-traversal-2026-06-06/entry-reliability-rootcause-2026-06-06.md` (session-3 addendum).
+- Plan (8 tasks, 4–7 not started): `docs/superpowers/plans/2026-06-06-warp-tunnel-pocket-traversal.md` (`31b3c93`)
+- Telemetry committed `4fc9a36`; warp commits (UNPUSHED, master): `5a94a19` (T0), `1427ebb`+`9c334c2` (T1), `a16d617`+`39fa8f2` (T2), `7064478` (T3)
+- **Next:** Max UAT (ride warps — into Portal A / cruise / out Portal B, repeats + far targets) → commit Fix D → resume T4–7. Deferred: finding-#4 turn-alignment accumulation.
 
 **Maps to journey:** Travel-loop signature moment (35% SCREENSAVER-MVP).
 
