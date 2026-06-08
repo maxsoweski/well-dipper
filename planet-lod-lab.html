@@ -2271,9 +2271,13 @@
       const _stab = u.liquidStability, _rain = u.precipitation, _g = u.surfaceGravity;
       const _clamp01 = x => Math.max(0, Math.min(1, x));
       const _wet = _stab > 0.15;
+      // Relict only on worlds that COULD have held surface liquid (retain an atmosphere).
+      // A genuinely airless world (atmosphere:null) floors to 0 — its surfaceHistory.erosion
+      // is bombardment/space-weathering, not fluvial — honoring the spec's "NONE on airless" gate.
+      const _hadLiquid = !!(_fp.atmosphere && _fp.atmosphere.retained !== false);
       state.fluvialActivity = _wet ? 1.0 : _clamp01(_erosion);              // relict if dried
       state.fluvialDensity  = _wet ? _clamp01(_stab * (0.3 + 0.7 * _rain))  // active network
-                                   : 0.4 * _clamp01(_erosion);             // faint relict traces
+                                   : (_hadLiquid ? 0.4 * _clamp01(_erosion) : 0.0);  // faint relict / none if airless
       state.fluvialDepth    = 0.08 + 0.10 * _rain + 0.04 * _clamp01(_g);
       state.fluvialMeander  = 0.3 + 0.5 * _rain;
       state._derived = u;
