@@ -2483,13 +2483,31 @@
     fGlacial.add(state, 'glacialEnabled').name('✓ enabled');
     fGlacial.add({ roll(){ state.glacialOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
+    // ▸ Surface — Gradational (NEW family — Fluvial/Aeolian; distinct from Relief).
+    // Future F12–F16 land here too. Top-level guiRight folder per the F11 spec.
+    const fGrad = guiRight.addFolder('Surface — Gradational'); fGrad.open();
+    // ▸ Rivers & valleys (F11) — drainage networks carved into canyonHeight. density/depth/
+    // meander/activity are the headline knobs (activity = relict↔active override); width/freq/
+    // warp/lowBias are shape knobs (lab-tunable, like glacial's mantle/lineation params).
+    const fRivers = fGrad.addFolder('Rivers & valleys (F11)'); fRivers.close();
+    fRivers.add(state, 'fluvialDensity', 0, 1, 0.01).name('density (rain-driven)').listen();
+    fRivers.add(state, 'fluvialDepth', 0, 0.4, 0.01).name('depth').listen();
+    fRivers.add(state, 'fluvialMeander', 0, 1, 0.01).name('meander').listen();
+    fRivers.add(state, 'fluvialActivity', 0, 1, 0.01).name('activity (relict↔active)').listen();
+    fRivers.add(state, 'fluvialWidth', 0.04, 0.3, 0.01).name('channel width');
+    fRivers.add(state, 'fluvialFreq', 0.5, 8, 0.1).name('network freq');
+    fRivers.add(state, 'fluvialWarp', 0, 1, 0.02).name('warp amount');
+    fRivers.add(state, 'fluvialLowBias', 0, 1, 0.02).name('low-ground bias');
+    fRivers.add(state, 'riversEnabled').name('✓ enabled');
+    fRivers.add({ roll(){ state.fluvialOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
       craters: fCraters, ejecta: fEjecta, mountains: fMountains, canyons: fCanyons,
       scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
-      sublimation: fSub, glacial: fGlacial,
+      sublimation: fSub, glacial: fGlacial, rivers: fRivers,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
