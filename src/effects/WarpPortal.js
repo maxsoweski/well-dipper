@@ -107,9 +107,20 @@ export class WarpPortal {
     // Uniform-radius cylinder spanning both portals. Stencil read when outside,
     // unconditional render when camera is INSIDE (driven by setTraversalMode).
     // CylinderGeometry(radiusTop, radiusBottom, height) — top at +Y, bottom at -Y
+    // Far-end taper (Max UAT 2026-06-07). The straight tunnel let the camera
+    // see the freshly-spawned destination system straight through the open far
+    // end during the INSIDE cruise ("we can see the new system beyond the end
+    // of the short tunnel"). Pinching the Portal-B end toward a vanishing point
+    // makes the corridor read as receding into the infinite distance AND
+    // occludes that forward view of the destination until the camera reaches the
+    // throat and emerges. Render-only: the traversal gate (_gateRadiusScene, 3u)
+    // and the Portal-B plane-crossing math don't read mesh radius, so AC2/AC4
+    // invariants are unaffected. radiusTop = +Y = Portal A (near, full radius);
+    // radiusBottom = -Y = Portal B (far, pinched).
+    const FAR_TAPER = 0.12;  // Portal-B end radius as a fraction of the near radius
     const tunnelGeo = new THREE.CylinderGeometry(
-      tunnelRadius,   // radiusTop — same as bottom for a straight tunnel
-      tunnelRadius,   // radiusBottom — was 0.3× before (tapered vanishing point)
+      tunnelRadius,              // radiusTop — Portal A (near camera): full radius
+      tunnelRadius * FAR_TAPER,  // radiusBottom — Portal B (far): pinched vanishing point
       tunnelLength,
       48,
       1,
@@ -265,6 +276,14 @@ export class WarpPortal {
 
             // Dim wall base so tunnel is visible even between stars
             col += vec3(0.04, 0.05, 0.1) * 0.4;
+
+            // ── Far-end depth fog (Max UAT 2026-06-07) ──
+            // Sink the Portal-B (far) end toward darkness so the tapered throat
+            // reads as receding into infinity instead of a bright pinch, and the
+            // forward view stays dark until emergence. UV convention: vUv.y=1 is
+            // the near end (Portal A), vUv.y=0 is the far end (Portal B).
+            float depthFog = mix(0.12, 1.0, smoothstep(0.0, 0.6, vUv.y));
+            col *= depthFog;
 
             // Retro Bayer dither
             int bx = int(mod(gl_FragCoord.x, 4.0));
@@ -764,13 +783,12 @@ export class WarpPortal {
     // exit shows it closing, not yanked away (AC8). The portal is frozen at its
     // true-world exit anchor (AC7), so it falls behind as the camera coasts on.
     // resetTraversal restores full visibility/fade/radius for the next warp.
-    // Landing strip is destination-side reference. Per Max 2026-04-16:
-    // "the walls of the tunnel and the portal should occlude everything
-    // beyond them, including those crosses." Tunnel walls + Portal B cap
-    // the interior visually so landing strip crosses don't leak through
-    // Portal B's aperture from inside the tunnel. Strip only becomes
-    // visible in OUTSIDE_B, after the camera has emerged into destination.
-    this._landingStrip.visible = (mode === 'OUTSIDE_B');
+    // Landing strip retired on exit (Max UAT 2026-06-07: "we don't need the
+    // runway on exit, only on entrance"). The destination-side crosses gave a
+    // deceleration motion-reference as the camera coasted out of Portal B, but
+    // Max doesn't want a runway on emergence — only the origin-side entry strip
+    // (approach) stays. Kept built (cheap, lab/back-compat) but never shown.
+    this._landingStrip.visible = false;
     // Entry strip is the origin-side counterpart: only visible while the
     // player is approaching Portal A. Individual cross visibility within
     // the strip is controlled by setEntryStripProgress.

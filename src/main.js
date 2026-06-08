@@ -6879,15 +6879,22 @@ function simStep(deltaTime) {
         const _advanceDir = warpEffect._swapFired ? _destForward : _tunnelForward;
         let _step = warpEffect.cameraForwardSpeed * deltaTime;
 
-        // ── AC5 emergence clamp ──
-        // Post-swap, hold the camera ~0.5u short of Portal B's plane until the
-        // load-adaptive gate opens (min-cruise elapsed AND destination ready).
-        // Without this, the camera flies the 60u pocket in ~3s and crosses
-        // Portal B before a slow load finishes — the OUTSIDE_B crossing would
-        // fire early and emerge into a half-loaded system (defeating AC5). While
-        // the gate is closed we cap the step to the remaining axis-distance-to-B
-        // minus 0.5u; a slow load = a brief hold at the portal mouth. When the
-        // gate opens the cap lifts, the camera advances, crosses, and emerges.
+        // ── AC5 emergence clamp + park-back (Max UAT 2026-06-07) ──
+        // Post-swap, hold the camera a fixed distance SHORT of Portal B's plane
+        // until the load-adaptive gate opens (min-cruise elapsed AND destination
+        // ready). Two jobs:
+        //   1. AC5: don't cross Portal B before the destination has loaded —
+        //      a slow load = a longer hold; emerging early shows a half-loaded
+        //      system. We cap the step to the remaining axis-distance-to-B minus
+        //      the park-back so the camera holds at that depth until the gate.
+        //   2. "Feel longer" (Max UAT): the old 0.5u park parked the camera AT
+        //      the throat, so the cruise read as short and the destination was
+        //      fully visible 0.5u ahead. Parking further back (WARP_PARK_BACK)
+        //      holds the camera deep in the corridor looking down the tapered,
+        //      far-darkened throat — the tunnel reads as receding to infinity
+        //      and the destination stays occluded until the gate opens and the
+        //      camera flies the final stretch through the throat and emerges.
+        // Tunable live via window._warpParkBack during tuning; bake before ship.
         if (warpEffect._swapFired && warpEffect.state === 'hyper') {
           const gateOpen = warpEffect.elapsed >= warpEffect.HYPER_MIN_CRUISE
             && warpEffect.destinationReady;
@@ -6896,7 +6903,9 @@ function simStep(deltaTime) {
             // refreshed it this frame after the rebase-proof group rewrite).
             _clampDiscBWorld.setFromMatrixPosition(warpPortal._discB.matrixWorld);
             const _axisToB = _clampToB.copy(_clampDiscBWorld).sub(camera.position).dot(_destForward);
-            _step = Math.min(_step, Math.max(0, _axisToB - 0.5));
+            const _parkBack = (typeof window !== 'undefined' && window._warpParkBack != null)
+              ? window._warpParkBack : 20;
+            _step = Math.min(_step, Math.max(0, _axisToB - _parkBack));
           }
         }
         camera.position.addScaledVector(_advanceDir, _step);
