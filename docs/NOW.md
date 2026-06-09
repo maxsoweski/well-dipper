@@ -22,10 +22,20 @@ telemetry (GPU 9223, 241fps, 3 warps): uScroll 0 throughout, zero frozen frames
 (was 280/843 gated), real INSIDE→OUTSIDE_B crossings, no AC4 force-flip.
 Headless 37/37. **Max UAT: ride warps — does the reversal go away?**
 
-Remaining problems (Max's words): (1) tunnel too short — must recede to infinite
-distance → **Task B**: blocker first — distB at swap is ~31.6 (and varies; ~14.7
-seen live), not 60 (`onSwapSystem` re-anchor suspect, `main.js` ~3061), then raise
-`WARP_POCKET_LENGTH`; (3) walls must occlude the destination — re-judge after B.
+**Task B blocker FIXED `87d5560`, VERIFIED_PENDING_MAX** — distB at cruise start
+was ~15-32u (varying), not 60: the swap fires at the Portal-A crossing DURING
+enter, and the remainder of ENTER (22.5→45 u/s, up to ~1.5s) flew the camera
+into the fresh pocket before HYPER. Fix: enter→hyper at `_swapFired` (WarpEffect)
+— cruise now starts at the full pocket length (live: 59.8/58.1 across 2 runs,
+deterministic; speed snap at the seam also shrank, ~26→20 vs 45→20).
+
+Remaining (Max's words): (1) tunnel must recede to infinite distance → ride the
+blocker fix FIRST (cruise now traverses the full 60u — may already read much
+longer), then decide `WARP_POCKET_LENGTH`. ⚠️ Coupling for that decision:
+`portalPreviewDistanceScene = length/2` and `foldPeakSpeed = 3×preview/4` — raising
+length to e.g. 150 also moves Portal A's spawn 30→75u out and fold peak 22.5→56 u/s
+(pre-warp feel changes). Decouple preview from length, or pick length accepting the
+coupling. (3) walls must occlude the destination — re-judge after the length call.
 Context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md` (diagnosis),
 `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09.md` (root cause + decision).
 
