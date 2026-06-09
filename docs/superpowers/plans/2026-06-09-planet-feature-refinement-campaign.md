@@ -87,7 +87,7 @@ Judge:
 Reference: Earth/Mars albedo maps (dossier-style refs in shots/ captions).
 
 ## Check 2 — Lighting model
-View: preset "Rocky (Earthlike)", distance 8; rotate light via lab GUI.
+View: preset "Rocky (Earthlike)", distance 8; drag-rotate the planet (light is world-fixed; rotating the planet moves the terminator).
 Judge:
 - [ ] Terminator position matches light direction; shading follows displacement
   (ridges lit on sun side, shadowed opposite)
@@ -99,8 +99,8 @@ View: any preset, distance 12, slow auto-rotate ~30s.
 Judge:
 - [ ] 6 levels read clearly; dither pattern stable (no shimmer/crawl while rotating)
 - [ ] Gradients quantize into deliberate bands, not accidental contours
-- [ ] Envelope flatters rather than crushes relief shading (compare envelope
-  off/on via GUI toggle)
+- [ ] Envelope flatters rather than crushes relief shading (compare via the
+  Envelope folder per-term bypass checkboxes — a full off-toggle is deferred)
 
 ## Check 4 — LOD ramp (F53 scaffolding)
 View: preset "Rocky (Earthlike)"; sweep window._lab.state.distance 20 → 2 → 20.
