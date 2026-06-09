@@ -116,6 +116,11 @@ export class WarpEffect {
    */
   start(direction = null) {
     if (this.state !== 'idle') return;
+    // Re-derive the preview-coupled speeds each warp so the live tuning knob
+    // (window._warpPreviewDist → portalPreviewDistanceScene) applies to the
+    // NEXT warp, keeping the FOLD-ramp-lands-at-Portal-A timing contract.
+    this._foldPeakSpeed = foldPeakSpeedScenePerSec(this.FOLD_DUR);
+    this._enterPeakSpeed = this._foldPeakSpeed * 2;
     this.state = 'fold';
     this.elapsed = 0;
     this.progress = 0;

@@ -471,7 +471,7 @@ export class WarpPortal {
     // Crosses span the camera↔portal distance with a ~10% margin on each end,
     // so the nearest cross sits in front of the ship and the farthest cross
     // sits in front of Portal A. The span is derived from the live preview
-    // distance (portalPreviewDistanceScene() = half the pocket length, ~30u)
+    // distance (portalPreviewDistanceScene(), own constant ~10u)
     // rather than hard-tied to `radius`, so the crosses always land between
     // the camera and Portal A regardless of the pocket dimensions.
     const count = 5;

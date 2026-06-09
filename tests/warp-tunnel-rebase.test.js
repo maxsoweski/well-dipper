@@ -3,9 +3,15 @@
 // (AC2 entry, AC4 emergence) via the pure plane-crossing state machine, and
 // the load-adaptive emergence gate (AC5). Replaces the camera-pin invariant
 // tests (mechanism reverted in Task 0).
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { createTraversal, stepTraversal, parkBackDepth } from '../src/effects/portalTraversal.js';
+import {
+  portalPreviewDistanceScene,
+  foldPeakSpeedScenePerSec,
+  WARP_POCKET_LENGTH,
+  WARP_PORTAL_PREVIEW_DISTANCE,
+} from '../src/core/ScaleConstants.js';
 import { WarpPortal } from '../src/effects/WarpPortal.js';
 import { WarpEffect } from '../src/effects/WarpEffect.js';
 import {
@@ -521,5 +527,41 @@ describe('emergence-driven exit: the crossing, not the min-cruise timer, ends HY
     while (we.state === 'hyper' && t < 30) { t += 0.1; we.update(0.1); }
     expect(we.state).toBe('exit');
     expect(t).toBeLessThan(we.HYPER_MIN_CRUISE + 0.3); // left at ~min-cruise, not the ceiling
+  });
+});
+
+describe('portal preview distance — decoupled from pocket length (Goal 1, 2026-06-09)', () => {
+  // Max: "the tunnel spawns far away from the player… it should be spawning
+  // like 100m away." Literal metersToScene(100) ≈ 6.7e-7u (the sub-micron
+  // pocket problem); in pocket-feel scale (3u aperture ≈ a rift that swallows
+  // the 20m ship → ~1u ≈ 10m) 100m ≈ 10u. Preview was tunnelLength/2 — so
+  // tuning spawn distance via WARP_POCKET_LENGTH would shrink the tunnel too.
+  // Decouple: preview gets its own constant; foldPeakSpeed stays derived from
+  // preview so the FOLD ramp still lands the camera at Portal A at FOLD end.
+  afterEach(() => { delete globalThis._warpPreviewDist; });
+
+  test('preview distance is its own 10u constant, not tied to pocket length', () => {
+    expect(portalPreviewDistanceScene()).toBe(WARP_PORTAL_PREVIEW_DISTANCE);
+    expect(portalPreviewDistanceScene()).toBe(10);
+    expect(portalPreviewDistanceScene()).not.toBe(WARP_POCKET_LENGTH * 0.5);
+  });
+
+  test('globalThis._warpPreviewDist overrides live (UAT feel-tuning knob)', () => {
+    globalThis._warpPreviewDist = 18;
+    expect(portalPreviewDistanceScene()).toBe(18);
+    delete globalThis._warpPreviewDist;
+    expect(portalPreviewDistanceScene()).toBe(WARP_PORTAL_PREVIEW_DISTANCE);
+  });
+
+  test('fold peak speed stays derived from preview (quadratic ramp covers preview by FOLD end)', () => {
+    expect(foldPeakSpeedScenePerSec(4)).toBeCloseTo(3 * portalPreviewDistanceScene() / 4, 10);
+  });
+
+  test('WarpEffect.start() re-derives fold/enter speeds from the live preview value', () => {
+    globalThis._warpPreviewDist = 18;
+    const we = new WarpEffect();
+    we.start();
+    expect(we._foldPeakSpeed).toBeCloseTo(3 * 18 / we.FOLD_DUR, 10);
+    expect(we._enterPeakSpeed).toBeCloseTo(2 * we._foldPeakSpeed, 10);
   });
 });

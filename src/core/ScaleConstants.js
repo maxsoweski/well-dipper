@@ -177,11 +177,23 @@ export function portalApertureScene() {
   return WARP_POCKET_RADIUS;
 }
 
-/** Portal A preview distance in scene units — how far ahead of the ship
- *  Portal A opens when warp begins. Human-scale: ~half the pocket length
- *  (30u) so the FOLD ramp lands the camera at Portal A (z=0). Warp-only. */
+/** Portal A spawn/preview distance in scene units — how far ahead of the
+ *  ship Portal A opens when warp begins. Its OWN constant, deliberately NOT
+ *  derived from the pocket length: deriving it (old: tunnelLength/2 = 30u)
+ *  meant spawn distance and tunnel length could only be tuned together.
+ *  10u ≈ Max's "spawn ~100m away" in pocket-feel scale (the 3u aperture
+ *  swallows the 20m ship → ~1u ≈ 10m; literal metersToScene(100) ≈ 6.7e-7u,
+ *  the sub-micron-pocket problem). foldPeakSpeedScenePerSec stays derived
+ *  from THIS value, so the FOLD ramp still lands the camera exactly at
+ *  Portal A's plane at FOLD end regardless of tuning. Warp-only. */
+export const WARP_PORTAL_PREVIEW_DISTANCE = 10;
+
+/** Live preview distance — checks the UAT feel-tuning override
+ *  `window._warpPreviewDist` (read per warp: spawn position at FOLD t=0,
+ *  fold/enter speeds re-derived in WarpEffect.start()). */
 export function portalPreviewDistanceScene() {
-  return tunnelLengthScene() * 0.5;
+  const o = globalThis._warpPreviewDist;
+  return (typeof o === 'number' && o > 0) ? o : WARP_PORTAL_PREVIEW_DISTANCE;
 }
 
 /** Distance past Portal B where the camera comes to rest at end of EXIT.

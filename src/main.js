@@ -1548,13 +1548,12 @@ const _portalLabMode = new URLSearchParams(location.search).has('portalLab');
 // animation skips straight to firing the warp (the warp loop does its own
 // slerp during FOLD so cutting the preview-align short isn't visually harsh).
 let _portalLabState = 'idle';
-// Distance from camera to Portal A when opened in lab-mode preview.
-// Fixed human-scale (post warp-pocket migration): Portal A sits half the
-// pocket length ahead of the camera (~30u), via portalPreviewDistanceScene()
-// in ScaleConstants, so any change to the pocket length propagates here. The
-// FOLD camera ramp in WarpEffect.js crosses this distance over FOLD_DUR via
-// its quadratic speed ramp (see foldPeakSpeedScenePerSec).
-const _portalLabPreviewDistance = portalPreviewDistanceScene();
+// Distance from camera to Portal A when opened in lab-mode preview comes
+// from portalPreviewDistanceScene() (own constant, 10u — decoupled from the
+// pocket length, live-tunable via window._warpPreviewDist), read at OPEN
+// time, not module load, so tuning applies to the next preview. The FOLD
+// camera ramp in WarpEffect.js crosses this distance over FOLD_DUR via its
+// quadratic speed ramp (see foldPeakSpeedScenePerSec).
 // Alignment animation state (drives camera slerp + entry-strip progress)
 const _portalLabAlignDuration = 1.5;
 let _portalLabAlignElapsed = 0;
@@ -5661,7 +5660,7 @@ function commitSelection() {
       autoNav.stop();
       cameraController.killFlightVelocity();
       cameraController.bypassed = true;
-      const previewPos = camera.position.clone().addScaledVector(warpTarget.direction, _portalLabPreviewDistance);
+      const previewPos = camera.position.clone().addScaledVector(warpTarget.direction, portalPreviewDistanceScene());
       warpPortal.resetTraversal();
       warpPortal.open(previewPos, warpTarget.direction);
       warpPortal.setRimIntensity(1.0);
@@ -6712,8 +6711,9 @@ function simStep(deltaTime) {
 
       // ── Dual-portal traversal (warp-through mesh) ──
       // Both portals stay in the world for the entire warp. Portal A opens
-      // 30u ahead of the starting camera along _tunnelForward at FOLD t=0;
-      // Portal B sits `tunnelLength` further along the same axis. Camera
+      // portalPreviewDistanceScene() (10u) ahead of the starting camera along
+      // _tunnelForward at FOLD t=0; Portal B sits `tunnelLength` further
+      // along the same axis. Camera
       // flies forward through OUTSIDE_A → INSIDE → OUTSIDE_B; plane-
       // crossing detection in `warpPortal.updateTraversal()` flips render
       // state and fires `onTraversal('INSIDE')` → warpEffect.onSwapSystem.
