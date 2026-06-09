@@ -29,15 +29,16 @@ into the fresh pocket before HYPER. Fix: enter→hyper at `_swapFired` (WarpEffe
 — cruise now starts at the full pocket length (live: 59.8/58.1 across 2 runs,
 deterministic; speed snap at the seam also shrank, ~26→20 vs 45→20).
 
-Remaining (Max's words): (1) tunnel must recede to infinite distance → ride the
-blocker fix FIRST (cruise now traverses the full 60u — may already read much
-longer), then decide `WARP_POCKET_LENGTH`. ⚠️ Coupling for that decision:
-`portalPreviewDistanceScene = length/2` and `foldPeakSpeed = 3×preview/4` — raising
-length to e.g. 150 also moves Portal A's spawn 30→75u out and fold peak 22.5→56 u/s
-(pre-warp feel changes). Decouple preview from length, or pick length accepting the
-coupling. (3) walls must occlude the destination — re-judge after the length call.
-Context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md` (diagnosis),
-`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09.md` (root cause + decision).
+**Max rode both fixes (UAT positive: "Much better already" / "Quite good") and set
+3 next goals (2026-06-09, his words):** (1) Portal A spawns too far away — often
+behind the nearest planet; should spawn "like 100m away"; (2) asteroid belt shows
+through the tunnel walls; (3) entry hitch — "everything stops moving" at tunnel
+entry. Target feel for all three: *one* long tunnel; after a few seconds of travel
+the far end appears, grows, and the new system shows through it.
+**→ Next-session prep (goals, code map, couplings, sequencing):
+`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09b.md`.**
+Older context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md`,
+`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09.md`.
 
 Prior sub-state — **Tasks 0–3 DONE; entry-reliability
 Fix D implemented + live-verified, VERIFIED_PENDING_MAX (UAT).** Root cause was the
