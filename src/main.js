@@ -52,6 +52,7 @@ import { AutopilotEvents } from './auto/AutopilotEvents.js';
 import { AutopilotNavSequence } from './auto/AutopilotNavSequence.js';
 import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
+import { parkBackDepth } from './effects/portalTraversal.js';
 import { portalPreviewDistanceScene, postExitDistanceScene, sceneToLy, shipHullToScene } from './core/ScaleConstants.js';
 import {
   maybeRebase as _maybeWorldRebase,
@@ -1610,6 +1611,11 @@ const _destForward = new THREE.Vector3();
 // before the destination is ready.
 const _clampDiscBWorld = new THREE.Vector3();
 const _clampToB = new THREE.Vector3();
+// Camera's axis-distance to Portal B at the first gated cruise frame. The swap
+// can drop the camera in shallower than the park maxBack; the soft-creep ease
+// starts from this depth so the hold is never BEHIND the camera (which would
+// freeze it). Reset whenever we're not in a gated post-swap cruise.
+let _parkEntryDepth = null;
 // onTraversal must be async: onSwapSystem awaits pendingSystemDataPromise
 // then calls warpSwapSystem which TELEPORTS the camera to the new system.
 // Pre-2026-04-17, this callback was synchronous: it invoked onSwapSystem
@@ -6889,12 +6895,17 @@ function simStep(deltaTime) {
         //      the park-back so the camera holds at that depth until the gate.
         //   2. "Feel longer" (Max UAT): the old 0.5u park parked the camera AT
         //      the throat, so the cruise read as short and the destination was
-        //      fully visible 0.5u ahead. Parking further back (WARP_PARK_BACK)
-        //      holds the camera deep in the corridor looking down the tapered,
-        //      far-darkened throat — the tunnel reads as receding to infinity
-        //      and the destination stays occluded until the gate opens and the
-        //      camera flies the final stretch through the throat and emerges.
-        // Tunable live via window._warpParkBack during tuning; bake before ship.
+        //      fully visible 0.5u ahead. Holding deep in the corridor keeps
+        //      the camera looking down the tapered, far-darkened throat — the
+        //      tunnel reads as receding to infinity and the destination stays
+        //      occluded until the gate opens and the camera flies the final
+        //      stretch through the throat and emerges.
+        // The hold is a SOFT CREEP, not a dead stop (Max decision 2026-06-09:
+        // "continuous flight"): a fixed park froze the camera, which exposed
+        // the now-removed uScroll counter-drift as a visible flow REVERSAL.
+        // parkBackDepth eases the hold from maxBack to minBack over the
+        // min-cruise so the camera always inches toward Portal B.
+        // Tunable live via window._warpParkBack/_warpParkBackMin; bake before ship.
         if (warpEffect._swapFired && warpEffect.state === 'hyper') {
           const gateOpen = warpEffect.elapsed >= warpEffect.HYPER_MIN_CRUISE
             && warpEffect.destinationReady;
@@ -6903,10 +6914,17 @@ function simStep(deltaTime) {
             // refreshed it this frame after the rebase-proof group rewrite).
             _clampDiscBWorld.setFromMatrixPosition(warpPortal._discB.matrixWorld);
             const _axisToB = _clampToB.copy(_clampDiscBWorld).sub(camera.position).dot(_destForward);
-            const _parkBack = (typeof window !== 'undefined' && window._warpParkBack != null)
+            if (_parkEntryDepth == null) _parkEntryDepth = _axisToB;
+            const _maxBack = (typeof window !== 'undefined' && window._warpParkBack != null)
               ? window._warpParkBack : 20;
-            _step = Math.min(_step, Math.max(0, _axisToB - _parkBack));
+            const _minBack = (typeof window !== 'undefined' && window._warpParkBackMin != null)
+              ? window._warpParkBackMin : 6;
+            const _parkBackEff = parkBackDepth(
+              warpEffect.elapsed, warpEffect.HYPER_MIN_CRUISE, _maxBack, _minBack, _parkEntryDepth);
+            _step = Math.min(_step, Math.max(0, _axisToB - _parkBackEff));
           }
+        } else {
+          _parkEntryDepth = null;
         }
         camera.position.addScaledVector(_advanceDir, _step);
 

@@ -47,3 +47,22 @@ export function stepTraversal(state, { camPos, aPos, aNrm, bPos, bNrm, discRadiu
 
   return { mode, prevDotA, prevDotB };
 }
+
+// Soft-creep park depth for the AC5 emergence hold (Max decision 2026-06-09:
+// "continuous flight" — never dead-stop the camera mid-cruise). The hold depth
+// behind Portal B eases linearly from maxBack at cruise start to minBack at
+// min-cruise, so the camera always inches forward while the gate is closed;
+// past min-cruise (slow load) it holds at minBack. Pure so it's unit-testable
+// outside main.js's render loop.
+//
+// entryDepth (optional): the camera's actual axis-distance to Portal B at the
+// moment the swap fired. The swap can drop the camera in SHALLOWER than
+// maxBack (distB varies — see the Task B blocker); an ease that starts at
+// maxBack would then sit BEHIND the camera and the step clamp would freeze it
+// until the ease caught up. Capping the start at entryDepth (floored at
+// minBack) keeps the hold always at-or-ahead of the camera — always creeping.
+export function parkBackDepth(elapsed, minCruise, maxBack, minBack, entryDepth = Infinity) {
+  const startBack = Math.max(minBack, Math.min(maxBack, entryDepth));
+  const t = Math.min(1, Math.max(0, minCruise > 0 ? elapsed / minCruise : 1));
+  return startBack + (minBack - startBack) * t;
+}

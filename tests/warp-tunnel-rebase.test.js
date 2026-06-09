@@ -5,7 +5,7 @@
 // tests (mechanism reverted in Task 0).
 import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
-import { createTraversal, stepTraversal } from '../src/effects/portalTraversal.js';
+import { createTraversal, stepTraversal, parkBackDepth } from '../src/effects/portalTraversal.js';
 import { WarpPortal } from '../src/effects/WarpPortal.js';
 import { WarpEffect } from '../src/effects/WarpEffect.js';
 import {
@@ -329,6 +329,115 @@ describe('load-adaptive emergence gate (AC5)', () => {
     // Bounded by the safety ceiling, not the 60s loop cap.
     expect(t).toBeLessThan(60);
     expect(we.state).not.toBe('hyper');
+  });
+});
+
+describe('cruise wall-motion has ONE source: camera flight (Max decision 2026-06-09)', () => {
+  // Root cause of "walls reverse halfway through the cruise": two opposing
+  // motion sources. Real parallax (camera flying through the cylinder) runs
+  // one way; the per-frame `uScroll += dt*0.5` drift in update() ran the
+  // other. When the AC5 park-back dead-stopped the camera mid-cruise, the
+  // drift became the only motion and the flow visibly REVERSED. The drift was
+  // a holdover from starfield-cylinder-lab.html's static-orbit camera (where
+  // it was the sole motion source) — never valid alongside a flying camera.
+  // Max's call: wall streaming comes ONLY from real flight; uScroll stays put.
+  function makeUpdateFake() {
+    return {
+      group: { visible: true },
+      _tunnel: makeFakeNode({ uTime: { value: 0 }, uScroll: { value: 0 } }),
+      _rimA: makeFakeNode({ uTime: { value: 0 } }),
+      _rimB: makeFakeNode({ uTime: { value: 0 } }),
+    };
+  }
+
+  test('update() does NOT drift uScroll — no camera-independent wall motion', () => {
+    const p = makeUpdateFake();
+    WarpPortal.prototype.update.call(p, 1.0);
+    expect(p._tunnel.material.uniforms.uScroll.value).toBe(0);
+  });
+
+  test('update() still advances uTime — twinkle shimmers even when the camera is slow', () => {
+    const p = makeUpdateFake();
+    WarpPortal.prototype.update.call(p, 1.0);
+    expect(p._tunnel.material.uniforms.uTime.value).toBeCloseTo(1.0, 9);
+    expect(p._rimA.material.uniforms.uTime.value).toBeCloseTo(1.0, 9);
+    expect(p._rimB.material.uniforms.uTime.value).toBeCloseTo(1.0, 9);
+  });
+});
+
+describe('soft-creep park depth (replaces the mid-cruise dead-stop)', () => {
+  // The old AC5 park-back clamped the camera to a FIXED 20u short of Portal B
+  // for the whole gated cruise — a dead stop, which is what exposed the
+  // opposing-drift reversal. The fix: the hold depth EASES from maxBack to
+  // minBack over the min-cruise, so the camera always inches forward (one
+  // coherent motion source, never frozen, never reversed). Pure function so
+  // the depth math is unit-testable outside the render loop.
+  const MIN_CRUISE = 3.5, MAX_BACK = 20, MIN_BACK = 6;
+
+  test('at cruise start the hold depth is maxBack', () => {
+    expect(parkBackDepth(0, MIN_CRUISE, MAX_BACK, MIN_BACK)).toBe(MAX_BACK);
+  });
+
+  test('at min-cruise the hold depth has eased to minBack', () => {
+    expect(parkBackDepth(MIN_CRUISE, MIN_CRUISE, MAX_BACK, MIN_BACK)).toBe(MIN_BACK);
+  });
+
+  test('past min-cruise (slow load) it holds at minBack — never below, never negative', () => {
+    expect(parkBackDepth(MIN_CRUISE * 3, MIN_CRUISE, MAX_BACK, MIN_BACK)).toBe(MIN_BACK);
+    expect(parkBackDepth(1000, MIN_CRUISE, MAX_BACK, MIN_BACK)).toBeGreaterThanOrEqual(0);
+  });
+
+  test('strictly decreasing across the cruise — the camera always has room to creep', () => {
+    let prev = parkBackDepth(0, MIN_CRUISE, MAX_BACK, MIN_BACK);
+    for (let t = 0.1; t <= MIN_CRUISE + 1e-9; t += 0.1) {
+      const d = parkBackDepth(t, MIN_CRUISE, MAX_BACK, MIN_BACK);
+      expect(d).toBeLessThan(prev);
+      prev = d;
+    }
+  });
+
+  test('negative elapsed clamps to maxBack (no overshoot past the start)', () => {
+    expect(parkBackDepth(-1, MIN_CRUISE, MAX_BACK, MIN_BACK)).toBe(MAX_BACK);
+  });
+
+  // Live telemetry 2026-06-09: the swap can drop the camera in SHALLOWER than
+  // maxBack (measured ~14.7u from Portal B vs maxBack=20 — the Task B distB
+  // variance). An ease that starts at maxBack then sits BEHIND the camera, so
+  // max(0, axisToB - parkBackEff) clamps to 0 and the camera freezes until the
+  // ease catches up (~1.3s of dead-stop, the exact thing this fix removes).
+  // The hold must start AT the camera's actual entry depth, never behind it.
+  describe('entry-depth cap (camera spawns shallower than maxBack)', () => {
+    const ENTRY = 14.7;
+
+    test('at cruise start the hold depth equals the entry depth, not maxBack', () => {
+      expect(parkBackDepth(0, MIN_CRUISE, MAX_BACK, MIN_BACK, ENTRY)).toBe(ENTRY);
+    });
+
+    test('still eases to minBack by min-cruise', () => {
+      expect(parkBackDepth(MIN_CRUISE, MIN_CRUISE, MAX_BACK, MIN_BACK, ENTRY)).toBe(MIN_BACK);
+    });
+
+    test('strictly decreasing from entry depth — never a frozen frame', () => {
+      let prev = parkBackDepth(0, MIN_CRUISE, MAX_BACK, MIN_BACK, ENTRY);
+      for (let t = 0.1; t <= MIN_CRUISE + 1e-9; t += 0.1) {
+        const d = parkBackDepth(t, MIN_CRUISE, MAX_BACK, MIN_BACK, ENTRY);
+        expect(d).toBeLessThan(prev);
+        prev = d;
+      }
+    });
+
+    test('a DEEP entry (beyond maxBack) keeps the maxBack start — unchanged behavior', () => {
+      expect(parkBackDepth(0, MIN_CRUISE, MAX_BACK, MIN_BACK, 31.6)).toBe(MAX_BACK);
+    });
+
+    test('entry already inside minBack: holds flat at minBack (never pushes backward)', () => {
+      expect(parkBackDepth(0, MIN_CRUISE, MAX_BACK, MIN_BACK, 4)).toBe(MIN_BACK);
+      expect(parkBackDepth(MIN_CRUISE, MIN_CRUISE, MAX_BACK, MIN_BACK, 4)).toBe(MIN_BACK);
+    });
+
+    test('omitted entry depth behaves exactly as before (backward compatible)', () => {
+      expect(parkBackDepth(0, MIN_CRUISE, MAX_BACK, MIN_BACK)).toBe(MAX_BACK);
+    });
   });
 });
 
