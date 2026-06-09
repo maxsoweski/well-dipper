@@ -441,6 +441,37 @@ describe('soft-creep park depth (replaces the mid-cruise dead-stop)', () => {
   });
 });
 
+describe('HYPER begins at the swap — the cruise gets the full pocket (Task B blocker)', () => {
+  // Root cause of "distB at cruise start is ~15-32u, not 60" (live-confirmed
+  // 2026-06-09: swap at ENTER elapsed=0.25 → first HYPER frame distB=23.3):
+  // the swap fires at the geometric Portal A crossing DURING enter, re-anchors
+  // the pocket with B 60u ahead — and then the remainder of ENTER (up to 1.5s
+  // at 22.5→45 u/s, ~50u) flies the camera into the fresh pocket BEFORE the
+  // gated HYPER cruise starts. hyperTraversalScenePerSec's contract ("HYPER
+  // covers exactly the tunnel length") assumes HYPER starts at full depth.
+  // Fix: once the swap has fired, ENTER's job is done — transition to HYPER
+  // immediately, so the cruise deterministically starts at the full pocket
+  // length. (Also shrinks the transition speed snap: ~26→20 instead of 45→20.)
+  test('enter transitions to hyper on the update after the swap fires', () => {
+    const we = new WarpEffect();
+    we.state = 'enter'; we.elapsed = 0.25; we.progress = 0.17;
+    we._swapFired = true;
+    we.update(1 / 60);
+    expect(we.state).toBe('hyper');
+    expect(we.cameraForwardSpeed).toBe(we._hyperSpeed);
+  });
+
+  test('without a swap, enter still runs its full duration (legacy / fallback path)', () => {
+    const we = new WarpEffect();
+    we.state = 'enter'; we.elapsed = 0; we._swapFired = false;
+    let t = 0;
+    while (we.state === 'enter' && t < we.ENTER_DUR - 0.1) { t += 1 / 60; we.update(1 / 60); }
+    expect(we.state).toBe('enter');               // no early exit without the swap
+    while (we.state === 'enter' && t < we.ENTER_DUR + 0.5) { t += 1 / 60; we.update(1 / 60); }
+    expect(we.state).toBe('hyper');               // natural duration exit intact
+  });
+});
+
 describe('emergence-driven exit: the crossing, not the min-cruise timer, ends HYPER (AC4)', () => {
   // Root cause #2 (2026-06-07 post-teleport-fix diagnosis): the AC5 clamp parks
   // the camera ~0.5u short of Portal B during the whole min-cruise. The min-cruise

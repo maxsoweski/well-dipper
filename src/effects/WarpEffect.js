@@ -253,8 +253,16 @@ export class WarpEffect {
     this.portalRimIntensity = 1.0;
     this.portalApproach = 1 + this.progress;  // 1 → 2 (past camera)
 
-    // Transition to HYPER
-    if (this.elapsed >= this.ENTER_DUR) {
+    // Transition to HYPER. Once the swap has fired (geometric Portal A
+    // crossing, dual-portal path), ENTER's dive-in is over — the camera is
+    // already inside the freshly re-anchored DESTINATION pocket, and every
+    // remaining ENTER frame (22.5→45 u/s) eats into the 60u cruise budget
+    // before the gated HYPER cruise starts (live 2026-06-09: distB at first
+    // HYPER frame was 14.7-31.6 instead of 60, varying with crossing timing).
+    // Transitioning at the swap starts the cruise at the full pocket length,
+    // deterministically. Legacy path unaffected: _swapFired is only ever set
+    // during HYPER there (the elapsed>0.15 fallback in _updateHyper).
+    if (this.elapsed >= this.ENTER_DUR || this._swapFired) {
       this.state = 'hyper';
       this.elapsed = 0;
       this.whiteFlash = 0;
