@@ -2,6 +2,9 @@
 
 **Date:** 2026-06-09 · **Project:** `~/projects/well-dipper` · **Branch:** `master`
 **Type:** Campaign methodology spec (the *how we work*, not a single feature).
+**v2 (2026-06-09, approved):** execution model changed to an end-to-end
+autonomous `/goal` chain — §13 supersedes §3 Stream B and amends §4/§6; §§5,
+7–11 stand. Max's gate moves to a batched final review lap.
 **Lab surface:** `planet-lod-lab.html` (`window._lab`). Scope = lab only; wiring
 into the production game (`src/objects/Planet.js`) is a separate later effort with
 no parity goal.
@@ -51,7 +54,7 @@ returning a structured **research dossier** (the top half of that feature's
 card — §5 sections 1–6). Runs in the background; non-sequential; front-loads the
 hardest part for every feature at once.
 
-### Stream B — UAT refinement (sequential, with Max)
+### Stream B — UAT refinement (sequential, with Max) — SUPERSEDED by §13 (v2)
 We walk features **in build-sequence / dependency order**, foundation first.
 Each feature's UAT is human-paced and slow. Because Stream A's agents run fast
 and in parallel, **all dossiers are ready long before Stream B reaches even
@@ -231,3 +234,120 @@ method, not just the planet fixes.
 - Whether Max wants to trim the §8 list (e.g., skip `[current]`-and-likely-fine
   features) to cut workflow cost — default is **all in-scope get a dossier**, since
   the dossier is exactly what lets us confirm a `[current]` feature is actually fine.
+- **(v2)** Exact `/goal` condition wording + turn bound per phase (§13.2).
+- **(v2)** The integration checklist (INTEGRATION.md pairs, from the catalogue's
+  shared-machinery notes) and the profile checklist (PROFILES.md, from Appendix
+  A presets × Appendix B coverage matrix).
+- **(v2)** `.gitignore` entry for `docs/FEATURES/cards/shots/`.
+
+---
+
+## 13. v2 amendment — end-to-end autonomous execution via `/goal`
+
+**Approved by Max 2026-06-09.** Replaces Stream B (§3) with an autonomous goal
+chain; adds two phases (integration, profiles) the v1 spec lacked; moves Max's
+UAT to a single batched review lap at the end. Stream A, the card schema (§5),
+the two ceremony tiers (§6, adapted per §13.4), dependency order and
+foundation-first (§4), and all §10 discipline rules carry over.
+
+### 13.0 The mechanism — what `/goal` is
+
+Claude Code ≥ 2.1.139: `/goal <condition>` keeps Claude working turn after turn
+— no per-turn user input — until a separate small evaluator model (Haiku)
+confirms from the **transcript alone** that the condition holds. Session-scoped,
+one goal at a time, typed by Max. Implications baked into this design:
+conditions must be **transcript-provable** (state check commands whose output
+lands in the conversation), every condition is **turn-bounded** ("…or stop
+after N turns and summarize what's parked"), and a multi-week campaign runs as
+a **sequence of bounded goals**, not one mega-goal. Main-turn tokens are
+regular session spend (Max-20x pool, NOT the metered Agent-SDK credit); a
+phase may stall on the rolling usage limit mid-run — that's a pause, not a
+failure; it resumes when the window refreshes.
+
+### 13.1 What changes vs. v1
+
+- Stream A (research Workflow → ~48 dossier cards) **unchanged**, still runs
+  first — the dossiers are the reference standard the autonomous judging uses.
+- Stream B's sequential Max-paced reference-compare → **Claude makes the
+  🟢/🟡/🔴 verdicts** (§13.3), logging verdict + screenshot gallery per card.
+- **Two new phases:** cross-feature integration (§13.5) and per-archetype
+  profile validation (§13.6).
+- **Max's gate = one batched review lap** at the end (§13.7) — taste keeps the
+  final word, batched instead of sequential.
+
+### 13.2 The phase chain
+
+Each phase = one `/goal` Max types, with a transcript-provable, turn-bounded
+condition (exact wording locked in the implementation plan). Fresh session +
+handoff doc at each seam (`handoff-at-seam`).
+
+| # | Phase | Goal condition (sketch) | Bound |
+|---|---|---|---|
+| 1 | Research fan-out | *(not a goal — one Workflow call)* ~48 cards committed | — |
+| 2 | Foundation | Substrate card has §7 verdicts + shots for FBM continents, lighting, posterize/Bayer envelope, LOD ramp; committed | 15 turns |
+| 3 | Refine built | All 15 built-feature cards (F1–F11, F17/18/22/23) show §7 verdict + gallery; fixes committed; vitest green | 35 turns |
+| 4a | Build: fluvial + aeolian | F12–F16, F19–F21 verdicted; lab renders each soloed | 45 turns |
+| 4b | Build: atmosphere | Bands/storms/clouds/thermal (F24–F33) verdicted | 45 turns |
+| 4c | Build: optical + exotic + overlay + rings | F34–F37, F40–F49, F51 verdicted; F38/F39 marked `parked-for-Max` | 45 turns |
+| 5 | Integration | INTEGRATION.md checklist all pass or parked | 25 turns |
+| 6 | Profiles | Every Appendix-A archetype renders its Appendix-B feature set, verified per type | 25 turns |
+| 7 | Max's review lap | *(not a goal)* Max walks the galleries, overrules anything | — |
+
+"End to end" honestly means: ~6 `/goal` launches from Max instead of ~40
+feature-by-feature sittings. Claude cannot chain sessions itself.
+
+### 13.3 Autonomous reference-compare judging
+
+Per feature: load card → solo on `:9223` per the isolation recipe → screenshot
+at 2–3 prescribed distances → **visual compare** of form/behavior against the
+card's reference images (Claude views both) → check shader math against the
+card's modeling notes → objective checks via `window.__wd.*` / pixel readback.
+The bar stays §10's: *"reads as X in the 6-level posterized envelope"* — form
+and behavior, never pixel-match. 🟢 → log, move on; 🟡 → light-loop tweak;
+🔴 → fix, or after the 3-cycle cap mark `parked` and continue. Screenshots go
+to `docs/FEATURES/cards/shots/F##-*.png` — **gitignored** (≈150 PNGs would
+bloat the repo) but persistent on disk for Max's review lap (Windows-openable);
+cards link them by relative path.
+
+### 13.4 Heavy loop, adapted (no Max in the loop)
+
+The F11 ceremony's brainstorm step needs Max, so for unbuilt features it
+collapses into the card: the dossier (§§1–6) **is** the spec; Claude adds a
+short **§6.5 build plan** to the card, then subagent-implement → code-review
+subagent → verify → commit. Code-review stays — the only adversarial check
+left with Max out of the loop. Forks mid-build follow
+`decision-needed-threshold`: technical → decide and log; taste → take the
+conservative option, mark the card `taste-call`, surface in Max's lap.
+
+### 13.5 Integration phase
+
+One card, `docs/FEATURES/cards/INTEGRATION.md`: the dependent pairs from the
+catalogue's shared machinery — rivers vs. canyon accumulator, frost over
+relief, clouds over bands, rings vs. eclipse shadows, etc. Each pair gets a
+solo-pair render check + verdict. The pair list is authored **during the
+implementation plan** from the catalogue's dependency notes, so the phase
+starts from a concrete checklist.
+
+### 13.6 Profile phase
+
+One card, `docs/FEATURES/cards/PROFILES.md`: for each Appendix-A archetype,
+render in the lab and check against the Appendix-B coverage matrix — right
+features present, wrong ones absent, `deriveUniforms()` drivers sane. Fixes go
+to the archetype registry / driver wiring; the `planet-archetypes` vitest is
+the regression net.
+
+### 13.7 Max's batched review lap
+
+Not a goal. A single review doc (ordered links to every card + gallery) lets
+Max walk the results, overrule verdicts, and decide the parked/taste-call
+items (incl. F38/F39 keep/stylize/drop). Anything overruled re-enters a light
+loop. UAT honesty is preserved: no card is *shipped* until this lap — verdicts
+before it are `VERIFIED_PENDING_MAX`.
+
+### 13.8 Guardrails (additions to §10)
+
+- Explicit-path staging only (lab file, `docs/FEATURES/**`,
+  `planet-archetypes.js`); warp WIP untouched; never `git add -A`.
+- Lab-file backtick parity stays EVEN.
+- **Commit at every feature seam** so a usage-limit stall never strands work.
+- `active-workstream.json` flips to this campaign at execution start.
