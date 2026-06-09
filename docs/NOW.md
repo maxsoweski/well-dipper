@@ -4,21 +4,30 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-07 by working-Claude (warp **cruise-visual tuning** in progress — runway-on-exit removed + WIP taper/darkening/park-back committed `fb36978`. Entry-reliability Fix D still VERIFIED_PENDING_MAX. All warp work unpushed; master ~33 ahead).
+Last updated: 2026-06-09 by working-Claude (warp cruise problem #2 **FIXED, VERIFIED_PENDING_MAX `8bda388`** — wall-scroll reversal killed: single motion source + soft-creep park. Entry-reliability Fix D still VERIFIED_PENDING_MAX. All warp work unpushed).
 
 ---
 
 ## Active workstream
 
-**`warp-tunnel-pocket-traversal-2026-06-06`** — **Now tuning the cruise visual
-(tuning, not a mystery — mechanism works, look needs dialing).** Committed `fb36978`:
-exit "runway" removed (Max UAT) + WIP far-taper / far-darkening / ~20u park-back
-(speculative, not yet visually dialed). Three problems remain (Max's words): (1)
-tunnel too short — must recede to infinite distance; (2) wall motion reverses
-halfway (drive `uScroll` from camera travel, not constant `dt*0.5`); (3) walls must
-occlude the destination (only the two end openings show out). Continuation +
-corrected diagnosis (walls DO render @99.7% — pixel readback, not eyeballed
-force-tests) in `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md`.
+**`warp-tunnel-pocket-traversal-2026-06-06`** — **cruise-visual tuning.**
+**Problem #2 (walls reverse halfway) FIXED `8bda388`, VERIFIED_PENDING_MAX.**
+Root cause: two opposing wall-motion sources — the constant `uScroll += dt*0.5`
+drift (static-camera lab holdover) vs real camera parallax; the AC5 dead-stop
+park exposed the drift as a reversal. Per Max's decision (continuous flight):
+drift removed; park is now a soft creep (`parkBackDepth()` in
+`portalTraversal.js`, eases 20u→6u over min-cruise, entry-depth-capped so the
+swap's shallow drop-in — measured ~14.7u live — can't re-freeze it). Live
+telemetry (GPU 9223, 241fps, 3 warps): uScroll 0 throughout, zero frozen frames
+(was 280/843 gated), real INSIDE→OUTSIDE_B crossings, no AC4 force-flip.
+Headless 37/37. **Max UAT: ride warps — does the reversal go away?**
+
+Remaining problems (Max's words): (1) tunnel too short — must recede to infinite
+distance → **Task B**: blocker first — distB at swap is ~31.6 (and varies; ~14.7
+seen live), not 60 (`onSwapSystem` re-anchor suspect, `main.js` ~3061), then raise
+`WARP_POCKET_LENGTH`; (3) walls must occlude the destination — re-judge after B.
+Context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md` (diagnosis),
+`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09.md` (root cause + decision).
 
 Prior sub-state — **Tasks 0–3 DONE; entry-reliability
 Fix D implemented + live-verified, VERIFIED_PENDING_MAX (UAT).** Root cause was the
