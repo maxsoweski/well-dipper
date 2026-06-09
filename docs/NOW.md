@@ -61,6 +61,13 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Next 1-3 queued (in priority order)
 
+0. **`planet-refinement-campaign` — apparatus SHIPPED 2026-06-09, Phase 1
+   ready to launch.** Spec v2 (`/goal` chain) + plan + cards + tracker
+   committed (`095b25b`…`0ff3158`). Next: fresh session runs plan Task 6
+   (research Workflow → 48 dossier cards), then Max launches Phase-2…6 via
+   the tracker's `/goal` launch cards. Serves SCREENSAVER-MVP visual polish
+   (planets = hero objects). Runs parallel to warp on shared tree —
+   explicit-path staging only.
 1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
 2. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
