@@ -50,8 +50,25 @@ Built — solo it in the lab on the :9223 debug Chrome (launch per chrome-devtoo
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Europa (icy moon), solo
+  `chaos`, d8/d3 + gate and crosscut checks. Drivers verified live:
+  cryoActivity 1.0, cellScale 5, raftJitter 0.66, matrixRough 0.5.
+  - Patches: chaos reads as discrete disrupted provinces inside coherent
+    shell at d8, not all-over noise (shot 01).
+  - Rafts: flat angular plates at distinct posterize bands (per-cell
+    tilt facets catching light differently) — jigsaw of moved plates,
+    with darker, rougher matrix channels between raft tops (shot 02).
+  - Gate: cryoActivity=0 → raft jigsaw vanishes leaving only base macro
+    relief (early-out verified live); 0.45 → sparser patches (shot 03).
+  - 1/g jitter driver (read live): Europa 0.66 / Titan 0.722 (low g) vs
+    Rocky 0.35 (1 g); cryoActivity simultaneously gates chaos OFF on
+    Rocky and Titan (0) — only icy-active worlds get rafts.
+  - Crosscut: with F10 cryo-ridges re-enabled, the ridge fabric visibly
+    truncates at chaos patches instead of blending through (shot 04).
+  - Temporal/aliasing stability covered by FOUNDATION checks 3 & 4 🟢.
+  - Shots: F09-chaos-01-d8-patches.png, -02-d3-rafts.png,
+    -03-d3-activity045.png, -04-d3-crosscut-ridges.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX

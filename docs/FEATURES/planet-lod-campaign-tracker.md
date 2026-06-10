@@ -35,7 +35,7 @@ during phases) | ▶️ = current
 | F6 | [F06-plateaus-tessera](cards/F06-plateaus-tessera.md) | Relief | ✅ | 🟢 | 3 |
 | F7 | [F07-volcanic-edifices](cards/F07-volcanic-edifices.md) | Relief | ✅ | 🟢 | 3 |
 | F8 | [F08-lava-plains-flows](cards/F08-lava-plains-flows.md) | Relief | ✅ | 🟡 Max-feedback fix1 | 3 |
-| F9 | [F09-chaos-terrain](cards/F09-chaos-terrain.md) | Relief | ✅ | — | 3 |
+| F9 | [F09-chaos-terrain](cards/F09-chaos-terrain.md) | Relief | ✅ | 🟢 | 3 |
 | F10 | [F10-ridged-icy-terrain](cards/F10-ridged-icy-terrain.md) | Relief | ✅ | — | 3 |
 | F11 | [F11-river-networks](cards/F11-river-networks.md) | Fluvial | ✅ | — | 3 |
 | F17 | [F17-glacial-landforms](cards/F17-glacial-landforms.md) | Cryo | ✅ | — | 3 |
