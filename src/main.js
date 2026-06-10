@@ -5448,12 +5448,18 @@ function warpSwapSystem() {
       const starPos = star.mesh.position;
       // UAT knob (pattern: _warpPreviewDist, ec47b84). Read per-warp so
       // live tuning applies to the next jump.
-      const arrivalMargin = (typeof window._warpArrivalMargin === 'number')
+      const arrivalMargin = (typeof window._warpArrivalMargin === 'number'
+        && window._warpArrivalMargin > 0)
         ? window._warpArrivalMargin : 1.3;
       let switchDist = star.billboardSwitchDistance(camera.fov, window.innerHeight);
       if (system.star2) {
+        // star2 is up to `sep` closer than the primary the camera is
+        // placed from — its switch distance must clear that worst case
+        // too, or a dim companion in a wide-rolled binary can emerge in
+        // flare LOD (M+M at default FOV: sep ~300 vs switchDist ~540).
+        const sep = starPos.distanceTo(system.star2.mesh.position);
         switchDist = Math.max(switchDist,
-          system.star2.billboardSwitchDistance(camera.fov, window.innerHeight));
+          system.star2.billboardSwitchDistance(camera.fov, window.innerHeight) + sep);
       }
       const orbitDist = switchDist * arrivalMargin;
 

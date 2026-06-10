@@ -9,7 +9,7 @@ import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
 import { StarFlare } from '../src/objects/StarFlare.js';
 
-const FOV = 50;        // game camera FOV
+const FOV = 50;        // representative FOV (game default is 70, settings-driven)
 const SCREEN_H = 1440;
 
 function makeStar({ radius = 1, luminosity = 1 } = {}) {
@@ -84,7 +84,7 @@ describe('StarFlare.billboardSwitchDistance', () => {
     const cam = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.1, 1e9);
     const d = star.billboardSwitchDistance(FOV, SCREEN_H);
 
-    globalThis.window = { innerHeight: SCREEN_H };  // update() reads window.innerHeight
+    globalThis.window = { innerHeight: SCREEN_H };  // update() reads only window.innerHeight today — extend this stub if it grows more window reads
     try {
       cam.position.set(0, 0, d * 0.99);             // inside → flare
       cam.updateMatrixWorld();
