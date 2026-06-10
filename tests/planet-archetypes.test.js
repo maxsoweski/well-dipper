@@ -100,7 +100,7 @@ const GLSL_NAME = {
   coastlines: 'PROV_COAST', outflow: 'PROV_OUTFLOW', karst: 'PROV_KARST', dunes: 'PROV_DUNES',
   dust: 'PROV_DUST', massWasting: 'PROV_MASSW', bands: 'PROV_BANDS', jets: 'PROV_JETS',
   weatherBands: 'PROV_WEATHER', greatSpot: 'PROV_GREATSPOT', stormTrain: 'PROV_STORMTRAIN',
-  polarVortex: 'PROV_POLAR',
+  polarVortex: 'PROV_POLAR', lightning: 'PROV_LIGHTNING',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

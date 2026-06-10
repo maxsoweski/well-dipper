@@ -1,5 +1,5 @@
 # Feature Card — F30 Lightning / electrical storms
-Domain: Storms · Lab status: ⬜ · Build-seq phase: 4b
+Domain: Storms · Lab status: 🟡 · Build-seq phase: 4b
 
 ## 1. Description (WHAT)
 
@@ -64,8 +64,11 @@ v1 scope cuts: sprites variant ([subtle], card item 8) → not built, logged; st
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop)
+- Evidence (repo root, gitignored): `F30-jovian-night-t0..t3.png` (polar pops appear/decay across ~1 s frames, 21–95 px from the visible pole on a ~270 px disc), `F30-jovian-OFF-t0/t1.png` (A/B: enabled false ⇒ night-disc max luminance 1, zero pixels >15; re-enable ⇒ pops return), `F30-jovian-close-t0..t2.png` (LOD2 blob shape), `F30-rocky-night-t0..t3.png` (equatorial wet-band clustering, y 461–492 vs equator ≈453), `F30-rocky-day.png` (lit side: no visible pops; faint day diffs consistent with the 0.35 night-boost floor), `F30-tune-night-t0..t3.png` + `F30-tune-close-t0..t2.png` (post-tune brightness re-verify).
+- §6 checklist: 1 🟢 (soft blob, radial falloff 70→9 over r 0–12 px at close range, no square edges, no bolt shapes), 2 🟢 (Jovian polar / Rocky low-latitude band — both regimes confirmed in pixel coords), 3 🟢-weak (pops appear/decay between frames, per-frame sampler caught a 57→52 decay, no synchronized strobing seen — but ~1 s screenshot cadence is too sparse to fully characterize rhythm; Max's eye is the real check), 4 🟢 (night-first; day pops exist at the 0.35 floor but never dominate the lit surface), 5 🟢 (largest cluster ≤110 px in a 2058 px frame; points-to-blobs, no hemisphere strobes), 6 🟡 (post-tune temporal peaks 154/255 at d8, 181/255 at d2.5 — clearly visible bright pops; mid-decay frames still read 20–50 by the envelope's nature; absolute brightness is taste fork a), 7 — by construction (pure function of pos+uTime, no buffers; uTime free-runs so exact-frame reproduction isn't screenshot-testable), 8 — sprites variant not built (v1 scope cut, logged in §6.5).
+- Live drivers: Jovian strength 1 / polar 1; Rocky strength 1 / polar 0 (n2-o2 rain factor); airless presets derive 0 (atmosphere-null short-circuit review-verified). Solo toggle verified: `solo('lightning')` keeps lightning on, drops bands/jets/spot — and unlike F27–F29, lightning renders OUTSIDE the bandMask gate (★ emissive channel), so solo actually shows it.
+- Tweaks applied: 1 of 3 cycles — emissive intensity literal 2.0 → 4.0 after the first verify found functionally-correct but faint flashes (peaks 31–57/255 at d8); re-verify: IMPROVED-SUFFICIENT, blob shape unchanged, no shader errors.
+- Code review (fable): APPROVE-WITH-FIXES, all three applied pre-verify. (1) MAJOR — blob Gaussian truncated at its own lattice cell faces (fragment evaluates only its cell; at default radius 0.05 the face amplitude was 37–83 % of peak ⇒ hard square edges mid-flash): fixed with a cell-local face window (smoothstep→0 at faces) + default uLightBlobR 0.05→0.022 + GUI max 0.15→0.06. (2) MINOR — driver re-declared the rain-composition map: now reuses `_rainFactor` (single source). (3) MINOR — convective mask re-ran the 5-octave fbmd per fragment: now takes Stage-8 `cw.x` as a parameter.
+- Taste forks for Max's lap: (a) flash brightness (the 4.0 GLSL literal is not a lab knob); (b) rate/duration defaults (0.5 cyc/s, 0.18 window — knobs exist); (c) sprites variant cut; (d) storm-spot proximity coupling cut (latitude+cloud mask only — integration-phase candidate per §6.5).
+- Status: VERIFIED_PENDING_MAX

@@ -455,6 +455,24 @@
       uniform float uPolarPhase;     // single-cap S-lobe orientation rad (driven: hash)
       uniform float uPolarW;         // polygon collar half-width rad — lab knob
       uniform vec3  uPolarTint;      // cap tint (driven: bandTint shifted cool — the teal-blue core lean)
+      // ── F30 lightning (Storms — card F30) — ★ EMISSIVE-CHANNEL ONLY, transient ──
+      // A spatio-temporal point process: sparse hashed cell grid, per-cell flash
+      // window on uTime with sharp-attack/exp-decay envelope, Gaussian glow blob
+      // around the jittered cell center — NEVER a drawn bolt (card §4: at lab
+      // viewing distances lightning reads as a sub-second diffuse glow lighting
+      // cloud tops from within, per Cassini PIA12576 / ISS night photography).
+      // Deterministic from (position, uTime) — no buffers, no state (the research
+      // doc hard constraint). Regression contract: the call site keys on
+      // uLightningStrength alone, so strength 0 (enable off, or any airless
+      // preset) renders byte-identical F29-committed output. uTime is allowed:
+      // lightning is a transient feature joining aurora/clouds as a time
+      // consumer; the F24 static band field is untouched (emissive channel only).
+      uniform float uLightningStrength; // 0..1 master gate (driven: 1 on gas, rain-composition factor on solid retained-atmosphere worlds)
+      uniform float uLightPolar;        // latitude regime: 0 ITCZ equatorial / 1 Juno polar clustering (driven: gas gate — PIA22474)
+      uniform float uLightRate;         // base flash rate, cycles/s before per-cell jitter — lab knob
+      uniform float uLightDur;          // flash window as a fraction of the cell cycle — lab knob
+      uniform float uLightCellFreq;     // flash cell grid frequency (cells per unit pos) — lab knob
+      uniform float uLightBlobR;        // flash blob angular radius rad — lab knob
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -716,6 +734,7 @@
       const int PROV_GREATSPOT   = 25;  // F27 — neutral: the vortex rides the same unprovinced gas deck as PROV_BANDS/PROV_JETS
       const int PROV_STORMTRAIN  = 26;  // F28 — neutral: the train rides the same unprovinced gas deck as PROV_GREATSPOT
       const int PROV_POLAR       = 27;  // F29 — neutral: the pole structure rides the same unprovinced gas deck as the storm family
+      const int PROV_LIGHTNING   = 28;  // F30 — neutral (weather, not geology): flashes follow the convective cloud deck (FROST-row pattern)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -761,6 +780,7 @@
         else if (fid == PROV_GREATSPOT)  { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_STORMTRAIN) { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_POLAR)      { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_LIGHTNING)  { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2424,6 +2444,51 @@
         return 1.0 - uPldStrength * parity;
       }
 
+      // ── F30 lightningEmissive (Storms — card F30 §6.5 step 2) — the transient
+      // electrical signature of convective storms, summed into the ★ emissive
+      // bypass channel (the lavaCrackEmissive/aurora pattern, card §4: emissive +
+      // high contrast = the canonical posterization survivor). One hashed cell per
+      // fragment: the per-cell phase ph rides uTime with RATE JITTER (0.7+0.6 h.x)
+      // plus a hash offset, so neighboring cells never sync — asynchronous
+      // Poisson-like timing, no metronome (card §6 item 3). Envelope = sharp
+      // attack at ph 0, exp decay across the uLightDur window (sub-second flash).
+      // Spatial form = a Gaussian glow blob around the jittered cell-center
+      // direction — a soft area glow lighting the cloud deck from within, never a
+      // drawn bolt (card §4 / §6 item 1). Weighted by: the SAME Stage-8 cloud FBM
+      // expression (flashes co-locate with the convective deck, card §6 item 2),
+      // an archetype latitude regime (ITCZ equatorial vs Juno polar via
+      // uLightPolar — PIA22474), and a night boost (reads night-first like aurora
+      // but does not vanish by day, card §6 item 4). Deterministic from
+      // (pos, uTime) — same seed + same t = same flash field (card §6 item 7).
+      vec3 lightningEmissive(vec3 pos, vec3 n, float diff, float cwx){
+        vec3 cell = floor(pos * uLightCellFreq);
+        vec3 h = hash33(cell);                              // 3 decorrelated per-cell hashes
+        // per-cell flash phase: rate jitter decorrelates timing across cells
+        float ph = fract(uTime * uLightRate * (0.7 + 0.6 * h.x) + h.y);
+        // envelope: sharp attack, fast exp decay, dark outside the window (branchless)
+        float e = step(ph, uLightDur) * exp(-5.0 * ph / uLightDur);
+        // jittered cell-center direction -> angular-distance Gaussian glow blob
+        vec3 cc = normalize((cell + 0.5 + 0.4 * (h - 0.5)) / uLightCellFreq);
+        float dc = acos(clamp(dot(n, cc), -1.0, 1.0));
+        float blob = exp(-(dc * dc) / (uLightBlobR * uLightBlobR));
+        // window the blob to zero at its own cell faces: the fragment evaluates
+        // only its cell, so an unwindowed Gaussian truncates into a hard square
+        // edge at the lattice boundary.
+        vec3 q = abs(fract(pos * uLightCellFreq) - 0.5);
+        blob *= smoothstep(0.5, 0.3, max(q.x, max(q.y, q.z)));
+        // convective mask: the Stage-8 cloud FBM, passed in from main() (cw.x)
+        float cm = smoothstep(0.05, 0.45, cwx);
+        // latitude regime: equatorial ITCZ Gaussian vs polar clustering, by uLightPolar
+        float lw = mix(exp(-pow(abs(n.y) / 0.45, 2.0)),
+                       smoothstep(0.5, 0.85, abs(n.y)), uLightPolar);
+        // night boost: flashes read night-first (aurora nightMask) but persist by day
+        float nb = 0.35 + 0.65 * smoothstep(0.1, -0.1, diff);
+        // provinceWeight(PROV_LIGHTNING) is NEUTRAL (floor 1.0 — weather, not geology);
+        // the multiply stays for the registry fan-out convention.
+        return vec3(0.9, 0.95, 1.0) * 4.0 * uLightningStrength * provinceWeight(PROV_LIGHTNING)
+               * e * blob * cm * lw * nb;
+      }
+
       void main(){
         vec3 N = normalize(vObjN);
 
@@ -2758,6 +2823,11 @@
         // ★ F8 lava cracks — ALWAYS bypass the quantizer (the canonical Option-C survivor, §F8.c):
         // spatial Worley crack-mask glow that stays crisp over the posterized basalt.
         emissive += lavaCrackEmissive(vPos);
+        // ★ F30 lightning — transient convective flash blobs; bypasses the quantizer so
+        // each pop stays crisp over the posterized cloud deck (card §6 item 6). Strength 0
+        // (enable off, or any airless preset) skips the call: byte-identical F29 output —
+        // the F30 regression contract.
+        if (uLightningStrength > 0.0) emissive += lightningEmissive(vPos, N, diff, cw.x);
 
         // ★ Specular glint (sunglint F36 stand-in) — Blinn-Phong, only on the lit side.
         vec3 H = normalize(uLightDir + V);
@@ -3048,6 +3118,14 @@
       uPolarPhase:      { value: 0.0 },   // F29 single-cap S-lobe orientation rad (driven: hash)
       uPolarW:          { value: 0.025 }, // F29 polygon collar half-width rad — lab knob
       uPolarTint:       { value: new THREE.Color(0.35, 0.45, 0.65) },  // F29 cap tint (driven: bandTint shifted cool/teal)
+      // ── F30 lightning (card F30 §6.5) — ★ emissive-channel point process ──
+      // uLightningStrength 0 ⇒ the GLSL call is skipped entirely (byte-identical F29 render).
+      uLightningStrength:{ value: 0.0 },  // F30 master gate (driven: 1 on gas, rain factor on solid wet worlds); 0 ⇒ term skipped
+      uLightPolar:      { value: 0.0 },   // F30 latitude regime 0 equatorial ITCZ / 1 Juno polar (driven: gas gate)
+      uLightRate:       { value: 0.5 },   // F30 base flash rate cycles/s before per-cell jitter — lab knob
+      uLightDur:        { value: 0.18 },  // F30 flash window fraction of the cell cycle — lab knob
+      uLightCellFreq:   { value: 14.0 },  // F30 flash cell grid frequency — lab knob
+      uLightBlobR:      { value: 0.022 }, // F30 flash blob angular radius rad — lab knob (≤ half-cell at freq 14 so the Gaussian, not the cell window, shapes the blob)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -3232,6 +3310,13 @@
       polarW: 0.025,        // F29 polygon collar half-width rad (lab knob)
       polarTint: [0.35,0.45,0.65], // F29 cap tint (driven: bandTint shifted cool — teal-blue core lean)
       polarVortexEnabled: true, // F29 enable gate
+      lightningStrength: 0.0, // F30 master gate (driven — 1 on gas decks, rain-composition factor on solid retained-atmosphere worlds)
+      lightPolar: 0,        // F30 latitude regime: 0 equatorial ITCZ / 1 Juno polar clustering (driven: gas gate)
+      lightRate: 0.5,       // F30 base flash rate cycles/s before per-cell jitter (lab knob)
+      lightDur: 0.18,       // F30 flash window fraction of the cell cycle (lab knob)
+      lightCellFreq: 14.0,  // F30 flash cell grid frequency (lab knob)
+      lightBlobR: 0.022,    // F30 flash blob angular radius rad (lab knob — ≤ half-cell at freq 14)
+      lightningEnabled: true, // F30 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3977,6 +4062,14 @@
       // Cap tint: bandTint shifted COOL (teal-blue lean) — the Cassini gold-haze-
       // outside / blue-core two-tone (card §6 item 2).
       state.polarTint = [_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)];
+      // ── F30 lightning — flash-activity drivers (card §6.5 step 4). Gas decks
+      // always convect (Juno/Cassini: flashes are ubiquitous on h2-he giants) ⇒ 1,
+      // with the Juno POLAR clustering regime (PIA22474). Solid worlds reuse the
+      // F26 rain-composition logic: moist convection needs a retained, rain-capable
+      // atmosphere (n2-o2 1 / co2-n2 0.5 / co2 0.2 / exotic-or-none 0) — airless
+      // worlds derive 0 and the per-frame writer keeps the GLSL term skipped.
+      state.lightningStrength = _gas ? 1.0 : (_fp.atmosphere?.retained ? _rainFactor : 0);
+      state.lightPolar = _gas ? 1 : 0;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -4377,6 +4470,18 @@
     fPolar.add(state, 'polarW', 0.005, 0.06, 0.001).name('collar width');
     fPolar.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storms (shared seed)');
     fPolar.add(state, 'polarVortexEnabled').name('✓ enabled');
+    // ▸ Lightning (F30) — transient convective flash blobs in the ★ emissive
+    // channel: sparse hashed cells fire on jittered uTime windows, weighted by
+    // the Stage-8 cloud field + archetype latitude regime (ITCZ vs Juno polar).
+    // strength is the driven display; rate/duration/cell-freq/blob-radius are
+    // lab knobs. NO 🎲 — the field is uTime-driven; placement is the cell hash.
+    const fLightning = fBandsGroup.addFolder('Lightning (F30)'); fLightning.close();
+    fLightning.add(state, 'lightningStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fLightning.add(state, 'lightRate', 0.05, 2, 0.01).name('flash rate');
+    fLightning.add(state, 'lightDur', 0.02, 0.5, 0.01).name('flash duration');
+    fLightning.add(state, 'lightCellFreq', 4, 30, 0.5).name('cell density');
+    fLightning.add(state, 'lightBlobR', 0.005, 0.06, 0.001).name('blob radius');
+    fLightning.add(state, 'lightningEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -4388,6 +4493,7 @@
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
+      lightning: fLightning,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4674,6 +4780,16 @@
       uniforms.uPolarPhase.value    = state.polarPhase;
       uniforms.uPolarW.value        = state.polarW;
       uniforms.uPolarTint.value.setRGB(state.polarTint[0], state.polarTint[1], state.polarTint[2]);
+      // F30 lightning — lightningEnabled gates strength→0 ONLY (the GLSL call site
+      // keys on uLightningStrength alone, so one gate skips the whole term and
+      // restores byte-identical F29 output); the knobs pass through, preserving
+      // the derived/slider values.
+      uniforms.uLightningStrength.value = state.lightningEnabled ? state.lightningStrength : 0.0;   // ✓ enable gate
+      uniforms.uLightPolar.value    = state.lightPolar;
+      uniforms.uLightRate.value     = state.lightRate;
+      uniforms.uLightDur.value      = state.lightDur;
+      uniforms.uLightCellFreq.value = state.lightCellFreq;
+      uniforms.uLightBlobR.value    = state.lightBlobR;
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
