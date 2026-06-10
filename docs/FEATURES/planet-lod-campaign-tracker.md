@@ -16,6 +16,7 @@ during phases) | ▶️ = current
 | 1 Research fan-out (Workflow, not /goal) | 48 dossier cards committed | ✅ 2026-06-09 |
 | 2 Foundation | FOUNDATION.md verdicted | ✅ 2026-06-10 (4×🟢; chroma-speckle taste-call for Phase 7) |
 | 3 Refine built (15 cards) | all §7 verdicts + galleries | ✅ 2026-06-10 (13🟢, F03 🟡 taste-call, F08 🟡 Max-feedback fix1) |
+| **Stage-D provinces** (inserted before 4a per Max 2026-06-10) | spike → scope → build → verify; all 15 built features province-aware | ✅ built 2026-06-10 — spike `05cde11`, build `3d04110`, VERIFIED_PENDING_MAX; workstream `docs/WORKSTREAMS/stage-d-provinces-2026-06-10/`; Phase-4a+ combiners now author against the LIVE `provinceWeight(PROV_<FEATURE>)` accessor + add affinity rows to `PROVINCES` (planet-archetypes.js) AND the GLSL chain |
 | 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | ▶️ pending |
 | 4b Build atmosphere (10) | F24-F33 verdicted | pending |
 | 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | pending |

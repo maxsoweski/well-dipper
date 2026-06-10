@@ -2,24 +2,24 @@
   "workstream": "stage-d-provinces-2026-06-10",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verified",
   "authoredBy": "working-Claude, autonomous mode (Max delegated 2026-06-10); assumptions marked in intent.md",
   "acceptanceCriteria": [
     {
       "id": "AC1-distinct-areas",
-      "statement": "With the Rocky preset at distance 4, dialing uProvinceWeight 0→1 produces large-scale distinct areas: mountains and craters cluster into different regions instead of tiling the globe evenly. Pixel change ≥3% on the planet disk and the regional dichotomy is visible in before/after screenshots.",
+      "statement": "With the Rocky preset at distance 4, dialing uProvinceWeight 0\u21921 produces large-scale distinct areas: mountains and craters cluster into different regions instead of tiling the globe evenly. Pixel change \u22653% on the planet disk and the regional dichotomy is visible in before/after screenshots.",
       "verifyVia": {
         "input": "Lab on :9223, Rocky preset, d4, clouds zeroed; set uniforms.uProvinceWeight.value 0 then 1; screenshot both",
-        "observable": "Pixel-diff ≥3% (gray levels >8) between the pair; ON shot shows smooth-vs-rough regional separation comparable to spike shots stageD-spike-rocky-03/04"
+        "observable": "Pixel-diff \u22653% (gray levels >8) between the pair; ON shot shows smooth-vs-rough regional separation comparable to spike shots stageD-spike-rocky-03/04"
       },
       "layer": "integration",
       "live": true
     },
     {
       "id": "AC2-soft-fields",
-      "statement": "Province weights are soft continuous fields — no hard borders. The JS oracle mirror of provinceWeight() has bounded local variation (no step discontinuity) and stays within [floor, 1].",
+      "statement": "Province weights are soft continuous fields \u2014 no hard borders. The JS oracle mirror of provinceWeight() has bounded local variation (no step discontinuity) and stays within [floor, 1].",
       "verifyVia": {
-        "input": "npx vitest run tests/planet-archetypes.test.js — provinceWeight oracle: sample along great-circle paths with small step, assert max |Δw| per step below smoothness bound and range within [floor, 1]",
+        "input": "npx vitest run tests/planet-archetypes.test.js \u2014 provinceWeight oracle: sample along great-circle paths with small step, assert max |\u0394w| per step below smoothness bound and range within [floor, 1]",
         "observable": "New vitest oracle tests pass; suite green"
       },
       "layer": "unit"
@@ -44,7 +44,7 @@
     },
     {
       "id": "AC5-f08-subsumed",
-      "statement": "The F08 ad-hoc province mask inside lavaCrackEmissive is replaced by the shared field — no second divergent province mechanism — and the lava-crack glow still clusters into scattered centers (the Io read Max accepted in fix cycle 1) rather than a globe-tiling net.",
+      "statement": "The F08 ad-hoc province mask inside lavaCrackEmissive is replaced by the shared field \u2014 no second divergent province mechanism \u2014 and the lava-crack glow still clusters into scattered centers (the Io read Max accepted in fix cycle 1) rather than a globe-tiling net.",
       "verifyVia": {
         "input": "Static: the ad-hoc pn-noise province term is gone from lavaCrackEmissive. Live: Lava preset nightside d4, activity raised, screenshot",
         "observable": "Glow appears as clustered centers following the shared field; no uniform net"
@@ -54,7 +54,7 @@
     },
     {
       "id": "AC6-legacy-escape-hatch",
-      "statement": "With uProvinceWeight = 0 the legacy Phase-3 look is intact — the 15 Phase-3 verdicts remain the regression baseline. Spot-check, not full re-judging.",
+      "statement": "With uProvinceWeight = 0 the legacy Phase-3 look is intact \u2014 the 15 Phase-3 verdicts remain the regression baseline. Spot-check, not full re-judging.",
       "verifyVia": {
         "input": "Lab on :9223: for Rocky, Lava, Europa presets at d4 (clouds zeroed), set uProvinceWeight=0, screenshot; compare against Phase-3 reference shots",
         "observable": "No structural change vs Phase-3 baseline (allowing the known ~0.0003% terrain fizz); vitest 8/8 stays green; backtick parity stays even"
@@ -64,7 +64,7 @@
     },
     {
       "id": "AC7-cohesive-read",
-      "statement": "Walking the preset gallery, planets read as bodies with distinct geologic regions — the Moon maria-vs-highlands / Mars dichotomy feel Max described — rather than slop laid over slop.",
+      "statement": "Walking the preset gallery, planets read as bodies with distinct geologic regions \u2014 the Moon maria-vs-highlands / Mars dichotomy feel Max described \u2014 rather than slop laid over slop.",
       "verifyVia": {
         "input": "Max walks the preset gallery in the lab with provinces live",
         "observable": "Max's holistic acceptance"
@@ -74,23 +74,23 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "Reserved uProvinceWeight uniform + GLSL decl (planet-lod-lab.html, registry §1 row, index §4 #8)",
+      "Reserved uProvinceWeight uniform + GLSL decl (planet-lod-lab.html, registry \u00a71 row, index \u00a74 #8)",
       "noised() / fbmd() noise primitives (the field is built from them)",
       "Built combiners F1-F11, F17, F18, F22, F23 + lavaCrackEmissive (retrofit targets)",
       "planet-archetypes.js FEATURES registry (affinity data mirror)",
       "Spike findings 2026-06-10 (commit 05cde11): direction validated; subsume-don't-stack"
     ],
     "outputs": [
-      "provinceWeight(FEATURE_ID) GLSL accessor — the convention every Phase-4a/4b/4c combiner authors against (multiply from day 1)",
+      "provinceWeight(FEATURE_ID) GLSL accessor \u2014 the convention every Phase-4a/4b/4c combiner authors against (multiply from day 1)",
       "Province affinity data in planet-archetypes.js (vitest-pinned)",
-      "Stage-C registry row uProvinceWeight flips RESERVED → LIVE",
+      "Stage-C registry row uProvinceWeight flips RESERVED \u2192 LIVE",
       "Campaign tracker Stage-D row + Phase-4a launch card updated to province-aware authoring"
     ],
     "mustStayWorking": [
       "All 15 Phase-3 verdicted features at their verdicted look (uProvinceWeight=0 escape hatch + spot-checks)",
       "npx vitest run tests/planet-archetypes.test.js (8/8 + new oracles)",
       "planet-lod-lab.html backtick parity stays even (currently 20)",
-      "Analytic-gradient discipline: province mask treated locally-constant is documented at each multiply (relief doc §5.4)",
+      "Analytic-gradient discipline: province mask treated locally-constant is documented at each multiply (relief doc \u00a75.4)",
       "Shared tree: src/main.js warp WIP never staged; only planet-lod-lab.html, planet-archetypes.js, docs/ paths",
       "Lab GUI: existing feature folders/toggles keep working; solo() unaffected"
     ]

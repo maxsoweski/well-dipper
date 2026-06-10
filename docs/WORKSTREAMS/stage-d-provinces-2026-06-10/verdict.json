@@ -1,0 +1,59 @@
+{
+  "workstream": "stage-d-provinces-2026-06-10",
+  "commit": "3d04110",
+  "date": "2026-06-10",
+  "provenance": {
+    "headlessAndStatic": "verify-workstream workflow run wf_015f21c6 (27 agents, 3x adversarial per AC)",
+    "liveIntegration": "working-Claude main-thread drive on the :9223 GPU lab per dev-collab OS (the workflow defers live ACs to working-Claude); independent reproduction at a different yaw (2.1) than the implementation shots, real preset keys verified via driverUI.preset after discovering setPreset() silently no-ops on partial names"
+  },
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1-distinct-areas",
+      "result": "PASS",
+      "evidence": "Workflow static: PASS-leaning (opposite-polarity affinities guarantee structural anti-correlation; 19/19 drift-guards). Live (working-Claude, independent): Rocky (Earthlike) preset verified via driverUI.preset, d4, yaw 2.1, clouds zeroed — dial 0 vs 1 disk pixel change 6.29% (>8 gray levels), shots stageD-verify-rocky-11/12-d4-yaw21-dial0/1.png. Implementation-time pair at yaw 0.6 measured 12.28% (stageD-live-rocky-03/04). Visual: dial 1 shows distinct rugged-bright vs smooth-dark regions; dial 0 uniform speckle. Both exceed the >=3% AC threshold.",
+      "adversarialVotes": "0/3 sufficient at workflow time (live pending); closed by main-thread live drive"
+    },
+    {
+      "id": "AC2-soft-fields",
+      "result": "PASS",
+      "evidence": "Workflow: 19/19 vitest incl. range/Lipschitz/monotonicity/dial-0-identity/frost-neutrality on the provinceWeightFromField oracle. Method deviation noted: oracle tests the mapping over field-value domain [0,1]; spatial fields are smoothstep-of-FBM (C1 by construction), smoothness verified conditionally + visually live.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC3-per-feature-affinity",
+      "result": "PASS",
+      "evidence": "Workflow: 15 PROVINCES rows == FEATURES keys exactly; well-formedness; ejecta==craters; complementary pair (mountains +1 / craters -1 on field 0); GLSL if-chain cross-checked row-by-row by drift-guard. 19/19.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC4-no-signature-changes",
+      "result": "PASS",
+      "evidence": "Workflow: git show 3d04110 shows zero combiner-signature changes (14 declarations context-only); spike fully removed (zero uSpikeProvince/spikeProvinceField hits); 16 provinceWeight(PROV_*) call sites; the two reserved-scalar reads swapped exactly. All 6 planet-lod suites 276/276; the 4 unrelated full-run failures touch no files in this commit.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC5-f08-subsumed",
+      "result": "PASS",
+      "evidence": "Workflow static: ad-hoc pn-noise mask deleted, replaced by shared volcanic field with fix1's activity-scaled threshold preserved, zero divergent mechanisms file-wide. Live (working-Claude): Lava (hot airless) preset verified via driverUI.preset (activity 1.0, coverage 0.95 natively), d4 — dial 1 shows crack glow confined to scattered clustered centers with quiet plains between (the accepted Io read); dial 0 shows the crack net tiling the whole disk (pre-fix1, expected escape-hatch behavior). 8.83% disk change. Shots stageD-verify-lava-13/14-d4-dial1/0.png.",
+      "adversarialVotes": "0/3 sufficient at workflow time (live pending); closed by main-thread live drive"
+    },
+    {
+      "id": "AC6-legacy-escape-hatch",
+      "result": "PASS",
+      "evidence": "Workflow static: provinceWeight() returns exactly 1.0 for all ids at dial 0 (mix identity); 19/19 vitest (original 8 subsumed); backtick parity even. Live (working-Claude): dial-0 renders captured for Rocky (stageD-live-rocky-03, stageD-verify-rocky-11), Lava (stageD-verify-lava-14), Europa (stageD-live-europa-07) — terrain structure matches the Phase-3 uniform-distribution look; shader compiles clean, no console errors. FLAGGED JUDGMENT CALL (working-Claude ruling, queued for Max's lap): F08 cracks at dial 0 render the PRE-fix1 uniform net (constant 0.7 field), not the fix1 clustered look — ruled acceptable because the subsume makes fix1's clustering province behavior by design, the escape hatch's purpose is relief regression protection, and the verdicted F08 look is preserved at the DEFAULT dial 1.",
+      "adversarialVotes": "0/3 sufficient at workflow time (live pending); closed by main-thread live drive"
+    },
+    {
+      "id": "AC7-cohesive-read",
+      "result": "deferred-to-max",
+      "evidence": "UAT — Max-only. Walk the Drivers presets (Rocky, Lava, Ocean, Titan, Frozen, Europa) at default province influence 1.0; judge whether each body reads as a world with distinct geologic regions rather than uniform slop-over-slop. Try sliding the Envelope > 'province influence' dial 0->1 on one body to feel what provinces add.",
+      "adversarialVotes": "n/a"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX 3d04110 — unit PASS (workflow, 3x adversarial), integration PASS (workflow static + working-Claude live drives on :9223), UAT deferred to Max (AC7 + the flagged F08-dial-0 judgment call + affinity taste choices marked [ASSUMPTION] in intent.md)."
+}
