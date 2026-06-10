@@ -89,6 +89,23 @@ const TYPE_CONFIG = {
 const ALL_TYPES = ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'Kg', 'Gg', 'Mg'];
 const EVOLVED_TYPES = new Set(['Kg', 'Gg', 'Mg']);
 
+// Unclamped macrotask yield. With ~8ms work slices a full-sky generation
+// yields hundreds of times; nested setTimeout(0) gets clamped to 4ms after
+// 5 levels, which would add seconds of dead wait. scheduler.yield (Chrome
+// 129+) and MessageChannel both resume without the clamp while still
+// letting the browser render between slices.
+function yieldToBrowser() {
+  if (typeof scheduler !== 'undefined' && scheduler.yield) return scheduler.yield();
+  if (typeof MessageChannel !== 'undefined') {
+    return new Promise(resolve => {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = () => resolve();
+      ch.port2.postMessage(null);
+    });
+  }
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 export class HashGridStarfield {
 
   static VISIBILITY_THRESHOLD = 6.5;
@@ -111,21 +128,22 @@ export class HashGridStarfield {
   }
 
   /**
-   * Async variant — yields to the browser between each spectral-type search.
-   * Each _searchType call is hundreds of ms of grid iteration; yielding
-   * between them keeps the main thread responsive during warp FOLD.
+   * Async variant — yields to the browser on a time budget so frames keep
+   * rendering during warp FOLD. The iterator yields whenever more than
+   * `pacing.budgetMs` (default 8ms) of grid iteration has elapsed since the
+   * last yield; this driver awaits an unclamped macrotask between slices.
    */
-  static async generateAsync(galacticMap, playerPos, skyRadius = 500) {
-    const iter = this._generateIterator(galacticMap, playerPos, skyRadius);
+  static async generateAsync(galacticMap, playerPos, skyRadius = 500, pacing = null) {
+    const iter = this._generateIterator(galacticMap, playerPos, skyRadius, pacing);
     let r = iter.next();
     while (!r.done) {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await yieldToBrowser();
       r = iter.next();
     }
     return r.value;
   }
 
-  static *_generateIterator(galacticMap, playerPos, skyRadius = 500) {
+  static *_generateIterator(galacticMap, playerPos, skyRadius = 500, pacing = null) {
     const threshold = this.VISIBILITY_THRESHOLD;
     const stars = [];
 
@@ -139,14 +157,14 @@ export class HashGridStarfield {
     const cachedFeatures = [...proceduralFeatures, ...realFeatures];
 
     // Search each spectral type independently at its own grid resolution.
-    // Delegate to the iterator form so its per-shell yields bubble up —
+    // Delegate to the iterator form so its time-budget yields bubble up —
     // a single type (O-stars at 10 kpc) can otherwise dominate a chunk.
     for (const type of ALL_TYPES) {
       yield;
       const cfg = TYPE_CONFIG[type];
       yield* this._searchTypeIterator(
         galacticMap, playerPos, stars, cachedFeatures,
-        type, cfg, threshold
+        type, cfg, threshold, pacing
       );
     }
 
@@ -224,12 +242,17 @@ export class HashGridStarfield {
   }
 
   /**
-   * Generator form of _searchType. Yields every 4 radial shells so async
-   * callers get frame-rate breathing room even within a single type search.
+   * Generator form of _searchType. Yields on a time budget — whenever more
+   * than `pacing.budgetMs` has elapsed since the last yield, checked per
+   * surface cell — so async callers get frame-rate breathing room even when
+   * a single shell costs hundreds of ms (shell surface grows as r²).
    * All star data is written into `results` by reference (iterator's
    * return value is not used — the yields are for pacing only).
    */
-  static *_searchTypeIterator(galacticMap, playerPos, results, cachedFeatures, type, cfg, threshold) {
+  static *_searchTypeIterator(galacticMap, playerPos, results, cachedFeatures, type, cfg, threshold, pacing = null) {
+    const budgetMs = pacing?.budgetMs ?? 8;
+    const now = pacing?.now ?? (() => performance.now());
+    let lastYield = now();
     const px = playerPos.x, py = playerPos.y, pz = playerPos.z;
     const cellSize = cfg.cell;
     const maxDist = cfg.maxDist;
@@ -247,7 +270,6 @@ export class HashGridStarfield {
     const typeOffset = ALL_TYPES.indexOf(type) * 100003;
 
     for (let r = 0; r <= searchRadius; r++) {
-      if (r > 0 && (r & 3) === 0) yield; // yield every 4 shells
       // Distance of this shell
       const shellDist = Math.max(0, (r - 1)) * cellSize;
 
@@ -261,6 +283,11 @@ export class HashGridStarfield {
         for (let dy = -r; dy <= r; dy++) {
           for (let dz = -r; dz <= r; dz++) {
             if (Math.abs(dx) < r && Math.abs(dy) < r && Math.abs(dz) < r) continue;
+
+            if (now() - lastYield >= budgetMs) {
+              yield;
+              lastYield = now();
+            }
 
             const cx = gcx + dx;
             const cy = gcy + dy;
