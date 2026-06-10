@@ -51,8 +51,29 @@ Built — solo it on the :9223 lab Chrome (launch per memory/chrome-devtools-922
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Lava (hot airless), solo
+  `edifices`, d4/d2.5/d15 + shield↔strato A/B + 5-preset driver sweep.
+  Drivers verified live: volcanism 1.0, maxHeight 1.246 (g⁻¹), mix 0.
+  - Cone form: discrete coherent cones with lit/shadow band faces rising
+    from the terrain; countable handful per hemisphere, sparser and
+    larger than the crater field, no lattice pattern (shots 01 d4, 02
+    d2.5).
+  - Summit pit: caldera reads as a dark bowl with lit far wall — a pit,
+    never a peak — at both ends of the shield↔strato slider (summit
+    zooms; dh/dr also pinned by the relief vitest).
+  - Shield↔strato: controlled A/B at the same host — mix 0 spreads a
+    broad gentle-banded dome, mix 1 contracts it into a narrow steep
+    tight-banded cone (shots 02 vs 03).
+  - Driver sweep (read live): volcanism 0.04 Frozen (≈none) → 0.215
+    Titan → 0.262 Rocky → 1.0 Europa/Lava — monotone none→few→many;
+    maxHeight clamps at 2.0 for small bodies vs 1.11 Rocky (Olympus
+    regime). shieldStratoMix 0.7 on wet Rocky vs 0 on dry Lava.
+  - Distance: edifices dissolve smoothly into the LOD ramp by d15 (shot
+    04); no pop (FOUNDATION check 4 🟢). Silhouette break on the limb is
+    subtle at derived amplitudes but lighting never inverts.
+  - Shots: F07-edifices-01-d4-lava-shields.png, -02-d2.5-limb.png,
+    -03-d2.5-strato.png, -04-d15-scatter.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
