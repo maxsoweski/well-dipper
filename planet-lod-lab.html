@@ -165,6 +165,9 @@
       uniform int   uEmissiveBypass;
       uniform int   uSpecBypass;
       uniform int   uLimbBypass;
+      // ── F34 limb glow (card F34 — driver-true rim) ──
+      uniform vec3  uLimbColor;     // F34 rim tint (driven: per-preset atmosphere hue; pre-F34 the rim reused uBaseColor)
+      uniform float uLimbExponent;  // F34 fresnel width (driven: ~3.5 thin clear blue line, ~1.8 thick-haze halo; always > 0)
       uniform float uCloudCoverage;   // 0..1 weather-layer density (Task 7)
       uniform float uAuroraIntensity; // 0..1 night-side ring strength (Task 7)
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
@@ -772,6 +775,7 @@
       const int PROV_CLOUDS      = 29;  // F31 — neutral (atmosphere, not geology): the deck/haze/blanket rides ABOVE the rock provinces (FROST-row pattern)
       const int PROV_DAYTHERM    = 30;  // F32 — neutral (irradiation, not geology): the dayside lobe follows the star, not the rock provinces (FROST-row pattern)
       const int PROV_NIGHTTHERM  = 31;  // F33 — neutral (atmospheric emission, not geology): the night floor + silicate deck ride ABOVE the rock provinces (FROST-row pattern)
+      const int PROV_LIMB        = 32;  // F34 — neutral (global optics, not geology): the rim hugs the whole silhouette regardless of provinces (FROST-row pattern, like clouds F31)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -821,6 +825,7 @@
         else if (fid == PROV_CLOUDS)     { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_DAYTHERM)   { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_NIGHTTHERM) { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_LIMB)       { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2919,9 +2924,18 @@
         surface *= 1.0 - blanketMask;
 
         // ── Stage 9: OPTICAL — limb/terminator scattering (additive-tint ONLY; must not double-darken). [domain: Optical]
-        // Limb / atmosphere rim glow (fresnel against the geometric normal, sun-weighted).
-        float limb = pow(1.0 - max(dot(N, V), 0.0), 3.0) * uLimbStrength * (diff + 0.15);
-        vec3 limbC = uBaseColor * limb;
+        // F34 limb / atmosphere rim glow — fresnel against the GEOMETRIC normal N (the
+        // rim hugs the true silhouette; relief never drags glow inboard), sun-weighted
+        // by (diff + 0.15): lit limb brightest, night limb keeps a faint floor.
+        // Driver-true since F34: width = uLimbExponent (thin clear atmosphere ~3.5 =
+        // narrow Earth blue line; thick-haze class ~1.8 = fat Titan/Venus halo), tint
+        // = uLimbColor (per-preset atmosphere hue — no longer the surface uBaseColor).
+        // The fresnel base is clamped to [0,1] and the exponent stays positive, so
+        // pow() never hits the spec-undefined region. Strength 0 (enable off, or any
+        // airless preset) zeroes the whole additive term: byte-identical pre-F34
+        // output — the F34 regression contract.
+        float limb = pow(1.0 - max(dot(N, V), 0.0), uLimbExponent) * uLimbStrength * (diff + 0.15);
+        vec3 limbC = uLimbColor * limb * provinceWeight(PROV_LIMB);
         limbC *= veilTint;    // F16 — the lit limb reads through the haze (card §6 item 5)
         limbC = (uLimbBypass == 1) ? limbC : posterize(limbC, uLevels, fc, 0.4, uDitherMode);
 
@@ -3021,6 +3035,9 @@
       uEmissiveBypass: { value: 0 },     // 1 = term skips the quantizer (smooth glow)
       uSpecBypass:     { value: 0 },
       uLimbBypass:     { value: 0 },
+      // ── F34 limb glow (driver-true rim — card §6.5 step 2) ──
+      uLimbColor:      { value: new THREE.Color(0.45, 0.65, 1.0) },  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
+      uLimbExponent:   { value: 3.5 },   // F34 fresnel width (driven: thin clear ~3.5 / thick-haze ~1.8)
       uCloudCoverage:  { value: 0.0 },   // weather-layer density (driven by deriveUniforms)
       uAuroraIntensity:{ value: 0.0 },   // night-side ring strength (driven by deriveUniforms)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
@@ -3319,6 +3336,71 @@
     scene.add(planet);
 
     // ─────────────────────────────────────────────────────────────────────────
+    // F34 / F31e — detached haze shell: a slightly enlarged BACK-FACE sphere
+    // drawn additively behind the planet (the Crying Suns second-pass approach,
+    // card §4 ladder rung 2). The opaque planet depth-occludes the shell's inner
+    // disc, leaving only the 1.0R..1.15R annulus — a halo that extends PAST the
+    // solid silhouette, which the single-sphere Stage-9 rim cannot do. The
+    // fragment shader quantizes its own fresnel into 1-2 concentric arcs (the
+    // Titan detached-haze layer cake); intensity = state.limbHazeShell, derived
+    // > 0 ONLY on the thick-haze class (Titan / Venus / Sub-Neptune) — every
+    // other preset keeps the mesh invisible (the F34 regression contract; the
+    // per-frame writer also hides it whenever limbEnabled is off). World-space:
+    // the halo is rotation-independent, so it is NOT parented to the spinning
+    // planet; sun-weighting reads the static WORLD_LIGHT directly.
+    // ─────────────────────────────────────────────────────────────────────────
+    const hazeShellUniforms = {
+      uShellColor:     { value: new THREE.Color(1.0, 0.55, 0.22) },   // synced to state.limbColor per frame
+      uShellIntensity: { value: 0.0 },                                // state.limbHazeShell (0 default = invisible)
+      uShellLight:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
+    };
+    const hazeShellMat = new THREE.ShaderMaterial({
+      uniforms: hazeShellUniforms,
+      vertexShader: /* glsl */ `
+        varying vec3 vNormalW;
+        varying vec3 vWorldPos;
+        void main(){
+          vNormalW = normalize(mat3(modelMatrix) * normal);
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldPos = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform vec3  uShellColor;
+        uniform float uShellIntensity;
+        uniform vec3  uShellLight;
+        varying vec3 vNormalW;
+        varying vec3 vWorldPos;
+        void main(){
+          vec3 N = normalize(vNormalW);
+          vec3 V = normalize(cameraPosition - vWorldPos);
+          // Back faces only: dot(N, V) runs from 0 at the shell's own silhouette
+          // down to ~-0.49 at the planet-occluded inner edge (cos asin(1/1.15)),
+          // so -dot * 2.0 remaps the visible annulus to ~0..1; t=1 hugs the
+          // solid limb, t=0 is the outer shell edge. No pow() anywhere.
+          float t = clamp(-dot(N, V) * 2.0, 0.0, 1.0);
+          // 1-2 concentric DETACHED arcs (the F31e Titan layers). Review M1:
+          // a zero band must sit adjacent to the limb so the arcs read as
+          // detached rings, not a thickened rim. From limb outward:
+          // gap (t>0.85) - bright arc - gap - dim arc - fade at outer edge.
+          float tq = (step(0.55, t) - step(0.85, t))
+                   + 0.5 * (step(0.10, t) - step(0.35, t));
+          // Sun-weighting mirrors the Stage-9 rim's (diff + 0.15) convention.
+          float w = clamp(dot(N, uShellLight), 0.0, 1.0) * 0.85 + 0.15;
+          gl_FragColor = vec4(uShellColor * tq * w * uShellIntensity, 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      transparent: true,          // sorts AFTER the opaque planet (depth-occlusion of the inner disc)
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const hazeShell = new THREE.Mesh(new THREE.SphereGeometry(R * 1.15, 96, 96), hazeShellMat);
+    hazeShell.visible = false;    // per-frame writer shows it ONLY when limbEnabled && limbStrength > 0 && limbHazeShell > 0
+    scene.add(hazeShell);
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Low-res render target + nearest-upscale blit — FAITHFUL to production.
     //
     // RetroRenderer.js renders scene objects into a low-res buffer
@@ -3509,6 +3591,10 @@
       thermalOcclusion: 0.6,// F33 silicate-cloud occlusion strength (lab knob — darkens the night glow, never brightens)
       daysideThermalEnabled: true,   // F32 enable gate — off collapses uDayTempK onto the night floor at the per-frame writer
       nightsideThermalEnabled: true, // F33 enable gate — off zeroes uNightTempK + occlusion at the per-frame writer (floor fades to black)
+      limbEnabled: true,    // F34 enable gate — off zeroes uLimbStrength AND hides the F31e haze shell at the per-frame writer
+      limbExponent: 3.5,    // F34 fresnel width (driven: thin clear ~3.5 narrow blue line / thick-haze ~1.8 fat halo)
+      limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
+      limbHazeShell: 0.0,   // F31e detached-shell intensity (driven: > 0 ONLY on the thick-haze class — Titan/Venus/Sub-Neptune)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3778,11 +3864,11 @@
     fEnv.add(state, 'ditherMode', { Bayer: 0, 'IGN/triangular': 1 }).name('dither mode');
     fEnv.add(state, 'emissive', 0, 1, 0.01).name('emissive (lava)');
     fEnv.add(state, 'specStrength', 0, 1, 0.01).name('specular (ocean/ice)');
-    fEnv.add(state, 'limbStrength', 0, 1, 0.01).name('limb glow');
+    // F34: the 'limb glow' slider + 'limb bypass quantizer' toggle MIGRATED to the
+    // registered "Limb glow (F34)" folder (Surface — Optical) — no duplicate GUI.
     fEnv.add(state, 'provinceWeight', 0, 1, 0.01).name('province influence');
     fEnv.add(state, 'emissiveBypass').name('emissive bypass quantizer');
     fEnv.add(state, 'specBypass').name('spec bypass quantizer');
-    fEnv.add(state, 'limbBypass').name('limb bypass quantizer');
 
     // ▸ Drivers (open) — "types are driver-bundle PRESETS, not shader branches" (spec §2.D).
     // A preset is a physics bundle; deriveUniforms() maps it to semantic uniforms with NO
@@ -3856,13 +3942,35 @@
       // deriveUniforms: lavaActivity 0.0052 — under the Jovian row's own 0.007.
       'Hot Jupiter (locked giant)': { radiusEarth:13, massEarth:400, rotationHours:80, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:150000, composition:{ironFraction:0.03,density:1.3,volatileFraction:0.04}, T_eq:1400, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:{color:[0.55,0.38,0.28],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
     };
+    // ── F34 limb glow — per-preset rim hue (card §6.5 step 3: "a small per-preset/
+    // archetype map"). The variant spread the old uBaseColor tint could not express:
+    // Earth-blue line on temperate/ocean worlds, Titan tholin orange, Venus pale
+    // sulfur, ice-giant blue, warm gas-deck tans. Airless presets are deliberately
+    // ABSENT — they fall back to uBaseColor and stay inert behind limbStrength 0.
+    // Review N6: the uBaseColor fallback reads a possibly-STALE previous-preset
+    // value during applyDrivers — any NEW atmospheric preset MUST get a row here.
+    const LIMB_COLOR_BY_PRESET = {
+      'Rocky (Earthlike)':          [0.45, 0.65, 1.00],   // Earth's razor-thin layered blue line
+      'Ocean (temperate)':          [0.40, 0.62, 1.00],   // deeper Rayleigh blue over the water world
+      'Eyeball (locked temperate)': [0.50, 0.66, 1.00],   // n2-o2 like Rocky — same blue family
+      'Titan (methane seas)':       [1.00, 0.55, 0.22],   // multi-layer tholin haze orange (Cassini)
+      'Venus (sulfuric shroud)':    [0.95, 0.88, 0.62],   // pale sulfur / H2SO4 cream
+      'Gas giant (Jovian)':         [0.88, 0.72, 0.52],   // warm NH3 deck tan
+      'Gas giant (Saturnian)':      [0.92, 0.84, 0.62],   // paler gold haze
+      'Ice giant (Neptunian)':      [0.45, 0.60, 1.00],   // methane-absorption ice-giant blue
+      'Sub-Neptune (hazy)':         [0.82, 0.74, 0.62],   // photochemical haze warm grey (GJ 1214 b)
+      'Hot Jupiter (locked giant)': [0.80, 0.50, 0.32],   // dusty sodium-scatter warm rim
+    };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
       state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;
       uniforms.uEmissive.value = u.emissive;
       uniforms.uSpecStrength.value = u.specStrength;
-      uniforms.uLimbStrength.value = u.limbStrength;
+      // uLimbStrength is now F34-owned: the core derivation is POST-PROCESSED in
+      // the F34 block below (haze-class fork + hue map) and written by the
+      // per-frame writer behind the limbEnabled gate — no direct uniform write
+      // here anymore (card §6.5 step 3, the F11/F31 precedent).
       // auroraIntensity / craterCells / atmosphereModel consumed by Task 7 + Stage C.
       // cloudCoverage is now F31-owned: the core derivation is POST-PROCESSED in the
       // F31 block below (regime + rebalance) and written by the per-frame writer —
@@ -4355,6 +4463,30 @@
       // unshaped glow UNDER the substellar-shaped one (double-count). Lava keeps
       // its stand-in for F41 (airless ⇒ not _hotJup).
       if (_hotJup) state.emissive = 0;
+      // ── F34 limb / atmosphere rim glow — driver derivation (card §6.5 step 3;
+      // post-process HERE per the F11 precedent — core.js untouched). The core's
+      // hasAtmo gate stays the master: u.limbStrength is 0.7 on every retained
+      // atmosphere and 0 airless (state.limbStrength picked it up at the top of
+      // applyDrivers), so Frozen/Lava/Europa keep a hard dark silhouette. This
+      // block picks the VARIANT (card §1): the thick-haze class — Venus blanket
+      // (regime 3), sub-neptune photochemical haze (regime 2), and the cold solid
+      // tholin world (Titan: retained, T_eq < 150 K, >= 1 bar, NOT h2-he — the
+      // gas giants' cold clear decks must stay out) — gets the fat detached halo
+      // (exponent ~1.8, strength x1.3); every other atmosphere keeps the narrow
+      // blue-line rim (exponent ~3.5).
+      const _thickHaze = _cloudRegime === 2 || _cloudRegime === 3 ||
+        (!_gas && !!_fp.atmosphere?.retained && (_fp.T_eq ?? 288) < 150 && (_fp.atmosphere?.pressure ?? 0) >= 1.0);
+      state.limbExponent = _thickHaze ? 1.8 : 3.5;
+      if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);
+      // Rim hue from the per-preset map; fallback = the uBaseColor rocky tone (the
+      // pre-F34 tint — airless presets land here and stay inert behind strength 0).
+      const _lc = LIMB_COLOR_BY_PRESET[driverUI.preset];
+      state.limbColor = _lc ? _lc.slice()
+        : [uniforms.uBaseColor.value.r, uniforms.uBaseColor.value.g, uniforms.uBaseColor.value.b];
+      // F31e detached haze shell: > 0 ONLY for the thick-haze class, and only when
+      // the rim itself fires — every clear/airless preset keeps the mesh invisible
+      // (the per-frame writer keys visibility on this value + limbEnabled).
+      state.limbHazeShell = (_thickHaze && state.limbStrength > 0) ? 0.6 : 0.0;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -4798,6 +4930,23 @@
     fThermalNight.add(state, 'nightsideThermalEnabled').name('✓ enabled');
     fThermal.add(state, 'daysideThermalEnabled').name('✓ enabled');
 
+    // ▸ Surface — Optical: the P26 scattering family (F34 limb; F35 terminator +
+    // F36 sunglint land here later). First registered Optical feature.
+    const fOpticalGroup = guiRight.addFolder('Surface — Optical'); fOpticalGroup.open();
+    // ▸ Limb glow (F34) — fresnel rim against the geometric silhouette + the F31e
+    // detached haze shell (back-face second pass, thick-haze worlds only). strength /
+    // exponent / color / shell are driven (hasAtmo gate, haze-class fork, per-preset
+    // hue map, .listen()); the bypass toggle is the lab knob. The strength slider +
+    // bypass toggle MIGRATED here from the Envelope folder (no duplicate GUI). NO 🎲
+    // — the rim is view-geometry, nothing is placed.
+    const fLimb = fOpticalGroup.addFolder('Limb glow (F34)'); fLimb.close();
+    fLimb.add(state, 'limbStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fLimb.add(state, 'limbExponent', 1, 6, 0.05).name('exponent (driven)').listen();
+    fLimb.addColor(state, 'limbColor').name('rim color (driven)').listen();
+    fLimb.add(state, 'limbHazeShell', 0, 1, 0.01).name('haze shell (driven)').listen();
+    fLimb.add(state, 'limbBypass').name('limb bypass quantizer');
+    fLimb.add(state, 'limbEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -4810,6 +4959,7 @@
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds,
       daysideThermal: fThermal, nightsideThermal: fThermalNight,
+      limb: fLimb,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4978,7 +5128,16 @@
       uniforms.uDitherMode.value = state.ditherMode;
       uniforms.uEmissive.value = state.emissive;
       uniforms.uSpecStrength.value = state.specStrength;
-      uniforms.uLimbStrength.value = state.limbStrength;
+      // F34 limb glow — limbEnabled gates strength→0 (the Stage-9 rim multiplies by
+      // uLimbStrength, so one gate zeroes the whole additive term and restores
+      // byte-identical pre-F34 output) AND hides the F31e haze shell; airless
+      // presets derive strength 0, so the same contract holds with the enable on.
+      uniforms.uLimbStrength.value = state.limbEnabled ? state.limbStrength : 0.0;   // ✓ enable gate
+      uniforms.uLimbExponent.value = state.limbExponent;
+      uniforms.uLimbColor.value.setRGB(state.limbColor[0], state.limbColor[1], state.limbColor[2]);
+      hazeShellUniforms.uShellColor.value.setRGB(state.limbColor[0], state.limbColor[1], state.limbColor[2]);
+      hazeShellUniforms.uShellIntensity.value = state.limbHazeShell;
+      hazeShell.visible = !!(state.limbEnabled && state.limbStrength > 0 && state.limbHazeShell > 0);
       uniforms.uProvinceWeight.value = state.provinceWeight;
       uniforms.uSeaLevel.value = state.lakesEnabled ? state.seaLevel : -1.0;   // ✓ enable gate (preserves slider value)
       uniforms.uDeltaDensity.value = state.deltasEnabled ? state.deltaDensity : 0.0;   // ✓ enable gate

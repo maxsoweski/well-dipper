@@ -102,6 +102,7 @@ const GLSL_NAME = {
   weatherBands: 'PROV_WEATHER', greatSpot: 'PROV_GREATSPOT', stormTrain: 'PROV_STORMTRAIN',
   polarVortex: 'PROV_POLAR', lightning: 'PROV_LIGHTNING', clouds: 'PROV_CLOUDS',
   daysideThermal: 'PROV_DAYTHERM', nightsideThermal: 'PROV_NIGHTTHERM',
+  limb: 'PROV_LIMB',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

@@ -83,8 +83,11 @@ day/twilight hue mix vs sun (F35 terminator-gradient owns sun-hue coupling);
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4c heavy loop)
+- Evidence (repo root, gitignored): `F34-rocky-d18.png` (blue rim, half-peak width 0.06R hugging the silhouette), `F34-rocky-bypass-off/on.png` (quantized histogram spikes 341/249/183 vs smooth 123/90/82), `F34-titan-d18.png` + `F34-titan-d8.png` (orange fat rim + detached shell: rim peak 108.5 → gap 0.8 → bright arc 29.6 → gap 4.0 → dim arc 16.4 → dark by 1.17R), `F34-rocky-d2.5.png` (close pass: band 0.058R, zero below 0.85R).
+- §6 checklist: rim-band 🟢 (0.06R, not a wash) · sun-weighting 🟢 (lit/night peak ratio 9.4×, blue-only night floor) · posterize layers 🟢-caveat (steps measurable but read as DITHERED bands, not crisp concentric rings, at d18 disc size — taste fork a) · airless gate 🟢 (Frozen/Lava limb+2px lum 0.1) · relief anchor 🟢 (perturb 0.55→1.0, rim stays r 0.90–1.01, zero inboard) · close-pass 🟢 · variant spread 🟢 (Titan exp 1.8/strength 0.91/orange vs Rocky exp 3.5/0.7/blue; Neptunian ice-blue) · F31e companion shell 🟢 (Titan/Venus/Sub-Neptune arcs 40.9/35.0/29.6 with gaps; Ocean/Jovian/Neptunian shell-zone max 0.1).
+- Live drivers: Rocky/Ocean/Eyeball 0.70/3.5/shell 0 · Titan/Venus/Sub-Neptune 0.91/1.8/shell 0.6 (orange/pale-sulfur/haze-grey) · gas ×4 0.70/3.5/shell 0 · airless 0. Thick-haze gate data-driven: `_cloudRegime 2||3 || (!gas && retained && T_eq<150 && pressure>=1)`.
+- Tweaks applied: 0 of 3 cycles — first live render passed all items (review M1 fixed pre-verify).
+- Code review (fable): APPROVE-WITH-FIXES. M1 MAJOR fixed pre-verify: shell was 1.04R with the bright bucket flush against the rim (sub-pixel at judging distances + the F31e smear failure) → 1.15R, remap 2.0, explicit gap-bright-gap-dim windows. N6 staleness comment added to LIMB_COLOR_BY_PRESET. Implementer deviations accepted: shell sun-weighting, full 10-preset color map, new "Surface — Optical" GUI group (home for F35/F36).
+- Taste forks for Max's lap: (a) bypass-off rim steps read dithered rather than crisp-concentric at d18 (Earth "layer cake" only partially expressed; crisper would need Bayer excluded from the rim term); (b) the rim re-tint changes EVERY atmosphere preset's default look vs pre-F34 (uBaseColor → atmosphere color, exp 3 → 3.5) — intended per §6.5 but globally visible; (c) shell arc radii/intensity (1.15R, 0.6) authored, not derived.
+- Status: VERIFIED_PENDING_MAX
