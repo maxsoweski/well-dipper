@@ -2513,6 +2513,12 @@ function populateSettingsUI() {
       input.checked = !!document.fullscreenElement;
       return;
     }
+    if (key === 'soundEnabled') {
+      // Session-only, not in Settings — reflects SoundEngine's live mute
+      // state (starts muted every load; see SoundEngine constructor).
+      input.checked = !soundEngine.muted;
+      return;
+    }
     const value = settings.get(key);
     if (input.type === 'checkbox') {
       input.checked = value;
@@ -2594,6 +2600,9 @@ function applySettingChange(key, value) {
       soundEngine.updateVolumes();
       musicManager.updateVolumes();
       break;
+    case 'soundEnabled':
+      soundEngine.setMuted(!value);
+      break;
   }
 }
 
@@ -2606,7 +2615,8 @@ function applySettingChange(key, value) {
       const key = input.dataset.setting;
       if (!key) return;
 
-      if (key === 'fullscreen') {
+      if (key === 'fullscreen' || key === 'soundEnabled') {
+        // Session-only keys — never written to Settings/localStorage
         applySettingChange(key, input.checked);
         return;
       }

@@ -29,6 +29,23 @@ export class SoundEngine {
     this._sfxGain = null;
     this._buffers = {};   // name → AudioBuffer
     this._loading = false;
+    // Session-only mute, ON at every page load (Max, 2026-06-10: the app
+    // opens silent; sound is opt-in per session via the settings checkbox).
+    // Deliberately NOT a persisted Settings key — persisting the unmute
+    // would make the next open loud again. Saved volume levels are kept;
+    // mute zeroes the master gain, which music/stings also route through.
+    this._muted = true;
+  }
+
+  /** Session mute state (true = silent). */
+  get muted() {
+    return this._muted;
+  }
+
+  /** Set session mute and apply it to the master gain. */
+  setMuted(muted) {
+    this._muted = !!muted;
+    this.updateVolumes();
   }
 
   /** Lazily create AudioContext (browsers require user gesture first). */
@@ -67,7 +84,7 @@ export class SoundEngine {
   updateVolumes() {
     if (!this._ctx) return;
     const s = this._settings;
-    this._masterGain.gain.value = s.get('masterVolume');
+    this._masterGain.gain.value = this._muted ? 0 : s.get('masterVolume');
     this._sfxGain.gain.value = s.get('sfxVolume');
   }
 
