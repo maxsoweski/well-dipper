@@ -47,6 +47,20 @@ Unbuilt — recommended recipe once built: register in planet-archetypes.js FEAT
 - [ ] On eyeball worlds, does the banding reorganize around the substellar point (rings/convergence toward the pupil) rather than the spin axis?
 - [ ] At full-disk distance does zonation stay SUBORDINATE to continents (Earthlike subtlety), while close-up reveals individual storm clusters along the convergence lines?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+The terrestrial sibling of F24: a latitude-indexed analytic bias curve added into the EXISTING Stage-8 cloud threshold (the production Planet.js:588-610 three-lobe reference), with the latitude input recursively domain-warped so belt edges shred into fronts. Cloud/albedo only — the bands are weather OVER the ground, never the surface.
+
+1. **Data:** FEATURES `weatherBands` { label 'Weather bands (F26)', enableKey 'weatherBandsEnabled', archetypes ['tectonic-terrestrial'] } (card §5 verbatim; Titan still gets driver-active bands — archetype only filters the GUI). PROVINCES `weatherBands` { field: 2, polarity: +1, floor: 1.00 } neutral (climate). PROV_WEATHER = 24 + GLSL row + GLSL_NAME line.
+2. **GLSL — latBias(lat):** three lobes from the production reference: ITCZ Gaussian exp(−(lat−shift)²/(2·0.08²))·0.6 (center shifted by uWeatherItczShift, the D3 term), storm-track Gaussian at ±0.55 width 0.15 ·0.8, polar smoothstep(0.65,0.85,|lat|)·0.4; implicit subtropical trough between lobes. Cell spacing scales with uWeatherCells (D8): storm-track center ≈ 0.55·(3/cells)… keep v1 simple — cells slider scales the storm-track Gaussian's center+width pair.
+3. **GLSL — front shredding:** warp the latitude input before latBias: lat' = sinLat + uWeatherWarp·(fbm warp, reuse the bandWarpField pattern at its own offset/frequency) — band edges become fronts, not drawn circles (§6 item 3).
+4. **Eyeball switch:** latCoord = mix(sinLat-axis, substellar-axis coordinate (vSubstellarAngle remapped), uWeatherLocked) — driven, locked×hasAtmo. No current preset exercises it; verify by a manual uniform poke, log as deferred-to-profiles.
+5. **Hook (Stage 8, regression-safe):** current term is `cloud = smoothstep(0.15, 0.5, cw.x) · uCloudCoverage · (diff+0.05)`. F26 adds INSIDE the threshold input: `cw.x + uWeatherStrength · (latBias(lat')·0.45 − 0.12)` — wet belts push the FBM over threshold, the −0.12 dries the troughs below baseline (clear subtropical gaps, §6 item 2). uWeatherStrength 0 ⇒ argument identical ⇒ byte-identical cloud layer (regression contract). Density stays lighting-routed via the existing (diff+0.05) factor — survives posterize as dither (§6 item 5).
+6. **Drivers (applyDrivers):** weatherStrength = NOT _gas AND atmosphere retained ? smoothstep-scaled by the preset's rain factor (n2-o2 1.0 / co2-n2 0.5 / co2 0.2) : 0 — Rocky/Ocean/Titan get bands, Lava/Frozen/Europa/gas get 0 (pre-check all 9). weatherCells from rotationHours (24h → 3); itczShift from u.frostLatitudeBias (the existing D3 proxy) ·0.25; weatherLocked = locked && retained. weatherOffset 🎲 reset.
+7. **Wiring:** uniforms uWeatherStrength/uWeatherCells/uWeatherItczShift/uWeatherLocked + lab knobs uWeatherWarp/uWeatherDry; state, per-frame gated writes, GUI folder 'Weather bands (F26)' (new group 'Atmosphere — Weather' or under Bands group — follow the existing group layout), featureFolders.
+
+v1 scope cuts: seasonal ITCZ migration (animated D3) → static shift only; curl-advected storm cells → F28/F31; cloud terminator shadows → F31; double-ITCZ variant → out; eyeball preset → Phase 6 profiles.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
