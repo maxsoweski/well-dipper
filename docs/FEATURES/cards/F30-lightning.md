@@ -47,6 +47,19 @@ Unbuilt — recipe for once it lands. Register in planet-archetypes.js FEATURES 
 - [ ] Is the pattern deterministic on re-approach — same seed + same uTime gives the same flash field (no stateful-buffer drift)?
 - [ ] If the [subtle] sprites variant is enabled: does it read as a barely-there red tick ABOVE a flash near the limb — noticed only when looked for, never competing with the flashes themselves?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+Greenfield, self-contained: a spatio-temporal point process summed into the ★ emissive bypass channel (the aurora/lavaCrackEmissive pattern) — deterministic from (position, uTime), no buffers, no bolts (the §4 conclusion: at lab distances lightning is a sub-second diffuse glow blob).
+
+1. **Data:** FEATURES `lightning` { label 'Lightning (F30)', enableKey 'lightningEnabled', archetypes ['gas-giant','tectonic-terrestrial'] }. PROVINCES neutral { field: 2, +1, 1.00 }. PROV_LIGHTNING = 28 + row + GLSL_NAME.
+2. **GLSL `lightningEmissive(vPos, N, diff)`** added to the ★ emissive sum AFTER the posterize split, gated `uLightningStrength > 0`: hash a sparse cell grid (floor(n·uLightCellFreq), reuse hash33); per fragment evaluate its cell + nothing fancier (one cell, blobs are small); cell flash phase ph = fract(uTime·uLightRate·(0.7+0.6·h1) + h2) — per-cell rate jitter ⇒ asynchronous, no metronome (§6 item 3); envelope e = (ph < uLightDur) ? exp(−5·ph/uLightDur) : 0 (sharp attack, fast decay); spatial blob = exp(−d²/r²) around the cell-center direction, r ~0.02-0.04 rad (small vs parent storm, §6 item 5); convective mask = smoothstep on the SAME Stage-8 cloud FBM field sampled at the cell center-ish (sample at fragment pos — cheaper, close enough) × archetype latitude weight: mix(equatorial band exp(−(|y|/0.45)²), polar weight smoothstep(0.5,0.85,|y|), uLightPolar) — Juno polar clustering on gas, ITCZ clustering on terrestrial (§6 item 2 + PIA22474); night boost = (0.35 + 0.65·nightMask) with nightMask = smoothstep(0.1,−0.1,diff) (reads night-first but doesn't vanish by day, §6 item 4). Color: cool white (0.9,0.95,1.0) ×2-ish intensity into the emissive sum.
+3. **Uniforms:** uLightningStrength (driven gate), uLightPolar (driven 0/1), uLightRate, uLightDur, uLightCellFreq, uLightBlobR (lab knobs). Per-frame write gated on lightningEnabled (strength→0 kills the family).
+4. **Drivers (applyDrivers):** lightningStrength = _gas ? 1 : (atmosphere retained ? rainFactor : 0) — Rocky/Ocean/Titan get terrestrial lightning, Lava/Frozen/Europa 0, gas 1. lightPolar = _gas ? 1 : 0.
+5. **GUI:** folder 'Lightning (F30)' in a Storms/Bands-adjacent spot — strength display .listen(), rate/duration/cell-freq knobs, ✓ LAST (no 🎲 — the field is uTime-driven, placement is the cell hash). featureFolders.
+6. **Verification (temporal feature — single screenshots can't):** burst of 4+ frames ~1 s apart on the night side; confirm flashes appear/decay/move between frames; A/B = enabled vs disabled across the SAME burst pattern (or strength 0); determinism is by construction (pure function of pos+uTime) — note, uTime keeps running so exact-frame reproduction isn't screenshot-testable; verify the function form instead.
+
+v1 scope cuts: sprites variant ([subtle], card item 8) → not built, logged; storm-spot proximity weighting (F27/F28 coupling) → latitude+cloud mask only, integration-phase candidate; bolt geometry → never (per §4).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
