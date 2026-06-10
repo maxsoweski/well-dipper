@@ -49,8 +49,31 @@ Built — solo it on the :9223 debug Chrome (launch per memory/chrome-devtools-9
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Rocky (Earthlike), solo
+  `canyons`, d20/d8/d3 + count-3/depth-0.25 exaggeration + crosscut and
+  early-out checks. Drivers verified live: chasmaDepth 0.1155 (≈ card's
+  0.12), count 1 default.
+  - Great-circle trench: one continuous linear gash tracks across the
+    disc and over the limb at d8; near-tangent plane geometry shows both
+    visible segments of the same circle (shot 01).
+  - Cross-section: lit wall vs shadowed wall in opposite posterize bands
+    with a floor band between — no inside-out lighting (shot 03 d3;
+    profile sign also pinned by the grabenProfile vitest oracle).
+  - Distance: survives as a thin dark line at d20 (shot 04); widens
+    smoothly into floor+walls on approach across d20→8→3 stills (no-pop
+    ramp covered by FOUNDATION check 4 🟢).
+  - Crossings: count=3 at depth 0.25 — superposed troughs, deeper at
+    intersections, no artifacts (shot 02).
+  - Crosscut: with mountains re-enabled, trenches visibly carve through
+    the ridge fabric, offsetting it (shot 05) — the P2 age cue.
+  - Seed stability: two fully independent setPreset→solo→applyDrivers
+    cycles produced pixel-identical d8 frames (0 px diff) — rift axes
+    deterministic per seed.
+  - Early-out: chasmaDepth=0 (enabled) vs canyonsEnabled=false are
+    pixel-identical (0 px diff, clouds zeroed) — no residue.
+  - Shots: F04-canyons-01-d8.png, -02-d8-count3-deep.png,
+    -03-d3-walls.png, -04-d20-line.png, -05-d6-crosscut-mountains.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
