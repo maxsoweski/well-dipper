@@ -49,8 +49,28 @@ Built — solo it on the :9223 debug Chrome (chrome-devtools MCP, per well-dippe
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Titan (methane seas) +
+  Rocky polar check, solo `glacial`, d8/d3. Drivers verified live:
+  Titan strength 0.802 / vigor 0.822 / basinThresh 0.15.
+  - Mantle: smooth bright ice fill ponds in low-slope basins while
+    steep terrain keeps its rough detail — the New-Horizons
+    smooth-vs-rough two-tone contrast, posterize-native (shots 01 d8,
+    02 d3). On/off A/B at d3 changes 17.7% of the frame; off restores
+    base cleanly (shot 03).
+  - Lineations: flow-aligned streaking within the mantle, regionally
+    coherent (shot 02); slope-gated so basin interiors stay smooth.
+  - Cold-cap confinement: forced strength on warm Rocky confines
+    glaciation to the polar cap with a soft edge (shot 04, pitch 0.9);
+    Titan's cold T_eq glaciates broadly (shot 01).
+  - Volatile-budget driver (objective): strength 0 Rocky / 0.394 Frozen
+    / 0.802 Titan / 1.0 Europa — tracks vf through the 0.15→0.5
+    smoothstep as designed.
+  - 1/g vigor driver (objective): 0.45 Rocky (1 g) vs 0.76–0.82 on the
+    small icy bodies.
+  - Distance fade/temporal stability per FOUNDATION checks 3 & 4 🟢.
+  - Shots: F17-glacial-01-d8-titan.png, -02-d3-lineations.png,
+    -03-d3-off-AB.png, -04-d8-rocky-polar.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
