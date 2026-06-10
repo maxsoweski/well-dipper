@@ -61,14 +61,15 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Next 1-3 queued (in priority order)
 
-0. **`planet-refinement-campaign` — Phase 1 DONE 2026-06-09 (`407bae7` +
-   `9bd4dd1`): all 48 research dossier cards written, URL-audited (9/9
-   spot-checks real), committed; tracker flipped Phase 2 ▶️.** Next: Max
-   starts a FRESH session and pastes the tracker's **Phase-2 `/goal` launch
-   card** (foundation pass); phases 2–6 run autonomously, Phase 7 is Max's
-   review lap. Serves SCREENSAVER-MVP visual polish (planets = hero
-   objects). Runs parallel to warp on shared tree — explicit-path staging
-   only.
+0. **`planet-refinement-campaign` — Phase 2 DONE 2026-06-10 (`f9ab594`…
+   `212ca03`): all 4 FOUNDATION substrate checks verdicted 🟢 (continents,
+   lighting, posterize+Bayer F50, LOD ramp F53), 17 shots in cards/shots/,
+   no code fixes needed; one `taste-call` (chroma speckle at posterize band
+   boundaries) queued for Phase 7. Tracker flipped Phase 3 ▶️.** Next: Max
+   starts a FRESH session and pastes the tracker's **Phase-3 `/goal` launch
+   card** (refine-built pass, 15 cards). Serves SCREENSAVER-MVP visual
+   polish (planets = hero objects). Runs parallel to warp on shared tree —
+   explicit-path staging only.
 1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
 2. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
