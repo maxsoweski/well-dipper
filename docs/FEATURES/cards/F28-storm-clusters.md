@@ -47,6 +47,20 @@ Unbuilt — recommended recipe once built. Prereqs: a gas DRIVER_PRESET (e.g. 'G
 - [ ] At full-disk distance (~20 radii) do the 1-3 storms stay individually countable, without 4x4 Bayer shimmer fusing them into the band pattern?
 - [ ] Are spot positions seed-stable on re-approach (same band, same longitude), so the planet reads as the same world every visit?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+F27 landed the whole shader mechanism (uStorm* vec4[8] carriage + stormSwirl + stormColTerms, commit c5c1b86) — F28 is mostly DATA: fill slots 1..7 with seed-derived storm families and restructure the per-frame writer to compose F27 (slot 0) + F28 (slots 1+) under separate enables. GLSL ideally unchanged.
+
+1. **Data:** FEATURES `stormTrain` { label 'Storm clusters (F28)', enableKey 'stormTrainEnabled', archetypes ['gas-giant'] } (NOT the card's 'banded-gas'). PROVINCES `stormTrain` neutral { field: 2, polarity: +1, floor: 1.00 }. PROV_STORMTRAIN = 26 + row + GLSL_NAME line. (The GLSL row exists for the vitest mirror even though the storm loop reads PROV_GREATSPOT's weight — both ≡ 1; note it in a comment.)
+2. **Variant by the vigor ramp (one mechanism, three reads):** vigor ≥ 0.7 (Jovian) → PEARL TRAIN: 4-6 bright pale ovals sharing one belt latitude, quasi-regular longitudes (2π/n spacing, ±15% jitter), radius 0.05-0.09, aspect 1.3-1.8, mild same-sign swirl 0.6-1.0; 0.35 ≤ vigor < 0.7 (Saturnian) → PLUME OUTBREAK: bright near-white head (radius ~0.09, rot ~1.2) + sheared TAIL = a second carriage slot at the same latitude offset ~2.5 head-radii east with aspect ~9, rot 0, dimmer color (the elliptical metric stretches it into the along-band streak — no GLSL change); vigor < 0.35 (Neptunian) → 1-2 small bright "scooter" patches (radius ~0.06, white-blue, rot ~0.5).
+3. **Band confinement (judging item 3):** pearl/plume latitude SNAPS to a belt center: belt centers sit at bandCoord = 0.5 + m ⇒ latC = (2 + 4m)/bandCount (F24's ladder inverted); |trueLat| = pow(|latC|, 1/bandLatPow), y = sin(trueLat·π/2); pick m via hash from the middle latitudes (|latC| 0.25-0.75). Mirror the JS inversion against the GLSL constants — same state knobs applyDrivers already reads.
+4. **Per-frame writer restructure:** compose the array each frame: idx 0 = great spot iff greatSpotEnabled && spotStrength; idx 1..k = train slots iff stormTrainEnabled && trainStrength (= _gas gate); uStormCount = total written. Keep .set() on preallocated vectors (no per-frame allocation).
+5. **applyDrivers derivation:** same (macroSeed, stormSeed) PRNG stream EXTENDED (draws continue after F27's — placement decorrelates for free); store train spots as state.trainSpots = [{center, radius, rot, aspect, color, companion:0}, ...]. trainStrength = _gas ? 1 : 0 (terrestrials 0 — pre-check).
+6. **GUI:** folder 'Storm clusters (F28)' — driven count display + radius-scale slider (.listen()), 🎲 shares stormSeed reroll (one seed owns ALL storm placement — note in folder), ✓ LAST. featureFolders.
+7. **Pre-check:** node table — Jovian: 4-6 pearls one belt lat, longitudes ~2π/n spaced; Saturnian: head+tail same lat, tail east; Neptunian: 1-2 scooters; terrestrials strength 0; total slots ≤ 8 with great spot on; determinism (same seeds → same layout).
+
+v1 scope cuts: tail decay gradient (single dim slot approximates it); vortex merging/animation → out; PlanetGenerator.storms production wiring → integration phase; GWS planet-encircling full wrap → tail caps at the elliptical metric's reach (taste fork).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
