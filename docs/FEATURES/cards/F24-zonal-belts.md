@@ -61,8 +61,13 @@ v1 scope cuts (logged for the card): per-band counter-rotating drift → F25 (je
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop)
+- Evidence (repo root, gitignored): `F24-jovian-d20.png` (full disc), `F24-jovian-d5-tune1.png` (festooned bands, post-tune), `F24-jovian-d1.5.png` (close deck), `F24-saturnian-d5.png` + `F24-icegiant-d5.png` (variant spread), `F24-ab-on/off/diff.png` (A/B: 8054 px changed, ALL inside the disc bbox — clean planetwide-albedo signature), `F24-stab-a/b.png` (zoom-cycle 20→1.5→30→20: **0 px changed** — deterministic, §6 item 6).
+- §6 checklist: items 1/3/4/5/6 read 🟢 live. Item 2 (festooning) 🟢 after tune 1. Item 7 (close-deck sheared grain) 🟡 — present but subtle (grain factor 0.10·contrast·r; reads stratified, not blobby, but faint).
+- Live driver verification: Jovian {strength 1, count 14, contrast 0.988, warp 0.545}, Saturnian {1, 11, 0.586, 0.356}, Neptunian {1, 3, 0.080, 0.120}; Rocky AND Titan derive strength 0 live (no terrestrial leakage). Variant spread is drivers-only (T_eq vigor ramp + Rhines count + atmosphere.color) — no per-preset hacks.
+- Tweaks applied (1 of 3 cycles): first-cut warp mix(1.0,2.4) displaced ±1.07 stripe units — more than a full band width — smearing bands into marble at d5. Re-derived to mix(0.12,0.55) (Jovian ≈ ±0.23-stripe festoons); bands now hold identity with scalloped edges.
+- Code review (fable, 2 should-fix, both applied): (1) stripe count rendered 2× the derived value — latC spans 2 units, coefficient fixed 0.5→0.25 so uBandCount counts visible stripes; (2) unconditional shadeN renormalize broke the byte-identical-at-strength-0 contract — branched on uBandStrength > 0.
+- Taste forks for Max's lap: (a) festoon turbulence is conservative — real Juno edges are MORE chaotic; warp ramp is one knob if he wants wilder; (b) 2-tone zone/belt palette from atmosphere.color (v1 cut — no multi-band hue ramp); (c) close-deck grain subtlety (item 7).
+- Scope cuts (per §6.5): longitudinal drift + counter-rotating jets → F25; storms → F27/F28; gas-preset × leftover-terrain-features interplay → Phase-5 integration; GUI band-tint swatch shows a stale color on solid presets (inert behind the strength gate — reviewer nit, accepted).
+- New infrastructure this card landed (4b features ride on it): 'gas-giant' archetype, 3 gas DRIVER_PRESETS (h2-he, rotationHours = the new D8 field), gas shadeN flatten, PROV_BANDS=22 neutral row.
+- Status: VERIFIED_PENDING_MAX

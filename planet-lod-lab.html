@@ -396,6 +396,15 @@
       uniform float uLobeAmp;          // landslide-tongue amplitude — lab knob
       uniform float uLobeFreq;         // landslide voronoi seed frequency (tongue spacing) — lab knob
       uniform vec3  uMassWastOffset;   // 🎲 domain offset — own lobe seed, decorrelated from craters/karst
+      // ── F24 zonal belts & zones (Bands step 4b — card F24) — ALBEDO ONLY, no relief ──
+      uniform float uBandStrength;     // 0..1 master gate (driven: 1 on h2-he gas worlds, 0 on every solid preset); <= 0 ⇒ no-op
+      uniform float uBandCount;        // visible stripe count pole-to-pole (driven, Rhines-flavored: D8 spin × disc size)
+      uniform float uBandContrast;     // zone↔belt luminance separation (driven: T_eq convective-vigor ramp; cold CH4-haze giants go bland)
+      uniform float uBandWarp;         // recursive-domain-warp displacement in stripe units (driven: festooning tracks the same ramp)
+      uniform vec3  uBandTint;         // deck base color (driven: atmosphere.color — tan / pale-gold / blue)
+      uniform float uBandStretch;      // vertical domain compression (~2.5) so the warp FBM streaks along latitude — lab knob
+      uniform float uBandLatPow;       // latitude remap exponent (>1 ⇒ wide equatorial bands, narrow polar) — lab knob
+      uniform vec3  uBandOffset;       // 🎲 domain offset — own warp seed, decorrelated from the terrain features
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -651,6 +660,7 @@
       const int PROV_DUNES       = 19;  // F15 — old stable plains (CRATER-row polarity: sand seas live among crater fields, not young orogens)
       const int PROV_DUST        = 20;  // F16 — fallout is near-global: dunes' old-plains polarity but a HIGH floor (mantles thin over young terrain, never vanish)
       const int PROV_MASSW       = 21;  // F19 — deposits live where steeps live: the MOUNTAIN-field polarity (talus needs walls to fail)
+      const int PROV_BANDS       = 22;  // F24 — neutral (atmosphere, not geology): the FROST-row pattern — a gas deck must not be gated by rock provinces
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -690,6 +700,7 @@
         else if (fid == PROV_DUNES)      { f = 1.0 - gProvince.x; fl = 0.30; }
         else if (fid == PROV_DUST)       { f = 1.0 - gProvince.x; fl = 0.50; }
         else if (fid == PROV_MASSW)      { f = gProvince.x; fl = 0.30; }
+        else if (fid == PROV_BANDS)      { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1223,6 +1234,61 @@
         float dev = dot(perturbed, N);
         if (dev < 0.5) perturbed = normalize(mix(perturbed, N, 0.5));
         return perturbed;
+      }
+
+      // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
+      // visible deck: alternating bright ZONES (anticyclonic upwelling, fresh high
+      // condensate) and dark BELTS (cyclonic subsidence, deeper warm cloud showing
+      // through). ALBEDO ONLY — no h/grad writes; the Bands family is the one family
+      // exempt from the displacement pipeline (card §4). All structure routes through
+      // LUMINANCE so the 6-level Bayer posterize carries the banding as quantize
+      // steps, not as hue shifts the envelope crushes (card §6 item 4).
+      // Stability contract: the band field reads geometric latitude + seed-fixed FBM
+      // ONLY — no uLodRamp/fwidth in the band coordinate (same bands at distance 30
+      // and 1.5, card §6 item 6) and no uTime (longitudinal jet drift is F25, v1
+      // scope cut). Poles: latitude-only keying means bands can never converge or
+      // pinch; an explicit darkened polar hood caps them instead (card §6 item 5).
+      vec3 zonalBandCol(vec3 N, vec3 pos){
+        // true latitude from the geometric normal, normalized to -1..1
+        float trueLat = asin(clamp(N.y, -1.0, 1.0)) * 0.63661977;   // × 2/π
+        // uBandLatPow > 1 widens the equatorial bands and narrows the polar ones
+        // (the Cassini-map spacing read) without moving the equator or the poles.
+        float latC = sign(trueLat) * pow(abs(trueLat), uBandLatPow);
+        // vertically-compressed sampling domain (research doc: p.y × ~2.5) so the
+        // warp FBM streaks horizontally — at close range the in-band texture reads
+        // as flow sheared along latitude, not isotropic blobs (card §6 item 7).
+        vec3 p = vec3(pos.x, pos.y * uBandStretch, pos.z) + uBandOffset;
+        // recursive domain warp (research doc q/r recipe — THE bands→fluid trick):
+        // r rides on q, so band edges scallop and festoon instead of reading as
+        // ruler-straight sin() boundaries. Fixed 4 octaves, fwBase 0 ⇒ no LOD fade.
+        float q = fbmd(p, 4.0, 0.0).x;
+        float r = fbmd(p + vec3(4.0 * q) + vec3(11.3, -7.1, 3.9), 4.0, 0.0).x;
+        // band coordinate: latitude indexes the stripe ladder; the warp displaces it.
+        // The 0.25: latC spans 2 units pole-to-pole and one triangle period = one
+        // zone + one belt = TWO stripes, so span = count/2 periods ⇒ uBandCount
+        // counts VISIBLE stripes pole-to-pole (Jupiter ~14, Cassini map).
+        // 0.5·r scales the (already zero-mean signed) fbm warp displacement.
+        float bandCoord = 0.25 * latC * uBandCount + uBandWarp * 0.5 * r;
+        // alternating zone/belt LUMINANCE — a smoothstepped triangle wave: flat band
+        // interiors with soft risers that land ON posterize-step transitions, so the
+        // Bayer dither textures the festooned boundary (card §6 items 2+4).
+        float tri = abs(2.0 * fract(bandCoord) - 1.0);
+        float zone = smoothstep(0.30, 0.70, tri);
+        // 2-tone palette derived from the deck tint (v1 scope cut: no multi-band hue
+        // ramp): zones LIGHTEN the tint (fresh condensate), belts DARKEN + WARM it
+        // (deeper warmer cloud). uBandContrast collapses both toward the plain tint —
+        // the ice-giant near-bland blue disc falls out of the cold-T_eq ramp alone.
+        vec3 zoneCol = min(uBandTint * 1.30 + vec3(0.08), vec3(1.0));
+        vec3 beltCol = uBandTint * vec3(0.62, 0.52, 0.42);
+        vec3 col = mix(mix(uBandTint, beltCol, uBandContrast),
+                       mix(uBandTint, zoneCol, uBandContrast), zone);
+        // faint in-band luminance grain from the warp field itself (hue-neutral,
+        // contrast-scaled) — the close-deck sheared-flow texture inside one band.
+        col *= 1.0 + 0.10 * uBandContrast * r;
+        // polar hood: a darkened cap keyed on latitude only (Jupiter/Neptune hoods);
+        // bands fade INTO it rather than pinching at a convergence point.
+        float hood = smoothstep(0.72, 0.95, abs(trueLat));
+        return col * (1.0 - 0.30 * hood);
       }
 
       // ── F2 craters (Stage-C step 3, Relief) — transcribed from craterProfile()
@@ -2156,6 +2222,12 @@
           }
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
+          // F24 gas flattening — a banded gas deck has no terrain to light: relax the
+          // perturbed normal back to the geometric sphere as uBandStrength rises. The
+          // bands carry ALL their structure through albedo luminance instead (card
+          // §6.5 step 4); the branch keeps uBandStrength 0 (every solid preset)
+          // byte-identical — an unconditional renormalize would shift low bits.
+          if (uBandStrength > 0.0) shadeN = normalize(mix(shadeN, N, uBandStrength));
           // ── Stage 3: CRYO frost-coverage mask (F23/F22) — coverage test, not relief; needs the
           // accumulated height h for the altitude lapse. Consumed at the Stage-6 albedo overlay.
           frostCover = frostCoverage(vPos, h, frostBandCoord);
@@ -2222,6 +2294,14 @@
         albedoCol = mix(albedoCol, beachCol, beachBand * (1.0 - frostCover));
         albedoCol *= 1.0 - 0.45 * cliffDark;
         albedoCol += vec3(0.10) * strandLine;
+        // ── F24 zonal belts (Bands step 4b) — the gas deck REPLACES the solid-surface
+        // albedo story above (a gas world has no surface to read; mask 1 ⇒ pure deck).
+        // Runs LAST in the albedo chain, pre-posterize, so the zone/belt luminance
+        // ladder lands on its own quantize bins (card §6 item 4). bandMask derives 0
+        // on every terrestrial preset — the whole block is a no-op there.
+        // provinceWeight(PROV_BANDS) is NEUTRAL (floor 1.0 — atmosphere, not geology).
+        float bandMask = uBandStrength * provinceWeight(PROV_BANDS);
+        if (bandMask > 0.0) albedoCol = mix(albedoCol, zonalBandCol(N, vPos), bandMask);
         // ── F16 butterscotch veil (Stage-8 haze channel, computed HERE so it hits each
         // term PRE-posterize — there is no single final quantizer, every surface term
         // carries its own). Airborne suspended dust warms ALL light passing through it
@@ -2513,6 +2593,14 @@
       uLobeAmp:         { value: 0.06 },  // F19 landslide-tongue amplitude — lab knob
       uLobeFreq:        { value: 6.0 },   // F19 tongue seed frequency — lab knob
       uMassWastOffset:  { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
+      uBandStrength:    { value: 0.0 },   // F24 master gate (driven: 1 on h2-he gas worlds, 0 on solid); <= 0 ⇒ no-op
+      uBandCount:       { value: 8.0 },   // F24 visible stripe count (driven: 12·R/rotationHours, clamped 3..16)
+      uBandContrast:    { value: 0.6 },   // F24 zone↔belt luminance separation (driven: T_eq convective-vigor ramp)
+      uBandWarp:        { value: 1.8 },   // F24 festoon displacement in stripe units (driven: same vigor ramp)
+      uBandTint:        { value: new THREE.Color(0.78, 0.62, 0.44) },  // F24 deck base color (driven: atmosphere.color)
+      uBandStretch:     { value: 2.5 },   // F24 vertical domain compression (streaks the warp along latitude) — lab knob
+      uBandLatPow:      { value: 1.3 },   // F24 latitude remap exponent (wide equatorial, narrow polar bands) — lab knob
+      uBandOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the warp domain)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2649,6 +2737,14 @@
       lobeAmp: 0.06,        // F19 landslide-tongue amplitude
       lobeFreq: 6.0,        // F19 tongue seed frequency
       massWastEnabled: true,// F19 enable gate
+      bandStrength: 0.0,    // F24 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
+      bandCount: 8.0,       // F24 visible stripe count (driven: 12·R/rotationHours, clamped 3..16)
+      bandContrast: 0.6,    // F24 zone↔belt luminance separation (driven: T_eq vigor ramp)
+      bandWarp: 0.5,        // F24 festoon displacement in stripe units (driven: same ramp)
+      bandTint: [0.78,0.62,0.44],  // F24 deck base color (driven: atmosphere.color)
+      bandStretch: 2.5,     // F24 vertical domain compression (lab knob)
+      bandLatPow: 1.3,      // F24 latitude remap exponent (lab knob)
+      bandsEnabled: true,   // F24 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2817,6 +2913,7 @@
       duneOffset: [0,0,0],
       dustOffset: [0,0,0],
       massWastOffset: [0,0,0],
+      bandOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -2946,6 +3043,18 @@
       // The lab models planet-around-STAR self-heating, so the close eccentric orbit stands in for a real
       // moon's planet-sourced tidal flexing (the documented P7 seam) — same convention as "Lava" at orbit 938.
       'Europa (icy moon)': { radiusEarth:0.5, massEarth:0.07, eccentricity:0.1, starMassEarth:332946, orbitRadiusEarth:2500, composition:{ironFraction:0.2,density:2.0,volatileFraction:0.5}, T_eq:110, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0.05, surfaceHistory:{erosion:0.05,bombardmentIntensity:0.3,resurfacingRate:0.6} },
+      // ── Phase 4b gas worlds (F24 zonal belts; F25/F27-F29 ride these same presets) ──
+      // No solid surface: surfaceHistory zeros + resurfacing 1 derive the relief gates to
+      // ~0 (and lavaCoverage 1 re-smooths the residual ridged base); volatileFraction 0.04
+      // sits UNDER the bone-dry floor (0.05) so frost/glacial/sublimation/liquid all gate 0
+      // — the h2-he envelope (composition 'h2-he', rainFactor 0) IS the visible surface.
+      // rotationHours is NEW (D8 spin, the Rhines band-count driver): only the F24
+      // derivation reads it; terrestrial presets omit it (defaults 24 h, inert behind
+      // bandStrength 0). eccentricity stays near-circular: the lab's star-tidal model
+      // scales with R⁵ and a giant's R≈10 would otherwise derive Io-grade lavaActivity.
+      'Gas giant (Jovian)': { radiusEarth:11.2, massEarth:317.8, rotationHours:9.9, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:122000, composition:{ironFraction:0.03,density:1.33,volatileFraction:0.04}, T_eq:125, tidalState:{locked:false}, atmosphere:{color:[0.78,0.62,0.44],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
+      'Gas giant (Saturnian)': { radiusEarth:9.4, massEarth:95.2, rotationHours:10.7, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:224000, composition:{ironFraction:0.03,density:0.69,volatileFraction:0.04}, T_eq:95, tidalState:{locked:false}, atmosphere:{color:[0.85,0.76,0.55],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
+      'Ice giant (Neptunian)': { radiusEarth:3.9, massEarth:17.1, rotationHours:16.1, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:705000, composition:{ironFraction:0.05,density:1.64,volatileFraction:0.04}, T_eq:55, tidalState:{locked:false}, atmosphere:{color:[0.35,0.48,0.85],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -3051,6 +3160,7 @@
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0]; state.karstOffset = [0,0,0];
       state.duneOffset = [0,0,0]; state.dustOffset = [0,0,0]; state.massWastOffset = [0,0,0];
+      state.bandOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -3146,6 +3256,31 @@
       state.repose = Math.min(2.2, Math.max(0.5, 0.9 / Math.pow(Math.max(_g, 0.05), 0.4)));
       const _coldGround = 1.0 - _ss(150, 260, _fp.T_eq ?? 288);
       state.ldaFat = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0) * _coldGround;
+      // ── F24 zonal belts — gas-giant banding (Bands step 4b; derivation lives HERE
+      // per the F11 precedent — core.js untouched). Master gate: an h2-he envelope IS
+      // the visible surface, so bandStrength is 1 on gas worlds and 0 on EVERY solid
+      // preset (the no-leakage pre-check, card §6.5.6) — no partial gas in v1.
+      const _gas = (_fp.atmosphere?.composition === 'h2-he');
+      state.bandStrength = _gas ? 1.0 : 0.0;
+      // Band count, Rhines-flavored (card §4): fast D8 spin on a big disc organizes
+      // convection into more alternating jets — 12·R/rotationHours, clamped 3..16.
+      // Jovian 11.2R/9.9h → 14; Saturnian 9.4R/10.7h → 11; Neptunian 3.9R/16.1h → 3.
+      // Terrestrial presets omit rotationHours (default 24 h) — inert behind strength 0.
+      const _rotH = _fp.rotationHours ?? 24;
+      state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (_fp.radiusEarth ?? 1) / _rotH)));
+      // Contrast AND festooning track convective vigor on one T_eq ramp 55→130 K
+      // (D1/interior heat): a warm interior churns vivid scalloped bands (Jupiter);
+      // a cold CH4-haze ice giant goes near-bland blue (Neptune). The 0.08 floor
+      // keeps a ghost of banding on even the coldest disc (card §1 intensity axis).
+      const _vigor = _ss(55, 130, _fp.T_eq ?? 288);
+      state.bandContrast = 0.08 + 0.92 * _vigor;
+      // Warp is in STRIPE units (GLSL: bandCoord += warp·0.5·r, r ≈ ±0.9): keep peak
+      // displacement well under one band width or bands smear into marble (live
+      // tune 2026-06-10 — the first cut, mix(1.0,2.4), displaced ±1.07 stripes and
+      // destroyed band identity at d5). mix(0.12,0.55): Jovian ≈ ±0.23-stripe festoons.
+      state.bandWarp = 0.12 + 0.43 * _vigor;
+      // Deck tint straight from the preset atmosphere color (tan / pale-gold / blue).
+      if (_gas) state.bandTint = _fp.atmosphere.color.slice();
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -3470,6 +3605,22 @@
     fMassWast.add({ roll(){ state.massWastOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fMassWast.add(state, 'massWastEnabled').name('✓ enabled');
 
+    // ▸ Surface — Bands: the gas-world family (F24 + the F25/F27-F29 features that ride it).
+    const fBandsGroup = guiRight.addFolder('Surface — Bands'); fBandsGroup.open();
+    // ▸ Zonal belts (F24) — alternating zone/belt luminance bands on gas presets, ALBEDO
+    // only. strength/count/contrast/warp/tint are driven (h2-he gate / Rhines spin×disc /
+    // T_eq vigor ramp / atmosphere color, .listen()); stretch + lat power are shape knobs.
+    const fBands = fBandsGroup.addFolder('Zonal belts (F24)'); fBands.close();
+    fBands.add(state, 'bandStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fBands.add(state, 'bandCount', 2, 20, 1).name('band count (driven)').listen();
+    fBands.add(state, 'bandContrast', 0, 1, 0.01).name('contrast (driven)').listen();
+    fBands.add(state, 'bandWarp', 0, 4, 0.05).name('festoon warp (driven)').listen();
+    fBands.addColor(state, 'bandTint').name('deck tint (driven)').listen();
+    fBands.add(state, 'bandStretch', 1, 6, 0.1).name('flow stretch');
+    fBands.add(state, 'bandLatPow', 0.5, 2.5, 0.05).name('lat power');
+    fBands.add({ roll(){ state.bandOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fBands.add(state, 'bandsEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -3478,7 +3629,7 @@
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
-      dunes: fDunes, dust: fDust, massWasting: fMassWast,
+      dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -3696,6 +3847,17 @@
       uniforms.uLobeAmp.value         = state.lobeAmp;
       uniforms.uLobeFreq.value        = state.lobeFreq;
       uniforms.uMassWastOffset.value.set(state.massWastOffset[0], state.massWastOffset[1], state.massWastOffset[2]);
+      // F24 bands — bandsEnabled gates strength→0 (the Stage-6 albedo mix AND the gas
+      // shadeN flatten both read uBandStrength, so one gate kills the whole family),
+      // preserving the slider value.
+      uniforms.uBandStrength.value = state.bandsEnabled ? state.bandStrength : 0.0;   // ✓ enable gate
+      uniforms.uBandCount.value    = state.bandCount;
+      uniforms.uBandContrast.value = state.bandContrast;
+      uniforms.uBandWarp.value     = state.bandWarp;
+      uniforms.uBandTint.value.setRGB(state.bandTint[0], state.bandTint[1], state.bandTint[2]);
+      uniforms.uBandStretch.value  = state.bandStretch;
+      uniforms.uBandLatPow.value   = state.bandLatPow;
+      uniforms.uBandOffset.value.set(state.bandOffset[0], state.bandOffset[1], state.bandOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

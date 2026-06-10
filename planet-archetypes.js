@@ -27,6 +27,7 @@ export const FEATURES = {
   dunes:      { label: 'Dunes & wind forms (F15)', enableKey: 'dunesEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
   dust:       { label: 'Dust mantles (F16)',    enableKey: 'dustEnabled',      archetypes: ['tectonic-terrestrial','volatile-cold'] },
   massWasting:{ label: 'Mass-wasting (F19)',    enableKey: 'massWastEnabled',  archetypes: ['impact-airless','tectonic-terrestrial','volcanic','icy-active','volatile-cold'] },
+  bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -37,6 +38,7 @@ export const ARCHETYPES = {
   'volcanic':             { label: 'Volcanic',               bodies: ['Io','Mars'],                   presets: ['Lava (hot airless)'] },
   'icy-active':           { label: 'Icy-active',             bodies: ['Europa','Ganymede'],           presets: ['Europa (icy moon)'] },
   'volatile-cold':        { label: 'Volatile / cold',        bodies: ['Pluto','Triton','Mars poles'], presets: ['Titan (methane seas)','Frozen (airless)'] },
+  'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)'] },
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
@@ -76,4 +78,5 @@ export const PROVINCES = {
   dunes:      { field: 0, polarity: -1, floor: 0.30 },  // sand seas on old stable plains — the CRATER-row polarity (Mars barchans live among craters)
   dust:       { field: 0, polarity: -1, floor: 0.50 },  // fallout is near-global — dunes' old-plains polarity but a HIGHER floor (mantles thin, never vanish)
   massWasting:{ field: 0, polarity: +1, floor: 0.30 },  // deposits live where steeps live — the MOUNTAIN-field polarity (talus needs walls to fail)
+  bands:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — atmosphere, not geology (FROST-row pattern: a gas deck must not be gated by rock provinces)
 };
