@@ -46,12 +46,57 @@ Unbuilt — recommended recipe once built. Registration: add key 'lakes' to FEAT
 - [ ] Does coverage scale by type: ocean preset = near-global liquid with sparse island chains, terrestrial = continents + seas, eyeball = a concentric substellar liquid disk ringed by ice?
 - [ ] Across the lodRamp, does approach add only coastline sharpness and glint definition — no new hue noise, no popping of the sea boundary?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — F14 builds FIRST in 4a: F12 deltas + F20 coastlines depend on its base level)
+
+1. **Shader — level-set cut in main(), AFTER lavaCombiner, BEFORE perturbAnalytic** (not a
+   combiner signature; the cut consumes the fully-accumulated h so canyons/basins flood free):
+   `liquidMask = smoothstep(uSeaLevel+0.02, uSeaLevel-0.02, h)`; inside the mask clamp
+   `h = mix(h, uSeaLevel, liquidMask)` and flatten `grad = mix(grad, vec3(0), liquidMask)` —
+   the flat geometric normal IS the liquid read (and catches the existing Blinn-Phong spec as
+   a coherent glint lobe with NO spec-path changes, per card §4's normals/specular spine).
+   `uSeaLevel <= -1` ⇒ pass skipped (regression-safe early-out). liquidMask is a main()-local
+   consumed at Stage 6; multiply by provinceWeight(PROV_LAKES) (NEUTRAL floor 1.0 — hydrology,
+   not geology — same ruling as frost; row exists so the data convention stays total).
+2. **Stage-6 albedo**: `albedoCol = mix(albedoCol-base, liquidCol, liquidMask)` BEFORE the
+   frost mix (frost wins over liquid where cold → sea-ice / eyeball ring for free).
+   liquidCol keyed on uLiquidSpecies: water = dark cool fill, methane = darker warm fill
+   (mirrors the F11 fluvTint species switch).
+3. **frostCoverage altitude lapse** reads the clamped h — seas freeze by latitude correctly.
+4. **Drivers (applyDrivers)**: gate `_wet = liquidStability > 0.15` (same F11 gate);
+   seaCoverage ∝ stability × volatileFraction; `state.seaLevel = mix(-0.2, 0.3, seaCoverage)`
+   else -1. Write `uniforms.uLiquidMask.value = seaCoverage` (the F36 coverage scalar the
+   registry reserves). Per-frame push: `uSeaLevel = lakesEnabled ? seaLevel : -1`.
+5. **Registration**: FEATURES += lakes {label 'Lakes & seas (F14)', enableKey 'lakesEnabled',
+   archetypes ['tectonic-terrestrial','volatile-cold']}; PROVINCES += lakes (neutral);
+   GLSL PROV_LAKES row + drift-guard GLSL_NAME map entry; fLakes folder under
+   Surface — Gradational with seaLevel slider (.listen()) + enabled toggle; featureFolders +=
+   lakes. Vitest coverage extends automatically (tests iterate FEATURES keys).
+6. **Verify**: vitest green; live :9223 — Ocean (temperate) = coastline cut + flat-liquid
+   read + glint; Titan (methane seas) = dark warm fill; Rocky = continents+seas; Frozen
+   (airless) = NO liquid (stability gate). Full preset keys only (setPreset no-ops on
+   partial names).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 (2026-06-10, working-Claude autonomous judging per spec §13.3 — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5 in one pass + 1 fix cycle. Shots (d4, clouds zeroed):
+  `F14-lakes-01-ocean-d4.png` (Ocean: dark cool sea, crisp coastline, coherent specular
+  glint lobe on the flat liquid — no spec-path changes needed, the flat normal carries it),
+  `F14-lakes-02-titan-d4.png` (pre-fix: frost painted over the sea),
+  `F14-lakes-04-titan-d4-fix1.png` (fix 1: dark warm methane seas with lobate coastlines
+  against bright frosted terrain — the Cassini radar read), `F14-lakes-03-rocky-d4.png`
+  (continents + modest seas, coverage 0.22). Frozen (airless): seaLevel −1, pass skipped
+  (stability gate). Drivers verified live: Ocean 0.15/0.7, Titan 0.2/0.8, Rocky −0.089/0.22.
+  Vitest 19/19 (FEATURES/PROVINCES/GLSL drift-guards cover lakes); backtick parity even.
+- Tweaks applied: fix cycle 1 — F14 × F22 phase consistency: `frostCover *= 1 − liquidMask`
+  (standing liquid ⇒ local T above condensation ⇒ no frost on open sea).
+- Code review (adversarial, per §13.4): no high-confidence issues. Two below-threshold flags:
+  (a) F11 fluvTint mixes after the liquid fill → drowned channels faintly tint the sea
+  (plausibly reads as bathymetry — glance during Max's lap); (b) `uLiquidMask.value` isn't
+  gated by lakesEnabled — gate it when F36 sunglint lands.
+- Deferred to integration pass (I-checks): frozen-sea / eyeball ice-ring variant (liquid
+  currently always suppresses frost; a cold-enough sea should read as ice plain instead).
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)

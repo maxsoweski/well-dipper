@@ -96,7 +96,7 @@ const GLSL_NAME = {
   scarps: 'PROV_SCARPS', plateaus: 'PROV_PLATEAUS', tessera: 'PROV_TESSERA',
   edifices: 'PROV_EDIFICES', lava: 'PROV_LAVA', chaos: 'PROV_CHAOS',
   cryoRidge: 'PROV_CRYORIDGE', rivers: 'PROV_RIVERS', sublimation: 'PROV_SUBLIMATION',
-  glacial: 'PROV_GLACIAL', frost: 'PROV_FROST',
+  glacial: 'PROV_GLACIAL', frost: 'PROV_FROST', lakes: 'PROV_LAKES',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

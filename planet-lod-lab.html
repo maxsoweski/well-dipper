@@ -342,6 +342,8 @@
       uniform float uFluvialHiGround;  // height above which channels fade (with LowBias)
       uniform vec3  uFluvialOffset;    // 🎲 domain offset — default (0,0,0) = unchanged
       uniform int   uLiquidSpecies;    // 0=water 1=methane/ethane (first GLSL consumer = F11 floor-tint)
+      // ── F14 lakes & seas (Fluvial step 4a — fluvial doc / card F14) ──
+      uniform float uSeaLevel;         // standing-liquid level-set threshold on accumulated h; <= -1 ⇒ no liquid (early-out)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -589,6 +591,7 @@
       const int PROV_SUBLIMATION = 11;
       const int PROV_GLACIAL     = 12;
       const int PROV_FROST       = 13;
+      const int PROV_LAKES       = 14;  // F14 — neutral (hydrology, not geology), like FROST
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -620,6 +623,7 @@
         else if (fid == PROV_SUBLIMATION){ f = gProvince.z;       fl = 0.40; }
         else if (fid == PROV_GLACIAL)    { f = 1.0 - gProvince.z; fl = 0.40; }
         else if (fid == PROV_FROST)      { f = gProvince.z;       fl = 1.00; }
+        else if (fid == PROV_LAKES)      { f = gProvince.z;       fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1582,6 +1586,9 @@
         // (needs the accumulated height for the altitude lapse), consumed at Stage 6.
         float frostCover = 0.0;
         float frostBandCoord = 0.0;   // F22 PLD pole-distance coordinate (set by frostCoverage)
+        // F14 standing-liquid coverage — set by the Stage-4 level-set cut (analytic branch),
+        // consumed at Stage 6 (liquid albedo fill) + implicitly by spec (flat normal = glint).
+        float liquidMask = 0.0;
         if (uNormalMode == 1){
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
@@ -1613,11 +1620,28 @@
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
+          // ── Stage 4 (F14): standing-liquid level-set cut (card §4) — AFTER all relief so
+          // fluvial channels + basins flood for free off the accumulated h. Inside the mask
+          // the height clamps to the equipotential and the gradient flattens to the geometric
+          // normal — the flat-vs-perturbed normal contrast IS the liquid read, and the existing
+          // Blinn-Phong spec catches a coherent glint lobe with no spec-path changes.
+          // provinceWeight(PROV_LAKES) is NEUTRAL (floor 1.0 — hydrology, not geology).
+          // (the liquidStability gate lives in applyDrivers: not-wet ⇒ seaLevel = -1)
+          if (uSeaLevel > -1.0){
+            liquidMask = smoothstep(uSeaLevel + 0.02, uSeaLevel - 0.02, h) * provinceWeight(PROV_LAKES);
+            h    = mix(h, uSeaLevel, liquidMask);
+            grad = mix(grad, vec3(0.0), liquidMask);
+          }
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
           // ── Stage 3: CRYO frost-coverage mask (F23/F22) — coverage test, not relief; needs the
           // accumulated height h for the altitude lapse. Consumed at the Stage-6 albedo overlay.
           frostCover = frostCoverage(vPos, h, frostBandCoord);
+          // F14 × F22 phase consistency: standing liquid means local T is ABOVE the volatile's
+          // condensation point (liquid phase, by definition) — frost cannot deposit on the open
+          // sea. Titan's methane seas stay radar-dark against bright frosted terrain. (Frozen-sea
+          // / eyeball ice-ring variant deferred — flagged in card §7 for the integration pass.)
+          frostCover *= 1.0 - liquidMask;
         }
 
         // ── Stage 2 (cont.): mountains / scarps; writes canyonHeight   [domain: Relief]
@@ -1646,7 +1670,12 @@
         // cap — the coverage itself saturates to the budget past the snowline, so it cannot carry rings.
         // The mix gates the strata to the cap (frostCover=0 ⇒ mix→uBaseColor, bare ground untouched).
         vec3 frostShade = uFrostAlbedo * pldBands(frostBandCoord);
-        vec3 albedoCol = mix(uBaseColor, frostShade, frostCover);
+        // F14 standing liquid — species-keyed fill mixed BEFORE frost so frost wins where
+        // cold (sea ice; the eyeball ice-ring falls out of the latitude lapse for free).
+        // Water = dark cool fill; methane/ethane = darker warm fill (Titan radar-dark).
+        vec3 liquidCol = (uLiquidSpecies == 1) ? vec3(0.11, 0.07, 0.03) : vec3(0.04, 0.10, 0.22);
+        vec3 albedoCol = mix(uBaseColor, liquidCol, liquidMask);
+        albedoCol = mix(albedoCol, frostShade, frostCover);
         // F11 species floor-tint — faint channel-floor albedo (water vs methane). Albedo only;
         // fluvialWet=0 ⇒ unchanged. Kept subtle so it reads as a floor darkening through posterize.
         vec3 fluvTint = (uLiquidSpecies == 1) ? vec3(0.30, 0.22, 0.10) : vec3(0.10, 0.14, 0.24);
@@ -1882,7 +1911,8 @@
       // emissiveBlackbody/voronoi3d = shader helpers; latBias/storm arrays =
       // per-domain, declared by their owner — see the registry doc.)
       uLiquidStability: { value: 0.0 },   // 0..1 liquid on/off gate    — owner Fluvial; read by Aeolian/Cryo/Optical
-      uLiquidMask:      { value: 0.0 },   // liquid-body coverage mask   — owner Fluvial; read by Optical (sunglint F36)
+      uLiquidMask:      { value: 0.0 },   // liquid-body coverage scalar — owner Fluvial (F14 applyDrivers writes seaCoverage); read by Optical (sunglint F36)
+      uSeaLevel:        { value: -1.0 },  // F14 standing-liquid level-set threshold; -1 = no liquid (driven: stability gate + coverage)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -1970,6 +2000,8 @@
       specStrength: 0.0,    // ocean/ice specular glint
       limbStrength: 0.0,    // atmosphere rim glow
       provinceWeight: 1.0,  // Stage-D province influence dial (0 = legacy uniform look)
+      seaLevel: -1.0,       // F14 standing-liquid threshold (driven; -1 = none)
+      lakesEnabled: true,   // F14 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2384,6 +2416,14 @@
                                    : (_hadLiquid ? 0.4 * _clamp01(_erosion) : 0.0);  // faint relict / none if airless
       state.fluvialDepth    = 0.08 + 0.10 * _rain + 0.04 * _clamp01(_g);
       state.fluvialMeander  = 0.3 + 0.5 * _rain;
+      // ── F14 lakes & seas — standing liquid (card §6.5 step 4) ──
+      // Coverage ∝ stability × volatile budget; seaLevel maps coverage onto the accumulated-h
+      // range (≈ -0.2 low basins … +0.3 drowns most relief). Same _wet gate as F11: a world
+      // that can't hold surface liquid gets seaLevel -1 (the shader pass early-outs).
+      const _vol = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0);
+      const _seaCoverage = _wet ? _clamp01(_stab * _vol) : 0.0;
+      state.seaLevel = _wet && _seaCoverage > 0.0 ? -0.2 + 0.5 * _seaCoverage : -1.0;
+      uniforms.uLiquidMask.value = _seaCoverage;   // the F36 coverage scalar (registry row)
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -2614,13 +2654,20 @@
     fRivers.add(state, 'riversEnabled').name('✓ enabled');
     fRivers.add({ roll(){ state.fluvialOffset = randOffset(); } }, 'roll').name('🎲 randomize');
 
+    // ▸ Lakes & seas (F14) — standing-liquid level-set cut on the accumulated height.
+    // seaLevel is driven (stability × volatiles via applyDrivers, .listen() syncs);
+    // the slider is the manual override for coastline exploration.
+    const fLakes = fGrad.addFolder('Lakes & seas (F14)'); fLakes.close();
+    fLakes.add(state, 'seaLevel', -1, 0.5, 0.01).name('sea level (driven)').listen();
+    fLakes.add(state, 'lakesEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
       craters: fCraters, ejecta: fEjecta, mountains: fMountains, canyons: fCanyons,
       scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
-      sublimation: fSub, glacial: fGlacial, rivers: fRivers,
+      sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -2786,6 +2833,7 @@
       uniforms.uSpecStrength.value = state.specStrength;
       uniforms.uLimbStrength.value = state.limbStrength;
       uniforms.uProvinceWeight.value = state.provinceWeight;
+      uniforms.uSeaLevel.value = state.lakesEnabled ? state.seaLevel : -1.0;   // ✓ enable gate (preserves slider value)
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

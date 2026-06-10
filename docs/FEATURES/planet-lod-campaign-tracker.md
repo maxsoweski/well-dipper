@@ -45,7 +45,7 @@ during phases) | ▶️ = current
 | F23 | [F23-snowline](cards/F23-snowline.md) | Cryo | ✅ | 🟢 | 3 |
 | F12 | [F12-deltas-fans](cards/F12-deltas-fans.md) | Fluvial | ⬜ | — | 4a |
 | F13 | [F13-outflow-channels](cards/F13-outflow-channels.md) | Fluvial | ⬜ | — | 4a |
-| F14 | [F14-lakes-seas](cards/F14-lakes-seas.md) | Fluvial | 🟡 | — | 4a |
+| F14 | [F14-lakes-seas](cards/F14-lakes-seas.md) | Fluvial | ✅ | 🟢 | 4a |
 | F21 | [F21-karst-dissolution](cards/F21-karst-dissolution.md) | Fluvial | ⬜ | — | 4a |
 | F15 | [F15-dunes-wind-forms](cards/F15-dunes-wind-forms.md) | Aeolian | ⬜ | — | 4a |
 | F16 | [F16-dust-mantles](cards/F16-dust-mantles.md) | Aeolian | ⬜ | — | 4a |
