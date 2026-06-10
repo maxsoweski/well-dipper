@@ -54,7 +54,7 @@ during phases) | ▶️ = current
 | F24 | [F24-zonal-belts](cards/F24-zonal-belts.md) | Bands | ✅ | 🟡 taste-call | 4b |
 | F25 | [F25-jets-shear](cards/F25-jets-shear.md) | Bands | ✅ | 🟡 taste-call | 4b |
 | F26 | [F26-latitude-weather-bands](cards/F26-latitude-weather-bands.md) | Bands | ✅ | 🟡 taste-call | 4b |
-| F27 | [F27-great-spot](cards/F27-great-spot.md) | Storms | 🟡 | — | 4b |
+| F27 | [F27-great-spot](cards/F27-great-spot.md) | Storms | ✅ | 🟡 taste-call | 4b |
 | F28 | [F28-storm-clusters](cards/F28-storm-clusters.md) | Storms | 🟡 | — | 4b |
 | F29 | [F29-polar-vortex](cards/F29-polar-vortex.md) | Storms | 🟡 | — | 4b |
 | F30 | [F30-lightning](cards/F30-lightning.md) | Storms | ⬜ | — | 4b |

@@ -47,12 +47,29 @@ Unbuilt — recipe for once it lands. Recommended registration: key `greatSpot` 
 - [ ] Dark-spot variant: on a bland ice-giant disk, does a soft 1–2-level darker oval with a small bright companion patch still read as a storm and not as a rendering artifact?
 - [ ] Behavior: does the spot stay anchored to the rotating surface (no sliding), and does the same seed reproduce the same position and size on re-approach?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+Rides F24/F25's gas substrate. Build the REGISTRY-SHAPED storm machinery once (flat arrays, §2's reserved carriage) with F27 = spots[0]; F28 extends the same arrays at smaller radii. Kinematic signature only (research doc "storm-mask + rotational swirl"): no fluid sim, no animation in v1.
+
+1. **Data:** FEATURES `greatSpot` { label 'Great spot (F27)', enableKey 'greatSpotEnabled', archetypes ['gas-giant'] } (NOT the card's 'gas-banded' — F24 set the archetype precedent). PROVINCES `greatSpot` { field: 2, polarity: +1, floor: 1.00 } neutral. PROV_GREATSPOT = 25 + row + GLSL_NAME line.
+2. **Uniform carriage (registry REGISTRY-canonical-uniforms.md:42 shape, lab-sized):** `uStormPosSize` vec4[8] (xyz = unit center, w = angular radius rad), `uStormParams` vec4[8] (x = rotStrength rad, y = E-W aspect, z = mode 0 warm/1 dark, w = companion strength), `uStormColor` vec3[8], `uStormCount` int. F27 drives index 0 only; uStormCount = greatSpotEnabled ? 1 : 0 in v1 (F28 will extend the count wiring).
+3. **GLSL — the swirl (the §4 recipe, 3D-rotation form, no 2D tangent frame):** per storm: d = great-circle distance acos(dot(n, c)) made elliptical by scaling the EAST tangent component by 1/aspect; ang = rotStrength · smoothstep(R, 0, d); n' = rotate n around axis c by ang (Rodrigues). Apply to the direction BEFORE the band computation — both trueLat and the warp domain read n', so the stripes themselves deflect and wrap (collar/moat for free, §6 item 3). Storm color: soft elliptical core mask (≤ 0.6R) mixes uStormColor — warm deepened tint (mode 0) or 1-2-level dark bruise (mode 1); pale collar = a luminance lift ring at 0.6-1.0R; dark mode adds a small bright companion Gaussian offset east-poleward (§6 item 7). Wake v1: skip (taste fork — log it).
+4. **JS storm derivation (in applyDrivers + seed hooks):** deterministic from macroSeed + a stormSeed state (🎲 rerolls stormSeed): hash → spot0 center (|y| ≤ 0.7, the card's pole-avoid), radius 0.18+0.12·hash, rotStrength = (1.2+1.3·hash)·sign, aspect 1.6-2.0, mode = _vigor < 0.35 ? dark : warm (Neptunian gets the GDS bruise, Jovian/Saturnian the warm oval), color from bandTint warmed (mode 0) / darkened (mode 1). spotStrength master = _gas gate. All 9-preset pre-check: terrestrials 0.
+5. **Wiring:** per-frame writes (arrays via .value mutation, count gated on greatSpotEnabled); GUI folder 'Great spot (F27)' — driven radius/rot/aspect sliders .listen(), 🎲 = stormSeed reroll, ✓ LAST; featureFolders. Seed determinism: same macroSeed+stormSeed ⇒ same placement (judging item 8); 'New planet' reroll moves it.
+6. **Tuning pre-check:** swirl budget — max deflection at core ≈ rotStrength ≈ 1.2-2.5 rad; verify the band pattern doesn't tear at the rim (smoothstep falloff is C¹); verify radius in stripe terms: 0.25 rad ≈ 2 stripes on count-14 Jovian (GRS straddles ~2 bands — right scale).
+
+v1 scope cuts: animation/rotation of the interior (two-phase flow map) → deferred (static swirl survives the envelope per research doc); turbulent wake filament → taste fork, logged not built; multi-spot data → F28; production PlanetGenerator.storms wiring → production integration phase (lab derives its own seeded spots).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop)
+- Evidence (repo root, gitignored): `F27-jovian-close-tune1.png` (THE money shot — brick-red E-W oval at center, bands wrapping in an S-curl, pale collar; stormSeed 3, d3.5), `F27-jovian-d10-seed3.png` (full disc), `F27-neptunian-dark.png` (GDS variant: soft dark oval + bright companion patch on the bland blue disc — the Voyager read), `F27-ab-on/off/diff.png` (ON/OFF at d6: 15,610 px, localized to the spot bbox — not planet-wide), `F27-jovian-close.png` (pre-tune comparison).
+- §6 checklist: 1 🟢 (coherent closed oval after tune 1, not a noise blob), 2 🟢 (E-W elongated, aspect 1.6-2.0 driven), 3 🟢 (bands visibly deflect and wrap — the swirl rotates the direction BOTH the latitude ladder and warp domain read), 4 🟢 (core posterizes 1-2 levels below the pale collar after tune 1), 5 🟢 (S-curl swirl read at close distance), 6 — wake not built (v1 scope cut, taste fork), 7 🟢 (dark-spot variant: bruise + companion read as a storm), 8 🟢 (placement is pure (macroSeed, stormSeed) hash — seed 3 reproduced the identical center across preset switches; object-space anchored by construction).
+- Live drivers (stormSeed 3): center (−0.38, 0.28, 0.88) 16°N, radius 0.28 rad (~2 stripes — GRS scale), rot 1.33, aspect 1.81; mode flips warm→dark exactly at the vigor 0.35 threshold (Jovian/Saturnian warm, Neptunian dark + companion 0.8). Terrestrials derive spotStrength 0 (count 0 — regression contract; the off path short-circuits to the original N/vPos expressions, bit-exact per review).
+- Tweaks applied (1 of 3 cycles): warm core color ×(1.25,0.95,0.8) matched the zone luminance and vanished into the deck — re-derived to ×(0.92,0.52,0.40) brick-red, darker than the deck, so the core lands its own posterize level inside the pale collar.
+- Code review (fable): no blockers/should-fix. Nits both applied: spotRot sign decorrelated from magnitude (separate PRNG draw); spotRadius slider max clamped 0.5→0.35 (slider extremes could push swirl past the hemisphere guard).
+- Infrastructure note: the registry-shaped uStorm* carriage (vec4[8] pos/params, vec3[8] color, count) is LIVE with F27 = index 0 — **F28 extends the same arrays**; uStormParams.z (mode) is carried but unread in GLSL (color baked JS-side), reserved for production wiring.
+- Taste forks for Max's lap: (a) wake/peel-off filament not built; (b) core saturation (brick-red lean); (c) interior rotation is static (animated swirl deferred per research doc).
+- Status: VERIFIED_PENDING_MAX

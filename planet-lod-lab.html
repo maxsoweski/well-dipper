@@ -425,6 +425,17 @@
       uniform float uWeatherWarp;      // front-shredding latitude-warp amplitude — lab knob
       uniform float uWeatherDry;       // subtropical-trough drying subtracted inside the cloud threshold — lab knob
       uniform vec3  uWeatherOffset;    // 🎲 domain offset — own warp seed, decorrelated from F24's uBandOffset
+      // ── F27 great-spot anticyclone (Bands step 4b — card F27) — ALBEDO ONLY ──
+      // The registry-reserved storm carriage (REGISTRY-canonical-uniforms.md storm row),
+      // lab-sized: flat arrays cap 8 (the shadowMoonPos pattern). F27 drives index 0;
+      // F28 extends the count at smaller radii — build the machinery once, drive by data.
+      // Regression contract: EVERY storm term sits behind i < uStormCount, so count 0
+      // (greatSpotEnabled off, or any terrestrial preset) renders byte-identical F25
+      // output. Static in v1 — no uTime in any storm term (interior rotation deferred).
+      uniform vec4  uStormPosSize[8];  // xyz = unit-sphere storm center, w = angular radius (rad)
+      uniform vec4  uStormParams[8];   // x = rotStrength (rad), y = E-W aspect, z = mode (0 warm / 1 dark), w = companion strength
+      uniform vec3  uStormColor[8];    // core color (driven: bandTint warmed for GRS-class / bruised for GDS-class)
+      uniform int   uStormCount;       // live storm count (driven: gas gate x enable; 0 = whole family no-ops)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -683,6 +694,7 @@
       const int PROV_BANDS       = 22;  // F24 — neutral (atmosphere, not geology): the FROST-row pattern — a gas deck must not be gated by rock provinces
       const int PROV_JETS        = 23;  // F25 — neutral: the shear dynamics ride the same unprovinced gas deck as PROV_BANDS
       const int PROV_WEATHER     = 24;  // F26 — neutral (climate, not geology): the FROST-row pattern — latitude circulation must not be gated by rock provinces
+      const int PROV_GREATSPOT   = 25;  // F27 — neutral: the vortex rides the same unprovinced gas deck as PROV_BANDS/PROV_JETS
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -725,6 +737,7 @@
         else if (fid == PROV_BANDS)      { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_JETS)       { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_WEATHER)    { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_GREATSPOT)  { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1379,6 +1392,76 @@
         return itcz + stormTrack + polar;
       }
 
+      // ── F27 great-spot anticyclone (Stage-6 albedo, Bands step 4b — card F27) — the
+      // kinematic vortex signature (research doc storm-mask + rotational swirl row): a
+      // hash-placed deterministic center, a rotational domain warp of the DIRECTION the
+      // whole band computation reads (so the stripes themselves deflect and wrap around
+      // the oval — collar/moat for free, card §6 item 3), and core/collar/companion
+      // color terms layered onto the finished band color. ALBEDO ONLY — no h/grad
+      // writes. ES 1.00-safe loops: constant bound 8, break on the uniform count.
+      // Per-storm tangent frame: east = normalize(cross(up, c)) (storm centers are
+      // clamped |y| <= 0.7, so the frame never degenerates), north = cross(c, east).
+      // Elliptical distance d = |(dot(n,east)/aspect, dot(n,north))| — chord-projection
+      // components approximate great-circle angle to ~1.5% at the R <= 0.30 rad radii
+      // involved (card §4: stretch the metric east-west by the local zonal direction).
+      // The step(0,dot(n,c)) facing guard kills the antipodal ghost the projected
+      // metric would otherwise mirror (d is ~0 at BOTH c and -c); the smoothstep
+      // falloff is already 0 far before the hemisphere edge, so the cut is invisible.
+      vec3 stormSwirl(vec3 n){
+        // rotate n around each storm center by ang = rotStrength x smoothstep(R,0,d)
+        // (Rodrigues, axis = c): a solid-body-like core twist decaying C1-smoothly to
+        // zero at the rim — the §4 kinematic recipe in 3D-rotation form (no 2D frame).
+        for (int i = 0; i < 8; i++){
+          if (i >= uStormCount) break;
+          vec3 c  = uStormPosSize[i].xyz;
+          float R = uStormPosSize[i].w;
+          vec3 east  = normalize(cross(vec3(0.0, 1.0, 0.0), c));
+          vec3 north = cross(c, east);
+          float d = length(vec2(dot(n, east) / uStormParams[i].y, dot(n, north)));
+          float ang = uStormParams[i].x * smoothstep(R, 0.0, d) * step(0.0, dot(n, c));
+          float ca = cos(ang), sa = sin(ang);
+          n = n * ca + cross(c, n) * sa + c * (dot(c, n) * (1.0 - ca));
+        }
+        return n;
+      }
+      vec3 stormColTerms(vec3 n, vec3 col){
+        // color terms ON TOP of the finished band color (card §6.5 step 3): a soft
+        // elliptical core mixing toward uStormColor (warm deepened tint mode 0 / dark
+        // bruise mode 1), a pale collar LUMINANCE lift ring at 0.6R-1.0R (rim/interior
+        // contrast survives posterization as two distinct levels, card §6 item 4), and
+        // for the dark GDS variant a small bright companion-cloud Gaussian offset
+        // ~1.3R east + 0.5R poleward (the Voyager 2 read, card §6 item 7). n is the
+        // direction zonalBandCol received — the storm-swirled one, so the mask edge
+        // wobbles with the same twist the bands carry (interior spiral hint at close
+        // range, card §6 item 5, from the swirl alone — static v1).
+        for (int i = 0; i < 8; i++){
+          if (i >= uStormCount) break;
+          vec3 c  = uStormPosSize[i].xyz;
+          float R = uStormPosSize[i].w;
+          vec3 east  = normalize(cross(vec3(0.0, 1.0, 0.0), c));
+          vec3 north = cross(c, east);
+          float de = dot(n, east), dn = dot(n, north);
+          // facing guard as a +100 far-side distance pedestal: branchless antipode kill
+          float d = length(vec2(de / uStormParams[i].y, dn)) + (1.0 - step(0.0, dot(n, c))) * 100.0;
+          // core <= 0.6R soft: a coherent closed oval, not a smeared noise blob
+          float core = 1.0 - smoothstep(0.40 * R, 0.62 * R, d);
+          col = mix(col, uStormColor[i], core * 0.85);
+          // pale collar 0.6R-1.0R: multiplicative luminance lift (hue-preserving)
+          float collar = smoothstep(0.55 * R, 0.72 * R, d) * (1.0 - smoothstep(0.88 * R, 1.05 * R, d));
+          col = min(col * (1.0 + 0.22 * collar), vec3(1.0));
+          // bright companion (dark mode only — uStormParams.w derives mode x 0.8):
+          // a near-white additive Gaussian east-poleward of the core
+          float comp = uStormParams[i].w;
+          if (comp > 0.0){
+            float py = (c.y < 0.0) ? -1.0 : 1.0;   // poleward = away from the equator
+            vec2 q = vec2(de - 1.3 * R, dn - py * 0.5 * R) / (0.35 * R);
+            float g = exp(-dot(q, q)) * step(0.0, dot(n, c));
+            col = min(col + vec3(0.30, 0.32, 0.34) * (comp * g), vec3(1.0));
+          }
+        }
+        return col;
+      }
+
       // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
       // visible deck: alternating bright ZONES (anticyclonic upwelling, fresh high
       // condensate) and dark BELTS (cyclonic subsidence, deeper warm cloud showing
@@ -1445,6 +1528,13 @@
         // faint in-band luminance grain from the warp field itself (hue-neutral,
         // contrast-scaled) — the close-deck sheared-flow texture inside one band.
         col *= 1.0 + 0.10 * uBandContrast * r;
+        // F27 storm color terms ride on the finished band color (core / collar /
+        // companion) — N here is already the storm-swirled direction from the call
+        // site, so mask and deflected stripes share one geometry. Count 0 skips the
+        // call: byte-identical F25 output (the F27 regression contract).
+        // provinceWeight(PROV_GREATSPOT) is NEUTRAL (floor 1.0) — the registry fan-out
+        // convention's multiply, kept as the mix weight (identically 1.0 today).
+        if (uStormCount > 0) col = mix(col, stormColTerms(N, col), provinceWeight(PROV_GREATSPOT));
         // polar hood: a darkened cap keyed on latitude only (Jupiter/Neptune hoods);
         // bands fade INTO it rather than pinching at a convergence point.
         float hood = smoothstep(0.72, 0.95, abs(trueLat));
@@ -2461,7 +2551,22 @@
         // on every terrestrial preset — the whole block is a no-op there.
         // provinceWeight(PROV_BANDS) is NEUTRAL (floor 1.0 — atmosphere, not geology).
         float bandMask = uBandStrength * provinceWeight(PROV_BANDS);
-        if (bandMask > 0.0) albedoCol = mix(albedoCol, zonalBandCol(N, vPos), bandMask);
+        if (bandMask > 0.0){
+          // ── F27 great spot — the swirl is applied to the DIRECTION the whole band
+          // computation reads, BEFORE zonalBandCol: trueLat AND the warp/noise domain
+          // both see the storm-rotated sphere, so the stripes deflect and wrap around
+          // the vortex (embedded IN the flow, card §6 item 3 — not a pasted sticker).
+          // provinceWeight(PROV_GREATSPOT) is NEUTRAL (floor 1.0 — same gas-deck
+          // pattern as PROV_BANDS/PROV_JETS). uStormCount 0 (feature off, or any
+          // terrestrial preset deriving spotStrength 0) takes the raw N/vPos path:
+          // byte-identical F25 rendering — the F27 regression contract.
+          vec3 bandN = N, bandPos = vPos;
+          if (uStormCount > 0){
+            bandN = stormSwirl(normalize(vPos));
+            bandPos = bandN * length(vPos);
+          }
+          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandPos), bandMask);
+        }
         // ── F25 jets solo visibility — jets key on uJetStrength ALONE: with the deck
         // dark (solo('jets') zeroes uBandStrength), the shear turbulence still reads
         // as a multiplicative 1±turb LUMINANCE factor on whatever albedo is beneath
@@ -2813,6 +2918,13 @@
       uWeatherWarp:     { value: 0.3 },   // F26 front-shredding latitude-warp amplitude — lab knob
       uWeatherDry:      { value: 0.15 },  // F26 subtropical-trough drying inside the cloud threshold — lab knob
       uWeatherOffset:   { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the warp domain)
+      // ── F27 storm carriage (registry REGISTRY-canonical-uniforms.md storm row, lab-sized) ──
+      // Flat arrays cap 8 (the shadowMoonPos pattern); F27 drives index 0, F28 extends
+      // the count. uStormCount 0 ⇒ every storm term no-ops (byte-identical F25 render).
+      uStormPosSize:    { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },  // xyz center, w angular radius (rad)
+      uStormParams:     { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },  // x rotStrength, y aspect, z mode, w companion
+      uStormColor:      { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },  // core color (driven: bandTint warmed/bruised)
+      uStormCount:      { value: 0 },     // live storm count (driven: gas gate x greatSpotEnabled)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2971,6 +3083,16 @@
       weatherWarp: 0.3,     // F26 front-shredding warp amplitude (lab knob)
       weatherDry: 0.15,     // F26 subtropical-trough drying (lab knob)
       weatherBandsEnabled: true, // F26 enable gate
+      stormSeed: 1234,      // F27 storm-placement seed — SEED IDENTITY: not reset on preset change; the folder 🎲 rerolls it
+      spotStrength: 0.0,    // F27 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
+      spotCenter: [1,0,0],  // F27 unit-sphere storm center (driven: stormSeed hash, |y| <= 0.7 pole-avoid)
+      spotRadius: 0.24,     // F27 angular radius rad (driven: 0.18 + 0.12 x hash)
+      spotRot: 1.8,         // F27 core swirl strength rad, signed = spin direction (driven: hash)
+      spotAspect: 1.8,      // F27 E-W ellipse aspect (driven: 1.6 + 0.4 x hash — the zonal-shear elongation)
+      spotMode: 0,          // F27 variant: 0 warm GRS-class / 1 dark GDS-class (driven: T_eq vigor < 0.35 = dark)
+      spotColor: [0.9,0.5,0.3], // F27 core color (driven: bandTint warmed x(1.25,0.95,0.8) / bruised x0.55)
+      spotCompanion: 0.0,   // F27 bright companion-cloud strength (driven: mode x 0.8 — dark variant only)
+      greatSpotEnabled: true, // F27 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3551,6 +3673,43 @@
       // (Lava/Europa are locked but airless) — verify by manual uniform poke,
       // deferred-to-profiles (card §6.5 step 4).
       state.weatherLocked = (_fp.tidalState?.locked && _hadLiquid) ? 1 : 0;
+      // ── F27 great-spot anticyclone — deterministic storm derivation (card §6.5
+      // step 4; derivation HERE per the F11 precedent — core.js untouched). Placement
+      // is SEED IDENTITY: hash(macroSeed, stormSeed) — same pair ⇒ same spot on
+      // re-approach (card §6 item 8); stormSeed survives preset changes (NOT in the
+      // 🎲 transient reset above) and rerolls only via the folder 🎲. mulberry32-style
+      // inline PRNG — each draw advances the stream, so the fields decorrelate.
+      const _spotRng = (seed => { let _a = seed >>> 0; return () => {
+        _a = (_a + 0x6D2B79F5) | 0;
+        let _t = Math.imul(_a ^ (_a >>> 15), 1 | _a);
+        _t = (_t + Math.imul(_t ^ (_t >>> 7), 61 | _t)) ^ _t;
+        return ((_t ^ (_t >>> 14)) >>> 0) / 4294967296;
+      }; })((Math.imul(state.macroSeed, 2654435761) ^ state.stormSeed) >>> 0);
+      // Same h2-he gate as F24/F25: a great spot is a gas-deck vortex — every solid
+      // preset derives 0 and the per-frame count gate writes uStormCount 0 (the
+      // 9-preset pre-check 2026-06-10: terrestrials/airless all 0; the F27 contract).
+      state.spotStrength = _gas ? 1.0 : 0.0;
+      // Center: longitude uniform; y = 1.4·(hash−0.5) clamped |y| <= 0.7 (the card's
+      // pole-avoid — also keeps the GLSL east-frame cross(up,c) non-degenerate).
+      const _spotLon = _spotRng() * Math.PI * 2.0;
+      const _spotY = Math.max(-0.7, Math.min(0.7, 1.4 * (_spotRng() - 0.5)));
+      const _spotRxz = Math.sqrt(1.0 - _spotY * _spotY);
+      state.spotCenter = [_spotRxz * Math.cos(_spotLon), _spotY, _spotRxz * Math.sin(_spotLon)];
+      // Radius 0.18..0.30 rad (~2 stripes on the count-14 Jovian — the GRS straddles
+      // ~2 bands, card §6.5 step 6); swirl 1.2..2.5 rad signed (sign = spin direction);
+      // aspect 1.6..2.0 E-W (the zonal-shear elongation, card §6 item 2).
+      state.spotRadius = 0.18 + 0.12 * _spotRng();
+      state.spotRot = (1.2 + 1.3 * _spotRng()) * (_spotRng() > 0.5 ? 1 : -1);
+      state.spotAspect = 1.6 + 0.4 * _spotRng();
+      // Variant from the SAME T_eq vigor ramp as the deck personality: a cold bland
+      // ice giant gets the dark GDS bruise + bright companion (Neptunian, vigor 0);
+      // warm churning decks get the warm GRS oval (Jovian 0.99 / Saturnian 0.55).
+      state.spotMode = _vigor < 0.35 ? 1 : 0;
+      const _bt = state.bandTint;
+      state.spotColor = state.spotMode === 1
+        ? [_bt[0] * 0.55, _bt[1] * 0.55, _bt[2] * 0.55]                                  // dark bruise: 1-2 posterize levels down
+        : [_bt[0] * 0.92, _bt[1] * 0.52, _bt[2] * 0.40];                                 // GRS brick-red: DARKER + redder than the deck so the core posterizes 1-2 levels below the pale collar (live tune 2026-06-10 — the first cut x(1.25,0.95,0.8) matched the zone luminance and the core vanished into the deck)
+      state.spotCompanion = state.spotMode * 0.8;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -3915,6 +4074,18 @@
     fWeather.add(state, 'weatherDry', 0, 0.3, 0.01).name('trough drying');
     fWeather.add({ roll(){ state.weatherOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fWeather.add(state, 'weatherBandsEnabled').name('✓ enabled');
+    // ▸ Great spot (F27) — a single coherent anticyclone embedded in the gas deck:
+    // storm-swirled band domain (stripes wrap the oval) + core/collar/companion color
+    // terms via the registry-shaped uStorm* arrays. radius/swirl/aspect are driven
+    // (stormSeed hash, .listen()); the 🎲 rerolls stormSeed THROUGH applyDrivers —
+    // placement is seed identity, exercised end-to-end (card §5), and it survives
+    // preset changes (unlike the transient domain-offset rolls).
+    const fSpot = fBandsGroup.addFolder('Great spot (F27)'); fSpot.close();
+    fSpot.add(state, 'spotRadius', 0.05, 0.35, 0.005).name('radius (driven)').listen();
+    fSpot.add(state, 'spotRot', -3, 3, 0.01).name('swirl (driven)').listen();
+    fSpot.add(state, 'spotAspect', 1, 3, 0.01).name('aspect (driven)').listen();
+    fSpot.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storm');
+    fSpot.add(state, 'greatSpotEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -3925,7 +4096,7 @@
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
-      weatherBands: fWeather,
+      weatherBands: fWeather, greatSpot: fSpot,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4175,6 +4346,14 @@
       uniforms.uWeatherWarp.value      = state.weatherWarp;
       uniforms.uWeatherDry.value       = state.weatherDry;
       uniforms.uWeatherOffset.value.set(state.weatherOffset[0], state.weatherOffset[1], state.weatherOffset[2]);
+      // F27 great spot — copy spot0 into the registry-shaped arrays each frame (cheap;
+      // F28 will extend indices 1+). The count write is THE regression contract:
+      // greatSpotEnabled false OR a terrestrial preset (spotStrength 0) ⇒ uStormCount
+      // 0 ⇒ every GLSL storm term no-ops ⇒ byte-identical F25 rendering.
+      uniforms.uStormPosSize.value[0].set(state.spotCenter[0], state.spotCenter[1], state.spotCenter[2], state.spotRadius);
+      uniforms.uStormParams.value[0].set(state.spotRot, state.spotAspect, state.spotMode, state.spotCompanion);
+      uniforms.uStormColor.value[0].set(state.spotColor[0], state.spotColor[1], state.spotColor[2]);
+      uniforms.uStormCount.value = (state.greatSpotEnabled && state.spotStrength > 0) ? 1 : 0;   // ✓ enable gate
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
