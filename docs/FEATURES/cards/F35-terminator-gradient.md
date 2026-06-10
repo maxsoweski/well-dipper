@@ -44,12 +44,49 @@ Unbuilt — recommended recipe once built. Registration: add `terminator: { labe
 - [ ] Under the 4x4 Bayer envelope, does the band's edge dissolve into dither texture instead of forming a hard concentric color ring (the banding failure mode the envelope exists to prevent)?
 - [ ] Does it compose with the F34 limb glow at the limb-terminator corners without blowing out — two scattering terms reading as one atmosphere?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: the §4 analytic band verbatim — a 1-D gaussian of signed
+mu = dot(N, uLightDir) in Stage 9, additive-tint only, riding the F34
+wiring pattern (freshest exemplar commit `3587fab`).
+
+1. **Register** — `terminator` in FEATURES (archetypes:
+   tectonic-terrestrial, per §5) + featureFolders + `terminatorEnabled`
+   default true + GUI folder "Terminator gradient (F35)" in the
+   Surface — Optical group F34 created (driven sliders `.listen()`:
+   termStrength, termWidth; own bypass toggle mirroring limbBypass;
+   ✓ enable LAST).
+2. **Shader** — uniforms uTermColor (vec3), uTermStrength, uTermWidth,
+   uTermBypass. Stage 9, GEOMETRIC N (atmospheric great-circle band, F34
+   precedent): `float mu = dot(N, uLightDir); float tt = mu / uTermWidth;
+   vec3 termC = uTermColor * uTermStrength * exp(-tt*tt);` — signed mu so
+   the band straddles zero and bleeds onto the night side. NO
+   pow(negative, y) — exp(-tt*tt) exactly. Posterize unless uTermBypass;
+   add next to limbC (additive only, never darkens).
+3. **applyDrivers derivation** (core.js OFF-LIMITS): strength
+   hasAtmo ? ~0.5 : 0; width from D5 pressure — hairline ~0.06 at ≤0.1 bar,
+   ~0.12 at 1 bar, broad ~0.30 Venus-class (log-ish clamp); hue from a
+   small per-preset map (warm red-orange n2-o2; broad orange Venus; cooler
+   for cold-haze worlds; Mars-blue rule recorded as data for any future
+   thin-dusty-CO2 preset), fallback warm orange.
+4. **Gates** — terminatorEnabled false OR airless ⇒ strength 0 (razor
+   terminator regression).
+5. **Plumbing** — PROV_TERM=33 + PROVINCES neutral row + provinceWeight
+   GLSL row + GLSL_NAME vitest line, per F34.
+
+v1 scope cuts (logged, not built): Mie forward-lobe phase (the Mars blue
+INVERSION mechanism — hue carried as data only); raymarched scattering
+(LOD2 rung); cloud-top reddening coupling near the band.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4c heavy loop)
+- Evidence (repo root, gitignored): `F35-rocky-d20.png`(+`-off`) (warm band straddling mu≈0: peak dRGB [113,48,29], FWHM 0.22 mu ≈ theory 0.20, ~1.4 posterize buckets), `F35-venus-d20.png` (broad orange, FWHM 0.48 — 2.18× Rocky vs theory 2.47×), `F35-rocky-d6.png` (Bayer dissolve, no hard ring), `F35-eyeball.png` (F31f ring + band = one coherent twilight zone). Verifier ray-cast every diff pixel onto the sphere to bin by mu — found uLightDir is OBJECT-space (world light fixed [0.61,0.36,0.71]); accounted for.
+- §6 checklist: distinct band 🟢 (own 1-2 buckets) · width↔pressure 🟢 (0.12→0.297 derived, 2.18× measured) · hue swap 🟢 (Rocky R-dominant / Titan B>R>G mauve / Neptunian blue-dominant) · additive-only 🟢 (night mean |diff| ≤0.26, day mu>0.5 diff 0.0 on Venus/Titan/Neptunian) · tracks lighting 🟢 (spun 1.2 rad, band re-centered at world-mu −0.03, no seam) · Bayer dissolve 🟢 · F34 composition 🟢 (Venus corner maxRGB [255,255,175], no white flood; saturated px are dayside clouds, band ≈0.002 there).
+- Live drivers: strength 0.5 all retained-atmosphere presets / 0 airless (Frozen/Lava A/B diff identically 0.0); width clamp(0.12+0.09·log10(P), 0.06, 0.30): Rocky 0.12 · Ocean/Titan 0.136 · Venus 0.297 · gas ×4 0.30; hue map 10 presets (Mars blue-inversion rule recorded as data for future thin-CO2 presets).
+- Tweaks applied: 0 of 3 cycles — first live render passed all items (review M1 fixed pre-verify).
+- Code review (fable): APPROVE-WITH-FIXES. M1 fixed pre-verify: FEATURES registration was tectonic-terrestrial only while drivers light the band on every retained-atmosphere preset and the default-on archetype filter would have hidden the GUI on 6 live presets — widened to F34's four-archetype set (scope widening vs the card's terrestrial/rocky/venus doc types, logged here). N4: corner stacking can't blow out (limb carries diff+0.15≈0.15 at the terminator; composite min-clamps). Implementer deviations accepted: constant warm-orange fallback (sidesteps N6 staleness), veilTint on termC (matches limbC), double zero-guard.
+- Taste forks for Max's lap: (a) Eyeball — F31f cloud-ring speckle picks up a warm/pink tint where it overlaps the band (coherent twilight overall, but the tinted speckle is an aesthetic call); (b) terminator band on the gas giants (physically real, widened per M1, but the card's doc scope was terrestrial/rocky/venus — drop to zero there if it fights the band stack); (c) global strength 0.5 authored, not derived.
+- Status: VERIFIED_PENDING_MAX

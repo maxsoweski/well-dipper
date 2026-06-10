@@ -168,6 +168,11 @@
       // ── F34 limb glow (card F34 — driver-true rim) ──
       uniform vec3  uLimbColor;     // F34 rim tint (driven: per-preset atmosphere hue; pre-F34 the rim reused uBaseColor)
       uniform float uLimbExponent;  // F34 fresnel width (driven: ~3.5 thin clear blue line, ~1.8 thick-haze halo; always > 0)
+      // ── F35 terminator color gradient (card F35 — the F34 rim's twilight half) ──
+      uniform vec3  uTermColor;     // F35 band tint (driven: per-preset hue map — warm n2-o2, broad orange Venus, cooler cold-haze)
+      uniform float uTermStrength;  // F35 band strength (driven: ~0.5 retained atmosphere, 0 airless — the master gate)
+      uniform float uTermWidth;     // F35 gaussian half-width in mu (driven: D5 pressure log ramp 0.06..0.30; floored in-shader)
+      uniform int   uTermBypass;    // 1 = band skips the quantizer (smooth twilight)
       uniform float uCloudCoverage;   // 0..1 weather-layer density (Task 7)
       uniform float uAuroraIntensity; // 0..1 night-side ring strength (Task 7)
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
@@ -776,6 +781,7 @@
       const int PROV_DAYTHERM    = 30;  // F32 — neutral (irradiation, not geology): the dayside lobe follows the star, not the rock provinces (FROST-row pattern)
       const int PROV_NIGHTTHERM  = 31;  // F33 — neutral (atmospheric emission, not geology): the night floor + silicate deck ride ABOVE the rock provinces (FROST-row pattern)
       const int PROV_LIMB        = 32;  // F34 — neutral (global optics, not geology): the rim hugs the whole silhouette regardless of provinces (FROST-row pattern, like clouds F31)
+      const int PROV_TERM        = 33;  // F35 — neutral (global optics, not geology): the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -826,6 +832,7 @@
         else if (fid == PROV_DAYTHERM)   { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_NIGHTTHERM) { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_LIMB)       { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_TERM)       { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2938,6 +2945,23 @@
         vec3 limbC = uLimbColor * limb * provinceWeight(PROV_LIMB);
         limbC *= veilTint;    // F16 — the lit limb reads through the haze (card §6 item 5)
         limbC = (uLimbBypass == 1) ? limbC : posterize(limbC, uLevels, fc, 0.4, uDitherMode);
+        // F35 terminator color gradient — the F34 rim's twilight half: a 1-D gaussian
+        // band of SIGNED mu = dot(N, uLightDir) against the same GEOMETRIC normal N
+        // (an atmospheric great-circle band; relief never bends twilight), peaked at
+        // mu = 0 so it straddles the boundary and bleeds slightly onto the night side.
+        // Written exp(-tt*tt) — NEVER pow(negative, y), which is spec-undefined for
+        // signed mu. Width is floored in-shader (max(w, 1e-3)) AND the whole term is
+        // gated on strength > 0: enable off, or any airless preset, derives strength
+        // 0 and skips the block entirely — byte-identical pre-F35 output, the F35
+        // regression contract. Additive tint ONLY (Stage-9 rule: never darkens).
+        vec3 termC = vec3(0.0);
+        if (uTermStrength > 0.0){
+          float mu = dot(N, uLightDir);
+          float tt = mu / max(uTermWidth, 1e-3);
+          termC = uTermColor * uTermStrength * exp(-tt * tt) * provinceWeight(PROV_TERM);
+          termC *= veilTint;  // F16 — twilight reads through the haze, same as the limb
+          termC = (uTermBypass == 1) ? termC : posterize(termC, uLevels, fc, 0.4, uDitherMode);
+        }
 
         // ════════ posterize(surface) split — ★ EMISSIVE channel: all terms below BYPASS the quantizer ════════
         // Owners: thermal Bands F32/F33 (emissiveBlackbody), magma Exotic F41 (emissiveBlackbody),
@@ -3015,7 +3039,7 @@
         float aurora = ringMask * nightMask * rays * uAuroraIntensity;
         vec3 auroraC = vec3(0.3, 0.9, 0.5) * aurora * 0.6;
 
-        gl_FragColor = vec4(min(surface + emissive + specC + limbC + cloudC + auroraC, vec3(1.0)), 1.0);
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -3038,6 +3062,11 @@
       // ── F34 limb glow (driver-true rim — card §6.5 step 2) ──
       uLimbColor:      { value: new THREE.Color(0.45, 0.65, 1.0) },  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
       uLimbExponent:   { value: 3.5 },   // F34 fresnel width (driven: thin clear ~3.5 / thick-haze ~1.8)
+      // ── F35 terminator color gradient (driver-true twilight band — card §6.5 step 2) ──
+      uTermColor:      { value: new THREE.Color(1.0, 0.45, 0.18) }, // F35 band tint (driven: per-preset map, fallback warm orange)
+      uTermStrength:   { value: 0.0 },   // F35 band strength (driven: ~0.5 retained atmosphere / 0 airless)
+      uTermWidth:      { value: 0.12 },  // F35 gaussian half-width (driven: pressure log ramp 0.06..0.30)
+      uTermBypass:     { value: 0 },     // 1 = band skips the quantizer (smooth twilight)
       uCloudCoverage:  { value: 0.0 },   // weather-layer density (driven by deriveUniforms)
       uAuroraIntensity:{ value: 0.0 },   // night-side ring strength (driven by deriveUniforms)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
@@ -3595,9 +3624,14 @@
       limbExponent: 3.5,    // F34 fresnel width (driven: thin clear ~3.5 narrow blue line / thick-haze ~1.8 fat halo)
       limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
       limbHazeShell: 0.0,   // F31e detached-shell intensity (driven: > 0 ONLY on the thick-haze class — Titan/Venus/Sub-Neptune)
+      terminatorEnabled: true, // F35 enable gate — off zeroes uTermStrength at the per-frame writer (razor colorless terminator)
+      termStrength: 0.0,    // F35 band strength (driven: ~0.5 on every retained atmosphere / 0 airless)
+      termWidth: 0.12,      // F35 gaussian half-width in mu (driven: D5 pressure log ramp — 0.06 hairline / 0.12 at 1 bar / 0.30 Venus-class)
+      termColor: [1.0, 0.45, 0.18],  // F35 band tint (driven: per-preset map, fallback warm orange)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
+      termBypass: false,    // F35 — band bypasses the quantizer (mirrors limbBypass)
       // ── voronoi3d spike debug (risk #1 seam gate; removed once foundation lands) ──
       debugMode: 0,         // 0 off, 1 F1, 2 F2-F1 border, 3 cell-id color (seam test), 4 lit relief
       voroScale: 5.0,
@@ -3960,6 +3994,29 @@
       'Ice giant (Neptunian)':      [0.45, 0.60, 1.00],   // methane-absorption ice-giant blue
       'Sub-Neptune (hazy)':         [0.82, 0.74, 0.62],   // photochemical haze warm grey (GJ 1214 b)
       'Hot Jupiter (locked giant)': [0.80, 0.50, 0.32],   // dusty sodium-scatter warm rim
+    };
+    // ── F35 terminator gradient — per-preset twilight-band hue (card §6.5 step 3).
+    // Slant-path reddening differs from the F34 rim hue: the limb is the atmosphere
+    // seen edge-on (its own color); the terminator is sunlight FILTERED through it
+    // (reddened on n2-o2, broad orange through the Venus shroud, cooler on the
+    // cold-haze worlds). Mars rule recorded as DATA for any future thin-dusty-CO2
+    // preset: micron dust forward-scatters blue near the sun — the INVERTED blue
+    // sunset, ~[0.45, 0.60, 1.00]; no current preset exercises it. Review N6 (F34)
+    // replicated: any NEW atmospheric preset MUST get a row here — the fallback is
+    // a CONSTANT warm orange (no stale-uBaseColor read, but a generic hue that
+    // throws away the preset's composition story). Airless presets are deliberately
+    // ABSENT — they land on the fallback and stay inert behind termStrength 0.
+    const TERM_COLOR_BY_PRESET = {
+      'Rocky (Earthlike)':          [1.00, 0.45, 0.18],   // Earth's orange-red sunset band (ISS twilight)
+      'Ocean (temperate)':          [1.00, 0.42, 0.22],   // same n2-o2 reddening, a touch rosier over water
+      'Eyeball (locked temperate)': [1.00, 0.48, 0.20],   // n2-o2 like Rocky — same warm family
+      'Titan (methane seas)':       [0.72, 0.52, 0.78],   // cold tholin haze — cool mauve twilight
+      'Venus (sulfuric shroud)':    [1.00, 0.62, 0.28],   // broad orange arc (Akatsuki crescent)
+      'Gas giant (Jovian)':         [1.00, 0.58, 0.30],   // warm NH3-deck amber
+      'Gas giant (Saturnian)':      [0.98, 0.72, 0.40],   // paler gold twilight
+      'Ice giant (Neptunian)':      [0.50, 0.55, 0.95],   // cold methane haze — cool blue band
+      'Sub-Neptune (hazy)':         [0.88, 0.62, 0.45],   // muted warm photochemical haze
+      'Hot Jupiter (locked giant)': [1.00, 0.38, 0.22],   // sodium-scatter deep red
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -4487,6 +4544,24 @@
       // the rim itself fires — every clear/airless preset keeps the mesh invisible
       // (the per-frame writer keys visibility on this value + limbEnabled).
       state.limbHazeShell = (_thickHaze && state.limbStrength > 0) ? 0.6 : 0.0;
+      // ── F35 terminator color gradient — driver derivation (card §6.5 steps 3-4;
+      // post-process HERE per the F34 precedent — core.js untouched). Strength is
+      // a flat ~0.5 on every retained atmosphere and 0 airless (the hasAtmo master
+      // gate: Frozen/Lava/Europa keep the razor colorless terminator — the F35
+      // regression contract; the per-frame writer adds the terminatorEnabled gate).
+      state.termStrength = _fp.atmosphere?.retained ? 0.5 : 0.0;
+      // Band width from D5 pressure on a log ramp (card §6.5 step 3): hairline
+      // 0.06 at <= ~0.1 bar, 0.12 at 1 bar (Rocky/Eyeball), ~0.14 at 1.5 bar
+      // (Ocean/Titan), saturating at the 0.30 Venus-class ceiling (92 bar — the
+      // Akatsuki broad-arc reference; gas-giant kbar pressures clamp to the same
+      // 0.30). The 1e-3 floor keeps log10 finite on airless presets — their
+      // width clamps to 0.06 and stays inert behind strength 0.
+      const _tp = Math.max(_fp.atmosphere?.pressure ?? 0, 1e-3);
+      state.termWidth = Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(_tp)));
+      // Band hue from the per-preset map; fallback = a constant warm orange (NOT
+      // the F34 stale-uBaseColor read — see the N6 note on TERM_COLOR_BY_PRESET).
+      const _tc = TERM_COLOR_BY_PRESET[driverUI.preset];
+      state.termColor = _tc ? _tc.slice() : [1.0, 0.5, 0.2];
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -4946,6 +5021,17 @@
     fLimb.add(state, 'limbHazeShell', 0, 1, 0.01).name('haze shell (driven)').listen();
     fLimb.add(state, 'limbBypass').name('limb bypass quantizer');
     fLimb.add(state, 'limbEnabled').name('✓ enabled');
+    // ▸ Terminator gradient (F35) — the F34 rim's twilight half: a colored gaussian
+    // band straddling the day/night boundary (Stage 9, additive-tint only).
+    // strength / width / color are driven (hasAtmo gate, pressure-log width,
+    // per-preset hue map, .listen()); the bypass toggle is the lab knob. NO 🎲
+    // — the band is lighting geometry, nothing is placed.
+    const fTerm = fOpticalGroup.addFolder('Terminator gradient (F35)'); fTerm.close();
+    fTerm.add(state, 'termStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fTerm.add(state, 'termWidth', 0.02, 0.5, 0.005).name('width (driven)').listen();
+    fTerm.addColor(state, 'termColor').name('band color (driven)').listen();
+    fTerm.add(state, 'termBypass').name('term bypass quantizer');
+    fTerm.add(state, 'terminatorEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -4959,7 +5045,7 @@
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds,
       daysideThermal: fThermal, nightsideThermal: fThermalNight,
-      limb: fLimb,
+      limb: fLimb, terminator: fTerm,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -5138,6 +5224,13 @@
       hazeShellUniforms.uShellColor.value.setRGB(state.limbColor[0], state.limbColor[1], state.limbColor[2]);
       hazeShellUniforms.uShellIntensity.value = state.limbHazeShell;
       hazeShell.visible = !!(state.limbEnabled && state.limbStrength > 0 && state.limbHazeShell > 0);
+      // F35 terminator gradient — terminatorEnabled gates strength→0 (the Stage-9
+      // band is gated on uTermStrength > 0, so one gate skips the whole additive
+      // term and restores byte-identical pre-F35 output); airless presets derive
+      // strength 0, so the same contract holds with the enable on.
+      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate
+      uniforms.uTermWidth.value = state.termWidth;
+      uniforms.uTermColor.value.setRGB(state.termColor[0], state.termColor[1], state.termColor[2]);
       uniforms.uProvinceWeight.value = state.provinceWeight;
       uniforms.uSeaLevel.value = state.lakesEnabled ? state.seaLevel : -1.0;   // ✓ enable gate (preserves slider value)
       uniforms.uDeltaDensity.value = state.deltasEnabled ? state.deltaDensity : 0.0;   // ✓ enable gate
@@ -5302,6 +5395,7 @@
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
+      uniforms.uTermBypass.value = state.termBypass ? 1 : 0;   // F35
       uniforms.uTime.value = t;   // clouds drift + aurora rays animate (Task 7)
       uniforms.uDebugMode.value = state.debugMode | 0;
       uniforms.uVoroScale.value = state.voroScale;

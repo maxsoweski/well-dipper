@@ -47,6 +47,11 @@ export const FEATURES = {
   // archetype (the F31 clouds membership set): the airless archetypes derive
   // limbStrength 0 in core, so listing them would only show a dead folder.
   limb:       { label: 'Limb glow (F34)',       enableKey: 'limbEnabled',      archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
+  // F35 terminator gradient — review M1: registration must agree with the render
+  // set. Drivers light the band on EVERY retained-atmosphere preset (a terminator
+  // is physically real on the giants too), so membership matches F34's set; the
+  // card's narrower terrestrial/rocky/venus doc scope is logged in its §7.
+  terminator: { label: 'Terminator gradient (F35)', enableKey: 'terminatorEnabled', archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -109,4 +114,5 @@ export const PROVINCES = {
   daysideThermal:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — irradiation, not geology: the dayside lobe follows the star, not the rock provinces (FROST-row pattern)
   nightsideThermal:{ field: 2, polarity: +1, floor: 1.00 },  // neutral — atmospheric emission, not geology: the night floor + silicate deck ride ABOVE the rock provinces (FROST-row pattern)
   limb:       { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the rim hugs the whole silhouette regardless of provinces (FROST-row pattern, like clouds F31)
+  terminator: { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
 };
