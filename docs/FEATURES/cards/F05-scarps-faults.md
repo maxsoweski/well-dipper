@@ -49,8 +49,32 @@ Built — solo it in the lab on the :9223 debug Chrome (see memory/chrome-devtoo
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Frozen (airless) + Rocky
+  (Earthlike), solo `scarps`, d6/d2.5/d4. Drivers verified live: Frozen
+  strength 0.0912 / style 1.0 (card's ≈0.091 normal-fault regime); Rocky
+  strength 0.0288 / style 0.156 (weak thrust / wrinkle-ridge regime).
+  - One-sided cliff: each front is a single hard lit/shadow band edge
+    with flat dithered treads on both sides — no symmetric corrugation
+    (shots 01 d6, 02 d2.5).
+  - Train + sinuosity: fronts share one regional orientation and snake
+    lobately (Discovery-Rupes-like), never ruler-straight (shot 01).
+  - Polarity: controlled A/B at fixed strength on Frozen — style 0 vs 1
+    inverts the raised/dropped relationship along the same front lines
+    (same seed/axis), a form change not a re-roll (shots 02 vs 04);
+    profile polarity also pinned by the scarpProfile vitest oracle.
+  - Preset regimes: Rocky reads as faint low-amplitude wrinkle ridges —
+    lighting-edge relief on plains (shot 03), clearly distinct from
+    Frozen's strong cliffs; matches the smallness/volatile drivers.
+  - Crosscut: with craters re-enabled at d4, scarp fronts slice through
+    crater fields while craters stay legible — additive offset, the P2
+    signature (shot 05).
+  - Province read at d6 holds as regional structure despite the ≤0.12
+    amplitude (shot 01). Rotation/dither stability covered by FOUNDATION
+    check 3 🟢 (screen-anchored Bayer, stationary speckle under rotation).
+  - Shots: F05-scarps-01-d6-frozen.png, -02-d2.5-front.png,
+    -03-d2.5-rocky-wrinkle.png, -04-d2.5-style0-thrust.png,
+    -05-d4-crosscut-craters.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
