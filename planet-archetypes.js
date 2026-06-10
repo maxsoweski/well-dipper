@@ -24,6 +24,7 @@ export const FEATURES = {
   coastlines: { label: 'Coastlines (F20)',      enableKey: 'coastEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
   outflow:    { label: 'Outflow channels (F13)',enableKey: 'outflowEnabled',   archetypes: ['tectonic-terrestrial','volatile-cold'] },
   karst:      { label: 'Karst (F21)',           enableKey: 'karstEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
+  dunes:      { label: 'Dunes & wind forms (F15)', enableKey: 'dunesEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -70,4 +71,5 @@ export const PROVINCES = {
   coastlines: { field: 2, polarity: +1, floor: 1.00 },  // neutral — margins live wherever the sea is, like lakes/frost
   outflow:    { field: 2, polarity: -1, floor: 0.30 },  // flood products — young lowlands, floods empty into the same basins as rivers
   karst:      { field: 1, polarity: +1, floor: 0.25 },  // soluble lithology — decorrelated from the fluvial z-field (CHAOS-row pattern)
+  dunes:      { field: 0, polarity: -1, floor: 0.30 },  // sand seas on old stable plains — the CRATER-row polarity (Mars barchans live among craters)
 };

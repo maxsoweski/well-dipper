@@ -375,6 +375,13 @@
       uniform float uKarstMazeDepth;   // labyrinth slot carve depth — lab knob
       uniform float uKarstPlateauLvl;  // plateau mask threshold on accumulated h — lab knob
       uniform vec3  uKarstOffset;      // 🎲 domain offset — own seed, decorrelated from fluvial/outflow
+      // ── F15 dunes & wind forms (Aeolian step 4a — card F15) ──
+      uniform float uDuneDensity;      // 0..1 master gate (driven: D6/D5 wind gate × dryness); <= 0 ⇒ early-out
+      uniform float uDuneAmp;          // ridge amplitude (relief units; dunes ADD — a deposit, not a carve) — lab knob
+      uniform float uDuneFreq;         // ridge frequency on latitude (across-wind coordinate; wavelength = 1/freq in pos.y) — lab knob
+      uniform float uDuneWarp;         // phase-warp amplitude (ridge threading/divergence, Shangri-La read) — lab knob
+      uniform float uDuneBelt;         // equatorial-belt confinement 0..1 (Titan hydrocarbon belts) — lab knob
+      uniform vec3  uDuneOffset;       // 🎲 domain offset — own warp seed, decorrelated from fluvial/outflow/karst
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -627,6 +634,7 @@
       const int PROV_COAST       = 16;  // F20 — neutral (margins live wherever the sea is), like LAKES/FROST
       const int PROV_OUTFLOW     = 17;  // F13 — flood products, same young-lowlands affinity as RIVERS
       const int PROV_KARST       = 18;  // F21 — soluble-lithology provinces (CHAOS-row pattern: y-field, decorrelated from the fluvial z-field)
+      const int PROV_DUNES       = 19;  // F15 — old stable plains (CRATER-row polarity: sand seas live among crater fields, not young orogens)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -663,6 +671,7 @@
         else if (fid == PROV_COAST)      { f = gProvince.z;       fl = 1.00; }
         else if (fid == PROV_OUTFLOW)    { f = 1.0 - gProvince.z; fl = 0.30; }
         else if (fid == PROV_KARST)      { f = gProvince.y; fl = 0.25; }
+        else if (fid == PROV_DUNES)      { f = 1.0 - gProvince.x; fl = 0.30; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -959,6 +968,56 @@
           float dsPm = (tpm > 0.0 && tpm < 1.0) ? (6.0*tpm*(1.0-tpm))/0.08 : 0.0;
           grad += -gateM * mDepth * (pm * r.yzw + r.x * dsPm * gradIn);
         }
+      }
+
+      // ── F15 duneCombiner (Stage-5 aeolian) — linear ergs v1: wind saltates loose grains
+      // into migrating ridges (card §4 Bagnold: flux needs air over a transport threshold —
+      // that D6/D5 gate lives in the DRIVEN uDuneDensity, airless ⇒ 0). Closed-form stand-in
+      // for the Werner/Paris transport sims (determinism constraint, card §4): a zonal (D8)
+      // wind ⇒ linear dunes run E-W, so the across-wind coordinate is latitude pos.y (the
+      // §3.2 banding trick re-aimed) and the ridge field is an ASYMMETRIC SAWTOOTH on
+      // t = fract(phase): long stoss ramp over t∈[0,0.72] × steep slip face over t∈[0.72,1]
+      // (product of smoothsteps — both ends sit at ridge=0 with zero slope, so the fract
+      // wrap has no lighting seam; the 0.72 split is the angle-of-repose asymmetry read).
+      // Phase warp = ONE low-freq noised() on its own uDuneOffset seed — ridges thread and
+      // diverge around obstacles (Titan Shangri-La). The phase derivative is EXACT
+      // (d(fract)=1 a.e., warp chain-ruled); the wind frame is locally constant (documented
+      // cosmetic-grad convention). Dunes are a DEPOSIT: h += positive relief, and
+      // canyonHeight is NOT written — that accumulator records incision (F4/F11/F13/F21
+      // carves) and nothing downstream of the chain reads it today, so a deposit entry
+      // would be both semantically wrong and inert. Sand-supply mask on ENTRY state:
+      // F11's lowGround mix (sand pools in basins — deposits flow AROUND mountains) ×
+      // gentle-slope gate on entry |grad| (karst's 0.5→1.2 — sand doesn't hang on cliffs)
+      // × equatorial belt mix(1, 1−ss(0.25,0.6,|lat|), uDuneBelt) × uDuneDensity ×
+      // provinceWeight(PROV_DUNES). No absolute-h floor anywhere ⇒ low-relief worlds
+      // (Titan) pass the masks (the F21 plateauLvl lesson). sand=0 ⇒ base untouched
+      // (§6 item 7); uDuneDensity <= 0 ⇒ early-out: Stage-A base byte-identical. v1 scope
+      // cuts (card §6.5.8): linear ergs ONLY — barchans/star/yardangs/streaks deferred.
+      void duneCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uDuneDensity <= 0.0) return;
+        float hIn = h;
+        vec3  gradIn = grad;                                   // mask reads entry state
+        float lowGround = mix(1.0, smoothstep(uFluvialHiGround, 0.0, hIn), uFluvialLowBias);
+        float gentle = 1.0 - smoothstep(0.5, 1.2, length(gradIn));   // flats only (cf. F21)
+        float belt = mix(1.0, 1.0 - smoothstep(0.25, 0.6, abs(pos.y)), uDuneBelt);
+        float sand = lowGround * gentle * belt * uDuneDensity * provinceWeight(PROV_DUNES);
+        if (sand <= 0.001) return;
+        // wind frame + phase — across-wind coordinate is latitude; warp threads the ridges
+        vec4 w = noised(pos * 1.7 + uDuneOffset + vec3(11.3, -6.1, 19.7));
+        float ph = pos.y * uDuneFreq + uDuneWarp * w.x;
+        vec3 dph = uDuneFreq * vec3(0.0, 1.0, 0.0) + uDuneWarp * 1.7 * w.yzw;
+        float t  = fract(ph);
+        // asymmetric sawtooth: stoss smoothstep(0,0.72,t) × slip 1−smoothstep(0.72,1,t)
+        float tu = min(t / 0.72, 1.0);
+        float td = clamp((t - 0.72) / 0.28, 0.0, 1.0);
+        float up    = tu*tu*(3.0 - 2.0*tu);
+        float down  = 1.0 - td*td*(3.0 - 2.0*td);
+        float ridge = up * down;
+        // exact piecewise d(ridge)/dt — regions exclusive: stoss has down≡1, slip has up≡1
+        float dridge = (t < 0.72) ? (6.0*tu*(1.0-tu)) / 0.72
+                                  : -(6.0*td*(1.0-td)) / 0.28;
+        h    += uDuneAmp * ridge * sand;
+        grad += uDuneAmp * sand * dridge * dph;                // sand locally constant
       }
 
       // ── F12 deltas & alluvial fans (Stage-4 Fluvial, card §6.5) — the DEPOSITIONAL mirror
@@ -1886,6 +1945,7 @@
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
+          duneCombiner(vPos, h, grad);             // F15 — linear ergs DEPOSIT on near-final lowlands (after all constructional relief so sand pools around it; before F8 — fresh basalt buries sand; before F12/F14 — deltas/sea read the final surface)
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
           deltaCombiner(vPos, h, grad, fluvialWet);// F12 — depositional aprons where channels meet base level (reads FINAL h)
           // ── Stage 4 (F14): standing-liquid level-set cut (card §4) — AFTER all relief so
@@ -2251,6 +2311,12 @@
       uKarstMazeDepth:  { value: 0.18 },  // F21 labyrinth slot carve depth — lab knob
       uKarstPlateauLvl: { value: 0.22 },  // F21 plateau mask threshold on accumulated h — lab knob
       uKarstOffset:     { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
+      uDuneDensity:     { value: 0.0 },   // F15 master gate (driven: D6/D5 wind gate × dryness); <= 0 early-outs
+      uDuneAmp:         { value: 0.06 },  // F15 ridge amplitude (deposit; well under fluvialDepth ~0.12) — lab knob
+      uDuneFreq:        { value: 16.0 },  // F15 ridge frequency (wavelength 1/16 pos.y ≈ 6 buffer px at d4, pixelScale 3) — lab knob
+      uDuneWarp:        { value: 2.0 },   // F15 phase-warp amplitude (ridge threading) — lab knob
+      uDuneBelt:        { value: 0.5 },   // F15 equatorial-belt confinement — lab knob
+      uDuneOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2369,6 +2435,12 @@
       karstMazeDepth: 0.18, // F21 labyrinth slot carve depth
       karstPlateauLvl: 0.08,// F21 plateau mask threshold (tuned 2026-06-10: 0.22 missed low-relief worlds — Titan h rarely clears it; relative/quantile mask is the deferred fix)
       karstEnabled: true,   // F21 enable gate
+      duneDensity: 0.0,     // F15 master gate (driven)
+      duneAmp: 0.06,        // F15 ridge amplitude (subtle deposit — under fluvialDepth 0.12)
+      duneFreq: 16.0,       // F15 ridge frequency (1/freq pos.y wavelength ≈ 6 buffer px at d4 — super-pixel under pixelScale 3)
+      duneWarp: 2.0,        // F15 phase-warp amplitude (threading)
+      duneBelt: 0.5,        // F15 equatorial-belt confinement
+      dunesEnabled: true,   // F15 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2534,6 +2606,7 @@
       fluvialOffset: [0,0,0],
       outflowOffset: [0,0,0],
       karstOffset: [0,0,0],
+      duneOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -2767,6 +2840,7 @@
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0]; state.karstOffset = [0,0,0];
+      state.duneOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -2822,6 +2896,16 @@
       state.karstDensity  = _wet ? _clamp01(_stab * (0.4 + 0.6 * _erosion))
                                  : (_hadLiquid ? 0.4 * _clamp01(_erosion) : 0.0);
       state.karstMaturity = _clamp01(_erosion);
+      // ── F15 dunes — aeolian transport needs AIR: the D6 retention gate × the same D5
+      // pressure ramp as core's retentionGate (smoothstep 0.05→0.3 bar — grains can't
+      // saltate in a near-vacuum), × a PARTIAL dryness term (1 − 0.65·stab), NOT (1 − stab):
+      // global liquid stability doesn't preclude ergs — Titan's flagship equatorial dune
+      // belts coexist with polar methane seas (the latitude split is uDuneBelt's job, not
+      // the global gate's; a full (1−stab) dryness would zero Titan — the F21 Titan trap).
+      // Outcomes: Rocky (stab .741, p 1.0) → 0.52; Ocean/Titan (stab 1, p 1.5) → 0.35;
+      // Lava/Frozen/Europa (airless, p 0) → 0 (the wind-still-rock fork, card §1).
+      const _press = _hadLiquid ? (_fp.atmosphere.pressure ?? 1.0) : 0;
+      state.duneDensity = _clamp01(_ss(0.05, 0.3, _press) * (1.0 - 0.65 * _stab));
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -3109,6 +3193,18 @@
     fKarst.add({ roll(){ state.karstOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fKarst.add(state, 'karstEnabled').name('✓ enabled');
 
+    // ▸ Dunes (F15) — linear ergs: asymmetric sawtooth ridges in a zonal wind frame,
+    // deposited on low/flat ground inside an equatorial belt. density is driven (D6/D5
+    // wind gate × dryness, .listen()); amp/freq/warp/belt are shape knobs.
+    const fDunes = fGrad.addFolder('Dunes & wind forms (F15)'); fDunes.close();
+    fDunes.add(state, 'duneDensity', 0, 1, 0.01).name('density (driven)').listen();
+    fDunes.add(state, 'duneAmp', 0, 0.2, 0.005).name('amplitude');
+    fDunes.add(state, 'duneFreq', 4, 60, 1).name('ridge freq');
+    fDunes.add(state, 'duneWarp', 0, 8, 0.1).name('warp');
+    fDunes.add(state, 'duneBelt', 0, 1, 0.01).name('equatorial belt');
+    fDunes.add({ roll(){ state.duneOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fDunes.add(state, 'dunesEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -3117,6 +3213,7 @@
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
+      dunes: fDunes,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -3312,6 +3409,13 @@
       uniforms.uKarstMazeDepth.value   = state.karstMazeDepth;
       uniforms.uKarstPlateauLvl.value  = state.karstPlateauLvl;
       uniforms.uKarstOffset.value.set(state.karstOffset[0], state.karstOffset[1], state.karstOffset[2]);
+      // F15 dunes — dunesEnabled gates density→0 (early-out), preserving the slider value.
+      uniforms.uDuneDensity.value = state.dunesEnabled ? state.duneDensity : 0.0;   // ✓ enable gate
+      uniforms.uDuneAmp.value     = state.duneAmp;
+      uniforms.uDuneFreq.value    = state.duneFreq;
+      uniforms.uDuneWarp.value    = state.duneWarp;
+      uniforms.uDuneBelt.value    = state.duneBelt;
+      uniforms.uDuneOffset.value.set(state.duneOffset[0], state.duneOffset[1], state.duneOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

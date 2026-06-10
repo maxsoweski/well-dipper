@@ -87,8 +87,30 @@ Unbuilt — recommended recipe once built: (1) add a FEATURES entry in planet-ar
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 taste-call (2026-06-10, working-Claude autonomous judging per spec §13.3 — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5 in one pass, zero fix cycles. Shots (Rocky preset, solo):
+  `F15-rocky-on.png` (d4 — E-W corduroy striping visible across the disc, zonal grain as
+  specced), `F15-diff.png` (on/off pixel-diff at d4 — 41k px planet-wide modulation, gated off
+  cleanly), `F15-rocky-d2.png` (close-up, directional texture). Drivers verified LIVE across
+  presets: Rocky 0.52, Titan 0.35, Ocean 0.35, Frozen (airless) 0 — the §6-item-5 gate behaves
+  (vanish airless, shrink wet, strongest dry+windy). Vitest 19/19. Console clean.
+- Why 🟡 not 🟢: stoss/slip asymmetry (§6 item 2) and erg-pooling-around-mountains (§6 item 4)
+  not judged at fine grain — the d2 zoom shows directional texture but the one-step slip-face
+  band needs Max's eye; far-distance corduroy-vs-dither (§6 item 3) borderline at d12. Knob
+  magnitudes are first guesses (amp 0.06, freq 16 — freq deliberately below the card's 30-60
+  after real canvas math: pixelScale-3 buffer ⇒ freq 40 would be sub-dither at d4).
+- Code review (adversarial, per §13.4): clean pass at ≥80 (sawtooth piecewise derivative exact
+  and seam-free at the fract wrap — zero value AND zero slope both sides; entry-state mask
+  discipline; plumbing 6×3; registries; airless regression traced through preset data).
+  Sub-threshold: Stage-5 placeholder comment now stale (pre-existing pattern).
+- Taste forks (conservative, marked): dryness = (1 − 0.65·stab) not the spec's (1 − stab) —
+  full coupling zeroes Titan, whose dune belts are the card's flagship (same trap class as
+  F21's erosion threshold; partial coupling keeps Titan at 0.35 while still shrinking wet
+  worlds). Call slot: after ALL constructional relief (glacial) so sand pools around final
+  mountains, before lava ("fresh basalt buries sand"); deltas/sea read the dune-included
+  surface. canyonHeight NOT written (deposition, not incision; accumulator is write-only today).
+  uDuneBelt is a lab knob, not driven (F21 precedent: density/maturity driven, shape static).
+- Scope cuts honored per §6.5.8: linear ergs only — barchan/star/wind-variability dispatch,
+  yardangs/ventifacts, and wind streaks (the albedo exception) all deferred.
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)
