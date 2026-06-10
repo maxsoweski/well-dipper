@@ -354,6 +354,17 @@
       uniform float uCoastCliffSlope;  // |grad| above which the shore reads as cliff — lab knob
       uniform float uTerraceStep;      // strandline spacing in shore-distance units — lab knob
       uniform float uStrandStrength;   // 0..1 paleo-strandline visibility (driven: erosion history)
+      // ── F13 outflow / megaflood channels (Fluvial step 4a — card F13) ──
+      uniform float uOutflowDensity;   // 0..1 master gate (driven: fluvial history, erosion-thresholded); <= 0 ⇒ early-out
+      uniform float uOutflowActivity;  // 0=relict (degraded banks, shallower) … 1=sharp/active (driven)
+      uniform float uOutflowWidth;     // trunk band half-width in field units (≈10× F11 spatial width w/ lower freq) — lab knob
+      uniform float uOutflowDepth;     // scour carve depth (relief units) — lab knob
+      uniform float uOutflowFreq;      // trunk frequency (continental single trunk: well below F11's) — lab knob
+      uniform float uOutflowWarpAmt;   // warp displacement (kept low — floods run straight) — lab knob
+      uniform float uOutflowIslands;   // streamlined-island strength inside the scour floor — lab knob
+      uniform float uOutflowGrooveFreq;// longitudinal-groove frequency (across-flow coordinate) — lab knob
+      uniform float uOutflowGrooves;   // groove amplitude as fraction of carve depth (≤ 0.15) — lab knob
+      uniform vec3  uOutflowOffset;    // 🎲 domain offset — own seed, decorrelated from uFluvialOffset
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -604,6 +615,7 @@
       const int PROV_LAKES       = 14;  // F14 — neutral (hydrology, not geology), like FROST
       const int PROV_DELTAS      = 15;  // F12 — river products, same lowlands affinity as RIVERS
       const int PROV_COAST       = 16;  // F20 — neutral (margins live wherever the sea is), like LAKES/FROST
+      const int PROV_OUTFLOW     = 17;  // F13 — flood products, same young-lowlands affinity as RIVERS
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -638,6 +650,7 @@
         else if (fid == PROV_LAKES)      { f = gProvince.z;       fl = 1.00; }
         else if (fid == PROV_DELTAS)     { f = 1.0 - gProvince.z; fl = 0.30; }
         else if (fid == PROV_COAST)      { f = gProvince.z;       fl = 1.00; }
+        else if (fid == PROV_OUTFLOW)    { f = 1.0 - gProvince.z; fl = 0.30; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -748,6 +761,105 @@
         // dropped — same chain-rule shortcut as scarp/glacial combiners).
         grad += -depth * uFluvialDensity * pw * lowGround * dchan;
         fluvialWet = max(fluvialWet, s);
+      }
+
+      // ── F13 outflowField — the megaflood trunk: structurally drainageField() minus the
+      // tributary octave (catastrophic floods scour ONE channel, not a dendritic tree).
+      // Own seed (uOutflowOffset + a constant decorrelation vector, province-style) so the
+      // trunk is NOT an F11 channel; warp noise at half the trunk freq and low uOutflowWarpAmt
+      // (floods run straight). Relict (low uOutflowActivity) WIDENS the wall smoothstep —
+      // degraded banks — per card §6.5.2. Returns vec4(chan, dchan) like drainageField;
+      // the RAW field gradient (flow-direction source for islands/grooves) via out, since
+      // dchan vanishes at the channel centerline exactly where islands live. Same gradient
+      // shortcut as drainageField: the warp's dq/dpos term is dropped (q ≈ pos chain rule).
+      vec4 outflowField(vec3 pos, out vec3 dfieldOut){
+        vec3 off = uOutflowOffset + vec3(31.7, -12.9, 8.3);   // decorrelate from uFluvialOffset at default (0,0,0)
+        vec4 wn = noised(pos * (uOutflowFreq * 0.5) + off);
+        vec3 q  = pos + uOutflowWarpAmt * wn.yzw;             // broad gentle bends, warp by noise grad
+        vec4 f  = noised(q * uOutflowFreq + off);
+        float field  = f.x;
+        vec3  dfield = f.yzw * uOutflowFreq;
+        dfieldOut    = dfield;
+        float w  = uOutflowWidth * mix(1.5, 1.0, uOutflowActivity);   // relict ⇒ wider, degraded banks
+        float af = abs(field);
+        float chan  = 1.0 - smoothstep(0.0, w, af);                   // trunk band
+        float dstep = (af < w) ? (6.0*(af/w)*(1.0-af/w))/w : 0.0;
+        vec3  dchan = -dstep * sign(field) * dfield;
+        return vec4(chan, dchan);
+      }
+
+      // ── F13 outflowCombiner (Stage-4) — carves the megaflood scour into the shared
+      // canyonHeight accumulator (F14 lakes can pool in the scour; F12/F14 downstream see
+      // the carved h). Runs immediately AFTER fluvialCombiner: same accumulator, distinct
+      // geomorphic event. Three terms, all relief-only (card §4: lighting-routed, NO albedo
+      // writes — the posterize-survival route): (1) FLAT-FLOORED scour — plateau
+      // smoothstep(0, 0.35, chan) saturates mid-band so the carve bottoms out flat and the
+      // walls live at the band edge (distinct silhouette from F4's V); (2) streamlined
+      // islands — voronoi3d-F1 bumps in a domain compressed 3.5:1 along the flow tangent
+      // t = normalize(cross(dfield, pos)) so noses/tails align downstream, restoring height
+      // toward the pre-carve rim (capped: islandH ≤ −carve); (3) longitudinal grooves —
+      // faint ridges constant along t (1D noise on the across-flow coordinate), ≤15% of
+      // carve depth via the uOutflowGrooves slider cap. Every term carries an analytic
+      // gradient into grad (t and the flow direction held locally constant — the documented
+      // cosmetic-grad convention, cf. fluvial lowGround). uOutflowDensity <= 0 ⇒ early-out;
+      // chan <= 0 ⇒ exact-zero contribution, return early (deltaCombiner branch precedent).
+      void outflowCombiner(vec3 pos, inout float h, inout float canyonHeight, inout vec3 grad){
+        if (uOutflowDensity <= 0.0) return;
+        vec3 dfield;
+        vec4 d = outflowField(pos, dfield);
+        float chan = d.x;
+        if (chan <= 0.0) return;                               // outside the trunk band
+        vec3  dchan = d.yzw;
+        // same low-ground mix as F11 (shared knobs — floods empty into the same lowlands)
+        float lowGround = mix(1.0, smoothstep(uFluvialHiGround, 0.0, h), uFluvialLowBias);
+        float pw = provinceWeight(PROV_OUTFLOW);               // §8: flood products favor young lowlands
+        float depth = uOutflowDepth * mix(0.45, 1.0, uOutflowActivity);   // relict = shallower
+        // (1) flat floor — plateau saturates at chan ≥ 0.35: walls only at the band edge
+        float tp = min(chan / 0.35, 1.0);
+        float plateau = tp*tp*(3.0 - 2.0*tp);
+        float dsP = (chan < 0.35) ? (6.0*tp*(1.0-tp))/0.35 : 0.0;   // d(plateau)/d(chan)
+        vec3  dplateau = dsP * dchan;
+        float gateK = lowGround * uOutflowDensity * pw;
+        float s = plateau * gateK;
+        float carve = -s * depth;                              // scour DOWN
+        canyonHeight += carve;
+        h            += carve;
+        grad += -depth * gateK * dplateau;                     // d(carve)/dpos (lowGround held const)
+        // flow frame — across-flow direction (raw field gradient) + downstream tangent
+        vec3 fdir = dfield / max(length(dfield), 1e-5);
+        vec3 tv   = cross(fdir, pos);
+        vec3 t    = tv / max(length(tv), 1e-5);
+        // (2) streamlined islands — voronoi3d F1 in a domain compressed along t (3.5:1
+        // stretch in world space): teardrop obstacles, tails agreeing with the trunk flow.
+        if (uOutflowIslands > 0.0 && plateau > 0.001){
+          float islScale = uOutflowFreq * 8.0;
+          vec3 ip = pos * islScale + uOutflowOffset;
+          vec3 q  = ip - (1.0 - 1.0/3.5) * dot(ip, t) * t;     // compress along-flow ⇒ 3.5:1 stretched cells
+          vec3 cellId, vgrad;
+          vec2 ff = voronoi3d(q, uVoroCells, cellId, vgrad);
+          float tb = min(ff.x / 0.45, 1.0);
+          float bump = 1.0 - tb*tb*(3.0 - 2.0*tb);             // 1 at cell center → 0 at r = 0.45
+          float dsB = (ff.x < 0.45) ? (6.0*tb*(1.0-tb))/0.45 : 0.0;
+          // dF1/dpos = Jᵀ·vgrad with J = islScale·(I − 0.714·t⊗t) (t held const; symmetric ⇒ Jᵀ=J)
+          vec3 dF1 = islScale * (vgrad - (1.0 - 1.0/3.5) * dot(vgrad, t) * t);
+          vec3 dbump = -dsB * dF1;
+          // islands restore height toward the pre-carve rim; bump·uOutflowIslands ≤ 1 ⇒ never above it
+          float islandH = uOutflowIslands * bump * s * depth;
+          canyonHeight += islandH;
+          h            += islandH;
+          grad += uOutflowIslands * depth * (s * dbump + bump * gateK * dplateau);
+        }
+        // (3) longitudinal grooves — 1D noise on the across-flow coordinate ⇒ ridges
+        // aligned with t; amplitude ≤ 15% of carve depth (slider cap), floor-mask gated via s.
+        if (uOutflowGrooves > 0.0 && plateau > 0.001){
+          float xc = dot(pos, fdir);
+          vec4 gn = noised(vec3(xc * uOutflowGrooveFreq, 4.7, -9.3) + uOutflowOffset);
+          float groove = uOutflowGrooves * depth * gn.x * s;
+          canyonHeight += groove;
+          h            += groove;
+          vec3 dgn = gn.y * uOutflowGrooveFreq * fdir;          // 1D chain rule (fdir held const)
+          grad += uOutflowGrooves * depth * (s * dgn + gn.x * gateK * dplateau);
+        }
       }
 
       // ── F12 deltas & alluvial fans (Stage-4 Fluvial, card §6.5) — the DEPOSITIONAL mirror
@@ -1665,6 +1777,7 @@
           ejectaCombiner(vPos, h, grad);            // F3 — apron wrapping the F2 craters
           canyonCombiner(vPos, h, canyonHeight, grad);
           fluvialCombiner(vPos, h, canyonHeight, grad, fluvialWet);   // F11 — channels carve into canyonHeight
+          outflowCombiner(vPos, h, canyonHeight, grad);    // F13 — megaflood trunk scours into canyonHeight (after F11: same accumulator, distinct event)
           scarpCombiner(vPos, h, grad);
           plateauCombiner(vPos, fwBase, h, grad);
           tesseraCombiner(vPos, h, grad);
@@ -2019,6 +2132,16 @@
       uCoastCliffSlope: { value: 1.2 },   // F20 |grad| above which the shore reads as cliff — lab knob
       uTerraceStep:     { value: 0.06 },  // F20 strandline spacing in shore-distance units — lab knob
       uStrandStrength:  { value: 0.0 },   // F20 paleo-strandline visibility (driven: erosion history)
+      uOutflowDensity:  { value: 0.0 },   // F13 master gate (driven: fluvial history × erosion threshold); <= 0 early-outs
+      uOutflowActivity: { value: 1.0 },   // F13 relict↔active (driven; relict = shallower + degraded banks)
+      uOutflowWidth:    { value: 0.35 },  // F13 trunk band half-width (field units; w/ freq 0.7 ≈ 10× F11 spatial width) — lab knob
+      uOutflowDepth:    { value: 0.18 },  // F13 scour carve depth — lab knob
+      uOutflowFreq:     { value: 0.7 },   // F13 trunk frequency (continental: well below F11's 2.3) — lab knob
+      uOutflowWarpAmt:  { value: 0.15 },  // F13 warp displacement (low — floods run straight) — lab knob
+      uOutflowIslands:  { value: 0.7 },   // F13 streamlined-island strength — lab knob
+      uOutflowGrooveFreq:{ value: 24.0 }, // F13 longitudinal groove frequency — lab knob
+      uOutflowGrooves:  { value: 0.10 },  // F13 groove amplitude (fraction of carve depth; capped 0.15) — lab knob
+      uOutflowOffset:   { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2118,6 +2241,16 @@
       terraceStep: 0.06,    // F20 strandline spacing (shore-distance units)
       strandStrength: 0.0,  // F20 paleo-strandline visibility (driven)
       coastEnabled: true,   // F20 enable gate
+      outflowDensity: 0.0,  // F13 master gate (driven)
+      outflowActivity: 1.0, // F13 relict↔active (driven)
+      outflowWidth: 0.18,   // F13 trunk band half-width (tuned 2026-06-10: 0.35 read as diffuse mottling, not a trunk)
+      outflowDepth: 0.25,   // F13 scour carve depth (tuned 2026-06-10 with the narrower band)
+      outflowFreq: 0.5,     // F13 trunk frequency (tuned 2026-06-10: longer continental arcs)
+      outflowWarp: 0.15,    // F13 warp displacement (floods run straight)
+      outflowIslands: 0.7,  // F13 streamlined-island strength
+      outflowGrooveFreq: 24,// F13 longitudinal groove frequency
+      outflowGrooves: 0.10, // F13 groove amplitude (fraction of carve depth)
+      outflowEnabled: true, // F13 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2281,6 +2414,7 @@
       fluvialActivity: 1.0, fluvialDensity: 0.0, fluvialDepth: 0.12, fluvialMeander: 0.5,
       fluvialWidth: 0.10, fluvialFreq: 2.3, fluvialWarp: 0.4, fluvialLowBias: 0.5,
       fluvialOffset: [0,0,0],
+      outflowOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -2513,7 +2647,7 @@
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
-      state.fluvialOffset = [0,0,0];
+      state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -2549,6 +2683,16 @@
       // v1 scope: no live sea ⇒ no coast (dry-world relict shorelines deferred, card §6.5.6).
       state.coastStrength  = state.seaLevel > -1.0 ? 1.0 : 0.0;
       state.strandStrength = _clamp01(_erosion);
+      // ── F13 outflow channels — megafloods are SINGULAR catastrophic events: same
+      // fluvial-history existence gate as F11 (live water, or relict erosion on a world
+      // that held an atmosphere), thresholded RARER on recorded erosion — a smoothstep
+      // 0.3→0.45 instead of a hard erosion≥0.3 cut, so density ramps in rather than pops
+      // (Rocky erosion 0.4 → 0.74; Ocean 0.6 → 1.0; Titan 0.2 → 0 — spec-faithful: rare).
+      // Activity reuses F11's relict logic: dried worlds get degraded banks for free.
+      const _ss = (e0, e1, x) => { const tt = _clamp01((x - e0) / (e1 - e0)); return tt*tt*(3 - 2*tt); };
+      const _fluvHistory = _wet || (_hadLiquid && _erosion > 0);
+      state.outflowDensity  = _fluvHistory ? _ss(0.3, 0.45, _erosion) : 0.0;
+      state.outflowActivity = state.fluvialActivity;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -2805,6 +2949,22 @@
     fCoast.add(state, 'strandStrength', 0, 1, 0.01).name('strandlines (driven)').listen();
     fCoast.add(state, 'coastEnabled').name('✓ enabled');
 
+    // ▸ Outflow channels (F13) — megaflood trunk scour: flat floor, streamlined teardrop
+    // islands, longitudinal grooves. density/activity are driven (fluvial history ×
+    // erosion threshold / F11 activity, .listen()); the rest are shape knobs.
+    const fOutflow = fGrad.addFolder('Outflow channels (F13)'); fOutflow.close();
+    fOutflow.add(state, 'outflowDensity', 0, 1, 0.01).name('density (driven)').listen();
+    fOutflow.add(state, 'outflowActivity', 0, 1, 0.01).name('activity (relict↔active)').listen();
+    fOutflow.add(state, 'outflowWidth', 0.1, 0.9, 0.01).name('trunk width');
+    fOutflow.add(state, 'outflowDepth', 0, 0.4, 0.01).name('scour depth');
+    fOutflow.add(state, 'outflowFreq', 0.3, 2, 0.05).name('trunk freq');
+    fOutflow.add(state, 'outflowWarp', 0, 0.6, 0.02).name('warp amount');
+    fOutflow.add(state, 'outflowIslands', 0, 1, 0.02).name('islands');
+    fOutflow.add(state, 'outflowGrooveFreq', 6, 60, 1).name('groove freq');
+    fOutflow.add(state, 'outflowGrooves', 0, 0.15, 0.005).name('grooves (× depth)');
+    fOutflow.add({ roll(){ state.outflowOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fOutflow.add(state, 'outflowEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -2812,7 +2972,7 @@
       scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
-      deltas: fDeltas, coastlines: fCoast,
+      deltas: fDeltas, coastlines: fCoast, outflow: fOutflow,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -2987,6 +3147,17 @@
       uniforms.uCoastCliffSlope.value = state.coastCliffSlope;
       uniforms.uTerraceStep.value = state.terraceStep;
       uniforms.uStrandStrength.value = state.strandStrength;
+      // F13 outflow — outflowEnabled gates density→0 (early-out), preserving the slider value.
+      uniforms.uOutflowDensity.value    = state.outflowEnabled ? state.outflowDensity : 0.0;   // ✓ enable gate
+      uniforms.uOutflowActivity.value   = state.outflowActivity;
+      uniforms.uOutflowWidth.value      = state.outflowWidth;
+      uniforms.uOutflowDepth.value      = state.outflowDepth;
+      uniforms.uOutflowFreq.value       = state.outflowFreq;
+      uniforms.uOutflowWarpAmt.value    = state.outflowWarp;
+      uniforms.uOutflowIslands.value    = state.outflowIslands;
+      uniforms.uOutflowGrooveFreq.value = state.outflowGrooveFreq;
+      uniforms.uOutflowGrooves.value    = state.outflowGrooves;
+      uniforms.uOutflowOffset.value.set(state.outflowOffset[0], state.outflowOffset[1], state.outflowOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

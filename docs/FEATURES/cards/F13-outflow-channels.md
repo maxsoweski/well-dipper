@@ -87,8 +87,33 @@ Unbuilt — recommended recipe once built: (1) register in planet-archetypes.js 
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 taste-call (2026-06-10, working-Claude autonomous judging per spec §13.3 — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5 in one pass + 1 tuning cycle. Shots (Rocky preset, solo):
+  `F13-rocky-d8.png` (regional read); `F13-tune1-diff.png` (the load-bearing check: pixel-diff
+  of trunk-only carve on/off at tuned settings — two broad sweeping curvilinear trunk bands
+  arcing across the disc, categorically wider than F11's dendritic threads, continuous and
+  flow-like); `F13-isl-diff.png` (islands-only on/off diff — discrete stretched bumps strictly
+  confined to the trunk arcs, visibly elongated); `F13-tuned-full.png` (all signals).
+  Drivers verified live: Rocky density 0.741 / activity 1.0 (matches the worked example in the
+  driver comment), Titan 0 (driven off — see flag). Console clean. Vitest 19/19.
+- Tuning cycle 1 (cap 3): as-implemented defaults (width 0.35, freq 0.7) read as diffuse
+  planet-wide mottling, not a singular trunk — the |field|<0.35 band covered too much sphere.
+  Fixed live and persisted: width 0.18, freq 0.5, depth 0.25. The "8-15× F11 spatial width"
+  interpretation survives (0.18/0.5 vs F11's 0.10/2.3 ≈ 8.3×).
+- Why 🟡 not 🟢: teardrop nose/tail asymmetry and a single agreed flow direction (§6 item 2),
+  groove lineation read (§6 item 4), and distance-20 fade (§6 item 8) were not judged at fine
+  grain — the screenshots confirm placement/confinement, not morphology; magnitude defaults are
+  knob-backed guesses. Glance items for Max's Phase-7 lap.
+- Code review (adversarial, per §13.4): clean pass at ≥80 confidence (math, GLSL guards,
+  plumbing, ordering, registries, regression early-out all verified). One comment typo fixed
+  (island Jacobian derivation double-counted islScale in prose; code was right). Sub-threshold
+  flags: island crest + groove peak can exceed the pre-carve rim by ≤0.02 relief units; grooves
+  ≥freq 24 have no fwidth fade (possible distance shimmer — §6 item 8, Max's gate).
+- Taste forks (conservative, marked): driven density uses smoothstep(0.3, 0.45, erosion) instead
+  of a hard 0.3 cut; **Titan gets density 0** (erosion 0.2 < threshold) so the card §5 Titan
+  re-check needs a manual slider drag — if cold megafloods should be on by default, lower the
+  threshold or raise Titan's preset erosion. Seed decorrelation constant vec3(31.7,−12.9,8.3).
+- Scope cuts honored per §6.5.7: single trunk, no cataracts/terraces, no F9 co-placement,
+  no crater-rim nucleation.
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)
