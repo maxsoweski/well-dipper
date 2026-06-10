@@ -51,8 +51,35 @@ Built — solo it on the :9223 debug Chrome (launch per memory/chrome-devtools-9
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Frozen (airless), solo
+  `craters`, d6/d3/d12 + morphology/relaxation/density sweeps. Drivers
+  verified live: craterDensity 0.8075, complexD 1.607 (after
+  `applyDrivers()` — setPreset alone leaves stale uniforms, same gotcha
+  as F01).
+  - Bowl + rim form: shadowed inner wall opposite lit wall with bright rim
+    ring at d6 and d3; battered/saturated read fits the airless preset
+    (shots 01, 02).
+  - Morphology driver: complexD=0.1 → interior central peaks + terrace
+    structure appear in the same craters; complexD=2.0 → plain bowls
+    everywhere; transition visibly tracks the driver (shots 04 vs 05).
+  - Age driver: density 0.08 reads as young resurfaced plain with a few
+    bowls — craters disappear, not dim (shot 07 vs 01).
+  - Size variety: hashed radii give overlapping mixed sizes; no lattice
+    rows or cell seams visible at d6 or d3.
+  - Palimpsest: relaxation 0.85 flattens bowls to faint ghost depressions
+    instead of popping craters off (shot 06).
+  - Distance: large craters still legible as forms at d12 through the
+    Bayer dither (shot 03). Rotation-lighting correctness and no-pop LOD
+    ramp covered by FOUNDATION checks 2 & 4 🟢 (crater shading explicitly
+    verified there across yaw sweep).
+  - Ejecta pairing (checklist item 8): solo silhouette self-sufficient
+    here; shared-center wrap verified in F03 (same Voronoi centers by
+    construction — see F03 §7).
+  - Vitest: craterProfile JS twin pinned; suite 8/8 green this session.
+  - Shots: F02-craters-01-d6.png, -02-d3.png, -03-d12.png,
+    -04-d6-allcomplex.png, -05-d6-allsimple.png, -06-d6-relax085.png,
+    -07-d6-density008.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
