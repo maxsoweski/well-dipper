@@ -47,6 +47,42 @@ Unbuilt — recommended recipe once built: (1) register in planet-archetypes.js 
 - [ ] At low uFluvialActivity-style relict settings, do banks soften and degrade while the teardrop forms stay legible (relict Mars read), instead of the whole feature dissolving?
 - [ ] At distance 20 does the feature degrade gracefully to a faint dark lineation and at 1.5-3 does the island close-up hold form without shimmer in the posterize?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — second carve pass through the F11 pattern)
+
+1. **`outflowField(pos)` primitive** — structurally `drainageField()` minus tributaries: own
+   uniforms (uOutflowFreq lower than F11's for a continental single trunk, uOutflowWarpAmt low —
+   floods run straight, own uOutflowOffset seed so the trunk is NOT an F11 channel), wide band
+   `chan = 1 − smoothstep(0, uOutflowWidth, |field|)` with uOutflowWidth ≈ 8-15× the F11 width.
+   Analytic gradient throughout (same dstep chain rule as drainageField).
+2. **`outflowCombiner` (Stage-4)** — runs immediately AFTER fluvialCombiner (shares the
+   canyonHeight accumulator so F14 can pool in the scour; F12/F14 downstream see the carved h).
+   Early-out `uOutflowDensity <= 0`. **Flat-floored scour, not a V**: floor mask
+   `plateau = smoothstep(0.0, 0.35, chan)` (saturates → walls only at the band edge), carve
+   `= −uOutflowDepth · mix(0.45, 1.0, uOutflowActivity) · plateau · lowGround ·
+   provinceWeight(PROV_OUTFLOW)`; relict (low activity) additionally WIDENS the wall smoothstep
+   (degraded banks) rather than just shrinking depth. Same lowGround mix as F11.
+3. **Streamlined islands** — inside the floor mask only: voronoi-F1 bumps (reuse the existing
+   voronoi3d machinery if its gradient is available, else a 2-cell noised() max) sampled in a
+   domain anisotropically stretched 3-4:1 along the local flow tangent
+   `t = normalize(cross(dfield, pos))` (perpendicular to the across-channel gradient and the
+   radial), so noses/tails align downstream automatically. Islands ADD height back up to ~the
+   rim (preserved obstacles), capped so they never exceed the pre-carve surface.
+4. **Longitudinal grooves** — faint high-frequency ridges aligned with t: sample 1D-style noise
+   on the across-flow coordinate `dot(pos, normalize(dfield))·uOutflowGrooveFreq`, amplitude
+   gated to the floor mask and ≤ ~15% of carve depth. Pure relief (grad-routed), no albedo.
+5. **Province**: PROV_OUTFLOW = 17, field 2 polarity −1 floor 0.30 (young lowlands — mirrors
+   PROV_RIVERS; floods empty into the same basins).
+6. **Registration + drivers**: FEATURES `outflow: { label: 'Outflow channels (F13)', enableKey:
+   'outflowEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] }` (card §5); GUI
+   folder after Rivers in fGrad-equivalent fluvial group with knobs width/depth/freq/islands/
+   grooves + driven density/activity sliders; deriveUniforms: outflowDensity follows the F11
+   fluvialDensity gate (worlds with live or relict fluvial history) but thresholded rarer
+   (megafloods are singular events — e.g. on only when erosion ≥ 0.3), outflowActivity = the
+   F11 activity driver (relict worlds get degraded banks for free).
+7. **v1 scope cuts (flagged)**: no anastomosing multi-thread reaches (single trunk only); no
+   dry cataracts/terraced inner channels; no F9 chaos-source co-placement (F9 unbuilt); island
+   count/placement purely procedural (no crater-rim nucleation — craters are a separate field).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
