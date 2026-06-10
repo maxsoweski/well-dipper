@@ -49,8 +49,30 @@ Built — solo it on the :9223 GPU Chrome (per memory/chrome-devtools-9223-launc
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Rocky (Earthlike), solo
+  `mountains`, d6/d3/d20 + orogeny 0↔1 behavior sweep.
+  - Crestlines: connected ridge spines with shadowed flanks at d6 and d3 —
+    reads as ranges, not isolated spikes (shots 01, 02).
+  - Fold belt: orogenyStrength=1 + amp 0.6 gives long parallel ridge grain
+    along one strike axis — the Appalachian/Valley-and-Ridge signature from
+    the §3 refs (shot 05). orogenyStrength=0 reads as isotropic ridged
+    massifs, clearly distinct (shot 04). Amplitude behavior visible in the
+    same pair (0.46 → 0.6 sharper/taller).
+  - Envelope: relief survives 6-level posterize as dither texture
+    (FOUNDATION check 3 🟢); temporal stability: two frames 2s apart with
+    uCloudCoverage zeroed → 6/1.8M px changed (0.0003%); the 0.14% seen
+    before zeroing was the animated cloud layer, not terrain.
+  - Determinism: full preset re-apply + applyDrivers() reproduced the d6
+    frame to 0.0003% — same strike grain and layout on revisit.
+  - Composition: full stack at d6 — ridges sit on FBM continents, frost
+    climbs relief via lapse rate, no floating-layer artifact (shot 06).
+  - Regression safety: uMountainAmp≤0 early-out pinned by the ridgedFold()
+    vitest oracle; `npx vitest run tests/planet-archetypes.test.js` 8/8 green.
+  - Method note: `setPreset()` does NOT re-derive driver uniforms — call
+    `_lab.applyDrivers()` after manual overrides to restore preset values.
+  - Shots: F01-mountains-01-d6.png, -02-d3.png, -03-d20.png,
+    -04-d6-orogeny0.png, -05-d6-orogeny1-amp06.png, -06-d6-fullstack.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
