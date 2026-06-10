@@ -66,8 +66,10 @@ v1 scope cuts: second 'warm dayside' preset (HD 189733 b-class gentle variant) �
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop; built+verified together with F33, one shared temperature curve)
+- Evidence (repo root, gitignored): `F32-global.png` (monotonic day→night gradient across the terminator, 210→16 luminance, no dead seam, no Mach-band staircase beyond the deliberate posterize-6 band albedo), `F32-substellar.png` + `F32-offset0.png` (broad soft ~84×81 px cap on a 273 px disc; near-peak centroid +24.3 px EAST at offset 0.26 → −1.1 px centered at offset 0 — the superrotation A/B), `F32-zones.png` (5 samples: cream-white 251/230/170 → amber → orange → dull red-brown → deep dim red 35/13/4 — ≥4 hue zones, no flat tint), `F32-orbit-a/b.png` (camera yaw +0.8: cap moves −93 px opposite the rotation — glow pinned to star direction in world space), `F32-off.png` / `F3233-bothoff.png` (ownership A/Bs), `F32-regress-jovian.png` + `F32-regress-rocky.png` (thermalStrength 0 everywhere else — no glow, bands intact).
+- §6 checklist: 1 🟢 (broad soft ellipse, not pinpoint/not hemisphere wash), 2 🟢 (terminator asymmetry via the offset A/B; default 0.26 rad ≈ 15° between WASP-43 b and HD 189733 b), 3 🟢 (bypass channel smooth; close-up neighbor-diff 0.011, zero >2), 4 🟢 (4+ blackbody zones), 5 🟢 (orbit-lock confirmed), 6 🟡 (only the molten-bright preset exists — warm-dayside variant spans via offset/redistribution/temp knobs; second preset deferred to PROFILES per §6.5 cut — taste fork a), 7 🟢 (one monotonic curve with F33; floor survives F32-off).
+- Tweaks applied: 0 of 3 cycles — first live render passed all items.
+- Code review (fable): APPROVE, zero findings ≥ threshold. Implementer deviations accepted: ABSOLUTE brightness ramp (min(tempK,1800)/1800)⁴ instead of dayTempK-normalized — the ownership split rewrites uDayTempK, so normalizing by it would render the F33-solo floor full-bright; absolute ramp keeps toggle A/B continuity exact. F33 sub-folder instead of shared folder (solo machinery is per-featureFolders-entry). Hot Jupiter preset orbit 150000 keeps lavaActivity 0.0052 (under Jovian's own 0.007).
+- Taste forks for Max's lap: (a) warm-dayside variant preset unauthored (knobs span it); (b) full-strength F30 polar lightning inherited via the gas gate — flashes over the incandescent dayside (plausible, h2-he decks convect; judge the read); (c) peak cap saturates at 237 (clips slightly — intensity scalar is a GLSL literal).
+- Status: VERIFIED_PENDING_MAX

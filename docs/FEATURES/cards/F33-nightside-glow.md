@@ -62,8 +62,10 @@ self-shading).
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop; built+verified with F32 — shared curve, full detail on the F32 card §7)
+- Evidence (repo root, gitignored): `F33-night.png` (d6 antistellar: mean disc luminance 15.9, RGB 33/12/3 — dull deep-red self-luminous floor, clearly not black), `F33-night-close.png` (d2.5: glow smooth, mean abs neighbor diff 0.011, zero Bayer crawl), `F33-off.png` + `F33-off-term.png` (nightsideThermalEnabled false ⇒ night disc 0.024 mean lum — black except lightning pops — while the F32 dayside lobe survives at the terminator).
+- §6 checklist: 1 🟢 (self-luminous floor, smooth bypass glow), 2 🟢 (warmer 37/16/8 near the terminator-side limb fading to 33/12/3 deep-night; gradient limb-compressed at exact antistellar aim — geometric, the curve lives near the terminator), 3 🟢 (occlusion blotches exclusively DARKER — dips to 12.4 against the 15.8 floor, ~10 % of area, never bright), 4 🟢 (continuous with F32; eastward asymmetry verified on the F32 card item 2), 5 🟢 (no dither crawl in the glow), 6 🟢 (limb annulus +13 % over interior — thin warm rim, silhouette legible), 7 🟢 (orbit-lock — world-space, verified F32 item 5).
+- Tweaks applied: 0 of 3 cycles.
+- Code review (fable): APPROVE (shared review with F32; ownership-split write-order verified — the F32-off collapse uses the post-split night value; emissiveBlackbody(0) safe below its first stop).
+- Taste forks for Max's lap: (a) occlusion contrast is subtle (12.4 vs 15.8 floor — uThermalOcclusion knob 0..1 exists, driven default 0.6); (b) night floor brightness (Keating 1100 K driven — nightTempK display only); (c) rim strength (GLSL literal ×0.6).
+- Status: VERIFIED_PENDING_MAX

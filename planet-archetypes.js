@@ -27,14 +27,22 @@ export const FEATURES = {
   dunes:      { label: 'Dunes & wind forms (F15)', enableKey: 'dunesEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
   dust:       { label: 'Dust mantles (F16)',    enableKey: 'dustEnabled',      archetypes: ['tectonic-terrestrial','volatile-cold'] },
   massWasting:{ label: 'Mass-wasting (F19)',    enableKey: 'massWastEnabled',  archetypes: ['impact-airless','tectonic-terrestrial','volcanic','icy-active','volatile-cold'] },
-  bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant'] },
-  jets:       { label: 'Jets & shear (F25)',    enableKey: 'jetsEnabled',      archetypes: ['gas-giant'] },
+  bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant','hot-jupiter'] },
+  jets:       { label: 'Jets & shear (F25)',    enableKey: 'jetsEnabled',      archetypes: ['gas-giant','hot-jupiter'] },
   weatherBands:{ label: 'Weather bands (F26)',  enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] },
-  greatSpot:  { label: 'Great spot (F27)',      enableKey: 'greatSpotEnabled', archetypes: ['gas-giant'] },
-  stormTrain: { label: 'Storm clusters (F28)',  enableKey: 'stormTrainEnabled', archetypes: ['gas-giant'] },
-  polarVortex:{ label: 'Polar vortex (F29)',    enableKey: 'polarVortexEnabled', archetypes: ['gas-giant'] },
-  lightning:  { label: 'Lightning (F30)',       enableKey: 'lightningEnabled', archetypes: ['gas-giant','tectonic-terrestrial'] },
-  clouds:     { label: 'Clouds & haze (F31)',   enableKey: 'cloudsEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant'] },
+  greatSpot:  { label: 'Great spot (F27)',      enableKey: 'greatSpotEnabled', archetypes: ['gas-giant','hot-jupiter'] },
+  stormTrain: { label: 'Storm clusters (F28)',  enableKey: 'stormTrainEnabled', archetypes: ['gas-giant','hot-jupiter'] },
+  polarVortex:{ label: 'Polar vortex (F29)',    enableKey: 'polarVortexEnabled', archetypes: ['gas-giant','hot-jupiter'] },
+  lightning:  { label: 'Lightning (F30)',       enableKey: 'lightningEnabled', archetypes: ['gas-giant','tectonic-terrestrial','hot-jupiter'] },
+  clouds:     { label: 'Clouds & haze (F31)',   enableKey: 'cloudsEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
+  // F32/F33 thermal pair — ONE temperature curve, two ownable consumers (built
+  // together; soloed separately). hot-jupiter-only: the locked h2-he envelope is
+  // the one preset family whose drivers derive thermalStrength > 0. The whole
+  // F24-F31 gas stack above also lists 'hot-jupiter' — the thermal glow rides
+  // OVER the band/storm/cloud deck, so those folders must stay visible (and the
+  // archetype filter feature-set complete) on the new preset.
+  daysideThermal:  { label: 'Dayside thermal (F32)', enableKey: 'daysideThermalEnabled',  archetypes: ['hot-jupiter'] },
+  nightsideThermal:{ label: 'Nightside glow (F33)',  enableKey: 'nightsideThermalEnabled', archetypes: ['hot-jupiter'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -46,6 +54,7 @@ export const ARCHETYPES = {
   'icy-active':           { label: 'Icy-active',             bodies: ['Europa','Ganymede'],           presets: ['Europa (icy moon)'] },
   'volatile-cold':        { label: 'Volatile / cold',        bodies: ['Pluto','Triton','Mars poles'], presets: ['Titan (methane seas)','Frozen (airless)'] },
   'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)','Sub-Neptune (hazy)'] },
+  'hot-jupiter':          { label: 'Hot Jupiter',            bodies: ['HD 209458 b','WASP-43 b'],     presets: ['Hot Jupiter (locked giant)'] },
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
@@ -93,4 +102,6 @@ export const PROVINCES = {
   polarVortex:{ field: 2, polarity: +1, floor: 1.00 },  // neutral — the pole structure rides the same unprovinced gas deck as the storm family (F27/F28)
   lightning:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — weather, not geology: flashes follow the convective cloud deck (FROST-row pattern)
   clouds:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — atmosphere, not geology: the deck/haze/blanket rides ABOVE the rock provinces (FROST-row pattern)
+  daysideThermal:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — irradiation, not geology: the dayside lobe follows the star, not the rock provinces (FROST-row pattern)
+  nightsideThermal:{ field: 2, polarity: +1, floor: 1.00 },  // neutral — atmospheric emission, not geology: the night floor + silicate deck ride ABOVE the rock provinces (FROST-row pattern)
 };

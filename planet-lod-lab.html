@@ -491,6 +491,22 @@
       uniform vec3  uHazeColor;         // haze / blanket tone (driven: preset atmosphere color)
       uniform float uChevronStrength;   // regime-3 Y/V chevron darkening — lab knob (~0.17 = one 6-level posterize bucket)
       uniform float uPupilR;            // regime-4 substellar cap half-angle rad — lab knob
+      // ── F32/F33 thermal day/night (cards F32 dayside hotspot + F33 nightside glow) ──
+      // ONE energy-balance temperature curve, two consumers (the emissiveBlackbody
+      // header contract): F32 owns the dayside lobe — uDayTempK plus the superrotation
+      // east shift baked into uThermalDir (the CPU rotates uLightDir about the spin
+      // axis; vSubstellarAngle stays light-true for its other consumers). F33 owns the
+      // nightside floor (uNightTempK, the Keating ~1100 K universal), the silicate
+      // occlusion mask and the warm limb rim. The per-frame writer splits ownership:
+      // F32 off ⇒ uDayTempK written as the night floor (lobe collapses onto it);
+      // F33 off ⇒ uNightTempK written 0 + uThermalOcclusion written 0. Strength 0
+      // (every non-hot-jupiter preset) skips the whole emissive term.
+      uniform float uThermalStrength;   // master gate + brightness scale (driven: 1 on hot-jupiter, else 0)
+      uniform vec3  uThermalDir;        // uLightDir rotated east about the spin axis by the hotspot offset (CPU per-frame)
+      uniform float uDayTempK;          // dayside peak temperature K (driven: T_eq x 1.15; writer-collapsed when F32 off)
+      uniform float uNightTempK;        // nightside floor temperature K (driven: 1100 on hot-jupiter; writer-zeroed when F33 off)
+      uniform float uRedistribution;    // day-to-night falloff exponent — lab knob 1..6 (3 = legacy pow(starFacing,3) heritage)
+      uniform float uThermalOcclusion;  // F33 silicate-cloud occlusion strength — lab knob (writer-zeroed when F33 off)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -754,6 +770,8 @@
       const int PROV_POLAR       = 27;  // F29 — neutral: the pole structure rides the same unprovinced gas deck as the storm family
       const int PROV_LIGHTNING   = 28;  // F30 — neutral (weather, not geology): flashes follow the convective cloud deck (FROST-row pattern)
       const int PROV_CLOUDS      = 29;  // F31 — neutral (atmosphere, not geology): the deck/haze/blanket rides ABOVE the rock provinces (FROST-row pattern)
+      const int PROV_DAYTHERM    = 30;  // F32 — neutral (irradiation, not geology): the dayside lobe follows the star, not the rock provinces (FROST-row pattern)
+      const int PROV_NIGHTTHERM  = 31;  // F33 — neutral (atmospheric emission, not geology): the night floor + silicate deck ride ABOVE the rock provinces (FROST-row pattern)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -801,6 +819,8 @@
         else if (fid == PROV_POLAR)      { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_LIGHTNING)  { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_CLOUDS)     { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_DAYTHERM)   { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_NIGHTTHERM) { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2924,6 +2944,48 @@
         // (enable off, or any airless preset) skips the call: byte-identical F29 output —
         // the F30 regression contract.
         if (uLightningStrength > 0.0) emissive += lightningEmissive(vPos, N, diff, cw.x);
+        // ★ F32/F33 thermal day/night — irradiation-driven self-emission on locked hot
+        // worlds (ONE temperature curve, two consumers — the emissiveBlackbody header
+        // contract). Energy-balance kernel (F32 card section 4): tempK ramps from the
+        // F33 night floor to the F32 day peak with starFacing^redistribution, where the
+        // facing is taken against uThermalDir — uLightDir rotated EAST about the spin
+        // axis by the superrotation hotspot offset (CPU per-frame writer), so the glow
+        // bleeds past one terminator and dies before the other. Hue = the shared
+        // emissiveBlackbody ramp. Brightness = a stylized Stefan-Boltzmann nod,
+        // (tempK/1800)^4 saturating at 1800 K — an ABSOLUTE ramp (deliberately NOT
+        // normalized by uDayTempK): the writer's ownership split rewrites uDayTempK /
+        // uNightTempK on enable toggles, and an absolute ramp means the split changes
+        // WHICH temps render, never how bright a given temperature is (exact A/B
+        // continuity between solo and combined). F33 terms in the same block: a
+        // low-frequency 3-octave fbmd silicate-cloud mask that only DARKENS the glow
+        // on the night hemisphere (Gao/Powell nightside decks block outgoing IR —
+        // dark patches, never bright), plus a thin warm fresnel rim on the dark limb
+        // so the silhouette stays legible at full-disk distance; the rim rides the
+        // night temperature's own brightness ramp, so F33-off extinguishes it with
+        // the floor. Strength 0 (every pre-existing preset derives 0) skips the whole
+        // block: byte-identical F31 output — the F32/F33 regression contract.
+        if (uThermalStrength > 0.0){
+          float sf = max(dot(N, uThermalDir), 0.0);
+          float tempK = mix(uNightTempK, uDayTempK, pow(sf, uRedistribution));
+          float tb = clamp(tempK * (1.0 / 1800.0), 0.0, 1.0);
+          float tb2 = tb * tb;
+          float thermalBright = tb2 * tb2;                          // (tempK/1800)^4 via squares (no pow edge cases)
+          // F33 silicate occlusion — patchy low-freq deck, slow superrotation drift;
+          // confined to the night hemisphere (fades out by sf 0.25) so the dayside
+          // lobe stays clear (the decks condense where it is cold, card F33 section 4).
+          float nightHemi = 1.0 - smoothstep(0.0, 0.25, sf);
+          float socc = smoothstep(0.05, 0.45, fbmd(vPos * 0.9 + vec3(uTime * 0.012, 0.0, 0.0), 3.0, 0.0).x);
+          float thermalOcc = 1.0 - uThermalOcclusion * socc * nightHemi;
+          vec3 thermalC = emissiveBlackbody(tempK) * thermalBright * thermalOcc * provinceWeight(PROV_DAYTHERM);
+          // F33 warm limb rim (dark side only) — fresnel^4 against the geometric
+          // normal, night-gated; kept subtle (0.6 of the floor brightness at grazing).
+          float fres = clamp(1.0 - max(dot(N, V), 0.0), 0.0, 1.0);
+          float fres2 = fres * fres;
+          float nb = clamp(uNightTempK * (1.0 / 1800.0), 0.0, 1.0);
+          float nb2 = nb * nb;
+          thermalC += emissiveBlackbody(uNightTempK) * (nb2 * nb2) * (fres2 * fres2) * nightHemi * 0.6 * provinceWeight(PROV_NIGHTTHERM);
+          emissive += uThermalStrength * thermalC;
+        }
 
         // ★ Specular glint (sunglint F36 stand-in) — Blinn-Phong, only on the lit side.
         vec3 H = normalize(uLightDir + V);
@@ -3232,6 +3294,14 @@
       uHazeColor:       { value: new THREE.Color(0.70, 0.65, 0.58) },  // F31 haze/blanket tone (driven: preset atmosphere color)
       uChevronStrength: { value: 0.18 },  // F31d Y/V chevron darkening — lab knob (~0.17 = one 6-level posterize bucket)
       uPupilR:          { value: 0.6 },   // F31f substellar cap half-angle rad — lab knob
+      // ── F32/F33 thermal day/night (cards §6.5 — ONE temperature curve, two consumers) ──
+      // uThermalStrength 0 ⇒ the GLSL block is skipped entirely (byte-identical F31 render).
+      uThermalStrength: { value: 0.0 },   // F32/F33 master gate (driven: 1 on hot-jupiter, else 0 — the regression contract)
+      uThermalDir:      { value: new THREE.Vector3().copy(WORLD_LIGHT) },  // uLightDir rotated east by the hotspot offset (per-frame writer)
+      uDayTempK:        { value: 0.0 },   // F32 dayside peak K (driven: T_eq x 1.15; writer collapses it to the floor when F32 off)
+      uNightTempK:      { value: 0.0 },   // F33 nightside floor K (driven: 1100 on hot-jupiter; writer zeroes it when F33 off)
+      uRedistribution:  { value: 3.0 },   // F32 day-to-night falloff exponent — lab knob (3 = legacy pow(starFacing,3) heritage)
+      uThermalOcclusion:{ value: 0.6 },   // F33 silicate-cloud occlusion strength — lab knob (writer zeroes it when F33 off)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -3431,6 +3501,14 @@
       chevronStrength: 0.18,// F31d Y/V chevron darkening (lab knob — ~0.17 = one 6-level posterize bucket)
       pupilR: 0.6,          // F31f substellar cap half-angle rad (lab knob)
       cloudsEnabled: true,  // F31 enable gate — off forces uCloudCoverage 0 + regime extras off at the per-frame writer (no deck at all)
+      thermalStrength: 0.0, // F32/F33 master gate (driven: 1 on hot-jupiter — locked + h2-he + retained — else 0)
+      dayTempK: 0.0,        // F32 dayside peak K (driven: T_eq x 1.15 — ~1610 on the Hot Jupiter preset)
+      nightTempK: 0.0,      // F33 nightside floor K (driven: hot-jupiter 1100 — the Keating universal nightside floor)
+      hotspotOffset: 0.26,  // F32 superrotation east shift rad (lab knob — ~15 deg, between WASP-43 b 7.75 and HD 189733 b 30)
+      redistribution: 3.0,  // F32 day-to-night falloff exponent (lab knob — legacy pow(starFacing,3) heritage)
+      thermalOcclusion: 0.6,// F33 silicate-cloud occlusion strength (lab knob — darkens the night glow, never brightens)
+      daysideThermalEnabled: true,   // F32 enable gate — off collapses uDayTempK onto the night floor at the per-frame writer
+      nightsideThermalEnabled: true, // F33 enable gate — off zeroes uNightTempK + occlusion at the per-frame writer (floor fades to black)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3763,6 +3841,20 @@
       // but airless). Also flips the pre-plumbed F26 weatherLocked + F23 frostLocked eyeball
       // switches for free. Near-circular orbit keeps star-tidal heating quiet.
       'Eyeball (locked temperate)': { radiusEarth:1.0, massEarth:1.0, eccentricity:0.01, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.3,density:5.5,volatileFraction:0.25}, T_eq:270, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:{color:[0.55,0.62,0.85],retained:true,pressure:1.0,composition:'n2-o2'}, habitability:0.5, surfaceHistory:{erosion:0.3,bombardmentIntensity:0.4,resurfacingRate:0.2} },
+      // ── F32/F33 thermal preset (F32 card §6.5 step 2 — data only) ──
+      // "Hot Jupiter (locked giant)" exercises the thermal pair: locked + h2-he +
+      // retained trips the _hotJup gate (thermalStrength 1, day 1610 K / night 1100 K).
+      // Gas-row conventions throughout (surfaceHistory zeros + resurfacing 1,
+      // volatileFraction 0.04 under the bone-dry floor — the envelope IS the surface).
+      // rotationHours 80 = pseudo-synchronous slow spin: bandCount clamps to the
+      // 3-band floor (few broad bands under the glow). The orbit follows the gas-row
+      // "illustrative, not orbit-consistent" convention: T_eq 1400 is DATA (a real hot
+      // jupiter hugs its star), while orbitRadiusEarth 150000 keeps the R^5 star-tidal
+      // term quiet — R 13 is the biggest disc in the lab and a close orbit would
+      // derive Io-grade lavaActivity (glowing cracks on a gas deck, the gas-row
+      // eccentricity lesson). Verified by node script through the real
+      // deriveUniforms: lavaActivity 0.0052 — under the Jovian row's own 0.007.
+      'Hot Jupiter (locked giant)': { radiusEarth:13, massEarth:400, rotationHours:80, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:150000, composition:{ironFraction:0.03,density:1.3,volatileFraction:0.04}, T_eq:1400, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:{color:[0.55,0.38,0.28],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -4241,6 +4333,28 @@
       // deep-deck flashes mute too — the gas-gate F30 derivation above would
       // otherwise strobe full-strength polar lightning over the flat globe.
       if (_cloudRegime === 2) state.lightningStrength = 0;
+      // ── F32/F33 thermal day/night — driver derivation (F32 card §6.5 step 6;
+      // derivation HERE per the F11 precedent — core.js untouched). The pair fires
+      // ONLY on a tidally-locked retained h2-he world (D7 lock pins a permanent
+      // dayside; the deep envelope carries the P21 superrotation that feeds both
+      // the east shift and the night floor). Every other preset derives strength 0
+      // and the GLSL block is skipped — byte-identical F31 render (the regression
+      // contract; eyeball worlds are locked but NOT h2-he, gas giants are h2-he
+      // but NOT locked — pre-checked by node script over all 13 presets).
+      const _hotJup = !!(_fp.tidalState?.locked && _fp.atmosphere?.composition === 'h2-he' && _fp.atmosphere?.retained);
+      state.thermalStrength = _hotJup ? 1.0 : 0.0;
+      // Dayside peak: irradiation temperature lifted 15% (greenhouse + the hotspot
+      // sitting above T_eq in the WASP-43 b map) — derived on EVERY preset (it is
+      // just the D1 temperature, meaningful data), inert behind strength 0.
+      state.dayTempK = (_fp.T_eq ?? 288) * 1.15;
+      // Nightside floor: the Keating/Cowan/Dang near-universal ~1100 K hot-jupiter
+      // nightside (F33 card §4) — a constant floor, NOT a fade-to-black.
+      state.nightTempK = _hotJup ? 1100 : 0;
+      // The thermal pair REPLACES the whole-globe uEmissive stand-in (its comment
+      // names F32 as the owner): T_eq 1400 would derive emissive 0.25 — a uniform
+      // unshaped glow UNDER the substellar-shaped one (double-count). Lava keeps
+      // its stand-in for F41 (airless ⇒ not _hotJup).
+      if (_hotJup) state.emissive = 0;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -4664,6 +4778,25 @@
     fClouds.add(state, 'chevronStrength', 0, 0.5, 0.01).name('chevron (venus)');
     fClouds.add(state, 'pupilR', 0.1, 1.5, 0.01).name('pupil radius (eyeball)');
     fClouds.add(state, 'cloudsEnabled').name('✓ enabled');
+    // ▸ Thermal day/night (F32/F33) — ONE energy-balance temperature curve in the
+    // ★ emissive bypass channel: F32 dayside lobe (superrotation east-shifted
+    // hotspot) + F33 nightside floor / silicate occlusion / warm limb rim.
+    // strength + both temps are driven displays; offset / redistribution /
+    // occlusion are lab knobs. NO 🎲 — placement is the light direction; the
+    // occlusion field is the seeded fbmd. F33 lives in its own SUB-folder so the
+    // registry gets one folder per feature key: sharing one folder would stack
+    // two ✓ title-toggles and two identical 🔆 solo buttons on it (ambiguous UI —
+    // relocateEnableToTitle + the solo loop are per-folder mechanisms).
+    const fThermal = fBandsGroup.addFolder('Thermal day/night (F32/F33)'); fThermal.close();
+    fThermal.add(state, 'thermalStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fThermal.add(state, 'dayTempK', 0, 3000, 10).name('day temp K (driven)').listen();
+    fThermal.add(state, 'nightTempK', 0, 2000, 10).name('night temp K (driven)').listen();
+    fThermal.add(state, 'hotspotOffset', -0.6, 0.6, 0.01).name('hotspot offset (east rad)');
+    fThermal.add(state, 'redistribution', 1, 6, 0.1).name('redistribution n');
+    const fThermalNight = fThermal.addFolder('Nightside glow (F33)'); fThermalNight.close();
+    fThermalNight.add(state, 'thermalOcclusion', 0, 1, 0.01).name('occlusion strength');
+    fThermalNight.add(state, 'nightsideThermalEnabled').name('✓ enabled');
+    fThermal.add(state, 'daysideThermalEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -4676,6 +4809,7 @@
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds,
+      daysideThermal: fThermal, nightsideThermal: fThermalNight,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4805,6 +4939,11 @@
     const hud = $('hud');
     const lightObj = new THREE.Vector3();
     const invQuat = new THREE.Quaternion();
+    // F32/F33 — preallocated thermal-direction scratch (no per-frame allocations):
+    // the object-space spin axis (+y; the planet spins about its local y) and the
+    // rotated copy of lightObj the writer feeds uThermalDir.
+    const SPIN_AXIS = new THREE.Vector3(0, 1, 0);
+    const thermalObj = new THREE.Vector3();
     let t = 0;
 
     function frame(){
@@ -4983,6 +5122,24 @@
       uniforms.uCloudRelief.value     = state.cloudRelief;
       uniforms.uChevronStrength.value = state.chevronStrength;
       uniforms.uPupilR.value          = state.pupilR;
+      // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
+      // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
+      // rotation about +y DECREASES longitude, which is EAST in this lab's tangent
+      // frame (the F28 east = cross(up, c) convention), so positive offset shifts
+      // the hotspot east of the substellar point. Ownership split (card §6.5 step 4):
+      // F32 off ⇒ the dayside lobe collapses onto the night floor (uDayTempK :=
+      // the WRITTEN night temp); F33 off ⇒ the floor fades to black (uNightTempK 0)
+      // and the occlusion mask dies with it. BOTH off ⇒ master strength 0 — the
+      // GLSL block skips entirely (and every non-thermal preset derives strength 0
+      // anyway: the regression contract).
+      thermalObj.copy(lightObj).applyAxisAngle(SPIN_AXIS, state.hotspotOffset);
+      uniforms.uThermalDir.value.copy(thermalObj);
+      const _nightTW = state.nightsideThermalEnabled ? state.nightTempK : 0.0;
+      uniforms.uNightTempK.value       = _nightTW;                                                  // ✓ F33 enable gate
+      uniforms.uDayTempK.value         = state.daysideThermalEnabled ? state.dayTempK : _nightTW;   // ✓ F32 enable gate
+      uniforms.uThermalOcclusion.value = state.nightsideThermalEnabled ? state.thermalOcclusion : 0.0;
+      uniforms.uRedistribution.value   = state.redistribution;
+      uniforms.uThermalStrength.value  = (state.daysideThermalEnabled || state.nightsideThermalEnabled) ? state.thermalStrength : 0.0;
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
