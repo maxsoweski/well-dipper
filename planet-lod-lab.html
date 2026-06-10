@@ -344,6 +344,10 @@
       uniform int   uLiquidSpecies;    // 0=water 1=methane/ethane (first GLSL consumer = F11 floor-tint)
       // ── F14 lakes & seas (Fluvial step 4a — fluvial doc / card F14) ──
       uniform float uSeaLevel;         // standing-liquid level-set threshold on accumulated h; <= -1 ⇒ no liquid (early-out)
+      // ── F12 deltas & alluvial fans (Fluvial step 4a — card F12) ──
+      uniform float uDeltaDensity;     // 0..1 deposition gate (driven: fluvialDensity × activity); <= 0 ⇒ early-out
+      uniform float uDeltaAmp;         // apron height amplitude — lab knob
+      uniform float uDeltaApronH;      // apron band height above base level — lab knob
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -592,6 +596,7 @@
       const int PROV_GLACIAL     = 12;
       const int PROV_FROST       = 13;
       const int PROV_LAKES       = 14;  // F14 — neutral (hydrology, not geology), like FROST
+      const int PROV_DELTAS      = 15;  // F12 — river products, same lowlands affinity as RIVERS
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -624,6 +629,7 @@
         else if (fid == PROV_GLACIAL)    { f = 1.0 - gProvince.z; fl = 0.40; }
         else if (fid == PROV_FROST)      { f = gProvince.z;       fl = 1.00; }
         else if (fid == PROV_LAKES)      { f = gProvince.z;       fl = 1.00; }
+        else if (fid == PROV_DELTAS)     { f = 1.0 - gProvince.z; fl = 0.30; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -734,6 +740,41 @@
         // dropped — same chain-rule shortcut as scarp/glacial combiners).
         grad += -depth * uFluvialDensity * pw * lowGround * dchan;
         fluvialWet = max(fluvialWet, s);
+      }
+
+      // ── F12 deltas & alluvial fans (Stage-4 Fluvial, card §6.5) — the DEPOSITIONAL mirror
+      // of F11's erosional carve. Sediment drops where flow decelerates (Exner: deposition at
+      // base level): gate = F11's channel strength (fluvialWet — already province-weighted and
+      // lowGround-biased upstream) × a base-level proximity band. The apron ADDS height
+      // (positive material standing above the basin/sea floor); its lit edge is the nearBase
+      // falloff, chain-ruled exactly through h (fluvialWet held locally-constant — the
+      // documented cosmetic-grad convention, cf. fluvial lowGround). Writes back into
+      // fluvialWet so the Stage-6 species floor-tint brightens the lobe (card §4's
+      // one-band-brighter sediment read). baseLvl: sea worlds deposit at the shoreline
+      // (uSeaLevel); dry/relict worlds (uSeaLevel = -1) deposit into low basins below
+      // h ≈ -0.05 — the Mars relict-fan case. Called LATE in the chain (after lavaCombiner,
+      // before the F14 cut) so the proximity test sees the final accumulated height.
+      // uDeltaDensity <= 0 ⇒ early-out (Stage-A base + F11 untouched, regression-safe).
+      void deltaCombiner(vec3 pos, inout float h, inout vec3 grad, inout float fluvialWet){
+        if (uDeltaDensity <= 0.0) return;
+        float baseLvl = (uSeaLevel > -1.0) ? uSeaLevel : -0.05;   // shoreline on sea worlds; low basins on dry/relict
+        float dh = h - baseLvl;
+        if (dh <= 0.0 || dh >= uDeltaApronH) return;            // subaerial apron band only
+        float t = dh / uDeltaApronH;
+        float nearBase = 1.0 - t*t*(3.0 - 2.0*t);               // 1 at base level → 0 at band top
+        float dnear = -(6.0*t*(1.0-t)) / uDeltaApronH;          // d(nearBase)/dh (exact)
+        // Deposit bounded to the band scale: |dnear| peaks at 1.5/uDeltaApronH, so capping k
+        // at 0.6·uDeltaApronH bounds |k·dnear| ≤ 0.9 — the gradient multiplier (1 + k·dnear)
+        // stays positive for EVERY knob combination (review 2026-06-10: uncapped, amp 0.2 at
+        // apronH 0.02 reached |k·dnear| = 15 → flipped, 14×-amplified lighting in the band).
+        float k = min(uDeltaAmp * uDeltaDensity * fluvialWet * provinceWeight(PROV_DELTAS),
+                      0.6 * uDeltaApronH);
+        float apron = k * nearBase;
+        h += apron;
+        // d(apron)/dpos = k · d(nearBase)/dh · grad(h) — counteracts the underlying slope
+        // (fans flatten against the front); the k cap above guarantees no flip.
+        grad += k * dnear * grad;
+        fluvialWet = max(fluvialWet, apron * 12.0);             // sediment-tint hook (Stage 6)
       }
 
       // F1 mountains combiner — ridged base relief layered onto the FBM continents.
@@ -1620,6 +1661,7 @@
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
+          deltaCombiner(vPos, h, grad, fluvialWet);// F12 — depositional aprons where channels meet base level (reads FINAL h)
           // ── Stage 4 (F14): standing-liquid level-set cut (card §4) — AFTER all relief so
           // fluvial channels + basins flood for free off the accumulated h. Inside the mask
           // the height clamps to the equipotential and the gradient flattens to the geometric
@@ -1913,6 +1955,9 @@
       uLiquidStability: { value: 0.0 },   // 0..1 liquid on/off gate    — owner Fluvial; read by Aeolian/Cryo/Optical
       uLiquidMask:      { value: 0.0 },   // liquid-body coverage scalar — owner Fluvial (F14 applyDrivers writes seaCoverage); read by Optical (sunglint F36)
       uSeaLevel:        { value: -1.0 },  // F14 standing-liquid level-set threshold; -1 = no liquid (driven: stability gate + coverage)
+      uDeltaDensity:    { value: 0.0 },   // F12 deposition gate (driven: fluvialDensity × activity); <= 0 early-outs
+      uDeltaAmp:        { value: 0.06 },  // F12 apron amplitude — lab knob
+      uDeltaApronH:     { value: 0.12 },  // F12 apron band height above base level — lab knob
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2002,6 +2047,10 @@
       provinceWeight: 1.0,  // Stage-D province influence dial (0 = legacy uniform look)
       seaLevel: -1.0,       // F14 standing-liquid threshold (driven; -1 = none)
       lakesEnabled: true,   // F14 enable gate
+      deltaDensity: 0.0,    // F12 deposition gate (driven)
+      deltaAmp: 0.06,       // F12 apron amplitude
+      deltaApronH: 0.12,    // F12 apron band height
+      deltasEnabled: true,  // F12 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2424,6 +2473,9 @@
       const _seaCoverage = _wet ? _clamp01(_stab * _vol) : 0.0;
       state.seaLevel = _wet && _seaCoverage > 0.0 ? -0.2 + 0.5 * _seaCoverage : -1.0;
       uniforms.uLiquidMask.value = _seaCoverage;   // the F36 coverage scalar (registry row)
+      // ── F12 deltas & fans — deposition tracks the channel network: density × activity
+      // (active worlds sharp lobes, relict Mars-like worlds subdued fans; zero without rivers).
+      state.deltaDensity = state.fluvialDensity * (0.5 + 0.5 * state.fluvialActivity);
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -2661,6 +2713,14 @@
     fLakes.add(state, 'seaLevel', -1, 0.5, 0.01).name('sea level (driven)').listen();
     fLakes.add(state, 'lakesEnabled').name('✓ enabled');
 
+    // ▸ Deltas & fans (F12) — depositional aprons where F11 channels meet base level.
+    // density is driven (fluvialDensity × activity, .listen()); amp/band are shape knobs.
+    const fDeltas = fGrad.addFolder('Deltas & fans (F12)'); fDeltas.close();
+    fDeltas.add(state, 'deltaDensity', 0, 1, 0.01).name('density (driven)').listen();
+    fDeltas.add(state, 'deltaAmp', 0, 0.2, 0.005).name('apron amplitude');
+    fDeltas.add(state, 'deltaApronH', 0.02, 0.4, 0.01).name('apron band height');
+    fDeltas.add(state, 'deltasEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -2668,6 +2728,7 @@
       scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
+      deltas: fDeltas,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -2834,6 +2895,9 @@
       uniforms.uLimbStrength.value = state.limbStrength;
       uniforms.uProvinceWeight.value = state.provinceWeight;
       uniforms.uSeaLevel.value = state.lakesEnabled ? state.seaLevel : -1.0;   // ✓ enable gate (preserves slider value)
+      uniforms.uDeltaDensity.value = state.deltasEnabled ? state.deltaDensity : 0.0;   // ✓ enable gate
+      uniforms.uDeltaAmp.value = state.deltaAmp;
+      uniforms.uDeltaApronH.value = state.deltaApronH;
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

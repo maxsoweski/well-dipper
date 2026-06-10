@@ -43,7 +43,7 @@ during phases) | ▶️ = current
 | F18 | [F18-sublimation-landscapes](cards/F18-sublimation-landscapes.md) | Cryo | ✅ | 🟢 | 3 |
 | F22 | [F22-polar-caps-frost](cards/F22-polar-caps-frost.md) | Cryo | ✅ | 🟢 | 3 |
 | F23 | [F23-snowline](cards/F23-snowline.md) | Cryo | ✅ | 🟢 | 3 |
-| F12 | [F12-deltas-fans](cards/F12-deltas-fans.md) | Fluvial | ⬜ | — | 4a |
+| F12 | [F12-deltas-fans](cards/F12-deltas-fans.md) | Fluvial | ✅ | 🟡 taste-call | 4a |
 | F13 | [F13-outflow-channels](cards/F13-outflow-channels.md) | Fluvial | ⬜ | — | 4a |
 | F14 | [F14-lakes-seas](cards/F14-lakes-seas.md) | Fluvial | ✅ | 🟢 | 4a |
 | F21 | [F21-karst-dissolution](cards/F21-karst-dissolution.md) | Fluvial | ⬜ | — | 4a |

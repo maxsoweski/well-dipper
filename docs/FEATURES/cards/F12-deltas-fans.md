@@ -47,12 +47,57 @@ Unbuilt — recommended recipe once built. Register in planet-archetypes.js FEAT
 - [ ] Does the form hold across liquids — same fan/delta morphology on the Titan methane preset as on the water ocean preset, differing only by palette/tint?
 - [ ] On re-approach at identical camera state, are the lobes pixel-identical (deterministic from position + seed, no temporal state)?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — builds AFTER F14: the apron keys on its base level)
+
+1. **deltaCombiner (Fluvial, Stage 4)** — called right AFTER fluvialCombiner in the chain
+   (consumes its fluvialWet as the channel-presence gate — no second drainageField eval in
+   v1). Signature: `deltaCombiner(pos, inout h, inout grad, inout fluvialWet)`.
+   `uDeltaDensity <= 0` ⇒ early-out (regression-safe).
+2. **Mechanism (card §4, Exner intuition)**: deposit where channels meet base level.
+   `baseLvl = max(uSeaLevel, -0.05)` (sea worlds: the shoreline; dry/relict worlds: low
+   basins — the Mars-fan case). `nearBase = 1 − smoothstep(0, uDeltaApronH, h − baseLvl)`,
+   subaerial-only (`h > baseLvl` side carries the apron; the drowned side is F14's).
+   `apron = uDeltaAmp × fluvialWet × nearBase`; `h += apron`. Gradient: the dominant lit
+   edge is the apron falloff in h — chain-rule through nearBase's smoothstep
+   (`d/dh = −6t(1−t)/W` × current grad), holding fluvialWet locally-constant (the
+   documented cosmetic-grad convention — same as fluvial's lowGround).
+3. **Sediment read**: write back `fluvialWet = max(fluvialWet, apron-strength × 1.5)` so the
+   existing Stage-6 species floor-tint brightens the lobes (the card's "one-band-brighter
+   sediment, extending the fluvialWet albedo hook").
+4. **Province**: PROV_DELTAS = 15, affinity = rivers' row {field 2, polarity −1, floor 0.30}
+   (deltas are river products — same lowlands). Multiply uDeltaDensity's effect via
+   fluvialWet (already province-weighted by F11) — NO double multiply; the GLSL row exists
+   for the convention/test totality, applied to the apron amp.
+5. **Drivers**: `state.deltaDensity = fluvialDensity × (0.5 + 0.5 × fluvialActivity)`
+   (active worlds sharp lobes, relict subdued); deltaAmp/apronH lab knobs.
+6. **Registration**: FEATURES.deltas {label 'Deltas & fans (F12)', enableKey
+   'deltasEnabled', archetypes ['tectonic-terrestrial','volatile-cold']}; PROVINCES.deltas;
+   GLSL_NAME map; fDeltas folder under Surface — Gradational; featureFolders.
+7. **v1 scope cuts (flagged taste-calls)**: no second drainage re-eval for distributary
+   splay (fluvialWet's own tributary structure carries the branching read); no per-lobe
+   avulsion switching. Revisit in Max's lap if lobes read too smooth.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 taste-call (2026-06-10, working-Claude autonomous judging — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5. Mechanism verified: on/off disk diff 1.77% concentrated along
+  coastal margins (`F12-deltas-01-ocean-d25.png` vs `-02-…-off.png`); channels show gray
+  sediment margins at d1.6 (`F12-deltas-03-ocean-d16-amp012.png`); worst-case knob corner
+  (amp 0.2, band 0.02) renders clean after the review fix (`F12-deltas-04-…-worstknobs.png`).
+  Vitest 19/19; backtick parity even.
+- Why 🟡 not 🟢: the §6 form read ("coherent semicircular cone apexed at a channel mouth")
+  is not decisively demonstrated at the conservative default amp 0.06 — the deposit reads as
+  subtle coastal banding + channel-margin brightening. Per decision-needed-threshold this is
+  a taste fork: Max decides in the Phase-7 lap whether the v1 read suffices, the amp default
+  rises, or the deferred distributary-splay enhancement (second drainage eval near base,
+  card §6.5 step 7) gets built.
+- Code review (adversarial): 1 important issue FOUND AND FIXED — uncapped gradient term
+  reached |k·dnear| = 15 at the knob corner (amp 0.2 / band 0.02) → flipped, 14×-amplified
+  lighting; fixed by capping the deposit to 0.6 × band height (|k·dnear| ≤ 0.9, no flip for
+  any knob combination). Also fixed the reviewer's base-level observation: baseLvl now uses
+  the true shoreline whenever liquid exists (was floored at −0.05, stranding aprons above
+  low-coverage seas).
+- Re-verify: vitest 19/19 + worst-case knob shot post-fix.
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)
