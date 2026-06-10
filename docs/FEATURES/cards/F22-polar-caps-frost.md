@@ -51,8 +51,32 @@ Built — solo it live. (1) Use the second Chrome on :9223 (chrome-devtools MCP,
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Rocky (Earthlike) +
+  Europa (icy moon), solo `frost`, d20/d8/d7. Drivers verified live:
+  Rocky maxCov 0.198 / condT 273 / locked 0 / pld 0.062; Europa maxCov
+  1.0 / locked 1.
+  - Cap: coherent bright polar region, a clean luminance step above
+    bare ground (shots 01 d20, 02 d7).
+  - Snowline: ragged fractal edge, never a latitude circle; isolated
+    bright high-altitude patches equatorward of the cap line — the
+    lapse-rate snowline climbing mountains with F1 enabled (shot 02).
+  - PLD strata: annular brightness structure nested inside the cap from
+    the pole-down view, gated to the cap (shot 03 at pldStrength 0.25).
+    Legibility is subtle at the derived 0.06 — Phase-7 taste knob note.
+  - Eyeball (locked): at Europa's 110 K the whole shell frosts —
+    physically right (everything is below the H₂O frost point). Raising
+    uPlanetTempEq to 320 K clears a bare warm substellar PUPIL with
+    frost wrapping toward the antistellar hemisphere — the eyeball form
+    verified as temperature behavior, not geometry failure (shots 05,
+    06).
+  - Latitude bias: formula-level (bias lifts the equatorial coldFactor
+    floor); not separately screenshotted.
+  - No-op: budget 0 (enabled) vs disabled pixel-identical — 0 px diff.
+  - Tint stays luminance-led; bright cap, subtle hue (no saturated slab).
+  - Shots: F22-frost-01-d20-rocky-cap.png, -02-d7-snowline-mountains.png,
+    -03-d8-pole-pld.png, -04-d20-europa-eyeball.png,
+    -05-d8-europa-pupil.png, -06-d8-eyeball-pupil-320K.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
