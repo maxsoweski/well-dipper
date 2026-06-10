@@ -54,6 +54,7 @@ import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
 import { parkBackDepth } from './effects/portalTraversal.js';
 import { portalPreviewDistanceScene, postExitDistanceScene, sceneToLy, shipHullToScene } from './core/ScaleConstants.js';
+import { hideNewRoots, restoreRoots } from './effects/swapCompileGate.js';
 import {
   maybeRebase as _maybeWorldRebase,
   worldOrigin as _worldOriginVec,
@@ -1615,6 +1616,9 @@ const _clampToB = new THREE.Vector3();
 // starts from this depth so the hold is never BEHIND the camera (which would
 // freeze it). Reset whenever we're not in a gated post-swap cruise.
 let _parkEntryDepth = null;
+// Swap compile gate restore list (see onSwapSystem). Module-scope so
+// onComplete can defensively restore if compileAsync never resolves.
+let _swapGatedRoots = [];
 // onTraversal must be async: onSwapSystem awaits pendingSystemDataPromise
 // then calls warpSwapSystem which TELEPORTS the camera to the new system.
 // Pre-2026-04-17, this callback was synchronous: it invoked onSwapSystem
@@ -3019,6 +3023,8 @@ warpEffect.onPrepareSystem = () => {
 
 // System swap at hyper start (tunnel is opaque, hides any GPU resource creation)
 warpEffect.onSwapSystem = async () => {
+  // TEMP swap-stall instrumentation (Goal 3 diagnosis 2026-06-09) — remove.
+  const __st = { t0: performance.now() };
   // Await in-flight async generation kicked off in onPrepareSystem. In the
   // common case, FOLD+ENTER (~6s) have already absorbed generation's ~4s
   // wall-clock work and the promise is resolved — await returns immediately.
@@ -3029,6 +3035,7 @@ warpEffect.onSwapSystem = async () => {
     try { await pendingSystemDataPromise; }
     catch (e) { console.error('[WARP] onPrepareSystem failed:', e); }
   }
+  __st.genAwait = performance.now();
   if (!_portalLabMode) {
     soundEngine.play('warpEnter');
     musicManager.play('hyperspace', 0.3);
@@ -3050,7 +3057,20 @@ warpEffect.onSwapSystem = async () => {
       );
     }
   }
+  __st.preSwap = performance.now();
+  // ── Swap compile gate (Goal 3, 2026-06-09) ──
+  // Snapshot the scene roots, spawn, then hide everything spawnSystem added.
+  // If the renderer draws the fresh meshes before compileAsync (below)
+  // finishes, the first draw force-compiles their shaders SYNCHRONOUSLY —
+  // measured 0.5-2.0s on a single frame, felt as "everything stops moving"
+  // right at tunnel entry. Hidden objects are still compiled (compile() uses
+  // scene.traverse, not traverseVisible), so the parallel compile is genuinely
+  // parallel; visibility is restored below once compile resolves, mid-cruise,
+  // behind the tunnel walls and before the AC5 emergence gate releases.
+  const _preSwapRoots = new Set(scene.children);
   warpSwapSystem();
+  _swapGatedRoots = _useDualPortal ? hideNewRoots(_preSwapRoots, scene.children) : [];
+  __st.swap = performance.now();
 
   // ── Re-anchor the dual portal around the post-teleport camera ──
   // warpSwapSystem() just TELEPORTED the camera to the destination. The HYPER
@@ -3098,12 +3118,14 @@ warpEffect.onSwapSystem = async () => {
   // new ones so the crossover sweep (in the warp update block) can fade
   // origin → destination while the player is inside the fullscreen shader
   // tunnel. Not needed here.
+  __st.reanchor = performance.now();
   if (_useDualPortal) {
     skyRenderer.activate();
   } else {
     skyRenderer.beginWarpTransition();
   }
   skyRenderer.update(camera, 0);
+  __st.sky = performance.now();
   // Restore galaxy glow (hidden during title screen)
   if (skyRenderer._glowLayer?.mesh) {
     skyRenderer._glowLayer.mesh._hiddenForTitle = false;
@@ -3128,11 +3150,30 @@ warpEffect.onSwapSystem = async () => {
   } catch (e) {
     console.warn('[WARP] compileAsync failed (continuing):', e);
   }
+  // Reveal the destination only now that its programs are linked — the next
+  // draw binds ready programs instead of stalling on a sync link-wait.
+  restoreRoots(_swapGatedRoots);
+  _swapGatedRoots = [];
   warpEffect.destinationReady = true;
+  __st.compile = performance.now();
+  window.__swapTiming = {
+    genAwaitMs: +(__st.genAwait - __st.t0).toFixed(1),
+    swapSpawnMs: +(__st.swap - __st.preSwap).toFixed(1),
+    skyMs: +(__st.sky - __st.reanchor).toFixed(1),
+    compileMs: +(__st.compile - __st.sky).toFixed(1),
+    totalMs: +(__st.compile - __st.t0).toFixed(1),
+  };
 };
 
 // When warp exit finishes, reveal the new system and restart autopilot
 warpEffect.onComplete = () => {
+  // Defensive: if compileAsync hung past the HYPER safety ceiling, the gated
+  // roots are still hidden — never arrive into an invisible system.
+  if (_swapGatedRoots.length) {
+    console.warn('[WARP] swap compile gate still held at onComplete — force-restoring %d roots', _swapGatedRoots.length);
+    restoreRoots(_swapGatedRoots);
+    _swapGatedRoots = [];
+  }
   skyRenderer.completeWarpTransition();
 
   // AC4: emergence is now a real INSIDE→OUTSIDE_B plane crossing during the
