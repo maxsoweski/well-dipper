@@ -61,15 +61,20 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Next 1-3 queued (in priority order)
 
-0. **`planet-refinement-campaign` — Phase 2 DONE 2026-06-10 (`f9ab594`…
-   `212ca03`): all 4 FOUNDATION substrate checks verdicted 🟢 (continents,
-   lighting, posterize+Bayer F50, LOD ramp F53), 17 shots in cards/shots/,
-   no code fixes needed; one `taste-call` (chroma speckle at posterize band
-   boundaries) queued for Phase 7. Tracker flipped Phase 3 ▶️.** Next: Max
-   starts a FRESH session and pastes the tracker's **Phase-3 `/goal` launch
-   card** (refine-built pass, 15 cards). Serves SCREENSAVER-MVP visual
-   polish (planets = hero objects). Runs parallel to warp on shared tree —
-   explicit-path staging only.
+0. **`planet-refinement-campaign` — Phase 3 DONE 2026-06-10 (`17052ab`…
+   `407682c`): all 15 built-feature cards verdicted — 13 🟢, F03 🟡
+   (full-disk rays read as speckle; cell-truncation carry-forward,
+   taste-call for Phase 7), F08 🟡 (Max live UAT: cell-based lava-flow
+   shape failed visual QA → fix cycle 1 shipped: domain-warped crack
+   channels + province clustering + flow-front glow; Max re-look
+   queued). ~70 shots in cards/shots/; vitest 8/8 green; zero other code
+   fixes needed. Lab method notes: setPreset doesn't re-derive drivers
+   (call `_lab.applyDrivers()`); zero uCloudCoverage before any
+   pixel-diff. Tracker flipped Phase 4a ▶️.** Next: Max starts a FRESH
+   session and pastes the tracker's **Phase-4a `/goal` launch card**
+   (build pass, fluvial+aeolian, 8 cards, heavy loop). Serves
+   SCREENSAVER-MVP visual polish (planets = hero objects). Runs parallel
+   to warp on shared tree — explicit-path staging only.
 1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
 2. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
