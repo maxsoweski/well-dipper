@@ -47,8 +47,33 @@ Built — solo it on the :9223 lab Chrome (launch per memory/chrome-devtools-922
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Titan/Frozen/Rocky, solo
+  `frost`, d12/d6. Shares the frostCoverage machinery verified in F22
+  (bright-cap luminance step, ragged fractal edge, frost-climbs-
+  mountains lapse, eyeball re-anchor, pixel-clean budget-0 no-op — see
+  F22 §7); F23-specific checks below.
+  - Softness knob: on Rocky (where the isotherm actually intersects the
+    surface) 0.01 → crisp coverage line vs 0.4 → wide dithered
+    transition skirt; 3.3% of frame changes between them, no banding
+    artifacts (shots 03 vs 04). Method note: on Frozen the knob no-ops
+    because at T_eq 60 K the entire surface sits below the frost point —
+    there is no snowline to soften; sweep softness on a world with a
+    real boundary.
+  - Latitude bias: bias 1 on Rocky spreads patchy frost well equatorward
+    while keeping the polar core — cap GEOMETRY changes, not just size
+    (shot 05).
+  - Species tints (read live): Rocky H₂O white; Titan species 2 CO₂
+    grey-white (0.88,0.88,0.90); Frozen species 3 CH₄ tholin-pink
+    (0.93,0.84,0.82) — luminance lift load-bearing, hue as flavor
+    (shots 01, 02). CARD ERRATUM: §5 says Titan derives CH₄/pink, but
+    the core.js classifier puts 94 K in the CO₂ band (>90 K) — the code
+    and F18's card agree; this card's §5 prose is wrong, not the code.
+  - Hot-world rejection (objective): Lava derives condensationT 0 /
+    maxCoverage 0 / species 0 — shader early-outs, no residual rim.
+  - Shots: F23-snowline-01-d12-titan-co2.png,
+    -02-d12-frozen-ch4pink.png, -03-d6-sharp001.png,
+    -04-d6-diffuse04.png, -05-d12-latbias1.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed (card §5 erratum noted above)
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
