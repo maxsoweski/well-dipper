@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash FIXED `4278037`, VERIFIED_PENDING_MAX.** Root cause was NONE of the handoff's 4 candidates — it predates the swap: `updateTraversal` ran in simStep (60Hz) while the rendered camera interpolates per render frame (240Hz), so the camera crossed Portal A's plane up to ~4 rendered frames before the mode flipped; those frames drew stencil-ON with the disc behind the camera → empty stencil mask → tunnel invisible → ~3 frames (~12ms) of raw origin sky. Proven by in-page per-frame canvas capture frame-aligned with signed plane distance (sky-bright frames == sd<0 ∧ OUTSIDE_A exactly, 2 pre-fix warps). Fix: detection moved to renderFrame after camera interpolation. Post-fix: 3 warps, 0 stale frames (was 3/warp), flat crossing brightness, no AC4/AC10 warnings. Headless 54/54. Prior session's 3 goals all VERIFIED_PENDING_MAX `c85480f`. TEMP `__swapTiming` instrumentation still in main.js — remove before workstream ships. **Pushed + Pages deploy green 2026-06-10** (Max: "Looks great! We should push" — explicit ride-confirmation of the flash fix not yet recorded; ask at next touchpoint).
+Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash FIXED `4278037`, VERIFIED_PENDING_MAX.** Root cause was NONE of the handoff's 4 candidates — it predates the swap: `updateTraversal` ran in simStep (60Hz) while the rendered camera interpolates per render frame (240Hz), so the camera crossed Portal A's plane up to ~4 rendered frames before the mode flipped; those frames drew stencil-ON with the disc behind the camera → empty stencil mask → tunnel invisible → ~3 frames (~12ms) of raw origin sky. Proven by in-page per-frame canvas capture frame-aligned with signed plane distance (sky-bright frames == sd<0 ∧ OUTSIDE_A exactly, 2 pre-fix warps). Fix: detection moved to renderFrame after camera interpolation. Post-fix: 3 warps, 0 stale frames (was 3/warp), flat crossing brightness, no AC4/AC10 warnings. Headless 54/54. Prior session's 3 goals all VERIFIED_PENDING_MAX `c85480f`. TEMP `__swapTiming` instrumentation still in main.js — remove before workstream ships. **Pushed + Pages deploy green 2026-06-10. Flash fix UAT-PASSED — Max confirmed from a post-fix warp ride ("yes looks great"). SHIPPED.** Still open from the 3-goals arc: explicit belt-through-walls confirmation (Goal 2) — Max hasn't said the word "belt" since the logdepth fix; ask on a belt-system ride).
 
 ---
 
@@ -42,11 +42,11 @@ gate; stall inventory + open leads in handoff). Goal 2 statically diagnosed
 **3-goals session 2 (2026-06-10 cont.): Goals 2+3 FIXED** (`81fe37b` `094e8a2`
 `f75842e` `c85480f`). **All 3 goals VERIFIED_PENDING_MAX. Max RODE it → flagged
 "a little flash where the tunnel disappears after we enter it."**
-**Flash session (2026-06-10): FIXED `4278037`, VERIFIED_PENDING_MAX** — sim-vs-render
-cadence bug at the Portal-A crossing, NOT a swap/load artifact; no latency spent
-(Max's offered levers unneeded — load was already hidden; see Last-updated line).
-**→ Max UAT: ride warps — flash gone?** Known residual if he still sees something
-at the seam: the far-end opening shows black (gated sky) for the ~0.4s compile
+**Flash session (2026-06-10): FIXED `4278037`, UAT-PASSED + SHIPPED (deployed)** —
+sim-vs-render cadence bug at the Portal-A crossing, NOT a swap/load artifact; no
+latency spent (Max's offered levers unneeded — load was already hidden; see
+Last-updated line). Known residual nobody has felt yet: the far-end opening shows
+black (gated sky) for the ~0.4s compile
 window post-swap, then destination stars pop in — small (3u opening at ~60u),
 measured sub-0.2%-of-pixels; fix candidates exist (keep old sky alive through
 the gate) if he feels it. Other residuals: one unattributed ~530ms hyper frame
