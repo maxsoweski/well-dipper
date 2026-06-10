@@ -5431,18 +5431,31 @@ function warpSwapSystem() {
     } else {
       // Star system: approach toward the star.
       // orbitDist sets the final camera-to-star distance post-EXIT (travel
-      // and coast terms cancel with starting position). The multiplier is
-      // tuned so the StarFlare bloom (plane size = radius × 30) subtends
-      // ~17° of the 50° FOV — star reads as large and prominent without
-      // dominating the sky. No innerOrbit cap: in compact systems the cap
-      // previously put the camera inside the flare plane, which made the
-      // star fill the whole view on arrival (2026-04-16 fix). If
-      // radius × 100 happens to exceed the first planet's orbit, that's
-      // fine — we arrive slightly outside the innermost planet, which
-      // still reads as a system-overview entry.
+      // and coast terms cancel with starting position). Arrival lands in
+      // BILLBOARD range — derived from the same screen-space formula
+      // StarFlare.update() uses for its flare→billboard switch, × margin —
+      // so the destination star reads as the same dot the player targeted
+      // in the origin starfield (Max, 2026-06-10; spec:
+      // docs/superpowers/specs/2026-06-10-warp-arrival-billboard-distance-design.md).
+      // The switch is screen-space (window height / FOV / luminosity), so
+      // a fixed radius multiplier — the previous radius×100, tuned
+      // 2026-04-16 for a prominent ~17° flare — can't guarantee billboard
+      // on every display; the derived distance can. Binaries take the max
+      // over both stars so both render as dots. The post-reveal nav leg
+      // still flies us in (cruise speed scales with leg length, 12s
+      // ceiling); that handoff is the future supercruise seam.
       const star = system.star;
       const starPos = star.mesh.position;
-      const orbitDist = star.data.radius * 100;
+      // UAT knob (pattern: _warpPreviewDist, ec47b84). Read per-warp so
+      // live tuning applies to the next jump.
+      const arrivalMargin = (typeof window._warpArrivalMargin === 'number')
+        ? window._warpArrivalMargin : 1.3;
+      let switchDist = star.billboardSwitchDistance(camera.fov, window.innerHeight);
+      if (system.star2) {
+        switchDist = Math.max(switchDist,
+          system.star2.billboardSwitchDistance(camera.fov, window.innerHeight));
+      }
+      const orbitDist = switchDist * arrivalMargin;
 
       camera.position.set(starPos.x, starPos.y + 2, starPos.z + travelDist + orbitDist + coastDist);
       camera.lookAt(starPos);

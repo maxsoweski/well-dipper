@@ -6,6 +6,7 @@
 // These tests pin parity with the pre-extraction inline formula.
 
 import { describe, test, expect } from 'vitest';
+import * as THREE from 'three';
 import { StarFlare } from '../src/objects/StarFlare.js';
 
 const FOV = 50;        // game camera FOV
@@ -76,5 +77,28 @@ describe('StarFlare.billboardSwitchDistance', () => {
     const star = makeStar({ radius: 1, luminosity: 1 });
     expect(star.billboardSwitchDistance(FOV, 2160))
       .toBeGreaterThan(star.billboardSwitchDistance(FOV, 1080));
+  });
+
+  test('update() toggles flare/billboard at exactly the method threshold', () => {
+    const star = makeStar({ radius: 1, luminosity: 1 });
+    const cam = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.1, 1e9);
+    const d = star.billboardSwitchDistance(FOV, SCREEN_H);
+
+    globalThis.window = { innerHeight: SCREEN_H };  // update() reads window.innerHeight
+    try {
+      cam.position.set(0, 0, d * 0.99);             // inside → flare
+      cam.updateMatrixWorld();
+      star.update(0.016, cam);
+      expect(star._flareDisc.visible).toBe(true);
+      expect(star._billboard.visible).toBe(false);
+
+      cam.position.set(0, 0, d * 1.01);             // outside → billboard
+      cam.updateMatrixWorld();
+      star.update(0.016, cam);
+      expect(star._flareDisc.visible).toBe(false);
+      expect(star._billboard.visible).toBe(true);
+    } finally {
+      delete globalThis.window;
+    }
   });
 });
