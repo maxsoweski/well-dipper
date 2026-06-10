@@ -64,8 +64,12 @@ v1 scope cuts: true curl-noise advection + sphere-tangent flow (research doc's f
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop)
+- Evidence (repo root, gitignored): `F25-ab-on/off/diff.png` (jets ON/OFF at d5 Jovian — 34,498 px delta, ALL inside the disc, concentrated in horizontal stripes AT band boundaries with the strongest cluster at the equatorial flank: §6 items 1+3 read directly off the diff), `F25-regress-jetsoff.png` (jets-off vs pre-F25 baseline `F24-stab-a.png`: **0 changed pixels in the render canvas** — the bandWarpField extraction is render-identical, F24's regression contract closed), `F25-anim-t0/t1.png` (4 s apart, jets on: 1,245 px drift vs ~250 temporal floor — drift alive), `F25-frozen-t0/t1.png` (jetSpeed 0: **0 px in 3 s** — time enters ONLY via the speed-scaled rotation).
+- Live drivers (Jovian): strength 1, speed 0.808, shearTurb 0.297, festoon 0.444 — matches the implementer's pre-check table (u(φ) sign alternates at every boundary, equatorial Gaussian 1.6× and widest, shearGate maxima exactly at boundaries, displacement budgets 0.267/0.400 stripe units under the caps).
+- §6 checklist: 1 🟢 (boundary concentration — diff evidence), 3 🟢 (equatorial jet), 5 🟢 (luminance/dither), 6 🟢 (d20 stripes clean per regression shot; d5 scallops keep silhouettes). 2 🟡 (festoon hooks visible near the equatorial flank; ONE-SIDEDNESS is analytic — single-sign max(0,tn) on one flank — but needs Max's eye to confirm it reads as wind). 4 🟡 (counter-rotation: alternation verified analytically + drift verified live; per-band direction read on posterized scallops defeated row cross-correlation — a Max-eye item under animation). 7 🟡 (boundary trains visible; "rolled KH forms" is a taste read).
+- Tweaks applied: none — 0 of 3 cycles used (F24's displacement-budget lesson was baked into the §6.5 plan).
+- Code review (fable): no blockers, no should-fix. Nits: rotation-bound comment corrected (applied); uJetEqWidth zero-guard declined (matches lab-knob trust pattern). Reviewer's open bit-identity item closed by the 0-px regression diff above.
+- Taste forks for Max's lap: (a) festoon strength/shape (0.444 — v1-minimal hooks; could be richer curl filaments); (b) drift rate (25 s phase cycle — slow churn); (c) whether counter-rotation reads under live animation.
+- Scope cuts (per §6.5): true curl-noise advection + sphere-tangent flow spike → not v1; Venus superrotating deck → driver gate is h2-he only, Venus variant deferred to Phase 5/6; storm vortices → F27/F28.
+- Status: VERIFIED_PENDING_MAX

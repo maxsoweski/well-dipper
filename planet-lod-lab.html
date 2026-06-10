@@ -405,6 +405,16 @@
       uniform float uBandStretch;      // vertical domain compression (~2.5) so the warp FBM streaks along latitude — lab knob
       uniform float uBandLatPow;       // latitude remap exponent (>1 ⇒ wide equatorial bands, narrow polar) — lab knob
       uniform vec3  uBandOffset;       // 🎲 domain offset — own warp seed, decorrelated from the terrain features
+      // ── F25 jets & shear turbulence (Bands step 4b — card F25) — ALBEDO/LUMINANCE ONLY ──
+      // Regression contract: every jets term sits behind uJetStrength > 0.0, so at 0 the
+      // render is byte-identical F24 output (uTime enters the band family ONLY through F25).
+      uniform float uJetStrength;      // 0..1 master gate (driven: 1 on h2-he gas worlds, 0 on every solid preset); <= 0 ⇒ no-op
+      uniform float uJetSpeed;         // counter-rotating drift amplitude, rad per flow-map phase (driven: D8 spin, ∝ 1/rotationHours)
+      uniform float uJetShearTurb;     // boundary-turbulence displacement amplitude in stripe units (driven: T_eq vigor ramp)
+      uniform float uJetFestoon;       // one-sided equatorial-flank hook amplitude in stripe units (driven: same ramp)
+      uniform float uJetTurbFreq;      // shear-turbulence fbm frequency multiplier vs the band-warp domain — lab knob
+      uniform float uJetEqWidth;       // equatorial superrotation Gaussian half-width in trueLat units — lab knob
+      uniform vec3  uJetOffset;        // 🎲 domain offset — own turbulence seed, decorrelated from the band warp
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -661,6 +671,7 @@
       const int PROV_DUST        = 20;  // F16 — fallout is near-global: dunes' old-plains polarity but a HIGH floor (mantles thin over young terrain, never vanish)
       const int PROV_MASSW       = 21;  // F19 — deposits live where steeps live: the MOUNTAIN-field polarity (talus needs walls to fail)
       const int PROV_BANDS       = 22;  // F24 — neutral (atmosphere, not geology): the FROST-row pattern — a gas deck must not be gated by rock provinces
+      const int PROV_JETS        = 23;  // F25 — neutral: the shear dynamics ride the same unprovinced gas deck as PROV_BANDS
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -701,6 +712,7 @@
         else if (fid == PROV_DUST)       { f = 1.0 - gProvince.x; fl = 0.50; }
         else if (fid == PROV_MASSW)      { f = gProvince.x; fl = 0.30; }
         else if (fid == PROV_BANDS)      { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_JETS)       { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1236,6 +1248,85 @@
         return perturbed;
       }
 
+      // ── F25 jets & shear turbulence (Stage-6 albedo, Bands step 4b — card F25) — the
+      // DYNAMICS on top of the F24 deck: an analytic zonal jet profile u(lat), a
+      // counter-rotating drift of the warp-noise sampling domain (two-phase flow map,
+      // research doc §3.2-3.3: two bounded phases offset 0.5, triangle crossfade — flow
+      // without accumulation, deterministic on bounded time), shear-gated boundary
+      // turbulence, and one-sided equatorial festoons. ALBEDO/LUMINANCE ONLY — no
+      // h/grad writes. Regression contract: every term sits behind uJetStrength > 0.0;
+      // at 0 the band path is byte-identical F24 (its zoom-cycle determinism intact) —
+      // uTime enters the band family through these functions ONLY.
+      vec3 jetRotY(vec3 v, float a){
+        // differential rotation about the spin axis (y): latitude is y-invariant, so
+        // band identity never moves — only the longitudinal sampling domain slides.
+        float c = cos(a), s = sin(a);
+        return vec3(c * v.x - s * v.z, v.y, s * v.x + c * v.z);
+      }
+      float jetU(float trueLat, float latC){
+        // analytic zonal wind (card §4): sin on the SAME pre-warp stripe ladder F24
+        // uses, so jets alternate sign each stripe and peak exactly at zone-belt
+        // boundaries (fract(bandCoord) 0.25/0.75), plus a wide equatorial
+        // superrotation Gaussian, ~1.6x amplitude — the widest, fastest band
+        // (card §6 item 3; the hot-Jupiter hotspot mechanism rides this in F32).
+        float jet = sin(6.2831853 * 0.25 * latC * uBandCount);
+        float eq  = 1.6 * exp(-(trueLat * trueLat) / (uJetEqWidth * uJetEqWidth));
+        return jet + eq;
+      }
+      float jetShearGate(float trueLat, float latC){
+        // shear-magnitude proxy, maxima AT stripe boundaries (card §6 item 1): the
+        // squared jet alternation (sin^2 = 1 at fract 0.25/0.75, 0 at band centers
+        // — the quarter-shifted cos^2 of the card, placed so the gate peaks where
+        // the jets and the zone-belt luminance transition live), plus the equatorial
+        // Gaussian FLANK term (normalized |d/dlat| of the superrotation bump, peak 1
+        // at lat = width/sqrt(2)). min() caps the gate so the displacement budget
+        // (uJetShearTurb in stripe units) is exact.
+        float s = sin(6.2831853 * 0.25 * latC * uBandCount);
+        float aL = abs(trueLat) / uJetEqWidth;
+        float eqFlank = 1.4142136 * aL * exp(0.5 - aL * aL);
+        return min(1.0, s * s + 0.6 * eqFlank);
+      }
+      float bandWarpField(vec3 pos){
+        // F24's recursive q/r warp, extracted VERBATIM so the F25 drift can sample it
+        // at rotated domains. Jets off ⇒ one un-rotated call — identical arithmetic
+        // to the original inline form, output unchanged.
+        vec3 p = vec3(pos.x, pos.y * uBandStretch, pos.z) + uBandOffset;
+        float q = fbmd(p, 4.0, 0.0).x;
+        return fbmd(p + vec3(4.0 * q) + vec3(11.3, -7.1, 3.9), 4.0, 0.0).x;
+      }
+      float jetsDisp(float trueLat, float latC, vec3 pos){
+        // shear-gated boundary turbulence + festoons, returned in stripe (bandCoord)
+        // units. Two-phase flow map (research doc §3.3): phases offset 0.5, each
+        // rotation bounded to +-|u|*uJetSpeed/2 around its rest pose (|u| peaks ~2.6
+        // at the equatorial flank), triangle crossfade
+        // w hides each phase wrap — nothing accumulates. The 0.04 rate ⇒ a 25 s
+        // phase cycle: full drift period tens of seconds (slow Jovian churn).
+        float u   = jetU(trueLat, latC);
+        float ph0 = fract(uTime * 0.04);
+        float ph1 = fract(uTime * 0.04 + 0.5);
+        float w   = abs(2.0 * ph0 - 1.0);
+        vec3 p0 = jetRotY(pos, u * uJetSpeed * (ph0 - 0.5));
+        vec3 p1 = jetRotY(pos, u * uJetSpeed * (ph1 - 0.5));
+        // higher-frequency fbm than the band warp (uJetTurbFreq x), same vertical
+        // stretch so eddies streak along latitude; own 🎲 seed via uJetOffset.
+        vec3 t0 = vec3(p0.x, p0.y * uBandStretch, p0.z) * uJetTurbFreq + uJetOffset;
+        vec3 t1 = vec3(p1.x, p1.y * uBandStretch, p1.z) * uJetTurbFreq + uJetOffset;
+        float tn = mix(fbmd(t0, 3.0, 0.0).x, fbmd(t1, 3.0, 0.0).x, w);
+        // turbulence concentrates AT boundaries — generalizes the legacy
+        // (1.0 - abs(bands)) gate in Planet.js. Budget (F24's marble lesson): peak
+        // displacement = uJetShearTurb·1.0·~0.9 ≈ 0.27 stripe <= 0.3.
+        float disp = uJetShearTurb * jetShearGate(trueLat, latC) * tn;
+        // festoons v1 (card §6.5 step 5): one-sided single-sign hooks on the NORTH
+        // flank of the equatorial stripe only (b = pre-warp band coordinate; window
+        // straddles the b = 0.25 boundary, zero for b < 0 ⇒ one hemisphere).
+        // max(0, tn) keeps every hook the same sign — consistent trailing direction
+        // is the festoon signature (card §6 item 2). Peak ≈ 0.45·0.9 ≈ 0.40 <= 0.5.
+        float b = 0.25 * latC * uBandCount;
+        float flank = smoothstep(0.08, 0.20, b) * (1.0 - smoothstep(0.30, 0.42, b));
+        disp += uJetFestoon * flank * max(0.0, tn);
+        return disp;
+      }
+
       // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
       // visible deck: alternating bright ZONES (anticyclonic upwelling, fresh high
       // condensate) and dark BELTS (cyclonic subsidence, deeper warm cloud showing
@@ -1245,8 +1336,9 @@
       // steps, not as hue shifts the envelope crushes (card §6 item 4).
       // Stability contract: the band field reads geometric latitude + seed-fixed FBM
       // ONLY — no uLodRamp/fwidth in the band coordinate (same bands at distance 30
-      // and 1.5, card §6 item 6) and no uTime (longitudinal jet drift is F25, v1
-      // scope cut). Poles: latitude-only keying means bands can never converge or
+      // and 1.5, card §6 item 6); uTime enters ONLY through the F25 jets terms below,
+      // every one behind uJetStrength > 0.0 (jets off ⇒ byte-identical F24 statics).
+      // Poles: latitude-only keying means bands can never converge or
       // pinch; an explicit darkened polar hood caps them instead (card §6 item 5).
       vec3 zonalBandCol(vec3 N, vec3 pos){
         // true latitude from the geometric normal, normalized to -1..1
@@ -1254,21 +1346,37 @@
         // uBandLatPow > 1 widens the equatorial bands and narrows the polar ones
         // (the Cassini-map spacing read) without moving the equator or the poles.
         float latC = sign(trueLat) * pow(abs(trueLat), uBandLatPow);
-        // vertically-compressed sampling domain (research doc: p.y × ~2.5) so the
-        // warp FBM streaks horizontally — at close range the in-band texture reads
-        // as flow sheared along latitude, not isotropic blobs (card §6 item 7).
-        vec3 p = vec3(pos.x, pos.y * uBandStretch, pos.z) + uBandOffset;
-        // recursive domain warp (research doc q/r recipe — THE bands→fluid trick):
-        // r rides on q, so band edges scallop and festoon instead of reading as
-        // ruler-straight sin() boundaries. Fixed 4 octaves, fwBase 0 ⇒ no LOD fade.
-        float q = fbmd(p, 4.0, 0.0).x;
-        float r = fbmd(p + vec3(4.0 * q) + vec3(11.3, -7.1, 3.9), 4.0, 0.0).x;
+        // recursive domain warp (research doc q/r recipe — THE bands→fluid trick),
+        // now via bandWarpField() (vertically-compressed domain, fixed 4 octaves,
+        // fwBase 0 ⇒ no LOD fade): r rides on q, so band edges scallop and festoon
+        // instead of reading as ruler-straight sin() boundaries. F25 drift: with jets
+        // ON the warp SAMPLING DOMAIN counter-rotates per latitude — angle
+        // u(lat)·uJetSpeed·(phase-0.5), two bounded phases, triangle crossfade — so
+        // adjacent bands visibly slide opposite ways (card §6 item 4) while latitude
+        // (y-invariant under jetRotY) keeps band identity fixed. Jets OFF takes the
+        // single un-rotated call: byte-identical to the F24 inline form.
+        float r;
+        if (uJetStrength > 0.0){
+          float u   = jetU(trueLat, latC);
+          float ph0 = fract(uTime * 0.04);
+          float ph1 = fract(uTime * 0.04 + 0.5);
+          float w   = abs(2.0 * ph0 - 1.0);
+          float r0  = bandWarpField(jetRotY(pos, u * uJetSpeed * (ph0 - 0.5)));
+          float r1  = bandWarpField(jetRotY(pos, u * uJetSpeed * (ph1 - 0.5)));
+          r = mix(r0, r1, w);
+        } else {
+          r = bandWarpField(pos);
+        }
         // band coordinate: latitude indexes the stripe ladder; the warp displaces it.
         // The 0.25: latC spans 2 units pole-to-pole and one triangle period = one
         // zone + one belt = TWO stripes, so span = count/2 periods ⇒ uBandCount
         // counts VISIBLE stripes pole-to-pole (Jupiter ~14, Cassini map).
         // 0.5·r scales the (already zero-mean signed) fbm warp displacement.
         float bandCoord = 0.25 * latC * uBandCount + uBandWarp * 0.5 * r;
+        // F25 shear turbulence + festoons displace the band coordinate. Jets terms
+        // key on uJetStrength ONLY (not uBandStrength) — solo('jets') shows the pure
+        // shear delta (card §5); the gate keeps jets-off byte-identical to F24.
+        if (uJetStrength > 0.0) bandCoord += uJetStrength * jetsDisp(trueLat, latC, pos);
         // alternating zone/belt LUMINANCE — a smoothstepped triangle wave: flat band
         // interiors with soft risers that land ON posterize-step transitions, so the
         // Bayer dither textures the festooned boundary (card §6 items 2+4).
@@ -2302,6 +2410,18 @@
         // provinceWeight(PROV_BANDS) is NEUTRAL (floor 1.0 — atmosphere, not geology).
         float bandMask = uBandStrength * provinceWeight(PROV_BANDS);
         if (bandMask > 0.0) albedoCol = mix(albedoCol, zonalBandCol(N, vPos), bandMask);
+        // ── F25 jets solo visibility — jets key on uJetStrength ALONE: with the deck
+        // dark (solo('jets') zeroes uBandStrength), the shear turbulence still reads
+        // as a multiplicative 1±turb LUMINANCE factor on whatever albedo is beneath
+        // (provinceWeight(PROV_JETS) is neutral, floor 1.0). The (1.0 - bandMask)
+        // complement keeps full-deck gas worlds single-counted — there the same
+        // displacement already lives INSIDE zonalBandCol. Jets off ⇒ exact no-op.
+        float jetSoloMask = uJetStrength * provinceWeight(PROV_JETS) * (1.0 - bandMask);
+        if (jetSoloMask > 0.0){
+          float jLat  = asin(clamp(N.y, -1.0, 1.0)) * 0.63661977;
+          float jLatC = sign(jLat) * pow(abs(jLat), uBandLatPow);
+          albedoCol *= clamp(1.0 + 1.2 * jetSoloMask * jetsDisp(jLat, jLatC, vPos), 0.4, 1.6);
+        }
         // ── F16 butterscotch veil (Stage-8 haze channel, computed HERE so it hits each
         // term PRE-posterize — there is no single final quantizer, every surface term
         // carries its own). Airborne suspended dust warms ALL light passing through it
@@ -2601,6 +2721,13 @@
       uBandStretch:     { value: 2.5 },   // F24 vertical domain compression (streaks the warp along latitude) — lab knob
       uBandLatPow:      { value: 1.3 },   // F24 latitude remap exponent (wide equatorial, narrow polar bands) — lab knob
       uBandOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the warp domain)
+      uJetStrength:     { value: 0.0 },   // F25 master gate (driven: 1 on h2-he gas worlds, 0 on solid); 0 ⇒ byte-identical F24
+      uJetSpeed:        { value: 0.8 },   // F25 drift amplitude, rad per flow phase (driven: 8/rotationHours, clamped 0.2..1.2)
+      uJetShearTurb:    { value: 0.25 },  // F25 boundary-turbulence amplitude in stripe units (driven: T_eq vigor ramp)
+      uJetFestoon:      { value: 0.3 },   // F25 one-sided equatorial hook amplitude in stripe units (driven: same ramp)
+      uJetTurbFreq:     { value: 3.0 },   // F25 turbulence fbm frequency multiplier vs the band warp — lab knob
+      uJetEqWidth:      { value: 0.25 },  // F25 equatorial superrotation Gaussian half-width (trueLat units) — lab knob
+      uJetOffset:       { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the turbulence domain)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2745,6 +2872,13 @@
       bandStretch: 2.5,     // F24 vertical domain compression (lab knob)
       bandLatPow: 1.3,      // F24 latitude remap exponent (lab knob)
       bandsEnabled: true,   // F24 enable gate
+      jetStrength: 0.0,     // F25 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
+      jetSpeed: 0.8,        // F25 counter-rotating drift amplitude (driven: 8/rotationHours, clamped 0.2..1.2)
+      jetShearTurb: 0.25,   // F25 shear-turbulence amplitude in stripe units (driven: T_eq vigor ramp)
+      jetFestoon: 0.3,      // F25 festoon hook amplitude in stripe units (driven: same ramp)
+      jetTurbFreq: 3.0,     // F25 turbulence fbm frequency multiplier (lab knob)
+      jetEqWidth: 0.25,     // F25 equatorial jet Gaussian half-width (lab knob)
+      jetsEnabled: true,    // F25 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2914,6 +3048,7 @@
       dustOffset: [0,0,0],
       massWastOffset: [0,0,0],
       bandOffset: [0,0,0],
+      jetOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -3160,7 +3295,7 @@
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0]; state.karstOffset = [0,0,0];
       state.duneOffset = [0,0,0]; state.dustOffset = [0,0,0]; state.massWastOffset = [0,0,0];
-      state.bandOffset = [0,0,0];
+      state.bandOffset = [0,0,0]; state.jetOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -3281,6 +3416,24 @@
       state.bandWarp = 0.12 + 0.43 * _vigor;
       // Deck tint straight from the preset atmosphere color (tan / pale-gold / blue).
       if (_gas) state.bandTint = _fp.atmosphere.color.slice();
+      // ── F25 jets & shear — the dynamics riding the F24 deck (card F25 §6.5 step 6;
+      // derivation HERE per the F11 precedent — core.js untouched). Same h2-he gate:
+      // jets are a gas-deck phenomenon, every solid preset derives 0 and the whole
+      // family no-ops (preserving F24's static output byte-for-byte when off).
+      state.jetStrength = _gas ? 1.0 : 0.0;
+      // Drift amplitude from D8 spin (fast rotation ⇒ stronger zonal organization ⇒
+      // faster apparent shear): 8/rotationHours rad per flow phase, clamped 0.2..1.2.
+      // With the GLSL 25 s flow-map cycle (uTime·0.04) a Jovian full drift period is
+      // tens of seconds — visibly flowing, never frantic. Jovian 0.81 / Saturnian
+      // 0.75 / Neptunian 0.50.
+      state.jetSpeed = Math.min(1.2, Math.max(0.2, 8 / _rotH));
+      // Shear turbulence + festoons ride the SAME T_eq convective-vigor ramp as F24's
+      // contrast/warp — one interior-heat knob drives the whole deck personality.
+      // Budgets in stripe units (F24's marble lesson, pre-checked 2026-06-10): turb
+      // peak = 0.30·gate(<=1)·tn(~0.9) ≈ 0.27 <= 0.3; festoon peak = 0.444·~0.9 ≈
+      // 0.40 <= 0.5 local. Jovian 0.297/0.444, Saturnian 0.187/0.247, Neptunian 0.05/0.
+      state.jetShearTurb = 0.05 + 0.25 * _vigor;
+      state.jetFestoon = 0.45 * _vigor;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -3620,6 +3773,18 @@
     fBands.add(state, 'bandLatPow', 0.5, 2.5, 0.05).name('lat power');
     fBands.add({ roll(){ state.bandOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fBands.add(state, 'bandsEnabled').name('✓ enabled');
+    // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
+    // boundary turbulence, one-sided festoons. strength/speed/turb/festoons are driven
+    // (h2-he gate / D8 spin / T_eq vigor ramp, .listen()); freq + eq width are lab knobs.
+    const fJets = fBandsGroup.addFolder('Jets & shear (F25)'); fJets.close();
+    fJets.add(state, 'jetStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fJets.add(state, 'jetSpeed', 0, 3, 0.01).name('drift speed (driven)').listen();
+    fJets.add(state, 'jetShearTurb', 0, 0.6, 0.01).name('shear turb (driven)').listen();
+    fJets.add(state, 'jetFestoon', 0, 1, 0.01).name('festoons (driven)').listen();
+    fJets.add(state, 'jetTurbFreq', 1, 8, 0.1).name('turb frequency');
+    fJets.add(state, 'jetEqWidth', 0.05, 0.6, 0.01).name('eq jet width');
+    fJets.add({ roll(){ state.jetOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fJets.add(state, 'jetsEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -3629,7 +3794,7 @@
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
-      dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands,
+      dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -3858,6 +4023,17 @@
       uniforms.uBandStretch.value  = state.bandStretch;
       uniforms.uBandLatPow.value   = state.bandLatPow;
       uniforms.uBandOffset.value.set(state.bandOffset[0], state.bandOffset[1], state.bandOffset[2]);
+      // F25 jets — jetsEnabled gates strength→0 (the zonalBandCol drift/displacement
+      // AND the solo luminance factor all key on uJetStrength, so one gate kills the
+      // whole family and restores F24's static byte-identical output), preserving the
+      // slider value.
+      uniforms.uJetStrength.value  = state.jetsEnabled ? state.jetStrength : 0.0;   // ✓ enable gate
+      uniforms.uJetSpeed.value     = state.jetSpeed;
+      uniforms.uJetShearTurb.value = state.jetShearTurb;
+      uniforms.uJetFestoon.value   = state.jetFestoon;
+      uniforms.uJetTurbFreq.value  = state.jetTurbFreq;
+      uniforms.uJetEqWidth.value   = state.jetEqWidth;
+      uniforms.uJetOffset.value.set(state.jetOffset[0], state.jetOffset[1], state.jetOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

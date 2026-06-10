@@ -52,7 +52,7 @@ during phases) | ▶️ = current
 | F19 | [F19-mass-wasting](cards/F19-mass-wasting.md) | Gradational | ✅ | 🟡 taste-call | 4a |
 | F20 | [F20-coastlines](cards/F20-coastlines.md) | Gradational | ✅ | 🟡 taste-call | 4a |
 | F24 | [F24-zonal-belts](cards/F24-zonal-belts.md) | Bands | ✅ | 🟡 taste-call | 4b |
-| F25 | [F25-jets-shear](cards/F25-jets-shear.md) | Bands | 🟡 | — | 4b |
+| F25 | [F25-jets-shear](cards/F25-jets-shear.md) | Bands | ✅ | 🟡 taste-call | 4b |
 | F26 | [F26-latitude-weather-bands](cards/F26-latitude-weather-bands.md) | Bands | 🟡 | — | 4b |
 | F27 | [F27-great-spot](cards/F27-great-spot.md) | Storms | 🟡 | — | 4b |
 | F28 | [F28-storm-clusters](cards/F28-storm-clusters.md) | Storms | 🟡 | — | 4b |
