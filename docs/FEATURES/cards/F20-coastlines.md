@@ -44,6 +44,30 @@ Unbuilt — recipe once built: register in planet-archetypes.js FEATURES as coas
 - [ ] On the Titan preset, does the margin read as dark methane sea against bright land with drowned-valley raggedness — species-tinted, with no bright water-world beach band?
 - [ ] Does all land-side coastal detail survive as relief/luminance structure (still legible if hue were stripped), per the envelope's survives-the-posterize rule?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — builds AFTER F14, reads its uSeaLevel)
+
+1. **Shore-distance block in main()** — right after the F14 liquid cut, BEFORE perturbAnalytic
+   (albedo-only consumers, but slope must be read pre-flatten on land — land side is untouched
+   by the cut, so post-cut placement is safe). Gate: `uSeaLevel > -1.0 && uCoastStrength > 0`.
+   `d = (h − uSeaLevel) / max(length(grad), 0.15)` — the SDF-from-implicit-function trick
+   (card §4); the analytic-FBM grad is free.
+2. **Three luminance signals** (all pre-posterize, relief/luminance only — the envelope's
+   survives rule): (a) **beach band**: `0 < d < uBeachWidth`, gated to gentle slopes
+   (`1 − smoothstep` on |grad| vs uCoastCliffSlope); (b) **cliff darkening**: near-shore
+   (|d| small) × steep slope; (c) **strandlines**: thin bright lines at `d ≈ k·uTerraceStep`
+   (k = 1..3), gentle-slope-gated — the Bonneville terrace-flight read as contour lines.
+3. **Stage-6 albedo**: beach mixes toward a species-keyed band — water → pale sand,
+   methane → dark tholin shore (card §6: "no bright water-world beach band" on Titan);
+   cliff multiplies albedo down; strandlines brighten faintly.
+4. **Province**: PROV_COAST = 16, NEUTRAL (floor 1.0 — margins live wherever the sea is,
+   like lakes/frost).
+5. **Drivers**: coastStrength = 1 when a sea exists (the F14 gate); strandStrength ∝
+   surfaceHistory.erosion (paleo-record on worlds with history). Knobs: beachWidth,
+   cliffSlope, terraceStep.
+6. **v1 scope cuts (flagged)**: strandlines are albedo lines, not relief benches (relief
+   flats would need h/grad mods before perturbAnalytic — deferred enhancement);
+   relict paleo-shorelines on DRY worlds (Mars case) deferred — v1 coasts require a live sea.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log

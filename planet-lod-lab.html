@@ -348,6 +348,12 @@
       uniform float uDeltaDensity;     // 0..1 deposition gate (driven: fluvialDensity × activity); <= 0 ⇒ early-out
       uniform float uDeltaAmp;         // apron height amplitude — lab knob
       uniform float uDeltaApronH;      // apron band height above base level — lab knob
+      // ── F20 coastlines (Gradational step 4a — card F20) ──
+      uniform float uCoastStrength;    // 0..1 master gate (driven: 1 when a sea exists); <= 0 ⇒ early-out
+      uniform float uBeachWidth;       // beach band width in shore-distance units — lab knob
+      uniform float uCoastCliffSlope;  // |grad| above which the shore reads as cliff — lab knob
+      uniform float uTerraceStep;      // strandline spacing in shore-distance units — lab knob
+      uniform float uStrandStrength;   // 0..1 paleo-strandline visibility (driven: erosion history)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
