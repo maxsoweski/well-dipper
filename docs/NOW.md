@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-09 by working-Claude (warp cruise problem #2 **FIXED, VERIFIED_PENDING_MAX `8bda388`** — wall-scroll reversal killed: single motion source + soft-creep park. Entry-reliability Fix D still VERIFIED_PENDING_MAX. All warp work unpushed).
+Last updated: 2026-06-10 by working-Claude (Max's 3 goals session 1: **Goal 1 DONE `ec47b84`** — Portal A spawns 10u ahead, preview decoupled from pocket length, live-verified, VERIFIED_PENDING_MAX. **Goal 3 root-caused, partial fix `db2388d`** — entry hitch = sync shader link-waits at first draw; swap compile gate built but ~400ms + ~1.1-1.6s stalls remain (sky scene uncovered + variant mismatch open) + FOLD generateAsync 250ms chunks. **Goal 2 (belt through walls) diagnosed static-only:** WarpPortal materials lack logdepthbuf chunks vs logarithmicDepthBuffer renderer — no fix yet. All warp work unpushed).
 
 ---
 
@@ -35,9 +35,14 @@ behind the nearest planet; should spawn "like 100m away"; (2) asteroid belt show
 through the tunnel walls; (3) entry hitch — "everything stops moving" at tunnel
 entry. Target feel for all three: *one* long tunnel; after a few seconds of travel
 the far end appears, grows, and the new system shows through it.
-**→ Next-session prep (goals, code map, couplings, sequencing):
-`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09b.md`.**
-Older context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md`,
+**3-goals session 1 (2026-06-10): Goal 1 shipped `ec47b84` (spawn 10u, live-verified,
+window._warpPreviewDist UAT knob). Goal 3 partially fixed `db2388d` (swap compile
+gate; stall inventory + open leads in handoff). Goal 2 statically diagnosed
+(logdepthbuf mismatch), no fix yet.**
+**→ Next-session prep (stall inventory, evidence, leads, test method):
+`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10.md`.**
+Older context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09b.md`,
+`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md`,
 `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09.md`.
 
 Prior sub-state — **Tasks 0–3 DONE; entry-reliability
