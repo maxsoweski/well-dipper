@@ -52,3 +52,28 @@ describe('swap compile gate — hide/restore of spawn-added scene roots', () => 
     expect(r.visible).toBe(true);
   });
 });
+
+// Goal 3b (2026-06-10): renderer.compile() collects LIGHTS via traverseVisible,
+// so compiling while the gated roots are hidden bakes a no-lights program
+// variant — the reveal frame then sync-links the lit variant (~330ms, profiler:
+// getProgramInfoLog at first use). Fix: restore visibility, start compileAsync
+// (its synchronous part samples lights), then re-hide via hideRoots — all in
+// one synchronous block so no render can interleave.
+describe('swap compile gate — hideRoots (re-hide for variant-matched compile)', () => {
+  test('hideRoots re-hides every root in the list', async () => {
+    const { hideRoots } = await import('../src/effects/swapCompileGate.js');
+    const roots = [node(), node(), node()];
+    const hidden = hideNewRoots(new Set(), roots);
+    restoreRoots(hidden);
+    expect(roots.every(r => r.visible === true)).toBe(true);
+    hideRoots(hidden);
+    expect(roots.every(r => r.visible === false)).toBe(true);
+    restoreRoots(hidden);
+    expect(roots.every(r => r.visible === true)).toBe(true);
+  });
+
+  test('hideRoots is safe on an empty list', async () => {
+    const { hideRoots } = await import('../src/effects/swapCompileGate.js');
+    expect(() => hideRoots([])).not.toThrow();
+  });
+});

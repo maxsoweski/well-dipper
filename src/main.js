@@ -54,7 +54,7 @@ import { WarpEffect } from './effects/WarpEffect.js';
 import { WarpPortal } from './effects/WarpPortal.js';
 import { parkBackDepth } from './effects/portalTraversal.js';
 import { portalPreviewDistanceScene, postExitDistanceScene, sceneToLy, shipHullToScene } from './core/ScaleConstants.js';
-import { hideNewRoots, restoreRoots } from './effects/swapCompileGate.js';
+import { hideNewRoots, restoreRoots, hideRoots } from './effects/swapCompileGate.js';
 import {
   maybeRebase as _maybeWorldRebase,
   worldOrigin as _worldOriginVec,
@@ -3121,6 +3121,17 @@ warpEffect.onSwapSystem = async () => {
   __st.reanchor = performance.now();
   if (_useDualPortal) {
     skyRenderer.activate();
+    // ── Sky-scene compile gate (Goal 3a, 2026-06-10) ──
+    // activate() disposed the old layers, which releases their GPU programs
+    // (three destroys a program when its last material is disposed), so the
+    // rebuilt layers' first draw re-links the same shaders synchronously —
+    // measured ~400-430ms on the swap frame. The sky lives in SkyRenderer's
+    // OWN scene, which the main-scene compileAsync below never reaches, and
+    // RetroRenderer's sky pass force-restores per-mesh visibility every
+    // frame — so gate at the scene root instead. compileAsync still reaches
+    // the materials (compile() traverses regardless of visibility); the
+    // parallel compile below restores visibility once programs are linked.
+    skyRenderer.getScene().visible = false;
   } else {
     skyRenderer.beginWarpTransition();
   }
@@ -3145,13 +3156,44 @@ warpEffect.onSwapSystem = async () => {
   // releases the gate.
   try {
     if (retroRenderer.renderer.compileAsync) {
-      await retroRenderer.renderer.compileAsync(scene, camera);
+      // ── Variant-matched compile (Goal 3b, 2026-06-10) ──
+      // compile() gathers LIGHTS via traverseVisible but materials via
+      // traverse. With the spawned roots hidden, the destination's star light
+      // is invisible too, so lit materials compile as the no-lights program
+      // variant — and the reveal frame sync-links the lit variant instead
+      // (~330ms single frame, profiler: getProgramInfoLog at first use).
+      // Restore visibility, let compileAsync's SYNCHRONOUS part sample the
+      // true lights state and kick off the parallel links, then re-hide —
+      // no render can interleave a synchronous block, so the teleport stays
+      // occluded the whole time.
+      restoreRoots(_swapGatedRoots);
+      // ── Target-matched compile (Goal 3b, 2026-06-10) ──
+      // The program cache key bakes in toneMapping + outputColorSpace, and
+      // BOTH depend on the render target bound when getProgram runs (canvas:
+      // SRGB + renderer.toneMapping; offscreen target: LinearSRGB + none).
+      // RetroRenderer draws the sky into bgTarget and the scene into
+      // sceneTarget, so compiling with the canvas bound produced variants
+      // that are never drawn — the reveal frame then sync-linked the real
+      // ones (~330ms: sky.glow.procedural + destination-specific shaders).
+      // Bind each pass's target around compileAsync's synchronous part.
+      const _prevTarget = retroRenderer.renderer.getRenderTarget();
+      retroRenderer.renderer.setRenderTarget(retroRenderer.sceneTarget);
+      const compiles = [retroRenderer.renderer.compileAsync(scene, camera)];
+      // Sky scene compiles in parallel — same renderer, shared program cache.
+      if (_useDualPortal) {
+        retroRenderer.renderer.setRenderTarget(retroRenderer.bgTarget);
+        compiles.push(retroRenderer.renderer.compileAsync(skyRenderer.getScene(), camera));
+      }
+      retroRenderer.renderer.setRenderTarget(_prevTarget);
+      hideRoots(_swapGatedRoots);
+      await Promise.all(compiles);
     }
   } catch (e) {
     console.warn('[WARP] compileAsync failed (continuing):', e);
   }
-  // Reveal the destination only now that its programs are linked — the next
-  // draw binds ready programs instead of stalling on a sync link-wait.
+  // Reveal the destination + sky only now that their programs are linked —
+  // the next draw binds ready programs instead of stalling on a sync link-wait.
+  skyRenderer.getScene().visible = true;
   restoreRoots(_swapGatedRoots);
   _swapGatedRoots = [];
   warpEffect.destinationReady = true;
@@ -3174,6 +3216,8 @@ warpEffect.onComplete = () => {
     restoreRoots(_swapGatedRoots);
     _swapGatedRoots = [];
   }
+  // Defensive: the sky gate must never outlive the warp either.
+  skyRenderer.getScene().visible = true;
   skyRenderer.completeWarpTransition();
 
   // AC4: emergence is now a real INSIDE→OUTSIDE_B plane crossing during the

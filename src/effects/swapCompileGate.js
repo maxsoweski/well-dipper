@@ -38,3 +38,15 @@ export function hideNewRoots(before, children) {
 export function restoreRoots(hidden) {
   for (const c of hidden) c.visible = true;
 }
+
+/**
+ * Re-hide a previously gated list. Used for the variant-matched compile
+ * (Goal 3b): renderer.compile() collects lights via traverseVisible, so the
+ * gated roots must be VISIBLE while compileAsync's synchronous part samples
+ * the scene (else materials compile as the no-lights variant and the reveal
+ * frame sync-links the lit one). Restore → start compileAsync → hideRoots,
+ * all in one synchronous block, keeps the teleport occluded throughout.
+ */
+export function hideRoots(hidden) {
+  for (const c of hidden) c.visible = false;
+}
