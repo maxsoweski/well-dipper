@@ -58,7 +58,7 @@ during phases) | ▶️ = current
 | F28 | [F28-storm-clusters](cards/F28-storm-clusters.md) | Storms | ✅ | 🟡 taste-call | 4b |
 | F29 | [F29-polar-vortex](cards/F29-polar-vortex.md) | Storms | ✅ | 🟡 taste-call | 4b |
 | F30 | [F30-lightning](cards/F30-lightning.md) | Storms | ✅ | 🟡 taste-call | 4b |
-| F31 | [F31-clouds-family](cards/F31-clouds-family.md) | Clouds | 🟡 | — | 4b |
+| F31 | [F31-clouds-family](cards/F31-clouds-family.md) | Clouds | ✅ | 🟡 taste-call | 4b |
 | F32 | [F32-dayside-hotspot](cards/F32-dayside-hotspot.md) | Thermal | 🟡 | — | 4b |
 | F33 | [F33-nightside-glow](cards/F33-nightside-glow.md) | Thermal | 🟡 | — | 4b |
 | F34 | [F34-limb-glow](cards/F34-limb-glow.md) | Optical | 🟡 | — | 4c |

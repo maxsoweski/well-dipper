@@ -34,17 +34,18 @@ export const FEATURES = {
   stormTrain: { label: 'Storm clusters (F28)',  enableKey: 'stormTrainEnabled', archetypes: ['gas-giant'] },
   polarVortex:{ label: 'Polar vortex (F29)',    enableKey: 'polarVortexEnabled', archetypes: ['gas-giant'] },
   lightning:  { label: 'Lightning (F30)',       enableKey: 'lightningEnabled', archetypes: ['gas-giant','tectonic-terrestrial'] },
+  clouds:     { label: 'Clouds & haze (F31)',   enableKey: 'cloudsEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
 // Feature membership is DERIVED by inverting FEATURES (no duplication).
 export const ARCHETYPES = {
   'impact-airless':       { label: 'Impact / airless',       bodies: ['Moon','Mercury'],              presets: ['Frozen (airless)'] },
-  'tectonic-terrestrial': { label: 'Tectonic / terrestrial', bodies: ['Earth','Venus'],               presets: ['Rocky (Earthlike)','Ocean (temperate)'] },
+  'tectonic-terrestrial': { label: 'Tectonic / terrestrial', bodies: ['Earth','Venus'],               presets: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)'] },
   'volcanic':             { label: 'Volcanic',               bodies: ['Io','Mars'],                   presets: ['Lava (hot airless)'] },
   'icy-active':           { label: 'Icy-active',             bodies: ['Europa','Ganymede'],           presets: ['Europa (icy moon)'] },
   'volatile-cold':        { label: 'Volatile / cold',        bodies: ['Pluto','Triton','Mars poles'], presets: ['Titan (methane seas)','Frozen (airless)'] },
-  'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)'] },
+  'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)','Sub-Neptune (hazy)'] },
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
@@ -91,4 +92,5 @@ export const PROVINCES = {
   stormTrain: { field: 2, polarity: +1, floor: 1.00 },  // neutral — the train rides the same unprovinced gas deck as the great spot (F27)
   polarVortex:{ field: 2, polarity: +1, floor: 1.00 },  // neutral — the pole structure rides the same unprovinced gas deck as the storm family (F27/F28)
   lightning:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — weather, not geology: flashes follow the convective cloud deck (FROST-row pattern)
+  clouds:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — atmosphere, not geology: the deck/haze/blanket rides ABOVE the rock provinces (FROST-row pattern)
 };

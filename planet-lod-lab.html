@@ -473,6 +473,24 @@
       uniform float uLightDur;          // flash window as a fraction of the cell cycle — lab knob
       uniform float uLightCellFreq;     // flash cell grid frequency (cells per unit pos) — lab knob
       uniform float uLightBlobR;        // flash blob angular radius rad — lab knob
+      // ── F31 clouds family (Clouds — card F31) — regime-dispatched Stage-8 combiner ──
+      // One driver (atmosphere) routed through regimes over the SINGLE Stage-8 fbmd
+      // cloud field (card §4): 0 weather deck (terrestrial patchy + gas low-coverage;
+      // regime 1 is reserved — gas band TOPS are the F24-F29 stack itself, no new
+      // code) · 2 sub-neptune haze mute (pre-posterize contrast kill toward one haze
+      // tone — the reserved Stage-8 muting slot) · 3 venus blanket (opaque deck,
+      // zero ground leak, one [subtle] Y/V chevron drifting with superrotation) ·
+      // 4 eyeball substellar pupil cap + terminator ring (STATIC vs uTime — reads
+      // the pre-plumbed vSubstellarAngle, moves only with the light direction).
+      // Deterministic: every term a pure function of (position, uTime, uniforms).
+      // Master gate = uCloudCoverage (Task 7, declared above): the per-frame writer
+      // forces it 0 when cloudsEnabled is off, so deck + every regime term vanish.
+      uniform int   uCloudRegime;       // 0 weather / 2 haze mute / 3 venus blanket / 4 eyeball (driven; int like uDebugMode)
+      uniform float uCloudRelief;       // clouds-as-relief self-shade strength — lab knob (tilts the CLOUD term's own diffuse with the fbmd gradient; NEVER writes the terrain heightfield — F19 contract)
+      uniform float uHazeMute;          // regime-2 pre-posterize mute amount (driven: 0.85 on sub-neptune haze, else 0)
+      uniform vec3  uHazeColor;         // haze / blanket tone (driven: preset atmosphere color)
+      uniform float uChevronStrength;   // regime-3 Y/V chevron darkening — lab knob (~0.17 = one 6-level posterize bucket)
+      uniform float uPupilR;            // regime-4 substellar cap half-angle rad — lab knob
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -735,6 +753,7 @@
       const int PROV_STORMTRAIN  = 26;  // F28 — neutral: the train rides the same unprovinced gas deck as PROV_GREATSPOT
       const int PROV_POLAR       = 27;  // F29 — neutral: the pole structure rides the same unprovinced gas deck as the storm family
       const int PROV_LIGHTNING   = 28;  // F30 — neutral (weather, not geology): flashes follow the convective cloud deck (FROST-row pattern)
+      const int PROV_CLOUDS      = 29;  // F31 — neutral (atmosphere, not geology): the deck/haze/blanket rides ABOVE the rock provinces (FROST-row pattern)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -781,6 +800,7 @@
         else if (fid == PROV_STORMTRAIN) { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_POLAR)      { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_LIGHTNING)  { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_CLOUDS)     { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2765,13 +2785,27 @@
         // uDustDepth 0 (airless / feature off) ⇒ veilTint = 1.0 exactly — regression-safe.
         float dustVeil = clamp(uDustTint * uDustDepth, 0.0, 1.0);
         vec3 veilTint = mix(vec3(1.0), vec3(1.06, 0.96, 0.82), dustVeil);
+        // ── F31c regime-2 HAZE MUTE — the Stage-8 reserved muting slot ("haze muting
+        // runs BEFORE final posterize"), hoisted here because every term carries its
+        // own quantizer (the F16 veil precedent above). Photochemical tholin haze
+        // (card §4: GJ 1214 b flat transmission spectrum) kills surface contrast
+        // toward ONE haze tone: deviation from uHazeColor scales by (1 - uHazeMute)
+        // — the mix IS the contrast + saturation kill. Applied to the PRE-LIT albedo
+        // (not the lit color) so day/night shading and the limb read survive — a
+        // deliberately featureless muted globe, never a broken texture (card §6
+        // item F31c: 2-3 flat lighting bands + limb glow are all that remain).
+        // uHazeMute 0 (every non-sub-neptune preset, or clouds disabled via the
+        // per-frame writer) leaves the albedo untouched — regression-safe.
+        albedoCol = mix(albedoCol, uHazeColor, uHazeMute);
         vec3 surface = posterize(min(veilTint * (albedoCol * (diff + ambient) + uBaseColor * rayBright), vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
         //    lit color + landMask; renders LAST among surface terms, before the envelope split. [domain: Exotic]
         //    (placeholder; maturity→0 must reveal the bare stage-6 base — the overlay-correctness test.)
 
-        // ── Stage 8: CLOUDS & HAZE — cloud-as-relief deck + haze muting (muting runs BEFORE final posterize);
+        // ── Stage 8: CLOUDS & HAZE — F31 regime-dispatched family combiner (LIVE 2026-06-10): clouds-as-
+        //    relief deck (regimes 0/3/4 below) + haze muting (regime 2 — LIVE, hoisted to the pre-posterize
+        //    albedo slot above, the F16 veil precedent, because every term carries its own quantizer);
         //    AEOLIAN F40 storm veil wins the upper slot when both active. [domains: Clouds, Aeolian]
         // Clouds (analytic-FBM weather layer — animated via uTime; off plain snoise, onto noised() — Q7).
         vec4 cw = fbmd(vPos * 1.7 + vec3(uTime * 0.02, 0.0, 0.0), 5.0, 0.0);
@@ -2801,10 +2835,68 @@
           // uWeatherDry (belts +0.37, ITCZ +0.24, trough −0.06 at defaults).
           cwx += uWeatherStrength * provinceWeight(PROV_WEATHER) * (weatherLatBias(wLatW) * 0.65 - uWeatherDry);
         }
-        float cloud = smoothstep(0.15, 0.5, cwx) * uCloudCoverage * (diff + 0.05);
-        vec3 cloudC = vec3(cloud);
+        // ── F31a CLOUDS-AS-RELIEF (card §6.5 step 5a) — the deck self-shades by
+        // tilting the CLOUD TERM'S OWN diffuse with the tangential component of the
+        // fbmd analytic gradient (cw.yzw — already computed, no second fbm). The
+        // lighting VALUE carries the cloud form through the posterize, not the hue
+        // (the research-doc posterization adaptation). F19 CONTRACT: this never
+        // touches h/grad or the surface normal — terrain shading is untouched.
+        // Replacing the old terrain-coupled (diff + 0.05) with the cloud-shaded
+        // (cdiff + 0.05) is the card's intentional, judged F31a upgrade: clouds no
+        // longer inherit ground-relief shadows, they cast their own.
+        vec3 cgt = cw.yzw - N * dot(cw.yzw, N);              // tangential cloud gradient
+        vec3 cn  = normalize(N - uCloudRelief * cgt);        // cloud-top shading normal
+        float cdiff = max(dot(cn, uLightDir), 0.0);
+        float cloud = smoothstep(0.15, 0.5, cwx) * uCloudCoverage * (cdiff + 0.05);
+        // ── F31 REGIME DISPATCH (card §6.5 step 5) — gated on uCloudCoverage like
+        // the deck itself: cloudsEnabled off forces coverage 0 at the per-frame
+        // writer, so blanket / pupil / ring all vanish with the deck (no deck at all).
+        float blanketMask = 0.0;          // regime 3 — 1.0 hides surface + thermal floor below
+        vec3 cloudTint = vec3(1.0);       // weather decks stay white; the venus blanket tints
+        if (uCloudCoverage > 0.0){
+          if (uCloudRegime == 2){
+            // F31c — the haze veil hangs ABOVE the deck: the patchy weather layer is
+            // muted away with the rest of the structure (the albedo mute upstream
+            // owns the featureless read; a visible swirling deck would defeat it).
+            cloud *= 1.0 - uHazeMute;
+          } else if (uCloudRegime == 3){
+            // F31d — VENUS BLANKET: the deck IS the visible surface. Coverage is
+            // driven to 1.0 and the term REPLACES the ground (blanketMask zeroes
+            // the surface + thermal-floor emissive below — zero ground leak at any
+            // distance, card §6). Shading = the clouds-as-relief diffuse over the
+            // geometric sphere, with a faint field variation for dither texture and
+            // ONE [subtle] planetary-scale Y/V chevron: a single-bucket darkening
+            // whose arms sweep back from the equator in (lat, lon - slow uTime
+            // drift) — the 4-day superrotating Kelvin/Rossby wave read (card §4).
+            blanketMask = 1.0;
+            vec3 bn = normalize(vPos);
+            float bLat = asin(clamp(bn.y, -1.0, 1.0));
+            float bLon = atan(bn.z, bn.x) - uTime * 0.03;    // slow superrotation drift
+            float arm  = cos(bLon + 1.6 * abs(bLat));        // arms rake back with |lat| - the sideways V/Y
+            float chev = smoothstep(0.55, 0.95, arm) * (1.0 - smoothstep(0.5, 1.2, abs(bLat)));
+            cloud = (cdiff + 0.05) * (0.97 + 0.06 * cw.x) * (1.0 - uChevronStrength * chev);
+            cloudTint = uHazeColor;                          // sulfuric deck tone (driven: atmosphere color)
+          } else if (uCloudRegime == 4){
+            // F31f — EYEBALL: standing substellar convection cap ("pupil") +
+            // terminator cloud ring, both pure functions of the pre-plumbed
+            // vSubstellarAngle — STATIC against uTime, they move only with the
+            // light direction (card §6). Shaded by the GEOMETRIC diffuse (not
+            // cdiff) so the cap stays still while the regular weather deck keeps
+            // drifting underneath at its derived coverage. The ring sits near 90
+            // degrees where gdiff is ~0, so it carries its own 0.3 luminance floor
+            // (edge-lit terminator clouds) — one dithered bucket at 6 levels.
+            float gdiff = max(dot(N, uLightDir), 0.0);
+            float pupil = smoothstep(uPupilR, uPupilR * 0.55, vSubstellarAngle);
+            float ringT = (vSubstellarAngle - 1.5708) / 0.22;
+            float ring  = exp(-ringT * ringT);
+            cloud += pupil * (gdiff + 0.05) + 0.55 * ring * (gdiff + 0.3);
+          }
+        }
+        vec3 cloudC = cloudTint * cloud;
         cloudC *= veilTint;   // F16 — suspended dust warms the cloud deck too (pre-posterize)
         cloudC = posterize(cloudC, uLevels, fc, 0.4, uDitherMode);
+        // F31d — the blanket replaces the ground entirely (regime 3 only; 0.0 elsewhere = exact no-op).
+        surface *= 1.0 - blanketMask;
 
         // ── Stage 9: OPTICAL — limb/terminator scattering (additive-tint ONLY; must not double-darken). [domain: Optical]
         // Limb / atmosphere rim glow (fresnel against the geometric normal, sun-weighted).
@@ -2818,7 +2910,11 @@
         // city lights F48/49, bioluminescence F46, aurora Optical F37, sunglint Optical F36.
 
         // ★ Emissive glow (lava/hot stand-in for F41/F32) — Lambert-independent (visible on the dark side).
-        vec3 emissive = uBaseColor * uEmissive;
+        // F31d blanketMask: an opaque venus deck also hides the ground's thermal floor
+        // (Venus T_eq 737 derives emissive ~0.14 — a night-side glow would read as
+        // ground leak through the shroud). Lava cracks / lightning below still punch
+        // through: they are above-deck or designated posterize-survivor channels.
+        vec3 emissive = uBaseColor * uEmissive * (1.0 - blanketMask);
         emissive = (uEmissiveBypass == 1) ? emissive : posterize(emissive, uLevels, fc, 0.4, uDitherMode);
         // ★ F8 lava cracks — ALWAYS bypass the quantizer (the canonical Option-C survivor, §F8.c):
         // spatial Worley crack-mask glow that stays crisp over the posterized basalt.
@@ -3126,6 +3222,16 @@
       uLightDur:        { value: 0.18 },  // F30 flash window fraction of the cell cycle — lab knob
       uLightCellFreq:   { value: 14.0 },  // F30 flash cell grid frequency — lab knob
       uLightBlobR:      { value: 0.022 }, // F30 flash blob angular radius rad — lab knob (≤ half-cell at freq 14 so the Gaussian, not the cell window, shapes the blob)
+      // ── F31 clouds family (card F31 §6.5) — regime-dispatched Stage-8 combiner ──
+      // uCloudCoverage (declared above, Task 7) is the family MASTER GATE: the
+      // per-frame writer forces it 0 when cloudsEnabled is off ⇒ deck + every
+      // regime term fully absent (the always-on Task-7 deck is now ownable).
+      uCloudRegime:     { value: 0 },     // F31 regime 0 weather / 2 haze mute / 3 venus blanket / 4 eyeball (driven; 1 reserved — gas tops ARE F24-F29)
+      uCloudRelief:     { value: 0.35 },  // F31a clouds-as-relief self-shade strength — lab knob (tilts the cloud term's diffuse with the fbmd gradient)
+      uHazeMute:        { value: 0.0 },   // F31c pre-posterize contrast kill toward uHazeColor (driven: 0.85 on sub-neptune haze, else 0)
+      uHazeColor:       { value: new THREE.Color(0.70, 0.65, 0.58) },  // F31 haze/blanket tone (driven: preset atmosphere color)
+      uChevronStrength: { value: 0.18 },  // F31d Y/V chevron darkening — lab knob (~0.17 = one 6-level posterize bucket)
+      uPupilR:          { value: 0.6 },   // F31f substellar cap half-angle rad — lab knob
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -3317,6 +3423,14 @@
       lightCellFreq: 14.0,  // F30 flash cell grid frequency (lab knob)
       lightBlobR: 0.022,    // F30 flash blob angular radius rad (lab knob — ≤ half-cell at freq 14)
       lightningEnabled: true, // F30 enable gate
+      cloudCoverage: 0.0,   // F31 deck coverage (driven: regime-3 worlds 1.0; else 0.15 + 0.55 x core derivation, 0 airless — the F26 §7 taste-fork-c rebalance)
+      cloudRegime: 0,       // F31 regime: 0 weather / 2 haze mute / 3 venus blanket / 4 eyeball (driven; 1 reserved — gas band tops ARE the F24-F29 stack)
+      cloudRelief: 0.35,    // F31a clouds-as-relief self-shade strength (lab knob)
+      hazeMute: 0.0,        // F31c pre-posterize contrast kill toward the haze tone (driven: 0.85 on sub-neptune haze, else 0)
+      hazeColor: [0.70,0.65,0.58], // F31 haze/blanket tone (driven: preset atmosphere color)
+      chevronStrength: 0.18,// F31d Y/V chevron darkening (lab knob — ~0.17 = one 6-level posterize bucket)
+      pupilR: 0.6,          // F31f substellar cap half-angle rad (lab knob)
+      cloudsEnabled: true,  // F31 enable gate — off forces uCloudCoverage 0 + regime extras off at the per-frame writer (no deck at all)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3629,6 +3743,26 @@
       'Gas giant (Jovian)': { radiusEarth:11.2, massEarth:317.8, rotationHours:9.9, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:122000, composition:{ironFraction:0.03,density:1.33,volatileFraction:0.04}, T_eq:125, tidalState:{locked:false}, atmosphere:{color:[0.78,0.62,0.44],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
       'Gas giant (Saturnian)': { radiusEarth:9.4, massEarth:95.2, rotationHours:10.7, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:224000, composition:{ironFraction:0.03,density:0.69,volatileFraction:0.04}, T_eq:95, tidalState:{locked:false}, atmosphere:{color:[0.85,0.76,0.55],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
       'Ice giant (Neptunian)': { radiusEarth:3.9, massEarth:17.1, rotationHours:16.1, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:705000, composition:{ironFraction:0.05,density:1.64,volatileFraction:0.04}, T_eq:55, tidalState:{locked:false}, atmosphere:{color:[0.35,0.48,0.85],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
+      // ── F31 clouds-family presets (card §6.5 step 2 — data only) ──
+      // "Venus (sulfuric shroud)" exercises regime 3 (opaque H2SO4 blanket, P18): co2 at
+      // 92 bar trips the co2 && pressure > 10 venus gate; T_eq 737 derives a faint thermal
+      // floor the blanket must hide (the zero-ground-leak check). rotationHours 5832 (the
+      // 243-day retrograde spin) collapses F26 to the single-cell Titan/Venus regime.
+      'Venus (sulfuric shroud)': { radiusEarth:0.95, massEarth:0.815, rotationHours:5832, eccentricity:0.007, starMassEarth:332946, orbitRadiusEarth:16888, composition:{ironFraction:0.3,density:5.24,volatileFraction:0.02}, T_eq:737, tidalState:{locked:false}, atmosphere:{color:[0.93,0.87,0.65],retained:true,pressure:92,composition:'co2'}, habitability:0, surfaceHistory:{erosion:0.3,bombardmentIntensity:0.2,resurfacingRate:0.7} },
+      // "Sub-Neptune (hazy)" exercises regime 2 (photochemical haze mute, P19 — GJ 1214 b):
+      // h2-he below BOTH the radius 6 and mass 10 sub-neptune gates. Gas-row conventions
+      // (surfaceHistory zeros + resurfacing 1, volatileFraction 0.04 under the bone-dry
+      // floor) so relief gates ~0; no rotationHours ⇒ default 24 h ⇒ bandCount 3 — the
+      // 2-3 flat bands that survive under the mute (card §6 item F31c). Near-circular
+      // 1 AU orbit keeps star-tidal lavaActivity 0 (the gas-row eccentricity lesson:
+      // R^5/a^5 tidal at a close orbit would paint glowing cracks on the haze globe);
+      // T_eq 550 is GJ 1214 b's — illustrative, not orbit-consistent, like the gas rows.
+      'Sub-Neptune (hazy)': { radiusEarth:2.7, massEarth:8.2, eccentricity:0.002, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.1,density:2.2,volatileFraction:0.04}, T_eq:550, tidalState:{locked:false}, atmosphere:{color:[0.72,0.66,0.58],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
+      // "Eyeball (locked temperate)" exercises regime 4 (P21 substellar pupil + terminator
+      // ring): the FIRST locked preset WITH an atmosphere (card §5 — Lava/Europa are locked
+      // but airless). Also flips the pre-plumbed F26 weatherLocked + F23 frostLocked eyeball
+      // switches for free. Near-circular orbit keeps star-tidal heating quiet.
+      'Eyeball (locked temperate)': { radiusEarth:1.0, massEarth:1.0, eccentricity:0.01, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.3,density:5.5,volatileFraction:0.25}, T_eq:270, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:{color:[0.55,0.62,0.85],retained:true,pressure:1.0,composition:'n2-o2'}, habitability:0.5, surfaceHistory:{erosion:0.3,bombardmentIntensity:0.4,resurfacingRate:0.2} },
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -3637,8 +3771,10 @@
       uniforms.uEmissive.value = u.emissive;
       uniforms.uSpecStrength.value = u.specStrength;
       uniforms.uLimbStrength.value = u.limbStrength;
-      // cloudCoverage / auroraIntensity / craterCells / atmosphereModel consumed by Task 7 + Stage C
-      if (uniforms.uCloudCoverage)  uniforms.uCloudCoverage.value  = u.cloudCoverage;
+      // auroraIntensity / craterCells / atmosphereModel consumed by Task 7 + Stage C.
+      // cloudCoverage is now F31-owned: the core derivation is POST-PROCESSED in the
+      // F31 block below (regime + rebalance) and written by the per-frame writer —
+      // no direct uniform write here anymore (card §6.5 step 4, the F11 precedent).
       if (uniforms.uAuroraIntensity) uniforms.uAuroraIntensity.value = u.auroraIntensity;
       // §2 #3 master liquid gate → RESERVED→LIVE uniforms (Fluvial owner; Optical/Aeolian/Cryo read in step 3+)
       if (uniforms.uLiquidStability) uniforms.uLiquidStability.value = u.liquidStability;
@@ -4070,6 +4206,41 @@
       // worlds derive 0 and the per-frame writer keeps the GLSL term skipped.
       state.lightningStrength = _gas ? 1.0 : (_fp.atmosphere?.retained ? _rainFactor : 0);
       state.lightPolar = _gas ? 1 : 0;
+      // ── F31 clouds family — regime + coverage derivation (card §6.5 steps 3-4;
+      // derivation HERE per the F11 precedent — core.js untouched). One atmosphere
+      // driver dispatches the Stage-8 combiner: venus = a thick co2 envelope
+      // (pressure > 10 bar trips the runaway-greenhouse H2SO4 blanket); sub-neptune
+      // = an h2-he envelope BELOW the gas-giant scale — radius < 6 per the card,
+      // PLUS mass < 10 M-Earth (deliberate deviation from the card's radius-only
+      // gate: "Ice giant (Neptunian)" is 3.9 R / 17.1 M and must stay regime 0,
+      // the F24-F29 no-breakage contract; 10 M-Earth is the conventional
+      // sub-neptune / ice-giant boundary — Neptune itself is 17 M); eyeball =
+      // locked + retained + solid (P21 substellar circulation needs a surface
+      // under an atmosphere). Gas giants stay 0: their cloud TOPS are the F24-F29
+      // band stack itself (regime 1 reserved), riding the low patchy deck.
+      let _cloudRegime = 0;
+      if (_fp.atmosphere?.composition === 'co2' && (_fp.atmosphere?.pressure ?? 0) > 10) _cloudRegime = 3;
+      else if (_gas && (_fp.radiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;
+      else if (_fp.tidalState?.locked && _fp.atmosphere?.retained && !_gas) _cloudRegime = 4;
+      state.cloudRegime = _cloudRegime;
+      // Coverage rebalance (F26 §7 taste fork c — this card's flagged job): post-
+      // process the core derivation before the per-frame writer picks it up.
+      // Regime 3 ⇒ 1.0 (opaque shroud); else 0.15 + 0.55·derived — Rocky 0.9→0.65
+      // (EPIC target: patchy swirls over LEGIBLE ground), Ocean 1.0→0.70, Titan
+      // 0.25→0.29, gas 0.2→0.26, Eyeball 0.7→0.535. Airless worlds derive 0 in
+      // core and STAY 0 (the rebalance floor must not conjure a deck from vacuum).
+      state.cloudCoverage = _cloudRegime === 3 ? 1.0
+        : (u.cloudCoverage > 0 ? _clamp01(0.15 + 0.55 * u.cloudCoverage) : 0.0);
+      // Haze tone straight from the preset atmosphere color (the F24 bandTint
+      // convention); mute amount fixed 0.85 on the haze regime — enough to sink
+      // band contrast under one posterize bucket while 2-3 flat bands survive.
+      if (_fp.atmosphere?.color) state.hazeColor = _fp.atmosphere.color.slice();
+      state.hazeMute = _cloudRegime === 2 ? 0.85 : 0.0;
+      // Sub-neptune featureless contract (card §6 F31c): the photochemical haze
+      // that flattens the GJ 1214 b spectrum sits ABOVE the convective deck, so
+      // deep-deck flashes mute too — the gas-gate F30 derivation above would
+      // otherwise strobe full-strength polar lightning over the flat globe.
+      if (_cloudRegime === 2) state.lightningStrength = 0;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -4482,6 +4653,17 @@
     fLightning.add(state, 'lightCellFreq', 4, 30, 0.5).name('cell density');
     fLightning.add(state, 'lightBlobR', 0.005, 0.06, 0.001).name('blob radius');
     fLightning.add(state, 'lightningEnabled').name('✓ enabled');
+    // ▸ Clouds & haze (F31) — the Stage-8 regime-dispatched family combiner over
+    // the single fbmd cloud field: weather deck (terrestrial + gas patchy) / sub-
+    // neptune haze mute / venus blanket + chevron / eyeball pupil + ring. coverage
+    // is the driven display; relief / chevron / pupil radius are lab knobs. NO 🎲
+    // — drift is uTime; placement is the field (card §6.5 step 6).
+    const fClouds = fBandsGroup.addFolder('Clouds & haze (F31)'); fClouds.close();
+    fClouds.add(state, 'cloudCoverage', 0, 1, 0.01).name('coverage (driven)').listen();
+    fClouds.add(state, 'cloudRelief', 0, 1.5, 0.01).name('relief shading');
+    fClouds.add(state, 'chevronStrength', 0, 0.5, 0.01).name('chevron (venus)');
+    fClouds.add(state, 'pupilR', 0.1, 1.5, 0.01).name('pupil radius (eyeball)');
+    fClouds.add(state, 'cloudsEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -4493,7 +4675,7 @@
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
-      lightning: fLightning,
+      lightning: fLightning, clouds: fClouds,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4790,6 +4972,17 @@
       uniforms.uLightDur.value      = state.lightDur;
       uniforms.uLightCellFreq.value = state.lightCellFreq;
       uniforms.uLightBlobR.value    = state.lightBlobR;
+      // F31 clouds family — cloudsEnabled forces the MASTER gate (uCloudCoverage)
+      // to 0 AND the regime extras off (regime 0, mute 0): no deck, no blanket, no
+      // haze mute, no pupil/ring — the formerly always-on Task-7 deck is now
+      // ownable (card §6.5 step 5). The knobs pass through, preserving values.
+      uniforms.uCloudCoverage.value   = state.cloudsEnabled ? state.cloudCoverage : 0.0;   // ✓ enable gate (family master)
+      uniforms.uCloudRegime.value     = state.cloudsEnabled ? (state.cloudRegime | 0) : 0;
+      uniforms.uHazeMute.value        = state.cloudsEnabled ? state.hazeMute : 0.0;
+      uniforms.uHazeColor.value.setRGB(state.hazeColor[0], state.hazeColor[1], state.hazeColor[2]);
+      uniforms.uCloudRelief.value     = state.cloudRelief;
+      uniforms.uChevronStrength.value = state.chevronStrength;
+      uniforms.uPupilR.value          = state.pupilR;
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
