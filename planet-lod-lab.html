@@ -436,6 +436,25 @@
       uniform vec4  uStormParams[8];   // x = rotStrength (rad), y = E-W aspect, z = mode (0 warm / 1 dark), w = companion strength
       uniform vec3  uStormColor[8];    // core color (driven: bandTint warmed for GRS-class / bruised for GDS-class)
       uniform int   uStormCount;       // live storm count (driven: gas gate x enable; 0 = whole family no-ops)
+      // ── F29 polar vortex (Bands step 4b — card F29) — ALBEDO/LUMINANCE ONLY, analytic ──
+      // One combiner in the pole tangent frame, NO carriage slots: the lattice's ring-
+      // cyclone centers derive in-shader from angle rounding (zero arrays). Variant by
+      // uPolarMode (float 0 cap / 1 polygon / 2 lattice, step()-selected — no int
+      // branching). Regression contract: the call site AND every term key on
+      // uPolarStrength, so strength 0 (enable off, or any solid preset) renders
+      // byte-identical F28 output. Static in v1 — no uTime in any polar term: the
+      // structures are quasi-permanent over years (PIA24967), so a seed-deterministic
+      // static read is physically honest.
+      uniform float uPolarStrength;  // 0..1 master gate (driven: 1 on h2-he gas presets, 0 on every solid world)
+      uniform float uPolarMode;      // variant: 0 single cap / 1 polygon jet / 2 cyclone lattice (driven: T_eq vigor ramp)
+      uniform float uPolarSides;     // polygon wavenumber N (driven: 5..8 hash, re-draw biased toward Saturn's 6)
+      uniform float uPolarR0;        // jet / lattice-ring angular radius rad (driven: 0.18 + 0.08 x hash)
+      uniform float uPolarAmp;       // polygon meander amplitude — rJet = r0 x (1 + amp cos(N theta)) — lab knob
+      uniform float uPolarPole;      // active pole sign: +1 north / -1 south (driven: hash)
+      uniform float uPolarRing;      // lattice ring cyclone count M (driven: 5..8 hash)
+      uniform float uPolarPhase;     // single-cap S-lobe orientation rad (driven: hash)
+      uniform float uPolarW;         // polygon collar half-width rad — lab knob
+      uniform vec3  uPolarTint;      // cap tint (driven: bandTint shifted cool — the teal-blue core lean)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -696,6 +715,7 @@
       const int PROV_WEATHER     = 24;  // F26 — neutral (climate, not geology): the FROST-row pattern — latitude circulation must not be gated by rock provinces
       const int PROV_GREATSPOT   = 25;  // F27 — neutral: the vortex rides the same unprovinced gas deck as PROV_BANDS/PROV_JETS
       const int PROV_STORMTRAIN  = 26;  // F28 — neutral: the train rides the same unprovinced gas deck as PROV_GREATSPOT
+      const int PROV_POLAR       = 27;  // F29 — neutral: the pole structure rides the same unprovinced gas deck as the storm family
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -740,6 +760,7 @@
         else if (fid == PROV_WEATHER)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_GREATSPOT)  { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_STORMTRAIN) { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_POLAR)      { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1464,6 +1485,81 @@
         return col;
       }
 
+      // ── F29 polarVortexCol (Bands step 4b — card F29) — the permanent pole-locked
+      // structure painted on the finished deck color. One combiner in the pole
+      // tangent frame: pr = angular distance from the ACTIVE pole (uPolarPole picks
+      // north/south — acos of the signed y keeps the frame seam- and pinch-free,
+      // the frostCoverage coordinate pattern), theta = longitude. Three variants
+      // selected by uPolarMode through step() products (floats — no int branching);
+      // every term's strength multiplies uPolarStrength x provinceWeight(PROV_POLAR)
+      // (neutral, floor 1.0 — registry fan-out convention) x the radial gate g, so
+      // strength 0 returns col untouched (the F29 regression contract) and the
+      // whole structure dies smoothly by pr 0.48 rad regardless of variant.
+      // ALBEDO/LUMINANCE ONLY — no h/grad writes; static — no uTime (PIA24967:
+      // the Juno lattice held its ring positions for five years).
+      vec3 polarVortexCol(vec3 n, vec3 col){
+        float pr = acos(clamp(uPolarPole * n.y, -1.0, 1.0));   // angular distance from the active pole (rad)
+        // overall gate: the combiner is a polar-cap regime — fade out well inside
+        // the band ladder's hood so the handoff is a smooth co-fade, no edge.
+        float g = 1.0 - smoothstep(0.38, 0.48, pr);
+        if (g <= 0.0) return col;   // cheap early-out: every term below scales by g
+        float theta = atan(n.z, n.x);
+        float s = uPolarStrength * provinceWeight(PROV_POLAR) * g;
+        // variant selectors — uPolarMode is exactly 0.0 / 1.0 / 2.0 (driven)
+        float isPoly = step(0.5, uPolarMode) * (1.0 - step(1.5, uPolarMode));
+        float isLatt = step(1.5, uPolarMode);
+        float isCap  = 1.0 - step(0.5, uPolarMode);
+        // ── mode 1: polygonal jet (Saturn hexagon — wavenumber-N Rossby meander).
+        // The polygon IS a jet streamline: rJet(theta) = r0 x (1 + amp cos(N theta))
+        // traced as a dark collar band (flat segments + rounded corners from the
+        // cosine, card §6 item 1), with the enclosed cap tinted toward uPolarTint —
+        // the Cassini gold-haze-outside / teal-core two-tone (card §6 item 2).
+        float pj = s * isPoly;
+        float rJet = uPolarR0 * (1.0 + uPolarAmp * cos(uPolarSides * theta));
+        float collar = 1.0 - smoothstep(0.0, uPolarW, abs(pr - rJet));
+        col *= 1.0 - 0.35 * collar * pj;
+        float capPoly = smoothstep(rJet, rJet * 0.8, pr);   // 1 inside the jet contour, 0 outside
+        col = mix(col, uPolarTint, 0.45 * capPoly * pj);
+        // ── mode 2: cyclone-cluster lattice (Juno Jupiter poles — vortex crystal).
+        // Central cyclone at the pole + a ring of M at pr = r0; the nearest ring
+        // center comes from rounding theta to the M-fold grid (analytic — by
+        // construction theta - thetaC already wraps into +-pi/M, and the centers
+        // match up across the +-pi seam since they sit at integer multiples of the
+        // segment angle). dc uses the small-angle tangent-plane metric with the
+        // sin(r0) azimuthal scale. Each cyclone = a soft luminance dimple + a
+        // bright eye dot (discrete swirl blobs, card §6 item 4); cap tint subtler
+        // than the polygon's.
+        float lt = s * isLatt;
+        float segA = 6.2831853 / uPolarRing;
+        float thetaC = floor(theta / segA + 0.5) * segA;
+        float dc = length(vec2(pr - uPolarR0, (theta - thetaC) * sin(uPolarR0)));
+        float dimple = max(1.0 - smoothstep(0.03, 0.08, pr),          // central cyclone disc
+                           1.0 - smoothstep(0.02, 0.06, dc));         // nearest ring-cyclone disc
+        float eye    = max(1.0 - smoothstep(0.0, 0.018, pr),          // central eye
+                           1.0 - smoothstep(0.0, 0.015, dc));         // ring eye
+        float capLatt = 1.0 - smoothstep(uPolarR0 * 1.3, uPolarR0 * 1.8, pr);
+        col = mix(col, uPolarTint, 0.25 * capLatt * lt);
+        col *= 1.0 - 0.30 * dimple * lt;
+        // mix-form so zero weight is a TRUE identity (review fix 2026-06-10: a bare
+        // min(col+..., 1.0) clamped the >1 deck even when the term was 0, stepping
+        // luminance at the gate circle on bright zones).
+        col = mix(col, min(col + vec3(0.25), vec3(1.0)), eye * lt);
+        // ── mode 0: single cap (Venus-style lobed swirl core — card §6 item 8).
+        // A soft cap tint + an S-lobe pair: two Gaussians at pr 0.07 on opposite
+        // sides of the pole (phase from the driven hash), one brightening and one
+        // darkening — the irregular twin-lobed read, clearly NOT a polygon.
+        float sc = s * isCap;
+        float capMask = 1.0 - smoothstep(0.12, 0.30, pr);
+        col = mix(col, uPolarTint, 0.35 * capMask * sc);
+        vec2 pp = pr * vec2(cos(theta), sin(theta));               // tangent-plane position
+        vec2 lb = 0.07 * vec2(cos(uPolarPhase), sin(uPolarPhase)); // lobe center (radius ~0.05 each)
+        vec2 q1 = (pp - lb) / 0.05;
+        vec2 q2 = (pp + lb) / 0.05;
+        col = mix(col, min(col + vec3(0.25), vec3(1.0)), exp(-dot(q1, q1)) * sc);   // bright lobe (mix-form, same review fix)
+        col *= 1.0 - 0.25 * exp(-dot(q2, q2)) * sc;                        // dark lobe
+        return col;
+      }
+
       // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
       // visible deck: alternating bright ZONES (anticyclonic upwelling, fresh high
       // condensate) and dark BELTS (cyclonic subsidence, deeper warm cloud showing
@@ -1543,7 +1639,16 @@
         // polar hood: a darkened cap keyed on latitude only (Jupiter/Neptune hoods);
         // bands fade INTO it rather than pinching at a convergence point.
         float hood = smoothstep(0.72, 0.95, abs(trueLat));
-        return col * (1.0 - 0.30 * hood);
+        col *= 1.0 - 0.30 * hood;
+        // F29 polar vortex — painted AFTER the hood (composition choice, card §6.5
+        // step deviation noted): the hood is the far-distance polar read and stays
+        // the unchanged base wherever the vortex gate fades (0.38-0.48 rad), while
+        // the vortex regime takes over ON TOP of it poleward — collar/eyes/tint
+        // hold their designed contrasts instead of being rescaled x0.7 by the hood
+        // multiply. Strength 0 (enable off, or any solid preset) skips the call:
+        // byte-identical F28 output — the F29 regression contract.
+        if (uPolarStrength > 0.0) col = polarVortexCol(N, col);
+        return col;
       }
 
       // ── F2 craters (Stage-C step 3, Relief) — transcribed from craterProfile()
@@ -2930,6 +3035,19 @@
       uStormParams:     { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },  // x rotStrength, y aspect, z mode, w companion
       uStormColor:      { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },  // core color (driven: bandTint warmed/bruised)
       uStormCount:      { value: 0 },     // live storm count (driven: gas gate x greatSpotEnabled)
+      // ── F29 polar vortex (card F29 §6.5) — analytic pole combiner, NO carriage slots ──
+      // Lattice centers derive in-shader from angle rounding (zero arrays). uPolarStrength
+      // 0 ⇒ the GLSL call is skipped entirely (byte-identical F28 render).
+      uPolarStrength:   { value: 0.0 },   // F29 master gate (driven: 1 on h2-he gas presets, 0 on solid); 0 ⇒ combiner skipped
+      uPolarMode:       { value: 0.0 },   // F29 variant: 0 single cap / 1 polygon jet / 2 cyclone lattice (driven: T_eq vigor)
+      uPolarSides:      { value: 6.0 },   // F29 polygon wavenumber N (driven: 5..8 hash, re-draw biased toward Saturn's 6)
+      uPolarR0:         { value: 0.22 },  // F29 jet / lattice-ring angular radius rad (driven: 0.18 + 0.08 x hash)
+      uPolarAmp:        { value: 0.12 },  // F29 polygon meander amplitude — lab knob (0.26 x 1.12 = 0.29 stays inside the 0.38 gate)
+      uPolarPole:       { value: 1.0 },   // F29 active pole sign +1 north / -1 south (driven: hash)
+      uPolarRing:       { value: 5.0 },   // F29 lattice ring cyclone count M (driven: 5..8 hash)
+      uPolarPhase:      { value: 0.0 },   // F29 single-cap S-lobe orientation rad (driven: hash)
+      uPolarW:          { value: 0.025 }, // F29 polygon collar half-width rad — lab knob
+      uPolarTint:       { value: new THREE.Color(0.35, 0.45, 0.65) },  // F29 cap tint (driven: bandTint shifted cool/teal)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -3103,6 +3221,17 @@
       trainCount: 0,        // F28 derived spot count (GUI display mirror of trainSpots.length)
       trainRadiusScale: 1.0,// F28 lab knob — scales every train radius at the per-frame writer (1 = derived size)
       stormTrainEnabled: true, // F28 enable gate
+      polarStrength: 0.0,   // F29 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
+      polarMode: 0,         // F29 variant: 0 single cap / 1 polygon jet / 2 cyclone lattice (driven: T_eq vigor ramp)
+      polarSides: 6,        // F29 polygon wavenumber N (driven: 5..8 hash, re-draw biased toward Saturn's 6)
+      polarR0: 0.22,        // F29 jet / lattice-ring angular radius rad (driven: 0.18 + 0.08 x hash)
+      polarAmp: 0.12,       // F29 polygon meander amplitude (lab knob — keeps rJet max 0.29 inside the 0.38 gate)
+      polarPole: 1,         // F29 active pole sign +1 north / -1 south (driven: hash)
+      polarRing: 5,         // F29 lattice ring cyclone count M (driven: 5..8 hash)
+      polarPhase: 0.0,      // F29 single-cap S-lobe orientation rad (driven: hash)
+      polarW: 0.025,        // F29 polygon collar half-width rad (lab knob)
+      polarTint: [0.35,0.45,0.65], // F29 cap tint (driven: bandTint shifted cool — teal-blue core lean)
+      polarVortexEnabled: true, // F29 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3810,6 +3939,44 @@
       }
       state.trainSpots = _tr;
       state.trainCount = _tr.length;
+      // ── F29 polar vortex — deterministic pole-structure derivation (card §6.5
+      // step 5; derivation HERE per the F11 precedent — core.js untouched). FRESH
+      // mulberry32 stream, NOT the F27/F28 stream extended: F28's draw count varies
+      // by vigor branch, so extending it would let a deck-personality change MOVE
+      // the pole structure. The seed mixes the SAME (macroSeed, stormSeed) identity
+      // with a golden-ratio constant — one seed pair still owns ALL storm/vortex
+      // placement (card §6 item 8) while the polar stream decorrelates from the
+      // spot/train stream.
+      const _polRng = (seed => { let _a = seed >>> 0; return () => {
+        _a = (_a + 0x6D2B79F5) | 0;
+        let _t = Math.imul(_a ^ (_a >>> 15), 1 | _a);
+        _t = (_t + Math.imul(_t ^ (_t >>> 7), 61 | _t)) ^ _t;
+        return ((_t ^ (_t >>> 14)) >>> 0) / 4294967296;
+      }; })(((Math.imul(state.macroSeed, 2654435761) ^ state.stormSeed) ^ 0x9E3779B9) >>> 0);
+      // Same h2-he gate as the storm family — a polar vortex is a gas-deck regime;
+      // every solid preset derives 0 and the per-frame writer zeroes the combiner.
+      state.polarStrength = _gas ? 1.0 : 0.0;
+      // Variant from the SAME T_eq vigor ramp as the deck/storm personality (card
+      // §6.5 step 3): hot churning Jovian ⇒ cyclone-cluster lattice (the Juno
+      // poles); mid Saturnian ⇒ polygonal jet (the hexagon); cold bland
+      // Neptunian/ice ⇒ single lobed cap (the Venus-style swirl core stands in —
+      // no Venus-type preset exists, card §6.5 v1 cuts).
+      state.polarMode = _vigor >= 0.7 ? 2 : (_vigor >= 0.35 ? 1 : 0);
+      // Wavenumber 5..8 with a re-draw bias toward Saturn's signature 6. The second
+      // draw is ALWAYS consumed — constant draw count keeps the later fields
+      // decoupled from the bias branch.
+      const _ps1 = 5 + Math.floor(_polRng() * 3.99);
+      const _ps2 = _polRng();
+      state.polarSides = (_ps1 !== 6 && _ps2 < 0.4) ? 6 : _ps1;
+      // Jet/ring radius 0.18..0.26 rad: with amp 0.12 the polygon's rJet max is
+      // 0.26 x 1.12 = 0.29 — comfortably inside the 0.38 gate onset (pre-check).
+      state.polarR0 = 0.18 + 0.08 * _polRng();
+      state.polarRing = 5 + Math.floor(_polRng() * 3.99);
+      state.polarPole = _polRng() > 0.5 ? 1 : -1;
+      state.polarPhase = _polRng() * 6.283;
+      // Cap tint: bandTint shifted COOL (teal-blue lean) — the Cassini gold-haze-
+      // outside / blue-core two-tone (card §6 item 2).
+      state.polarTint = [_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)];
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -4197,6 +4364,19 @@
     fTrain.add(state, 'trainRadiusScale', 0.5, 2, 0.01).name('radius scale');
     fTrain.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storms (shared seed)');
     fTrain.add(state, 'stormTrainEnabled').name('✓ enabled');
+    // ▸ Polar vortex (F29) — the pole-locked permanent structure: single cap /
+    // polygonal jet / cyclone lattice on the SAME vigor ramp as the deck/storm
+    // personality. Analytic — no carriage slots (the lattice centers derive
+    // in-shader). mode/sides/r0 are driven displays; collar width is the lab knob.
+    // The 🎲 rerolls the SHARED stormSeed (seed identity owns ALL storm/vortex
+    // placement), so it re-rolls F27/F28 too.
+    const fPolar = fBandsGroup.addFolder('Polar vortex (F29)'); fPolar.close();
+    fPolar.add(state, 'polarMode', 0, 2, 1).name('mode (driven)').listen();
+    fPolar.add(state, 'polarSides', 5, 8, 1).name('sides (driven)').listen();
+    fPolar.add(state, 'polarR0', 0.1, 0.3, 0.005).name('radius r0 (driven)').listen();
+    fPolar.add(state, 'polarW', 0.005, 0.06, 0.001).name('collar width');
+    fPolar.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storms (shared seed)');
+    fPolar.add(state, 'polarVortexEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -4207,7 +4387,7 @@
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
-      weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain,
+      weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4480,6 +4660,20 @@
         }
       }
       uniforms.uStormCount.value = _stormN;   // ✓ both enable gates folded in
+      // F29 polar vortex — polarVortexEnabled gates strength→0 ONLY (the GLSL call
+      // site and every polar term key on uPolarStrength alone, so one gate kills the
+      // whole combiner and restores byte-identical F28 output); everything else
+      // passes through, preserving the derived/slider values.
+      uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength : 0.0;   // ✓ enable gate
+      uniforms.uPolarMode.value     = state.polarMode;
+      uniforms.uPolarSides.value    = state.polarSides;
+      uniforms.uPolarR0.value       = state.polarR0;
+      uniforms.uPolarAmp.value      = state.polarAmp;
+      uniforms.uPolarPole.value     = state.polarPole;
+      uniforms.uPolarRing.value     = state.polarRing;
+      uniforms.uPolarPhase.value    = state.polarPhase;
+      uniforms.uPolarW.value        = state.polarW;
+      uniforms.uPolarTint.value.setRGB(state.polarTint[0], state.polarTint[1], state.polarTint[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

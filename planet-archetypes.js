@@ -32,6 +32,7 @@ export const FEATURES = {
   weatherBands:{ label: 'Weather bands (F26)',  enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] },
   greatSpot:  { label: 'Great spot (F27)',      enableKey: 'greatSpotEnabled', archetypes: ['gas-giant'] },
   stormTrain: { label: 'Storm clusters (F28)',  enableKey: 'stormTrainEnabled', archetypes: ['gas-giant'] },
+  polarVortex:{ label: 'Polar vortex (F29)',    enableKey: 'polarVortexEnabled', archetypes: ['gas-giant'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -87,4 +88,5 @@ export const PROVINCES = {
   weatherBands:{ field: 2, polarity: +1, floor: 1.00 }, // neutral — climate, not geology (FROST-row pattern: latitude circulation must not be gated by rock provinces)
   greatSpot:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — the vortex rides the same unprovinced gas deck as bands/jets (F24/F25)
   stormTrain: { field: 2, polarity: +1, floor: 1.00 },  // neutral — the train rides the same unprovinced gas deck as the great spot (F27)
+  polarVortex:{ field: 2, polarity: +1, floor: 1.00 },  // neutral — the pole structure rides the same unprovinced gas deck as the storm family (F27/F28)
 };

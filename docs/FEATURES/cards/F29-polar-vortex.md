@@ -47,12 +47,33 @@ Unbuilt — recipe for once it lands. Prerequisite: a gas-giant driver preset (g
 - [ ] At the jet latitude, do the zonal bands (F24) visibly hand off to the polar regime — bands terminating at or winding into the collar — rather than overlapping through it?
 - [ ] Does the Venus-style single-cap variant read as an irregular lobed swirl core (shape-shifting S-curve) clearly distinct in character from the crisp geometric Saturn polygon?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+One polar combiner in the pole tangent frame, three variants on the vigor split, all analytic — NO new carriage slots (the lattice centers derive in-shader from angle rounding, zero arrays). Albedo/luminance only, applied at the zonalBandCol tail like the storms.
+
+1. **Data:** FEATURES `polarVortex` { label 'Polar vortex (F29)', enableKey 'polarVortexEnabled', archetypes ['gas-giant'] } (NOT the card's 'banded-gas'). PROVINCES neutral { field: 2, +1, 1.00 }. PROV_POLAR = 27 + row + GLSL_NAME.
+2. **Pole frame (no seam, no pinch):** pole = uPolarPole (±1); pr = acos(clamp(pole·n.y,−1,1)) (angular distance from the active pole); θ = atan(n.z, n.x). Combiner gates on pr < ~0.45 rad — far outside the band ladder's polar hood, which stays as the distance read (§6 item 6).
+3. **Variants (uPolarMode, driven by vigor):**
+   · **Polygon jet (Saturnian, 0.35 ≤ vigor < 0.7):** jet contour rJet(θ) = r0·(1 + amp·cos(sides·θ)); dark collar band |pr − rJet| < w (w ~0.025, smoothstepped); cap interior (pr < rJet) takes a low-frequency tint shift toward uPolarTint (the Cassini gold-outside/teal-core two-tone, §6 item 2). amp ~0.12 — flat segments + rounded corners, not a wobbly circle.
+   · **Cyclone lattice (Jovian, vigor ≥ 0.7):** central swirl-dimple + eye at pr 0; ring of M cyclones at pr = r0: nearest-center via θc = round(θ·M/2π)·2π/M (analytic, no arrays); each = luminance dimple (soft dark disc ~0.06 rad) + bright eye dot (~0.015 rad) — the Juno pentagon read (§6 item 4). Cap tint shift subtler than Saturn's.
+   · **Single cap (ice, vigor < 0.35):** irregular lobed swirl core — cap tint + an S-lobe luminance term from 2 offset Gaussians rotated by a hash phase (Venus-style irregularity, §6 item 8), no polygon.
+4. **Uniforms:** uPolarStrength/uPolarSides/uPolarR0/uPolarAmp/uPolarMode/uPolarPole/uPolarRing + uPolarTint vec3 (+ lab knobs collar width, cap tint mix). Per-frame gated on polarVortexEnabled (strength→0).
+5. **Derivation (applyDrivers):** FRESH PRNG stream seeded (macroSeed-mix ^ stormSeed ^ 0x9E3779B9) — NOT an extension of the F27/F28 stream (F28's draw count varies by branch; a fresh stream keeps polar placement variant-independent). sides = 5 + floor(h·3.99) biased toward 6 (Saturn); r0 = 0.18 + 0.08h; ring M = 5 + floor(h·3.99); pole = h > 0.5 ? 1 : −1; tint = bandTint shifted cool (teal-blue lean). polarStrength = _gas gate (terrestrials 0 — pre-check).
+6. **GUI:** folder 'Polar vortex (F29)' — driven sides/r0/mode .listen(), 🎲 shares stormSeed (seed identity owns all storm/vortex placement), ✓ LAST. featureFolders.
+7. **Pre-check:** node table — 3 presets: mode/sides/r0/pole/ring per seed; terrestrials 0; same seed stable. Geometry: polygon collar at r0 0.18-0.26 + amp 0.12 stays inside the 0.45 gate; lattice ring + cyclone radius ≤ gate.
+
+v1 scope cuts: drift/rotation animation (two-phase flow map) → static (quasi-permanent is physically honest per PIA24967); Venus-type preset → none exists, the single-cap variant stands in on ice giants; production polarStorm wiring → integration phase; band→collar winding (gaseous-giganticus curl handoff) → the swirl handoff is the existing hood fade, taste fork.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop)
+- Evidence (repo root, gitignored): `F29-polygon-north.png` (Saturnian wavenumber-5 polygon pole-on, seed 1: crisp 5-sided dark contour, flat segments + rounded corners, tinted cap — NOT a wobbly circle), `F29-lattice.png` (Jovian, seed 1: central dark cyclone with bright eye + ring of 8 discrete eyed cyclone discs at fixed radius — the Juno lattice read), `F29-ab-on/off/diff.png` (polar ON/OFF, jets frozen: 66,332 px confined to the cap region), `F29-polygon-poleon.png` (south-pole seed — night side, unjudgeable; methodology: scan for polarPole +1).
+- §6 checklist: 1 🟢 (closed N-gon contour locked to the pole), 2 🟡 (cap interior reads as a distinct tinted regime, but combined with the collar it leans "filled dark polygon" more than Cassini's traced-band-with-visible-interior — taste fork), 3 — static by design (scope cut: drift animation deferred; quasi-permanence is physically honest per PIA24967), 4 🟢 (discrete same-sized eyed cyclones in a ring + central — no merging), 5 🟢 (object-space pole frame, acos/atan construction — no seam or pinch visible pole-on), 6 🟡 (gate dies by pr 0.48 so the far read is the F24 hood; pop-free emergence not explicitly distance-swept — quick Max check), 7 🟡 (band→cap handoff is the hood co-fade, bands don't "wind into" the collar — taste fork, the gaseous-giganticus curl handoff was cut), 8 — Venus-lobed cap derived on Neptunian (mode 0, S-lobe pair) but not visually judged this session (lowest-risk variant; Max's lap or the profiles phase).
+- Live drivers (seed 1): Saturnian → polygon sides 5, r0 0.191, pole +1; Jovian → lattice ring 8; Neptunian → cap (mode 0); terrestrials strength 0. Same seed reproduced identical geometry across preset switches.
+- Tweaks applied: 0 of 3 cycles — first render judged clean on both flagship variants.
+- Code review (fable): 1 should-fix applied — the additive eye/lobe terms used bare min(col+x, 1) clamps that fired even at zero weight, stepping >1-luminance deck pixels at the gate circle; both converted to mix-form (zero weight = true identity). Nit logged not built: cap-tint-mix lab knob from §6.5 step 4 wasn't exposed (mix weights are GLSL literals 0.45/0.25/0.35); uPolarAmp is console-only. Nit noted: atan(0,0) at the exact pole is spec-undefined (measure-zero, real GPUs return 0 — unguarded by precedent).
+- Taste forks for Max's lap: (a) filled-vs-traced polygon read (collar+cap tint together); (b) cap tint strength/hue (teal-blue lean); (c) static vs drifting (animation cut); (d) band→collar winding cut.
+- Solo note (inherited from F27/F28): `solo('polarVortex')` disables bands ⇒ bandMask 0 ⇒ nothing renders — judge with bands ON (the §5 recipe's "toggle F24 back on" applies to all gas riders).
+- Status: VERIFIED_PENDING_MAX
