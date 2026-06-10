@@ -44,6 +44,20 @@ Unbuilt in the lab — recommended recipe once built. Wiring prerequisites: regi
 - [ ] At full-disk distance, does the dark limb read as a thin warm rim that keeps the planet's silhouette legible against space, rather than the disk vanishing?
 - [ ] As the camera orbits, does the glow stay locked to the substellar geometry (fixed toward the star) — no drift with view direction — confirming it's driven by vSubstellarAngle, not a view-space hack?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+Built TOGETHER with F32 as one shared temperature curve ("ONE curve, two
+consumers" — the contract already written into the emissiveBlackbody header).
+Full plan: F32 card §6.5. F33's share: the `nightsideThermal` FEATURES key
+(enableKey `nightsideThermalEnabled`, PROV_NIGHTTHERM = 31), the uNightTempK
+floor (driven 1100 K — the Keating universal nightside), the night-hemisphere
+silicate-cloud occlusion mask (low-freq fbmd, DARKENS the glow, patchy), and
+the thin warm limb rim for silhouette legibility. Disable semantics: the
+per-frame writer collapses uNightTempK → 0 (floor fades to black, occlusion
+off) while F32's dayside lobe survives independently. v1 cuts logged on the
+F32 card (warm-variant preset, 2-axis latitude falloff, occlusion
+self-shading).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log

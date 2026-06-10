@@ -100,9 +100,10 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
    uCloudCoverage before pixel-diffs) still apply.
 1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
-2. **`warp-tunnel-second-half-not-rendering`** — **ROOT-CAUSED + FIXED
-   2026-06-10, VERIFIED_PENDING_MAX `1787c3f` + `2c23ee8`** (no rewrite
-   needed). TWO independent causes, both reproduced per-frame on GPU 9223
+2. **`warp-tunnel-second-half-not-rendering`** — **SHIPPED 2026-06-10:
+   Max UAT-passed ("Looks like it works!") `1787c3f` + `2c23ee8`, pushed
+   same day** (no rewrite needed). Arrival-distance (`04d3437`) UAT-passed
+   in the same ride — margin stays at default 1.3 (no tune requested). TWO independent causes, both reproduced per-frame on GPU 9223
    after Max's UAT report ("freeze + second half missing on binary
    destinations"): (a) Portal-A re-anchor margin 1e-10 < float64 rounding
    at destination coords → spurious INSIDE→OUTSIDE_A one frame post-swap
