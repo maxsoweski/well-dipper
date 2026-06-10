@@ -51,8 +51,35 @@ Built — solo on the :9223 lab (chrome-devtools MCP, see memory/well-dipper-tes
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 2026-06-10 (VERIFIED_PENDING_MAX) — Frozen (airless), solo
+  `ejecta` + cratersEnabled (per §5 dependency), d20/d8/d6/d2, rampart and
+  ray A/Bs. Drivers verified live: ejectaStrength 0.8075 (= craterDensity),
+  rampart 0.648, rayBrightness 0.9.
+  - Apron 🟢: raised debris collars hug each crater rim outside the bowl,
+    lumpy and breaking into ragged patches outward — thrown debris, not a
+    donut decal (shots 02 d6, 03 d2). Same Voronoi centers as F2 by
+    construction; collars visibly ring the F2 bowls (closes F02 checklist
+    item 8).
+  - Rampart 🟢: A/B at d2 — rampart=0 monotone fading skirt vs rampart=1
+    raised lobate terminal ridge rings standing proud; clearly
+    distinguishable after posterize (shots 04 vs 05).
+  - Gating 🟢: derived rayBrightness 0.9 on Frozen (airless) vs 0.0 on
+    Rocky (Earthlike) (atmosphere+erosion gate, read live);
+    ejectaStrength tracks craterDensity (0.81 vs 0.50 across presets).
+  - Rays at close/mid range 🟢: read as discrete radial streak fans
+    around young craters at d2–d8 (shot 04 right side, 06).
+  - Rays at full disk 🟡 `taste-call`: at d20 the on/off pixel diff (1630
+    px) shows rays DO cross posterize bands, but they read as bright
+    speckle, not discrete Tycho-style spokes — the documented §2
+    carry-forward (rays truncate at Voronoi cell boundaries; crater radii
+    too small a fraction of the disk). Structural fix is §4's
+    multi-cell/N-nearest evaluation — build work beyond a refine tweak,
+    so taking the conservative option and surfacing for Phase 7: accept
+    speckle-rays as stylization, or fund the multi-cell ray rework.
+  - Shots: F03-ejecta-01-d20-rays.png, -02-d6-aprons.png,
+    -03-d2-rampart-default.png, -04-d2-rampart0.png, -05-d2-rampart1.png,
+    -06-d8-rays.png.
+- Max's feedback: (pending Phase-7 lap — decide full-disk ray treatment)
+- Tweaks applied: none (structural item documented, not slider-fixable)
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
