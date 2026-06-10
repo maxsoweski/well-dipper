@@ -73,4 +73,18 @@ Judge:
   dither is the alternative if unwanted).
   Shots: FOUNDATION-check3-01-rotate-t0.png, -02-rotate-t4.png,
   -03-levels24.png, -04-bypass-spec-limb.png.
-- Check 4: (pending)
+- Check 4: 🟢 2026-06-10 — Rocky (Earthlike), numeric sweep d20→2→20 +
+  close-range limb inspection at d2.5 + two-frame pixel diff. lodRampOf:
+  smoothstep(20,6) — 0.0 at d20 rising strictly monotonically to 1.0 at d6,
+  values identical on approach vs retreat (logged in transcript: 0/.0554/.1983/
+  .3936/.6064/.8017/.9446/1.0 at d20/18/16/14/12/10/8/6). autoOctaves(ramp):
+  4.0→9.0, monotonic (note: takes the RAMP not distance as arg). lodHysteresis
+  dead-band verified in Node: activate only inside d18, hold until past d22 —
+  4-radius band kills boundary flicker. Continuous ramp + trailing-octave fade
+  means no discrete pop thresholds exist in the substrate. Fizz check: two
+  compositor screenshots at d2.5, same view, clouds zeroed → 24/1.8M pixels
+  changed (0.0013%); with clouds on, 0.617% (the animated cloud term only).
+  fwidth clamp holding; limb terrain coherent. (Method note: an earlier
+  canvas drawImage diff read all-black — no preserveDrawingBuffer — and was
+  discarded as invalid; the screenshot diff above is the real measurement.)
+  Shots: FOUNDATION-check4-01-d2.5-limb.png.

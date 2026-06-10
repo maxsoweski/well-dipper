@@ -14,8 +14,8 @@ during phases) | ▶️ = current
 | Phase | Goal | Status |
 |---|---|---|
 | 1 Research fan-out (Workflow, not /goal) | 48 dossier cards committed | ✅ 2026-06-09 |
-| 2 Foundation | FOUNDATION.md verdicted | ▶️ pending |
-| 3 Refine built (15 cards) | all §7 verdicts + galleries | pending |
+| 2 Foundation | FOUNDATION.md verdicted | ✅ 2026-06-10 (4×🟢; chroma-speckle taste-call for Phase 7) |
+| 3 Refine built (15 cards) | all §7 verdicts + galleries | ▶️ pending |
 | 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | pending |
 | 4b Build atmosphere (10) | F24-F33 verdicted | pending |
 | 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | pending |
@@ -75,7 +75,7 @@ during phases) | ▶️ = current
 | F48 | [F48-city-lights](cards/F48-city-lights.md) | Overlay | ⬜(lab) | — | 4c |
 | F49 | [F49-ecumenopolis](cards/F49-ecumenopolis.md) | Overlay | ⬜(lab) | — | 4c |
 | F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | 🟡 | — | 4c |
-| — | [FOUNDATION](cards/FOUNDATION.md) (F50/F52/F53 substrate) | Foundation | ✅ | — | 2 |
+| — | [FOUNDATION](cards/FOUNDATION.md) (F50/F52/F53 substrate) | Foundation | ✅ | 🟢 | 2 |
 | — | [INTEGRATION](cards/INTEGRATION.md) | Crosscutting | — | — | 5 |
 | — | [PROFILES](cards/PROFILES.md) | Crosscutting | — | — | 6 |
 | F38/F39 | airglow / cloud-optics — keep/stylize/drop call, no dossier | Optical | `[subtle]` | — | 4c |
