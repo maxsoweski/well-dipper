@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-10 by working-Claude (3-goals session 2: **ALL THREE GOALS FIXED, VERIFIED_PENDING_MAX `c85480f`.** **Goal 3 (entry hitch) closed across 4 commits** — `81fe37b` time-budget pacing for HashGridStarfield (8ms slices, injectable clock, TDD), `094e8a2` frame-aligned rAF yields (macrotask yields batched ~13 slices/paint → 105ms frames), `f75842e` sky-scene compile gate + variant-matched (lights via traverseVisible) + target-matched (program cache key bakes toneMapping/outputColorSpace per render target — compiles ran canvas-bound, passes draw into bgTarget/sceneTarget) compiles. Live (GPU 9223, 10 measured warps): FOLD ≤1×~65-86ms frame/warp (was 14-16×250-270ms), swap+reveal stalls eliminated incl. cold first warp (was 400ms + 330-1600ms); one unattributed 530ms hyper frame in 10 warps (likely GC, didn't recur). **Goal 2 fixed `c85480f`** — tunnel walls now write log depth (logdepthbuf chunks; test pins includes); GPU-compiles clean; belt-pixel check = Max's ride. Headless 54/54. TEMP `__swapTiming` instrumentation still in main.js — remove before workstream ships. All warp work unpushed).
+Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash FIXED `4278037`, VERIFIED_PENDING_MAX.** Root cause was NONE of the handoff's 4 candidates — it predates the swap: `updateTraversal` ran in simStep (60Hz) while the rendered camera interpolates per render frame (240Hz), so the camera crossed Portal A's plane up to ~4 rendered frames before the mode flipped; those frames drew stencil-ON with the disc behind the camera → empty stencil mask → tunnel invisible → ~3 frames (~12ms) of raw origin sky. Proven by in-page per-frame canvas capture frame-aligned with signed plane distance (sky-bright frames == sd<0 ∧ OUTSIDE_A exactly, 2 pre-fix warps). Fix: detection moved to renderFrame after camera interpolation. Post-fix: 3 warps, 0 stale frames (was 3/warp), flat crossing brightness, no AC4/AC10 warnings. Headless 54/54. Prior session's 3 goals all VERIFIED_PENDING_MAX `c85480f`. TEMP `__swapTiming` instrumentation still in main.js — remove before workstream ships. All warp work unpushed).
 
 ---
 
@@ -40,17 +40,19 @@ window._warpPreviewDist UAT knob). Goal 3 partially fixed `db2388d` (swap compil
 gate; stall inventory + open leads in handoff). Goal 2 statically diagnosed
 (logdepthbuf mismatch), no fix yet.**
 **3-goals session 2 (2026-06-10 cont.): Goals 2+3 FIXED** (`81fe37b` `094e8a2`
-`f75842e` `c85480f` — see Last-updated line for the mechanism map). **All 3 goals
-VERIFIED_PENDING_MAX. Max RODE it → new active item (his words): "a little flash
-where the tunnel disappears after we enter it."** He offers latency (delay warp /
-longer ENTER / longer first-half cruise) as acceptable currency for a smooth
-transition. Leading hypothesis (unverified): the stall fixes UNMASKED a 1-2-frame
-visual discontinuity at the swap (portal re-open replaying its animation, possibly
-compounded by the new sky-scene gate) — diagnose with the per-frame sampler before
-touching sequencing. Residuals: one unattributed ~530ms hyper frame (1-in-10,
-likely GC); compile gate holds ~0.4-1.0s of the 3.5s min-cruise behind walls.
-**→ NEXT SESSION: the flash. Full prep (hypotheses, sampler extension, fix
-directions, test-method deltas): `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10b.md`.**
+`f75842e` `c85480f`). **All 3 goals VERIFIED_PENDING_MAX. Max RODE it → flagged
+"a little flash where the tunnel disappears after we enter it."**
+**Flash session (2026-06-10): FIXED `4278037`, VERIFIED_PENDING_MAX** — sim-vs-render
+cadence bug at the Portal-A crossing, NOT a swap/load artifact; no latency spent
+(Max's offered levers unneeded — load was already hidden; see Last-updated line).
+**→ Max UAT: ride warps — flash gone?** Known residual if he still sees something
+at the seam: the far-end opening shows black (gated sky) for the ~0.4s compile
+window post-swap, then destination stars pop in — small (3u opening at ~60u),
+measured sub-0.2%-of-pixels; fix candidates exist (keep old sky alive through
+the gate) if he feels it. Other residuals: one unattributed ~530ms hyper frame
+(1-in-10, likely GC).
+**Handoff trail: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10b.md`** (its
+§0 candidate mechanisms 1-4 all ruled out by evidence; §3 test method still current).
 Older: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10.md` (§3 test method
 still current; §1-2 closed).
 Older context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09b.md`,
