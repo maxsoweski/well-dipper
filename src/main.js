@@ -3095,10 +3095,19 @@ warpEffect.onSwapSystem = async () => {
   // here, coupled to the teleport instead of to one trigger, fixes both cases.
   if (_useDualPortal) {
     camera.getWorldDirection(_swapNewForward);
-    // Offset a tiny amount (~1e-10 scene units) behind camera so the INSIDE-mode
-    // invariant holds (camera on +forward side of Portal A) without eating into
-    // the HYPER+EXIT travel budget.
-    _swapPortalAPos.copy(camera.position).addScaledVector(_swapNewForward, -1e-10);
+    // Offset behind the camera so the INSIDE-mode invariant holds (camera on
+    // +forward side of Portal A). The margin must sit FAR above float64
+    // rounding at destination coordinate magnitudes (1e4–1e6 scene units →
+    // eps ~1e-11–1e-10): dotA subtracts two near-identical positions, so a
+    // sub-noise margin (the original 1e-10) leaves dotA's SIGN as rounding
+    // noise for the first post-swap frames — a noisy −/+ pair fires a
+    // spurious INSIDE→OUTSIDE_A "backed out", disc B then never shows
+    // (tunnel second half missing) and AC4 stays silent (it only checks
+    // stuck-INSIDE). Root-caused per-frame 2026-06-10 (binary 77967870:
+    // camera crossed the B plane dead-center while mode sat OUTSIDE_A).
+    // 0.5u costs 0.1% of the ~463u travel budget; precision floor pinned in
+    // tests/portal-traversal-margin.test.js.
+    _swapPortalAPos.copy(camera.position).addScaledVector(_swapNewForward, -0.5);
     warpPortal.resetTraversal();
     warpPortal.open(_swapPortalAPos, _swapNewForward);
     // resetTraversal sets mode to OUTSIDE_A; force back to INSIDE for HYPER.
@@ -3115,7 +3124,10 @@ warpEffect.onSwapSystem = async () => {
     // the group is left in a stale frame and Portal B drifts ~785-1730u away,
     // so the camera never reaches the 3u emergence gate.
     _destForward.copy(_swapNewForward);
-    _getWorldTrue(camera.position, _pocketAnchorTrue);
+    // Anchor from the PORTAL position, not the camera — the per-frame group
+    // rewrite (_fromWorldTrue at ~main.js:6865) would otherwise collapse the
+    // 0.5u back-margin on the first sim tick, re-creating the sub-noise dotA.
+    _getWorldTrue(_swapPortalAPos, _pocketAnchorTrue);
   }
 
   // ── Regenerate sky for new galactic position ──
