@@ -49,8 +49,31 @@ Built — use the :9223 chrome-devtools lab session (per well-dipper-testing-ref
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Rocky (Earthlike) +
+  Titan (methane seas), solo `rivers`, d6/d2.5/d1.3 + relict and
+  negative-control sweeps. Drivers verified live: Rocky density 0.606 /
+  activity 1.0 / depth 0.19 / meander 0.67; Titan density 1.0,
+  uLiquidSpecies 1.
+  - Dendritic topology: sinuous trunks with tributaries joining INTO
+    trunks at visible Y-junctions — a connected drainage tree, not
+    overlaid line patterns (shot 01 d2.5; the spike's apron-gated
+    max()-union doing its job).
+  - Carved relief: channels show lit-wall/shadow-wall pairs from the
+    bent gradient — negative relief, not painted stripes (shots 01, 02).
+  - Meander: default 0.67 gives winding Mississippi-style trunks without
+    breaking connectivity (shot 01).
+  - Relict regime: activity/density 0.3 → shallow, soft-banked, sparse
+    valley traces (Warrego-style) vs the sharp incised active network
+    (shot 05 vs 01).
+  - Species: Titan's denser hydrocarbon network with darker/warmer floor
+    tint; tint stays subtle through posterize (shot 04).
+  - Existence gate (objective): fluvialDensity derives to 0 on both
+    airless presets (Lava, Frozen) — no atmosphere, no rivers.
+  - Global read: at d6 the network stays a few continental trunk
+    systems, no posterized noise dissolve (shot 03).
+  - Shots: F11-rivers-01-d2.5-network.png, -02-d1.3-walls.png,
+    -03-d6-global.png, -04-d2.5-titan-methane.png, -05-d2.5-relict.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
