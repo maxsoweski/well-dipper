@@ -47,6 +47,16 @@ Judge:
   judged as macro height-region boundary complexity per the form-not-pixels bar.
   Shots: FOUNDATION-check1-01-d20.png, -02-d8.png, -03-pole.png,
   -04-reroll1.png, -05-reroll2.png, -06-reroll3.png.
-- Check 2: (pending)
+- Check 2: 🟢 2026-06-10 — Rocky (Earthlike) d8, yaw 0/2/4 phase sweep + zoom
+  series d8/5/3/2. Light uLightDir=(0.61,0.35,0.71) world-fixed; observed
+  phases match quantitatively (yaw0 ≈ full disc lit from upper-right, yaw2 ≈
+  half phase lit screen-left at ~74° camera-light angle, yaw4 ≈ night side
+  with thin lit rim). Ridge/crater shading follows displacement (sun-facing
+  slopes bright, opposite shadowed) at every distance; pole view (check1-03)
+  shows no inverted/flat normals; no seam artifacts. Zoom stills show detail
+  octaves arriving without shading-character flips (method note: stills can't
+  fully rule out temporal pop — ramp monotonicity is logged in Check 4).
+  Shots: FOUNDATION-check2-01-yaw0.png, -02-yaw2.png, -03-yaw4.png,
+  -04-d5.png, -05-d3.png, -06-d2.png.
 - Check 3: (pending)
 - Check 4: (pending)
