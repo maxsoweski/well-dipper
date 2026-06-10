@@ -58,5 +58,19 @@ Judge:
   fully rule out temporal pop — ramp monotonicity is logged in Check 4).
   Shots: FOUNDATION-check2-01-yaw0.png, -02-yaw2.png, -03-yaw4.png,
   -04-d5.png, -05-d3.png, -06-d2.png.
-- Check 3: (pending)
+- Check 3: 🟢 2026-06-10 — Rocky (Earthlike) d12, spin 0.003 rad/frame, two
+  rotation frames 4s apart + levels-24 comparison + spec/limb bypass toggles.
+  6 levels read as distinct steps along the day-night gradient; band edges
+  follow lighting (deliberate, not accidental contours). Dither is
+  gl_FragCoord-anchored Bayer (screen-stationary by construction, no time
+  term) and the speckle character is identical across rotation frames. Relief
+  comparison vs levels=24: all major forms (ridges, basins, craters) stay
+  readable at 6 levels — envelope flatters, doesn't crush. Per-term bypass
+  verified live (uSpecBypass/uLimbBypass=1 → smooth terms over posterized
+  base; restored to 0 after). `taste-call`: per-channel quantization yields
+  pink/green chroma speckle at band boundaries at d12 — inherent to the
+  per-channel posterize design; flag for Max's Phase-7 lap (luminance-only
+  dither is the alternative if unwanted).
+  Shots: FOUNDATION-check3-01-rotate-t0.png, -02-rotate-t4.png,
+  -03-levels24.png, -04-bypass-spec-limb.png.
 - Check 4: (pending)
