@@ -38,7 +38,15 @@ Judge:
 ────────── §7 verdicts (filled during Phase 2) ──────────
 
 ## 7. Verdict + tweak log
-- Check 1: (pending)
+- Check 1: 🟢 2026-06-10 — Rocky (Earthlike), d20 + d8 + pole view + 3 macro-seed
+  rerolls (4242/77/8888). Macro octaves produce coherent continental-scale
+  highland/lowland masses with irregular natural boundaries; no tiling, no
+  axis-aligned banding, no pole pinching (pitch-1.4 view clean); rerolls vary
+  the arrangement while keeping the rocky-terrestrial character. Note: no
+  sea-level/ocean fill in the substrate (that's F14, Phase 4a) — "coastline"
+  judged as macro height-region boundary complexity per the form-not-pixels bar.
+  Shots: FOUNDATION-check1-01-d20.png, -02-d8.png, -03-pole.png,
+  -04-reroll1.png, -05-reroll2.png, -06-reroll3.png.
 - Check 2: (pending)
 - Check 3: (pending)
 - Check 4: (pending)
