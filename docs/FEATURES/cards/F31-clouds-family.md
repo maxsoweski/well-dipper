@@ -47,6 +47,29 @@ Unbuilt as a registered feature — clouds have no key in planet-archetypes.js F
 - [ ] F31f — does the substellar 'pupil' cloud read as a bright cap locked to the light direction (static against uTime, moving only with uLightDir) with a terminator ring near 90 degrees from the substellar point?
 - [ ] Family coherence — do all six variants visibly speak one cloud language (same dither texture, same brightness vocabulary) while reading as clearly different atmospheric regimes?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+Strategy: extend Stage 8 into a regime-dispatched family combiner over the ONE
+existing fbmd cloud field (§4's recommendation), register the family as an
+ownable feature, and author the three missing presets as data. F31b (gas band
+tops) is ALREADY the F24-F29 band stack — no new code; judge family coherence
+only. Regimes: 0 weather (terrestrial + gas patchy deck) · 2 sub-neptune haze
+mute · 3 venus blanket · 4 eyeball pupil/ring.
+
+1. **Data:** FEATURES `clouds` { label 'Clouds & haze (F31)', enableKey 'cloudsEnabled', archetypes: every archetype whose presets retain an atmosphere (check how the lab classifies presets into archetypes and list accordingly) }. PROVINCES neutral { field: 2, +1, 1.00 }. PROV_CLOUDS = 29 + GLSL provinceWeight row + GLSL_NAME test line.
+2. **Three new DRIVER_PRESETS** (data-only, each value object MUST open with `radiusEarth:` — vitest regex): 'Venus (sulfuric shroud)' (radiusEarth 0.95, T_eq 737, atmosphere co2 retained pressure 92, habitability 0, not locked, erosion ~0.3/resurfacing 0.7); 'Sub-Neptune (hazy)' (radiusEarth 2.7, massEarth 8.2, T_eq 550, atmosphere h2-he retained pressure 1000, habitability 0, surfaceHistory zeros + resurfacing 1 like the gas rows); 'Eyeball (locked temperate)' (radiusEarth 1.0, T_eq 270, tidalState locked synchronous, atmosphere n2-o2 retained pressure 1, habitability 0.5). Verify each classifies into a sane archetype; report which in the final summary.
+3. **Regime derivation in applyDrivers (NOT core.js):** from preset data — venus: composition 'co2' && pressure > 10 ⇒ 3; sub-neptune: 'h2-he' && NOT the gas-giant gate (radiusEarth < 6) ⇒ 2; eyeball: locked && retained && not gas ⇒ 4; else 0. Gas giants stay 0 (their deck is the band stack).
+4. **Coverage rebalance (F26 §7 taste fork c — this card's flagged job):** post-process the core derivation in applyDrivers before writing the uniform (F11 precedent): regime 3 ⇒ 1.0 (opaque shroud); else coverage' = clamp01(0.15 + 0.55·derived) ⇒ Rocky 0.9→0.65 (EPIC target: patchy swirls over LEGIBLE ground), Ocean 1.0→0.70, Titan 0.29, gas 0.26.
+5. **GLSL Stage-8 family combiner** (gate the whole family on uCloudCoverage > 0.0 as today; cloudsEnabled false ⇒ per-frame writer forces coverage 0 + regime terms off ⇒ deck fully absent):
+   a. **Clouds-as-relief (F31a upgrade):** fbmd already returns the analytic gradient — self-shade the deck by tilting the cloud term's diffuse with the tangential gradient (lighting value carries the form through the posterize, not hue — the research doc's posterization adaptation). Strength = uCloudRelief lab knob.
+   b. **Regime 2 — haze mute:** in the reserved pre-posterize muting slot (Stage-8 header): col = mix(col, uHazeColor, uHazeMute) plus contrast kill toward the haze tone BEFORE final posterize — deliberately featureless (2-3 flat bands + existing limb glow read), never 'broken texture'.
+   c. **Regime 3 — venus blanket:** deck covers everything (coverage 1, zero ground leak at any distance) + ONE [subtle] Y/V chevron: a single-bucket darkening, planetary-scale chevron shape in (lat, lon − slow uTime drift) — the 4-day superrotation read.
+   d. **Regime 4 — eyeball:** bright substellar cloud cap = smoothstep on the pre-plumbed vSubstellarAngle (STATIC vs uTime, moves only with light dir) + terminator cloud ring = gaussian bump near 90° substellar angle; the regular drifting weather deck stays underneath at derived coverage.
+6. **Uniforms:** uCloudRegime (int-ish float), uHazeColor (vec3, driven from atmosphere color), uHazeMute, uCloudRelief, uChevronStrength, uPupilR (eyeball cap half-angle). Lab knobs: coverage display .listen() (driven), relief, chevron, pupil radius; ✓ LAST, no 🎲 (drift is uTime; placement is the field).
+7. **Verification:** Rocky d20/d6/d2 (floating deck, legible ground, deterministic drift, self-shading); Jovian (bands stay the surface read, patchy deck doesn't fight them); Sub-Neptune (flat muted globe); Venus (zero ground leak at d20 AND d2.5 + chevron only with strength up); Eyeball (pupil static across 3 frames while deck drifts; ring near terminator); A/B cloudsEnabled on Rocky.
+
+v1 scope cuts: F31e detached limb shells (aspirational → parked; natural companion of F34 limb-glow in 4c); curl-noise advection (linear fbmd drift stays); LOD2 thin-shell mesh (in-shader only); terminator cloud shadowing (offset density sample) — all logged, not built.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
