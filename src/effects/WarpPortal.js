@@ -158,15 +158,24 @@ export class WarpPortal {
           uFade: { value: 1 },           // AC8 close-tween alpha (1 = opaque, 0 = gone)
         },
 
+        // logdepthbuf chunks: the renderer runs logarithmicDepthBuffer, so
+        // every world body (AsteroidBelt, planets, rings) writes LOG depth.
+        // The tunnel is the occluder between the camera and those bodies —
+        // without the same convention its depth writes/tests are meaningless
+        // and sparse belt pixels survive through the walls (Goal 2).
         vertexShader: /* glsl */ `
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
           varying vec2 vUv;
           void main() {
             vUv = uv;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            #include <logdepthbuf_vertex>
           }
         `,
 
         fragmentShader: /* glsl */ `
+          #include <logdepthbuf_pars_fragment>
           uniform float uTime;
           uniform float uScroll;
           uniform vec3  uHashSeed;
@@ -237,6 +246,7 @@ export class WarpPortal {
           }
 
           void main() {
+            #include <logdepthbuf_fragment>
             float scrollY = (vUv.y + uScroll) * uLengthCells;
 
             // ── Origin starfield ──
