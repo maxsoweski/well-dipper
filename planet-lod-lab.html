@@ -260,15 +260,12 @@
       // ── Shared seam (registry §1): uCryoActivity — owner Cryo (D2/D12→P7); read by Relief F9/F10.
       //    RESERVED at 0.0 until Cryo lands; under option A a lab knob drives it so F9/F10 are exercisable. ──
       uniform float uCryoActivity;      // 0..1 icy-shell disruption — the F9/F10 master gate (≤0 ⇒ both early-out)
-      // ── Stage-D province hook (registry §1 / index §8): uProvinceWeight — owner Stage-D provinces.
-      //    RESERVED 2026-06-07 as a no-op multiplier (default 1.0). When Stage-D lands, EVERY combiner
-      //    multiplies its contribution by provinceWeight(FEATURE_ID); the global uniform read means no
-      //    combiner signature changes. Fan-out domains adopt the multiply now (no-op vs 1.0). ──
-      uniform float uProvinceWeight;    // per-region feature weight (1.0 = uniform/no-op until Stage-D wires the spatial field)
-      // ── SPIKE(Stage-D, index §8 prescribed ~30-min A/B) — THROWAWAY, not the system. ──
-      //    0 = current uniform look; 1 = three combiners weighted by ONE shared low-freq field
-      //    (mountains by m, craters/ejecta by 1−m, lava cracks by m). Delete after the A/B.
-      uniform float uSpikeProvince;     // 0..1 spike toggle (default 0 = no change)
+      // ── Stage-D provinces (LIVE 2026-06-10, workstream stage-d-provinces-2026-06-10) ──
+      //    uProvinceWeight is now the GLOBAL INFLUENCE DIAL over the spatial weight fields:
+      //    0 ⇒ legacy uniform look (regression escape hatch), 1 ⇒ full provinces (default).
+      //    Every combiner multiplies by provinceWeight(FEATURE_ID) — see the accessor block
+      //    above mountainCombiner. Still a multiplier, NOT a gate (registry §1 semantics). ──
+      uniform float uProvinceWeight;    // 0..1 province influence dial (1 = full spatial weighting)
       // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief) ──
       uniform float uChaosCellScale;    // raft size (voronoi3d frequency; driven)
       uniform float uChaosRaftJitter;   // raft height/tilt displacement (driven, ∝ 1/g)
@@ -566,6 +563,67 @@
         return vec4(h, grad);
       }
 
+      // ── Stage-D provinces (index §8 — LIVE 2026-06-10) — the shared large-scale partition ──
+      // Declared BEFORE every combiner (fluvial is the earliest consumer in source order).
+      // THREE decorrelated low-frequency FBM threshold fields (the codebase's region idiom:
+      // F8 flow region / F9 chaos region / F22 snowline), computed ONCE per fragment into
+      // gProvince by initProvinces(), then mapped per-feature by provinceWeight(FEATURE_ID).
+      // The {field, polarity, floor} affinity rows MIRROR planet-archetypes.js PROVINCES
+      // (vitest drift-guards parse this if-chain — edit BOTH places). Constraints honored:
+      // SOFT weight fields (smoothstep blends — blend-not-branch, §8 load-bearing) and
+      // feature-POOR provinces (floor keeps a feature faintly present outside its region;
+      // floor 1.0 = neutral, for climate-driven features geology must not gate). The fields
+      // are very low freq, so every multiply treats the weight locally-constant in the
+      // gradient (the fluvialCombiner-lowGround / Musgrave-weight chain-rule convention).
+      const int PROV_MOUNTAINS   = 0;   // F3 ejecta + rays share PROV_CRATERS (they wrap F2)
+      const int PROV_CRATERS     = 1;
+      const int PROV_CANYONS     = 2;
+      const int PROV_SCARPS      = 3;
+      const int PROV_PLATEAUS    = 4;
+      const int PROV_TESSERA     = 5;
+      const int PROV_EDIFICES    = 6;
+      const int PROV_LAVA        = 7;
+      const int PROV_CHAOS       = 8;
+      const int PROV_CRYORIDGE   = 9;
+      const int PROV_RIVERS      = 10;
+      const int PROV_SUBLIMATION = 11;
+      const int PROV_GLACIAL     = 12;
+      const int PROV_FROST       = 13;
+      vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
+      void initProvinces(vec3 pos){
+        // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
+        // planet seed so every world partitions differently
+        vec4 a1 = noised(pos * 0.75 + uMacroOffset + vec3(17.3, -9.1, 4.7));
+        vec4 a2 = noised(pos * 1.5  + uMacroOffset + vec3(-3.2, 8.8, -12.6));
+        vec4 b1 = noised(pos * 0.85 + uMacroOffset + vec3(-23.7, 5.3, 19.1));
+        vec4 b2 = noised(pos * 1.7  + uMacroOffset + vec3(9.4, -15.8, 2.2));
+        vec4 c1 = noised(pos * 0.65 + uMacroOffset + vec3(4.8, 27.5, -11.3));
+        vec4 c2 = noised(pos * 1.3  + uMacroOffset + vec3(-19.2, -6.7, 13.9));
+        gProvince = vec3(
+          smoothstep(0.35, 0.65, 0.5 + 0.5 * (a1.x + 0.35 * a2.x) / 1.35),
+          smoothstep(0.35, 0.65, 0.5 + 0.5 * (b1.x + 0.35 * b2.x) / 1.35),
+          smoothstep(0.35, 0.65, 0.5 + 0.5 * (c1.x + 0.35 * c2.x) / 1.35));
+      }
+      float provinceWeight(int fid){
+        float f; float fl;   // field sample (polarity applied) + floor — mirrors PROVINCES data
+        if      (fid == PROV_MOUNTAINS)  { f = gProvince.x;       fl = 0.15; }
+        else if (fid == PROV_CRATERS)    { f = 1.0 - gProvince.x; fl = 0.25; }
+        else if (fid == PROV_CANYONS)    { f = gProvince.x;       fl = 0.20; }
+        else if (fid == PROV_SCARPS)     { f = gProvince.z;       fl = 0.30; }
+        else if (fid == PROV_PLATEAUS)   { f = gProvince.z;       fl = 0.20; }
+        else if (fid == PROV_TESSERA)    { f = gProvince.x;       fl = 0.20; }
+        else if (fid == PROV_EDIFICES)   { f = gProvince.y;       fl = 0.15; }
+        else if (fid == PROV_LAVA)       { f = gProvince.y;       fl = 0.10; }
+        else if (fid == PROV_CHAOS)      { f = gProvince.y;       fl = 0.25; }
+        else if (fid == PROV_CRYORIDGE)  { f = 1.0 - gProvince.y; fl = 0.30; }
+        else if (fid == PROV_RIVERS)     { f = 1.0 - gProvince.z; fl = 0.30; }
+        else if (fid == PROV_SUBLIMATION){ f = gProvince.z;       fl = 0.40; }
+        else if (fid == PROV_GLACIAL)    { f = 1.0 - gProvince.z; fl = 0.40; }
+        else if (fid == PROV_FROST)      { f = gProvince.z;       fl = 1.00; }
+        else                             { f = 1.0;               fl = 1.00; }
+        return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
+      }
+
       // ── F1 mountains: ridged-multifractal base relief (relief doc §F1) ──
       // Musgrave ridged multifractal with the Decarpentier-correct gradient. Each
       // octave's noise is FOLDED (signal = uRidgeOffset − |n.x|), SHARPENED (signal²)
@@ -663,26 +721,15 @@
         float chan = d.x;
         vec3  dchan = d.yzw;
         float depth = uFluvialDepth * mix(0.35, 1.0, uFluvialActivity);  // relict = shallower
-        float s = chan * lowGround * uFluvialDensity;
+        float pw = provinceWeight(PROV_RIVERS);                          // §8: networks favor young lowlands
+        float s = chan * lowGround * uFluvialDensity * pw;
         float carve = -s * depth;                                        // carve DOWN
         canyonHeight += carve;
         h            += carve;
         // d(carve)/dpos ≈ -depth·uFluvialDensity·lowGround·dchan  (d(lowGround)/dh second-order,
         // dropped — same chain-rule shortcut as scarp/glacial combiners).
-        grad += -depth * uFluvialDensity * lowGround * dchan;
+        grad += -depth * uFluvialDensity * pw * lowGround * dchan;
         fluvialWet = max(fluvialWet, s);
-      }
-
-      // ── SPIKE(Stage-D, index §8) — ONE shared low-frequency province field, soft-blended
-      // (no hard edges — index §8 load-bearing constraint: provinces are SOFT weight fields,
-      // blend-not-branch). Two noised() octaves, smoothstepped to a 0..1 weight. The mask is
-      // very low freq so its gradient term is treated locally-constant (same chain-rule
-      // shortcut as fluvialCombiner's lowGround / Musgrave octave weights). THROWAWAY.
-      float spikeProvinceField(vec3 pos){
-        vec4 n1 = noised(pos * 0.75 + vec3(17.3, -9.1, 4.7));
-        vec4 n2 = noised(pos * 1.5  + vec3(-3.2, 8.8, -12.6));
-        float f = 0.5 + 0.5 * (n1.x + 0.35 * n2.x) / 1.35;
-        return smoothstep(0.35, 0.65, f);
       }
 
       // F1 mountains combiner — ridged base relief layered onto the FBM continents.
@@ -692,7 +739,7 @@
       void mountainCombiner(vec3 pos, float fwBase, inout float h, inout vec3 grad){
         if (uMountainAmp <= 0.0) return;
         // input is pos·uMountainScale, so its screen footprint is fwBase·uMountainScale
-        float pw = mix(1.0, spikeProvinceField(pos), uSpikeProvince);     // SPIKE(Stage-D): mountains live where m is high
+        float pw = provinceWeight(PROV_MOUNTAINS);   // §8: ranges cluster in tectonic provinces
         vec4 m = fbmdRidged(pos * uMountainScale, uOctaves, fwBase * uMountainScale);
         h    += uMountainAmp * m.x * pw;
         grad += uMountainAmp * m.yzw * uMountainScale * pw;
@@ -748,7 +795,7 @@
         float morphology = smoothstep(uCraterComplexD*0.6, uCraterComplexD, diameter);
         float r = ff.x / craterRadius;
         vec2 prof = craterProfile(r, morphology, uCraterRelaxation, uTerraceCount);
-        float pw = mix(1.0, 1.0 - spikeProvinceField(pos), uSpikeProvince);  // SPIKE(Stage-D): craters in the COMPLEMENT region
+        float pw = provinceWeight(PROV_CRATERS);     // §8: craters keep to old terrain (anti-tectonic)
         float amp = uCraterAmp * host * pw;
         h    += amp * prof.x;
         // d(h)/d(vPos) = dh/dr · (1/craterRadius) · d(f1)/d(vPos);  d(f1)/d(vPos) = voroGrad·uCraterScale
@@ -795,9 +842,9 @@
         float patchMask = mix(1.0, smoothstep(0.35, 0.85, fbm), smoothstep(1.2, 2.2, r)); // patchy outward
         float lump = mix(1.0, fbm, uEjectaLump);
         float m = host * lump * patchMask;
-        // SPIKE(Stage-D): ejecta wraps F2's craters — mask with the SAME complement weight
-        // so aprons never ring province-suppressed craters.
-        float pw = mix(1.0, 1.0 - spikeProvinceField(pos), uSpikeProvince);
+        // §8: ejecta wraps F2's craters — SAME affinity (PROV_CRATERS) so aprons never
+        // ring province-suppressed craters.
+        float pw = provinceWeight(PROV_CRATERS);
         float amp = uEjectaStrength * uEjectaAmp * pw;
         h += amp * m * prof.x;
         // d(amp·m·prof.x)/dpos = amp·[ m·prof.y·dr/dpos + prof.x·dm/dpos ]
@@ -829,7 +876,7 @@
         float az = atan(dot(dir, e2), dot(dir, e1));
         float streaks = pow(max(0.5 + 0.5*sin(az*uRayCount + ch.z*6.2831853), 0.0), uRaySharp);
         float radial = smoothstep(1.0, 1.3, r) * (1.0 - smoothstep(2.0, 6.0, r));  // start past rim, fade out
-        return uRayBrightness * host * streaks * radial * 0.35;
+        return uRayBrightness * host * streaks * radial * 0.35 * provinceWeight(PROV_CRATERS);   // §8: rays follow their craters
       }
 
       // ── F4 graben profile (Stage-C step 3, Relief) — transcribed from grabenProfile()
@@ -857,17 +904,18 @@
       // correctly. uChasmaDepth≤0 ⇒ early-out (Stage-A base + F1/F2 untouched).
       void canyonCombiner(vec3 pos, inout float h, inout float canyonHeight, inout vec3 grad){
         if (uChasmaDepth <= 0.0) return;
+        float pw = provinceWeight(PROV_CANYONS);                   // §8: rifts die out leaving their province
         for (int i = 0; i < 3; i++){
           if (i >= uChasmaCount) break;
           vec3 n = normalize(uChasmaAxis[i]);
           float s = dot(pos, n);                                   // signed dist to rift plane
           float d = abs(s);
           vec2 gp = grabenProfile(d, uChasmaWidth, uChasmaFloor);  // (depth ≤ 0, d depth/dd)
-          float dep = uChasmaDepth * gp.x;                         // ≤ 0 — carved DOWN
+          float dep = uChasmaDepth * gp.x * pw;                    // ≤ 0 — carved DOWN
           canyonHeight += dep;                                     // ★ the shared accumulator
           h            += dep;
           // d(dep)/dpos = uChasmaDepth · gp.y · dd/ds · ds/dpos,  dd/ds = sign(s), ds/dpos = n
-          grad += uChasmaDepth * gp.y * sign(s) * n;
+          grad += uChasmaDepth * pw * gp.y * sign(s) * n;
         }
       }
 
@@ -905,7 +953,7 @@
         float s = sin(phase);                                     // periodic fault train
         vec2 sp = scarpProfile(s, 0.0, uScarpWidth);              // smoothed block step
         float styleSign = mix(1.0, -1.0, clamp(uScarpStyle, 0.0, 1.0));  // thrust up / normal down
-        float amp = uScarpStrength * styleSign;
+        float amp = uScarpStrength * styleSign * provinceWeight(PROV_SCARPS);   // §8
         h += amp * (sp.x - 0.5);                                  // center on datum (±0.5 blocks)
         // d(sp.x)/dpos = dh/ds · cos(phase) · uScarpFreq · dfield
         grad += amp * sp.y * cos(phase) * uScarpFreq * dfield;
@@ -1002,8 +1050,9 @@
         float plOct = min(uOctaves, 3.0);
         vec4 ph = fbmdHetero(pos * uPlateauScale, plOct, fwBase * uPlateauScale, uPlateauOffset);
         vec2 tp = terraceProfile(ph.x, uPlateauLevels, uPlateauSoftness);
-        h    += uPlateauStrength * (tp.x - 0.5);
-        grad += uPlateauStrength * tp.y * ph.yzw * uPlateauScale;
+        float pw = provinceWeight(PROV_PLATEAUS);                  // §8: mesas mark ancient highlands
+        h    += uPlateauStrength * (tp.x - 0.5) * pw;
+        grad += uPlateauStrength * pw * tp.y * ph.yzw * uPlateauScale;
       }
 
       // ── F6 ridgeWave — tessera ridge fold (Stage-C step 3) — transcribed from
@@ -1061,8 +1110,9 @@
         // product (union of grooves) + product-rule gradient
         float prod = rw0.x * rw1.x;
         vec3  dprod = rw1.x * dr0 + rw0.x * dr1;
-        h    += uTesseraStrength * (prod - 0.5);                  // -0.5 DC cosmetic (normal-only shading)
-        grad += uTesseraStrength * dprod;
+        float pw = provinceWeight(PROV_TESSERA);                  // §8: deformed-crust province
+        h    += uTesseraStrength * (prod - 0.5) * pw;             // -0.5 DC cosmetic (normal-only shading)
+        grad += uTesseraStrength * pw * dprod;
       }
 
       // ── F7 edifice profile (Stage-C step 3, Relief) — transcribed from edificeProfile()
@@ -1101,7 +1151,7 @@
         float edificeRadius = mix(0.3, 0.7, ch.y);                // hashed size (cell units; bigger than craters)
         float r = ff.x / edificeRadius;
         vec2 prof = edificeProfile(r, uShieldStratoMix, uEdificeCaldera);
-        float amp = uEdificeAmp * uEdificeMaxHeight * host;
+        float amp = uEdificeAmp * uEdificeMaxHeight * host * provinceWeight(PROV_EDIFICES);   // §8: volcanic province
         h    += amp * prof.x;
         // d(h)/d(vPos) = dh/dr · (1/edificeRadius) · d(f1)/d(vPos); d(f1)/d(vPos)=voroGrad·uEdificeScale
         grad += amp * prof.y * (1.0/edificeRadius) * voroGrad * uEdificeScale;
@@ -1124,6 +1174,7 @@
         vec4 rn = noised(pos * uLavaScale + uLavaOffset);
         float fbm01 = 0.5 + 0.5 * rn.x;
         float region = smoothstep(1.0 - uLavaCoverage, 1.0 - uLavaCoverage + 0.25, fbm01);
+        region *= provinceWeight(PROV_LAVA);                        // §8: flood basalt pools in the volcanic province
         // SMOOTH: lava floods + flattens older relief inside the region
         h    *= (1.0 - region);
         grad *= (1.0 - region);
@@ -1168,11 +1219,12 @@
         float region = smoothstep(1.0 - uLavaCoverage, 1.0 - uLavaCoverage + 0.25, fbm01);
         // Cluster the channel glow into active volcanic provinces — Io from space reads as
         // scattered glowing centers, never a globe-tiling net. Extent scales with activity.
-        vec4 pn = noised(pos * 1.1 + uLavaOffset * 1.7 + vec3(31.4, -17.2, 8.8));
-        float province = smoothstep(0.62 - 0.22 * uLavaActivity, 0.78, 0.5 + 0.5 * pn.x);
-        // SPIKE(Stage-D): the shared field REPLACES the ad-hoc mask above (subsume, don't stack —
-        // stacking two independent masks intersects to near-nothing; verified in A/B shot 06).
-        province = mix(province, smoothstep(0.45, 0.75, spikeProvinceField(pos)), uSpikeProvince);
+        // SUBSUMED by Stage-D 2026-06-10: the F08-fix1 ad-hoc pn-noise mask is replaced by the
+        // SHARED volcanic field (gProvince.y) carrying fix1's activity-scaled threshold —
+        // stacking two independent masks intersects to near-nothing (spike A/B shot 06).
+        // uProvinceWeight=0 falls back to a constant mid field (uniform, pre-fix1 behavior).
+        float provField = mix(0.7, gProvince.y, uProvinceWeight);
+        float province = smoothstep(0.62 - 0.22 * uLavaActivity, 0.78, provField);
         // Flow-front glow — incandescent lobate margins where flows advance; the region-edge
         // band peaks at the mask's 0.5 contour, giving the liquid-sheet read at the boundary.
         float front = region * (1.0 - region) * 4.0;
@@ -1214,6 +1266,7 @@
         if (uCryoActivity <= 0.0) return;
         vec4 mn = noised(pos * uChaosMaskScale + uChaosOffset);
         float region = smoothstep(1.0 - uCryoActivity, 1.0 - uCryoActivity + 0.3, 0.5 + 0.5 * mn.x);
+        region *= provinceWeight(PROV_CHAOS);                    // §8: chaos clusters over internal heat
         if (region <= 0.0) return;
         vec3 cId, vGrad;
         vec2 ff = voronoi3d(pos * uChaosCellScale + uChaosOffset, uVoroCells, cId, vGrad);
@@ -1239,7 +1292,7 @@
       //     (cheap tier: lenticulae + refrozen-crack web DEFERRED, relief doc §F10.d).
       void cryoRidgeCombiner(vec3 pos, inout float h, inout vec3 grad){
         if (uCryoActivity <= 0.0) return;
-        float amp = uCryoRidgeAmp * uCryoActivity;
+        float amp = uCryoRidgeAmp * uCryoActivity * provinceWeight(PROV_CRYORIDGE);   // §8: ridged plains complement chaos
         // (1) double ridges — warped line field carrying the double-ridge profile
         vec3 ax0 = normalize(uCryoRidgeAxis0);
         vec4 wn = noised(pos * 2.0 + uCryoRidgeOffsetV);
@@ -1292,7 +1345,7 @@
         float band    = uSubColdGate * uPlanetTempEq;                 // confinement edge softness (K)
         float capMask = smoothstep(-band, band, coldnes);
         if (capMask <= 0.0) return;
-        float amp = uSubAmp * uSubStrength * capMask * uProvinceWeight;   // §8 province convention (no-op 1.0 for now)
+        float amp = uSubAmp * uSubStrength * capMask * provinceWeight(PROV_SUBLIMATION);   // §8 (spatial field LIVE 2026-06-10)
 
         if (uVolatileSpecies == 3){
           // CH₄ penitentes — strongly anisotropic SHARP blades, aligned to the sun azimuth (penitentes
@@ -1382,7 +1435,7 @@
         vec3  fG  = flow.yzw * FLOW_SCALE;                            // regional height gradient (object space)
         vec3  gT  = fG - nrm * dot(fG, nrm);                          // tangential component
         float slope = length(gT);
-        float base = uGlacialStrength * capMask * uProvinceWeight;    // §8 province convention (no-op 1.0 for now)
+        float base = uGlacialStrength * capMask * provinceWeight(PROV_GLACIAL);   // §8 (spatial field LIVE 2026-06-10)
 
         // (1) ice mantle — slope-damped FBM, ponded where the REGIONAL surface is LOW-slope (basins).
         // The basin mask is slowly-varying (held locally-constant, the chaos/ejecta cosmetic-grad convention).
@@ -1445,7 +1498,10 @@
         float breakup = noised(p * uFrostNoiseScale + uFrostOffset).x * uFrostNoiseAmp * uPlanetTempEq;
         float band = uFrostEdgeSoftness * uPlanetTempEq;                   // soft snowline width in K
         float raw = smoothstep(-band, band, coldness + breakup);
-        return raw * uFrostMaxCoverage;
+        // §8 convention-complete: frost carries a NEUTRAL affinity (floor 1.0 ⇒ weight ≡ 1) —
+        // F22/F23 are climate (latitude/temperature), geology must not gate them. The multiply
+        // stays so a future taste pass can dial it via the data without touching this code.
+        return raw * uFrostMaxCoverage * provinceWeight(PROV_FROST);
       }
 
       // ── pldBands — F22 polar-layered-deposit strata (cryo-doc §2 F22) ──
@@ -1511,6 +1567,10 @@
         // hard invariant already honored: ★ emissive terms are added AFTER the
         // posterize split so they don't band into gray steps (Stage-A §2.C).
         // ════════════════════════════════════════════════════════════════════
+
+        // ── Stage 0.5: Stage-D province fields — ONCE per fragment, BEFORE any consumer
+        // (relief combiners, rayField, lavaCrackEmissive, frostCoverage all read gProvince).
+        initProvinces(vPos);
 
         // ── Stage 1: noised() height/derivative base (Stage-A foundation) ──
         vec3 shadeN;
@@ -1825,14 +1885,13 @@
       uLiquidMask:      { value: 0.0 },   // liquid-body coverage mask   — owner Fluvial; read by Optical (sunglint F36)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
-      // ── Stage-D province hook (index §4 #8 / §8) — RESERVED 2026-06-07, no-op until Stage-D ──
-      // A per-region weight every combiner multiplies its contribution by. Default 1.0 = no-op
-      // (multiplier, NOT a 0.0 gate). Owner: Stage-D provinces; consumers: ALL combiners (F1–F10 +
-      // the 8 domains). Reserved BEFORE the fan-out so domains author province-aware combiners from
-      // day 1 (multiply by provinceWeight(FEATURE_ID)) — Stage-D then swaps the scalar for the
-      // spatial field WITHOUT changing any combiner signature. Convention spelled out in index §8.
-      uProvinceWeight:  { value: 1.0 },   // 1.0 = uniform/no-op — owner Stage-D provinces; read by ALL combiners (when wired)
-      uSpikeProvince:   { value: 0.0 },   // SPIKE(Stage-D §8 A/B) — 0=current look, 1=province-masked. THROWAWAY.
+      // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
+      // The spatial weight field landed: provinceWeight(FEATURE_ID) reads 3 low-freq fields
+      // (gProvince) against per-feature affinities mirrored from planet-archetypes.js PROVINCES.
+      // uProvinceWeight is the global influence dial (multiplier, NOT a 0.0 gate): 0 restores the
+      // legacy uniform look (regression escape hatch), 1 = full provinces. Combiner signatures
+      // unchanged — exactly the swap the 2026-06-07 reservation was bought for.
+      uProvinceWeight:  { value: 1.0 },   // Stage-D LIVE 2026-06-10: global province-influence dial (0=legacy uniform look, 1=full provinces); read by ALL combiners via provinceWeight(FEATURE_ID)
     };
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
@@ -1910,6 +1969,7 @@
       emissive: 0.0,        // lava/hot glow
       specStrength: 0.0,    // ocean/ice specular glint
       limbStrength: 0.0,    // atmosphere rim glow
+      provinceWeight: 1.0,  // Stage-D province influence dial (0 = legacy uniform look)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2172,6 +2232,7 @@
     fEnv.add(state, 'emissive', 0, 1, 0.01).name('emissive (lava)');
     fEnv.add(state, 'specStrength', 0, 1, 0.01).name('specular (ocean/ice)');
     fEnv.add(state, 'limbStrength', 0, 1, 0.01).name('limb glow');
+    fEnv.add(state, 'provinceWeight', 0, 1, 0.01).name('province influence');
     fEnv.add(state, 'emissiveBypass').name('emissive bypass quantizer');
     fEnv.add(state, 'specBypass').name('spec bypass quantizer');
     fEnv.add(state, 'limbBypass').name('limb bypass quantizer');
@@ -2724,6 +2785,7 @@
       uniforms.uEmissive.value = state.emissive;
       uniforms.uSpecStrength.value = state.specStrength;
       uniforms.uLimbStrength.value = state.limbStrength;
+      uniforms.uProvinceWeight.value = state.provinceWeight;
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

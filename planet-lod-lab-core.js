@@ -942,3 +942,16 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
     ...qualityKnobs(qualityTier),
   };
 }
+
+// ── Stage-D provinceWeightFromField (LIVE 2026-06-10) — CPU mirror of the GLSL accessor's
+// MAPPING stage: field sample (already in [0,1]) → per-feature weight, given an affinity row
+// from planet-archetypes.js PROVINCES and the global influence dial. The GLSL computes
+//   f' = polarity >= 0 ? f : 1 - f
+//   w  = mix(1, floor + (1 - floor) * f', dial)
+// Pinned properties (vitest): dial 0 ⇒ 1 exactly; range [mix(1,floor,dial), 1]; monotone in f
+// per polarity; Lipschitz |Δw| ≤ (1-floor)·dial·|Δf| (soft fields stay soft through the map).
+// The SPATIAL fields themselves are smoothstep-of-FBM (C¹ by construction) in the shader.
+export function provinceWeightFromField(fieldValue, affinity, dial = 1) {
+  const f = affinity.polarity >= 0 ? fieldValue : 1 - fieldValue;
+  return mix(1, affinity.floor + (1 - affinity.floor) * f, dial);
+}

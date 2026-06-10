@@ -34,3 +34,30 @@ export const ARCHETYPES = {
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
 export const featuresOf = (archKey) =>
   Object.entries(FEATURES).filter(([, f]) => f.archetypes.includes(archKey)).map(([k]) => k);
+
+// ── Stage-D geologic provinces (LIVE 2026-06-10, workstream stage-d-provinces-2026-06-10) ──
+// The per-feature affinity data the shader's provinceWeight() accessor MIRRORS (GLSL if-chain
+// in planet-lod-lab.html — edit BOTH; the vitest drift-guard parses the GLSL and cross-checks
+// it against this table). Three decorrelated low-frequency fields partition the sphere; each
+// feature declares the field it clusters into (polarity +1) or avoids (-1), plus a floor that
+// keeps it faintly present outside its province (feature-POOR provinces, not feature-absent).
+// floor 1.0 = NEUTRAL: climate-driven features (frost F22/F23) stay unprovinced — geology
+// must not gate latitude/temperature behavior.
+export const PROVINCE_FIELDS = ['tectonic', 'volcanic', 'ancient'];
+export const PROVINCES = {
+  mountains:  { field: 0, polarity: +1, floor: 0.15 },
+  craters:    { field: 0, polarity: -1, floor: 0.25 },
+  ejecta:     { field: 0, polarity: -1, floor: 0.25 },  // wraps F2 — MUST equal craters (vitest-pinned)
+  canyons:    { field: 0, polarity: +1, floor: 0.20 },
+  scarps:     { field: 2, polarity: +1, floor: 0.30 },
+  plateaus:   { field: 2, polarity: +1, floor: 0.20 },
+  tessera:    { field: 0, polarity: +1, floor: 0.20 },
+  edifices:   { field: 1, polarity: +1, floor: 0.15 },
+  lava:       { field: 1, polarity: +1, floor: 0.10 },
+  chaos:      { field: 1, polarity: +1, floor: 0.25 },
+  cryoRidge:  { field: 1, polarity: -1, floor: 0.30 },
+  rivers:     { field: 2, polarity: -1, floor: 0.30 },
+  sublimation:{ field: 2, polarity: +1, floor: 0.40 },
+  glacial:    { field: 2, polarity: -1, floor: 0.40 },
+  frost:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — climate, not geology
+};
