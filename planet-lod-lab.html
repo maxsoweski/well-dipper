@@ -382,6 +382,12 @@
       uniform float uDuneWarp;         // phase-warp amplitude (ridge threading/divergence, Shangri-La read) — lab knob
       uniform float uDuneBelt;         // equatorial-belt confinement 0..1 (Titan hydrocarbon belts) — lab knob
       uniform vec3  uDuneOffset;       // 🎲 domain offset — own warp seed, decorrelated from fluvial/outflow/karst
+      // ── F16 dust mantles (Aeolian step 4a — card F16) ──
+      uniform float uDustDepth;        // 0..1 master continuum (driven: press ramp × dryness × erosion); <= 0 ⇒ early-out; ONE scalar runs all three channels (relief smoothing / ochre lift / butterscotch veil)
+      uniform float uDustRegionFreq;   // settling-region noise frequency (mantle patch scale) — lab knob
+      uniform float uDustFlatK;        // settling slope-damp k in 1/(1+k·|grad|²) — dust survives flats, strips from steeps — lab knob
+      uniform float uDustTint;         // butterscotch veil strength (Stage-8 whole-disk warm muting) — lab knob
+      uniform vec3  uDustOffset;       // 🎲 domain offset — own region seed, decorrelated from lava/dunes
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -635,6 +641,7 @@
       const int PROV_OUTFLOW     = 17;  // F13 — flood products, same young-lowlands affinity as RIVERS
       const int PROV_KARST       = 18;  // F21 — soluble-lithology provinces (CHAOS-row pattern: y-field, decorrelated from the fluvial z-field)
       const int PROV_DUNES       = 19;  // F15 — old stable plains (CRATER-row polarity: sand seas live among crater fields, not young orogens)
+      const int PROV_DUST        = 20;  // F16 — fallout is near-global: dunes' old-plains polarity but a HIGH floor (mantles thin over young terrain, never vanish)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -672,6 +679,7 @@
         else if (fid == PROV_OUTFLOW)    { f = 1.0 - gProvince.z; fl = 0.30; }
         else if (fid == PROV_KARST)      { f = gProvince.y; fl = 0.25; }
         else if (fid == PROV_DUNES)      { f = 1.0 - gProvince.x; fl = 0.30; }
+        else if (fid == PROV_DUST)       { f = 1.0 - gProvince.x; fl = 0.50; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1018,6 +1026,44 @@
                                   : -(6.0*td*(1.0-td)) / 0.28;
         h    += uDuneAmp * ridge * sand;
         grad += uDuneAmp * sand * dridge * dph;                // sand locally constant
+      }
+
+      // ── F16 dustCombiner (Stage-5 aeolian) — settled-fallout mantle: near-uniform
+      // atmospheric fallout drapes topography and a deep mantle erases high-frequency
+      // relief first (card §4 diffusive read). ATTENUATION, not carve — the lavaCombiner
+      // precedent h *= (1-x); grad *= (1-x) so depth 0 returns the accumulated relief
+      // EXACTLY (card §6 item 7). Less grad ⇒ fewer dither transitions ⇒ a visibly
+      // smoother posterized surface ("route detail through normals" in reverse).
+      // Settling weight (card §6.5.2) = depth × region × flatness × province:
+      //   region   — ONE low-freq noised() on its own uDustOffset seed, smoothstep
+      //              SYMMETRIC about the noise median 0.5 (0.35→0.65): ~half the sphere
+      //              carries mantle at depth 1 (the 40-60% coverage pre-check) and the
+      //              0.3-wide margin keeps the edge gradational — no posterize-amplified
+      //              contour (card §6 item 6).
+      //   flatness — the research doc's slope damp 1/(1+k·dot(grad,grad)) on ENTRY grad,
+      //              repurposed as a settling weight: dust survives flats/lows, strips
+      //              from steep windswept faces (card §6 item 3). Denominator ≥ 1 —
+      //              divide guarded by construction. No absolute-h gate (the F21 trap).
+      //   province — PROV_DUST: dunes' old-plains polarity, floor 0.50 (fallout is
+      //              near-global; mantles thin over young terrain, never vanish).
+      // atten clamps at 0.85 so full loess never erases the sphere itself. Exports
+      // dustCover (= atten) for the Stage-6 ochre lift; the Stage-8 veil reads
+      // uDustDepth directly (airborne haze is whole-disk, not region-masked). Called
+      // after duneCombiner (dust settles over the ergs), before lavaCombiner (fresh
+      // basalt punches through any mantle — lava's own attenuation runs last).
+      // OUT-param discipline: dustCover written FIRST, before the early-out, so the
+      // caller's variable is always defined. v1 scope cuts (card §6.5.8): the Mars
+      // 30-60° latitude-gate, dust devils/storm veil (F40), species-keyed colors.
+      void dustCombiner(vec3 pos, inout float h, inout vec3 grad, out float dustCover){
+        dustCover = 0.0;                                       // ALWAYS written (early-out below)
+        if (uDustDepth <= 0.0) return;
+        vec4 rn = noised(pos * uDustRegionFreq + uDustOffset + vec3(7.7, -3.9, 13.1));
+        float region = smoothstep(0.35, 0.65, 0.5 + 0.5 * rn.x);
+        float flatness = 1.0 / (1.0 + uDustFlatK * dot(grad, grad));   // entry grad
+        float atten = min(uDustDepth * region * flatness * provinceWeight(PROV_DUST), 0.85);
+        h    *= (1.0 - atten);
+        grad *= (1.0 - atten);
+        dustCover = atten;
       }
 
       // ── F12 deltas & alluvial fans (Stage-4 Fluvial, card §6.5) — the DEPOSITIONAL mirror
@@ -1905,6 +1951,9 @@
         // (needs the accumulated height for the altitude lapse), consumed at Stage 6.
         float frostCover = 0.0;
         float frostBandCoord = 0.0;   // F22 PLD pole-distance coordinate (set by frostCoverage)
+        // F16 dust-mantle cover — set by dustCombiner (analytic branch; out param, always
+        // written), consumed at the Stage-6 ochre lift. 0.0 here covers the finite-diff path.
+        float dustCover = 0.0;
         // F14 standing-liquid coverage — set by the Stage-4 level-set cut (analytic branch),
         // consumed at Stage 6 (liquid albedo fill) + implicitly by spec (flat normal = glint).
         float liquidMask = 0.0;
@@ -1946,6 +1995,7 @@
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
           duneCombiner(vPos, h, grad);             // F15 — linear ergs DEPOSIT on near-final lowlands (after all constructional relief so sand pools around it; before F8 — fresh basalt buries sand; before F12/F14 — deltas/sea read the final surface)
+          dustCombiner(vPos, h, grad, dustCover);  // F16 — dust mantle SMOOTHS relief (after F15 — dust settles over the ergs; before F8 — fresh basalt punches through any mantle); writes dustCover for the Stage-6 ochre lift
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
           deltaCombiner(vPos, h, grad, fluvialWet);// F12 — depositional aprons where channels meet base level (reads FINAL h)
           // ── Stage 4 (F14): standing-liquid level-set cut (card §4) — AFTER all relief so
@@ -2003,6 +2053,9 @@
           // sea. Titan's methane seas stay radar-dark against bright frosted terrain. (Frozen-sea
           // / eyeball ice-ring variant deferred — flagged in card §7 for the integration pass.)
           frostCover *= 1.0 - liquidMask;
+          // F16 × F14 — same phase logic: settled dust can't mantle the open sea (it sinks);
+          // the airborne veil (Stage 8) is unaffected — haze hangs over water too.
+          dustCover *= 1.0 - liquidMask;
         }
 
         // ── Stage 2 (cont.): mountains / scarps; writes canyonHeight   [domain: Relief]
@@ -2036,6 +2089,13 @@
         // Water = dark cool fill; methane/ethane = darker warm fill (Titan radar-dark).
         vec3 liquidCol = (uLiquidSpecies == 1) ? vec3(0.11, 0.07, 0.03) : vec3(0.04, 0.10, 0.22);
         vec3 albedoCol = mix(uBaseColor, liquidCol, liquidMask);
+        // F16 dust ochre lift — settled-mantle albedo mixed BEFORE the frost mix so frost
+        // WINS where cold (F20's frost-wins ordering; ice-cemented mantles still read
+        // frosty). Butterscotch ochre = dust absorbs blue, scatters the rest (card §3
+        // webexhibits read). Pre-posterize so the warm/bright band survives quantization
+        // as its own bin instead of collapsing into bare rock (card §6 item 4).
+        const vec3 DUST_OCHRE = vec3(0.72, 0.52, 0.30);
+        albedoCol = mix(albedoCol, DUST_OCHRE, dustCover * 0.6);
         albedoCol = mix(albedoCol, frostShade, frostCover);
         // F11 species floor-tint — faint channel-floor albedo (water vs methane). Albedo only;
         // fluvialWet=0 ⇒ unchanged. Kept subtle so it reads as a floor darkening through posterize.
@@ -2051,7 +2111,18 @@
         albedoCol = mix(albedoCol, beachCol, beachBand * (1.0 - frostCover));
         albedoCol *= 1.0 - 0.45 * cliffDark;
         albedoCol += vec3(0.10) * strandLine;
-        vec3 surface = posterize(min(albedoCol * (diff + ambient) + uBaseColor * rayBright, vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
+        // ── F16 butterscotch veil (Stage-8 haze channel, computed HERE so it hits each
+        // term PRE-posterize — there is no single final quantizer, every surface term
+        // carries its own). Airborne suspended dust warms ALL light passing through it
+        // (card §3): whole-disk multiplicative muting col·(1.06, 0.96, 0.82) blended by
+        // uDustTint·uDustDepth — applied to the lit SURFACE (terminator included via
+        // diff), the CLOUD deck and the LIMB glow below, NOT painted on the ground albedo
+        // (card §6 item 5). The ★ emissive/spec/aurora bypass channels stay unmuted —
+        // they are the designated posterize-survivors (incandescence punches through).
+        // uDustDepth 0 (airless / feature off) ⇒ veilTint = 1.0 exactly — regression-safe.
+        float dustVeil = clamp(uDustTint * uDustDepth, 0.0, 1.0);
+        vec3 veilTint = mix(vec3(1.0), vec3(1.06, 0.96, 0.82), dustVeil);
+        vec3 surface = posterize(min(veilTint * (albedoCol * (diff + ambient) + uBaseColor * rayBright), vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
         //    lit color + landMask; renders LAST among surface terms, before the envelope split. [domain: Exotic]
@@ -2063,12 +2134,14 @@
         vec4 cw = fbmd(vPos * 1.7 + vec3(uTime * 0.02, 0.0, 0.0), 5.0, 0.0);
         float cloud = smoothstep(0.15, 0.5, cw.x) * uCloudCoverage * (diff + 0.05);
         vec3 cloudC = vec3(cloud);
+        cloudC *= veilTint;   // F16 — suspended dust warms the cloud deck too (pre-posterize)
         cloudC = posterize(cloudC, uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 9: OPTICAL — limb/terminator scattering (additive-tint ONLY; must not double-darken). [domain: Optical]
         // Limb / atmosphere rim glow (fresnel against the geometric normal, sun-weighted).
         float limb = pow(1.0 - max(dot(N, V), 0.0), 3.0) * uLimbStrength * (diff + 0.15);
         vec3 limbC = uBaseColor * limb;
+        limbC *= veilTint;    // F16 — the lit limb reads through the haze (card §6 item 5)
         limbC = (uLimbBypass == 1) ? limbC : posterize(limbC, uLevels, fc, 0.4, uDitherMode);
 
         // ════════ posterize(surface) split — ★ EMISSIVE channel: all terms below BYPASS the quantizer ════════
@@ -2317,6 +2390,11 @@
       uDuneWarp:        { value: 2.0 },   // F15 phase-warp amplitude (ridge threading) — lab knob
       uDuneBelt:        { value: 0.5 },   // F15 equatorial-belt confinement — lab knob
       uDuneOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
+      uDustDepth:       { value: 0.0 },   // F16 master continuum (driven: press ramp × dryness × erosion); <= 0 early-outs
+      uDustRegionFreq:  { value: 1.3 },   // F16 settling-region noise scale (lava's 1.4-class continental patches) — lab knob
+      uDustFlatK:       { value: 1.0 },   // F16 slope-damp k (the research doc's literal 1/(1+|grad|²) trick) — lab knob
+      uDustTint:        { value: 0.35 },  // F16 butterscotch veil strength (Stage-8 muting) — lab knob
+      uDustOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2441,6 +2519,11 @@
       duneWarp: 2.0,        // F15 phase-warp amplitude (threading)
       duneBelt: 0.5,        // F15 equatorial-belt confinement
       dunesEnabled: true,   // F15 enable gate
+      dustDepth: 0.0,       // F16 master continuum (driven)
+      dustRegionFreq: 1.3,  // F16 settling-region noise scale (continental mantle patches)
+      dustFlatK: 1.0,       // F16 settling slope-damp k
+      dustTint: 0.35,       // F16 butterscotch veil strength
+      dustEnabled: true,    // F16 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2607,6 +2690,7 @@
       outflowOffset: [0,0,0],
       karstOffset: [0,0,0],
       duneOffset: [0,0,0],
+      dustOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -2840,7 +2924,7 @@
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0]; state.karstOffset = [0,0,0];
-      state.duneOffset = [0,0,0];
+      state.duneOffset = [0,0,0]; state.dustOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -2906,6 +2990,18 @@
       // Lava/Frozen/Europa (airless, p 0) → 0 (the wind-still-rock fork, card §1).
       const _press = _hadLiquid ? (_fp.atmosphere.pressure ?? 1.0) : 0;
       state.duneDensity = _clamp01(_ss(0.05, 0.3, _press) * (1.0 - 0.65 * _stab));
+      // ── F16 dust mantles — ONE depth continuum runs all three channels (relief
+      // smoothing / ochre lift / butterscotch veil). Same aeolian air gate as F15
+      // (press ramp × partial dryness — lofting needs air over a transport threshold,
+      // and a dry surface to source grains), × an accumulation-history term
+      // (0.3 + 0.7·erosion): mantles are fallout INTEGRATED OVER TIME (the card-§1
+      // ~32 m Amazonian loess), and D11 recorded erosion is the lab's time budget —
+      // FLOORED at 0.3 so young-but-windy worlds still wear a veneer (a hard erosion
+      // coupling would near-zero Titan, the F21/F15 trap; Titan must keep its haze).
+      // Outcomes: Rocky (p 1.0, stab .741, ero .4) → 0.30; Ocean (p 1.5, stab 1,
+      // ero .6) → 0.25; Titan (p 1.5, stab 1, ero .2) → 0.15 (haze world > 0, card
+      // §6.5.6); Lava/Frozen/Europa (airless, p 0) → 0 (no air ⇒ no fallout).
+      state.dustDepth = _clamp01(_ss(0.05, 0.3, _press) * (1.0 - 0.65 * _stab) * (0.3 + 0.7 * _erosion));
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -3205,6 +3301,17 @@
     fDunes.add({ roll(){ state.duneOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fDunes.add(state, 'dunesEnabled').name('✓ enabled');
 
+    // ▸ Dust mantles (F16) — settled fallout drapes + smooths relief, lifts albedo to
+    // ochre, and warms the whole disk (butterscotch veil). depth is driven (press ramp ×
+    // dryness × erosion, .listen()); regionFreq/flatK/tint are shape knobs.
+    const fDust = fGrad.addFolder('Dust mantles (F16)'); fDust.close();
+    fDust.add(state, 'dustDepth', 0, 1, 0.01).name('depth (driven)').listen();
+    fDust.add(state, 'dustRegionFreq', 0.5, 6, 0.1).name('region freq');
+    fDust.add(state, 'dustFlatK', 0, 8, 0.1).name('flatness k');
+    fDust.add(state, 'dustTint', 0, 1, 0.01).name('haze tint');
+    fDust.add({ roll(){ state.dustOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fDust.add(state, 'dustEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -3213,7 +3320,7 @@
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
-      dunes: fDunes,
+      dunes: fDunes, dust: fDust,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -3416,6 +3523,13 @@
       uniforms.uDuneWarp.value    = state.duneWarp;
       uniforms.uDuneBelt.value    = state.duneBelt;
       uniforms.uDuneOffset.value.set(state.duneOffset[0], state.duneOffset[1], state.duneOffset[2]);
+      // F16 dust — dustEnabled gates depth→0 (combiner early-out AND Stage-8 veil both
+      // read uDustDepth, so one gate kills all three channels), preserving the slider value.
+      uniforms.uDustDepth.value      = state.dustEnabled ? state.dustDepth : 0.0;   // ✓ enable gate
+      uniforms.uDustRegionFreq.value = state.dustRegionFreq;
+      uniforms.uDustFlatK.value      = state.dustFlatK;
+      uniforms.uDustTint.value       = state.dustTint;
+      uniforms.uDustOffset.value.set(state.dustOffset[0], state.dustOffset[1], state.dustOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

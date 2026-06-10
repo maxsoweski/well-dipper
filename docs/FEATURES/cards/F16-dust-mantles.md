@@ -46,12 +46,71 @@ Unbuilt — recommended recipe once built. Register in planet-archetypes.js FEAT
 - [ ] Does the mantle margin read as a gradational fade, with no posterize-amplified hard contour line where the region mask cuts off?
 - [ ] With the feature soloed off or depth at 0, does the underlying accumulated relief return exactly — regression-safe attenuation like lavaCombiner's?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — one depth continuum, three channels)
+
+1. **`dustCombiner(pos, inout h, inout grad, out dustCover)` (Stage-5)** — called right after
+   duneCombiner (dust settles over dunes), before lavaCombiner (fresh basalt punches through
+   any mantle — lava's own attenuation precedent runs last). Early-out `uDustDepth <= 0.0`
+   (dustCover = 0.0 FIRST so the out param is always written). ATTENUATION, not carve — the
+   lavaCombiner pattern: `h *= (1.0 − atten); grad *= (1.0 − atten)` returns relief exactly at
+   depth 0 (§6 item 7).
+2. **Settling weight**: `atten = uDustDepth · region · flatness · pw`, where region = low-freq
+   noised() FBM mask (lava-region pattern, own uDustOffset seed + uDustRegionFreq, smooth
+   margins — §6 item 6), flatness = `1.0/(1.0 + uDustFlatK·dot(grad,grad))` on ENTRY grad (the
+   research doc's slope-damp trick as a settling weight — dust survives flats, strips from
+   steeps, §6 item 3), pw = provinceWeight(PROV_DUST). Clamp atten ≤ ~0.85 so loess never
+   erases the sphere itself. Export `dustCover = atten` for the albedo/haze channels.
+3. **Stage-6 ochre lift**: `albedoCol = mix(albedoCol, DUST_OCHRE, dustCover · 0.6)` next to
+   the frost-overlay precedent, pre-posterize; DUST_OCHRE ≈ vec3(0.72, 0.52, 0.30) const
+   (butterscotch — the webexhibits blue-absorption read). Order vs frost: frost wins (mix dust
+   BEFORE the frost mix — ice-cemented mantles still read frosty; matches F20's frost-wins).
+4. **Stage-8 butterscotch veil**: in the haze slot before final posterize, whole-disk warm
+   muting `col = mix(col, col·vec3(1.06, 0.96, 0.82), uDustTint · uDustDepth)` — airborne
+   (applies to everything incl. limb/terminator), NOT a ground paint (§6 item 5). uDustTint
+   default ~0.35, lab knob.
+5. **Province**: PROV_DUST = 20, `f = 1.0 - gProvince.x; fl = 0.50;` (settles everywhere, mild
+   old-plains preference — same polarity as dunes, higher floor: fallout is near-global) +
+   PROVINCES.dust { field: 0, polarity: -1, floor: 0.50 }.
+6. **Registration + drivers**: FEATURES `dust: { label: 'Dust mantles (F16)', enableKey:
+   'dustEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] }`; GUI folder per the
+   F15 pattern (driven depth .listen(), knobs regionFreq/flatK/tint, 🎲, ✓ last);
+   deriveUniforms: dustDepth = the F15 aeolian gate (press ramp × partial dryness) ×
+   (0.3 + 0.7·erosion) — dust needs air + dry + time; reuse F15's _press/_stab locals.
+   Titan must stay > 0 (haze world); airless 0.
+7. **Tuning pre-check (standing lesson)**: region mask coverage ~40-60% at depth 1 (not
+   全-sphere, not specks); the three channels must each be visible in an A/B at d6 — relief
+   smoothing via fewer dither transitions, ochre as a brighter warm band, veil as whole-disk
+   warmth. No absolute-h gates (F21 trap).
+8. **v1 scope cuts (flagged)**: Mars 30–60° latitude-dependent mantle gate deferred; dust
+   devils/storm veil (F40's lane); species-keyed dust colors (one ochre fits v1).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 (2026-06-10, working-Claude autonomous judging per spec §13.3 — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5 in one pass, zero fix cycles. Shots (Rocky preset, solo, d6):
+  `F16-rocky-on.png` (driven veneer 0.30), `F16-diff.png` (on/off pixel-diff — 18.6k px with
+  measured mean RGB shift **R +12.1 / G +4.8 / B −4.2**, the butterscotch signature confirmed
+  numerically, not just by eye), `F16-sidebyside.png` (bare vs depth-1 loess — relief contrast
+  visibly muted, dark canyon banding softened, whole disc warmer/homogenized: the Mars
+  before/after-dust-storm read). Continuum verified: 0.30 veneer → 1.0 loess strengthens
+  monotonically, no binary pop. Drivers live: Rocky 0.301, Titan 0.154 (>0, haze world),
+  Frozen (airless) 0. Vitest 19/19. Console clean.
+- Why 🟢: all three channels (relief smoothing, ochre lift, veil) verified visibly + the tint
+  verified numerically; regression exactness traced (attenuation identity at depth 0, IEEE-
+  exact ×1.0); zero tuning cycles needed — the §6.5.7 coverage pre-check did its job.
+  Remaining glance items for Max's lap are taste-grade only: settling-on-flats contrast
+  (flatK), margin gradation, veil-vs-ground discrimination at d20.
+- Code review (adversarial, per §13.4): clean pass at ≥80 (attenuation matches the lava
+  convention exactly; dustCover assigned on every path incl. finite-diff branch; veil applied
+  pre-posterize at surface/cloud/limb and NOT at emissive/spec/aurora bypasses; registries +
+  enable-gate kill-all-channels traced). Implementer's node --check caught a backtick-in-GLSL-
+  comment string-termination bug mid-build (fixed before review).
+- Taste forks (conservative, marked): dustCover *= 1−liquidMask (frost's F14 phase logic —
+  settled dust can't mantle open sea; veil deliberately unmasked); driver history term floored
+  at 0.3 (young windy worlds keep a veneer — avoids the F21/F15 Titan-zeroing trap class);
+  bypass channels unmuted (incandescence punches through haze).
+- Scope cuts honored per §6.5.8: no 30–60° latitude mantle gate, no storm veil (F40), one ochre.
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)
