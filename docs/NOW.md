@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-Last updated: 2026-06-10 by working-Claude (Max's 3 goals session 1: **Goal 1 DONE `ec47b84`** — Portal A spawns 10u ahead, preview decoupled from pocket length, live-verified, VERIFIED_PENDING_MAX. **Goal 3 root-caused, partial fix `db2388d`** — entry hitch = sync shader link-waits at first draw; swap compile gate built but ~400ms + ~1.1-1.6s stalls remain (sky scene uncovered + variant mismatch open) + FOLD generateAsync 250ms chunks. **Goal 2 (belt through walls) diagnosed static-only:** WarpPortal materials lack logdepthbuf chunks vs logarithmicDepthBuffer renderer — no fix yet. All warp work unpushed).
+Last updated: 2026-06-10 by working-Claude (3-goals session 2: **ALL THREE GOALS FIXED, VERIFIED_PENDING_MAX `c85480f`.** **Goal 3 (entry hitch) closed across 4 commits** — `81fe37b` time-budget pacing for HashGridStarfield (8ms slices, injectable clock, TDD), `094e8a2` frame-aligned rAF yields (macrotask yields batched ~13 slices/paint → 105ms frames), `f75842e` sky-scene compile gate + variant-matched (lights via traverseVisible) + target-matched (program cache key bakes toneMapping/outputColorSpace per render target — compiles ran canvas-bound, passes draw into bgTarget/sceneTarget) compiles. Live (GPU 9223, 10 measured warps): FOLD ≤1×~65-86ms frame/warp (was 14-16×250-270ms), swap+reveal stalls eliminated incl. cold first warp (was 400ms + 330-1600ms); one unattributed 530ms hyper frame in 10 warps (likely GC, didn't recur). **Goal 2 fixed `c85480f`** — tunnel walls now write log depth (logdepthbuf chunks; test pins includes); GPU-compiles clean; belt-pixel check = Max's ride. Headless 54/54. TEMP `__swapTiming` instrumentation still in main.js — remove before workstream ships. All warp work unpushed).
 
 ---
 
@@ -39,8 +39,15 @@ the far end appears, grows, and the new system shows through it.
 window._warpPreviewDist UAT knob). Goal 3 partially fixed `db2388d` (swap compile
 gate; stall inventory + open leads in handoff). Goal 2 statically diagnosed
 (logdepthbuf mismatch), no fix yet.**
+**3-goals session 2 (2026-06-10 cont.): Goals 2+3 FIXED** (`81fe37b` `094e8a2`
+`f75842e` `c85480f` — see Last-updated line for the mechanism map). **All 3 goals
+now VERIFIED_PENDING_MAX → Max rides against the target feel** (one long tunnel,
+far end grows, new system through it). Residuals to watch on the ride: one
+unattributed ~530ms hyper frame (1-in-10 warps, likely GC); compile gate holds
+~0.4-1.0s of the 3.5s min-cruise (invisible behind walls).
 **→ Next-session prep (stall inventory, evidence, leads, test method):
-`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10.md`.**
+`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10.md` (§1-2 now closed by
+session 2; test method §3 still current).**
 Older context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09b.md`,
 `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md`,
 `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09.md`.
