@@ -29,6 +29,7 @@ export const FEATURES = {
   massWasting:{ label: 'Mass-wasting (F19)',    enableKey: 'massWastEnabled',  archetypes: ['impact-airless','tectonic-terrestrial','volcanic','icy-active','volatile-cold'] },
   bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant'] },
   jets:       { label: 'Jets & shear (F25)',    enableKey: 'jetsEnabled',      archetypes: ['gas-giant'] },
+  weatherBands:{ label: 'Weather bands (F26)',  enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -81,4 +82,5 @@ export const PROVINCES = {
   massWasting:{ field: 0, polarity: +1, floor: 0.30 },  // deposits live where steeps live — the MOUNTAIN-field polarity (talus needs walls to fail)
   bands:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — atmosphere, not geology (FROST-row pattern: a gas deck must not be gated by rock provinces)
   jets:       { field: 2, polarity: +1, floor: 1.00 },  // neutral — the shear dynamics ride the same unprovinced gas deck as bands (F24)
+  weatherBands:{ field: 2, polarity: +1, floor: 1.00 }, // neutral — climate, not geology (FROST-row pattern: latitude circulation must not be gated by rock provinces)
 };

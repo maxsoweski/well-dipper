@@ -99,6 +99,7 @@ const GLSL_NAME = {
   glacial: 'PROV_GLACIAL', frost: 'PROV_FROST', lakes: 'PROV_LAKES', deltas: 'PROV_DELTAS',
   coastlines: 'PROV_COAST', outflow: 'PROV_OUTFLOW', karst: 'PROV_KARST', dunes: 'PROV_DUNES',
   dust: 'PROV_DUST', massWasting: 'PROV_MASSW', bands: 'PROV_BANDS', jets: 'PROV_JETS',
+  weatherBands: 'PROV_WEATHER',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

@@ -65,8 +65,13 @@ v1 scope cuts: seasonal ITCZ migration (animated D3) → static shift only; curl
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop)
+- Evidence (repo root, gitignored): `F26-ab-on/off/diff.png` (ON/OFF at d4 Rocky: 34,487 px delta, all in-disc, clumped storm masses not uniform speckle), `F26-final-s1.png` + the row-profile table below (THE load-bearing check), `F26-eyeball-poke.png` (uWeatherLocked=1 manual poke: clouds reorganize into an arc around the substellar point — mechanism works, no preset drives it yet), `F26-rocky-d12.png`, `F26-clean-s0/s2.png` (diagnostic series).
+- **Objective row-profile** (screen-row luminance delta weather-on minus weather-off, spec/limb stripped, coverage 0.45 — rows ≈ latitudes): ITCZ 49-55 at −6/−12° (warp-displaced south of the equator — the "broken, never a clean line" character), N storm track 49-56 at 30-37°, S storm track 39 at −45°, subtropical gaps ≈ 0 at ±24°, poles quiet. The full Hadley three-lobe skeleton expresses through the posterized envelope.
+- §6 checklist: 1 🟢 (ITCZ broken band at parity after cycle 3), 2 🟢 (storm tracks + CLEAR gaps — profile zeros at ±24°), 3 🟢 (front shredding via the independent recursive-warp instance; the ITCZ's ±8° wander IS the warp), 4 🟢 (weather over visible ground; instantly distinct from F24 — different palette, ground shows in gaps), 5 🟢 (lighting-routed via the existing (diff+0.05) factor), 6 🟡 (cells/rotation: mechanism verified by table — cells 1 pushes the track off-disc — but no slow-rotator preset exercises it live), 7 🟡 (eyeball reorganization verified by manual poke; deferred-to-profiles for a real preset), 8 🟡 (subtlety at full disk: at the DERIVED coverage 0.9 the deck buries everything — that's F31's coverage derivation, not F26; judged at 0.45).
+- Tweaks applied (3 of 3 cycles): (1) diagnostic — uWeatherDry probe isolated why the ITCZ read as absent (narrow σ 0.08 band fell between posterize rows + dry offset ate the push); (2) bias scale 0.45→0.65, ITCZ σ 0.08→0.11, uWeatherDry default 0.12→0.15 (belts +0.37 / ITCZ +0.24 / trough −0.06); (3) ITCZ weight 0.6→0.85 → equatorial parity. Production constants were tuned for a [0,1] noise; the lab's signed fbmd needed the rebalance.
+- Code review (fable): no blockers, no should-fix; one stale-comment nit (applied). Regression contract (weather off ⇒ cloud layer byte-identical) verified by review trace — the gated branch never touches cwx at strength 0.
+- Live drivers: Rocky/Ocean/Titan strength 1 cells 3; Lava/Frozen/Europa/gas×3 strength 0 (pre-check table verified live for Rocky).
+- Taste forks for Max's lap: (a) ITCZ prominence (now ≈ storm tracks; real GOES varies); (b) trough drying depth (0.15 — deeper = starker gaps); (c) the derived cloudCoverage 0.9 on Rocky buries banding at full disk — flag for F31's coverage rebalance.
+- Scope cuts (per §6.5): seasonal ITCZ migration → static shift; storm-cell advection → F28/F31; terminator cloud shadows → F31; eyeball preset → Phase 6.
+- Status: VERIFIED_PENDING_MAX

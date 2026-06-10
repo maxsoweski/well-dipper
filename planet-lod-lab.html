@@ -415,6 +415,16 @@
       uniform float uJetTurbFreq;      // shear-turbulence fbm frequency multiplier vs the band-warp domain — lab knob
       uniform float uJetEqWidth;       // equatorial superrotation Gaussian half-width in trueLat units — lab knob
       uniform vec3  uJetOffset;        // 🎲 domain offset — own turbulence seed, decorrelated from the band warp
+      // ── F26 latitude weather bands (Bands step 4b — card F26) — CLOUD LAYER ONLY ──
+      // Regression contract: the whole family sits behind uWeatherStrength > 0.0, so at
+      // 0 the Stage-8 threshold input is the raw cw.x — cloud layer byte-identical.
+      uniform float uWeatherStrength;  // 0..1 master gate (driven: not-gas AND retained, x rain-composition factor; 0 on gas/airless)
+      uniform float uWeatherCells;     // circulation cell count (driven: D8 spin, 72/rotationHours clamped 1..6; Earth 24 h = 3)
+      uniform float uWeatherItczShift; // ITCZ center shift off the equator in |lat| units (driven: D3 tilt via frostLatitudeBias)
+      uniform float uWeatherLocked;    // 1 = eyeball coordinate: bands reorganize around the substellar point (driven: locked AND retained)
+      uniform float uWeatherWarp;      // front-shredding latitude-warp amplitude — lab knob
+      uniform float uWeatherDry;       // subtropical-trough drying subtracted inside the cloud threshold — lab knob
+      uniform vec3  uWeatherOffset;    // 🎲 domain offset — own warp seed, decorrelated from F24's uBandOffset
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -672,6 +682,7 @@
       const int PROV_MASSW       = 21;  // F19 — deposits live where steeps live: the MOUNTAIN-field polarity (talus needs walls to fail)
       const int PROV_BANDS       = 22;  // F24 — neutral (atmosphere, not geology): the FROST-row pattern — a gas deck must not be gated by rock provinces
       const int PROV_JETS        = 23;  // F25 — neutral: the shear dynamics ride the same unprovinced gas deck as PROV_BANDS
+      const int PROV_WEATHER     = 24;  // F26 — neutral (climate, not geology): the FROST-row pattern — latitude circulation must not be gated by rock provinces
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -713,6 +724,7 @@
         else if (fid == PROV_MASSW)      { f = gProvince.x; fl = 0.30; }
         else if (fid == PROV_BANDS)      { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_JETS)       { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_WEATHER)    { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1325,6 +1337,46 @@
         float flank = smoothstep(0.08, 0.20, b) * (1.0 - smoothstep(0.30, 0.42, b));
         disp += uJetFestoon * flank * max(0.0, tn);
         return disp;
+      }
+
+      // ── F26 latitude weather bands (Stage-8 clouds, Bands step 4b — card F26) — the
+      // TERRESTRIAL sibling of F24: an analytic three-lobe latitude bias (transcribed
+      // from production Planet.js:588-610) added INSIDE the existing Stage-8 cloud-FBM
+      // threshold, so wet belts push the FBM over coverage and dry troughs sink below
+      // it. CLOUD LAYER ONLY — the bands are weather OVER a visible ground, never the
+      // surface itself (card §1 — the F24 distinction), and no h/grad writes.
+      // Regression contract: every term sits behind uWeatherStrength > 0.0; at 0 the
+      // threshold input is the raw cw.x — the cloud layer stays byte-identical.
+      float weatherWarpField(vec3 pos){
+        // recursive q/r warp on the F24 bandWarpField PATTERN but a fully independent
+        // instance: own 🎲 seed (uWeatherOffset), own decorrelation constant, and NO
+        // coupling to uBandOffset/uBandStretch — terrestrial fronts must not re-shape
+        // when a gas deck knob moves. Fixed 4 octaves, fwBase 0 ⇒ no LOD fade.
+        vec3 p = pos * 1.6 + uWeatherOffset + vec3(-19.7, 5.3, 23.1);
+        float q = fbmd(p, 4.0, 0.0).x;
+        return fbmd(p + vec3(4.0 * q) + vec3(11.3, -7.1, 3.9), 4.0, 0.0).x;
+      }
+      float weatherLatBias(float lat){
+        // three lobes per the production reference: ITCZ Gaussian (center rides
+        // uWeatherItczShift — the D3 axial-tilt monsoon migration, static in v1),
+        // storm-track Gaussian whose center+width PAIR scales with uWeatherCells
+        // (D8 spin: 3 cells = the Earth 0.55/0.15 curve; fast rotators pull tighter
+        // tracks equator-ward, slow rotators push the track off the disc entirely —
+        // the one-cell Titan/Venus collapse), and a fixed polar smoothstep. The
+        // subtropical clear trough at lat ~0.27 is implicit between the lobes.
+        // sigma 0.11 (production used 0.08): widened for read-through at gallery
+        // distance on a ~500 px posterized disc (live tune 2026-06-10 — at 0.08 the
+        // warped band fell between rows and the ITCZ read as absent).
+        // weight 0.85 (production used 0.6): against the trough-drying term the 0.6
+        // ITCZ delta ran a third of the storm tracks — 0.85 brings the equatorial
+        // band to rough parity (card §6 item 1, the headline read).
+        float itcz = exp(-(lat - uWeatherItczShift) * (lat - uWeatherItczShift) / (2.0 * 0.11 * 0.11)) * 0.85;
+        float cs = 3.0 / max(uWeatherCells, 1.0);
+        float stC = 0.55 * cs;
+        float stW = 0.15 * cs;
+        float stormTrack = exp(-(lat - stC) * (lat - stC) / (2.0 * stW * stW)) * 0.8;
+        float polar = smoothstep(0.65, 0.85, lat) * 0.4;
+        return itcz + stormTrack + polar;
       }
 
       // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
@@ -2443,7 +2495,33 @@
         //    AEOLIAN F40 storm veil wins the upper slot when both active. [domains: Clouds, Aeolian]
         // Clouds (analytic-FBM weather layer — animated via uTime; off plain snoise, onto noised() — Q7).
         vec4 cw = fbmd(vPos * 1.7 + vec3(uTime * 0.02, 0.0, 0.0), 5.0, 0.0);
-        float cloud = smoothstep(0.15, 0.5, cw.x) * uCloudCoverage * (diff + 0.05);
+        // ── F26 latitude weather bands — bias the threshold INPUT (card §6.5 step 5):
+        // wet belts (ITCZ / storm tracks / polar) lift the cloud FBM over the coverage
+        // threshold; the -uWeatherDry term sinks the subtropical troughs below baseline
+        // (clear gaps, card §6 item 2). The latitude input is pre-warped by a
+        // recursive-warp fbm so belt edges shred into fronts, not drawn-on latitude
+        // circles (card §6 item 3). Eyeball switch: tidally-locked retained-atmosphere
+        // worlds reorganize circulation around the substellar point — latCoord mixes
+        // |spin-axis lat| → substellar-angle space via the SHARED vSubstellarAngle
+        // varying (the frost convention). Drift comes free from the cw FBM's existing
+        // uTime term sliding under the static belt envelope — no new time terms.
+        // Density stays lighting-routed via the existing (diff + 0.05) factor below,
+        // so the bands survive the posterize as dither texture (card §6 item 5). At
+        // uWeatherStrength 0 the branch is skipped: bit-identical threshold argument.
+        float cwx = cw.x;
+        if (uWeatherStrength > 0.0){
+          float wLat = mix(abs(normalize(vPos).y),
+                           clamp(vSubstellarAngle / 3.14159265, 0.0, 1.0),
+                           uWeatherLocked);
+          float wLatW = abs(wLat + uWeatherWarp * weatherWarpField(vPos));
+          // provinceWeight(PROV_WEATHER) is NEUTRAL (floor 1.0 — climate, not geology).
+          // 0.65 bias scale (live tune 2026-06-10, was 0.45): the signed fbmd base
+          // spans ~±0.6 against a 0.15..0.5 threshold window, so belts need ~+0.4
+          // to clearly clear it where the base runs low; troughs go negative via
+          // uWeatherDry (belts +0.37, ITCZ +0.24, trough −0.06 at defaults).
+          cwx += uWeatherStrength * provinceWeight(PROV_WEATHER) * (weatherLatBias(wLatW) * 0.65 - uWeatherDry);
+        }
+        float cloud = smoothstep(0.15, 0.5, cwx) * uCloudCoverage * (diff + 0.05);
         vec3 cloudC = vec3(cloud);
         cloudC *= veilTint;   // F16 — suspended dust warms the cloud deck too (pre-posterize)
         cloudC = posterize(cloudC, uLevels, fc, 0.4, uDitherMode);
@@ -2728,6 +2806,13 @@
       uJetTurbFreq:     { value: 3.0 },   // F25 turbulence fbm frequency multiplier vs the band warp — lab knob
       uJetEqWidth:      { value: 0.25 },  // F25 equatorial superrotation Gaussian half-width (trueLat units) — lab knob
       uJetOffset:       { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the turbulence domain)
+      uWeatherStrength: { value: 0.0 },   // F26 master gate (driven: not-gas AND retained, x rain factor); 0 ⇒ byte-identical clouds
+      uWeatherCells:    { value: 3.0 },   // F26 circulation cell count (driven: 72/rotationHours, clamped 1..6; Earth 24 h = 3)
+      uWeatherItczShift:{ value: 0.0 },   // F26 ITCZ equator shift in |lat| units (driven: frostLatitudeBias x 0.25)
+      uWeatherLocked:   { value: 0.0 },   // F26 eyeball coordinate switch (driven: tidally locked AND retained)
+      uWeatherWarp:     { value: 0.3 },   // F26 front-shredding latitude-warp amplitude — lab knob
+      uWeatherDry:      { value: 0.15 },  // F26 subtropical-trough drying inside the cloud threshold — lab knob
+      uWeatherOffset:   { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the warp domain)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2879,6 +2964,13 @@
       jetTurbFreq: 3.0,     // F25 turbulence fbm frequency multiplier (lab knob)
       jetEqWidth: 0.25,     // F25 equatorial jet Gaussian half-width (lab knob)
       jetsEnabled: true,    // F25 enable gate
+      weatherStrength: 0.0, // F26 master gate (driven — rain-composition factor on solid retained-atmosphere worlds, 0 on gas/airless)
+      weatherCells: 3.0,    // F26 circulation cell count (driven: 72/rotationHours, clamped 1..6)
+      weatherItczShift: 0.0,// F26 ITCZ equator shift (driven: frostLatitudeBias x 0.25)
+      weatherLocked: 0,     // F26 eyeball coordinate switch (driven: locked AND retained)
+      weatherWarp: 0.3,     // F26 front-shredding warp amplitude (lab knob)
+      weatherDry: 0.15,     // F26 subtropical-trough drying (lab knob)
+      weatherBandsEnabled: true, // F26 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3049,6 +3141,7 @@
       massWastOffset: [0,0,0],
       bandOffset: [0,0,0],
       jetOffset: [0,0,0],
+      weatherOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -3295,7 +3388,7 @@
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0]; state.karstOffset = [0,0,0];
       state.duneOffset = [0,0,0]; state.dustOffset = [0,0,0]; state.massWastOffset = [0,0,0];
-      state.bandOffset = [0,0,0]; state.jetOffset = [0,0,0];
+      state.bandOffset = [0,0,0]; state.jetOffset = [0,0,0]; state.weatherOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -3434,6 +3527,30 @@
       // 0.40 <= 0.5 local. Jovian 0.297/0.444, Saturnian 0.187/0.247, Neptunian 0.05/0.
       state.jetShearTurb = 0.05 + 0.25 * _vigor;
       state.jetFestoon = 0.45 * _vigor;
+      // ── F26 latitude weather bands — terrestrial circulation (card F26 §6.5 step 6;
+      // derivation HERE per the F11 precedent — core.js untouched). Master gate:
+      // weather bands need a SOLID world holding an atmosphere (not-gas AND retained
+      // — on a gas world the deck IS the surface, F24's job), scaled by how much the
+      // air RAINS: composition factor n2-o2 1.0 / co2-n2 0.5 / co2 0.2 / else 0.
+      // Pre-checked 2026-06-10: Rocky/Ocean/Titan 1.0; Lava/Frozen/Europa (airless)
+      // 0; all three h2-he gas presets 0 — no leakage onto the F24 deck.
+      const _rainFactor = ({ 'n2-o2': 1.0, 'co2-n2': 0.5, 'co2': 0.2 })[_fp.atmosphere?.composition] ?? 0.0;
+      state.weatherStrength = (!_gas && _hadLiquid) ? _rainFactor : 0.0;
+      // Cell count from D8 spin (the Rhines logic at terrestrial scale): faster
+      // rotation multiplies circulation cells — 72/rotationHours clamped 1..6, so
+      // Earth's 24 h derives the canonical 3 (Hadley/Ferrel/polar) and a slow
+      // rotator collapses to 1 (the GLSL pushes its storm track off the disc —
+      // single vague equatorial band, the Titan/Venus regime).
+      state.weatherCells = Math.min(6, Math.max(1, Math.round(72 / _rotH)));
+      // ITCZ shift rides the existing D3 axial-tilt proxy (frostLatitudeBias =
+      // tilt/90): high-obliquity worlds drag the convergence band off the equator.
+      // Static in v1 — seasonal migration is a scope cut (card §6.5 cuts).
+      state.weatherItczShift = u.frostLatitudeBias * 0.25;
+      // Eyeball switch: tidally-locked worlds that KEEP an atmosphere reorganize
+      // circulation around the substellar point. No current preset exercises it
+      // (Lava/Europa are locked but airless) — verify by manual uniform poke,
+      // deferred-to-profiles (card §6.5 step 4).
+      state.weatherLocked = (_fp.tidalState?.locked && _hadLiquid) ? 1 : 0;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -3758,7 +3875,7 @@
     fMassWast.add({ roll(){ state.massWastOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fMassWast.add(state, 'massWastEnabled').name('✓ enabled');
 
-    // ▸ Surface — Bands: the gas-world family (F24 + the F25/F27-F29 features that ride it).
+    // ▸ Surface — Bands: the atmosphere-bands family (gas F24/F25 + the F27-F29 riders + terrestrial F26).
     const fBandsGroup = guiRight.addFolder('Surface — Bands'); fBandsGroup.open();
     // ▸ Zonal belts (F24) — alternating zone/belt luminance bands on gas presets, ALBEDO
     // only. strength/count/contrast/warp/tint are driven (h2-he gate / Rhines spin×disc /
@@ -3785,6 +3902,19 @@
     fJets.add(state, 'jetEqWidth', 0.05, 0.6, 0.01).name('eq jet width');
     fJets.add({ roll(){ state.jetOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fJets.add(state, 'jetsEnabled').name('✓ enabled');
+    // ▸ Weather bands (F26) — terrestrial latitude cloud belts riding the Stage-8
+    // deck: three-lobe latBias (ITCZ / storm tracks / polar) biasing the existing
+    // cloud-FBM threshold. strength/cells/ITCZ shift/locked are driven (rain gate /
+    // D8 spin / D3 tilt / lock state, .listen()); front warp + drying are lab knobs.
+    const fWeather = fBandsGroup.addFolder('Weather bands (F26)'); fWeather.close();
+    fWeather.add(state, 'weatherStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fWeather.add(state, 'weatherCells', 1, 6, 1).name('cells (driven)').listen();
+    fWeather.add(state, 'weatherItczShift', 0, 0.5, 0.01).name('ITCZ shift (driven)').listen();
+    fWeather.add(state, 'weatherLocked', 0, 1, 1).name('locked eyeball (driven)').listen();
+    fWeather.add(state, 'weatherWarp', 0, 1, 0.01).name('front warp');
+    fWeather.add(state, 'weatherDry', 0, 0.3, 0.01).name('trough drying');
+    fWeather.add({ roll(){ state.weatherOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fWeather.add(state, 'weatherBandsEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -3795,6 +3925,7 @@
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
+      weatherBands: fWeather,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4034,6 +4165,16 @@
       uniforms.uJetTurbFreq.value  = state.jetTurbFreq;
       uniforms.uJetEqWidth.value   = state.jetEqWidth;
       uniforms.uJetOffset.value.set(state.jetOffset[0], state.jetOffset[1], state.jetOffset[2]);
+      // F26 weather bands — weatherBandsEnabled gates strength→0 (the whole Stage-8
+      // threshold-bias term keys on uWeatherStrength alone), restoring the byte-identical
+      // baseline cloud layer, preserving the slider value.
+      uniforms.uWeatherStrength.value  = state.weatherBandsEnabled ? state.weatherStrength : 0.0;   // ✓ enable gate
+      uniforms.uWeatherCells.value     = state.weatherCells;
+      uniforms.uWeatherItczShift.value = state.weatherItczShift;
+      uniforms.uWeatherLocked.value    = state.weatherLocked;
+      uniforms.uWeatherWarp.value      = state.weatherWarp;
+      uniforms.uWeatherDry.value       = state.weatherDry;
+      uniforms.uWeatherOffset.value.set(state.weatherOffset[0], state.weatherOffset[1], state.weatherOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
