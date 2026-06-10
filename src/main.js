@@ -6835,11 +6835,17 @@ function simStep(deltaTime) {
         if (warpEffect._swapFired) {
           _fromWorldTrue(_pocketAnchorTrue, warpPortal.group.position);
         }
-        // Run real plane-crossing traversal in every warp phase. The pocket is
-        // human-scale (~60u, Task 2) so the camera physically crosses Portal A
-        // (entry), cruises INSIDE, and crosses Portal B (emergence). No forced
-        // INSIDE, no per-frame pin — the 4285602 choreography-killers are gone.
-        warpPortal.updateTraversal(camera, { forwardSpeed: warpEffect.cameraForwardSpeed, state: warpEffect.state });
+        // Plane-crossing traversal detection MOVED to renderFrame (entry-flash
+        // fix, 2026-06-10). It used to run here, but simStep ticks at 60Hz
+        // while the camera the player SEES is interpolated per render frame
+        // (240Hz on Max's display) — so the rendered camera crossed Portal A's
+        // plane up to ~4 render frames before this tick flipped the mode. Those
+        // frames rendered OUTSIDE_A (stencil ON) with the stencil disc behind
+        // the camera → empty stencil mask → tunnel invisible → 1-4 frames of
+        // raw origin sky ("a little flash where the tunnel disappears", Max
+        // UAT 2026-06-10; confirmed frame-aligned via live capture). Detection
+        // now runs after camera interpolation so the mode/stencil flip lands
+        // on the same frame that renders the crossing.
         // AC8 close-tween: once the emergence crossing starts the close (during
         // EXIT), shrink+fade the tunnel each frame. The close spans EXIT (~2s) +
         // ~1s of post-warp coast, so it's also driven in the post-warp else block.
@@ -7679,6 +7685,20 @@ function renderFrame(alpha) {
     // reticle, scene render, and any same-frame projection consumers all
     // see the same camera state.
     camera.updateMatrixWorld(true);
+  }
+
+  // ── Dual-portal traversal detection (entry-flash fix, 2026-06-10) ──
+  // Runs HERE, not in simStep: the traversal mode drives RENDER state (the
+  // tunnel's stencil mask), so it must track the camera the renderer is
+  // about to draw — the alpha-blended one set just above — at render
+  // cadence. At sim cadence (60Hz) the interpolated camera crossed Portal
+  // A's plane up to one sim tick before the mode flipped; those frames
+  // drew stencil-ON with the disc behind the camera (empty mask → tunnel
+  // invisible → origin-sky flash at entry). The INSIDE flip's onSwapSystem
+  // side effects are unaffected: its teleport runs in a microtask after
+  // this whole rAF task, so it still lands atomically between frames.
+  if (warpEffect.isActive && _useDualPortal) {
+    warpPortal.updateTraversal(camera, { forwardSpeed: warpEffect.cameraForwardSpeed, state: warpEffect.state });
   }
 
   // ── Render-classified subsystem updates (migrated from simStep Phase 3) ──
