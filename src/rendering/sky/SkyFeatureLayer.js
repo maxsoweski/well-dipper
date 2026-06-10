@@ -1273,6 +1273,16 @@ export class SkyFeatureLayer {
   // ── Utility ──
 
   _hashSeed(seedStr) {
+    // Fail soft on a missing seed: a throw here runs inside the warp-swap
+    // pipeline (skyRenderer.activate → setFeatures), and aborting that
+    // strands the destination with no sky/starfield. Producers should never
+    // send a falsy seed (pinned in tests/known-object-feature-seed.test.js)
+    // — warn so a regression is visible, but keep the sky alive.
+    if (seedStr == null) {
+      console.warn('[SkyFeatureLayer] feature with missing seed — using fallback hash');
+      seedStr = 'missing-seed';
+    }
+    seedStr = String(seedStr);
     let h = 0;
     for (let i = 0; i < seedStr.length; i++) {
       h = ((h << 5) - h + seedStr.charCodeAt(i)) | 0;

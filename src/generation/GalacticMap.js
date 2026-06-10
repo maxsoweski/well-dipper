@@ -1544,7 +1544,11 @@ export class GalacticMap {
           type: profile.type,
           position: { x: pos.x, y: pos.y, z: pos.z },
           radius: profile.radius,
-          seed: profile.messier || profile.ngc,
+          // Catalog key fallback: IC-/named-only objects (IC1396, IC434,
+          // CasA, IC2602) have null messier AND ngc — a null seed crashes
+          // SkyFeatureLayer._hashSeed mid-warp-swap (see
+          // tests/known-object-feature-seed.test.js).
+          seed: profile.messier || profile.ngc || key,
           color: [...profile.colorPrimary],
           knownProfile: profile,
           isKnownObject: true,
