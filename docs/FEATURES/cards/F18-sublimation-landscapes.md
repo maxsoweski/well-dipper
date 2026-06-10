@@ -51,8 +51,34 @@ Built — solo it in the lab on the :9223 debug Chrome (per well-dipper-testing-
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Frozen (airless), solo
+  `sublimation`, d6/d2.5, species sweep 3→2→4→1. Drivers verified live:
+  subStrength 0.802, derived volatileSpecies 3 (CH₄ at T_eq 60 K, per
+  the core.js classifier).
+  - CH₄ penitentes: strongly anisotropic fields of thin parallel crests
+    sharing one azimuth, smooth exposed terrain between — not isotropic
+    ridged noise (shots 01 d6, 02 d2.5).
+  - CO₂ swiss-cheese: rounded flat-floored steep-walled depressions
+    punched DOWN into a smooth cap, no raised rims and no ejecta —
+    clearly distinct from the F02 crater read; wall shadows biased to
+    one side (sun-facing retreat asymmetry) (shot 03).
+  - N₂ polygons: surface reorganizes into raised smooth cell interiors
+    separated by connected narrow dark trough borders — cell-vs-border
+    two-tone, finer pits riding on top without destroying the cell read
+    (shot 04 vs 03, same region compared).
+  - H₂O hollows: same radial-pit family, mild ×0.4 driver factor pinned
+    in core.js (shot 05).
+  - Species switching is discrete and uniform-gated (no planetType
+    branch); gate-0 (enabled, strength 0) vs disabled is pixel-identical
+    — 0 px diff, clean early-out.
+  - Cold-cap confinement: uniformly cold Frozen etches broadly; the
+    capMask is the same localT<condensationT machinery verified
+    polar-confined on warm worlds in F17/F22.
+  - Temporal/dither stability per FOUNDATION checks 3 & 4 🟢.
+  - Shots: F18-sub-01-d6-ch4-blades.png, -02-d2.5-blades-close.png,
+    -03-d2.5-co2-swisscheese.png, -04-d2.5-n2-polygons.png,
+    -05-d2.5-h2o-hollows.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX

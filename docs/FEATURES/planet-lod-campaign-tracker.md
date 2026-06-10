@@ -39,7 +39,7 @@ during phases) | ▶️ = current
 | F10 | [F10-ridged-icy-terrain](cards/F10-ridged-icy-terrain.md) | Relief | ✅ | 🟢 | 3 |
 | F11 | [F11-river-networks](cards/F11-river-networks.md) | Fluvial | ✅ | 🟢 | 3 |
 | F17 | [F17-glacial-landforms](cards/F17-glacial-landforms.md) | Cryo | ✅ | 🟢 | 3 |
-| F18 | [F18-sublimation-landscapes](cards/F18-sublimation-landscapes.md) | Cryo | ✅ | — | 3 |
+| F18 | [F18-sublimation-landscapes](cards/F18-sublimation-landscapes.md) | Cryo | ✅ | 🟢 | 3 |
 | F22 | [F22-polar-caps-frost](cards/F22-polar-caps-frost.md) | Cryo | ✅ | — | 3 |
 | F23 | [F23-snowline](cards/F23-snowline.md) | Cryo | ✅ | — | 3 |
 | F12 | [F12-deltas-fans](cards/F12-deltas-fans.md) | Fluvial | ⬜ | — | 4a |
