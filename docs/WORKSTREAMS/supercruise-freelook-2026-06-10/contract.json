@@ -1,0 +1,129 @@
+{
+  "workstream": "supercruise-freelook-2026-06-10",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Movement-system replacement. Clone Elite Dangerous supercruise as the starting point for ALL in-system motion (Max's scope pick: post-warp fly-in + tour legs + COMMIT BURN transit), rewire the autopilot to drive it, add Elite-style hold-to-look freelook. One flight model, two drivers (autopilot / player). Ship transform and head/camera mount separated from day one so the near-future cockpit attaches without motion rework. Arrival keeps today's shaking-fast-decel beat (accel the inverse) ported onto the new model. AutopilotMotion and FlythroughCamera's motion role retire. Integration seam: warpRevealSystem nav handoff (main.js ~5510, per docs/superpowers/specs/2026-06-10-warp-arrival-billboard-distance-design.md). Out of scope: cockpit visual, world-origin rebasing, time dilation, wide binaries, warp-tunnel changes.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-supercruise-flight-model",
+      "statement": "The supercruise flight model, cloned from Elite as the starting point: the ship always advances along its nose vector; throttle sets target speed; max speed scales with distance from massive bodies (crawl near a planet, enormous in deep space); acceleration/deceleration is heavy and smooth (no instant speed changes); turn rate is capped and tightens as speed rises.",
+      "verifyVia": {
+        "input": "Headless Vitest suite driving the flight model in isolation: step the model with fixed throttle/steering inputs near a massive body vs in deep space; step turn inputs at low vs high speed.",
+        "observable": "Position delta is always along the nose vector; speed asymptotically approaches the throttle-set target (bounded accel, no step change); the gravity-well speed cap is monotonically increasing with distance from the dominant body; achieved turn rate never exceeds the cap and the cap at high speed is lower than at low speed."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-ship-head-separation",
+      "statement": "Player movement is independent of the freelook system, and the systems allow for the future cockpit inclusion: the ship entity transform is the single authoritative source of motion; the camera/head is a mount deriving from it; freelook writes only to the mount, never to the ship.",
+      "verifyVia": {
+        "input": "Headless test: fly the model on a fixed trajectory while applying freelook input to the head mount; then a cockpit-attachment probe — parent a dummy object to the ship transform.",
+        "observable": "Ship trajectory (position + heading series) is bit-identical with and without freelook input; the dummy 'cockpit' object tracks ship position+orientation exactly while the head mount rotates independently of both."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-manual-piloting",
+      "statement": "Manual piloting works in the running game: mouse acts as a virtual joystick (deflection from center = pitch/yaw turn rate, capped) with an on-screen indicator; W/S set throttle (Elite convention); the player can fly to a body, decelerate into the drop window, and arrive — coming in too hot overshoots.",
+      "verifyVia": {
+        "input": "Live (GPU 9223 chrome-devtools, per memory/well-dipper-testing-reference.md): take manual control, inject synthetic mouse/keyboard input to fly toward a planet — one approach inside the drop window, one deliberately too fast.",
+        "observable": "Ship turns at a rate proportional to mouse deflection (capped); throttle responds to W/S; the in-window approach ends in arrival at the body (orbit/idle behavior engaged at the expected capture distance); the too-hot approach overshoots (passes the body without capture); HUD joystick indicator tracks the injected deflection."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-freelook",
+      "statement": "Freelook, basically like Elite: holding the freelook control swings the view freely while the ship keeps flying its line; releasing recenters the view forward.",
+      "verifyVia": {
+        "input": "Live: during supercruise flight (autopilot or manual), hold the freelook control and inject mouse movement; release; sample ship heading, ship trajectory, and camera orientation per frame throughout.",
+        "observable": "While held: camera orientation diverges from ship heading by the injected amount while ship velocity direction and trajectory are unchanged versus a no-freelook control run; on release: camera orientation returns to ship-forward (eased recenter), ending aligned within tolerance."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-autopilot-rewired",
+      "statement": "The autopilot is rewired to drive the supercruise system in place of what's there today: the post-warp fly-in, the system-tour legs between bodies, and the nav-computer COMMIT BURN transit are all flown by the autopilot working the same throttle/steering/drop controls a player would. AutopilotMotion and FlythroughCamera's motion role are retired from the live path.",
+      "verifyVia": {
+        "input": "Live: (a) warp to a fresh system and let the tour run through ≥2 stops; (b) trigger COMMIT BURN to a planet via the nav computer. Instrument which mover writes camera/ship position each frame.",
+        "observable": "Every in-system motion frame is written by the supercruise ship entity (autopilot inputs visible on the model: throttle/turn commands within the same caps as manual); zero frames written by AutopilotMotion or FlythroughCamera travel during fly-in, tour legs, and COMMIT BURN; each leg ends with the drop/arrival behavior at the target body."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-arrival-beats-ported",
+      "statement": "Today's felt beats survive on the new model: arrival is a shaking, fast decel; acceleration is the inverse. Departure ramps with shake, arrival decelerates hard with shake, cruise between is smooth.",
+      "verifyVia": {
+        "input": "Live: ride one autopilot tour leg end-to-end; sample speed and the camera-shake driver state per frame.",
+        "observable": "Speed profile shows a steep (but continuous) decel into arrival and the mirrored ramp on departure; the shake driver is active during the accel and decel windows and quiescent mid-cruise."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-hud",
+      "statement": "Minimal screen-space HUD: speed readout, throttle indicator, virtual-joystick reticle, and a target marker with the drop window — present and tracking live state during supercruise (screen-space, so it survives the future cockpit swap).",
+      "verifyVia": {
+        "input": "Live: during manual flight with a locked target, inject throttle and steering changes; read the HUD DOM/canvas elements and the flight-model state each frame.",
+        "observable": "HUD speed equals model speed; throttle indicator equals commanded throttle; joystick reticle position equals current mouse deflection; target marker tracks the target's screen position and the drop-window state (in-window vs too-fast) matches the model's."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-screensaver-loop-no-regression",
+      "statement": "Nothing the screensaver does today regresses: title → warp → arrival at billboard distance → autopilot tour → auto-warp loops unattended across systems; Toy Box mode and the mobile always-Toy-Box constraint are untouched.",
+      "verifyVia": {
+        "input": "Live: from a fresh load, let the loop run unattended across ≥2 complete system visits (tour + auto-warp); separately verify Toy Box orbit/zoom on a focused body and the isMobile constructor constraint (headless for the constraint).",
+        "observable": "Both auto-warps complete with the destination star(s) in billboard LOD at emergence (system.star billboard visible, per the shipped arrival-distance invariant); both tours complete and re-warp without input; no AC4/AC5 portal warnings and no new console errors; Toy Box drag/zoom behavior unchanged; mobile path still forces TOY_BOX."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-holistic-elite-feel",
+      "statement": "Flying it manually and watching the autopilot fly it, the whole thing reads as Elite supercruise: pointing the nose with the mouse feels like Elite's virtual stick, the gravity-well slowdown near bodies feels right, freelook feels like Elite's headlook, the shaking accel/decel beats land, and the screensaver tour looks at least as good as before.",
+      "verifyVia": {
+        "input": "Max flies: takes manual control, cruises to a planet, drops out; overshoots once on purpose; uses freelook mid-flight; then hands off and watches the autopilot run a full tour + auto-warp.",
+        "observable": "Holistic acceptance — does this cohere as the Elite-style flight experience Max wanted. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "warpRevealSystem nav handoff (src/main.js ~5510) — the designated supercruise integration seam: where post-warp motion authority transfers to the new system (per the 2026-06-10 arrival-distance spec)",
+      "StarFlare.billboardSwitchDistance arrival-distance computation (shipped 04d3437) — KEPT; sets the post-warp starting range the supercruise fly-in begins from",
+      "AutoNavigator tour queue (src/auto/AutoNavigator.js) + autoNav.onTourComplete (main.js ~1971) — KEPT as the target source / loop driver; only the motion underneath changes",
+      "AutopilotMotion (src/auto/AutopilotMotion.js) and FlythroughCamera (src/auto/FlythroughCamera.js) travel role — the movers being REPLACED; their arrival shake/fast-decel treatment is the felt-beat reference to port (AC6)",
+      "commitBurn() handler (main.js ~5744) + NavComputer COMMIT BURN UI — rewired to dispatch a supercruise leg instead of FlythroughCamera travel",
+      "ShipCameraSystem (src/camera/ShipCameraSystem.js) — camera-mode owner (TOY_BOX/FLIGHT, isMobile constraint, persistence); supercruise becomes the flight-side drive; existing look-offset machinery is raw material for the freelook mount",
+      "FlightDynamics (src/flight/FlightDynamics.js) — existing untested ship-physics module; evaluate as substrate vs supersede during planning",
+      "System body positions + radii (gravity-well speed-cap curve needs the dominant-body distance each frame)",
+      "Settings/input plumbing in main.js (keydown/mouse handlers, autopilot-interrupt rules: input takes control immediately)"
+    ],
+    "outputs": [
+      "A supercruise flight model module (ship entity: position/orientation/velocity, throttle, capped turn rate, gravity-well speed cap, heavy accel curves) — the single authoritative source of in-system motion, headless-testable (AC1)",
+      "A head/camera mount transform parented to the ship transform — freelook writes here only; the future cockpit attaches to the ship transform (AC2)",
+      "An autopilot driver that works the same controls a player would (throttle/steer/drop) to fly tour legs, the post-warp fly-in, and COMMIT BURN legs (AC5)",
+      "Manual input layer: mouse virtual joystick (deflection→turn rate) + W/S throttle + hold-to-look freelook binding (AC3/AC4)",
+      "Minimal screen-space HUD: speed, throttle, joystick reticle, target marker with drop window (AC7)",
+      "Retirement of AutopilotMotion + FlythroughCamera's motion role from the live path (removed or explicitly quarantined), with their tests updated",
+      "Ported arrival/departure shake + fast-decel treatment driven by the new model's accel/decel state (AC6)"
+    ],
+    "mustStayWorking": [
+      "The warp tunnel pipeline identity (FOLD/ENTER/HYPER/EXIT, portal traversal state machine, pocket rig) — this arc takes over only AFTER the warpRevealSystem handoff; the pocket-traversal contract's AC1–AC10 invariants hold, especially AC10 (swap stays INSIDE-occluded — it explicitly protects 'future camera/movement changes')",
+      "Billboard-distance arrival (star(s) in billboard LOD at emergence, both warp paths, binaries take max+sep) — shipped 2026-06-10, UAT-passed",
+      "Toy Box camera mode (drag orbit, scroll zoom) + mobile always-Toy-Box constraint + cameraMode persistence",
+      "NavComputer selection/drill-down/ENGAGE flow and seed-targeted warps (only the motion behind COMMIT BURN changes, not the UI or warp dispatch)",
+      "World-origin rebasing semantics for celestial bodies and the resetWorldOrigin-on-spawn wiring — the new mover must go through the same rebased-frame conventions (the spawn-once-body-centering class of bug)",
+      "Default-mute + Sound Enabled session checkbox (19134e9); system music scheduling hooked in warpRevealSystem",
+      "Targeting reticle and warp-landing-strip behavior (the latter separately UAT-pending at e31ee65) — unchanged",
+      "Autopilot-interrupt convention: player input takes control immediately, position/velocity preserved (no snap)",
+      "Existing test suites stay green except those that encode the retired movers' motion (rewrite alongside, per AC5); known pre-existing failures (KnownObjects ×3, GalacticFeatures ×1, vendor runner-mismatch) are not ours"
+    ]
+  }
+}
