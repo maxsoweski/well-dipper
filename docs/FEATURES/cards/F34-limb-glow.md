@@ -44,6 +44,41 @@ Built — isolate on :9223 (see chrome-devtools-9223-launch + well-dipper-testin
 - [ ] At close distance (~2.5 radii) does the limb arc stay a coherent curved band at the frame edge instead of flooding the view?
 - [ ] Variant spread (currently a known gap): does a Titan-class world read thicker/hazier at the limb than an Earth-like, and does the rim hue read as atmosphere color rather than just brightened surface color?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: keep the analytic fresnel core (§4's [survives] pick) but make it
+driver-true and registered; absorb the parked F31e detached-haze-shell
+companion as a cheap enlarged back-face shell pass for thick-haze worlds.
+
+1. **Register as a feature** — `limb` entry in planet-archetypes.js FEATURES
+   + `featureFolders` + `limbEnabled` state default true + GUI folder
+   "Limb glow" (driven sliders `.listen()`, ✓ enable LAST): limbStrength,
+   limbExponent, limbHazeShell, limb-bypass toggle. MIGRATE the two existing
+   Envelope-folder limb controls into this folder (no duplicate GUI).
+2. **Driver-true rim** — new uniforms `uLimbColor` (vec3), `uLimbExponent`
+   (float); shader keeps geometric-N fresnel but
+   `pow(1.0 - max(dot(N,V),0.0), uLimbExponent) * uLimbStrength * (diff+0.15)`,
+   tinted `uLimbColor` (not uBaseColor). Posterize/bypass path unchanged.
+3. **applyDrivers derivation** (post-process; core.js OFF-LIMITS): keep
+   derived hasAtmo gate; thin/clear atmosphere → exponent ~3.5 (narrow blue
+   line); thick-haze class (Titan / Venus / Sub-Neptune hazeMute>0) →
+   exponent ~1.8 + strength ×1.3 (fat halo). `limbColor` from a small
+   per-preset/archetype map in applyDrivers (Earth-blue temperate/ocean,
+   Titan orange, Venus pale sulfur, ice-giant blue…) — fallback uBaseColor.
+4. **F31e companion shell** — second back-face sphere mesh (scale ~1.04,
+   additive, depthWrite false) whose fresnel is quantized into 1–2 concentric
+   arcs, color uLimbColor, intensity `limbHazeShell` derived >0 ONLY for
+   thick-haze worlds (0 default). Enable-gated per frame with the rim.
+5. **Gates** — limbEnabled false OR airless ⇒ uLimbStrength 0 + shell
+   invisible (Frozen/Lava negative control stays hard-edged).
+6. **Registry plumbing per F32/F33 exemplar** (`e5e9a45`): PROVINCES affinity
+   row + PROV_LIMB id (next free: 32) + provinceWeight row + GLSL_NAME vitest
+   line.
+
+v1 scope cuts (logged, not built): raymarched scattering (LOD2 ladder rung 3);
+day/twilight hue mix vs sun (F35 terminator-gradient owns sun-hue coupling);
+>2 detached shell layers; Pluto backlit phase-function boost.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
