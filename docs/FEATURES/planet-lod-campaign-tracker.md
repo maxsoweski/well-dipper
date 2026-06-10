@@ -13,8 +13,8 @@ during phases) | ▶️ = current
 
 | Phase | Goal | Status |
 |---|---|---|
-| 1 Research fan-out (Workflow, not /goal) | 48 dossier cards committed | ▶️ pending |
-| 2 Foundation | FOUNDATION.md verdicted | pending |
+| 1 Research fan-out (Workflow, not /goal) | 48 dossier cards committed | ✅ 2026-06-09 |
+| 2 Foundation | FOUNDATION.md verdicted | ▶️ pending |
 | 3 Refine built (15 cards) | all §7 verdicts + galleries | pending |
 | 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | pending |
 | 4b Build atmosphere (10) | F24-F33 verdicted | pending |
