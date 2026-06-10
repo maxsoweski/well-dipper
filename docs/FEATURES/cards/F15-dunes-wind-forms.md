@@ -46,6 +46,43 @@ Unbuilt — recommended recipe once built: (1) add a FEATURES entry in planet-ar
 - [ ] If wind streaks are included, do they read as faint one-directional albedo tails behind craters/obstacles, all agreeing with the dune grain direction, without breaking the posterize discipline?
 - [ ] Does soloing the feature leave the base sphere unchanged where sand coverage is zero (regression-safe, like frostCover=0 ⇒ uBaseColor unchanged)?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — linear ergs v1, closed-form)
+
+1. **`duneCombiner(pos, h, grad)` (Stage-5 aeolian slot)** — called after karstCombiner, before
+   the F12 delta pass (dunes are a deposit; deltas/sea read the final surface). Early-out
+   `uDuneDensity <= 0.0` first statement. Pure relief + analytic grad; NO albedo in v1.
+2. **Wind frame + phase**: zonal wind (D8) ⇒ linear dunes run E-W; the across-wind coordinate
+   is latitude `lat = pos.y` (unit-sphere pos; the §3.2 banding trick re-aimed). Ridge phase
+   `ph = lat·uDuneFreq + warp`, warp = low-freq noised() (hash-warped threading, Shangri-La
+   read). Keep the wind frame locally constant in the gradient (cosmetic-grad convention);
+   the phase derivative is exact: `d(ph)/dpos = uDuneFreq·(0,1,0) + dwarp`.
+3. **Asymmetric sawtooth profile** on `t = fract(ph)`: long stoss ramp rising over t∈[0,0.72]
+   (`smoothstep(0,0.72,t)`), steep slip face dropping over t∈[0.72,1] (`1−smoothstep(0.72,1,t)`)
+   — product form `ridge = up·down` with exact piecewise derivative through fract (d(fract)=1
+   a.e.; the jump at t=1 lands where ridge=0 so no lighting seam). Height `+= uDuneAmp · ridge ·
+   sand`, grad chain-ruled through d(ridge)/dt·d(ph)/dpos.
+4. **Sand-supply mask** `sand` = lowGround mix (deposits pool in basins — reuse the F11
+   lowGround pattern on entry h) × gentle-slope gate on entry |grad| (sand doesn't hang on
+   cliffs) × optional equatorial belt `mix(1, 1−smoothstep(0.25, 0.6, |lat|), uDuneBelt)`
+   (Titan belts) × uDuneDensity × provinceWeight(PROV_DUNES). §6 item 7: sand=0 ⇒ base
+   untouched.
+5. **Province**: PROV_DUNES = 19, `f = 1.0 - gProvince.x; fl = 0.30;` (old stable plains — the
+   crater-field polarity; Mars barchans live among craters) + PROVINCES.dunes
+   { field: 0, polarity: -1, floor: 0.30 }.
+6. **Registration + drivers**: FEATURES `dunes: { label: 'Dunes & wind forms (F15)', enableKey:
+   'dunesEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] }` (card §5); GUI folder
+   under Surface — Gradational per the F13/F21 pattern (driven .listen() sliders, 🎲 seed for
+   the warp offset, ✓ enabled last); deriveUniforms: duneDensity = atmosphere-retained gate ×
+   smoothstep on pressure (D5 — grains need air) × dryness (1 − liquidStability driven value);
+   duneBelt default ~0.5. Look at how uLiquidStability and pressure are derived and mirror.
+7. **Tuning pre-check (F13/F21 lesson)**: reason about coverage + amplitude vs the posterize
+   BEFORE settling defaults — ridge spacing must be several pixels at d4 (uDuneFreq ~30-60 on
+   unit lat), amp well under fluvialDepth (dunes are subtle), and verify low-relief presets
+   (Titan) actually pass the masks (absolute-h thresholds bit F21).
+8. **v1 scope cuts (flagged)**: linear dunes only — barchan crescents, star dunes, and the
+   wind-variability dispatch deferred; yardangs/ventifacts deferred; wind streaks (the albedo
+   exception) deferred.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
