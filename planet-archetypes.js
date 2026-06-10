@@ -21,6 +21,7 @@ export const FEATURES = {
   rivers:     { label: 'Rivers & valleys (F11)',enableKey: 'riversEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold'] },
   lakes:      { label: 'Lakes & seas (F14)',    enableKey: 'lakesEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
   deltas:     { label: 'Deltas & fans (F12)',   enableKey: 'deltasEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold'] },
+  coastlines: { label: 'Coastlines (F20)',      enableKey: 'coastEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -64,4 +65,5 @@ export const PROVINCES = {
   frost:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — climate, not geology
   lakes:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — hydrology (level-set), not geology
   deltas:     { field: 2, polarity: -1, floor: 0.30 },  // river products — same lowlands affinity as rivers
+  coastlines: { field: 2, polarity: +1, floor: 1.00 },  // neutral — margins live wherever the sea is, like lakes/frost
 };

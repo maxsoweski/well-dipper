@@ -603,6 +603,7 @@
       const int PROV_FROST       = 13;
       const int PROV_LAKES       = 14;  // F14 — neutral (hydrology, not geology), like FROST
       const int PROV_DELTAS      = 15;  // F12 — river products, same lowlands affinity as RIVERS
+      const int PROV_COAST       = 16;  // F20 — neutral (margins live wherever the sea is), like LAKES/FROST
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -636,6 +637,7 @@
         else if (fid == PROV_FROST)      { f = gProvince.z;       fl = 1.00; }
         else if (fid == PROV_LAKES)      { f = gProvince.z;       fl = 1.00; }
         else if (fid == PROV_DELTAS)     { f = 1.0 - gProvince.z; fl = 0.30; }
+        else if (fid == PROV_COAST)      { f = gProvince.z;       fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1636,6 +1638,11 @@
         // F14 standing-liquid coverage — set by the Stage-4 level-set cut (analytic branch),
         // consumed at Stage 6 (liquid albedo fill) + implicitly by spec (flat normal = glint).
         float liquidMask = 0.0;
+        // F20 coastline luminance signals — set by the shore-distance block (analytic branch),
+        // consumed at Stage 6 (beach band / cliff darkening / strandline albedo terms).
+        float beachBand  = 0.0;
+        float cliffDark  = 0.0;
+        float strandLine = 0.0;
         if (uNormalMode == 1){
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
@@ -1679,6 +1686,39 @@
             liquidMask = smoothstep(uSeaLevel + 0.02, uSeaLevel - 0.02, h) * provinceWeight(PROV_LAKES);
             h    = mix(h, uSeaLevel, liquidMask);
             grad = mix(grad, vec3(0.0), liquidMask);
+          }
+          // ── F20 coastlines (card §6.5) — signed shore distance + three pre-posterize
+          // luminance signals, computed AFTER the F14 cut (the land side is untouched by
+          // the cut, so h/grad here still carry the land-side field; the liquid side is
+          // masked out via 1-liquidMask) and BEFORE perturbAnalytic. The SDF-from-implicit-
+          // function trick (card §4): d = (h − uSeaLevel)/|∇h| converts the height margin
+          // into a true geometric shore distance — beach width auto-widens on flats and
+          // collapses to a cliff line on steeps. All three signals are albedo/luminance
+          // only (v1 scope cut, card §6.5.6: strandlines are NOT relief benches; dry-world
+          // relict shorelines deferred — v1 coasts require a live sea). Consumed at Stage 6.
+          // provinceWeight(PROV_COAST) is NEUTRAL (floor 1.0 — margins live wherever the
+          // sea is, like lakes/frost).
+          if (uSeaLevel > -1.0 && uCoastStrength > 0.0){
+            float slope  = length(grad);
+            float d      = (h - uSeaLevel) / max(slope, 0.15);   // signed shore distance
+            float gentle = 1.0 - smoothstep(0.5 * uCoastCliffSlope, uCoastCliffSlope, slope);
+            float coastW = uCoastStrength * provinceWeight(PROV_COAST) * (1.0 - liquidMask);
+            // (a) beach band — 0 < d < uBeachWidth on gentle shores (wave-built terrace)
+            beachBand = smoothstep(0.0, 0.3 * uBeachWidth, d)
+                      * (1.0 - smoothstep(0.7 * uBeachWidth, uBeachWidth, d))
+                      * gentle * coastW;
+            // (b) cliff darkening — wave-cut face: near-shore (|d| small) × steep slope
+            cliffDark = (1.0 - smoothstep(0.0, 2.0 * uBeachWidth, abs(d)))
+                      * (1.0 - gentle) * coastW;
+            // (c) paleo-strandlines — thin bright lines at d ≈ k·uTerraceStep (k = 1..3),
+            // the Bonneville terrace-flight read; older (higher) lines fade with k.
+            for (int k = 1; k <= 3; k++){
+              float fk = float(k);
+              strandLine += (1.0 - smoothstep(0.0, 0.15 * uTerraceStep,
+                                              abs(d - fk * uTerraceStep)))
+                          * pow(0.7, fk - 1.0);
+            }
+            strandLine *= gentle * uStrandStrength * coastW;
           }
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
@@ -1728,6 +1768,16 @@
         // fluvialWet=0 ⇒ unchanged. Kept subtle so it reads as a floor darkening through posterize.
         vec3 fluvTint = (uLiquidSpecies == 1) ? vec3(0.30, 0.22, 0.10) : vec3(0.10, 0.14, 0.24);
         albedoCol = mix(albedoCol, fluvTint, clamp(fluvialWet, 0.0, 1.0) * 0.35 * uFluvialDensity);
+        // F20 coastlines — three pre-posterize luminance terms (card §6.5 step 3). Beach
+        // mixes toward a species-keyed band: water → pale sand, methane → dark tholin
+        // shore (card §6: NO bright water-world beach on Titan); frost wins over beach
+        // where cold (same phase logic as the F14 liquid fill — snow buries the strand).
+        // Cliff multiplies albedo DOWN (a wave-cut face reads dark at any hue);
+        // strandlines brighten faintly. All luminance — survives the posterize.
+        vec3 beachCol = (uLiquidSpecies == 1) ? vec3(0.13, 0.09, 0.05) : vec3(0.78, 0.70, 0.52);
+        albedoCol = mix(albedoCol, beachCol, beachBand * (1.0 - frostCover));
+        albedoCol *= 1.0 - 0.45 * cliffDark;
+        albedoCol += vec3(0.10) * strandLine;
         vec3 surface = posterize(min(albedoCol * (diff + ambient) + uBaseColor * rayBright, vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
@@ -1964,6 +2014,11 @@
       uDeltaDensity:    { value: 0.0 },   // F12 deposition gate (driven: fluvialDensity × activity); <= 0 early-outs
       uDeltaAmp:        { value: 0.06 },  // F12 apron amplitude — lab knob
       uDeltaApronH:     { value: 0.12 },  // F12 apron band height above base level — lab knob
+      uCoastStrength:   { value: 0.0 },   // F20 master gate (driven: 1 when a sea exists); <= 0 ⇒ early-out
+      uBeachWidth:      { value: 0.04 },  // F20 beach band width in shore-distance units — lab knob
+      uCoastCliffSlope: { value: 1.2 },   // F20 |grad| above which the shore reads as cliff — lab knob
+      uTerraceStep:     { value: 0.06 },  // F20 strandline spacing in shore-distance units — lab knob
+      uStrandStrength:  { value: 0.0 },   // F20 paleo-strandline visibility (driven: erosion history)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2057,6 +2112,12 @@
       deltaAmp: 0.06,       // F12 apron amplitude
       deltaApronH: 0.12,    // F12 apron band height
       deltasEnabled: true,  // F12 enable gate
+      coastStrength: 0.0,   // F20 master gate (driven; 1 when a sea exists)
+      beachWidth: 0.04,     // F20 beach band width (shore-distance units)
+      coastCliffSlope: 1.2, // F20 |grad| above which the shore reads as cliff
+      terraceStep: 0.06,    // F20 strandline spacing (shore-distance units)
+      strandStrength: 0.0,  // F20 paleo-strandline visibility (driven)
+      coastEnabled: true,   // F20 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2482,6 +2543,12 @@
       // ── F12 deltas & fans — deposition tracks the channel network: density × activity
       // (active worlds sharp lobes, relict Mars-like worlds subdued fans; zero without rivers).
       state.deltaDensity = state.fluvialDensity * (0.5 + 0.5 * state.fluvialActivity);
+      // ── F20 coastlines — active margins exist wherever F14 holds a standing sea (the
+      // same gate: seaLevel > -1 ⇔ _wet && coverage > 0). Paleo-strandlines record wave
+      // work over time, ∝ surfaceHistory.erosion (fresh worlds get no terrace flight);
+      // v1 scope: no live sea ⇒ no coast (dry-world relict shorelines deferred, card §6.5.6).
+      state.coastStrength  = state.seaLevel > -1.0 ? 1.0 : 0.0;
+      state.strandStrength = _clamp01(_erosion);
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -2727,6 +2794,17 @@
     fDeltas.add(state, 'deltaApronH', 0.02, 0.4, 0.01).name('apron band height');
     fDeltas.add(state, 'deltasEnabled').name('✓ enabled');
 
+    // ▸ Coastlines (F20) — shore-distance margins on the F14 sea: beach band, cliff
+    // darkening, paleo-strandline terraces. strength/strandlines are driven
+    // (sea gate / erosion history, .listen()); width/slope/step are shape knobs.
+    const fCoast = fGrad.addFolder('Coastlines (F20)'); fCoast.close();
+    fCoast.add(state, 'coastStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fCoast.add(state, 'beachWidth', 0.005, 0.15, 0.005).name('beach width');
+    fCoast.add(state, 'coastCliffSlope', 0.2, 3, 0.05).name('cliff slope');
+    fCoast.add(state, 'terraceStep', 0.02, 0.2, 0.005).name('terrace step');
+    fCoast.add(state, 'strandStrength', 0, 1, 0.01).name('strandlines (driven)').listen();
+    fCoast.add(state, 'coastEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -2734,7 +2812,7 @@
       scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
-      deltas: fDeltas,
+      deltas: fDeltas, coastlines: fCoast,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -2904,6 +2982,11 @@
       uniforms.uDeltaDensity.value = state.deltasEnabled ? state.deltaDensity : 0.0;   // ✓ enable gate
       uniforms.uDeltaAmp.value = state.deltaAmp;
       uniforms.uDeltaApronH.value = state.deltaApronH;
+      uniforms.uCoastStrength.value = state.coastEnabled ? state.coastStrength : 0.0;   // ✓ enable gate
+      uniforms.uBeachWidth.value = state.beachWidth;
+      uniforms.uCoastCliffSlope.value = state.coastCliffSlope;
+      uniforms.uTerraceStep.value = state.terraceStep;
+      uniforms.uStrandStrength.value = state.strandStrength;
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

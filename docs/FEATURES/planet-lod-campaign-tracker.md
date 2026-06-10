@@ -50,7 +50,7 @@ during phases) | ▶️ = current
 | F15 | [F15-dunes-wind-forms](cards/F15-dunes-wind-forms.md) | Aeolian | ⬜ | — | 4a |
 | F16 | [F16-dust-mantles](cards/F16-dust-mantles.md) | Aeolian | ⬜ | — | 4a |
 | F19 | [F19-mass-wasting](cards/F19-mass-wasting.md) | Gradational | ⬜ | — | 4a |
-| F20 | [F20-coastlines](cards/F20-coastlines.md) | Gradational | ⬜ | — | 4a |
+| F20 | [F20-coastlines](cards/F20-coastlines.md) | Gradational | ✅ | 🟡 taste-call | 4a |
 | F24 | [F24-zonal-belts](cards/F24-zonal-belts.md) | Bands | 🟡(game) | — | 4b |
 | F25 | [F25-jets-shear](cards/F25-jets-shear.md) | Bands | 🟡 | — | 4b |
 | F26 | [F26-latitude-weather-bands](cards/F26-latitude-weather-bands.md) | Bands | 🟡 | — | 4b |

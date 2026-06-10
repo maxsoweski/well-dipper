@@ -32,7 +32,7 @@ Geomorphology treats a coastline as the sea-level isoline of the topographic fie
 
 ## 5. Isolation recipe (:9223)
 
-Unbuilt — recipe once built: register in planet-archetypes.js FEATURES as coastlines: { label: 'Coastlines (F20)', enableKey: 'coastEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] } (the per-folder 🔆 solo button and Body-filter wiring then come free via setFeatureEnables). Steps on the :9223 lab: (1) load preset 'Ocean (temperate)' (the canonical water-coast exemplar; 'Rocky (Earthlike)' for a continent-dominant coast, 'Titan (methane seas)' for the methane lake-margin/species variant); (2) window._lab.solo('coastlines'); (3) judge at three distances via window._lab.state.distance = 8 (global continent-outline read), 3 (regional coast: bays/peninsulas/beach band), 1.5 (LOD2 close-up: cliff line, terrace flight, foam). Vary state.macroSeed to re-roll continents and confirm the boundary tracks them. Clear with window._lab.enableAllFeatures().
+Unbuilt — recipe once built: register in planet-archetypes.js FEATURES as coastlines: { label: 'Coastlines (F20)', enableKey: 'coastEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] } (the per-folder 🔆 solo button and Body-filter wiring then come free via setFeatureEnables). Steps on the :9223 lab: (1) load preset 'Ocean (temperate)' (the canonical water-coast exemplar; 'Rocky (Earthlike)' for a continent-dominant coast, 'Titan (methane seas)' for the methane lake-margin/species variant); (2) window._lab.solo('coastlines') **then `window._lab.state.lakesEnabled = true`** — F20 reads F14's uSeaLevel and strict solo zeroes it to −1 (same dependent-feature-blank-under-solo pattern as F12 deltas; amended 2026-06-10 per code review); (3) judge at three distances via window._lab.state.distance = 8 (global continent-outline read), 3 (regional coast: bays/peninsulas/beach band), 1.5 (LOD2 close-up: cliff line, terrace flight, foam). Vary state.macroSeed to re-roll continents and confirm the boundary tracks them. Clear with window._lab.enableAllFeatures().
 
 ## 6. What to judge (UAT checklist)
 
@@ -72,8 +72,29 @@ Unbuilt — recipe once built: register in planet-archetypes.js FEATURES as coas
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 taste-call (2026-06-10, working-Claude autonomous judging per spec §13.3 — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5 in one pass, zero fix cycles. Shots (Ocean preset, lakes re-enabled
+  under solo per amended §5): `F20-ocean-d8.png` / `F20-ocean-d3.png` / `F20-ocean-d1.5.png`
+  (three-distance ladder — boundary coherent at global read, margins at regional);
+  `F20-ab-on.png` / `F20-ab-off.png` / `F20-ab-diff.png` (the load-bearing check: pixel-diff of
+  coastEnabled on/off at d3 — 23k changed pixels ALL hugging land/sea margins, sea interior and
+  deep land untouched, proving the signals are shore-localized and the gate works);
+  `F20-titan-d3.png` (dark methane sea, ragged margin, NO bright beach band — species=1 keyed
+  live); `F20-ocean-seed777.png` (macroSeed re-roll — coast tracks the new continents).
+  Drivers verified live: Ocean coastStrength 1 / strand 0.6 (=erosion), Titan 1 / 0.2.
+  Vitest 19/19 (PROVINCES↔GLSL mirror sees PROV_COAST). Backtick parity even.
+- Why 🟡 not 🟢: magnitude constants (cliff ×0.45, strandline +0.10, beach colors, 0.7^k decay)
+  are conservative first guesses behind lab knobs; beach-vs-cliff slope response and the
+  strandline-vs-posterize-banding distinction were verified as "signals fire where they should"
+  (A/B diff) but not judged at fine grain — glance items for Max's Phase-7 lap.
+- Code review (adversarial, per §13.4): 1 Important — solo('coastlines') zeroes uSeaLevel via
+  lakesEnabled, blanking the effect under the card's own §5 recipe. Resolution: option (c),
+  amend §5 to "solo, then re-enable lakes" (matches the F12 dependent-feature precedent; no new
+  uniform machinery). Below-threshold flags: strandlines/cliff not frost-gated (beach is);
+  terraceStep < beachWidth puts strandlines inside the beach band (cosmetic knob interaction).
+- Taste forks (conservative, marked): frost-vs-beach ordering (beach weighted by 1−frostCover,
+  frost wins — F14 phase-consistency logic); all magnitude constants above.
+- Deferred to integration pass: strandlines as true relief benches (v1 is albedo-only per
+  §6.5.6); relict paleo-shorelines on dry worlds (Mars case).
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)
