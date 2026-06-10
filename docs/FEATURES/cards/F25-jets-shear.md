@@ -46,6 +46,20 @@ Unbuilt — recipe once built: (1) add a 'Gas giant (Jovian)' entry to DRIVER_PR
 - [ ] At distance ~20 radii do bands collapse to 2-3 clean stripes; at ~2 radii do scallops and filaments emerge WITHOUT destroying the band silhouette that defines the world's identity?
 - [ ] Do shear vortices at a belt-zone interface read as rolled-up forms strung along a line (Kelvin-Helmholtz train), not random noise patches?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4b heavy loop)
+
+F24 landed the substrate (gas-giant archetype, 3 h2-he presets, zonalBandCol with bandCoord ladder + recursive warp, PROV_BANDS, gas shadeN flatten). F25 adds the DYNAMICS on top: an analytic jet profile, counter-rotating longitudinal drift, shear-gated boundary turbulence, and one-sided festoons. All luminance, no relief.
+
+1. **Data:** FEATURES `jets` { label 'Jets & shear (F25)', enableKey 'jetsEnabled', archetypes ['gas-giant'] } (reuse F24's archetype — do NOT create the card's suggested 'gas-banded'; one gas archetype). PROVINCES `jets` { field: 2, polarity: +1, floor: 1.00 } neutral. PROV_JETS = 23 + GLSL row + GLSL_NAME line.
+2. **Jet profile u(φ):** analytic, derived from the SAME bandCoord ladder F24 uses (pre-warp): u = sin(2π·bandCoordBase) — alternating sign per stripe, peaks at zone-belt boundaries — plus an equatorial superrotation term: wide Gaussian at lat 0, amplitude ~1.6× (the widest, fastest band; §6 item 3). shearGate = |du/dφ| proxy: cos² of the same phase (peaks at boundaries) + equatorial-flank boost.
+3. **Drift (uTime enters HERE — F24 stays static):** differential rotation of the WARP-NOISE sampling domain only: rotate p around the spin axis (y) by angle u(φ)·uJetSpeed·phase — latitude is y-invariant so band identity is untouched. Use the research doc's two-phase flow-map (§3.2-3.3: two copies at phase fract(t), fract(t+0.5), each rotation bounded ±half-period, triangle crossfade) so shear never accumulates unboundedly and the pattern is deterministic on bounded time. Read research/RESEARCH_high-lod-planet-shaders-2026-06-05.md §3.2-3.3 before writing this.
+4. **Shear turbulence:** a second, higher-frequency fbm warp term added to bandCoord, amplitude = uJetShearTurb · shearGate — generalizes the legacy (1.0 − abs(bands)) gate; turbulence concentrates AT boundaries (§6 item 1), reads as a rolled KH train strung along the interface because the posterize quantizes the scalloped displacement (§6 item 7).
+5. **Festoons (v1 minimal):** one-sided hooks off the equatorial belt's flank only: noise-gated displacement applied asymmetrically (single sign, single flank band of latitude), amplitude uJetFestoon. Direction consistency = the sign convention (§6 item 2). If it muddies, drop to 0 default and mark taste-call (3-cycle cap applies).
+6. **Wiring:** uniforms uJetStrength/uJetSpeed/uJetShearTurb/uJetFestoon (+ lab knobs uJetTurbFreq, uJetEqWidth); state defaults; per-frame writes gated on jetsEnabled; applyDrivers — jetStrength = _gas gate, jetSpeed ∝ 1/rotationHours, shearTurb + festoon on the same T_eq vigor ramp as F24; jetOffset reset. GUI folder (driven .listen(), 🎲, ✓ LAST), featureFolders. The jets GLSL terms key on uJetStrength ONLY (not uBandStrength) so solo('jets') shows the pure shear delta per card §5.
+7. **Tuning pre-check:** displacement budget in STRIPE units again (F24's lesson): peak turb displacement ≤ ~0.3 stripe at boundaries, festoon ≤ ~0.5 local. Verify u(φ) sign alternation across 3 presets numerically.
+
+v1 scope cuts: true curl-noise advection + sphere-tangent flow (research doc's flagged risky spike) → not in v1, drift is domain rotation; storm vortices → F27/F28; Venus superrotating deck → covered implicitly by the gas gate only if a Venus-type h2-he... it is NOT (Venus is co2) — Venus variant deferred to Phase-5/6 (driver gate is h2-he in v1, logged).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
