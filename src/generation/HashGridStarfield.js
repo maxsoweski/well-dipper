@@ -89,21 +89,24 @@ const TYPE_CONFIG = {
 const ALL_TYPES = ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'Kg', 'Gg', 'Mg'];
 const EVOLVED_TYPES = new Set(['Kg', 'Gg', 'Mg']);
 
-// Unclamped macrotask yield. With ~8ms work slices a full-sky generation
-// yields hundreds of times; nested setTimeout(0) gets clamped to 4ms after
-// 5 levels, which would add seconds of dead wait. scheduler.yield (Chrome
-// 129+) and MessageChannel both resume without the clamp while still
-// letting the browser render between slices.
+// Frame-aligned yield: resume the next work slice at the start of the next
+// animation frame so the browser actually PAINTS between slices. Plain
+// macrotask yields (scheduler.yield / MessageChannel / setTimeout) don't
+// guarantee that — Chrome batches a dozen 8ms slices between paints, which
+// measured as ~105ms frames during warp FOLD (2026-06-10). The setTimeout
+// race keeps generation from deadlocking where rAF doesn't fire (hidden
+// tab, node/vitest).
 function yieldToBrowser() {
-  if (typeof scheduler !== 'undefined' && scheduler.yield) return scheduler.yield();
-  if (typeof MessageChannel !== 'undefined') {
-    return new Promise(resolve => {
-      const ch = new MessageChannel();
-      ch.port1.onmessage = () => resolve();
-      ch.port2.postMessage(null);
-    });
-  }
-  return new Promise(resolve => setTimeout(resolve, 0));
+  return new Promise(resolve => {
+    let done = false;
+    const fin = () => { if (!done) { done = true; resolve(); } };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(fin);
+      setTimeout(fin, 100);
+    } else {
+      setTimeout(fin, 0);
+    }
+  });
 }
 
 export class HashGridStarfield {
