@@ -41,13 +41,18 @@ gate; stall inventory + open leads in handoff). Goal 2 statically diagnosed
 (logdepthbuf mismatch), no fix yet.**
 **3-goals session 2 (2026-06-10 cont.): Goals 2+3 FIXED** (`81fe37b` `094e8a2`
 `f75842e` `c85480f` — see Last-updated line for the mechanism map). **All 3 goals
-now VERIFIED_PENDING_MAX → Max rides against the target feel** (one long tunnel,
-far end grows, new system through it). Residuals to watch on the ride: one
-unattributed ~530ms hyper frame (1-in-10 warps, likely GC); compile gate holds
-~0.4-1.0s of the 3.5s min-cruise (invisible behind walls).
-**→ Next-session prep (stall inventory, evidence, leads, test method):
-`/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10.md` (§1-2 now closed by
-session 2; test method §3 still current).**
+VERIFIED_PENDING_MAX. Max RODE it → new active item (his words): "a little flash
+where the tunnel disappears after we enter it."** He offers latency (delay warp /
+longer ENTER / longer first-half cruise) as acceptable currency for a smooth
+transition. Leading hypothesis (unverified): the stall fixes UNMASKED a 1-2-frame
+visual discontinuity at the swap (portal re-open replaying its animation, possibly
+compounded by the new sky-scene gate) — diagnose with the per-frame sampler before
+touching sequencing. Residuals: one unattributed ~530ms hyper frame (1-in-10,
+likely GC); compile gate holds ~0.4-1.0s of the 3.5s min-cruise behind walls.
+**→ NEXT SESSION: the flash. Full prep (hypotheses, sampler extension, fix
+directions, test-method deltas): `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10b.md`.**
+Older: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-10.md` (§3 test method
+still current; §1-2 closed).
 Older context: `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09b.md`,
 `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-07b.md`,
 `/tmp/well-dipper-warp-tunnel-tuning-handoff-2026-06-09.md`.
