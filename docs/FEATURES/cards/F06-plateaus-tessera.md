@@ -51,8 +51,29 @@ Built — two solo keys. (1) Launch the second Chrome on :9223 (per memory/chrom
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Rocky (Earthlike), solo
+  `plateaus` then solo `tessera`, d8/d3/d1.5. Drivers verified live:
+  Rocky plateauStrength 0.0825 / tesseraStrength 0.0029 (gate correctly
+  near-closed).
+  - Plateau treads: broad flats settle into one posterize band each, with
+    dither concentrating along the stepped riser edges; discrete stacked
+    mesa levels read as intentional at strength 0.2 (shots 02, 03 +
+    tight zoom). Treads stay broad at d3/d1.5 — the 3-octave cap holds.
+  - Stratification: rough texture concentrates on the elevated provinces,
+    basins stay smoother (shot 03).
+  - Tessera lattice: at 0.15 (the real Lava-derived value), grooves run
+    in two intersecting orientations — crosscutting Ovda-style fabric,
+    not single-direction corrugation or isotropic noise; groove walls lit
+    from a consistent side (shots 04 d3, 05 d1.5).
+  - Driver gating as storytelling (read live across all 6 presets):
+    tessera 0.15 Lava / 0.147 Europa (high-stress) vs 0.0029 Rocky,
+    0.0408 Ocean, 0 Titan, 0 Frozen — rare/high-stress per the NTRS
+    survey; the manual 0.15 used for judging is exactly the Lava value.
+  - Rotation/dither stability covered by FOUNDATION checks 3 & 4 🟢.
+  - Shots: F06-plateaus-01-d8.png, F06-plateaus-02-d3-treads.png,
+    F06-plateaus-03-d3-strength02.png, F06-tessera-04-d3-strength015.png,
+    F06-tessera-05-d1.5-lattice.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none needed
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX

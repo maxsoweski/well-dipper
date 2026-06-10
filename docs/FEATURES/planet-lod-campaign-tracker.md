@@ -32,7 +32,7 @@ during phases) | ▶️ = current
 | F3 | [F03-ejecta-rays](cards/F03-ejecta-rays.md) | Relief | ✅ | 🟡 taste-call | 3 |
 | F4 | [F04-canyons-rifts](cards/F04-canyons-rifts.md) | Relief | ✅ | 🟢 | 3 |
 | F5 | [F05-scarps-faults](cards/F05-scarps-faults.md) | Relief | ✅ | 🟢 | 3 |
-| F6 | [F06-plateaus-tessera](cards/F06-plateaus-tessera.md) | Relief | ✅ | — | 3 |
+| F6 | [F06-plateaus-tessera](cards/F06-plateaus-tessera.md) | Relief | ✅ | 🟢 | 3 |
 | F7 | [F07-volcanic-edifices](cards/F07-volcanic-edifices.md) | Relief | ✅ | — | 3 |
 | F8 | [F08-lava-plains-flows](cards/F08-lava-plains-flows.md) | Relief | ✅ | — | 3 |
 | F9 | [F09-chaos-terrain](cards/F09-chaos-terrain.md) | Relief | ✅ | — | 3 |
