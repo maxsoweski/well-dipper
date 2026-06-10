@@ -10,6 +10,20 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+**`supercruise-freelook-2026-06-10`** — **NEW DEV ARC, scoped + greenlit 2026-06-10, building.**
+Clone Elite Dangerous supercruise as the starting point for ALL in-system motion
+(post-warp fly-in + tour legs + COMMIT BURN), rewire the autopilot to drive it,
+add Elite-style hold-to-look freelook. Ship/head transform split from day one
+(cockpit comes in a near-future arc — no rebasing prerequisite for this one).
+Arrival keeps today's shaking-fast-decel beat. AutopilotMotion + FlythroughCamera
+motion role retire. Contract (9 ACs) + intent:
+`docs/WORKSTREAMS/supercruise-freelook-2026-06-10/`. Seam: warpRevealSystem nav
+handoff (main.js ~5510). **Maps to journey:** rebuilds the travel-loop foundation
+the 35% SCREENSAVER-MVP autopilot rides; first GAME-tier (85%) capability (manual
+flight). Next: implementation plan (superpowers:writing-plans), then build.
+
+### Prior active (pending-UAT items remain)
+
 **`warp-tunnel-pocket-traversal-2026-06-06`** — **cruise-visual tuning.**
 **Problem #2 (walls reverse halfway) FIXED `8bda388`, VERIFIED_PENDING_MAX.**
 Root cause: two opposing wall-motion sources — the constant `uScroll += dt*0.5`
