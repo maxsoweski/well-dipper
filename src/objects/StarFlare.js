@@ -327,6 +327,33 @@ export class StarFlare {
     return new THREE.Mesh(geometry, material);
   }
 
+  /**
+   * Camera distance at which the flare disc yields to the distance
+   * billboard (and vice versa) — the same screen-space criterion
+   * update() applies per frame: the flare's visible glow
+   * (renderRadius × 6 world units) projecting below a
+   * luminosity-dependent 16–22 px target. Pure math, no renderer
+   * needed — warp arrival placement calls this to land the camera in
+   * guaranteed-billboard range (main.js warpSwapSystem).
+   */
+  billboardSwitchDistance(fovDegrees, screenHeightPx) {
+    const fovRad = fovDegrees * Math.PI / 180;
+    const pixelsPerRadian = (screenHeightPx / 2) / Math.tan(fovRad / 2);
+    const lf = this._lumFactor || 0.7;
+    // The biggest background stars in StarfieldLayer use aSize=8 which
+    // doubles to gl_PointSize=16. Target 16-22 px so the billboard is
+    // always at least as big as the brightest BG star:
+    //   any star (clamp floor)   → 16 px
+    //   G-class (Sol, lf ~0.7)   → 17 px
+    //   A-class (~1.0)           → 19 px
+    //   O-class (~1.5)           → 22 px (clamp ceiling)
+    const targetPx = Math.max(16, Math.min(22, 16 + 6 * (lf - 0.55)));
+    // Visible glow diameter is renderRadius*6 (shader glowRadius*2);
+    // switch when it projects below targetPx:
+    //   (R*6/dist)*pixelsPerRadian < targetPx  ⇔  dist > this value.
+    return (this._renderRadius * 6 / targetPx) * pixelsPerRadian;
+  }
+
   update(deltaTime, camera) {
     this._time += deltaTime;
     const uniforms = this._flareDisc.material.uniforms;
@@ -337,54 +364,37 @@ export class StarFlare {
       this._flareDisc.quaternion.copy(camera.quaternion);
 
       // ── Distance LOD: swap flare disc for circular billboard ──
-      // Switch when the star's visible bright region (the flare shader's
-      // `glowRadius * 2` ≈ R*6 in world units) shrinks below the screen
-      // size of the billboard. The billboard then renders at exactly that
-      // pixel size, constant in screen space, so the star is always at
-      // least as big and bright as a peak background starfield star and
-      // its halo has room to dither out into a hazy glow.
-      //
-      // The biggest background stars in StarfieldLayer use aSize=8 which
-      // doubles to gl_PointSize=16 (16-pixel rasterization area). Target
-      // here is 16-22 px so the billboard is always at least as big as
-      // the brightest BG star, with enough radius for a real dithered
-      // halo around the bright core (otherwise the falloff has nowhere
-      // to go and the star reads as a small dot, not a hazy glow).
-      //   any star (clamp floor)   → 16 px
-      //   G-class (Sol, lf ~0.7)   → 17 px
-      //   A-class (~1.0)           → 19 px
-      //   O-class (~1.5)           → 22 px (clamp ceiling)
-      const dist = camera.position.distanceTo(this.mesh.position);
-      const fovRad = camera.fov * Math.PI / 180;
-      const pixelsPerRadian = (window.innerHeight / 2) / Math.tan(fovRad / 2);
-      const lf = this._lumFactor || 0.7;
-      const targetPx = Math.max(16, Math.min(22, 16 + 6 * (lf - 0.55)));
-      // The flareDisc's actual visible glow extends to ~R*3 in world units
-      // (the shader's `glowRadius`), so the visible diameter is R*6.
-      const visibleDiameterPx =
-        (this._renderRadius * 6 / Math.max(dist, 0.001)) * pixelsPerRadian;
+      // Threshold math lives in billboardSwitchDistance() (single source
+      // of truth — warp arrival placement reuses it). The billboard
+      // renders at a constant screen size so the star is always at least
+      // as big and bright as a peak background starfield star and its
+      // halo has room to dither out into a hazy glow.
+      const dist = Math.max(
+        camera.position.distanceTo(this.mesh.position), 0.001);
+      const switchDist =
+        this.billboardSwitchDistance(camera.fov, window.innerHeight);
 
-      if (visibleDiameterPx < targetPx) {
+      if (dist > switchDist) {
         // Star has shrunk to background-star size — show the billboard.
         this._flareDisc.visible = false;
         this._billboard.visible = true;
-        // World-space scale that produces exactly `targetPx` pixels at
-        // the current camera distance. Recomputed every frame so the
-        // billboard's projected size stays constant as you fly away.
-        const worldSize = (targetPx / pixelsPerRadian) * dist;
+        // World-space scale that produces exactly targetPx pixels at the
+        // current camera distance (targetPx/pixelsPerRadian == R*6/switchDist,
+        // so worldSize == R*6*dist/switchDist). Recomputed every frame so
+        // the projected size stays constant as you fly away.
+        const worldSize = (this._renderRadius * 6 * dist) / switchDist;
         this._billboard.scale.set(worldSize, worldSize, 1);
         this._billboard.quaternion.copy(camera.quaternion);
       } else {
         this._flareDisc.visible = true;
         this._billboard.visible = false;
-        // Spike fade — ramp diffraction spike contribution down to 0
-        // by the time we'd switch to the billboard, so the flareDisc's
-        // last visible state matches the billboard's circular dot.
-        // Above 4*targetPx visible diameter: full spikes.
-        // From 4*targetPx down to targetPx: smooth fade.
-        // At/below targetPx: spikes off (and we've switched anyway).
-        const range = targetPx * 3;
-        const t = Math.max(0, Math.min(1, (visibleDiameterPx - targetPx) / range));
+        // Spike fade — ramp diffraction spike contribution down to 0 by
+        // the time we'd switch to the billboard, so the flareDisc's last
+        // visible state matches the billboard's circular dot. Full spikes
+        // above 4× the switch-size, smooth fade down to the switch. (In
+        // the old px terms: (visibleDiameterPx − targetPx)/(3·targetPx)
+        // == (switchDist/dist − 1)/3 — same ramp, re-expressed.)
+        const t = Math.max(0, Math.min(1, (switchDist / dist - 1) / 3));
         const spikeIntensity = t * t * (3 - 2 * t); // smoothstep
         uniforms.uSpikeIntensity.value = spikeIntensity;
       }
