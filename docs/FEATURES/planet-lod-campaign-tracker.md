@@ -18,8 +18,8 @@ during phases) | ▶️ = current
 | 3 Refine built (15 cards) | all §7 verdicts + galleries | ✅ 2026-06-10 (13🟢, F03 🟡 taste-call, F08 🟡 Max-feedback fix1) |
 | **Stage-D provinces** (inserted before 4a per Max 2026-06-10) | spike → scope → build → verify; all 15 built features province-aware | ✅ built 2026-06-10 — spike `05cde11`, build `3d04110`, VERIFIED_PENDING_MAX; workstream `docs/WORKSTREAMS/stage-d-provinces-2026-06-10/`; Phase-4a+ combiners now author against the LIVE `provinceWeight(PROV_<FEATURE>)` accessor + add affinity rows to `PROVINCES` (planet-archetypes.js) AND the GLSL chain |
 | 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | ✅ 2026-06-10 — all 8 verdicted (F14/F16 🟢, F12/F13/F15/F19/F20/F21 🟡 taste-call); next ▶️ 4b |
-| 4b Build atmosphere (10) | F24-F33 verdicted | ▶️ pending |
-| 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | pending |
+| 4b Build atmosphere (10) | F24-F33 verdicted | ✅ 2026-06-10 — all 10 🟡 taste-call VERIFIED_PENDING_MAX; new presets: 3 gas giants + Venus + Sub-Neptune + Eyeball + Hot Jupiter; new archetype hot-jupiter |
+| 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | ▶️ pending |
 | 5 Integration | INTEGRATION.md I-1…I-15 verdicted | pending |
 | 6 Profiles | PROFILES.md 18 rows verdicted | pending |
 | 7 Max review lap | galleries walked, parked items decided | pending |

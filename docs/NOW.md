@@ -80,24 +80,25 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Next 1-3 queued (in priority order)
 
-0. **`planet-refinement-campaign` — Phase 4a DONE 2026-06-10
-   (`deedff6`…`244368e`): all 8 fluvial+aeolian cards built + verdicted —
-   F14/F16 🟢, F12/F13/F15/F19/F20/F21 🟡 taste-call. Heavy loop per
-   §13.4 (subagent implement → adversarial review → live A/B pixel-diff
-   verify on :9223). Notable: F19's hostGrad = gradIn − gradBase trick
-   (additivity contract comment at the call site); 2 tuning cycles burned
-   on band-coverage defaults (F13 width, F21 plateau level — absolute-h
-   masks bite low-relief worlds). Lab method note: editing
-   planet-lod-lab.html Vite-reloads the :9223 page — FIXED 2026-06-10
-   post-4a: the lab now persists the full GUI scenario (preset/solo/
-   distance/knobs) to sessionStorage across reloads, verified end-to-end
-   (tracer survived a real Vite reload). Fresh tabs still boot defaults;
-   ?fresh=1 opts out / clears. Vitest 19/19; evidence shots in
-   repo root (F13-*/F15-*/F16-*/F19-*/F20-*/F21v2-*).** Next: Max starts
-   a FRESH session and pastes the tracker's **Phase-4b `/goal` launch
-   card** (atmosphere pass, F24-F33, 10 cards). Phase-3 notes (setPreset
-   doesn't re-derive drivers → call `_lab.applyDrivers()`; zero
-   uCloudCoverage before pixel-diffs) still apply.
+0. **`planet-refinement-campaign` — Phase 4b DONE 2026-06-10
+   (`5460789`…`e5e9a45`, two sessions): all 10 atmosphere cards built +
+   verdicted 🟡 taste-call VERIFIED_PENDING_MAX — F24-F26 bands, F27-F29
+   storms, F30 lightning (emissive point process; review caught
+   cell-boundary blob clipping pre-verify; 1 tune: intensity 2→4),
+   F31 clouds family (regime dispatch: weather/haze/venus/eyeball; Rocky
+   coverage 0.9→0.645 rebalance — the F26 burial fixed; F31e shells
+   parked for 4c/F34), F32+F33 thermal pair (one energy-balance curve,
+   two owned consumers, superrotation offset A/B'd). SEVEN new presets
+   this phase: 3 gas giants, Venus, Sub-Neptune, Eyeball, Hot Jupiter
+   (+ new hot-jupiter archetype). Vitest 19/19; evidence shots repo root
+   (F24-*…F33-*). Taste forks recorded per card §7 for the Phase-7
+   lap.** Next: Max starts a FRESH session and pastes the tracker's
+   **Phase-4c `/goal` launch card** (optical+exotic+overlay+rings,
+   15 cards + F38/F39 call). Session notes that carry: same-tick uniform
+   reads lie (double-rAF or read state.*), freeze jetSpeed before A/Bs,
+   sessionStorage restores stale solo/knob state over reloads (re-run
+   setPreset + re-enable gates), solo() kills the bands substrate for
+   band-riders (lightning/thermal are emissive-channel, immune).
 1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
 2. **`warp-tunnel-second-half-not-rendering`** — **SHIPPED 2026-06-10:
