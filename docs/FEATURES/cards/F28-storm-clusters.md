@@ -65,8 +65,12 @@ v1 scope cuts: tail decay gradient (single dim slot approximates it); vortex mer
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4b heavy loop)
+- Evidence (repo root, gitignored): `F28-pearl-close.png` (rimmed white oval inside its dark belt — the Juno pearl read, d2.5), `F28-pearls2.png` (lit low-lat train, seed 2: 4 pearls y 0.34), `F28-pearls.png` (first southern-belt train), `F28-plume.png` (Saturnian GWS: bright head + sheared east tail along the band, seed 5), `F28-ab3-on/off` + `F28-ab-diff.png` (clean A/B with jets FROZEN: 19,382 px in one 390×94 along-band strip = head+tail exactly; the first A/B attempt read 232k planet-wide px — that was F25's jet drift animating between frames, methodology note: freeze jetSpeed before storm A/Bs).
+- §6 checklist: 1 🟢 (discrete rimmed ovals), 2 🟡 (family/train: all pearls share one belt at 2π/n spacing — but only 1-2 face the camera per view (honest sphere geometry); full-train countability needs the planet to spin — Max-eye item), 3 🟢 (belt-confined via the inverted F24 ladder, snap math review-verified; E-W elongated 1.3-1.8), 4 🟢 (swirl deflection visible at close range; mild by design at pearl radii), 5 🟢 (pale-white pearls and near-white plume head land their own posterize bucket vs the belt), 6 🟢 (plume = head + along-band streak, not a second oval — the A/B strip is the direct evidence), 7 deferred (full-disk countability — see item 2), 8 🟢 (determinism — seed 5 reproduced the identical plume across multiple preset switches and a hot-reload rebuild).
+- Live data: Jovian seed 2 → 4 pearls y 0.34 (equatorward belt — admitted by the tune), seed 3 → 6 pearls y −0.73; Saturnian seed 5 → head (−0.53, 0.41, 0.74) + tail east at the same snapped latitude (rotation-about-y form); Neptunian → 1 scooter. Terrestrials trainStrength 0.
+- Tweaks applied (1 of 3 cycles): belt-candidate filter moved from latC-space (0.25-0.75) to Y-SPACE (|y| ≤ 0.75) — the latPow remap is nonlinear, so the first cut excluded the equatorward belt (y 0.35) and admitted a 70° near-polar one on count-14 worlds.
+- Code review (fable): 1 should-fix applied — plume pushed head-first let the wide tail core REPAINT the head (later slots win in stormColTerms); tail now drawn first, head on top. Nits applied: tail center = rotation about the y axis (exact latitude preservation, was ~2.5% sag); bandLatPow slider got onChange(applyDrivers) so snapped storms re-derive when the ladder moves.
+- Taste forks for Max's lap: (a) train visibility — 4-6 pearls means 1-2 per view; more pearls or tighter spacing reads more "string"; (b) plume tail is a single uniform-dim slot (decay gradient cut); (c) scooter count/placement on ice giants.
+- Scope cuts (per §6.5): tail decay gradient; vortex merging/animation; production PlanetGenerator.storms wiring → integration phase; planet-encircling GWS wrap.
+- Status: VERIFIED_PENDING_MAX

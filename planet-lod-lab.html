@@ -695,6 +695,7 @@
       const int PROV_JETS        = 23;  // F25 — neutral: the shear dynamics ride the same unprovinced gas deck as PROV_BANDS
       const int PROV_WEATHER     = 24;  // F26 — neutral (climate, not geology): the FROST-row pattern — latitude circulation must not be gated by rock provinces
       const int PROV_GREATSPOT   = 25;  // F27 — neutral: the vortex rides the same unprovinced gas deck as PROV_BANDS/PROV_JETS
+      const int PROV_STORMTRAIN  = 26;  // F28 — neutral: the train rides the same unprovinced gas deck as PROV_GREATSPOT
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -738,6 +739,7 @@
         else if (fid == PROV_JETS)       { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_WEATHER)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_GREATSPOT)  { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_STORMTRAIN) { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1534,6 +1536,9 @@
         // call: byte-identical F25 output (the F27 regression contract).
         // provinceWeight(PROV_GREATSPOT) is NEUTRAL (floor 1.0) — the registry fan-out
         // convention's multiply, kept as the mix weight (identically 1.0 today).
+        // F28 train slots 1+ ride this SAME weight: PROV_STORMTRAIN's row exists only
+        // for the data mirror (vitest drift guard) — both rows are neutral, so the
+        // shared read is identically 1.0 either way.
         if (uStormCount > 0) col = mix(col, stormColTerms(N, col), provinceWeight(PROV_GREATSPOT));
         // polar hood: a darkened cap keyed on latitude only (Jupiter/Neptune hoods);
         // bands fade INTO it rather than pinching at a convergence point.
@@ -3093,6 +3098,11 @@
       spotColor: [0.9,0.5,0.3], // F27 core color (driven: bandTint warmed x(1.25,0.95,0.8) / bruised x0.55)
       spotCompanion: 0.0,   // F27 bright companion-cloud strength (driven: mode x 0.8 — dark variant only)
       greatSpotEnabled: true, // F27 enable gate
+      trainStrength: 0.0,   // F28 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
+      trainSpots: [],       // F28 derived storm family (driven: stormSeed hash — pearls / plume+tail / scooters by vigor)
+      trainCount: 0,        // F28 derived spot count (GUI display mirror of trainSpots.length)
+      trainRadiusScale: 1.0,// F28 lab knob — scales every train radius at the per-frame writer (1 = derived size)
+      stormTrainEnabled: true, // F28 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3710,6 +3720,96 @@
         ? [_bt[0] * 0.55, _bt[1] * 0.55, _bt[2] * 0.55]                                  // dark bruise: 1-2 posterize levels down
         : [_bt[0] * 0.92, _bt[1] * 0.52, _bt[2] * 0.40];                                 // GRS brick-red: DARKER + redder than the deck so the core posterizes 1-2 levels below the pale collar (live tune 2026-06-10 — the first cut x(1.25,0.95,0.8) matched the zone luminance and the core vanished into the deck)
       state.spotCompanion = state.spotMode * 0.8;
+      // ── F28 storm clusters / oval trains — deterministic train derivation (card
+      // §6.5 steps 2-5; derivation HERE per the F11 precedent — core.js untouched).
+      // SAME PRNG STREAM as F27, extended: every draw below continues after the great
+      // spot's, so one (macroSeed, stormSeed) pair owns ALL storm placement and the
+      // two features decorrelate for free (card §6.5 step 5). Same h2-he gate —
+      // trains are gas-deck vortices; every solid preset derives 0 and the per-frame
+      // writer adds no slots.
+      state.trainStrength = _gas ? 1.0 : 0.0;
+      // Band confinement (card §6 item 3): pearl/plume latitudes SNAP to a BELT
+      // center. F24's ladder INVERTED: belts sit at fract(bandCoord) = 0.5, i.e.
+      // bandCoord = 0.5 + m, and bandCoord = 0.25·latC·bandCount, so latC =
+      // (2 + 4m)/bandCount; |trueLat| = pow(|latC|, 1/bandLatPow) (the GLSL latitude
+      // remap inverted) and y = sin(trueLat·π/2) (trueLat = asin(y)·2/π inverted).
+      // Candidate belts filtered in Y-SPACE, |y| <= 0.75 (live tune 2026-06-10: the
+      // first cut filtered |latC| 0.25..0.75, but the latPow remap is nonlinear —
+      // on count-14 Jovian that excluded the equatorward belt (y 0.35) and ADMITTED
+      // a 70-degree near-polar one (y 0.94), violating the card's pole-avoid).
+      // Mirrors the GLSL chain through the same state knobs.
+      const _trMs = [];
+      for (let _m = 0; (2 + 4 * _m) / state.bandCount <= 1.0 + 1e-9; _m++){
+        const _yc = Math.sin(Math.pow((2 + 4 * _m) / state.bandCount, 1 / state.bandLatPow) * Math.PI / 2);
+        if (_yc <= 0.75 + 1e-9) _trMs.push(_m);
+      }
+      const _trBeltY = () => {
+        const _m = _trMs.length ? _trMs[Math.floor(_spotRng() * _trMs.length)] : 0;
+        const _latC = (2 + 4 * _m) / state.bandCount;
+        const _hemi = _spotRng() > 0.5 ? 1 : -1;
+        return _hemi * Math.sin(Math.pow(_latC, 1 / state.bandLatPow) * Math.PI / 2);
+      };
+      // One mechanism, three reads on the SAME T_eq vigor ramp as the deck personality
+      // (card §6.5 step 2): Jovian ⇒ string-of-pearls train; Saturnian ⇒ GWS plume
+      // head + sheared tail (a rot-0 aspect-9 slot — the elliptical metric stretches
+      // it into the along-band streak, no GLSL change); Neptunian ⇒ 1-2 scooters.
+      const _tr = [];
+      if (_vigor >= 0.7){
+        // PEARL TRAIN: 4-6 pale near-white ovals sharing ONE belt latitude, quasi-
+        // regular longitudes (2π/n spacing ± 15% jitter), mild SAME-SIGN swirl —
+        // one anticyclonic shear zone spins the whole family the same way.
+        const _trN = 4 + Math.floor(_spotRng() * 3);
+        const _trY = _trBeltY();
+        const _trRxz = Math.sqrt(1 - _trY * _trY);
+        const _trLon0 = _spotRng() * Math.PI * 2;
+        const _trSgn = _spotRng() > 0.5 ? 1 : -1;
+        // pale near-white lift of the deck tint — the bright-oval posterize bucket
+        const _trCol = [Math.min(1, _bt[0] * 0.55 + 0.45), Math.min(1, _bt[1] * 0.55 + 0.45), Math.min(1, _bt[2] * 0.55 + 0.45)];
+        for (let _i = 0; _i < _trN; _i++){
+          const _lon = _trLon0 + (_i + 0.3 * (_spotRng() - 0.5)) * Math.PI * 2 / _trN;
+          _tr.push({ center: [_trRxz * Math.cos(_lon), _trY, _trRxz * Math.sin(_lon)],
+                     radius: 0.05 + 0.04 * _spotRng(), rot: _trSgn * (0.6 + 0.4 * _spotRng()),
+                     aspect: 1.3 + 0.5 * _spotRng(), color: _trCol, companion: 0 });
+        }
+      } else if (_vigor >= 0.35){
+        // PLUME OUTBREAK (Saturn 2010 GWS): bright convective head + sheared tail =
+        // a second slot at the same belt offset 2.5 head-radii EAST along the band
+        // (east = normalize(cross(up, c)) — the GLSL tangent frame's east), rot 0,
+        // aspect 9, head color dimmed ×0.75 (tail decay gradient is a v1 scope cut).
+        const _trY = _trBeltY();
+        const _trRxz = Math.sqrt(1 - _trY * _trY);
+        const _trLon = _spotRng() * Math.PI * 2;
+        const _hc = [_trRxz * Math.cos(_trLon), _trY, _trRxz * Math.sin(_trLon)];
+        const _hR = 0.09;
+        const _hCol = [Math.min(1, _bt[0] * 0.35 + 0.65), Math.min(1, _bt[1] * 0.35 + 0.65), Math.min(1, _bt[2] * 0.35 + 0.65)];
+        // TAIL FIRST: stormColTerms paints slots in order and later slots win in
+        // overlaps — the head's bright oval must repaint ON TOP of the dim streak
+        // (review fix 2026-06-10: head-first let the wide tail core erase the head).
+        // Tail center = head rotated about the y axis (preserves the snapped belt
+        // latitude exactly; the cross-product offset sagged y by ~2.5%).
+        // d(center)/d(lon) = -east·rxz, so EAST = decreasing longitude here.
+        const _tAng = 2.5 * _hR / _trRxz;
+        const _tLon = _trLon - _tAng;
+        _tr.push({ center: [_trRxz * Math.cos(_tLon), _trY, _trRxz * Math.sin(_tLon)],
+                   radius: 0.10, rot: 0, aspect: 9,
+                   color: [_hCol[0] * 0.75, _hCol[1] * 0.75, _hCol[2] * 0.75], companion: 0 });
+        _tr.push({ center: _hc, radius: _hR, rot: 1.2, aspect: 1.4, color: _hCol, companion: 0 });
+      } else {
+        // SCOOTERS (Neptune's transient companions): 1-2 small bright white-blue
+        // patches, each snapped to its own belt — band confinement holds for the
+        // cold bland deck too.
+        const _trN = 1 + (_spotRng() > 0.5 ? 1 : 0);
+        for (let _i = 0; _i < _trN; _i++){
+          const _trY = _trBeltY();
+          const _trRxz = Math.sqrt(1 - _trY * _trY);
+          const _lon = _spotRng() * Math.PI * 2;
+          _tr.push({ center: [_trRxz * Math.cos(_lon), _trY, _trRxz * Math.sin(_lon)],
+                     radius: 0.05 + 0.02 * _spotRng(), rot: (_spotRng() > 0.5 ? 1 : -1) * 0.5,
+                     aspect: 1.3, color: [0.85, 0.90, 1.0], companion: 0 });
+        }
+      }
+      state.trainSpots = _tr;
+      state.trainCount = _tr.length;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -4046,7 +4146,7 @@
     fBands.add(state, 'bandWarp', 0, 4, 0.05).name('festoon warp (driven)').listen();
     fBands.addColor(state, 'bandTint').name('deck tint (driven)').listen();
     fBands.add(state, 'bandStretch', 1, 6, 0.1).name('flow stretch');
-    fBands.add(state, 'bandLatPow', 0.5, 2.5, 0.05).name('lat power');
+    fBands.add(state, 'bandLatPow', 0.5, 2.5, 0.05).name('lat power').onChange(applyDrivers);   // F28 belt-snap reads this — re-derive so storms stay on their belts
     fBands.add({ roll(){ state.bandOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fBands.add(state, 'bandsEnabled').name('✓ enabled');
     // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
@@ -4086,6 +4186,17 @@
     fSpot.add(state, 'spotAspect', 1, 3, 0.01).name('aspect (driven)').listen();
     fSpot.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storm');
     fSpot.add(state, 'greatSpotEnabled').name('✓ enabled');
+    // ▸ Storm clusters (F28) — the plural sibling riding the SAME carriage: F27 keeps
+    // slot 0, the train fills the next slots (pearls / plume+tail / scooters by the
+    // vigor ramp). ONE seed owns ALL storm placement — the 🎲 below rerolls the
+    // SHARED stormSeed, so it re-rolls the great spot too (seed identity, card §6
+    // item 8). Count is a driven display (.listen().disable()); radius scale is the
+    // lab knob the per-frame writer multiplies onto every train radius.
+    const fTrain = fBandsGroup.addFolder('Storm clusters (F28)'); fTrain.close();
+    fTrain.add(state, 'trainCount', 0, 7, 1).name('spots (driven)').listen().disable();
+    fTrain.add(state, 'trainRadiusScale', 0.5, 2, 0.01).name('radius scale');
+    fTrain.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storms (shared seed)');
+    fTrain.add(state, 'stormTrainEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -4096,7 +4207,7 @@
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
-      weatherBands: fWeather, greatSpot: fSpot,
+      weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -4346,14 +4457,29 @@
       uniforms.uWeatherWarp.value      = state.weatherWarp;
       uniforms.uWeatherDry.value       = state.weatherDry;
       uniforms.uWeatherOffset.value.set(state.weatherOffset[0], state.weatherOffset[1], state.weatherOffset[2]);
-      // F27 great spot — copy spot0 into the registry-shaped arrays each frame (cheap;
-      // F28 will extend indices 1+). The count write is THE regression contract:
-      // greatSpotEnabled false OR a terrestrial preset (spotStrength 0) ⇒ uStormCount
-      // 0 ⇒ every GLSL storm term no-ops ⇒ byte-identical F25 rendering.
-      uniforms.uStormPosSize.value[0].set(state.spotCenter[0], state.spotCenter[1], state.spotCenter[2], state.spotRadius);
-      uniforms.uStormParams.value[0].set(state.spotRot, state.spotAspect, state.spotMode, state.spotCompanion);
-      uniforms.uStormColor.value[0].set(state.spotColor[0], state.spotColor[1], state.spotColor[2]);
-      uniforms.uStormCount.value = (state.greatSpotEnabled && state.spotStrength > 0) ? 1 : 0;   // ✓ enable gate
+      // F27/F28 storm carriage — COMPOSE the slots each frame (no allocations: .set()
+      // on the preallocated vectors): idx 0 = F27 great spot iff ITS gate passes;
+      // next slots = F28 train spots iff THEIR gate passes (cap 8); uStormCount =
+      // total written. Each feature drops out independently — stormTrainEnabled false
+      // reproduces the F27-committed writes exactly; BOTH off (or any terrestrial
+      // preset deriving strength 0) ⇒ count 0 ⇒ every GLSL storm term no-ops ⇒
+      // byte-identical F25 rendering (the regression contract).
+      let _stormN = 0;
+      if (state.greatSpotEnabled && state.spotStrength > 0){
+        uniforms.uStormPosSize.value[0].set(state.spotCenter[0], state.spotCenter[1], state.spotCenter[2], state.spotRadius);
+        uniforms.uStormParams.value[0].set(state.spotRot, state.spotAspect, state.spotMode, state.spotCompanion);
+        uniforms.uStormColor.value[0].set(state.spotColor[0], state.spotColor[1], state.spotColor[2]);
+        _stormN = 1;
+      }
+      if (state.stormTrainEnabled && state.trainStrength > 0){
+        for (let i = 0; i < state.trainSpots.length && _stormN < 8; i++, _stormN++){
+          const s = state.trainSpots[i];
+          uniforms.uStormPosSize.value[_stormN].set(s.center[0], s.center[1], s.center[2], s.radius * state.trainRadiusScale);
+          uniforms.uStormParams.value[_stormN].set(s.rot, s.aspect, 0, s.companion);
+          uniforms.uStormColor.value[_stormN].set(s.color[0], s.color[1], s.color[2]);
+        }
+      }
+      uniforms.uStormCount.value = _stormN;   // ✓ both enable gates folded in
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
