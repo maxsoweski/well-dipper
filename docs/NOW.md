@@ -73,20 +73,22 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Next 1-3 queued (in priority order)
 
-0. **`planet-refinement-campaign` — Phase 3 DONE 2026-06-10 (`17052ab`…
-   `407682c`): all 15 built-feature cards verdicted — 13 🟢, F03 🟡
-   (full-disk rays read as speckle; cell-truncation carry-forward,
-   taste-call for Phase 7), F08 🟡 (Max live UAT: cell-based lava-flow
-   shape failed visual QA → fix cycle 1 shipped: domain-warped crack
-   channels + province clustering + flow-front glow; Max re-look
-   queued). ~70 shots in cards/shots/; vitest 8/8 green; zero other code
-   fixes needed. Lab method notes: setPreset doesn't re-derive drivers
-   (call `_lab.applyDrivers()`); zero uCloudCoverage before any
-   pixel-diff. Tracker flipped Phase 4a ▶️.** Next: Max starts a FRESH
-   session and pastes the tracker's **Phase-4a `/goal` launch card**
-   (build pass, fluvial+aeolian, 8 cards, heavy loop). Serves
-   SCREENSAVER-MVP visual polish (planets = hero objects). Runs parallel
-   to warp on shared tree — explicit-path staging only.
+0. **`planet-refinement-campaign` — Phase 4a DONE 2026-06-10
+   (`deedff6`…`244368e`): all 8 fluvial+aeolian cards built + verdicted —
+   F14/F16 🟢, F12/F13/F15/F19/F20/F21 🟡 taste-call. Heavy loop per
+   §13.4 (subagent implement → adversarial review → live A/B pixel-diff
+   verify on :9223). Notable: F19's hostGrad = gradIn − gradBase trick
+   (additivity contract comment at the call site); 2 tuning cycles burned
+   on band-coverage defaults (F13 width, F21 plateau level — absolute-h
+   masks bite low-relief worlds). Lab method note (NEW): editing
+   planet-lod-lab.html Vite-reloads the :9223 page and silently resets
+   preset/solo/distance — re-set the whole scenario after ANY file edit
+   or A/B diffs measure a reset page. Vitest 19/19; evidence shots in
+   repo root (F13-*/F15-*/F16-*/F19-*/F20-*/F21v2-*).** Next: Max starts
+   a FRESH session and pastes the tracker's **Phase-4b `/goal` launch
+   card** (atmosphere pass, F24-F33, 10 cards). Phase-3 notes (setPreset
+   doesn't re-derive drivers → call `_lab.applyDrivers()`; zero
+   uCloudCoverage before pixel-diffs) still apply.
 1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
 2. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
