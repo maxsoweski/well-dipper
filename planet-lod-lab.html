@@ -365,6 +365,16 @@
       uniform float uOutflowGrooveFreq;// longitudinal-groove frequency (across-flow coordinate) — lab knob
       uniform float uOutflowGrooves;   // groove amplitude as fraction of carve depth (≤ 0.15) — lab knob
       uniform vec3  uOutflowOffset;    // 🎲 domain offset — own seed, decorrelated from uFluvialOffset
+      // ── F21 karst / dissolution (Fluvial step 4a — card F21) ──
+      uniform float uKarstDensity;     // 0..1 master gate (driven: F11 solvent gate, erosion-weighted); <= 0 ⇒ early-out
+      uniform float uKarstMaturity;    // 0=shallow grooves … 1=full maze (driven ∝ surfaceHistory.erosion)
+      uniform float uKarstDolineFreq;  // doline Worley-cell frequency — lab knob
+      uniform float uKarstDolineR;     // pit radius in F1 units (well under cell size ⇒ discrete pits) — lab knob
+      uniform float uKarstDolineDepth; // doline carve depth (relief units) — lab knob
+      uniform float uKarstMazeFreq;    // labyrinth slot frequency (own freq, NOT F1's) — lab knob
+      uniform float uKarstMazeDepth;   // labyrinth slot carve depth — lab knob
+      uniform float uKarstPlateauLvl;  // plateau mask threshold on accumulated h — lab knob
+      uniform vec3  uKarstOffset;      // 🎲 domain offset — own seed, decorrelated from fluvial/outflow
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -616,6 +626,7 @@
       const int PROV_DELTAS      = 15;  // F12 — river products, same lowlands affinity as RIVERS
       const int PROV_COAST       = 16;  // F20 — neutral (margins live wherever the sea is), like LAKES/FROST
       const int PROV_OUTFLOW     = 17;  // F13 — flood products, same young-lowlands affinity as RIVERS
+      const int PROV_KARST       = 18;  // F21 — soluble-lithology provinces (CHAOS-row pattern: y-field, decorrelated from the fluvial z-field)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -651,6 +662,7 @@
         else if (fid == PROV_DELTAS)     { f = 1.0 - gProvince.z; fl = 0.30; }
         else if (fid == PROV_COAST)      { f = gProvince.z;       fl = 1.00; }
         else if (fid == PROV_OUTFLOW)    { f = 1.0 - gProvince.z; fl = 0.30; }
+        else if (fid == PROV_KARST)      { f = gProvince.y; fl = 0.25; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -859,6 +871,93 @@
           h            += groove;
           vec3 dgn = gn.y * uOutflowGrooveFreq * fdir;          // 1D chain rule (fdir held const)
           grad += uOutflowGrooves * depth * (s * dgn + gn.x * gateK * dplateau);
+        }
+      }
+
+      // ── F21 karstRidged — small dedicated 2-octave ridged slot sampler (card §6.5.3).
+      // The labyrinth valley network is the CRESTLINE SET of a folded noise — fbmdRidged's
+      // fold (signal = so − |n.x|) with the −sign(n.x) chain-rule correction — used
+      // NEGATIVELY: where a ridged field would raise crests, dissolution carves slots.
+      // Own seed (uKarstOffset + constant decorrelation) and own uKarstMazeFreq:
+      // deliberately NOT coupled to the F1 mountain uniforms (uRidgeOffset/uRidgeGain).
+      // Maturity WIDENS the fold acceptance so (so up ⇒ more of the field inside a slot)
+      // dissection density rises monotonically: shallow grooves → connected maze.
+      // Returns vec4(slot in [0,~1], dslot/dpos). so ≥ 0.35 always ⇒ the /so is safe.
+      vec4 karstRidged(vec3 pos){
+        vec3 off = uKarstOffset + vec3(-14.1, 23.9, -7.7);   // decorrelate from fluvial/outflow at default (0,0,0)
+        float so = mix(0.35, 0.9, uKarstMaturity);           // fold width: maturity ⇒ wider dissection
+        float slot = 0.0;
+        vec3 dslot = vec3(0.0);
+        float freq = uKarstMazeFreq;
+        float amp  = 0.65;
+        for (int i = 0; i < 2; i++){
+          vec4 n = noised(pos * freq + off);
+          float sig = max(so - abs(n.x), 0.0) / so;          // fold, normalized to [0,1]
+          slot += amp * sig * sig;                           // sharpen: slot walls steepen, floors flatten
+          // d(sig²)/dpos = 2·sig·(−sign(n.x)/so)·(freq·n.yzw) — zero outside the fold (sig clamped)
+          if (sig > 0.0) dslot += amp * (2.0 * sig / so) * -sign(n.x) * freq * n.yzw;
+          freq *= 2.3;
+          amp  *= 0.5;
+        }
+        return vec4(slot, dslot);
+      }
+
+      // ── F21 karstCombiner (Stage-4) — dissolution terrain: a solvent chemically eats
+      // soluble crust (card §4: rate ∝ undersaturation × lithology kinetics — one shader,
+      // species-switched constants). Sibling of fluvialCombiner/outflowCombiner, called
+      // right after F13 and BEFORE the F12 delta + F14 sea cut — so pit/slot floors carved
+      // below uSeaLevel inherit the species fill/tint and become COLLAPSE LAKES with zero
+      // karst-side code (card §6.5.5). Two unioned (summed — they occupy different ground)
+      // terms, both PURE RELIEF (no albedo/fluvialWet writes — posterize-survival route):
+      // (1) DOLINES — rimless Worley pits (voronoi3d F1 smoothstep bowls; NO raised rim —
+      //     the §6-item-1 discriminator vs F2 craters) gated to LOW ground (F11's shared
+      //     lowGround mix — dolines pull drainage inward on flats) × a gentle-slope gate
+      //     on |grad| (no pits on mountain walls);
+      // (2) LABYRINTH — a dissected plateau: smoothstep plateau mask on accumulated h ×
+      //     karstRidged slot carve, leaving flat-topped polygonal remnants between
+      //     through-going valley slots (Titan T-120 'plateau minus slots', §6 item 2).
+      // uKarstMaturity deepens both terms and widens dissection monotonically (§6 item 3).
+      // Gates (lowGround/gentle/province) are locally-constant in the gradient (the
+      // documented cosmetic-grad convention); the plateau mask's d(pm)/dpos rides the
+      // INCOMING grad (the plateau edge is a real height feature — remnant rims light).
+      // uKarstDensity <= 0 ⇒ early-out: Stage-A base byte-identical, regression-safe.
+      void karstCombiner(vec3 pos, inout float h, inout float canyonHeight, inout vec3 grad){
+        if (uKarstDensity <= 0.0) return;
+        float hIn = h;
+        vec3  gradIn = grad;                                   // gates/masks read entry state
+        float pw = provinceWeight(PROV_KARST);                 // §8: soluble-lithology provinces
+        // (1) dolines — rimless pits on low/flat ground
+        float lowGround = mix(1.0, smoothstep(uFluvialHiGround, 0.0, hIn), uFluvialLowBias);
+        float gentle = 1.0 - smoothstep(0.5, 1.2, length(gradIn));   // flats only (cf. F20 cliff slope)
+        float gateD = lowGround * gentle * uKarstDensity * pw;
+        if (gateD > 0.001){
+          vec3 cellId; vec3 vgrad;
+          vec2 ff = voronoi3d(pos * uKarstDolineFreq + uKarstOffset + vec3(7.9, -18.3, 12.1),
+                              uVoroCells, cellId, vgrad);
+          float tp = min(ff.x / max(uKarstDolineR, 1e-4), 1.0);
+          float pit = 1.0 - tp*tp*(3.0 - 2.0*tp);              // 1 at cell center → 0 at r = R; NO rim
+          if (pit > 0.0){
+            float dsP = (ff.x < uKarstDolineR) ? (6.0*tp*(1.0-tp))/uKarstDolineR : 0.0;
+            vec3 dF1 = uKarstDolineFreq * vgrad;               // chain rule through the domain scale
+            float dDepth = uKarstDolineDepth * mix(0.4, 1.0, uKarstMaturity);
+            float carve = -gateD * pit * dDepth;               // carve DOWN (closed, inward-draining)
+            canyonHeight += carve;
+            h            += carve;
+            grad += gateD * dDepth * dsP * dF1;                // d(carve)/dpos = −gateD·dDepth·d(pit)
+          }
+        }
+        // (2) labyrinth — plateau mask × slot carve (uses ENTRY h: the pre-karst surface)
+        float tpm = clamp((hIn - uKarstPlateauLvl) / 0.08, 0.0, 1.0);
+        float pm  = tpm*tpm*(3.0 - 2.0*tpm);                   // smoothstep(lvl, lvl+0.08, hIn)
+        if (pm > 0.001){
+          vec4 r = karstRidged(pos);
+          float mDepth = uKarstMazeDepth * mix(0.25, 1.0, uKarstMaturity);
+          float gateM = uKarstDensity * pw;                    // NO lowGround — the plateau IS high ground
+          float carve = -gateM * pm * r.x * mDepth;
+          canyonHeight += carve;
+          h            += carve;
+          float dsPm = (tpm > 0.0 && tpm < 1.0) ? (6.0*tpm*(1.0-tpm))/0.08 : 0.0;
+          grad += -gateM * mDepth * (pm * r.yzw + r.x * dsPm * gradIn);
         }
       }
 
@@ -1778,6 +1877,7 @@
           canyonCombiner(vPos, h, canyonHeight, grad);
           fluvialCombiner(vPos, h, canyonHeight, grad, fluvialWet);   // F11 — channels carve into canyonHeight
           outflowCombiner(vPos, h, canyonHeight, grad);    // F13 — megaflood trunk scours into canyonHeight (after F11: same accumulator, distinct event)
+          karstCombiner(vPos, h, canyonHeight, grad);      // F21 — dolines + labyrinth dissolve into canyonHeight (before F12/F14: collapse lakes come free)
           scarpCombiner(vPos, h, grad);
           plateauCombiner(vPos, fwBase, h, grad);
           tesseraCombiner(vPos, h, grad);
@@ -2142,6 +2242,15 @@
       uOutflowGrooveFreq:{ value: 24.0 }, // F13 longitudinal groove frequency — lab knob
       uOutflowGrooves:  { value: 0.10 },  // F13 groove amplitude (fraction of carve depth; capped 0.15) — lab knob
       uOutflowOffset:   { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
+      uKarstDensity:    { value: 0.0 },   // F21 master gate (driven: F11 solvent gate, erosion-weighted); <= 0 early-outs
+      uKarstMaturity:   { value: 0.5 },   // F21 dissection maturity (driven ∝ surfaceHistory.erosion)
+      uKarstDolineFreq: { value: 9.0 },   // F21 doline Worley-cell frequency — lab knob
+      uKarstDolineR:    { value: 0.28 },  // F21 pit radius in F1 units (well under cell size 1.0 ⇒ discrete pits) — lab knob
+      uKarstDolineDepth:{ value: 0.12 },  // F21 doline carve depth — lab knob
+      uKarstMazeFreq:   { value: 6.0 },   // F21 labyrinth slot frequency (own, NOT F1's) — lab knob
+      uKarstMazeDepth:  { value: 0.18 },  // F21 labyrinth slot carve depth — lab knob
+      uKarstPlateauLvl: { value: 0.22 },  // F21 plateau mask threshold on accumulated h — lab knob
+      uKarstOffset:     { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2251,6 +2360,15 @@
       outflowGrooveFreq: 24,// F13 longitudinal groove frequency
       outflowGrooves: 0.10, // F13 groove amplitude (fraction of carve depth)
       outflowEnabled: true, // F13 enable gate
+      karstDensity: 0.0,    // F21 master gate (driven)
+      karstMaturity: 0.5,   // F21 dissection maturity (driven ∝ erosion)
+      karstDolineFreq: 9.0, // F21 doline Worley-cell frequency
+      karstDolineR: 0.28,   // F21 pit radius (F1 units; well under cell size ⇒ discrete pits, not mottling)
+      karstDolineDepth: 0.12,// F21 doline carve depth
+      karstMazeFreq: 6.0,   // F21 labyrinth slot frequency
+      karstMazeDepth: 0.18, // F21 labyrinth slot carve depth
+      karstPlateauLvl: 0.08,// F21 plateau mask threshold (tuned 2026-06-10: 0.22 missed low-relief worlds — Titan h rarely clears it; relative/quantile mask is the deferred fix)
+      karstEnabled: true,   // F21 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2415,6 +2533,7 @@
       fluvialWidth: 0.10, fluvialFreq: 2.3, fluvialWarp: 0.4, fluvialLowBias: 0.5,
       fluvialOffset: [0,0,0],
       outflowOffset: [0,0,0],
+      karstOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -2647,7 +2766,7 @@
       state.plateauDomainOffset = [0,0,0]; state.tesseraDomainOffset = [0,0,0]; state.edificeOffset = [0,0,0];
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
-      state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0];
+      state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0]; state.karstOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -2693,6 +2812,16 @@
       const _fluvHistory = _wet || (_hadLiquid && _erosion > 0);
       state.outflowDensity  = _fluvHistory ? _ss(0.3, 0.45, _erosion) : 0.0;
       state.outflowActivity = state.fluvialActivity;
+      // ── F21 karst — F11's solvent-gate STRUCTURE (stable liquid ⇒ active; relict-wet
+      // retained-atmosphere ⇒ faint; airless ⇒ 0) with EROSION replacing rain in the wet
+      // branch: dissolution is rate × time (card §4 Cornet framework), and D11 erosion is
+      // the recorded time budget — rain rate drives channels, not slow chemical eating.
+      // Unlike F13 (erosion-thresholded rare ⇒ Titan 0), Titan MUST stay nonzero — its
+      // labyrinth terrain is the flagship reference (Titan stab·(0.4+0.12) ≈ 0.4; Rocky
+      // ≈ 0.58; Ocean ≈ 0.69; airless 0). Maturity = dissection degree ∝ erosion (§6.5.4).
+      state.karstDensity  = _wet ? _clamp01(_stab * (0.4 + 0.6 * _erosion))
+                                 : (_hadLiquid ? 0.4 * _clamp01(_erosion) : 0.0);
+      state.karstMaturity = _clamp01(_erosion);
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -2965,6 +3094,21 @@
     fOutflow.add({ roll(){ state.outflowOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fOutflow.add(state, 'outflowEnabled').name('✓ enabled');
 
+    // ▸ Karst (F21) — dissolution terrain: rimless doline pits on low/flat ground +
+    // labyrinth plateau dissection. density/maturity are driven (F11 solvent gate ×
+    // erosion / erosion, .listen()); the rest are shape knobs.
+    const fKarst = fGrad.addFolder('Karst (F21)'); fKarst.close();
+    fKarst.add(state, 'karstDensity', 0, 1, 0.01).name('density (driven)').listen();
+    fKarst.add(state, 'karstMaturity', 0, 1, 0.01).name('maturity (driven)').listen();
+    fKarst.add(state, 'karstDolineFreq', 3, 20, 0.5).name('doline freq');
+    fKarst.add(state, 'karstDolineR', 0.05, 0.6, 0.01).name('doline radius');
+    fKarst.add(state, 'karstDolineDepth', 0, 0.3, 0.01).name('doline depth');
+    fKarst.add(state, 'karstMazeFreq', 2, 16, 0.5).name('maze freq');
+    fKarst.add(state, 'karstMazeDepth', 0, 0.4, 0.01).name('maze depth');
+    fKarst.add(state, 'karstPlateauLvl', 0, 0.6, 0.01).name('plateau level');
+    fKarst.add({ roll(){ state.karstOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fKarst.add(state, 'karstEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -2972,7 +3116,7 @@
       scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
-      deltas: fDeltas, coastlines: fCoast, outflow: fOutflow,
+      deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -3158,6 +3302,16 @@
       uniforms.uOutflowGrooveFreq.value = state.outflowGrooveFreq;
       uniforms.uOutflowGrooves.value    = state.outflowGrooves;
       uniforms.uOutflowOffset.value.set(state.outflowOffset[0], state.outflowOffset[1], state.outflowOffset[2]);
+      // F21 karst — karstEnabled gates density→0 (early-out), preserving the slider value.
+      uniforms.uKarstDensity.value     = state.karstEnabled ? state.karstDensity : 0.0;   // ✓ enable gate
+      uniforms.uKarstMaturity.value    = state.karstMaturity;
+      uniforms.uKarstDolineFreq.value  = state.karstDolineFreq;
+      uniforms.uKarstDolineR.value     = state.karstDolineR;
+      uniforms.uKarstDolineDepth.value = state.karstDolineDepth;
+      uniforms.uKarstMazeFreq.value    = state.karstMazeFreq;
+      uniforms.uKarstMazeDepth.value   = state.karstMazeDepth;
+      uniforms.uKarstPlateauLvl.value  = state.karstPlateauLvl;
+      uniforms.uKarstOffset.value.set(state.karstOffset[0], state.karstOffset[1], state.karstOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

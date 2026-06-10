@@ -46,12 +46,75 @@ Unbuilt — recipe once built. Register in planet-archetypes.js FEATURES as kars
 - [ ] Does the feature stay confined to plausible ground — biased to low/soluble terrain via the lowGround-style gate, and fully absent (base untouched) on airless/no-solvent presets when the master gate is 0?
 - [ ] At far distance, does the doline field fade with the LOD ramp into a coherent stippled-darkening of the region rather than sub-pixel shimmer through the dither?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — two dissolution terms, one maturity axis)
+
+1. **`karstCombiner` (Stage-4)** — sibling of fluvialCombiner, called right after outflowCombiner
+   (before F12/F14 so collapse lakes come free from the existing cut). Early-out
+   `uKarstDensity <= 0`. Carves into the shared h/canyonHeight/grad contract; same lowGround
+   mix and province weight discipline. Both terms below are unioned (sum — they occupy
+   different ground) and scaled by `uKarstDensity · provinceWeight(PROV_KARST)`.
+2. **Doline term** — Worley-pit field via the existing voronoi3d machinery (F13 just reused it;
+   gradient available): rimless bowls `pit = 1 − smoothstep(0, uKarstDolineR, F1)` at
+   uKarstDolineFreq, depth `uKarstDolineDepth · mix(0.4, 1.0, uKarstMaturity)`, gated to
+   LOW/flat ground (the lowGround mix with a gentle-slope gate — dolines pull drainage inward
+   on flats, card §4). NO raised rim (distinguishes from F2 craters, §6 item 1).
+3. **Labyrinth term** — dissected plateau: plateau mask `pm = smoothstep(uKarstPlateauLvl,
+   uKarstPlateauLvl + 0.08, h)`, valley slots = a small dedicated 2-octave ridged sampler
+   (fold |n.x| with the −sign(n.x) chain rule, own uKarstOffset seed + uKarstMazeFreq — do NOT
+   couple to fbmdRidged's mountain uniforms), carve `= −uKarstMazeDepth · slot² · pm ·
+   mix(0.25, 1.0, uKarstMaturity)`; dissection density rises with maturity by widening the slot
+   fold threshold. Flat-topped remnants stand between slots (§6 item 2).
+4. **Maturity axis**: single uKarstMaturity (driven ∝ surfaceHistory.erosion, also a knob) lerps
+   both depths + slot dissection — shallow grooves → full maze, monotonic (§6 item 3).
+5. **Collapse lakes**: free — karst runs before the F14 cut, so pit floors carved below
+   uSeaLevel get the species fill/tint with zero karst-side code. Note it in the block comment.
+6. **Province**: PROV_KARST = 18, `f = gProvince.y; fl = 0.25;` (soluble-lithology provinces,
+   decorrelated from the fluvial z-field; CHAOS-row pattern) + PROVINCES.karst
+   { field: 1, polarity: +1, floor: 0.25 }.
+7. **Registration + drivers**: FEATURES `karst: { label: 'Karst (F21)', enableKey:
+   'karstEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] }` (card §5); GUI folder
+   per the F13/F20 pattern (driven sliders .listen(), 🎲 seed, ✓ enabled last); deriveUniforms:
+   karstDensity = the F11 solvent gate (retained atmosphere + liquid stable or relict-wet),
+   karstMaturity = clamp01(erosion). Pure relief — no albedo writes.
+8. **v1 scope cuts (flagged)**: no tower-karst end stage (fenglin silhouettes need remnant
+   steepening — deferred); no underground/cave structure; doline clustering is voronoi-uniform
+   (no point-process clustering control).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 taste-call (2026-06-10, working-Claude autonomous judging per spec §13.3 — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5 in one pass + 1 tuning cycle. Shots (Titan preset, solo, d2,
+  maturity 0.8): `F21v2-titan-on.png` (render); `F21v2-diff.png` (doline term on/off pixel-diff —
+  dozens of DISCRETE separated pit clusters across the disc, the rimless point-process read,
+  not mottling); `F21v2-maze-pl06-diff.png` (maze term isolated — coherent dissected upland
+  patches, slots confined to plateau regions: "plateau minus slots"); `F21v2-composite.png`
+  (both terms, tuned defaults). Drivers verified live: Titan density 0.52 / maturity 0.2
+  (driven), Rocky-family gates per the driver comment. Vitest 19/19. Console clean.
+- Tuning cycle 1 (cap 3): default uKarstPlateauLvl 0.22 produced a near-invisible maze on
+  Titan (~700 px diff) — Titan's relief rarely clears 0.22, the coverage reasoning assumed
+  Rocky-scale relief. Persisted 0.08. Structural note for the integration pass: the plateau
+  mask is ABSOLUTE in h, so it interacts with per-world relief amplitude — a relative/quantile
+  mask is the right deferred fix; per-archetype profiles (Phase 6) can paper over it meanwhile.
+- Verification gotcha (cost ~6 probe rounds): editing planet-lod-lab.html triggers a Vite
+  full-reload of the :9223 lab page, silently resetting preset/solo/distance state — early
+  "zero-diff" karst readings were measured against a reset page (Rocky, d20, all features on),
+  not the configured Titan scenario. Re-set the whole scenario after ANY file edit.
+- Why 🟡 not 🟢: maturity-sweep monotonicity (§6 item 3) verified by construction not by
+  sweep; collapse-lake tint (§6 item 4) not visually confirmed (needs lakes co-enabled + a pit
+  below seaLevel in frame); doline-vs-crater distinguishability and posterize wall-banding
+  (§6 items 1, 5) are glance items for Max's lap. Driven Titan maturity 0.2 = shallow grooves
+  while real Titan labyrinth is mature — flagged taste-call (knob sweeps it).
+- Code review (adversarial, per §13.4): clean pass at ≥80 (chain rules re-derived by hand,
+  incl. the karstRidged /so normalization and the plateau-mask product rule; entry-state
+  consistency; registries; regression early-out). Sub-threshold flags: dsP guard asymmetry
+  (cosmetic); gentle gate reads full accumulated |grad| so near-LOD doline coverage may
+  over-suppress (UAT territory).
+- Taste forks (conservative, marked): karstDensity uses the F11 solvent-gate structure with
+  erosion replacing rain (keeps Titan alive at 0.4+; the F13-style erosion threshold would
+  zero the flagship case); lowGround gates dolines only (the plateau IS high ground — §6.5.1's
+  generic "same lowGround mix" contradicted §6.5.3 there, resolved in the maze's favor).
+- Scope cuts honored per §6.5.8: no tower karst, no caves, voronoi-uniform doline placement.
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)
