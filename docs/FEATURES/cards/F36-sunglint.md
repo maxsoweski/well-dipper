@@ -44,12 +44,55 @@ Stand-in exists but has NO FEATURES solo key — `window._lab.solo('sunglint')` 
 - [ ] At close distance, does roughness/slope-noise modulation read as a shimmering glitter patch of discrete specks elongated toward the sun, rather than a static painted dot?
 - [ ] Does increasing 'wind/roughness' broaden and dim the spot (Cox–Munk behavior) instead of just scaling brightness?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: promote the existing bypass-channel Blinn-Phong stand-in to true
+F36 per §4's three-step recipe — liquid-gate it, make it species-aware,
+add Cox–Munk roughness + spatial glitter breakup. Exemplars `3587fab`
+(F34) / `7341437` (F35).
+
+1. **Register** — `sunglint` in FEATURES (archetypes:
+   tectonic-terrestrial + volatile-cold — ocean/terrestrial/eyeball +
+   Titan) + featureFolders + `sunglintEnabled` default true + GUI folder
+   "Sunglint (F36)" in Surface — Optical. MIGRATE the Envelope folder's
+   specStrength slider + spec-bypass toggle into it (no duplicate GUI);
+   add a new `glintRoughness` slider (0–1).
+2. **Liquid gate** — fulfill the reserved Fluvial→Optical contract: the
+   glint multiplies by the SAME in-shader liquid condition the water
+   coloring already uses (sea-level cut of the height field; reuse the
+   existing water mask logic where it's computed, hoisting to a float if
+   needed). Land/ice stays matte. Airless or liquidStability 0 worlds ⇒
+   no glint (the stand-in's whole-surface sheen disappears — intended;
+   logged as taste fork).
+3. **Species** — consume the already-declared uLiquidSpecies for the
+   glint: water → bright cold-white tint, exponent ~200; methane/ethane
+   → ~0.6× strength, warm tholin tint, exponent ~120 (lower IOR).
+4. **Cox–Munk roughness** — `glintRoughness` BROADENS AND DIMS:
+   exponent = mix(speciesExp, speciesExp*0.25, r), strength ×=
+   mix(1.0, 0.45, r). Derive a default r in applyDrivers from wind
+   proxy if one exists, else 0.15 authored.
+5. **Glitter breakup** — multiply the spec lobe by a high-frequency
+   spatial slope-noise mask (existing noise fns; deterministic from
+   position, bounded-uTime shimmer optional): sub-pixel/averaged at
+   d20 (single point), discrete specks at d≤5. No accumulation buffers.
+6. **Plumbing** — PROV_GLINT=34 + PROVINCES neutral row + provinceWeight
+   row + GLSL_NAME line; frame writer sole uniform owner; keep core.js
+   specStrength derivation, post-process in applyDrivers.
+
+v1 scope cuts (logged, not built): Gerstner/anisotropic sun-elongated
+streak (specks are isotropic noise v1); Fresnel angle dependence beyond
+the species constant; foam coupling; separate metallic land spec for
+iron worlds (stand-in behavior retired).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4c heavy loop)
+- Evidence (repo root, gitignored): `F36-ocean-d20.png` (glint blob 20×15 px on a ~100-140 px disc — a point, not a sheen; peak dLum 170), `F36-rocky-glint.png` (all 389 diff px one cluster on water; 5 land samples dLum 0.00), `F36-titan-glint.png` (peak 91.7 = 0.54× Ocean, dRGB [121,87,52] warm), `F36-ocean-d4-glitter.png` (35 distinct specks at d4 vs single blob at d20; shimmer 4361 px over 1.5 s, OFF-control 0), `F36-bypass-on/off.png` (119 vs 60 unique levels), `F36-solo-isolate.png`.
+- §6 checklist: sharp point 🟢 · geometry tracking 🟢 (yaw +0.4 → centroid slid ~10 px; night/terminator diff 0) · liquid confinement 🟢 (land matte; 2 fringe px at the soft sea-mask edge) · bypass crisp-vs-quantized 🟢 · species 🟢 (Titan 0.54× warm vs Ocean cold; uniforms exact: 0.4404/106.5) · glitter at close LOD 🟢 (uLodRamp fade-in; deterministic noised sample) · Cox–Munk 🟢 (r 0→0.8: peak 170→126.9 dimmer, half-peak area 84→105 broader).
+- Live drivers: Rocky/Ocean/Eyeball 0.8/exp 200/cold-white · Titan 0.48/120/warm tholin · other 9 presets 0 (Venus/Jovian/Frozen A/B diff 0 px; Lava diff = its own glow pulse, glint ≈ 0). Liquid gate = the F14 Stage-4 sea cut (lakesEnabled=false correctly kills the glint).
+- Tweaks applied: 1 of 3 cycles — water tint [1,1,0.95] read warm-ivory in diff statistics vs the card's "cold-white"; flipped to [0.95,0.97,1.0] at all 3 sites post-verify. Re-verify: not re-run (3-channel constant hue nudge; all behavior axes unaffected; vitest 19/19, parity 34).
+- Code review (fable): APPROVE, no MAJOR/MINOR. Notes: unbounded uTime in the glitter noise (precedented by clouds/aurora — logged, not changed); solo('sunglint') renders nothing by design (solo kills lakes → liquidMask 0; isolate via solo + lakesEnabled=true — §5 updated path); per-preset derivation confirmed live by the verifier.
+- Taste forks for Max's lap: (a) the stand-in's whole-surface/land sheen (incl. airless iron metallic sheen) is RETIRED — dry and gas worlds lost their old subtle specular entirely (per card, but globally visible); (b) glitter constants authored (freq 60, thresholds, ×2.2 gain); (c) glintRoughness default 0.15 authored (no wind driver exists in _derived).
+- Status: VERIFIED_PENDING_MAX

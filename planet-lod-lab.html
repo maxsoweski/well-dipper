@@ -160,7 +160,7 @@
       uniform int   uFwClamp;       // 1 = fwidth octave clamp on
       uniform int   uDitherMode;    // 0 = Bayer, 1 = IGN
       uniform float uEmissive;      // emissive glow strength
-      uniform float uSpecStrength;  // specular glint
+      uniform float uSpecStrength;  // F36 sunglint strength (driven: liquid master gate, species + Cox-Munk dim folded at the per-frame writer)
       uniform float uLimbStrength;  // limb/atmosphere rim glow
       uniform int   uEmissiveBypass;
       uniform int   uSpecBypass;
@@ -173,6 +173,9 @@
       uniform float uTermStrength;  // F35 band strength (driven: ~0.5 retained atmosphere, 0 airless — the master gate)
       uniform float uTermWidth;     // F35 gaussian half-width in mu (driven: D5 pressure log ramp 0.06..0.30; floored in-shader)
       uniform int   uTermBypass;    // 1 = band skips the quantizer (smooth twilight)
+      // ── F36 sunglint (card F36 — liquid-only mirror glint) ──
+      uniform vec3  uGlintTint;     // F36 species tint (driven: water cold-white / methane warm tholin)
+      uniform float uGlintExp;      // F36 Blinn-Phong exponent (driven: species base 200 water / 120 methane, x Cox-Munk roughness broadening at the writer; floored in-shader)
       uniform float uCloudCoverage;   // 0..1 weather-layer density (Task 7)
       uniform float uAuroraIntensity; // 0..1 night-side ring strength (Task 7)
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
@@ -782,6 +785,7 @@
       const int PROV_NIGHTTHERM  = 31;  // F33 — neutral (atmospheric emission, not geology): the night floor + silicate deck ride ABOVE the rock provinces (FROST-row pattern)
       const int PROV_LIMB        = 32;  // F34 — neutral (global optics, not geology): the rim hugs the whole silhouette regardless of provinces (FROST-row pattern, like clouds F31)
       const int PROV_TERM        = 33;  // F35 — neutral (global optics, not geology): the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
+      const int PROV_GLINT       = 34;  // F36 — neutral (view/illumination geometry, not geology): the mirror point follows sun + camera over the already lakes-gated sea (FROST-row pattern, like limb/terminator)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -833,6 +837,7 @@
         else if (fid == PROV_NIGHTTHERM) { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_LIMB)       { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_TERM)       { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_GLINT)      { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -3025,11 +3030,40 @@
           emissive += uThermalStrength * thermalC;
         }
 
-        // ★ Specular glint (sunglint F36 stand-in) — Blinn-Phong, only on the lit side.
-        vec3 H = normalize(uLightDir + V);
-        float spec = pow(max(dot(shadeN, H), 0.0), 48.0) * uSpecStrength * step(0.0001, diff);
-        vec3 specC = vec3(spec);
-        specC = (uSpecBypass == 1) ? specC : posterize(specC, uLevels, fc, 0.4, uDitherMode);
+        // ★ Sunglint (F36) — the mirror image of the star on standing liquid, LIQUID-ONLY.
+        // Promoted from the Blinn-Phong stand-in (which glinted on the whole surface,
+        // land included): the lobe now multiplies by the SAME Stage-4 liquidMask the
+        // F14 sea cut / water coloring already use (the reserved Fluvial-to-Optical
+        // contract), so adjacent land/ice stays matte and any no-sea preset (airless,
+        // gas h2-he envelope, hot Venus: uSeaLevel -1 keeps liquidMask 0) renders NO
+        // glint. shadeN inside the mask is the flattened (geometric) sea normal — the
+        // F14 cut already relaxed grad to 0 there, so the lobe reads as one coherent
+        // specular point pinned to the half-vector geometry, not relief sparkle.
+        // Species + Cox-Munk arrive pre-derived (uGlintTint / uGlintExp / uSpecStrength:
+        // water cold-white exp ~200, methane warm dim exp ~120; roughness broadens AND
+        // dims at the per-frame writer). pow() base keeps the clamped max(dot, 0)
+        // pattern and the exponent is floored — never spec-undefined. Glitter breakup
+        // (card section 4 step 3): ONE high-frequency noised() sample from vPos (slow
+        // uTime domain drift = shimmer, deterministic, no accumulation) resolves the
+        // far-distance point into discrete specks at close LOD; the mask fades in on
+        // uLodRamp (0 at d20 = clean single point) and the x2.2 gain compensates the
+        // sparse-speck duty cycle so integrated energy stays comparable across the
+        // fade. The strength-and-mask guard skips the whole block when the glint
+        // cannot fire: enable off (writer zeroes uSpecStrength), no-sea presets, or
+        // land fragments all yield specC = vec3(0) EXACTLY — the F36 regression
+        // contract (the default LOOK changes by design: the stand-in's land sheen is
+        // retired, logged as the card section 6.5 taste fork).
+        vec3 specC = vec3(0.0);
+        if (uSpecStrength > 0.0 && liquidMask > 0.0){
+          vec3 H = normalize(uLightDir + V);
+          float spec = pow(max(dot(shadeN, H), 0.0), max(uGlintExp, 1.0)) * uSpecStrength * step(0.0001, diff);
+          spec *= liquidMask * provinceWeight(PROV_GLINT);
+          float gn = noised(vPos * 60.0 + vec3(uTime * 0.35)).x;
+          float specks = smoothstep(0.05, 0.35, gn) * 2.2;
+          spec *= mix(1.0, specks, smoothstep(0.5, 1.0, uLodRamp));
+          specC = uGlintTint * spec;
+          specC = (uSpecBypass == 1) ? specC : posterize(specC, uLevels, fc, 0.4, uDitherMode);
+        }
 
         // ★ Aurora (Optical F37 stand-in) — night-side polar ring; rays from analytic noised(); skips quantizer.
         float lat = N.y;                                       // -1..1 latitude proxy (object-space normal)
@@ -3067,6 +3101,9 @@
       uTermStrength:   { value: 0.0 },   // F35 band strength (driven: ~0.5 retained atmosphere / 0 airless)
       uTermWidth:      { value: 0.12 },  // F35 gaussian half-width (driven: pressure log ramp 0.06..0.30)
       uTermBypass:     { value: 0 },     // 1 = band skips the quantizer (smooth twilight)
+      // ── F36 sunglint (driver-true liquid glint — card §6.5 steps 3-4) ──
+      uGlintTint:      { value: new THREE.Color(0.95, 0.97, 1.0) },  // F36 species tint (driven: water cold-white / methane warm tholin)
+      uGlintExp:       { value: 200.0 }, // F36 Blinn-Phong exponent (driven: species base x Cox-Munk broadening at the writer)
       uCloudCoverage:  { value: 0.0 },   // weather-layer density (driven by deriveUniforms)
       uAuroraIntensity:{ value: 0.0 },   // night-side ring strength (driven by deriveUniforms)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
@@ -3233,7 +3270,7 @@
       // emissiveBlackbody/voronoi3d = shader helpers; latBias/storm arrays =
       // per-domain, declared by their owner — see the registry doc.)
       uLiquidStability: { value: 0.0 },   // 0..1 liquid on/off gate    — owner Fluvial; read by Aeolian/Cryo/Optical
-      uLiquidMask:      { value: 0.0 },   // liquid-body coverage scalar — owner Fluvial (F14 applyDrivers writes seaCoverage); read by Optical (sunglint F36)
+      uLiquidMask:      { value: 0.0 },   // liquid-body coverage scalar — owner Fluvial (F14 applyDrivers writes seaCoverage). NOTE (F36, 2026-06-10): the sunglint consumes the SPATIAL Stage-4 liquidMask in-shader (the same sea cut F14 renders), not this whole-planet scalar — the Fluvial-to-Optical contract is fulfilled per-fragment; this registry scalar stays value-only.
       uSeaLevel:        { value: -1.0 },  // F14 standing-liquid level-set threshold; -1 = no liquid (driven: stability gate + coverage)
       uDeltaDensity:    { value: 0.0 },   // F12 deposition gate (driven: fluvialDensity × activity); <= 0 early-outs
       uDeltaAmp:        { value: 0.06 },  // F12 apron amplitude — lab knob
@@ -3497,7 +3534,7 @@
       // ── Envelope (spec §2.C) — the A/B/C tunable surface; values stay OPEN (§4) ──
       ditherMode: 0,        // 0 Bayer, 1 IGN/triangular
       emissive: 0.0,        // lava/hot glow
-      specStrength: 0.0,    // ocean/ice specular glint
+      specStrength: 0.0,    // F36 sunglint strength (driven: core derivation, zeroed when no open sea; 0.6x methane)
       limbStrength: 0.0,    // atmosphere rim glow
       provinceWeight: 1.0,  // Stage-D province influence dial (0 = legacy uniform look)
       seaLevel: -1.0,       // F14 standing-liquid threshold (driven; -1 = none)
@@ -3628,6 +3665,10 @@
       termStrength: 0.0,    // F35 band strength (driven: ~0.5 on every retained atmosphere / 0 airless)
       termWidth: 0.12,      // F35 gaussian half-width in mu (driven: D5 pressure log ramp — 0.06 hairline / 0.12 at 1 bar / 0.30 Venus-class)
       termColor: [1.0, 0.45, 0.18],  // F35 band tint (driven: per-preset map, fallback warm orange)
+      sunglintEnabled: true, // F36 enable gate — off zeroes uSpecStrength at the per-frame writer (specC vec3(0) exactly; NOTE: the glint also needs the F14 sea — lakes off ⇒ liquidMask 0 ⇒ no glint, so solo('sunglint') must re-enable lakes to show anything)
+      glintRoughness: 0.15, // F36 Cox-Munk sea state (authored default 0.15 — no wind-speed driver exists in _derived; live lab slider): broadens AND dims at the per-frame writer
+      glintBaseExp: 200,    // F36 species base exponent (driven: water 200 / methane-ethane 120 — lower IOR, broader dimmer lobe)
+      glintTint: [0.95, 0.97, 1.0],  // F36 species tint (driven: water cold-white / methane warm tholin)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -3897,12 +3938,13 @@
     fEnv.add(state, 'levels', 6, 16, 1).name('posterize levels');
     fEnv.add(state, 'ditherMode', { Bayer: 0, 'IGN/triangular': 1 }).name('dither mode');
     fEnv.add(state, 'emissive', 0, 1, 0.01).name('emissive (lava)');
-    fEnv.add(state, 'specStrength', 0, 1, 0.01).name('specular (ocean/ice)');
     // F34: the 'limb glow' slider + 'limb bypass quantizer' toggle MIGRATED to the
     // registered "Limb glow (F34)" folder (Surface — Optical) — no duplicate GUI.
+    // F36: the 'specular (ocean/ice)' slider + 'spec bypass quantizer' toggle
+    // MIGRATED to the registered "Sunglint (F36)" folder (Surface — Optical) —
+    // no duplicate GUI (same migration as F34's).
     fEnv.add(state, 'provinceWeight', 0, 1, 0.01).name('province influence');
     fEnv.add(state, 'emissiveBypass').name('emissive bypass quantizer');
-    fEnv.add(state, 'specBypass').name('spec bypass quantizer');
 
     // ▸ Drivers (open) — "types are driver-bundle PRESETS, not shader branches" (spec §2.D).
     // A preset is a physics bundle; deriveUniforms() maps it to semantic uniforms with NO
@@ -4023,7 +4065,10 @@
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
       state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;
       uniforms.uEmissive.value = u.emissive;
-      uniforms.uSpecStrength.value = u.specStrength;
+      // uSpecStrength is now F36-owned: the core derivation is POST-PROCESSED in
+      // the F36 block below (liquid gate + species) and written by the per-frame
+      // writer behind the sunglintEnabled gate (Cox-Munk dim folded there) — no
+      // direct uniform write here anymore (the F34 precedent).
       // uLimbStrength is now F34-owned: the core derivation is POST-PROCESSED in
       // the F34 block below (haze-class fork + hue map) and written by the
       // per-frame writer behind the limbEnabled gate — no direct uniform write
@@ -4562,6 +4607,36 @@
       // the F34 stale-uBaseColor read — see the N6 note on TERM_COLOR_BY_PRESET).
       const _tc = TERM_COLOR_BY_PRESET[driverUI.preset];
       state.termColor = _tc ? _tc.slice() : [1.0, 0.5, 0.2];
+      // ── F36 sunglint — driver derivation (card §6.5 steps 2-4; post-process HERE
+      // per the F34/F35 precedent — core.js untouched). Liquid master gate: a mirror
+      // glint needs an OPEN SEA, i.e. the exact condition that turned on the F14 cut
+      // above (seaLevel > -1 ⇔ _wet && coverage > 0 — the in-shader liquidMask is its
+      // spatial form). Every no-sea preset zeroes: airless (Lava/Frozen/Europa), hot
+      // shrouded Venus, AND all four gas/hot-jupiter h2-he presets — a gas giant has
+      // no liquid surface to mirror, so the gate retires the stand-in's faint
+      // whole-deck sheen there (core's iron*0.15 floor; logged decision, card §6.5
+      // step 2). The airless iron metal-sheen path is likewise retired (card v1 cut
+      // — a separate land-spec feature can resurrect it). Wet worlds keep the core
+      // derivation (~0.8 via the liquidStability ramp). Pre-checked through the real
+      // deriveUniforms over all 13 presets: Rocky/Ocean/Eyeball 0.8 water; Titan
+      // 0.48 methane; the other 9 all 0.
+      const _glintWet = state.seaLevel > -1.0;
+      if (!_glintWet) state.specStrength = 0.0;
+      // Species (card §6.5 step 3): consume the derived liquidSpecies CPU-SIDE into
+      // uGlintTint/uGlintExp/strength rather than branching in-shader — same pattern
+      // as the F34/F35 per-preset hue maps, and it keeps all three knobs visible in
+      // the GUI. Water: bright cold-white, tight exp 200. Methane/ethane (Titan):
+      // lower IOR (n ~1.27 vs 1.33) ⇒ 0.6x strength, warm tholin-sky tint, broader
+      // exp 120 — the Kraken Mare dim-warm read.
+      const _glintMeth = u.liquidSpecies === 1;
+      if (_glintMeth) state.specStrength = Math.min(1.0, state.specStrength * 0.6);
+      state.glintBaseExp = _glintMeth ? 120 : 200;
+      state.glintTint = _glintMeth ? [1.0, 0.72, 0.42] : [0.95, 0.97, 1.0];
+      // Cox-Munk roughness default (card §6.5 step 4): _derived carries no wind-speed
+      // driver (D8 spin organizes bands, not sea state; the F15 pressure ramp gates
+      // saltation existence, not wave slope), so r = 0.15 authored per the card. The
+      // slider stays live — the broaden-and-dim fold happens at the per-frame writer.
+      state.glintRoughness = 0.15;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -5005,8 +5080,8 @@
     fThermalNight.add(state, 'nightsideThermalEnabled').name('✓ enabled');
     fThermal.add(state, 'daysideThermalEnabled').name('✓ enabled');
 
-    // ▸ Surface — Optical: the P26 scattering family (F34 limb; F35 terminator +
-    // F36 sunglint land here later). First registered Optical feature.
+    // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
+    // F36 sunglint).
     const fOpticalGroup = guiRight.addFolder('Surface — Optical'); fOpticalGroup.open();
     // ▸ Limb glow (F34) — fresnel rim against the geometric silhouette + the F31e
     // detached haze shell (back-face second pass, thick-haze worlds only). strength /
@@ -5032,6 +5107,21 @@
     fTerm.addColor(state, 'termColor').name('band color (driven)').listen();
     fTerm.add(state, 'termBypass').name('term bypass quantizer');
     fTerm.add(state, 'terminatorEnabled').name('✓ enabled');
+    // ▸ Sunglint (F36) — the star's mirror image on standing liquid: liquid-masked
+    // Blinn-Phong lobe in the bypass channel (Stage 9 composite-split). strength /
+    // base exponent / tint are driven (F14 sea gate, species map, .listen());
+    // roughness is driven-default 0.15 but LIVE (Cox-Munk broaden-and-dim folds at
+    // the per-frame writer); the bypass toggle is the lab knob. The slider + bypass
+    // toggle MIGRATED here from the Envelope folder (no duplicate GUI). NO 🎲 — the
+    // glint is sun/camera geometry, nothing is placed. NOTE: needs the F14 sea —
+    // solo('sunglint') turns lakes off, so re-enable lakes to see the glint.
+    const fGlint = fOpticalGroup.addFolder('Sunglint (F36)'); fGlint.close();
+    fGlint.add(state, 'specStrength', 0, 1, 0.01).name('strength (driven)').listen();
+    fGlint.add(state, 'glintRoughness', 0, 1, 0.01).name('roughness (wind)').listen();
+    fGlint.add(state, 'glintBaseExp', 20, 400, 1).name('base exponent (driven)').listen();
+    fGlint.addColor(state, 'glintTint').name('glint tint (driven)').listen();
+    fGlint.add(state, 'specBypass').name('spec bypass quantizer');
+    fGlint.add(state, 'sunglintEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -5045,7 +5135,7 @@
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds,
       daysideThermal: fThermal, nightsideThermal: fThermalNight,
-      limb: fLimb, terminator: fTerm,
+      limb: fLimb, terminator: fTerm, sunglint: fGlint,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -5213,7 +5303,17 @@
       uniforms.uFwClamp.value = state.fwClamp ? 1 : 0;
       uniforms.uDitherMode.value = state.ditherMode;
       uniforms.uEmissive.value = state.emissive;
-      uniforms.uSpecStrength.value = state.specStrength;
+      // F36 sunglint — sunglintEnabled gates strength→0 (the Stage-9 spec block is
+      // gated on uSpecStrength > 0, so one gate skips the whole bypass-channel term:
+      // specC = vec3(0) exactly — the F36 regression contract); no-sea presets derive
+      // strength 0, so the same contract holds with the enable on. Cox-Munk roughness
+      // folds into BOTH writes HERE, CPU-side (card §6.5 step 4), so the lab slider
+      // stays live without re-running applyDrivers: rough seas BROADEN the lobe
+      // (exponent x mix(1, 0.25, r)) AND dim it (strength x mix(1, 0.45, r)).
+      uniforms.uSpecStrength.value = state.sunglintEnabled
+        ? state.specStrength * (1.0 - 0.55 * state.glintRoughness) : 0.0;   // ✓ enable gate
+      uniforms.uGlintExp.value = state.glintBaseExp * (1.0 - 0.75 * state.glintRoughness);
+      uniforms.uGlintTint.value.setRGB(state.glintTint[0], state.glintTint[1], state.glintTint[2]);
       // F34 limb glow — limbEnabled gates strength→0 (the Stage-9 rim multiplies by
       // uLimbStrength, so one gate zeroes the whole additive term and restores
       // byte-identical pre-F34 output) AND hides the F31e haze shell; airless

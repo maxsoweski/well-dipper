@@ -52,6 +52,13 @@ export const FEATURES = {
   // is physically real on the giants too), so membership matches F34's set; the
   // card's narrower terrestrial/rocky/venus doc scope is logged in its §7.
   terminator: { label: 'Terminator gradient (F35)', enableKey: 'terminatorEnabled', archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
+  // F36 sunglint — liquid-only mirror glint. Membership = the archetypes whose
+  // presets can derive an open sea (the F14 wet x coverage gate): tectonic-
+  // terrestrial (Rocky/Ocean/Eyeball water) + volatile-cold (Titan methane).
+  // Gas/hot-jupiter archetypes are deliberately ABSENT: an h2-he envelope has no
+  // liquid SURFACE to mirror — their drivers derive specStrength 0 (the stand-in
+  // whole-surface sheen, incl. the airless iron metal sheen, is retired).
+  sunglint:   { label: 'Sunglint (F36)',        enableKey: 'sunglintEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -115,4 +122,5 @@ export const PROVINCES = {
   nightsideThermal:{ field: 2, polarity: +1, floor: 1.00 },  // neutral — atmospheric emission, not geology: the night floor + silicate deck ride ABOVE the rock provinces (FROST-row pattern)
   limb:       { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the rim hugs the whole silhouette regardless of provinces (FROST-row pattern, like clouds F31)
   terminator: { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
+  sunglint:   { field: 2, polarity: +1, floor: 1.00 },  // neutral — view/illumination geometry, not geology: the mirror point follows sun + camera over the (already lakes-gated) sea (FROST-row pattern, like limb/terminator)
 };
