@@ -100,8 +100,26 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
    uCloudCoverage before pixel-diffs) still apply.
 1. **`warp-landing-strip-persists` Max UAT** — confirm the fix in Max's
    browser, then flip to Shipped + push.
-2. **`warp-tunnel-second-half-not-rendering`** — needs PM-scoping. Last
-   warp regression; likely a Phase-E tunnel-pipeline rewrite.
+2. **`warp-tunnel-second-half-not-rendering`** — **ROOT-CAUSED + FIXED
+   2026-06-10, VERIFIED_PENDING_MAX `1787c3f` + `2c23ee8`** (no rewrite
+   needed). TWO independent causes, both reproduced per-frame on GPU 9223
+   after Max's UAT report ("freeze + second half missing on binary
+   destinations"): (a) Portal-A re-anchor margin 1e-10 < float64 rounding
+   at destination coords → spurious INSIDE→OUTSIDE_A one frame post-swap
+   → disc B can never reveal, AC4 silent; binary correlation was larger
+   orbitDist coords, not binarity. Margin → 0.5u + anchor from portal pos.
+   (b) Null-seed known objects (IC1396/IC434/CasA/IC2602 — no messier/ngc)
+   crash SkyFeatureLayer._hashSeed inside onSwapSystem → gate held, AC4
+   stall, arrived system stranded with no sky/starfield. Seed falls back
+   to catalog key + _hashSeed fails soft. 12-warp post-fix ride clean
+   (dotA −0.5 invariant, everB all warps incl. binaries); IC1396-adjacent
+   warp clean + follow-up warp not stranded. Tests:
+   `portal-traversal-margin.test.js`, `known-object-feature-seed.test.js`.
+   **NEW LATENT BUG found while pinning (separate, unfixed): IC434
+   Horsehead shares IDENTICAL galacticPos with M78 and the known-object
+   injection dedup splices it — Horsehead never renders anywhere.**
+   Also shipped 2026-06-10: **default-mute** (`19134e9`) — app opens
+   silent every load; session-only "Sound Enabled" checkbox in settings.
 3. **`world-origin-reset-on-system-swap-2026-06-04`** — SCOPED (`466a0c5`),
    **awaiting GATE 1**, queued behind MVP. Structural fix to the rebasing
    bug class (wire dead `resetWorldOrigin()` + invariant test). Full review:
