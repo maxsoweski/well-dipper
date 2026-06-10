@@ -51,8 +51,32 @@ Built — solo it in the :9223 debug Chrome (chrome-devtools MCP, per memory/chr
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟢 2026-06-10 (VERIFIED_PENDING_MAX) — Europa (icy moon), solo
+  `cryoRidge`, d6/d3/d12 + gate/warp/amp sweeps. Drivers verified live:
+  cryoActivity 1.0, amp 0.12, drFreq 3, offset 0.45, width 0.18,
+  bandFreq 14, warp 0.3.
+  - Lineations: long, sinuous, quasi-parallel ridge lines stay coherent
+    across the disc and wrap the limb — anisotropic line fields, not
+    isotropic bumps (shots 01 d6, 02 d3).
+  - Double-ridge triplet: crest/trough/crest cross-section pinned by the
+    doubleRidgeProfile vitest oracle; visible as paired-line internal
+    banding along lineations under oblique light — subtle at the default
+    amp 0.12, unambiguous at amp 0.3 (shot 06). Default amplitude is
+    conservative; flag for Max if he wants Europa to read bolder.
+  - Grooved bands: a clearly finer second family confined to band swaths
+    along a different axis — two crosscutting tectonic generations, no
+    grid/interference read (shots 01, 06).
+  - Gate: cryoActivity 0 → dead-smooth shell (shot 04); amp scales
+    proportionally (early-out verified).
+  - Sinuosity: warp 0.7 produces broad meandering arcs, lines stay
+    connected (shot 05).
+  - Distance: ridges dissolve gracefully by d12, no moire from
+    bandFreq 14 in stills (shot 03); temporal stability per FOUNDATION
+    checks 3 & 4 🟢. All relief arrives as shading-band/dither texture —
+    zero albedo striping.
+  - Shots: F10-cryoridge-01-d6.png, -02-d3-profile.png, -03-d12-fade.png,
+    -04-d6-activity0.png, -05-d6-warp07.png, -06-d6-amp03.png.
+- Max's feedback: (pending Phase-7 lap)
+- Tweaks applied: none (amp default noted as conservative — taste knob)
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX
