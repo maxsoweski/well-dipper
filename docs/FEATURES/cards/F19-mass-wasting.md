@@ -47,12 +47,87 @@ Unbuilt — recommended recipe once built. Register the feature in planet-archet
 - [ ] Under the 4x4 Bayer dither at surface-skimming distance, does the apron stay as stable flat posterize bands (smoothness reads as calm) instead of shimmering?
 - [ ] Does gravity scaling behave: on a low-g preset do aprons stand steeper/shorter, and on ice presets do they slump fatter, in a way that reads as form change, not just amplitude change?
 
+## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — talus aprons + downhill lobes v1)
+
+1. **`massWastCombiner(pos, inout h, inout grad)` (Stage-5 gradational)** — called AFTER all
+   steep-relief hosts (after karstCombiner, before duneCombiner: dunes/dust then mantle over
+   the deposits; lava still last-ish per its contract). Early-out `uMassWastDensity <= 0.0`.
+   Reads ENTRY h/grad for all gating (the established hIn/gradIn discipline).
+2. **Foot-of-steeps gate**: coarse REGIONAL slope per the F17 glacial pattern (re-read how
+   :1333-1345 samples it — reuse its helper if one exists, else a 2-sample noised()-free probe
+   of the underlying field is NOT available → use the F17 approach verbatim). Talus zone =
+   `steepNearby = smoothstep(uRepose, uRepose·1.6, regionalSlope)` × local-slope window
+   `1 − smoothstep(uRepose·0.7, uRepose, |gradIn|)` (deposits bank where slope DROPS below a
+   steep neighbor — §6 item 3; pure-solo with hosts off ⇒ regionalSlope flat ⇒ zero deposits).
+3. **Talus apron term**: `h += uTalusAmp · zone · pw`; SMOOTHNESS is the read (§6 items 1, 7):
+   attenuate the high-frequency part of grad on the deposit — `grad *= (1.0 − 0.6·zone·pw)`
+   (F16 attenuation convention; deposit reads calm against busy walls). Convexity: scale amp
+   by `(1.0 + uLdaFat)` — the ice-world lobate-debris-apron variant is a FATTER collar via the
+   driven uLdaFat, not a separate shape (v1 simplification, flagged).
+4. **Discrete lobe term**: voronoi3d-seeded (F13 pattern, own uMassWastOffset seed) on the
+   steep mask only: each cell with `steepNearby > 0.5` hosts one tongue — profile =
+   smoothstep skirt stretched 2.5:1 along the DOWNHILL direction `dn = normalize(−gradIn)`
+   (F13's anisotropic-stretch Jacobian machinery, axis = dn instead of the flow tangent),
+   faint raised terminal edge (a second, narrower smoothstep ring on the downhill end only if
+   cheap — else cut and flag). §6 item 5: tongues, not circles.
+5. **Province**: PROV_MASSW = 21, `f = gProvince.x; fl = 0.30;` (deposits live where steeps
+   live — mountain-field polarity) + PROVINCES.massWasting { field: 0, polarity: +1,
+   floor: 0.30 }.
+6. **Registration + drivers**: FEATURES `massWasting: { label: 'Mass-wasting (F19)',
+   enableKey: 'massWastEnabled', archetypes: ['impact-airless','tectonic-terrestrial',
+   'volcanic','icy-active','volatile-cold'] }` (card §5 — note FIVE archetypes; check the
+   filter still behaves); GUI per the F16 pattern; deriveUniforms: massWastDensity = 1.0 on
+   any solid world (relief is universal; airless INCLUDED — Iapetus/crater-wall talus),
+   uRepose ∝ inverse gravity (read what deriveUniforms exposes for surfaceGravity — low-g ⇒
+   higher repose ⇒ steeper standing walls, §6 item 8), uLdaFat ∝ ground-ice/volatileFraction
+   on cold worlds.
+7. **Tuning pre-check (standing lesson)**: gates must produce DISCRETE deposits at scarp/crater
+   feet, not planet-wide wash — reason about what fraction of a Rocky surface has
+   regionalSlope > uRepose before settling defaults; verify on low-relief worlds the early-out
+   keeps the base clean. No absolute-h thresholds.
+8. **v1 scope cuts (flagged)**: sturzstrom long-runout scaling, slump terraces, flow diversion
+   around obstacles, separate LDA geometry (fatness knob only), repose-envelope height clamp
+   (true Roering-style critical-angle faces deferred — v1 is additive fill + smoothing).
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 taste-call (2026-06-10, working-Claude autonomous judging per spec §13.3 — VERIFIED_PENDING_MAX)
+- Evidence: built per §6.5 in one pass, zero fix cycles. Shots (Frozen preset, solo + craters
+  re-enabled per the card's parasitic-on-slope caveat): `F19-frozen-on.png` (render),
+  `F19-diff.png` (the load-bearing check: on/off pixel-diff — deposit traces RING every crater
+  wall across the disc, flats and crests untouched, zero planet-wide wash: §6 item 3 verified).
+  Pure-solo (hosts off): on/off diff = **exactly 0 changed pixels** — the gradBase subtraction
+  zero-deposit guarantee holds bit-exactly live, independently re-measured by the orchestrator
+  on top of the implementer's own check (297 px vs 228 temporal noise floor). Drivers live:
+  density 1.0, Frozen repose 1.50 / ldaFat 0.6, Titan repose 1.89 / fat 0.8, Rocky 0.94 / 0.
+  Vitest 19/19. Console clean.
+- Design fork (the load-bearing one, review-verified sound): the card's F17-style regional-
+  slope probe is host-blind (can't see enables) and raw entry |grad| is FBM-dominated (median
+  0.89 measured) — replaced with `hostGrad = gradIn − gradBase` where gradBase is the pure
+  Stage-A FBM gradient snapshotted at the call site. Exact because every pre-F19 combiner is
+  additive on grad (review traced all 15); CONTRACT comment now guards the call site (a future
+  pre-F19 multiplicative smoother would silently corrupt the gate). Hosts thus include every
+  steep accumulated form (mountains/craters/canyons/karst/outflow/scarps/edifices/chaos/cryo/
+  sublimation/glacial) — matches the card's open-ended host list.
+- Why 🟡 not 🟢: placement + regression are verified to the session's highest standard, but
+  the §6 morphology heart is unjudged at fine grain — lobe tongues reading as downhill-pointing
+  (item 2/5), LDA fat-collar vs thin-skirt form change (item 4), gravity-scaling as form not
+  amplitude (item 8), apron calm-band texture contrast (items 1/7). Default amplitudes are
+  deliberately subtle; knobs reach 0.3 if Max wants bolder.
+- Code review (adversarial, per §13.4): clean pass at ≥80 — gradBase fork verified exhaustively
+  (additivity of all 15 upstream combiners, units commensurable, single caller), lobe Jacobian
+  byte-equivalent to F13's, terminal ring derivative exact and zero outside the skirt, dn guard
+  unreachable-by-construction. Sub-threshold: localOK gates full 3D |gradIn| vs sHost's
+  tangent projection (calibrated empirically as-is); the additivity contract was implicit
+  (now explicit at the call site).
+- Taste forks (conservative, marked): per-cell hash keeps ~60% of lobes (episodic failures);
+  repose = clamp(0.9·g^−0.4, 0.5, 2.2) (mild inverse power so Titan low-g doesn't blow past
+  every wall); terminal-edge ring KEPT (pure ALU, no extra noise samples); call slot after
+  glacial (the card's "after karst" parenthetical contradicted its own "after ALL steep hosts"
+  rule — resolved toward the rule).
+- Scope cuts honored per §6.5.8: no sturzstrom runout scaling, slump terraces, flow diversion,
+  separate LDA geometry, or repose-envelope clamp.
+- Re-verify: n/a
+- Status: VERIFIED_PENDING_MAX (Max's Phase-7 review lap)

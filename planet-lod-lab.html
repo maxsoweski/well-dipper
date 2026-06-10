@@ -388,6 +388,14 @@
       uniform float uDustFlatK;        // settling slope-damp k in 1/(1+k·|grad|²) — dust survives flats, strips from steeps — lab knob
       uniform float uDustTint;         // butterscotch veil strength (Stage-8 whole-disk warm muting) — lab knob
       uniform vec3  uDustOffset;       // 🎲 domain offset — own region seed, decorrelated from lava/dunes
+      // ── F19 mass-wasting deposits (Gradational step 4a — card F19) ──
+      uniform float uMassWastDensity;  // 0..1 master gate (driven: 1.0 on every solid world, airless INCLUDED — Iapetus talus); <= 0 ⇒ early-out
+      uniform float uRepose;           // angle-of-repose threshold in accumulated-|grad| units (driven ∝ g^-0.4 — low-g walls stand steeper, card §6 item 8)
+      uniform float uTalusAmp;         // talus-apron fill amplitude — lab knob
+      uniform float uLdaFat;           // 0..1 lobate-debris-apron fattening (driven: ground ice = volatile budget × cold); v1 = fatter collar, NOT separate geometry
+      uniform float uLobeAmp;          // landslide-tongue amplitude — lab knob
+      uniform float uLobeFreq;         // landslide voronoi seed frequency (tongue spacing) — lab knob
+      uniform vec3  uMassWastOffset;   // 🎲 domain offset — own lobe seed, decorrelated from craters/karst
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -642,6 +650,7 @@
       const int PROV_KARST       = 18;  // F21 — soluble-lithology provinces (CHAOS-row pattern: y-field, decorrelated from the fluvial z-field)
       const int PROV_DUNES       = 19;  // F15 — old stable plains (CRATER-row polarity: sand seas live among crater fields, not young orogens)
       const int PROV_DUST        = 20;  // F16 — fallout is near-global: dunes' old-plains polarity but a HIGH floor (mantles thin over young terrain, never vanish)
+      const int PROV_MASSW       = 21;  // F19 — deposits live where steeps live: the MOUNTAIN-field polarity (talus needs walls to fail)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -680,6 +689,7 @@
         else if (fid == PROV_KARST)      { f = gProvince.y; fl = 0.25; }
         else if (fid == PROV_DUNES)      { f = 1.0 - gProvince.x; fl = 0.30; }
         else if (fid == PROV_DUST)       { f = 1.0 - gProvince.x; fl = 0.50; }
+        else if (fid == PROV_MASSW)      { f = gProvince.x; fl = 0.30; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -1064,6 +1074,99 @@
         h    *= (1.0 - atten);
         grad *= (1.0 - atten);
         dustCover = atten;
+      }
+
+      // ── F19 massWastCombiner (Stage-5 gradational) — slope material fails under gravity
+      // and runs out as talus aprons + landslide tongues (card §4: Roering creep regime +
+      // discrete-failure regime, both faked closed-form — no cellular thermal-erosion sim,
+      // the determinism constraint). Called AFTER every steep-relief host (mountains/craters/
+      // canyons/karst/scarps/edifices/glacial...) and BEFORE duneCombiner — dunes/dust then
+      // mantle OVER the deposits; lava still suppresses last per its contract.
+      // FOOT-OF-STEEPS GATE (the load-bearing fork, logged in card §7): the card's F17-style
+      // low-freq REGIONAL slope probe is host-BLIND — a decorrelated noise field cannot see
+      // whether scarps/craters are enabled, so pure-solo would still sprout deposits — and
+      // the raw entry |grad| is dominated by base-FBM octave noise (measured CPU-side
+      // 2026-06-10: tangential |grad| median 0.89, p99 2.19 at 6 octaves — any threshold on
+      // it is either planet-wide wash or misses walls; the same reason F17 refuses the
+      // accumulated grad for flow direction). The EXACT host signal is free instead: the
+      // call site already holds the base-FBM gradient (hd.yzw), so hostGrad = gradIn -
+      // gradBase is precisely the accumulated HOST-relief gradient — identically vec3(0.0)
+      // when hosts are off, so pure-solo produces zero deposits NATURALLY (card §6 item 3,
+      // no special-casing). Tangential projection of hostGrad (the F17 gT idiom) gives
+      // sHost, the wall slope, in units of R = uRepose (driven ∝ g^-0.4: low-g ⇒ higher
+      // repose ⇒ steeper standing walls + shorter aprons, §6 item 8):
+      //   steepNearby = smoothstep(0.6R, 1.1R, sHost)          — rises through the wall foot
+      //   clingable   = 1 - smoothstep(1.8R, 3.0R, sHost)      — sheer faces shed, stay rough
+      //   localOK     = 1 - smoothstep(1.2R, 2.4R, |gradIn|)   — the card's entry-grad window,
+      //                 edges widened (entry grad carries the FBM floor; the card's 0.7R→R
+      //                 edges would zero the zone — same measurement as above)
+      // zone = product × density × province: the deposit band drapes the LOWER WALL + foot
+      // (slope near repose — a talus surface IS a repose-angle surface) and §6 item 6's
+      // "bury the lower wall's texture" comes from the F16-convention grad attenuation.
+      // TALUS (creep regime): additive fill h += amp·zone (zone held locally-constant —
+      // documented cosmetic-grad convention; its true derivative needs second derivatives
+      // of the accumulated h) + grad *= (1 - 0.6·zone) smoothing — SMOOTHNESS is the read:
+      // calm dither bands against busy wall texture (§6 items 1, 7). uLdaFat scales amp by
+      // (1 + fat): the icy lobate-debris-apron variant is a FATTER convex collar, not
+      // separate geometry (v1 simplification, card §6.5.3). LOBES (failure regime):
+      // voronoi3d tongues on the steep mask, domain COMPRESSED along the downhill unit
+      // dn = -hostT/sHost so cells stretch 2.5:1 downslope (F13's streamlined-island
+      // Jacobian-transpose machinery, axis = dn instead of the flow tangent; dn comes from
+      // the HOST gradient, not gradIn — the F17 incoherent-direction lesson). A per-cell
+      // hash keeps ~60% of wall cells (failures are EPISODIC events — one quake, one slide,
+      // card §1; the crater per-cell-hash precedent) and a narrow second smoothstep ring on
+      // the downhill end only (downEnd via dot(vgrad, dn)) raises the terminal edge —
+      // kept because it is cheap: pure ALU reuse of ff.x, no extra noise/voronoi samples.
+      // sHost <= 1e-4 skips the lobe block entirely (guarded normalize). uMassWastDensity
+      // <= 0 OR steepNearby ~ 0 ⇒ exact-zero contribution: Stage-A base byte-identical.
+      // v1 scope cuts (card §6.5.8): sturzstrom long-runout scaling, slump terraces, flow
+      // diversion around obstacles, separate LDA geometry, repose-envelope height clamp.
+      void massWastCombiner(vec3 pos, vec3 gradBase, inout float h, inout vec3 grad){
+        if (uMassWastDensity <= 0.0) return;
+        vec3  gradIn = grad;                                   // gates read entry state
+        vec3  hostGrad = gradIn - gradBase;                    // EXACT accumulated host-relief gradient
+        vec3  nrm = normalize(pos);
+        vec3  hostT = hostGrad - nrm * dot(hostGrad, nrm);     // tangential component (F17 gT idiom)
+        float sHost = length(hostT);
+        float steepNearby = smoothstep(uRepose * 0.6, uRepose * 1.1, sHost);
+        if (steepNearby <= 0.001) return;                      // flats + pure-solo: exact-zero, base byte-identical
+        float clingable = 1.0 - smoothstep(uRepose * 1.8, uRepose * 3.0, sHost);
+        float localOK   = 1.0 - smoothstep(uRepose * 1.2, uRepose * 2.4, length(gradIn));
+        float pw   = provinceWeight(PROV_MASSW);               // §8: deposits live where steeps live
+        float zone = steepNearby * clingable * localOK * uMassWastDensity * pw;
+        float fat  = 1.0 + uLdaFat;                            // icy LDA variant = fatter collar (v1)
+        // (1) talus apron — additive fill + F16-convention grad smoothing on the deposit
+        h    += uTalusAmp * fat * zone;
+        grad *= 1.0 - 0.6 * zone;                              // zone <= 1 ⇒ multiplier >= 0.4, never flips
+        // (2) landslide tongues — downhill-stretched voronoi cells seeded on the steep mask
+        if (sHost > 1e-4){
+          vec3 dn = -hostT / sHost;                            // downhill unit, tangent plane (divide guarded)
+          vec3 lp = pos * uLobeFreq + uMassWastOffset + vec3(-21.3, 9.7, 5.1);   // own seed, decorrelated
+          vec3 q  = lp - (1.0 - 1.0/2.5) * dot(lp, dn) * dn;   // compress along dn ⇒ 2.5:1 stretched cells
+          vec3 cellId; vec3 vgrad;
+          vec2 ff = voronoi3d(q, uVoroCells, cellId, vgrad);
+          float keep = step(hash33(cellId + vec3(5.7, -2.3, 8.9)).x, 0.6);   // episodic: ~60% of wall cells fail
+          float lAmp = uLobeAmp * fat * steepNearby * localOK * keep * uMassWastDensity * pw;
+          if (lAmp > 0.0001){
+            float tb = min(ff.x / 0.55, 1.0);
+            float bump = 1.0 - tb*tb*(3.0 - 2.0*tb);           // 1 at the seed → 0 at the skirt edge
+            float dsB = (ff.x < 0.55) ? (6.0*tb*(1.0-tb))/0.55 : 0.0;
+            // dF1/dpos = J^T·vgrad with J = uLobeFreq·(I - 0.6·dn⊗dn) (dn held const; symmetric ⇒ J^T = J)
+            vec3 dF1 = uLobeFreq * (vgrad - (1.0 - 1.0/2.5) * dot(vgrad, dn) * dn);
+            h    += lAmp * bump;
+            grad += lAmp * -dsB * dF1;                         // gates + dn held locally constant
+            // terminal-edge ring — narrow smoothstep band just inside the skirt, downhill end only
+            float downEnd = smoothstep(0.0, 0.7, dot(vgrad, dn));   // vgrad = unit seed→fragment direction
+            float t1 = clamp((tb - 0.62) / 0.23, 0.0, 1.0);
+            float t2 = clamp((tb - 0.85) / 0.15, 0.0, 1.0);
+            float ring  = (t1*t1*(3.0 - 2.0*t1)) * (1.0 - t2*t2*(3.0 - 2.0*t2));
+            float dring = (6.0*t1*(1.0-t1))/0.23 * (1.0 - t2*t2*(3.0 - 2.0*t2))
+                        - (t1*t1*(3.0 - 2.0*t1)) * (6.0*t2*(1.0-t2))/0.15;
+            float rAmp = lAmp * 0.4 * downEnd;                 // downEnd held const (cosmetic-grad convention)
+            h    += rAmp * ring;
+            grad += rAmp * dring * (1.0/0.55) * dF1;           // chain rule through tb = ff.x/0.55
+          }
+        }
       }
 
       // ── F12 deltas & alluvial fans (Stage-4 Fluvial, card §6.5) — the DEPOSITIONAL mirror
@@ -1972,6 +2075,9 @@
           vec4 hd = fbmd(vPos, uOctaves, fwBase);
           float h = hd.x;
           vec3 grad = hd.yzw;
+          // F19 — base-FBM gradient snapshot: massWastCombiner subtracts it from the running
+          // grad to recover the EXACT accumulated host-relief slope (hosts off ⇒ zero deposits).
+          vec3 gradBase = hd.yzw;
           // ── Stage 2: RELIEF combiners — mountains (F1, ridged base), craters
           // (F2, voronoi3d consumer), then canyons (F4, tectonic graben → canyonHeight).
           // Each ADDS a height delta + chain-rule gradient onto the FBM base; the single
@@ -1994,6 +2100,11 @@
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
+          // CONTRACT (F19 gradBase trick): every combiner ABOVE this line must stay ADDITIVE on
+          // grad (grad += only) — F19 derives its host-relief gate from gradIn − gradBase, so a
+          // pre-F19 multiplicative smoother would leak base FBM into hostGrad. Multiplicative
+          // passes (F16 dust, F8 lava, F14 cut) all run below.
+          massWastCombiner(vPos, gradBase, h, grad); // F19 — talus aprons + landslide tongues bank at the FOOT of the accumulated steep relief (after ALL steep hosts incl. F17's mantle; before F15/F16 — dunes + dust then mantle over the deposits)
           duneCombiner(vPos, h, grad);             // F15 — linear ergs DEPOSIT on near-final lowlands (after all constructional relief so sand pools around it; before F8 — fresh basalt buries sand; before F12/F14 — deltas/sea read the final surface)
           dustCombiner(vPos, h, grad, dustCover);  // F16 — dust mantle SMOOTHS relief (after F15 — dust settles over the ergs; before F8 — fresh basalt punches through any mantle); writes dustCover for the Stage-6 ochre lift
           lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
@@ -2395,6 +2506,13 @@
       uDustFlatK:       { value: 1.0 },   // F16 slope-damp k (the research doc's literal 1/(1+|grad|²) trick) — lab knob
       uDustTint:        { value: 0.35 },  // F16 butterscotch veil strength (Stage-8 muting) — lab knob
       uDustOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
+      uMassWastDensity: { value: 0.0 },   // F19 master gate (driven: 1.0 on every solid world, airless included); <= 0 early-outs
+      uRepose:          { value: 0.95 },  // F19 angle-of-repose threshold in |grad| units (driven ∝ g^-0.4)
+      uTalusAmp:        { value: 0.08 },  // F19 talus-apron fill amplitude — lab knob
+      uLdaFat:          { value: 0.0 },   // F19 lobate-debris-apron fattening (driven: ground ice = volatiles × cold)
+      uLobeAmp:         { value: 0.06 },  // F19 landslide-tongue amplitude — lab knob
+      uLobeFreq:        { value: 6.0 },   // F19 tongue seed frequency — lab knob
+      uMassWastOffset:  { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
       uLiquidSpecies:   { value: 0 },     // enum 0=water 1=methane/ethane — owner Fluvial; read by Optical (glint IOR/tint)
       uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)
       // ── Stage-D provinces (index §4 #8 / §8) — LIVE 2026-06-10 (workstream stage-d-provinces) ──
@@ -2524,6 +2642,13 @@
       dustFlatK: 1.0,       // F16 settling slope-damp k
       dustTint: 0.35,       // F16 butterscotch veil strength
       dustEnabled: true,    // F16 enable gate
+      massWastDensity: 1.0, // F19 master gate (driven — 1.0 on every solid world, airless included)
+      repose: 0.95,         // F19 angle-of-repose threshold (driven ∝ g^-0.4)
+      talusAmp: 0.08,       // F19 talus-apron fill amplitude
+      ldaFat: 0.0,          // F19 LDA fattening (driven: ground ice on cold worlds)
+      lobeAmp: 0.06,        // F19 landslide-tongue amplitude
+      lobeFreq: 6.0,        // F19 tongue seed frequency
+      massWastEnabled: true,// F19 enable gate
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -2691,6 +2816,7 @@
       karstOffset: [0,0,0],
       duneOffset: [0,0,0],
       dustOffset: [0,0,0],
+      massWastOffset: [0,0,0],
       // ── Per-feature 🎲 domain offsets (GUI ergonomics) — default (0,0,0) = byte-identical
       // base render. Re-rolled (transient) by each folder's 🎲; reset by applyDrivers. ──
       craterOffset: [0,0,0],
@@ -2924,7 +3050,7 @@
       state.lavaOffset = [0,0,0]; state.chaosOffset = [0,0,0]; state.cryoRidgeOffsetV = [0,0,0];
       state.frostOffset = [0,0,0]; state.subOffset = [0,0,0]; state.glacialOffset = [0,0,0];
       state.fluvialOffset = [0,0,0]; state.outflowOffset = [0,0,0]; state.karstOffset = [0,0,0];
-      state.duneOffset = [0,0,0]; state.dustOffset = [0,0,0];
+      state.duneOffset = [0,0,0]; state.dustOffset = [0,0,0]; state.massWastOffset = [0,0,0];
       // ── F11 fluvial (lab audit 2026-06-07) — derive from surfaced drivers ──
       // Existence gate = liquidStability (0 on airless worlds ⇒ no active rivers). Density
       // tracks D4 rain; depth adds a touch of D14 gravity. Relict (was-wet, now-dry: low
@@ -3002,6 +3128,24 @@
       // ero .6) → 0.25; Titan (p 1.5, stab 1, ero .2) → 0.15 (haze world > 0, card
       // §6.5.6); Lava/Frozen/Europa (airless, p 0) → 0 (no air ⇒ no fallout).
       state.dustDepth = _clamp01(_ss(0.05, 0.3, _press) * (1.0 - 0.65 * _stab) * (0.3 + 0.7 * _erosion));
+      // ── F19 mass-wasting — gravity + steep relief are UNIVERSAL: every preset is a solid
+      // world, airless very much included (Iapetus sturzstroms, lunar crater-wall talus), so
+      // the master gate is a constant 1.0 — existence is gated PER-FRAGMENT by the host-slope
+      // residual in the combiner (no steeps ⇒ no deposits), not by climate here. uRepose maps
+      // D14 surface gravity INVERSELY (0.9·g^-0.4, clamped 0.5..2.2): low-g walls stand
+      // steeper before shedding (§6 item 8 — Titan/Frozen aprons sit higher + shorter; the
+      // mild 0.4 power keeps Titan's g=0.16 from blowing the threshold past every wall).
+      // Physically dry repose is g-independent (friction); the stylized inverse is the card's
+      // deliberate form-change read. uLdaFat = ground-ice proxy: D2 volatile budget (the F14
+      // ×2 ramp) × a cold gate on T_eq (warm worlds hold no ground ice — Rocky/Ocean stay 0
+      // despite volatiles; Mars-likes would land partway). Outcomes:
+      //   Rocky (g .90) → repose 0.94, fat 0;   Ocean (g 1.07) → 0.87, 0;
+      //   Lava (g .80) → 0.98, 0;               Titan (g .16) → 1.89, 0.80;
+      //   Frozen (g .28) → 1.50, 0.60;          Europa (g .28) → 1.50, 1.00.
+      state.massWastDensity = 1.0;
+      state.repose = Math.min(2.2, Math.max(0.5, 0.9 / Math.pow(Math.max(_g, 0.05), 0.4)));
+      const _coldGround = 1.0 - _ss(150, 260, _fp.T_eq ?? 288);
+      state.ldaFat = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0) * _coldGround;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -3312,6 +3456,20 @@
     fDust.add({ roll(){ state.dustOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fDust.add(state, 'dustEnabled').name('✓ enabled');
 
+    // ▸ Mass-wasting (F19) — talus aprons + landslide tongues bank at the foot of steep host
+    // relief. PARASITIC on slope (card §5): after solo, re-enable one host (scarpsEnabled or
+    // cratersEnabled) so deposits have something to fail off — pure solo correctly shows none.
+    // density/repose/LDA-fat are driven (.listen()); talus/lobe amp + freq are shape knobs.
+    const fMassWast = fGrad.addFolder('Mass-wasting (F19)'); fMassWast.close();
+    fMassWast.add(state, 'massWastDensity', 0, 1, 0.01).name('density (driven)').listen();
+    fMassWast.add(state, 'repose', 0.2, 3, 0.01).name('repose (g⁻¹)').listen();
+    fMassWast.add(state, 'talusAmp', 0, 0.3, 0.005).name('talus fill');
+    fMassWast.add(state, 'ldaFat', 0, 1, 0.01).name('LDA fat (ice, driven)').listen();
+    fMassWast.add(state, 'lobeAmp', 0, 0.3, 0.005).name('lobe amplitude');
+    fMassWast.add(state, 'lobeFreq', 2, 16, 0.5).name('lobe density');
+    fMassWast.add({ roll(){ state.massWastOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    fMassWast.add(state, 'massWastEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -3320,7 +3478,7 @@
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
       sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
-      dunes: fDunes, dust: fDust,
+      dunes: fDunes, dust: fDust, massWasting: fMassWast,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -3530,6 +3688,14 @@
       uniforms.uDustFlatK.value      = state.dustFlatK;
       uniforms.uDustTint.value       = state.dustTint;
       uniforms.uDustOffset.value.set(state.dustOffset[0], state.dustOffset[1], state.dustOffset[2]);
+      // F19 mass-wasting — massWastEnabled gates density→0 (combiner early-out), preserving the slider value.
+      uniforms.uMassWastDensity.value = state.massWastEnabled ? state.massWastDensity : 0.0;   // ✓ enable gate
+      uniforms.uRepose.value          = state.repose;
+      uniforms.uTalusAmp.value        = state.talusAmp;
+      uniforms.uLdaFat.value          = state.ldaFat;
+      uniforms.uLobeAmp.value         = state.lobeAmp;
+      uniforms.uLobeFreq.value        = state.lobeFreq;
+      uniforms.uMassWastOffset.value.set(state.massWastOffset[0], state.massWastOffset[1], state.massWastOffset[2]);
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

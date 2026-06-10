@@ -26,6 +26,7 @@ export const FEATURES = {
   karst:      { label: 'Karst (F21)',           enableKey: 'karstEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
   dunes:      { label: 'Dunes & wind forms (F15)', enableKey: 'dunesEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
   dust:       { label: 'Dust mantles (F16)',    enableKey: 'dustEnabled',      archetypes: ['tectonic-terrestrial','volatile-cold'] },
+  massWasting:{ label: 'Mass-wasting (F19)',    enableKey: 'massWastEnabled',  archetypes: ['impact-airless','tectonic-terrestrial','volcanic','icy-active','volatile-cold'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -74,4 +75,5 @@ export const PROVINCES = {
   karst:      { field: 1, polarity: +1, floor: 0.25 },  // soluble lithology — decorrelated from the fluvial z-field (CHAOS-row pattern)
   dunes:      { field: 0, polarity: -1, floor: 0.30 },  // sand seas on old stable plains — the CRATER-row polarity (Mars barchans live among craters)
   dust:       { field: 0, polarity: -1, floor: 0.50 },  // fallout is near-global — dunes' old-plains polarity but a HIGHER floor (mantles thin, never vanish)
+  massWasting:{ field: 0, polarity: +1, floor: 0.30 },  // deposits live where steeps live — the MOUNTAIN-field polarity (talus needs walls to fail)
 };

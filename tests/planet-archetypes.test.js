@@ -98,7 +98,7 @@ const GLSL_NAME = {
   cryoRidge: 'PROV_CRYORIDGE', rivers: 'PROV_RIVERS', sublimation: 'PROV_SUBLIMATION',
   glacial: 'PROV_GLACIAL', frost: 'PROV_FROST', lakes: 'PROV_LAKES', deltas: 'PROV_DELTAS',
   coastlines: 'PROV_COAST', outflow: 'PROV_OUTFLOW', karst: 'PROV_KARST', dunes: 'PROV_DUNES',
-  dust: 'PROV_DUST',
+  dust: 'PROV_DUST', massWasting: 'PROV_MASSW',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

@@ -17,8 +17,8 @@ during phases) | ▶️ = current
 | 2 Foundation | FOUNDATION.md verdicted | ✅ 2026-06-10 (4×🟢; chroma-speckle taste-call for Phase 7) |
 | 3 Refine built (15 cards) | all §7 verdicts + galleries | ✅ 2026-06-10 (13🟢, F03 🟡 taste-call, F08 🟡 Max-feedback fix1) |
 | **Stage-D provinces** (inserted before 4a per Max 2026-06-10) | spike → scope → build → verify; all 15 built features province-aware | ✅ built 2026-06-10 — spike `05cde11`, build `3d04110`, VERIFIED_PENDING_MAX; workstream `docs/WORKSTREAMS/stage-d-provinces-2026-06-10/`; Phase-4a+ combiners now author against the LIVE `provinceWeight(PROV_<FEATURE>)` accessor + add affinity rows to `PROVINCES` (planet-archetypes.js) AND the GLSL chain |
-| 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | ▶️ pending |
-| 4b Build atmosphere (10) | F24-F33 verdicted | pending |
+| 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | ✅ 2026-06-10 — all 8 verdicted (F14/F16 🟢, F12/F13/F15/F19/F20/F21 🟡 taste-call); next ▶️ 4b |
+| 4b Build atmosphere (10) | F24-F33 verdicted | ▶️ pending |
 | 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | pending |
 | 5 Integration | INTEGRATION.md I-1…I-15 verdicted | pending |
 | 6 Profiles | PROFILES.md 18 rows verdicted | pending |
@@ -49,7 +49,7 @@ during phases) | ▶️ = current
 | F21 | [F21-karst-dissolution](cards/F21-karst-dissolution.md) | Fluvial | ✅ | 🟡 taste-call | 4a |
 | F15 | [F15-dunes-wind-forms](cards/F15-dunes-wind-forms.md) | Aeolian | ✅ | 🟡 taste-call | 4a |
 | F16 | [F16-dust-mantles](cards/F16-dust-mantles.md) | Aeolian | ✅ | 🟢 | 4a |
-| F19 | [F19-mass-wasting](cards/F19-mass-wasting.md) | Gradational | ⬜ | — | 4a |
+| F19 | [F19-mass-wasting](cards/F19-mass-wasting.md) | Gradational | ✅ | 🟡 taste-call | 4a |
 | F20 | [F20-coastlines](cards/F20-coastlines.md) | Gradational | ✅ | 🟡 taste-call | 4a |
 | F24 | [F24-zonal-belts](cards/F24-zonal-belts.md) | Bands | 🟡(game) | — | 4b |
 | F25 | [F25-jets-shear](cards/F25-jets-shear.md) | Bands | 🟡 | — | 4b |
