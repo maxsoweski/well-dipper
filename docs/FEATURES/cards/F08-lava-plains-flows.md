@@ -51,8 +51,45 @@ Built — solo it in the :9223 debug Chrome (launch per memory/chrome-devtools-9
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: 🟡 2026-06-10 — Lava (hot airless), solo `lava`, d8/d6/d4/d1.4,
+  day + night side. **Live Max UAT feedback mid-pass** (see below) → one
+  fix cycle applied, awaiting his re-look.
+  - Plains/burial 🟢: flooded regions read as smooth plains erasing
+    craters/mountains inside a crisp low-frequency lobate boundary at
+    coverage 0.45 with F1/F2 re-enabled (shot 02) — burial, not paint.
+  - Coverage axis 🟢: 0.45 maria patches → 0.95 whole-world Io plain
+    (shots 01, 02); crater suppression and plain extent move together.
+  - Activity axis 🟢: activity 0 kills the glow, plains' form persists
+    on the night side (shot 05 vs 04).
+  - Glow behavior 🟢: emissive bypass keeps channels crisp over the
+    posterized basalt; visible on the night side; pulses (5.9% of frame
+    changed over 1.5 s, mean changed-pixel color 141/107/81 R>G>B —
+    incandescent, not cartoon red).
+- Max's feedback (2026-06-10, live): "the lava flows look the least
+  realistic… what would lava flows look like from space? Mostly like
+  water but a different material. The glow and everything looks cool but
+  the cell-based shape of the flows is all off." → should not pass
+  visual QA as-was.
+- Tweaks applied (fix cycle 1, root-caused first): the cell read came
+  from `lavaCrackEmissive`'s UNWARPED Worley F2−F1 border lattice tiling
+  the whole flooded region (at Io coverage 0.95 = the entire globe);
+  topology is structural to F2−F1, not slider-reachable. Edit confined
+  to that one function (emissive-only, no relief/gradient math, vitest
+  untouched 8/8 green): (1) strong 3-axis FBM domain-warp of the crack
+  field — borders now meander/branch like channels and levees; (2) glow
+  clustered into volcanic provinces via a low-freq mask scaling with
+  activity — Io reads as scattered centers, not a globe-tiling net;
+  (3) flow-front term (region-edge band) so advancing lobate margins
+  glow. Result: night side = meandering channel networks in provinces
+  with dark quiet zones (shot 07 vs old 04); day side = smooth liquid
+  sheets with lobate margins (shot 08). Warped-cell borders now read as
+  dark lobes with bright margins — the Amirani signature.
+- Re-verify: shots 07/08 retaken post-fix on reloaded page; vitest 8/8.
+  Cycle-2 knobs if Max wants more: lower uCrackScale (fewer, bigger
+  lobes), CRACK_WARP_AMP (currently 0.38), province thresholds.
+- Status: VERIFIED_PENDING_MAX (fix cycle 1 of 3 used; Max re-look
+  requested)
+- Shots: F08-lava-01-d8-io.png, -02-d6-maria-burial.png,
+  -03-d1.4-cracks.png, -04-d4-nightside.png (pre-fix),
+  -05-d4-nightside-activity0.png, -06-d3-wrinkles.png,
+  -07-d4-nightside-fix1.png, -08-d4-dayside-fix1.png.

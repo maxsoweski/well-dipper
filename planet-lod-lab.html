@@ -1128,17 +1128,35 @@
       // emissiveBlackbody ramp at ~1400 K (fresh-basalt incandescence). uTime drives the pulse.
       vec3 lavaCrackEmissive(vec3 pos){
         if (uLavaActivity <= 0.0 || uLavaCoverage <= 0.0) return vec3(0.0);
+        // Domain-warp the crack field so borders meander like flow channels/levees instead of
+        // a uniform polygonal lattice (Max UAT 2026-06-10: flows must read liquid, not
+        // cell-based). Three decorrelated noised() evals build the warp vector; emissive-only,
+        // so no gradient bookkeeping is needed.
+        const float CRACK_WARP_FREQ = 1.6;
+        const float CRACK_WARP_AMP  = 0.38;
+        vec4 w1 = noised(pos * CRACK_WARP_FREQ + uLavaOffset + vec3(11.73, 4.21, 7.97));
+        vec4 w2 = noised(pos * CRACK_WARP_FREQ + uLavaOffset + vec3(-7.31, 9.02, -3.55));
+        vec4 w3 = noised(pos * CRACK_WARP_FREQ + uLavaOffset + vec3(2.62, -12.34, 5.18));
+        vec3 wpos = pos + CRACK_WARP_AMP * vec3(w1.x, w2.x, w3.x);
         vec3 cId, cGrad;
-        vec2 cff = voronoi3d(pos * uCrackScale + uLavaOffset, uVoroCells, cId, cGrad);
-        float crackMask = 1.0 - smoothstep(0.0, uCrackWidth, cff.y - cff.x);   // bright on cell borders
+        vec2 cff = voronoi3d(wpos * uCrackScale + uLavaOffset, uVoroCells, cId, cGrad);
+        float crackMask = 1.0 - smoothstep(0.0, uCrackWidth, cff.y - cff.x);   // bright on warped channels
         // restrict to flooded regions (same mask basis as lavaCombiner)
         vec4 rn = noised(pos * uLavaScale + uLavaOffset);
         float fbm01 = 0.5 + 0.5 * rn.x;
         float region = smoothstep(1.0 - uLavaCoverage, 1.0 - uLavaCoverage + 0.25, fbm01);
+        // Cluster the channel glow into active volcanic provinces — Io from space reads as
+        // scattered glowing centers, never a globe-tiling net. Extent scales with activity.
+        vec4 pn = noised(pos * 1.1 + uLavaOffset * 1.7 + vec3(31.4, -17.2, 8.8));
+        float province = smoothstep(0.62 - 0.22 * uLavaActivity, 0.78, 0.5 + 0.5 * pn.x);
+        // Flow-front glow — incandescent lobate margins where flows advance; the region-edge
+        // band peaks at the mask's 0.5 contour, giving the liquid-sheet read at the boundary.
+        float front = region * (1.0 - region) * 4.0;
         // animated glow — pulse phase varies spatially via the region FBM so cracks shimmer async
         float glow = 0.5 + 0.5 * sin(uTime * uLavaGlowRate + fbm01 * 6.2831853);
         vec3 molten = emissiveBlackbody(1400.0);
-        return crackMask * region * glow * uLavaActivity * molten;
+        float mask = crackMask * province * region + front * 0.9;
+        return mask * glow * uLavaActivity * molten;
       }
 
       // doubleRidgeProfile — F10 Europa double-ridge cross-line profile (transcribed from the
