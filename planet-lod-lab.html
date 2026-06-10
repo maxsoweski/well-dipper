@@ -3926,6 +3926,36 @@
                     featureEnabled(key){ return !!state[FEATURES[key].enableKey]; },
                     featureFolders, filterUI,
                     get sceneTarget(){ return sceneTarget; } };
+
+    // ── HOT-RELOAD SCENARIO PERSISTENCE (2026-06-10) ──
+    // Vite full-reloads this page on ANY edit to it, silently resetting preset/solo/
+    // distance mid-verification (Phase-4a cost: A/B diffs measured against a reset page).
+    // sessionStorage is per-tab: it survives reloads in the SAME tab (the failure mode)
+    // but a fresh tab still boots to defaults. Opt out / clear: load with ?fresh=1.
+    // saveAll()/gui.load round-trips every GUI-bound value (enables, knobs, preset,
+    // distance); gui.load fires onChange handlers, so preset re-applies drivers and
+    // pixelScale rebuilds the target — same side effects as hand-setting them.
+    const SCENARIO_KEY = 'lodlab-scenario';
+    const saveScenario = () => {
+      try { sessionStorage.setItem(SCENARIO_KEY, JSON.stringify(saveAll())); } catch (e) {}
+    };
+    window.addEventListener('pagehide', saveScenario);       // fires on Vite reload
+    window.addEventListener('beforeunload', saveScenario);   // belt-and-braces
+    (function restoreScenario(){
+      if (new URLSearchParams(location.search).has('fresh')) {
+        sessionStorage.removeItem(SCENARIO_KEY); return;
+      }
+      let o = null;
+      try { o = JSON.parse(sessionStorage.getItem(SCENARIO_KEY)); } catch (e) {}
+      if (!o) return;
+      try {
+        // saveAll() merges both panels' controllers/folders; lil-gui load() ignores
+        // entries it doesn't own, so feeding the merged blob to each panel restores both.
+        guiLeft.load(o); guiRight.load(o);
+        updateSeedUniforms(); syncDisplays();
+        console.log('[lodlab] scenario restored from sessionStorage (use ?fresh=1 for defaults)');
+      } catch (e) { console.warn('[lodlab] scenario restore failed — defaults kept', e); }
+    })();
   </script>
 </body>
 </html>

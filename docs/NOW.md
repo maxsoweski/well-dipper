@@ -80,10 +80,12 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
    verify on :9223). Notable: F19's hostGrad = gradIn − gradBase trick
    (additivity contract comment at the call site); 2 tuning cycles burned
    on band-coverage defaults (F13 width, F21 plateau level — absolute-h
-   masks bite low-relief worlds). Lab method note (NEW): editing
-   planet-lod-lab.html Vite-reloads the :9223 page and silently resets
-   preset/solo/distance — re-set the whole scenario after ANY file edit
-   or A/B diffs measure a reset page. Vitest 19/19; evidence shots in
+   masks bite low-relief worlds). Lab method note: editing
+   planet-lod-lab.html Vite-reloads the :9223 page — FIXED 2026-06-10
+   post-4a: the lab now persists the full GUI scenario (preset/solo/
+   distance/knobs) to sessionStorage across reloads, verified end-to-end
+   (tracer survived a real Vite reload). Fresh tabs still boot defaults;
+   ?fresh=1 opts out / clears. Vitest 19/19; evidence shots in
    repo root (F13-*/F15-*/F16-*/F19-*/F20-*/F21v2-*).** Next: Max starts
    a FRESH session and pastes the tracker's **Phase-4b `/goal` launch
    card** (atmosphere pass, F24-F33, 10 cards). Phase-3 notes (setPreset
