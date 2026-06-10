@@ -265,6 +265,10 @@
       //    multiplies its contribution by provinceWeight(FEATURE_ID); the global uniform read means no
       //    combiner signature changes. Fan-out domains adopt the multiply now (no-op vs 1.0). ──
       uniform float uProvinceWeight;    // per-region feature weight (1.0 = uniform/no-op until Stage-D wires the spatial field)
+      // ── SPIKE(Stage-D, index §8 prescribed ~30-min A/B) — THROWAWAY, not the system. ──
+      //    0 = current uniform look; 1 = three combiners weighted by ONE shared low-freq field
+      //    (mountains by m, craters/ejecta by 1−m, lava cracks by m). Delete after the A/B.
+      uniform float uSpikeProvince;     // 0..1 spike toggle (default 0 = no change)
       // ── F9 chaos / disrupted terrain (Stage-C step 3, Relief) ──
       uniform float uChaosCellScale;    // raft size (voronoi3d frequency; driven)
       uniform float uChaosRaftJitter;   // raft height/tilt displacement (driven, ∝ 1/g)
@@ -669,6 +673,18 @@
         fluvialWet = max(fluvialWet, s);
       }
 
+      // ── SPIKE(Stage-D, index §8) — ONE shared low-frequency province field, soft-blended
+      // (no hard edges — index §8 load-bearing constraint: provinces are SOFT weight fields,
+      // blend-not-branch). Two noised() octaves, smoothstepped to a 0..1 weight. The mask is
+      // very low freq so its gradient term is treated locally-constant (same chain-rule
+      // shortcut as fluvialCombiner's lowGround / Musgrave octave weights). THROWAWAY.
+      float spikeProvinceField(vec3 pos){
+        vec4 n1 = noised(pos * 0.75 + vec3(17.3, -9.1, 4.7));
+        vec4 n2 = noised(pos * 1.5  + vec3(-3.2, 8.8, -12.6));
+        float f = 0.5 + 0.5 * (n1.x + 0.35 * n2.x) / 1.35;
+        return smoothstep(0.35, 0.65, f);
+      }
+
       // F1 mountains combiner — ridged base relief layered onto the FBM continents.
       // uMountainAmp<=0 ⇒ early-out (Stage-A base untouched, regression-safe), exactly
       // like craterCombiner. uMountainScale is the outer domain frequency: its chain-
@@ -676,9 +692,10 @@
       void mountainCombiner(vec3 pos, float fwBase, inout float h, inout vec3 grad){
         if (uMountainAmp <= 0.0) return;
         // input is pos·uMountainScale, so its screen footprint is fwBase·uMountainScale
+        float pw = mix(1.0, spikeProvinceField(pos), uSpikeProvince);     // SPIKE(Stage-D): mountains live where m is high
         vec4 m = fbmdRidged(pos * uMountainScale, uOctaves, fwBase * uMountainScale);
-        h    += uMountainAmp * m.x;
-        grad += uMountainAmp * m.yzw * uMountainScale;
+        h    += uMountainAmp * m.x * pw;
+        grad += uMountainAmp * m.yzw * uMountainScale * pw;
       }
 
       vec3 perturbAnalytic(vec3 N, vec3 grad, float strength){
@@ -731,7 +748,8 @@
         float morphology = smoothstep(uCraterComplexD*0.6, uCraterComplexD, diameter);
         float r = ff.x / craterRadius;
         vec2 prof = craterProfile(r, morphology, uCraterRelaxation, uTerraceCount);
-        float amp = uCraterAmp * host;
+        float pw = mix(1.0, 1.0 - spikeProvinceField(pos), uSpikeProvince);  // SPIKE(Stage-D): craters in the COMPLEMENT region
+        float amp = uCraterAmp * host * pw;
         h    += amp * prof.x;
         // d(h)/d(vPos) = dh/dr · (1/craterRadius) · d(f1)/d(vPos);  d(f1)/d(vPos) = voroGrad·uCraterScale
         grad += amp * prof.y * (1.0/craterRadius) * voroGrad * uCraterScale;
@@ -777,7 +795,10 @@
         float patchMask = mix(1.0, smoothstep(0.35, 0.85, fbm), smoothstep(1.2, 2.2, r)); // patchy outward
         float lump = mix(1.0, fbm, uEjectaLump);
         float m = host * lump * patchMask;
-        float amp = uEjectaStrength * uEjectaAmp;
+        // SPIKE(Stage-D): ejecta wraps F2's craters — mask with the SAME complement weight
+        // so aprons never ring province-suppressed craters.
+        float pw = mix(1.0, 1.0 - spikeProvinceField(pos), uSpikeProvince);
+        float amp = uEjectaStrength * uEjectaAmp * pw;
         h += amp * m * prof.x;
         // d(amp·m·prof.x)/dpos = amp·[ m·prof.y·dr/dpos + prof.x·dm/dpos ]
         vec3 drdp = (1.0/craterRadius) * voroGrad * uCraterScale;  // dr/dpos (chain-ruled, exact)
@@ -1149,6 +1170,9 @@
         // scattered glowing centers, never a globe-tiling net. Extent scales with activity.
         vec4 pn = noised(pos * 1.1 + uLavaOffset * 1.7 + vec3(31.4, -17.2, 8.8));
         float province = smoothstep(0.62 - 0.22 * uLavaActivity, 0.78, 0.5 + 0.5 * pn.x);
+        // SPIKE(Stage-D): the shared field REPLACES the ad-hoc mask above (subsume, don't stack —
+        // stacking two independent masks intersects to near-nothing; verified in A/B shot 06).
+        province = mix(province, smoothstep(0.45, 0.75, spikeProvinceField(pos)), uSpikeProvince);
         // Flow-front glow — incandescent lobate margins where flows advance; the region-edge
         // band peaks at the mask's 0.5 contour, giving the liquid-sheet read at the boundary.
         float front = region * (1.0 - region) * 4.0;
@@ -1808,6 +1832,7 @@
       // day 1 (multiply by provinceWeight(FEATURE_ID)) — Stage-D then swaps the scalar for the
       // spatial field WITHOUT changing any combiner signature. Convention spelled out in index §8.
       uProvinceWeight:  { value: 1.0 },   // 1.0 = uniform/no-op — owner Stage-D provinces; read by ALL combiners (when wired)
+      uSpikeProvince:   { value: 0.0 },   // SPIKE(Stage-D §8 A/B) — 0=current look, 1=province-masked. THROWAWAY.
     };
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
