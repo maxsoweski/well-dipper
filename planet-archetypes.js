@@ -75,6 +75,15 @@ export const FEATURES = {
   // Ocean/Venus/Eyeball) derive activity 0 behind the dryness + thin-pressure
   // gates — the folder shows, the feature stays inert (the F34/F35 convention).
   dustStorm:  { label: 'Dust storms (F40)',     enableKey: 'dustStormEnabled', archetypes: ['tectonic-terrestrial'] },
+  // F41 hemispheric magma ocean — Exotic substellar sea (D1 extreme T_eq + D7 lock
+  // melt the permanent dayside; F-exotic-natural group). Carrier class = locked +
+  // solid + substellar melt: ONLY the two volcanic presets derive a sea angle > 0
+  // ('Magma (K2-141b)' wide sea ~1.52 rad; 'Lava (hot airless)' small pond ~0.42),
+  // so registration agrees with the render set (review M1, both directions):
+  // volcanic only — Eyeball is locked but temperate (T_ss 378 K, mask gates 0),
+  // Hot Jupiter is locked + hot but GAS (no rock surface to melt — its glow is the
+  // F32/F33 thermal pair), every unlocked preset derives T_ss 0 outright.
+  magma:      { label: 'Magma ocean (F41)',     enableKey: 'magmaEnabled',     archetypes: ['volcanic'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -82,7 +91,7 @@ export const FEATURES = {
 export const ARCHETYPES = {
   'impact-airless':       { label: 'Impact / airless',       bodies: ['Moon','Mercury'],              presets: ['Frozen (airless)'] },
   'tectonic-terrestrial': { label: 'Tectonic / terrestrial', bodies: ['Earth','Venus','Mars'],        presets: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)'] },
-  'volcanic':             { label: 'Volcanic',               bodies: ['Io','Mars'],                   presets: ['Lava (hot airless)'] },
+  'volcanic':             { label: 'Volcanic',               bodies: ['Io','Mars','K2-141b'],         presets: ['Lava (hot airless)','Magma (K2-141b)'] },
   'icy-active':           { label: 'Icy-active',             bodies: ['Europa','Ganymede'],           presets: ['Europa (icy moon)'] },
   'volatile-cold':        { label: 'Volatile / cold',        bodies: ['Pluto','Triton','Mars poles'], presets: ['Titan (methane seas)','Frozen (airless)'] },
   'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)','Sub-Neptune (hazy)'] },
@@ -141,4 +150,5 @@ export const PROVINCES = {
   sunglint:   { field: 2, polarity: +1, floor: 1.00 },  // neutral — view/illumination geometry, not geology: the mirror point follows sun + camera over the (already lakes-gated) sea (FROST-row pattern, like limb/terminator)
   aurora:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — magnetospheric optics, not geology: the oval follows the dipole axis + night side, never the rock provinces (FROST-row pattern, like limb/terminator/sunglint)
   dustStorm:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — weather, not geology: the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged F40 v1 scope cut)
+  magma:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — irradiation, not geology: the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
 };

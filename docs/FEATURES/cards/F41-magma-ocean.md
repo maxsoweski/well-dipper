@@ -47,12 +47,73 @@ Unbuilt -- recipe for once it lands. Recommended: register a `magma` key in plan
 - [ ] At whole-disk distance, does the planet still read as the two-tone 'eyeball' archetype (hot lobe + dark frosted back) within 2-3 posterize levels, without the shoreline aliasing into dither shimmer?
 - [ ] When relief features (F8 cracks, craters) coexist, does the sea suppress them inside the mask (molten = smooth, zero-age) while they survive on the solid nightside?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: §4's 1-D substellar-angle model — the sea is a smoothstep around
+a liquidus iso-angle of vSubstellarAngle; in-sea texture is the doc's lava
+stack on the emissive-bypass channel; nightside reuses the locked frost
+cap. Also discharges the 4b carry-over: F41 owns the Lava half of the
+whole-globe uBaseColor*uEmissive stand-in (F32 took the hot-jupiter
+half). Exemplars `b66550c` (F40, incl. new-preset pattern) / `3170d54`.
+
+1. **New preset (data)** — `'Magma (K2-141b)'`: radiusEarth ~1.5, locked,
+   T_eq ~2000 (substellar ~3000 K — rock vaporizes), airless or thin
+   rock-vapor, iron-rich, near-zero volatiles. Opens with `radiusEarth:`.
+   The proper carrier — shoreline well inside the dayside. Walk all
+   features for sanity (no clouds/fluvial/glint; craters suppressed
+   in-sea per step 5).
+2. **Register** — `magma` in FEATURES (archetypes: volcanic) +
+   featureFolders + `magmaEnabled` default true + GUI "Magma ocean (F41)"
+   (driven `.listen()`: seaAngle, magmaTemp; ✓ enable LAST).
+3. **Sea mask + thermal field** — driven uniforms uMagmaSeaAngle (the
+   liquidus iso-angle, derived in applyDrivers by solving
+   T_ss·cos^¼θ = liquidus with T_ss ≈ T_eq·1.4 on locked worlds, mask 0
+   if T_ss < liquidus), uMagmaTemp (T_ss). GLSL: mask =
+   smoothstep(uMagmaSeaAngle+δ, uMagmaSeaAngle−δ, vSubstellarAngle);
+   T(θ) = uMagmaTemp·pow(max(cos θ,0.05), 0.25) (positive base —
+   spec-safe); emissiveBlackbody(T(θ)) gives the concentric white→amber→
+   dull-red contours.
+4. **In-sea combiner** — Voronoi F2-F1 dark crust plates / bright seams
+   (reuse the F8 lavaCrackEmissive machinery/knobs where possible),
+   churned by two-phase bounded-time advected domain-warped FBM; seams
+   denser+dimmer toward the shoreline; thin animated emissive band at
+   the mask edge (shoreline waves). ALL glow through the star-emissive-
+   bypass channel (added AFTER posterize).
+5. **Surface suppression in-sea** — molten = zero-age: inside the mask,
+   replace the rock albedo with the dark crust tone and blend shadeN
+   toward geometric N (color/normal level only — NO h/grad writes), so
+   craters/relief vanish in the sea and survive on the nightside.
+6. **Nightside rock-frost** — reuse the antistellar locked frost-cap
+   machinery (uFrostLocked pattern) as a slight albedo lift, distinct
+   tone from polar frost (warm grey condensate, not white).
+7. **Stand-in retirement (Lava half)** — applyDrivers zeroes the
+   whole-globe state.emissive on the magma-class gate (locked && hot),
+   mirroring F32's _hotJup zeroing. Lava (T_eq 950, T_ss ~1330 K) sits
+   near the peridotite solidus: with liquidus 1300 K it derives a SMALL
+   substellar melt pond + keeps F8 cracks — its globe glow now comes
+   from real features, not the stand-in. Taste fork: Lava's look changes.
+8. **Plumbing** — PROV_MAGMA=37 + PROVINCES row + provinceWeight row +
+   GLSL_NAME line; frame writer sole uniform owner.
+
+GLSL reserved-word check (F40 lesson): no `patch`/`sample`/`filter`
+identifiers; node --check cannot catch shader-compile errors.
+
+v1 scope cuts (logged, not built): rock-vapor atmosphere + supersonic
+wind streaks; rock RAIN at the hot pole; eyeball-archetype hot-lobe
+coupling (Eyeball preset is temperate — mask gates to 0 there anyway);
+hot-pole evaporation albedo feedback.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4c heavy loop)
+- Evidence (repo root, gitignored): `F41-k2-d20.png` (one coherent lobe, amber core → dull-red rim, monotonic radial falloff, extent 0.97-1.0R = predicted sin(1.5243)), `F41-lava-pond-d8.png` (pond rim 0.41R vs predicted 0.408R — iso-temperature circle clearly NOT the terminator), `F41-k2-plates-d3.png`(+frame2) (dark plates / bright seams, ONE lattice vocabulary, 12.7% churn over 2.5 s bounded), `F41-k2-shoreline-d6.png` (rim local max L27.4 vs 15.3 in-sea), `F41-k2-night.png`, `F41-lava-night.png` (night mean L 7.7/255 — wash retired).
+- §6 checklist: coherent sea 🟢 · shoreline ≠ terminator 🟢 (Lava pond test) · blackbody contours 🟢 (G/R 0.73→0.63 falloff) · crust plates/seams churn 🟢 (M1 fix verified: no ghosted second lattice) · emissive-bypass crispness 🟢 · nightside condensate 🟡 (CORRECT-AS-CODED, sub-threshold as rendered: max ≈1.5/255 under ambient 0.035 — taste fork b) · two-tone whole-disc read 🟢 · relief suppression in-sea 🟢 (34.7% px A/B; sea pinned to light, centroid 0.3 px under spin while 27.3% of surface rotated).
+- New preset 'Magma (K2-141b)' (15th): seaAngle 1.5243 / T_ss 2800; airless ⇒ clouds/limb/term/aurora/dust/frost all 0 (verified). NOTE: K2 derives craterDensity 0 from preset DATA (bombardment 0, resurfacing 1 — a fully-resurfacing molten world), so nightside craterlessness is data-driven, not F41 masking.
+- Stand-in retirement (the 4b F32 carry-over, discharged): whole-globe uBaseColor*uEmissive wash zeroed on the magma class (locked && !gas && T_ss>1300) independent of magmaEnabled. Lava now reads "rocky world with one molten eye" — small dull-red 0.42-rad pond + bright shoreline ring + F8 crack embers on a DARK night side (was: glowing orange ball). THE headline taste fork (a).
+- Tweaks applied: 0 of 3 cycles — review fixes landed pre-verify, first live render passed.
+- Code review (fable): APPROVE-WITH-FIXES, both applied pre-verify. M1 MAJOR: F8 crack emissive was unmasked inside the sea (ghosted twin seam lattice + contradiction of card item 8) → `* (1.0 - mgSeaMask)`, bit-exact elsewhere. N1: cos floor 0.05→0.04 (reconciles GLSL rim temp with the CPU liquidus solve at K2's shoreline). N2 cosmetic: GUI shows nonzero T_ss display on locked non-magma presets (shader-inert). N3 = fork (c).
+- Taste forks for Max's lap: (a) Lava's retired wash (the intended but large look change); (b) nightside rock-frost invisible as shipped — raise cap / add faint self-term / twilight placement if it should be SEEN; (c) rock-frost on Lava physically marginal at T_ss 1330 (vaporization needs ~2400 K) — a smoothstep on uMagmaTemp could scale it; (d) liquidus 1300 K + T_ss = T_eq×1.4 authored constants.
+- Process note → testing reference: under the normal URL, toggling any *Enabled triggers an async sessionStorage scenario-restore that resets camera+uTime mid-test; `?fresh=1` makes toggles inert.
+- Status: VERIFIED_PENDING_MAX

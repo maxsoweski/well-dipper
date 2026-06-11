@@ -532,6 +532,19 @@
       uniform float uNightTempK;        // nightside floor temperature K (driven: 1100 on hot-jupiter; writer-zeroed when F33 off)
       uniform float uRedistribution;    // day-to-night falloff exponent — lab knob 1..6 (3 = legacy pow(starFacing,3) heritage)
       uniform float uThermalOcclusion;  // F33 silicate-cloud occlusion strength — lab knob (writer-zeroed when F33 off)
+      // ── F41 hemispheric magma ocean (Exotic — card F41) — the Stage-7 exotic
+      // consumer of the shared machinery: the sea is a smoothstep mask around a
+      // driven liquidus iso-angle of the SHARED vSubstellarAngle varying (the
+      // uFrostLocked antistellar-cap field, hot side), surface temperature follows
+      // the K2-141b GCM irradiation law T(theta) = T_ss x cos^(1/4)(theta), hue =
+      // the shared emissiveBlackbody ramp (the ONE-curve F32/F33/F41 header
+      // contract), and ALL glow rides the star-emissive-bypass channel (added
+      // AFTER the posterize). The per-frame writer forces the angle 0 when
+      // magmaEnabled is off, so sea + shoreline + crust + rock-frost all vanish:
+      // byte-identical pre-F41 output — the F41 regression contract.
+      uniform float uMagmaSeaAngle;     // liquidus iso-angle rad (driven: acos((1300/T_ss)^4) on locked solid worlds whose T_ss = T_eq x 1.4 clears the 1300 K liquidus, else 0 — the master gate)
+      uniform float uMagmaTemp;         // substellar surface temp T_ss K (driven: T_eq x 1.4 on locked worlds; unlocked worlds derive 0 — heat spins away, never a hemispheric sea)
+      uniform float uMagmaChurnSpeed;   // crust-plate churn phase rate (x uTime) — lab knob (BOUNDED two-phase advection, the F25/F40 fract crossfade)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -802,6 +815,7 @@
       const int PROV_GLINT       = 34;  // F36 — neutral (view/illumination geometry, not geology): the mirror point follows sun + camera over the already lakes-gated sea (FROST-row pattern, like limb/terminator)
       const int PROV_AURORA      = 35;  // F37 — neutral (magnetospheric optics, not geology): the oval follows the dipole axis + the night side, never the rock provinces (FROST-row pattern, like limb/terminator/glint)
       const int PROV_DUSTSTORM   = 36;  // F40 — neutral (weather, not geology): the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged v1 scope cut)
+      const int PROV_MAGMA       = 37;  // F41 — neutral (irradiation, not geology): the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -856,6 +870,7 @@
         else if (fid == PROV_GLINT)      { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_AURORA)     { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_DUSTSTORM)  { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_MAGMA)      { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2747,6 +2762,31 @@
         // ── Stage 5: AEOLIAN — dunes (anisotropic relief mod); dust mantle SMOOTHS relief (runs AFTER stage 2) [domain: Aeolian]
         //    (stages 2-5 reshape shadeN / height / canyonHeight; placeholders until their domains land.)
 
+        // ── F41 magma-sea mask + in-sea relief suppression (Exotic, card §6.5 steps
+        // 3 + 5) — computed ONCE here, consumed by the Stage-6 albedo terms (crust
+        // replace + rayBright kill + nightside rock-frost) and the ★ Stage-9 emissive
+        // sea below. Mask = smoothstep around the DRIVEN liquidus iso-angle of the
+        // SHARED vSubstellarAngle varying (0 substellar, pi antistellar — the
+        // uFrostLocked cap field, hot side), with a noised() breakup so the shoreline
+        // reads as a ragged iso-temperature line, not a drawn-on circle (the frost
+        // fractal-snowline convention). SUPPRESSION CONTRACT: molten = zero-age —
+        // inside the mask the shading normal blends toward the GEOMETRIC sphere at
+        // the COLOR + shadeN level ONLY (NO h/grad accumulator writes), so craters /
+        // F8 wrinkles / all relief vanish in the sea and survive untouched on the
+        // solid nightside (the F24 gas-flatten precedent — branch-guarded, because an
+        // unconditional renormalize would shift low bits: angle 0 stays
+        // byte-identical, the F41 regression contract). provinceWeight(PROV_MAGMA)
+        // is NEUTRAL (floor 1.0 — irradiation, not geology: the sea follows the
+        // star, FROST-row pattern); the multiply stays for the registry convention.
+        float mgSeaMask = 0.0;
+        float mgAngleW = vSubstellarAngle;
+        if (uMagmaSeaAngle > 0.0){
+          mgAngleW = vSubstellarAngle + 0.05 * noised(vPos * 3.3 + uMacroOffset).x;
+          mgSeaMask = smoothstep(uMagmaSeaAngle + 0.05, uMagmaSeaAngle - 0.05, mgAngleW)
+                    * provinceWeight(PROV_MAGMA);
+          shadeN = normalize(mix(shadeN, N, mgSeaMask));
+        }
+
         // ── Envelope composite-split (spec §2.C) — each term is the A/B/C surface.
         // A bypassed term skips the quantizer => smooth glow over the posterized base.
         float diff = max(dot(shadeN, uLightDir), 0.0);
@@ -2851,6 +2891,27 @@
             float cluster = smoothstep(0.15, 0.5, noised(vPos * 1.1 + vec3(31.7, -11.2, 17.9)).x);
             albedoCol *= 1.0 - 0.22 * stroke * cluster * trackWin * provinceWeight(PROV_DUSTSTORM);
           }
+        }
+        // ── F41 magma-sea surface + nightside rock-frost (Exotic, card §6.5 steps
+        // 5-6 — ALBEDO/COLOR only, the suppression contract's second half). In-sea
+        // the rock albedo is REPLACED by the dark foundering-crust tone (the Kilauea
+        // dark-plate base — brightness lives in the emissive seams added at Stage 9,
+        // NOT here, so the sea reads near-black where the crust is whole) and the F3
+        // fresh-ray brightening is killed (zero-age melt holds no ejecta — multiply
+        // INSIDE the gate so angle 0 never touches rayBright). On the antistellar
+        // side a SLIGHT warm-grey albedo lift reads as rock-vapor condensate plains
+        // (the K2-141b GCM cycle: vapor blown across the terminator snows back out)
+        // — the uFrostLocked cap pattern on the SAME vSubstellarAngle field, kept
+        // patchy via noised() and DELIBERATELY warm grey (rock frost), distinct from
+        // the white polar F22/F23 frost. Relief survives there (albedo lift only).
+        // Angle 0 (enable off via the per-frame writer, or every non-magma preset)
+        // skips the block: albedoCol/rayBright untouched — the F41 regression contract.
+        if (uMagmaSeaAngle > 0.0){
+          float mgNight = smoothstep(1.9, 2.7, vSubstellarAngle);
+          float mgPatch = smoothstep(0.3, 0.75, 0.5 + 0.5 * noised(vPos * 2.4 + uMacroOffset + vec3(17.3, -5.1, 8.9)).x);
+          albedoCol = mix(albedoCol, vec3(0.47, 0.44, 0.40), 0.35 * mgNight * mgPatch * provinceWeight(PROV_MAGMA));
+          albedoCol = mix(albedoCol, vec3(0.055, 0.045, 0.042), mgSeaMask);
+          rayBright *= 1.0 - mgSeaMask;
         }
         // ── F16 butterscotch veil (Stage-8 haze channel, computed HERE so it hits each
         // term PRE-posterize — there is no single final quantizer, every surface term
@@ -3066,7 +3127,12 @@
         // Owners: thermal Bands F32/F33 (emissiveBlackbody), magma Exotic F41 (emissiveBlackbody),
         // city lights F48/49, bioluminescence F46, aurora Optical F37, sunglint Optical F36.
 
-        // ★ Emissive glow (lava/hot stand-in for F41/F32) — Lambert-independent (visible on the dark side).
+        // ★ Emissive glow (whole-globe thermal-floor — the old lava/hot stand-in,
+        // now RETIRED for BOTH its named owners: F32 zeroes state.emissive on
+        // hot-jupiter, F41 zeroes it on the magma class (locked + solid + T_ss >
+        // liquidus — Lava and K2-141b), both at applyDrivers. What remains is the
+        // faint non-magma hot floor, e.g. Venus ~0.14 hidden under the blanket.)
+        // Lambert-independent (visible on the dark side).
         // F31d blanketMask: an opaque venus deck also hides the ground's thermal floor
         // (Venus T_eq 737 derives emissive ~0.14 — a night-side glow would read as
         // ground leak through the shroud). Lava cracks / lightning below still punch
@@ -3075,7 +3141,11 @@
         emissive = (uEmissiveBypass == 1) ? emissive : posterize(emissive, uLevels, fc, 0.4, uDitherMode);
         // ★ F8 lava cracks — ALWAYS bypass the quantizer (the canonical Option-C survivor, §F8.c):
         // spatial Worley crack-mask glow that stays crisp over the posterized basalt.
-        emissive += lavaCrackEmissive(vPos);
+        // Review M1 (F41): cracks are masked OUT of the magma sea — the molten
+        // zero-age dayside owns its own seams, F8 rides the solid nightside
+        // (card item 8). mgSeaMask is 0.0 unless the F41 angle gate ran; x*1.0
+        // is bit-exact, so the pre-F41 contract holds everywhere else.
+        emissive += lavaCrackEmissive(vPos) * (1.0 - mgSeaMask);
         // ★ F30 lightning — transient convective flash blobs; bypasses the quantizer so
         // each pop stays crisp over the posterized cloud deck (card §6 item 6). Strength 0
         // (enable off, or any airless preset) skips the call: byte-identical F29 output —
@@ -3122,6 +3192,62 @@
           float nb2 = nb * nb;
           thermalC += emissiveBlackbody(uNightTempK) * (nb2 * nb2) * (fres2 * fres2) * nightHemi * 0.6 * provinceWeight(PROV_NIGHTTHERM);
           emissive += uThermalStrength * thermalC;
+        }
+        // ★ F41 hemispheric magma ocean — the EXOTIC consumer of the shared
+        // emissiveBlackbody ramp (ONE curve, the F32/F33/F41 header contract; the
+        // 1800 K-normalized quartic brightness is reused VERBATIM so a given
+        // temperature renders the same energy in either feature). T(theta) follows
+        // the K2-141b GCM irradiation law T_ss x cos^(1/4)(theta) — the pow base is
+        // floored at 0.05 (always positive: never the spec-undefined pow region) —
+        // so the bypass glow forms CONCENTRIC temperature contours: white/amber hot
+        // pole fading to a dull-red shoreline rim along the blackbody ramp. In-sea
+        // structure (the Kilauea foundering-crust read): dark plates separated by
+        // bright incandescent seams — the F8 crack vocabulary on the SHARED
+        // voronoi3d keystone, REUSING the F8 uCrackScale / uCrackWidth knobs +
+        // uLavaOffset seed (one crack language per planet, no duplicated Voronoi).
+        // Churn = BOUNDED two-phase advection (the F25/F40 fract crossfade —
+        // nothing accumulates; fly-away/re-approach lands in a plausible nearby
+        // state): two half-period phases drift the warp domain +-half around a rest
+        // pose and crossfade on a triangle weight; the warp vector is the noised()
+        // analytic gradient (one sample = a free vec3). Open melt at the hot pole
+        // fades into crusted plates toward the shoreline (the mgCrust ramp — seams
+        // carry the glow, plates keep a faint translucent floor), and the brightness
+        // ramp itself dims the seams shoreward as T(theta) falls. The shoreline is
+        // a thin ANIMATED emissive band straddling the mask edge (liquidus-
+        // temperature waves lapping the rock; gaussian via exp(-t*t) — never
+        // pow(neg); shimmer is periodic sin, no accumulation). ALL terms ride this
+        // post-posterize emissive channel (the designated survivor, card §4).
+        // Angle 0 (enable off via the per-frame writer, or every non-magma preset)
+        // skips the block: byte-identical pre-F41 emissive — the regression contract.
+        if (uMagmaSeaAngle > 0.0){
+          float mgPh0 = fract(uTime * uMagmaChurnSpeed);
+          float mgPh1 = fract(uTime * uMagmaChurnSpeed + 0.5);
+          float mgWgt = abs(2.0 * mgPh0 - 1.0);                 // triangle weight hides each phase wrap
+          vec3 mgDrift = vec3(0.30, 0.0, 0.22);                 // each phase displaced +-half around its rest pose
+          vec4 mgW0 = noised(vPos * 1.9 + uLavaOffset + mgDrift * (mgPh0 - 0.5));
+          vec4 mgW1 = noised(vPos * 1.9 + uLavaOffset + mgDrift * (mgPh1 - 0.5));
+          vec3 mgWarpV = mix(mgW0.yzw, mgW1.yzw, mgWgt);        // churn warp vector (analytic gradient — free)
+          vec3 mgC = vec3(0.0);
+          if (mgSeaMask > 0.0){
+            // cos floor 0.04 (review N1): K2's shoreline sits at cos 0.0465 — a
+            // 0.05 floor disagrees with the CPU liquidus iso-angle solve there.
+            float mgTempK = uMagmaTemp * pow(max(cos(vSubstellarAngle), 0.04), 0.25);
+            float mgTb = clamp(mgTempK * (1.0 / 1800.0), 0.0, 1.0);
+            float mgTb2 = mgTb * mgTb;                          // (tempK/1800)^4 via squares (no pow edge cases)
+            vec3 mgCid; vec3 mgGrd;
+            vec2 mgFF = voronoi3d((vPos + 0.16 * mgWarpV) * uCrackScale + uLavaOffset, uVoroCells, mgCid, mgGrd);
+            float mgSeam = 1.0 - smoothstep(0.0, uCrackWidth, mgFF.y - mgFF.x);
+            float mgRelT = clamp(vSubstellarAngle / max(uMagmaSeaAngle, 1e-3), 0.0, 1.0);   // 0 hot pole -> 1 shoreline (guarded div)
+            float mgCrust = smoothstep(0.15, 0.65, mgRelT);     // open melt at the pole -> foundering plates shoreward
+            float mgStruct = mix(1.0, max(mgSeam, 0.06), mgCrust);   // whole crust keeps a faint translucent floor
+            mgC = emissiveBlackbody(mgTempK) * (mgTb2 * mgTb2) * mgStruct * mgSeaMask;   // mask already carries provinceWeight
+          }
+          // shoreline waves — thin emissive band on the SAME breakup-warped angle the
+          // mask uses (so the band hugs the ragged shore exactly), at the liquidus
+          // temperature: 0.27 = the 1300 K point on the shared 1800 K quartic.
+          float mgShoreT = (mgAngleW - uMagmaSeaAngle) / 0.035;
+          float mgShore = exp(-mgShoreT * mgShoreT) * (0.65 + 0.35 * sin(uTime * 1.3 + mgWarpV.x * 9.0));
+          emissive += mgC + emissiveBlackbody(1300.0) * 0.27 * mgShore * provinceWeight(PROV_MAGMA);
         }
 
         // ★ Sunglint (F36) — the mirror image of the star on standing liquid, LIQUID-ONLY.
@@ -3255,6 +3381,11 @@
       // ── F40 dust storms (driver-true aeolian storm veil — card §6.5 steps 3-6) ──
       uDustActivity:   { value: 0.0 },   // F40 storm activity (driven: retained AND pressure <= 0.5 AND dry AND not gas -> 0.55 Mars-like carrier, else 0)
       uDustColor:      { value: new THREE.Color(0.78, 0.55, 0.32) },  // F40 lofted-dust tint (driven: preset atmosphere butterscotch, fallback warm ochre)
+      // ── F41 hemispheric magma ocean (driver-true exotic sea — card §6.5 steps 3-7) ──
+      // uMagmaSeaAngle 0 ⇒ every F41 GLSL block is skipped entirely (byte-identical pre-F41 render).
+      uMagmaSeaAngle:  { value: 0.0 },   // F41 liquidus iso-angle rad (driven: acos((1300/T_ss)^4) on the locked-solid-melt class — K2-141b ~1.52 / Lava ~0.42 / else 0, the master gate)
+      uMagmaTemp:      { value: 0.0 },   // F41 substellar surface temp T_ss K (driven: T_eq x 1.4 on locked worlds, 0 unlocked)
+      uMagmaChurnSpeed:{ value: 0.02 },  // F41 crust-plate churn phase rate — lab knob (bounded two-phase fract crossfade)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -3827,6 +3958,10 @@
       dustStormEnabled: true, // F40 enable gate — off zeroes uDustActivity at the per-frame writer (veil + front + tracks all vanish: byte-identical pre-F40 output)
       dustActivity: 0.0,    // F40 storm activity 0..1 (driven: 0.55 on the Mars-like thin-dry carrier, 0 on every wet/thick/airless/gas preset; the slider walks the whole P23 axis — tracks ~0.1-0.4, regional fronts mid, planet-encircling at 1)
       dustColor: [0.78, 0.55, 0.32], // F40 lofted-dust tint (driven: preset atmosphere butterscotch; fallback warm ochre)
+      magmaEnabled: true,   // F41 enable gate — off zeroes uMagmaSeaAngle at the per-frame writer (sea + shoreline + crust + rock-frost all vanish: byte-identical pre-F41 output)
+      magmaSeaAngle: 0.0,   // F41 liquidus iso-angle rad (driven: acos((1300/T_ss)^4) — K2-141b ~1.52 wide sea / Lava ~0.42 substellar pond / 0 on every other preset)
+      magmaTemp: 0.0,       // F41 substellar temp T_ss K (driven: T_eq x 1.4 on locked worlds — K2-141b 2800, Lava 1330; unlocked worlds 0)
+      magmaChurnSpeed: 0.02,// F41 crust-plate churn phase rate (lab knob — the F25/F40 bounded two-phase fract crossfade; nothing accumulates)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -4200,6 +4335,31 @@
       // 0.05), terminator width clamped to the 0.06 hairline — with the recorded
       // Mars-blue sunset hue now LIVE in TERM_COLOR_BY_PRESET below (review N6).
       'Mars (arid rocky)': { radiusEarth:0.53, massEarth:0.107, rotationHours:24.6, eccentricity:0.093, starMassEarth:332946, orbitRadiusEarth:35652, axialTilt:25, composition:{ironFraction:0.10,density:3.93,volatileFraction:0.1}, T_eq:210, tidalState:{locked:false}, atmosphere:{color:[0.80,0.58,0.36],retained:true,pressure:0.01,composition:'co2'}, habitability:0.05, surfaceHistory:{erosion:0.35,bombardmentIntensity:0.7,resurfacingRate:0.15} },
+      // ── F41 magma-ocean preset (card §6.5 step 1 — data only) ──
+      // "Magma (K2-141b)" is the F41 proper carrier: the locked iron-rich
+      // super-Earth whose permanent dayside melts outright. T_eq 2000 -> T_ss
+      // 2800 K (rock vaporizes — the K2-141b GCM endpoints) -> sea iso-angle
+      // ~1.52 rad: the shoreline sits well inside the dayside, matching the
+      // discovery papers' ~2/3-in-perpetual-daylight geometry. AIRLESS BY CHOICE
+      // (atmosphere:null): the real body's silicate-vapor envelope is thin and
+      // collapse-condensing — null keeps limb / terminator / aurora / clouds /
+      // F40 naturally 0 (NO LIMB/TERM color-map rows needed: the N6 rule binds
+      // ATMOSPHERIC presets only) and the rock-vapor wind/rain stack is the
+      // card's logged v1 scope cut. volatileFraction 0 = bone-dry floor (frost /
+      // liquid / sublimation / glacial / dunes all gate 0 — the nightside
+      // rock-frost is F41's own term, not F22's). ironFraction 0.4 = the
+      // measured iron-rich density class (D13 field 0.4 x 0.2 lock-damp = 0.08
+      // — above the 0.05 gate but aurora needs an atmosphere: inert). Orbit
+      // ~212 follows the Lava-row rough-consistency convention (a scales as
+      // T^-2 from Lava's 938 at 950 K); at that distance even the token
+      // eccentricity 0.01 saturates the R^5/a^5 star-tidal term ->
+      // lavaActivity 1 + lavaCoverage 1 (resurfacing 1) — DELIBERATE: the card
+      // §1 recipe row is F8 + F41 (crack glow rides the solid nightside while
+      // the sea owns the dayside) and the molten interior keeps the surface
+      // zero-age (craters 0 via bombardment 0, erosion 0). rotationHours 6.7 =
+      // the locked spin (the real 0.28-day orbital period); only gas/atmosphere-
+      // gated consumers read it — inert but honest data.
+      'Magma (K2-141b)': { radiusEarth:1.5, massEarth:5, rotationHours:6.7, eccentricity:0.01, starMassEarth:332946, orbitRadiusEarth:212, composition:{ironFraction:0.4,density:8,volatileFraction:0}, T_eq:2000, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
     };
     // ── F34 limb glow — per-preset rim hue (card §6.5 step 3: "a small per-preset/
     // archetype map"). The variant spread the old uBaseColor tint could not express:
@@ -4750,8 +4910,9 @@
       state.nightTempK = _hotJup ? 1100 : 0;
       // The thermal pair REPLACES the whole-globe uEmissive stand-in (its comment
       // names F32 as the owner): T_eq 1400 would derive emissive 0.25 — a uniform
-      // unshaped glow UNDER the substellar-shaped one (double-count). Lava keeps
-      // its stand-in for F41 (airless ⇒ not _hotJup).
+      // unshaped glow UNDER the substellar-shaped one (double-count). The Lava
+      // half of the stand-in is retired by F41 below (the magma-class zeroing) —
+      // retirement COMPLETE 2026-06-10, both named owners landed.
       if (_hotJup) state.emissive = 0;
       // ── F34 limb / atmosphere rim glow — driver derivation (card §6.5 step 3;
       // post-process HERE per the F11 precedent — core.js untouched). The core's
@@ -4901,6 +5062,37 @@
         && _stab < 0.05 && !_gas;
       state.dustActivity = _dustCarrier ? 0.55 : 0.0;
       state.dustColor = _fp.atmosphere?.color ? _fp.atmosphere.color.slice() : [0.78, 0.55, 0.32];
+      // ── F41 hemispheric magma ocean — driver derivation (card §6.5 steps 3 + 7;
+      // derivation HERE per the F11/F34 precedent — core.js untouched). The magma
+      // class = locked AND solid AND substellar melt. T_ss: D7 lock pins a
+      // permanent dayside whose substellar point runs HOTTER than the equilibrium
+      // average — T_ss = T_eq x 1.4, the zero-redistribution airless limit;
+      // UNLOCKED worlds spin their heat away and never hold a hemispheric sea, so
+      // they derive T_ss 0 outright (not just a sub-liquidus value). Gas envelopes
+      // are excluded (no rock surface to melt — Hot Jupiter is locked + hot but
+      // its glow is the F32/F33 pair). Sea extent solves the card §4 irradiation
+      // law T_ss·cos^(1/4)(theta) = liquidus (1300 K — the peridotite-solidus-ish
+      // working value, card §6.5 step 7) for the iso-angle:
+      // theta = acos((liquidus/T_ss)^4). Pre-checked over all 15 presets (node,
+      // 2026-06-10): ONLY "Magma (K2-141b)" (T_ss 2800 -> 1.524 rad wide sea) and
+      // "Lava (hot airless)" (T_ss 1330 -> 0.421 rad substellar melt pond) derive
+      // > 0; Eyeball is locked but temperate (T_ss 378), Europa locked but frozen
+      // (T_ss 154), every unlocked/gas preset gates 0 — the regression contract.
+      const _mgTss = _fp.tidalState?.locked ? (_fp.T_eq ?? 288) * 1.4 : 0;
+      const MG_LIQUIDUS = 1300;
+      const _magmaClass = !_gas && _mgTss > MG_LIQUIDUS;
+      state.magmaTemp = _mgTss;
+      state.magmaSeaAngle = _magmaClass
+        ? Math.acos(Math.max(0, Math.min(1, Math.pow(MG_LIQUIDUS / _mgTss, 4)))) : 0;
+      // F41 stand-in retirement (card §6.5 step 7 — the Lava half; F32 took the
+      // hot-jupiter half above): the magma class REPLACES the whole-globe
+      // uBaseColor x uEmissive wash (Lava derived 0.23, K2-141b 0.25 — a uniform
+      // unshaped glow UNDER the masked sea + F8 cracks would double-count, and it
+      // lit the whole nightside). Mirrors the F32 _hotJup zeroing exactly:
+      // independent of magmaEnabled, so Lava's DEFAULT look changes by design
+      // (the card's logged taste fork) — its glow now comes from real features
+      // (F41 masked sea + shoreline + the F8 cracks it already had), not the wash.
+      if (_magmaClass) state.emissive = 0;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -5356,6 +5548,23 @@
     fThermalNight.add(state, 'nightsideThermalEnabled').name('✓ enabled');
     fThermal.add(state, 'daysideThermalEnabled').name('✓ enabled');
 
+    // ▸ Surface — Exotic: the Stage-7 exotic family — F41 magma ocean is its
+    // first live member (base-type overlays land here as the domain fills in).
+    const fExoticGroup = guiRight.addFolder('Surface — Exotic'); fExoticGroup.open();
+    // ▸ Magma ocean (F41) — hemispheric substellar sea in the ★ emissive bypass
+    // channel: a smoothstep liquidus iso-angle mask on the SHARED vSubstellarAngle,
+    // T(theta) = T_ss x cos^(1/4)(theta) colored by the shared emissiveBlackbody
+    // ramp, Kilauea plate/seam structure (the F8 crack knobs) churned by bounded
+    // two-phase advection, animated shoreline waves, nightside rock-frost. sea
+    // angle + substellar temp are driven displays (.listen()); churn speed is the
+    // lab knob. NO 🎲 — the sea follows the light direction; plate placement is
+    // the seeded F8 crack domain (uLavaOffset — the F8 folder's 🎲 rerolls both).
+    const fMagma = fExoticGroup.addFolder('Magma ocean (F41)'); fMagma.close();
+    fMagma.add(state, 'magmaSeaAngle', 0, 1.6, 0.01).name('sea angle rad (driven)').listen();
+    fMagma.add(state, 'magmaTemp', 0, 4000, 10).name('substellar T K (driven)').listen();
+    fMagma.add(state, 'magmaChurnSpeed', 0, 0.2, 0.001).name('churn speed');
+    fMagma.add(state, 'magmaEnabled').name('✓ enabled');
+
     // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
     // F36 sunglint).
     const fOpticalGroup = guiRight.addFolder('Surface — Optical'); fOpticalGroup.open();
@@ -5423,7 +5632,7 @@
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds, dustStorm: fDustStorm,
-      daysideThermal: fThermal, nightsideThermal: fThermalNight,
+      daysideThermal: fThermal, nightsideThermal: fThermalNight, magma: fMagma,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
@@ -5781,6 +5990,19 @@
       // same contract holds with the enable on. Preserves the slider value.
       uniforms.uDustActivity.value = state.dustStormEnabled ? state.dustActivity : 0.0;   // ✓ enable gate
       uniforms.uDustColor.value.setRGB(state.dustColor[0], state.dustColor[1], state.dustColor[2]);
+      // F41 magma ocean — magmaEnabled gates the sea angle→0 (the mask + shadeN
+      // suppression, crust albedo + rayBright kill, nightside rock-frost, emissive
+      // sea AND shoreline waves ALL key on uMagmaSeaAngle > 0, so ONE gate kills
+      // every term: byte-identical pre-F41 output — the F41 regression contract);
+      // every non-magma preset derives angle 0, so the same contract holds with the
+      // enable on. NOTE the deliberate exception: the stand-in retirement (state.
+      // emissive zeroed on the magma class at applyDrivers) is INDEPENDENT of this
+      // gate — the F32 _hotJup convention — so Lava/K2-141b with magma off show NO
+      // whole-globe wash either (per card §6.5 step 7). Temp + churn pass through,
+      // preserving the driven/slider values.
+      uniforms.uMagmaSeaAngle.value   = state.magmaEnabled ? state.magmaSeaAngle : 0.0;   // ✓ enable gate
+      uniforms.uMagmaTemp.value       = state.magmaTemp;
+      uniforms.uMagmaChurnSpeed.value = state.magmaChurnSpeed;
       // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
       // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
       // rotation about +y DECREASES longitude, which is EAST in this lab's tangent
