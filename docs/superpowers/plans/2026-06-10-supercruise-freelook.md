@@ -644,7 +644,9 @@ export class SupercruisePilot {
   }
 
   _stamp(frame) {
-    frame.phase = this.phase;
+    // Report the ENTRY phase — the phase that drove this frame's behavior.
+    // (Stamping the exit phase double-fires phaseChanged and hides one-frame
+    // phases like an instant on-axis ALIGN.)
     frame.phaseChanged = frame.phase !== frame.prevPhase;
     return frame;
   }
