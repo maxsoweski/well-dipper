@@ -308,7 +308,8 @@ describe('HeadMount (AC2 ship/head split + AC4 hold-to-look)', () => {
     const cockpit = new THREE.Object3D();
     cockpit.position.copy(m.position); cockpit.quaternion.copy(m.orientation);
     expect(cockpit.position.equals(m.position)).toBe(true);
-    expect(cockpit.quaternion.angleTo(m.orientation)).toBe(0);
+    // exact component-wise — angleTo(==) is 1 ULP shy of 0 in float64
+    expect(cockpit.quaternion.equals(m.orientation)).toBe(true);
     // camera sits AT the ship but looks AWAY from ship-forward by the look amount
     expect(cam.position.equals(m.position)).toBe(true);
     expect(cam.quaternion.angleTo(m.orientation)).toBeGreaterThan(0.3);
@@ -356,7 +357,7 @@ export const HEAD_TUNING = {
   MAX_YAW: Math.PI * 0.75,  // ±135°
   MAX_PITCH: Math.PI / 3,   // ±60°
   RECENTER_TAU: 0.25,       // s — eased recenter on release
-  SNAP_EPS: 1e-4,           // rad — snap-to-zero threshold
+  SNAP_EPS: 1e-3,           // rad (0.057°) — snap-to-zero; full recenter ≤ ~1.7s
 };
 
 export class HeadMount {
