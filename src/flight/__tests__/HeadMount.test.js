@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { SupercruiseModel } from '../SupercruiseModel.js';
-import { HeadMount } from '../HeadMount.js';
+import { HeadMount, HEAD_TUNING } from '../HeadMount.js';
 
 const DT = 1 / 60;
 
@@ -41,7 +41,21 @@ describe('HeadMount (AC2 ship/head split + AC4 hold-to-look)', () => {
     expect(cockpit.quaternion.equals(m.orientation)).toBe(true);
     // camera sits AT the ship but looks AWAY from ship-forward by the look amount
     expect(cam.position.equals(m.position)).toBe(true);
-    expect(cam.quaternion.angleTo(m.orientation)).toBeGreaterThan(0.3);
+    // ship-local compose: ship × look(YXZ pitch,yaw) — exact, pins order AND frame
+    // (equals(), not angleTo < 1e-9 — angleTo(self) ≈ 4e-8 acos artifact, see above)
+    const expected = m.orientation.clone()
+      .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, 0.4, 0, 'YXZ')));
+    expect(cam.quaternion.equals(expected)).toBe(true);
+  });
+
+  it('clamps look offsets at MAX_YAW / MAX_PITCH, both signs', () => {
+    const h = new HeadMount();
+    h.beginLook(); h.addLook(10, 10);
+    expect(h.yaw).toBe(HEAD_TUNING.MAX_YAW);
+    expect(h.pitch).toBe(HEAD_TUNING.MAX_PITCH);
+    h.addLook(-100, -100);
+    expect(h.yaw).toBe(-HEAD_TUNING.MAX_YAW);
+    expect(h.pitch).toBe(-HEAD_TUNING.MAX_PITCH);
   });
 
   it('recenters on release (eased), ends aligned', () => {
