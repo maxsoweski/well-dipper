@@ -545,6 +545,20 @@
       uniform float uMagmaSeaAngle;     // liquidus iso-angle rad (driven: acos((1300/T_ss)^4) on locked solid worlds whose T_ss = T_eq x 1.4 clears the 1300 K liquidus, else 0 — the master gate)
       uniform float uMagmaTemp;         // substellar surface temp T_ss K (driven: T_eq x 1.4 on locked worlds; unlocked worlds derive 0 — heat spins away, never a hemispheric sea)
       uniform float uMagmaChurnSpeed;   // crust-plate churn phase rate (x uTime) — lab knob (BOUNDED two-phase advection, the F25/F40 fract crossfade)
+      // ── F42 carbon-world crust (Exotic — card F42) — surface MINERALOGY, not new
+      // landforms (card section 4: above disk C/O ~0.8 the condensation sequence
+      // swaps silicates for graphite/SiC/diamond): a global near-black graphite
+      // albedo mask (Stage 6, ONE low-frequency octave — no high-freq albedo noise
+      // fighting the dither), tar-flat basin fills in the F8 uLavaCoverage combiner
+      // mold (the sanctioned height-domain pattern), and sparse crest diamond
+      // glints + a broad soft tar sheen riding the star-emissive-bypass family
+      // (added AFTER the posterize — crisp specks, never banded). The per-frame
+      // writer derives uCarbonStrength from the driven C/O ratio and forces it 0
+      // when carbonEnabled is off; EVERY F42 term keys on it, so one gate kills
+      // the family: byte-identical pre-F42 output — the F42 regression contract.
+      uniform float uCarbonStrength;    // master gate 0..1 (driven: clamp((C/O - 0.8) x 2.5) — 1.2 on the carbon preset -> 1; every preset without composition.carbonToOxygen derives ratio 0 -> 0)
+      uniform float uTarCoverage;       // 0..1 tar-flat coverage fraction — lab knob (the F8 region-extent semantics; <= 0 early-outs the combiner)
+      uniform float uGlintDensity;      // 0..1 diamond-glint sparse-cell density — lab knob (per-cell hash threshold)
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -816,6 +830,7 @@
       const int PROV_AURORA      = 35;  // F37 — neutral (magnetospheric optics, not geology): the oval follows the dipole axis + the night side, never the rock provinces (FROST-row pattern, like limb/terminator/glint)
       const int PROV_DUSTSTORM   = 36;  // F40 — neutral (weather, not geology): the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged v1 scope cut)
       const int PROV_MAGMA       = 37;  // F41 — neutral (irradiation, not geology): the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
+      const int PROV_CARBON      = 38;  // F42 — neutral (mineralogy, not geology): the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -871,6 +886,7 @@
         else if (fid == PROV_AURORA)     { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_DUSTSTORM)  { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_MAGMA)      { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_CARBON)     { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2243,6 +2259,48 @@
         return mask * glow * uLavaActivity * molten;
       }
 
+      // ── F42 tar flats — carbon-world hydrocarbon basin fills (Exotic, card section
+      // 6.5 step 5): the F8 uLavaCoverage region-mask resurfacing pattern — the
+      // sanctioned height-domain combiner — mirrored exactly (early-out gate, ONE
+      // low-freq noised() octave -> fbm01 -> smoothstep region whose EXTENT grows
+      // with coverage, multiplicative h/grad suppression), with TWO carbon-specific
+      // differences: (a) a HEIGHT gate pools the tar in low basins only (card
+      // section 4 height-based stratification — reduced-carbon liquids fill lows,
+      // never paint crests), and (b) NO wrinkle ridges (tar is a smooth fill — the
+      // flat-dither-vs-textured-relief contrast IS the read, the Titan dark-flats
+      // template). The region mask is exported (out cbTar) for the Stage-6 dark
+      // fill tone + the post-posterize tar sheen (ONE mask basis, no recompute
+      // drift). Runs in the LAST multiplicative slot beside lavaCombiner (below
+      // the F19 additive-contract line — multiplicative passes only live there).
+      // uCarbonStrength or uTarCoverage <= 0 early-outs: h/grad untouched,
+      // byte-identical pre-F42 output — the F42 regression contract.
+      void carbTarCombiner(vec3 pos, inout float h, inout vec3 grad, inout float cbTar){
+        if (uCarbonStrength <= 0.0 || uTarCoverage <= 0.0) return;
+        // flow-region mask — the F8 basis verbatim: low-freq FBM, thresholded;
+        // extent grows with coverage (1 -> whole-world tar seas). Own seed offset
+        // (decorrelated from F8's uLavaOffset) keyed to the planet's macro identity.
+        vec4 cbRn = noised(pos * 1.4 + uMacroOffset + vec3(23.7, -8.1, 14.9));
+        float cbFbm = 0.5 + 0.5 * cbRn.x;
+        // Verify fix cycle 2: range remap (was a flat 1.8 gain, cycle 1) — the
+        // raw F8 mapping left the knob's bottom half DEAD (0.35 default was
+        // pixel-identical to 0) and the flat gain saturated above ~0.45. The
+        // basin gate caps extent (tar can only fill lows), so the effective
+        // window is onset ~0.54 .. all-basins ~0.85; map the whole 0..1 knob
+        // onto it: default 0.35 -> 0.633 (visible), 1.0 -> 0.88 (every basin).
+        float cbCovEff = 0.5 + 0.38 * uTarCoverage;
+        float cbRegion = smoothstep(1.0 - cbCovEff, 1.0 - cbCovEff + 0.25, cbFbm);
+        // height gate — tar pools LOW: full strength below the datum, gone on rises
+        // (reads the INCOMING accumulated h, before its own flattening)
+        cbRegion *= 1.0 - smoothstep(-0.02, 0.06, h);
+        cbRegion *= uCarbonStrength * provinceWeight(PROV_CARBON);
+        // SMOOTH: tar floods + flattens older relief inside the region (F8 verbatim —
+        // the fill relaxes the basin toward the datum, shorelines stay crisp via the
+        // smoothstep edges)
+        h    *= (1.0 - cbRegion);
+        grad *= (1.0 - cbRegion);
+        cbTar = cbRegion;
+      }
+
       // doubleRidgeProfile — F10 Europa double-ridge cross-line profile (transcribed from the
       // planet-lod-lab-core.js oracle; constants DR_TROUGH_AMP=0.6, DR_TROUGH_W=0.5). Two
       // gaussian ridge crests at a=±offset flanking a gaussian trough at the line center a=0;
@@ -2646,6 +2704,13 @@
         float beachBand  = 0.0;
         float cliffDark  = 0.0;
         float strandLine = 0.0;
+        // F42 carbon-crust signals — set in the analytic branch (carbTarCombiner mask
+        // + the crest probe on the accumulated height), consumed at Stage 6 (graphite/
+        // tar albedo) + the post-posterize F42 emissive block (sheen + diamond glints).
+        // 0.0 here covers the finite-diff path (tar/glint signals inert there; the
+        // Stage-6 graphite mask computes inline and still applies — review NOTE 1).
+        float carbTar   = 0.0;
+        float carbCrest = 0.0;
         if (uNormalMode == 1){
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
@@ -2684,11 +2749,17 @@
           // CONTRACT (F19 gradBase trick): every combiner ABOVE this line must stay ADDITIVE on
           // grad (grad += only) — F19 derives its host-relief gate from gradIn − gradBase, so a
           // pre-F19 multiplicative smoother would leak base FBM into hostGrad. Multiplicative
-          // passes (F16 dust, F8 lava, F14 cut) all run below.
+          // passes (F16 dust, F8 lava, F42 tar, F14 cut) all run below.
           massWastCombiner(vPos, gradBase, h, grad); // F19 — talus aprons + landslide tongues bank at the FOOT of the accumulated steep relief (after ALL steep hosts incl. F17's mantle; before F15/F16 — dunes + dust then mantle over the deposits)
           duneCombiner(vPos, h, grad);             // F15 — linear ergs DEPOSIT on near-final lowlands (after all constructional relief so sand pools around it; before F8 — fresh basalt buries sand; before F12/F14 — deltas/sea read the final surface)
           dustCombiner(vPos, h, grad, dustCover);  // F16 — dust mantle SMOOTHS relief (after F15 — dust settles over the ergs; before F8 — fresh basalt punches through any mantle); writes dustCover for the Stage-6 ochre lift
-          lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (runs LAST)
+          lavaCombiner(vPos, h, grad);             // F8 — flood-basalt plains SMOOTH/suppress relief + wrinkle ridges (last of the F8-era passes; F42 tar follows)
+          carbTarCombiner(vPos, h, grad, carbTar); // F42 — tar flats FILL/SMOOTH low basins (the F8 multiplicative slot; exports the Stage-6 + sheen mask)
+          // F42 crest probe — threshold on the accumulated height (the cheapest robust
+          // crest proxy, card section 6.5 step 6), excluding tar fills: diamond glints
+          // live on uplifted crests, never in basins. Local-only (no h/grad writes);
+          // strength 0 skips it and carbCrest stays 0 — the F42 regression contract.
+          if (uCarbonStrength > 0.0) carbCrest = smoothstep(0.05, 0.16, h) * (1.0 - carbTar);
           deltaCombiner(vPos, h, grad, fluvialWet);// F12 — depositional aprons where channels meet base level (reads FINAL h)
           // ── Stage 4 (F14): standing-liquid level-set cut (card §4) — AFTER all relief so
           // fluvial channels + basins flood for free off the accumulated h. Inside the mask
@@ -2912,6 +2983,29 @@
           albedoCol = mix(albedoCol, vec3(0.47, 0.44, 0.40), 0.35 * mgNight * mgPatch * provinceWeight(PROV_MAGMA));
           albedoCol = mix(albedoCol, vec3(0.055, 0.045, 0.042), mgSeaMask);
           rayBright *= 1.0 - mgSeaMask;
+        }
+        // ── F42 graphite crust + tar-flat fill (Exotic, card section 6.5 steps 4-5 —
+        // ALBEDO only, the lighting-routed-detail discipline: relief keeps reading
+        // through the analytic normals + dither + limb, the albedo just goes DARK).
+        // Graphite plain = the whole-world near-black mask (the Ryugu 4-5 percent
+        // albedo target): master gate x ONE low-frequency fbm01 octave at planet
+        // scale, range-mapped to ~0.85-1.0 so the world is uniformly dark with only
+        // subtle low-freq variation — deliberately NO high-frequency albedo noise
+        // that would fight the dither and shimmer under the posterizer (card section
+        // 6 item 7). Tar flats then overprint DARKER still with a warm hydrocarbon
+        // cast (the Titan radar-dark read; the warm-vs-cool split keeps graphite and
+        // tar distinguishable inside the lowest luminance buckets). F3 fresh rays
+        // are DAMPED, not killed (carbonaceous ejecta is dark too — Ryugu's rays
+        // barely contrast; the F41 rayBright-inside-the-gate precedent, so strength
+        // 0 never touches rayBright). Strength 0 (enable off via the per-frame
+        // writer, or every preset without the C/O field) skips the block:
+        // albedoCol/rayBright untouched — the F42 regression contract.
+        if (uCarbonStrength > 0.0){
+          float cbVar = 0.5 + 0.5 * noised(vPos * 0.9 + uMacroOffset + vec3(-19.3, 6.7, 11.1)).x;
+          float cbMask = uCarbonStrength * (0.85 + 0.15 * cbVar) * provinceWeight(PROV_CARBON);
+          albedoCol = mix(albedoCol, vec3(0.045, 0.043, 0.048), cbMask);   // graphite — near-black, faintly cool
+          albedoCol = mix(albedoCol, vec3(0.030, 0.024, 0.018), carbTar);  // tar fill — darker, faintly warm, dead smooth
+          rayBright *= 1.0 - 0.8 * cbMask;
         }
         // ── F16 butterscotch veil (Stage-8 haze channel, computed HERE so it hits each
         // term PRE-posterize — there is no single final quantizer, every surface term
@@ -3249,6 +3343,46 @@
           float mgShore = exp(-mgShoreT * mgShoreT) * (0.65 + 0.35 * sin(uTime * 1.3 + mgWarpV.x * 9.0));
           emissive += mgC + emissiveBlackbody(1300.0) * 0.27 * mgShore * provinceWeight(PROV_MAGMA);
         }
+        // ★ F42 diamond glints + tar sheen — the carbon crust's two specular accents,
+        // BOTH riding this post-posterize channel (the designated survivor family,
+        // card section 6 item 3: "the few high-energy effects that look wrong when
+        // banded" — a glint dithered into a soft blob is no glint). NOT thermal
+        // emission (graphite at T_eq 600 is not visibly incandescent): both terms
+        // are sun+view-dependent reflections, so each carries step(0.0001, diff) —
+        // dark side stays dark. Diamond glints (card section 6.5 step 6) = the
+        // game snow-sparkle technique: ONE voronoi3d call tiles sparse cells, a
+        // per-cell hash33 picks the rare diamond-bearing cells (high threshold via
+        // uGlintDensity) AND jitters a per-cell micro-normal off shadeN, then
+        // pow(max(dot(Nc,H),0), 60) fires only when that cell's facet aligns with
+        // the half-vector — isolated crisp specks that shift as sun/camera move,
+        // confined to carbCrest (uplifted crests, the high-pressure-carbon story)
+        // and masked OUT of tar fills upstream. Tar sheen = a broad soft
+        // Blinn-Phong (exponent 8, dim — a waxy hydrocarbon flat, DELIBERATELY
+        // distinct from F36's tight liquid glint at exp ~200 and from the hard
+        // specks beside it) on the carbTar mask, whose F14-style flattened normal
+        // the combiner already relaxed. Spec-safety: pow bases are max(dot,0)
+        // clamped, exponents constant; no divisions. Strength 0 (enable off via
+        // the per-frame writer, or every preset without the C/O field) skips the
+        // block: byte-identical pre-F42 emissive — the F42 regression contract.
+        if (uCarbonStrength > 0.0){
+          vec3 cbHv = normalize(uLightDir + V);
+          if (carbCrest > 0.0 && uGlintDensity > 0.0){
+            vec3 cbCid; vec3 cbGrd;
+            vec2 cbFF = voronoi3d(vPos * 16.0 + uDetailOffset, uVoroCells, cbCid, cbGrd);
+            vec3 cbHash = hash33(cbCid + vec3(31.0));
+            float cbSparse = step(1.0 - 0.15 * uGlintDensity, cbHash.x);     // rare diamond-bearing cells
+            float cbSpot = 1.0 - smoothstep(0.0, 0.18, cbFF.x);              // speck hugs the cell center
+            vec3 cbN = normalize(shadeN + 0.45 * (cbHash - 0.5));            // per-cell hashed micro-facet
+            float cbGlint = pow(max(dot(cbN, cbHv), 0.0), 60.0);
+            emissive += vec3(0.92, 0.96, 1.0) * 2.5 * cbGlint * cbSparse * cbSpot
+                        * carbCrest * step(0.0001, diff)
+                        * uCarbonStrength * provinceWeight(PROV_CARBON);
+          }
+          if (carbTar > 0.0){
+            float cbSheen = pow(max(dot(shadeN, cbHv), 0.0), 8.0);
+            emissive += vec3(0.32, 0.30, 0.26) * 0.12 * cbSheen * carbTar * step(0.0001, diff);
+          }
+        }
 
         // ★ Sunglint (F36) — the mirror image of the star on standing liquid, LIQUID-ONLY.
         // Promoted from the Blinn-Phong stand-in (which glinted on the whole surface,
@@ -3386,6 +3520,11 @@
       uMagmaSeaAngle:  { value: 0.0 },   // F41 liquidus iso-angle rad (driven: acos((1300/T_ss)^4) on the locked-solid-melt class — K2-141b ~1.52 / Lava ~0.42 / else 0, the master gate)
       uMagmaTemp:      { value: 0.0 },   // F41 substellar surface temp T_ss K (driven: T_eq x 1.4 on locked worlds, 0 unlocked)
       uMagmaChurnSpeed:{ value: 0.02 },  // F41 crust-plate churn phase rate — lab knob (bounded two-phase fract crossfade)
+      // ── F42 carbon-world crust (driver-true exotic mineralogy — card §6.5 steps 3-7) ──
+      // uCarbonStrength 0 ⇒ every F42 GLSL block is skipped entirely (byte-identical pre-F42 render).
+      uCarbonStrength: { value: 0.0 },   // F42 master gate (driven: clamp((C/O - 0.8) x 2.5) — 'Carbon (high C/O)' 1.2 -> 1; every other preset derives 0)
+      uTarCoverage:    { value: 0.35 },  // F42 tar-flat coverage fraction — lab knob (F8 region-extent semantics; inert behind strength 0)
+      uGlintDensity:   { value: 0.5 },   // F42 diamond-glint sparse-cell density — lab knob (inert behind strength 0)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -3962,6 +4101,10 @@
       magmaSeaAngle: 0.0,   // F41 liquidus iso-angle rad (driven: acos((1300/T_ss)^4) — K2-141b ~1.52 wide sea / Lava ~0.42 substellar pond / 0 on every other preset)
       magmaTemp: 0.0,       // F41 substellar temp T_ss K (driven: T_eq x 1.4 on locked worlds — K2-141b 2800, Lava 1330; unlocked worlds 0)
       magmaChurnSpeed: 0.02,// F41 crust-plate churn phase rate (lab knob — the F25/F40 bounded two-phase fract crossfade; nothing accumulates)
+      carbonEnabled: true,  // F42 enable gate — off zeroes uCarbonStrength at the per-frame writer (graphite albedo + tar flats + sheen + diamond glints all vanish: byte-identical pre-F42 output)
+      carbonRatio: 0.0,     // F42 C/O ratio (driven: preset composition.carbonToOxygen — 1.2 on 'Carbon (high C/O)', absent ⇒ 0 everywhere else; the writer maps >0.8 onto the master gate, so the slider walks the silicate→graphite condensation swap on any preset)
+      tarCoverage: 0.35,    // F42 tar-flat coverage fraction (lab knob — F8 region-extent semantics: basins flood first via the height gate, 1 ⇒ whole-world tar seas)
+      glintDensity: 0.5,    // F42 diamond-glint sparse-cell density (lab knob — per-cell hash threshold; ~dozens of candidate cells per disc at 0.5)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -4360,6 +4503,30 @@
       // the locked spin (the real 0.28-day orbital period); only gas/atmosphere-
       // gated consumers read it — inert but honest data.
       'Magma (K2-141b)': { radiusEarth:1.5, massEarth:5, rotationHours:6.7, eccentricity:0.01, starMassEarth:332946, orbitRadiusEarth:212, composition:{ironFraction:0.4,density:8,volatileFraction:0}, T_eq:2000, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
+      // ── F42 carbon-world preset (card §6.5 step 1 — data only) ──
+      // "Carbon (high C/O)" is the F42 carrier: a warm airless super-Earth condensed
+      // from a carbon-rich disk. composition.carbonToOxygen 1.2 is the ONE new data
+      // field (D10 — deriveUniforms ignores unknown composition fields, so it rides
+      // through core untouched and applyDrivers reads it from the preset directly;
+      // every other preset omits it -> ratio 0 -> F42 inert, the regression
+      // contract). UNLOCKED + T_eq 600 deliberately avoids the F41 magma class
+      // (locked && T_ss > 1300 cannot fire: unlocked derives T_ss 0 outright) — the
+      // hot molten 55 Cnc e variant is the card's logged v1 scope cut. AIRLESS
+      // (atmosphere:null): limb / terminator / aurora / clouds / weather / F40 all
+      // naturally 0 (no N6 color-map rows needed — the rule binds atmospheric
+      // presets only). volatileFraction 0.02 sits UNDER the bone-dry floor (0.05):
+      // frost / liquid / sublimation / glacial / dunes / dust-mantle all gate 0 —
+      // no white frost diluting the dark-body read; the dark "flats" here are
+      // F42's own tar, not F14 liquid. Orbit 23455 (1 AU) follows the Sub-Neptune
+      // "illustrative, not orbit-consistent" convention: a T-consistent ~2350
+      // orbit would saturate the R^5/a^5 star-tidal term (lavaActivity ~1 — Io
+      // cracks glowing through the graphite); at 1 AU with eccentricity 0.01 it
+      // derives ~0.001, and lavaCoverage 0.1 (resurfacing) keeps F8 a trace dark
+      // basalt patch at most — consistent with an old carbon crust. bombardment
+      // 0.5 + erosion 0.1 keep craters + sharp ridged relief ALIVE (the card asks
+      // for relief interest: form must read through shading/silhouette on a
+      // near-black world, and the crest probe needs real crests for glints).
+      'Carbon (high C/O)': { radiusEarth:1.1, massEarth:1.4, eccentricity:0.01, starMassEarth:332946, orbitRadiusEarth:23455, composition:{ironFraction:0.3,density:6,volatileFraction:0.02,carbonToOxygen:1.2}, T_eq:600, tidalState:{locked:false}, atmosphere:null, habitability:0, surfaceHistory:{erosion:0.1,bombardmentIntensity:0.5,resurfacingRate:0.1} },
     };
     // ── F34 limb glow — per-preset rim hue (card §6.5 step 3: "a small per-preset/
     // archetype map"). The variant spread the old uBaseColor tint could not express:
@@ -5093,6 +5260,25 @@
       // (the card's logged taste fork) — its glow now comes from real features
       // (F41 masked sea + shoreline + the F8 cracks it already had), not the wash.
       if (_magmaClass) state.emissive = 0;
+      // ── F42 carbon-world crust — driver derivation (card §6.5 step 3; derivation
+      // HERE per the F11/F34/F41 precedent — core.js untouched: deriveUniforms
+      // ignores unknown composition fields, so carbonToOxygen rides through the
+      // preset data and is read off _fp directly). D10 C/O ratio is the SOLE
+      // driver; the per-frame writer maps it onto the master gate as
+      // clamp((ratio - 0.8) x 2.5) — the Kuchner-Seager condensation swap-point at
+      // 0.8 (silicates -> graphite/SiC/diamond), full strength by 1.2. Pre-checked
+      // over all 16 presets: ONLY "Carbon (high C/O)" carries the field (1.2 ->
+      // strength 1); every other preset derives ratio 0 -> strength 0 EXACTLY —
+      // the F42 regression contract.
+      state.carbonRatio = _fp.composition?.carbonToOxygen ?? 0;
+      const _carbonClass = !_gas && state.carbonRatio > 0.8;
+      // F42 stand-in note (the F32/F41 zeroing convention): T_eq 600 derives a
+      // faint whole-globe hot-floor wash (emissive ~0.083) — but graphite at 600 K
+      // is NOT visibly incandescent, and a rock-toned night glow would break the
+      // card's headline dark-body read. Zeroed on the carbon class, independent of
+      // carbonEnabled (the _hotJup/_magmaClass convention; only the new preset is
+      // in the class, so the 15 existing presets keep their derived emissive).
+      if (_carbonClass) state.emissive = 0;
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -5564,6 +5750,19 @@
     fMagma.add(state, 'magmaTemp', 0, 4000, 10).name('substellar T K (driven)').listen();
     fMagma.add(state, 'magmaChurnSpeed', 0, 0.2, 0.001).name('churn speed');
     fMagma.add(state, 'magmaEnabled').name('✓ enabled');
+    // ▸ Carbon crust (F42) — surface mineralogy of a high-C/O world: near-black
+    // graphite albedo (Stage 6 low-freq mask), tar flats filling low basins (the
+    // F8 height-domain combiner mold), sparse view-dependent diamond glints on
+    // crests + a broad soft tar sheen (both post-posterize, the ★ bypass family).
+    // C/O ratio is the driven display (.listen(); the slider walks the 0.8
+    // condensation swap-point on any preset); tar coverage + glint density are
+    // the lab knobs. NO 🎲 — the tar/glint domains are seeded off the planet's
+    // own macro/detail identity (the Seeds folder rerolls them with the world).
+    const fCarbon = fExoticGroup.addFolder('Carbon crust (F42)'); fCarbon.close();
+    fCarbon.add(state, 'carbonRatio', 0, 1.5, 0.01).name('C/O ratio (driven)').listen();
+    fCarbon.add(state, 'tarCoverage', 0, 1, 0.01).name('tar coverage');
+    fCarbon.add(state, 'glintDensity', 0, 1, 0.01).name('glint density');
+    fCarbon.add(state, 'carbonEnabled').name('✓ enabled');
 
     // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
     // F36 sunglint).
@@ -5633,6 +5832,7 @@
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds, dustStorm: fDustStorm,
       daysideThermal: fThermal, nightsideThermal: fThermalNight, magma: fMagma,
+      carbon: fCarbon,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
@@ -6003,6 +6203,19 @@
       uniforms.uMagmaSeaAngle.value   = state.magmaEnabled ? state.magmaSeaAngle : 0.0;   // ✓ enable gate
       uniforms.uMagmaTemp.value       = state.magmaTemp;
       uniforms.uMagmaChurnSpeed.value = state.magmaChurnSpeed;
+      // F42 carbon crust — carbonEnabled gates the master strength→0 (graphite
+      // albedo, tar combiner + fill tone, tar sheen, diamond glints ALL key on
+      // uCarbonStrength > 0, so ONE gate kills the family: byte-identical pre-F42
+      // output — the F42 regression contract); every preset without
+      // composition.carbonToOxygen derives ratio 0 ⇒ strength 0, so the same
+      // contract holds with the enable on. The mapping clamp((ratio − 0.8) × 2.5)
+      // is the card §4 condensation-sequence swap-point: silicate rock below C/O
+      // 0.8, full graphite/diamond mineralogy by 1.2. tarCoverage/glintDensity
+      // pass through, preserving the slider values (inert behind strength 0).
+      uniforms.uCarbonStrength.value = state.carbonEnabled
+        ? Math.min(1, Math.max(0, (state.carbonRatio - 0.8) * 2.5)) : 0.0;   // ✓ enable gate
+      uniforms.uTarCoverage.value    = state.tarCoverage;
+      uniforms.uGlintDensity.value   = state.glintDensity;
       // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
       // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
       // rotation about +y DECREASES longitude, which is EAST in this lab's tangent

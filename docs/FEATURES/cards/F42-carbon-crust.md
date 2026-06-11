@@ -44,12 +44,61 @@ Unbuilt — recommended recipe once built: register in planet-archetypes.js FEAT
 - [ ] At distance 20 does it read as one coherent 'black world with rare sparkle' silhouette; at distance 2.5 do all three materials stay distinguishable within 6 luminance levels?
 - [ ] Does the dark albedo stay a low-frequency mask — i.e., no high-frequency albedo noise that would fight the dither and shimmer under the posterizer?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: §4's three MATERIAL regimes layered on existing relief — no new
+keystone primitives; composes the F8 coverage-combiner, ridged-FBM crest
+fold, voronoi3d, and the emissive/spec bypass channel. Exemplars
+`0161a93` (F41, freshest incl. preset pattern) / `b66550c` (F40).
+
+1. **New preset (data)** — `'Carbon (high C/O)'`: airless, T_eq ~600,
+   UNLOCKED (deliberately avoids the F41 magma class — locked+hot would
+   fire a melt pond; the 55 Cnc e "hot molten carbon world" variant is a
+   v1 cut), iron ~0.3, `composition.carbonToOxygen: 1.2`, near-black
+   palette. Opens with `radiusEarth:`. No N6 rows (airless).
+2. **New archetype (data)** — `'exotic-carbon'` in ARCHETYPES (bodies:
+   55 Cnc e?, PSR J1719-1438 b; presets: the new one). Register `carbon`
+   in FEATURES (archetypes: ['exotic-carbon']) + featureFolders +
+   `carbonEnabled` default true + GUI "Carbon crust (F42)" in
+   Surface — Exotic (driven `.listen()`: carbonRatio display, tarCoverage,
+   glintDensity; ✓ enable LAST).
+3. **Driver** — uCarbonRatio surfaced in applyDrivers from
+   `_fp.composition.carbonToOxygen` (D10; CPU side already computes it —
+   core.js untouched, preset data carries the field); feature fires at
+   ratio > 0.8; all 15 existing presets derive 0/absent ⇒ inert.
+4. **Graphite plain** — global dark-albedo multiply toward near-black
+   (Ryugu 4-5% albedo), LOW-FREQUENCY mask only (one fbm01 octave at
+   planet scale — no high-frequency albedo noise fighting the dither);
+   relief keeps reading via normals + dither + limb.
+5. **Tar flats** — the F8 uLavaCoverage pattern VERBATIM: fbm01 +
+   smoothstep coverage region in the sanctioned relief-combiner chain
+   (mirror lavaCombiner's integration exactly — this is the established
+   height-domain combiner, NOT a new accumulator write), flattening
+   basins into smooth dark fills with crisp shorelines + a broad soft
+   specular (low exponent, dim — distinct from F36's liquid glint).
+6. **Diamond glints** — crest mask (the F1 ridged 1-abs fold) ∩ sparse
+   voronoi3d F1 hashed cells; per-cell hashed micro-normal →
+   `pow(max(dot(Nc,H),0.0), k~60)` view/sun-dependent specks, routed
+   POST-posterize via the emissive/spec bypass family — sparse crisp
+   single-bucket-bright points on uplifted crests only.
+7. **Plumbing** — PROV_CARBON=38 + PROVINCES neutral row + provinceWeight
+   row + GLSL_NAME line; frame writer sole uniform owner; reserved-word
+   audit (F40 lesson).
+
+v1 scope cuts (logged, not built): hot/molten 55 Cnc e variant (carbon
+preset is warm-airless); carbon-chemistry cross-inheritance (hydrocarbon
+rivers/methane seas on carbon worlds — F11/F14 own those); SiC/TiC
+spectral coloring; pressure-depth diamond stratification.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4c heavy loop)
+- Evidence (repo root + docs/FEATURES/screenshots, gitignored): `F42-carbon-d20.png` vs `F42-rocky-d20-ref.png` (dark body: lit-disc median lum 0 / mean 6.0 with 23% of px in the 10-50 relief band vs Rocky median 85 — dark but NOT featureless), `F42-carbon-glints-d3.png`(+yaw2 pair) (3 crisp 255-lum specks; yaw sweep 0/3/1/0 with zero centroid overlap — fully view-dependent), `F42-carbon-tar-d5-fixed.png` (smooth warm-dark basin fills, crisp shorelines).
+- §6 checklist: dark body w/ readable relief 🟢 · sparse view-dependent crest glints 🟢 (crisp single-dither-cell blocks, on crust never in tar) · glints survive bypass 🟢 · tar flats 🟢 post-fix (warm-dark [9.0,5.7,4.0] R/B 2.2 vs near-neutral crust; basin gate keeps 1.0 = all-basins, not whole-world paint) · geology-not-decals 🟢 · whole-disc coherence 🟢 · low-freq albedo only 🟢. Tar sheen: broad dim un-dithered gradient patches, max 43 — nothing F36-like.
+- New preset 'Carbon (high C/O)' (16th) + NEW archetype 'exotic-carbon' (filter machinery is open-set — rides free). 15-preset byte-identity hash-verified by the implementer live; carbon-class emissive zeroing unreachable elsewhere (only this preset carries composition.carbonToOxygen).
+- Tweaks applied: 2 of 3 cycles, both on the tar coverage mapping. (1) Default 0.35 was PIXEL-IDENTICAL to 0 (visible onset ~0.55 — the basin gate restricts the raw F8 mapping) → flat 1.8 gain; re-verify showed the gain just moved the dead zone (walkable range only ~[0.28,0.45]). (2) Range remap cbCovEff = 0.5 + 0.38·knob → sweep 0/185/739/915/931 px at 0/0.15/0.35/0.6/1.0: strictly increasing, 4 distinct steps, default clearly visible, basin-gate cap intact.
+- Code review (fable): APPROVE-WITH-FIXES (two stale load-bearing comments — F19 contract enumeration + "runs LAST" — fixed pre-verify). Notes: finite-diff path comment corrected; glints have NO LOD fade (vs F36's uLodRamp precedent) — at d20 they appear as intermittent single-frame pops during rotation, not continuous shimmer (verifier data, item 7).
+- Taste forks for Max's lap: (a) glint sparsity — 2 of 4 yaw views at d3 had ZERO glints, and d20 "rare sparkle" is temporally rare (single-frame pops); knobs glintDensity + crest thresholds (0.05/0.16) exist, and the uLodRamp fade is the remedy if pops read as flicker; (b) tarCoverage is an authored knob NOT derived per-preset (setPreset doesn't reset it — verifier caught it left at 1.0); (c) carbon palette/identity overall (new world + new archetype); (d) 1 AU illustrative orbit (T-consistent orbit would saturate star-tidal → Io-grade glowing cracks — a possible deliberate hot-carbon variant later).
+- Status: VERIFIED_PENDING_MAX

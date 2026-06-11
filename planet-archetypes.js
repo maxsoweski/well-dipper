@@ -84,6 +84,17 @@ export const FEATURES = {
   // Hot Jupiter is locked + hot but GAS (no rock surface to melt — its glow is the
   // F32/F33 thermal pair), every unlocked preset derives T_ss 0 outright.
   magma:      { label: 'Magma ocean (F41)',     enableKey: 'magmaEnabled',     archetypes: ['volcanic'] },
+  // F42 carbon-world crust — Exotic surface MINERALOGY, not new landforms (D10 high
+  // C/O swaps the condensation sequence: graphite/SiC/diamond replace silicate rock;
+  // F-exotic-natural group). Carrier class = composition.carbonToOxygen > 0.8 (the
+  // Kuchner-Seager swap-point): ONLY 'Carbon (high C/O)' carries the field (ratio
+  // 1.2 -> strength 1; every other preset derives ratio 0 outright), so registration
+  // agrees with the render set (review M1, both directions). A NEW dedicated
+  // archetype: no existing preset family is carbon-rich, and the graphite/tar/
+  // diamond read shares no carrier with the volcanic HEAT class — F42 is material
+  // chemistry, not melt (the 55 Cnc e hot-molten variant is the card's logged v1
+  // scope cut).
+  carbon:     { label: 'Carbon crust (F42)',    enableKey: 'carbonEnabled',    archetypes: ['exotic-carbon'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -96,6 +107,7 @@ export const ARCHETYPES = {
   'volatile-cold':        { label: 'Volatile / cold',        bodies: ['Pluto','Triton','Mars poles'], presets: ['Titan (methane seas)','Frozen (airless)'] },
   'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)','Sub-Neptune (hazy)'] },
   'hot-jupiter':          { label: 'Hot Jupiter',            bodies: ['HD 209458 b','WASP-43 b'],     presets: ['Hot Jupiter (locked giant)'] },
+  'exotic-carbon':        { label: 'Exotic / carbon',        bodies: ['55 Cnc e','PSR J1719-1438 b'], presets: ['Carbon (high C/O)'] },
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
@@ -151,4 +163,5 @@ export const PROVINCES = {
   aurora:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — magnetospheric optics, not geology: the oval follows the dipole axis + night side, never the rock provinces (FROST-row pattern, like limb/terminator/sunglint)
   dustStorm:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — weather, not geology: the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged F40 v1 scope cut)
   magma:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — irradiation, not geology: the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
+  carbon:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — mineralogy, not geology: the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
 };
