@@ -38,7 +38,7 @@ import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
 import { AutopilotMotion } from './auto/AutopilotMotion.js';
-import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
+import { SupercruiseModel } from './flight/SupercruiseModel.js';
 import { HeadMount } from './flight/HeadMount.js';
 import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
 import { Ship } from './core/Ship.js';
@@ -435,7 +435,13 @@ const scHead = new HeadMount();
 const scPilot = new SupercruisePilot(scModel);
 let _scManual = false;            // player has the stick (FLIGHT-mode supercruise)
 const _scBodies = [];             // per-tick gravity-well body list (reused)
-window._sc = { model: scModel, pilot: scPilot, head: scHead, tuning: SC_TUNING }; // UAT knobs + test probe
+// UAT knobs + test probe. tuning/pilotTuning/headTuning are the LIVE
+// per-instance objects — each constructor shallow-copies its module
+// defaults, so mutating the default objects would affect nothing.
+window._sc = {
+  model: scModel, pilot: scPilot, head: scHead,
+  tuning: scModel.tuning, pilotTuning: scPilot.tuning, headTuning: scHead.tuning,
+};
 
 // §A4 body-velocity resolver. Reads orbit params from the active
 // system and writes the body's world-frame velocity into `out`.
@@ -7214,16 +7220,47 @@ function simStep(deltaTime) {
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
 
-      // AC6 felt beats: same impulses as the V1 branch, new triggers.
-      // (`phase` is the ENTRY phase — phaseChanged + CRUISE fires on the
-      // first frame DRIVEN by CRUISE, see SupercruisePilot._stamp.)
+      // AC6 felt beats: queue the same impulses as the V1 branch, new
+      // triggers. (`phase` is the ENTRY phase — phaseChanged + CRUISE
+      // fires on the first frame DRIVEN by CRUISE, see
+      // SupercruisePilot._stamp.) The impulses only queue a pending
+      // debug fire; shipChoreographer.update below consumes it and
+      // runs the tremor envelope into shakeEuler.
       if (scFrame) {
         if (scFrame.phaseChanged && scFrame.phase === PilotPhase.CRUISE) {
           shipChoreographer.debugAccelImpulse();
         }
         if (scFrame.decelStarted) shipChoreographer.debugDecelImpulse();
       }
-      // Shake quat composition — same mechanism as the V1 branch.
+
+      // Drive ShipChoreographer (mirrors the V1 autopilotMotion branch).
+      // Its update() early-returns while its own phase is IDLE, so kick
+      // it out of IDLE once when the sc branch goes live. Gated on
+      // !isActive (IDLE check) because beginTour _resetState()s the
+      // shake envelope — calling it mid-tour would cut an active shake.
+      // Task 6's dispatch sites also call beginTour on real legs; this
+      // guard makes that redundant call a no-op here.
+      if (!shipChoreographer.isActive) {
+        shipChoreographer.beginTour({ fromWarp: false });
+      }
+      // Synthesized pseudo motion-frame: only the fields
+      // ShipChoreographer.update actually reads (position, phase,
+      // motionStarted, isShortTrip, warpExit). subPhase mapping mirrors
+      // the V1 branch: 'traveling' during ALIGN/CRUISE — and during
+      // manual stick with no pilot (scFrame === null) — so shake events
+      // can fire; 'orbiting' during HOLD so shake decays to zero (no
+      // shake during hold per AC6). motionStarted = first frame driven
+      // by ALIGN (beginLeg entry) → resets the per-leg fire budget.
+      shipChoreographer.update(deltaTime, {
+        position: scModel.position,
+        phase: (scFrame && scFrame.phase === PilotPhase.HOLD) ? 'orbiting' : 'traveling',
+        motionStarted: !!(scFrame && scFrame.phaseChanged && scFrame.phase === PilotPhase.ALIGN),
+        isShortTrip: false,
+        warpExit: false,
+      });
+      // Shake quat composition — shakeEuler is now driven by the
+      // choreographer update above; same composition mechanism as the
+      // V1 branch.
       _composeShakeOntoCamera();
 
       if (scFrame) _handleScPilotFrame(scFrame); // fleshed out in tour-cutover task
