@@ -6,6 +6,8 @@
 // Frame idiom copied from AutopilotMotion: one-shots polled by main.js.
 import * as THREE from 'three';
 
+const NEG_Z = new THREE.Vector3(0, 0, -1); // local nose; setFromUnitVectors doesn't mutate args
+
 export const PilotPhase = Object.freeze({
   IDLE: 'IDLE', ALIGN: 'ALIGN', CRUISE: 'CRUISE', HOLD: 'HOLD',
 });
@@ -33,6 +35,7 @@ export class SupercruisePilot {
     this._toTarget = new THREE.Vector3();
     this._local = new THREE.Vector3();
     this._invQ = new THREE.Quaternion();
+    this._holdQ = new THREE.Quaternion();
   }
 
   get isActive() { return this.phase !== PilotPhase.IDLE; }
@@ -45,6 +48,7 @@ export class SupercruisePilot {
   }
 
   stop() {
+    this.model.setTurnInput(0, 0); // momentary control; throttle stays — latched setting (Elite semantics)
     this.phase = PilotPhase.IDLE;
     this._target = null;
   }
@@ -70,7 +74,7 @@ export class SupercruisePilot {
       // Body-locked hold (today's STATION-A): write position through the model.
       m.position.copy(bodyPos).add(this._holdOffset);
       m.speed = 0; m.setThrottle(0); m.setTurnInput(0, 0);
-      this._lookAtBody(bodyPos);
+      this._lookAtBody(bodyPos, dt);
       this._holdTimer += dt;
       if (this._holdTimer >= tgt.linger) frame.motionComplete = true;
       return this._stamp(frame);
@@ -80,8 +84,10 @@ export class SupercruisePilot {
     this._local.copy(this._toTarget).normalize()
       .applyQuaternion(this._invQ.copy(m.orientation).invert());
     // local -Z is the nose; x>0 → target to the right, y>0 → above.
-    const yawIn = THREE.MathUtils.clamp(-this._local.x * t.STEER_GAIN, -1, 1);
+    let yawIn = THREE.MathUtils.clamp(-this._local.x * t.STEER_GAIN, -1, 1);
     const pitchIn = THREE.MathUtils.clamp(this._local.y * t.STEER_GAIN, -1, 1);
+    // Exact antiparallel (target dead astern) → zero steering signal → permanent ALIGN hang.
+    if (this._local.z > 0 && Math.hypot(this._local.x, this._local.y) < 1e-6) yawIn = 1;
     m.setTurnInput(yawIn, pitchIn);
     const aligned = -this._local.z >= t.ALIGN_DOT;
 
@@ -108,13 +114,12 @@ export class SupercruisePilot {
     return this._stamp(frame);
   }
 
-  _lookAtBody(bodyPos) {
+  _lookAtBody(bodyPos, dt) {
     // During HOLD keep the nose on the body so the resumed leg departs cleanly.
     const m = this.model;
     this._toTarget.copy(bodyPos).sub(m.position).normalize();
-    const q = new THREE.Quaternion().setFromUnitVectors(
-      new THREE.Vector3(0, 0, -1), this._toTarget);
-    m.orientation.slerp(q, 0.1);
+    this._holdQ.setFromUnitVectors(NEG_Z, this._toTarget);
+    m.orientation.slerp(this._holdQ, 1 - Math.exp(-dt / 0.16)); // ≈0.1/frame at 60Hz
   }
 
   _stamp(frame) {

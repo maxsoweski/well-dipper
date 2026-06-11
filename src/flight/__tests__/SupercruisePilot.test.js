@@ -31,9 +31,9 @@ describe('SupercruisePilot', () => {
     const last = frames[frames.length - 1];
     expect(last.motionComplete).toBe(true);
     expect(last.overshoot).toBeFalsy();
-    // held at the felt-fill hold distance, body-locked
+    // held at the felt-fill hold distance, body-locked (HOLD_VIEW_FRAC = 2.6)
     const holdDist = model.position.distanceTo(body.mesh.position);
-    expect(holdDist).toBeLessThan(body.radius * 12);
+    expect(holdDist).toBeCloseTo(body.radius * 2.6, 0);
     // phases were traversed in order
     const seq = [...new Set(frames.map(f => f.phase))];
     expect(seq).toEqual([PilotPhase.ALIGN, PilotPhase.CRUISE, PilotPhase.HOLD]);
@@ -53,6 +53,20 @@ describe('SupercruisePilot', () => {
       expect(model.throttle).toBeLessThanOrEqual(1);
       model.update(DT);
     }
+  });
+
+  it('converges and completes an off-axis leg (pins steering signs)', () => {
+    // A flipped yaw/pitch sign steers AWAY from the body — the leg never
+    // converges and motionComplete never fires within the step budget.
+    const model = new SupercruiseModel();
+    const body = mkBody(3000, 1000, -4000, 5);
+    model.setBodies([{ position: body.mesh.position, radius: body.radius }]);
+    const pilot = new SupercruisePilot(model);
+    pilot.beginLeg({ toBody: body.mesh, bodyRadius: body.radius, linger: 0.5 });
+    const frames = fly(pilot, model, 60 * 180);
+    const last = frames[frames.length - 1];
+    expect(last.motionComplete).toBe(true);
+    expect(last.overshoot).toBeFalsy();
   });
 
   it('emits decelStarted once per leg (the AC6 shake trigger)', () => {
@@ -92,6 +106,34 @@ describe('SupercruisePilot', () => {
     model.setTurnInput(0.5, 0.5);
     pilot.update(DT);
     expect(model.turnInput.yaw).toBe(0.5); // untouched — pilot is hands-off
+  });
+
+  it('HOLD is body-locked: a moving body carries the ship at constant offset', () => {
+    const model = new SupercruiseModel();
+    const body = mkBody(0, 0, -5000, 5);
+    model.setBodies([{ position: body.mesh.position, radius: body.radius }]);
+    const pilot = new SupercruisePilot(model);
+    pilot.beginLeg({ toBody: body.mesh, bodyRadius: body.radius, linger: 5 });
+    // Fly the leg until HOLD is reached.
+    for (let i = 0; i < 60 * 120 && pilot.phase !== PilotPhase.HOLD; i++) {
+      pilot.update(DT);
+      model.update(DT);
+    }
+    expect(pilot.phase).toBe(PilotPhase.HOLD);
+    // One settled HOLD frame to snapshot the locked offset.
+    pilot.update(DT); model.update(DT);
+    const offset0 = model.position.clone().sub(body.mesh.position);
+    const startPos = model.position.clone();
+    // Drag the body sideways mid-HOLD; the ship must ride along, body-locked.
+    for (let i = 0; i < 120; i++) {
+      body.mesh.position.x += 1;
+      const f = pilot.update(DT);
+      model.update(DT);
+      expect(f.phase).toBe(PilotPhase.HOLD);
+      const offset = model.position.clone().sub(body.mesh.position);
+      expect(offset.distanceTo(offset0)).toBeLessThan(1e-6);
+    }
+    expect(model.position.distanceTo(startPos)).toBeGreaterThan(100);
   });
 
   it('linger: Infinity holds forever — motionComplete never fires', () => {
