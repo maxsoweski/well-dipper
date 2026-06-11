@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { SupercruiseModel } from '../SupercruiseModel.js';
-import { SupercruisePilot, PilotPhase } from '../SupercruisePilot.js';
+import { SupercruisePilot, PilotPhase, PILOT_TUNING } from '../SupercruisePilot.js';
 
 const DT = 1 / 60;
 const mkBody = (x, y, z, r) => ({
@@ -209,5 +209,39 @@ describe('SupercruisePilot', () => {
       expect(f.motionComplete).toBe(false);
       expect(f.phase).toBe(PilotPhase.HOLD);
     }
+  });
+
+  it('capture stays arithmetically possible across production radii (cap floor vs drop ceiling)', () => {
+    // With CAP_MIN_ABS = 0.01 the ABSOLUTE floor governed near tiny bodies:
+    // cruise speed at the drop sphere was 0.75 × 0.01 = 0.0075, but the drop
+    // window needs speed ≤ 10R / DROP_ETA_MAX = 4R — impossible for
+    // R < 0.001875 (observed live: Proteus R=0.0014058 limit-cycled forever).
+    for (const R of [5, 0.48, 0.0163, 0.0014058, 4e-5]) {   // star..smallest moon
+      const m = new SupercruiseModel();
+      m.setBodies([{ position: new THREE.Vector3(0, 0, 0), radius: R }]);
+      m.position.set(10 * R + R, 0, 0);                      // at the drop sphere
+      const cruiseSpeedAtDrop = PILOT_TUNING.CRUISE_THROTTLE * m.speedCap();
+      const dropMaxSpeed = (10 * R) / PILOT_TUNING.DROP_ETA_MAX;
+      expect(cruiseSpeedAtDrop).toBeLessThanOrEqual(dropMaxSpeed);
+    }
+  });
+
+  it('captures and completes at Proteus radius (regression: CAP_MIN_ABS limit cycle, live 2026-06-10)', () => {
+    // Proteus (R=0.0014058) sits BELOW the old absolute floor's capturable
+    // minimum (R=0.001875): 0.75 × 0.01 > 4R, so the pilot overshot, looped
+    // back, overshot again — forever. Full-leg check that the 1e-5 floor
+    // lets the leg capture cleanly and complete.
+    const model = new SupercruiseModel();
+    const body = mkBody(0, 0, -30, 0.0014058);
+    model.setBodies([{ position: body.mesh.position, radius: body.radius }]);
+    const pilot = new SupercruisePilot(model);
+    pilot.beginLeg({ toBody: body.mesh, bodyRadius: body.radius, linger: 1 });
+    const frames = fly(pilot, model, 60 * 150);
+    const last = frames[frames.length - 1];
+    expect(last.motionComplete).toBe(true);             // reached HOLD, lingered, completed
+    expect(frames.some(f => f.overshoot)).toBe(false);  // no limit cycle — clean capture
+    expect(frames.some(f => f.phase === PilotPhase.HOLD)).toBe(true);
+    expect(model.position.distanceTo(body.mesh.position))
+      .toBeLessThanOrEqual(body.radius * 10);
   });
 });

@@ -113,7 +113,7 @@ import * as THREE from 'three';
 export const SC_TUNING = {
   ETA_K: 6.0,               // speed cap = surfaceDist / ETA_K (Elite's ~6s rule)
   CAP_MIN_FRAC: 0.5,        // per-body cap floor = radius × this (scale-free: capture stays possible at any body size)
-  CAP_MIN_ABS: 0.01,        // u/s absolute floor — numerical safety only
+  CAP_MIN_ABS: 1e-5,        // u/s absolute floor — pure numerical safety; MUST stay ≤ 5.3 × smallest capturable body radius (capture needs 0.75×floor ≤ 4R; smallest moon ≈ 4e-5)
   CAP_MAX: 20000.0,         // u/s deep-space ceiling
   ACCEL_TAU: 1.4,           // s — exponential approach to target speed (heavy feel)
   TURN_RATE_MAX: 0.7,       // rad/s at rest
