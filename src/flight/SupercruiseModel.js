@@ -8,7 +8,8 @@ import * as THREE from 'three';
 
 export const SC_TUNING = {
   ETA_K: 6.0,               // speed cap = surfaceDist / ETA_K (Elite's ~6s rule)
-  CAP_MIN: 4.0,             // u/s floor when hugging a body
+  CAP_MIN_FRAC: 0.5,        // per-body cap floor = radius × this (scale-free: capture stays possible at any body size)
+  CAP_MIN_ABS: 0.01,        // u/s absolute floor — numerical safety only
   CAP_MAX: 20000.0,         // u/s deep-space ceiling
   ACCEL_TAU: 1.4,           // s — exponential approach to target speed (heavy feel) (must stay ≤ ETA_K/4 or full-throttle approach decel turns underdamped and surges)
   TURN_RATE_MAX: 0.7,       // rad/s at rest
@@ -46,13 +47,15 @@ export class SupercruiseModel {
     return out.set(0, 0, -1).applyQuaternion(this.orientation);
   }
 
-  /** Gravity-well cap: min over bodies of clamp(surfaceDist / ETA_K). */
+  /** Gravity-well cap: min over bodies of max(floor, surfaceDist / ETA_K),
+   *  where the floor scales with body radius so pilot capture
+   *  (speed ≤ 4R) stays reachable at production radii (1e-4..5). */
   speedCap() {
     const t = this.tuning;
     let cap = t.CAP_MAX;
     for (const b of this._bodies) {
       const d = Math.max(0, this.position.distanceTo(b.position) - b.radius);
-      const c = Math.max(t.CAP_MIN, d / t.ETA_K);
+      const c = Math.max(t.CAP_MIN_ABS, b.radius * t.CAP_MIN_FRAC, d / t.ETA_K);
       if (c < cap) cap = c;
     }
     return cap;

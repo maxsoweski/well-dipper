@@ -112,7 +112,8 @@ import * as THREE from 'three';
 
 export const SC_TUNING = {
   ETA_K: 6.0,               // speed cap = surfaceDist / ETA_K (Elite's ~6s rule)
-  CAP_MIN: 4.0,             // u/s floor when hugging a body
+  CAP_MIN_FRAC: 0.5,        // per-body cap floor = radius × this (scale-free: capture stays possible at any body size)
+  CAP_MIN_ABS: 0.01,        // u/s absolute floor — numerical safety only
   CAP_MAX: 20000.0,         // u/s deep-space ceiling
   ACCEL_TAU: 1.4,           // s — exponential approach to target speed (heavy feel)
   TURN_RATE_MAX: 0.7,       // rad/s at rest
@@ -155,7 +156,7 @@ export class SupercruiseModel {
     let cap = t.CAP_MAX;
     for (const b of this._bodies) {
       const d = Math.max(0, this.position.distanceTo(b.position) - b.radius);
-      const c = Math.max(t.CAP_MIN, d / t.ETA_K);
+      const c = Math.max(t.CAP_MIN_ABS, b.radius * t.CAP_MIN_FRAC, d / t.ETA_K);
       if (c < cap) cap = c;
     }
     return cap;
@@ -222,7 +223,7 @@ describe('SupercruiseModel — gravity-well cap + turn rate (AC1)', () => {
     }
     expect(m.speedCap()).toBeLessThanOrEqual(SC_TUNING.CAP_MAX);
     m.position.set(body.radius + 0.1, 0, 0);
-    expect(m.speedCap()).toBe(SC_TUNING.CAP_MIN); // floor at the surface
+    expect(m.speedCap()).toBe(Math.max(SC_TUNING.CAP_MIN_ABS, body.radius * SC_TUNING.CAP_MIN_FRAC)); // floor at the surface (scale-free)
   });
 
   it('crawls near a planet, runs enormous in deep space (end-to-end)', () => {
@@ -544,6 +545,7 @@ export const PILOT_TUNING = {
   DROP_ETA_MAX: 2.5,         // s — dropMaxSpeed = 10R / DROP_ETA_MAX
   DECEL_CUE_FACTOR: 15,      // decelStarted one-shot at 15R (AC6 shake cue)
   HOLD_VIEW_FRAC: 2.6,       // hold distance ≈ 2.6R (today's felt-fill)
+  HOLD_SETTLE_TAU: 0.6,      // s — exponential ease from capture point to hold point (kills HOLD-entry snap)
 };
 
 export class SupercruisePilot {
@@ -553,6 +555,7 @@ export class SupercruisePilot {
     this.phase = PilotPhase.IDLE;
     this._target = null;       // { mesh, radius, linger }
     this._holdOffset = new THREE.Vector3();
+    this._holdPoint = new THREE.Vector3();
     this._holdTimer = 0;
     this._decelCued = false;
     this._prevPhase = PilotPhase.IDLE;
@@ -593,8 +596,11 @@ export class SupercruisePilot {
     const dropMaxSpeed = dropRadius / t.DROP_ETA_MAX;
 
     if (this.phase === PilotPhase.HOLD) {
-      // Body-locked hold (today's STATION-A): write position through the model.
-      m.position.copy(bodyPos).add(this._holdOffset);
+      // Body-locked hold (today's STATION-A): ease toward the (moving) hold
+      // point — exponential settle (~3τ ≈ 1.8 s) instead of a one-frame teleport.
+      const k = 1 - Math.exp(-dt / t.HOLD_SETTLE_TAU);
+      this._holdPoint.copy(bodyPos).add(this._holdOffset);
+      m.position.lerp(this._holdPoint, k);
       m.speed = 0; m.setThrottle(0); m.setTurnInput(0, 0);
       this._lookAtBody(bodyPos);
       this._holdTimer += dt;
@@ -623,7 +629,7 @@ export class SupercruisePilot {
         if (m.speed <= dropMaxSpeed) {
           // Capture: enter the body-locked hold at felt-fill distance.
           this._holdOffset.copy(m.position).sub(bodyPos)
-            .normalize().multiplyScalar(Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius + 1));
+            .normalize().multiplyScalar(Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius * 1.05)); // scale-free: ×1.05 inside-body guard, no absolute term
           this.phase = PilotPhase.HOLD;
           this._holdTimer = 0;
         } else {

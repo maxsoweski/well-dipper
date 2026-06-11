@@ -20,6 +20,7 @@ export const PILOT_TUNING = {
   DROP_ETA_MAX: 2.5,         // s — dropMaxSpeed = 10R / DROP_ETA_MAX
   DECEL_CUE_FACTOR: 15,      // decelStarted one-shot at 15R (AC6 shake cue)
   HOLD_VIEW_FRAC: 2.6,       // hold distance ≈ 2.6R (today's felt-fill)
+  HOLD_SETTLE_TAU: 0.6,      // s — exponential ease from capture point to hold point (kills HOLD-entry snap)
 };
 
 export class SupercruisePilot {
@@ -29,6 +30,7 @@ export class SupercruisePilot {
     this.phase = PilotPhase.IDLE;
     this._target = null;       // { mesh, radius, linger }
     this._holdOffset = new THREE.Vector3();
+    this._holdPoint = new THREE.Vector3();
     this._holdTimer = 0;
     this._decelCued = false;
     this._prevPhase = PilotPhase.IDLE;
@@ -71,10 +73,17 @@ export class SupercruisePilot {
     const dropMaxSpeed = dropRadius / t.DROP_ETA_MAX;
 
     if (this.phase === PilotPhase.HOLD) {
-      // Body-locked hold (today's STATION-A): write position through the model.
-      m.position.copy(bodyPos).add(this._holdOffset);
+      // Body-locked hold (today's STATION-A): ease toward the (moving) hold
+      // point — exponential settle from the capture point (≤10R) instead of a
+      // one-frame teleport. Converges in ~3τ ≈ 1.8 s, then chases the moving
+      // hold point with sub-visual steady-state lag.
+      const k = 1 - Math.exp(-dt / t.HOLD_SETTLE_TAU);
+      this._holdPoint.copy(bodyPos).add(this._holdOffset);
+      m.position.lerp(this._holdPoint, k);
       m.speed = 0; m.setThrottle(0); m.setTurnInput(0, 0);
       this._lookAtBody(bodyPos, dt);
+      // Linger timing starts at HOLD entry (simpler than settle-gating, and a
+      // moving body can never stall the timer); ~1.8 s of the linger is settle.
       this._holdTimer += dt;
       if (this._holdTimer >= tgt.linger) frame.motionComplete = true;
       return this._stamp(frame);
@@ -103,7 +112,7 @@ export class SupercruisePilot {
         if (m.speed <= dropMaxSpeed) {
           // Capture: enter the body-locked hold at felt-fill distance.
           this._holdOffset.copy(m.position).sub(bodyPos)
-            .normalize().multiplyScalar(Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius + 1));
+            .normalize().multiplyScalar(Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius * 1.05)); // scale-free: ×1.05 inside-body guard, no absolute term
           this.phase = PilotPhase.HOLD;
           this._holdTimer = 0;
         } else {
