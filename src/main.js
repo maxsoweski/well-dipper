@@ -1757,10 +1757,12 @@ window._lab = {
     return !splashActive && !titleScreenActive && !!system;
   },
 
-  /** Stop autopilot + autopilotMotion in one call. Used by scenario 5. */
+  /** Stop autopilot + autopilotMotion + supercruise pilot in one call. Used by scenario 5. */
   stopAutopilot() {
     if (autoNav.isActive) stopFlythrough();
     if (autopilotMotion.isActive) autopilotMotion.stop();
+    scPilot.stop();
+    _scManual = false;
     _autopilotEnabled = false;
   },
 
@@ -5312,23 +5314,32 @@ function updateFocusFromStop(stop) {
 }
 
 /**
- * Begin a tour-leg motion plan toward the given stop. V1 STATION-hold
- * redesign (2026-04-25): autopilot-tour legs route through
- * `AutopilotMotion`, not the legacy `NavigationSubsystem`. Used by
- * the autopilot loop after motionComplete and by Tab / number-key /
- * minimap jumps during an active tour. The prior-body parameter is
- * preserved on the function signature for caller compatibility but
- * the V1 motion model does not consume it (V1 has no
- * orbit-tangential departure math — straight-line aim-once).
+ * Begin a tour-leg motion plan toward the given stop. Supercruise
+ * cutover (2026-06-10): autopilot-tour legs route through
+ * `SupercruisePilot` (was AutopilotMotion per the V1 STATION-hold
+ * redesign 2026-04-25). Used by the autopilot loop after
+ * motionComplete and by Tab / number-key / minimap jumps during an
+ * active tour. The prior-body parameter is preserved on the function
+ * signature for caller compatibility but neither motion model
+ * consumes it (straight-line aim-once, no orbit-tangential departure).
  */
 function _beginTourLegMotion(stop, priorBody) {
   if (!stop || !stop.bodyRef) return;
-  autopilotMotion.beginMotion({
-    fromPosition: camera.position.clone(),
+  // Jumps can fire while a non-sc driver still owns the camera (e.g.
+  // the warp-arrival navSubsystem first leg). Seed the model pose from
+  // the camera so the leg departs from the current view pose; when the
+  // sc mover is already driving, keep its live pose/speed (continuity
+  // across mid-tour jumps — beginLeg only resets the pilot phase).
+  if (!scPilot.isActive && !_scManual) {
+    scModel.position.copy(camera.position);
+    scModel.orientation.copy(camera.quaternion);
+    scModel.speed = 0;
+    scModel.setThrottle(0);
+  }
+  scPilot.beginLeg({
     toBody: stop.bodyRef,
     bodyRadius: stop.bodyRadius,
-    ship,
-    fovDegrees: settings.get('fov'),
+    linger: stop.linger * settings.get('tourLingerMultiplier'),
   });
   // Ship-axis tour-leg advance — flips ENTRY→CRUISE on first post-ENTRY
   // call; 1:1 mapping thereafter.
@@ -5373,15 +5384,18 @@ function startFlythrough() {
   // Bypass manual camera — flythrough drives camera directly
   cameraController.bypassed = true;
 
-  // V1 STATION-hold redesign (2026-04-25): autopilot tour begins via
-  // AutopilotMotion — straight-line CRUISE → 10R APPROACH → STATION-A
-  // hold. Felt-fill hold distance derived from FOV.
-  autopilotMotion.beginMotion({
-    fromPosition: camera.position.clone(),
+  // Supercruise cutover (2026-06-10): autopilot tour begins via
+  // SupercruisePilot — ALIGN → CRUISE (gravity-well speed cap) → HOLD.
+  // Seed the model pose once at autopilot start so the first leg
+  // departs from the camera's pose, standing still.
+  scModel.position.copy(camera.position);
+  scModel.orientation.copy(camera.quaternion);
+  scModel.speed = 0;
+  scModel.setThrottle(0);
+  scPilot.beginLeg({
     toBody: firstStop.bodyRef,
     bodyRadius: firstStop.bodyRadius,
-    ship,
-    fovDegrees: settings.get('fov'),
+    linger: firstStop.linger * settings.get('tourLingerMultiplier'),
   });
   // Ship-axis: non-warp engage → first leg is CRUISE (not ENTRY).
   shipChoreographer.beginTour({ fromWarp: false });
@@ -5397,7 +5411,7 @@ function startFlythrough() {
  * Stop the flythrough and hand camera back to manual orbit control.
  */
 function stopFlythrough() {
-  if (!autoNav.isActive && !flythrough.active && !autopilotMotion.isActive && !(_autopilotNavSequence && _autopilotNavSequence.isActive)) return;
+  if (!autoNav.isActive && !flythrough.active && !autopilotMotion.isActive && !scPilot.isActive && !(_autopilotNavSequence && _autopilotNavSequence.isActive)) return;
   soundEngine.play('autopilotOff');
 
   // Abort any in-progress nav sequence
@@ -5410,6 +5424,8 @@ function stopFlythrough() {
   autoNav.stop();
   shipChoreographer.stop();
   autopilotMotion.stop();
+  scPilot.stop();
+  _scManual = false;
   _manualBurnOrbiting = false;
   _autopilotEnabled = false;
 
@@ -6246,8 +6262,52 @@ function _composeShakeOntoCamera() {
   }
 }
 
+// Per-leg advance latch for _handleScPilotFrame. The pilot's
+// motionComplete is LEVEL-triggered (fires every HOLD frame past the
+// linger timer), unlike V1 AutopilotMotion's one-shot. beginLeg resets
+// the phase so a successful advance self-clears — but if advanceToNext
+// hands back a stop with no bodyRef, an unlatched handler would call
+// advanceToNext EVERY frame (skipping stops + spamming onTourComplete).
+// The latch makes the advance fire once per leg, mirroring V1's
+// one-shot; it clears on the next leg's ALIGN entry.
+let _scLegAdvanced = false;
+
 function _handleScPilotFrame(frame) {
-  // Tour advance / arrival wiring lands in the tour-cutover task.
+  // New leg started (beginLeg → ALIGN) — re-arm the advance latch.
+  if (frame.phaseChanged && frame.phase === PilotPhase.ALIGN) {
+    _scLegAdvanced = false;
+  }
+
+  // Tour-only wiring below; manual-burn pilot legs (Task 9) skip it.
+  if (!autoNav.isActive) return;
+
+  // Reticle sync (mirrors the V1 autopilotMotion branch, 2026-04-25):
+  // surface the autopilot target as the selected reticle so the camera-
+  // centered body is verifiable. Re-targets when the tour advances.
+  const _curStop = autoNav.getCurrentStop?.();
+  if (_curStop) {
+    const _tgt = _makeTarget(_curStop.type, {
+      starIndex: _curStop.starIndex,
+      planetIndex: _curStop.planetIndex,
+      moonIndex: _curStop.moonIndex,
+    });
+    if (_tgt) _selectedTarget = _tgt;
+  }
+
+  // Tour advance: motionComplete fires after the HOLD linger timer.
+  if (frame.motionComplete && !_scLegAdvanced) {
+    _scLegAdvanced = true;
+    const nextStop = autoNav.advanceToNext();
+    if (nextStop && nextStop.bodyRef) {
+      scPilot.beginLeg({
+        toBody: nextStop.bodyRef,
+        bodyRadius: nextStop.bodyRadius,
+        linger: nextStop.linger * settings.get('tourLingerMultiplier'),
+      });
+      shipChoreographer.onLegAdvanced();
+      updateFocusFromStop(nextStop);
+    }
+  }
 }
 
 function simStep(deltaTime) {
@@ -7434,20 +7494,26 @@ function simStep(deltaTime) {
       }
 
       if (result.orbitComplete) {
-        // V1 STATION-hold redesign (2026-04-25): autopilot-tour
-        // advance migrated to AutopilotMotion. The legacy navSubsystem
-        // is stopped here so it doesn't compete; subsequent legs run
-        // entirely on V1. (Warp-arrival path uses navSubsystem for
-        // its first leg and hands off here.)
+        // Supercruise cutover (2026-06-10): autopilot-tour advance
+        // migrated to SupercruisePilot (was AutopilotMotion per V1,
+        // 2026-04-25). The legacy navSubsystem is stopped here so it
+        // doesn't compete; subsequent legs run entirely on the sc
+        // mover. (Warp-arrival path uses navSubsystem for its first
+        // leg and hands off here.)
         const nextStop = autoNav.advanceToNext();
         if (nextStop && nextStop.bodyRef) {
           if (navSubsystem.stop) navSubsystem.stop();
-          autopilotMotion.beginMotion({
-            fromPosition: camera.position.clone(),
+          // navSubsystem owned the camera until this frame — seed the
+          // model pose from the camera so the leg departs from the
+          // current view pose.
+          scModel.position.copy(camera.position);
+          scModel.orientation.copy(camera.quaternion);
+          scModel.speed = 0;
+          scModel.setThrottle(0);
+          scPilot.beginLeg({
             toBody: nextStop.bodyRef,
             bodyRadius: nextStop.bodyRadius,
-            ship,
-            fovDegrees: settings.get('fov'),
+            linger: nextStop.linger * settings.get('tourLingerMultiplier'),
           });
           // Ship-axis: first post-ENTRY advance flips ENTRY→CRUISE. After
           // that, the phase mapping is 1:1 traveling/approaching/orbiting
