@@ -60,6 +60,17 @@ describe('SupercruiseModel — gravity-well cap + turn rate (AC1)', () => {
     expect(m.speedCap()).toBe(SC_TUNING.CAP_MIN); // floor at the surface
   });
 
+  it('speed cap takes the min over multiple bodies — nearest body governs', () => {
+    const m = new SupercruiseModel();
+    const bodyA = { position: new THREE.Vector3(0, 0, 0), radius: 5 };
+    const bodyB = { position: new THREE.Vector3(100000, 0, 0), radius: 10 };
+    m.setBodies([bodyA, bodyB]);
+    m.position.set(100060, 0, 0);                // near B, far from A
+    expect(m.speedCap()).toBeCloseTo(Math.max(SC_TUNING.CAP_MIN, (60 - bodyB.radius) / SC_TUNING.ETA_K), 9);
+    m.position.set(60, 0, 0);                    // near A, far from B
+    expect(m.speedCap()).toBeCloseTo(Math.max(SC_TUNING.CAP_MIN, (60 - bodyA.radius) / SC_TUNING.ETA_K), 9);
+  });
+
   it('crawls near a planet, runs enormous in deep space (end-to-end)', () => {
     const m = new SupercruiseModel();
     m.setBodies([{ position: new THREE.Vector3(), radius: 5 }]);

@@ -10,7 +10,7 @@ export const SC_TUNING = {
   ETA_K: 6.0,               // speed cap = surfaceDist / ETA_K (Elite's ~6s rule)
   CAP_MIN: 4.0,             // u/s floor when hugging a body
   CAP_MAX: 20000.0,         // u/s deep-space ceiling
-  ACCEL_TAU: 1.4,           // s — exponential approach to target speed (heavy feel)
+  ACCEL_TAU: 1.4,           // s — exponential approach to target speed (heavy feel) (must stay ≤ ETA_K/4 or full-throttle approach decel turns underdamped and surges)
   TURN_RATE_MAX: 0.7,       // rad/s at rest
   TURN_RATE_MIN_FRAC: 0.25, // turn authority remaining at full local speed
   THROTTLE_RATE: 0.6,       // throttle units/s for held W/S stepping
@@ -41,6 +41,7 @@ export class SupercruiseModel {
     this.turnInput.pitch = THREE.MathUtils.clamp(pitch, -1, 1);
   }
 
+  /** Returns shared scratch unless `out` is passed — copy or pass `out` if held across update(). */
   nose(out = this._nose) {
     return out.set(0, 0, -1).applyQuaternion(this.orientation);
   }
