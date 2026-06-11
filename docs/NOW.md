@@ -10,17 +10,38 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-**`supercruise-freelook-2026-06-10`** — **NEW DEV ARC, scoped + greenlit 2026-06-10, building.**
-Clone Elite Dangerous supercruise as the starting point for ALL in-system motion
-(post-warp fly-in + tour legs + COMMIT BURN), rewire the autopilot to drive it,
-add Elite-style hold-to-look freelook. Ship/head transform split from day one
-(cockpit comes in a near-future arc — no rebasing prerequisite for this one).
-Arrival keeps today's shaking-fast-decel beat. AutopilotMotion + FlythroughCamera
-motion role retire. Contract (9 ACs) + intent:
-`docs/WORKSTREAMS/supercruise-freelook-2026-06-10/`. Seam: warpRevealSystem nav
-handoff (main.js ~5510). **Maps to journey:** rebuilds the travel-loop foundation
-the 35% SCREENSAVER-MVP autopilot rides; first GAME-tier (85%) capability (manual
-flight). Next: implementation plan (superpowers:writing-plans), then build.
+**`supercruise-freelook-2026-06-10`** — **AUTOPILOT HALF BUILT (Tasks 1–7 of 13),
+paused at a clean seam 2026-06-10.** Elite-style supercruise is now THE in-system
+mover for the **autopilot**: tour legs AND post-warp fly-in both fly the new
+`SupercruiseModel` (one model, two drivers). Manual piloting / freelook / HUD /
+old-mover retirement (Tasks 8–13) deferred to a fresh session.
+Contract (9 ACs) + intent + plan:
+`docs/WORKSTREAMS/supercruise-freelook-2026-06-10/` +
+`docs/superpowers/plans/2026-06-10-supercruise-freelook.md`.
+**Built + committed (all unit + live-verified on GPU :9223):**
+- `src/flight/SupercruiseModel.js` — nose-vector flight, throttle, gravity-well
+  speed cap (scale-free: `CAP_MIN_FRAC` 0.5 + `CAP_MIN_ABS` 1e-5 — production
+  radii span 4e-5…5, two scale bugs found+fixed live), capped turn rate. 40 unit tests.
+- `src/flight/HeadMount.js` — rotation-only head/ship split (hold-to-look, eased
+  recenter); ready for Task 8/10 input wiring + the future cockpit (computed math,
+  NOT Object3D parenting — WorldOrigin rebase constraint).
+- `src/flight/SupercruisePilot.js` — ALIGN/CRUISE/HOLD autopilot driver issuing the
+  SAME throttle/steer a player will; drop-window capture vs overshoot; HOLD settle ease.
+- `src/main.js` — sc mover branch in simStep (drives `ShipChoreographer` for the
+  AC6 shake beats); tour-leg + warp-fly-in cutover; `_seedScPoseFromCameraIfIdle()`
+  helper; warp-path pilot stops; `window._sc` live-tuning probe.
+- Commits: `53f4766 b09015d a258eeb 5b5dcfe f40f59c de78ab7 a710919 64a614a 51cd579 259f855 d5e4e2f 2fd8981 0dce7b3 ec0f932` (master, UNPUSHED).
+**NOT yet built (Tasks 8–13):** manual W/S throttle + mouse virtual joystick + F→manual
+takeover + manual drop (AC3); freelook input binding (AC4 live); minimal HUD
+speed/throttle/reticle/target (AC7); COMMIT BURN cutover `focus*`→pilot, `focusShip`
+quarantine (AC5c); retire AutopilotMotion + NavigationSubsystem from live path (AC8
+loop + Task 12); full verify-workstream + Max UAT (AC9).
+**Handoff:** `/tmp/well-dipper-supercruise-handoff-2026-06-10.md`.
+**Maps to journey:** rebuilds the travel-loop foundation the 35% SCREENSAVER-MVP
+autopilot rides; first GAME-tier (85%) capability lands with Tasks 8–10.
+**⚠ Live tree note:** the screensaver autopilot now flies supercruise — if Max runs
+the dev server before Tasks 8–13, the tour/warp loop works but manual F-mode still
+routes to the legacy FlightDynamics drive (not yet rewired).
 
 ### Prior active (pending-UAT items remain)
 
