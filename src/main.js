@@ -38,6 +38,9 @@ import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
 import { AutopilotMotion } from './auto/AutopilotMotion.js';
+import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
+import { HeadMount } from './flight/HeadMount.js';
+import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
 import { Ship } from './core/Ship.js';
 import { ShipChoreographer } from './auto/ShipChoreographer.js';
 import { CameraChoreographer } from './auto/CameraChoreographer.js';
@@ -421,6 +424,19 @@ flythrough.setShakeProvider(shipChoreographer);
 const ship = new Ship();
 const autopilotMotion = new AutopilotMotion();
 
+// ── Supercruise flight model (supercruise-freelook-2026-06-10) ──
+// New authoritative in-system mover: SupercruiseModel (pure math, Elite-
+// style gravity-well cap), SupercruisePilot (autopilot driver issuing the
+// same controls a player has), HeadMount (rotation-only free-look on top
+// of the ship orientation). DORMANT until the tour cutover task dispatches
+// it — nothing calls scPilot.beginLeg or sets _scManual yet.
+const scModel = new SupercruiseModel();
+const scHead = new HeadMount();
+const scPilot = new SupercruisePilot(scModel);
+let _scManual = false;            // player has the stick (FLIGHT-mode supercruise)
+const _scBodies = [];             // per-tick gravity-well body list (reused)
+window._sc = { model: scModel, pilot: scPilot, head: scHead, tuning: SC_TUNING }; // UAT knobs + test probe
+
 // §A4 body-velocity resolver. Reads orbit params from the active
 // system and writes the body's world-frame velocity into `out`.
 // Bound to autopilotMotion at init so beginMotion calls don't need
@@ -559,6 +575,11 @@ if (cameraController._diagnostics) {
 _trackControllerCaches(shipChoreographer, [
   '_prevPosition',
 ], 'shipChoreographer');
+// Supercruise ship entity — scene-local position must rebase with the world.
+// Orientation/speed/throttle are frame-free: NOT tracked.
+_trackControllerCaches(scModel, [
+  'position',
+], 'scModel');
 
 window._flythrough = flythrough;
 window._autoNav = autoNav;
@@ -6206,6 +6227,23 @@ function isWarpTargetOccluded(targetDir) {
 // the render path (interpolated render state would jump mid-render-frame).
 const _simAccumulator = createAccumulator({ stepMs: 1000 / 60, maxStepMs: 100 });
 
+// Apply shake rotation post-lookAt (mirror of FlythroughCamera's
+// composition). Camera-local Euler XYZ. Extracted verbatim from the
+// V1 autopilotMotion branch (supercruise-freelook-2026-06-10) so the
+// supercruise mover branch composes shake the same way.
+function _composeShakeOntoCamera() {
+  const se = shipChoreographer.shakeEuler;
+  if (se && (se.pitch !== 0 || se.yaw !== 0 || se.roll !== 0)) {
+    _v_euler.set(se.pitch, se.yaw, se.roll, 'XYZ');
+    _v_shakeQuat.setFromEuler(_v_euler);
+    camera.quaternion.multiply(_v_shakeQuat);
+  }
+}
+
+function _handleScPilotFrame(frame) {
+  // Tour advance / arrival wiring lands in the tour-cutover task.
+}
+
 function simStep(deltaTime) {
   // World-origin rebase event timing rule (AC #4):
   // *"Rebase must happen before any per-frame logic that uses world
@@ -7139,6 +7177,57 @@ function simStep(deltaTime) {
       }
     }
 
+    // ── Supercruise mover (autopilot pilot OR manual stick) ──
+    // New flight model (supercruise-freelook-2026-06-10). DORMANT until
+    // the tour-cutover task dispatches it: nothing calls scPilot.beginLeg
+    // or sets _scManual yet. Writes the camera ONLY here in simStep
+    // (fixed 60Hz); the render-side cameraInterp handles blending.
+    const scActive = (scPilot.isActive || _scManual)
+      && !warpEffect.isActive && !splashActive && !titleScreenActive;
+    if (scActive) {
+      // Gravity-well cap inputs: CURRENT rebased mesh positions, refreshed
+      // per tick. Accessors copied from the body-rewrite block above
+      // (star/star2, system.planets entries, entry.moons).
+      _scBodies.length = 0;
+      if (system) {
+        if (system.star?.mesh) {
+          _scBodies.push({ position: system.star.mesh.position, radius: system.star.data.radius });
+        }
+        if (system.star2?.mesh) {
+          _scBodies.push({ position: system.star2.mesh.position, radius: system.star2.data.radius });
+        }
+        for (const entry of system.planets || []) {
+          if (entry?.planet?.mesh) {
+            _scBodies.push({ position: entry.planet.mesh.position, radius: entry.planet.data.radius });
+          }
+          for (const moon of entry?.moons || []) {
+            if (moon?.mesh) {
+              _scBodies.push({ position: moon.mesh.position, radius: moon.data.radius });
+            }
+          }
+        }
+      }
+      scModel.setBodies(_scBodies);
+
+      const scFrame = scPilot.isActive ? scPilot.update(deltaTime) : null;
+      scModel.update(deltaTime);
+      scHead.update(deltaTime);
+      scHead.applyTo(camera, scModel.position, scModel.orientation);
+
+      // AC6 felt beats: same impulses as the V1 branch, new triggers.
+      // (`phase` is the ENTRY phase — phaseChanged + CRUISE fires on the
+      // first frame DRIVEN by CRUISE, see SupercruisePilot._stamp.)
+      if (scFrame) {
+        if (scFrame.phaseChanged && scFrame.phase === PilotPhase.CRUISE) {
+          shipChoreographer.debugAccelImpulse();
+        }
+        if (scFrame.decelStarted) shipChoreographer.debugDecelImpulse();
+      }
+      // Shake quat composition — same mechanism as the V1 branch.
+      _composeShakeOntoCamera();
+
+      if (scFrame) _handleScPilotFrame(scFrame); // fleshed out in tour-cutover task
+    }
     // ── V1 STATION-hold autopilot (2026-04-25) ──
     // Authoritative per-leg motion path for autopilot tour. Runs when
     // AutopilotMotion has an active leg. Cruise → 10R approach → hold;
@@ -7150,7 +7239,7 @@ function simStep(deltaTime) {
     // callers: warp-arrival velocity-continuity + manual-burn from
     // reticle selection. V1 doesn't replicate those paths' velocity
     // semantics; retire-followup workstream migrates them.
-    if (autopilotMotion.isActive && !warpEffect.isActive && !splashActive && !titleScreenActive) {
+    else if (autopilotMotion.isActive && !warpEffect.isActive && !splashActive && !titleScreenActive) {
       const frame = autopilotMotion.update(deltaTime);
       // Position write: motion-produces pipeline (Principle 5).
       camera.position.copy(frame.position);
@@ -7249,13 +7338,9 @@ function simStep(deltaTime) {
         shipChoreographer.update(deltaTime, shipFrame);
       }
       // Apply shake rotation post-lookAt (mirror of FlythroughCamera's
-      // composition). Camera-local Euler XYZ.
-      const se = shipChoreographer.shakeEuler;
-      if (se && (se.pitch !== 0 || se.yaw !== 0 || se.roll !== 0)) {
-        _v_euler.set(se.pitch, se.yaw, se.roll, 'XYZ');
-        _v_shakeQuat.setFromEuler(_v_euler);
-        camera.quaternion.multiply(_v_shakeQuat);
-      }
+      // composition). Camera-local Euler XYZ — extracted verbatim into
+      // _composeShakeOntoCamera, shared with the supercruise branch.
+      _composeShakeOntoCamera();
 
       _captureTelemetrySample();
 
@@ -7466,8 +7551,10 @@ function simStep(deltaTime) {
 
   // Skip cameraController.update when V1 autopilot motion is active —
   // V1 fully owns camera.position and camera.lookAt; cameraController
-  // would otherwise overwrite them with its own orbit math.
-  if (!autopilotMotion.isActive) {
+  // would otherwise overwrite them with its own orbit math. Same for the
+  // supercruise mover (pilot or manual stick): it writes the camera pose
+  // in its simStep branch and must not be fought.
+  if (!autopilotMotion.isActive && !scPilot.isActive && !_scManual) {
     cameraController.update(deltaTime);
   }
 
