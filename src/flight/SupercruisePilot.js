@@ -1,0 +1,128 @@
+// src/flight/SupercruisePilot.js
+//
+// Autopilot driver for SupercruiseModel (AC5). Issues the SAME controls a
+// player has — setThrottle / setTurnInput — plus a body-locked HOLD that
+// reproduces today's STATION-A linger (AutopilotMotion.js:583-642).
+// Frame idiom copied from AutopilotMotion: one-shots polled by main.js.
+import * as THREE from 'three';
+
+export const PilotPhase = Object.freeze({
+  IDLE: 'IDLE', ALIGN: 'ALIGN', CRUISE: 'CRUISE', HOLD: 'HOLD',
+});
+
+export const PILOT_TUNING = {
+  ALIGN_DOT: 0.995,          // nose alignment to open the throttle
+  CRUISE_THROTTLE: 0.75,     // Elite blue-zone
+  STEER_GAIN: 3.0,           // local-offset → turn-input proportional gain
+  DROP_RADIUS_FACTOR: 10,    // capture sphere = 10R (today's APPROACH onset)
+  DROP_ETA_MAX: 2.5,         // s — dropMaxSpeed = 10R / DROP_ETA_MAX
+  DECEL_CUE_FACTOR: 15,      // decelStarted one-shot at 15R (AC6 shake cue)
+  HOLD_VIEW_FRAC: 2.6,       // hold distance ≈ 2.6R (today's felt-fill)
+};
+
+export class SupercruisePilot {
+  constructor(model, tuning = {}) {
+    this.model = model;
+    this.tuning = { ...PILOT_TUNING, ...tuning };
+    this.phase = PilotPhase.IDLE;
+    this._target = null;       // { mesh, radius, linger }
+    this._holdOffset = new THREE.Vector3();
+    this._holdTimer = 0;
+    this._decelCued = false;
+    this._prevPhase = PilotPhase.IDLE;
+    this._toTarget = new THREE.Vector3();
+    this._local = new THREE.Vector3();
+    this._invQ = new THREE.Quaternion();
+  }
+
+  get isActive() { return this.phase !== PilotPhase.IDLE; }
+
+  beginLeg({ toBody, bodyRadius, linger = 8 }) {
+    this._target = { mesh: toBody, radius: bodyRadius, linger };
+    this.phase = PilotPhase.ALIGN;
+    this._holdTimer = 0;
+    this._decelCued = false;
+  }
+
+  stop() {
+    this.phase = PilotPhase.IDLE;
+    this._target = null;
+  }
+
+  /** Step the driver. Returns the one-shot frame; caller then steps the model. */
+  update(dt) {
+    const frame = {
+      phase: this.phase, prevPhase: this._prevPhase,
+      phaseChanged: false, motionComplete: false,
+      overshoot: false, decelStarted: false,
+    };
+    this._prevPhase = this.phase;
+    if (this.phase === PilotPhase.IDLE || !this._target) return frame;
+
+    const m = this.model, t = this.tuning, tgt = this._target;
+    const bodyPos = tgt.mesh.position;
+    this._toTarget.copy(bodyPos).sub(m.position);
+    const dist = this._toTarget.length();
+    const dropRadius = tgt.radius * t.DROP_RADIUS_FACTOR;
+    const dropMaxSpeed = dropRadius / t.DROP_ETA_MAX;
+
+    if (this.phase === PilotPhase.HOLD) {
+      // Body-locked hold (today's STATION-A): write position through the model.
+      m.position.copy(bodyPos).add(this._holdOffset);
+      m.speed = 0; m.setThrottle(0); m.setTurnInput(0, 0);
+      this._lookAtBody(bodyPos);
+      this._holdTimer += dt;
+      if (this._holdTimer >= tgt.linger) frame.motionComplete = true;
+      return this._stamp(frame);
+    }
+
+    // Steer toward the body: target direction in ship-local frame.
+    this._local.copy(this._toTarget).normalize()
+      .applyQuaternion(this._invQ.copy(m.orientation).invert());
+    // local -Z is the nose; x>0 → target to the right, y>0 → above.
+    const yawIn = THREE.MathUtils.clamp(-this._local.x * t.STEER_GAIN, -1, 1);
+    const pitchIn = THREE.MathUtils.clamp(this._local.y * t.STEER_GAIN, -1, 1);
+    m.setTurnInput(yawIn, pitchIn);
+    const aligned = -this._local.z >= t.ALIGN_DOT;
+
+    if (this.phase === PilotPhase.ALIGN) {
+      m.setThrottle(0);
+      if (aligned) { this.phase = PilotPhase.CRUISE; }
+    } else if (this.phase === PilotPhase.CRUISE) {
+      m.setThrottle(t.CRUISE_THROTTLE);
+      if (!this._decelCued && dist <= tgt.radius * t.DECEL_CUE_FACTOR) {
+        this._decelCued = true; frame.decelStarted = true;
+      }
+      if (dist <= dropRadius) {
+        if (m.speed <= dropMaxSpeed) {
+          // Capture: enter the body-locked hold at felt-fill distance.
+          this._holdOffset.copy(m.position).sub(bodyPos)
+            .normalize().multiplyScalar(Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius + 1));
+          this.phase = PilotPhase.HOLD;
+          this._holdTimer = 0;
+        } else {
+          frame.overshoot = true; // too hot — fly past, stay in CRUISE
+        }
+      }
+    }
+    return this._stamp(frame);
+  }
+
+  _lookAtBody(bodyPos) {
+    // During HOLD keep the nose on the body so the resumed leg departs cleanly.
+    const m = this.model;
+    this._toTarget.copy(bodyPos).sub(m.position).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, -1), this._toTarget);
+    m.orientation.slerp(q, 0.1);
+  }
+
+  _stamp(frame) {
+    // Report the ENTRY phase — the phase that drove this frame's behavior.
+    // (Stamping the exit phase double-fires phaseChanged — once on the
+    // transition frame, again on the next — and hides one-frame phases
+    // like an instant on-axis ALIGN.)
+    frame.phaseChanged = frame.phase !== frame.prevPhase;
+    return frame;
+  }
+}
