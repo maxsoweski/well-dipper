@@ -428,8 +428,9 @@ const autopilotMotion = new AutopilotMotion();
 // New authoritative in-system mover: SupercruiseModel (pure math, Elite-
 // style gravity-well cap), SupercruisePilot (autopilot driver issuing the
 // same controls a player has), HeadMount (rotation-only free-look on top
-// of the ship orientation). DORMANT until the tour cutover task dispatches
-// it — nothing calls scPilot.beginLeg or sets _scManual yet.
+// of the ship orientation). LIVE for autopilot tour legs since the
+// 2026-06-10 cutover (scPilot.beginLeg dispatched from tour start /
+// advance / jumps); _scManual stays unset until the manual-controls task.
 const scModel = new SupercruiseModel();
 const scHead = new HeadMount();
 const scPilot = new SupercruisePilot(scModel);
@@ -5323,19 +5324,31 @@ function updateFocusFromStop(stop) {
  * signature for caller compatibility but neither motion model
  * consumes it (straight-line aim-once, no orbit-tangential departure).
  */
+/** Seed the supercruise model from the camera pose — only when the sc system
+ *  isn't already flying (an active pilot/manual stick keeps live pose+speed;
+ *  re-seeding would stomp speed to 0 and bake the HeadMount look offset into
+ *  the ship orientation). Returns true if it seeded. */
+function _seedScPoseFromCameraIfIdle() {
+  if (scPilot.isActive || _scManual) return false;
+  scModel.position.copy(camera.position);
+  scModel.orientation.copy(camera.quaternion);
+  scModel.speed = 0; scModel.setThrottle(0);
+  return true;
+}
+
 function _beginTourLegMotion(stop, priorBody) {
   if (!stop || !stop.bodyRef) return;
   // Jumps can fire while a non-sc driver still owns the camera (e.g.
-  // the warp-arrival navSubsystem first leg). Seed the model pose from
-  // the camera so the leg departs from the current view pose; when the
-  // sc mover is already driving, keep its live pose/speed (continuity
-  // across mid-tour jumps — beginLeg only resets the pilot phase).
-  if (!scPilot.isActive && !_scManual) {
-    scModel.position.copy(camera.position);
-    scModel.orientation.copy(camera.quaternion);
-    scModel.speed = 0;
-    scModel.setThrottle(0);
-  }
+  // the warp-arrival navSubsystem first leg). When the sc mover isn't
+  // flying yet, stop that legacy driver so it doesn't stay wedged-active
+  // competing for the camera (mirrors the orbitComplete handoff cleanup),
+  // then seed the model pose from the camera so the leg departs from the
+  // current view pose. When the sc mover IS already driving, keep its
+  // live pose/speed (continuity across mid-tour jumps — beginLeg only
+  // resets the pilot phase) — and navSubsystem can't be the active
+  // driver in that case, so no stop is needed.
+  if (!scPilot.isActive && !_scManual && navSubsystem.stop) navSubsystem.stop();
+  _seedScPoseFromCameraIfIdle();
   scPilot.beginLeg({
     toBody: stop.bodyRef,
     bodyRadius: stop.bodyRadius,
@@ -5386,12 +5399,11 @@ function startFlythrough() {
 
   // Supercruise cutover (2026-06-10): autopilot tour begins via
   // SupercruisePilot — ALIGN → CRUISE (gravity-well speed cap) → HOLD.
-  // Seed the model pose once at autopilot start so the first leg
-  // departs from the camera's pose, standing still.
-  scModel.position.copy(camera.position);
-  scModel.orientation.copy(camera.quaternion);
-  scModel.speed = 0;
-  scModel.setThrottle(0);
+  // Seed the model pose at autopilot start so the first leg departs
+  // from the camera's pose, standing still. Guarded: engaging the
+  // autopilot from live manual supercruise flight must keep the live
+  // pose/speed, not stomp them (Task-9 manual-controls heads-up).
+  _seedScPoseFromCameraIfIdle();
   scPilot.beginLeg({
     toBody: firstStop.bodyRef,
     bodyRadius: firstStop.bodyRadius,
@@ -7244,10 +7256,12 @@ function simStep(deltaTime) {
     }
 
     // ── Supercruise mover (autopilot pilot OR manual stick) ──
-    // New flight model (supercruise-freelook-2026-06-10). DORMANT until
-    // the tour-cutover task dispatches it: nothing calls scPilot.beginLeg
-    // or sets _scManual yet. Writes the camera ONLY here in simStep
-    // (fixed 60Hz); the render-side cameraInterp handles blending.
+    // New flight model (supercruise-freelook-2026-06-10). LIVE for
+    // autopilot tour legs since the 2026-06-10 cutover (scPilot.beginLeg
+    // dispatched from tour start / advance / jumps); _scManual stays
+    // unset until the manual-controls task. Writes the camera ONLY here
+    // in simStep (fixed 60Hz); the render-side cameraInterp handles
+    // blending.
     const scActive = (scPilot.isActive || _scManual)
       && !warpEffect.isActive && !splashActive && !titleScreenActive;
     if (scActive) {
@@ -7323,7 +7337,7 @@ function simStep(deltaTime) {
       // V1 branch.
       _composeShakeOntoCamera();
 
-      if (scFrame) _handleScPilotFrame(scFrame); // fleshed out in tour-cutover task
+      if (scFrame) _handleScPilotFrame(scFrame); // reticle sync + tour advance (live since the 2026-06-10 cutover)
     }
     // ── V1 STATION-hold autopilot (2026-04-25) ──
     // Authoritative per-leg motion path for autopilot tour. Runs when
@@ -7506,10 +7520,7 @@ function simStep(deltaTime) {
           // navSubsystem owned the camera until this frame — seed the
           // model pose from the camera so the leg departs from the
           // current view pose.
-          scModel.position.copy(camera.position);
-          scModel.orientation.copy(camera.quaternion);
-          scModel.speed = 0;
-          scModel.setThrottle(0);
+          _seedScPoseFromCameraIfIdle();
           scPilot.beginLeg({
             toBody: nextStop.bodyRef,
             bodyRadius: nextStop.bodyRadius,
@@ -8533,7 +8544,7 @@ function trySelect(clientX, clientY) {
       // let the click fall through to scene raycasting or warp star selection.
       const hit = systemMap.hitTest(uv.u, uv.v);
       if (hit) {
-        if (autoNav.isActive && flythrough.active) {
+        if (autoNav.isActive && (flythrough.active || scPilot.isActive)) {
           // During autopilot: jump to the selected body and immediately
           // begin travel (interrupt current orbit/travel).
           let stop = null;
@@ -9084,7 +9095,7 @@ if (mobileControls) {
     } else if (action === 'prev') {
       // Cycle through all bodies in autopilot order (star → planets → moons)
       if (!system) return;
-      if (autoNav.isActive && flythrough.active) {
+      if (autoNav.isActive && (flythrough.active || scPilot.isActive)) {
         const priorBody = navSubsystem.bodyRef;
         const stop = autoNav.advance(-1);
         if (stop?.bodyRef) {
@@ -9098,7 +9109,7 @@ if (mobileControls) {
       }
     } else if (action === 'next') {
       if (!system) return;
-      if (autoNav.isActive && flythrough.active) {
+      if (autoNav.isActive && (flythrough.active || scPilot.isActive)) {
         const priorBody = navSubsystem.bodyRef;
         const stop = autoNav.advance(1);
         if (stop?.bodyRef) {
