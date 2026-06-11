@@ -5469,6 +5469,11 @@ function warpSwapSystem() {
   // Stop autopilot (don't restore camera — warp controls it)
   flythrough.stop();
   autoNav.stop();
+  // Defensive: a still-active supercruise leg here would hold a stale
+  // _target.mesh into the about-to-be-disposed system. beginWarpTurn
+  // already stops the pilot at turn start; this covers any path that
+  // reaches the swap without it (mirrors the flythrough/autoNav stops).
+  scPilot.stop();
   _cancelSystemMusic(); // stop ambient music during warp
   // Cancel any stale deep sky linger timer from the previous system
   // (e.g., title screen auto-dismiss sets this during warp)
@@ -5614,22 +5619,18 @@ function warpRevealSystem() {
 
   const firstStop = autoNav.getCurrentStop();
   if (firstStop && firstStop.bodyRef) {
-    const upcoming = autoNav.getNextStop();
-    navSubsystem.beginMotion({
-      fromPosition: camera.position.clone(),
-      fromOrientation: camera.quaternion.clone(),
-      fromOrbitBody: null,
+    // Supercruise seam (contract supercruise-freelook-2026-06-10):
+    // arrive at billboard distance (unchanged, upstream), fly in on the
+    // new model. Unconditional — the legacy seam started the fly-in even
+    // with autopilot off; only autoNav.start() above stays gated on
+    // _autopilotEnabled. The pilot is never active here (beginWarpTurn
+    // stops it at turn start; warpSwapSystem stops it defensively), so
+    // the guarded seed always takes.
+    _seedScPoseFromCameraIfIdle();
+    scPilot.beginLeg({
       toBody: firstStop.bodyRef,
-      toOrbitDistance: firstStop.orbitDistance,
-      toBodyRadius: firstStop.bodyRadius,
-      nextBody: upcoming ? upcoming.bodyRef : null,
-      nextOrbitDistance: upcoming ? upcoming.orbitDistance : 0,
-      arrivalOptions: {
-        approachFirst: true,
-        slowOrbit: true,
-        approachOrbitDuration: firstStop.linger * settings.get('tourLingerMultiplier'),
-      },
-      launchOptions: { warpExit: true },
+      bodyRadius: firstStop.bodyRadius,
+      linger: firstStop.linger * settings.get('tourLingerMultiplier'),
     });
     // Ship-axis ENTRY — warp-exit is the continuity-anchor per §10.5.
     shipChoreographer.beginTour({ fromWarp: true });
@@ -7512,8 +7513,9 @@ function simStep(deltaTime) {
         // migrated to SupercruisePilot (was AutopilotMotion per V1,
         // 2026-04-25). The legacy navSubsystem is stopped here so it
         // doesn't compete; subsequent legs run entirely on the sc
-        // mover. (Warp-arrival path uses navSubsystem for its first
-        // leg and hands off here.)
+        // mover. (Since the Task-7 cutover the warp-arrival fly-in is
+        // a scPilot leg from warpRevealSystem — this handoff only
+        // fires for manual-burn navSubsystem legs, Task 9's domain.)
         const nextStop = autoNav.advanceToNext();
         if (nextStop && nextStop.bodyRef) {
           if (navSubsystem.stop) navSubsystem.stop();
@@ -8772,6 +8774,12 @@ function beginWarpTurn() {
   // Stop flythrough camera — we're taking direct control for the turn.
   // autoNav stays active (warpRevealSystem rebuilds it for the new system).
   if (flythrough.active) flythrough.stop();
+  // Stop the supercruise pilot too — its simStep branch only yields while
+  // warpEffect.isActive, which isn't true yet during the turn, so a live
+  // leg would fight the turn slerp for the camera. Mirrors the flythrough
+  // stop above (camera drivers only — _scManual / autoNav untouched);
+  // warpRevealSystem re-arms the fly-in on emergence.
+  scPilot.stop();
   cameraController.bypassed = true;
   warpTarget.turning = true;
   warpTarget.turnTimer = 0;
