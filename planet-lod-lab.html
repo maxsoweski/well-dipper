@@ -507,6 +507,15 @@
       uniform vec3  uHazeColor;         // haze / blanket tone (driven: preset atmosphere color)
       uniform float uChevronStrength;   // regime-3 Y/V chevron darkening — lab knob (~0.17 = one 6-level posterize bucket)
       uniform float uPupilR;            // regime-4 substellar cap half-angle rad — lab knob
+      // ── F40 dust storms (Aeolian — card F40) — the Stage-8 UPPER slot the header
+      // reserves: an airborne dust veil that FLATTENS the surface pre-posterize
+      // (tau = activity^2 x domain-warped patch mask), a self-shading front via the
+      // F31a clouds-as-relief slot on the dust field's OWN gradient, and low-activity
+      // dust devil track curlicues on the surface albedo. One driven scalar walks the
+      // whole P23 axis (local cloud ... planet-encircling); the per-frame writer
+      // forces it 0 when dustStormEnabled is off, so veil + front + tracks all vanish.
+      uniform float uDustActivity;      // 0..1 storm activity (driven: retained AND pressure <= 0.5 bar AND dry AND not gas -> 0.55 Mars-like carrier; else 0)
+      uniform vec3  uDustColor;         // F40 lofted-dust tint (driven: preset atmosphere butterscotch; lit by the front's own diffuse, not painted on the ground)
       // ── F32/F33 thermal day/night (cards F32 dayside hotspot + F33 nightside glow) ──
       // ONE energy-balance temperature curve, two consumers (the emissiveBlackbody
       // header contract): F32 owns the dayside lobe — uDayTempK plus the superrotation
@@ -792,6 +801,7 @@
       const int PROV_TERM        = 33;  // F35 — neutral (global optics, not geology): the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
       const int PROV_GLINT       = 34;  // F36 — neutral (view/illumination geometry, not geology): the mirror point follows sun + camera over the already lakes-gated sea (FROST-row pattern, like limb/terminator)
       const int PROV_AURORA      = 35;  // F37 — neutral (magnetospheric optics, not geology): the oval follows the dipole axis + the night side, never the rock provinces (FROST-row pattern, like limb/terminator/glint)
+      const int PROV_DUSTSTORM   = 36;  // F40 — neutral (weather, not geology): the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged v1 scope cut)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -845,6 +855,7 @@
         else if (fid == PROV_TERM)       { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_GLINT)      { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_AURORA)     { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_DUSTSTORM)  { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2818,6 +2829,29 @@
           float jLatC = sign(jLat) * pow(abs(jLat), uBandLatPow);
           albedoCol *= clamp(1.0 + 1.2 * jetSoloMask * jetsDisp(jLat, jLatC, vPos), 0.4, 1.6);
         }
+        // ── F40 dust devil tracks (card §6.5 step 5 — the low-activity garnish):
+        // thin dark curlicues ETCHED into the surface albedo where vortices stripped
+        // the bright settled dust (HiRISE ESP_031199_2070 — albedo SUBTRACTION, never
+        // a dark cloud added on top). Strokes = the zero-crossing contours of a
+        // domain-warped noised() field (loopy thin lines for free; the warp vector is
+        // the .yzw analytic gradient of one extra sample — cheap, card §6.5 step 5),
+        // clustered sparse by a low-frequency patch mask. LUMINANCE-only: a
+        // multiplicative darkening scales all channels equally (hue ratios survive,
+        // card item 5 "never hue"). STATIC — no uTime: tracks are persistent ground
+        // etchings, deterministic on re-approach. Windowed to activity ~0.1-0.4 and
+        // fading as the veil takes over; activity 0 (enable off via the per-frame
+        // writer, or every non-carrier preset) skips the block — albedoCol untouched,
+        // the F40 regression contract. NO h/grad writes (F19 contract).
+        if (uDustActivity > 0.0){
+          float trackWin = smoothstep(0.08, 0.15, uDustActivity) * (1.0 - smoothstep(0.30, 0.45, uDustActivity));
+          if (trackWin > 0.0){
+            vec3 tp = vPos * 6.0;
+            vec3 twp = tp + 0.8 * noised(tp * 0.5 + vec3(13.1, 7.7, -9.3)).yzw;   // curl the strokes
+            float stroke = 1.0 - smoothstep(0.0, 0.05, abs(noised(twp).x));        // thin zero-crossing curlicues
+            float cluster = smoothstep(0.15, 0.5, noised(vPos * 1.1 + vec3(31.7, -11.2, 17.9)).x);
+            albedoCol *= 1.0 - 0.22 * stroke * cluster * trackWin * provinceWeight(PROV_DUSTSTORM);
+          }
+        }
         // ── F16 butterscotch veil (Stage-8 haze channel, computed HERE so it hits each
         // term PRE-posterize — there is no single final quantizer, every surface term
         // carries its own). Airborne suspended dust warms ALL light passing through it
@@ -2841,7 +2875,58 @@
         // uHazeMute 0 (every non-sub-neptune preset, or clouds disabled via the
         // per-frame writer) leaves the albedo untouched — regression-safe.
         albedoCol = mix(albedoCol, uHazeColor, uHazeMute);
-        vec3 surface = posterize(min(veilTint * (albedoCol * (diff + ambient) + uBaseColor * rayBright), vec3(1.0)), uLevels, fc, 0.4, uDitherMode);
+        // ── F40 dust storm VEIL — the Stage-8 reserved UPPER slot ("AEOLIAN F40 storm
+        // veil wins the upper slot"), hoisted to this pre-posterize seat like the F16
+        // veil / F31c mute above because every term carries its own quantizer. The lit
+        // surface is computed FIRST (litSurf — identical arithmetic to the old inline
+        // posterize argument), then veiled: tau = activity^2 (a*a, no pow) x a
+        // recursive domain-warped patch mask (q=fbm(p); r=fbm(p+4q) — the shredded,
+        // lobed, asymmetric leading edge, card §6 item 1), and the FLATTEN job runs as
+        // mix(litSurf, dustTone, 1-exp(-tau)) BEFORE the posterize, so obscuration
+        // reads as the band count collapsing 6 -> 2-3 (card §4's critical insight —
+        // exp(-tau) is spec-defined everywhere). The dust tone is lit by the front's
+        // OWN diffuse: the F31a clouds-as-relief slot (uCloudRelief) applied to the
+        // dust field's analytic gradient, so the advancing wall's sunlit top reads
+        // BRIGHTER than the ground it covers and survives as dither texture, not a
+        // flat wash (card §6 item 4). F19 CONTRACT: never touches h/grad or the
+        // terrain normal. Drift is BOUNDED two-phase time (the F25 fract crossfade —
+        // nothing accumulates; fly-away/re-approach lands in a plausible nearby state,
+        // card §6 item 6). The patch floor rises with activity (engulf smoothstep) so
+        // activity 1 is planet-encircling. dustTau also attenuates the F31 weather
+        // deck below — the storm hangs ABOVE it (the upper-slot rule). Activity 0
+        // (enable off via the per-frame writer, or every non-carrier preset) skips the
+        // block: litSurf untouched, exp(-0) = 1.0 on the deck — byte-identical pre-F40
+        // output, the F40 regression contract.
+        float dustTau = 0.0;
+        vec3 litSurf = min(veilTint * (albedoCol * (diff + ambient) + uBaseColor * rayBright), vec3(1.0));
+        if (uDustActivity > 0.0){
+          float a2 = uDustActivity * uDustActivity;            // activity^2 via a*a (no pow)
+          float dph0 = fract(uTime * 0.008);
+          float dph1 = fract(uTime * 0.008 + 0.5);
+          float dwgt = abs(2.0 * dph0 - 1.0);                  // triangle weight hides each phase wrap
+          vec3 dp = vPos * 2.1;
+          float dq = fbmd(dp, 3.0, 0.0).x;                     // static recursive-warp q (the shred stays put; the field slides under it)
+          vec3 shredO = vec3(9.2, -3.1, 7.4);
+          vec3 ddrift = vec3(0.45, 0.0, 0.30);                 // each phase displaced +-half around its rest pose
+          vec4 dr0 = fbmd(dp + vec3(4.0 * dq) + shredO + ddrift * (dph0 - 0.5), 4.0, 0.0);
+          vec4 dr1 = fbmd(dp + vec3(4.0 * dq) + shredO + ddrift * (dph1 - 0.5), 4.0, 0.0);
+          vec4 dr = mix(dr0, dr1, dwgt);
+          // patch mask: storms grow + multiply as the threshold bias rises with
+          // activity; the engulf floor takes the whole disc by activity 1 (§6.5 step 3)
+          // Verify fix cycle 2: threshold band lowered 0.30..0.55 -> 0.15..0.45
+          // so the DRIVEN Mars activity 0.55 reads as a credible regional storm
+          // (was 2.5-3 percent disc coverage - no-storm on the feature's own carrier).
+          float patchRaw = smoothstep(0.15, 0.45, dr.x + 0.30 * uDustActivity);
+          float engulf = smoothstep(0.55, 1.0, uDustActivity);
+          float dustPatch = mix(patchRaw, 1.0, engulf) * provinceWeight(PROV_DUSTSTORM); // NB: 'patch' is a GLSL ES 3.00 reserved word
+          dustTau = 3.0 * a2 * dustPatch;
+          // self-shading front — F31a mechanism on the dust field's own tangential gradient
+          vec3 dgt = dr.yzw - N * dot(dr.yzw, N);
+          vec3 ddn = normalize(N - uCloudRelief * dgt);
+          float ddiff = max(dot(ddn, uLightDir), 0.0);
+          litSurf = mix(litSurf, min(uDustColor * (ddiff + 0.05), vec3(1.0)), 1.0 - exp(-dustTau));
+        }
+        vec3 surface = posterize(litSurf, uLevels, fc, 0.4, uDitherMode);
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
         //    lit color + landMask; renders LAST among surface terms, before the envelope split. [domain: Exotic]
@@ -2850,7 +2935,8 @@
         // ── Stage 8: CLOUDS & HAZE — F31 regime-dispatched family combiner (LIVE 2026-06-10): clouds-as-
         //    relief deck (regimes 0/3/4 below) + haze muting (regime 2 — LIVE, hoisted to the pre-posterize
         //    albedo slot above, the F16 veil precedent, because every term carries its own quantizer);
-        //    AEOLIAN F40 storm veil wins the upper slot when both active. [domains: Clouds, Aeolian]
+        //    AEOLIAN F40 storm veil wins the upper slot when both active (LIVE 2026-06-10: the veil
+        //    sits in the hoisted pre-posterize seat above; dustTau attenuates this deck below). [domains: Clouds, Aeolian]
         // Clouds (analytic-FBM weather layer — animated via uTime; off plain snoise, onto noised() — Q7).
         vec4 cw = fbmd(vPos * 1.7 + vec3(uTime * 0.02, 0.0, 0.0), 5.0, 0.0);
         // ── F26 latitude weather bands — bias the threshold INPUT (card §6.5 step 5):
@@ -2938,6 +3024,7 @@
         }
         vec3 cloudC = cloudTint * cloud;
         cloudC *= veilTint;   // F16 — suspended dust warms the cloud deck too (pre-posterize)
+        cloudC *= exp(-dustTau);   // F40 — the storm veil hangs ABOVE the weather deck (the upper-slot rule); dust off => exp(-0) = 1.0 exactly
         cloudC = posterize(cloudC, uLevels, fc, 0.4, uDitherMode);
         // F31d — the blanket replaces the ground entirely (regime 3 only; 0.0 elsewhere = exact no-op).
         surface *= 1.0 - blanketMask;
@@ -3165,6 +3252,9 @@
       uAuroraRingLat:  { value: 0.7 },   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2)
       uAuroraRingWidth:{ value: 0.12 },  // F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored)
       uMagAxis:        { value: new THREE.Vector3(0, 1, 0) },      // F37 dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed)
+      // ── F40 dust storms (driver-true aeolian storm veil — card §6.5 steps 3-6) ──
+      uDustActivity:   { value: 0.0 },   // F40 storm activity (driven: retained AND pressure <= 0.5 AND dry AND not gas -> 0.55 Mars-like carrier, else 0)
+      uDustColor:      { value: new THREE.Color(0.78, 0.55, 0.32) },  // F40 lofted-dust tint (driven: preset atmosphere butterscotch, fallback warm ochre)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -3734,6 +3824,9 @@
       auroraRingWidth: 0.12,// F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored 0.07)
       auroraColor: [0.3, 0.9, 0.5], // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal; fallback green)
       magAxis: [0, 1, 0],   // F37 magnetic dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed — a per-planet seed property, no GUI control)
+      dustStormEnabled: true, // F40 enable gate — off zeroes uDustActivity at the per-frame writer (veil + front + tracks all vanish: byte-identical pre-F40 output)
+      dustActivity: 0.0,    // F40 storm activity 0..1 (driven: 0.55 on the Mars-like thin-dry carrier, 0 on every wet/thick/airless/gas preset; the slider walks the whole P23 axis — tracks ~0.1-0.4, regional fronts mid, planet-encircling at 1)
+      dustColor: [0.78, 0.55, 0.32], // F40 lofted-dust tint (driven: preset atmosphere butterscotch; fallback warm ochre)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -4082,6 +4175,31 @@
       // eccentricity lesson). Verified by node script through the real
       // deriveUniforms: lavaActivity 0.0052 — under the Jovian row's own 0.007.
       'Hot Jupiter (locked giant)': { radiusEarth:13, massEarth:400, rotationHours:80, eccentricity:0.005, starMassEarth:332946, orbitRadiusEarth:150000, composition:{ironFraction:0.03,density:1.3,volatileFraction:0.04}, T_eq:1400, tidalState:{locked:true,lockType:'synchronous'}, atmosphere:{color:[0.55,0.38,0.28],retained:true,pressure:1000,composition:'h2-he'}, habitability:0, surfaceHistory:{erosion:0,bombardmentIntensity:0,resurfacingRate:1} },
+      // ── F40 dust-storm preset (card §6.5 step 1 — data only) ──
+      // "Mars (arid rocky)" is the F40 carrier: the dry thin-but-present-atmosphere
+      // world. retained co2 at 0.01 bar passes D6 retention as PRESENT but sits under
+      // BOTH the 0.05-bar liquid retention gate and the F15/F16 saltation ramp —
+      // liquidStability derives 0 three ways over (pressure, T_eq 210 outside both
+      // liquid windows, and the gates multiply), so the fluvial stack stays relict-
+      // only (erosion 0.35 = the Noachian valley-network evidence) and F40's dryness
+      // gate passes. KNOWN MODEL TENSION (logged): real Mars saltates at 0.006 bar,
+      // but the lab's F15/F16 air gate floors at 0.05 bar — dunes/dust-mantles derive
+      // 0 here; F40 carries its own veil and does not read that ramp. volatileFraction
+      // 0.1 clears the bone-dry floor JUST enough for a small H2O polar cap
+      // (frostMaxCoverage ~0.06, condensation 273 K) without waking glacial (0.15
+      // threshold) or liquid (the other two gates hold it at 0). ironFraction 0.10:
+      // DELIBERATELY under Mars's true ~0.2 compositional share — the core's
+      // iron-only D13 model cannot express a DEAD dynamo (field = iron x lock), and
+      // 0.19 would derive a Titan-grade 0.19 polar oval on a world with no global
+      // field; 0.10 lands a faint 0.10 (the Sub-Neptune faint-aurora precedent),
+      // defensible as MAVEN's observed faint discrete/diffuse aurorae rather than
+      // zero. axialTilt 25 (real 25.2 deg) spreads seasonal frost low per D3.
+      // Eccentric 1.52 AU orbit keeps star-tidal heat ~0 (no lava/cryo). The co2
+      // composition derives: pink CO2-dissociation aurora hue, rainFactor 0.2 (faint
+      // F26/F30), regime-0 weather deck at low coverage (~0.29 via habitability
+      // 0.05), terminator width clamped to the 0.06 hairline — with the recorded
+      // Mars-blue sunset hue now LIVE in TERM_COLOR_BY_PRESET below (review N6).
+      'Mars (arid rocky)': { radiusEarth:0.53, massEarth:0.107, rotationHours:24.6, eccentricity:0.093, starMassEarth:332946, orbitRadiusEarth:35652, axialTilt:25, composition:{ironFraction:0.10,density:3.93,volatileFraction:0.1}, T_eq:210, tidalState:{locked:false}, atmosphere:{color:[0.80,0.58,0.36],retained:true,pressure:0.01,composition:'co2'}, habitability:0.05, surfaceHistory:{erosion:0.35,bombardmentIntensity:0.7,resurfacingRate:0.15} },
     };
     // ── F34 limb glow — per-preset rim hue (card §6.5 step 3: "a small per-preset/
     // archetype map"). The variant spread the old uBaseColor tint could not express:
@@ -4101,6 +4219,7 @@
       'Ice giant (Neptunian)':      [0.45, 0.60, 1.00],   // methane-absorption ice-giant blue
       'Sub-Neptune (hazy)':         [0.82, 0.74, 0.62],   // photochemical haze warm grey (GJ 1214 b)
       'Hot Jupiter (locked giant)': [0.80, 0.50, 0.32],   // dusty sodium-scatter warm rim
+      'Mars (arid rocky)':          [0.60, 0.66, 0.88],   // thin dusty blue-grey arc (the razor CO2 line seen on orbital limb shots)
     };
     // ── F35 terminator gradient — per-preset twilight-band hue (card §6.5 step 3).
     // Slant-path reddening differs from the F34 rim hue: the limb is the atmosphere
@@ -4108,7 +4227,7 @@
     // (reddened on n2-o2, broad orange through the Venus shroud, cooler on the
     // cold-haze worlds). Mars rule recorded as DATA for any future thin-dusty-CO2
     // preset: micron dust forward-scatters blue near the sun — the INVERTED blue
-    // sunset, ~[0.45, 0.60, 1.00]; no current preset exercises it. Review N6 (F34)
+    // sunset, ~[0.45, 0.60, 1.00]; LIVE since F40 ("Mars (arid rocky)"). Review N6 (F34)
     // replicated: any NEW atmospheric preset MUST get a row here — the fallback is
     // a CONSTANT warm orange (no stale-uBaseColor read, but a generic hue that
     // throws away the preset's composition story). Airless presets are deliberately
@@ -4124,6 +4243,7 @@
       'Ice giant (Neptunian)':      [0.50, 0.55, 0.95],   // cold methane haze — cool blue band
       'Sub-Neptune (hazy)':         [0.88, 0.62, 0.45],   // muted warm photochemical haze
       'Hot Jupiter (locked giant)': [1.00, 0.38, 0.22],   // sodium-scatter deep red
+      'Mars (arid rocky)':          [0.45, 0.60, 1.00],   // the recorded thin-dusty-CO2 rule fires AT LAST: micron dust forward-scatters blue near the sun — the famous INVERTED blue Martian sunset
     };
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
@@ -4763,6 +4883,24 @@
       const _maTilt = 11 * Math.PI / 180;
       const _maAz = ((Math.imul(state.macroSeed, 2654435761) >>> 0) / 4294967296) * Math.PI * 2;
       state.magAxis = [Math.sin(_maTilt) * Math.cos(_maAz), Math.cos(_maTilt), Math.sin(_maTilt) * Math.sin(_maAz)];
+      // ── F40 dust storms — driver derivation (card §6.5 step 6; derivation HERE per
+      // the F11/F34 precedent — core.js untouched). The P23 carrier gate, all four
+      // legs ANDed: a RETAINED atmosphere (air to loft — airless Frozen/Lava/Europa
+      // fail), THIN at <= 0.5 bar (a thick column rains/weathers dust out — Rocky
+      // 1.0 / Ocean+Titan 1.5 / Venus 92 / the kbar gas rows all fail; the card §6.5
+      // venus note), DRY at liquidStability < 0.05 (a wet surface binds grains —
+      // Rocky 0.74 / Ocean 1.0 / Eyeball fail twice over), and NOT a gas envelope
+      // (no loose surface dust to source — the storm deck there IS the F24-F29
+      // stack). Pre-checked over all 14 presets: ONLY "Mars (arid rocky)" passes ->
+      // activity 0.55 (a strong regional-storm season, mid P23 axis — the slider
+      // walks the rest: tracks ~0.1-0.4, planet-encircling at 1). Dust tint from the
+      // preset atmosphere color (the F24 bandTint / F31 hazeColor convention — a
+      // dusty world's SKY is its lofted dust, so the butterscotch comes for free);
+      // airless presets keep the fallback ochre and stay inert behind activity 0.
+      const _dustCarrier = !!(_fp.atmosphere?.retained) && (_fp.atmosphere?.pressure ?? 0) <= 0.5
+        && _stab < 0.05 && !_gas;
+      state.dustActivity = _dustCarrier ? 0.55 : 0.0;
+      state.dustColor = _fp.atmosphere?.color ? _fp.atmosphere.color.slice() : [0.78, 0.55, 0.32];
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -5186,6 +5324,18 @@
     fClouds.add(state, 'chevronStrength', 0, 0.5, 0.01).name('chevron (venus)');
     fClouds.add(state, 'pupilR', 0.1, 1.5, 0.01).name('pupil radius (eyeball)');
     fClouds.add(state, 'cloudsEnabled').name('✓ enabled');
+    // ▸ Dust storms (F40) — the Stage-8 upper-slot aeolian veil: activity + tint are
+    // driven (thin-dry carrier gate, atmosphere butterscotch, .listen()); dragging
+    // the activity slider walks the WHOLE P23 intensity axis on one knob — dust
+    // devil track curlicues ~0.1-0.4, shredded regional fronts mid-range, planet-
+    // encircling ochre obscuration at 1 (the 2018 Opportunity-ending endmember).
+    // Self-shade strength rides the F31 'relief shading' knob above (the shared
+    // clouds-as-relief slot). NO 🎲 — storm placement is the drifting noise field
+    // itself (bounded two-phase time), nothing is seed-placed in v1.
+    const fDustStorm = fBandsGroup.addFolder('Dust storms (F40)'); fDustStorm.close();
+    fDustStorm.add(state, 'dustActivity', 0, 1, 0.01).name('activity (driven)').listen();
+    fDustStorm.addColor(state, 'dustColor').name('dust color (driven)').listen();
+    fDustStorm.add(state, 'dustStormEnabled').name('✓ enabled');
     // ▸ Thermal day/night (F32/F33) — ONE energy-balance temperature curve in the
     // ★ emissive bypass channel: F32 dayside lobe (superrotation east-shifted
     // hotspot) + F33 nightside floor / silicate occlusion / warm limb rim.
@@ -5272,7 +5422,7 @@
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
-      lightning: fLightning, clouds: fClouds,
+      lightning: fLightning, clouds: fClouds, dustStorm: fDustStorm,
       daysideThermal: fThermal, nightsideThermal: fThermalNight,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
@@ -5624,6 +5774,13 @@
       uniforms.uCloudRelief.value     = state.cloudRelief;
       uniforms.uChevronStrength.value = state.chevronStrength;
       uniforms.uPupilR.value          = state.pupilR;
+      // F40 dust storms — dustStormEnabled gates activity→0 (the tracks block, the
+      // veil block AND the deck attenuation all key on uDustActivity > 0 / dustTau 0,
+      // so ONE gate kills all three terms: byte-identical pre-F40 output — the F40
+      // regression contract); every non-carrier preset derives activity 0, so the
+      // same contract holds with the enable on. Preserves the slider value.
+      uniforms.uDustActivity.value = state.dustStormEnabled ? state.dustActivity : 0.0;   // ✓ enable gate
+      uniforms.uDustColor.value.setRGB(state.dustColor[0], state.dustColor[1], state.dustColor[2]);
       // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
       // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
       // rotation about +y DECREASES longitude, which is EAST in this lab's tangent

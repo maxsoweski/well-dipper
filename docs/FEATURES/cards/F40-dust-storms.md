@@ -46,12 +46,63 @@ Unbuilt — recommended recipe once built: register in planet-archetypes.js FEAT
 - [ ] Does animation drift slowly and deterministically (bounded time), so a fly-away/re-approach shows the same storm in a plausible nearby state with no pop or pooling?
 - [ ] Does it gate correctly on drivers — appearing only on dry thin-but-present-atmosphere worlds (rocky/arid terrestrial/venus), never on airless, ocean, or ice presets?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: §4's single-slider P23 axis — uDustActivity drives a
+domain-warped patch mask whose τ veils the surface PRE-posterize (the
+F31-regime-2 haze-mute slot precedent) while the mask gradient feeds the
+cloud-relief slot for a self-shading front. Plus the card-recommended
+Mars-like preset so the feature has a carrier. Exemplars `3587fab`/
+`9a3aed4`/`3170d54`.
+
+1. **New preset (data)** — `'Mars (arid rocky)'` in DRIVER_PRESETS
+   (opens with `radiusEarth:` — vitest regex): r ~0.53, thin co2
+   atmosphere (pressure ~0.01, retained), liquidStability 0, dry dusty
+   surface palette, unlocked spin, iron ~0.19 (real Mars: weak field —
+   aurora gates out). Classifies tectonic-terrestrial. Walk ALL existing
+   features' derivations for sanity on it (F34 limb thin, F35 terminator
+   → the recorded Mars-blue hue rule fires, F36 no sea, F37 gate).
+2. **Register** — `dustStorm` in FEATURES (archetypes:
+   tectonic-terrestrial) + featureFolders + `dustStormEnabled` default
+   true + GUI folder "Dust storms (F40)" (driven `.listen()`:
+   dustActivity 0–1 walks the whole P23 axis; ✓ enable LAST).
+3. **Stage-8 veil** — uniforms uDustActivity, uDustColor (ochre,
+   preset-derivable). τ = activity² × patchMask where patchMask =
+   recursive domain-warped fbmd (q=fbm(p+o); r=fbm(p+4q) shred per §4)
+   with BOUNDED two-phase time (F25 fract pattern — re-approach
+   stability is a card checklist item). Veil applied pre-posterize:
+   `mix(surfaceColor, uDustColor*diff, 1.0-exp(-tau))` so obscuration
+   collapses the band count (the flatten job); at activity→1 the mask
+   floor rises so the veil goes planet-encircling.
+4. **Self-shading front** — feed the mask density into the existing
+   cloud-relief slot (the F31 clouds-as-relief adaptation) so the
+   advancing wall's lit top reads brighter than the surface under it.
+5. **Dust devil tracks (low-activity garnish)** — thin dark curlicues
+   ETCHED into bright terrain: albedo darkening (luminance subtraction,
+   never hue) along a domain-warped stroke mask, visible at activity
+   ~0.1–0.4, fading as the veil takes over.
+6. **applyDrivers derivation** — activity gate: retained atmosphere AND
+   pressure ≤ ~0.5 bar AND dry (liquidStability ≈ 0) → activity ~0.55
+   on Mars-like; 0 on airless / wet / thick-atmo (Venus 92 bar fails
+   the thin gate; regime-3 also irrelevant) / gas. uDustColor from
+   preset surface palette (butterscotch).
+7. **Plumbing** — PROV_DUSTSTORM=36 + PROVINCES row + provinceWeight
+   row + GLSL_NAME line; frame writer sole uniform owner.
+
+v1 scope cuts (logged, not built): seasonal/perihelion clustering (D3
+axial tilt driver); Hellas-style low-elevation nucleation correlation;
+weeks-scale growth animation (slider IS the axis); τ optical-depth
+physical calibration.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4c heavy loop)
+- Evidence (repo root, gitignored): `F40-mars-d18.png` (new Mars preset full disc: cratered rust arid world, small near-neutral polar frost, no seas), `F40-mars-regional.png`/`F40-mars-regional2.png` (regional lobes pre/post threshold tune), `F40-mars-act015/055/100.png` (P23 axis sweep), `F40-mars-tracks-d3.png` (dark curlicues 0.57% of disc, mean dLum −13.8).
+- §6 checklist: regional lobed wall 🟢 (post-tune 21.8% disc coverage, 1 large + ~24 small lobed components, localized not engulfing) · global endmember 🟢 (act 1.0: inner-disc 99.0% covered, relief obscured, lit-window bands 4→3, contrast std 14.3→9.8; limb + terminator still read on top) · continuous τ ramp 🟢 (mean|diff| 0.22/0.82/3.58/26.3/34.2 at 0.15/0.35/0.55/0.8/1.0, strictly monotonic) · self-shading front 🟢 (lit patch +9 lum vs adjacent surface, warmer) · dust devil tracks 🟢 (luminance-only etched strokes; windowed 0.08–0.45, absent at driven 0.55 — slider-only, per card intent) · bounded drift 🟢 (3 s drift confined to patch zone; uTime+=1000 survives, no NaN) · driver gates 🟢 (all 13 other presets activity 0; Rocky/Frozen A/B byte-identical; Ocean/Venus/Jovian diffs ≤ animation noise floor).
+- New preset 'Mars (arid rocky)' (14th): activity 0.55 sole carrier; cross-feature smoke 🟢 — F35 Mars-blue terminator LIVE (dRGB B-dominant [23,32,51]), F34 thin blue-grey limb (~11% disc radius), F36 no glint, F37 faint pink 0.10 (iron 0.10, not the card's 0.19 — implementer caught that 0.19 would derive a Titan-grade oval on a dead-dynamo world; MAVEN faint-aurora precedent), F31 regime 0 cov 0.2875, craters 0.595. Known model tension logged: F15/F16 derive 0 on Mars (lab's 0.05-bar saltation floor vs real 0.006-bar Mars).
+- Tweaks applied: 2 of 3 cycles. (1) FATAL — `patch` is a GLSL ES 3.00 reserved word: shader failed validation, whole lab rendered black; verifier renamed to `dustPatch` in-tree (reviewed + kept). Lesson: node --check/vitest can't catch shader-compile errors; only live verify can. (2) patchRaw threshold 0.30..0.55 → 0.15..0.45 — driven Mars 0.55 showed 2.5-3% coverage ("no storm" on the feature's own carrier); post-tune 21.8%. Re-verify: targeted PASS (monotonic sweep intact, engulf intact, gates 0).
+- Code review (fable): APPROVE. MINOR logged (manual dust slider on Venus regime-3 darkens toward black — unreachable from any driven path; lab-knob-oddity precedent). Notes: shred warp is a scalar splat, not the card's vector warp (flag if the edge reads flat); deck attenuation relies on exp(0)==1 exactness; tracks need a manual slider move to see (isolation recipe).
+- Taste forks for Max's lap: (a) storm coverage tuning (21.8% at 0.55 — authored band, one knob walks it); (b) scalar-splat shred — if the leading edge doesn't read "shredded/asymmetric" enough, the vector-warp upgrade is the first lever; (c) Mars preset palette/identity overall (new world, deserves an eyeball); (d) tracks slider-only visibility.
+- Status: VERIFIED_PENDING_MAX

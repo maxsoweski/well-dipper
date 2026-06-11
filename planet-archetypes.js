@@ -67,13 +67,21 @@ export const FEATURES = {
   // metallic-hydrogen dynamo boost, since the iron-only core D13 derivation
   // can't express a giant dynamo; Sub-Neptune keeps its faint derived 0.10).
   aurora:     { label: 'Aurorae (F37)',         enableKey: 'auroraEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
+  // F40 dust storms — aeolian atmospheric veil (P23 lofting; F-dust family sole
+  // member). Carrier = the dry thin-but-present-atmosphere world (Mars preset):
+  // tectonic-terrestrial only — airless worlds have no air to loft (Frozen/Lava
+  // gate 0), gas worlds have no loose surface dust (the storm deck there IS the
+  // F24-F29 stack), and the wet/thick presets in this same archetype (Rocky/
+  // Ocean/Venus/Eyeball) derive activity 0 behind the dryness + thin-pressure
+  // gates — the folder shows, the feature stays inert (the F34/F35 convention).
+  dustStorm:  { label: 'Dust storms (F40)',     enableKey: 'dustStormEnabled', archetypes: ['tectonic-terrestrial'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
 // Feature membership is DERIVED by inverting FEATURES (no duplication).
 export const ARCHETYPES = {
   'impact-airless':       { label: 'Impact / airless',       bodies: ['Moon','Mercury'],              presets: ['Frozen (airless)'] },
-  'tectonic-terrestrial': { label: 'Tectonic / terrestrial', bodies: ['Earth','Venus'],               presets: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)'] },
+  'tectonic-terrestrial': { label: 'Tectonic / terrestrial', bodies: ['Earth','Venus','Mars'],        presets: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)'] },
   'volcanic':             { label: 'Volcanic',               bodies: ['Io','Mars'],                   presets: ['Lava (hot airless)'] },
   'icy-active':           { label: 'Icy-active',             bodies: ['Europa','Ganymede'],           presets: ['Europa (icy moon)'] },
   'volatile-cold':        { label: 'Volatile / cold',        bodies: ['Pluto','Triton','Mars poles'], presets: ['Titan (methane seas)','Frozen (airless)'] },
@@ -132,4 +140,5 @@ export const PROVINCES = {
   terminator: { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
   sunglint:   { field: 2, polarity: +1, floor: 1.00 },  // neutral — view/illumination geometry, not geology: the mirror point follows sun + camera over the (already lakes-gated) sea (FROST-row pattern, like limb/terminator)
   aurora:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — magnetospheric optics, not geology: the oval follows the dipole axis + night side, never the rock provinces (FROST-row pattern, like limb/terminator/sunglint)
+  dustStorm:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — weather, not geology: the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged F40 v1 scope cut)
 };
