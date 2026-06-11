@@ -46,6 +46,54 @@ Unbuilt — recommended recipe once built. (1) Register in planet-archetypes.js 
 - [ ] At the terminator, do facet edges produce crisp light/dark breaks (relief-through-normals) instead of soft albedo gradients the posterizer crushes to mud?
 - [ ] As distance closes toward LOD2, does sub-faceting fade in pop-free (octave-ramp behavior) so big facets gain smaller faces rather than the whole field rescaling?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: §4's per-cell planar-facet encoding — the F9 chaos-raft
+mechanism (per-cell hashed height + constant tilt, exact gradient) at
+crystal amplitude, IQ F2−F1 border ridges, per-facet spec sparks on the
+bypass channel. New Crystal preset as the driven carrier (the Appendix-A
+crystal row is F43 + glints). Exemplars `5d6a6a8` (F42 — freshest, incl.
+new-archetype pattern) / `0161a93` (F41).
+
+1. **New preset (data)** — `'Crystal (faceted)'`: airless, T_eq ~150,
+   unlocked, PRISTINE surfaceHistory (erosion 0, bombardmentIntensity
+   ~0.1, resurfacingRate 0) — the slow-cooling undisturbed-lithology
+   profile. Opens with `radiusEarth:` (~0.8). Cool blue-grey palette.
+2. **New archetype (data)** — `'exotic-geometric'` (bodies: Pluto bladed
+   terrain, 55 Cnc e; presets: the new one). Register `facets` in
+   FEATURES (archetypes: ['exotic-geometric']) + featureFolders +
+   `facetsEnabled` default true + GUI "Crystal facets (F43)" in
+   Surface — Exotic (driven `.listen()` facetStrength display +
+   facetCoverage knob; ✓ enable LAST).
+3. **Driver** — crystal-class gate in applyDrivers from real fields:
+   airless && erosion < 0.05 && resurfacingRate < 0.05 &&
+   bombardmentIntensity < 0.2 → facetStrength 1 (walk all 16 existing
+   presets: Frozen/Europa/Lava/Magma/Carbon must all FAIL on at least
+   one term — verify each; only the new preset fires).
+4. **facetCombiner** (relief chain, beside chaosCombiner — ADDITIVE on
+   grad, above the F19 contract line per F9's slot): one voronoi3d —
+   per cell: height += hashed base + dot(pos − cellCenter, hashed tilt)
+   (planar facet; tilt is the per-cell CONSTANT fed exactly into grad,
+   the F9 mechanism) + F2−F1 smoothstep ridge crest at borders. Coverage
+   mask: low-freq fbm threshold gates which cells grow (the F7 edifice
+   gating); facetCoverage knob walks scattered → continuous (make the
+   FULL knob range walkable — the F42 tar lesson).
+5. **Sub-faceting at LOD2** — second finer voronoi3d octave faded in by
+   the existing lodRamp/octave-budget mechanism (pop-free).
+6. **Glints** — per-facet spark: the facet's own tilted normal vs H,
+   pow(max(dot,0), ~80), sparse (per-cell hash gate), POST-posterize
+   bypass family (beside the F42 glint block; distinct vocabulary —
+   F43 sparks ride facet alignment, not crest∩cell).
+7. **Plumbing** — PROV_FACETS=39 + PROVINCES neutral row + provinceWeight
+   row + GLSL_NAME line; frame writer sole uniform owner; reserved-word
+   audit (fc is TAKEN in the shader — use 'fct' prefix).
+
+v1 scope cuts (logged, not built): Pluto blade ORIENTATION alignment
+(self-organized common axis — cells are independently tilted v1);
+carbon/lava cross-listing (scattered facets on Carbon — taste fork);
+accent-color crystal hue (NMS-style — relief+lighting only per the
+research discipline); Wulff-construction habit shapes.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
