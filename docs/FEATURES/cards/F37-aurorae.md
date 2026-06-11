@@ -47,12 +47,55 @@ Built, but NOT solo-able via window._lab.solo() — aurora has no key in planet-
 - [ ] Does the animation read as slow shimmer/flicker of the rays while the oval geometry itself stays steady — no strobing, no ring wandering?
 - [ ] Is the color identity legible at 6 levels — dominant green on N2-O2 worlds, distinguishable from city-lights amber and lava orange if those variants share a night side?
 
+## 6.5 Build plan (working-Claude, 2026-06-10 — Phase 4c heavy loop)
+
+Strategy: upgrade the lab stand-in to production parity (§4: "applyAurora()
+is already 90% of this") — constants → uniforms fed per the generator's
+derivations, plus registration. Exemplars `3587fab`/`7341437`/`9a3aed4`.
+
+1. **Register** — `aurora` in FEATURES (archetypes: tectonic-terrestrial,
+   gas-giant, hot-jupiter — terrestrial richest carrier, giants get UV
+   ovals) + featureFolders + `auroraEnabled` default true + GUI folder
+   "Aurorae (F37)" in Surface — Optical (driven `.listen()`: intensity,
+   ringLat, ringWidth, color; ✓ enable LAST).
+2. **Uniforms** — uAuroraColor (vec3), uAuroraRingLat, uAuroraRingWidth,
+   uMagAxis (vec3). Shader: replace the fixed-constant block — magnetic
+   latitude `mlat = dot(N, uMagAxis)` (axis seeded ~11° off spin axis,
+   hashed from uSeed if available else authored constant), Gaussian ring
+   `exp(-t*t)` with t=(|mlat|-uAuroraRingLat)/uAuroraRingWidth (no
+   pow(neg)), KEEP nightMask + emissive-bypass channel (never posterized).
+3. **Curtain striations** — anisotropic rays: noise frequency HIGH in
+   azimuth, LOW in latitude (e.g. noised(vec3(atan2-azimuth*K_hi,
+   mlat*K_lo, phase))-style or stretched-domain noised); clamp/guard
+   atan inputs. Add a second slower noise term for flicker. Bounded/
+   periodic time OK (weather-layer class).
+4. **applyDrivers derivation** (core.js OFF-LIMITS) mirroring
+   PlanetGenerator.js:435-487: gate field>0.05; ringLat = 0.7+field·0.2;
+   ringWidth = 0.15−field·0.08; intensity from existing core
+   auroraIntensity; color by D4 composition (n2-o2 green [0.3,0.9,0.5],
+   h2-he blue-purple, co2/co2-n2 pink-red, methane blue-green).
+5. **Venus override (4b carry-over)** — F31 §7 fork (a): core keys
+   magneticField on lock-flag so Venus (slow rotator, no dynamo) derives
+   aurora 0.3, physically wrong + invisible under the opaque blanket
+   anyway. applyDrivers zeroes aurora when cloudRegime==3. Logged here +
+   in F31 §7 as resolved-by-F37.
+6. **Plumbing** — PROV_AURORA=35 + PROVINCES neutral row + provinceWeight
+   row + GLSL_NAME line; frame writer sole uniform owner.
+
+v1 scope cuts (logged, not built): solar-wind storm expansion dynamics
+(Saturn shrink-when-bright); moon magnetic footprints; LOD2 raymarched
+curtain sheets; red upper-fringe second emission line.
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- Rating: **🟡 taste-call — VERIFIED_PENDING_MAX** (2026-06-10, Phase 4c heavy loop)
+- Evidence (repo root, gitignored): `F37-rocky-ring.png` (closed annulus 24/24 azimuth bins; cap mean diff 0.54 vs ring 4.30/peak 378; ring radius 161.4 px vs 163 predicted), `F37-rocky-curtain-d4.png` (15 discrete rays/188°, along-vs-across HF anisotropy 1.8×), `F37-jovian-ring.png` (blue-purple tight oval, B-max dRGB), `F37-neptunian-ring.png` (fix-cycle evidence) + supporting A/B frames.
+- §6 checklist: polar ring w/ dark cap 🟢 · curtain striations 🟢 (azimuthal breakup, smooth across-ring bump) · night-side only 🟢 (lit hemisphere 58/2M px; twilight falloff 1.9×) · emissive-bypass crispness 🟢 (94 contiguous luminance values vs posterized surface clusters) · physics gate 🟢 (Frozen/Lava/Europa/Venus all 0; Venus = the F31 fork-a fix confirmed) · field-driven geometry 🟢 (Rocky 0.764/0.124 vs Jovian 0.82/0.102, pixel-confirmed tighter+narrower) · steady-geometry flicker 🟢 (ring radius 0.3 px stable over 2 s while ray pattern redistributes) · color identity 🟢 (Rocky G-max [2.1,5.1,2.4], Jovian B-max [2.0,1.1,4.9]). Tilted axis: magAxis 11.0° off +y; ring centered on mag pole (radial std 7.9 px vs 38.6 around geo pole).
+- Live drivers: Rocky 0.32 / Ocean 0.28 / Titan 0.18 / Sub-Neptune 0.10 (deliberately un-boosted, regime-2 featureless) / Eyeball 0.06 / Jovian+Saturnian+Neptunian+HotJupiter 0.6 via M1 metallic-hydrogen dynamo boost (lat 0.82, width 0.102, h2-he blue-purple) / Venus 0 (regime-3 override) / airless 0.
+- Tweaks applied: 1 of 3 cycles — Neptunian (r 3.9) missed the giant-dynamo radius cutoff ≥6 → intensity 0; lowered to ≥3.5 (ionic-water dynamo, still excludes Sub-Neptune r 2.7). Re-verify: targeted PASS (0.6/0.82/0.102/blue-purple exact; Sub-Neptune 0.10 and Rocky 0.32 untouched).
+- Code review (fable): APPROVE-WITH-FIXES, both applied pre-verify. M1: registration↔render-set disagreement both directions → added volatile-cold (Titan's live 0.18 oval) + the radius-scoped dynamo boost (Jupiter/Saturn are the card's canonical examples; iron-only core D13 can't express giant dynamos; core off-limits). N1 comment correction. Notes: nightMask reversed-edge smoothstep (spec-undefined since the stand-in) rewritten provably-identical; Sub-Neptune aurora-vs-lightning asymmetry is deliberate (aurora emits ABOVE the haze in the ionosphere; lightning flashed from BELOW the deck — the F31 kill doesn't apply); production applyAurora has the curtain anisotropy BACKWARDS vs the card's research (lab follows the card; production-parity follow-up logged).
+- v1 cuts (additional): hue-shift-along-ring (Planet.js:195-198) not ported.
+- Taste forks for Max's lap: (a) dynamo boost constant 0.6 + radius cutoff 3.5 authored, not derived; (b) Eyeball's barely-over-gate 0.06 oval on the permanent night side; (c) Titan reads GREEN (its preset declares n2-o2, physically right) — methane-teal table row exists but no preset triggers it; (d) Neptunian oval reads dim at d15 (showcase shots need closer range).
+- Status: VERIFIED_PENDING_MAX

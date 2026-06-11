@@ -103,6 +103,7 @@ const GLSL_NAME = {
   polarVortex: 'PROV_POLAR', lightning: 'PROV_LIGHTNING', clouds: 'PROV_CLOUDS',
   daysideThermal: 'PROV_DAYTHERM', nightsideThermal: 'PROV_NIGHTTHERM',
   limb: 'PROV_LIMB', terminator: 'PROV_TERM', sunglint: 'PROV_GLINT',
+  aurora: 'PROV_AURORA',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

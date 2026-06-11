@@ -59,6 +59,14 @@ export const FEATURES = {
   // liquid SURFACE to mirror — their drivers derive specStrength 0 (the stand-in
   // whole-surface sheen, incl. the airless iron metal sheen, is retired).
   sunglint:   { label: 'Sunglint (F36)',        enableKey: 'sunglintEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
+  // F37 aurorae — night-side magnetic ovals (P24: D13 field is the HARD gate).
+  // Registration agrees with the render set (review M1, both directions):
+  // tectonic-terrestrial (Earth green O-line ovals, the richest carrier) +
+  // volatile-cold (Titan derives a live 0.18 oval; Frozen airless-inert) +
+  // the giants (Jupiter/Saturn UV H2 ovals — live via the applyDrivers
+  // metallic-hydrogen dynamo boost, since the iron-only core D13 derivation
+  // can't express a giant dynamo; Sub-Neptune keeps its faint derived 0.10).
+  aurora:     { label: 'Aurorae (F37)',         enableKey: 'auroraEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -123,4 +131,5 @@ export const PROVINCES = {
   limb:       { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the rim hugs the whole silhouette regardless of provinces (FROST-row pattern, like clouds F31)
   terminator: { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
   sunglint:   { field: 2, polarity: +1, floor: 1.00 },  // neutral — view/illumination geometry, not geology: the mirror point follows sun + camera over the (already lakes-gated) sea (FROST-row pattern, like limb/terminator)
+  aurora:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — magnetospheric optics, not geology: the oval follows the dipole axis + night side, never the rock provinces (FROST-row pattern, like limb/terminator/sunglint)
 };

@@ -64,7 +64,7 @@ during phases) | ▶️ = current
 | F34 | [F34-limb-glow](cards/F34-limb-glow.md) | Optical | ✅ | 🟡 taste-call | 4c |
 | F35 | [F35-terminator-gradient](cards/F35-terminator-gradient.md) | Optical | ✅ | 🟡 taste-call | 4c |
 | F36 | [F36-sunglint](cards/F36-sunglint.md) | Optical | ✅ | 🟡 taste-call | 4c |
-| F37 | [F37-aurorae](cards/F37-aurorae.md) | Optical | 🟡 | — | 4c |
+| F37 | [F37-aurorae](cards/F37-aurorae.md) | Optical | ✅ | 🟡 taste-call | 4c |
 | F40 | [F40-dust-storms](cards/F40-dust-storms.md) | Dust | 🟡 | — | 4c |
 | F41 | [F41-magma-ocean](cards/F41-magma-ocean.md) | Exotic | ⬜ | — | 4c |
 | F42 | [F42-carbon-crust](cards/F42-carbon-crust.md) | Exotic | ⬜ | — | 4c |

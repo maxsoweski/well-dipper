@@ -177,7 +177,12 @@
       uniform vec3  uGlintTint;     // F36 species tint (driven: water cold-white / methane warm tholin)
       uniform float uGlintExp;      // F36 Blinn-Phong exponent (driven: species base 200 water / 120 methane, x Cox-Munk roughness broadening at the writer; floored in-shader)
       uniform float uCloudCoverage;   // 0..1 weather-layer density (Task 7)
-      uniform float uAuroraIntensity; // 0..1 night-side ring strength (Task 7)
+      // ── F37 aurorae (card F37 — driver-true night-side magnetic ovals) ──
+      uniform float uAuroraIntensity; // 0..1 ring strength (driven: core field x atmosphere, hard-gated field > 0.05; Venus regime-3 override 0)
+      uniform vec3  uAuroraColor;     // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal)
+      uniform float uAuroraRingLat;   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2 — stronger dynamo hugs the pole)
+      uniform float uAuroraRingWidth; // F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored CPU-side AND in-shader)
+      uniform vec3  uMagAxis;         // F37 magnetic dipole axis, unit (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed)
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
       uniform vec3  uLightDir;      // object-space light dir
       uniform vec3  uBaseColor;
@@ -786,6 +791,7 @@
       const int PROV_LIMB        = 32;  // F34 — neutral (global optics, not geology): the rim hugs the whole silhouette regardless of provinces (FROST-row pattern, like clouds F31)
       const int PROV_TERM        = 33;  // F35 — neutral (global optics, not geology): the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
       const int PROV_GLINT       = 34;  // F36 — neutral (view/illumination geometry, not geology): the mirror point follows sun + camera over the already lakes-gated sea (FROST-row pattern, like limb/terminator)
+      const int PROV_AURORA      = 35;  // F37 — neutral (magnetospheric optics, not geology): the oval follows the dipole axis + the night side, never the rock provinces (FROST-row pattern, like limb/terminator/glint)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -838,6 +844,7 @@
         else if (fid == PROV_LIMB)       { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_TERM)       { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_GLINT)      { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_AURORA)     { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -3065,13 +3072,60 @@
           specC = (uSpecBypass == 1) ? specC : posterize(specC, uLevels, fc, 0.4, uDitherMode);
         }
 
-        // ★ Aurora (Optical F37 stand-in) — night-side polar ring; rays from analytic noised(); skips quantizer.
-        float lat = N.y;                                       // -1..1 latitude proxy (object-space normal)
-        float ringMask = exp(-pow((abs(lat) - 0.7) / 0.12, 2.0));
-        float nightMask = smoothstep(0.1, -0.1, diff);         // visible in darkness/twilight
-        float rays = 0.5 + 0.5 * noised(N * 8.0 + vec3(uTime * 0.1)).x;
-        float aurora = ringMask * nightMask * rays * uAuroraIntensity;
-        vec3 auroraC = vec3(0.3, 0.9, 0.5) * aurora * 0.6;
+        // ★ Aurorae (F37) — driver-true night-side magnetic ovals, promoted from the
+        // fixed-constant stand-in (lat 0.7 / width 0.12 / hard-coded green). The whole
+        // production applyAurora() structure (Planet.js) ports in: a gaussian ring in
+        // MAGNETIC latitude (mlat = dot(N, uMagAxis) — the ~11-deg dipole tilt makes
+        // the oval visibly off-axis from the spin pole, the cheapest realism
+        // multiplier per card section 4), a 2-octave anisotropic curtain (striations
+        // HIGH-frequency along azimuth, LOW along latitude — the load-bearing curtain
+        // cue), and a second slower noised() term as flicker (shimmer over a STEADY
+        // oval — the card section 6 animation contract). nightMask + the additive
+        // emissive-bypass compositing stay exactly where the stand-in sat (pure
+        // luminance glow, never posterized — Option C). Spec-safety: the gaussian is
+        // exp(-t*t) (no pow(neg)); azimuth needs NO atan at all — the unit in-plane
+        // direction mDir (N projected off the dipole axis, normalized with a floored
+        // denominator) feeds the noise domain directly, so the domain is continuous
+        // everywhere (no -pi/pi seam) and merely spins fast near the magnetic pole,
+        // where azStable fades the striation contrast to flat glow (the ring gaussian
+        // still leaks ~exp(-2) at the pole, so the degenerate region IS visible and
+        // must degrade gracefully). The uAuroraIntensity > 0.0 guard skips the whole
+        // block: enable off (the per-frame writer zeroes it), the field <= 0.05 hard
+        // gate, airless worlds, and the Venus regime-3 override all yield
+        // auroraC = vec3(0) EXACTLY — the F37 regression contract.
+        vec3 auroraC = vec3(0.0);
+        if (uAuroraIntensity > 0.0){
+          float mlat = dot(N, uMagAxis);                       // -1..1 magnetic latitude
+          float t = (abs(mlat) - uAuroraRingLat) / max(uAuroraRingWidth, 1e-3);
+          float ringMask = exp(-t * t);
+          // night mask — same -0.1..0.1 twilight band as the stand-in, but with the
+          // edges in spec order (smoothstep with edge0 > edge1 is undefined GLSL).
+          float nightMask = 1.0 - smoothstep(-0.1, 0.1, diff); // visible in darkness/twilight
+          // magnetic-frame azimuth direction: tangent basis about uMagAxis. The cross
+          // with +z is safe — uMagAxis keeps y ~cos(11 deg) ~0.98, never parallel to z.
+          vec3 mE1 = normalize(cross(uMagAxis, vec3(0.0, 0.0, 1.0)));
+          vec3 mE2 = cross(uMagAxis, mE1);
+          vec2 mxz = vec2(dot(N, mE1), dot(N, mE2));
+          float mr = length(mxz);
+          vec2 mDir = mxz / max(mr, 1e-4);                     // unit azimuth dir (floored: no 0/0)
+          float azStable = smoothstep(0.0, 0.1, mr);           // fade striations where azimuth degenerates
+          // 2-octave curtain (the Planet.js applyAurora structure on the lab's
+          // analytic noised()): azimuth freq 8/16 vs latitude freq 1.5/2.5 —
+          // anisotropy is the striation. Time drifts the LATITUDE slot (curtains
+          // rise); bounded/periodic-free accumulation is fine (weather-layer class).
+          float curtain = noised(vec3(mDir * 8.0,  mlat * 1.5 + uTime * 0.12)).x * 0.5 + 0.5;
+          curtain += (noised(vec3(mDir * 16.0, mlat * 2.5 + uTime * 0.2)).x * 0.5 + 0.5) * 0.25;
+          float cb = max(curtain, 0.0) * 0.8;                  // normalize the 1.25 2-octave max
+          float rays = mix(0.4, cb * cb, azStable);            // square via multiply (no pow); flat at the pole
+          // slow flicker — a LOW-frequency azimuth domain on a slow clock multiplies
+          // brightness 0.5..1.0: the rays shimmer while the oval geometry stays put.
+          float flicker = clamp(0.75 + 0.25 * noised(vec3(mDir * 2.0, uTime * 0.05)).x, 0.0, 1.0);
+          float aurora = ringMask * nightMask * rays * flicker * uAuroraIntensity
+                       * provinceWeight(PROV_AURORA);
+          // gain 0.8 (stand-in 0.6): the flicker mean 0.75 would otherwise dim the
+          // default read below the stand-in's — 0.6/0.75 = 0.8 preserves mean energy.
+          auroraC = uAuroraColor * aurora * 0.8;
+        }
 
         gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC, vec3(1.0)), 1.0);
       }
@@ -3105,7 +3159,12 @@
       uGlintTint:      { value: new THREE.Color(0.95, 0.97, 1.0) },  // F36 species tint (driven: water cold-white / methane warm tholin)
       uGlintExp:       { value: 200.0 }, // F36 Blinn-Phong exponent (driven: species base x Cox-Munk broadening at the writer)
       uCloudCoverage:  { value: 0.0 },   // weather-layer density (driven by deriveUniforms)
-      uAuroraIntensity:{ value: 0.0 },   // night-side ring strength (driven by deriveUniforms)
+      // ── F37 aurorae (driver-true magnetic ovals — card §6.5 steps 2-4) ──
+      uAuroraIntensity:{ value: 0.0 },   // F37 ring strength (driven: core field x atmosphere, hard-gated field > 0.05; Venus regime-3 override)
+      uAuroraColor:    { value: new THREE.Color(0.3, 0.9, 0.5) },  // F37 emission color (driven: D4 composition map, fallback green)
+      uAuroraRingLat:  { value: 0.7 },   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2)
+      uAuroraRingWidth:{ value: 0.12 },  // F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored)
+      uMagAxis:        { value: new THREE.Vector3(0, 1, 0) },      // F37 dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -3669,6 +3728,12 @@
       glintRoughness: 0.15, // F36 Cox-Munk sea state (authored default 0.15 — no wind-speed driver exists in _derived; live lab slider): broadens AND dims at the per-frame writer
       glintBaseExp: 200,    // F36 species base exponent (driven: water 200 / methane-ethane 120 — lower IOR, broader dimmer lobe)
       glintTint: [0.95, 0.97, 1.0],  // F36 species tint (driven: water cold-white / methane warm tholin)
+      auroraEnabled: true,  // F37 enable gate — off zeroes uAuroraIntensity at the per-frame writer (auroraC vec3(0) exactly)
+      auroraIntensity: 0.0, // F37 ring strength (driven: core auroraIntensity = field x atmosphere, hard-gated field > 0.05; Venus regime-3 override 0)
+      auroraRingLat: 0.7,   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2 — stronger dynamo hugs the pole)
+      auroraRingWidth: 0.12,// F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored 0.07)
+      auroraColor: [0.3, 0.9, 0.5], // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal; fallback green)
+      magAxis: [0, 1, 0],   // F37 magnetic dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed — a per-planet seed property, no GUI control)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -4073,11 +4138,14 @@
       // the F34 block below (haze-class fork + hue map) and written by the
       // per-frame writer behind the limbEnabled gate — no direct uniform write
       // here anymore (card §6.5 step 3, the F11/F31 precedent).
-      // auroraIntensity / craterCells / atmosphereModel consumed by Task 7 + Stage C.
+      // craterCells / atmosphereModel consumed by Stage C + qualityTier.
       // cloudCoverage is now F31-owned: the core derivation is POST-PROCESSED in the
       // F31 block below (regime + rebalance) and written by the per-frame writer —
       // no direct uniform write here anymore (card §6.5 step 4, the F11 precedent).
-      if (uniforms.uAuroraIntensity) uniforms.uAuroraIntensity.value = u.auroraIntensity;
+      // auroraIntensity is now F37-owned: the core derivation is POST-PROCESSED in
+      // the F37 block below (field hard gate + composition color + Venus override)
+      // and written by the per-frame writer behind the auroraEnabled gate — the
+      // direct uniform write that lived here is retired (the F34/F36 precedent).
       // §2 #3 master liquid gate → RESERVED→LIVE uniforms (Fluvial owner; Optical/Aeolian/Cryo read in step 3+)
       if (uniforms.uLiquidStability) uniforms.uLiquidStability.value = u.liquidStability;
       if (uniforms.uLiquidSpecies)   uniforms.uLiquidSpecies.value   = u.liquidSpecies;
@@ -4637,6 +4705,64 @@
       // saltation existence, not wave slope), so r = 0.15 authored per the card. The
       // slider stays live — the broaden-and-dim fold happens at the per-frame writer.
       state.glintRoughness = 0.15;
+      // ── F37 aurorae — driver derivation (card §6.5 steps 4-5; post-process HERE
+      // per the F34/F35/F36 precedent — core.js untouched), mirroring the production
+      // PlanetGenerator.js aurora block. The D13 field (u.magneticField = iron x
+      // lock-factor) is the HARD gate (P24): field <= 0.05 zeroes the intensity
+      // (Europa 0.04 gates out; the true giants are rescued by the M1 dynamo
+      // boost below). Intensity above the gate: Rocky 0.32 / Ocean 0.28 /
+      // Titan 0.18 / Sub-Neptune 0.10 / Eyeball 0.06 / true giants 0.6 boosted —
+      // pre-checked over all 13 presets. Ring geometry from the generator: stronger dynamo =
+      // a tighter, narrower oval closer to the pole (lat 0.7..0.9, width floored
+      // 0.07 — the generator's own 0.07..0.15 range, kept explicit so a lab-slider
+      // field can never fold the gaussian).
+      // Review M1 (c): metallic-hydrogen dynamo boost for TRUE giants. Core's
+      // iron-only D13 model can't express giant dynamos (Jupiter/Saturn UV H2
+      // ovals are the card's canonical examples, yet Jovian iron 0.03 gates out).
+      // Scope = core's sub-neptune discriminator inverted (h2-he envelope of
+      // giant radius); Sub-Neptune (r 2.7) deliberately keeps its faint derived
+      // 0.10 (regime-2 featureless intent, reviewer NOTE 2). Recomputed, not
+      // reused — core's u.auroraIntensity used the UNBOOSTED field (hasAtmo
+      // true on every h2-he preset).
+      // Radius cutoff 3.5: includes the ice giant (Neptune's dynamo is ionic-
+      // water, also invisible to the iron model; r 3.9), still excludes
+      // Sub-Neptune (r 2.7, regime-2 featureless). Verify fix cycle 1.
+      const _giantDynamo = _gas && (_fp.radiusEarth ?? 1) >= 3.5;
+      const _mag = _giantDynamo ? Math.max(u.magneticField, 0.6) : u.magneticField;
+      state.auroraIntensity = _mag > 0.05 ? (_giantDynamo ? _mag : u.auroraIntensity) : 0.0;
+      state.auroraRingLat   = 0.7 + _mag * 0.2;
+      state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);
+      // Emission color by D4 composition (the PlanetGenerator auroraColors table:
+      // oxygen 557.7 nm line / hydrogen Balmer / CO2 dissociation / methane).
+      // Per-preset composition strings come straight from the preset atmosphere
+      // (the F30 rain-composition pattern); airless presets fall back green and
+      // stay inert behind intensity 0. NOTE: Titan's preset declares n2-o2 (its
+      // real bulk N2 column) so it reads green, not the methane teal.
+      const _auroraColorByComp = {
+        'n2-o2':   [0.3, 0.9,  0.4],   // green (oxygen line) — Earth
+        'h2-he':   [0.3, 0.2,  0.8],   // blue-purple (hydrogen Balmer) — Jupiter/Saturn
+        'co2-n2':  [0.8, 0.3,  0.4],   // pink-red (CO2 dissociation)
+        'co2':     [0.9, 0.35, 0.5],   // pink
+        'methane': [0.2, 0.6,  0.7],   // blue-green
+      };
+      const _ac = _auroraColorByComp[_fp.atmosphere?.composition];
+      state.auroraColor = _ac ? _ac.slice() : [0.3, 0.8, 0.4];
+      // Venus override — the F31 §7 fork (a) carry-over, resolved BY F37 here: the
+      // core keys magneticField on the lock FLAG only, so the slow-rotator Venus
+      // (243-day spin, no dynamo — rotationHours never reaches the core) derives a
+      // physically-wrong 0.3 that would also be invisible under the opaque H2SO4
+      // blanket anyway. The regime-3 cloudRegime derived above IS the venus
+      // identity, so it zeroes the aurora (no dynamo + opaque shroud).
+      if (_cloudRegime === 3) state.auroraIntensity = 0.0;
+      // Magnetic dipole axis: the spin axis (+y) tilted 11 deg (Earth's dipole
+      // offset — card §4's cheapest realism multiplier), tilt AZIMUTH hashed from
+      // macroSeed (deterministic per planet identity; same Knuth multiplier as the
+      // storm streams). Re-derives on preset/quality change like the storm seeds —
+      // the documented seed-change convention (a bare macro-seed roll re-derives at
+      // the next applyDrivers, same as storm placement).
+      const _maTilt = 11 * Math.PI / 180;
+      const _maAz = ((Math.imul(state.macroSeed, 2654435761) >>> 0) / 4294967296) * Math.PI * 2;
+      state.magAxis = [Math.sin(_maTilt) * Math.cos(_maAz), Math.cos(_maTilt), Math.sin(_maTilt) * Math.sin(_maAz)];
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
@@ -5122,6 +5248,19 @@
     fGlint.addColor(state, 'glintTint').name('glint tint (driven)').listen();
     fGlint.add(state, 'specBypass').name('spec bypass quantizer');
     fGlint.add(state, 'sunglintEnabled').name('✓ enabled');
+    // ▸ Aurorae (F37) — night-side magnetic ovals in the emissive-bypass channel
+    // (Stage 9, additive luminance — never posterized). intensity / ring latitude /
+    // ring width / color are ALL driven (D13 field hard gate, generator ring
+    // derivations, D4 composition hue map, .listen()) — display-style controls per
+    // the F34/F35 pattern. NO 🎲 — the dipole axis is a per-planet seed property
+    // (macroSeed-hashed), nothing is placed. NOTE: night-side only — orbit to the
+    // dark hemisphere and look near a pole to see it.
+    const fAurora = fOpticalGroup.addFolder('Aurorae (F37)'); fAurora.close();
+    fAurora.add(state, 'auroraIntensity', 0, 1, 0.01).name('intensity (driven)').listen();
+    fAurora.add(state, 'auroraRingLat', 0.5, 1, 0.005).name('ring latitude (driven)').listen();
+    fAurora.add(state, 'auroraRingWidth', 0.02, 0.3, 0.005).name('ring width (driven)').listen();
+    fAurora.addColor(state, 'auroraColor').name('color (driven)').listen();
+    fAurora.add(state, 'auroraEnabled').name('✓ enabled');
 
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
@@ -5135,7 +5274,7 @@
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds,
       daysideThermal: fThermal, nightsideThermal: fThermalNight,
-      limb: fLimb, terminator: fTerm, sunglint: fGlint,
+      limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
@@ -5331,6 +5470,17 @@
       uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate
       uniforms.uTermWidth.value = state.termWidth;
       uniforms.uTermColor.value.setRGB(state.termColor[0], state.termColor[1], state.termColor[2]);
+      // F37 aurorae — auroraEnabled gates intensity→0 (the Stage-9 aurora block is
+      // guarded on uAuroraIntensity > 0, so one gate skips the whole bypass-channel
+      // term: auroraC = vec3(0) exactly — the F37 regression contract); gated/airless
+      // /Venus presets derive intensity 0, so the same contract holds with the enable
+      // on. The width floor is repeated here so a hand-cranked state value can never
+      // reach the shader unfloored (the GLSL max() is the last line of defense).
+      uniforms.uAuroraIntensity.value = state.auroraEnabled ? state.auroraIntensity : 0.0;   // ✓ enable gate
+      uniforms.uAuroraRingLat.value   = state.auroraRingLat;
+      uniforms.uAuroraRingWidth.value = Math.max(0.02, state.auroraRingWidth);
+      uniforms.uAuroraColor.value.setRGB(state.auroraColor[0], state.auroraColor[1], state.auroraColor[2]);
+      uniforms.uMagAxis.value.set(state.magAxis[0], state.magAxis[1], state.magAxis[2]).normalize();
       uniforms.uProvinceWeight.value = state.provinceWeight;
       uniforms.uSeaLevel.value = state.lakesEnabled ? state.seaLevel : -1.0;   // ✓ enable gate (preserves slider value)
       uniforms.uDeltaDensity.value = state.deltasEnabled ? state.deltaDensity : 0.0;   // ✓ enable gate
