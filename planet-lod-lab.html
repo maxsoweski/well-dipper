@@ -4699,16 +4699,42 @@
     // Same ringPhysics the impostor samples → cloud inherits the banded structure and
     // the cloud↔impostor seam stays invisible. Centered on origin, already in the XZ
     // plane (baker writes x=r·cosθ, z=r·sinθ); tilted per-frame to match the impostor.
-    const ringBaked = bakeRingCloud(ringPhysics, {
-      count: 400000, R: R, thickness: 0.01,
-    });
-    const ringCloud = makeRingCloudPoints(ringBaked, {
-      pointScale: 300, dResolve: 4.0, dCull: 14.0, planetRadius: R,
-      lightDir: [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z],
-      sizeClamp: 24,
-    });
-    ringCloud.visible = false;   // driven by the same rings toggle as the impostor (per-frame)
-    scene.add(ringCloud);
+    //
+    // `let` (not const) so rebakeRingCloud() can dispose + swap them live when the
+    // count/thickness sliders change (those are BAKED attributes, not uniforms). The
+    // per-frame loop + GUI closures reference these MODULE-SCOPE bindings, so after a
+    // rebake swap they automatically resolve the CURRENT cloud.
+    //
+    // The build reads state.ring* (single source of truth shared with the sliders), so
+    // the first build is DEFERRED to buildRingCloud() called just after `const state`
+    // is declared below (the build deps — scene/R/WORLD_LIGHT/ringPhysics — already
+    // exist here; only `state` is still in its temporal dead zone at this point).
+    let ringBaked = null;
+    let ringCloud = null;
+    function buildRingCloud() {
+      ringBaked = bakeRingCloud(ringPhysics, {
+        count: state.ringCount, R: R, thickness: state.ringThickness,
+      });
+      ringCloud = makeRingCloudPoints(ringBaked, {
+        pointScale: state.ringPointScale, dResolve: state.ringDResolve, dCull: state.ringDCull,
+        planetRadius: R, lightDir: [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z],
+        sizeClamp: state.ringSizeClamp,
+      });
+      ringCloud.visible = !!state.ringsEnabled;   // driven by the same rings toggle as the impostor (per-frame)
+      scene.add(ringCloud);
+    }
+    // Live re-bake: count/thickness are BAKED attributes, so changing them needs a full
+    // dispose + rebuild. Mirrors rings-lod-lab.html's _rlab.ring.rebake(). Carries the
+    // live LOD/size uniform values across the swap (build already reads them from state,
+    // which the live sliders keep in sync) and preserves current visibility.
+    function rebakeRingCloud() {
+      if (ringCloud) {
+        scene.remove(ringCloud);
+        ringCloud.geometry.dispose();
+        ringCloud.material.dispose();
+      }
+      buildRingCloud();   // reads the current state.ring* (incl. the new count/thickness + live LOD/size)
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Low-res render target + nearest-upscale blit — FAITHFUL to production.
@@ -5163,7 +5189,20 @@
       cryoRidgeOffsetV: [0,0,0],
       frostOffset: [0,0,0],
       ringsEnabled: false,  // F51 — standalone toggle (NOT a FEATURES key; ring is a separate mesh, not a surface province)
+      // F51 rings-v2 cloud tuning — single source of truth shared by the build (L4702-4709)
+      // and the GUI sliders (in the Rings folder). Defaults = the tuned values; do NOT change.
+      // 4 are LIVE uniforms (write on change); count+thickness REQUIRE a rebake (baked attrs).
+      ringCount: 400000,      // REBAKE — in-plane particle density
+      ringThickness: 0.01,    // REBAKE — vertical spread; MUST stay physically thin (real rings are razor-thin)
+      ringPointScale: 300,    // LIVE uPointScale
+      ringDResolve: 4.0,      // LIVE uDResolve — cam dist where particles reach full size
+      ringDCull: 14.0,        // LIVE uDCull — cam dist beyond which particles fade out
+      ringSizeClamp: 24,      // LIVE uSizeClamp — RT-pixel clamp on point size
     };
+
+    // F51 rings-v2 — now that `state` exists, do the first cloud build (deferred from the
+    // mesh-setup block above so the build can read state.ring* as the single source of truth).
+    buildRingCloud();
 
     const $ = (id) => document.getElementById(id);
 
@@ -6920,6 +6959,23 @@
       set show(v){ state.ringsEnabled = v; },
     };
     fRings.add(ringsProxy, 'show').name('show rings').listen();
+    // F51 rings-v2 cloud tuning sliders. 4 LIVE (write the uniform on change) + 2 REBAKE.
+    // The .onChange closures read the MODULE-SCOPE `ringCloud` at call time, so after a
+    // rebake swaps in a new Points the live sliders still target the CURRENT cloud.
+    fRings.add(state, 'ringPointScale', 50, 800, 10).name('point scale')
+      .onChange(v => ringCloud.material.uniforms.uPointScale.value = v);
+    fRings.add(state, 'ringDResolve', 1, 12, 0.5).name('LOD resolve dist')
+      .onChange(v => ringCloud.material.uniforms.uDResolve.value = v);
+    fRings.add(state, 'ringDCull', 6, 30, 0.5).name('LOD cull dist')
+      .onChange(v => ringCloud.material.uniforms.uDCull.value = v);
+    fRings.add(state, 'ringSizeClamp', 4, 80, 1).name('size clamp (px)')
+      .onChange(v => ringCloud.material.uniforms.uSizeClamp.value = v);
+    // REBAKE — count + thickness are baked attributes (dispose + rebuild). thickness max
+    // capped at 0.06 to keep the ring physically thin (real rings are razor-thin).
+    fRings.add(state, 'ringCount', 20000, 1000000, 20000).name('count (rebake)')
+      .onChange(() => rebakeRingCloud());
+    fRings.add(state, 'ringThickness', 0.002, 0.06, 0.002).name('thickness (rebake)')
+      .onChange(() => rebakeRingCloud());
 
     applyDrivers();   // load the default driver bundle (Rocky) into the envelope uniforms
 
