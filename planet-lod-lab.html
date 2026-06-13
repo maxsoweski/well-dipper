@@ -109,6 +109,7 @@
     import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms } from './planet-lod-lab-core.js';
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { generateRingPhysics } from './src/generation/PhysicsEngine.js';   // F51 rings — CPU-side physics chain
+    import { bakeRingCloud, makeRingCloudPoints } from './ring-particle-cloud.js';   // F51 rings-v2 — near-tier LOD particle cloud
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -4694,6 +4695,21 @@
     ring.visible = false;
     scene.add(ring);
 
+    // F51 rings-v2 — near-tier LOD particle cloud (proven in rings-lod-lab.html).
+    // Same ringPhysics the impostor samples → cloud inherits the banded structure and
+    // the cloud↔impostor seam stays invisible. Centered on origin, already in the XZ
+    // plane (baker writes x=r·cosθ, z=r·sinθ); tilted per-frame to match the impostor.
+    const ringBaked = bakeRingCloud(ringPhysics, {
+      count: 400000, R: R, thickness: 0.01,
+    });
+    const ringCloud = makeRingCloudPoints(ringBaked, {
+      pointScale: 300, dResolve: 4.0, dCull: 14.0, planetRadius: R,
+      lightDir: [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z],
+      sizeClamp: 24,
+    });
+    ringCloud.visible = false;   // driven by the same rings toggle as the impostor (per-frame)
+    scene.add(ringCloud);
+
     // ─────────────────────────────────────────────────────────────────────────
     // Low-res render target + nearest-upscale blit — FAITHFUL to production.
     //
@@ -7038,6 +7054,12 @@
       ring.quaternion.copy(planet.quaternion);
       ringUniforms.lightDir.value.copy(lightObj);
       ring.visible = !!state.ringsEnabled;
+      // F51 rings-v2 — near-tier particle cloud, same toggle/frame as the impostor.
+      // Lab has no delta-time in scope; use a fixed +0.016 step for the twinkle.
+      ringCloud.visible = !!state.ringsEnabled;
+      ringCloud.material.uniforms.uTime.value += 0.016;
+      ringCloud.quaternion.copy(ring.quaternion);                          // tilt WITH the impostor (axial tilt)
+      ringCloud.material.uniforms.uLightDir.value.copy(ringUniforms.lightDir.value);  // object-space light, same as impostor
       // F35 terminator gradient — terminatorEnabled gates strength→0 (the Stage-9
       // band is gated on uTermStrength > 0, so one gate skips the whole additive
       // term and restores byte-identical pre-F35 output); airless presets derive
