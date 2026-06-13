@@ -1,6 +1,7 @@
 // tests/ring-particle-cloud.test.js
 import { describe, it, expect } from 'vitest';
-import { bakeRingCloud } from '../ring-particle-cloud.js';
+import { bakeRingCloud, makeRingCloudPoints } from '../ring-particle-cloud.js';
+import * as THREE from 'three';
 
 // Synthetic physics fixture: two ringlets (ice 4-5, rock 6-8) with a gap between.
 const PHYSICS = {
@@ -82,5 +83,20 @@ describe('bakeRingCloud', () => {
         break;
       }
     }
+  });
+});
+
+describe('makeRingCloudPoints', () => {
+  it('builds a THREE.Points with the baked attributes and LOD uniforms', () => {
+    const baked = bakeRingCloud(PHYSICS, { count: 1000, R: 1, rng: seeded(11) });
+    const pts = makeRingCloudPoints(baked, { dResolve: 4, dCull: 14, planetRadius: 1 });
+    expect(pts).toBeInstanceOf(THREE.Points);
+    expect(pts.geometry.getAttribute('position').count).toBe(baked.count);
+    expect(pts.geometry.getAttribute('aColor').count).toBe(baked.count);
+    expect(pts.geometry.getAttribute('aSize').count).toBe(baked.count);
+    expect(pts.material.uniforms.uDResolve.value).toBe(4);
+    expect(pts.material.uniforms.uDCull.value).toBe(14);
+    expect(pts.material.transparent).toBe(true);
+    expect(pts.material.depthWrite).toBe(false);
   });
 });
