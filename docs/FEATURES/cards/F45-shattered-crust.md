@@ -269,4 +269,4 @@ Live on :9223 (chrome-devtools GPU — NOT Playwright; memory/well-dipper-testin
   - GUI `shatSubFreq` slider max widened 6 → **7** (:6195) so the walked 5.0 sits mid-high, not at the edge (F44 range lesson). `shatSubAmt` slider range unchanged (0.7 sits comfortably in 0–1).
   - No other defaults changed — shatScale 1.6, shatBlockJitter 0.6, shatBorderDepth 1.0, shatBorderWidth 0.10, shatMaskScale 1.1, shatMaskCover 1.0 all read well as-shipped.
 - **Re-verify:** none blocking. The d20 global-province read couldn't be fully *judged* due to small-disc framing (chunking confirmed present); judge the patchwork gestalt at d3–d8. If Max wants more provinces, walk `shatScale` (no code change, slider already covers 0.8–8).
-- Status: VERIFIED_PENDING_MAX (pending sha)
+- Status: VERIFIED_PENDING_MAX e94323e
