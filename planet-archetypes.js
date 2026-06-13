@@ -125,6 +125,13 @@ export const FEATURES = {
   // uShatStrength is a pure ENABLE gate (no driver class), so registration is the enable flag alone.
   shatter:    { label: 'Shattered crust (F45)', enableKey: 'shatterEnabled',   archetypes: ['exotic-shattered'] },
   bioMats:    { label: 'Bioluminescent mats (F46)', enableKey: 'bioMatsEnabled', archetypes: ['tectonic-terrestrial'] },
+  // F47 machine / structured surface — Exotic Stage-7 dual-channel OVERLAY (engineered crust
+  // composited over the full natural base): panel-edge bevels through the normal channel + glowing
+  // circuit traces / lit windows on the emissive-bypass channel, gated by a maturity-driven coverage
+  // mask (coverage 0 ⇒ bare Stage-6 base). NEW archetype 'technogenic' (no natural archetype fits an
+  // engineered overlay), rides 'Rocky (Earthlike)' per the card §5 base. uMachCoverage is a pure lab
+  // knob (no driver derivation), so registration is the enable flag alone.
+  machine:    { label: 'Machine surface (F47)', enableKey: 'machineEnabled', archetypes: ['technogenic'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -140,6 +147,7 @@ export const ARCHETYPES = {
   'exotic-carbon':        { label: 'Exotic / carbon',        bodies: ['55 Cnc e','PSR J1719-1438 b'], presets: ['Carbon (high C/O)'] },
   'exotic-geometric':     { label: 'Exotic / geometric',     bodies: ['Pluto bladed terrain','55 Cnc e'], presets: ['Crystal (faceted)'] },
   'exotic-shattered':     { label: 'Exotic / shattered',     bodies: ['Miranda','Europa Conamara Chaos'], presets: ['Frozen (airless)'] },
+  'technogenic':          { label: 'Technogenic / machine',  bodies: ['Trantor (fictional)','Coruscant (fictional)','Dyson-swarm hypothetical'], presets: ['Rocky (Earthlike)'] },
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
@@ -200,4 +208,5 @@ export const PROVINCES = {
   hexTess:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal tessellation, not geology: the hex tiling covers the whole uniform crust (cooling/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
   shatter:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal disruption, not geology: the shattered-block field covers the whole crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)
   bioMats:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — biosphere coverage, not geology: the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)
+  machine:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — engineered overlay, not geology: a built crust covers terrain regardless of rock provinces (FROST-row pattern, like bioMats F46)
 };

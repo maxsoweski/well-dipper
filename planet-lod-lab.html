@@ -188,6 +188,16 @@
       uniform vec3  uBioColor;
       uniform float uBioScale;
       uniform float uBioIntensity;
+      // F47 machine / structured surface (Stage-7 EXOTIC overlay, dual-channel)
+      uniform float uMachCoverage;      // maturity/coverage driver: lowers FBM threshold (scattered→full grid); 0 = bare base, gates the whole combiner + composite + glow
+      uniform float uMachDistrictScale; // low-freq district grid frequency
+      uniform float uMachBlockScale;    // high-freq block grid frequency (scale-hierarchy 2nd tier)
+      uniform float uMachSeamWidth;     // grid-line / panel-seam half-width (border-distance threshold)
+      uniform float uMachBevel;         // bevel amount fed onto grad (normal-channel driver)
+      uniform vec3  uMachMetalColor;    // near-flat dark-metal plate albedo
+      uniform vec3  uMachGlowColor;     // circuit-trace / window emissive color
+      uniform float uMachGlowIntensity; // trace+window glow brightness (emissive-bypass)
+      uniform float uMachWindowDensity; // per-cell-hash fraction of lit cells
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
       uniform vec3  uLightDir;      // object-space light dir
       uniform vec3  uBaseColor;
@@ -899,6 +909,7 @@
       const int PROV_HEXTESS     = 40;  // F44 — neutral (crustal tessellation, not geology): the hex field tiles the WHOLE uniform-lithology crust (surface-history/cooling-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
       const int PROV_SHATTER     = 41;  // F45 — neutral (crustal disruption, not geology): the shatter tiles the WHOLE crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)
       const int PROV_BIOMATS     = 42;  // F46 — neutral (biosphere coverage, not geology): the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)
+      const int PROV_MACHINE     = 43;  // F47 — neutral (engineered overlay, not geology): a built crust covers terrain regardless of rock provinces (FROST-row pattern, like bioMats F46)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -959,6 +970,7 @@
         else if (fid == PROV_HEXTESS)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_SHATTER)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_BIOMATS)    { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_MACHINE)    { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2620,6 +2632,51 @@
         //  default and matches the SPH/Voronoi fragmentation physics in §4.)
       }
 
+      // ── F47 machine / structured surface helpers (Stage-7 EXOTIC overlay) ──
+      // Inline triplanar surface-aligned 2D rectilinear grid (NOT a 3D lattice sliced by the
+      // sphere — that gives curved-slice production artifacts). Three cardinal-plane fract() grids
+      // blended by pow(abs(N),6.0) weights. Returns 2D border distance; cellHash via out-param.
+      float machGrid1(vec2 uv, float scale, out float cellHash){
+        vec2 g = fract(uv * scale);
+        vec2 b = min(g, 1.0 - g);                 // distance to nearest grid line (per axis)
+        float d = min(b.x, b.y);                  // 2D border distance
+        vec2 cell = floor(uv * scale);
+        cellHash = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+        return d;
+      }
+      // blend the 3 axis-plane grids by triplanar weights → .x = blended border distance, cellHash = blended cell id
+      vec3 machGridSDF(vec3 p, float scale, out float cellHash){
+        vec3 an = pow(abs(normalize(p)), vec3(6.0));
+        an /= max(an.x + an.y + an.z, 1e-4);
+        float hX, hY, hZ;
+        float dX = machGrid1(p.yz, scale, hX);
+        float dY = machGrid1(p.zx, scale, hY);
+        float dZ = machGrid1(p.xy, scale, hZ);
+        cellHash = hX*an.x + hY*an.y + hZ*an.z;   // dominant-plane cell id (blended)
+        return vec3(dX*an.x + dY*an.y + dZ*an.z, cellHash, 0.0);
+      }
+      // coverage: low-freq FBM thresholded by maturity (scattered patches → full grid).
+      // uMacroOffset ties the pattern to the seed (every combiner convention); NO time in the spatial mask.
+      float machCoverageMask(vec3 p){
+        float f = 0.5 + 0.5 * fbmd(p * uMachDistrictScale * 0.5 + uMacroOffset, 3.0, 0.0).x;
+        float t = mix(0.75, 0.05, uMachCoverage);   // high maturity lowers threshold (patches merge)
+        return smoothstep(t, t + 0.15, f);
+      }
+      // Normal channel: panel-edge bevels banked onto grad (lit by perturbAnalytic — edges catch sun).
+      // uMachCoverage<=0 ⇒ early-out (no grad write — byte-identical pre-F47 grad; the F46 gate pattern).
+      void machineRelief(vec3 pos, inout float h, inout vec3 grad){
+        if (uMachCoverage <= 0.0) return;                       // ≤0 EARLY-OUT (byte-identical pre-F47)
+        float cov = machCoverageMask(pos) * provinceWeight(PROV_MACHINE);
+        if (cov <= 0.0) return;
+        vec3 N = normalize(pos);
+        float machCellH;
+        vec3 machGd = machGridSDF(pos, uMachBlockScale, machCellH);
+        float machEdge = 1.0 - smoothstep(0.0, uMachSeamWidth, machGd.x);   // 1 at seam, 0 inside plate
+        // directional kick along a seam-tangent so the seam catches light (tune at live-verify)
+        vec3 machTangent = normalize(cross(N, vec3(0.0, 1.0, 0.0)) + vec3(1e-4));
+        grad += uMachBevel * machEdge * machTangent * cov;
+      }
+
       // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief — relief doc §F10.a) ──
       // The signature icy-moon look, gated by the SHARED uCryoActivity. TWO mechanisms:
       // (1) DOUBLE RIDGES (Europa) — warped directional lines (like F6 tessera / F8 wrinkles)
@@ -3024,6 +3081,7 @@
           facetCombiner(vPos, h, grad, fctMask);   // F43 — crystalline facet field (the F9 chaos-raft mechanism at crystal amplitude; ADDITIVE on grad, the F19 contract; exports fctMask for the post-posterize spark)
           hexCrust(vPos, h, grad);                 // F44 — hex-tessellated crust (voronoi3dReg + regularity knob; F2−F1 trough borders + flat/domed interiors; ADDITIVE on grad, F19 contract; gated by uHexStrength × provinceWeight(PROV_HEXTESS))
           shatterCombiner(vPos, h, grad);          // F45 — shattered/fractured crust (globalized two-octave chaosCombiner: voronoi3d mega-blocks w/ per-cell flat+tilt, F2−F1 graben crevasses, sub-fracture lattice; ADDITIVE on grad, F19 contract; gated by uShatStrength × region × provinceWeight(PROV_SHATTER))
+          machineRelief(vPos, h, grad);            // F47 panel bevels onto grad (ADDITIVE, F19 contract; gated by uMachCoverage × provinceWeight(PROV_MACHINE))
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
@@ -3366,7 +3424,17 @@
 
         // ── Stage 7: EXOTIC overlay — base-type + overlay-layer composite; consumes the FULL natural-base
         //    lit color + landMask; renders LAST among surface terms, before the envelope split. [domain: Exotic]
-        //    (placeholder; maturity→0 must reveal the bare stage-6 base — the overlay-correctness test.)
+        //    F47 machine surface — dark-metal plate albedo composited OVER the posterized natural base,
+        //    under the maturity-driven coverage mask. Posterized inside the mix so the quantizer never
+        //    sees an albedo gradient to crush; guarded on uMachCoverage>0 so coverage 0 ⇒ surface
+        //    byte-identical (bare Stage-6 base — the overlay-correctness regression guarantee). Panel
+        //    seams/bevels ride the normal channel (machineRelief); traces/windows ride the emissive bypass.
+        if (uMachCoverage > 0.0) {
+          float machCov = machCoverageMask(vPos) * provinceWeight(PROV_MACHINE);
+          surface = mix(surface,
+                        posterize(uMachMetalColor * (diff + ambient), uLevels, fc, 0.4, uDitherMode),
+                        machCov);
+        }
 
         // ── Stage 8: CLOUDS & HAZE — F31 regime-dispatched family combiner (LIVE 2026-06-10): clouds-as-
         //    relief deck (regimes 0/3/4 below) + haze muting (regime 2 — LIVE, hoisted to the pre-posterize
@@ -3545,6 +3613,22 @@
           float shimmer   = 0.75 + 0.25 * noised(vec3(bwPos.xy * 1.5, uTime * 0.06)).x;
           float bio = mat * nightMask * shimmer * uBioIntensity * provinceWeight(PROV_BIOMATS);
           bioC = uBioColor * clamp(bio, 0.0, 1.0);
+        }
+        // ★ F47 machine surface — glowing circuit traces (district-grid seam ridge) + per-cell-hash
+        // lit windows (block grid), on the emissive-bypass channel so they stay crisp over the 6-level
+        // posterize and read on the night side (the F8 lava-crack / F46 bioC survivor pattern). Spatial
+        // pattern is deterministic (uMacroOffset-seeded grids); only an optional intensity shimmer uses
+        // uTime — NO time-based coverage/grid. uMachCoverage 0 ⇒ machC = vec3(0) exactly.
+        vec3 machC = vec3(0.0);
+        if (uMachCoverage > 0.0) {
+          float machCovE = machCoverageMask(vPos) * provinceWeight(PROV_MACHINE);
+          float machChD, machChB;
+          float machDD = machGridSDF(vPos, uMachDistrictScale, machChD).x;   // district seam distance
+          float machDB = machGridSDF(vPos, uMachBlockScale,    machChB).x;   // block seam distance + cell hash
+          float machTrace  = 1.0 - smoothstep(0.0, uMachSeamWidth, machDD);  // bright circuit traces on district seams
+          float machWindow = step(1.0 - uMachWindowDensity, machChB) * (1.0 - smoothstep(0.0, 0.5, machDB)); // lit cells (hash-selected, bright at cell center)
+          float machShimmer = 0.85 + 0.15 * noised(vec3(vPos.xy * 3.0, uTime * 0.1)).x;
+          machC = uMachGlowColor * (machTrace + machWindow) * machShimmer * uMachGlowIntensity * machCovE;
         }
         // ★ F30 lightning — transient convective flash blobs; bypasses the quantizer so
         // each pop stays crisp over the posterized cloud deck (card §6 item 6). Strength 0
@@ -3808,7 +3892,7 @@
           auroraC = uAuroraColor * aurora * 0.8;
         }
 
-        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + bioC, vec3(1.0)), 1.0);
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + bioC + machC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -3888,6 +3972,16 @@
       uShatMaskCover:   { value: 1.0 },  // F45 region coverage = intensity axis (1=global shattered) — lab knob (inert behind strength 0)
       uShatSubFreq:     { value: 5.0 },  // F45 sub-fracture lattice frequency — lab knob (inert behind strength 0; walked 3.5→5.0, overwritten per-frame from state)
       uShatSubAmt:      { value: 0.7 },  // F45 sub-fracture relief amount — lab knob (inert behind strength 0; walked 0.4→0.7, overwritten per-frame from state)
+      // F47 machine surface (Stage-7 EXOTIC overlay, dual-channel) — uMachCoverage is the master gate (pure lab knob: state.machCoverage when machineEnabled, else 0); all others inert behind coverage 0
+      uMachCoverage:      { value: 0.0 },                                  // F47 master gate (0 ⇒ bare base — combiner early-outs, composite + glow guarded)
+      uMachDistrictScale: { value: 2.2 },                                  // F47 low-freq district grid frequency
+      uMachBlockScale:    { value: 9.0 },                                  // F47 high-freq block grid frequency (scale-hierarchy 2nd tier)
+      uMachSeamWidth:     { value: 0.06 },                                 // F47 grid-line / panel-seam half-width
+      uMachBevel:         { value: 0.5 },                                  // F47 bevel amount fed onto grad (normal channel)
+      uMachMetalColor:    { value: new THREE.Color(0.10, 0.11, 0.13) },    // F47 near-flat dark-metal plate albedo
+      uMachGlowColor:     { value: new THREE.Color(0.45, 0.85, 1.0) },     // F47 circuit-trace / window emissive color (cyan)
+      uMachGlowIntensity: { value: 0.8 },                                  // F47 trace+window glow brightness (emissive-bypass)
+      uMachWindowDensity: { value: 0.5 },                                  // F47 per-cell-hash fraction of lit cells
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -4490,6 +4584,16 @@
       shatMaskCover: 1.0,   // F45 region coverage = INTENSITY axis (lab knob — 1.0=globally shattered; sweep down for masked-local fracture-zone endmember) (STARTING guess)
       shatSubFreq: 5.0,     // F45 sub-fracture lattice frequency (lab knob — multiplier on shatScale, subdivides blocks). WALKED 3.5→5.0: at 3.5 the second scale was nearly invisible at d3 (UAT item 3 under-read, the F44-distinguisher); 5.0 makes the within-block crack lattice clearly readable without dissolving to mush (6.0 = mush)
       shatSubAmt: 0.7,      // F45 sub-fracture relief amount (lab knob — MUST be >0 default or reads as F44 paving, UAT item 3). WALKED 0.4→0.7: 0.4 produced almost no visible second-scale delta; 0.7 reads "violently reassembled" two-scale clearly, 1.0 starts to over-fracture
+      machineEnabled: true, // F47 enable gate — off zeroes uMachCoverage at the writer (combiner early-outs + composite + glow all vanish: byte-identical pre-F47 output)
+      machCoverage: 0.6,    // F47 maturity/coverage driver (pure lab knob — scatter→full grid; default mid: visible build-out without saturation; §5 isolation recipe sets 1.0 for the globe read)
+      machDistrictScale: 2.2, // F47 low-freq district grid frequency (lab knob)
+      machBlockScale: 9.0,  // F47 high-freq block grid frequency (lab knob — ~4× district = readable two-tier hierarchy, greeble principle)
+      machSeamWidth: 0.06,  // F47 grid-line / panel-seam half-width (lab knob — matched to the ~500px posterized-disc seam scale, the F45 shatBorderWidth precedent)
+      machBevel: 0.9,       // F47 panel-bevel amount fed onto grad (lab knob — normal-channel driver; UAT item 5 is the live gate). Walked 0.5→0.9 at live-verify: day-side seam lighting under-read at 0.5 against the dark metal.
+      machMetalColor: [0.22, 0.24, 0.28], // F47 dark-metal plate albedo (lab knob). Walked [0.10,0.11,0.13]→[0.22,0.24,0.28] at live-verify: near-black metal made the day side an unlit ball; brighter steel lets sun-catching seams + dither read (UAT item 5) without washing the night-side glow.
+      machGlowColor: [0.45, 0.85, 1.0],   // F47 circuit-trace / window emissive color (lab knob — cyan; amber/green also valid per production palette)
+      machGlowIntensity: 0.8, // F47 trace+window glow brightness (lab knob — emissive-bypass)
+      machWindowDensity: 0.5, // F47 per-cell-hash fraction of lit cells (lab knob)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -6241,6 +6345,22 @@
     fShat.add(state, 'shatSubAmt', 0, 1, 0.01).name('sub-fracture amt');          // walked default 0.7 — MUST be >0 default (UAT item 3, the F44-distinguisher)
     fShat.add(state, 'shatterEnabled').name('✓ enabled');
 
+    // ▸ Machine surface (F47) — Stage-7 EXOTIC dual-channel overlay (engineered crust composited
+    // over the full natural base). Lives in fExoticGroup (the Stage-7 exotic home, next to F45) —
+    // NOT the Envelope folder (F46 went there as pure emissive; F47 has a relief channel + IS the
+    // Stage-7 exotic-overlay slot). machCoverage is the uMachCoverage maturity driver (pure lab knob).
+    const fMachine = fExoticGroup.addFolder('Machine surface (F47)'); fMachine.close();
+    fMachine.add(state, 'machCoverage', 0, 1, 0.01).name('maturity (scatter→grid)');  // the uMachCoverage driver, default 0.6
+    fMachine.add(state, 'machDistrictScale', 0.8, 6, 0.1).name('district scale');
+    fMachine.add(state, 'machBlockScale', 3, 18, 0.5).name('block scale');
+    fMachine.add(state, 'machSeamWidth', 0.01, 0.15, 0.005).name('seam width');
+    fMachine.add(state, 'machBevel', 0, 1.5, 0.01).name('panel bevel');
+    fMachine.add(state, 'machGlowIntensity', 0, 1.5, 0.01).name('trace glow');
+    fMachine.add(state, 'machWindowDensity', 0, 1, 0.01).name('lit-window density');
+    fMachine.addColor(state, 'machMetalColor').name('plate color');
+    fMachine.addColor(state, 'machGlowColor').name('glow color');
+    fMachine.add(state, 'machineEnabled').name('✓ enabled');
+
     // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
     // F36 sunglint).
     const fOpticalGroup = guiRight.addFolder('Surface — Optical'); fOpticalGroup.open();
@@ -6311,6 +6431,7 @@
       daysideThermal: fThermal, nightsideThermal: fThermalNight, magma: fMagma,
       carbon: fCarbon, facets: fFacets, hexTess: fHex, shatter: fShat,
       bioMats: fEnv,
+      machine: fMachine,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
@@ -6734,6 +6855,18 @@
       uniforms.uShatMaskCover.value   = state.shatMaskCover;
       uniforms.uShatSubFreq.value     = state.shatSubFreq;
       uniforms.uShatSubAmt.value      = state.shatSubAmt;
+      // F47 machine surface — machineEnabled gates uMachCoverage→0 (combiner early-outs,
+      // composite + glow guarded on uMachCoverage>0): ONE gate kills the family, byte-identical
+      // pre-F47 output. Sole F47 write site.
+      uniforms.uMachCoverage.value      = state.machineEnabled ? state.machCoverage : 0.0;   // ✓ enable gate
+      uniforms.uMachDistrictScale.value = state.machDistrictScale;
+      uniforms.uMachBlockScale.value    = state.machBlockScale;
+      uniforms.uMachSeamWidth.value     = state.machSeamWidth;
+      uniforms.uMachBevel.value         = state.machBevel;
+      uniforms.uMachGlowIntensity.value = state.machGlowIntensity;
+      uniforms.uMachWindowDensity.value = state.machWindowDensity;
+      uniforms.uMachMetalColor.value.setRGB(state.machMetalColor[0], state.machMetalColor[1], state.machMetalColor[2]);
+      uniforms.uMachGlowColor.value.setRGB(state.machGlowColor[0], state.machGlowColor[1], state.machGlowColor[2]);
       // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
       // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
       // rotation about +y DECREASES longitude, which is EAST in this lab's tangent

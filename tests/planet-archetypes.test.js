@@ -107,6 +107,7 @@ const GLSL_NAME = {
   carbon: 'PROV_CARBON', facets: 'PROV_FACETS', hexTess: 'PROV_HEXTESS',
   shatter: 'PROV_SHATTER',
   bioMats: 'PROV_BIOMATS',
+  machine: 'PROV_MACHINE',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(
