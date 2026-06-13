@@ -105,6 +105,7 @@ const GLSL_NAME = {
   limb: 'PROV_LIMB', terminator: 'PROV_TERM', sunglint: 'PROV_GLINT',
   aurora: 'PROV_AURORA', dustStorm: 'PROV_DUSTSTORM', magma: 'PROV_MAGMA',
   carbon: 'PROV_CARBON', facets: 'PROV_FACETS', hexTess: 'PROV_HEXTESS',
+  shatter: 'PROV_SHATTER',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

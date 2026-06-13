@@ -115,6 +115,15 @@ export const FEATURES = {
   // archetype, no new preset — rides 'Frozen (airless)' per the card §5 base). uHexStrength
   // is a pure ENABLE gate (no driver class), so registration is the enable flag alone.
   hexTess:    { label: 'Hex crust (F44)',       enableKey: 'hexTessEnabled',   archetypes: ['exotic-geometric'] },
+  // F45 shattered / fractured crust — Exotic speculative endmember (P15 crustal tessellation,
+  // CATASTROPHIC-disruption branch): an existing crust shattered into chaotic, mismatched,
+  // tilted blocks (shatter-then-reaccrete; Miranda / Europa Conamara analog). Gets its OWN
+  // archetype 'exotic-shattered' (NOT exotic-geometric) — F43/F44 are ORDERED tilings of a
+  // PRISTINE crust; F45 is the opposite physical story (chaotic disruption), and grouping it
+  // with the ordered tilings would imply a shared carrier + let the lab's solo/archetype tooling
+  // group it with F44 (the "reads like paving stones" failure UAT item 3 guards against).
+  // uShatStrength is a pure ENABLE gate (no driver class), so registration is the enable flag alone.
+  shatter:    { label: 'Shattered crust (F45)', enableKey: 'shatterEnabled',   archetypes: ['exotic-shattered'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -129,6 +138,7 @@ export const ARCHETYPES = {
   'hot-jupiter':          { label: 'Hot Jupiter',            bodies: ['HD 209458 b','WASP-43 b'],     presets: ['Hot Jupiter (locked giant)'] },
   'exotic-carbon':        { label: 'Exotic / carbon',        bodies: ['55 Cnc e','PSR J1719-1438 b'], presets: ['Carbon (high C/O)'] },
   'exotic-geometric':     { label: 'Exotic / geometric',     bodies: ['Pluto bladed terrain','55 Cnc e'], presets: ['Crystal (faceted)'] },
+  'exotic-shattered':     { label: 'Exotic / shattered',     bodies: ['Miranda','Europa Conamara Chaos'], presets: ['Frozen (airless)'] },
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
@@ -187,4 +197,5 @@ export const PROVINCES = {
   carbon:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — mineralogy, not geology: the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
   facets:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — crystallization, not geology: the facet field grows over the WHOLE undisturbed crust (surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like carbon F42)
   hexTess:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal tessellation, not geology: the hex tiling covers the whole uniform crust (cooling/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
+  shatter:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal disruption, not geology: the shattered-block field covers the whole crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)
 };

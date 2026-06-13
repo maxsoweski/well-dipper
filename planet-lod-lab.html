@@ -596,6 +596,28 @@
       uniform float uHexBorderDepth;    // trough carve depth (−) — lab knob
       uniform float uHexBorderWidth;    // smoothstep width of the F2−F1 border band — lab knob
       uniform float uHexDome;           // per-cell domed-center amount (Sputnik convex shading; 0=flat plateau, 1=fully domed) — lab knob
+      // ── F45 shattered / fractured crust (Exotic — card F45) — P15 crustal tessellation
+      // (catastrophic-disruption / shatter-then-reaccrete endmember; Miranda / Europa Conamara
+      // analog): a uniform crust shattered into CHAOTIC, mismatched, tilted blocks. Mechanism =
+      // a GLOBALIZED two-octave generalization of the F9 chaosCombiner — voronoi3d MEGA-BLOCKS
+      // with per-cell hashed flat raft height + per-cell CONSTANT tilt fed DIRECTLY into grad
+      // (the F9 cosmetic-gradient trick — each block lands in its own posterize band), an
+      // F2−F1 border crevasse carved DOWN with graben walls (reuse grabenProfile), and a finer
+      // second-octave SUB-FRACTURE voronoi lattice gated INSIDE blocks (the two-scale read that
+      // sells 'violently reassembled' over F44's uniform paving). ALL relief (height + gradient),
+      // never albedo, so it survives the 6-level Bayer posterize. uShatStrength is a pure ENABLE
+      // gate (no preset, no driver derivation — the writer sets it 1 when shatterEnabled, else 0);
+      // EVERY F45 term keys on it, so one gate kills the family: byte-identical pre-F45 output.
+      // (fc=gl_FragCoord, sh~shadow are TAKEN — all F45 GLSL locals/uniforms use the 'shat'/'uShat' prefix.)
+      uniform float uShatStrength;      // master gate 0..1 (pure enable: 1 when shatterEnabled, else 0; the writer is sole owner)
+      uniform float uShatScale;         // mega-block density (voronoi3d frequency) — lab knob
+      uniform float uShatBlockJitter;   // per-block flat-height + CONSTANT-tilt displacement (the chaos uChaosRaftJitter analog — THE grad driver) — lab knob
+      uniform float uShatBorderDepth;   // F2−F1 crevasse carve-down depth (grabenProfile amplitude) — lab knob
+      uniform float uShatBorderWidth;   // smoothstep width of the F2−F1 border band feeding grabenProfile — lab knob
+      uniform float uShatMaskScale;     // low-freq region-mask frequency (the uChaosMaskScale pattern) — lab knob
+      uniform float uShatMaskCover;     // region coverage 0..1 = the INTENSITY axis (local fracture zone → globally shattered) — lab knob
+      uniform float uShatSubFreq;       // second-octave sub-fracture lattice frequency (multiplier on uShatScale) — lab knob
+      uniform float uShatSubAmt;        // sub-fracture relief amount (0=single-scale blocks, >0=subdivided) — lab knob
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -870,6 +892,7 @@
       const int PROV_CARBON      = 38;  // F42 — neutral (mineralogy, not geology): the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
       const int PROV_FACETS      = 39;  // F43 — neutral (crystallization, not geology): the facet field grows over the WHOLE undisturbed crust (surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like carbon F42)
       const int PROV_HEXTESS     = 40;  // F44 — neutral (crustal tessellation, not geology): the hex field tiles the WHOLE uniform-lithology crust (surface-history/cooling-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
+      const int PROV_SHATTER     = 41;  // F45 — neutral (crustal disruption, not geology): the shatter tiles the WHOLE crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -928,6 +951,7 @@
         else if (fid == PROV_CARBON)     { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_FACETS)     { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_HEXTESS)    { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_SHATTER)    { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2537,6 +2561,58 @@
         grad += amp * hxInterior * (0.9 * hxTilt - 2.0 * (1.0 - hxFF.x) * hxDome * hxGrad);
       }
 
+      // ── F45 shattered / fractured crust (Stage-C step 3, Relief — card F45 §6.5 step 5) ──
+      // P15 catastrophic-disruption endmember: a uniform crust shattered into chaotic, mismatched,
+      // tilted blocks (Miranda / Europa Conamara analog). A GLOBALIZED two-octave generalization of
+      // chaosCombiner (:2372): the same voronoi3d mega-cells with per-cell hashed flat raft height +
+      // per-cell CONSTANT tilt written DIRECTLY into grad (the F9 cosmetic-gradient — exact flat-plate
+      // normals so each block lands in its own posterize band, UAT item 1), but PROMOTED from a masked
+      // LOCAL patch (chaos gates on uCryoActivity) to a GLOBAL field whose region mask defaults to
+      // cover≈1 (uShatMaskCover sweeps the intensity axis — local fracture zone → globally shattered,
+      // UAT item 5). Adds (1) an F2−F1 border CREVASSE carved DOWN with graben walls (reuse
+      // grabenProfile :1950) so inter-block fractures read as shadowed cliffs (UAT item 2), and (2) a
+      // finer second-octave SUB-FRACTURE voronoi lattice GATED inside blocks (the two-scale read that
+      // sells 'violently reassembled' over F44's uniform paving, UAT item 3). ALL relief (height +
+      // gradient), ADDITIVE on grad (the F9/F19 contract), so it lives ABOVE the F19 mass-wasting line
+      // beside chaosCombiner/hexCrust. uShatStrength<=0 ⇒ early-out: byte-identical pre-F45 output.
+      // ── MAGNITUDE-MATCH (the F44 fix-cycle): per-block tilt pushes grad at the SAME magnitude as
+      // chaosCombiner's raft tilt (region*interior*tilt, FULL uShatBlockJitter amplitude, no extra
+      // scale, :2387); the border-crevasse grad uses ×uShatBorderDepth×0.9 (DEPTH drives the slope —
+      // F44 v1 used ×width≈0.07, ~12× too weak → invisible). ──
+      void shatterCombiner(vec3 pos, inout float h, inout vec3 grad){
+        if (uShatStrength <= 0.0) return;                       // ≤0 EARLY-OUT (byte-identical pre-F45)
+        // ── low-freq region mask: the uChaosMaskScale pattern, but GLOBAL (cover→1) ──
+        vec4 shatMn = noised(pos * uShatMaskScale + uMacroOffset);
+        float shatRegion = smoothstep(1.0 - uShatMaskCover, 1.0 - uShatMaskCover + 0.3, 0.5 + 0.5 * shatMn.x);
+        shatRegion *= provinceWeight(PROV_SHATTER);
+        float shatAmp = uShatStrength * shatRegion;
+        if (shatAmp <= 0.0) return;
+        // ── OCTAVE 1: voronoi3d MEGA-BLOCKS — per-cell flat height + per-cell CONSTANT tilt ──
+        vec3 shatId, shatGrad;
+        vec3 shatQ = pos * uShatScale + uMacroOffset + vec3(7.3, 24.1, -15.6);   // decorrelate seed
+        vec2 shatFF = voronoi3d(shatQ, uVoroCells, shatId, shatGrad);
+        vec3  shatRh   = hash33(shatId);                                          // per-block randoms (height + tilt)
+        float shatInterior = smoothstep(0.0, uShatBorderWidth * 1.5, shatFF.y - shatFF.x);   // 1 inside block, 0 at seam
+        float shatBlockH = (shatRh.x - 0.5) * 2.0 * uShatBlockJitter;            // per-block flat raft height
+        vec3  shatTilt   = (shatRh - 0.5) * 2.0 * uShatBlockJitter;              // per-block CONSTANT tilt — THE grad driver (chaos contract, FULL jitter amplitude, no extra scale)
+        h    += shatAmp * shatInterior * shatBlockH;
+        grad += shatAmp * shatInterior * shatTilt;                              // ★ MAGNITUDE-MATCH chaosCombiner :2387 (region*interior*tilt)
+        // ── BORDER CREVASSE: F2−F1 distance carved DOWN with graben walls (reuse grabenProfile) ──
+        float shatBd = shatFF.y - shatFF.x;                                     // 0 at seam → grows inward
+        vec2  shatGp = grabenProfile(shatBd, uShatBorderWidth, 0.2);            // depth∈[−1,0], .y = wall slope (flat-floor trench)
+        h    += shatAmp * uShatBorderDepth * shatGp.x;                          // carve DOWN (shatGp.x ≤ 0)
+        grad += shatAmp * uShatBorderDepth * 0.9 * shatGp.y * shatGrad;         // ★ DEPTH×0.9 drives slope (F44 lesson; shatGrad=∂F1/∂p=cell-edge dir)
+        // ── OCTAVE 2: finer SUB-FRACTURE lattice within blocks (sells 'reassembled', not 'paved') ──
+        vec3 shatSubId, shatSubGrad;
+        vec2 shatSubFF = voronoi3d(shatQ * uShatSubFreq + vec3(41.2, -3.8, 9.5), uVoroCells, shatSubId, shatSubGrad);
+        float shatSubEdge = 1.0 - smoothstep(0.0, uShatBorderWidth * 0.6, shatSubFF.y - shatSubFF.x);   // 1 at sub-seam
+        h    += shatAmp * shatInterior * uShatSubAmt * (-shatSubEdge) * 0.5;    // shallow sub-grooves inside blocks
+        grad += shatAmp * shatInterior * uShatSubAmt * 0.9 * shatSubEdge * shatSubGrad;   // ★ sub-seam slope into grad (0.9 scale)
+        // (Sub-octave GATED by shatInterior so sub-fractures live INSIDE blocks, not across the
+        //  mega-borders — preserves the two-scale read. A 2nd voronoi octave is the cheaper faithful
+        //  default and matches the SPH/Voronoi fragmentation physics in §4.)
+      }
+
       // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief — relief doc §F10.a) ──
       // The signature icy-moon look, gated by the SHARED uCryoActivity. TWO mechanisms:
       // (1) DOUBLE RIDGES (Europa) — warped directional lines (like F6 tessera / F8 wrinkles)
@@ -2940,6 +3016,7 @@
           chaosCombiner(vPos, h, grad);            // F9 — ice-shell chaos rafts (reads shared uCryoActivity)
           facetCombiner(vPos, h, grad, fctMask);   // F43 — crystalline facet field (the F9 chaos-raft mechanism at crystal amplitude; ADDITIVE on grad, the F19 contract; exports fctMask for the post-posterize spark)
           hexCrust(vPos, h, grad);                 // F44 — hex-tessellated crust (voronoi3dReg + regularity knob; F2−F1 trough borders + flat/domed interiors; ADDITIVE on grad, F19 contract; gated by uHexStrength × provinceWeight(PROV_HEXTESS))
+          shatterCombiner(vPos, h, grad);          // F45 — shattered/fractured crust (globalized two-octave chaosCombiner: voronoi3d mega-blocks w/ per-cell flat+tilt, F2−F1 graben crevasses, sub-fracture lattice; ADDITIVE on grad, F19 contract; gated by uShatStrength × region × provinceWeight(PROV_SHATTER))
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
@@ -3764,6 +3841,17 @@
       uHexBorderDepth: { value: 0.5 },   // F44 trough carve depth — lab knob (inert behind strength 0)
       uHexBorderWidth: { value: 0.08 },  // F44 border band width — lab knob (inert behind strength 0)
       uHexDome:        { value: 0.4 },   // F44 per-cell domed-center amount — lab knob (inert behind strength 0)
+      // ── F45 shattered crust (pure enable gate — card §6.5; no preset, no driver) ──
+      // uShatStrength 0 ⇒ every F45 GLSL block is skipped entirely (byte-identical pre-F45 render).
+      uShatStrength:    { value: 0.0 },  // F45 master gate (pure enable: 1 when shatterEnabled, else 0)
+      uShatScale:       { value: 1.6 },  // F45 mega-block density — lab knob (voronoi3d frequency; inert behind strength 0)
+      uShatBlockJitter: { value: 0.6 },  // F45 per-block flat+tilt displacement — lab knob (THE grad driver; inert behind strength 0)
+      uShatBorderDepth: { value: 1.0 },  // F45 crevasse carve-down depth — lab knob (inert behind strength 0)
+      uShatBorderWidth: { value: 0.10 }, // F45 F2−F1 border band width — lab knob (inert behind strength 0)
+      uShatMaskScale:   { value: 1.1 },  // F45 region-mask frequency — lab knob (inert behind strength 0)
+      uShatMaskCover:   { value: 1.0 },  // F45 region coverage = intensity axis (1=global shattered) — lab knob (inert behind strength 0)
+      uShatSubFreq:     { value: 5.0 },  // F45 sub-fracture lattice frequency — lab knob (inert behind strength 0; walked 3.5→5.0, overwritten per-frame from state)
+      uShatSubAmt:      { value: 0.7 },  // F45 sub-fracture relief amount — lab knob (inert behind strength 0; walked 0.4→0.7, overwritten per-frame from state)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -4355,6 +4443,15 @@
       hexBorderDepth: 1.1,  // F44 trough carve depth (lab knob) — v2 walk: deeper carve so borders catch light under the analytic-normal relief (now grad rides DEPTH, not width)
       hexBorderWidth: 0.10, // F44 border band width (lab knob) — v2 walk: slightly wider band reads cleaner at mid distance
       hexDome: 0.55,        // F44 per-cell domed-center amount (lab knob — 0=flat plateau, 1=fully domed Sputnik convex shading) — v2 walk: convex cell centers read without per-cell flicker
+      shatterEnabled: true, // F45 enable gate — off zeroes uShatStrength at the per-frame writer (block tilt + border crevasses + sub-fracture all vanish: byte-identical pre-F45 output)
+      shatScale: 1.6,       // F45 mega-block density (lab knob — voronoi3d frequency). 1.6 = big clear blocks that read; fine packs dissolve under posterize at distance (STARTING guess — walk live per §9)
+      shatBlockJitter: 0.6, // F45 per-block flat-height + CONSTANT-tilt displacement (lab knob — the chaos uChaosRaftJitter analog; THE grad driver) (STARTING guess)
+      shatBorderDepth: 1.0, // F45 F2−F1 crevasse carve-down depth (lab knob — grabenProfile amplitude) (STARTING guess)
+      shatBorderWidth: 0.10,// F45 F2−F1 border band width (lab knob — smoothstep width feeding grabenProfile) (STARTING guess)
+      shatMaskScale: 1.1,   // F45 region-mask frequency (lab knob — the uChaosMaskScale pattern) (STARTING guess)
+      shatMaskCover: 1.0,   // F45 region coverage = INTENSITY axis (lab knob — 1.0=globally shattered; sweep down for masked-local fracture-zone endmember) (STARTING guess)
+      shatSubFreq: 5.0,     // F45 sub-fracture lattice frequency (lab knob — multiplier on shatScale, subdivides blocks). WALKED 3.5→5.0: at 3.5 the second scale was nearly invisible at d3 (UAT item 3 under-read, the F44-distinguisher); 5.0 makes the within-block crack lattice clearly readable without dissolving to mush (6.0 = mush)
+      shatSubAmt: 0.7,      // F45 sub-fracture relief amount (lab knob — MUST be >0 default or reads as F44 paving, UAT item 3). WALKED 0.4→0.7: 0.4 produced almost no visible second-scale delta; 0.7 reads "violently reassembled" two-scale clearly, 1.0 starts to over-fracture
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -6081,6 +6178,23 @@
     fHex.add(state, 'hexBorderWidth', 0.02, 0.2, 0.005).name('border width');
     fHex.add(state, 'hexDome', 0, 1, 0.01).name('dome amount');
     fHex.add(state, 'hexTessEnabled').name('✓ enabled');
+    // ▸ Shattered crust (F45) — P15 catastrophic-disruption endmember: a uniform crust
+    // shattered into chaotic, mismatched, tilted blocks (Miranda / Europa Conamara). A
+    // globalized two-octave generalization of the F9 chaosCombiner — voronoi3d mega-blocks
+    // with per-cell flat height + CONSTANT tilt into grad, F2−F1 graben crevasses carved DOWN,
+    // and a finer sub-fracture voronoi lattice inside blocks (the two-scale 'reassembled' read).
+    // Pure enable gate (no preset, no driver) — rides whatever preset is loaded ('Frozen
+    // (airless)' is the §5 test base). NO 🎲 — the shatter domain is seeded off uMacroOffset.
+    const fShat = fExoticGroup.addFolder('Shattered crust (F45)'); fShat.close();
+    fShat.add(state, 'shatScale', 0.8, 8, 0.1).name('block density');             // walkable mid-low (default 1.6 sits ~mid)
+    fShat.add(state, 'shatBlockJitter', 0, 1.2, 0.01).name('block tilt/raise');   // the grad driver (default 0.6 mid)
+    fShat.add(state, 'shatBorderDepth', 0, 2.0, 0.01).name('crevasse depth');     // default 1.0 mid
+    fShat.add(state, 'shatBorderWidth', 0.04, 0.2, 0.005).name('crevasse width');
+    fShat.add(state, 'shatMaskCover', 0, 1, 0.01).name('coverage (zone→global)'); // intensity axis (default 1.0 = global)
+    fShat.add(state, 'shatMaskScale', 0.4, 3, 0.1).name('zone scale');
+    fShat.add(state, 'shatSubFreq', 1.5, 7, 0.1).name('sub-fracture freq');       // walked default 5.0 (max widened 6→7 so the good value sits mid-high, not at the edge — F44 range lesson)
+    fShat.add(state, 'shatSubAmt', 0, 1, 0.01).name('sub-fracture amt');          // walked default 0.7 — MUST be >0 default (UAT item 3, the F44-distinguisher)
+    fShat.add(state, 'shatterEnabled').name('✓ enabled');
 
     // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
     // F36 sunglint).
@@ -6150,7 +6264,7 @@
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds, dustStorm: fDustStorm,
       daysideThermal: fThermal, nightsideThermal: fThermalNight, magma: fMagma,
-      carbon: fCarbon, facets: fFacets, hexTess: fHex,
+      carbon: fCarbon, facets: fFacets, hexTess: fHex, shatter: fShat,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
@@ -6556,6 +6670,18 @@
       uniforms.uHexBorderDepth.value = state.hexBorderDepth;
       uniforms.uHexBorderWidth.value = state.hexBorderWidth;
       uniforms.uHexDome.value        = state.hexDome;
+      // F45 shattered crust — shatterEnabled gates the master strength→0 (block tilt, border
+      // crevasses, sub-fracture ALL key on uShatStrength>0, so ONE gate kills the family:
+      // byte-identical pre-F45 output). No driver derivation (no preset). Sole F45 write site.
+      uniforms.uShatStrength.value    = state.shatterEnabled ? 1.0 : 0.0;   // ✓ enable gate
+      uniforms.uShatScale.value       = state.shatScale;
+      uniforms.uShatBlockJitter.value = state.shatBlockJitter;
+      uniforms.uShatBorderDepth.value = state.shatBorderDepth;
+      uniforms.uShatBorderWidth.value = state.shatBorderWidth;
+      uniforms.uShatMaskScale.value   = state.shatMaskScale;
+      uniforms.uShatMaskCover.value   = state.shatMaskCover;
+      uniforms.uShatSubFreq.value     = state.shatSubFreq;
+      uniforms.uShatSubAmt.value      = state.shatSubAmt;
       // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
       // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
       // rotation about +y DECREASES longitude, which is EAST in this lab's tangent
