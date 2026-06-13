@@ -45,6 +45,7 @@
   <script type="module">
     import * as THREE from 'three';
     import { generateRingPhysics } from './src/generation/PhysicsEngine.js';   // F51 rings — CPU-side physics chain
+    import { bakeRingCloud, makeRingCloudPoints } from './ring-particle-cloud.js';   // F51 Task 5 — near-tier LOD particle cloud
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera  (house pattern — planet-lod-lab.html L116-126)
@@ -341,6 +342,30 @@
     scene.add(ring);
 
     // ─────────────────────────────────────────────────────────────────────────
+    // F51 Task 5 — NEAR-TIER particle cloud, layered on top of the impostor.
+    // Baked from the SAME ringPhysics the impostor draws → it inherits the banded
+    // ringlet/gap structure, so the cloud↔impostor seam stays invisible. Per-particle
+    // the shader sizes + fades by camera distance (full near dResolve, zero beyond
+    // dCull) → on approach the impostor resolves into a field of glinting particles;
+    // far away the cloud fades to nothing, leaving the flat impostor alone (no pop).
+    //
+    // ORIENTATION: the baker writes x = r·cos θ, z = r·sin θ, y = thickness → particles
+    // are ALREADY in the XZ equatorial plane, the SAME plane the impostor lies in
+    // (RingGeometry .rotateX(π/2)). So the cloud is added with NO rotation and NO extra
+    // transform — both centered on the planet at the origin, same frame.
+    // `let` (not const) so the rebake helper can dispose + swap them live.
+    // ─────────────────────────────────────────────────────────────────────────
+    let ringBaked = bakeRingCloud(ringPhysics, {
+      count: 80000, R: R, thickness: 0.02,
+    });
+    let ringCloud = makeRingCloudPoints(ringBaked, {
+      pointScale: 300, dResolve: 4.0, dCull: 14.0, planetRadius: R,
+      lightDir: [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z],
+    });
+    ringCloud.visible = true;
+    scene.add(ringCloud);   // centered on planet (origin), same XZ plane as the impostor — NOT rotated
+
+    // ─────────────────────────────────────────────────────────────────────────
     // State + controls (plain DOM sliders)
     // ─────────────────────────────────────────────────────────────────────────
     const state = {
@@ -434,7 +459,14 @@
     // ─────────────────────────────────────────────────────────────────────────
     // Render loop — Pass 1: scene → low-res buffer; Pass 2: nearest blit → screen
     // ─────────────────────────────────────────────────────────────────────────
+    let lastT = performance.now();
     function frame() {
+      const now = performance.now();
+      // Clamp dt so a long stall (tab backgrounded, first frame) doesn't spike the
+      // twinkle phase. 0.1s ceiling ≈ 10fps floor — plenty for a per-frame phase advance.
+      const dt = Math.min((now - lastT) / 1000, 0.1);
+      lastT = now;
+
       updateCamera();
       updateHud();
 
@@ -442,6 +474,11 @@
       // The harness ring is un-rotated (planet at origin, no quaternion), so object
       // space == world space → WORLD_LIGHT (already normalized) writes directly.
       ringUniforms.lightDir.value.copy(WORLD_LIGHT);
+
+      // F51 Task 5 — advance the cloud's twinkle phase. References the module-scope
+      // `ringCloud` (closure binding, NOT a captured local), so after rebake() swaps
+      // in a new Points the write lands on the CURRENT cloud's material.
+      ringCloud.material.uniforms.uTime.value += dt;
 
       renderer.setRenderTarget(sceneTarget);
       renderer.render(scene, camera);
@@ -468,6 +505,47 @@
 
     // Expose for chrome-devtools evaluate_script (drive state, read a frame)
     window._rlab = { state, camera, scene, THREE, planet, starfield, rebuildTarget, ring, ringUniforms, ringPhysics };
+
+    // F51 Task 5 — live cloud tuning controls (no page reload needed). Getters return
+    // the CURRENT cloud/baked even after a rebake swap. The coordinator drives these
+    // from chrome-devtools on :9223 for the Step 4/5 visual gate + tuning sweep.
+    window._rlab.ring = {
+      get cloud() { return ringCloud; },
+      get impostor() { return ring; },
+      get baked() { return ringBaked; },
+      setLOD(dResolve, dCull) {
+        ringCloud.material.uniforms.uDResolve.value = dResolve;
+        ringCloud.material.uniforms.uDCull.value = dCull;
+      },
+      setPointScale(s) { ringCloud.material.uniforms.uPointScale.value = s; },
+      setSizeClamp(s) { ringCloud.material.uniforms.uSizeClamp.value = s; },
+      setCloudVisible(v) { ringCloud.visible = !!v; },
+      setImpostorVisible(v) { ring.visible = !!v; },
+      // EXTRA: re-bake the cloud with new count/thickness/sizeMin/sizeMax and swap it in
+      // live. Lets the coordinator sweep particle DENSITY/THICKNESS/SIZE for the Step 5
+      // decision gate (does ~80k STATIC points resolve as individuals at d≈4?) without a
+      // reload. Carries the live LOD/size uniform values across the swap. Returns new count.
+      rebake(opts = {}) {
+        const merged = Object.assign({ count: ringBaked.count, R: R, thickness: 0.02 }, opts);
+        const oldLOD = {
+          dResolve: ringCloud.material.uniforms.uDResolve.value,
+          dCull: ringCloud.material.uniforms.uDCull.value,
+          pointScale: ringCloud.material.uniforms.uPointScale.value,
+          sizeClamp: ringCloud.material.uniforms.uSizeClamp.value,
+        };
+        scene.remove(ringCloud);
+        ringCloud.geometry.dispose();
+        ringCloud.material.dispose();
+        ringBaked = bakeRingCloud(ringPhysics, merged);
+        ringCloud = makeRingCloudPoints(ringBaked, {
+          pointScale: oldLOD.pointScale, dResolve: oldLOD.dResolve, dCull: oldLOD.dCull,
+          planetRadius: R, lightDir: [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z], sizeClamp: oldLOD.sizeClamp,
+        });
+        ringCloud.visible = true;
+        scene.add(ringCloud);
+        return ringBaked.count;
+      },
+    };
   </script>
 </body>
 </html>
