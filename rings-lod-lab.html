@@ -355,12 +355,16 @@
     // transform — both centered on the planet at the origin, same frame.
     // `let` (not const) so the rebake helper can dispose + swap them live.
     // ─────────────────────────────────────────────────────────────────────────
-    // Tuned at the Task-5 visual gate (:9223): thickness is the richness lever —
-    // 0.02 read as a thin sparse sheet; ~0.14 gives the field real 3D depth/parallax
-    // on a close flyby. count is secondary (80k→250k barely moved it); 160k is ample.
-    // dResolve/dCull/pointScale/sizeClamp left at plan defaults for Max to fine-tune in UAT.
+    // Tuned at the Task-5 visual gate (:9223). thickness MUST stay physically thin
+    // relative to the planet (real rings are razor-thin) — 0.01 → yHalf ≈ 4% of the
+    // planet radius, which reads as a real thin ring edge-on. Since thickness can't be
+    // used to buy richness, in-plane density (count) carries it: 400k makes the band
+    // read dense from flyby/ansa angles; 800k is diminishing returns. The near ring
+    // FACE stays sparse up close — that is physically correct for a thin ring (the
+    // dense-field-foreground option = recycled-proximity-patch, deferred pending Max).
+    // dResolve/dCull/pointScale/sizeClamp left at plan defaults for UAT fine-tuning.
     let ringBaked = bakeRingCloud(ringPhysics, {
-      count: 160000, R: R, thickness: 0.14,
+      count: 400000, R: R, thickness: 0.01,
     });
     let ringCloud = makeRingCloudPoints(ringBaked, {
       pointScale: 300, dResolve: 4.0, dCull: 14.0, planetRadius: R,
@@ -530,7 +534,7 @@
       // decision gate (does ~80k STATIC points resolve as individuals at d≈4?) without a
       // reload. Carries the live LOD/size uniform values across the swap. Returns new count.
       rebake(opts = {}) {
-        const merged = Object.assign({ count: ringBaked.count, R: R, thickness: 0.14 }, opts);
+        const merged = Object.assign({ count: ringBaked.count, R: R, thickness: 0.01 }, opts);
         const oldLOD = {
           dResolve: ringCloud.material.uniforms.uDResolve.value,
           dCull: ringCloud.material.uniforms.uDCull.value,
