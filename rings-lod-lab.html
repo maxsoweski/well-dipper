@@ -355,8 +355,12 @@
     // transform — both centered on the planet at the origin, same frame.
     // `let` (not const) so the rebake helper can dispose + swap them live.
     // ─────────────────────────────────────────────────────────────────────────
+    // Tuned at the Task-5 visual gate (:9223): thickness is the richness lever —
+    // 0.02 read as a thin sparse sheet; ~0.14 gives the field real 3D depth/parallax
+    // on a close flyby. count is secondary (80k→250k barely moved it); 160k is ample.
+    // dResolve/dCull/pointScale/sizeClamp left at plan defaults for Max to fine-tune in UAT.
     let ringBaked = bakeRingCloud(ringPhysics, {
-      count: 80000, R: R, thickness: 0.02,
+      count: 160000, R: R, thickness: 0.14,
     });
     let ringCloud = makeRingCloudPoints(ringBaked, {
       pointScale: 300, dResolve: 4.0, dCull: 14.0, planetRadius: R,
@@ -526,7 +530,7 @@
       // decision gate (does ~80k STATIC points resolve as individuals at d≈4?) without a
       // reload. Carries the live LOD/size uniform values across the swap. Returns new count.
       rebake(opts = {}) {
-        const merged = Object.assign({ count: ringBaked.count, R: R, thickness: 0.02 }, opts);
+        const merged = Object.assign({ count: ringBaked.count, R: R, thickness: 0.14 }, opts);
         const oldLOD = {
           dResolve: ringCloud.material.uniforms.uDResolve.value,
           dCull: ringCloud.material.uniforms.uDCull.value,
