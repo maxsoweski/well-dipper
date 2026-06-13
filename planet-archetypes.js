@@ -124,6 +124,7 @@ export const FEATURES = {
   // group it with F44 (the "reads like paving stones" failure UAT item 3 guards against).
   // uShatStrength is a pure ENABLE gate (no driver class), so registration is the enable flag alone.
   shatter:    { label: 'Shattered crust (F45)', enableKey: 'shatterEnabled',   archetypes: ['exotic-shattered'] },
+  bioMats:    { label: 'Bioluminescent mats (F46)', enableKey: 'bioMatsEnabled', archetypes: ['tectonic-terrestrial'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -198,4 +199,5 @@ export const PROVINCES = {
   facets:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — crystallization, not geology: the facet field grows over the WHOLE undisturbed crust (surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like carbon F42)
   hexTess:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal tessellation, not geology: the hex tiling covers the whole uniform crust (cooling/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
   shatter:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal disruption, not geology: the shattered-block field covers the whole crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)
+  bioMats:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — biosphere coverage, not geology: the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)
 };

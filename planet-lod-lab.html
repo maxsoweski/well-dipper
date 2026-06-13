@@ -183,6 +183,11 @@
       uniform float uAuroraRingLat;   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2 — stronger dynamo hugs the pole)
       uniform float uAuroraRingWidth; // F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored CPU-side AND in-shader)
       uniform vec3  uMagAxis;         // F37 magnetic dipole axis, unit (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed)
+      // F46 bioluminescent mats
+      uniform float uBioCoverage;
+      uniform vec3  uBioColor;
+      uniform float uBioScale;
+      uniform float uBioIntensity;
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
       uniform vec3  uLightDir;      // object-space light dir
       uniform vec3  uBaseColor;
@@ -893,6 +898,7 @@
       const int PROV_FACETS      = 39;  // F43 — neutral (crystallization, not geology): the facet field grows over the WHOLE undisturbed crust (surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like carbon F42)
       const int PROV_HEXTESS     = 40;  // F44 — neutral (crustal tessellation, not geology): the hex field tiles the WHOLE uniform-lithology crust (surface-history/cooling-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
       const int PROV_SHATTER     = 41;  // F45 — neutral (crustal disruption, not geology): the shatter tiles the WHOLE crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)
+      const int PROV_BIOMATS     = 42;  // F46 — neutral (biosphere coverage, not geology): the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -952,6 +958,7 @@
         else if (fid == PROV_FACETS)     { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_HEXTESS)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_SHATTER)    { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_BIOMATS)    { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -3514,6 +3521,31 @@
         // (card item 8). mgSeaMask is 0.0 unless the F41 angle gate ran; x*1.0
         // is bit-exact, so the pre-F41 contract holds everywhere else.
         emissive += lavaCrackEmissive(vPos) * (1.0 - mgSeaMask);
+        // ★ F46 bioluminescent / fungal mats — emissive OVERLAY (NOT relief): a night-side biosphere
+        // glow added AFTER the quantizer (Option-C bypass survivor, like lava cracks above / aurora).
+        // Coverage = thresholded domain-warped FBM (sparse patches → planet-spanning mat as uBioCoverage→1);
+        // reticulated veining = thresholded warped-noise contour (deterministic fake-Turing, NO ping-pong);
+        // gated to the dark hemisphere by nightMask + slow noised() shimmer. uBioCoverage 0 ⇒ bioC = vec3(0).
+        vec3 bioC = vec3(0.0);
+        if (uBioCoverage > 0.0) {
+          // domain warp (lava-crack idiom) so colonies meander, not a noise grid
+          vec4 bw1 = noised(vPos * (uBioScale*0.6) + uMacroOffset + vec3(5.2, 18.7, -9.3));
+          vec4 bw2 = noised(vPos * (uBioScale*0.6) + uMacroOffset + vec3(-12.1, 3.4, 7.8));
+          vec3 bwPos = vPos + 0.35 * vec3(bw1.x, bw2.x, bw1.y);
+          // coverage FBM → patch mask; raising uBioCoverage lowers the threshold (patches grow & merge)
+          float bfbm = 0.5 + 0.5 * noised(bwPos * uBioScale + uMacroOffset).x;
+          float thresh = mix(0.72, 0.08, uBioCoverage);                 // high thresh = sparse, low = full mat
+          float bioPatch = smoothstep(thresh, thresh + 0.18, bfbm);     // soft colony patches ('patch' is a GLSL ES 3.00 reserved word)
+          // reticulated veining — thresholded contour of a 2nd warped noise = "fake-Turing" net (deterministic)
+          float vein01 = 0.5 + 0.5 * noised(bwPos * (uBioScale*2.3) + uMacroOffset + vec3(31.0,-4.0,12.0)).x;
+          float veins  = 1.0 - smoothstep(0.0, 0.10, abs(vein01 - 0.5)); // bright on the iso-0.5 contour ridges
+          float mat    = bioPatch * mix(0.55, 1.0, veins);              // veins brighten within colonies
+          // night gate (the aurora nightMask) + slow living shimmer (aurora flicker)
+          float nightMask = 1.0 - smoothstep(-0.1, 0.1, diff);
+          float shimmer   = 0.75 + 0.25 * noised(vec3(bwPos.xy * 1.5, uTime * 0.06)).x;
+          float bio = mat * nightMask * shimmer * uBioIntensity * provinceWeight(PROV_BIOMATS);
+          bioC = uBioColor * clamp(bio, 0.0, 1.0);
+        }
         // ★ F30 lightning — transient convective flash blobs; bypasses the quantizer so
         // each pop stays crisp over the posterized cloud deck (card §6 item 6). Strength 0
         // (enable off, or any airless preset) skips the call: byte-identical F29 output —
@@ -3776,7 +3808,7 @@
           auroraC = uAuroraColor * aurora * 0.8;
         }
 
-        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC, vec3(1.0)), 1.0);
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + bioC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -3814,6 +3846,10 @@
       uAuroraRingLat:  { value: 0.7 },   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2)
       uAuroraRingWidth:{ value: 0.12 },  // F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored)
       uMagAxis:        { value: new THREE.Vector3(0, 1, 0) },      // F37 dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed)
+      uBioCoverage:  { value: 0.0 },                               // F46 inert behind uBioCoverage 0
+      uBioColor:     { value: new THREE.Color(0.30, 0.95, 0.55) }, // F46 inert behind uBioCoverage 0
+      uBioScale:     { value: 2.4 },                               // F46 inert behind uBioCoverage 0
+      uBioIntensity: { value: 0.7 },                               // F46 inert behind uBioCoverage 0
       // ── F40 dust storms (driver-true aeolian storm veil — card §6.5 steps 3-6) ──
       uDustActivity:   { value: 0.0 },   // F40 storm activity (driven: retained AND pressure <= 0.5 AND dry AND not gas -> 0.55 Mars-like carrier, else 0)
       uDustColor:      { value: new THREE.Color(0.78, 0.55, 0.32) },  // F40 lofted-dust tint (driven: preset atmosphere butterscotch, fallback warm ochre)
@@ -4421,6 +4457,8 @@
       auroraRingWidth: 0.12,// F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored 0.07)
       auroraColor: [0.3, 0.9, 0.5], // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal; fallback green)
       magAxis: [0, 1, 0],   // F37 magnetic dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed — a per-planet seed property, no GUI control)
+      bioMatsEnabled: true,  // F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)
+      bioCoverage: 0.45,  bioColor: [0.30, 0.95, 0.55],  bioScale: 2.4,  bioIntensity: 0.7,
       dustStormEnabled: true, // F40 enable gate — off zeroes uDustActivity at the per-frame writer (veil + front + tracks all vanish: byte-identical pre-F40 output)
       dustActivity: 0.0,    // F40 storm activity 0..1 (driven: 0.55 on the Mars-like thin-dry carrier, 0 on every wet/thick/airless/gas preset; the slider walks the whole P23 axis — tracks ~0.1-0.4, regional fronts mid, planet-encircling at 1)
       dustColor: [0.78, 0.55, 0.32], // F40 lofted-dust tint (driven: preset atmosphere butterscotch; fallback warm ochre)
@@ -4728,6 +4766,13 @@
     // no duplicate GUI (same migration as F34's).
     fEnv.add(state, 'provinceWeight', 0, 1, 0.01).name('province influence');
     fEnv.add(state, 'emissiveBypass').name('emissive bypass quantizer');
+    // ▸ Bioluminescent mats (F46) — emissive-bypass overlay (night-side biosphere glow). NO 🎲
+    // (coverage domain is seeded off uMacroOffset; the Seeds folder rerolls it).
+    fEnv.add(state, 'bioCoverage', 0, 1, 0.01).name('bio coverage (patch→mat)');  // intensity axis, default 0.45 mid
+    fEnv.add(state, 'bioScale', 0.8, 6, 0.1).name('bio patch density');           // default 2.4 mid
+    fEnv.add(state, 'bioIntensity', 0, 1.5, 0.01).name('bio glow');               // default 0.7 mid
+    fEnv.addColor(state, 'bioColor').name('bio color');
+    fEnv.add(state, 'bioMatsEnabled').name('✓ bio mats enabled');
 
     // ▸ Drivers (open) — "types are driver-bundle PRESETS, not shader branches" (spec §2.D).
     // A preset is a physics bundle; deriveUniforms() maps it to semantic uniforms with NO
@@ -6265,6 +6310,7 @@
       lightning: fLightning, clouds: fClouds, dustStorm: fDustStorm,
       daysideThermal: fThermal, nightsideThermal: fThermalNight, magma: fMagma,
       carbon: fCarbon, facets: fFacets, hexTess: fHex, shatter: fShat,
+      bioMats: fEnv,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
@@ -6472,6 +6518,12 @@
       uniforms.uAuroraRingWidth.value = Math.max(0.02, state.auroraRingWidth);
       uniforms.uAuroraColor.value.setRGB(state.auroraColor[0], state.auroraColor[1], state.auroraColor[2]);
       uniforms.uMagAxis.value.set(state.magAxis[0], state.magAxis[1], state.magAxis[2]).normalize();
+      // F46 bioluminescent mats — bioMatsEnabled gates coverage→0 (the bio block is guarded on
+      // uBioCoverage > 0, so one gate skips the whole bypass term: bioC = vec3(0) exactly). Sole F46 write site.
+      uniforms.uBioCoverage.value  = state.bioMatsEnabled ? state.bioCoverage : 0.0;   // ✓ enable gate
+      uniforms.uBioScale.value     = state.bioScale;
+      uniforms.uBioIntensity.value = state.bioIntensity;
+      uniforms.uBioColor.value.setRGB(state.bioColor[0], state.bioColor[1], state.bioColor[2]);
       uniforms.uProvinceWeight.value = state.provinceWeight;
       uniforms.uSeaLevel.value = state.lakesEnabled ? state.seaLevel : -1.0;   // ✓ enable gate (preserves slider value)
       uniforms.uDeltaDensity.value = state.deltasEnabled ? state.deltaDensity : 0.0;   // ✓ enable gate
