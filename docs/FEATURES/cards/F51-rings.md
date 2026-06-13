@@ -203,4 +203,14 @@ production names that are already proven safe (`uRingletInnerR`, `uGapCenters`, 
   `F51-nearplane-shadow.png`, `F51-shadow-bite.png`, `F51-shadow-topdown.png`,
   `F51-edgeon-grazing.png`, `F51-tuned-off.png`, `F51-tuned-on.png`.
 
-- **Status: → VERIFIED_PENDING_MAX `093523c`**
+- **Max's UAT feedback (2026-06-13): REWORK NEEDED — v1 rejected.** The flat-annulus
+  shader still reads as "pretty much the old rings" (the production sine-fake look it
+  replaced). Max wants rings that **look like genuine 3D objects that interact with the
+  scene dynamically and have their own LOD** — close enough and the ring should **resolve
+  into individual particles** (instanced geometry / particle chunks near; impostor/shader
+  annulus far; smooth LOD transition between). This is an ARCHITECTURAL rethink, not a
+  tuning pass — the current single-RingGeometry + fragment-shader approach is the wrong
+  substrate for it. See the handoff for the rework brief. The v1 build + envelope plumbing
+  (dither/posterize/shadow) is still useful reference, not throwaway.
+
+- **Status: v1 built (`093523c`, VERIFIED then REJECTED at Max UAT 2026-06-13) → REOPENED for 3D-LOD-particle rework. Status: reopen.**

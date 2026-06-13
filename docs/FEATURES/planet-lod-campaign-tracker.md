@@ -19,8 +19,8 @@ during phases) | ▶️ = current
 | **Stage-D provinces** (inserted before 4a per Max 2026-06-10) | spike → scope → build → verify; all 15 built features province-aware | ✅ built 2026-06-10 — spike `05cde11`, build `3d04110`, VERIFIED_PENDING_MAX; workstream `docs/WORKSTREAMS/stage-d-provinces-2026-06-10/`; Phase-4a+ combiners now author against the LIVE `provinceWeight(PROV_<FEATURE>)` accessor + add affinity rows to `PROVINCES` (planet-archetypes.js) AND the GLSL chain |
 | 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | ✅ 2026-06-10 — all 8 verdicted (F14/F16 🟢, F12/F13/F15/F19/F20/F21 🟡 taste-call); next ▶️ 4b |
 | 4b Build atmosphere (10) | F24-F33 verdicted | ✅ 2026-06-10 — all 10 🟡 taste-call VERIFIED_PENDING_MAX; new presets: 3 gas giants + Venus + Sub-Neptune + Eyeball + Hot Jupiter; new archetype hot-jupiter |
-| 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | ✅ 2026-06-13 — all 15 cards verdicted (F44/F46 🟢, other 13 🟡 taste-call VERIFIED_PENDING_MAX); F51 rings built in-lab as a 2nd annulus mesh (`093523c`); F38/F39 → DROP recommendation parked-for-Max; next ▶️ 5 |
-| 5 Integration | INTEGRATION.md I-1…I-15 verdicted | ▶️ next |
+| 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | 🔁 REOPENED 2026-06-13 by Max. Formal /goal was met (13× 🟡 + F44/F46 🟢 verdicts; F51 v1 `093523c`; F38/F39 rec recorded) — BUT Max overrode two outcomes: **F51 rings need REWORK** (v1 flat-annulus shader rejected → wants 3D LOD particle rings) and **F38/F39 → BUILD both** (not drop). Those 3 items are the remaining 4c work. Other 12 cards stay VERIFIED_PENDING_MAX. |
+| 5 Integration | INTEGRATION.md I-1…I-15 verdicted | pending (after 4c rework closes) |
 | 6 Profiles | PROFILES.md 18 rows verdicted | pending |
 | 7 Max review lap | galleries walked, parked items decided | pending |
 
@@ -75,21 +75,25 @@ during phases) | ▶️ = current
 | F47 | [F47-machine-surface](cards/F47-machine-surface.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F48 | [F48-city-lights](cards/F48-city-lights.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F49 | [F49-ecumenopolis](cards/F49-ecumenopolis.md) | Overlay | ✅ | 🟡 taste-call | 4c |
-| F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | ✅ | 🟡 taste-call | 4c |
+| F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | 🔁 v1 rejected | REWORK → 3D LOD particle rings (Max 6-13) | 4c |
 | — | [FOUNDATION](cards/FOUNDATION.md) (F50/F52/F53 substrate) | Foundation | ✅ | 🟢 | 2 |
 | — | [INTEGRATION](cards/INTEGRATION.md) | Crosscutting | — | — | 5 |
 | — | [PROFILES](cards/PROFILES.md) | Crosscutting | — | — | 6 |
-| F38/F39 | airglow / cloud-optics — keep/stylize/drop call, no dossier | Optical | **DROP both (rec) — parked-for-Max** ↓ | 4c |
+| F38/F39 | airglow / cloud-optics — no dossier yet | Optical | **KEEP — BUILD both (Max 6-13, overrode drop rec)** ↓ | 4c |
 
-## F38 / F39 keep-stylize-drop recommendation — PARKED FOR MAX (taste call)
+## F38 / F39 — MAX DECIDED: BUILD BOTH (2026-06-13, overrode the DROP rec)
 
-These two `[subtle]` optical features have no dossier card. Phase-4c requires a
-recorded keep/stylize/drop recommendation; per `feedback_decision-needed-threshold`
-this is a TASTE decision Max owns — the recommendation below is reasoning, not a
-build. Neither is implemented anywhere (confirmed: no airglow/glory/rainbow planet
-identifier in `planet-lod-lab.html` or `src/`). Criteria used: (1) fit with the
+**Decision:** Max wants both F38 airglow and F39 cloud-optics built. The drop
+recommendation below is RETAINED as the design challenge, not a verdict — it names
+exactly what the build must overcome (envelope-crush, redundancy, missing data). Both
+need a dossier card authored first (none exists) then the §13.4 heavy loop. Neither is
+implemented anywhere yet (confirmed: no airglow/glory/rainbow planet identifier in
+`planet-lod-lab.html` or `src/`).
+
+Original criteria used for the (now-overridden) recommendation: (1) fit with the
 6-level posterize + Bayer-dither retro envelope, (2) redundancy with already-built
-features, (3) availability of driver data the pipeline models, (4) build cost.
+features, (3) availability of driver data the pipeline models, (4) build cost. **These
+are now the constraints the build must solve, not reasons to skip it:**
 
 - **F38 — Airglow / nightglow limb band → RECOMMEND DROP as a standalone feature.**
   - *Envelope fit:* the source itself flags it `[subtle]` — "a faint diffuse night-limb
@@ -116,9 +120,14 @@ features, (3) availability of driver data the pipeline models, (4) build cost.
     ever wants a nod, a "Venus glory" reads better as a tiny bright forward-scatter hotspot
     on the F31 cloud deck (a sub-tweak to F31) than as a rainbow renderer.
 
-**Net recommendation:** DROP both as standalone features; the only keep-worthy fragments
-fold cheaply into F33/F34 (airglow tint) and F31 (glory hotspot) if Max wants a token
-presence. **Max decides** — until then both are parked, not dropped.
+**~~Net recommendation: DROP both~~ — OVERRIDDEN. Max wants both built (2026-06-13).**
+The fold-in hints stay useful as *cheapest-honest* fallbacks if the standalone build
+can't beat the envelope: F38 airglow → night-limb tint on F33/F34; F39 glory → bright
+forward-scatter hotspot on the F31 cloud deck. But the directive is BUILD standalone
+first. Design challenge for both: make a `[subtle]` optical effect survive the 6-level
+posterize without crushing — likely means stylizing toward discrete, higher-contrast
+forms (a defined airglow band; a 2-3 banded "rainbow arc" read as deliberate posterized
+colour steps, not a failed smooth gradient) rather than physical literalism.
 
 ## Launch cards — the exact /goal lines Max types
 
