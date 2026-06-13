@@ -1,5 +1,5 @@
 # Feature Card — F51 Rings
-Domain: Crosscutting · Lab status: 🟡 · Build-seq phase: 4c
+Domain: Crosscutting · Lab status: 🟢 v2 VERIFIED_PENDING_MAX (`9bcd71d`) · Build-seq phase: 4c
 
 ## 1. Description (WHAT)
 
@@ -47,7 +47,45 @@ UNBUILT in the lab — recommended recipe once built: (1) register a FEATURES ke
 - [ ] At grazing/edge-on angles, do the radial bands stay stable instead of shimmering into moiré against the 4x4 Bayer grid (the band-limiting behavior)?
 - [ ] Does ring presence/density vary believably across bodies (fresh dense disk vs tenuous old remnant), reading as a property of the world rather than a fixed decal?
 
-## 6.5 Build plan
+## 6.5 Build plan — v2 (3D LOD particle ring) — CURRENT
+
+> Spec: `docs/superpowers/specs/2026-06-13-f51-rings-3d-lod-particle-design.md` ·
+> Plan: `docs/superpowers/plans/2026-06-13-f51-rings-3d-lod-particle.md`
+> Supersedes the v1 build plan below (kept for envelope/shadow/dither reference).
+
+**Why v2:** Max rejected v1 (§7) — a single flat-annulus fragment shader reads as "the old
+rings" up close. v2 makes the ring a **two-tier object with LOD**: the v1 impostor annulus is
+reused as the always-on FAR tier (it looks fine at distance), and a `THREE.Points` particle
+cloud layers on top, sized + faded per-particle by camera distance so detail **emerges** on
+approach and resolves into individual glinting particles. Because the impostor is always
+underneath, there is no pop and no dissolve. Approach B: "emergence, not swap."
+
+**Architecture:**
+- **Pure baker** `bakeRingCloud(physics, opts)` (`ring-particle-cloud.js`, repo root) — samples
+  particles (rejection sampling, area-weighted by r) from the SAME `generateRingPhysics()`
+  ringlet/gap density profile the impostor draws, so the cloud↔impostor seam is invisible.
+  Returns flat typed arrays. Pure + unit-tested (`tests/ring-particle-cloud.test.js`).
+- **Cloud factory** `makeRingCloudPoints(baked, opts)` — a `THREE.Points` with a point-sprite
+  shader adapted from `src/objects/Galaxy.js`, but NormalBlending (not additive), a
+  camera-distance LOD ramp (`smoothstep(dResolve, dCull)`), a per-particle analytic
+  planet-shadow, and the 6-level posterize + Bayer dither retro envelope.
+- **Harness** `rings-lod-lab.html` (repo root) — standalone scene + plain planet + ported v1
+  impostor + cloud + camera/RT controls, where the mechanism was proven before integration.
+- **Integration** — in `planet-lod-lab.html` the cloud is built next to the existing impostor
+  `ring`, driven by the SAME `state.ringsEnabled` toggle, tilted per-frame via
+  `ringCloud.quaternion.copy(ring.quaternion)` (coplanar with the impostor under axial tilt).
+
+**Tuning finding (visual gate):** disk **thickness MUST stay physically thin** (real rings are
+razor-thin) — `thickness: 0.01` → yHalf ≈ 4% of planet radius, reads as a real thin ring
+edge-on. Since thickness can't buy richness, in-plane **density (count)** carries it:
+`count: 400000` reads dense from flyby/ansa angles (800k = diminishing returns). The near ring
+*face* stays sparse up close — physically correct for a thin ring. A denser-near-foreground
+option (recycled-proximity-patch) was scoped and **deferred** (Max chose ship-thin+static,
+2026-06-13); revisit only if UAT wants more foreground richness.
+
+---
+
+## 6.5 Build plan — v1 (SUPERSEDED by v2 above; envelope/shadow/dither still valid reference)
 
 ### Feasibility verdict — CLEAN (scene-mesh, not fullscreen-shader)
 The lab is a REAL THREE scene, not a single fullscreen raymarched quad. Evidence (LIVE planet-lod-lab.html):
@@ -214,3 +252,46 @@ production names that are already proven safe (`uRingletInnerR`, `uGapCenters`, 
   (dither/posterize/shadow) is still useful reference, not throwaway.
 
 - **Status: v1 built (`093523c`, VERIFIED then REJECTED at Max UAT 2026-06-13) → REOPENED for 3D-LOD-particle rework. Status: reopen.**
+
+────────── v2 (3D LOD particle ring) ──────────
+
+- **Rating: 🟢 VERIFIED_PENDING_MAX `9bcd71d`** — integration green on working-Claude's live
+  checks; UAT (does the close-flyby read as genuine 3D resolving to particles, beating the v1
+  rejection?) is Max's gate alone. NOT Shipped until Max signs off.
+
+- **What was built (Tasks 1-7, plan `2026-06-13-f51-rings-3d-lod-particle.md`):** the two-tier
+  impostor+cloud substrate (see §6.5 v2). Pure baker + factory (`ring-particle-cloud.js`,
+  7 unit tests), proven in the standalone harness `rings-lod-lab.html`, then integrated into
+  `planet-lod-lab.html` next to the existing impostor `ring`, driven by the same
+  `state.ringsEnabled` toggle.
+
+- **Working-Claude live integration checks (:9223, all ✅):**
+  - Cloud renders in the production lab — 400k particles, visible under the rings toggle.
+  - Both tiers compose: impostor band (far) + emerging particle cloud (near) over the same
+    physics profile; no double-render in the LOD band.
+  - **No pop/dissolve** — per-particle `smoothstep(dResolve=4, dCull=14)` alpha ramp with the
+    impostor always rendering underneath; no discrete switch exists in the code path.
+  - **Coplanarity under axial tilt** — rotated the planet; the cloud quaternion exactly tracks
+    the impostor's (`coplanarMatch: true`), so the seam holds when the ring tilts/spins.
+  - **Toggle drives both tiers** — `rings(false)` hides cloud + impostor together; `rings(true)`
+    shows both. Zero console errors after integration (only a pre-existing GUI form-field lint).
+  - Mechanism verdict: **80k+ static points DO resolve as individual glinting particles** up
+    close → static-buffer approach holds, recycled-proximity-patch NOT needed (deferred).
+
+- **UAT items still owed to Max (the PENDING):** (1) does the close flyby beat v1's flat-band
+  rejection — genuine-3D-resolving-to-particles, not "the old rings"? (2) is the near-face
+  density acceptable (thin ring → physically sparse near face), or build the proximity-patch?
+  (3) is `thickness 0.01 / count 400k` the right default, or tune the live dials
+  (dResolve/dCull/pointScale/sizeClamp)? (4) a mixed-composition seed shows color banding the
+  current all-ice test seed doesn't.
+
+- **Shots saved** (`docs/FEATURES/cards/shots/`, gitignored): harness —
+  `rings-lod-far-d25.png` (impostor only, cloud faded), `rings-lod-flyby-thick.png` +
+  `rings-lod-flyby-px3-bothtiers.png` (cloud resolving / both tiers at ÷3),
+  `rings-lod-thin-400k-flyby.png` + `rings-lod-thin-800k-flyby.png` (thin-ring density),
+  `rings-lod-thin-edgeon.png` (thin reads as a real ring edge-on); lab —
+  `F51-v2-lab-flyby.png`, `F51-v2-lab-oblique.png`, `F51-v2-lab-near.png`. Compare against v1
+  baseline `F51-faceon-tuned.png`.
+
+- **Status: v2 built (baker/factory/harness/integration, HEAD `9bcd71d`) → VERIFIED_PENDING_MAX.
+  Awaiting Max UAT. Status: verified-pending-max.**

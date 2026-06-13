@@ -19,7 +19,7 @@ during phases) | ▶️ = current
 | **Stage-D provinces** (inserted before 4a per Max 2026-06-10) | spike → scope → build → verify; all 15 built features province-aware | ✅ built 2026-06-10 — spike `05cde11`, build `3d04110`, VERIFIED_PENDING_MAX; workstream `docs/WORKSTREAMS/stage-d-provinces-2026-06-10/`; Phase-4a+ combiners now author against the LIVE `provinceWeight(PROV_<FEATURE>)` accessor + add affinity rows to `PROVINCES` (planet-archetypes.js) AND the GLSL chain |
 | 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | ✅ 2026-06-10 — all 8 verdicted (F14/F16 🟢, F12/F13/F15/F19/F20/F21 🟡 taste-call); next ▶️ 4b |
 | 4b Build atmosphere (10) | F24-F33 verdicted | ✅ 2026-06-10 — all 10 🟡 taste-call VERIFIED_PENDING_MAX; new presets: 3 gas giants + Venus + Sub-Neptune + Eyeball + Hot Jupiter; new archetype hot-jupiter |
-| 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | 🔁 REOPENED 2026-06-13 by Max. Formal /goal was met (13× 🟡 + F44/F46 🟢 verdicts; F51 v1 `093523c`; F38/F39 rec recorded) — BUT Max overrode two outcomes: **F51 rings need REWORK** (v1 flat-annulus shader rejected → wants 3D LOD particle rings) and **F38/F39 → BUILD both** (not drop). Those 3 items are the remaining 4c work. Other 12 cards stay VERIFIED_PENDING_MAX. |
+| 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | 🔁 REOPENED 2026-06-13 by Max. Formal /goal was met (13× 🟡 + F44/F46 🟢 verdicts; F51 v1 `093523c`; F38/F39 rec recorded) — Max overrode two outcomes: F51 rings REWORK + F38/F39 → BUILD both. **F51 rework CLOSED 2026-06-13: v2 3D-LOD-particle ring built + integrated (`9bcd71d`), 🟢 VERIFIED_PENDING_MAX (awaiting Max UAT).** Remaining 4c work: **F38 airglow + F39 cloud-optics (BUILD both)**. Other 12 cards stay VERIFIED_PENDING_MAX. |
 | 5 Integration | INTEGRATION.md I-1…I-15 verdicted | pending (after 4c rework closes) |
 | 6 Profiles | PROFILES.md 18 rows verdicted | pending |
 | 7 Max review lap | galleries walked, parked items decided | pending |
@@ -75,7 +75,7 @@ during phases) | ▶️ = current
 | F47 | [F47-machine-surface](cards/F47-machine-surface.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F48 | [F48-city-lights](cards/F48-city-lights.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F49 | [F49-ecumenopolis](cards/F49-ecumenopolis.md) | Overlay | ✅ | 🟡 taste-call | 4c |
-| F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | 🔁 v1 rejected | REWORK → 3D LOD particle rings (Max 6-13) | 4c |
+| F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | 🟢 v2 VERIFIED_PENDING_MAX | 3D LOD particle ring (impostor far + emergent THREE.Points cloud near); `9bcd71d`; awaiting Max UAT | 4c |
 | — | [FOUNDATION](cards/FOUNDATION.md) (F50/F52/F53 substrate) | Foundation | ✅ | 🟢 | 2 |
 | — | [INTEGRATION](cards/INTEGRATION.md) | Crosscutting | — | — | 5 |
 | — | [PROFILES](cards/PROFILES.md) | Crosscutting | — | — | 6 |
