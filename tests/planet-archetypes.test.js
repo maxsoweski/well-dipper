@@ -104,7 +104,7 @@ const GLSL_NAME = {
   daysideThermal: 'PROV_DAYTHERM', nightsideThermal: 'PROV_NIGHTTHERM',
   limb: 'PROV_LIMB', terminator: 'PROV_TERM', sunglint: 'PROV_GLINT',
   aurora: 'PROV_AURORA', dustStorm: 'PROV_DUSTSTORM', magma: 'PROV_MAGMA',
-  carbon: 'PROV_CARBON',
+  carbon: 'PROV_CARBON', facets: 'PROV_FACETS',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

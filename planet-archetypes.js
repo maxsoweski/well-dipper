@@ -95,6 +95,20 @@ export const FEATURES = {
   // chemistry, not melt (the 55 Cnc e hot-molten variant is the card's logged v1
   // scope cut).
   carbon:     { label: 'Carbon crust (F42)',    enableKey: 'carbonEnabled',    archetypes: ['exotic-carbon'] },
+  // F43 crystalline facet field — Exotic speculative endmember (P15 crustal
+  // tessellation, slow-crystallization branch): near-equilibrium crystal growth
+  // tiles the crust into flat planar faces meeting at sharp ridge crests (F-exotic-
+  // natural group). Carrier class = airless + PRISTINE surface-history (erosion < 0.05
+  // && resurfacingRate < 0.05 && bombardmentIntensity < 0.2): ONLY 'Crystal (faceted)'
+  // clears all four terms (every other preset fails at least one — atmospheric presets
+  // fail airless, Lava/Magma fail resurfacingRate ~1, Frozen/Europa/Carbon fail erosion
+  // ≥ 0.05), so registration agrees with the render set (review M1, both directions).
+  // A NEW dedicated archetype: no existing preset family is undisturbed-airless-crystalline,
+  // and the facet read shares no carrier with the volcanic HEAT class or the carbon
+  // MINERALOGY class — F43 is unhurried crystallization geometry (the Pluto-blade /
+  // Naica-selenite template; the Wulff-habit + blade-orientation-alignment refinements
+  // are the card's logged v1 scope cuts).
+  facets:     { label: 'Crystal facets (F43)',  enableKey: 'facetsEnabled',    archetypes: ['exotic-geometric'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -108,6 +122,7 @@ export const ARCHETYPES = {
   'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)','Sub-Neptune (hazy)'] },
   'hot-jupiter':          { label: 'Hot Jupiter',            bodies: ['HD 209458 b','WASP-43 b'],     presets: ['Hot Jupiter (locked giant)'] },
   'exotic-carbon':        { label: 'Exotic / carbon',        bodies: ['55 Cnc e','PSR J1719-1438 b'], presets: ['Carbon (high C/O)'] },
+  'exotic-geometric':     { label: 'Exotic / geometric',     bodies: ['Pluto bladed terrain','55 Cnc e'], presets: ['Crystal (faceted)'] },
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
@@ -164,4 +179,5 @@ export const PROVINCES = {
   dustStorm:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — weather, not geology: the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged F40 v1 scope cut)
   magma:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — irradiation, not geology: the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
   carbon:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — mineralogy, not geology: the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
+  facets:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — crystallization, not geology: the facet field grows over the WHOLE undisturbed crust (surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like carbon F42)
 };

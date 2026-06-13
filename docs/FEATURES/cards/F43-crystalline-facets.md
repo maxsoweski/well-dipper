@@ -98,8 +98,54 @@ research discipline); Wulff-construction habit shapes.
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+**Rating: 🟡 taste-call — VERIFIED_PENDING_MAX (2026-06-13)**
+
+Built via the Phase-4c heavy loop (subagent implement → code-review → live GPU
+verify on :9223). vitest `tests/planet-archetypes.test.js` 19/19; shader compiled
+clean (NO black-out — the reserved-word check passed live; `fct`-prefixed identifiers,
+zero collisions); console error/warn-free across the verify pass.
+
+**§6 UAT checklist (live, Crystal preset, solo'd, :9223):**
+- ✅ Flat planar faces meeting at sharp ridge crests — reads as a jumble of tilted
+  planes within the posterize bands (at the tuned amp/scale; see tweak below).
+  `F43-11`, `F43-06/07`.
+- ✅ Adjacent facets catch light differently (per-cell constant tilt → distinct lit
+  values) — confirmed by the yaw A/B (`F43-06` vs `F43-07`): facets flip lit↔dark as
+  orientation changes.
+- ✅ Glints sparse + crisp (not a static speckle) — a handful of bright sparks; they
+  track the facet-lighting sweep on yaw. `F43-04` (cov 1) vs `F43-03` (cov 0) shows
+  glints scale with coverage.
+- ✅ Variant axis scattered→continuous driven by region masking — coverage knob walks
+  the FULL 0→1 range with no dead zone (`F43-03` cov 0 vs `F43-04` cov 1); F42 tar
+  lesson satisfied.
+- ✅ Seam-free over the whole sphere (3D voronoi) — no pole pinch / UV seam at any yaw.
+- ✅ Relief-through-normals (terminator-crisp mechanism) — facets are normal-driven, not
+  albedo; A/B-off (`F43-09`) removes the entire facet contribution cleanly
+  (`uFacetStrength→0`), no leftover artifacts, no regression.
+- ◐ LOD2 sub-faceting fade — mechanism wired (second finer voronoi3d octave on the
+  lodRamp budget); not isolated in a dedicated close-distance capture this pass.
+
+**Tweaks applied (live, within the 3-cycle budget):**
+- Defaults under-read at the implementer's amp 0.5 / scale 9 (facets nearly invisible —
+  read as mottled noise). Live-tuned to **amp 2.0 / scale 4 / coverage 0.65**, at which
+  the facet field reads clearly as crystal (`F43-10`/`F43-11` sweep → `F43-12` final
+  from-preset load). Widened the amplitude GUI range 0–1.5 → 0–2.5 so the new default
+  sits mid-range and stays walkable. Edits in `planet-lod-lab.html` state defaults +
+  the fFacets amplitude `.add()` range; comments dated.
+
+**Parked / taste-calls for Max's review lap:**
+- **Palette:** the Crystal preset reads neutral-grey with warm-pink facet tones, NOT the
+  specced "cool blue-grey." Cause is the lab's own discipline — the 6-level posterize
+  adds to *luminance*, so hue gradients get crushed and the warm base bleeds through
+  (`F43-08` full non-solo). Not chased, because hue barely survives the posterize by
+  design. Max's call whether to push the base cooler anyway.
+- **Headline coverage:** default 0.65 = "mostly-faceted" crystal world. If Max wants the
+  headline read more *scattered* (discrete crystals on a plainer body), drop to ~0.3.
+- **Extra knobs:** implementer added `facetScale`/`facetAmp` knobs beyond the card's
+  named `facetCoverage` (real uniforms, matches the per-feature knob convention). Trim to
+  minimal folder if undesired.
+
+**Shots:** `docs/FEATURES/cards/shots/F43-01`…`F43-12` (d8/d3/d2.2 + coverage/amp sweeps +
+yaw A/B + facets-off A/B + final from-preset load).
+
+- Status: **VERIFIED_PENDING_MAX** — awaiting Max's Phase-7 review-lap UAT.
