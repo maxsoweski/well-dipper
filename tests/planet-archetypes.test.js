@@ -109,6 +109,7 @@ const GLSL_NAME = {
   bioMats: 'PROV_BIOMATS',
   machine: 'PROV_MACHINE',
   cityLights: 'PROV_CITYLIGHTS',
+  ecumenopolis: 'PROV_ECUMENOPOLIS',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(

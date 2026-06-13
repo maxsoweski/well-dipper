@@ -141,6 +141,13 @@ export const FEATURES = {
   // F47's 'technogenic', which lists only Rocky and would break the Ocean/Eyeball legs). uCityMaturity
   // is a pure lab knob (no driver derivation, like F47 uMachCoverage), so registration is the enable flag.
   cityLights: { label: 'City lights (F48)', enableKey: 'cityLightsEnabled', archetypes: ['tectonic-terrestrial'] },
+  // F49 ecumenopolis — Overlay/EXOTIC P28 SATURATION endpoint: a tri-part overlay (day albedo crossfade +
+  // Voronoi-border street-canyon relief + whole-surface night glow) composited over the natural terrestrial
+  // base, all gated by one uEcuCoverage master knob (coverage 0 ⇒ bare Stage-6 base). REUSES
+  // 'tectonic-terrestrial' (same reasoning as F48: it overlays the Rocky/Ocean/Eyeball bases the §5 verify
+  // recipe needs — NOT F47's 'technogenic', which lists only Rocky). uEcuCoverage is a pure lab knob (no
+  // driver derivation, like F47/F48), so registration is the enable flag alone.
+  ecumenopolis: { label: 'Ecumenopolis (F49)', enableKey: 'ecumenopolisEnabled', archetypes: ['tectonic-terrestrial'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -219,4 +226,5 @@ export const PROVINCES = {
   bioMats:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — biosphere coverage, not geology: the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)
   machine:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — engineered overlay, not geology: a built crust covers terrain regardless of rock provinces (FROST-row pattern, like bioMats F46)
   cityLights: { field: 2, polarity: +1, floor: 1.00 },  // neutral — civilization coverage, not geology (FROST-row, like machine F47 / bioMats F46)
+  ecumenopolis: { field: 2, polarity: +1, floor: 1.00 },  // neutral — engineered saturation overlay, not geology (FROST-row, like cityLights F48 / machine F47)
 };

@@ -203,6 +203,15 @@
       uniform float uCityScale;          // F48 settlement noise frequency (cluster density)
       uniform float uCityCoastBoost;     // F48 coast-hugging brightness multiplier
       uniform vec3  uCityColor;          // F48 warm sodium-amber night-city color
+      uniform float uEcuCoverage;        // F49 master gate — P28 SATURATION (0 ⇒ bare Stage-6 base; HIGH default planet-covering)
+      uniform vec3  uEcuConcreteColor;   // F49 flat concrete/steel day-albedo target (crossfaded pre-posterize)
+      uniform vec3  uEcuGlowColor;       // F49 warm-sodium whole-surface night glow color
+      uniform float uEcuGlowIntensity;   // F49 night-glow brightness (emissive-bypass)
+      uniform float uEcuDistrictScale;   // F49 low-freq district/coverage frequency
+      uniform float uEcuBlockScale;      // F49 high-freq block/canyon frequency (lodRamp-ramped)
+      uniform float uEcuCanyonDepth;     // F49 street-canyon relief depth banked onto grad
+      uniform float uEcuSeamWidth;       // F49 Voronoi-border canyon half-width (F2−F1 threshold)
+      uniform float uEcuWarpAmt;         // F49 domain-warp amount (bends the block network organic)
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
       uniform vec3  uLightDir;      // object-space light dir
       uniform vec3  uBaseColor;
@@ -916,6 +925,7 @@
       const int PROV_BIOMATS     = 42;  // F46 — neutral (biosphere coverage, not geology): the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)
       const int PROV_MACHINE     = 43;  // F47 — neutral (engineered overlay, not geology): a built crust covers terrain regardless of rock provinces (FROST-row pattern, like bioMats F46)
       const int PROV_CITYLIGHTS  = 44;  // F48 — neutral (civilization coverage, not geology; FROST-row, like bioMats F46 / machine F47)
+      const int PROV_ECUMENOPOLIS = 45; // F49 — neutral (engineered saturation overlay, not geology; FROST-row, like cityLights F48 / machine F47)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -978,6 +988,7 @@
         else if (fid == PROV_BIOMATS)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_MACHINE)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_CITYLIGHTS) { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_ECUMENOPOLIS) { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2684,6 +2695,34 @@
         grad += uMachBevel * machEdge * machTangent * cov;
       }
 
+      // ── F49 coverage (machCoverageMask clone; saturates harder than F47) ──
+      // Low-freq FBM thresholded by uEcuCoverage; HIGH coverage ⇒ near-zero threshold ⇒ planet-covering.
+      // uMacroOffset ties the pattern to the seed (every combiner convention); NO time in the spatial mask.
+      float ecuCoverageMask(vec3 p){
+        float f = 0.5 + 0.5 * fbmd(p * uEcuDistrictScale * 0.5 + uMacroOffset, 3.0, 0.0).x;
+        float t = mix(0.55, 0.02, uEcuCoverage);   // LOWER ceiling than F47's 0.05: F49 saturates to full coverage
+        return smoothstep(t, t + 0.12, f);
+      }
+      // ── F49 day-side district relief: object-space Voronoi-border (F2−F1) street canyons banked
+      // onto grad (lit by perturbAnalytic — canyon walls catch sun). Seam-free Voronoi (NOT a triplanar
+      // fract grid) kills the cube-axis lattice + pole pinching (UAT item 4). uEcuCoverage<=0 ⇒ early-out
+      // (no grad write — byte-identical pre-F49 grad; the F47/F46 gate pattern).
+      void ecuRelief(vec3 pos, inout float h, inout vec3 grad){
+        if (uEcuCoverage <= 0.0) return;                  // ≤0 EARLY-OUT (byte-identical pre-F49)
+        float cov = ecuCoverageMask(pos) * provinceWeight(PROV_ECUMENOPOLIS);
+        if (cov <= 0.0) return;
+        float fwB  = max(max(fwidth(pos.x), fwidth(pos.y)), fwidth(pos.z));
+        float bFreq = uEcuBlockScale * mix(1.0, 2.2, uLodRamp);          // blocks resolve finer as camera closes
+        // domain warp → organic block network (bioMats/F45 warp idiom)
+        vec4 ecuW1 = noised(pos * (uEcuBlockScale*0.4) + uMacroOffset + vec3(7.3,-2.1,5.9));
+        vec3 ecuWp = pos + uEcuWarpAmt * vec3(ecuW1.x, ecuW1.y, ecuW1.z);
+        vec3 ecuCellId, ecuVGrad;
+        vec2 ecuR = voronoi3d(ecuWp * bFreq, 27, ecuCellId, ecuVGrad);   // ecuR.x=F1, ecuR.y=F2
+        float ecuBorder = 1.0 - smoothstep(0.0, uEcuSeamWidth, ecuR.y - ecuR.x); // 1 in street canyon, 0 inside block
+        if (uFwClamp == 1) ecuBorder *= 1.0 - smoothstep(0.4, 0.8, fwB * bFreq);  // kill sub-pixel moiré vs Bayer
+        grad += -uEcuCanyonDepth * ecuBorder * ecuVGrad * cov;          // carve canyons DOWN; perturbAnalytic lights walls
+      }
+
       // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief — relief doc §F10.a) ──
       // The signature icy-moon look, gated by the SHARED uCryoActivity. TWO mechanisms:
       // (1) DOUBLE RIDGES (Europa) — warped directional lines (like F6 tessera / F8 wrinkles)
@@ -3089,6 +3128,7 @@
           hexCrust(vPos, h, grad);                 // F44 — hex-tessellated crust (voronoi3dReg + regularity knob; F2−F1 trough borders + flat/domed interiors; ADDITIVE on grad, F19 contract; gated by uHexStrength × provinceWeight(PROV_HEXTESS))
           shatterCombiner(vPos, h, grad);          // F45 — shattered/fractured crust (globalized two-octave chaosCombiner: voronoi3d mega-blocks w/ per-cell flat+tilt, F2−F1 graben crevasses, sub-fracture lattice; ADDITIVE on grad, F19 contract; gated by uShatStrength × region × provinceWeight(PROV_SHATTER))
           machineRelief(vPos, h, grad);            // F47 panel bevels onto grad (ADDITIVE, F19 contract; gated by uMachCoverage × provinceWeight(PROV_MACHINE))
+          ecuRelief(vPos, h, grad);                // F49 — Voronoi-border street canyons onto grad (ADDITIVE, F19 contract; gated by uEcuCoverage × provinceWeight(PROV_ECUMENOPOLIS))
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
@@ -3352,6 +3392,14 @@
           albedoCol = mix(albedoCol, vec3(0.045, 0.043, 0.048), cbMask);   // graphite — near-black, faintly cool
           albedoCol = mix(albedoCol, vec3(0.030, 0.024, 0.018), carbTar);  // tar fill — darker, faintly warm, dead smooth
           rayBright *= 1.0 - 0.8 * cbMask;
+        }
+        // ── F49 ecumenopolis day-side albedo crossfade (PRE-posterize, the F41/F42 albedoCol=mix(...)
+        // precedent). At high coverage the surface color is REPLACED toward a single FLAT concrete tone
+        // (per-block variation rides RELIEF + dither, NOT albedo — avoids fighting the posterize, the
+        // F42 graphite precedent). Coverage 0 ⇒ mix(...,0) = albedoCol unchanged (regression-safe).
+        if (uEcuCoverage > 0.0) {
+          float ecuCovA = ecuCoverageMask(vPos) * provinceWeight(PROV_ECUMENOPOLIS);
+          albedoCol = mix(albedoCol, uEcuConcreteColor, ecuCovA);
         }
         // ── F16 butterscotch veil (Stage-8 haze channel, computed HERE so it hits each
         // term PRE-posterize — there is no single final quantizer, every surface term
@@ -3657,6 +3705,25 @@
           float city = cityMask * cityNight * uCityIntensity * provinceWeight(PROV_CITYLIGHTS);
           cityC = uCityColor * clamp(city, 0.0, 1.0);
         }
+        // ★ F49 ecumenopolis night glow — F48's warm grid run to SATURATION (whole-surface lattice, no
+        // dark rural/ocean gaps — UAT item 1) + per-district hash brightness tiering (bright cores / dim
+        // sprawl — UAT item 6), on the post-quantizer emissive-bypass channel, gated by the aurora nightMask.
+        // SATURATION distinctive vs F48: the +0.25 floor on the grid term + HIGH default coverage means the
+        // WHOLE nightside glows. Deterministic (uMacroOffset-seeded); uEcuCoverage 0 ⇒ ecuC = vec3(0) exactly.
+        vec3 ecuC = vec3(0.0);
+        if (uEcuCoverage > 0.0) {
+          float ecuCovE = ecuCoverageMask(vPos) * provinceWeight(PROV_ECUMENOPOLIS);
+          vec4 ecuEw = noised(vPos * (uEcuDistrictScale*0.6) + uMacroOffset + vec3(-3.1,8.4,1.7));
+          vec3 ecuEwp = vPos + uEcuWarpAmt * vec3(ecuEw.x, ecuEw.y, ecuEw.z);
+          vec3 ecuDistId, ecuGE;
+          vec2 ecuRE = voronoi3d(ecuEwp * uEcuDistrictScale, 27, ecuDistId, ecuGE);
+          float ecuDistHash = hash33(ecuDistId).x;
+          float ecuBright = mix(0.35, 1.0, ecuDistHash);                       // bright cores / dim sprawl tiering
+          float ecuGrid = 1.0 - smoothstep(0.0, uEcuSeamWidth*1.5, ecuRE.y - ecuRE.x); // glowing street lattice
+          float ecuNight = 1.0 - smoothstep(-0.1, 0.1, diff);                  // LIVE aurora nightMask form (NOT card-prose smoothstep(0.1,-0.1), invalid GLSL)
+          float ecuGlow = (ecuGrid + 0.25) * ecuBright * ecuNight * uEcuGlowIntensity * ecuCovE;  // +0.25 floor ⇒ whole nightside glows (saturation)
+          ecuC = uEcuGlowColor * clamp(ecuGlow, 0.0, 1.0);
+        }
         // ★ F30 lightning — transient convective flash blobs; bypasses the quantizer so
         // each pop stays crisp over the posterized cloud deck (card §6 item 6). Strength 0
         // (enable off, or any airless preset) skips the call: byte-identical F29 output —
@@ -3919,7 +3986,7 @@
           auroraC = uAuroraColor * aurora * 0.8;
         }
 
-        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + bioC + machC + cityC, vec3(1.0)), 1.0);
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + bioC + machC + cityC + ecuC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -4014,6 +4081,17 @@
       uCityScale:         { value: 2.8 },                                  // F48 settlement noise frequency (cluster density)
       uCityCoastBoost:    { value: 1.6 },                                  // F48 coast-hugging brightness multiplier
       uCityColor:         { value: new THREE.Color(0.95, 0.75, 0.3) },     // F48 warm sodium-amber night-city color (legacy Planet.js:920)
+      // F49 ecumenopolis (Overlay/EXOTIC tri-part SATURATION overlay) — uEcuCoverage is the master gate
+      // (pure lab knob: state.ecuCoverage when ecumenopolisEnabled, else 0); all others inert behind coverage 0
+      uEcuCoverage:       { value: 0.0 },                                  // F49 master gate (0 ⇒ bare base — relief early-outs, albedo + glow guarded)
+      uEcuConcreteColor:  { value: new THREE.Color(0.34, 0.34, 0.36) },    // F49 flat steel-concrete day-albedo target (legacy Planet.js:843-849 intent)
+      uEcuGlowColor:      { value: new THREE.Color(0.95, 0.78, 0.45) },    // F49 warm-sodium whole-surface night glow color
+      uEcuGlowIntensity:  { value: 1.0 },                                  // F49 night-glow brightness (emissive-bypass)
+      uEcuDistrictScale:  { value: 2.4 },                                  // F49 low-freq district/coverage frequency
+      uEcuBlockScale:     { value: 8.0 },                                  // F49 high-freq block/canyon frequency (lodRamp-ramped)
+      uEcuCanyonDepth:    { value: 0.45 },                                 // F49 street-canyon relief depth banked onto grad
+      uEcuSeamWidth:      { value: 0.07 },                                 // F49 Voronoi-border canyon half-width
+      uEcuWarpAmt:        { value: 0.30 },                                 // F49 domain-warp amount (organic block network)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -4632,6 +4710,16 @@
       cityScale: 2.8,         // F48 settlement cluster density (lab knob)
       cityCoastBoost: 1.6,    // F48 coast-hugging brightness multiplier (lab knob)
       cityColor: [0.95, 0.75, 0.3], // F48 warm sodium-amber night-city color (lab knob — legacy Planet.js:920)
+      ecumenopolisEnabled: true, // F49 enable gate — off forces uEcuCoverage 0 at the writer (relief early-outs + albedo + glow all vanish: byte-identical bare Stage-6 base)
+      ecuCoverage: 0.85,    // F49 P28 SATURATION coverage (lab knob — HIGH default: planet-covering, contrast F48's scattered 0.5; 0 = regression gate)
+      ecuConcreteColor: [0.34, 0.34, 0.36], // F49 flat steel-concrete day-albedo target (lab knob)
+      ecuGlowColor: [0.95, 0.78, 0.45], // F49 warm-sodium whole-surface night glow color (lab knob — slightly warmer than F48 amber)
+      ecuGlowIntensity: 1.0, // F49 night-glow brightness (lab knob — emissive-bypass)
+      ecuDistrictScale: 2.4, // F49 low-freq district/coverage frequency (lab knob ≈ machDistrictScale)
+      ecuBlockScale: 8.0,    // F49 high-freq block/canyon frequency (lab knob ≈ machBlockScale; lodRamp-ramped)
+      ecuCanyonDepth: 0.70,  // F49 street-canyon relief depth onto grad (lab knob — verify-tuned 0.45→0.70: day-side canyons read as LIT RELIEF, not subtle albedo mottle; no over-carving/moiré at LOD2; slider range 0..1.2 covers it)
+      ecuSeamWidth: 0.07,    // F49 Voronoi-border canyon half-width (lab knob)
+      ecuWarpAmt: 0.30,      // F49 domain-warp amount (lab knob — organic block network)
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -6407,6 +6495,22 @@
     fMachine.addColor(state, 'machGlowColor').name('glow color');
     fMachine.add(state, 'machineEnabled').name('✓ enabled');
 
+    // ▸ Ecumenopolis (F49) — the P28 SATURATION endpoint: a tri-part overlay (day albedo crossfade +
+    // Voronoi-border street-canyon relief + whole-surface night glow) over the terrestrial base, all
+    // gated by uEcuCoverage. Lives in fExoticGroup (it has a RELIEF channel, like F47 — NOT the Envelope
+    // folder F48 went to). ecuCoverage is the uEcuCoverage saturation driver (pure lab knob).
+    const fEcu = fExoticGroup.addFolder('Ecumenopolis (F49)'); fEcu.close();
+    fEcu.add(state, 'ecuCoverage', 0, 1, 0.01).name('coverage (saturation)');  // the uEcuCoverage driver, default HIGH 0.85
+    fEcu.add(state, 'ecuGlowIntensity', 0, 2, 0.01).name('night glow');
+    fEcu.add(state, 'ecuDistrictScale', 0.8, 6, 0.1).name('district scale');
+    fEcu.add(state, 'ecuBlockScale', 3, 18, 0.5).name('block scale');
+    fEcu.add(state, 'ecuCanyonDepth', 0, 1.2, 0.01).name('canyon depth');
+    fEcu.add(state, 'ecuSeamWidth', 0.01, 0.2, 0.005).name('seam width');
+    fEcu.add(state, 'ecuWarpAmt', 0, 0.6, 0.01).name('domain warp');
+    fEcu.addColor(state, 'ecuConcreteColor').name('concrete color');
+    fEcu.addColor(state, 'ecuGlowColor').name('glow color');
+    fEcu.add(state, 'ecumenopolisEnabled').name('✓ enabled');
+
     // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
     // F36 sunglint).
     const fOpticalGroup = guiRight.addFolder('Surface — Optical'); fOpticalGroup.open();
@@ -6479,6 +6583,7 @@
       bioMats: fEnv,
       cityLights: fEnv,
       machine: fMachine,
+      ecumenopolis: fEcu,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
@@ -6920,6 +7025,17 @@
       uniforms.uCityScale.value      = state.cityScale;
       uniforms.uCityCoastBoost.value = state.cityCoastBoost;
       uniforms.uCityColor.value.setRGB(state.cityColor[0], state.cityColor[1], state.cityColor[2]);
+      // F49 ecumenopolis — uEcuCoverage is the SOLE gate: enable off ⇒ 0 ⇒ relief early-outs + albedo
+      // crossfade mix(...,0) + ecuC vec3(0) ⇒ byte-identical bare Stage-6 base. Sole F49 write site.
+      uniforms.uEcuCoverage.value      = state.ecumenopolisEnabled ? state.ecuCoverage : 0.0;   // ✓ enable gate
+      uniforms.uEcuGlowIntensity.value = state.ecuGlowIntensity;
+      uniforms.uEcuDistrictScale.value = state.ecuDistrictScale;
+      uniforms.uEcuBlockScale.value    = state.ecuBlockScale;
+      uniforms.uEcuCanyonDepth.value   = state.ecuCanyonDepth;
+      uniforms.uEcuSeamWidth.value     = state.ecuSeamWidth;
+      uniforms.uEcuWarpAmt.value       = state.ecuWarpAmt;
+      uniforms.uEcuConcreteColor.value.setRGB(state.ecuConcreteColor[0], state.ecuConcreteColor[1], state.ecuConcreteColor[2]);
+      uniforms.uEcuGlowColor.value.setRGB(state.ecuGlowColor[0], state.ecuGlowColor[1], state.ecuGlowColor[2]);
       // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
       // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
       // rotation about +y DECREASES longitude, which is EAST in this lab's tangent
