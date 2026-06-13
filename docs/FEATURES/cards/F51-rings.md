@@ -47,12 +47,160 @@ UNBUILT in the lab — recommended recipe once built: (1) register a FEATURES ke
 - [ ] At grazing/edge-on angles, do the radial bands stay stable instead of shimmering into moiré against the 4x4 Bayer grid (the band-limiting behavior)?
 - [ ] Does ring presence/density vary believably across bodies (fresh dense disk vs tenuous old remnant), reading as a property of the world rather than a fixed decal?
 
+## 6.5 Build plan
+
+### Feasibility verdict — CLEAN (scene-mesh, not fullscreen-shader)
+The lab is a REAL THREE scene, not a single fullscreen raymarched quad. Evidence (LIVE planet-lod-lab.html):
+`new THREE.WebGLRenderer` (116), `new THREE.Scene()` (121), `PerspectiveCamera` (122), the planet is a real
+`new THREE.SphereGeometry(R,256,256)` → `new THREE.Mesh` → `scene.add(planet)` (4385-4388), and the main loop
+does `renderer.render(scene, camera)` into a low-res RT then a nearest-blit upscale (7219-7223). The blit is ONLY
+a post pixelation pass — the dither/posterize live in each object's own fragment shader, not in the blit. So a ring
+is just a SECOND mesh added to the same `scene` with its own ShaderMaterial. There is exactly one prior-art for this
+in the lab: the **hazeShell** (`new THREE.Mesh(new THREE.SphereGeometry(R*1.15,…), hazeShellMat)` + `scene.add` at
+4451-4453, toggled per-frame by `hazeShell.visible = …` at 6775). The ring follows that pattern verbatim — only the
+geometry (RingGeometry, equatorial) and the shader differ. NO awkward surgery, NO raymarch-into-quad.
+
+### Approach: port the production annulus, swap its shader body for the dead RingRenderer ringlet/gap loop
+Build a single ring mesh in the lab using the **production `_createRing()` envelope** (Planet.js:1105-1235 — those
+card line numbers are LIVE-accurate) for geometry, vertex shader, planet-shadow cylinder, Bayer dither-discard
+(1225), 6-level posterize (1183-1187, 1227), and the moon-gap loop (1208-1212). Then **replace the fake-sine band
+body** (Planet.js:1194-1202) with the **dead `RingRenderer.js` physics-driven ringlet/gap loop** (RingRenderer.js:208-235:
+per-fragment ringlet rectangles with smoothstep edges × resonance-gap notches, composition color from
+`COMPOSITION_COLORS` at RingRenderer.js:28-33). Feed it from a **CPU-side `generateRingPhysics()` call**
+(PhysicsEngine.js:793-905 — Roche inner edge 844, moon-clipped outer 847-857, age-decay density 858-862,
+2:1/3:1 resonance gaps 866-887, ringlet partition 889-903) flattened into the same Float32Array uniform layout
+RingRenderer already builds (RingRenderer.js:69-101). Add the ONE new term §4 calls for: an `fwidth(t)`
+band-limiting clamp on the ringlet density so fine bands fade to their mean at grazing angles instead of moiréing
+against the 4×4 Bayer grid (the sine fake had none).
+
+### PROV decision (lesson 3): DO NOT register rings in FEATURES — use a standalone toggle
+`setFeatureEnables()` (LIVE 6607-6612) loops `Object.keys(FEATURES)` and the test `tests/planet-archetypes.test.js:127`
+hard-asserts `keys(PROVINCES).sort() === keys(FEATURES).sort()`, plus each row needs a `provinceWeight` GLSL arm
+(test 115-123). A ring is a **separate mesh, not a surface province** — it has no `provinceWeight` meaning. Registering
+it in FEATURES would force a meaningless PROV row + GLSL arm just to satisfy the test. So: **add a standalone
+`state.ringsEnabled` boolean + its own lil-gui checkbox**, NOT a FEATURES entry. This means NO edit to
+`planet-archetypes.js` and NO edit to `tests/planet-archetypes.test.js`. Trade-off: rings won't get the automatic
+🔆-solo button (6630-6632) or archetype-filter row — acceptable; add a plain checkbox in a new `Rings (F51)` folder.
+(Highest PROV id is currently `PROV_ECUMENOPOLIS`; we deliberately do NOT consume id 46.)
+
+### Host preset (lesson 4): hang the ring off an existing preset for first light
+None of the DRIVER_PRESETS is a gas giant with rings. For first light, DON'T add a new archetype — drive
+`generateRingPhysics()` with a hand-built params object (origin 'roche', a planetDensity/moonDensity pair, an
+`ageGyr`, one synthetic inner moon to clip the outer edge + carve a 2:1 gap) independent of the surface preset, and
+render the ring on whatever body is shown. The card §5's "Frozen (airless)" works as a visual host. A dedicated
+ringed gas-giant preset is a later polish step, not first-light.
+
+### Exact edit sites (LIVE planet-lod-lab.html line numbers)
+1. **Ring uniforms + material + mesh** — insert immediately AFTER the hazeShell block (after 4453, before the
+   render-target section at 4467). Mirror the hazeShell structure: a `ringUniforms` object, a `ringMat`
+   (`THREE.ShaderMaterial`, `side: THREE.DoubleSide`, `transparent:true`, `depthWrite:false` like the production
+   ring), `new THREE.Mesh(new THREE.RingGeometry(innerR,outerR,64).rotateX(PI/2), ringMat)`, `ring.visible=false`,
+   `scene.add(ring)`.
+2. **Per-frame uniform writes + tilt + visibility** — in the frame loop near the hazeShell writer (6773-6775).
+   Write `ring.quaternion.copy(planet.quaternion)` so the annulus tilts with the body (axial tilt = planet spin
+   axis), copy `lightObj`→ring lightDir (object-space, same as the planet's 6745-6746), and
+   `ring.visible = !!state.ringsEnabled`.
+3. **Enable toggle + GUI** — add `ringsEnabled: false` to the `state` object (near 4503+), and a new
+   `guiLeft.addFolder('Rings (F51)')` with `.add(state,'ringsEnabled').name('show rings')` near the feature-folder
+   setup (~6630) or the presets folder (~6645).
+4. **`window._lab` hook** — add a `rings()` convenience or extend `solo` is NOT applicable (rings isn't a FEATURES
+   key); instead expose `window._lab.rings = (on)=>{ state.ringsEnabled = on!==false; }` near the `_lab` object
+   (7280-7282) so the :9223 recipe can toggle it.
+
+### Port-from / resurrect-from / read-from (summary)
+- **Port envelope from** `_createRing()` (Planet.js:1105-1235): geometry+rotateX, vertex shader, bayerDither +
+  posterize fns, planet-shadow cylinder (1214-1223), dither-discard (1225), moon-gap loop (1208-1212).
+- **Resurrect band body from** `RingRenderer.js:200-272` (the `if (uRingletCount>0)` physics branch 208-235 +
+  its uniform-array build 69-101 + `COMPOSITION_COLORS` 28-33). Drop the legacy sine `else` branch (236-246) —
+  we always have physics in the lab.
+- **Read physics from** `generateRingPhysics()` (PhysicsEngine.js:793-905). Call it CPU-side in the lab with a
+  synthetic params object; flatten `ringlets[]`/`gaps[]`/`density`/`composition` into the Float32Array uniforms.
+
+### GLSL reserved-word check (lesson 2)
+`partition` is the high-risk word here (rings "partition" into ringlets) — it is a GLSL reserved word and will
+BLACK OUT the whole lab with no static-test catch. Do NOT name any GLSL identifier `partition`. Use a `uRing*`/`ringT`
+prefix throughout. Also avoid `sample`, `filter`, `input`, `output`, `active`, `common`, `resource`. Reuse the
+production names that are already proven safe (`uRingletInnerR`, `uGapCenters`, `vPos`, `vRelWorldPos`, `ringColor1`).
+
+### Ordered implement checklist (next dispatch follows this)
+1. Add `state.ringsEnabled = false` to the lab `state` object.
+2. Write a `makeRingPhysics()` helper in the lab that calls `generateRingPhysics()` with a synthetic params bundle
+   (origin 'roche', densities, ageGyr, one synthetic inner moon) → returns the physics object.
+3. Build `ringUniforms` + flatten physics into Float32Arrays (copy RingRenderer.js:69-101 logic).
+4. Build `ringMat` = ShaderMaterial: vertex shader (port Planet.js:1132-1147) + fragment shader (port the envelope
+   from Planet.js:1150-1230 but swap the band body 1194-1202 for the RingRenderer physics loop 208-235; ADD the
+   `fwidth(t)` band-limit clamp on density). DoubleSide, transparent, depthWrite false.
+5. `ring = new THREE.Mesh(RingGeometry(innerR,outerR,64).rotateX(PI/2), ringMat)`, `visible=false`, `scene.add`.
+   Insert after 4453.
+6. Per-frame (near 6773): `ring.quaternion.copy(planet.quaternion)`, write light dir, `ring.visible = state.ringsEnabled`.
+7. Add the `Rings (F51)` GUI folder + checkbox + `window._lab.rings()` hook.
+8. Sanity: load lab, `window._lab.rings(true)`, set distance ≈12 face-on → annulus reads with discrete ringlets +
+   one dominant Cassini gap; distance 3-5 near ring plane → planet-shadow bite + dither translucency; sweep pitch
+   to edge-on → confirm fwidth clamp kills moiré. (NO FEATURES/PROVINCES test should be touched — run `npm test` to
+   confirm planet-archetypes.test.js still passes unchanged.)
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- **Rating: 🟡** — clean pass on all 8 UAT items AFTER tuning, but the gap-width and
+  opacity tunes are read-driven stylization (not physics-faithful), so there's a taste-call
+  for Max on how literal vs. legible the dominant gap should be (see Taste-call below).
+- **Host used:** `Frozen (airless)` preset. The central body renders with a cyan tectonic
+  grid under the default seed (it's the province/voronoi structure, not preset-specific —
+  `provinceWeight=0` did not visibly clear it without a driver re-derivation). The grid does
+  NOT bleed into the ring; the ring physics is independent of the surface preset, so it was
+  judged cleanly regardless.
+
+- **What was judged (8/8 pass after tuning):**
+  - ☑ Flat equatorial annulus, not a billboard — confirmed by tilting pitch: the ring
+    foreshortens into an ellipse locked to the planet plane (`F51-faceon-tilt.png`,
+    `F51-tuned-on.png`).
+  - ☑ 3-5 discrete ringlets, not a smooth gradient — physics yields 3 ice ringlets; after the
+    opacity lift + alternating contrast they read as distinct light/dark bands, not a ramp.
+  - ☑ ONE dominant Cassini-analog gap readable at distance — the widened 2:1 gap reads as a
+    commanding dark clearing at d=12 AND d=25 (`F51-far-d25-tuned.png`); the finer 3:1 gap
+    appears as a subordinate inner clearing up close.
+  - ☑ Sharp-edged planet-shadow bite with stars through it — top-down view shows the shadowed
+    arc going sparse (stars visible) while the lit arc stays dense (`F51-shadow-topdown.png`).
+  - ☑ Bayer dither translucency clean at the limb — no halo / sorting artifacts where the ring
+    crosses the planet limb at the near-edge-on grazing pass (`F51-edgeon-grazing.png`).
+  - ☑ Composition family reads — cool ice-blue palette posterizes cleanly within 6 levels.
+  - ☑ Stable bands at grazing/edge-on — the `fwidth` band-limit clamp fades fine bands to their
+    mean; no moiré shimmer at pitch≈0.04 (`F51-edgeon-grazing.png`).
+  - ☑ Ring presence reads as a world property — density/shadow/banding cohere as a real disk,
+    not a decal. ON/OFF delta is total (`F51-tuned-off.png` vs `F51-tuned-on.png`): the entire
+    annulus vanishes with rings off, confirming the term fires.
+
+- **Tweaks applied** (all lab-only, `planet-lod-lab.html`; physics ENGINE untouched):
+  - **Gap-width presentational boost** (flatten loop ~4521): physics gap widths (~0.035 R_p
+    dominant 2:1, ~0.02 R_p 3:1) are sub-Bayer-cell and never registered. Sorted gaps by width,
+    gave the dominant (widest) gap a **0.34 R_p half-width** and subordinate gaps **0.12 R_p**,
+    so ONE commanding clearing reads + thinner ones stay subordinate. (was: raw physics widths →
+    now: 0.34 / 0.12 R_p half-widths)
+  - **Ringlet opacity lift + alternating contrast** (flatten loop ~4513): effective opacities
+    were ~0.29-0.37 (base × density 0.64) and clustered → read as a gradient. Lifted base ×**1.6**
+    and pushed adjacent ringlets apart (**odd ×1.15 / even ×0.78**) so band boundaries read as
+    discrete steps. Physics ordering preserved; only amplified. (was: `rl.opacity*density` →
+    now: `min(1, base*1.6*altContrast)`)
+  - **Comment fix:** corrected the stale `makeRingPhysics()` comment "orbit = 4 planet radii" →
+    "orbit = 9 planet radii" to match the code's `orbitRadiusEarth: 9.0`.
+
+- **Re-verify (after tuning, lab reloaded, ZERO console errors):** d=12 face-on → discrete
+  ringlets + one dominant gap; d=25 far → dominant gap still readable; d≈4.5-9 near plane /
+  top-down → sharp planet-shadow bite with stars through the shadowed arc; pitch≈0.04 edge-on →
+  no moiré, clean limb crossing. ON/OFF delta total at the same camera.
+
+- **Taste-call for Max (the 🟡):** the dominant gap was widened to 0.34 R_p half-width (~0.68 R_p
+  visible) — physically the Cassini-class gap is far narrower (~0.035 R_p), so this trades
+  physical literalism for legibility in the 6-level posterized retro envelope. Dial it down toward
+  physics if you want a subtler, more naturalistic gap, or keep it bold for the "unmistakably
+  ringed planet at a glance" read.
+
+- **Shots saved** (`docs/FEATURES/cards/shots/`, gitignored): `F51-faceon-on.png`,
+  `F51-faceon-off.png` (pre-tune ON/OFF delta), `F51-faceon-tilt.png`, `F51-closeup-d8.png`,
+  `F51-far-d25-before.png`, `F51-faceon-tuned.png`, `F51-far-d25-tuned.png`,
+  `F51-nearplane-shadow.png`, `F51-shadow-bite.png`, `F51-shadow-topdown.png`,
+  `F51-edgeon-grazing.png`, `F51-tuned-off.png`, `F51-tuned-on.png`.
+
+- **Status: → VERIFIED_PENDING_MAX `093523c`**
