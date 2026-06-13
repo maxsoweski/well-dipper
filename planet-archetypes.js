@@ -132,6 +132,15 @@ export const FEATURES = {
   // engineered overlay), rides 'Rocky (Earthlike)' per the card §5 base. uMachCoverage is a pure lab
   // knob (no driver derivation), so registration is the enable flag alone.
   machine:    { label: 'Machine surface (F47)', enableKey: 'machineEnabled', archetypes: ['technogenic'] },
+  // F48 city lights — Overlay/EXOTIC pure-emissive night-side civilization glow (P28 build-out
+  // composited over the natural terrestrial base on the emissive-bypass channel; NO relief channel,
+  // unlike F47). Suitability = land × coast-proximity × 2-octave noise threshold, gated by the
+  // aurora nightMask, maturity-swept (specks → coastal bands; maturity 0 ⇒ bare Stage-6 base).
+  // REUSES 'tectonic-terrestrial' (civilization grows on the same habitable worlds as F46 bioMats;
+  // that archetype already lists the Rocky/Ocean/Eyeball bases the §5 verify recipe needs — NOT
+  // F47's 'technogenic', which lists only Rocky and would break the Ocean/Eyeball legs). uCityMaturity
+  // is a pure lab knob (no driver derivation, like F47 uMachCoverage), so registration is the enable flag.
+  cityLights: { label: 'City lights (F48)', enableKey: 'cityLightsEnabled', archetypes: ['tectonic-terrestrial'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -209,4 +218,5 @@ export const PROVINCES = {
   shatter:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal disruption, not geology: the shattered-block field covers the whole crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)
   bioMats:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — biosphere coverage, not geology: the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)
   machine:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — engineered overlay, not geology: a built crust covers terrain regardless of rock provinces (FROST-row pattern, like bioMats F46)
+  cityLights: { field: 2, polarity: +1, floor: 1.00 },  // neutral — civilization coverage, not geology (FROST-row, like machine F47 / bioMats F46)
 };

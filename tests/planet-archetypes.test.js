@@ -108,6 +108,7 @@ const GLSL_NAME = {
   shatter: 'PROV_SHATTER',
   bioMats: 'PROV_BIOMATS',
   machine: 'PROV_MACHINE',
+  cityLights: 'PROV_CITYLIGHTS',
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(
