@@ -47,12 +47,118 @@ Unbuilt — recommended recipe once built. (1) Register in planet-archetypes.js 
 - [ ] Does the terminator read as lights coming on — the emissive ramping in smoothly via the nightMask — rather than a hard day/night seam in the glow?
 - [ ] Does block-grid frequency ramp coherently with approach distance (lodRamp) — more, finer blocks as you close in — without popping or moiré against the 4x4 Bayer?
 
+## 6.5 Build plan
+
+**Strategy (tri-part overlay, maturity-gated, over the terrestrial base).** F49 is the P28 saturation endpoint: it composites THREE channels over the posterized terrestrial base, all gated by one master knob `uEcuCoverage` (0 ⇒ byte-identical bare Stage-6 base). (a) **Day-side albedo crossfade** — Stage-6 `albedoCol` is mixed toward a concrete/steel palette by coverage PRE-posterize (the F41/F42 `albedoCol = mix(...)` precedent), so at high coverage the surface color is *replaced* toward concrete (UNLIKE F47, which kept its plate albedo on the Stage-7 composite and left Stage-6 flat). (b) **Day-side relief** — an **object-space Voronoi-border (F2−F1) district network** injected into the analytic `grad` accumulator (street canyons + mega-block massing), lit by the existing `perturbAnalytic`, exactly mirroring F47's `machineRelief` grad-feed but using the seam-free `voronoi3d` keystone instead of F47's triplanar `machGridSDF` — this is the load-bearing choice that kills the cube-axis lattice + pole pinching (UAT item 4). (c) **Night-side emissive** — F48's warm grid glow run to SATURATION (coverage≈1, no dark gaps) + per-district hash brightness tiering, on the post-quantizer emissive-bypass channel, gated by the aurora `nightMask`. Block frequency ramps off `uLodRamp` with the `fwidth` octave clamp so the lattice never moirés against the 4×4 Bayer (UAT item 8). **Confirmed: Voronoi-border, NOT triplanar.**
+
+**GLSL prefix discipline.** Every new identifier uses the `ecu`/`uEcu` prefix. Checked against the GLSL ES 3.00 reserved-word list — `ecu`, `ecuCov`, `ecuBorder`, `ecuC`, `ecuCanyon`, `ecuWarp`, `ecuHash`, `ecuNight`, `uEcuCoverage`, `uEcuConcreteColor`, `uEcuGlowColor`, `uEcuGlowIntensity`, `uEcuDistrictScale`, `uEcuBlockScale`, `uEcuCanyonDepth`, `uEcuSeamWidth` are all clear (no `patch`/`sample`/`filter`/`input`/`output`/`active`/`common`/`partition`/`resource`/`superp`/`mat*`/`vec*`/`sampler*` collision). Precedent: F46/F40 had to rename a local `patch`→`bioPatch`/`dustPatch` (`'patch' is a GLSL ES 3.00 reserved word`, planet-lod-lab.html:3613, :3422) — do NOT reintroduce one.
+
+**PROV decision: `PROV_ECUMENOPOLIS = 45`, NEUTRAL.** Highest PROV in use is 44 (`PROV_CITYLIGHTS`, F48, planet-lod-lab.html:918). F49 is an engineered/civilization overlay, not geology, so it follows the FROST-row NEUTRAL pattern of every overlay since aurora — GLSL arm `else if (fid == PROV_ECUMENOPOLIS) { f = gProvince.z; fl = 1.00; }` and JS row `ecumenopolis: { field: 2, polarity: +1, floor: 1.00 }`. This satisfies the test trio: `keys(PROVINCES) === keys(FEATURES)` (planet-archetypes.test.js:126), the GLSL-mirror row match (:151), and the no-extra-rows set (:157, needs `GLSL_NAME.ecumenopolis: 'PROV_ECUMENOPOLIS'`).
+
+**Archetype decision: REUSE `tectonic-terrestrial`.** Same reasoning F48 adopted (planet-archetypes.js:139-143): the §5 verify recipe selects the Rocky/Ocean/Eyeball terrestrial bases the overlay composites over, and `tectonic-terrestrial` is the only archetype whose `presets` list includes all of them (:150). F47's `technogenic` lists only `Rocky (Earthlike)` — using it would leave the Ocean/Eyeball legs of the recipe pointing at a base that archetype can't reach. Test implication: every `FEATURES.archetypes` entry must be a real `ARCHETYPES` key (test:43-48) and every preset a real `DRIVER_PRESETS` key (test:50) — reusing the existing terrestrial archetype keeps both green with zero new archetype/preset wiring. (`technogenic` stays valid because F47 still lists it — test:57 "≥1 feature per archetype" holds.)
+
+**Voronoi-border mechanism.** `voronoi3d(vec3 p, int cells, out vec3 cellId, out vec3 grad)` returns `vec2(F1, F2)` (planet-lod-lab.html:796, :816), so the seam distance is simply `r.y - r.x` from a single call — NO workaround needed, NO double-call. District relief: domain-warp the sample point first (`vec3 ecuWp = vPos + uEcuWarpAmt * vec3(noised(...).x, ...)` — the F45/bioMats warp idiom) so the block network bends organic, sample `vec2 r = voronoi3d(ecuWp * blockFreq, 27, ecuCellId, ecuVGrad)`, build the canyon `float ecuBorder = 1.0 - smoothstep(0.0, uEcuSeamWidth, r.y - r.x)` (1 in the street, 0 inside a block), and bank it onto `grad` along a seam tangent the way F47 does: `grad += -uEcuCanyonDepth * ecuBorder * ecuVGrad * ecuCov` (negative = canyons carve DOWN; `ecuVGrad` is the cell's relief-normal out-param, so `perturbAnalytic` lights the canyon walls). **Block-frequency ramp:** `float blockFreq = uEcuBlockScale * mix(1.0, 2.2, uLodRamp)` (finer blocks as the camera closes), with the canonical octave clamp applied to the canyon weight — `ecuBorder *= (uFwClamp == 1) ? 1.0 - smoothstep(0.4, 0.8, fwBase * blockFreq) : 1.0` (the `fbmd`/`fbmdRidged` idiom at :847/:1021, using the in-scope `fwBase` from :3062) so sub-pixel blocks fade to their mean instead of moiréing the Bayer. Call site mirrors `machineRelief`: a new `ecuRelief(vPos, h, grad)` invoked right after machineRelief (:3091), additive-on-grad per the F19 contract, early-out `if (uEcuCoverage <= 0.0) return;`.
+
+**Albedo-crossfade mechanism.** Target var = `albedoCol` (Stage-6, planet-lod-lab.html:3231 onward; last touched at :3378 before the lit-surface compose at :3402, then `posterize` at :3430). Add a coverage crossfade in the F42 slot (just after the F42 carbon block ~:3355, before the F16 veil at :3365): `if (uEcuCoverage > 0.0) { float ecuCovA = ecuCoverageMask(vPos) * provinceWeight(PROV_ECUMENOPOLIS); albedoCol = mix(albedoCol, uEcuConcreteColor, ecuCovA); }`. Pre-posterize so the concrete tone lands on its own quantize bin (the F42 graphite precedent — deliberately low-freq, no high-freq albedo noise to fight the dither). Concrete palette default `vec3(0.34, 0.34, 0.36)` (mid-grey steel-concrete; legacy Planet.js:843-849 intent ported, NOT its tri-axis grid). Coverage 0 ⇒ `mix(...,0)` = `albedoCol` unchanged (regression-safe). NOTE/RISK: the crossfade competes with the posterize — keep the concrete tone a single flat value (no spatial variation here) so it reads as 1-2 clean bands, exactly as F42 graphite does; per-block tonal variation rides the RELIEF channel + dither, never albedo.
+
+**Night-emissive mechanism.** New `ecuC` block in the emissive-bypass region (after F48's `cityC` block, ~:3659, before the F30 lightning add at :3664), the F46-`bioC`/F47-`machC`/F48-`cityC` survivor pattern: `vec3 ecuC = vec3(0.0); if (uEcuCoverage > 0.0) { float ecuCovE = ecuCoverageMask(vPos) * provinceWeight(PROV_ECUMENOPOLIS); vec2 r = voronoi3d(<warped> * uEcuDistrictScale, 27, ecuDistId, ecuG); float ecuDistHash = hash33(ecuDistId).x; float ecuBright = mix(0.35, 1.0, ecuDistHash); float ecuGrid = 1.0 - smoothstep(0.0, uEcuSeamWidth*1.5, r.y - r.x); /* glowing street lattice */ float ecuNight = 1.0 - smoothstep(-0.1, 0.1, diff); /* LIVE aurora nightMask form, NOT the card-prose smoothstep(0.1,-0.1) which is invalid GLSL — see :3656 */ float ecuShimmer = 0.9 + 0.1*noised(vec3(vPos.xy*2.0, uTime*0.05)).x; /* optional slow glow only */ ecuC = uEcuGlowColor * clamp((ecuGrid + 0.25) * ecuBright * ecuNight * uEcuGlowIntensity * ecuCovE, 0.0, 1.0); }`. SATURATION distinctive vs F48: the `+0.25` floor on the grid term + HIGH default coverage means the whole nightside glows (no dark rural/ocean gaps — UAT item 1), while the district hash gives bright cores / dim sprawl tiering (UAT item 6). Spatial layout is `uMacroOffset`-seeded + deterministic; `uTime` only in the optional shimmer. Add to the final composite: `gl_FragColor = vec4(min(surface + emissive + ... + cityC + ecuC, vec3(1.0)), 1.0);` at planet-lod-lab.html:3922.
+
+**New uniforms.**
+
+| uniform | type | default | registration sites |
+|---|---|---|---|
+| `uEcuCoverage` | float | 0.0 (writer-gated) | THREE.uniforms obj (~:4016, after `uCityColor`); writer (~:6922, `state.ecumenopolisEnabled ? state.ecuCoverage : 0.0`); GLSL decl (~:201, after `uCityMaturity`) |
+| `uEcuConcreteColor` | vec3/Color | (0.34,0.34,0.36) | uniforms obj; writer (`.setRGB`); GLSL decl |
+| `uEcuGlowColor` | vec3/Color | (0.95,0.78,0.45) warm sodium | uniforms obj; writer (`.setRGB`); GLSL decl |
+| `uEcuGlowIntensity` | float | 1.0 | uniforms obj; writer; GLSL decl |
+| `uEcuDistrictScale` | float | 2.4 | uniforms obj; writer; GLSL decl |
+| `uEcuBlockScale` | float | 8.0 | uniforms obj; writer; GLSL decl |
+| `uEcuCanyonDepth` | float | 0.45 | uniforms obj; writer; GLSL decl |
+| `uEcuSeamWidth` | float | 0.07 | uniforms obj; writer; GLSL decl |
+| `uEcuWarpAmt` | float | 0.30 | uniforms obj; writer; GLSL decl |
+
+(3 registration sites each: GLSL `uniform` decl block ~:155-201 · `uniforms` JS object ~:4002-4016 · per-frame writer ~:6905-6922. Scalars use `state.<name>`; colors use `.value.setRGB(state.x[0..2])`. `uEcuCoverage` is the sole master gate — writer multiplies the enable flag exactly like `uMachCoverage`:6908 / `uCityMaturity`:6918.)
+
+**Edit sites (ordered, REAL current lines — grep-verified, NOT the stale card numbers).**
+1. `planet-lod-lab.html:~201` — GLSL `uniform` decls (insert the 9 `uEcu*` after `uCityMaturity`/`uCityColor` block at :201).
+2. `planet-lod-lab.html:918` — add `const int PROV_ECUMENOPOLIS = 45;` after `PROV_CITYLIGHTS`.
+3. `planet-lod-lab.html:980` — add GLSL provinceWeight arm `else if (fid == PROV_ECUMENOPOLIS) { f = gProvince.z; fl = 1.00; }` after the `PROV_CITYLIGHTS` arm.
+4. `planet-lod-lab.html:~2671` — new `float ecuCoverageMask(vec3 p)` (the `machCoverageMask`:2667 clone: low-freq fbm thresholded by `uEcuCoverage`, `mix(0.55, 0.02, uEcuCoverage)` — note LOWER ceiling than F47's 0.05 because F49 saturates) + new `void ecuRelief(vec3 pos, inout float h, inout vec3 grad)` (the `machineRelief`:2674 clone with the Voronoi-border canyon mechanism above).
+5. `planet-lod-lab.html:3091` — insert `ecuRelief(vPos, h, grad);` right after the `machineRelief(...)` call (additive-grad, F19 contract).
+6. `planet-lod-lab.html:~3355` — albedo crossfade block (after the F42 carbon block, before F16 veil at :3365): `if (uEcuCoverage > 0.0) albedoCol = mix(albedoCol, uEcuConcreteColor, ecuCoverageMask(vPos)*provinceWeight(PROV_ECUMENOPOLIS));`.
+7. `planet-lod-lab.html:~3659` — `ecuC` night-emissive block (after F48 `cityC` block ends, before F30 lightning at :3664).
+8. `planet-lod-lab.html:3922` — add `+ ecuC` to the `gl_FragColor` min() sum.
+9. `planet-lod-lab.html:~4016` — 9 entries in the `uniforms` JS object (after `uCityColor:`).
+10. `planet-lod-lab.html:~4634` — state-init defaults (after `cityColor:`): `ecumenopolisEnabled: true,` + `ecuCoverage: 0.85,` + the 8 knob defaults.
+11. `planet-lod-lab.html:~6398` — new `const fEcu = fExoticGroup.addFolder('Ecumenopolis (F49)'); fEcu.close();` after `fMachine` (F49 has a relief channel ⇒ fExoticGroup home, like F47, NOT fEnv); add sliders for all 8 knobs + `fEcu.addColor(state,'ecuConcreteColor')` + `fEcu.addColor(state,'ecuGlowColor')` + **`fEcu.add(state, 'ecumenopolisEnabled').name('✓ enabled');`** (load-bearing literal — test:16 regex `/\.add\(state, '(\w+Enabled)'\)/` needs this exact single-line form; relocated to title by the existing :6498 loop).
+12. `planet-lod-lab.html:~6922` — per-frame writer block (after the F48 city writes at :6918-6922).
+13. `planet-lod-lab.html:6481` — add `ecumenopolis: fEcu,` to the `featureFolders` map (gives solo + title-toggle wiring for free).
+14. `planet-archetypes.js:143` — add `ecumenopolis: { label: 'Ecumenopolis (F49)', enableKey: 'ecumenopolisEnabled', archetypes: ['tectonic-terrestrial'] },` after `cityLights`.
+15. `planet-archetypes.js:221` — add `ecumenopolis: { field: 2, polarity: +1, floor: 1.00 },` to `PROVINCES` after `cityLights`.
+16. `tests/planet-archetypes.test.js:111` — add `ecumenopolis: 'PROV_ECUMENOPOLIS',` to the `GLSL_NAME` map (after `cityLights`). This is the ONLY hand-edit the test needs — the FEATURES/PROVINCES/panel-binding/archetype assertions all auto-satisfy from sites 11/14/15.
+
+**Key GLSL (fits voronoi3d / perturbAnalytic / lodRamp+fwidth; deterministic — domain-offset, no uTime in spatial layout).**
+```glsl
+// ── F49 coverage (machCoverageMask clone; saturates harder) ──
+float ecuCoverageMask(vec3 p){
+  float f = 0.5 + 0.5 * fbmd(p * uEcuDistrictScale * 0.5 + uMacroOffset, 3.0, 0.0).x;
+  float t = mix(0.55, 0.02, uEcuCoverage);          // high coverage ⇒ near-zero threshold ⇒ planet-covering
+  return smoothstep(t, t + 0.12, f);
+}
+// ── F49 day-side district relief: Voronoi-border canyons into grad (machineRelief slot) ──
+void ecuRelief(vec3 pos, inout float h, inout vec3 grad){
+  if (uEcuCoverage <= 0.0) return;                  // early-out: byte-identical pre-F49 grad
+  float cov = ecuCoverageMask(pos) * provinceWeight(PROV_ECUMENOPOLIS);
+  if (cov <= 0.0) return;
+  float fwB  = max(max(fwidth(pos.x), fwidth(pos.y)), fwidth(pos.z));
+  float bFreq = uEcuBlockScale * mix(1.0, 2.2, uLodRamp);          // blocks resolve finer as camera closes
+  // domain warp → organic block network (bioMats/F45 warp idiom)
+  vec4 w1 = noised(pos * (uEcuBlockScale*0.4) + uMacroOffset + vec3(7.3,-2.1,5.9));
+  vec3 wp = pos + uEcuWarpAmt * vec3(w1.x, w1.y, w1.z);
+  vec3 ecuCellId, ecuVGrad;
+  vec2 r = voronoi3d(wp * bFreq, 27, ecuCellId, ecuVGrad);          // r.x=F1, r.y=F2
+  float ecuBorder = 1.0 - smoothstep(0.0, uEcuSeamWidth, r.y - r.x); // 1 in street canyon, 0 inside block
+  if (uFwClamp == 1) ecuBorder *= 1.0 - smoothstep(0.4, 0.8, fwB * bFreq); // kill sub-pixel moiré vs Bayer
+  grad += -uEcuCanyonDepth * ecuBorder * ecuVGrad * cov;            // carve canyons DOWN; perturbAnalytic lights walls
+}
+```
+(The night-emissive `ecuC` block + albedo crossfade are quoted in the two mechanism paragraphs above; both reuse `voronoi3d`/`hash33`/`noised` + the live `diff` nightMask form at :3656.)
+
+**Suggested defaults + ranges (tuned at verify).** `ecuCoverage` default **0.85** (HIGH — F49 is the SATURATION feature; contrast F48's scattered 0.5), slider `0..1`. `ecuGlowIntensity` 1.0 (`0..2`). `ecuConcreteColor` (0.34,0.34,0.36) — mid steel-grey, bright enough that day-side canyon relief + dither read without going to an unlit ball (the F47 live-verify lesson: near-black metal killed the day read, machMetalColor was walked 0.10→0.22). `ecuGlowColor` (0.95,0.78,0.45) warm sodium (F48 amber, slightly warmer). `ecuDistrictScale` 2.4 (`0.8..6`), `ecuBlockScale` 8.0 (`3..18`), `ecuCanyonDepth` 0.45 (`0..1.2`), `ecuSeamWidth` 0.07 (`0.01..0.2`), `ecuWarpAmt` 0.30 (`0..0.6`). Reasoning: district ≈ machDistrictScale, block ≈ machBlockScale so the two-tier hierarchy reads at the same distances F47 tuned; canyon depth mid so massing reads as relief not noise.
+
+**OFF / coverage-0 regression guarantee.** Single master gate `uEcuCoverage`: the writer forces it to 0 when `ecumenopolisEnabled` is false (the `machineEnabled`/`cityLightsEnabled` precedent). At 0: `ecuRelief` early-outs (no grad write ⇒ byte-identical pre-F49 normal), the albedo crossfade is `mix(albedoCol, _, 0)` = `albedoCol` unchanged, and the `ecuC` block is skipped ⇒ `ecuC == vec3(0)` ⇒ `gl_FragColor` byte-identical bare Stage-6 base. Coverage→0 continuously reveals the base everywhere (UAT item 5: oceans/relief show through where coverage < 1).
+
+**Test line(s) verbatim** (the only hand-edit `tests/planet-archetypes.test.js` needs — insert into `GLSL_NAME` after the `cityLights: 'PROV_CITYLIGHTS',` line at :111):
+```js
+  ecumenopolis: 'PROV_ECUMENOPOLIS',
+```
+
 ────────── below filled during UAT, NOT by the workflow ──────────
 
 ## 7. Verdict + tweak log
 
-- Rating: (pending)
-- Max's feedback: (pending)
-- Tweaks applied: (pending)
-- Re-verify: (pending)
-- Status: open
+- **Rating: 🟡** (ships; one taste-call for Max on day-side relief strength — see below).
+
+- **Live-verify findings (:9223 GPU lab, Rocky (Earthlike) base, solo'd, dpr 1.25, innerWidth 1402, ZERO shader errors across all states + post-tune reload):**
+  - **ON/OFF + cov-0 delta = firing.** ON (cov 0.85) vs OFF at identical camera is a strong, unambiguous delta: OFF = the bare reddish-brown terrestrial Rocky base (no concrete, no district net, no glow); ON = grey concrete albedo + Voronoi district relief + warm sodium nightside lattice. `ecuCoverage=0` is byte-identical to OFF (bare base) — the single master-gate regression contract holds. NOT an ON==OFF blocker.
+  - **All THREE channels fire:** (a) day concrete albedo crossfade ✓ (surface goes mid-grey steel where built-over); (b) day-side district relief ✓ (Voronoi-border street canyons + mega-block massing read as lit relief through the normal channel — see canyon-depth tweak below); (c) night emissive grid ✓ (whole-surface warm amber Voronoi lattice, crisp/unbanded on the bypass channel, with bright-core/dim-sprawl district tiering).
+  - **Saturation read = PLANET-WIDE (correct F49 identity), NOT scattered F48 patches.** At default cov 0.85 the nightside is a continuous organic glow lattice wrapping the whole disc — no large dark rural/ocean gaps, only small base-show-through spots. Coverage ladder cov0(bare)→0.5→0.85→1.0 reads as monotonically increasing saturation (cov 0.5 has visibly larger dark gaps; 1.0 densest). Reads as one worldwide urban fabric, not cities-in-a-band.
+  - **POLE / cube-grid behavior = CLEAN.** Oriented over the pole (pitch 1.35), the object-space Voronoi network wraps organically — same irregular cell sizes across the pole, NO axis-aligned cube-grid lattice, NO pole pinch/convergence. The seam-free `voronoi3d` keystone (vs the legacy Planet.js tri-axis `fract()` grid) does its job; this was the load-bearing UAT-4 risk and it's resolved.
+  - **Terminator = smooth.** Day/night boundary centered: the emissive ramps in gradually through the terminator band via the aurora-style nightMask — lights "come on" smoothly, no hard day/night glow seam.
+  - **LOD ramp = clean.** Dolly d10→d2: finer block/canyon frequency resolves as the camera closes (lodRamp + fwidth clamp), no popping, no moiré shimmer against the 4×4 Bayer dither at LOD2.
+
+- **Per-UAT (§6, 8 items):** (1) planet-wide glow saturation — **PASS**; (2) night crisp/unbanded vs day-in-posterize — **PASS**; (3) day canyons as lit relief not albedo noise — **PASS** (after canyon-depth tune; was borderline-subtle at the shipped default); (4) organic urban fabric, no cube-grid/pole-pinch — **PASS**; (5) terrestrial base shows through where coverage<1 — **PASS** (cov ladder + base-show-through spots); (6) district brightness tiering w/o Bayer flicker — **PASS**; (7) terminator lights-coming-on, no hard seam — **PASS**; (8) lodRamp finer blocks, no pop/moiré — **PASS**.
+
+- **Tweaks applied:**
+  - `state.ecuCanyonDepth` default **0.45 → 0.70** (`planet-lod-lab.html:4720`). Reason: at the build-plan default 0.45 the day-side street-canyon network read as a subtle albedo mottle rather than clearly *lit relief* (the exact F47 "day read too weak" failure mode the card warns about). At 0.70 the canyons catch shading and the mega-block massing reads as relief through the dither, satisfying UAT-3, with no over-carving and no moiré at the closest LOD. (Spot-checked 0.45 / 0.70 / 0.90; 0.90 read slightly "scarred", 0.70 is the clean middle.) Slider range `0..1.2` (`:6507`) already covers it — no range widening needed. No other defaults changed; the build-plan glow/coverage/scale/warp/seam defaults all read correctly as-shipped.
+
+- **Re-verify:** After the edit, reloaded the lab (`?fresh=1`) and confirmed: ZERO shader errors, default loaded as `ecuCanyonDepth:0.70`, and the day-canyons relief reads as intended at the new default (final `F49-day-canyons.png` captured at 0.70). All three channels + saturation + pole-clean re-confirmed at the tuned default.
+
+- **Taste-call for Max (the 🟡):** Day-side relief strength. Shipped at `ecuCanyonDepth 0.70` (up from 0.45) so the megacity massing reads as *relief* on the lit day side rather than near-flat concrete. If you'd rather the day side stay more subdued/flat-brutalist (letting the nightside glow carry the feature), dial it back toward 0.5; if you want the canyons even more sculpted, 0.9 still holds without artifacting. Everything else is 🟢.
+
+- **Shots** (in `docs/FEATURES/cards/shots/`, gitignored): `F49-on.png` / `F49-off.png` (same-camera delta), `F49-cov0-bare.png` (master-gate regression = bare base), `F49-wholedisc-d10.png` (whole-disc saturation), `F49-night-grid.png` (planet-wide warm lattice), `F49-day-canyons.png` (day relief @ tuned 0.70), `F49-poles.png` (organic-over-pole, no cube grid), `F49-ladder-cov50.png` / `F49-ladder-cov100.png` (saturation sweep), `F49-terminator.png` (smooth lights-coming-on), `F49-lod-d2.png` (LOD2, no moiré).
+
+- **Risk/anomaly:** None blocking. Minor: the night lattice at default reads as fairly large organic "blob-border" cells (domain-warped Voronoi) rather than a tight rectilinear grid — this is by design (seam-free organic urban fabric) and reads as planet-wide saturation, but if Max expects a denser/finer street grid, raise `ecuDistrictScale`/`ecuBlockScale`. Flagging as a possible second taste-call, not a defect.
+
+- **Max's feedback:** (pending — UAT)
+- **Status:** VERIFIED_PENDING_MAX 92bf873

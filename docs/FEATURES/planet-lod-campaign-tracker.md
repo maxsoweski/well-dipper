@@ -74,7 +74,7 @@ during phases) | ▶️ = current
 | F46 | [F46-fungal-mats](cards/F46-fungal-mats.md) | Overlay | ✅ | 🟢 | 4c |
 | F47 | [F47-machine-surface](cards/F47-machine-surface.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F48 | [F48-city-lights](cards/F48-city-lights.md) | Overlay | ✅ | 🟡 taste-call | 4c |
-| F49 | [F49-ecumenopolis](cards/F49-ecumenopolis.md) | Overlay | ⬜(lab) | — | 4c |
+| F49 | [F49-ecumenopolis](cards/F49-ecumenopolis.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | 🟡 | — | 4c |
 | — | [FOUNDATION](cards/FOUNDATION.md) (F50/F52/F53 substrate) | Foundation | ✅ | 🟢 | 2 |
 | — | [INTEGRATION](cards/INTEGRATION.md) | Crosscutting | — | — | 5 |
