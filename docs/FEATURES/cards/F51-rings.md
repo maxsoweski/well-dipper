@@ -1,5 +1,5 @@
 # Feature Card — F51 Rings
-Domain: Crosscutting · Lab status: 🟢 v2 VERIFIED_PENDING_MAX (`9bcd71d`) · Build-seq phase: 4c
+Domain: Crosscutting · Lab status: 🟢 v2 VERIFIED_PENDING_MAX (`71eea7a`) · Build-seq phase: 4c
 
 ## 1. Description (WHAT)
 
@@ -293,5 +293,20 @@ production names that are already proven safe (`uRingletInnerR`, `uGapCenters`, 
   `F51-v2-lab-flyby.png`, `F51-v2-lab-oblique.png`, `F51-v2-lab-near.png`. Compare against v1
   baseline `F51-faceon-tuned.png`.
 
-- **Status: v2 built (baker/factory/harness/integration, HEAD `9bcd71d`) → VERIFIED_PENDING_MAX.
-  Awaiting Max UAT. Status: verified-pending-max.**
+- **Lab sliders added (`71eea7a`):** all 6 cloud variables are now live GUI sliders in the
+  `Rings (F51)` folder — `point scale`, `LOD resolve dist`, `LOD cull dist`, `size clamp` (live
+  uniforms) + `count (rebake)`, `thickness (rebake)` (dispose+rebuild, preserving live uniform
+  values; thickness capped at 0.06 to enforce physical thinness). Verified live on :9223: a
+  count rebake rebuilds the cloud (400k→600k), stays visible, and preserves the live uniform
+  values across the swap; live sliders move the current cloud after a rebake (no stale closure).
+  (`F51-v2-lab-sliders.png`.) Build site was refactored into `buildRingCloud()` + deferred past
+  the `state` declaration (the inline build sat in `state`'s temporal dead zone once it read
+  `state.ring*`); `ringCloud`/`ringBaked` are now module-scope `let` for rebake swapping.
+
+- **Max sign-off (2026-06-13): "these all seem good to me so far — go ahead with this."**
+  Approach approved in principle; the sliders were his one ask before fine-tuning. Status stays
+  VERIFIED_PENDING_MAX — final UAT (the cohesive-whole + slider-driven tuning call) remains
+  Max's gate; no agent closes it. Then handed off to a fresh session for the bigger LOD-workstream picture.
+
+- **Status: v2 built + slider-tunable (HEAD `71eea7a`) → VERIFIED_PENDING_MAX.
+  Max approved-in-principle; awaiting his slider-driven UAT. Status: verified-pending-max.**

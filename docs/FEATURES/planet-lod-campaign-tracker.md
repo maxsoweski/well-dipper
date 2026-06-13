@@ -75,7 +75,7 @@ during phases) | ▶️ = current
 | F47 | [F47-machine-surface](cards/F47-machine-surface.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F48 | [F48-city-lights](cards/F48-city-lights.md) | Overlay | ✅ | 🟡 taste-call | 4c |
 | F49 | [F49-ecumenopolis](cards/F49-ecumenopolis.md) | Overlay | ✅ | 🟡 taste-call | 4c |
-| F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | 🟢 v2 VERIFIED_PENDING_MAX | 3D LOD particle ring (impostor far + emergent THREE.Points cloud near); `9bcd71d`; awaiting Max UAT | 4c |
+| F51 | [F51-rings](cards/F51-rings.md) | Crosscutting | 🟢 v2 VERIFIED_PENDING_MAX | 3D LOD particle ring (impostor far + emergent THREE.Points cloud near) + 6 lab sliders; `71eea7a`; Max approved-in-principle, awaiting slider-driven UAT | 4c |
 | — | [FOUNDATION](cards/FOUNDATION.md) (F50/F52/F53 substrate) | Foundation | ✅ | 🟢 | 2 |
 | — | [INTEGRATION](cards/INTEGRATION.md) | Crosscutting | — | — | 5 |
 | — | [PROFILES](cards/PROFILES.md) | Crosscutting | — | — | 6 |
