@@ -579,6 +579,23 @@
       uniform float uFacetCoverage;     // 0..1 facet coverage fraction — lab knob (scattered crystals → continuous field; the F7 region-extent semantics, FULL-range walkable)
       uniform float uFacetScale;        // facet cell density (voronoi3d frequency) — lab knob
       uniform float uFacetAmp;          // facet relief amplitude (per-cell height + tilt scale) — lab knob
+      // ── F44 hex-tessellated crust (Exotic — card F44) — P15 crustal tessellation
+      // (cooling-contraction / convection branch): a uniform-lithology crust tiles into
+      // ~hexagonal cells (3 fractures @ 120°). Mechanism = the voronoi3d keystone with a
+      // REGULARITY jitter knob (zero-jitter Voronoi degenerates to a hex lattice), trough
+      // BORDERS carved from the F2−F1 distance (the F18 N₂-polygon convention) into
+      // height+gradient, and per-cell hashed flat/domed interiors (the F9 chaos-raft +
+      // Sputnik dome). ALL relief (height + gradient), never albedo, so it survives the
+      // 6-level Bayer posterize. uHexStrength is a pure ENABLE gate (no preset, no driver
+      // derivation — the writer sets it 1 when hexTessEnabled, else 0); EVERY F44 term keys
+      // on it, so one gate kills the family: byte-identical pre-F44 output. (fc is TAKEN —
+      // gl_FragCoord; all F44 GLSL locals use the 'hx' prefix.)
+      uniform float uHexStrength;       // master gate 0..1 (pure enable: 1 when hexTessEnabled, else 0; the writer is sole owner)
+      uniform float uHexRegularity;     // 0..1 jitter knob: 0 = random Voronoi blobs, 1 = zero-jitter regular hex lattice
+      uniform float uHexScale;          // hex cell density (voronoi3d frequency) — lab knob
+      uniform float uHexBorderDepth;    // trough carve depth (−) — lab knob
+      uniform float uHexBorderWidth;    // smoothstep width of the F2−F1 border band — lab knob
+      uniform float uHexDome;           // per-cell domed-center amount (Sputnik convex shading; 0=flat plateau, 1=fully domed) — lab knob
 
       // ── snoise — VERBATIM from Planet.js (used by the finite-diff regression path) ──
       vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
@@ -852,6 +869,7 @@
       const int PROV_MAGMA       = 37;  // F41 — neutral (irradiation, not geology): the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
       const int PROV_CARBON      = 38;  // F42 — neutral (mineralogy, not geology): the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
       const int PROV_FACETS      = 39;  // F43 — neutral (crystallization, not geology): the facet field grows over the WHOLE undisturbed crust (surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like carbon F42)
+      const int PROV_HEXTESS     = 40;  // F44 — neutral (crustal tessellation, not geology): the hex field tiles the WHOLE uniform-lithology crust (surface-history/cooling-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -909,6 +927,7 @@
         else if (fid == PROV_MAGMA)      { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_CARBON)     { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_FACETS)     { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_HEXTESS)    { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -2431,6 +2450,93 @@
         fctMask = fctGrow / max(amp, 1e-4);                          // 0..1 grown-facet presence (amp-normalized)
       }
 
+      // ── F44 voronoi3dReg — voronoi3d with a REGULARITY jitter knob (card F44 §4) ──
+      // A verbatim copy of the voronoi3d keystone (:737) with ONE change: each cell's
+      // jitter is blended toward its REGULAR lattice node by reg, and that node is
+      // PARITY-STAGGERED into a BCC arrangement (odd index-sum cells get a +half-cell
+      // shift). reg=0 ⇒ full hash33 jitter (random Voronoi blobs, identical to voronoi3d
+      // up to the offset); reg=1 ⇒ ZERO jitter on a BCC lattice — whose Voronoi cells are
+      // truncated octahedra that read as HEXAGONS in surface cross-section (§4: zero-jitter
+      // cubic gives squares, BCC gives hexes). The 0→1 sweep walks random-Voronoi → hex.
+      // Returns the same vec2(F1,F2) + cellId + grad=normalize(p−center) contract as voronoi3d.
+      vec2 voronoi3dReg(vec3 p, int cells, float reg, out vec3 cellId, out vec3 grad){
+        vec3 ip = floor(p);
+        vec3 fp = fract(p);
+        float f1 = 1e9, f2 = 1e9;
+        vec3 nCell = ip, nR = vec3(0.0);
+        for (int gz=-1; gz<=1; gz++){
+          if (cells < 27 && gz != 0) continue;     // 9-cell: center slab only
+          for (int gy=-1; gy<=1; gy++){
+            for (int gx=-1; gx<=1; gx++){
+              vec3 g = vec3(float(gx), float(gy), float(gz));
+              // TWO-SUBLATTICE BCC scan: each cell contributes TWO feature points — a CORNER
+              // node (lattice offset 0) and a BODY-CENTER node (lattice offset 0.5). Each blends
+              // from its OWN hashed jitter toward its node by reg, and BOTH compete in the
+              // running F1/F2. reg=1 ⇒ the union {g} ∪ {g+0.5} over the integer grid is a true
+              // BCC point set → truncated-octahedron Voronoi cells (hexagonal cross-sections).
+              // reg=0 ⇒ both candidates are independent full-hash33-jitter points (random
+              // Voronoi — the 0→1 continuum stays intact). Distinct hashes/ids keep them apart.
+              vec3 gi = ip + g;                                       // this cell's integer node
+              // — sublattice A: corner node —
+              vec3 jitA = hash33(gi);
+              vec3 cA   = g + mix(jitA, vec3(0.0), reg);              // jitter (reg0) → corner g (reg1)
+              vec3 rA   = cA - fp;
+              float dA  = length(rA);
+              if (dA < f1){ f2 = f1; f1 = dA; nCell = gi; nR = rA; }
+              else if (dA < f2){ f2 = dA; }
+              // — sublattice B: body-center node (distinct hash seed → independent at reg0) —
+              vec3 jitB = hash33(gi + vec3(0.5));
+              vec3 cB   = g + mix(jitB, vec3(0.5), reg);              // jitter (reg0) → center g+0.5 (reg1)
+              vec3 rB   = cB - fp;
+              float dB  = length(rB);
+              if (dB < f1){ f2 = f1; f1 = dB; nCell = gi + vec3(0.5); nR = rB; }
+              else if (dB < f2){ f2 = dB; }
+            }
+          }
+        }
+        cellId = nCell;
+        grad = (f1 > 1e-6) ? (-nR / f1) : vec3(0.0); // = normalize(p - center)
+        return vec2(f1, f2);
+      }
+
+      // ── F44 hex-tessellated crust (Stage-C step 3, Relief — card F44 §6.5 step 2) ──
+      // P15 crustal tessellation: a uniform-lithology crust tiled into ~hex cells. Uses the
+      // voronoi3dReg variant (above) so uHexRegularity walks random-Voronoi → regular hex.
+      // (1) trough BORDERS: the F2−F1 distance carved as a negative-height groove into
+      //     height+gradient (the F18 N₂-polygon convention :2543) — borders carry the signal.
+      // (2) per-cell hashed flat PLATEAU (F9 chaos-raft :2360) + analytic DOME from F1 (the
+      //     Sputnik raised-center convex shading) — interiors stay quiet, dome's analytic
+      //     gradient rides voronoi3d's grad=normalize(p−center) so no per-cell flicker.
+      // ALL relief (height + gradient), ADDITIVE on grad (the F9/F19 contract), so it lives
+      // above the F19 mass-wasting line. uHexStrength<=0 ⇒ early-out: byte-identical pre-F44.
+      void hexCrust(vec3 pos, inout float h, inout vec3 grad){
+        if (uHexStrength <= 0.0) return;
+        float amp = uHexStrength * provinceWeight(PROV_HEXTESS);
+        if (amp <= 0.0) return;
+        vec3 hxId, hxGrad;
+        vec3 hxQ = pos * uHexScale + uMacroOffset + vec3(19.4, -8.7, 33.1);
+        // regularity jitter knob — 0=random Voronoi, 1=regular hex lattice (see voronoi3dReg).
+        vec2 hxFF = voronoi3dReg(hxQ, uVoroCells, uHexRegularity, hxId, hxGrad);
+        // ── borders: F2−F1 trough carved into height+gradient (F18 convention) ──
+        // hxGrad = normalize(p−center) = ∂F1/∂p; the F2−F1 band's slope rides it (cell-edge
+        // direction). DEPTH (not width) drives the gradient: the trough's analytic slope is
+        // the carve depth × the band's spatial rate, matched to facetCombiner's 0.9 seam scale
+        // (was uHexBorderWidth×0.9 ≈ 0.07 — ~12× too weak to shade; now uHexBorderDepth×0.9).
+        float hxEdge = 1.0 - smoothstep(0.0, uHexBorderWidth, hxFF.y - hxFF.x);  // 1 at seam, 0 inside
+        h    += amp * uHexBorderDepth * (-hxEdge);                       // carve trough (negative)
+        grad += amp * uHexBorderDepth * 0.9 * hxEdge * hxGrad;           // trough slope ∝ DEPTH (facetCombiner 0.9 scale)
+        // ── per-cell hashed flat/domed interior (F9 chaos-raft + Sputnik dome) ──
+        vec3  hxRh = hash33(hxId);
+        float hxInterior = smoothstep(0.0, uHexBorderWidth * 1.5, hxFF.y - hxFF.x);  // 1 inside, 0 at seam
+        vec3  hxTilt = (hxRh - 0.5) * 2.0;                              // per-cell CONSTANT tilt (exact grad, F9 raft)
+        float hxFlat = (hxRh.x - 0.5) * 0.4;                            // per-cell flat plateau height
+        float hxDome = uHexDome * (1.0 - hxFF.x) * (1.0 - hxFF.x);      // convex toward cell center (F1→0 at center)
+        h    += amp * hxInterior * (hxFlat + hxDome);
+        // plateau tilt (F9 raft, ∝0.9) + dome's analytic gradient ∂/∂p[(1−F1)²]=−2(1−F1)∂F1/∂p.
+        // hxDome already folds uHexDome, so the dome slope is 2(1−F1)·hxDome·(−hxGrad) — depth-faithful.
+        grad += amp * hxInterior * (0.9 * hxTilt - 2.0 * (1.0 - hxFF.x) * hxDome * hxGrad);
+      }
+
       // ── F10 ridged / grooved icy terrain (Stage-C step 3, Relief — relief doc §F10.a) ──
       // The signature icy-moon look, gated by the SHARED uCryoActivity. TWO mechanisms:
       // (1) DOUBLE RIDGES (Europa) — warped directional lines (like F6 tessera / F8 wrinkles)
@@ -2833,6 +2939,7 @@
           edificeCombiner(vPos, h, grad);          // F7 — volcanic shield/strato cones + caldera
           chaosCombiner(vPos, h, grad);            // F9 — ice-shell chaos rafts (reads shared uCryoActivity)
           facetCombiner(vPos, h, grad, fctMask);   // F43 — crystalline facet field (the F9 chaos-raft mechanism at crystal amplitude; ADDITIVE on grad, the F19 contract; exports fctMask for the post-posterize spark)
+          hexCrust(vPos, h, grad);                 // F44 — hex-tessellated crust (voronoi3dReg + regularity knob; F2−F1 trough borders + flat/domed interiors; ADDITIVE on grad, F19 contract; gated by uHexStrength × provinceWeight(PROV_HEXTESS))
           cryoRidgeCombiner(vPos, h, grad);        // F10 — double ridges + grooved bands (reads shared uCryoActivity)
           sublimationCombiner(vPos, h, grad);      // F18 — sublimation landscapes (species-switched: pits/polygons/blades/hollows)
           glacialCombiner(vPos, fwBase, h, grad);  // F17 — glacial ice mantle + flow-aligned moraine/esker lineations (reads frost cap gate)
@@ -3649,6 +3756,14 @@
       uFacetCoverage:  { value: 0.45 },  // F43 facet coverage fraction — lab knob (scattered → continuous; F7 region-extent semantics; inert behind strength 0)
       uFacetScale:     { value: 9.0 },   // F43 facet cell density — lab knob (voronoi3d frequency; inert behind strength 0)
       uFacetAmp:       { value: 0.5 },   // F43 facet relief amplitude — lab knob (per-cell height + tilt scale; inert behind strength 0)
+      // ── F44 hex-tessellated crust (pure enable gate — card §6.5; no preset, no driver) ──
+      // uHexStrength 0 ⇒ every F44 GLSL block is skipped entirely (byte-identical pre-F44 render).
+      uHexStrength:    { value: 0.0 },   // F44 master gate (pure enable: 1 when hexTessEnabled, else 0)
+      uHexRegularity:  { value: 0.85 },  // F44 jitter knob — 0=random Voronoi, 1=regular hex (inert behind strength 0)
+      uHexScale:       { value: 4.0 },   // F44 hex cell density — lab knob (voronoi3d frequency; inert behind strength 0)
+      uHexBorderDepth: { value: 0.5 },   // F44 trough carve depth — lab knob (inert behind strength 0)
+      uHexBorderWidth: { value: 0.08 },  // F44 border band width — lab knob (inert behind strength 0)
+      uHexDome:        { value: 0.4 },   // F44 per-cell domed-center amount — lab knob (inert behind strength 0)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
       uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
@@ -4234,6 +4349,12 @@
       facetCoverage: 0.65,  // F43 facet coverage fraction (lab knob — scattered crystals → continuous field; FULL-range walkable per the F42 tar lesson). 0.65 default = headline mostly-faceted crystal world (live-tuned 2026-06-13)
       facetScale: 4.0,      // F43 facet cell density (lab knob — voronoi3d frequency). 4.0 = large clear planar faces that read as crystal; 9 was too fine to read as facets (live-tuned 2026-06-13)
       facetAmp: 2.0,        // F43 facet relief amplitude (lab knob — per-cell height + tilt scale). 2.0 = crisp facet/ridge contrast; 0.5 under-read as mottled noise (live-tuned 2026-06-13)
+      hexTessEnabled: true, // F44 enable gate — off zeroes uHexStrength at the per-frame writer (border troughs + flat/domed interiors all vanish: byte-identical pre-F44 output)
+      hexRegularity: 0.85,  // F44 jitter knob (lab knob — 0=random Voronoi blobs, 1=regular hex lattice; 0.85 reads as deliberate hex while keeping believable variance) — walked & confirmed v2 verify
+      hexScale: 1.6,        // F44 hex cell density (lab knob — voronoi3d frequency). v2 RE-TUNE: BCC two-sublattice scan ~doubled point density, so 4.0 packed cells too fine at close LOD; 1.6 gives big clear columnar cells that survive full-octave base FBM at d2.5–d8
+      hexBorderDepth: 1.1,  // F44 trough carve depth (lab knob) — v2 walk: deeper carve so borders catch light under the analytic-normal relief (now grad rides DEPTH, not width)
+      hexBorderWidth: 0.10, // F44 border band width (lab knob) — v2 walk: slightly wider band reads cleaner at mid distance
+      hexDome: 0.55,        // F44 per-cell domed-center amount (lab knob — 0=flat plateau, 1=fully domed Sputnik convex shading) — v2 walk: convex cell centers read without per-cell flicker
       emissiveBypass: false,
       specBypass: false,
       limbBypass: false,
@@ -5946,6 +6067,20 @@
     fFacets.add(state, 'facetScale', 3, 24, 0.5).name('cell density');
     fFacets.add(state, 'facetAmp', 0, 2.5, 0.01).name('amplitude');
     fFacets.add(state, 'facetsEnabled').name('✓ enabled');
+    // ▸ Hex crust (F44) — P15 crustal tessellation: a uniform-lithology crust tiled into
+    // ~hex cells via the voronoi3d keystone with a REGULARITY jitter knob (random Voronoi →
+    // regular hex), F2−F1 trough borders carved into relief (the F18 N₂-polygon convention)
+    // + per-cell hashed flat plateaus / analytic Sputnik domes (the F9 chaos-raft + dome).
+    // Pure enable gate (no preset, no driver) — rides whatever preset is loaded ('Frozen
+    // (airless)' is the §5 test base). NO 🎲 — the hex domain is seeded off uMacroOffset
+    // (the world's own identity; the Seeds folder rerolls it).
+    const fHex = fExoticGroup.addFolder('Hex crust (F44)'); fHex.close();
+    fHex.add(state, 'hexRegularity', 0, 1, 0.01).name('regularity (voronoi→hex)');
+    fHex.add(state, 'hexScale', 1, 12, 0.1).name('cell density');  // v2: range lowered (min 3→1) — BCC two-sublattice doubled point density, so the walkable default (1.6) sits below the old min; 1–12 keeps it mid-low
+    fHex.add(state, 'hexBorderDepth', 0, 1.5, 0.01).name('border depth');
+    fHex.add(state, 'hexBorderWidth', 0.02, 0.2, 0.005).name('border width');
+    fHex.add(state, 'hexDome', 0, 1, 0.01).name('dome amount');
+    fHex.add(state, 'hexTessEnabled').name('✓ enabled');
 
     // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
     // F36 sunglint).
@@ -6015,7 +6150,7 @@
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
       lightning: fLightning, clouds: fClouds, dustStorm: fDustStorm,
       daysideThermal: fThermal, nightsideThermal: fThermalNight, magma: fMagma,
-      carbon: fCarbon, facets: fFacets,
+      carbon: fCarbon, facets: fFacets, hexTess: fHex,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
     // Move each feature's enable controller out of the folder body and into its
@@ -6410,6 +6545,17 @@
       uniforms.uFacetCoverage.value  = state.facetCoverage;
       uniforms.uFacetScale.value     = state.facetScale;
       uniforms.uFacetAmp.value       = state.facetAmp;
+      // F44 hex crust — hexTessEnabled gates the master strength→0 (border troughs + domed
+      // interiors ALL key on uHexStrength > 0, so ONE gate kills the family: byte-identical
+      // pre-F44 output). NO driver derivation (no preset) — uHexStrength is purely the enable
+      // gate; regularity/scale/border/dome pass through (inert behind strength 0). This frame
+      // writer is the SOLE owner of the F44 uniforms (no second write site).
+      uniforms.uHexStrength.value    = state.hexTessEnabled ? 1.0 : 0.0;   // ✓ enable gate
+      uniforms.uHexRegularity.value  = state.hexRegularity;
+      uniforms.uHexScale.value       = state.hexScale;
+      uniforms.uHexBorderDepth.value = state.hexBorderDepth;
+      uniforms.uHexBorderWidth.value = state.hexBorderWidth;
+      uniforms.uHexDome.value        = state.hexDome;
       // F32/F33 thermal day/night — uThermalDir = the object-space light dir rotated
       // about the spin axis (+y) by the superrotation hotspot offset; a right-hand
       // rotation about +y DECREASES longitude, which is EAST in this lab's tangent

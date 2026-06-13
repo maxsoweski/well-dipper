@@ -69,7 +69,7 @@ during phases) | ▶️ = current
 | F41 | [F41-magma-ocean](cards/F41-magma-ocean.md) | Exotic | ✅ | 🟡 taste-call | 4c |
 | F42 | [F42-carbon-crust](cards/F42-carbon-crust.md) | Exotic | ✅ | 🟡 taste-call | 4c |
 | F43 | [F43-crystalline-facets](cards/F43-crystalline-facets.md) | Exotic | ✅ | 🟡 taste-call | 4c |
-| F44 | [F44-hex-tessellation](cards/F44-hex-tessellation.md) | Exotic | ⬜ | — | 4c |
+| F44 | [F44-hex-tessellation](cards/F44-hex-tessellation.md) | Exotic | ✅ | 🟢 | 4c |
 | F45 | [F45-shattered-crust](cards/F45-shattered-crust.md) | Exotic | ⬜ | — | 4c |
 | F46 | [F46-fungal-mats](cards/F46-fungal-mats.md) | Overlay | ⬜(lab) | — | 4c |
 | F47 | [F47-machine-surface](cards/F47-machine-surface.md) | Overlay | ⬜(lab) | — | 4c |

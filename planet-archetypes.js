@@ -109,6 +109,12 @@ export const FEATURES = {
   // Naica-selenite template; the Wulff-habit + blade-orientation-alignment refinements
   // are the card's logged v1 scope cuts).
   facets:     { label: 'Crystal facets (F43)',  enableKey: 'facetsEnabled',    archetypes: ['exotic-geometric'] },
+  // F44 hex-tessellated crust — Exotic speculative endmember (P15 crustal tessellation,
+  // cooling-contraction / convection branch): a uniform-lithology crust tiles into ~hex
+  // cells (3 fractures @ 120°). REUSES the exotic-geometric archetype F43 created (no new
+  // archetype, no new preset — rides 'Frozen (airless)' per the card §5 base). uHexStrength
+  // is a pure ENABLE gate (no driver class), so registration is the enable flag alone.
+  hexTess:    { label: 'Hex crust (F44)',       enableKey: 'hexTessEnabled',   archetypes: ['exotic-geometric'] },
 };
 
 // Each ARCHETYPE carries its human metadata + which lab presets exemplify it.
@@ -180,4 +186,5 @@ export const PROVINCES = {
   magma:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — irradiation, not geology: the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
   carbon:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — mineralogy, not geology: the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
   facets:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — crystallization, not geology: the facet field grows over the WHOLE undisturbed crust (surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like carbon F42)
+  hexTess:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — crustal tessellation, not geology: the hex tiling covers the whole uniform crust (cooling/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)
 };
