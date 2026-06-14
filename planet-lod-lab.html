@@ -108,6 +108,8 @@
     import GUI from 'lil-gui';
     import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms } from './planet-lod-lab-core.js';
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
+    import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
+    import { computeEnableSet } from './lab-isolation.js';             // Phase 2: pure non-destructive-solo enable-set logic
     import { generateRingPhysics } from './src/generation/PhysicsEngine.js';   // F51 rings — CPU-side physics chain
     import { bakeRingCloud, makeRingCloudPoints } from './ring-particle-cloud.js';   // F51 rings-v2 — near-tier LOD particle cloud
 
@@ -5258,7 +5260,7 @@
     // ▸ Body filter — archetype-driven panel filtering + per-feature solo
     // (planet-archetypes.js). Created here so it sits at the TOP of the panel;
     // its controls are added below, once the feature folders exist.
-    const filterUI = { filter: true, archetypeLabel: '—' };
+    const filterUI = { filter: true, archetypeLabel: '—', soloMode: 'context' };
     const fFilter = guiLeft.addFolder('Body filter'); fFilter.open();
 
     // ▸ View & LOD (always open)
@@ -6902,11 +6904,54 @@
       relocateEnableToTitle(folder, FEATURES[key].enableKey);
     }
     // soloKey=null → enable ALL features; otherwise enable ONLY that feature.
+    // LEGACY destructive path — kept for "enable all". Solo now goes through the
+    // non-destructive soloFeature()/unsolo() pair below (Phase 2, Tier-2 prereq).
     function setFeatureEnables(soloKey){
       for (const k of Object.keys(FEATURES)) {
         state[FEATURES[k].enableKey] = (soloKey === null) || (k === soloKey);
       }
       syncDisplays();
+    }
+
+    // ── Non-destructive solo (Phase 2) ──────────────────────────────────────
+    // The render-audit sweep solos each feature ON then OFF and must RESTORE the
+    // operator's prior enable state after each cell — "enable all" is wrong (it
+    // loses what was on). So we snapshot the enables on the FIRST solo and restore
+    // that exact set on unsolo. soloMode picks the co-enable set: 'context' adds
+    // the feature's isolationKit (so dependents actually emerge); 'bare' is the
+    // feature alone. computeEnableSet (lab-isolation.js) is the single rule source.
+    let _preSoloEnables = null;   // enable snapshot captured before the first solo
+    let _soloKey = null;          // currently-soloed feature key, or null
+    let _soloMode = 'context';    // 'context' | 'bare'
+    const captureEnables = () => {
+      const snap = {};
+      for (const k of Object.keys(FEATURES)) snap[k] = !!state[FEATURES[k].enableKey];
+      return snap;
+    };
+    const applyEnableSet = (set) => {           // set = Set<featureKey> to turn ON, rest OFF
+      for (const k of Object.keys(FEATURES)) state[FEATURES[k].enableKey] = set.has(k);
+      syncDisplays();
+    };
+    function soloFeature(key, { mode } = {}){
+      if (_preSoloEnables === null) _preSoloEnables = captureEnables();   // capture once, on first solo
+      if (mode) _soloMode = mode;
+      _soloKey = key;
+      const kit = (ASSOCIATIONS[key] && ASSOCIATIONS[key].isolationKit) || [];
+      applyEnableSet(computeEnableSet(Object.keys(FEATURES), { solo: key, mode: _soloMode, isolationKit: kit }));
+    }
+    function unsolo(){
+      if (_preSoloEnables) {
+        for (const k of Object.keys(FEATURES)) state[FEATURES[k].enableKey] = _preSoloEnables[k];
+        syncDisplays();
+        _preSoloEnables = null;
+      } else {
+        setFeatureEnables(null);   // nothing captured → safe default: enable all
+      }
+      _soloKey = null;
+    }
+    function setSoloMode(mode){
+      _soloMode = (mode === 'bare') ? 'bare' : 'context';
+      if (_soloKey !== null) soloFeature(_soloKey);   // re-apply current solo under new mode (no re-capture)
     }
     // The relevant feature set = UNION of featuresOf() over every archetype whose
     // presets include the current Drivers preset (Frozen maps to two → union).
@@ -6925,14 +6970,17 @@
       syncDisplays();
     }
     // One 🔆 solo button per feature folder (appended below its existing controls).
+    // Non-destructive: honors the current soloMode and restores prior enables on unsolo.
     for (const [key, folder] of Object.entries(featureFolders)) {
-      folder.add({ solo(){ setFeatureEnables(key); } }, 'solo').name('🔆 solo (isolate)');
+      folder.add({ solo(){ soloFeature(key); } }, 'solo').name('🔆 solo (isolate)');
     }
     // Header controls live in the top fFilter folder.
     fFilter.add(filterUI, 'archetypeLabel').name('archetype').disable();
     fFilter.add(filterUI, 'filter').name('filter to relevant').onChange(applyArchetypeFilter);
-    fFilter.add({ enableAll(){ setFeatureEnables(null); } }, 'enableAll').name('enable all');
-    fFilter.add({ clearSolo(){ setFeatureEnables(null); } }, 'clearSolo').name('clear solo');
+    // soloMode dropdown: context = solo + its isolationKit (dependents emerge); bare = solo alone.
+    fFilter.add(filterUI, 'soloMode', ['context', 'bare']).name('solo mode').onChange(setSoloMode);
+    fFilter.add({ enableAll(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); } }, 'enableAll').name('enable all');
+    fFilter.add({ clearSolo(){ unsolo(); } }, 'clearSolo').name('clear solo (restore)');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
@@ -7622,7 +7670,9 @@
                     settingsBlob, applySettings, driverUI, applyDrivers,
                     setPreset(name){ if (DRIVER_PRESETS[name]) { driverUI.preset = name; applyDrivers(); } return state._derived; },
                     setQuality(q){ driverUI.qualityTier = q; applyDrivers(); return state._derived; },
-                    solo(key){ setFeatureEnables(key); }, enableAllFeatures(){ setFeatureEnables(null); },
+                    solo(key, opts){ soloFeature(key, opts); }, unsolo(){ unsolo(); },
+                    get soloMode(){ return _soloMode; }, set soloMode(m){ filterUI.soloMode = (m === 'bare') ? 'bare' : 'context'; setSoloMode(m); },
+                    enableAllFeatures(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); },
                     setFilter(on){ filterUI.filter = on; applyArchetypeFilter(); },
                     featureVisible(key){ return !featureFolders[key]._hidden; },
                     featureEnabled(key){ return !!state[FEATURES[key].enableKey]; },
