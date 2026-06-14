@@ -6953,6 +6953,90 @@
       _soloMode = (mode === 'bare') ? 'bare' : 'context';
       if (_soloKey !== null) soloFeature(_soloKey);   // re-apply current solo under new mode (no re-capture)
     }
+
+    // ── Render-delta sweep (Phase 2.5 Task 8) ───────────────────────────────
+    // For the CURRENT preset, measure each feature's MARGINAL pixel contribution
+    // in context: ON = {feature} ∪ isolationKit, OFF = isolationKit only.
+    //
+    // ROTATION is frozen (so the planet doesn't move between ON/OFF), but uTime is
+    // NOT — many features animate (clouds drift, aurora rays, storms, lightning),
+    // and a single frozen instant misses transients (e.g. lightning is OFF most of
+    // the time). So we sample several uTime values across an animation cycle and
+    // take the UNION of pixels that changed in ANY sample: a pixel counts if ON vs
+    // OFF differ by >12/255 summed-abs RGB at any sampled instant. delta = that
+    // union as a fraction of the frame. ON and OFF are always read at the SAME
+    // uTime within a sample, so animation never contaminates the diff. An inert
+    // feature still changes exactly 0 pixels (deterministic) → noise floor = 0.
+    // Returns { preset, deltas:{feature:frac}, degenerate:{feature:'black'|'blown'|null} }.
+    function _readTargetPixels(){
+      const w = sceneTarget.width, h = sceneTarget.height;
+      const buf = new Uint8Array(w * h * 4);
+      renderer.readRenderTargetPixels(sceneTarget, 0, 0, w, h, buf);
+      return buf;
+    }
+    function _degenerateOf(a){   // coarse mechanical-failure check on the ON frame
+      let black = 0, blown = 0; const n = a.length / 4;
+      for (let i = 0; i < a.length; i += 4){
+        if (a[i]===0   && a[i+1]===0   && a[i+2]===0)   black++;
+        if (a[i]===255 && a[i+1]===255 && a[i+2]===255) blown++;
+      }
+      if (black / n > 0.999) return 'black';   // whole frame black → planet itself vanished
+      if (blown / n > 0.5)   return 'blown';   // >half the frame pure white → overflow
+      return null;
+    }
+    // Sample points = VIEWS × TIMES. Two camera VIEWS (yaw + 0 and + π) cover BOTH
+    // hemispheres — night-side-only features (aurora, cityLights, lightning,
+    // nightsideThermal) live on the side away from the light and are invisible from
+    // a single day-lit view. TIMES span ~a full clouds/aurora cycle (fract(uTime*0.04)
+    // ⇒ period 25) so animated features register. A pixel counts if ON vs OFF differ
+    // at ANY (view,time) sample → captures angle- and time-dependent contributions.
+    //
+    // BASELINE = the preset's NATURAL relevant feature set (relevantFeatureSet()), NOT
+    // a bare solo. We answer the PLAYER-VISIBLE question — "does toggling this feature
+    // change the planet the player actually sees on this preset?" — so:
+    //   ON  = naturalSet ∪ {feature}   OFF = naturalSet \ {feature}.
+    // A surface feature hidden under a gas giant's atmosphere yields ~0 delta (correctly
+    // "doesn't render"); a feature that punches through where it shouldn't yields a real
+    // false-render. (A bare solo+kit baseline instead strips the preset's own atmosphere,
+    // exposing terrain the player never sees — measuring capability, not visibility.)
+    const _SWEEP_VIEWS = [0, Math.PI];
+    const _SWEEP_TIMES = [0, 12, 24];
+    async function renderDeltaSweep({ settleFrames = 2, perPixelThresh = 12 } = {}){
+      const allKeys = Object.keys(FEATURES);
+      const restore = captureEnables();              // operator's prior enables — restored at end
+      const prevFreeze = _sweepFreeze, baseT = t, baseYaw = state.yaw;
+      _sweepFreeze = true;                           // freeze auto-spin; we drive t + yaw by hand below
+      const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+      const settle = async n => { for (let i = 0; i < n; i++) await nextFrame(); };
+      const N = sceneTarget.width * sceneTarget.height;
+      const naturalSet = relevantFeatureSet().set;   // the preset's natural feature union (the player's planet)
+      const deltas = {}, degenerate = {};
+      for (const key of allKeys){
+        const onSet  = new Set(naturalSet); onSet.add(key);          // natural planet WITH the feature
+        const offSet = new Set(naturalSet); offSet.delete(key);      // natural planet WITHOUT the feature
+        const everChanged = new Uint8Array(N);                       // per-pixel: changed in ANY sample
+        let degen = null, first = true;
+        for (const vyaw of _SWEEP_VIEWS) for (const dt of _SWEEP_TIMES){
+          state.yaw = baseYaw + vyaw;                                // camera hemisphere
+          t = baseT + dt;                                            // fixed instant (frame() won't advance it)
+          applyEnableSet(onSet);  await settle(settleFrames); const on  = _readTargetPixels();
+          applyEnableSet(offSet); await settle(settleFrames); const off = _readTargetPixels();
+          for (let i = 0, px = 0; i < on.length; i += 4, px++){
+            const dd = Math.abs(on[i]-off[i]) + Math.abs(on[i+1]-off[i+1]) + Math.abs(on[i+2]-off[i+2]);
+            if (dd > perPixelThresh) everChanged[px] = 1;
+          }
+          if (first){ degen = _degenerateOf(on); first = false; }    // degeneracy judged at the first sample
+        }
+        let c = 0; for (let i = 0; i < N; i++) if (everChanged[i]) c++;
+        deltas[key] = c / N;
+        degenerate[key] = degen;
+      }
+      t = baseT; state.yaw = baseYaw;                                // restore clock + camera
+      for (const k of allKeys) state[FEATURES[k].enableKey] = restore[k];   // restore enables
+      syncDisplays();
+      _sweepFreeze = prevFreeze;
+      return { preset: driverUI.preset, deltas, degenerate };
+    }
     // The relevant feature set = UNION of featuresOf() over every archetype whose
     // presets include the current Drivers preset (Frozen maps to two → union).
     function relevantFeatureSet(){
@@ -7099,9 +7183,15 @@
     const thermalObj = new THREE.Vector3();
     let t = 0;
 
+    // Render-delta sweep freeze (Phase 2.5): when true, t + rotation stop advancing
+    // so the A/B sweep isolates a feature's pixel contribution — only the enable
+    // toggle changes the output, never animation or spin.
+    let _sweepFreeze = false;
     function frame(){
+      if (!_sweepFreeze) {
       t += 0.0025;
       planet.rotation.y += state.spinSpeed;   // 0 = stopped; 0.000375 (slider center) = the original rate
+      }
 
       // Camera orbits the origin (yaw/pitch/distance) — mouse-driven, mirrors CameraController.
       const dist = state.distance * R;
@@ -7673,6 +7763,7 @@
                     solo(key, opts){ soloFeature(key, opts); }, unsolo(){ unsolo(); },
                     get soloMode(){ return _soloMode; }, set soloMode(m){ filterUI.soloMode = (m === 'bare') ? 'bare' : 'context'; setSoloMode(m); },
                     enableAllFeatures(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); },
+                    renderDeltaSweep(opts){ return renderDeltaSweep(opts); },
                     setFilter(on){ filterUI.filter = on; applyArchetypeFilter(); },
                     featureVisible(key){ return !featureFolders[key]._hidden; },
                     featureEnabled(key){ return !!state[FEATURES[key].enableKey]; },
