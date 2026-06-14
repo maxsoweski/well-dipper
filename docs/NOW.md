@@ -4,6 +4,11 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> **🧭 Working the planet-LOD lab? READ `docs/FEATURES/planet-lod-CHARTER.md` FIRST** — it's
+> the durable strategic frame (lab≠game by design, the program arc, the canonical model
+> location). It exists because fresh sessions keep losing that wider context. Then NOW.md
+> (this file) for live state + the tracker for which feature is next.
+>
 > **Parallel campaign note (2026-06-13):** The supercruise/warp content below remains the
 > paused primary workstream. SEPARATELY, the **planet-LOD campaign** (tracker:
 > `docs/FEATURES/planet-lod-campaign-tracker.md`; pickup memory `well-dipper-lod-terrain-campaign.md`)

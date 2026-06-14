@@ -12,6 +12,7 @@ every top-level doc and its job.
 2. Skim [`docs/JOURNEY.md`](docs/JOURNEY.md) current-objective + KR status
 3. Read [`docs/NOW.md`](docs/NOW.md) Active workstream + Next 1-3
 4. Verify `~/.claude/state/dev-collab/active-workstream.json` well-dipper key matches NOW.md — if not, update one or the other before proceeding
+5. **If the session is planet-LOD lab work → read [`docs/FEATURES/planet-lod-CHARTER.md`](docs/FEATURES/planet-lod-CHARTER.md) FIRST** (the durable strategic frame: lab≠game by design, the program arc, the canonical model location). It exists because fresh sessions keep losing that wider context; read it before tactical status.
 
 ## Session end
 
