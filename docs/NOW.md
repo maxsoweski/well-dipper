@@ -33,18 +33,32 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > capability lens is also wanted). lightning dead-renders flagged LOW-CONFIDENCE (sparse transient).
 > Tests: 21 green + 1 skip.
 >
-> **⚠️ DISCOVERY (2026-06-14, post-Tier-2): the lab feature model ≠ the game.** Verified by
-> code-explorer (file:line-cited): `planet-archetypes.js` (FEATURES/ARCHETYPES/featuresOf) +
-> `planet-feature-associations.js` + the whole Tier-2 audit are imported ONLY by the lab/tests —
-> **no `src/` file uses them.** The real game gates rendering by a `type` STRING:
-> `PlanetGenerator._pickType` → `ExoticOverlay.apply` (type-swap, probabilistic) → `Planet.js`
-> integer-typeIndex shader dispatch. So the Tier-2 audit validates the LAB's model against the LAB's
-> rendering (valid shader-dev fidelity tool) but does NOT audit the game; the "Venus/Mars cities"
-> finding is a lab force-enable artifact — in-game Venus stays type 'venus' and never hits the
-> city-lights branch. Max's archetype deep-dive request now forks: (A) audit the GAME's
-> type/overlay system, (B) the lab model, or (C) reconcile (is the lab meant to drive the game?).
-> **Pending Max's pick — handoff `/tmp/handoff-archetype-game-audit-2026-06-14.md`.**
-> Prior Tier-2 handoff `/tmp/handoff-manifest-tier2-render-audit-2026-06-14.md`.
+> **RECONCILED (2026-06-14): lab renderer ≠ game renderer — by design.** Max picked lens C.
+> The lab's feature/archetype/association model is a **deliberately-decoupled staging ground
+> for a next-gen planet renderer**, NOT the game's source of truth and NOT a throwaway sandbox.
+> The game still runs the March-2026 **type-branch** shader (`Planet.js`, gated by a `type`
+> string via `PlanetGenerator._pickType` → `ExoticOverlay.apply` → `_typeIndex` dispatch); the
+> lab runs a **feature-composition** shader (`planet-lod-lab-core.js`, the F1–F51 campaign +
+> provinces). They share ZERO shader code. Game-wiring is an explicitly-deferred, no-parity
+> separate effort (Max-approved campaign spec, 2026-06-09 L8-9/L224) with no plan/scope yet.
+> The "Venus/Mars cities" worry was a lab force-enable artifact — in-game Venus stays type
+> 'venus' and never hits the city-lights branch. **Durable record + the deferred-port decisions:
+> `docs/FEATURES/lab-vs-game-renderer-divergence.md` (keep until the port happens).**
+> Handoffs: `/tmp/handoff-archetype-game-audit-2026-06-14.md`, `/tmp/handoff-manifest-tier2-render-audit-2026-06-14.md`.
+>
+> **▶ CURRENT FOCUS (Max, 2026-06-14): make the LOD lab itself good — not game-wiring.** Two
+> phases: (1) **catalog — DONE 2026-06-14.** The comprehensive planet-type×feature×driver model
+> already existed (`docs/FEATURES/planet-visual-features.md`: L0 drivers D1–D16 → L1 processes
+> P1–P28 → L2 features F1–F53, + Appendix A 18 types), and the game's `PhysicsEngine.js` already
+> computes those drivers (incl. `habitabilityScore` as a result of composition/atmo/magneto/orbit).
+> The recent manifest had DRIFTED from it (hand-listed derived lab uniforms, 16/47 driver stubs).
+> **Re-based all 47 on D1–D16:** new `planet-drivers.js` (canonical DRIVERS D1–D16 + PROCESSES
+> P1–P28 transcribed from the model); each feature now declares `processes:[P#]` and DERIVES
+> `dependsOn.drivers` (can't drift, like `modifies`). Overlays → `habitability` (cityLights/
+> ecumenopolis/machine; bioMats); carbon → D10. Guard test rewritten (was Claim-8 skip) → 36 green.
+> (2) **per-feature quality pass — NEXT** (Max picked: reuse the campaign per-feature UAT loop,
+> spec §13). Walk each feature vs reference, adjust the shader. Tier-2 render-delta sweep already
+> produced a 109-false / 85-dead punch-list to triage manifest-wrong vs feature-buggy.
 
 Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash FIXED `4278037`, VERIFIED_PENDING_MAX.** Root cause was NONE of the handoff's 4 candidates — it predates the swap: `updateTraversal` ran in simStep (60Hz) while the rendered camera interpolates per render frame (240Hz), so the camera crossed Portal A's plane up to ~4 rendered frames before the mode flipped; those frames drew stencil-ON with the disc behind the camera → empty stencil mask → tunnel invisible → ~3 frames (~12ms) of raw origin sky. Proven by in-page per-frame canvas capture frame-aligned with signed plane distance (sky-bright frames == sd<0 ∧ OUTSIDE_A exactly, 2 pre-fix warps). Fix: detection moved to renderFrame after camera interpolation. Post-fix: 3 warps, 0 stale frames (was 3/warp), flat crossing brightness, no AC4/AC10 warnings. Headless 54/54. Prior session's 3 goals all VERIFIED_PENDING_MAX `c85480f`. TEMP `__swapTiming` instrumentation still in main.js — remove before workstream ships. **Pushed + Pages deploy green 2026-06-10. Flash fix UAT-PASSED, belts CONFIRMED, far-opening residual CONFIRMED FINE — Max, post-fix ride. All 3 goals + flash SHIPPED.** Next (Max, 2026-06-10): arrival distance — exit farther from system center so star(s) show as billboards on emergence, consistent with the starfield-version of the star seen from the origin system when warping via starfield targeting (vs nav comp). **ARRIVAL-DISTANCE IMPLEMENTED same day (`4afd58e` `29405f5` `04d3437`, master, unpushed): orbitDist now derived from new `StarFlare.billboardSwitchDistance()` × 1.3 (knob `window._warpArrivalMargin`), both warp paths, binaries take max+sep. Spec/plan in docs/superpowers/{specs,plans}/2026-06-10-warp-arrival-billboard-distance*. 6/6 unit tests; subagent spec+quality reviews clean. **Live verify (Task 3) COMPLETE — ARRIVAL-DISTANCE VERIFIED_PENDING_MAX `04d3437`.** 5 controlled warps all-state-tools (no screenshots, game muted per Max's directives): warp 1 full PASS (prior session), warp 3 starfield emergence PASS w/ in-eval center-raycast + >100px mesh sweep (only sky-dome scenery; NO giant flare — §3 anomaly did NOT reproduce at 2 instrumented emergences, CLOSED as runaway-tour scenery), LOD crossover observed BOTH directions (disc 3186–3408 / billboard ≥3631, brackets switchDist ≈ emergence/1.3), nav-comp path PASS via real AutopilotNavSequence (overlay→commit→dispatch→arrival), binary (M+M, seed 175217743) BOTH stars `bbVis=true, discVis=false` at emergence incl. the dim-companion +sep worst case, large-orbitDist arrival ~4.9k units clean. Note: dist-at-idle-detection jitters around orbitDist (coast before / fly-in after the idle flip) — invariant is billboard-range emergence, held every observation. Console: only the known pre-existing travel-telemetry oscillation warning; no AC4/AC5. Fresh: 6/6 unit, build clean. Seed-targeted nav-data warps work from console (replicate `_setWarpTargetFromNavStar` field writes on `window._warpTarget` + `_beginWarpTurn`). **Max UAT next: ride starfield + nav-comp warp, tune `window._warpArrivalMargin` (default 1.3, read per-warp) — confirmed value gets baked. Then remove TEMP `__swapTiming` + push on Max's word.**
 

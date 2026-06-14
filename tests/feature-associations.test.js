@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { FEATURES, ARCHETYPES, PROVINCES } from '../planet-archetypes.js';
 import { ASSOCIATIONS, DOMAINS, PROVINCE_GROUPS, provinceGroupOf } from '../planet-feature-associations.js';
+import { DRIVERS, PROCESSES, driversFor } from '../planet-drivers.js';
 
 const featureKeys = Object.keys(FEATURES);
 
@@ -149,15 +150,63 @@ describe('Tier-1: rendersOn vs archetype coherence (Claim 7)', () => {
   });
 });
 
-// Claim 8 — driver-name validity. DEFERRED pending Max's Decision 4: 16/47 features
-// carry `dependsOn.drivers:[] // TODO`, and the manifest's driver names ('erosion',
-// 'tidalHeat', …) are physical-uniform CONCEPTS, not the literal _derived uniform
-// keys — building a faithful enum needs a judgment mapping against deriveUniforms()
-// in planet-lod-lab-core.js. Stubbed skipped rather than fabricate a false guard.
-describe.skip('Tier-1: driver-name validity (Claim 8) — DEFERRED (Decision 4)', () => {
-  it('every dependsOn.drivers name is a real derived-uniform driver', () => {
-    // TODO(audit): build DRIVER_ENUM from planet-lod-lab-core.js deriveUniforms()
-    // and assert each non-empty driver name ∈ DRIVER_ENUM; decide whether the 16
-    // stubbed [] lists must be filled or are legitimately driver-less.
+// Claim 8 — driver-name validity. RESOLVED 2026-06-14 (Max: "re-base all 47 on D1–D16").
+// dependsOn.drivers is now DERIVED from each feature's `processes` (+ directDrivers) via the
+// canonical L0/L1 model in planet-drivers.js (DRIVERS D1–D16, PROCESSES P1–P28). These tests
+// pin the manifest to that model: valid process/driver refs, correct derivation, no empties.
+describe('Tier-1: driver model grounding (Claim 8)', () => {
+  it('every feature.processes entry is a real PROCESSES key', () => {
+    const bad = [];
+    for (const k of featureKeys) {
+      for (const p of (ASSOCIATIONS[k].processes || [])) {
+        if (!PROCESSES[p]) bad.push(`${k} → '${p}'`);
+      }
+    }
+    expect(bad, `processes referencing unknown P#:\n  ${bad.join('\n  ')}`).toEqual([]);
+  });
+
+  it('every directDrivers entry is a real DRIVERS key', () => {
+    const bad = [];
+    for (const k of featureKeys) {
+      for (const d of (ASSOCIATIONS[k].directDrivers || [])) {
+        if (!DRIVERS[d]) bad.push(`${k} → '${d}'`);
+      }
+    }
+    expect(bad, `directDrivers referencing unknown D#:\n  ${bad.join('\n  ')}`).toEqual([]);
+  });
+
+  it('every derived dependsOn.drivers name is a canonical D1–D16 driver', () => {
+    const bad = [];
+    for (const k of featureKeys) {
+      for (const d of ASSOCIATIONS[k].dependsOn.drivers) {
+        if (!DRIVERS[d]) bad.push(`${k} → '${d}'`);
+      }
+    }
+    expect(bad, `dependsOn.drivers referencing unknown D#:\n  ${bad.join('\n  ')}`).toEqual([]);
+  });
+
+  it('dependsOn.drivers is the exact derivation of processes + directDrivers (no hand-edits)', () => {
+    const bad = [];
+    for (const k of featureKeys) {
+      const a = ASSOCIATIONS[k];
+      const expected = driversFor(a.processes, a.directDrivers);
+      if (JSON.stringify(a.dependsOn.drivers) !== JSON.stringify(expected)) {
+        bad.push(`${k}: got [${a.dependsOn.drivers}] expected [${expected}]`);
+      }
+    }
+    expect(bad, `drivers out of sync with the model:\n  ${bad.join('\n  ')}`).toEqual([]);
+  });
+
+  it('every feature derives at least one driver (no empty driver columns)', () => {
+    const empty = featureKeys.filter(k => ASSOCIATIONS[k].dependsOn.drivers.length === 0);
+    expect(empty, `features with no derived drivers: ${empty.join(', ')}`).toEqual([]);
+  });
+
+  it('every PROCESSES driver is itself a canonical D1–D16 driver (registry self-consistency)', () => {
+    const bad = [];
+    for (const [p, def] of Object.entries(PROCESSES)) {
+      for (const d of def.drivers) if (!DRIVERS[d]) bad.push(`${p} → '${d}'`);
+    }
+    expect(bad, `PROCESSES referencing unknown drivers:\n  ${bad.join('\n  ')}`).toEqual([]);
   });
 });
