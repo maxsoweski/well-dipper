@@ -33,8 +33,11 @@ The associations Max wants to navigate by **are not captured as data anywhere**.
 |---|---|---|
 | `planet-feature-associations.js` (repo root, sibling of `planet-archetypes.js`) | The manifest: `ASSOCIATIONS[featureKey] = {domain, provinceGroup, dependsOn, modifies, isolationKit, rendersOn}` + enums + helper accessors | **Create** |
 | `tests/feature-associations.test.js` | Drift-guard: every `FEATURES` key has an entry; enums valid; `provinceGroup` consistent with `PROVINCES` `{field,polarity}`; `dependsOn.features` / `modifies` / `isolationKit` reference real keys | **Create** |
-| `planet-lod-lab.html` | Isolation upgrades (Phase 2): non-destructive solo, in-context vs bare, `window._lab` API additions | **Modify** |
+| `planet-lod-lab.html` | Isolation upgrades (Phase 2): non-destructive solo, in-context vs bare, `window._lab` API additions; `renderDeltaSweep()` live harness (Phase 2.5) | **Modify** |
 | `tests/lab-isolation.test.js` | Unit-test the pure isolation helpers (extract the enable-set computation as a pure fn so it's testable headless) | **Create** |
+| `lab-render-audit.js` (repo root) | Pure auditor: `expectedMatrix(manifest, presets)` + `auditRenderMatrix(expected, actualDeltas)` → violations (`falseRenders`, `deadRenders`) | **Create** |
+| `tests/render-audit.test.js` | Unit-test the pure auditor against a synthetic delta matrix | **Create** |
+| `docs/FEATURES/lab-render-audit.md` | Output of the live sweep: preset×feature render matrix + the violations punch-list for Max's review | **Create** (generated) |
 | `docs/superpowers/plans/2026-06-14-lab-feature-panel-rebuild.md` | Phase 3 detailed plan (the new panel) | **Create later** (after Phase 1 lands) |
 
 **Shared-tree caution (from handoff):** the working tree also holds an unrelated warp-session `src/` WIP + loose untracked files. Stage **explicit paths only** — never `git add -A`.
@@ -320,6 +323,128 @@ Goal: make isolation reviewable and non-destructive *before* the panel rebuild, 
 
 ---
 
+## Phase 2.5 — Render-audit quality gate (the final test)
+
+**Why:** today a bunch of features render on presets where they shouldn't — and look broken doing it. The manifest (Phase 1) declares the *intended* render-set per feature (`rendersOn`); this gate verifies the *actual* lab matches it, group by group, so the catalog isn't just documentation but an enforced contract. It is the concrete, automatable form of "a basic quality check as the feature groups are identified."
+
+**What it checks**, for every (preset × feature) cell:
+- **False-render (the bug Max sees):** preset ∉ `ASSOCIATIONS[feature].rendersOn`, but the feature's A/B delta (solo ON vs OFF, in-context) is **nonzero** → it's painting pixels on a planet it shouldn't touch. ⚠️ flag.
+- **Dead-render:** preset ∈ `rendersOn`, but delta is **zero** → claims to render, actually inert (manifest optimistic, or driver gate broken). ⚠️ flag.
+- **Degenerate output ("looks broken"):** on a preset it *should* render on, sample the render target — all-black (nothing emerged), blown-out/NaN (white overflow), or out-of-gamut → 🔧 candidate. (Aesthetic "looks broken" beyond these degenerate cases stays Max's review-lap call; this catches the mechanical failures.)
+
+**Ordering:** runs after Phase 2 because the sweep relies on the **non-destructive solo** (Task 4) to restore state and the **in-context isolation** (Task 5) so dependent features actually emerge. It is organized **by association group** — it sweeps and reports group-by-group (tectonic-highlands, young-lowlands, atmosphere/global, …) so the output reads as a per-group quality check, matching how the groups were catalogued in Phase 1.
+
+**Disambiguation is the point:** each violation tells Max *which* of two fixes a feature needs — manifest wrong (`rendersOn` should include this preset) vs feature actually buggy (driver gate derives nonzero where it shouldn't, in `applyDrivers()`/`deriveUniforms()`). The audit produces the punch-list; the fixes are follow-on work, triaged with Max.
+
+### Task 7: Pure auditor (TDD — headless, no GPU)
+
+**Files:**
+- Create: `lab-render-audit.js`
+- Create: `tests/render-audit.test.js`
+
+- [ ] **Step 1: Write the failing test**
+
+```js
+// tests/render-audit.test.js
+import { describe, it, expect } from 'vitest';
+import { expectedMatrix, auditRenderMatrix } from '../lab-render-audit.js';
+
+describe('render audit', () => {
+  const manifest = {
+    rivers: { rendersOn: ['Rocky', 'Ocean'] },
+    aurora: { rendersOn: ['Rocky', 'Gas giant'] },
+  };
+  const presets = ['Rocky', 'Ocean', 'Gas giant'];
+
+  it('expectedMatrix marks the declared render cells true', () => {
+    const m = expectedMatrix(manifest, presets);
+    expect(m.rivers.Ocean).toBe(true);
+    expect(m.rivers['Gas giant']).toBe(false);
+    expect(m.aurora['Gas giant']).toBe(true);
+  });
+
+  it('flags a false-render (renders where rendersOn says it should not)', () => {
+    const expected = expectedMatrix(manifest, presets);
+    const actualDeltas = { rivers: { Rocky: 0.4, Ocean: 0.3, 'Gas giant': 0.2 }, // <- 0.2 on Gas giant = bug
+                           aurora: { Rocky: 0.5, Ocean: 0.0, 'Gas giant': 0.6 } };
+    const v = auditRenderMatrix(expected, actualDeltas, { eps: 0.01 });
+    expect(v.falseRenders).toContainEqual({ feature: 'rivers', preset: 'Gas giant', delta: 0.2 });
+    expect(v.deadRenders).toEqual([]); // aurora Ocean is 0 but Ocean ∉ rendersOn(aurora) → not dead, correctly absent
+  });
+
+  it('flags a dead-render (declared but inert)', () => {
+    const expected = expectedMatrix(manifest, presets);
+    const actualDeltas = { rivers: { Rocky: 0.0, Ocean: 0.3, 'Gas giant': 0.0 }, // Rocky declared but 0 = dead
+                           aurora: { Rocky: 0.5, Ocean: 0.0, 'Gas giant': 0.6 } };
+    const v = auditRenderMatrix(expected, actualDeltas, { eps: 0.01 });
+    expect(v.deadRenders).toContainEqual({ feature: 'rivers', preset: 'Rocky', delta: 0.0 });
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `cd /home/ax/projects/well-dipper && npx vitest run tests/render-audit.test.js`
+Expected: FAIL — `Cannot find module '../lab-render-audit.js'`.
+
+- [ ] **Step 3: Implement the pure auditor**
+
+```js
+// lab-render-audit.js
+export function expectedMatrix(manifest, presets) {
+  const m = {};
+  for (const [feature, a] of Object.entries(manifest)) {
+    m[feature] = {};
+    for (const p of presets) m[feature][p] = (a.rendersOn || []).includes(p);
+  }
+  return m;
+}
+
+// expected: featureKey -> preset -> bool (should render)
+// actualDeltas: featureKey -> preset -> number (measured ON/OFF pixel delta)
+export function auditRenderMatrix(expected, actualDeltas, { eps = 0.01 } = {}) {
+  const falseRenders = [], deadRenders = [];
+  for (const feature of Object.keys(expected)) {
+    for (const preset of Object.keys(expected[feature])) {
+      const should = expected[feature][preset];
+      const delta = (actualDeltas[feature] || {})[preset] ?? 0;
+      if (!should && delta > eps) falseRenders.push({ feature, preset, delta });
+      if (should && delta <= eps) deadRenders.push({ feature, preset, delta });
+    }
+  }
+  return { falseRenders, deadRenders };
+}
+```
+
+- [ ] **Step 4: Run to verify PASS**
+
+Run: `cd /home/ax/projects/well-dipper && npx vitest run tests/render-audit.test.js`
+Expected: PASS (all three).
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /home/ax/projects/well-dipper
+git add lab-render-audit.js tests/render-audit.test.js
+git commit -m "feat(lab): pure render-audit (false-render / dead-render detection)"
+```
+
+### Task 8: Live sweep harness + generate the audit report
+
+**Files:**
+- Modify: `planet-lod-lab.html` (add `window._lab.renderDeltaSweep()`)
+- Create (generated): `docs/FEATURES/lab-render-audit.md`
+
+Task-level (expands to bite-sized steps at execution; needs GPU `:9223`, NOT Playwright — see `well-dipper-testing-reference`):
+- Add `window._lab.renderDeltaSweep()` — for the **current** preset, loop every feature: in-context solo ON → tick ~5 frames (driven uniforms lag a frame) → read the low-res render target (`_lab.sceneTarget`, NOT the default framebuffer) → solo OFF → tick → read → summed-abs pixel delta. Restore prior enables (Phase-2 non-destructive). Return `{ preset, deltas: {feature: delta}, degenerate: {feature: 'black'|'blown'|null} }`.
+- Driver script (chrome-devtools): for each `DRIVER_PRESETS` key → `_lab.setPreset(p)` → `renderDeltaSweep()` → collect.
+- Feed the collected matrix through the Task-7 `auditRenderMatrix` + `expectedMatrix` → write `docs/FEATURES/lab-render-audit.md`: a preset×feature table (✅ expected-and-renders / ⚠️ false-render / ⚠️ dead-render / 🔧 degenerate), grouped by association group, with the violations punch-list at top for Max.
+- **Gate:** the audit report's existence + a triaged violations list is the Phase-2.5 deliverable. Fixing the violations (manifest `rendersOn` vs driver-gate bugs) is follow-on, triaged with Max — not auto-fixed in this gate.
+
+> The campaign already uses this A/B-delta technique (solo + ON/OFF, double-rAF before reads); reuse those lessons (`well-dipper-lod-terrain-campaign` memory: same-tick uniform reads lie; `?fresh=1` to stop sessionStorage restoring stale state mid-sweep).
+
+---
+
 ## Phase 3 — New manifest-driven feature panel (separate plan)
 
 Per the resolved "manifest first, then new panel" decision and the writing-plans scope rule (multiple independent subsystems → separate plans), the panel rebuild gets its own detailed plan authored **after** Phase 1 lands and the manifest's real shape is in hand. Scope to capture there:
@@ -334,7 +459,7 @@ Per the resolved "manifest first, then new panel" decision and the writing-plans
 
 ## Self-review
 
-- **Spec coverage:** isolate-any-feature → Phase 2 (Tasks 4–6) + Phase 3 inline controls; navigate-by-associations → Phase 1 manifest (`dependsOn`/`modifies`/`provinceGroup`) surfaced as Phase 3 chips; archetype-first + basic-settings-then-features → Phase 3 nav; "catalog and update" → the manifest + drift-guard tests (Tasks 1–3) keep catalog and code in sync. Covered.
+- **Spec coverage:** isolate-any-feature → Phase 2 (Tasks 4–6) + Phase 3 inline controls; navigate-by-associations → Phase 1 manifest (`dependsOn`/`modifies`/`provinceGroup`) surfaced as Phase 3 chips; archetype-first + basic-settings-then-features → Phase 3 nav; "catalog and update" → the manifest + drift-guard tests (Tasks 1–3) keep catalog and code in sync; **basic quality check as groups are identified / features rendering when they shouldn't → Phase 2.5 render-audit gate (Tasks 7–8)**, organized by association group, flagging false-renders + degenerate output. Covered.
 - **Type consistency:** `ASSOCIATIONS[key]` shape (`domain, provinceGroup, dependsOn:{drivers,features}, modifies, isolationKit, rendersOn`) is identical in the schema block, the three exemplars, and every test assertion. `computeEnableSet(allKeys, {solo, mode, isolationKit})` is referenced identically in Tasks 5 and 6. `provinceGroupOf(field, polarity)` defined in Task 3 Step 1, used in Step 2.
 - **Placeholders:** Phase 1 is fully concrete (real test code, real schema, real exemplars). The ~46 un-exemplified manifest entries are bounded by the completeness test (Task 1) and the authoring rules (Task 2) rather than inlined — a deliberate, enforced decomposition, not a TODO. Phases 2–3 are task-level by design (Phase 3 is explicitly a separate plan); they expand to bite-sized steps at execution.
 
