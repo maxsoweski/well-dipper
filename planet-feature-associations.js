@@ -22,6 +22,15 @@ export const PROVINCE_GROUPS = {
   'global':             null,
 };
 
+// Inverts a {field,polarity} affinity back to its group name. Defaults to
+// 'global' when no provinced tuple matches (i.e. unprovinced features).
+export function provinceGroupOf(field, polarity) {
+  for (const [name, t] of Object.entries(PROVINCE_GROUPS)) {
+    if (t && t.field === field && t.polarity === polarity) return name;
+  }
+  return 'global';
+}
+
 // ASSOCIATIONS[key] = {
 //   domain:        one of DOMAINS
 //   provinceGroup: one of Object.keys(PROVINCE_GROUPS)
