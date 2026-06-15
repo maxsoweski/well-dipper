@@ -6970,7 +6970,7 @@
       ctrl.domElement.classList.add('title-toggle');
       ctrl.domElement.addEventListener('click', e => e.stopPropagation());
       title.appendChild(ctrl.domElement);
-      ctrl.onChange(() => refreshAllCardStates());   // enable flip → card State dot updates
+      ctrl.onChange(() => { refreshAllCardStates(); if (typeof refreshArchetypeInfo === 'function') refreshArchetypeInfo(); });   // enable flip → card State dot + archetype-info dots/K update
     }
     for (const [key, folder] of Object.entries(featureFolders)) {
       relocateEnableToTitle(folder, FEATURES[key].enableKey);
