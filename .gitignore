@@ -34,3 +34,4 @@ recordings/
 # planet refinement campaign screenshot galleries (large PNGs; persistent on disk, reviewed from Windows)
 docs/FEATURES/cards/shots/*.png
 docs/FEATURES/screenshots/*.png
+.superpowers/
