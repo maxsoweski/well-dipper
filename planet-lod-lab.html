@@ -5695,6 +5695,15 @@
       state.craterRelaxation = u.craterRelaxation;
       state.terraceCount     = u.terraceCount;
       uniforms.uVoroCells.value = u.craterCells;
+      // F2 crater PRESERVATION driver (lab audit 2026-06-15) — craters rendered too
+      // uniformly across worlds; preservation is climate/age physics. The core gives a
+      // base; HERE we modulate density/amp/relaxation by a single _craterWeathering
+      // signal (computed once the surface-history helpers below exist — applied at the
+      // marker further down). Stash the core bases the knob/driver scale (the
+      // lavaActivity/cryoActivity precedent — sliders .listen(), a drag overrides until
+      // the next preset/quality change re-derives).
+      state._craterDensityBase = u.craterDensity;
+      state._craterAmpBase      = 0.9;   // core has no craterAmp; 0.9 is the historic knob default
       // F3 ejecta & rays (Stage-C step 3) — derived strength/rampart/ray-brightness flow
       // into state (frame loop → uniforms). Placement reuses the F2 crater uniforms.
       state.ejectaStrength   = u.ejectaStrength;
@@ -5879,6 +5888,28 @@
       state.repose = Math.min(2.2, Math.max(0.5, 0.9 / Math.pow(Math.max(_g, 0.05), 0.4)));
       const _coldGround = 1.0 - _ss(150, 260, _fp.T_eq ?? 288);
       state.ldaFat = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0) * _coldGround;
+      // ── F2 crater PRESERVATION (apply marker, lab audit 2026-06-15) ──────────────
+      // Physics: craters are PRESERVED on airless/old/cold worlds (no wind/water to
+      // soften, no tectonics to bury) and ERASED on atmosphere'd/active worlds. One
+      // _craterWeathering ∈ [0,1] blends the three erasers (all reuse helpers above):
+      //   • atmosphere weathering: retained-atmosphere pressure ramp _ss(0.02,1.5,_press)
+      //     — airless ⇒ 0 (_press is 0 when !_hadLiquid); Mars 0.01 bar ≈ 0 (thin → still
+      //     preserved highlands); Earth 1.0 high; Venus 92 saturates.
+      //   • recorded erosion D11: _ss(0.0,0.6,_erosion).
+      //   • resurfacing (tectonics/volcanism buries craters): _ss(0.1,0.9,resurfacingRate).
+      // High W ⇒ erased: LOWER density+amp, HIGHER relaxation (palimpsest flatten).
+      // Low W (airless) ⇒ preserved: HIGHER density+amp, LOWER relaxation. Continuous,
+      // no hard switch. Outcomes — Frozen W≈.02 (numerous/large/sharp); Rocky W≈.63,
+      // Ocean W≈.91, Venus W≈1.0 (sparse/subtle/soft); Mars W≈.19 (preserved, thin air).
+      const _atmoWx     = _hadLiquid ? _ss(0.02, 1.5, _press) : 0.0;
+      const _resurfRate = _fp.surfaceHistory?.resurfacingRate ?? 0;
+      const _craterWeathering = _clamp01(0.55 * _atmoWx
+                                       + 0.30 * _ss(0.0, 0.6, _erosion)
+                                       + 0.40 * _ss(0.1, 0.9, _resurfRate));
+      const _preserved = 1.0 - _craterWeathering;
+      state.craterDensity    = _clamp01(state._craterDensityBase * (0.45 + 0.55 * _preserved));
+      state.craterAmp        = state._craterAmpBase * (0.5 + 0.7 * _preserved);
+      state.craterRelaxation = _clamp01(state.craterRelaxation + 0.85 * _craterWeathering);
       // ── F24 zonal belts — gas-giant banding (Bands step 4b; derivation lives HERE
       // per the F11 precedent — core.js untouched). Master gate: an h2-he envelope IS
       // the visible surface, so bandStrength is 1 on gas worlds and 0 on EVERY solid
@@ -6443,7 +6474,7 @@
     fCraters.add(state, 'craterRelaxation', 0, 1, 0.01).name('relaxation').listen();
     fCraters.add(state, 'terraceCount', 2, 6, 1).name('terrace rings').listen();
     fCraters.add(state, 'craterScale', 1, 20, 0.5).name('cell density');
-    fCraters.add(state, 'craterAmp', 0, 2, 0.01).name('amplitude');
+    fCraters.add(state, 'craterAmp', 0, 2, 0.01).name('amplitude').listen();   // driven by preservation; .listen() syncs the driver value (drag overrides until re-derive)
     fCraters.add(state, 'cratersEnabled').name('✓ enabled');
     fCraters.add({ roll(){ state.craterOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     // ▸ Ejecta & Rays (F3) — derived (strength/rampart/ray-brightness from the preset,
