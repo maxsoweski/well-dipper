@@ -5258,11 +5258,12 @@
       return { controllers: { ...a.controllers, ...b.controllers }, folders: { ...a.folders, ...b.folders } }; }
     function resetAll(){ guiLeft.reset(); guiRight.reset(); }
 
-    // ▸ Body filter — archetype-driven panel filtering + per-feature solo
-    // (planet-archetypes.js). Created here so it sits at the TOP of the panel;
-    // its controls are added below, once the feature folders exist.
+    // ▸ World — preset picker + derived archetype + archetype-driven panel
+    // filtering + per-feature solo (planet-archetypes.js). Created here so it
+    // sits at the TOP of the panel; its controls are added below, once the
+    // feature folders (and the preset driver) exist.
     const filterUI = { filter: true, archetypeLabel: '—', soloMode: 'context' };
-    const fFilter = guiLeft.addFolder('Body filter'); fFilter.open();
+    const fWorld = guiLeft.addFolder('World'); fWorld.open();
 
     // ▸ View & LOD (always open)
     const fView = guiLeft.addFolder('View & LOD'); fView.open();
@@ -6278,7 +6279,7 @@
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
     }
     const fDrivers = guiLeft.addFolder('Drivers'); fDrivers.open();
-    fDrivers.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('type preset').onChange(applyDrivers);
+    // preset picker moved up to the top-of-panel World folder (added below).
     fDrivers.add(driverUI, 'qualityTier', 0, 1, 0.01).name('qualityTier').onChange(applyDrivers);
 
     // ▸ Surface — Relief
@@ -7083,13 +7084,15 @@
     for (const [key, folder] of Object.entries(featureFolders)) {
       folder.add({ solo(){ soloFeature(key); } }, 'solo').name('🔆 solo (isolate)');
     }
-    // Header controls live in the top fFilter folder.
-    fFilter.add(filterUI, 'archetypeLabel').name('archetype').disable();
-    fFilter.add(filterUI, 'filter').name('filter to relevant').onChange(applyArchetypeFilter);
+    // Header controls live in the top World folder: preset picker first, then
+    // the derived archetype label directly beneath it, then filter/solo.
+    fWorld.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('preset').onChange(applyDrivers);
+    fWorld.add(filterUI, 'archetypeLabel').name('archetype').disable();
+    fWorld.add(filterUI, 'filter').name('filter to relevant').onChange(applyArchetypeFilter);
     // soloMode dropdown: context = solo + its isolationKit (dependents emerge); bare = solo alone.
-    fFilter.add(filterUI, 'soloMode', ['context', 'bare']).name('solo mode').onChange(setSoloMode);
-    fFilter.add({ enableAll(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); } }, 'enableAll').name('enable all');
-    fFilter.add({ clearSolo(){ unsolo(); } }, 'clearSolo').name('clear solo (restore)');
+    fWorld.add(filterUI, 'soloMode', ['context', 'bare']).name('solo mode').onChange(setSoloMode);
+    fWorld.add({ enableAll(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); } }, 'enableAll').name('enable all');
+    fWorld.add({ clearSolo(){ unsolo(); } }, 'clearSolo').name('clear solo (restore)');
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
