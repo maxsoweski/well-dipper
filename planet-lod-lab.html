@@ -7210,6 +7210,7 @@
       fNotRelevant.domElement.style.display = (filterUI.filter && nIrrelevant > 0) ? '' : 'none';
       syncDisplays();
       refreshAllCardStates();   // relevance/enable may have changed → update card State lines
+      if (typeof refreshArchetypeInfo === 'function') refreshArchetypeInfo();   // re-derive AFTER archetypeLabel set (spec lock #9)
     }
     // ── Archetype info view (Ask 3) ───────────────────────────────────────────
     // A read-only, fully-derived explanation of WHY each feature is in this world's
@@ -7280,7 +7281,31 @@
     // Header controls live in the top World folder: preset picker first, then
     // the derived archetype label directly beneath it, then filter/solo.
     fWorld.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('preset').onChange(applyDrivers);
-    fWorld.add(filterUI, 'archetypeLabel').name('archetype').disable();
+    const archCtrl = fWorld.add(filterUI, 'archetypeLabel').name('archetype').disable();
+    // ── Archetype info block: plain DOM injected directly under the archetype field
+    //    row, toggled by an ⓘ on that row (mirrors relocateEnableToTitle's injection).
+    const archInfoEl = document.createElement('div');
+    archInfoEl.className = 'archetype-info';                 // collapsed by default (CSS display:none)
+    // Insert as the next sibling of the archetype controller's row, INSIDE the World
+    // folder body, so it sits visually beneath the label it explains.
+    archCtrl.domElement.insertAdjacentElement('afterend', archInfoEl);
+    const archInfoBtn = document.createElement('span');
+    archInfoBtn.className = 'title-info';
+    archInfoBtn.textContent = 'ⓘ';
+    archInfoBtn.title = 'why are these features relevant to this world?';
+    archInfoBtn.addEventListener('click', e => {
+      e.stopPropagation();                                  // don't disturb the disabled controller
+      const opening = !archInfoEl.classList.contains('open');
+      if (opening) archInfoEl.innerHTML = archetypeInfoHtml();   // build fresh on open (cheap)
+      archInfoEl.classList.toggle('open');
+    });
+    // Append the ⓘ into the controller's NAME cell (the field's left label), after
+    // the "archetype" text — the disabled widget cell stays untouched.
+    (archCtrl.$name || archCtrl.domElement).appendChild(archInfoBtn);
+    // Keep a single live re-render entry point used by the preset/toggle hooks below.
+    function refreshArchetypeInfo(){
+      if (archInfoEl.classList.contains('open')) archInfoEl.innerHTML = archetypeInfoHtml();
+    }
     fWorld.add(filterUI, 'filter').name('filter to relevant').onChange(applyArchetypeFilter);
     // soloMode dropdown: context = solo + its isolationKit (dependents emerge); bare = solo alone.
     fWorld.add(filterUI, 'soloMode', ['context', 'bare']).name('solo mode').onChange(setSoloMode);
