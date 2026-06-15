@@ -6066,10 +6066,15 @@
       state.limbHazeShell = (_thickHaze && state.limbStrength > 0) ? 0.6 : 0.0;
       // ── F35 terminator color gradient — driver derivation (card §6.5 steps 3-4;
       // post-process HERE per the F34 precedent — core.js untouched). Strength is
-      // a flat ~0.5 on every retained atmosphere and 0 airless (the hasAtmo master
+      // a flat ~0.15 on every retained atmosphere and 0 airless (the hasAtmo master
       // gate: Frozen/Lava/Europa keep the razor colorless terminator — the F35
       // regression contract; the per-frame writer adds the terminatorEnabled gate).
-      state.termStrength = _fp.atmosphere?.retained ? 0.5 : 0.0;
+      // TUNED 2026-06-15 (quality pass): was 0.5 — that additive peak (~0.5×saturated
+      // hue) swamped the surface into a heavy orange BELT on every atmospheric world
+      // (Max-reported, all planet types). 0.15 reads as subtle twilight reddening; the
+      // physically-motivated per-preset WIDTH ramp (below) is unchanged. Taste-call →
+      // Max UAT (live `strength`/`width` sliders, both .listen()).
+      state.termStrength = _fp.atmosphere?.retained ? 0.15 : 0.0;
       // Band width from D5 pressure on a log ramp (card §6.5 step 3): hairline
       // 0.06 at <= ~0.1 bar, 0.12 at 1 bar (Rocky/Eyeball), ~0.14 at 1.5 bar
       // (Ocean/Titan), saturating at the 0.30 Venus-class ceiling (92 bar — the
