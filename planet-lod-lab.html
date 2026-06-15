@@ -7468,6 +7468,24 @@
     }
     renderAuditSummary();          // initial "(not run)"
 
+    // ── Auto-stale on any control change (Ask 4) ──────────────────────────────
+    // lil-gui bubbles EVERY controller change to the parent GUI's onChange, so two
+    // top-level hooks (guiLeft + guiRight) cover all ~47 toggles + every slider with
+    // no per-controller wiring. Conservative: ANY change stales (spec lock #4 — the
+    // view/camera-knob exemption is deferred/YAGNI). The _auditing guard early-returns
+    // while the audit's own sweep is mutating enables, so the audit can't self-stale.
+    function staleAudit(){
+      if (_auditing) return;                 // the sweep's own churn — ignore (LOAD-BEARING)
+      if (!state.audit) return;              // nothing to stale yet
+      if (state.audit.fresh) {               // only act on the fresh->stale transition
+        state.audit.fresh = false;
+        renderAllAuditBadges();              // dim badges
+        renderAuditSummary();                // "⚠ stale — re-audit"
+      }
+    }
+    guiLeft.onChange(staleAudit);
+    guiRight.onChange(staleAudit);
+
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
     fSeeds.add(state, 'macroSeed', 0, 10000, 1).name('macro seed').listen().onChange(updateSeedUniforms);
