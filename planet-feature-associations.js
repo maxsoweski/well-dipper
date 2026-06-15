@@ -70,7 +70,8 @@ export const ASSOCIATIONS = {
     dependsOn: { features: [] },
     isolationKit: [],
     // +Mars(prominent)/Rocky/Eyeball(faint) 2026-06-15: declared-only-Frozen was badly wrong (Mars is crater-saturated). Driver scales density by age/resurfacing → faint on eroded worlds, ~0 on Ocean/Venus.
-    rendersOn: ['Frozen (airless)','Mars (arid rocky)','Rocky (Earthlike)','Eyeball (locked temperate)'],
+    // +Ocean/Venus/Titan/Europa 2026-06-15 audit: cratering universal on solid surfaces (driver self-limits — Venus crushed by resurfacing). Exotic Carbon/Crystal own their relief → hard-gated OFF.
+    rendersOn: ['Frozen (airless)','Mars (arid rocky)','Rocky (Earthlike)','Eyeball (locked temperate)','Ocean (temperate)','Venus (sulfuric shroud)','Titan (methane seas)','Europa (icy moon)'],
   },
   ejecta: {
     domain: 'relief', provinceGroup: 'old-plains',
@@ -78,7 +79,8 @@ export const ASSOCIATIONS = {
     dependsOn: { features: [] },
     isolationKit: [],
     // mirrors craters (ejecta aprons inseparable from craters)
-    rendersOn: ['Frozen (airless)','Mars (arid rocky)','Rocky (Earthlike)','Eyeball (locked temperate)'],
+    // +Ocean/Venus/Titan/Europa 2026-06-15 audit: cratering universal on solid surfaces (driver self-limits). Exotic Carbon/Crystal hard-gated OFF.
+    rendersOn: ['Frozen (airless)','Mars (arid rocky)','Rocky (Earthlike)','Eyeball (locked temperate)','Ocean (temperate)','Venus (sulfuric shroud)','Titan (methane seas)','Europa (icy moon)'],
   },
   canyons: {
     domain: 'relief', provinceGroup: 'tectonic-highlands',

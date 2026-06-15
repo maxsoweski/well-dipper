@@ -5656,7 +5656,7 @@
       // canyons/tessera) in addition to shatter/hexTess. Same derivation: preset
       // membership in the corrected manifest's rendersOn → 1.0/0.0 (rendersOnDivergent
       // is already folded into ASSOCIATIONS[key].rendersOn upstream).
-      for (const key of ['shatter', 'hexTess', 'mountains', 'scarps', 'plateaus', 'canyons', 'tessera']) {
+      for (const key of ['shatter', 'hexTess', 'mountains', 'scarps', 'plateaus', 'canyons', 'tessera', 'craters', 'ejecta']) {
         state.featureRelevant[key] =
           (ASSOCIATIONS[key]?.rendersOn || []).includes(driverUI.preset) ? 1.0 : 0.0;
       }
@@ -8151,14 +8151,14 @@
       // uVoroCells set by applyDrivers (qualityTier) — the debug folder's voroCells
       // still drives the spike viz; craters read the driver-set uVoroCells.
       if (state.debugMode > 0) uniforms.uVoroCells.value = state.voroCells | 0;
-      uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity : 0.0;   // ✓ enable gate (preserves slider value)
+      uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.featureRelevant.craters : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — density→0 early-outs the crater pass on non-members (Carbon/Crystal/gas)
       uniforms.uCraterComplexD.value   = state.craterComplexD;
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
       uniforms.uTerraceCount.value     = state.terraceCount;
       uniforms.uCraterScale.value      = state.craterScale;
       uniforms.uCraterAmp.value        = state.craterAmp;
       // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.
-      uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength : 0.0;   // ✓ enable gate
+      uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.featureRelevant.ejecta : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — strength→0 early-outs the ejecta pass on non-members (Carbon/Crystal/gas)
       uniforms.uEjectaRampart.value    = state.ejectaRampart;
       uniforms.uEjectaAmp.value        = state.ejectaAmp;
       uniforms.uEjectaLump.value       = state.ejectaLump;

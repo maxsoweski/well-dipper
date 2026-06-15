@@ -4,8 +4,8 @@
 // (single source per feature); archetype→feature subsets fall out by inversion via
 // featuresOf() — no second place to drift.
 export const FEATURES = {
-  craters:    { label: 'Craters (F2)',          enableKey: 'cratersEnabled',   archetypes: ['impact-airless','tectonic-terrestrial'] },  // 2026-06-15 triage: craters observed on terrestrial worlds (Mars saturated; Earth/eyeball faint) — driver scales by age/resurfacing
-  ejecta:     { label: 'Ejecta & Rays (F3)',    enableKey: 'ejectaEnabled',    archetypes: ['impact-airless','tectonic-terrestrial'] },  // mirrors craters (ejecta aprons are physically inseparable from craters)
+  craters:    { label: 'Craters (F2)',          enableKey: 'cratersEnabled',   archetypes: ['impact-airless','tectonic-terrestrial','volatile-cold','icy-active'] },  // 2026-06-15 audit: cratering universal on solid surfaces (driver self-limits) — +Titan(volatile-cold)/Europa(icy-active); driver scales density by age/resurfacing
+  ejecta:     { label: 'Ejecta & Rays (F3)',    enableKey: 'ejectaEnabled',    archetypes: ['impact-airless','tectonic-terrestrial','volatile-cold','icy-active'] },  // 2026-06-15 audit: cratering universal on solid surfaces (driver self-limits) — mirrors craters (ejecta aprons physically inseparable)
   scarps:     { label: 'Scarps (F5)',           enableKey: 'scarpsEnabled',    archetypes: ['impact-airless','tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) scarps — silicate/tectonic relief
   mountains:  { label: 'Mountains (F1)',        enableKey: 'mountainsEnabled', archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) has 17 km silicate thrust mountains — observed
 
