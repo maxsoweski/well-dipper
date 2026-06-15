@@ -7831,7 +7831,7 @@
       uniforms.uRayCount.value         = state.rayCount;
       uniforms.uRaySharp.value         = state.raySharp;
       // F1 mountains — amplitude/orogeny driven; ridge fold + scale lab-tunable.
-      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp : 0.0;   // ✓ enable gate
+      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp * (1.0 - state.isExoticCarbonOrGeometric) : 0.0;   // ✓ enable gate × Carbon/Crystal exotic-crust knockdown (hard-zero on Carbon/Crystal only; icy worlds keep rockyCrust soft-scale + preview)
       uniforms.uRidgeOffset.value      = state.ridgeOffset;
       uniforms.uRidgeGain.value        = state.ridgeGain;
       uniforms.uOrogenyStrength.value  = state.orogenyStrength;
