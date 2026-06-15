@@ -167,6 +167,18 @@ all parked/taste-call items) and walks you through it.
 |---|---|---|---|---|
 | F11 | [f11 spec](../superpowers/specs/2026-06-07-f11-fluvial-river-networks-design.md) | [f11 plan](../superpowers/plans/2026-06-07-f11-fluvial-river-networks.md) | spike `172526d` · shader `2f3855a` · drivers `27155da` · GUI+registry `cd7f263` · tint+verify `573083e` | ✅ lab; folded into Phase-3 refinement |
 
+## Parking-lot — proposed new features (not yet scoped)
+
+Ideas captured for a future campaign feature (dossier card + §13.4 heavy loop),
+**NOT to be built inline** during a fix/triage session. Promote to the Feature
+index + a launch card when Max greenlights scoping.
+
+- **Outpost worlds** (logged 2026-06-15) — Mars/Venus-type sparse **nightside outpost
+  lights**: a few scattered points/clusters, distinct from the dense `ecumenopolis`
+  city-glow and `cityLights` features. The visual: a not-yet-civilized world showing
+  a handful of human/alien outposts on the dark side. Needs PM-scope (driver: habitability
+  floor? a new "settlement-stage" axis below the ecumenopolis gate?), then a dossier card.
+
 ## Session pickup (inside a goal phase)
 
 1. Read this tracker → Phase-status table → current phase; find first
