@@ -209,8 +209,11 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > dayside gates clean, off⇒vec3(0) deterministic, Venus brightest, antisolar-locked (vanishes 25° off-axis).
 > `PROV_CLOUDOPTICS=47`; enforced suites 36/36; backtick parity even; NO core touch. Card
 > `docs/FEATURES/cards/F39-cloud-optics.md` (§7 verdict + 3 taste-forks for Max's lap: d4/bright-Venus
-> inner-blue clip→2-band read, stylized-large uGloryRadius=0.06, rainbow-42°-arc cut to v1). **Commit LOCAL —
-> push pending Max's word (he pre-authorized pushing F39 separately when it lands).**
+> inner-blue clip→2-band read, stylized-large uGloryRadius=0.06, rainbow-42°-arc cut to v1). **Max UAT
+> verdict (2026-06-15): DISABLED BY DEFAULT — taste-call** (read as a "bullseye"; too hi-fidelity for the
+> lo-fi aesthetic). `cloudOpticsEnabled` default flipped true→false (opt-in via GUI, like city-lights/machine
+> after Phase-1 declutter); code/registry/verification all retained, parked-as-built. **Commits LOCAL — push
+> pending Max's word.**
 > (4) **Still pending Max UAT (carried):** F38 airglow + its 3 taste-forks; Phase-1 declutter + Thread B
 > (shipped+pushed, VERIFIED_PENDING_MAX).
 

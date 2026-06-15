@@ -5065,7 +5065,7 @@
       airglowIntensity: 0.0, // F38 band strength (driven: atmosphere presence/density at applyDrivers; 0 on airless Frozen/Lava/Europa)
       airglowColor: [0.35, 0.95, 0.55], // F38 airglow-green (OI 557.7 nm; uniform — no composition map, half its distinctness vs aurora)
       // ── F39 cloud optics ──
-      cloudOpticsEnabled: true,  // F39 enable gate — off zeroes uCloudOpticsIntensity at the per-frame writer (cloudOpticsC vec3(0) exactly)
+      cloudOpticsEnabled: false,  // F39 enable gate — DEFAULT OFF (Max taste-call 2026-06-15: the glory reads too hi-fidelity for the lo-fi aesthetic; code retained, opt-in only). Off zeroes uCloudOpticsIntensity at the per-frame writer (cloudOpticsC vec3(0) exactly)
       cloudOpticsIntensity: 0.7, // F39 glory strength (driver-side base; the writer multiplies by cloud presence so cloudless worlds arrive 0)
       gloryRadius: 0.06,         // F39 stylized-large ring-stack angular radius (rad) — tuned in isolation so the 2–3 bands read at d15/d4
       featureRelevant: { shatter: 1, hexTess: 1 },  // per-feature relevance hard-gate seed (1 = pass; recomputed by applyDrivers from rendersOn). Safe first-frame default.
