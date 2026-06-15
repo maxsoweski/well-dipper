@@ -4978,6 +4978,8 @@
       auroraColor: [0.3, 0.9, 0.5], // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal; fallback green)
       magAxis: [0, 1, 0],   // F37 magnetic dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed — a per-planet seed property, no GUI control)
       habitability: 0, habGate: 1,  // D15 gate (set by applyDrivers from preset; safe defaults so the first frame can't write NaN coverage)
+      featureRelevant: { shatter: 1, hexTess: 1 },  // per-feature relevance hard-gate seed (1 = pass; recomputed by applyDrivers from rendersOn). Safe first-frame default.
+      isExoticCarbonOrGeometric: 0,                 // Carbon/Crystal exotic-crust knockdown seed (0 = no knockdown). Safe first-frame default.
       bioMatsEnabled: false,  // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)
       bioCoverage: 0.45,  bioColor: [0.30, 0.95, 0.55],  bioScale: 2.4,  bioIntensity: 0.7,
       dustStormEnabled: true, // F40 enable gate — off zeroes uDustActivity at the per-frame writer (veil + front + tracks all vanish: byte-identical pre-F40 output)
@@ -5552,6 +5554,29 @@
       // hab ≤ 0.05 worlds (gas giants, lava, frozen, europa, titan, venus, mars, magma,
       // carbon, crystal) → 0. Recomputed only on preset/quality change (not per frame).
       { const t = Math.min(1, Math.max(0, (state.habitability - 0.1) / 0.3)); state.habGate = t * t * (3 - 2 * t); }
+      // ── Per-feature relevance hard-gate (Thread B) ────────────────────────────
+      // Each gated feature is multiplied by ITS OWN relevance to the current preset
+      // (NOT a blanket "is-exotic-world" flag — see spec §"The core correction").
+      // Signal = the manifest's effective render membership (ASSOCIATIONS[key].rendersOn),
+      // which HONORS hexTess's rendersOnDivergent Frozen membership (the raw
+      // relevantFeatureSet().set does NOT — spec §D2/finding #5). Stored 1.0/0.0 so the
+      // writer multiply matches the habGate idiom. Recomputed only on preset/quality change.
+      state.featureRelevant = state.featureRelevant || {};
+      for (const key of ['shatter', 'hexTess']) {
+        state.featureRelevant[key] =
+          (ASSOCIATIONS[key]?.rendersOn || []).includes(driverUI.preset) ? 1.0 : 0.0;
+      }
+      // ── Exotic-crust knockdown signal for mountains (Thread B) ─────────────────
+      // 1.0 ONLY on the exotic-carbon (Carbon) / exotic-geometric (Crystal) presets,
+      // whose relief is owned by carbon-crust (F42) / facets (F43). Mountains are hard-
+      // zeroed there (silicate orogeny categorically wrong); everywhere ELSE — incl. icy
+      // worlds — mountains keep their rockyCrust soft-scale + force-enable preview.
+      // NOT a general relevance gate (spec §"mountains is a TARGETED knockdown").
+      {
+        const _archs = relevantFeatureSet().archs;
+        state.isExoticCarbonOrGeometric =
+          (_archs.includes('exotic-carbon') || _archs.includes('exotic-geometric')) ? 1.0 : 0.0;
+      }
       state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;
       uniforms.uEmissive.value = u.emissive;
       // uSpecStrength is now F36-owned: the core derivation is POST-PROCESSED in
