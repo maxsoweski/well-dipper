@@ -128,6 +128,17 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 >   17-file vitest baseline unchanged. Asks 3–4 + Thread B remain.
 > - **Ask 3 — archetype info view** (inline ⓘ on the World-folder archetype label; runtime-derived roster of
 >   what the world should exhibit + per-feature state; no generator). spec `abf3d56`+`e4bff7f`, plan `002b033`.
+>   **SHIPPED 2026-06-15 — VERIFIED_PENDING_MAX `a6b4950`** (3 commits `a44a762`→`a6b4950`, LOCAL/unpushed):
+>   `archetypeInfoHtml()` renderer + `.archetype-info` CSS (Task 1); ⓘ on the disabled archetype field row +
+>   plain-DOM block injected under it, collapsed by default (Task 2); live-update — enable toggle refreshes
+>   dots+K, preset change re-derives via `applyArchetypeFilter()` tail hook (Task 3). Plain DOM, no
+>   core/shader change → cannot regress rendering. Reconciled cleanly with Ask 2 (merged single-slot
+>   onChange so card-State AND archetype-info both refresh; reused existing `escapeHtml`/`.title-info`). Lab
+>   *tooling*, not a game feature (charter: lab≠game). Live-verified on :9223 (all 5 spec criteria: Venus
+>   2-arch/mountains-under-both/M-counts-once, Gas-giant 1-arch, toggle flips dot+K w/ N/M held, preset
+>   re-derive matches label, collapsed-default); Ask 2 card-State non-regression confirmed (●↔○ flips). 2
+>   plan-pinned suites green (planet-archetypes incl. cityLights pin #16, feature-associations); pre-existing
+>   17-file vitest baseline unchanged. Ask 4 + Thread B remain.
 > - **Thread B — render-correctness residuals** (per-feature relevance hard-gate for shatter/hexTess + targeted
 >   Carbon/Crystal knockdown for mountains; carbon/facets already honest; faint Ocean/Europa craters ACCEPTED
 >   doc-only; lab-level only, ZERO core touches; gets Max UAT). spec `09ff72a`→`e339b9f`, plan `473ac8d`.
