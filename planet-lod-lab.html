@@ -7741,7 +7741,7 @@
       // pre-F44 output). NO driver derivation (no preset) — uHexStrength is purely the enable
       // gate; regularity/scale/border/dome pass through (inert behind strength 0). This frame
       // writer is the SOLE owner of the F44 uniforms (no second write site).
-      uniforms.uHexStrength.value    = state.hexTessEnabled ? 1.0 : 0.0;   // ✓ enable gate
+      uniforms.uHexStrength.value    = state.hexTessEnabled ? state.featureRelevant.hexTess : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (zeros force-enable on non-member worlds; 1.0 on Frozen — its member world)
       uniforms.uHexRegularity.value  = state.hexRegularity;
       uniforms.uHexScale.value       = state.hexScale;
       uniforms.uHexBorderDepth.value = state.hexBorderDepth;
@@ -7750,7 +7750,7 @@
       // F45 shattered crust — shatterEnabled gates the master strength→0 (block tilt, border
       // crevasses, sub-fracture ALL key on uShatStrength>0, so ONE gate kills the family:
       // byte-identical pre-F45 output). No driver derivation (no preset). Sole F45 write site.
-      uniforms.uShatStrength.value    = state.shatterEnabled ? 1.0 : 0.0;   // ✓ enable gate
+      uniforms.uShatStrength.value    = state.shatterEnabled ? state.featureRelevant.shatter : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (zeros force-enable on non-member worlds; 1.0 on Frozen — its member world)
       uniforms.uShatScale.value       = state.shatScale;
       uniforms.uShatBlockJitter.value = state.shatBlockJitter;
       uniforms.uShatBorderDepth.value = state.shatBorderDepth;
