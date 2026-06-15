@@ -7010,6 +7010,32 @@
     for (const [key, folder] of Object.entries(featureFolders)) {
       relocateEnableToTitle(folder, FEATURES[key].enableKey);
     }
+    // ── Render-audit badges (Ask 4) ───────────────────────────────────────────
+    // A plain-DOM glyph on each feature folder's title bar, AFTER the relocated
+    // enable toggle (mirrors relocateEnableToTitle's injection). NOT a lil-gui
+    // controller, so it never perturbs syncDisplays(), the enable controller, or
+    // the reparenting relevance filter. Badge shows on ALL features (relevant or
+    // not) — a 🔴F on a force-enabled irrelevant feature is the gate-testing signal.
+    const auditBadges = {};   // key -> <span>
+    for (const [key, folder] of Object.entries(featureFolders)) {
+      const badge = document.createElement('span');
+      badge.className = 'audit-badge';
+      badge.textContent = '';                 // empty until the first audit
+      folder.$title.appendChild(badge);       // after the relocated enable toggle
+      auditBadges[key] = badge;
+    }
+    // Fill every badge from state.audit. Empty when no audit has run; dimmed (.stale)
+    // when the audit is not fresh or was computed for a different preset.
+    function renderAllAuditBadges(){
+      const a = state.audit;
+      const stale = a ? (!a.fresh || a.preset !== driverUI.preset) : false;
+      for (const key of Object.keys(auditBadges)) {
+        const badge = auditBadges[key];
+        const r = a && a.results[key];
+        badge.textContent = r ? r.status : '';
+        badge.classList.toggle('stale', !!r && stale);
+      }
+    }
     // ── Per-feature info card (Ask 2) ─────────────────────────────────────────
     // Read-only reference card. Prose comes from FEATURE_CARDS (generated from the
     // .md); structured data (processes→drivers, rendersOn) from the manifest +
@@ -7426,9 +7452,6 @@
         + (dDegen ? ` &middot; ${dDegen} degenerate` : '')
         + ` &middot; ${freshTag}`;
     }
-
-    // TEMP shim (removed in Task 5): no-op until the real badge renderer exists.
-    if (typeof renderAllAuditBadges === 'undefined') { var renderAllAuditBadges = function(){}; }
 
     async function runAuditFromButton(){
       auditCtrl.disable();
