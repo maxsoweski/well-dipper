@@ -5298,21 +5298,8 @@
     // no duplicate GUI (same migration as F34's).
     fEnv.add(state, 'provinceWeight', 0, 1, 0.01).name('province influence');
     fEnv.add(state, 'emissiveBypass').name('emissive bypass quantizer');
-    // ▸ Bioluminescent mats (F46) — emissive-bypass overlay (night-side biosphere glow). NO 🎲
-    // (coverage domain is seeded off uMacroOffset; the Seeds folder rerolls it).
-    fEnv.add(state, 'bioCoverage', 0, 1, 0.01).name('bio coverage (patch→mat)');  // intensity axis, default 0.45 mid
-    fEnv.add(state, 'bioScale', 0.8, 6, 0.1).name('bio patch density');           // default 2.4 mid
-    fEnv.add(state, 'bioIntensity', 0, 1.5, 0.01).name('bio glow');               // default 0.7 mid
-    fEnv.addColor(state, 'bioColor').name('bio color');
-    fEnv.add(state, 'bioMatsEnabled').name('✓ bio mats enabled');
-    // ▸ City lights (F48) — emissive-bypass overlay (P28 night-side civilization glow). Pure
-    // emissive (no relief channel) so it lives in fEnv next to F46, NOT fExoticGroup (F47's home).
-    fEnv.add(state, 'cityMaturity',   0, 1,   0.01).name('city maturity (specks→bands)'); // intensity axis, default 0.5
-    fEnv.add(state, 'cityIntensity',  0, 1.5, 0.01).name('city glow');                     // default 0.9
-    fEnv.add(state, 'cityScale',      0.8, 6, 0.1 ).name('city density');                  // default 2.8
-    fEnv.add(state, 'cityCoastBoost', 1, 3,   0.05).name('coast hugging');                 // default 1.6
-    fEnv.addColor(state, 'cityColor').name('city color');
-    fEnv.add(state, 'cityLightsEnabled').name('✓ city lights enabled');                    // ← load-bearing literal (test:16 regex)
+    // F46 bioMats + F48 cityLights moved out of Envelope into their own dedicated
+    // right-panel feature folders (under Surface — Exotic); see fBioMats/fCityLights below.
 
     // ▸ Drivers (open) — "types are driver-bundle PRESETS, not shader branches" (spec §2.D).
     // A preset is a physics bundle; deriveUniforms() maps it to semantic uniforms with NO
@@ -6805,6 +6792,25 @@
     fShat.add(state, 'shatSubAmt', 0, 1, 0.01).name('sub-fracture amt');          // walked default 0.7 — MUST be >0 default (UAT item 3, the F44-distinguisher)
     fShat.add(state, 'shatterEnabled').name('✓ enabled');
 
+    // ▸ Bioluminescent mats (F46) — emissive-bypass overlay (night-side biosphere glow). NO 🎲
+    // (coverage domain is seeded off uMacroOffset; the Seeds folder rerolls it). Own folder so the
+    // feature's controls aren't split across the shared Envelope folder (menu-declutter Phase 1).
+    const fBioMats = fExoticGroup.addFolder('Bioluminescent mats (F46)'); fBioMats.close();
+    fBioMats.add(state, 'bioCoverage', 0, 1, 0.01).name('bio coverage (patch→mat)');  // intensity axis, default 0.45 mid
+    fBioMats.add(state, 'bioScale', 0.8, 6, 0.1).name('bio patch density');           // default 2.4 mid
+    fBioMats.add(state, 'bioIntensity', 0, 1.5, 0.01).name('bio glow');               // default 0.7 mid
+    fBioMats.addColor(state, 'bioColor').name('bio color');
+    fBioMats.add(state, 'bioMatsEnabled').name('✓ bio mats enabled');
+    // ▸ City lights (F48) — emissive-bypass overlay (P28 night-side civilization glow). Pure
+    // emissive (no relief channel); own folder alongside F46 (menu-declutter Phase 1).
+    const fCityLights = fExoticGroup.addFolder('City lights (F48)'); fCityLights.close();
+    fCityLights.add(state, 'cityMaturity',   0, 1,   0.01).name('city maturity (specks→bands)'); // intensity axis, default 0.5
+    fCityLights.add(state, 'cityIntensity',  0, 1.5, 0.01).name('city glow');                     // default 0.9
+    fCityLights.add(state, 'cityScale',      0.8, 6, 0.1 ).name('city density');                  // default 2.8
+    fCityLights.add(state, 'cityCoastBoost', 1, 3,   0.05).name('coast hugging');                 // default 1.6
+    fCityLights.addColor(state, 'cityColor').name('city color');
+    fCityLights.add(state, 'cityLightsEnabled').name('✓ city lights enabled');                    // ← load-bearing literal (test:16 regex)
+
     // ▸ Machine surface (F47) — Stage-7 EXOTIC dual-channel overlay (engineered crust composited
     // over the full natural base). Lives in fExoticGroup (the Stage-7 exotic home, next to F45) —
     // NOT the Envelope folder (F46 went there as pure emissive; F47 has a relief channel + IS the
@@ -6906,8 +6912,8 @@
       lightning: fLightning, clouds: fClouds, dustStorm: fDustStorm,
       daysideThermal: fThermal, nightsideThermal: fThermalNight, magma: fMagma,
       carbon: fCarbon, facets: fFacets, hexTess: fHex, shatter: fShat,
-      bioMats: fEnv,
-      cityLights: fEnv,
+      bioMats: fBioMats,
+      cityLights: fCityLights,
       machine: fMachine,
       ecumenopolis: fEcu,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
