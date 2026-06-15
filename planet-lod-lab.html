@@ -227,6 +227,9 @@
       uniform float uAuroraRingLat;   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2 — stronger dynamo hugs the pole)
       uniform float uAuroraRingWidth; // F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored CPU-side AND in-shader)
       uniform vec3  uMagAxis;         // F37 magnetic dipole axis, unit (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed)
+      // ── F38 airglow (card F38 — thin uniform night-limb photochemical shell) ──
+      uniform float uAirglowIntensity; // 0..1 band strength (driven: ATMOSPHERE density gate, 0 airless — aurora's non-magnetic sibling, no field gate)
+      uniform vec3  uAirglowColor;     // F38 emission color (airglow-green OI 557.7 nm — uniform, NO composition lookup unlike aurora)
       // F46 bioluminescent mats
       uniform float uBioCoverage;
       uniform vec3  uBioColor;
@@ -970,6 +973,7 @@
       const int PROV_MACHINE     = 43;  // F47 — neutral (engineered overlay, not geology): a built crust covers terrain regardless of rock provinces (FROST-row pattern, like bioMats F46)
       const int PROV_CITYLIGHTS  = 44;  // F48 — neutral (civilization coverage, not geology; FROST-row, like bioMats F46 / machine F47)
       const int PROV_ECUMENOPOLIS = 45; // F49 — neutral (engineered saturation overlay, not geology; FROST-row, like cityLights F48 / machine F47)
+      const int PROV_AIRGLOW     = 46;  // F38 — neutral (atmospheric optics, not geology): the OI-557.7 night-limb shell encases the WHOLE planet uniformly, never the rock provinces (FROST-row pattern, like aurora F37 / limb F34)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -1033,6 +1037,7 @@
         else if (fid == PROV_MACHINE)    { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_CITYLIGHTS) { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_ECUMENOPOLIS) { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_AIRGLOW)    { f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -4030,7 +4035,32 @@
           auroraC = uAuroraColor * aurora * 0.8;
         }
 
-        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + bioC + machC + cityC + ecuC, vec3(1.0)), 1.0);
+        // ★ Airglow (F38) — thin UNIFORM night-limb photochemical shell (P24 non-
+        // magnetic half; aurora's sibling). NOT a polar oval (F37), NOT a broad
+        // scattering halo (F34), NOT a hemisphere fill (F33): a thin DEFINED green
+        // ring pinned exactly at the grazing-angle limb on the dark hemisphere, at
+        // ALL latitudes. Two masks on the emissive-bypass channel (never posterized):
+        //   • night mask — the LIVE aurora form 1.0 - smoothstep(-0.1,0.1,diff)
+        //     (edge0 < edge1; the reversed card-prose form is spec-undefined GLSL).
+        //   • limb mask — fresnel/grazing term grazing = 1 - |dot(N,V)| (~0 face-on,
+        //     →1 at the silhouette), raised to K and passed through a SHARP smoothstep
+        //     window (E0→E1 high on the grazing curve) so the band is a thin crisp ring
+        //     with defined inner/outer edges — the stylization directive (tracker:127-130)
+        //     to BEAT the 6-level envelope: a discrete band, not a smooth low-contrast
+        //     fade (the fade is exactly what posterize+Bayer crushes). Color is the hard
+        //     airglow-green constant (OI 557.7 nm), uniform — NO composition lookup. The
+        //     uAirglowIntensity > 0.0 guard skips the whole block: enable off (writer
+        //     zeroes it) and airless worlds (atmoFactor 0) both yield airglowC = vec3(0)
+        //     EXACTLY — the F38 regression contract.
+        vec3 airglowC = vec3(0.0);
+        if (uAirglowIntensity > 0.0){
+          float nightMask = 1.0 - smoothstep(-0.1, 0.1, diff);          // night/twilight gate (LIVE aurora form)
+          float grazing   = 1.0 - abs(dot(N, V));                        // 0 face-on → 1 at the limb (geometric normal, like F34)
+          float limb      = smoothstep(0.55, 0.78, pow(grazing, 2.0));   // SHARP window high on the grazing curve → thin DEFINED ring (K=2.0, E0=0.55, E1=0.78)
+          airglowC = uAirglowColor * (limb * nightMask * uAirglowIntensity) * provinceWeight(PROV_AIRGLOW);
+        }
+
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + airglowC + bioC + machC + cityC + ecuC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -4068,6 +4098,9 @@
       uAuroraRingLat:  { value: 0.7 },   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2)
       uAuroraRingWidth:{ value: 0.12 },  // F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored)
       uMagAxis:        { value: new THREE.Vector3(0, 1, 0) },      // F37 dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed)
+      // ── F38 airglow (driver-true thin night-limb shell — card §6.5 steps 4-6) ──
+      uAirglowIntensity:{ value: 0.0 },   // F38 band strength (driven: atmosphere density gate; 0 airless ⇒ airglowC vec3(0) exactly)
+      uAirglowColor:    { value: new THREE.Color(0.35, 0.95, 0.55) },  // F38 airglow-green default (OI 557.7 nm; uniform, no composition map)
       uBioCoverage:  { value: 0.0 },                               // F46 inert behind uBioCoverage 0
       uBioColor:     { value: new THREE.Color(0.30, 0.95, 0.55) }, // F46 inert behind uBioCoverage 0
       uBioScale:     { value: 2.4 },                               // F46 inert behind uBioCoverage 0
@@ -4987,6 +5020,10 @@
       auroraRingWidth: 0.12,// F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored 0.07)
       auroraColor: [0.3, 0.9, 0.5], // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal; fallback green)
       magAxis: [0, 1, 0],   // F37 magnetic dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed — a per-planet seed property, no GUI control)
+      // ── F38 airglow ──
+      airglowEnabled: true,  // F38 enable gate — off zeroes uAirglowIntensity at the per-frame writer (airglowC vec3(0) exactly)
+      airglowIntensity: 0.0, // F38 band strength (driven: atmosphere presence/density at applyDrivers; 0 on airless Frozen/Lava/Europa)
+      airglowColor: [0.35, 0.95, 0.55], // F38 airglow-green (OI 557.7 nm; uniform — no composition map, half its distinctness vs aurora)
       habitability: 0, habGate: 1,  // D15 gate (set by applyDrivers from preset; safe defaults so the first frame can't write NaN coverage)
       featureRelevant: { shatter: 1, hexTess: 1 },  // per-feature relevance hard-gate seed (1 = pass; recomputed by applyDrivers from rendersOn). Safe first-frame default.
       isExoticCarbonOrGeometric: 0,                 // Carbon/Crystal exotic-crust knockdown seed (0 = no knockdown). Safe first-frame default.
@@ -6238,6 +6275,24 @@
       const _maTilt = 11 * Math.PI / 180;
       const _maAz = ((Math.imul(state.macroSeed, 2654435761) >>> 0) / 4294967296) * Math.PI * 2;
       state.magAxis = [Math.sin(_maTilt) * Math.cos(_maAz), Math.cos(_maTilt), Math.sin(_maTilt) * Math.sin(_maAz)];
+      // ── F38 airglow — driver derivation (card §6.5 step 7; derivation HERE per the
+      // F34/F35/F37 precedent — core.js untouched). Gate is ATMOSPHERE (D4/D6), NOT the
+      // magnetic field: airglow is aurora's non-magnetic P24 sibling. The master gate is
+      // _fp.atmosphere?.retained (same atmosphere-presence signal F35's termStrength uses
+      // — airless Frozen/Lava/Europa carry atmosphere:null ⇒ undefined ⇒ 0). Intensity
+      // scales with atmosphere DENSITY on a pressure log ramp (the F35 _tp/log10 pattern):
+      // ~0.30 at the 1-bar terrestrials (Rocky/Ocean/Eyeball), saturating to the 0.70
+      // Venus-class ceiling (92 bar — the thick-atmosphere carrier reads brightest, card
+      // §5). The 1e-3 floor keeps log10 finite. This is `atmoFactor`-as-intensity: a
+      // single atmosphere term that zeroes airless and brightens with density (card §4).
+      // Floor 0.12 (not 0.30) so the density ramp is REAL: a near-airless-but-retained
+      // world (Mars, 0.01 bar) reads a faint band, 1-bar Earth medium, thick Venus brightest
+      // — honoring "intensity scales with density". Mars & Titan glow (both have real airglow:
+      // ESA TGO detected Mars green 557.7nm nightglow 2020; Titan dayglow) → listed in rendersOn.
+      const _agP = Math.max(_fp.atmosphere?.pressure ?? 0, 1e-3);
+      state.airglowIntensity = _fp.atmosphere?.retained
+        ? Math.min(0.70, Math.max(0.12, 0.40 + 0.20 * Math.log10(_agP)))
+        : 0.0;
       // ── F40 dust storms — driver derivation (card §6.5 step 6; derivation HERE per
       // the F11/F34 precedent — core.js untouched). The P23 carrier gate, all four
       // legs ANDed: a RETAINED atmosphere (air to loft — airless Frozen/Lava/Europa
@@ -6964,6 +7019,18 @@
     fAurora.addColor(state, 'auroraColor').name('color (driven)').listen();
     fAurora.add(state, 'auroraEnabled').name('✓ enabled');
 
+    // ▸ Airglow (F38) — thin UNIFORM night-limb photochemical shell in the emissive-
+    // bypass channel (Stage 9, additive luminance — never posterized). intensity is
+    // driven (atmosphere-density gate, .listen()); color is a free display control
+    // (the airglow-green OI-557.7 constant, uniform — NO composition lookup, half its
+    // distinctness vs aurora). NO 🎲 — the band is deliberately uniform (no per-seed
+    // placement). NOTE: night-side only — orbit to the dark hemisphere and look at the
+    // terminator limb; the band appears at ALL latitudes, not just the poles.
+    const fAirglow = fOpticalGroup.addFolder('Airglow (F38)'); fAirglow.close();
+    fAirglow.add(state, 'airglowIntensity', 0, 1, 0.01).name('intensity (driven)').listen();
+    fAirglow.addColor(state, 'airglowColor').name('color');
+    fAirglow.add(state, 'airglowEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -6982,6 +7049,7 @@
       machine: fMachine,
       ecumenopolis: fEcu,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
+      airglow: fAirglow,
     };
     // Collapsed home for features irrelevant to the current world (filter ON).
     // Created after all category groups + featureFolders so it sits at the BOTTOM
@@ -7701,6 +7769,14 @@
       uniforms.uAuroraRingWidth.value = Math.max(0.02, state.auroraRingWidth);
       uniforms.uAuroraColor.value.setRGB(state.auroraColor[0], state.auroraColor[1], state.auroraColor[2]);
       uniforms.uMagAxis.value.set(state.magAxis[0], state.magAxis[1], state.magAxis[2]).normalize();
+      // F38 airglow — airglowEnabled gates intensity→0 (the Stage-9 airglow block is
+      // guarded on uAirglowIntensity > 0, so one gate skips the whole bypass-channel term:
+      // airglowC = vec3(0) exactly — the F38 regression contract). The atmoFactor (atmosphere
+      // presence/density) is ALREADY folded into state.airglowIntensity at applyDrivers (the
+      // sole owner of the derivation), so airless worlds carry intensity 0 and arrive here as
+      // exactly 0 — no second multiply (that would double-count density). Writer = enable gate.
+      uniforms.uAirglowIntensity.value = state.airglowEnabled ? state.airglowIntensity : 0.0;   // ✓ enable gate (atmoFactor baked into state.airglowIntensity)
+      uniforms.uAirglowColor.value.setRGB(state.airglowColor[0], state.airglowColor[1], state.airglowColor[2]);
       // F46 bioluminescent mats — bioMatsEnabled gates coverage→0 (the bio block is guarded on
       // uBioCoverage > 0, so one gate skips the whole bypass term: bioC = vec3(0) exactly). Sole F46 write site.
       uniforms.uBioCoverage.value  = state.bioMatsEnabled ? state.bioCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no biosphere on uninhabitable worlds)

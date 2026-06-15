@@ -348,6 +348,13 @@ export const ASSOCIATIONS = {
     isolationKit: [],
     rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Titan (methane seas)','Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)','Sub-Neptune (hazy)','Hot Jupiter (locked giant)'],
   },
+  airglow: {
+    domain: 'optical', provinceGroup: 'global',
+    processes: ['P24'],   // airglow — the non-magnetic half of P24 photochemistry; D4/D6 ATMOSPHERE gate (F38), NOT the field
+    dependsOn: { features: [] },
+    isolationKit: [],
+    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Titan (methane seas)'],
+  },
 
   // ── dust ──
   dustStorm: {

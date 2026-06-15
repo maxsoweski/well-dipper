@@ -68,6 +68,13 @@ export const FEATURES = {
   // metallic-hydrogen dynamo boost, since the iron-only core D13 derivation
   // can't express a giant dynamo; Sub-Neptune keeps its faint derived 0.10).
   aurora:     { label: 'Aurorae (F37)',         enableKey: 'auroraEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
+  // F38 airglow — night-limb photochemical glow (P24: D4/D6 ATMOSPHERE is the gate,
+  // NOT the magnetic field — this is aurora's non-magnetic sibling). Carriers are the
+  // atmospheric terrestrials + the cold-volatile atmospheric worlds (Titan); airless
+  // Frozen/Lava/Europa derive intensity 0 behind the atmosphere gate (the folder shows,
+  // the feature stays inert — the F34/F35 convention). No giant rows: airglow is the
+  // thin OI-557.7 oxygen-shell read on terrestrial-class atmospheres, not the gas decks.
+  airglow:    { label: 'Airglow (F38)',         enableKey: 'airglowEnabled',   archetypes: ['tectonic-terrestrial','volatile-cold'] },
   // F40 dust storms — aeolian atmospheric veil (P23 lofting; F-dust family sole
   // member). Carrier = the dry thin-but-present-atmosphere world (Mars preset):
   // tectonic-terrestrial only — airless worlds have no air to loft (Frozen/Lava
@@ -218,6 +225,7 @@ export const PROVINCES = {
   terminator: { field: 2, polarity: +1, floor: 1.00 },  // neutral — global optics, not geology: the twilight band follows the light, not the rock provinces (FROST-row pattern, like limb F34)
   sunglint:   { field: 2, polarity: +1, floor: 1.00 },  // neutral — view/illumination geometry, not geology: the mirror point follows sun + camera over the (already lakes-gated) sea (FROST-row pattern, like limb/terminator)
   aurora:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — magnetospheric optics, not geology: the oval follows the dipole axis + night side, never the rock provinces (FROST-row pattern, like limb/terminator/sunglint)
+  airglow:    { field: 2, polarity: +1, floor: 1.00 },  // neutral — atmospheric optics, not geology: the OI-557.7 night-limb shell encases the WHOLE planet uniformly, never the rock provinces (FROST-row pattern, like aurora F37 / limb F34)
   dustStorm:  { field: 2, polarity: +1, floor: 1.00 },  // neutral — weather, not geology: the airborne veil/tracks ride the wind, not the rock provinces (FROST-row pattern, like clouds F31; Hellas-style low-elevation nucleation is a logged F40 v1 scope cut)
   magma:      { field: 2, polarity: +1, floor: 1.00 },  // neutral — irradiation, not geology: the sea follows the substellar point (the light direction), never the rock provinces (FROST-row pattern, like daysideThermal F32)
   carbon:     { field: 2, polarity: +1, floor: 1.00 },  // neutral — mineralogy, not geology: the graphite/tar/diamond materials ARE the whole crust (composition-driven, planet-global), never gated by rock provinces (FROST-row pattern, like magma F41)
