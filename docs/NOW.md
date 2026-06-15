@@ -111,8 +111,8 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > archetype info view → live render-audit surfacing, each its own brainstorm→spec→plan) + the
 > render-correctness residuals folded in from (3) above (Carbon/Crystal mountains, faint craters
 > Ocean/Europa, shatter/hexTess exotic leak). Substrate: `relevantFeatureSet()`/`applyArchetypeFilter()`.
-> **Commits `6214510`/`3424ef7`/`fc30eb1`/`9aebb53` are LOCAL — push pending Max + his UAT.** Planning
-> handoff for the remaining asks: see `/tmp/` handoff (2026-06-15 menu-declutter-NEXT).
+> **Commits `6214510`/`3424ef7`/`fc30eb1`/`9aebb53`/`b198057` are LOCAL — push pending Max + his UAT.**
+> Planning handoff for the remaining asks: `/tmp/handoff-lod-menu-overhaul-PLANNING-NEXT-2026-06-15.md`.
 > (5) **Parking-lot:** "outpost worlds" feature idea (Mars/Venus-type sparse nightside outpost lights,
 > distinct from ecumenopolis/cities) — capture as a NEW campaign feature (dossier card + heavy loop), NOT inline.
 
