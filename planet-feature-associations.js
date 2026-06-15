@@ -61,21 +61,24 @@ export const ASSOCIATIONS = {
     processes: ['P2','P3','P4'],   // tectonic + orogeny + effusive volcanism (F1)
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)'],
+    // +Lava 2026-06-15: Io (volcanic) has 17 km silicate thrust mountains (observed). Driver gates icy/exotic crust off.
+    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Lava (hot airless)'],
   },
   craters: {
     domain: 'relief', provinceGroup: 'old-plains',
     processes: ['P1'],
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Frozen (airless)'],
+    // +Mars(prominent)/Rocky/Eyeball(faint) 2026-06-15: declared-only-Frozen was badly wrong (Mars is crater-saturated). Driver scales density by age/resurfacing → faint on eroded worlds, ~0 on Ocean/Venus.
+    rendersOn: ['Frozen (airless)','Mars (arid rocky)','Rocky (Earthlike)','Eyeball (locked temperate)'],
   },
   ejecta: {
     domain: 'relief', provinceGroup: 'old-plains',
     processes: ['P1'],
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Frozen (airless)'],
+    // mirrors craters (ejecta aprons inseparable from craters)
+    rendersOn: ['Frozen (airless)','Mars (arid rocky)','Rocky (Earthlike)','Eyeball (locked temperate)'],
   },
   canyons: {
     domain: 'relief', provinceGroup: 'tectonic-highlands',
@@ -110,14 +113,16 @@ export const ASSOCIATIONS = {
     processes: ['P4','P5'],   // effusive + explosive volcanism (F7)
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Lava (hot airless)','Magma (K2-141b)'],
+    // +Venus 2026-06-15: Venus has constructional edifices (Maat/Sif Mons, coronae) — observed. NOT Europa (silicate; cryo only — driver gates icy crust off).
+    rendersOn: ['Lava (hot airless)','Magma (K2-141b)','Venus (sulfuric shroud)'],
   },
   lava: {
     domain: 'relief', provinceGroup: 'volcanic-provinces',
     processes: ['P4'],
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Lava (hot airless)','Magma (K2-141b)'],
+    // +Venus 2026-06-15: Venus basaltic plains, active (Sif Mons/Niobe Planitia) — observed. NOT Europa (silicate; cryo only — driver gates icy crust off).
+    rendersOn: ['Lava (hot airless)','Magma (K2-141b)','Venus (sulfuric shroud)'],
   },
   chaos: {
     domain: 'relief', provinceGroup: 'volcanic-provinces',
@@ -140,21 +145,24 @@ export const ASSOCIATIONS = {
     processes: ['P22','P10'],   // seasonal volatile cycling + glacial (F22 polar caps/frost)
     dependsOn: { features: ['lakes'] },  // reads (1−liquidMask): no frost on open sea (shader L3212)
     isolationKit: [],
-    rendersOn: ['Titan (methane seas)','Frozen (airless)'],
+    // +Europa 2026-06-15: Europa's surface IS water-ice + hydrates (observed) — icier than Titan/Frozen.
+    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)'],
   },
   sublimation: {
     domain: 'cryo', provinceGroup: 'ancient-high',
     processes: ['P11'],
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Titan (methane seas)','Frozen (airless)'],
+    // +Europa 2026-06-15: equatorial penitentes theorized (Hobley 2018).
+    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)'],
   },
   glacial: {
     domain: 'cryo', provinceGroup: 'young-lowlands',
     processes: ['P10'],
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Titan (methane seas)','Frozen (airless)'],
+    // +Europa 2026-06-15: viscous ice flow / lobate flows theorized.
+    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)'],
   },
 
   // ── fluvial ──
@@ -211,7 +219,8 @@ export const ASSOCIATIONS = {
     processes: ['P12'],
     dependsOn: { features: ['mountains','craters','ejecta','canyons','rivers','outflow','karst','scarps','plateaus','tessera','edifices','chaos','facets','hexTess','shatter','machine','ecumenopolis','cryoRidge','sublimation','glacial'] },
     isolationKit: ['mountains','canyons'],
-    rendersOn: ['Frozen (airless)','Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Lava (hot airless)','Magma (K2-141b)','Europa (icy moon)','Titan (methane seas)'],
+    // blanket 2026-06-15: mass-wasting needs only slopes+gravity — universal on ALL solid-surface worlds (Max's call). +Carbon +Crystal. Excludes only the no-surface gas/ice giants.
+    rendersOn: ['Frozen (airless)','Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Lava (hot airless)','Magma (K2-141b)','Europa (icy moon)','Titan (methane seas)','Carbon (high C/O)','Crystal (faceted)'],
   },
 
   // ── aeolian ──

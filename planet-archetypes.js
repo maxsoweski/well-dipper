@@ -4,10 +4,11 @@
 // (single source per feature); archetype→feature subsets fall out by inversion via
 // featuresOf() — no second place to drift.
 export const FEATURES = {
-  craters:    { label: 'Craters (F2)',          enableKey: 'cratersEnabled',   archetypes: ['impact-airless'] },
-  ejecta:     { label: 'Ejecta & Rays (F3)',    enableKey: 'ejectaEnabled',    archetypes: ['impact-airless'] },
+  craters:    { label: 'Craters (F2)',          enableKey: 'cratersEnabled',   archetypes: ['impact-airless','tectonic-terrestrial'] },  // 2026-06-15 triage: craters observed on terrestrial worlds (Mars saturated; Earth/eyeball faint) — driver scales by age/resurfacing
+  ejecta:     { label: 'Ejecta & Rays (F3)',    enableKey: 'ejectaEnabled',    archetypes: ['impact-airless','tectonic-terrestrial'] },  // mirrors craters (ejecta aprons are physically inseparable from craters)
   scarps:     { label: 'Scarps (F5)',           enableKey: 'scarpsEnabled',    archetypes: ['impact-airless','tectonic-terrestrial'] },
-  mountains:  { label: 'Mountains (F1)',        enableKey: 'mountainsEnabled', archetypes: ['tectonic-terrestrial'] },
+  mountains:  { label: 'Mountains (F1)',        enableKey: 'mountainsEnabled', archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) has 17 km silicate thrust mountains — observed
+
   canyons:    { label: 'Canyons (F4)',          enableKey: 'canyonsEnabled',   archetypes: ['tectonic-terrestrial'] },
   plateaus:   { label: 'Plateaus (F6)',         enableKey: 'plateausEnabled',  archetypes: ['tectonic-terrestrial'] },
   tessera:    { label: 'Tessera (F6)',          enableKey: 'tesseraEnabled',   archetypes: ['tectonic-terrestrial'] },
@@ -15,9 +16,9 @@ export const FEATURES = {
   lava:       { label: 'Lava plains (F8)',      enableKey: 'lavaEnabled',      archetypes: ['volcanic'] },
   chaos:      { label: 'Chaos (F9)',            enableKey: 'chaosEnabled',     archetypes: ['icy-active'] },
   cryoRidge:  { label: 'Ridged icy (F10)',      enableKey: 'cryoRidgeEnabled', archetypes: ['icy-active'] },
-  frost:      { label: 'Cryo / Frost (F23/F22)',enableKey: 'frostEnabled',     archetypes: ['volatile-cold'] },
-  sublimation:{ label: 'Sublimation (F18)',     enableKey: 'subEnabled',       archetypes: ['volatile-cold'] },
-  glacial:    { label: 'Glacial (F17)',         enableKey: 'glacialEnabled',   archetypes: ['volatile-cold'] },
+  frost:      { label: 'Cryo / Frost (F23/F22)',enableKey: 'frostEnabled',     archetypes: ['volatile-cold','icy-active'] },  // 2026-06-15 triage: Europa's surface IS water-ice + hydrates (observed)
+  sublimation:{ label: 'Sublimation (F18)',     enableKey: 'subEnabled',       archetypes: ['volatile-cold','icy-active'] },  // 2026-06-15 triage: Europa equatorial penitentes (Hobley 2018, theorized)
+  glacial:    { label: 'Glacial (F17)',         enableKey: 'glacialEnabled',   archetypes: ['volatile-cold','icy-active'] },  // 2026-06-15 triage: Europa viscous ice flow / lobate flows (theorized)
   rivers:     { label: 'Rivers & valleys (F11)',enableKey: 'riversEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold'] },
   lakes:      { label: 'Lakes & seas (F14)',    enableKey: 'lakesEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
   deltas:     { label: 'Deltas & fans (F12)',   enableKey: 'deltasEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold'] },
@@ -26,7 +27,7 @@ export const FEATURES = {
   karst:      { label: 'Karst (F21)',           enableKey: 'karstEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
   dunes:      { label: 'Dunes & wind forms (F15)', enableKey: 'dunesEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
   dust:       { label: 'Dust mantles (F16)',    enableKey: 'dustEnabled',      archetypes: ['tectonic-terrestrial','volatile-cold'] },
-  massWasting:{ label: 'Mass-wasting (F19)',    enableKey: 'massWastEnabled',  archetypes: ['impact-airless','tectonic-terrestrial','volcanic','icy-active','volatile-cold'] },
+  massWasting:{ label: 'Mass-wasting (F19)',    enableKey: 'massWastEnabled',  archetypes: ['impact-airless','tectonic-terrestrial','volcanic','icy-active','volatile-cold','exotic-carbon','exotic-geometric'] },  // 2026-06-15 triage: mass-wasting needs only slopes+gravity — universal on ALL solid-surface worlds (Max: blanket)
   bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant','hot-jupiter'] },
   jets:       { label: 'Jets & shear (F25)',    enableKey: 'jetsEnabled',      archetypes: ['gas-giant','hot-jupiter'] },
   weatherBands:{ label: 'Weather bands (F26)',  enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] },
@@ -155,7 +156,7 @@ export const FEATURES = {
 export const ARCHETYPES = {
   'impact-airless':       { label: 'Impact / airless',       bodies: ['Moon','Mercury'],              presets: ['Frozen (airless)'] },
   'tectonic-terrestrial': { label: 'Tectonic / terrestrial', bodies: ['Earth','Venus','Mars'],        presets: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)'] },
-  'volcanic':             { label: 'Volcanic',               bodies: ['Io','Mars','K2-141b'],         presets: ['Lava (hot airless)','Magma (K2-141b)'] },
+  'volcanic':             { label: 'Volcanic',               bodies: ['Io','Mars','Venus','K2-141b'],  presets: ['Lava (hot airless)','Magma (K2-141b)','Venus (sulfuric shroud)'] },  // 2026-06-15 triage: Venus is volcanically active (Magellan basaltic plains + edifices; Sif Mons) — also a tectonic-terrestrial preset
   'icy-active':           { label: 'Icy-active',             bodies: ['Europa','Ganymede'],           presets: ['Europa (icy moon)'] },
   'volatile-cold':        { label: 'Volatile / cold',        bodies: ['Pluto','Triton','Mars poles'], presets: ['Titan (methane seas)','Frozen (airless)'] },
   'gas-giant':            { label: 'Gas giant',              bodies: ['Jupiter','Saturn','Neptune'],  presets: ['Gas giant (Jovian)','Gas giant (Saturnian)','Ice giant (Neptunian)','Sub-Neptune (hazy)'] },
