@@ -5652,7 +5652,11 @@
       // relevantFeatureSet().set does NOT — spec §D2/finding #5). Stored 1.0/0.0 so the
       // writer multiply matches the habGate idiom. Recomputed only on preset/quality change.
       state.featureRelevant = state.featureRelevant || {};
-      for (const key of ['shatter', 'hexTess']) {
+      // Extended (Thread B) to cover the 5 relief writers (mountains/scarps/plateaus/
+      // canyons/tessera) in addition to shatter/hexTess. Same derivation: preset
+      // membership in the corrected manifest's rendersOn → 1.0/0.0 (rendersOnDivergent
+      // is already folded into ASSOCIATIONS[key].rendersOn upstream).
+      for (const key of ['shatter', 'hexTess', 'mountains', 'scarps', 'plateaus', 'canyons', 'tessera']) {
         state.featureRelevant[key] =
           (ASSOCIATIONS[key]?.rendersOn || []).includes(driverUI.preset) ? 1.0 : 0.0;
       }
@@ -8162,31 +8166,31 @@
       uniforms.uRayCount.value         = state.rayCount;
       uniforms.uRaySharp.value         = state.raySharp;
       // F1 mountains — amplitude/orogeny driven; ridge fold + scale lab-tunable.
-      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp * (1.0 - state.isExoticCarbonOrGeometric) : 0.0;   // ✓ enable gate × Carbon/Crystal exotic-crust knockdown (hard-zero on Carbon/Crystal only; icy worlds keep rockyCrust soft-scale + preview)
+      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp * (1.0 - state.isExoticCarbonOrGeometric) * state.featureRelevant.mountains : 0.0;   // ✓ enable gate × Carbon/Crystal exotic-crust knockdown × per-feature relevance hard-gate (Thread B idiom)
       uniforms.uRidgeOffset.value      = state.ridgeOffset;
       uniforms.uRidgeGain.value        = state.ridgeGain;
       uniforms.uOrogenyStrength.value  = state.orogenyStrength;
       uniforms.uOrogenyAxis.value.set(Math.cos(state.orogenyAngle), Math.sin(state.orogenyAngle));
       uniforms.uMountainScale.value    = state.mountainScale;
       // F4 canyons — depth/count/width/floor driven+lab; axes set in applyDrivers (seed prop).
-      uniforms.uChasmaDepth.value      = state.canyonsEnabled ? state.chasmaDepth : 0.0;   // ✓ enable gate
+      uniforms.uChasmaDepth.value      = state.canyonsEnabled ? state.chasmaDepth * state.featureRelevant.canyons : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
       uniforms.uChasmaCount.value      = state.chasmaCount | 0;
       uniforms.uChasmaWidth.value      = state.chasmaWidth;
       uniforms.uChasmaFloor.value      = state.chasmaFloor;
       // F5 scarps — strength/style driven; width/freq/warp lab-tunable; axis set in applyDrivers.
-      uniforms.uScarpStrength.value    = state.scarpsEnabled ? state.scarpStrength : 0.0;   // ✓ enable gate
+      uniforms.uScarpStrength.value    = state.scarpsEnabled ? state.scarpStrength * state.featureRelevant.scarps : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
       uniforms.uScarpStyle.value       = state.scarpStyle;
       uniforms.uScarpWidth.value       = state.scarpWidth;
       uniforms.uScarpFreq.value        = state.scarpFreq;
       uniforms.uScarpWarp.value        = state.scarpWarp;
       uniforms.uScarpWarpFreq.value    = state.scarpWarpFreq;
       // F6 plateaus — strength driven; scale/offset/levels/softness lab-tunable.
-      uniforms.uPlateauStrength.value  = state.plateausEnabled ? state.plateauStrength : 0.0;   // ✓ enable gate
+      uniforms.uPlateauStrength.value  = state.plateausEnabled ? state.plateauStrength * state.featureRelevant.plateaus : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
       uniforms.uPlateauScale.value     = state.plateauScale;
       uniforms.uPlateauOffset.value    = state.plateauOffset;
       uniforms.uPlateauLevels.value    = state.plateauLevels;
       uniforms.uPlateauSoftness.value  = state.plateauSoftness;
-      uniforms.uTesseraStrength.value  = state.tesseraEnabled ? state.tesseraStrength : 0.0;   // ✓ enable gate
+      uniforms.uTesseraStrength.value  = state.tesseraEnabled ? state.tesseraStrength * state.featureRelevant.tessera : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
       uniforms.uTesseraFreq.value      = state.tesseraFreq;
       uniforms.uTesseraWarp.value      = state.tesseraWarp;
       uniforms.uTesseraWarpFreq.value  = state.tesseraWarpFreq;
