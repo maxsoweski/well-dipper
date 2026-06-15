@@ -62,16 +62,18 @@ All derived at runtime from existing modules; nothing hand-authored.
 | Line | Example | Source |
 |---|---|---|
 | Header | `Venus (sulfuric shroud) → 2 archetypes · 30 relevant features · K enabled` | `driverUI.preset` + `relevantFeatureSet().archs` + **de-duplicated** `set` size + live enable count |
-| Per-archetype heading | `Tectonic / terrestrial` | `ARCHETYPES[archKey].label` |
+| Per-archetype heading | `Tectonic / terrestrial (27)` | `ARCHETYPES[archKey].label` + that archetype's roster size |
 | …its bodies | `like Earth, Venus, Mars` | `ARCHETYPES[archKey].bodies` joined |
-| …its feature roster | `● Mountains  ○ Canyons  ● Craters …` | `featuresOf(archKey)`, each with live state |
+| …its feature roster | `● Mountains  ○ Canyons  ● Craters˙ …` | `featuresOf(archKey)`, each an inline chip with live state |
 
 **Header counts (precise definitions):**
 - `N archetypes` = `relevantFeatureSet().archs.length` (archetypes whose `presets` include the current
   preset).
 - `M relevant features` = the **DE-DUPLICATED** count, i.e. `relevantFeatureSet().set.size` (a feature
   in two of the world's archetypes is counted **once** here).
-- `K enabled` = of those `M` features, how many have their `state.*` enable flag true right now.
+- `K enabled` = of those `M` relevant features, how many have their `state.*` enable flag true right
+  now. A feature force-enabled **while irrelevant** to this world (the "Not relevant" group workflow)
+  is outside `M` and is **not** counted — `K` measures the world's *expected* roster, not every toggle.
 
 **Per-archetype rosters are NOT de-duplicated.** A feature belonging to **multiple** of the world's
 archetypes (e.g. `frost` ∈ `volatile-cold` + `icy-active`; `mountains` ∈ `tectonic-terrestrial` +
@@ -79,6 +81,19 @@ archetypes (e.g. `frost` ∈ `volatile-cold` + `icy-active`; `mountains` ∈ `te
 whole point of the view (it shows *why* the feature is in the roster, which can be more than one
 reason). The single de-duplicated total lives only in the header's `M` count. **(Max explicitly
 approved this — do NOT dedup the per-archetype rosters.)**
+
+**Roster layout (locked):** each archetype's roster renders as an **inline, wrapping row of compact
+feature chips** (`● Mountains  ○ Canyons  …`) — **NOT** one row per feature. A 27-feature roster
+(`tectonic-terrestrial`) wraps to a handful of lines; acceptable in an opt-in ⓘ view, so no
+scroll / multi-column / collapse is needed for v1.
+
+**Count reconciliation (locked) — so the header `M` vs. roster sums never reads as a bug:**
+- The **per-archetype heading carries that archetype's own count** (e.g. `Tectonic / terrestrial (27)`),
+  so `27 + 5` is visible against the header's unique `M = 30`.
+- A feature belonging to **more than one** of the world's archetypes is given a **subtle "shared"
+  marker** on its chip in each roster (e.g. a trailing `˙` / muted styling — implementer's exact
+  glyph, but it MUST visually distinguish double-listed chips). This makes the arithmetic
+  self-explanatory: the duplicated chips are the ones marked shared.
 
 **Enable-state dots** mirror Ask 2's convention: `●` enabled / `○` off, per feature, read from
 runtime `state.*` at render time.
@@ -136,8 +151,9 @@ This matches Ask 2's approach: the structured/state-bearing parts re-render on t
   multi-archetype features; `M` does not). This is intended, not a bug — call it out in the view's
   layout so it doesn't read as an arithmetic error (e.g. for Venus the header counts 30 unique
   relevant features while the two rosters list 32 rows — `tectonic-terrestrial` 27 + `volcanic` 5,
-  with multi-archetype features like `mountains` double-listed). The implementer should make the
-  distinction legible (header = unique total; rosters = membership view).
+  with multi-archetype features like `mountains` double-listed). Resolved by the **Count reconciliation
+  (locked)** treatment above — per-archetype heading counts + a shared-chip marker — so header = unique
+  total and rosters = membership view, reconcilable at a glance.
 - **DOM injection on the archetype field row** must not clobber lil-gui's disabled-controller markup
   or collide with the Phase-1 / Ask-2 title-bar injections; verify live.
 - **Re-render timing:** the block must rebuild *after* `applyArchetypeFilter()` updates
