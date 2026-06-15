@@ -142,6 +142,22 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > - **Thread B — render-correctness residuals** (per-feature relevance hard-gate for shatter/hexTess + targeted
 >   Carbon/Crystal knockdown for mountains; carbon/facets already honest; faint Ocean/Europa craters ACCEPTED
 >   doc-only; lab-level only, ZERO core touches; gets Max UAT). spec `09ff72a`→`e339b9f`, plan `473ac8d`.
+>   **SHIPPED 2026-06-15 — VERIFIED_PENDING_MAX `27d8b8e`** (4 commits `340e2ae`→`ccbdaf5`, LOCAL/unpushed):
+>   `applyDrivers()` derives `state.featureRelevant.{shatter,hexTess}` from `ASSOCIATIONS[key].rendersOn` (honors
+>   hexTess's `rendersOnDivergent` Frozen membership — the raw `relevantFeatureSet().set` does NOT) +
+>   `state.isExoticCarbonOrGeometric`, both 1.0/0.0 (habGate idiom); three one-line `×=` writer multiplies
+>   (`uShatStrength`/`uHexStrength` × relevance, `uMountainAmp` × `(1−exoticCG)`). Lab-level only, NO core/shader
+>   change, NO manifest edit. Lab *tooling* (charter: lab≠game). Live-verified on :9223 via direct uniform probe
+>   (writer outputs): Rocky force-enable shat/hex → `uShat=uHex=0` (gate beats enable); Frozen member → `=1`
+>   (byte-identical); Carbon/Crystal `uMountainAmp=0` while derivedAmp>0; Rocky `uMountainAmp=0.46=derivedAmp`
+>   (member unchanged). Europa mountains-preview asymmetry held. D2 canary `frozen.hexRel===1`. 2 plan-pinned
+>   suites green (feature-associations incl. rendersOn⊆archetype-union+divergent exemption — proves no manifest
+>   drift; planet-archetypes incl. cityLights pin #16); pre-existing 17-file vitest baseline unchanged.
+>   **Render-audit Δ re-run NOT used (CONCERN):** a fresh `?fresh=1` sweep measures at ~60–100× smaller pixel-
+>   fraction scale than the committed `248b355` sweep (untouched features clouds/canyons/craters collapsed
+>   identically) → not apples-to-apples; the committed report (`248b355`, 64/51) was left as-is. The uniform-level
+>   live probe is the integration proof instead. Ask 4 should re-baseline the audit under a captured sweep config.
+>   Max UAT remains.
 > - **Ask 4 — live render-audit surfacing** ("Audit this world" button → live current-preset sweep → existing
 >   pure auditor → per-feature glyph badges + World summary; auto-stale-on-edit; shared EPS/STRONG via new
 >   pure lab-render-status.js imported by lab AND gen-render-audit.mjs). spec `5c20886`→`dd733ce`, plan `d3282de`.
