@@ -7208,11 +7208,20 @@
     // exposing terrain the player never sees — measuring capability, not visibility.)
     const _SWEEP_VIEWS = [0, Math.PI];
     const _SWEEP_TIMES = [0, 12, 24];
+    // Delta = changedPixels / frameTotal, so a feature's reading scales with the planet's
+    // on-screen coverage (∝ 1/distance²). The capture distance MUST be pinned or the whole
+    // matrix floats: the committed .sweep-raw.json baseline was measured at distance ≈ 2.6
+    // (calibrated 2026-06-15 — reproduces every Rocky baseline value within ±1.4%), but
+    // renderDeltaSweep historically never controlled state.distance, so a fresh sweep at the
+    // default distance 20 read ~64–100× smaller and silently demoted solid renders to faint.
+    // Pinning here makes the offline report AND the live Ask-4 badges capture at one scale.
+    const SWEEP_DISTANCE = 2.6;
     async function renderDeltaSweep({ settleFrames = 2, perPixelThresh = 12 } = {}){
       const allKeys = Object.keys(FEATURES);
       const restore = captureEnables();              // operator's prior enables — restored at end
-      const prevFreeze = _sweepFreeze, baseT = t, baseYaw = state.yaw;
+      const prevFreeze = _sweepFreeze, baseT = t, baseYaw = state.yaw, baseDist = state.distance;
       _sweepFreeze = true;                           // freeze auto-spin; we drive t + yaw by hand below
+      state.distance = SWEEP_DISTANCE;               // pin coverage scale (see SWEEP_DISTANCE note above)
       const nextFrame = () => new Promise(r => requestAnimationFrame(r));
       const settle = async n => { for (let i = 0; i < n; i++) await nextFrame(); };
       const N = sceneTarget.width * sceneTarget.height;
@@ -7238,7 +7247,7 @@
         deltas[key] = c / N;
         degenerate[key] = degen;
       }
-      t = baseT; state.yaw = baseYaw;                                // restore clock + camera
+      t = baseT; state.yaw = baseYaw; state.distance = baseDist;     // restore clock + camera + zoom
       for (const k of allKeys) state[FEATURES[k].enableKey] = restore[k];   // restore enables
       syncDisplays();
       _sweepFreeze = prevFreeze;
