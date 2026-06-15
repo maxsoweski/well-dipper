@@ -161,6 +161,22 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > - **Ask 4 — live render-audit surfacing** ("Audit this world" button → live current-preset sweep → existing
 >   pure auditor → per-feature glyph badges + World summary; auto-stale-on-edit; shared EPS/STRONG via new
 >   pure lab-render-status.js imported by lab AND gen-render-audit.mjs). spec `5c20886`→`dd733ce`, plan `d3282de`.
+>   **SHIPPED 2026-06-15 — VERIFIED_PENDING_MAX `5679e8d`** (6 commits `a22a1fc`→`5679e8d`, LOCAL/unpushed):
+>   pure `lab-render-status.js` (`statusOf` + EPS=1e-4/STRONG=5e-4, ⬛-degen-wins, 10-assert unit test);
+>   `gen-render-audit.mjs` imports those consts → report re-gens byte-identical (64/51, `git diff --exit-code`
+>   clean); lab `runAudit()` runs `renderDeltaSweep()` for current preset, classifies 47 features (eps passed
+>   EXPLICITLY — not the 0.01 default), writes `state.audit`; World-folder button + summary ("N false · M dead ·
+>   ✓ fresh|⚠ stale"); plain-DOM glyph badge per feature title bar; two global `gui.onChange` hooks auto-stale on
+>   any edit, guarded by `_auditing` so the sweep can't self-stale. **NO core/shader change** (`planet-lod-lab-core.js`
+>   untouched; `git diff ba972d5..HEAD` = 4 files only). Lab *tooling* (charter: lab≠game — no Max-UAT gate required,
+>   but live :9223 verify mandatory + done). Live-verified on :9223 (state/DOM, not images): self-stale guard
+>   (`fresh===true` right after audit), badges===state cell-for-cell, stale-on-edit + re-audit-restores-fresh +
+>   preset-switch-stales (via real dropdown), `machine`-on-Ocean force-irrelevant → `🔴F` (delta 0.0053). Cross-check
+>   vs committed report: strong-signal home-preset cells agree (Rocky 9/10); `shatter`/`hexTess` Venus 🔴F→· =
+>   EXPECTED Thread-B fix showing through (delta exactly 0); eps-knife-edge faint features diverge per the known
+>   fresh-sweep scale issue (same as Thread B's CONCERN above), NOT an eps bug (canyons@1.3e-4→✅ proves eps=1e-4
+>   reaches statusOf). 4 plan-pinned suites green (render-status, render-audit, feature-associations,
+>   planet-archetypes incl. cityLights pin); pre-existing 17-file galaxy/vendor baseline unchanged. Max UAT optional.
 > Recommended execution order (Max's earlier pick): **Ask 2 → Ask 3 → Thread B → Ask 4** (Ask 4 last so the
 > surfaced audit reflects Thread B's fixes; Asks 2/3/4 are GUI-independent of each other and of Thread B).
 > Execution-ready handoff: `/tmp/handoff-lod-quality-pass-EXECUTE-READY-2026-06-15.md`. **Still pending: Max UAT
