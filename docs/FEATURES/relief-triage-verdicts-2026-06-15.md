@@ -36,6 +36,13 @@ Source list of false-renders: `lab-render-audit.md` (solid 🔴F, Δ>0.0005).
 Faint traces (⚠️F, Δ 0.0001–0.0005) deferred: craters+Rocky/Eye (faint-legit), canyons/scarps/plateaus+Europa,
 edifices+Venus(faint, but Venus is broaden-anyway), tessera+Lava, sublimation/glacial+Eye/Ocean.
 
+**ACCEPTED — faint `craters` on Ocean / Europa (Δ ~0.0001–0.0005, ⚠️ faint-trace tier).** Verdict:
+ACCEPT — minor cratering is science-legit on all solid surfaces; the trace is below the 🔴 0.0005
+solid-false-render threshold and reads as a real faint signal, not a bug. Decision: Max's call,
+2026-06-15 (recorded in the Thread B design spec, committed `e339b9f`). Action: **no code** — documented
+and closed; this trace is expected to PERSIST in the render-audit (do not treat its continued presence
+as a regression). Promotes the deferred faint-traces line above for craters specifically.
+
 ## Implementation buckets
 
 **A. Manifest-too-narrow → broaden `rendersOn`** (planet-feature-associations.js;
