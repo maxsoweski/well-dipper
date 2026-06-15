@@ -103,7 +103,7 @@ const GLSL_NAME = {
   polarVortex: 'PROV_POLAR', lightning: 'PROV_LIGHTNING', clouds: 'PROV_CLOUDS',
   daysideThermal: 'PROV_DAYTHERM', nightsideThermal: 'PROV_NIGHTTHERM',
   limb: 'PROV_LIMB', terminator: 'PROV_TERM', sunglint: 'PROV_GLINT',
-  aurora: 'PROV_AURORA', airglow: 'PROV_AIRGLOW', dustStorm: 'PROV_DUSTSTORM', magma: 'PROV_MAGMA',
+  aurora: 'PROV_AURORA', airglow: 'PROV_AIRGLOW', cloudOptics: 'PROV_CLOUDOPTICS', dustStorm: 'PROV_DUSTSTORM', magma: 'PROV_MAGMA',
   carbon: 'PROV_CARBON', facets: 'PROV_FACETS', hexTess: 'PROV_HEXTESS',
   shatter: 'PROV_SHATTER',
   bioMats: 'PROV_BIOMATS',

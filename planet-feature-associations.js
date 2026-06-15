@@ -355,6 +355,15 @@ export const ASSOCIATIONS = {
     isolationKit: [],
     rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Titan (methane seas)'],
   },
+  cloudOptics: {
+    domain: 'optical', provinceGroup: 'global',
+    // glory needs a live F31 deck (uCloudCoverage > 0): renders NOTHING without clouds.
+    // solo('cloudOptics') must re-enable clouds → clouds in the kit (the F36 sunglint→lakes precedent).
+    processes: ['P26'],   // F39 antisolar backscatter glory (optical/atmospheric scattering off the cloud deck)
+    dependsOn: { features: ['clouds'] },
+    isolationKit: ['clouds'],
+    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)'],
+  },
 
   // ── dust ──
   dustStorm: {

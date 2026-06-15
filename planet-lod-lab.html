@@ -230,6 +230,9 @@
       // ── F38 airglow (card F38 — thin uniform night-limb photochemical shell) ──
       uniform float uAirglowIntensity; // 0..1 band strength (driven: ATMOSPHERE density gate, 0 airless — aurora's non-magnetic sibling, no field gate)
       uniform vec3  uAirglowColor;     // F38 emission color (airglow-green OI 557.7 nm — uniform, NO composition lookup unlike aurora)
+      // ── F39 cloud optics (card F39 — antisolar backscatter glory on the LIT cloud deck) ──
+      uniform float uCloudOpticsIntensity; // 0..1 glory strength (driven: cloudsEnabled × cloudCoverage presence; 0 cloudless ⇒ cloudOpticsC vec3(0) exactly)
+      uniform float uGloryRadius;          // F39 stylized-large angular radius of the ring stack (rad); rings quantized against this, zero beyond. Inflated far past the sub-degree real glory so the bands read at planet distance.
       // F46 bioluminescent mats
       uniform float uBioCoverage;
       uniform vec3  uBioColor;
@@ -974,6 +977,7 @@
       const int PROV_CITYLIGHTS  = 44;  // F48 — neutral (civilization coverage, not geology; FROST-row, like bioMats F46 / machine F47)
       const int PROV_ECUMENOPOLIS = 45; // F49 — neutral (engineered saturation overlay, not geology; FROST-row, like cityLights F48 / machine F47)
       const int PROV_AIRGLOW     = 46;  // F38 — neutral (atmospheric optics, not geology): the OI-557.7 night-limb shell encases the WHOLE planet uniformly, never the rock provinces (FROST-row pattern, like aurora F37 / limb F34)
+      const int PROV_CLOUDOPTICS = 47;  // F39 — neutral (antisolar backscatter glory, not geology): the colored rings follow sun + camera over the LIT cloud deck, never the rock provinces (FROST-row pattern, like airglow F38 / aurora F37)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
@@ -1038,6 +1042,7 @@
         else if (fid == PROV_CITYLIGHTS) { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_ECUMENOPOLIS) { f = gProvince.z; fl = 1.00; }
         else if (fid == PROV_AIRGLOW)    { f = gProvince.z; fl = 1.00; }
+        else if (fid == PROV_CLOUDOPTICS){ f = gProvince.z; fl = 1.00; }
         else                             { f = 1.0;               fl = 1.00; }
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
@@ -4060,7 +4065,39 @@
           airglowC = uAirglowColor * (limb * nightMask * uAirglowIntensity) * provinceWeight(PROV_AIRGLOW);
         }
 
-        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + airglowC + bioC + machC + cityC + ecuC, vec3(1.0)), 1.0);
+        // ★ Cloud optics (F39) — antisolar BACKSCATTER GLORY: discrete colored concentric
+        // rings on the LIT cloud deck, centered where the camera looks back along the sun
+        // line (dot(V, uLightDir) → 1 at the antisolar point). The exact OPPOSITE gate of
+        // airglow: a LIT-cloud-top effect (dayside), not a night-limb shell. Three
+        // deliberate stylizations vs the real sub-degree spectral glory (card §1):
+        //   • the ring radius uGloryRadius is inflated far past the real angle so the bands
+        //     read at planet distance;
+        //   • the palette is a flat constant warm-outer→cool-inner (red → green → violet),
+        //     NO composition lookup (mirrors airglow's flat green);
+        //   • 2–3 HARD posterized colour steps (floor-quantized theta/uGloryRadius) — leans
+        //     INTO discreteness so the bands survive the 6-level envelope as INTENTIONAL
+        //     steps. Emissive-bypass channel ⇒ never double-quantized by Bayer.
+        // Reuses the live V (view-to-camera, L3302), diff (max(dot(shadeN,uLightDir),0), L3298)
+        // and uLightDir — no redeclaration. The uCloudOpticsIntensity > 0.0 && uCloudCoverage
+        // > 0.0 guard skips the whole block: enable off (writer zeroes intensity) and any
+        // cloudless world (master gate 0) both yield cloudOpticsC = vec3(0) EXACTLY — the
+        // F39 regression contract.
+        vec3 cloudOpticsC = vec3(0.0);
+        if (uCloudOpticsIntensity > 0.0 && uCloudCoverage > 0.0){
+          float theta = acos(clamp(dot(V, uLightDir), -1.0, 1.0));     // 0 at antisolar point, grows outward
+          float lit   = smoothstep(0.0, 0.1, diff);                    // dayside gate (OPPOSITE of airglow's night mask)
+          float radius = max(uGloryRadius, 1e-3);                      // floor the denominator — no 0/0
+          float ringMask = step(theta, radius);                       // 1 inside the ring stack, 0 beyond uGloryRadius
+          float band = floor(clamp(theta / radius, 0.0, 0.999) * 3.0); // 3 HARD steps: 0 (inner) / 1 (mid) / 2 (outer)
+          // flat constant palette, warm-outer → cool-inner (NO composition lookup)
+          vec3 gloryInner = vec3(0.35, 0.45, 1.00);   // blue-violet inner
+          vec3 gloryMid   = vec3(0.35, 1.00, 0.45);   // green mid
+          vec3 gloryOuter = vec3(1.00, 0.45, 0.35);   // reddish outer
+          vec3 gloryCol = band < 0.5 ? gloryInner : (band < 1.5 ? gloryMid : gloryOuter);
+          cloudOpticsC = gloryCol * (ringMask * lit * uCloudOpticsIntensity) * provinceWeight(PROV_CLOUDOPTICS);
+        }
+
+        gl_FragColor = vec4(min(surface + emissive + specC + limbC + termC + cloudC + auroraC + airglowC + cloudOpticsC + bioC + machC + cityC + ecuC, vec3(1.0)), 1.0);
       }
     `;
 
@@ -4101,6 +4138,9 @@
       // ── F38 airglow (driver-true thin night-limb shell — card §6.5 steps 4-6) ──
       uAirglowIntensity:{ value: 0.0 },   // F38 band strength (driven: atmosphere density gate; 0 airless ⇒ airglowC vec3(0) exactly)
       uAirglowColor:    { value: new THREE.Color(0.35, 0.95, 0.55) },  // F38 airglow-green default (OI 557.7 nm; uniform, no composition map)
+      // ── F39 cloud optics (driver-true antisolar glory — card §6.5 steps 4-6) ──
+      uCloudOpticsIntensity:{ value: 0.0 },   // F39 glory strength (driven: cloudsEnabled × cloud presence at the writer; 0 cloudless ⇒ cloudOpticsC vec3(0) exactly)
+      uGloryRadius:         { value: 0.06 },  // F39 stylized-large ring-stack angular radius (rad) — inflated past the sub-degree real glory so the bands read at d15/d4
       uBioCoverage:  { value: 0.0 },                               // F46 inert behind uBioCoverage 0
       uBioColor:     { value: new THREE.Color(0.30, 0.95, 0.55) }, // F46 inert behind uBioCoverage 0
       uBioScale:     { value: 2.4 },                               // F46 inert behind uBioCoverage 0
@@ -5024,7 +5064,10 @@
       airglowEnabled: true,  // F38 enable gate — off zeroes uAirglowIntensity at the per-frame writer (airglowC vec3(0) exactly)
       airglowIntensity: 0.0, // F38 band strength (driven: atmosphere presence/density at applyDrivers; 0 on airless Frozen/Lava/Europa)
       airglowColor: [0.35, 0.95, 0.55], // F38 airglow-green (OI 557.7 nm; uniform — no composition map, half its distinctness vs aurora)
-      habitability: 0, habGate: 1,  // D15 gate (set by applyDrivers from preset; safe defaults so the first frame can't write NaN coverage)
+      // ── F39 cloud optics ──
+      cloudOpticsEnabled: true,  // F39 enable gate — off zeroes uCloudOpticsIntensity at the per-frame writer (cloudOpticsC vec3(0) exactly)
+      cloudOpticsIntensity: 0.7, // F39 glory strength (driver-side base; the writer multiplies by cloud presence so cloudless worlds arrive 0)
+      gloryRadius: 0.06,         // F39 stylized-large ring-stack angular radius (rad) — tuned in isolation so the 2–3 bands read at d15/d4
       featureRelevant: { shatter: 1, hexTess: 1 },  // per-feature relevance hard-gate seed (1 = pass; recomputed by applyDrivers from rendersOn). Safe first-frame default.
       isExoticCarbonOrGeometric: 0,                 // Carbon/Crystal exotic-crust knockdown seed (0 = no knockdown). Safe first-frame default.
       bioMatsEnabled: false,  // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)
@@ -7031,6 +7074,19 @@
     fAirglow.addColor(state, 'airglowColor').name('color');
     fAirglow.add(state, 'airglowEnabled').name('✓ enabled');
 
+    // ▸ Cloud optics (F39) — antisolar backscatter GLORY: discrete colored concentric rings
+    // on the LIT cloud deck (emissive-bypass, never posterized). intensity is driven (the
+    // writer couples it to the F31 cloud-presence factor, .listen()); gloryRadius is the
+    // stylized-large ring-stack radius (deliberately inflated past the sub-degree real angle
+    // so the bands read at planet distance). NO 🎲 — the ring is geometric (sun + camera
+    // driven, no per-seed placement). NOTE: dayside + antisolar only — orbit so the camera
+    // looks back along the sun line at the LIT cloud tops; the rings vanish on the night
+    // hemisphere, off the sun line, or on a cloudless world.
+    const fCloudOptics = fOpticalGroup.addFolder('Cloud optics (F39)'); fCloudOptics.close();
+    fCloudOptics.add(state, 'cloudOpticsIntensity', 0, 1, 0.01).name('intensity (driven)').listen();
+    fCloudOptics.add(state, 'gloryRadius', 0, 0.3, 0.005).name('gloryRadius');
+    fCloudOptics.add(state, 'cloudOpticsEnabled').name('✓ enabled');
+
     // ── Archetype filter + per-feature solo ──────────────────────────────────
     // Bridge FEATURES keys → existing folder refs (note: sublimation ↔ fSub).
     const featureFolders = {
@@ -7050,6 +7106,7 @@
       ecumenopolis: fEcu,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
       airglow: fAirglow,
+      cloudOptics: fCloudOptics,
     };
     // Collapsed home for features irrelevant to the current world (filter ON).
     // Created after all category groups + featureFolders so it sits at the BOTTOM
@@ -7777,6 +7834,15 @@
       // exactly 0 — no second multiply (that would double-count density). Writer = enable gate.
       uniforms.uAirglowIntensity.value = state.airglowEnabled ? state.airglowIntensity : 0.0;   // ✓ enable gate (atmoFactor baked into state.airglowIntensity)
       uniforms.uAirglowColor.value.setRGB(state.airglowColor[0], state.airglowColor[1], state.airglowColor[2]);
+      // F39 cloud optics — sole owner of uCloudOpticsIntensity. Two gates collapse to one
+      // uniform: cloudOpticsEnabled (the ✓ enable) AND the F31 cloud-presence factor (the
+      // SAME signal the cloud writer L7922 reads: cloudsEnabled ? cloudCoverage : 0). A
+      // cloudless or clouds-off world ⇒ factor 0 ⇒ intensity 0 ⇒ the > 0.0 shader guard
+      // skips the whole block: cloudOpticsC = vec3(0) exactly (the F39 regression contract;
+      // the in-shader uCloudCoverage > 0.0 guard is the second line of defense).
+      const cloudPresence = state.cloudsEnabled ? state.cloudCoverage : 0.0;
+      uniforms.uCloudOpticsIntensity.value = state.cloudOpticsEnabled ? state.cloudOpticsIntensity * cloudPresence : 0.0;   // ✓ enable gate × F31 cloud-presence
+      uniforms.uGloryRadius.value = state.gloryRadius;
       // F46 bioluminescent mats — bioMatsEnabled gates coverage→0 (the bio block is guarded on
       // uBioCoverage > 0, so one gate skips the whole bypass term: bioC = vec3(0) exactly). Sole F46 write site.
       uniforms.uBioCoverage.value  = state.bioMatsEnabled ? state.bioCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no biosphere on uninhabitable worlds)
