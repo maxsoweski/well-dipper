@@ -4947,7 +4947,8 @@
       auroraRingWidth: 0.12,// F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored 0.07)
       auroraColor: [0.3, 0.9, 0.5], // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal; fallback green)
       magAxis: [0, 1, 0],   // F37 magnetic dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed — a per-planet seed property, no GUI control)
-      bioMatsEnabled: true,  // F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)
+      habitability: 0, habGate: 1,  // D15 gate (set by applyDrivers from preset; safe defaults so the first frame can't write NaN coverage)
+      bioMatsEnabled: false,  // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)
       bioCoverage: 0.45,  bioColor: [0.30, 0.95, 0.55],  bioScale: 2.4,  bioIntensity: 0.7,
       dustStormEnabled: true, // F40 enable gate — off zeroes uDustActivity at the per-frame writer (veil + front + tracks all vanish: byte-identical pre-F40 output)
       dustActivity: 0.0,    // F40 storm activity 0..1 (driven: 0.55 on the Mars-like thin-dry carrier, 0 on every wet/thick/airless/gas preset; the slider walks the whole P23 axis — tracks ~0.1-0.4, regional fronts mid, planet-encircling at 1)
@@ -4965,13 +4966,13 @@
       facetCoverage: 0.65,  // F43 facet coverage fraction (lab knob — scattered crystals → continuous field; FULL-range walkable per the F42 tar lesson). 0.65 default = headline mostly-faceted crystal world (live-tuned 2026-06-13)
       facetScale: 4.0,      // F43 facet cell density (lab knob — voronoi3d frequency). 4.0 = large clear planar faces that read as crystal; 9 was too fine to read as facets (live-tuned 2026-06-13)
       facetAmp: 2.0,        // F43 facet relief amplitude (lab knob — per-cell height + tilt scale). 2.0 = crisp facet/ridge contrast; 0.5 under-read as mottled noise (live-tuned 2026-06-13)
-      hexTessEnabled: true, // F44 enable gate — off zeroes uHexStrength at the per-frame writer (border troughs + flat/domed interiors all vanish: byte-identical pre-F44 output)
+      hexTessEnabled: false, // DEFAULT-OFF 2026-06-14 (pure-enable exotic, no driver gate → painted non-exotic presets; opt-in toggle). F44 enable gate — off zeroes uHexStrength at the per-frame writer (border troughs + flat/domed interiors all vanish: byte-identical pre-F44 output)
       hexRegularity: 0.85,  // F44 jitter knob (lab knob — 0=random Voronoi blobs, 1=regular hex lattice; 0.85 reads as deliberate hex while keeping believable variance) — walked & confirmed v2 verify
       hexScale: 1.6,        // F44 hex cell density (lab knob — voronoi3d frequency). v2 RE-TUNE: BCC two-sublattice scan ~doubled point density, so 4.0 packed cells too fine at close LOD; 1.6 gives big clear columnar cells that survive full-octave base FBM at d2.5–d8
       hexBorderDepth: 1.1,  // F44 trough carve depth (lab knob) — v2 walk: deeper carve so borders catch light under the analytic-normal relief (now grad rides DEPTH, not width)
       hexBorderWidth: 0.10, // F44 border band width (lab knob) — v2 walk: slightly wider band reads cleaner at mid distance
       hexDome: 0.55,        // F44 per-cell domed-center amount (lab knob — 0=flat plateau, 1=fully domed Sputnik convex shading) — v2 walk: convex cell centers read without per-cell flicker
-      shatterEnabled: true, // F45 enable gate — off zeroes uShatStrength at the per-frame writer (block tilt + border crevasses + sub-fracture all vanish: byte-identical pre-F45 output)
+      shatterEnabled: false, // DEFAULT-OFF 2026-06-14 (pure-enable exotic, no driver gate → painted non-exotic presets; opt-in toggle). F45 enable gate — off zeroes uShatStrength at the per-frame writer (block tilt + border crevasses + sub-fracture all vanish: byte-identical pre-F45 output)
       shatScale: 1.6,       // F45 mega-block density (lab knob — voronoi3d frequency). 1.6 = big clear blocks that read; fine packs dissolve under posterize at distance (STARTING guess — walk live per §9)
       shatBlockJitter: 0.6, // F45 per-block flat-height + CONSTANT-tilt displacement (lab knob — the chaos uChaosRaftJitter analog; THE grad driver) (STARTING guess)
       shatBorderDepth: 1.0, // F45 F2−F1 crevasse carve-down depth (lab knob — grabenProfile amplitude) (STARTING guess)
@@ -4980,7 +4981,7 @@
       shatMaskCover: 1.0,   // F45 region coverage = INTENSITY axis (lab knob — 1.0=globally shattered; sweep down for masked-local fracture-zone endmember) (STARTING guess)
       shatSubFreq: 5.0,     // F45 sub-fracture lattice frequency (lab knob — multiplier on shatScale, subdivides blocks). WALKED 3.5→5.0: at 3.5 the second scale was nearly invisible at d3 (UAT item 3 under-read, the F44-distinguisher); 5.0 makes the within-block crack lattice clearly readable without dissolving to mush (6.0 = mush)
       shatSubAmt: 0.7,      // F45 sub-fracture relief amount (lab knob — MUST be >0 default or reads as F44 paving, UAT item 3). WALKED 0.4→0.7: 0.4 produced almost no visible second-scale delta; 0.7 reads "violently reassembled" two-scale clearly, 1.0 starts to over-fracture
-      machineEnabled: true, // F47 enable gate — off zeroes uMachCoverage at the writer (combiner early-outs + composite + glow all vanish: byte-identical pre-F47 output)
+      machineEnabled: false, // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F47 enable gate — off zeroes uMachCoverage at the writer (combiner early-outs + composite + glow all vanish: byte-identical pre-F47 output)
       machCoverage: 0.6,    // F47 maturity/coverage driver (pure lab knob — scatter→full grid; default mid: visible build-out without saturation; §5 isolation recipe sets 1.0 for the globe read)
       machDistrictScale: 2.2, // F47 low-freq district grid frequency (lab knob)
       machBlockScale: 9.0,  // F47 high-freq block grid frequency (lab knob — ~4× district = readable two-tier hierarchy, greeble principle)
@@ -4990,13 +4991,13 @@
       machGlowColor: [0.45, 0.85, 1.0],   // F47 circuit-trace / window emissive color (lab knob — cyan; amber/green also valid per production palette)
       machGlowIntensity: 0.8, // F47 trace+window glow brightness (lab knob — emissive-bypass)
       machWindowDensity: 0.5, // F47 per-cell-hash fraction of lit cells (lab knob)
-      cityLightsEnabled: true, // F48 enable gate — off forces uCityMaturity 0 at the writer (cityC vec3(0) exactly: byte-identical bare Stage-6 base)
+      cityLightsEnabled: false, // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F48 enable gate — off forces uCityMaturity 0 at the writer (cityC vec3(0) exactly: byte-identical bare Stage-6 base)
       cityMaturity: 0.5,      // F48 P28 build-out intensity axis (lab knob — specks → coastal bands; 0 = regression gate)
       cityIntensity: 0.9,     // F48 warm glow brightness (lab knob)
       cityScale: 2.8,         // F48 settlement cluster density (lab knob)
       cityCoastBoost: 1.6,    // F48 coast-hugging brightness multiplier (lab knob)
       cityColor: [0.95, 0.75, 0.3], // F48 warm sodium-amber night-city color (lab knob — legacy Planet.js:920)
-      ecumenopolisEnabled: true, // F49 enable gate — off forces uEcuCoverage 0 at the writer (relief early-outs + albedo + glow all vanish: byte-identical bare Stage-6 base)
+      ecumenopolisEnabled: false, // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F49 enable gate — off forces uEcuCoverage 0 at the writer (relief early-outs + albedo + glow all vanish: byte-identical bare Stage-6 base)
       ecuCoverage: 0.85,    // F49 P28 SATURATION coverage (lab knob — HIGH default: planet-covering, contrast F48's scattered 0.5; 0 = regression gate)
       ecuConcreteColor: [0.34, 0.34, 0.36], // F49 flat steel-concrete day-albedo target (lab knob)
       ecuGlowColor: [0.95, 0.78, 0.45], // F49 warm-sodium whole-surface night glow color (lab knob — slightly warmer than F48 amber)
@@ -5524,6 +5525,15 @@
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
+      // D15 habitability (P27/P28 biotic+technogenic driver) — stored so the per-frame
+      // overlay writers can gate bio/city/machine/ecu coverage to 0 on uninhabitable
+      // worlds (catalog re-base 2026-06-14 declared these driven by habitability, but
+      // their coverage was a pure lab knob — gas giants got cities. This wires the gate).
+      state.habitability = (DRIVER_PRESETS[driverUI.preset].habitability ?? 0);
+      // smoothstep(0.1,0.4): habitable worlds (Rocky 0.7 / Ocean 0.9 / Eyeball 0.5) → 1;
+      // hab ≤ 0.05 worlds (gas giants, lava, frozen, europa, titan, venus, mars, magma,
+      // carbon, crystal) → 0. Recomputed only on preset/quality change (not per frame).
+      { const t = Math.min(1, Math.max(0, (state.habitability - 0.1) / 0.3)); state.habGate = t * t * (3 - 2 * t); }
       state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;
       uniforms.uEmissive.value = u.emissive;
       // uSpecStrength is now F36-owned: the core derivation is POST-PROCESSED in
@@ -7274,7 +7284,7 @@
       uniforms.uMagAxis.value.set(state.magAxis[0], state.magAxis[1], state.magAxis[2]).normalize();
       // F46 bioluminescent mats — bioMatsEnabled gates coverage→0 (the bio block is guarded on
       // uBioCoverage > 0, so one gate skips the whole bypass term: bioC = vec3(0) exactly). Sole F46 write site.
-      uniforms.uBioCoverage.value  = state.bioMatsEnabled ? state.bioCoverage : 0.0;   // ✓ enable gate
+      uniforms.uBioCoverage.value  = state.bioMatsEnabled ? state.bioCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no biosphere on uninhabitable worlds)
       uniforms.uBioScale.value     = state.bioScale;
       uniforms.uBioIntensity.value = state.bioIntensity;
       uniforms.uBioColor.value.setRGB(state.bioColor[0], state.bioColor[1], state.bioColor[2]);
@@ -7491,7 +7501,7 @@
       // F47 machine surface — machineEnabled gates uMachCoverage→0 (combiner early-outs,
       // composite + glow guarded on uMachCoverage>0): ONE gate kills the family, byte-identical
       // pre-F47 output. Sole F47 write site.
-      uniforms.uMachCoverage.value      = state.machineEnabled ? state.machCoverage : 0.0;   // ✓ enable gate
+      uniforms.uMachCoverage.value      = state.machineEnabled ? state.machCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no technosphere on uninhabitable worlds)
       uniforms.uMachDistrictScale.value = state.machDistrictScale;
       uniforms.uMachBlockScale.value    = state.machBlockScale;
       uniforms.uMachSeamWidth.value     = state.machSeamWidth;
@@ -7501,14 +7511,14 @@
       uniforms.uMachMetalColor.value.setRGB(state.machMetalColor[0], state.machMetalColor[1], state.machMetalColor[2]);
       uniforms.uMachGlowColor.value.setRGB(state.machGlowColor[0], state.machGlowColor[1], state.machGlowColor[2]);
       // F48 city lights — uCityMaturity is the SOLE gate: enable off ⇒ 0 ⇒ cityC vec3(0) ⇒ byte-identical bare Stage-6 base.
-      uniforms.uCityMaturity.value   = state.cityLightsEnabled ? state.cityMaturity : 0.0;
+      uniforms.uCityMaturity.value   = state.cityLightsEnabled ? state.cityMaturity * state.habGate : 0.0;   // × D15 habitability gate (no cities on uninhabitable worlds)
       uniforms.uCityIntensity.value  = state.cityIntensity;
       uniforms.uCityScale.value      = state.cityScale;
       uniforms.uCityCoastBoost.value = state.cityCoastBoost;
       uniforms.uCityColor.value.setRGB(state.cityColor[0], state.cityColor[1], state.cityColor[2]);
       // F49 ecumenopolis — uEcuCoverage is the SOLE gate: enable off ⇒ 0 ⇒ relief early-outs + albedo
       // crossfade mix(...,0) + ecuC vec3(0) ⇒ byte-identical bare Stage-6 base. Sole F49 write site.
-      uniforms.uEcuCoverage.value      = state.ecumenopolisEnabled ? state.ecuCoverage : 0.0;   // ✓ enable gate
+      uniforms.uEcuCoverage.value      = state.ecumenopolisEnabled ? state.ecuCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no planet-city on uninhabitable worlds)
       uniforms.uEcuGlowIntensity.value = state.ecuGlowIntensity;
       uniforms.uEcuDistrictScale.value = state.ecuDistrictScale;
       uniforms.uEcuBlockScale.value    = state.ecuBlockScale;
