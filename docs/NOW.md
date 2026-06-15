@@ -119,6 +119,13 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Max to greenlight execution (each brainstormed→spec→plan w/ Max; specs/plans LOCAL, UNPUSHED):**
 > - **Ask 2 — per-feature info cards** (rich card derived from planet-visual-features.md at build time via a
 >   generator + drift guard; inline ⓘ in each feature folder). spec `73bb42d`, plan `fef95fe`.
+>   **SHIPPED 2026-06-15 — VERIFIED_PENDING_MAX `b30f811`** (6 commits `ec9f0f4`→`261ca9d`, LOCAL/unpushed):
+>   generator `scripts/gen-feature-cards.mjs` + `planet-feature-cards.generated.js` (46/47 cards; clouds(F31)
+>   structured-only); unit test pins parser+F#→key join; `npm run gen-feature-cards`; inline ⓘ card per feature
+>   folder (prose+driven/renders/state, plain DOM, no core/shader change); doc-rot drift guard (also fixed a
+>   pre-existing Check-7 `set -e` abort). Live-verified on :9223 (all 5 spec criteria + multi-open). 3 plan-pinned
+>   suites green (planet-archetypes incl. cityLights pin, feature-associations, gen-feature-cards); pre-existing
+>   17-file vitest baseline unchanged. Asks 3–4 + Thread B remain.
 > - **Ask 3 — archetype info view** (inline ⓘ on the World-folder archetype label; runtime-derived roster of
 >   what the world should exhibit + per-feature state; no generator). spec `abf3d56`+`e4bff7f`, plan `002b033`.
 > - **Thread B — render-correctness residuals** (per-feature relevance hard-gate for shatter/hexTess + targeted
