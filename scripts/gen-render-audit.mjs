@@ -10,9 +10,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { ASSOCIATIONS, PROVINCE_GROUPS } from '../planet-feature-associations.js';
 import { expectedMatrix, auditRenderMatrix } from '../lab-render-audit.js';
-
-const EPS = 1e-4;        // render/inert boundary: ≈14px of 140k; floor is exactly 0 (frozen+deterministic)
-const STRONG = 5e-4;     // false-renders above this are "solid", below are "faint trace"
+import { EPS, STRONG } from '../lab-render-status.js';   // shared thresholds — single source of truth (Ask 4)
 
 // ── load + un-double-encode the sweep dump ──────────────────────────────────
 let d = JSON.parse(readFileSync(new URL('../docs/FEATURES/.sweep-raw.json', import.meta.url), 'utf8'));
