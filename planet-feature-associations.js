@@ -85,21 +85,24 @@ export const ASSOCIATIONS = {
     processes: ['P2','P8'],   // tectonic graben + fluvial-incised gorge (F4)
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)'],
+    // +Lava 2026-06-15: Io has silicate canyons — tectonic/silicate relief.
+    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Lava (hot airless)'],
   },
   scarps: {
     domain: 'relief', provinceGroup: 'ancient-high',
     processes: ['P2'],
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Frozen (airless)','Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)'],
+    // +Lava 2026-06-15: Io scarps — tectonic/silicate relief.
+    rendersOn: ['Frozen (airless)','Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Lava (hot airless)'],
   },
   plateaus: {
     domain: 'relief', provinceGroup: 'ancient-high',
     processes: ['P2','P15'],   // uplift plateau + crustal-plateau tessera (F6)
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)'],
+    // +Lava 2026-06-15: Io silicate plateaus — tectonic/silicate relief.
+    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Venus (sulfuric shroud)','Eyeball (locked temperate)','Mars (arid rocky)','Lava (hot airless)'],
   },
   tessera: {
     domain: 'relief', provinceGroup: 'tectonic-highlands',
@@ -114,7 +117,8 @@ export const ASSOCIATIONS = {
     dependsOn: { features: [] },
     isolationKit: [],
     // +Venus 2026-06-15: Venus has constructional edifices (Maat/Sif Mons, coronae) — observed. NOT Europa (silicate; cryo only — driver gates icy crust off).
-    rendersOn: ['Lava (hot airless)','Magma (K2-141b)','Venus (sulfuric shroud)'],
+    // +Rocky/Ocean/Eyeball/Mars 2026-06-15: volcanic edifices on rocky worlds (Earth Hawaii, Mars Olympus Mons) — observed.
+    rendersOn: ['Lava (hot airless)','Magma (K2-141b)','Venus (sulfuric shroud)','Rocky (Earthlike)','Ocean (temperate)','Eyeball (locked temperate)','Mars (arid rocky)'],
   },
   lava: {
     domain: 'relief', provinceGroup: 'volcanic-provinces',
@@ -146,7 +150,8 @@ export const ASSOCIATIONS = {
     dependsOn: { features: ['lakes'] },  // reads (1−liquidMask): no frost on open sea (shader L3212)
     isolationKit: [],
     // +Europa 2026-06-15: Europa's surface IS water-ice + hydrates (observed) — icier than Titan/Frozen.
-    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)'],
+    // +Mars 2026-06-15: Mars seasonal frost (polar caps / morning ground frost) — observed.
+    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)','Mars (arid rocky)'],
   },
   sublimation: {
     domain: 'cryo', provinceGroup: 'ancient-high',
@@ -154,7 +159,8 @@ export const ASSOCIATIONS = {
     dependsOn: { features: [] },
     isolationKit: [],
     // +Europa 2026-06-15: equatorial penitentes theorized (Hobley 2018).
-    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)'],
+    // +Mars/Eyeball 2026-06-15: Mars CO₂ sublimation (polar spiders/araneiforms — observed); eyeball terminator volatile sublimation.
+    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)','Mars (arid rocky)','Eyeball (locked temperate)'],
   },
   glacial: {
     domain: 'cryo', provinceGroup: 'young-lowlands',
@@ -162,7 +168,8 @@ export const ASSOCIATIONS = {
     dependsOn: { features: [] },
     isolationKit: [],
     // +Europa 2026-06-15: viscous ice flow / lobate flows theorized.
-    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)'],
+    // +Ocean/Eyeball 2026-06-15: Earth glaciers (observed); eyeball nightside ice flow.
+    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)','Ocean (temperate)','Eyeball (locked temperate)'],
   },
 
   // ── fluvial ──
@@ -431,7 +438,8 @@ export const ASSOCIATIONS = {
     processes: ['P28'],   // technospheric development → D15 + D16 + D7 (F47)
     dependsOn: { features: [] },
     isolationKit: [],
-    rendersOn: ['Rocky (Earthlike)'],
+    // +Ocean/Eyeball 2026-06-15: Max's call — mega-machine worlds allowed on habitable ocean/eyeball.
+    rendersOn: ['Rocky (Earthlike)','Ocean (temperate)','Eyeball (locked temperate)'],
   },
   cityLights: {
     domain: 'overlay', provinceGroup: 'global',

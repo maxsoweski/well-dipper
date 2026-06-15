@@ -6,19 +6,19 @@
 export const FEATURES = {
   craters:    { label: 'Craters (F2)',          enableKey: 'cratersEnabled',   archetypes: ['impact-airless','tectonic-terrestrial'] },  // 2026-06-15 triage: craters observed on terrestrial worlds (Mars saturated; Earth/eyeball faint) — driver scales by age/resurfacing
   ejecta:     { label: 'Ejecta & Rays (F3)',    enableKey: 'ejectaEnabled',    archetypes: ['impact-airless','tectonic-terrestrial'] },  // mirrors craters (ejecta aprons are physically inseparable from craters)
-  scarps:     { label: 'Scarps (F5)',           enableKey: 'scarpsEnabled',    archetypes: ['impact-airless','tectonic-terrestrial'] },
+  scarps:     { label: 'Scarps (F5)',           enableKey: 'scarpsEnabled',    archetypes: ['impact-airless','tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) scarps — silicate/tectonic relief
   mountains:  { label: 'Mountains (F1)',        enableKey: 'mountainsEnabled', archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) has 17 km silicate thrust mountains — observed
 
-  canyons:    { label: 'Canyons (F4)',          enableKey: 'canyonsEnabled',   archetypes: ['tectonic-terrestrial'] },
-  plateaus:   { label: 'Plateaus (F6)',         enableKey: 'plateausEnabled',  archetypes: ['tectonic-terrestrial'] },
+  canyons:    { label: 'Canyons (F4)',          enableKey: 'canyonsEnabled',   archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) has silicate canyons — observed
+  plateaus:   { label: 'Plateaus (F6)',         enableKey: 'plateausEnabled',  archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io silicate plateaus — silicate/tectonic relief on a volcanic body
   tessera:    { label: 'Tessera (F6)',          enableKey: 'tesseraEnabled',   archetypes: ['tectonic-terrestrial'] },
-  edifices:   { label: 'Edifices (F7)',         enableKey: 'edificesEnabled',  archetypes: ['volcanic'] },
+  edifices:   { label: 'Edifices (F7)',         enableKey: 'edificesEnabled',  archetypes: ['volcanic','tectonic-terrestrial'] },  // 2026-06-15 triage: volcanic edifices on rocky worlds (Earth Hawaii, Mars Olympus Mons) — observed
   lava:       { label: 'Lava plains (F8)',      enableKey: 'lavaEnabled',      archetypes: ['volcanic'] },
   chaos:      { label: 'Chaos (F9)',            enableKey: 'chaosEnabled',     archetypes: ['icy-active'] },
   cryoRidge:  { label: 'Ridged icy (F10)',      enableKey: 'cryoRidgeEnabled', archetypes: ['icy-active'] },
-  frost:      { label: 'Cryo / Frost (F23/F22)',enableKey: 'frostEnabled',     archetypes: ['volatile-cold','icy-active'] },  // 2026-06-15 triage: Europa's surface IS water-ice + hydrates (observed)
-  sublimation:{ label: 'Sublimation (F18)',     enableKey: 'subEnabled',       archetypes: ['volatile-cold','icy-active'] },  // 2026-06-15 triage: Europa equatorial penitentes (Hobley 2018, theorized)
-  glacial:    { label: 'Glacial (F17)',         enableKey: 'glacialEnabled',   archetypes: ['volatile-cold','icy-active'] },  // 2026-06-15 triage: Europa viscous ice flow / lobate flows (theorized)
+  frost:      { label: 'Cryo / Frost (F23/F22)',enableKey: 'frostEnabled',     archetypes: ['volatile-cold','icy-active','tectonic-terrestrial'] },  // 2026-06-15 triage: Europa water-ice (observed); Mars seasonal frost (observed) on tectonic-terrestrial preset
+  sublimation:{ label: 'Sublimation (F18)',     enableKey: 'subEnabled',       archetypes: ['volatile-cold','icy-active','tectonic-terrestrial'] },  // 2026-06-15 triage: Europa penitentes (Hobley 2018); Mars CO₂ sublimation (araneiforms, observed) + eyeball terminator on tectonic-terrestrial preset
+  glacial:    { label: 'Glacial (F17)',         enableKey: 'glacialEnabled',   archetypes: ['volatile-cold','icy-active','tectonic-terrestrial'] },  // 2026-06-15 triage: Europa ice flow (theorized); Earth glaciers (observed) + eyeball nightside ice on tectonic-terrestrial preset
   rivers:     { label: 'Rivers & valleys (F11)',enableKey: 'riversEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold'] },
   lakes:      { label: 'Lakes & seas (F14)',    enableKey: 'lakesEnabled',     archetypes: ['tectonic-terrestrial','volatile-cold'] },
   deltas:     { label: 'Deltas & fans (F12)',   enableKey: 'deltasEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold'] },
@@ -144,7 +144,7 @@ export const FEATURES = {
   // mask (coverage 0 ⇒ bare Stage-6 base). NEW archetype 'technogenic' (no natural archetype fits an
   // engineered overlay), rides 'Rocky (Earthlike)' per the card §5 base. uMachCoverage is a pure lab
   // knob (no driver derivation), so registration is the enable flag alone.
-  machine:    { label: 'Machine surface (F47)', enableKey: 'machineEnabled', archetypes: ['technogenic'] },
+  machine:    { label: 'Machine surface (F47)', enableKey: 'machineEnabled', archetypes: ['technogenic'] },  // 2026-06-15 (Max's call): mega-machine worlds allowed on habitable ocean/eyeball — technogenic archetype broadened to those presets (F47 "the world IS engineered" kept distinct from F48/F49 "civilization on a natural world")
   // F48 city lights — Overlay/EXOTIC pure-emissive night-side civilization glow (P28 build-out
   // composited over the natural terrestrial base on the emissive-bypass channel; NO relief channel,
   // unlike F47). Suitability = land × coast-proximity × 2-octave noise threshold, gated by the
@@ -176,7 +176,7 @@ export const ARCHETYPES = {
   'exotic-carbon':        { label: 'Exotic / carbon',        bodies: ['55 Cnc e','PSR J1719-1438 b'], presets: ['Carbon (high C/O)'] },
   'exotic-geometric':     { label: 'Exotic / geometric',     bodies: ['Pluto bladed terrain','55 Cnc e'], presets: ['Crystal (faceted)'] },
   'exotic-shattered':     { label: 'Exotic / shattered',     bodies: ['Miranda','Europa Conamara Chaos'], presets: ['Frozen (airless)'] },
-  'technogenic':          { label: 'Technogenic / machine',  bodies: ['Trantor (fictional)','Coruscant (fictional)','Dyson-swarm hypothetical'], presets: ['Rocky (Earthlike)'] },
+  'technogenic':          { label: 'Technogenic / machine',  bodies: ['Trantor (fictional)','Coruscant (fictional)','Dyson-swarm hypothetical'], presets: ['Rocky (Earthlike)','Ocean (temperate)','Eyeball (locked temperate)'] },  // 2026-06-15 (Max's call): mega-machine worlds allowed on habitable ocean/eyeball
 };
 
 // Derived helper (also what Stage-D will call): the archetype→feature-subset map.
