@@ -95,6 +95,17 @@
     .lil-gui .title-toggle { width: auto; min-width: 0; }
     .lil-gui .title-toggle .lil-name { display: none; }   /* hide the controller's own '✓ enabled' label */
     .lil-gui .title-toggle .lil-widget { min-width: 0; }
+    /* Per-feature info card (Ask 2) — plain DOM injected as a folder's first child. */
+    .lil-gui .feature-card { display: none; font-size: 11px; line-height: 1.45; padding: 6px 8px;
+      margin: 2px 0 4px; background: #1a1a1f; border-left: 2px solid #4a90d9; color: #cfd2d6; }
+    .lil-gui .feature-card.open { display: block; }
+    .lil-gui .feature-card .fc-row { margin: 2px 0; }
+    .lil-gui .feature-card .fc-k { color: #8a8f96; }                 /* row label */
+    .lil-gui .feature-card .fc-status { float: right; opacity: 0.8; }
+    .lil-gui .feature-card .fc-state-on  { color: #6ad06a; }
+    .lil-gui .feature-card .fc-state-off { color: #8a8f96; }
+    .lil-gui .title-info { cursor: pointer; user-select: none; opacity: 0.7; margin-left: 4px; }
+    .lil-gui .title-info:hover { opacity: 1; }
   </style>
 </head>
 <body>
@@ -109,6 +120,8 @@
     import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms } from './planet-lod-lab-core.js';
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
+    import { PROCESSES, DRIVERS, driversFor } from './planet-drivers.js';   // card "Driven" line: process labels + derived driver keys
+    import { FEATURE_CARDS } from './planet-feature-cards.generated.js';     // card prose (name/variants/examples/status); AUTO-GENERATED
     import { computeEnableSet } from './lab-isolation.js';             // Phase 2: pure non-destructive-solo enable-set logic
     import { generateRingPhysics } from './src/generation/PhysicsEngine.js';   // F51 rings — CPU-side physics chain
     import { bakeRingCloud, makeRingCloudPoints } from './ring-particle-cloud.js';   // F51 rings-v2 — near-tier LOD particle cloud
@@ -6943,6 +6956,58 @@
     }
     for (const [key, folder] of Object.entries(featureFolders)) {
       relocateEnableToTitle(folder, FEATURES[key].enableKey);
+    }
+    // ── Per-feature info card (Ask 2) ─────────────────────────────────────────
+    // Read-only reference card. Prose comes from FEATURE_CARDS (generated from the
+    // .md); structured data (processes→drivers, rendersOn) from the manifest +
+    // driver model; live state from state.* + relevantFeatureSet() at render time.
+    // Returns a plain <div> (NOT a lil-gui controller) so it never perturbs
+    // syncDisplays(), the enable controller, or the reparenting relevance filter.
+    function escapeHtml(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+    function buildFeatureCard(key){
+      const el = document.createElement('div');
+      el.className = 'feature-card';
+      const prose = FEATURE_CARDS[key];                 // may be undefined → structured-only
+      const assoc = ASSOCIATIONS[key] || {};
+      const rows = [];
+
+      // Title + status (prose-backed only).
+      if (prose) {
+        rows.push(`<div class="fc-row"><b>${escapeHtml(prose.name)} (F${escapeHtml(prose.fNum)})</b>`
+          + (prose.status ? `<span class="fc-status">[${escapeHtml(prose.status)}]</span>` : '') + `</div>`);
+        if (prose.variants) rows.push(`<div class="fc-row"><span class="fc-k">is:</span> ${escapeHtml(prose.variants)}</div>`);
+        if (prose.examples) rows.push(`<div class="fc-row"><span class="fc-k">like:</span> ${escapeHtml(prose.examples)}</div>`);
+      }
+
+      // Driven: process labels → derived driver KEYS (compact; not DRIVERS[].label).
+      const procs = assoc.processes || [];
+      if (procs.length) {
+        const procLabels = procs.map(p => (PROCESSES[p] && PROCESSES[p].label) || p).join(' · ');
+        const driverKeys = driversFor(procs, assoc.directDrivers || []).join(', ');
+        rows.push(`<div class="fc-row"><span class="fc-k">driven:</span> ${escapeHtml(procLabels)}`
+          + (driverKeys ? ` &rarr; ${escapeHtml(driverKeys)}` : '') + `</div>`);
+      }
+
+      // Renders: manifest rendersOn.
+      const renders = assoc.rendersOn || [];
+      if (renders.length) rows.push(`<div class="fc-row"><span class="fc-k">renders:</span> ${escapeHtml(renders.join(', '))}</div>`);
+
+      // State: the ONLY line that changes as Max works. Filled by refreshCardState().
+      rows.push(`<div class="fc-row fc-state" data-key="${escapeHtml(key)}"></div>`);
+
+      el.innerHTML = rows.join('');
+      refreshCardState(el.querySelector('.fc-state'), key);
+      return el;
+    }
+
+    // Re-fill a single card's State line from live runtime. Safe to call repeatedly.
+    function refreshCardState(stateEl, key){
+      if (!stateEl) return;
+      const enabled = !!state[FEATURES[key].enableKey];
+      const relevant = relevantFeatureSet().set.has(key);
+      const dot = enabled ? '<span class="fc-state-on">&#9679; enabled</span>' : '<span class="fc-state-off">&#9675; off</span>';
+      const rel = relevant ? 'relevant to THIS world' : '<span class="fc-state-off">not relevant</span>';
+      stateEl.innerHTML = `<span class="fc-k">state:</span> ${dot} &middot; ${rel}`;
     }
     // soloKey=null → enable ALL features; otherwise enable ONLY that feature.
     // LEGACY destructive path — kept for "enable all". Solo now goes through the
