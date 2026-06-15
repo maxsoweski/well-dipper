@@ -96,10 +96,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Residuals (expected): Carbon/Crystal mountains (exotic), faint craters on Ocean/Europa (next round).
 > **All session commits PUSHED to origin/master.** Remaining solid cluster = shatter/hexTess (exotics
 > on non-exotic worlds) — distinct future triage, not this workstream.
-> (4) **Max's bigger ask = MENU/INFO OVERHAUL** (his goal #3) — ◀ **NEXT, needs Max brainstorming first
-> (real UI design).** relevance indicators + per-feature info cards + archetype info view + auto-correct
-> mismatches + a USABILITY/QA pass (menus too complex, dedup archetype-selector vs indicator). Substrate
-> exists: `relevantFeatureSet()`/`applyArchetypeFilter()` (~L7067). Handoff `/tmp/handoff-lod-triage-round3-2026-06-15.md`.
+> (4) **Max's bigger ask = MENU/INFO OVERHAUL** (his goal #3), 4 phases. **Phase 1 (declutter)
+> SHIPPED 2026-06-15 — VERIFIED_PENDING_MAX `fc30eb1`** (3 commits `6214510`/`3424ef7`/`fc30eb1`,
+> GUI-only in planet-lod-lab.html, no shader/core change; full vitest delta = 0 new failures vs the
+> pre-existing 17-file baseline; live-verified on :9223). Three moves landed: (a) top-of-left **World**
+> folder consolidating the preset picker + derived archetype label + filter/solo (kills the
+> selector-vs-indicator dup); (b) dedicated **bioMats(F46)/cityLights(F48)** right-panel folders (sliders
+> moved out of shared Envelope; `cityLightsEnabled` literal preserved); (c) `applyArchetypeFilter()`
+> now **reparents** feature folders — relevant → their category in declaration order, irrelevant → one
+> collapsed **"Not relevant to this world (N)"** group (filter ON default; force-enable still 1 click away).
+> Spec/plan: `docs/superpowers/{specs,plans}/2026-06-15-lod-lab-menu-declutter*`. **Deferred asks 2–4
+> (hang on this clean frame):** per-feature info cards, archetype info view, live render-audit surfacing.
+> Substrate: `relevantFeatureSet()`/`applyArchetypeFilter()`. Handoff `/tmp/handoff-lod-menu-declutter-EXECUTE-2026-06-15.md`.
 > (5) **Parking-lot:** "outpost worlds" feature idea (Mars/Venus-type sparse nightside outpost lights,
 > distinct from ecumenopolis/cities) — capture as a NEW campaign feature (dossier card + heavy loop), NOT inline.
 
