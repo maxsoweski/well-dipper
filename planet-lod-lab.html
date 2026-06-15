@@ -5723,7 +5723,11 @@
       // Outcomes: Rocky (p 1.0, stab .741, ero .4) → 0.30; Ocean (p 1.5, stab 1,
       // ero .6) → 0.25; Titan (p 1.5, stab 1, ero .2) → 0.15 (haze world > 0, card
       // §6.5.6); Lava/Frozen/Europa (airless, p 0) → 0 (no air ⇒ no fallout).
-      state.dustDepth = _clamp01(_ss(0.05, 0.3, _press) * (1.0 - 0.65 * _stab) * (0.3 + 0.7 * _erosion));
+      // Bucket B (relief triage 2026-06-15): gas/ice giants (h2-he) have NO solid surface, so
+      // settled dust can't accumulate — their "dust" is suspended atmospheric haze (a separate
+      // feature). Force-enable honesty: zero dustDepth where there's no surface.
+      const _noSurface = _fp.atmosphere?.composition === 'h2-he';
+      state.dustDepth = _noSurface ? 0.0 : _clamp01(_ss(0.05, 0.3, _press) * (1.0 - 0.65 * _stab) * (0.3 + 0.7 * _erosion));
       // ── F19 mass-wasting — gravity + steep relief are UNIVERSAL: every preset is a solid
       // world, airless very much included (Iapetus sturzstroms, lunar crater-wall talus), so
       // the master gate is a constant 1.0 — existence is gated PER-FRAGMENT by the host-slope
@@ -5793,7 +5797,14 @@
       // Pre-checked 2026-06-10: Rocky/Ocean/Titan 1.0; Lava/Frozen/Europa (airless)
       // 0; all three h2-he gas presets 0 — no leakage onto the F24 deck.
       const _rainFactor = ({ 'n2-o2': 1.0, 'co2-n2': 0.5, 'co2': 0.2 })[_fp.atmosphere?.composition] ?? 0.0;
-      state.weatherStrength = (!_gas && _hadLiquid) ? _rainFactor : 0.0;
+      // Bucket B (relief triage 2026-06-15): zonal weather bands are only VISIBLE through a
+      // transparent atmosphere. Opaque-haze worlds (Titan: cold + dense + retained N2 →
+      // homogenized disk; research) show no zonal banding — that's the haze layer's job (a
+      // separate feature). _opaqueHaze is the cold-dense-atmo branch of the canonical _thickHaze
+      // (reused at its definition below, ~L6060). Sub-Neptune/Venus haze (cloudRegime 2/3) is
+      // already excluded here: sub-Neptune is _gas; Venus _rainFactor is 0 at 737 K.
+      const _opaqueHaze = !_gas && !!_fp.atmosphere?.retained && (_fp.T_eq ?? 288) < 150 && (_fp.atmosphere?.pressure ?? 0) >= 1.0;
+      state.weatherStrength = (!_gas && _hadLiquid && !_opaqueHaze) ? _rainFactor : 0.0;
       // Cell count from D8 spin (the Rhines logic at terrestrial scale): faster
       // rotation multiplies circulation cells — 72/rotationHours clamped 1..6, so
       // Earth's 24 h derives the canonical 3 (Hadley/Ferrel/polar) and a slow
@@ -6051,8 +6062,7 @@
       // gas giants' cold clear decks must stay out) — gets the fat detached halo
       // (exponent ~1.8, strength x1.3); every other atmosphere keeps the narrow
       // blue-line rim (exponent ~3.5).
-      const _thickHaze = _cloudRegime === 2 || _cloudRegime === 3 ||
-        (!_gas && !!_fp.atmosphere?.retained && (_fp.T_eq ?? 288) < 150 && (_fp.atmosphere?.pressure ?? 0) >= 1.0);
+      const _thickHaze = _cloudRegime === 2 || _cloudRegime === 3 || _opaqueHaze;  // _opaqueHaze (cold solid tholin world, e.g. Titan) defined at the F26 weather-bands gate above
       state.limbExponent = _thickHaze ? 1.8 : 3.5;
       if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);
       // Rim hue from the per-preset map; fallback = the uBaseColor rocky tone (the

@@ -546,6 +546,15 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const retentionGate = retained ? smoothstep(0.05, 0.3, pressure) : 0;     // D6
   const volatileFraction = d.composition?.volatileFraction ?? 0.15;
   const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05
+  // rockyCrust (Bucket B, relief triage 2026-06-15): the SILICATE-vs-ICE crust discriminator.
+  // Bulk density is the rock↔ice axis (ρ≳3.9 g/cm³ rocky, ≲2.5 icy) — deliberately NOT
+  // volatileFraction, because water-rich-but-rock-crusted worlds (Earth/Ocean, high vf) DO build
+  // silicate mountains/volcanoes. The silicate-relief family (mountains/lava/edifices/tessera)
+  // multiplies by this so it zeroes on icy worlds (Europa 2.0 / Titan 1.9 / Frozen 2.5) — where
+  // relief is ice-tectonics/cryo, carried by their own features — while KEEPING silicate worlds
+  // incl. Io-grade Lava (7) and Venus (5.24). See docs/FEATURES/relief-triage-verdicts-2026-06-15.md.
+  const density = d.composition?.density ?? 5.5;
+  const rockyCrust = smoothstep(2.5, 3.9, density);
   const waterWindow   = smoothstep(248, 273, T) * (1 - smoothstep(373, 398, T));  // ~273–373 K plateau
   const methaneWindow = smoothstep(85, 90, T) * (1 - smoothstep(112, 120, T));    // ~90–112 K Titan band
   const tempWindow = Math.max(waterWindow, methaneWindow);                  // D1 — in-window for SOME species
@@ -636,7 +645,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // erodes (old worlds = rounded low ranges). The proxy for "young/active" is simply
   // (1−erosion); a constant base scales it into a felt amplitude. Stays in 0..1.
   const habitability = clamp01(d.habitability ?? 0);
-  const mountainAmp = clamp01(mix(0.25, 0.6, 1 - erosion));
+  const mountainAmp = clamp01(mix(0.25, 0.6, 1 - erosion)) * rockyCrust;   // ×rockyCrust: silicate orogeny only (icy worlds relieve via cryo/ice-tectonics)
 
   // orogenyStrength: blends isotropic ridged hills (0) ↔ anisotropic linear fold
   // BELTS (1, the "Himalaya" look). True fold-mountain belts need plate subduction,
@@ -709,7 +718,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // stressed worlds show the crosscutting ridge lattice, so a high smoothstep gate on
   // tectonicActivity (a dead/mild world shows none), eroded-down. ×0.15 scales the
   // dual-axis intersecting-ridge lattice amplitude.
-  const tesseraStrength = clamp01(smoothstep(0.45, 0.9, tectonicActivity) * (1 - 0.4 * erosion)) * 0.15;
+  const tesseraStrength = clamp01(smoothstep(0.45, 0.9, tectonicActivity) * (1 - 0.4 * erosion)) * 0.15 * rockyCrust;   // ×rockyCrust: Venus-type silicate landform (icy crust deforms as ridges/chaos)
 
   // tesseraAxes: 2 seeded unit-vec3 — the two lattice orientations whose intersecting
   // warped ridges form the crosscutting tessera grid (seed-deterministic per planet).
@@ -721,7 +730,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // young-age resurfacing (fresh volcanic plains), plus a modest subduction-arc proxy
   // (habitability is this file's plate-tectonics proxy — Earth's arc volcanoes). A dead,
   // cold, un-resurfaced world (Frozen) shows none; Io-grade tidal (Lava) saturates.
-  const volcanismStrength = clamp01(tidalProxy + resurfacing * 0.5 + habitability * 0.3);
+  const volcanismStrength = clamp01(tidalProxy + resurfacing * 0.5 + habitability * 0.3) * rockyCrust;   // ×rockyCrust: silicate edifices only (icy worlds get cryovolcanic domes, a separate feature)
 
   // edificeMaxHeight (∝ 1/g, D14): low-gravity worlds grow GIANT shields — Olympus Mons
   // is 22 km because Mars is ~0.38 g (a tall edifice would slump under Earth gravity).
@@ -742,13 +751,13 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // fresh smooth plain; an old cratered world has none). Direct passthrough of the
   // resurfacing rate (the F2 craterDensity already reads (1−resurfacing), so the two
   // are consistent: high resurfacing ⇒ few craters + broad lava plains).
-  const lavaCoverage = clamp01(resurfacing);
+  const lavaCoverage = clamp01(resurfacing) * rockyCrust;   // ×rockyCrust: silicate flood-basalt only (icy resurfacing is cryo, carried by cryoActivity)
 
   // lavaActivity (D12): the EMISSIVE driver — is the lava COLD (old solidified plains,
   // tidal≈0) or GLOWING (active, tidally self-heated like Io)? tidalProxy is the same
   // Io-normalized tidal-heat clamp F7 uses, so a close eccentric world's cracks glow.
   // The GLSL crack mask multiplies this in; 0 ⇒ the spatial emissive term early-outs.
-  const lavaActivity = tidalProxy;
+  const lavaActivity = tidalProxy * rockyCrust;   // ×rockyCrust: silicate emissive lava only (icy tidal heating drives cryoActivity, not glowing rock)
 
   // channelDensity (seed × activity): gates the deferred leveed-channel / sinuous-rille
   // combiner (relief doc §F8.a rich tier). _derived-only for now (no GLSL consumer until
