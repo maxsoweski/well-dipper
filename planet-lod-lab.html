@@ -6918,6 +6918,15 @@
       ecumenopolis: fEcu,
       limb: fLimb, terminator: fTerm, sunglint: fGlint, aurora: fAurora,
     };
+    // Collapsed home for features irrelevant to the current world (filter ON).
+    // Created after all category groups + featureFolders so it sits at the BOTTOM
+    // of the right (Features) panel.
+    const fNotRelevant = guiRight.addFolder('Not relevant to this world (0)'); fNotRelevant.close();
+    // Capture each feature folder's ORIGINAL category parent so relevant features
+    // can be re-appended there in declaration order (preserves intra-category order).
+    const FEATURE_LAYOUT = Object.entries(featureFolders).map(([key, folder]) => ({
+      key, folder, parentEl: folder.domElement.parentElement,
+    }));
     // Move each feature's enable controller out of the folder body and into its
     // title bar (design 2026-06-07, mechanism b). The controller stays in the
     // gui tree, so syncDisplays()/updateDisplay() keeps the title box synced when
@@ -7080,9 +7089,20 @@
     function applyArchetypeFilter(){
       const { set, archs } = relevantFeatureSet();
       filterUI.archetypeLabel = archs.map(a => ARCHETYPES[a].label).join(' + ') || '(none)';
-      for (const [key, folder] of Object.entries(featureFolders)) {
-        if (!filterUI.filter || set.has(key)) folder.show(); else folder.hide();
+      let nIrrelevant = 0;
+      for (const { key, folder, parentEl } of FEATURE_LAYOUT) {
+        const relevant = !filterUI.filter || set.has(key);
+        if (relevant) {
+          parentEl.appendChild(folder.domElement);          // back to its category, in declaration order
+        } else {
+          fNotRelevant.$children.appendChild(folder.domElement);
+          nIrrelevant++;
+        }
       }
+      // lil-gui renders the disclosure arrow as a CSS pseudo-element, so setting
+      // textContent is safe (doesn't clobber it).
+      fNotRelevant.$title.textContent = `Not relevant to this world (${nIrrelevant})`;
+      fNotRelevant.domElement.style.display = (filterUI.filter && nIrrelevant > 0) ? '' : 'none';
       syncDisplays();
     }
     // One 🔆 solo button per feature folder (appended below its existing controls).
