@@ -284,7 +284,10 @@ if [ -f "docs/SYSTEMS.md" ] && [ -d "docs/FEATURES" ]; then
   for f in docs/FEATURES/*.md; do
     [ -f "$f" ] || continue
     # Extract Systems touched: line (parseable per Rule 14)
-    TOUCHED=$(grep -E '^\*\*Systems touched:\*\*' "$f" | sed -E 's/^\*\*Systems touched:\*\* *//' | tr ',' '\n' | sed 's/^ *//;s/ *$//')
+    # `|| true`: under `set -euo pipefail`, a no-match grep returns 1 and aborts the
+    # whole script before later checks run (a FEATURES doc with no Systems-touched
+    # line is legitimate). Empty TOUCHED is already handled by the [ -z ] guard below.
+    TOUCHED=$(grep -E '^\*\*Systems touched:\*\*' "$f" | sed -E 's/^\*\*Systems touched:\*\* *//' | tr ',' '\n' | sed 's/^ *//;s/ *$//' || true)
     for slug in $TOUCHED; do
       [ -z "$slug" ] && continue
       if ! echo "$SYS_SLUGS" | grep -qxF "$slug"; then
@@ -315,6 +318,28 @@ if [ -f "docs/FEATURES.md" ] && [ -d "docs/FEATURES" ]; then
   done
 else
   echo "  (skipped — docs/FEATURES.md or docs/FEATURES/ missing)" >> "$REPORT"
+fi
+
+# ---- Check: feature-cards generated-file staleness ----
+section "Feature-cards generated-file staleness"
+if [ -f "planet-feature-cards.generated.js" ] && [ -f "scripts/gen-feature-cards.mjs" ]; then
+  # Snapshot committed file; regen; diff; restore (never silently update).
+  FC_SNAPSHOT=$(mktemp)
+  cp planet-feature-cards.generated.js "$FC_SNAPSHOT"
+  if node scripts/gen-feature-cards.mjs >/dev/null 2>&1; then
+    if ! diff -q "$FC_SNAPSHOT" planet-feature-cards.generated.js >/dev/null 2>&1; then
+      flag "feature-cards-stale" "planet-feature-cards.generated.js differs from fresh gen — run 'npm run gen-feature-cards' and commit"
+      mv "$FC_SNAPSHOT" planet-feature-cards.generated.js   # restore committed version
+    else
+      rm -f "$FC_SNAPSHOT"
+    fi
+  else
+    # exit non-zero from the generator here means a STRUCTURAL parse error (not a coverage warning)
+    warn "feature-cards-check" "gen-feature-cards errored (structural parse?); cannot verify staleness"
+    mv "$FC_SNAPSHOT" planet-feature-cards.generated.js
+  fi
+else
+  echo "  (skipped — planet-feature-cards.generated.js or gen-feature-cards.mjs missing)" >> "$REPORT"
 fi
 
 # ---- Summary ----
