@@ -95,6 +95,14 @@
     .lil-gui .title-toggle { width: auto; min-width: 0; }
     .lil-gui .title-toggle .lil-name { display: none; }   /* hide the controller's own '✓ enabled' label */
     .lil-gui .title-toggle .lil-widget { min-width: 0; }
+    /* Render-audit surface (Ask 4) — per-feature title-bar glyph + World summary. */
+    .lil-gui .audit-badge { margin-left: 6px; font-size: 12px; line-height: 1; user-select: none; }
+    .lil-gui .audit-badge.stale { opacity: 0.35; }              /* dimmed when state.audit.fresh === false */
+    .lil-gui .audit-summary { font-size: 11px; line-height: 1.4; padding: 4px 8px; margin: 2px 0 4px;
+      color: #cfd2d6; }
+    .lil-gui .audit-summary.stale { color: #c98a2a; }           /* "stale — re-audit" tint */
+    .lil-gui .audit-summary .as-false { color: #d96a6a; }
+    .lil-gui .audit-summary .as-dead  { color: #c9a14a; }
     /* Per-feature info card (Ask 2) — plain DOM injected as a folder's first child. */
     .lil-gui .feature-card { display: none; font-size: 11px; line-height: 1.45; padding: 6px 8px;
       margin: 2px 0 4px; background: #1a1a1f; border-left: 2px solid #4a90d9; color: #cfd2d6; }
@@ -7387,6 +7395,55 @@
     fWorld.add(filterUI, 'soloMode', ['context', 'bare']).name('solo mode').onChange(setSoloMode);
     fWorld.add({ enableAll(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); } }, 'enableAll').name('enable all');
     fWorld.add({ clearSolo(){ unsolo(); } }, 'clearSolo').name('clear solo (restore)');
+
+    // ── Audit this world (Ask 4) ──────────────────────────────────────────────
+    // Runs renderDeltaSweep() for the CURRENT preset, classifies every feature,
+    // writes state.audit, then re-renders all badges + this summary. The sweep
+    // restores auto-spin/camera/enables itself; the only UI obligation is to
+    // disable the button + show "Auditing…" while it runs.
+    const auditBtnProxy = { audit(){ runAuditFromButton(); } };
+    const auditCtrl = fWorld.add(auditBtnProxy, 'audit').name('Audit this world');
+    // Plain-DOM summary line injected directly under the button row.
+    const auditSummaryEl = document.createElement('div');
+    auditSummaryEl.className = 'audit-summary';
+    auditCtrl.domElement.insertAdjacentElement('afterend', auditSummaryEl);
+
+    function renderAuditSummary(){
+      const a = state.audit;
+      if (!a) { auditSummaryEl.classList.remove('stale'); auditSummaryEl.textContent = 'Audit: (not run)'; return; }
+      const stale = !a.fresh || a.preset !== driverUI.preset;   // preset mismatch is stale (spec)
+      let nFalse = 0, mDead = 0, dDegen = 0;
+      for (const k of Object.keys(a.results)) {
+        const s = a.results[k].status;
+        if (s === '🔴F' || s === '⚠️F') nFalse++;
+        else if (s === '⚠️D') mDead++;
+        else if (s === '⬛') dDegen++;
+      }
+      auditSummaryEl.classList.toggle('stale', stale);
+      const freshTag = stale ? '⚠ stale — re-audit' : '✓ fresh';
+      auditSummaryEl.innerHTML = `Audit: <span class="as-false">${nFalse} false</span> &middot; `
+        + `<span class="as-dead">${mDead} dead</span>`
+        + (dDegen ? ` &middot; ${dDegen} degenerate` : '')
+        + ` &middot; ${freshTag}`;
+    }
+
+    // TEMP shim (removed in Task 5): no-op until the real badge renderer exists.
+    if (typeof renderAllAuditBadges === 'undefined') { var renderAllAuditBadges = function(){}; }
+
+    async function runAuditFromButton(){
+      auditCtrl.disable();
+      const origName = 'Audit this world';
+      auditCtrl.name('Auditing…');
+      try {
+        await runAudit();
+      } finally {
+        auditCtrl.name(origName);
+        auditCtrl.enable();
+      }
+      renderAllAuditBadges();      // defined in Task 5
+      renderAuditSummary();
+    }
+    renderAuditSummary();          // initial "(not run)"
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
