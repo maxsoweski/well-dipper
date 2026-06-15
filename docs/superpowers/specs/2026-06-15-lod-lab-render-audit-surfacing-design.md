@@ -2,12 +2,15 @@
 
 **Date:** 2026-06-15
 **Author:** working-Claude (brainstormed with Max)
-**Status:** spec — pending Max review → implementation plan
+**Status:** spec — 5 open decisions LOCKED (2026-06-15) → ready for implementation plan
 **Scope:** `planet-lod-lab.html` (GUI) + a small extracted **pure status-mapping module**
-(new file, e.g. `lab-render-status.js`) + a unit test for it. **No shader/core changes**
-(`planet-lod-lab-core.js` untouched), so this cannot regress any planet rendering. It REUSES the
-existing pure auditor (`lab-render-audit.js`) and the existing in-page sweep
-(`renderDeltaSweep()`) — it adds no new GPU code, just a surface over what already exists.
+(`lab-render-status.js`, new file) + a unit test for it (`tests/render-status.test.js`) +
+`scripts/gen-render-audit.mjs` (refactored to import the shared `EPS`/`STRONG` constants from the new
+module — see "Shared constants" below). **No shader/core changes** (`planet-lod-lab-core.js` untouched),
+so this cannot regress any planet rendering. It REUSES the existing pure auditor (`lab-render-audit.js`)
+and the existing in-page sweep (`renderDeltaSweep()`) — it adds no new GPU code, just a surface over
+what already exists. The only offline-pipeline touch is the constants refactor in `gen-render-audit.mjs`,
+which is behavior-preserving (verified by a byte-identical re-generation of `lab-render-audit.md`).
 **Campaign frame:** this is lab *tooling*, not a planet feature — the campaign per-feature UAT loop
 does NOT govern. It's a GUI/derivation addition (plus one tiny pure helper), verified live on `:9223`.
 Single-system → `dev-collab-scope` is NOT invoked (same call as the Phase-1 declutter and Asks 2/3),
@@ -89,30 +92,41 @@ Per-feature classification, for the current preset `p`, mirrors `scripts/gen-ren
 
 ### Per-feature STATUS vocabulary (the report's glyphs, exactly)
 
-Use **the same glyph tiers and thresholds the offline report already defines** (`gen-render-audit.mjs`
+Use **the EXACT glyph strings and thresholds the offline report already emits** (`gen-render-audit.mjs`
 `glyph()` at lines 56-64, `EPS`/`STRONG` at lines 14-15), so the in-GUI surface and the offline report
-**agree cell-for-cell**:
+**agree cell-for-cell**. The vocabulary is locked to the report's strings — note the strong-false badge
+keeps its **`F` suffix (`🔴F`, never bare `🔴`)**:
 
 | Status | Glyph | Rule (current preset) |
 |---|---|---|
 | fires-as-declared | ✅ | `should && delta > eps` |
-| strong false-render | 🔴 (report writes `🔴F`) | `!should && delta > STRONG` |
+| strong false-render | 🔴F | `!should && delta > STRONG` |
 | faint false-render | ⚠️F | `!should && eps < delta <= STRONG` |
 | dead-render | ⚠️D | `should && delta <= eps` |
 | correctly inert | `·` | `!should && delta <= eps` |
 | degenerate (black/blown) | ⬛ | sweep `degenerate[f] != null` (`"black"` or `"blown"`) |
 
-**Thresholds (locked to the report):** `eps = 1e-4`, `STRONG = 5e-4`. Source them as named constants;
-the cleanest path is to export `EPS`/`STRONG` from the extracted status module (below) and have
-`gen-render-audit.mjs` import them too, so there is **one** copy. (At minimum the spec's values MUST
-equal the report's — do not hardcode a second divergent pair.)
+**Thresholds (locked to the report) — single source of truth (IN SCOPE):** `eps = 1e-4`,
+`STRONG = 5e-4`. These are exported as named constants `EPS`/`STRONG` from the new pure status module
+(`lab-render-status.js`, below), and **BOTH** consumers import them from there: the in-GUI badge
+(`planet-lod-lab.html`) **and** the offline report (`gen-render-audit.mjs`, which currently declares its
+own local `const EPS`/`const STRONG` at lines 14-15 — those are deleted in favor of the import). One
+copy, so the in-GUI surface and the report can never drift. (This decides the earlier "import vs. just
+pin equal" question — the shared-constant refactor is in scope, not deferred.)
 
-**Degenerate precedence (decide explicitly):** a degenerate frame is a *mechanical failure on the ON
-frame*. The recommended precedence is: **⬛ degenerate wins over every other tier** (if the ON frame is
-all-black or blown, the delta tier is not meaningful). The offline report instead lists degenerates as a
-*separate* punch-list and still prints the delta-based glyph in the matrix; for the single-glyph in-GUI
-badge, ⬛-wins is the honest read. **This is a deliberate, noted deviation from the report's
-side-channel treatment** — flag it for Max.
+> **Footgun — the auditor's OWN default eps is `0.01`, NOT `1e-4`.** `auditRenderMatrix(expected,
+> deltas, { eps })` defaults to `{ eps = 0.01 }` (`lab-render-audit.js:22`). That default is two orders
+> of magnitude coarser than the render/inert boundary the report and lab use. Both the report and the
+> live surface MUST **pass `eps` explicitly** (the shared `EPS = 1e-4`) on every `auditRenderMatrix`
+> call — **never rely on the auditor default.** Omitting the explicit `eps` would silently reclassify
+> faint renders as inert and make the in-GUI badge disagree with the report.
+
+**Degenerate precedence (LOCKED): ⬛ degenerate WINS over the delta tier** for the single in-GUI badge.
+A degenerate frame is a *mechanical failure on the ON frame* — if the ON frame is all-black or blown, the
+delta classification is meaningless, so the badge shows ⬛ regardless of what the delta tier would say.
+**This is a deliberate divergence from the offline report**, which side-channels degenerates as a
+*separate* punch-list AND still prints the delta-based glyph in the matrix. For the single-glyph in-GUI
+badge there is only one slot, so ⬛-wins is the honest read. Decided — not an open question.
 
 > **Threshold note — do NOT conflate the two thresholds.** The sweep applies a **per-pixel** gate
 > `perPixelThresh = 12` (i.e. `>12/255` summed-abs RGB) to decide whether *a pixel* changed
@@ -133,7 +147,7 @@ same glyph.
   Plain DOM, **not** a lil-gui controller, so it never perturbs `syncDisplays()`, the enable controller,
   or the reparenting relevance filter (`applyArchetypeFilter()`).
   - **Badge on ALL features**, relevant or not. For an **irrelevant, force-enabled** feature (the
-    "Not relevant to this world" group workflow), a **🔴** is exactly the gate-testing signal Max wants
+    "Not relevant to this world" group workflow), a **🔴F** is exactly the gate-testing signal Max wants
     — "this feature paints a world it has no business on." So the badge must render for force-enabled
     irrelevant features too, not just the relevant roster.
 - **Ask 2 integration point (do NOT hard-depend):** the Ask 2 card's **State** line can read the same
@@ -142,7 +156,7 @@ same glyph.
 - **Ask 3 integration point (do NOT hard-depend):** the Ask 3 roster **chips** (`● Mountains ○ Canyons`)
   can append the same glyph per chip *if/when Ask 3 is built*. Same independence rule.
 - **World-folder summary line:** `Audit: N false · M dead · ✓ fresh` (or `⚠ stale`), rendered next to
-  the "Audit this world" button. `N` = count of features whose status ∈ {🔴, ⚠️F}; `M` = count of ⚠️D.
+  the "Audit this world" button. `N` = count of features whose status ∈ {🔴F, ⚠️F}; `M` = count of ⚠️D.
   (Degenerate count MAY be appended, e.g. `· D degenerate`, implementer's call.) When no audit has run
   yet, the summary reads e.g. `Audit: (not run)`.
 
@@ -157,37 +171,36 @@ re-run of "Audit this world" sets `fresh = true` and restores full-opacity badge
 `state.audit.preset` no longer match `driverUI.preset`, so the surface MUST treat a preset mismatch as
 stale (or clear the audit). The summary/badges must not show a glyph computed for a *different* world.
 
-**The exact detection hook is left to the implementation plan — the spec NAMES the candidates and flags
-this as the chief implementation risk:**
+**Detection hook (LOCKED): one global `gui.onChange` per top-level GUI + an `_auditing` guard flag.**
 
-1. **Single delegated global hook (recommended candidate).** lil-gui exposes a top-level
-   `gui.onChange(event => …)` that fires for **every** controller change in that GUI (its
-   `_callOnChange` bubbles every controller's change up to the parent GUI —
-   `node_modules/lil-gui/dist/lil-gui.esm.js:149-155, 2259-2265`). Registering one
-   `guiLeft.onChange(...)` + one `guiRight.onChange(...)` to set `fresh = false` covers **all ~47
-   feature toggles and every slider** without touching each controller. **Caveat to resolve in the
-   plan:** this global hook will *also* fire for the preset controller, for `filter to relevant`, for
-   the camera/quality knobs, and — critically — for the **sweep's own** `applyEnableSet()`/`syncDisplays()`
-   churn *during* the audit. The plan must (a) suppress staleness during the audit run (e.g. a
-   `_auditing` guard flag, set while the sweep runs, checked in the onChange), and (b) decide which
-   controllers legitimately stale the audit (enables + feature sliders: yes; pure camera/view knobs that
-   don't affect the sweep: arguably no — but conservative = any change stales, which is the safe/honest
-   default).
-2. **Edit-counter compared at audit time.** Maintain a monotonic `state.editSeq` bumped on each relevant
-   change; record `state.audit.editSeq` at audit time; `fresh = (editSeq === audit.editSeq && preset
-   === audit.preset)`. This makes freshness a pure comparison rather than a mutation, and sidesteps the
-   "did my own sweep churn count as an edit?" problem if the counter is only bumped by user-driven
-   handlers.
-3. **Per-controller wiring (rejected baseline).** Adding `onChange` to all ~47 enable controllers + every
-   slider is the brute-force option; named only to be explicitly rejected as the most fragile/highest-
-   churn path.
+lil-gui exposes a top-level `gui.onChange(event => …)` that fires for **every** controller change in that
+GUI — its `_callOnChange` bubbles every controller's change up to the parent GUI
+(`node_modules/lil-gui/dist/lil-gui.esm.js:149-155, 2259-2265`). So registering exactly **one**
+`guiLeft.onChange(...)` **and one** `guiRight.onChange(...)`, each setting `state.audit.fresh = false`,
+covers **all ~47 feature toggles and every slider** with no per-controller wiring. (Per-controller
+`onChange` on all ~47 enables + every slider is the brute-force alternative — explicitly NOT chosen; it's
+the most fragile/highest-churn path. The global delegated hook is decided.)
 
-> **Chief implementation risk (on the record):** getting auto-stale detection to fire on *real operator
-> edits* but **not** on the audit's own internal enable/clock churn. The sweep mutates `state[*enableKey]`
-> 6× per feature and calls `syncDisplays()`, which is exactly what a naive global onChange would read as
-> "47 edits." Whichever hook is chosen MUST be guarded against self-triggering. This is the part most
-> likely to ship subtly wrong (a perpetually-stale or never-stale badge), so it gets explicit live
-> verification (below) and is called out for Max.
+**The `_auditing` guard — and the self-trigger trap it solves.** The audit's OWN sweep mutates
+`state[*enableKey]` 6× per feature and calls `syncDisplays()` — which is exactly the kind of controller
+churn the global `onChange` fires on. Without protection the audit would, mid-run, fire `onChange`
+dozens of times and instantly mark *itself* stale (a badge that's green for a split second and then
+perpetually "stale"). To prevent this, set a boolean `state._auditing = true` for the duration of the
+sweep and have **both** `onChange` handlers early-return while `_auditing` is set (ignore the change).
+Clear `_auditing` after the sweep restores enables/clock/camera. This guard is the single load-bearing
+detail of the staleness mechanism — it's why the hook is a guarded global rather than naive.
+
+**Staling scope (LOCKED — conservative): ANY control change stales the audit.** Both global handlers
+stale on *every* controller change they see (enables, feature sliders, preset, `filter to relevant`,
+camera/view/quality knobs — all of them). This is the safe/honest default: a green ✅ is never trusted
+after the operator touches anything. **Exempting pure view/camera/quality knobs** (controls that don't
+affect the sweep, so arguably shouldn't stale it) is an explicit **DEFERRED / YAGNI refinement** — a
+possible future curation, **not built in v1.** Don't add it now.
+
+> **Chief implementation risk (on the record):** the `_auditing` guard must reliably bracket the *entire*
+> sweep (set before the first enable mutation, cleared only after the final restore), or the audit will
+> self-stale. This is the part most likely to ship subtly wrong (a perpetually-stale or never-stale
+> badge), so it gets explicit live verification (below).
 
 ### The one genuinely test-worthy seam — extract a PURE status function
 
@@ -198,23 +211,24 @@ Almost all of Ask 4 is live-verified GUI glue. The **one** piece worth a unit te
 // lab-render-status.js  (NEW, pure, DOM-free, importable in vitest + the in-page <script>)
 export const EPS = 1e-4;
 export const STRONG = 5e-4;
-// statusOf(should, delta, degenerate) -> '✅' | '🔴' | '⚠️F' | '⚠️D' | '·' | '⬛'
+// statusOf(should, delta, degenerate) -> '✅' | '🔴F' | '⚠️F' | '⚠️D' | '·' | '⬛'
 export function statusOf(should, delta, degenerate) { … }
 ```
 
 `statusOf` is the single source of the tier logic; the in-GUI classifier calls it per feature
-(`should` from `expectedMatrix`, `delta`/`degenerate` from the sweep). To keep the in-GUI surface and
-the offline report on identical boundaries, `gen-render-audit.mjs` SHOULD be refactored to import
-`EPS`/`STRONG` (and ideally `statusOf`) from this module — but if that refactor is judged out-of-scope
-for Ask 4, the values MUST at least be pinned equal, and a test should assert the in-GUI glyph for a
-known offline-report cell matches the report.
+(`should` from `expectedMatrix`, `delta`/`degenerate` from the sweep). It returns the report's exact
+glyph strings (strong-false = `🔴F`), and applies the **⬛-degenerate-wins** precedence (degenerate
+short-circuits before the delta tiers). To keep the in-GUI surface and the offline report on identical
+boundaries, `gen-render-audit.mjs` is refactored to import `EPS`/`STRONG` from this module (in scope —
+see "Shared constants"); a test additionally asserts the in-GUI glyph for a known offline-report cell
+matches the report.
 
 **Unit test (`tests/render-status.test.js`) MUST cover every tier:**
 
 | Case | Inputs | Expected |
 |---|---|---|
 | fires-as-declared | `should=true, delta=0.01, degen=null` | `✅` |
-| strong false | `should=false, delta=0.001, degen=null` (> STRONG) | `🔴` |
+| strong false | `should=false, delta=0.001, degen=null` (> STRONG) | `🔴F` |
 | faint false | `should=false, delta=2e-4, degen=null` (eps < δ ≤ STRONG) | `⚠️F` |
 | dead | `should=true, delta=0, degen=null` | `⚠️D` |
 | correctly inert | `should=false, delta=0, degen=null` | `·` |
@@ -226,7 +240,8 @@ Add a boundary case at exactly `delta === eps` and `delta === STRONG` to pin the
 ## Mechanics & risks (on the record)
 
 - **Auto-stale self-triggering (chief risk)** — detailed above. The audit's own `applyEnableSet` churn
-  must not mark the just-completed audit stale.
+  must not mark the just-completed audit stale; the `_auditing` guard (set across the whole sweep,
+  early-returned in both global `onChange` handlers) is the locked mechanism.
 - **Line-number drift** in `planet-lod-lab.html` is real — every line number here is a **HINT**. Re-`grep
   -n` each edit site (`renderDeltaSweep`, `relevantFeatureSet`, `relocateEnableToTitle`,
   `applyArchetypeFilter`, `fWorld`, the World-folder controller block ~7115, `window._lab`) before
@@ -234,8 +249,8 @@ Add a boundary case at exactly `delta === eps` and `delta === STRONG` to pin the
 - **DOM injection in the title bar** must not collide with the Phase-1 enable-in-title relocation or
   Ask 2's per-feature ⓘ button (if built): the audit badge appends *after* the relocated enable toggle.
   Verify live.
-- **Degenerate-glyph precedence** is a noted deviation from the offline report (which side-channels
-  degenerates) — flag for Max (above).
+- **Degenerate-glyph precedence (LOCKED, ⬛-wins)** is a deliberate divergence from the offline report
+  (which side-channels degenerates and still prints the delta glyph) — see "Degenerate precedence" above.
 - **Glyph parity with the report** is the correctness anchor: the in-GUI classification for any
   (current-preset, feature) cell MUST equal the offline report's glyph for the same cell. Verified by
   cross-check (below). Drift here would make the live surface lie relative to the canonical report.
@@ -262,28 +277,34 @@ Add a boundary case at exactly `delta === eps` and `delta === STRONG` to pin the
     (`docs/FEATURES/lab-render-audit.md` — read it for a current 🔴F or ⚠️F cell on a specific preset), OR
     **force-enable a feature that doesn't belong** to the current world (toggle it on in the "Not relevant"
     group). Click **"Audit this world."**
-    - The expected **per-feature glyphs** appear on the feature folders' title bars (✅ / 🔴 / ⚠️F /
+    - The expected **per-feature glyphs** appear on the feature folders' title bars (✅ / 🔴F / ⚠️F /
       ⚠️D / `·` / ⬛), readable from `state.audit.results`.
     - The **World-folder summary** counts (`N false · M dead`) match the count of those glyph tiers.
     - **Cross-check the in-GUI classification against the offline report
       `docs/FEATURES/lab-render-audit.md` for the SAME preset — they MUST agree** cell-for-cell (the
       anchor invariant; both run the same auditor over the same sweep).
+  - **`_auditing` guard works (self-trigger trap):** immediately after an audit completes (no operator
+    edit in between), `state.audit.fresh === true` — i.e. the sweep's own ~6×/feature enable churn +
+    `syncDisplays()` did NOT mark the just-finished audit stale via the global `onChange`.
   - **Edit a slider or toggle** → badges **dim** and the summary flips to **"stale — re-audit"**
-    (`state.audit.fresh === false`).
+    (`state.audit.fresh === false`). (Any control change stales, per the conservative scope.)
   - **Re-click "Audit this world"** → `fresh === true`, badges restore to full opacity.
   - **Switch preset** → the prior audit reads **stale/cleared** (no glyphs for the wrong world).
   - After any audit, confirm the sweep **restored auto-spin and camera** (planet resumes spinning;
     `state.yaw` / clock back to pre-audit) — i.e. the working state cleaned up.
-  - Confirm the audit works for a **force-enabled irrelevant** feature (its 🔴 badge appears) — the
+  - Confirm the audit works for a **force-enabled irrelevant** feature (its 🔴F badge appears) — the
     gate-testing signal.
 - **Unit test** (`tests/render-status.test.js`) for the pure `statusOf` mapping covering **all six tiers**
   + the `eps`/`STRONG` boundaries (table above). Run `npm test` (vitest) — green.
-- **Existing suites stay green (additive):** `tests/render-audit.test.js` (the auditor — unchanged unless
-  `EPS`/`STRONG` are factored out, in which case it stays green against the same values),
+- **Existing suites stay green (additive):** `tests/render-audit.test.js` (the auditor — unchanged; the
+  shared-constant refactor doesn't alter its logic, only where `gen-render-audit.mjs` sources `EPS`/`STRONG`),
   `feature-associations`, `planet-archetypes`, the `cityLightsEnabled` pin, the Stage-D GLSL drift-guard.
-  If `gen-render-audit.mjs` is refactored to import shared constants, re-run it once and confirm
-  `docs/FEATURES/lab-render-audit.md` is byte-identical (no spurious diff).
+- **Shared-constant refactor is behavior-preserving (REQUIRED check):** after `gen-render-audit.mjs`
+  imports `EPS`/`STRONG` from `lab-render-status.js` (replacing its local `const`s at lines 14-15),
+  **re-run `node scripts/gen-render-audit.mjs` and confirm `docs/FEATURES/lab-render-audit.md` is
+  byte-identical** to the committed version (e.g. `git diff --exit-code docs/FEATURES/lab-render-audit.md`
+  → no diff). A byte-identical report proves the refactor changed nothing.
 - **Commit explicit paths only** — `planet-lod-lab.html`, `lab-render-status.js`,
-  `tests/render-status.test.js` (and `scripts/gen-render-audit.mjs` only if the shared-constant refactor
-  is done). **Never `git add -A`** (shared-tree litter: warp WIP, loose `.png`/`.webm`/`.html`, and a
-  0-byte `HEAD` file).
+  `tests/render-status.test.js`, and `scripts/gen-render-audit.mjs` (the shared-constant refactor).
+  **Never `git add -A`** (shared-tree litter: warp WIP, loose `.png`/`.webm`/`.html`, and a 0-byte
+  `HEAD` file).
