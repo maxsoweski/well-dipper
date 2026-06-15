@@ -106,6 +106,23 @@
     .lil-gui .feature-card .fc-state-off { color: #8a8f96; }
     .lil-gui .title-info { cursor: pointer; user-select: none; opacity: 0.7; margin-left: 4px; }
     .lil-gui .title-info:hover { opacity: 1; }
+    /* Archetype info view (Ask 3) — plain DOM injected under the World folder's
+       disabled `archetype` field row. Collapsed by default; ⓘ toggles .open. */
+    .lil-gui .archetype-info { display: none; font-size: 11px; line-height: 1.5;
+      padding: 6px 8px; margin: 2px 0 6px; background: #16161b;
+      border-left: 2px solid #c9a14a; color: #cfd2d6; }
+    .lil-gui .archetype-info.open { display: block; }
+    .lil-gui .archetype-info .ai-header { font-weight: 600; color: #e6e8ea; margin-bottom: 4px; }
+    .lil-gui .archetype-info .ai-arch { margin-top: 6px; }
+    .lil-gui .archetype-info .ai-arch-h { color: #c9a14a; }
+    .lil-gui .archetype-info .ai-bodies { color: #8a8f96; font-style: italic; }
+    .lil-gui .archetype-info .ai-roster { margin-top: 2px; }
+    /* inline wrapping chips — NOT one row per feature (spec lock #3) */
+    .lil-gui .archetype-info .ai-chip { display: inline-block; margin: 1px 8px 1px 0; white-space: nowrap; }
+    .lil-gui .archetype-info .ai-on  { color: #6ad06a; }   /* ● enabled */
+    .lil-gui .archetype-info .ai-off { color: #8a8f96; }   /* ○ off */
+    .lil-gui .archetype-info .ai-shared { opacity: 0.72; }  /* multi-archetype feature (spec lock #5) */
+    .lil-gui .archetype-info .ai-note { color: #6f747b; font-size: 10px; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -7193,6 +7210,67 @@
       fNotRelevant.domElement.style.display = (filterUI.filter && nIrrelevant > 0) ? '' : 'none';
       syncDisplays();
       refreshAllCardStates();   // relevance/enable may have changed → update card State lines
+    }
+    // ── Archetype info view (Ask 3) ───────────────────────────────────────────
+    // A read-only, fully-derived explanation of WHY each feature is in this world's
+    // roster. Returns the innerHTML for a plain <div> (NOT a lil-gui controller),
+    // so it never perturbs syncDisplays(), the enable controllers, or the
+    // reparenting relevance filter (applyArchetypeFilter() moves FEATURE folders;
+    // this block lives on the World folder and is untouched by that loop).
+    //
+    // Header  : preset → N archetypes · M relevant features (DE-DUPED) · K enabled
+    // Per arch: <label> (rosterCount) — like <bodies> ; then inline wrapping chips
+    //           ● Enabled  ○ Off, each chip marked "shared" if ≥2 of THIS world's
+    //           current archetypes list it (explains the M-vs-roster-sum gap).
+    function archetypeInfoHtml(){
+      const { set, archs } = relevantFeatureSet();          // set = de-duped keys; archs = current archetype keys
+      const N = archs.length;
+      const M = set.size;                                    // de-duplicated total (spec lock #1)
+      let K = 0;                                             // enabled among the M relevant features only (spec lock #1)
+      for (const key of set) if (state[FEATURES[key].enableKey]) K++;
+
+      // Per-relevant-feature: how many of THIS world's current archetypes list it.
+      // ≥2 → "shared" marker on its chip in each roster (spec lock #5).
+      const archMembership = {};                             // key -> count among `archs`
+      for (const a of archs) for (const k of featuresOf(a)) archMembership[k] = (archMembership[k] || 0) + 1;
+
+      const presetName = driverUI.preset;
+      const parts = [];
+      parts.push(`<div class="ai-header">${escapeHtml(presetName)} &rarr; `
+        + `${N} archetype${N === 1 ? '' : 's'} &middot; ${M} relevant feature${M === 1 ? '' : 's'} `
+        + `&middot; ${K} enabled</div>`);
+
+      if (N === 0) {
+        parts.push(`<div class="ai-note">No archetype maps to this preset.</div>`);
+        return parts.join('');
+      }
+
+      for (const a of archs) {
+        const meta = ARCHETYPES[a];
+        const roster = featuresOf(a);                        // NOT de-duped across archetypes (spec lock #2)
+        parts.push(`<div class="ai-arch">`
+          + `<span class="ai-arch-h">${escapeHtml(meta.label)} (${roster.length})</span>`   // per-arch count (lock #4)
+          + (meta.bodies && meta.bodies.length
+              ? ` <span class="ai-bodies">like ${escapeHtml(meta.bodies.join(', '))}</span>` : '')
+          + `</div>`);
+        const chips = roster.map(key => {
+          const enabled = !!state[FEATURES[key].enableKey];
+          const dot = enabled
+            ? '<span class="ai-on">&#9679;</span>'           // ●
+            : '<span class="ai-off">&#9675;</span>';         // ○
+          const shared = (archMembership[key] || 0) >= 2;    // shared among THIS world's archetypes (lock #5)
+          // short chip label: strip the trailing "(F#)" tag from FEATURES[key].label
+          const name = FEATURES[key].label.replace(/\s*\(F[^)]*\)\s*$/, '');
+          return `<span class="ai-chip${shared ? ' ai-shared' : ''}">`
+            + `${dot} ${escapeHtml(name)}${shared ? '&middot;' : ''}</span>`;   // trailing ˙-style marker
+        }).join('');
+        parts.push(`<div class="ai-roster">${chips}</div>`);
+      }
+
+      parts.push(`<div class="ai-note">Header counts unique features (M=${M}); `
+        + `per-archetype rosters list a feature under every archetype it belongs to, so `
+        + `shared&middot; features are double-listed. K counts only enabled features relevant to this world.</div>`);
+      return parts.join('');
     }
     // One 🔆 solo button per feature folder (appended below its existing controls).
     // Non-destructive: honors the current soloMode and restores prior enables on unsolo.
