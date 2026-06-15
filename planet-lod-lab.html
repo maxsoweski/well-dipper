@@ -137,6 +137,8 @@
     import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms } from './planet-lod-lab-core.js';
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
+    import { expectedMatrix, auditRenderMatrix } from './lab-render-audit.js';   // NEW: pure auditor (Ask 4)
+    import { statusOf, EPS as AUDIT_EPS } from './lab-render-status.js';          // NEW: glyph map + shared eps (Ask 4)
     import { PROCESSES, driversFor } from './planet-drivers.js';   // card "Driven" line: process labels + derived driver keys
     import { FEATURE_CARDS } from './planet-feature-cards.generated.js';     // card prose (name/variants/examples/status); AUTO-GENERATED
     import { computeEnableSet } from './lab-isolation.js';             // Phase 2: pure non-destructive-solo enable-set logic
@@ -7216,6 +7218,55 @@
       for (const a of archs) for (const k of featuresOf(a)) set.add(k);
       return { set, archs };
     }
+
+    // ── Live render-audit (Ask 4) ─────────────────────────────────────────────
+    // Runs the existing in-page sweep for the CURRENT preset, classifies all 47
+    // features via the existing pure auditor + statusOf, and stores the result on
+    // state.audit. A SECOND in-GUI consumer of renderDeltaSweep() — current-preset
+    // only, on demand. Does NOT touch the offline pipeline.
+    //
+    // _auditing brackets the ENTIRE sweep: the sweep mutates state[*Enabled] ~6×
+    // per feature and calls syncDisplays(), which the two global gui.onChange
+    // staleness hooks (Task 6) listen on. Without this guard the audit would mark
+    // ITSELF stale mid-run. Set before the sweep, cleared in finally (after the
+    // sweep's own restore), so any control change DURING the sweep is ignored and
+    // any control change AFTER it correctly stales. This is the single load-bearing
+    // detail of the staleness mechanism.
+    let _auditing = false;
+    async function runAudit(){
+      const preset = driverUI.preset;
+      _auditing = true;
+      let sweep;
+      try {
+        sweep = await renderDeltaSweep();           // { preset, deltas, degenerate } for the CURRENT preset
+      } finally {
+        _auditing = false;                          // cleared even if the sweep throws
+      }
+      // expected side: ASSOCIATIONS[f].rendersOn -> should-render-on-this-preset
+      const keys = Object.keys(FEATURES);
+      const manifest = {};
+      for (const f of keys) manifest[f] = { rendersOn: (ASSOCIATIONS[f] && ASSOCIATIONS[f].rendersOn) || [] };
+      const expected = expectedMatrix(manifest, [preset]);
+      // actual side: wrap the sweep's per-feature fraction into the auditor's shape
+      const actualDeltas = {};
+      for (const f of keys) actualDeltas[f] = { [preset]: sweep.deltas[f] ?? 0 };
+      // auditRenderMatrix is called for parity with the report (its falseRenders/
+      // deadRenders sets must agree with statusOf); pass eps EXPLICITLY — the auditor
+      // default is 0.01, NOT 1e-4 (footgun). We do not consume its return directly
+      // for the badge (statusOf is the per-feature source), but the explicit-eps call
+      // keeps the cross-check invariant honest.
+      auditRenderMatrix(expected, actualDeltas, { eps: AUDIT_EPS });   // parity call; eps explicit (spec lock #5)
+      const results = {};
+      for (const f of keys) {
+        const should = expected[f][preset];
+        const delta = sweep.deltas[f] ?? 0;
+        const degenerate = sweep.degenerate[f] ?? null;
+        results[f] = { status: statusOf(should, delta, degenerate), delta };
+      }
+      state.audit = { preset, fresh: true, results };
+      return state.audit;
+    }
+
     function applyArchetypeFilter(){
       const { set, archs } = relevantFeatureSet();
       filterUI.archetypeLabel = archs.map(a => ARCHETYPES[a].label).join(' + ') || '(none)';
