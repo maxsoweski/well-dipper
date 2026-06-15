@@ -10,6 +10,7 @@
     "sync-ships": "bash scripts/sync-ships.sh",
     "generate-glow": "node scripts/generate-galaxy-glow.mjs",
     "generate-glow:test": "node scripts/generate-galaxy-glow.mjs --test",
+    "gen-feature-cards": "node scripts/gen-feature-cards.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify-golden": "node tests/golden-trajectories/run-golden.mjs",
