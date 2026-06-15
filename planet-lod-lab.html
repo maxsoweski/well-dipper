@@ -6953,6 +6953,7 @@
       ctrl.domElement.classList.add('title-toggle');
       ctrl.domElement.addEventListener('click', e => e.stopPropagation());
       title.appendChild(ctrl.domElement);
+      ctrl.onChange(() => refreshAllCardStates());   // enable flip → card State dot updates
     }
     for (const [key, folder] of Object.entries(featureFolders)) {
       relocateEnableToTitle(folder, FEATURES[key].enableKey);
@@ -7008,6 +7009,28 @@
       const dot = enabled ? '<span class="fc-state-on">&#9679; enabled</span>' : '<span class="fc-state-off">&#9675; off</span>';
       const rel = relevant ? 'relevant to THIS world' : '<span class="fc-state-off">not relevant</span>';
       stateEl.innerHTML = `<span class="fc-k">state:</span> ${dot} &middot; ${rel}`;
+    }
+    // Inject an ⓘ toggle into each feature folder's title bar and a (hidden) card
+    // as the folder's FIRST body child. Mirrors relocateEnableToTitle()'s title-bar
+    // DOM injection; stopPropagation so clicking ⓘ doesn't collapse the folder.
+    const featureCards = {};   // key -> { cardEl, stateEl } for live State refresh
+    for (const [key, folder] of Object.entries(featureFolders)) {
+      const cardEl = buildFeatureCard(key);
+      folder.$children.insertBefore(cardEl, folder.$children.firstChild);   // above the sliders
+      featureCards[key] = { cardEl, stateEl: cardEl.querySelector('.fc-state') };
+      const info = document.createElement('span');
+      info.className = 'title-info';
+      info.textContent = 'ⓘ';
+      info.title = 'feature info';
+      info.addEventListener('click', e => {
+        e.stopPropagation();                 // don't toggle the folder's open/close
+        cardEl.classList.toggle('open');
+      });
+      folder.$title.appendChild(info);       // after the enable toggle relocated in Phase 1
+    }
+    // Refresh every visible card's State line (enable dots + relevance). Cheap — text only.
+    function refreshAllCardStates(){
+      for (const key of Object.keys(featureCards)) refreshCardState(featureCards[key].stateEl, key);
     }
     // soloKey=null → enable ALL features; otherwise enable ONLY that feature.
     // LEGACY destructive path — kept for "enable all". Solo now goes through the
@@ -7169,6 +7192,7 @@
       fNotRelevant.$title.textContent = `Not relevant to this world (${nIrrelevant})`;
       fNotRelevant.domElement.style.display = (filterUI.filter && nIrrelevant > 0) ? '' : 'none';
       syncDisplays();
+      refreshAllCardStates();   // relevance/enable may have changed → update card State lines
     }
     // One 🔆 solo button per feature folder (appended below its existing controls).
     // Non-destructive: honors the current soloMode and restores prior enables on unsolo.
