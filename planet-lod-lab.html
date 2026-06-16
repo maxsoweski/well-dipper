@@ -147,7 +147,7 @@
     import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
     import { expectedMatrix, auditRenderMatrix } from './lab-render-audit.js';   // NEW: pure auditor (Ask 4)
     import { statusOf, EPS as AUDIT_EPS } from './lab-render-status.js';          // NEW: glyph map + shared eps (Ask 4)
-    import { PROCESSES, driversFor } from './planet-drivers.js';   // card "Driven" line: process labels + derived driver keys
+    import { PROCESSES, driversFor, DRIVERS } from './planet-drivers.js';   // card "Driven by"/"Depends on" lines: process labels + friendly driver names
     import { FEATURE_CARDS } from './planet-feature-cards.generated.js';     // card prose (name/variants/examples/status); AUTO-GENERATED
     import { computeEnableSet } from './lab-isolation.js';             // Phase 2: pure non-destructive-solo enable-set logic
     import { generateRingPhysics } from './src/generation/PhysicsEngine.js';   // F51 rings — CPU-side physics chain
@@ -7214,22 +7214,29 @@
       if (prose) {
         rows.push(`<div class="fc-row"><b>${escapeHtml(prose.name)} (F${escapeHtml(prose.fNum)})</b>`
           + (prose.status ? `<span class="fc-status">[${escapeHtml(prose.status)}]</span>` : '') + `</div>`);
-        if (prose.variants) rows.push(`<div class="fc-row"><span class="fc-k">is:</span> ${escapeHtml(prose.variants)}</div>`);
-        if (prose.examples) rows.push(`<div class="fc-row"><span class="fc-k">like:</span> ${escapeHtml(prose.examples)}</div>`);
+        if (prose.variants) rows.push(`<div class="fc-row"><span class="fc-k">Variants:</span> ${escapeHtml(prose.variants)}</div>`);
+        if (prose.examples) rows.push(`<div class="fc-row"><span class="fc-k">Real examples:</span> ${escapeHtml(prose.examples)}</div>`);
       }
 
-      // Driven: process labels → derived driver KEYS (compact; not DRIVERS[].label).
+      // Driven by: the geological process(es) that produce the feature.
+      // Depends on: the physical inputs that control its strength/look (short human names from DRIVERS[].label).
       const procs = assoc.processes || [];
       if (procs.length) {
         const procLabels = procs.map(p => (PROCESSES[p] && PROCESSES[p].label) || p).join(' · ');
-        const driverKeys = driversFor(procs, assoc.directDrivers || []).join(', ');
-        rows.push(`<div class="fc-row"><span class="fc-k">driven:</span> ${escapeHtml(procLabels)}`
-          + (driverKeys ? ` &rarr; ${escapeHtml(driverKeys)}` : '') + `</div>`);
+        rows.push(`<div class="fc-row"><span class="fc-k">Driven by:</span> ${escapeHtml(procLabels)}</div>`);
+        const driverKeys = driversFor(procs, assoc.directDrivers || []);
+        if (driverKeys.length) {
+          const friendly = driverKeys.map(k => {
+            const lab = DRIVERS[k] && DRIVERS[k].label;
+            return lab ? lab.split('→')[0].trim() : k;
+          });
+          rows.push(`<div class="fc-row"><span class="fc-k">Depends on:</span> ${escapeHtml(friendly.join(' · '))}</div>`);
+        }
       }
 
-      // Renders: manifest rendersOn.
+      // Appears on: manifest rendersOn (the planet types this feature is declared for).
       const renders = assoc.rendersOn || [];
-      if (renders.length) rows.push(`<div class="fc-row"><span class="fc-k">renders:</span> ${escapeHtml(renders.join(', '))}</div>`);
+      if (renders.length) rows.push(`<div class="fc-row"><span class="fc-k">Appears on:</span> ${escapeHtml(renders.join(', '))}</div>`);
 
       // State: the ONLY line that changes as Max works. Filled by refreshCardState().
       rows.push(`<div class="fc-row fc-state" data-key="${escapeHtml(key)}"></div>`);
@@ -7246,7 +7253,7 @@
       const relevant = relevantFeatureSet().set.has(key);
       const dot = enabled ? '<span class="fc-state-on">&#9679; enabled</span>' : '<span class="fc-state-off">&#9675; off</span>';
       const rel = relevant ? 'relevant to THIS world' : '<span class="fc-state-off">not relevant</span>';
-      stateEl.innerHTML = `<span class="fc-k">state:</span> ${dot} &middot; ${rel}`;
+      stateEl.innerHTML = `<span class="fc-k">State:</span> ${dot} &middot; ${rel}`;
     }
     // Inject an ⓘ toggle into each feature folder's title bar and a (hidden) card
     // as the folder's FIRST body child. Mirrors relocateEnableToTitle()'s title-bar
@@ -7261,8 +7268,9 @@
       info.textContent = 'ⓘ';
       info.title = 'feature info';
       info.addEventListener('click', e => {
-        e.stopPropagation();                 // don't toggle the folder's open/close
-        cardEl.classList.toggle('open');
+        e.stopPropagation();                 // don't let the click hit the title's native toggle
+        const showing = cardEl.classList.toggle('open');
+        if (showing) folder.open();          // card lives in the folder body — open the folder so it's visible (Option A)
       });
       folder.$title.appendChild(info);       // after the enable toggle relocated in Phase 1
     }

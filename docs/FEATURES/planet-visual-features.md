@@ -213,16 +213,16 @@ detail today.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F1** | Mountains / ranges | P2, P3, P4 | tectonic fold belt · volcanic shield/strato · ridged crestlines | Himalaya, Olympus Mons, Tharsis | rocky, terrestrial, venus, lava, ice, carbon | `[aspirational]` |
-| **F2** | Craters | P1 | simple bowl · complex (central peak + terraces) · peak-ring · multi-ring basin · palimpsest (relaxed) | Tycho, Orientale, Caloris, Valhalla | rocky, ice, terrestrial, venus, carbon, machine, shattered, crystal | `[partial]` (basin height only) |
-| **F3** | Ejecta & rays | P1 | continuous blanket · discontinuous · rampart (fluidized, icy/wet) · bright ray system (airless only) · secondary fields | Tycho rays, Mars ramparts | rocky, ice, terrestrial, machine, crystal | `[aspirational]` |
-| **F4** | Canyons / rifts | P2, P8 | tectonic graben/chasma · fluvial-incised gorge · cryo-chasma | Valles Marineris, Grand Canyon, Charon chasmata | terrestrial, rocky, venus, ice, ocean | `[aspirational]` |
-| **F5** | Scarps & fault systems | P2 | normal-fault cliff · lobate contraction scarp · wrinkle ridge · horst-and-graben province | Discovery Rupes, lunar maria ridges | rocky, mercury-like, terrestrial, venus, ice | `[aspirational]` |
-| **F6** | Plateaus / highlands / tessera | P2, P15 | uplift plateau · crustal-plateau tessera (crosscutting lattice) | Tibetan Plateau, Ovda Regio | terrestrial, venus, rocky, hex, shattered | `[aspirational]` |
-| **F7** | Volcanic edifices | P4, P5 | shield · stratovolcano · caldera · pancake dome (thick-air) · corona/nova/arachnoid (plume) | Mauna Loa, Sapas Mons, Venus coronae | rocky, terrestrial, venus, lava, carbon | `[aspirational]` |
-| **F8** | Lava plains & flows | P4 | flood-basalt plain · leveed channel · sinuous rille · collapsed tube/pit chain | lunar maria, Venusian canali, Io flows | rocky, lava, venus, terrestrial, ice, machine | `[partial]` (lava cracks) |
-| **F9** | Chaos / disrupted terrain | P2, P6, P7 | ice-shell chaos (rafts) · volatile-outflow collapse · antipodal seismic jumble | Conamara Chaos, Caloris antipode | ice, ocean, rocky, shattered | `[aspirational]` |
-| **F10** | Ridged / grooved icy terrain | P2, P7 | double ridges · grooved bands · lenticulae (diapirs) · refrozen-crack networks | Europa, Ganymede, Enceladus | ice, ocean | `[aspirational]` |
+| **F1** | Mountains / ranges | P2, P3, P4 | tectonic fold belt (rock crumpled and pushed up where landmasses collide) · volcanic shield/strato (mountains built by lava — broad gentle domes or steep cones) · ridged crestlines (long sharp parallel spines of high ground) | Himalaya (Earth), Olympus Mons (Mars, the tallest known volcano), Tharsis (Mars, a giant volcanic bulge) | rocky, terrestrial, venus, lava, ice, carbon | `[aspirational]` |
+| **F2** | Craters | P1 | simple bowl (small, smooth-sided pit) · complex (central peak with terraced walls) · peak-ring (a ring of peaks instead of one) · multi-ring basin (huge, with several concentric rings) · palimpsest (an old crater flattened nearly smooth) | Tycho (Moon), Orientale (Moon), Caloris (Mercury), Valhalla (Callisto, a moon of Jupiter) | rocky, ice, terrestrial, venus, carbon, machine, shattered, crystal | `[partial]` (basin height only) |
+| **F3** | Ejecta & rays | P1 | continuous blanket (unbroken sheet of debris near the crater) · discontinuous (scattered, patchy debris farther out) · rampart (raised ridged rim, formed where ice or water made the debris flow like mud) · bright ray system (streaks of fresh material, only on airless worlds) · secondary fields (small craters made by chunks thrown out from the main impact) | Tycho rays (Moon), Mars ramparts | rocky, ice, terrestrial, machine, crystal | `[aspirational]` |
+| **F4** | Canyons / rifts | P2, P8 | tectonic graben/chasma (a valley where the ground sank between cracks) · fluvial-incised gorge (a canyon carved by flowing liquid) · cryo-chasma (a deep rift in icy crust) | Valles Marineris (Mars), Grand Canyon (Earth), Charon chasmata (Pluto's moon Charon) | terrestrial, rocky, venus, ice, ocean | `[aspirational]` |
+| **F5** | Scarps & fault systems | P2 | normal-fault cliff (a cliff where ground dropped along a crack) · lobate contraction scarp (a curved step where the crust squeezed and buckled) · wrinkle ridge (a long low wrinkle in hardened lava) · horst-and-graben province (a striped region of raised blocks and sunken valleys) | Discovery Rupes (Mercury), lunar maria ridges (the Moon's dark plains) | rocky, mercury-like, terrestrial, venus, ice | `[aspirational]` |
+| **F6** | Plateaus / highlands / tessera | P2, P15 | uplift plateau (a broad raised tableland) · crustal-plateau tessera (highlands criss-crossed by a lattice of ridges and grooves) | Tibetan Plateau (Earth), Ovda Regio (Venus) | terrestrial, venus, rocky, hex, shattered | `[aspirational]` |
+| **F7** | Volcanic edifices | P4, P5 | shield (broad, gently sloped dome from runny lava) · stratovolcano (tall, steep cone from sticky lava and ash) · caldera (big crater-like pit where the top collapsed) · pancake dome (flat-topped blob, forms under thick air) · corona/nova/arachnoid (round or web-like features pushed up by rising plumes of molten rock) | Mauna Loa (Earth, Hawaii), Sapas Mons (Venus), Venus coronae | rocky, terrestrial, venus, lava, carbon | `[aspirational]` |
+| **F8** | Lava plains & flows | P4 | flood-basalt plain (vast sheet of cooled runny lava) · leveed channel (a lava river with built-up banks) · sinuous rille (a long winding lava groove) · collapsed tube/pit chain (a line of holes where a lava tunnel caved in) | lunar maria (the Moon's dark plains), Venusian canali (long lava channels on Venus), Io flows (lava on Jupiter's moon Io) | rocky, lava, venus, terrestrial, ice, machine | `[partial]` (lava cracks) |
+| **F9** | Chaos / disrupted terrain | P2, P6, P7 | ice-shell chaos (rafts) (a frozen crust broken into tilted ice slabs) · volatile-outflow collapse (ground that caved in after underground ice or gas drained away) · antipodal seismic jumble (terrain shaken into rubble by a huge impact on the planet's far side) | Conamara Chaos (Europa, a moon of Jupiter), Caloris antipode (Mercury, the point opposite a giant crater) | ice, ocean, rocky, shattered | `[aspirational]` |
+| **F10** | Ridged / grooved icy terrain | P2, P7 | double ridges (paired parallel ice ridges) · grooved bands (long stripes of furrowed ice) · lenticulae (diapirs) (lens-shaped blobs where warm ice pushed up) · refrozen-crack networks (old cracks that froze back over) | Europa (moon of Jupiter), Ganymede (moon of Jupiter), Enceladus (moon of Saturn) | ice, ocean | `[aspirational]` |
 
 ### F-gradational — water/wind/ice-shaped landforms
 *Derives from: P8–P14. Existence gated by D6/P25 (need a retained
@@ -230,17 +230,17 @@ atmosphere + stable liquid) — an airless world skips this whole family.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F11** | River networks & valleys | P8 | dendritic network · meanders · single trunk · relict (degraded) | Earth, Titan (methane), Mars (relict) | terrestrial, ocean, ice, eyeball, carbon (hydrocarbon) | `[aspirational]` |
-| **F12** | Deltas & alluvial fans | P8 | birdsfoot delta · fan · coalesced bajada | Titan deltas, Mars fans | ocean, terrestrial, eyeball | `[aspirational]` |
-| **F13** | Outflow / megaflood channels | P8 | streamlined-island scoured channel | Kasei Valles, Channeled Scablands | terrestrial, ice, ocean | `[aspirational]` |
-| **F14** | Lakes & seas (standing liquid) | P8, P13 | water sea · methane/ethane sea · dry playa/lakebed | Earth oceans, Titan Kraken Mare | ocean, terrestrial, eyeball, carbon | `[partial]` (ocean-type water + islands) |
-| **F15** | Dunes & wind forms | P9 | barchan · linear · star · yardang · ventifact · wind streak | Namib, Titan dune belts, Mars | terrestrial, venus, ice, carbon, lava (silicate sand) | `[aspirational]` |
-| **F16** | Dust mantles | P9, P23 | thin veneer · deep loess · butterscotch haze tint | Mars dust mantle | terrestrial, venus, ice, rocky | `[aspirational]` |
-| **F17** | Glacial landforms | P10 | ice sheet/glacier · U-valley · fjord · moraine · esker · polar layered deposits | Earth, Mars, Pluto N₂ glaciers | ice, terrestrial, eyeball, ocean | `[aspirational]` |
-| **F18** | Sublimation landscapes | P11 | pits/hollows · Swiss-cheese · bladed/penitente · araneiform spiders · convection polygons | Pluto Sputnik Planitia, Mars S-pole | ice, terrestrial, eyeball | `[aspirational]` |
-| **F19** | Mass-wasting deposits | P12 | landslide lobe · slump terraces · talus apron · lobate debris apron | Valles landslides, Mars LDAs | all rocky, ice | `[aspirational]` |
-| **F20** | Coastlines | P13 | strandline/paleo-shoreline · sea cliff · beach/terrace | Earth, Titan lake margins | ocean, terrestrial, eyeball | `[aspirational]` |
-| **F21** | Karst / dissolution | P14 | sinkhole/doline · labyrinth maze · collapse lake | Titan labyrinth, Earth limestone | terrestrial, ice, carbon, ocean | `[aspirational]` |
+| **F11** | River networks & valleys | P8 | dendritic network (branching like the twigs of a tree) · meanders (slow looping S-curves across flat land) · single trunk (one main channel, few branches) · relict (degraded) (dried-up channels left from flows long gone) | Earth, Titan (Saturn's moon, where the rivers are liquid methane), Mars (relict — dry channels from ancient water) | terrestrial, ocean, ice, eyeball, carbon (hydrocarbon) | `[aspirational]` |
+| **F12** | Deltas & alluvial fans | P8 | birdsfoot delta (river splits into finger-like channels) · fan (sediment spread in a wide cone) · coalesced bajada (several fans merged along a slope) | Titan deltas (a moon of Saturn), Mars fans | ocean, terrestrial, eyeball | `[aspirational]` |
+| **F13** | Outflow / megaflood channels | P8 | streamlined-island scoured channel (a valley raked out by a giant flood, leaving teardrop-shaped islands) | Kasei Valles (Mars), Channeled Scablands (Washington State, Earth) | terrestrial, ice, ocean | `[aspirational]` |
+| **F14** | Lakes & seas (standing liquid) | P8, P13 | water sea (liquid-water ocean) · methane/ethane sea (seas of cold liquid fuel-like chemicals) · dry playa/lakebed (a dried-up lake floor) | Earth oceans, Titan Kraken Mare (a methane sea on Saturn's moon Titan) | ocean, terrestrial, eyeball, carbon | `[partial]` (ocean-type water + islands) |
+| **F15** | Dunes & wind forms | P9 | barchan (crescent-shaped dune) · linear (long straight ridge dunes) · star (many-armed dune from shifting winds) · yardang (rock ridge sculpted by wind) · ventifact (a rock polished and grooved by windblown sand) · wind streak (a smear of dust left downwind) | Namib (Earth), Titan dune belts (Saturn's moon Titan), Mars | terrestrial, venus, ice, carbon, lava (silicate sand) | `[aspirational]` |
+| **F16** | Dust mantles | P9, P23 | thin veneer (a light dusting) · deep loess (thick wind-piled dust) · butterscotch haze tint (dusty air gives a tan-yellow color) | Mars dust mantle | terrestrial, venus, ice, rocky | `[aspirational]` |
+| **F17** | Glacial landforms | P10 | ice sheet/glacier (thick slow-moving ice) · U-valley (a steep valley carved smooth by ice) · fjord (a flooded ice-carved coastal valley) · moraine (a ridge of rubble a glacier shoved aside) · esker (a winding gravel ridge left by meltwater) · polar layered deposits (stacked ice-and-dust layers at the poles) | Earth, Mars, Pluto N₂ glaciers (slow-moving frozen-nitrogen ice on Pluto) | ice, terrestrial, eyeball, ocean | `[aspirational]` |
+| **F18** | Sublimation landscapes | P11 | pits/hollows (shallow holes left as ice turns straight to gas) · Swiss-cheese (terrain full of rounded holes) · bladed/penitente (tall thin blades or spikes of ice) · araneiform spiders (branching cracks carved by escaping gas) · convection polygons (slow-churning surface that cracks into a tile pattern) | Pluto Sputnik Planitia (Pluto's heart-shaped plain), Mars S-pole (Mars south pole) | ice, terrestrial, eyeball | `[aspirational]` |
+| **F19** | Mass-wasting deposits | P12 | landslide lobe (tongue of fallen rock and dirt) · slump terraces (stair-like steps where ground slid down) · talus apron (skirt of loose rubble at a slope's base) · lobate debris apron (rounded ice-and-rock skirt that crept downhill slowly) | Valles landslides (Mars' giant canyon), Mars LDAs (icy debris skirts on Mars) | all rocky, ice | `[aspirational]` |
+| **F20** | Coastlines | P13 | strandline/paleo-shoreline (an old high-water mark from a vanished sea) · sea cliff (steep face cut by waves) · beach/terrace (flat shelf left by the water's edge) | Earth, Titan lake margins (edges of Titan's lakes) | ocean, terrestrial, eyeball | `[aspirational]` |
+| **F21** | Karst / dissolution | P14 | sinkhole/doline (a pit where the ground dissolved and dropped) · labyrinth maze (a tangle of dissolved grooves and ridges) · collapse lake (a pool that fills a sunken hollow) | Titan labyrinth (Saturn's moon), Earth limestone (caves and sinkholes in soluble rock) | terrestrial, ice, carbon, ocean | `[aspirational]` |
 
 ### F-volatile-surface — climate-painted surface patterns
 *Derives from: P22 (the snowline / frost cycle). The bridge family between
@@ -249,26 +249,26 @@ climate and terrain.*
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
 | **F22** | Polar caps & frost fields | P22, P10 | perennial water cap · seasonal CO₂ frost · N₂/CH₄ frost field · **eyeball nightside cap + terminator melt ring** | Earth, Mars, Triton, Pluto | terrestrial, ice, eyeball, rocky | `[partial]` (terrestrial/eyeball caps) |
-| **F23** | Snowline / frost-coverage boundary | P22 | sharp coverage line · diffuse tint · latitude vs. altitude band | Earth snowline, Mars frost edge | rocky, ice, terrestrial, eyeball | `[aspirational]` |
+| **F23** | Snowline / frost-coverage boundary | P22 | sharp coverage line (a crisp edge where frost begins) · diffuse tint (a soft, gradual frosting) · latitude vs. altitude band (frost set by how far north/south, or by how high up) | Earth snowline, Mars frost edge | rocky, ice, terrestrial, eyeball | `[aspirational]` |
 
 ### F-bands — atmospheric banding (the visible "surface" of gas worlds)
 *Derives from: P16, P20, P21.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F24** | Zonal belts & zones | P16 | high-contrast many-banded (Jupiter) · soft few-banded · bland blue + sparse CH₄ clouds (ice giant) | Jupiter, Saturn, Neptune | gas, sub-neptune, hot-jupiter | `[current]` |
-| **F25** | Jets & shear turbulence | P16 | equatorial superrotation jet · counter-rotating jet shear · festoon/scallop turbulence | Jupiter belt edges | gas, hot-jupiter, venus | `[partial]` (turbulence in gas-giant) |
-| **F26** | Latitude weather bands (terrestrial) | P20 | Hadley/Ferrel zonation · ITCZ/monsoon convergence band | Earth | terrestrial, ocean, eyeball | `[current]` |
+| **F24** | Zonal belts & zones | P16 | high-contrast many-banded (bold stripes, like Jupiter) · soft few-banded (faint pale stripes) · bland blue + sparse CH₄ clouds (mostly featureless blue with thin methane clouds, like an ice giant) | Jupiter, Saturn, Neptune | gas, sub-neptune, hot-jupiter | `[current]` |
+| **F25** | Jets & shear turbulence | P16 | equatorial superrotation jet (a fast wind band racing around the equator) · counter-rotating jet shear (neighboring wind bands sliding past each other in opposite directions) · festoon/scallop turbulence (wavy scalloped swirls where the winds churn) | Jupiter belt edges (the boundaries between Jupiter's cloud stripes) | gas, hot-jupiter, venus | `[partial]` (turbulence in gas-giant) |
+| **F26** | Latitude weather bands (terrestrial) | P20 | Hadley/Ferrel zonation (stacked bands of wind that circle the planet) · ITCZ/monsoon convergence band (a rainy belt where winds meet near the equator) | Earth | terrestrial, ocean, eyeball | `[current]` |
 
 ### F-storms — vortices & discrete storms
 *Derives from: P17.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F27** | Great-spot anticyclone | P17 | single giant oval · dark spot | Jupiter GRS, Neptune GDS | gas, hot-jupiter | `[current]` (single) |
-| **F28** | Storm clusters / oval trains | P17 | white-oval train · "string of pearls" · convective plume outbreak | Jupiter ovals, Saturn GWS | gas, hot-jupiter, sub-neptune | `[partial]` (`storms.spots` generated, unwired) |
-| **F29** | Polar vortex | P17 | single cyclonic cap · **polygonal jet (Saturn hexagon)** · cyclone-cluster lattice (pentagon/hexagon ring) | Saturn hexagon, Jupiter poles, Venus | gas, venus, eyeball, hex | `[partial]` (polar darkening only) |
-| **F30** | Lightning / electrical storms | P17 | flash clusters in convective regions · (sprites — `[subtle]`) | Jupiter, Saturn, Earth | gas, sub-neptune, terrestrial, ocean | `[aspirational]` |
+| **F27** | Great-spot anticyclone | P17 | single giant oval (one enormous swirling storm) · dark spot (a darker storm patch) | Jupiter GRS (the Great Red Spot), Neptune GDS (the Great Dark Spot) | gas, hot-jupiter | `[current]` (single) |
+| **F28** | Storm clusters / oval trains | P17 | white-oval train (a row of pale storm ovals) · "string of pearls" (storms lined up like beads) · convective plume outbreak (a sudden burst of towering storm clouds) | Jupiter ovals, Saturn GWS (Saturn's Great White Spot) | gas, hot-jupiter, sub-neptune | `[partial]` (`storms.spots` generated, unwired) |
+| **F29** | Polar vortex | P17 | single cyclonic cap (one big swirling storm over the pole) · polygonal jet (a wind stream bent into straight sides, like Saturn's hexagon) · cyclone-cluster lattice (a tidy ring of storms forming a pentagon or hexagon) | Saturn hexagon (six-sided polar jet), Jupiter poles, Venus | gas, venus, eyeball, hex | `[partial]` (polar darkening only) |
+| **F30** | Lightning / electrical storms | P17 | flash clusters in convective regions (bursts of lightning where storm clouds boil upward) · sprites (faint red flashes high above the storm — subtle) | Jupiter, Saturn, Earth | gas, sub-neptune, terrestrial, ocean | `[aspirational]` |
 
 ### F-clouds — the cloud/haze FAMILY (one driver, six looks)
 *Derives from: P18, P19, P21. **Same driver (atmosphere), different L1
@@ -289,18 +289,18 @@ model is process-first.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F32** | Dayside thermal hotspot | P21 | warm dayside · glowing molten-bright dayside · eastward-shifted hotspot (superrotation) | HD 209458 b, WASP-43 b | hot-jupiter | `[current]` (day-side thermal) |
-| **F33** | Nightside thermal glow | P21 | dim self-emission + patchy mineral/silicate nightside clouds | ultra-hot Jupiters | hot-jupiter | `[current]` (night-side glow) |
+| **F32** | Dayside thermal hotspot | P21 | warm dayside (the sunlit face runs hot) · glowing molten-bright dayside (a dayside so hot it glows) · eastward-shifted hotspot (superrotation) (the hottest spot blown east by fast winds) | HD 209458 b (a hot gas planet around a distant star), WASP-43 b (a scorching gas planet around a distant star) | hot-jupiter | `[current]` (day-side thermal) |
+| **F33** | Nightside thermal glow | P21 | dim self-emission (a faint heat-glow on the dark side) plus patchy mineral/silicate clouds (clouds made of rock-vapor) | ultra-hot Jupiters (scorching giant exoplanets) | hot-jupiter | `[current]` (night-side glow) |
 
 ### F-optical — limb, terminator, glint, aurora
 *Derives from: P24, P26.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F34** | Limb / atmosphere rim glow | P26 | fresnel rim · blue line · thick haze halo | Earth blue line, Titan | all atmospheric types | `[current]` (fresnel limb) |
-| **F35** | Terminator color gradient | P26 | reddened day/night boundary · twilight band | Earth sunsets, Mars blue sunsets | terrestrial, rocky, venus | `[current]` (terminator day/night) |
-| **F36** | Sunglint off liquid | P26 | sharp specular spot on water / methane sea | Earth glint, Titan Kraken glint | ocean, terrestrial, eyeball | `[aspirational]` (no specular glint in pipeline) |
-| **F37** | Aurorae | P24 | polar ovals · ring latitude/width by field strength | Earth, Jupiter, Saturn | terrestrial, gas, ocean, city-lights | `[current]` (physics-gated) |
+| **F34** | Limb / atmosphere rim glow | P26 | fresnel rim (a thin bright outline of light along the edge) · blue line (the thin blue glow of air seen edge-on) · thick haze halo (a fuzzy ring of haze around the planet) | Earth blue line (the blue band seen from orbit), Titan | all atmospheric types | `[current]` (fresnel limb) |
+| **F35** | Terminator color gradient | P26 | reddened day/night boundary (the line between day and night glows red) · twilight band (a soft dusk-colored strip) | Earth sunsets, Mars blue sunsets | terrestrial, rocky, venus | `[current]` (terminator day/night) |
+| **F36** | Sunglint off liquid | P26 | sharp specular spot on water / methane sea (a bright mirror-like glare where sunlight bounces off a liquid surface) | Earth glint (sun reflecting off the ocean), Titan Kraken glint (sunlight off Titan's largest methane sea) | ocean, terrestrial, eyeball | `[aspirational]` (no specular glint in pipeline) |
+| **F37** | Aurorae | P24 | polar ovals (glowing oval halos over the poles) · ring latitude/width by field strength (how big and how far from the pole the glow sits depends on the magnetic field) | Earth, Jupiter, Saturn | terrestrial, gas, ocean, city-lights | `[current]` (physics-gated) |
 | **F38** | Airglow / nightglow limb band | P24 | faint diffuse night-limb ring | Earth airglow | terrestrial, ocean, venus | `[subtle]` |
 | **F39** | Cloud optics (rainbows / glories) | P26 | colored arcs/rings of uniform-droplet clouds | Earth rainbows, Venus glory | terrestrial, ocean, venus | `[subtle]` |
 
@@ -309,7 +309,7 @@ model is process-first.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F40** | Dust storms | P23 | dust devil tracks · regional dust front · planet-encircling global storm | Mars | rocky, terrestrial (arid), venus | `[partial]` (optional Mars dust storms) |
+| **F40** | Dust storms | P23 | dust devil tracks (squiggly trails left by small whirlwinds) · regional dust front (a dust wall sweeping one area) · planet-encircling global storm (dust wrapping the whole world) | Mars | rocky, terrestrial (arid), venus | `[partial]` (optional Mars dust storms) |
 
 ### F-exotic-natural — speculative natural endmembers
 *Derives from: P4/P6 (extreme heat), P15 (crystallization/fracture), D10
@@ -317,11 +317,11 @@ model is process-first.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F41** | Hemispheric magma ocean | P4, P6, D7, D1(extreme) | molten dayside sea · magma shoreline/waves at terminator · nightside rock-frost condensate plains | K2-141b, 55 Cnc e (candidates) | lava, eyeball | `[aspirational]` *(speculative)* |
-| **F42** | Carbon-world crust | D10 | graphite plain · diamond-studded ridges · hydrocarbon/tar flats | hypothesized carbon planets | carbon, crystal, rocky | `[aspirational]` *(speculative)* |
-| **F43** | Crystalline facet field | P15 | scattered crystals … continuous faceted field | none confirmed | crystal, carbon, lava (cooled) | `[aspirational]` *(speculative)* |
-| **F44** | Hexagonal-tessellated crust | P15 | small polygons … planet-wide hex tiling | basalt columns, Pluto polygons (small analogs) | hex, rocky, ice | `[aspirational]` *(speculative)* |
-| **F45** | Shattered / fractured crust | P15 | local fracture zone … globally shattered blocks | Miranda (analog) | shattered, rocky, ice | `[aspirational]` *(speculative)* |
+| **F41** | Hemispheric magma ocean | P4, P6, D7, D1(extreme) | molten dayside sea (an ocean of liquid rock on the sun-facing side) · magma shoreline/waves at terminator (lava coast and waves where day meets night) · nightside rock-frost condensate plains (plains where vaporized rock freezes out on the dark side) | K2-141b (candidate lava world), 55 Cnc e (candidate lava world) | lava, eyeball | `[aspirational]` *(speculative)* |
+| **F42** | Carbon-world crust | D10 | graphite plain (flat fields of pencil-lead carbon) · diamond-studded ridges (ridges sparkling with diamond) · hydrocarbon/tar flats (sticky oily-black plains) | hypothesized carbon planets (a proposed planet type, none confirmed yet) | carbon, crystal, rocky | `[aspirational]` *(speculative)* |
+| **F43** | Crystalline facet field | P15 | scattered crystals (a few glinting crystal patches) … continuous faceted field (a whole surface of flat shiny crystal faces) | none confirmed | crystal, carbon, lava (cooled) | `[aspirational]` *(speculative)* |
+| **F44** | Hexagonal-tessellated crust | P15 | small polygons (little many-sided tiles) … planet-wide hex tiling (six-sided tiles covering the whole world) | basalt columns (cooled-lava pillars on Earth), Pluto polygons (small analogs) (smaller tile-like patterns seen on Pluto) | hex, rocky, ice | `[aspirational]` *(speculative)* |
+| **F45** | Shattered / fractured crust | P15 | local fracture zone (cracking in one area) … globally shattered blocks (the whole crust broken into pieces) | Miranda (analog) (a moon of Uranus with jumbled terrain) | shattered, rocky, ice | `[aspirational]` *(speculative)* |
 
 ### F-overlay — artificial / biotic surface coatings
 *These four EXOTIC types have **no geomorphic formation** — they derive
@@ -331,10 +331,10 @@ A note). Confidence: speculative game-construct.*
 
 | ID | Feature | From | Variants | Examples | WD types | Status |
 |---|---|---|---|---|---|---|
-| **F46** | Bioluminescent / fungal mats | P27 | sparse patches … planet-spanning living mat | none confirmed | fungal | `[current]` (bioluminescent spots) |
-| **F47** | Machine / structured surface | P28 | scattered structures … fully machined crust (circuit grid) | Dyson-tier hypothetical | machine | `[current]` (circuit grid) |
-| **F48** | City lights | P28 (+D7 nightside) | scattered cities … continuous urban band; lit nightside | Earth-at-night (nascent) | city-lights, eyeball (nightside cities) | `[current]` (night-side city lights) |
-| **F49** | Ecumenopolis | P28 (saturation) | planet-covering megacity (whole-surface glow) | fictional (Coruscant) | ecumenopolis | `[current]` (whole-surface city glow) |
+| **F46** | Bioluminescent / fungal mats | P27 | sparse patches (scattered glowing or fungal spots) … planet-spanning living mat (a single living layer wrapped around the whole world) | none confirmed | fungal | `[current]` (bioluminescent spots) |
+| **F47** | Machine / structured surface | P28 | scattered structures (a few built objects dotting the surface) … fully machined crust (the whole surface turned into a circuit-like grid) | Dyson-tier hypothetical (imagined mega-engineered worlds, none known to exist) | machine | `[current]` (circuit grid) |
+| **F48** | City lights | P28 (+D7 nightside) | scattered cities (isolated points of light) … continuous urban band (lights merging into one glowing strip); lit nightside (the dark half of the world dotted with light) | Earth-at-night (nascent — just beginning to appear) | city-lights, eyeball (nightside cities) | `[current]` (night-side city lights) |
+| **F49** | Ecumenopolis | P28 (saturation) | planet-covering megacity (whole-surface glow) (a single city wrapping the entire planet, lit up all over) | fictional (Coruscant) (the city-planet from Star Wars) | ecumenopolis | `[current]` (whole-surface city glow) |
 
 ### F-crosscutting — universal, type-agnostic
 *Render envelope + system-level features that apply across all bodies.*
