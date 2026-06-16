@@ -1,0 +1,120 @@
+{
+  "workstream": "planet-scale-normalization-2026-06-15",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope skill, 2026-06-15). Theme B of lod-lab-quality-backlog. Claude-flagged assumptions in intent.md await Max greenlight.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-footprint-oracle",
+      "statement": "deriveUniforms() derives a per-feature footprint-scale factor from radiusEarth and applies it to EVERY footprint-bearing uniform (crater, river/valley, lava-cell/crack, chaos raft, crystal facet, basalt hex, edifice, dune, karst doline, ecumenopolis district, shatter block, sublimation pit/polygon). Footprint frequency rises monotonically with radiusEarth across a 0.4->13 sweep, stays bounded, and the baseline (radiusEarth=1.0) is recalibrated so features occupy a smaller fraction of the disk than the pre-change values. One shared helper, not per-uniform magic numbers.",
+      "verifyVia": {
+        "input": "npx vitest run tests/planet-archetypes.test.js (or a new tests/planet-scale.test.js) -- oracle samples the derived footprint uniforms across a radiusEarth sweep 0.4..13",
+        "observable": "Oracle asserts: monotonic frequency increase with radius for every listed feature, bounded outputs, and baseline-at-r1.0 strictly smaller footprint (higher frequency) than the captured pre-change baseline constants; suite green"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-footprint-live",
+      "statement": "On a radius-1.0 Rocky world at fixed camera distance, craters and rivers occupy a clearly smaller fraction of the disk than the pre-change baseline (features no longer dominate / 'make the planet look small'); AND between two surfaced bodies of different radius (e.g. Titan r0.4 vs Magma r1.5, same camera distance) the larger body shows visibly smaller / more numerous footprints.",
+      "verifyVia": {
+        "input": "Lab on :9223, Rocky preset d4 clouds zeroed: screenshot before/after; then Titan vs Magma at matched distance, screenshot pair",
+        "observable": "Rocky after-shot shows craters/rivers at a visibly smaller disk-fraction than before (measured feature angular size down, pixel-diff >=3%); Titan-vs-Magma pair shows the larger body with the smaller relative footprint"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-rate-oracle",
+      "statement": "deriveUniforms() derives an animation-rate factor that decreases monotonically with radiusEarth and applies it to every time-driven uniform (lava emissive-crack pulse / 'breathing' rate, water-glint shimmer rate, gas-giant storm drift, aurora pulse). Baseline rates recalibrated so even a self-sized body no longer 'breathes too fast'. Bounded; one shared helper.",
+      "verifyVia": {
+        "input": "vitest oracle: sample the derived rate uniforms across a radiusEarth sweep",
+        "observable": "Monotonic rate decrease with radius for every listed time-driven uniform, bounded; baseline-at-r1.0 rate strictly below pre-change constants; suite green"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-rate-live",
+      "statement": "Lava emissive 'breathing' on the Lava/Magma presets is visibly slower than the pre-change rate; gas-giant storm drift on a large giant (Jovian r11.2) is slower than on a smaller giant (Neptune r3.9) at matched playback.",
+      "verifyVia": {
+        "input": "Lab on :9223: Lava preset nightside, sample uTime-advanced frames N apart, measure crack-glow phase delta before/after; Jovian vs Neptunian storm-centroid displacement over equal uTime",
+        "observable": "Lava crack-glow phase advances less per unit time than pre-change; Jovian storm centroid moves less than Neptune's over the same uTime step"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-gravity-relief-oracle",
+      "statement": "deriveUniforms() scales relief-amplitude uniforms by a bounded function of surfaceGravity (M/R^2) so that low-gravity worlds get amplified relief and high-gravity worlds get subdued relief. Applied consistently to the relief-amplitude knobs; monotonic decreasing in surfaceGravity; bounded to avoid degenerate flat/spiky extremes.",
+      "verifyVia": {
+        "input": "vitest oracle: compute derived relief-amplitude factors across all 23 presets and assert ordering by surfaceGravity",
+        "observable": "Mars/Titan (low g) resolve to higher relief-amplitude factor than Magma/Carbon (high g); factor monotonic-decreasing in surfaceGravity, within [floor, ceil]; suite green"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6-gravity-relief-live",
+      "statement": "COARSE (lever 3 is the fuzziest): with terminator-grazing light, Mars and Titan show taller relief shadowing than the pre-change baseline, and a high-gravity world (Magma or Carbon) shows flatter relief than a low-gravity one of similar feature set. Directional sanity check, not a precise magnitude target.",
+      "verifyVia": {
+        "input": "Lab on :9223 at a grazing sun angle: Mars and Titan before/after screenshots; Carbon (high g) vs a low-g rocky at matched lighting",
+        "observable": "Mars/Titan after-shots show longer/deeper relief shadows than before; high-g world reads visibly flatter than the low-g comparator"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-single-source",
+      "statement": "All three scaling levers live in ONE place — named helpers (footprint factor + rate factor + relief-gravity factor) inside deriveUniforms() in planet-lod-lab-core.js (Max relaxed the off-limits caution for this, 2026-06-15) — NOT scattered as per-combiner constants edited in the GLSL. Edits confined to the deriveUniforms transform; the analytic-gradient / voronoi3d / crater-shape math in core.js is NOT touched. GLSL combiner bodies unchanged except that a uniform value now arrives pre-scaled.",
+      "verifyVia": {
+        "input": "git diff of the workstream commits over planet-lod-lab-core.js + planet-lod-lab.html",
+        "observable": "Scaling factors defined once in deriveUniforms and multiplied into the affected uniform values; core.js diff confined to deriveUniforms (no gradient/voronoi/shape-math hunks); no new per-feature scale constants hand-edited inside GLSL combiners; no files under src/ modified"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC8-no-regression",
+      "statement": "All 17 base presets still render; the Tier-2 render-audit false-render count stays at 2 (no new false renders) and dead-renders do not worsen beyond the known floor-flicker; the unit gate stays 36/36; backtick parity stays even; no src/ modified.",
+      "verifyVia": {
+        "input": "npx vitest run tests/planet-archetypes.test.js tests/feature-associations.test.js; re-run renderDeltaSweep + node scripts/gen-render-audit.mjs; backtick-parity check",
+        "observable": "vitest 36/36 green; lab-render-audit.md false=2 unchanged; backtick count even; git diff touches no src/ path"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-cohesive-scale-read",
+      "statement": "Walking the preset gallery, planets read at believable scale: features sit at the right size relative to the body, large worlds feel massive and slow, small worlds feel small, and nothing reads like 'an ocean from a mile up' or a toy planet. Holistic acceptance.",
+      "verifyVia": {
+        "input": "Max walks the full preset gallery in the lab with scale-normalization live",
+        "observable": "Max's holistic acceptance that scale no longer 'feels all over the place'"
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "radiusEarth / massEarth / surfaceGravity already derived in deriveUniforms (planet-lod-lab-core.js:496-514)",
+      "Per-preset radiusEarth/massEarth bundles in planet-lod-lab.html (~line 5440+, all 23 presets accurate)",
+      "Footprint uniforms: uCraterScale, river/valley scale, uCrackScale/uLavaScale, uChaosCellScale, uFacetScale, uHexScale, uEdificeScale, dune scale, uKarstDolineFreq, uEcuDistrictScale/uEcuBlockScale, uShatScale, uSubPitScale/uSubPolyScale",
+      "Rate uniforms: uLavaGlowRate, water-glint shimmer rate, gas-giant storm drift (uStormPosSize train rate), aurora pulse",
+      "Relief-amplitude uniforms across the F2/F4/F8/F18/F43 combiners",
+      "The voronoi3d keystone (22 call-sites) whose frequency args are the footprint knobs",
+      "Pattern precedent: province-weight single-source helper (stage-d-provinces contract)"
+    ],
+    "outputs": [
+      "featureFootprintFactor(radiusEarth) + animationRateFactor(radiusEarth) + reliefGravityFactor(surfaceGravity) helpers in deriveUniforms — the convention future feature passes author against",
+      "Recalibrated baseline footprint + rate constants (baseline-at-r1.0 smaller/slower than today)",
+      "lod-lab-quality-backlog.md #2 resolved; #8 (water-glint) and #10 (lava-rate) footprint/rate halves addressed",
+      "Campaign tracker Theme-B / scale-normalization row"
+    ],
+    "mustStayWorking": [
+      "All 17 base presets render (render-audit false=2 unchanged; dead-renders not worse than floor)",
+      "npx vitest run tests/planet-archetypes.test.js tests/feature-associations.test.js (36/36)",
+      "planet-lod-lab.html backtick parity stays even",
+      "No files under src/ modified; planet-lod-lab-core.js off-limits caution RELAXED for this workstream (Max, 2026-06-15) — edits confined to deriveUniforms scaling helpers, NOT the analytic-gradient/voronoi/shape math (flag in commit)",
+      "Existing gravity uses of radiusEarth/massEarth (surfaceGravity, gas-giant band count line ~5928, cloud regime ~6178, giant dynamo ~6320) keep their current behavior",
+      "Lab GUI: existing per-feature scale/rate knobs still override the derived defaults (helper sets the default; manual GUI tweak still wins)",
+      "Shared tree: stage explicit paths only (planet-lod-lab.html, planet-lod-lab-core.js, tests/, docs/); never git add -A; src/main.js warp WIP + src/debug/LabMode.js never staged"
+    ]
+  }
+}
