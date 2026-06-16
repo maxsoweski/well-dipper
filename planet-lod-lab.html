@@ -142,7 +142,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm } from './planet-lod-lab-core.js';
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
     import { expectedMatrix, auditRenderMatrix } from './lab-render-audit.js';   // NEW: pure auditor (Ask 4)
@@ -4902,6 +4902,11 @@
     // ─────────────────────────────────────────────────────────────────────────
     // State + controls
     // ─────────────────────────────────────────────────────────────────────────
+    // Real-units scale system — per-feature calibration constants (the "desired look"
+    // at the reference radius; see WORKSTREAMS/planet-scale-normalization-2026-06-15).
+    // C_CRATER = 1.0 ⇒ uCraterScale = radius_km / craterSizeKm (craterSizeKm is literally
+    // crater diameter in km; smaller km ⇒ more, smaller craters).
+    const C_CRATER = 1.0;
     const state = {
       distance: 20.0,       // camera distance in radii (mouse-wheel driven) -> drives lodRamp
       yaw: 0.337,           // orbit yaw   (pointer-drag) — initial ≈ the old fixed CAM_DIR view
@@ -5143,7 +5148,9 @@
       craterComplexD: 0.6,
       craterRelaxation: 0.0,
       terraceCount: 4.0,
-      craterScale: 6.0,
+      craterScale: 6.0,    // legacy hand-set cell density (superseded by real-units derive)
+      planetRadiusEarth: 1.0,  // real-units scale: planet radius in Earth radii (6371 km = 1 RE)
+      craterSizeKm: 530,       // real-units scale: characteristic crater diameter in km
       craterAmp: 0.9,
       // ── F3 ejecta & rays (Stage-C step 3, Relief) — derived (ejectaStrength/rampart/
       // rayBrightness from the preset) + lab-tunable (amp/lump/ray count/sharpness).
@@ -5635,6 +5642,9 @@
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
+      // Real-units scale: source the planet radius from the preset (manual GUI drags
+      // persist until the next preset change — acceptable for the crater slice).
+      state.planetRadiusEarth = DRIVER_PRESETS[driverUI.preset].radiusEarth ?? 1.0;
       // D15 habitability (P27/P28 biotic+technogenic driver) — stored so the per-frame
       // overlay writers can gate bio/city/machine/ecu coverage to 0 on uninhabitable
       // worlds (catalog re-base 2026-06-14 declared these driven by habitability, but
@@ -6466,6 +6476,9 @@
     const fDrivers = guiLeft.addFolder('Drivers'); fDrivers.open();
     // preset picker moved up to the top-of-panel World folder (added below).
     fDrivers.add(driverUI, 'qualityTier', 0, 1, 0.01).name('qualityTier').onChange(applyDrivers);
+    // Real-units scale: planet radius (RE) + a live km readout (Earth = 6371 km).
+    fDrivers.add(state, 'planetRadiusEarth', 0.3, 16, 0.01).name('planet radius (RE)').listen().onChange(()=>applyDrivers());
+    fDrivers.add({ get km(){ return (state.planetRadiusEarth*6371).toFixed(0)+' km'; } }, 'km').name('radius (km)').listen().disable();
 
     // ▸ Surface — Relief
     const fRelief = guiRight.addFolder('Surface — Relief'); fRelief.open();
@@ -6477,7 +6490,7 @@
     fCraters.add(state, 'craterComplexD', 0.05, 2.0, 0.01).name('complexD (g⁻¹)').listen();
     fCraters.add(state, 'craterRelaxation', 0, 1, 0.01).name('relaxation').listen();
     fCraters.add(state, 'terraceCount', 2, 6, 1).name('terrace rings').listen();
-    fCraters.add(state, 'craterScale', 1, 20, 0.5).name('cell density');
+    fCraters.add(state, 'craterSizeKm', 50, 2000, 5).name('crater size (km)').onChange(()=>applyDrivers());
     fCraters.add(state, 'craterAmp', 0, 2, 0.01).name('amplitude').listen();   // driven by preservation; .listen() syncs the driver value (drag overrides until re-derive)
     fCraters.add(state, 'cratersEnabled').name('✓ enabled');
     fCraters.add({ roll(){ state.craterOffset = randOffset(); } }, 'roll').name('🎲 randomize');
@@ -8163,7 +8176,7 @@
       uniforms.uCraterComplexD.value   = state.craterComplexD;
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
       uniforms.uTerraceCount.value     = state.terraceCount;
-      uniforms.uCraterScale.value      = state.craterScale;
+      uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER);
       uniforms.uCraterAmp.value        = state.craterAmp;
       // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.
       uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.featureRelevant.ejecta : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — strength→0 early-outs the ejecta pass on non-members (Carbon/Crystal/gas)
