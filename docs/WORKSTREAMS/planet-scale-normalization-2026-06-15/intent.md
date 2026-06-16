@@ -30,20 +30,31 @@ Related symptoms from the same backlog he tied to scale:
   breathing and storm drift read massive/slow on a giant, brisk on a small body.
 - Walking the gallery, **planets read at believable scale** — nothing reads like "an ocean from
   a mile up" or a toy-sized world.
+- I can **control for the size of the planet and the size of the features** — both are real,
+  dialable quantities in the lab, decoupled from how close the camera is.
 
-## Scope decisions (Max, 2026-06-15)
+## Scope decisions (Max, 2026-06-15/16)
 
-- **All three levers**: (1) feature footprint ∝ body size, (2) animation rate ∝ 1/size,
-  (3) gravity-realism (relief amplitude responds to surface gravity).
-- **All footprint-bearing features**, not just the worst offenders.
+The brainstorm (see `design.md`) reframed this from "scale feature footprints" into a **real-units
+scale system in the lab**. Decisions:
+- **Surface = the lab renderer** (bring it up to size-awareness; reuse the game's existing size
+  model). The game renderer already varies size by archetype+random and is left untouched.
+- **Real-units controls + readouts** (no viewport scale gauge). Planet radius and feature sizes
+  are expressed in km; `deriveUniforms` converts to the shader's unit-sphere uniforms.
+- **All three levers**, unified by real units: (1) footprint = `radius_km / featureSize_km`,
+  (2) animation rate ∝ 1/radius, (3) relief height in km capped by surface gravity.
+- **All footprint-bearing features** get a km size dial (fuzzy ones use a documented
+  representative dimension).
+- **Size source:** seeded random draw from the game's `radiusRangesEarth` per archetype + reroll +
+  manual override; named real bodies (Mars/Titan/…) default to a canonical-size lock.
+- **`radiusRangesEarth` extracted to `ScaleConstants.js`** (5a) — single source shared by game+lab.
+- Free camera control is preserved; geometry/zoom unchanged.
 
-## Known considerations to confirm at greenlight (Claude-flagged, not Max's)
+## Resolved considerations (were Claude-flagged; settled in the brainstorm)
 
-1. **The lab renders each preset at a normalized on-screen size** (camera distance measured in
-   body radii — you inspect one world at a time). So this pass does NOT make big planets render
-   physically bigger *on screen*; the lever is feature-size **relative to the body** + baseline
-   recalibration. If you actually want body-to-body render-size differences, that's a different
-   (larger) change — flag it and we rescope.
+1. **"Looks small" = feature-to-body ratio, NOT body-to-body render size.** Confirmed: the lab keeps
+   free camera + normalized inspection; size registers through real-unit controls + relative feature
+   size, not the body's on-screen pixels. Body-to-body render sizing is explicitly a non-goal here.
 2. **Surfaced worlds cluster at radius 0.4–1.5** (Titan 0.4 → Magma 1.5); the dramatically large
    radii (Neptune 3.9 → Hot Jupiter 13) are gas giants with no craters/rivers/lava. So cross-preset
    *footprint* differentiation is inherently subtle among crater-bearing worlds — a large part of
