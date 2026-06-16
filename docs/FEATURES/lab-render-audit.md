@@ -51,37 +51,16 @@ each one disambiguates *manifest wrong* (`rendersOn` needs this preset) vs *feat
 
 ## ⚠️ Violations punch-list
 
-- **False-renders (renders where `rendersOn` says it should not):** 18 (17 solid 🔴, 1 faint ⚠️)
-- **Dead-renders (declared in `rendersOn` but inert):** 54
+- **False-renders (renders where `rendersOn` says it should not):** 2 (2 solid 🔴, 0 faint ⚠️)
+- **Dead-renders (declared in `rendersOn` but inert):** 63
 - **Degenerate frames (black / blown-out on a should-render cell):** 0
 
 ### 🔴 Solid false-renders — highest-priority (feature clearly paints a planet it should not)
 
 | feature | renders on (unexpected) | Δ | declared `rendersOn` | divergent? |
 |---|---|---:|---|:--:|
-| `airglow` | **SubN** | 0.0265 | Rocky, Ocean, Venus, Eye, Mars, Titan |  |
-| `airglow` | **GasS** | 0.0265 | Rocky, Ocean, Venus, Eye, Mars, Titan |  |
-| `airglow` | **GasJ** | 0.0265 | Rocky, Ocean, Venus, Eye, Mars, Titan |  |
-| `airglow` | **IceN** | 0.0265 | Rocky, Ocean, Venus, Eye, Mars, Titan |  |
-| `airglow` | **HotJ** | 0.0265 | Rocky, Ocean, Venus, Eye, Mars, Titan |  |
-| `lightning` | **Titan** | 0.0177 | GasJ, GasS, IceN, SubN, Rocky, Ocean, Venus, Eye, Mars, HotJ |  |
-| `cloudOptics` | **Titan** | 0.0060 | Rocky, Ocean, Venus |  |
-| `cloudOptics` | **GasJ** | 0.0060 | Rocky, Ocean, Venus |  |
-| `cloudOptics` | **GasS** | 0.0060 | Rocky, Ocean, Venus |  |
-| `cloudOptics` | **IceN** | 0.0060 | Rocky, Ocean, Venus |  |
-| `cloudOptics` | **SubN** | 0.0060 | Rocky, Ocean, Venus |  |
-| `cloudOptics` | **HotJ** | 0.0060 | Rocky, Ocean, Venus |  |
-| `glacial` | **Mars** | 0.0054 | Titan, Frozen, Europa, Ocean, Eye |  |
-| `cloudOptics` | **Mars** | 0.0054 | Rocky, Ocean, Venus |  |
-| `machine` | **Mars** | 0.0050 | Rocky, Ocean, Eye |  |
-| `polarVortex` | **Mars** | 0.0050 | GasJ, GasS, IceN, SubN, HotJ |  |
-| `cloudOptics` | **Eye** | 0.0050 | Rocky, Ocean, Venus |  |
-
-### ⚠️ Faint false-renders — trace pixels (sub-0.0005; may be edge bleed or a real faint leak)
-
-| feature | preset | Δ |
-|---|---|---:|
-| `shatter` | Mars | 0.00046 |
+| `lightning` | **Titan** | 0.0107 | GasJ, GasS, IceN, SubN, Rocky, Ocean, Venus, Eye, Mars, HotJ |  |
+| `magma` | **Ocean** | 0.0036 | Magma, Lava |  |
 
 ### ⚠️ Dead-renders — declared but inert (manifest optimistic, kit insufficient, or driver gate broken)
 
@@ -95,7 +74,13 @@ each one disambiguates *manifest wrong* (`rendersOn` needs this preset) vs *feat
 | `bioMats` | Venus | 0.00000 | measured inert |
 | `bioMats` | Mars | 0.00000 | measured inert |
 | `cityLights` | Venus | 0.00000 | measured inert |
+| `cityLights` | Mars | 0.00000 | measured inert |
+| `clouds` | Titan | 0.00005 | measured inert |
 | `clouds` | Frozen | 0.00000 | measured inert |
+| `clouds` | GasJ | 0.00001 | measured inert |
+| `clouds` | GasS | 0.00001 | measured inert |
+| `clouds` | IceN | 0.00001 | measured inert |
+| `clouds` | HotJ | 0.00001 | measured inert |
 | `coastlines` | Rocky | 0.00000 | measured inert |
 | `coastlines` | Ocean | 0.00000 | measured inert |
 | `coastlines` | Frozen | 0.00000 | measured inert |
@@ -103,12 +88,15 @@ each one disambiguates *manifest wrong* (`rendersOn` needs this preset) vs *feat
 | `coastlines` | Eye | 0.00000 | measured inert |
 | `coastlines` | Mars | 0.00000 | measured inert |
 | `deltas` | Frozen | 0.00000 | measured inert |
-| `deltas` | Venus | 0.00003 | measured inert |
+| `deltas` | Venus | 0.00002 | measured inert |
 | `dunes` | Frozen | 0.00000 | measured inert |
 | `dunes` | Mars | 0.00000 | measured inert |
 | `dust` | Frozen | 0.00000 | measured inert |
+| `dust` | Mars | 0.00000 | measured inert |
 | `ecumenopolis` | Venus | 0.00000 | measured inert |
+| `ecumenopolis` | Mars | 0.00000 | measured inert |
 | `ejecta` | Venus | 0.00010 | measured inert |
+| `glacial` | Mars | 0.00000 | measured inert |
 | `greatSpot` | GasJ | 0.00002 | measured inert |
 | `greatSpot` | GasS | 0.00002 | measured inert |
 | `greatSpot` | IceN | 0.00002 | measured inert |
@@ -131,7 +119,7 @@ each one disambiguates *manifest wrong* (`rendersOn` needs this preset) vs *feat
 | `polarVortex` | SubN | 0.00000 | measured inert |
 | `polarVortex` | HotJ | 0.00000 | measured inert |
 | `rivers` | Frozen | 0.00000 | measured inert |
-| `stormTrain` | GasS | 0.00005 | measured inert |
+| `stormTrain` | GasS | 0.00008 | measured inert |
 | `stormTrain` | IceN | 0.00000 | measured inert |
 | `stormTrain` | SubN | 0.00000 | measured inert |
 | `stormTrain` | HotJ | 0.00000 | measured inert |
@@ -163,7 +151,7 @@ Legend: ✅ renders-as-declared · `·` correctly inert · ⚠️D dead-render �
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | `craters` | ✅ | · | ✅ | ✅ | ✅ | ✅ | · | · | · | ✅ | · | ✅ | · | ✅ | · | · | · |
 | `dunes` | ✅ | · | ✅ | ✅ | ⚠️D | · | · | · | · | ✅ | · | ✅ | · | ⚠️D | · | · | · |
-| `dust` | ✅ | · | ✅ | ✅ | ⚠️D | · | · | · | · | ✅ | · | ✅ | · | ✅ | · | · | · |
+| `dust` | ✅ | · | ✅ | ✅ | ⚠️D | · | · | · | · | ✅ | · | ✅ | · | ⚠️D | · | · | · |
 | `ejecta` | ✅ | · | ✅ | ✅ | ✅ | ✅ | · | · | · | ⚠️D | · | ✅ | · | ✅ | · | · | · |
 
 ### volcanic-provinces
@@ -194,7 +182,7 @@ Legend: ✅ renders-as-declared · `·` correctly inert · ⚠️D dead-render �
 | feature | Rocky | Lava | Ocean | Titan | Frozen | Europa | GasJ | GasS | IceN | Venus | SubN | Eye | HotJ | Mars | Magma | Carbon | Cryst |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | `deltas` | ✅ | · | ✅ | ✅ | ⚠️D | · | · | · | · | ⚠️D | · | ✅ | · | ✅ | · | · | · |
-| `glacial` | · | · | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · | ✅ | · | 🔴F | · | · | · |
+| `glacial` | · | · | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · | ✅ | · | ⚠️D | · | · | · |
 | `outflow` | ✅ | · | ✅ | ⚠️D | ⚠️D | · | · | · | · | ⚠️D | · | ⚠️D | · | ✅ | · | · | · |
 | `rivers` | ✅ | · | ✅ | ✅ | ⚠️D | · | · | · | · | ✅ | · | ✅ | · | ✅ | · | · | · |
 
@@ -202,18 +190,18 @@ Legend: ✅ renders-as-declared · `·` correctly inert · ⚠️D dead-render �
 
 | feature | Rocky | Lava | Ocean | Titan | Frozen | Europa | GasJ | GasS | IceN | Venus | SubN | Eye | HotJ | Mars | Magma | Carbon | Cryst |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| `airglow` | ✅ | · | ✅ | ✅ | · | · | 🔴F | 🔴F | 🔴F | ✅ | 🔴F | ✅ | 🔴F | ✅ | · | · | · |
+| `airglow` | ✅ | · | ✅ | ✅ | · | · | · | · | · | ✅ | · | ✅ | · | ✅ | · | · | · |
 | `aurora` | ✅ | · | ✅ | ⚠️D | · | · | ✅ | ✅ | ✅ | ⚠️D | ⚠️D | ⚠️D | ✅ | ⚠️D | · | · | · |
 | `bands` | · | · | · | · | · | · | ✅ | ✅ | ✅ | · | ✅ | · | ✅ | · | · | · | · |
 | `bioMats` | ✅ | · | ✅ | · | · | · | · | · | · | ⚠️D | · | ✅ | · | ⚠️D | · | · | · |
 | `carbon` | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | ✅ | · |
-| `cityLights` | ✅ | · | ✅ | · | · | · | · | · | · | ⚠️D | · | ✅ | · | ✅ | · | · | · |
-| `cloudOptics` | ✅ | · | ✅ | 🔴F | · | · | 🔴F | 🔴F | 🔴F | ✅ | 🔴F | 🔴F | 🔴F | 🔴F | · | · | · |
-| `clouds` | ✅ | · | ✅ | ✅ | ⚠️D | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · |
+| `cityLights` | ✅ | · | ✅ | · | · | · | · | · | · | ⚠️D | · | ✅ | · | ⚠️D | · | · | · |
+| `cloudOptics` | ✅ | · | ✅ | · | · | · | · | · | · | ✅ | · | · | · | · | · | · | · |
+| `clouds` | ✅ | · | ✅ | ⚠️D | ⚠️D | · | ⚠️D | ⚠️D | ⚠️D | ✅ | ✅ | ✅ | ⚠️D | ✅ | · | · | · |
 | `coastlines` | ⚠️D | · | ⚠️D | ✅ | ⚠️D | · | · | · | · | ⚠️D | · | ⚠️D | · | ⚠️D | · | · | · |
 | `daysideThermal` | · | · | · | · | · | · | · | · | · | · | · | · | ✅ | · | · | · | · |
 | `dustStorm` | · | · | · | · | · | · | · | · | · | · | · | · | · | ✅ | · | · | · |
-| `ecumenopolis` | ✅ | · | ✅ | · | · | · | · | · | · | ⚠️D | · | ✅ | · | ✅ | · | · | · |
+| `ecumenopolis` | ✅ | · | ✅ | · | · | · | · | · | · | ⚠️D | · | ✅ | · | ⚠️D | · | · | · |
 | `facets` | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | · | ✅ |
 | `frost` | · | · | · | ✅ | ✅ | ✅ | · | · | · | · | · | · | · | ✅ | · | · | · |
 | `greatSpot` | · | · | · | · | · | · | ⚠️D | ⚠️D | ⚠️D | · | ⚠️D | · | ⚠️D | · | · | · | · |
@@ -222,11 +210,11 @@ Legend: ✅ renders-as-declared · `·` correctly inert · ⚠️D dead-render �
 | `lakes` | ✅ | · | ✅ | ✅ | ⚠️D | · | · | · | · | ⚠️D | · | ✅ | · | ⚠️D | · | · | · |
 | `lightning` | ✅ | · | ✅ | 🔴F | · | · | ✅ | ✅ | ✅ | ✅ | ⚠️D | ✅ | ✅ | ✅ | · | · | · |
 | `limb` | ✅ | · | ✅ | ✅ | · | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · |
-| `machine` | ✅ | · | ✅ | · | · | · | · | · | · | · | · | ✅ | · | 🔴F | · | · | · |
-| `magma` | · | ✅ | · | · | · | · | · | · | · | · | · | · | · | · | ✅ | · | · |
+| `machine` | ✅ | · | ✅ | · | · | · | · | · | · | · | · | ✅ | · | · | · | · | · |
+| `magma` | · | ✅ | 🔴F | · | · | · | · | · | · | · | · | · | · | · | ✅ | · | · |
 | `nightsideThermal` | · | · | · | · | · | · | · | · | · | · | · | · | ✅ | · | · | · | · |
-| `polarVortex` | · | · | · | · | · | · | ⚠️D | ⚠️D | ⚠️D | · | ⚠️D | · | ⚠️D | 🔴F | · | · | · |
-| `shatter` | · | · | · | · | ✅ | · | · | · | · | · | · | · | · | ⚠️F | · | · | · |
+| `polarVortex` | · | · | · | · | · | · | ⚠️D | ⚠️D | ⚠️D | · | ⚠️D | · | ⚠️D | · | · | · | · |
+| `shatter` | · | · | · | · | ✅ | · | · | · | · | · | · | · | · | · | · | · | · |
 | `stormTrain` | · | · | · | · | · | · | ✅ | ⚠️D | ⚠️D | · | ⚠️D | · | ⚠️D | · | · | · | · |
 | `sunglint` | ✅ | · | ✅ | ✅ | · | · | · | · | · | ⚠️D | · | ⚠️D | · | ⚠️D | · | · | · |
 | `terminator` | ✅ | · | ✅ | ✅ | · | · | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · |

@@ -171,7 +171,8 @@ export const ASSOCIATIONS = {
     isolationKit: [],
     // +Europa 2026-06-15: viscous ice flow / lobate flows theorized.
     // +Ocean/Eyeball 2026-06-15: Earth glaciers (observed); eyeball nightside ice flow.
-    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)','Ocean (temperate)','Eyeball (locked temperate)'],
+    // +Mars 2026-06-15: real glaciers — lobate debris aprons + buried ice (manifest-too-narrow broaden, not a driver bug; already in tectonic-terrestrial archetype union).
+    rendersOn: ['Titan (methane seas)','Frozen (airless)','Europa (icy moon)','Ocean (temperate)','Eyeball (locked temperate)','Mars (arid rocky)'],
   },
 
   // ── fluvial ──

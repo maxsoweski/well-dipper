@@ -5068,7 +5068,7 @@
       cloudOpticsEnabled: false,  // F39 enable gate — DEFAULT OFF (Max taste-call 2026-06-15: the glory reads too hi-fidelity for the lo-fi aesthetic; code retained, opt-in only). Off zeroes uCloudOpticsIntensity at the per-frame writer (cloudOpticsC vec3(0) exactly)
       cloudOpticsIntensity: 0.7, // F39 glory strength (driver-side base; the writer multiplies by cloud presence so cloudless worlds arrive 0)
       gloryRadius: 0.06,         // F39 stylized-large ring-stack angular radius (rad) — tuned in isolation so the 2–3 bands read at d15/d4
-      featureRelevant: { shatter: 1, hexTess: 1 },  // per-feature relevance hard-gate seed (1 = pass; recomputed by applyDrivers from rendersOn). Safe first-frame default.
+      featureRelevant: { shatter: 1, hexTess: 1, airglow: 1, cloudOptics: 1, polarVortex: 1, machine: 1 },  // per-feature relevance hard-gate seed (1 = pass; recomputed by applyDrivers from rendersOn). Safe first-frame default.
       isExoticCarbonOrGeometric: 0,                 // Carbon/Crystal exotic-crust knockdown seed (0 = no knockdown). Safe first-frame default.
       bioMatsEnabled: false,  // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)
       bioCoverage: 0.45,  bioColor: [0.30, 0.95, 0.55],  bioScale: 2.4,  bioIntensity: 0.7,
@@ -5656,7 +5656,7 @@
       // canyons/tessera) in addition to shatter/hexTess. Same derivation: preset
       // membership in the corrected manifest's rendersOn → 1.0/0.0 (rendersOnDivergent
       // is already folded into ASSOCIATIONS[key].rendersOn upstream).
-      for (const key of ['shatter', 'hexTess', 'mountains', 'scarps', 'plateaus', 'canyons', 'tessera', 'craters', 'ejecta']) {
+      for (const key of ['shatter', 'hexTess', 'mountains', 'scarps', 'plateaus', 'canyons', 'tessera', 'craters', 'ejecta', 'airglow', 'cloudOptics', 'polarVortex', 'machine']) {
         state.featureRelevant[key] =
           (ASSOCIATIONS[key]?.rendersOn || []).includes(driverUI.preset) ? 1.0 : 0.0;
       }
@@ -7875,7 +7875,7 @@
       // presence/density) is ALREADY folded into state.airglowIntensity at applyDrivers (the
       // sole owner of the derivation), so airless worlds carry intensity 0 and arrive here as
       // exactly 0 — no second multiply (that would double-count density). Writer = enable gate.
-      uniforms.uAirglowIntensity.value = state.airglowEnabled ? state.airglowIntensity : 0.0;   // ✓ enable gate (atmoFactor baked into state.airglowIntensity)
+      uniforms.uAirglowIntensity.value = state.airglowEnabled ? state.airglowIntensity * state.featureRelevant.airglow : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — zeros gas-giant/Sub-Neptune leaks (green OI airglow is terrestrial; giants' real airglow is UV, unmodeled)
       uniforms.uAirglowColor.value.setRGB(state.airglowColor[0], state.airglowColor[1], state.airglowColor[2]);
       // F39 cloud optics — sole owner of uCloudOpticsIntensity. Two gates collapse to one
       // uniform: cloudOpticsEnabled (the ✓ enable) AND the F31 cloud-presence factor (the
@@ -7884,7 +7884,7 @@
       // skips the whole block: cloudOpticsC = vec3(0) exactly (the F39 regression contract;
       // the in-shader uCloudCoverage > 0.0 guard is the second line of defense).
       const cloudPresence = state.cloudsEnabled ? state.cloudCoverage : 0.0;
-      uniforms.uCloudOpticsIntensity.value = state.cloudOpticsEnabled ? state.cloudOpticsIntensity * cloudPresence : 0.0;   // ✓ enable gate × F31 cloud-presence
+      uniforms.uCloudOpticsIntensity.value = state.cloudOpticsEnabled ? state.cloudOpticsIntensity * cloudPresence * state.featureRelevant.cloudOptics : 0.0;   // ✓ enable gate × F31 cloud-presence × per-feature relevance hard-gate (Thread B idiom) — restricts glory to declared Rocky/Ocean/Venus (dormant: default-OFF, gated for audit cleanliness)
       uniforms.uGloryRadius.value = state.gloryRadius;
       // F46 bioluminescent mats — bioMatsEnabled gates coverage→0 (the bio block is guarded on
       // uBioCoverage > 0, so one gate skips the whole bypass term: bioC = vec3(0) exactly). Sole F46 write site.
@@ -8004,7 +8004,7 @@
       // site and every polar term key on uPolarStrength alone, so one gate kills the
       // whole combiner and restores byte-identical F28 output); everything else
       // passes through, preserving the derived/slider values.
-      uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength : 0.0;   // ✓ enable gate
+      uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (polar vortex authored for gas giants, not terrestrial)
       uniforms.uPolarMode.value     = state.polarMode;
       uniforms.uPolarSides.value    = state.polarSides;
       uniforms.uPolarR0.value       = state.polarR0;
@@ -8105,7 +8105,7 @@
       // F47 machine surface — machineEnabled gates uMachCoverage→0 (combiner early-outs,
       // composite + glow guarded on uMachCoverage>0): ONE gate kills the family, byte-identical
       // pre-F47 output. Sole F47 write site.
-      uniforms.uMachCoverage.value      = state.machineEnabled ? state.machCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no technosphere on uninhabitable worlds)
+      uniforms.uMachCoverage.value      = state.machineEnabled ? state.machCoverage * state.habGate * state.featureRelevant.machine : 0.0;   // ✓ enable gate × D15 habitability gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (technogenic declared Rocky/Ocean/Eye only; dormant: default-OFF, gated for audit cleanliness)
       uniforms.uMachDistrictScale.value = state.machDistrictScale;
       uniforms.uMachBlockScale.value    = state.machBlockScale;
       uniforms.uMachSeamWidth.value     = state.machSeamWidth;
