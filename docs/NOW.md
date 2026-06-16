@@ -19,6 +19,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > (`docs/FEATURES/planet-lod-campaign-tracker.md` — phases 1→7, F1–F51 status). Orientation,
 > not a brainstorm. Handoff `/tmp/handoff-f51-lod-workstream-2026-06-13.md`.
 
+> **▶ ACTIVE WORKSTREAM (2026-06-15/16): `planet-scale-normalization`** — Theme B of the
+> LOD-lab quality backlog (`docs/FEATURES/lod-lab-quality-backlog.md` #2). Building a **real-units
+> scale system** into the lab (planet radius + feature sizes + relief heights in km; `deriveUniforms`
+> converts to unit-sphere uniforms). Scope/design/contract in
+> `docs/WORKSTREAMS/planet-scale-normalization-2026-06-15/` (intent + design + 10-AC contract).
+> **Phase A done** (`a329891`: conversion helpers + `radiusRangesEarth`→`ScaleConstants` extraction,
+> oracle 13/13, gen-guard 85/85). **Crater slice done + Max-approved** (`c32374d`: `uCraterScale =
+> radiusEarth*6371/craterSizeKm`, verified live exact). **Next: fan the proven pattern across all
+> footprint features + relief-km + animation-rate + gravity + seeded size-source/reroll + km GUI,
+> then verify-workstream.** All commits LOCAL/unpushed. Handoff:
+> `/tmp/handoff-planet-scale-normalization-crater-slice-2026-06-16.md`.
+
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
 > `dependsOn.features`; massWasting deps→20 grad-writers; lakes→frost/dust/sunglint/cityLights;
