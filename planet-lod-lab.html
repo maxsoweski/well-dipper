@@ -4907,6 +4907,10 @@
     // C_CRATER = 1.0 ⇒ uCraterScale = radius_km / craterSizeKm (craterSizeKm is literally
     // crater diameter in km; smaller km ⇒ more, smaller craters).
     const C_CRATER = 1.0;
+    // Per-feature calibration constants (C=1 ⇒ uXScale = radius_km / xSizeKm, so the km dial is
+    // literally the feature's characteristic size). Defaults below set each xSizeKm = 6371/currentFreq
+    // so each feature keeps its existing look at the reference radius (RE=1); see design.md.
+    const C_LAVA = 1.0, C_CRACK = 1.0, C_EDIFICE = 1.0, C_CHAOS = 1.0, C_FACET = 1.0, C_HEX = 1.0;
     const state = {
       distance: 20.0,       // camera distance in radii (mouse-wheel driven) -> drives lodRamp
       yaw: 0.337,           // orbit yaw   (pointer-drag) — initial ≈ the old fixed CAM_DIR view
@@ -5091,11 +5095,13 @@
       facetsEnabled: true,  // F43 enable gate — off zeroes uFacetStrength at the per-frame writer (facet relief + sub-faceting + sparks all vanish: byte-identical pre-F43 output)
       facetStrength: 0.0,   // F43 facet strength (driven: 1 on the airless+pristine crystal class — airless && erosion<0.05 && resurfacingRate<0.05 && bombardment<0.2; 0 on every other preset; display-only, the writer reads it)
       facetCoverage: 0.65,  // F43 facet coverage fraction (lab knob — scattered crystals → continuous field; FULL-range walkable per the F42 tar lesson). 0.65 default = headline mostly-faceted crystal world (live-tuned 2026-06-13)
-      facetScale: 4.0,      // F43 facet cell density (lab knob — voronoi3d frequency). 4.0 = large clear planar faces that read as crystal; 9 was too fine to read as facets (live-tuned 2026-06-13)
+      facetScale: 4.0,      // legacy hand-set facet density (superseded by real-units derive; was: 4.0 = large clear planar faces, live-tuned 2026-06-13)
+      facetSizeKm: 1593,    // real-units scale: characteristic facet size in km (6371/4.0)
       facetAmp: 2.0,        // F43 facet relief amplitude (lab knob — per-cell height + tilt scale). 2.0 = crisp facet/ridge contrast; 0.5 under-read as mottled noise (live-tuned 2026-06-13)
       hexTessEnabled: false, // DEFAULT-OFF 2026-06-14 (pure-enable exotic, no driver gate → painted non-exotic presets; opt-in toggle). F44 enable gate — off zeroes uHexStrength at the per-frame writer (border troughs + flat/domed interiors all vanish: byte-identical pre-F44 output)
       hexRegularity: 0.85,  // F44 jitter knob (lab knob — 0=random Voronoi blobs, 1=regular hex lattice; 0.85 reads as deliberate hex while keeping believable variance) — walked & confirmed v2 verify
-      hexScale: 1.6,        // F44 hex cell density (lab knob — voronoi3d frequency). v2 RE-TUNE: BCC two-sublattice scan ~doubled point density, so 4.0 packed cells too fine at close LOD; 1.6 gives big clear columnar cells that survive full-octave base FBM at d2.5–d8
+      hexScale: 1.6,        // legacy hand-set hex density (superseded by real-units derive; v2 RE-TUNE 1.6 = big clear columnar cells, survives full-octave base FBM at d2.5–d8)
+      hexSizeKm: 3982,      // real-units scale: characteristic hex-column size in km (6371/1.6)
       hexBorderDepth: 1.1,  // F44 trough carve depth (lab knob) — v2 walk: deeper carve so borders catch light under the analytic-normal relief (now grad rides DEPTH, not width)
       hexBorderWidth: 0.10, // F44 border band width (lab knob) — v2 walk: slightly wider band reads cleaner at mid distance
       hexDome: 0.55,        // F44 per-cell domed-center amount (lab knob — 0=flat plateau, 1=fully domed Sputnik convex shading) — v2 walk: convex cell centers read without per-cell flicker
@@ -5203,7 +5209,8 @@
       volcanismStrength: 0.0,
       edificeMaxHeight: 1.0,
       shieldStratoMix: 0.0,
-      edificeScale: 3.0,
+      edificeScale: 3.0,    // legacy hand-set cell density (superseded by real-units derive)
+      edificeSizeKm: 2124,  // real-units scale: characteristic edifice spacing in km (6371/3.0)
       edificeAmp: 0.2,
       edificeCaldera: 0.12,
       // ── F8 lava plains & flows (Stage-C step 3, Relief) — derived (lavaCoverage/
@@ -5212,18 +5219,21 @@
       lavaCoverage: 0.0,
       lavaActivity: 0.0,
       lavaAxis: [0,1,0],
-      lavaScale: 1.4,
+      lavaScale: 1.4,       // legacy hand-set region density (superseded by real-units derive)
+      lavaSizeKm: 4551,     // real-units scale: characteristic lava-region size in km (6371/1.4)
       wrinkleAmp: 0.06,
       wrinkleFreq: 14.0,
       wrinkleWarp: 0.4,
-      crackScale: 9.0,
+      crackScale: 9.0,      // legacy hand-set crack density (superseded by real-units derive)
+      crackSizeKm: 708,     // real-units scale: characteristic crack spacing in km (6371/9.0)
       crackWidth: 0.08,
       lavaGlowRate: 1.5,
       // ── F9/F10 icy terrain (Stage-C step 3, Relief) — gated by the SHARED uCryoActivity
       // (owner Cryo). Under option A, cryoActivity is a LAB KNOB stub-driver until Cryo lands;
       // Relief derives the SHAPE (cellScale/jitter/matrixRough; ridge freqs/offset/width/axes). ──
       cryoActivity: 0.0,    // ◀ SHARED seam stub (lab knob); Cryo will own this derivation
-      chaosCellScale: 5.0,
+      chaosCellScale: 5.0,  // legacy hand-set raft density (superseded by real-units derive)
+      chaosSizeKm: 1274,    // real-units scale: representative chaos-raft width in km (6371/5.0; fuzzy — modeling choice, not rigorous)
       chaosRaftJitter: 0.5,
       chaosMatrixRough: 0.5,
       chaosMaskScale: 1.1,
@@ -6582,7 +6592,7 @@
     fEdifices.add(state, 'volcanismStrength', 0, 1, 0.01).name('volcanism (density)').listen();
     fEdifices.add(state, 'edificeMaxHeight', 0.2, 2.0, 0.01).name('max height (g⁻¹)').listen();
     fEdifices.add(state, 'shieldStratoMix', 0, 1, 0.01).name('shield↔strato').listen();
-    fEdifices.add(state, 'edificeScale', 1, 10, 0.5).name('cell density');
+    fEdifices.add(state, 'edificeSizeKm', 600, 6400, 50).name('edifice size (km)').onChange(()=>applyDrivers());
     fEdifices.add(state, 'edificeAmp', 0, 0.6, 0.01).name('amplitude');
     fEdifices.add(state, 'edificeCaldera', 0.02, 0.3, 0.01).name('caldera radius');
     fEdifices.add(state, 'edificesEnabled').name('✓ enabled');
@@ -6594,11 +6604,11 @@
     const fLava = fRelief.addFolder('Lava plains (F8)'); fLava.close();
     fLava.add(state, 'lavaCoverage', 0, 1, 0.01).name('coverage (smooths)').listen();
     fLava.add(state, 'lavaActivity', 0, 1, 0.01).name('activity (crack glow)').listen();
-    fLava.add(state, 'lavaScale', 0.5, 4, 0.1).name('region scale');
+    fLava.add(state, 'lavaSizeKm', 1500, 13000, 100).name('region size (km)').onChange(()=>applyDrivers());
     fLava.add(state, 'wrinkleAmp', 0, 0.2, 0.005).name('wrinkle amp');
     fLava.add(state, 'wrinkleFreq', 2, 30, 0.5).name('wrinkle freq');
     fLava.add(state, 'wrinkleWarp', 0, 1.5, 0.01).name('wrinkle sinuosity');
-    fLava.add(state, 'crackScale', 3, 20, 0.5).name('crack density');
+    fLava.add(state, 'crackSizeKm', 300, 2200, 25).name('crack spacing (km)').onChange(()=>applyDrivers());
     fLava.add(state, 'crackWidth', 0.01, 0.25, 0.005).name('crack width');
     fLava.add(state, 'lavaGlowRate', 0, 5, 0.1).name('glow pulse rate');
     fLava.add(state, 'lavaEnabled').name('✓ enabled');
@@ -6609,7 +6619,7 @@
     // raft jitter sync from the preset (.listen()); mask scale is a lab knob.
     const fChaos = fRelief.addFolder('Chaos (F9)'); fChaos.close();
     fChaos.add(state, 'cryoActivity', 0, 1, 0.01).name('◀ ICY ACTIVITY (shared, Cryo)').listen();
-    fChaos.add(state, 'chaosCellScale', 1, 12, 0.5).name('raft size').listen();
+    fChaos.add(state, 'chaosSizeKm', 500, 6400, 50).name('raft size (km)').listen().onChange(()=>applyDrivers());
     fChaos.add(state, 'chaosRaftJitter', 0, 1, 0.01).name('raft jitter (∝1/g)').listen();
     fChaos.add(state, 'chaosMatrixRough', 0, 1, 0.01).name('matrix roughness').listen();
     fChaos.add(state, 'chaosMaskScale', 0.4, 3, 0.1).name('chaos-region scale');
@@ -6968,7 +6978,7 @@
     const fFacets = fExoticGroup.addFolder('Crystal facets (F43)'); fFacets.close();
     fFacets.add(state, 'facetStrength', 0, 1, 0.01).name('facet strength (driven)').listen();
     fFacets.add(state, 'facetCoverage', 0, 1, 0.01).name('coverage (scatter→full)');
-    fFacets.add(state, 'facetScale', 3, 24, 0.5).name('cell density');
+    fFacets.add(state, 'facetSizeKm', 250, 2200, 25).name('facet size (km)').onChange(()=>applyDrivers());
     fFacets.add(state, 'facetAmp', 0, 2.5, 0.01).name('amplitude');
     fFacets.add(state, 'facetsEnabled').name('✓ enabled');
     // ▸ Hex crust (F44) — P15 crustal tessellation: a uniform-lithology crust tiled into
@@ -6980,7 +6990,7 @@
     // (the world's own identity; the Seeds folder rerolls it).
     const fHex = fExoticGroup.addFolder('Hex crust (F44)'); fHex.close();
     fHex.add(state, 'hexRegularity', 0, 1, 0.01).name('regularity (voronoi→hex)');
-    fHex.add(state, 'hexScale', 1, 12, 0.1).name('cell density');  // v2: range lowered (min 3→1) — BCC two-sublattice doubled point density, so the walkable default (1.6) sits below the old min; 1–12 keeps it mid-low
+    fHex.add(state, 'hexSizeKm', 500, 6400, 50).name('column size (km)').onChange(()=>applyDrivers());  // km-inverted from the old 1–12 freq range (default 3982 = 6371/1.6)
     fHex.add(state, 'hexBorderDepth', 0, 1.5, 0.01).name('border depth');
     fHex.add(state, 'hexBorderWidth', 0.02, 0.2, 0.005).name('border width');
     fHex.add(state, 'hexDome', 0, 1, 0.01).name('dome amount');
@@ -8090,7 +8100,7 @@
       // writer is the SOLE owner of the F43 uniforms (no second write site).
       uniforms.uFacetStrength.value  = state.facetsEnabled ? state.facetStrength : 0.0;   // ✓ enable gate
       uniforms.uFacetCoverage.value  = state.facetCoverage;
-      uniforms.uFacetScale.value     = state.facetScale;
+      uniforms.uFacetScale.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.facetSizeKm, C_FACET);
       uniforms.uFacetAmp.value       = state.facetAmp;
       // F44 hex crust — hexTessEnabled gates the master strength→0 (border troughs + domed
       // interiors ALL key on uHexStrength > 0, so ONE gate kills the family: byte-identical
@@ -8099,7 +8109,7 @@
       // writer is the SOLE owner of the F44 uniforms (no second write site).
       uniforms.uHexStrength.value    = state.hexTessEnabled ? state.featureRelevant.hexTess : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (zeros force-enable on non-member worlds; 1.0 on Frozen — its member world)
       uniforms.uHexRegularity.value  = state.hexRegularity;
-      uniforms.uHexScale.value       = state.hexScale;
+      uniforms.uHexScale.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.hexSizeKm, C_HEX);
       uniforms.uHexBorderDepth.value = state.hexBorderDepth;
       uniforms.uHexBorderWidth.value = state.hexBorderWidth;
       uniforms.uHexDome.value        = state.hexDome;
@@ -8219,7 +8229,7 @@
       uniforms.uVolcanismStrength.value = state.edificesEnabled ? state.volcanismStrength : 0.0;   // ✓ enable gate
       uniforms.uEdificeMaxHeight.value = state.edificeMaxHeight;
       uniforms.uShieldStratoMix.value  = state.shieldStratoMix;
-      uniforms.uEdificeScale.value     = state.edificeScale;
+      uniforms.uEdificeScale.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.edificeSizeKm, C_EDIFICE);
       uniforms.uEdificeAmp.value       = state.edificeAmp;
       uniforms.uEdificeCaldera.value   = state.edificeCaldera;
       // F8 lava plains — coverage (SMOOTHS relief, gates region) + activity (emissive cracks)
@@ -8228,18 +8238,18 @@
       uniforms.uLavaCoverage.value = state.lavaEnabled ? state.lavaCoverage : 0.0;   // ✓ enable gate
       uniforms.uLavaActivity.value = state.lavaEnabled ? state.lavaActivity : 0.0;   // ✓ enable gate (cracks dark)
       uniforms.uLavaAxis.value.set(state.lavaAxis[0], state.lavaAxis[1], state.lavaAxis[2]);
-      uniforms.uLavaScale.value    = state.lavaScale;
+      uniforms.uLavaScale.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.lavaSizeKm, C_LAVA);
       uniforms.uWrinkleAmp.value   = state.wrinkleAmp;
       uniforms.uWrinkleFreq.value  = state.wrinkleFreq;
       uniforms.uWrinkleWarp.value  = state.wrinkleWarp;
-      uniforms.uCrackScale.value   = state.crackScale;
+      uniforms.uCrackScale.value   = featureFrequencyFromKm(state.planetRadiusEarth, state.crackSizeKm, C_CRACK);
       uniforms.uCrackWidth.value   = state.crackWidth;
       uniforms.uLavaGlowRate.value = state.lavaGlowRate;
       // F9/F10 icy terrain — uCryoActivity is the SHARED seam (lab-knob stub, owner Cryo; gates
       // BOTH combiners' early-out). Per-feature enables zero each feature's OWN amplitude for
       // independent A/B (chaos → jitter+matrixRough to 0; ridges → amp to 0); SHAPE is driven.
       uniforms.uCryoActivity.value     = state.cryoActivity;
-      uniforms.uChaosCellScale.value   = state.chaosCellScale;
+      uniforms.uChaosCellScale.value   = featureFrequencyFromKm(state.planetRadiusEarth, state.chaosSizeKm, C_CHAOS);
       uniforms.uChaosRaftJitter.value  = state.chaosEnabled ? state.chaosRaftJitter : 0.0;   // ✓ enable gate
       uniforms.uChaosMatrixRough.value = state.chaosEnabled ? state.chaosMatrixRough : 0.0;  // ✓ enable gate
       uniforms.uChaosMaskScale.value   = state.chaosMaskScale;
