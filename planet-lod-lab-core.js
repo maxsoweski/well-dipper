@@ -952,6 +952,52 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   };
 }
 
+// ── Real-units → unit-sphere uniform conversion (planet-scale-normalization-2026-06-15, AC1) ──
+// Pure helpers that let deriveUniforms (and the lab GUI, later phase) express planet radius,
+// feature horizontal size, and relief height in REAL km — converting to the shader's unit-sphere
+// uniform space given the planet's real radius. The shader still runs on a unit sphere; only the
+// uniform VALUES change. These do NOT touch the analytic-gradient / voronoi3d / crater-shape math.
+export const R_EARTH_KM = 6371; // Earth's mean radius in km (radiusEarth is in Earth radii).
+
+// Footprint → shader frequency. frequency = cFeature * radius_km / featureSize_km.
+// Monotonic ↑ in radiusEarth (bigger planet ⇒ a fixed-km feature spans fewer cells ⇒ higher
+// frequency ⇒ smaller + more numerous on the disk) and ↓ in featureSizeKm. cFeature is the
+// per-feature calibration constant (the desired look at the reference radius).
+export function featureFrequencyFromKm(radiusEarth, featureSizeKm, cFeature) {
+  return cFeature * (radiusEarth * R_EARTH_KM) / featureSizeKm;
+}
+
+// Relief height → unit-sphere amplitude. EXACT: a height of h km on a body of real radius
+// radius_km is a fraction h / radius_km of the (unit) radius. No clamping here — the gravity cap
+// is applied separately via reliefGravityFactor.
+export function reliefAmplitudeFromKm(featureHeightKm, radiusEarth) {
+  return featureHeightKm / (radiusEarth * R_EARTH_KM);
+}
+
+// Gravity cap on authored relief height. Bounded, MONOTONIC-DECREASING in surfaceGravity:
+// low-g worlds (Mars/Titan) get a larger factor (exaggerated relief, Olympus-Mons read); high-g
+// worlds get a smaller factor (isostatic limit, subdued relief). Chosen form:
+//   clamp( surfaceGravity^(-0.5), FLOOR, CEIL )  with FLOOR = 0.4, CEIL = 2.5.
+// g^(-1/2) is smooth, strictly decreasing on g > 0, equals 1 at g = 1 (Earth ⇒ unchanged), and
+// the clamp keeps it off the degenerate flat/spiky extremes. surfaceGravity is floored at 1e-3
+// before the power so a near-zero g can't blow up before the clamp catches it.
+export function reliefGravityFactor(surfaceGravity) {
+  const FLOOR = 0.4, CEIL = 2.5;
+  const f = Math.pow(Math.max(surfaceGravity, 1e-3), -0.5);
+  return Math.min(CEIL, Math.max(FLOOR, f));
+}
+
+// Animation-rate factor. Bounded, ∝ 1/radiusEarth relative to a reference radius: big worlds
+// animate slower (lava breathing, glint shimmer, storm drift, aurora pulse). Chosen form:
+//   clamp( refRadiusEarth / radiusEarth, FLOOR, CEIL )  with FLOOR = 0.1, CEIL = 3.
+// refRadiusEarth defaults to 1 (Earth). radiusEarth is floored at 1e-6 so a degenerate ~0 radius
+// can't divide-by-zero before the clamp.
+export function animationRateFactor(radiusEarth, refRadiusEarth = 1) {
+  const FLOOR = 0.1, CEIL = 3.0;
+  const f = refRadiusEarth / Math.max(radiusEarth, 1e-6);
+  return Math.min(CEIL, Math.max(FLOOR, f));
+}
+
 // ── Stage-D provinceWeightFromField (LIVE 2026-06-10) — CPU mirror of the GLSL accessor's
 // MAPPING stage: field sample (already in [0,1]) → per-feature weight, given an affinity row
 // from planet-archetypes.js PROVINCES and the global influence dial. The GLSL computes

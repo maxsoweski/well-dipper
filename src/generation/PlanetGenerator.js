@@ -1,4 +1,4 @@
-import { earthRadiiToScene } from '../core/ScaleConstants.js';
+import { earthRadiiToScene, RADIUS_RANGES_EARTH } from '../core/ScaleConstants.js';
 import {
   estimateMassEarth, computeAtmosphere, deriveComposition,
   equilibriumTemperature, tidalLockTimescale, checkTidalLock,
@@ -321,27 +321,8 @@ export class PlanetGenerator {
     const type = forceType || this._pickType(rng, orbitRadiusAU, zones);
 
     // Size ranges in Earth radii — based on real exoplanet science.
-    // These are realistic physical sizes used for scene-scale rendering.
-    const radiusRangesEarth = {
-      'rocky':        [0.3, 0.8],    // Mercury (0.38) to Mars (0.53)
-      'terrestrial':  [0.8, 1.5],    // Venus (0.95) to super-Earth
-      'ocean':        [0.8, 1.8],    // Earth-like to large water worlds
-      'eyeball':      [0.8, 1.3],    // Tidally locked terrestrial
-      'venus':        [0.8, 1.2],    // Venus-like (0.95 real)
-      'carbon':       [0.4, 0.9],    // Small, dense worlds
-      'lava':         [0.3, 1.0],    // Small hot worlds
-      'ice':          [0.4, 1.2],    // Icy bodies
-      'sub-neptune':  [2.5, 4.0],    // Mini-Neptunes (Neptune = 3.88)
-      'gas-giant':    [6.0, 14.0],   // Jupiter (11.2) / Saturn (9.4)
-      'hot-jupiter':  [8.0, 16.0],   // Inflated close-in giants
-      'hex':          [0.4, 0.9],    // Small artificial construct
-      'shattered':    [0.5, 1.2],    // Medium fractured world
-      'crystal':      [0.3, 0.8],    // Small crystalline body
-      'fungal':       [0.6, 1.3],    // Medium bio world
-      'machine':      [0.8, 1.5],    // Medium artificial world
-      'city-lights':  [0.8, 1.5],    // Earth-like with civilization
-      'ecumenopolis': [0.9, 1.8],    // Mega-city, often super-Earth sized
-    };
+    // Single source of truth now lives in ScaleConstants (shared game + lab).
+    const radiusRangesEarth = RADIUS_RANGES_EARTH;
     const radiusRangeEarth = radiusRangesEarth[type] || [0.5, 1.5];
     const radiusEarth = rng.range(...radiusRangeEarth);
     const radiusScene = earthRadiiToScene(radiusEarth);
