@@ -1,0 +1,106 @@
+{
+  "workstream": "rivers-dendritic-drainage-2026-06-17",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-17. Theme A item #3 of lod-lab-quality-backlog (wrong generation primitive). Built on two PASSED viability spikes: sphere-routing (rivers-sphere-spike-plan-2026-06-17.md, commit e2f3bb5) and terrain-coupling (rivers-terrain-lab.html, 2026-06-17, C3 Max-eye-approved). Render method = ribbon geometry overlay (not texture bake).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-shared-height-module",
+      "statement": "The lab's height GLSL (noised, fbmd, the combiner chain) plus its uniform derivation are extracted into a reusable module imported by BOTH the planet shader and the river router, so there is a single source of h(pos). Zero behavioral change to the planet: the extraction is a pure code-lift (the diff is the gate).",
+      "verifyVia": {
+        "input": "git diff over the extracted module + planet-lod-lab.html; run the existing planet/core test suites (npx vitest run, incl. the core.js finite-diff parity guards); load the lab on :9223 and compare a fixed Rocky preset render before/after",
+        "observable": "Height GLSL + uniform derivation defined once in the shared module and consumed by both the planet shader and the river router; existing test suites stay green (zero behavioral drift); the before/after lab render of the fixed preset is visually identical (no pixel-diff beyond noise)"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-real-terrain-coupling",
+      "statement": "The river router reads the lab's REAL accumulated h(pos) and its gradient at the ~40k irregular-mesh vertices (via the shared height module / FloatType RTT), not the FBM stand-in. The gradient is sampled BEFORE the F14 sea cut so routing uses real slope. Ocean/outlet cells are the real water level-set (h < uSeaLevel).",
+      "verifyVia": {
+        "input": "Lab on :9223 (a wet Rocky preset): read window._rivers height stats and spot-check sampled vertex heights against the rendered planet; confirm routing inputs come from the live shader, not a JS FBM",
+        "observable": "Per-vertex h is finite (0 NaN/Inf), range/median consistent with the rendered terrain; ocean cells == real level-set; routing demonstrably runs on the live planet's terrain (changing a terrain dial changes the heights the router sees)"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-sealevel-from-histogram",
+      "statement": "Sea level is solved from the live height histogram (inverse-CDF to a target ocean fraction) per planet, not the FBM-era coverage formula. The resulting ocean fraction lands in a believable band (target ~25-45%) across presets, given the positive-biased real combiner stack.",
+      "verifyVia": {
+        "input": "vitest: feed the histogram solver representative h-distributions (incl. a positive-skewed one like the real stack) and assert the solved threshold yields the requested fraction. Live on :9223: read the achieved ocean fraction across several wet presets",
+        "observable": "Oracle: solver returns a threshold within tolerance of the requested fraction for skewed + symmetric distributions; suite green. Live: ocean fraction lands in the target band (no ~13% under-water or drowned world)"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-ribbon-overlay-render",
+      "statement": "Rivers render as the variable-width ribbon-geometry overlay on the actual lab planet (lifted ~R*1.001), following the real valleys into the seas; the old F11 fluvialCombiner height contribution is disabled in the lab (no double rivers / no leftover worm-trail noise-band).",
+      "verifyVia": {
+        "input": "Lab on :9223, a wet Rocky preset: screenshot the planet with rivers from >=4 viewpoints incl. both poles + a basin close-up; confirm the old F11 carve/tint is off (uFluvialDensity path disabled)",
+        "observable": "Ribbon network visible on the shaded planet, trunks reaching the water bodies, tributaries branching upslope; no second river pattern from the old noise-band; no seam/pole artifact across the viewpoints"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-dendritic-routing-metrics",
+      "statement": "Routing on the real terrain over the irregular spherical-Delaunay mesh produces a valid dendritic drainage network: 0 orphans, 0 uphill, max Horton-Strahler order >=3, bifurcation ratio R_b in the natural band (~3-5), width grows monotonically toward the sea (0 violations), and reaches read as straightish-with-natural-wobble (river-scale median turn well above 0, near-collinear fraction near 0) -- not grid-locked straight lines.",
+      "verifyVia": {
+        "input": "Lab on :9223: read window._rivers.stats after routing on the real field (orphanPct, uphillPct, maxStrahlerOrder, bifurcationRatio, monotonic-width violation count, river-scale near-collinear % + median turn deg)",
+        "observable": "orphanPct == 0 and uphillPct == 0; maxStrahlerOrder >= 3; R_b in [3,5.5]; monotonic-width violations == 0; river-scale near-collinear < ~1% with a non-trivial median turn angle"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-scale-coupling",
+      "statement": "River footprint and width obey the just-shipped Theme-B km scale system: the width law scale and the mesh/sampling resolution scale with planet radius_km, so rivers stay believably sized across planet sizes and do not make a large planet look small.",
+      "verifyVia": {
+        "input": "Lab on :9223: sweep the planet-radius dial (e.g. 1.0 -> 3.0 RE) holding the river size inputs; screenshot pair",
+        "observable": "On the larger radius the river network occupies a visibly smaller disk-fraction (finer, more numerous channels), consistent with the crater/footprint behavior shipped in planet-scale-normalization; rivers never read oversized for the body"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-regeneration-budget",
+      "statement": "The irregular mesh (Fibonacci+Lloyd+Delaunay -- terrain-independent) is cached and built once; changing a terrain/seed/sea-level dial RE-READS height + RE-ROUTES + RE-RIBBONS without rebuilding the mesh, within an acceptable interactive budget at the lab's working resolution.",
+      "verifyVia": {
+        "input": "Lab on :9223: trigger a sea-level change and a reseed; read the logged timings for full cold build vs re-route-only; confirm the mesh is not rebuilt on terrain change",
+        "observable": "Re-route-only path is materially cheaper than cold build (spike: ~100-170ms vs ~710ms) and the mesh-build cost is incurred only on cold load / vertex-count change; dial changes visibly update the rivers without a multi-second freeze"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-reads-as-rivers",
+      "statement": "On the actual lab planet, the rivers cohere as real dendritic drainage from Max's view -- straight reaches branching like trees, widening as they run to the larger bodies of water, sitting believably on the real terrain -- and are clearly distinct from the old worm-trails. Holistic acceptance.",
+      "verifyVia": {
+        "input": "Max walks the lab on :9223 across multiple wet presets and viewpoints",
+        "observable": "Max judges the rivers read as real rivers (the art-director spec), cohesive as a whole, and a clear improvement over the prior F11 worm-trails"
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "The lab's accumulated analytic height h(pos): base fbmd (planet-lod-lab.html:898) + the ~20-combiner height chain (:3170-3204), province-weighted -- consumed via the new shared height module (AC1)",
+      "The F14 water level-set: uSeaLevel (:442) and the sea cut (:3212-3216) -- the river outlet condition (h < uSeaLevel)",
+      "The irregular spherical-Delaunay mesh: Fibonacci -> 4x Lloyd -> ConvexHull adjacency (proven in rivers-lab.html) -- routing + render substrate",
+      "Theme-B km scale system: featureFrequencyFromKm / reliefAmplitudeFromKm / animationRateFactor (planet-lod-lab-core.js:960-988) + radiusRangesEarth in src/core/ScaleConstants.js -- footprint/width/resolution scaling"
+    ],
+    "outputs": [
+      "A river ribbon-geometry overlay THREE.Mesh added to the lab scene (lifted ~R*1.001)",
+      "A sea-level solver (live height histogram -> uSeaLevel threshold) replacing the FBM-era coverage formula",
+      "The shared height GLSL + uniform-derivation module, newly imported by the planet shader (the lab's first such extraction)"
+    ],
+    "mustStayWorking": [
+      "The rest of the height combiner stack renders identically after the GLSL extraction (zero-behavior code-lift -- AC1)",
+      "The lab's existing presets, render path, and GUI",
+      "The planet-scale-normalization (Theme B) system shipped 2026-06-17",
+      "F14 water rendering / the level-set cut",
+      "The existing planet-generation vitest suite + planet-lod-lab-core.js finite-diff parity guards"
+    ]
+  }
+}
