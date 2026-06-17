@@ -142,7 +142,8 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, animationRateFactor } from './planet-lod-lab-core.js';
+    import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
     import { expectedMatrix, auditRenderMatrix } from './lab-render-audit.js';   // NEW: pure auditor (Ask 4)
@@ -4913,11 +4914,66 @@
     const C_LAVA = 1.0, C_CRACK = 1.0, C_EDIFICE = 1.0, C_CHAOS = 1.0, C_FACET = 1.0, C_HEX = 1.0;
     const C_SHAT = 1.0, C_KARST = 1.0, C_ECUD = 1.0, C_ECUB = 1.0, C_SUBPIT = 1.0, C_SUBPOLY = 1.0;
     const C_DUNE = 1.0, C_OUTFLOW = 1.0, C_FLUVIAL = 1.0; // rivers calibrated DOWN: default km set for freq ≈4.6 (~2× old 2.3, mirrors the crater rule — flagged-oversized per backlog #3)
+
+    // ── AC3 relief normalization — physically-plausible relief amplitude multiplier. ──
+    // A height of heightKm on a body of radius RE renders, in unit-sphere space, at amplitude
+    // reliefAmplitudeFromKm(heightKm, RE) = heightKm/(RE·6371), capped by reliefGravityFactor(g).
+    // To preserve each feature's HISTORIC look at the reference radius (RE=1) and Earth gravity
+    // (g=1) we normalize against that reference: at RE=1,g=1 the multiplier is exactly 1.0 (so the
+    // existing baseAmp is unchanged), then scales ∝ (1/RE)·reliefGravityFactor(g) — bigger planet ⇒
+    // shallower relative relief; low-g (Mars/Titan) ⇒ exaggerated; high-g (Magma/Carbon) ⇒ flat.
+    // (heightKm cancels in the ratio, so it's the per-feature *authored* height that future tuning
+    // can push individual features above/below 1.0 by; with the defaults all four sit at 1.0 @ Earth.)
+    function reliefNorm(heightKm, radiusEarth, surfaceGravity){
+      const ref = reliefAmplitudeFromKm(heightKm, 1);            // amplitude at reference RE=1
+      const here = reliefAmplitudeFromKm(heightKm, radiusEarth); // amplitude at this radius
+      return (here / ref) * reliefGravityFactor(surfaceGravity); // = (1/RE)·gravityFactor
+    }
+
+    // ── AC5 size-source — seeded radius draw + canonical lock (planet-scale-normalization) ──
+    // Named real bodies are SIZE-LOCKED to their canonical radiusEarth (their identity IS their
+    // size). Every OTHER preset draws a seeded-random radius from the game's RADIUS_RANGES_EARTH
+    // for its archetype, mirroring PlanetGenerator.generate(). A reroll button + seed field
+    // redraws; a manual radius slider then overrides until the next preset/reroll.
+    const NAMED_BODY = new Set([
+      'Mars (arid rocky)', 'Titan (methane seas)', 'Europa (icy moon)',
+      'Venus (sulfuric shroud)', 'Magma (K2-141b)', 'Hot Jupiter (locked giant)'
+    ]);
+    // preset key → RADIUS_RANGES_EARTH archetype key (only used for the seeded-random presets).
+    const PRESET_ARCHETYPE = {
+      'Rocky (Earthlike)': 'terrestrial',
+      'Lava (hot airless)': 'lava',
+      'Ocean (temperate)': 'ocean',
+      'Frozen (airless)': 'ice',
+      'Gas giant (Jovian)': 'gas-giant',
+      'Gas giant (Saturnian)': 'gas-giant',
+      'Ice giant (Neptunian)': 'sub-neptune',
+      'Sub-Neptune (hazy)': 'sub-neptune',
+      'Eyeball (locked temperate)': 'eyeball',
+      'Carbon (high C/O)': 'carbon',
+      'Crystal (faceted)': 'crystal'
+    };
+    // Deterministic seeded PRNG (mulberry32) for the radius draw — same family as the lab's
+    // inline storm-placement streams, lifted here so reroll is reproducible per seed.
+    function mulberry32(a){ return function(){ a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+    // Resolve the radius for a preset given a seed: canonical lock for named bodies, else a seeded
+    // draw from the archetype range (falls back to the preset's own radiusEarth if no mapping).
+    function drawPresetRadius(presetName, seed){
+      const preset = DRIVER_PRESETS[presetName];
+      const canonical = preset.radiusEarth ?? 1.0;
+      if (NAMED_BODY.has(presetName)) return canonical;
+      const arch = PRESET_ARCHETYPE[presetName];
+      const range = arch && RADIUS_RANGES_EARTH[arch];
+      if (!range) return canonical;   // archetype-less preset (overlay types) keep their value
+      const r = mulberry32(seed >>> 0)();
+      return range[0] + r * (range[1] - range[0]);
+    }
     const state = {
       distance: 20.0,       // camera distance in radii (mouse-wheel driven) -> drives lodRamp
       yaw: 0.337,           // orbit yaw   (pointer-drag) — initial ≈ the old fixed CAM_DIR view
       pitch: 0.205,         // orbit pitch (pointer-drag), clamped to ±89°
       macroSeed: 1,         // big-feature noise band seed (octaves 0..2 — the continents)
+      radiusSeed: 1,        // AC5 seeded-radius draw seed (reroll redraws the archetype-range radius)
       detailSeed: 1,        // fine-detail noise band seed (octaves 3+ — surface texture)
       pixelScale: 3,        // low-res buffer divisor (matches production RetroRenderer)
       octaves: 4.0,         // manual octave value (used when octAuto = false)
@@ -5166,6 +5222,16 @@
       planetRadiusEarth: 1.0,  // real-units scale: planet radius in Earth radii (6371 km = 1 RE)
       craterSizeKm: 530,       // real-units scale: characteristic crater diameter in km
       craterAmp: 0.9,
+      // ── AC3 relief HEIGHTS (km) — physically-plausible authored relief depth/height. ──
+      // Rendered amplitude = baseAmp · reliefAmplitudeFromKm(heightKm, RE) · reliefGravityFactor(g) · K.
+      // The K_* calibration constants (near C_*) are set so that at the reference radius RE=1 and
+      // Earth gravity g=1 the rendered amplitude EQUALS the historic baseAmp — so Earth-scale worlds
+      // keep their look while real radius + gravity now modulate (low-g exaggerated, high-g flat,
+      // big planet ⇒ shallower relative relief). Heights are real-world representative values.
+      craterDepthKm: 2.0,      // typical complex-crater depth (a few km)
+      mountainHeightKm: 9.0,   // Everest-class orogenic relief
+      edificeHeightKm: 22.0,   // Olympus-Mons-class shield volcano
+      canyonDepthKm: 6.0,      // Valles-Marineris / deep street-canyon class
       // ── F3 ejecta & rays (Stage-C step 3, Relief) — derived (ejectaStrength/rampart/
       // rayBrightness from the preset) + lab-tunable (amp/lump/ray count/sharpness).
       // Placement reuses the F2 crater uniforms (scale/offset/density) — same craters. ──
@@ -5663,9 +5729,20 @@
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     function applyDrivers(){
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
-      // Real-units scale: source the planet radius from the preset (manual GUI drags
-      // persist until the next preset change — acceptable for the crater slice).
-      state.planetRadiusEarth = DRIVER_PRESETS[driverUI.preset].radiusEarth ?? 1.0;
+      // AC5 size-source + manual-override BUG FIX: the planet radius is drawn ONLY on a real
+      // preset change (or an explicit reroll), NOT on every applyDrivers() call. Previously this
+      // line ran unconditionally, so any knob's .onChange(()=>applyDrivers()) — including dragging
+      // the radius slider itself — instantly snapped the radius back to the preset value. Now the
+      // draw is gated on preset-change (or rerollRadius() bumping _radiusDirty), so manual drags
+      // persist until the next preset/reroll. Named bodies lock to canonical; generic archetypes
+      // draw a seeded radius from RADIUS_RANGES_EARTH.
+      if (driverUI.preset !== state._lastPreset || state._radiusDirty) {
+        state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed);
+        state._lastPreset = driverUI.preset;
+        state._radiusDirty = false;
+      }
+      // Stash surface gravity for the AC3 relief-gravity factor + the AC7 readout panel.
+      state.surfaceGravity = u.surfaceGravity;
       // D15 habitability (P27/P28 biotic+technogenic driver) — stored so the per-frame
       // overlay writers can gate bio/city/machine/ecu coverage to 0 on uninhabitable
       // worlds (catalog re-base 2026-06-14 declared these driven by habitability, but
@@ -6500,6 +6577,21 @@
     // Real-units scale: planet radius (RE) + a live km readout (Earth = 6371 km).
     fDrivers.add(state, 'planetRadiusEarth', 0.3, 16, 0.01).name('planet radius (RE)').listen().onChange(()=>applyDrivers());
     fDrivers.add({ get km(){ return (state.planetRadiusEarth*6371).toFixed(0)+' km'; } }, 'km').name('radius (km)').listen().disable();
+    // AC5 seeded radius source: a seed field + reroll redraw the archetype-range radius (named
+    // bodies stay canonical). rerollRadius() bumps the seed, flags a one-shot redraw, then runs
+    // applyDrivers() — which (with the bug fix) is the ONLY place that re-samples the radius.
+    function rerollRadius(){ state.radiusSeed = (Math.random()*4294967296)>>>0; state._radiusDirty = true; applyDrivers(); }
+    fDrivers.add(state, 'radiusSeed', 0, 4294967295, 1).name('radius seed').listen().onChange(()=>{ state._radiusDirty = true; applyDrivers(); });
+    fDrivers.add({ roll(){ rerollRadius(); } }, 'roll').name('🎲 reroll radius');
+    // ── AC7 scale readout panel — radius (already above), surface gravity (g), and the
+    // flagged per-feature footprints (crater + river) in km. Read-only getters update live.
+    const fScaleReadout = fDrivers.addFolder('scale readout'); fScaleReadout.open();
+    fScaleReadout.add({ get g(){ return (state.surfaceGravity ?? 1).toFixed(2)+' g'; } }, 'g').name('surface gravity').listen().disable();
+    fScaleReadout.add({ get re(){ return (state.planetRadiusEarth).toFixed(2)+' RE'; } }, 're').name('radius (RE)').listen().disable();
+    fScaleReadout.add({ get crater(){ return state.craterSizeKm.toFixed(0)+' km Ø'; } }, 'crater').name('crater footprint').listen().disable();
+    fScaleReadout.add({ get river(){ return state.fluvialSizeKm.toFixed(0)+' km'; } }, 'river').name('river footprint').listen().disable();
+    fScaleReadout.add({ get edifice(){ return state.edificeSizeKm.toFixed(0)+' km'; } }, 'edifice').name('edifice footprint').listen().disable();
+    fScaleReadout.add({ get relief(){ return state.mountainHeightKm.toFixed(1)+' km h'; } }, 'relief').name('mtn relief height').listen().disable();
 
     // ▸ Surface — Relief
     const fRelief = guiRight.addFolder('Surface — Relief'); fRelief.open();
@@ -7846,7 +7938,13 @@
       uniforms.uOctaves.value = oct;
       uniforms.uLodRamp.value = lod;
       uniforms.uLevels.value = state.levels;
-      uniforms.uPerturb.value = state.perturb;
+      // ── AC3/AC4 scale factors (computed once per frame from the live radius + gravity) ──
+      // _animRate ∝ 1/radius — big worlds animate slower (lava breathing, churn, storm drift,
+      // city flash). _g is the stashed surface gravity used by reliefNorm() per relief feature.
+      const _RE = state.planetRadiusEarth, _gNow = state.surfaceGravity ?? 1.0;
+      const _animRate = animationRateFactor(_RE);
+      // AC3 global relief (perturb): the planet-wide displacement scale also tracks radius+gravity.
+      uniforms.uPerturb.value = state.perturb * reliefNorm(state.mountainHeightKm, _RE, _gNow);
       uniforms.uNormalMode.value = state.normalMode;
       uniforms.uFwClamp.value = state.fwClamp ? 1 : 0;
       uniforms.uDitherMode.value = state.ditherMode;
@@ -7995,7 +8093,7 @@
       // whole family and restores F24's static byte-identical output), preserving the
       // slider value.
       uniforms.uJetStrength.value  = state.jetsEnabled ? state.jetStrength : 0.0;   // ✓ enable gate
-      uniforms.uJetSpeed.value     = state.jetSpeed;
+      uniforms.uJetSpeed.value     = state.jetSpeed * _animRate;   // AC4 storm/band drift slower on a large giant (Jovian) than a small one (Neptune)
       uniforms.uJetShearTurb.value = state.jetShearTurb;
       uniforms.uJetFestoon.value   = state.jetFestoon;
       uniforms.uJetTurbFreq.value  = state.jetTurbFreq;
@@ -8054,7 +8152,7 @@
       // the derived/slider values.
       uniforms.uLightningStrength.value = state.lightningEnabled ? state.lightningStrength : 0.0;   // ✓ enable gate
       uniforms.uLightPolar.value    = state.lightPolar;
-      uniforms.uLightRate.value     = state.lightRate;
+      uniforms.uLightRate.value     = state.lightRate * _animRate;   // AC4 city-light flash slows on big bodies
       uniforms.uLightDur.value      = state.lightDur;
       uniforms.uLightCellFreq.value = state.lightCellFreq;
       uniforms.uLightBlobR.value    = state.lightBlobR;
@@ -8088,7 +8186,7 @@
       // preserving the driven/slider values.
       uniforms.uMagmaSeaAngle.value   = state.magmaEnabled ? state.magmaSeaAngle : 0.0;   // ✓ enable gate
       uniforms.uMagmaTemp.value       = state.magmaTemp;
-      uniforms.uMagmaChurnSpeed.value = state.magmaChurnSpeed;
+      uniforms.uMagmaChurnSpeed.value = state.magmaChurnSpeed * _animRate;   // AC4 magma churn slows on big bodies
       // F42 carbon crust — carbonEnabled gates the master strength→0 (graphite
       // albedo, tar combiner + fill tone, tar sheen, diamond glints ALL key on
       // uCarbonStrength > 0, so ONE gate kills the family: byte-identical pre-F42
@@ -8160,7 +8258,7 @@
       uniforms.uEcuGlowIntensity.value = state.ecuGlowIntensity;
       uniforms.uEcuDistrictScale.value = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuDistrictSizeKm, C_ECUD);
       uniforms.uEcuBlockScale.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuBlockSizeKm, C_ECUB);
-      uniforms.uEcuCanyonDepth.value   = state.ecuCanyonDepth;
+      uniforms.uEcuCanyonDepth.value   = state.ecuCanyonDepth * reliefNorm(state.canyonDepthKm, _RE, _gNow);   // AC3 canyon depth km, radius+gravity normalized
       uniforms.uEcuSeamWidth.value     = state.ecuSeamWidth;
       uniforms.uEcuWarpAmt.value       = state.ecuWarpAmt;
       uniforms.uEcuConcreteColor.value.setRGB(state.ecuConcreteColor[0], state.ecuConcreteColor[1], state.ecuConcreteColor[2]);
@@ -8198,7 +8296,7 @@
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
       uniforms.uTerraceCount.value     = state.terraceCount;
       uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER);
-      uniforms.uCraterAmp.value        = state.craterAmp;
+      uniforms.uCraterAmp.value        = state.craterAmp * reliefNorm(state.craterDepthKm, _RE, _gNow);   // AC3 crater depth in km, radius+gravity normalized
       // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.
       uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.featureRelevant.ejecta : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — strength→0 early-outs the ejecta pass on non-members (Carbon/Crystal/gas)
       uniforms.uEjectaRampart.value    = state.ejectaRampart;
@@ -8208,7 +8306,7 @@
       uniforms.uRayCount.value         = state.rayCount;
       uniforms.uRaySharp.value         = state.raySharp;
       // F1 mountains — amplitude/orogeny driven; ridge fold + scale lab-tunable.
-      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp * (1.0 - state.isExoticCarbonOrGeometric) * state.featureRelevant.mountains : 0.0;   // ✓ enable gate × Carbon/Crystal exotic-crust knockdown × per-feature relevance hard-gate (Thread B idiom)
+      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp * (1.0 - state.isExoticCarbonOrGeometric) * state.featureRelevant.mountains * reliefNorm(state.mountainHeightKm, _RE, _gNow) : 0.0;   // ✓ enable gate × Carbon/Crystal exotic-crust knockdown × per-feature relevance hard-gate (Thread B idiom) × AC3 mountain height km radius+gravity normalized
       uniforms.uRidgeOffset.value      = state.ridgeOffset;
       uniforms.uRidgeGain.value        = state.ridgeGain;
       uniforms.uOrogenyStrength.value  = state.orogenyStrength;
@@ -8241,7 +8339,7 @@
       uniforms.uEdificeMaxHeight.value = state.edificeMaxHeight;
       uniforms.uShieldStratoMix.value  = state.shieldStratoMix;
       uniforms.uEdificeScale.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.edificeSizeKm, C_EDIFICE);
-      uniforms.uEdificeAmp.value       = state.edificeAmp;
+      uniforms.uEdificeAmp.value       = state.edificeAmp * reliefNorm(state.edificeHeightKm, _RE, 1.0);   // AC3 edifice height km, RADIUS-normalized only — gravity already in uEdificeMaxHeight (core ∝1/g), so g=1 here avoids double-applying
       uniforms.uEdificeCaldera.value   = state.edificeCaldera;
       // F8 lava plains — coverage (SMOOTHS relief, gates region) + activity (emissive cracks)
       // driven; wrinkle/crack/glow lab-tunable. The enable toggle gates BOTH the early-outs
@@ -8255,7 +8353,7 @@
       uniforms.uWrinkleWarp.value  = state.wrinkleWarp;
       uniforms.uCrackScale.value   = featureFrequencyFromKm(state.planetRadiusEarth, state.crackSizeKm, C_CRACK);
       uniforms.uCrackWidth.value   = state.crackWidth;
-      uniforms.uLavaGlowRate.value = state.lavaGlowRate;
+      uniforms.uLavaGlowRate.value = state.lavaGlowRate * _animRate;   // AC4 lava "breathing" slows on big bodies
       // F9/F10 icy terrain — uCryoActivity is the SHARED seam (lab-knob stub, owner Cryo; gates
       // BOTH combiners' early-out). Per-feature enables zero each feature's OWN amplitude for
       // independent A/B (chaos → jitter+matrixRough to 0; ridges → amp to 0); SHAPE is driven.
@@ -8417,6 +8515,8 @@
                     featureEnabled(key){ return !!state[FEATURES[key].enableKey]; },
                     featureFolders, filterUI,
                     rings(on){ state.ringsEnabled = on !== false; return state.ringsEnabled; },   // F51 :9223 toggle
+                    rerollRadius(){ rerollRadius(); return state.planetRadiusEarth; },   // AC5 :9223 reroll hook
+                    drawPresetRadius(name, seed){ return drawPresetRadius(name, seed >>> 0); },   // AC5 pure-draw probe
                     get sceneTarget(){ return sceneTarget; } };
 
     // ── HOT-RELOAD SCENARIO PERSISTENCE (2026-06-10) ──
