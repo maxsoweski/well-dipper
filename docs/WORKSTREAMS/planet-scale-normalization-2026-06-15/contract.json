@@ -8,12 +8,13 @@
   "acceptanceCriteria": [
     {
       "id": "AC1-units-conversion-oracle",
-      "statement": "deriveUniforms() converts real-unit inputs (planet radius_km, per-feature horizontal size_km, relief height_km) into the shader's unit-sphere uniforms via named helpers: featureFrequencyFromKm (= C_feature * radius_km / size_km), reliefAmplitudeFromKm (= height_km / radius_km), reliefGravityFactor(surfaceGravity), animationRateFactor(radius_km). C_feature is calibrated so already-good features keep ~current frequency at the reference radius while Max-flagged-oversized features (craters, rivers) calibrate to a smaller footprint.",
+      "statement": "Real-unit inputs (planet radius_km, per-feature horizontal size_km, relief height_km) are converted into the shader's unit-sphere uniforms via named single-source helpers defined once in planet-lod-lab-core.js — featureFrequencyFromKm (= C_feature * radius_km / size_km), reliefAmplitudeFromKm (= height_km / radius_km), reliefGravityFactor(surfaceGravity), animationRateFactor(radius_km), plus R_EARTH_KM — and INVOKED from the lab's uniform-build path (applyDrivers / the uniform .value assignments in planet-lod-lab.html), per the AC8-blessed single-source architecture (the helpers are not literally inlined inside deriveUniforms()). The per-feature (C_feature, featureSize_km) calibration is set so already-good features keep ~current frequency at the reference radius, while Max-flagged-oversized features (craters, rivers) calibrate to a smaller footprint (higher base frequency).",
       "verifyVia": {
-        "input": "npx vitest run (new tests/planet-scale.test.js): sample each helper across radius_km 0.3..16 RE and a feature size_km sweep",
-        "observable": "frequency monotonically increases with radius_km and decreases with size_km, bounded; amplitude == height_km/radius_km; rate ~ 1/radius_km; reliefGravityFactor monotonic-decreasing in surfaceGravity within [floor,ceil]; C_feature calibration check: craters/rivers resolve to higher base frequency (smaller footprint) than pre-change at reference radius; suite green"
+        "input": "npx vitest run tests/planet-scale.test.js (helper property oracle) + tests/planet-scale-calibration.test.js (calibration guard): sample each helper across radius_km 0.3..16 RE and a feature size_km sweep; pin the crater/river calibrated inputs against their documented pre-change baselines",
+        "observable": "frequency monotonically increases with radius_km and decreases with size_km, bounded; amplitude == height_km/radius_km; rate ~ 1/radius_km; reliefGravityFactor monotonic-decreasing in surfaceGravity within [floor,ceil]; calibration guard: at RE=1 crater base frequency (≈12.0) and river base frequency (=4.6) are each strictly GREATER than their documented pre-change defaults (crater 6.0, river 2.3) — smaller footprint; both suites green"
       },
-      "layer": "unit"
+      "layer": "unit",
+      "amended": "2026-06-17 (Max-approved): reworded to match the AC8-blessed single-source architecture — helpers are defined once in planet-lod-lab-core.js and invoked from the uniform-build path (applyDrivers / uniform .value assignments), not literally inside deriveUniforms(); calibration clause now backed by tests/planet-scale-calibration.test.js. Intent and requirement unchanged."
     },
     {
       "id": "AC2-footprint-live",
@@ -53,7 +54,8 @@
         "observable": "Oracle: every draw in-range / named-body canonical; suite green. Live: reroll visibly changes radius + footprint; manual slider override takes effect"
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "testDebt": "AC5 headless oracle deferred 2026-06-17 (Max-approved): size-source (drawPresetRadius / NAMED_BODY / archetype map) is inline in planet-lod-lab.html, not vitest-importable. Verified live on :9223 (dc04806). Follow-up: extract to an importable module + add the in-range/canonical vitest oracle."
     },
     {
       "id": "AC6-scaleconstants-extraction",

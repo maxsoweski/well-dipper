@@ -103,6 +103,12 @@ rigorous." Flagged so a future reader knows the km value there is a modeling cho
 - **UAT (Max only):** dial planet + feature sizes in real units; planets read at believable scale;
   nothing "makes the planet look small."
 
+### Test-debt
+- AC5 headless oracle deferred 2026-06-17 (Max-approved): size-source (drawPresetRadius /
+  NAMED_BODY / archetype map) is inline in planet-lod-lab.html, not vitest-importable. Verified
+  live on :9223. Follow-up: extract to an importable module + add the in-range/canonical vitest
+  oracle.
+
 ## Non-goals (explicit)
 - No body-to-body on-screen size comparison view (lab inspects one body; camera stays free).
 - No visible viewport scale gauge/ruler (Max chose real-units controls + readouts only).
