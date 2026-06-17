@@ -4911,6 +4911,8 @@
     // literally the feature's characteristic size). Defaults below set each xSizeKm = 6371/currentFreq
     // so each feature keeps its existing look at the reference radius (RE=1); see design.md.
     const C_LAVA = 1.0, C_CRACK = 1.0, C_EDIFICE = 1.0, C_CHAOS = 1.0, C_FACET = 1.0, C_HEX = 1.0;
+    const C_SHAT = 1.0, C_KARST = 1.0, C_ECUD = 1.0, C_ECUB = 1.0, C_SUBPIT = 1.0, C_SUBPOLY = 1.0;
+    const C_DUNE = 1.0, C_OUTFLOW = 1.0, C_FLUVIAL = 1.0; // rivers calibrated DOWN: default km set for freq ≈4.6 (~2× old 2.3, mirrors the crater rule — flagged-oversized per backlog #3)
     const state = {
       distance: 20.0,       // camera distance in radii (mouse-wheel driven) -> drives lodRamp
       yaw: 0.337,           // orbit yaw   (pointer-drag) — initial ≈ the old fixed CAM_DIR view
@@ -4947,7 +4949,8 @@
       outflowActivity: 1.0, // F13 relict↔active (driven)
       outflowWidth: 0.18,   // F13 trunk band half-width (tuned 2026-06-10: 0.35 read as diffuse mottling, not a trunk)
       outflowDepth: 0.25,   // F13 scour carve depth (tuned 2026-06-10 with the narrower band)
-      outflowFreq: 0.5,     // F13 trunk frequency (tuned 2026-06-10: longer continental arcs)
+      outflowFreq: 0.5,     // legacy hand-set trunk frequency (superseded by real-units derive; longer continental arcs)
+      outflowSizeKm: 12742, // real-units scale: characteristic outflow-trunk spacing in km (6371/0.5; intentionally large continental arcs)
       outflowWarp: 0.15,    // F13 warp displacement (floods run straight)
       outflowIslands: 0.7,  // F13 streamlined-island strength
       outflowGrooveFreq: 24,// F13 longitudinal groove frequency
@@ -4955,7 +4958,8 @@
       outflowEnabled: true, // F13 enable gate
       karstDensity: 0.0,    // F21 master gate (driven)
       karstMaturity: 0.5,   // F21 dissection maturity (driven ∝ erosion)
-      karstDolineFreq: 9.0, // F21 doline Worley-cell frequency
+      karstDolineFreq: 9.0, // legacy hand-set doline Worley-cell frequency (superseded by real-units derive)
+      karstDolineSizeKm: 708, // real-units scale: characteristic doline spacing in km (6371/9.0)
       karstDolineR: 0.28,   // F21 pit radius (F1 units; well under cell size ⇒ discrete pits, not mottling)
       karstDolineDepth: 0.12,// F21 doline carve depth
       karstMazeFreq: 6.0,   // F21 labyrinth slot frequency
@@ -4964,7 +4968,8 @@
       karstEnabled: true,   // F21 enable gate
       duneDensity: 0.0,     // F15 master gate (driven)
       duneAmp: 0.06,        // F15 ridge amplitude (subtle deposit — under fluvialDepth 0.12)
-      duneFreq: 16.0,       // F15 ridge frequency (1/freq pos.y wavelength ≈ 6 buffer px at d4 — super-pixel under pixelScale 3)
+      duneFreq: 16.0,       // legacy hand-set ridge frequency (superseded by real-units derive; 1/freq wavelength ≈ 6 buffer px at d4)
+      duneSizeKm: 398,      // real-units scale: characteristic dune-ridge wavelength in km (6371/16.0)
       duneWarp: 2.0,        // F15 phase-warp amplitude (threading)
       duneBelt: 0.5,        // F15 equatorial-belt confinement
       dunesEnabled: true,   // F15 enable gate
@@ -5106,7 +5111,8 @@
       hexBorderWidth: 0.10, // F44 border band width (lab knob) — v2 walk: slightly wider band reads cleaner at mid distance
       hexDome: 0.55,        // F44 per-cell domed-center amount (lab knob — 0=flat plateau, 1=fully domed Sputnik convex shading) — v2 walk: convex cell centers read without per-cell flicker
       shatterEnabled: false, // DEFAULT-OFF 2026-06-14 (pure-enable exotic, no driver gate → painted non-exotic presets; opt-in toggle). F45 enable gate — off zeroes uShatStrength at the per-frame writer (block tilt + border crevasses + sub-fracture all vanish: byte-identical pre-F45 output)
-      shatScale: 1.6,       // F45 mega-block density (lab knob — voronoi3d frequency). 1.6 = big clear blocks that read; fine packs dissolve under posterize at distance (STARTING guess — walk live per §9)
+      shatScale: 1.6,       // legacy hand-set mega-block density (superseded by real-units derive; 1.6 = big clear blocks that read)
+      shatSizeKm: 3982,     // real-units scale: representative shatter-block width in km (6371/1.6; fuzzy — modeling choice, not rigorous)
       shatBlockJitter: 0.6, // F45 per-block flat-height + CONSTANT-tilt displacement (lab knob — the chaos uChaosRaftJitter analog; THE grad driver) (STARTING guess)
       shatBorderDepth: 1.0, // F45 F2−F1 crevasse carve-down depth (lab knob — grabenProfile amplitude) (STARTING guess)
       shatBorderWidth: 0.10,// F45 F2−F1 border band width (lab knob — smoothstep width feeding grabenProfile) (STARTING guess)
@@ -5135,8 +5141,10 @@
       ecuConcreteColor: [0.34, 0.34, 0.36], // F49 flat steel-concrete day-albedo target (lab knob)
       ecuGlowColor: [0.95, 0.78, 0.45], // F49 warm-sodium whole-surface night glow color (lab knob — slightly warmer than F48 amber)
       ecuGlowIntensity: 1.0, // F49 night-glow brightness (lab knob — emissive-bypass)
-      ecuDistrictScale: 2.4, // F49 low-freq district/coverage frequency (lab knob ≈ machDistrictScale)
-      ecuBlockScale: 8.0,    // F49 high-freq block/canyon frequency (lab knob ≈ machBlockScale; lodRamp-ramped)
+      ecuDistrictScale: 2.4, // legacy hand-set district frequency (superseded by real-units derive)
+      ecuDistrictSizeKm: 2655, // real-units scale: representative ecumenopolis district size in km (6371/2.4; fuzzy — modeling choice)
+      ecuBlockScale: 8.0,    // legacy hand-set block frequency (superseded by real-units derive; lodRamp-ramped)
+      ecuBlockSizeKm: 796,   // real-units scale: representative ecumenopolis block size in km (6371/8.0; fuzzy — modeling choice)
       ecuCanyonDepth: 0.70,  // F49 street-canyon relief depth onto grad (lab knob — verify-tuned 0.45→0.70: day-side canyons read as LIT RELIEF, not subtle albedo mottle; no over-carving/moiré at LOD2; slider range 0..1.2 covers it)
       ecuSeamWidth: 0.07,    // F49 Voronoi-border canyon half-width (lab knob)
       ecuWarpAmt: 0.30,      // F49 domain-warp amount (lab knob — organic block network)
@@ -5267,8 +5275,10 @@
       subStrength: 0.0,          // driven gate (≤0 ⇒ early-out)
       volatileSpecies: 0,        // driven morphology switch (0 none/1 H₂O/2 CO₂/3 CH₄/4 N₂)
       subAmp: 0.10,
-      subPitScale: 8.0,
-      subPolyScale: 4.0,
+      subPitScale: 8.0,     // legacy hand-set pit frequency (superseded by real-units derive)
+      subPitSizeKm: 796,    // real-units scale: characteristic sublimation-pit spacing in km (6371/8.0)
+      subPolyScale: 4.0,    // legacy hand-set polygon frequency (superseded by real-units derive)
+      subPolySizeKm: 1593,  // real-units scale: characteristic sublimation-polygon spacing in km (6371/4.0)
       subFloorFrac: 0.45,
       subPitDensity: 0.7,
       bladeFreq: 18.0,
@@ -5309,6 +5319,7 @@
       riversEnabled: true,
       fluvialActivity: 1.0, fluvialDensity: 0.0, fluvialDepth: 0.12, fluvialMeander: 0.5,
       fluvialWidth: 0.10, fluvialFreq: 2.3, fluvialWarp: 0.4, fluvialLowBias: 0.5,
+      fluvialSizeKm: 1385, // real-units scale: characteristic river-network spacing in km. FLAGGED-OVERSIZED (backlog #3): 1385 ⇒ freq ≈4.6 at RE=1 (~2× old 2.3), mirroring the crater recalibration. Tune live; manual override persists.
       fluvialOffset: [0,0,0],
       outflowOffset: [0,0,0],
       karstOffset: [0,0,0],
@@ -6666,8 +6677,8 @@
     fSub.add(state, 'subStrength', 0, 1, 0.01).name('sublimation gate (driven)').listen();
     fSub.add(state, 'volatileSpecies', { none: 0, 'H₂O hollows': 1, 'CO₂ swiss-cheese': 2, 'CH₄ penitentes': 3, 'N₂ polygons': 4 }).name('species (morphology)').listen();
     fSub.add(state, 'subAmp', 0, 0.3, 0.01).name('relief amp');
-    fSub.add(state, 'subPitScale', 2, 16, 0.5).name('pit freq (CO₂/H₂O)');
-    fSub.add(state, 'subPolyScale', 1, 10, 0.5).name('polygon freq (N₂)');
+    fSub.add(state, 'subPitSizeKm', 400, 3200, 25).name('pit size km (CO₂/H₂O)').onChange(()=>applyDrivers());
+    fSub.add(state, 'subPolySizeKm', 640, 6400, 50).name('polygon size km (N₂)').onChange(()=>applyDrivers());
     fSub.add(state, 'subFloorFrac', 0.1, 0.9, 0.05).name('pit floor frac');
     fSub.add(state, 'subPitDensity', 0, 1, 0.05).name('pit density');
     fSub.add(state, 'bladeFreq', 4, 50, 1).name('blade freq (CH₄)');
@@ -6706,7 +6717,7 @@
     fRivers.add(state, 'fluvialMeander', 0, 1, 0.01).name('meander').listen();
     fRivers.add(state, 'fluvialActivity', 0, 1, 0.01).name('activity (relict↔active)').listen();
     fRivers.add(state, 'fluvialWidth', 0.04, 0.3, 0.01).name('channel width');
-    fRivers.add(state, 'fluvialFreq', 0.5, 8, 0.1).name('network freq');
+    fRivers.add(state, 'fluvialSizeKm', 800, 12700, 50).name('network size (km)').onChange(()=>applyDrivers());
     fRivers.add(state, 'fluvialWarp', 0, 1, 0.02).name('warp amount');
     fRivers.add(state, 'fluvialLowBias', 0, 1, 0.02).name('low-ground bias');
     fRivers.add(state, 'riversEnabled').name('✓ enabled');
@@ -6746,7 +6757,7 @@
     fOutflow.add(state, 'outflowActivity', 0, 1, 0.01).name('activity (relict↔active)').listen();
     fOutflow.add(state, 'outflowWidth', 0.1, 0.9, 0.01).name('trunk width');
     fOutflow.add(state, 'outflowDepth', 0, 0.4, 0.01).name('scour depth');
-    fOutflow.add(state, 'outflowFreq', 0.3, 2, 0.05).name('trunk freq');
+    fOutflow.add(state, 'outflowSizeKm', 3200, 21000, 100).name('trunk size (km)').onChange(()=>applyDrivers());
     fOutflow.add(state, 'outflowWarp', 0, 0.6, 0.02).name('warp amount');
     fOutflow.add(state, 'outflowIslands', 0, 1, 0.02).name('islands');
     fOutflow.add(state, 'outflowGrooveFreq', 6, 60, 1).name('groove freq');
@@ -6760,7 +6771,7 @@
     const fKarst = fGrad.addFolder('Karst (F21)'); fKarst.close();
     fKarst.add(state, 'karstDensity', 0, 1, 0.01).name('density (driven)').listen();
     fKarst.add(state, 'karstMaturity', 0, 1, 0.01).name('maturity (driven)').listen();
-    fKarst.add(state, 'karstDolineFreq', 3, 20, 0.5).name('doline freq');
+    fKarst.add(state, 'karstDolineSizeKm', 320, 2100, 25).name('doline size (km)').onChange(()=>applyDrivers());
     fKarst.add(state, 'karstDolineR', 0.05, 0.6, 0.01).name('doline radius');
     fKarst.add(state, 'karstDolineDepth', 0, 0.3, 0.01).name('doline depth');
     fKarst.add(state, 'karstMazeFreq', 2, 16, 0.5).name('maze freq');
@@ -6775,7 +6786,7 @@
     const fDunes = fGrad.addFolder('Dunes & wind forms (F15)'); fDunes.close();
     fDunes.add(state, 'duneDensity', 0, 1, 0.01).name('density (driven)').listen();
     fDunes.add(state, 'duneAmp', 0, 0.2, 0.005).name('amplitude');
-    fDunes.add(state, 'duneFreq', 4, 60, 1).name('ridge freq');
+    fDunes.add(state, 'duneSizeKm', 106, 1600, 5).name('ridge size (km)').onChange(()=>applyDrivers());
     fDunes.add(state, 'duneWarp', 0, 8, 0.1).name('warp');
     fDunes.add(state, 'duneBelt', 0, 1, 0.01).name('equatorial belt');
     fDunes.add({ roll(){ state.duneOffset = randOffset(); } }, 'roll').name('🎲 randomize');
@@ -7003,7 +7014,7 @@
     // Pure enable gate (no preset, no driver) — rides whatever preset is loaded ('Frozen
     // (airless)' is the §5 test base). NO 🎲 — the shatter domain is seeded off uMacroOffset.
     const fShat = fExoticGroup.addFolder('Shattered crust (F45)'); fShat.close();
-    fShat.add(state, 'shatScale', 0.8, 8, 0.1).name('block density');             // walkable mid-low (default 1.6 sits ~mid)
+    fShat.add(state, 'shatSizeKm', 800, 8000, 50).name('block size (km)').onChange(()=>applyDrivers());   // km-inverted from old 0.8–8 freq (default 3982 = 6371/1.6)
     fShat.add(state, 'shatBlockJitter', 0, 1.2, 0.01).name('block tilt/raise');   // the grad driver (default 0.6 mid)
     fShat.add(state, 'shatBorderDepth', 0, 2.0, 0.01).name('crevasse depth');     // default 1.0 mid
     fShat.add(state, 'shatBorderWidth', 0.04, 0.2, 0.005).name('crevasse width');
@@ -7055,8 +7066,8 @@
     const fEcu = fExoticGroup.addFolder('Ecumenopolis (F49)'); fEcu.close();
     fEcu.add(state, 'ecuCoverage', 0, 1, 0.01).name('coverage (saturation)');  // the uEcuCoverage driver, default HIGH 0.85
     fEcu.add(state, 'ecuGlowIntensity', 0, 2, 0.01).name('night glow');
-    fEcu.add(state, 'ecuDistrictScale', 0.8, 6, 0.1).name('district scale');
-    fEcu.add(state, 'ecuBlockScale', 3, 18, 0.5).name('block scale');
+    fEcu.add(state, 'ecuDistrictSizeKm', 1060, 8000, 50).name('district size (km)').onChange(()=>applyDrivers());
+    fEcu.add(state, 'ecuBlockSizeKm', 350, 2100, 25).name('block size (km)').onChange(()=>applyDrivers());
     fEcu.add(state, 'ecuCanyonDepth', 0, 1.2, 0.01).name('canyon depth');
     fEcu.add(state, 'ecuSeamWidth', 0.01, 0.2, 0.005).name('seam width');
     fEcu.add(state, 'ecuWarpAmt', 0, 0.6, 0.01).name('domain warp');
@@ -7930,7 +7941,7 @@
       uniforms.uOutflowActivity.value   = state.outflowActivity;
       uniforms.uOutflowWidth.value      = state.outflowWidth;
       uniforms.uOutflowDepth.value      = state.outflowDepth;
-      uniforms.uOutflowFreq.value       = state.outflowFreq;
+      uniforms.uOutflowFreq.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.outflowSizeKm, C_OUTFLOW);
       uniforms.uOutflowWarpAmt.value    = state.outflowWarp;
       uniforms.uOutflowIslands.value    = state.outflowIslands;
       uniforms.uOutflowGrooveFreq.value = state.outflowGrooveFreq;
@@ -7939,7 +7950,7 @@
       // F21 karst — karstEnabled gates density→0 (early-out), preserving the slider value.
       uniforms.uKarstDensity.value     = state.karstEnabled ? state.karstDensity : 0.0;   // ✓ enable gate
       uniforms.uKarstMaturity.value    = state.karstMaturity;
-      uniforms.uKarstDolineFreq.value  = state.karstDolineFreq;
+      uniforms.uKarstDolineFreq.value  = featureFrequencyFromKm(state.planetRadiusEarth, state.karstDolineSizeKm, C_KARST);
       uniforms.uKarstDolineR.value     = state.karstDolineR;
       uniforms.uKarstDolineDepth.value = state.karstDolineDepth;
       uniforms.uKarstMazeFreq.value    = state.karstMazeFreq;
@@ -7949,7 +7960,7 @@
       // F15 dunes — dunesEnabled gates density→0 (early-out), preserving the slider value.
       uniforms.uDuneDensity.value = state.dunesEnabled ? state.duneDensity : 0.0;   // ✓ enable gate
       uniforms.uDuneAmp.value     = state.duneAmp;
-      uniforms.uDuneFreq.value    = state.duneFreq;
+      uniforms.uDuneFreq.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.duneSizeKm, C_DUNE);
       uniforms.uDuneWarp.value    = state.duneWarp;
       uniforms.uDuneBelt.value    = state.duneBelt;
       uniforms.uDuneOffset.value.set(state.duneOffset[0], state.duneOffset[1], state.duneOffset[2]);
@@ -8117,7 +8128,7 @@
       // crevasses, sub-fracture ALL key on uShatStrength>0, so ONE gate kills the family:
       // byte-identical pre-F45 output). No driver derivation (no preset). Sole F45 write site.
       uniforms.uShatStrength.value    = state.shatterEnabled ? state.featureRelevant.shatter : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (zeros force-enable on non-member worlds; 1.0 on Frozen — its member world)
-      uniforms.uShatScale.value       = state.shatScale;
+      uniforms.uShatScale.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.shatSizeKm, C_SHAT);
       uniforms.uShatBlockJitter.value = state.shatBlockJitter;
       uniforms.uShatBorderDepth.value = state.shatBorderDepth;
       uniforms.uShatBorderWidth.value = state.shatBorderWidth;
@@ -8147,8 +8158,8 @@
       // crossfade mix(...,0) + ecuC vec3(0) ⇒ byte-identical bare Stage-6 base. Sole F49 write site.
       uniforms.uEcuCoverage.value      = state.ecumenopolisEnabled ? state.ecuCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no planet-city on uninhabitable worlds)
       uniforms.uEcuGlowIntensity.value = state.ecuGlowIntensity;
-      uniforms.uEcuDistrictScale.value = state.ecuDistrictScale;
-      uniforms.uEcuBlockScale.value    = state.ecuBlockScale;
+      uniforms.uEcuDistrictScale.value = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuDistrictSizeKm, C_ECUD);
+      uniforms.uEcuBlockScale.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuBlockSizeKm, C_ECUB);
       uniforms.uEcuCanyonDepth.value   = state.ecuCanyonDepth;
       uniforms.uEcuSeamWidth.value     = state.ecuSeamWidth;
       uniforms.uEcuWarpAmt.value       = state.ecuWarpAmt;
@@ -8281,8 +8292,8 @@
       uniforms.uSubStrength.value        = state.subEnabled ? state.subStrength : 0.0;   // ✓ enable gate
       uniforms.uVolatileSpecies.value    = state.volatileSpecies;
       uniforms.uSubAmp.value             = state.subAmp;
-      uniforms.uSubPitScale.value        = state.subPitScale;
-      uniforms.uSubPolyScale.value       = state.subPolyScale;
+      uniforms.uSubPitScale.value        = featureFrequencyFromKm(state.planetRadiusEarth, state.subPitSizeKm, C_SUBPIT);
+      uniforms.uSubPolyScale.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.subPolySizeKm, C_SUBPOLY);
       uniforms.uSubFloorFrac.value       = state.subFloorFrac;
       uniforms.uSubPitDensity.value      = state.subPitDensity;
       uniforms.uBladeFreq.value          = state.bladeFreq;
@@ -8317,7 +8328,7 @@
       uniforms.uFluvialDepth.value    = state.fluvialDepth;
       uniforms.uFluvialMeander.value  = state.fluvialMeander;
       uniforms.uFluvialWidth.value    = state.fluvialWidth;
-      uniforms.uFluvialFreq.value     = state.fluvialFreq;
+      uniforms.uFluvialFreq.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.fluvialSizeKm, C_FLUVIAL);
       uniforms.uFluvialWarpAmt.value  = state.fluvialWarp;
       uniforms.uFluvialLowBias.value  = state.fluvialLowBias;
       uniforms.uFluvialOffset.value.set(state.fluvialOffset[0], state.fluvialOffset[1], state.fluvialOffset[2]);
