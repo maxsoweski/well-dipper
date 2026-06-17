@@ -25,11 +25,21 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > converts to unit-sphere uniforms). Scope/design/contract in
 > `docs/WORKSTREAMS/planet-scale-normalization-2026-06-15/` (intent + design + 10-AC contract).
 > **Phase A done** (`a329891`: conversion helpers + `radiusRangesEarth`→`ScaleConstants` extraction,
-> oracle 13/13, gen-guard 85/85). **Crater slice done + Max-approved** (`c32374d`: `uCraterScale =
-> radiusEarth*6371/craterSizeKm`, verified live exact). **Next: fan the proven pattern across all
-> footprint features + relief-km + animation-rate + gravity + seeded size-source/reroll + km GUI,
-> then verify-workstream.** All commits LOCAL/unpushed. Handoff:
+> oracle 13/13, gen-guard 85/85). **Crater slice done + Max-approved** (`c32374d`). **DONE + VERIFIED 2026-06-17 →
+> `VERIFIED_PENDING_MAX aafa94c` (runtime `dc04806`).** Footprint fan-out + AC3 relief (physically-
+> plausible heights × gravity factor, M2) + AC4 animation-rate + AC5 seeded size-source (named-body
+> locks vs archetype draws, M3) + self-resetting-slider fix + AC7 km readout all landed.
+> `verify-workstream` ran: AC6/8/9 PASS (3/3 adversarial); AC2/3/5/7 PASS live on :9223 (evidence in
+> `scale-gallery.html`); AC1 calibration test added + AC1 reworded to the AC8 architecture; AC5
+> headless-oracle logged as test-debt. **Max UAT (AC10) is the only open gate** — focus item: AC4
+> small-world lava breathes *faster* (rate ∝ 1/RE; Lava archetype drew RE 0.75) → eyeball whether the
+> base rate needs an absolute floor. All commits LOCAL/unpushed. Handoff:
 > `/tmp/handoff-planet-scale-normalization-crater-slice-2026-06-16.md`.
+> **▶ Rivers (Theme-A #3) sphere-seam viability spike: VIABLE (`e2f3bb5`, 2026-06-17).** Seam-free
+> dendritic drainage proven on an **irregular spherical Delaunay mesh** (regular icosphere grid-locks
+> channels straight); G1 (routing) + G2 (dendritic look) both Max-eye-approved; conform-only suffices
+> (carve deferred). Full rivers feature (`h(pos)` coupling + texture-bake + shader carve) `dev-collab-
+> scope` queued. Plan/verdict: `docs/FEATURES/rivers-sphere-spike-plan-2026-06-17.md`.
 
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
