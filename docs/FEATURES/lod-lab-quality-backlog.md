@@ -97,6 +97,16 @@ airless (gate/driver bug — declared-on but not painting), #6 vegetation-from-s
   Delaunay mesh** (a regular icosphere grid-locks channels into straight lines). Full plan + verdict:
   `rivers-sphere-spike-plan-2026-06-17.md`. **Next: `dev-collab-scope` the full feature** (production
   `h(pos)` coupling + texture-bake + shader sample/carve path) as a new workstream.
+- **#2 scale normalization — SHIPPED (2026-06-17).** Theme-B `planet-scale-normalization` workstream
+  complete + Max-UAT-passed + pushed: real-units footprints, AC3 relief (physically-plausible × gravity),
+  AC4 animation-rate, AC5 seeded size-source (named-body locks vs archetype draws) + slider-fix, AC7 km
+  readout. (`#15 pixelScale-mush` still parked.)
+- **#10 lava — ESCALATED to the NEXT Theme-A re-think (2026-06-17, Max).** Like rivers (#3), the
+  cell-based lava rendering needs a *method* re-think, not a parameter tweak. Max's framing: the
+  breathing RATE is NOT the priority — the basic restructuring of the rendering method is. (The AC4
+  radius-relative rate lever from the scale workstream may help AFTER the restructuring; the
+  absolute-rate-floor adjustment is parked until then.) Next when picked up: a rivers-style research →
+  isolated-lab viability spike.
 
 ## Status
 Parked, untriaged (except **#3 rivers**, now active — see above). Next session opens with the
