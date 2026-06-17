@@ -1,0 +1,84 @@
+# Rivers sphere-seam viability spike — plan & criteria (2026-06-17)
+
+> Companion to `rivers-dendritic-drainage-research-2026-06-16.md` (the research). This is the
+> **viability spike** plan, approved by Max 2026-06-17. Theme-A item #3 in the LOD-lab quality
+> backlog. Lab-renderer R&D only; game-port deferred (see `planet-lod-CHARTER.md`).
+
+## Goal
+Answer, **fast and early**, whether realistic dendritic drainage is viable for Well Dipper before
+committing to the full feature. Two unknowns gate it:
+1. **Seam-free routing on a sphere** — the real unsolved engineering bit (research open-problem #1).
+2. **Coupling to our existing terrain** — does conforming the network to our analytic height field
+   produce acceptable dendritic structure (vs. today's worm-trails)?
+
+## Approved design decisions
+- **Algorithm — HYBRID** (Max, 2026-06-17): use Génevaux Approach A's **branching grammar**
+  (Horton-Strahler production rules → the dendritic tree *look*), but couple growth to the
+  **existing height field `h(pos)` as the downhill constraint** and **carve channels locally** into
+  `h` rather than synthesizing the macro terrain. Existing terrain is preserved and *feeds* the
+  rivers; it is not rebuilt. (Rejected: pure conform-only — risks worm-trails; pure hydrology-first
+  Génevaux — rivers would dictate/override the existing terrain = rebuild risk.)
+- **Domain — icosphere / geodesic grid.** Single closed mesh ⇒ no seams by construction, near-uniform
+  cells, no pole singularity. Routing on it *is* the seam test. Routing domain only; the bake-storage
+  layout (cubemap vs octahedral) is a later, separate concern.
+- **Architecture note (not rebuilt):** today the planet is a `SphereGeometry` mesh + one
+  `ShaderMaterial` computing every feature analytically from `pos`; water bodies (F14) are a level-set
+  `h(pos) < uSeaLevel` on the single accumulated height. Rivers committing to the bake path means one
+  analytic feature becomes a sampled-texture+carve — additive, not a rebuild. The game already has a
+  bake pipeline. (Confirmed by reading `planet-lod-lab.html` / `-core.js`.)
+
+## Scope honesty — what the spike proves vs. defers
+- Uses a **JS stand-in height field** of the same *character* as our terrain (FBM on the sphere + a
+  few large features + a sea level, tuned to ~30–40% ocean), **not** the literal production `h(pos)`.
+  Viability ("can icosphere routing make sea-rooted dendritic trees, seam-free?") is answerable with a
+  representative field. Tune the stand-in's roughness/sea-fraction to resemble ours so the look-read
+  is honest.
+- **Deferred to integration (named risk):** coupling to the *exact* production `h(pos)` via JS-port or
+  render-to-texture. First scoping item *if* the spike passes; does not change the viability answer.
+
+## Build stages (cheap, riskiest first) — isolated `rivers-lab.html` harness
+- **S0** — icosphere mesh (deduplicated vertex graph w/ adjacency) + stand-in height field + sea level.
+- **S1** — lowest-neighbour flow routing + drainage-area accumulation. Ocean cells (`h < seaLevel`)
+  are absorbing outlets; interior local minima handled as lakes (priority-flood fill-or-route).
+  **← G1 fires here.**
+- **S2** — Horton-Strahler shaping: extract the tree, width ∝ √(area), acute confluences → dendritic
+  *look*. **← G2 fires here.**
+- **S3** *(conditional)* — light incision/carve pass, only if S2 conform-only looks weak; compare to S2.
+
+**Viewing:** render icosphere with river cells highlighted; screenshot from **≥4 viewpoints incl.
+both poles**, surfaced through a gallery (one URL for Max). Spin-check for banding at the 12
+icosphere pentagon vertices.
+
+## Success / Failure criteria (the early go/no-go)
+
+### G1 — Seam-free routing  *(after S1 — engineering gate)*
+- **PASS:** (a) 100% of channel cells have a downhill path to a sink — zero orphans, zero uphill runs;
+  (b) no seam/banding/dead-zone artifact at the 12 pentagon vertices or either pole across ≥4
+  viewpoints; (c) accumulation field continuous across those 12 vertices (no spike/hole).
+- **FAIL:** visible seams, orphaned channels, or channels that can't reach outlets → icosphere is the
+  wrong substrate → escalate to Max, **viability ↓**.
+
+### G2 — Dendritic look  *(after S2 — coupling gate)*
+- **PASS:** reads as tree-like — straightish reaches branching at acute angles into trunks that
+  **widen monotonically toward the sea**; Horton-Strahler order ≥3 emerges naturally; visibly distinct
+  from today's worm-trails. (Objective proxies + Max's eye.)
+- **FAIL:** worm-trails / disconnected segments / no trunk-tributary hierarchy even after the grammar pass.
+
+### G3 — Conform vs. carve  *(compare S2 vs S3 — informs scope, not a blocker)*
+- Output: recommendation on whether the full feature needs the carve/erosion pass (more compute, more
+  terrain modification) or conform-only suffices.
+
+### Overall verdict
+VIABLE if **G1 PASS and G2 PASS** (carve optional per G3). NOT VIABLE if G1 fails, or G2 fails even
+with carve → rivers stay stylized fakes, reset expectations (per research recommendation).
+
+### Kill condition (time-box)
+If G1 can't be made to pass within **3 implement→test cycles**, stop and escalate rather than
+death-spiral (standing 3-cycle cap).
+
+## Execution
+Built via gated subagents (keeps main-session context low): one builder+verifier subagent per round,
+Max inspects G1 before S2, judges G2. Standing cautions: new file only (don't touch
+`planet-lod-lab.html` / `-core.js` / `LabMode.js`); test on `:9223` GPU Chrome via chrome-devtools at
+`127.0.0.1` (server already running — don't start it); screenshots to disk → gallery, never read into
+context.
