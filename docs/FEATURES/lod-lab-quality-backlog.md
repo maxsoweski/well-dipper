@@ -77,6 +77,21 @@ airless (gate/driver bug — declared-on but not painting), #6 vegetation-from-s
 #9 terrestrial clouds (variety/dynamics), #13 gas-giant close-up clouds (LOD detail), #14 rings
 (composition/lighting maturity — extends the F51 rings v2 work).
 
+## Parked observations (added 2026-06-16, during the Theme-B scale pass)
+- **#15 — pixelScale × many-small-features-on-large-planets reads as visual mush.** Once footprint
+  scaling is live, a large planet (high RE) packs many small features into the disk; under the lab's
+  default `pixelScale` (super-pixel downsample, e.g. 3) + posterize, the fine detail aliases into a
+  messy wash. Max flagged this while reviewing the scale gallery and chose to **park it** (may be an
+  unavoidable tension between the retro pixel aesthetic and dense detail; revisit after rivers).
+  Symptom is a render/pixelScale interaction, not the scale math itself.
+- **#3 rivers — ESCALATED to active work (2026-06-16).** Scale recalibration (footprint freq 2.3→4.6)
+  made rivers smaller but NOT river-shaped: Max — "rivers run in straight sections and then branch off
+  almost like trees when they meet larger bodies of water; these just don't look like rivers." Root
+  cause confirmed in-code: F11 `drainageField()` defines channels as the near-zero band of a
+  domain-warped FBM field (no flow direction, no downhill coupling, no accumulation) → meandering
+  bands, not a dendritic drainage tree. This is the **Theme-A** primitive problem. → researching
+  planetary dendritic-drainage generation that's shader-compatible (research deliverable 2026-06-16).
+
 ## Status
-Parked, untriaged. Next session opens with the **order-of-attack** decision (roots-first vs
-worst-offender-first), then scopes the chosen item(s). No work started.
+Parked, untriaged (except **#3 rivers**, now active — see above). Next session opens with the
+**order-of-attack** decision for the rest (roots-first vs worst-offender-first).
