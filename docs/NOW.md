@@ -4,6 +4,11 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
+> (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation
+> primitive) → #3 rivers** · contract: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`.
+> *(One-line breadcrumb so the nesting is reflexive across handoffs; update when the active feature changes.)*
+
 > **🧭 Working the planet-LOD lab? READ `docs/FEATURES/planet-lod-CHARTER.md` FIRST** — it's
 > the durable strategic frame (lab≠game by design, the program arc, the canonical model
 > location). It exists because fresh sessions keep losing that wider context. Then NOW.md
@@ -38,8 +43,14 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **▶ Rivers (Theme-A #3) sphere-seam viability spike: VIABLE (`e2f3bb5`, 2026-06-17).** Seam-free
 > dendritic drainage proven on an **irregular spherical Delaunay mesh** (regular icosphere grid-locks
 > channels straight); G1 (routing) + G2 (dendritic look) both Max-eye-approved; conform-only suffices
-> (carve deferred). Full rivers feature (`h(pos)` coupling + texture-bake + shader carve) `dev-collab-
-> scope` queued. Plan/verdict: `docs/FEATURES/rivers-sphere-spike-plan-2026-06-17.md`.
+> (carve deferred). Plan/verdict: `docs/FEATURES/rivers-sphere-spike-plan-2026-06-17.md`.
+> **▶ Rivers full feature SCOPED + Max-GREENLIT (2026-06-17, scope commit `e9ea4b5`).** A 2nd
+> (terrain-coupling) spike passed (C1–C4, C3 Max-eye-approved; `rivers-terrain-lab.html` untracked).
+> ⭐ **Render method = ribbon-geometry OVERLAY, NOT texture-bake** (the research/older-plan bake-path
+> framing is STALE — superseded). 8-AC contract in
+> `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/` (intent + contract; AC1 shared-height-GLSL
+> module, AC3 sea-level-from-histogram = the two coupling-spike findings). Active workstream flipped to
+> rivers. **NEXT = BUILD** per contract; handoff `/tmp/handoff-rivers-build-2026-06-17.md`.
 
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
