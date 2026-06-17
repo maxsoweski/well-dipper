@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rivers Spike — Gate G1 gallery</title>
+  <style>
+    body { margin:0; background:#0b0d12; color:#cdd6e0; font-family:ui-sans-serif,system-ui,sans-serif; padding:24px; }
+    h1 { font-size:20px; margin:0 0 4px; }
+    h2 { font-size:16px; margin:28px 0 6px; color:#e6edf5; }
+    .sub { color:#8a94a3; font-size:13px; margin:0 0 16px; }
+    .verdict { background:#10331a; border:1px solid #2e7d46; color:#a6f0bf; padding:10px 14px; border-radius:8px; font-size:14px; margin-bottom:8px; }
+    .verdict b { color:#dffce8; }
+    .metrics { background:#13161d; border:1px solid #232833; border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:18px; }
+    .metrics table { border-collapse:collapse; width:100%; }
+    .metrics td { padding:3px 10px 3px 0; }
+    .metrics td.h { color:#8a94a3; }
+    .metrics .good { color:#a6f0bf; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:20px; }
+    figure { margin:0; background:#13161d; border:1px solid #232833; border-radius:10px; overflow:hidden; }
+    figure img { width:100%; display:block; background:#000; }
+    figcaption { padding:10px 12px; font-size:13px; color:#aeb8c6; }
+    figcaption b { color:#e6edf5; }
+    code { color:#9fd; }
+    .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:5px; margin-left:6px; vertical-align:middle; }
+    .tag.before { background:#3a2326; color:#f3b6b6; border:1px solid #6b3036; }
+    .tag.after  { background:#10331a; color:#a6f0bf; border:1px solid #2e7d46; }
+  </style>
+</head>
+<body>
+  <h1>Rivers viability spike — Gate G2 (S2 shaping) + G3 (carve decision)</h1>
+  <p class="sub">Drainage routing on a sphere, shaped into a dendritic network. Harness: <code>rivers-lab.html</code>. ~40k verts · 35% ocean · FBM seed 1337.</p>
+
+  <!-- ───────────── Round 4: S2 Horton-Strahler shaping (G2) ───────────── -->
+  <div class="verdict">
+    <b>G2 verdict (for Max's eye): reads as real dendritic rivers.</b>
+    The routed skeleton is now shaped into a branching tree: Horton-Strahler order over the full flow forest,
+    variable-width ribbons from the Dunne–Leopold law <code>φ = 0.42·A^0.69</code> (trunks widen monotonically to the sea),
+    Chaikin-smoothed polylines (zig-zags absorbed, wobble kept), coloured by stream order (tributaries cool → trunks bright).
+    Distinct from the prior uniform worm-trail lines.
+  </div>
+  <div class="metrics">
+    <table>
+      <tr><td class="h">G2 objective proxy</td><td class="h">value</td><td class="h">target</td></tr>
+      <tr><td>max Horton-Strahler order</td><td class="good">6</td><td>≥ 3</td></tr>
+      <tr><td>order distribution (cells)</td><td>1:17430 · 2:5422 · 3:2157 · 4:667 · 5:314 · 6:10</td><td>geometric decay</td></tr>
+      <tr><td>stream counts N<sub>w</sub></td><td>1:7242 · 2:1454 · 3:359 · 4:76 · 5:17 · 6:1</td><td>geometric decay</td></tr>
+      <tr><td>bifurcation ratio R<sub>b</sub> (Horton regression)</td><td class="good">5.45</td><td>~3–5</td></tr>
+      <tr><td>R<sub>b</sub> (consecutive-ratio mean, top order excluded)</td><td class="good">4.56</td><td>~3–5</td></tr>
+      <tr><td>width monotonic toward sea (rendered edges)</td><td class="good">0 / 27,972 violations</td><td>0</td></tr>
+      <tr><td>orphans / uphill</td><td class="good">0% / 0%</td><td>0</td></tr>
+    </table>
+    <p class="sub" style="margin:8px 0 0;">R<sub>b</sub> regression slope = 5.45; the simple consecutive-ratio mean is 4.56 once the highest order (always 1 stream → tiny-sample 17:1 ratio) is excluded. Both sit in the realistic natural-network band.</p>
+  </div>
+  <div class="verdict" style="background:#1a2533;border-color:#2e5a7d;color:#bcdcf5;">
+    <b>G3 recommendation: conform-only suffices — the carve pass is NOT needed for viability.</b>
+    The dendritic read comes from topology (routing) + the width law + smoothing, not from geometric incision.
+    A light order-scaled carve (depress centerline ∝ order, valley-shadow tint) was implemented and is togglable
+    (<code>window._rivers.setCarve(true)</code>); on the flat stand-in terrain it adds only a marginal shadow.
+    Defer carve to the integration phase as a polish lever once real terrain normals exist.
+  </div>
+
+  <h2>Round 4 — S2 shaping <span class="tag after">dendritic trees, width ∝ area</span></h2>
+  <p class="sub">Four viewpoints incl. both poles + a major-basin close-up. Trunk→tributary hierarchy is visibly clear; trunks widen toward ocean outlets.</p>
+  <div class="grid">
+    <figure><img src="screenshots/rivers-spike-g2-basin-closeup.png" alt="basin closeup">
+      <figcaption><b>Major basin (close-up)</b> — wide bright trunks taper upstream into thin dark-blue tributaries branching at acute angles. Classic dendritic drainage; width grows monotonically to the sea.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g2-front.png" alt="front">
+      <figcaption><b>Front (+Z)</b> — bright trunks reach the ocean bays; cooler tributaries feed them.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g2-back.png" alt="back">
+      <figcaption><b>Back (−Z)</b> — alternate hemisphere, consistent hierarchy.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g2-side.png" alt="side">
+      <figcaption><b>Side (+X)</b> — mid-latitude continuity, no grid alignment.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g2-npole.png" alt="north pole">
+      <figcaption><b>North pole</b> — rivers drain cleanly into the polar ocean cap; no pole pinch, spoke, or seam.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g2-spole.png" alt="south pole">
+      <figcaption><b>South pole</b> — dense dendritic network continuous across the pole.</figcaption></figure>
+  </div>
+
+  <h2>G3 — conform vs. carve <span class="tag after">conform-only suffices</span></h2>
+  <p class="sub">Same basin, same camera. Carve dips trunk centerlines inward (∝ order) + adds a valley-shadow tint. On the flat stand-in the difference is marginal — the look is carried by width + topology, not incision.</p>
+  <div class="grid">
+    <figure><img src="screenshots/rivers-spike-g2-basin-conform.png" alt="conform">
+      <figcaption><b>Conform-only</b> (default) — rivers sit on the surface. Already reads as proper dendritic drainage.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g2-basin-carve.png" alt="carve">
+      <figcaption><b>Light carve</b> (<code>CARVE_DEPTH 0.006</code>) — subtly darker/incised. Polish, not load-bearing for viability.</figcaption></figure>
+  </div>
+
+  <hr style="border:0;border-top:1px solid #232833;margin:32px 0 8px;">
+  <h2 style="color:#8a94a3;">Prior rounds — G1 routing (kept below)</h2>
+  <h1 style="font-size:16px;color:#8a94a3;margin-top:16px;">Rivers viability spike — Gate G1 / G1b / G1c (S0 + S1)</h1>
+  <p class="sub">Drainage routing (priority-flood + accumulation) on a sphere. ~40k verts · 35% ocean · FBM seed 1337.</p>
+
+  <!-- ───────────── Round 3: irregular mesh ───────────── -->
+  <div class="verdict">
+    <b>G1c verdict: PASS — irregular mesh kills residual grid-lock.</b>
+    Round 2 jittered icosphere <i>positions</i> but kept its regular adjacency (~6 fixed edge-direction families) → ~2% of runs still snapped perfectly straight.
+    Round 3 replaces the mesh entirely: <b>Fibonacci sphere → 4× Lloyd relaxation (blue-noise) → 3D convex hull = spherical Delaunay adjacency</b> (watertight, no seam/pole by construction) + D-infinity-style steepest-descent routing. Barnes-2014 flat-resolution retained.
+  </div>
+  <div class="verdict" style="background:#1a2533;border-color:#2e5a7d;color:#bcdcf5;">
+    <b>Seam-free (G1) holds on the new mesh:</b> orphans <b>0%</b>, uphill <b>0%</b>, self-loops <b>0</b> over 26,000 land verts.
+    Valence distribution is textbook Delaunay: <b>median 6, range 5–7, 96.4% are 6</b> — no clustering/holes at either pole or anywhere. Faces = 2N−4 exactly (watertight). Seam-free across 6 viewpoints incl. both poles.
+  </div>
+
+  <div class="metrics">
+    <table>
+      <tr><td class="h">straightness metric</td><td class="h">Round 2 (jittered icosphere)</td><td class="h">Round 3 (irregular mesh)</td></tr>
+      <tr><td><b>river-scale</b> near-collinear &lt;2° (chord ≈ 3–6 verts)</td><td>—</td><td class="good">0% / 0%</td></tr>
+      <tr><td><b>river-scale</b> median turn angle</td><td>~32° (per-edge)</td><td class="good">23.6° / 23.7°</td></tr>
+      <tr><td>per-edge near-collinear &lt;2° (micro, fine-mesh artifact)</td><td>2.2%</td><td>53.6%*</td></tr>
+      <tr><td>orphans / uphill</td><td class="good">0% / 0%</td><td class="good">0% / 0%</td></tr>
+    </table>
+    <p class="sub" style="margin:8px 0 0;">*The per-edge (micro) number is a measurement-scale artifact: at ~0.02 vertex spacing on a smooth slope, adjacent edges are nearly collinear by definition even when the river visibly meanders. The honest "are there perfectly-straight runs?" measure is at river scale (sample direction every 3–6 vertices) → <b>0% perfectly-straight, natural ~24° wobble</b>. Round 2's 32° was a per-edge number inflated by the 0.30× position jitter scrambling edge directions; the meander is comparable.</p>
+  </div>
+
+  <h2>Round 3 — irregular mesh <span class="tag after">grid-lock eliminated</span></h2>
+  <p class="sub">Fibonacci + Lloyd + spherical-Delaunay. Channels meander and branch at every scale; no mesh-edge-aligned straight lines remain.</p>
+  <div class="grid">
+    <figure><img src="screenshots/rivers-spike-g1c-npole.png" alt="irregular north pole">
+      <figcaption><b>North pole</b> — meandering channels across the pole; no clustering, hole, or radial spoke.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1c-spole.png" alt="irregular south pole">
+      <figcaption><b>South pole</b> — dense dendritic skeleton, tributaries joining trunks at acute angles; continuous across the pole.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1c-eqA.png" alt="irregular equator A">
+      <figcaption><b>Equator (+X)</b> — wobbly-straight reaches bending toward coastlines; no grid alignment.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1c-eqB.png" alt="irregular equator B">
+      <figcaption><b>Equator (+Z)</b> — alternate hemisphere.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1c-eqC.png" alt="irregular oblique">
+      <figcaption><b>Oblique (−X+Y−Z)</b> — fourth+ viewpoint, mid-latitude continuity.</figcaption></figure>
+  </div>
+
+  <hr style="border:0;border-top:1px solid #232833;margin:32px 0 8px;">
+  <h2 style="color:#8a94a3;">Prior rounds — icosphere (kept for comparison)</h2>
+  <div class="verdict" style="margin-top:8px;">
+    <b>G1 verdict: PASS (seam-free).</b> orphans <b>0%</b>, uphill <b>0%</b>, self-loops <b>0</b> over 26,626 land verts.
+    No seam / banding / pole dead-zone across 5 viewpoints incl. both poles. Valence: exactly <b>12×5 + 40950×6</b> (watertight icosphere preserved).
+  </div>
+  <div class="verdict" style="background:#1a2533;border-color:#2e5a7d;color:#bcdcf5;">
+    <b>G1b (straightness) FIX applied.</b> Cause = priority-flood <b>flats</b> (65.8% of straight runs) + mesh <b>grid-lock</b> (34.2%).
+    Fix: Barnes-2014 flat-resolution gradient + tangential vertex jitter (0.30× edge len, seeded). Channels now read wobbly-straight, not perfectly straight.
+  </div>
+
+  <div class="metrics">
+    <table>
+      <tr><td class="h">straightness metric</td><td class="h">BEFORE (Round 1)</td><td class="h">AFTER (G1b)</td></tr>
+      <tr><td>median flow-edge turning angle</td><td>1.06°</td><td class="good">32.1°</td></tr>
+      <tr><td>fraction of edge-pairs &lt;2° (near-collinear)</td><td>65.3%</td><td class="good">2.2%</td></tr>
+      <tr><td>fraction of channel length in straight (&lt;5°) runs</td><td>34.5%</td><td class="good">3.8%</td></tr>
+      <tr><td>pentagon accum ratio (max — continuity)</td><td>1983</td><td class="good">39.3</td></tr>
+      <tr><td>orphans / uphill</td><td class="good">0% / 0%</td><td class="good">0% / 0%</td></tr>
+    </table>
+  </div>
+
+  <h2>AFTER — G1b fix <span class="tag after">flats resolved + de-quantized</span></h2>
+  <p class="sub">Wobbly-straight reaches that bend and branch toward the sea — natural drainage skeleton, ready for S2 shaping.</p>
+  <div class="grid">
+    <figure><img src="screenshots/rivers-spike-g1b-oblique.png" alt="after oblique">
+      <figcaption><b>Oblique</b> — dendritic tributaries feeding trunks; reaches are straightish but no longer mathematically straight.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1b-northpole.png" alt="after north pole">
+      <figcaption><b>North pole</b> — meandering channels, no pole pinch, no radial spokes.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1b-southpole.png" alt="after south pole">
+      <figcaption><b>South pole</b> — continuous channels across the pole; no dead-zone or banding ring.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1b-equatorX.png" alt="after equator X">
+      <figcaption><b>Equator (+X)</b> — mid-latitude continuity.</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1b-equatorZ.png" alt="after equator Z">
+      <figcaption><b>Equator (+Z)</b> — alternate hemisphere.</figcaption></figure>
+  </div>
+
+  <h2>BEFORE — Round 1 <span class="tag before">perfectly straight</span></h2>
+  <p class="sub">Same routing without flat-resolution or jitter — channels snap to mesh edge directions and shoot straight across filled basins.</p>
+  <div class="grid">
+    <figure><img src="screenshots/rivers-spike-g1-oblique.png" alt="before oblique">
+      <figcaption><b>Oblique</b> — note the perfectly straight runs (Max's flag).</figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1-northpole.png" alt="before north pole">
+      <figcaption><b>North pole</b></figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1-southpole.png" alt="before south pole">
+      <figcaption><b>South pole</b></figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1-equatorX.png" alt="before equator X">
+      <figcaption><b>Equator (+X)</b></figcaption></figure>
+    <figure><img src="screenshots/rivers-spike-g1-equatorZ.png" alt="before equator Z">
+      <figcaption><b>Equator (+Z)</b></figcaption></figure>
+  </div>
+</body>
+</html>

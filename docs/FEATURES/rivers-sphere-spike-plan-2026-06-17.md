@@ -82,3 +82,27 @@ Max inspects G1 before S2, judges G2. Standing cautions: new file only (don't to
 `planet-lod-lab.html` / `-core.js` / `LabMode.js`); test on `:9223` GPU Chrome via chrome-devtools at
 `127.0.0.1` (server already running — don't start it); screenshots to disk → gallery, never read into
 context.
+
+## Outcome — VIABLE (2026-06-17, all gates passed; G1/G2 confirmed by Max's eye)
+- **G1 (seam-free routing) — PASS.** Required an *irregular* substrate. The regular icosphere caused
+  grid-locked perfectly-straight channels (cause split measured: ~66% priority-flood flats, ~34% mesh
+  edge-direction snap). Fixed by rebuilding the mesh as **Fibonacci → 4× Lloyd → convex-hull spherical
+  Delaunay** (~40k pts, watertight) + **Barnes-2014 flat-resolution** + **D-infinity-style routing**.
+  Result: 0% orphan/uphill, seam-free at both poles, natural wobbly-straight reaches (river-scale
+  median turn ~24°).
+- **G2 (dendritic look) — PASS.** Horton-Strahler shaping: max order **6**, bifurcation ratio R_b
+  **4.6–5.5** (natural band), width ∝ Dunne–Leopold `φ=0.42·A^0.69` grows monotonically to sea
+  (**0 / 27,972** violations), Chaikin-smoothed, pruned to order ≥2. Reads as trunks widening to bays
+  + acute-angle tributaries; distinct from prior worm-trails.
+- **G3 (conform vs carve) — conform-only suffices.** Dendritic read is carried by routing topology +
+  width law + smoothing; carve adds only a marginal valley shadow on the flat stand-in. Carve left as
+  a togglable pass (`window._rivers.setCarve(true)`), **deferred to integration as polish**. Full
+  feature is lighter than the research's worst case.
+- **⭐ Load-bearing finding for the full-feature scope:** seam-free drainage REQUIRES irregular
+  adjacency (Delaunay) — a regular grid grid-locks channels into straight lines. This was the single
+  biggest surprise of the spike.
+- **Deferred to the full-feature workstream (`dev-collab-scope` next):** couple to production `h(pos)`
+  (JS-port or render-to-texture); bake-texture layout (flow-dir + drainage-area + signed-distance);
+  shader sample+carve path; shoreline width-clamp polish (trunks slightly blobby at the sea).
+- **Artifacts:** `rivers-lab.html` (harness — committed), `rivers-spike-gallery.html`,
+  `screenshots/rivers-spike-*.png` (untracked, per the artifact convention).

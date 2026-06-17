@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rivers Lab — S0/S1 drainage spike</title>
+  <!--
+    Rivers viability spike — Round 1 (S0 + S1 + Gate G1).
+    Served via the project Vite dev server (bare `three` import, like planet-lod-lab.html).
+    Isolated R&D harness. Stand-in height field — NOT production h(pos). See
+    docs/FEATURES/rivers-sphere-spike-plan-2026-06-17.md.
+  -->
+  <style>
+    html,body { margin:0; height:100%; background:#05060a; overflow:hidden; font-family:ui-monospace,monospace; }
+    #canvas { display:block; width:100vw; height:100vh; }
+    #hud { position:fixed; top:8px; left:8px; color:#9fd; font-size:12px; line-height:1.5;
+           background:rgba(0,0,0,.55); padding:8px 10px; border-radius:6px; white-space:pre; pointer-events:none; }
+    /* Vite dev-server spuriously re-fetches this .html as a module → 500 → cosmetic
+       error overlay that covers the canvas. The lab itself runs fine (all addons load
+       200, window._rivers populates). Hide the overlay so the render is visible. */
+    vite-error-overlay { display:none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { ConvexHull } from 'three/addons/math/ConvexHull.js';
+
+    // ───────────────────────── Params ─────────────────────────
+    // Round 3: TRULY IRREGULAR mesh. Replace the regular icosphere adjacency (which
+    // left ~6 fixed edge-direction families to snap to → residual perfectly-straight
+    // runs) with a Fibonacci-sphere point set, Lloyd-relaxed to blue-noise, then
+    // triangulated by 3D convex hull == spherical Delaunay (watertight, no seam/pole).
+    const TARGET_N     = 40000;  // ~comparable to old ~40,962-vert icosphere
+    const LLOYD_ITERS  = 4;      // Lloyd relaxation passes (blue-noise the point set)
+    const FBM_SEED     = 1337;
+    const SEA_TARGET   = 0.35;   // ~30-40% ocean target
+    const CHANNEL_FRAC = 0.06;   // (legacy, kept for HUD compare) top fraction of land verts by accumulation
+    // S2 shaping params
+    const CHANNEL_ORDER= 2;      // a cell is part of the river NETWORK if its Strahler order ≥ this
+    const MIN_ORDER    = 2;      // prune: only RENDER channel cells with Strahler order ≥ this (trunks+tributaries, not every thread)
+    const WIDTH_PHI    = 0.42;   // Dunne–Leopold width law φ=0.42·A^0.69 (research)
+    const WIDTH_EXP    = 0.69;
+    const WIDTH_SCALE  = 0.00055;// maps φ(A) → world ribbon half-width on the unit sphere
+    const WIDTH_MIN    = 0.0009; // floor half-width so order-2 tributaries stay visible
+    const WIDTH_MAX    = 0.018;  // cap so the trunk near the sea doesn't balloon
+    const CHAIKIN_ITERS= 3;      // polyline smoothing passes (absorbs residual right-angle zig-zags)
+    // S3 (conditional) light incision/carve — depress channel centerline radially inward by
+    // an order-scaled amount so trunks read as cut valleys. Default OFF (conform-only).
+    // Toggle live in console: window._rivers.setCarve(true) then it rebuilds the ribbon.
+    const CARVE_DEFAULT= false;
+    const CARVE_DEPTH  = 0.006;  // max inward depression (unit-sphere radius) for the deepest trunk
+    const FLAT_RESOLVE = true;   // Barnes-2014 flat routing — impose gradient across filled flats (still needed)
+    const DINF_ROUTE   = true;   // D-infinity-style de-snap: bias receiver pick toward true steepest descent
+
+    // ───────────────────── Renderer / scene ───────────────────
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x05060a);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.001, 100);
+    camera.position.set(0, 0, 3.2);
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6); dir.position.set(1,1,1); scene.add(dir);
+
+    // ───────── S0a: irregular sphere mesh (Fibonacci + Lloyd + spherical Delaunay) ─────────
+    // Why: a regular icosphere gives every vertex ~6 neighbours pointing along a few
+    // fixed edge-direction families. On long uniform slopes lowest-neighbour routing
+    // keeps snapping to one family → perfectly-straight runs that vertex-jitter can't
+    // remove (adjacency is unchanged). Here we build a genuinely irregular graph:
+    //   1. Fibonacci sphere = even, isotropic, clustering-free initial point set.
+    //   2. Lloyd relaxation (move each point toward the area-weighted centroid of its
+    //      Delaunay neighbourhood, renormalise) → blue-noise spacing, no preferred dirs.
+    //   3. 3D convex hull of points on the unit sphere == Delaunay triangulation on the
+    //      sphere → inherently watertight, no seam, no pole singularity. Its faces give
+    //      both the adjacency (for routing) and the render triangles.
+    //
+    // Returns {verts, faces, adj}. No pentagon anchors — irregularity is global, so the
+    // old "12 pentagon vertices" continuity metric is replaced by a valence-distribution
+    // sanity check (mostly ~6, no degenerate clustering).
+
+    function fibonacciSphere(n) {
+      // Spherical Fibonacci lattice — even areal coverage, no axis clustering.
+      const pts = new Array(n);
+      const ga = Math.PI * (3 - Math.sqrt(5)); // golden angle
+      for (let i = 0; i < n; i++) {
+        const y = 1 - (2 * i + 1) / n;          // [-1,1], centred
+        const r = Math.sqrt(Math.max(0, 1 - y*y));
+        const phi = i * ga;
+        pts[i] = new THREE.Vector3(Math.cos(phi)*r, y, Math.sin(phi)*r);
+      }
+      return pts;
+    }
+
+    // Build spherical Delaunay (== convex hull) from an array of unit Vector3.
+    // Tags each input vector with .__i so we can recover indices from hull faces.
+    function sphericalDelaunay(points) {
+      for (let i = 0; i < points.length; i++) points[i].__i = i;
+      const hull = new ConvexHull().setFromPoints(points);
+      const faces = [];
+      for (const f of hull.faces) {
+        const a = f.edge.head().point.__i;
+        const b = f.edge.next.head().point.__i;
+        const c = f.edge.next.next.head().point.__i;
+        faces.push([a, b, c]);
+      }
+      return faces;
+    }
+
+    function buildAdjacency(N, faces) {
+      const adjSet = Array.from({length:N}, () => new Set());
+      for (const [a,b,c] of faces) {
+        adjSet[a].add(b); adjSet[a].add(c);
+        adjSet[b].add(a); adjSet[b].add(c);
+        adjSet[c].add(a); adjSet[c].add(b);
+      }
+      return adjSet.map(s => Array.from(s));
+    }
+
+    function buildIrregularSphere(targetN, lloydIters) {
+      // 1. Fibonacci seed
+      let points = fibonacciSphere(targetN);
+      // 2. Lloyd relaxation toward Delaunay-neighbour centroids
+      for (let it = 0; it < lloydIters; it++) {
+        const faces = sphericalDelaunay(points);
+        const adj = buildAdjacency(points.length, faces);
+        const moved = new Array(points.length);
+        const c = new THREE.Vector3();
+        for (let i = 0; i < points.length; i++) {
+          c.copy(points[i]);
+          for (const nb of adj[i]) c.add(points[nb]);
+          c.normalize();                 // centroid back onto unit sphere
+          moved[i] = c.clone();
+        }
+        points = moved;
+      }
+      // 3. final triangulation
+      const faces = sphericalDelaunay(points);
+      const verts = points.map(p => [p.x, p.y, p.z]);
+      const adj = buildAdjacency(verts.length, faces);
+      return { verts, faces, adj };
+    }
+
+    // ───────────── S0b: stand-in height field (FBM) ───────────
+    // Deterministic value-noise FBM on the sphere position + large undulations.
+    function mulberry32(seed){ let a = seed>>>0; return function(){ a|=0; a=(a+0x6D2B79F5)|0;
+      let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+    function makeGrad3(seed){
+      const rng = mulberry32(seed); const G = [];
+      for (let i=0;i<256;i++){ // random unit vectors
+        let x,y,z,l;
+        do { x=rng()*2-1; y=rng()*2-1; z=rng()*2-1; l=x*x+y*y+z*z; } while(l>1||l<1e-4);
+        l=Math.sqrt(l); G.push([x/l,y/l,z/l]);
+      }
+      const perm = new Uint8Array(512);
+      const p = [...Array(256).keys()];
+      for (let i=255;i>0;i--){ const j=Math.floor(rng()*(i+1)); [p[i],p[j]]=[p[j],p[i]]; }
+      for (let i=0;i<512;i++) perm[i]=p[i&255];
+      return {G,perm};
+    }
+    const {G,perm} = makeGrad3(FBM_SEED);
+    function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+    function lerp(a,b,t){ return a+(b-a)*t; }
+    function gradDot(hash,x,y,z){ const g=G[hash&255]; return g[0]*x+g[1]*y+g[2]*z; }
+    function pnoise(x,y,z){ // classic Perlin 3D
+      const X=Math.floor(x)&255, Y=Math.floor(y)&255, Z=Math.floor(z)&255;
+      x-=Math.floor(x); y-=Math.floor(y); z-=Math.floor(z);
+      const u=fade(x), v=fade(y), w=fade(z);
+      const A=perm[X]+Y, AA=perm[A]+Z, AB=perm[A+1]+Z;
+      const B=perm[X+1]+Y, BA=perm[B]+Z, BB=perm[B+1]+Z;
+      return lerp(
+        lerp( lerp(gradDot(perm[AA],x,y,z),   gradDot(perm[BA],x-1,y,z),   u),
+              lerp(gradDot(perm[AB],x,y-1,z),  gradDot(perm[BB],x-1,y-1,z), u), v),
+        lerp( lerp(gradDot(perm[AA+1],x,y,z-1),  gradDot(perm[BA+1],x-1,y,z-1),  u),
+              lerp(gradDot(perm[AB+1],x,y-1,z-1), gradDot(perm[BB+1],x-1,y-1,z-1),u), v), w);
+    }
+    function fbm(x,y,z){
+      let f=0, amp=0.5, freq=1.6, norm=0;
+      for (let o=0;o<6;o++){ f += amp*pnoise(x*freq,y*freq,z*freq); norm+=amp; amp*=0.5; freq*=2.0; }
+      return f/norm;
+    }
+    function heightAt(px,py,pz){
+      // large-scale undulations (continents) + medium FBM detail
+      const cont = 0.9*pnoise(px*0.9+11.3, py*0.9-4.1, pz*0.9+7.7)
+                 + 0.5*pnoise(px*1.8-3.0,  py*1.8+9.0, pz*1.8-2.2);
+      const detail = fbm(px+5.0, py-5.0, pz+2.5);
+      return cont*0.7 + detail*0.5;
+    }
+
+    // ───────────────── Build mesh + heights ───────────────────
+    const t0 = performance.now();
+    const mesh0 = buildIrregularSphere(TARGET_N, LLOYD_ITERS);
+    const { verts, faces, adj } = mesh0;
+    const N = verts.length;
+
+    // valence distribution sanity (irregular mesh: expect mostly ~6, no degenerate clustering)
+    let valMin=Infinity, valMax=0, valSum=0; const valHist={};
+    for (let i=0;i<N;i++){ const v=adj[i].length; valMin=Math.min(valMin,v); valMax=Math.max(valMax,v); valSum+=v; valHist[v]=(valHist[v]||0)+1; }
+    const valMean = valSum/N;
+
+    const pos = new Float32Array(N*3);
+    const height = new Float32Array(N);
+    for (let i=0;i<N;i++){
+      const [x,y,z] = verts[i];
+      pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+      height[i] = heightAt(x,y,z);
+    }
+    // sea level: pick threshold so ~SEA_TARGET fraction is ocean
+    const sorted = Float32Array.from(height).sort();
+    const seaLevel = sorted[Math.floor(SEA_TARGET*N)];
+    const isOcean = new Uint8Array(N);
+    let oceanCount=0;
+    for (let i=0;i<N;i++){ if (height[i] < seaLevel){ isOcean[i]=1; oceanCount++; } }
+
+    // ───────────── S1: priority-flood (Barnes 2014) ───────────
+    // Fill interior depressions so every land vertex drains to an ocean outlet.
+    // Binary min-heap on the *filled* elevation.
+    function priorityFlood() {
+      const filled = Float32Array.from(height);
+      const closed = new Uint8Array(N);
+      // min-heap of [elev, idx]
+      const heapE = []; const heapI = [];
+      function push(e,i){ heapE.push(e); heapI.push(i); let c=heapE.length-1;
+        while(c>0){ const p=(c-1)>>1; if(heapE[p]<=heapE[c])break; [heapE[p],heapE[c]]=[heapE[c],heapE[p]]; [heapI[p],heapI[c]]=[heapI[c],heapI[p]]; c=p; } }
+      function pop(){ const e=heapE[0], i=heapI[0]; const le=heapE.pop(), li=heapI.pop();
+        if(heapE.length){ heapE[0]=le; heapI[0]=li; let c=0; const n=heapE.length;
+          for(;;){ let l=2*c+1,r=2*c+2,s=c; if(l<n&&heapE[l]<heapE[s])s=l; if(r<n&&heapE[r]<heapE[s])s=r; if(s===c)break;
+            [heapE[s],heapE[c]]=[heapE[c],heapE[s]]; [heapI[s],heapI[c]]=[heapI[c],heapI[s]]; c=s; } }
+        return [e,i]; }
+      // seed with all ocean cells (the outlets)
+      for (let i=0;i<N;i++){ if(isOcean[i]){ closed[i]=1; push(filled[i], i); } }
+      while (heapE.length){
+        const [, c] = pop();
+        for (const nb of adj[c]){
+          if (closed[nb]) continue;
+          closed[nb]=1;
+          if (filled[nb] <= filled[c]) filled[nb] = filled[c] + 1e-6; // raise to spill level
+          push(filled[nb], nb);
+        }
+      }
+      return filled;
+    }
+    const filled = priorityFlood();
+
+    // ── G1b(b): Barnes-2014 flat resolution ──
+    // After fill, basins become FLATS (neighbours at equal `filled`). The naive
+    // "pick any lowest neighbour" then shoots a straight line to the spill. Barnes 2014:
+    // build a synthetic micro-gradient across each flat = combine two BFS distance
+    // fields — (1) distance AWAY from higher terrain (gradient pushes inflow forward),
+    // (2) distance TOWARD lower terrain / spill (gradient pulls to the outlet). The
+    // combined field gives every flat cell a unique, curved descent so basins drain
+    // without straight shots. We express it as a tiny additive offset to `filled`.
+    const gradOff = new Float64Array(N); // synthetic offset (only meaningful on flats)
+    if (FLAT_RESOLVE) {
+      const FLATEPS = 1e-4; // cells within this of a neighbour's filled value = "flat" relation
+      // A cell is "flat" if it has NO strictly-lower neighbour (on filled surface) but is land.
+      const isFlat = new Uint8Array(N);
+      // edge markers: HIGH = flat cell adjacent to strictly-higher terrain (inflow edge);
+      //               LOW  = flat cell adjacent to strictly-lower terrain (spill/outlet edge).
+      const hiSeed=[], loSeed=[];
+      for (let i=0;i<N;i++){
+        if (isOcean[i]) continue;
+        let hasLower=false, adjHigher=false, adjLower=false;
+        for (const nb of adj[i]){
+          if (filled[nb] < filled[i]-FLATEPS) { hasLower=true; adjLower=true; }
+          else if (filled[nb] > filled[i]+FLATEPS) adjHigher=true;
+        }
+        if (!hasLower) isFlat[i]=1;        // no real downhill -> on a flat
+        // mark seeds (computed against flat membership below)
+        i; // placeholder
+        if (adjHigher) hiSeed.push(i);
+        if (adjLower)  loSeed.push(i);
+      }
+      // BFS distance over the flat graph only (edges between cells with |Δfilled|<=FLATEPS)
+      const flatEdge=(a,b)=> isFlat[a] && Math.abs(filled[a]-filled[b])<=FLATEPS;
+      function bfs(seeds){
+        const dist=new Int32Array(N).fill(-1); const q=[];
+        for (const s of seeds){ if(isFlat[s]){ dist[s]=0; q.push(s); } }
+        let h=0;
+        while(h<q.length){ const c=q[h++]; for(const nb of adj[c]){ if(isFlat[nb]&&dist[nb]<0&&flatEdge(c,nb)){ dist[nb]=dist[c]+1; q.push(nb); } } }
+        return dist;
+      }
+      // toLow = distance to spill (we want to DESCEND toward this -> lower offset near spill)
+      // fromHigh = distance from inflow edge (we want to DESCEND away from inflow -> higher offset near inflow)
+      const dLow = bfs(loSeed.filter(i=>isFlat[i]));
+      const dHigh= bfs(hiSeed.filter(i=>isFlat[i]));
+      // combined potential: higher near inflow & far from spill, lower near spill.
+      // scale must be << FLATEPS-of-real-terrain so it never overrides genuine slope.
+      const GSCALE = 5e-7;
+      for (let i=0;i<N;i++){
+        if (!isFlat[i]) continue;
+        const dl = dLow[i] >=0 ? dLow[i] : 0;
+        const dh = dHigh[i]>=0 ? dHigh[i] : 0;
+        // descend toward spill (dl small => low) and away from inflow (dh large => low):
+        gradOff[i] = GSCALE * (dl - 0.5*dh);
+      }
+    }
+
+    // receiver selection on the FILLED+gradient surface (always strictly downhill).
+    //   DINF_ROUTE=false → D8-style "lowest neighbour" (snaps on regular meshes).
+    //   DINF_ROUTE=true  → D-infinity-style "steepest descent per unit distance":
+    //     pick the strictly-lower neighbour maximising (Δsurf / edge-length). On an
+    //     irregular mesh edge lengths vary, so the steepest-slope neighbour is not the
+    //     same direction family across a slope → de-snaps without breaking downhill.
+    const surf = (i)=> filled[i] + gradOff[i];
+    const receiver = new Int32Array(N).fill(-1);
+    const _a = new THREE.Vector3(), _b = new THREE.Vector3();
+    for (let i=0;i<N;i++){
+      if (isOcean[i]) { receiver[i] = i; continue; } // ocean = absorbing outlet (self)
+      const si = surf(i);
+      let best=-1;
+      if (DINF_ROUTE) {
+        _a.set(verts[i][0], verts[i][1], verts[i][2]);
+        let bestSlope = 0;
+        for (const nb of adj[i]) {
+          const drop = si - surf(nb);
+          if (drop <= 0) continue;                 // only strictly downhill
+          _b.set(verts[nb][0], verts[nb][1], verts[nb][2]);
+          const slope = drop / Math.max(1e-9, _a.distanceTo(_b));
+          if (slope > bestSlope) { bestSlope = slope; best = nb; }
+        }
+      } else {
+        let bestE = si;
+        for (const nb of adj[i]){ if (surf(nb) < bestE){ bestE=surf(nb); best=nb; } }
+      }
+      receiver[i] = best === -1 ? i : best; // -1 fallback should not happen post-flood
+    }
+
+    // ───────── accumulation in topological (descending) order ─────────
+    const order = Array.from({length:N}, (_,i)=>i).sort((a,b)=> surf(b)-surf(a));
+    const accum = Float32Array.from({length:N}, ()=>1); // each cell contributes 1
+    for (const i of order){
+      const r = receiver[i];
+      if (r !== i) accum[r] += accum[i];
+    }
+
+    // ───────── G1 metric (a): orphans + uphill ─────────
+    let landCount=0, uphill=0, orphan=0, selfLoopLand=0;
+    const visitState = new Int8Array(N); // 0=unknown,1=reaches ocean,2=fails
+    function reachesOcean(start){
+      // follow receivers; detect cycle / ocean
+      const path=[]; let c=start, guard=0;
+      while(true){
+        if (isOcean[c]) { for(const p of path) visitState[p]=1; return true; }
+        if (visitState[c]===1){ for(const p of path) visitState[p]=1; return true; }
+        if (visitState[c]===2){ for(const p of path) visitState[p]=2; return false; }
+        if (path.includes(c) || guard++ > N+5){ for(const p of path) visitState[p]=2; return false; }
+        path.push(c);
+        const r = receiver[c];
+        if (r === c){ for(const p of path) visitState[p]=2; return false; }
+        c = r;
+      }
+    }
+    for (let i=0;i<N;i++){
+      if (isOcean[i]) continue;
+      landCount++;
+      if (receiver[i]===i) selfLoopLand++;
+      if (receiver[i]!==i && surf(receiver[i]) > surf(i)+1e-9) uphill++; // on filled+gradient surface (should be 0)
+      if (!reachesOcean(i)) orphan++;
+    }
+
+    function median(arr){ if(!arr.length) return 0; const a=arr.slice().sort((x,y)=>x-y); const m=a.length>>1;
+      return a.length%2? a[m] : (a[m-1]+a[m])/2; }
+
+    // ───────── S2: Horton-Strahler stream order (over the FULL flow forest) ─────────
+    // Strahler order is a property of the drainage tree itself, not of a pre-thresholded
+    // subset — restricting children to an accumulation-thresholded channel set collapses
+    // every reach to order 1 (sub-threshold tributaries become invisible, so no node ever
+    // sees ≥2 children). So compute it over EVERY land cell's receiver forest:
+    //   order(leaf)=1; order(node)=max child order, +1 iff ≥2 children tie that max.
+    // Children of r = all land cells i with receiver[i]===r. Process upstream→downstream
+    // (ascending surf == reverse of the descending `order` used for accumulation).
+    // The river NETWORK is then defined hydrologically: cells with order ≥ CHANNEL_ORDER.
+    const strahler = new Int32Array(N).fill(0);
+    const childMaxOrd = new Int32Array(N).fill(0);
+    const childMaxCnt = new Int32Array(N).fill(0);
+    const hasChild    = new Uint8Array(N);
+    // `order` is descending-surf == upstream-first, so children are finalized before parents.
+    for (let k = 0; k < order.length; k++) {
+      const i = order[k];
+      if (isOcean[i]) continue;
+      const ord = !hasChild[i] ? 1
+                : (childMaxCnt[i] >= 2 ? childMaxOrd[i] + 1 : childMaxOrd[i]);
+      strahler[i] = ord;
+      const r = receiver[i];
+      if (r !== i && !isOcean[r]) {
+        hasChild[r] = 1;
+        if (ord > childMaxOrd[r]) { childMaxOrd[r] = ord; childMaxCnt[r] = 1; }
+        else if (ord === childMaxOrd[r]) childMaxCnt[r]++;
+      }
+    }
+    // river network = order ≥ CHANNEL_ORDER (textbook drainage-network definition)
+    const isChannel = new Uint8Array(N);
+    let channelCount = 0;
+    for (let i=0;i<N;i++){ if(!isOcean[i] && strahler[i] >= CHANNEL_ORDER){ isChannel[i]=1; channelCount++; } }
+    // legacy accumulation threshold kept only for HUD/compare context
+    const landAccum = [];
+    for (let i=0;i<N;i++) if(!isOcean[i]) landAccum.push(accum[i]);
+    landAccum.sort((a,b)=>a-b);
+    const chanThresh = landAccum[Math.floor((1-CHANNEL_FRAC)*landAccum.length)] || 50;
+
+    // order distribution + max (over the full forest — the realism signal)
+    let maxOrder = 0; const orderHist = {};
+    for (let i=0;i<N;i++){ if(isOcean[i]) continue; const o=strahler[i]; if(o>maxOrder)maxOrder=o; orderHist[o]=(orderHist[o]||0)+1; }
+    // Horton bifurcation ratio R_b = mean of N_w / N_(w+1) over orders (realistic ~3–5).
+    // N_w = number of order-w STREAMS (a stream = maximal same-order run; count its
+    // downstream-end cell, i.e. where order increases or it leaves the forest).
+    const streamCount = {};
+    for (let i=0;i<N;i++){
+      if(isOcean[i]) continue;
+      const o = strahler[i];
+      const r = receiver[i];
+      const ro = (r!==i && !isOcean[r]) ? strahler[r] : -1;
+      if (ro !== o) streamCount[o] = (streamCount[o]||0) + 1;
+    }
+    // The highest order always has 1 stream → its ratio is a tiny-sample artifact (e.g.
+    // 17 order-5 streams / 1 order-6 = 17). Standard practice: estimate R_b as the slope of
+    // the Horton regression log(N_w) = log(a) − w·log(R_b) over orders with adequate counts.
+    // Report that (robust) plus the simple consecutive-ratio mean EXCLUDING the top order.
+    let rbSum=0, rbN=0;
+    for (let w=1; w<maxOrder-1; w++){          // exclude the last (1-stream) ratio
+      const a=streamCount[w]||0, b=streamCount[w+1]||0;
+      if (a>0 && b>0){ rbSum += a/b; rbN++; }
+    }
+    const bifurcationRatioTrimmed = rbN ? +(rbSum/rbN).toFixed(2) : 0;
+    // Horton-regression slope (uses all orders with count≥1; least-squares on log counts)
+    let sx=0, sy=0, sxx=0, sxy=0, sn=0;
+    for (let w=1; w<=maxOrder; w++){
+      const c = streamCount[w]||0; if (c<1) continue;
+      const x=w, y=Math.log(c); sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; sn++;
+    }
+    const slope = sn>1 ? (sn*sxy - sx*sy)/(sn*sxx - sx*sx) : 0;
+    const bifurcationRatio = sn>1 ? +Math.exp(-slope).toFixed(2) : bifurcationRatioTrimmed;
+
+    // ───────── G1 metric (c): valence-distribution sanity (irregular mesh) ─────────
+    // No pentagon anchors any more. We want the hull/Delaunay degrees to be mostly ~6
+    // with a tight spread and no degenerate clustering (a stray very-high-valence vertex
+    // would mark a clustering artifact at a pole or elsewhere).
+    const valSorted = []; for (let i=0;i<N;i++) valSorted.push(adj[i].length);
+    valSorted.sort((a,b)=>a-b);
+    const valMedian = median(valSorted);
+    const valHistTop = Object.entries(valHist).sort((a,b)=>b[1]-a[1]).slice(0,6)
+                        .map(([k,v])=>`${k}:${(100*v/N).toFixed(1)}%`).join(' ');
+
+    // ───────── Straightness metrics (Round-2 comparison) ─────────
+    // For each channel bend i→r→rr (all channel), compute the turning angle between the
+    // incoming great-circle direction (i→r) and outgoing (r→rr), in r's tangent plane.
+    //   near-collinear pair fraction  = bends with turn < 2°
+    //   straight-run length fraction  = channel edges inside a run of >=3 consecutive
+    //                                   near-collinear (<2°) edges along a flow path
+    //   median turning angle          = robustness check the result stays "natural" wobble
+    function tangentDir(from, to){
+      // unit direction at `from` pointing toward `to`, projected into `from`'s tangent plane
+      const a=new THREE.Vector3(verts[from][0],verts[from][1],verts[from][2]);
+      const b=new THREE.Vector3(verts[to][0],verts[to][1],verts[to][2]);
+      const n=a.clone();                       // outward normal at `from` (unit-sphere position)
+      const edge=b.clone().sub(a);
+      const tang=edge.sub(n.clone().multiplyScalar(edge.dot(n)));
+      return tang.lengthSq()>1e-20 ? tang.normalize() : null;
+    }
+    const turnAngles=[];
+    const isCollinearEdge = new Uint8Array(N); // marks edge i->r as <2° bend at r
+    let bendCount=0, nearCollinear=0;
+    const DEG2=2*Math.PI/180;
+    for (let i=0;i<N;i++){
+      if (!isChannel[i]) continue;
+      const r=receiver[i]; if (r===i || !isChannel[r]) continue;
+      const rr=receiver[r]; if (rr===r || !isChannel[rr]) continue;
+      // directions in r's tangent plane: incoming = r->i reversed = i->r ; outgoing = r->rr
+      const din=tangentDir(r,i);  // points back upstream
+      const dout=tangentDir(r,rr);
+      if (!din||!dout) continue;
+      // turning angle = deviation from straight = angle between (-din) and dout
+      const straight=din.clone().negate();
+      const cosA=THREE.MathUtils.clamp(straight.dot(dout),-1,1);
+      const turn=Math.acos(cosA);
+      turnAngles.push(turn);
+      bendCount++;
+      if (turn<DEG2){ nearCollinear++; isCollinearEdge[i]=1; }
+    }
+    // straight-run length fraction: edges in runs of >=3 consecutive collinear edges
+    let straightRunEdges=0, totalChanEdges=0;
+    for (let i=0;i<N;i++){
+      if (!isChannel[i]) continue;
+      const r=receiver[i]; if(r===i||!isChannel[r]) continue;
+      totalChanEdges++;
+    }
+    // walk each channel headwater downstream, counting collinear streaks
+    const visited=new Uint8Array(N);
+    for (let s=0;s<N;s++){
+      if(!isChannel[s]||visited[s]) continue;
+      // only start from headwaters (no channel contributor) to avoid double counting paths
+      let isHead=true;
+      for(const nb of adj[s]){ if(isChannel[nb] && receiver[nb]===s){ isHead=false; break; } }
+      if(!isHead) continue;
+      let c=s, streak=0;
+      while(isChannel[c]){
+        const r=receiver[c];
+        if(r===c||!isChannel[r]) break;
+        if(isCollinearEdge[c]) streak++;
+        else { if(streak>=3) straightRunEdges+=streak; streak=0; }
+        visited[c]=1; c=r;
+      }
+      if(streak>=3) straightRunEdges+=streak;
+    }
+    const turnMedianDeg = +(median(turnAngles)*180/Math.PI).toFixed(2);
+    const nearCollinearPct = bendCount? +(100*nearCollinear/bendCount).toFixed(2) : 0;
+    const straightRunPct = totalChanEdges? +(100*straightRunEdges/totalChanEdges).toFixed(2) : 0;
+
+    // ── River-SCALE straightness (the meaningful number) ──
+    // The per-edge metric above samples adjacent ~0.02-spacing vertices, so on a fine mesh
+    // it is dominated by sub-river micro-direction (a smooth slope reads "near-collinear"
+    // even when the river visibly meanders). Re-measure at a river-relevant chord length:
+    // walk each headwater downstream, sample the flow direction every STEP edges (chord
+    // ≈ STEP*0.02), and measure the turn between successive chords. This is what "are there
+    // perfectly-straight runs?" actually means at the scale a viewer sees.
+    function chordDir(i,j){
+      let ex=verts[j][0]-verts[i][0], ey=verts[j][1]-verts[i][1], ez=verts[j][2]-verts[i][2];
+      const L=Math.hypot(ex,ey,ez); return L<1e-10?null:[ex/L,ey/L,ez/L];
+    }
+    function scaleStraightness(STEP){
+      const turns=[]; let bends=0, coll=0; const vis=new Uint8Array(N);
+      for(let s=0;s<N;s++){
+        if(!isChannel[s])continue;
+        let isHead=true; for(const nb of adj[s]){ if(isChannel[nb]&&receiver[nb]===s){isHead=false;break;} }
+        if(!isHead)continue;
+        const path=[]; let c=s,g=0;
+        while(isChannel[c]&&g++<200000){ path.push(c); const r=receiver[c]; if(r===c||!isChannel[r])break; c=r; }
+        const dirs=[];
+        for(let k=0;k+STEP<path.length;k+=STEP){ const d=chordDir(path[k],path[k+STEP]); if(d)dirs.push(d); }
+        for(let k=1;k<dirs.length;k++){
+          let cc=dirs[k-1][0]*dirs[k][0]+dirs[k-1][1]*dirs[k][1]+dirs[k-1][2]*dirs[k][2];
+          cc=Math.max(-1,Math.min(1,cc)); const t=Math.acos(cc);
+          turns.push(t); bends++; if(t<DEG2)coll++;
+        }
+      }
+      turns.sort((a,b)=>a-b);
+      return { STEP, bends, nearCollinearPct: bends?+(100*coll/bends).toFixed(2):0,
+               medianTurnDeg: bends?+(turns[turns.length>>1]*180/Math.PI).toFixed(2):0 };
+    }
+    const riverScale = scaleStraightness(3);   // ~0.06 chord = river-scale
+    const riverScale6 = scaleStraightness(6);
+
+    const buildMs = (performance.now()-t0).toFixed(0);
+
+    // ─────────────────────── Render ───────────────────────────
+    // Base mesh: land = muted tan/green by elevation, ocean = dark blue.
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(N*3);
+    const colors = new Float32Array(N*3);
+    const cOcean = new THREE.Color(0x0a2240);
+    const cLandLo= new THREE.Color(0x3a3326);
+    const cLandHi= new THREE.Color(0x6b6450);
+    const hMin = sorted[0], hMax = sorted[N-1];
+    for (let i=0;i<N;i++){
+      positions[i*3]=pos[i*3]; positions[i*3+1]=pos[i*3+1]; positions[i*3+2]=pos[i*3+2];
+      let c;
+      if (isOcean[i]) c = cOcean;
+      else { const t=(height[i]-seaLevel)/(hMax-seaLevel+1e-6); c = cLandLo.clone().lerp(cLandHi, THREE.MathUtils.clamp(t,0,1)); }
+      colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+    const faceIdx = new Uint32Array(faces.length*3);
+    for (let f=0;f<faces.length;f++){ faceIdx[f*3]=faces[f][0]; faceIdx[f*3+1]=faces[f][1]; faceIdx[f*3+2]=faces[f][2]; }
+    geo.setIndex(new THREE.BufferAttribute(faceIdx,1));
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:1, metalness:0, flatShading:false }));
+    scene.add(mesh);
+
+    // ───────── S2 render: variable-width SMOOTHED dendritic ribbons ─────────
+    // The rendered network is the channel forest PRUNED to Strahler order ≥ MIN_ORDER
+    // (drops the order-1 hillslope threads so it reads as a branching tree, not a mesh).
+    // Pipeline per maximal flow path:  extract polyline (headwater→sea, through rendered
+    // cells) → Chaikin-smooth (absorbs residual right-angle zig-zags, keeps wobble) →
+    // emit a triangle-strip ribbon whose half-width = clamp(WIDTH_SCALE·φ·A^0.69) so
+    // trunks (big A, near sea) are visibly wider than tributaries and width grows
+    // monotonically downstream. Shared trunk edges are consumed once (drawn-edge marks).
+    const LIFT = 1.0035;
+    const rendered = new Uint8Array(N);
+    for (let i=0;i<N;i++) if (isChannel[i] && strahler[i] >= MIN_ORDER) rendered[i]=1;
+
+    const widthAt = (i) => {
+      const phiW = WIDTH_PHI * Math.pow(accum[i], WIDTH_EXP);   // Dunne–Leopold φ=0.42·A^0.69
+      return THREE.MathUtils.clamp(WIDTH_SCALE * phiW, WIDTH_MIN, WIDTH_MAX);
+    };
+    // colour by Strahler order: tributaries cool, trunks bright
+    const cOrd = (o) => {
+      const t = THREE.MathUtils.clamp((o - MIN_ORDER) / Math.max(1, maxOrder - MIN_ORDER), 0, 1);
+      return new THREE.Color(0x2a5cff).lerp(new THREE.Color(0x8ffaff), t);
+    };
+
+    // Chaikin corner-cutting on a list of {p:[x,y,z], w, c:Color}; renormalises each new
+    // point back onto the (lifted) sphere so the ribbon hugs the surface. Endpoints kept.
+    function chaikin(pts, iters){
+      let cur = pts;
+      for (let it=0; it<iters; it++){
+        if (cur.length < 3) break;
+        const out = [cur[0]];
+        for (let k=0; k<cur.length-1; k++){
+          const a=cur[k], b=cur[k+1];
+          const mk=(t)=>{
+            const v=new THREE.Vector3(a.p[0]+(b.p[0]-a.p[0])*t, a.p[1]+(b.p[1]-a.p[1])*t, a.p[2]+(b.p[2]-a.p[2])*t).normalize().multiplyScalar(LIFT);
+            return { p:[v.x,v.y,v.z], w:a.w+(b.w-a.w)*t, c:a.c.clone().lerp(b.c,t) };
+          };
+          out.push(mk(0.25), mk(0.75));
+        }
+        out.push(cur[cur.length-1]);
+        cur = out;
+      }
+      return cur;
+    }
+
+    // headwaters of the rendered network (no rendered cell drains into them)
+    const heads=[];
+    for (let i=0;i<N;i++){
+      if(!rendered[i]) continue;
+      let isHead=true;
+      for(const nb of adj[i]){ if(rendered[nb] && receiver[nb]===i){ isHead=false; break; } }
+      if(isHead) heads.push(i);
+    }
+    const renderedCount = rendered.reduce((a,b)=>a+b,0);
+
+    // S3 carve: per-cell inward radius offset ∝ Strahler order (deepest trunks cut most).
+    // When carve OFF radius = LIFT (sits on surface); when ON it dips below 1.0.
+    const carveRadius = (idx, carve) => {
+      if (!carve) return LIFT;
+      const t = THREE.MathUtils.clamp((strahler[idx]-MIN_ORDER)/Math.max(1,maxOrder-MIN_ORDER),0,1);
+      return 1.0 - CARVE_DEPTH * (0.25 + 0.75*t);   // even order-2 dips slightly; trunks deepest
+    };
+
+    // Build the whole ribbon geometry for a given carve mode. Returns a BufferGeometry.
+    function buildRibbonGeometry(carve){
+      const ribPos = [], ribCol = [], ribIdx = []; let vBase = 0;
+      const drawn = new Uint8Array(N);
+      const up=new THREE.Vector3(), fwd=new THREE.Vector3(), side=new THREE.Vector3();
+      function emitRibbon(spts){
+        if (spts.length < 2) return;
+        const P = spts.map(s=>new THREE.Vector3(s.p[0],s.p[1],s.p[2]));
+        for (let k=0;k<spts.length;k++){
+          const cur=P[k];
+          fwd.set(0,0,0);
+          if (k>0) fwd.add(cur.clone().sub(P[k-1]));
+          if (k<spts.length-1) fwd.add(P[k+1].clone().sub(cur));
+          up.copy(cur).normalize();
+          fwd.sub(up.clone().multiplyScalar(fwd.dot(up)));
+          if (fwd.lengthSq()<1e-14) fwd.set(up.y,up.z,up.x);
+          fwd.normalize();
+          side.crossVectors(up, fwd).normalize().multiplyScalar(spts[k].w);
+          const L = cur.clone().sub(side), R = cur.clone().add(side);
+          const c = spts[k].c;
+          ribPos.push(L.x,L.y,L.z, R.x,R.y,R.z);
+          ribCol.push(c.r,c.g,c.b, c.r,c.g,c.b);
+          if (k>0){ const b0=vBase+(k-1)*2, b1=vBase+k*2; ribIdx.push(b0,b0+1,b1, b0+1,b1+1,b1); }
+        }
+        vBase += spts.length*2;
+      }
+      function pathFrom(start){
+        const raw=[]; let c=start, g=0;
+        while (rendered[c] && g++ < 200000){
+          raw.push(c);
+          if (drawn[c]) break;
+          drawn[c]=1;
+          const r=receiver[c];
+          if (r===c || !rendered[r]){ if (r!==c) raw.push(r); break; }
+          c=r;
+        }
+        return raw;
+      }
+      function buildAndEmit(start){
+        const raw = pathFrom(start);
+        if (raw.length < 2) return;
+        const pts = raw.map(idx=>{
+          const rad = carveRadius(idx, carve);
+          // carve darkens slightly to fake valley shadow
+          let col = cOrd(strahler[idx]||MIN_ORDER);
+          if (carve) col = col.clone().multiplyScalar(0.78);
+          return { p:[pos[idx*3]*rad, pos[idx*3+1]*rad, pos[idx*3+2]*rad], w:widthAt(idx), c:col };
+        });
+        emitRibbon(chaikin(pts, CHAIKIN_ITERS));
+      }
+      for (const h of heads) buildAndEmit(h);
+      for (let i=0;i<N;i++){ if(rendered[i] && !drawn[i]) buildAndEmit(i); }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(ribPos,3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(ribCol,3));
+      g.setIndex(ribIdx); g.computeVertexNormals();
+      return g;
+    }
+
+    let ribbon = new THREE.Mesh(buildRibbonGeometry(CARVE_DEFAULT),
+      new THREE.MeshBasicMaterial({ vertexColors:true, side:THREE.DoubleSide }));
+    scene.add(ribbon);
+
+    // ─────────────────────── HUD + debug handle ───────────────
+    const stats = {
+      mesh:'irregular(fib+lloyd'+LLOYD_ITERS+'+hull-delaunay)', dinf:DINF_ROUTE,
+      vertices:N, faces:faces.length, oceanCount, oceanFrac:+(oceanCount/N).toFixed(3),
+      landCount, channelCount, seaLevel:+seaLevel.toFixed(4), chanThresh,
+      orphanPct:+(100*orphan/landCount).toFixed(3), uphillPct:+(100*uphill/landCount).toFixed(3),
+      selfLoopLand, buildMs:+buildMs,
+      // valence sanity
+      valMin, valMax, valMean:+valMean.toFixed(3), valMedian, valHistTop,
+      // micro (per-edge) straightness — scale artifact on a fine mesh, kept for transparency
+      microNearCollinearPct:nearCollinearPct, microStraightRunPct:straightRunPct, microTurnMedianDeg:turnMedianDeg, microBendCount:bendCount,
+      // RIVER-SCALE straightness (the meaningful number; vs Round-2 per-edge: 2.2% / 32°)
+      riverNearCollinearPct: riverScale.nearCollinearPct, riverTurnMedianDeg: riverScale.medianTurnDeg, riverBends: riverScale.bends,
+      riverScale6NearCollinearPct: riverScale6.nearCollinearPct, riverScale6TurnMedianDeg: riverScale6.medianTurnDeg,
+      // S2 / G2 shaping
+      maxStrahlerOrder: maxOrder, orderHist, streamCount, bifurcationRatio, bifurcationRatioTrimmed,
+      renderedCount, minOrderRendered:MIN_ORDER, widthLaw:`${WIDTH_PHI}·A^${WIDTH_EXP} (scale ${WIDTH_SCALE}, clamp ${WIDTH_MIN}–${WIDTH_MAX})`,
+      chaikinIters:CHAIKIN_ITERS, carvePass:CARVE_DEFAULT, carveDepth:CARVE_DEPTH,
+    };
+    window._rivers = { verts, pos, faces, adj, height, filled, receiver, accumulation:accum,
+                       strahler, isOcean, isChannel, rendered, seaLevel, stats, valHist, orderHist,
+                       // view helper: orient camera to a target unit vector (d = camera distance, default 3.2)
+                       lookFrom(x,y,z,d){ const r=d||3.2; camera.position.set(x*r,y*r,z*r); controls.target.set(0,0,0); controls.update(); },
+                       // S3 toggle: rebuild the river ribbon with/without the incision carve
+                       setCarve(on){ scene.remove(ribbon); ribbon.geometry.dispose();
+                         ribbon = new THREE.Mesh(buildRibbonGeometry(!!on), ribbon.material);
+                         scene.add(ribbon); stats.carvePass=!!on; return !!on; } };
+
+    document.getElementById('hud').textContent =
+      `IRREGULAR mesh (fib+lloyd${LLOYD_ITERS}+hull) | dinf ${DINF_ROUTE}\n`+
+      `verts ${N} | faces ${faces.length} | build ${buildMs}ms\n`+
+      `ocean ${(100*oceanCount/N).toFixed(1)}% (sea ${seaLevel.toFixed(3)}) | channels ${channelCount}\n`+
+      `G1a orphans ${stats.orphanPct}% | uphill ${stats.uphillPct}% | selfLoop ${selfLoopLand}\n`+
+      `valence med ${valMedian} [${valMin}–${valMax}] mean ${valMean.toFixed(2)}\n`+
+      `river-scale: collinear<2° ${riverScale.nearCollinearPct}% | medTurn ${riverScale.medianTurnDeg}°\n`+
+      `S2: maxOrder ${maxOrder} | R_b ${bifurcationRatio} (trim ${bifurcationRatioTrimmed}) | rendered ${renderedCount} (order≥${MIN_ORDER})\n`+
+      `orders ${Object.entries(orderHist).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(' ')}`;
+
+    console.log('[rivers-lab] stats', stats);
+    window.__riversReady = true;
+
+    // ─────────────────────── Loop ─────────────────────────────
+    addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+    function tick(){ controls.update(); renderer.render(scene,camera); requestAnimationFrame(tick); }
+    tick();
+  </script>
+</body>
+</html>

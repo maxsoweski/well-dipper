@@ -91,6 +91,12 @@ airless (gate/driver bug — declared-on but not painting), #6 vegetation-from-s
   domain-warped FBM field (no flow direction, no downhill coupling, no accumulation) → meandering
   bands, not a dendritic drainage tree. This is the **Theme-A** primitive problem. → researching
   planetary dendritic-drainage generation that's shader-compatible (research deliverable 2026-06-16).
+- **#3 rivers — VIABILITY SPIKE PASSED (2026-06-17).** Isolated `rivers-lab.html` proved seam-free
+  dendritic drainage on a sphere (G1) that reads as real rivers (G2), both confirmed by Max's eye;
+  conform-only suffices, carve not needed (G3). Key finding: requires an **irregular spherical
+  Delaunay mesh** (a regular icosphere grid-locks channels into straight lines). Full plan + verdict:
+  `rivers-sphere-spike-plan-2026-06-17.md`. **Next: `dev-collab-scope` the full feature** (production
+  `h(pos)` coupling + texture-bake + shader sample/carve path) as a new workstream.
 
 ## Status
 Parked, untriaged (except **#3 rivers**, now active — see above). Next session opens with the
