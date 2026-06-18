@@ -57,10 +57,19 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > obsolete verbatim copies removed, router lab graduated to tracked source. AC3 (sea-level-from-histogram,
 > TDD) — `planet-lod-sealevel.js` inverse-CDF solver (6 oracle tests); per-planet sea solve lands all 5
 > reseeds at exactly 35% ocean (was ~13%). Also fixed an AC1 regression `planet-archetypes.test.js` missed
-> (GLSL-mirror parse repointed to the shared module). 273/273 planet cluster green. **NEXT = AC4 (ribbon
-> overlay on the actual lab planet + retire F11) → AC5 (routing metrics; ⚠ R_b ~6 at 35% ocean vs [3,5.5]
-> band — at 12.7% it was 4.84, so the higher sea shifts bifurcation stats; address in AC5) → AC6/AC7.**
-> Build handoff `/tmp/handoff-rivers-build-2026-06-17.md`; AC2 pickup `/tmp/handoff-rivers-AC2-2026-06-18.md`.
+> (GLSL-mirror parse repointed to the shared module). 273/273 planet cluster green. **AC4 (ribbon overlay
+> on the actual lab planet + retire F11) DONE + committed `c3f0e7b`** (2026-06-18). Extracted the proven
+> router/ribbon pipeline into a SHARED module `planet-lod-rivers.js` (AC1-style, no third verbatim copy) —
+> repointed the router lab at it as a zero-drift regression gate (stats reproduce: ocean 35%, orphan/uphill 0,
+> maxStrahler 5), then wired `createRiverOverlay` into `planet-lod-lab.html` bound to the lab's LIVE uniforms.
+> Ribbon parented to `planet` (co-rotates), lazily mesh-built on enable (556ms), re-route reuses the cached
+> mesh (133ms — AC7 preview). New "Rivers — dendritic overlay (AC4)" GUI folder: enabling forces F11 off
+> (state.riversEnabled→0, the per-frame gate) and drives the planet sea to the histogram 35% so water + river
+> outlets agree. LIVE-VERIFIED on :9223 from 4 viewpoints (equator, BOTH poles clean = no pole/seam artifact,
+> basin close-up): dendritic network, trunks to seas, tributaries branching upslope, no F11 double-pattern,
+> 0 console errors. **NEXT = AC5 (routing metrics; ⚠ R_b 6.16 at 35% ocean vs [3,5.5] band — at 12.7% it was
+> 4.84, so the higher sea shifts bifurcation stats; address in AC5 via CHANNEL_ORDER/width-law/ocean-target) →
+> AC6/AC7.** Build handoff `/tmp/handoff-rivers-build-2026-06-17.md`; AC4 pickup `/tmp/handoff-rivers-AC4-2026-06-18.md`.
 
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
