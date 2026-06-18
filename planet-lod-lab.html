@@ -3411,6 +3411,7 @@
         seaMode: riverOverlayState.seaFromHistogram ? 'histogram' : 'live',
         targetFraction: riverOverlayState.targetOceanFraction,
         radiusEarth: state.planetRadiusEarth,   // AC6: width/footprint scales with planet radius
+        widthSeed: state.macroSeed,             // UAT item1: per-planet seeded width-scale draw
       });
       if (riverOverlayState.seaFromHistogram){
         state.seaLevel = seaLevel;
@@ -3424,7 +3425,7 @@
       uniforms.uRiverCarveDepth.value    = riverOverlayState.carve ? riverOverlayState.carveDepthH : 0.0;
       uniforms.uRiverCarveRough.value    = riverOverlayState.carve ? riverOverlayState.carveRough : 0.0;
       uniforms.uRiverCarveGateHi.value   = riverOverlayState.carveGateHi;
-      riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · ${stats.totalMs}ms`;
+      riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
       syncDisplays();
     }
     // Enable/disable: turning the overlay ON forces F11 off (saving the prior flag) and routes;

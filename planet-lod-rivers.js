@@ -36,7 +36,12 @@ export const DEFAULT_PARAMS = Object.freeze({
   // deliberately NOT done here — a single 40k global mesh can't resolve a big world's thread-thin
   // rivers; that's the deferred view-dependent LOD workstream. AC6 is macro PROPORTIONING only.)
   REF_RADIUS_EARTH: 1.0,
-  WIDTH_RADIUS_FLOOR: 0.2, WIDTH_RADIUS_CEIL: 2.5,
+  WIDTH_RADIUS_FLOOR: 0.08, WIDTH_RADIUS_CEIL: 2.5,   // UAT item1: lowered 0.2→0.08 so big worlds' rivers can thin to ~true 1/radius instead of clamping
+  // UAT item1 (per-planet seeded width): the planet seed draws a width-scale multiplier in this
+  // band so river scale varies planet-to-planet ("can go smaller depending on seed"). Applied to
+  // WIDTH_SCALE/MIN/MAX only (topology stays seed-invariant). Identity-safe: widthSeed omitted ⇒
+  // multiplier 1 ⇒ params unchanged (the router lab stays byte-for-byte).
+  WIDTH_SEED_LO: 0.6, WIDTH_SEED_HI: 1.5,
   // ── carve (river→valley incision) ──
   VALLEY_WIDTH_MUL: 4.0,   // valley footprint = water width × this (the V is wider than the water)
   VALLEY_DEPTH_LO: 0.45, VALLEY_DEPTH_HI: 1.0,   // center depth (0..1) lerped by stream order; cube map stores this
@@ -53,16 +58,31 @@ export function widthRadiusFactor(radiusEarth, params = DEFAULT_PARAMS) {
   return Math.min(params.WIDTH_RADIUS_CEIL ?? 2.5, Math.max(params.WIDTH_RADIUS_FLOOR ?? 0.2, f));
 }
 
-// AC6: return params with the width law scaled for this planet radius. Identity at the reference
-// radius (so existing callers / the router lab are byte-for-byte unchanged). Scales the absolute
-// width fields only — WIDTH_PHI/EXP (the accumulation SHAPE) are radius-invariant.
-export function paramsForRadius(params = DEFAULT_PARAMS, radiusEarth) {
-  if (radiusEarth == null) return params;
-  const k = widthRadiusFactor(radiusEarth, params);
+// UAT item1: deterministic per-planet width-scale multiplier in [WIDTH_SEED_LO, WIDTH_SEED_HI],
+// hashed from the planet seed (small integers like macroSeed). Same seed ⇒ same width every time;
+// LO==HI (or seed null) ⇒ 1 (no variation). Affects width only, never topology.
+export function widthSeedFactor(seed, params = DEFAULT_PARAMS) {
+  const lo = params.WIDTH_SEED_LO ?? 1.0, hi = params.WIDTH_SEED_HI ?? 1.0;
+  if (seed == null || lo === hi) return 1.0;
+  let x = (Math.floor(seed) >>> 0) || 1;          // integer mix → [0,1)
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = (x ^ (x >>> 16)) >>> 0;
+  return lo + (hi - lo) * (x / 4294967296);
+}
+
+// AC6 + UAT item1: return params with the width law scaled for this planet radius AND its per-seed
+// draw. Identity at the reference radius with no seed mul (so existing callers / the router lab are
+// byte-for-byte unchanged). Scales the absolute width fields only — WIDTH_PHI/EXP (the accumulation
+// SHAPE) are radius- and seed-invariant.
+export function paramsForRadius(params = DEFAULT_PARAMS, radiusEarth, widthSeedMul = 1) {
+  const kR = (radiusEarth == null) ? 1 : widthRadiusFactor(radiusEarth, params);
+  const kS = widthSeedMul ?? 1;
+  const k = kR * kS;
   if (Math.abs(k - 1) < 1e-9) return params;
   return { ...params,
     WIDTH_SCALE: params.WIDTH_SCALE * k, WIDTH_MIN: params.WIDTH_MIN * k, WIDTH_MAX: params.WIDTH_MAX * k,
-    _widthRadiusFactor: k };
+    _widthRadiusFactor: kR, _widthSeedMul: kS, _widthFactor: k };
 }
 
 // ───────────────────────── RTT height shader (router main) ─────────────────────────
@@ -760,14 +780,16 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     meshMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
   }
 
-  function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, label = 'route' } = {}) {
+  function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, widthSeed = null, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
     const r = sampler.read(); height = r.height; grad = r.grad;
     seaLevel = (seaMode === 'histogram') ? solveSeaLevel(height, targetFraction) : uniforms.uSeaLevel.value;
     const oc = computeOcean(height, seaLevel, N); isOcean = oc.isOcean; oceanCount = oc.oceanCount;
-    // AC6: routing/topology is radius-invariant; only the width law (ribbon + valley footprint) scales.
-    const pEff = paramsForRadius(params, radiusEarth);
+    // AC6 + UAT item1: routing/topology is radius- & seed-invariant; only the width law (ribbon +
+    // valley footprint) scales — by planet radius (AC6) AND the per-planet seeded draw (UAT item1).
+    const widthSeedMul = widthSeedFactor(widthSeed, params);
+    const pEff = paramsForRadius(params, radiusEarth, widthSeedMul);
     const routed = routeAndOrder({ mesh, height, grad, isOcean, params });
     const ribGeo = buildRibbonGeometry({ mesh, routed, params: pEff });
     ribbon.geometry.dispose(); ribbon.geometry = ribGeo;
@@ -778,6 +800,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     stats = buildStats({ routed, height, N, faces: mesh.faces.length, seaLevel, oceanCount, ribGeo, label, totalMs });
     stats.meshMs = +meshMs.toFixed(0);
     stats.widthRadiusFactor = pEff._widthRadiusFactor != null ? +pEff._widthRadiusFactor.toFixed(3) : 1;
+    stats.widthSeedFactor = pEff._widthSeedMul != null ? +pEff._widthSeedMul.toFixed(3) : 1;
     return { stats, seaLevel };
   }
 
