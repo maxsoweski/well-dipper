@@ -67,9 +67,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > (state.riversEnabled→0, the per-frame gate) and drives the planet sea to the histogram 35% so water + river
 > outlets agree. LIVE-VERIFIED on :9223 from 4 viewpoints (equator, BOTH poles clean = no pole/seam artifact,
 > basin close-up): dendritic network, trunks to seas, tributaries branching upslope, no F11 double-pattern,
-> 0 console errors. **NEXT = AC5 (routing metrics; ⚠ R_b 6.16 at 35% ocean vs [3,5.5] band — at 12.7% it was
-> 4.84, so the higher sea shifts bifurcation stats; address in AC5 via CHANNEL_ORDER/width-law/ocean-target) →
-> AC6/AC7.** Build handoff `/tmp/handoff-rivers-build-2026-06-17.md`; AC4 pickup `/tmp/handoff-rivers-AC4-2026-06-18.md`.
+> 0 console errors. **Max review of AC4: "looks good but isn't integrated, it's like an overlay."** →
+> **AC4 INTEGRATION WIP committed `b0e8f08`** (river→landscape carve; default-off toggle, planet byte-identical
+> when off): de-glow + seat (deep-water palette, LIFT 0.999) + **valley carve** — routed network rasterized
+> into a direction-keyed depth CUBE map (`buildValleyGeometry` + `createCarveCubeMap` in planet-lod-rivers.js;
+> shader samples by surface dir → bends normal into a V + darkens floor, along the REAL network so no F11
+> worm-trails; cube → no seam/pole). GUI sliders (carve depth/floor). Router lab regression holds.
+> **2 OPEN ISSUES (Max, next session — handoff `/tmp/handoff-rivers-AC4-carve-2026-06-18.md`): (1) channel
+> edges too smooth/artificial (Chaikin + clean V → need natural roughness/meander); (2) valleys don't FILL
+> with water (carve darkens the floor but doesn't lower h, and the water ribbon is thinner than the valley →
+> dry groove + thin line, not a water-filled channel).** Then AC5 (routing metrics; ⚠ R_b 6.16 at 35% ocean
+> vs [3,5.5] band — address via CHANNEL_ORDER/width-law/ocean-target) → AC6/AC7. Build handoff
+> `/tmp/handoff-rivers-build-2026-06-17.md`.
 
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
