@@ -27,7 +27,11 @@ export const DEFAULT_PARAMS = Object.freeze({
   FLAT_RESOLVE: true,
   DINF_ROUTE: true,
   CHANNEL_FRAC: 0.06,
-  LIFT: 1.0035,
+  LIFT: 0.999,   // seat the water just BELOW the mean surface so it sits in the channel (was 1.0035 = floating)
+  // ── carve (river→valley incision) ──
+  VALLEY_WIDTH_MUL: 4.0,   // valley footprint = water width × this (the V is wider than the water)
+  VALLEY_DEPTH_LO: 0.45, VALLEY_DEPTH_HI: 1.0,   // center depth (0..1) lerped by stream order; cube map stores this
+  CARVE_CUBE_SIZE: 1024,
   TARGET_OCEAN_FRACTION: 0.35,   // AC3: solve uSeaLevel to this fraction (band 0.25–0.45)
 });
 
@@ -423,8 +427,11 @@ export function buildRibbonGeometry({ mesh, routed, params = DEFAULT_PARAMS }) {
     return THREE.MathUtils.clamp(WIDTH_SCALE * phiW, WIDTH_MIN, WIDTH_MAX);
   };
   const cOrd = (o) => {
+    // Deep-water palette (de-glowed): dark navy headwaters → lit water-blue trunks. Keeps the
+    // stream-order gradient but well below the old luminous cyan that read as a glowing decal.
+    // Tuned to read AGAINST the carved (darkened) valley floor without glowing back to a decal.
     const t = THREE.MathUtils.clamp((o - MIN_ORDER) / Math.max(1, maxOrder - MIN_ORDER), 0, 1);
-    return new THREE.Color(0x2a5cff).lerp(new THREE.Color(0x8ffaff), t);
+    return new THREE.Color(0x1d3c5e).lerp(new THREE.Color(0x4486bb), t);
   };
   function chaikin(pts, iters) {
     let cur = pts;
@@ -504,6 +511,159 @@ export function buildRibbonGeometry({ mesh, routed, params = DEFAULT_PARAMS }) {
   return g;
 }
 
+// ═══════════════════════ CARVE — valley footprint + depth cube map ═══════════════════════
+// The lab planet is a smooth normal-mapped sphere (all relief is faked via normal perturbation
+// + albedo, no real geometry). So "carve a valley" = bend the normal into a V-channel + darken
+// the floor ALONG THE REAL ROUTED NETWORK (this is what kept F11 from working: F11 carved a noise
+// mask; this carves the actual dendritic drainage). We rasterize the network into a direction-keyed
+// cube map of valley DEPTH; the planet shader samples it by surface direction and subtracts a valley
+// profile from h (the existing perturbAnalytic does the normal). buildValleyGeometry emits a 3-rail
+// strip (left edge depth 0 · center depth d01 · right edge depth 0) per smoothed channel path — the
+// tent profile rasterizes a V-valley; the valley is wider than the water ribbon and deepens with order.
+export function buildValleyGeometry({ mesh, routed, params = DEFAULT_PARAMS }) {
+  const { adj, pos } = mesh;
+  const N = mesh.N != null ? mesh.N : (pos.length / 3);
+  const { MIN_ORDER, WIDTH_PHI, WIDTH_EXP, WIDTH_SCALE, WIDTH_MIN, WIDTH_MAX, CHAIKIN_ITERS, LIFT,
+          VALLEY_WIDTH_MUL, VALLEY_DEPTH_LO, VALLEY_DEPTH_HI } = params;
+  const { receiver, accum, strahler, maxOrder, isChannel } = routed;
+  const rendered = new Uint8Array(N);
+  for (let i = 0; i < N; i++) if (isChannel[i] && strahler[i] >= MIN_ORDER) rendered[i] = 1;
+  const halfWidthAt = (i) => {
+    const phiW = WIDTH_PHI * Math.pow(accum[i], WIDTH_EXP);
+    return THREE.MathUtils.clamp(WIDTH_SCALE * phiW, WIDTH_MIN, WIDTH_MAX) * VALLEY_WIDTH_MUL;
+  };
+  const depthAt = (o) => {
+    const t = THREE.MathUtils.clamp((o - MIN_ORDER) / Math.max(1, maxOrder - MIN_ORDER), 0, 1);
+    return VALLEY_DEPTH_LO + (VALLEY_DEPTH_HI - VALLEY_DEPTH_LO) * t;
+  };
+  function chaikin(pts, iters) {
+    let cur = pts;
+    for (let it = 0; it < iters; it++) {
+      if (cur.length < 3) break;
+      const out = [cur[0]];
+      for (let k = 0; k < cur.length - 1; k++) {
+        const a = cur[k], b = cur[k + 1];
+        const mk = (t) => {
+          const v = new THREE.Vector3(a.p[0] + (b.p[0] - a.p[0]) * t, a.p[1] + (b.p[1] - a.p[1]) * t, a.p[2] + (b.p[2] - a.p[2]) * t).normalize();
+          return { p: [v.x, v.y, v.z], w: a.w + (b.w - a.w) * t, d: a.d + (b.d - a.d) * t };
+        };
+        out.push(mk(0.25), mk(0.75));
+      }
+      out.push(cur[cur.length - 1]);
+      cur = out;
+    }
+    return cur;
+  }
+  const heads = [];
+  for (let i = 0; i < N; i++) {
+    if (!rendered[i]) continue;
+    let isHead = true;
+    for (const nb of adj[i]) { if (rendered[nb] && receiver[nb] === i) { isHead = false; break; } }
+    if (isHead) heads.push(i);
+  }
+  const vPos = [], vDepth = [], vIdx = []; let vBase = 0;
+  const drawn = new Uint8Array(N);
+  const up = new THREE.Vector3(), fwd = new THREE.Vector3(), side = new THREE.Vector3();
+  function emitValley(spts) {
+    if (spts.length < 2) return;
+    const P = spts.map(s => new THREE.Vector3(s.p[0], s.p[1], s.p[2]));
+    for (let k = 0; k < spts.length; k++) {
+      const cur = P[k];
+      fwd.set(0, 0, 0);
+      if (k > 0) fwd.add(cur.clone().sub(P[k - 1]));
+      if (k < spts.length - 1) fwd.add(P[k + 1].clone().sub(cur));
+      up.copy(cur).normalize();
+      fwd.sub(up.clone().multiplyScalar(fwd.dot(up)));
+      if (fwd.lengthSq() < 1e-14) fwd.set(up.y, up.z, up.x);
+      fwd.normalize();
+      side.crossVectors(up, fwd).normalize().multiplyScalar(spts[k].w);
+      const C = cur.clone().normalize();
+      const L = cur.clone().sub(side).normalize(), R = cur.clone().add(side).normalize();
+      vPos.push(L.x, L.y, L.z, C.x, C.y, C.z, R.x, R.y, R.z);   // 3 rails: L, C, R
+      vDepth.push(0.0, spts[k].d, 0.0);
+      if (k > 0) {
+        const a = vBase + (k - 1) * 3, b = vBase + k * 3;   // a:[L,C,R]@k-1  b:[L,C,R]@k
+        vIdx.push(a, a + 1, b, a + 1, b + 1, b);             // left quad  (L,C)
+        vIdx.push(a + 1, a + 2, b + 1, a + 2, b + 2, b + 1); // right quad (C,R)
+      }
+    }
+    vBase += spts.length * 3;
+  }
+  function pathFrom(start) {
+    const raw = []; let c = start, g = 0;
+    while (rendered[c] && g++ < 200000) {
+      raw.push(c);
+      if (drawn[c]) break;
+      drawn[c] = 1;
+      const r = receiver[c];
+      if (r === c || !rendered[r]) { if (r !== c) raw.push(r); break; }
+      c = r;
+    }
+    return raw;
+  }
+  function buildAndEmit(start) {
+    const raw = pathFrom(start);
+    if (raw.length < 2) return;
+    const pts = raw.map(idx => ({ p: [pos[idx * 3], pos[idx * 3 + 1], pos[idx * 3 + 2]],
+                                  w: halfWidthAt(idx), d: depthAt(strahler[idx] || MIN_ORDER) }));
+    emitValley(chaikin(pts, CHAIKIN_ITERS));
+  }
+  for (const h of heads) buildAndEmit(h);
+  for (let i = 0; i < N; i++) { if (rendered[i] && !drawn[i]) buildAndEmit(i); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(vPos, 3));
+  g.setAttribute('aDepth', new THREE.Float32BufferAttribute(vDepth, 1));
+  g.setIndex(vIdx);
+  return g;
+}
+
+// Cube map of valley depth (R channel), rendered from the valley footprint geometry by a CubeCamera
+// at the origin. MAX blend + no depth test so the deepest valley wins where tributaries overlap; the
+// planet shader samples it as textureCube(map, normalize(vPos)).r — direction-keyed, so no equirect
+// seam or pole distortion, and rotation-invariant (object space) like every other combiner.
+export function createCarveCubeMap({ renderer, size = 1024 }) {
+  const cubeRT = new THREE.WebGLCubeRenderTarget(size, {
+    type: THREE.HalfFloatType, format: THREE.RGBAFormat,
+    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
+  });
+  const mat = new THREE.ShaderMaterial({
+    glslVersion: null,
+    vertexShader: `
+      precision highp float;
+      attribute float aDepth;
+      varying float vDepth;
+      void main(){ vDepth = aDepth; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+    `,
+    fragmentShader: `
+      precision highp float;
+      varying float vDepth;
+      void main(){ gl_FragColor = vec4(vDepth, 0.0, 0.0, 1.0); }
+    `,
+    side: THREE.DoubleSide,
+    depthTest: false, depthWrite: false,
+    blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation,
+    blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+  });
+  const cubeScene = new THREE.Scene();
+  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+  mesh.frustumCulled = false;
+  cubeScene.add(mesh);
+  const cubeCam = new THREE.CubeCamera(0.01, 3, cubeRT);
+  const _c = new THREE.Color();
+  function update(valleyGeo) {
+    mesh.geometry.dispose();
+    mesh.geometry = valleyGeo;
+    const prevTarget = renderer.getRenderTarget();
+    renderer.getClearColor(_c); const prevAlpha = renderer.getClearAlpha();
+    renderer.setClearColor(0x000000, 0);   // empty cube = depth 0 (no valley); MAX accumulates from 0
+    cubeCam.update(renderer, cubeScene);
+    renderer.setClearColor(_c, prevAlpha);
+    renderer.setRenderTarget(prevTarget);
+  }
+  function dispose() { cubeRT.dispose(); mat.dispose(); mesh.geometry.dispose(); }
+  return { texture: cubeRT.texture, update, dispose };
+}
+
 // ───────────── stats bundle (C1 height sanity + C2/AC5 network metrics) ─────────────
 export function buildStats({ routed, height, N, faces, seaLevel, oceanCount, ribGeo, label, totalMs }) {
   let hmin = Infinity, hmax = -Infinity, nan = 0; const hs = [];
@@ -536,7 +696,7 @@ export function buildStats({ routed, height, N, faces, seaLevel, oceanCount, rib
 //             returns it so the host can drive its water to match) or 'live' (uses the host's
 //             current uniforms.uSeaLevel as the outlet condition, no sea override).
 export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS, octavesDuringRead = 9 }) {
-  let mesh = null, sampler = null, N = 0;
+  let mesh = null, sampler = null, carve = null, N = 0;
   let height = null, grad = null, isOcean = null, oceanCount = 0, seaLevel = 0, stats = null, meshMs = 0;
   const ribbon = new THREE.Mesh(
     new THREE.BufferGeometry(),
@@ -554,6 +714,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     for (let i = 0; i < N; i++) { pos[i * 3] = mesh.verts[i][0]; pos[i * 3 + 1] = mesh.verts[i][1]; pos[i * 3 + 2] = mesh.verts[i][2]; }
     mesh.pos = pos; mesh.N = N;
     sampler = createHeightSampler({ renderer, uniforms, verts: mesh.verts, octavesDuringRead });
+    carve = createCarveCubeMap({ renderer, size: params.CARVE_CUBE_SIZE });
     meshMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
   }
 
@@ -566,6 +727,9 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     const routed = routeAndOrder({ mesh, height, grad, isOcean, params });
     const ribGeo = buildRibbonGeometry({ mesh, routed, params });
     ribbon.geometry.dispose(); ribbon.geometry = ribGeo;
+    // carve: rasterize the valley footprint into the depth cube map (same network as the ribbon)
+    const valleyGeo = buildValleyGeometry({ mesh, routed, params });
+    carve.update(valleyGeo);
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
     stats = buildStats({ routed, height, N, faces: mesh.faces.length, seaLevel, oceanCount, ribGeo, label, totalMs });
     stats.meshMs = +meshMs.toFixed(0);
@@ -578,6 +742,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     get stats() { return stats; }, get seaLevel() { return seaLevel; },
     get height() { return height; }, get grad() { return grad; }, get isOcean() { return isOcean; },
     get sampler() { return sampler; },
-    dispose() { if (sampler) sampler.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
+    get carveTexture() { return carve ? carve.texture : null; },
+    dispose() { if (sampler) sampler.dispose(); if (carve) carve.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
   };
 }

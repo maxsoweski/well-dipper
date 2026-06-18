@@ -195,8 +195,30 @@
 
     const fragmentShader = /* glsl */ `
       ${HEIGHT_GLSL}
+      // ── AC4 river carve — samplerCube of valley depth (rendered from the REAL routed network,
+      // planet-lod-rivers.js). Sampled by surface direction; bends the normal into a V-channel +
+      // darkens the floor. uRiverCarveStrength == 0 ⇒ untouched (regression-safe). This is the
+      // F11 replacement done right: the carve follows the dendritic network, not a noise mask.
+      uniform samplerCube uRiverCarveMap;
+      uniform float uRiverCarveStrength;   // master gate + normal bend amount
+      uniform float uRiverCarveFloor;      // valley-floor albedo darkening amount
+      // Returns valley depth at dir and writes the tangential gradient of depth (object space).
+      float sampleCarve(vec3 dir, out vec3 depthGrad){
+        float eps = 0.0045;
+        vec3 ref = abs(dir.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+        vec3 t1 = normalize(cross(dir, ref));
+        vec3 t2 = cross(dir, t1);
+        float dC  = textureCube(uRiverCarveMap, dir).r;
+        float dP1 = textureCube(uRiverCarveMap, normalize(dir + eps * t1)).r;
+        float dM1 = textureCube(uRiverCarveMap, normalize(dir - eps * t1)).r;
+        float dP2 = textureCube(uRiverCarveMap, normalize(dir + eps * t2)).r;
+        float dM2 = textureCube(uRiverCarveMap, normalize(dir - eps * t2)).r;
+        depthGrad = ((dP1 - dM1) * t1 + (dP2 - dM2) * t2) / (2.0 * eps);
+        return dC;
+      }
       void main(){
         vec3 N = normalize(vObjN);
+        float carveDepth = 0.0;
 
         // ── voronoi3d seam-gate debug (index §5 risk #1) — early-return viz ──
         if (uDebugMode > 0){
@@ -373,6 +395,15 @@
             }
             strandLine *= gentle * uStrandStrength * coastW;
           }
+          // ── AC4 river carve — incise the routed network into the relief. Adds the valley's
+          // tangential gradient onto grad (valley = negative height delta ⇒ grad += -∇depth), so
+          // perturbAnalytic bends the surface normal into the V-channel; flattened inside standing
+          // liquid (no walls under the sea). carveDepth is reused at Stage 6 for floor darkening.
+          if (uRiverCarveStrength > 0.0){
+            vec3 carveGrad;
+            carveDepth = sampleCarve(N, carveGrad);
+            grad += -carveGrad * uRiverCarveStrength * (1.0 - liquidMask);
+          }
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
           shadeN = perturbAnalytic(N, grad, reliefAmp);
           // F24 gas flattening — a banded gas deck has no terrain to light: relax the
@@ -462,6 +493,10 @@
         // fluvialWet=0 ⇒ unchanged. Kept subtle so it reads as a floor darkening through posterize.
         vec3 fluvTint = (uLiquidSpecies == 1) ? vec3(0.30, 0.22, 0.10) : vec3(0.10, 0.14, 0.24);
         albedoCol = mix(albedoCol, fluvTint, clamp(fluvialWet, 0.0, 1.0) * 0.35 * uFluvialDensity);
+        // ── AC4 river carve — wet valley-floor darkening along the carved network (the F11 tint's
+        // role, but keyed on the real carve depth, not a noise mask). uRiverCarveFloor 0 ⇒ no-op.
+        vec3 carveFloorCol = (uLiquidSpecies == 1) ? vec3(0.10, 0.07, 0.03) : vec3(0.05, 0.07, 0.12);
+        albedoCol = mix(albedoCol, carveFloorCol, clamp(carveDepth * uRiverCarveFloor, 0.0, 1.0) * (1.0 - liquidMask));
         // F20 coastlines — three pre-posterize luminance terms (card §6.5 step 3). Beach
         // mixes toward a species-keyed band: water → pale sand, methane → dark tholin
         // shore (card §6: NO bright water-world beach on Titan); frost wins over beach
@@ -1230,6 +1265,23 @@
 
     const uniforms = makeUniforms(WORLD_LIGHT);
 
+    // ── AC4 river carve uniforms. samplerCube must always be bound, so seed with a 1×1 black
+    // (depth 0 = no carve) dummy cube until the overlay renders the real one. Strength/floor 0 by
+    // default ⇒ the carve is a no-op (planet renders byte-identically) until the overlay turns it on.
+    function makeDummyCubeTexture(){
+      const faces = [];
+      for (let i = 0; i < 6; i++){
+        const c = document.createElement('canvas'); c.width = c.height = 1;
+        const cx = c.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, 1, 1);
+        faces.push(c);
+      }
+      const ct = new THREE.CubeTexture(faces); ct.needsUpdate = true; return ct;
+    }
+    const _dummyCarveCube = makeDummyCubeTexture();
+    uniforms.uRiverCarveMap      = { value: _dummyCarveCube };
+    uniforms.uRiverCarveStrength = { value: 0.0 };
+    uniforms.uRiverCarveFloor    = { value: 0.0 };
+
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
     const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
     const planet = new THREE.Mesh(geometry, material);
@@ -1246,7 +1298,8 @@
     const riverOverlay = createRiverOverlay({ renderer, uniforms, octavesDuringRead: 9 });
     riverOverlay.ribbon.visible = false;
     planet.add(riverOverlay.ribbon);
-    const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35, _f11Saved: true, status: '(off)' };
+    const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35,
+      carve: true, carveStrength: 0.7, carveFloor: 1.3, _f11Saved: true, status: '(off)' };
 
     // ─────────────────────────────────────────────────────────────────────────
     // F34 / F31e — detached haze shell: a slightly enlarged BACK-FACE sphere
@@ -3333,6 +3386,10 @@
         state.lakesEnabled = true;
         state.coastStrength = 1.0;
       }
+      // point the planet shader at the freshly-rendered valley-depth cube + apply carve amounts
+      uniforms.uRiverCarveMap.value = riverOverlay.carveTexture || _dummyCarveCube;
+      uniforms.uRiverCarveStrength.value = riverOverlayState.carve ? riverOverlayState.carveStrength : 0.0;
+      uniforms.uRiverCarveFloor.value    = riverOverlayState.carve ? riverOverlayState.carveFloor : 0.0;
       riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · ${stats.totalMs}ms`;
       syncDisplays();
     }
@@ -3348,9 +3405,17 @@
         riverReroute('enable');
       } else {
         state.riversEnabled = riverOverlayState._f11Saved;   // restore F11 to its prior state
+        uniforms.uRiverCarveStrength.value = 0.0;            // carve off (planet back to byte-identical)
+        uniforms.uRiverCarveFloor.value = 0.0;
         riverOverlayState.status = '(off)';
         applyDrivers();                    // restore the driven sea level (undo the histogram override)
       }
+    }
+    // live carve tuning (no re-route needed — just the shader amounts)
+    function applyCarveAmounts(){
+      if (!riverOverlayState.enabled) return;
+      uniforms.uRiverCarveStrength.value = riverOverlayState.carve ? riverOverlayState.carveStrength : 0.0;
+      uniforms.uRiverCarveFloor.value    = riverOverlayState.carve ? riverOverlayState.carveFloor : 0.0;
     }
     // Debounced re-route so dragging a terrain slider doesn't route on every onChange (~100-170ms each).
     let _riverRerouteTimer = 0;
@@ -3613,6 +3678,9 @@
     fRiversOverlay.add(riverOverlayState, 'enabled').name('✓ overlay (F11 off when on)').listen().onChange(setRiverOverlay);
     fRiversOverlay.add(riverOverlayState, 'seaFromHistogram').name('sea from histogram (AC3)').onChange(()=>riverReroute('seaMode'));
     fRiversOverlay.add(riverOverlayState, 'targetOceanFraction', 0.15, 0.55, 0.01).name('target ocean frac').onChange(()=>riverRerouteDebounced());
+    fRiversOverlay.add(riverOverlayState, 'carve').name('carve valleys into terrain').onChange(()=>{ riverRerouteDebounced(); applyCarveAmounts(); });
+    fRiversOverlay.add(riverOverlayState, 'carveStrength', 0, 2, 0.01).name('carve depth (normal)').onChange(applyCarveAmounts);
+    fRiversOverlay.add(riverOverlayState, 'carveFloor', 0, 3, 0.01).name('floor darkening').onChange(applyCarveAmounts);
     fRiversOverlay.add({ reroute(){ riverReroute('manual'); } }, 'reroute').name('↻ re-route now');
     fRiversOverlay.add(riverOverlayState, 'status').name('status').listen().disable();
 
