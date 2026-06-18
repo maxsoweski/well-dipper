@@ -80,6 +80,17 @@ Max opened a scoping pass on AC6 ("rivers as integrated, scale-coupled terrain")
   reads the full combiner-chain `h` (read-coupling), so this half is mostly owned. Physical back-coupling
   (crater lakes, river mouths widening coasts, lava/dune valley burial) hits the one-pass-bake ceiling and is
   **deferred** (named in the new workstream's intent).
+  - **UAT CORRECTION (2026-06-18):** "mostly owned" was too strong. Max's holistic UAT found rivers
+    *cutting through mountains*. Root cause: the read-coupling has a **resolution ceiling** — the router
+    routes on the 40k-vertex mesh (~140 km spacing), which **aliases** terrain finer than its spacing
+    (adjacent verts differ by up to ~35% of the height range), so a routed segment crosses rendered ridges
+    the graph never saw; the carve then incised them **unconditionally**, gouging trenches through peaks.
+    Fixed at the carve layer (commit `348b7a0`): a **relief gate** (`uRiverCarveGateHi`) keyed on the
+    shader's per-pixel `h` — the only field that sees the sub-mesh ridge — fades the carve out on high
+    ground (depth + wall-bend + floor together), so the height-modifying features *do* compose. The deeper
+    fix (the route itself not crossing rendered ridges) is the **40k-mesh ceiling = the deferred
+    `rivers-viewdependent-lod-2026-06-18` workstream**. So: read-coupling is owned at the carve/render
+    boundary now; route-vs-render fidelity is explicitly deferred, not "mostly owned."
 - **Small-body / large-channel application** (outflow channels, chasmata on moons) is a parked future hunch,
   not in scope now.
 

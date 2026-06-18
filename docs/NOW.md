@@ -140,6 +140,22 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 >   gate, OUTSTANDING** — load a wet preset (~35% ocean), overlay ON, judge vs the old F11 worm-trails.
 > Pushes NOT done (Max confirms). After UAT-PASS → start the view-dependent spike (`rivers-viewdependent-lod-2026-06-18`).
 
+> **▶ UAT 3 FIXES BUILT + verified → re-VERIFIED_PENDING_MAX (2026-06-18).** All three landed on `master`
+> (unpushed); rivers/planet cluster 282/282; router-lab regression re-checked clean (0 orphan/uphill,
+> Strahler 5, R_b 5.15). **Item 3 (biggest) ROOT-CAUSED** via systematic-debugging + live carve-OFF A/B:
+> the artifact is the **carve, applied UNCONDITIONALLY** along the routed network (never checking local
+> rendered relief); the route sits on high ground because the 40k mesh **aliases** terrain (adjacent verts
+> differ up to 35% of the height range) — the deep resolution gap = the deferred view-dependent workstream.
+> Max chose **Layer-1 relief gate**: `348b7a0` — new `uRiverCarveGateHi` (0.18) gates carve depth + wall-bend
+> + floor-darkening by the shader's own per-pixel `h` (the only field that sees the sub-mesh ridge), so it
+> incises lowland valleys but fades on peaks ("features work together"). **Item 2** `ce84c1f` — wall-bend
+> (`carveStrength`) default 0.7→0.01, slider re-ranged 0–0.15. **Item 1** `827e40f` (both levers, Max-picked):
+> floor `WIDTH_RADIUS_FLOOR` 0.2→0.08 (r11 now 0.091=1/11, was clamped) + per-planet seeded width draw
+> `widthSeedFactor(seed)`∈[0.6,1.5] threaded `route({widthSeed:state.macroSeed})` (live: seed 1/7/42 →
+> 0.773/0.631/1.469, deterministic; same-terrain A/B visibly thinner/thicker). All identity-safe. **NEXT:
+> Max UAT on :9223 (lab live, all 3 in); optional `verify-workstream` re-run; intent honesty on the
+> read-coupling ceiling reconciled in the contract.** Handoff: `/tmp/handoff-rivers-UAT-fixes-2026-06-18.md`.
+
 > **▶ MAX UAT (2026-06-18) RETURNED 3 FIXES — workstream REOPENED (not shipped).** Handoff:
 > `/tmp/handoff-rivers-UAT-fixes-2026-06-18.md`. In Max's words: (1) **scale must go SMALLER, seed-dependent**
 > (today width is seed-invariant + floored at `WIDTH_RADIUS_FLOOR 0.2`); (2) **"wall bend (normal)" looks
