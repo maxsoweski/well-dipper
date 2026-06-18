@@ -120,6 +120,26 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > AC7 (regen budget), AC8 (Max UAT) — **THEN** start the view-dependent spike. Active workstream stays
 > `rivers-dendritic-drainage-2026-06-17`.
 
+> **▶ GLOBAL RIVERS → VERIFIED_PENDING_MAX `d420c85` (2026-06-18).** Sequence (Max's pick: AC6 hookup →
+> verify → UAT) executed:
+> • **AC5 routing metrics** `74bbe87` — added the missing monotonic-width metric (reads 0); R_b guard band
+>   **calibrated [3,5.5]→[3,7]** per Max ("calibrate to reality": 6.16 is a global-POOLED estimate, textbook
+>   3-5 is per-basin; every structural check clean + look eye-passed at AC4, so calibrate the yardstick, don't
+>   retune generation). All 7 metrics pass: orphan/uphill/widthViolations 0, maxStrahler 6, near-collinear 0%,
+>   median turn 30.7°.
+> • **AC6 scale-coupling** `d420c85` — radius-coupled the global overlay: object-space river width ∝
+>   1/radiusEarth (inverse of the Theme-B `featureFrequencyFromKm`), `widthRadiusFactor`/`paramsForRadius` in
+>   `planet-lod-rivers.js`, threaded via `route({radiusEarth})`, wired from `state.planetRadiusEarth`. Live
+>   RE1→RE3: factor 1.0→0.333, network valid, smaller disk-fraction. Mesh-res scaling **deferred-by-design** to
+>   the view-dependent workstream (a 40k global mesh can't resolve big-world thread-thin rivers).
+> • **AC7 regen budget** — live-verified: mesh built once (710ms), NOT rebuilt on sea-level OR terrain change
+>   (mesh-ref stable), re-route 113-202ms.
+> • **verify-workstream** (`wf_d829c028-886`, full, liveBranch=main): Unit PASS (AC1/AC3); the 5 live-integration
+>   ACs I drove green on :9223 (working-Claude); AC4's stale "floating ribbon ~R*1.001" wording **reconciled** in
+>   the contract (shipped = LIFT 0.999 seated + carve Option-B flood). `verdict.json` written. **AC8 UAT = Max's
+>   gate, OUTSTANDING** — load a wet preset (~35% ocean), overlay ON, judge vs the old F11 worm-trails.
+> Pushes NOT done (Max confirms). After UAT-PASS → start the view-dependent spike (`rivers-viewdependent-lod-2026-06-18`).
+
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
 > `dependsOn.features`; massWasting deps→20 grad-writers; lakes→frost/dust/sunglint/cityLights;

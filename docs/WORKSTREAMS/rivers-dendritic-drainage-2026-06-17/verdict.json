@@ -1,0 +1,58 @@
+{
+  "workstream": "rivers-dendritic-drainage-2026-06-17",
+  "commit": "d420c85",
+  "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "deferred-to-max" },
+  "liveDriveBy": "working-Claude (main thread, chrome-devtools :9223) — liveBranch=main, so verify-workstream wf_d829c028-886 left the 5 live-integration ACs INSUFFICIENT pending these drives; results below applied 2026-06-18.",
+  "perAC": [
+    {
+      "id": "AC1-shared-height-module",
+      "result": "PASS",
+      "evidence": "Static (diff is the gate). Single h(pos) source: planet-lod-height.glsl.js HEIGHT_GLSL consumed by both planet shader (planet-lod-lab.html) and river router (planet-lod-rivers.js). Byte-identity proof: module == removed lab lines verbatim; uniform-defaults moved verbatim to planet-lod-uniforms.js. Extraction commit 8fcfaeb. vitest planet/core: 298 tests green incl. finite-diff parity guards.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2-real-terrain-coupling",
+      "result": "PASS",
+      "evidence": "Static code-path PASS (RTT FloatType readback, shared height module, gradient before F14 cut, ocean=real level-set). LIVE-DRIVEN 2026-06-18 on :9223: riverStats nanCount=0 (per-vertex h all finite), h range finite (hMin -0.285 / hMedian 0.146 / hMax 0.60), ocean==real level-set at 35%. Terrain dial re-samples the live shader: a radius reseed moved the read-back heights (hMax 0.60->0.558, hMedian 0.1455->0.1324, sea re-solved 0.1045->0.0909) — router demonstrably routes on the live planet field, not a JS FBM.",
+      "adversarialVotes": "3/3 sufficient (static)"
+    },
+    {
+      "id": "AC3-sealevel-from-histogram",
+      "result": "PASS",
+      "evidence": "Unit. planet-lod-sealevel.js solveSeaLevel inverse-CDF (2048-bin). vitest: 6/6 oracle (achievedFraction within 2pp for uniform/bell/positive-skewed, monotonicity, degenerate clamps, finite-on-flat); 25/25 with archetypes. Single sea-level source, default target 0.35 in 0.25-0.45 band. Live: all reseeds land 35% (killed the old ~13%-underwater failure on the positive-skewed real stack).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC4-ribbon-overlay-render",
+      "result": "PASS",
+      "evidence": "LIVE-DRIVEN 2026-06-18 on :9223 (judged against INTENT — verify flagged the original 'floating ribbon ~R*1.001' wording as stale; reconciled in contract: shipped behavior is LIFT=0.999 seated + carve Option-B valley flood). Screenshots rivers-verify-AC4-{equator,npole}-2026-06-18: dendritic valley network follows the real valleys and drains to the seas; F11 OFF (state.riversEnabled gate=false) so NO double network / NO worm-trail band; network continuous over the north pole with NO seam/pinch. Matches the 2026-06-18 carve-review look Max approved-in-principle at AC4.",
+      "adversarialVotes": "0/3 sufficient on STALE static text — live drive against intent resolves it"
+    },
+    {
+      "id": "AC5-dendritic-routing-metrics",
+      "result": "PASS",
+      "evidence": "LIVE-DRIVEN 2026-06-18, window._lab.riverStats at the Max-approved 35% ocean: orphanPct 0, uphillPct 0, maxStrahler 6, widthViolations 0 (new metric this session), riverNearCollinearPct 0%, riverTurnMedianDeg 30.7 (natural meander, not grid-locked). bifurcationRatio 6.16 (global-pooled regression) / 5.52 (trimmed) — within the calibrated guard band [3,7] (Max decision 2026-06-18: textbook 3-5 is per-basin; global pooling inflates ~0.5-1). All 7 metrics pass.",
+      "adversarialVotes": "2/3 sufficient (static)"
+    },
+    {
+      "id": "AC6-scale-coupling",
+      "result": "PASS",
+      "evidence": "LIVE-DRIVEN 2026-06-18. widthRadiusFactor=clamp(refR/radiusEarth,0.2,2.5) scales WIDTH_SCALE/MIN/MAX; route({radiusEarth}) threads it into ribbon+valley, topology radius-invariant. Sweep RE1->RE3: widthRadiusFactor 1.0->0.333 (exactly 1/3), network stays valid (orphan/uphill/widthViolations 0, ocean 35%), renderedCount 8425->8712. Isolated width A/B on fixed terrain (rivers-AC6-widthA/B): visibly thinner/finer channels = smaller disk-fraction. Mesh-resolution scaling DEFERRED-by-design to rivers-viewdependent-lod (40k global mesh can't resolve a big world's thread-thin rivers).",
+      "adversarialVotes": "2/3 sufficient (static)"
+    },
+    {
+      "id": "AC7-regeneration-budget",
+      "result": "PASS",
+      "evidence": "LIVE-DRIVEN 2026-06-18. Mesh built once (meshMs 710, ensureMesh guarded; mesh object reference stable across 3 sea-level re-routes AND a terrain reseed — not rebuilt). Re-route-only path 113-202ms vs ~850ms cold (mesh 710 + route ~140) — materially cheaper, matches the contract ~100-170ms band. Sea-level retargets live (25/45/35%); terrain reseed re-reads height + re-routes via the lab's own debounced applyDrivers path (113ms) with the mesh intact and the network valid throughout.",
+      "adversarialVotes": "3/3 sufficient (static)"
+    },
+    {
+      "id": "AC8-reads-as-rivers",
+      "result": "deferred-to-max",
+      "evidence": "UAT — holistic acceptance, Max's gate alone; no agent PASSes it. Substrate AC1-AC7 is verified green. Max's UAT: open planet-lod-lab.html on :9223, a wet preset (~35% ocean), river overlay ON, and judge whether the rivers read as real dendritic drainage to the seas and a clear improvement over the old F11 worm-trails.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX d420c85 — Unit PASS (AC1, AC3); Integration PASS (AC2/AC4/AC5/AC6/AC7 driven green live by working-Claude on :9223); UAT (AC8) deferred to Max. The stale AC4 wording the verify flagged was reconciled in the contract (seated+flood, not floating ribbon).",
+  "summaryForMax": "Global rivers workstream is VERIFIED_PENDING_MAX at d420c85. Everything an agent can objectively check is green: the two unit ACs (shared height module, histogram sea level) PASS headless; the five live-integration ACs (real-terrain coupling, ribbon/valley render, routing metrics, radius scale-coupling, regeneration budget) I drove green on the :9223 GPU lab this session. AC5's R_b guard band was calibrated to reality per your call; AC4's contract text was reconciled (the shipped look is water-filled valleys, not a floating ribbon). Only AC8 remains — your holistic UAT: load a wet preset (~35% ocean), turn the river overlay ON, and judge whether it reads as real dendritic rivers draining to the seas and a clear win over the old F11 worm-trails. That felt judgment is the gate no agent can render."
+}

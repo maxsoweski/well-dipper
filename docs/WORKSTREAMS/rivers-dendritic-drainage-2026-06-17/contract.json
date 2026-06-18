@@ -2,7 +2,7 @@
   "workstream": "rivers-dendritic-drainage-2026-06-17",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "VERIFIED_PENDING_MAX d420c85 (2026-06-18) — unit+integration green; AC8 UAT deferred to Max. See verdict.json.",
   "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-17. Theme A item #3 of lod-lab-quality-backlog (wrong generation primitive). Built on two PASSED viability spikes: sphere-routing (rivers-sphere-spike-plan-2026-06-17.md, commit e2f3bb5) and terrain-coupling (rivers-terrain-lab.html, 2026-06-17, C3 Max-eye-approved). Render method = ribbon geometry overlay (not texture bake).",
   "acceptanceCriteria": [
     {
@@ -35,7 +35,7 @@
     },
     {
       "id": "AC4-ribbon-overlay-render",
-      "statement": "Rivers render as the variable-width ribbon-geometry overlay on the actual lab planet (lifted ~R*1.001), following the real valleys into the seas; the old F11 fluvialCombiner height contribution is disabled in the lab (no double rivers / no leftover worm-trail noise-band).",
+      "statement": "Rivers render on the actual lab planet, following the real valleys into the seas; the old F11 fluvialCombiner height contribution is disabled in the lab (no double rivers / no leftover worm-trail noise-band). WORDING RECONCILED 2026-06-18 (verify flagged the original as stale): the original text said 'ribbon-geometry overlay lifted ~R*1.001' (floating above the surface). The SHIPPED + Max-approved behavior (AC4 carve review, commit 382b698) is LIFT=0.999 -- the water ribbon is SEATED just below the mean surface -- PLUS carve Option-B, which lowers h along the routed network BEFORE the F14 sea cut so valleys FLOOD with real F14 water (albedo/glint/coast for free). The correct visual is therefore water-filled valleys, not a floating ribbon. Intent is the gate: rivers follow the real valleys into the seas, no F11 worm-trail band, no pole/seam.",
       "verifyVia": {
         "input": "Lab on :9223, a wet Rocky preset: screenshot the planet with rivers from >=4 viewpoints incl. both poles + a basin close-up; confirm the old F11 carve/tint is off (uFluvialDensity path disabled)",
         "observable": "Ribbon network visible on the shaded planet, trunks reaching the water bodies, tributaries branching upslope; no second river pattern from the old noise-band; no seam/pole artifact across the viewpoints"
