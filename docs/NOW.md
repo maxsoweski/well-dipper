@@ -50,7 +50,11 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > framing is STALE — superseded). 8-AC contract in
 > `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/` (intent + contract; AC1 shared-height-GLSL
 > module, AC3 sea-level-from-histogram = the two coupling-spike findings). Active workstream flipped to
-> rivers. **NEXT = BUILD** per contract; handoff `/tmp/handoff-rivers-build-2026-06-17.md`.
+> rivers. **BUILD IN PROGRESS:** **AC1 (shared-height-module) DONE + committed `8fcfaeb`** (2026-06-18)
+> — height GLSL + uniform defaults single-sourced into `planet-lod-height.glsl.js` + `planet-lod-uniforms.js`,
+> proven zero-behavior (fragmentShader byte-identical, 328 uniforms identical bar uTime, 273/273 gate green,
+> lab loads clean on :9223). **NEXT = AC2 (real-terrain RTT coupling) + AC3 (sea-level-from-histogram).**
+> Build handoff `/tmp/handoff-rivers-build-2026-06-17.md`; AC2 pickup `/tmp/handoff-rivers-AC2-2026-06-18.md`.
 
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
