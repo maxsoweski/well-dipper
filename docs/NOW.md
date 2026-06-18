@@ -101,6 +101,25 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > intent.md but Max REOPENED it (now landed) — note the reversal when the contract is revised. Handoff:
 > `/tmp/handoff-rivers-AC6-scale-scope-2026-06-18.md`.
 
+> **▶ AC6 SCOPE PASS DONE + Max-GREENLIT (2026-06-18, commit `2669e53`).** dev-collab-scope pass.
+> Max sharpened "realistic at scale" → **realistic from a SPACECRAFT POV** (Elite-Dangerous: far orbit
+> down to "planet fills the viewport, just above atmosphere"). The single global 40k-vertex bake
+> structurally can't resolve thread-thin close-approach rivers (≈140km vertex floor, ≈14km min width) →
+> **the close-approach realism SPLIT OUT into a new spike-first workstream:
+> `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/`** (intent + 7-AC contract, validated). Arch is
+> research-forced (5-agent prior-art + code-map scan in the two `research/` dirs): keep the existing
+> global route as a LOD-independent **authority**, deterministically **amplify** local detail (Dendry,
+> Gaillard I3D 2019) conditioned on it; **evaluate SDF-in-shader render vs the current ribbon** (S5
+> reverses the global overlay's "ribbon, NOT SDF" call — sub-pixel ribbons shimmer). S4 (faint-at-orbit →
+> resolve-on-approach) KEPT. Integration = rivers **sit/drain in the composed terrain** (read-coupling,
+> mostly owned); physical back-coupling (crater lakes, mouths, burial) DEFERRED + named. The
+> small-body/large-channel idea is a parked hunch. **AC6 in the GLOBAL contract reduced to the
+> macro/proportioning layer only** (+ forward-pointer; stale line refs fixed). The earlier "two-regime
+> split" framing in the handoff is SUPERSEDED (small-body parked; the work is the Earth+ spacecraft regime).
+> **SEQUENCING (Max): FINISH GLOBAL RIVERS FIRST** — remaining AC5 (R_b=6.16 @ 35% ocean vs [3,5.5] band),
+> AC7 (regen budget), AC8 (Max UAT) — **THEN** start the view-dependent spike. Active workstream stays
+> `rivers-dendritic-drainage-2026-06-17`.
+
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
 > `dependsOn.features`; massWasting deps→20 grad-writers; lakes→frost/dust/sunglint/cityLights;
