@@ -155,6 +155,7 @@
     import { bakeRingCloud, makeRingCloudPoints } from './ring-particle-cloud.js';   // F51 rings-v2 — near-tier LOD particle cloud
     import { HEIGHT_GLSL } from './planet-lod-height.glsl.js';   // AC1: single source of h(pos) GLSL (lab + river router)
     import { makeUniforms } from './planet-lod-uniforms.js';      // AC1: single source of uniform defaults (factory)
+    import { createRiverOverlay } from './planet-lod-rivers.js';  // AC4: dendritic river ribbon overlay (shared router/ribbon pipeline)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -1233,6 +1234,19 @@
     const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
     const planet = new THREE.Mesh(geometry, material);
     scene.add(planet);
+
+    // ── AC4 — dendritic river ribbon overlay (planet-lod-rivers.js, the shared router/ribbon
+    // pipeline proven in the router lab). Lazily builds its irregular spherical-Delaunay mesh on
+    // first enable, then reads the lab's LIVE height field via FloatType RTT (octaves pinned high,
+    // the SHARED AC1 height GLSL) → priority-flood/D-inf routing → Horton–Strahler → variable-width
+    // ribbon. Parented to `planet` (never scaled/moved) so it co-rotates with the spin; hidden
+    // until the Rivers-overlay toggle turns it on — which also forces F11 off via state.riversEnabled
+    // (the per-frame gate at the F11 block). riverOverlayState + the control fns live below the GUI;
+    // re-route hooks hang off applyDrivers (debounced) so rivers track the current preset/dials.
+    const riverOverlay = createRiverOverlay({ renderer, uniforms, octavesDuringRead: 9 });
+    riverOverlay.ribbon.visible = false;
+    planet.add(riverOverlay.ribbon);
+    const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35, _f11Saved: true, status: '(off)' };
 
     // ─────────────────────────────────────────────────────────────────────────
     // F34 / F31e — detached haze shell: a slightly enlarged BACK-FACE sphere
@@ -3299,7 +3313,53 @@
       state._derived = u;
       syncDisplays();
       applyArchetypeFilter();   // preset changed → re-derive relevant archetype + re-filter
+      riverRerouteDebounced();  // AC4: if the overlay is on, re-route on the new terrain/preset
     }
+
+    // ── AC4 river overlay control ────────────────────────────────────────────────
+    // route(): re-read the live height field + re-route + re-ribbon (no mesh rebuild — AC7).
+    // In histogram mode the overlay OWNS the planet sea so the visible water and the river
+    // outlets agree: drive state.seaLevel (the per-frame F14 sync propagates it to uSeaLevel) and
+    // force lakes/coast on. 'live' mode instead routes to whatever sea the preset currently shows.
+    function riverReroute(label){
+      if (!riverOverlayState.enabled) return;
+      const { stats, seaLevel } = riverOverlay.route({
+        label: label || 'reroute',
+        seaMode: riverOverlayState.seaFromHistogram ? 'histogram' : 'live',
+        targetFraction: riverOverlayState.targetOceanFraction,
+      });
+      if (riverOverlayState.seaFromHistogram){
+        state.seaLevel = seaLevel;
+        state.lakesEnabled = true;
+        state.coastStrength = 1.0;
+      }
+      riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · ${stats.totalMs}ms`;
+      syncDisplays();
+    }
+    // Enable/disable: turning the overlay ON forces F11 off (saving the prior flag) and routes;
+    // OFF restores F11 + re-runs applyDrivers to undo the histogram sea override.
+    function setRiverOverlay(on){
+      riverOverlayState.enabled = on;
+      riverOverlay.ribbon.visible = on;
+      if (on){
+        riverOverlayState._f11Saved = state.riversEnabled;
+        state.riversEnabled = false;       // F11 height carve + tint off (per-frame gate)
+        syncDisplays();
+        riverReroute('enable');
+      } else {
+        state.riversEnabled = riverOverlayState._f11Saved;   // restore F11 to its prior state
+        riverOverlayState.status = '(off)';
+        applyDrivers();                    // restore the driven sea level (undo the histogram override)
+      }
+    }
+    // Debounced re-route so dragging a terrain slider doesn't route on every onChange (~100-170ms each).
+    let _riverRerouteTimer = 0;
+    function riverRerouteDebounced(){
+      if (!riverOverlayState.enabled) return;
+      clearTimeout(_riverRerouteTimer);
+      _riverRerouteTimer = setTimeout(() => riverReroute('applyDrivers'), 220);
+    }
+
     const fDrivers = guiLeft.addFolder('Drivers'); fDrivers.open();
     // preset picker moved up to the top-of-panel World folder (added below).
     fDrivers.add(driverUI, 'qualityTier', 0, 1, 0.01).name('qualityTier').onChange(applyDrivers);
@@ -3543,6 +3603,18 @@
     fRivers.add(state, 'fluvialLowBias', 0, 1, 0.02).name('low-ground bias');
     fRivers.add(state, 'riversEnabled').name('✓ enabled');
     fRivers.add({ roll(){ state.fluvialOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+
+    // ▸ Rivers — dendritic overlay (F11 replacement, AC4). Ribbon-geometry overlay routed on the
+    // REAL height field over an irregular Delaunay mesh — the proven router/ribbon pipeline. When
+    // ON, F11's height carve + tint switch off (state.riversEnabled→0) so there is no double network.
+    // 'sea from histogram' (AC3) drives the planet sea to the target ocean fraction so the visible
+    // water and the river outlets agree; off → routes to the preset's own sea.
+    const fRiversOverlay = fGrad.addFolder('Rivers — dendritic overlay (AC4)'); fRiversOverlay.close();
+    fRiversOverlay.add(riverOverlayState, 'enabled').name('✓ overlay (F11 off when on)').listen().onChange(setRiverOverlay);
+    fRiversOverlay.add(riverOverlayState, 'seaFromHistogram').name('sea from histogram (AC3)').onChange(()=>riverReroute('seaMode'));
+    fRiversOverlay.add(riverOverlayState, 'targetOceanFraction', 0.15, 0.55, 0.01).name('target ocean frac').onChange(()=>riverRerouteDebounced());
+    fRiversOverlay.add({ reroute(){ riverReroute('manual'); } }, 'reroute').name('↻ re-route now');
+    fRiversOverlay.add(riverOverlayState, 'status').name('status').listen().disable();
 
     // ▸ Lakes & seas (F14) — standing-liquid level-set cut on the accumulated height.
     // seaLevel is driven (stability × volatiles via applyDrivers, .listen() syncs);
@@ -5246,6 +5318,10 @@
                     rings(on){ state.ringsEnabled = on !== false; return state.ringsEnabled; },   // F51 :9223 toggle
                     rerollRadius(){ rerollRadius(); return state.planetRadiusEarth; },   // AC5 :9223 reroll hook
                     drawPresetRadius(name, seed){ return drawPresetRadius(name, seed >>> 0); },   // AC5 pure-draw probe
+                    // AC4 — dendritic river overlay handles (toggle + re-route + live stats)
+                    rivers(on){ setRiverOverlay(on !== false); return riverOverlayState.enabled; },
+                    riversReroute(opts){ if (opts && opts.seaFromHistogram !== undefined) riverOverlayState.seaFromHistogram = opts.seaFromHistogram; if (opts && opts.targetFraction !== undefined) riverOverlayState.targetOceanFraction = opts.targetFraction; riverReroute('manual'); return riverOverlay.stats; },
+                    get riverOverlay(){ return riverOverlay; }, get riverStats(){ return riverOverlay.stats; }, riverState: riverOverlayState,
                     get sceneTarget(){ return sceneTarget; } };
 
     // ── HOT-RELOAD SCENARIO PERSISTENCE (2026-06-10) ──
