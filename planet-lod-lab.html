@@ -3396,6 +3396,7 @@
         label: label || 'reroute',
         seaMode: riverOverlayState.seaFromHistogram ? 'histogram' : 'live',
         targetFraction: riverOverlayState.targetOceanFraction,
+        radiusEarth: state.planetRadiusEarth,   // AC6: width/footprint scales with planet radius
       });
       if (riverOverlayState.seaFromHistogram){
         state.seaLevel = seaLevel;

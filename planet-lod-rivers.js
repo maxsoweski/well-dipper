@@ -28,12 +28,42 @@ export const DEFAULT_PARAMS = Object.freeze({
   DINF_ROUTE: true,
   CHANNEL_FRAC: 0.06,
   LIFT: 0.999,   // seat the water just BELOW the mean surface so it sits in the channel (was 1.0035 = floating)
+  // ── AC6 radius-coupling (Theme-B scale system) ──
+  // The width fields above are calibrated at the REFERENCE radius. River width is a real-km
+  // footprint; on a unit sphere it occupies a fraction ∝ 1/radiusEarth (the inverse of
+  // featureFrequencyFromKm). So WIDTH_SCALE/MIN/MAX scale by refRadius/radiusEarth, clamped so a
+  // giant world's rivers don't vanish and a tiny world's don't bloat. (Mesh-resolution scaling is
+  // deliberately NOT done here — a single 40k global mesh can't resolve a big world's thread-thin
+  // rivers; that's the deferred view-dependent LOD workstream. AC6 is macro PROPORTIONING only.)
+  REF_RADIUS_EARTH: 1.0,
+  WIDTH_RADIUS_FLOOR: 0.2, WIDTH_RADIUS_CEIL: 2.5,
   // ── carve (river→valley incision) ──
   VALLEY_WIDTH_MUL: 4.0,   // valley footprint = water width × this (the V is wider than the water)
   VALLEY_DEPTH_LO: 0.45, VALLEY_DEPTH_HI: 1.0,   // center depth (0..1) lerped by stream order; cube map stores this
   CARVE_CUBE_SIZE: 1024,
   TARGET_OCEAN_FRACTION: 0.35,   // AC3: solve uSeaLevel to this fraction (band 0.25–0.45)
 });
+
+// AC6: object-space river-width factor for a planet of radiusEarth. ∝ refRadius/radiusEarth
+// (bigger world ⇒ proportionally thinner rivers ⇒ smaller disk-fraction), clamped off the
+// degenerate extremes. radiusEarth floored at 1e-6 so a ~0 radius can't divide-by-zero.
+export function widthRadiusFactor(radiusEarth, params = DEFAULT_PARAMS) {
+  const ref = params.REF_RADIUS_EARTH ?? 1.0;
+  const f = ref / Math.max(radiusEarth || ref, 1e-6);
+  return Math.min(params.WIDTH_RADIUS_CEIL ?? 2.5, Math.max(params.WIDTH_RADIUS_FLOOR ?? 0.2, f));
+}
+
+// AC6: return params with the width law scaled for this planet radius. Identity at the reference
+// radius (so existing callers / the router lab are byte-for-byte unchanged). Scales the absolute
+// width fields only — WIDTH_PHI/EXP (the accumulation SHAPE) are radius-invariant.
+export function paramsForRadius(params = DEFAULT_PARAMS, radiusEarth) {
+  if (radiusEarth == null) return params;
+  const k = widthRadiusFactor(radiusEarth, params);
+  if (Math.abs(k - 1) < 1e-9) return params;
+  return { ...params,
+    WIDTH_SCALE: params.WIDTH_SCALE * k, WIDTH_MIN: params.WIDTH_MIN * k, WIDTH_MAX: params.WIDTH_MAX * k,
+    _widthRadiusFactor: k };
+}
 
 // ───────────────────────── RTT height shader (router main) ─────────────────────────
 // Identity clip-space vertex shader: one texel per vertex, writes the three varyings
@@ -730,21 +760,24 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     meshMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
   }
 
-  function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, label = 'route' } = {}) {
+  function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
     const r = sampler.read(); height = r.height; grad = r.grad;
     seaLevel = (seaMode === 'histogram') ? solveSeaLevel(height, targetFraction) : uniforms.uSeaLevel.value;
     const oc = computeOcean(height, seaLevel, N); isOcean = oc.isOcean; oceanCount = oc.oceanCount;
+    // AC6: routing/topology is radius-invariant; only the width law (ribbon + valley footprint) scales.
+    const pEff = paramsForRadius(params, radiusEarth);
     const routed = routeAndOrder({ mesh, height, grad, isOcean, params });
-    const ribGeo = buildRibbonGeometry({ mesh, routed, params });
+    const ribGeo = buildRibbonGeometry({ mesh, routed, params: pEff });
     ribbon.geometry.dispose(); ribbon.geometry = ribGeo;
     // carve: rasterize the valley footprint into the depth cube map (same network as the ribbon)
-    const valleyGeo = buildValleyGeometry({ mesh, routed, params });
+    const valleyGeo = buildValleyGeometry({ mesh, routed, params: pEff });
     carve.update(valleyGeo);
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
     stats = buildStats({ routed, height, N, faces: mesh.faces.length, seaLevel, oceanCount, ribGeo, label, totalMs });
     stats.meshMs = +meshMs.toFixed(0);
+    stats.widthRadiusFactor = pEff._widthRadiusFactor != null ? +pEff._widthRadiusFactor.toFixed(3) : 1;
     return { stats, seaLevel };
   }
 
