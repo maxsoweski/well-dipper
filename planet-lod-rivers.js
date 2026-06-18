@@ -508,6 +508,17 @@ export function buildRibbonGeometry({ mesh, routed, params = DEFAULT_PARAMS }) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(ribCol, 3));
   g.setIndex(ribIdx); g.computeVertexNormals();
   g.userData.renderedCount = rendered.reduce((a, b) => a + b, 0);
+  // AC5: monotonic-width violation count — width must grow (never shrink) toward the sea along
+  // the rendered network. width = f(accum) with accum monotone-nondecreasing downstream, so this
+  // is structurally 0; the metric is the guard that the width law actually preserves that.
+  let widthViolations = 0;
+  for (let i = 0; i < N; i++) {
+    if (!rendered[i]) continue;
+    const r = receiver[i];
+    if (r === i || !rendered[r]) continue;        // sea-mouth or order-cutoff terminus
+    if (widthAt(r) < widthAt(i) - 1e-6) widthViolations++;
+  }
+  g.userData.widthViolations = widthViolations;
   return g;
 }
 
@@ -682,6 +693,7 @@ export function buildStats({ routed, height, N, faces, seaLevel, oceanCount, rib
     riverTurnMedianDeg: routed.riverScale.medianTurnDeg, riverNearCollinearPct: routed.riverScale.nearCollinearPct,
     riverScale6TurnDeg: routed.riverScale6.medianTurnDeg,
     channelCount: routed.channelCount, renderedCount: ribGeo ? ribGeo.userData.renderedCount : 0,
+    widthViolations: ribGeo ? (ribGeo.userData.widthViolations ?? null) : null,
     orderHist: routed.orderHist, streamCount: routed.streamCount,
   };
 }
