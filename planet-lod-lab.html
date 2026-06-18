@@ -204,6 +204,7 @@
       uniform float uRiverCarveFloor;      // valley-floor albedo darkening amount
       uniform float uRiverCarveDepth;      // Option B: h-units the floor drops (→ F14 flood)
       uniform float uRiverCarveRough;      // fbm roughness on depth + walls (breaks the clean V)
+      uniform float uRiverCarveGateHi;     // relief gate (UAT item3): carve fades out above this elevation-over-sea (peaks); large ⇒ old unconditional behavior
       // Returns valley depth at dir and writes the tangential gradient of depth (object space).
       float sampleCarve(vec3 dir, out vec3 depthGrad){
         float eps = 0.0045;
@@ -368,6 +369,17 @@
               float rn = 0.5 * snoise(vPos * 14.0) + 0.25 * snoise(vPos * 30.0) + 0.125 * snoise(vPos * 62.0);
               cr = clamp(1.0 + uRiverCarveRough * rn, 0.0, 2.0);
             }
+            // RELIEF GATE (UAT item 3, 2026-06-18): the routed network is baked on the 40k-vertex
+            // global mesh, which aliases over relief finer than its ~140km spacing; where a routed
+            // segment crosses a rendered ridge, the UNCONDITIONAL carve gouged a trench THROUGH the
+            // peak (Max UAT: "rivers cut straight into mountains"). Gate the carve by the LOCAL
+            // RENDERED elevation — the accumulated analytic h here is the only field that sees the
+            // sub-mesh ridge (the router's own h does not) — so it incises lowland valleys but fades
+            // out on high ground: the height-modifying features "work together". uRiverCarveGateHi
+            // large ⇒ reliefGate ~1 everywhere = prior (unconditional) behavior.
+            float aboveSea = max(0.0, h - uSeaLevel);
+            float reliefGate = 1.0 - smoothstep(uRiverCarveGateHi * 0.35, uRiverCarveGateHi, aboveSea);
+            cr *= reliefGate;                                  // gates depth, wall-bend AND dry-floor darkening together
             carveDepth *= cr;
             h    -= carveDepth * uRiverCarveDepth;              // lower the floor → F14 floods it
             grad += -carveGrad * cr * uRiverCarveStrength;      // bend the walls into the V
@@ -1296,6 +1308,7 @@
     uniforms.uRiverCarveFloor    = { value: 0.0 };
     uniforms.uRiverCarveDepth    = { value: 0.0 };   // Option B: h-units the floor is lowered (→ F14 floods)
     uniforms.uRiverCarveRough    = { value: 0.0 };   // fbm roughness on depth+walls (breaks the clean V/waterline)
+    uniforms.uRiverCarveGateHi   = { value: 0.18 };  // relief gate (UAT item3): carve fades out above this elevation-over-sea
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
     const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
@@ -1315,6 +1328,7 @@
     planet.add(riverOverlay.ribbon);
     const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35,
       carve: true, carveStrength: 0.7, carveFloor: 1.3, carveDepthH: 0.08, carveRough: 0.5,
+      carveGateHi: 0.18,
       _f11Saved: true, status: '(off)' };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -3409,6 +3423,7 @@
       uniforms.uRiverCarveFloor.value    = riverOverlayState.carve ? riverOverlayState.carveFloor : 0.0;
       uniforms.uRiverCarveDepth.value    = riverOverlayState.carve ? riverOverlayState.carveDepthH : 0.0;
       uniforms.uRiverCarveRough.value    = riverOverlayState.carve ? riverOverlayState.carveRough : 0.0;
+      uniforms.uRiverCarveGateHi.value   = riverOverlayState.carveGateHi;
       riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · ${stats.totalMs}ms`;
       syncDisplays();
     }
@@ -3439,6 +3454,7 @@
       uniforms.uRiverCarveFloor.value    = riverOverlayState.carve ? riverOverlayState.carveFloor : 0.0;
       uniforms.uRiverCarveDepth.value    = riverOverlayState.carve ? riverOverlayState.carveDepthH : 0.0;
       uniforms.uRiverCarveRough.value    = riverOverlayState.carve ? riverOverlayState.carveRough : 0.0;
+      uniforms.uRiverCarveGateHi.value   = riverOverlayState.carveGateHi;
     }
     // Debounced re-route so dragging a terrain slider doesn't route on every onChange (~100-170ms each).
     let _riverRerouteTimer = 0;
@@ -3703,6 +3719,7 @@
     fRiversOverlay.add(riverOverlayState, 'targetOceanFraction', 0.15, 0.55, 0.01).name('target ocean frac').onChange(()=>riverRerouteDebounced());
     fRiversOverlay.add(riverOverlayState, 'carve').name('carve valleys into terrain').onChange(()=>{ riverRerouteDebounced(); applyCarveAmounts(); });
     fRiversOverlay.add(riverOverlayState, 'carveStrength', 0, 2, 0.01).name('wall bend (normal)').onChange(applyCarveAmounts);
+    fRiversOverlay.add(riverOverlayState, 'carveGateHi', 0.02, 1.0, 0.01).name('relief gate (peaks off)').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveDepthH', 0, 0.3, 0.005).name('flood depth (h↓→water)').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveRough', 0, 1, 0.01).name('edge roughness').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveFloor', 0, 3, 0.01).name('dry-floor darkening').onChange(applyCarveAmounts);
