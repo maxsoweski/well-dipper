@@ -2,7 +2,7 @@
   "workstream": "rivers-dendritic-drainage-2026-06-17",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "VERIFIED_PENDING_MAX d420c85 (2026-06-18) — unit+integration green; AC8 UAT deferred to Max. See verdict.json.",
+  "status": "REOPENED — Max UAT (2026-06-18) returned 3 fixes (rivers cut through mountains [height-coupling, biggest]; scale must go smaller seed-dependent; wall-bend-normal best ~0.01). Build/verify through d420c85 was unit+integration green (see verdict.json), but AC8 UAT did not pass. Fixes tracked in /tmp/handoff-rivers-UAT-fixes-2026-06-18.md + NOW.md.",
   "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-17. Theme A item #3 of lod-lab-quality-backlog (wrong generation primitive). Built on two PASSED viability spikes: sphere-routing (rivers-sphere-spike-plan-2026-06-17.md, commit e2f3bb5) and terrain-coupling (rivers-terrain-lab.html, 2026-06-17, C3 Max-eye-approved). Render method = ribbon geometry overlay (not texture bake).",
   "acceptanceCriteria": [
     {

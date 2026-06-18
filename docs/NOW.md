@@ -140,6 +140,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 >   gate, OUTSTANDING** — load a wet preset (~35% ocean), overlay ON, judge vs the old F11 worm-trails.
 > Pushes NOT done (Max confirms). After UAT-PASS → start the view-dependent spike (`rivers-viewdependent-lod-2026-06-18`).
 
+> **▶ MAX UAT (2026-06-18) RETURNED 3 FIXES — workstream REOPENED (not shipped).** Handoff:
+> `/tmp/handoff-rivers-UAT-fixes-2026-06-18.md`. In Max's words: (1) **scale must go SMALLER, seed-dependent**
+> (today width is seed-invariant + floored at `WIDTH_RADIUS_FLOOR 0.2`); (2) **"wall bend (normal)" looks
+> best at ~0.01** (`carveStrength` default 0.7 → re-default/re-range); (3) **BIGGEST: rivers cut straight
+> INTO mountains/high terrain instead of flowing down/around** — "all features that modify terrain height
+> need to work together." Ruled out = missing combiners (`ROUTER_MAIN` runs the full chain). Prime
+> hypotheses: (A) router under-resolves fine relief (40k verts ~140km + `octavesDuringRead:9` vs full-res
+> shader → routes across peaks it can't see); (B) carve is unconditional along the path → gouges trenches
+> through rendered mountains. Fix is an INTEGRATION decision (raise router fidelity vs relief-aware
+> routing/carve vs. it may force starting the view-dependent workstream) — brainstorm with Max, don't
+> param-nudge. **Next session: fix item 3 first (systematic-debugging), then 1 + 2, then re-run verify.**
+
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
 > `dependsOn.features`; massWasting deps→20 grad-writers; lakes→frost/dust/sunglint/cityLights;
