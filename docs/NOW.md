@@ -50,10 +50,16 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > framing is STALE — superseded). 8-AC contract in
 > `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/` (intent + contract; AC1 shared-height-GLSL
 > module, AC3 sea-level-from-histogram = the two coupling-spike findings). Active workstream flipped to
-> rivers. **BUILD IN PROGRESS:** **AC1 (shared-height-module) DONE + committed `8fcfaeb`** (2026-06-18)
-> — height GLSL + uniform defaults single-sourced into `planet-lod-height.glsl.js` + `planet-lod-uniforms.js`,
-> proven zero-behavior (fragmentShader byte-identical, 328 uniforms identical bar uTime, 273/273 gate green,
-> lab loads clean on :9223). **NEXT = AC2 (real-terrain RTT coupling) + AC3 (sea-level-from-histogram).**
+> rivers. **BUILD IN PROGRESS:** **AC1 (shared-height-module) DONE `8fcfaeb`; AC2+AC3 DONE + committed
+> `03cf22a`** (2026-06-18). AC2 (real-terrain RTT coupling) — router lab reads the lab's REAL h+grad at
+> ~40k verts via the SHARED AC1 modules (the "both consumers" proof); verified live on :9223: h+grad
+> finite, ocean == real level-set, terrain dial moves the read-back heights; zero-drift vs the spike;
+> obsolete verbatim copies removed, router lab graduated to tracked source. AC3 (sea-level-from-histogram,
+> TDD) — `planet-lod-sealevel.js` inverse-CDF solver (6 oracle tests); per-planet sea solve lands all 5
+> reseeds at exactly 35% ocean (was ~13%). Also fixed an AC1 regression `planet-archetypes.test.js` missed
+> (GLSL-mirror parse repointed to the shared module). 273/273 planet cluster green. **NEXT = AC4 (ribbon
+> overlay on the actual lab planet + retire F11) → AC5 (routing metrics; ⚠ R_b ~6 at 35% ocean vs [3,5.5]
+> band — at 12.7% it was 4.84, so the higher sea shifts bifurcation stats; address in AC5) → AC6/AC7.**
 > Build handoff `/tmp/handoff-rivers-build-2026-06-17.md`; AC2 pickup `/tmp/handoff-rivers-AC2-2026-06-18.md`.
 
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
