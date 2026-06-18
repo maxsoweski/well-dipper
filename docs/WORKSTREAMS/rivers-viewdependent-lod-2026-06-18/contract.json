@@ -1,0 +1,99 @@
+{
+  "workstream": "rivers-viewdependent-lod-2026-06-18",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-18. Spin-off from rivers-dendritic-drainage-2026-06-17 (AC6 scope pass). SPIKE-FIRST: proves a close-approach view-dependent river mechanism in an isolated harness before any production build is scoped. Grounded by a 5-agent prior-art + code-map scan (docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/research/ + ../rivers-dendritic-drainage-2026-06-17/research/). Architecture is research-forced: keep the existing global route as the LOD-independent authority, deterministically amplify local detail (Dendry, Gaillard 2019) conditioned on it; render via SDF-in-surface-shader (recommended first attempt, reverses the global overlay's ribbon decision).",
+  "acceptanceCriteria": [
+    {
+      "id": "S1-isolated-harness",
+      "statement": "A standalone view-dependent rivers harness (e.g. rivers-viewdependent-lab.html) exists that loads the existing global router output as the coarse authority and adds the view-dependent amplification + render on top -- WITHOUT modifying the production river path (planet-lod-rivers.js and planet-lod-lab.html's river integration stay byte-identical). The spike lives entirely in the harness per the isolated-test-harness rule.",
+      "verifyVia": {
+        "input": "git diff over planet-lod-rivers.js and planet-lod-lab.html (river-integration regions); load the new harness on :9223",
+        "observable": "Harness loads and renders a planet with rivers; planet-lod-rivers.js is unchanged and the production lab's river wiring is unchanged (diff empty for those paths); the global overlay lab (rivers-dendritic-drainage) still works"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "S2-authority-drives-amplification",
+      "statement": "The CRUX: the macro drainage network is taken from the existing global route and stays positionally STABLE across zoom; fine local detail is synthesized deterministically (seeded by position, Dendry-style) and CONDITIONED on that coarse authority -- not regenerated independently per patch. Re-viewing the same patch reproduces identical detail.",
+      "verifyVia": {
+        "input": "On :9223 harness, fixed seed: zoom far -> close -> far and compare the macro trunk network; toggle the amplification layer; re-enter a previously-viewed patch",
+        "observable": "Macro trunk network is positionally identical at every zoom level (no shift/swim); amplified tributaries appear only as detail beneath the existing trunks; the same patch regenerates byte-identical detail on re-view (deterministic)"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "S3-close-approach-realism",
+      "statement": "At the closest spacecraft approach (planet fills the viewport), channels render thread-thin (order ~1-4 px-equivalent, not continental gashes), tributary count increases as you approach, channel width tapers toward the headwaters (~ drainage-area^0.35 / Strahler order), and reaches show natural wobble rather than grid-locked straight lines -- reading as dense dendritic drainage.",
+      "verifyVia": {
+        "input": "On :9223, close-approach viewpoints on >=2 wet presets; read the harness's width distribution + per-distance channel/tributary counts; screenshot",
+        "observable": "At closest approach channel widths are small relative to the disk (no continental-width gashes); more channels resolve as distance decreases; widths taper monotonically headward; reaches are non-collinear (natural meander, not straight grid lines)"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "S4-pop-free-appearance-lod",
+      "statement": "Across the full envelope (far orbit -> close approach -> back), rivers fade from faint/invisible at orbit to fully resolved on approach via CONTINUOUS contrast/width-driven fades -- no discrete pop, no swimming, no flicker, no sudden appearance/disappearance of channels.",
+      "verifyVia": {
+        "input": "On :9223, step/animate the camera distance across the full far-orbit-to-close envelope and back; watch transitions; screenshot a few stops",
+        "observable": "Rivers faint or absent at far orbit, smoothly resolving on approach (modeled as contrast loss, not a resolution cutoff); through the whole sweep no channel pops in/out, swims, or shimmers"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "S5-thin-render-stable",
+      "statement": "The chosen render method (SDF-in-surface-shader is the recommended first attempt vs. the existing ribbon overlay) draws sub-pixel-to-few-pixel-wide rivers STABLY: no aliasing/shimmer/edge-crawl as the camera moves at close approach, and no z-fighting at the limb. If SDF fails, the harness records why and what was tried (3-cycle cap).",
+      "verifyVia": {
+        "input": "On :9223, translate/orbit the camera at close approach along a thin river reach and at the planet limb; observe edges across motion",
+        "observable": "Thin river edges stay stable under camera motion (analytic-AA / coverage-faded, no crawling or shimmer); no z-fighting or depth artifacts at the limb"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "S6-sits-in-composed-terrain",
+      "statement": "Amplified rivers follow the REAL composed terrain at the close-approach scale -- running down actual valleys, collecting into trunks toward the seas, pooling in basins -- with none running uphill or across ridge crests, and proportioned so a large planet does not read as small.",
+      "verifyVia": {
+        "input": "On :9223, inspect the amplified network against the rendered relief on a wet preset at close approach; spot-check channels vs valleys/ridges",
+        "observable": "Channels lie in real lows/valleys and converge toward water bodies; zero rivers crossing ridge crests or running uphill; overall proportion reads correct for the body's size"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "S7-viability-verdict",
+      "statement": "A written go/no-go viability verdict names the proven mechanism (or, if it failed within the 3-cycle cap, the failure mode + the next candidate technique) and the recommended follow-on production build scope. AND, from Max's view, walking the harness far->close across multiple wet presets, the close-approach rivers read as real rivers from a spacecraft and are a clear improvement over the prior continental gashes. Holistic acceptance -- Max's gate alone.",
+      "verifyVia": {
+        "input": "Max walks the :9223 harness across presets and the full distance envelope, and reads the verdict doc",
+        "observable": "Max judges the close-approach rivers read as realistic dendritic drainage from a spacecraft and clearly beat the old global-bake gashes; a verdict document exists recording the mechanism decision + recommended build scope"
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "The existing GLOBAL river route as the coarse authority: planet-lod-rivers.js createRiverOverlay.route() -> priority-flood + flow-accumulation + Horton-Strahler trunk topology (the LOD-independent network the local layer amplifies). Code map confirms this route CANNOT be decomposed per-chunk (drainage area needs the whole upstream network)",
+      "The composed analytic height field h(pos): base fbm + the ~25-combiner chain (planet-lod-lab.html:320-354, analytic uNormalMode==0 branch) -- rivers already drain the composed relief of every other combiner (read-coupling)",
+      "The F14 water level-set: uSeaLevel (used at planet-lod-lab.html:382) + the sea cut (:382-385) -- the river outlet condition (h < uSeaLevel)",
+      "Theme-B km scale system: featureFrequencyFromKm / reliefAmplitudeFromKm (planet-lod-lab-core.js:966-975) + RADIUS_RANGES_EARTH / planetRadiusEarth (src/core/ScaleConstants.js) -- proportioning the amplified network for the body, and pixels-per-km at the camera driving the LOD laws",
+      "Prior art (2026-06-18 scan, research/): Dendry (Gaillard et al., I3D 2019; ref impl github.com/mgaillard/Noise); Derzapf et al. 2011 'River Networks for Instant Procedural Planets'; Bruneton & Neyret 2008 / Proland (vector rivers + footprint/appearance shaders, view-dependent quadtree); quantitative laws (Hack h~0.57, width ~ area^0.35, drainage density)"
+    ],
+    "outputs": [
+      "A standalone view-dependent rivers harness (rivers-viewdependent-lab.html or similar) -- isolated, production untouched",
+      "A view-dependent local-amplification module: deterministic, position-seeded dendritic detail conditioned on the coarse global authority",
+      "An SDF-based river render path in the surface shader + continuous appearance-LOD fades (projected-width visibility + atmospheric contrast) -- to be compared against the existing ribbon overlay",
+      "A written viability verdict doc: mechanism decision (or failure mode + next candidate) + recommended follow-on production build scope"
+    ],
+    "mustStayWorking": [
+      "The production global river overlay and its lab (rivers-dendritic-drainage-2026-06-17 workstream) -- untouched during the spike",
+      "planet-lod-rivers.js -- shared by both labs (rivers-terrain-lab.html and planet-lod-lab.html); must not regress",
+      "The planet generation, scale (Theme-B), and water/level-set systems",
+      "The existing planet-generation vitest suite + planet-lod-lab-core.js finite-diff parity guards"
+    ]
+  }
+}

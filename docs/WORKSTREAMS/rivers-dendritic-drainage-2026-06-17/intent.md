@@ -61,6 +61,28 @@ to the seas.
 - **Retire the old F11** in the lab — disable the `fluvialCombiner` height contribution (it self-gates
   on `uFluvialDensity`) so the overlay doesn't double up.
 
+## Scope clarification (Max, 2026-06-18) — AC6 boundary + the close-approach split
+
+Max opened a scoping pass on AC6 ("rivers as integrated, scale-coupled terrain"). Outcome:
+
+- **AC6 stays the GLOBAL/macro proportioning layer** — radius-couple the existing global overlay so it
+  is correctly sized for the body (this is genuinely undone: the code map confirms `DEFAULT_PARAMS` in
+  `planet-lod-rivers.js` is frozen and radius-blind; nothing reads `planetRadiusEarth`).
+- **"Realistic at terrestrial scale" = realistic from a SPACECRAFT POV** (Max's words), Elite-Dangerous-style:
+  far orbit down to "planet fills the viewport, just above the atmosphere." At that closest approach the
+  current global-bake rivers are continental-width gashes — a single 40k-vertex global mesh structurally
+  cannot resolve thread-thin, numerous rivers (≈140 km vertex spacing, ≈14 km min ribbon width). Resizing
+  the global bake alone cannot reach it.
+- **That close-approach realism moved to a NEW spike-first workstream:**
+  `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/`. It builds ON TOP of this global overlay (which
+  becomes the LOD-independent "authority" the view-dependent layer amplifies from).
+- **Integration (Max's point #2) = rivers sit/drain correctly in the composed terrain.** The router already
+  reads the full combiner-chain `h` (read-coupling), so this half is mostly owned. Physical back-coupling
+  (crater lakes, river mouths widening coasts, lava/dune valley burial) hits the one-pass-bake ceiling and is
+  **deferred** (named in the new workstream's intent).
+- **Small-body / large-channel application** (outflow channels, chasmata on moons) is a parked future hunch,
+  not in scope now.
+
 ## Deferred (named, out of scope here)
 
 - Real geometric **carve** into terrain normals/shadows (overlay sits on the surface; conform-only

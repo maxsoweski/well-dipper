@@ -55,7 +55,7 @@
     },
     {
       "id": "AC6-scale-coupling",
-      "statement": "River footprint and width obey the just-shipped Theme-B km scale system: the width law scale and the mesh/sampling resolution scale with planet radius_km, so rivers stay believably sized across planet sizes and do not make a large planet look small.",
+      "statement": "River footprint and width obey the just-shipped Theme-B km scale system: the width law scale and the mesh/sampling resolution scale with planet radius_km, so rivers stay believably sized across planet sizes and do not make a large planet look small. SCOPE NOTE (2026-06-18): this AC is the GLOBAL/macro proportioning layer ONLY -- correctly sizing the existing global overlay for the body. Realistic rivers at close (spacecraft) approach are a separate spike-first effort: docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/. Code map confirms the overlay currently reads NO radius (DEFAULT_PARAMS is Object.freeze'd and radius-blind in planet-lod-rivers.js; the C_FLUVIAL constant exists but feeds only the dead F11 path), so this hookup is genuinely undone.",
       "verifyVia": {
         "input": "Lab on :9223: sweep the planet-radius dial (e.g. 1.0 -> 3.0 RE) holding the river size inputs; screenshot pair",
         "observable": "On the larger radius the river network occupies a visibly smaller disk-fraction (finer, more numerous channels), consistent with the crater/footprint behavior shipped in planet-scale-normalization; rivers never read oversized for the body"
@@ -85,8 +85,8 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "The lab's accumulated analytic height h(pos): base fbmd (planet-lod-lab.html:898) + the ~20-combiner height chain (:3170-3204), province-weighted -- consumed via the new shared height module (AC1)",
-      "The F14 water level-set: uSeaLevel (:442) and the sea cut (:3212-3216) -- the river outlet condition (h < uSeaLevel)",
+      "The lab's accumulated analytic height h(pos): base fbm + the ~25-combiner height chain (planet-lod-lab.html:320-354, analytic uNormalMode==0 branch in main()), province-weighted -- consumed via the new shared height module (AC1). [line refs verified 2026-06-18; handoff's :3170-3204 was stale by ~2850 lines]",
+      "The F14 water level-set: uSeaLevel (used at :382) and the sea cut (:382-385) -- the river outlet condition (h < uSeaLevel)",
       "The irregular spherical-Delaunay mesh: Fibonacci -> 4x Lloyd -> ConvexHull adjacency (proven in rivers-lab.html) -- routing + render substrate",
       "Theme-B km scale system: featureFrequencyFromKm / reliefAmplitudeFromKm / animationRateFactor (planet-lod-lab-core.js:960-988) + radiusRangesEarth in src/core/ScaleConstants.js -- footprint/width/resolution scaling"
     ],
