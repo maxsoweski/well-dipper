@@ -1327,7 +1327,7 @@
     riverOverlay.ribbon.visible = false;
     planet.add(riverOverlay.ribbon);
     const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35,
-      carve: true, carveStrength: 0.7, carveFloor: 1.3, carveDepthH: 0.08, carveRough: 0.5,
+      carve: true, carveStrength: 0.01, carveFloor: 1.3, carveDepthH: 0.08, carveRough: 0.5,
       carveGateHi: 0.18,
       _f11Saved: true, status: '(off)' };
 
@@ -3718,7 +3718,7 @@
     fRiversOverlay.add(riverOverlayState, 'seaFromHistogram').name('sea from histogram (AC3)').onChange(()=>riverReroute('seaMode'));
     fRiversOverlay.add(riverOverlayState, 'targetOceanFraction', 0.15, 0.55, 0.01).name('target ocean frac').onChange(()=>riverRerouteDebounced());
     fRiversOverlay.add(riverOverlayState, 'carve').name('carve valleys into terrain').onChange(()=>{ riverRerouteDebounced(); applyCarveAmounts(); });
-    fRiversOverlay.add(riverOverlayState, 'carveStrength', 0, 2, 0.01).name('wall bend (normal)').onChange(applyCarveAmounts);
+    fRiversOverlay.add(riverOverlayState, 'carveStrength', 0, 0.15, 0.005).name('wall bend (normal)').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveGateHi', 0.02, 1.0, 0.01).name('relief gate (peaks off)').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveDepthH', 0, 0.3, 0.005).name('flood depth (h↓→water)').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveRough', 0, 1, 0.01).name('edge roughness').onChange(applyCarveAmounts);
