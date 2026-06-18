@@ -10,6 +10,11 @@ import { FEATURES, ARCHETYPES, featuresOf } from '../planet-archetypes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
+// AC1 (rivers-dendritic-drainage) extracted the height GLSL — incl. the provinceWeight()
+// if-chain this test mirrors — into the shared single-source module. The lab now splices it
+// at runtime, so the if-chain rows are parsed from there, not the .html. (Panel toggles +
+// DRIVER_PRESETS still live in the .html, so labSrc stays the source for those.)
+const glslSrc = readFileSync(path.resolve(__dirname, '../planet-lod-height.glsl.js'), 'utf8');
 
 // The enable-keys the panel actually binds, e.g. `.add(state, 'cratersEnabled')`.
 const panelEnableKeys = new Set(
@@ -113,7 +118,7 @@ const GLSL_NAME = {
 };
 const FIELD_OF_SWIZZLE = { x: 0, y: 1, z: 2 };
 const glslRows = Object.fromEntries(
-  [...labSrc.matchAll(
+  [...glslSrc.matchAll(
     /fid == (PROV_\w+)\)\s*\{ f = (1\.0 - )?gProvince\.([xyz]);\s*fl = ([0-9.]+);/g
   )].map(m => [m[1], {
     field: FIELD_OF_SWIZZLE[m[3]],

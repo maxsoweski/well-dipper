@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rivers × Terrain coupling spike</title>
+  <!--
+    rivers-terrain-lab.html — RIVER ROUTER LAB (real-terrain coupling, AC2+AC3).
+    planet-LOD REAL height field (RTT FloatType readback of the SHARED height GLSL —
+    planet-lod-height.glsl.js, F11 omitted, fwBase=0) → proven river router/ribbon pipeline
+    (from rivers-lab.html) → ribbon overlay on a sphere shaded by the real h. Sea level solved
+    per planet from the live height histogram (planet-lod-sealevel.js). Served by the running
+    Vite dev server. Verify via chrome-devtools on 127.0.0.1:5173.
+    Sidecar: rivers-terrain-lab.main.js (imports planet-lod-{height.glsl,uniforms,sealevel}.js).
+  -->
+  <style>
+    html,body { margin:0; height:100%; background:#05060a; overflow:hidden; font-family:ui-monospace,monospace; }
+    #canvas { display:block; width:100vw; height:100vh; }
+    #hud { position:fixed; top:8px; left:8px; color:#9fd; font-size:12px; line-height:1.5;
+           background:rgba(0,0,0,.6); padding:8px 10px; border-radius:6px; white-space:pre; pointer-events:none; }
+    vite-error-overlay { display:none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+  <script type="module" src="./rivers-terrain-lab.main.js"></script>
+</body>
+</html>
