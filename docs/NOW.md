@@ -79,6 +79,27 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > dry groove + thin line, not a water-filled channel).** Then AC5 (routing metrics; ⚠ R_b 6.16 at 35% ocean
 > vs [3,5.5] band — address via CHANNEL_ORDER/width-law/ocean-target) → AC6/AC7. Build handoff
 > `/tmp/handoff-rivers-build-2026-06-17.md`.
+> **▶ AC4 carve — the 2 review fixes LANDED + committed (2026-06-18):** (1) **edges roughened** —
+> carve depth + wall gradient × a surface-keyed fbm (breaks the clean Chaikin V; rides ON the real
+> network, no F11 worm-trail); (2) **valleys FILL with water (Max chose Option B)** — the carve now
+> lowers `h` BEFORE the F14 sea cut so the floor drops below sea level and floods via the same
+> level-set as the oceans (water albedo + glint + coast for free). Both gated by `uRiverCarveStrength`
+> (default-off ⇒ planet byte-identical). All shader-side in `planet-lod-lab.html` — `planet-lod-rivers.js`
+> UNTOUCHED, so router-lab regression is structurally safe. 2 new live sliders (flood depth, edge
+> roughness). Live-verified on :9223 (before/after close-up basin); 282/282 planet tests green.
+> **▶ THEN Max reframed the whole feature → SCALE (2026-06-18, this session's pivot):** current rivers
+> are **continental-width + radius-INDEPENDENT** (40k mesh ⇒ ~88km cell floor; ribbons 14–285km wide,
+> valleys ×4 >1000km) — they look planet-spanning, not riverine, which is why they're visible from orbit
+> when real Earth rivers aren't. Max's framing: current global-bake tech is RIGHT for small bodies /
+> large channels (with mods), but for Earth+ it's "scaled up way too far," AND rivers must compose with
+> the OTHER terrain-modification combiners (they form as part of the terrain, not an overlay).
+> **Decision: scope AC6 (scale-coupling) properly** — bigger than the contract's current AC6 ("width+mesh
+> scale with radius_km" via Theme-B): now also (a) the resolution-floor reality (Earth rivers go
+> sub-visible / need a local/zoom-gated regime, not just "finer"), (b) rivers as a first-class member of
+> the combiner chain. **Next session: dev-collab-scope pass to revise AC6** (grounded in the Theme-B km
+> scale system that already exists + the two-regime split). NOTE: the geometric carve was DEFERRED in
+> intent.md but Max REOPENED it (now landed) — note the reversal when the contract is revised. Handoff:
+> `/tmp/handoff-rivers-AC6-scale-scope-2026-06-18.md`.
 
 > **Feature-association manifest — Tier-1 + Tier-2 landed (2026-06-14):** Tier-1 added the
 > cross-source (vs-shader) test tier + grounded defect fixes (`modifies` DERIVED from
