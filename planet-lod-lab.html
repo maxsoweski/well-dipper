@@ -2266,9 +2266,16 @@
       const h = (n) => { const x = Math.sin(n) * 43758.5453; return (x - Math.floor(x)) * 256.0; };
       return out.set(h(seed*12.9898 + 78.233), h(seed*39.346 + 11.135), h(seed*53.711 + 94.673));
     }
+    let _seedUniformsInited = false;
     function updateSeedUniforms(){
       seedOffset(state.macroSeed,  uniforms.uMacroOffset.value);
       seedOffset(state.detailSeed, uniforms.uDetailOffset.value);
+      // AC3: a seed change (macro/detail reroll, "New planet", scenario restore) is a planet change,
+      // so re-route the dendritic network always (debounced; routes even when the ribbon is hidden).
+      // Skipped on the first call — startup routing is handled by the deferred initial route below,
+      // which also waits for first paint so the one-time mesh build doesn't block it.
+      if (_seedUniformsInited && typeof riverRerouteDebounced === 'function') riverRerouteDebounced();
+      _seedUniformsInited = true;
     }
     updateSeedUniforms();
 
@@ -3406,70 +3413,94 @@
     }
 
     // ── AC4 river overlay control ────────────────────────────────────────────────
-    // route(): re-read the live height field + re-route + re-ribbon (no mesh rebuild — AC7).
-    // In histogram mode the overlay OWNS the planet sea so the visible water and the river
-    // outlets agree: drive state.seaLevel (the per-frame F14 sync propagates it to uSeaLevel) and
-    // force lakes/coast on. 'live' mode instead routes to whatever sea the preset currently shows.
-    function riverReroute(label){
-      if (!riverOverlayState.enabled) return;
-      const { stats, seaLevel } = riverOverlay.route({
-        label: label || 'reroute',
+    // AC3 (always-on routing): the dendritic NETWORK is routed unconditionally per planet so the
+    // router graph + the carve cube (R=depth, and — once AC4–6 land — G=mouth / B=order) exist in
+    // the DEFAULT state, with no manual enable. ensureNetworkRouted() is that always-on path: it
+    // routes, points uRiverCarveMap at the REAL carve cube, sets the relief gate, and updates status
+    // REGARDLESS of riverOverlayState.enabled. It deliberately does NOT touch the things that ARE
+    // visible/opt-in: the histogram sea override (gated to enabled, below, in riverReroute) and the
+    // terrain-carve gouging amounts (gated to enabled && carve, in applyCarveAmounts). So AC3 on its
+    // own produces no visible change — nothing samples G/B yet, and depth-carve stays off by default.
+    function ensureNetworkRouted(label){
+      const res = riverOverlay.route({
+        label: label || 'route',
         seaMode: riverOverlayState.seaFromHistogram ? 'histogram' : 'live',
         targetFraction: riverOverlayState.targetOceanFraction,
         radiusEarth: state.planetRadiusEarth,   // AC6: width/footprint scales with planet radius
         widthSeed: state.macroSeed,             // UAT item1: per-planet seeded width-scale draw
       });
+      const stats = res.stats;
+      // Always point the planet shader at the freshly-rendered carve cube (the REAL texture, never
+      // the dummy) so AC4–6 combiners can sample its G/B channels. The dummy stands in ONLY before
+      // the first route completes (the deferred initial route, below).
+      uniforms.uRiverCarveMap.value = riverOverlay.carveTexture || _dummyCarveCube;
+      uniforms.uRiverCarveGateHi.value = riverOverlayState.carveGateHi;
+      applyCarveAmounts();                 // (re)apply the enabled && carve-gated gouging amounts
+      riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
+      syncDisplays();
+      return res;                          // { stats, seaLevel }
+    }
+    // route(): re-read the live height field + re-route + re-ribbon (no mesh rebuild — AC7).
+    // In histogram mode the overlay OWNS the planet sea so the visible water and the river
+    // outlets agree: drive state.seaLevel (the per-frame F14 sync propagates it to uSeaLevel) and
+    // force lakes/coast on. 'live' mode instead routes to whatever sea the preset currently shows.
+    // riverReroute is the ENABLED-only path: it routes (via ensureNetworkRouted) AND applies the
+    // opt-in histogram sea override. The always-on routing on preset/seed change goes through
+    // riverRerouteDebounced → ensureNetworkRouted directly, so it never forces the sea override.
+    function riverReroute(label){
+      if (!riverOverlayState.enabled) return;
+      // route the network + carve cube, then apply the overlay-only histogram sea override.
+      const { seaLevel } = ensureNetworkRouted(label);
       if (riverOverlayState.seaFromHistogram){
         state.seaLevel = seaLevel;
         state.lakesEnabled = true;
         state.coastStrength = 1.0;
+        syncDisplays();
       }
-      // point the planet shader at the freshly-rendered valley-depth cube + apply carve amounts
-      uniforms.uRiverCarveMap.value = riverOverlay.carveTexture || _dummyCarveCube;
-      uniforms.uRiverCarveStrength.value = riverOverlayState.carve ? riverOverlayState.carveStrength : 0.0;
-      uniforms.uRiverCarveFloor.value    = riverOverlayState.carve ? riverOverlayState.carveFloor : 0.0;
-      uniforms.uRiverCarveDepth.value    = riverOverlayState.carve ? riverOverlayState.carveDepthH : 0.0;
-      uniforms.uRiverCarveRough.value    = riverOverlayState.carve ? riverOverlayState.carveRough : 0.0;
-      uniforms.uRiverCarveGateHi.value   = riverOverlayState.carveGateHi;
-      riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
-      syncDisplays();
     }
-    // Enable/disable: turning the overlay ON forces F11 off (saving the prior flag) and routes;
-    // OFF re-runs applyDrivers to undo the histogram sea override. (The old F11-off coupling is
-    // gone — there is no second river network to mute. state.riversEnabled IS this overlay's enable,
-    // the shared FEATURES['rivers'] key, mirrored to riverOverlayState.enabled for the internal
-    // route/carve guards.)
+    // Enable/disable: this toggle now controls ONLY the visible RIBBON overlay + the opt-in
+    // histogram sea override + the terrain-gouging amounts. The dendritic NETWORK itself is always
+    // routed (AC3 — ensureNetworkRouted on load + preset/seed change), so the carve cube + graph
+    // exist regardless of this toggle; we do NOT revert uRiverCarveMap to the dummy on disable.
+    // ON: show ribbon + re-route (refreshes the route, applies the sea override + gouging amounts).
+    // OFF: hide ribbon, zero gouging amounts (applyCarveAmounts), undo the histogram sea override.
     function setRiverOverlay(on){
       state.riversEnabled = on;            // the registry enableKey — keep it authoritative
       riverOverlayState.enabled = on;      // internal mirror for riverReroute/applyCarveAmounts guards
       riverOverlay.ribbon.visible = on;
       if (on){
         syncDisplays();
-        riverReroute('enable');
+        riverReroute('enable');            // network already routed; this refreshes + applies sea override + carve
       } else {
-        uniforms.uRiverCarveStrength.value = 0.0;            // carve off (planet back to byte-identical)
-        uniforms.uRiverCarveFloor.value = 0.0;
-        uniforms.uRiverCarveDepth.value = 0.0;
-        uniforms.uRiverCarveRough.value = 0.0;
-        riverOverlayState.status = '(off)';
+        applyCarveAmounts();               // enabled=false → forces gouging amounts to 0 (planet un-gouged)
+        riverOverlayState.status = '(routed, ribbon off)';
         applyDrivers();                    // restore the driven sea level (undo the histogram override)
       }
     }
-    // live carve tuning (no re-route needed — just the shader amounts)
+    // live carve tuning (no re-route needed — just the shader amounts). The terrain-GOUGING
+    // amounts stay gated by enabled && carve (so AC3's always-on routing never gouges by default —
+    // the carve cube exists but nothing displaces terrain unless the overlay is enabled and carve
+    // is on). The relief gate is set unconditionally (harmless without strength). When disabled the
+    // gouging amounts are forced to 0 so no stale value survives a disable.
     function applyCarveAmounts(){
-      if (!riverOverlayState.enabled) return;
-      uniforms.uRiverCarveStrength.value = riverOverlayState.carve ? riverOverlayState.carveStrength : 0.0;
-      uniforms.uRiverCarveFloor.value    = riverOverlayState.carve ? riverOverlayState.carveFloor : 0.0;
-      uniforms.uRiverCarveDepth.value    = riverOverlayState.carve ? riverOverlayState.carveDepthH : 0.0;
-      uniforms.uRiverCarveRough.value    = riverOverlayState.carve ? riverOverlayState.carveRough : 0.0;
+      const carveOn = riverOverlayState.enabled && riverOverlayState.carve;
+      uniforms.uRiverCarveStrength.value = carveOn ? riverOverlayState.carveStrength : 0.0;
+      uniforms.uRiverCarveFloor.value    = carveOn ? riverOverlayState.carveFloor : 0.0;
+      uniforms.uRiverCarveDepth.value    = carveOn ? riverOverlayState.carveDepthH : 0.0;
+      uniforms.uRiverCarveRough.value    = carveOn ? riverOverlayState.carveRough : 0.0;
       uniforms.uRiverCarveGateHi.value   = riverOverlayState.carveGateHi;
     }
     // Debounced re-route so dragging a terrain slider doesn't route on every onChange (~100-170ms each).
+    // AC3: routes ALWAYS (no !enabled early-return) so the network/carve cube track the current
+    // preset/seed even when the ribbon is hidden. When enabled we go through riverReroute (which also
+    // applies the opt-in histogram sea override); when disabled we route the network only.
     let _riverRerouteTimer = 0;
     function riverRerouteDebounced(){
-      if (!riverOverlayState.enabled) return;
       clearTimeout(_riverRerouteTimer);
-      _riverRerouteTimer = setTimeout(() => riverReroute('applyDrivers'), 220);
+      _riverRerouteTimer = setTimeout(() => {
+        if (riverOverlayState.enabled) riverReroute('applyDrivers');
+        else ensureNetworkRouted('applyDrivers');
+      }, 220);
     }
 
     const fDrivers = guiLeft.addFolder('Drivers'); fDrivers.open();
@@ -5373,6 +5404,16 @@
     }
     rebuildTarget();
     frame();
+
+    // AC3: route the dendritic network ONCE on load so the carve cube + graph exist by default
+    // (no manual enable). Deferred past first paint — the one-time ~1.4s mesh build (ensureMesh,
+    // cached thereafter) must not block the first frame. Two rAF ticks + a short timeout let the
+    // planet paint first; subsequent routes (preset/seed change) are warm. ensureNetworkRouted does
+    // NOT apply the ribbon, the histogram sea override, or terrain gouging — so this is pure infra
+    // with no visible change (nothing samples G/B until AC4–6).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setTimeout(() => { try { ensureNetworkRouted('initial'); } catch (e) { console.warn('[AC3] initial route failed', e); } }, 0);
+    }));
 
     window.addEventListener('resize', () => {
       const { w, h } = rebuildTarget();
