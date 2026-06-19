@@ -19,9 +19,15 @@
    gravity and so on. Right now scale feels all over the place, like the size of features
    isn't normalized; often they (especially craters and rivers) make the planet look really
    small because of their relative size."
-3. **Rivers & valleys — shape + math** — "Rivers and valleys' shapes need work. The current
-   system just does not replicate rivers realistically. The math needs to be updated. There's
-   probably math out there for simulating rivers and associated features we can copy."
+3. **Rivers & valleys — shape + math** — ✅ **SHIPPED `f45c804` (2026-06-19, global layer).**
+   Replaced the cell-noise F11 worm-trails with a real spherical-Delaunay dendritic drainage
+   network routed on the actual lab terrain (shared height module), histogram sea level, relief-
+   gated carve, radius+per-seed width. Max UAT-passed. Contract:
+   `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`. Close-approach realism (route still
+   crosses rendered ridges on the 40k global mesh) split out → `rivers-viewdependent-lod-2026-06-18`.
+   ORIGINAL: "Rivers and valleys' shapes need work. The current system just does not replicate
+   rivers realistically. The math needs to be updated. There's probably math out there for
+   simulating rivers and associated features we can copy."
 4. **Gradational features absent on impact/airless bodies** — "Gradational features don't seem
    to appear on Impact/airless bodies at all, though they're turned on."
 5. **Sublimation (esp. CH₄)** — "Sublimation needs a lot of work; looks really off for some

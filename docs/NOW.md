@@ -6,7 +6,9 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
 > (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation
-> primitive) → #3 rivers** · contract: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`.
+> primitive) → #3 rivers ✅ SHIPPED (2026-06-19) → NEXT: rivers view-dependent LOD** ·
+> shipped contract: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`; next:
+> `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/`.
 > *(One-line breadcrumb so the nesting is reflexive across handoffs; update when the active feature changes.)*
 
 > **🧭 Working the planet-LOD lab? READ `docs/FEATURES/planet-lod-CHARTER.md` FIRST** — it's
@@ -100,6 +102,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > scale system that already exists + the two-regime split). NOTE: the geometric carve was DEFERRED in
 > intent.md but Max REOPENED it (now landed) — note the reversal when the contract is revised. Handoff:
 > `/tmp/handoff-rivers-AC6-scale-scope-2026-06-18.md`.
+
+> **✅ GLOBAL RIVERS SHIPPED `f45c804` (2026-06-19).** Max's AC8 UAT passed — walked the clean
+> Earth-like lab on :9223 (Rocky preset, seed 1, frozen, distance 2.6, all 3 fixes live: relief
+> gate 0.18 / wall-bend 0.01 / per-seed width 0.773, 0 width violations) and called it: *"looks
+> good to me."* Rivers read as real dendritic drainage to the seas, no longer cut through
+> mountains, sized right, a clear win over the old F11 worm-trails. No tuning changes; defaults
+> stand. All 8 ACs green (unit + integration driven live 2026-06-18 + UAT). `verdict.json` →
+> SHIPPED; `contract.json` status → SHIPPED. **DEFERRED BY DESIGN:** the route itself still
+> crosses rendered ridges (40k global mesh can't resolve them) → the already-scoped
+> **`rivers-viewdependent-lod-2026-06-18`** workstream, the next pickup (Max's sequencing). Was
+> VERIFIED_PENDING_MAX `f45c804`; pushed to origin/master last session.
+>
+> ---
+> *History below (chronological, oldest of this thread at the bottom):*
 
 > **▶ AC6 SCOPE PASS DONE + Max-GREENLIT (2026-06-18, commit `2669e53`).** dev-collab-scope pass.
 > Max sharpened "realistic at scale" → **realistic from a SPACECRAFT POV** (Elite-Dangerous: far orbit
