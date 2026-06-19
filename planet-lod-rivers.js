@@ -142,7 +142,7 @@ export const ROUTER_MAIN = `
     lavaCombiner(vPos, h, grad);
     float carbTar;
     carbTarCombiner(vPos, h, grad, carbTar);
-    deltaCombiner(vPos, h, grad, fluvialWet);
+    deltaCombiner(vPos, h, grad, fluvialWet, 0.0);  // mouth=0: deltas are a downstream deposit, they must NOT feed routing h (mouths derive FROM routing — circular)
     gl_FragColor = vec4(h, grad);
   }
 `;

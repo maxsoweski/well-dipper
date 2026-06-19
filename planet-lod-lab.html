@@ -352,7 +352,15 @@
           // live on uplifted crests, never in basins. Local-only (no h/grad writes);
           // strength 0 skips it and carbCrest stays 0 — the F42 regression contract.
           if (uCarbonStrength > 0.0) carbCrest = smoothstep(0.05, 0.16, h) * (1.0 - carbTar);
-          deltaCombiner(vPos, h, grad, fluvialWet);// F12 — depositional aprons where channels meet base level (reads FINAL h)
+          // AC4 (2026-06-19): gate F12 deltas on the baked carve-cube MOUTH channel (.g) — the
+          // real routed river mouths (sized by accum) — sampled with the SAME object-space surface
+          // direction N that sampleCarve uses for its center tap (line ~214: textureCube(...,dir).r,
+          // dir==N). The cube is direction-keyed (rotation-invariant) and the valley graph was
+          // rasterized on the unit sphere, so N is the correct key. NOT gated on uRiverCarveStrength
+          // (that's the terrain-gouge toggle): the mouth channel exists whenever the real cube is
+          // bound (AC3). Dummy cube (pre-first-route) ⇒ .g=0 ⇒ no deltas (safe).
+          float deltaMouth = textureCube(uRiverCarveMap, N).g;
+          deltaCombiner(vPos, h, grad, fluvialWet, deltaMouth);// F12 — depositional aprons at REAL river mouths (reads FINAL h)
           // ── AC4 river carve (Option B) — incise the routed valley network into h BEFORE the
           // F14 cut, so the carved floor can drop below sea level and flood with REAL water via
           // the same level-set mechanism as oceans (liquidMask fill + flat normal + glint + coast

@@ -1339,10 +1339,12 @@ export const HEIGHT_GLSL = /* glsl */ `
 
       // ── F12 deltas & alluvial fans (Stage-4 Fluvial, card §6.5) — the DEPOSITIONAL mirror
       // of F11's erosional carve. Sediment drops where flow decelerates (Exner: deposition at
-      // base level): gate = F11's channel strength (fluvialWet — already province-weighted and
-      // lowGround-biased upstream) × a base-level proximity band. The apron ADDS height
+      // base level): gate = the baked carve-cube mouth field (G, the real routed river mouths,
+      // sized by accum — AC4, 2026-06-19; replaces the retired F11 fluvialWet noise gate) × a
+      // base-level proximity band. uDeltaDensity demotes to an intensity-only climate multiplier.
+      // The apron ADDS height
       // (positive material standing above the basin/sea floor); its lit edge is the nearBase
-      // falloff, chain-ruled exactly through h (fluvialWet held locally-constant — the
+      // falloff, chain-ruled exactly through h (mouth held locally-constant — the
       // documented cosmetic-grad convention, cf. fluvial lowGround). Writes back into
       // fluvialWet so the Stage-6 species floor-tint brightens the lobe (card §4's
       // one-band-brighter sediment read). baseLvl: sea worlds deposit at the shoreline
@@ -1350,8 +1352,9 @@ export const HEIGHT_GLSL = /* glsl */ `
       // h ≈ -0.05 — the Mars relict-fan case. Called LATE in the chain (after lavaCombiner,
       // before the F14 cut) so the proximity test sees the final accumulated height.
       // uDeltaDensity <= 0 ⇒ early-out (Stage-A base + F11 untouched, regression-safe).
-      void deltaCombiner(vec3 pos, inout float h, inout vec3 grad, inout float fluvialWet){
+      void deltaCombiner(vec3 pos, inout float h, inout vec3 grad, inout float fluvialWet, float mouth){
         if (uDeltaDensity <= 0.0) return;
+        if (mouth <= 0.0) return;                                 // AC4: no real river mouth here ⇒ no delta (dummy cube .g=0 ⇒ dormant)
         float baseLvl = (uSeaLevel > -1.0) ? uSeaLevel : -0.05;   // shoreline on sea worlds; low basins on dry/relict
         float dh = h - baseLvl;
         if (dh <= 0.0 || dh >= uDeltaApronH) return;            // subaerial apron band only
@@ -1362,7 +1365,11 @@ export const HEIGHT_GLSL = /* glsl */ `
         // at 0.6·uDeltaApronH bounds |k·dnear| ≤ 0.9 — the gradient multiplier (1 + k·dnear)
         // stays positive for EVERY knob combination (review 2026-06-10: uncapped, amp 0.2 at
         // apronH 0.02 reached |k·dnear| = 15 → flipped, 14×-amplified lighting in the band).
-        float k = min(uDeltaAmp * uDeltaDensity * fluvialWet * provinceWeight(PROV_DELTAS),
+        // AC4: 'mouth' (baked carve-cube .g, locally-CONSTANT in the gradient like fluvialWet was)
+        // is the SPATIAL gate — deltas form WHERE real river mouths are; uDeltaDensity is the
+        // climate INTENSITY multiplier only (no longer a location/presence gate). Finite-diff
+        // parity preserved: mouth contributes no pos-varying term to the analytic gradient.
+        float k = min(uDeltaAmp * uDeltaDensity * mouth * provinceWeight(PROV_DELTAS),
                       0.6 * uDeltaApronH);
         float apron = k * nearBase;
         h += apron;
