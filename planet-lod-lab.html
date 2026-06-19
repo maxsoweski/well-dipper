@@ -271,7 +271,7 @@
         // canonical shared accumulator (index §1): Relief writes tectonic graben;
         // Fluvial incised gorges + Cryo chasma ADD IN. Stages 2/3/4 consume it.
         float canyonHeight = 0.0;
-        float fluvialWet = 0.0;   // F11 channel strength, consumed by the Stage-6 species floor-tint
+        float fluvialWet = 0.0;   // F12 deposition gate — seeded by fluvialCombiner, read by deltaCombiner (the F11 floor-tint consumer was retired 2026-06-19)
         // Stage 3 CRYO frost-coverage (F23/F22) — albedo overlay, set in the analytic branch
         // (needs the accumulated height for the altitude lapse), consumed at Stage 6.
         float frostCover = 0.0;
@@ -514,10 +514,9 @@
         const vec3 DUST_OCHRE = vec3(0.72, 0.52, 0.30);
         albedoCol = mix(albedoCol, DUST_OCHRE, dustCover * 0.6);
         albedoCol = mix(albedoCol, frostShade, frostCover);
-        // F11 species floor-tint — faint channel-floor albedo (water vs methane). Albedo only;
-        // fluvialWet=0 ⇒ unchanged. Kept subtle so it reads as a floor darkening through posterize.
-        vec3 fluvTint = (uLiquidSpecies == 1) ? vec3(0.30, 0.22, 0.10) : vec3(0.10, 0.14, 0.24);
-        albedoCol = mix(albedoCol, fluvTint, clamp(fluvialWet, 0.0, 1.0) * 0.35 * uFluvialDensity);
+        // (F11 species floor-tint removed 2026-06-19 — the dendritic overlay's carve-floor
+        // darkening below is now THE river floor albedo. fluvialWet still flows into F12
+        // deltaCombiner as its depositional gate, so the variable is kept live above.)
         // ── AC4 river carve — wet valley-floor darkening along the carved network (the F11 tint's
         // role, but keyed on the real carve depth, not a noise mask). uRiverCarveFloor 0 ⇒ no-op.
         vec3 carveFloorCol = (uLiquidSpecies == 1) ? vec3(0.10, 0.07, 0.03) : vec3(0.05, 0.07, 0.12);
@@ -1320,16 +1319,18 @@
     // first enable, then reads the lab's LIVE height field via FloatType RTT (octaves pinned high,
     // the SHARED AC1 height GLSL) → priority-flood/D-inf routing → Horton–Strahler → variable-width
     // ribbon. Parented to `planet` (never scaled/moved) so it co-rotates with the spin; hidden
-    // until the Rivers-overlay toggle turns it on — which also forces F11 off via state.riversEnabled
-    // (the per-frame gate at the F11 block). riverOverlayState + the control fns live below the GUI;
+    // until the Rivers & valleys toggle turns it on (state.riversEnabled — the shared rivers
+    // enableKey). riverOverlayState + the control fns live below the GUI;
     // re-route hooks hang off applyDrivers (debounced) so rivers track the current preset/dials.
     const riverOverlay = createRiverOverlay({ renderer, uniforms, octavesDuringRead: 9 });
     riverOverlay.ribbon.visible = false;
     planet.add(riverOverlay.ribbon);
+    // enabled mirrors state.riversEnabled (the registry enableKey) for the internal route/carve
+    // guards; setRiverOverlay keeps the two in sync. (No _f11Saved — the old F11-off coupling is gone.)
     const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35,
       carve: true, carveStrength: 0.01, carveFloor: 1.3, carveDepthH: 0.08, carveRough: 0.5,
       carveGateHi: 0.18,
-      _f11Saved: true, status: '(off)' };
+      status: '(off)' };
 
     // ─────────────────────────────────────────────────────────────────────────
     // F34 / F31e — detached haze shell: a slightly enlarged BACK-FACE sphere
@@ -2206,9 +2207,14 @@
       frostEnabled: true,
       subEnabled: true,
       glacialEnabled: true,
-      // F11 fluvial — riversEnabled gates the carve; activity/density/depth/meander are
-      // driven (applyDrivers); width/freq/warp/lowBias are lab shape knobs (proven spike defaults).
-      riversEnabled: true,
+      // Rivers & valleys — riversEnabled is the dendritic-overlay enable (the shared
+      // FEATURES['rivers'] key). Default OFF: routing the overlay is expensive, so it stays
+      // off until the operator (or a test hook) enables it, which triggers the first route.
+      // The fluvial* scalars below are NO LONGER river-visual knobs — fluvialActivity/Density
+      // survive only as the F12/F13 climate proxies (applyDrivers → deltaDensity/outflowActivity);
+      // depth/meander/width/freq/warp/lowBias are inert now that the F11 carve is retired (kept so
+      // applyDrivers and the shared uFluvial* uniform writes stay null-safe; remove with F11 GLSL).
+      riversEnabled: false,
       fluvialActivity: 1.0, fluvialDensity: 0.0, fluvialDepth: 0.12, fluvialMeander: 0.5,
       fluvialWidth: 0.10, fluvialFreq: 2.3, fluvialWarp: 0.4, fluvialLowBias: 0.5,
       fluvialSizeKm: 1385, // real-units scale: characteristic river-network spacing in km. FLAGGED-OVERSIZED (backlog #3): 1385 ⇒ freq ≈4.6 at RE=1 (~2× old 2.3), mirroring the crater recalibration. Tune live; manual override persists.
@@ -3429,17 +3435,18 @@
       syncDisplays();
     }
     // Enable/disable: turning the overlay ON forces F11 off (saving the prior flag) and routes;
-    // OFF restores F11 + re-runs applyDrivers to undo the histogram sea override.
+    // OFF re-runs applyDrivers to undo the histogram sea override. (The old F11-off coupling is
+    // gone — there is no second river network to mute. state.riversEnabled IS this overlay's enable,
+    // the shared FEATURES['rivers'] key, mirrored to riverOverlayState.enabled for the internal
+    // route/carve guards.)
     function setRiverOverlay(on){
-      riverOverlayState.enabled = on;
+      state.riversEnabled = on;            // the registry enableKey — keep it authoritative
+      riverOverlayState.enabled = on;      // internal mirror for riverReroute/applyCarveAmounts guards
       riverOverlay.ribbon.visible = on;
       if (on){
-        riverOverlayState._f11Saved = state.riversEnabled;
-        state.riversEnabled = false;       // F11 height carve + tint off (per-frame gate)
         syncDisplays();
         riverReroute('enable');
       } else {
-        state.riversEnabled = riverOverlayState._f11Saved;   // restore F11 to its prior state
         uniforms.uRiverCarveStrength.value = 0.0;            // carve off (planet back to byte-identical)
         uniforms.uRiverCarveFloor.value = 0.0;
         uniforms.uRiverCarveDepth.value = 0.0;
@@ -3694,28 +3701,17 @@
     // ▸ Surface — Gradational (NEW family — Fluvial/Aeolian; distinct from Relief).
     // Future F12–F16 land here too. Top-level guiRight folder per the F11 spec.
     const fGrad = guiRight.addFolder('Surface — Gradational'); fGrad.open();
-    // ▸ Rivers & valleys (F11) — drainage networks carved into canyonHeight. density/depth/
-    // meander/activity are the headline knobs (activity = relict↔active override); width/freq/
-    // warp/lowBias are shape knobs (lab-tunable, like glacial's mantle/lineation params).
-    const fRivers = fGrad.addFolder('Rivers & valleys (F11)'); fRivers.close();
-    fRivers.add(state, 'fluvialDensity', 0, 1, 0.01).name('density (rain-driven)').listen();
-    fRivers.add(state, 'fluvialDepth', 0, 0.4, 0.01).name('depth').listen();
-    fRivers.add(state, 'fluvialMeander', 0, 1, 0.01).name('meander').listen();
-    fRivers.add(state, 'fluvialActivity', 0, 1, 0.01).name('activity (relict↔active)').listen();
-    fRivers.add(state, 'fluvialWidth', 0.04, 0.3, 0.01).name('channel width');
-    fRivers.add(state, 'fluvialSizeKm', 800, 12700, 50).name('network size (km)').onChange(()=>applyDrivers());
-    fRivers.add(state, 'fluvialWarp', 0, 1, 0.02).name('warp amount');
-    fRivers.add(state, 'fluvialLowBias', 0, 1, 0.02).name('low-ground bias');
-    fRivers.add(state, 'riversEnabled').name('✓ enabled');
-    fRivers.add({ roll(){ state.fluvialOffset = randOffset(); } }, 'roll').name('🎲 randomize');
-
-    // ▸ Rivers — dendritic overlay (F11 replacement, AC4). Ribbon-geometry overlay routed on the
-    // REAL height field over an irregular Delaunay mesh — the proven router/ribbon pipeline. When
-    // ON, F11's height carve + tint switch off (state.riversEnabled→0) so there is no double network.
+    // ▸ Rivers & valleys (F11) — THE canonical river feature (the old F11 worm-trail carve was
+    // retired 2026-06-19). A dendritic drainage network: a ribbon-geometry overlay routed on the
+    // REAL height field over an irregular Delaunay mesh (the proven router/ribbon pipeline), with an
+    // optional valley carve incised into the planet so the channels read in the surface itself.
+    // The enable binds state.riversEnabled — the SHARED FEATURES['rivers'] enableKey — so this folder
+    // is the first-class registry entry (title-bar toggle + ⓘ card + archetype-relevance), exactly
+    // like Lakes & seas (F14) / Deltas & fans (F12). onChange routes the overlay (setRiverOverlay).
     // 'sea from histogram' (AC3) drives the planet sea to the target ocean fraction so the visible
     // water and the river outlets agree; off → routes to the preset's own sea.
-    const fRiversOverlay = fGrad.addFolder('Rivers — dendritic overlay (AC4)'); fRiversOverlay.close();
-    fRiversOverlay.add(riverOverlayState, 'enabled').name('✓ overlay (F11 off when on)').listen().onChange(setRiverOverlay);
+    const fRiversOverlay = fGrad.addFolder('Rivers & valleys (F11)'); fRiversOverlay.close();
+    fRiversOverlay.add(state, 'riversEnabled').name('✓ enabled').listen().onChange(setRiverOverlay);
     fRiversOverlay.add(riverOverlayState, 'seaFromHistogram').name('sea from histogram (AC3)').onChange(()=>riverReroute('seaMode'));
     fRiversOverlay.add(riverOverlayState, 'targetOceanFraction', 0.15, 0.55, 0.01).name('target ocean frac').onChange(()=>riverRerouteDebounced());
     fRiversOverlay.add(riverOverlayState, 'carve').name('carve valleys into terrain').onChange(()=>{ riverRerouteDebounced(); applyCarveAmounts(); });
@@ -4166,7 +4162,7 @@
       craters: fCraters, ejecta: fEjecta, mountains: fMountains, canyons: fCanyons,
       scarps: fScarps, plateaus: fPlateaus, tessera: fTessera, edifices: fEdifices,
       lava: fLava, chaos: fChaos, cryoRidge: fCryoRidge, frost: fFrost,
-      sublimation: fSub, glacial: fGlacial, rivers: fRivers, lakes: fLakes,
+      sublimation: fSub, glacial: fGlacial, rivers: fRiversOverlay, lakes: fLakes,
       deltas: fDeltas, coastlines: fCoast, outflow: fOutflow, karst: fKarst,
       dunes: fDunes, dust: fDust, massWasting: fMassWast, bands: fBands, jets: fJets,
       weatherBands: fWeather, greatSpot: fSpot, stormTrain: fTrain, polarVortex: fPolar,
@@ -4203,7 +4199,14 @@
       ctrl.domElement.classList.add('title-toggle');
       ctrl.domElement.addEventListener('click', e => e.stopPropagation());
       title.appendChild(ctrl.domElement);
-      ctrl.onChange(() => { refreshAllCardStates(); if (typeof refreshArchetypeInfo === 'function') refreshArchetypeInfo(); });   // enable flip → card State dot + archetype-info dots/K update
+      // Preserve any side-effect the controller already had (e.g. rivers → setRiverOverlay routes
+      // the overlay): lil-gui's onChange REPLACES, so chain the prior handler before our refresh.
+      const prevOnChange = ctrl._onChange;
+      ctrl.onChange((v) => {
+        if (prevOnChange) prevOnChange.call(ctrl, v);
+        refreshAllCardStates();
+        if (typeof refreshArchetypeInfo === 'function') refreshArchetypeInfo();
+      });   // enable flip → side-effect + card State dot + archetype-info dots/K update
     }
     for (const [key, folder] of Object.entries(featureFolders)) {
       relocateEnableToTitle(folder, FEATURES[key].enableKey);
@@ -5332,8 +5335,14 @@
       uniforms.uCryoRidgeOffsetV.value.set(state.cryoRidgeOffsetV[0], state.cryoRidgeOffsetV[1], state.cryoRidgeOffsetV[2]);
       uniforms.uSubOffset.value.set(state.subOffset[0], state.subOffset[1], state.subOffset[2]);
       uniforms.uGlacialOffset.value.set(state.glacialOffset[0], state.glacialOffset[1], state.glacialOffset[2]);
-      // F11 fluvial — riversEnabled gates density→0 (early-out), preserving the slider value.
-      uniforms.uFluvialDensity.value  = state.riversEnabled ? state.fluvialDensity : 0.0;
+      // F11 fluvial RETIRED (2026-06-19) — the dendritic overlay is now THE river feature, so the
+      // old worm-trail height carve is permanently off (uFluvialDensity ≡ 0 ⇒ fluvialCombiner early-
+      // outs, terrain carries no F11 carve). state.fluvialDensity/Activity survive as the F12/F13
+      // climate SCALARS (deltaDensity/outflowActivity driver lines, applyDrivers) — they no longer
+      // drive any F11 *visual*. NB: F12 deltas are spatially gated by fluvialWet, which only the F11
+      // carve seeds; with the carve off, deltas stay dormant until the planned spatial-coupling
+      // workstream re-grounds them on the dendritic network. F13 outflow is independent (uOutflow*).
+      uniforms.uFluvialDensity.value  = 0.0;
       uniforms.uFluvialActivity.value = state.fluvialActivity;
       uniforms.uFluvialDepth.value    = state.fluvialDepth;
       uniforms.uFluvialMeander.value  = state.fluvialMeander;
