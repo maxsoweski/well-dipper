@@ -9,7 +9,7 @@
 // (d) SPACING scales with Strahler order (e) WIDTH follows 0.42*accum^0.69.
 import { describe, it, expect } from 'vitest';
 import {
-  AMP, ampHash, ampKeyPoint, buildChildren, amplifierSample, widthKm, controlElev, distSeg, baseSpacing,
+  AMP, ampHash, ampKeyPoint, buildChildren, amplifierSample, widthKm, controlElev, distSeg, baseSpacing, connectAngle,
 } from '../planet-lod-river-amplifier.js';
 
 // A horizontal baked trunk segment along +x at z=0 (downhill end at b), used as the level-0 parent.
@@ -201,6 +201,74 @@ describe('river amplifier — (c) TRUNK-CONVERGENCE (tributaries flow INTO the t
   it('children root on the trunk only where a trunk exists — no children when depth gate is shut', () => {
     const none = buildChildren(0.7, 0.15, TRUNK, orderN, 0.0, FULL_LOD, SEED);
     expect(none).toHaveLength(0);
+  });
+});
+
+describe('river amplifier — (c2) CONNECTION-ANGLE rule (dendritic join, NOT radial starburst)', () => {
+  // The radial-starburst bug: each key-point connected to its NEAREST point on the parent
+  // (perpendicular foot), so tributaries arrived from ALL directions → spokes. The Dendry
+  // ConnectPointToSegmentAngle rule shifts the interior connection DOWNSTREAM by the perpendicular
+  // distance, so the tributary leans into the trunk at ~45° pointing downstream. These tests assert
+  // that directional, upstream-side approach — the thing that makes the pattern a branching tree.
+  // TRUNK is horizontal a=[0,0]→b=[2,0] with za=1 (source) > zb=0 (mouth): downhill flow is +x.
+  const DOWNHILL = [1, 0];           // unit downstream direction of TRUNK
+  const gen0 = buildChildren(0.7, 0.15, TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, SEED).filter((c) => c.gen === 0);
+
+  // identify children whose perpendicular foot is INTERIOR (the only ones the 45° shift applies to)
+  const interior = gen0.filter((c) => {
+    const s = distSeg(c.q[0], c.q[1], TRUNK.a[0], TRUNK.a[1], TRUNK.b[0], TRUNK.b[1]);
+    return s.u > 1e-3 && s.u < 1 - 1e-3 && s.dist > 1e-4;   // foot strictly inside, off-axis source
+  });
+
+  it('there ARE interior-foot tributaries to test (the rule applies to a real population)', () => {
+    expect(interior.length).toBeGreaterThan(3);
+  });
+
+  it('every interior connection is shifted DOWNSTREAM of the perpendicular foot (45° rule applied)', () => {
+    // The connection param u must move toward the downhill end (b, +x) relative to the foot param u0.
+    for (const c of interior) {
+      const foot = distSeg(c.q[0], c.q[1], TRUNK.a[0], TRUNK.a[1], TRUNK.b[0], TRUNK.b[1]);
+      const connParam = distSeg(c.conn[0], c.conn[1], TRUNK.a[0], TRUNK.a[1], TRUNK.b[0], TRUNK.b[1]).u;
+      expect(connParam).toBeGreaterThan(foot.u + 1e-6);   // strictly downstream of the foot
+    }
+  });
+
+  it('tributaries approach from the UPSTREAM side — flow into the trunk points downstream', () => {
+    // (conn - q) is the tributary's flow direction; its component along the trunk's downhill
+    // direction must be POSITIVE for every interior child. A radial starburst would have these
+    // distributed in all directions (many negative). This is the dendritic-vs-radial discriminator.
+    for (const c of interior) {
+      const dx = c.conn[0] - c.q[0], dy = c.conn[1] - c.q[1];
+      const len = Math.hypot(dx, dy) || 1;
+      const along = (dx * DOWNHILL[0] + dy * DOWNHILL[1]) / len;   // cos(angle to downstream)
+      expect(along).toBeGreaterThan(0);                            // never joins from downstream/perp-away
+    }
+  });
+
+  it('the cohort is dendritic on average — mean downstream alignment is solidly positive, not ~0', () => {
+    // A radial pattern averages to ≈0 alignment (spokes cancel). A dendritic tree leans downstream,
+    // so the MEAN cos(angle-to-downstream) over interior tributaries is clearly positive.
+    const alongs = interior.map((c) => {
+      const dx = c.conn[0] - c.q[0], dy = c.conn[1] - c.q[1];
+      const len = Math.hypot(dx, dy) || 1;
+      return (dx * DOWNHILL[0] + dy * DOWNHILL[1]) / len;
+    });
+    const mean = alongs.reduce((s, v) => s + v, 0) / alongs.length;
+    expect(mean).toBeGreaterThan(0.3);   // markedly downstream-biased, not the ~0 of a starburst
+  });
+
+  it('connectAngle is the exact downstream-shift rule: u shifts by segDist/segLen toward the low end', () => {
+    // direct unit check of the helper against the Dendry ConnectPointToSegmentAngle formula.
+    const a = [0, 0], b = [2, 0], za = 1, zb = 0;   // downhill toward b (+x)
+    const q = [0.6, 0.4];                            // foot at u0=0.3, segDist=0.4, segLen=2
+    const r = connectAngle(q[0], q[1], a, b, za, zb);
+    const u0 = 0.3, segDist = 0.4, segLen = 2;
+    const expectedU = u0 + segDist / segLen;         // = 0.5, shifted downstream
+    expect(r.conn[0]).toBeCloseTo(expectedU * 2, 9); // conn.x = u*segLen
+    expect(r.conn[1]).toBeCloseTo(0, 9);             // on the trunk axis
+    // reversed orientation (a low) must shift the OTHER way (toward a, −x)
+    const r2 = connectAngle(q[0], q[1], a, b, /*za*/0, /*zb*/1);
+    expect(r2.conn[0]).toBeLessThan(q[0]);           // downstream is now −x → conn upstream-of-foot in x
   });
 });
 

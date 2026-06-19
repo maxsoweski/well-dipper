@@ -96,6 +96,26 @@ ${hashSrc}
     vec2 ab = b - a; float u = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-9), 0.0, 1.0);
     return length(p - (a + u * ab));
   }
+  // CONNECTION-ANGLE RULE (Dendry ConnectPointToSegmentAngle) — EXACT mirror of JS connectAngle().
+  // Attaches q to the parent [a,b] at a ~45° DOWNSTREAM join (shift the connection downstream along
+  // the parent by the perpendicular distance) instead of the nearest foot — dendritic, not radial.
+  // Packs the result into a vec4(conn.xy, dC, zConn). za/zb give the parent's downhill orientation.
+  vec4 ampConnectAngle(vec2 q, vec2 a, vec2 b, float za, float zb){
+    vec2 ab = b - a;
+    float segLen2 = max(dot(ab, ab), 1e-12);
+    float segLen = sqrt(segLen2);
+    float u0 = clamp(dot(q - a, ab) / segLen2, 0.0, 1.0);
+    vec2 foot = a + u0 * ab;
+    float segDist = length(q - foot);
+    float dirSign = (zb <= za) ? 1.0 : -1.0;   // downstream = toward the lower-elevation end
+    float u = u0;
+    if (u0 > 0.0 && u0 < 1.0){
+      u = clamp(u0 + dirSign * (segDist / segLen), 0.0, 1.0);   // 45° downstream shift
+    }
+    vec2 conn = a + u * ab;
+    float zConn = za + (zb - za) * u;
+    return vec4(conn, length(q - conn), zConn);
+  }
   // Strahler-driven level-0 cell size: high-order trunks subdivide FINER (smaller cell).
   float ampBaseSpacing(float orderN){
     return ${AMP.BASE_SPACING.toFixed(4)} / max(0.35, orderN);  // 6th-order finer than 2nd
@@ -136,11 +156,10 @@ ${hashSrc}
         ivec2 cell = base + ivec2(dx, dy);
         // point-sharing: finer levels reuse the coarse key-point at the SAME world cell corner.
         vec2 q = ampKeyPoint(cell, k, seed) * cellSize;
-        // connect q to nearest of {a, b, mid} of the PARENT segment (ConnectPointToSegmentRivers)
-        vec2 mid = 0.5 * (paA + paB);
-        vec2 conn = mid; float dC = distance(q, mid); float zConn = 0.5 * (paZa + paZb);
-        if (distance(q, paA) < dC){ conn = paA; dC = distance(q, paA); zConn = paZa; }
-        if (distance(q, paB) < dC){ conn = paB; dC = distance(q, paB); zConn = paZb; }
+        // CONNECTION-ANGLE RULE (Dendry ConnectPointToSegmentAngle): attach q to the PARENT at a
+        // ~45° DOWNSTREAM join, NOT the nearest foot — dendritic tributaries, not radial spokes.
+        vec4 connPack = ampConnectAngle(q, paA, paB, paZa, paZb);
+        vec2 conn = connPack.xy; float dC = connPack.z; float zConn = connPack.w;
         // DOWNHILL: child key-point elevation forced strictly above its connection (Dendry GenerateSubSegments).
         // zChild = max(zConn + MINSLOPE[k]*dist, controlElev(q)). controlElev = terrain height at q;
         // in the harness this is the linear elevation along the ORIGINAL baked trunk axis at q's foot

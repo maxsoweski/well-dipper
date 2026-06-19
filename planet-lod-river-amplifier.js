@@ -49,6 +49,36 @@ export function distSeg(px, py, ax, ay, bx, by) {
   return { dist: Math.hypot(px - cx, py - cy), u, cx, cy };
 }
 
+// ── connection-angle rule (Dendry ConnectPointToSegmentAngle) ── EXACT mirror of GLSL connectAngle().
+// Connects key-point q to the parent segment [a,b] (with elevations za,zb) at a ~45° DOWNSTREAM join
+// instead of the nearest perpendicular foot. Returns { conn:[x,y], dC:|q-conn|, zConn, u }.
+//   1. project q onto the parent → param u0 ∈ [0,1], perpendicular distance segDist.
+//   2. orient toward DOWNHILL: dirSign = +1 if b is the low end (zb<=za), else -1 (low end is a).
+//   3. if the foot is INTERIOR (0<u0<1): shift downstream by segDist/segLen (the 45° rule),
+//      v = u0 + dirSign*(segDist/segLen), then clamp v to [0,1]; else keep u0 (foot at an endpoint).
+//   4. conn = lerp(a,b,u), zConn = lerp(za,zb,u), dC = |q-conn|.
+// Result: tributaries lean into the trunk pointing downstream — dendritic, not radial.
+export function connectAngle(qx, qy, a, b, za, zb) {
+  const abx = b[0] - a[0], aby = b[1] - a[1];
+  const segLen2 = Math.max(abx * abx + aby * aby, 1e-12);
+  const segLen = Math.sqrt(segLen2);
+  let u0 = ((qx - a[0]) * abx + (qy - a[1]) * aby) / segLen2;
+  u0 = Math.min(1, Math.max(0, u0));
+  const footx = a[0] + u0 * abx, footy = a[1] + u0 * aby;
+  const segDist = Math.hypot(qx - footx, qy - footy);
+  // downstream = toward the LOWER-elevation end. b low (zb<=za) → shift +u; a low → shift -u.
+  const dirSign = (zb <= za) ? 1 : -1;
+  let u = u0;
+  if (u0 > 0 && u0 < 1) {
+    u = u0 + dirSign * (segDist / segLen);
+    u = Math.min(1, Math.max(0, u));   // clamp: a tributary can't attach past an endpoint
+  }
+  const connx = a[0] + u * abx, conny = a[1] + u * aby;
+  const zConn = za + (zb - za) * u;
+  const dC = Math.hypot(qx - connx, qy - conny);
+  return { conn: [connx, conny], dC, zConn, u };
+}
+
 // Strahler-driven level-0 cell size: high-order trunks subdivide FINER. (mirror of ampBaseSpacing)
 export function baseSpacing(orderN) {
   return AMP.BASE_SPACING / Math.max(0.35, orderN);
@@ -85,13 +115,17 @@ export function buildChildren(uvx, uvy, trunk, orderN, depth, lod, seed) {
         const cx = baseX + dx, cy = baseY + dy;
         const kp = ampKeyPoint(cx, cy, k, seed);
         const qx = kp[0] * cellSize, qy = kp[1] * cellSize;
-        // connect q to nearest of {a, b, mid} of the parent segment
-        const midx = 0.5 * (paA[0] + paB[0]), midy = 0.5 * (paA[1] + paB[1]);
-        let conn = [midx, midy], dC = Math.hypot(qx - midx, qy - midy), zConn = 0.5 * (paZa + paZb);
-        const dA = Math.hypot(qx - paA[0], qy - paA[1]);
-        if (dA < dC) { conn = paA.slice(); dC = dA; zConn = paZa; }
-        const dB = Math.hypot(qx - paB[0], qy - paB[1]);
-        if (dB < dC) { conn = paB.slice(); dC = dB; zConn = paZb; }
+        // ── CONNECTION-ANGLE RULE (Dendry ConnectPointToSegmentAngle, NoiseLib/include/noise.h) ──
+        // Faithful port of the 45° join: instead of attaching q to its NEAREST point on the
+        // parent (perpendicular foot → tributaries arrive from all directions → radial starbursts),
+        // attach to a point shifted DOWNSTREAM along the parent by the lateral (perpendicular)
+        // distance. Because the downstream shift equals the lateral offset, the tributary leans
+        // into the parent at ~45° pointing downstream — a dendritic join, never a spoke. Dendry:
+        //   u = projection of q onto parent;  if interior: v = u + segDist/segLen (clamped to 1).
+        // We measure "downstream" by parent elevation: the parent's DOWNHILL end is the low-z end,
+        // so the shift moves the connection parameter toward that end (toward B if zb<za, else A).
+        const connInfo = connectAngle(qx, qy, paA, paB, paZa, paZb);
+        const conn = connInfo.conn, dC = connInfo.dC, zConn = connInfo.zConn;
         // DOWNHILL: child key-point elevation forced strictly above its connection point
         // zChild = max(zConn + minSlope*dist, controlElev(q))  (Dendry GenerateSubSegments).
         const minSlope = AMP.MINSLOPE[k];

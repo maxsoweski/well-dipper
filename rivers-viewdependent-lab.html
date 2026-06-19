@@ -52,6 +52,8 @@
     <input id="den" type="range" min="0.3" max="1" step="0.01" value="1" />
     <label class="row"><span>channel width</span><span class="val" id="lWidth">0.05</span></label>
     <input id="width" type="range" min="0.01" max="0.30" step="0.01" value="0.05" />
+    <label class="row"><span>basin width</span><span class="val" id="lBasin">0.25</span></label>
+    <input id="basin" type="range" min="0.05" max="0.80" step="0.01" value="0.25" />
     <label class="row"><span>seed</span><span class="val" id="lSeed">1337</span></label>
     <input id="seed" type="range" min="1" max="4096" step="1" value="1337" />
     <button id="ab">A/B: amplifier ON</button>
@@ -90,25 +92,28 @@
       uniform int   uAmpOn;         // A/B toggle
       uniform float uPxInv;         // half-pixel width floor scale (1/px in patch units)
       uniform float uWidthScale;    // render-space channel-width factor (decoupled from km width law)
+      uniform float uBasinWidth;    // proximity-band half-width: detail concentrates within this of a trunk
 
       ${RIVER_AMPLIFIER_GLSL}
 
-      // ── MOCK control function: two control trunks crossing the patch. In production these come
-      //    from reconstructTrunkSeg() over the carve cube; here they are hand-placed so the
-      //    expected convergence is known. trunkSeg() returns the nearest trunk's segment + its
-      //    endpoint elevations + a "depth" gate proxy (1 inside a band around the trunk, else 0).
+      // ── MOCK control function: a single clear diagonal trunk forming a realistic river BASIN.
+      //    In production these come from reconstructTrunkSeg() over the carve cube; here it is
+      //    hand-placed so the expected convergence is known by construction. The OLD version used a
+      //    uniform depth band (depth = d<0.6 ? 0.8 : 0) which gave the amplifier no proximity OR
+      //    downhill signal — tributaries had nothing to converge toward. This version supplies BOTH:
+      //      (a) a NARROW, smoothly-falling-off proximity band (depth) controlled by uBasinWidth, so
+      //          synthesized detail concentrates near the trunk and fades away from it; and
+      //      (b) a clear DOWNHILL gradient: za high at the upper-left source, zb low at the lower-
+      //          right mouth, so flow runs A→B and the amplifier's downhill rule has real signal.
+      //    Returns the trunk segment + endpoint elevations + the smooth depth gate proxy.
       void mockTrunks(vec2 uv, out vec2 a, out vec2 b, out float za, out float zb, out float depth){
-        // trunk 1: diagonal, flowing down-right (za high at upper-left, zb low at lower-right)
-        vec2 a1 = vec2(0.2, 1.7), b1 = vec2(1.7, 0.3); float za1 = 1.0, zb1 = 0.0;
-        // trunk 2: a second trunk lower-left, flowing down-left
-        vec2 a2 = vec2(0.3, 0.3), b2 = vec2(1.4, 1.1); float za2 = 0.8, zb2 = 0.1;
-        // distance to each segment
-        vec2 ab1 = b1 - a1; float u1 = clamp(dot(uv-a1, ab1)/dot(ab1,ab1), 0.0, 1.0);
-        float d1 = length(uv - (a1 + u1*ab1));
-        vec2 ab2 = b2 - a2; float u2 = clamp(dot(uv-a2, ab2)/dot(ab2,ab2), 0.0, 1.0);
-        float d2 = length(uv - (a2 + u2*ab2));
-        if (d1 <= d2){ a=a1; b=b1; za=za1; zb=zb1; depth = (d1 < 0.6) ? 0.8 : 0.0; }
-        else        { a=a2; b=b2; za=za2; zb=zb2; depth = (d2 < 0.6) ? 0.8 : 0.0; }
+        // single clear trunk: diagonal, flowing down-right. Source high (za), mouth low (zb).
+        a = vec2(0.25, 1.65); b = vec2(1.65, 0.35); za = 1.0; zb = 0.0;
+        vec2 ab = b - a; float u = clamp(dot(uv-a, ab)/dot(ab,ab), 0.0, 1.0);
+        float d = length(uv - (a + u*ab));
+        // smooth proximity band: depth ≈ 0.85 on the trunk, falling smoothly to 0 by ~2× basinWidth.
+        // smoothstep gives the narrow, soft-edged basin the amplifier concentrates tributaries inside.
+        depth = 0.85 * smoothstep(2.0 * uBasinWidth, 0.0, d);
       }
 
       void main(){
@@ -147,6 +152,7 @@
         uAmpOn:   { value: 1 },
         uPxInv:   { value: PATCH / window.innerHeight },   // 1 px in patch units
         uWidthScale: { value: 0.05 },                       // thin dendritic lines by default
+        uBasinWidth: { value: 0.25 },                       // proximity band half-width (basin)
       },
       vertexShader: `out vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: frag,
@@ -160,6 +166,7 @@
     $('lod').addEventListener('input', (e) => { mat.uniforms.uLod.value = +e.target.value; $('lLod').textContent = (+e.target.value).toFixed(2); });
     $('den').addEventListener('input', (e) => { mat.uniforms.uDensity.value = +e.target.value; $('lDen').textContent = (+e.target.value).toFixed(2); });
     $('width').addEventListener('input', (e) => { mat.uniforms.uWidthScale.value = +e.target.value; $('lWidth').textContent = (+e.target.value).toFixed(2); });
+    $('basin').addEventListener('input', (e) => { mat.uniforms.uBasinWidth.value = +e.target.value; $('lBasin').textContent = (+e.target.value).toFixed(2); });
     $('seed').addEventListener('input', (e) => { mat.uniforms.uSeed.value = +e.target.value; $('lSeed').textContent = e.target.value; });
     $('ab').addEventListener('click', () => {
       const on = mat.uniforms.uAmpOn.value = mat.uniforms.uAmpOn.value ? 0 : 1;
@@ -188,6 +195,7 @@
           lod: mat.uniforms.uLod.value,
           density: mat.uniforms.uDensity.value,
           widthScale: mat.uniforms.uWidthScale.value,
+          basinWidth: mat.uniforms.uBasinWidth.value,
           seed: mat.uniforms.uSeed.value,
           patch: PATCH, maxgen: AMP.MAXGEN,
         };
@@ -198,6 +206,7 @@
           `lodRamp:   ${window.__rivAmp.lod.toFixed(2)}\n` +
           `density:   ${window.__rivAmp.density.toFixed(2)}\n` +
           `width:     ${window.__rivAmp.widthScale.toFixed(2)}\n` +
+          `basin:     ${window.__rivAmp.basinWidth.toFixed(2)}\n` +
           `seed:      ${window.__rivAmp.seed}\n\n` +
           `frame:     ${window.__rivAmp.msPerFrame} ms  (~${window.__rivAmp.fps} fps)\n` +
           `blue = mock control trunks · teal = synthesized tributaries\n` +
