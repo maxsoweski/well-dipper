@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carve multi-channel packing lab — AC1 (rivers-fluvial-coupling)</title>
+  <!--
+    carve-packing-lab.html — ISOLATED HARNESS for AC1-multichannel-packing-harness
+    of the rivers-fluvial-coupling-2026-06-19 workstream.
+
+    PROVES (or disproves) the central technical risk: can THREE fields be packed
+    into ONE HalfFloat RGBA cube — R=valley depth, G=mouth/apron, B=Strahler-order/
+    width — using the EXACT same MAX-blend equation production uses
+    (MaxEquation, blendSrc=OneFactor, blendDst=OneFactor), WITHOUT cross-channel
+    corruption, ESPECIALLY at confluences where multiple valley strips overlap?
+
+    This replicates production's createCarveCubeMap (planet-lod-rivers.js:685-726)
+    EXACTLY — same RT format (HalfFloatType/RGBAFormat/1024/LinearFilter/no-mips),
+    same blend state, same DoubleSide/depthTest:false, same clear(0x000000,0) —
+    but rasterizes a SMALL SYNTHETIC controlled scene with hand-set per-vertex
+    fields (aDepth, aMouth, aOrder) so the EXPECTED packed result is KNOWN.
+
+    The cube frag emits gl_FragColor = vec4(depth, mouth, order, 1.0) — exactly
+    the production change AC2 will make.
+
+    Verdict: window.__packing = { pass, probes:[...], details } and a console line
+    'PACKING PASS' / 'PACKING FAIL: <reasons>'. Read live via chrome-devtools.
+
+    Standalone at http://127.0.0.1:5173/carve-packing-lab.html (Vite serves repo root).
+    Self-contained: does NOT import planet-lod-rivers.js (replicates the cube inline
+    so the test is a faithful, dependency-free mirror of the production format/blend).
+  -->
+  <style>
+    html,body { margin:0; height:100%; background:#05060a; overflow:hidden; font-family:ui-monospace,monospace; }
+    #canvas { display:block; width:100vw; height:100vh; }
+    #hud { position:fixed; top:8px; left:8px; color:#9fd; font-size:12px; line-height:1.5;
+           background:rgba(0,0,0,.6); padding:8px 10px; border-radius:6px; white-space:pre; max-width:48vw; }
+    .pass { color:#7fffa0; } .fail { color:#ff7f7f; }
+    vite-error-overlay { display:none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 0. Renderer (offscreen-style; we only need a GL context + a cube RT)
+    // ════════════════════════════════════════════════════════════════════════
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:false });
+    renderer.setPixelRatio(1);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x05060a);
+    const hud = document.getElementById('hud');
+
+    const CARVE_CUBE_SIZE = 1024;   // production CARVE_CUBE_SIZE
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 1. PRODUCTION-IDENTICAL cube, but frag writes 3 packed channels.
+    //    Mirrors createCarveCubeMap (planet-lod-rivers.js:685-726) field-for-field.
+    //    The ONLY intentional divergence from the SHIPPED frag is the multi-channel
+    //    write — which is precisely the production change AC2 will make. Everything
+    //    that governs correctness (RT format, blend equation/factors, depthTest,
+    //    side, clear color) is byte-identical.
+    // ════════════════════════════════════════════════════════════════════════
+    function createPackedCarveCubeMap({ renderer, size = CARVE_CUBE_SIZE }) {
+      const cubeRT = new THREE.WebGLCubeRenderTarget(size, {
+        type: THREE.HalfFloatType, format: THREE.RGBAFormat,
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
+      });
+      const mat = new THREE.ShaderMaterial({
+        glslVersion: null,
+        vertexShader: `
+          precision highp float;
+          attribute float aDepth;
+          attribute float aMouth;
+          attribute float aOrder;
+          varying float vDepth;
+          varying float vMouth;
+          varying float vOrder;
+          void main(){
+            vDepth = aDepth; vMouth = aMouth; vOrder = aOrder;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          precision highp float;
+          varying float vDepth;
+          varying float vMouth;
+          varying float vOrder;
+          // EXACTLY the production change: pack three fields, alpha=1.
+          void main(){ gl_FragColor = vec4(vDepth, vMouth, vOrder, 1.0); }
+        `,
+        side: THREE.DoubleSide,
+        depthTest: false, depthWrite: false,
+        blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation,
+        blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+      });
+      const cubeScene = new THREE.Scene();
+      const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+      mesh.frustumCulled = false;
+      cubeScene.add(mesh);
+      const cubeCam = new THREE.CubeCamera(0.01, 3, cubeRT);
+      const _c = new THREE.Color();
+      function update(valleyGeo) {
+        mesh.geometry.dispose();
+        mesh.geometry = valleyGeo;
+        const prevTarget = renderer.getRenderTarget();
+        renderer.getClearColor(_c); const prevAlpha = renderer.getClearAlpha();
+        renderer.setClearColor(0x000000, 0);   // empty cube = all channels 0; MAX accumulates from 0
+        cubeCam.update(renderer, cubeScene);
+        renderer.setClearColor(_c, prevAlpha);
+        renderer.setRenderTarget(prevTarget);
+      }
+      return { cubeRT, texture: cubeRT.texture, update,
+               dispose(){ cubeRT.dispose(); mat.dispose(); mesh.geometry.dispose(); } };
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 2. SYNTHETIC controlled valley geometry.
+    //    Same 3-rail tent strip as production buildValleyGeometry (rivers.js:628-651):
+    //    per polyline node emit rails L(edge), C(center), R(edge); edge fields = 0,
+    //    center fields = the node's (depth,mouth,order); two quads bridge consecutive
+    //    nodes. We hand-author the polylines and per-node fields so EXPECTED packed
+    //    texels are known.
+    //
+    //    Field encoding mirrors production semantics:
+    //      depth = VALLEY_DEPTH_LO..HI lerped by order      (R)
+    //      mouth = apron strength, NONZERO ONLY at sea-end of a trunk (G)
+    //      order = normalized Strahler 0..1                 (B)
+    // ════════════════════════════════════════════════════════════════════════
+    const VALLEY_DEPTH_LO = 0.45, VALLEY_DEPTH_HI = 1.0;   // production params
+    const depthFromOrderN = (orderN) => VALLEY_DEPTH_LO + (VALLEY_DEPTH_HI - VALLEY_DEPTH_LO) * orderN;
+
+    // half-angular-width of each tent rail (radians of arc off the centerline)
+    const RAIL_HW = 0.020;
+
+    // Build a tent strip from a list of nodes:
+    //   node = { dir:THREE.Vector3(unit), depth, mouth, order }
+    // The strip is laid out along consecutive node directions; side offset is a small
+    // great-circle step perpendicular to the local forward.
+    function emitStrip(nodes, out) {
+      if (nodes.length < 2) return;
+      const P = nodes.map(n => n.dir.clone().normalize());
+      const up = new THREE.Vector3(), fwd = new THREE.Vector3(), side = new THREE.Vector3();
+      const base = out.pos.length / 3;
+      for (let k = 0; k < nodes.length; k++) {
+        const cur = P[k];
+        fwd.set(0,0,0);
+        if (k > 0) fwd.add(cur.clone().sub(P[k-1]));
+        if (k < nodes.length-1) fwd.add(P[k+1].clone().sub(cur));
+        up.copy(cur).normalize();
+        fwd.sub(up.clone().multiplyScalar(fwd.dot(up)));
+        if (fwd.lengthSq() < 1e-14) fwd.set(up.y, up.z, up.x);
+        fwd.normalize();
+        side.crossVectors(up, fwd).normalize().multiplyScalar(RAIL_HW);
+        const C = cur.clone().normalize();
+        const L = cur.clone().sub(side).normalize();
+        const R = cur.clone().add(side).normalize();
+        out.pos.push(L.x,L.y,L.z, C.x,C.y,C.z, R.x,R.y,R.z);   // rails L, C, R
+        // edges carry 0 in every channel (tent profile), center carries the fields
+        out.depth.push(0.0, nodes[k].depth, 0.0);
+        out.mouth.push(0.0, nodes[k].mouth, 0.0);
+        out.order.push(0.0, nodes[k].order, 0.0);
+      }
+      const nb = out.pos.length / 3 - base;  // verts added (== nodes*3)
+      for (let k = 1; k < nodes.length; k++) {
+        const a = base + (k-1)*3, b = base + k*3;
+        out.idx.push(a, a+1, b,  a+1, b+1, b);          // left quad (L,C)
+        out.idx.push(a+1, a+2, b+1,  a+2, b+2, b+1);    // right quad (C,R)
+      }
+    }
+
+    // ── Build the synthetic network ───────────────────────────────────────────
+    // We place everything on one hemisphere around +Z so probe directions are
+    // unambiguous and land on the +Z (PX-axis-free) face for clean readback.
+    //
+    // Direction helper: small angular offsets around +Z, parameterized in (x,y)
+    // tangent radians.
+    function dir(ax, ay) {
+      // ax,ay are small angles (radians) tilting +Z toward +X and +Y.
+      const v = new THREE.Vector3(Math.sin(ax), Math.sin(ay), 1).normalize();
+      return v;
+    }
+
+    // Strahler orders in this synthetic basin: headwaters=1, mid=2, trunk=3.
+    const MAXO = 3;
+    const oN = (o) => (o - 1) / (MAXO - 1);   // 1->0, 2->0.5, 3->1.0
+
+    // --- Strip A: HEADWATER (low order=1, NOT a mouth). Runs along +X, north side.
+    const HEAD_ORDER = oN(1);                       // 0.0
+    const HEAD_DEPTH = depthFromOrderN(HEAD_ORDER); // 0.45
+    const stripHead = [
+      { dir: dir(-0.10, 0.10), depth: HEAD_DEPTH, mouth: 0.0, order: HEAD_ORDER },
+      { dir: dir(-0.02, 0.06), depth: HEAD_DEPTH, mouth: 0.0, order: HEAD_ORDER },
+      { dir: dir( 0.00, 0.00), depth: HEAD_DEPTH, mouth: 0.0, order: HEAD_ORDER }, // -> confluence @ origin dir
+    ];
+
+    // --- Strip B: a SECOND tributary into the confluence, designed adversarially.
+    //   To catch a BROKEN pack, this tributary carries:
+    //     HIGH order (=3, the trunk-grade reach), but LOW depth-for-its-order
+    //     would be wrong — production ties depth to order, so we keep them
+    //     consistent EXCEPT we craft the CONFLUENCE so the two overlapping strips
+    //     disagree per-channel (see confluence node below). Strip B itself:
+    //     order=2 (mid), depth from order. Comes from -Y.
+    const MIDB_ORDER = oN(2);                       // 0.5
+    const MIDB_DEPTH = depthFromOrderN(MIDB_ORDER); // 0.725
+    const stripMidB = [
+      { dir: dir( 0.08, -0.12), depth: MIDB_DEPTH, mouth: 0.0, order: MIDB_ORDER },
+      { dir: dir( 0.03, -0.06), depth: MIDB_DEPTH, mouth: 0.0, order: MIDB_ORDER },
+      { dir: dir( 0.00,  0.00), depth: MIDB_DEPTH, mouth: 0.0, order: MIDB_ORDER }, // -> confluence
+    ];
+
+    // --- Strip C: TRUNK (high order=3), flows from the confluence to the SEA where
+    //   it becomes a MOUTH (mouth>0) at its sea-end. Runs along +X past the confluence.
+    const TRUNK_ORDER = oN(3);                        // 1.0
+    const TRUNK_DEPTH = depthFromOrderN(TRUNK_ORDER); // 1.0
+    const MOUTH_STRENGTH = 0.8;                       // apron strength at the sea node
+    const stripTrunk = [
+      { dir: dir( 0.00,  0.00), depth: TRUNK_DEPTH, mouth: 0.0,            order: TRUNK_ORDER }, // confluence end
+      { dir: dir( 0.10,  0.00), depth: TRUNK_DEPTH, mouth: 0.0,            order: TRUNK_ORDER },
+      { dir: dir( 0.20,  0.00), depth: TRUNK_DEPTH, mouth: MOUTH_STRENGTH, order: TRUNK_ORDER }, // SEA MOUTH
+    ];
+
+    // --- The ADVERSARIAL CONFLUENCE.
+    //   The probe at the confluence direction (origin, +Z) has THREE strips meeting:
+    //   Head (order 0.0, depth 0.45), MidB (order 0.5, depth 0.725), Trunk (order 1.0,
+    //   depth 1.0). Under correct per-channel MAX the packed texel must be:
+    //     R = max(0.45, 0.725, 1.0)        = 1.0   (deepest wins)
+    //     B = max(0.0, 0.5, 1.0)           = 1.0   (highest order wins)
+    //     G = max(0,0,0)                   = 0.0   (no mouth here)
+    //   To make a BROKEN pack VISIBLY fail, we add a 4th overlapping strip whose
+    //   per-channel values are deliberately DECORRELATED: a strip with HIGH order
+    //   but LOW depth, AND a strip with HIGH depth but LOW order, both passing through
+    //   the confluence. A naive/broken pack (e.g. one that copied one channel across
+    //   all three, or that let a strong channel bleed into a weak one) cannot satisfy
+    //   "R=highDepth AND B=highOrder simultaneously from DIFFERENT source strips".
+    //
+    //   Strip D: HIGH DEPTH, LOW ORDER  (depth 1.0, order 0.0) through confluence.
+    //   Strip E: LOW DEPTH, HIGH ORDER  (depth 0.45, order 1.0) through confluence.
+    //   Correct MAX-pack over {D,E} alone => R=1.0 (from D) AND B=1.0 (from E).
+    //   A pack that smears one channel into another would yield R≈B (correlated) and FAIL.
+    const stripD = [   // high depth, low order — comes from +Y
+      { dir: dir(-0.06, 0.10), depth: 1.0, mouth: 0.0, order: 0.0 },
+      { dir: dir(-0.03, 0.05), depth: 1.0, mouth: 0.0, order: 0.0 },
+      { dir: dir( 0.00, 0.00), depth: 1.0, mouth: 0.0, order: 0.0 }, // confluence
+    ];
+    const stripE = [   // low depth, high order — comes from -X
+      { dir: dir(-0.12, -0.04), depth: 0.45, mouth: 0.0, order: 1.0 },
+      { dir: dir(-0.06, -0.02), depth: 0.45, mouth: 0.0, order: 1.0 },
+      { dir: dir( 0.00,  0.00), depth: 0.45, mouth: 0.0, order: 1.0 }, // confluence
+    ];
+
+    const geoOut = { pos:[], depth:[], mouth:[], order:[], idx:[] };
+    emitStrip(stripHead,  geoOut);
+    emitStrip(stripMidB,  geoOut);
+    emitStrip(stripTrunk, geoOut);
+    emitStrip(stripD,     geoOut);
+    emitStrip(stripE,     geoOut);
+
+    const valleyGeo = new THREE.BufferGeometry();
+    valleyGeo.setAttribute('position', new THREE.Float32BufferAttribute(geoOut.pos, 3));
+    valleyGeo.setAttribute('aDepth',   new THREE.Float32BufferAttribute(geoOut.depth, 1));
+    valleyGeo.setAttribute('aMouth',   new THREE.Float32BufferAttribute(geoOut.mouth, 1));
+    valleyGeo.setAttribute('aOrder',   new THREE.Float32BufferAttribute(geoOut.order, 1));
+    valleyGeo.setIndex(geoOut.idx);
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 3. Render the cube.
+    // ════════════════════════════════════════════════════════════════════════
+    const carve = createPackedCarveCubeMap({ renderer, size: CARVE_CUBE_SIZE });
+    carve.update(valleyGeo);
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 4. READBACK.
+    //    A WebGLCubeRenderTarget is 6 face textures. We read each face with
+    //    readRenderTargetPixels(rt, x, y, w, h, buffer, activeCubeFaceIndex).
+    //    HalfFloatType => the GPU buffer is RGBA16F; readback returns Uint16
+    //    half-float bits which we decode in JS. We then map each probe WORLD
+    //    DIRECTION to (face, u, v) using the standard cube lookup math — the SAME
+    //    selection textureCube(map, dir) performs — so the readback faithfully
+    //    reflects what the planet shader would sample (NEAREST texel; production
+    //    uses LinearFilter, but probes sit at strip CENTERS far from edges, where
+    //    nearest≈linear).
+    // ════════════════════════════════════════════════════════════════════════
+    function halfToFloat(h) {
+      const s = (h & 0x8000) >> 15, e = (h & 0x7C00) >> 10, f = h & 0x03FF;
+      if (e === 0) return (s ? -1 : 1) * Math.pow(2, -14) * (f / 1024);
+      if (e === 0x1F) return f ? NaN : ((s ? -1 : 1) * Infinity);
+      return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
+    }
+
+    const S = CARVE_CUBE_SIZE;
+    // read all 6 faces once into decoded Float32 arrays [face][ (y*S+x)*4 + c ]
+    const faces = [];
+    for (let face = 0; face < 6; face++) {
+      const buf = new Uint16Array(S * S * 4);
+      renderer.readRenderTargetPixels(carve.cubeRT, 0, 0, S, S, buf, face);
+      const f32 = new Float32Array(S * S * 4);
+      for (let i = 0; i < f32.length; i++) f32[i] = halfToFloat(buf[i]);
+      faces.push(f32);
+    }
+
+    // Standard cubemap direction -> (faceIndex, u, v) in [0,1].
+    // Face order matches GL_TEXTURE_CUBE_MAP_POSITIVE_X..NEGATIVE_Z = 0..5,
+    // which is the activeCubeFaceIndex order three.js uses.
+    function dirToFaceUV(d) {
+      const ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
+      let face, sc, tc, ma;
+      if (ax >= ay && ax >= az) {
+        if (d.x > 0) { face = 0; sc = -d.z; tc = -d.y; } else { face = 1; sc = d.z; tc = -d.y; }
+        ma = ax;
+      } else if (ay >= ax && ay >= az) {
+        if (d.y > 0) { face = 2; sc = d.x; tc = d.z; } else { face = 3; sc = d.x; tc = -d.z; }
+        ma = ay;
+      } else {
+        if (d.z > 0) { face = 4; sc = d.x; tc = -d.y; } else { face = 5; sc = -d.x; tc = -d.y; }
+        ma = az;
+      }
+      const u = 0.5 * (sc / ma + 1.0);
+      const v = 0.5 * (tc / ma + 1.0);
+      return { face, u, v };
+    }
+
+    // readback returns rows bottom-to-top (GL); textureCube v already accounts for
+    // orientation via tc sign. readRenderTargetPixels gives y=0 at bottom; our v in
+    // [0,1] maps directly to row = round(v*(S-1)). We sample NEAREST.
+    function sampleDir(d) {
+      const { face, u, v } = dirToFaceUV(d.clone().normalize());
+      const x = Math.min(S-1, Math.max(0, Math.round(u * (S - 1))));
+      const y = Math.min(S-1, Math.max(0, Math.round(v * (S - 1))));
+      const o = (y * S + x) * 4;
+      const f = faces[face];
+      return { R: f[o], G: f[o+1], B: f[o+2], A: f[o+3], face, u:+u.toFixed(3), v:+v.toFixed(3) };
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 5. PROBES + PASS/FAIL.
+    // ════════════════════════════════════════════════════════════════════════
+    const NEAR = 1e-2;          // "≈0" tolerance for half-float + tent falloff
+    const TOL  = 0.06;          // value-match tolerance (half-float + nearest sampling)
+    const approx = (a, b) => Math.abs(a - b) <= TOL;
+
+    // Probe directions sit at the CENTER of each strip's mid-node (so we read the
+    // tent center, not a 0-edge). Confluence/empty are explicit.
+    const probes = [];
+    function probe(name, d, checks) {
+      const s = sampleDir(d);
+      const reasons = [];
+      checks(s, reasons);
+      const pass = reasons.length === 0;
+      probes.push({ name, pass, sample:{R:+s.R.toFixed(4),G:+s.G.toFixed(4),B:+s.B.toFixed(4),A:+s.A.toFixed(4),face:s.face,u:s.u,v:s.v}, reasons });
+      return pass;
+    }
+
+    // (a) HEADWATER center: low order, NOT a mouth.
+    probe('headwater', dir(-0.02, 0.06), (s, r) => {
+      if (!approx(s.R, HEAD_DEPTH)) r.push(`R(depth)=${s.R.toFixed(3)} expected≈${HEAD_DEPTH}`);
+      if (s.G > NEAR)              r.push(`G(mouth)=${s.G.toFixed(3)} expected≈0 on headwater`);
+      if (!approx(s.B, HEAD_ORDER))r.push(`B(order)=${s.B.toFixed(3)} expected≈${HEAD_ORDER}`);
+    });
+
+    // (b) TRUNK center (between confluence and mouth): high order, not yet mouth.
+    probe('trunk', dir(0.10, 0.00), (s, r) => {
+      if (!approx(s.R, TRUNK_DEPTH)) r.push(`R(depth)=${s.R.toFixed(3)} expected≈${TRUNK_DEPTH}`);
+      if (s.G > NEAR)               r.push(`G(mouth)=${s.G.toFixed(3)} expected≈0 mid-trunk`);
+      if (!approx(s.B, TRUNK_ORDER))r.push(`B(order)=${s.B.toFixed(3)} expected≈${TRUNK_ORDER}`);
+    });
+
+    // (c) MOUTH (sea-end of trunk): mouth nonzero, high order.
+    probe('mouth', dir(0.20, 0.00), (s, r) => {
+      if (!approx(s.R, TRUNK_DEPTH))       r.push(`R(depth)=${s.R.toFixed(3)} expected≈${TRUNK_DEPTH}`);
+      if (!approx(s.G, MOUTH_STRENGTH))    r.push(`G(mouth)=${s.G.toFixed(3)} expected≈${MOUTH_STRENGTH}`);
+      if (!approx(s.B, TRUNK_ORDER))       r.push(`B(order)=${s.B.toFixed(3)} expected≈${TRUNK_ORDER}`);
+    });
+
+    // (d) CONFLUENCE: the crux. Overlapping strips {Head,MidB,Trunk,D,E}.
+    //   Correct per-channel MAX:
+    //     R = max(0.45,0.725,1.0[trunk],1.0[D],0.45) = 1.0   (deepest)
+    //     G = max(all 0)                              = 0.0   (no mouth here)
+    //     B = max(0.0,0.5,1.0[trunk],0.0,1.0[E])      = 1.0   (highest order)
+    //   The adversarial part: R's 1.0 comes from D (low-order strip) and B's 1.0
+    //   comes from E (low-depth strip) — DIFFERENT sources. A broken pack that
+    //   correlates channels cannot land R=1.0 AND B=1.0 with G=0 simultaneously.
+    probe('confluence', dir(0.0, 0.0), (s, r) => {
+      if (!approx(s.R, 1.0)) r.push(`R(depth)=${s.R.toFixed(3)} expected≈1.0 (deepest of overlap)`);
+      if (s.G > NEAR)        r.push(`G(mouth)=${s.G.toFixed(3)} expected≈0 (no mouth at confluence) — CHANNEL BLEED`);
+      if (!approx(s.B, 1.0)) r.push(`B(order)=${s.B.toFixed(3)} expected≈1.0 (highest order of overlap)`);
+    });
+
+    // (e) EMPTY: a direction with no valley — all channels 0.
+    probe('empty', dir(-0.6, 0.5), (s, r) => {
+      if (s.R > NEAR) r.push(`R(depth)=${s.R.toFixed(3)} expected≈0 (empty)`);
+      if (s.G > NEAR) r.push(`G(mouth)=${s.G.toFixed(3)} expected≈0 (empty)`);
+      if (s.B > NEAR) r.push(`B(order)=${s.B.toFixed(3)} expected≈0 (empty)`);
+    });
+
+    // ── cross-probe relational checks (monotonicity / independence) ──
+    const byName = Object.fromEntries(probes.map(p => [p.name, p]));
+    const relReasons = [];
+    // B monotone with intended order: trunk B > headwater B
+    if (!(byName.trunk.sample.B > byName.headwater.sample.B + 0.1))
+      relReasons.push(`B not monotone: trunk B(${byName.trunk.sample.B}) !> headwater B(${byName.headwater.sample.B})`);
+    // G nonzero ONLY at mouth: mouth G high, all others ≈0
+    if (!(byName.mouth.sample.G > 0.3))
+      relReasons.push(`mouth G(${byName.mouth.sample.G}) not clearly nonzero`);
+    for (const nm of ['headwater','trunk','confluence','empty'])
+      if (byName[nm].sample.G > NEAR)
+        relReasons.push(`G leaked at '${nm}' (${byName[nm].sample.G}) — should be mouth-only`);
+    // Confluence channel INDEPENDENCE: R and B both maxed from different strips,
+    // G stays 0. (Already in the confluence probe, but assert the independence
+    // explicitly so a correlated/bled pack is unmistakable.)
+    {
+      const c = byName.confluence.sample;
+      if (Math.abs(c.R - c.B) > 0.12 && (c.R < 0.9 || c.B < 0.9))
+        relReasons.push(`confluence R(${c.R}) and B(${c.B}) not both ≈1.0 — channels not independently MAX-resolved`);
+    }
+
+    const probesPass = probes.every(p => p.pass);
+    const pass = probesPass && relReasons.length === 0;
+
+    const failReasons = [
+      ...probes.filter(p => !p.pass).map(p => `[${p.name}] ${p.reasons.join('; ')}`),
+      ...relReasons,
+    ];
+
+    window.__packing = {
+      pass,
+      probes,
+      details: {
+        relReasons,
+        expected: {
+          headwater: { R: HEAD_DEPTH, G: 0, B: HEAD_ORDER },
+          trunk:     { R: TRUNK_DEPTH, G: 0, B: TRUNK_ORDER },
+          mouth:     { R: TRUNK_DEPTH, G: MOUTH_STRENGTH, B: TRUNK_ORDER },
+          confluence:{ R: 1.0, G: 0, B: 1.0 },
+          empty:     { R: 0, G: 0, B: 0 },
+        },
+        cube: { type:'HalfFloatType', format:'RGBAFormat', size:S, filter:'LinearFilter', mipmaps:false,
+                blend:'MaxEquation OneFactor/OneFactor (CustomBlending)', side:'DoubleSide', depthTest:false,
+                clear:'0x000000 alpha 0' },
+        confluenceDesign: 'Strip D (depth1.0/order0.0) + Strip E (depth0.45/order1.0) overlap the confluence so a CORRECT per-channel MAX yields R=1.0 (from D) AND B=1.0 (from E) AND G=0; a pack that bleeds/correlates channels cannot satisfy all three.',
+        tolerances: { TOL, NEAR },
+      },
+    };
+
+    if (pass) console.log('PACKING PASS');
+    else      console.log('PACKING FAIL: ' + failReasons.join(' | '));
+
+    // ── HUD ──
+    const line = (p) => `${p.pass ? '✓' : '✗'} ${p.name.padEnd(11)} R=${p.sample.R.toFixed(3)} G=${p.sample.G.toFixed(3)} B=${p.sample.B.toFixed(3)}`;
+    hud.innerHTML =
+      `<span class="${pass?'pass':'fail'}">CARVE PACKING ${pass?'PASS':'FAIL'}</span>\n` +
+      `cube: HalfFloat RGBA ${S}² · MAX-blend One/One\n` +
+      `frag: vec4(depth, mouth, order, 1)\n\n` +
+      probes.map(line).join('\n') +
+      (failReasons.length ? `\n\n<span class="fail">${failReasons.join('\n')}</span>` : '') +
+      `\n\nwindow.__packing.pass = ${pass}`;
+
+    // ── small visualization: show the cube on a sphere (depth=R as brightness,
+    //    order=B tinted blue, mouth=G tinted green) so the scene is human-legible.
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.001, 100);
+    camera.position.set(0.3, 0.3, 2.6);
+    camera.lookAt(0,0,0);
+    const viz = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 96, 64),
+      new THREE.ShaderMaterial({
+        uniforms: { uCube: { value: carve.texture } },
+        vertexShader: `varying vec3 vN; void main(){ vN = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+        fragmentShader: `
+          precision highp float; uniform samplerCube uCube; varying vec3 vN;
+          void main(){
+            vec4 c = textureCube(uCube, normalize(vN));
+            // R depth -> grey, G mouth -> green, B order -> blue
+            vec3 col = vec3(c.r*0.5) + vec3(0.0, c.g, 0.0) + vec3(0.0,0.0,c.b*0.7);
+            gl_FragColor = vec4(col + 0.02, 1.0);
+          }`,
+      })
+    );
+    scene.add(viz);
+    function loop(){ viz.rotation.y += 0.0; renderer.render(scene, camera); requestAnimationFrame(loop); }
+    loop();
+  </script>
+</body>
+</html>
