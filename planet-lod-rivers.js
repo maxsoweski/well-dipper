@@ -119,7 +119,7 @@ export const ROUTER_MAIN = `
     craterCombiner(vPos, h, grad);
     ejectaCombiner(vPos, h, grad);
     canyonCombiner(vPos, h, canyonHeight, grad);
-    outflowCombiner(vPos, h, canyonHeight, grad);
+    outflowCombiner(vPos, h, canyonHeight, grad, 0.0);   // AC5 — order=0: outflow is a downstream scour, must NOT feed routing (order derives FROM routing; outflow off in routing). Early-outs ⇒ zero contribution, router baseline preserved.
     karstCombiner(vPos, h, canyonHeight, grad);
     scarpCombiner(vPos, h, grad);
     plateauCombiner(vPos, fwBase, h, grad);

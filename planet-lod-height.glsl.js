@@ -1010,35 +1010,40 @@ export const HEIGHT_GLSL = /* glsl */ `
       // gradient into grad (t and the flow direction held locally constant — the documented
       // cosmetic-grad convention, cf. fluvial lowGround). uOutflowDensity <= 0 ⇒ early-out;
       // chan <= 0 ⇒ exact-zero contribution, return early (deltaCombiner branch precedent).
-      void outflowCombiner(vec3 pos, inout float h, inout float canyonHeight, inout vec3 grad){
-        if (uOutflowDensity <= 0.0) return;
+      // AC5 (rivers-fluvial-coupling): the megaflood outflow is now PLACED on the REAL
+      // Strahler trunk. 'order' is the baked B channel of the carve cube (normalized stream
+      // order, ~0 off-channel, peaks on the high-order trunks). realTrunk gates/places the
+      // scour at the real high-order reach instead of outflowField's decorrelated noise band.
+      // outflowField is STILL called — but only for dfield, to orient the cosmetic islands/
+      // grooves morphology so the scour reads as a distinct landform. The scour PROFILE
+      // (flat floor + islands + grooves) is unchanged; only PLACEMENT becomes causal.
+      // 'order'/realTrunk are treated as locally-CONSTANT in the gradient (the AC4 'mouth'
+      // convention) — so every old placement-gradient (dplateau/dsP/dchan) term is ZERO and
+      // removed; only the intrinsic island (dbump) + groove (dgn) gradient terms survive.
+      void outflowCombiner(vec3 pos, inout float h, inout float canyonHeight, inout vec3 grad, float order){
+        // high-order reaches only: B peaks at trunks. Below ~0.45 = headwaters/off-channel,
+        // full scour by ~0.8. (Placement envelope — replaces outflowField's chan band.)
+        float realTrunk = smoothstep(0.45, 0.8, order);
+        if (uOutflowDensity <= 0.0 || realTrunk <= 0.0) return;
         vec3 dfield;
-        vec4 d = outflowField(pos, dfield);
-        float chan = d.x;
-        if (chan <= 0.0) return;                               // outside the trunk band
-        vec3  dchan = d.yzw;
+        outflowField(pos, dfield);                             // ONLY for dfield (flow frame); chan no longer gates
         // same low-ground mix as F11 (shared knobs — floods empty into the same lowlands)
         float lowGround = mix(1.0, smoothstep(uFluvialHiGround, 0.0, h), uFluvialLowBias);
         float pw = provinceWeight(PROV_OUTFLOW);               // §8: flood products favor young lowlands
         float depth = uOutflowDepth * mix(0.45, 1.0, uOutflowActivity);   // relict = shallower
-        // (1) flat floor — plateau saturates at chan ≥ 0.35: walls only at the band edge
-        float tp = min(chan / 0.35, 1.0);
-        float plateau = tp*tp*(3.0 - 2.0*tp);
-        float dsP = (chan < 0.35) ? (6.0*tp*(1.0-tp))/0.35 : 0.0;   // d(plateau)/d(chan)
-        vec3  dplateau = dsP * dchan;
         float gateK = lowGround * uOutflowDensity * pw;
-        float s = plateau * gateK;
+        float s = realTrunk * gateK;                           // placement envelope = real trunk (was plateau)
         float carve = -s * depth;                              // scour DOWN
         canyonHeight += carve;
         h            += carve;
-        grad += -depth * gateK * dplateau;                     // d(carve)/dpos (lowGround held const)
+        // NB: no placement-gradient term — realTrunk/order held locally constant (AC4 'mouth' convention)
         // flow frame — across-flow direction (raw field gradient) + downstream tangent
         vec3 fdir = dfield / max(length(dfield), 1e-5);
         vec3 tv   = cross(fdir, pos);
         vec3 t    = tv / max(length(tv), 1e-5);
         // (2) streamlined islands — voronoi3d F1 in a domain compressed along t (3.5:1
         // stretch in world space): teardrop obstacles, tails agreeing with the trunk flow.
-        if (uOutflowIslands > 0.0 && plateau > 0.001){
+        if (uOutflowIslands > 0.0 && s > 0.001){
           float islScale = uOutflowFreq * 8.0;
           vec3 ip = pos * islScale + uOutflowOffset;
           vec3 q  = ip - (1.0 - 1.0/3.5) * dot(ip, t) * t;     // compress along-flow ⇒ 3.5:1 stretched cells
@@ -1054,18 +1059,18 @@ export const HEIGHT_GLSL = /* glsl */ `
           float islandH = uOutflowIslands * bump * s * depth;
           canyonHeight += islandH;
           h            += islandH;
-          grad += uOutflowIslands * depth * (s * dbump + bump * gateK * dplateau);
+          grad += uOutflowIslands * depth * s * dbump;         // intrinsic island grad only (placement held const ⇒ dplateau term gone)
         }
         // (3) longitudinal grooves — 1D noise on the across-flow coordinate ⇒ ridges
         // aligned with t; amplitude ≤ 15% of carve depth (slider cap), floor-mask gated via s.
-        if (uOutflowGrooves > 0.0 && plateau > 0.001){
+        if (uOutflowGrooves > 0.0 && s > 0.001){
           float xc = dot(pos, fdir);
           vec4 gn = noised(vec3(xc * uOutflowGrooveFreq, 4.7, -9.3) + uOutflowOffset);
           float groove = uOutflowGrooves * depth * gn.x * s;
           canyonHeight += groove;
           h            += groove;
           vec3 dgn = gn.y * uOutflowGrooveFreq * fdir;          // 1D chain rule (fdir held const)
-          grad += uOutflowGrooves * depth * (s * dgn + gn.x * gateK * dplateau);
+          grad += uOutflowGrooves * depth * s * dgn;            // intrinsic groove grad only (placement held const ⇒ dplateau term gone)
         }
       }
 

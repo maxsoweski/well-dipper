@@ -323,7 +323,8 @@
           ejectaCombiner(vPos, h, grad);            // F3 — apron wrapping the F2 craters
           canyonCombiner(vPos, h, canyonHeight, grad);
           fluvialCombiner(vPos, h, canyonHeight, grad, fluvialWet);   // F11 — channels carve into canyonHeight
-          outflowCombiner(vPos, h, canyonHeight, grad);    // F13 — megaflood trunk scours into canyonHeight (after F11: same accumulator, distinct event)
+          float outflowOrder = textureCube(uRiverCarveMap, N).b;   // AC5 — baked Strahler order (B): place outflow on the REAL trunk (same object-space dir N as sampleCarve / deltaCombiner)
+          outflowCombiner(vPos, h, canyonHeight, grad, outflowOrder);    // F13 — megaflood trunk scours into canyonHeight (after F11: same accumulator, distinct event)
           karstCombiner(vPos, h, canyonHeight, grad);      // F21 — dolines + labyrinth dissolve into canyonHeight (before F12/F14: collapse lakes come free)
           scarpCombiner(vPos, h, grad);
           plateauCombiner(vPos, fwBase, h, grad);
