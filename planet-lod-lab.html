@@ -421,10 +421,29 @@
             float d      = (h - uSeaLevel) / max(slope, 0.15);   // signed shore distance
             float gentle = 1.0 - smoothstep(0.5 * uCoastCliffSlope, uCoastCliffSlope, slope);
             float coastW = uCoastStrength * provinceWeight(PROV_COAST) * (1.0 - liquidMask);
-            // (a) beach band — 0 < d < uBeachWidth on gentle shores (wave-built terrace)
-            beachBand = smoothstep(0.0, 0.3 * uBeachWidth, d)
-                      * (1.0 - smoothstep(0.7 * uBeachWidth, uBeachWidth, d))
+            // AC6 (2026-06-19): estuarine keying — widen the beach band specifically at REAL
+            // river mouths via the baked carve-cube MOUTH channel (.g), the same object-space
+            // surface dir N used by AC4's deltaMouth tap (~line 363) and sampleCarve's center
+            // tap. Plain (river-free) coast has .g == 0 ⇒ beachWEff == uBeachWidth ⇒ the
+            // beachBand smoothsteps below are BYTE-IDENTICAL to the shipped F20 (the regression
+            // contract). This is the F20 "keyed to rivers specifically" piece from the carve-map
+            // coupling feasibility briefing: the carve→F14-flood→shore-SDF breach shoreline
+            // already lights flooded carved valleys emergently — this ADDS a broad estuarine/
+            // deltaic shore band ON TOP at the discrete mouths. Albedo-only (beachBand feeds the
+            // Stage-6 beachCol mix); no h/grad writes, so finite-diff parity is untouched. Dummy
+            // cube (pre-first-route) ⇒ .g == 0 ⇒ no estuary (safe).
+            float coastMouth = textureCube(uRiverCarveMap, N).g;
+            const float ESTUARY_WIDEN = 2.0;                     // mouth .g=1 ⇒ 3× beach width (estuary/delta breadth); .g=0 ⇒ ×1 (identity)
+            float beachWEff = uBeachWidth * (1.0 + coastMouth * ESTUARY_WIDEN);
+            // (a) beach band — 0 < d < beachWEff on gentle shores (wave-built terrace,
+            // widened to an estuarine/deltaic band at real river mouths)
+            beachBand = smoothstep(0.0, 0.3 * beachWEff, d)
+                      * (1.0 - smoothstep(0.7 * beachWEff, beachWEff, d))
                       * gentle * coastW;
+            // estuarine brightness lift — faint extra beach intensity AT mouths only
+            // (scaled by coastMouth ⇒ plain coast untouched), so the deltaic flats read a
+            // touch brighter/sandier than a generic wave terrace. mouth .g=0 ⇒ ×1 (identity).
+            beachBand *= 1.0 + 0.25 * coastMouth;
             // (b) cliff darkening — wave-cut face: near-shore (|d| small) × steep slope
             cliffDark = (1.0 - smoothstep(0.0, 2.0 * uBeachWidth, abs(d)))
                       * (1.0 - gentle) * coastW;
