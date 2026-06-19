@@ -22,12 +22,17 @@ export const DEFAULT_PARAMS = Object.freeze({
   LLOYD_ITERS: 4,
   CHANNEL_ORDER: 2,
   MIN_ORDER: 2,
-  WIDTH_PHI: 0.42, WIDTH_EXP: 0.69, WIDTH_SCALE: 0.00055, WIDTH_MIN: 0.0009, WIDTH_MAX: 0.018,
+  WIDTH_PHI: 0.42, WIDTH_EXP: 0.69, WIDTH_SCALE: 0.000275, WIDTH_MIN: 0.00045, WIDTH_MAX: 0.009,
   CHAIKIN_ITERS: 3,
   FLAT_RESOLVE: true,
   DINF_ROUTE: true,
   CHANNEL_FRAC: 0.06,
   LIFT: 0.999,   // seat the water just BELOW the mean surface so it sits in the channel (was 1.0035 = floating)
+  // ── width law halved 2026-06-19 (pre-LOD "less cartoonish" baseline) ──
+  // WIDTH_SCALE/MIN/MAX were multiplied by 0.5 (shape/ratio/seed logic unchanged). Geomorphically
+  // realistic thinness (rivers ~10km ≈ 0.0016 of radius, vs this ~0.009 widest trunk still ~5× wide)
+  // awaits the deferred view-dependent river-LOD workstream: below ~0.4× the fixed 40k global
+  // drainage network self-erases at orbit distance (nothing finer to fall back on).
   // ── AC6 radius-coupling (Theme-B scale system) ──
   // The width fields above are calibrated at the REFERENCE radius. River width is a real-km
   // footprint; on a unit sphere it occupies a fraction ∝ 1/radiusEarth (the inverse of
