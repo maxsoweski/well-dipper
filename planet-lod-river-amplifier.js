@@ -139,7 +139,9 @@ function childSDF(px, py, child) {
 
 // Production-shaped entry point — EXACT JS mirror of GLSL riverAmplifier().
 // trunk = { a:[x,y], b:[x,y], za, zb }.  Returns { sdf, incision, flowDir:[x,y], bestGen }.
-export function amplifierSample(uvx, uvy, trunk, orderN, depth, lod, pxPerKmInv, seed) {
+// widthScale: render-space factor decoupling the channel radius from the km magnitude of the
+// width law (see GLSL note). Same param order as the GLSL signature: lod, pxPerKmInv, widthScale, seed.
+export function amplifierSample(uvx, uvy, trunk, orderN, depth, lod, pxPerKmInv, widthScale, seed) {
   const flowDir0 = unit2([trunk.b[0] - trunk.a[0] + 1e-6, trunk.b[1] - trunk.a[1]]);
   if (lod <= 0 || depth < AMP.TRUNK_EPS) {
     return { sdf: 1e9, incision: 0, flowDir: flowDir0, bestGen: 0 };
@@ -151,7 +153,7 @@ export function amplifierSample(uvx, uvy, trunk, orderN, depth, lod, pxPerKmInv,
     if (s.dist < best.dist) { best = s; bestFlow = c.flowDir.slice(); }
   }
   const wKm = widthKm(orderN, best.gen);
-  const radius = Math.max(wKm * 0.5, 0.5 * pxPerKmInv);
+  const radius = Math.max(wKm * widthScale * 0.5, 0.5 * pxPerKmInv);
   const incision = smoothstep(radius + AMP.AA, radius - AMP.AA, best.dist) * lod;
   return { sdf: best.dist - radius, incision, flowDir: bestFlow, bestGen: best.gen, radius };
 }

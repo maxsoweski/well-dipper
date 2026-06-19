@@ -111,8 +111,8 @@ ${hashSrc}
   // orderN = normalized Strahler (carve.b); depth = carve.r (the GATE); lod in [0,1]; pxPerKmInv
   // = half-pixel floor scale. Returns vec2(signedDist, incision); writes flowDir (tangent-plane).
   vec2 riverAmplifier(vec2 uvT, vec2 trunkA, vec2 trunkB, float trunkZa, float trunkZb,
-                      float orderN, float depth, float lod, float pxPerKmInv, float seed,
-                      out vec2 flowDir){
+                      float orderN, float depth, float lod, float pxPerKmInv, float widthScale,
+                      float seed, out vec2 flowDir){
     flowDir = normalize(trunkB - trunkA + vec2(1e-6, 0.0));
     if (lod <= 0.0 || depth < ${AMP.TRUNK_EPS.toFixed(4)}) return vec2(1e9, 0.0);  // early-out: far OR no trunk
 
@@ -165,7 +165,12 @@ ${hashSrc}
       cellSize *= 0.5;                                           // resolution doubles each level
     }
     float wKm = ampWidthKm(orderN, bestGen);
-    float radius = max(wKm * 0.5, 0.5 * pxPerKmInv);             // half-pixel width floor
+    // widthScale decouples the rendered channel radius from the km magnitude of the Dunne–Leopold
+    // width law. ampWidthKm() outputs object-space KM (~0.1–0.26) which, used directly as a
+    // tangent-plane-uv radius, floods the whole patch (channels as wide as the cells). widthScale
+    // is a tunable RENDER-space factor; the width-LAW RATIO (child < parent) is preserved because
+    // every generation's wKm is multiplied by the SAME widthScale.
+    float radius = max(wKm * widthScale * 0.5, 0.5 * pxPerKmInv);  // half-pixel width floor
     float incision = smoothstep(radius + ${AMP.AA.toFixed(4)}, radius - ${AMP.AA.toFixed(4)}, bestSDF) * lod;
     flowDir = bestFlow;
     return vec2(bestSDF - radius, incision);                     // x = signed distance, y = incision weight

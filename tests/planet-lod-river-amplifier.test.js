@@ -19,6 +19,7 @@ const FULL_LOD = 1.0;
 const HIGH_ORDER = 1.0;     // normalized Strahler (6th-order trunk → 1.0)
 const DEPTH_OK = 0.8;       // > AMP.TRUNK_EPS so the gate opens
 const PX_INV = 0.0;         // disable the half-pixel floor so width law is read directly
+const WIDTH_SCALE = 1.0;    // render-space channel-width factor; 1.0 reads the raw km width law
 
 describe('river amplifier — (a) DETERMINISM (position-seeded, no flicker)', () => {
   it('hash is a pure function of (cell, level, seed)', () => {
@@ -32,8 +33,8 @@ describe('river amplifier — (a) DETERMINISM (position-seeded, no flicker)', ()
 
   it('same surface point → bit-identical (sdf, incision, flowDir) across repeated calls', () => {
     const p = [0.83, 0.21];
-    const r1 = amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, SEED);
-    const r2 = amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, SEED);
+    const r1 = amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, WIDTH_SCALE, SEED);
+    const r2 = amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, WIDTH_SCALE, SEED);
     expect(r2.sdf).toBe(r1.sdf);
     expect(r2.incision).toBe(r1.incision);
     expect(r2.flowDir).toEqual(r1.flowDir);
@@ -43,8 +44,8 @@ describe('river amplifier — (a) DETERMINISM (position-seeded, no flicker)', ()
   it('query ORDER cannot change a point\'s value (shuffled evaluation is identical)', () => {
     const pts = [];
     for (let i = 0; i < 40; i++) pts.push([0.1 + 0.03 * i, 0.05 + 0.017 * (i % 7)]);
-    const forward = pts.map((p) => amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, SEED).sdf);
-    const reversed = [...pts].reverse().map((p) => amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, SEED).sdf);
+    const forward = pts.map((p) => amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, WIDTH_SCALE, SEED).sdf);
+    const reversed = [...pts].reverse().map((p) => amplifierSample(p[0], p[1], TRUNK, HIGH_ORDER, DEPTH_OK, FULL_LOD, PX_INV, WIDTH_SCALE, SEED).sdf);
     reversed.reverse();
     expect(reversed).toEqual(forward);
   });
@@ -63,10 +64,10 @@ describe('river amplifier — (a) DETERMINISM (position-seeded, no flicker)', ()
   });
 
   it('amplifier emits ZERO when far (lod=0) or off-trunk (depth below the gate)', () => {
-    const far = amplifierSample(0.5, 0.2, TRUNK, HIGH_ORDER, DEPTH_OK, 0.0, PX_INV, SEED);
+    const far = amplifierSample(0.5, 0.2, TRUNK, HIGH_ORDER, DEPTH_OK, 0.0, PX_INV, WIDTH_SCALE, SEED);
     expect(far.incision).toBe(0);
     expect(far.sdf).toBeGreaterThan(1e8);
-    const dry = amplifierSample(0.5, 0.2, TRUNK, HIGH_ORDER, AMP.TRUNK_EPS - 0.001, FULL_LOD, PX_INV, SEED);
+    const dry = amplifierSample(0.5, 0.2, TRUNK, HIGH_ORDER, AMP.TRUNK_EPS - 0.001, FULL_LOD, PX_INV, WIDTH_SCALE, SEED);
     expect(dry.incision).toBe(0);
     expect(buildChildren(0.5, 0.2, TRUNK, HIGH_ORDER, AMP.TRUNK_EPS - 0.001, FULL_LOD, SEED)).toHaveLength(0);
   });
@@ -177,7 +178,7 @@ describe('river amplifier — (c) TRUNK-CONVERGENCE (tributaries flow INTO the t
     const CELL = baseSpacing(orderN);                // 0.25 at HIGH_ORDER — channel-width-scaled bound
     let near = 0;
     for (let x = 0.2; x < 1.8; x += 0.1) {
-      const r = amplifierSample(x, 0.06, TRUNK, orderN, DEPTH_OK, FULL_LOD, PX_INV, SEED);
+      const r = amplifierSample(x, 0.06, TRUNK, orderN, DEPTH_OK, FULL_LOD, PX_INV, WIDTH_SCALE, SEED);
       if (r.sdf + r.radius < CELL) near++;            // raw distance-to-nearest-child < one cell
     }
     expect(near).toBeGreaterThan(8);
@@ -189,7 +190,7 @@ describe('river amplifier — (c) TRUNK-CONVERGENCE (tributaries flow INTO the t
     // the nearest synthesized child than points at y=1.5 (far), on average. A uniform net would show
     // no such gradient. (raw distance = sdf + radius, undoing the width subtraction.)
     const rawDist = (x, y) => {
-      const r = amplifierSample(x, y, TRUNK, orderN, DEPTH_OK, FULL_LOD, PX_INV, SEED);
+      const r = amplifierSample(x, y, TRUNK, orderN, DEPTH_OK, FULL_LOD, PX_INV, WIDTH_SCALE, SEED);
       return r.sdf + r.radius;
     };
     let nearSum = 0, farSum = 0, n = 0;
@@ -254,7 +255,7 @@ describe('river amplifier — (e) WIDTH follows 0.42 * accum^0.69 and child < pa
 
   it('the half-pixel floor keeps the finest channel from collapsing below a pixel', () => {
     const pxInv = 0.02;                       // 1 px ≈ 0.02 km-units here
-    const r = amplifierSample(0.83, 0.04, TRUNK, 1.0, DEPTH_OK, FULL_LOD, pxInv, SEED);
+    const r = amplifierSample(0.83, 0.04, TRUNK, 1.0, DEPTH_OK, FULL_LOD, pxInv, WIDTH_SCALE, SEED);
     expect(r.radius).toBeGreaterThanOrEqual(0.5 * pxInv - 1e-12);
   });
 });
