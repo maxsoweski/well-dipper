@@ -6,9 +6,12 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
 > (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation
-> primitive) → #3 rivers ✅ SHIPPED (2026-06-19) → NEXT: rivers view-dependent LOD** ·
-> shipped contract: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`; next:
-> `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/`.
+> primitive) → #3 rivers ✅ SHIPPED (2026-06-19); F11 retired + dendritic made first-class
+> (`076f586`) → NEXT: FLUVIAL FEATURE CO-DEPENDENCE** (Max's north star: features read each
+> other's real output → distinct 3D landforms, not homogeneous mush — spatially couple deltas/
+> outflow/coast onto the dendritic carve map). Shipped contract:
+> `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`. Also still scoped+deferred:
+> `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/` (close-approach LOD).
 > *(One-line breadcrumb so the nesting is reflexive across handoffs; update when the active feature changes.)*
 
 > **🧭 Working the planet-LOD lab? READ `docs/FEATURES/planet-lod-CHARTER.md` FIRST** — it's
@@ -102,6 +105,29 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > scale system that already exists + the two-regime split). NOTE: the geometric carve was DEFERRED in
 > intent.md but Max REOPENED it (now landed) — note the reversal when the contract is revised. Handoff:
 > `/tmp/handoff-rivers-AC6-scale-scope-2026-06-18.md`.
+
+> **▶ F11 RETIRED + DENDRITIC RIVERS MADE FIRST-CLASS `076f586` (2026-06-19, post-ship).** Max:
+> remove the old F11 river feature + wire the new one like the others (checkbox by the folder
+> name). Done via subagents. Removed the F11 worm-trail VISUAL (height-carve + `fluvTint`) + its
+> GUI folder; promoted the dendritic network to THE rivers feature with full first-class treatment
+> (title-bar enable checkbox + ⓘ info + relevance filter via the `rivers`/`state.riversEnabled`
+> key; folder → 'Rivers & valleys (F11)'). Verified 282/282, backtick parity even, rivers off/on
+> confirmed live on :9223. **⚠ BEHAVIOR CHANGE — deltas dormant:** F12 `deltaCombiner` is spatially
+> gated by `fluvialWet`, seeded ONLY by the F11 network (shared `planet-lod-height.glsl.js`); F11
+> off ⇒ `fluvialWet`=0 ⇒ delta aprons dormant until re-coupled to the dendritic mouths. F13 outflow
+> unaffected. This is the lead-in to the next workstream. Push PENDING Max. Handoff:
+> `/tmp/handoff-rivers-fluvial-coupling-2026-06-19.md`.
+>
+> **▶ NEXT WORKSTREAM (scope, don't build yet) — FLUVIAL FEATURE CO-DEPENDENCE.** Max's priority:
+> generation where features inform each other → distinct 3D landforms (not "semi-homogeneous slop").
+> First concrete step: spatially couple the fluvial family (F12 deltas, F13 outflow, F20 coast) onto
+> the dendritic carve map so they form AT the real rivers. Validated feasible (subagent, 2026-06-19):
+> carve map = HalfFloat RGBA cube, **R=depth, G/B free**, built once per route. Need: retain the
+> router graph (`strahler/receiver/accum`, currently discarded), bake mouth field (F12/F20) +
+> Strahler order (F13) into spare channels, and make the network route unconditionally per planet
+> (always-on) so always-on features can read it. Findings:
+> `~/briefings/welldipper-carvemap-coupling-feasibility-2026-06-19.md`. Scope via `dev-collab-scope`
+> (spans 2+ systems). Slug suggestion: `rivers-fluvial-coupling-2026-06-19`.
 
 > **✅ GLOBAL RIVERS SHIPPED `f45c804` (2026-06-19).** Max's AC8 UAT passed — walked the clean
 > Earth-like lab on :9223 (Rocky preset, seed 1, frozen, distance 2.6, all 3 fixes live: relief
