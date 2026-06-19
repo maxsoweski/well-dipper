@@ -11,6 +11,20 @@ Mature the **planet-LOD lab renderer** to the quality bar for the **SCREENSAVER-
 (`HEART_OF_DESIRE.md`): planets/moons are the hero objects on screen. The lab is where
 that visual polish is developed.
 
+## ⭐ NORTH STAR — FEATURES WORK TOGETHER (co-dependence) — ALWAYS (Max, 2026-06-19)
+**Every piece of terrain work in this lab — global generation AND view-dependent LOD detail —
+must take the OTHER features into account. This is the standing north star; it appears here,
+at every session start, and in every handoff.** Concretely:
+- **Rivers respect MOUNTAIN topology** — drainage flows around/down the real relief, never ignores it.
+- **Rivers FEED the ocean** — they terminate at the coast and flow INTO the sea. They must NOT
+  "float on top of" the ocean (e.g. a carve/LOD that incises over water cells = missing the mark).
+- **Downstream features stay keyed to the real drainage** — deltas/outflow/coastlines derive from
+  the actual routed network (the shipped fluvial-coupling pattern), at LOD scale too.
+- Generalizes to all structured features (mountains↔canyons↔scarps→coherent massifs, etc.).
+A feature that looks right in isolation but ignores its neighbours is WRONG here. When adding LOD
+detail, the local regeneration must READ the other features' fields (height-with-mountains, sea
+level, coast) so finer detail stays consistent with the global coupling — not just look plausible alone.
+
 ## The single most important structural fact: the lab ≠ the game (BY DESIGN)
 There are **two unrelated planet renderers** (full detail + the deferred-port decisions:
 [`lab-vs-game-renderer-divergence.md`](lab-vs-game-renderer-divergence.md)):
