@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>River view-dependent LOD lab — Dendry amplifier spike</title>
+  <!--
+    rivers-viewdependent-lab.html — ISOLATED HARNESS for the river-LOD amplifier
+    (spec docs/superpowers/specs/2026-06-19-river-lod-design.md §7 build-sequence step 1).
+
+    PROVES (or disproves) the MAKE-OR-BREAK primitive BEFORE any production sampleCarve edit:
+    can a deterministic, position-seeded, control-function-conditioned Dendry amplifier
+    synthesize sub-tributaries that (a) are dendritic/branching, (b) obey downhill flow, and
+    (c) CONVERGE INTO mock control trunks (no parallel network) — gated so it contributes
+    ZERO when far (lodRamp=0) or off-trunk?
+
+    ISOLATION. This renders the amplifier SDF over a FLAT 2D patch domain (a fullscreen quad in
+    tangent-plane uv), NOT the full planet pipeline. No Planet.js, no carve cube, no 40k mesh.
+    The "control function" is a handful of MOCK control trunks drawn directly in-shader, so the
+    expected convergence behavior is known by construction. It imports the SHARED amplifier GLSL
+    (planet-lod-river-amplifier.glsl.js) so the harness and the headless unit tests
+    (tests/planet-lod-river-amplifier.test.js) exercise the SAME primitive — the GLSL here is the
+    same string the JS reference port mirrors.
+
+    GUI: lodRamp/strength · drainage density · A/B (amplifier on/off) · seed.
+    Verdict for chrome-devtools: window.__rivAmp = { fps, msPerFrame, ... }.
+    Standalone at http://127.0.0.1:5173/rivers-viewdependent-lab.html (Vite serves repo root).
+  -->
+  <style>
+    html,body { margin:0; height:100%; background:#05060a; overflow:hidden; font-family:ui-monospace,monospace; color:#9fd; }
+    #canvas { display:block; width:100vw; height:100vh; }
+    #hud { position:fixed; top:8px; left:8px; font-size:12px; line-height:1.5;
+           background:rgba(0,0,0,.6); padding:8px 10px; border-radius:6px; white-space:pre; pointer-events:none; }
+    #gui { position:fixed; top:8px; right:8px; font-size:12px; background:rgba(0,0,0,.7);
+           padding:10px 12px; border-radius:6px; width:240px; }
+    #gui label { display:block; margin:6px 0 2px; }
+    #gui input[type=range] { width:100%; }
+    #gui .row { display:flex; justify-content:space-between; align-items:center; }
+    #gui button { width:100%; margin-top:8px; background:#123; color:#9fd; border:1px solid #2a4; padding:6px; border-radius:4px; cursor:pointer; }
+    .val { color:#7fffa0; }
+    vite-error-overlay { display:none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+  <div id="gui">
+    <strong>River-LOD amplifier</strong>
+    <label class="row"><span>lodRamp / strength</span><span class="val" id="lLod">1.00</span></label>
+    <input id="lod" type="range" min="0" max="1" step="0.01" value="1" />
+    <label class="row"><span>drainage density</span><span class="val" id="lDen">1.00</span></label>
+    <input id="den" type="range" min="0.3" max="1" step="0.01" value="1" />
+    <label class="row"><span>seed</span><span class="val" id="lSeed">1337</span></label>
+    <input id="seed" type="range" min="1" max="4096" step="1" value="1337" />
+    <button id="ab">A/B: amplifier ON</button>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { RIVER_AMPLIFIER_GLSL, AMP } from './planet-lod-river-amplifier.glsl.js';
+
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:false });
+    renderer.setPixelRatio(1);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const hud = document.getElementById('hud');
+
+    // ── Fullscreen quad over the tangent-plane patch. uv ∈ [0, PATCH] maps to the same
+    //    coordinate space the amplifier's cell grid lives in (BASE_SPACING ≈ 0.25 units).
+    const PATCH = 2.0;   // patch spans 2 tangent-plane units → ~8 level-0 cells across
+
+    // NOTE: GLSL ES 3.00 (THREE.GLSL3) — the amplifier's deterministic hash uses uint bit-mix,
+    // which requires WebGL2/GLSL3. This harness imports RIVER_AMPLIFIER_GLSL (the GLSL3 variant).
+    // The production sampleCarve in planet-lod-lab.html is GLSL1 today (textureCube, no
+    // glslVersion:GLSL3) — porting the primitive there has TWO resolved options, both now provided
+    // by planet-lod-river-amplifier.glsl.js:
+    //   (a) promote that shader to WebGL2/GLSL3 (renderer ctx getContext('webgl2') +
+    //       glslVersion:THREE.GLSL3, audit textureCube→texture) and inline RIVER_AMPLIFIER_GLSL; OR
+    //   (b) inline RIVER_AMPLIFIER_GLSL1 (sin-fract hash fallback — same math, GLSL1-safe).
+    // RIVER_AMPLIFIER_REQUIRES_GLSL3 flags that this default export is GLSL3. Do NOT inline both.
+    const frag = /* glsl */ `
+      precision highp float;
+      in vec2 vUv;                  // [0,1] across the quad
+      out vec4 fragColor;
+      uniform float uLod;           // lodRamp gate / strength
+      uniform float uDensity;       // drainage density → normalized Strahler order proxy
+      uniform float uSeed;          // position-seed
+      uniform int   uAmpOn;         // A/B toggle
+      uniform float uPxInv;         // half-pixel width floor scale (1/px in patch units)
+
+      ${RIVER_AMPLIFIER_GLSL}
+
+      // ── MOCK control function: two control trunks crossing the patch. In production these come
+      //    from reconstructTrunkSeg() over the carve cube; here they are hand-placed so the
+      //    expected convergence is known. trunkSeg() returns the nearest trunk's segment + its
+      //    endpoint elevations + a "depth" gate proxy (1 inside a band around the trunk, else 0).
+      void mockTrunks(vec2 uv, out vec2 a, out vec2 b, out float za, out float zb, out float depth){
+        // trunk 1: diagonal, flowing down-right (za high at upper-left, zb low at lower-right)
+        vec2 a1 = vec2(0.2, 1.7), b1 = vec2(1.7, 0.3); float za1 = 1.0, zb1 = 0.0;
+        // trunk 2: a second trunk lower-left, flowing down-left
+        vec2 a2 = vec2(0.3, 0.3), b2 = vec2(1.4, 1.1); float za2 = 0.8, zb2 = 0.1;
+        // distance to each segment
+        vec2 ab1 = b1 - a1; float u1 = clamp(dot(uv-a1, ab1)/dot(ab1,ab1), 0.0, 1.0);
+        float d1 = length(uv - (a1 + u1*ab1));
+        vec2 ab2 = b2 - a2; float u2 = clamp(dot(uv-a2, ab2)/dot(ab2,ab2), 0.0, 1.0);
+        float d2 = length(uv - (a2 + u2*ab2));
+        if (d1 <= d2){ a=a1; b=b1; za=za1; zb=zb1; depth = (d1 < 0.6) ? 0.8 : 0.0; }
+        else        { a=a2; b=b2; za=za2; zb=zb2; depth = (d2 < 0.6) ? 0.8 : 0.0; }
+      }
+
+      void main(){
+        vec2 uv = vUv * ${PATCH.toFixed(2)};
+        vec2 a, b; float za, zb, depth;
+        mockTrunks(uv, a, b, za, zb, depth);
+
+        // draw the mock trunk (always visible, the "real river" the amplifier must converge into)
+        vec2 ab = b - a; float ut = clamp(dot(uv-a, ab)/dot(ab,ab), 0.0, 1.0);
+        float dTrunk = length(uv - (a + ut*ab));
+        float trunkInk = smoothstep(0.030, 0.018, dTrunk);
+
+        vec3 col = vec3(0.03, 0.04, 0.06);
+        col = mix(col, vec3(0.15, 0.45, 0.95), trunkInk);   // trunk = blue
+
+        if (uAmpOn == 1){
+          float orderN = clamp(uDensity, ${AMP.ORDER_GATE_LO.toFixed(2)}, 1.0);
+          vec2 flow;
+          vec2 amp = riverAmplifier(uv, a, b, za, zb, orderN, depth, uLod, uPxInv, uSeed, flow);
+          // amp.x = signed distance (negative inside a channel), amp.y = incision weight
+          float trib = smoothstep(0.022, 0.010, amp.x + 0.012) * uLod;  // thin synthesized channels
+          col = mix(col, vec3(0.35, 0.85, 0.65), trib * amp.y);          // tributaries = teal
+          // tint by flow direction so convergence-into-trunk is legible
+          col += vec3(0.0, 0.05, 0.0) * trib * (0.5 + 0.5 * flow.x);
+        }
+        fragColor = vec4(col, 1.0);
+      }
+    `;
+
+    const mat = new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      uniforms: {
+        uLod:     { value: 1.0 },
+        uDensity: { value: 1.0 },
+        uSeed:    { value: 1337 },
+        uAmpOn:   { value: 1 },
+        uPxInv:   { value: PATCH / window.innerHeight },   // 1 px in patch units
+      },
+      vertexShader: `out vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+      fragmentShader: frag,
+    });
+    const scene = new THREE.Scene();
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    // ── GUI wiring ──
+    const $ = (id) => document.getElementById(id);
+    $('lod').addEventListener('input', (e) => { mat.uniforms.uLod.value = +e.target.value; $('lLod').textContent = (+e.target.value).toFixed(2); });
+    $('den').addEventListener('input', (e) => { mat.uniforms.uDensity.value = +e.target.value; $('lDen').textContent = (+e.target.value).toFixed(2); });
+    $('seed').addEventListener('input', (e) => { mat.uniforms.uSeed.value = +e.target.value; $('lSeed').textContent = e.target.value; });
+    $('ab').addEventListener('click', () => {
+      const on = mat.uniforms.uAmpOn.value = mat.uniforms.uAmpOn.value ? 0 : 1;
+      $('ab').textContent = on ? 'A/B: amplifier ON' : 'A/B: amplifier OFF (baked trunks only)';
+    });
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      mat.uniforms.uPxInv.value = PATCH / window.innerHeight;
+    });
+
+    // ── render loop + per-frame cost measurement (spec §7: measured, not assumed) ──
+    let frames = 0, acc = 0, last = performance.now();
+    window.__rivAmp = { ready: false, fps: 0, msPerFrame: 0, ampOn: true, lod: 1, seed: 1337 };
+    function loop(){
+      const t0 = performance.now();
+      renderer.render(scene, cam);
+      const t1 = performance.now();
+      acc += (t1 - t0); frames++;
+      if (t1 - last > 500){
+        const ms = acc / frames;
+        window.__rivAmp = {
+          ready: true,
+          fps: +(1000 / (ms || 1)).toFixed(1),
+          msPerFrame: +ms.toFixed(3),
+          ampOn: mat.uniforms.uAmpOn.value === 1,
+          lod: mat.uniforms.uLod.value,
+          density: mat.uniforms.uDensity.value,
+          seed: mat.uniforms.uSeed.value,
+          patch: PATCH, maxgen: AMP.MAXGEN,
+        };
+        hud.innerHTML =
+          `RIVER-LOD AMPLIFIER SPIKE (isolated)\n` +
+          `flat patch ${PATCH}u · MAXGEN ${AMP.MAXGEN} · 5x5 neighborhood\n\n` +
+          `amplifier: ${window.__rivAmp.ampOn ? 'ON' : 'OFF'}\n` +
+          `lodRamp:   ${window.__rivAmp.lod.toFixed(2)}\n` +
+          `density:   ${window.__rivAmp.density.toFixed(2)}\n` +
+          `seed:      ${window.__rivAmp.seed}\n\n` +
+          `frame:     ${window.__rivAmp.msPerFrame} ms  (~${window.__rivAmp.fps} fps)\n` +
+          `blue = mock control trunks · teal = synthesized tributaries\n` +
+          `(GPU cost here is the per-pixel Option-A measurement, spec §7/§9)`;
+        acc = 0; frames = 0; last = t1;
+      }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>
