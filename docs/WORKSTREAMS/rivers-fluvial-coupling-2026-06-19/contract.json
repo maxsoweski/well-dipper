@@ -1,0 +1,118 @@
+{
+  "workstream": "rivers-fluvial-coupling-2026-06-19",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-19. First concrete step of the fluvial co-dependence arc (Theme A, wrong generation primitive). Built on shipped dendritic rivers (eca2973) + F11 retirement (076f586). Technical path validated by the read-only feasibility investigation ~/briefings/welldipper-carvemap-coupling-feasibility-2026-06-19.md. Climate/always-on/F13 decisions resolved by working-Claude against Max's north star (Max delegated the calls to the north-star criterion).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-multichannel-packing-harness",
+      "statement": "An isolated *-lab.html harness proves the multi-field carve-cube packing works BEFORE any production wiring: render the dendritic valley geometry into a HalfFloat RGBA cube carrying R=depth, G=mouth/apron, B=Strahler-order/width, read the channels back, and confirm the MAX-blend equation packs the extra channels correctly at confluences (deepest/highest-order/widest wins, no cross-channel corruption). Per feedback_isolated-test-harnesses: if the mechanism doesn't work in isolation, production can't save it.",
+      "verifyVia": {
+        "input": "Open the new packing harness on :9223; readback the cube G/B at known mouth nodes, headwater nodes, and a confluence; compare against the CPU-side graph values (mouth set, strahler, accum)",
+        "observable": "G is nonzero only at/near real mouth nodes and zero on headwaters; B monotone with Strahler order; at a confluence each channel resolves to the max-correct value (no channel bleeds another's magnitude). Harness logs PASS for all probe points."
+      },
+      "layer": "unit",
+      "live": true
+    },
+    {
+      "id": "AC2-retain-and-bake-graph",
+      "statement": "The router graph (receiver[], accum[], strahler[], isChannel[], isOcean[]), currently built in routeAndOrder and DISCARDED, is retained and used to bake two new fields into the existing carve cube: a mouth/apron field (G) at nodes where isChannel[i] && !isOcean[i] && isOcean[receiver[i]], sized by accum[]; and a Strahler-order/width field (B). buildValleyGeometry gains aMouth/aOrder vertex attributes and createCarveCubeMap's frag writes vec4(depth, mouth, order, 1). The shipped R=depth carve and its relief gate (uRiverCarveGateHi) are unchanged.",
+      "verifyVia": {
+        "input": "Lab on :9223 (wet preset): read the carve cube (or _lab.uniforms.uRiverCarve*) and spot-check G/B against window._rivers graph; confirm R-channel carve depth + relief-gate behavior is byte-identical to the shipped rivers (before/after screenshot of a fixed preset)",
+        "observable": "Carve cube carries mouth in G (co-located with where ribbons meet the sea) and order in B (peaks on the trunk); R-channel carve unchanged (shipped rivers render identically, no new gouging/regression)"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-always-on-routing",
+      "statement": "The dendritic network routes unconditionally per planet (on preset/seed change), decoupled from the river-overlay UI toggle, so the graph + carve + mouth/order fields exist in the DEFAULT state without the user enabling anything. The visible river RIBBON overlay remains an independent display toggle (off by default is fine). The mesh stays cached/built-once; only re-read+re-route+re-bake runs on planet change, within the interactive budget.",
+      "verifyVia": {
+        "input": "Lab on :9223: load a fresh wet preset WITHOUT touching the river toggle; read window._rivers/_lab to confirm a routed graph + populated carve mouth/order channels exist; change preset and reseed; confirm re-route runs and the ribbon visibility toggle still works independently",
+        "observable": "A valid routed network + mouth/order fields are present by default (no manual overlay enable); preset/seed change re-routes (logged totalMs ~tens of ms, no multi-second freeze, mesh not rebuilt); ribbon visibility toggles on/off without affecting the coupling"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-deltas-at-real-mouths",
+      "statement": "F12 deltas form AT real river mouths (currently DORMANT since F11 retirement — deltaCombiner is gated by fluvialWet, seeded by the now-off F11 noise field). deltaCombiner is re-gated on the baked mouth channel (G) instead of fluvialWet; apron size scales with the mouth's accum (bigger rivers -> bigger deltas). The state.fluvialDensity/deltaDensity climate scalar survives ONLY as a neutral-by-default global intensity multiplier, NOT as a presence/location gate.",
+      "verifyVia": {
+        "input": "Lab on :9223 (wet preset, rivers always-on per AC3): inspect the shoreline at several river mouths vs plain coast with no river; reseed and re-check; A/B the climate multiplier at neutral vs raised",
+        "observable": "Deltas appear at/adjacent to real river mouths and are absent on river-free shoreline; larger-accum mouths carry visibly larger aprons; reseeding moves the deltas with the rivers; deltas are restored (no longer dead) and no longer driven by the F11 noise field"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-outflow-on-real-trunk",
+      "statement": "F13 outflow channels — today a synthetic megaflood scour field on a decorrelated seed (uOutflowOffset), unrelated to the routed network — are located/gated by the baked Strahler-order channel (B) so the megaflood trunk follows the REAL high-order reach. The distinctive carved scour PROFILE is preserved (outflow stays a visually distinct landform); only its placement becomes causal.",
+      "verifyVia": {
+        "input": "Lab on :9223: compare the outflow megaflood channel location against the real highest-Strahler reach (window._rivers); reseed the river network and confirm the outflow trunk moves with it (proving coupling vs the old independent seed)",
+        "observable": "The megaflood outflow coincides with the real trunk (highest-order reach), not an unrelated location; reseeding the rivers relocates the outflow accordingly; the scour profile still reads as a distinct megaflood landform (not collapsed into an ordinary river)"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-coast-keyed-to-mouths",
+      "statement": "F20 coastlines respond specifically where rivers reach the sea (estuarine keying) via the baked mouth channel — on top of the already-emergent carve->F14-flood->shore-SDF shoreline that lights flooded carved valleys. The generic shoreline treatment on river-free coast is unchanged.",
+      "verifyVia": {
+        "input": "Lab on :9223: compare the coast/beach treatment at river mouths vs plain coast on the same planet; toggle the mouth keying to confirm the difference is mouth-driven",
+        "observable": "Coast at river mouths shows a distinct (e.g. widened estuarine) treatment vs plain coast; the carved-valley breach shoreline still appears emergently; plain-coast shoreline is unchanged from the shipped F20"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-no-regression",
+      "statement": "Editing the SHARED modules (planet-lod-rivers.js to retain graph + bake channels; planet-lod-height.glsl.js to re-gate deltaCombiner/outflowCombiner) introduces zero regression: the router-lab stays clean, the height-combiner finite-diff parity holds, the test cluster is green, backtick parity stays even, and non-fluvial features render unchanged.",
+      "verifyVia": {
+        "input": "npx vitest run tests/planet-lod-*.test.js tests/planet-archetypes.test.js tests/planet-lod-sealevel.test.js; reload rivers-terrain-lab.html and read window._rivers.stats; grep -o backtick planet-lod-lab.html | wc -l; before/after lab screenshot of a non-fluvial (dry) preset",
+        "observable": "Test cluster 282/282; router lab stats 0 orphan/uphill, Strahler ~5, R_b ~5.15; backtick count even (126); non-fluvial preset renders identically (no drift to mountains/F14 water/generic coast)"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-reads-as-coupled-system",
+      "statement": "On the actual lab planet, the fluvial family reads as ONE coupled system feeding off the real rivers — deltas at real mouths, the megaflood outflow on the real trunk, coast biting in where rivers breach — distinct, mutually-informing landforms, clearly better than the pre-coupling abstract-scalar version (the 'slop'). Holistic acceptance.",
+      "verifyVia": {
+        "input": "Max walks the lab on :9223 across multiple wet presets, seeds, and viewpoints",
+        "observable": "Max judges the fluvial features cohere as a single system that demonstrably feeds off the real river network, produce distinct 3D-reading landforms, and are a clear improvement over the abstract-scalar 'mush'"
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "The router graph from routeAndOrder: receiver[], accum[], strahler[], isChannel[], isOcean[], height[] (planet-lod-rivers.js:462-464) -- currently LOCAL to route() and DISCARDED; this workstream retains it.",
+      "The carve cube uRiverCarveMap: THREE.WebGLCubeRenderTarget, HalfFloatType/RGBA, 1024^2, R=valley depth, G/B free, A=1 (createCarveCubeMap planet-lod-rivers.js:~685; rasterized by buildValleyGeometry ~:596 + cube frag ~:701; MAX-blend MaxEquation OneFactor/OneFactor ~:705).",
+      "The shared height GLSL: deltaCombiner (planet-lod-height.glsl.js:~1353-1373, gated today by uDeltaDensity x fluvialWet), outflowField/outflowCombiner (~:982-1069, synthetic decorrelated seed uOutflowOffset), and the F20 shore-distance SDF block (planet-lod-lab.html:410-431).",
+      "F14 sea level-set uSeaLevel + the sea cut (planet-lod-lab.html:382-398) -- the mouth/outlet condition (h < uSeaLevel) and the carve->flood->shoreline chain.",
+      "The shipped dendritic rivers feature (eca2973): state.riversEnabled, route()/riverReroute (planet-lod-lab.html:~3407-3433), and the per-pixel relief gate uRiverCarveGateHi (planet-lod-lab.html:~372-385).",
+      "The climate scalars state.fluvial* (fluvialDensity/deltaDensity, fluvialActivity/outflowActivity) -- demoted here to neutral-by-default global intensity trim."
+    ],
+    "outputs": [
+      "A multi-channel carve cube: R=depth (unchanged), G=mouth/apron field, B=Strahler-order/width field.",
+      "New buildValleyGeometry vertex attributes aMouth/aOrder; createCarveCubeMap frag writing vec4(depth, mouth, order, 1).",
+      "A retained router graph (added to route()'s baking pass or the overlay's getter surface).",
+      "Re-gated deltaCombiner (mouth channel G instead of fluvialWet) -- RESTORES the currently-dormant deltas.",
+      "outflowCombiner located/gated by the order channel B (scour profile preserved).",
+      "F20 estuarine keying at river mouths via the mouth channel.",
+      "An always-on route() call in planet setup (per preset/seed), decoupled from the ribbon-visibility toggle.",
+      "An isolated multi-channel-packing harness (*-lab.html) proving the cube packing (AC1)."
+    ],
+    "mustStayWorking": [
+      "The shipped dendritic rivers: after ANY edit to planet-lod-rivers.js, the router lab (rivers-terrain-lab.html) regression must stay clean -- 0 orphan/uphill, Strahler ~5, R_b ~5.15.",
+      "The R-channel carve depth + relief gate uRiverCarveGateHi -- adding G/B under MAX-blend must not alter the shipped depth carve or reintroduce mountain-gouging.",
+      "planet-lod-height.glsl.js finite-diff parity tests (the combiner chain is unit-tested).",
+      "Test cluster green: npx vitest run tests/planet-lod-*.test.js tests/planet-archetypes.test.js tests/planet-lod-sealevel.test.js -> 282/282 (NOT bare npm test; 4 pre-existing galaxy/star-catalog/deep-sky failures are unrelated).",
+      "Backtick parity in planet-lod-lab.html stays EVEN (126 now).",
+      "Non-fluvial features render unchanged: mountains/relief, F14 water rendering + level-set cut, generic F20 coast on river-free shoreline.",
+      "The lab's presets, render path, and GUI; the climate fluvial* sliders still function (now as intensity trim).",
+      "All carve-fed features inherit the 40k-mesh ~140km resolution floor -- that ceiling is the SEPARATE rivers-viewdependent-lod-2026-06-18 workstream, NOT addressed here (mouths/deltas will be coarse at that resolution, by design)."
+    ]
+  }
+}
