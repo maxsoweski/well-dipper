@@ -7,17 +7,23 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
 > (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation
 > primitive) → #3 rivers ✅ SHIPPED (2026-06-19); F11 retired + dendritic made first-class
-> (`076f586`) → **▶ FLUVIAL FEATURE CO-DEPENDENCE — 🟢 VERIFIED_PENDING_MAX `0d0ef44` (2026-06-19)**
+> (`076f586`) → **FLUVIAL FEATURE CO-DEPENDENCE — ✅ SHIPPED (Max UAT-passed 2026-06-19, "these seem
+> to work together well"); 8 commits on master `167937d`, NOT yet pushed (awaiting Max push OK).**
 > (Max's north star: features read each other's real output → distinct 3D landforms, not homogeneous
 > mush). Spatially coupled F12 deltas (mouth/G channel), F13 outflow (order/B → real Strahler trunk),
 > F20 coast (estuarine keying at mouths) onto the dendritic carve cube; routing now always-on per
-> planet. 8-AC contract `docs/WORKSTREAMS/rivers-fluvial-coupling-2026-06-19/` — AC1–AC7 GREEN,
-> **AC8 holistic UAT = Max's gate** (does it read as ONE coupled system, distinct landforms not slop?).
-> Built via per-AC implement→audit→adjust workflows; live integration verified by working-Claude (a
-> dual-call-site shader-compile bug was live-caught at AC4 + fixed). NOT pushed (awaiting Max UAT).
-> Shipped predecessor: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`. Still scoped+deferred:
-> `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/` (close-approach LOD — the ~140km 40k-mesh
-> floor that makes the coupled features read coarsely; OUT of scope for this WS).
+> planet. 8-AC contract `docs/WORKSTREAMS/rivers-fluvial-coupling-2026-06-19/` (AC1–AC7 GREEN, AC8 UAT
+> passed). Built via per-AC implement→audit→adjust workflows; a dual-call-site shader-compile bug was
+> live-caught at AC4 + fixed.
+> **▶ NEXT (Max's 2 next-steps, 2026-06-19):** (1) **RIVER SCALE** — "rivers still seem too large for
+> the scale in question; the basic rendering tech here is sound but should be happening at smaller
+> scales"; downstream features (deltas/outflow/coast) "seem more appropriate in scale" → it's the
+> RIVERS' own width/scale that reads too large, NOT the coupling. Diagnose vs `rivers-viewdependent-lod-2026-06-18`
+> (40k-mesh ~140km floor) and/or river width-tuning (shipped rivers AC6 width-by-radius + UAT-item1
+> seeded width). (2) **GENERALIZE THE CO-DEPENDENCE APPROACH TO ALL TERRAIN GEN** — "use the info
+> we've already built about which features interact/go together (D1-D16→P1-P28→F1-F53 model +
+> planet-feature-associations.js) and make sure their systems are taking each other into account."
+> Shipped predecessor: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`.
 > *(One-line breadcrumb so the nesting is reflexive across handoffs; update when the active feature changes.)*
 
 > **🧭 Working the planet-LOD lab? READ `docs/FEATURES/planet-lod-CHARTER.md` FIRST** — it's
