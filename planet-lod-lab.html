@@ -156,6 +156,7 @@
     import { HEIGHT_GLSL } from './planet-lod-height.glsl.js';   // AC1: single source of h(pos) GLSL (lab + river router)
     import { makeUniforms } from './planet-lod-uniforms.js';      // AC1: single source of uniform defaults (factory)
     import { createRiverOverlay } from './planet-lod-rivers.js';  // AC4: dendritic river ribbon overlay (shared router/ribbon pipeline)
+    import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -205,17 +206,47 @@
       uniform float uRiverCarveDepth;      // Option B: h-units the floor drops (→ F14 flood)
       uniform float uRiverCarveRough;      // fbm roughness on depth + walls (breaks the clean V)
       uniform float uRiverCarveGateHi;     // relief gate (UAT item3): carve fades out above this elevation-over-sea (peaks); large ⇒ old unconditional behavior
+      // ── Option B river-LOD STEP 2: camera-localised tributary patch (2D ortho FloatType RTT) ──
+      // A small angular cap (default ~8° half-angle) carrying FINE valley depth at ~1km/texel (~9×
+      // finer than the ~9km/texel global carve cube). Unioned (MAX) into every sampleCarve tap under
+      // an angular falloff so the finite-diff gradient bends the fine valley WALLS, not just the floor.
+      // At uRiverCarvePatchStrength==0 patchDepth() returns 0 ⇒ max(global,0)==global ⇒ byte-identical.
+      uniform sampler2D uRiverCarvePatchMap;
+      uniform vec3  uRiverCarvePatchN;        // == patch centre (object space) = patch-cap normal
+      uniform vec3  uRiverCarvePatchU;        // local-frame tangent (UV +x / su axis)
+      uniform vec3  uRiverCarvePatchV;        // local-frame tangent (UV +y / sv axis)
+      uniform float uRiverCarvePatchAngular;  // cap half-angle (radians)
+      uniform float uRiverCarvePatchStrength; // 0 ⇒ patch off (regression-safe); GUI-owned
+      // GNOMONIC-TANGENT inverse projection — byte-aligned with projectToPatch() in
+      // planet-lod-tributary-patch.js. Returns the patch valley depth at object-space dir D (0 outside
+      // the cap / when strength is off), already faded by the angular smoothstep falloff.
+      float patchDepth(vec3 D){
+        if (uRiverCarvePatchStrength <= 0.0) return 0.0;
+        float cosd = dot(D, uRiverCarvePatchN);
+        if (cosd <= cos(uRiverCarvePatchAngular)) return 0.0;   // outside the cap
+        float su = dot(D, uRiverCarvePatchU) / cosd;            // gnomonic-tan lateral coords
+        float sv = dot(D, uRiverCarvePatchV) / cosd;
+        float R  = tan(uRiverCarvePatchAngular);                // == bake ortho half-size
+        vec2  uv = vec2(su, sv) / (2.0 * R) + 0.5;
+        float lateral = length(vec2(su, sv)) / R;               // 0 centre .. 1 edge
+        float falloff = 1.0 - smoothstep(0.7, 1.0, lateral);    // fade out at the cap edge (no seam)
+        return texture2D(uRiverCarvePatchMap, uv).r * falloff;
+      }
       // Returns valley depth at dir and writes the tangential gradient of depth (object space).
       float sampleCarve(vec3 dir, out vec3 depthGrad){
         float eps = 0.0045;
         vec3 ref = abs(dir.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
         vec3 t1 = normalize(cross(dir, ref));
         vec3 t2 = cross(dir, t1);
-        float dC  = textureCube(uRiverCarveMap, dir).r;
-        float dP1 = textureCube(uRiverCarveMap, normalize(dir + eps * t1)).r;
-        float dM1 = textureCube(uRiverCarveMap, normalize(dir - eps * t1)).r;
-        float dP2 = textureCube(uRiverCarveMap, normalize(dir + eps * t2)).r;
-        float dM2 = textureCube(uRiverCarveMap, normalize(dir - eps * t2)).r;
+        // global cube depth UNIONED (MAX) with the fine patch depth at the SAME dir, on all 5 taps —
+        // so the finite-diff gradient (below) bends the fine valley WALLS, not just darkens the floor.
+        vec3 oP1 = normalize(dir + eps * t1), oM1 = normalize(dir - eps * t1);
+        vec3 oP2 = normalize(dir + eps * t2), oM2 = normalize(dir - eps * t2);
+        float dC  = max(textureCube(uRiverCarveMap, dir).r, patchDepth(dir));
+        float dP1 = max(textureCube(uRiverCarveMap, oP1).r, patchDepth(oP1));
+        float dM1 = max(textureCube(uRiverCarveMap, oM1).r, patchDepth(oM1));
+        float dP2 = max(textureCube(uRiverCarveMap, oP2).r, patchDepth(oP2));
+        float dM2 = max(textureCube(uRiverCarveMap, oM2).r, patchDepth(oM2));
         depthGrad = ((dP1 - dM1) * t1 + (dP2 - dM2) * t2) / (2.0 * eps);
         return dC;
       }
@@ -1329,13 +1360,28 @@
       }
       const ct = new THREE.CubeTexture(faces); ct.needsUpdate = true; return ct;
     }
+    // sampler2D dummy for the river-LOD patch (Option B STEP 2). MUST be a 2D DataTexture (NOT a
+    // CubeTexture) — a samplerCube dummy would be an invalid bind for sampler2D uRiverCarvePatchMap.
+    // 1×1 black ⇒ depth 0; with uRiverCarvePatchStrength=0 it's never sampled anyway (regression-safe).
+    function makeDummyTex2D(){
+      const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
+      t.needsUpdate = true; return t;
+    }
     const _dummyCarveCube = makeDummyCubeTexture();
+    const _dummyPatchTex = makeDummyTex2D();
     uniforms.uRiverCarveMap      = { value: _dummyCarveCube };
     uniforms.uRiverCarveStrength = { value: 0.0 };
     uniforms.uRiverCarveFloor    = { value: 0.0 };
     uniforms.uRiverCarveDepth    = { value: 0.0 };   // Option B: h-units the floor is lowered (→ F14 floods)
     uniforms.uRiverCarveRough    = { value: 0.0 };   // fbm roughness on depth+walls (breaks the clean V/waterline)
     uniforms.uRiverCarveGateHi   = { value: 0.18 };  // relief gate (UAT item3): carve fades out above this elevation-over-sea
+    // Option B river-LOD STEP 2 — camera-localised tributary patch uniforms (default OFF = no-op).
+    uniforms.uRiverCarvePatchMap      = { value: _dummyPatchTex };
+    uniforms.uRiverCarvePatchN        = { value: new THREE.Vector3(0, 0, 1) };  // patch centre/normal
+    uniforms.uRiverCarvePatchU        = { value: new THREE.Vector3(1, 0, 0) };  // local-frame tangent (su)
+    uniforms.uRiverCarvePatchV        = { value: new THREE.Vector3(0, 1, 0) };  // local-frame tangent (sv)
+    uniforms.uRiverCarvePatchAngular  = { value: 0.14 };  // ~8° half-angle cap
+    uniforms.uRiverCarvePatchStrength = { value: 0.0 };   // 0 ⇒ patch off (regression-safe default)
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
     const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
@@ -1353,11 +1399,17 @@
     const riverOverlay = createRiverOverlay({ renderer, uniforms, octavesDuringRead: 9 });
     riverOverlay.ribbon.visible = false;
     planet.add(riverOverlay.ribbon);
+    // Option B river-LOD STEP 2 — camera-localised fine-tributary patch. Reads the REAL GPU height at
+    // a fine tangent-plane lattice (octaves 12 > the router's 9), grows the dendritic network onto the
+    // in-patch trunk outlets, and bakes valley depth into a 2D ortho RTT unioned into sampleCarve.
+    // On-demand (static camera); bake via the GUI button / window._lab.bakeTributaryPatch().
+    const tributaryPatch = createTributaryPatch({ renderer, uniforms, octaves: 12 });
     // enabled mirrors state.riversEnabled (the registry enableKey) for the internal route/carve
     // guards; setRiverOverlay keeps the two in sync. (No _f11Saved — the old F11-off coupling is gone.)
     const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35,
       carve: true, carveStrength: 0.01, carveFloor: 1.3, carveDepthH: 0.08, carveRough: 0.5,
       carveGateHi: 0.18,
+      patchStrength: 0.0, patchAngularDeg: 8,   // Option B river-LOD STEP 2: fine-tributary patch (default off)
       status: '(off)' };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -3468,6 +3520,32 @@
       syncDisplays();
       return res;                          // { stats, seaLevel }
     }
+    // Option B river-LOD STEP 2 — bake the fine-tributary patch at the CURRENT camera direction.
+    // center = object-space camera dir (the lightObj pattern: invQuat · normalize(camera.position)).
+    // The patch reads the in-patch trunk channels from the retained router graph (riverOverlay.routed)
+    // and the base mesh verts; growTributaries needs base verts + per-node isChannel/strahler, which
+    // the mesh carries (verts) and the routed graph carries (isChannel/strahler) — merged below.
+    // Static, on-demand: re-bake-on-move / windowing are deferred (spec §9). Sets patch uniforms;
+    // the master uRiverCarvePatchStrength is applied from the GUI value (0 ⇒ regression-safe).
+    function bakeTributaryPatch(){
+      let routed = riverOverlay.routed;
+      if (!routed){ ensureNetworkRouted('patch-prep'); routed = riverOverlay.routed; }
+      const baseMesh = riverOverlay.mesh;
+      if (!routed || !baseMesh){ console.warn('[patch] no routed graph / mesh yet'); return null; }
+      const invQ = new THREE.Quaternion().copy(planet.quaternion).invert();
+      const c = camera.position.clone().normalize().applyQuaternion(invQ);  // object-space cam dir
+      const angularRadius = THREE.MathUtils.degToRad(riverOverlayState.patchAngularDeg);
+      const info = tributaryPatch.bake({
+        routed,
+        baseMesh: { verts: baseMesh.verts, N: baseMesh.N, isChannel: routed.isChannel, strahler: routed.strahler },
+        center: [c.x, c.y, c.z],
+        angularRadius,
+        seed: state.macroSeed,
+        params: { gridRes: 56 },
+      });
+      uniforms.uRiverCarvePatchStrength.value = riverOverlayState.patchStrength;
+      return info;   // { center, u, v, angular, segmentCount }
+    }
     // route(): re-read the live height field + re-route + re-ribbon (no mesh rebuild — AC7).
     // In histogram mode the overlay OWNS the planet sea so the visible water and the river
     // outlets agree: drive state.seaLevel (the per-frame F14 sync propagates it to uSeaLevel) and
@@ -3780,6 +3858,11 @@
     fRiversOverlay.add(riverOverlayState, 'carveRough', 0, 1, 0.01).name('edge roughness').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveFloor', 0, 3, 0.01).name('dry-floor darkening').onChange(applyCarveAmounts);
     fRiversOverlay.add({ reroute(){ riverReroute('manual'); } }, 'reroute').name('↻ re-route now');
+    // Option B river-LOD STEP 2 — camera-localised fine-tributary patch (bloom-on-approach).
+    fRiversOverlay.add(riverOverlayState, 'patchAngularDeg', 2, 16, 0.5).name('patch half-angle (deg)');
+    fRiversOverlay.add(riverOverlayState, 'patchStrength', 0, 1, 0.01).name('patch LOD strength')
+      .onChange(v => uniforms.uRiverCarvePatchStrength.value = v);
+    fRiversOverlay.add({ bake(){ bakeTributaryPatch(); } }, 'bake').name('⌖ bake tributary patch @ cam');
     fRiversOverlay.add(riverOverlayState, 'status').name('status').listen().disable();
 
     // ▸ Lakes & seas (F14) — standing-liquid level-set cut on the accumulated height.
@@ -5511,6 +5594,16 @@
                     rivers(on){ setRiverOverlay(on !== false); return riverOverlayState.enabled; },
                     riversReroute(opts){ if (opts && opts.seaFromHistogram !== undefined) riverOverlayState.seaFromHistogram = opts.seaFromHistogram; if (opts && opts.targetFraction !== undefined) riverOverlayState.targetOceanFraction = opts.targetFraction; riverReroute('manual'); return riverOverlay.stats; },
                     get riverOverlay(){ return riverOverlay; }, get riverStats(){ return riverOverlay.stats; }, riverState: riverOverlayState,
+                    // Option B river-LOD STEP 2 — bake the fine-tributary patch at the CURRENT camera + set strength.
+                    // Usage: window._lab.bakeTributaryPatch({ angularDeg: 8, strength: 1 }) — bakes at the current
+                    // camera direction, raises the patch strength, and returns { center,u,v,angular,segmentCount }.
+                    bakeTributaryPatch(opts){
+                      if (opts && opts.angularDeg !== undefined) riverOverlayState.patchAngularDeg = opts.angularDeg;
+                      const info = bakeTributaryPatch();
+                      if (opts && opts.strength !== undefined){ riverOverlayState.patchStrength = opts.strength; uniforms.uRiverCarvePatchStrength.value = opts.strength; }
+                      return { info, strength: uniforms.uRiverCarvePatchStrength.value };
+                    },
+                    get tributaryPatch(){ return tributaryPatch; },
                     get sceneTarget(){ return sceneTarget; } };
 
     // ── HOT-RELOAD SCENARIO PERSISTENCE (2026-06-10) ──
