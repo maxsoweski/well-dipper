@@ -47,6 +47,22 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > runs already mapped both pipelines — both are non-displaced spheres; the river stack is mostly
 > portable-core; the carve is a surface-shader graft). **STILL Max-owned:** UAT of ribbon-vs-carve
 > reading (now unblocked) + the deferred graft-vs-replace renderer-unification call.
+
+> **▶ LATEST (2026-06-20, port-ready pass LANDED).** Both pieces done, local-only on master.
+> (§1) **Radius-parameterized the ribbon builders** (`63159a6`): `buildRibbonGeometry` +
+> `buildFineRibbonGeometry` take `params.radius` (default 1.0 = lab no-op); the whole ribbon scales
+> uniformly (centerline `dir*radius*LIFT` AND width `*radius`) so the game's
+> `IcosahedronGeometry(d.radius,5)` surface is supported. **Audit's sharper finding:** only the two
+> RIBBON builders depend on radius — `buildValleyGeometry` (direction-keyed carve cube) +
+> `buildFineValleyGeometry` (angle-keyed ortho patch, planar tan-space) are radius-invariant by
+> construction, deliberately NOT threaded. `radius` orthogonal to `radiusEarth` (width) + `ribbonLift`
+> (mesh scale). TDD `tests/planet-lod-river-radius.test.js`; cluster **369→374 green**; live-verified
+> default path renders rivers unchanged (ribbon radii=0.999=LIFT). (§2) **Port-contract doc**
+> (`0233cf3`): `docs/FEATURES/river-lod-port-contract.md` — portable-core modules, the
+> `sampleCarve`/`uRiverCarve*`/`uSeaLevel` shader graft, radius param, ribbon-lift + logdepthbuf/
+> no-polygonOffset caveats, lab-glue to re-implement; linked from divergence §4. Contract not a plan —
+> wiring stays deferred. **STILL Max-owned (unchanged):** UAT of ribbon-vs-carve (esp. grazing angles)
+> + the graft-vs-replace renderer-unification call.
 >
 > **▶ (2026-06-20 PM): §7 BUILT + headless-green + review-hardened; live GPU gate run →
 > objective plumbing PASSES, but LEGIBILITY needs 2 Max decisions (NOT a clean pass).** 4 commits on
