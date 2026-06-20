@@ -75,3 +75,11 @@ real decisions:
 **None of this is in scope until the lab itself is mature** (catalog complete + per-feature
 quality passed). See `planet-lod-campaign-tracker.md` and the manifest functional audit
 (`docs/superpowers/plans/2026-06-14-manifest-functional-audit.md`).
+
+> **Port-readiness (river-LOD only):** the river-LOD subsystem has been made port-READY ahead of this
+> decision — its importable-vs-graft-vs-glue seam is captured in
+> [`river-lod-port-contract.md`](river-lod-port-contract.md) (the portable-core modules, the
+> `sampleCarve`/`uRiverCarve*`/`uSeaLevel` shader graft, the now-parameterized geometric `radius`, the
+> ribbon-lift and logdepthbuf/no-polygonOffset caveats, and the lab-glue to re-implement). That contract
+> names WHAT crosses the seam; the graft-vs-replace question above still decides WHEN/HOW. Other
+> subsystems remain un-scoped for the port.
