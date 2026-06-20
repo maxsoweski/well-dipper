@@ -33,8 +33,25 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > render; α-carries-zoom / gridRes fixed-per-feature-per-planet ~448 (O(Nf²) snap→O(1) hex-lattice
 > inverse); 3 full-strength co-dependence reads (real height, sea-level outlets, ocean-mask bake);
 > static-cap v1; **legibility GPU gate** (LEGIBLE not just DIFFERS). Radius = realistic seed-derived
-> `state.planetRadiusEarth·6371`, no gen change. **NEXT = build §7 in a FRESH session** (Max's call;
-> the make-or-break live GPU gate is not background-able). Pickup: `/tmp/handoff-river-lod-build-instance1-2026-06-20.md`.
+> `state.planetRadiusEarth·6371`, no gen change. Pickup spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`.
+
+> **▶ LATEST (2026-06-20 PM): §7 BUILT + headless-green + review-hardened; live GPU gate run →
+> objective plumbing PASSES, but LEGIBILITY needs 2 Max decisions (NOT a clean pass).** 4 commits on
+> master (local-only): `7de1f7d` §7.1 co-dependence field-reads (height coeff 1.0 / sea outlets /
+> ocean mask), `38f817c` §7.2 O(1) hex-lattice inverse + seed-derived gridRes, `d220d04` §7.2 review
+> fixes (snapToLattice rim-widen + skip O(Nf·N_base) macro scan on GPU path — both HIGH-sev, caught by
+> a 10-agent adversarial review workflow), `0135fdc` §7.3 fine ribbon + order-graded dry→flood carve.
+> Headless: **366 green** (was 339; +27 new across 3 test files). **GPU gate (page 3, `:9223`)
+> findings:** pipeline wired (segmentCount ~200k), console clean, **regression-safe at strength 0** ✓,
+> fine CARVE adds finer dendrites that read (A/B differs, legible at a higher channel threshold) ✓,
+> feeds-the-sea/ocean-mask headless-verified ✓. **TWO open decisions (Max's, UAT-layer):**
+> **(1) fine RIBBON (Fork A) is depth-OCCLUDED** in the lab — the TRUNK ribbon is too (LIFT 0.999 sits
+> inside the radius-1.0 sphere) → rivers read via CARVE flood/dark-floors only (matches the handoff's
+> "shipped rivers read via flooding, not ribbon"); Fork A is a no-op here until the ribbon is
+> un-occluded or the game-port. **(2) DENSITY**: at the derived gridRes 550 the default fine-channel
+> threshold (Strahler≥2 → ~102k channels) reads as a SMEAR; a higher render threshold (≥4 → ~22k)
+> reads as legible dendrites — needs a default-raise + a GUI slider to tune. Gate screenshots:
+> `river-lod-gate-{A..G}*.jpeg` (repo root, NOT committed). Campaign memory updated with full findings.
 
 > **🧭 Working the planet-LOD lab? READ `docs/FEATURES/planet-lod-CHARTER.md` FIRST** — it's
 > the durable strategic frame (lab≠game by design, the program arc, the canonical model
