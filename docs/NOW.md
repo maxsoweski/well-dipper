@@ -26,6 +26,16 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Shipped predecessor: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`.
 > *(One-line breadcrumb so the nesting is reflexive across handoffs; update when the active feature changes.)*
 
+> **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
+> river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
+> WITH Max + approved. Spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`
+> (commits `19f98b3` + radius `a21a5e7`, local-only). Decisions: ribbon(legibility)+carve(co-dependence)
+> render; α-carries-zoom / gridRes fixed-per-feature-per-planet ~448 (O(Nf²) snap→O(1) hex-lattice
+> inverse); 3 full-strength co-dependence reads (real height, sea-level outlets, ocean-mask bake);
+> static-cap v1; **legibility GPU gate** (LEGIBLE not just DIFFERS). Radius = realistic seed-derived
+> `state.planetRadiusEarth·6371`, no gen change. **NEXT = build §7 in a FRESH session** (Max's call;
+> the make-or-break live GPU gate is not background-able). Pickup: `/tmp/handoff-river-lod-build-instance1-2026-06-20.md`.
+
 > **🧭 Working the planet-LOD lab? READ `docs/FEATURES/planet-lod-CHARTER.md` FIRST** — it's
 > the durable strategic frame (lab≠game by design, the program arc, the canonical model
 > location). It exists because fresh sessions keep losing that wider context. Then NOW.md
