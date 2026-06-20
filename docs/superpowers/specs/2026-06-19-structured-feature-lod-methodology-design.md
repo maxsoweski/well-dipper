@@ -329,13 +329,27 @@ rows ≈ **~32–40 km/cell** — only ~3× finer than the 113 km base, which is
 tributaries don't read (UAT failure #2). Tributary valleys want `s_feat ≈ 5–10 km`.
 With Nyquist (~2 cells per valley) the cell target is ~3–5 km.
 
-**Required gridRes (rivers).** Holding the 8° cap: `gridRes = ceil(cap_diameter /
-cell_target) = ceil(1780 km / ~4 km) ≈ 445`. That lands inside the brief's
-**300–560** window. **Recommendation: target gridRes ≈ 448 at the 8° cap** (round to
-keep the lattice symmetric), and let α shrink the cap on descent rather than pushing
-gridRes past ~560. At a tighter 4° approach cap, the SAME gridRes ≈ 448 gives ~2
-km/cell for free — that is the zoom response (α carries it; gridRes stays fixed per
-3.1c).
+**R_planet is SEED-DERIVED (realistic, not fixed Earth).** The physical radius
+already exists in the lab as `state.planetRadiusEarth` (`planet-lod-lab.html:2129`),
+drawn per-seed from the game's `RADIUS_RANGES_EARTH` (`src/core/ScaleConstants.js:67-86`,
+~0.3–16 Earth radii — moons through giants) via `drawPresetRadius(preset, radiusSeed)`
+(`:1868-1877`). So `R_planet_km = state.planetRadiusEarth · 6371`. The LOD math READS
+this; it does NOT assume Earth-scale and does NOT touch the unit-sphere geometry
+(`R = 1.0`, `:173`). No generation-side change — radius is already seeded.
+
+**Required gridRes (rivers).** With `cap_diameter_km = 2 · sin(α) · R_planet_km` and a
+per-feature cell target `s_feat`: `gridRes = ceil(cap_diameter_km / s_feat_km)`. For an
+**Earth-scale** seed (`planetRadiusEarth = 1.0` → R_planet_km ≈ 6371) at the 8° cap,
+cap_diameter ≈ 1780 km, so with `s_feat ≈ 4 km`: `gridRes ≈ 445`. That lands inside the
+brief's **300–560** window. **Recommendation: target gridRes ≈ 448 at the 8° cap for an
+Earth-scale seed** (round to keep the lattice symmetric), and let α shrink the cap on
+descent rather than pushing gridRes past ~560. **Because `R_planet_km` is seed-derived,
+gridRes scales automatically per planet** — a 0.5-RE moon yields a smaller cap_diameter
+and thus a smaller gridRes for the same km/cell; a giant yields more. gridRes is therefore
+fixed *per feature per planet size*, recomputed only when the seed (radius) or `s_feat`
+changes — never per frame, never with zoom. At a tighter 4° approach cap, the SAME gridRes
+gives ~2 km/cell for free — that is the zoom response (α carries it; gridRes stays fixed
+per 3.1c).
 
 **Worst-case vert count.** `Nf ≈ π·gridRes²/4` (disc-area estimate; the hex lattice
 runs ~15% higher). At gridRes 448 → **Nf ≈ 158k fine verts** (vs. ~2,460 at gridRes
@@ -935,9 +949,12 @@ promotes them to `VERIFIED_PENDING_MAX`, Max's UAT closes.
      radius-clipped miss).
    - Add the `inverse(forward(k)) == k` unit test for every k (boundary cells are
      where it diverges).
-   - Then derive gridRes once from `s_feat ≈ 5–10 km` + the 8° cap → **target gridRes
-     ≈ 448** (replace the hard-coded `56` at `planet-lod-lab.html:3544`); hold it
-     fixed, let α carry zoom.
+   - Then derive gridRes from `s_feat ≈ 5–10 km` + the 8° cap + the **seed-derived**
+     `R_planet_km = state.planetRadiusEarth · 6371` (`planet-lod-lab.html:2129`):
+     `gridRes = ceil(2·sin(α)·R_planet_km / s_feat_km)` → **≈ 448 for an Earth-scale
+     seed** (replace the hard-coded `56` at `planet-lod-lab.html:3544`). Recompute on
+     seed/radius change (it scales per planet size); hold it fixed across zoom — α
+     carries zoom. Do NOT touch the unit-sphere geometry `R = 1.0`.
 
 3. **Fine ribbon + carve render representation (Section 2).**
    - **Fork A:** `buildFineRibbonGeometry` in `planet-lod-tributary-patch.js`
@@ -986,12 +1003,16 @@ in a live `:9223` GPU pass with Max or by a one-line decision.
    the finest achievable detail at the α_min cap. If Max wants unbounded zoom-in
    detail, a second finer cap tier is needed (a §4/§5 seam-policy extension).
    Taste/perf-ceiling tradeoff.
-5. **§3 — physical planet radius.** The 8°→~1780 km→km/cell math assumes Earth-scale
-   (~6371 km); the lab renders on a unit sphere with no explicit physical-radius
-   constant found in `planet-lod-lab.html`. If the lab's intended radius differs, the
-   gridRes target shifts proportionally (the 300–560 window and the O(1)-fix logic
-   hold regardless). Confirm intended radius before the `s_feat→gridRes` numbers are
-   treated as final.
+5. **§3 — physical planet radius. RESOLVED (Max, 2026-06-19): use realistic
+   seed-derived radius.** The lab already carries a per-seed physical radius
+   `state.planetRadiusEarth` (`planet-lod-lab.html:2129`), drawn from the game's
+   `RADIUS_RANGES_EARTH` (`src/core/ScaleConstants.js:67-86`, ~0.3–16 RE) via
+   `drawPresetRadius(preset, radiusSeed)` (`:1868-1877`). The LOD gridRes derivation
+   reads `R_planet_km = state.planetRadiusEarth · 6371` (see §3.2), so density scales
+   realistically per planet — no fixed Earth assumption, no generation change, no
+   game-side work, unit-sphere geometry untouched. (Minor, non-blocking: radius uses
+   `radiusSeed`, continents use `macroSeed`; kept independent — flip the radius draw to
+   `macroSeed` later if one-seed-drives-all is wanted. One-line wiring, not now.)
 6. **§4 Fix 1 — FLATS_EPS magnitude.** ≈1e-3 relative recommended; too large
    re-introduces dilution, too small gives non-deterministic flow on flat GPU
    terrain. Empirical/visual call.
