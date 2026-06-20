@@ -35,7 +35,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > static-cap v1; **legibility GPU gate** (LEGIBLE not just DIFFERS). Radius = realistic seed-derived
 > `state.planetRadiusEarth·6371`, no gen change. Pickup spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`.
 
-> **▶ LATEST (2026-06-20 PM): §7 BUILT + headless-green + review-hardened; live GPU gate run →
+> **▶ LATEST (2026-06-20 late): both legibility decisions RESOLVED → threshold done + ribbon
+> UN-OCCLUDED; next = lightweight port-READY pass.** (1) §8.10 fine-channel render threshold:
+> default 4 + GUI slider, committed (through `21e4e2a`), twice adversarially reviewed. (2) **Ribbon
+> un-occlude: committed `eeddaab`** — `riverOverlayState.ribbonLift` (default 1.0014) applied as a
+> uniform mesh scale to both ribbon meshes (carve `LIFT` 0.999 untouched), `depthTest` stays true,
+> new `ribbon lift (occlude↔float)` GUI slider; verified live (trunk ribbon now renders over the
+> surface, far hemisphere occluded). Cluster **369 green**. Max reframed: build river-LOD
+> **port-READY** (radius-param the geometry + a port-contract doc) WITHOUT wiring into the game.
+> **NEXT SESSION:** `/tmp/handoff-river-lod-portready-2026-06-20.md` (two parallel `code-explorer`
+> runs already mapped both pipelines — both are non-displaced spheres; the river stack is mostly
+> portable-core; the carve is a surface-shader graft). **STILL Max-owned:** UAT of ribbon-vs-carve
+> reading (now unblocked) + the deferred graft-vs-replace renderer-unification call.
+>
+> **▶ (2026-06-20 PM): §7 BUILT + headless-green + review-hardened; live GPU gate run →
 > objective plumbing PASSES, but LEGIBILITY needs 2 Max decisions (NOT a clean pass).** 4 commits on
 > master (local-only): `7de1f7d` §7.1 co-dependence field-reads (height coeff 1.0 / sea outlets /
 > ocean mask), `38f817c` §7.2 O(1) hex-lattice inverse + seed-derived gridRes, `d220d04` §7.2 review
