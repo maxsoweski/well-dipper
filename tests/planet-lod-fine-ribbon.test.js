@@ -137,6 +137,19 @@ describe('§8.10 — configurable fine-channel render threshold (legible density
     const two = buildFineValleyGeometry({ out, planar: out.planar, params: { channelOrderMin: 2 } }).userData.segmentCount;
     expect(def).toBe(two);
   });
+
+  it('valley + ribbon resolve the SAME effective render floor (no divergence on the no-param fallback)', () => {
+    // guards the §8.10 invariant the review flagged: both builders must gate on an identical floor.
+    // Compare default (fallback) vs explicit-2 for BOTH builders — if either builder's fallback drifted
+    // off 2 the counts would diverge.
+    const out = richOut();
+    const vDef = buildFineValleyGeometry({ out, planar: out.planar }).userData.segmentCount;
+    const vTwo = buildFineValleyGeometry({ out, planar: out.planar, params: { channelOrderMin: 2 } }).userData.segmentCount;
+    const rDef = buildFineRibbonGeometry({ out, routed: { accum: null }, baseVerts: null }).userData.ribbonVerts;
+    const rTwo = buildFineRibbonGeometry({ out, routed: { accum: null }, baseVerts: null, params: { channelOrderMin: 2 } }).userData.ribbonVerts;
+    expect(vDef).toBe(vTwo);
+    expect(rDef).toBe(rTwo);
+  });
 });
 
 describe('§2 Fork E — a trunk-pinned outlet vertex sits at the trunk node position', () => {

@@ -137,7 +137,9 @@ export function buildFineRibbonGeometry({ out, routed, baseVerts, params = {} })
   const { WIDTH_PHI, WIDTH_EXP, WIDTH_SCALE, WIDTH_MIN, WIDTH_MAX, CHAIKIN_ITERS, LIFT } = P;
   // order floor for the cOrd ramp = the fine-channel render threshold (so the smallest RENDERED fine
   // order maps to the dark/thin end of the shared ramp), tracking the configurable threshold (§8.10).
-  const MIN_ORDER = P.channelOrderMin != null ? P.channelOrderMin : P.MIN_ORDER;
+  // Fall back to the SAME canonical constant buildFineValleyGeometry uses (DEFAULT_TRIB_PARAMS.channelOrderMin)
+  // so the carve floor and the ribbon floor can never silently diverge if a default is retuned.
+  const MIN_ORDER = P.channelOrderMin != null ? P.channelOrderMin : DEFAULT_TRIB_PARAMS.channelOrderMin;
   const { fverts, fadj, freceiver, fstrahler, faccum, isFineChannel, isOutlet, outletBaseNode } = out;
   const Nf = fverts.length;
   const C_LO = new THREE.Color(0x1d3c5e), C_HI = new THREE.Color(0x4486bb);   // shared deep-water ramp
