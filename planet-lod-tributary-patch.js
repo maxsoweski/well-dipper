@@ -16,7 +16,7 @@
 
 import * as THREE from 'three';
 import {
-  localFrame, buildFineGrid, growTributaries, DEFAULT_TRIB_PARAMS,
+  localFrame, buildFineGrid, snapToLattice, growTributaries, DEFAULT_TRIB_PARAMS,
 } from './planet-lod-tributaries.js';
 import { createHeightSampler, DEFAULT_PARAMS } from './planet-lod-rivers.js';
 
@@ -167,7 +167,8 @@ export function createTributaryPatch({ renderer, uniforms, octaves = 12, size = 
     const region = { center, angularRadius, gridRes };
 
     // 1. fine lattice (deterministic; growTributaries rebuilds the SAME lattice from the same region).
-    const { fverts } = buildFineGrid({ center, angularRadius }, gridRes);
+    const grid = buildFineGrid({ center, angularRadius }, gridRes);
+    const { fverts } = grid;
 
     // 2. REAL GPU height at the fine verts (replaces STEP 1's CPU fbm). Higher octave count than the
     //    base router's 9 reveals sub-base-mesh relief for the fine network to follow.
@@ -180,13 +181,8 @@ export function createTributaryPatch({ renderer, uniforms, octaves = 12, size = 
     //    nearest fine vert (the same lattice growTributaries uses ⇒ exact index correspondence for the
     //    snapped fine verts; for arbitrary p it's the nearest, which is what the macro trend wants).
     const sampleHeight = (p) => {
-      let best = 0, bestDot = -Infinity;
-      for (let k = 0; k < fverts.length; k++) {
-        const f = fverts[k];
-        const d = p[0] * f[0] + p[1] * f[1] + p[2] * f[2];
-        if (d > bestDot) { bestDot = d; best = k; }
-      }
-      return height[best];
+      const k = snapToLattice(grid, p);    // O(1) closed-form lattice inverse (§3.2; was an O(Nf) scan)
+      return k >= 0 ? height[k] : height[0];
     };
 
     // 4. grow the fine dendritic network onto the in-patch trunk outlets. Forward the full §4.3

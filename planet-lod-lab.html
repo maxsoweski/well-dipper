@@ -3527,6 +3527,21 @@
     // the mesh carries (verts) and the routed graph carries (isChannel/strahler) — merged below.
     // Static, on-demand: re-bake-on-move / windowing are deferred (spec §9). Sets patch uniforms;
     // the master uRiverCarvePatchStrength is applied from the GUI value (0 ⇒ regression-safe).
+    // §3.2 — derive the fine lattice density from the target tributary feature size + the SEED-DERIVED
+    // planet radius, at a CANONICAL reference cap (not the live cap). gridRes is fixed per feature per
+    // planet size (recomputed only when the radius/s_feat change — it reads state.planetRadiusEarth
+    // live, so a radius reroll auto-updates it); the live patchAngularDeg carries the zoom response (a
+    // tighter cap ⇒ finer km/cell for free at the SAME gridRes, per §3.1c). Clamped [56, 560]: floor at
+    // the legacy density, cap at the perf budget (Nf ≈ π·gridRes²/4 ≈ 158k verts at 448 → sub-second
+    // one-shot bake now that the snap is O(1)).
+    const RIVER_LOD_REF_CAP_DEG = 8.0;   // canonical design cap the density is fixed at
+    const RIVER_LOD_S_FEAT_KM   = 4.0;   // target tributary-valley feature size (≥2 cells/valley)
+    function deriveTributaryGridRes(){
+      const Rplanet_km = state.planetRadiusEarth * 6371;
+      const refAlpha   = THREE.MathUtils.degToRad(RIVER_LOD_REF_CAP_DEG);
+      const capDiam_km = 2 * Math.sin(refAlpha) * Rplanet_km;
+      return Math.max(56, Math.min(560, Math.ceil(capDiam_km / RIVER_LOD_S_FEAT_KM)));
+    }
     function bakeTributaryPatch(){
       let routed = riverOverlay.routed;
       if (!routed){ ensureNetworkRouted('patch-prep'); routed = riverOverlay.routed; }
@@ -3535,14 +3550,16 @@
       const invQ = new THREE.Quaternion().copy(planet.quaternion).invert();
       const c = camera.position.clone().normalize().applyQuaternion(invQ);  // object-space cam dir
       const angularRadius = THREE.MathUtils.degToRad(riverOverlayState.patchAngularDeg);
+      const gridRes = deriveTributaryGridRes();
       const info = tributaryPatch.bake({
         routed,
         baseMesh: { verts: baseMesh.verts, N: baseMesh.N, isChannel: routed.isChannel, strahler: routed.strahler },
         center: [c.x, c.y, c.z],
         angularRadius,
         seed: state.macroSeed,
-        params: { gridRes: 56 },
+        params: { gridRes },
       });
+      info && (info.gridRes = gridRes);
       uniforms.uRiverCarvePatchStrength.value = riverOverlayState.patchStrength;
       return info;   // { center, u, v, angular, segmentCount }
     }
@@ -5604,6 +5621,7 @@
                       return { info, strength: uniforms.uRiverCarvePatchStrength.value };
                     },
                     get tributaryPatch(){ return tributaryPatch; },
+                    deriveTributaryGridRes(){ return deriveTributaryGridRes(); },   // §3.2 gridRes probe
                     get sceneTarget(){ return sceneTarget; } };
 
     // ── HOT-RELOAD SCENARIO PERSISTENCE (2026-06-10) ──

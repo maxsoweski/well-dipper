@@ -120,6 +120,10 @@ export function fbm(x, y, z, seed, params = DEFAULT_TRIB_PARAMS) {
 // is a PURE FUNCTION of (region, gridRes) — this is what guarantees determinism and eval-order
 // invariance of everything downstream. Returns { fverts, fadj, planar }:
 //   fverts[k] = [x,y,z] on the unit sphere   planar[k] = [su, sv]   fadj[k] = neighbour indices.
+// Module-level lattice key so buildFineGrid (forward) and snapToLattice (inverse) agree byte-for-byte.
+// rows/cols are small (|r|,|c| < 100000/2) so this is collision-free for our sizes.
+export const latticeKey = (r, c) => r * 100000 + c;
+
 export function buildFineGrid(region, gridRes) {
   const { center, angularRadius } = region;
   const { u, v, n } = localFrame(center);
@@ -130,7 +134,7 @@ export function buildFineGrid(region, gridRes) {
 
   // Build a deterministic (row,col)->index map, scanning rows then cols in fixed order.
   const fverts = [], planar = [], rowColOf = [], indexAt = new Map();
-  const key = (r, c) => r * 100000 + c;       // rows/cols are small; collision-free for our sizes
+  const key = latticeKey;
   const rHalf = Math.ceil(rows / 2) + 1;
   for (let r = -rHalf; r <= rHalf; r++) {
     const sv = r * rowH;
@@ -166,7 +170,44 @@ export function buildFineGrid(region, gridRes) {
     }
     fadj[k].sort((a, b) => a - b); // canonical neighbour order (eval-order invariance)
   }
-  return { fverts, fadj, planar, gridRes: rows, R, cell };
+  return { fverts, fadj, planar, gridRes: rows, R, cell, rowH, indexAt, rowColOf, frame: { u, v, n } };
+}
+
+// ───────────────────────── snapToLattice (closed-form O(1) lattice inverse) ─────────────────────────
+// Snap an object-space unit dir to its nearest fine vert via the analytic triangular-lattice cell
+// inverse (§3.2) — replaces the O(Nf) linear scan that made each grow O(Nf²) and blocked raising
+// gridRes. Project dir into the patch frame to recover planar (su,sv) (the gnomonic-tangent inverse:
+// su = dot(dir,u)/dot(dir,n)), round to the lattice (row,col) exactly inverting buildFineGrid's
+// forward placement, then pick the max-dot candidate among the rounded cell + its row/column
+// neighbours. For an in-lattice point this returns that exact vert (so inverse(forward(k)) == k for
+// EVERY k, boundary cells included — k is always among its own candidates with dot 1). Radius-clipped
+// cells are absent from indexAt, so the candidate ring naturally falls back to the nearest PRESENT
+// vertex; a one-step ring widen covers the rare all-clipped near-rim query. O(1) per call.
+export function snapToLattice(grid, dir) {
+  const { frame, cell, rowH, indexAt, fverts } = grid;
+  const { u, v, n } = frame;
+  const cosd = dir[0] * n[0] + dir[1] * n[1] + dir[2] * n[2];
+  if (cosd <= 0) return -1;                    // behind the cap — no valid gnomonic projection
+  const su = (dir[0] * u[0] + dir[1] * u[1] + dir[2] * u[2]) / cosd;
+  const sv = (dir[0] * v[0] + dir[1] * v[1] + dir[2] * v[2]) / cosd;
+  const r0 = Math.round(sv / rowH);
+  let best = -1, bestDot = -Infinity;
+  const scan = (ring) => {
+    for (let r = r0 - ring; r <= r0 + ring; r++) {
+      const offset = ((((r % 2) + 2) % 2) === 1) ? cell * 0.5 : 0;
+      const c0 = Math.round((su - offset) / cell);
+      for (let c = c0 - ring; c <= c0 + ring; c++) {
+        const idx = indexAt.get(latticeKey(r, c));
+        if (idx === undefined) continue;
+        const f = fverts[idx];
+        const d = dir[0] * f[0] + dir[1] * f[1] + dir[2] * f[2];
+        if (d > bestDot) { bestDot = d; best = idx; }
+      }
+    }
+  };
+  scan(1);                                     // 3×3 candidate ring — the nearest lattice vert is here
+  if (best === -1) scan(2);                    // near-rim fallback: widen once (still fixed-radius, O(1))
+  return best;
 }
 
 // ───────────────────────── priorityFloodFromOutlets ─────────────────────────
@@ -318,7 +359,8 @@ export function growTributaries({ baseMesh, routed, sampleHeight, height, seaLev
   const { center, angularRadius } = region;
 
   // 1. deterministic fine lattice (pure function of region+gridRes)
-  const { fverts, fadj, planar, cell: fineCell } = buildFineGrid({ center, angularRadius }, gridRes);
+  const grid = buildFineGrid({ center, angularRadius }, gridRes);
+  const { fverts, fadj, planar, cell: fineCell } = grid;
   const Nf = fverts.length;
   const cellAngle = Math.atan(fineCell);   // ~angular size of one fine cell (for trunk densification)
 
@@ -336,12 +378,9 @@ export function growTributaries({ baseMesh, routed, sampleHeight, height, seaLev
   const outletBaseNode = new Int32Array(Nf).fill(-1);
   const outletSurf = new Float64Array(Nf);   // trunk/sea surf to pin h to, per fine outlet
   const isOceanFine = new Uint8Array(Nf);    // co-dependence Fix 2/3: fine vert is below sea level
-  // helper: nearest fine vert to an arbitrary unit direction (linear scan; patch grids are small).
-  const snapNearest = (dir) => {
-    let snap = -1, bestDot = -Infinity;
-    for (let k = 0; k < Nf; k++) { const d = vdot(dir, fverts[k]); if (d > bestDot) { bestDot = d; snap = k; } }
-    return snap;
-  };
+  // helper: nearest fine vert to an arbitrary unit direction — O(1) closed-form lattice inverse
+  // (§3.2; was an O(Nf) linear scan ⇒ O(Nf²) overall, the blocker on raising gridRes).
+  const snapNearest = (dir) => snapToLattice(grid, dir);
   // claim a fine vert as an outlet for base node bn at elevation s; on collision keep the
   // higher-strahler trunk node (deterministic: index-stable, strahler-prioritised).
   const claimOutlet = (k, bn, s) => {
