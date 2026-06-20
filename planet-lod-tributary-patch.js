@@ -135,6 +135,10 @@ export function buildFineValleyGeometry({ out, planar, params = {} }) {
 export function buildFineRibbonGeometry({ out, routed, baseVerts, params = {} }) {
   const P = { ...DEFAULT_PARAMS, ...params };
   const { WIDTH_PHI, WIDTH_EXP, WIDTH_SCALE, WIDTH_MIN, WIDTH_MAX, CHAIKIN_ITERS, LIFT } = P;
+  // Geometric sphere radius (default 1.0 = lab unit sphere = no-op; port passes d.radius). Scales the
+  // whole fine ribbon uniformly so it keeps its angular footprint on the game's IcosahedronGeometry.
+  // Geometric radius only — orthogonal to radiusEarth (width-proportioning) and ribbonLift (mesh scale).
+  const radius = P.radius != null ? P.radius : 1;
   // order floor for the cOrd ramp = the fine-channel render threshold (so the smallest RENDERED fine
   // order maps to the dark/thin end of the shared ramp), tracking the configurable threshold (§8.10).
   // Fall back to the SAME canonical constant buildFineValleyGeometry uses (DEFAULT_TRIB_PARAMS.channelOrderMin)
@@ -167,7 +171,7 @@ export function buildFineRibbonGeometry({ out, routed, baseVerts, params = {} })
       for (let k = 0; k < cur.length - 1; k++) {
         const a = cur[k], b = cur[k + 1];
         const mk = (t) => {
-          const v = new THREE.Vector3(a.p[0] + (b.p[0] - a.p[0]) * t, a.p[1] + (b.p[1] - a.p[1]) * t, a.p[2] + (b.p[2] - a.p[2]) * t).normalize().multiplyScalar(LIFT);
+          const v = new THREE.Vector3(a.p[0] + (b.p[0] - a.p[0]) * t, a.p[1] + (b.p[1] - a.p[1]) * t, a.p[2] + (b.p[2] - a.p[2]) * t).normalize().multiplyScalar(radius * LIFT);
           return { p: [v.x, v.y, v.z], w: a.w + (b.w - a.w) * t, c: a.c.clone().lerp(b.c, t) };
         };
         out2.push(mk(0.25), mk(0.75));
@@ -236,10 +240,10 @@ export function buildFineRibbonGeometry({ out, routed, baseVerts, params = {} })
       if (isTerm && termBn >= 0 && baseVerts && baseVerts[termBn]) {
         // Fork E: pin the terminal cross-section to the trunk rail (position + width + colour).
         const tp = baseVerts[termBn];
-        return { p: [tp[0] * LIFT, tp[1] * LIFT, tp[2] * LIFT], w: trunkWidthAt(termBn), c: trunkCOrd(termBn) };
+        return { p: [tp[0] * radius * LIFT, tp[1] * radius * LIFT, tp[2] * radius * LIFT], w: trunkWidthAt(termBn) * radius, c: trunkCOrd(termBn) };
       }
       const f = fverts[idx];
-      return { p: [f[0] * LIFT, f[1] * LIFT, f[2] * LIFT], w: Math.min(widthLaw(faccum[idx]), cap), c: fineCOrd(fstrahler[idx] || MIN_ORDER) };
+      return { p: [f[0] * radius * LIFT, f[1] * radius * LIFT, f[2] * radius * LIFT], w: Math.min(widthLaw(faccum[idx]), cap) * radius, c: fineCOrd(fstrahler[idx] || MIN_ORDER) };
     });
     emitRibbon(chaikin(pts, CHAIKIN_ITERS));
   }

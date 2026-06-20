@@ -474,6 +474,12 @@ export function buildRibbonGeometry({ mesh, routed, params = DEFAULT_PARAMS }) {
   const { adj, pos } = mesh;
   const N = mesh.N != null ? mesh.N : (pos.length / 3);
   const { MIN_ORDER, WIDTH_PHI, WIDTH_EXP, WIDTH_SCALE, WIDTH_MIN, WIDTH_MAX, CHAIKIN_ITERS, LIFT } = params;
+  // Geometric sphere radius the ribbon is built on. Default 1.0 = the lab's unit sphere (no-op);
+  // the game surface is IcosahedronGeometry(d.radius,5), so the port passes radius = d.radius. The
+  // whole ribbon scales uniformly by radius (centerline lift *radius*LIFT AND lateral width *radius),
+  // so the river keeps the SAME angular footprint on any sphere. NOTE this is the GEOMETRIC radius —
+  // orthogonal to radiusEarth (AC6 width-proportioning) and to ribbonLift (the un-occlude mesh scale).
+  const radius = params.radius != null ? params.radius : 1;
   const { receiver, accum, strahler, maxOrder, isChannel } = routed;
   const rendered = new Uint8Array(N);
   for (let i = 0; i < N; i++) if (isChannel[i] && strahler[i] >= MIN_ORDER) rendered[i] = 1;
@@ -496,7 +502,7 @@ export function buildRibbonGeometry({ mesh, routed, params = DEFAULT_PARAMS }) {
       for (let k = 0; k < cur.length - 1; k++) {
         const a = cur[k], b = cur[k + 1];
         const mk = (t) => {
-          const v = new THREE.Vector3(a.p[0] + (b.p[0] - a.p[0]) * t, a.p[1] + (b.p[1] - a.p[1]) * t, a.p[2] + (b.p[2] - a.p[2]) * t).normalize().multiplyScalar(LIFT);
+          const v = new THREE.Vector3(a.p[0] + (b.p[0] - a.p[0]) * t, a.p[1] + (b.p[1] - a.p[1]) * t, a.p[2] + (b.p[2] - a.p[2]) * t).normalize().multiplyScalar(radius * LIFT);
           return { p: [v.x, v.y, v.z], w: a.w + (b.w - a.w) * t, c: a.c.clone().lerp(b.c, t) };
         };
         out.push(mk(0.25), mk(0.75));
@@ -552,8 +558,8 @@ export function buildRibbonGeometry({ mesh, routed, params = DEFAULT_PARAMS }) {
   function buildAndEmit(start) {
     const raw = pathFrom(start);
     if (raw.length < 2) return;
-    const pts = raw.map(idx => ({ p: [pos[idx * 3] * LIFT, pos[idx * 3 + 1] * LIFT, pos[idx * 3 + 2] * LIFT],
-                                  w: widthAt(idx), c: cOrd(strahler[idx] || MIN_ORDER) }));
+    const pts = raw.map(idx => ({ p: [pos[idx * 3] * radius * LIFT, pos[idx * 3 + 1] * radius * LIFT, pos[idx * 3 + 2] * radius * LIFT],
+                                  w: widthAt(idx) * radius, c: cOrd(strahler[idx] || MIN_ORDER) }));
     emitRibbon(chaikin(pts, CHAIKIN_ITERS));
   }
   for (const h of heads) buildAndEmit(h);
