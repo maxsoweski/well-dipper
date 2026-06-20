@@ -312,7 +312,7 @@ function buildMacroInterp(baseMesh, surf, fverts) {
 // is taken from routed.surf over the base mesh (the true routed surface) — sampleHeight, if given,
 // is mixed in as an extra low-frequency macro term so the field still trends with real elevation
 // when a caller supplies a richer height than the coarse base graph carries.
-export function growTributaries({ baseMesh, routed, sampleHeight, region, seed = 0, params }) {
+export function growTributaries({ baseMesh, routed, sampleHeight, height, seaLevel, region, seed = 0, params }) {
   const P = { ...DEFAULT_TRIB_PARAMS, ...(params || {}) };
   const gridRes = (region && region.gridRes != null) ? region.gridRes : P.gridRes;
   const { center, angularRadius } = region;
@@ -334,7 +334,8 @@ export function growTributaries({ baseMesh, routed, sampleHeight, region, seed =
   const { receiver: bReceiver } = routed;
   const isOutlet = new Uint8Array(Nf);
   const outletBaseNode = new Int32Array(Nf).fill(-1);
-  const outletSurf = new Float64Array(Nf);   // trunk surf to pin h to, per fine outlet
+  const outletSurf = new Float64Array(Nf);   // trunk/sea surf to pin h to, per fine outlet
+  const isOceanFine = new Uint8Array(Nf);    // co-dependence Fix 2/3: fine vert is below sea level
   // helper: nearest fine vert to an arbitrary unit direction (linear scan; patch grids are small).
   const snapNearest = (dir) => {
     let snap = -1, bestDot = -Infinity;
@@ -347,6 +348,11 @@ export function growTributaries({ baseMesh, routed, sampleHeight, region, seed =
     if (k < 0) return;
     if (isOutlet[k]) {
       const cur = outletBaseNode[k];
+      // SEA-vs-TRUNK collision (Fix 2): bn === -1 is a SEA outlet. A trunk outlet always wins a
+      // collision (keep the trunk node) — both still act as sinks, and trunkStrahler[-1] is undefined,
+      // so resolve the priority EXPLICITLY rather than via an undefined strahler comparison.
+      if (bn === -1) return;                                                   // existing claim wins over a sea outlet
+      if (cur === -1) { outletBaseNode[k] = bn; outletSurf[k] = s; return; }   // a trunk node overrides a sea claim
       const curS = trunkStrahler ? trunkStrahler[cur] : 0;
       const newS = trunkStrahler ? trunkStrahler[bn] : 0;
       if (newS > curS) { outletBaseNode[k] = bn; outletSurf[k] = s; }
@@ -383,15 +389,37 @@ export function growTributaries({ baseMesh, routed, sampleHeight, region, seed =
     }
   }
 
-  // 3. fine height field = interpolated macro slope + fine fbm; outlets PIN to their trunk surf.
+  // 2b. SEA-OUTLET pass (co-dependence Fix 2): a fine vert below sea level is a COAST outlet, so fine
+  // flow drains to whichever outlet (trunk OR sea) it reaches first — tributaries FEED the ocean
+  // instead of ponding at the coast (North Star). seaLevel/height are orchestrator-supplied readers
+  // (§4.3); guarded so pure-CPU callers (no GPU height) are a no-op. height[k] corresponds to
+  // fverts[k] because buildFineGrid is a pure fn of (region, gridRes): the bake's height array and
+  // this lattice share indices. Sea outlets pin to seaLevel (the shoreline level-set h == seaLevel),
+  // claimed AFTER the trunk loop so a trunk outlet wins any collision (see claimOutlet).
+  if (height && typeof seaLevel === 'number') {
+    for (let k = 0; k < Nf; k++) {
+      if (height[k] < seaLevel) {
+        isOceanFine[k] = 1;
+        claimOutlet(k, -1, seaLevel);
+      }
+    }
+  }
+
+  // 3. fine height field = REAL height at coeff 1.0 + fine fbm; outlets PIN to their trunk/sea surf.
+  // Co-dependence Fix 1 (§4): route on the orchestrator-supplied GPU height at FULL strength so the
+  // fine network bends around the real mountains (the base router's 9-octave surf is too coarse to
+  // see sub-mesh relief). baseH is demoted to a tiny FLATS_EPS tie-breaker — NOT a fixed-fraction
+  // blend — purely to give priority-flood a deterministic downhill direction on dead-flat GPU terrain.
+  const FLATS_EPS = 1e-3;
   const { baseH } = buildMacroInterp(baseMesh, surf, fverts);
   const h = new Float64Array(Nf);
   for (let k = 0; k < Nf; k++) {
     const p = fverts[k];
-    let macro = baseH[k];
+    let macro;
     if (typeof sampleHeight === 'function') {
-      // mix in caller-supplied macro height (low weight; keeps trend, doesn't fight the routed surf)
-      macro = 0.5 * macro + 0.5 * sampleHeight(p);
+      macro = sampleHeight(p) + FLATS_EPS * baseH[k];   // coeff 1.0 on the real field; flats tie-breaker
+    } else {
+      macro = baseH[k];                                 // pure-CPU path: no richer field to honor
     }
     const fineN = fbm(p[0] * P.fineFreq, p[1] * P.fineFreq, p[2] * P.fineFreq, seed, P);
     h[k] = macro + P.fineAmp * fineN;
@@ -416,8 +444,8 @@ export function growTributaries({ baseMesh, routed, sampleHeight, region, seed =
   return {
     fverts, fadj, planar,
     freceiver, fstrahler, faccum,
-    isOutlet, outletBaseNode, isFineChannel,
-    filled,
+    isOutlet, outletBaseNode, outletSurf, isFineChannel, isOceanFine,
+    h, filled,
     region: { center, angularRadius, gridRes },
     seed, gridRes,
   };

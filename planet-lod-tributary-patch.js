@@ -50,7 +50,7 @@ export function buildFineValleyGeometry({ out, planar, params = {} }) {
   const P = { ...DEFAULT_PARAMS, ...params };
   const { VALLEY_DEPTH_LO, VALLEY_DEPTH_HI, VALLEY_WIDTH_MUL } = P;
   const MIN_ORDER = DEFAULT_TRIB_PARAMS.channelOrderMin;   // fine-channel gate (Strahler ≥ this)
-  const { freceiver, fstrahler, isFineChannel } = out;
+  const { freceiver, fstrahler, isFineChannel, isOceanFine } = out;
   const Nf = planar.length;
 
   // max fine order present (for depth normalisation; ≥ MIN_ORDER so the lerp is well-formed).
@@ -78,6 +78,7 @@ export function buildFineValleyGeometry({ out, planar, params = {} }) {
     if (isFineChannel[k] !== 1) continue;
     const r = freceiver[k];
     if (r === k || r < 0) continue;            // sink / self — no segment to emit
+    if (isOceanFine && (isOceanFine[k] || isOceanFine[r])) continue;   // Fix 3: never carve over water
     const a = planar[k], b = planar[r];
     // chain direction in the planar plane; side = 90° rotation (the 2D normal).
     let dx = b[0] - a[0], dy = b[1] - a[1];
@@ -188,8 +189,12 @@ export function createTributaryPatch({ renderer, uniforms, octaves = 12, size = 
       return height[best];
     };
 
-    // 4. grow the fine dendritic network onto the in-patch trunk outlets.
-    const out = growTributaries({ baseMesh, routed, sampleHeight, region, seed, params });
+    // 4. grow the fine dendritic network onto the in-patch trunk outlets. Forward the full §4.3
+    //    reader bundle: sampleHeight (mountains, coeff 1.0), the per-vert GPU height array + seaLevel
+    //    (the shared ocean boundary) so growTributaries can claim sea outlets (Fix 2) and flag ocean
+    //    cells (Fix 3). seaLevel is orchestrator-owned: read straight off the carve uniform.
+    const seaLevel = uniforms.uSeaLevel ? uniforms.uSeaLevel.value : undefined;
+    const out = growTributaries({ baseMesh, routed, sampleHeight, height, seaLevel, region, seed, params });
 
     // 5. build the planar fine valley geometry (depth rails only) and render it into the patch RTT.
     const valleyGeo = buildFineValleyGeometry({ out, planar: out.planar, params });
