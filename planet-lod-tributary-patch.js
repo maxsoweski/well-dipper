@@ -49,7 +49,10 @@ export function projectToPatch(dir, { N, u, v, angular }) {
 export function buildFineValleyGeometry({ out, planar, params = {} }) {
   const P = { ...DEFAULT_PARAMS, ...params };
   const { VALLEY_DEPTH_HI, VALLEY_WIDTH_MUL } = P;   // FINE_LO below replaces the global VALLEY_DEPTH_LO (Fork D)
-  const MIN_ORDER = DEFAULT_TRIB_PARAMS.channelOrderMin;   // fine-channel gate (Strahler ≥ this)
+  // fine-channel render threshold (Strahler ≥ this). Configurable so the lab can thin the network to a
+  // legible density (§8.10); also the depth-lerp FLOOR, so the smallest RENDERED order grades to the
+  // shallow/dry end regardless of the threshold (else a raised threshold would carve small channels too deep).
+  const MIN_ORDER = params.channelOrderMin != null ? params.channelOrderMin : DEFAULT_TRIB_PARAMS.channelOrderMin;
   const { freceiver, fstrahler, isFineChannel, isOceanFine } = out;
   const Nf = planar.length;
 
@@ -86,6 +89,7 @@ export function buildFineValleyGeometry({ out, planar, params = {} }) {
   let vBase = 0;
   for (let k = 0; k < Nf; k++) {
     if (isFineChannel[k] !== 1) continue;
+    if (fstrahler[k] < MIN_ORDER) continue;    // render threshold (§8.10): only orders ≥ MIN_ORDER draw
     const r = freceiver[k];
     if (r === k || r < 0) continue;            // sink / self — no segment to emit
     if (isOceanFine && (isOceanFine[k] || isOceanFine[r])) continue;   // Fix 3: never carve over water
@@ -130,14 +134,17 @@ export function buildFineValleyGeometry({ out, planar, params = {} }) {
 //           T-junction gap, no doubled line, no colour jump. Sea outlets (bn = -1) just end at the coast.
 export function buildFineRibbonGeometry({ out, routed, baseVerts, params = {} }) {
   const P = { ...DEFAULT_PARAMS, ...params };
-  const { MIN_ORDER, WIDTH_PHI, WIDTH_EXP, WIDTH_SCALE, WIDTH_MIN, WIDTH_MAX, CHAIKIN_ITERS, LIFT } = P;
+  const { WIDTH_PHI, WIDTH_EXP, WIDTH_SCALE, WIDTH_MIN, WIDTH_MAX, CHAIKIN_ITERS, LIFT } = P;
+  // order floor for the cOrd ramp = the fine-channel render threshold (so the smallest RENDERED fine
+  // order maps to the dark/thin end of the shared ramp), tracking the configurable threshold (§8.10).
+  const MIN_ORDER = P.channelOrderMin != null ? P.channelOrderMin : P.MIN_ORDER;
   const { fverts, fadj, freceiver, fstrahler, faccum, isFineChannel, isOutlet, outletBaseNode } = out;
   const Nf = fverts.length;
   const C_LO = new THREE.Color(0x1d3c5e), C_HI = new THREE.Color(0x4486bb);   // shared deep-water ramp
 
   // rendered gate = fine channel (Strahler ≥ MIN_ORDER), the same gate buildFineValleyGeometry uses.
-  const rendered = new Uint8Array(Nf);
-  for (let k = 0; k < Nf; k++) if (isFineChannel[k] === 1) rendered[k] = 1;
+  const rendered = new Uint8Array(Nf);   // render gate = fine channel AND order ≥ threshold (§8.10)
+  for (let k = 0; k < Nf; k++) if (isFineChannel[k] === 1 && fstrahler[k] >= MIN_ORDER) rendered[k] = 1;
 
   let fineMaxOrder = MIN_ORDER;
   for (let k = 0; k < Nf; k++) if (fstrahler[k] > fineMaxOrder) fineMaxOrder = fstrahler[k];

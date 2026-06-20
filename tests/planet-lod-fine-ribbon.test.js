@@ -8,7 +8,7 @@
 //   Fork E — at a trunk-pinned outlet the terminal vertex sits at the trunk node position (no T-gap).
 import { describe, it, expect } from 'vitest';
 import { growTributaries, buildFineGrid } from '../planet-lod-tributaries.js';
-import { buildFineRibbonGeometry } from '../planet-lod-tributary-patch.js';
+import { buildFineRibbonGeometry, buildFineValleyGeometry } from '../planet-lod-tributary-patch.js';
 import { DEFAULT_PARAMS } from '../planet-lod-rivers.js';
 
 // Same trunk-valley fixture convention as the other tributary tests, but we also keep the base verts +
@@ -89,6 +89,53 @@ describe('§2 Fork B — fine width never exceeds the trunk width at the outlet'
       maxFineW = Math.max(maxFineW, 0.5 * Math.hypot(dx, dy, dz));
     }
     expect(maxFineW).toBeLessThanOrEqual(maxTrunkW + 1e-6);
+  });
+});
+
+describe('§8.10 — configurable fine-channel render threshold (legible density)', () => {
+  // Re-grow at a higher gridRes so the fine network carries a range of Strahler orders, then sweep the
+  // render threshold. The SAME network is reused (channelOrderMin only gates which channels RENDER, it
+  // never changes topology), so a higher threshold must yield a monotone-non-increasing segment count.
+  function richOut(gridRes = 72) {
+    const center = [0, 0, 1], angularRadius = 0.32;
+    const grid = buildFineGrid({ center, angularRadius }, 12);
+    const verts = grid.fverts, adj = grid.fadj, planar = grid.planar, N = verts.length;
+    const colMap = new Map();
+    for (let i = 0; i < N; i++) {
+      const ck = Math.round(planar[i][0] * 1000);
+      const cur = colMap.get(ck);
+      if (cur === undefined || Math.abs(planar[i][1]) < Math.abs(planar[cur][1])) colMap.set(ck, i);
+    }
+    const trunkRows = [...colMap.entries()].sort((a, b) => a[0] - b[0]).map(([, i]) => i);
+    const receiver = new Int32Array(N).fill(-1), isChannel = new Uint8Array(N), strahler = new Int32Array(N).fill(0), surf = new Float64Array(N);
+    for (let i = 0; i < N; i++) surf[i] = 1.6 * Math.abs(planar[i][1]) - 0.18 * planar[i][0];
+    for (let r = 0; r < trunkRows.length; r++) { const i = trunkRows[r]; isChannel[i] = 1; strahler[i] = 3; surf[i] -= 0.05; receiver[i] = (r + 1 < trunkRows.length) ? trunkRows[r + 1] : i; }
+    const baseMesh = { verts, adj, N, isChannel, strahler };
+    const routed = { receiver, isChannel, strahler, surf: (i) => surf[i], maxOrder: 3, accum: null };
+    return growTributaries({ baseMesh, routed, sampleHeight: (p) => 1.6 * Math.abs(p[1]), region: { center, angularRadius, gridRes }, seed: 7 });
+  }
+
+  it('higher channelOrderMin renders strictly fewer (or equal) valley + ribbon segments', () => {
+    const out = richOut();
+    const counts = [2, 3, 4, 5].map(min => ({
+      min,
+      valley: buildFineValleyGeometry({ out, planar: out.planar, params: { channelOrderMin: min } }).userData.segmentCount,
+      ribbon: buildFineRibbonGeometry({ out, routed: { accum: null }, baseVerts: null, params: { channelOrderMin: min } }).userData.ribbonVerts,
+    }));
+    for (let i = 1; i < counts.length; i++) {
+      expect(counts[i].valley).toBeLessThanOrEqual(counts[i - 1].valley);
+      expect(counts[i].ribbon).toBeLessThanOrEqual(counts[i - 1].ribbon);
+    }
+    // the lowest threshold renders something; a high threshold thins it well below the dense default
+    expect(counts[0].valley).toBeGreaterThan(0);
+    expect(counts[3].valley).toBeLessThan(counts[0].valley);
+  });
+
+  it('default (no channelOrderMin param) matches an explicit threshold of 2 — backward compatible', () => {
+    const out = richOut();
+    const def = buildFineValleyGeometry({ out, planar: out.planar }).userData.segmentCount;
+    const two = buildFineValleyGeometry({ out, planar: out.planar, params: { channelOrderMin: 2 } }).userData.segmentCount;
+    expect(def).toBe(two);
   });
 });
 
