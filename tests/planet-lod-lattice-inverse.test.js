@@ -91,3 +91,36 @@ describe('§3.2 snapToLattice — exposes the lattice index + frame buildFineGri
     expect(snapToLattice(grid, [0, 0, -1])).toBe(-1);
   });
 });
+
+describe('§3.2 snapToLattice — NEVER returns -1 for an in-cap dir, INCLUDING the near-rim annulus', () => {
+  // Regression for the review finding: a single ring=2 widen left a thin near-rim annulus where the
+  // radius clip removes whole column-stretches around r0, so the nearest present vert is 3+ rows
+  // inward and the scan returned -1 — silently dropping trunk outlets, worsening with gridRes. The
+  // bounded widening loop must find a present cell for every dir whose gnomonic radius is < R.
+  const region = { center: [0.3, -0.6, 0.74], angularRadius: 0.14 };
+  const { u, v, n } = localFrame(region.center);
+  const R = Math.tan(region.angularRadius);
+  function mkDir(rad, ang) {
+    const su = rad * Math.cos(ang), sv = rad * Math.sin(ang);
+    const p = [n[0] + u[0] * su + v[0] * sv, n[1] + u[1] * su + v[1] * sv, n[2] + u[2] * su + v[2] * sv];
+    const L = Math.hypot(p[0], p[1], p[2]);
+    return [p[0] / L, p[1] / L, p[2] / L];
+  }
+  for (const gridRes of [120, 280, 448]) {
+    it(`gridRes=${gridRes}: 0 of ~7200 in-cap probes (out to 0.999R, dense in the rim) return -1`, () => {
+      const grid = buildFineGrid(region, gridRes);
+      let minusOne = 0, probes = 0;
+      // sweep radius densely toward the rim (where the failures concentrated) × full angle
+      for (let ri = 1; ri <= 40; ri++) {
+        const rad = (0.999 * R) * Math.pow(ri / 40, 0.5);   // bias samples toward the rim
+        for (let ai = 0; ai < 180; ai++) {
+          const ang = (ai / 180) * 2 * Math.PI;
+          if (snapToLattice(grid, mkDir(rad, ang)) === -1) minusOne++;
+          probes++;
+        }
+      }
+      expect(probes).toBeGreaterThan(7000);
+      expect(minusOne).toBe(0);
+    });
+  }
+});

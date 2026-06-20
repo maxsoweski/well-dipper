@@ -182,7 +182,9 @@ export function buildFineGrid(region, gridRes) {
 // neighbours. For an in-lattice point this returns that exact vert (so inverse(forward(k)) == k for
 // EVERY k, boundary cells included — k is always among its own candidates with dot 1). Radius-clipped
 // cells are absent from indexAt, so the candidate ring naturally falls back to the nearest PRESENT
-// vertex; a one-step ring widen covers the rare all-clipped near-rim query. O(1) per call.
+// vertex; the candidate ring WIDENS until a present cell is found, covering near-rim notches where the
+// clip removes whole column-stretches around r0 (the nearest present vert can be several rows inward).
+// Non-rim queries resolve at ring 1, so this is effectively O(1); the widen fires only in the rim annulus.
 export function snapToLattice(grid, dir) {
   const { frame, cell, rowH, indexAt, fverts } = grid;
   const { u, v, n } = frame;
@@ -205,8 +207,13 @@ export function snapToLattice(grid, dir) {
       }
     }
   };
-  scan(1);                                     // 3×3 candidate ring — the nearest lattice vert is here
-  if (best === -1) scan(2);                    // near-rim fallback: widen once (still fixed-radius, O(1))
+  // Widen ONLY until the first ring that contains a present cell (the nearest present vert lives in
+  // that ring). The common (non-rim) case resolves at ring 1 ⇒ effectively O(1); the widen fires only
+  // in the thin near-rim annulus where the radius clip removes whole column-stretches around r0 (the
+  // nearest present vert can be several rows inward — a single one-step widen is NOT enough). Bounded
+  // by the lattice half-extent so an out-of-lattice dir terminates with best = -1.
+  const maxRing = Math.ceil((grid.gridRes || 2) / 2) + 2;
+  for (let ring = 1; best === -1 && ring <= maxRing; ring++) scan(ring);
   return best;
 }
 
@@ -449,14 +456,23 @@ export function growTributaries({ baseMesh, routed, sampleHeight, height, seaLev
   // fine network bends around the real mountains (the base router's 9-octave surf is too coarse to
   // see sub-mesh relief). baseH is demoted to a tiny FLATS_EPS tie-breaker — NOT a fixed-fraction
   // blend — purely to give priority-flood a deterministic downhill direction on dead-flat GPU terrain.
+  // PERF (§3.1c): the flats tie-breaker only needs a deterministic, smoothly-varying field so
+  // priority-flood has a downhill on dead-flat GPU terrain — its 1e-3 weight never competes with the
+  // real coupling. So on the GPU path we use a cheap analytic low-freq value-noise term and SKIP
+  // buildMacroInterp entirely: that nearest-base scan is O(Nf·N_base) (~Nf·40000), which would
+  // dominate the bake at target gridRes (~158k verts) and break the O(Nf) one-shot contract — all to
+  // produce a term consumed at 1e-3. buildMacroInterp runs ONLY on the pure-CPU fallback, where baseH
+  // IS the real macro field (no GPU height to honor).
   const FLATS_EPS = 1e-3;
-  const { baseH } = buildMacroInterp(baseMesh, surf, fverts);
+  const hasGPUHeight = typeof sampleHeight === 'function';
+  const baseH = hasGPUHeight ? null : buildMacroInterp(baseMesh, surf, fverts).baseH;
   const h = new Float64Array(Nf);
   for (let k = 0; k < Nf; k++) {
     const p = fverts[k];
     let macro;
-    if (typeof sampleHeight === 'function') {
-      macro = sampleHeight(p) + FLATS_EPS * baseH[k];   // coeff 1.0 on the real field; flats tie-breaker
+    if (hasGPUHeight) {
+      const tie = fbm(p[0] * 1.7, p[1] * 1.7, p[2] * 1.7, seed + 9173, P);   // cheap deterministic flats tie-breaker
+      macro = sampleHeight(p) + FLATS_EPS * tie;        // coeff 1.0 on the real GPU field
     } else {
       macro = baseH[k];                                 // pure-CPU path: no richer field to honor
     }
