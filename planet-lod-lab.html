@@ -1404,6 +1404,9 @@
     // in-patch trunk outlets, and bakes valley depth into a 2D ortho RTT unioned into sampleCarve.
     // On-demand (static camera); bake via the GUI button / window._lab.bakeTributaryPatch().
     const tributaryPatch = createTributaryPatch({ renderer, uniforms, octaves: 12 });
+    // §2 Fork C — the fine-ribbon mesh (the LOD legibility channel), parented to `planet` like the
+    // trunk ribbon so it co-rotates. Hidden until a bake raises patchStrength > 0 (managed below).
+    planet.add(tributaryPatch.fineRibbon);
     // enabled mirrors state.riversEnabled (the registry enableKey) for the internal route/carve
     // guards; setRiverOverlay keeps the two in sync. (No _f11Saved — the old F11-off coupling is gone.)
     const riverOverlayState = { enabled: false, seaFromHistogram: true, targetOceanFraction: 0.35,
@@ -3557,11 +3560,14 @@
         center: [c.x, c.y, c.z],
         angularRadius,
         seed: state.macroSeed,
-        params: { gridRes },
+        params: { gridRes, radiusEarth: state.planetRadiusEarth },   // radius scales the fine-ribbon width law (Fork B)
       });
       info && (info.gridRes = gridRes);
       uniforms.uRiverCarvePatchStrength.value = riverOverlayState.patchStrength;
-      return info;   // { center, u, v, angular, segmentCount }
+      // §2 Fork C — show the fine ribbon iff the patch is active (strength > 0); a bake at strength 0
+      // stays regression-safe (mesh hidden, carve patch contributes 0).
+      tributaryPatch.fineRibbon.visible = riverOverlayState.patchStrength > 0;
+      return info;   // { center, u, v, angular, segmentCount, ribbonVerts, gridRes }
     }
     // route(): re-read the live height field + re-route + re-ribbon (no mesh rebuild — AC7).
     // In histogram mode the overlay OWNS the planet sea so the visible water and the river
@@ -3878,7 +3884,7 @@
     // Option B river-LOD STEP 2 — camera-localised fine-tributary patch (bloom-on-approach).
     fRiversOverlay.add(riverOverlayState, 'patchAngularDeg', 2, 16, 0.5).name('patch half-angle (deg)');
     fRiversOverlay.add(riverOverlayState, 'patchStrength', 0, 1, 0.01).name('patch LOD strength')
-      .onChange(v => uniforms.uRiverCarvePatchStrength.value = v);
+      .onChange(v => { uniforms.uRiverCarvePatchStrength.value = v; tributaryPatch.fineRibbon.visible = v > 0; });
     fRiversOverlay.add({ bake(){ bakeTributaryPatch(); } }, 'bake').name('⌖ bake tributary patch @ cam');
     fRiversOverlay.add(riverOverlayState, 'status').name('status').listen().disable();
 
@@ -5617,7 +5623,7 @@
                     bakeTributaryPatch(opts){
                       if (opts && opts.angularDeg !== undefined) riverOverlayState.patchAngularDeg = opts.angularDeg;
                       const info = bakeTributaryPatch();
-                      if (opts && opts.strength !== undefined){ riverOverlayState.patchStrength = opts.strength; uniforms.uRiverCarvePatchStrength.value = opts.strength; }
+                      if (opts && opts.strength !== undefined){ riverOverlayState.patchStrength = opts.strength; uniforms.uRiverCarvePatchStrength.value = opts.strength; tributaryPatch.fineRibbon.visible = opts.strength > 0; }
                       return { info, strength: uniforms.uRiverCarvePatchStrength.value };
                     },
                     get tributaryPatch(){ return tributaryPatch; },

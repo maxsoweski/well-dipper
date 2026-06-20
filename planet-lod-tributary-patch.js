@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import {
   localFrame, buildFineGrid, snapToLattice, growTributaries, DEFAULT_TRIB_PARAMS,
 } from './planet-lod-tributaries.js';
-import { createHeightSampler, DEFAULT_PARAMS } from './planet-lod-rivers.js';
+import { createHeightSampler, paramsForRadius, DEFAULT_PARAMS } from './planet-lod-rivers.js';
 
 // ───────────────────────── projectToPatch (pure; byte-aligned with the GLSL) ─────────────────────────
 // GNOMONIC-TANGENT inverse projection: given an object-space unit dir and a patch frame {N,u,v,angular},
@@ -48,7 +48,7 @@ export function projectToPatch(dir, { N, u, v, angular }) {
 // fstrahler, exactly like the global cube, so the patch floor depths read on the same scale as global.
 export function buildFineValleyGeometry({ out, planar, params = {} }) {
   const P = { ...DEFAULT_PARAMS, ...params };
-  const { VALLEY_DEPTH_LO, VALLEY_DEPTH_HI, VALLEY_WIDTH_MUL } = P;
+  const { VALLEY_DEPTH_HI, VALLEY_WIDTH_MUL } = P;   // FINE_LO below replaces the global VALLEY_DEPTH_LO (Fork D)
   const MIN_ORDER = DEFAULT_TRIB_PARAMS.channelOrderMin;   // fine-channel gate (Strahler ≥ this)
   const { freceiver, fstrahler, isFineChannel, isOceanFine } = out;
   const Nf = planar.length;
@@ -56,9 +56,19 @@ export function buildFineValleyGeometry({ out, planar, params = {} }) {
   // max fine order present (for depth normalisation; ≥ MIN_ORDER so the lerp is well-formed).
   let maxOrder = MIN_ORDER;
   for (let k = 0; k < Nf; k++) if (fstrahler[k] > maxOrder) maxOrder = fstrahler[k];
+  // §2 Fork D — order-graded DRY→FLOOD depth. The fine carve floor depth is graded by fine Strahler
+  // so the SMALLEST tributaries carve a shallow DRY groove (floor stays above sea ⇒ no flood, just the
+  // Stage-6 dry-floor albedo darkening at lab:582), while the LARGER fine orders near the trunk outlet
+  // carve deep enough that h − carveDepth·uRiverCarveDepth crosses uSeaLevel and floods via the same
+  // F14 level-set as the trunks. FINE_LO is below the global VALLEY_DEPTH_LO (0.45) so the dark/thin
+  // end is genuinely shallow; a gamma>1 biases small orders shallow. The ABSOLUTE dry→flood cutoff is
+  // tuned live at the GPU gate via uRiverCarveDepth (open fork §8.2) — this bakes only the RELATIVE grade.
+  const FINE_LO = P.FINE_VALLEY_DEPTH_LO != null ? P.FINE_VALLEY_DEPTH_LO : 0.20;
+  const FINE_HI = P.FINE_VALLEY_DEPTH_HI != null ? P.FINE_VALLEY_DEPTH_HI : VALLEY_DEPTH_HI;
+  const FINE_GAMMA = P.FINE_VALLEY_DEPTH_GAMMA != null ? P.FINE_VALLEY_DEPTH_GAMMA : 1.6;
   const depthAt = (o) => {
     const t = Math.max(0, Math.min(1, (o - MIN_ORDER) / Math.max(1, maxOrder - MIN_ORDER)));
-    return VALLEY_DEPTH_LO + (VALLEY_DEPTH_HI - VALLEY_DEPTH_LO) * t;
+    return FINE_LO + (FINE_HI - FINE_LO) * Math.pow(t, FINE_GAMMA);
   };
   // valley half-width in PLANAR units. The fine cell already sets the lattice spacing; a small fixed
   // multiple of it (× VALLEY_WIDTH_MUL) gives a valley a couple of cells wide — wide enough to read,
@@ -102,6 +112,137 @@ export function buildFineValleyGeometry({ out, planar, params = {} }) {
   g.setAttribute('aDepth', new THREE.Float32BufferAttribute(vDepth, 1));
   g.setIndex(vIdx);
   g.userData.segmentCount = vIdx.length / 6;
+  return g;
+}
+
+// ───────────────────────── buildFineRibbonGeometry (the legibility render — §2 Fork A/B/E) ─────────────────────────
+// The fine tier's VISIBLE water-line. Mirrors buildRibbonGeometry (planet-lod-rivers.js:473) — a
+// 2-rail Chaikin-smoothed strip walked down receiver chains, vertex-coloured by the SHARED cOrd
+// stream-order ramp, width = widthAt(accum) — but on the FINE network (out.freceiver / out.faccum /
+// out.fstrahler over out.fverts, which are already on the unit sphere). Reusing the rivers' own
+// legibility renderer (representation parity, §2 obligation 1) guarantees the fine network reads
+// regardless of whether its carve floods.
+//   Fork B: same navy→blue cOrd ramp (low fine Strahler ⇒ dark/thin end automatically); width clamped
+//           to the trunk's width at the path's outlet so a fine rail never out-widths the trunk it joins.
+//   Fork E: at an outlet pinned to a TRUNK node (outletBaseNode ≥ 0), the terminal cross-section is
+//           emitted at the trunk centerline position with the trunk's width and the trunk's cOrd colour
+//           (read off the global routed graph), so the fine rail tapers INTO the trunk rail — no
+//           T-junction gap, no doubled line, no colour jump. Sea outlets (bn = -1) just end at the coast.
+export function buildFineRibbonGeometry({ out, routed, baseVerts, params = {} }) {
+  const P = { ...DEFAULT_PARAMS, ...params };
+  const { MIN_ORDER, WIDTH_PHI, WIDTH_EXP, WIDTH_SCALE, WIDTH_MIN, WIDTH_MAX, CHAIKIN_ITERS, LIFT } = P;
+  const { fverts, fadj, freceiver, fstrahler, faccum, isFineChannel, isOutlet, outletBaseNode } = out;
+  const Nf = fverts.length;
+  const C_LO = new THREE.Color(0x1d3c5e), C_HI = new THREE.Color(0x4486bb);   // shared deep-water ramp
+
+  // rendered gate = fine channel (Strahler ≥ MIN_ORDER), the same gate buildFineValleyGeometry uses.
+  const rendered = new Uint8Array(Nf);
+  for (let k = 0; k < Nf; k++) if (isFineChannel[k] === 1) rendered[k] = 1;
+
+  let fineMaxOrder = MIN_ORDER;
+  for (let k = 0; k < Nf; k++) if (fstrahler[k] > fineMaxOrder) fineMaxOrder = fstrahler[k];
+  const widthLaw = (accum) => THREE.MathUtils.clamp(WIDTH_SCALE * (WIDTH_PHI * Math.pow(accum, WIDTH_EXP)), WIDTH_MIN, WIDTH_MAX);
+  const fineCOrd = (o) => C_LO.clone().lerp(C_HI, THREE.MathUtils.clamp((o - MIN_ORDER) / Math.max(1, fineMaxOrder - MIN_ORDER), 0, 1));
+
+  // trunk readers (Fork B clamp + Fork E pin). routed carries the GLOBAL accum/strahler/maxOrder; the
+  // trunk width law uses the SAME pEff params as the fine ribbon so the two are directly comparable.
+  const trunkMaxOrder = (routed && routed.maxOrder) || fineMaxOrder;
+  const trunkWidthAt = (bn) => (routed && routed.accum) ? widthLaw(routed.accum[bn]) : WIDTH_MAX;
+  const trunkCOrd = (bn) => C_LO.clone().lerp(C_HI, THREE.MathUtils.clamp(((routed && routed.strahler ? routed.strahler[bn] : MIN_ORDER) - MIN_ORDER) / Math.max(1, trunkMaxOrder - MIN_ORDER), 0, 1));
+
+  function chaikin(pts, iters) {
+    let cur = pts;
+    for (let it = 0; it < iters; it++) {
+      if (cur.length < 3) break;
+      const out2 = [cur[0]];
+      for (let k = 0; k < cur.length - 1; k++) {
+        const a = cur[k], b = cur[k + 1];
+        const mk = (t) => {
+          const v = new THREE.Vector3(a.p[0] + (b.p[0] - a.p[0]) * t, a.p[1] + (b.p[1] - a.p[1]) * t, a.p[2] + (b.p[2] - a.p[2]) * t).normalize().multiplyScalar(LIFT);
+          return { p: [v.x, v.y, v.z], w: a.w + (b.w - a.w) * t, c: a.c.clone().lerp(b.c, t) };
+        };
+        out2.push(mk(0.25), mk(0.75));
+      }
+      out2.push(cur[cur.length - 1]);
+      cur = out2;
+    }
+    return cur;
+  }
+
+  // heads = rendered verts with no rendered upstream child (the dendritic sources).
+  const heads = [];
+  for (let k = 0; k < Nf; k++) {
+    if (!rendered[k]) continue;
+    let isHead = true;
+    for (const nb of fadj[k]) { if (rendered[nb] && freceiver[nb] === k) { isHead = false; break; } }
+    if (isHead) heads.push(k);
+  }
+
+  const ribPos = [], ribCol = [], ribIdx = []; let vBase = 0;
+  const drawn = new Uint8Array(Nf);
+  const up = new THREE.Vector3(), fwd = new THREE.Vector3(), side = new THREE.Vector3();
+  function emitRibbon(spts) {
+    if (spts.length < 2) return;
+    const Pv = spts.map(s => new THREE.Vector3(s.p[0], s.p[1], s.p[2]));
+    for (let k = 0; k < spts.length; k++) {
+      const cur = Pv[k];
+      fwd.set(0, 0, 0);
+      if (k > 0) fwd.add(cur.clone().sub(Pv[k - 1]));
+      if (k < spts.length - 1) fwd.add(Pv[k + 1].clone().sub(cur));
+      up.copy(cur).normalize();
+      fwd.sub(up.clone().multiplyScalar(fwd.dot(up)));
+      if (fwd.lengthSq() < 1e-14) fwd.set(up.y, up.z, up.x);
+      fwd.normalize();
+      side.crossVectors(up, fwd).normalize().multiplyScalar(spts[k].w);
+      const L = cur.clone().sub(side), Rr = cur.clone().add(side);
+      const c = spts[k].c;
+      ribPos.push(L.x, L.y, L.z, Rr.x, Rr.y, Rr.z);
+      ribCol.push(c.r, c.g, c.b, c.r, c.g, c.b);
+      if (k > 0) { const b0 = vBase + (k - 1) * 2, b1 = vBase + k * 2; ribIdx.push(b0, b0 + 1, b1, b0 + 1, b1 + 1, b1); }
+    }
+    vBase += spts.length * 2;
+  }
+  // path: walk freceiver while rendered; include the terminal outlet vertex (Fork E pins it).
+  function pathFrom(start) {
+    const raw = []; let c = start, g = 0;
+    while (rendered[c] && g++ < 200000) {
+      raw.push(c);
+      if (drawn[c]) break;
+      drawn[c] = 1;
+      const r = freceiver[c];
+      if (r === c || !rendered[r]) { if (r !== c) raw.push(r); break; }   // r is the outlet/sink terminal
+      c = r;
+    }
+    return raw;
+  }
+  function buildAndEmit(start) {
+    const raw = pathFrom(start);
+    if (raw.length < 2) return;
+    // outlet width cap (Fork B): clamp every fine width on this path to the trunk's width at its outlet.
+    const term = raw[raw.length - 1];
+    const termBn = isOutlet[term] ? outletBaseNode[term] : -1;
+    const cap = (termBn >= 0) ? trunkWidthAt(termBn) : WIDTH_MAX;
+    const pts = raw.map((idx, i) => {
+      const isTerm = (i === raw.length - 1) && isOutlet[idx];
+      if (isTerm && termBn >= 0 && baseVerts && baseVerts[termBn]) {
+        // Fork E: pin the terminal cross-section to the trunk rail (position + width + colour).
+        const tp = baseVerts[termBn];
+        return { p: [tp[0] * LIFT, tp[1] * LIFT, tp[2] * LIFT], w: trunkWidthAt(termBn), c: trunkCOrd(termBn) };
+      }
+      const f = fverts[idx];
+      return { p: [f[0] * LIFT, f[1] * LIFT, f[2] * LIFT], w: Math.min(widthLaw(faccum[idx]), cap), c: fineCOrd(fstrahler[idx] || MIN_ORDER) };
+    });
+    emitRibbon(chaikin(pts, CHAIKIN_ITERS));
+  }
+  for (const h of heads) buildAndEmit(h);
+  for (let k = 0; k < Nf; k++) { if (rendered[k] && !drawn[k]) buildAndEmit(k); }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(ribPos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(ribCol, 3));
+  g.setIndex(ribIdx); g.computeVertexNormals();
+  g.userData.renderedCount = rendered.reduce((a, b) => a + b, 0);
+  g.userData.ribbonVerts = ribPos.length / 3;
   return g;
 }
 
@@ -162,6 +303,20 @@ export function createTributaryPatch({ renderer, uniforms, octaves = 12, size = 
 
   const _c = new THREE.Color();
 
+  // §2 Fork C — the FINE-RIBBON mesh: a second persistent Mesh next to the trunk ribbon, parented to
+  // `planet` by the lab so it co-rotates identically, same material as the trunk ribbon but
+  // renderOrder 11 (one above the trunk's 10) so the fine rail draws last where it joins the trunk (no
+  // z-fight). Geometry is swapped on every bake (exactly as route() swaps the trunk ribbon). Created
+  // hidden; the lab shows it when patchStrength > 0. The carve patch (the co-dependence channel) and
+  // this ribbon (the legibility channel) are the rivers' TWO render jobs reused at the fine tier (§2).
+  const fineRibbon = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
+  );
+  fineRibbon.frustumCulled = false;
+  fineRibbon.renderOrder = 11;
+  fineRibbon.visible = false;
+
   function bake({ routed, baseMesh, center, angularRadius, seed = 0, params = {} }) {
     const gridRes = params.gridRes != null ? params.gridRes : DEFAULT_TRIB_PARAMS.gridRes;
     const region = { center, angularRadius, gridRes };
@@ -197,6 +352,15 @@ export function createTributaryPatch({ renderer, uniforms, octaves = 12, size = 
     mesh.geometry.dispose();
     mesh.geometry = valleyGeo;
 
+    // 5b. §2 Fork A/B/C/E — build the FINE RIBBON (the legibility channel) and swap it onto the
+    //     persistent fineRibbon mesh. Width law uses the radius-scaled pEff so fine widths are directly
+    //     comparable to the trunk's (Fork B clamp), and the outlet vertex pins to the trunk rail via
+    //     the global routed graph + base verts (Fork E).
+    const pEff = paramsForRadius({ ...DEFAULT_PARAMS, ...params }, params.radiusEarth);
+    const ribGeo = buildFineRibbonGeometry({ out, routed, baseVerts: baseMesh.verts, params: pEff });
+    fineRibbon.geometry.dispose();
+    fineRibbon.geometry = ribGeo;
+
     const R = Math.tan(angularRadius);
     cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R;
     cam.updateProjectionMatrix();
@@ -219,12 +383,18 @@ export function createTributaryPatch({ renderer, uniforms, octaves = 12, size = 
     if (uniforms.uRiverCarvePatchV)       uniforms.uRiverCarvePatchV.value.set(v[0], v[1], v[2]);
     if (uniforms.uRiverCarvePatchAngular) uniforms.uRiverCarvePatchAngular.value = angularRadius;
 
-    return { center: n, u, v, angular: angularRadius, segmentCount: valleyGeo.userData.segmentCount };
+    return {
+      center: n, u, v, angular: angularRadius,
+      segmentCount: valleyGeo.userData.segmentCount,
+      ribbonVerts: ribGeo.userData.ribbonVerts,
+      renderedFineChannels: ribGeo.userData.renderedCount,
+    };
   }
 
   function dispose() {
     target.dispose(); mat.dispose(); mesh.geometry.dispose();
+    fineRibbon.geometry.dispose(); fineRibbon.material.dispose();
   }
 
-  return { texture: target.texture, bake, dispose };
+  return { texture: target.texture, fineRibbon, bake, dispose };
 }
