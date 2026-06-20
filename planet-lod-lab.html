@@ -1415,7 +1415,26 @@
       patchStrength: 0.0, patchAngularDeg: 8,   // Option B river-LOD STEP 2: fine-tributary patch (default off)
       patchChannelMinOrder: 4,   // §8.10 — fine-channel RENDER threshold (Strahler ≥ this). 2 ≈ smear at target
                                  // gridRes; ~4 reads as legible dendrites. Tunable live via the GUI slider.
+      // §2 Fork A un-occlude — the ribbon meshes are baked at DEFAULT_PARAMS.LIFT (0.999, BELOW the
+      // r=1.0 surface, so the depth-writing surface hides them). Because relief is shaded-not-displaced,
+      // there is no geometric channel to seat the ribbon in: a uniform mesh scale just above (1/0.999)
+      // lifts it ABOVE the surface so depthTest (kept TRUE) shows the near hemisphere and still occludes
+      // the far one. Tunable live (occlude↔float) because the right amount is a UAT judgment; 0.999 was
+      // chosen to avoid the old 1.0035 "floating" look, and on this fine 256² sphere a tiny lift clears
+      // occlusion with near-imperceptible float. Portable: the game-port applies the same radial offset
+      // relative to its own (also non-displaced) surface radius.
+      ribbonLift: 1.0014,
       status: '(off)' };
+
+    // Lift both parented ribbon meshes just above the surface via a uniform radial scale about the
+    // planet centre (no geometry rebake; the carve bake keeps DEFAULT_PARAMS.LIFT=0.999 untouched).
+    // Called on init and from the GUI slider.
+    function applyRibbonLift(){
+      const s = riverOverlayState.ribbonLift;
+      riverOverlay.ribbon.scale.setScalar(s);
+      tributaryPatch.fineRibbon.scale.setScalar(s);
+    }
+    applyRibbonLift();
 
     // ─────────────────────────────────────────────────────────────────────────
     // F34 / F31e — detached haze shell: a slightly enlarged BACK-FACE sphere
@@ -3894,6 +3913,9 @@
     fRiversOverlay.add(riverOverlayState, 'patchChannelMinOrder', 2, 8, 1).name('fine detail threshold (≥Strahler)')
       .onChange(() => { if (riverOverlayState.patchStrength > 0) bakeTributaryPatch(); });
     fRiversOverlay.add({ bake(){ bakeTributaryPatch(); } }, 'bake').name('⌖ bake tributary patch @ cam');
+    // §2 Fork A — un-occlude lever. < ~1.001 = seated below the surface (occluded, carve-only reading);
+    // higher = ribbon floats above the shaded relief. Drive it during UAT to find the sweet spot.
+    fRiversOverlay.add(riverOverlayState, 'ribbonLift', 0.997, 1.006, 0.0002).name('ribbon lift (occlude↔float)').onChange(applyRibbonLift);
     fRiversOverlay.add(riverOverlayState, 'status').name('status').listen().disable();
 
     // ▸ Lakes & seas (F14) — standing-liquid level-set cut on the accumulated height.
