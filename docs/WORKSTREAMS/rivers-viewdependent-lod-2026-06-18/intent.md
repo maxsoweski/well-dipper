@@ -1,5 +1,10 @@
 # rivers-viewdependent-lod — intent
 
+> **Phase-5 role (2026-06-20):** this workstream IS "WS5 — view-dependent rich tier" in
+> [`../../FEATURES/planet-lod-phase5-integration-plan.md`](../../FEATURES/planet-lod-phase5-integration-plan.md).
+> The audit's resolution-capped couplings (glacial U-valley carving, dune orientation/echo dunes,
+> gorge depth) land here — cross-linked, NOT duplicated into the Phase-5 plan.
+
 **Spin-off from** `rivers-dendritic-drainage-2026-06-17` (see its AC6 scope clarification, 2026-06-18).
 Serves the SCREENSAVER-MVP heart (planets are the hero objects). Lab-renderer R&D; game-port deferred per
 `docs/FEATURES/planet-lod-CHARTER.md`. **This is a SPIKE-FIRST workstream** — its job is to prove a

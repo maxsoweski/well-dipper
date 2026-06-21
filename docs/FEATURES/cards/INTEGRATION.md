@@ -1,5 +1,12 @@
 # Integration Card — cross-feature composition (Phase 5)
 
+> **Phase 5 was reframed (2026-06-20).** These I-1…I-15 checks are now the *acceptance/verification
+> layer* run AFTER the coupling builds, not the whole of Phase 5. The build side — driven by
+> [`../feature-interaction-audit-2026-06-20.md`](../feature-interaction-audit-2026-06-20.md) (52
+> gaps) and sequenced in [`../planet-lod-phase5-integration-plan.md`](../planet-lod-phase5-integration-plan.md)
+> (WS1–WS5) — closes the gaps these checks would otherwise just flag red. See that plan for which
+> WS each I-check maps to.
+
 Each check: enable ONLY the named features (window._lab solo/enable flags),
 render on :9223, screenshot to shots/INT-NN-<slug>.png, verdict 🟢/🟡/🔴/parked.
 Composition machinery under test: combiner chain order, canyonHeight accumulator,

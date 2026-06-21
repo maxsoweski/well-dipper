@@ -57,6 +57,10 @@ If you find yourself asking "is the planet-type/feature model laid out?" — yes
    sweep already produced a punch-list (109 false-renders / 85 dead-renders) to triage
    manifest-wrong vs feature-buggy. Tracker is the per-feature status.
 3. **Integration** (cross-feature) and **profiles** (per-type) — later campaign phases.
+   Integration (Phase 5) is now operationalized by the feature-interaction audit
+   ([`feature-interaction-audit-2026-06-20.md`](feature-interaction-audit-2026-06-20.md)) →
+   build plan in [`planet-lod-phase5-integration-plan.md`](planet-lod-phase5-integration-plan.md)
+   (52 gaps → WS1–WS5 + cross-cutting; serves the NORTH STAR directly).
 4. **Game-port** — the deferred, separate, no-parity effort. NOT in scope until the lab is mature.
 
 ## Current position

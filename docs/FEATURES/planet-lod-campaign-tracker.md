@@ -20,7 +20,7 @@ during phases) | ▶️ = current
 | 4a Build fluvial+aeolian (8) | F12-F16,F19-F21 verdicted | ✅ 2026-06-10 — all 8 verdicted (F14/F16 🟢, F12/F13/F15/F19/F20/F21 🟡 taste-call); next ▶️ 4b |
 | 4b Build atmosphere (10) | F24-F33 verdicted | ✅ 2026-06-10 — all 10 🟡 taste-call VERIFIED_PENDING_MAX; new presets: 3 gas giants + Venus + Sub-Neptune + Eyeball + Hot Jupiter; new archetype hot-jupiter |
 | 4c Build optical+exotic+overlay+rings (15) | F34-F37,F40-F49,F51 + F38/F39 call | 🔁 REOPENED 2026-06-13 by Max. Formal /goal was met (13× 🟡 + F44/F46 🟢 verdicts; F51 v1 `093523c`; F38/F39 rec recorded) — Max overrode two outcomes: F51 rings REWORK + F38/F39 → BUILD both. **F51 rework CLOSED 2026-06-13: v2 3D-LOD-particle ring built + integrated (`9bcd71d`), 🟢 VERIFIED_PENDING_MAX (awaiting Max UAT).** Remaining 4c work: **F38 airglow + F39 cloud-optics (BUILD both)**. Other 12 cards stay VERIFIED_PENDING_MAX. |
-| 5 Integration | INTEGRATION.md I-1…I-15 verdicted | pending (after 4c rework closes) |
+| 5 Integration | INTEGRATION.md I-1…I-15 verdicted | **PLANNED 2026-06-20** — reframed from verify-only to *build the couplings*: [`planet-lod-phase5-integration-plan.md`](planet-lod-phase5-integration-plan.md) sequences the audit's 52 gaps into WS1–WS5 + cross-cutting; I-1…I-15 become the acceptance layer run after the builds. WS1 (keystone `filled` surfacing — 7 gaps) = recommended first build. Each WS scoped via `dev-collab-scope` when built (none built yet). |
 | 6 Profiles | PROFILES.md 18 rows verdicted | pending |
 | 7 Max review lap | galleries walked, parked items decided | pending |
 

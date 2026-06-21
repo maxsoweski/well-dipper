@@ -64,6 +64,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > wiring stays deferred. **STILL Max-owned (unchanged):** UAT of ribbon-vs-carve (esp. grazing angles)
 > + the graft-vs-replace renderer-unification call.
 >
+> **▶ LATEST (2026-06-20, Phase-5 Integration SCOPED — planning only, local).** After the
+> feature-interaction audit (`0606313`: 84 edges → 52 gaps), Max approved scoping it as a campaign
+> and delegated the framing call to working-Claude. **Call made:** it IS campaign **Phase 5
+> "Integration"** (was `pending`), reframed from verify-only → *build the couplings*; the I-1…I-15
+> checks become the acceptance layer run AFTER the builds. 52 gaps sequenced into **WS1–WS5 +
+> cross-cutting**, full gap→WS + I-check→WS mapping in the new
+> **`docs/FEATURES/planet-lod-phase5-integration-plan.md`**. WS1 (keystone: surface the discarded
+> per-basin `filled` → lake mask + rim breach; closes 7 gaps incl. Max's crater-lake example) =
+> recommended FIRST build. WS5 = cross-link to the existing `rivers-viewdependent-lod-2026-06-18`
+> workstream (NOT duplicated). **Second call: planning-only this session** — each WS is built via its
+> own `dev-collab-scope` pass when Max greenlights it (none built yet; respects the scope+UAT gates).
+> Updated: CHARTER program-3 line, campaign-tracker Phase-5 row, INTEGRATION.md header pointer,
+> view-dependent intent (WS5 role). All local/unpushed.
+>
 > **▶ (2026-06-20 PM): §7 BUILT + headless-green + review-hardened; live GPU gate run →
 > objective plumbing PASSES, but LEGIBILITY needs 2 Max decisions (NOT a clean pass).** 4 commits on
 > master (local-only): `7de1f7d` §7.1 co-dependence field-reads (height coeff 1.0 / sea outlets /
