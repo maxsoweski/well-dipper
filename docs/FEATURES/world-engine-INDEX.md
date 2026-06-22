@@ -15,8 +15,11 @@ it). Frame: a **"story engine"** — what renders IS the body's billions-of-year
 dependency order is **time's arrow**. WF1 (outcomes catalog) is **done**. In-thread we **collapsed ~84
 candidate engines → 15 engines in 5 tiers** (the spine), ran a **story-lens review** (two audits), and
 **FOLDED its findings into the spine** (§3.1 + §4: tier re-slots, the epoch/host-editor model, the
-broken+over-supplying L0 boundary). **PENDING only:** Max's sign-off on the **L0-gap resolution** (spine §4c)
-+ a final read of the adopted tier re-slots → **THEN WF2 by-engine research** fans out per approved engine.
+broken+over-supplying L0 boundary). **ALL STRUCTURAL CHOICES LOCKED 2026-06-22** — Max delegated the technical
+calls (criterion: "easiest-to-optimize path toward the story-engine north star"); working-Claude locked the
+epoch/host-editor model + tier re-slots + the **L0-gap → Option A (expose + derive)** (spine §3.1/§4c/§5).
+**WF2 by-engine research is now GO — launched** (per-engine research → adversarial verify pipeline, built to dodge
+the runner wedge; §7).
 
 ## 2. Read order for next session
 
@@ -87,7 +90,8 @@ The **15 engines in 5 tiers** (spine §3 has full I/O — don't re-list here):
 
 ## 7. Open decisions / what's next
 
-**Convergence items pending Max** (then WF2 launches):
+**Convergence items — ✅ ALL LOCKED 2026-06-22** (Max delegated technical calls; criterion = easiest-to-optimize
+toward the story-engine north star). Items 1–3 below are RESOLVED; WF2 is launched:
 1. **Tier re-slots — ADOPTED in spine §3.1** (split E8a bombardment / E8b space-weathering-late; E2-illumination → render-frame sidecar; E12-province → T1, palette stays terminal). Pending only Max's final read. E3/E5 stay put.
 2. **Epoch / host-editor model — ADOPTED in spine §3.1** (2–4 named epochs + editor-on-host composition; the "history-machine" fix). Pending Max's read. (Re-typing `planet-feature-associations.js` edges render→history is a WF2/build task.)
 3. **L0-gap resolution** — spine §4 "expose + derive" lean: L0 exposes the system graph it already computes + a thin Tier-1 base step derives structured fields. A1's ordered fix list: (1) plumb D12 + (2) compute eccentricity → (3) surface dropped primitives → (4) expose system graph → (5–7) the type-demotion refactor (high blast radius, defer to WF2). Decide: expose+derive vs extend-L0 vs decide-after-WF2-gap-list.

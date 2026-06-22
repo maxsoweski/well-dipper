@@ -94,7 +94,11 @@ resonances. That under-exposure is half the gap (§4a).
 
 ## 3.1 Model-level additions from the story-lens review (the two findings tiers alone can't hold)
 
-**The EPOCH / host-editor evaluation model (the central history fix — REQUIRED).** A flat "each engine runs once
+**The EPOCH / host-editor evaluation model (the central history fix — REQUIRED). ✅ LOCKED 2026-06-22.** Max
+delegated the technical call; criterion = "easiest-to-optimize path toward the story-engine north star." Rationale:
+a flat one-pass stack *structurally cannot* encode on-patch history sequences, so you cannot optimize toward a star
+the architecture can't reach — this is the minimum structure that makes the star reachable. Keep it MINIMAL: the
+coarsest epoch granularity (2–4) that still encodes the sequences that matter, NOT billion-year time-stepping. A flat "each engine runs once
 in tier order" model **cannot** represent event-sequences on one patch: crater later intruded by magma (floor-
 fractured crater), channel later exhumed into an inverted ridge, dune later frost-locked, fresh ray later space-
 weathered. The catalog itself calls for "engines that compose over each other's outputs" and "a crater is a
@@ -141,10 +145,17 @@ game; `ExoticOverlay` re-rolls a type post-hoc and regenerates, **erasing derive
 - **Resolution principle (adopted):** **demote "type" from a load-bearing INPUT to a derived LABEL** — an output of
   E1, a name read off the result, never a thing that pre-decides features. Drivers decide; type names.
 
-### 4c. The L0-gap resolution — STILL OPEN (Max's call; may wait for WF2's precise gap list)
-Working lean: L0 stays the scalar source but **exposes the system graph it already computes**; a thin Tier-1 base
-step in L1 **derives the structured fields**. Alternatives: extend L0 itself; or decide after WF2's per-engine gap
-list. **Not locked.**
+### 4c. The L0-gap resolution — ✅ RESOLVED 2026-06-22: EXPOSE + DERIVE (Option A)
+Max delegated the technical call (criterion = easiest-to-optimize path toward the story-engine north star).
+**Decision:** L0 stays the scalar source but **exposes the system graph it already computes**; a new thin Tier-1
+**base step in L1 derives the structured fields** (orientation fields, stress tensors, field-topology maps).
+Rationale against the criterion: (1) derivation IS the history-writing work → it belongs in the NEW L1 layer by
+definition; (2) lowest blast radius — does not edit the fragile, most-depended-on PlanetGenerator/PhysicsEngine
+core (§7 caution), so it's the cheapest layer to iterate/optimize; (3) gives WF2 a concrete boundary to design
+against; (4) NOT premature — fixes *where* derivation lives, not *what* fields (WF2 still produces the per-engine
+field list). The **plumbing track is UNCONDITIONAL** (un-zero D12, compute eccentricity, surface D13/D16/metallicity,
+expose the system graph) and happens under any option — WF2 writes its precise spec (spot-check the agent-reported
+file:line cites before editing).
 
 ## 5. Locked decisions
 
@@ -153,10 +164,14 @@ list. **Not locked.**
   checkpoint between (passed; clean-first reconciliation done).
 - Engine collapse done **in-thread** (dodges the runner wedge); WF2 fans out per **approved** engine.
 - Story-lens review **done**; its findings folded into §3.1 + §4.
+- **Epoch / host-editor model LOCKED** (2026-06-22) + **tier re-slots LOCKED** (E8a bombardment / E8b space-weathering split; E2-illumination → render-frame sidecar; E12-province → T1, palette stays terminal).
+- **L0-gap RESOLVED → Option A (expose + derive)** (§4c); the plumbing track is unconditional.
+- All locks made by working-Claude under Max's explicit delegation of the technical calls; criterion = easiest-to-optimize toward the story-engine north star.
 
 ## 6. Status & what's next
 
-**Still open:** the **L0-gap resolution** (§4c); final tier sign-off (§3.1 re-slots adopted pending Max's read).
+**Status (2026-06-22):** all structural choices LOCKED — epoch/host-editor model, tier re-slots, and the L0-gap
+(→ Option A expose+derive). **Nothing structural pending Max.** WF2 by-engine research is GO (launched).
 
 **WF2 (by-engine research) — now produces MORE than per-engine dossiers.** Per the review it must also yield:
 1. an **input-boundary plumbing spec** (compute+surface D12, eccentricity, dropped primitives, expose the system graph);
