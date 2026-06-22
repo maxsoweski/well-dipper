@@ -20,11 +20,35 @@ system must eventually be able to produce* — and the diff target for the next 
 ## Summary
 
 - Existing baseline features (kept): **53** (F-list) + 18 type presets
-- **Additions found: 129** — 100 OBS / 11 SIM / 11 THEO / 7 SF
-- Candidate engines surfaced (consolidated): **75** — ⚠ still too many; needs collapse to ROOT engines for WF2
+- **Additions found: 129** — 100 OBS / 11 SIM / 11 THEO / 7 SF → **125 net-new** after the reconciliation pass below (4 intra-catalog double-listings removed; **0** baseline/manifest collisions)
+- Candidate engines surfaced (consolidated): **75 process engines + 7 new modality engines + 2 modality extensions = 84** — ⚠ still feature-granular; WF2 collapses to ~8–15 ROOT engines
 - Reclassification notes (group existing features by generative cause): **60**
 
 ---
+
+## Reconciliation pass (pre-WF2, 2026-06-22)
+
+Before launching the by-engine workflow (WF2), the 129 additions were reconciled against the **full** F1–F53 model
+([`planet-visual-features.md`](planet-visual-features.md)) and the **implemented code manifest**
+(`planet-feature-associations.js` + `planet-archetypes.js`) — closing the WF1 caveat that the additions diff was
+against baseline *text* only and never cross-checked the lab's actual feature set.
+
+**Result: 4 confirmed duplicates → 125 net-new.** All four are **intra-catalog double-listings** (the same outcome
+filed under two domain buckets); **zero** collisions against F1–F53 itself or a manifest key. The sweep was
+disciplined — nearly every addition argues its distinction as a new modality / sub-process / driver axis, so the
+near-baseline matches are genuinely new and were correctly kept.
+
+Confirmed duplicates (keep first occurrence, drop second):
+1. **Cantaloupe terrain** — Volcanic-domain entry = Glacial-domain entry (Triton diapir-overturn texture, one engine).
+2. **Floor-fractured craters** — Volcanic-domain entry = Impact-domain entry (lunar laccolith floor-uplift; both cite Gassendi/Posidonius/Humboldt).
+3. **Lunar swirls** — already bundled in the Impact-domain space-weathering entry = standalone Magnetospheric-domain entry (Reiner Gamma magnetic-standoff albedo).
+4. **Strike-slip fault class** — Tidal-domain "tidal-walking offset faults" = Tectonic-domain "strike-slip / transcurrent class" (both Europa Astypalaea Linea; F5 has no strike-slip member).
+
+**Deferred to WF2 — 6 borderline near-collapses** (each kept for a defensible distinguishing axis, but re-test in
+the engine-collapse as candidate same-engine/different-output pairs): cryovolcanic edifice vs flow-plains; Triton N₂
+geyser-streaks vs Enceladus water-vapor jets; seasonal CO₂-jet dark-fan overlay vs F18 permanent spiders;
+corona-province vs diapir-dome relief vs cantaloupe texture (one engine, three scales); hemispheric radiolytic
+dichotomy vs discrete electron-burn lenses.
 
 ## Additions by domain
 
@@ -399,6 +423,27 @@ outputs cascade into many features. Listed here as raw input to that step:
 - Technogenic-development engine (single civilization-scale/saturation axis: scattered machine structures -> city lights -> planet-covering ecumenopolis -> star-enclosing Dyson swarm/shell -> centrifugal ringworld/band -> nested matrioshka computronium; constructive megascale earthworks impose a designed structural grain)
 - Technogenic-destructive engine (subtractive/destructive sibling: mining mass-removal or directed-energy weapon carving crater-like geometry with tool-made regularity - terraces, grids, glassing, radial fracture; clearly gated as artificial)
 - Body-geometry / illumination-state engine (a render-frame axis, not a surface feature: Roche-ellipsoidal shape, comet-tail disintegrating body, rogue/starless thermal-only no-terminator lighting, and ringworld/Dyson non-spherical geometries that MODIFY how all surface features read)
+
+### MODALITY engines — folded from the completeness critic (2026-06-22)
+
+The critic found the catalog **morphology-complete but modality-poor**: the residual gaps are not landforms but
+*modalities* a feature-bag renderer structurally cannot represent. These map 1:1 onto **shared drivers** and MUST be
+first-class root-engine candidates in WF2's collapse — they emit **body-wide fields / overlays**, not landforms.
+(7 new engines + 2 extensions to engines listed above.)
+
+- Surface-chemistry / coloration paint engine (composition + irradiation dose + temperature/latitude -> a body-wide surface HUE/PALETTE field; Io metastable-sulfur allotrope color, Europa irradiated-salt color-centers, Mars evaporite brightness, Umbriel-type cold-trap bright ring; pure color decoupled from relief — the "palette field" the co-genesis layer owes every body)
+- Whole-disk compositional-province engine (latitudinal/hemispheric albedo+composition patterning as a GLOBAL organizing layer ABOVE individual landforms; Titan Xanadu/Shangri-La bright-continent vs dark-sand-sea provinces, Io equatorial-vs-polar sulfur zonation — the "province field")
+- Temporal / transient surface-state engine (a time-varying overlay keyed to insolation + season + obliquity: recurring-slope-lineae darkening/fading, seasonal frost flush, dust-clearing albedo swings, equinox ring-spoke cycles; the cross-cutting TEMPORAL modality the snapshot sweep barely registered — the "seasonal layer")
+- Ring-planet interaction engine (ring optical depth + ring/sub-stellar geometry + magnetic coupling -> the ring's own structured shadow band cast on the disk, electrostatic radial spokes, and the mid-latitude ring-rain inflow band; distinct from the static rings feature)
+- Biosignature surface-tint engine (photosynthetic-pigment red-edge land tint + ocean-bloom/red-tide water color, seasonally modulated by insolation; the biotic OUTCOME-as-color, distinct from the existing bioluminescent/fungal structure track)
+- Technosignature modality-overlay engine (civilization-scale waste-heat IR hotspots, in-orbit engineered-structure shadow/glint on the disk, and industrial pollution-haze discoloration; the non-structural technosignature outputs, complementing the technogenic-development/-destructive STRUCTURE engines above)
+- Catastrophic disruption / reassembly engine (partial disruption + gravitational re-accretion of a small body -> mismatched terrain units / regio patchwork bounded by km-scale mega-scarps, e.g. Miranda + Verona Rupes; distinct from the SF global-shattered-crust engine and from impact cratering)
+- (extension) Body-geometry / illumination-state engine -> add a COMPACT-OBJECT / exotic-host illumination mode (pulsar/neutron-star host: pulsed/non-stellar illumination + a radiation-blasted surface; extends the render-frame illumination axis alongside the rogue/starless self-emission state)
+- (extension) Envelope-stripping / atmospheric-escape engine -> add an EXOSPHERIC gas-escape-tail output (an intact warm body losing atmosphere grows a vast neutral-hydrogen comet-like tail / UV-bright exosphere; distinct from the disintegrating-rock DUST tail the catastrophic-evaporation engine already emits)
+
+> **Named single-body special-cases (not new root engines):** Mercury hollows (-> volatile-sublimation pit engine),
+> Venus arachnoids / novae (-> the mantle-upwelling stagnant-lid / nova engines already listed). WF2 gives these
+> *named hooks* in the engine->feature map, not their own root engine.
 
 ---
 
