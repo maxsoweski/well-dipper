@@ -13,9 +13,10 @@ effects" (slop). Real bodies look distinctive because features share **engines**
 of rendering** (L0 galaxy procgen → **L1 world-engine (NEW)** → L2 feature renderers that just *express*
 it). Frame: a **"story engine"** — what renders IS the body's billions-of-years history; the engine
 dependency order is **time's arrow**. WF1 (outcomes catalog) is **done**. In-thread we **collapsed ~84
-candidate engines → 15 engines in 5 tiers** (the spine) and ran a **story-lens review** (two audits).
-**PENDING:** Max's convergence on (a) tier re-slots, (b) the L0-gap resolution, (c) how to fold in the
-audit findings → **THEN WF2 by-engine research** fans out per approved engine.
+candidate engines → 15 engines in 5 tiers** (the spine), ran a **story-lens review** (two audits), and
+**FOLDED its findings into the spine** (§3.1 + §4: tier re-slots, the epoch/host-editor model, the
+broken+over-supplying L0 boundary). **PENDING only:** Max's sign-off on the **L0-gap resolution** (spine §4c)
++ a final read of the adopted tier re-slots → **THEN WF2 by-engine research** fans out per approved engine.
 
 ## 2. Read order for next session
 
@@ -34,7 +35,7 @@ That's enough to resume. The outcomes catalog is 298KB — do **NOT** read it wh
 
 | Artifact | What it is | Anchor |
 |---|---|---|
-| `world-engine-architecture-spine.md` | ⭐ Central doc: 15 engines × 5 tiers (§3), L0 interface D1–D16 (§2), L0-gap (§4), locked decisions (§5), open story-lens Qs (§6) | DRAFT |
+| `world-engine-architecture-spine.md` | ⭐ Central doc: 15 engines × 5 tiers (§3) + review re-slots/epoch model (§3.1), L0 broken+over-supply (§4), locked (§5), what's-next (§6) | review folded in |
 | `world-engine-outcomes-catalog.md` | WF1 output: 125 net-new + 84 candidate engines + 60 reclassifications. **Read top ~30 lines only (298KB).** | committed `75681a7` |
 | `world-engine-L0-audit.md` | A1 story-lens: Q1 sufficiency + Q2 over-supply | DRAFT |
 | `world-engine-history-ordering-audit.md` | A2 story-lens: Q3 history/time's-arrow | DRAFT |
@@ -53,11 +54,12 @@ That's enough to resume. The outcomes catalog is 298KB — do **NOT** read it wh
 
 3-layer model: **L0** galaxy procgen (exists) → **L1** world-engine (NEW, 15 engines) → **L2** renderers (express only).
 The **15 engines in 5 tiers** (spine §3 has full I/O — don't re-list here):
-- **T1 Body-defining:** E1 composition/regime · E2 figure/illumination
+- **T1 Body-defining:** E1 composition/regime (+ derived "type" label) · E2-figure · E12-province *(moved here from T5)*
 - **T2 Forcing fields:** E3 tidal/orbital · E4 magnetosphere/radiation · E5 atmosphere/climate
-- **T3 Surface-building/relief:** E6 tectonic-grain · E7 magmatism · E8 impact+space-weathering
+- **T3 Surface-building/relief:** E6 tectonic-grain · E7 magmatism · E8a bombardment
 - **T4 Surface-sculpting:** E9 hydrology · E10 aeolian · E11 cryosphere *(North-Star couplings live here)*
-- **T5 Modality/coherence:** E12 chemistry/province · E13 temporal/transient · E14 inhabitation · E15 rings
+- **T5 Modality/coherence:** E8b space-weathering · E12-palette · E13 temporal/transient · E14 inhabitation · E15 rings
+- **Render-frame sidecar (not a tier):** E2-illumination *(modifies how every tier reads)*
 
 ## 5. Story-lens review findings (condensed — detail in the two audits)
 
@@ -86,8 +88,8 @@ The **15 engines in 5 tiers** (spine §3 has full I/O — don't re-list here):
 ## 7. Open decisions / what's next
 
 **Convergence items pending Max** (then WF2 launches):
-1. **Tier re-slots** (from A2): split **E8** (bombardment T3 / space-weathering late); **E2 illumination → render-frame sidecar**; **E12 province → body-defining** (palette terminal). E3/E5 stay put (per-body role splits, not tier errors).
-2. **Add the epoch / host-editor model** — the architecture isn't a *history machine* until host/editor composition + 2–4 epochs are added (A2 §3). Re-type `planet-feature-associations.js` edges from render-masks to history-edits.
+1. **Tier re-slots — ADOPTED in spine §3.1** (split E8a bombardment / E8b space-weathering-late; E2-illumination → render-frame sidecar; E12-province → T1, palette stays terminal). Pending only Max's final read. E3/E5 stay put.
+2. **Epoch / host-editor model — ADOPTED in spine §3.1** (2–4 named epochs + editor-on-host composition; the "history-machine" fix). Pending Max's read. (Re-typing `planet-feature-associations.js` edges render→history is a WF2/build task.)
 3. **L0-gap resolution** — spine §4 "expose + derive" lean: L0 exposes the system graph it already computes + a thin Tier-1 base step derives structured fields. A1's ordered fix list: (1) plumb D12 + (2) compute eccentricity → (3) surface dropped primitives → (4) expose system graph → (5–7) the type-demotion refactor (high blast radius, defer to WF2). Decide: expose+derive vs extend-L0 vs decide-after-WF2-gap-list.
 4. **Type → derived-label demotion** — long-horizon target: `_pickType` becomes a seed/label; palette/atmo/feature-set derive from drivers + fields (replace `rendersOn` allowlists with driver-threshold gates).
 
