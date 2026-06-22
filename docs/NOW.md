@@ -78,6 +78,21 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Updated: CHARTER program-3 line, campaign-tracker Phase-5 row, INTEGRATION.md header pointer,
 > view-dependent intent (WS5 role). All local/unpushed.
 >
+> **▶ REFINED (2026-06-21, via workflow `wf_df308f40-79d`).** Max's topo-map observation —
+> *the same tectonic activity produces both mountains AND the structured valleys that shape
+> rivers* — exposed a blind spot. Code-verified (4-agent workflow): the river router DOES route
+> on real finished mountain relief (RTT of the real combiner chain → priority-flood; lateral read,
+> WIRED, I-1), so the visible effect mostly works. BUT the engine has **no shared tectonic
+> lineament field** — relief features share only a scalar province amplitude-mask (`gProvince.x`),
+> each with its own seed-hashed axis; inter-range lows are incidental noise minima, not orogenic
+> drainage corridors. So **shared-driver CO-GENESIS** (one cause → many coherent features =
+> *vertical* coupling) is categorically distinct from the audit's 52 gaps (all *lateral*
+> output-reads) and was never enumerated (audit rubric excludes shared-driver as "co-occurrence").
+> Added to the plan: a **"lateral reads vs. vertical co-genesis" scope-boundary section** + **WS4
+> sub-item 7 (orogenic drainage-corridor co-genesis, mountains↔rivers)** — fidelity-tier, below WS1,
+> kept DISTINCT from WS4's relief×relief partition generator (don't conflate). Plan + NOW.md updated;
+> local/unpushed.
+>
 > **▶ (2026-06-20 PM): §7 BUILT + headless-green + review-hardened; live GPU gate run →
 > objective plumbing PASSES, but LEGIBILITY needs 2 Max decisions (NOT a clean pass).** 4 commits on
 > master (local-only): `7de1f7d` §7.1 co-dependence field-reads (height coeff 1.0 / sea outlets /

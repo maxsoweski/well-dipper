@@ -28,6 +28,36 @@ campaign's Phase numbers (the audit's own "Phase 1–5" remediation labels are t
 
 ---
 
+## Lateral reads vs. vertical co-genesis (scope boundary)
+
+Every one of the 52 gaps — and every WS1–WS5 remedy — is a **lateral output-read**:
+feature A reads feature B's already-computed field/mask/buffer (WS1 `filled`→liquid mask),
+or a one-line coupling on a signal already in scope (WS2), or a combiner re-order (WS3).
+Even WS4's partition generator is "dividing features read each other." This plan closes
+the lateral axis well.
+
+A **distinct, unscoped axis** is **shared-driver co-genesis**: one upstream cause emitting
+*multiple coherent features at once*. Max's canonical example (2026-06-21) — the same tectonic
+event that **raises a range** also **carves the structured valleys** that give rivers their
+shape, both cascading to sea level. The engine does NOT do this today: ranges and the lows
+between them share only a *scalar* province amplitude-mask (`gProvince.x`), each relief
+writer has its own seed-hashed axis (no shared strike tensor), and inter-range lows are
+incidental ridged-multifractal noise minima, not tectonically-oriented drainage corridors
+(`planet-lod-height.glsl.js`, `planet-lod-lab-core.js:660-725`). The river router reads the
+**finished** relief (lateral, already WIRED — I-1) and routes correctly on it, so the
+*visible* "rivers run down between mountains to the sea" largely already works. Co-genesis
+is a **fidelity-tier** upgrade (oriented, structured valleys instead of noise lows), not a
+correctness fix — it sits **below WS1** in priority but is **not** covered by any WS.
+
+> The audit's own rubric tags shared-driver recompute as "rubric-excluded" co-occurrence
+> (Recurring Cause #7), which is why `mountains × rivers` is **absent from the 84-edge
+> matrix and the 52-gap table** — it was never an edge, so it is neither flagged nor
+> judged-wired. The model also encodes mountains (F1=P2+P3+P4) and rivers (F11=P8) on
+> different processes, sharing only L0 drivers. Co-genesis is therefore invisible to both
+> the model and this plan, by construction.
+
+---
+
 ## The five workstreams
 
 Each WS, when built, gets its own `dev-collab-scope` pass (`intent.md` + `contract.json`) → build →
@@ -64,6 +94,16 @@ no new architecture. This is the highest leverage-per-effort item in the whole a
    in shadowed crater floors / pole-facing scarps.
 6. **Chaos shallow-liquid class** + **ecumenopolis×cityLights continuum merge** + **carbon hot
    variant** — smaller standalone arch items.
+7. **Orogenic drainage-corridor co-genesis (mountains↔rivers)** — a *shared* orogenic
+   lineament/strike field that emits BOTH range uplift AND co-oriented inter-range valleys,
+   fed into the router as structured drainage corridors (vs. today's noise-low troughs).
+   **Distinct from item 3's partition generator** (which divides the surface between
+   relief×relief pairs and excludes rivers). This is **vertical co-genesis, not a lateral
+   read** (see the scope-boundary section above). **Fidelity-tier:** the existing
+   router-on-real-relief read (I-1) already delivers the gross effect; this upgrades valley
+   *structure/orientation*. Spec/spike FIRST; sequence AFTER WS1. (Added 2026-06-21 from
+   Max's topo-map observation — the first co-genesis item; if more shared-driver couplings
+   surface, they join this vertical axis, not the lateral 52.)
 
 ---
 
