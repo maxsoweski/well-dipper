@@ -132,3 +132,36 @@ describe('E6 runE6 builds relief', () => {
     expect(Array.from(a.substrate.height)).toEqual(Array.from(b.substrate.height));
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { priorityFloodFill, d8Receivers, flowAccumulate } from '../relief-e9-hydrology.js';
+
+describe('E9 routing primitives', () => {
+  // 5x5 cone: high centre, low edges → all flow should reach the boundary.
+  function cone(n) {
+    const h = new Float32Array(n * n); const c = (n - 1) / 2;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) h[y * n + x] = -(Math.hypot(x - c, y - c));
+    return h; // centre = 0 (high), edges negative (low) → inverted cone, ridge in middle
+  }
+  it('priority-flood removes interior pits (no cell strictly below all neighbours, off-edge)', () => {
+    const n = 7; const h = new Float32Array(n * n).fill(1); h[3 * n + 3] = -5; // a pit
+    const filled = priorityFloodFill(h, n, -1e9);
+    // the pit must be filled up to at least its lowest neighbour
+    let isPit = true;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if (filled[(3+dy)*n + (3+dx)] < filled[3*n+3]) isPit = false;
+    expect(isPit).toBe(false);
+  });
+  it('d8 receivers point downhill (filled[receiver] <= filled[i]) for non-outlet cells', () => {
+    const n = 9; const h = cone(n); const filled = priorityFloodFill(h, n, -1e9);
+    const rec = d8Receivers(filled, n);
+    let okPct = 0, land = 0;
+    for (let i = 0; i < n * n; i++) { if (rec[i] !== i) { land++; if (filled[rec[i]] <= filled[i] + 1e-6) okPct++; } }
+    expect(okPct).toBe(land); // EVERY routed cell goes downhill
+  });
+  it('flow accumulation concentrates: max accum >> mean accum', () => {
+    const n = 21; const h = cone(n); const filled = priorityFloodFill(h, n, -1e9);
+    const rec = d8Receivers(filled, n); const accum = flowAccumulate(rec, n);
+    const max = Math.max(...accum); const mean = accum.reduce((a, b) => a + b, 0) / accum.length;
+    expect(max).toBeGreaterThan(mean * 5);   // trunk cells carry far more than average
+  });
+});
