@@ -103,3 +103,32 @@ describe('E6 Melosh latitude stress', () => {
     expect(s.grainMag.some(v => v > 0)).toBe(true);
   });
 });
+
+import { runE6 } from '../relief-e6-tectonic.js';
+import { makeBaseStep as mkBase4 } from '../relief-base-step.js';
+import { PRESETS as P4 } from '../relief-presets.js';
+
+describe('E6 runE6 builds relief', () => {
+  const grid = { n: 48, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'e6-1' };
+  it('writes nonzero, finite, varied relief', () => {
+    const { substrate, crust, drivers } = mkBase4(P4.rocky, grid);
+    runE6(substrate, crust, drivers, { name: 'tectonic-build' }, grid.seed);
+    expect(substrate.height.every(Number.isFinite)).toBe(true);
+    const min = Math.min(...substrate.height), max = Math.max(...substrate.height);
+    expect(max - min).toBeGreaterThan(0);
+  });
+  it('low-gravity body gets larger relief amplitude than high-gravity (isostatic 1/√g cap)', () => {
+    const lowG  = mkBase4({ ...P4.rocky, massEarth: 0.1, radiusEarth: 0.5 }, grid);   // g≈0.4
+    const highG = mkBase4({ ...P4.rocky, massEarth: 4.0, radiusEarth: 1.2 }, grid);   // g≈2.8
+    runE6(lowG.substrate, lowG.crust, lowG.drivers, { name:'tectonic-build' }, grid.seed);
+    runE6(highG.substrate, highG.crust, highG.drivers, { name:'tectonic-build' }, grid.seed);
+    const amp = (s) => Math.max(...s.height) - Math.min(...s.height);
+    expect(amp(lowG.substrate)).toBeGreaterThan(amp(highG.substrate));
+  });
+  it('is deterministic for a fixed seed', () => {
+    const a = mkBase4(P4.rocky, grid), b = mkBase4(P4.rocky, grid);
+    runE6(a.substrate, a.crust, a.drivers, { name:'tectonic-build' }, 'seedX');
+    runE6(b.substrate, b.crust, b.drivers, { name:'tectonic-build' }, 'seedX');
+    expect(Array.from(a.substrate.height)).toEqual(Array.from(b.substrate.height));
+  });
+});
