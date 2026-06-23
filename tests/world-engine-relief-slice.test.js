@@ -526,6 +526,40 @@ describe('Layer 4 — liquid-stability gate', () => {
   });
 });
 
+describe('Layer 4 — retention gate is load-bearing', () => {
+  const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L4ret' };
+  // PROVE the Jeans retention term (D6) is live, not dead code. Final-review finding: all 5 shipped
+  // presets retain (λ_N2 ≈ 46–209 ≫ 6) so retention never discriminates among them. Here we ISOLATE it:
+  // a TEMPERATE (T_eq 290 → waterWindow=1, so tempWindow>0) and VOLATILE-RICH (volatileFraction 0.4 →
+  // volatileGate≈1) world that is nonetheless TOO LOW-MASS / LARGE-RADIUS to hold an atmosphere. Its
+  // hot exosphere (T_exo = 3.5·290) + tiny escape velocity drives λ_N2 < 6 → retained=false →
+  // retentionGate=0 → liquidStability=0. A CONTROL that differs ONLY in mass/radius (Earth-like) keeps
+  // λ_N2 ≫ 6 → retained=true → liquidStability high. Same temp+volatile inputs in both → the ONLY thing
+  // that can explain the collapse is the retention gate. (Measured: lowMass λ_N2≈0.35, liquidStability 0;
+  // control λ_N2≈209, liquidStability 1.0.)
+  const tempVolatile = {
+    composition: { density: 5.5, volatileFraction: 0.4 },
+    T_eq: 290, eccentricity: 0, orbitRadiusEarth: 23455, starMassEarth: 332946,
+    surfaceHistory: { erosion: 0.5 },
+  };
+  const lowMass = { ...tempVolatile, massEarth: 0.005, radiusEarth: 3.0 }; // λ_N2 < 6 → retained=false
+  const control = { ...tempVolatile, massEarth: 1.0,   radiusEarth: 1.0 }; // λ_N2 ≫ 6 → retained=true
+
+  it('retained=false collapses liquidStability to ~0 even when temperate + volatile-rich', () => {
+    const low = mkBase_L4(lowMass, grid);
+    expect(low.drivers.liquidStability).toBeLessThan(0.01);   // retentionGate=0 zeroes the product
+  });
+
+  it('isolates retention: an Earth-mass control with identical temp+volatile inputs stays liquid-stable', () => {
+    const low  = mkBase_L4(lowMass, grid);
+    const ctrl = mkBase_L4(control, grid);
+    // Only mass/radius differ between low & ctrl → the gap IS the retention gate. If temperature or
+    // volatiles were the cause, the control (same T_eq, same volatileFraction) would also be ~0.
+    expect(ctrl.drivers.liquidStability).toBeGreaterThan(0.5);
+    expect(ctrl.drivers.liquidStability - low.drivers.liquidStability).toBeGreaterThan(0.5);
+  });
+});
+
 // append to tests/world-engine-relief-slice.test.js
 import { PRESETS as P_L5 } from '../relief-presets.js';
 import { makeBaseStep as mkBase_L5 } from '../relief-base-step.js';
