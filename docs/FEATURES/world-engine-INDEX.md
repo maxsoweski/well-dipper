@@ -21,9 +21,12 @@ epoch/host-editor model + tier re-slots + the **L0-gap → Option A (expose + de
 **WF2 COMPLETE 2026-06-22** — 18/18 engine dossiers (research → adversarial verify; no wedge). Architecture holds:
 17/18 high-confidence + real-time-feasible; only E9 (hydrology) is bake-time not per-frame. Design direction +
 build order + plumbing spec + the terrain↔rivers answer in **`world-engine-wf2-synthesis.md`**; raw dossiers in
-`world-engine-wf2-dossiers.json` (480KB, query don't read). **NEXT = Max reviews the design direction (wf2-synthesis)
-→ then the first-slice implementation plan** (relief group: E6 build → E9 carve over 2 epochs sharing a relief
-substrate). Brainstorm gate still holds: no build until Max approves the direction.
+`world-engine-wf2-dossiers.json` (480KB, query don't read). **DESIGN DIRECTION APPROVED by Max 2026-06-22 — brainstorm gate CLEARED.** Build the **first vertical slice = the
+relief group** (E6 tectonic *build* → E9 hydrology *carve*, over 2 epochs, sharing one mutable **relief substrate**;
+fed by a minimal base step: D12 un-zeroed + a stub interior field + the relief field). Max wants it driven **via
+workflows** in a fresh session. **NEXT = `superpowers:writing-plans`** for the slice → then `executing-plans` /
+Workflow build. Success test (north-star): the result reads as a landscape with a history — drainage that clearly
+post-dates and cuts the tectonic relief.
 
 ## 2. Read order for next session
 
