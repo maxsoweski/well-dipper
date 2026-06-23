@@ -420,3 +420,33 @@ describe('Layer 2 — geometry branch', () => {
     expect(cross).toBeGreaterThan(0.02);
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { runReliefSlice as runRS_L3 } from '../relief-slice.js';
+import { PRESETS as P_L3 } from '../relief-presets.js';
+import { hypsometricDistance as hypso_L3, perCellRMS as rms_L3 } from '../relief-divergence.js';
+
+describe('Layer 3 — toggleable seed discriminator', () => {
+  const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L3' };
+  it('discriminator ON changes the field layout vs OFF for the same bundle+seed', () => {
+    const on  = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: true });
+    const off = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: false });
+    expect(rms_L3(on.substrate.height, off.substrate.height)).toBeGreaterThan(0.3); // layout reshuffled
+  });
+  it('discriminator OFF is reproducible (held-seed baseline is stable)', () => {
+    const a = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: false });
+    const b = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: false });
+    expect(Array.from(a.substrate.height)).toEqual(Array.from(b.substrate.height));
+  });
+  it('two different bundles draw different streams when ON (composition-keyed layout)', () => {
+    const rocky  = runRS_L3(P_L3.rocky,  { ...grid, epoch2: false, discriminate: true });
+    const europa = runRS_L3(P_L3.europa, { ...grid, epoch2: false, discriminate: true });
+    expect(rms_L3(rocky.substrate.height, europa.substrate.height)).toBeGreaterThan(0.3);
+  });
+  it('GUARD: a reseed alone (discriminator) must NOT be what carries the held-seed hypsometric gate', () => {
+    // Same bundle, discriminator ON vs OFF = pure reshuffle of ONE world → hypsometric ~ floor, not a pass.
+    const on  = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: true });
+    const off = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: false });
+    expect(hypso_L3(on.substrate.height, off.substrate.height)).toBeLessThan(0.05); // reshuffle ≈ no shape change
+  });
+});

@@ -90,9 +90,11 @@ function steeredNoise(noise, x, y, angle, regime, freq, sign = +1) {
 export function runE6(substrate, crust, drivers, epoch = { name: 'tectonic-build' }, seed = 'e6') {
   const { n } = substrate;
   writeGrain(substrate, drivers, epoch.rotatePoleDeg || 0);        // Steps 1-2
-  const rng = alea(String(seed) + ':e6:' + (epoch.name || ''));
+  // L3: append the physics discriminator to the noise seeds when ON → composition-keyed LAYOUT.
+  const disc = (drivers.useDiscriminator && drivers.discriminator) ? ':' + drivers.discriminator : '';
+  const rng = alea(String(seed) + ':e6:' + (epoch.name || '') + disc);
   const noise = createNoise2D(rng);
-  const noisePlateau = createNoise2D(alea(String(seed) + ':e6plateau'));
+  const noisePlateau = createNoise2D(alea(String(seed) + ':e6plateau' + disc));
   const gCap = reliefGravityFactor(drivers.surfaceGravity ?? 1);
   const silicate = drivers.rockyCrust ?? 1;                        // icy worlds → muted silicate relief
   const blend = epoch.blend ?? 1;                                  // Task 9 overprint uses <1

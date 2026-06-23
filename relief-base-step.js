@@ -9,7 +9,7 @@ import { createNoise2D } from 'simplex-noise';
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const smoothstep = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
-export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'relief' }) {
+export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'relief', discriminate = true }) {
   const d = bundle || {};
   const radiusEarth = d.radiusEarth ?? 1.0;
   const massEarth = d.massEarth ?? 1.0;
@@ -44,8 +44,15 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 're
   const shellThickness = clamp01(0.3 + 0.5 * smoothstep(0.5, 9, surfaceGravity) + 0.2 * (1 - age));
   const despinAmp = clamp01(0.3 + 0.7 * age);
 
+  // L3: physics discriminator — folds composition/regime into the seed so the LAYOUT is composition-keyed.
+  // Derived from already-computed geophysics (never invented). TOGGLEABLE: the verifier runs it OFF to
+  // measure the held-seed (L1+L2) baseline; ON adds the secondary reseed lift. NOT the decisive gate.
+  const discriminator = String(radialStrainSign) + ':' + (rockyCrust > 0.5 ? 'sil' : 'ice');
+  const useDiscriminator = !!discriminate;
+
   // Low-freq crustal-thickness blobs → plateau/tessera masks (E6 Step 4). Seeded simplex.
-  const rng = alea(String(seed) + ':crust');
+  const crustSeed = String(seed) + ':crust' + (useDiscriminator ? ':' + discriminator : '');
+  const rng = alea(crustSeed);
   const noise = createNoise2D(rng);
   const thicknessBlob = (ix, iy, gn) => {
     const u = ix / gn, v = iy / gn;
@@ -56,7 +63,7 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 're
 
   const substrate = makeSubstrate({ n, lat0Deg, lat1Deg, domainKm });
   const drivers = { tidalHeat, surfaceGravity, rockyCrust, surfaceHistory, age,
-                    radialStrainSign, radialStrainMag, despinAmp };
+                    radialStrainSign, radialStrainMag, despinAmp, discriminator, useDiscriminator };
   const crust = { shellThickness, thicknessBlob };
   return { drivers, crust, substrate };
 }

@@ -20,7 +20,8 @@ import { runE9, d8Receivers, priorityFloodFill } from './relief-e9-hydrology.js'
 import { cloneHeight } from './relief-substrate.js';
 
 export function runReliefSlice(driverBundle, opts = {}) {
-  const params = { n: 256, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'slice', epoch2: true, ...opts };
+  const params = { n: 256, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'slice',
+                   epoch2: true, discriminate: true, ...opts };
   const { drivers, crust, substrate } = makeBaseStep(driverBundle, params);
   // EPOCH 1 — tectonic build (E6 writes the host).
   runE6(substrate, crust, drivers, { name: 'tectonic-build' }, params.seed);
