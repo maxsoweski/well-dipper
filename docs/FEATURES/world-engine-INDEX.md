@@ -51,6 +51,12 @@ model end-to-end, the **expose+derive (Option A)** boundary, and **E9 bake feasi
   quality metric, not part of the pass gate** (resolution-dependent realism garnish, not in the §9 north-star); the
   gate is the **5 resolution-robust core signals** (subtractive, carve-correlates-relief, no-uphill,
   depressions-filled, accumulation-spread).
+- **Presets are AMPLITUDE-only BY DESIGN (not a bug).** They feed real physics-derived drivers, but those
+  currently modulate intensity (gravity cap, silicate gate, erodibility), **not** formation structure — the
+  spatial pattern is **seed-locked and preset-independent** (same seed + different preset = identical landform,
+  rescaled). Per-body-type *structural* divergence was never a slice goal. **Full why + how-to-make-them-diverge
+  is in the BUILD INTENT header of `relief-presets.js`** (and the entry header of `relief-slice.js`). Recorded so
+  no future session re-derives it from code (cost the 2026-06-23 session a full 6-module read).
 
 **NEXT (UAT ✅ done):** (1) **create a dedicated branch** off `master` for the world-engine production work
 (preserve `master` as-is, per Max 2026-06-23); (2) on that branch, **scope the production L1 layer** via

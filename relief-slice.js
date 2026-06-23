@@ -1,6 +1,19 @@
 // relief-slice.js — orchestrator + north-star verifier. Pure: no three.js.
 // The 2-epoch host-editor loop: ONE shared substrate, E6 writes height in epoch 1, E9 subtracts in
 // epoch 2. heightAfterBuild is the legibility witness (lets us prove "drainage post-dates the relief").
+//
+// ── BUILD INTENT (per record-build-intent; this is the slice ENTRY — read here first) ──
+// Function: makeBaseStep → E6 tectonic BUILD (epoch 1, writes height) → E9 hydrology CARVE (epoch 2,
+//   subtracts from the SAME height) → optional E6 despin-overprint. verifyReliefSlice checks 5 north-star signals.
+// Intent: prove the host-editor / shared-substrate mechanism end-to-end — one mutable DEM edited across epochs
+//   so the result reads as a landscape WITH A HISTORY — in an ISOLATED lab (zero production edits).
+// Deliberate NON-GOALS (by design — do NOT "fix" without scoping):
+//   • Per-body-type structural divergence: presets modulate AMPLITUDE only, not formation shape — full why in
+//     the BUILD INTENT block of relief-presets.js.
+//   • Flat 2D latitude-band DEM, not sphere/cubemap (sphere mapping deferred).
+//   • E9 is a CPU bake-time REFERENCE, not per-frame (GPU FastFlow bake deferred).
+//   • D12 derived in this slice's own base step (production PlanetGenerator.js:565 hard-zero untouched).
+//   • Hack's-law exponent is a REPORTED metric, not a pass gate (resolution-dependent garnish).
 import { makeBaseStep } from './relief-base-step.js';
 import { runE6 } from './relief-e6-tectonic.js';
 import { runE9, d8Receivers, priorityFloodFill } from './relief-e9-hydrology.js';
