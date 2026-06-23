@@ -554,8 +554,10 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-**`world-engine` relief-group slice — BUILT (isolated harness), VERIFIED_PENDING_MAX
-`90b66f7`, awaiting Max UAT (2026-06-23).** First vertical slice of the co-genesis
+**`world-engine` relief-group slice — BUILT (isolated harness), ✅ Max UAT-PASSED 2026-06-23
+(`90b66f7`). Push: HOLD (Max). Branch plan: preserve `master` as-is; production-L1 integration
+goes on a DEDICATED branch (this slice is isolated/additive — safe on master as a checkpoint).**
+First vertical slice of the co-genesis
 **"world-engine" L1 layer** for the planet-LOD lab: the RELIEF GROUP — E6 tectonic
 *builds* relief → E9 hydrology *carves* drainage, over 2 epochs sharing ONE mutable
 height substrate, fed by a minimal base step. Built in an **isolated harness — NOT
@@ -574,8 +576,9 @@ items: shared-relief-substrate pattern, host-editor/epoch model end-to-end, expo
 - **Plan (10 TDD tasks):** `docs/FEATURES/world-engine-relief-slice-plan.md`.
 - **Master pickup index:** `docs/FEATURES/world-engine-INDEX.md` (read it first).
 - **⚠ SCOPE CAVEATS (do not overclaim):** UAT — "does it read as a landscape with a
-  history" — is **MAX'S GATE ALONE** (no agent closes it); status is **VERIFIED_PENDING_MAX,
-  NOT shipped**. Flat 2D latitude-band DEM (NOT sphere/cubemap — sphere mapping is deferred
+  history" — was **MAX'S GATE ALONE** and is now **✅ PASSED (2026-06-23)**; the slice is proven
+  in the lab but **NOT pushed and NOT wired into production** (a separate, large effort). Flat 2D
+  latitude-band DEM (NOT sphere/cubemap — sphere mapping is deferred
   integration; cubemap-seam lake breakage is a known later hazard). E9 is a CPU bake-time
   reference (GPU FastFlow/Jain-2024 bake deferred). D12 stubbed/derived in the slice's own
   base step (NO edit to the production `PlanetGenerator.js:565` hard-zero). Hack's-law

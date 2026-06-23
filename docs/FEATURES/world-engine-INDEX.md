@@ -1,9 +1,12 @@
 # World-Engine — MASTER PICKUP INDEX (read THIS first)
 
-**Status:** FIRST SLICE BUILT + VERIFIED_PENDING_MAX `90b66f7`, 2026-06-23 (brainstorm gate cleared 2026-06-22).
-Repo `~/projects/well-dipper`, branch `master`, **everything local — nothing pushed.** This index is the single
-cheap entry point so the next session resumes WITHOUT re-reviewing ~300KB of state. Read this → the spine → the two
-audits, then act.
+**Status:** FIRST SLICE BUILT + **Max UAT-PASSED 2026-06-23** (`90b66f7`); brainstorm gate cleared 2026-06-22.
+Repo `~/projects/well-dipper`, branch `master`, **everything local — nothing pushed (Max: HOLD).**
+**Branch plan (Max, 2026-06-23):** preserve `master` AS-IS; the next, *large* production-L1 integration (wiring
+engines into the real renderers + the type-demotion refactor — high blast radius) goes on a **DEDICATED branch**.
+The slice is isolated/additive (new `relief-*.js` + harness only, zero production edits), so it sits safely on
+master as a clean checkpoint. This index is the single cheap entry point so the next session resumes WITHOUT
+re-reviewing ~300KB of state. Read this → the spine → the wf2-synthesis → the slice plan, then act.
 
 ## 1. Where we are
 
@@ -28,7 +31,7 @@ relief group** (E6 tectonic *build* → E9 hydrology *carve*, over 2 epochs, sha
 fed by a minimal base step: D12 un-zeroed + a stub interior field + the relief field) is now **BUILT** in an
 **isolated harness** (NOT wired into the game or the main planet-lod-lab).
 
-**SLICE BUILT + VERIFIED_PENDING_MAX `90b66f7` (2026-06-23).** The brainstorm→build crossing is DONE.
+**SLICE BUILT + ✅ Max UAT-PASSED 2026-06-23 (`90b66f7`).** The brainstorm→build crossing is DONE.
 Objective gate GREEN: **33/33 vitest pass**; the north-star verifier `verifyReliefSlice` returns `pass=true` on
 rocky/lava/europa presets across seeds; live GPU (RTX 5080, chrome-devtools `:5173`) **A/B confirmed** — epoch-2 OFF
 shows uncut tectonic relief, epoch-2 ON shows a dendritic drainage network carved into the SAME relief
@@ -39,8 +42,8 @@ model end-to-end, the **expose+derive (Option A)** boundary, and **E9 bake feasi
   `relief-e6-tectonic.js`, `relief-e9-hydrology.js`, `relief-slice.js`, `world-engine-relief-lab.html`,
   `world-engine-relief-lab.main.js`, `tests/world-engine-relief-slice.test.js`.
 - **Implementation plan (10 TDD tasks):** `docs/FEATURES/world-engine-relief-slice-plan.md`.
-- **HONEST SCOPE CAVEATS:** UAT — "does it read as a landscape with a history" — is **MAX'S GATE ALONE** (no agent
-  closes it); status is **VERIFIED_PENDING_MAX, NOT shipped**. The slice uses a **flat 2D latitude-band DEM** (NOT
+- **HONEST SCOPE CAVEATS:** UAT — "does it read as a landscape with a history" — was **MAX'S GATE ALONE** and is
+  now **✅ PASSED (2026-06-23)**; the slice is proven in the lab but **NOT pushed, NOT wired into production**. The slice uses a **flat 2D latitude-band DEM** (NOT
   sphere/cubemap) — sphere mapping is deferred integration (cubemap-seam lake breakage is a known later hazard). E9
   is a **CPU bake-time reference** (not per-frame); the GPU FastFlow (Jain 2024) bake is the deferred optimization.
   D12 tidalHeating is **stubbed/derived in the slice's own base step** (NO edit to the production
@@ -49,8 +52,11 @@ model end-to-end, the **expose+derive (Option A)** boundary, and **E9 bake feasi
   gate is the **5 resolution-robust core signals** (subtractive, carve-correlates-relief, no-uphill,
   depressions-filled, accumulation-spread).
 
-**NEXT = Max UAT on the live harness** (`world-engine-relief-lab.html`, GPU). If it reads right, scope the
-production **L1 layer** via `dev-collab-scope`.
+**NEXT (UAT ✅ done):** (1) **create a dedicated branch** off `master` for the world-engine production work
+(preserve `master` as-is, per Max 2026-06-23); (2) on that branch, **scope the production L1 layer** via
+`dev-collab-scope` (high blast radius — wiring engines into the real renderers + the type-demotion refactor);
+(3) optionally extend the *lab* slice first (sphere/cubemap mapping, GPU FastFlow bake, more engines E7/E10/E11
+onto the same substrate) before the production port. Push remains on **HOLD** until Max says.
 
 ## 2. Read order for next session
 
