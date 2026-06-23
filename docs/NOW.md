@@ -607,7 +607,7 @@ liquid-water bundle completing the wet/frozen/airless trio vs europa, lava).
   hold up** — a 15-seed sweep showed cross-regime hypsometric is seed-fragile (6/15 fail at n=192),
   so hypsometric + directional anisotropy are now REPORTED to corroborate, NOT gated (Task 4.5
   EARLY-EXIT GO + Task 7 redefinition).
-- **Objective gate GREEN: 61/61 vitest pass** (`tests/world-engine-relief-slice.test.js`).
+- **✅ DONE + Max UAT-PASSED 2026-06-23 (`ef63554`):** 63/63 vitest pass (`tests/world-engine-relief-slice.test.js`) + whole-branch review clean + live integration check (chrome-devtools `:5173`) + **Max UAT "they all read as distinct."**
 - **Harness (this session, lab-only):** preset selector now offers `terrestrial` (auto from
   `Object.keys(PRESETS)`); HUD shows the current preset's drivers (dominant regime / liquidStability /
   anisotropy) every render (cheap — read off the current run), plus an **on-demand "divergence vs lava"
@@ -618,11 +618,11 @@ liquid-water bundle completing the wet/frozen/airless trio vs europa, lava).
   updated in `relief-slice.js` (non-goal flipped to "now realized"), `relief-presets.js`, `relief-divergence.js`.
 - **Spec / plan / SDD:** `docs/superpowers/specs/2026-06-23-world-engine-body-divergence-design.md`,
   `docs/superpowers/plans/2026-06-23-world-engine-body-divergence.md`, task briefs+reports in `.superpowers/sdd/`.
-- **▶ NEXT — UAT IS MAX'S GATE ALONE:** open the relief lab on GPU, view the **terrestrial / europa /
-  lava trio at ONE seed**, confirm they read as three categorically different worlds (the button + HUD
-  corroborate objectively; the holistic judgment is Max's). No agent closes UAT. Then resume the
-  production-L1 scope. **Controller still owes the live integration check** (the 3-world A/B + screenshots
-  on `:5173`); this task was CODE+DOCS only.
+- **▶ NEXT — UAT ✅ PASSED; build closed.** Live integration check done (3-world A/B + screenshots
+  `screenshots/relief-divergence-{terrestrial,europa,lava}.png`), Max UAT passed. Open decision: **push**
+  (still HOLD — Max's call). Then the production-L1 port: dedicated branch off `master` →
+  `dev-collab-scope` the L1 layer (wiring engines into the real renderers + type-demotion refactor,
+  high blast radius). Lab left clean on `terrestrial`.
 
 ### Prior active — supercruise (paused at a clean seam, pending UAT)
 

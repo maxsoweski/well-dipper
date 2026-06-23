@@ -1,13 +1,13 @@
 # World-Engine — MASTER PICKUP INDEX (read THIS first)
 
 **Status:** FIRST SLICE BUILT + **Max UAT-PASSED 2026-06-23** (`90b66f7`); brainstorm gate cleared 2026-06-22.
-**RELIEF BODY-TYPE DIVERGENCE BUILD: objective gate GREEN + LIVE-VERIFIED, `VERIFIED_PENDING_MAX ef63554`.**
+**RELIEF BODY-TYPE DIVERGENCE BUILD: ✅ Max UAT-PASSED 2026-06-23 (`ef63554`).**
 The relief slice now produces **categorically different worlds per body type** (not amplitude-only); decisive
 gate = `divergenceReport` (regime | hydrology | carve, reseed-invariant); **63/63 vitest pass** + whole-branch
-review clean. **Live integration check (chrome-devtools, lab on :5173) PASSED 2026-06-23:** at one seed the
-terrestrial/europa/lava trio diverges by the right axes (terr-vs-europa regime+carve; europa-vs-lava hydrology;
-NULL rocky-vs-rocky fails 0/0/0) and the renderer expresses each field (screenshots `screenshots/relief-divergence-{terrestrial,europa,lava}.png`). **UAT — "three
-categorically different worlds at one seed" — is MAX'S GATE ALONE; no agent closes it.** Push remains HOLD.
+review clean + live integration check passed (chrome-devtools, lab :5173). **Max UAT ✅ PASSED 2026-06-23**
+("they all read as distinct") — the terrestrial/europa/lava trio reads as three categorically different worlds
+at one seed (terr-vs-europa regime+carve; europa-vs-lava hydrology; NULL rocky-vs-rocky fails 0/0/0; screenshots
+`screenshots/relief-divergence-{terrestrial,europa,lava}.png`). **Push remains HOLD (Max's call).**
 Spec: `docs/superpowers/specs/2026-06-23-world-engine-body-divergence-design.md`; plan: `docs/superpowers/plans/2026-06-23-world-engine-body-divergence.md`; SDD task briefs + reports in `.superpowers/sdd/`.
 Repo `~/projects/well-dipper`, branch `master`, **everything local — nothing pushed (Max: HOLD).**
 **Branch plan (Max, 2026-06-23):** preserve `master` AS-IS; the next, *large* production-L1 integration (wiring
@@ -79,11 +79,9 @@ model end-to-end, the **expose+derive (Option A)** boundary, and **E9 bake feasi
   `window._relief.divergence(against, n)` exposes the same for scripted live checks. **Renderer
   (buildMesh/displacement/coloring) stays PRESET-BLIND** — the selector picks the GENERATION input only.
 
-**NEXT — divergence build awaits Max's UAT.** (0) **Max UAT on the body-type divergence build** (the immediate
-gate): open the relief lab, view the terrestrial / europa / lava trio at ONE seed, confirm they read as three
-categorically different worlds; the on-demand "divergence vs lava" button + HUD drivers line corroborate
-objectively, but the holistic judgment is Max's alone. Objective gate already GREEN (61/61 + `divergenceReport`).
-Then the original slice-NEXT: (1) **create a dedicated branch** off `master` for the world-engine production work
+**NEXT — divergence build ✅ UAT-PASSED; ready for the production port.** (0) Body-type divergence build is
+DONE + Max UAT-passed 2026-06-23 (63/63 + `divergenceReport` + live-verified). Open decision: **push** (still
+HOLD — Max's call). Then: (1) **create a dedicated branch** off `master` for the world-engine production work
 (preserve `master` as-is, per Max 2026-06-23); (2) on that branch, **scope the production L1 layer** via
 `dev-collab-scope` (high blast radius — wiring engines into the real renderers + the type-demotion refactor);
 (3) optionally extend the *lab* slice first (sphere/cubemap mapping, GPU FastFlow bake, more engines E7/E10/E11
