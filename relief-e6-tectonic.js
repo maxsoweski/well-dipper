@@ -70,6 +70,11 @@ function reliefGravityFactor(g) {
 //   contraction (sign +1): LOW base freq + HIGH along-strike elongation → long parallel scarp ridges (F5).
 //   extension  (sign -1): HIGHER base freq + blockier aspect → graben spacing / horst-and-graben (F4/F5).
 // All ratio constants TO-BE-TUNED-IN-LAB-then-locked (Task 7).
+// ATTRIBUTION (test-validity): L1 (regime) carries the held-seed HYPSOMETRIC divergence — it flips the
+//   Anderson regime mix per body, a distribution-shape change. L2 (this sign branch) carries DIRECTIONAL
+//   ANISOTROPY — how relief is oriented about the strike (tight across-strike ridges vs blocky). Those are
+//   orthogonal axes; hypsometry cannot see L2. The L2 gate measures it via
+//   relief-divergence.directionalAnisotropy (contraction → high across/along energy ratio; extension → ~1).
 function steeredNoise(noise, x, y, angle, regime, freq, sign = +1) {
   const ca = Math.cos(angle), sa = Math.sin(angle);
   const contraction = sign >= 0;

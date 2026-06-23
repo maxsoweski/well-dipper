@@ -271,7 +271,7 @@ describe('E6 editor-on-host overprint (generality)', () => {
 // append to tests/world-engine-relief-slice.test.js
 import {
   zscore, hypsometricDistance, perCellRMS, regimeHistogramDistance,
-  carveFraction, channelFraction,
+  carveFraction, channelFraction, directionalAnisotropy,
 } from '../relief-divergence.js';
 
 describe('divergence metrics', () => {
@@ -312,6 +312,21 @@ describe('divergence metrics', () => {
     const acc = Float32Array.from({ length: 100 }, (_, i) => i);
     const f = channelFraction(acc, 0.9);
     expect(f).toBeGreaterThan(0); expect(f).toBeLessThan(0.2);
+  });
+  it('directionalAnisotropy >> 1 when relief varies ACROSS strike but is smooth ALONG it', () => {
+    // grain runs east (θ=0) → across-strike = the y-axis. Build a field that ripples in y (across)
+    // and is constant in x (along): all gradient energy lands on the across-strike axis.
+    const n = 32; const h = new Float32Array(n * n); const g = new Float32Array(n * n); // θ=0 everywhere
+    for (let iy = 0; iy < n; iy++) for (let ix = 0; ix < n; ix++) h[iy * n + ix] = Math.sin(iy * 0.9);
+    expect(directionalAnisotropy(h, g, n)).toBeGreaterThan(10);   // RED→GREEN: it detects the direction
+  });
+  it('directionalAnisotropy ≈ 1 for an isotropic (direction-free) field', () => {
+    // Independent random heights have no preferred orientation → across ≈ along energy → ratio ≈ 1.
+    const n = 48; const h = new Float32Array(n * n); const g = new Float32Array(n * n); // θ=0 everywhere
+    let s = 12345; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let i = 0; i < h.length; i++) h[i] = rnd();
+    const r = directionalAnisotropy(h, g, n);
+    expect(r).toBeGreaterThan(0.7); expect(r).toBeLessThan(1.4);
   });
 });
 
@@ -355,12 +370,45 @@ describe('Layer 1 — regime un-damp', () => {
 // append to tests/world-engine-relief-slice.test.js
 import { runReliefSlice as runRS_L2 } from '../relief-slice.js';
 import { PRESETS as P_L2 } from '../relief-presets.js';
-import { hypsometricDistance as hypso_L2, perCellRMS as rms_L2 } from '../relief-divergence.js';
+import {
+  hypsometricDistance as hypso_L2,
+  directionalAnisotropy as aniso_L2,
+} from '../relief-divergence.js';
 
 describe('Layer 2 — geometry branch', () => {
   const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L2' };
-  it('held-seed hypsometric divergence of a cross-regime pair clears the reseed floor', () => {
+  const n = grid.n;
+
+  // PRIMARY L2-ATTRIBUTABLE GATE. directionalAnisotropy is the ONLY metric here that L2 (and not L1)
+  // moves: L1 only flips the regime MIX (a hypsometric/distribution change), it does NOT orient relief
+  // about the strike. L2's sign-branched steeredNoise is what makes contraction relief vary tightly
+  // ACROSS strike (long ridges/scarps, high anisotropy) vs extension relief stay blockier (~isotropic).
+  // Pre-L2 the geometry was regime-blind, so both bodies had the SAME along/across freq ratio and this
+  // metric was identical across bundles → this assert would have failed (RED). Post-L2 it differs by sign.
+  it('cross-regime anisotropy difference exceeds same-bundle reseed variation (the L2-only signal)', () => {
     // E9 OFF, SAME seed for both → only L1 regime + L2 geometry can move the field.
+    const rocky  = runRS_L2(P_L2.rocky,  { ...grid, epoch2: false });   // contraction (sign +1)
+    const europa = runRS_L2(P_L2.europa, { ...grid, epoch2: false });   // extension   (sign -1)
+    const aRocky  = aniso_L2(rocky.substrate.height,  rocky.substrate.grainAngle,  n);
+    const aEuropa = aniso_L2(europa.substrate.height, europa.substrate.grainAngle, n);
+    const crossDiff = Math.abs(aRocky - aEuropa);
+    // null baseline: SAME bundle, DIFFERENT seeds → how much this metric wiggles on a mere reshuffle.
+    const a1 = runRS_L2(P_L2.rocky, { ...grid, seed: 'L2a', epoch2: false });
+    const a2 = runRS_L2(P_L2.rocky, { ...grid, seed: 'L2b', epoch2: false });
+    const reseedVar = Math.abs(
+      aniso_L2(a1.substrate.height, a1.substrate.grainAngle, n) -
+      aniso_L2(a2.substrate.height, a2.substrate.grainAngle, n)
+    );
+    // contraction should be MORE across-strike-organised (sharper ⟂ ridges) than extension.
+    expect(aRocky).toBeGreaterThan(aEuropa);
+    // and the body-type difference must dominate the reseed wobble — this is L2's contribution.
+    expect(crossDiff).toBeGreaterThan(reseedVar);
+  });
+
+  it('held-seed hypsometric divergence of a cross-regime pair clears the reseed floor', () => {
+    // RE-LABELED (honesty): this divergence is carried PRIMARILY by L1's regime flip, NOT by L2 — L1
+    // already cleared the reseed floor pre-L2 (see task-3 report). Retained as a field-divergence sanity
+    // check that the cross-regime pair still produces a real distribution change; it does NOT credit L2.
     const rocky  = runRS_L2(P_L2.rocky,  { ...grid, epoch2: false });
     const europa = runRS_L2(P_L2.europa, { ...grid, epoch2: false });
     const cross = hypso_L2(rocky.substrate.height, europa.substrate.height);
