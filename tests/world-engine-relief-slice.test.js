@@ -495,3 +495,33 @@ describe('Layer 3 — toggleable seed discriminator', () => {
     expect(Math.abs(aOn - aOff)).toBeLessThan(0.3 * Math.abs(aOff - aEuropa));
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { runReliefSlice as runRS_L4 } from '../relief-slice.js';
+import { PRESETS as P_L4 } from '../relief-presets.js';
+import { makeBaseStep as mkBase_L4 } from '../relief-base-step.js';
+import { carveFraction as carveFrac_L4 } from '../relief-divergence.js';
+
+describe('Layer 4 — liquid-stability gate', () => {
+  const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L4' };
+  it('derives liquidStability: temperate-wet rocky high, hot-airless lava ~0', () => {
+    const rocky = mkBase_L4(P_L4.rocky, grid);
+    const lava  = mkBase_L4(P_L4.lava, grid);
+    expect(rocky.drivers.liquidStability).toBeGreaterThan(0.3);
+    expect(lava.drivers.liquidStability).toBeLessThan(0.05);
+  });
+  it('wet rocky carves a real network; airless lava/magma carve ~nothing', () => {
+    const rocky = runRS_L4(P_L4.rocky, { ...grid, epoch2: true });
+    const lava  = runRS_L4(P_L4.lava,  { ...grid, epoch2: true });
+    const magma = runRS_L4(P_L4.magma, { ...grid, epoch2: true });
+    expect(carveFrac_L4(rocky.e9.incision)).toBeGreaterThan(0.05);
+    expect(carveFrac_L4(lava.e9.incision)).toBeLessThan(0.005);
+    expect(carveFrac_L4(magma.e9.incision)).toBeLessThan(0.005);
+  });
+  it('kills the hardcoded 0.4 ocean: gated-off body has ~no standing sea', () => {
+    const lava = runRS_L4(P_L4.lava, { ...grid, epoch2: true });
+    const standingFrac = Array.from(lava.substrate.standing).filter((v) => v === 1).length
+      / lava.substrate.standing.length;
+    expect(standingFrac).toBeLessThan(0.1);   // no forced 40% ocean on an airless world
+  });
+});

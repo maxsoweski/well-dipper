@@ -103,16 +103,20 @@ export function seaLevelForFraction(height, n, frac) {
 
 export function runE9(substrate, drivers, epoch = { name: 'fluvial-carve' }, seed = 'e9') {
   const { n } = substrate; const N = n * n;
+  // L4: liquid-stability gate — airless/frozen bodies carve ~nothing (no liquid → no fluvial network).
+  const liquidStability = drivers.liquidStability ?? 1;
+  if (liquidStability <= 1e-3) {
+    return { incision: new Float32Array(N), seaLevel: -Infinity, passes: 0 };  // airless/frozen: no carve
+  }
   const PASSES = 5;                       // bounded handful (E9 verify: not 1, not ~200)
   const m = 0.45, nExp = 1.0;
-  const erodibility = 0.18 * clamp01b(0.3 + 0.7 * (drivers.surfaceHistory ?? 0)); // K base from erosion budget
+  const erodibility = 0.18 * clamp01b(0.3 + 0.7 * (drivers.surfaceHistory ?? 0))
+                      * liquidStability * (drivers.rainFactor ?? 1);   // L4: gate carve strength
   const weight = synthPrecip(substrate, drivers);
   const maturity = clamp01b(0.4 + 0.6 * (drivers.age ?? 0.5));
 
   // sea level from a volatile/temperature-derived target ocean fraction (E9 base-level step).
-  const frac = clamp01b(0.55 * clamp01b(((drivers.rockyCrust ?? 1) > 0 ? 1 : 1)) *
-                        clamp01b(0.2 + 0.8 * ((substrate.height && 1))) ); // simple 0.4-ish default
-  const targetFrac = 0.4;                 // slice default; harness GUI overrides
+  const targetFrac = clamp01b(0.5 * liquidStability);   // L4: ocean fraction from liquid stability (was 0.4)
   let seaLevel = seaLevelForFraction(substrate.height, n, targetFrac);
 
   const incision = new Float32Array(N);   // accumulates ≤0

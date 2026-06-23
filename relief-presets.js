@@ -19,8 +19,10 @@
 //     only rescaled in height. (This is exactly the "presets just change amplitude" UAT observation, 2026-06-23.)
 //   • radialStrainSign (contraction→scarps vs expansion→grabens) is now UN-DAMPED (Layer 1): it flips the
 //     Anderson regime per body (rocky→THRUST-leaning; icy/molten→NORMAL-leaning). Regime divergence is live.
-//   • Ocean fraction is hardcoded 0.4 (ignores volatiles/T_eq); precip is latitude-only; palette is height-only
-//     (Europa is NOT icy-colored); `age` is the default 0.5 for every preset (absent from the bundle).
+//   • Ocean fraction + carve are now GATED by liquidStability (Layer 4): airless/hot bodies carve ~nothing
+//     and have no forced ocean; temperate-wet bodies carve a full network. The hardcoded 0.4 is gone.
+//     (precip is still latitude-only; palette is height-only — Europa is NOT icy-colored; `age` is the
+//     default 0.5 for every preset, absent from the bundle.)
 // To make presets diverge STRUCTURALLY (future work, not yet scoped): fold composition into the seed/pattern
 //   (not just amplitude); derive ocean fraction from volatiles+T_eq; branch ice-vs-silicate
 //   texture/erosion modes; add a preset-aware palette + temperature-driven precip.

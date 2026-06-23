@@ -44,6 +44,28 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 're
   const shellThickness = clamp01(0.3 + 0.5 * smoothstep(0.5, 9, surfaceGravity) + 0.2 * (1 - age));
   const despinAmp = clamp01(0.3 + 0.7 * age);
 
+  // L4: liquidStability — canonical production gate, copied verbatim (NOT invented).
+  //   temp + volatile gates: EXACT copy of planet-lod-lab-core.js:558-560 / :548.
+  const T = d.T_eq ?? 280;
+  const volatileFraction = d.composition?.volatileFraction ?? 0.15;
+  const volatileGate = smoothstep(0.05, 0.2, volatileFraction);                       // D2
+  const waterWindow   = smoothstep(248, 273, T) * (1 - smoothstep(373, 398, T));
+  const methaneWindow = smoothstep(85, 90, T)   * (1 - smoothstep(112, 120, T));
+  const tempWindow = Math.max(waterWindow, methaneWindow);                            // D1
+  //   retention gate (D6): reconstruct retained/pressure via the Jeans chain (PhysicsEngine.js:96-100,
+  //   :111, :184-187, :218-239). uvStripFactor DROPPED (documented, spec §6 — no luminosityRel/orbitAU).
+  const T_exo = 3.5 * T;                                                              // PhysicsEngine.js:111
+  const kB = 1.380649e-23, mp = 1.6726e-27, G = 6.674e-11, Mearth = 5.972e24, Rearth = 6.371e6;
+  const massKg = (d.massEarth ?? 1) * Mearth, radM = (d.radiusEarth ?? 1) * Rearth;
+  const vEsc2 = 2 * G * massKg / radM;
+  const jeans = (molarMass) => (molarMass * mp * vEsc2) / (2 * kB * T_exo);           // λ for a species
+  const retained = jeans(28) > 6;                                                     // N2, λ>6 (PE:184-187)
+  const pressure = retained ? clamp01(0.3 + 0.8 * (d.massEarth ?? 1)) : 0;            // PE:218 secondary-atmo
+  const retentionGate = retained ? smoothstep(0.05, 0.3, pressure) : 0;              // planet-lod-lab-core:546
+  const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);        // :561
+  const liquidSpecies = methaneWindow > waterWindow ? 1 : 0;                          // :562 (0 water,1 methane)
+  const rainFactor = (waterWindow > 0 && retained) ? 1.0 : (retained ? 0.2 : 0);      // proxy (spec §3 L4)
+
   // L3: physics discriminator — folds composition/regime into the seed so the LAYOUT is composition-keyed.
   // Derived from already-computed geophysics (never invented). TOGGLEABLE: the verifier runs it OFF to
   // measure the held-seed (L1+L2) baseline; ON adds the secondary reseed lift. NOT the decisive gate.
@@ -63,7 +85,8 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 're
 
   const substrate = makeSubstrate({ n, lat0Deg, lat1Deg, domainKm });
   const drivers = { tidalHeat, surfaceGravity, rockyCrust, surfaceHistory, age,
-                    radialStrainSign, radialStrainMag, despinAmp, discriminator, useDiscriminator };
+                    radialStrainSign, radialStrainMag, despinAmp,
+                    discriminator, useDiscriminator, liquidStability, liquidSpecies, rainFactor };
   const crust = { shellThickness, thicknessBlob };
   return { drivers, crust, substrate };
 }
