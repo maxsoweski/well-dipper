@@ -106,7 +106,6 @@ Expected: FAIL — `Failed to resolve import '../relief-divergence.js'`.
 //   reseed-INVARIANT component (held-seed gate); perCellRMS is reseed-SENSITIVE and DIAGNOSTIC ONLY.
 // Deliberate non-goals: not a renderer; not preset-aware; does not run the slice (orchestration lives in
 //   relief-slice.js divergenceReport). It only measures arrays handed to it.
-import { REGIME } from './relief-substrate.js';
 
 export function zscore(arr) {
   const n = arr.length, out = new Float64Array(n);
@@ -159,7 +158,7 @@ export function channelFraction(flowAccum, pct = 0.9) {
   return c / (flowAccum.length || 1);
 }
 ```
-(`REGIME` import is kept for readability/intent even though the histogram indexes 0–2 directly.)
+(`relief-divergence.js` has no imports — every metric is self-contained on the arrays passed in.)
 
 - [ ] **Step 4: Run tests, verify they pass**
 
@@ -351,7 +350,7 @@ In `runE6`, update the call (currently :85):
 
 Run: `npx vitest run tests/world-engine-relief-slice.test.js -t "Layer 2"` → Expected: PASS.
 Run: `npx vitest run tests/world-engine-relief-slice.test.js` → Expected: PASS (whole file; determinism + north-star core gate tests still green).
-> If the cross-regime hypsometric does not beat the floor even after tuning `fScale/along/across` and `REGIME_GAIN`, this is an early-warning toward the **Task 5.5 early-exit** — note the values, do not over-tune.
+> If the cross-regime hypsometric does not beat the floor even after tuning `fScale/along/across` and `REGIME_GAIN`, this is an early-warning toward the **Task 4.5 early-exit** — note the values, do not over-tune.
 
 - [ ] **Step 6: Commit**
 
@@ -473,7 +472,7 @@ git commit -m "feat(relief L3): toggleable physics-discriminator seed re-key"
 
 ---
 
-### Task 5.5: EARLY-EXIT CHECKPOINT (decision gate — not code)
+### Task 4.5: EARLY-EXIT CHECKPOINT (decision gate — not code)
 
 **This is a STOP-or-GO decision, performed by the driver (working-Claude / reviewer), not a subagent.** After Layers 1–3, evaluate the hardened early-exit rule (spec §3/§5):
 
@@ -752,7 +751,7 @@ describe('§9 decisive divergence gate', () => {
 - [ ] **Step 3: Run, tune, lock**
 
 Run: `npx vitest run tests/world-engine-relief-slice.test.js -t "decisive divergence gate"`.
-If a relative assertion is marginal, tune `REGIME_GAIN` (Layer 1) and the L2 `fScale/along/across` constants in the harness/test until separation is clean, then **lock** them with a `// LOCKED <date>: <value>, validated vs null(~0)+reseed-floor` comment. The `* 1.5` margin and `0.05`/`0.1` constants are the locked thresholds — adjust once, comment, freeze. **Honor the early-exit (Task 5.5): if the cross-regime field pass cannot be achieved without the carve axis, STOP and report.**
+If a relative assertion is marginal, tune `REGIME_GAIN` (Layer 1) and the L2 `fScale/along/across` constants in the harness/test until separation is clean, then **lock** them with a `// LOCKED <date>: <value>, validated vs null(~0)+reseed-floor` comment. The `* 1.5` margin and `0.05`/`0.1` constants are the locked thresholds — adjust once, comment, freeze. **Honor the early-exit (Task 4.5): if the cross-regime field pass cannot be achieved without the carve axis, STOP and report.**
 
 - [ ] **Step 4: Full suite green**
 
@@ -812,7 +811,7 @@ Report `VERIFIED_PENDING_MAX <sha>`. **UAT — "three categorically different wo
 - §3 Layer 1 → Task 2 ✅ · Layer 2 → Task 3 ✅ · Layer 3 (toggleable) → Task 4 ✅ · Layer 4 (3 sites) → Task 5 ✅ · Layer 5 → Task 6 ✅
 - §5 verifier (4 metrics) → Task 1 primitives + Task 7 `divergenceReport` ✅ (carveFraction=metric1, channelFraction=metric2, regimeHistogramDistance=metric3, hypsometricDistance=metric4 load-bearing) ✅
 - §5/§9 hardened decisive gate (held-seed, reseed-invariant, regime-corroborated, same-regime→carve) → Task 7 ✅
-- Early-exit rule (hardened) → Task 5.5 ✅
+- Early-exit rule (hardened) → Task 4.5 ✅
 - §3 build-requirement: toggleable discriminator → Task 4 ✅
 - §7 input gap (Jeans reconstruction, uvStripFactor dropped) → Task 5 Step 3 ✅
 - record-build-intent on every module → folded into Tasks 1/2/5/8 ✅
