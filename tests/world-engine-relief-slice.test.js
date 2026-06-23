@@ -525,3 +525,28 @@ describe('Layer 4 — liquid-stability gate', () => {
     expect(standingFrac).toBeLessThan(0.1);   // no forced 40% ocean on an airless world
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { PRESETS as P_L5 } from '../relief-presets.js';
+import { makeBaseStep as mkBase_L5 } from '../relief-base-step.js';
+import { runReliefSlice as runRS_L5 } from '../relief-slice.js';
+import { carveFraction as carveFrac_L5 } from '../relief-divergence.js';
+
+describe('Layer 5 — terrestrial bundle', () => {
+  const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L5' };
+  it('terrestrial exists, is silicate, and is fully liquid-stable', () => {
+    expect(P_L5.terrestrial).toBeDefined();
+    const t = mkBase_L5(P_L5.terrestrial, grid);
+    expect(t.drivers.rockyCrust).toBeGreaterThan(0.9);          // density 5.5 → silicate
+    expect(t.drivers.liquidStability).toBeGreaterThan(0.5);     // temperate + volatile-rich + retained
+  });
+  it('the wet/frozen/airless trio is categorically separated by carve', () => {
+    const terr = runRS_L5(P_L5.terrestrial, { ...grid, epoch2: true });
+    const euro = runRS_L5(P_L5.europa,      { ...grid, epoch2: true });
+    const lava = runRS_L5(P_L5.lava,        { ...grid, epoch2: true });
+    expect(carveFrac_L5(terr.e9.incision)).toBeGreaterThan(0.05);   // wet carves
+    expect(carveFrac_L5(lava.e9.incision)).toBeLessThan(0.005);     // airless bare
+    // europa frozen-water but methane-window cold: carves little-to-nothing vs terrestrial
+    expect(carveFrac_L5(terr.e9.incision)).toBeGreaterThan(carveFrac_L5(euro.e9.incision));
+  });
+});

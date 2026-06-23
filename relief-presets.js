@@ -31,4 +31,9 @@ export const PRESETS = {
   lava:   { composition:{ ironFraction:0.7,  density:7.0, volatileFraction:0.02 }, T_eq:950,  eccentricity:0.15,  orbitRadiusEarth:938,   starMassEarth:332946, radiusEarth:0.9, massEarth:0.65,  surfaceHistory:{ erosion:0.0 } },
   magma:  { composition:{ ironFraction:0.4,  density:8.0, volatileFraction:0.0  }, T_eq:2000, eccentricity:0.01,  orbitRadiusEarth:212,   starMassEarth:332946, radiusEarth:1.5, massEarth:5.0,   surfaceHistory:{ erosion:0.0 } },
   europa: { composition:{ ironFraction:0.2,  density:2.0, volatileFraction:0.5  }, T_eq:110,  eccentricity:0.1,   orbitRadiusEarth:2500,  starMassEarth:332946, radiusEarth:0.5, massEarth:0.07,  surfaceHistory:{ erosion:0.05 } },
+  // L5: temperate liquid-water "terrestrial" body — completes the wet/frozen/airless trio
+  // (terrestrial wet-carves / europa methane-window / lava airless). density 5.5 → rockyCrust=1.0;
+  // T_eq 290 + volatileFraction 0.4 + N2-retained → liquidStability=1.0; erosion 0.6 → strong carve.
+  // Numbers are TO-BE-TUNED-then-locked targets (final lock in Task 7).
+  terrestrial: { composition:{ ironFraction:0.33, density:5.5, volatileFraction:0.4 }, T_eq:290, eccentricity:0.01, orbitRadiusEarth:23455, starMassEarth:332946, radiusEarth:1.0, massEarth:1.0, surfaceHistory:{ erosion:0.6 } },
 };
