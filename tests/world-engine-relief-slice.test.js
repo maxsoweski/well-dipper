@@ -69,3 +69,37 @@ describe('base step', () => {
     expect(() => makeBaseStep({}, grid)).not.toThrow();
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { makeSubstrate as mkSub2, REGIME as RG, latDegOfRow as latRow } from '../relief-substrate.js';
+import { stressAtLat, writeGrain } from '../relief-e6-tectonic.js';
+
+describe('E6 Melosh latitude stress', () => {
+  const drivers = { radialStrainSign: +1, radialStrainMag: 0, despinAmp: 1, surfaceGravity: 1 };
+  it('equator → thrust (both horizontal stresses compressive)', () => {
+    const r = stressAtLat(0, drivers);
+    expect(r.regime).toBe(RG.THRUST);
+  });
+  it('pole → normal (both tensile)', () => {
+    const r = stressAtLat(85, drivers);
+    expect(r.regime).toBe(RG.NORMAL);
+  });
+  it('mid-latitude (~48°) → strike-slip (stresses straddle zero)', () => {
+    const r = stressAtLat(48, drivers);
+    expect(r.regime).toBe(RG.STRIKESLIP);
+  });
+  it('contraction sign biases toward thrust vs expansion toward normal at the same latitude', () => {
+    const lat = 50;
+    const contract = stressAtLat(lat, { ...drivers, radialStrainSign:+1, radialStrainMag:0.3 });
+    const expand   = stressAtLat(lat, { ...drivers, radialStrainSign:-1, radialStrainMag:0.3 });
+    // more compression under contraction → regime index >= expansion's (THRUST=2 > STRIKESLIP=1 > NORMAL=0)
+    expect(contract.regime).toBeGreaterThanOrEqual(expand.regime);
+  });
+  it('writeGrain fills regime that varies across the latitude band', () => {
+    const s = mkSub2({ n: 32, lat0Deg: 0, lat1Deg: 85, domainKm: 4000 });
+    writeGrain(s, drivers);
+    const regimes = new Set(Array.from(s.regime));
+    expect(regimes.size).toBeGreaterThan(1);            // not a single regime everywhere
+    expect(s.grainMag.some(v => v > 0)).toBe(true);
+  });
+});
