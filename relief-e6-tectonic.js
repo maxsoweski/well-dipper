@@ -66,12 +66,18 @@ function reliefGravityFactor(g) {
   return Math.min(2.5, Math.max(0.4, f));
 }
 
-// Anisotropic steered noise: sample simplex in a frame rotated to the grain angle, stretched along
-// strike (lineaments are long). Ridged (1-|n|) for compressional grain, billow (|n|) otherwise.
-function steeredNoise(noise, x, y, angle, regime, freq) {
+// Anisotropic steered noise. L2: regime/sign branches the spatial GEOMETRY —
+//   contraction (sign +1): LOW base freq + HIGH along-strike elongation → long parallel scarp ridges (F5).
+//   extension  (sign -1): HIGHER base freq + blockier aspect → graben spacing / horst-and-graben (F4/F5).
+// All ratio constants TO-BE-TUNED-IN-LAB-then-locked (Task 7).
+function steeredNoise(noise, x, y, angle, regime, freq, sign = +1) {
   const ca = Math.cos(angle), sa = Math.sin(angle);
-  const u = (x * ca + y * sa) * freq * 0.35;   // along strike: lower freq (elongated)
-  const v = (-x * sa + y * ca) * freq * 1.6;    // across strike: higher freq (tight ridges)
+  const contraction = sign >= 0;
+  const fScale  = contraction ? 0.7 : 1.5;          // contraction = lower freq (longer lineaments)
+  const along   = contraction ? 0.25 : 0.55;        // contraction = more elongated along strike
+  const across  = contraction ? 1.9 : 1.2;          // contraction = tighter across strike (sharp ridges)
+  const u = (x * ca + y * sa) * freq * fScale * along;
+  const v = (-x * sa + y * ca) * freq * fScale * across;
   const nVal = noise(u, v);
   return regime === REGIME.NORMAL ? Math.abs(nVal) - 0.5 : 0.5 - Math.abs(nVal); // ridges vs grabens
 }
@@ -92,7 +98,8 @@ export function runE6(substrate, crust, drivers, epoch = { name: 'tectonic-build
       const i = iy * n + ix;
       const x = ix / n, y = iy / n;
       // Step 3: steered grain relief.
-      let h = steeredNoise(noise, x, y, substrate.grainAngle[i], substrate.regime[i], 9.0)
+      let h = steeredNoise(noise, x, y, substrate.grainAngle[i], substrate.regime[i], 9.0,
+                           drivers.radialStrainSign ?? +1)
                 * substrate.grainMag[i];
       // Step 4: plateau/tessera — isostatic uplift on thick-crust blobs, capped by 1/√g.
       const blob = crust.thicknessBlob(ix, iy, n);

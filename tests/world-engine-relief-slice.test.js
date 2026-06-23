@@ -351,3 +351,24 @@ describe('Layer 1 — regime un-damp', () => {
     expect(new Set(Array.from(europa.substrate.regime)).size).toBeGreaterThan(1);
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { runReliefSlice as runRS_L2 } from '../relief-slice.js';
+import { PRESETS as P_L2 } from '../relief-presets.js';
+import { hypsometricDistance as hypso_L2, perCellRMS as rms_L2 } from '../relief-divergence.js';
+
+describe('Layer 2 — geometry branch', () => {
+  const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L2' };
+  it('held-seed hypsometric divergence of a cross-regime pair clears the reseed floor', () => {
+    // E9 OFF, SAME seed for both → only L1 regime + L2 geometry can move the field.
+    const rocky  = runRS_L2(P_L2.rocky,  { ...grid, epoch2: false });
+    const europa = runRS_L2(P_L2.europa, { ...grid, epoch2: false });
+    const cross = hypso_L2(rocky.substrate.height, europa.substrate.height);
+    // reseed floor: SAME bundle, DIFFERENT seed (a reshuffle of the same world).
+    const a1 = runRS_L2(P_L2.rocky, { ...grid, seed: 'L2a', epoch2: false });
+    const a2 = runRS_L2(P_L2.rocky, { ...grid, seed: 'L2b', epoch2: false });
+    const floor = hypso_L2(a1.substrate.height, a2.substrate.height);
+    expect(cross).toBeGreaterThan(floor);                  // physics beats a mere reseed
+    expect(cross).toBeGreaterThan(0.02);
+  });
+});
