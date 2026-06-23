@@ -211,3 +211,38 @@ describe('E9 incision (the host edit)', () => {
     expect(passes).toBeGreaterThanOrEqual(3); expect(passes).toBeLessThanOrEqual(12);
   });
 });
+
+import { runReliefSlice, verifyReliefSlice } from '../relief-slice.js';
+import { PRESETS as P7 } from '../relief-presets.js';
+
+describe('relief slice orchestrator', () => {
+  it('build-only and build+carve are bit-identical THROUGH epoch 1', () => {
+    const carve = runReliefSlice(P7.rocky, { n: 64, seed: 's', epoch2: true });
+    const buildOnly = runReliefSlice(P7.rocky, { n: 64, seed: 's', epoch2: false });
+    // heightAfterBuild is captured pre-carve in both → must match exactly
+    expect(Array.from(carve.heightAfterBuild)).toEqual(Array.from(buildOnly.heightAfterBuild));
+    // build-only final height == its post-build snapshot (no carve ran)
+    expect(Array.from(buildOnly.substrate.height)).toEqual(Array.from(buildOnly.heightAfterBuild));
+  });
+  it('enabling epoch 2 only lowers height (valleys overprint)', () => {
+    const r = runReliefSlice(P7.rocky, { n: 64, seed: 's2', epoch2: true });
+    for (let i = 0; i < r.substrate.height.length; i++)
+      expect(r.substrate.height[i]).toBeLessThanOrEqual(r.heightAfterBuild[i] + 1e-6);
+  });
+  it('passes the north-star verifier on the Rocky control', () => {
+    const r = runReliefSlice(P7.rocky, { n: 96, seed: 's3', epoch2: true });
+    const v = verifyReliefSlice(r);
+    expect(v.signals.subtractive).toBe(true);
+    expect(v.signals.carveCorrelatesRelief).toBe(true);
+    expect(v.signals.noUphill).toBe(true);
+    expect(v.signals.depressionsFilled).toBe(true);
+    expect(v.signals.hackExponent).toBeGreaterThan(0.4);
+    expect(v.signals.hackExponent).toBeLessThan(0.8);
+    expect(v.pass).toBe(true);
+  });
+  it('is deterministic end-to-end', () => {
+    const a = runReliefSlice(P7.lava, { n: 64, seed: 'det' });
+    const b = runReliefSlice(P7.lava, { n: 64, seed: 'det' });
+    expect(Array.from(a.substrate.height)).toEqual(Array.from(b.substrate.height));
+  });
+});
