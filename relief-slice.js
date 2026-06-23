@@ -18,6 +18,8 @@ import { makeBaseStep } from './relief-base-step.js';
 import { runE6 } from './relief-e6-tectonic.js';
 import { runE9, d8Receivers, priorityFloodFill } from './relief-e9-hydrology.js';
 import { cloneHeight } from './relief-substrate.js';
+import { hypsometricDistance, perCellRMS, regimeHistogramDistance,
+         directionalAnisotropy, carveFraction } from './relief-divergence.js';
 
 export function runReliefSlice(driverBundle, opts = {}) {
   const params = { n: 256, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'slice',
@@ -36,6 +38,42 @@ export function runReliefSlice(driverBundle, opts = {}) {
             blend: params.overprint.blend ?? 0.4 }, params.seed + ':op');
   }
   return { substrate, drivers, crust, heightAfterBuild, heightAfterCarve, e9, params };
+}
+
+// LOCKED thresholds (validate vs null=identical-bundle ~0 AND reseed runs=same-bundle-diff-seed before freezing).
+const REGIME_DIVERGE = 0.2;   // regime-class TV: cross-regime ~0.7-1.0, same-regime/null ~0
+const HYDRO_DIVERGE  = 0.3;   // |liquidStability| gap: europa(1.0) vs lava(0.0)=1.0; rocky(0.74) vs terr(1.0)=0.26 (same category, correctly not-different)
+const CARVE_DIVERGE  = 0.05;  // |carveFraction| gap
+
+// Decisive §5/§9 gate. PASS iff a pair diverges on >=1 ROBUST, RESEED-INVARIANT, PHYSICS-CARRIED axis:
+// tectonic regime (L1) OR hydrology/liquid-stability (L4) OR fluvial carve (L4). All invariant to a Layer-3
+// reseed -> a reshuffle of the same world cannot pass. directional anisotropy (L2, flips with regime sign ->
+// redundant as a gate term) and held-seed hypsometric (reseed-invariant but EMPIRICALLY seed-fragile across
+// regimes) are REPORTED to credit/corroborate, NOT gated.
+export function divergenceReport(bundleA, bundleB, { n = 192, seed = 'gate' } = {}) {
+  const held  = (b, s) => runReliefSlice(b, { n, seed: s, epoch2: false, discriminate: false });
+  const carve = (b)    => runReliefSlice(b, { n, seed,     epoch2: true,  discriminate: true  });
+  const a0 = held(bundleA, seed), b0 = held(bundleB, seed);
+  const aR1 = held(bundleA, seed + 'A'), aR2 = held(bundleA, seed + 'B');   // reseed floor (same bundle)
+  const cA = carve(bundleA), cB = carve(bundleB);
+  // robust GATE axes
+  const regimeDist = regimeHistogramDistance(a0.substrate.regime, b0.substrate.regime);
+  const lsA = a0.drivers.liquidStability ?? 1, lsB = b0.drivers.liquidStability ?? 1;
+  const hydroDist  = Math.abs(lsA - lsB);
+  const carveA = carveFraction(cA.e9?.incision ?? new Float32Array(n * n));
+  const carveB = carveFraction(cB.e9?.incision ?? new Float32Array(n * n));
+  const carveDist = Math.abs(carveA - carveB);
+  // REPORTED corroboration (not gated)
+  const anisoA = directionalAnisotropy(a0.substrate.height, a0.substrate.grainAngle, n);
+  const anisoB = directionalAnisotropy(b0.substrate.height, b0.substrate.grainAngle, n);
+  const heldSeedHypso = hypsometricDistance(a0.substrate.height, b0.substrate.height);
+  const reseedFloor   = hypsometricDistance(aR1.substrate.height, aR2.substrate.height);
+  const perCell       = perCellRMS(a0.substrate.height, b0.substrate.height);
+  const regimePass = regimeDist > REGIME_DIVERGE, hydroPass = hydroDist > HYDRO_DIVERGE, carvePass = carveDist > CARVE_DIVERGE;
+  const pass = regimePass || hydroPass || carvePass;
+  const reason = [regimePass && 'regime', hydroPass && 'hydrology', carvePass && 'carve'].filter(Boolean).join('+') || 'none';
+  return { pass, reason, regimeDist, hydroDist, carveDist, carveA, carveB, lsA, lsB,
+           anisoA, anisoB, heldSeedHypso, reseedFloor, perCellRMS: perCell };
 }
 
 export function verifyReliefSlice(result) {

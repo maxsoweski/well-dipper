@@ -550,3 +550,33 @@ describe('Layer 5 — terrestrial bundle', () => {
     expect(carveFrac_L5(terr.e9.incision)).toBeGreaterThan(carveFrac_L5(euro.e9.incision));
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { divergenceReport } from '../relief-slice.js';
+import { PRESETS as P_G } from '../relief-presets.js';
+
+describe('§9 decisive divergence gate', () => {
+  it('cross-regime pair (terrestrial vs europa) passes via tectonic regime', () => {
+    const r = divergenceReport(P_G.terrestrial, P_G.europa, { n: 192, seed: 'gate1' });
+    expect(r.regimeDist).toBeGreaterThan(0.2);     // +1 contraction vs -1 extension
+    expect(r.pass).toBe(true);
+    expect(r.reason).toContain('regime');
+  });
+  it('same-regime pair (europa vs lava) passes via the HYDROLOGY axis', () => {
+    const r = divergenceReport(P_G.europa, P_G.lava, { n: 192, seed: 'gate2' });
+    expect(r.hydroDist).toBeGreaterThan(0.3);      // europa ls~1.0 (methane) vs lava ls~0.0 (airless)
+    expect(r.pass).toBe(true);
+    expect(r.reason).toContain('hydrology');
+  });
+  it('NULL: identical bundle never passes (reseed-invariant gate cannot be fooled)', () => {
+    const r = divergenceReport(P_G.rocky, P_G.rocky, { n: 192, seed: 'gate3' });
+    expect(r.regimeDist).toBeCloseTo(0, 6);
+    expect(r.hydroDist).toBeCloseTo(0, 6);
+    expect(r.carveDist).toBeCloseTo(0, 6);
+    expect(r.pass).toBe(false);
+  });
+  it('reports corroborating anisotropy (L2 credit): contraction terrestrial > extension europa', () => {
+    const r = divergenceReport(P_G.terrestrial, P_G.europa, { n: 192, seed: 'gate4' });
+    expect(r.anisoA).toBeGreaterThan(r.anisoB);
+  });
+});

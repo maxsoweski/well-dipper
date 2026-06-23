@@ -13,9 +13,12 @@ const DEG = Math.PI / 180;
 
 // L1: regime gain — eps as a fraction of the despin stress span. SHIFTS regime bands per body without
 // collapsing all bands into one regime. Must keep EVERY preset banded (≥2 Anderson regime classes).
-// The highest-mag preset (europa, mag ≈ 0.87) saturates to 100% NORMAL above its computed ceiling
-// of ~0.44; 0.4 sits below that with margin (europa ≈ NORMAL 80% / STRIKESLIP 5% / THRUST 15% @ n=96).
-// TO-BE-TUNED placeholder — final value is locked in the lab in Task 7.
+// The highest-mag preset (europa, mag ≈ 0.87) saturates to 100% in one class above its computed ceiling
+// of ~0.44; 0.4 sits below that with margin.
+// LOCKED 2026-06-23: 0.4, europa banding ceiling ~0.44, validated. Task-7 banding sweep @ n=96 confirms
+//   every preset keeps ≥2 Anderson regime classes (rocky 2, lava 3, magma 3, europa 3, terrestrial 2),
+//   so the regime axis stays a live, reseed-invariant divergence signal for the §9 gate. Do NOT change
+//   without re-running the banding check (no preset may collapse to a single regime).
 const REGIME_GAIN = 0.4;
 
 export function stressAtLat(latDeg, drivers) {
@@ -69,7 +72,11 @@ function reliefGravityFactor(g) {
 // Anisotropic steered noise. L2: regime/sign branches the spatial GEOMETRY —
 //   contraction (sign +1): LOW base freq + HIGH along-strike elongation → long parallel scarp ridges (F5).
 //   extension  (sign -1): HIGHER base freq + blockier aspect → graben spacing / horst-and-graben (F4/F5).
-// All ratio constants TO-BE-TUNED-IN-LAB-then-locked (Task 7).
+// LOCKED 2026-06-23 (Task 7): fScale {0.7|1.5}, along {0.25|0.55}, across {1.9|1.2}. These produce the
+//   directional-anisotropy split the §9 gate REPORTS as corroboration (contraction terrestrial anisoA≈12-15
+//   ≫ extension europa anisoB≈2 at n=192). Anisotropy is REPORTED, not gated (it flips with regime sign, so
+//   it is redundant with the regime gate term); these constants govern that reported credit, not the PASS.
+//   Do NOT change values without re-validating that contraction anisotropy stays well above extension.
 // ATTRIBUTION (test-validity): L1 (regime) carries the held-seed HYPSOMETRIC divergence — it flips the
 //   Anderson regime mix per body, a distribution-shape change. L2 (this sign branch) carries DIRECTIONAL
 //   ANISOTROPY — how relief is oriented about the strike (tight across-strike ridges vs blocky). Those are
