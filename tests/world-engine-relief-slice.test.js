@@ -267,3 +267,50 @@ describe('E6 editor-on-host overprint (generality)', () => {
     expect(maxAbs).toBeLessThan(1.0);          // but it's a faint blend, not a rebuild
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import {
+  zscore, hypsometricDistance, perCellRMS, regimeHistogramDistance,
+  carveFraction, channelFraction,
+} from '../relief-divergence.js';
+
+describe('divergence metrics', () => {
+  it('zscore yields mean ~0 and std ~1', () => {
+    const z = zscore(Float32Array.from([1, 2, 3, 4, 5]));
+    const mean = z.reduce((a, b) => a + b, 0) / z.length;
+    const std = Math.sqrt(z.reduce((a, b) => a + b * b, 0) / z.length);
+    expect(mean).toBeCloseTo(0, 6);
+    expect(std).toBeCloseTo(1, 6);
+  });
+  it('hypsometricDistance ~0 for a pure amplitude rescale (the OLD coat-swap reads as no divergence)', () => {
+    const a = Float32Array.from({ length: 400 }, (_, i) => Math.sin(i * 0.3));
+    const b = Float32Array.from(a, (v) => v * 7.5);          // same shape, 7.5x amplitude
+    expect(hypsometricDistance(a, b)).toBeLessThan(1e-6);
+  });
+  it('hypsometricDistance > 0 when the DISTRIBUTION SHAPE differs (skewed vs symmetric)', () => {
+    const sym  = Float32Array.from({ length: 400 }, (_, i) => Math.sin(i * 0.3));            // ~symmetric
+    const skew = Float32Array.from({ length: 400 }, (_, i) => Math.pow(Math.abs(Math.sin(i * 0.3)), 3)); // skewed
+    expect(hypsometricDistance(sym, skew)).toBeGreaterThan(0.05);
+  });
+  it('perCellRMS is large for a reshuffle even when the distribution is identical', () => {
+    const a = Float32Array.from({ length: 400 }, (_, i) => Math.sin(i * 0.3));
+    const b = Float32Array.from(a).reverse();                // same multiset, different arrangement
+    expect(hypsometricDistance(a, b)).toBeLessThan(0.05);    // distribution ~unchanged
+    expect(perCellRMS(a, b)).toBeGreaterThan(0.5);           // but per-cell saturates (reseed-sensitive)
+  });
+  it('regimeHistogramDistance is 0 for identical class mixes, positive when classes shift', () => {
+    const a = Uint8Array.from([0, 0, 1, 2]);
+    const b = Uint8Array.from([0, 0, 1, 2]);
+    const c = Uint8Array.from([2, 2, 2, 2]);
+    expect(regimeHistogramDistance(a, b)).toBeCloseTo(0, 6);
+    expect(regimeHistogramDistance(a, c)).toBeGreaterThan(0.4);
+  });
+  it('carveFraction counts incised cells', () => {
+    expect(carveFraction(Float32Array.from([0, -0.01, -1e-9, -0.5]))).toBeCloseTo(0.5, 6);
+  });
+  it('channelFraction is in (0,1)', () => {
+    const acc = Float32Array.from({ length: 100 }, (_, i) => i);
+    const f = channelFraction(acc, 0.9);
+    expect(f).toBeGreaterThan(0); expect(f).toBeLessThan(0.2);
+  });
+});
