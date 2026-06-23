@@ -1,7 +1,7 @@
 # World-Engine — MASTER PICKUP INDEX (read THIS first)
 
 **Status:** FIRST SLICE BUILT + **Max UAT-PASSED 2026-06-23** (`90b66f7`); brainstorm gate cleared 2026-06-22.
-**RELIEF BODY-TYPE DIVERGENCE BUILD: objective gate GREEN, `VERIFIED_PENDING_MAX <new-sha>` (was `842b649` pre-harness).**
+**RELIEF BODY-TYPE DIVERGENCE BUILD: objective gate GREEN, `VERIFIED_PENDING_MAX 0d3c1f1` (build pre-harness `842b649`).**
 The relief slice now produces **categorically different worlds per body type** (not amplitude-only); decisive
 gate = `divergenceReport` (regime | hydrology | carve, reseed-invariant); 61/61 vitest pass. **UAT — "three
 categorically different worlds at one seed" — is MAX'S GATE ALONE; no agent closes it.** Push remains HOLD.
