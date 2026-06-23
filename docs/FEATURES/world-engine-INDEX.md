@@ -1,9 +1,12 @@
 # World-Engine — MASTER PICKUP INDEX (read THIS first)
 
 **Status:** FIRST SLICE BUILT + **Max UAT-PASSED 2026-06-23** (`90b66f7`); brainstorm gate cleared 2026-06-22.
-**RELIEF BODY-TYPE DIVERGENCE BUILD: objective gate GREEN, `VERIFIED_PENDING_MAX 0d3c1f1` (build pre-harness `842b649`).**
+**RELIEF BODY-TYPE DIVERGENCE BUILD: objective gate GREEN + LIVE-VERIFIED, `VERIFIED_PENDING_MAX ef63554`.**
 The relief slice now produces **categorically different worlds per body type** (not amplitude-only); decisive
-gate = `divergenceReport` (regime | hydrology | carve, reseed-invariant); 61/61 vitest pass. **UAT — "three
+gate = `divergenceReport` (regime | hydrology | carve, reseed-invariant); **63/63 vitest pass** + whole-branch
+review clean. **Live integration check (chrome-devtools, lab on :5173) PASSED 2026-06-23:** at one seed the
+terrestrial/europa/lava trio diverges by the right axes (terr-vs-europa regime+carve; europa-vs-lava hydrology;
+NULL rocky-vs-rocky fails 0/0/0) and the renderer expresses each field (screenshots `screenshots/relief-divergence-{terrestrial,europa,lava}.png`). **UAT — "three
 categorically different worlds at one seed" — is MAX'S GATE ALONE; no agent closes it.** Push remains HOLD.
 Spec: `docs/superpowers/specs/2026-06-23-world-engine-body-divergence-design.md`; plan: `docs/superpowers/plans/2026-06-23-world-engine-body-divergence.md`; SDD task briefs + reports in `.superpowers/sdd/`.
 Repo `~/projects/well-dipper`, branch `master`, **everything local — nothing pushed (Max: HOLD).**
