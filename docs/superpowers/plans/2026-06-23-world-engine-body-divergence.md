@@ -679,44 +679,61 @@ git commit -m "feat(relief L5): add temperate terrestrial bundle (wet/frozen/air
 
 ---
 
-### Task 7: Lock thresholds + the decisive divergence gate (`divergenceReport` + §9 success gate)
+### Task 7: Decisive divergence gate (`divergenceReport`) + lock tuning  ⚠ REVISED per build findings
 
-Add the orchestrating verifier and the locked, validated decisive gate as an automated test (objective half of the §9 success gate). UAT remains Max's alone.
+> **Why revised (empirical, from the build):** the original plan made the held-seed **hypsometric** distance the load-bearing decisive metric. A 15-seed sweep (Task 4) showed it is **seed-fragile across regimes** — for some master seeds two different-regime bodies have nearly-identical height *distributions*. The robust, reseed-INVARIANT, physics-carried divergence signals are **tectonic regime (L1)** and the **hydrology axis (L4: liquidStability / carve)**. Directional **anisotropy (L2)** flips perfectly with regime sign (so it's redundant as a gate term) and **hypsometric** is too noisy — both are kept as **reported corroboration, not gate terms**. This preserves the assessment's principle (reseed-invariant + physics-carried + not reseed-foolable) with metrics that actually hold up. (Controller updates spec §5/§9/§1/early-exit to match — NOT the implementer.)
+
+A pair is "categorically different" iff it diverges on **at least one** robust axis: **regime OR hydrology OR carve**. All three are invariant to a Layer-3 reseed, so a "different random map of the same world" CANNOT pass (the anti-coat-swap-of-a-different-color guarantee; cf. the Task-4 GUARD).
 
 **Files:**
-- Modify: `relief-slice.js` (add + export `divergenceReport(bundleA, bundleB, opts)`)
-- Modify: `relief-e6-tectonic.js` / `relief-divergence.js` (lock `REGIME_GAIN` + the `DIVERGENCE_THRESHOLD`)
+- Modify: `relief-slice.js` (add + export `divergenceReport`)
+- Modify: `relief-e6-tectonic.js` (lock `REGIME_GAIN=0.4` comment) and confirm L2 geometry constants locked
 - Test: `tests/world-engine-relief-slice.test.js` (append `describe('§9 decisive divergence gate')`)
+- **NOT in this task:** spec §5/§9 edits (controller handles those in-thread).
 
 **Interfaces:**
-- Consumes: all prior. Produces: `divergenceReport(a, b, { n, seed }) -> { heldSeedHypso, reseedFloor, regimeDist, perCellRMS, secondaryHypso, carveA, carveB, pass }`.
+- Produces: `divergenceReport(a, b, { n, seed }) -> { pass, reason, regimeDist, hydroDist, carveDist, carveA, carveB, lsA, lsB, anisoA, anisoB, heldSeedHypso, reseedFloor, perCellRMS }`.
 
 - [ ] **Step 1: Add `divergenceReport` to `relief-slice.js`**
 
 ```js
-import { hypsometricDistance, perCellRMS, regimeHistogramDistance, carveFraction }
-  from './relief-divergence.js';
+import { hypsometricDistance, perCellRMS, regimeHistogramDistance,
+         directionalAnisotropy, carveFraction } from './relief-divergence.js';
 
-// Decisive §5/§9 gate orchestrator. Held-seed (discriminator OFF) hypsometric is load-bearing; per-cell
-// RMS + secondary (discriminator ON) divergence are reported, not gated. Regime corroborates cross-regime.
-export function divergenceReport(bundleA, bundleB, { n = 160, seed = 'gate' } = {}) {
-  const held = (b, s) => runReliefSlice(b, { n, seed: s, epoch2: false, discriminate: false });
-  const on   = (b)    => runReliefSlice(b, { n, seed,     epoch2: false, discriminate: true });
-  const carve = (b)   => runReliefSlice(b, { n, seed,     epoch2: true,  discriminate: true });
+// LOCKED thresholds (validate vs null=identical-bundle ~0 AND reseed runs=same-bundle-diff-seed before freezing).
+const REGIME_DIVERGE = 0.2;   // regime-class TV: cross-regime ~0.7-1.0, same-regime/null ~0
+const HYDRO_DIVERGE  = 0.3;   // |liquidStability| gap: europa(1.0) vs lava(0.0)=1.0; rocky(0.74) vs terr(1.0)=0.26 (same category, correctly not-different)
+const CARVE_DIVERGE  = 0.05;  // |carveFraction| gap
+
+// Decisive §5/§9 gate. PASS iff a pair diverges on >=1 ROBUST, RESEED-INVARIANT, PHYSICS-CARRIED axis:
+// tectonic regime (L1) OR hydrology/liquid-stability (L4) OR fluvial carve (L4). All invariant to a Layer-3
+// reseed -> a reshuffle of the same world cannot pass. directional anisotropy (L2, flips with regime sign ->
+// redundant as a gate term) and held-seed hypsometric (reseed-invariant but EMPIRICALLY seed-fragile across
+// regimes) are REPORTED to credit/corroborate, NOT gated.
+export function divergenceReport(bundleA, bundleB, { n = 192, seed = 'gate' } = {}) {
+  const held  = (b, s) => runReliefSlice(b, { n, seed: s, epoch2: false, discriminate: false });
+  const carve = (b)    => runReliefSlice(b, { n, seed,     epoch2: true,  discriminate: true  });
   const a0 = held(bundleA, seed), b0 = held(bundleB, seed);
-  const aR1 = held(bundleA, seed + 'A'), aR2 = held(bundleA, seed + 'B');  // reseed floor (same bundle)
+  const aR1 = held(bundleA, seed + 'A'), aR2 = held(bundleA, seed + 'B');   // reseed floor (same bundle)
+  const cA = carve(bundleA), cB = carve(bundleB);
+  // robust GATE axes
+  const regimeDist = regimeHistogramDistance(a0.substrate.regime, b0.substrate.regime);
+  const lsA = a0.drivers.liquidStability ?? 1, lsB = b0.drivers.liquidStability ?? 1;
+  const hydroDist  = Math.abs(lsA - lsB);
+  const carveA = carveFraction(cA.e9?.incision ?? new Float32Array(n * n));
+  const carveB = carveFraction(cB.e9?.incision ?? new Float32Array(n * n));
+  const carveDist = Math.abs(carveA - carveB);
+  // REPORTED corroboration (not gated)
+  const anisoA = directionalAnisotropy(a0.substrate.height, a0.substrate.grainAngle, n);
+  const anisoB = directionalAnisotropy(b0.substrate.height, b0.substrate.grainAngle, n);
   const heldSeedHypso = hypsometricDistance(a0.substrate.height, b0.substrate.height);
   const reseedFloor   = hypsometricDistance(aR1.substrate.height, aR2.substrate.height);
-  const regimeDist    = regimeHistogramDistance(a0.substrate.regime, b0.substrate.regime);
-  const rms           = perCellRMS(on(bundleA).substrate.height, on(bundleB).substrate.height);
-  const carveA = carveFraction(carve(bundleA).e9?.incision ?? new Float32Array(n * n));
-  const carveB = carveFraction(carve(bundleB).e9?.incision ?? new Float32Array(n * n));
-  // PASS = field shape diverges by physics (held-seed beats reseed floor by a margin) AND a real regime
-  // shift, OR (same-regime pair) the carve axis separates them. Reseed alone NEVER passes.
-  const fieldPass  = heldSeedHypso > reseedFloor * 1.5 && regimeDist > 0.1;
-  const carvePass  = Math.abs(carveA - carveB) > 0.05;
-  return { heldSeedHypso, reseedFloor, regimeDist, perCellRMS: rms,
-           carveA, carveB, pass: fieldPass || carvePass };
+  const perCell       = perCellRMS(a0.substrate.height, b0.substrate.height);
+  const regimePass = regimeDist > REGIME_DIVERGE, hydroPass = hydroDist > HYDRO_DIVERGE, carvePass = carveDist > CARVE_DIVERGE;
+  const pass = regimePass || hydroPass || carvePass;
+  const reason = [regimePass && 'regime', hydroPass && 'hydrology', carvePass && 'carve'].filter(Boolean).join('+') || 'none';
+  return { pass, reason, regimeDist, hydroDist, carveDist, carveA, carveB, lsA, lsB,
+           anisoA, anisoB, heldSeedHypso, reseedFloor, perCellRMS: perCell };
 }
 ```
 
@@ -728,30 +745,36 @@ import { divergenceReport } from '../relief-slice.js';
 import { PRESETS as P_G } from '../relief-presets.js';
 
 describe('§9 decisive divergence gate', () => {
-  it('cross-regime pair (terrestrial vs europa) passes via field physics, not reseed', () => {
-    const r = divergenceReport(P_G.terrestrial, P_G.europa, { n: 160, seed: 'gate1' });
-    expect(r.heldSeedHypso).toBeGreaterThan(r.reseedFloor * 1.5);   // physics beats reshuffle
-    expect(r.regimeDist).toBeGreaterThan(0.1);
+  it('cross-regime pair (terrestrial vs europa) passes via tectonic regime', () => {
+    const r = divergenceReport(P_G.terrestrial, P_G.europa, { n: 192, seed: 'gate1' });
+    expect(r.regimeDist).toBeGreaterThan(0.2);     // +1 contraction vs -1 extension
     expect(r.pass).toBe(true);
+    expect(r.reason).toContain('regime');
   });
-  it('same-regime pair (europa vs lava) passes via the carve axis, not the field', () => {
-    const r = divergenceReport(P_G.europa, P_G.lava, { n: 160, seed: 'gate2' });
-    expect(Math.abs(r.carveA - r.carveB)).toBeGreaterThan(0.05);
+  it('same-regime pair (europa vs lava) passes via the HYDROLOGY axis', () => {
+    const r = divergenceReport(P_G.europa, P_G.lava, { n: 192, seed: 'gate2' });
+    expect(r.hydroDist).toBeGreaterThan(0.3);      // europa ls~1.0 (methane) vs lava ls~0.0 (airless)
     expect(r.pass).toBe(true);
+    expect(r.reason).toContain('hydrology');
   });
-  it('NULL: identical bundle never passes (no reseed-only pass)', () => {
-    const r = divergenceReport(P_G.rocky, P_G.rocky, { n: 160, seed: 'gate3' });
-    expect(r.heldSeedHypso).toBeLessThan(r.reseedFloor * 1.5);      // no physics divergence
-    expect(Math.abs(r.carveA - r.carveB)).toBeLessThan(0.05);
+  it('NULL: identical bundle never passes (reseed-invariant gate cannot be fooled)', () => {
+    const r = divergenceReport(P_G.rocky, P_G.rocky, { n: 192, seed: 'gate3' });
+    expect(r.regimeDist).toBeCloseTo(0, 6);
+    expect(r.hydroDist).toBeCloseTo(0, 6);
+    expect(r.carveDist).toBeCloseTo(0, 6);
     expect(r.pass).toBe(false);
+  });
+  it('reports corroborating anisotropy (L2 credit): contraction terrestrial > extension europa', () => {
+    const r = divergenceReport(P_G.terrestrial, P_G.europa, { n: 192, seed: 'gate4' });
+    expect(r.anisoA).toBeGreaterThan(r.anisoB);
   });
 });
 ```
 
-- [ ] **Step 3: Run, tune, lock**
+- [ ] **Step 3: Run, validate, lock**
 
 Run: `npx vitest run tests/world-engine-relief-slice.test.js -t "decisive divergence gate"`.
-If a relative assertion is marginal, tune `REGIME_GAIN` (Layer 1) and the L2 `fScale/along/across` constants in the harness/test until separation is clean, then **lock** them with a `// LOCKED <date>: <value>, validated vs null(~0)+reseed-floor` comment. The `* 1.5` margin and `0.05`/`0.1` constants are the locked thresholds — adjust once, comment, freeze. **Honor the early-exit (Task 4.5): if the cross-regime field pass cannot be achieved without the carve axis, STOP and report.**
+**Validate the locked thresholds** against (a) the NULL run (identical bundle → regimeDist/hydroDist/carveDist all ~0, far below thresholds) and (b) report the actual values for terrestrial-vs-europa (regimeDist), europa-vs-lava (hydroDist), terrestrial-vs-lava (regime+carve). If `europa-vs-lava regimeDist` happens to exceed 0.2 (both are sign −1 but mixes may differ), that's fine — the pair still PASSES; just report it and keep the test asserting `hydroDist > 0.3` + `pass` + `reason` contains 'hydrology' (do not add a brittle `regimeDist < 0.2` assert). Confirm `REGIME_GAIN=0.4` keeps every preset banded (Task 2 invariant) and add/keep a `// LOCKED 2026-06-23: 0.4, europa banding ceiling ~0.44, validated` comment; confirm the L2 geometry constants carry a similar locked-comment. **Early-exit (Task 4.5) was GO — regime+anisotropy robustly diverge; do not re-open it.**
 
 - [ ] **Step 4: Full suite green**
 
@@ -760,8 +783,8 @@ Run: `npx vitest run tests/world-engine-relief-slice.test.js` → Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add relief-slice.js relief-e6-tectonic.js relief-divergence.js tests/world-engine-relief-slice.test.js
-git commit -m "feat(relief): decisive held-seed divergence gate + locked tuning"
+git add relief-slice.js relief-e6-tectonic.js tests/world-engine-relief-slice.test.js
+git commit -m "feat(relief): decisive divergence gate (regime|hydrology|carve, reseed-invariant) + locked tuning"
 ```
 
 ---
