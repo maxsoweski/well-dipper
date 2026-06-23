@@ -11,6 +11,10 @@ import { REGIME, idx, latDegOfRow } from './relief-substrate.js';
 const NU = 0.25;
 const DEG = Math.PI / 180;
 
+// L1: regime gain — eps as a fraction of the despin stress span. ≤ ~0.8 SHIFTS regime bands per body
+// without collapsing all bands into one regime. TO-BE-TUNED-IN-LAB-then-locked (Task 7).
+const REGIME_GAIN = 0.6;
+
 export function stressAtLat(latDeg, drivers) {
   const s2 = Math.sin(latDeg * DEG) ** 2;
   const amp = (drivers.despinAmp ?? 1);
@@ -18,7 +22,10 @@ export function stressAtLat(latDeg, drivers) {
   let sZon = amp * ((1 + NU) - (1 + 3 * NU) * s2);
   // Isotropic radial strain: contraction (+1) adds compression everywhere (scarps); expansion (-1)
   // adds tension (grabens). Shifts the regime boundaries — E6 dossier: sign flips the feature set.
-  const eps = (drivers.radialStrainSign ?? +1) * (drivers.radialStrainMag ?? 0) * (3 + NU) * 0.5;
+  // eps bounded to a fraction of the despin span → regime-relevant by construction (biases WHICH bands
+  // are scarps vs grabens, never saturates). span = despin sMer range ≈ amp*(3+NU).
+  const span = amp * (3 + NU);
+  const eps = (drivers.radialStrainSign ?? +1) * (drivers.radialStrainMag ?? 0) * span * REGIME_GAIN;
   sMer += eps; sZon += eps;
   // Anderson regime from the two horizontal principal stresses (surface vertical stress ≈ 0).
   let regime;

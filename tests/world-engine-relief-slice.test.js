@@ -314,3 +314,34 @@ describe('divergence metrics', () => {
     expect(f).toBeGreaterThan(0); expect(f).toBeLessThan(0.2);
   });
 });
+
+// append to tests/world-engine-relief-slice.test.js
+import { runReliefSlice as runRS_L1 } from '../relief-slice.js';
+import { PRESETS as P_L1 } from '../relief-presets.js';
+import { makeBaseStep as mkBase_L1 } from '../relief-base-step.js';
+import { regimeHistogramDistance as regDist_L1 } from '../relief-divergence.js';
+
+describe('Layer 1 — regime un-damp', () => {
+  const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L1' };
+  it('radialStrainMag is no longer damped to inertness (>> 0.001)', () => {
+    const { drivers } = mkBase_L1(P_L1.rocky, grid);
+    expect(Math.abs(drivers.radialStrainMag)).toBeGreaterThan(0.05);
+  });
+  it('a contraction body (rocky, +1) and an extension body (europa, -1) diverge in regime mix', () => {
+    const rocky  = runRS_L1(P_L1.rocky,  { ...grid, epoch2: false });
+    const europa = runRS_L1(P_L1.europa, { ...grid, epoch2: false });
+    // GATE METRIC (relative): cross-regime pair must differ in regime-class mix...
+    const cross = regDist_L1(rocky.substrate.regime, europa.substrate.regime);
+    // ...far more than the null baseline (same bundle vs itself = 0).
+    const nullA = regDist_L1(rocky.substrate.regime, rocky.substrate.regime);
+    expect(cross).toBeGreaterThan(0.1);
+    expect(cross).toBeGreaterThan(nullA + 0.1);
+  });
+  it('rocky leans THRUST (compression) vs europa leans NORMAL (extension)', () => {
+    const rocky  = runRS_L1(P_L1.rocky,  { ...grid, epoch2: false });
+    const europa = runRS_L1(P_L1.europa, { ...grid, epoch2: false });
+    const frac = (reg, k) => Array.from(reg).filter((r) => r === k).length / reg.length;
+    expect(frac(rocky.substrate.regime, 2)).toBeGreaterThan(frac(europa.substrate.regime, 2));  // THRUST=2
+    expect(frac(europa.substrate.regime, 0)).toBeGreaterThan(frac(rocky.substrate.regime, 0));  // NORMAL=0
+  });
+});

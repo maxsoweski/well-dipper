@@ -17,8 +17,8 @@
 //   • Spatial pattern is SEED-LOCKED & preset-independent: E6/E9 seeds exclude the preset, and the tectonic
 //     grain bands are latitude-only (Melosh despin). Same seed + different preset = IDENTICAL landform layout,
 //     only rescaled in height. (This is exactly the "presets just change amplitude" UAT observation, 2026-06-23.)
-//   • The one qualitative lever — radialStrainSign (contraction→scarps vs expansion→grabens) — is damped
-//     (radialStrainMag ≤ 0.001, ~1000× below the despin stress), so it never flips the regime in practice.
+//   • radialStrainSign (contraction→scarps vs expansion→grabens) is now UN-DAMPED (Layer 1): it flips the
+//     Anderson regime per body (rocky→THRUST-leaning; icy/molten→NORMAL-leaning). Regime divergence is live.
 //   • Ocean fraction is hardcoded 0.4 (ignores volatiles/T_eq); precip is latitude-only; palette is height-only
 //     (Europa is NOT icy-colored); `age` is the default 0.5 for every preset (absent from the bundle).
 // To make presets diverge STRUCTURALLY (future work, not yet scoped): fold composition into the seed/pattern

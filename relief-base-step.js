@@ -35,7 +35,9 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 're
   const expansionDrive = clamp01(Math.log10(1 + tidalHeat) / 2);   // tidal heating pushes expansion
   const contractionDrive = clamp01(0.4 + 0.6 * age) * clamp01(surfaceGravity / 1.5); // cooling/age/size
   const radialStrainSign = contractionDrive >= expansionDrive ? +1 : -1;
-  const radialStrainMag = clamp01(Math.abs(contractionDrive - expansionDrive)) * 0.001; // ~0.05-0.1% areal
+  // L1: un-damped strain magnitude (0..1). Was capped *0.001 (regime-inert, the coat-swap). The
+  // despin-span re-basing in relief-e6-tectonic.js keeps it band-SHIFTING, not saturating.
+  const radialStrainMag = clamp01(Math.abs(contractionDrive - expansionDrive));
 
   // Despin amplitude proxy (E6 can pick PATTERN from latitude but needs an amplitude). Approximate from
   // age (more despin accumulated) + a shell-thickness term. Honest: not the true Δ(spin^2) (unavailable).
