@@ -229,16 +229,22 @@ describe('relief slice orchestrator', () => {
     for (let i = 0; i < r.substrate.height.length; i++)
       expect(r.substrate.height[i]).toBeLessThanOrEqual(r.heightAfterBuild[i] + 1e-6);
   });
-  it('passes the north-star verifier on the Rocky control', () => {
+  it('passes the north-star core gate on the Rocky control (resolution-robust)', () => {
     const r = runReliefSlice(P7.rocky, { n: 96, seed: 's3', epoch2: true });
     const v = verifyReliefSlice(r);
     expect(v.signals.subtractive).toBe(true);
     expect(v.signals.carveCorrelatesRelief).toBe(true);
     expect(v.signals.noUphill).toBe(true);
     expect(v.signals.depressionsFilled).toBe(true);
+    expect(v.signals.accumSpread).toBe(true);
+    expect(v.pass).toBe(true);                       // gate = the 5 core mechanism signals
+  });
+  it('drainage shows fluvial Hack-law scaling at adequate resolution (quality, not gate)', () => {
+    // Hack's law is only well-resolved on a sufficiently large grid; measure it at n=192.
+    const v = verifyReliefSlice(runReliefSlice(P7.rocky, { n: 192, seed: 's3', epoch2: true }));
     expect(v.signals.hackExponent).toBeGreaterThan(0.4);
     expect(v.signals.hackExponent).toBeLessThan(0.8);
-    expect(v.pass).toBe(true);
+    expect(v.signals.hackPlausible).toBe(true);
   });
   it('is deterministic end-to-end', () => {
     const a = runReliefSlice(P7.lava, { n: 64, seed: 'det' });
