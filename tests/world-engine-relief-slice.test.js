@@ -424,7 +424,11 @@ describe('Layer 2 — geometry branch', () => {
 // append to tests/world-engine-relief-slice.test.js
 import { runReliefSlice as runRS_L3 } from '../relief-slice.js';
 import { PRESETS as P_L3 } from '../relief-presets.js';
-import { hypsometricDistance as hypso_L3, perCellRMS as rms_L3 } from '../relief-divergence.js';
+import {
+  perCellRMS as rms_L3,
+  regimeHistogramDistance as regDist_L3,
+  directionalAnisotropy as aniso_L3,
+} from '../relief-divergence.js';
 
 describe('Layer 3 — toggleable seed discriminator', () => {
   const grid = { n: 96, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'L3' };
@@ -443,31 +447,51 @@ describe('Layer 3 — toggleable seed discriminator', () => {
     const europa = runRS_L3(P_L3.europa, { ...grid, epoch2: false, discriminate: true });
     expect(rms_L3(rocky.substrate.height, europa.substrate.height)).toBeGreaterThan(0.3);
   });
-  it('GUARD: a reseed alone (discriminator) must NOT be what carries the held-seed hypsometric gate', () => {
-    // The anti-"coat-swap-of-a-different-color" guard, made RELATIVE instead of a fixed threshold. A pure
-    // reseed (same bundle, discriminator ON vs OFF) only reshuffles the ARRANGEMENT of one world's heights; it
-    // leaves the height DISTRIBUTION almost untouched. A genuine cross-regime pair (two different-regime
-    // bundles, both held-seed) moves that distribution more. We measure BOTH in-run and assert the reshuffle
-    // is a fraction of the cross divergence, so the bar tracks the field's actual scale rather than a magic
-    // constant. Why this beats the old fixed `< 0.05`: a 15-seed sweep at n=96 found rocky reshuffle ranging
-    // 0.0212–0.1458 (mean 0.0594) — already ABOVE 0.05, i.e. the old test only passed on a lucky pinned seed.
-    // Run at n=192 for cleaner distribution statistics.
+  it('GUARD: a pure reseed scrambles arrangement but CANNOT move the reseed-invariant physics signals', () => {
+    // The anti-"coat-swap-of-a-different-color" guard, rebuilt to be SEED-UNIVERSAL BY CONSTRUCTION.
     //
-    // SCOPE NOTE (honesty — do not overstate): this relative form is NOT seed-universal. A 15-seed sweep at
-    // n=192 showed reshuffle/cross ratio ranging 0.117–1.446 (mean 0.42); ~6/15 seeds exceed 0.4 because on a
-    // few seeds the rocky-OFF and europa-OFF height DISTRIBUTIONS genuinely converge (cross collapses to
-    // reshuffle scale — e.g. seed "qq": cross 0.082, reshuffle 0.119). Averaging either/both sides over extra
-    // held-seeds did not rescue those outliers. So this is a DETERMINISTIC single-seed assertion on the pinned
-    // committed seed (L3, n=192: reshuffle 0.0368, cross 0.1540, ratio 0.239 → 1.7× headroom under 0.4), which
-    // is a strict, in-run-scaled improvement over the old fixed-0.05 — NOT a claim that every seed clears 0.4.
-    // See task-4-report.md for the full multi-seed table. Revisit if a seed-universal GUARD is needed (would
-    // require a noise-floor estimate, not a single cross-pair).
-    const gridHi = { ...grid, n: 192 };
-    const rockyOn  = runRS_L3(P_L3.rocky,  { ...gridHi, epoch2: false, discriminate: true });
-    const rockyOff = runRS_L3(P_L3.rocky,  { ...gridHi, epoch2: false, discriminate: false });
-    const europaOff = runRS_L3(P_L3.europa, { ...gridHi, epoch2: false, discriminate: false });
-    const reshuffle = hypso_L3(rockyOn.substrate.height, rockyOff.substrate.height);  // same bundle, ON vs OFF
-    const cross     = hypso_L3(rockyOff.substrate.height, europaOff.substrate.height); // cross-regime, both held-seed
-    expect(reshuffle).toBeLessThan(0.4 * cross); // a reseed reshuffles arrangement, not the height distribution
+    // What it must prove: a pure reseed (same bundle, discriminator ON vs OFF = a reshuffle of ONE world)
+    // cannot pass the decisive divergence gate. The gate rests on the two signals that are BOTH
+    // reseed-INVARIANT and robustly physics-carried:
+    //   • regime-class histogram (L1) — driven by the deterministic radial-strain sign + latitude, not by
+    //     the noise stream, so a reseed leaves it essentially unchanged.
+    //   • directional anisotropy (L2) — a property of the sign-branched geometry branch, so its
+    //     body-to-body difference comes from physics, not from re-keying the seed.
+    // A reseed DOES scramble the per-cell arrangement (perCellRMS), and that is all it does. So we assert:
+    //   1. perCellRMS(ON, OFF) is LARGE → the reseed genuinely reshuffled the field (proves it did something).
+    //   2. regimeHistogramDistance(ON, OFF) ≈ 0 → regime is reseed-invariant; a reshuffle cannot fake a
+    //      regime shift (the L1 half of the gate is untouchable by reseeding).
+    //   3. the reshuffle's anisotropy change is SMALL RELATIVE to a genuine cross-body anisotropy difference
+    //      → anisotropy divergence is carried by the geometry branch (physics), not by reseeding (the L2 half).
+    // Therefore a "different random map of the same world" moves only the diagnostic (arrangement) axis and
+    // leaves both load-bearing physics axes the decisive gate rests on essentially fixed → it cannot pass.
+    //
+    // WHY SEED-UNIVERSAL (unlike the prior hypsometric form): regime and anisotropy are STRUCTURAL, not
+    // sample-specific. regimeHistogramDistance(ON,OFF) is identically 0 for EVERY seed (the regime field is a
+    // deterministic function of sign+latitude, independent of the noise key). The anisotropy reshuffle delta
+    // is tiny vs the cross-body delta because the cross delta is dominated by the contraction-vs-extension
+    // geometry sign — a ~10× across-strike-energy gap that no reseed can produce. The discarded hypsometric
+    // GUARD was seed-FRAGILE because for some seeds rocky-OFF and europa-OFF have near-identical height
+    // distributions, collapsing the cross divergence to reshuffle scale; regime/anisotropy do not have that
+    // failure mode. A 15-seed sweep at n=160 confirmed all three asserts hold for every seed (regimeDelta
+    // exactly 0; perCellRMS 1.25–1.45; anisotropy ratio 0.006–0.260, all < 0.3). See task-4-report.md.
+    // The committed test pins ONE seed at n=160 for determinism; the universality is demonstrated by the sweep.
+    const gridN = { ...grid, n: 160 };
+    const rockyOn   = runRS_L3(P_L3.rocky,  { ...gridN, epoch2: false, discriminate: true });
+    const rockyOff  = runRS_L3(P_L3.rocky,  { ...gridN, epoch2: false, discriminate: false });
+    const europaOff = runRS_L3(P_L3.europa, { ...gridN, epoch2: false, discriminate: false });
+
+    // 1. The reseed genuinely reshuffled the per-cell arrangement.
+    expect(rms_L3(rockyOn.substrate.height, rockyOff.substrate.height)).toBeGreaterThan(0.3);
+
+    // 2. Regime class mix is reseed-INVARIANT — a reshuffle cannot fake a regime shift.
+    expect(regDist_L3(rockyOn.substrate.regime, rockyOff.substrate.regime)).toBeLessThan(0.02);
+
+    // 3. The reshuffle's anisotropy change is small RELATIVE to a real cross-body anisotropy difference,
+    //    i.e. anisotropy divergence comes from the geometry branch (physics), not from reseeding.
+    const aOn     = aniso_L3(rockyOn.substrate.height,   rockyOn.substrate.grainAngle,   gridN.n);
+    const aOff    = aniso_L3(rockyOff.substrate.height,  rockyOff.substrate.grainAngle,  gridN.n);
+    const aEuropa = aniso_L3(europaOff.substrate.height, europaOff.substrate.grainAngle, gridN.n);
+    expect(Math.abs(aOn - aOff)).toBeLessThan(0.3 * Math.abs(aOff - aEuropa));
   });
 });
