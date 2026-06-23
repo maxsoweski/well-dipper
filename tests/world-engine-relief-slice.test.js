@@ -344,4 +344,10 @@ describe('Layer 1 — regime un-damp', () => {
     expect(frac(rocky.substrate.regime, 2)).toBeGreaterThan(frac(europa.substrate.regime, 2));  // THRUST=2
     expect(frac(europa.substrate.regime, 0)).toBeGreaterThan(frac(rocky.substrate.regime, 0));  // NORMAL=0
   });
+  it('europa (highest-mag preset) is NOT saturated to a single regime — REGIME_GAIN below its ceiling', () => {
+    // Guard: at GAIN > ~0.44 europa collapses to 100% NORMAL, which would make L2 (regime-branched
+    // geometry) degenerate. eps must SHIFT bands, never saturate — keep >=2 Anderson regime classes.
+    const europa = runRS_L1(P_L1.europa, { ...grid, epoch2: false });
+    expect(new Set(Array.from(europa.substrate.regime)).size).toBeGreaterThan(1);
+  });
 });

@@ -11,9 +11,12 @@ import { REGIME, idx, latDegOfRow } from './relief-substrate.js';
 const NU = 0.25;
 const DEG = Math.PI / 180;
 
-// L1: regime gain — eps as a fraction of the despin stress span. ≤ ~0.8 SHIFTS regime bands per body
-// without collapsing all bands into one regime. TO-BE-TUNED-IN-LAB-then-locked (Task 7).
-const REGIME_GAIN = 0.6;
+// L1: regime gain — eps as a fraction of the despin stress span. SHIFTS regime bands per body without
+// collapsing all bands into one regime. Must keep EVERY preset banded (≥2 Anderson regime classes).
+// The highest-mag preset (europa, mag ≈ 0.87) saturates to 100% NORMAL above its computed ceiling
+// of ~0.44; 0.4 sits below that with margin (europa ≈ NORMAL 80% / STRIKESLIP 5% / THRUST 15% @ n=96).
+// TO-BE-TUNED placeholder — final value is locked in the lab in Task 7.
+const REGIME_GAIN = 0.4;
 
 export function stressAtLat(latDeg, drivers) {
   const s2 = Math.sin(latDeg * DEG) ** 2;

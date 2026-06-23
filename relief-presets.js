@@ -22,8 +22,8 @@
 //   • Ocean fraction is hardcoded 0.4 (ignores volatiles/T_eq); precip is latitude-only; palette is height-only
 //     (Europa is NOT icy-colored); `age` is the default 0.5 for every preset (absent from the bundle).
 // To make presets diverge STRUCTURALLY (future work, not yet scoped): fold composition into the seed/pattern
-//   (not just amplitude); un-damp radialStrainMag; derive ocean fraction from volatiles+T_eq; branch
-//   ice-vs-silicate texture/erosion modes; add a preset-aware palette + temperature-driven precip.
+//   (not just amplitude); derive ocean fraction from volatiles+T_eq; branch ice-vs-silicate
+//   texture/erosion modes; add a preset-aware palette + temperature-driven precip.
 export const PRESETS = {
   rocky:  { composition:{ ironFraction:0.32, density:5.5, volatileFraction:0.15 }, T_eq:288,  eccentricity:0.017, orbitRadiusEarth:23455, starMassEarth:332946, radiusEarth:1.0, massEarth:0.9,   surfaceHistory:{ erosion:0.4 } },
   lava:   { composition:{ ironFraction:0.7,  density:7.0, volatileFraction:0.02 }, T_eq:950,  eccentricity:0.15,  orbitRadiusEarth:938,   starMassEarth:332946, radiusEarth:0.9, massEarth:0.65,  surfaceHistory:{ erosion:0.0 } },
