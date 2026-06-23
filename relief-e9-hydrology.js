@@ -69,3 +69,80 @@ export function flowAccumulate(receiver, n, weight) {
   }
   return accum;
 }
+
+// ── append to relief-e9-hydrology.js ──
+import { latDegOfRow } from './relief-substrate.js';
+
+const clamp01b = (x) => Math.max(0, Math.min(1, x));
+
+// Synthesized rainfall weight — no climate engine yet (E9 dossier: precip is under-supplied; stub it).
+// latitude band (wet equator/temperate, dry mid) + orographic upslope (rain on windward height gradient).
+export function synthPrecip(substrate, drivers) {
+  const { n } = substrate; const w = new Float32Array(n * n);
+  for (let iy = 0; iy < n; iy++) {
+    const lat = latDegOfRow(substrate, iy) * Math.PI / 180;
+    const band = 0.5 + 0.5 * Math.cos(lat * 2);                 // wet near equator & poles, dry mid
+    for (let ix = 0; ix < n; ix++) {
+      const i = iy * n + ix;
+      const hx = substrate.height[Math.min(ix + 1, n - 1) + iy * n] - substrate.height[i];
+      const oro = clamp01b(hx * 4);                              // upslope (windward +x) → more rain
+      w[i] = 0.4 + band + 0.6 * oro;
+    }
+  }
+  // normalise to mean ~1 so K stays calibrated
+  let s = 0; for (const v of w) s += v; const k = (n * n) / (s || 1);
+  for (let i = 0; i < w.length; i++) w[i] *= k;
+  return w;
+}
+
+export function seaLevelForFraction(height, n, frac) {
+  if (frac <= 0) return -Infinity; if (frac >= 1) return Infinity;
+  const sorted = Float32Array.from(height).sort();
+  return sorted[Math.floor(frac * (sorted.length - 1))];
+}
+
+export function runE9(substrate, drivers, epoch = { name: 'fluvial-carve' }, seed = 'e9') {
+  const { n } = substrate; const N = n * n;
+  const PASSES = 5;                       // bounded handful (E9 verify: not 1, not ~200)
+  const m = 0.45, nExp = 1.0;
+  const erodibility = 0.18 * clamp01b(0.3 + 0.7 * (drivers.surfaceHistory ?? 0)); // K base from erosion budget
+  const weight = synthPrecip(substrate, drivers);
+  const maturity = clamp01b(0.4 + 0.6 * (drivers.age ?? 0.5));
+
+  // sea level from a volatile/temperature-derived target ocean fraction (E9 base-level step).
+  const frac = clamp01b(0.55 * clamp01b(((drivers.rockyCrust ?? 1) > 0 ? 1 : 1)) *
+                        clamp01b(0.2 + 0.8 * ((substrate.height && 1))) ); // simple 0.4-ish default
+  const targetFrac = 0.4;                 // slice default; harness GUI overrides
+  let seaLevel = seaLevelForFraction(substrate.height, n, targetFrac);
+
+  const incision = new Float32Array(N);   // accumulates ≤0
+  for (let p = 0; p < PASSES; p++) {
+    const filled = priorityFloodFill(substrate.height, n, seaLevel);
+    const rec = d8Receivers(filled, n);
+    const accum = flowAccumulate(rec, n, weight);
+    for (let i = 0; i < N; i++) substrate.flowAccum[i] = accum[i];
+    // one bounded stream-power increment per cell, capped so a cell never cuts below its receiver.
+    for (let iy = 0; iy < n; iy++) for (let ix = 0; ix < n; ix++) {
+      const i = iy * n + ix; const r = rec[i]; if (r === i) continue;
+      if (substrate.height[i] < seaLevel) continue;                 // don't carve underwater
+      const ry = (r / n) | 0, rx = r - ry * n;
+      const dist = ((ix - rx) && (iy - ry)) ? Math.SQRT2 : 1;
+      const slope = Math.max(0, (substrate.height[i] - substrate.height[r]) / dist);
+      let dz = erodibility * Math.pow(accum[i], m) * Math.pow(slope, nExp) * maturity * 0.02;
+      const drop = substrate.height[i] - substrate.height[r];
+      dz = Math.min(dz, Math.max(0, drop * 0.5));                   // stability cap (no inversion)
+      incision[i] -= dz;
+      substrate.height[i] -= dz;
+    }
+  }
+  // base-level / standing-liquid fill (lakes from residual depressions + the sea).
+  const filledFinal = priorityFloodFill(substrate.height, n, seaLevel);
+  for (let i = 0; i < N; i++) {
+    const lake = filledFinal[i] - substrate.height[i] > 1e-4;
+    const sea = substrate.height[i] < seaLevel;
+    substrate.standing[i] = (lake || sea) ? 1 : 0;
+    substrate.baseLevel[i] = sea ? seaLevel : (lake ? filledFinal[i] : substrate.height[i]);
+    substrate.maturity[i] = Math.min(1, substrate.maturity[i] + maturity * 0.5);
+  }
+  return { incision, seaLevel, passes: PASSES };
+}

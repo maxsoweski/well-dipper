@@ -165,3 +165,49 @@ describe('E9 routing primitives', () => {
     expect(max).toBeGreaterThan(mean * 5);   // trunk cells carry far more than average
   });
 });
+
+import { runE9, synthPrecip, seaLevelForFraction } from '../relief-e9-hydrology.js';
+import { runE6 as runE6_6 } from '../relief-e6-tectonic.js';
+import { makeBaseStep as mkBase6 } from '../relief-base-step.js';
+import { PRESETS as P6 } from '../relief-presets.js';
+import { cloneHeight as clone6 } from '../relief-substrate.js';
+
+describe('E9 incision (the host edit)', () => {
+  const grid = { n: 64, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'e9-1' };
+  function built() {
+    const b = mkBase6(P6.rocky, grid);
+    runE6_6(b.substrate, b.crust, b.drivers, { name:'tectonic-build' }, grid.seed);
+    return b;
+  }
+  it('incision is strictly subtractive and lowers the shared height', () => {
+    const b = built(); const before = clone6(b.substrate);
+    const { incision } = runE9(b.substrate, b.drivers, { name:'fluvial-carve' }, grid.seed);
+    expect(incision.every(v => v <= 1e-9)).toBe(true);
+    for (let i = 0; i < b.substrate.height.length; i++)
+      expect(b.substrate.height[i]).toBeLessThanOrEqual(before[i] + 1e-6);
+  });
+  it('carve correlates with relief: high-relief cells incise more than flat low cells', () => {
+    const b = built(); const before = clone6(b.substrate);
+    const { incision } = runE9(b.substrate, b.drivers, { name:'fluvial-carve' }, grid.seed);
+    const med = [...before].sort((a, c) => a - c)[before.length >> 1];
+    let hiSum = 0, hiN = 0, loSum = 0, loN = 0;
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] > med) { hiSum += -incision[i]; hiN++; } else { loSum += -incision[i]; loN++; }
+    }
+    expect(hiSum / hiN).toBeGreaterThan(loSum / loN);   // mountains get cut, flats don't
+  });
+  it('synthPrecip is nonneg and varies with latitude', () => {
+    const b = built(); const w = synthPrecip(b.substrate, b.drivers);
+    expect(w.every(v => v >= 0)).toBe(true);
+    expect(Math.max(...w)).toBeGreaterThan(Math.min(...w));
+  });
+  it('seaLevelForFraction hits the requested ocean fraction (±5%)', () => {
+    const b = built(); const sl = seaLevelForFraction(b.substrate.height, grid.n, 0.4);
+    let below = 0; for (const v of b.substrate.height) if (v < sl) below++;
+    expect(below / b.substrate.height.length).toBeCloseTo(0.4, 1);
+  });
+  it('uses a bounded handful of passes (not 1, not ~200)', () => {
+    const b = built(); const { passes } = runE9(b.substrate, b.drivers, { name:'fluvial-carve' }, grid.seed);
+    expect(passes).toBeGreaterThanOrEqual(3); expect(passes).toBeLessThanOrEqual(12);
+  });
+});
