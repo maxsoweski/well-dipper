@@ -1,12 +1,14 @@
 # World-Engine — MASTER PICKUP INDEX (read THIS first)
 
-**Status:** BRAINSTORM in progress, 2026-06-22. Repo `~/projects/well-dipper`, branch `master`,
-**everything local — nothing pushed.** This index is the single cheap entry point so the next
-session resumes WITHOUT re-reviewing ~300KB of state. Read this → the spine → the two audits, then act.
+**Status:** FIRST SLICE BUILT + VERIFIED_PENDING_MAX `90b66f7`, 2026-06-23 (brainstorm gate cleared 2026-06-22).
+Repo `~/projects/well-dipper`, branch `master`, **everything local — nothing pushed.** This index is the single
+cheap entry point so the next session resumes WITHOUT re-reviewing ~300KB of state. Read this → the spine → the two
+audits, then act.
 
 ## 1. Where we are
 
-We are **brainstorming** (NOT building) a co-genesis **"world-engine" L1 layer** for the planet-LOD lab.
+We are building a co-genesis **"world-engine" L1 layer** for the planet-LOD lab — the brainstorm is DONE and the
+**first vertical slice is BUILT** (see the status block at the end of this section).
 The problem: today each visual feature is an independent overlay → bodies read as a "bag of toggled
 effects" (slop). Real bodies look distinctive because features share **engines** rooted in the body's
 **history + composition + place in the system**. The world-engine is a **new generative layer upstream
@@ -21,12 +23,34 @@ epoch/host-editor model + tier re-slots + the **L0-gap → Option A (expose + de
 **WF2 COMPLETE 2026-06-22** — 18/18 engine dossiers (research → adversarial verify; no wedge). Architecture holds:
 17/18 high-confidence + real-time-feasible; only E9 (hydrology) is bake-time not per-frame. Design direction +
 build order + plumbing spec + the terrain↔rivers answer in **`world-engine-wf2-synthesis.md`**; raw dossiers in
-`world-engine-wf2-dossiers.json` (480KB, query don't read). **DESIGN DIRECTION APPROVED by Max 2026-06-22 — brainstorm gate CLEARED.** Build the **first vertical slice = the
+`world-engine-wf2-dossiers.json` (480KB, query don't read). **DESIGN DIRECTION APPROVED by Max 2026-06-22 — brainstorm gate CLEARED.** The **first vertical slice = the
 relief group** (E6 tectonic *build* → E9 hydrology *carve*, over 2 epochs, sharing one mutable **relief substrate**;
-fed by a minimal base step: D12 un-zeroed + a stub interior field + the relief field). Max wants it driven **via
-workflows** in a fresh session. **NEXT = `superpowers:writing-plans`** for the slice → then `executing-plans` /
-Workflow build. Success test (north-star): the result reads as a landscape with a history — drainage that clearly
-post-dates and cuts the tectonic relief.
+fed by a minimal base step: D12 un-zeroed + a stub interior field + the relief field) is now **BUILT** in an
+**isolated harness** (NOT wired into the game or the main planet-lod-lab).
+
+**SLICE BUILT + VERIFIED_PENDING_MAX `90b66f7` (2026-06-23).** The brainstorm→build crossing is DONE.
+Objective gate GREEN: **33/33 vitest pass**; the north-star verifier `verifyReliefSlice` returns `pass=true` on
+rocky/lava/europa presets across seeds; live GPU (RTX 5080, chrome-devtools `:5173`) **A/B confirmed** — epoch-2 OFF
+shows uncut tectonic relief, epoch-2 ON shows a dendritic drainage network carved into the SAME relief
+(`screenshots/relief-slice-A-epoch2-off-uncut.png`, `screenshots/relief-slice-B-epoch2-on-carved.png`). The slice
+validates the 4 things wf2-synthesis §9 listed: the **shared-relief-substrate** pattern, the **host-editor/epoch**
+model end-to-end, the **expose+derive (Option A)** boundary, and **E9 bake feasibility**.
+- **New files (all committed at repo root):** `relief-substrate.js`, `relief-base-step.js`, `relief-presets.js`,
+  `relief-e6-tectonic.js`, `relief-e9-hydrology.js`, `relief-slice.js`, `world-engine-relief-lab.html`,
+  `world-engine-relief-lab.main.js`, `tests/world-engine-relief-slice.test.js`.
+- **Implementation plan (10 TDD tasks):** `docs/FEATURES/world-engine-relief-slice-plan.md`.
+- **HONEST SCOPE CAVEATS:** UAT — "does it read as a landscape with a history" — is **MAX'S GATE ALONE** (no agent
+  closes it); status is **VERIFIED_PENDING_MAX, NOT shipped**. The slice uses a **flat 2D latitude-band DEM** (NOT
+  sphere/cubemap) — sphere mapping is deferred integration (cubemap-seam lake breakage is a known later hazard). E9
+  is a **CPU bake-time reference** (not per-frame); the GPU FastFlow (Jain 2024) bake is the deferred optimization.
+  D12 tidalHeating is **stubbed/derived in the slice's own base step** (NO edit to the production
+  `PlanetGenerator.js:565` hard-zero — irrelevant to the lab). Hack's-law exponent (~0.41–0.45) is **REPORTED as a
+  quality metric, not part of the pass gate** (resolution-dependent realism garnish, not in the §9 north-star); the
+  gate is the **5 resolution-robust core signals** (subtractive, carve-correlates-relief, no-uphill,
+  depressions-filled, accumulation-spread).
+
+**NEXT = Max UAT on the live harness** (`world-engine-relief-lab.html`, GPU). If it reads right, scope the
+production **L1 layer** via `dev-collab-scope`.
 
 ## 2. Read order for next session
 

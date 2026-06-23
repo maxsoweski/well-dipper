@@ -554,6 +554,41 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+**`world-engine` relief-group slice — BUILT (isolated harness), VERIFIED_PENDING_MAX
+`90b66f7`, awaiting Max UAT (2026-06-23).** First vertical slice of the co-genesis
+**"world-engine" L1 layer** for the planet-LOD lab: the RELIEF GROUP — E6 tectonic
+*builds* relief → E9 hydrology *carves* drainage, over 2 epochs sharing ONE mutable
+height substrate, fed by a minimal base step. Built in an **isolated harness — NOT
+wired into the game or the main planet-lod-lab.** Objective gate is GREEN: **33/33
+vitest pass**; the north-star verifier `verifyReliefSlice` returns `pass=true` on
+rocky/lava/europa presets across seeds; live GPU (RTX 5080, chrome-devtools `:5173`)
+A/B confirmed — epoch-2 OFF shows uncut tectonic relief, epoch-2 ON shows a dendritic
+drainage network carved into the SAME relief (`screenshots/relief-slice-A-epoch2-off-uncut.png`,
+`screenshots/relief-slice-B-epoch2-on-carved.png`). Validates the 4 wf2-synthesis §9
+items: shared-relief-substrate pattern, host-editor/epoch model end-to-end, expose+derive
+(Option A) boundary, E9 bake feasibility.
+- **New files (all committed at repo root):** `relief-substrate.js`, `relief-base-step.js`,
+  `relief-presets.js`, `relief-e6-tectonic.js`, `relief-e9-hydrology.js`, `relief-slice.js`,
+  `world-engine-relief-lab.html`, `world-engine-relief-lab.main.js`,
+  `tests/world-engine-relief-slice.test.js`.
+- **Plan (10 TDD tasks):** `docs/FEATURES/world-engine-relief-slice-plan.md`.
+- **Master pickup index:** `docs/FEATURES/world-engine-INDEX.md` (read it first).
+- **⚠ SCOPE CAVEATS (do not overclaim):** UAT — "does it read as a landscape with a
+  history" — is **MAX'S GATE ALONE** (no agent closes it); status is **VERIFIED_PENDING_MAX,
+  NOT shipped**. Flat 2D latitude-band DEM (NOT sphere/cubemap — sphere mapping is deferred
+  integration; cubemap-seam lake breakage is a known later hazard). E9 is a CPU bake-time
+  reference (GPU FastFlow/Jain-2024 bake deferred). D12 stubbed/derived in the slice's own
+  base step (NO edit to the production `PlanetGenerator.js:565` hard-zero). Hack's-law
+  exponent (~0.41–0.45) is REPORTED as a quality metric, NOT a pass-gate signal; the gate is
+  the 5 resolution-robust core signals (subtractive, carve-correlates-relief, no-uphill,
+  depressions-filled, accumulation-spread).
+- **▶ NEXT:** Max UAT on the live harness (`world-engine-relief-lab.html`, GPU). If it reads
+  right, scope the production **L1 layer** via `dev-collab-scope`.
+- **Maps to journey:** the deferred "Phase 2" L1 generative layer the LOD-lab charter names —
+  upstream of rendering so features express a shared history, not a bag of toggled effects.
+
+### Prior active — supercruise (paused at a clean seam, pending UAT)
+
 **`supercruise-freelook-2026-06-10`** — **AUTOPILOT HALF BUILT (Tasks 1–7 of 13),
 paused at a clean seam 2026-06-10.** Elite-style supercruise is now THE in-system
 mover for the **autopilot**: tour legs AND post-warp fly-in both fly the new
@@ -587,7 +622,7 @@ autopilot rides; first GAME-tier (85%) capability lands with Tasks 8–10.
 the dev server before Tasks 8–13, the tour/warp loop works but manual F-mode still
 routes to the legacy FlightDynamics drive (not yet rewired).
 
-### Prior active (pending-UAT items remain)
+### Prior active — warp tunnel (pending-UAT items remain)
 
 **`warp-tunnel-pocket-traversal-2026-06-06`** — **cruise-visual tuning.**
 **Problem #2 (walls reverse halfway) FIXED `8bda388`, VERIFIED_PENDING_MAX.**
