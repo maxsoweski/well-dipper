@@ -246,3 +246,18 @@ describe('relief slice orchestrator', () => {
     expect(Array.from(a.substrate.height)).toEqual(Array.from(b.substrate.height));
   });
 });
+
+describe('E6 editor-on-host overprint (generality)', () => {
+  it('a rotated-pole overprint epoch changes relief but stays bounded (faint blend)', () => {
+    const base = runReliefSlice(P7.rocky, { n: 64, seed: 'op', epoch2: true });
+    const over = runReliefSlice(P7.rocky, { n: 64, seed: 'op', epoch2: true,
+                                            overprint: { rotatePoleDeg: 35, blend: 0.4 } });
+    let diff = 0, maxAbs = 0;
+    for (let i = 0; i < base.substrate.height.length; i++) {
+      const d = Math.abs(over.substrate.height[i] - base.substrate.height[i]);
+      diff += d; maxAbs = Math.max(maxAbs, d);
+    }
+    expect(diff).toBeGreaterThan(0);          // the overprint did something
+    expect(maxAbs).toBeLessThan(1.0);          // but it's a faint blend, not a rebuild
+  });
+});

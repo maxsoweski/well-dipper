@@ -31,10 +31,10 @@ export function stressAtLat(latDeg, drivers) {
   return { sMer, sZon, regime, grainAngle };
 }
 
-export function writeGrain(substrate, drivers) {
+export function writeGrain(substrate, drivers, rotatePoleDeg = 0) {
   const { n } = substrate;
   for (let iy = 0; iy < n; iy++) {
-    const lat = latDegOfRow(substrate, iy);
+    const lat = latDegOfRow(substrate, iy) + rotatePoleDeg;   // rotated pole → 2nd-gen offset bands
     const { sMer, sZon, regime, grainAngle } = stressAtLat(lat, drivers);
     const mag = Math.min(1, Math.hypot(sMer, sZon) / (1 + NU));
     for (let ix = 0; ix < n; ix++) {
@@ -68,7 +68,7 @@ function steeredNoise(noise, x, y, angle, regime, freq) {
 
 export function runE6(substrate, crust, drivers, epoch = { name: 'tectonic-build' }, seed = 'e6') {
   const { n } = substrate;
-  writeGrain(substrate, drivers);                                  // Steps 1-2
+  writeGrain(substrate, drivers, epoch.rotatePoleDeg || 0);        // Steps 1-2
   const rng = alea(String(seed) + ':e6:' + (epoch.name || ''));
   const noise = createNoise2D(rng);
   const noisePlateau = createNoise2D(alea(String(seed) + ':e6plateau'));

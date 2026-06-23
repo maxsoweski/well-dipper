@@ -15,7 +15,13 @@ export function runReliefSlice(driverBundle, opts = {}) {
   // EPOCH 2 — fluvial carve (E9 edits the host in place).
   let e9 = null;
   if (params.epoch2) e9 = runE9(substrate, drivers, { name: 'fluvial-carve' }, params.seed);
-  return { substrate, drivers, crust, heightAfterBuild, e9, params };
+  const heightAfterCarve = cloneHeight(substrate);
+  if (params.overprint) {
+    runE6(substrate, crust, drivers,
+          { name: 'despin-overprint', rotatePoleDeg: params.overprint.rotatePoleDeg ?? 30,
+            blend: params.overprint.blend ?? 0.4 }, params.seed + ':op');
+  }
+  return { substrate, drivers, crust, heightAfterBuild, heightAfterCarve, e9, params };
 }
 
 export function verifyReliefSlice(result) {
