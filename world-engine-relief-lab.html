@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>World-Engine — relief group slice (E6 build → E9 carve)</title>
+  <!--
+    world-engine-relief-lab.html — ISOLATED relief-substrate slice harness.
+    base step (D12 un-zero + stub crust) → EPOCH 1 E6 tectonic build → EPOCH 2 E9 fluvial carve,
+    sharing ONE mutable height field (the host-editor model). Pure compute in relief-*.js (vitest-tested);
+    this page only VISUALISES. E9 is a CPU bake reference (not per-frame). Served by Vite —
+    open http://127.0.0.1:5173/world-engine-relief-lab.html (Max runs `npm run dev`).
+  -->
+  <style>
+    html,body { margin:0; height:100%; background:#05060a; overflow:hidden; font-family:ui-monospace,monospace; }
+    #canvas { display:block; width:100vw; height:100vh; }
+    #hud { position:fixed; top:8px; left:8px; color:#9fd; font-size:12px; line-height:1.5;
+           background:rgba(0,0,0,.6); padding:8px 10px; border-radius:6px; white-space:pre; pointer-events:none; }
+    #mini { position:fixed; bottom:8px; right:8px; border:1px solid #234; image-rendering:pixelated; }
+    vite-error-overlay { display:none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+  <canvas id="mini" width="256" height="256"></canvas>
+  <script type="module" src="./world-engine-relief-lab.main.js"></script>
+</body>
+</html>
