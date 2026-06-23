@@ -1,6 +1,11 @@
 # World-Engine — MASTER PICKUP INDEX (read THIS first)
 
 **Status:** FIRST SLICE BUILT + **Max UAT-PASSED 2026-06-23** (`90b66f7`); brainstorm gate cleared 2026-06-22.
+**RELIEF BODY-TYPE DIVERGENCE BUILD: objective gate GREEN, `VERIFIED_PENDING_MAX <new-sha>` (was `842b649` pre-harness).**
+The relief slice now produces **categorically different worlds per body type** (not amplitude-only); decisive
+gate = `divergenceReport` (regime | hydrology | carve, reseed-invariant); 61/61 vitest pass. **UAT — "three
+categorically different worlds at one seed" — is MAX'S GATE ALONE; no agent closes it.** Push remains HOLD.
+Spec: `docs/superpowers/specs/2026-06-23-world-engine-body-divergence-design.md`; plan: `docs/superpowers/plans/2026-06-23-world-engine-body-divergence.md`; SDD task briefs + reports in `.superpowers/sdd/`.
 Repo `~/projects/well-dipper`, branch `master`, **everything local — nothing pushed (Max: HOLD).**
 **Branch plan (Max, 2026-06-23):** preserve `master` AS-IS; the next, *large* production-L1 integration (wiring
 engines into the real renderers + the type-demotion refactor — high blast radius) goes on a **DEDICATED branch**.
@@ -51,14 +56,31 @@ model end-to-end, the **expose+derive (Option A)** boundary, and **E9 bake feasi
   quality metric, not part of the pass gate** (resolution-dependent realism garnish, not in the §9 north-star); the
   gate is the **5 resolution-robust core signals** (subtractive, carve-correlates-relief, no-uphill,
   depressions-filled, accumulation-spread).
-- **Presets are AMPLITUDE-only BY DESIGN (not a bug).** They feed real physics-derived drivers, but those
-  currently modulate intensity (gravity cap, silicate gate, erodibility), **not** formation structure — the
-  spatial pattern is **seed-locked and preset-independent** (same seed + different preset = identical landform,
-  rescaled). Per-body-type *structural* divergence was never a slice goal. **Full why + how-to-make-them-diverge
-  is in the BUILD INTENT header of `relief-presets.js`** (and the entry header of `relief-slice.js`). Recorded so
-  no future session re-derives it from code (cost the 2026-06-23 session a full 6-module read).
+- **Presets now diverge STRUCTURALLY (body-type divergence build, 2026-06-23).** The earlier "amplitude-only
+  by design" caveat is SUPERSEDED. Five compounding layers now make same-seed presets produce *categorically
+  different worlds*: **L1 regime** (un-damped strain sign flips the Anderson regime mix per body), **L2 geometry**
+  (regime/sign branches steeredNoise → across- vs along-strike relief), **L3 seed** (a composition/regime
+  discriminator folds into the crust seed → composition-keyed layout), **L4 carve** (liquidStability gates ocean
+  fraction + fluvial carve), **L5 terrestrial** (a temperate liquid-water bundle completing the wet/frozen/airless
+  trio vs europa, lava). **Decisive gate = `divergenceReport` in `relief-slice.js`** (exported): a pair PASSES iff
+  it diverges on ≥1 robust, **reseed-invariant** axis — regime OR hydrology(|liquidStability|) OR carve. Reseed-
+  invariant by construction → a reshuffle of the same world cannot pass. The former "decisive gate = held-seed
+  hypsometric" was redefined (Task 4.5 GO + Task 7): a 15-seed sweep showed cross-regime hypsometric is seed-
+  fragile (6/15 fail at n=192), so hypsometric + anisotropy are now REPORTED to corroborate, not gated. **Full why
+  is in the BUILD INTENT headers of `relief-slice.js` + `relief-presets.js` + `relief-divergence.js`.** Still NOT
+  gated (future work): preset-aware palette (Europa not icy-colored) + temperature-driven precip.
+- **Harness (lab) surfaces the divergence for UAT.** `world-engine-relief-lab.main.js`: the preset selector now
+  offers `terrestrial` (auto, from `Object.keys(PRESETS)`); the HUD shows the current preset's drivers (dominant
+  regime / liquidStability / anisotropy) every render (cheap, read off the current run), plus an **on-demand
+  "divergence vs lava" button** that runs `divergenceReport` at n=128 (NOT per-frame — it runs the slice ~6×).
+  `window._relief.divergence(against, n)` exposes the same for scripted live checks. **Renderer
+  (buildMesh/displacement/coloring) stays PRESET-BLIND** — the selector picks the GENERATION input only.
 
-**NEXT (UAT ✅ done):** (1) **create a dedicated branch** off `master` for the world-engine production work
+**NEXT — divergence build awaits Max's UAT.** (0) **Max UAT on the body-type divergence build** (the immediate
+gate): open the relief lab, view the terrestrial / europa / lava trio at ONE seed, confirm they read as three
+categorically different worlds; the on-demand "divergence vs lava" button + HUD drivers line corroborate
+objectively, but the holistic judgment is Max's alone. Objective gate already GREEN (61/61 + `divergenceReport`).
+Then the original slice-NEXT: (1) **create a dedicated branch** off `master` for the world-engine production work
 (preserve `master` as-is, per Max 2026-06-23); (2) on that branch, **scope the production L1 layer** via
 `dev-collab-scope` (high blast radius — wiring engines into the real renderers + the type-demotion refactor);
 (3) optionally extend the *lab* slice first (sphere/cubemap mapping, GPU FastFlow bake, more engines E7/E10/E11

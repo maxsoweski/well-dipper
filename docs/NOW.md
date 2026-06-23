@@ -590,6 +590,40 @@ items: shared-relief-substrate pattern, host-editor/epoch model end-to-end, expo
 - **Maps to journey:** the deferred "Phase 2" L1 generative layer the LOD-lab charter names —
   upstream of rendering so features express a shared history, not a bag of toggled effects.
 
+**▶ RELIEF BODY-TYPE DIVERGENCE BUILD — DONE, objective gate GREEN → `VERIFIED_PENDING_MAX`
+(harness commit this session; build pre-harness `842b649`). Push: HOLD.** Max's post-UAT ask:
+the relief slice should produce **categorically different worlds per body type** (the prior slice
+was AMPLITUDE-only by design). Built additively in the same isolated lab across 5 compounding
+layers: **L1 regime** (un-damped strain sign flips the Anderson regime mix per body),
+**L2 geometry** (regime/sign branches steeredNoise → across- vs along-strike relief),
+**L3 seed** (a composition/regime discriminator folds into the crust seed → composition-keyed
+LAYOUT; toggleable via `discriminate`), **L4 carve** (liquidStability gates ocean fraction +
+fluvial carve — airless≈0, temperate-wet=full network), **L5 terrestrial** (a temperate
+liquid-water bundle completing the wet/frozen/airless trio vs europa, lava).
+- **DECISIVE GATE redefined → `divergenceReport` in `relief-slice.js`** (exported): a pair PASSES
+  iff it diverges on ≥1 ROBUST, RESEED-INVARIANT axis — **regime | hydrology(|liquidStability|) |
+  carve** (thresholds 0.2 / 0.3 / 0.05). Reseed-invariant by construction → a reshuffle of the
+  same world cannot pass. **The spec's original "decisive gate = held-seed HYPSOMETRIC" did NOT
+  hold up** — a 15-seed sweep showed cross-regime hypsometric is seed-fragile (6/15 fail at n=192),
+  so hypsometric + directional anisotropy are now REPORTED to corroborate, NOT gated (Task 4.5
+  EARLY-EXIT GO + Task 7 redefinition).
+- **Objective gate GREEN: 61/61 vitest pass** (`tests/world-engine-relief-slice.test.js`).
+- **Harness (this session, lab-only):** preset selector now offers `terrestrial` (auto from
+  `Object.keys(PRESETS)`); HUD shows the current preset's drivers (dominant regime / liquidStability /
+  anisotropy) every render (cheap — read off the current run), plus an **on-demand "divergence vs lava"
+  button** that runs `divergenceReport` at n=128 (NOT per-frame). `window._relief.divergence(against,n)`
+  exposes it for scripted live checks. **Renderer (buildMesh/displacement/coloring) stays PRESET-BLIND.**
+- **New file:** `relief-divergence.js` (the measuring instrument: hypsometric / perCellRMS /
+  regimeHistogram / directionalAnisotropy / carveFraction / channelFraction). Build-intent headers
+  updated in `relief-slice.js` (non-goal flipped to "now realized"), `relief-presets.js`, `relief-divergence.js`.
+- **Spec / plan / SDD:** `docs/superpowers/specs/2026-06-23-world-engine-body-divergence-design.md`,
+  `docs/superpowers/plans/2026-06-23-world-engine-body-divergence.md`, task briefs+reports in `.superpowers/sdd/`.
+- **▶ NEXT — UAT IS MAX'S GATE ALONE:** open the relief lab on GPU, view the **terrestrial / europa /
+  lava trio at ONE seed**, confirm they read as three categorically different worlds (the button + HUD
+  corroborate objectively; the holistic judgment is Max's). No agent closes UAT. Then resume the
+  production-L1 scope. **Controller still owes the live integration check** (the 3-world A/B + screenshots
+  on `:5173`); this task was CODE+DOCS only.
+
 ### Prior active — supercruise (paused at a clean seam, pending UAT)
 
 **`supercruise-freelook-2026-06-10`** — **AUTOPILOT HALF BUILT (Tasks 1–7 of 13),

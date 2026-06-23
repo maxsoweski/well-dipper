@@ -7,13 +7,23 @@
 //   subtracts from the SAME height) → optional E6 despin-overprint. verifyReliefSlice checks 5 north-star signals.
 // Intent: prove the host-editor / shared-substrate mechanism end-to-end — one mutable DEM edited across epochs
 //   so the result reads as a landscape WITH A HISTORY — in an ISOLATED lab (zero production edits).
+// BODY-TYPE STRUCTURAL DIVERGENCE — NOW REALIZED (this build, 2026-06-23). Presets no longer differ by
+//   amplitude alone; they diverge STRUCTURALLY across five compounding layers:
+//     L1 regime — un-damped radial-strain sign flips the Anderson regime mix per body (THRUST↔NORMAL bands).
+//     L2 geometry — regime/sign branches steeredNoise so relief varies tightly across-strike vs blockily.
+//     L3 seed — a composition/regime discriminator folds into the crust seed → composition-keyed LAYOUT.
+//     L4 carve — liquidStability gates ocean fraction + fluvial carve (airless≈0, temperate-wet=full network).
+//     L5 terrestrial — a temperate liquid-water bundle completes the wet/frozen/airless trio (vs europa, lava).
+//   DECISIVE GATE = divergenceReport() below: a pair PASSES iff it diverges on ≥1 ROBUST, RESEED-INVARIANT,
+//   physics-carried axis — tectonic regime (L1) OR hydrology/liquidStability (L4) OR fluvial carve (L4).
+//   Reseed-invariant by construction → a reshuffle of the same world cannot pass. Held-seed hypsometric +
+//   directional anisotropy are REPORTED to corroborate, not gated. (61/61 tests green; objective gate GREEN.)
 // Deliberate NON-GOALS (by design — do NOT "fix" without scoping):
-//   • Per-body-type structural divergence: presets modulate AMPLITUDE only, not formation shape — full why in
-//     the BUILD INTENT block of relief-presets.js.
 //   • Flat 2D latitude-band DEM, not sphere/cubemap (sphere mapping deferred).
 //   • E9 is a CPU bake-time REFERENCE, not per-frame (GPU FastFlow bake deferred).
 //   • D12 derived in this slice's own base step (production PlanetGenerator.js:565 hard-zero untouched).
 //   • Hack's-law exponent is a REPORTED metric, not a pass gate (resolution-dependent garnish).
+//   • Palette stays height-only + precip stays latitude-only (a preset-aware palette is future work, not gated).
 import { makeBaseStep } from './relief-base-step.js';
 import { runE6 } from './relief-e6-tectonic.js';
 import { runE9, d8Receivers, priorityFloodFill } from './relief-e9-hydrology.js';
@@ -52,6 +62,7 @@ const CARVE_DIVERGE  = 0.05;  // |carveFraction| gap
 // regimes) are REPORTED to credit/corroborate, NOT gated.
 export function divergenceReport(bundleA, bundleB, { n = 192, seed = 'gate' } = {}) {
   const held  = (b, s) => runReliefSlice(b, { n, seed: s, epoch2: false, discriminate: false });
+  // carve magnitude is liquidStability-gated -> the L3 discriminator (spatial only) does not move carveFraction, so this axis stays reseed-invariant despite discriminate:true
   const carve = (b)    => runReliefSlice(b, { n, seed,     epoch2: true,  discriminate: true  });
   const a0 = held(bundleA, seed), b0 = held(bundleB, seed);
   const aR1 = held(bundleA, seed + 'A'), aR2 = held(bundleA, seed + 'B');   // reseed floor (same bundle)
