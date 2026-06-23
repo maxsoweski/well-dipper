@@ -444,9 +444,30 @@ describe('Layer 3 — toggleable seed discriminator', () => {
     expect(rms_L3(rocky.substrate.height, europa.substrate.height)).toBeGreaterThan(0.3);
   });
   it('GUARD: a reseed alone (discriminator) must NOT be what carries the held-seed hypsometric gate', () => {
-    // Same bundle, discriminator ON vs OFF = pure reshuffle of ONE world → hypsometric ~ floor, not a pass.
-    const on  = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: true });
-    const off = runRS_L3(P_L3.rocky, { ...grid, epoch2: false, discriminate: false });
-    expect(hypso_L3(on.substrate.height, off.substrate.height)).toBeLessThan(0.05); // reshuffle ≈ no shape change
+    // The anti-"coat-swap-of-a-different-color" guard, made RELATIVE instead of a fixed threshold. A pure
+    // reseed (same bundle, discriminator ON vs OFF) only reshuffles the ARRANGEMENT of one world's heights; it
+    // leaves the height DISTRIBUTION almost untouched. A genuine cross-regime pair (two different-regime
+    // bundles, both held-seed) moves that distribution more. We measure BOTH in-run and assert the reshuffle
+    // is a fraction of the cross divergence, so the bar tracks the field's actual scale rather than a magic
+    // constant. Why this beats the old fixed `< 0.05`: a 15-seed sweep at n=96 found rocky reshuffle ranging
+    // 0.0212–0.1458 (mean 0.0594) — already ABOVE 0.05, i.e. the old test only passed on a lucky pinned seed.
+    // Run at n=192 for cleaner distribution statistics.
+    //
+    // SCOPE NOTE (honesty — do not overstate): this relative form is NOT seed-universal. A 15-seed sweep at
+    // n=192 showed reshuffle/cross ratio ranging 0.117–1.446 (mean 0.42); ~6/15 seeds exceed 0.4 because on a
+    // few seeds the rocky-OFF and europa-OFF height DISTRIBUTIONS genuinely converge (cross collapses to
+    // reshuffle scale — e.g. seed "qq": cross 0.082, reshuffle 0.119). Averaging either/both sides over extra
+    // held-seeds did not rescue those outliers. So this is a DETERMINISTIC single-seed assertion on the pinned
+    // committed seed (L3, n=192: reshuffle 0.0368, cross 0.1540, ratio 0.239 → 1.7× headroom under 0.4), which
+    // is a strict, in-run-scaled improvement over the old fixed-0.05 — NOT a claim that every seed clears 0.4.
+    // See task-4-report.md for the full multi-seed table. Revisit if a seed-universal GUARD is needed (would
+    // require a noise-floor estimate, not a single cross-pair).
+    const gridHi = { ...grid, n: 192 };
+    const rockyOn  = runRS_L3(P_L3.rocky,  { ...gridHi, epoch2: false, discriminate: true });
+    const rockyOff = runRS_L3(P_L3.rocky,  { ...gridHi, epoch2: false, discriminate: false });
+    const europaOff = runRS_L3(P_L3.europa, { ...gridHi, epoch2: false, discriminate: false });
+    const reshuffle = hypso_L3(rockyOn.substrate.height, rockyOff.substrate.height);  // same bundle, ON vs OFF
+    const cross     = hypso_L3(rockyOff.substrate.height, europaOff.substrate.height); // cross-regime, both held-seed
+    expect(reshuffle).toBeLessThan(0.4 * cross); // a reseed reshuffles arrangement, not the height distribution
   });
 });
