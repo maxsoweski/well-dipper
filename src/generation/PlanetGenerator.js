@@ -365,6 +365,9 @@ export class PlanetGenerator {
     // Tidal locking (PhysicsEngine §2)
     const starMassSolar = zones?.starMassSolar || 1.0;
     const ageGyr = zones?.ageGyr || 4.5;
+    // System metallicity actually used in generation (mirrors the value fed to
+    // deriveComposition above). Surfaced on planetData as an additive driver.
+    const metallicity = zones ? (zones.metallicity || 0) : 0;
     const lockTimescale = tidalLockTimescale(starMassSolar, massEarth, radiusEarth, Math.max(orbitRadiusAU, 0.01));
     const tidalState = checkTidalLock(lockTimescale, ageGyr);
 
@@ -685,6 +688,9 @@ export class PlanetGenerator {
       tidalState,
       habitability: habScore,
       surfaceHistory,
+      // System physics drivers (WS1 — additive surfacing, render-neutral)
+      age: ageGyr, // Gyr — system age used in tidal/atmosphere generation
+      metallicity, // dex — system metallicity used in composition generation
     };
   }
 

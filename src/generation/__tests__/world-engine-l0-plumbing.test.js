@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { generateGrid, GRID } from './world-engine-l0-grid.js';
+import { generateGrid, GRID, generateBody, SOL_ZONES } from './world-engine-l0-grid.js';
+import { PlanetGenerator } from '../PlanetGenerator.js';
+import { SeededRandom } from '../SeededRandom.js';
 import baseline from './__fixtures__/l0-baseline.json';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -44,6 +46,27 @@ describe('WS1 L0 plumbing — determinism', () => {
     // includes a giant and at least one tidally-locked body
     expect(grid.some((b) => b.type === 'gas-giant')).toBe(true);
     expect(grid.some((b) => b.tidalState.locked)).toBe(true);
+  });
+});
+
+describe('WS1 AC4 — age + metallicity surfaced', () => {
+  it('age and metallicity appear on planetData equal to the system values', () => {
+    // Any grid row is generated under SOL_ZONES (ageGyr 4.5, metallicity 0.0),
+    // and generate() surfaces the SAME system drivers it generated with.
+    const body = generateBody(GRID[3]); // 'we-temperate-terra', a stable terrestrial
+    expect(body.age).toBeCloseTo(SOL_ZONES.ageGyr); // 4.5 Gyr
+    expect(body.metallicity).toBeCloseTo(SOL_ZONES.metallicity); // 0.0 dex
+  });
+
+  it('surfaced drivers track non-default system values', () => {
+    // Prove the keys carry the SYSTEM value, not a hardcoded default: drive
+    // the real generate() entry with a distinct age + metallicity and assert
+    // the surfaced keys echo them.
+    const [seed, orbitAU, forceType] = GRID[3];
+    const zones = { ...SOL_ZONES, ageGyr: 8.2, metallicity: 0.45 };
+    const body = PlanetGenerator.generate(new SeededRandom(seed), orbitAU, null, zones, forceType);
+    expect(body.age).toBeCloseTo(8.2);
+    expect(body.metallicity).toBeCloseTo(0.45);
   });
 });
 
