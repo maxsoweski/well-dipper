@@ -27,10 +27,10 @@
     },
     {
       "id": "AC3-magnetic-field-surfaced-single-source",
-      "statement": "A body's magnetic-field strength (D13) is surfaced on planetData from a SINGLE canonical computation, instead of being computed inline twice (PhysicsEngine.js:168 in computeAtmosphere, PlanetGenerator.js:421 in the aurora block) and discarded. The aurora/atmosphere paths read the surfaced value rather than recomputing, so the surfaced number equals the value those paths already used (behavior-preserving).",
+      "statement": "A body's magnetic-field strength (D13) — the DYNAMO field the aurora path uses — is surfaced on planetData as a single canonical value: computed once in generate() and read by the aurora block (no longer recomputed-and-discarded there), with the surfaced number byte-identical to the aurora path's prior value (behavior-preserving). NARROWED 2026-06-24 (Max, after verify-workstream found the bind): computeAtmosphere (PhysicsEngine.js:167-168) intentionally keeps its OWN internal field-strength proxy for atmosphere stripping, which uses a cruder lock test (|rotationSpeed|<0.01, treating 3:2-resonance as fully locked) than the surfaced dynamo value (lockType==='synchronous'). Unifying them is a deliberate BEHAVIOR CHANGE (alters 3:2-resonance atmosphere retention) and is OUT of additive-WS1 scope — logged as a follow-up cleanup (see intent.md + production-L1-plan deferred cleanups). The surfaced magneticField is the canonical dynamo driver for WS2/E4.",
       "verifyVia": {
-        "input": "npx vitest run: generate bodies across iron/rotation/lock combinations; read planetData.magneticField and compare to the value the aurora/atmosphere code uses",
-        "observable": "planetData.magneticField is present and EQUALS the value the aurora/atmosphere paths consume (single source of truth); aurora/atmosphere rendering inputs are unchanged (the surfaced value === the old inline value)"
+        "input": "npx vitest run: generate bodies across iron/rotation/lock combinations; read planetData.magneticField and compare to the aurora path's dynamo expression ironFraction * (lockType==='synchronous' ? 0.2 : 1.0)",
+        "observable": "planetData.magneticField is present and EQUALS the aurora/dynamo value (single source for the aurora path; the aurora block reads it rather than recomputing); aurora rendering inputs are unchanged (surfaced value === old inline aurora value). computeAtmosphere's separate internal stripping proxy is intentionally out of scope per the narrowed AC (logged cleanup)."
       },
       "layer": "integration",
       "live": false

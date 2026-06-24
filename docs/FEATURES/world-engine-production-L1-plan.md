@@ -268,6 +268,15 @@ production's existing sphere carve genuinely subtractive.
 8. Per-body bake budget (WS4): target "seconds, not per-frame"; sets the E9 incision-pass count (lab uses 5) and
    whether a 2nd route is needed.
 
+## Deferred cleanups (logged, non-blocking)
+
+- **Magnetic-field lock-predicate unification (from WS1 AC3, 2026-06-24).** `computeAtmosphere`'s internal
+  atmosphere-stripping field proxy (`PhysicsEngine.js:167-168`) uses a cruder lock test (`|rotationSpeed|<0.01`,
+  treating 3:2-resonance as fully locked → ×0.2) than the canonical surfaced `planetData.magneticField` dynamo value
+  (`lockType==='synchronous'` → ×1.0 for 3:2). The dynamo test is the more physically correct one. Unifying is a
+  deliberate BEHAVIOR CHANGE (alters 3:2-resonance atmosphere retention) → needs its own verify + Max UAT; left out
+  of additive WS1. Fold into WS2 or a small follow-up.
+
 ---
 
 *Next step (per the handoff + INDEX §1): create a dedicated branch off `master`, then `dev-collab-scope` the first

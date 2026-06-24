@@ -164,6 +164,12 @@ export function computeAtmosphere(params) {
   // Magnetic field factor: strong field reduces sputtering by ~10×
   // Field strength correlates with iron core fraction and rotation rate
   // Tidally locked planets have weaker fields (slower rotation)
+  // NOTE (WS1, 2026-06-24): this is computeAtmosphere's OWN internal stripping proxy,
+  // intentionally SEPARATE from the canonical surfaced planetData.magneticField (the
+  // dynamo value computed in PlanetGenerator). This proxy uses a cruder lock test
+  // (rotationSpeed<0.01, which is 0 for ANY locked body incl. 3:2-resonance) whereas
+  // the surfaced dynamo value uses lockType==='synchronous'. Unifying them would change
+  // 3:2-resonance atmosphere retention (a behavior change) — deferred cleanup, not WS1.
   const isLocked = Math.abs(rotationSpeed) < 0.01;
   const fieldStrength = ironFraction * (isLocked ? 0.2 : 1.0);
   // UV flux relative to Earth (1/r² law)

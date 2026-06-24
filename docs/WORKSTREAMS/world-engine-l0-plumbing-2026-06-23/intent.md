@@ -28,8 +28,10 @@ programmatic"; additive + WS2-consumes is that path under the lab-only decision.
   which were just as dead.
 - **Every world has a real orbital eccentricity.** It never did before. Same seed always gives the same
   number. We're only computing and exposing it for now — orbits don't visibly change yet.
-- **A world's magnetic field is available on the world**, and it's the *same* number the aurora already
-  uses — computed once, not twice and thrown away.
+- **A world's magnetic field is available on the world** — the *same* dynamo number the aurora path uses,
+  surfaced as a canonical driver instead of being recomputed inline and thrown away. (Atmosphere stripping keeps
+  its own separate internal field proxy with a cruder lock test — a pre-existing quirk, left alone to keep WS1
+  additive; logged as a later cleanup.)
 - **A world's age and its system's metallicity are available on the world** (they were computed and dropped).
 - **From any world you can see its place in the system** — its siblings, its own moons, who it's in
   resonance with, its companion star — and reading that doesn't break saving/loading.
