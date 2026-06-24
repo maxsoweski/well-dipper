@@ -82,6 +82,7 @@ import {
 import { Settings } from './ui/Settings.js';
 import { BodyInfo } from './ui/BodyInfo.js';
 import { TargetingReticle } from './ui/TargetingReticle.js';
+import { SupercruiseHud } from './ui/SupercruiseHud.js';
 import { SoundEngine } from './audio/SoundEngine.js';
 import { MusicManager } from './audio/MusicManager.js';
 import { generateSystemNames, generateSystemName } from './generation/NameGenerator.js';
@@ -297,6 +298,10 @@ const bodyInfo = new BodyInfo();
 // Three visual states: none, tentative (hover), selected (committed).
 // Owns rendering only — main.js owns the state (_hoverTarget, _selectedTarget).
 const targetingReticle = new TargetingReticle(camera);
+// Supercruise HUD (AC7): own fixed canvas above the reticle (zIndex 51),
+// pure view — main.js injects { speed, throttle, deflection, targetPos,
+// dropState } each render frame. Exposed as window._sc.hud below.
+const scHud = new SupercruiseHud(camera);
 // Debug hook — inspect reticle state from DevTools / Playwright
 window._reticle = targetingReticle;
 window._getReticleState = () => ({
@@ -444,7 +449,7 @@ let _scDeflection = { x: 0, y: 0 };
 // per-instance objects — each constructor shallow-copies its module
 // defaults, so mutating the default objects would affect nothing.
 window._sc = {
-  model: scModel, pilot: scPilot, head: scHead,
+  model: scModel, pilot: scPilot, head: scHead, hud: scHud,
   tuning: scModel.tuning, pilotTuning: scPilot.tuning, headTuning: scHead.tuning,
 };
 
@@ -5802,6 +5807,27 @@ function _resolveSelectedBody() {
   return { mesh: t.mesh, radius: t.radius };
 }
 
+// Drop-window state for the supercruise HUD target marker (AC7). Mirrors the
+// manual drop-out capture rule (the `if (_scManual)` block in simStep): inside
+// the 10R capture sphere → 'in-window' if slow enough to drop, else 'too-fast';
+// outside the sphere (or no target) → 'none'. The 10R / (10R)/DROP_ETA_MAX
+// constants are SINGLE-SOURCED from scPilot.tuning so the HUD readout and the
+// live capture never drift apart. Does NOT re-tune any model speed floors.
+function _scDropState() {
+  // Resolve the same body the HUD marker tracks: selected body first, else the
+  // pilot's active target (so the autopilot tour shows a drop window too).
+  const sel = _resolveSelectedBody();
+  const bp = sel ? sel.mesh.position : (scPilot._target?.mesh?.position ?? null);
+  if (!bp) return 'none';
+  const R = (sel ? sel.radius : scPilot._target?.radius) ?? 5;
+  const t = scPilot.tuning;
+  const captureSphere = R * t.DROP_RADIUS_FACTOR;          // 10R
+  const dropMaxSpeed = captureSphere / t.DROP_ETA_MAX;     // (10R)/2.5
+  const d = scModel.position.distanceTo(bp);
+  if (d > captureSphere) return 'none';
+  return scModel.speed <= dropMaxSpeed ? 'in-window' : 'too-fast';
+}
+
 /**
  * Deselect the currently selected target. Hides the commit burn button.
  */
@@ -8077,6 +8103,20 @@ function renderFrame(alpha) {
     selectedTarget: _selectedForReticle,
     ghostTargets: _visibleGhostTargets,
     shipTargets: _shipTargetsForReticle,
+  });
+
+  // ── Supercruise HUD (AC7) ── speed, throttle, virtual-joystick reticle,
+  // target marker + drop window. Visible only while flying supercruise (manual
+  // stick or autopilot pilot) and not warping; honors the H-key HUD toggle.
+  // targetPos: the selected body's mesh.position, else the pilot's active
+  // target — same body _scDropState() classifies, so marker + label agree.
+  scHud.update({
+    visible: _hudVisible && (_scManual || scPilot.isActive) && !warpEffect.isActive,
+    speed: scModel.speed,
+    throttle: scModel.throttle,
+    deflection: _scDeflection,
+    targetPos: _resolveSelectedBody()?.mesh.position ?? scPilot._target?.mesh?.position ?? null,
+    dropState: _scDropState(),
   });
   _updateCommitBurnButton();
 
