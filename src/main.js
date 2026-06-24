@@ -5918,7 +5918,10 @@ function _updateCommitBurnButton() {
   // button appears during the autopilot tour because _selectedTarget
   // is set to the autopilot target (which makes the reticle bracket
   // it) but flythrough.active is false.
-  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning || autopilotMotion.isActive;
+  // supercruise-freelook-2026-06-10 (AC5c): suppress the BURN button while a
+  // supercruise leg is flying (autopilot pilot OR manual stick), the same way
+  // the legacy autopilotMotion.isActive guard suppressed it during V1 legs.
+  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning || autopilotMotion.isActive || scPilot.isActive || _scManual;
   const visible = !!_selectedTarget && !burning;
   btn.style.display = visible ? 'block' : 'none';
   if (visible) {
@@ -5981,6 +5984,9 @@ function focusShip(shipIndex) {
 
   console.log(`[BURN START] ship: archetype=${archetype} hullScene=${hullLengthScene.toExponential(3)} orbitDist=${orbitDist.toExponential(3)} (~${(orbitDist * 149597870.7).toFixed(0)}m)`);
   cameraController.bypassed = true;
+  // QUARANTINED LEGACY PATH (supercruise-freelook-2026-06-10): ship-target burns
+  // keep NavigationSubsystem's ship-lock orbit until a dedicated port preserves
+  // Ship Scanner behavior. All other in-system motion is SupercruiseModel.
   navSubsystem.beginMotion({
     fromPosition: camera.position.clone(),
     fromOrientation: camera.quaternion.clone(),
@@ -6030,26 +6036,20 @@ function focusPlanet(index) {
     const orbitDist = Math.max(bodyRadius * 6, 0.02);
     console.log(`[BURN START] planet: radius=${bodyRadius.toFixed(4)}, orbitDist=${orbitDist.toFixed(4)}, ratio=${(orbitDist/Math.max(bodyRadius,0.001)).toFixed(1)}x`);
     cameraController.bypassed = true;
-    navSubsystem.beginMotion({
-      fromPosition: camera.position.clone(),
-      fromOrientation: camera.quaternion.clone(),
-      fromOrbitBody: null,
+    // COMMIT BURN cutover (supercruise-freelook-2026-06-10, AC5c): the
+    // manual nav-computer burn now flies on SupercruiseModel via the
+    // SupercruisePilot, replacing the legacy navSubsystem.beginMotion
+    // dispatch. Seed the model from the camera pose so the leg departs
+    // standing still from the current view, then run a body-locked HOLD
+    // leg with linger:Infinity (orbit until input/idle re-engages the
+    // tour — the holdOnly/orbitDuration:99999 semantics of the old path).
+    scModel.position.copy(camera.position);
+    scModel.orientation.copy(camera.quaternion);
+    scModel.speed = 0; scModel.setThrottle(0);
+    scPilot.beginLeg({
       toBody: entry.planet.mesh,
-      toOrbitDistance: orbitDist,
-      toBodyRadius: bodyRadius,
-      // Manual-burn: pre-refactor `beginTravelFrom` assigned nextBodyRef =
-      // target as a side-effect of its parameter naming; main.js never
-      // overrode it. Preserve that accidental-but-load-bearing behavior so
-      // the `_updateTravel` entry-yaw pick matches (verified by telemetry
-      // harness). See tests/refactor-verification/autopilot-navigation-subsystem-split.html.
-      nextBody: entry.planet.mesh,
-      nextOrbitDistance: orbitDist,
-      arrivalOptions: {
-        approachFirst: false,
-        holdOnly: true,
-        slowOrbit: true,
-        orbitDuration: 99999,
-      },
+      bodyRadius: bodyRadius,
+      linger: Infinity,
     });
     const pName = system.names?.planets?.[index]?.name ?? null;
     bodyInfo.showPlanet(entry.planet.data, index, pName);
@@ -6084,22 +6084,18 @@ function focusStar(starIdx) {
   viewDist = Math.max(viewDist, 2.0);
   const bodyRadius = starObj.data.radius;
   cameraController.bypassed = true;
-  navSubsystem.beginMotion({
-    fromPosition: camera.position.clone(),
-    fromOrientation: camera.quaternion.clone(),
-    fromOrbitBody: null,
+  // COMMIT BURN cutover (supercruise-freelook-2026-06-10, AC5c): manual
+  // star burn now flies on SupercruiseModel via SupercruisePilot. Seed
+  // from the camera pose, then a body-locked HOLD leg with linger:Infinity
+  // (the holdOnly/orbitDuration:99999 semantics of the legacy navSubsystem
+  // path — orbit until input/idle re-engages the tour).
+  scModel.position.copy(camera.position);
+  scModel.orientation.copy(camera.quaternion);
+  scModel.speed = 0; scModel.setThrottle(0);
+  scPilot.beginLeg({
     toBody: starObj.mesh,
-    toOrbitDistance: viewDist,
-    toBodyRadius: bodyRadius,
-    // Preserve pre-refactor manual-burn nextBodyRef = target accident.
-    nextBody: starObj.mesh,
-    nextOrbitDistance: viewDist,
-    arrivalOptions: {
-      approachFirst: false,
-      holdOnly: true,
-      slowOrbit: true,
-      orbitDuration: 99999,
-    },
+    bodyRadius: bodyRadius,
+    linger: Infinity,
   });
   const sName = system.names
     ? (starIdx === 1 ? system.names.star2 : system.names.star)
@@ -6132,22 +6128,18 @@ function focusMoon(planetIndex, moonIndex) {
   // Smooth cinematic travel instead of instant snap
   const bodyRadius = moon.data.radius;
   cameraController.bypassed = true;
-  navSubsystem.beginMotion({
-    fromPosition: camera.position.clone(),
-    fromOrientation: camera.quaternion.clone(),
-    fromOrbitBody: null,
+  // COMMIT BURN cutover (supercruise-freelook-2026-06-10, AC5c): manual
+  // moon burn now flies on SupercruiseModel via SupercruisePilot. Seed
+  // from the camera pose, then a body-locked HOLD leg with linger:Infinity
+  // (the holdOnly/orbitDuration:99999 semantics of the legacy navSubsystem
+  // path — orbit until input/idle re-engages the tour).
+  scModel.position.copy(camera.position);
+  scModel.orientation.copy(camera.quaternion);
+  scModel.speed = 0; scModel.setThrottle(0);
+  scPilot.beginLeg({
     toBody: moon.mesh,
-    toOrbitDistance: viewDist,
-    toBodyRadius: bodyRadius,
-    // Preserve pre-refactor manual-burn nextBodyRef = target accident.
-    nextBody: moon.mesh,
-    nextOrbitDistance: viewDist,
-    arrivalOptions: {
-      approachFirst: false,
-      holdOnly: true,
-      slowOrbit: true,
-      orbitDuration: 99999,
-    },
+    bodyRadius: bodyRadius,
+    linger: Infinity,
   });
   const mName = system.names?.planets?.[planetIndex]?.moons?.[moonIndex] ?? null;
   bodyInfo.showMoon(moon.data, planetIndex, mName);
@@ -6307,6 +6299,15 @@ function _handleScPilotFrame(frame) {
   // New leg started (beginLeg → ALIGN) — re-arm the advance latch.
   if (frame.phaseChanged && frame.phase === PilotPhase.ALIGN) {
     _scLegAdvanced = false;
+  }
+
+  // Manual COMMIT BURN arrival (supercruise-freelook-2026-06-10, AC5c):
+  // when a manual burn leg reaches HOLD (autopilot OFF), we've entered the
+  // post-burn body-locked orbit — arm the idle re-engage. This is the
+  // SupercruisePilot equivalent of the legacy navSubsystem travelComplete
+  // arming (the focusShip ship-lock path still uses that legacy site).
+  if (frame.phaseChanged && frame.phase === PilotPhase.HOLD && !autoNav.isActive) {
+    _manualBurnOrbiting = true;
   }
 
   // Tour-only wiring below; manual-burn pilot legs (Task 9) skip it.
