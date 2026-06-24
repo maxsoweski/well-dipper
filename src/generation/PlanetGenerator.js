@@ -371,6 +371,14 @@ export class PlanetGenerator {
     const lockTimescale = tidalLockTimescale(starMassSolar, massEarth, radiusEarth, Math.max(orbitRadiusAU, 0.01));
     const tidalState = checkTidalLock(lockTimescale, ageGyr);
 
+    // Magnetic field strength (PhysicsEngine §D13) — SINGLE source of truth.
+    // iron core fraction × rotation factor (synchronous tidal lock weakens the
+    // dynamo). Computed ONCE here; the aurora block reads `magneticField` rather
+    // than recomputing, and it is surfaced on planetData as an additive driver.
+    // Expression is byte-identical to the former inline aurora computation.
+    const isLocked = tidalState.locked && tidalState.lockType === 'synchronous';
+    const magneticField = composition.ironFraction * (isLocked ? 0.2 : 1.0);
+
     // Atmosphere — physics-driven (PhysicsEngine §1)
     const atmoPhysics = computeAtmosphere({
       radiusEarth, massEarth, orbitAU: orbitRadiusAU,
@@ -419,9 +427,8 @@ export class PlanetGenerator {
     // ── Aurora ── (physics-driven: magnetic field + atmosphere + stellar wind)
     let aurora = null;
     if (atmoPhysics.retained) {
-      // Magnetic field strength: iron core fraction × rotation factor
-      const isLocked = tidalState.locked && tidalState.lockType === 'synchronous';
-      const fieldStrength = composition.ironFraction * (isLocked ? 0.2 : 1.0);
+      // Magnetic field strength is computed once above (`magneticField`,
+      // single source of truth); the aurora block reads it here.
 
       // UV/stellar wind flux (1/r² from star)
       const uvFlux = luminosityRel / Math.max(orbitRadiusAU * orbitRadiusAU, 0.001);
@@ -430,11 +437,11 @@ export class PlanetGenerator {
       // Strong field + moderate UV = clear auroral ovals (Earth, Jupiter)
       // Weak field = no aurora (Venus, Mars)
       // Very strong UV can overwhelm even weak fields (close-in planets around M-dwarfs)
-      if (fieldStrength > 0.05) {
+      if (magneticField > 0.05) {
         // Aurora intensity: stronger stellar wind + stronger field = brighter
         // But very close planets get overwhelmed (field compressed, aurora everywhere)
         const windIntensity = Math.min(uvFlux, 50); // cap extreme cases
-        const auroraIntensity = Math.min(1.0, fieldStrength * windIntensity * 0.15);
+        const auroraIntensity = Math.min(1.0, magneticField * windIntensity * 0.15);
 
         // Only visible auroras above a threshold
         if (auroraIntensity > 0.05) {
@@ -455,8 +462,8 @@ export class PlanetGenerator {
           // Aurora ring latitude: typically 60-75° from equator (15-30° from pole)
           // Stronger field → narrower ring closer to pole
           // Weaker field → wider, more diffuse ring, closer to equator
-          const ringLatitude = 0.7 + fieldStrength * 0.2; // 0.7 to 0.9 (in normalized Y)
-          const ringWidth = 0.15 - fieldStrength * 0.08;  // 0.07 to 0.15
+          const ringLatitude = 0.7 + magneticField * 0.2; // 0.7 to 0.9 (in normalized Y)
+          const ringWidth = 0.15 - magneticField * 0.08;  // 0.07 to 0.15
 
           aurora = {
             color,
@@ -691,6 +698,7 @@ export class PlanetGenerator {
       // System physics drivers (WS1 — additive surfacing, render-neutral)
       age: ageGyr, // Gyr — system age used in tidal/atmosphere generation
       metallicity, // dex — system metallicity used in composition generation
+      magneticField, // D13 — iron-core × rotation dynamo strength (single source; aurora reads it)
     };
   }
 

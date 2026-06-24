@@ -70,6 +70,34 @@ describe('WS1 AC4 — age + metallicity surfaced', () => {
   });
 });
 
+describe('WS1 AC3 — magneticField surfaced, single source', () => {
+  // The aurora block (PlanetGenerator.js:~423-424) computes its field strength
+  // as `composition.ironFraction * (isLocked ? 0.2 : 1.0)` where
+  // `isLocked = tidalState.locked && tidalState.lockType === 'synchronous'`.
+  // AC3 hoists that SINGLE computation to a `magneticField` const surfaced on
+  // planetData; the aurora block reads it instead of recomputing. The test
+  // mirrors the aurora block's EXACT lock check + formula (NOT bare
+  // `tidalState.locked`) so it validates byte-identical behavior.
+  const expectedField = (body) => {
+    const isLocked = body.tidalState.locked && body.tidalState.lockType === 'synchronous';
+    return body.composition.ironFraction * (isLocked ? 0.2 : 1.0);
+  };
+
+  it('magneticField is present and equals ironFraction*(isLocked?0.2:1.0)', () => {
+    const body = generateBody(GRID[3]); // a stable terrestrial
+    expect(body.magneticField).toBeCloseTo(expectedField(body));
+  });
+
+  it('magneticField equals the aurora-block field expression for every grid body', () => {
+    // Strongest single-source check: across hot/locked/temperate/giant/cold
+    // bodies, the surfaced value always matches the aurora block's expression.
+    for (const body of generateGrid()) {
+      expect(body.magneticField, `magneticField mismatch for ${body.type}`)
+        .toBeCloseTo(expectedField(body));
+    }
+  });
+});
+
 describe('WS1 L0 plumbing — additive gate (AC6)', () => {
   it('baseline fixture matches the grid length', () => {
     expect(baseline).toHaveLength(generateGrid().length);
