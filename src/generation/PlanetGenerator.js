@@ -3,8 +3,10 @@ import {
   estimateMassEarth, computeAtmosphere, deriveComposition,
   equilibriumTemperature, tidalLockTimescale, checkTidalLock,
   habitabilityScore, computeSurfaceHistory, generateRingPhysics,
+  circularize,
 } from './PhysicsEngine.js';
 import { realisticRotationSpeed as rot } from '../core/CelestialTime.js';
+import { SeededRandom } from './SeededRandom.js';
 
 /**
  * PlanetGenerator — produces data describing a single planet.
@@ -368,6 +370,24 @@ export class PlanetGenerator {
     // System metallicity actually used in generation (mirrors the value fed to
     // deriveComposition above). Surfaced on planetData as an additive driver.
     const metallicity = zones ? (zones.metallicity || 0) : 0;
+
+    // ── Orbital eccentricity (PhysicsEngine §2 — circularize) ──
+    // Orbits are placed circular in StarSystemGenerator; circularize() was dead.
+    // WS1 AC2 surfaces a COMPUTED eccentricity (DATA-ONLY — never feeds px/pz).
+    //
+    // CRITICAL: e0 is drawn from a DEDICATED sub-rng derived from the body's
+    // STABLE identity (orbit + system seed/metallicity/mass), NOT from the
+    // passed-in `rng`. This guarantees ZERO additional draws on the shared
+    // planet-generation stream, so per-body AND cross-planet behavior is
+    // byte-identical (the additive gate, AC6, stays green). The sub-seed is
+    // deterministic, so the same body/seed always yields the same eccentricity.
+    const eccSeed = `ecc:${orbitRadiusAU}:${metallicity}:${starMassSolar}:${zones?.starType ?? 'none'}`;
+    const eccRng = new SeededRandom(eccSeed);
+    const e0 = eccRng.range(0, 0.4); // modest initial eccentricity
+    // Damp e0 over the system age: tau ∝ orbitAU^6.5 / massParent, so close-in
+    // bodies circularize toward 0 while distant ones retain eccentricity.
+    const eccentricity = circularize(e0, ageGyr, Math.max(orbitRadiusAU, 0.01), starMassSolar);
+
     const lockTimescale = tidalLockTimescale(starMassSolar, massEarth, radiusEarth, Math.max(orbitRadiusAU, 0.01));
     const tidalState = checkTidalLock(lockTimescale, ageGyr);
 
@@ -699,6 +719,7 @@ export class PlanetGenerator {
       age: ageGyr, // Gyr — system age used in tidal/atmosphere generation
       metallicity, // dex — system metallicity used in composition generation
       magneticField, // D13 — iron-core × rotation dynamo strength (single source; aurora reads it)
+      eccentricity, // [0,1) — circularize(e0, age, orbitAU, starMass); DATA-ONLY, drawn from a dedicated sub-rng (no shared-stream draw)
     };
   }
 

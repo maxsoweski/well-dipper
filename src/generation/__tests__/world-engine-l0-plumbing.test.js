@@ -98,6 +98,40 @@ describe('WS1 AC3 — magneticField surfaced, single source', () => {
   });
 });
 
+describe('WS1 AC2 — eccentricity computed', () => {
+  // Eccentricity is COMPUTED (orbits are circular by construction; circularize()
+  // was dead). generate() seeds a deterministic initial eccentricity from a
+  // DEDICATED sub-rng (derived from the body's stable identity), then damps it
+  // via circularize(e0, ageGyr, orbitAU, massParentSolar). The dedicated sub-rng
+  // guarantees ZERO draws from the shared planet rng, so the additive gate (AC6)
+  // stays byte-identical regardless of how the system threads its rng.
+  it('eccentricity is present, in [0,1), and deterministic', () => {
+    const a = generateBody(GRID[3]); // a stable terrestrial
+    const b = generateBody(GRID[3]); // regenerate same body
+    expect(a.eccentricity).toBeGreaterThanOrEqual(0);
+    expect(a.eccentricity).toBeLessThan(1);
+    expect(a.eccentricity).toBe(b.eccentricity); // deterministic across generations
+  });
+
+  it('every grid body has eccentricity in [0,1)', () => {
+    for (const body of generateGrid()) {
+      expect(body.eccentricity, `eccentricity out of range for ${body.type}`)
+        .toBeGreaterThanOrEqual(0);
+      expect(body.eccentricity, `eccentricity out of range for ${body.type}`)
+        .toBeLessThan(1);
+    }
+  });
+
+  it('close-in bodies circularize lower than distant ones (same seed family)', () => {
+    // Same seed + same zones, differing only in orbit: circularization timescale
+    // tau ∝ orbitAU^6.5, so a close-in body damps far more of its initial e than
+    // a distant one. Using a fixed seed isolates the orbit→eccentricity effect.
+    const close = PlanetGenerator.generate(new SeededRandom('ecc-fam'), 0.1, null, SOL_ZONES, 'rocky');
+    const distant = PlanetGenerator.generate(new SeededRandom('ecc-fam'), 12.0, null, SOL_ZONES, 'rocky');
+    expect(close.eccentricity).toBeLessThan(distant.eccentricity);
+  });
+});
+
 describe('WS1 L0 plumbing — additive gate (AC6)', () => {
   it('baseline fixture matches the grid length', () => {
     expect(baseline).toHaveLength(generateGrid().length);
