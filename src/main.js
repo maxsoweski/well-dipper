@@ -38,7 +38,7 @@ import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
 import { AutopilotMotion } from './auto/AutopilotMotion.js';
-import { SupercruiseModel } from './flight/SupercruiseModel.js';
+import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
 import { HeadMount } from './flight/HeadMount.js';
 import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
 import { Ship } from './core/Ship.js';
@@ -436,6 +436,10 @@ const scHead = new HeadMount();
 const scPilot = new SupercruisePilot(scModel);
 let _scManual = false;            // player has the stick (FLIGHT-mode supercruise)
 const _scBodies = [];             // per-tick gravity-well body list (reused)
+// Current virtual-joystick deflection (deadzone-shaped, -1..1 each). Written
+// by the canvas mousemove handler while _scManual && !scHead.held; consumed by
+// the supercruise HUD reticle (Task 11). Frozen while freelook is held.
+let _scDeflection = { x: 0, y: 0 };
 // UAT knobs + test probe. tuning/pilotTuning/headTuning are the LIVE
 // per-instance objects — each constructor shallow-copies its module
 // defaults, so mutating the default objects would affect nothing.
@@ -5785,6 +5789,20 @@ function selectTarget(target) {
 }
 
 /**
+ * Resolve the currently-selected target into a { mesh, radius } body for the
+ * supercruise manual drop-out (Task 8). `_selectedTarget` is a _makeTarget()
+ * descriptor: stars/planets/moons carry `mesh` + `radius` directly. Ships are
+ * excluded — they use the quarantined NavigationSubsystem ship-lock path, not
+ * a celestial-body capture. Returns null when there's nothing capturable.
+ */
+function _resolveSelectedBody() {
+  const t = _selectedTarget;
+  if (!t || t.kind === 'ship') return null;
+  if (!t.mesh || typeof t.radius !== 'number') return null;
+  return { mesh: t.mesh, radius: t.radius };
+}
+
+/**
  * Deselect the currently selected target. Hides the commit burn button.
  */
 function deselectTarget() {
@@ -7295,6 +7313,31 @@ function simStep(deltaTime) {
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
 
+      // ── Manual drop-out (AC3) ──
+      // While the player flies, if a body is selected and we're inside its
+      // drop window — within the 10R capture sphere AND slow enough
+      // (speed ≤ (10R)/2.5, the same window the autopilot pilot uses) —
+      // capture into a Toy Box orbit at the body. Coming in too hot just
+      // flies past (no capture; the player keeps the stick). Reuses the
+      // pilot's drop-window math deliberately; does NOT re-tune the model's
+      // scale-free speed floors.
+      if (_scManual) {
+        const sel = _resolveSelectedBody();
+        if (sel) {
+          const bp = sel.mesh.position;
+          const R = sel.radius ?? 5;
+          const d = scModel.position.distanceTo(bp);
+          if (d <= R * 10 && scModel.speed <= (R * 10) / 2.5) {
+            // In the drop window → capture into Toy Box orbit at the body.
+            _scManual = false;
+            cameraController.setCameraMode(CameraMode.TOY_BOX);
+            cameraController.bypassed = false;
+            cameraController.restoreFromWorldState(bp);
+            shipChoreographer.debugDecelImpulse();
+          }
+        }
+      }
+
       // AC6 felt beats: queue the same impulses as the V1 branch, new
       // triggers. (`phase` is the ENTRY phase — phaseChanged + CRUISE
       // fires on the first frame DRIVEN by CRUISE, see
@@ -7654,7 +7697,18 @@ function simStep(deltaTime) {
                    && document.getElementById('keybinds-overlay')?.style.display === 'none';
     cameraController._flightEnabled = flightOk;
 
-    if (flightOk) {
+    if (_scManual) {
+      // Supercruise manual throttle (Elite convention): W ramps throttle up,
+      // S ramps it down, both held-key stepping at SC_TUNING.THROTTLE_RATE
+      // (units/s). The supercruise mover owns motion in this mode, so the
+      // legacy free-flight WASD path below must NOT also run (it would fight
+      // the model). setThrottle clamps to 0..1 internally.
+      const dir = (_heldKeys.has('KeyW') ? 1 : 0) - (_heldKeys.has('KeyS') ? 1 : 0);
+      if (dir !== 0) {
+        scModel.setThrottle(scModel.throttle + dir * SC_TUNING.THROTTLE_RATE * deltaTime);
+      }
+      cameraController.setFlightInput(0, 0, false);
+    } else if (flightOk) {
       // Use e.code values (KeyW/KeyS/etc.) — immune to Shift changing e.key case
       const fwd = (_heldKeys.has('KeyW') ? 1 : 0) - (_heldKeys.has('KeyS') ? 1 : 0);
       const right = (_heldKeys.has('KeyD') ? 1 : 0) - (_heldKeys.has('KeyA') ? 1 : 0);
@@ -8438,7 +8492,26 @@ window.addEventListener('keydown', (e) => {
       console.log('[MODE] Flight mode unavailable — no star system');
       return;
     }
+    // F → supercruise manual (replaces FlightDynamics-driven FLIGHT internals).
+    // toggleCameraMode keeps wd_cameraMode persistence + the mobile lock; we
+    // then drive the new supercruise model directly instead of the legacy
+    // flight dynamics. _scManual short-circuits cameraController.update() in
+    // simStep (see the "Skip cameraController.update" guard) so the legacy
+    // FLIGHT internals stop being reachable.
     const newMode = cameraController.toggleCameraMode();
+    if (newMode === CameraMode.FLIGHT) {
+      _scManual = true;
+      scPilot.stop();
+      scModel.position.copy(camera.position);
+      scModel.orientation.copy(camera.quaternion);
+      scModel.speed = 0;
+      scModel.setThrottle(0);
+      cameraController.bypassed = true;
+    } else {
+      _scManual = false;
+      cameraController.bypassed = false;
+      cameraController.restoreFromWorldState(findClosestBody()?.position);
+    }
     console.log(`[MODE] Camera → ${newMode}`);
     return;
   }
@@ -8456,6 +8529,20 @@ window.addEventListener('keydown', (e) => {
 
   // During autopilot, some keys redirect the tour instead of normal behavior
   if (autoNav.isActive) {
+    // W/S while supercruise is flying: seamless takeover. The same model keeps
+    // flying — the pilot hands off mid-state (no snap, position/velocity
+    // preserved) and the player picks up the throttle/stick. A/D fall through
+    // to the legacy stopFlythrough() → Toy Box restore.
+    if (scPilot.isActive && (e.code === 'KeyW' || e.code === 'KeyS')) {
+      scPilot.stop();
+      _scManual = true;
+      // Intent follows action; setCameraMode persists wd_cameraMode + holds
+      // the mobile lock (mobile never reaches here anyway — keyboard).
+      cameraController.setCameraMode(CameraMode.FLIGHT);
+      cameraController.bypassed = true;
+      autoNav.stop();
+      return;
+    }
     // WASD: stop autopilot and take manual control
     if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
       stopFlythrough();
@@ -8799,6 +8886,27 @@ canvas.addEventListener('mousemove', (e) => {
   if (!autoNav.isActive) {
     idleTimer = 0;
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
+  }
+
+  // ── Supercruise virtual joystick ──
+  // Mouse position relative to the canvas centre is the stick deflection:
+  // distance from centre = turn-rate command (pitch/yaw), capped by the
+  // model. A deadzone around centre keeps the nose steady at rest. Only
+  // while the player has the stick AND freelook isn't held (freelook
+  // consumes the motion and freezes the joystick; Task 10). We fall
+  // through afterward so idle-reset and the rest of the handler still run.
+  if (_scManual && !scHead.held) {
+    const r = canvas.getBoundingClientRect();
+    const nx = ((e.clientX - r.left) - r.width / 2) / (r.width / 2);   // -1..1
+    const ny = ((e.clientY - r.top) - r.height / 2) / (r.height / 2);  // -1..1
+    const dead = 0.06;
+    const shape = (v) => Math.abs(v) < dead ? 0 : Math.sign(v) * (Math.abs(v) - dead) / (1 - dead);
+    const sx = shape(nx);
+    const sy = shape(ny);
+    // Mouse right → yaw right (nose right); mouse up → pitch up. Sign
+    // convention is UAT-tuned; tests only assert proportionality + cap.
+    scModel.setTurnInput(-sx, -sy);
+    _scDeflection = { x: sx, y: sy }; // consumed by the HUD reticle (Task 11)
   }
 
   // Minimap drag-to-rotate (pointer lock keeps cursor captured)
