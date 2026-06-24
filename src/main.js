@@ -7353,8 +7353,14 @@ function simStep(deltaTime) {
         if (sel) {
           const bp = sel.mesh.position;
           const R = sel.radius ?? 5;
+          // Single-source the drop window from scPilot.tuning (same as
+          // _scDropState/the HUD) so the captured-here behavior and the
+          // displayed "DROP READY/TOO FAST" label can never drift apart.
+          const t = scPilot.tuning;
+          const captureSphere = R * t.DROP_RADIUS_FACTOR;        // 10R
+          const dropMaxSpeed = captureSphere / t.DROP_ETA_MAX;   // (10R)/2.5
           const d = scModel.position.distanceTo(bp);
-          if (d <= R * 10 && scModel.speed <= (R * 10) / 2.5) {
+          if (d <= captureSphere && scModel.speed <= dropMaxSpeed) {
             // In the drop window → capture into Toy Box orbit at the body.
             _scManual = false;
             cameraController.setCameraMode(CameraMode.TOY_BOX);
