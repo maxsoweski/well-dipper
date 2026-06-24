@@ -3,7 +3,7 @@ import {
   estimateMassEarth, computeAtmosphere, deriveComposition,
   equilibriumTemperature, tidalLockTimescale, checkTidalLock,
   habitabilityScore, computeSurfaceHistory, generateRingPhysics,
-  circularize,
+  circularize, tidalHeatingPlanet,
 } from './PhysicsEngine.js';
 import { realisticRotationSpeed as rot } from '../core/CelestialTime.js';
 import { SeededRandom } from './SeededRandom.js';
@@ -388,6 +388,16 @@ export class PlanetGenerator {
     // bodies circularize toward 0 while distant ones retain eccentricity.
     const eccentricity = circularize(e0, ageGyr, Math.max(orbitRadiusAU, 0.01), starMassSolar);
 
+    // ── Stellar tidal heating (PhysicsEngine §2 — D12) ──
+    // Previously hard-zeroed (the inline `0` passed to computeSurfaceHistory).
+    // WS1 AC1 surfaces a REAL computed value (Io-moon scale) from the body's
+    // own eccentricity + star mass + radius + orbit. DATA-ONLY: surfaced on
+    // planetData but NOT fed into computeSurfaceHistory (consumption is WS2),
+    // so the additive gate (AC6) stays byte-identical. Uses no rng draws.
+    // Because the law ∝ 1/a⁵ and close orbits circularize hard, most temperate
+    // bodies correctly read ~0; only close + eccentric planets register heat.
+    const tidalHeating = tidalHeatingPlanet(eccentricity, starMassSolar, radiusEarth, orbitRadiusAU);
+
     const lockTimescale = tidalLockTimescale(starMassSolar, massEarth, radiusEarth, Math.max(orbitRadiusAU, 0.01));
     const tidalState = checkTidalLock(lockTimescale, ageGyr);
 
@@ -720,6 +730,7 @@ export class PlanetGenerator {
       metallicity, // dex — system metallicity used in composition generation
       magneticField, // D13 — iron-core × rotation dynamo strength (single source; aurora reads it)
       eccentricity, // [0,1) — circularize(e0, age, orbitAU, starMass); DATA-ONLY, drawn from a dedicated sub-rng (no shared-stream draw)
+      tidalHeating, // D12 — stellar tidal heating (Io-moon scale); REAL, computed from eccentricity+star+orbit; DATA-ONLY (not fed to computeSurfaceHistory)
     };
   }
 

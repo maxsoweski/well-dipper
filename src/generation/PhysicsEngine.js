@@ -309,6 +309,39 @@ export function tidalHeating(eccentricity, massParentEarth, radiusMoonEarth, orb
   return (e2 * mp2 * rm5 / a5) / ioRef;
 }
 
+// Unit conversions for the planet (star-driven) tidal-heating case.
+// Sun = 332,946 Earth masses; 1 AU = 23,454.8 Earth radii. These map a
+// planet-around-star configuration onto the SAME Io-normalized formula above,
+// so a planet's stellar tidal heating reads on the Io-moon scale (≈1 = Io).
+const SUN_MASS_EARTH = 332946;
+const AU_IN_EARTH_RADII = 23454.8;
+
+/**
+ * Tidal heating rate for a PLANET heated by its STAR (D12).
+ * Same simplified Peale–Cassen–Reynolds law as tidalHeating() (Io-normalized),
+ * with the parent = the star and the orbit measured from the star. Because the
+ * law goes as 1/a⁵, distant/temperate orbits read ~0 and only close + eccentric
+ * planets register heating — which is physically honest. A planet at Earth's
+ * real eccentricity (≈0.017) and 1 AU returns ≈0.
+ *
+ * NOTE: our eccentricity model circularizes close-in orbits hard (e → 0), so
+ * MOST generated planets correctly get ~0; nonzero heating requires retained
+ * eccentricity at a close-enough orbit.
+ * @param {number} eccentricity - orbital eccentricity
+ * @param {number} starMassSolar - star mass in solar masses
+ * @param {number} planetRadiusEarth - planet radius in Earth radii
+ * @param {number} orbitAU - orbital distance from the star in AU
+ * @returns {number} tidal heating rate (0 = none, 1 = Io-level, >1 = extreme)
+ */
+export function tidalHeatingPlanet(eccentricity, starMassSolar, planetRadiusEarth, orbitAU) {
+  return tidalHeating(
+    eccentricity,
+    starMassSolar * SUN_MASS_EARTH,
+    planetRadiusEarth,
+    Math.max(orbitAU, 1e-6) * AU_IN_EARTH_RADII,
+  );
+}
+
 /**
  * Orbit circularization over time.
  * Eccentric orbits lose eccentricity through tidal dissipation.

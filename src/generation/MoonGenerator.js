@@ -1,6 +1,8 @@
 import { earthRadiiToScene, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleConstants.js';
 import { PlanetGenerator } from './PlanetGenerator.js';
 import { realisticOrbitSpeed as orb } from '../core/CelestialTime.js';
+import { tidalHeating as tidalHeatingFn } from './PhysicsEngine.js';
+import { SeededRandom } from './SeededRandom.js';
 
 /**
  * MoonGenerator — produces data describing moons orbiting a planet.
@@ -154,6 +156,12 @@ export class MoonGenerator {
 
     const startAngle = rng.range(0, Math.PI * 2);
 
+    // Real tidal heating (D12) — moons are where this physically belongs.
+    // Uses a dedicated sub-rng (no draw from `rng`), so additive gate stays green.
+    const tidalHeating = this._computeTidalHeating(
+      planetData, moonRadiusData.radiusEarth, orbitRadiusEarth,
+    );
+
     return {
       type,
       // Physical units
@@ -161,6 +169,8 @@ export class MoonGenerator {
       radiusScene: moonRadiusData.radiusScene,
       orbitRadiusEarth,
       orbitRadiusScene,
+      // Real tidal heating (Io-moon scale). DATA-ONLY surfacing (WS1 AC1).
+      tidalHeating,
       // Map/backward-compat units
       radius: moonRadiusData.radius,
       orbitRadius,
@@ -228,6 +238,31 @@ export class MoonGenerator {
   }
 
   /**
+   * Real tidal heating for a moon (D12 — Peale, Cassen & Reynolds 1979),
+   * Io-normalized via PhysicsEngine.tidalHeating().
+   *
+   * Moons carry NO eccentricity field, so we SEED one from a DEDICATED sub-rng
+   * keyed on the moon's stable identity (parent identity + orbit + radius),
+   * exactly like the planet-eccentricity pattern (PlanetGenerator AC2). This
+   * draws ZERO numbers from the passed-in moon-generation `rng`, so moon
+   * generation is byte-identical and the additive gate stays green. The moon
+   * eccentricity range (0–0.012) brackets Io's real e≈0.0041; tidal flexing of
+   * a close inner moon stays nonzero (a perfectly circular orbit gives 0 heat).
+   *
+   * @param {object} planetData - parent planet (provides massEarth)
+   * @param {number} moonRadiusEarth - moon radius in Earth radii
+   * @param {number} orbitRadiusEarth - moon orbit radius in Earth radii
+   * @returns {number} Io-scaled tidal heating (≈1 = Io-level)
+   */
+  static _computeTidalHeating(planetData, moonRadiusEarth, orbitRadiusEarth) {
+    const eccSeed = `moonecc:${planetData.massEarth}:${planetData.radiusEarth}:${orbitRadiusEarth}:${moonRadiusEarth}`;
+    const eccRng = new SeededRandom(eccSeed);
+    const moonEcc = eccRng.range(0.0, 0.012); // brackets Io's e≈0.0041
+    const parentMassEarth = planetData.massEarth || 0;
+    return tidalHeatingFn(moonEcc, parentMassEarth, moonRadiusEarth, Math.max(orbitRadiusEarth, 1e-6));
+  }
+
+  /**
    * Generate a planet-class moon — uses PlanetGenerator for visuals
    * but MoonGenerator for orbital parameters.
    * Think Titan, Ganymede, or a captured mini-Neptune.
@@ -276,6 +311,10 @@ export class MoonGenerator {
       moonCount: 0,
     };
 
+    // Real tidal heating (D12) for the planet-class moon — same dedicated
+    // sub-rng pattern (no draw from `rng`), keeps the additive gate green.
+    const tidalHeating = this._computeTidalHeating(planetData, radiusEarth, orbitRadiusEarth);
+
     return {
       type: planetType,
       isPlanetMoon: true,
@@ -286,6 +325,8 @@ export class MoonGenerator {
       orbitRadiusScene,
       radius,
       orbitRadius,
+      // Real tidal heating (Io-moon scale). DATA-ONLY surfacing (WS1 AC1).
+      tidalHeating,
       // Dummy colors for billboard fallback (use planet palette)
       baseColor: pData.baseColor,
       accentColor: pData.accentColor,

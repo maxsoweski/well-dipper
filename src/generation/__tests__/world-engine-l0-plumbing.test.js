@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { generateGrid, GRID, generateBody, SOL_ZONES } from './world-engine-l0-grid.js';
 import { PlanetGenerator } from '../PlanetGenerator.js';
+import { MoonGenerator } from '../MoonGenerator.js';
 import { SeededRandom } from '../SeededRandom.js';
+import { tidalHeatingPlanet } from '../PhysicsEngine.js';
 import baseline from './__fixtures__/l0-baseline.json';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -129,6 +131,79 @@ describe('WS1 AC2 — eccentricity computed', () => {
     const close = PlanetGenerator.generate(new SeededRandom('ecc-fam'), 0.1, null, SOL_ZONES, 'rocky');
     const distant = PlanetGenerator.generate(new SeededRandom('ecc-fam'), 12.0, null, SOL_ZONES, 'rocky');
     expect(close.eccentricity).toBeLessThan(distant.eccentricity);
+  });
+});
+
+describe('WS1 AC1 — tidal heating is real (moons + planets)', () => {
+  // The Io-normalized PhysicsEngine.tidalHeating() was DEAD in production
+  // (called only in tests). AC1 wires it for moons (where it physically
+  // belongs) and computes stellar tidal heating for planets via the new
+  // tidalHeatingPlanet() helper (consistent unit-mapping → Io-moon scale).
+  // tidalHeating is SURFACED ONLY — it is NOT fed into computeSurfaceHistory
+  // (consumption is WS2's job), so the additive gate (AC6) stays byte-identical.
+
+  // Helper to generate a gas-giant body to parent moons.
+  const giantBody = () => generateBody(GRID[7]); // 'we-giant', gas-giant
+
+  it('an Io-like generated moon reports significant tidal heating', () => {
+    // Innermost moon (index 0) of a gas giant = the Io slot (close orbit,
+    // huge parent mass). With a seeded modest eccentricity it gets strong
+    // tidal flexing. Force a fresh seed so the moon generator picks the
+    // close, innermost slot.
+    const giant = giantBody();
+    const moon = MoonGenerator.generate(
+      new SeededRandom('io-like-moon'), giant, 0, 3, 'outer', SOL_ZONES,
+    );
+    expect(moon.tidalHeating).toBeGreaterThan(0.1);
+  });
+
+  it('every generated moon reports a finite tidalHeating >= 0', () => {
+    const giant = giantBody();
+    for (let i = 0; i < 5; i++) {
+      const moon = MoonGenerator.generate(
+        new SeededRandom(`moon-finite-${i}`), giant, i, 5, 'outer', SOL_ZONES,
+      );
+      expect(Number.isFinite(moon.tidalHeating), `moon ${i} not finite`).toBe(true);
+      expect(moon.tidalHeating, `moon ${i} negative`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('a temperate, circularized planet reports ~0 tidal heating', () => {
+    // we-temperate-venus is a temperate world (T_eq~304K) close enough that
+    // its orbit circularizes (e -> 0), so its REAL computed tidal heating is
+    // ~0. This is the honest "temperate planet -> ~0" case.
+    const body = generateBody(GRID[5]); // 'we-temperate-venus', 0.7 AU
+    expect(body.tidalHeating).toBeLessThan(0.01);
+  });
+
+  it('the planet tidal-heating helper returns >0 for forced close+eccentric params', () => {
+    // Direct unit anchor: a close-in (0.05 AU), eccentric (e=0.2), Earth-sized
+    // planet around a Sun-mass star MUST register nonzero stellar tidal heating.
+    const th = tidalHeatingPlanet(0.2, 1.0, 1.0, 0.05);
+    expect(th).toBeGreaterThan(0);
+  });
+
+  it('the planet tidal-heating helper maps Earth (e=0.017, 1 AU) to ~0', () => {
+    // Earth's REAL low eccentricity at 1 AU -> ~0 (the model is honest about
+    // temperate worlds). Asserts the unit-mapping normalization, independent
+    // of any particular generated body's seeded eccentricity.
+    const th = tidalHeatingPlanet(0.017, 1.0, 1.0, 1.0);
+    expect(th).toBeLessThan(0.01);
+  });
+
+  it('every generated planet reports a finite tidalHeating >= 0', () => {
+    for (const body of generateGrid()) {
+      expect(Number.isFinite(body.tidalHeating), `${body.type} not finite`).toBe(true);
+      expect(body.tidalHeating, `${body.type} negative`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('surfaceHistory is unchanged (tidalHeating is surfaced, not consumed)', () => {
+    // Explicit intent assertion (the AC6 baseline already guards this): adding
+    // tidalHeating must NOT alter computeSurfaceHistory output.
+    generateGrid().forEach((body, i) => {
+      expect(body.surfaceHistory).toEqual(baseline[i].surfaceHistory);
+    });
   });
 });
 
