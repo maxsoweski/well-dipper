@@ -8889,6 +8889,17 @@ canvas.addEventListener('mousemove', (e) => {
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
   }
 
+  // ── Supercruise freelook (hold-to-look, Elite headlook) ──
+  // While the freelook control is held (middle mouse), mouse motion swings
+  // the head mount instead of steering/orbiting. The ship keeps flying its
+  // line (scHead writes ONLY the camera, never the model). First-person
+  // convention: mouse right → look right, mouse up → look up. We consume the
+  // motion and return so the joystick deflection freezes while held.
+  if (scHead.held) {
+    scHead.addLook(-e.movementX * 0.003, -e.movementY * 0.0025);
+    return; // freelook consumes the motion; joystick deflection freezes while held
+  }
+
   // ── Supercruise virtual joystick ──
   // Mouse position relative to the canvas centre is the stick deflection:
   // distance from centre = turn-rate command (pitch/yaw), capped by the
@@ -8917,9 +8928,12 @@ canvas.addEventListener('mousemove', (e) => {
     return; // consume the move — don't orbit the camera
   }
 
-  // Middle mouse (or left mouse in deep sky) free-look during flythrough
+  // Middle mouse (or left mouse in deep sky) free-look during flythrough.
+  // Suppressed while supercruise freelook owns the middle mouse (Task 10) —
+  // the scHead.held branch above already returned, so this is belt-and-braces
+  // for any path where the model isn't driving but the look is still held.
   const freeLookDrag = _middleMouseDown || (cameraController.forceFreeLook && cameraController._leftFreeLooking);
-  if (flythrough.active && freeLookDrag) {
+  if (flythrough.active && freeLookDrag && !scHead.held) {
     flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
   }
 
@@ -9004,6 +9018,16 @@ canvas.addEventListener('mousedown', (e) => {
 
   if (e.button === 1) {
     _middleMouseDown = true;
+    // Supercruise hold-to-look (Task 10, AC4): middle mouse swings the head
+    // mount while the ship keeps flying. preventDefault suppresses the
+    // browser's middle-click autoscroll. Gated on a supercruise mover being
+    // active (pilot or manual stick); cameraController.bypassed is already
+    // true in those states, so ShipCameraSystem's own middle-mouse free-look
+    // returns early and never fights this.
+    if (_scManual || scPilot.isActive) {
+      e.preventDefault();
+      scHead.beginLook();
+    }
   }
   // Cancel momentum drift on any click — hand camera to user immediately
   if (_deepSkyDrift) {
@@ -9054,6 +9078,10 @@ window.addEventListener('mouseup', (e) => {
   }
   if (e.button === 1) {
     _middleMouseDown = false;
+    // Supercruise hold-to-look release (Task 10, AC4): drop the held flag so
+    // HeadMount.update() eases the view back to ship-forward. Unconditional —
+    // endLook() is a no-op when the head wasn't held.
+    scHead.endLook();
     if (flythrough.active) flythrough.clearFreeLook();
   }
 });
