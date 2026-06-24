@@ -2,7 +2,8 @@
   "workstream": "world-engine-l0-plumbing-2026-06-23",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verified",
+  "verification": "VERIFIED 2026-06-24 at commit 05bf668 via dev-collab verify-workstream (full): all 6 ACs PASS (5 integration + 1 unit, all headless/live=false), 3/3 adversarial sufficiency each; additive-gate golden l0-baseline.json independently confirmed untouched; uat=N/A (no UAT AC) -> WS1 DONE. WS1 scoped suite 33/33. AC3 narrowed (2026-06-24, 317072a) + an AC5 resonancePartners cull-safety defect found+fixed this session (05bf668, TDD seed scan-2606, live GPU-runtime confirmed).",
   "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-23. WS1 of the production-L1 port (lab-only decision locked by Max 2026-06-23). Features + done-criteria derived from a code-grounded planning pass (4 parallel code-architect agents) recorded in docs/FEATURES/world-engine-production-L1-plan.md. Scope shape = STRICTLY ADDITIVE (expose real drivers, zero behavioral change) per Max's 'most straightforward path to truly programmatic' criterion + the refactor carve-out (the diff is the gate).",
   "acceptanceCriteria": [
     {

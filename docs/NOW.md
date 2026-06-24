@@ -554,6 +554,38 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+**`world-engine` PRODUCTION-L1 PORT — WS1 (L0 plumbing) BUILT + ✅ VERIFIED 2026-06-24
+(`05bf668`, branch `feature/world-engine-production-L1`; `master` preserved at `25fe51c`; push HOLD).**
+First of 4 production-L1 workstreams (lab-only scope locked by Max 2026-06-23; campaign plan
+`docs/FEATURES/world-engine-production-L1-plan.md`). WS1 is STRICTLY ADDITIVE: surfaces six real L0
+drivers on per-body `planetData` — `age`, `metallicity`, `magneticField` (single-source dynamo),
+`eccentricity` (was dead code; data-only; dedicated rng → zero shared-stream draws), `tidalHeating`
+(real for moons+planets; surfaced-only, NOT wired into rendering), `systemContext` (flat,
+serialization-safe) — with ZERO behavioral change (frozen 23-key additive gate held byte-identical).
+Built last session via subagent-driven TDD (7 tasks); contract+intent
+`docs/WORKSTREAMS/world-engine-l0-plumbing-2026-06-23/`.
+- **This session (2026-06-24): workflow audit → fix → re-verify.** A 6-dimension adversarial audit
+  (each finding 3-lens verified) cleared the additive invariant but surfaced ONE real correctness
+  defect: `systemContext.resonancePartners` resolved resonance pairs via PRE-cull indices against the
+  POST-cull `planets` array → wrong partner/ratio (and dropped culled pairs) in binary+resonant+culled
+  systems. Fixed via TDD (object-identity partner resolution; trigger seed `scan-2606`, RED→GREEN,
+  independently reproduced; live GPU-runtime confirmed on `:5173`, fps 242). Plus 5 test/comment
+  hardening items (AC1 generated-planet tidalHeating pin; moon frozen-baseline additive gate;
+  exact-equality assertions; eccSeed comment; nit comment). Committed `05bf668`.
+- **✅ verify-workstream at `05bf668`: all 6 ACs PASS** (5 integration + 1 unit, all headless/live=false),
+  3/3 adversarial each; additive-gate golden independently confirmed untouched; `uat = N/A` (no UAT AC)
+  → WS1 DONE. WS1 suite 33/33; the 4 broader-cluster failures are pre-existing `searchKnownObjects`, untouched.
+- **▶ NEXT: WS2 (Tier-1 base step)** — consumes WS1's outputs; start via `dev-collab-scope` →
+  `writing-plans` → `subagent-driven-development` → `verify-workstream`. Then WS3 (type-demotion) ∥ WS4
+  (wire E6→E9). **Carry-ins:** planet `tidalHeating` scale is Io-normalized + UNCALIBRATED (WS2 calibrates);
+  `systemContext.partnerIndex` is positional, NOT a persistable id; the magnetic-field lock-predicate
+  unification (computeAtmosphere's cruder `|rotationSpeed|<0.01` vs dynamo `lockType==='synchronous'`) is a
+  deliberate DEFERRED cleanup (documented at `PhysicsEngine.js` + intent.md + campaign plan).
+- **Open (Max's):** push (HOLD, campaign-wide); whether to merge `feature/world-engine-production-L1`
+  → `master` after WS1 (merging triggers the master-only Pages deploy — rec: keep accumulating WS2–4 first).
+
+---
+
 **`world-engine` relief-group slice — BUILT (isolated harness), ✅ Max UAT-PASSED 2026-06-23
 (`90b66f7`). Push: HOLD (Max). Branch plan: preserve `master` as-is; production-L1 integration
 goes on a DEDICATED branch (this slice is isolated/additive — safe on master as a checkpoint).**
