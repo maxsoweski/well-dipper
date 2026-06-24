@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { generateGrid, GRID, generateBody, SOL_ZONES } from './world-engine-l0-grid.js';
+import { generateMoonGrid, MOON_GRID } from './world-engine-l0-moon-grid.js';
 import { PlanetGenerator } from '../PlanetGenerator.js';
 import { MoonGenerator } from '../MoonGenerator.js';
 import { SeededRandom } from '../SeededRandom.js';
 import { tidalHeatingPlanet } from '../PhysicsEngine.js';
 import { StarSystemGenerator } from '../StarSystemGenerator.js';
 import baseline from './__fixtures__/l0-baseline.json';
+import moonBaseline from './__fixtures__/l0-moon-baseline.json';
 
 // ════════════════════════════════════════════════════════════════════════
 // World-Engine WS1 — L0 plumbing regression harness (AC6 foundation)
@@ -67,8 +69,10 @@ describe('WS1 AC4 — age + metallicity surfaced', () => {
     // Any grid row is generated under SOL_ZONES (ageGyr 4.5, metallicity 0.0),
     // and generate() surfaces the SAME system drivers it generated with.
     const body = generateBody(GRID[3]); // 'we-temperate-terra', a stable terrestrial
-    expect(body.age).toBeCloseTo(SOL_ZONES.ageGyr); // 4.5 Gyr
-    expect(body.metallicity).toBeCloseTo(SOL_ZONES.metallicity); // 0.0 dex
+    // EXACT equality (AC4 is a pure pass-through of the system value — no float
+    // arithmetic): the surfaced key must be the SAME number, not merely close.
+    expect(body.age).toBe(SOL_ZONES.ageGyr); // 4.5 Gyr
+    expect(body.metallicity).toBe(SOL_ZONES.metallicity); // 0.0 dex
   });
 
   it('surfaced drivers track non-default system values', () => {
@@ -78,8 +82,9 @@ describe('WS1 AC4 — age + metallicity surfaced', () => {
     const [seed, orbitAU, forceType] = GRID[3];
     const zones = { ...SOL_ZONES, ageGyr: 8.2, metallicity: 0.45 };
     const body = PlanetGenerator.generate(new SeededRandom(seed), orbitAU, null, zones, forceType);
-    expect(body.age).toBeCloseTo(8.2);
-    expect(body.metallicity).toBeCloseTo(0.45);
+    // EXACT equality (pure pass-through, no float arithmetic).
+    expect(body.age).toBe(8.2);
+    expect(body.metallicity).toBe(0.45);
   });
 });
 
@@ -98,7 +103,10 @@ describe('WS1 AC3 — magneticField surfaced, single source', () => {
 
   it('magneticField is present and equals ironFraction*(isLocked?0.2:1.0)', () => {
     const body = generateBody(GRID[3]); // a stable terrestrial
-    expect(body.magneticField).toBeCloseTo(expectedField(body));
+    // EXACT equality: the surfaced value is the SINGLE canonical computation,
+    // and expectedField() re-evaluates the byte-identical production expression,
+    // so they must be exactly equal (not merely close).
+    expect(body.magneticField).toBe(expectedField(body));
   });
 
   it('magneticField equals the aurora-block field expression for every grid body', () => {
@@ -106,7 +114,7 @@ describe('WS1 AC3 — magneticField surfaced, single source', () => {
     // bodies, the surfaced value always matches the aurora block's expression.
     for (const body of generateGrid()) {
       expect(body.magneticField, `magneticField mismatch for ${body.type}`)
-        .toBeCloseTo(expectedField(body));
+        .toBe(expectedField(body));
     }
   });
 });
@@ -142,6 +150,24 @@ describe('WS1 AC2 — eccentricity computed', () => {
     const close = PlanetGenerator.generate(new SeededRandom('ecc-fam'), 0.1, null, SOL_ZONES, 'rocky');
     const distant = PlanetGenerator.generate(new SeededRandom('ecc-fam'), 12.0, null, SOL_ZONES, 'rocky');
     expect(close.eccentricity).toBeLessThan(distant.eccentricity);
+  });
+
+  it('eccentricity is a function of (orbit, zone params) — NOT the planet rng seed', () => {
+    // Documents the ACTUAL eccSeed behavior (keeps code + the adjacent comment
+    // honest, ITEM D2): eccentricity is drawn from a dedicated sub-rng keyed on
+    // `ecc:${orbitAU}:${metallicity}:${starMassSolar}:${starType}` — it carries
+    // NO system seed and NO per-body planet rng. Consequences, asserted here:
+    //
+    //   (a) two bodies at the SAME orbit + SAME zones get the SAME eccentricity
+    //       EVEN with different planet seeds AND different forced types (the
+    //       eccSeed ignores both) — proving e is NOT a function of the seed.
+    //   (b) changing the orbit (with zones held) CHANGES the eccentricity.
+    const a = PlanetGenerator.generate(new SeededRandom('seed-A'), 3.0, null, SOL_ZONES, 'rocky');
+    const b = PlanetGenerator.generate(new SeededRandom('seed-B'), 3.0, null, SOL_ZONES, 'ice');
+    expect(a.eccentricity).toBe(b.eccentricity); // same orbit+zones → same e
+
+    const moved = PlanetGenerator.generate(new SeededRandom('seed-A'), 4.0, null, SOL_ZONES, 'rocky');
+    expect(moved.eccentricity).not.toBe(a.eccentricity); // different orbit → different e
   });
 });
 
@@ -207,6 +233,37 @@ describe('WS1 AC1 — tidal heating is real (moons + planets)', () => {
       expect(Number.isFinite(body.tidalHeating), `${body.type} not finite`).toBe(true);
       expect(body.tidalHeating, `${body.type} negative`).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it('a GENERATED planet reports nonzero tidalHeating wired THROUGH generate()', () => {
+    // PIN (regression-defect guard, added 2026-06-24): every other planet-side
+    // tidalHeating check above is either a direct helper call (tidalHeatingPlanet)
+    // or a ~0 case. If generate() were ever changed to emit a literal 0 for
+    // tidalHeating, ALL of those would still pass — and tidalHeating is NOT a
+    // baseline-gate key, so the AC6 additive gate would not catch it either.
+    // This pins the nonzero value as it flows through the REAL generate() entry.
+    //
+    // The grid's close-in bodies (0.04-0.12 AU) circularize to e≈0 → th=0, so the
+    // genuinely-heated slots are the moderately-distant ones that RETAIN
+    // eccentricity. GRID[6] = 'we-outer-subnep' (2 AU, e≈0.28) is the largest.
+    const SUBNEP_IDX = 6;
+    const grid = generateGrid();
+    const body = grid[SUBNEP_IDX];
+    const [, orbitAU] = GRID[SUBNEP_IDX];
+
+    // (1) it must actually be nonzero — the assertion that a literal-0 regression
+    //     would FAIL (this is the RED-if-zeroed guard the bare helper test lacks).
+    expect(body.type).toBe('sub-neptune'); // guard: the grid row hasn't drifted
+    expect(body.tidalHeating, 'generated sub-neptune should retain real tidal heat')
+      .toBeGreaterThan(0);
+
+    // (2) value pin: the surfaced number must EQUAL the helper recomputed from
+    //     the body's OWN eccentricity + star mass + radius + orbit (the exact
+    //     production call). Exact equality — same deterministic computation path.
+    const expected = tidalHeatingPlanet(
+      body.eccentricity, SOL_ZONES.starMassSolar, body.radiusEarth, orbitAU,
+    );
+    expect(body.tidalHeating).toBe(expected);
   });
 
   it('surfaceHistory is unchanged (tidalHeating is surfaced, not consumed)', () => {
@@ -303,6 +360,124 @@ describe('WS1 AC5 — systemContext reachable + serialization-safe', () => {
     for (const entry of sys.planets) {
       expect(() => JSON.stringify(entry.planetData.systemContext)).not.toThrow();
     }
+  });
+});
+
+describe('WS1 AC5 — resonancePartners survive the binary-stability cull', () => {
+  // REGRESSION (correctness defect found 2026-06-24): detectResonances() runs
+  // BEFORE the binary-stability cull (StarSystemGenerator.js: resonances ~:443,
+  // cull ~:461) and returns innerIdx/outerIdx into the PRE-cull planets array.
+  // The cull then filters + re-packs `planets`, shifting/removing indices. The
+  // systemContext post-pass reused those PRE-cull indices against the FINAL
+  // (post-cull) array. The existence guard `planets[r.outerIdx]` only catches
+  // OUT-OF-RANGE indices, never a wrong-but-present one — so in a binary +
+  // resonant + culled system, resonancePartners attached the WRONG partner /
+  // wrong ratio, and a pair whose endpoint was culled (now out of range) was
+  // silently dropped instead of resolved.
+  //
+  // Trigger seed discovered by scanning the real generator (scan-{0..5000}):
+  //   'scan-2606' — binary (F companion), resonant chain, 4 final planets after
+  //   the cull removed inner planet(s) so the pre-cull chain indices (2-3 @5:3,
+  //   3-4 @2:1) no longer line up with the final array.
+  const SEED_CULLED_BINARY = 'scan-2606';
+
+  it('points at the body whose ACTUAL period ratio matches the stated ratio (cull-safe)', () => {
+    const sys = StarSystemGenerator.generate(SEED_CULLED_BINARY);
+    // Guard the fixture: this seed must still be the binary+resonant+culled case
+    // that exercises the bug, else the test would pass vacuously.
+    expect(sys.isBinary).toBe(true);
+    expect(sys.resonanceChain && sys.resonanceChain.isResonant).toBe(true);
+    // The pre-cull chain references an index >= the final planet count — proof a
+    // chain member was culled (the exact precondition for the defect).
+    const chainMaxIdx = sys.resonanceChain.resonances.reduce(
+      (m, r) => Math.max(m, r.innerIdx, r.outerIdx), 0);
+    expect(chainMaxIdx).toBeGreaterThanOrEqual(sys.planets.length);
+
+    const planets = sys.planets;
+    const ratioVal = (s) => { const [n, d] = s.split(':').map(Number); return n / d; };
+
+    // CORRECTNESS INVARIANT: for every surfaced resonance partner, the partner
+    // index must point at a body whose REAL period ratio (Kepler) with this body
+    // equals the stated ratio (within snap tolerance). On the buggy code the
+    // partner is wrong, so the period ratio won't match → this FAILS (RED).
+    let checked = 0;
+    planets.forEach((entry, idx) => {
+      for (const rp of entry.planetData.systemContext.resonancePartners) {
+        const partner = planets[rp.partnerIndex];
+        expect(partner, `idx ${idx} partner ${rp.partnerIndex} missing`).toBeDefined();
+        const a1 = entry.orbitRadiusAU;
+        const a2 = partner.orbitRadiusAU;
+        const periodRatio = Math.pow(Math.max(a1, a2) / Math.min(a1, a2), 1.5);
+        expect(periodRatio, `idx ${idx}->${rp.partnerIndex} ratio ${rp.ratio} but actual period ratio ${periodRatio.toFixed(4)}`)
+          .toBeCloseTo(ratioVal(rp.ratio), 2);
+        checked++;
+      }
+    });
+    // The surviving chain must still expose real partners (not all dropped).
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it('reciprocity holds: if A lists B then B lists A with the same ratio', () => {
+    const sys = StarSystemGenerator.generate(SEED_CULLED_BINARY);
+    const planets = sys.planets;
+    planets.forEach((entry, idx) => {
+      for (const rp of entry.planetData.systemContext.resonancePartners) {
+        const back = planets[rp.partnerIndex].planetData.systemContext.resonancePartners;
+        const reciprocal = back.find((b) => b.partnerIndex === idx && b.ratio === rp.ratio);
+        expect(reciprocal, `idx ${idx}<->${rp.partnerIndex} ratio ${rp.ratio} not reciprocated`).toBeDefined();
+      }
+    });
+  });
+
+  it('resolves the exact post-cull partner set for scan-2606', () => {
+    // Hand-derived from the FINAL array's period ratios:
+    //   final idx1<->idx2 = 5:3 (1.6667), final idx2<->idx3 = 2:1 (2.0000).
+    const sys = StarSystemGenerator.generate(SEED_CULLED_BINARY);
+    const expected = [
+      [],
+      [{ partnerIndex: 2, ratio: '5:3' }],
+      [{ partnerIndex: 1, ratio: '5:3' }, { partnerIndex: 3, ratio: '2:1' }],
+      [{ partnerIndex: 2, ratio: '2:1' }],
+    ];
+    sys.planets.forEach((entry, idx) => {
+      expect(entry.planetData.systemContext.resonancePartners).toEqual(expected[idx]);
+    });
+  });
+});
+
+describe('WS1 L0 plumbing — MOON additive gate (forward regression)', () => {
+  // The planet gate (l0-baseline.json) is planet-only. WS1 ALSO touched the
+  // MoonGenerator path (it now surfaces a real `tidalHeating`). That diff is
+  // already proven additive by code-reading — MoonGenerator._computeTidalHeating
+  // uses a DEDICATED sub-rng and makes ZERO draws on the moon `rng`. This gate
+  // is FORWARD protection: it freezes the CURRENT moon output (a fixed parent +
+  // 5 moon seeds) so a later workstream (WS2+) cannot silently perturb moons.
+  // It mirrors the planet gate's structure (compare PRE-EXISTING keys only; the
+  // new additive `tidalHeating` is absent from MOON_BASELINE_KEYS and ignored).
+  const MOON_BASELINE_KEYS = Object.keys(moonBaseline[0]).filter((k) => k !== 'tidalHeating');
+
+  it('moon baseline fixture matches the moon-grid length', () => {
+    expect(moonBaseline).toHaveLength(generateMoonGrid().length);
+    expect(moonBaseline).toHaveLength(MOON_GRID.length);
+  });
+
+  it('the gate compares pre-existing moon keys, excluding the additive tidalHeating', () => {
+    // Guards the gate itself: tidalHeating must be the ONLY new key (it must be
+    // present on the fixture but excluded from the byte-identical comparison).
+    expect(Object.keys(moonBaseline[0])).toContain('tidalHeating');
+    expect(MOON_BASELINE_KEYS).not.toContain('tidalHeating');
+    // A non-trivial set of frozen keys (radiusEarth, type, orbit*, colors, …).
+    expect(MOON_BASELINE_KEYS.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it('pre-existing moon keys are byte-identical to the frozen baseline', () => {
+    const grid = generateMoonGrid();
+    grid.forEach((moon, i) => {
+      for (const k of MOON_BASELINE_KEYS) {
+        expect(moon[k], `moon[${i}].${k} drifted from frozen moon baseline`)
+          .toEqual(moonBaseline[i][k]);
+      }
+    });
   });
 });
 

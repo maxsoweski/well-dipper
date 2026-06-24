@@ -376,11 +376,14 @@ export class PlanetGenerator {
     // WS1 AC2 surfaces a COMPUTED eccentricity (DATA-ONLY — never feeds px/pz).
     //
     // CRITICAL: e0 is drawn from a DEDICATED sub-rng derived from the body's
-    // STABLE identity (orbit + system seed/metallicity/mass), NOT from the
-    // passed-in `rng`. This guarantees ZERO additional draws on the shared
-    // planet-generation stream, so per-body AND cross-planet behavior is
-    // byte-identical (the additive gate, AC6, stays green). The sub-seed is
-    // deterministic, so the same body/seed always yields the same eccentricity.
+    // STABLE positional identity — its orbit plus the zone parameters
+    // (metallicity, starMassSolar, starType). It does NOT use the passed-in
+    // planet `rng` and there is NO per-body or per-system seed in the key, so
+    // ZERO additional draws happen on the shared planet-generation stream and
+    // the additive gate (AC6) stays byte-identical. The sub-seed is fully
+    // deterministic, so eccentricity is a pure function of (orbit, zones): two
+    // bodies at the same orbit under the same zones get the SAME eccentricity,
+    // and changing the orbit changes it. (Tested in world-engine-l0-plumbing.test.js.)
     const eccSeed = `ecc:${orbitRadiusAU}:${metallicity}:${starMassSolar}:${zones?.starType ?? 'none'}`;
     const eccRng = new SeededRandom(eccSeed);
     const e0 = eccRng.range(0, 0.4); // modest initial eccentricity
@@ -602,7 +605,12 @@ export class PlanetGenerator {
     // Surface history (PhysicsEngine §10)
     const surfaceHistory = computeSurfaceHistory(
       ageGyr, false, false, // nearBelt/nearGiant refined by system generator later
-      atmoPhysics.retained, 0, // tidalHeatingRate for planets is ~0 (moons get tidal heating)
+      // tidalHeatingRate is passed as literal 0 here ON PURPOSE: WS1 SURFACES a
+      // real planet `tidalHeating` (above) on planetData but intentionally does
+      // NOT feed it into resurfacing — consumption is deferred to WS2. (Keeping
+      // this 0 is what makes WS1 additive: computeSurfaceHistory output is
+      // byte-identical to pre-WS1, guarded by the AC6 baseline gate.)
+      atmoPhysics.retained, 0,
     );
 
     // ── Gas giant storms ── (deterministic from seed)

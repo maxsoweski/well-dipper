@@ -450,6 +450,22 @@ export class StarSystemGenerator {
       }
     }
 
+    // Capture resonance partnerships by PLANET OBJECT REFERENCE *now*, before
+    // any later pass mutates the `planets` array. detectResonances/snapToResonances
+    // ran on the array as it was THEN, so resonanceData.resonances holds indices
+    // valid only at this point. The binary-stability cull below REMOVES and
+    // re-packs `planets` (and migration may sort it), so those raw indices go
+    // stale. Holding the actual objects (a/b) lets the systemContext post-pass
+    // resolve each pair to its FINAL index via planets.indexOf() — and omit any
+    // partner that was culled. (WS1 AC5 cull-safety fix, 2026-06-24.)
+    const resPairs = resonanceData.isResonant
+      ? resonanceData.resonances.map((r) => ({
+          a: planets[r.innerIdx],
+          b: planets[r.outerIdx],
+          ratio: r.ratio,
+        }))
+      : [];
+
     // ── Stellar Evolution (PhysicsEngine §8) ──
     const evolution = stellarEvolution(starType, radiusSolarVaried, ageGyr);
 
@@ -636,20 +652,22 @@ export class StarSystemGenerator {
         tidalHeating: moon.tidalHeating,
       }));
 
-      // resonancePartners: from the resonance chain, the pairs that involve
-      // THIS body's index. resonanceChain indices reference the final planets
-      // array (resonance snapping is in-place, no reordering). Guard against
-      // any stale/out-of-range index so a future filtering edge case can't add
-      // a partner that doesn't exist.
+      // resonancePartners: the resonance pairs that involve THIS body. Resolved
+      // by OBJECT IDENTITY against resPairs (captured before the binary-stability
+      // cull, which DOES remove/re-pack `planets` — so raw chain indices are NOT
+      // valid against this final array; that's the bug this avoids). For each
+      // captured pair, if this body is one endpoint, the partner's FINAL index is
+      // planets.indexOf(partner); a partner culled out of the system yields -1 and
+      // is OMITTED (its resonance no longer exists in the surviving system).
       const resonancePartners = [];
-      const chain = resonanceData.isResonant ? resonanceData.resonances : [];
-      for (const r of chain) {
-        if (r.innerIdx === idx && planets[r.outerIdx]) {
-          resonancePartners.push({ partnerIndex: r.outerIdx, ratio: r.ratio });
-        }
-        if (r.outerIdx === idx && planets[r.innerIdx]) {
-          resonancePartners.push({ partnerIndex: r.innerIdx, ratio: r.ratio });
-        }
+      for (const pair of resPairs) {
+        let partner = null;
+        if (pair.a === entry) partner = pair.b;
+        else if (pair.b === entry) partner = pair.a;
+        else continue;
+        const partnerIndex = planets.indexOf(partner);
+        if (partnerIndex === -1) continue; // partner was culled — omit
+        resonancePartners.push({ partnerIndex, ratio: pair.ratio });
       }
 
       entry.planetData.systemContext = {

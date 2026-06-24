@@ -1,0 +1,137 @@
+[
+  {
+    "type": "volcanic",
+    "radiusEarth": 0.9102184896286115,
+    "radiusScene": 0.03877530765817885,
+    "orbitRadiusEarth": 71.67030120730456,
+    "orbitRadiusScene": 3.0531548314311743,
+    "tidalHeating": 203.78099086323954,
+    "radius": 0.23523876746720584,
+    "orbitRadius": 6.316766159478334,
+    "baseColor": [
+      0.85,
+      0.5,
+      0.08
+    ],
+    "accentColor": [
+      0.18,
+      0.1,
+      0.06
+    ],
+    "orbitSpeed": 0.00002573038146303757,
+    "inclination": -0.0014863394666463081,
+    "startAngle": 6.161000061696529,
+    "noiseScale": 10.62749999465339,
+    "clouds": null,
+    "atmosphere": null,
+    "aurora": null
+  },
+  {
+    "type": "ice",
+    "radiusEarth": 0.753189385246041,
+    "radiusScene": 0.032085867811481344,
+    "orbitRadiusEarth": 226.9581826625431,
+    "orbitRadiusScene": 9.668418581424335,
+    "tidalHeating": 0.04658298837588514,
+    "radius": 0.19465583777248263,
+    "orbitRadius": 11.161292649256131,
+    "baseColor": [
+      0.92,
+      0.9,
+      0.88
+    ],
+    "accentColor": [
+      0.45,
+      0.38,
+      0.3
+    ],
+    "orbitSpeed": 0.00001703613265122623,
+    "inclination": -0.05193622317165136,
+    "startAngle": 5.698919657255794,
+    "noiseScale": 12.843180192325116,
+    "clouds": null,
+    "atmosphere": null,
+    "aurora": null
+  },
+  {
+    "type": "ice",
+    "radiusEarth": 0.5961617843468947,
+    "radiusScene": 0.025396492013177712,
+    "orbitRadiusEarth": 291.3808691613143,
+    "orbitRadiusScene": 12.412825026271989,
+    "tidalHeating": 0.009873854307035431,
+    "radius": 0.1540732966411556,
+    "orbitRadius": 17.534609032682777,
+    "baseColor": [
+      0.75,
+      0.78,
+      0.72
+    ],
+    "accentColor": [
+      0.28,
+      0.32,
+      0.25
+    ],
+    "orbitSpeed": 0.000013977597959475307,
+    "inclination": -0.04543931083753705,
+    "startAngle": 1.809941758607753,
+    "noiseScale": 16.226043412458584,
+    "clouds": null,
+    "atmosphere": null,
+    "aurora": null
+  },
+  {
+    "type": "rocky",
+    "radiusEarth": 0.47447449985388973,
+    "radiusScene": 0.0202126136937757,
+    "orbitRadiusEarth": 708.6139350342794,
+    "orbitRadiusScene": 30.186953632460302,
+    "tidalHeating": 0.00008029483616720241,
+    "radius": 0.12262418069071435,
+    "orbitRadius": 23.141528361110847,
+    "baseColor": [
+      0.42,
+      0.38,
+      0.35
+    ],
+    "accentColor": [
+      0.65,
+      0.6,
+      0.55
+    ],
+    "orbitSpeed": 0.000008970364791895337,
+    "inclination": -0.043553044088184834,
+    "startAngle": 6.271900450742876,
+    "noiseScale": 20.387496054351303,
+    "clouds": null,
+    "atmosphere": null,
+    "aurora": null
+  },
+  {
+    "type": "rocky",
+    "radiusEarth": 1.0546751313330158,
+    "radiusScene": 0.04492916059478647,
+    "orbitRadiusEarth": 681.517662806828,
+    "orbitRadiusScene": 29.03265243557087,
+    "tidalHeating": 0.003977204318491291,
+    "radius": 0.27257244364957073,
+    "orbitRadius": 27.863079155731565,
+    "baseColor": [
+      0.52,
+      0.42,
+      0.32
+    ],
+    "accentColor": [
+      0.22,
+      0.18,
+      0.14
+    ],
+    "orbitSpeed": 0.000010124159393901747,
+    "inclination": 0.04394592940807343,
+    "startAngle": 5.831730097229422,
+    "noiseScale": 9.17187360001106,
+    "clouds": null,
+    "atmosphere": null,
+    "aurora": null
+  }
+]
