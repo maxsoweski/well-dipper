@@ -4,6 +4,7 @@ import { PlanetGenerator } from '../PlanetGenerator.js';
 import { MoonGenerator } from '../MoonGenerator.js';
 import { SeededRandom } from '../SeededRandom.js';
 import { tidalHeatingPlanet } from '../PhysicsEngine.js';
+import { StarSystemGenerator } from '../StarSystemGenerator.js';
 import baseline from './__fixtures__/l0-baseline.json';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -204,6 +205,94 @@ describe('WS1 AC1 — tidal heating is real (moons + planets)', () => {
     generateGrid().forEach((body, i) => {
       expect(body.surfaceHistory).toEqual(baseline[i].surfaceHistory);
     });
+  });
+});
+
+describe('WS1 AC5 — systemContext reachable + serialization-safe', () => {
+  // systemContext is a FLAT, derived summary of a body's place in the system.
+  // It CANNOT be built inside PlanetGenerator.generate() (each body is finalized
+  // BEFORE the system graph — moons, resonances, companion — exists). It is
+  // attached by a post-pass in StarSystemGenerator AFTER the graph is assembled.
+  // Therefore systemContext is tested via a REAL StarSystemGenerator system, NOT
+  // the harness grid (which calls generate() directly and intentionally has none).
+  //
+  // Seeds were discovered empirically against the real generator:
+  //   SEED_RESONANT = single (companionClass null), resonant (chain 2-3, 3-4),
+  //                   6 planets, has moons.
+  //   SEED_BINARY   = binary (companion class F), resonant, 5 planets.
+  const SEED_RESONANT = 'rscan-7';
+  const SEED_BINARY = 'scan-7';
+
+  it('a body can resolve siblings, its own moons, resonance partners, companion', () => {
+    const sys = StarSystemGenerator.generate(SEED_RESONANT);
+    expect(sys.planets.length).toBeGreaterThanOrEqual(3);
+
+    const entry = sys.planets[1];
+    const body = entry.planetData;
+
+    // siblings = every OTHER planet, summarized to primitives.
+    expect(Array.isArray(body.systemContext.siblings)).toBe(true);
+    expect(body.systemContext.siblings.length).toBe(sys.planets.length - 1);
+    for (const s of body.systemContext.siblings) {
+      expect(typeof s.type).toBe('string');
+      expect(typeof s.orbitAU).toBe('number');
+    }
+
+    // moons = THIS body's own moons (planets[i].moons), summarized.
+    expect(Array.isArray(body.systemContext.moons)).toBe(true);
+    expect(body.systemContext.moons.length).toBe(entry.moons.length);
+
+    // companionClass is null for a single star.
+    expect(body.systemContext.companionClass).toBeNull();
+  });
+
+  it('resonancePartners on a chain body match the system resonanceChain', () => {
+    const sys = StarSystemGenerator.generate(SEED_RESONANT);
+    expect(sys.resonanceChain).not.toBeNull();
+    expect(sys.resonanceChain.isResonant).toBe(true);
+
+    // Derive the expected partner set for each planet index straight from the
+    // chain, then assert every body's systemContext.resonancePartners matches.
+    const expectedFor = (idx) => {
+      const partners = [];
+      for (const r of sys.resonanceChain.resonances) {
+        if (r.innerIdx === idx) partners.push({ partnerIndex: r.outerIdx, ratio: r.ratio });
+        if (r.outerIdx === idx) partners.push({ partnerIndex: r.innerIdx, ratio: r.ratio });
+      }
+      return partners;
+    };
+
+    sys.planets.forEach((entry, idx) => {
+      expect(entry.planetData.systemContext.resonancePartners).toEqual(expectedFor(idx));
+    });
+
+    // And at least one chain body actually has a partner (guards the assertion
+    // above from passing vacuously on an all-empty set).
+    const anyPartners = sys.planets.some(
+      (p) => p.planetData.systemContext.resonancePartners.length > 0,
+    );
+    expect(anyPartners).toBe(true);
+  });
+
+  it('companionClass is the secondary star class in a binary system', () => {
+    const sys = StarSystemGenerator.generate(SEED_BINARY);
+    expect(sys.isBinary).toBe(true);
+    expect(sys.star2).not.toBeNull();
+    for (const entry of sys.planets) {
+      expect(entry.planetData.systemContext.companionClass).toBe(sys.star2.type);
+    }
+  });
+
+  it('the whole system still JSON-serializes (no circular ref introduced)', () => {
+    // Pre-change, JSON.stringify(system) already succeeds (verified: no
+    // pre-existing cycle). The flat systemContext must keep it that way — it
+    // copies ONLY primitives, never a planet/system/parent reference.
+    const sys = StarSystemGenerator.generate(SEED_RESONANT);
+    expect(() => JSON.stringify(sys)).not.toThrow();
+    // Belt-and-suspenders: the systemContext objects are themselves acyclic.
+    for (const entry of sys.planets) {
+      expect(() => JSON.stringify(entry.planetData.systemContext)).not.toThrow();
+    }
   });
 });
 

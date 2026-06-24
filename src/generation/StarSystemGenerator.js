@@ -605,6 +605,61 @@ export class StarSystemGenerator {
     // See docs/GAME_BIBLE.md §6 and ExoticOverlay.js.
     ExoticOverlay.apply(systemData);
 
+    // ── systemContext post-pass (World-Engine WS1 AC5) ──
+    // Each body's planetData is finalized by PlanetGenerator.generate() BEFORE
+    // the system graph exists (moons, resonances, companion are computed here,
+    // after the per-planet loop). So this FLAT, derived summary of a body's
+    // place in the system can only be built now, at the end, once the graph is
+    // fully assembled (including ExoticOverlay's in-place type changes).
+    //
+    // CRITICAL: copy PRIMITIVES only. Never assign systemData, a planet entry,
+    // or any parent reference — that would create a cycle and break
+    // JSON.stringify(system) (saves/sharing). This pass adds ZERO rng draws
+    // (purely derived), keeping the AC6 additive gate byte-identical.
+    const companionClass = star2 ? star2.type : null;
+    planets.forEach((entry, idx) => {
+      // siblings: every OTHER planet, summarized to flat primitives.
+      const siblings = [];
+      for (let j = 0; j < planets.length; j++) {
+        if (j === idx) continue;
+        siblings.push({
+          type: planets[j].planetData.type,
+          orbitAU: planets[j].orbitRadiusAU,
+        });
+      }
+
+      // moons: THIS body's own moons (planets[idx].moons), summarized.
+      const moons = entry.moons.map((moon) => ({
+        type: moon.type,
+        radiusEarth: moon.radiusEarth,
+        orbitRadiusEarth: moon.orbitRadiusEarth,
+        tidalHeating: moon.tidalHeating,
+      }));
+
+      // resonancePartners: from the resonance chain, the pairs that involve
+      // THIS body's index. resonanceChain indices reference the final planets
+      // array (resonance snapping is in-place, no reordering). Guard against
+      // any stale/out-of-range index so a future filtering edge case can't add
+      // a partner that doesn't exist.
+      const resonancePartners = [];
+      const chain = resonanceData.isResonant ? resonanceData.resonances : [];
+      for (const r of chain) {
+        if (r.innerIdx === idx && planets[r.outerIdx]) {
+          resonancePartners.push({ partnerIndex: r.outerIdx, ratio: r.ratio });
+        }
+        if (r.outerIdx === idx && planets[r.innerIdx]) {
+          resonancePartners.push({ partnerIndex: r.innerIdx, ratio: r.ratio });
+        }
+      }
+
+      entry.planetData.systemContext = {
+        siblings,
+        moons,
+        resonancePartners,
+        companionClass,
+      };
+    });
+
     return systemData;
   }
 
