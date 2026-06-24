@@ -1,0 +1,790 @@
+[
+  {
+    "type": "lava",
+    "radiusEarth": 0.6387548229657114,
+    "radiusScene": 0.027210955458339302,
+    "radius": 0.3935741845518351,
+    "baseColor": [
+      0.12,
+      0.08,
+      0.1
+    ],
+    "accentColor": [
+      0.8,
+      0.15,
+      0.05
+    ],
+    "rings": null,
+    "clouds": null,
+    "atmosphere": null,
+    "aurora": null,
+    "storms": null,
+    "moonCount": 0,
+    "noiseScale": 3.5994813763536513,
+    "noiseDetail": 0.493212877959013,
+    "rotationSpeed": 0,
+    "axialTilt": 0.13213316746987402,
+    "sunDirection": [
+      -0.0025517463047354354,
+      -0.991842116445578,
+      -0.12744686985388395
+    ],
+    "massEarth": 0.17138745154088855,
+    "composition": {
+      "carbonToOxygen": 0.5069044956937433,
+      "ironFraction": 0.25845224784687165,
+      "volatileFraction": 0.02422612392343581,
+      "surfaceType": "silicate",
+      "density": 4743.8089913874865
+    },
+    "T_eq": 1039.3524443465117,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "habitability": {
+      "score": 0.30000000000000004,
+      "factors": [
+        "stable-orbit",
+        "age-simple",
+        "age-complex"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.135,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "rocky",
+    "radiusEarth": 0.5895066436612979,
+    "radiusScene": 0.02511298301997129,
+    "radius": 0.37370398619677875,
+    "baseColor": [
+      0.55,
+      0.5,
+      0.35
+    ],
+    "accentColor": [
+      0.7,
+      0.65,
+      0.45
+    ],
+    "rings": null,
+    "clouds": {
+      "color": [
+        0.9,
+        0.9,
+        0.92
+      ],
+      "density": 0.6929124668240547,
+      "scale": 2.519897357560694
+    },
+    "atmosphere": {
+      "color": [
+        0.75,
+        0.55,
+        0.25
+      ],
+      "strength": 0.15,
+      "physics": {
+        "retained": true,
+        "type": "secondary",
+        "composition": "co2",
+        "pressure": 0.691047770070522,
+        "jeansH2": 1.2746637831528074,
+        "jeansN2": 17.693094303464342,
+        "jeansCO2": 27.81430523834932
+      }
+    },
+    "aurora": {
+      "color": [
+        0.9,
+        0.35,
+        0.5
+      ],
+      "intensity": 0.46101341769564896,
+      "ringLatitude": 0.7122936911385506,
+      "ringWidth": 0.14508252354457973
+    },
+    "storms": null,
+    "moonCount": 1,
+    "noiseScale": 2.6896271037403494,
+    "noiseDetail": 0.3863215347053483,
+    "rotationSpeed": 0,
+    "axialTilt": 0.28486496582627296,
+    "sunDirection": [
+      0.4053153314277156,
+      -0.4382491903810523,
+      0.8022824497893453
+    ],
+    "massEarth": 0.12736518004701464,
+    "composition": {
+      "carbonToOxygen": 0.604684556927532,
+      "ironFraction": 0.307342278463766,
+      "volatileFraction": 0.048671139231882994,
+      "surfaceType": "silicate",
+      "density": 4939.369113855064
+    },
+    "T_eq": 734.9331614402322,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "habitability": {
+      "score": 0.5499999999999999,
+      "factors": [
+        "atmosphere",
+        "stable-orbit",
+        "age-simple",
+        "age-complex"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "eyeball",
+    "radiusEarth": 1.1467644748743624,
+    "radiusScene": 0.048852166629647836,
+    "radius": 0.6080586849246175,
+    "baseColor": [
+      0.12,
+      0.08,
+      0.3
+    ],
+    "accentColor": [
+      0.35,
+      0.2,
+      0.15
+    ],
+    "rings": null,
+    "clouds": {
+      "color": [
+        0.9,
+        0.9,
+        0.92
+      ],
+      "density": 0.40027984902262687,
+      "scale": 3.6802334277890623
+    },
+    "atmosphere": {
+      "color": [
+        0.75,
+        0.55,
+        0.25
+      ],
+      "strength": 0.2740724289456735,
+      "physics": {
+        "retained": true,
+        "type": "secondary",
+        "composition": "co2",
+        "pressure": 2.740724289456735,
+        "jeansH2": 4.437066537052648,
+        "jeansN2": 61.589132529238256,
+        "jeansCO2": 96.82076533091002
+      }
+    },
+    "aurora": null,
+    "storms": null,
+    "moonCount": 0,
+    "noiseScale": 4.687130403937772,
+    "noiseDetail": 0.4397830909118056,
+    "rotationSpeed": 0,
+    "axialTilt": -0.28654764080420136,
+    "sunDirection": [
+      0.2205011161453146,
+      0.9730969802892578,
+      -0.06679464597254982
+    ],
+    "massEarth": 1.4938161929711569,
+    "composition": {
+      "carbonToOxygen": 0.4898239695932717,
+      "ironFraction": 0.24991198479663584,
+      "volatileFraction": 0.019955992398317905,
+      "surfaceType": "silicate",
+      "density": 4709.647939186543
+    },
+    "T_eq": 1272.9415757817023,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "habitability": {
+      "score": 0.6,
+      "factors": [
+        "atmosphere",
+        "stable-orbit",
+        "age-simple",
+        "age-complex",
+        "mass-range"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "terrestrial",
+    "radiusEarth": 1.1318883456755429,
+    "radiusScene": 0.04821844352577813,
+    "radius": 0.5896504832431674,
+    "baseColor": [
+      0.06,
+      0.16,
+      0.32
+    ],
+    "accentColor": [
+      0.3,
+      0.5,
+      0.4
+    ],
+    "rings": null,
+    "clouds": {
+      "color": [
+        0.9,
+        0.9,
+        0.92
+      ],
+      "density": 0.5981316130608321,
+      "scale": 2.236592301633209
+    },
+    "atmosphere": {
+      "color": [
+        0.3,
+        0.5,
+        0.9
+      ],
+      "strength": 0.15,
+      "physics": {
+        "retained": true,
+        "type": "secondary",
+        "composition": "n2-o2",
+        "pressure": 1.43869069857102,
+        "jeansH2": 21.416831078709865,
+        "jeansN2": 297.2784015403011,
+        "jeansCO2": 467.3344333891615
+      }
+    },
+    "aurora": null,
+    "storms": null,
+    "moonCount": 0,
+    "noiseScale": 3.5492507240269333,
+    "noiseDetail": 0.3905899902572855,
+    "rotationSpeed": 0.005711554961201425,
+    "axialTilt": 0.38066142168827355,
+    "sunDirection": [
+      0.16144661746812927,
+      -0.9868356075572924,
+      0.009511748794466273
+    ],
+    "massEarth": 1.4233633732137747,
+    "composition": {
+      "carbonToOxygen": 0.6236238536424935,
+      "ironFraction": 0.31681192682124676,
+      "volatileFraction": 0.053405963410623376,
+      "surfaceType": "silicate",
+      "density": 4977.247707284987
+    },
+    "T_eq": 254.58831515634046,
+    "tidalState": {
+      "locked": false,
+      "lockType": "none"
+    },
+    "habitability": {
+      "score": 1,
+      "factors": [
+        "atmosphere",
+        "liquid-water",
+        "magnetic-field",
+        "stable-orbit",
+        "age-simple",
+        "age-complex",
+        "mass-range"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "ocean",
+    "radiusEarth": 1.1980936156585813,
+    "radiusScene": 0.05103878802705557,
+    "radius": 0.5990468078292907,
+    "baseColor": [
+      0.08,
+      0.15,
+      0.4
+    ],
+    "accentColor": [
+      0.12,
+      0.3,
+      0.5
+    ],
+    "rings": null,
+    "clouds": {
+      "color": [
+        0.9,
+        0.9,
+        0.92
+      ],
+      "density": 0.6034720909781754,
+      "scale": 2.528152938466519
+    },
+    "atmosphere": {
+      "color": [
+        0.3,
+        0.5,
+        0.9
+      ],
+      "strength": 0.1705232824944129,
+      "physics": {
+        "retained": true,
+        "type": "secondary",
+        "composition": "n2-o2",
+        "pressure": 1.7052328249441289,
+        "jeansH2": 27.35276167666053,
+        "jeansN2": 379.67266207901935,
+        "jeansCO2": 596.8617547951894
+      }
+    },
+    "aurora": null,
+    "storms": null,
+    "moonCount": 0,
+    "noiseScale": 4.028907605679706,
+    "noiseDetail": 0.502899678144604,
+    "rotationSpeed": -0.0037093102020832403,
+    "axialTilt": 0.28863164549693465,
+    "sunDirection": [
+      -0.2335410692593157,
+      -0.8364854974192019,
+      0.49573236890137196
+    ],
+    "massEarth": 1.756541031180161,
+    "composition": {
+      "carbonToOxygen": 0.4765167424920947,
+      "ironFraction": 0.24325837124604735,
+      "volatileFraction": 0.016629185623023658,
+      "surfaceType": "silicate",
+      "density": 4683.033484984189
+    },
+    "T_eq": 232.40627181393674,
+    "tidalState": {
+      "locked": false,
+      "lockType": "none"
+    },
+    "habitability": {
+      "score": 1,
+      "factors": [
+        "atmosphere",
+        "liquid-water",
+        "magnetic-field",
+        "stable-orbit",
+        "age-simple",
+        "age-complex",
+        "mass-range"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "venus",
+    "radiusEarth": 0.8243225263431668,
+    "radiusScene": 0.035116139622218906,
+    "radius": 0.4182418947573751,
+    "baseColor": [
+      0.75,
+      0.65,
+      0.4
+    ],
+    "accentColor": [
+      0.85,
+      0.78,
+      0.55
+    ],
+    "rings": null,
+    "clouds": null,
+    "atmosphere": {
+      "color": [
+        0.75,
+        0.55,
+        0.25
+      ],
+      "strength": 0.7,
+      "physics": {
+        "retained": true,
+        "type": "primordial",
+        "composition": "co2",
+        "pressure": 90,
+        "jeansH2": 100
+      }
+    },
+    "aurora": {
+      "color": [
+        0.9,
+        0.35,
+        0.5
+      ],
+      "intensity": 0.09678760607707869,
+      "ringLatitude": 0.7632345693036914,
+      "ringWidth": 0.12470617227852343
+    },
+    "storms": null,
+    "moonCount": 0,
+    "noiseScale": 2.1987184319877997,
+    "noiseDetail": 0.41293750326149165,
+    "rotationSpeed": 0.0008333333333333333,
+    "axialTilt": -0.3287934842519462,
+    "sunDirection": [
+      0.7511660366457765,
+      0.12271017779835564,
+      -0.648607583716512
+    ],
+    "massEarth": 0.44035408662867087,
+    "composition": {
+      "carbonToOxygen": 0.6223456930369139,
+      "ironFraction": 0.31617284651845695,
+      "volatileFraction": 0.05308642325922847,
+      "surfaceType": "silicate",
+      "density": 4974.691386073828
+    },
+    "T_eq": 304.29123787709915,
+    "tidalState": {
+      "locked": true,
+      "lockType": "3:2-resonance"
+    },
+    "habitability": {
+      "score": 0.95,
+      "factors": [
+        "atmosphere",
+        "liquid-water",
+        "magnetic-field",
+        "stable-orbit",
+        "age-simple",
+        "age-complex"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "sub-neptune",
+    "radiusEarth": 3.6933136912994087,
+    "radiusScene": 0.1573351632493548,
+    "radius": 1.1773254765197634,
+    "baseColor": [
+      0.25,
+      0.4,
+      0.5
+    ],
+    "accentColor": [
+      0.4,
+      0.55,
+      0.6
+    ],
+    "rings": null,
+    "clouds": null,
+    "atmosphere": {
+      "color": [
+        0.4,
+        0.55,
+        0.7
+      ],
+      "strength": 0.8,
+      "physics": {
+        "retained": true,
+        "type": "primordial",
+        "composition": "h2-he",
+        "pressure": 50,
+        "jeansH2": 100
+      }
+    },
+    "aurora": null,
+    "storms": null,
+    "moonCount": 2,
+    "noiseScale": 2.28289042157121,
+    "noiseDetail": 0.37341389870271086,
+    "rotationSpeed": 0.002036756167634546,
+    "axialTilt": -0.3758895311038941,
+    "sunDirection": [
+      -0.2823226828572828,
+      0.9174441156701122,
+      -0.28033943241462106
+    ],
+    "massEarth": 24.886928343036878,
+    "composition": {
+      "carbonToOxygen": 0.5774949124082923,
+      "ironFraction": 0.29374745620414616,
+      "volatileFraction": 0.21004375250044244,
+      "surfaceType": "silicate",
+      "density": 4548.649776019845
+    },
+    "T_eq": 180.02112405790623,
+    "tidalState": {
+      "locked": false,
+      "lockType": "none"
+    },
+    "habitability": {
+      "score": 0.7,
+      "factors": [
+        "atmosphere",
+        "magnetic-field",
+        "stable-orbit",
+        "age-simple",
+        "age-complex"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "gas-giant",
+    "radiusEarth": 11.427429987117648,
+    "radiusScene": 0.4868085174512118,
+    "radius": 2.9533288722625004,
+    "baseColor": [
+      0.3,
+      0.35,
+      0.5
+    ],
+    "accentColor": [
+      0.5,
+      0.55,
+      0.7
+    ],
+    "rings": null,
+    "clouds": null,
+    "atmosphere": {
+      "color": [
+        0.65,
+        0.7150000000000001,
+        0.9099999999999999
+      ],
+      "strength": 0.55,
+      "physics": {
+        "retained": true,
+        "type": "primordial",
+        "composition": "h2-he",
+        "pressure": 1000,
+        "jeansH2": 100
+      }
+    },
+    "aurora": null,
+    "storms": null,
+    "moonCount": 1,
+    "noiseScale": 2.384674829430878,
+    "noiseDetail": 0.5748853517696262,
+    "rotationSpeed": 0.003917152118093023,
+    "axialTilt": 0.962995316600427,
+    "sunDirection": [
+      -0.3890587818552966,
+      0.5101532575855582,
+      0.7670573107898235
+    ],
+    "massEarth": 136.02431950225383,
+    "composition": {
+      "carbonToOxygen": 0.45582282701507215,
+      "ironFraction": 0.23291141350753608,
+      "volatileFraction": 0.3918003023964249,
+      "surfaceType": "silicate",
+      "density": 3880.956462744831
+    },
+    "T_eq": 111.64436171486685,
+    "tidalState": {
+      "locked": false,
+      "lockType": "none"
+    },
+    "habitability": {
+      "score": 0.7,
+      "factors": [
+        "atmosphere",
+        "magnetic-field",
+        "stable-orbit",
+        "age-simple",
+        "age-complex"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "ice",
+    "radiusEarth": 0.6010148100554943,
+    "radiusScene": 0.025603230908364055,
+    "radius": 0.4005074050277471,
+    "baseColor": [
+      0.55,
+      0.7,
+      0.8
+    ],
+    "accentColor": [
+      0.35,
+      0.5,
+      0.65
+    ],
+    "rings": null,
+    "clouds": {
+      "color": [
+        0.9,
+        0.9,
+        0.92
+      ],
+      "density": 0.5930163626559078,
+      "scale": 3.206622657366097
+    },
+    "atmosphere": {
+      "color": [
+        0.4,
+        0.55,
+        0.7
+      ],
+      "strength": 0.55,
+      "physics": {
+        "retained": true,
+        "type": "primordial",
+        "composition": "h2-he",
+        "pressure": 10.684049700748453,
+        "jeansH2": 10.965299189057154,
+        "jeansN2": 152.20489919139033,
+        "jeansCO2": 239.27264797614262
+      }
+    },
+    "aurora": null,
+    "storms": null,
+    "moonCount": 0,
+    "noiseScale": 4.788990928325802,
+    "noiseDetail": 0.3799245142843574,
+    "rotationSpeed": 0.0016244731054951749,
+    "axialTilt": 0.05128921987488866,
+    "sunDirection": [
+      0.5648518052156313,
+      0.11814385409002956,
+      -0.8166911704465749
+    ],
+    "massEarth": 0.13680994014969045,
+    "composition": {
+      "carbonToOxygen": 0.4540746613405645,
+      "ironFraction": 0.23203733067028226,
+      "volatileFraction": 0.5464817751147266,
+      "surfaceType": "ice-rock",
+      "density": 3567.223103121958
+    },
+    "T_eq": 90.01056202895312,
+    "tidalState": {
+      "locked": false,
+      "lockType": "none"
+    },
+    "habitability": {
+      "score": 0.7,
+      "factors": [
+        "atmosphere",
+        "magnetic-field",
+        "stable-orbit",
+        "age-simple",
+        "age-complex"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  },
+  {
+    "type": "carbon",
+    "radiusEarth": 0.4615739958593622,
+    "radiusScene": 0.01966305222360883,
+    "radius": 0.23694439751561733,
+    "baseColor": [
+      0.06,
+      0.05,
+      0.05
+    ],
+    "accentColor": [
+      0.25,
+      0.18,
+      0.1
+    ],
+    "rings": null,
+    "clouds": null,
+    "atmosphere": {
+      "color": [
+        0.4,
+        0.55,
+        0.7
+      ],
+      "strength": 0.55,
+      "physics": {
+        "retained": true,
+        "type": "primordial",
+        "composition": "h2-he",
+        "pressure": 10.25757603166818,
+        "jeansH2": 6.584574966405319,
+        "jeansN2": 91.39783162323802,
+        "jeansCO2": 143.68132240126235
+      }
+    },
+    "aurora": null,
+    "storms": null,
+    "moonCount": 0,
+    "noiseScale": 3.6032789156306535,
+    "noiseDetail": 0.5044192177709192,
+    "rotationSpeed": 0.003397557233848298,
+    "axialTilt": -0.03017701907083392,
+    "sunDirection": [
+      0.7879271187368414,
+      0.3733499870060199,
+      -0.48967401683330536
+    ],
+    "massEarth": 0.05151520633363603,
+    "composition": {
+      "carbonToOxygen": 0.4784519675187767,
+      "ironFraction": 0.24422598375938837,
+      "volatileFraction": 0.5642259837593884,
+      "surfaceType": "ice-rock",
+      "density": 3592.677951278165
+    },
+    "T_eq": 73.49331614402323,
+    "tidalState": {
+      "locked": false,
+      "lockType": "none"
+    },
+    "habitability": {
+      "score": 0.7,
+      "factors": [
+        "atmosphere",
+        "magnetic-field",
+        "stable-orbit",
+        "age-simple",
+        "age-complex"
+      ]
+    },
+    "surfaceHistory": {
+      "bombardmentIntensity": 0,
+      "erosionLevel": 0.6749999999999999,
+      "resurfacingRate": 0.1
+    }
+  }
+]
