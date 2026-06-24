@@ -1,0 +1,98 @@
+{
+  "workstream": "world-engine-l0-plumbing-2026-06-23",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-23. WS1 of the production-L1 port (lab-only decision locked by Max 2026-06-23). Features + done-criteria derived from a code-grounded planning pass (4 parallel code-architect agents) recorded in docs/FEATURES/world-engine-production-L1-plan.md. Scope shape = STRICTLY ADDITIVE (expose real drivers, zero behavioral change) per Max's 'most straightforward path to truly programmatic' criterion + the refactor carve-out (the diff is the gate).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-tidal-heating-is-real",
+      "statement": "D12 tidal heating is computed from real physics and surfaced on the generated body, NO LONGER a hard zero. A tidally-heated body (close, eccentric orbit / Io-like moon) reports a real nonzero planetData.tidalHeating; a cold, distant body reports ~0. This holds for BOTH planets AND moons (the function PhysicsEngine.tidalHeating() at PhysicsEngine.js:295 was dead end-to-end — called only in tests; PlanetGenerator hard-zeroes it inline at PlanetGenerator.js:565 and MoonGenerator never calls it at all). The value is surfaced ONLY — it is NOT wired into computeSurfaceHistory (that stays its current behavior; consumption is WS2's job).",
+      "verifyVia": {
+        "input": "npx vitest run the WS1 tests: generate a tidally-heated planet and an Io-like moon at fixed seeds, and a cold distant body; read planetData.tidalHeating",
+        "observable": "planetData.tidalHeating is real and >0 for the tidally-heated planet and the moon, and ~0 for the cold body; the value matches PhysicsEngine.tidalHeating() called with the body's real eccentricity/parent params; computeSurfaceHistory output is unchanged from before (resurfacing identical)"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC2-eccentricity-computed",
+      "statement": "Every body has a real orbital eccentricity (it was never computed — circularize() at PhysicsEngine.js:321 is dead, and orbits are circular by construction at StarSystemGenerator.js:362-363). WS1 seeds a deterministic initial eccentricity (rng, formation/zone-informed) and damps it via circularize(), surfacing planetData.eccentricity in [0,1). DATA-ONLY: eccentricity does NOT feed orbit placement in WS1 (visible orbits stay circular). It feeds AC1's tidal-heating call.",
+      "verifyVia": {
+        "input": "npx vitest run: generate the same body at a fixed seed twice; generate close-in vs distant bodies; read planetData.eccentricity",
+        "observable": "planetData.eccentricity is present, in [0,1), and identical across runs of the same seed (deterministic); AC1's tidal-heating call consumes planetData.eccentricity (not a literal); orbit placement (px/pz) is unchanged"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC3-magnetic-field-surfaced-single-source",
+      "statement": "A body's magnetic-field strength (D13) is surfaced on planetData from a SINGLE canonical computation, instead of being computed inline twice (PhysicsEngine.js:168 in computeAtmosphere, PlanetGenerator.js:421 in the aurora block) and discarded. The aurora/atmosphere paths read the surfaced value rather than recomputing, so the surfaced number equals the value those paths already used (behavior-preserving).",
+      "verifyVia": {
+        "input": "npx vitest run: generate bodies across iron/rotation/lock combinations; read planetData.magneticField and compare to the value the aurora/atmosphere code uses",
+        "observable": "planetData.magneticField is present and EQUALS the value the aurora/atmosphere paths consume (single source of truth); aurora/atmosphere rendering inputs are unchanged (the surfaced value === the old inline value)"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC4-age-metallicity-surfaced",
+      "statement": "A body's age (D16) and its system's metallicity are surfaced on planetData. Both already exist at system level (StarSystemGenerator.js:585-586) and are consumed internally (ageGyr enters generate() at :367; metallicity feeds deriveComposition/_pickType) but are dropped from the returned object (PlanetGenerator.js:660-688). This is a ~2-line additive plumb.",
+      "verifyVia": {
+        "input": "npx vitest run: generate a body in a system with known ageGyr + metallicity; read planetData.age and planetData.metallicity",
+        "observable": "planetData.age === the system ageGyr and planetData.metallicity === the system metallicity for the same generation (pure equality)"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5-system-context-reachable-and-serialization-safe",
+      "statement": "From any generated body you can resolve its place in the system — siblings (other planets' type + orbit), its own moons, its resonance partners, and its companion star class — via a FLAT derived planetData.systemContext summary. The graph is computed one level up AFTER the body exists (planets[].moons at StarSystemGenerator.js:390/393, resonanceChain at PhysicsEngine.js:596, companion star2 at :567) and the body only carries moonCount today, so this requires a second back-link pass. It MUST be a flat summary, NOT a live back-reference (planetData._system = systemData would be circular and break JSON save/share).",
+      "verifyVia": {
+        "input": "npx vitest run: generate a known resonant system (>=3 compact planets); from one body read planetData.systemContext; then JSON.stringify(systemData)",
+        "observable": "systemContext resolves real siblings (type+orbit), the body's actual moons (not just a count), resonance partners matching systemData.resonanceChain, and the companion class; JSON.stringify(systemData) succeeds with no circular-reference throw"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC6-zero-render-regression-additive-gate",
+      "statement": "WS1 is strictly additive: nothing that renders today changes. For a fixed seed x type grid, the generated output is byte/tolerance-identical to before EXCEPT for the new keys (tidalHeating, eccentricity, magneticField, age, metallicity, systemContext). computeSurfaceHistory/resurfacing, orbit placement, aurora/atmosphere behavior, and the save/serialization system are all unchanged. The diff is the gate.",
+      "verifyVia": {
+        "input": "npx vitest run the regression suite (existing tests + a golden snapshot of PlanetGenerator.generate output over a fixed seed x type grid, diffed pre/post WS1); confirm existing test cluster stays green",
+        "observable": "Existing test cluster green; the generate() golden snapshot is identical pre/post WS1 except for the six new additive keys; no change to resurfacing, orbit px/pz, or aurora inputs"
+      },
+      "layer": "integration",
+      "live": false
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "PhysicsEngine.tidalHeating(eccentricity, massParentEarth, radiusMoonEarth, orbitRadiusEarth) -- PhysicsEngine.js:295. Real, Io-normalized, currently called ONLY in __tests__/PhysicsEngine.test.js (dead in production for both planets and moons).",
+      "PhysicsEngine.circularize(initialEccentricity, ageGyr, orbitAU, massParent) -- PhysicsEngine.js:321. Real but dead (test-only). NOTE: no initial eccentricity is seeded anywhere -- orbits are circular by construction (StarSystemGenerator.js:362-363) -- so WS1 must SEED an initial eccentricity, then damp; it is 'compute', not 'un-comment'.",
+      "Inline magnetic fieldStrength computations: PhysicsEngine.js:168 (computeAtmosphere, ironFraction*(isLocked?0.2:1.0)) and PlanetGenerator.js:421 (aurora block, identical) -- computed twice, surfaced never.",
+      "systemData.ageGyr + systemData.metallicity (StarSystemGenerator.js:585-586) -- available, consumed internally, dropped from the body's return.",
+      "The system graph computed one level up AFTER body creation: planets[].moons (StarSystemGenerator.js:390/393), detectResonances -> resonanceChain (PhysicsEngine.js:396 -> :596), companion star2 (StarSystemGenerator.js:567). Not exposed to per-body planetData (body carries only moonCount).",
+      "PlanetGenerator.generate()'s returned planetData object (PlanetGenerator.js:660-688) -- the surface to extend with the new keys.",
+      "MoonGenerator.generate() / MoonGenerator._pickType (MoonGenerator.js:312) -- the moon path, which also never calls tidalHeating()."
+    ],
+    "outputs": [
+      "planetData.tidalHeating -- real, computed via PhysicsEngine.tidalHeating(), nonzero for tidally-heated bodies; surfaced for BOTH planets and moons. Surfaced ONLY (not wired into computeSurfaceHistory).",
+      "planetData.eccentricity -- a deterministic seeded-then-damped value in [0,1); data-only (not fed to orbit placement). Feeds the tidal-heating call.",
+      "planetData.magneticField (D13) -- surfaced from a single canonical computation; aurora/atmosphere read it instead of recomputing.",
+      "planetData.age + planetData.metallicity -- surfaced from systemData.",
+      "planetData.systemContext -- a FLAT derived summary (siblings' type+orbit, own-moons summary, resonance partners, companion class); serialization-safe (no circular reference).",
+      "WS2's Tier-1 base step / L0 adapter is the downstream consumer of all of the above -- it replaces the lab's current preset-shim self-derivation with reads of the real L0 output."
+    ],
+    "mustStayWorking": [
+      "computeSurfaceHistory / surfaceHistory.resurfacing behavior -- UNCHANGED. D12 is surfaced, NOT wired into resurfacing (that re-wire is deliberately deferred to keep WS1 zero-regression and to avoid changing the deferred game renderer).",
+      "The shipped game renderer (src/objects/Planet.js) reads of surfaceHistory / crater density -- unchanged (additive scope).",
+      "Aurora/atmosphere reads of magnetic fieldStrength -- must EQUAL the now-surfaced planetData.magneticField (single source; behavior-preserving).",
+      "Orbit placement (px/pz from orbitAngle, StarSystemGenerator.js:362-363) -- unchanged; eccentricity is data-only in WS1.",
+      "The save/serialization system -- JSON.stringify(systemData) and any save/share path must still succeed; the systemContext summary must NOT introduce a circular reference (this is the load-bearing reason for a flat summary over a live back-ref).",
+      "Existing vitest cluster green (the generation/physics tests).",
+      "Same-seed generation output byte/tolerance-identical except the six new additive keys (the additive gate, AC6).",
+      "MoonGenerator existing behavior unchanged except the additive tidalHeating surfacing."
+    ]
+  }
+}
