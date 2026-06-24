@@ -21,11 +21,21 @@ import baseline from './__fixtures__/l0-baseline.json';
 // WITHOUT importing this file's frozen-baseline JSON (which does not exist on
 // the first capture). See that harness for the determinism rationale.
 //
-// HOW TO REGENERATE the frozen baseline (only when generate() output is
-// INTENTIONALLY changed — e.g. a WS1 task adds a new key):
-//   node src/generation/__tests__/__fixtures__/regen-l0-baseline.mjs
-// (see that script's header). The additive-gate test below must stay GREEN
-// through every WS1 task that only ADDS keys.
+// HOW TO REGENERATE the frozen baseline — DANGER, read first:
+//   Regenerate ONLY when an EXISTING baseline key's value is INTENTIONALLY
+//   changed (WS1 never does this — WS1 is purely additive). Regenerating
+//   re-bakes whatever generate() currently emits into the fixture, which
+//   DESTROYS drift detection for those keys.
+//
+//   Adding a NEW key MUST NOT trigger a regen. The additive gate compares
+//   only against BASELINE_KEYS (the keys frozen in the fixture); any new key
+//   a WS1 task adds is simply absent from that list and is ignored by design.
+//   So an additive change needs ZERO fixture churn — that's the whole point.
+//
+//   If (and only if) an existing key's value legitimately changes:
+//     node src/generation/__tests__/__fixtures__/regen-l0-baseline.mjs
+//   (see that script's header). The additive-gate test below must stay GREEN
+//   through every WS1 task that only ADDS keys, with NO regen.
 // ════════════════════════════════════════════════════════════════════════
 
 // The keys present on generate() output TODAY (PlanetGenerator.js:660-688).
@@ -317,5 +327,67 @@ describe('WS1 L0 plumbing — additive gate (AC6)', () => {
           .toEqual(baseline[i][k]);
       }
     });
+  });
+});
+
+describe('WS1 — closeout', () => {
+  // End-to-end proof that WS1's six additive outputs are all present AND the
+  // additive gate held the whole way: the 23 baseline keys are still
+  // byte-identical to the frozen fixture.
+  //
+  // The six new keys split across TWO production paths, so they are asserted
+  // on TWO surfaces (NOT one):
+  //   • FIVE in-generate() keys — eccentricity, tidalHeating, magneticField,
+  //     age, metallicity — are added inside PlanetGenerator.generate(), so they
+  //     appear on every generateGrid() body (the harness calls generate()).
+  //   • systemContext is added by a POST-PASS in StarSystemGenerator AFTER the
+  //     system graph exists. generateGrid() calls generate() directly and so
+  //     intentionally has NO systemContext. It is therefore asserted on a body
+  //     from a REAL StarSystemGenerator system (the resonant seed Task 6 uses).
+  const IN_GENERATE_KEYS = [
+    'eccentricity',
+    'tidalHeating',
+    'magneticField',
+    'age',
+    'metallicity',
+  ];
+  const SEED_RESONANT = 'rscan-7'; // same single/resonant system Task 6 used
+
+  it('the five in-generate keys are present + finite on every grid body, and all 23 baseline keys are byte-identical', () => {
+    generateGrid().forEach((body, i) => {
+      // (1) the five additive in-generate keys are present and sane.
+      for (const k of IN_GENERATE_KEYS) {
+        expect(body[k], `body[${i}].${k} missing`).toBeDefined();
+        expect(Number.isFinite(body[k]), `body[${i}].${k} not finite`).toBe(true);
+      }
+      // (2) the additive gate, restated end-to-end: every frozen baseline key
+      //     is still exactly equal to the fixture (additivity proven).
+      for (const k of BASELINE_KEYS) {
+        expect(body[k], `body[${i}].${k} drifted from frozen baseline`)
+          .toEqual(baseline[i][k]);
+      }
+    });
+  });
+
+  it('systemContext is present + well-formed on bodies from a real StarSystemGenerator system', () => {
+    // systemContext is NOT on generateGrid() bodies by design (post-pass lives
+    // in StarSystemGenerator). Prove it exists + is well-formed on real bodies.
+    const sys = StarSystemGenerator.generate(SEED_RESONANT);
+    expect(sys.planets.length).toBeGreaterThanOrEqual(3);
+
+    for (const entry of sys.planets) {
+      const ctx = entry.planetData.systemContext;
+      expect(ctx, 'systemContext missing on a system body').toBeDefined();
+      // Flat, serialization-safe shape: arrays of primitive summaries + a
+      // nullable companionClass (the four fields the post-pass writes).
+      expect(Array.isArray(ctx.siblings)).toBe(true);
+      expect(Array.isArray(ctx.moons)).toBe(true);
+      expect(Array.isArray(ctx.resonancePartners)).toBe(true);
+      expect(
+        ctx.companionClass === null || typeof ctx.companionClass === 'string',
+      ).toBe(true);
+      // siblings = every OTHER planet, summarized to primitives.
+      expect(ctx.siblings.length).toBe(sys.planets.length - 1);
+    }
   });
 });
