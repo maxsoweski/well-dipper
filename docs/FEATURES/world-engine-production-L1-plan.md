@@ -13,9 +13,11 @@ the docs." Parent design: [`world-engine-architecture-spine.md`](world-engine-ar
 
 ---
 
-## ⭐ The one decision that bounds the whole effort
+## ⭐ The one decision that bounds the whole effort — ✅ LOCKED 2026-06-23: LAB-ONLY (Max)
 
 **Does the production-L1 port target the LAB renderer only, with the shipped GAME shader demotion deferred?**
+→ **Max decided 2026-06-23: LAB-ONLY.** The `Planet.js` game-shader demotion (WS3 F5) is a separate, deferred
+workstream and is OUT of scope for this port.
 
 There are **two unrelated renderers** (see [`lab-vs-game-renderer-divergence.md`](lab-vs-game-renderer-divergence.md)):
 - **Game** — `src/objects/Planet.js`: a 40+ branch `if (planetType == N)` shader gated by `_typeIndex()`
@@ -28,7 +30,7 @@ There are **two unrelated renderers** (see [`lab-vs-game-renderer-divergence.md`
 **Both WS3 and WS4 planners independently recommend: target the LAB; treat the game-shader port as a separate,
 very-high-blast-radius, deferred workstream that needs its own scope.** That keeps the L1 port bounded. The
 alternative — rewriting the shipped `Planet.js` shader as part of this effort — is a much larger, player-facing
-change with no current plan. **Recommendation: lab-only; defer the game-shader port. Confirm before scoping.**
+change with no current plan. **Recommendation: lab-only; defer the game-shader port. ✅ Confirmed by Max 2026-06-23.**
 
 ---
 
@@ -249,8 +251,8 @@ production's existing sphere carve genuinely subtractive.
 ## Decisions needed from Max (consolidated)
 
 **Bounding decision (must answer before scoping):**
-1. **Lab-only vs include the game shader?** → *Recommend lab-only; defer the `Planet.js` game-shader port (WS3 F5)
-   to its own workstream.* This is the difference between a bounded effort and rewriting the shipped renderer.
+1. **Lab-only vs include the game shader?** → ✅ **DECIDED 2026-06-23: lab-only.** The `Planet.js` game-shader port
+   (WS3 F5) is deferred to its own workstream, OUT of scope here.
 
 **Has a clear recommended default — flag if you disagree, otherwise we proceed on the default:**
 2. Eccentricity (WS1 F2): **data-only** in WS1 (don't make visible orbits elliptical yet) — keeps blast radius low,
