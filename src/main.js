@@ -451,7 +451,183 @@ let _scDeflection = { x: 0, y: 0 };
 window._sc = {
   model: scModel, pilot: scPilot, head: scHead, hud: scHud,
   tuning: scModel.tuning, pilotTuning: scPilot.tuning, headTuning: scHead.tuning,
+  // ── In-game fly-from-rest probe (Item 2b, supercruise-hud-movement
+  //    -design-2026-06-24) ──────────────────────────────────────────────
+  // window._sc.flyFromRest({ seconds = 6 }) → runs the SAME scripted
+  // fly-from-rest the standalone flight-controls-lab does, but in the REAL
+  // game: enters manual flight at the current focus body, sets throttle to
+  // full (the held-W endpoint), steps scModel.update at the sim's fixed
+  // 60 Hz for `seconds`, and SAMPLES over time:
+  //   • scModel.speed
+  //   • the camera's WORLD position (via scHead.applyTo, the real pose path)
+  //   • the focus body's PROJECTED SCREEN-SPACE radius (projected through
+  //     the LIVE camera: body center + a surface point → NDC → px).
+  // Then it RESTORES the prior flight state (manual flag, model pose/speed/
+  // throttle/bodies, camera pose, head look) so the live session is
+  // untouched. Returns the same verdict shape as the lab:
+  //   { visiblyTranslated, screenRadiusGrowthPct, peakSpeed,
+  //     distanceTravelled, samples }
+  // where visiblyTranslated = projected radius grew ≥ 25% across the window
+  // (the perceptual signal the synthetic checks missed). Runs synchronously
+  // — does not touch the rAF loop, does not register any keyboard shortcut.
+  flyFromRest(opts = {}) { return _scFlyFromRest(opts); },
 };
+
+// Map findClosestBody()'s focus descriptor to a { mesh, radius } pair — the
+// same body manual-entry (F-key) drops toward. Used by the fly-from-rest
+// probe to pick + project the focus body. Returns null if no system/body.
+function _scResolveFocusBody() {
+  if (!system || !system.planets) return null;
+  const f = findClosestBody();
+  if (!f) return null;
+  if (f.starIndex === 0 && system.star?.mesh) {
+    return { mesh: system.star.mesh, radius: system.star.data.radius };
+  }
+  if (f.starIndex === 1 && system.star2?.mesh) {
+    return { mesh: system.star2.mesh, radius: system.star2.data.radius };
+  }
+  const entry = system.planets[f.focusIndex];
+  if (!entry) return null;
+  if (f.moonIndex >= 0) {
+    const moon = entry.moons?.[f.moonIndex];
+    if (moon?.mesh) return { mesh: moon.mesh, radius: moon.data.radius };
+  }
+  if (entry.planet?.mesh) {
+    return { mesh: entry.planet.mesh, radius: entry.planet.data.radius };
+  }
+  return null;
+}
+
+// Project a body's apparent screen-space radius (in CSS px) through the LIVE
+// camera: project the center + a surface point (center + camera-right·radius)
+// to NDC, take their pixel distance. Mirrors the lab's perceptual signal.
+const _scProjC = new THREE.Vector3();
+const _scProjS = new THREE.Vector3();
+const _scCamRight = new THREE.Vector3();
+function _scProjectedScreenRadius(bodyMesh, bodyRadius) {
+  const halfW = window.innerWidth / 2;
+  const halfH = window.innerHeight / 2;
+  // Camera-right in world space (first column of the camera's world matrix).
+  _scCamRight.setFromMatrixColumn(camera.matrixWorld, 0);
+  _scProjC.copy(bodyMesh.position);
+  _scProjS.copy(bodyMesh.position).addScaledVector(_scCamRight, bodyRadius);
+  // NDC (−1..1). project() reads camera.matrixWorldInverse + projectionMatrix,
+  // both refreshed by the caller before each sample.
+  _scProjC.project(camera);
+  _scProjS.project(camera);
+  const cx = _scProjC.x * halfW, cy = _scProjC.y * halfH;
+  const sx = _scProjS.x * halfW, sy = _scProjS.y * halfH;
+  return Math.hypot(sx - cx, sy - cy);
+}
+
+// The scripted fly-from-rest itself. Synchronous; restores all touched state.
+function _scFlyFromRest({ seconds = 6 } = {}) {
+  const focus = _scResolveFocusBody();
+  if (!focus) {
+    return {
+      visiblyTranslated: false, screenRadiusGrowthPct: 0,
+      peakSpeed: 0, distanceTravelled: 0, samples: [],
+      error: 'no-focus-body (no active star system)',
+    };
+  }
+
+  // ── Snapshot prior state for exact restore ──
+  const prior = {
+    manual: _scManual,
+    bypassed: cameraController.bypassed,
+    position: scModel.position.clone(),
+    orientation: scModel.orientation.clone(),
+    speed: scModel.speed,
+    throttle: scModel.throttle,
+    turn: { yaw: scModel.turnInput.yaw, pitch: scModel.turnInput.pitch },
+    bodies: scModel._bodies,
+    headYaw: scHead.yaw,
+    headPitch: scHead.pitch,
+    camPos: camera.position.clone(),
+    camQuat: camera.quaternion.clone(),
+  };
+
+  // ── Build the gravity-well body list exactly as simStep does ──
+  const bodies = [];
+  if (system.star?.mesh) bodies.push({ position: system.star.mesh.position, radius: system.star.data.radius });
+  if (system.star2?.mesh) bodies.push({ position: system.star2.mesh.position, radius: system.star2.data.radius });
+  for (const entry of system.planets || []) {
+    if (entry?.planet?.mesh) bodies.push({ position: entry.planet.mesh.position, radius: entry.planet.data.radius });
+    for (const moon of entry?.moons || []) {
+      if (moon?.mesh) bodies.push({ position: moon.mesh.position, radius: moon.data.radius });
+    }
+  }
+
+  // ── Enter manual fly-from-rest AT the current camera pose ──
+  // Mirrors the F-key manual-entry path (main.js:8550-8556): snap the model
+  // to the camera, zero speed, set bodies, then hold W = full throttle.
+  scModel.position.copy(camera.position);
+  scModel.orientation.copy(camera.quaternion);
+  scModel.speed = 0;
+  scModel.setTurnInput(0, 0);   // straight-ahead, no stick
+  scModel.setBodies(bodies);
+  scModel.setThrottle(1);       // full throttle — the held-W endpoint
+  scHead.yaw = 0; scHead.pitch = 0; // look straight down the nose
+
+  // ── Step at the sim's fixed 60 Hz, sampling over time ──
+  const dt = 1 / 60;
+  const steps = Math.max(1, Math.round(seconds / dt));
+  const sampleEvery = Math.max(1, Math.round(steps / 60)); // ~60 samples max
+  const samples = [];
+  let peakSpeed = 0;
+
+  const sample = (t) => {
+    // Drive the real pose path, then refresh camera matrices so projection
+    // reflects this step before we measure the projected radius.
+    scHead.applyTo(camera, scModel.position, scModel.orientation);
+    camera.updateMatrixWorld(true);
+    samples.push({
+      t,
+      speed: scModel.speed,
+      camPos: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+      screenRadiusPx: _scProjectedScreenRadius(focus.mesh, focus.radius),
+    });
+  };
+
+  sample(0); // t=0 baseline (still at rest)
+  for (let i = 1; i <= steps; i++) {
+    scModel.update(dt);
+    if (scModel.speed > peakSpeed) peakSpeed = scModel.speed;
+    if (i % sampleEvery === 0 || i === steps) sample(i * dt);
+  }
+
+  // ── Verdict (same semantics as the lab) ──
+  const r0 = samples[0].screenRadiusPx;
+  const rN = samples[samples.length - 1].screenRadiusPx;
+  const screenRadiusGrowthPct = r0 > 1e-9 ? ((rN - r0) / r0) * 100 : 0;
+  const startPos = prior.camPos; // camera world pos before the run
+  const endPos = camera.position;
+  const distanceTravelled = endPos.distanceTo(startPos);
+  const visiblyTranslated = screenRadiusGrowthPct >= 25;
+
+  // ── Restore prior state — leave the live session untouched ──
+  _scManual = prior.manual;
+  cameraController.bypassed = prior.bypassed;
+  scModel.position.copy(prior.position);
+  scModel.orientation.copy(prior.orientation);
+  scModel.speed = prior.speed;
+  scModel.setThrottle(prior.throttle);
+  scModel.setTurnInput(prior.turn.yaw, prior.turn.pitch);
+  scModel.setBodies(prior.bodies);
+  scHead.yaw = prior.headYaw;
+  scHead.pitch = prior.headPitch;
+  camera.position.copy(prior.camPos);
+  camera.quaternion.copy(prior.camQuat);
+  camera.updateMatrixWorld(true);
+
+  return {
+    visiblyTranslated,
+    screenRadiusGrowthPct,
+    peakSpeed,
+    distanceTravelled,
+    samples,
+  };
+}
 
 // §A4 body-velocity resolver. Reads orbit params from the active
 // system and writes the body's world-frame velocity into `out`.
@@ -2530,11 +2706,19 @@ function formatSettingValue(key, value) {
   if (key === 'fov') return `${value}°`;
   if (key === 'autoRotateSpeed') return `${value.toFixed(1)}`;
   if (key === 'celestialTimeMultiplier') {
-    // Realistic-celestial-motion-2026-04-27: multiplier ranges 1×–10000×
-    // log-scale. Format with sig-fig-aware precision.
-    if (value >= 100) return `${Math.round(value)}×`;
-    if (value >= 10)  return `${value.toFixed(1)}×`;
-    return `${value.toFixed(2)}×`;
+    // §supercruise-hud-movement-design-2026-06-24 — SIGNED multiplier.
+    // 1× (the shipped default) reads as REALTIME; negatives read as
+    // REVERSE (retrograde / rewind). Magnitude spans 1×–10000× log-scale
+    // in either direction. Format with sig-fig-aware precision.
+    const a = Math.abs(value);
+    if (a < 1.0000001) return 'REALTIME';   // pos 0 → exactly 1.0
+    const sign = value < 0 ? '-' : '';
+    const tag = value < 0 ? ' REVERSE' : '';
+    let mag;
+    if (a >= 100) mag = `${Math.round(a)}`;
+    else if (a >= 10) mag = `${a.toFixed(1)}`;
+    else mag = `${a.toFixed(2)}`;
+    return `${sign}${mag}×${tag}`;
   }
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
   if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
@@ -2564,11 +2748,20 @@ function populateSettingsUI() {
     } else if (input.tagName === 'SELECT') {
       input.value = String(value);
     } else {
-      // celestialTimeMultiplier slider stores raw position 0–40 in the
-      // DOM, mapped to multiplier 10^(pos/10) (= 1× at 0, 10000× at 40).
-      // Per workstream realistic-celestial-motion-2026-04-27.
+      // celestialTimeMultiplier slider stores raw DOM position in the
+      // SIGNED range -40..0..+40, mapped to multiplier
+      // sign(pos)·10^(|pos|/10): pos 0 → exactly 1× (REALTIME), +40 →
+      // 10000× (speed up), -40 → -10000× (REVERSE / rewind).
+      // §supercruise-hud-movement-design-2026-06-24 (was 0..40 / 1×..10000×
+      // positive-only per realistic-celestial-motion-2026-04-27). The slider
+      // markup ships min="0"; widen it to the signed range from JS so we
+      // don't need to touch index.html. Inverse of the input handler's map.
       if (key === 'celestialTimeMultiplier') {
-        input.value = Math.log10(Math.max(1, value)) * 10;
+        input.min = -40;
+        input.max = 40;
+        const a = Math.abs(value);
+        const pos = a <= 1 ? 0 : Math.log10(a) * 10;
+        input.value = Math.sign(value) * pos;
       } else {
         input.value = value;
       }
@@ -2666,10 +2859,16 @@ function applySettingChange(key, value) {
       } else if (input.tagName === 'SELECT') {
         value = parseInt(input.value, 10);
       } else if (key === 'celestialTimeMultiplier') {
-        // Slider position 0–40 → multiplier 10^(pos/10) (log scale,
-        // 1× at pos 0, 10× at 10, 100× at 20, 1000× at 30, 10000× at 40).
-        // Per workstream realistic-celestial-motion-2026-04-27.
-        value = Math.pow(10, parseFloat(input.value) / 10);
+        // SIGNED slider — §supercruise-hud-movement-design-2026-06-24.
+        // DOM pos -40..0..+40 → multiplier sign(pos)·10^(|pos|/10):
+        //   pos   0 →     1× (REALTIME, the shipped default)
+        //   pos +10 →    10×, +20 → 100×, +30 → 1000×, +40 → 10000× (faster)
+        //   pos -10 →   -10×, -20 →-100×, -30 →-1000×, -40 →-10000× (REVERSE)
+        // A negative multiplier flows through the single celestialDt lever
+        // (main.js:6459) and runs every orbit/rotation accumulator backward.
+        const pos = parseFloat(input.value);
+        value = Math.sign(pos) * Math.pow(10, Math.abs(pos) / 10);
+        if (pos === 0) value = 1.0; // sign(0)=0 → force exact realtime
       } else {
         value = parseFloat(input.value);
       }
