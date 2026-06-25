@@ -1,0 +1,204 @@
+{
+  "workstream": "world-engine-base-step-2026-06-24",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-24. WS2 of the production-L1 port (lab-only). Scope grounded by a 17-agent code-grounding + adversarial-verify workflow (wf_03004682-2bd): F1+F2+F4+F7 full, F3+F5 thinned, F6 deferred; interim field-viz INCLUDED as a thin new page reading the production base-step output. Technical defaults applied during scope (magnetic-field cleanup kept separate; interior field in base step; prefer upstream tidalHeating; quantized grain port; age /~10Gyr; tanh tidal calibration; F7 gates on F2-adapter output + 5 relief presets; loveK2 bounded proxy) — see intent.md.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-F1-base-step-interface",
+      "statement": "F1: makeBaseStep(planetData, gridOpts) returns {drivers, crust, substrate} with every declared field present and correctly typed, in a NEW src/worldengine/base/ tree (src/generation/ untouched). A downstream-engine stub destructures every driver (tidalHeat, surfaceGravity, rockyCrust, surfaceHistory, age, radialStrainSign, radialStrainMag, despinAmp, discriminator, useDiscriminator, liquidStability, liquidSpecies, rainFactor), calls crust.thicknessBlob/shellThickness, and reads every substrate typed-array field with no ReferenceError/undefined. makeSubstrate(gridOpts) returns a grid with correct shape/dtype/bounds (n*n lengths, regime/standing Uint8, rest Float32, zero-init) and working idx/latDegOfRow/cloneHeight helpers (cloneHeight is a deep copy).",
+      "verifyVia": {
+        "input": "npx vitest run: construct a WS1 planetData fixture + gridOpts; run the destructuring stub; build makeSubstrate({n:64,...})",
+        "observable": "Zero ReferenceError/undefined; every driver+crust+substrate field present with correct type; substrate field lengths n*n with correct dtypes and all-zero init; idx/latDegOfRow/cloneHeight behave and cloneHeight is independent"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F1-tidal-precedence",
+      "statement": "F1: the base step is single-source on tidal heat. When planetData.tidalHeating is present, the bundle's tidal slot traces to it (no Io-formula recompute); when it is absent, the base step falls back to the lab self-derivation, finite and non-throwing.",
+      "verifyVia": {
+        "input": "npx vitest run: makeBaseStep with tidalHeating set to a sentinel, then with it omitted; read the tidal slot",
+        "observable": "present -> tidal slot traces to the upstream value (single-source); absent -> finite, >=0, no throw"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F2-key-mapping-pure",
+      "statement": "F2: the L0 consumption adapter maps all six WS1 keys into the input bundle with the right role and drops none -- bundle.tidalHeat<-tidalHeating, bundle.ageNorm<-age, bundle.magneticField===planetData.magneticField, metallicity/eccentricity/systemContext present (eccentricity unused by heat). The adapter is pure/deterministic (same input twice -> byte-identical bundle; input never mutated; no rng); systemContext is serialization-safe with partnerIndex never persisted as an id (positional only).",
+      "verifyVia": {
+        "input": "npx vitest run: adaptL0 on a deep-frozen planetData with all six keys as sentinels, run twice; JSON.stringify(systemContext) round-trip",
+        "observable": "each field traces to its source (fail if any unmapped); two runs deep-equal; frozen input not violated; round-trip stable; no partnerIndex-keyed persistence"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F2-tidal-age-calibration",
+      "statement": "F2: tidal consumption is calibrated and bounded -- Earth-like -> ~0, Io-like anchored mid-range, all values in [0,1], strictly ordered Earth < Io < close inner-moon < lava, with no two presets collapsing to the same clamped extreme (the lab's log10(1+h)/2 saturates lava AND inner-moon to 1.0 -> replaced by a tanh/atan knee). age normalizes to ageNorm in [0,1] so old bodies don't saturate despinAmp/radialStrain.",
+      "verifyVia": {
+        "input": "npx vitest run: feed tidal inputs {Io=1.0, Earth=1.74e-3, lava=7.82e5, inner-moon~=249} and ages 0.5 vs 13.0 Gyr through the adapter; read the tidal driver and ageNorm/despinAmp",
+        "observable": "Earth~=0; all tidal in [0,1]; strictly ordered Earth<Io<inner-moon<lava with no collapse; ageNorm in [0,1]; young vs old differ (not both clamped)"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F2-tidal-integration",
+      "statement": "F2: end-to-end through the real generators, a tidally-heated body produces a larger tidal driver than a near-circular control. A close, eccentric body and a distant near-circular body (fixed seeds, real PlanetGenerator/MoonGenerator) run through adaptL0; the field that feeds expansionDrive/radialStrain is compared.",
+      "verifyVia": {
+        "input": "npx vitest run: generate a close-eccentric body + a distant near-circular body at fixed seeds; adaptL0 each; compare the tidal-fed driver",
+        "observable": "heated > control > 0; control ~= 0"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-F3-sphere-carrier",
+      "statement": "F3 (thinned): the base-step field carrier is sphere-native, reusing the river router's proven seam-free mesh (buildIrregularSphere). Node-indexed adjacency is continuous across the antimeridian and both poles (reciprocal, degree ~5-8, zero edge-truncation); the carrier mesh is identical to buildIrregularSphere for matched (targetN, lloydIters); per-node tangent frame (east,north)+latitude replace latDegOfRow (orthonormal/tangent off-pole, documented finite fallback at poles); the mesh is deterministic for the same (targetN, lloydIters) (no rng in the mesh builder).",
+      "verifyVia": {
+        "input": "npx vitest run: build via makeSphereField; sample pole/antimeridian nodes; build twice; build buildIrregularSphere with matched params",
+        "observable": "all sampled adjacency reciprocal, degree in range, zero edge-truncated; carrier mesh === router mesh (verts/faces/adj); tangent frames orthonormal/tangent, latitude===asin(y), poles finite; two builds byte-identical"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F3-seam-continuity",
+      "statement": "F3 (thinned): a known smooth global scalar reads continuous across every seam -- per-edge gradient |dfield|/arcDist stays below the analytic Lipschitz bound with no spike at the antimeridian or poles; all carrier field arrays are finite and (when populated) bounded; verts are unit-length.",
+      "verifyVia": {
+        "input": "npx vitest run: assign field[i]=f(nodeDir(i)) for a smooth f; compute max per-edge gradient; scan arrays",
+        "observable": "max per-edge gradient below f's Lipschitz bound; no NaN/Inf; |verts|~=1"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F4-stress-regime-oracle",
+      "statement": "F4: per-texel Anderson regime follows the latitude-band oracle and responds to radial strain. regime(~0deg)===THRUST, regime(~48deg)===STRIKESLIP, regime(~85deg)===NORMAL (sampled away from the ~38deg/57deg band boundaries); contraction (radialStrainSign +1) biases toward THRUST relative to expansion (-1) at fixed latitude (higher whole-field THRUST fraction, lower NORMAL).",
+      "verifyVia": {
+        "input": "npx vitest run: build the F4 field at neutral strain; sample regime at ~0/48/85deg; build two fields differing only in radialStrainSign (mag~=0.3); compare regime at ~50deg and THRUST/NORMAL fractions",
+        "observable": "regime matches the oracle at the three latitudes; contraction.regime >= expansion.regime, higher THRUST fraction under contraction and higher NORMAL under expansion"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F4-grain-deterministic",
+      "statement": "F4: grain is perpendicular to the dominant principal stress and bounded; the field never collapses; it is deterministic. grainAngle = 0 when |sMer|>=|sZon| else pi/2 (faithful quantized port); grainMag is normalized stress in [0,1] tracking hypot(sMer,sZon)/(1+nu); every field carries >=2 distinct regimes; same (drivers,params,seed) -> byte-identical grainAngle/grainMag/regime/sMer/sZon.",
+      "verifyVia": {
+        "input": "npx vitest run: build the field for the shipped first-wave bundles; read sMer/sZon/grainAngle/grainMag/regime; build twice and compare element-wise",
+        "observable": "grainAngle quantized per the rule; grainMag in [0,1] tracking stress magnitude; sMer/sZon finite; >=2 regimes per field; arrays exactly equal across builds"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F4-seam-continuity",
+      "statement": "F4 (depends on F3): regime and grain are continuous across sphere seams -- for seam-neighbor texel pairs at ~equal true latitude (via F3 adjacency), regime and grainAngle are equal, EXCEPT where a true band boundary (~38deg/57deg) lies between the two latitudes (band-boundary tolerance, not naive equality).",
+      "verifyVia": {
+        "input": "npx vitest run: over F3's sphere adjacency, compare regime+grainAngle for same-latitude seam-neighbor pairs",
+        "observable": "equal regime/grainAngle for same-band seam-neighbors; any change coincides with a true band boundary"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-F5-interior-fields",
+      "statement": "F5 (thinned, in base step): the per-texel crustalThickness field is finite, in [0,1], and low-frequency (windowed gradient-energy below threshold for all presets); interior body-scalars are present, bounded against written range constants, and physically ordered -- shellThickness rises with gravity and falls with age, thermalState(young+heated) > thermalState(old+cold), loveK2 within its declared [min,max]; all deterministic.",
+      "verifyVia": {
+        "input": "npx vitest run: build the base step for the 5 relief presets + old/cold/small vs young/heated/large bodies; read crustalThickness + interior scalars; build twice",
+        "observable": "crustalThickness finite/in-range/low-freq for all presets; scalars bounded + ordered as stated; byte-identical across builds"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F5-crust-drives-e6",
+      "statement": "F5: the crustal field is genuinely upstream of relief -- higher crustal thickness produces higher post-E6 plateau height, all else equal, through the real runE6 pure function (F5 exposes the field via the thicknessBlob(ix,iy,n) accessor E6 calls).",
+      "verifyVia": {
+        "input": "npx vitest run: feed runE6 two crust fields differing only in crustalThickness over a patch; compare substrate.height",
+        "observable": "high-thickness patch height > low-thickness patch height, all else equal"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-F7-determinism-gate",
+      "statement": "F7 GATE: running the production base step twice with identical (bundle, opts, seed) yields byte-identical derived fields for every standard bundle (the F2-adapter output PLUS the 5 relief presets pinned as named fixtures). No Date.now/Math.random anywhere in the base step or verifier.",
+      "verifyVia": {
+        "input": "npx vitest run: for each standard bundle, derive twice; deep-equal each typed array and toBe each driver scalar",
+        "observable": "every field element-identical across runs; a single differing element fails"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-F7-verifier-gate",
+      "statement": "F7 GATE: the field-level verifier PASSES on every standard bundle and FLAGS corruption. verify(output) -> {pass:true, signals:{finite,bounded,seamConsistent,physicallyOrdered}} for all bundles; corrupting one field per case (height[k]=NaN; grainMag[k]=5; pole forced to THRUST; injected seam discontinuity) -> pass:false with the matching signal false and a detail naming field/index, while the control still passes. (seamConsistent is a defined no-op-pass for any bundle that is flat first-wave.)",
+      "verifyVia": {
+        "input": "npx vitest run: derive each bundle and run verify(); then clone a valid output, corrupt one field per case, re-run verify()",
+        "observable": "pass:true with all signals true for valid bundles; each corruption -> pass:false with the matching signal false + field/index detail; control passes"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-VIZ-faithful",
+      "statement": "VIZ (interim, new page on production output): a thin field-viz page reads the production src/worldengine/base output and paints it faithfully -- regime color === the legend color for regime[i]; grain streak orientation === grainAngle (validated on a SYNTHETIC continuous-grain substrate, since real E6 grain is quantized {0, pi/2}); thickness heatmap === crustalThickness, bounded. The viz is read-only -- generating it does not perturb the base-step output.",
+      "verifyVia": {
+        "input": "npx vitest run / headless: render the viz from a known base-step output (and a synthetic continuous-grain substrate for the streak test); compare painted values to the source fields; diff the base-step output with viz on vs off",
+        "observable": "per-node/per-pixel regime color === legend; streak orientation === grainAngle on the synthetic substrate; heatmap === crustalThickness within bounds; base-step output identical with viz on vs off"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-VIZ-distinct",
+      "statement": "VIZ (optional UAT gate, Max-only): switching the preset bundle in the live field-viz page produces visibly distinct grain/regime/thickness maps -- categorically different worlds, not recolored noise. This is the interim 'see the L0->L1 layer' acceptance; it is never agent-PASSed (deferred-to-max).",
+      "verifyVia": {
+        "input": "chrome-devtools: in the field-viz page, switch e.g. lava -> terrestrial with the viz on; observe regime/grain/thickness",
+        "observable": "Max judges the two presets read as categorically distinct derived fields (holistic acceptance; deferred-to-max)"
+      },
+      "layer": "uat",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "WS1 planetData from PlanetGenerator.generate() return (src/generation/PlanetGenerator.js): five keys -- age (Gyr), metallicity (dex), magneticField (D13 dynamo, single source), eccentricity ([0,1) data-only), tidalHeating (D12 real, Io-scale, UNCALIBRATED). systemContext is attached by a post-pass in StarSystemGenerator.js (present iff routed through StarSystemGenerator), NOT in generate()'s return. Plus pre-existing fields the base step reads: composition.{ironFraction,density,volatileFraction}, surfaceHistory.{erosion,resurfacing,bombardment}, radiusEarth, massEarth, T_eq, atmosphere, tidalState.{locked,lockType}.",
+      "Moon objects (MoonGenerator.js) surface tidalHeating on the WRAPPER, not on moon.planetData -- the adapter must know which contract it is handed.",
+      "gridOpts {n, lat0Deg, lat1Deg, domainKm, seed, discriminate} (F1 flat-band shape), extended by F3 to sphere params {targetN, lloydIters, seed}.",
+      "Lab references generalized (READ-ONLY, not modified): relief-base-step.js makeBaseStep; relief-substrate.js makeSubstrate/idx/latDegOfRow/cloneHeight; relief-e6-tectonic.js stressAtLat/writeGrain/runE6 (physics reference; nu=0.25, REGIME_GAIN=0.4 locked); relief-presets.js 5 bundles (rocky/lava/magma/europa/terrestrial).",
+      "planet-lod-rivers.js buildIrregularSphere(targetN, lloydIters) -- the proven seam-free mesh F3 reuses; routeAndOrder operates over adj[] + 3D verts.",
+      "Derivation templates (read-only): PhysicsEngine.deriveComposition (driver-based clamped/bounded template), tidalHeating()/tidalHeatingPlanet(), checkTidalLock -> {locked,lockType}.",
+      "The lab self-derivation shim deriveUniforms (planet-lod-lab-core.js:496; tidal math :516-527) -- the F2 fallback that must keep working until the adapter lands.",
+      "vitest (package.json test = vitest run)."
+    ],
+    "outputs": [
+      "NEW src/worldengine/base/ tree (does not exist yet) exporting makeBaseStep(planetData, gridOpts) -> {drivers, crust, substrate} (pure, no three.js).",
+      "drivers scalar bundle: tidalHeat, surfaceGravity, rockyCrust, surfaceHistory(erosion), age/ageNorm, radialStrainSign(+/-1), radialStrainMag([0,1]), despinAmp([0,1]), discriminator(string), useDiscriminator(bool), liquidStability, liquidSpecies(0|1), rainFactor. (contractionDrive/expansionDrive internal, not exposed.)",
+      "crust: { shellThickness, thicknessBlob(ix,iy,n) } + F5's crustalThickness field (exposed via the thicknessBlob accessor E6 expects), loveK2, thermalState.",
+      "substrate typed-array grid: height/grainAngle/grainMag/regime(Uint8)/faultDensity/flowAccum/baseLevel/standing/maturity + idx/latDegOfRow/cloneHeight (or sphere analogues nodeDir/latDegOf/tangentFrameAt).",
+      "The F4 orientation field: per-texel {sMer, sZon, grainAngle, grainMag, regime} co-registered -- the keystone WS4's E6 grain reader consumes (replaces per-feature hashed strike axes uOrogenyAxis/uScarpAxis/uTesseraAxis/uLavaAxis/uChasmaAxis/uCryoRidgeAxis in planet-lod-height.glsl.js).",
+      "The F3 sphere field-carrier: {N, verts(unit dirs), faces, adj(seam-continuous)} + per-node field arrays + documented degenerate-pole convention + the sphere-field harness.",
+      "The F7 verifier verify(output) -> {pass, signals:{finite,bounded,seamConsistent,physicallyOrdered}, detail} -- the WS2 acceptance gate.",
+      "The interim field-viz: a thin NEW page reading the production base-step output (regime colors, grain streaks, thickness heatmap).",
+      "WS3 F1 relevance: WS3's E1-composition label reads the SAME drivers (deriveComposition shared kernel) -- input to WS3 F1, parallelizable, not a hard dep of WS2."
+    ],
+    "mustStayWorking": [
+      "src/generation/ UNTOUCHED -- WS2 is a new additive tree (Option A). The defining invariant AND the load-bearing reason the magnetic-field lock-predicate cleanup stays a separate follow-up.",
+      "The six WS1 keys stay byte-identical -- WS2 only READS them; must not perturb the WS1 additive gate.",
+      "planetData not mutated by any WS2 code (purity; preserves JSON save/share).",
+      "systemContext serialization-safe -- JSON.stringify(systemData) must not throw; no re-introduced circular reference; partnerIndex never persisted as an id (positional only).",
+      "The lab relief slice + harness UNCHANGED -- relief-*.js, planet-lod-*; the existing world-engine-relief-slice suite stays green.",
+      "The lab self-derivation shim (deriveUniforms) keeps working as the F2 fallback; its vitest pins stay green.",
+      "src/objects/Planet.js (shipped game shader) UNTOUCHED -- LAB-ONLY lock; separate deferred port.",
+      "computeAtmosphere's 3:2-resonance atmosphere retention stays as-is -- the lock-predicate proxy (PhysicsEngine.js:173, |rotationSpeed|<0.01) is NOT changed by WS2 (cleanup kept separate).",
+      "The river router's sphere-native seam-free behavior stays the reference for F3 adjacency; the router-lab zero-drift regression stays green.",
+      "Determinism: same (bundle,opts,seed) -> byte-identical fields (the F7 gate); no Date.now/Math.random in the base step or verifier."
+    ]
+  }
+}

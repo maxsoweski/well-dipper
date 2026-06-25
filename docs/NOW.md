@@ -555,7 +555,8 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 ## Active workstream
 
 **`world-engine` PRODUCTION-L1 PORT — WS1 (L0 plumbing) BUILT + ✅ VERIFIED 2026-06-24
-(`05bf668`, branch `feature/world-engine-production-L1`; `master` preserved at `25fe51c`; push HOLD).**
+(`05bf668`, branch `feature/world-engine-production-L1`; `master` preserved at `25fe51c`; push HOLD).
+→ ACTIVE SUB-WORKSTREAM is now WS2 (Tier-1 base step), SCOPED 2026-06-24 — see the WS2 bullet below.**
 First of 4 production-L1 workstreams (lab-only scope locked by Max 2026-06-23; campaign plan
 `docs/FEATURES/world-engine-production-L1-plan.md`). WS1 is STRICTLY ADDITIVE: surfaces six real L0
 drivers on per-body `planetData` — `age`, `metallicity`, `magneticField` (single-source dynamo),
@@ -575,12 +576,19 @@ Built last session via subagent-driven TDD (7 tasks); contract+intent
 - **✅ verify-workstream at `05bf668`: all 6 ACs PASS** (5 integration + 1 unit, all headless/live=false),
   3/3 adversarial each; additive-gate golden independently confirmed untouched; `uat = N/A` (no UAT AC)
   → WS1 DONE. WS1 suite 33/33; the 4 broader-cluster failures are pre-existing `searchKnownObjects`, untouched.
-- **▶ NEXT: WS2 (Tier-1 base step)** — consumes WS1's outputs; start via `dev-collab-scope` →
-  `writing-plans` → `subagent-driven-development` → `verify-workstream`. Then WS3 (type-demotion) ∥ WS4
-  (wire E6→E9). **Carry-ins:** planet `tidalHeating` scale is Io-normalized + UNCALIBRATED (WS2 calibrates);
-  `systemContext.partnerIndex` is positional, NOT a persistable id; the magnetic-field lock-predicate
-  unification (computeAtmosphere's cruder `|rotationSpeed|<0.01` vs dynamo `lockType==='synchronous'`) is a
-  deliberate DEFERRED cleanup (documented at `PhysicsEngine.js` + intent.md + campaign plan).
+- **▶ WS2 (Tier-1 base step) — ✅ SCOPED 2026-06-24; contract written, building next.**
+  `docs/WORKSTREAMS/world-engine-base-step-2026-06-24/` (intent.md + contract.json [16 ACs, schema-valid]
+  + scoping-dossier.md). Scope grounded by a 17-agent code-grounding + adversarial-verify workflow
+  (`wf_03004682-2bd`). **Max's scope decisions:** WS2 = F1 interface + F2 L0-adapter + F4 stress/grain
+  field + F7 verifier-gate (full) + F3 sphere-carrier & F5 interior (thinned); F6 deferred. NEW
+  `src/worldengine/base/` tree, `src/generation/` untouched (Option A). **Interim field-viz INCLUDED**
+  (thin new page reading the *production* base-step output → the "see the L0→L1 layer" UAT before WS4).
+  Key grounding: F3 thins because the river router's `buildIrregularSphere` is already seam-free (reuse it).
+  **Carry-ins folded in:** tidalHeating calibrated (tanh knee, Io mid-range); `partnerIndex` positional;
+  magnetic-field lock-predicate cleanup kept SEPARATE (lives in `src/generation/`; behavior change).
+  **▶ NEXT: `superpowers:writing-plans` → `subagent-driven-development` → `verify-workstream`.**
+  Then WS3 (type-demotion) ∥ WS4 (wire E6→E9). Roadmap: WS2 verifier-gate (headless) + interim field-viz
+  is the next visible UAT; the FULL "planet reads as a landscape with a history" UAT lands at WS4.
 - **Open (Max's):** push (HOLD, campaign-wide); whether to merge `feature/world-engine-production-L1`
   → `master` after WS1 (merging triggers the master-only Pages deploy — rec: keep accumulating WS2–4 first).
 
