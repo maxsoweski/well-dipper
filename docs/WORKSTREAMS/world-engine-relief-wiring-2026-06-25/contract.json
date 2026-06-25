@@ -91,7 +91,7 @@
       "statement": "No strike-axis derivation or relief-amplitude decision remains in the shader for grained features; the shader only expresses the grain/substrate fields.",
       "verifyVia": {
         "input": "Code-audit planet-lod-height.glsl.js and the shader paths for grained features.",
-        "observable": "No per-feature axis hashing (the initProvinces / fbmdRidged paths) or amplitude decisions left in-shader; all orientation/amplitude sourced from the grain + province fields."
+        "observable": "For the six grained combiners, the strike axis comes through the grain cube via mix(oldAxis, grainStrike, uTectonicGrainStrength) (fbmdRidged:881 vec2-projected, canyonCombiner:1917, scarpCombiner:1955, tesseraCombiner:2102/2110, lavaPlainsCombiner:2189, cryoRidgeCombiner:2621/2631) — no raw per-feature axis hashing remains for them (the six deriveUniforms hashes orogeny:662/chasma:685/scarp:707/tessera:725/lava:772/cryo:888 + the seededUnitVec3:483 primitive become the strength=0 endpoint only, and the four grained-axis 🎲 rerolls orogeny:3715/chasma:3728/scarp:3743/tessera:3769 are gated). initProvinces:797 / gProvince:796 / provinceWeight:811 are EXPLICITLY PRESERVED (amplitude/where, augmented behind uProvinceWeight per Max decision #6 — NOT replaced); the in-shader gProvince rotation of the grain strike (orientation composition) reads, never replaces, that field."
       },
       "layer": "unit",
       "live": false
@@ -115,10 +115,13 @@
       "E6 math reference: relief-e6-tectonic.js (reference, not drop-in)."
     ],
     "outputs": [
-      "planet-lod-height.glsl.js relief features — replaces per-feature axis hashing at initProvinces:797 / fbmdRidged:880; the renderer expresses the fields.",
-      "New module: planet-lod-tectonic.js.",
-      "Derivation added in deriveUniforms.",
-      "Orchestration host: createRiverOverlay (planet-lod-rivers.js:797)."
+      "planet-lod-height.glsl.js relief features — the renderer stops deriving STRIKE/ORIENTATION for grained features and instead expresses the shared grain field. The REPLACE-SET is the six combiner axis reads (fbmdRidged:881 [vec2 xz, projected from the cube's vec3 strike], canyonCombiner:1917, scarpCombiner:1955, tesseraCombiner:2102/2110, lavaPlainsCombiner:2189, cryoRidgeCombiner:2621/2631) + their six deriveUniforms hashes (orogeny:662, chasma:685, scarp:707, tessera:725, lava:772, cryo:888) + the seededUnitVec3:483 primitive + the four grained-axis GUI rerolls (orogeny:3715 [Math.random angle, NOT randUnitVec3], chasma:3728, scarp:3743, tessera:3769). Each old uXxxAxis remains as the uTectonicGrainStrength=0 endpoint (branch-guarded byte-identical fallback).",
+      "PRESERVED (augment, NOT replace — Max decision #6): initProvinces:797, gProvince:796, provinceWeight:811 (amplitude/where masks). The grain composes ORIENTATION against gProvince IN-SHADER (a province-keyed rotation of the cube strike) — it reads gProvince, never replaces it. (Note: initProvinces does AMPLITUDE, not axis hashing; the prior 'replace per-feature axis hashing at initProvinces:797 / fbmdRidged:880' wording conflated two mechanisms and is corrected here. lava:3801 and cryo:3825 GUI rerolls touch only OFFSETS, not axes, and need no gate.)",
+      "New module: planet-lod-tectonic.js (bakeTectonicGrain → strike-only cube field).",
+      "New pure helper in planet-lod-rivers.js: perNodeIncision (the per-mesh-node Δ≤0 carve operand; buildValleyGeometry aDepth + the carve cube R channel both derive from it).",
+      "Derivation added in deriveUniforms; grain cube uniform (uTectonicGrainCube) + uTectonicGrainStrength in planet-lod-uniforms.js.",
+      "rotatePoleDeg=0 param added to writeGrainSphere (src/worldengine/base/tectonic.js:53) — a deliberate, byte-identical-at-default WS2 addition (outside src/generation/).",
+      "Orchestration host: createRiverOverlay (planet-lod-rivers.js:797) — bakes the grain cube once per body inside route()."
     ],
     "mustStayWorking": [
       "Router-lab zero-drift regression (planet-lod-rivers.js routeAndOrder:283, buildValleyGeometry:595; ocean ~35%, maxStrahler ~5, 0 orphan/uphill).",
