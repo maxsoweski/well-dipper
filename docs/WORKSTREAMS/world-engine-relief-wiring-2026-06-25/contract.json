@@ -1,0 +1,132 @@
+{
+  "workstream": "world-engine-relief-wiring-2026-06-25",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "title": "WS4 — wire relief engines (E6 grain → E9 subtractive carve) into the lab renderer",
+  "status": "building",
+  "campaign": "docs/FEATURES/world-engine-production-L1-plan.md §WS4",
+  "acceptanceCriteria": [
+    {
+      "id": "grain-oracle",
+      "statement": "The E6 grain field reproduces the lab tectonic oracle (equator→thrust, mid-latitude→strike-slip, pole→normal) and is deterministic per (drivers, seed).",
+      "verifyVia": {
+        "input": "Run the grain derivation headless for a fixed (drivers, seed) bundle.",
+        "observable": "Regime classification matches the oracle per latitude band; re-running yields byte-identical fields."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "one-shared-grain",
+      "statement": "With grain ON, the relief features (mountains, scarps, tessera, canyons) read their strike/orientation from the ONE shared grain field, not independent per-feature hashed axes.",
+      "verifyVia": {
+        "input": "Enable grain on the lab planet on :9223 and probe each grained feature's orientation source.",
+        "observable": "Each grained feature's strike correlates to the shared grain field; a uniform/window probe confirms one field feeds N consumers (no independent random axis remains)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "grain-zero-identical",
+      "statement": "With uTectonicGrainStrength = 0, the rendered planet is byte-identical to the pre-WS4 baseline (safe fallback).",
+      "verifyVia": {
+        "input": "Set grain strength 0 on :9223 and A/B against a pre-WS4 baseline capture.",
+        "observable": "GPU capture identical within tolerance to baseline; uniform probe shows the fallback path is taken."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "carve-subtractive",
+      "statement": "The drainage carve is strictly subtractive: carved height ≤ authored height at every vertex, with 0 uphill and 0 orphan edges.",
+      "verifyVia": {
+        "input": "Run the carve over a fixed body headless.",
+        "observable": "Per-vertex carved ≤ authored everywhere; routing reports 0 uphill, 0 orphan."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "epoch-build-identical",
+      "statement": "Epoch 1 (E6 build) is bit-identical with the carve disabled, and epoch 2 (E9) only lowers height (monotone non-increasing).",
+      "verifyVia": {
+        "input": "Snapshot the epoch-1 build with carve disabled, then run epoch 2 headless.",
+        "observable": "Build-only snapshot bit-identical with carve off; epoch-2 height delta ≤ 0 at every vertex."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "epoch-carve-visible",
+      "statement": "Flipping the carve epoch off→on on the lab planet reads as 'uncut relief' → 'drainage carved into the SAME relief' — valley floors are genuinely lower.",
+      "verifyVia": {
+        "input": "Toggle the carve epoch off/on on :9223 over a built relief and probe valley-pixel heights.",
+        "observable": "Valley-pixel height/depth decreases when the epoch turns on; the carve sits in the same relief that was just built."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "router-zero-drift",
+      "statement": "The router-lab zero-drift regression stays green (ocean ~35%, maxStrahler ~5, 0 orphan/uphill) and sphere-mapping is correct: both poles clean, lakes intact.",
+      "verifyVia": {
+        "input": "Run the router-lab regression headless and inspect both poles on :9223.",
+        "observable": "Regression metrics within their bands; both poles render clean; lakes intact."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "bake-once",
+      "statement": "The grain+carve bake runs once per (preset, seed), not per-frame; it re-bakes only on preset/seed/sea-level change and stays within the documented bake budget.",
+      "verifyVia": {
+        "input": "Change camera/time (no re-bake expected), then change seed/preset/sea-level (re-bake expected) on :9223.",
+        "observable": "Bake counter = 1 per preset/seed; unchanged on camera/time; increments on seed/preset/sea-level change; within budget."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "renderer-expression-only",
+      "statement": "No strike-axis derivation or relief-amplitude decision remains in the shader for grained features; the shader only expresses the grain/substrate fields.",
+      "verifyVia": {
+        "input": "Code-audit planet-lod-height.glsl.js and the shader paths for grained features.",
+        "observable": "No per-feature axis hashing (the initProvinces / fbmdRidged paths) or amplitude decisions left in-shader; all orientation/amplitude sourced from the grain + province fields."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "landscape-with-history",
+      "statement": "Looking at the planet as a whole, the relief reads as the coherent result of the forces that formed it (landforms belong to a tectonic system, not random scatter) AND drainage has cut into that relief — a clear step toward 'you can see the forces that formed it.'",
+      "verifyVia": {
+        "input": "Max walks a built world on :9223 with grain + carve on.",
+        "observable": "Max judges the whole-disk read coheres as tectonic relief + drainage with a history."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "WS2 base-step outputs — src/worldengine/base/tectonic.js writeGrainSphere + the F3 carrier (grain inputs).",
+      "WS1 D12 tidalHeating (driver vector input).",
+      "The lab self-derivation deriveUniforms (planet-lod-lab-core.js:496).",
+      "Driver vector D11/D12/D14/composition/despin.",
+      "E6 math reference: relief-e6-tectonic.js (reference, not drop-in)."
+    ],
+    "outputs": [
+      "planet-lod-height.glsl.js relief features — replaces per-feature axis hashing at initProvinces:797 / fbmdRidged:880; the renderer expresses the fields.",
+      "New module: planet-lod-tectonic.js.",
+      "Derivation added in deriveUniforms.",
+      "Orchestration host: createRiverOverlay (planet-lod-rivers.js:797)."
+    ],
+    "mustStayWorking": [
+      "Router-lab zero-drift regression (planet-lod-rivers.js routeAndOrder:283, buildValleyGeometry:595; ocean ~35%, maxStrahler ~5, 0 orphan/uphill).",
+      "gProvince amplitude mask (augmented, not replaced).",
+      "The shipped rivers feature's scale + water-fill.",
+      "src/generation/ byte-untouched.",
+      "No Date.now/Math.random in derivation.",
+      "grainStrength=0 byte-identical fallback."
+    ]
+  }
+}
