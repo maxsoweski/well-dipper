@@ -131,6 +131,34 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uScarpWarpFreq;    // warp-noise domain frequency — lab knob
       uniform vec3  uScarpDomainOffset; // 🎲 domain offset — default (0,0,0) = unchanged
 
+      // ── WS4 E6 tectonic grain (shared strike field) — the ONE orientation source the grained
+      // combiners read instead of each hashing an independent axis. uTectonicGrainStrength is the
+      // gate: 0 ⇒ every grained combiner runs its pre-WS4 normalize(uXxxAxis) instruction VERBATIM
+      // (BRANCH-guarded, never a mix-to-0 — so a null/unbaked cube is never sampled at the fallback;
+      // see D6: a mix() would still execute the textureCube fetch and a null samplerCube can yield NaN).
+      // The cube (T7/T8) stores the smooth WORLD-space strike in RG (.b grainMag, .a regime/province).
+      // sampleGrainStrike unpacks RG → a unit strike vec3 in the planet's tangent space at dir; the
+      // in-shader province rotation that turns the latitude-banded base strike into 2D landforms is
+      // composed in each combiner against the REAL gProvince (T13), NOT here.
+      uniform float       uTectonicGrainStrength;  // 0 = grain OFF (byte-identical fallback gate)
+      uniform samplerCube uTectonicGrainCube;      // baked strike-only cube (RG = world strike.xy)
+      vec3 sampleGrainStrike(vec3 dir){
+        vec3 d = normalize(dir);
+        vec2 g = textureCube(uTectonicGrainCube, d).rg;          // packed world strike (xy dominant)
+        // The cube packs two dominant world components; recover the third on the unit sphere so the
+        // strike stays a real direction even where the third component is non-trivial. Fall back to
+        // the dir-tangent if the packed vector is degenerate (unbaked/black cube → length 0).
+        float z2 = max(0.0, 1.0 - dot(g, g));
+        vec3 strike = vec3(g, sqrt(z2));
+        float len = length(strike);
+        if (len < 1e-4) {
+          // degenerate (black/unbaked cube): pick any tangent so a stray sample is still a unit dir.
+          vec3 ref = abs(d.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+          return normalize(cross(d, ref));
+        }
+        return strike / len;
+      }
+
       // ── F6 plateaus / highlands (Stage-C step 3, Relief) — HeteroTerrain + mesa terrace ──
       uniform float uPlateauStrength;  // 0..~0.2 flat-topped highland amplitude (driven; ≤0 early-outs)
       uniform float uPlateauScale;     // HeteroTerrain domain frequency — lab knob
@@ -1952,7 +1980,12 @@ export const HEIGHT_GLSL = /* glsl */ `
       // uScarpStrength≤0 ⇒ early-out (Stage-A base + F1/F2/F4 untouched).
       void scarpCombiner(vec3 pos, inout float h, inout vec3 grad){
         if (uScarpStrength <= 0.0) return;
-        vec3 ax = normalize(uScarpAxis);
+        // WS4 grain wiring (the PATTERN T13 repeats). BRANCH, not mix-to-0 (D6): at strength==0 the
+        // ELSE runs normalize(uScarpAxis) verbatim — no cube fetch, no mix, no precision drift — so
+        // the grain-OFF planet is BYTEWISE the pre-WS4 shader even with uTectonicGrainCube still null.
+        vec3 ax = uTectonicGrainStrength > 0.0
+          ? normalize(mix(uScarpAxis, sampleGrainStrike(pos), uTectonicGrainStrength))
+          : normalize(uScarpAxis);
         vec4 wn = noised(pos * uScarpWarpFreq + uMacroOffset + uScarpDomainOffset); // analytic value+grad (+🎲 offset)
         float field  = dot(pos, ax) + uScarpWarp * wn.x;          // directional + warp
         vec3  dfield = ax + uScarpWarp * uScarpWarpFreq * wn.yzw;  // EXACT field gradient

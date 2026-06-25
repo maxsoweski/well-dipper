@@ -10,6 +10,16 @@ All file:line cites below were re-verified against current code 2026-06-25.
 
 ---
 
+## Max decisions (2026-06-25)
+
+Three binding decisions from Max, recorded here so the build does not re-litigate them:
+
+1. **Stream-power is the DEFAULT carve-depth law.** `Δ = -K·A^m·S^n` (T10) ships as the default depth law; the old Strahler `depthAt` tent is kept ONLY as a `params.LEGACY_DEPTH` fallback flag for A/B, never the default. (This changes river APPEARANCE vs the 2026-06-19 shipped rivers — flagged in openForMax.)
+2. **T12b is DEFERRED — do NOT build it.** The rigorous rendered-frame epoch snapshot (extract `BUILD_MAIN`, add a `fragmentShader` param to `createHeightSampler`, prove a byte-match) is out of scope for WS4. `epoch-carve-visible` rests on the routed-substrate height readback (T12) + Max's UAT eye instead.
+3. **move-2 / `rotatePoleDeg` is DROPPED — make NO edit to `src/worldengine/base/tectonic.js`.** Do not add `rotatePoleDeg` to `writeGrainSphere`. Consume the EXISTING 2-arg `writeGrainSphere(carrier, drivers)` as the grain source. The per-body-obliquity / inter-body-variety move that T2 and parts of T6 depended on is cut; `src/worldengine/` stays read-only/byte-untouched. (Within-body 2D structure was always 100% on D4 move-1 / the in-shader province rotation in T13 anyway — see D4's honest attribution.)
+
+---
+
 ## 0. Repo conventions that BITE (read before the first task)
 
 - **Tests run SCOPED, never bare `npm test`.** Bare `vitest run` globs `src/generation/__tests__/KnownObjects.test.js` (`searchKnownObjects`) which is pre-broken → false red. Every gate uses a path-substring invocation:

@@ -145,6 +145,15 @@ export function makeUniforms(WORLD_LIGHT) {
       uRidgeGain:        { value: 2.0 },   // multifractal weight gain (lab-tunable)
       uOrogenyStrength:  { value: 0.0 },   // isotropic ridged ↔ fold-belt (driven)
       uOrogenyAxis:      { value: new THREE.Vector2(1, 0) },  // strike direction (driven from angle)
+      // ── WS4 tectonic grain fallback scaffolding (T3 / D6) ──
+      // The shared-grain consumption path (T5/T13) wraps each grained `normalize(uXxxAxis)` in a
+      // branch-guarded `mix(oldAxis, sampleGrainStrike(vPos), uTectonicGrainStrength)`. At strength 0
+      // the ORIGINAL axis instruction stream runs verbatim (no cube fetch, no mix) → byte-identical
+      // pre-WS4 render (grain-zero-identical). These defaults make that fallback the boot state:
+      uTectonicGrainStrength: { value: 0.0 },   // 0 = grain OFF, byte-identical fallback (the gate)
+      uTectonicGrainCube:     { value: null },  // baked strike-only HalfFloat cube (T7/T8); null until baked.
+                                                // NEVER sampled at strength 0 — the combiner branch (D6)
+                                                // short-circuits before any textureCube on the null cube.
       uMountainScale:    { value: 1.6 },   // mountain domain frequency (lab-tunable)
       uMountainDomainOffset: { value: new THREE.Vector3() },   // 🎲 domain offset (default 0 = unchanged)
       // ── F4 canyons / rifts (Stage-C step 3, Relief) — tectonic graben → canyonHeight ──

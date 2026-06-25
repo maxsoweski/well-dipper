@@ -1370,6 +1370,12 @@
     const _dummyCarveCube = makeDummyCubeTexture();
     const _dummyPatchTex = makeDummyTex2D();
     uniforms.uRiverCarveMap      = { value: _dummyCarveCube };
+    // ── WS4 T5 (D6 belt-and-braces): a samplerCube must ALWAYS be bound, so seed uTectonicGrainCube
+    // with the SAME 1×1 black dummy until the grain bake (T7/T8) renders the real strike cube. The
+    // grained combiners BRANCH on uTectonicGrainStrength (default 0) so this dummy is NEVER sampled at
+    // the byte-identical fallback — it exists only so the bind is valid (an unbound/null samplerCube
+    // can warn/UB on some drivers and would perturb the strength-0 A/B capture this AC rests on).
+    uniforms.uTectonicGrainCube  = { value: makeDummyCubeTexture() };
     uniforms.uRiverCarveStrength = { value: 0.0 };
     uniforms.uRiverCarveFloor    = { value: 0.0 };
     uniforms.uRiverCarveDepth    = { value: 0.0 };   // Option B: h-units the floor is lowered (→ F14 floods)
@@ -5647,6 +5653,11 @@
                     rivers(on){ setRiverOverlay(on !== false); return riverOverlayState.enabled; },
                     riversReroute(opts){ if (opts && opts.seaFromHistogram !== undefined) riverOverlayState.seaFromHistogram = opts.seaFromHistogram; if (opts && opts.targetFraction !== undefined) riverOverlayState.targetOceanFraction = opts.targetFraction; riverReroute('manual'); return riverOverlay.stats; },
                     get riverOverlay(){ return riverOverlay; }, get riverStats(){ return riverOverlay.stats; }, riverState: riverOverlayState,
+                    // WS4 T5 — grain strength A/B hook. grainStrength() reads, grainStrength(s) sets the
+                    // gate (0 = byte-identical fallback). The combiner BRANCHES on it, so 0 reverts to the
+                    // pre-WS4 normalize(uXxxAxis) path exactly. Used by the live grain-zero-identical /
+                    // one-shared-grain captures on :9223 (set 0, capture; set 1, capture; diff).
+                    grainStrength(s){ if (s !== undefined) uniforms.uTectonicGrainStrength.value = +s; return uniforms.uTectonicGrainStrength.value; },
                     // Option B river-LOD STEP 2 — bake the fine-tributary patch at the CURRENT camera + set strength.
                     // Usage: window._lab.bakeTributaryPatch({ angularDeg: 8, strength: 1 }) — bakes at the current
                     // camera direction, raises the patch strength, and returns { center,u,v,angular,segmentCount }.
