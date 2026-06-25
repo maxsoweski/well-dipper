@@ -44,6 +44,7 @@ import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
 import { shapeStick, STICK_TUNING } from './flight/stickCurve.js';
 import { FlightMode, advanceFlightMode, flightModeInfo } from './flight/flightModes.js';
 import { FlightModeToast } from './ui/FlightModeToast.js';
+import { alignStep, alignDot } from './flight/aimAssist.js';
 import { Ship } from './core/Ship.js';
 import { ShipChoreographer } from './auto/ShipChoreographer.js';
 import { CameraChoreographer } from './auto/CameraChoreographer.js';
@@ -6010,6 +6011,14 @@ function selectTarget(target) {
     cameraController._transitionSpeed = 0.06;
   }
 
+  // Flight-assist modes react to a (re)selection while flying.
+  if (_scManual) {
+    const _b = _resolveSelectedBody();
+    if (_b) {
+      if (_flightMode === FlightMode.ALIGN) _beginAlign(_b);
+      else if (_flightMode === FlightMode.ASSIST) _engageAssist(_b); // Task 6
+    }
+  }
   _updateCommitBurnButton();
 }
 
@@ -7575,6 +7584,15 @@ function simStep(deltaTime) {
 
       const scFrame = scPilot.isActive ? scPilot.update(deltaTime) : null;
       scModel.update(deltaTime);
+      // Mode B: ease the nose ONCE to face the selected body, then release. A
+      // still stick lets it finish; deflecting the stick cancels it (see the
+      // mousemove handler). Writes orientation before scHead.applyTo reads it.
+      if (_alignState.active && _alignState.mesh) {
+        _alignState.t += deltaTime;
+        alignStep(scModel.orientation, scModel.position, _alignState.mesh.position, deltaTime, ALIGN_TAU);
+        const _d = alignDot(scModel.orientation, scModel.position, _alignState.mesh.position);
+        if (_d >= scPilot.tuning.ALIGN_DOT || _alignState.t >= ALIGN_MAX_S) _alignState.active = false;
+      }
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
 
@@ -9222,13 +9240,12 @@ canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
     const nx = ((e.clientX - r.left) - r.width / 2) / (r.width / 2);   // -1..1
     const ny = ((e.clientY - r.top) - r.height / 2) / (r.height / 2);  // -1..1
-    // Radial deadzone + cubic expo (preserves direction → diagonals stay
-    // correct). Item 2, supercruise-polish-2026-06-25.
     const s = shapeStick(nx, ny, _scStickTuning);
-    // Mouse right → yaw right (nose right); mouse up → pitch up. Sign
-    // convention is UAT-tuned; tests only assert proportionality + cap.
+    const _deflected = (s.x !== 0 || s.y !== 0);
+    if (_alignState.active && _deflected) _alignState.active = false; // Mode B: deflect cancels align
+    // Mode C disengage is added in Task 6; in Manual/Align the stick is authoritative:
     scModel.setTurnInput(-s.x, -s.y);
-    _scDeflection = { x: s.x, y: s.y }; // consumed by the HUD reticle (Task 11)
+    _scDeflection = { x: s.x, y: s.y };
   }
 
   // Minimap drag-to-rotate (pointer lock keeps cursor captured)
