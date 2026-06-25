@@ -1,5 +1,7 @@
 # World-Engine — MASTER PICKUP INDEX (read THIS first)
 
+> **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](world-engine-architecture-spine.md).
+
 **Status:** FIRST SLICE BUILT + **Max UAT-PASSED 2026-06-23** (`90b66f7`); brainstorm gate cleared 2026-06-22.
 **RELIEF BODY-TYPE DIVERGENCE BUILD: ✅ Max UAT-PASSED 2026-06-23 (`ef63554`).**
 The relief slice now produces **categorically different worlds per body type** (not amplitude-only); decisive
