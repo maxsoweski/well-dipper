@@ -6,6 +6,9 @@
 **Approved by Max** (brainstorming, 2026-06-25): three assist modes; **F cycles** `Manual → Align → Assist → Exit`
 (4-state ring, the "Exit" slot leaves flight); a tooltip shows the mode on each entry.
 
+> **STATUS 2026-06-25:** BUILT + headless-verified + 3-lens adversarially reviewed + LIVE-verified ALL-PASS on
+> `:9223`/`:5174`. VERIFIED_PENDING_MAX `4fa6c28`. Commits `d7049ba`→`4fa6c28` (8). Awaiting Max UAT.
+
 Currently F is a 2-state toggle: it flips the FLIGHT camera mode on/off (`src/main.js:8759`). This replaces that toggle
 with a 4-state ring and layers two new assist behaviors on top of the existing manual flight, **reusing** the autopilot
 pilot (`scPilot`), the selected-target state (`_selectedTarget`), and the clean no-jump exit (`adoptCurrentPose`).
