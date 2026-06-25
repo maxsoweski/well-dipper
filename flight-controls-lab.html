@@ -108,10 +108,15 @@
       <label>EXPO: <input type="range" id="EXPO" min="0" max="0.6" step="0.01" value="0.30"> <span id="EXPOVal">0.30</span></label>
     </div>
     <div class="group">
+      <div class="group-title">FLIGHT MODES (F-cycle)</div>
+      <button class="btn" id="btnCycleMode">Cycle mode (F)</button>
+      <div id="modeReadout">MODE: MANUAL &nbsp; align:off &nbsp; assist:off</div>
+    </div>
+    <div class="group">
       <button class="btn" id="btnFly">Fly from rest (6s)</button>
       <button class="btn" id="btnReset">Reset</button>
     </div>
-    <div class="hint">W/S = throttle &nbsp; drag = virtual joystick (turn)<br>_lab.flyFromRest({seconds}) in console for the verdict</div>
+    <div class="hint">W/S = throttle &nbsp; drag = virtual joystick (turn)<br>F = cycle Manual→Align→Assist→Exit &nbsp; (deflect cancels B / disengages C)<br>_lab.flyFromRest({seconds}) in console for the verdict</div>
   </div>
 
   <script type="module">
@@ -121,6 +126,9 @@
     import { earthRadiiToScene } from './src/core/ScaleConstants.js';
     import { SupercruiseHud } from './src/ui/SupercruiseHud.js';
     import { shapeStick, shapeMagnitude, STICK_TUNING } from './src/flight/stickCurve.js';
+    import { SupercruisePilot } from './src/flight/SupercruisePilot.js';
+    import { FlightMode, advanceFlightMode, flightModeInfo } from './src/flight/flightModes.js';
+    import { alignStep, alignDot } from './src/flight/aimAssist.js';
 
     const canvas = document.getElementById('canvas');
     const hudEl = document.getElementById('hud');
@@ -201,6 +209,35 @@
     const model = new SupercruiseModel();
     const headMount = new HeadMount();
 
+    // ── Flight-assist modes (F-cycle) — real pilot + state machine, observed in
+    // isolation against the real model. The reference planet IS the selected
+    // body for Modes B/C. Mirrors main.js's _flightMode / _alignState wiring. ──
+    const scPilot = new SupercruisePilot(model);
+    let _flightMode = FlightMode.MANUAL;
+    const _alignState = { active: false, mesh: null, t: 0 };
+    const ALIGN_TAU = 0.16;     // s — Mode-B ease time constant
+    const ALIGN_MAX_S = 1.5;    // s — Mode-B align safety cap
+    function _selectedBody() { return { mesh: planet, radius: PLANET_RADIUS }; }
+    function _beginAlign(b) { _alignState.active = true; _alignState.mesh = b.mesh; _alignState.t = 0; }
+    function _engageAssist(b) { scPilot.beginLeg({ toBody: b.mesh, bodyRadius: b.radius }); }
+    function _enterFlightMode(mode) {
+      _alignState.active = false;
+      if (mode !== FlightMode.ASSIST) scPilot.stop();
+      const b = _selectedBody();
+      if (mode === FlightMode.ALIGN) _beginAlign(b);
+      else if (mode === FlightMode.ASSIST) _engageAssist(b);
+    }
+    // F cycles Manual → Align → Assist → Exit (back to Manual baseline here).
+    function cycleFlightMode() {
+      const next = advanceFlightMode(_flightMode, true);
+      if (next.exit) { _flightMode = FlightMode.MANUAL; _alignState.active = false; scPilot.stop(); }
+      else { _flightMode = next.mode; _enterFlightMode(_flightMode); }
+      const info = flightModeInfo(next.exit ? 'exit' : _flightMode);
+      scHud.show?.(info.label, info.hint); // no-op if HUD has no toast; toast is in main.js
+      updateModeLabel();
+      return _flightMode;
+    }
+
     // Single gravity body = the reference planet at origin (rebased frame = world here).
     function refreshBodies() {
       model.setBodies([{ position: planet.position, radius: PLANET_RADIUS }]);
@@ -214,6 +251,10 @@
       model.speed = 0;
       model.throttle = 0;
       model.setTurnInput(0, 0);
+      // Return the F-cycle to the Manual baseline (clear any align/assist).
+      _flightMode = FlightMode.MANUAL;
+      _alignState.active = false; _alignState.mesh = null; _alignState.t = 0;
+      scPilot.stop();
       headMount.yaw = 0; headMount.pitch = 0; headMount.endLook();
       refreshBodies();
       headMount.applyTo(camera, model.position, model.orientation);
@@ -245,6 +286,7 @@
       const k = e.key.toLowerCase();
       if (k === 'w') keys.w = true;
       if (k === 's') keys.s = true;
+      if (k === 'f') cycleFlightMode();
     });
     window.addEventListener('keyup', (e) => {
       const k = e.key.toLowerCase();
@@ -262,8 +304,14 @@
       const nx = THREE.MathUtils.clamp((e.clientX - dragX) / JOY_RANGE, -1, 1);
       const ny = THREE.MathUtils.clamp(-(e.clientY - dragY) / JOY_RANGE, -1, 1);
       const s = shapeStick(nx, ny, stickTuning);
-      model.setTurnInput(s.x, s.y);
-      _labDeflection = { x: s.x, y: s.y };
+      const deflected = (s.x !== 0 || s.y !== 0);
+      // Mode C: manual steer disengages the hold; Mode B: deflect cancels align.
+      if (_flightMode === FlightMode.ASSIST && scPilot.isActive && deflected) scPilot.stop();
+      if (!(_flightMode === FlightMode.ASSIST && scPilot.isActive)) {
+        if (_alignState.active && deflected) _alignState.active = false;
+        model.setTurnInput(s.x, s.y);
+        _labDeflection = { x: s.x, y: s.y };
+      }
     });
     window.addEventListener('mouseup', () => {
       dragging = false;
@@ -340,13 +388,24 @@
     let scripted = null; // when a flyFromRest run is active, hold its driver
 
     function step(dt) {
+      const assistDriving = _flightMode === FlightMode.ASSIST && scPilot.isActive;
       // Throttle stepping from held W/S (mirrors main.js setThrottle(throttle ± RATE*dt)).
+      // While assist drives, W/S disengages it (manual throttle resumes next frame).
       if (!scripted) {
-        if (keys.w) model.setThrottle(model.throttle + model.tuning.THROTTLE_RATE * dt);
-        if (keys.s) model.setThrottle(model.throttle - model.tuning.THROTTLE_RATE * dt);
+        const dir = (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
+        if (assistDriving) { if (dir !== 0) scPilot.stop(); }
+        else if (dir !== 0) model.setThrottle(model.throttle + dir * model.tuning.THROTTLE_RATE * dt);
       }
       refreshBodies();          // current rebased body positions every tick (per model contract)
+      if (scPilot.isActive) scPilot.update(dt); // Mode C: autopilot issues controls before model step
       model.update(dt);         // steering + speed + translate
+      // Mode B: ease the nose ONCE toward the selected body, then release.
+      if (_alignState.active && _alignState.mesh) {
+        _alignState.t += dt;
+        alignStep(model.orientation, model.position, _alignState.mesh.position, dt, ALIGN_TAU);
+        const d = alignDot(model.orientation, model.position, _alignState.mesh.position);
+        if (d >= scPilot.tuning.ALIGN_DOT || _alignState.t >= ALIGN_MAX_S) _alignState.active = false;
+      }
       headMount.update(dt);     // recenter easing when not held
       headMount.applyTo(camera, model.position, model.orientation);
     }
@@ -374,6 +433,17 @@
         `throttle = ${model.throttle.toFixed(2)}   speed = ${model.speed.toExponential(2)} u/s\n` +
         `cap = ${model.speedCap().toExponential(2)} u/s\n` +
         `screen R = ${projectedScreenRadiusPx().toFixed(1)} px`;
+    }
+
+    // Flight-mode readout: current mode + whether Mode-B align / Mode-C assist
+    // are live, so Modes B/C are observable in isolation.
+    const modeReadoutEl = document.getElementById('modeReadout');
+    function updateModeLabel() {
+      if (!modeReadoutEl) return;
+      modeReadoutEl.textContent =
+        `MODE: ${_flightMode.toUpperCase()}` +
+        `   align:${_alignState.active ? 'ON' : 'off'}` +
+        `   assist:${scPilot.isActive ? 'ON' : 'off'}`;
     }
 
     let frameCount = 0, fpsTimer = performance.now();
@@ -406,6 +476,7 @@
         captureSphere,
         dropMaxSpeed,
         dropState,
+        flightMode: _flightMode,
       });
     }
 
@@ -414,6 +485,7 @@
       renderer.render(scene, camera);
       updateScHud();   // real HUD render (after camera applied via headMount.applyTo in step)
       updateHud();
+      updateModeLabel(); // reflect align/assist auto-clearing without a keypress
       updateFps();
       requestAnimationFrame(loop);
     }
@@ -499,10 +571,17 @@
       projectedScreenRadiusPx,
       stickTuning,
       scHud,
+      // Flight-modes (F-cycle) — observe Modes B/C in isolation.
+      scPilot,
+      cycleFlightMode,
+      get flightMode() { return _flightMode; },
+      get alignActive() { return _alignState.active; },
+      get assistActive() { return scPilot.isActive; },
     };
 
     // ── Panel buttons ──
     document.getElementById('btnReset').onclick = () => resetModel();
+    document.getElementById('btnCycleMode').onclick = () => cycleFlightMode();
     document.getElementById('btnFly').onclick = async (e) => {
       e.target.textContent = 'Flying…';
       const r = await flyFromRest({ seconds: 6 });

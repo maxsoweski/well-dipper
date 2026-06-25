@@ -38,7 +38,8 @@ export class SupercruiseHud {
   /** state: {
    *   visible, speed, commandedSpeed, throttle, deflection:{x,y},
    *   targetPos|null, targetDistance|null, captureSphere|null,
-   *   dropMaxSpeed|null, dropState: 'none'|'in-window'|'too-fast'
+   *   dropMaxSpeed|null, dropState: 'none'|'in-window'|'too-fast',
+   *   flightMode: 'manual'|'align'|'assist'|null
    * } */
   update(state) {
     const c = this.ctx; c.clearRect(0, 0, innerWidth, innerHeight);
@@ -163,6 +164,17 @@ export class SupercruiseHud {
           c.fillText('SLOW DOWN', p.x + 18, cueY + 16);
         }
       }
+    }
+
+    // ── Flight-assist mode readout (upper-center, reticle green) ──
+    // The toast announces each mode on entry; this is the persistent indicator
+    // of which assist mode is live while flying. One fillText, no new layout.
+    if (state.flightMode) {
+      c.fillStyle = '#64ff82';
+      c.font = '14px monospace';
+      c.textAlign = 'center';
+      c.fillText(`MODE: ${state.flightMode.toUpperCase()}`, cx, 28);
+      c.textAlign = 'left';
     }
   }
 

@@ -8391,6 +8391,7 @@ function renderFrame(alpha) {
     captureSphere: _scDrop.captureSphere,
     dropMaxSpeed: _scDrop.dropMaxSpeed,
     dropState: _scDrop.state,
+    flightMode: _scManual ? _flightMode : null,
   });
   _updateCommitBurnButton();
 
