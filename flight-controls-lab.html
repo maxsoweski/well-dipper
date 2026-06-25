@@ -75,6 +75,14 @@
       transform: translate(-50%, -50%);
       font-size: 18px; z-index: 20;
     }
+    #stickPlot {
+      position: fixed; bottom: 12px; right: 12px;
+      width: 220px; height: 120px;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(0, 255, 0, 0.35);
+      border-radius: 3px;
+      cursor: default; z-index: 10;
+    }
   </style>
 </head>
 <body>
@@ -84,6 +92,9 @@
   <div id="fps">FPS: --</div>
   <div id="status">LOADING…</div>
 
+  <!-- stick-curve plot: deflection (0..1) → achieved turn rate, redrawn on EXPO change -->
+  <canvas id="stickPlot" width="220" height="120"></canvas>
+
   <div id="panel" style="display:none;">
     <div class="group">
       <div class="group-title">FLIGHT MODEL TUNING (model.tuning — live)</div>
@@ -91,6 +102,10 @@
       <label>ACCEL_TAU: <input type="range" id="ACCEL_TAU" min="0.2" max="2.0" step="0.05" value="1.4"> <span id="ACCEL_TAUVal">1.40</span></label>
       <label>CAP_MIN_FRAC: <input type="range" id="CAP_MIN_FRAC" min="0.0" max="1.0" step="0.05" value="0.5"> <span id="CAP_MIN_FRACVal">0.50</span></label>
       <label>THROTTLE_RATE: <input type="range" id="THROTTLE_RATE" min="0.1" max="2.0" step="0.05" value="0.6"> <span id="THROTTLE_RATEVal">0.60</span></label>
+    </div>
+    <div class="group">
+      <div class="group-title">STICK CURVE (stickTuning — live)</div>
+      <label>EXPO: <input type="range" id="EXPO" min="0" max="0.6" step="0.01" value="0.30"> <span id="EXPOVal">0.30</span></label>
     </div>
     <div class="group">
       <button class="btn" id="btnFly">Fly from rest (6s)</button>
@@ -104,6 +119,8 @@
     import { SupercruiseModel } from './src/flight/SupercruiseModel.js';
     import { HeadMount } from './src/flight/HeadMount.js';
     import { earthRadiiToScene } from './src/core/ScaleConstants.js';
+    import { SupercruiseHud } from './src/ui/SupercruiseHud.js';
+    import { shapeStick, shapeMagnitude, STICK_TUNING } from './src/flight/stickCurve.js';
 
     const canvas = document.getElementById('canvas');
     const hudEl = document.getElementById('hud');
@@ -126,6 +143,11 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
     });
+
+    // ── Real shipping HUD instance (previewed over the lab) + stick shaping state ──
+    const scHud = new SupercruiseHud(camera);
+    const stickTuning = { ...STICK_TUNING };       // live copy — EXPO slider mutates this
+    let _labDeflection = { x: 0, y: 0 };           // current shaped drag (HUD reticle)
 
     // ── Real-scale reference planet (Earth = 1 Earth-radius) at origin ──
     const PLANET_RADIUS = earthRadiiToScene(1); // ≈ 0.0426 scene units
@@ -236,11 +258,18 @@
     canvas.addEventListener('mousedown', (e) => { dragging = true; dragX = e.clientX; dragY = e.clientY; });
     window.addEventListener('mousemove', (e) => {
       if (!dragging) return;
-      const yaw   = THREE.MathUtils.clamp((e.clientX - dragX) / JOY_RANGE, -1, 1);
-      const pitch = THREE.MathUtils.clamp(-(e.clientY - dragY) / JOY_RANGE, -1, 1);
-      model.setTurnInput(yaw, pitch);
+      // raw deflection in [-1,1] from drag-start, then radial deadzone + expo shaping.
+      const nx = THREE.MathUtils.clamp((e.clientX - dragX) / JOY_RANGE, -1, 1);
+      const ny = THREE.MathUtils.clamp(-(e.clientY - dragY) / JOY_RANGE, -1, 1);
+      const s = shapeStick(nx, ny, stickTuning);
+      model.setTurnInput(s.x, s.y);
+      _labDeflection = { x: s.x, y: s.y };
     });
-    window.addEventListener('mouseup', () => { dragging = false; model.setTurnInput(0, 0); });
+    window.addEventListener('mouseup', () => {
+      dragging = false;
+      model.setTurnInput(0, 0);
+      _labDeflection = { x: 0, y: 0 };
+    });
 
     // ── Tuning sliders bound live to model.tuning ──
     const TUNING_IDS = ['ETA_K', 'ACCEL_TAU', 'CAP_MIN_FRAC', 'THROTTLE_RATE'];
@@ -256,6 +285,54 @@
       apply();
     }
     TUNING_IDS.forEach(bindTuning);
+
+    // ── Stick-curve plot: deflection 0..1 → achieved turn rate, redrawn on EXPO change ──
+    const stickPlot = document.getElementById('stickPlot');
+    const stickCtx = stickPlot.getContext('2d');
+    function drawStickPlot() {
+      const W = stickPlot.width, H = stickPlot.height;
+      const pad = { l: 8, r: 8, t: 18, b: 8 };
+      const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+      stickCtx.clearRect(0, 0, W, H);
+      // label
+      stickCtx.fillStyle = '#0a0';
+      stickCtx.font = '10px monospace';
+      stickCtx.fillText('deflection → turn rate', pad.l, 12);
+      // axes
+      stickCtx.strokeStyle = 'rgba(0,255,0,0.25)';
+      stickCtx.lineWidth = 1;
+      stickCtx.strokeRect(pad.l, pad.t, pw, ph);
+      // curve: y = shapeMagnitude(x) * turnRateCap(); normalize by turnRateCap so the
+      // shape fills the plot regardless of the (speed-dependent) cap magnitude.
+      const cap = model.turnRateCap() || 1;
+      stickCtx.strokeStyle = '#0f0';
+      stickCtx.lineWidth = 1.5;
+      stickCtx.beginPath();
+      const N = 64;
+      for (let i = 0; i <= N; i++) {
+        const x = i / N;                                  // deflection 0..1
+        const y = shapeMagnitude(x, stickTuning) * cap;   // achieved turn rate
+        const px = pad.l + x * pw;
+        const py = pad.t + ph - (cap > 0 ? (y / cap) : 0) * ph;
+        if (i === 0) stickCtx.moveTo(px, py); else stickCtx.lineTo(px, py);
+      }
+      stickCtx.stroke();
+    }
+    drawStickPlot();
+
+    // EXPO slider → stickTuning.EXPO, redraw the plot.
+    (() => {
+      const el = document.getElementById('EXPO');
+      const out = document.getElementById('EXPOVal');
+      const apply = () => {
+        const v = parseFloat(el.value);
+        stickTuning.EXPO = v;
+        out.textContent = v.toFixed(2);
+        drawStickPlot();
+      };
+      el.oninput = apply;
+      apply();
+    })();
 
     // ── Fixed-timestep sim loop ──
     const FIXED_DT = 1 / 60;
@@ -309,9 +386,33 @@
       }
     }
 
+    // Build + push the REAL shipping HUD state (previews speed readout, log bar,
+    // drop tick, ETA over the lab). Drop physics single-sourced from PLANET_RADIUS.
+    function updateScHud() {
+      const captureSphere = PLANET_RADIUS * 10;
+      const dropMaxSpeed = captureSphere / 2.5;
+      const d = model.position.distanceTo(planet.position);
+      const dropState = d > captureSphere
+        ? 'none'
+        : (model.speed <= dropMaxSpeed ? 'in-window' : 'too-fast');
+      scHud.update({
+        visible: true,
+        speed: model.speed,
+        commandedSpeed: model.throttle * model.speedCap(),
+        throttle: model.throttle,
+        deflection: _labDeflection,
+        targetPos: planet.position,
+        targetDistance: d,
+        captureSphere,
+        dropMaxSpeed,
+        dropState,
+      });
+    }
+
     function loop(now) {
       tickPhysics(now);
       renderer.render(scene, camera);
+      updateScHud();   // real HUD render (after camera applied via headMount.applyTo in step)
       updateHud();
       updateFps();
       requestAnimationFrame(loop);
@@ -396,6 +497,8 @@
       PLANET_RADIUS,
       ENTRY_DIST,
       projectedScreenRadiusPx,
+      stickTuning,
+      scHud,
     };
 
     // ── Panel buttons ──

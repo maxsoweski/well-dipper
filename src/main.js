@@ -41,6 +41,7 @@ import { AutopilotMotion } from './auto/AutopilotMotion.js';
 import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
 import { HeadMount } from './flight/HeadMount.js';
 import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
+import { shapeStick, STICK_TUNING } from './flight/stickCurve.js';
 import { Ship } from './core/Ship.js';
 import { ShipChoreographer } from './auto/ShipChoreographer.js';
 import { CameraChoreographer } from './auto/CameraChoreographer.js';
@@ -440,17 +441,30 @@ const scModel = new SupercruiseModel();
 const scHead = new HeadMount();
 const scPilot = new SupercruisePilot(scModel);
 let _scManual = false;            // player has the stick (FLIGHT-mode supercruise)
+// Single setter for the manual-flight flag so the cursor restore can't be
+// missed on any exit path (Item 3, supercruise-polish-2026-06-25). Hides the
+// OS cursor while flying (absolute-from-center stick, no pointer-lock).
+function setScManual(on) {
+  _scManual = on;
+  document.body.style.cursor = on ? 'none' : '';
+}
 const _scBodies = [];             // per-tick gravity-well body list (reused)
 // Current virtual-joystick deflection (deadzone-shaped, -1..1 each). Written
 // by the canvas mousemove handler while _scManual && !scHead.held; consumed by
 // the supercruise HUD reticle (Task 11). Frozen while freelook is held.
 let _scDeflection = { x: 0, y: 0 };
+// Live copy of the virtual-stick deadzone+expo tuning (Item 2,
+// supercruise-polish-2026-06-25). Mutated via window._sc.stickTuning for
+// harness/UAT tuning; read by the joystick block's shapeStick() call.
+const _scStickTuning = { ...STICK_TUNING };
 // UAT knobs + test probe. tuning/pilotTuning/headTuning are the LIVE
 // per-instance objects — each constructor shallow-copies its module
 // defaults, so mutating the default objects would affect nothing.
 window._sc = {
   model: scModel, pilot: scPilot, head: scHead, hud: scHud,
   tuning: scModel.tuning, pilotTuning: scPilot.tuning, headTuning: scHead.tuning,
+  stickTuning: _scStickTuning,
+
   // ── In-game fly-from-rest probe (Item 2b, supercruise-hud-movement
   //    -design-2026-06-24) ──────────────────────────────────────────────
   // window._sc.flyFromRest({ seconds = 6 }) → runs the SAME scripted
@@ -606,7 +620,7 @@ function _scFlyFromRest({ seconds = 6 } = {}) {
   const visiblyTranslated = screenRadiusGrowthPct >= 25;
 
   // ── Restore prior state — leave the live session untouched ──
-  _scManual = prior.manual;
+  setScManual(prior.manual);
   cameraController.bypassed = prior.bypassed;
   scModel.position.copy(prior.position);
   scModel.orientation.copy(prior.orientation);
@@ -1948,7 +1962,7 @@ window._lab = {
     if (autoNav.isActive) stopFlythrough();
     if (autopilotMotion.isActive) autopilotMotion.stop();
     scPilot.stop();
-    _scManual = false;
+    setScManual(false);
     _autopilotEnabled = false;
   },
 
@@ -5645,7 +5659,7 @@ function stopFlythrough() {
   shipChoreographer.stop();
   autopilotMotion.stop();
   scPilot.stop();
-  _scManual = false;
+  setScManual(false);
   _manualBurnOrbiting = false;
   _autopilotEnabled = false;
 
@@ -6012,19 +6026,24 @@ function _resolveSelectedBody() {
 // outside the sphere (or no target) → 'none'. The 10R / (10R)/DROP_ETA_MAX
 // constants are SINGLE-SOURCED from scPilot.tuning so the HUD readout and the
 // live capture never drift apart. Does NOT re-tune any model speed floors.
+// Returns { state, d, captureSphere, dropMaxSpeed } (was a bare enum string).
+// The HUD single-sources the drop numbers from here (10R / (10R)/2.5 from
+// scPilot.tuning) so the readout and the capture rule can't drift apart.
 function _scDropState() {
   // Resolve the same body the HUD marker tracks: selected body first, else the
   // pilot's active target (so the autopilot tour shows a drop window too).
   const sel = _resolveSelectedBody();
   const bp = sel ? sel.mesh.position : (scPilot._target?.mesh?.position ?? null);
-  if (!bp) return 'none';
+  if (!bp) return { state: 'none', d: null, captureSphere: null, dropMaxSpeed: null };
   const R = (sel ? sel.radius : scPilot._target?.radius) ?? 5;
   const t = scPilot.tuning;
   const captureSphere = R * t.DROP_RADIUS_FACTOR;          // 10R
   const dropMaxSpeed = captureSphere / t.DROP_ETA_MAX;     // (10R)/2.5
   const d = scModel.position.distanceTo(bp);
-  if (d > captureSphere) return 'none';
-  return scModel.speed <= dropMaxSpeed ? 'in-window' : 'too-fast';
+  const state = d > captureSphere
+    ? 'none'
+    : (scModel.speed <= dropMaxSpeed ? 'in-window' : 'too-fast');
+  return { state, d, captureSphere, dropMaxSpeed };
 }
 
 /**
@@ -7561,7 +7580,7 @@ function simStep(deltaTime) {
           const d = scModel.position.distanceTo(bp);
           if (d <= captureSphere && scModel.speed <= dropMaxSpeed) {
             // In the drop window → capture into Toy Box orbit at the body.
-            _scManual = false;
+            setScManual(false);
             cameraController.setCameraMode(CameraMode.TOY_BOX);
             cameraController.bypassed = false;
             cameraController.restoreFromWorldState(bp);
@@ -8315,13 +8334,21 @@ function renderFrame(alpha) {
   // stick or autopilot pilot) and not warping; honors the H-key HUD toggle.
   // targetPos: the selected body's mesh.position, else the pilot's active
   // target — same body _scDropState() classifies, so marker + label agree.
+  // Resolve target + drop numbers once so the readout is single-sourced (10R /
+  // (10R)/2.5 live only in _scDropState → scPilot.tuning).
+  const _scDrop = _scDropState();
+  const _scTargetPos = _resolveSelectedBody()?.mesh.position ?? scPilot._target?.mesh?.position ?? null;
   scHud.update({
     visible: _hudVisible && (_scManual || scPilot.isActive) && !warpEffect.isActive,
     speed: scModel.speed,
+    commandedSpeed: scModel.throttle * scModel.speedCap(),
     throttle: scModel.throttle,
     deflection: _scDeflection,
-    targetPos: _resolveSelectedBody()?.mesh.position ?? scPilot._target?.mesh?.position ?? null,
-    dropState: _scDropState(),
+    targetPos: _scTargetPos,
+    targetDistance: _scTargetPos ? scModel.position.distanceTo(_scTargetPos) : null,
+    captureSphere: _scDrop.captureSphere,
+    dropMaxSpeed: _scDrop.dropMaxSpeed,
+    dropState: _scDrop.state,
   });
   _updateCommitBurnButton();
 
@@ -8746,7 +8773,7 @@ window.addEventListener('keydown', (e) => {
     // FLIGHT internals stop being reachable.
     const newMode = cameraController.toggleCameraMode();
     if (newMode === CameraMode.FLIGHT) {
-      _scManual = true;
+      setScManual(true);
       scPilot.stop();
       scModel.position.copy(camera.position);
       scModel.orientation.copy(camera.quaternion);
@@ -8754,7 +8781,7 @@ window.addEventListener('keydown', (e) => {
       scModel.setThrottle(0);
       cameraController.bypassed = true;
     } else {
-      _scManual = false;
+      setScManual(false);
       cameraController.bypassed = false;
       cameraController.restoreFromWorldState(findClosestBody()?.position);
     }
@@ -8781,7 +8808,7 @@ window.addEventListener('keydown', (e) => {
     // to the legacy stopFlythrough() → Toy Box restore.
     if (scPilot.isActive && (e.code === 'KeyW' || e.code === 'KeyS')) {
       scPilot.stop();
-      _scManual = true;
+      setScManual(true);
       // Intent follows action; setCameraMode persists wd_cameraMode + holds
       // the mobile lock (mobile never reaches here anyway — keyboard).
       cameraController.setCameraMode(CameraMode.FLIGHT);
@@ -9156,14 +9183,13 @@ canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
     const nx = ((e.clientX - r.left) - r.width / 2) / (r.width / 2);   // -1..1
     const ny = ((e.clientY - r.top) - r.height / 2) / (r.height / 2);  // -1..1
-    const dead = 0.06;
-    const shape = (v) => Math.abs(v) < dead ? 0 : Math.sign(v) * (Math.abs(v) - dead) / (1 - dead);
-    const sx = shape(nx);
-    const sy = shape(ny);
+    // Radial deadzone + cubic expo (preserves direction → diagonals stay
+    // correct). Item 2, supercruise-polish-2026-06-25.
+    const s = shapeStick(nx, ny, _scStickTuning);
     // Mouse right → yaw right (nose right); mouse up → pitch up. Sign
     // convention is UAT-tuned; tests only assert proportionality + cap.
-    scModel.setTurnInput(-sx, -sy);
-    _scDeflection = { x: sx, y: sy }; // consumed by the HUD reticle (Task 11)
+    scModel.setTurnInput(-s.x, -s.y);
+    _scDeflection = { x: s.x, y: s.y }; // consumed by the HUD reticle (Task 11)
   }
 
   // Minimap drag-to-rotate (pointer lock keeps cursor captured)
@@ -9193,8 +9219,9 @@ canvas.addEventListener('mousemove', (e) => {
     } else {
       _hoverTarget = bodyHit;
     }
-    // Cursor feedback: pointer when we can click a body
-    if (bodyHit) canvas.style.cursor = 'pointer';
+    // Cursor feedback: pointer when we can click a body. Suppressed while
+    // flying so we don't repaint a pointer over the hidden cursor (Item 3).
+    if (bodyHit && !_scManual) canvas.style.cursor = 'pointer';
   }
 
   // ── Orbit line hover highlight (screen-space, throttled to ~30 Hz) ──
@@ -9221,9 +9248,9 @@ canvas.addEventListener('mousemove', (e) => {
       newHover.material.color.set(0x44ff44); // bright green
       newHover.material.opacity = 1.0;
       newHover.material.needsUpdate = true;
-      canvas.style.cursor = 'pointer';
+      if (!_scManual) canvas.style.cursor = 'pointer';
     } else {
-      canvas.style.cursor = '';
+      if (!_scManual) canvas.style.cursor = '';
     }
     _hoveredOrbitLine = newHover;
   }
