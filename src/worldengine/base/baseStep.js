@@ -3,7 +3,7 @@
 // Pure: no three.js. Imports only alea + simplex-noise (deterministic; no Math.random/Date.now).
 import { makeSubstrate } from './substrate.js';
 import { clamp01, smoothstep } from './mathutil.js';
-import { calibrateTidal } from './adaptL0.js';
+import { calibrateTidal, LOVE_K2_RANGE } from './adaptL0.js';
 import alea from 'alea';
 import { createNoise2D } from 'simplex-noise';
 
@@ -75,10 +75,20 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'wo
     return clamp01(0.65 * a + 0.35 * b);
   };
 
+  // ── F5 interior proxies (bounded, ordered, written ranges) ──
+  const thermalState = clamp01(0.5 * tidalHeat + 0.5 * (1 - ageNorm));   // young+heated high, old+cold low
+  const loveK2 = LOVE_K2_RANGE.min + (LOVE_K2_RANGE.max - LOVE_K2_RANGE.min)
+    * clamp01(0.25 + 0.55 * thermalState + 0.30 * (1 - rockyCrust) - 0.25 * shellThickness);
+  // materialized crustalThickness field (per-texel, [0,1], low-freq) over the flat grid
+  const crustalThickness = new Float32Array(n * n);
+  for (let iy = 0; iy < n; iy++) for (let ix = 0; ix < n; ix++) {
+    crustalThickness[iy * n + ix] = thicknessBlob(ix, iy, n);
+  }
+
   const substrate = makeSubstrate({ n, lat0Deg, lat1Deg, domainKm });
   const drivers = { tidalHeat, surfaceGravity, rockyCrust, surfaceHistory, age: ageNorm,
                     radialStrainSign, radialStrainMag, despinAmp,
                     discriminator, useDiscriminator, liquidStability, liquidSpecies, rainFactor };
-  const crust = { shellThickness, thicknessBlob };  // Task 8 adds crustalThickness, loveK2, thermalState
+  const crust = { shellThickness, thicknessBlob, crustalThickness, loveK2, thermalState };
   return { drivers, crust, substrate };
 }
