@@ -7619,6 +7619,8 @@ function simStep(deltaTime) {
           if (d <= captureSphere && scModel.speed <= dropMaxSpeed) {
             // In the drop window → capture into Toy Box orbit at the body.
             setScManual(false);
+            scPilot.stop();          // Mode C: arrival ends the assist hold cleanly
+            _alignState.active = false;
             cameraController.setCameraMode(CameraMode.TOY_BOX);
             cameraController.bypassed = false;
             cameraController.restoreFromWorldState(bp);
@@ -7993,7 +7995,9 @@ function simStep(deltaTime) {
       // legacy free-flight WASD path below must NOT also run (it would fight
       // the model). setThrottle clamps to 0..1 internally.
       const dir = (_heldKeys.has('KeyW') ? 1 : 0) - (_heldKeys.has('KeyS') ? 1 : 0);
-      if (dir !== 0) {
+      if (_flightMode === FlightMode.ASSIST && scPilot.isActive) {
+        if (dir !== 0) scPilot.stop(); // Mode C: W/S disengages the hold (manual throttle resumes next frame)
+      } else if (dir !== 0) {
         scModel.setThrottle(scModel.throttle + dir * SC_TUNING.THROTTLE_RATE * deltaTime);
       }
       cameraController.setFlightInput(0, 0, false);
@@ -9242,10 +9246,14 @@ canvas.addEventListener('mousemove', (e) => {
     const ny = ((e.clientY - r.top) - r.height / 2) / (r.height / 2);  // -1..1
     const s = shapeStick(nx, ny, _scStickTuning);
     const _deflected = (s.x !== 0 || s.y !== 0);
-    if (_alignState.active && _deflected) _alignState.active = false; // Mode B: deflect cancels align
-    // Mode C disengage is added in Task 6; in Manual/Align the stick is authoritative:
-    scModel.setTurnInput(-s.x, -s.y);
-    _scDeflection = { x: s.x, y: s.y };
+    if (_flightMode === FlightMode.ASSIST && scPilot.isActive && _deflected) {
+      scPilot.stop(); // Mode C: manual steer disengages the hold
+    }
+    if (!(_flightMode === FlightMode.ASSIST && scPilot.isActive)) {
+      if (_alignState.active && _deflected) _alignState.active = false; // Mode B cancel
+      scModel.setTurnInput(-s.x, -s.y);
+      _scDeflection = { x: s.x, y: s.y };
+    }
   }
 
   // Minimap drag-to-rotate (pointer lock keeps cursor captured)
