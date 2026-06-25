@@ -10,7 +10,7 @@ export class SupercruiseHud {
     this.camera = camera;
     this.canvas = document.createElement('canvas');
     Object.assign(this.canvas.style, {
-      position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: 51,
+      position: 'fixed', inset: '0', display: 'block', pointerEvents: 'none', zIndex: 51,
     });
     document.body.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d');
@@ -23,6 +23,8 @@ export class SupercruiseHud {
   _resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.canvas.width = innerWidth * dpr; this.canvas.height = innerHeight * dpr;
+    this.canvas.style.width = innerWidth + 'px';
+    this.canvas.style.height = innerHeight + 'px';
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
