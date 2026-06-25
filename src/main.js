@@ -7621,6 +7621,7 @@ function simStep(deltaTime) {
             setScManual(false);
             scPilot.stop();          // Mode C: arrival ends the assist hold cleanly
             _alignState.active = false;
+            _flightMode = FlightMode.MANUAL; // keep invariant: never stale while _scManual is false
             cameraController.setCameraMode(CameraMode.TOY_BOX);
             cameraController.bypassed = false;
             cameraController.restoreFromWorldState(bp);
@@ -8871,6 +8872,7 @@ window.addEventListener('keydown', (e) => {
     if (scPilot.isActive && (e.code === 'KeyW' || e.code === 'KeyS')) {
       scPilot.stop();
       setScManual(true);
+      _flightMode = FlightMode.MANUAL; // spec §1: W/S takeover enters Manual (don't inherit a stale mode)
       // Intent follows action; setCameraMode persists wd_cameraMode + holds
       // the mobile lock (mobile never reaches here anyway — keyboard).
       cameraController.setCameraMode(CameraMode.FLIGHT);
