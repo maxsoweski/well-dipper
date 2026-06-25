@@ -5,6 +5,7 @@
 // reproduces today's STATION-A linger (AutopilotMotion.js:583-642).
 // Frame idiom copied from AutopilotMotion: one-shots polled by main.js.
 import * as THREE from 'three';
+import { alignStep } from './aimAssist.js';
 
 const NEG_Z = new THREE.Vector3(0, 0, -1); // local nose; setFromUnitVectors doesn't mutate args
 
@@ -125,10 +126,7 @@ export class SupercruisePilot {
 
   _lookAtBody(bodyPos, dt) {
     // During HOLD keep the nose on the body so the resumed leg departs cleanly.
-    const m = this.model;
-    this._toTarget.copy(bodyPos).sub(m.position).normalize();
-    this._holdQ.setFromUnitVectors(NEG_Z, this._toTarget);
-    m.orientation.slerp(this._holdQ, 1 - Math.exp(-dt / 0.16)); // ≈0.1/frame at 60Hz
+    alignStep(this.model.orientation, this.model.position, bodyPos, dt, 0.16);
   }
 
   _stamp(frame) {
