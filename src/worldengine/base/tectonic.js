@@ -2,7 +2,6 @@
 // Production port of relief-e6-tectonic.js (stress + build half). Pure stress (stressAtLat/writeGrain);
 // runE6 (Task 8) adds seeded simplex. No three.js. nu=0.25, REGIME_GAIN=0.4 LOCKED.
 import { REGIME, idx, latDegOfRow } from './substrate.js';
-import { clamp01 } from './mathutil.js';
 import alea from 'alea';
 import { createNoise2D } from 'simplex-noise';
 

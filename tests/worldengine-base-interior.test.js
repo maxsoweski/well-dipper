@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeBaseStep } from '../src/worldengine/base/baseStep.js';
 import { runE6 } from '../src/worldengine/base/tectonic.js';
-import { makeSubstrate, idx } from '../src/worldengine/base/substrate.js';
+import { makeSubstrate } from '../src/worldengine/base/substrate.js';
 import { LOVE_K2_RANGE } from '../src/worldengine/base/adaptL0.js';
 
 const grid = { n: 32, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'f5-1' };
