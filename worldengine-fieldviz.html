@@ -1,0 +1,59 @@
+<!-- worldengine-fieldviz.html — interim field-viz: SEE the L0->L1 layer (Max UAT). Read-only. -->
+<!-- Run via the existing vite dev server at base /well-dipper/ on :5173; open /worldengine-fieldviz.html -->
+<!doctype html><html><head><meta charset="utf-8"><title>World-Engine — field viz (WS2)</title>
+<style>body{background:#111;color:#ddd;font:13px system-ui;margin:0;padding:12px}
+canvas{image-rendering:pixelated;border:1px solid #333;margin-right:8px}
+select,label{font:13px system-ui} .row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.legend span{display:inline-block;width:12px;height:12px;margin:0 4px -2px 8px}</style></head>
+<body>
+<h3>World-Engine WS2 — derived field viz <small>(read-only; reads <code>src/worldengine/base</code> production output)</small></h3>
+<div>
+  <label>Preset:
+    <select id="preset">
+      <option>rocky</option><option>lava</option><option>magma</option>
+      <option>europa</option><option>terrestrial</option>
+    </select>
+  </label>
+  <span class="legend">regime:<span style="background:#d2463c"></span>thrust
+    <span style="background:#3cbe5a"></span>strike-slip<span style="background:#3c78dc"></span>normal</span>
+</div>
+<div class="row" style="margin-top:10px">
+  <div><div>regime + grain</div><canvas id="cRegime" width="256" height="256"></canvas></div>
+  <div><div>crustal thickness</div><canvas id="cThick" width="256" height="256"></canvas></div>
+</div>
+<script type="module">
+import { makeBaseStep } from './src/worldengine/base/baseStep.js';
+import { writeGrain } from './src/worldengine/base/tectonic.js';
+import { paintField, REGIME_LEGEND } from './src/worldengine/base/fieldViz.js';
+import { PRESETS } from './relief-presets.js';
+const N = 128, grid = { n: N, lat0Deg: -80, lat1Deg: 80, domainKm: 8000, seed: 'fieldviz' };
+const cR = document.getElementById('cRegime'), cT = document.getElementById('cThick');
+const xR = cR.getContext('2d'), xT = cT.getContext('2d');
+function draw(name) {
+  const out = makeBaseStep(PRESETS[name], grid);
+  writeGrain(out.substrate, out.drivers);
+  const p = paintField(out);
+  const sc = 256 / N;
+  // regime field
+  const img = xR.createImageData(N, N);
+  for (let i = 0; i < N * N; i++) { const c = p.regimeColors[i]; img.data[i*4]=c[0]; img.data[i*4+1]=c[1]; img.data[i*4+2]=c[2]; img.data[i*4+3]=255; }
+  // upscale via temp canvas
+  const tmp = document.createElement('canvas'); tmp.width = N; tmp.height = N; tmp.getContext('2d').putImageData(img, 0, 0);
+  xR.imageSmoothingEnabled = false; xR.clearRect(0,0,256,256); xR.drawImage(tmp, 0, 0, 256, 256);
+  // grain streaks (subsample)
+  xR.strokeStyle = 'rgba(255,255,255,0.5)';
+  for (let iy = 2; iy < N; iy += 6) for (let ix = 2; ix < N; ix += 6) {
+    const s = p.streaks[iy*N+ix], cx = (ix+0.5)*sc, cy = (iy+0.5)*sc, L = 4;
+    xR.beginPath(); xR.moveTo(cx - s.dx*L, cy - s.dy*L); xR.lineTo(cx + s.dx*L, cy + s.dy*L); xR.stroke();
+  }
+  // thickness
+  const it = xT.createImageData(N, N);
+  for (let i = 0; i < N * N; i++) { const c = p.thicknessColors[i]; it.data[i*4]=c[0]; it.data[i*4+1]=c[1]; it.data[i*4+2]=c[2]; it.data[i*4+3]=255; }
+  const tt = document.createElement('canvas'); tt.width=N; tt.height=N; tt.getContext('2d').putImageData(it,0,0);
+  xT.imageSmoothingEnabled = false; xT.clearRect(0,0,256,256); xT.drawImage(tt, 0, 0, 256, 256);
+  window.__wefv = { out, painted: p };  // for live verification
+}
+document.getElementById('preset').addEventListener('change', e => draw(e.target.value));
+draw('rocky');
+</script>
+</body></html>
