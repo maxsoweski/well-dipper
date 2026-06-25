@@ -43,6 +43,31 @@ describe('SupercruiseModel — nose-vector flight + throttle', () => {
   });
 });
 
+describe('SupercruiseModel — reverse throttle (Elite-style)', () => {
+  it('setThrottle clamps into [-1, 1]', () => {
+    const m = new SupercruiseModel();
+    m.setThrottle(-0.5);
+    expect(m.throttle).toBe(-0.5);
+    m.setThrottle(-2);
+    expect(m.throttle).toBe(-1);
+    m.setThrottle(2);
+    expect(m.throttle).toBe(1);
+  });
+
+  it('throttle -1 yields negative speed and a backward (−nose) position delta', () => {
+    const m = new SupercruiseModel();
+    m.orientation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.7);
+    m.setThrottle(-1);
+    const before = m.position.clone();
+    for (let i = 0; i < 60; i++) m.update(DT);
+    expect(m.speed).toBeLessThan(0);             // reverse: signed speed survives
+    const delta = m.position.clone().sub(before);
+    expect(delta.lengthSq()).toBeGreaterThan(0);
+    const nose = m.nose(new THREE.Vector3());
+    expect(delta.clone().normalize().dot(nose)).toBeCloseTo(-1, 6); // moved along −nose
+  });
+});
+
 describe('SupercruiseModel — gravity-well cap + turn rate (AC1)', () => {
   it('speed cap is monotonically increasing with distance from the dominant body', () => {
     const m = new SupercruiseModel();

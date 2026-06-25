@@ -27,7 +27,7 @@ export class SupercruiseModel {
     this.position = new THREE.Vector3();      // scene-local (rebased) frame
     this.orientation = new THREE.Quaternion();
     this.speed = 0;                            // u/s along the nose, ≥ 0
-    this.throttle = 0;                         // 0..1
+    this.throttle = 0;                         // -1..1
     this.turnInput = { yaw: 0, pitch: 0 };     // -1..1 each
     this._bodies = [];                         // [{ position: Vector3, radius: number }]
     this._nose = new THREE.Vector3();
@@ -39,7 +39,7 @@ export class SupercruiseModel {
    *  with CURRENT rebased mesh positions (never cache across ticks). */
   setBodies(list) { this._bodies = list; }
 
-  setThrottle(t) { this.throttle = THREE.MathUtils.clamp(t, 0, 1); }
+  setThrottle(t) { this.throttle = THREE.MathUtils.clamp(t, -1, 1); }
 
   setTurnInput(yaw, pitch) {
     this.turnInput.yaw = THREE.MathUtils.clamp(yaw, -1, 1);
@@ -86,7 +86,7 @@ export class SupercruiseModel {
     const target = this.throttle * this.speedCap();
     const k = 1 - Math.exp(-dt / this.tuning.ACCEL_TAU);
     this.speed += (target - this.speed) * k;
-    if (this.speed < 1e-9) this.speed = 0;
+    if (Math.abs(this.speed) < 1e-9) this.speed = 0;
     // The ONLY translation source: forward along the nose.
     this.position.addScaledVector(this.nose(), this.speed * dt);
   }

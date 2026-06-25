@@ -56,11 +56,13 @@ export class SupercruiseHud {
     const lx = 24;                 // left margin of the cluster
     const barW = 180;              // log speed bar width
 
-    // (1) Large numeric speed (the "reads 0" bug fix).
+    // (1) Large numeric speed (the "reads 0" bug fix). formatSpeed returns a
+    // magnitude (Math.abs), so prefix "REV " when reversing to read clearly.
     const spd = formatSpeed(speed);
+    const spdPrefix = speed < 0 ? 'REV ' : '';
     c.fillStyle = '#9fe8ff';
     c.font = '22px monospace';
-    c.fillText(`${spd.value} ${spd.unit}`, lx, innerHeight - 66);
+    c.fillText(`${spdPrefix}${spd.value} ${spd.unit}`, lx, innerHeight - 66);
 
     // Speed-band color: blue-green in the safe drop window, red when too fast,
     // else cyan. "Safe" is dropState in-window OR (target set and speed under
@@ -70,12 +72,13 @@ export class SupercruiseHud {
     const tooFast = state.dropState === 'too-fast';
     const speedColor = tooFast ? '#ff7b6b' : inWindow ? '#7bff9e' : '#9fe8ff';
 
-    // (2) Horizontal LOG speed bar: fill to actual; pin at commanded; drop tick.
+    // (2) Horizontal LOG speed bar: fill to actual magnitude (speedToBarFrac is
+    // not abs-safe; speed can be negative in reverse); pin at commanded; drop tick.
     const sbY = innerHeight - 52, sbH = 8;
     c.strokeStyle = '#9fe8ff';
     c.strokeRect(lx, sbY, barW, sbH);
     c.fillStyle = speedColor;
-    c.fillRect(lx, sbY, barW * speedToBarFrac(speed), sbH);
+    c.fillRect(lx, sbY, barW * speedToBarFrac(Math.abs(speed)), sbH);
 
     // commanded "pin" (downward triangle above the bar) — actual chases this.
     const pinX = lx + barW * speedToBarFrac(commandedSpeed);
@@ -91,20 +94,36 @@ export class SupercruiseHud {
       c.beginPath(); c.moveTo(tickX, sbY - 2); c.lineTo(tickX, sbY + sbH + 2); c.stroke();
     }
 
-    // (3) Throttle bar (0–100%) with its own commanded pin at the throttle pos.
+    // (3) BIDIRECTIONAL throttle bar (-100%..+100%). The model now allows reverse
+    // throttle, so the bar fills RIGHT of a center zero-mark for forward and LEFT
+    // (amber = reverse) for negative throttle, with a commanded pin at the tip.
     const tbY = innerHeight - 40, tbW = 120, tbH = 8;
+    const tbCenterX = lx + tbW / 2;                       // zero-throttle mark
+    const throttle = Math.min(1, Math.max(-1, state.throttle || 0));
     c.strokeStyle = '#9fe8ff';
     c.strokeRect(lx, tbY, tbW, tbH);
-    c.fillStyle = '#9fe8ff';
-    c.fillRect(lx, tbY, tbW * (state.throttle || 0), tbH);
-    const tPinX = lx + tbW * Math.min(1, Math.max(0, state.throttle || 0));
+    // center zero-mark (vertical tick through the bar).
+    c.strokeStyle = '#9fe8ff';
+    c.beginPath(); c.moveTo(tbCenterX, tbY - 2); c.lineTo(tbCenterX, tbY + tbH + 2); c.stroke();
+    // fill from center: right = forward (cyan), left = reverse (amber).
+    const fillW = (tbW / 2) * Math.abs(throttle);
+    if (throttle >= 0) {
+      c.fillStyle = '#9fe8ff';
+      c.fillRect(tbCenterX, tbY, fillW, tbH);
+    } else {
+      c.fillStyle = '#ffb84d';                            // distinct amber reverse tone
+      c.fillRect(tbCenterX - fillW, tbY, fillW, tbH);
+    }
+    const tPinX = tbCenterX + (tbW / 2) * throttle;       // pin at the fill tip
     c.fillStyle = '#ffffff';
     c.beginPath();
     c.moveTo(tPinX - 3, tbY + tbH + 6); c.lineTo(tPinX + 3, tbY + tbH + 6); c.lineTo(tPinX, tbY + tbH);
     c.closePath(); c.fill();
 
     // ── Center reticle: cross + deflection dot ──
-    c.strokeStyle = '#9fe8ff'; c.fillStyle = '#9fe8ff';
+    // Game reticle green (#64ff82 — TargetingReticle's selected-reticle green)
+    // so the supercruise aim cross reads as one piece with the body reticles.
+    c.strokeStyle = '#64ff82'; c.fillStyle = '#64ff82';
     c.beginPath(); c.moveTo(cx - 10, cy); c.lineTo(cx + 10, cy);
     c.moveTo(cx, cy - 10); c.lineTo(cx, cy + 10); c.stroke();
     const jr = Math.min(innerWidth, innerHeight) * 0.25;
@@ -112,15 +131,15 @@ export class SupercruiseHud {
     c.arc(cx + state.deflection.x * jr, cy + state.deflection.y * jr, 4, 0, Math.PI * 2);
     c.fill();
 
-    // ── Target marker: box + ETA + drop label ──
+    // ── Target cue: ETA + drop label ──
+    // The game's green TargetingReticle already marks the selected body, so we
+    // draw no box here (it duplicated the reticle). The ETA + drop cue sits
+    // BELOW the body so it clears the reticle's name label above/beside it.
     if (hasTarget) {
       const p = this._project(state.targetPos);
       if (p) {
-        c.strokeStyle = tooFast ? '#ff7b6b'
-          : state.dropState === 'in-window' ? '#7bff9e' : '#9fe8ff';
-        c.strokeRect(p.x - 14, p.y - 14, 28, 28);
-
         c.font = '13px monospace';
+        const cueY = p.y + 28;        // offset below the body, clear of the name label
 
         // ETA "M:SS" = distance / speed (only when moving + target set).
         let eta = '--:--';
@@ -133,15 +152,15 @@ export class SupercruiseHud {
           }
         }
         c.fillStyle = '#9fe8ff';
-        c.fillText(eta, p.x + 18, p.y);
+        c.fillText(eta, p.x + 18, cueY);
 
         // Drop label: SAFE TO DROP (green) / SLOW DOWN (amber).
         if (state.dropState === 'in-window') {
           c.fillStyle = '#7bff9e';
-          c.fillText('SAFE TO DROP', p.x + 18, p.y + 16);
+          c.fillText('SAFE TO DROP', p.x + 18, cueY + 16);
         } else if (tooFast) {
           c.fillStyle = '#ffb84d';
-          c.fillText('SLOW DOWN', p.x + 18, p.y + 16);
+          c.fillText('SLOW DOWN', p.x + 18, cueY + 16);
         }
       }
     }

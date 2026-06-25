@@ -8781,9 +8781,25 @@ window.addEventListener('keydown', (e) => {
       scModel.setThrottle(0);
       cameraController.bypassed = true;
     } else {
+      // Exit manual flight → Toy Box, WITHOUT teleporting. The camera keeps
+      // the exact supercruise pose it's already at: adoptCurrentPose anchors
+      // the orbit on the closest body but back-solves yaw/pitch/distance from
+      // the live camera position (and clamps a very-far supercruise distance
+      // into range by pushing the anchor out along the sight line), so the
+      // next _applyOrbit reconstructs the same position. The interpolator is
+      // resync'd so the fixed-timestep render blend doesn't slide across the
+      // flip — without this, prev/curr snapshots straddle the mode change and
+      // the camera visibly lerps to the recomputed orbit. Mirrors the warp
+      // teleport-resync hook (warpSwapSystem). If there's no body to anchor
+      // (deep sky / empty), just drop the bypass and leave the pose put.
       setScManual(false);
-      cameraController.bypassed = false;
-      cameraController.restoreFromWorldState(findClosestBody()?.position);
+      const _closest = findClosestBody();
+      if (_closest) {
+        cameraController.adoptCurrentPose(_closest.position);
+      } else {
+        cameraController.bypassed = false;
+      }
+      cameraInterp.resync(camera);
     }
     console.log(`[MODE] Camera → ${newMode}`);
     return;

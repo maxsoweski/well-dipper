@@ -703,6 +703,62 @@ export class ShipCameraSystem {
     }
   }
 
+  /**
+   * Adopt the camera's CURRENT world pose as a Toy Box orbit — no teleport.
+   *
+   * Like restoreFromWorldState, this anchors the orbit on `anchorPosition`
+   * (e.g. the closest body) and back-solves yaw/pitch/distance from the live
+   * camera position, so the next _applyOrbit reconstructs the SAME position
+   * the camera is already at. Two differences that matter when handing off
+   * from a supercruise pose that may be very far out:
+   *
+   *   1. The back-solved distance is CLAMPED to [minDistance, maxDistance].
+   *      An un-clamped supercruise distance (tens of thousands of units) would
+   *      otherwise live outside the zoom range the orbit code expects.
+   *   2. When the distance IS clamped, the orbit target is pushed OUT along the
+   *      camera→anchor ray so `target + clampedDist * dir` still lands exactly
+   *      on the camera's current position. So position is preserved even when
+   *      the raw distance was out of range — the orbit just rotates around a
+   *      virtual anchor along the same sight line until the player zooms.
+   *
+   * Callers MUST resync the render interpolator (cameraInterp.resync) right
+   * after, so the fixed-timestep blend doesn't lerp across the mode flip.
+   */
+  adoptCurrentPose(anchorPosition) {
+    this.bypassed = false;
+    this._transitioning = false;
+    this._returningToOrbit = false;
+
+    const offset = _v1.copy(this.camera.position).sub(anchorPosition);
+    const rawDist = offset.length();
+    const yaw = Math.atan2(offset.x, offset.z);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / (rawDist || 1))));
+    const dist = Math.max(this.minDistance, Math.min(this.maxDistance, rawDist));
+
+    // Anchor the orbit so the clamped distance reproduces the EXACT current
+    // camera position. With dir = unit(camera - anchor), the orbit places the
+    // camera at target + dist*dir; solving for target = camera - dist*dir.
+    if (rawDist > 1e-6) {
+      const dir = offset.divideScalar(rawDist); // offset now normalized (_v1)
+      this.target.copy(this.camera.position).addScaledVector(dir, -dist);
+    } else {
+      this.target.copy(anchorPosition);
+    }
+    this._targetGoal.copy(this.target);
+
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.distance = dist;
+    this.smoothedYaw = yaw;
+    this.smoothedPitch = pitch;
+    this.smoothedDistance = dist;
+    this.zoomSpeed = 0;
+
+    if (this._hasGravity && this.flight) {
+      this.flight.setPositionVelocity(this.camera.position.clone());
+    }
+  }
+
   // ── WASD free-flight ──
   //
   // TOY_BOX: WASD is ignored. The Toy Box is for examining bodies, not
