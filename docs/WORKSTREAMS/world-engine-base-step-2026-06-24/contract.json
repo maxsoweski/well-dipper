@@ -2,7 +2,7 @@
   "workstream": "world-engine-base-step-2026-06-24",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "VERIFIED_PENDING_MAX",
+  "status": "Shipped",
   "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope), 2026-06-24. WS2 of the production-L1 port (lab-only). Scope grounded by a 17-agent code-grounding + adversarial-verify workflow (wf_03004682-2bd): F1+F2+F4+F7 full, F3+F5 thinned, F6 deferred; interim field-viz INCLUDED as a thin new page reading the production base-step output. Technical defaults applied during scope (magnetic-field cleanup kept separate; interior field in base step; prefer upstream tidalHeating; quantized grain port; age /~10Gyr; tanh tidal calibration; F7 gates on F2-adapter output + 5 relief presets; loveK2 bounded proxy) — see intent.md.",
   "acceptanceCriteria": [
     {

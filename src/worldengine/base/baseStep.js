@@ -65,6 +65,12 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'wo
   const useDiscriminator = !!discriminate;
 
   // ── crust: shellThickness + thicknessBlob (seeded low-freq simplex) ──
+  // KNOWN BEHAVIOR (faithful port of relief-base-step.js): the crust seed keys the thickness LAYOUT on
+  // discriminator = (radialStrainSign, sil/ice), NOT on full preset identity. So two worlds in the same
+  // class at the same grid seed get a BYTE-IDENTICAL crustalThickness field (e.g. lava ≡ magma both '-1:sil';
+  // rocky ≡ terrestrial both '1:sil') — their regime/grain still differ (driven by despinAmp/radialStrainMag).
+  // By design (layout is composition-class-keyed; amplitude varies). If WS4 needs same-class worlds to have
+  // distinct thickness layouts, fold more identity into the seed. See KNOWN-BEHAVIORS.md (workstream dir).
   const crustSeed = String(seed) + ':crust' + (useDiscriminator ? ':' + discriminator : '');
   const rng = alea(crustSeed);
   const noise = createNoise2D(rng);

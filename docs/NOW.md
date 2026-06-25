@@ -556,7 +556,7 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 **`world-engine` PRODUCTION-L1 PORT — WS1 (L0 plumbing) BUILT + ✅ VERIFIED 2026-06-24
 (`05bf668`, branch `feature/world-engine-production-L1`; `master` preserved at `25fe51c`; push HOLD).
-→ ACTIVE SUB-WORKSTREAM is WS2 (Tier-1 base step), BUILT + 🟢 VERIFIED_PENDING_MAX 2026-06-25 (`b71d3ec`) — see the WS2 bullet below.**
+→ WS2 (Tier-1 base step) ✅ SHIPPED 2026-06-25 (Max UAT-passed; `b71d3ec`). NEXT (fresh session): WS3 (type-demotion) ∥ WS4 (wire E6→E9) — see the WS2 bullet below.**
 First of 4 production-L1 workstreams (lab-only scope locked by Max 2026-06-23; campaign plan
 `docs/FEATURES/world-engine-production-L1-plan.md`). WS1 is STRICTLY ADDITIVE: surfaces six real L0
 drivers on per-body `planetData` — `age`, `metallicity`, `magneticField` (single-source dynamo),
@@ -576,7 +576,7 @@ Built last session via subagent-driven TDD (7 tasks); contract+intent
 - **✅ verify-workstream at `05bf668`: all 6 ACs PASS** (5 integration + 1 unit, all headless/live=false),
   3/3 adversarial each; additive-gate golden independently confirmed untouched; `uat = N/A` (no UAT AC)
   → WS1 DONE. WS1 suite 33/33; the 4 broader-cluster failures are pre-existing `searchKnownObjects`, untouched.
-- **▶ WS2 (Tier-1 base step) — BUILT + 🟢 VERIFIED_PENDING_MAX 2026-06-25 (`b71d3ec`, local-only, NOT pushed).**
+- **▶ WS2 (Tier-1 base step) — ✅ SHIPPED 2026-06-25 (Max UAT-passed; `b71d3ec`, local-only, NOT pushed).**
   `docs/WORKSTREAMS/world-engine-base-step-2026-06-24/` (intent.md + contract.json [16 ACs] + scoping-dossier.md
   + **verdict.json**). NEW three-free `src/worldengine/base/` tree (8 modules: substrate, mathutil, adaptL0,
   baseStep, tectonic, sphereField, verify, fieldViz) ports the proven `relief-*` formulas; `src/generation/` +
@@ -589,11 +589,13 @@ Built last session via subagent-driven TDD (7 tasks); contract+intent
   no three.js/Math.random/Date.now in the base tree. F3 reuses the router's `buildIrregularSphere` via a plain-mesh
   DI (three lives only in the test). One gate-caught gap closed: the F7 fixture set now threads the **F2-adapter
   output** (not just the 5 presets) through the determinism+verifier gate.
-  **▶ OPEN (Max's): (1) VIZ UAT** — open `worldengine-fieldviz.html` on `:5173`, switch the 5 presets, judge whether
-  ≥2 worlds read as categorically distinct derived fields vs recolored noise (AC-VIZ-distinct, deferred-to-max).
-  **(2) Tidal Io-anchor** (`TIDAL_LOG_KNEE=1.6` → Io reads ~0.19, top-end spread kept; confirm or retune on that
-  page — the calibration tests are property-based and pass regardless of the knee).
-  Then WS3 (type-demotion) ∥ WS4 (wire E6→E9); the FULL "planet reads as a landscape with a history" UAT lands at WS4.
+  **✅ Max UAT (2026-06-25):** each preset reads categorically distinct → AC-VIZ-distinct PASS (16/16 ACs). Two
+  deliberate behaviors documented in `KNOWN-BEHAVIORS.md`: (1) same-class worlds share a byte-identical
+  `crustalThickness` layout (lava≡magma `-1:sil`, rocky≡terrestrial `1:sil`; 0/16384 cells differ) — regime/grain
+  still differ (4608/16384), Max accepted; (2) tidal Io-anchor `TIDAL_LOG_KNEE=1.6` (Io~0.19) confirmed — retune is
+  a one-constant change. Both flagged inline in `adaptL0.js` + `baseStep.js`.
+  **▶ NEXT (fresh session, Max's seam): WS3 (type→label demotion) ∥ WS4 (wire E6→E9 into the renderer)** — WS4 is
+  where the FULL "planet reads as a landscape with a history" UAT lands. Campaign plan `world-engine-production-L1-plan.md`.
 - **Open (Max's):** push (HOLD, campaign-wide); whether to merge `feature/world-engine-production-L1`
   → `master` after WS1 (merging triggers the master-only Pages deploy — rec: keep accumulating WS2–4 first).
 

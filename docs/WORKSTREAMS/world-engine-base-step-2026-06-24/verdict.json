@@ -3,9 +3,10 @@
   "commit": "b71d3ec",
   "verifiedAt": "2026-06-25",
   "verifiedBy": "verify-workstream wf_fbd25257-ca1 (full, 3x adversarial) + targeted AC-F7 re-verify wf_e4fab211-129 (3/3 sufficient) after closing the F2-adapter fixture gap",
-  "overall": "VERIFIED_PENDING_MAX",
-  "summary": "15 of 16 ACs PASS (objective, 3x adversarial). 1 AC (AC-VIZ-distinct) is UAT, deferred-to-max. WS2 base step is built + headless-verified; the only remaining gate is Max's VIZ UAT. Full WS2 suite 47/47 green; lab reference suite 63/63 green (no regression); src/generation + relief-* + planet-lod-* + Planet.js byte-untouched; no three.js / Math.random / Date.now in src/worldengine/base.",
-  "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "deferred-to-max" },
+  "overall": "SHIPPED",
+  "shippedAt": "2026-06-25",
+  "summary": "16 of 16 ACs PASS. 15 objective (3x adversarial) + AC-VIZ-distinct PASSED by Max's VIZ UAT 2026-06-25. WS2 base step built + verified + UAT-accepted. Full WS2 suite 47/47 green; lab reference suite 63/63 green (no regression); src/generation + relief-* + planet-lod-* + Planet.js byte-untouched; no three.js / Math.random / Date.now in src/worldengine/base. Two deliberate behaviors documented in KNOWN-BEHAVIORS.md (same-class crustalThickness collision incl. lava/magma; tidal Io-anchor TIDAL_LOG_KNEE=1.6). Local-only — NOT pushed (campaign push HOLD).",
+  "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "PASS" },
   "perAC": [
     { "id": "AC-F1-base-step-interface", "layer": "unit", "result": "PASS", "adversarial": "3/3", "evidence": "Downstream stub destructures all 13 drivers + crust.thicknessBlob/shellThickness + all 9 substrate typed-array fields, zero ReferenceError/undefined; makeSubstrate n*n lengths, regime/standing Uint8, rest Float32 zero-init; idx/latDegOfRow/cloneHeight (deep copy) verified. interface+substrate 14/14." },
     { "id": "AC-F1-tidal-precedence", "layer": "unit", "result": "PASS", "adversarial": "3/3", "evidence": "Present d.tidalHeat traces to it via calibrateTidal (no Io recompute, invariant to ecc/orbit, monotonic); absent -> bounded Io self-derivation, finite >=0, no throw. baseStep.js:23-28; interface.test.js precedence+fallback cases." },
@@ -22,11 +23,11 @@
     { "id": "AC-F7-determinism-gate", "layer": "unit", "result": "PASS", "adversarial": "3/3 (re-verify wf_e4fab211-129)", "evidence": "CLOSED at b71d3ec: standardBundles now = 5 relief presets PLUS the F2-adapter output (adaptL0(adapterPlanetData), a contract-named fixture). Both the determinism gate (double-run makeBaseStep+runE6, byte-identical height/grainAngle/grainMag/regime/faultDensity + crustalThickness + driver scalars + loveK2 + thermalState) and the verifier gate iterate the full 6-bundle set. Skeptic probes confirmed the adapter output is distinct from all presets (tidal 0.143, ageNorm 0.45) and the comparison is load-bearing (seed-mutation negative control differs). No Date.now/Math.random in base step or verifier (seeded alea/simplex only)." },
     { "id": "AC-F7-verifier-gate", "layer": "unit", "result": "PASS", "adversarial": "3/3", "evidence": "verify() -> {pass:true, signals all true} for every standard bundle; corrupting one field per case flips the matching signal false with field/index detail (height NaN->finite; grainMag=5->bounded; poles->THRUST->physicallyOrdered; off-band seam regime flip->seamConsistent), control still passes. seamConsistent is a defined no-op-pass on flat first-wave." },
     { "id": "AC-VIZ-faithful", "layer": "unit", "result": "PASS", "adversarial": "3/3", "evidence": "regimeColor===legend; grainStreak orientation===grainAngle on a synthetic continuous-grain substrate (real grain is quantized); thicknessHeat bounded+monotone; paintField is read-only (base-step output identical with viz on/off)." },
-    { "id": "AC-VIZ-distinct", "layer": "uat", "result": "deferred-to-max", "adversarial": "n/a", "evidence": "UAT — Max's holistic acceptance only; never agent-PASSed. Max opens worldengine-fieldviz.html on the :5173 dev server, switches presets, judges whether at least two worlds read as categorically distinct derived fields (regime/grain/thickness) vs recolored noise. Precondition met: the 5 presets are genuinely distinct geophysical inputs." }
+    { "id": "AC-VIZ-distinct", "layer": "uat", "result": "PASS", "adversarial": "Max UAT 2026-06-25", "evidence": "Max ran the VIZ UAT on worldengine-fieldviz.html: each preset reads as categorically distinct. Lava/magma share an identical crustalThickness layout (same '-1:sil' discriminator class, verified 0/16384 cells differ) but have distinct regime+grain (4608/16384 regime cells differ) — Max judged acceptable. Documented as a deliberate behavior in KNOWN-BEHAVIORS.md #1." }
   ],
-  "openForMax": [
-    "VIZ UAT (AC-VIZ-distinct): worldengine-fieldviz.html on :5173 — switch presets, judge categorical distinctness.",
-    "Tidal Io-anchor calibration (TIDAL_LOG_KNEE=1.6 -> Io reads ~0.19): confirm or retune where Io sits on the 0-1 dial; tests are property-based and pass regardless of the knee."
+  "resolvedForMax": [
+    "VIZ UAT (AC-VIZ-distinct): PASSED 2026-06-25 — each preset distinct; lava/magma thickness collision accepted + documented (KNOWN-BEHAVIORS.md #1).",
+    "Tidal Io-anchor (TIDAL_LOG_KNEE=1.6 -> Io ~0.19): Max confirmed acceptable 2026-06-25; documented (KNOWN-BEHAVIORS.md #2); property-based tests pass at any reasonable knee if retuned later."
   ],
   "notPushed": true,
   "branch": "feature/world-engine-production-L1"

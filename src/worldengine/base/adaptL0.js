@@ -4,7 +4,11 @@ import { clamp01 } from './mathutil.js';
 // Tidal calibration: map the raw Io-ratio (0..∞, 1.0 = Io-grade) to a bounded [0,1) driver.
 // tanh(log10(1+h)/KNEE): Earth-like (~1.7e-3) -> ~0; strictly monotone; never reaches exactly 1.0,
 // so distinct heating levels never collapse to the same clamped extreme (the old clamp01(tidalHeat) bug).
-// KNEE is the OPEN Io-anchor sub-question (smaller KNEE -> Io reads higher). 1.6 -> Io≈0.19 (top-end spread kept).
+// IO-ANCHOR CALIBRATION (Max-confirmed 2026-06-25, WS2 UAT): KNEE=1.6 puts Io-grade heating at ~0.19 on
+// the 0-1 dial — deliberately LOW so the top end keeps spread (inner-moon/lava worlds stay visibly
+// distinct). The dossier's alternative was Io~0.5 (KNEE~0.55) which crushes the top end to ~1.0. The
+// calibration TESTS are property-based (Earth<0.05, strictly ordered, never exactly 1.0) so they pass at
+// ANY reasonable KNEE — retuning Io higher is a one-constant change. See KNOWN-BEHAVIORS.md (workstream dir).
 export const TIDAL_LOG_KNEE = 1.6;
 export const AGE_NORM_DIVISOR = 10;          // Gyr -> [0,1] (~max system age; decision 5e: /~10)
 export const DENSITY_KGM3_TO_GCM3 = 1 / 1000; // PhysicsEngine density is kg/m³; base step wants g/cm³
