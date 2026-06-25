@@ -6,14 +6,28 @@ import { writeGrain, writeGrainSphere, runE6, REGIME_BAND_DEG, SEAM_LAT_TOL_DEG 
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere } from '../planet-lod-rivers.js';
 import { REGIME } from '../src/worldengine/base/substrate.js';
+import { adaptL0 } from '../src/worldengine/base/adaptL0.js';
 
 const grid = { n: 32, lat0Deg: 0, lat1Deg: 80, domainKm: 4000, seed: 'v-1' };
 const neutral = { despinAmp: 1, radialStrainSign: 1, radialStrainMag: 0 };
 const between = (bands, la, lb) => bands.some(b => (Math.abs(la) - b) * (Math.abs(lb) - b) < 0);
 
+// WS1 planetData (PhysicsEngine shape: density kg/m³, age Gyr). Its F2-adapter output is a contract-
+// named F7 fixture per AC-F7-determinism-gate: "the F2-adapter output PLUS the 5 relief presets."
+const adapterPlanetData = Object.freeze({
+  radiusEarth: 1.0, massEarth: 1.0, T_eq: 288,
+  composition: Object.freeze({ ironFraction: 0.32, density: 5500, volatileFraction: 0.15 }),
+  surfaceHistory: Object.freeze({ erosion: 0.4, resurfacing: 0.1, bombardment: 0.5 }),
+  age: 4.5, metallicity: 0.0, magneticField: 0.32, eccentricity: 0.05, tidalHeating: 0.7,
+  systemContext: Object.freeze({ siblings: [], moons: [], resonancePartners: [], companionClass: null }),
+});
+
 async function standardBundles() {
   const { PRESETS } = await import('../relief-presets.js');
-  return ['rocky','lava','magma','europa','terrestrial'].map(n => PRESETS[n]);
+  return [
+    ...['rocky', 'lava', 'magma', 'europa', 'terrestrial'].map(n => PRESETS[n]),
+    adaptL0(adapterPlanetData),   // F2-adapter output — contract-named F7 fixture
+  ];
 }
 function flatOutput(bundle) {
   const o = makeBaseStep(bundle, grid);
