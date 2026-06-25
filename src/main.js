@@ -42,6 +42,8 @@ import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
 import { HeadMount } from './flight/HeadMount.js';
 import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
 import { shapeStick, STICK_TUNING } from './flight/stickCurve.js';
+import { FlightMode, advanceFlightMode, flightModeInfo } from './flight/flightModes.js';
+import { FlightModeToast } from './ui/FlightModeToast.js';
 import { Ship } from './core/Ship.js';
 import { ShipChoreographer } from './auto/ShipChoreographer.js';
 import { CameraChoreographer } from './auto/CameraChoreographer.js';
@@ -294,6 +296,7 @@ let systemMap = null;
 
 // ── Body Info HUD ──
 const bodyInfo = new BodyInfo();
+const flightModeToast = new FlightModeToast();
 
 // ── Targeting Reticle (in-system body selection HUD) ──
 // Three visual states: none, tentative (hover), selected (committed).
@@ -448,6 +451,10 @@ function setScManual(on) {
   _scManual = on;
   document.body.style.cursor = on ? 'none' : '';
 }
+let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
+const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
+const ALIGN_TAU = 0.16;                        // s — Mode-B ease time constant
+const ALIGN_MAX_S = 1.5;                        // s — Mode-B align safety cap
 const _scBodies = [];             // per-tick gravity-well body list (reused)
 // Current virtual-joystick deflection (deadzone-shaped, -1..1 each). Written
 // by the canvas mousemove handler while _scManual && !scHead.held; consumed by
@@ -6020,6 +6027,19 @@ function _resolveSelectedBody() {
   return { mesh: t.mesh, radius: t.radius };
 }
 
+// Mode-specific entry actions when the F-cycle lands on a mode. Manual is the
+// no-assist baseline; ALIGN/ASSIST act on the selected body (filled in Tasks 5/6).
+function _enterFlightMode(mode) {
+  _alignState.active = false;            // any prior align ends on a mode change
+  if (mode !== FlightMode.ASSIST) scPilot.stop(); // only Assist drives the pilot
+  const body = _resolveSelectedBody();
+  if (!body) return;
+  if (mode === FlightMode.ALIGN) _beginAlign(body);      // Task 5
+  else if (mode === FlightMode.ASSIST) _engageAssist(body); // Task 6
+}
+function _beginAlign(body) { _alignState.active = true; _alignState.mesh = body.mesh; _alignState.t = 0; }
+function _engageAssist(body) { scPilot.beginLeg({ toBody: body.mesh, bodyRadius: body.radius }); }
+
 // Drop-window state for the supercruise HUD target marker (AC7). Mirrors the
 // manual drop-out capture rule (the `if (_scManual)` block in simStep): inside
 // the 10R capture sphere → 'in-window' if slow enough to drop, else 'too-fast';
@@ -8771,8 +8791,12 @@ window.addEventListener('keydown', (e) => {
     // flight dynamics. _scManual short-circuits cameraController.update() in
     // simStep (see the "Skip cameraController.update" guard) so the legacy
     // FLIGHT internals stop being reachable.
-    const newMode = cameraController.toggleCameraMode();
-    if (newMode === CameraMode.FLIGHT) {
+    // F now cycles a 4-state ring: (off) → Manual → Align → Assist → Exit → (off).
+    // _scManual is the "in flight" gate; advanceFlightMode owns the ring.
+    const _next = advanceFlightMode(_flightMode, _scManual);
+    if (!_scManual) {
+      // ── ENTER flight at Manual (today's enter branch) ──
+      cameraController.setCameraMode(CameraMode.FLIGHT);
       setScManual(true);
       scPilot.stop();
       scModel.position.copy(camera.position);
@@ -8780,28 +8804,27 @@ window.addEventListener('keydown', (e) => {
       scModel.speed = 0;
       scModel.setThrottle(0);
       cameraController.bypassed = true;
-    } else {
-      // Exit manual flight → Toy Box, WITHOUT teleporting. The camera keeps
-      // the exact supercruise pose it's already at: adoptCurrentPose anchors
-      // the orbit on the closest body but back-solves yaw/pitch/distance from
-      // the live camera position (and clamps a very-far supercruise distance
-      // into range by pushing the anchor out along the sight line), so the
-      // next _applyOrbit reconstructs the same position. The interpolator is
-      // resync'd so the fixed-timestep render blend doesn't slide across the
-      // flip — without this, prev/curr snapshots straddle the mode change and
-      // the camera visibly lerps to the recomputed orbit. Mirrors the warp
-      // teleport-resync hook (warpSwapSystem). If there's no body to anchor
-      // (deep sky / empty), just drop the bypass and leave the pose put.
+      _flightMode = FlightMode.MANUAL;
+      _enterFlightMode(_flightMode);
+    } else if (_next.exit) {
+      // ── EXIT flight → Toy Box, no teleport (today's exit branch) ──
       setScManual(false);
+      scPilot.stop();
+      _alignState.active = false;
+      cameraController.setCameraMode(CameraMode.TOY_BOX);
       const _closest = findClosestBody();
-      if (_closest) {
-        cameraController.adoptCurrentPose(_closest.position);
-      } else {
-        cameraController.bypassed = false;
-      }
+      if (_closest) cameraController.adoptCurrentPose(_closest.position);
+      else cameraController.bypassed = false;
       cameraInterp.resync(camera);
+      _flightMode = FlightMode.MANUAL; // reset for the next entry
+    } else {
+      // ── CYCLE to the next assist mode, staying in flight ──
+      _flightMode = _next.mode;
+      _enterFlightMode(_flightMode);
     }
-    console.log(`[MODE] Camera → ${newMode}`);
+    const _info = flightModeInfo(_next.exit ? 'exit' : _flightMode);
+    flightModeToast.show(_info.label, _info.hint);
+    console.log(`[MODE] flight ${_scManual ? _flightMode : 'OFF'}`);
     return;
   }
 
