@@ -78,10 +78,10 @@
     },
     {
       "id": "bake-once",
-      "statement": "The grain+carve bake runs once per (preset, seed), not per-frame; it re-bakes only on preset/seed/sea-level change and stays within the documented bake budget.",
+      "statement": "The grain+carve bake runs once per (preset, seed), not per-frame; the grain bake re-bakes only on seed/preset change (it is tectonic — derived from drivers+seed, independent of sea level) and stays within the documented bake budget.",
       "verifyVia": {
         "input": "Change camera/time (no re-bake expected), then change seed/preset/sea-level (re-bake expected) on :9223.",
-        "observable": "Bake counter = 1 per preset/seed; unchanged on camera/time; increments on seed/preset/sea-level change; within budget."
+        "observable": "Bake counter = 1 per preset/seed; unchanged on camera/time AND on sea-level change (grain is sea-level-independent); increments by exactly 1 on seed/preset change; within budget."
       },
       "layer": "integration",
       "live": true
