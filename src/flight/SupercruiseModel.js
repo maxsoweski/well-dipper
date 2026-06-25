@@ -7,11 +7,15 @@
 import * as THREE from 'three';
 
 export const SC_TUNING = {
-  ETA_K: 6.0,               // speed cap = surfaceDist / ETA_K (Elite's ~6s rule)
+  ETA_K: 3.0,               // speed cap = surfaceDist / ETA_K. Tuned 2026-06-24 (Bug B: 6 → 3) for perceptible
+                            //   manual flight near small bodies. MUST stay ≥ 2.25: drop-safe at every body scale iff
+                            //   cap at capture sphere (9R/ETA_K) ≤ dropMax (4R), i.e. ETA_K ≥ 9/4. Scale-free.
   CAP_MIN_FRAC: 0.5,        // per-body cap floor = radius × this (scale-free: capture stays possible at any body size)
   CAP_MIN_ABS: 1e-5,        // u/s absolute floor — pure numerical safety; MUST stay ≤ 5.3 × smallest capturable body radius (capture needs 0.75×floor ≤ 4R; smallest moon ≈ 4e-5)
   CAP_MAX: 20000.0,         // u/s deep-space ceiling
-  ACCEL_TAU: 1.4,           // s — exponential approach to target speed (heavy feel) (must stay ≤ ETA_K/4 or full-throttle approach decel turns underdamped and surges)
+  ACCEL_TAU: 0.6,           // s — exponential approach to target speed. Tuned 2026-06-24 (Bug B: 1.4 → 0.6) for a
+                            //   responsive throttle (perceptible within ~1.3s). MUST stay ≤ ETA_K/4 (=0.75 here) or
+                            //   full-throttle approach decel turns underdamped and surges.
   TURN_RATE_MAX: 0.7,       // rad/s at rest
   TURN_RATE_MIN_FRAC: 0.25, // turn authority remaining at full local speed
   THROTTLE_RATE: 0.6,       // throttle units/s for held W/S stepping
