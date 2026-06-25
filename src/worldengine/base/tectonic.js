@@ -44,3 +44,18 @@ export function writeGrain(substrate, drivers, rotatePoleDeg = 0) {
     }
   }
 }
+
+// sphere-native grain: per-node latitude from the F3 carrier replaces latDegOfRow.
+// Because regime/grain are a pure function of latitude, same-latitude seam neighbours agree
+// (continuity across the antimeridian + poles holds by construction).
+export function writeGrainSphere(carrier, drivers) {
+  const N = carrier.N;
+  for (let i = 0; i < N; i++) {
+    const lat = carrier.latDegOf(i);
+    const { sMer, sZon, regime, grainAngle } = stressAtLat(lat, drivers);
+    const mag = Math.min(1, Math.hypot(sMer, sZon) / (1 + NU));
+    carrier.grainAngle[i] = grainAngle;
+    carrier.grainMag[i] = mag;
+    carrier.regime[i] = regime;
+  }
+}
