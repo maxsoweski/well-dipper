@@ -107,15 +107,106 @@ describe('WS4 T4 — determinism + purity (no rng in the derivation path)', () =
   });
 });
 
-describe('WS4 T4 — smoothStrikeAngle stub returns the raw quantized director (T6 makes it smooth)', () => {
-  it('returns a finite number in [0, π/2] (the {0, π/2} director range at this scaffold stage)', () => {
-    // T4 stub = identity over the raw stressAtLat grainAngle, so it returns 0 or π/2.
-    // T6 will REPLACE this with a continuous function and its own RED asserts continuity across 45°.
+describe('WS4 T4 — smoothStrikeAngle returns a director in [0, π/2]', () => {
+  it('returns a finite number in [0, π/2] (the director range)', () => {
+    // After T6 this is a CONTINUOUS function of (sMer, sZon); range stays [0, π/2].
     for (const [sMer, sZon] of [[2, 1], [1, 2], [1.5, 1.5], [-2, -0.5]]) {
       const a = smoothStrikeAngle(sMer, sZon);
       expect(Number.isFinite(a)).toBe(true);
       expect(a).toBeGreaterThanOrEqual(0);
       expect(a).toBeLessThanOrEqual(Math.PI / 2 + 1e-9);
     }
+  });
+});
+
+// ── T6 — smooth director (continuous through the 45° |sMer|=|sZon| crossover) + macroSeed band ──────
+// Why (plan §D3): the raw E6 grainAngle is a 2-value director {0, π/2} with a HARD flip at |lat|=45°.
+// Fed raw, a cube that interpolates across that flip smears through angles the math never intended.
+// T6 re-derives a CONTINUOUS strike from the continuous stress components (sMer, sZon) — monotone
+// through the crossover instead of stepping — and macroSeed shifts band placement for inter-body
+// variety (plan §D9). Per Max #3 this does NOT thread rotatePoleDeg into writeGrainSphere (no
+// src/worldengine edit); the latitude offset is applied inside the bake via stressAtLat re-derivation.
+import { stressAtLat } from '../src/worldengine/base/tectonic.js';
+
+describe('WS4 T6 — smoothStrikeAngle is CONTINUOUS (monotone through the 45° crossover)', () => {
+  it('→ 0 where |sMer| ≫ |sZon|, → π/2 where |sZon| ≫ |sMer| (the two endpoints)', () => {
+    expect(smoothStrikeAngle(10, 0.001)).toBeLessThan(0.05);          // meridional-dominant → ~0
+    expect(smoothStrikeAngle(0.001, 10)).toBeGreaterThan(Math.PI / 2 - 0.05); // zonal-dominant → ~π/2
+  });
+
+  it('passes THROUGH (does not step at) the |sMer|=|sZon| crossover — equal-magnitude → π/4', () => {
+    // The quantized writer flips 0↔π/2 here; the smooth director must sit at the midpoint, finite.
+    expect(smoothStrikeAngle(1, 1)).toBeCloseTo(Math.PI / 4, 6);
+    expect(smoothStrikeAngle(-2, 2)).toBeCloseTo(Math.PI / 4, 6); // sign-independent (director magnitude)
+  });
+
+  it('is monotone non-decreasing as the zonal share grows (no jump across the crossover)', () => {
+    // Sweep |sZon|/|sMer| from << 1 to >> 1 at fixed |sMer|; strike must rise smoothly 0 → π/2 with
+    // every step small (no π/2 discontinuity) — the property a banded {0,π/2} field FAILS.
+    const sMer = 1;
+    let prev = smoothStrikeAngle(sMer, 1e-4);
+    let maxStep = 0;
+    for (let r = 1e-4; r <= 100; r *= 1.05) {
+      const a = smoothStrikeAngle(sMer, r);
+      expect(a).toBeGreaterThanOrEqual(prev - 1e-9); // non-decreasing
+      maxStep = Math.max(maxStep, a - prev);
+      prev = a;
+    }
+    expect(maxStep).toBeLessThan(0.05); // no hard flip — every increment is small
+  });
+
+  it('the strike is continuous in LATITUDE across 45° (sample 44.9° vs 45.1° — small angle, not a π/2 step)', () => {
+    const d = neutralDrivers;
+    const a = smoothStrikeAngle(stressAtLat(44.9, d).sMer, stressAtLat(44.9, d).sZon);
+    const b = smoothStrikeAngle(stressAtLat(45.1, d).sMer, stressAtLat(45.1, d).sZon);
+    expect(Math.abs(a - b)).toBeLessThan(0.05); // continuous — the raw director would jump π/2 here
+  });
+});
+
+describe('WS4 T6 — bakeTectonicGrain uses the smooth director + macroSeed band placement', () => {
+  const mesh = tinyMesh();
+
+  it('the baked world-strike is NOT the raw quantized director (smooth strike is used per node)', () => {
+    // With the smooth director, equal-stress nodes near the crossover get a π/4 strike, so the world
+    // strike no longer collapses onto exactly cos(0)/cos(π/2) of the frame. Assert at least one node
+    // carries an intermediate strike (the smooth director is genuinely wired, not the stub).
+    const out = bakeTectonicGrain({ mesh, drivers: neutralDrivers, macroSeed: 7 });
+    let intermediate = false;
+    for (let i = 0; i < out.grainAngleSmooth.length; i++) {
+      const a = out.grainAngleSmooth[i];
+      if (a > 0.02 && a < Math.PI / 2 - 0.02) { intermediate = true; break; }
+    }
+    expect(intermediate).toBe(true);
+  });
+
+  it('macroSeed shifts band placement (different macroSeed → different strike field) — inter-body variety', () => {
+    // Plan §D9: rotatePoleDeg = f(macroSeed) relocates the latitude bands so different worlds differ.
+    // This is an INTER-BODY check (not a within-body longitudinal one — D4: move-2 is inter-body only).
+    const a = bakeTectonicGrain({ mesh, drivers: neutralDrivers, macroSeed: 7 });
+    const b = bakeTectonicGrain({ mesh, drivers: neutralDrivers, macroSeed: 4242 });
+    let differs = false;
+    for (let i = 0; i < a.grainAngleSmooth.length; i++) {
+      if (Math.abs(a.grainAngleSmooth[i] - b.grainAngleSmooth[i]) > 1e-4) { differs = true; break; }
+    }
+    expect(differs).toBe(true);
+  });
+
+  it('is deterministic per (drivers, macroSeed): same macroSeed → byte-identical smooth strike', () => {
+    const a = bakeTectonicGrain({ mesh, drivers: neutralDrivers, macroSeed: 99 });
+    const b = bakeTectonicGrain({ mesh, drivers: neutralDrivers, macroSeed: 99 });
+    expect(Array.from(a.grainAngleSmooth)).toEqual(Array.from(b.grainAngleSmooth));
+    expect(Array.from(a.strikeWorldX)).toEqual(Array.from(b.strikeWorldX));
+    expect(Array.from(a.strikeWorldY)).toEqual(Array.from(b.strikeWorldY));
+    expect(Array.from(a.strikeWorldZ)).toEqual(Array.from(b.strikeWorldZ));
+  });
+
+  it('does NOT call Math.random / Date.now in the smooth-director + macroSeed path', () => {
+    const randSpy = vi.spyOn(Math, 'random');
+    const nowSpy = vi.spyOn(Date, 'now');
+    bakeTectonicGrain({ mesh, drivers: neutralDrivers, macroSeed: 4242 });
+    expect(randSpy).not.toHaveBeenCalled();
+    expect(nowSpy).not.toHaveBeenCalled();
+    randSpy.mockRestore();
+    nowSpy.mockRestore();
   });
 });

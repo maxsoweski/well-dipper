@@ -890,6 +890,42 @@ export const HEIGHT_GLSL = /* glsl */ `
         return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);
       }
 
+      // ── WS4 T13 (D4 move-1): in-shader province rotation of the grain strike ──
+      // The baked grain cube stores a smooth WORLD-space strike that is a pure function of |lat|
+      // (latitude bands — D3/D4: it carries ZERO within-body longitudinal structure). To turn those
+      // zonal bands into 2D LANDFORMS that "play out across the surface" (Max's bar), each grained
+      // combiner rotates its sampled strike by an angle keyed to the REAL gProvince at this fragment
+      // — the SAME macroSeed-driven province field the renderer already uses for amplitude. This is
+      // the ONLY within-body anti-banding source (move-2 / rotatePoleDeg is inter-body only, and the
+      // smooth director adds none). It READS gProvince, never replaces it (Max decision #6: augment).
+      //
+      // The rotation is about the local surface normal so the strike stays TANGENT to the sphere on a
+      // unit-sphere fragment, n = normalize(pos)). gProvince.x (tectonic where-mask) drives the angle;
+      // centring on 0.5 keeps the mean rotation ~0 so province-neutral fragments are near-unchanged.
+      // GRAIN_PROVINCE_ROT is the (small) angular gain — bounded so the shared strike still reads as
+      // shared, just province-warped into 2D rather than zonal stripes.
+      const float GRAIN_PROVINCE_ROT = 1.20;   // radians of strike rotation across the province range
+      vec3 grainProvinceRotate(vec3 strike, vec3 pos){
+        vec3 n = normalize(pos);
+        // Rodrigues rotation of the strike about the surface normal n by the province-keyed angle.
+        float ang = GRAIN_PROVINCE_ROT * (gProvince.x - 0.5)
+                  + 0.6 * GRAIN_PROVINCE_ROT * (gProvince.z - 0.5);  // a second mask adds 2D variety
+        float c = cos(ang), s = sin(ang);
+        vec3 t = normalize(strike - dot(strike, n) * n);            // tangent part of the strike
+        if (length(strike - dot(strike, n) * n) < 1e-4) t = strike; // already ~aligned: leave as-is
+        vec3 b = cross(n, t);                                       // the other in-tangent-plane basis
+        return normalize(c * t + s * b);
+      }
+      // vec2 (xz-plane) sibling for the orogeny axis special case (D7): fbmdRidged reads uOrogenyAxis
+      // as a vec2 in the xz-plane. The cube strike is projected to xz upstream; here we rotate that 2D
+      // axis in-plane by the SAME province-keyed angle so mountains co-orient with the vec3 features.
+      vec2 grainProvinceRotate2(vec2 ax2, vec3 pos){
+        float ang = GRAIN_PROVINCE_ROT * (gProvince.x - 0.5)
+                  + 0.6 * GRAIN_PROVINCE_ROT * (gProvince.z - 0.5);
+        float c = cos(ang), s = sin(ang);
+        return normalize(vec2(c * ax2.x - s * ax2.y, s * ax2.x + c * ax2.y));
+      }
+
       // ── F1 mountains: ridged-multifractal base relief (relief doc §F1) ──
       // Musgrave ridged multifractal with the Decarpentier-correct gradient. Each
       // octave's noise is FOLDED (signal = uRidgeOffset − |n.x|), SHARPENED (signal²)
@@ -906,7 +942,13 @@ export const HEIGHT_GLSL = /* glsl */ `
       // transforms back by the SAME S (Sᵀ=S) — applied to grad.xz to keep stretched
       // ridge faces lit correctly.
       vec4 fbmdRidged(vec3 pos, float octaves, float fwBase){
-        vec2 ax = normalize(uOrogenyAxis);
+        // WS4 T13 — orogeny vec2 special case (D7). The grain cube stores a vec3 world strike; project
+        // it onto the xz-plane (uOrogenyAxis lives there) and rotate by the in-fragment province, so
+        // mountain belts share the grain and acquire 2D structure. BRANCH-guarded (D6): at strength==0
+        // the verbatim normalize(uOrogenyAxis) runs — no cube fetch, no mix — bytewise the pre-WS4 axis.
+        vec2 ax = uTectonicGrainStrength > 0.0
+          ? grainProvinceRotate2(normalize(mix(uOrogenyAxis, normalize(sampleGrainStrike(pos).xz), uTectonicGrainStrength)), pos)
+          : normalize(uOrogenyAxis);
         vec2 pe = vec2(-ax.y, ax.x);                              // across-strike axis
         float stretch = mix(1.0, 3.0, clamp(uOrogenyStrength, 0.0, 1.0));
         // S·xz : keep the along-strike component, scale the across-strike component
@@ -1942,7 +1984,10 @@ export const HEIGHT_GLSL = /* glsl */ `
         float pw = provinceWeight(PROV_CANYONS);                   // §8: rifts die out leaving their province
         for (int i = 0; i < 3; i++){
           if (i >= uChasmaCount) break;
-          vec3 n = normalize(uChasmaAxis[i]);
+          // WS4 T13 — branch-guarded shared grain (D6). strength==0 ⇒ verbatim normalize(uChasmaAxis[i]).
+          vec3 n = uTectonicGrainStrength > 0.0
+            ? grainProvinceRotate(normalize(mix(uChasmaAxis[i], sampleGrainStrike(pos), uTectonicGrainStrength)), pos)
+            : normalize(uChasmaAxis[i]);
           float s = dot(pos, n);                                   // signed dist to rift plane
           float d = abs(s);
           vec2 gp = grabenProfile(d, uChasmaWidth, uChasmaFloor);  // (depth ≤ 0, d depth/dd)
@@ -1984,7 +2029,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // ELSE runs normalize(uScarpAxis) verbatim — no cube fetch, no mix, no precision drift — so
         // the grain-OFF planet is BYTEWISE the pre-WS4 shader even with uTectonicGrainCube still null.
         vec3 ax = uTectonicGrainStrength > 0.0
-          ? normalize(mix(uScarpAxis, sampleGrainStrike(pos), uTectonicGrainStrength))
+          ? grainProvinceRotate(normalize(mix(uScarpAxis, sampleGrainStrike(pos), uTectonicGrainStrength)), pos)
           : normalize(uScarpAxis);
         vec4 wn = noised(pos * uScarpWarpFreq + uMacroOffset + uScarpDomainOffset); // analytic value+grad (+🎲 offset)
         float field  = dot(pos, ax) + uScarpWarp * wn.x;          // directional + warp
@@ -2131,16 +2176,20 @@ export const HEIGHT_GLSL = /* glsl */ `
       // uTesseraFreq modest to avoid the product shimmering.
       void tesseraCombiner(vec3 pos, inout float h, inout vec3 grad){
         if (uTesseraStrength <= 0.0) return;
-        // axis 0 — warped with the macro seed
-        vec3 ax0 = normalize(uTesseraAxis[0]);
+        // axis 0 — warped with the macro seed. WS4 T13 — branch-guarded shared grain (D6).
+        vec3 ax0 = uTectonicGrainStrength > 0.0
+          ? grainProvinceRotate(normalize(mix(uTesseraAxis[0], sampleGrainStrike(pos), uTectonicGrainStrength)), pos)
+          : normalize(uTesseraAxis[0]);
         vec4 wn0 = noised(pos * uTesseraWarpFreq + uMacroOffset + uTesseraDomainOffset);
         float field0  = dot(pos, ax0) + uTesseraWarp * wn0.x;
         vec3  dfield0 = ax0 + uTesseraWarp * uTesseraWarpFreq * wn0.yzw;
         float phase0  = field0 * uTesseraFreq;
         vec2  rw0 = ridgeWave(phase0);                            // ridge value + d/dphase
         vec3  dr0 = rw0.y * uTesseraFreq * dfield0;               // d(ridge0)/dpos
-        // axis 1 — warped with the detail seed (decorrelated groove set)
-        vec3 ax1 = normalize(uTesseraAxis[1]);
+        // axis 1 — warped with the detail seed (decorrelated groove set). WS4 T13 — branch-guarded grain.
+        vec3 ax1 = uTectonicGrainStrength > 0.0
+          ? grainProvinceRotate(normalize(mix(uTesseraAxis[1], sampleGrainStrike(pos), uTectonicGrainStrength)), pos)
+          : normalize(uTesseraAxis[1]);
         vec4 wn1 = noised(pos * uTesseraWarpFreq + uDetailOffset + uTesseraDomainOffset);
         float field1  = dot(pos, ax1) + uTesseraWarp * wn1.x;
         vec3  dfield1 = ax1 + uTesseraWarp * uTesseraWarpFreq * wn1.yzw;
@@ -2218,8 +2267,11 @@ export const HEIGHT_GLSL = /* glsl */ `
         // SMOOTH: lava floods + flattens older relief inside the region
         h    *= (1.0 - region);
         grad *= (1.0 - region);
-        // wrinkle ridges — linear compression ridges on the fresh plain (only where flooded)
-        vec3 ax = normalize(uLavaAxis);
+        // wrinkle ridges — linear compression ridges on the fresh plain (only where flooded).
+        // WS4 T13 — branch-guarded shared grain (D6). strength==0 ⇒ verbatim normalize(uLavaAxis).
+        vec3 ax = uTectonicGrainStrength > 0.0
+          ? grainProvinceRotate(normalize(mix(uLavaAxis, sampleGrainStrike(pos), uTectonicGrainStrength)), pos)
+          : normalize(uLavaAxis);
         vec4 wn = noised(pos * WRINKLE_WARP_FREQ + uLavaOffset + uMacroOffset);
         float field  = dot(pos, ax) + uWrinkleWarp * wn.x;          // sinuous directional field
         vec3  dfield = ax + uWrinkleWarp * WRINKLE_WARP_FREQ * wn.yzw;  // EXACT field gradient
@@ -2650,8 +2702,11 @@ export const HEIGHT_GLSL = /* glsl */ `
       void cryoRidgeCombiner(vec3 pos, inout float h, inout vec3 grad){
         if (uCryoActivity <= 0.0) return;
         float amp = uCryoRidgeAmp * uCryoActivity * provinceWeight(PROV_CRYORIDGE);   // §8: ridged plains complement chaos
-        // (1) double ridges — warped line field carrying the double-ridge profile
-        vec3 ax0 = normalize(uCryoRidgeAxis0);
+        // (1) double ridges — warped line field carrying the double-ridge profile.
+        // WS4 T13 — branch-guarded shared grain (D6). strength==0 ⇒ verbatim normalize(uCryoRidgeAxis0).
+        vec3 ax0 = uTectonicGrainStrength > 0.0
+          ? grainProvinceRotate(normalize(mix(uCryoRidgeAxis0, sampleGrainStrike(pos), uTectonicGrainStrength)), pos)
+          : normalize(uCryoRidgeAxis0);
         vec4 wn = noised(pos * 2.0 + uCryoRidgeOffsetV);
         float field  = dot(pos, ax0) + uCryoRidgeWarp * wn.x;
         vec3  dfield = ax0 + uCryoRidgeWarp * 2.0 * wn.yzw;
@@ -2660,8 +2715,11 @@ export const HEIGHT_GLSL = /* glsl */ `
         vec2  dr = doubleRidgeProfile(t, uCryoRidgeOffset, uCryoRidgeWidth);
         h    += amp * dr.x;
         grad += amp * dr.y * cos(phase) * uDoubleRidgeFreq * dfield;   // dh/dt · dt/dphase · dphase/dpos
-        // (2) grooved bands — fine ridgeWave ridges in low-freq band envelopes (second axis)
-        vec3 ax1 = normalize(uCryoRidgeAxis1);
+        // (2) grooved bands — fine ridgeWave ridges in low-freq band envelopes (second axis).
+        // WS4 T13 — branch-guarded shared grain (D6). strength==0 ⇒ verbatim normalize(uCryoRidgeAxis1).
+        vec3 ax1 = uTectonicGrainStrength > 0.0
+          ? grainProvinceRotate(normalize(mix(uCryoRidgeAxis1, sampleGrainStrike(pos), uTectonicGrainStrength)), pos)
+          : normalize(uCryoRidgeAxis1);
         vec4 bn = noised(pos * 1.3 + uCryoRidgeOffsetV + uMacroOffset);
         float bfield  = dot(pos, ax1) + uCryoRidgeWarp * bn.x;
         vec3  bdfield = ax1 + uCryoRidgeWarp * 1.3 * bn.yzw;

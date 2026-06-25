@@ -24,17 +24,43 @@
 // integer macroSeed, consumed (later, T6) via the same sin-hash recipe the GLSL uses — never via
 // the GUI randUnitVec3 (Math.random) helper.
 
-import { writeGrainSphere } from './src/worldengine/base/tectonic.js';
+import * as THREE from 'three';
+import { writeGrainSphere, stressAtLat } from './src/worldengine/base/tectonic.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ── smoothStrikeAngle(sMer, sZon) ──────────────────────────────────────────────────────────────
-// T4 STUB: returns the raw quantized E6 director (0 where meridional stress dominates, π/2 where
-// zonal dominates) — the SAME {0, π/2} step writeGrainSphere emits. This is identity, NOT smooth.
-// T6 REPLACES the body with a CONTINUOUS function of the (sMer, sZon) stress components (monotone
-// through the 45° |sMer|=|sZon| crossover) and owns the continuity RED. The signature is fixed now
-// so T6 is a body-only change.
+// T6 (plan §D3): a CONTINUOUS strike director re-derived from the continuous stress components.
+// The raw E6 grainAngle (writeGrainSphere) is a 2-value director {0, π/2} that HARD-FLIPS at
+// |sMer|=|sZon| (|lat|=45°). Fed raw, a HalfFloat cube that interpolates across that flip smears
+// through angles the math never intended, reading as banded stripes with seam-smear.
+//
+// strike = atan2(|sZon|, |sMer|) is the natural continuous director:
+//   • |sMer| ≫ |sZon|  → atan2(small, large) → 0     (meridional-dominant strike — E6's 0 case)
+//   • |sZon| ≫ |sMer|  → atan2(large, small) → π/2   (zonal-dominant strike — E6's π/2 case)
+//   • |sMer| = |sZon|  → atan2(1, 1) = π/4           (the crossover: PASS THROUGH, don't step)
+// It is C∞ in the magnitudes, monotone non-decreasing as the zonal share grows, sign-independent
+// (a 2-fold director carries magnitude, not sense), and reproduces the quantized endpoints exactly.
+// The cube therefore stores a strike that never interpolates through an angle the stress never had.
 export function smoothStrikeAngle(sMer, sZon) {
-  return Math.abs(sMer) >= Math.abs(sZon) ? 0 : Math.PI / 2;
+  return Math.atan2(Math.abs(sZon), Math.abs(sMer));
+}
+
+// ── macroSeedRotateDeg(macroSeed) — band placement for INTER-BODY variety (plan §D9, Max #3) ─────
+// rotatePoleDeg = f(macroSeed): a deterministic latitude offset so different worlds get different
+// band placement (the grain is otherwise latitude-only / longitudinally uniform → identical between
+// bodies). Max #3 DROPS threading this into writeGrainSphere (no src/worldengine edit); instead the
+// bake re-derives stress at (lat + rotateDeg) via stressAtLat, so the offset is applied entirely
+// inside this module over the EXISTING 2-arg writer.
+//
+// Entropy = the INTEGER macroSeed only, hashed with the SAME sin-hash recipe the GLSL seedOffset
+// uses (planet-lod-lab.html:2376: x = sin(n)*43758.5453; frac(x)) so the JS offset and the shader's
+// uMacroOffset derive from one shared transform of the same seed (plan §D6/D9 — not one transform
+// apart). NO Math.random / Date.now: pure function of the seed. Range ±45° keeps every band reachable
+// while guaranteeing distinct fields across seeds.
+export function macroSeedRotateDeg(macroSeed = 0) {
+  const x = Math.sin((macroSeed | 0) * 12.9898 + 78.233) * 43758.5453;
+  const frac = x - Math.floor(x); // [0,1)
+  return (frac * 2 - 1) * 45;      // [-45°, +45°)
 }
 
 // ── bakeTectonicGrain({ mesh, drivers, macroSeed, rotatePoleDeg }) ──────────────────────────────
@@ -51,14 +77,19 @@ export function bakeTectonicGrain({ mesh, drivers, macroSeed = 0, rotatePoleDeg 
   if (!mesh || !mesh.verts) {
     throw new Error('bakeTectonicGrain: mesh with verts is required');
   }
-  // rotatePoleDeg is intentionally NOT threaded into writeGrainSphere (Max #3 — 2-arg writer).
-  // Reference it so the no-op contract is explicit and lint-visible, without affecting the bake.
-  void rotatePoleDeg;
-  void macroSeed;
 
   const carrier = makeSphereField(mesh);
-  // 2-arg prod writer (Max #3) — pure, zero rng → byte-identical on re-run.
+  // 2-arg prod writer (Max #3) — pure, zero rng → byte-identical on re-run. It writes the QUANTIZED
+  // grainAngle + grainMag + regime onto the carrier; those stay the confidence/classification
+  // channels. The SMOOTH strike below is re-derived per node from the continuous stress, so
+  // writeGrainSphere is NOT the strike source (its {0, π/2} director would band the cube).
   writeGrainSphere(carrier, drivers);
+
+  // Band placement: a deterministic latitude offset from the integer macroSeed (plan §D9). Applied
+  // here (re-derive stress at lat + rotateDeg) rather than threaded into writeGrainSphere — Max #3
+  // keeps the writer 2-arg. An explicit rotatePoleDeg arg, if passed, ADDS to the macroSeed offset
+  // (caller override), defaulting to 0 so existing 2-field callers are unaffected.
+  const rotateDeg = macroSeedRotateDeg(macroSeed) + rotatePoleDeg;
 
   const N = carrier.N;
   const grainAngleSmooth = new Float32Array(N);
@@ -69,12 +100,12 @@ export function bakeTectonicGrain({ mesh, drivers, macroSeed = 0, rotatePoleDeg 
   const strikeWorldZ = new Float32Array(N);
 
   for (let i = 0; i < N; i++) {
-    // T4 stub: re-quantize the carrier's director through smoothStrikeAngle. The carrier exposes the
-    // quantized grainAngle (0 or π/2) but not the raw sMer/sZon per node; passing cos/sin of that
-    // angle recovers the same {0, π/2} classification the stub returns, so the scaffold output is the
-    // identity director. (T6 will derive the smooth angle from the continuous stress components.)
-    const a = carrier.grainAngle[i];
-    const angle = smoothStrikeAngle(Math.cos(a), Math.sin(a));
+    // SMOOTH director (T6): re-derive the continuous stress at this node's (band-shifted) latitude
+    // and take the continuous strike. stressAtLat is the SAME pure function writeGrainSphere calls,
+    // so the regime/grainMag bands stay coherent with the carrier — only the ANGLE becomes smooth.
+    const lat = carrier.latDegOf(i) + rotateDeg;
+    const { sMer, sZon } = stressAtLat(lat, drivers);
+    const angle = smoothStrikeAngle(sMer, sZon);
     grainAngleSmooth[i] = angle;
     grainMag[i] = carrier.grainMag[i];
     regime[i] = carrier.regime[i];
@@ -94,4 +125,111 @@ export function bakeTectonicGrain({ mesh, drivers, macroSeed = 0, rotatePoleDeg 
   }
 
   return { grainAngleSmooth, grainMag, regime, strikeWorldX, strikeWorldY, strikeWorldZ };
+}
+
+// ── buildGrainCubeGeometry({ mesh, strikeWorld, grainMag, regime }) ─────────────────────────────
+// T7 (plan §D2): the pure geometry the grain CubeCamera renders from. Unlike the carve cube (sparse
+// valley STRIPS along channels), grain is a WHOLE-SPHERE field — every mesh node carries a strike —
+// so this rasterizes a full-sphere TRIANGLE mesh: one vertex per node at its unit direction
+// (verts[i]), triangulated by mesh.faces, each vertex carrying the world strike vector + grainMag +
+// regime as attributes. The cube camera at the origin then reads the field by direction
+// (textureCube(map, normalize(vPos))) — the same direction-keyed, seam-free, pole-distortion-free
+// contract createCarveCubeMap uses, so there's no equirect seam or pole smear.
+//
+// Channels carried per vertex (the cube fragment packs them into RGBA — D2):
+//   aStrike (vec3) → R,G hold the dominant world strike components (the cube fragment selects xy);
+//   aGrainMag (float) → B (the continuous confidence channel);
+//   aRegime (float, regime/2 ∈ {0,0.5,1}) → A (the classification term, normalized HalfFloat-safe).
+//
+// PURE: no rng, no Date.now — it only copies the already-derived per-node arrays into BufferAttributes.
+export function buildGrainCubeGeometry({ mesh, strikeWorld, grainMag, regime }) {
+  const verts = mesh.verts;
+  const faces = mesh.faces;
+  const N = verts.length;
+
+  const pos = new Float32Array(N * 3);
+  const str = new Float32Array(N * 3);
+  const mag = new Float32Array(N);
+  const reg = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    pos[i * 3] = verts[i][0]; pos[i * 3 + 1] = verts[i][1]; pos[i * 3 + 2] = verts[i][2];
+    str[i * 3] = strikeWorld.x[i]; str[i * 3 + 1] = strikeWorld.y[i]; str[i * 3 + 2] = strikeWorld.z[i];
+    mag[i] = grainMag[i];
+    reg[i] = regime[i] / 2; // {NORMAL:0,STRIKESLIP:1,THRUST:2} → {0,0.5,1}: finite, decodable, no clip
+  }
+
+  // index: 3 vertex ids per face — a watertight sphere so the cube has no holes between nodes.
+  const idx = new Uint32Array(faces.length * 3);
+  for (let f = 0; f < faces.length; f++) {
+    idx[f * 3] = faces[f][0]; idx[f * 3 + 1] = faces[f][1]; idx[f * 3 + 2] = faces[f][2];
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aStrike', new THREE.BufferAttribute(str, 3));
+  g.setAttribute('aGrainMag', new THREE.BufferAttribute(mag, 1));
+  g.setAttribute('aRegime', new THREE.BufferAttribute(reg, 1));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  return g;
+}
+
+// ── createGrainCube({ renderer, size }) — LIVE/GPU baker (mirrors createCarveCubeMap) ───────────
+// T7 (plan §D2): rasterize buildGrainCubeGeometry into a HalfFloat cube via a CubeCamera at the
+// origin — the exact lifecycle createCarveCubeMap (planet-lod-rivers.js:716) uses, so the grain bake
+// rides the same once-per-body cadence (T8 calls update() inside route()). The planet shader reads it
+// with one textureCube(uTectonicGrainCube, normalize(vPos)) → world strike (RG), grainMag (B),
+// regime (A). NEEDS a WebGL renderer ⇒ exercised LIVE on :9223, not headless (see liveDeferred).
+//
+// Pack: R,G = strike.xy (the dominant world components; sampleGrainStrike rebuilds z from a unit
+// constraint or reads it as needed — D2), B = grainMag, A = regime. Last-write/replace (no MAX blend:
+// the sphere is watertight, every direction is covered by exactly one triangle, so there is no overlap
+// to resolve — unlike valley strips where MAX picks the deepest). No depth test (origin camera).
+export function createGrainCube({ renderer, size = 256 }) {
+  const cubeRT = new THREE.WebGLCubeRenderTarget(size, {
+    type: THREE.HalfFloatType, format: THREE.RGBAFormat,
+    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
+  });
+  const mat = new THREE.ShaderMaterial({
+    glslVersion: null,
+    vertexShader: `
+      precision highp float;
+      attribute vec3 aStrike;
+      attribute float aGrainMag;
+      attribute float aRegime;
+      varying vec3 vStrike;
+      varying float vGrainMag;
+      varying float vRegime;
+      void main(){ vStrike = aStrike; vGrainMag = aGrainMag; vRegime = aRegime; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+    `,
+    fragmentShader: `
+      precision highp float;
+      varying vec3 vStrike;
+      varying float vGrainMag;
+      varying float vRegime;
+      // RG = world strike xy (interpolated as a direction, re-normalized in-shader on read);
+      // B = grain magnitude; A = regime/2. z of the strike is recoverable shader-side from the
+      // unit constraint + the sampled xy (the dominant components), per D2.
+      void main(){ gl_FragColor = vec4(vStrike.xy, vGrainMag, vRegime); }
+    `,
+    side: THREE.DoubleSide,
+    depthTest: false, depthWrite: false,
+  });
+  const cubeScene = new THREE.Scene();
+  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+  mesh.frustumCulled = false;
+  cubeScene.add(mesh);
+  const cubeCam = new THREE.CubeCamera(0.01, 3, cubeRT);
+  const _c = new THREE.Color();
+  function update(grainGeo) {
+    mesh.geometry.dispose();
+    mesh.geometry = grainGeo;
+    const prevTarget = renderer.getRenderTarget();
+    renderer.getClearColor(_c); const prevAlpha = renderer.getClearAlpha();
+    renderer.setClearColor(0x000000, 0);  // empty = zero strike/mag (no grain); the sphere covers all dirs
+    cubeCam.update(renderer, cubeScene);
+    renderer.setClearColor(_c, prevAlpha);
+    renderer.setRenderTarget(prevTarget);
+  }
+  function dispose() { cubeRT.dispose(); mat.dispose(); mesh.geometry.dispose(); }
+  return { texture: cubeRT.texture, update, dispose };
 }

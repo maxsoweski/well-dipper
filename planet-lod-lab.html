@@ -155,7 +155,8 @@
     import { bakeRingCloud, makeRingCloudPoints } from './ring-particle-cloud.js';   // F51 rings-v2 — near-tier LOD particle cloud
     import { HEIGHT_GLSL } from './planet-lod-height.glsl.js';   // AC1: single source of h(pos) GLSL (lab + river router)
     import { makeUniforms } from './planet-lod-uniforms.js';      // AC1: single source of uniform defaults (factory)
-    import { createRiverOverlay } from './planet-lod-rivers.js';  // AC4: dendritic river ribbon overlay (shared router/ribbon pipeline)
+    import { createRiverOverlay, DEFAULT_GRAIN_DRIVERS, perNodeIncision, applyIncision } from './planet-lod-rivers.js';  // AC4: dendritic river ribbon overlay (shared router/ribbon pipeline) · WS4 T12-probe: the neutral E6 grain drivers the overlay bakes with · WS4 T12: the proven Δ≤0 carve law the epoch toggle folds into sampleRoutedHeight
+    import { bakeTectonicGrain } from './planet-lod-tectonic.js';  // WS4 T12-probe: pure (no-rng) per-node strike deriver — re-run with the overlay mesh+macroSeed to read back the SAME field the grain cube holds
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -3538,12 +3539,18 @@
         targetFraction: riverOverlayState.targetOceanFraction,
         radiusEarth: state.planetRadiusEarth,   // AC6: width/footprint scales with planet radius
         widthSeed: state.macroSeed,             // UAT item1: per-planet seeded width-scale draw
+        macroSeed: state.macroSeed,             // WS4 T8/D9: grain co-orients with the gProvince partition (same seed feeds uMacroOffset)
       });
       const stats = res.stats;
       // Always point the planet shader at the freshly-rendered carve cube (the REAL texture, never
       // the dummy) so AC4–6 combiners can sample its G/B channels. The dummy stands in ONLY before
       // the first route completes (the deferred initial route, below).
       uniforms.uRiverCarveMap.value = riverOverlay.carveTexture || _dummyCarveCube;
+      // WS4 T8: point the planet shader at the freshly-baked grain cube (the REAL strike field). The
+      // dummy 1×1 cube (set at init) stands in ONLY before the first route; once route() bakes, the
+      // grained combiners (T5 scarp / T13 rest) sample the shared field. Strength still defaults 0, so
+      // nothing changes visibly until uTectonicGrainStrength>0 — the branch guard keeps strength-0 byte-identical.
+      uniforms.uTectonicGrainCube.value = riverOverlay.grainTexture || uniforms.uTectonicGrainCube.value;
       uniforms.uRiverCarveGateHi.value = riverOverlayState.carveGateHi;
       applyCarveAmounts();                 // (re)apply the enabled && carve-gated gouging amounts
       riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
@@ -3718,7 +3725,11 @@
     fMountains.add(state, 'ridgeGain', 1.5, 2.5, 0.01).name('ridge gain');
     fMountains.add(state, 'mountainScale', 0.5, 5, 0.1).name('domain freq');
     fMountains.add(state, 'mountainsEnabled').name('✓ enabled');
-    fMountains.add({ roll(){ state.orogenyAngle = Math.random() * 2.0 * Math.PI - Math.PI; state.mountainDomainOffset = randOffset(); } }, 'roll').name('🎲 randomize');
+    // WS4 T14: gate the orogeny strike reroll. With grain ON (uTectonicGrainStrength>0) the shared
+    // grain cube governs every grained strike, so a 🎲 must NOT install an independent Math.random axis
+    // (that would decorrelate mountains from the one-shared-grain field). The domain offset (cosmetic
+    // warp, not strike) still rolls. Grain OFF → the legacy random-strike look is preserved verbatim.
+    fMountains.add({ roll(){ if (uniforms.uTectonicGrainStrength.value <= 0) state.orogenyAngle = Math.random() * 2.0 * Math.PI - Math.PI; state.mountainDomainOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     // ▸ Canyons (F4) — tectonic graben, writes the shared canyonHeight accumulator.
     // depth/count come from the driver preset+seed (.listen()-synced); width/floor are
     // lab knobs. A rift is a great circle; combining 1–3 gives a rift system.
@@ -3730,7 +3741,10 @@
     fCanyons.add(state, 'canyonsEnabled').name('✓ enabled');
     // Axes aren't frame-synced (they're a per-planet seed prop written in applyDrivers),
     // so the 🎲 writes the uniform directly — same as applyDrivers does.
+    // WS4 T14: gate the chasma strike reroll — with grain ON the shared cube is authoritative, so the
+    // randUnitVec3 axes are NOT installed (no independent random axis to break one-shared-grain).
     fCanyons.add({ roll(){
+      if (uniforms.uTectonicGrainStrength.value > 0) return;
       state.chasmaAxes = [randUnitVec3(), randUnitVec3(), randUnitVec3()];
       for (let i = 0; i < 3; i++) uniforms.uChasmaAxis.value[i].set(state.chasmaAxes[i][0], state.chasmaAxes[i][1], state.chasmaAxes[i][2]);
     } }, 'roll').name('🎲 randomize');
@@ -3745,9 +3759,13 @@
     fScarps.add(state, 'scarpWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
     fScarps.add(state, 'scarpWarpFreq', 0.5, 5, 0.1).name('warp freq');
     fScarps.add(state, 'scarpsEnabled').name('✓ enabled');
+    // WS4 T14: gate the scarp strike reroll — with grain ON the shared cube governs scarp strike, so
+    // the randUnitVec3 axis is NOT installed. The cosmetic domain offset still rolls (not strike).
     fScarps.add({ roll(){
-      state.scarpAxis = randUnitVec3();
-      uniforms.uScarpAxis.value.set(state.scarpAxis[0], state.scarpAxis[1], state.scarpAxis[2]);
+      if (uniforms.uTectonicGrainStrength.value <= 0) {
+        state.scarpAxis = randUnitVec3();
+        uniforms.uScarpAxis.value.set(state.scarpAxis[0], state.scarpAxis[1], state.scarpAxis[2]);
+      }
       state.scarpDomainOffset = randOffset();
     } }, 'roll').name('🎲 randomize');
     // ▸ Plateaus (F6) — flat-topped highlands. strength comes from the driver preset
@@ -3771,9 +3789,13 @@
     fTessera.add(state, 'tesseraWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
     fTessera.add(state, 'tesseraWarpFreq', 0.5, 5, 0.1).name('warp freq');
     fTessera.add(state, 'tesseraEnabled').name('✓ enabled');
+    // WS4 T14: gate the tessera strike reroll — with grain ON the shared cube governs both lattice
+    // axes, so the randUnitVec3 axes are NOT installed. The cosmetic domain offset still rolls.
     fTessera.add({ roll(){
-      state.tesseraAxes = [randUnitVec3(), randUnitVec3()];
-      for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(state.tesseraAxes[i][0], state.tesseraAxes[i][1], state.tesseraAxes[i][2]);
+      if (uniforms.uTectonicGrainStrength.value <= 0) {
+        state.tesseraAxes = [randUnitVec3(), randUnitVec3()];
+        for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(state.tesseraAxes[i][0], state.tesseraAxes[i][1], state.tesseraAxes[i][2]);
+      }
       state.tesseraDomainOffset = randOffset();
     } }, 'roll').name('🎲 randomize');
     // ▸ Edifices (F7) — volcanic shield/strato cones + summit caldera. volcanism strength /
@@ -5653,11 +5675,46 @@
                     rivers(on){ setRiverOverlay(on !== false); return riverOverlayState.enabled; },
                     riversReroute(opts){ if (opts && opts.seaFromHistogram !== undefined) riverOverlayState.seaFromHistogram = opts.seaFromHistogram; if (opts && opts.targetFraction !== undefined) riverOverlayState.targetOceanFraction = opts.targetFraction; riverReroute('manual'); return riverOverlay.stats; },
                     get riverOverlay(){ return riverOverlay; }, get riverStats(){ return riverOverlay.stats; }, riverState: riverOverlayState,
+                    // WS4 T8 — grain bake-once probe. grainBakeCount increments once per route() (the
+                    // once-per-(preset,seed,sea) cadence). The live bake-once AC reads it on :9223:
+                    // camera/time changes never call route() ⇒ count unchanged; preset/seed/sea changes
+                    // route() ⇒ count +1. grainTexture is the baked HalfFloat strike cube the shader samples.
+                    get grainBakeCount(){ return riverOverlay.grainBakeCount; },
+                    get grainTexture(){ return riverOverlay.grainTexture; },
                     // WS4 T5 — grain strength A/B hook. grainStrength() reads, grainStrength(s) sets the
                     // gate (0 = byte-identical fallback). The combiner BRANCHES on it, so 0 reverts to the
                     // pre-WS4 normalize(uXxxAxis) path exactly. Used by the live grain-zero-identical /
                     // one-shared-grain captures on :9223 (set 0, capture; set 1, capture; diff).
                     grainStrength(s){ if (s !== undefined) uniforms.uTectonicGrainStrength.value = +s; return uniforms.uTectonicGrainStrength.value; },
+                    // WS4 T12 — carve-EPOCH toggle for epoch-carve-visible. Off (default) = epoch 1, the
+                    // uncut authored relief; on = epoch 2, drainage carved into THAT SAME substrate. It gates
+                    // sampleRoutedHeight (above): ON folds perNodeIncision via applyIncision onto the routed
+                    // substrate, so the per-direction readback at channel dirs DECREASES while off-channel
+                    // dirs hold — the NUMERIC drop the AC requires (the cosmetic Stage-6 carveFloorCol
+                    // darkening leaves height unchanged and would FAIL this readback). Usage on :9223:
+                    //   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);
+                    //   _lab.setCarveEpoch(true);  const on  = _lab.sampleRoutedHeight(channelDirs);
+                    //   // assert on[k] < off[k] at channel dirs, on[k] === off[k] off-channel.
+                    _carveEpochOn: false,
+                    setCarveEpoch(on){ this._carveEpochOn = on !== false; return this._carveEpochOn; },
+                    get carveEpoch(){ return this._carveEpochOn; },
+                    // WS4 T18 — UAT bundle: a DETERMINISTIC seed control so Max's :9223 walkthrough can
+                    // reproduce "a couple of seeds" (plan T18) — the SAME worlds every run. The GUI
+                    // "New planet" button uses Math.random and cannot land on a specific world; setSeed
+                    // takes an INTEGER macroSeed (+ optional detailSeed, default = macroSeed) and threads
+                    // it through the EXISTING seeded updateSeedUniforms() path: it writes uMacroOffset
+                    // (which feeds BOTH the renderer AND the grain bake — D9), then the debounced
+                    // route() re-routes the network + re-bakes the grain cube, exactly like a GUI reroll.
+                    // No Math.random / Date.now: the integer seed is the only entropy, so same seed →
+                    // same world (the reproducibility the UAT bundle promises). Usage on :9223:
+                    //   _lab.setSeed(1234); _lab.grainStrength(1); _lab.setCarveEpoch(true);  // world A
+                    //   _lab.setSeed(5678);                                                   // world B
+                    setSeed(macro, detail){
+                      state.macroSeed = (macro >>> 0);
+                      state.detailSeed = (detail !== undefined ? detail : macro) >>> 0;
+                      updateSeedUniforms();
+                      return { macroSeed: state.macroSeed, detailSeed: state.detailSeed };
+                    },
                     // Option B river-LOD STEP 2 — bake the fine-tributary patch at the CURRENT camera + set strength.
                     // Usage: window._lab.bakeTributaryPatch({ angularDeg: 8, strength: 1 }) — bakes at the current
                     // camera direction, raises the patch strength, and returns { center,u,v,angular,segmentCount }.
@@ -5670,7 +5727,145 @@
                     },
                     get tributaryPatch(){ return tributaryPatch; },
                     deriveTributaryGridRes(){ return deriveTributaryGridRes(); },   // §3.2 gridRes probe
-                    get sceneTarget(){ return sceneTarget; } };
+                    get sceneTarget(){ return sceneTarget; },
+                    // ── WS4 T12-probe — the live read-out surfaces the live ACs bind to ──
+                    // Built because _lab exposed state/uniforms/riverStats/sceneTarget but NO per-direction
+                    // height read-back and NO per-feature strike read-out — so the live ACs would have
+                    // degraded to "does the screenshot LOOK aligned/cut?", which passes on a zonal banded
+                    // field that merely looks aligned, or on the cosmetic floor-darkening (Stage 6
+                    // carveFloorCol) with no real height drop. These give epoch-carve-visible a NUMERIC
+                    // height read-back and one-shared-grain a per-feature strike read-out.
+                    //
+                    // (1) sampleRoutedHeight(dirs): the ROUTED-substrate height (the ROUTER_MAIN field the
+                    // carve is computed over — planet-lod-rivers.js createHeightSampler/route) at each
+                    // requested world direction. NOT a rendered-chain sample (honest per plan D5c — the
+                    // full rendered-chain readback is the deferred T12b). dirs = array of [x,y,z] (or
+                    // THREE.Vector3). Returns a Float64Array, one height per dir, via NEAREST-mesh-node
+                    // lookup (max dot product of the normalized dir with each mesh vertex). epoch-carve-
+                    // visible reads channel-node dirs carve-off vs carve-on: ON must DECREASE the height.
+                    sampleRoutedHeight(dirs){
+                      const ov = riverOverlay;
+                      const authored = ov && ov.height;   // last sampler.read() routed substrate (epoch 1, ROUTER_MAIN)
+                      const mesh = ov && ov.mesh;         // { verts:[[x,y,z],…], N }
+                      if (!authored || !mesh || !mesh.verts) return null;   // overlay not yet routed
+                      // WS4 T12 — carve-epoch gate. epoch 1 (carve OFF) = the AUTHORED routed substrate as
+                      // read. epoch 2 (carve ON) = authored + perNodeIncision folded onto a FRESH array via
+                      // applyIncision (the SAME Δ≤0 law the unit ws4-carve-subtractive / ws4-epoch proved
+                      // strictly subtractive). So the readback at channel dirs DROPS when the epoch is on,
+                      // off-channel dirs hold — the NUMERIC gate epoch-carve-visible binds to (NOT the
+                      // cosmetic Stage-6 carveFloorCol darkening, which leaves height unchanged). Honest per
+                      // plan D5c: this is the ROUTER_MAIN field the carve is computed over, NOT a rendered-
+                      // chain sample (that is the deferred T12b). No rng / no wall-clock entropy —
+                      // applyIncision/perNodeIncision are pure, so the readback is deterministic.
+                      let h = authored;
+                      if (this._carveEpochOn && ov.routed){
+                        const incision = perNodeIncision({ mesh, routed: ov.routed, authored, params: ov.params });
+                        h = applyIncision(authored, incision);   // fresh array — epoch 1 (authored) untouched
+                      }
+                      const verts = mesh.verts, N = verts.length;
+                      const list = Array.isArray(dirs) ? dirs : [dirs];
+                      const out = new Float64Array(list.length);
+                      for (let k = 0; k < list.length; k++) {
+                        const d = list[k];
+                        let dx = d.x !== undefined ? d.x : d[0];
+                        let dy = d.y !== undefined ? d.y : d[1];
+                        let dz = d.z !== undefined ? d.z : d[2];
+                        const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+                        let best = -2, bi = 0;            // pick the mesh node the direction points AT
+                        for (let i = 0; i < N; i++) {
+                          const v = verts[i];
+                          const dot = v[0] * dx + v[1] * dy + v[2] * dz;
+                          if (dot > best) { best = dot; bi = i; }
+                        }
+                        out[k] = h[bi];
+                      }
+                      return out;
+                    },
+                    // (2) probeStrike(featureKey, dir): one grained feature's EFFECTIVE sampled strike at a
+                    // world direction — re-deriving the SHARED field via the pure bakeTectonicGrain (the
+                    // same deriver + same neutral DEFAULT_GRAIN_DRIVERS + same state.macroSeed the overlay
+                    // baked into the cube, so it is byte-identical to the cube, no rng) and blending the
+                    // feature's OWN axis toward that shared strike EXACTLY like the branch-guarded shader
+                    // combiner: strength>0 ? normalize(mix(uXxxAxis, sharedStrike, strength)) : uXxxAxis.
+                    // So at strength 0 it returns the feature's pre-WS4 axis (features DECORRELATED), at
+                    // strength 1 the shared strike (all six IDENTICAL) — the exact distinction one-shared-
+                    // grain needs ("all read the cube" vs "all happen to point similar"). Orogeny is the
+                    // vec2 xz special case (plan D7): its shared endpoint is the strike projected onto xz.
+                    probeStrike(featureKey, dir){
+                      const shared = this._sharedStrikeAt(dir);          // vec3 world strike from the field
+                      if (!shared) return null;
+                      const s = uniforms.uTectonicGrainStrength.value;
+                      const u = uniforms;
+                      const axMap = {
+                        orogeny: () => new THREE.Vector3(u.uOrogenyAxis.value.x, 0, u.uOrogenyAxis.value.y), // vec2 xz
+                        scarp:   () => u.uScarpAxis.value.clone(),
+                        chasma:  () => u.uChasmaAxis.value[0].clone(),
+                        tessera: () => u.uTesseraAxis.value[0].clone(),
+                        lava:    () => u.uLavaAxis.value.clone(),
+                        cryo:    () => u.uCryoRidgeAxis0.value.clone(),
+                      };
+                      const mk = axMap[featureKey];
+                      if (!mk) return null;
+                      const axis = mk().normalize();
+                      if (!(s > 0)) return axis;                          // BRANCH: strength 0 ⇒ own axis verbatim
+                      if (featureKey === 'orogeny') {
+                        // vec2 special case: project the shared strike onto the xz-plane, mix in 2D, lift back.
+                        const g = new THREE.Vector2(shared.x, shared.z); if (g.lengthSq() > 1e-12) g.normalize();
+                        const a2 = new THREE.Vector2(axis.x, axis.z);
+                        const m2 = a2.lerp(g, s); if (m2.lengthSq() > 1e-12) m2.normalize();
+                        return new THREE.Vector3(m2.x, 0, m2.y);
+                      }
+                      const mixed = axis.lerp(shared.clone(), s);
+                      if (mixed.lengthSq() > 1e-12) mixed.normalize();
+                      return mixed;
+                    },
+                    // grainProbe(): the whole read-out one-shared-grain asserts over — the live strength +
+                    // every grained feature's effective strike at a probe direction (default +X), plus the
+                    // raw shared strike. Set strength=1, perturb the cube (reroll/re-bake), confirm ALL SIX
+                    // strikes move together; at strength=0 NONE move (each is its own pre-WS4 axis). Re-
+                    // derives the shared field with the overlay's mesh + the SAME drivers/macroSeed the bake
+                    // used (D9: state.macroSeed feeds both uMacroOffset and the grain bake).
+                    grainProbe(dir){
+                      const probeDir = dir || [1, 0, 0];
+                      const shared = this._sharedStrikeAt(probeDir);
+                      if (!shared) return null;
+                      const sv = (v) => v ? [v.x, v.y, v.z] : null;
+                      return {
+                        strength: uniforms.uTectonicGrainStrength.value,
+                        macroSeed: state.macroSeed,
+                        dir: (probeDir.x !== undefined) ? [probeDir.x, probeDir.y, probeDir.z] : probeDir.slice(),
+                        sharedStrike: sv(shared),
+                        // all six grained features (orogeny / chasma / scarp / tessera / lava / cryo): a
+                        // missing or independent one fails one-shared-grain.
+                        orogeny: sv(this.probeStrike('orogeny', probeDir)),
+                        chasma:  sv(this.probeStrike('chasma',  probeDir)),
+                        scarp:   sv(this.probeStrike('scarp',   probeDir)),
+                        tessera: sv(this.probeStrike('tessera', probeDir)),
+                        lava:    sv(this.probeStrike('lava',    probeDir)),
+                        cryo:    sv(this.probeStrike('cryo',    probeDir)),
+                      };
+                    },
+                    // Internal: the shared per-node world strike at a direction, re-derived from the field
+                    // the cube holds (bakeTectonicGrain — pure, macroSeed-only entropy, no Math.random /
+                    // Date.now), via the SAME nearest-mesh-node lookup as sampleRoutedHeight.
+                    _sharedStrikeAt(dir){
+                      const ov = riverOverlay;
+                      const mesh = ov && ov.mesh;
+                      if (!mesh || !mesh.verts) return null;
+                      const grain = bakeTectonicGrain({ mesh, drivers: DEFAULT_GRAIN_DRIVERS, macroSeed: state.macroSeed });
+                      const verts = mesh.verts, N = verts.length;
+                      let dx = dir.x !== undefined ? dir.x : dir[0];
+                      let dy = dir.y !== undefined ? dir.y : dir[1];
+                      let dz = dir.z !== undefined ? dir.z : dir[2];
+                      const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+                      let best = -2, bi = 0;
+                      for (let i = 0; i < N; i++) {
+                        const v = verts[i];
+                        const dot = v[0] * dx + v[1] * dy + v[2] * dz;
+                        if (dot > best) { best = dot; bi = i; }
+                      }
+                      return new THREE.Vector3(grain.strikeWorldX[bi], grain.strikeWorldY[bi], grain.strikeWorldZ[bi]);
+                    } };
 
     // ── HOT-RELOAD SCENARIO PERSISTENCE (2026-06-10) ──
     // Vite full-reloads this page on ANY edit to it, silently resetting preset/solo/

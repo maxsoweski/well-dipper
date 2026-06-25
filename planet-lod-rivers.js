@@ -15,6 +15,11 @@ import * as THREE from 'three';
 import { ConvexHull } from 'three/addons/math/ConvexHull.js';
 import { HEIGHT_GLSL } from './planet-lod-height.glsl.js';
 import { solveSeaLevel } from './planet-lod-sealevel.js';
+// WS4 T8 — grain bake host. The derivation (bakeTectonicGrain) + cube geometry (buildGrainCubeGeometry)
+// + the HalfFloat cube baker (createGrainCube) all live in planet-lod-tectonic.js (the net-new
+// orchestrator, plan §D1). createRiverOverlay.route() drives them once per body so the grain bake
+// rides the same once-per-(preset,seed,sea) cadence the carve cube already uses (bake-once AC).
+import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './planet-lod-tectonic.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
 export const DEFAULT_PARAMS = Object.freeze({
@@ -50,9 +55,60 @@ export const DEFAULT_PARAMS = Object.freeze({
   // ── carve (river→valley incision) ──
   VALLEY_WIDTH_MUL: 4.0,   // valley footprint = water width × this (the V is wider than the water)
   VALLEY_DEPTH_LO: 0.45, VALLEY_DEPTH_HI: 1.0,   // center depth (0..1) lerped by stream order; cube map stores this
+  // ── WS4 T10 stream-power incision law (perNodeIncision) ──
+  // Δ = -K·A^m·S^n is the DEFAULT carve-depth law (Max decision #1, 2026-06-25): channel-node incision
+  // scales with drainage area A (accum) and local downslope gradient S, NOT the legacy order-only tent.
+  // The RAW K·A^m·S^n magnitudes are NORMALIZED across channel nodes into [VALLEY_DEPTH_LO..HI] (the
+  // HalfFloat carve-cube band, range guard §D5b), so K is an overall gain that cancels under
+  // normalization — m/n set the SHAPE (relative depth of big-A/steep channels vs small ones). Keep them
+  // named so A/B tuning is a param change, not an edit. params.LEGACY_DEPTH=true falls back to the old
+  // Strahler tent (depthAt) for A/B; default = stream-power (the tent is the FLAG, not the default).
+  CARVE_K: 1.0, CARVE_M: 0.5, CARVE_N: 1.0,
   CARVE_CUBE_SIZE: 1024,
+  // WS4 T8: the grain cube is a WHOLE-SPHERE direction field (one strike per node), not sparse valley
+  // strips, so it tolerates a much smaller cube than the carve cube — 256 keeps the bake cheap (it
+  // re-bakes once per (preset,seed,sea), same cadence as the carve). Documented tunable per intent.
+  GRAIN_CUBE_SIZE: 256,
   TARGET_OCEAN_FRACTION: 0.35,   // AC3: solve uSeaLevel to this fraction (band 0.25–0.45)
 });
+
+// WS4 T8 default E6 stress drivers for the grain bake. The lab does not yet surface despin/radial-strain
+// (D11/D12) as GUI drivers, so the host supplies this NEUTRAL bundle (matching the grain-oracle test):
+// despinAmp 1, contraction sign +1, zero radial strain. When WS1's driver vector wires through, the
+// host passes the real bundle; until then neutral gives the deterministic latitude-banded strike the
+// smooth director + macroSeed band-placement organize into 2D in-shader (T13).
+export const DEFAULT_GRAIN_DRIVERS = Object.freeze({ despinAmp: 1, radialStrainSign: 1, radialStrainMag: 0 });
+
+// ───────────────────────── WS4 T8 — grain bake orchestration helper ─────────────────────────
+// bakeGrainCube({ mesh, drivers, macroSeed, grainCube, deriveGrain, buildGrainGeo }) — the ONE place
+// the per-body grain bake happens: derive the per-node strike-only field (bakeTectonicGrain, plan §D1),
+// build the full-sphere cube geometry (buildGrainCubeGeometry, §D2/T7), and hand it to the grain cube's
+// update() so the CubeCamera rasterizes the HalfFloat strike/grainMag/regime cube the shader samples.
+//
+// Called ONCE per createRiverOverlay.route() (so it inherits route()'s once-per-(preset,seed,sea)
+// debounce — bake-once AC). Pure except for the single grainCube.update() side effect: the derivation
+// has no rng / no Date.now (entropy = the integer macroSeed only, §D9), so re-running with the same
+// (mesh, drivers, macroSeed) yields a byte-identical strike field. Returns the per-node arrays so the
+// host can probe the shared field (one-shared-grain). grainCube may be null (the host may bake before
+// the cube exists / in a renderer-less context) — the derivation still runs, the GPU update is skipped.
+//
+// deriveGrain / buildGrainGeo are injectable for headless testing (the real defaults are the pure
+// planet-lod-tectonic.js functions; a test passes a spy cube + the real pure derivers to assert the
+// once-per-call contract WITHOUT a WebGL renderer).
+export function bakeGrainCube({
+  mesh, drivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, grainCube,
+  deriveGrain = bakeTectonicGrain, buildGrainGeo = buildGrainCubeGeometry,
+} = {}) {
+  const grain = deriveGrain({ mesh, drivers, macroSeed });
+  const geo = buildGrainGeo({
+    mesh,
+    strikeWorld: { x: grain.strikeWorldX, y: grain.strikeWorldY, z: grain.strikeWorldZ },
+    grainMag: grain.grainMag,
+    regime: grain.regime,
+  });
+  if (grainCube && typeof grainCube.update === 'function') grainCube.update(geo);
+  return grain;
+}
 
 // AC6: object-space river-width factor for a planet of radiusEarth. ∝ refRadius/radiusEarth
 // (bigger world ⇒ proportionally thinner rivers ⇒ smaller disk-fraction), clamped off the
@@ -709,6 +765,116 @@ export function buildValleyGeometry({ mesh, routed, isOcean, params = DEFAULT_PA
   return g;
 }
 
+// ───────────── WS4 T9/T10 — perNodeIncision: the REAL carve operand (Δ ≤ 0 per mesh node) ─────────────
+// THE problem this solves (plan §D5-pre): `buildValleyGeometry` returns 3-rail STRIP geometry whose
+// `aDepth` is a POSITIVE tent on new strip vertices that do NOT map 1:1 to mesh nodes; `routeAndOrder`
+// returns `filled` (priority-flood, which RAISES). Neither is a per-node `carved[i]`, so the
+// `carve-subtractive` AC ("carved ≤ authored at every vertex") had no operand. `perNodeIncision` is that
+// missing single source of carve depth: a Float32Array Δ over the SAME mesh nodes, every Δ[i] ≤ 0, the
+// per-node height drop the carve applies. `buildValleyGeometry`'s per-rail `aDepth` and the carve cube's
+// R channel both DERIVE from `-Δ[i]` (so the unit and the rendered cube agree by construction, not by
+// coincidence — plan §D5/T9). This is a PURE function over the routed substrate: no rng, no Date.now —
+// re-running with the same (mesh, routed, authored, params) yields a byte-identical Δ.
+//
+// `authored` is the height the router actually routed on (the routed substrate, ROUTER_MAIN field). The
+// helper does NOT witness the shader's `reliefGate` (a rendered-only field, §D5d, proven LIVE in T12) and
+// does NOT mutate `authored` (epoch-build-identical, §T11 — the caller applies Δ to a fresh copy).
+//
+// DEFAULT carve law (Max decision #1): stream-power Δ = -K·A^m·S^n on channel nodes, 0 elsewhere.
+//   A = accum[i] (drainage area proxy); S[i] = local downslope gradient = max over adj of
+//       (surf(i)-surf(nb))/dist(i,nb) using routed.surf (the flat-resolved filled+gradOff closure).
+// The raw K·A^m·S^n magnitudes are NORMALIZED across channel nodes into [VALLEY_DEPTH_LO..HI] — the
+// HalfFloat carve-cube depth band (range guard §D5b) — so the deepest trunk lands at HI and shallower
+// channels scale down proportionally; deep trunks can't clip the cube or blow the carve budget.
+// params.LEGACY_DEPTH=true falls back to the legacy order-only Strahler tent (depthAt) for A/B.
+export function perNodeIncision({ mesh, routed, authored, params = DEFAULT_PARAMS }) {
+  const { adj, pos } = mesh;
+  const N = mesh.N != null ? mesh.N : (pos.length / 3);
+  const { MIN_ORDER, VALLEY_DEPTH_LO, VALLEY_DEPTH_HI, CARVE_K, CARVE_M, CARVE_N } = params;
+  const { accum, strahler, isChannel, surf, maxOrder } = routed;
+  // void authored: the law is computed over the routed graph; authored is the substrate the caller
+  // proves the subtraction against (carved = authored + Δ) and is intentionally NOT mutated here.
+  void authored;
+
+  const incision = new Float32Array(N); // defaults to 0 everywhere (off-channel nodes stay untouched)
+
+  // channel mask — mirror buildValleyGeometry's `rendered`: a real channel of at least MIN_ORDER.
+  const isCarved = (i) => isChannel[i] && strahler[i] >= MIN_ORDER;
+
+  // node-to-node geodesic-ish distance on the unit sphere (chord length is fine for a local gradient).
+  const dist = (i, j) => {
+    const dx = pos[i * 3] - pos[j * 3];
+    const dy = pos[i * 3 + 1] - pos[j * 3 + 1];
+    const dz = pos[i * 3 + 2] - pos[j * 3 + 2];
+    return Math.hypot(dx, dy, dz);
+  };
+  // local downslope gradient S[i] (≥ 0): steepest drop from i to any lower neighbour on the routed
+  // surface. surf is the closure (i)=>filled[i]+gradOff[i] (rivers.js routeAndOrder), so this is the
+  // flat-resolved hydrologic gradient the routing itself used.
+  const slopeAt = (i) => {
+    const si = surf(i);
+    let best = 0;
+    for (const nb of adj[i]) {
+      const d = dist(i, nb);
+      if (d < 1e-9) continue;
+      const g = (si - surf(nb)) / d;
+      if (g > best) best = g;
+    }
+    return best;
+  };
+
+  // legacy order-only tent (depthAt) reachable behind LEGACY_DEPTH for A/B (plan §T10).
+  const LEGACY = !!params.LEGACY_DEPTH;
+  const legacyDepth = (o) => {
+    const t = THREE.MathUtils.clamp((o - MIN_ORDER) / Math.max(1, maxOrder - MIN_ORDER), 0, 1);
+    return VALLEY_DEPTH_LO + (VALLEY_DEPTH_HI - VALLEY_DEPTH_LO) * t; // already in-band
+  };
+
+  if (LEGACY) {
+    for (let i = 0; i < N; i++) if (isCarved(i)) incision[i] = -legacyDepth(strahler[i]);
+    return incision;
+  }
+
+  // ── stream-power (default): raw magnitude K·A^m·S^n per channel node, then normalize into the band ──
+  const raw = new Float32Array(N);
+  let maxRaw = 0;
+  for (let i = 0; i < N; i++) {
+    if (!isCarved(i)) continue;
+    const A = accum[i] > 0 ? accum[i] : 0;
+    const S = slopeAt(i);
+    const r = CARVE_K * Math.pow(A, CARVE_M) * Math.pow(S, CARVE_N);
+    raw[i] = r;
+    if (r > maxRaw) maxRaw = r;
+  }
+  if (maxRaw <= 0) return incision; // no carveable channels (degenerate) → all-zero, still subtractive
+
+  // map raw ∈ (0..maxRaw] → depth ∈ [VALLEY_DEPTH_LO..VALLEY_DEPTH_HI]; deepest channel = HI, the rest
+  // scale linearly by their stream-power magnitude (so deep, high-A/steep trunks sit deepest, in-band).
+  const span = VALLEY_DEPTH_HI - VALLEY_DEPTH_LO;
+  for (let i = 0; i < N; i++) {
+    if (!isCarved(i) || raw[i] <= 0) continue;
+    const depth = VALLEY_DEPTH_LO + span * (raw[i] / maxRaw);
+    incision[i] = -depth; // strictly ≤ 0 (depth ∈ [LO..HI] > 0)
+  }
+  return incision;
+}
+
+// ───────────── WS4 T11 — applyIncision: fold the carve onto an IMMUTABLE COPY of the build snapshot ─────
+// AC `epoch-build-identical` (unit, plan §T11). The carve apply step MUST read the epoch-1 build snapshot
+// (`authored` = the routed substrate / ROUTER_MAIN field) and WRITE A FRESH array — it must NOT mutate
+// `authored` in place. This preserves epoch 1 byte-identically through epoch 2, so:
+//   carved[i] = authored[i] + incision[i],  incision[i] ≤ 0  ⇒  carved[i] ≤ authored[i] (height only drops).
+// This is the SINGLE fold of perNodeIncision (T9/T10) onto the snapshot; keeping it a pure, allocating
+// helper (no in-place `authored[i] +=`) is exactly the immutability the AC binds to. Pure: no rng, no
+// Date.now — same (authored, incision) → byte-identical carved. (The rendered "epoch 1 is the uncut
+// relief" claim rests on the LIVE readback T12; this unit proves only the JS-side immutable-copy + Δ≤0.)
+export function applyIncision(authored, incision) {
+  const N = authored.length;
+  const carved = new Float32Array(N); // fresh array — authored (the build snapshot) is never written
+  for (let i = 0; i < N; i++) carved[i] = authored[i] + incision[i];
+  return carved;
+}
+
 // Cube map of valley depth (R channel), rendered from the valley footprint geometry by a CubeCamera
 // at the origin. MAX blend + no depth test so the deepest valley wins where tributaries overlap; the
 // planet shader samples it as textureCube(map, normalize(vPos)).r — direction-keyed, so no equirect
@@ -794,10 +960,16 @@ export function buildStats({ routed, height, N, faces, seaLevel, oceanCount, rib
 //   route({seaMode,targetFraction}) — 'histogram' (default; solves sea to targetFraction and
 //             returns it so the host can drive its water to match) or 'live' (uses the host's
 //             current uniforms.uSeaLevel as the outlet condition, no sea override).
-export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS, octavesDuringRead = 9 }) {
+export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS, octavesDuringRead = 9,
+                                     makeGrainCube = createGrainCube }) {
   let mesh = null, sampler = null, carve = null, N = 0;
   let height = null, grad = null, isOcean = null, oceanCount = 0, seaLevel = 0, stats = null, meshMs = 0;
   let routedGraph = null;   // AC2: retain the router graph (receiver/accum/strahler/isChannel) instead of discarding it
+  // WS4 T8: the grain cube (whole-sphere strike field) + a bake counter. grainBakeCount increments
+  // once per route() (the bake-once cadence — camera/time changes never call route(), so they never
+  // re-bake; preset/seed/sea changes go through route() and DO). makeGrainCube is injectable so a
+  // headless test can swap a renderer-less stub for the GPU CubeCamera baker.
+  let grainCube = null, grainBakeCount = 0;
   const ribbon = new THREE.Mesh(
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
@@ -815,10 +987,15 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     mesh.pos = pos; mesh.N = N;
     sampler = createHeightSampler({ renderer, uniforms, verts: mesh.verts, octavesDuringRead });
     carve = createCarveCubeMap({ renderer, size: params.CARVE_CUBE_SIZE });
+    // WS4 T8: the grain cube rides the same lazy-once lifecycle as the carve cube (built on first
+    // route(), reused thereafter). makeGrainCube defaults to the real createGrainCube (CubeCamera RTT);
+    // a test injects a stub so this is renderer-free in CI.
+    grainCube = makeGrainCube({ renderer, size: params.GRAIN_CUBE_SIZE });
     meshMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
   }
 
-  function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, widthSeed = null, label = 'route' } = {}) {
+  function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, widthSeed = null,
+                   grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
     const r = sampler.read(); height = r.height; grad = r.grad;
@@ -835,6 +1012,13 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // carve: rasterize the valley footprint into the depth (R) + mouth (G) + order (B) cube map
     const valleyGeo = buildValleyGeometry({ mesh, routed, isOcean, params: pEff });
     carve.update(valleyGeo);
+    // WS4 T8: bake the grain cube ONCE per route — same cadence as the carve cube (bake-once AC).
+    // route() is only called on (preset, seed, sea-level) change (via riverRerouteDebounced /
+    // ensureNetworkRouted); camera/time changes never call route(), so they never re-bake. macroSeed
+    // co-orients the grain with the gProvince partition (D9); grainDrivers default to the neutral E6
+    // bundle until WS1's driver vector wires through.
+    bakeGrainCube({ mesh, drivers: grainDrivers, macroSeed, grainCube });
+    grainBakeCount++;
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
     stats = buildStats({ routed, height, N, faces: mesh.faces.length, seaLevel, oceanCount, ribGeo, label, totalMs });
     stats.meshMs = +meshMs.toFixed(0);
@@ -851,6 +1035,10 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     get sampler() { return sampler; },
     get routed() { return routedGraph; },
     get carveTexture() { return carve ? carve.texture : null; },
-    dispose() { if (sampler) sampler.dispose(); if (carve) carve.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
+    // WS4 T8: the baked grain cube texture (the host pushes it to uTectonicGrainCube) + the bake
+    // counter (the bake-once live AC reads it: unchanged on camera/time, +1 per preset/seed/sea change).
+    get grainTexture() { return grainCube ? grainCube.texture : null; },
+    get grainBakeCount() { return grainBakeCount; },
+    dispose() { if (sampler) sampler.dispose(); if (carve) carve.dispose(); if (grainCube && grainCube.dispose) grainCube.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
   };
 }

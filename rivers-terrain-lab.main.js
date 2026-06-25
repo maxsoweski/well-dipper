@@ -162,6 +162,52 @@ window._rivers = {
   // re-read only (no seed change) — re-solves the sea, then re-routes.
   rereadAndRoute(){ return regen('reread', { seaMode:'histogram' }); },
   get TARGET_OCEAN_FRACTION(){ return overlay.params.TARGET_OCEAN_FRACTION; },
+  // ── WS4 T15: numeric both-poles + lakes read-out (router-zero-drift AC) ──
+  // The four zero-drift metrics live on .stats (oceanPct/maxStrahler/orphanPct/uphillPct); this probe
+  // surfaces the "both poles clean + lakes intact" half of the AC as FALSIFIABLE NUMBERS off the routed
+  // graph the overlay retains (overlay.routed), so the live :9223 gate reads back numbers, not pixels
+  // (the dossier's live-test discipline: a colour screenshot can lie — endorheic floors look like lakes,
+  // a banded cap looks "clean"). NO routing is recomputed here — it reads the committed AC2/AC3 graph, so
+  // there is no second router to drift. NO Math.random/Date.now (HARD RULE): pure reads + a `dist` from
+  // mesh adjacency, matching routeAndOrder's own surf-gradient definition.
+  polesAndLakes(){
+    const routed = overlay.routed, mesh = overlay.mesh, isOcean = overlay.isOcean, height = overlay.height;
+    if (!routed || !mesh || !isOcean || !height) return null;
+    const { receiver, surf, filled, selfLoopLand } = routed;
+    const verts = mesh.verts, N = mesh.N;
+    // "clean pole cap" = within POLE_CAP_COS of a pole (|y| high), no orphan (never-reaches-ocean) and no
+    // uphill receiver edge — the same orphan/uphill conditions routeAndOrder counts globally, restricted
+    // to the cap. We re-walk reachesOcean off receiver/isOcean so the cap read matches the AC definition.
+    const POLE_CAP_COS = 0.92;   // |y| ≥ 0.92 ≈ within ~23° of a pole
+    function reachesOcean(start){
+      let c = start, hops = 0;
+      while (hops++ < N){ if (isOcean[c]) return true; const r = receiver[c]; if (r === c) return false; c = r; }
+      return false;
+    }
+    const cap = (sign) => {
+      let count = 0, land = 0, orphan = 0, uphill = 0;
+      for (let i = 0; i < N; i++){
+        const y = verts[i][1];
+        if (sign > 0 ? y < POLE_CAP_COS : y > -POLE_CAP_COS) continue;
+        count++;
+        if (isOcean[i]) continue;
+        land++;
+        if (receiver[i] !== i && surf(receiver[i]) > surf(i) + 1e-9) uphill++;
+        if (!reachesOcean(i)) orphan++;
+      }
+      return { count, land, orphan, uphill, clean: orphan === 0 && uphill === 0 };
+    };
+    // lakes / endorheic basins: priority-flood RAISES height to `filled` at internally-drained cells
+    // (filled[i] > height[i] on land), plus land sinks (selfLoopLand). A nonzero, stable count = "lakes
+    // intact"; it going to 0 (or exploding) is a sphere-mapping/routing regression.
+    let floodedLand = 0;
+    for (let i = 0; i < N; i++){ if (!isOcean[i] && filled[i] > height[i] + 1e-6) floodedLand++; }
+    return {
+      north: cap(+1), south: cap(-1),
+      lakes: { floodedLand, selfLoopLand, basins: floodedLand },
+      bothPolesClean: cap(+1).clean && cap(-1).clean,
+    };
+  },
 };
 window.__riversTerrainReady = true;
 
