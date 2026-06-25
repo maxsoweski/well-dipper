@@ -14,3 +14,32 @@ export function calibrateTidal(rawIoRatio) {
   const h = Math.max(0, rawIoRatio || 0);
   return Math.tanh(Math.log10(1 + h) / TIDAL_LOG_KNEE);
 }
+
+// ── F2 adapter: WS1 planetData -> base-step bundle (pure; never mutates planetData) ──
+export function adaptL0(planetData) {
+  const p = planetData || {};
+  const comp = p.composition || {};
+  // density: PhysicsEngine emits kg/m³ (1000..8000); the base step's smoothstep(2.5,3.9,density)
+  // expects g/cm³. Convert when it looks like kg/m³ (>100); pass through g/cm³ / default otherwise.
+  const rawDensity = comp.density;
+  const density = (rawDensity != null && rawDensity > 100)
+    ? rawDensity * DENSITY_KGM3_TO_GCM3
+    : (rawDensity ?? 5.5);
+  return {
+    // tidal: PREFER upstream D12 (single-source). undefined => base step recomputes via Io-formula.
+    tidalHeat: (p.tidalHeating != null) ? p.tidalHeating : undefined,
+    // age (Gyr) -> ageNorm [0,1]
+    ageNorm: (p.age != null) ? clamp01(p.age / AGE_NORM_DIVISOR) : undefined,
+    // data-only pass-throughs (eccentricity present but UNUSED by heat on the precedence path)
+    magneticField: p.magneticField,
+    metallicity: p.metallicity,
+    eccentricity: p.eccentricity,
+    systemContext: p.systemContext,
+    // physical fields the base-step derivation reads
+    radiusEarth: p.radiusEarth,
+    massEarth: p.massEarth,
+    T_eq: p.T_eq,
+    composition: { ...comp, density },
+    surfaceHistory: p.surfaceHistory ? { ...p.surfaceHistory } : undefined,
+  };
+}
