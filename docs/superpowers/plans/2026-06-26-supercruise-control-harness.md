@@ -51,7 +51,7 @@ Build `src/flight/ShipControls.js` — the single named control surface owning `
   - `steerToward(orientation, from, toBody, steerGain, out?): {yaw,pitch}` (NEW, `aimAssist.js`).
   - `PILOT_TUNING.STEER_GAIN = 3.0` (`SupercruisePilot.js:19`).
 - **Produces (CONTRACT — exact signatures):**
-  - `export class ShipControls`, `constructor({ model, pilot, head, host = {} })`.
+  - `export class ShipControls`, `constructor({ model, pilot, head, host = {}, stickTuning = null })` — extends the contract opts with `stickTuning` so the live `_scStickTuning` object can be single-sourced (`controls.tuning` REFERENCES it; no `stickTuning` ⇒ own `{ ...STICK_TUNING }` copy for the lab/headless case).
   - `host` delegates (all optional): `host.selectTarget(target)`, `host.deselectTarget()`, `host.resolveSelectedBody() → {mesh,radius}|null`, `host.enterFlight(type)`, `host.exitFlight()`, `host.readFlightType() → 'manual'|'align'|'assist'`, `host.setDeflection({x,y})`, `host.dropState() → {state,d,captureSphere,dropMaxSpeed}`.
   - `setThrottle(t: number): void` — delegates `model.setThrottle(t)`; reverse real (`setThrottle(-0.5)` ⇒ `model.throttle === -0.5`).
   - `steer(x: number, y: number): void` — `shapeStick(x,y,{deadzone:tuning.DEADZONE,expo:tuning.EXPO})` (casing reconciled), then `model.setTurnInput(-shaped.x,-shaped.y)` AND `host.setDeflection?.({x:shaped.x,y:shaped.y})`.
@@ -457,7 +457,7 @@ describe('get target — named accessor over pilot._target', () => {
 - [ ] **Step 17: Run it, verify it fails** — Run: `npx vitest run src/flight/__tests__/ShipControls.test.js`
   Expected: FAIL — `Failed to resolve import "../ShipControls.js"` (module does not exist; all describe blocks error).
 
-- [ ] **Step 18: Write minimal implementation — `src/flight/ShipControls.js` (pure verbs + step + getState + target)** — create the file. `flyTo`/`engage`/`disengage`/`selectTarget`/`deselect` are stubbed here and completed in Steps 21/26 so each verb lands behind its own test. Tuning defaults come from `STICK_TUNING` (the casing fix lowercases them at the call site):
+- [ ] **Step 18: Write minimal implementation — `src/flight/ShipControls.js` (pure verbs + step + getState + target)** — create the file. `flyTo`/`engage`/`disengage`/`selectTarget`/`deselect` are stubbed here and completed in Steps 21/26 so each verb lands behind its own test. The stick tuning is SINGLE-SOURCED: `controls.tuning` REFERENCES the `stickTuning` object passed in (in-game that is the live `_scStickTuning`, Step 30(b)), defaulting to its own `{ ...STICK_TUNING }` copy only in the lab/headless case (no `stickTuning` arg). The casing fix lowercases `tuning.DEADZONE`/`tuning.EXPO` at the `shapeStick` call site:
 
 ```js
 // src/flight/ShipControls.js
@@ -485,14 +485,20 @@ export { PILOT_FRAME_FIELDS } from './SupercruisePilot.js';
 const INERT_DROP = Object.freeze({ state: 'none', d: null, captureSphere: null, dropMaxSpeed: null });
 
 export class ShipControls {
-  constructor({ model, pilot, head, host = {} }) {
+  constructor({ model, pilot, head, host = {}, stickTuning = null }) {
     this.model = model;
     this.pilot = pilot;
     this.head = head;
     this.host = host;
     // Live stick deadzone+expo tuning (UPPERCASE keys, as STICK_TUNING ships).
     // steer() lowercases these into shapeStick's opts so they actually apply.
-    this.tuning = { ...STICK_TUNING };
+    // SINGLE SOURCE: in-game, main.js passes the live module-scoped
+    // _scStickTuning object (= window._sc.stickTuning) as `stickTuning`, and we
+    // REFERENCE it (no spread/copy) so controls.tuning === _scStickTuning — the
+    // same object the live `_deflected` input-gate reads (shapeStick(nx,ny,
+    // _scStickTuning), main.js:9270). Mutating one UAT knob then moves both.
+    // Lab/headless (no stickTuning) ⇒ own default copy so the lab still works.
+    this.tuning = stickTuning ?? { ...STICK_TUNING };
     this._arrival = null;       // the in-flight Arrival being polled (flyTo)
   }
 
@@ -771,6 +777,12 @@ describe('engage / disengage — host delegation (no-snap exit preserved in host
   // through this surface is Task 3 — here we only build + expose it.
   const scControls = new ShipControls({
     model: scModel, pilot: scPilot, head: scHead,
+    // SINGLE SOURCE: pass the live module-scoped _scStickTuning object
+    // (= window._sc.stickTuning, src/main.js:480,487; also read by the live
+    // `_deflected` gate at :9270) so controls.tuning === _scStickTuning — one
+    // shared tuning object, NOT a copy. A UAT mutation of either then moves
+    // both (the casing fix in steer() reads this same object's DEADZONE/EXPO).
+    stickTuning: _scStickTuning,
     host: {
       selectTarget: (target) => selectTarget(target),
       deselectTarget: () => deselectTarget(),
@@ -1282,33 +1294,53 @@ Then the orchestrator runs the lab live-verify OUTSIDE this plan (chrome-devtool
 
 ---
 
-### Task 3: Wire the live game through `ShipControls` — consolidate the 9 `beginLeg` sites + route player steer + sim step (PURE consolidation, ZERO behavior change)
+### Task 3: Wire the live game through `ShipControls` — consolidate the 9 `beginLeg` sites + route player steer + in-game engage/disengage + live selection + sim step (PURE consolidation / MECHANICAL extraction, ZERO behavior change)
 
-> **⚠ SCOPE BOUNDARY vs. spec Part-3 AC1 — DECISION NEEDED FROM MAX before this task runs.**
-> Spec Part-3 AC1 reads: *"Player manual/assist input, the attract tour's per-leg dispatch, and warp re-entry all flow through the surface verbs (`engage`/`steer`/`flyTo`) rather than poking `scPilot`/`scModel` directly."* As written, **this task routes `step`, the 9 `beginLeg` sites (via `flyTo`), and the player joystick (`steer`) — but NOT the in-game `engage`/`disengage` path.** Three named-but-unrouted-in-game items remain after this plan as written:
-> 1. **`engage`/`disengage` (the live F-key handler).** Task 1 Step 30(b) deliberately leaves the `enterFlight`/`exitFlight`/`readFlightType`/`dropState` host delegates UNWIRED ("wired in Task 3"), but Task 3 below has no step that (a) implements those delegates or (b) reroutes the player F-key `_scManual` engage/exit toggle through `scControls.engage()`/`disengage()`. So in-game `engage`/`disengage` and `getState().mode` stay non-functional, and the `engage` verb AC1 names is not on the live input path.
-> 2. **In-game `selectTarget`/`deselect` call sites** — exposed on the surface + wired as host delegates, but the live game's own selection calls are not rerouted through `scControls.selectTarget`/`deselect` (only the lab exercises them, Task 2).
-> 3. **The three existing raw `scPilot._target` reads** at `src/main.js:6081, 6083, 8378` — the named `get target` accessor is added (Task 1) and tested, but these existing reads are not migrated to `scControls.target`, so the cross-boundary private-field reads risk (e) names still remain.
+> **✅ SCOPE BOUNDARY vs. spec Part-3 AC1 — RESOLVED. Max chose OPTION A (route in-game engage/disengage + live selection through the surface NOW).**
+> Spec Part-3 AC1 reads: *"Player manual/assist input, the attract tour's per-leg dispatch, and warp re-entry all flow through the surface verbs (`engage`/`steer`/`flyTo`) rather than poking `scPilot`/`scModel` directly."* **Decision (2026-06-26): Option A.** AC1's named clauses (player manual/assist input via `steer`/`flyTo`, the attract tour's per-leg dispatch, warp re-entry) are satisfied verbatim by the routing in Steps 6/7/10/15; F-key engage/disengage routing (Steps 19–20) is the defensible reading of "player manual/assist input." This task ALSO routes one item that is **beyond** AC1's literal `engage`/`steer`/`flyTo` verb list — in-game `selectTarget`/`deselect` (item 2) — as an additional Option-A scope item, **not** an AC1 clause; AC1 itself does not demand selection routing. So the surface is the single door for everything below:
+> 1. **`engage`/`disengage` (the live F-key handler).** Steps 19–20 below implement the `enterFlight`/`exitFlight`/`readFlightType`/`flightMode`/`dropState` host delegates left UNWIRED by Task 1 Step 30(b), by **MECHANICALLY EXTRACTING** the existing live F-handler enter/exit bodies (`src/main.js:8818-8872`) into delegate functions (Step 19), then reroute the F-key toggle through `scControls.engage(type)`/`scControls.disengage()` (Step 20).
+> 2. **In-game `selectTarget`/`deselect` call sites (additional Option-A scope, NOT an AC1 clause — AC1's verb list is `engage`/`steer`/`flyTo` only).** Step 22 reroutes the live player selection calls (the canvas click handler `selectTarget` at `src/main.js:9038,9054`; the deselect sites at `src/main.js:2683,8563,9090`) through `scControls.selectTarget`/`scControls.deselect`, which delegate to the LOW-LEVEL `selectTarget`/`deselectTarget` impl (no surface re-entry — wiring shown explicitly in Step 19).
+> 3. **The three existing raw `scPilot._target` reads** at `src/main.js:6081, 6083, 8378` — Step 23 migrates them to `scControls.target` (the named accessor from Task 1), closing recon risk (e).
+> 4. **`getState().mode` gated on engagement** — Step 24 wires the `flightMode()` delegate so `mode` is `null` while idle (contract §4), fixing the type-shows-when-idle nuance.
 >
-> **Why deferred, not silently fixed here:** routing the live F-handler through `engage`/`disengage` touches the **locked no-snap-exit behavior** (`flightExitAnchor` + `adoptCurrentPose` + `cameraInterp.resync`) and the live camera-mode/Settings/seed path — it is a behavior-sensitive change, not a mechanical dispatch swap like the `beginLeg` consolidation. **Max must choose ONE of:**
-> - **(A) Add an in-game engage-routing step to this task** — implement the `enterFlight`/`exitFlight`/`readFlightType`/`dropState` delegates promised in Task 1 Step 30(b), reroute the F-handler through `scControls.engage()`/`disengage()` (no-snap exit preserved), reroute the live `selectTarget`/`deselect` calls, migrate the 3 `_target` reads to `scControls.target`, and add headless assertions. This satisfies AC1 as written but enlarges Task 3 (the riskiest task) and adds behavior-sensitive surface area.
-> - **(B) Amend spec Part-3 AC1** to drop `engage` (and in-game `selectTarget`/`deselect` + the `_target`-read migration) from the in-game required verbs for THIS arc, scoping in-game engage-routing as a follow-on. Then this plan satisfies the (narrowed) AC1 as written.
+> **The hard constraint (Max-locked):** engage-routing is a **MECHANICAL, ZERO-BEHAVIOR-CHANGE extraction of the EXISTING live handlers**. The locked no-snap exit (`flightExitAnchor` + `adoptCurrentPose` + `cameraInterp.resync`, `src/main.js:8856-8867`) is **MOVED, NOT REWRITTEN** — byte-for-byte the same anchor math. The byte-identical no-snap-exit live-verify (dPos/dQuat unchanged vs the session-5b baseline) is run **separately by the orchestrator** (chrome-devtools, NOT a headless TDD step here).
 >
-> Until Max picks (A) or (B), this plan does **not** satisfy Part-3 AC1 verbatim. The steps below cover only `step`/`flyTo`/`steer`.
+> **What AC1's "rather than poking `scPilot`/`scModel` directly" means here (scope of the "no direct poke"):** it is satisfied at the **DISPATCH / INPUT layer** — no remaining dispatch site (steer, flyTo/beginLeg, F-key engage/disengage, selection) reaches into `scPilot`/`scModel` directly; this is what the Step 26 greps verify (`scPilot\.beginLeg(` → 0, `scModel\.setTurnInput(-` → 0, `scPilot\._target` → 0). It is **NOT** a claim of zero literal `scModel`/`scPilot` occurrences in `main.js`. The residual `scModel.position.copy(...)` / `scModel.setThrottle(0)` / `scPilot.stop()` statements that survive INSIDE the extracted host delegates (`_enterFlightInternal`/`_exitFlightInternal`, Step 19) and the sim-loop's `scModel.setBodies(...)` are the **spec-sanctioned host-coupled seed/cancel code** that the architecture deliberately keeps in `main.js` (spec design §"Host-coupled bits stay in `main.js`", `2026-06-26-supercruise-control-harness-design.md:104-108`) — they are host-side delegate internals, not dispatch sites, so AC1 is met **by design**, not by literal zero-occurrence.
 
 **Files:**
-- Modify: `src/main.js` — the sim-step pilot→model order (`7601-7602`); the 9 `scPilot.beginLeg(` dispatch sites (`5598`, `5653`, `5876`, `6066`, `6338`, `6384`, `6428`, `6623`, `7856`); the live virtual-joystick steer pair (`9277-9278`).
-- Create: `src/flight/__tests__/shipControls-game-wiring.test.js` — a headless integration test asserting `flyTo` routes through `pilot.beginLeg` and `step` preserves the `pilot.update → model.update` order (the only pure-checkable invariants of this consolidation).
+- Modify: `src/main.js` —
+  - the sim-step pilot→model order (`7601-7602`);
+  - the 9 `scPilot.beginLeg(` dispatch sites (`5598`, `5653`, `5876`, `6066`, `6338`, `6384`, `6428`, `6623`, `7856`);
+  - the live virtual-joystick steer pair (`9277-9278`);
+  - **(Option A, engage-routing)** the host-delegate closures in the `scControls` constructor (`~775-785`, the four `enterFlight`/`exitFlight`/`readFlightType`/`flightMode`/`dropState` delegates left UNWIRED by Task 1 Step 30(b)) — wired by extracting the F-handler enter/exit bodies into named delegate functions;
+  - the live F-key handler `_scManual` engage/disengage toggle (`8818-8872`) — rerouted through `scControls.engage(type)`/`scControls.disengage()`;
+  - the live player selection call sites — canvas click `selectTarget` (`9038`, `9054`) and the deselect sites (`2683`, `8563`, `9090`) — rerouted through `scControls.selectTarget`/`scControls.deselect`;
+  - the 3 raw `scPilot._target` reads (`6081`, `6083`, `8378`) — migrated to `scControls.target`;
+  - the `getState().mode` source (`8390` `_scManual ? _flightMode : null`) — surfaced via the `flightMode()` host delegate so `mode` is gated on engagement.
+- Create: `src/flight/__tests__/shipControls-game-wiring.test.js` — a headless integration test asserting `flyTo` routes through `pilot.beginLeg`, `step` preserves the `pilot.update → model.update` order, AND the engage/disengage/selection/mode delegates fire the host callbacks (the pure-checkable invariants of this consolidation; the byte-identical no-snap-exit dPos/dQuat check is the orchestrator's live-verify, not headless).
 
 **Interfaces:**
 - Consumes (from Task 1, the module-scoped `ShipControls` instance + `window._sc.controls`, `src/main.js:484`):
   - `shipControls.flyTo({ toBody: THREE.Object3D, bodyRadius: number, linger?: number }) → Arrival` — wraps `pilot.beginLeg(target)` (`SupercruisePilot.js:46`, `{ toBody, bodyRadius, linger = 8 }`); in-game it only sets the leg and returns the `Arrival` (frame-safe intent-setter — does NOT step the model, the 60 Hz loop owns stepping).
   - `shipControls.step(dt: number) → PilotFrame | null` — if `pilot.isActive`: `pilot.update(dt)` FIRST then `model.update(dt)`, returns the frame; else `model.update(dt)` only, returns `null`. Encapsulates the `pilot.update → model.update` order (matches `src/main.js:7601-7602`).
   - `shipControls.steer(x: number, y: number) → void` — RAW stick coords (pre-shaping); runs the shaped-stick curve with the casing reconciled, then `model.setTurnInput(-shaped.x, -shaped.y)` (the negated turn-input convention) AND `host.setDeflection({ x: shaped.x, y: shaped.y })` (un-negated deflection store) so `_scDeflection`/HUD stick stay in sync.
+  - `shipControls.engage(type?: 'manual'|'align'|'assist') → void` — `host.enterFlight(type ?? host.readFlightType())` (CONTRACT §1). The F-on toggle made callable.
+  - `shipControls.disengage() → void` — `host.exitFlight()` (the no-snap exit) + `pilot.stop()` (CONTRACT §1).
+  - `shipControls.selectTarget(target: object|null) → void` / `shipControls.deselect() → void` — delegate to `host.selectTarget(target)` / `host.deselectTarget()` (CONTRACT §1). The host delegates point at the LOW-LEVEL `selectTarget`/`deselectTarget` impls — NOT back at the surface (no re-entry).
+  - `get shipControls.target → { mesh, radius, linger } | null` — named accessor over `pilot._target` (CONTRACT §1; formalizes the `src/main.js:6081,6083,8378` reads).
+  - `shipControls.getState() → ShipControlsState` — `{ speed, commandedSpeed, throttle, mode, phase, dropState }`; `mode` comes from `host.flightMode()` (the contract §4 `_scManual ? _flightMode : null` value), `dropState` from `host.dropState()` (CONTRACT §4).
+  - host delegates wired this task (all reach live `main.js` module state): `host.enterFlight(type)`, `host.exitFlight()`, `host.readFlightType()`, `host.flightMode()`, `host.dropState()` — see CONTRACT §0. (`host.selectTarget`/`host.deselectTarget`/`host.resolveSelectedBody`/`host.setDeflection` already wired in Task 1 Step 30(b).)
   - `Arrival` — `{ done, promise, then(cb), poll(frame), cancel() }`; resolves with the `motionComplete` `PilotFrame`.
-- Produces: no new public symbol. The 9 `beginLeg` literals leave `src/main.js` (the sole surviving literal is inside `ShipControls.flyTo`, in `src/flight/ShipControls.js`).
+- Produces: no new public symbol. The 9 `beginLeg` literals leave `src/main.js` (the sole surviving literal is inside `ShipControls.flyTo`, in `src/flight/ShipControls.js`). The live F-handler enter/exit bodies move into the `enterFlight`/`exitFlight` host-delegate closures (same `main.js` module scope; not a new exported symbol). After this task the surface is the single door for engage/disengage/selection/steer/flyTo/step.
 
-**Behavior-change budget (ZERO):** every replacement is mechanically equivalent. `flyTo` in-game is `pilot.beginLeg(target)` + return `Arrival` (we discard the return where today's call discarded nothing). `step(dt)` runs the identical `pilot.isActive ? pilot.update(dt) : null` then `model.update(dt)` sequence and returns the same `scFrame`. `steer(nx, ny)` reproduces the exact `setTurnInput(-s.x,-s.y)` + `_scDeflection={x:s.x,y:s.y}` pair; at the DEFAULT `_scStickTuning` (`{...STICK_TUNING}`, `src/main.js:480`) the Task-1 casing fix yields identical shaped output (defaults win either way), so live feel is unchanged unless the UAT knob `window._sc.stickTuning` is mutated — which is the intended latent-bug fix, not a regression.
+**Behavior-change budget (ZERO):** every replacement is mechanically equivalent.
+- `flyTo` in-game is `pilot.beginLeg(target)` + return `Arrival` (we discard the return where today's call discarded nothing).
+- `step(dt)` runs the identical `pilot.isActive ? pilot.update(dt) : null` then `model.update(dt)` sequence and returns the same `scFrame`.
+- `steer(nx, ny)` reproduces the exact `setTurnInput(-s.x,-s.y)` + `_scDeflection={x:s.x,y:s.y}` pair; at the DEFAULT `_scStickTuning` (`{...STICK_TUNING}`, `src/main.js:480`) the Task-1 casing fix yields identical shaped output (defaults win either way), so live feel is unchanged unless the UAT knob `window._sc.stickTuning` is mutated — the intended latent-bug fix, not a regression.
+- **`engage`/`disengage` are a MECHANICAL EXTRACTION** of the existing F-handler enter/exit bodies (`8818-8872`) into the `enterFlight`/`exitFlight` delegates — the SAME statements, in the SAME order, MOVED not rewritten. The no-snap exit's forward-ray anchor (`camera.getWorldDirection` → `_resolveSelectedBody()?.mesh.position ?? findClosestBody()?.position ?? null` → clamped `_d` → `flightExitAnchor` → `adoptCurrentPose` → `cameraInterp.resync`, `8856-8867`) is preserved EXACTLY. `disengage()` adds `pilot.stop()` (CONTRACT §1) — but the extracted exit body already calls `scPilot.stop()` (`8844`), so to avoid a double-stop the `scPilot.stop()` + `_alignState.active = false` lines stay inside `exitFlight` and `disengage`'s own `pilot.stop()` is the idempotent second call on an already-stopped pilot (no behavior delta — `pilot.stop()` on an idle pilot is a no-op past the first call).
+- **Selection rerouting** swaps `selectTarget(x)` → `scControls.selectTarget(x)` and `deselectTarget()` → `scControls.deselect()` at the live call sites; the surface delegates straight to the SAME low-level impl (`host.selectTarget = (t) => selectTarget(t)`, `host.deselectTarget = () => deselectTarget()` — Task 1 Step 30(b)), so the executed code is byte-identical, one extra function hop deep. **No surface re-entry / no double-dispatch** (the host points at the low-level `selectTarget`/`deselectTarget`, never at `scControls.selectTarget`).
+- **`_target`-read migration** swaps the private-field read `scPilot._target` for `scControls.target` (the accessor returns `pilot._target` verbatim — Task 1 Step 18) at 6081/6083/8378; identical value, formalized boundary.
+- **`getState().mode` gating** routes through `host.flightMode()` (returns `_scManual ? _flightMode : null`, the EXACT `8390` expression) — the HUD's own `flightMode:` write at `8390` is UNCHANGED; only `getState().mode` newly reads through the delegate so the surface reports `null` while idle (the contract §4 semantic). No live-feel change — `getState` is a read.
 
 > **COMMIT DISCIPLINE (parallel-session guard):** the branch is shared with a separate World Engine session co-touching `src/main.js` + `docs/NOW.md`. EVERY commit step below is FILE-SCOPED — `git add <explicit paths>` then `git commit -m "..." -- <explicit paths>`. NEVER `git add -A` / `git add .`. Do NOT edit `docs/NOW.md` in this task.
 
@@ -1626,17 +1658,229 @@ function _engageAssist(body) { scControls.flyTo({ toBody: body.mesh, bodyRadius:
 - [ ] **Step 16: Build + suite check after the steer routing** — Run: `npx vite build` then `npx vitest run src/flight`
   Expected: build "built in …" clean; flight suite green. Then `npx vitest run` — expected: known-failures-only, **0 NEW** failures.
 
-- [ ] **Step 17: Final grep + build gate for the task** — Run all three:
-  - `grep -n 'scPilot\.beginLeg(' src/main.js` → expected: no output (zero matches).
+- [ ] **Step 17: Commit the steer routing** — file-scoped:
+  `git add src/main.js`
+  `git commit -m "refactor(supercruise): route live virtual-joystick steer through ShipControls.steer (HUD deflection synced)" -- src/main.js`
+
+---
+
+#### Option-A engage-routing (Steps 18–28): route in-game engage/disengage + live selection + the `_target` reads + `getState().mode` through the surface
+
+> **This is the Option-A block Max chose.** It is a **MECHANICAL, ZERO-BEHAVIOR-CHANGE extraction** of the existing live F-handler enter/exit (`src/main.js:8818-8872`) into the host delegates Task 1 Step 30(b) left unwired, then a reroute of the live engage/selection call sites through the surface. The locked no-snap exit (`flightExitAnchor` + `adoptCurrentPose` + `cameraInterp.resync`, `8856-8867`) is **MOVED, not rewritten** — byte-for-byte identical anchor math. No headless test can prove "byte-identical no-snap exit" (it needs the live camera) — the byte-identical dPos/dQuat live-verify is the orchestrator's gate (Step 28's checklist line), NOT a step here. The headless tests below only pin that the delegates fire the host callbacks and the selection/`_target`/`mode` wiring routes through the surface.
+
+- [ ] **Step 18: Write the failing test for the engage-routing wiring** — append a `describe('ShipControls engage/disengage/selection delegation (Task 3 Option-A)', …)` block to `src/flight/__tests__/shipControls-game-wiring.test.js`. This pins the surface→host delegation the live wiring depends on (the no-snap-exit BEHAVIOR is the orchestrator's live-verify, not here — these assert only that the verbs reach the contracted host callbacks):
+
+```js
+import { vi } from 'vitest';
+
+describe('ShipControls engage/disengage/selection delegation (Task 3 Option-A)', () => {
+  function hostControls(host) {
+    const model = new SupercruiseModel();
+    const pilot = new SupercruisePilot(model);
+    const head = new HeadMount();
+    return { model, pilot, controls: new ShipControls({ model, pilot, head, host }) };
+  }
+
+  it('engage(type) calls host.enterFlight with the explicit type (the F-on path)', () => {
+    const enterFlight = vi.fn();
+    const { controls } = hostControls({ enterFlight });
+    controls.engage('assist');
+    expect(enterFlight).toHaveBeenCalledWith('assist');
+  });
+
+  it('engage() with no type reads host.readFlightType() (Settings-selected type)', () => {
+    const enterFlight = vi.fn();
+    const readFlightType = vi.fn(() => 'align');
+    const { controls } = hostControls({ enterFlight, readFlightType });
+    controls.engage();
+    expect(readFlightType).toHaveBeenCalledTimes(1);
+    expect(enterFlight).toHaveBeenCalledWith('align');
+  });
+
+  it('disengage() calls host.exitFlight() — the no-snap exit delegate (F-off path)', () => {
+    const exitFlight = vi.fn();
+    const { pilot, controls } = hostControls({ exitFlight });
+    const body = new THREE.Object3D(); body.position.set(0, 0, -50);
+    controls.flyTo({ toBody: body, bodyRadius: 5, linger: 8, selfStep: false });
+    controls.disengage();
+    expect(exitFlight).toHaveBeenCalledTimes(1);
+    expect(pilot.phase).toBe('IDLE');   // pilot.stop() ran (idempotent w/ exitFlight's own stop)
+  });
+
+  it('selectTarget / deselect delegate to the LOW-LEVEL host impls (no surface re-entry)', () => {
+    const selectTarget = vi.fn();
+    const deselectTarget = vi.fn();
+    const { controls } = hostControls({ selectTarget, deselectTarget });
+    const t = { kind: 'planet', mesh: new THREE.Object3D(), radius: 5 };
+    controls.selectTarget(t);
+    controls.deselect();
+    expect(selectTarget).toHaveBeenCalledWith(t);
+    expect(deselectTarget).toHaveBeenCalledTimes(1);
+  });
+
+  it('getState().mode reads host.flightMode() (null while idle, the §4 semantic)', () => {
+    let engaged = false;
+    const flightMode = vi.fn(() => (engaged ? 'manual' : null));
+    const { controls } = hostControls({ flightMode });
+    expect(controls.getState().mode).toBe(null);   // idle → null
+    engaged = true;
+    expect(controls.getState().mode).toBe('manual');
+  });
+
+  it('get target exposes pilot._target (the accessor the 6081/6083/8378 reads migrate to)', () => {
+    const { controls } = hostControls({});
+    const body = new THREE.Object3D(); body.position.set(0, 0, -50);
+    controls.flyTo({ toBody: body, bodyRadius: 5, linger: 8, selfStep: false });
+    expect(controls.target?.mesh).toBe(body);
+    expect(controls.target?.radius).toBe(5);
+  });
+});
+```
+
+> **`getState().mode` depends on a `flightMode()` host delegate** that is NOT in Task 1's Step-18 `getState` body (which reads `host.readFlightType?.() ?? null`). Option A REQUIRES `getState().mode` to be gated on engagement (`null` while idle, contract §4). Step 24 changes `getState` to read `host.flightMode?.() ?? null` and adds `flightMode` to the contract's host list. If Task 1 shipped `getState` reading `readFlightType()`, that is the line Step 24 edits; the `flightMode` delegate is the engagement-gated source, distinct from the un-gated `readFlightType` (which `engage()` still uses to pick the type).
+
+- [ ] **Step 19: Run it, verify it fails — then implement the five host delegates by MECHANICALLY EXTRACTING the live F-handler** — Run: `npx vitest run src/flight/__tests__/shipControls-game-wiring.test.js`
+  Expected: FAIL (the `engage`/`disengage`/`selectTarget`/`deselect`/`getState().mode`/`get target` blocks fail until the host delegates exist + `getState` reads `flightMode()`).
+
+  Then implement the delegates in `src/main.js`. The `scControls` constructor host (Task 1 Step 30(b), `~775-785`) currently wires only `selectTarget`/`deselectTarget`/`resolveSelectedBody`/`setDeflection`. **Extract** the F-handler enter body (`8818-8840`) and exit body (`8842-8869`) into named delegate functions and wire all five. The host object becomes:
+
+```js
+  host: {
+    selectTarget: (target) => selectTarget(target),
+    deselectTarget: () => deselectTarget(),
+    resolveSelectedBody: () => _resolveSelectedBody(),
+    setDeflection: ({ x, y }) => { _scDeflection = { x, y }; },
+    // ── Option A (Task 3): the F-handler enter/exit, MECHANICALLY EXTRACTED.
+    //    Same statements, same order, MOVED out of the keydown handler. ──
+    enterFlight: (type) => _enterFlightInternal(type),
+    exitFlight:  () => _exitFlightInternal(),
+    readFlightType: () => settings.get('flightControlType'),   // un-gated TYPE (8834)
+    flightMode:  () => (_scManual ? _flightMode : null),       // engagement-gated (8390)
+    dropState:   () => _scDropState(),                          // 6077-6092
+  },
+```
+
+  Define the two extracted functions near the F-handler (the bodies are the EXACT statements lifted from `8818-8869`; the only change is the Settings-type pick moves to honor an explicit `type` arg when `engage(type)` passes one, else read Settings — preserving today's "read Settings on each engage" behavior when `type` is omitted):
+
+```js
+  // MECHANICALLY EXTRACTED from the F-handler ENGAGE body (main.js:8818-8840).
+  // Same statements, same order — the camera→FLIGHT seed, scPilot.stop, model
+  // seed from camera, throttle 0, bypassed, then _enterFlightMode + toast.
+  function _enterFlightInternal(type) {
+    cameraController.setCameraMode(CameraMode.FLIGHT);
+    setScManual(true);
+    scPilot.stop();
+    scModel.position.copy(camera.position);
+    scModel.orientation.copy(camera.quaternion);
+    scModel.speed = 0;
+    scModel.setThrottle(0);
+    cameraController.bypassed = true;
+    // Type comes from the caller (engage(type)) if given, else Settings — the
+    // SAME source the inline handler read on each engage. Guard → Manual.
+    const _type = type ?? settings.get('flightControlType');
+    _flightMode = (_type === FlightMode.ALIGN || _type === FlightMode.ASSIST)
+      ? _type
+      : FlightMode.MANUAL;
+    _enterFlightMode(_flightMode);
+    const _info = flightModeInfo(_flightMode);
+    flightModeToast.show(`Flight ON — ${_info.label}`, _info.hint);
+  }
+
+  // MECHANICALLY EXTRACTED from the F-handler DISENGAGE body (main.js:8842-8869).
+  // The no-snap exit is MOVED VERBATIM — forward-ray anchor + adoptCurrentPose +
+  // cameraInterp.resync. DO NOT rewrite any line in this block.
+  function _exitFlightInternal() {
+    setScManual(false);
+    scPilot.stop();
+    _alignState.active = false;
+    cameraController.setCameraMode(CameraMode.TOY_BOX);
+    camera.getWorldDirection(_exitFwd);
+    const _anchorBody = _resolveSelectedBody()?.mesh.position
+      ?? findClosestBody()?.position
+      ?? null;
+    const _rawD = _anchorBody ? camera.position.distanceTo(_anchorBody) : 100;
+    const _d = Math.max(
+      cameraController.minDistance,
+      Math.min(cameraController.maxDistance, _rawD),
+    );
+    const _anchor = flightExitAnchor(camera.position, _exitFwd, _d);
+    cameraController.adoptCurrentPose(_anchor);
+    cameraInterp.resync(camera);
+    _flightMode = FlightMode.MANUAL;
+    flightModeToast.show('Flight OFF', '');
+  }
+```
+
+  > **Why `engage()`'s `type ?? readFlightType()` and `enterFlight`'s `type ?? settings.get(...)` are both present and consistent:** `scControls.engage()` (CONTRACT §1) resolves `type ?? host.readFlightType()` and passes the result to `host.enterFlight(type)`. So when the F-key calls `scControls.engage()` (no arg, Step 20), `engage` reads `readFlightType()` and hands `enterFlight` an explicit type; `enterFlight`'s own `?? settings.get(...)` fallback then never fires (type is already set) — it is belt-and-suspenders, preserving the inline handler's Settings read for any direct `host.enterFlight()` caller. Behavior is identical to today's single Settings read per engage.
+
+- [ ] **Step 20: Reroute the live F-key handler through `scControls.engage()`/`disengage()`** — in `src/main.js`, the F-key keydown block (`8818-8872`) currently inlines the `if (!_scManual) { …ENGAGE… } else { …DISENGAGE… }`. Replace the inline two-branch body (the statements from `8818`'s `if (!_scManual) {` through `8869`'s `}` closing the else) with the surface calls, keeping the outer guards (`8800-8806`) and the trailing `console.log` (`8871`) UNCHANGED:
+
+```js
+    if (!_scManual) {
+      scControls.engage();      // F-on: reads Settings type, runs _enterFlightInternal
+    } else {
+      scControls.disengage();   // F-off: runs _exitFlightInternal (no-snap) + pilot.stop()
+    }
+    console.log(`[MODE] flight ${_scManual ? _flightMode : 'OFF'}`);
+    return;
+```
+
+  > The extracted `_enterFlightInternal`/`_exitFlightInternal` now own the bodies; the F-handler is a 2-line dispatch. `disengage()` additionally calls `pilot.stop()` (CONTRACT §1) — idempotent because `_exitFlightInternal` already ran `scPilot.stop()` (a second `stop()` on an idle pilot is a no-op). The `console.log` reads `_scManual`/`_flightMode`, both of which the extracted bodies set exactly as before, so the log line is unchanged.
+
+- [ ] **Step 21: Build + suite check after the engage extraction + F-reroute** — Run: `npx vite build` then `npx vitest run src/flight/__tests__/shipControls-game-wiring.test.js`
+  Expected: build "built in …" clean; the engage/disengage delegation block from Step 18 green (host callbacks fire). If `findClosestBody`/`_exitFwd`/`flightExitAnchor`/`cameraInterp` are out of scope at the extracted-function location, MOVE the function definitions next to the F-handler (same module scope) rather than passing them as args — they are all module-scope bindings; do NOT re-import or duplicate.
+
+- [ ] **Step 22: Reroute the live player selection call sites through `scControls.selectTarget`/`deselect`** — in `src/main.js`, swap the live PLAYER selection calls (NOT the low-level impl, NOT the `_lab` debug helpers at `2020`/`2026`/`2049` which intentionally drive the raw pipeline for tests):
+  - canvas click body-hit (`9038`): `selectTarget(bodyHit);` → `scControls.selectTarget(bodyHit);`
+  - canvas click orbit-hit (`9054`): `if (target) selectTarget(target);` → `if (target) scControls.selectTarget(target);`
+  - nav-computer warp-pick clear (`2683`): `if (_selectedTarget) deselectTarget();` → `if (_selectedTarget) scControls.deselect();`
+  - Escape-to-deselect (`8563`): `deselectTarget();` → `scControls.deselect();`
+  - starfield warp-pick clear (`9090`): `if (_selectedTarget) deselectTarget();` → `if (_selectedTarget) scControls.deselect();`
+
+  > **CRITICAL — no recursion / no double-dispatch:** `scControls.selectTarget` delegates to `host.selectTarget`, and `host.selectTarget = (target) => selectTarget(target)` (Step 19 / Task 1 Step 30(b)) points at the LOW-LEVEL `selectTarget` impl at `5974` — NOT back at `scControls.selectTarget`. So the call chain is `scControls.selectTarget(t)` → `host.selectTarget(t)` → `selectTarget(t)` (the `5974` impl), exactly ONE extra hop, terminating in the same function body. Likewise `scControls.deselect()` → `host.deselectTarget()` → `deselectTarget()` (`6097`). Do NOT change the `5974`/`6097` function definitions, and do NOT point the host delegates at the surface — that would infinitely recurse.
+
+- [ ] **Step 23: Migrate the 3 raw `scPilot._target` reads to `scControls.target`** — in `src/main.js`, swap the cross-boundary private-field reads for the named accessor (Task 1 Step 18: `get target() { return this.pilot._target; }` — same value, formalized):
+  - `_scDropState` body position (`6081`): `(scPilot._target?.mesh?.position ?? null)` → `(scControls.target?.mesh?.position ?? null)`
+  - `_scDropState` radius (`6083`): `scPilot._target?.radius` → `scControls.target?.radius`
+  - HUD target-pos (`8378`): `scPilot._target?.mesh?.position` → `scControls.target?.mesh?.position`
+
+  > Behavior-identical: `scControls.target` returns `scPilot._target` verbatim. This closes recon risk (e) — no remaining raw `scPilot._target` read in `main.js`.
+
+- [ ] **Step 24: Gate `getState().mode` on engagement via the `flightMode()` delegate** — in `src/flight/ShipControls.js`, change the `getState` `mode` source from the un-gated `host.readFlightType?.() ?? null` (Task 1 Step 18) to the engagement-gated `host.flightMode?.() ?? null`:
+
+```js
+      // mode: the host's live flight TYPE, gated on engagement — null while idle
+      // (contract §4: `_scManual ? _flightMode : null`, main.js:8390). The host's
+      // flightMode() delegate IS that expression; readFlightType() (un-gated) is
+      // still used by engage() to PICK the type, but getState reports null-when-idle.
+      mode: this.host.flightMode?.() ?? null,
+```
+
+  Update the `ShipControls.test.js` `getState` expectation (Task 1 Step 16) only if it asserted `mode` via `readFlightType` — the no-host lab case still yields `mode === null` (no `flightMode` delegate ⇒ `?? null`), so the existing no-host assertion holds. Add `flightMode()` to the contract's host-delegate list in the CONTRACT §0 / §4 notes (the `flightMode` delegate is the §4 `mode` source; `readFlightType` stays the §1 `engage` type source — two distinct delegates, one gated, one not).
+
+  > **Why a separate `flightMode()` delegate, not reuse `readFlightType()`:** `readFlightType()` returns the Settings-configured TYPE *regardless* of whether the ship is engaged (engage() needs it to pick the mode at F-on). `mode` in `getState` (contract §4) must be `null` while idle. The two differ exactly when idle, so they are distinct delegates. This is the "type-shows-when-idle nuance" Option A fixes (the Task 1 Step-18 Note flagged it as a contract-nuance for Max; Option A resolves it by gating host-side, where engagement state lives).
+
+- [ ] **Step 25: Build + full suite check after selection/`_target`/`mode` rerouting** — Run: `npx vite build` then `npx vitest run src/flight` then `npx vitest run`
+  Expected: build "built in …" clean; `src/flight` green incl. the Step-18 delegation block; full suite known-failures-only, **0 NEW** failures. If a new red appears, a reroute diverged from the original call — STOP and root-cause (per `feedback_think-before-acting.md`), don't patch downstream.
+
+- [ ] **Step 26: Final grep + build gate for the task** — Run all:
+  - `grep -n 'scPilot\.beginLeg(' src/main.js` → expected: no output (zero matches). (Spec Part-3 AC2 end condition — `flyTo` consolidation.)
   - `grep -n 'scModel\.setTurnInput(-' src/main.js` → expected: no output (the live joystick negation now lives in `ShipControls.steer`; the only remaining `setTurnInput` sites in `main.js` are the `flyFromRest` probe's `(0,0)` seed at `602` and the prior-state restore at `650`, neither of which is the player steer path).
+  - `grep -n 'scPilot\._target' src/main.js` → expected: no output (the 3 raw cross-boundary reads now route through `scControls.target` — recon risk (e) closed).
   - `npx vite build` → expected: "built in …", no errors.
   - `npx vitest run` → expected: known-failures-only, 0 new.
 
-  This is the headless gate for Task 3. The chrome-devtools live-verify (attract tour flies + advances; manual `flyTo` arrives at the right body; F engage/disengage no-snaps with camera Δposition ≈ 0, Δquaternion ≈ 0; 0 new console errors — `well-dipper-testing-reference.md` §6.5, `:5174` worktree tab) is run by the orchestrator AFTER this gate, NOT as a step here.
+  This is the headless gate for Task 3. The chrome-devtools live-verify is the orchestrator's gate (Step 28's checklist), run AFTER this gate, NOT as a step here.
 
-- [ ] **Step 18: Commit the steer routing** — file-scoped:
-  `git add src/main.js`
-  `git commit -m "refactor(supercruise): route live virtual-joystick steer through ShipControls.steer (HUD deflection synced)" -- src/main.js`
+- [ ] **Step 27: Commit the engage-routing (Option A)** — file-scoped (`main.js` co-touched by the World Engine session; NEVER `git add -A`):
+  `git add src/main.js src/flight/ShipControls.js src/flight/__tests__/shipControls-game-wiring.test.js`
+  `git commit -m "refactor(supercruise): route in-game engage/disengage + live selection + _target reads + getState.mode through ShipControls (Option A; no-snap exit mechanically extracted)" -- src/main.js src/flight/ShipControls.js src/flight/__tests__/shipControls-game-wiring.test.js`
+
+- [ ] **Step 28: Task-3 live-verify checklist (ORCHESTRATOR-RUN — NOT a headless step here)** — after the Step-26 headless gate is green, the orchestrator runs the chrome-devtools live-verify on `:9223` → the `:5174` worktree tab (`well-dipper-testing-reference.md` §6.5; assert `location.href` contains `:5174`; hard-reload after the `main.js` edit; apply the mute snippet). Confirm:
+  - **Byte-identical no-snap exit (the Max-locked gate):** F-engage then F-disengage; measure the CAMERA transform dPos/dQuat across the exit and assert **unchanged vs the session-5b baseline** (Δposition ≈ 0, Δquaternion ≈ 0 — the forward-ray anchor was MOVED, not rewritten, so the exit must be byte-identical to the pre-extraction behavior). ~100-unit world-origin rebases are compensated/invisible (dQuat ≈ 0) — not bugs.
+  - F engage at each Settings flight type (`manual`/`align`/`assist`) enters flight + shows the right toast; `getState().mode` reads the engaged type, and `null` after disengage (the idle-gating fix).
+  - A live player click selects a body via `scControls.selectTarget` (reticle + bodyInfo appear as before); Escape deselects via `scControls.deselect`.
+  - The attract tour still flies + advances; a manual `flyTo` (commit-burn) arrives at the right body; 0 new console errors.
 
 ---
 
