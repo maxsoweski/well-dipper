@@ -37,7 +37,6 @@ import { SystemMap } from './ui/SystemMap.js';
 import { AutoNavigator } from './auto/AutoNavigator.js';
 import { FlythroughCamera } from './auto/FlythroughCamera.js';
 import { NavigationSubsystem } from './auto/NavigationSubsystem.js';
-import { AutopilotMotion } from './auto/AutopilotMotion.js';
 import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
 import { HeadMount } from './flight/HeadMount.js';
 import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
@@ -140,6 +139,14 @@ const shipAmbLight = new THREE.AmbientLight(0x404858, 0.6);  // dim cool fill
 scene.add(shipAmbLight);
 
 // ── Ship Spawner ──
+// SHIPS_ENABLED gates NPC ship spawning. DISABLED for the F&F ship arc
+// (supercruise-control-harness 2026-06-26): no spawned ships → every
+// ship site (all gated on shipSpawner.ships) is inert → the Ship-Scanner
+// ship-lock path (focusShip / NavigationSubsystem / FlythroughCamera)
+// falls out of the live path. ShipSpawner code + the NPC ship features
+// are KEPT, dormant for ENRICHED reactivation — flip this to true to
+// restore. See docs/FEATURES.md §"Ship NPC spawning — disable for F&F".
+const SHIPS_ENABLED = false;
 const shipSpawner = new ShipSpawner();
 shipSpawner.init();  // async, loads manifest in background — non-blocking
 window._shipSpawner = shipSpawner;  // exposed for integration tests (Unit 3)
@@ -432,14 +439,10 @@ const flythrough = new FlythroughCamera(camera, navSubsystem);
 const shipChoreographer = new ShipChoreographer(navSubsystem);
 flythrough.setShakeProvider(shipChoreographer);
 
-// V1 STATION-hold redesign (2026-04-25) — first-class ship object +
-// thin per-leg motion evaluator. AutopilotMotion replaces the
-// autopilot-tour callers of NavigationSubsystem; the latter remains
-// dormant for manual-burn + warp-arrival paths until those are
-// scoped into a follow-on workstream. See `docs/WORKSTREAMS/
-// autopilot-station-hold-redesign-2026-04-24.md`.
+// V1 STATION-hold redesign (2026-04-25) — first-class ship object.
+// (AutopilotMotion retired 2026-06-26 — supercruise mover owns all
+// autopilot-tour motion; see src/auto/AutopilotMotion.js header.)
 const ship = new Ship();
-const autopilotMotion = new AutopilotMotion();
 
 // ── Supercruise flight model (supercruise-freelook-2026-06-10) ──
 // New authoritative in-system mover: SupercruiseModel (pure math, Elite-
@@ -751,10 +754,9 @@ function _resolveBodyVelocity(target, out) {
   // V1 (binary star orbital motion is rare enough to defer to
   // V-later if it surfaces a problem).
 }
-// Bind once — AutopilotMotion's beginMotion preserves this across
-// legs (§A4 amendment to AutopilotMotion.js, beginMotion does not
-// overwrite when input.getBodyVelocity is undefined).
-autopilotMotion._getBodyVelocity = (out) => _resolveBodyVelocity(autopilotMotion._target, out);
+// (AutopilotMotion retired 2026-06-26 — the _getBodyVelocity bind that
+// fed its §A4 predicted-intercept solver is removed with it. The pure
+// _resolveBodyVelocity helper above is kept dormant for reactivation.)
 
 // WS 3 — camera-axis dispatch per §10.1. The camera choreographer authors
 // which target the camera looks at each frame (ESTABLISHING: linger on
@@ -793,9 +795,6 @@ function _trackControllerCaches(controller, fieldNames, label) {
     }
   }
 }
-_trackControllerCaches(autopilotMotion, [
-  '_startPos', '_approachStartPos', '_holdEndpoint', '_position',
-], 'autopilotMotion');
 _trackControllerCaches(navSubsystem, [
   '_position', '_lookAtTarget', 'departurePos', '_hermiteStartPos',
   '_seamEntryPosition', '_prevPosition', '_seamBodyPositionAtEntry',
@@ -1734,10 +1733,10 @@ function _captureTelemetrySample() {
     quat: [+camera.quaternion.x.toFixed(6), +camera.quaternion.y.toFixed(6),
            +camera.quaternion.z.toFixed(6), +camera.quaternion.w.toFixed(6)],
   };
-  // Target source resolution: prefer navSubsystem.bodyRef (legacy nav-driven
-  // motion); fall back to autopilotMotion._target (V1 motion controller —
-  // active during autopilot CRUISE / APPROACH / STATION-A). The `via` field
-  // disambiguates so consumers can tell which path is sourcing the target.
+  // Target source resolution: navSubsystem.bodyRef (legacy nav-driven
+  // manual-burn / warp-arrival motion). The AutopilotMotion._target
+  // fallback was removed 2026-06-26 with that retired controller — the
+  // supercruise mover's target is sourced via window._sc.controls.target.
   if (navBP && navSubsystem.bodyRef) {
     const bq = navSubsystem.bodyRef.quaternion;
     sample.target = {
@@ -1745,15 +1744,6 @@ function _captureTelemetrySample() {
       quat: bq ? [+bq.x.toFixed(6), +bq.y.toFixed(6), +bq.z.toFixed(6), +bq.w.toFixed(6)]
                : [0, 0, 0, 1],
       via: 'navSubsystem',
-    };
-  } else if (autopilotMotion._target && autopilotMotion._target.position) {
-    const tp = autopilotMotion._target.position;
-    const tq = autopilotMotion._target.quaternion;
-    sample.target = {
-      pos: [+tp.x.toFixed(4), +tp.y.toFixed(4), +tp.z.toFixed(4)],
-      quat: tq ? [+tq.x.toFixed(6), +tq.y.toFixed(6), +tq.z.toFixed(6), +tq.w.toFixed(6)]
-               : [0, 0, 0, 1],
-      via: 'autopilotMotion',
     };
   } else {
     sample.target = null;
@@ -1772,7 +1762,6 @@ function _captureTelemetrySample() {
     shipPhase: shipChoreographer.currentPhase,
     navPhase: plan.phase,
     autoNavActive: autoNav.isActive,
-    autopilotMotionActive: autopilotMotion.isActive,
     autopilotEnabled: _autopilotEnabled,
     flightEnabled: cameraController._flightEnabled,
     bypassed: cameraController.bypassed,
@@ -1785,8 +1774,7 @@ function _captureTelemetrySample() {
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
-// V1 STATION-hold redesign — debug accessors (remove after Director audit).
-window._autopilotMotion = autopilotMotion;
+// V1 STATION-hold redesign — debug accessor for the shared player-ship.
 window._ship = ship;
 
 let idleTimer = 0;
@@ -2009,10 +1997,9 @@ window._lab = {
     return !splashActive && !titleScreenActive && !!system;
   },
 
-  /** Stop autopilot + autopilotMotion + supercruise pilot in one call. Used by scenario 5. */
+  /** Stop autopilot + supercruise pilot in one call. Used by scenario 5. */
   stopAutopilot() {
     if (autoNav.isActive) stopFlythrough();
-    if (autopilotMotion.isActive) autopilotMotion.stop();
     scPilot.stop();
     setScManual(false);
     _autopilotEnabled = false;
@@ -2069,6 +2056,12 @@ window._lab = {
   /** Read current Ship Scanner mode. */
   isShipScannerMode() {
     return _shipScannerMode;
+  },
+
+  /** Whether NPC ship spawning is enabled. The ship integration tests
+   * gate on this so they skip cleanly when ships are disabled (F&F arc). */
+  shipsEnabled() {
+    return SHIPS_ENABLED;
   },
 
   /** Programmatically select a ship by index (Unit 3). Mirrors the click
@@ -4372,7 +4365,11 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   };
 
   // ── Spawn flavor ships near planets ──
-  {
+  // Single switch: gated on SHIPS_ENABLED (DISABLED for F&F — see the
+  // ShipSpawner construction). With spawn off, shipSpawner.ships stays
+  // empty, so focusShip / the _shipScannerMode hit-test / the
+  // flythrough.active simStep branch are all unreachable by construction.
+  if (SHIPS_ENABLED) {
     const shipRng = new SeededRandom(`${seed}-ships`);
     shipSpawner.spawnForSystem(scene, systemData, planets, () => shipRng.float());
   }
@@ -5702,7 +5699,7 @@ function startFlythrough() {
  * Stop the flythrough and hand camera back to manual orbit control.
  */
 function stopFlythrough() {
-  if (!autoNav.isActive && !flythrough.active && !autopilotMotion.isActive && !scPilot.isActive && !(_autopilotNavSequence && _autopilotNavSequence.isActive)) return;
+  if (!autoNav.isActive && !flythrough.active && !scPilot.isActive && !(_autopilotNavSequence && _autopilotNavSequence.isActive)) return;
   soundEngine.play('autopilotOff');
 
   // Abort any in-progress nav sequence
@@ -5714,7 +5711,6 @@ function stopFlythrough() {
   flythrough.stop();
   autoNav.stop();
   shipChoreographer.stop();
-  autopilotMotion.stop();
   scPilot.stop();
   setScManual(false);
   _manualBurnOrbiting = false;
@@ -6244,7 +6240,7 @@ function _updateCommitBurnButton() {
   // supercruise-freelook-2026-06-10 (AC5c): suppress the BURN button while a
   // supercruise leg is flying (autopilot pilot OR manual stick), the same way
   // the legacy autopilotMotion.isActive guard suppressed it during V1 legs.
-  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning || autopilotMotion.isActive || scPilot.isActive || _scManual;
+  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning || scPilot.isActive || _scManual;
   const visible = !!_selectedTarget && !burning;
   btn.style.display = visible ? 'block' : 'none';
   if (visible) {
@@ -7707,139 +7703,12 @@ function simStep(deltaTime) {
 
       if (scFrame) _handleScPilotFrame(scFrame); // reticle sync + tour advance (live since the 2026-06-10 cutover)
     }
-    // ── V1 STATION-hold autopilot (2026-04-25) ──
-    // Authoritative per-leg motion path for autopilot tour. Runs when
-    // AutopilotMotion has an active leg. Cruise → 10R approach → hold;
-    // body-locked station-A; auto-advances tour on motionComplete.
-    // Camera looks down ship.forward (AC #5); shake composes on top
-    // (AC #6 ACCEL/DECEL fires at phase boundaries).
-    //
-    // The legacy `flythrough.update` path (below) handles non-V1
-    // callers: warp-arrival velocity-continuity + manual-burn from
-    // reticle selection. V1 doesn't replicate those paths' velocity
-    // semantics; retire-followup workstream migrates them.
-    else if (autopilotMotion.isActive && !warpEffect.isActive && !splashActive && !titleScreenActive) {
-      const frame = autopilotMotion.update(deltaTime);
-      // Position write: motion-produces pipeline (Principle 5).
-      camera.position.copy(frame.position);
-
-      // TROUBLESHOOTING (2026-04-25): surface the autopilot target as
-      // the selected reticle so Max can verify whether the camera is
-      // centered on the body during cruise/approach/station-A. The
-      // commit-burn button is suppressed during flythrough.active so
-      // setting _selectedTarget here doesn't trigger the burn UI.
-      // Reticle re-targets when the tour advances to next leg.
-      const _curStop = autoNav.getCurrentStop?.();
-      if (_curStop) {
-        const _tgt = _makeTarget(_curStop.type, {
-          starIndex: _curStop.starIndex,
-          planetIndex: _curStop.planetIndex,
-          moonIndex: _curStop.moonIndex,
-        });
-        if (_tgt) _selectedTarget = _tgt;
-      }
-
-      // ACCEL / DECEL shake fires at phase boundaries. Per feature
-      // doc §"Gravity drives" V1 scope:
-      //   - ACCEL at CRUISE onset (departure from STATION-A or IDLE)
-      //   - DECEL at APPROACH onset (10R threshold)
-      // No shake during smooth motion.
-      if (frame.phaseChanged) {
-        if (frame.phase === 'CRUISE' && frame.prevPhase !== 'CRUISE') {
-          shipChoreographer.debugAccelImpulse();
-        } else if (frame.phase === 'APPROACH' && frame.prevPhase === 'CRUISE') {
-          shipChoreographer.debugDecelImpulse();
-        }
-      }
-
-      // Camera-axis dispatch (AC #10): route through
-      // CameraChoreographer's CameraMode dispatch. V1 ESTABLISHING is
-      // collapsed (returns ship.forward × 100) when ship is wired —
-      // see CameraChoreographer.setShip / EstablishingMode collapse.
-      // The motionFrame here is the V1 frame (position + phase + one-
-      // shots); cameraChoreographer.update reads `motionFrame.position`
-      // for the look-at offset origin.
-      cameraChoreographer.update(deltaTime, frame);
-      camera.lookAt(cameraChoreographer.currentLookAtTarget);
-
-      // V1 AC #5 telemetry hook: snapshot camera quaternion AFTER lookAt
-      // and BEFORE shake-multiply. Director audit 2026-04-25 ruled the
-      // AC #5 contract holds at the pre-shake basis (shake is additive
-      // on top per V1 spec). Verifier reads this for the dot ≥ 0.9999
-      // check; post-shake dot is structurally bounded by shake amplitude
-      // and only constrained by the spec's escape clause (≥ 0.99 if
-      // shake is implemented as rotation, which it is here).
-      window._cam_preshake_quat_x = camera.quaternion.x;
-      window._cam_preshake_quat_y = camera.quaternion.y;
-      window._cam_preshake_quat_z = camera.quaternion.z;
-      window._cam_preshake_quat_w = camera.quaternion.w;
-
-      // ShipChoreographer drives the shake envelope state. Pass a
-      // minimal frame compatible with its existing signal-derivation
-      // (it reads frame.position + a few flags). subPhase = 'traveling'
-      // during CRUISE/APPROACH so shake events can fire; 'orbiting'
-      // during STATION-A so shake decays to zero (no shake during
-      // hold per AC #6).
-      //
-      // Skip update when autopilotMotion is in its one-frame IDLE
-      // window between motionComplete and the next leg's beginMotion.
-      // ShipChoreographer.update has an early-return when its own
-      // phase is IDLE — passing 'idle' here would set the phase to
-      // IDLE permanently and the subsequent leg's CRUISE/STATION
-      // updates would never run. The skip preserves shake-envelope
-      // continuity across the leg boundary.
-      if (frame.phase !== 'IDLE') {
-        // §A8 (2026-04-27): include 'lhokon' in 'orbiting' classification
-        // so ShipChoreographer's signal-derivation gate is closed during
-        // the camera-pivot window. Without this, body-locked-to-old-body
-        // position changes during lhokon (per §A7) drive a phantom
-        // |d|v|/dt| signal — for moons the compound parent+local
-        // orbital velocity oscillates enough to trigger peak-pullback
-        // and fire a DECEL shake mid-pivot. Authored CRUISE-onset and
-        // APPROACH-onset shakes (lines below + the explicit triggers
-        // ~line 6531) are unaffected — they don't depend on the gate.
-        const subPhase = (frame.phase === 'STATION-A' || frame.phase === 'lhokon') ? 'orbiting' : 'traveling';
-        const shipFrame = {
-          position: camera.position,
-          velocity: { x: 0, y: 0, z: 0 },
-          lookAtTarget: cameraChoreographer.currentLookAtTarget,
-          phase: subPhase,
-          motionStarted: frame.motionStarted,
-          travelComplete: false,
-          orbitComplete: false,
-          targetingReady: false,
-          abruptness: 0,
-          isShortTrip: false,
-          warpExit: false,
-          shipVelocity: { x: 0, y: 0, z: 0 },
-          velocityBlendActive: false,
-        };
-        shipChoreographer.update(deltaTime, shipFrame);
-      }
-      // Apply shake rotation post-lookAt (mirror of FlythroughCamera's
-      // composition). Camera-local Euler XYZ — extracted verbatim into
-      // _composeShakeOntoCamera, shared with the supercruise branch.
-      _composeShakeOntoCamera();
-
-      _captureTelemetrySample();
-
-      // Tour advance: motionComplete fires after STATION-A hold timer.
-      if (frame.motionComplete) {
-        const nextStop = autoNav.advanceToNext();
-        if (nextStop && nextStop.bodyRef) {
-          autopilotMotion.beginMotion({
-            fromPosition: camera.position.clone(),
-            toBody: nextStop.bodyRef,
-            bodyRadius: nextStop.bodyRadius,
-            ship,
-            fovDegrees: settings.get('fov'),
-          });
-          shipChoreographer.onLegAdvanced();
-          updateFocusFromStop(nextStop);
-        }
-      }
-    } else
     // ── Autopilot (cinematic flythrough) ──
+    // (V1 AutopilotMotion simStep branch removed 2026-06-26 — the
+    // supercruise mover owns all autopilot-tour motion; the dead branch
+    // had no live entry point. Its sole beginMotion was the self-chaining
+    // tour-advance inside the branch itself.)
+    else
     // Skip idle timer during warp or title screen (title has its own 30s timer)
     if (warpEffect.isActive || splashActive || titleScreenActive) {
       // Warp, splash, or title screen is active — don't start autopilot
@@ -8051,7 +7920,7 @@ function simStep(deltaTime) {
   // would otherwise overwrite them with its own orbit math. Same for the
   // supercruise mover (pilot or manual stick): it writes the camera pose
   // in its simStep branch and must not be fought.
-  if (!autopilotMotion.isActive && !scPilot.isActive && !_scManual) {
+  if (!scPilot.isActive && !_scManual) {
     cameraController.update(deltaTime);
   }
 
@@ -8384,7 +8253,7 @@ function renderFrame(alpha) {
   // §A8 fix: when autopilot is burning toward the selected target, skip the
   // occlusion check. The autopilot target reticle must remain visible even
   // if a foreground body is between camera and target.
-  const _selectedForReticle = (_selectedTarget && (autopilotMotion.isActive || !_isReticleOccluded(_selectedTarget))) ? _selectedTarget : null;
+  const _selectedForReticle = (_selectedTarget && !_isReticleOccluded(_selectedTarget)) ? _selectedTarget : null;
 
   // Ship Scanner (Unit 1): build shipTargets array when scanner mode is on.
   // Uses _makeTarget('ship', ...) for consistency with hitTestBodies and

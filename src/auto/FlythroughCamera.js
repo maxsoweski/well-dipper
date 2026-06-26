@@ -3,6 +3,12 @@ import * as THREE from 'three';
 /**
  * FlythroughCamera — orientation-authoring layer for the cinematic camera.
  *
+ * RETIRED 2026-06-26 (supercruise-control-harness, Tasks 12–13).
+ * FlythroughCamera.active === navSubsystem.isActive, and with NPC ship
+ * spawning DISABLED (SHIPS_ENABLED=false) the ship-lock path that drove
+ * it is unreachable — the flythrough.active simStep branch is dead-weight.
+ * File KEPT, wiring INTACT, dormant for ENRICHED reactivation. Not deleted.
+ *
  * Thinned 2026-04-20 per WS 1 of the V1 autopilot sequence
  * (docs/WORKSTREAMS/autopilot-navigation-subsystem-split-2026-04-20.md).
  * Position / velocity / Hermite / orbit-arc / approach / descend all moved to

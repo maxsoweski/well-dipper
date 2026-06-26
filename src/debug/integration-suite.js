@@ -1198,6 +1198,16 @@ export async function runShipScannerInspectionTests() {
   }
   const __wd = window.__wd;
   const _lab = window._lab;
+  // Ships disabled for the F&F arc (SHIPS_ENABLED=false) → no NPC ships
+  // exist, so this suite has nothing to assert. Skip cleanly (preserved,
+  // not deleted — flip SHIPS_ENABLED to re-enable). Missing shipsEnabled
+  // ⇒ skip (safe direction: never run this suite against zero ships).
+  if (typeof _lab.shipsEnabled !== 'function' || !_lab.shipsEnabled()) {
+    return {
+      passed: 0, failed: 0, total: 0,
+      results: [{ name: 'ship-scanner-inspection', passed: true, evidence: 'skipped — NPC ships disabled (SHIPS_ENABLED=false)' }],
+    };
+  }
   const results = [];
 
   // Pre-condition: scanner mode OFF; capture baseline ship reticle count.
@@ -1541,6 +1551,15 @@ export async function runShipScannerBurnArrivalTest() {
   }
   const _lab = window._lab;
   const __wd = window.__wd;
+  // Ships disabled for the F&F arc (SHIPS_ENABLED=false) → no NPC ship to
+  // burn toward. Skip cleanly (preserved, not deleted). Missing
+  // shipsEnabled ⇒ skip (safe direction: never run against zero ships).
+  if (typeof _lab.shipsEnabled !== 'function' || !_lab.shipsEnabled()) {
+    return {
+      passed: 0, failed: 0, total: 0,
+      results: [{ name: 'ship-scanner-burn-arrival', passed: true, evidence: 'skipped — NPC ships disabled (SHIPS_ENABLED=false)' }],
+    };
+  }
   const results = [];
 
   // Setup: scanner on, find an in-viewport ship.

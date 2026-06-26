@@ -3,6 +3,14 @@ import { VelocityBlend } from './VelocityBlend.js';
 import { simRandom } from '../core/SimRandom.js';
 
 /**
+ * RETIRED 2026-06-26 (supercruise-control-harness, Tasks 12–13). The
+ * remaining live callers below were the manual-burn + warp-arrival
+ * paths reached via ship-lock (focusShip) and the legacy flythrough
+ * branch; with NPC ship spawning DISABLED (SHIPS_ENABLED=false in
+ * main.js) those entry points are unreachable. The nav wiring in
+ * main.js is KEPT INTACT (not ripped out) — this file is dormant for
+ * ENRICHED reactivation, NOT deleted. Do NOT extend it.
+ *
  * RETIRE PENDING (2026-04-25, Director ruling on the V1 STATION-hold
  * redesign workstream). NavigationSubsystem is no longer used for
  * autopilot-tour motion — that path runs through `AutopilotMotion.js`
