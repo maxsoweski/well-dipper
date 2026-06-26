@@ -160,14 +160,17 @@ describe('getState — live telemetry read', () => {
     expect(s.commandedSpeed).toBeCloseTo(0.5 * SC_TUNING.CAP_MAX, 9);
   });
 
-  it('with a host: mode = host.readFlightType() and dropState = host.dropState() (delegation, not fallback)', () => {
+  it('with a host: mode = host.flightMode() and dropState = host.dropState() (delegation, not fallback)', () => {
+    // getState().mode is gated on engagement via host.flightMode() (Task 3
+    // Step 24, contract §4: `_scManual ? _flightMode : null`) — NOT readFlightType()
+    // (the un-gated Settings TYPE that engage() reads to pick a mode).
     const hostDrop = { state: 'approach', d: 5, captureSphere: 9, dropMaxSpeed: 4 };
     const { controls } = mk({
-      readFlightType: () => 'assist',
+      flightMode: () => 'assist',
       dropState: () => hostDrop,
     });
     const s = controls.getState();
-    expect(s.mode).toBe('assist');        // delegated flight TYPE, not the null fallback
+    expect(s.mode).toBe('assist');        // delegated flight MODE, not the null fallback
     expect(s.dropState).toBe(hostDrop);   // the host-returned object, not the inert default
   });
 

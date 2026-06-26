@@ -500,12 +500,13 @@ const scControls = new ShipControls({
     deselectTarget: () => deselectTarget(),
     resolveSelectedBody: () => _resolveSelectedBody(),
     setDeflection: ({ x, y }) => { _scDeflection = { x, y }; },
-    // The remaining delegates (enterFlight / exitFlight / readFlightType /
-    // dropState) are wired in Task 3 alongside the F-handler and HUD
-    // consolidation; left undefined here ⇒ those verbs no-op, which is
-    // correct because nothing calls engage/disengage/getState.mode yet.
-    // (getState().mode reads host.readFlightType() — the contracted delegate
-    // in §0 — NOT a separate flightMode(); see the Step-18 getState Note.)
+    // ── Option A (Task 3): the F-handler enter/exit, MECHANICALLY EXTRACTED.
+    //    Same statements, same order, MOVED out of the keydown handler. ──
+    enterFlight: (type) => _enterFlightInternal(type),
+    exitFlight: () => _exitFlightInternal(),
+    readFlightType: () => settings.get('flightControlType'),   // un-gated TYPE (8864); engage() reads it to PICK the mode
+    flightMode: () => (_scManual ? _flightMode : null),        // engagement-gated (8420); getState().mode source
+    dropState: () => _scDropState(),                            // 6107-6125
   },
 });
 // UAT knobs + test probe. tuning/pilotTuning/headTuning are the LIVE
@@ -2710,7 +2711,7 @@ function _setWarpTargetFromNavStar(navStar) {
   // Single-selection invariant: picking a star via the nav computer cancels
   // any in-system body selection so Space commits the warp rather than a
   // stale body burn.
-  if (_selectedTarget) deselectTarget();
+  if (_selectedTarget) scControls.deselect();
 
   // Set up warp target — attach the exact nav star data so warp resolution
   // can go directly to this star without a direction-based fallback search.
@@ -5625,10 +5626,11 @@ function _beginTourLegMotion(stop, priorBody) {
   // driver in that case, so no stop is needed.
   if (!scPilot.isActive && !_scManual && navSubsystem.stop) navSubsystem.stop();
   _seedScPoseFromCameraIfIdle();
-  scPilot.beginLeg({
+  scControls.flyTo({
     toBody: stop.bodyRef,
     bodyRadius: stop.bodyRadius,
     linger: stop.linger * settings.get('tourLingerMultiplier'),
+    selfStep: false,
   });
   // Ship-axis tour-leg advance — flips ENTRY→CRUISE on first post-ENTRY
   // call; 1:1 mapping thereafter.
@@ -5680,10 +5682,11 @@ function startFlythrough() {
   // autopilot from live manual supercruise flight must keep the live
   // pose/speed, not stomp them (Task-9 manual-controls heads-up).
   _seedScPoseFromCameraIfIdle();
-  scPilot.beginLeg({
+  scControls.flyTo({
     toBody: firstStop.bodyRef,
     bodyRadius: firstStop.bodyRadius,
     linger: firstStop.linger * settings.get('tourLingerMultiplier'),
+    selfStep: false,
   });
   // Ship-axis: non-warp engage → first leg is CRUISE (not ENTRY).
   shipChoreographer.beginTour({ fromWarp: false });
@@ -5903,10 +5906,11 @@ function warpRevealSystem() {
     // stops it at turn start; warpSwapSystem stops it defensively), so
     // the guarded seed always takes.
     _seedScPoseFromCameraIfIdle();
-    scPilot.beginLeg({
+    scControls.flyTo({
       toBody: firstStop.bodyRef,
       bodyRadius: firstStop.bodyRadius,
       linger: firstStop.linger * settings.get('tourLingerMultiplier'),
+      selfStep: false,
     });
     // Ship-axis ENTRY — warp-exit is the continuity-anchor per §10.5.
     shipChoreographer.beginTour({ fromWarp: true });
@@ -6093,7 +6097,7 @@ function _enterFlightMode(mode) {
   else if (mode === FlightMode.ASSIST) _engageAssist(body); // Task 6
 }
 function _beginAlign(body) { _alignState.active = true; _alignState.mesh = body.mesh; _alignState.t = 0; }
-function _engageAssist(body) { scPilot.beginLeg({ toBody: body.mesh, bodyRadius: body.radius }); }
+function _engageAssist(body) { scControls.flyTo({ toBody: body.mesh, bodyRadius: body.radius, selfStep: false }); }
 
 // Drop-window state for the supercruise HUD target marker (AC7). Mirrors the
 // manual drop-out capture rule (the `if (_scManual)` block in simStep): inside
@@ -6108,9 +6112,9 @@ function _scDropState() {
   // Resolve the same body the HUD marker tracks: selected body first, else the
   // pilot's active target (so the autopilot tour shows a drop window too).
   const sel = _resolveSelectedBody();
-  const bp = sel ? sel.mesh.position : (scPilot._target?.mesh?.position ?? null);
+  const bp = sel ? sel.mesh.position : (scControls.target?.mesh?.position ?? null);
   if (!bp) return { state: 'none', d: null, captureSphere: null, dropMaxSpeed: null };
-  const R = (sel ? sel.radius : scPilot._target?.radius) ?? 5;
+  const R = (sel ? sel.radius : scControls.target?.radius) ?? 5;
   const t = scPilot.tuning;
   const captureSphere = R * t.DROP_RADIUS_FACTOR;          // 10R
   const dropMaxSpeed = captureSphere / t.DROP_ETA_MAX;     // (10R)/2.5
@@ -6365,10 +6369,11 @@ function focusPlanet(index) {
     scModel.position.copy(camera.position);
     scModel.orientation.copy(camera.quaternion);
     scModel.speed = 0; scModel.setThrottle(0);
-    scPilot.beginLeg({
+    scControls.flyTo({
       toBody: entry.planet.mesh,
       bodyRadius: bodyRadius,
       linger: Infinity,
+      selfStep: false,
     });
     const pName = system.names?.planets?.[index]?.name ?? null;
     bodyInfo.showPlanet(entry.planet.data, index, pName);
@@ -6411,10 +6416,11 @@ function focusStar(starIdx) {
   scModel.position.copy(camera.position);
   scModel.orientation.copy(camera.quaternion);
   scModel.speed = 0; scModel.setThrottle(0);
-  scPilot.beginLeg({
+  scControls.flyTo({
     toBody: starObj.mesh,
     bodyRadius: bodyRadius,
     linger: Infinity,
+    selfStep: false,
   });
   const sName = system.names
     ? (starIdx === 1 ? system.names.star2 : system.names.star)
@@ -6455,10 +6461,11 @@ function focusMoon(planetIndex, moonIndex) {
   scModel.position.copy(camera.position);
   scModel.orientation.copy(camera.quaternion);
   scModel.speed = 0; scModel.setThrottle(0);
-  scPilot.beginLeg({
+  scControls.flyTo({
     toBody: moon.mesh,
     bodyRadius: bodyRadius,
     linger: Infinity,
+    selfStep: false,
   });
   const mName = system.names?.planets?.[planetIndex]?.moons?.[moonIndex] ?? null;
   bodyInfo.showMoon(moon.data, planetIndex, mName);
@@ -6650,10 +6657,11 @@ function _handleScPilotFrame(frame) {
     _scLegAdvanced = true;
     const nextStop = autoNav.advanceToNext();
     if (nextStop && nextStop.bodyRef) {
-      scPilot.beginLeg({
+      scControls.flyTo({
         toBody: nextStop.bodyRef,
         bodyRadius: nextStop.bodyRadius,
         linger: nextStop.linger * settings.get('tourLingerMultiplier'),
+        selfStep: false,
       });
       shipChoreographer.onLegAdvanced();
       updateFocusFromStop(nextStop);
@@ -7628,8 +7636,7 @@ function simStep(deltaTime) {
       }
       scModel.setBodies(_scBodies);
 
-      const scFrame = scPilot.isActive ? scPilot.update(deltaTime) : null;
-      scModel.update(deltaTime);
+      const scFrame = scControls.step(deltaTime);
       // Mode B: ease the nose ONCE to face the selected body, then release. A
       // still stick lets it finish; deflecting the stick cancels it (see the
       // mousemove handler). Writes orientation before scHead.applyTo reads it.
@@ -7883,10 +7890,11 @@ function simStep(deltaTime) {
           // model pose from the camera so the leg departs from the
           // current view pose.
           _seedScPoseFromCameraIfIdle();
-          scPilot.beginLeg({
+          scControls.flyTo({
             toBody: nextStop.bodyRef,
             bodyRadius: nextStop.bodyRadius,
             linger: nextStop.linger * settings.get('tourLingerMultiplier'),
+            selfStep: false,
           });
           // Ship-axis: first post-ENTRY advance flips ENTRY→CRUISE. After
           // that, the phase mapping is 1:1 traveling/approaching/orbiting
@@ -8405,7 +8413,7 @@ function renderFrame(alpha) {
   // Resolve target + drop numbers once so the readout is single-sourced (10R /
   // (10R)/2.5 live only in _scDropState → scPilot.tuning).
   const _scDrop = _scDropState();
-  const _scTargetPos = _resolveSelectedBody()?.mesh.position ?? scPilot._target?.mesh?.position ?? null;
+  const _scTargetPos = _resolveSelectedBody()?.mesh.position ?? scControls.target?.mesh?.position ?? null;
   scHud.update({
     visible: _hudVisible && (_scManual || scPilot.isActive) && !warpEffect.isActive,
     speed: scModel.speed,
@@ -8478,6 +8486,77 @@ _replayReady.then(() => _animateController.start());
 
 // ── Handle Window Resize ──
 window.addEventListener('resize', () => retroRenderer.resize());
+
+// ── Flight engage/exit, MECHANICALLY EXTRACTED from the F-handler ──────────
+// (supercruise-control-harness-2026-06-26 Task 3 Option-A.) The ENGAGE body
+// and the no-snap DISENGAGE body are MOVED VERBATIM out of the F-key keydown
+// handler into these two named functions so ShipControls.engage/disengage can
+// drive them through the host delegates. Same statements, same order — no
+// rewrite of the no-snap exit (flightExitAnchor + adoptCurrentPose +
+// cameraInterp.resync). Hoisted declarations: the scControls host closures
+// reference them, but only call at runtime (after init), so order is safe.
+
+// MECHANICALLY EXTRACTED from the F-handler ENGAGE body. Same statements, same
+// order — the camera→FLIGHT seed, scPilot.stop, model seed from camera, throttle
+// 0, bypassed, then _enterFlightMode + toast. The flight TYPE comes from the
+// caller (engage(type)) if given, else Settings — the SAME source the inline
+// handler read on each engage. Guard against an unexpected stored value → Manual.
+function _enterFlightInternal(type) {
+  // Reuse the existing ENTER setup verbatim (camera → FLIGHT, model seeded
+  // from the live camera pose, throttle zero, cameraController bypassed).
+  cameraController.setCameraMode(CameraMode.FLIGHT);
+  setScManual(true);
+  scPilot.stop();
+  scModel.position.copy(camera.position);
+  scModel.orientation.copy(camera.quaternion);
+  scModel.speed = 0;
+  scModel.setThrottle(0);
+  cameraController.bypassed = true;
+  // The active flight TYPE comes from Settings (read on each engage; a
+  // mid-flight change applies on the next F-on) UNLESS the caller passed one.
+  // The stored strings are the FlightMode enum values verbatim, so this is an
+  // identity map. Guard against an unexpected stored value by falling back to Manual.
+  const _type = type ?? settings.get('flightControlType');
+  _flightMode = (_type === FlightMode.ALIGN || _type === FlightMode.ASSIST)
+    ? _type
+    : FlightMode.MANUAL;
+  _enterFlightMode(_flightMode); // begins Align/Assist for those types
+  const _info = flightModeInfo(_flightMode);
+  flightModeToast.show(`Flight ON — ${_info.label}`, _info.hint);
+}
+
+// MECHANICALLY EXTRACTED from the F-handler DISENGAGE body. The no-snap exit is
+// MOVED VERBATIM — forward-ray anchor + adoptCurrentPose + cameraInterp.resync.
+// DO NOT rewrite any line in this block.
+function _exitFlightInternal() {
+  setScManual(false);
+  scPilot.stop();
+  _alignState.active = false;
+  cameraController.setCameraMode(CameraMode.TOY_BOX);
+  // No-snap exit (§2): anchor the Toy-Box orbit on the camera's CURRENT
+  // forward ray, not the closest body. adoptCurrentPose back-solves the
+  // orbit from (camera − anchor) and pushes the target out along the ray,
+  // so _applyOrbit reproduces the EXACT camera position AND lookAt(target)
+  // reproduces the EXACT look direction → zero position/orientation snap.
+  // `d` only sets the post-exit orbit-pivot scale: distance to the selected
+  // body, else the closest body, else a sane fallback. Clamp it to the
+  // camera's own [minDistance, maxDistance] (the clamp cancels out of the
+  // reconstructed position — see flightExitAnchor's contract).
+  camera.getWorldDirection(_exitFwd);
+  const _anchorBody = _resolveSelectedBody()?.mesh.position
+    ?? findClosestBody()?.position
+    ?? null;
+  const _rawD = _anchorBody ? camera.position.distanceTo(_anchorBody) : 100;
+  const _d = Math.max(
+    cameraController.minDistance,
+    Math.min(cameraController.maxDistance, _rawD),
+  );
+  const _anchor = flightExitAnchor(camera.position, _exitFwd, _d);
+  cameraController.adoptCurrentPose(_anchor);
+  cameraInterp.resync(camera);
+  _flightMode = FlightMode.MANUAL; // reset for the next engage
+  flightModeToast.show('Flight OFF', '');
+}
 
 // ── Keyboard shortcuts ──
 window.addEventListener('keydown', (e) => {
@@ -8590,7 +8669,7 @@ window.addEventListener('keydown', (e) => {
     }
     // Nothing else to dismiss: use Escape to deselect the current target
     if (_selectedTarget) {
-      deselectTarget();
+      scControls.deselect();
       return;
     }
   }
@@ -8845,58 +8924,16 @@ window.addEventListener('keydown', (e) => {
     // ON → DISENGAGE (clean, no snap). The 4-state F-ring is retired —
     // advanceFlightMode is no longer consulted here; the flight TYPE lives in
     // Settings instead. _scManual is the "in flight" gate.
+    // F is now routed through the ShipControls surface (Task 3 Option-A). The
+    // ENGAGE / no-snap-DISENGAGE bodies were MECHANICALLY EXTRACTED into
+    // _enterFlightInternal / _exitFlightInternal (wired as host.enterFlight /
+    // host.exitFlight); engage()/disengage() drive them — same statements, same
+    // order. disengage() additionally calls pilot.stop(), idempotent because the
+    // extracted exit body already ran scPilot.stop().
     if (!_scManual) {
-      // ── ENGAGE flight (OFF → ON) ──────────────────────────────────────────
-      // Reuse the existing ENTER setup verbatim (camera → FLIGHT, model seeded
-      // from the live camera pose, throttle zero, cameraController bypassed).
-      cameraController.setCameraMode(CameraMode.FLIGHT);
-      setScManual(true);
-      scPilot.stop();
-      scModel.position.copy(camera.position);
-      scModel.orientation.copy(camera.quaternion);
-      scModel.speed = 0;
-      scModel.setThrottle(0);
-      cameraController.bypassed = true;
-      // The active flight TYPE comes from Settings (read on each engage; a
-      // mid-flight change applies on the next F-on). The stored strings are the
-      // FlightMode enum values verbatim, so this is an identity map. Guard
-      // against an unexpected stored value by falling back to Manual.
-      const _type = settings.get('flightControlType');
-      _flightMode = (_type === FlightMode.ALIGN || _type === FlightMode.ASSIST)
-        ? _type
-        : FlightMode.MANUAL;
-      _enterFlightMode(_flightMode); // begins Align/Assist for those types
-      const _info = flightModeInfo(_flightMode);
-      flightModeToast.show(`Flight ON — ${_info.label}`, _info.hint);
+      scControls.engage();      // F-on: reads Settings type, runs _enterFlightInternal
     } else {
-      // ── DISENGAGE flight (ON → OFF) — no teleport ─────────────────────────
-      setScManual(false);
-      scPilot.stop();
-      _alignState.active = false;
-      cameraController.setCameraMode(CameraMode.TOY_BOX);
-      // No-snap exit (§2): anchor the Toy-Box orbit on the camera's CURRENT
-      // forward ray, not the closest body. adoptCurrentPose back-solves the
-      // orbit from (camera − anchor) and pushes the target out along the ray,
-      // so _applyOrbit reproduces the EXACT camera position AND lookAt(target)
-      // reproduces the EXACT look direction → zero position/orientation snap.
-      // `d` only sets the post-exit orbit-pivot scale: distance to the selected
-      // body, else the closest body, else a sane fallback. Clamp it to the
-      // camera's own [minDistance, maxDistance] (the clamp cancels out of the
-      // reconstructed position — see flightExitAnchor's contract).
-      camera.getWorldDirection(_exitFwd);
-      const _anchorBody = _resolveSelectedBody()?.mesh.position
-        ?? findClosestBody()?.position
-        ?? null;
-      const _rawD = _anchorBody ? camera.position.distanceTo(_anchorBody) : 100;
-      const _d = Math.max(
-        cameraController.minDistance,
-        Math.min(cameraController.maxDistance, _rawD),
-      );
-      const _anchor = flightExitAnchor(camera.position, _exitFwd, _d);
-      cameraController.adoptCurrentPose(_anchor);
-      cameraInterp.resync(camera);
-      _flightMode = FlightMode.MANUAL; // reset for the next engage
-      flightModeToast.show('Flight OFF', '');
+      scControls.disengage();   // F-off: runs _exitFlightInternal (no-snap) + pilot.stop()
     }
     console.log(`[MODE] flight ${_scManual ? _flightMode : 'OFF'}`);
     return;
@@ -9065,7 +9102,7 @@ function trySelect(clientX, clientY) {
   // planet doesn't fall through to "nearest background star".
   const bodyHit = hitTestBodies(clientX, clientY);
   if (bodyHit) {
-    selectTarget(bodyHit);
+    scControls.selectTarget(bodyHit);
     return;
   }
 
@@ -9081,7 +9118,7 @@ function trySelect(clientX, clientY) {
         moonIndex: orbitHit.info.moonIndex,
       });
     }
-    if (target) selectTarget(target);
+    if (target) scControls.selectTarget(target);
     return;
   }
 
@@ -9117,7 +9154,7 @@ function trySelectWarpTarget(rayDir) {
   // Single-selection invariant: picking a background star cancels any
   // in-system body selection so Space commits the warp rather than a
   // stale body burn.
-  if (_selectedTarget) deselectTarget();
+  if (_selectedTarget) scControls.deselect();
 
   soundEngine.play('warpTarget');
   warpTarget.direction = result.direction;
@@ -9297,15 +9334,24 @@ canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
     const nx = ((e.clientX - r.left) - r.width / 2) / (r.width / 2);   // -1..1
     const ny = ((e.clientY - r.top) - r.height / 2) / (r.height / 2);  // -1..1
-    const s = shapeStick(nx, ny, _scStickTuning);
+    // Casing-fixed shaping (lowercased opts) so the disengage/align-cancel
+    // gate honors live UAT tuning identically to ShipControls.steer() — the
+    // original inline pair derived gate, turn-input AND deflection from ONE
+    // shaped vector, so the gate must use the SAME casing-fixed shaping the
+    // surface applies. Passing _scStickTuning's UPPERCASE keys here would
+    // silently fall back to defaults (stickCurve.js:7 reads lowercase), so the
+    // gate and the applied deflection would disagree under a mutated deadzone.
+    const s = shapeStick(nx, ny, { deadzone: _scStickTuning.DEADZONE, expo: _scStickTuning.EXPO });
     const _deflected = (s.x !== 0 || s.y !== 0);
     if (_flightMode === FlightMode.ASSIST && scPilot.isActive && _deflected) {
       scPilot.stop(); // Mode C: manual steer disengages the hold
     }
     if (!(_flightMode === FlightMode.ASSIST && scPilot.isActive)) {
       if (_alignState.active && _deflected) _alignState.active = false; // Mode B cancel
-      scModel.setTurnInput(-s.x, -s.y);
-      _scDeflection = { x: s.x, y: s.y };
+      // Route through the surface: shapes (casing-fixed), negates the turn-input,
+      // and writes the un-negated _scDeflection via host.setDeflection — the SAME
+      // two writes the inline pair did, now single-doored (ShipControls.steer).
+      scControls.steer(nx, ny);
     }
   }
 

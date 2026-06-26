@@ -77,12 +77,12 @@ export class ShipControls {
       speed: m.speed,
       commandedSpeed: m.throttle * m.speedCap(),
       throttle: m.throttle,
-      // mode = the host's live flight TYPE via the CONTRACTED host.readFlightType()
-      // delegate (contract §0; 'manual'|'align'|'assist'). No host (lab/headless) ⇒
-      // null. NOTE: readFlightType() is NOT gated on "in flight", so when a host IS
-      // present mode reflects the configured flight TYPE even if the ship is not
-      // currently engaged — see the contract-nuance flag in the plan's Step-18 Note.
-      mode: this.host.readFlightType?.() ?? null,
+      // mode: the host's live flight TYPE, gated on engagement — null while idle
+      // (contract §4: `_scManual ? _flightMode : null`, main.js:8420). The host's
+      // flightMode() delegate IS that expression; readFlightType() (un-gated) is
+      // still used by engage() to PICK the type, but getState reports null-when-idle.
+      // No host (lab/headless) ⇒ no flightMode delegate ⇒ `?? null` ⇒ mode === null.
+      mode: this.host.flightMode?.() ?? null,
       phase: this.pilot.phase,
       dropState: this.host.dropState?.() ?? { ...INERT_DROP },
     };
