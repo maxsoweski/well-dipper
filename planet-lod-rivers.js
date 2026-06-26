@@ -20,6 +20,14 @@ import { solveSeaLevel } from './planet-lod-sealevel.js';
 // orchestrator, plan §D1). createRiverOverlay.route() drives them once per body so the grain bake
 // rides the same once-per-(preset,seed,sea) cadence the carve cube already uses (bake-once AC).
 import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './planet-lod-tectonic.js';
+// Baked-relief (WS world-engine-baked-relief-render-2026-06-25) Phase B — the HEIGHT cube trio
+// (copies of the grain trio, carrying carrier.height instead of strike). createHeightCube is the
+// GPU baker, buildHeightCubeGeometry the pure geometry, bakeHeightCube the once-per-route wrapper.
+// The height DATA comes from the sphere-native E6 writer (writeHeightSphere) over the same carrier
+// the grain bake uses (makeSphereField). RELIEF_CUBE_SIZE = 256 (same class as GRAIN_CUBE_SIZE).
+import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './planet-lod-tectonic.js';
+import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
+import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
 export const DEFAULT_PARAMS = Object.freeze({
@@ -108,6 +116,56 @@ export function bakeGrainCube({
   });
   if (grainCube && typeof grainCube.update === 'function') grainCube.update(geo);
   return grain;
+}
+
+// ── computeAdjGradient(carrier) — per-node tangent-plane finite-difference gradient (Phase B.3) ──
+// SHADING-ONLY (the router does NOT use this for routing — routeAndOrder derives its own surf-gradient
+// from node-to-node drops; Map 04 §10). Packed into the height cube's GBA so perturbAnalytic can bend
+// the normal. Returns Float32Array(N*3): the world-space surface gradient ∇h at each node.
+//
+// Method: for each node i, fit the tangent-plane slope (∂h/∂east, ∂h/∂north) by a least-squares /
+// averaged finite difference over its adjacency neighbours (projected into carrier.tangentFrameAt(i)),
+// then express the gradient back in world space as gE*east + gN*north (already tangent, no radial
+// component). Deterministic (no rng), finite (degenerate neighbour sets ⇒ zero gradient guard),
+// seam-free (operates on carrier.adj + the pole-safe tangent frame, object-space — no UV/lat-long).
+export function computeAdjGradient(carrier) {
+  const N = carrier.N;
+  const h = carrier.height;
+  const verts = carrier.verts;
+  const adj = carrier.adj;
+  const grad = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const { east, north } = carrier.tangentFrameAt(i);
+    const di = verts[i];
+    // Normal-equation accumulators for the 2×2 least-squares fit of (gE, gN) to dh ≈ gE*de + gN*dn.
+    let sEE = 0, sEN = 0, sNN = 0, sEh = 0, sNh = 0, used = 0;
+    const nb = adj[i];
+    for (let k = 0; k < nb.length; k++) {
+      const j = nb[k];
+      const dj = verts[j];
+      // tangent displacement toward neighbour j (project the chord onto the local tangent frame)
+      const cx = dj[0] - di[0], cy = dj[1] - di[1], cz = dj[2] - di[2];
+      const de = cx * east[0] + cy * east[1] + cz * east[2];
+      const dn = cx * north[0] + cy * north[1] + cz * north[2];
+      const dh = h[j] - h[i];
+      if (!Number.isFinite(de) || !Number.isFinite(dn) || !Number.isFinite(dh)) continue;
+      sEE += de * de; sEN += de * dn; sNN += dn * dn;
+      sEh += de * dh; sNh += dn * dh; used++;
+    }
+    let gE = 0, gN = 0;
+    const det = sEE * sNN - sEN * sEN;
+    if (used >= 2 && Math.abs(det) > 1e-12) {
+      gE = (sEh * sNN - sNh * sEN) / det;
+      gN = (sNh * sEE - sEh * sEN) / det;
+    }
+    if (!Number.isFinite(gE)) gE = 0;
+    if (!Number.isFinite(gN)) gN = 0;
+    // express tangent gradient back in world space (gE along east + gN along north; both tangent)
+    grad[i * 3]     = gE * east[0] + gN * north[0];
+    grad[i * 3 + 1] = gE * east[1] + gN * north[1];
+    grad[i * 3 + 2] = gE * east[2] + gN * north[2];
+  }
+  return grad;
 }
 
 // AC6: object-space river-width factor for a planet of radiusEarth. ∝ refRadius/radiusEarth
@@ -970,6 +1028,10 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   // re-bake; preset/seed/sea changes go through route() and DO). makeGrainCube is injectable so a
   // headless test can swap a renderer-less stub for the GPU CubeCamera baker.
   let grainCube = null, grainBakeCount = 0;
+  // Baked-relief Phase B: the HEIGHT cube (whole-sphere E6 relief field) + its own bake counter.
+  // Same lazy-once lifecycle + once-per-route cadence as the grain cube (bake-once AC). The DATA
+  // source is the sphere-native carrier.height (writeHeightSphere), NOT the in-shader sampler read.
+  let heightCube = null, heightBakeCount = 0;
   const ribbon = new THREE.Mesh(
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
@@ -991,6 +1053,9 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // route(), reused thereafter). makeGrainCube defaults to the real createGrainCube (CubeCamera RTT);
     // a test injects a stub so this is renderer-free in CI.
     grainCube = makeGrainCube({ renderer, size: params.GRAIN_CUBE_SIZE });
+    // Baked-relief Phase B: the HEIGHT cube rides the same lazy-once lifecycle (built on first route(),
+    // reused thereafter). createHeightCube is the real CubeCamera RTT baker; RELIEF_CUBE_SIZE = 256.
+    heightCube = createHeightCube({ renderer, size: RELIEF_CUBE_SIZE });
     meshMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
   }
 
@@ -1019,6 +1084,24 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // bundle until WS1's driver vector wires through.
     bakeGrainCube({ mesh, drivers: grainDrivers, macroSeed, grainCube });
     grainBakeCount++;
+    // ── Baked-relief Phase B: build the sphere-native E6 height field as DATA, bake it to the HEIGHT
+    // cube (same once-per-route cadence as grain). The §0 invariant: ONE field (carrier.height) → ONE
+    // cube (heightCube) → both the renderer (AC2) and the router (AC3) read it.
+    //
+    // RISK #2 sourcing (resolved): route() carries grainDrivers (the E6 driver bundle) + macroSeed
+    // (the body's deterministic integer seed) — both flow in here. writeHeightSphere needs (crust,
+    // drivers, epoch, seed). It does NOT dereference `crust` (it derives its own seam-free thickness
+    // blob from the seed family seed+':crust'); we pass an inert {} placeholder for signature parity.
+    // drivers = grainDrivers (the SAME bundle the grain bake uses). heightSeed = a deterministic string
+    // built from the integer macroSeed (the SAME entropy the grain bake consumes; NO Math.random).
+    const heightSeed = 'e6:' + (macroSeed | 0);
+    const carrier = makeSphereField(mesh);
+    writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
+    writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
+    const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
+    // source = sphere-native E6 DATA, NOT sampler.read() (the §B.5 SPLIT-TRAP #3 guard).
+    bakeHeightCube({ mesh, height: carrier.height, grad: reliefGrad, heightCube });
+    heightBakeCount++;
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
     stats = buildStats({ routed, height, N, faces: mesh.faces.length, seaLevel, oceanCount, ribGeo, label, totalMs });
     stats.meshMs = +meshMs.toFixed(0);
@@ -1039,6 +1122,10 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // counter (the bake-once live AC reads it: unchanged on camera/time, +1 per preset/seed/sea change).
     get grainTexture() { return grainCube ? grainCube.texture : null; },
     get grainBakeCount() { return grainBakeCount; },
-    dispose() { if (sampler) sampler.dispose(); if (carve) carve.dispose(); if (grainCube && grainCube.dispose) grainCube.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
+    // Baked-relief Phase B: the baked HEIGHT cube texture (the host pushes it to uReliefBakeCube) + its
+    // bake counter (bake-once: unchanged on camera/time, +1 per preset/seed/sea change via route()).
+    get reliefTexture() { return heightCube ? heightCube.texture : null; },
+    get reliefBakeCount() { return heightBakeCount; },
+    dispose() { if (sampler) sampler.dispose(); if (carve) carve.dispose(); if (grainCube && grainCube.dispose) grainCube.dispose(); if (heightCube && heightCube.dispose) heightCube.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
   };
 }
