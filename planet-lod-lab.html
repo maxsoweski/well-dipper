@@ -157,6 +157,8 @@
     import { makeUniforms } from './planet-lod-uniforms.js';      // AC1: single source of uniform defaults (factory)
     import { createRiverOverlay, DEFAULT_GRAIN_DRIVERS, perNodeIncision, applyIncision } from './planet-lod-rivers.js';  // AC4: dendritic river ribbon overlay (shared router/ribbon pipeline) · WS4 T12-probe: the neutral E6 grain drivers the overlay bakes with · WS4 T12: the proven Δ≤0 carve law the epoch toggle folds into sampleRoutedHeight
     import { bakeTectonicGrain } from './planet-lod-tectonic.js';  // WS4 T12-probe: pure (no-rng) per-node strike deriver — re-run with the overlay mesh+macroSeed to read back the SAME field the grain cube holds
+    import { makeSphereField } from './src/worldengine/base/sphereField.js';   // AC2 _bakedReliefAt probe: rebuild the carrier route() baked
+    import { writeGrainSphere, writeHeightSphere } from './src/worldengine/base/tectonic.js';   // AC2 _bakedReliefAt probe: re-derive the SAME pure height field the relief cube holds
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -337,7 +339,18 @@
           // New analytic path — relief amplitude grows with approach (lodRamp), so
           // "one scalar drives all complexity" (spec §2.B): octaves AND detail depth.
           float fwBase = max(max(fwidth(vPos.x), fwidth(vPos.y)), fwidth(vPos.z));
-          vec4 hd = fbmd(vPos, uOctaves, fwBase);
+          // AC2 — baked-relief height source, BRANCH-guarded (SPLIT-TRAP #4: if/else, NEVER mix()-to-0).
+          // strength 0 ⇒ ELSE branch = the verbatim pre-AC2 fbmd line, NO textureCube fetch (byte-identical).
+          // strength 1 ⇒ pure baked field (R=height, GBA=gradient) so the surface tracks the baked cube.
+          vec4 hd;
+          if (uReliefBakeStrength > 0.0) {
+            vec4 baked = sampleBakedRelief(vObjN);          // object-space direction-keyed, seam-free
+            vec4 synth = fbmd(vPos, uOctaves, fwBase);      // in-shader DETAIL residual
+            // §C.3 LOCKED blend: body = baked, residual = synth fraction; s=1 => pure baked.
+            hd = vec4(baked.x * uReliefBakeStrength, baked.yzw * uReliefBakeStrength) + synth * (1.0 - uReliefBakeStrength);
+          } else {
+            hd = fbmd(vPos, uOctaves, fwBase);              // VERBATIM pre-AC2 path, NO cube fetch
+          }
           float h = hd.x;
           vec3 grad = hd.yzw;
           // F19 — base-FBM gradient snapshot: massWastCombiner subtracts it from the running
@@ -1377,6 +1390,13 @@
     // the byte-identical fallback — it exists only so the bind is valid (an unbound/null samplerCube
     // can warn/UB on some drivers and would perturb the strength-0 A/B capture this AC rests on).
     uniforms.uTectonicGrainCube  = { value: makeDummyCubeTexture() };
+    // ── AC2 baked relief — same D6 belt-and-braces: a samplerCube must ALWAYS be bound, so seed
+    // uReliefBakeCube with a 1×1 black dummy until route() bakes the real height cube. The height
+    // source BRANCHES on uReliefBakeStrength (default 0) so this dummy is NEVER sampled at the
+    // byte-identical fallback — it exists only so the bind is valid (a null samplerCube can warn/UB).
+    const _dummyReliefCube = makeDummyCubeTexture();
+    uniforms.uReliefBakeCube     = { value: _dummyReliefCube };
+    uniforms.uReliefBakeStrength = { value: 0.0 };   // default 0 ⇒ byte-identical (prod uniforms.js default also stays 0)
     uniforms.uRiverCarveStrength = { value: 0.0 };
     uniforms.uRiverCarveFloor    = { value: 0.0 };
     uniforms.uRiverCarveDepth    = { value: 0.0 };   // Option B: h-units the floor is lowered (→ F14 floods)
@@ -2443,14 +2463,19 @@
     // new-vs-old boundary is legible. Plain lil-gui readout (a bound string, .disable()d).
     const grainCarveUI = {
       grainStrength: 1.0,                                      // LAB live initial = ON (A/B visible)
+      reliefBakeStrength: 1.0,                                 // AC2 LAB live initial = ON (A/B visible)
       carveEpoch: (window._lab && window._lab.carveEpoch) || false,
       legend: 'grain drives: orogeny · canyon · scarp · tessera · lava · cryo',
     };
     // Apply the lab's ON-by-default grain immediately (does NOT touch the uniforms.js default).
     uniforms.uTectonicGrainStrength.value = grainCarveUI.grainStrength;
+    // AC2: apply the lab's ON-by-default baked relief (LAB live = 1 for A/B; prod uniforms.js stays 0).
+    uniforms.uReliefBakeStrength.value = grainCarveUI.reliefBakeStrength;
     fGrainCarve.add(grainCarveUI, 'legend').name('⊞ shared grain feeds').disable();
     fGrainCarve.add(grainCarveUI, 'grainStrength', 0, 1, 0.01).name('grain strength (0 = old scatter)')
       .onChange(v => { window._lab ? window._lab.grainStrength(v) : (uniforms.uTectonicGrainStrength.value = v); });
+    fGrainCarve.add(grainCarveUI, 'reliefBakeStrength', 0, 1, 0.01).name('baked relief (0 = synth only)')
+      .onChange(v => { window._lab ? window._lab.reliefBakeStrength(v) : (uniforms.uReliefBakeStrength.value = v); });
     fGrainCarve.add(grainCarveUI, 'carveEpoch').name('carve epoch (drainage cuts relief)')
       .onChange(v => { window._lab && window._lab.setCarveEpoch(v); });
     // Carve depth — the live h-units the valley floor drops (→ F14 flood). Reuses the EXISTING
@@ -3580,6 +3605,10 @@
       // grained combiners (T5 scarp / T13 rest) sample the shared field. Strength still defaults 0, so
       // nothing changes visibly until uTectonicGrainStrength>0 — the branch guard keeps strength-0 byte-identical.
       uniforms.uTectonicGrainCube.value = riverOverlay.grainTexture || uniforms.uTectonicGrainCube.value;
+      // AC2: point the planet shader at the freshly-baked relief height cube (Phase B exposes
+      // riverOverlay.reliefTexture). Falls back to the dummy until the first bake. Strength still
+      // gates the fetch (default 0), so nothing changes visibly until uReliefBakeStrength>0.
+      uniforms.uReliefBakeCube.value = riverOverlay.reliefTexture || _dummyReliefCube;
       uniforms.uRiverCarveGateHi.value = riverOverlayState.carveGateHi;
       applyCarveAmounts();                 // (re)apply the enabled && carve-gated gouging amounts
       riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
@@ -5715,6 +5744,16 @@
                     // pre-WS4 normalize(uXxxAxis) path exactly. Used by the live grain-zero-identical /
                     // one-shared-grain captures on :9223 (set 0, capture; set 1, capture; diff).
                     grainStrength(s){ if (s !== undefined) uniforms.uTectonicGrainStrength.value = +s; return uniforms.uTectonicGrainStrength.value; },
+                    // AC2 — baked-relief strength A/B hook (copy of grainStrength). reliefBakeStrength() reads,
+                    // reliefBakeStrength(s) sets the gate (0 = byte-identical fallback). The height source
+                    // BRANCHES on it (if/else, never mix-to-0), so 0 reverts to the verbatim pre-AC2 fbmd line
+                    // with NO cube fetch. Used by the live strength-0-identical / strength-1-tracks captures on :9223.
+                    reliefBakeStrength(s){ if (s !== undefined) uniforms.uReliefBakeStrength.value = +s; return uniforms.uReliefBakeStrength.value; },
+                    // AC2 — baked-relief bake-once + texture probes (copies of grainBakeCount/grainTexture).
+                    // reliefBakeCount increments once per route() (camera/time changes never re-bake). reliefTexture
+                    // is the baked HalfFloat height cube (R=height, GBA=gradient) the renderer samples.
+                    get reliefBakeCount(){ return riverOverlay.reliefBakeCount; },
+                    get reliefTexture(){ return riverOverlay.reliefTexture; },
                     // WS4 T12 — carve-EPOCH toggle for epoch-carve-visible. Off (default) = epoch 1, the
                     // uncut authored relief; on = epoch 2, drainage carved into THAT SAME substrate. It gates
                     // sampleRoutedHeight (above): ON folds perNodeIncision via applyIncision onto the routed
@@ -5894,6 +5933,35 @@
                         if (dot > best) { best = dot; bi = i; }
                       }
                       return new THREE.Vector3(grain.strikeWorldX[bi], grain.strikeWorldY[bi], grain.strikeWorldZ[bi]);
+                    },
+                    // AC2 parity probe — the baked RELIEF height at a direction, re-derived from the SAME pure
+                    // field the cube holds. Mirrors _sharedStrikeAt: rebuild the carrier route() baked
+                    // (makeSphereField → writeGrainSphere → writeHeightSphere) with the SAME inputs route()
+                    // uses (mesh, DEFAULT_GRAIN_DRIVERS, heightSeed='e6:'+macroSeed — see rivers.js:1097-1100),
+                    // then nearest-mesh-node lookup (max dot, identical to sampleRoutedHeight). Pure: no
+                    // Math.random / Date.now (writeHeightSphere's only entropy is the seed). Returns the scalar
+                    // height the relief cube's R channel should hold at that direction — the cube-sample == data
+                    // assertion the AC2 strength-1 parity check reads.
+                    _bakedReliefAt(dir){
+                      const ov = riverOverlay;
+                      const mesh = ov && ov.mesh;
+                      if (!mesh || !mesh.verts) return null;
+                      const heightSeed = 'e6:' + (state.macroSeed | 0);
+                      const carrier = makeSphereField(mesh);
+                      writeGrainSphere(carrier, DEFAULT_GRAIN_DRIVERS);                                   // precondition: grain before height
+                      writeHeightSphere(carrier, {}, DEFAULT_GRAIN_DRIVERS, { name: 'tectonic-build' }, heightSeed);
+                      const verts = mesh.verts, N = verts.length;
+                      let dx = dir.x !== undefined ? dir.x : dir[0];
+                      let dy = dir.y !== undefined ? dir.y : dir[1];
+                      let dz = dir.z !== undefined ? dir.z : dir[2];
+                      const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+                      let best = -2, bi = 0;
+                      for (let i = 0; i < N; i++) {
+                        const v = verts[i];
+                        const dot = v[0] * dx + v[1] * dy + v[2] * dz;
+                        if (dot > best) { best = dot; bi = i; }
+                      }
+                      return carrier.height[bi];
                     } };
 
     // ── HOT-RELOAD SCENARIO PERSISTENCE (2026-06-10) ──

@@ -142,6 +142,12 @@ export const HEIGHT_GLSL = /* glsl */ `
       // composed in each combiner against the REAL gProvince (T13), NOT here.
       uniform float       uTectonicGrainStrength;  // 0 = grain OFF (byte-identical fallback gate)
       uniform samplerCube uTectonicGrainCube;      // baked strike-only cube (RG = world strike.xy)
+      // ── AC2 baked relief (WS world-engine) — parallel HEIGHT channel to the grain cube above.
+      // Same byte-identical contract: at strength 0 the renderer NEVER fetches uReliefBakeCube
+      // (the height source stays the verbatim pre-AC2 fbmd line — see the if/else in lab main()).
+      uniform float       uReliefBakeStrength;      // 0 = baked relief OFF (byte-identical fallback gate)
+      uniform samplerCube uReliefBakeCube;          // baked low-freq height cube (R=height, GBA=gradient)
+      vec4 sampleBakedRelief(vec3 dir){ return textureCube(uReliefBakeCube, normalize(dir)); } // .x=height, .yzw=grad
       vec3 sampleGrainStrike(vec3 dir){
         vec3 d = normalize(dir);
         vec2 g = textureCube(uTectonicGrainCube, d).rg;          // packed world strike (xy dominant)
