@@ -1,0 +1,121 @@
+{
+  "workstream": "world-engine-plate-uplift-field-2026-06-26",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "campaign": "world-engine production-L1 port \u2014 Option C (one-pass plate placement), increment 1: placed plate/uplift field feeding existing erosion",
+  "renderer": "LAB only (planet-lod-lab.html); game Planet.js deferred/OUT",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "A new three-free, headless-testable generator (peer of src/worldengine/base/tectonic.js \u2014 e.g. src/worldengine/base/plates.js) runs ONE pass \u2014 seed N plate centroids deterministically from the integer macroSeed \u2192 spherical-Voronoi partition \u2192 per-plate Euler-pole motion \u2192 classify each boundary convergent/divergent/transform by relative-motion stress \u2192 write an uplift field U onto the sphere carrier and spread it inward via a distance field. For an Earth-like body the plate path writes U as the SOLE low/mid-frequency source for carrier.height (it REPLACES the latitude-band writeHeightSphere contribution; it does NOT add on top of it \u2014 additive would re-introduce the very latitude banding this increment removes, given writeHeightSphere is epoch-additive at tectonic.js:180). The pass is render-once: the only iteration permitted is a BOUNDED gen-time relaxation (the precedent WD already ships: tectonic.js jacobiSmoothSphere 10 passes; relief-e9-hydrology.js runE9 PASSES=5) \u2014 NOT time-stepping billions of years. Fully deterministic: same drivers+macroSeed => byte-identical U field; all values finite and bounded; NO Math.random / Date.now anywhere in the derivation (all randomness seeded via alea / the macroSeed sin-hash recipe).",
+      "verifyVia": {
+        "input": "Vitest headless (pattern: tests/worldengine-base-height-sphere.test.js). Build a small-N carrier via buildIrregularSphere (importable from planet-lod-rivers.js, e.g. TARGET_N=600), run the plate/uplift generator twice with the same drivers+macroSeed and once with a different macroSeed; grep the new module source for Math.random/Date.now; count the relaxation passes the generator runs.",
+        "observable": "The two same-seed U fields are byte-identical (Float32Array equality); every value finite and within the documented relief range; grep shows zero Math.random / Date.now in the module; the different-seed run produces a measurably different field (seed-sensitivity); the relaxation pass count is a fixed small bound (no while-loop on a convergence threshold, no per-Myr time loop) \u2014 render-once confirmed."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "The placed U field has TECTONIC STRUCTURE, not noise: U is concentrated at classified CONVERGENT plate boundaries (uplift/ranges), is negative/low at DIVERGENT boundaries (rift), and is low/flat in cratonic plate INTERIORS \u2014 and this pattern correlates with the plate-boundary geometry the generator itself produced. This is THE load-bearing anti-'uplift-as-noise + erode = eroded noise' guard: a deterministic noise field, and a latitude-only field, must each provably FAIL it.",
+      "verifyVia": {
+        "input": "Vitest headless: run the generator, retain the per-node plateId / boundaryClass labels AND the U field; compute (a) mean U at convergent-boundary nodes, divergent-boundary nodes, and interior nodes; (b) the Pearson correlation of U against signed distance-to-nearest-classified-boundary. Then run the SAME metrics on two controls built on the same carrier: a pure-simplex-noise U field, and a latitude-only (stressAtLat-derived) U field.",
+        "observable": "Mean U at convergent-boundary nodes >= 2x mean U at interior nodes; mean U at divergent-boundary nodes is below the interior mean (negative/rift); |Pearson correlation| of U vs signed-distance-to-nearest-boundary >= 0.5; AND both the pure-noise control and the latitude-only control FAIL the convergent>=2x-interior test (asserted as a required failure) \u2014 so neither eroded noise nor latitude bands can pass this AC."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3",
+      "statement": "U is a SWAPPABLE interface, built C-ready: the U field reaches the erosion/carve only through the carrier.height single-source seam (planet-lod-rivers.js:~1091, the array both the router and the height cube read) and the routed graph's accum \u2014 the erosion/carve contains NO branch on the U source. A future Tier-C plate-MOTION stepping pass that wrote the SAME carrier.height would flow through unchanged. Proven by substituting an alternate U writer behind the interface and observing the downstream path runs byte-for-byte the same. (Note on the carve path: the lab's per-route carve is buildValleyGeometry + carve.update over the routed graph (rivers.js:1106-1107); perNodeIncision/applyIncision is the epoch-toggle READBACK law in sampleRoutedHeight (lab.html:5814-5830). Both consume the SAME routed-graph accum, so the interface seam is carrier.height + accum, not a specific incision call.)",
+      "verifyVia": {
+        "input": "Vitest headless (pattern: tests/planet-lod-rivers-carve-channels.test.js): build a tiny carrier whose carrier.height was written by (a) the one-pass plate writer and (b) a stub alternate-U writer of identical shape; route both with routeAndOrder and run the carve operand (perNodeIncision/applyIncision over the routed graph, the pure readback law) on both.",
+        "observable": "Routing + carve produce a valid carved field for BOTH U sources via the IDENTICAL code path \u2014 no source-specific branch exists in routeAndOrder / the carve operand; applyIncision writes a fresh immutable carved array for each; the only coupling is carrier.height (input) + accum (routed graph). The stub-U substitution succeeding through the unchanged path IS the swappability proof."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4",
+      "statement": "The erosion DISCHARGE input is parameterized so the later precip/climate increment drops in with ZERO rework: routeAndOrder (planet-lod-rivers.js:397) accepts an optional precipWeight (Float32Array length N); the hardcoded uniform accum at planet-lod-rivers.js:489 (Float32Array.from({length:N},()=>1)) becomes accum[i] = precipWeight ? precipWeight[i] : 1 \u2014 identity when omitted. accum lives on the routed graph that BOTH the per-route carve (buildValleyGeometry) and the epoch readback (perNodeIncision) consume, so this single seam parameterizes discharge for the whole pipeline. ALSO identity-safe for base level: computeOcean (planet-lod-rivers.js:388, today a scalar seaLevel) accepts an optional per-node base-level field; OMITTED => today's scalar-seaLevel ocean set is byte-identical (the identity-safe default), SUPPLIED => per-node thresholding.",
+      "verifyVia": {
+        "input": "Vitest headless: (1) call routeAndOrder with no precipWeight, then with an explicit uniform-1 precipWeight, then with a hand-built NON-uniform precipWeight (pattern: hand-built accum Float32Array from the carve-channels test); (2) call computeOcean with no base-level field, then with a spatially-varying base-level field, and compare the ocean masks.",
+        "observable": "Omitted precipWeight => accumulation/order/Strahler output is byte-identical to the pre-change router (determinism baseline holds); explicit uniform-1 precipWeight => byte-identical to omitted; non-uniform precipWeight => accumulation weights demonstrably track the supplied array (discharge is genuinely input-driven, not hardcoded); omitting the base-level field => computeOcean reproduces the scalar-seaLevel ocean set byte-for-byte; supplying a spatially-varying base-level field => the set of nodes marked ocean changes in the predicted direction (nodes below their local base level flip ocean)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5",
+      "statement": "The plate path is GATED by body regime and does NOT globally swap E6 \u2014 verified at the gate selector + the existing despun writers directly (headless), not via full route(). For a non-Earth-like archetype (tidally-locked / icy / stagnant-lid / volatile / impact \u2014 preset.tidalState.locked or PRESET_ARCHETYPE not in {terrestrial, ocean}) the gate returns the DESPUN path and carrier.height is byte-identical to writeGrainSphere(carrier, grainDrivers) + writeHeightSphere(carrier, {}, grainDrivers, \u2026, heightSeed='e6:'+(macroSeed|0)) with the neutral DEFAULT_GRAIN_DRIVERS bundle. For a terrestrial/ocean archetype the gate returns the PLATE path (the new uplift writer). The gate reads an archetype/locked discriminator threaded in from the lab/preset layer; it is NOT placed inside the three-free src/worldengine/base layer.",
+      "verifyVia": {
+        "input": "Vitest headless (the writers ARE headless, per tests/worldengine-base-height-sphere.test.js): call the gate selector with a non-Earth-like archetype fixture (e.g. locked:true / PRESET_ARCHETYPE 'ice'), build carrier.height through whichever path it returns, and compare to a direct writeGrainSphere+writeHeightSphere(carrier,{},DEFAULT_GRAIN_DRIVERS,...,heightSeed) on the same carrier+seed. Then call the gate with a terrestrial archetype fixture and confirm it routes to the plate writer.",
+        "observable": "Non-Earth-like archetype => the gate selects the despun writers and carrier.height equals the direct writeGrainSphere+writeHeightSphere result byte-for-byte (plate path NOT entered); terrestrial/ocean archetype => the gate selects the plate writer and carrier.height differs from the latitude-band E6 field; the gate function lives at the route()/lab boundary and takes the discriminator as a parameter (no regime literal hardcoded inside src/worldengine/base)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC6",
+      "statement": "VARIETY from seed (headless, no renderer, no driver plumbing): across N>=4 Earth-like macroSeeds the generated plate partitions and U-derived macro-layouts are genuinely DISTINCT \u2014 different plate counts / boundary geometry / continent arrangement \u2014 not one template rescaled or rotated. This falls straight out of seeding centroids from macroSeed and is what makes a galaxy of bodies compelling rather than one planet recolored. (Driver-response \u2014 that changing massGravity/tidalHeating/etc. shifts plate vigor/count/age in a tested direction \u2014 is explicitly a NEXT increment; see intent NOT-in-scope, since route() does not yet thread the driver vector, rivers.js:1112.)",
+      "verifyVia": {
+        "input": "Vitest headless: generate U fields for N>=4 distinct Earth-like macroSeeds on the same small-N carrier; compute pairwise spatial correlation of the U fields and compare plate counts / boundary-segment geometry.",
+        "observable": "Pairwise max |spatial correlation| of the U fields across the set is below a stated ceiling (e.g. max |corr| < 0.6) \u2014 bodies are not a global rescale/rotation of one field; plate counts and boundary geometry differ substantively across seeds (not a constant partition)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC7",
+      "statement": "On the LAB sphere (:9223), the existing bounded erosion routes/incises down the PLACED plate relief \u2014 not latitude. With the plate path active on an Earth-like body: (a) the router's height source is the plate-written carrier.height single source (not the legacy sampler.read() fallback); (b) drainage descends the placed relief with 0 uphill/orphan edges and trunks reaching the sea; (c) the relief is plate-keyed, not zonal \u2014 height variance explained by distance-to-nearest-plate-boundary materially exceeds variance explained by latitude; (d) the shipped router-lab regression stats hold (ocean ~35%, maxStrahler within the documented band). This is the single OBJECTIVE live-integration check (working-Claude drives it on :9223 from the main thread; it is NOT a holistic 'does it look like a world' judgment \u2014 that is AC8/uat).",
+      "verifyVia": {
+        "input": "On :9223 via a NEW window._lab.plateProbe() instrumentation deliverable (see architecturalConnections.outputs) returning {heightSource:'carrier'|'sampler', plateId[], boundaryClass[], U[], varExplainedByBoundaryDist, varExplainedByLatitude, riverStats}. PRECONDITION: first set window._lab.reliefBakeStrength(>0) (planet-lod-lab.html:2478 / the bakedOn gate at planet-lod-rivers.js:1089) so the router reads carrier.height, not the sampler.read() fallback. Then select an Earth-like preset ('Rocky (Earthlike)'), build the body with the plate path on, route rivers, and read plateProbe().",
+        "observable": "plateProbe().heightSource == 'carrier' (single source, bakedOn confirmed); riverStats show 0 uphill/orphan edges and trunks reaching the sea, ocean ~35%, maxStrahler within band; varExplainedByBoundaryDist materially exceeds varExplainedByLatitude (by a stated factor) \u2014 the carve follows plate-boundary uplift, NOT sin^2(lat) latitude bands."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8",
+      "statement": "Holistic acceptance (Max alone): across a VARIETY of seeds, an Earth-like lab body reads as a coherent WORLD \u2014 distinct, plate-shaped continents whose mountains, valleys, plains, and rivers belong to the SAME generated history (ranges at convergent plate boundaries, rifts/low ground at divergent boundaries, rivers descending from the ranges through plains to the sea, cratonic interiors quiet) \u2014 not latitude bands, not eroded noise, and not the same shape rescaled. It IS its history, not merely reads-as.",
+      "verifyVia": {
+        "input": "Max walks the lab on :9223: builds several Earth-like bodies across different seeds, sets reliefBakeStrength>0, toggles the plate path on/off, orbits each across the sphere (including seams/poles), and inspects where ranges / rivers / plains sit relative to the placed plate structure.",
+        "observable": "Max's holistic judgment: the relief reads as the determined end-state of a generated tectonic history (continents are bounded plate-shaped landmasses, ranges hug convergent boundaries, drainage belongs to that relief), the bodies are genuinely various across seeds, and nothing reads as latitude banding or eroded noise. (The verify workflow marks this deferred-to-max and never auto-PASSes it.)"
+      },
+      "layer": "uat",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/worldengine/base/ \u2014 production home for the NEW three-free peer module (plates.js / uplift.js) next to tectonic.js; headless-testable like substrate.js/sphereField.js/tectonic.js (sphereField.js:1-4 'THREE-FREE BY CONSTRUCTION')",
+      "src/worldengine/base/sphereField.js \u2014 makeSphereField:7 (carrier.height Float32Array:13, the single-source field U is written onto), tangentFrameAt:27 (east/north for Euler-pole + boundary math), latDegOf:23",
+      "src/worldengine/base/tectonic.js \u2014 the relief writer the plate path REPLACES for Earth-like bodies: stressAtLat:19 (latitude-only sin^2(lat) \u2014 the bands, not plates), writeGrainSphere:53, writeHeightSphere:147 (epoch-ADDITIVE carrier.height += , line 180 \u2014 hence the plate path must write U as the SOLE low/mid source, not add over it); jacobiSmoothSphere:131 (10-pass bounded smooth \u2014 precedent that bounded passes are not time-stepping)",
+      "planet-drivers.js \u2014 DRIVERS D1-D16:19; the model-sanctioned plate-tectonics driver set is P3 'Orogeny (plate tectonics)' = ['tidalHeating','massGravity','habitability'] (planet-drivers.js:45). This increment reads the macroSeed for placement; tuning plate count/vigor/age to the P3 drivers is the named driver-response follow-on (route() does not yet thread the driver vector \u2014 rivers.js:1112 'grainDrivers default to the neutral E6 bundle until WS1 wires through')",
+      "planet-lod-rivers.js route():1062 \u2014 the ONE orchestration seam: carrier built :1079, writeGrainSphere :1080, writeHeightSphere :1081 (the swap point: Earth-like => the new plate/uplift writer instead), single-source carrier.height to router :1091 + height cube :1120, heightSeed='e6:'+(macroSeed|0) :1078, byte-identical strength-0 (bakedOn) fallback :1089-1093, seaLevel scalar + computeOcean :1095",
+      "planet-lod-rivers.js \u2014 the existing bounded erosion the U field FEEDS: per-route carve buildValleyGeometry + carve.update :1106-1107 (the path the LAB actually renders); routeAndOrder:397 with the HARDCODED discharge accum=1 at :489 (the single seam to parameterize \u2014 both consumers read this accum); perNodeIncision:848 / applyIncision:929 (the pure epoch-toggle READBACK law sampleRoutedHeight folds in, lab.html:5814-5830 \u2014 NOT the per-route carve); computeOcean:388 (scalar seaLevel today; the base-level field threads here)",
+      "relief-e9-hydrology.js \u2014 the UAT-passed flat-reference erosion whose discharge is ALREADY parameterized: flowAccumulate(receiver,n,weight):59 + synthPrecip:80 (the precip-weight interface SHAPE the sphere router accum:489 should adopt); runE9:104 (PASSES=5 bounded, stability cap :137, liquid-stability regime gate :108) \u2014 READ for shape; the sphere path is the one to change",
+      "planet-lod-lab.html \u2014 the regime-GATE seam: DRIVER_PRESETS:2537 (17 body regimes, preset.tidalState.locked flag), PRESET_ARCHETYPE:1901 (Earth-like-vs-icy/locked classifier: 'Rocky (Earthlike)'->'terrestrial'), createRiverOverlay/route call site :1426, macroSeed :1933, reliefBakeStrength control :2478, window._lab :5717 (the object the NEW plateProbe is added to)",
+      "planet-feature-associations.js \u2014 PROVINCE_GROUPS:17 (tectonic-highlands/old-plains/young-lowlands field+polarity), provinceGroupOf:29 \u2014 the U field is STRUCTURED so the in-shader province partition (initProvinces rivers.js:229 / gProvince) COULD later key off it; that province-as-referent rewiring is OUT of this increment (see intent NOT-in-scope)"
+    ],
+    "outputs": [
+      "src/worldengine/base/plates.js (or uplift.js) \u2014 NEW three-free generator: one-pass plate/uplift field (centroids \u2192 spherical Voronoi \u2192 Euler-pole motion \u2192 boundary classification \u2192 write U as the sole low/mid source \u2192 distance-field spread)",
+      "planet-lod-rivers.js \u2014 route() gains a regime/archetype param; for Earth-like it calls the new uplift writer in place of writeGrainSphere+writeHeightSphere (carrier.height becomes the plate-written U); routeAndOrder:397 accepts optional precipWeight (line 489 becomes accum[i]=precipWeight?precipWeight[i]:1); computeOcean:388 accepts an optional per-node base-level field (omitted => scalar seaLevel byte-identical)",
+      "planet-lod-lab.html \u2014 threads the body's archetype/locked discriminator into route() so the gate has an input; Earth-like presets now render plate-placed continents; ADDS window._lab.plateProbe() instrumentation {heightSource, plateId[], boundaryClass[], U[], varExplainedByBoundaryDist, varExplainedByLatitude, riverStats} so the live integration AC (AC7) has something objective to read on :9223",
+      "planet-lod-tectonic.js cube/bake machinery is UNCHANGED \u2014 the plate-written carrier.height flows through buildHeightCubeGeometry:266 / createHeightCube:302 / bakeHeightCube:354 (field-agnostic) with no edits"
+    ],
+    "mustStayWorking": [
+      "NON-EARTH-LIKE bodies keep the existing despun/zonal E6 BYTE-IDENTICAL: the regime gate runs writeGrainSphere(carrier,grainDrivers)+writeHeightSphere(carrier,{},grainDrivers,\u2026) at planet-lod-rivers.js:1080-1081 unchanged for icy/tidally-locked/stagnant-lid/volatile/impact bodies (same calls, same args, same heightSeed) \u2014 those are their own future increments (ASSESSMENT.md:216, 273-274: 'addition by regime, not replacement; Melosh is the right model for despun/icy bodies')",
+      "the shipped rivers feature (Max-UAT-passed 2026-06-19): router-lab regression gate holds \u2014 ocean ~35%, maxStrahler in band, 0 orphan/uphill edges; omitted precipWeight => accum=1 identity (planet-lod-rivers.js:489) and omitted base-level field => scalar-seaLevel ocean set byte-identical, so drainage does not silently regress (identity-safe precedent: widthSeedFactor :185, paramsForRadius :201)",
+      "the strength-0 / regime fallback is byte-identical by construction (planet-lod-rivers.js:1089-1093 bakedOn pattern): omitted regime/precip params => today's behavior exactly; the plate branch is a function-call swap, both branches write carrier.height",
+      "seam/pole continuity of the baked height field is PRESERVED \u2014 already verified by the Option-A baked-relief increment (its AC4: no seam ridge, no pole pinch on longitudinally-varying baked height); the plate-written carrier.height flows through the SAME field-agnostic cube unchanged, so continuity is inherited, not re-litigated here",
+      "determinism HARD-rule: NO Math.random / Date.now in any plate/uplift derivation \u2014 all plate centroids seeded via alea / the macroSeed sin-hash recipe (tectonic.js:79 'no Math.random'; planet-lod-tectonic.js HARD RULES; macroSeedRotateDeg:60)",
+      "'place once, don't time-step billions of years' (spine \u00a70): one-shot placement; the only iteration is the bounded gen-time relaxation WD already ships (perNodeIncision single-shot; runE9 PASSES=5; jacobiSmoothSphere 10 passes) \u2014 render once, not a billion-year simulation",
+      "three-free separation of src/worldengine/base/: the new module imports only alea/simplex-noise + sphereField helpers (no THREE); the regime-gate logic stays at the route()/lab boundary, NOT inside the regime-agnostic base layer (sphereField.js:1-4 / tectonic.js import discipline)",
+      "lab != game (charter): NO change to game Planet.js / src/objects/* or src/rendering/shaders/MaterialBodyShader.js (verified ZERO river/carve/relief references); the production-renderer port is a SEPARATE later increment",
+      "the cube/bake path is untouched (planet-lod-tectonic.js createHeightCube:302 / bakeHeightCube:354 is field-agnostic \u2014 it bakes whatever scalar is in carrier.height); no new cube plumbing",
+      "stage explicit paths only on commit (tree carries warp WIP + loose media; never git add -A); a file named HEAD exists in repo root (never git show HEAD)"
+    ]
+  }
+}
