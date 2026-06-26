@@ -28,7 +28,24 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶ INCREMENT 1 (world-engine-baked-relief-render) — BUILT + VERIFIED_PENDING_MAX `e9d6cd5` (2026-06-25).**
+> **▶ INCREMENT 1 AC5 UAT (2026-06-26) → "SEMI-COHERENT", DID NOT PASS → grain-vs-landform-process question, dig next.**
+> Max walked the lab (slid `baked relief` 0→1 up close). Verdict: he can *sort of* see ridges/basins in the grain
+> basis (landmass "pinches together" in places, "bottoms out below sea level" in others) **but it does not read as
+> Earth's mountain ranges / valleys / rivers.** **The render plumbing is correct + verified** (single-source diff 0,
+> seam/pole-clean) — so this is a **GENERATIVE-MODEL/content verdict, NOT a wiring bug.** Max's framing: **tectonic
+> grain is a *fabric/input*; landforms are a *process output*** (convergence → uplift/eruption → accumulation →
+> weathering/erosion over time → landforms). **THE FORK to answer:** is the E6 grain-relief on screen the **(a) BASIS**
+> (precursor; the landform-producing process still has to be wired in) or the **(b) END-RESULT** (then the model is
+> wrong about how landforms arise)? Working-Claude's hypothesis = **(a)** (raw E6 structural relief + token carve; the
+> uplift→accumulate→weather chain isn't present), LOW-MED confidence — **and it may be deeper than the named follow-ons
+> (Option C continents / increment-2 substrate swap).** **Decision: do NOT ship increment 1; do NOT revert it** (reusable
+> verified plumbing, like WS4). **NEXT (Max's directive): a FRESH session digs the fork via workflows + subagents** —
+> map the E-series engine chain (E6/E7/E8/E9/E11: which exist, where the landform-process lives), determine what the
+> UAT-passed relief-slice actually computes vs what increment-1 ported, reconcile with the locked direction, answer
+> (a)/(b), **brainstorm WITH Max before any build.** Handoff:
+> `/tmp/handoff-world-engine-grain-vs-landform-process-2026-06-26.md`. Push HOLD.
+
+> **▶ INCREMENT 1 (world-engine-baked-relief-render) — BUILT + VERIFIED (`e9d6cd5`); AC5 UAT → semi-coherent, see block above (2026-06-25).**
 > The A-lite first step of the full-A render port. **5 phases A–E committed** (`cef95c5`→`e9d6cd5` on
 > `1eb556d` plan): (A) net-new sphere-native `writeHeightSphere` — coarse E6 relief generated as DATA on a
 > seam-free 3D-simplex domain (NOT lat/long), deterministic; (B) bake `carrier.height` into a seam-free 256³
