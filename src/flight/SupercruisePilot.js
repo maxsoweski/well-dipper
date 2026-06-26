@@ -5,13 +5,27 @@
 // reproduces today's STATION-A linger (AutopilotMotion.js:583-642).
 // Frame idiom copied from AutopilotMotion: one-shots polled by main.js.
 import * as THREE from 'three';
-import { alignStep } from './aimAssist.js';
+import { alignStep, steerToward } from './aimAssist.js';
 
 const NEG_Z = new THREE.Vector3(0, 0, -1); // local nose; setFromUnitVectors doesn't mutate args
 
 export const PilotPhase = Object.freeze({
   IDLE: 'IDLE', ALIGN: 'ALIGN', CRUISE: 'CRUISE', HOLD: 'HOLD',
 });
+
+/**
+ * @typedef {Object} PilotFrame   one-shot returned by SupercruisePilot.update(dt)
+ * @property {('IDLE'|'ALIGN'|'CRUISE'|'HOLD')} phase        ENTRY phase that drove THIS frame
+ * @property {('IDLE'|'ALIGN'|'CRUISE'|'HOLD')} prevPhase    phase on the prior frame
+ * @property {boolean} phaseChanged    phase !== prevPhase (stamped in _stamp())
+ * @property {boolean} motionComplete  HOLD linger timer elapsed (level-triggered past linger)
+ * @property {boolean} overshoot       entered capture sphere too hot — flew past, stayed CRUISE
+ * @property {boolean} decelStarted    one-shot AC6 shake cue at 15R (DECEL_CUE_FACTOR)
+ */
+// Canonical field list/order of a PilotFrame — the named arrival/Frame contract.
+export const PILOT_FRAME_FIELDS = Object.freeze([
+  'phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted',
+]);
 
 export const PILOT_TUNING = {
   ALIGN_DOT: 0.995,          // nose alignment to open the throttle
@@ -39,6 +53,7 @@ export class SupercruisePilot {
     this._local = new THREE.Vector3();
     this._invQ = new THREE.Quaternion();
     this._holdQ = new THREE.Quaternion();
+    this._steerOut = { yaw: 0, pitch: 0 };
   }
 
   get isActive() { return this.phase !== PilotPhase.IDLE; }
@@ -90,14 +105,12 @@ export class SupercruisePilot {
       return this._stamp(frame);
     }
 
-    // Steer toward the body: target direction in ship-local frame.
+    // Steer toward the body via the shared aimAssist.steerToward helper
+    // (extracted from this block; behavior-identical). _local is still computed
+    // for the ALIGN_DOT check below (−localZ = nose-to-target alignment).
     this._local.copy(this._toTarget).normalize()
       .applyQuaternion(this._invQ.copy(m.orientation).invert());
-    // local -Z is the nose; x>0 → target to the right, y>0 → above.
-    let yawIn = THREE.MathUtils.clamp(-this._local.x * t.STEER_GAIN, -1, 1);
-    const pitchIn = THREE.MathUtils.clamp(this._local.y * t.STEER_GAIN, -1, 1);
-    // Exact antiparallel (target dead astern) → zero steering signal → permanent ALIGN hang.
-    if (this._local.z > 0 && Math.hypot(this._local.x, this._local.y) < 1e-6) yawIn = 1;
+    const { yaw: yawIn, pitch: pitchIn } = steerToward(m.orientation, m.position, bodyPos, t.STEER_GAIN, this._steerOut);
     m.setTurnInput(yawIn, pitchIn);
     const aligned = -this._local.z >= t.ALIGN_DOT;
 

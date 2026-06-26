@@ -42,6 +42,7 @@ import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
 import { HeadMount } from './flight/HeadMount.js';
 import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
 import { shapeStick, STICK_TUNING } from './flight/stickCurve.js';
+import { ShipControls } from './flight/ShipControls.js';
 // advanceFlightMode is intentionally retained but UNUSED by the F path as of
 // §supercruise-flight-toggle-settings-design-2026-06-25: F became a 2-state
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
@@ -478,11 +479,40 @@ const _exitFwd = new THREE.Vector3();
 // supercruise-polish-2026-06-25). Mutated via window._sc.stickTuning for
 // harness/UAT tuning; read by the joystick block's shapeStick() call.
 const _scStickTuning = { ...STICK_TUNING };
+// The named ship-control surface (contract supercruise-control-harness
+// -2026-06-26). Owns model+pilot+head; host delegates reach the camera /
+// Settings / reticle / no-snap-exit / HUD-stick that can't live in the
+// portable class. Live-game ROUTING of player input + the 9 beginLeg sites
+// through this surface is Task 3 — here we only build + expose it.
+// (Constructed AFTER _scStickTuning so the single-sourced stick-tuning
+// reference is not in its temporal-dead-zone; the host functions below are
+// hoisted declarations reached only when a verb later fires.)
+const scControls = new ShipControls({
+  model: scModel, pilot: scPilot, head: scHead,
+  // SINGLE SOURCE: pass the live module-scoped _scStickTuning object
+  // (= window._sc.stickTuning, src/main.js:481,488; also read by the live
+  // `_deflected` gate) so controls.tuning === _scStickTuning — one shared
+  // tuning object, NOT a copy. A UAT mutation of either then moves both (the
+  // casing fix in steer() reads this same object's DEADZONE/EXPO).
+  stickTuning: _scStickTuning,
+  host: {
+    selectTarget: (target) => selectTarget(target),
+    deselectTarget: () => deselectTarget(),
+    resolveSelectedBody: () => _resolveSelectedBody(),
+    setDeflection: ({ x, y }) => { _scDeflection = { x, y }; },
+    // The remaining delegates (enterFlight / exitFlight / readFlightType /
+    // dropState) are wired in Task 3 alongside the F-handler and HUD
+    // consolidation; left undefined here ⇒ those verbs no-op, which is
+    // correct because nothing calls engage/disengage/getState.mode yet.
+    // (getState().mode reads host.readFlightType() — the contracted delegate
+    // in §0 — NOT a separate flightMode(); see the Step-18 getState Note.)
+  },
+});
 // UAT knobs + test probe. tuning/pilotTuning/headTuning are the LIVE
 // per-instance objects — each constructor shallow-copies its module
 // defaults, so mutating the default objects would affect nothing.
 window._sc = {
-  model: scModel, pilot: scPilot, head: scHead, hud: scHud,
+  model: scModel, pilot: scPilot, head: scHead, hud: scHud, controls: scControls,
   tuning: scModel.tuning, pilotTuning: scPilot.tuning, headTuning: scHead.tuning,
   stickTuning: _scStickTuning,
 
