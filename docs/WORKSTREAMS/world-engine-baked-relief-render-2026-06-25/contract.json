@@ -1,0 +1,81 @@
+{
+  "workstream": "world-engine-baked-relief-render-2026-06-25",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "campaign": "world-engine production-L1 port (full-A render port, increment 1 of 2)",
+  "renderer": "LAB only (planet-lod-lab.html); game Planet.js deferred/OUT",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "A coarse, sphere-native relief HEIGHT field is generated as DATA once per body and baked into a sampleable carrier (cube), deterministically — same drivers+seed => byte-identical baked field; values finite and bounded. This is the structure-as-data the renderer will read (no in-shader height synthesis for the low-frequency body).",
+      "verifyVia": {
+        "input": "Run the bake for a given driver bundle + seed twice (headless / Node + vitest).",
+        "observable": "The two baked height fields are byte-identical; all values finite within the documented relief range; the field is materialized as data (a typed array / baked cube), not a shader expression."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "The lab renderer DISPLACES the surface from the baked height field (the relief body IS the sampled field, not noised()); a strength uniform gates it, and at strength 0 the planet is byte-identical to today (safe fallback, WS4 pattern).",
+      "verifyVia": {
+        "input": "On :9223, enable baked-relief at strength 1, then dial to 0; observe the lab planet (window._lab).",
+        "observable": "At strength 1 the surface visibly deforms to match the baked field (displacement tracks the sampled height, verifiable via a uniform/field probe); at strength 0 the render is byte-identical to the pre-increment baseline."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3",
+      "statement": "The existing sphere-native river router routes on the SAME baked height field the surface is displaced from (re-pointed from the in-shader readback) — a single height source, no surface-vs-rivers data/noise split. Drainage follows the baked relief.",
+      "verifyVia": {
+        "input": "On :9223, route rivers over a built body with baked-relief on; compare the router's height source to the displaced surface field.",
+        "observable": "Router height source == the baked field (not the legacy in-shader readback); drainage descends the baked relief (0 uphill/orphan edges; trunks reach the sea); router-lab regression stats hold (ocean ~35%, maxStrahler in band)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4",
+      "statement": "The baked relief and the drainage are continuous across cube seams and at the poles — no seam ridge, no pole pinch/artifact. (The critics' FIRST acceptance gate: longitudinally-varying baked height on a sphere has never been exercised in this codebase.)",
+      "verifyVia": {
+        "input": "Headless: sample the baked cube across all seam boundaries + poles. Live (:9223): orbit the body across each seam and both poles.",
+        "observable": "Headless seam-sample delta below threshold across every seam/pole (continuous field); live view shows no seam line, no ridge at cube edges, no pole pinch; drainage crosses seams without breaking."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5",
+      "statement": "Looking at the lab planet as a whole, the low-frequency relief reads as the result of generated structure (data) — a coherent system, not random scatter — with drainage cut into that same relief. Judged against the WS4-SCOPED bar (coherent tectonic system + drainage), NOT 'where are Earth's continents' (deferred to Option C).",
+      "verifyVia": {
+        "input": "Max walks the lab on :9223: build a body, toggle baked-relief off->on and strength, orbit it.",
+        "observable": "Max's holistic judgment: the relief reads as coming from generated structure (not an orientation overlay on noise), drainage runs down that relief, and it coheres across the sphere."
+      },
+      "layer": "uat",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Per-body drivers / province field / grain field (sphere-native, seam-free by construction) — the existing L1 fields",
+      "src/worldengine/base/sphereField.js — the sphere carrier the flat-DEM slice lacks (canonical sphere field; surface B)",
+      "src/worldengine/base/tectonic.js runE6 height math (surface B, canonical E6) — adapted to write height onto sphere nodes (NO sphere-native height writer exists today; this is the net-new core of the increment)",
+      "planet-lod-tectonic.js cube-bake machinery (createGrainCube / buildGrainCubeGeometry) — WS4 used it to carry ORIENTATION; reuse it to carry HEIGHT",
+      "relief-e6-tectonic.js / relief-slice.js — the UAT-PASSED flat reference to READ for the height math, do NOT import (two-copy drift guard, planet-lod-tectonic.js:13-15)"
+    ],
+    "outputs": [
+      "planet-lod-height.glsl.js + planet-lod-lab.html — the renderer height/displacement path now samples the baked field for the low-frequency body",
+      "planet-lod-rivers.js — the river router's height source re-pointed to the baked field"
+    ],
+    "mustStayWorking": [
+      "strength-0 byte-identical fallback (WS4 safe-fallback pattern) — the regression guard",
+      "the shipped rivers feature (Max-UAT-passed 2026-06-19): router-lab regression gate holds (ocean ~35%, maxStrahler in band, 0 orphan/uphill)",
+      "WS4 grain orientation preserved (gProvince amplitude/where + grain orientation/regime still drive the detail residual on top)",
+      "src/generation/* and src/worldengine/* stay byte-untouched EXCEPT the scoped sphere-native height writer added to src/worldengine/base/ (no Date.now/Math.random in derivation)",
+      "lab != game (charter): no change to game Planet.js / src/objects/*",
+      "stage explicit paths only on commit (tree carries warp WIP + ~695 loose media; never git add -A); a file named HEAD exists in repo root (never git show HEAD)"
+    ]
+  }
+}
