@@ -42,7 +42,13 @@ import { SupercruiseModel, SC_TUNING } from './flight/SupercruiseModel.js';
 import { HeadMount } from './flight/HeadMount.js';
 import { SupercruisePilot, PilotPhase } from './flight/SupercruisePilot.js';
 import { shapeStick, STICK_TUNING } from './flight/stickCurve.js';
+// advanceFlightMode is intentionally retained but UNUSED by the F path as of
+// §supercruise-flight-toggle-settings-design-2026-06-25: F became a 2-state
+// on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
+// module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
+// is kept importable for the deferred control-harness arc.
 import { FlightMode, advanceFlightMode, flightModeInfo } from './flight/flightModes.js';
+import { flightExitAnchor } from './flight/flightExitAnchor.js';
 import { FlightModeToast } from './ui/FlightModeToast.js';
 import { alignStep, alignDot } from './flight/aimAssist.js';
 import { Ship } from './core/Ship.js';
@@ -445,12 +451,14 @@ const scModel = new SupercruiseModel();
 const scHead = new HeadMount();
 const scPilot = new SupercruisePilot(scModel);
 let _scManual = false;            // player has the stick (FLIGHT-mode supercruise)
-// Single setter for the manual-flight flag so the cursor restore can't be
-// missed on any exit path (Item 3, supercruise-polish-2026-06-25). Hides the
-// OS cursor while flying (absolute-from-center stick, no pointer-lock).
+// Single setter for the manual-flight flag. The cursor is NO LONGER hidden in
+// flight (§supercruise-flight-toggle-settings-design-2026-06-25 §4): Max wants
+// it visible so he can free the mouse to re-select a body (F-off → click →
+// F-on). The virtual-joystick stick is absolute-from-center with no
+// pointer-lock, so the OS cursor staying on screen is harmless. We leave the
+// cursor untouched here; the canvas hover handler paints the body pointer.
 function setScManual(on) {
   _scManual = on;
-  document.body.style.cursor = on ? 'none' : '';
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
@@ -461,6 +469,11 @@ const _scBodies = [];             // per-tick gravity-well body list (reused)
 // by the canvas mousemove handler while _scManual && !scHead.held; consumed by
 // the supercruise HUD reticle (Task 11). Frozen while freelook is held.
 let _scDeflection = { x: 0, y: 0 };
+// Reused scratch for the no-snap exit forward ray (F-off). Filled by
+// camera.getWorldDirection() in the F-handler's disengage branch, fed to
+// flightExitAnchor(). Module-scope so the once-per-keypress handler allocates
+// nothing. §supercruise-flight-toggle-settings-design-2026-06-25 §2.
+const _exitFwd = new THREE.Vector3();
 // Live copy of the virtual-stick deadzone+expo tuning (Item 2,
 // supercruise-polish-2026-06-25). Mutated via window._sc.stickTuning for
 // harness/UAT tuning; read by the joystick block's shapeStick() call.
@@ -2879,7 +2892,10 @@ function applySettingChange(key, value) {
       if (input.type === 'checkbox') {
         value = input.checked;
       } else if (input.tagName === 'SELECT') {
-        value = parseInt(input.value, 10);
+        // colorPalette is an integer select; flightControlType is a STRING
+        // select (FlightMode enum value verbatim — parseInt would NaN it).
+        // §supercruise-flight-toggle-settings-design-2026-06-25 §3.
+        value = (key === 'flightControlType') ? input.value : parseInt(input.value, 10);
       } else if (key === 'celestialTimeMultiplier') {
         // SIGNED slider — §supercruise-hud-movement-design-2026-06-24.
         // DOM pos -40..0..+40 → multiplier sign(pos)·10^(|pos|/10):
@@ -8815,11 +8831,15 @@ window.addEventListener('keydown', (e) => {
     // flight dynamics. _scManual short-circuits cameraController.update() in
     // simStep (see the "Skip cameraController.update" guard) so the legacy
     // FLIGHT internals stop being reachable.
-    // F now cycles a 4-state ring: (off) → Manual → Align → Assist → Exit → (off).
-    // _scManual is the "in flight" gate; advanceFlightMode owns the ring.
-    const _next = advanceFlightMode(_flightMode, _scManual);
+    // F is a 2-state on/off toggle (§supercruise-flight-toggle-settings-design
+    // -2026-06-25 §1): OFF → ENGAGE flight at the Settings-selected type;
+    // ON → DISENGAGE (clean, no snap). The 4-state F-ring is retired —
+    // advanceFlightMode is no longer consulted here; the flight TYPE lives in
+    // Settings instead. _scManual is the "in flight" gate.
     if (!_scManual) {
-      // ── ENTER flight at Manual (today's enter branch) ──
+      // ── ENGAGE flight (OFF → ON) ──────────────────────────────────────────
+      // Reuse the existing ENTER setup verbatim (camera → FLIGHT, model seeded
+      // from the live camera pose, throttle zero, cameraController bypassed).
       cameraController.setCameraMode(CameraMode.FLIGHT);
       setScManual(true);
       scPilot.stop();
@@ -8828,26 +8848,47 @@ window.addEventListener('keydown', (e) => {
       scModel.speed = 0;
       scModel.setThrottle(0);
       cameraController.bypassed = true;
-      _flightMode = FlightMode.MANUAL;
-      _enterFlightMode(_flightMode);
-    } else if (_next.exit) {
-      // ── EXIT flight → Toy Box, no teleport (today's exit branch) ──
+      // The active flight TYPE comes from Settings (read on each engage; a
+      // mid-flight change applies on the next F-on). The stored strings are the
+      // FlightMode enum values verbatim, so this is an identity map. Guard
+      // against an unexpected stored value by falling back to Manual.
+      const _type = settings.get('flightControlType');
+      _flightMode = (_type === FlightMode.ALIGN || _type === FlightMode.ASSIST)
+        ? _type
+        : FlightMode.MANUAL;
+      _enterFlightMode(_flightMode); // begins Align/Assist for those types
+      const _info = flightModeInfo(_flightMode);
+      flightModeToast.show(`Flight ON — ${_info.label}`, _info.hint);
+    } else {
+      // ── DISENGAGE flight (ON → OFF) — no teleport ─────────────────────────
       setScManual(false);
       scPilot.stop();
       _alignState.active = false;
       cameraController.setCameraMode(CameraMode.TOY_BOX);
-      const _closest = findClosestBody();
-      if (_closest) cameraController.adoptCurrentPose(_closest.position);
-      else cameraController.bypassed = false;
+      // No-snap exit (§2): anchor the Toy-Box orbit on the camera's CURRENT
+      // forward ray, not the closest body. adoptCurrentPose back-solves the
+      // orbit from (camera − anchor) and pushes the target out along the ray,
+      // so _applyOrbit reproduces the EXACT camera position AND lookAt(target)
+      // reproduces the EXACT look direction → zero position/orientation snap.
+      // `d` only sets the post-exit orbit-pivot scale: distance to the selected
+      // body, else the closest body, else a sane fallback. Clamp it to the
+      // camera's own [minDistance, maxDistance] (the clamp cancels out of the
+      // reconstructed position — see flightExitAnchor's contract).
+      camera.getWorldDirection(_exitFwd);
+      const _anchorBody = _resolveSelectedBody()?.mesh.position
+        ?? findClosestBody()?.position
+        ?? null;
+      const _rawD = _anchorBody ? camera.position.distanceTo(_anchorBody) : 100;
+      const _d = Math.max(
+        cameraController.minDistance,
+        Math.min(cameraController.maxDistance, _rawD),
+      );
+      const _anchor = flightExitAnchor(camera.position, _exitFwd, _d);
+      cameraController.adoptCurrentPose(_anchor);
       cameraInterp.resync(camera);
-      _flightMode = FlightMode.MANUAL; // reset for the next entry
-    } else {
-      // ── CYCLE to the next assist mode, staying in flight ──
-      _flightMode = _next.mode;
-      _enterFlightMode(_flightMode);
+      _flightMode = FlightMode.MANUAL; // reset for the next engage
+      flightModeToast.show('Flight OFF', '');
     }
-    const _info = flightModeInfo(_next.exit ? 'exit' : _flightMode);
-    flightModeToast.show(_info.label, _info.hint);
     console.log(`[MODE] flight ${_scManual ? _flightMode : 'OFF'}`);
     return;
   }
@@ -9286,9 +9327,14 @@ canvas.addEventListener('mousemove', (e) => {
     } else {
       _hoverTarget = bodyHit;
     }
-    // Cursor feedback: pointer when we can click a body. Suppressed while
-    // flying so we don't repaint a pointer over the hidden cursor (Item 3).
-    if (bodyHit && !_scManual) canvas.style.cursor = 'pointer';
+    // Cursor feedback: pointer when we can click a body. Now painted even in
+    // flight (§supercruise-flight-toggle §4): the cursor stays visible while
+    // flying so the player can free the mouse to re-select a body.
+    if (bodyHit) canvas.style.cursor = 'pointer';
+    // No body under the cursor → reset to default, UNLESS an orbit line is
+    // currently hovered (that block below owns the pointer in that case, so
+    // clearing it here would clobber it and the two would fight every frame).
+    else if (!_hoveredOrbitLine) canvas.style.cursor = '';
   }
 
   // ── Orbit line hover highlight (screen-space, throttled to ~30 Hz) ──
@@ -9315,9 +9361,9 @@ canvas.addEventListener('mousemove', (e) => {
       newHover.material.color.set(0x44ff44); // bright green
       newHover.material.opacity = 1.0;
       newHover.material.needsUpdate = true;
-      if (!_scManual) canvas.style.cursor = 'pointer';
+      canvas.style.cursor = 'pointer';   // painted in flight too (§toggle §4)
     } else {
-      if (!_scManual) canvas.style.cursor = '';
+      canvas.style.cursor = '';
     }
     _hoveredOrbitLine = newHover;
   }

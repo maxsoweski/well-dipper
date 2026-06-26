@@ -49,6 +49,18 @@ const DEFAULTS = {
   // Color palette (0=default, 1=mono, 2=amber, 3=green, 4=blue,
   //   5=gameboy, 6=cga, 7=sepia, 8=virtualboy, 9=inverted)
   colorPalette: 0,
+
+  // Flight control type — §supercruise-flight-toggle-settings-design-2026-06-25.
+  // F is a 2-state on/off flight toggle; THIS setting picks WHICH of the three
+  // flight behaviors engages on F-on. main.js reads it on each engage and maps
+  // it to FlightMode (src/flight/flightModes.js) — the stored strings are the
+  // FlightMode enum values verbatim so the mapping is identity:
+  //   'manual' → Manual (you fly), 'align' → Align-on-select (nose centers on
+  //   target), 'assist' → Assist (auto-flies to target; steer to take over).
+  // Default 'manual'. No migration: an absent key falls back to 'manual' via
+  // the DEFAULTS merge, which is the desired one-time default for existing
+  // users (a stored value of any other enum string is preserved as-is).
+  flightControlType: 'manual',
 };
 
 export class Settings {

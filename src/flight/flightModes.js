@@ -1,6 +1,12 @@
-// Pure flight-assist mode state machine for the F-cycle.
-// F rotates a 4-state ring: Manual → Align-on-select → Assist → Exit (leaves flight) → …
-// `_flightMode` (in main.js) holds the in-flight sub-state; "off" is _scManual === false.
+// Pure flight-assist mode definitions + state machine.
+// As of §supercruise-flight-toggle-settings-design-2026-06-25, F is a 2-state
+// ON/OFF toggle (flight on / flight off → Toy Box), and the flight TYPE
+// (Manual / Align / Assist) is chosen in Settings, not by cycling F. The enum,
+// flightModeInfo, and isManualInput are all still in live use.
+// `advanceFlightMode` (the old 4-state ring helper) and `INFO.exit` are
+// RETAINED-BUT-UNUSED-BY-F — kept importable for the deferred control-harness
+// arc; see the matching note at main.js ~line 45. Do not delete them.
+// `_flightMode` (in main.js) holds the in-flight type; "off" is _scManual === false.
 export const FlightMode = Object.freeze({
   MANUAL: 'manual',
   ALIGN: 'align',
@@ -25,7 +31,7 @@ const INFO = {
   [FlightMode.MANUAL]: { label: 'Manual', hint: 'you fly' },
   [FlightMode.ALIGN]:  { label: 'Align-on-select', hint: 'nose centers on your target' },
   [FlightMode.ASSIST]: { label: 'Assist', hint: 'auto-flies to target — steer to take over' },
-  exit:                { label: 'Exit flight', hint: 'back to autopilot' },
+  exit:                { label: 'Exit flight', hint: 'back to Toy Box' },
 };
 export function flightModeInfo(modeOrExit) {
   return INFO[modeOrExit] ?? INFO[FlightMode.MANUAL];

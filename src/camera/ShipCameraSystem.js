@@ -723,6 +723,11 @@ export class ShipCameraSystem {
    *
    * Callers MUST resync the render interpolator (cameraInterp.resync) right
    * after, so the fixed-timestep blend doesn't lerp across the mode flip.
+   *
+   * DRIFT GUARD: src/flight/__tests__/flightExitAnchor.test.js re-implements
+   * this math (and _applyOrbit, plus the minDistance/maxDistance clamp) inline
+   * to assert the no-snap exit invariant. If this method or those clamp bounds
+   * change, update that test in lockstep or it will silently test stale math.
    */
   adoptCurrentPose(anchorPosition) {
     this.bypassed = false;

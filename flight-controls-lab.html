@@ -129,6 +129,11 @@
     import { SupercruisePilot } from './src/flight/SupercruisePilot.js';
     import { FlightMode, advanceFlightMode, flightModeInfo } from './src/flight/flightModes.js';
     import { alignStep, alignDot } from './src/flight/aimAssist.js';
+    // ── Toggle/exit/settings build (spec 2026-06-25) — real helper + real camera
+    // controller + real Settings store, exercised below by the F-toggle probes. ──
+    import { flightExitAnchor } from './src/flight/flightExitAnchor.js';
+    import { ShipCameraSystem, CameraMode } from './src/camera/ShipCameraSystem.js';
+    import { Settings } from './src/ui/Settings.js';
 
     const canvas = document.getElementById('canvas');
     const hudEl = document.getElementById('hud');
@@ -549,6 +554,183 @@
       });
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  F-TOGGLE BUILD PROBES (spec 2026-06-25 — toggle / no-snap exit / settings)
+    //
+    //  These exercise the SWITCHING + EXIT + SETTINGS changes against the real
+    //  modules, NOT the in-flight behaviors (Manual/Align/Assist stay as-is).
+    //  Two probes:
+    //    1. checkNoSnapExit()      — drives F-on (model engage) then the real
+    //       DISENGAGE sequence on a REAL ShipCameraSystem and asserts the CAMERA
+    //       pose (position + look direction) is preserved across the forward-ray
+    //       exit. This is the no-snap proof on the CAMERA, not the frozen model
+    //       (session-4's miss). Uses real flightExitAnchor + real adoptCurrentPose.
+    //    2. checkSettingsTypeEngage() — with Settings type = Assist, asserts the
+    //       model is IDLE while flight is OFF (no engage / no autopilot takeover),
+    //       and that F-on begins the assist pilot toward the selected body. Mirrors
+    //       main.js's `_type = settings.get('flightControlType')` → _enterFlightMode.
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Real Settings store (reads the new `flightControlType` key + its default).
+    const labSettings = new Settings();
+
+    // A real ShipCameraSystem instance for the no-snap exit probe. Built lazily so
+    // the lab boots without it; constructed on its OWN offscreen canvas so its DOM
+    // listeners never fight the lab's main canvas input. We drive the camera through
+    // flight by hand (bypassed) exactly as main.js does, then run the production
+    // disengage and assert on the resulting camera transform.
+    let _exitCam = null;        // THREE.PerspectiveCamera owned by the probe
+    let _exitController = null; // ShipCameraSystem driving _exitCam
+    function _ensureExitController() {
+      if (_exitController) return _exitController;
+      _exitCam = new THREE.PerspectiveCamera(65, 1, 1e-5, 100);
+      const offscreen = document.createElement('canvas');
+      _exitController = new ShipCameraSystem(_exitCam, offscreen, { isMobile: false });
+      return _exitController;
+    }
+
+    const _exitFwd = new THREE.Vector3();
+    const _capPos = new THREE.Vector3();
+    const _capLook = new THREE.Vector3();
+    const _nowLook = new THREE.Vector3();
+
+    // Drive F-on (ENGAGE) then F-off (DISENGAGE) on the real camera controller and
+    // measure the camera-pose delta the forward-ray exit produces. Returns the raw
+    // deltas + a pass/fail verdict (Δposition ≈ 0, Δlook-direction ≈ 0).
+    //
+    // `posEps` is in scene units; the camera sits ~ENTRY_DIST (≈0.26u) out, so the
+    // tolerance is generous-but-tight relative to that scale. `lookEps` is the max
+    // allowed angle (rad) between before/after forward vectors.
+    function checkNoSnapExit({ posEps = 1e-4, lookEps = 1e-4 } = {}) {
+      const ctrl = _ensureExitController();
+      resetModel();
+
+      // ── ENGAGE (F-on): seed the camera from the model pose, FLIGHT + bypassed,
+      //    exactly like main.js's engage branch. headMount maps model→camera. ──
+      ctrl.setCameraMode(CameraMode.FLIGHT);
+      ctrl.bypassed = true;
+      _flightMode = labSettings.get('flightControlType') === FlightMode.ALIGN
+        ? FlightMode.ALIGN
+        : (labSettings.get('flightControlType') === FlightMode.ASSIST ? FlightMode.ASSIST : FlightMode.MANUAL);
+
+      // Put the ship somewhere non-trivial with a non-axis-aligned look so the
+      // pose-preservation test isn't accidentally satisfied by symmetry: pitch the
+      // nose off the planet and roll the head a touch. Then map model→camera.
+      model.position.set(ENTRY_DIST * 0.7, ENTRY_DIST * 0.4, ENTRY_DIST);
+      model.orientation.setFromEuler(new THREE.Euler(0.21, -0.6, 0.13, 'YXZ'));
+      headMount.yaw = 0.18; headMount.pitch = -0.12; // small freelook offset (bank/look)
+      headMount.applyTo(_exitCam, model.position, model.orientation);
+      _exitCam.updateMatrixWorld(true);
+
+      // ── Capture the camera pose BEFORE disengage (position + forward/look). ──
+      _capPos.copy(_exitCam.position);
+      _exitCam.getWorldDirection(_capLook); // world -Z, normalized
+
+      // ── DISENGAGE (F-off): the EXACT production sequence (main.js KeyF else-branch):
+      //    setCameraMode(TOY_BOX) → forward-ray flightExitAnchor → adoptCurrentPose
+      //    → resync. Anchor distance = dist to selected body (the planet here),
+      //    clamped to the controller's own [minDistance, maxDistance]. ──
+      ctrl.setCameraMode(CameraMode.TOY_BOX);
+      _exitCam.getWorldDirection(_exitFwd);
+      const _rawD = _exitCam.position.distanceTo(planet.position);
+      const _d = Math.max(ctrl.minDistance, Math.min(ctrl.maxDistance, _rawD));
+      const anchor = flightExitAnchor(_exitCam.position, _exitFwd, _d);
+      ctrl.adoptCurrentPose(anchor);
+      // One orbit update tick (dt=0 = the resync-frozen first frame: no auto-drift,
+      // no smoothing lerp). update() routes TOY_BOX → _applyOrbit, reconstructing
+      // the camera from the smoothed yaw/pitch/dist adoptCurrentPose just set.
+      ctrl.update(0);
+      _exitCam.updateMatrixWorld(true);
+
+      // ── Measure deltas on the CAMERA (not the frozen model). ──
+      const dPos = _exitCam.position.distanceTo(_capPos);
+      _exitCam.getWorldDirection(_nowLook);
+      // angle between before/after forward vectors (look-direction snap)
+      const dot = THREE.MathUtils.clamp(_capLook.dot(_nowLook), -1, 1);
+      const dLookRad = Math.acos(dot);
+
+      // Restore lab state so the probe leaves no residue.
+      _flightMode = FlightMode.MANUAL;
+      resetModel();
+
+      const pass = dPos <= posEps && dLookRad <= lookEps;
+      return {
+        pass,
+        dPosition: dPos,
+        dLookRad,
+        dLookDeg: +(dLookRad * 180 / Math.PI).toFixed(6),
+        anchorDistance: _d,
+        rawDistance: _rawD,
+        before: { pos: _capPos.toArray(), look: _capLook.toArray() },
+        after: { pos: _exitCam.position.toArray(), look: _nowLook.toArray() },
+        posEps, lookEps,
+      };
+    }
+
+    // With Settings type = Assist: model is IDLE while OFF (no engage), and F-on
+    // begins the assist pilot toward the selected body. Mirrors main.js engage:
+    //   _type = settings.get('flightControlType'); _flightMode = _type; _enterFlightMode.
+    // Uses the lab's real model + real SupercruisePilot (scPilot) + real Settings.
+    function checkSettingsTypeEngage() {
+      const prevType = labSettings.get('flightControlType');
+      labSettings.set('flightControlType', FlightMode.ASSIST);
+      resetModel();
+
+      // ── Flight OFF: nothing engaged. Step the model several frames and confirm
+      //    it does NOT move (no drift, no autopilot takeover). scPilot idle. ──
+      const offStartPos = model.position.clone();
+      const offStartSpeed = model.speed;
+      const assistIdleWhileOff = !scPilot.isActive;
+      for (let i = 0; i < 30; i++) {
+        // Step the model exactly as the OFF (non-flight) lab would: no pilot, no
+        // throttle, no stick. The model must remain frozen.
+        refreshBodies();
+        model.update(FIXED_DT);
+      }
+      const offDrift = model.position.distanceTo(offStartPos);
+      const modelStillWhileOff = offDrift < 1e-9 && Math.abs(model.speed - offStartSpeed) < 1e-12;
+
+      // ── F-on (ENGAGE) reading the Settings type → assist pilot takes the stick. ──
+      resetModel();
+      const _type = labSettings.get('flightControlType');
+      _flightMode = (_type === FlightMode.ALIGN || _type === FlightMode.ASSIST)
+        ? _type
+        : FlightMode.MANUAL;
+      _enterFlightMode(_flightMode); // begins Assist (scPilot.beginLeg) for ASSIST
+      const engagedAssist = (_flightMode === FlightMode.ASSIST) && scPilot.isActive;
+      // beginLeg stores { mesh, radius, linger }; the pilot's leg target should be
+      // the currently-selected body (the reference planet in the lab).
+      const targetsSelected = scPilot._target?.mesh === _selectedBody().mesh;
+
+      // Step a few frames so the pilot actually starts driving the model.
+      const engStartPos = model.position.clone();
+      for (let i = 0; i < 30; i++) {
+        refreshBodies();
+        if (scPilot.isActive) scPilot.update(FIXED_DT);
+        model.update(FIXED_DT);
+      }
+      const movedAfterEngage = model.position.distanceTo(engStartPos) > 0;
+
+      // Restore.
+      scPilot.stop();
+      _flightMode = FlightMode.MANUAL;
+      labSettings.set('flightControlType', prevType);
+      resetModel();
+
+      const pass = assistIdleWhileOff && modelStillWhileOff
+        && engagedAssist && !!targetsSelected && movedAfterEngage;
+      return {
+        pass,
+        settingDefault: new Settings().get('flightControlType'), // fresh store → 'manual'
+        assistIdleWhileOff,
+        modelStillWhileOff,
+        offDrift,
+        engagedAssist,
+        targetsSelected: !!targetsSelected,
+        movedAfterEngage,
+      };
+    }
+
     function setTuning(k, v) {
       if (!(k in model.tuning)) throw new Error(`Unknown tuning key: ${k}`);
       model.tuning[k] = v;
@@ -577,6 +759,12 @@
       get flightMode() { return _flightMode; },
       get alignActive() { return _alignState.active; },
       get assistActive() { return scPilot.isActive; },
+      // ── F-toggle build probes (spec 2026-06-25) ──
+      // No-snap exit verified on the CAMERA (real ShipCameraSystem + real
+      // flightExitAnchor + real adoptCurrentPose); Settings-type → engage path.
+      settings: labSettings,
+      checkNoSnapExit,
+      checkSettingsTypeEngage,
     };
 
     // ── Panel buttons ──
