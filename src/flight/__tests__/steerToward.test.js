@@ -28,6 +28,7 @@ describe('steerToward — extracted from SupercruisePilot.update (:93-101)', () 
   it('target dead astern (+Z, antiparallel) ⇒ yaw = 1 (escape, :100)', () => {
     const out = steerToward(ID(), V(0, 0, 0), V(0, 0, 10), GAIN);
     expect(out.yaw).toBe(1);           // would be 0 without the antiparallel escape
+    expect(out.pitch).toBeCloseTo(0, 6); // escape must not corrupt pitch
   });
 
   it('off-axis ⇒ clamped magnitude (never beyond ±1)', () => {
