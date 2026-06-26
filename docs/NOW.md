@@ -32,6 +32,29 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **▶ WS4 UAT (2026-06-25) → GENERATIVE-ARCHITECTURE PIVOT, NOT shipped.** Max walked the lab (grain slider + carve-epoch toggle + ⊞grain feature tags added for UAT, `6a172c8`). The grain *mechanism* verifies and the subtractive carve genuinely reshapes the heightfield (oceans/lakes/mountains shift). BUT UAT surfaced a fundamental gap: the procgen layer (WS1 drivers, WS2 fields) generates only a THIN latitude-banded **orientation** grain + scalars — NOT a tectonic structure/**history as DATA**; the relief is shader-synthesized noise merely *oriented* by the grain, so it reads as an orientation overlay, not "a planet with a tectonic history." That violates the spine's own **"procgen decides, render expresses / place plausible structure once per body"** principle (`world-engine-architecture-spine.md` §0/§1). **Decision: do NOT ship WS4; do NOT start WS3.** WS4 = reusable foundational plumbing (one shared field + a real subtractive carve). **NEXT (Max's directive): a FRESH session examines the GENERATIVE ARCHITECTURE *via a workflow*** — map what's generated as data vs synthesized in the shader across game/lab/world-engine → assess vs Max's "generate tectonic history as data → render it" vision → research prior art (procedural plate tectonics / structural heightfields) → recommend a direction → then brainstorm with Max before any build. Handoff: `/tmp/handoff-world-engine-generative-architecture-rethink-2026-06-25.md`. Push HOLD.
 
+> **▶ GENARCH ASSESSMENT DONE → DIRECTION SET → INCREMENT 1 SCOPED (2026-06-25, this session).** Ran the
+> architecture-examination workflow (14 agents: map+research+2 assess+3 adversarial critique) → committed
+> `docs/FEATURES/world-engine-genarch-assessment-2026-06-25/ASSESSMENT.md` (`6787146`). **Verdict: the DIRECTION is
+> right** — "procgen writes structure as DATA, render expresses it" is validated by the UAT-PASSED relief slice AND
+> every production planet renderer + SOTA paper surveyed. **WS4 failed UAT because it wired only the orientation grain
+> into the production shader; the relief HEIGHT stayed in-shader noise** (`height.glsl.js:950` mixes grain as an axis,
+> `:972` keeps height `noised()`). 3 critics returned **refuted=false** (core call survives) but flagged that the
+> synthesis OVER-SELLS the fix → folded into **ASSESSMENT.md §11**: full-A is bigger than rated (NO sphere-native height
+> writer exists; E9 is flat-only), the slice's flat-DEM divergence UAT does NOT transfer to a sphere
+> "reads-as-history" UAT, an **A-lite** coarse-elevation-bake middle path was never priced, **D12 zero is
+> `PlanetGenerator.js:606-613` not :565** (WS1 already surfaces tidalHeating — gap is consumption), and **WS4's UAT bar
+> EXCLUDES continents** (intent.md:15-16 defers them to E7/E8/E11 + Option C). **Max's call (verbatim): stop bouncing
+> micro-decisions — proceed toward the outcome.** Direction locked: **reopen decision #6**, renderer expresses **baked
+> structure-as-data** (full-A = destination); **B dead**; **C (one-pass plate model for continents) = follow-on**.
+> **SCOPED increment 1: `world-engine-baked-relief-render-2026-06-25`** (intent+contract committed `f3e8c30`, status
+> building, active-workstream switched) — reach full-A via an A-lite-shaped first increment: bake a COARSE sphere-native
+> height field → DISPLACE the surface from it + re-point the river router at the SAME field + seam/pole continuity (the
+> critics' first AC), de-risking the sphere/dual-source plumbing before the heavy **E6-build+E9-carve-substrate swap =
+> increment 2**. 5 ACs (AC1 unit, AC2-4 live integration on :9223, AC5 Max UAT vs the WS4-scoped bar). **NEXT (fresh
+> session, build via subagents per Max): present contract for greenlight → plan → build → `verify-workstream` →
+> VERIFIED_PENDING_MAX → Max UAT.** LAB-only. Push HOLD. Handoff:
+> `/tmp/handoff-world-engine-baked-relief-render-2026-06-25.md`.
+
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
 > WITH Max + approved. Spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`
