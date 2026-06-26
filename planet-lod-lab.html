@@ -2431,6 +2431,35 @@
     const filterUI = { filter: true, archetypeLabel: '—', soloMode: 'context' };
     const fWorld = guiLeft.addFolder('World'); fWorld.open();
 
+    // ▸ Tectonic grain & carve (WS4) — surfaces the WS4 shared-grain + drainage-carve
+    // controls that were previously CONSOLE-ONLY (window._lab.grainStrength / setCarveEpoch)
+    // or buried inside the Rivers folder. Created 2nd-from-top so the new shared-grain
+    // behaviour is discoverable. LAB-GUI ONLY — none of these change shader/core/uniform
+    // defaults; the production uTectonicGrainStrength default stays 0 (grain-zero-identical
+    // regression intact). We set the LAB's LIVE grain strength to 1.0 below so the shared-
+    // grain orientation is visible on load; slide to 0 for the old per-feature scatter (A/B).
+    const fGrainCarve = guiLeft.addFolder('Tectonic grain & carve (WS4)'); fGrainCarve.open();
+    // Legend line (read-only title) naming the 6 grain-driven relief features so the
+    // new-vs-old boundary is legible. Plain lil-gui readout (a bound string, .disable()d).
+    const grainCarveUI = {
+      grainStrength: 1.0,                                      // LAB live initial = ON (A/B visible)
+      carveEpoch: (window._lab && window._lab.carveEpoch) || false,
+      legend: 'grain drives: orogeny · canyon · scarp · tessera · lava · cryo',
+    };
+    // Apply the lab's ON-by-default grain immediately (does NOT touch the uniforms.js default).
+    uniforms.uTectonicGrainStrength.value = grainCarveUI.grainStrength;
+    fGrainCarve.add(grainCarveUI, 'legend').name('⊞ shared grain feeds').disable();
+    fGrainCarve.add(grainCarveUI, 'grainStrength', 0, 1, 0.01).name('grain strength (0 = old scatter)')
+      .onChange(v => { window._lab ? window._lab.grainStrength(v) : (uniforms.uTectonicGrainStrength.value = v); });
+    fGrainCarve.add(grainCarveUI, 'carveEpoch').name('carve epoch (drainage cuts relief)')
+      .onChange(v => { window._lab && window._lab.setCarveEpoch(v); });
+    // Carve depth — the live h-units the valley floor drops (→ F14 flood). Reuses the EXISTING
+    // riverOverlayState.carveDepthH → uRiverCarveDepth uniform; applyCarveAmounts re-applies it
+    // (gated on rivers enabled && carve, so 0 stays regression-safe). .listen() keeps this slider
+    // in sync with the duplicate control inside the Rivers folder.
+    fGrainCarve.add(riverOverlayState, 'carveDepthH', 0, 0.3, 0.005).name('carve depth (floor h↓)')
+      .listen().onChange(() => applyCarveAmounts());
+
     // ▸ View & LOD (always open)
     const fView = guiLeft.addFolder('View & LOD'); fView.open();
     fView.add(state, 'distance', 1.1, 30, 0.1).name('distance (radii)').listen();
@@ -3717,7 +3746,7 @@
     fEjecta.add(state, 'ejectaEnabled').name('✓ enabled');
     // ▸ Mountains (F1) — derived (amplitude/orogeny strength+strike from the preset,
     // .listen()-synced on preset change) + lab knobs (ridge fold offset/gain, scale).
-    const fMountains = fRelief.addFolder('Mountains (F1)'); fMountains.close();
+    const fMountains = fRelief.addFolder('Mountains (F1) ⊞grain'); fMountains.close();   // ⊞grain: strike/orientation driven by the shared WS4 tectonic grain
     fMountains.add(state, 'mountainAmp', 0, 1, 0.01).name('amplitude (erosion)').listen();
     fMountains.add(state, 'orogenyStrength', 0, 1, 0.01).name('orogeny (fold belt)').listen();
     fMountains.add(state, 'orogenyAngle', -Math.PI, Math.PI, 0.01).name('strike angle').listen();
@@ -3733,7 +3762,7 @@
     // ▸ Canyons (F4) — tectonic graben, writes the shared canyonHeight accumulator.
     // depth/count come from the driver preset+seed (.listen()-synced); width/floor are
     // lab knobs. A rift is a great circle; combining 1–3 gives a rift system.
-    const fCanyons = fRelief.addFolder('Canyons (F4)'); fCanyons.close();
+    const fCanyons = fRelief.addFolder('Canyons (F4) ⊞grain'); fCanyons.close();   // ⊞grain: chasma orientation driven by the shared WS4 tectonic grain
     fCanyons.add(state, 'chasmaDepth', 0, 0.4, 0.005).name('depth (tectonic)').listen();
     fCanyons.add(state, 'chasmaCount', 0, 3, 1).name('rift count').listen();
     fCanyons.add(state, 'chasmaWidth', 0.02, 0.3, 0.005).name('half-width');
@@ -3751,7 +3780,7 @@
     // ▸ Scarps (F5) — warped fault-block province. strength/style come from the driver
     // preset+seed (.listen()-synced); width/freq/warp are lab knobs. The scarp fronts are
     // warped iso-contours of dot(pos, axis); freq sets how many parallel scarps.
-    const fScarps = fRelief.addFolder('Scarps (F5)'); fScarps.close();
+    const fScarps = fRelief.addFolder('Scarps (F5) ⊞grain'); fScarps.close();   // ⊞grain: fault strike driven by the shared WS4 tectonic grain
     fScarps.add(state, 'scarpStrength', 0, 0.3, 0.005).name('strength (contraction)').listen();
     fScarps.add(state, 'scarpStyle', 0, 1, 0.01).name('style (thrust↔normal)').listen();
     fScarps.add(state, 'scarpWidth', 0.05, 0.6, 0.01).name('cliff softness');
@@ -3783,7 +3812,7 @@
     // the driver preset (high-stress gate, .listen()-synced); the 2 lattice axes are
     // seeded (no GUI); freq/warp/warpFreq are lab knobs. Two warped 1-|sin| ridge fields
     // multiplied → grooves crosscut in both directions over a high crust.
-    const fTessera = fRelief.addFolder('Tessera (F6)'); fTessera.close();
+    const fTessera = fRelief.addFolder('Tessera (F6) ⊞grain'); fTessera.close();   // ⊞grain: lattice orientation driven by the shared WS4 tectonic grain
     fTessera.add(state, 'tesseraStrength', 0, 0.3, 0.005).name('strength (lattice)').listen();
     fTessera.add(state, 'tesseraFreq', 1, 16, 0.5).name('lattice density (freq)');
     fTessera.add(state, 'tesseraWarp', 0, 1.5, 0.01).name('sinuosity (warp)');
@@ -3815,7 +3844,7 @@
     // CRACKS (the headline) pulse via uTime through the emissive-bypass channel. coverage
     // (resurfacing) + activity (tidal glow) come from the driver preset (.listen()-synced);
     // region scale, wrinkle ridges, crack scale/width, glow rate are lab knobs.
-    const fLava = fRelief.addFolder('Lava plains (F8)'); fLava.close();
+    const fLava = fRelief.addFolder('Lava plains (F8) ⊞grain'); fLava.close();   // ⊞grain: wrinkle/flow orientation driven by the shared WS4 tectonic grain
     fLava.add(state, 'lavaCoverage', 0, 1, 0.01).name('coverage (smooths)').listen();
     fLava.add(state, 'lavaActivity', 0, 1, 0.01).name('activity (crack glow)').listen();
     fLava.add(state, 'lavaSizeKm', 1500, 13000, 100).name('region size (km)').onChange(()=>applyDrivers());
@@ -3842,7 +3871,7 @@
     // ▸ Ridged icy (F10) — double ridges (Europa) + grooved bands (Ganymede), gated by the same
     // SHARED uCryoActivity (the icy-activity knob in the Chaos folder). Ridge freq/offset/width +
     // band freq sync from the preset (.listen()); amplitude + sinuosity are lab knobs.
-    const fCryoRidge = fRelief.addFolder('Ridged icy (F10)'); fCryoRidge.close();
+    const fCryoRidge = fRelief.addFolder('Ridged icy (F10) ⊞grain'); fCryoRidge.close();   // ⊞grain: ridge orientation driven by the shared WS4 tectonic grain
     fCryoRidge.add(state, 'cryoRidgeAmp', 0, 0.4, 0.01).name('ridge amp');
     fCryoRidge.add(state, 'doubleRidgeFreq', 0.5, 10, 0.25).name('double-ridge freq').listen();
     fCryoRidge.add(state, 'cryoRidgeOffset', 0.1, 0.9, 0.01).name('ridge flank offset').listen();
@@ -3927,7 +3956,7 @@
     fRiversOverlay.add(riverOverlayState, 'carve').name('carve valleys into terrain').onChange(()=>{ riverRerouteDebounced(); applyCarveAmounts(); });
     fRiversOverlay.add(riverOverlayState, 'carveStrength', 0, 0.15, 0.005).name('wall bend (normal)').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveGateHi', 0.02, 1.0, 0.01).name('relief gate (peaks off)').onChange(applyCarveAmounts);
-    fRiversOverlay.add(riverOverlayState, 'carveDepthH', 0, 0.3, 0.005).name('flood depth (h↓→water)').onChange(applyCarveAmounts);
+    fRiversOverlay.add(riverOverlayState, 'carveDepthH', 0, 0.3, 0.005).name('flood depth (h↓→water)').listen().onChange(applyCarveAmounts);   // .listen() — mirrors the duplicate "carve depth" slider in the WS4 grain & carve folder
     fRiversOverlay.add(riverOverlayState, 'carveRough', 0, 1, 0.01).name('edge roughness').onChange(applyCarveAmounts);
     fRiversOverlay.add(riverOverlayState, 'carveFloor', 0, 3, 0.01).name('dry-floor darkening').onChange(applyCarveAmounts);
     fRiversOverlay.add({ reroute(){ riverReroute('manual'); } }, 'reroute').name('↻ re-route now');
