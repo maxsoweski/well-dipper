@@ -1,0 +1,43 @@
+{
+  "workstream": "world-engine-baked-relief-render-2026-06-25",
+  "commit": "e9d6cd5",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "evidence": "Unit-layer headless. Sphere-native relief HEIGHT generated as DATA once per body (src/worldengine/base/tectonic.js writeHeightSphere), baked into a sampleable cube (planet-lod-tectonic.js RELIEF_CUBE_SIZE=256, build/create/bakeHeightCube), byte-identical for same drivers+seed, finite, bounded (|h|<4); materialized as data not a shader expression (SPLIT-TRAP #3 guard: bake fed carrier.height, not sampler readback). vitest tests/worldengine-base-height-sphere.test.js + tests/relief-height-cube.test.js = 22/22 PASS. Full-suite 1085/1089; the 4 fails (GalacticFeatures x1, KnownObjects x3) + 13 vendor/motion-test-kit file-FAILs have NO overlap with the AC1 diff and are pre-existing at baseline 1eb556d.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration, live=true. STATIC GREEN: planet-lod-lab.html:344-354 branches the height body on uReliefBakeStrength (s=1 => pure sampled cube R channel; sampleBakedRelief in planet-lod-height.glsl.js:148-150; cube pointed at the real baked cube lab.html:3611); true if/else BRANCH (SPLIT-TRAP #4, never mix-to-0); else = VERBATIM pre-AC2 synth, no textureCube fetch; prod uniforms.js does not define the uniform => strength-0 byte-identical structurally intact. Headless 42/42. Live browser drive deferred to working-Claude on :9223 (see live-integration-evidence.md => PASS).",
+      "adversarialVotes": "0/3 sufficient (no live evidence in-workflow by design)"
+    },
+    {
+      "id": "AC3",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration, live=true. STATIC + HEADLESS GREEN: route() builds ONE carrier=makeSphereField(mesh), fills via writeGrainSphere->writeHeightSphere (integer macroSeed), and under a SINGLE gate (uReliefBakeStrength>0) sets height=carrier.height (the IDENTICAL array baked into the cube via bakeHeightCube); strength 0 preserves the legacy sampler.read fallback. Headless 13/13 (relief-router-repoint wiring scan + relief-router-baked-drainage: height===carrier.height reference, uphill=0 & orphan=0, ocean [0.25,0.45], maxStrahler [3,8], flow >5x mean, deterministic). Live runtime parity deferred to working-Claude on :9223 (see live-integration-evidence.md => PASS).",
+      "adversarialVotes": "3/3 sufficient (on what was checked)"
+    },
+    {
+      "id": "AC4",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration, live=true. HEADLESS DATA-CONTINUITY PASS: writeHeightSphere computes height[i] as a pure function of carrier.verts[i] via createNoise3D + adjacency Jacobi (no lat/long UV => no antimeridian seam, no pole singularity). tests/relief-seam-pole-continuity.test.js with FROZEN clean-field thresholds (injection probe confirms they FAIL seams/pinches >=0.10): antimeridian maxDelta 0.0352, cube-face maxDelta 0.0724, both caps nan=0, region drainage 0 uphill/orphan, raw seam 0.0352 < ceil 0.1116; 42/42. Live VISUAL observable deferred to working-Claude on :9223 (see live-integration-evidence.md => PASS).",
+      "adversarialVotes": "0/3 sufficient (no live evidence in-workflow by design)"
+    },
+    {
+      "id": "AC5",
+      "result": "deferred-to-max",
+      "evidence": "UAT-layer (holistic acceptance, MAX-ONLY). No agent passes a UAT AC. Wiring is consistent with the AC5 walk: GUI slider 'baked relief (0 = synth only)' bound to window._lab.reliefBakeStrength() (lab default 1.0); s=1 => pure baked field; one carrier.height feeds BOTH the displaced surface cube AND the router's height array (Phase-D re-point, the one-field invariant). Whether the surface reads as 'generated structure, not a grain on noise' is Max's call alone.",
+      "adversarialVotes": "n/a - UAT is Max-only"
+    }
+  ],
+  "overall": "INSUFFICIENT (in-workflow) - Unit PASS; live integration (AC2,AC3,AC4) deferred to working-Claude; UAT (AC5) deferred to Max. SUPERSEDED by live-integration-evidence.md: AC2/AC3/AC4 driven on :9223 by working-Claude => PASS; integration GREEN; status => VERIFIED_PENDING_MAX e9d6cd5.",
+  "summaryForMax": "Unit PASS (AC1 22/22, byte-identical/finite/bounded/no-RNG; full-suite fails pre-existing, untouched by the diff). Integration static+headless GREEN (42/42); the live runtime halves of AC2/AC3/AC4 were not driven inside the workflow (main-branch mode) and were completed by working-Claude on :9223 with passing evidence (single-source diff 0, strength-0 fallback, poles/seam clean) recorded in live-integration-evidence.md. AC5 UAT deferred to Max."
+}

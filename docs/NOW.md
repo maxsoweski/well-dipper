@@ -28,6 +28,28 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
+> **▶ INCREMENT 1 (world-engine-baked-relief-render) — BUILT + VERIFIED_PENDING_MAX `e9d6cd5` (2026-06-25).**
+> The A-lite first step of the full-A render port. **5 phases A–E committed** (`cef95c5`→`e9d6cd5` on
+> `1eb556d` plan): (A) net-new sphere-native `writeHeightSphere` — coarse E6 relief generated as DATA on a
+> seam-free 3D-simplex domain (NOT lat/long), deterministic; (B) bake `carrier.height` into a seam-free 256³
+> cube once-per-route; (C) lab renderer displaces from the cube behind `uReliefBakeStrength`, strength-0 =
+> verbatim fallback (if/else, never mix); (D) river router re-pointed to the **same** `carrier.height` array;
+> (E) seam/pole continuity gate. **The §0 invariant held: ONE field → ONE cube → BOTH consumers, ONE strength
+> uniform** (the WS4 data/noise split is closed). **Verification:** AC1 unit PASS (22/22 + full-suite confirms
+> the 4 pre-existing fails are untouched by the diff); AC2/AC3/AC4 integration GREEN = headless 42/42 +
+> working-Claude live drive on `:9223` (**single-source router==baked diff 0 sphere-wide**; strength-0 router
+> falls back to legacy; both poles no pinch + cube-corner no seam ridge); AC5 UAT **deferred-to-max**. Built
+> via workflows (understand→plan→build w/ per-phase adversarial review→verify-workstream); the Phase-E
+> reviewer caught a **vacuous AC4 seam test** (self-calibrated threshold) → reworked to frozen
+> injection-validated thresholds. Artifacts in `docs/WORKSTREAMS/world-engine-baked-relief-render-2026-06-25/`:
+> `BUILD-PLAN.md`, `verdict.json`, `live-integration-evidence.md`. **NEXT = Max AC5 UAT** (lab-only): open the
+> LOD lab, slide **'baked relief (0 = synth only)'** 0→1, judge — does the relief read as **generated
+> structure** (coherent landforms, not a grain on noise) with **drainage cut into that same relief**, vs the
+> **WS4-scoped bar** (coherent system + drainage; NOT "where are the continents" — that's the Option-C
+> follow-on). UAT pass → Ship (FEATURES row + doc-updates). Then **increment 2** = the heavy E6-build +
+> E9-carve substrate swap onto the sphere. **Push HOLD** (campaign-wide). Handoff:
+> `/tmp/handoff-world-engine-baked-relief-render-2026-06-25.md`.
+
 > **▶ WS4 (world-engine-relief-wiring) — VERIFIED_PENDING_MAX `deca261` (2026-06-25).** E6 tectonic **grain** → E9 subtractive stream-power **carve** wired into the LAB (lab-only; game Planet.js deferred). One shared grain field feeds all 6 grained combiners (mix gated by `uTectonicGrainStrength`, 0=byte-identical fallback); drainage genuinely subtracts (perNodeIncision Δ≤0, epoch build-then-carve). 4 unit ACs PASS (grain-oracle, carve-subtractive, epoch-build-identical, renderer-expression-only; 3× adversarial) + 5 live integration ACs PASS on :9223 (one-shared-grain, grain-zero-identical, epoch-carve-visible, router-zero-drift ocean35/Strahler5/0-orphan-uphill/poles-clean, bake-once). **`landscape-with-history` UAT = Max's gate alone — PENDING:** walk a built world, toggle grain 0↔1 + carve epoch, judge "reads as a landscape with a history." A/B captures in `scratchpad/ws4-live/`. Built entirely via workflows (ground→plan→adversarial-critique→build→verify→live-drive). bake-once AC amended: grain is sea-level-independent. **Push HOLD** (campaign-wide).
 
 > **▶ WS4 UAT (2026-06-25) → GENERATIVE-ARCHITECTURE PIVOT, NOT shipped.** Max walked the lab (grain slider + carve-epoch toggle + ⊞grain feature tags added for UAT, `6a172c8`). The grain *mechanism* verifies and the subtractive carve genuinely reshapes the heightfield (oceans/lakes/mountains shift). BUT UAT surfaced a fundamental gap: the procgen layer (WS1 drivers, WS2 fields) generates only a THIN latitude-banded **orientation** grain + scalars — NOT a tectonic structure/**history as DATA**; the relief is shader-synthesized noise merely *oriented* by the grain, so it reads as an orientation overlay, not "a planet with a tectonic history." That violates the spine's own **"procgen decides, render expresses / place plausible structure once per body"** principle (`world-engine-architecture-spine.md` §0/§1). **Decision: do NOT ship WS4; do NOT start WS3.** WS4 = reusable foundational plumbing (one shared field + a real subtractive carve). **NEXT (Max's directive): a FRESH session examines the GENERATIVE ARCHITECTURE *via a workflow*** — map what's generated as data vs synthesized in the shader across game/lab/world-engine → assess vs Max's "generate tectonic history as data → render it" vision → research prior art (procedural plate tectonics / structural heightfields) → recommend a direction → then brainstorm with Max before any build. Handoff: `/tmp/handoff-world-engine-generative-architecture-rethink-2026-06-25.md`. Push HOLD.
