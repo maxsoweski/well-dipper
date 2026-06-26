@@ -7612,39 +7612,18 @@ function simStep(deltaTime) {
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
 
-      // ── Manual drop-out (AC3) ──
-      // While the player flies, if a body is selected and we're inside its
-      // drop window — within the 10R capture sphere AND slow enough
-      // (speed ≤ (10R)/2.5, the same window the autopilot pilot uses) —
-      // capture into a Toy Box orbit at the body. Coming in too hot just
-      // flies past (no capture; the player keeps the stick). Reuses the
-      // pilot's drop-window math deliberately; does NOT re-tune the model's
-      // scale-free speed floors.
-      if (_scManual) {
-        const sel = _resolveSelectedBody();
-        if (sel) {
-          const bp = sel.mesh.position;
-          const R = sel.radius ?? 5;
-          // Single-source the drop window from scPilot.tuning (same as
-          // _scDropState/the HUD) so the captured-here behavior and the
-          // displayed "DROP READY/TOO FAST" label can never drift apart.
-          const t = scPilot.tuning;
-          const captureSphere = R * t.DROP_RADIUS_FACTOR;        // 10R
-          const dropMaxSpeed = captureSphere / t.DROP_ETA_MAX;   // (10R)/2.5
-          const d = scModel.position.distanceTo(bp);
-          if (d <= captureSphere && scModel.speed <= dropMaxSpeed) {
-            // In the drop window → capture into Toy Box orbit at the body.
-            setScManual(false);
-            scPilot.stop();          // Mode C: arrival ends the assist hold cleanly
-            _alignState.active = false;
-            _flightMode = FlightMode.MANUAL; // keep invariant: never stale while _scManual is false
-            cameraController.setCameraMode(CameraMode.TOY_BOX);
-            cameraController.bypassed = false;
-            cameraController.restoreFromWorldState(bp);
-            shipChoreographer.debugDecelImpulse();
-          }
-        }
-      }
+      // ── Manual drop-out (AC3) — REMOVED 2026-06-25 (Max's design call) ──
+      // Close-approach auto-capture drop-out removed: under the F=on/off model
+      // the player stays in flight near a planet and presses F to drop to
+      // Toy-Box (a no-snap exit via flightExitAnchor in the DISENGAGE branch).
+      // The old block re-anchored the orbit on the BODY center
+      // (restoreFromWorldState(bp)) → camera.lookAt(body) → the close-approach
+      // "jump" (the un-fixed twin of the F-off snap fixed in bc7e15e). It also
+      // mis-fired far from the planet when a world-origin rebase corrupted its
+      // distance check. Assist still flies in and HOLDs near the body
+      // (SupercruisePilot HOLD phase, camera untouched); only the automatic
+      // EXIT-from-flight was removed. scPilot.tuning DROP_* constants stay —
+      // the pilot's HOLD phase and the HUD drop-window readout still use them.
 
       // AC6 felt beats: queue the same impulses as the V1 branch, new
       // triggers. (`phase` is the ENTRY phase — phaseChanged + CRUISE
