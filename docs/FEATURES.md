@@ -58,8 +58,8 @@ Commit history is supporting evidence only, not authority.
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
 | Cockpit (visual frame + reactive HUD readouts + status lights pulsing w/ engine state) | F&F-MVP | proposed | — | — |
-| Ship Scanner (Alt-toggle, cyan reticles, burn-to-ship 45°, ship-lock orbit) | ENRICHED | shipped-code (30aa1cf) | — | — |
-| Ship NPC spawning (NPC ships in systems; stochastic ~0-12 per system) | ENRICHED | shipped-code — **will be disabled for F&F ship; preserve code for ENRICHED reactivation** | — | — |
+| Ship Scanner (Alt-toggle, cyan reticles, burn-to-ship 45°, ship-lock orbit) | ENRICHED | shipped-code (30aa1cf) — **dormant in F&F** (depends on NPC spawning, disabled 2026-06-26); `NavigationSubsystem`/`FlythroughCamera` retired, files kept | — | — |
+| Ship NPC spawning (NPC ships in systems; stochastic ~0-12 per system) | ENRICHED | **DISABLED for F&F** (`SHIPS_ENABLED=false`, `main.js` spawn switch, supercruise-control-harness 2026-06-26) — code KEPT, dormant for ENRICHED reactivation | — | — |
 | Ship-to-ship gameplay (interaction beyond visual presence) | GAME | proposed | Player ship manual flight | — |
 
 ## Reticles
@@ -211,7 +211,7 @@ Follow-up (non-blocking): ~12 dead `system._navigable` reader sites in `main.js`
 deleted in this cleanup; harmless reads of `undefined`).
 
 ### Ship NPC spawning — disable for F&F
-ShipSpawner currently spawns ships stochastically (~0-12 per system) per intake-correcting code sweep. Scene-level DirectionalLight + AmbientLight provide proper Lambertian shading (shipped 2026-05-10 commit `aa9ad23`; prior emissive-only workaround removed in same commit). Feature is NPC-ships-in-systems = ENRICHED tier. **Action item before F&F ship:** disable spawn (likely gate behind URL param or settings flag, or remove ShipSpawner instantiation from `main.js`); preserve code for ENRICHED reactivation later.
+ShipSpawner currently spawns ships stochastically (~0-12 per system) per intake-correcting code sweep. Scene-level DirectionalLight + AmbientLight provide proper Lambertian shading (shipped 2026-05-10 commit `aa9ad23`; prior emissive-only workaround removed in same commit). Feature is NPC-ships-in-systems = ENRICHED tier. **DONE 2026-06-26** (supercruise-control-harness): spawn disabled at the single switch — `const SHIPS_ENABLED = false` gates the `shipSpawner.spawnForSystem(…)` call in `main.js`. With spawn off, `focusShip` / the `_shipScannerMode` hit-test / the `flythrough.active` simStep branch are unreachable by construction (all gated on `shipSpawner.ships`), so `NavigationSubsystem` + `FlythroughCamera` are marked retired (files KEPT, nav wiring intact). ShipSpawner code + NPC ship features preserved for ENRICHED reactivation — flip `SHIPS_ENABLED` to restore. Player-ship sharing (`shipHullToScene('player')`, `ScaleConstants.js`) untouched.
 
 ### World-origin rebasing — pipeline crossing
 Per intake conversation 2026-05-19: this is suspected to be where gameplay-layer issues will accumulate. It's necessary infrastructure for any ship-scale work that requires float32 precision (which is most of Layer 3). It crosses:
