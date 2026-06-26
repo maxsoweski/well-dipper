@@ -28,22 +28,24 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶ INCREMENT 1 AC5 UAT (2026-06-26) → "SEMI-COHERENT", DID NOT PASS → grain-vs-landform-process question, dig next.**
-> Max walked the lab (slid `baked relief` 0→1 up close). Verdict: he can *sort of* see ridges/basins in the grain
-> basis (landmass "pinches together" in places, "bottoms out below sea level" in others) **but it does not read as
-> Earth's mountain ranges / valleys / rivers.** **The render plumbing is correct + verified** (single-source diff 0,
-> seam/pole-clean) — so this is a **GENERATIVE-MODEL/content verdict, NOT a wiring bug.** Max's framing: **tectonic
-> grain is a *fabric/input*; landforms are a *process output*** (convergence → uplift/eruption → accumulation →
-> weathering/erosion over time → landforms). **THE FORK to answer:** is the E6 grain-relief on screen the **(a) BASIS**
-> (precursor; the landform-producing process still has to be wired in) or the **(b) END-RESULT** (then the model is
-> wrong about how landforms arise)? Working-Claude's hypothesis = **(a)** (raw E6 structural relief + token carve; the
-> uplift→accumulate→weather chain isn't present), LOW-MED confidence — **and it may be deeper than the named follow-ons
-> (Option C continents / increment-2 substrate swap).** **Decision: do NOT ship increment 1; do NOT revert it** (reusable
-> verified plumbing, like WS4). **NEXT (Max's directive): a FRESH session digs the fork via workflows + subagents** —
-> map the E-series engine chain (E6/E7/E8/E9/E11: which exist, where the landform-process lives), determine what the
-> UAT-passed relief-slice actually computes vs what increment-1 ported, reconcile with the locked direction, answer
-> (a)/(b), **brainstorm WITH Max before any build.** Handoff:
-> `/tmp/handoff-world-engine-grain-vs-landform-process-2026-06-26.md`. Push HOLD.
+> **▶ GRAIN-VS-LANDFORM FORK RESOLVED (2026-06-26) → answer (a) BASIS → Option-C plate-placement increment SCOPED + greenlit, build handed to fresh session via workflows.**
+> The AC5 "semi-coherent" verdict was a **generative-model/content** verdict, not a wiring bug. Dig (via workflows)
+> answered the fork: **(a)** — what's on screen is precursor E6 grain (latitude bands; the carve never touches the baked
+> field); the landform process is genuinely deferred, not a wrong end-state. Two-part missing process: **erosion** (E9,
+> already owned + UAT-passed flat) vs **construction/uplift** (unbuilt). **Then Max sharpened the bar: not "reads-as-coherent"
+> but actually COHERENT** — rivers where the procgen's full history says they should be. Coherence trace: the carve IS real
+> flow routing (not decoration) but is fed two historyless inputs (latitude-only height + uniform rain `accum=1`) → correct
+> router over incoherent substrate = incoherent rivers. **SOTA research (Cordonnier 2016 / Cortial 2019 / Tzathas 2024)
+> established a 3-tier model**: place tectonic END-STATE + run a **bounded gen-time erosion** (NOT geologic-time sim;
+> compatible with locked place-once) → render once. Max's frame: **"generative, not simulative"** ("what *happened*",
+> end-state determined by formation variables). **The hard gap = STAGE 1 (placing the uplift/continent field), not erosion
+> (WD owns it).** Decisions: **Tier B now, built C-ready**; **branch by regime** (plate path gated to Earth-like; despun E6
+> kept byte-identical for icy/locked/etc.); **lab-first**; **seed-only variety this increment** (driver-response = named
+> follow-on); precip/base-level **parameterized-but-deferred** (no north-star debt). **Scoped + committed:**
+> `docs/WORKSTREAMS/world-engine-plate-uplift-field-2026-06-26/` (intent + 8-AC contract, `f3662c8`, status **building**,
+> active-workstream pointer set). **NEXT: fresh session BUILDS it via per-AC implement→`verify-workstream` workflows.**
+> Handoff: `/tmp/handoff-world-engine-plate-uplift-field-build-2026-06-26.md`. Increment-1 baked-relief plumbing: do NOT
+> revert (reusable, verified). **Push HOLD** (whole local branch since 2026-06-23).
 
 > **▶ INCREMENT 1 (world-engine-baked-relief-render) — BUILT + VERIFIED (`e9d6cd5`); AC5 UAT → semi-coherent, see block above (2026-06-25).**
 > The A-lite first step of the full-A render port. **5 phases A–E committed** (`cef95c5`→`e9d6cd5` on
