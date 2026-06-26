@@ -1063,7 +1063,35 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
                    grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
-    const r = sampler.read(); height = r.height; grad = r.grad;
+    // ── Baked-relief Phase B/D: build the sphere-native E6 height field as DATA. The SAME carrier is
+    // the single source for BOTH (a) the HEIGHT cube the renderer displaces from (Phase B/C, baked
+    // below) and (b) the router's height array (Phase D re-point, just below). The §0 invariant: ONE
+    // field (carrier.height) → ONE cube (heightCube) → both consumers read it, gated by ONE strength
+    // uniform (uReliefBakeStrength).
+    //
+    // RISK #2 sourcing (resolved): route() carries grainDrivers (the E6 driver bundle) + macroSeed
+    // (the body's deterministic integer seed) — both flow in here. writeHeightSphere needs (crust,
+    // drivers, epoch, seed). It does NOT dereference `crust` (it derives its own seam-free thickness
+    // blob from the seed family seed+':crust'); we pass an inert {} placeholder for signature parity.
+    // drivers = grainDrivers (the SAME bundle the grain bake uses). heightSeed = a deterministic string
+    // built from the integer macroSeed (the SAME entropy the grain bake consumes; NO Math.random).
+    const heightSeed = 'e6:' + (macroSeed | 0);
+    const carrier = makeSphereField(mesh);
+    writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
+    writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
+    const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
+    // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
+    // uReliefBakeStrength uniform the renderer (Phase C) gates on. strength>0 ⇒ BOTH read carrier.height
+    // (the IDENTICAL array baked into heightCube below — single source, no surface-vs-rivers split).
+    // strength 0 ⇒ BOTH fall back to the legacy in-shader RTT (sampler.read() / fbmd), byte-identical.
+    // carrier is built on the SAME mesh the router routes (buildIrregularSphere in ensureMesh()), so
+    // carrier.height[i] is indexed by the same node index — a direct re-point (Option B, LOCKED).
+    const bakedOn = !!(uniforms.uReliefBakeStrength && uniforms.uReliefBakeStrength.value > 0.0);
+    if (bakedOn) {
+      height = carrier.height; grad = reliefGrad;       // SAME source as the cube (Option B)
+    } else {
+      const r = sampler.read(); height = r.height; grad = r.grad;   // legacy in-shader RTT (strength-0 fallback)
+    }
     seaLevel = (seaMode === 'histogram') ? solveSeaLevel(height, targetFraction) : uniforms.uSeaLevel.value;
     const oc = computeOcean(height, seaLevel, N); isOcean = oc.isOcean; oceanCount = oc.oceanCount;
     // AC6 + UAT item1: routing/topology is radius- & seed-invariant; only the width law (ribbon +
@@ -1084,22 +1112,11 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // bundle until WS1's driver vector wires through.
     bakeGrainCube({ mesh, drivers: grainDrivers, macroSeed, grainCube });
     grainBakeCount++;
-    // ── Baked-relief Phase B: build the sphere-native E6 height field as DATA, bake it to the HEIGHT
-    // cube (same once-per-route cadence as grain). The §0 invariant: ONE field (carrier.height) → ONE
-    // cube (heightCube) → both the renderer (AC2) and the router (AC3) read it.
-    //
-    // RISK #2 sourcing (resolved): route() carries grainDrivers (the E6 driver bundle) + macroSeed
-    // (the body's deterministic integer seed) — both flow in here. writeHeightSphere needs (crust,
-    // drivers, epoch, seed). It does NOT dereference `crust` (it derives its own seam-free thickness
-    // blob from the seed family seed+':crust'); we pass an inert {} placeholder for signature parity.
-    // drivers = grainDrivers (the SAME bundle the grain bake uses). heightSeed = a deterministic string
-    // built from the integer macroSeed (the SAME entropy the grain bake consumes; NO Math.random).
-    const heightSeed = 'e6:' + (macroSeed | 0);
-    const carrier = makeSphereField(mesh);
-    writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
-    writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
-    const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
-    // source = sphere-native E6 DATA, NOT sampler.read() (the §B.5 SPLIT-TRAP #3 guard).
+    // ── Baked-relief Phase B: bake the sphere-native E6 height field (the SAME `carrier` built above,
+    // the SAME array the router re-points to under bakedOn) to the HEIGHT cube — same once-per-route
+    // cadence as grain. source = sphere-native E6 DATA, NOT sampler.read() (the §B.5 SPLIT-TRAP #3
+    // guard). This is the cube the renderer (Phase C) displaces from; the router reads the identical
+    // carrier.height (Phase D) — single source, gated by the same uReliefBakeStrength uniform.
     bakeHeightCube({ mesh, height: carrier.height, grad: reliefGrad, heightCube });
     heightBakeCount++;
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
