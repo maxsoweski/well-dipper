@@ -49,6 +49,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // is kept importable for the deferred control-harness arc.
 import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
+import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
 import { FlightModeToast } from './ui/FlightModeToast.js';
 import { alignStep, alignDot } from './flight/aimAssist.js';
@@ -7648,6 +7649,19 @@ function simStep(deltaTime) {
         const _d = alignDot(scModel.orientation, scModel.position, _alignState.mesh.position);
         if (_d >= scPilot.tuning.ALIGN_DOT || _alignState.t >= ALIGN_MAX_S) _alignState.active = false;
       }
+      // ── Latched free-look bridge (§supercruise-arrival-modes-design
+      //    -2026-06-27, Feature 2 / Task 6) ──
+      // Reconcile HeadMount.held with the F-latch BEFORE update()/applyTo so the
+      // head pose composes every frame while In-Flight REGARDLESS of drive state
+      // (this branch is gated on scPilot.isActive || _scManual, so it runs while
+      // dropped/parked too). While latched, syncHeadToFreeLook re-asserts held=
+      // true → the mousemove handler's existing `scHead.held` gate routes pointer
+      // motion to scHead.addLook AND freezes the virtual joystick (no new code
+      // there). On toggle-off it consumes the one-shot recenter and releases the
+      // hold so update() eases yaw/pitch → 0. The middle-mouse PEEK still drives
+      // held directly; this re-asserts it next frame, so a peek release while
+      // still latched never recenters.
+      syncHeadToFreeLook(freeLook, scHead);
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
 
