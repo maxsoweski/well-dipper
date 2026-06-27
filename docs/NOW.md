@@ -47,7 +47,15 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > (`BUILD.md`, `verdict.json`, `live-integration-evidence.md`). **NEXT = Max AC8 UAT** (lab-only, :9223): does
 > an Earth-like body read as a coherent WORLD — plate-shaped continents, ranges at convergent boundaries,
 > drainage belonging to that relief, genuinely various across seeds — not latitude bands / eroded noise? (Lab
-> overlays all surface features; isolate via toggles / `reliefBakeStrength`.) UAT pass → Ship. Deferred
+> overlays all surface features; isolate via toggles / `reliefBakeStrength`.) UAT pass → Ship.
+> **▶ BEFORE Max's UAT — BUILD a lab UI "isolate plate relief" control** (Max's ask 2026-06-27: a one-click
+> GUI toggle, NOT a console snippet, replacing the verified isolation recipe). A `lab-uat-isolation` workflow
+> established the plates author 100% of the continents (causal A/B) but NEITHER default view is honest
+> (relief=1 buried under clutter; relief=0 = fake legacy-noise continents) — only a stripped relief=1 view is
+> a valid AC8 read. Plus a fix for the "baked relief" slider desync, and a named deferred follow-on (re-seat
+> legacy orogeny F1/F4/F5 to NEST into plate boundaries — needs its own scope pass, only if UAT finds the
+> plate ranges too smooth alone). Fresh-session handoff (via workflows/subagents):
+> `/tmp/handoff-lab-plate-isolation-ui-2026-06-27.md`. Deferred
 > follow-ons (named, not abandoned): precip/climate field, driver-response, game `Planet.js` port, Tier-C
 > plate-motion stepping, province-as-referent rewiring, non-Earth-like regimes.
 >
