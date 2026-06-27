@@ -33,10 +33,25 @@
       <div id="intro-logo2" class="intro-logo intro-credit">original score by<br><span class="credit-name">Christian Sewesky</span></div>
     </div>
 
-    <!-- Title screen overlay -->
+    <!-- Title screen overlay. Doubles as the ORRERY/HELM mode picker
+         (§supercruise-arrival-modes-design-2026-06-27, #2): the two peer modes
+         are chosen here, then launched via the same flow as today. The
+         "press anything to begin" prompt remains as the no-explicit-pick path
+         (defaults to ORRERY, preserving the auto-dismiss screensaver). Mobile is
+         ORRERY-only, so the HELM choice is hidden there (CSS). -->
     <div id="title-screen" style="display:none;">
       <div class="title-content">
         <h1 class="title-name">WELL-DIPPER</h1>
+        <div class="title-mode-picker">
+          <button id="title-mode-orrery" class="title-mode-btn" data-mode="orrery">
+            <span class="title-mode-name">ORRERY</span>
+            <span class="title-mode-desc">watch &amp; plan &mdash; god's-eye overview</span>
+          </button>
+          <button id="title-mode-helm" class="title-mode-btn" data-mode="helm">
+            <span class="title-mode-name">HELM</span>
+            <span class="title-mode-desc">take the ship &mdash; pilot &amp; free-look</span>
+          </button>
+        </div>
         <p class="title-prompt">press anything to begin</p>
       </div>
       <button id="title-fullscreen-btn" class="title-fullscreen-btn">&#x26F6; FULLSCREEN</button>

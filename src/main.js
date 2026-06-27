@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -2460,6 +2460,24 @@ document.getElementById('splash-screen')?.addEventListener('touchend', _handleSp
 // ── Title screen ──
 let titleScreenActive = false;
 let _titleAutoTimer = null;
+// The station the player picked at the splash mode-picker (§supercruise-arrival
+// -modes-design-2026-06-27, #2). Consumed ONCE by warpRevealSystem when the first
+// star system goes live: 'helm' → enter HELM (drive untouched) instead of the
+// autopilot tour; 'orrery' (the default / "press anything to begin") → today's
+// contemplative autopilot-screensaver reveal. Mobile is ORRERY-only, so this is
+// only ever 'helm' on desktop. Reset to 'orrery' after it's applied.
+let _pendingBootMode = 'orrery';
+
+// The splash mode-picker action — sets the chosen boot station, then launches the
+// game via the SAME flow as today (dismissTitleScreen). The two title buttons +
+// the legacy "press anything to begin" path all funnel through here. On mobile,
+// HELM is unavailable (ORRERY-only), so any non-orrery pick is coerced to orrery.
+function _pickBootMode(mode) {
+  if (!titleScreenActive) return;
+  const decided = (_isMobile ? 'orrery' : (mode ?? 'orrery'));
+  _pendingBootMode = bootModeAction(decided).mode;
+  dismissTitleScreen();
+}
 
 function dismissTitleScreen() {
   if (!titleScreenActive) return;
@@ -2501,6 +2519,23 @@ function dismissTitleScreen() {
       startFlythrough();
     }
   }, 5000);
+}
+
+// Wire the two splash mode-picker buttons (ORRERY / HELM). Each picks its station
+// then launches via _pickBootMode → dismissTitleScreen (the same launch flow the
+// "press anything to begin" path uses). stopPropagation so the click doesn't also
+// hit the document-level "press anything" dismiss (which would default to ORRERY).
+{
+  const wirePick = (id, mode) => {
+    const btn = document.getElementById(id);
+    if (btn) {
+      const handler = (e) => { e.preventDefault(); e.stopPropagation(); _pickBootMode(mode); };
+      btn.addEventListener('click', handler);
+      btn.addEventListener('touchend', handler);
+    }
+  };
+  wirePick('title-mode-orrery', 'orrery');
+  wirePick('title-mode-helm', 'helm');
 }
 
 function toggleKeybinds() {
@@ -5907,6 +5942,26 @@ function warpRevealSystem() {
   let firstStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
   if (firstStopIdx < 0) firstStopIdx = 0;
   autoNav.currentIndex = firstStopIdx;
+
+  // Splash mode-picker handoff (§supercruise-arrival-modes-design-2026-06-27, #2,
+  // AC6): if the player picked HELM at the title, boot INTO the helm instead of
+  // the contemplative autopilot tour. Consume the pick once (reset to ORRERY),
+  // disable the screensaver, and enter flight from the live warp-exit pose (no
+  // tour leg). The drive is left untouched — entering the helm is not "lighting
+  // the drive" (that's E's job). ORRERY boot falls through to today's reveal.
+  const _boot = bootModeAction(_pendingBootMode);
+  _pendingBootMode = 'orrery';
+  if (_boot.enterFlight && !_isMobile) {
+    _autopilotEnabled = false;
+    autoNav.stop();
+    _seedScPoseFromCameraIfIdle();
+    _enterFlightInternal();
+    _updateModeSwapButton();
+    console.log('Warp: booting into HELM (splash mode-picker)');
+    _scheduleSystemMusic(20, 35);
+    return;
+  }
+
   // Only start autoNav if autopilot was enabled before warp
   if (_autopilotEnabled) autoNav.start();
 

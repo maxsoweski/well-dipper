@@ -286,6 +286,63 @@ html, body {
   letter-spacing: 0.1em;
 }
 
+/* ── Title-screen mode picker (ORRERY / HELM) ── */
+.title-mode-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+  opacity: 0;
+  animation: title-prompt-in 1.5s ease-out 6s forwards;
+}
+
+.title-mode-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  font-family: 'DotGothic16', monospace;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 8px 16px;
+  min-width: 220px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.title-mode-btn:hover,
+.title-mode-btn:focus-visible {
+  background: rgba(100, 180, 255, 0.18);
+  border-color: rgba(100, 180, 255, 0.6);
+  outline: none;
+}
+
+.title-mode-btn:active {
+  background: rgba(100, 180, 255, 0.32);
+}
+
+.title-mode-name {
+  font-size: clamp(16px, 2.4vw, 22px);
+  letter-spacing: 0.22em;
+  margin-right: -0.22em;
+}
+
+.title-mode-desc {
+  font-size: clamp(10px, 1.4vw, 12px);
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+/* Mobile is ORRERY-only (hard-locked to Toy Box) — hide the HELM choice. */
+@media (pointer: coarse) {
+  #title-mode-helm { display: none; }
+}
+
 /* ── Overlay Close Button (used in settings + keybinds panels) ── */
 .overlay-close {
   position: absolute;

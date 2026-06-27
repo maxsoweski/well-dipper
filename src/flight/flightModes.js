@@ -31,7 +31,7 @@ const INFO = {
   [FlightMode.MANUAL]: { label: 'Manual', hint: 'you fly' },
   [FlightMode.ALIGN]:  { label: 'Align-on-select', hint: 'nose centers on your target' },
   [FlightMode.ASSIST]: { label: 'Assist', hint: 'auto-flies to target — steer to take over' },
-  exit:                { label: 'Exit flight', hint: 'back to Toy Box' },
+  exit:                { label: 'Swap to ORRERY', hint: 'leave the Helm for the orrery' },
 };
 export function flightModeInfo(modeOrExit) {
   return INFO[modeOrExit] ?? INFO[FlightMode.MANUAL];
@@ -139,6 +139,23 @@ export function modeSwapAction({ scManual } = {}) {
   }
   // ORRERY → HELM (drive untouched)
   return { target: 'helm', enterFlight: true, exitFlight: false, lightDrive: false };
+}
+
+// The SPLASH MODE-PICKER boot decision, extracted pure (§supercruise-arrival
+// -modes-design-2026-06-27, #2 "splash = mode picker", AC6). The existing title/
+// splash screen presents two PEER choices — ORRERY and HELM — and selecting one
+// launches the game into that mode via the SAME launch flow used today (we extend
+// the existing boot, we do NOT invent a parallel one). This reducer maps the
+// chosen mode to the one bit the live title-dismiss handler needs: whether boot
+// should ENTER flight (HELM → _enterFlightInternal once the system is live, so
+// _scManual becomes true) or stay in the orrery (ORRERY → _scManual stays false,
+// today's autopilot-tour reveal). Any unknown/missing pick (including the legacy
+// "press anything to begin" with no explicit choice) falls back to ORRERY — the
+// safe, contemplative boot — so a stray value can never strand the player in
+// flight. `enterFlight` is true IFF the chosen mode is HELM.
+export function bootModeAction(mode) {
+  const helm = mode === 'helm';
+  return { mode: helm ? 'helm' : 'orrery', enterFlight: helm };
 }
 
 // The late, normal-mode (autopilot-off) Esc/Backquote fall-through (main.js

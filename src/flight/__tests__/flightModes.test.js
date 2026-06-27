@@ -25,7 +25,11 @@ describe('flightModeInfo', () => {
     expect(flightModeInfo(FlightMode.MANUAL).label).toBe('Manual');
     expect(flightModeInfo(FlightMode.ALIGN).label).toBe('Align-on-select');
     expect(flightModeInfo(FlightMode.ASSIST).label).toBe('Assist');
-    expect(flightModeInfo('exit').label).toBe('Exit flight');
+    // User-facing label renamed for the ORRERY/HELM restructure (§supercruise
+    // -arrival-modes-design-2026-06-27, #2): the old "Exit flight / back to Toy
+    // Box" is now the swap-to-orrery wording. (INFO.exit is retained-but-unused
+    // by the live F path; this pins the renamed string.)
+    expect(flightModeInfo('exit').label).toBe('Swap to ORRERY');
     for (const m of [FlightMode.MANUAL, FlightMode.ALIGN, FlightMode.ASSIST, 'exit']) {
       expect(typeof flightModeInfo(m).hint).toBe('string');
     }
