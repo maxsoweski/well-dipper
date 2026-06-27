@@ -1,0 +1,164 @@
+{
+  "workstream": "world-engine-shell-relief-2026-06-27",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "designRef": "../world-engine-history-program-2026-06-27/increment-1-shell-relief-DESIGN.md",
+  "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
+  "summary": "Increment 1 of the world-engine history program: a deterministic, three-free despun/ice-shell relief writer (src/worldengine/base/shellRelief.js), sibling of plates.js, that replaces the sin^2(lat) fallback for icy-active / volatile-cold / eyeball-despun bodies ONLY, organized about a seeded paleo-spin axis w0 and tidal axis t_hat, and never touches the validated Earth-like plate path.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "DETERMINISM + NO-RNG: shellRelief.js contains no Math.random()/Date.now() call form, and writeShellReliefSphere run twice on the same fresh 600-node carrier yields byte-identical fields, for every seed x regime; |U| < SHELL_BOUND.",
+      "verifyVia": {
+        "input": "Static-grep shellRelief.js for /Math\\.random\\s*\\(|Date\\.now\\s*\\(/ (zero matches) + render-once guard (one while-drain, no convergence-while); run writeShellReliefSphere(carrier,{},{macroSeed:s,regime:r}) twice for s in {1,2,3,7,42} x r in {icy-active,volatile-cold,eyeball-despun}.",
+        "observable": "Zero RNG matches; byte-identical U, grainAngle, faultDensity, cellId, stressTensile (Float32Array equality) across the two runs for every (s,r); |U[i]| < SHELL_BOUND for all nodes."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "STRUCTURE BAR (signal must PASS): the field is explained by stress geometry, with a predictor rebuilt ARM'S-LENGTH from published thetaTraj/stressTensile geometry (NOT from lineamentNode, to avoid circularity).",
+      "verifyVia": {
+        "input": "On the 600-node carrier, per regime, rebuild a signed lineament-stress-proximity predictor via BFS geodesic falloff from the published stress geometry; measure corr(U, predictor); compare lineament-node amplitude to the per-regime quiet denominator (cells for icy-active/volatile-cold; quiet/non-lineament plains for eyeball-despun); measure corr(thetaTraj, despin principal-axis about w0).",
+        "observable": "|corr(U, signed stress-proximity)| >= 0.5; lineament(ridge-shoulder) amplitude >= 2x the per-regime quiet denominator; corr(thetaTraj, despin principal-axis about w0) >= 0.5 for eyeball-despun + volatile-cold. [Exact threshold values + the stress closed-forms pending research workflow wccpy01ez — MUST-FIX #1.]"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3",
+      "statement": "LATITUDE CONTROL (must FAIL): U is NOT explained by carrier +y latitude bands — the load-bearing falsifier vs the sin^2(lat) fallback this writer replaces.",
+      "verifyVia": {
+        "input": "Correlate U vs sin^2(carrier +y latitude), all three regimes.",
+        "observable": "varExplainedByLatitudeY < 0.15 AND strictly < varExplainedByStress, for every regime."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4",
+      "statement": "TILTED-BAND CONTROL (must hold): the DISCRETE lineament network — not the underlying despin band tilted onto a random pole — carries the structure. Guards the 'rotated sin^2' fake; depends on the double-ridge cross-section being active in eyeball-despun.",
+      "verifyVia": {
+        "input": "Correlate U vs sin^2(colatitude about the seeded w0); confirm the analytic double-ridge cross-section (trough + two shoulders) is applied in eyeball-despun so U oscillates ACROSS each ring.",
+        "observable": "varExplainedByStress > varExplainedByLatitudeW0 for all regimes, including eyeball-despun."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5",
+      "statement": "NOISE CONTROL (must FAIL): the real stress-gated field beats pure noise, and a control variant with BOTH the sigma1 gate AND the thetaTraj steering disabled collapses the structure signal.",
+      "verifyVia": {
+        "input": "Correlate U vs an amplitude-matched independent simplex field; build a noise-control variant of the writer with the sigma1 gate disabled AND thetaTraj steering replaced by isotropic/random steering.",
+        "observable": "corr(U, matched-noise) < 0.15; the gates+steering-disabled variant FAILS AC2(a) (corr collapses toward 0) AND AC2(b) (the 2x ratio breaks); the real field PASSES."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC6",
+      "statement": "VARIETY: two different macroSeeds produce different worlds, each reproducible per seed.",
+      "verifyVia": {
+        "input": "Build the field with two different macroSeeds, same regime.",
+        "observable": "Different cellCount AND < 0.2 node-overlap of lineamentNode AND different w0; each seed reproducible."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC7",
+      "statement": "NO-CLOBBER of the Earth-like plate path: terrestrial/ocean unlocked bodies still route to the plate writer, byte-identical to a pre-change baseline.",
+      "verifyVia": {
+        "input": "Call writeBodyRelief with archetype in {terrestrial, ocean}, locked=false.",
+        "observable": "Returns path:'plate' with shellDiag:null; the plate U field is byte-identical to the captured pre-change baseline; the plate AC2 structure test still passes unchanged."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC8",
+      "statement": "NO-CLOBBER of the despun/zonal fallback + dispatch safety: non-shell non-earthlike bodies keep the byte-identical despun path, and a locked gas/lava world must NOT match the shell writer (SHELL_EXCLUDE).",
+      "verifyVia": {
+        "input": "Call writeBodyRelief with impact-airless (unlocked) and gas-giant; and with a locked gas body (null+locked, and explicit gas-giant+locked) and a locked lava body.",
+        "observable": "shellRegimeOf returns null; path:'despun', byte-identical to baseline; the locked gas/lava bodies do NOT match shellRegimeOf because gas-giant/sub-neptune/lava/carbon/crystal/terrestrial/ocean are in SHELL_EXCLUDE."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC9",
+      "statement": "SEAM FIRES: with the PRESET_ARCHETYPE additions the lab presets route to the right regimes; and the null+locked Europa fall-through still routes (never silently to sin^2).",
+      "verifyVia": {
+        "input": "With the 'Europa (icy moon)':'ice' and 'Titan (methane seas)':'volatile' PRESET_ARCHETYPE additions, route Europa/Frozen/Eyeball/Titan; then with the additions REMOVED, route the null+locked Europa.",
+        "observable": "Europa->icy-active, Frozen->icy-active, Eyeball->eyeball-despun, Titan->volatile-cold; with additions removed, null+locked Europa still ->eyeball-despun via the locked-fallback. (NOTE: Titan is single-covered by its map line only — locked:false, no fallback net — so dropping the Titan line silently regresses it to bands.)"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC10",
+      "statement": "LIVE shellProbe: in the running lab, the four target presets bake onto the carrier and the probe proves the field is real stress geometry, not latitude — and the landforms look distinct.",
+      "verifyVia": {
+        "input": "In the lab on :9223, select Europa (then Frozen, Eyeball, Titan), window._lab.setSeed(1234); window._lab.reliefBakeStrength(1); force a route; window._lab.shellProbe(); take a screenshot.",
+        "observable": "heightSource=='carrier'; regime matches the preset; varExplainedByStress > varExplainedByLatitudeY AND > varExplainedByLatitudeW0; lineamentInteriorRatio >= 2; grainStressCorr high for eyeball/volatile; screenshot shows distinct cracks/cycloids/chaos vs sin^2 bands."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC11",
+      "statement": "UAT (Max-only): each of Europa/Frozen/Eyeball/Titan reads as a distinct, recognizable icy/despun world-type and coheres as the experience Max wanted — not a latitude smear.",
+      "verifyVia": {
+        "input": "Max views Europa/Frozen/Eyeball/Titan in the lab (against a recording per the Max recording protocol if motion matters).",
+        "observable": "Max judges each as a genuinely distinct icy/despun world; holistic acceptance. Never PASSed by any agent — deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "carrier sphere field (sphereField.js makeSphereField): height/grainAngle/faultDensity Float32Arrays, regime Uint8Array, verts/adj/N, tangentFrameAt(i)->{east,north} unit vectors, latDegOf(i)",
+      "macroSeed (integer) coerced via seed=(macroSeed|0)",
+      "regime tag (icy-active|volatile-cold|eyeball-despun) resolved by shellRegimeOf(archetype, locked)",
+      "lab dispatch passing archetype: PRESET_ARCHETYPE[_preset]||null and locked (planet-lod-lab.html:3655-3656)",
+      "external three-free deps: alea, simplex-noise createNoise3D; mathutil.js clamp(lo,hi,x)/clamp01/mix/smoothstep",
+      "COPIED VERBATIM into shellRelief.js (no imports): plates.js vec3 helpers dot/cross/norm/randDir/falloffAng + meanEdgeAngle; tectonic.js steeredNoise3 (module-private, REGIME branch inlined as ridged=regime!==0)"
+    ],
+    "outputs": [
+      "carrier.height (REPLACE via .set(U)) — sole low/mid source for shell regimes",
+      "carrier.grainAngle = thetaTraj (lineament strike)",
+      "carrier.faultDensity = clamp01(|sigma1|)",
+      "shellDiag object {U, regime, cellId, cellCount, stressTensile, thetaTraj, lineamentNode, chaosMask, w0, t_hat, meanEdgeAngle, relaxPasses} returned through writeBodyRelief -> route() -> get shellDiag() accessor",
+      "live shellProbe() in the lab reads riverOverlay.shellDiag"
+    ],
+    "mustStayWorking": [
+      "the validated Earth-like plate path — byte-identical (checked FIRST via isEarthlikePlatePath; AC7)",
+      "the despun/zonal fallback for non-shell non-earthlike bodies — byte-identical (AC8)",
+      "no edits to plates.js, tectonic.js, sphereField.js, planet-archetypes.js",
+      "AC1 no-RNG + render-once static guards (alea only; no Math.random/Date.now; one while-drain)",
+      "route()/lab never override SHELL_DEFAULTS (only the headless test via tune), mirroring plates DEFAULTS discipline"
+    ]
+  },
+  "filesTouched": [
+    "NEW src/worldengine/base/shellRelief.js",
+    "NEW tests/worldengine-base-shell-structure.test.js",
+    "EDIT planet-lod-rivers.js (import + isShellReliefPath export; 3-way writeBodyRelief ~417; thread shellDiag through route ~1129-1130; add get shellDiag() ~1189)",
+    "EDIT planet-lod-lab.html (PRESET_ARCHETYPE additions ~1901; shellProbe() on _lab ~5825)",
+    "DOC record-build-intent note"
+  ],
+  "mustFix": [
+    "#1 (BLOCKER, pending research wccpy01ez): pin the stress-field math — despin membrane stress sigma_despin(colat about w0) with both principal components + sign convention; diurnal stress sigma_tidal(angle-to-t_hat, phi0) with explicit position-dependent principal-axis rotation (this is what makes cycloids emerge); normalization into the ~[-1,1] threshold band; the symmetric 2x2 diagonalization (theta=0.5*atan2(2b,a-c); eigenvalues (a+c)/2 +/- sqrt(((a-c)/2)^2+b^2)); and the THRESHOLD crest rule (R[i]>CREST_THRESH gated by sigma1, NOT a relative local-max). Cite Melosh 1977 despin + Hoppa et al. 1999 cycloids.",
+    "Dispatch safety: SHELL_EXCLUDE = {terrestrial, ocean, gas-giant, sub-neptune, lava, carbon, crystal} excluded from the locked-fallback; strict-'>' Voronoi tie-break (lowest-index wins) to match plates; 'volatile' is a COINED new short key (one added PRESET_ARCHETYPE line); Titan is single-covered (locked:false, no fallback net).",
+    "Copy steeredNoise3 VERBATIM into shellRelief.js (module-private in tectonic.js:93; tectonic.js out-of-scope to edit) with REGIME inlined as ridged=regime!==0.",
+    "Verification tightenings: AC4 eyeball must use the double-ridge cross-section; AC5 noise control disables BOTH sigma1 gate AND thetaTraj steering; the shellProbe/AC2 predictor is rebuilt arm's-length from stressTensile/thetaTraj GEOMETRY (not lineamentNode); AC2(b) denominator branches per regime (eyeball has no cells -> use quiet/non-lineament nodes)."
+  ],
+  "pendingInputs": [
+    "Stress-field math closed forms + thresholds from research workflow wccpy01ez (feeds AC2/AC3/AC4/AC5 + STEP 1/STEP 3 of the writer). The math-INDEPENDENT slice (AC1 determinism infra, AC6 variety scaffolding, AC7/AC8/AC9 seam + dispatch) is buildable before the math lands."
+  ],
+  "buildSlices": [
+    "SLICE A (math-independent, buildable now): SHELL_REGIMES map + shellRegimeOf + SHELL_EXCLUDE; isShellReliefPath; 3-way writeBodyRelief; shellDiag threading + get shellDiag() accessor; PRESET_ARCHETYPE lab additions; the determinism scaffold (verbatim vec3 helpers, meanEdgeAngle, alea 'shell:' namespace, SHELL_DEFAULTS skeleton, convection-cell Voronoi partition + BFS, RELAX). Covers AC7, AC8, AC9, and the AC1 no-RNG/determinism harness + AC6 variety scaffolding.",
+    "SLICE B (needs stress math): STEP 1 stress tensor field + diagonalization; STEP 3 steered lineaments + double-ridge cross-section + crest rule; STEP 4 chaos overlay; STEP 5 assemble. Covers AC2, AC3, AC4, AC5 and the live AC10."
+  ]
+}

@@ -35,14 +35,18 @@ describe('AC5 — regime gate (Earth-like plate path vs despun zonal E6)', () =>
     expect(isEarthlikePlatePath(undefined, false)).toBe(false);
   });
 
-  it('non-Earth-like archetype (ice) => carrier.height byte-identical to the despun writers', () => {
+  // NOTE (shell-relief increment): 'ice' now routes to the SHELL writer, not the despun fallback.
+  // The despun byte-identity guarantee moved to genuinely-despun archetypes (impact-airless, gas-giant,
+  // locked terrestrial) — see tests/worldengine-shell-regime-gate.test.js AC8.
+  it('icy archetype (ice) => SHELL path (no longer the sin^2 despun fallback)', () => {
     const seed = 7;
     const ref = despunReference(seed);
     const c = carrierOf();
     const out = writeBodyRelief(c, { archetype: 'ice', locked: false, grainDrivers: DEFAULT_GRAIN_DRIVERS, macroSeed: seed, heightSeed: 'e6:' + seed });
-    expect(out.path).toBe('despun');
-    expect(out.plateDiag).toBe(null);
-    expect(Array.from(c.height)).toEqual(Array.from(ref.height));   // byte-identical, plate path NOT entered
+    expect(out.path).toBe('shell');
+    expect(out.shellDiag).toBeTruthy();
+    expect(out.shellDiag.regime).toBe('icy-active');
+    expect(Array.from(c.height)).not.toEqual(Array.from(ref.height));   // the shell writer ran, not latitude bands
   });
 
   it('tidally-locked terrestrial => despun byte-identical (locked beats archetype)', () => {

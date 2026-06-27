@@ -28,6 +28,7 @@ import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './pl
 import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './planet-lod-tectonic.js';
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
 import { writePlateUpliftSphere } from './src/worldengine/base/plates.js';
+import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
@@ -414,16 +415,27 @@ export function isEarthlikePlatePath(archetype, locked = false) {
 // (carrier.height = U, the SOLE low/mid source). Non-Earth-like => the despun writers EXACTLY as
 // before — writeGrainSphere(carrier,grainDrivers) + writeHeightSphere(carrier,{},grainDrivers,
 // {name:'tectonic-build'},heightSeed) — same calls, same args, same seed => byte-identical fallback.
+// Sibling of isEarthlikePlatePath: true when the body is an icy/despun shell regime. Checked AFTER
+// the earthlike gate so the validated plate path is never touched (zero-clobber by construction).
+export function isShellReliefPath(archetype, locked = false) {
+  return shellRegimeOf(archetype, locked) !== null;
+}
+
 export function writeBodyRelief(carrier, {
   archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, heightSeed = 'e6:0',
 } = {}) {
   if (isEarthlikePlatePath(archetype, locked)) {
     const plateDiag = writePlateUpliftSphere(carrier, grainDrivers, { macroSeed });
-    return { path: 'plate', plateDiag };
+    return { path: 'plate', plateDiag, shellDiag: null };
+  }
+  const regime = shellRegimeOf(archetype, locked);    // icy-active | volatile-cold | eyeball-despun | null
+  if (regime) {
+    const shellDiag = writeShellReliefSphere(carrier, grainDrivers, { macroSeed, regime });
+    return { path: 'shell', plateDiag: null, shellDiag };
   }
   writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
   writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
-  return { path: 'despun', plateDiag: null };
+  return { path: 'despun', plateDiag: null, shellDiag: null };
 }
 
 // ═══════════════════════ ROUTING + ORDER + METRICS ═══════════════════════
@@ -1067,6 +1079,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   let height = null, grad = null, isOcean = null, oceanCount = 0, seaLevel = 0, stats = null, meshMs = 0;
   let routedGraph = null;   // AC2: retain the router graph (receiver/accum/strahler/isChannel) instead of discarding it
   let plateDiag = null;     // plate-uplift increment: the plate partition diagnostics on the Earth-like path (null on despun); read by the live plateProbe (AC7)
+  let shellDiag = null;     // shell-relief increment: the despun/ice-shell diagnostics on the shell path (null off it); read by the live shellProbe
   let lastHeightSource = 'sampler';  // AC7: 'carrier' when the router read the baked plate-written carrier.height, else 'sampler'
   // WS4 T8: the grain cube (whole-sphere strike field) + a bake counter. grainBakeCount increments
   // once per route() (the bake-once cadence — camera/time changes never call route(), so they never
@@ -1127,7 +1140,8 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // other regime keeps the despun writeGrainSphere+writeHeightSphere byte-identical. The plate
     // diagnostics (partition / boundary class / U) are retained for the live plateProbe (AC7).
     const relief = writeBodyRelief(carrier, { archetype, locked, grainDrivers, macroSeed, heightSeed });
-    plateDiag = relief.plateDiag;                       // null on the despun path
+    plateDiag = relief.plateDiag;                       // null off the plate path
+    shellDiag = relief.shellDiag;                       // null off the shell path
     const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
     // uReliefBakeStrength uniform the renderer (Phase C) gates on. strength>0 ⇒ BOTH read carrier.height
@@ -1187,6 +1201,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // plate-uplift increment: the plate partition diagnostics (Earth-like path) + the router's height
     // source — both read by the live plateProbe (AC7). plateDiag is null on the despun path.
     get plateDiag() { return plateDiag; },
+    get shellDiag() { return shellDiag; },
     get heightSource() { return lastHeightSource; },
     get carveTexture() { return carve ? carve.texture : null; },
     // WS4 T8: the baked grain cube texture (the host pushes it to uTectonicGrainCube) + the bake
