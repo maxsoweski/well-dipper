@@ -191,16 +191,13 @@ html, body {
   transition: opacity 1s ease;
 }
 
-/* Cold-open fade-up from black (§free-look-interaction-redesign-2026-06-27,
-   Part 3): the title screen is the FIRST thing shown, so the black-hold is short
-   and the nebula backdrop reveals briskly — no 8s intro precedes it anymore. */
 #title-screen.animate-in {
-  animation: title-fade-in 2.4s ease-out forwards;
+  animation: title-fade-in 4s ease-out forwards;
 }
 
 @keyframes title-fade-in {
   0% { background: #000; }
-  35% { background: #000; }
+  62% { background: #000; }
   100% { background: transparent; }
 }
 
@@ -256,9 +253,7 @@ html, body {
   position: relative;
   left: -2px;
   opacity: 0;
-  /* Cold-open: title is shown FIRST, so the prompt appears briskly (was 6s/7.5s,
-     timed to the retired 8s intro-then-title flow). */
-  animation: title-prompt-in 1.2s ease-out 1.6s forwards, title-blink 4s ease-in-out 3s infinite;
+  animation: title-prompt-in 1.5s ease-out 6s forwards, title-blink 4s ease-in-out 7.5s infinite;
   text-shadow:
     -1px -1px 0 rgba(0,0,0,0.7),  1px -1px 0 rgba(0,0,0,0.7),
     -1px  1px 0 rgba(0,0,0,0.7),  1px  1px 0 rgba(0,0,0,0.7),
@@ -291,63 +286,62 @@ html, body {
   letter-spacing: 0.1em;
 }
 
-/* ── Title-screen mode picker (ORRERY / HELM) ── */
-.title-mode-picker {
+/* ── Cold-open chooser: ORRERY / HELM on the black splash (boot-flow corrected
+   2026-06-27). The picker lives on #splash-screen (the FIRST screen), centered on
+   black with nothing else. A gentle fade-in since no intro precedes it. ── */
+.splash-mode-picker {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-  margin-top: 18px;
+  align-items: center;
+  gap: 16px;
   opacity: 0;
-  /* Cold-open: picker appears briskly with the title (was 6s, for the retired
-     intro-then-title flow). */
-  animation: title-prompt-in 1.2s ease-out 1.4s forwards;
+  animation: title-prompt-in 1s ease-out 0.4s forwards;
 }
 
-.title-mode-btn {
+.splash-mode-btn {
   pointer-events: auto;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  text-align: right;
+  align-items: center;
+  text-align: center;
   font-family: 'DotGothic16', monospace;
   color: rgba(255, 255, 255, 0.85);
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 6px;
-  padding: 8px 16px;
-  min-width: 220px;
+  padding: 14px 28px;
+  min-width: 280px;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.title-mode-btn:hover,
-.title-mode-btn:focus-visible {
+.splash-mode-btn:hover,
+.splash-mode-btn:focus-visible {
   background: rgba(100, 180, 255, 0.18);
   border-color: rgba(100, 180, 255, 0.6);
   outline: none;
 }
 
-.title-mode-btn:active {
+.splash-mode-btn:active {
   background: rgba(100, 180, 255, 0.32);
 }
 
-.title-mode-name {
-  font-size: clamp(16px, 2.4vw, 22px);
+.splash-mode-name {
+  font-size: clamp(18px, 2.6vw, 24px);
   letter-spacing: 0.22em;
   margin-right: -0.22em;
 }
 
-.title-mode-desc {
+.splash-mode-desc {
   font-size: clamp(10px, 1.4vw, 12px);
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.5);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 /* Mobile is ORRERY-only (hard-locked to Toy Box) — hide the HELM choice. */
 @media (pointer: coarse) {
-  #title-mode-helm { display: none; }
+  #splash-mode-helm { display: none; }
 }
 
 /* ── Overlay Close Button (used in settings + keybinds panels) ── */

@@ -8,8 +8,9 @@ supercruise arc) · **Status:** design APPROVED by Max in-thread 2026-06-27.
 > (the peer-mode model — ORRERY = god's-eye overview station, HELM = in-ship piloting —
 > and its splash mode-picker). That spec established WHICH mode you boot into and how M /
 > HUD / Options swap stations; THIS spec changes HOW the cursor and steering HUD behave
-> per sub-mode, redesigns the free-look interaction inside HELM, and reorders the boot so
-> the mode-picker is the cold-open. The two specs share the same boot/splash surfaces and
+> per sub-mode, redesigns the free-look interaction inside HELM, and prepends a black
+> ORRERY/HELM chooser to the boot (the original title sequence is left UNCHANGED — see the
+> CORRECTED Part 3). The two specs share the same boot/splash surfaces and
 > the same ORRERY/HELM vocabulary — read them together. **DESKTOP only unless noted;
 > mobile stays ORRERY-only and touch-driven and must be left working.**
 
@@ -26,9 +27,10 @@ Three coupled changes, one spec:
    in free-look is a FREE CURSOR (no steer, no camera move) for pointing/selecting; a
    click selects a body; the view HOLDS where you dragged it on LMB-release and only
    recenters when you EXIT free-look (F off), via a fast-but-graceful ease.
-3. **Part 3 — Boot reorder.** The ORRERY/HELM picker (the WELL-DIPPER title screen)
-   becomes the FIRST thing shown — the begin-gate. Picking a mode STARTS the music and a
-   SKIPPABLE intro, then warps into the chosen mode.
+3. **Part 3 — Boot: prepend a black ORRERY/HELM chooser (CORRECTED 2026-06-27).** A new
+   minimal BLACK splash showing ONLY ORRERY and HELM replaces "Do you wish to begin?".
+   Picking records the choice, then plays the ORIGINAL title sequence UNCHANGED (intro
+   logos → WELL-DIPPER title → music → warp); only the end drops you into the chosen mode.
 
 These changes SUPERSEDE the deliberate 2026-06-25 "cursor stays visible in flight"
 decision (`main.js:468-473` comment): selection now happens in free-look where the cursor
@@ -141,41 +143,54 @@ The middle-mouse PEEK (hands-on quick look) keeps working unchanged
 (`main.js` mousedown ~9600-9603 / mouseup ~9652-9658). It drives `held` directly on
 press/release and is orthogonal to the free-look latch.
 
-## Part 3 — Boot reorder (picker is the cold-open)
+## Part 3 — Boot: prepend a black ORRERY/HELM chooser (CORRECTED 2026-06-27)
 
-### Today
+> **This supersedes the original "picker is the cold-open" Part 3.** That version
+> (commit `c8e7b53`) turned the WELL-DIPPER title screen itself into the picker, removed
+> "Do you wish to begin?", and made *picking* trigger the logos. Max corrected it: the
+> title sequence must stay UNTOUCHED; only a new chooser is prepended and the chosen mode
+> is consumed at the end. Reworked in the boot-flow-redo commit below.
+
+### Today (pre-session)
 
 `#splash-screen` "Do you wish to begin?" (first) → click → `startIntroSequence()` plays
-`'intro'` music + DESHE/score logos over ~8s → `#title-screen` (WELL-DIPPER + ORRERY/HELM
-picker) shows at 8000 ms with `'title'` music → picking a mode calls
-`dismissTitleScreen()` which STOPS the music → warp. `_pendingBootMode` threads the choice
-to `warpRevealSystem` (HELM → `_enterFlightInternal` at first warp; ORRERY → autopilot
-tour).
+`'intro'` music + DESHE/score logos over ~8s → `#title-screen` (WELL-DIPPER + "press
+anything to begin") shows at 8000 ms with `'title'` music → "press anything" /
+music-driven auto-dismiss → `dismissTitleScreen()` → screensaver/warp.
 
 ### The change
 
-The ORRERY/HELM picker (the WELL-DIPPER title screen) is the FIRST thing shown — it
-REPLACES the "Do you wish to begin?" splash as the begin-gate.
+A **new, minimal BLACK splash showing ONLY the two choices ORRERY and HELM** replaces the
+"Do you wish to begin?" splash as the begin-gate (the FIRST screen, nothing else on it).
 
-- **Picking ORRERY or HELM IS the "begin".** It STARTS the music + the intro/title
-  sequence (the DESHE/score logos), THEN warps into the chosen mode. Picking must NOT stop
-  the music (reverse of today's `dismissTitleScreen` `musicManager.stop`).
-- **The intro is SKIPPABLE.** Pressing anything (or clicking) during the post-pick intro
-  skips straight to the warp.
-- **Music cues reconciled sensibly** via the existing `musicManager` (`'intro'`
-  `playOnce`, `'title'` loop, `_scheduleSystemMusic` on arrival): picking BEGINS audio
-  rather than ending it.
+- **Selecting ORRERY or HELM records the choice** (`_pendingBootMode`) **then runs the
+  ORIGINAL title sequence COMPLETELY UNCHANGED**: `startIntroSequence()` → DESHE/score
+  intro logos (~8s) → WELL-DIPPER title screen ("press anything to begin") → `'title'`
+  music → press-anything / music-driven auto-dismiss → warp. The intro logos, title
+  screen, music cues, and timing are exactly as before this session.
+- **The ONLY difference from the pre-session flow:** the chooser is prepended, and when
+  the title screen ends/dismisses the player drops into the chosen mode (HELM → flight;
+  ORRERY → autopilot tour) instead of always the autopilot tour.
+- The picker is OFF the title screen — the title screen is plain again. The intro is NOT
+  skippable and the music semantics are untouched (the original `dismissTitleScreen`
+  still `musicManager.stop`s on dismiss, exactly as before).
+
+So: **black ORRERY/HELM chooser → [original unchanged title sequence] → chosen mode.**
+The choice is captured up front (`#splash-screen` repurposed) and consumed once at the
+first star-system arrival; the title sequence in the middle is left alone.
 
 ### Preserve
 
-- The legacy "press anything to begin" = ORRERY path (a non-explicit begin defaults to
-  ORRERY — the safe, contemplative boot, matching `bootModeAction`'s ORRERY fallback).
-- The idle auto-dismiss to the ORRERY / screensaver auto-warp if the player never picks.
+- The legacy "press anything" = ORRERY path: a click on the black background (not on a
+  button) defaults to ORRERY via `_handleSplashDismiss`.
+- The title screen's music-driven auto-dismiss to the ORRERY / screensaver auto-warp.
 - Mobile = ORRERY-only (HELM hidden on mobile).
+- The D-hold debug skip (lands directly in Sol) on the splash background.
 
 The boot decision stays expressed by the pure `bootModeAction(mode)` reducer
-(`flightModes.js:171-174`): `{ mode: 'helm'|'orrery', enterFlight: helm }`. The reorder is
-WHEN music/intro fire relative to the pick — not a new boot path.
+(`flightModes.js`): `{ mode: 'helm'|'orrery', enterFlight: helm }`, consumed unchanged in
+`warpRevealSystem`. The change is only WHERE the pick is captured (the new black chooser
+instead of the title screen) — not a new boot path, and not a reorder of the intro.
 
 ## Non-goals (explicit)
 
@@ -226,13 +241,15 @@ WHEN music/intro fire relative to the pick — not a new boot path.
   sets `_selectedTarget`/arms BURN, and the selection is not cleared by exiting free-look
   (F off). Modelled at the reducer/logic level where the decision lives; live confirm
   deferred. *Live portion deferred to Max (UAT layer).*
-- **AC11 (integration, live) — picker is the first screen; picking STARTS music + skippable
-  intro, then warps into the chosen mode.** On cold load the ORRERY/HELM picker is shown
-  first (no "Do you wish to begin?" splash gate); picking a mode starts the music + intro
-  (does NOT stop music); pressing anything during the intro skips to the warp; the warp
-  enters the chosen mode (HELM → `_enterFlightInternal`, ORRERY → autopilot tour). The
-  legacy "press anything" defaults to ORRERY; idle auto-dismiss to ORRERY screensaver still
-  fires. *Deferred to Max (UAT layer).*
+- **AC11 (integration, live) — black chooser is the first screen; original title sequence
+  unchanged; end drops into the chosen mode (CORRECTED 2026-06-27).** On cold load the
+  BLACK ORRERY/HELM chooser is shown first with nothing else (replacing "Do you wish to
+  begin?"); picking a mode records it and runs the ORIGINAL `startIntroSequence` UNCHANGED
+  (DESHE/score logos → WELL-DIPPER title → `'title'` music → press-anything/auto-dismiss →
+  warp); the warp enters the chosen mode (HELM → `_enterFlightInternal`, ORRERY → autopilot
+  tour). The black-background "press anything" defaults to ORRERY; the title's music-driven
+  auto-dismiss to the ORRERY screensaver still fires. *Verified live (working-Claude,
+  2026-06-27): both HELM and ORRERY paths confirmed; UAT-feel deferred to Max.*
 - **AC12 (unit) — `bootModeAction` drives the reordered boot.** `bootModeAction('helm')`
   → `{mode:'helm', enterFlight:true}`; `bootModeAction('orrery')` and any unknown/missing
   pick → `{mode:'orrery', enterFlight:false}`. (Pins the boot decision the reorder threads;
@@ -244,8 +261,8 @@ WHEN music/intro fire relative to the pick — not a new boot path.
   you take the Helm and returns the moment you free-look; the steering reticle gets out of
   the way for looking; LMB-drag-to-look feels natural and holds where you left it;
   recenter-on-F feels snappy-but-graceful; clicking bodies in free-look selects/flies
-  intuitively; the boot opens straight on the picker and picking feels like "beginning."
-  *Deferred to Max.*
+  intuitively; the boot opens on the black ORRERY/HELM chooser, the original title
+  sequence plays unchanged, and you drop into the mode you chose. *Deferred to Max.*
 
 ## Testing approach
 
@@ -254,8 +271,8 @@ WHEN music/intro fire relative to the pick — not a new boot path.
   state live in `src/flight/`. `npx vitest run src/flight src/camera src/ui`.
 - **Integration (live, chrome-devtools):** AC3–AC8, AC11, AC13 — cursor visibility per
   sub-mode, crosshair/dot hide, hold-to-look, free-cursor-no-steer, click-select,
-  ASSIST-flies-but-stays, the reordered picker→music→skippable-intro→warp, and mobile
-  ORRERY-only. Working-Claude drives the objective live integration checks; the UAT-layer
+  ASSIST-flies-but-stays, the black-chooser→original-intro→title→warp→chosen-mode flow, and
+  mobile ORRERY-only. Working-Claude drives the objective live integration checks; the UAT-layer
   ACs (the felt-feel halves of AC3–AC8/AC11/AC13 and AC14) are **deferred to Max** — no
   agent closes UAT.
 - **Build:** `npm run build` clean.

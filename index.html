@@ -12,58 +12,41 @@
   <body>
     <canvas id="canvas"></canvas>
 
-    <!-- RETIRED begin-gate (§free-look-interaction-redesign-2026-06-27, Part 3):
-         the old "Do you wish to begin?" splash is NO LONGER the cold-open — the
-         title/mode-picker is now first. Kept hidden (display:none) so the inline
-         span-builder + any stray getElementById('splash-screen') stay harmless;
-         it is never shown and never receives input. -->
-    <div id="splash-screen" style="display:none;">
-      <p class="splash-prompt" id="splash-text"></p>
-      <script>
-        // Per-character sliding illumination
-        const _st = 'Do you wish to begin?';
-        const _el = document.getElementById('splash-text');
-        for (let i = 0; i < _st.length; i++) {
-          const s = document.createElement('span');
-          s.className = 'sc';
-          s.style.setProperty('--i', i);
-          s.textContent = _st[i] === ' ' ? '\u00A0' : _st[i];
-          _el.appendChild(s);
-        }
-      </script>
+    <!-- Cold-open: the BLACK ORRERY/HELM chooser (boot-flow corrected 2026-06-27).
+         This is the begin-gate — the FIRST thing shown, replacing the old
+         "Do you wish to begin?" splash. Black background, ONLY the two choices.
+         Picking a station records it (_pendingBootMode) then runs the ORIGINAL
+         begin flow UNCHANGED (intro logos → WELL-DIPPER title → music → warp); the
+         chosen mode is consumed at the first star-system arrival (warpRevealSystem):
+         HELM → flight, ORRERY → autopilot tour. A click on the black background
+         ("press anything") defaults to ORRERY (legacy path, via _handleSplashDismiss).
+         Mobile is ORRERY-only, so the HELM choice is hidden there (CSS). -->
+    <div id="splash-screen">
+      <div class="splash-mode-picker">
+        <button id="splash-mode-orrery" class="splash-mode-btn" data-mode="orrery">
+          <span class="splash-mode-name">ORRERY</span>
+          <span class="splash-mode-desc">watch &amp; plan &mdash; god's-eye overview</span>
+        </button>
+        <button id="splash-mode-helm" class="splash-mode-btn" data-mode="helm">
+          <span class="splash-mode-name">HELM</span>
+          <span class="splash-mode-desc">take the ship &mdash; pilot &amp; free-look</span>
+        </button>
+      </div>
     </div>
 
-    <!-- Post-pick intro sequence (DESHÉ / score logos). Shown AFTER the player
-         picks a mode at the title screen — picking IS the "begin" that starts the
-         music + these logos, then warps in. Skippable (any input jumps to warp).
-         (§free-look-interaction-redesign-2026-06-27, Part 3.) -->
+    <!-- Intro sequence (DESHÉ / score logos), shown after the chooser before the
+         title screen — part of the ORIGINAL begin flow, run by startIntroSequence. -->
     <div id="intro-overlay" style="display:none;">
       <div id="intro-logo1" class="intro-logo"><span class="deshe-title">DESHÉ</span><span class="deshe-sub">studios</span></div>
       <div id="intro-logo2" class="intro-logo intro-credit">original score by<br><span class="credit-name">Christian Sewesky</span></div>
     </div>
 
-    <!-- Title screen overlay — the COLD-OPEN. This IS the begin-gate: the FIRST
-         thing shown at boot (replacing the old "Do you wish to begin?" splash). It
-         doubles as the ORRERY/HELM mode picker (§free-look-interaction-redesign
-         -2026-06-27, Part 3; #2): the two peer modes are chosen here, and picking
-         one (or the legacy "press anything") STARTS the music + intro logos, then
-         warps into the chosen mode. The "press anything to begin" prompt is the
-         no-explicit-pick path (defaults to ORRERY, preserving the idle auto-dismiss
-         screensaver). Mobile is ORRERY-only, so the HELM choice is hidden (CSS).
-         Visible at boot with animate-in so it fades up from black. -->
-    <div id="title-screen" class="animate-in">
+    <!-- Title screen overlay (plain — the mode picker moved to the black chooser
+         above). Original begin flow: intro logos reveal this, the title theme plays,
+         and "press anything" / the auto-dismiss timer warps into the chosen mode. -->
+    <div id="title-screen" style="display:none;">
       <div class="title-content">
         <h1 class="title-name">WELL-DIPPER</h1>
-        <div class="title-mode-picker">
-          <button id="title-mode-orrery" class="title-mode-btn" data-mode="orrery">
-            <span class="title-mode-name">ORRERY</span>
-            <span class="title-mode-desc">watch &amp; plan &mdash; god's-eye overview</span>
-          </button>
-          <button id="title-mode-helm" class="title-mode-btn" data-mode="helm">
-            <span class="title-mode-name">HELM</span>
-            <span class="title-mode-desc">take the ship &mdash; pilot &amp; free-look</span>
-          </button>
-        </div>
         <p class="title-prompt">press anything to begin</p>
       </div>
       <button id="title-fullscreen-btn" class="title-fullscreen-btn">&#x26F6; FULLSCREEN</button>
