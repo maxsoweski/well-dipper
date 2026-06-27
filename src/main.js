@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -5721,6 +5721,7 @@ function stopFlythrough() {
   shipChoreographer.stop();
   scPilot.stop();
   setScManual(false);
+  _flightMode = FlightMode.MANUAL; // #1 takeover: any player-directed ASSIST leg ends here too — reset for the next engage
   if (freeLook.latched) freeLook.exit(); // clear a tour-set free-look latch on stop (§arrival-modes)
   _manualBurnOrbiting = false;
   _autopilotEnabled = false;
@@ -6384,6 +6385,11 @@ function focusPlanet(index) {
     scModel.position.copy(camera.position);
     scModel.orientation.copy(camera.quaternion);
     scModel.speed = 0; scModel.setThrottle(0);
+    // #1 takeover fix (§supercruise-arrival-modes-design-2026-06-27): a PLAYER-
+    // DIRECTED burn (commit-burn / in-flight reselect) runs under ASSIST so the
+    // manual-cancel gates (manualCancelsLeg, ~7933/~9305) fire and grabbing the
+    // stick/throttle takes over. Reset to MANUAL when the leg ends/cancels.
+    _flightMode = playerBurnMode();
     scControls.flyTo({
       toBody: entry.planet.mesh,
       bodyRadius: bodyRadius,
@@ -6431,6 +6437,8 @@ function focusStar(starIdx) {
   scModel.position.copy(camera.position);
   scModel.orientation.copy(camera.quaternion);
   scModel.speed = 0; scModel.setThrottle(0);
+  // #1 takeover fix: player-directed burn → ASSIST so the manual-cancel gates fire.
+  _flightMode = playerBurnMode();
   scControls.flyTo({
     toBody: starObj.mesh,
     bodyRadius: bodyRadius,
@@ -6476,6 +6484,8 @@ function focusMoon(planetIndex, moonIndex) {
   scModel.position.copy(camera.position);
   scModel.orientation.copy(camera.quaternion);
   scModel.speed = 0; scModel.setThrottle(0);
+  // #1 takeover fix: player-directed burn → ASSIST so the manual-cancel gates fire.
+  _flightMode = playerBurnMode();
   scControls.flyTo({
     toBody: moon.mesh,
     bodyRadius: bodyRadius,
@@ -7930,8 +7940,11 @@ function simStep(deltaTime) {
       // legacy free-flight WASD path below must NOT also run (it would fight
       // the model). setThrottle clamps to 0..1 internally.
       const dir = (_heldKeys.has('KeyW') ? 1 : 0) - (_heldKeys.has('KeyS') ? 1 : 0);
-      if (_flightMode === FlightMode.ASSIST && scPilot.isActive) {
-        if (dir !== 0) scPilot.stop(); // Mode C: W/S disengages the hold (manual throttle resumes next frame)
+      if (manualCancelsLeg(_flightMode, scPilot.isActive)) {
+        // Mode C / #1 takeover: W/S disengages the hold AND cancels a player-
+        // directed commit-burn leg (manual throttle resumes next frame). Reset
+        // the leg mode to MANUAL so the gate doesn't keep matching a dead leg.
+        if (dir !== 0) { scPilot.stop(); _flightMode = FlightMode.MANUAL; }
       } else if (dir !== 0) {
         scModel.setThrottle(scModel.throttle + dir * SC_TUNING.THROTTLE_RATE * deltaTime);
       }
@@ -9302,10 +9315,13 @@ canvas.addEventListener('mousemove', (e) => {
     // gate and the applied deflection would disagree under a mutated deadzone.
     const s = shapeStick(nx, ny, { deadzone: _scStickTuning.DEADZONE, expo: _scStickTuning.EXPO });
     const _deflected = (s.x !== 0 || s.y !== 0);
-    if (_flightMode === FlightMode.ASSIST && scPilot.isActive && _deflected) {
-      scPilot.stop(); // Mode C: manual steer disengages the hold
+    if (manualCancelsLeg(_flightMode, scPilot.isActive) && _deflected) {
+      // Mode C / #1 takeover: manual steer disengages the hold AND cancels a
+      // player-directed commit-burn leg. Reset to MANUAL (dead leg); the steer
+      // below then applies this same frame (scPilot now idle → gate re-evaluates).
+      scPilot.stop(); _flightMode = FlightMode.MANUAL;
     }
-    if (!(_flightMode === FlightMode.ASSIST && scPilot.isActive)) {
+    if (!manualCancelsLeg(_flightMode, scPilot.isActive)) {
       if (_alignState.active && _deflected) _alignState.active = false; // Mode B cancel
       // Route through the surface: shapes (casing-fixed), negates the turn-input,
       // and writes the un-negated _scDeflection via host.setDeflection — the SAME

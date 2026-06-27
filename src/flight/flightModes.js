@@ -77,3 +77,23 @@ export function isManualInput(stick, throttleDir) {
   const sx = stick?.x ?? 0, sy = stick?.y ?? 0;
   return throttleDir !== 0 || (sx * sx + sy * sy) > 0;
 }
+
+// The in-flight mode a PLAYER-DIRECTED burn runs under (§supercruise-arrival-modes
+// -design-2026-06-27, #1 takeover fix). A commit-burn (Space → commitBurn →
+// focusPlanet/Star/Moon → scControls.flyTo) — and an in-flight reselect via the
+// same focus* door — activates scPilot. Pre-fix it left _flightMode at MANUAL, so
+// the manual-cancel gates (manualCancelsLeg) could never fire and the burn was
+// uncancellable. Running the leg under ASSIST makes the existing gates satisfy.
+// This is the player-directed source ONLY — the Q autopilot TOUR keeps MANUAL and
+// its own separate W/S takeover (main.js ~8918), so the gate stays targeted.
+export function playerBurnMode() {
+  return FlightMode.ASSIST;
+}
+
+// The live takeover-gate predicate (main.js W/S ~7933, stick ~9305/~9308),
+// extracted pure: manual input cancels the leg IFF an ASSIST leg is actively
+// flying. Deliberately NOT broadened to "any pilotActive" — that would also catch
+// the system-picked autopilot TOUR (which runs at MANUAL with its own takeover).
+export function manualCancelsLeg(flightMode, pilotActive) {
+  return flightMode === FlightMode.ASSIST && !!pilotActive;
+}
