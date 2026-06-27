@@ -73,8 +73,11 @@ describe('Phase D / AC3 — river-router height-source re-point wiring (SPLIT-TR
   it('the carrier the router re-points to IS the array baked into the height cube (single source)', () => {
     // The SAME `carrier` variable feeds BOTH the re-point (height = carrier.height) AND the cube bake
     // (bakeHeightCube({ ..., height: carrier.height, ... })). One field, one cube, both consumers.
+    // The relief WRITER is now the AC5 regime gate writeBodyRelief(carrier, ...) — it encapsulates
+    // writeGrainSphere+writeHeightSphere (despun path) OR writePlateUpliftSphere (Earth-like plate
+    // path); either way it writes the SAME carrier.height that is baked + routed. Single source preserved.
     expect(body).toMatch(/const\s+carrier\s*=\s*makeSphereField\(/);
-    expect(body).toMatch(/writeHeightSphere\(\s*carrier/);
+    expect(body).toMatch(/writeBodyRelief\(\s*carrier/);
     expect(body).toMatch(/bakeHeightCube\(\{[\s\S]{0,120}height:\s*carrier\.height/);
   });
 

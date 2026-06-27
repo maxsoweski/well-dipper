@@ -27,6 +27,7 @@ import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './pl
 // the grain bake uses (makeSphereField). RELIEF_CUBE_SIZE = 256 (same class as GRAIN_CUBE_SIZE).
 import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './planet-lod-tectonic.js';
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
+import { writePlateUpliftSphere } from './src/worldengine/base/plates.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
@@ -385,16 +386,56 @@ export function createHeightSampler({ renderer, uniforms, verts, octavesDuringRe
 }
 
 // ───────────── ocean mask from the real level-set (h < seaLevel) ─────────────
-export function computeOcean(height, seaLevel, N) {
+// AC4 (no north-star debt): `baseLevel` is an OPTIONAL per-node base-level field (Float32Array
+// length N). OMITTED => today's scalar-seaLevel ocean set is byte-identical (the identity-safe
+// default); SUPPLIED => each node is thresholded against its own local base level, so the later
+// precip/climate increment's spatially-varying sea/base level drops in with ZERO rework here.
+export function computeOcean(height, seaLevel, N, baseLevel = null) {
   const isOcean = new Uint8Array(N); let oceanCount = 0;
-  for (let i = 0; i < N; i++) { if (height[i] < seaLevel) { isOcean[i] = 1; oceanCount++; } }
+  for (let i = 0; i < N; i++) {
+    const thresh = baseLevel ? baseLevel[i] : seaLevel;
+    if (height[i] < thresh) { isOcean[i] = 1; oceanCount++; }
+  }
   return { isOcean, oceanCount };
+}
+
+// ───────────── regime gate: Earth-like plate path vs despun zonal E6 (AC5) ─────────────
+// The gate lives HERE at the route()/lab boundary — NOT inside the three-free src/worldengine/base
+// layer, which stays regime-agnostic. Earth-like terrestrial/ocean bodies get the one-pass plate/
+// uplift field; everything else (tidally-locked / icy / stagnant-lid / volatile / impact) keeps the
+// existing despun/zonal E6 writers BYTE-IDENTICAL ("addition by regime, not replacement").
+export function isEarthlikePlatePath(archetype, locked = false) {
+  if (locked) return false;                 // tidally-locked bodies => despun shell, never plates
+  return archetype === 'terrestrial' || archetype === 'ocean';
+}
+
+// Writes carrier.height for the body via the gated relief path, and returns which path ran plus the
+// plate diagnostics (for the live plateProbe, AC7). Earth-like => the one-pass plate writer
+// (carrier.height = U, the SOLE low/mid source). Non-Earth-like => the despun writers EXACTLY as
+// before — writeGrainSphere(carrier,grainDrivers) + writeHeightSphere(carrier,{},grainDrivers,
+// {name:'tectonic-build'},heightSeed) — same calls, same args, same seed => byte-identical fallback.
+export function writeBodyRelief(carrier, {
+  archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, heightSeed = 'e6:0',
+} = {}) {
+  if (isEarthlikePlatePath(archetype, locked)) {
+    const plateDiag = writePlateUpliftSphere(carrier, grainDrivers, { macroSeed });
+    return { path: 'plate', plateDiag };
+  }
+  writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
+  writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
+  return { path: 'despun', plateDiag: null };
 }
 
 // ═══════════════════════ ROUTING + ORDER + METRICS ═══════════════════════
 // Priority-flood → flat-resolve → D-inf receiver → Horton–Strahler order, plus the AC5
 // network-validity metrics (orphans/uphill/bifurcation ratio/river-scale straightness).
-export function routeAndOrder({ mesh, height, grad, isOcean, params = DEFAULT_PARAMS }) {
+// AC4 (no north-star debt): `precipWeight` is an OPTIONAL per-node discharge weight (Float32Array
+// length N). OMITTED => the hardcoded uniform accum=1 (identity, determinism baseline holds); SUPPLIED
+// => accum seeds from precipWeight[i], so the later precip/climate increment's rainfall field drops in
+// with ZERO rework. `accum` lives on the routed graph that BOTH the per-route carve (buildValleyGeometry)
+// AND the epoch readback (perNodeIncision) consume, so this single seam parameterizes discharge for the
+// whole pipeline.
+export function routeAndOrder({ mesh, height, grad, isOcean, params = DEFAULT_PARAMS, precipWeight = null }) {
   const { verts, adj } = mesh;
   const N = mesh.N != null ? mesh.N : verts.length;
   const { CHANNEL_ORDER, FLAT_RESOLVE, DINF_ROUTE } = params;
@@ -486,7 +527,9 @@ export function routeAndOrder({ mesh, height, grad, isOcean, params = DEFAULT_PA
     receiver[i] = best === -1 ? i : best;
   }
   const order = Array.from({ length: N }, (_, i) => i).sort((a, b) => surf(b) - surf(a));
-  const accum = Float32Array.from({ length: N }, () => 1);
+  // AC4: per-node discharge seed — precipWeight[i] when supplied, else uniform 1 (byte-identical).
+  const accum = new Float32Array(N);
+  for (let i = 0; i < N; i++) accum[i] = precipWeight ? precipWeight[i] : 1;
   for (const i of order) { const r = receiver[i]; if (r !== i) accum[r] += accum[i]; }
 
   // orphans + uphill
@@ -1023,6 +1066,8 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   let mesh = null, sampler = null, carve = null, N = 0;
   let height = null, grad = null, isOcean = null, oceanCount = 0, seaLevel = 0, stats = null, meshMs = 0;
   let routedGraph = null;   // AC2: retain the router graph (receiver/accum/strahler/isChannel) instead of discarding it
+  let plateDiag = null;     // plate-uplift increment: the plate partition diagnostics on the Earth-like path (null on despun); read by the live plateProbe (AC7)
+  let lastHeightSource = 'sampler';  // AC7: 'carrier' when the router read the baked plate-written carrier.height, else 'sampler'
   // WS4 T8: the grain cube (whole-sphere strike field) + a bake counter. grainBakeCount increments
   // once per route() (the bake-once cadence — camera/time changes never call route(), so they never
   // re-bake; preset/seed/sea changes go through route() and DO). makeGrainCube is injectable so a
@@ -1060,7 +1105,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   }
 
   function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, widthSeed = null,
-                   grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, label = 'route' } = {}) {
+                   grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, archetype = null, locked = false, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
     // ── Baked-relief Phase B/D: build the sphere-native E6 height field as DATA. The SAME carrier is
@@ -1077,8 +1122,12 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // built from the integer macroSeed (the SAME entropy the grain bake consumes; NO Math.random).
     const heightSeed = 'e6:' + (macroSeed | 0);
     const carrier = makeSphereField(mesh);
-    writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
-    writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
+    // ── AC5 regime gate: Earth-like terrestrial/ocean bodies get the one-pass plate/uplift field
+    // (carrier.height = U, the SOLE low/mid source — REPLACES the latitude-band E6 writer); every
+    // other regime keeps the despun writeGrainSphere+writeHeightSphere byte-identical. The plate
+    // diagnostics (partition / boundary class / U) are retained for the live plateProbe (AC7).
+    const relief = writeBodyRelief(carrier, { archetype, locked, grainDrivers, macroSeed, heightSeed });
+    plateDiag = relief.plateDiag;                       // null on the despun path
     const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
     // uReliefBakeStrength uniform the renderer (Phase C) gates on. strength>0 ⇒ BOTH read carrier.height
@@ -1087,6 +1136,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // carrier is built on the SAME mesh the router routes (buildIrregularSphere in ensureMesh()), so
     // carrier.height[i] is indexed by the same node index — a direct re-point (Option B, LOCKED).
     const bakedOn = !!(uniforms.uReliefBakeStrength && uniforms.uReliefBakeStrength.value > 0.0);
+    lastHeightSource = bakedOn ? 'carrier' : 'sampler';  // AC7: the objective single-source signal the plateProbe reads
     if (bakedOn) {
       height = carrier.height; grad = reliefGrad;       // SAME source as the cube (Option B)
     } else {
@@ -1134,6 +1184,10 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     get height() { return height; }, get grad() { return grad; }, get isOcean() { return isOcean; },
     get sampler() { return sampler; },
     get routed() { return routedGraph; },
+    // plate-uplift increment: the plate partition diagnostics (Earth-like path) + the router's height
+    // source — both read by the live plateProbe (AC7). plateDiag is null on the despun path.
+    get plateDiag() { return plateDiag; },
+    get heightSource() { return lastHeightSource; },
     get carveTexture() { return carve ? carve.texture : null; },
     // WS4 T8: the baked grain cube texture (the host pushes it to uTectonicGrainCube) + the bake
     // counter (the bake-once live AC reads it: unchanged on camera/time, +1 per preset/seed/sea change).

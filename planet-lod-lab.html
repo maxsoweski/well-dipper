@@ -3587,6 +3587,7 @@
     // terrain-carve gouging amounts (gated to enabled && carve, in applyCarveAmounts). So AC3 on its
     // own produces no visible change — nothing samples G/B yet, and depth-carve stays off by default.
     function ensureNetworkRouted(label){
+      const _preset = driverUI.preset;
       const res = riverOverlay.route({
         label: label || 'route',
         seaMode: riverOverlayState.seaFromHistogram ? 'histogram' : 'live',
@@ -3594,6 +3595,10 @@
         radiusEarth: state.planetRadiusEarth,   // AC6: width/footprint scales with planet radius
         widthSeed: state.macroSeed,             // UAT item1: per-planet seeded width-scale draw
         macroSeed: state.macroSeed,             // WS4 T8/D9: grain co-orients with the gProvince partition (same seed feeds uMacroOffset)
+        // plate-uplift increment (AC5): the regime discriminator. Earth-like terrestrial/ocean bodies
+        // get the one-pass plate/uplift field; every other regime keeps the despun E6 path byte-identical.
+        archetype: PRESET_ARCHETYPE[_preset] || null,
+        locked: !!(DRIVER_PRESETS[_preset] && DRIVER_PRESETS[_preset].tidalState && DRIVER_PRESETS[_preset].tidalState.locked),
       });
       const stats = res.stats;
       // Always point the planet shader at the freshly-rendered carve cube (the REAL texture, never
@@ -5754,6 +5759,44 @@
                     // is the baked HalfFloat height cube (R=height, GBA=gradient) the renderer samples.
                     get reliefBakeCount(){ return riverOverlay.reliefBakeCount; },
                     get reliefTexture(){ return riverOverlay.reliefTexture; },
+                    // plate-uplift increment (AC7) — the live-integration probe. Returns the objective
+                    // signals read on :9223: the router's height SOURCE, the plate partition
+                    // (plateId/boundaryClass/U), the variance of U explained by distance-to-nearest-plate-
+                    // boundary vs by latitude, and the river network stats. The boundary-distance predictor
+                    // is rebuilt HERE from the published boundaryClass labels (arm's-length, like the AC2
+                    // headless gate) — NOT the generator's internal field. PRECONDITION: call
+                    // _lab.reliefBakeStrength(>0) and route FIRST, else heightSource=='sampler' (the router
+                    // read the legacy in-shader fallback, not the plate-written carrier.height).
+                    plateProbe(){
+                      const pd = riverOverlay.plateDiag;
+                      const heightSource = riverOverlay.heightSource;
+                      const riverStats = riverOverlay.stats;
+                      if (!pd) return { heightSource, plateId:null, boundaryClass:null, U:null,
+                        varExplainedByBoundaryDist:null, varExplainedByLatitude:null, riverStats,
+                        note:'despun path (non-Earth-like body) — no plate field' };
+                      const mesh = riverOverlay.mesh, N = mesh.N, adj = mesh.adj, verts = mesh.verts;
+                      const U = pd.U, bc = pd.boundaryClass, mea = pd.meanEdgeAngle || 0.02, BELT = 0.06;
+                      // boundaryClass codes (plates.js BOUNDARY): 1=CONVERGENT, 2=DIVERGENT.
+                      const conv = [], div = [];
+                      for (let i=0;i<N;i++){ if (bc[i]===1) conv.push(i); else if (bc[i]===2) div.push(i); }
+                      const bfs = (src) => { const d=new Int32Array(N).fill(-1); const q=new Int32Array(N); let h=0,t=0; for (const s of src){ d[s]=0; q[t++]=s; } while(h<t){ const c=q[h++]; const nb=adj[c]; for(let k=0;k<nb.length;k++){ const m=nb[k]; if(d[m]<0){ d[m]=d[c]+1; q[t++]=m; } } } return d; };
+                      const dC = bfs(conv), dD = bfs(div);
+                      const indep = new Float64Array(N), lat = new Float64Array(N);
+                      for (let i=0;i<N;i++){
+                        const fC = dC[i]>=0 ? Math.exp(-(dC[i]*mea)/BELT) : 0;
+                        const fD = dD[i]>=0 ? Math.exp(-(dD[i]*mea)/BELT) : 0;
+                        indep[i] = fC - fD;
+                        lat[i] = Math.asin(Math.max(-1, Math.min(1, verts[i][1])));
+                      }
+                      const corr = (a,b) => { let ma=0,mb=0; for(let i=0;i<N;i++){ma+=a[i];mb+=b[i];} ma/=N; mb/=N; let c=0,va=0,vb=0; for(let i=0;i<N;i++){ const da=a[i]-ma, db=b[i]-mb; c+=da*db; va+=da*da; vb+=db*db; } return c/(Math.sqrt(va*vb)||1); };
+                      const cB = corr(U, indep), cL = corr(U, lat);
+                      return {
+                        heightSource, plateCount: pd.plateCount,
+                        plateId: Array.from(pd.plateId), boundaryClass: Array.from(bc), U: Array.from(U),
+                        varExplainedByBoundaryDist: cB*cB, varExplainedByLatitude: cL*cL,
+                        riverStats,
+                      };
+                    },
                     // WS4 T12 — carve-EPOCH toggle for epoch-carve-visible. Off (default) = epoch 1, the
                     // uncut authored relief; on = epoch 2, drainage carved into THAT SAME substrate. It gates
                     // sampleRoutedHeight (above): ON folds perNodeIncision via applyIncision onto the routed
