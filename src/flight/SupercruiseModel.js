@@ -16,6 +16,9 @@ export const SC_TUNING = {
   ACCEL_TAU: 0.6,           // s — exponential approach to target speed. Tuned 2026-06-24 (Bug B: 1.4 → 0.6) for a
                             //   responsive throttle (perceptible within ~1.3s). MUST stay ≤ ETA_K/4 (=0.75 here) or
                             //   full-throttle approach decel turns underdamped and surges.
+  COAST_TAU: 8.0,           // s — gentle exponential speed decay while the drive is OFF (dropped out / coasting).
+                            //   NOT a scale-bug floor: the gravity-well speedCap still clamps coasting speed so a
+                            //   nearby body parks you. Long (8s) so dropped-out momentum is preserved, not zeroed.
   TURN_RATE_MAX: 0.7,       // rad/s at rest
   TURN_RATE_MIN_FRAC: 0.25, // turn authority remaining at full local speed
   THROTTLE_RATE: 0.6,       // throttle units/s for held W/S stepping
@@ -26,8 +29,9 @@ export class SupercruiseModel {
     this.tuning = { ...SC_TUNING, ...tuning };
     this.position = new THREE.Vector3();      // scene-local (rebased) frame
     this.orientation = new THREE.Quaternion();
-    this.speed = 0;                            // u/s along the nose, ≥ 0
+    this.speed = 0;                            // u/s along the nose (signed: reverse < 0)
     this.throttle = 0;                         // -1..1
+    this._driveOn = true;                      // supercruise drive engaged. OFF → coast (momentum preserved)
     this.turnInput = { yaw: 0, pitch: 0 };     // -1..1 each
     this._bodies = [];                         // [{ position: Vector3, radius: number }]
     this._nose = new THREE.Vector3();
@@ -40,6 +44,16 @@ export class SupercruiseModel {
   setBodies(list) { this._bodies = list; }
 
   setThrottle(t) { this.throttle = THREE.MathUtils.clamp(t, -1, 1); }
+
+  /** Engage (true) / drop out (false) the supercruise drive.
+   *  OFF → the model stops propelling: it no longer ramps toward the throttle
+   *  target. It COASTS — current velocity preserved, decaying gently by COAST_TAU,
+   *  while the gravity-well speedCap still clamps the max so proximity to a body
+   *  parks you. ON → the existing throttle/accel behavior resumes. */
+  setDrive(on) { this._driveOn = !!on; }
+
+  /** True while the supercruise drive is engaged; false while coasting (dropped out). */
+  get driveOn() { return this._driveOn; }
 
   setTurnInput(yaw, pitch) {
     this.turnInput.yaw = THREE.MathUtils.clamp(yaw, -1, 1);
@@ -81,11 +95,25 @@ export class SupercruiseModel {
       this._q.setFromEuler(this._euler.set(pitch, yaw, 0, 'YXZ'));
       this.orientation.multiply(this._q).normalize();
     }
-    // Speed: exponential approach to throttle × cap. The cap falling as we
-    // near a body IS the Elite decel-on-approach.
-    const target = this.throttle * this.speedCap();
-    const k = 1 - Math.exp(-dt / this.tuning.ACCEL_TAU);
-    this.speed += (target - this.speed) * k;
+    // Speed update. Two regimes:
+    if (this._driveOn) {
+      // DRIVE ON: exponential approach to throttle × cap. The cap falling as we
+      // near a body IS the Elite decel-on-approach.
+      const target = this.throttle * this.speedCap();
+      const k = 1 - Math.exp(-dt / this.tuning.ACCEL_TAU);
+      this.speed += (target - this.speed) * k;
+    } else {
+      // DRIVE OFF (dropped out): COAST. Do NOT pull toward the throttle target —
+      // preserve momentum, decaying only by the gentle COAST_TAU. The well cap
+      // below still clamps it, so coasting into a body parks you.
+      this.speed *= Math.exp(-dt / this.tuning.COAST_TAU);
+    }
+    // Gravity-well clamp (both regimes): magnitude never exceeds the local cap,
+    // sign preserved (reverse momentum survives). Anti-clip: nose-into-a-body
+    // engage can't exceed ~0 because the cap collapses to the surface floor.
+    const cap = this.speedCap();
+    if (this.speed > cap) this.speed = cap;
+    else if (this.speed < -cap) this.speed = -cap;
     if (Math.abs(this.speed) < 1e-9) this.speed = 0;
     // The ONLY translation source: forward along the nose.
     this.position.addScaledVector(this.nose(), this.speed * dt);
