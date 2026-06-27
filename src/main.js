@@ -5721,6 +5721,7 @@ function stopFlythrough() {
   shipChoreographer.stop();
   scPilot.stop();
   setScManual(false);
+  if (freeLook.latched) freeLook.exit(); // clear a tour-set free-look latch on stop (§arrival-modes)
   _manualBurnOrbiting = false;
   _autopilotEnabled = false;
 
@@ -8875,10 +8876,14 @@ window.addEventListener('keydown', (e) => {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
     if (splashActive || titleScreenActive) return;
-    if (!_scManual) {
-      // Free-look is an In-Flight control. Outside flight there's nothing to
-      // free-look from (Toybox already orbits via drag) — ignore F.
-      console.log('[MODE] free-look unavailable — not In-Flight (press E to engage supercruise)');
+    // Free-look is available whenever the supercruise camera path is live — i.e.
+    // In-Flight (_scManual) OR while the autopilot/tour is flying (scPilot.isActive).
+    // This matches the frame-loop apply gate (scPilot.isActive || _scManual) and the
+    // middle-mouse peek gate, so F latches free-look during the Q tour too ("look
+    // around while the autopilot flies", §arrival-modes Feature 2 / AC6). Outside
+    // both there's nothing to free-look from (Toybox already orbits via drag).
+    if (!_scManual && !scPilot.isActive) {
+      console.log('[MODE] free-look unavailable — engage supercruise (E) or start the autopilot tour first');
       return;
     }
     freeLook.toggle();
