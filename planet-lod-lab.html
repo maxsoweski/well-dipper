@@ -1950,17 +1950,17 @@
       limbStrength: 0.0,    // atmosphere rim glow
       provinceWeight: 1.0,  // Stage-D province influence dial (0 = legacy uniform look)
       seaLevel: -1.0,       // F14 standing-liquid threshold (driven; -1 = none)
-      lakesEnabled: true,   // F14 enable gate
+      lakesEnabled: false,   // F14 enable gate
       deltaDensity: 0.0,    // F12 deposition gate (driven)
       deltaAmp: 0.06,       // F12 apron amplitude
       deltaApronH: 0.12,    // F12 apron band height
-      deltasEnabled: true,  // F12 enable gate
+      deltasEnabled: false,  // F12 enable gate
       coastStrength: 0.0,   // F20 master gate (driven; 1 when a sea exists)
       beachWidth: 0.04,     // F20 beach band width (shore-distance units)
       coastCliffSlope: 1.2, // F20 |grad| above which the shore reads as cliff
       terraceStep: 0.06,    // F20 strandline spacing (shore-distance units)
       strandStrength: 0.0,  // F20 paleo-strandline visibility (driven)
-      coastEnabled: true,   // F20 enable gate
+      coastEnabled: false,   // F20 enable gate
       outflowDensity: 0.0,  // F13 master gate (driven)
       outflowActivity: 1.0, // F13 relict↔active (driven)
       outflowWidth: 0.18,   // F13 trunk band half-width (tuned 2026-06-10: 0.35 read as diffuse mottling, not a trunk)
@@ -1971,7 +1971,7 @@
       outflowIslands: 0.7,  // F13 streamlined-island strength
       outflowGrooveFreq: 24,// F13 longitudinal groove frequency
       outflowGrooves: 0.10, // F13 groove amplitude (fraction of carve depth)
-      outflowEnabled: true, // F13 enable gate
+      outflowEnabled: false, // F13 enable gate
       karstDensity: 0.0,    // F21 master gate (driven)
       karstMaturity: 0.5,   // F21 dissection maturity (driven ∝ erosion)
       karstDolineFreq: 9.0, // legacy hand-set doline Worley-cell frequency (superseded by real-units derive)
@@ -1981,26 +1981,26 @@
       karstMazeFreq: 6.0,   // F21 labyrinth slot frequency
       karstMazeDepth: 0.18, // F21 labyrinth slot carve depth
       karstPlateauLvl: 0.08,// F21 plateau mask threshold (tuned 2026-06-10: 0.22 missed low-relief worlds — Titan h rarely clears it; relative/quantile mask is the deferred fix)
-      karstEnabled: true,   // F21 enable gate
+      karstEnabled: false,   // F21 enable gate
       duneDensity: 0.0,     // F15 master gate (driven)
       duneAmp: 0.06,        // F15 ridge amplitude (subtle deposit — under fluvialDepth 0.12)
       duneFreq: 16.0,       // legacy hand-set ridge frequency (superseded by real-units derive; 1/freq wavelength ≈ 6 buffer px at d4)
       duneSizeKm: 398,      // real-units scale: characteristic dune-ridge wavelength in km (6371/16.0)
       duneWarp: 2.0,        // F15 phase-warp amplitude (threading)
       duneBelt: 0.5,        // F15 equatorial-belt confinement
-      dunesEnabled: true,   // F15 enable gate
+      dunesEnabled: false,   // F15 enable gate
       dustDepth: 0.0,       // F16 master continuum (driven)
       dustRegionFreq: 1.3,  // F16 settling-region noise scale (continental mantle patches)
       dustFlatK: 1.0,       // F16 settling slope-damp k
       dustTint: 0.35,       // F16 butterscotch veil strength
-      dustEnabled: true,    // F16 enable gate
+      dustEnabled: false,    // F16 enable gate
       massWastDensity: 1.0, // F19 master gate (driven — 1.0 on every solid world, airless included)
       repose: 0.95,         // F19 angle-of-repose threshold (driven ∝ g^-0.4)
       talusAmp: 0.08,       // F19 talus-apron fill amplitude
       ldaFat: 0.0,          // F19 LDA fattening (driven: ground ice on cold worlds)
       lobeAmp: 0.06,        // F19 landslide-tongue amplitude
       lobeFreq: 6.0,        // F19 tongue seed frequency
-      massWastEnabled: true,// F19 enable gate
+      massWastEnabled: false,// F19 enable gate
       bandStrength: 0.0,    // F24 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
       bandCount: 8.0,       // F24 visible stripe count (driven: 12·R/rotationHours, clamped 3..16)
       bandContrast: 0.6,    // F24 zone↔belt luminance separation (driven: T_eq vigor ramp)
@@ -2008,21 +2008,21 @@
       bandTint: [0.78,0.62,0.44],  // F24 deck base color (driven: atmosphere.color)
       bandStretch: 2.5,     // F24 vertical domain compression (lab knob)
       bandLatPow: 1.3,      // F24 latitude remap exponent (lab knob)
-      bandsEnabled: true,   // F24 enable gate
+      bandsEnabled: false,   // F24 enable gate
       jetStrength: 0.0,     // F25 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
       jetSpeed: 0.8,        // F25 counter-rotating drift amplitude (driven: 8/rotationHours, clamped 0.2..1.2)
       jetShearTurb: 0.25,   // F25 shear-turbulence amplitude in stripe units (driven: T_eq vigor ramp)
       jetFestoon: 0.3,      // F25 festoon hook amplitude in stripe units (driven: same ramp)
       jetTurbFreq: 3.0,     // F25 turbulence fbm frequency multiplier (lab knob)
       jetEqWidth: 0.25,     // F25 equatorial jet Gaussian half-width (lab knob)
-      jetsEnabled: true,    // F25 enable gate
+      jetsEnabled: false,    // F25 enable gate
       weatherStrength: 0.0, // F26 master gate (driven — rain-composition factor on solid retained-atmosphere worlds, 0 on gas/airless)
       weatherCells: 3.0,    // F26 circulation cell count (driven: 72/rotationHours, clamped 1..6)
       weatherItczShift: 0.0,// F26 ITCZ equator shift (driven: frostLatitudeBias x 0.25)
       weatherLocked: 0,     // F26 eyeball coordinate switch (driven: locked AND retained)
       weatherWarp: 0.3,     // F26 front-shredding warp amplitude (lab knob)
       weatherDry: 0.15,     // F26 subtropical-trough drying (lab knob)
-      weatherBandsEnabled: true, // F26 enable gate
+      weatherBandsEnabled: false, // F26 enable gate
       stormSeed: 1234,      // F27 storm-placement seed — SEED IDENTITY: not reset on preset change; the folder 🎲 rerolls it
       spotStrength: 0.0,    // F27 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
       spotCenter: [1,0,0],  // F27 unit-sphere storm center (driven: stormSeed hash, |y| <= 0.7 pole-avoid)
@@ -2032,12 +2032,12 @@
       spotMode: 0,          // F27 variant: 0 warm GRS-class / 1 dark GDS-class (driven: T_eq vigor < 0.35 = dark)
       spotColor: [0.9,0.5,0.3], // F27 core color (driven: bandTint warmed x(1.25,0.95,0.8) / bruised x0.55)
       spotCompanion: 0.0,   // F27 bright companion-cloud strength (driven: mode x 0.8 — dark variant only)
-      greatSpotEnabled: true, // F27 enable gate
+      greatSpotEnabled: false, // F27 enable gate
       trainStrength: 0.0,   // F28 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
       trainSpots: [],       // F28 derived storm family (driven: stormSeed hash — pearls / plume+tail / scooters by vigor)
       trainCount: 0,        // F28 derived spot count (GUI display mirror of trainSpots.length)
       trainRadiusScale: 1.0,// F28 lab knob — scales every train radius at the per-frame writer (1 = derived size)
-      stormTrainEnabled: true, // F28 enable gate
+      stormTrainEnabled: false, // F28 enable gate
       polarStrength: 0.0,   // F29 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
       polarMode: 0,         // F29 variant: 0 single cap / 1 polygon jet / 2 cyclone lattice (driven: T_eq vigor ramp)
       polarSides: 6,        // F29 polygon wavenumber N (driven: 5..8 hash, re-draw biased toward Saturn's 6)
@@ -2048,14 +2048,14 @@
       polarPhase: 0.0,      // F29 single-cap S-lobe orientation rad (driven: hash)
       polarW: 0.025,        // F29 polygon collar half-width rad (lab knob)
       polarTint: [0.35,0.45,0.65], // F29 cap tint (driven: bandTint shifted cool — teal-blue core lean)
-      polarVortexEnabled: true, // F29 enable gate
+      polarVortexEnabled: false, // F29 enable gate
       lightningStrength: 0.0, // F30 master gate (driven — 1 on gas decks, rain-composition factor on solid retained-atmosphere worlds)
       lightPolar: 0,        // F30 latitude regime: 0 equatorial ITCZ / 1 Juno polar clustering (driven: gas gate)
       lightRate: 0.5,       // F30 base flash rate cycles/s before per-cell jitter (lab knob)
       lightDur: 0.18,       // F30 flash window fraction of the cell cycle (lab knob)
       lightCellFreq: 14.0,  // F30 flash cell grid frequency (lab knob)
       lightBlobR: 0.022,    // F30 flash blob angular radius rad (lab knob — ≤ half-cell at freq 14)
-      lightningEnabled: true, // F30 enable gate
+      lightningEnabled: false, // F30 enable gate
       cloudCoverage: 0.0,   // F31 deck coverage (driven: regime-3 worlds 1.0; else 0.15 + 0.55 x core derivation, 0 airless — the F26 §7 taste-fork-c rebalance)
       cloudRegime: 0,       // F31 regime: 0 weather / 2 haze mute / 3 venus blanket / 4 eyeball (driven; 1 reserved — gas band tops ARE the F24-F29 stack)
       cloudRelief: 0.35,    // F31a clouds-as-relief self-shade strength (lab knob)
@@ -2063,35 +2063,35 @@
       hazeColor: [0.70,0.65,0.58], // F31 haze/blanket tone (driven: preset atmosphere color)
       chevronStrength: 0.18,// F31d Y/V chevron darkening (lab knob — ~0.17 = one 6-level posterize bucket)
       pupilR: 0.6,          // F31f substellar cap half-angle rad (lab knob)
-      cloudsEnabled: true,  // F31 enable gate — off forces uCloudCoverage 0 + regime extras off at the per-frame writer (no deck at all)
+      cloudsEnabled: false,  // F31 enable gate — off forces uCloudCoverage 0 + regime extras off at the per-frame writer (no deck at all)
       thermalStrength: 0.0, // F32/F33 master gate (driven: 1 on hot-jupiter — locked + h2-he + retained — else 0)
       dayTempK: 0.0,        // F32 dayside peak K (driven: T_eq x 1.15 — ~1610 on the Hot Jupiter preset)
       nightTempK: 0.0,      // F33 nightside floor K (driven: hot-jupiter 1100 — the Keating universal nightside floor)
       hotspotOffset: 0.26,  // F32 superrotation east shift rad (lab knob — ~15 deg, between WASP-43 b 7.75 and HD 189733 b 30)
       redistribution: 3.0,  // F32 day-to-night falloff exponent (lab knob — legacy pow(starFacing,3) heritage)
       thermalOcclusion: 0.6,// F33 silicate-cloud occlusion strength (lab knob — darkens the night glow, never brightens)
-      daysideThermalEnabled: true,   // F32 enable gate — off collapses uDayTempK onto the night floor at the per-frame writer
-      nightsideThermalEnabled: true, // F33 enable gate — off zeroes uNightTempK + occlusion at the per-frame writer (floor fades to black)
-      limbEnabled: true,    // F34 enable gate — off zeroes uLimbStrength AND hides the F31e haze shell at the per-frame writer
+      daysideThermalEnabled: false,   // F32 enable gate — off collapses uDayTempK onto the night floor at the per-frame writer
+      nightsideThermalEnabled: false, // F33 enable gate — off zeroes uNightTempK + occlusion at the per-frame writer (floor fades to black)
+      limbEnabled: false,    // F34 enable gate — off zeroes uLimbStrength AND hides the F31e haze shell at the per-frame writer
       limbExponent: 3.5,    // F34 fresnel width (driven: thin clear ~3.5 narrow blue line / thick-haze ~1.8 fat halo)
       limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
       limbHazeShell: 0.0,   // F31e detached-shell intensity (driven: > 0 ONLY on the thick-haze class — Titan/Venus/Sub-Neptune)
-      terminatorEnabled: true, // F35 enable gate — off zeroes uTermStrength at the per-frame writer (razor colorless terminator)
+      terminatorEnabled: false, // F35 enable gate — off zeroes uTermStrength at the per-frame writer (razor colorless terminator)
       termStrength: 0.0,    // F35 band strength (driven: ~0.5 on every retained atmosphere / 0 airless)
       termWidth: 0.12,      // F35 gaussian half-width in mu (driven: D5 pressure log ramp — 0.06 hairline / 0.12 at 1 bar / 0.30 Venus-class)
       termColor: [1.0, 0.45, 0.18],  // F35 band tint (driven: per-preset map, fallback warm orange)
-      sunglintEnabled: true, // F36 enable gate — off zeroes uSpecStrength at the per-frame writer (specC vec3(0) exactly; NOTE: the glint also needs the F14 sea — lakes off ⇒ liquidMask 0 ⇒ no glint, so solo('sunglint') must re-enable lakes to show anything)
+      sunglintEnabled: false, // F36 enable gate — off zeroes uSpecStrength at the per-frame writer (specC vec3(0) exactly; NOTE: the glint also needs the F14 sea — lakes off ⇒ liquidMask 0 ⇒ no glint, so solo('sunglint') must re-enable lakes to show anything)
       glintRoughness: 0.15, // F36 Cox-Munk sea state (authored default 0.15 — no wind-speed driver exists in _derived; live lab slider): broadens AND dims at the per-frame writer
       glintBaseExp: 200,    // F36 species base exponent (driven: water 200 / methane-ethane 120 — lower IOR, broader dimmer lobe)
       glintTint: [0.95, 0.97, 1.0],  // F36 species tint (driven: water cold-white / methane warm tholin)
-      auroraEnabled: true,  // F37 enable gate — off zeroes uAuroraIntensity at the per-frame writer (auroraC vec3(0) exactly)
+      auroraEnabled: false,  // F37 enable gate — off zeroes uAuroraIntensity at the per-frame writer (auroraC vec3(0) exactly)
       auroraIntensity: 0.0, // F37 ring strength (driven: core auroraIntensity = field x atmosphere, hard-gated field > 0.05; Venus regime-3 override 0)
       auroraRingLat: 0.7,   // F37 oval magnetic latitude (driven: 0.7 + field x 0.2 — stronger dynamo hugs the pole)
       auroraRingWidth: 0.12,// F37 oval gaussian half-width (driven: 0.15 - field x 0.08, floored 0.07)
       auroraColor: [0.3, 0.9, 0.5], // F37 emission color (driven: D4 composition map — n2-o2 green / h2-he blue-purple / co2 pink / methane teal; fallback green)
       magAxis: [0, 1, 0],   // F37 magnetic dipole axis (driven: spin axis tilted ~11 deg, azimuth hashed from macroSeed — a per-planet seed property, no GUI control)
       // ── F38 airglow ──
-      airglowEnabled: true,  // F38 enable gate — off zeroes uAirglowIntensity at the per-frame writer (airglowC vec3(0) exactly)
+      airglowEnabled: false,  // F38 enable gate — off zeroes uAirglowIntensity at the per-frame writer (airglowC vec3(0) exactly)
       airglowIntensity: 0.0, // F38 band strength (driven: atmosphere presence/density at applyDrivers; 0 on airless Frozen/Lava/Europa)
       airglowColor: [0.35, 0.95, 0.55], // F38 airglow-green (OI 557.7 nm; uniform — no composition map, half its distinctness vs aurora)
       // ── F39 cloud optics ──
@@ -2102,18 +2102,18 @@
       isExoticCarbonOrGeometric: 0,                 // Carbon/Crystal exotic-crust knockdown seed (0 = no knockdown). Safe first-frame default.
       bioMatsEnabled: false,  // DEFAULT-OFF 2026-06-14 (ungated overlay painted every preset → clean natural baseline; opt-in toggle). F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)
       bioCoverage: 0.45,  bioColor: [0.30, 0.95, 0.55],  bioScale: 2.4,  bioIntensity: 0.7,
-      dustStormEnabled: true, // F40 enable gate — off zeroes uDustActivity at the per-frame writer (veil + front + tracks all vanish: byte-identical pre-F40 output)
+      dustStormEnabled: false, // F40 enable gate — off zeroes uDustActivity at the per-frame writer (veil + front + tracks all vanish: byte-identical pre-F40 output)
       dustActivity: 0.0,    // F40 storm activity 0..1 (driven: 0.55 on the Mars-like thin-dry carrier, 0 on every wet/thick/airless/gas preset; the slider walks the whole P23 axis — tracks ~0.1-0.4, regional fronts mid, planet-encircling at 1)
       dustColor: [0.78, 0.55, 0.32], // F40 lofted-dust tint (driven: preset atmosphere butterscotch; fallback warm ochre)
-      magmaEnabled: true,   // F41 enable gate — off zeroes uMagmaSeaAngle at the per-frame writer (sea + shoreline + crust + rock-frost all vanish: byte-identical pre-F41 output)
+      magmaEnabled: false,   // F41 enable gate — off zeroes uMagmaSeaAngle at the per-frame writer (sea + shoreline + crust + rock-frost all vanish: byte-identical pre-F41 output)
       magmaSeaAngle: 0.0,   // F41 liquidus iso-angle rad (driven: acos((1300/T_ss)^4) — K2-141b ~1.52 wide sea / Lava ~0.42 substellar pond / 0 on every other preset)
       magmaTemp: 0.0,       // F41 substellar temp T_ss K (driven: T_eq x 1.4 on locked worlds — K2-141b 2800, Lava 1330; unlocked worlds 0)
       magmaChurnSpeed: 0.02,// F41 crust-plate churn phase rate (lab knob — the F25/F40 bounded two-phase fract crossfade; nothing accumulates)
-      carbonEnabled: true,  // F42 enable gate — off zeroes uCarbonStrength at the per-frame writer (graphite albedo + tar flats + sheen + diamond glints all vanish: byte-identical pre-F42 output)
+      carbonEnabled: false,  // F42 enable gate — off zeroes uCarbonStrength at the per-frame writer (graphite albedo + tar flats + sheen + diamond glints all vanish: byte-identical pre-F42 output)
       carbonRatio: 0.0,     // F42 C/O ratio (driven: preset composition.carbonToOxygen — 1.2 on 'Carbon (high C/O)', absent ⇒ 0 everywhere else; the writer maps >0.8 onto the master gate, so the slider walks the silicate→graphite condensation swap on any preset)
       tarCoverage: 0.35,    // F42 tar-flat coverage fraction (lab knob — F8 region-extent semantics: basins flood first via the height gate, 1 ⇒ whole-world tar seas)
       glintDensity: 0.5,    // F42 diamond-glint sparse-cell density (lab knob — per-cell hash threshold; ~dozens of candidate cells per disc at 0.5)
-      facetsEnabled: true,  // F43 enable gate — off zeroes uFacetStrength at the per-frame writer (facet relief + sub-faceting + sparks all vanish: byte-identical pre-F43 output)
+      facetsEnabled: false,  // F43 enable gate — off zeroes uFacetStrength at the per-frame writer (facet relief + sub-faceting + sparks all vanish: byte-identical pre-F43 output)
       facetStrength: 0.0,   // F43 facet strength (driven: 1 on the airless+pristine crystal class — airless && erosion<0.05 && resurfacingRate<0.05 && bombardment<0.2; 0 on every other preset; display-only, the writer reads it)
       facetCoverage: 0.65,  // F43 facet coverage fraction (lab knob — scattered crystals → continuous field; FULL-range walkable per the F42 tar lesson). 0.65 default = headline mostly-faceted crystal world (live-tuned 2026-06-13)
       facetScale: 4.0,      // legacy hand-set facet density (superseded by real-units derive; was: 4.0 = large clear planar faces, live-tuned 2026-06-13)
@@ -2322,20 +2322,20 @@
       glacialOffset: [0,0,0],
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
-      cratersEnabled: true,
-      ejectaEnabled: true,
-      mountainsEnabled: true,
-      canyonsEnabled: true,
-      scarpsEnabled: true,
-      plateausEnabled: true,
-      tesseraEnabled: true,
-      edificesEnabled: true,
-      lavaEnabled: true,
-      chaosEnabled: true,
-      cryoRidgeEnabled: true,
-      frostEnabled: true,
-      subEnabled: true,
-      glacialEnabled: true,
+      cratersEnabled: false,
+      ejectaEnabled: false,
+      mountainsEnabled: false,
+      canyonsEnabled: false,
+      scarpsEnabled: false,
+      plateausEnabled: false,
+      tesseraEnabled: false,
+      edificesEnabled: false,
+      lavaEnabled: false,
+      chaosEnabled: false,
+      cryoRidgeEnabled: false,
+      frostEnabled: false,
+      subEnabled: false,
+      glacialEnabled: false,
       // Rivers & valleys — riversEnabled is the dendritic-overlay enable (the shared
       // FEATURES['rivers'] key). Default OFF: routing the overlay is expensive, so it stays
       // off until the operator (or a test hook) enables it, which triggers the first route.
