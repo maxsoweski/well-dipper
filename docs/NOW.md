@@ -138,6 +138,21 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > — re-run that one finding? **Other tracks landed:** ROADMAP folded with the preserved thinSpots research (`1ba3370`;
 > +2 new increments 4.5 exotic-shattered, 5.5 shared-fields), research output preserved durably (`71172a1`).
 >
+> **▶ PER-INCREMENT BASIS-LEVEL UAT RUBRICS — WRITTEN (2026-06-27).** Max's directive: make the basis-vs-expression
+> UAT framing (from shell-relief: *"did it lay down the right BASIS?"* not *"is it believable?"*) a **standard artifact
+> for every increment** of the world-engine history program. Delivered:
+> `docs/WORKSTREAMS/world-engine-history-program-2026-06-27/UAT-RUBRICS.md` — one **5-field rubric card** per increment
+> (Ships-as-data / Expression-path / **Visually-testable?** / Basis-level-pass-criteria / Red-flags) for all 11
+> increments (1–9 + 4.5, 5.5), with #9 game port reframed as *expression-fidelity*, not basis. Grounded against live
+> code: `PRESET_ARCHETYPE` (`planet-lod-lab.html:1901`) + `SHELL_REGIMES`/`SHELL_EXCLUDE` (`shellRelief.js`) → a
+> **"test the PRESET the user sees, not the canonical archetype"** caveat table. **The high-value finding (the ⭐
+> visually-testable column):** three increments can't be UAT'd as-is and need a proxy/probe/preset built BEFORE they're
+> contracted — **#5 bombardment** (no lab preset routes to it; the only `impact-airless` preset is `Frozen`→#1), **#5.5
+> shared-field pass** (ships invisible fields other writers consume → needs probes + downstream proxy), **#6 epoch model**
+> (no direct look → composed-history proxy; AND its fixed-point solver is UNMECHANIZED — the degenerate cross-tier-cycles
+> research = NOW-item 4 above). Also flagged: **#4.5 blocked on Max's geometry decision** (block-jumble vs diapir-grooved),
+> **#8 should be split** (archetype-completers vs Tier-5 overlays = open decision c). **Push HOLD.**
+>
 > **▶ GRAIN-VS-LANDFORM FORK RESOLVED (2026-06-26) → answer (a) BASIS → Option-C plate-placement increment SCOPED + greenlit, build handed to fresh session via workflows.**
 > The AC5 "semi-coherent" verdict was a **generative-model/content** verdict, not a wiring bug. Dig (via workflows)
 > answered the fork: **(a)** — what's on screen is precursor E6 grain (latitude bands; the carve never touches the baked
