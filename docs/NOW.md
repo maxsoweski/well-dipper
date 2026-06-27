@@ -138,6 +138,25 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > — re-run that one finding? **Other tracks landed:** ROADMAP folded with the preserved thinSpots research (`1ba3370`;
 > +2 new increments 4.5 exotic-shattered, 5.5 shared-fields), research output preserved durably (`71172a1`).
 >
+> **▶ INCREMENT 2 (PLATE DRIVER-RESPONSE) — SCOPED, AWAITING MAX GREENLIGHT (2026-06-27).** `dev-collab-scope` pass.
+> **Active workstream switched** shell-relief → `docs/WORKSTREAMS/world-engine-plate-driver-response-2026-06-27/`
+> (`intent.md` + `contract.json`, status `building`, validated, active pointer set). ⚠ **shell-relief is NOT shipped** —
+> its AC11 UAT is still Max's open hands-on gate (`VERIFIED_PENDING_MAX 54ea74d`); #2 is a *sibling* effort on the plate
+> path that doesn't touch the shell path, so it can build in parallel. **What #2 is:** the MULTIPLY move — thread the
+> real per-body D-vector (D14 gravity / D2 volatiles / D12 tidal-heating / D16 age) through `route()`→`writeBodyRelief`→
+> `writePlateUpliftSphere` via a NEW body-driver channel + a calibrated `driversToTune(D)` so PLATE_COUNT / UPLIFT_GAIN /
+> CONTINENTAL_FRACTION respond to drivers. Today the plate writer ignores drivers (`void drivers`, plates.js:110) and
+> varies by seed only. **Max's scoping calls (in-thread):** (1) **full driver set** (not minimal-legible); (2) accepts
+> **D16 age must be surfaced first** (presets carry erosion/bombardment/resurfacing, NOT age). 7 ACs: AC1 determinism /
+> AC2 **Earth byte-identity** (the load-bearing guard — `driversToTune(D_earth)`→DEFAULTS branch) / AC3 monotone
+> correct-sign response / AC4 age surfaced+consumed / AC5 **no-clobber the grain bake** (separate driver channel) / AC6
+> live probe / **AC7 UAT** = the UAT-RUBRICS increment-2 card folded in (two Earth-likes differing only in drivers read
+> as genuinely different worlds; Earth unchanged). **#1 must-fix (calibration, build's first task):** define `D_earth`
+> as a named constant + calibrate transfer fns to return DEFAULTS at the *real* Earth D-values (NOT a 0-vector;
+> tidalHeatNorm≈0.19, ageNorm≈0.45). ⚠ **"Why we care" in intent.md is Claude's draft — Max to reword.** **NEXT:** Max
+> greenlights `contract.json` → SLICE A (plumbing, byte-identical) → SLICE B (calibration) via `verify-workstream`.
+> **Push HOLD.**
+>
 > **▶ PER-INCREMENT BASIS-LEVEL UAT RUBRICS — WRITTEN (2026-06-27).** Max's directive: make the basis-vs-expression
 > UAT framing (from shell-relief: *"did it lay down the right BASIS?"* not *"is it believable?"*) a **standard artifact
 > for every increment** of the world-engine history program. Delivered:
