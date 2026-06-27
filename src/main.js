@@ -8599,18 +8599,12 @@ window.addEventListener('keydown', (e) => {
       scControls.deselect();
       return;
     }
-    // Last in the cascade (§supercruise-arrival-modes-design-2026-06-27,
-    // Feature 3): with nothing left to dismiss/deselect, Esc exits In-Flight →
-    // Toybox. Reuse the pose-preserving _exitFlightInternal (forward-ray anchor +
-    // adoptCurrentPose + focus-clear per 7bd261c) so the camera does NOT snap onto
-    // a body center. Also drops the drive and clears any latched free-look so the
-    // next E engage starts clean.
-    if (_scManual) {
-      if (freeLook.latched) freeLook.exit();
-      scModel.setDrive(false);
-      _exitFlightInternal();
-      return;
-    }
+    // #2 "Esc de-mode" (§supercruise-arrival-modes-design-2026-06-27): the
+    // OLD exit-flight-to-Toybox step that used to live here is REMOVED. Esc
+    // must NEVER switch modes (ORRERY <-> HELM). With nothing left to dismiss
+    // or deselect, Esc does NOTHING — in HELM it no longer drops you to ORRERY.
+    // Leaving HELM is ONLY via the swap key (M) / HUD button / Options item.
+    // (Pure cascade pinned in flightModes.escCascadeAction.)
   }
 
   // Block all input during splash/intro sequence
@@ -8983,7 +8977,13 @@ window.addEventListener('keydown', (e) => {
     // nothing → no-op.
     commitSelection();
   } else if (e.code === 'Escape' || e.code === 'Backquote') {
-    focusPlanet(-1);
+    // ORRERY-only focus reset (NOT a mode switch). #2 "Esc de-mode"
+    // (§supercruise-arrival-modes-design-2026-06-27): with the early-cascade
+    // exit-flight step removed, a quiet-HUD Esc now falls through to here. Gate
+    // on !_scManual so this stays an ORRERY focusPlanet(-1) reset and Esc does
+    // NOTHING in HELM (no camera disturbance, no mode change). Backquote is the
+    // dev shortcut and keeps its prior unconditional reach.
+    if (e.code === 'Backquote' || !_scManual) focusPlanet(-1);
   } else if (e.code === 'Tab') {
     e.preventDefault();
     if (!system) return;

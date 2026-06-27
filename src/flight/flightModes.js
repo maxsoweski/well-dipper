@@ -97,3 +97,38 @@ export function playerBurnMode() {
 export function manualCancelsLeg(flightMode, pilotActive) {
   return flightMode === FlightMode.ASSIST && !!pilotActive;
 }
+
+// The Esc cascade, extracted pure (§supercruise-arrival-modes-design-2026-06-27,
+// #2 "Esc de-mode"). Esc must NEVER switch modes (ORRERY <-> HELM). The OLD
+// cascade ended with an exit-flight-to-Toybox step (main.js: if (_scManual) {
+// freeLook.exit(); scModel.setDrive(false); _exitFlightInternal(); return }) —
+// that step is REMOVED. Leaving HELM is now ONLY via the swap key / HUD button /
+// Options item, never Esc. New order, highest priority first:
+//   1. an open overlay (debug/pretext/sound/nav/settings/keybinds) → close it
+//   2. a selected body                                             → deselect it
+//   3. otherwise                                                   → NOTHING
+// Crucially the regime (`scManual` — HELM vs ORRERY) is NOT an input to the
+// decision: mashing Esc can at most drop your selection, never strand you in or
+// out of a mode. The live handler keeps its richer per-overlay branching (which
+// overlay, handleEscape levels); this reducer pins the ORDER + the no-mode-switch
+// invariant so it can't silently regress. The late ORRERY focusPlanet(-1) reset
+// (a focus reset WITHIN ORRERY, not a mode switch) is a separate, lower path and
+// is intentionally not modelled here.
+export function escCascadeAction({ overlayOpen, hasSelection } = {}) {
+  if (overlayOpen) return 'dismiss-overlay';
+  if (hasSelection) return 'deselect';
+  return 'none';
+}
+
+// The late, normal-mode (autopilot-off) Esc/Backquote fall-through (main.js
+// ~8979). #2 "Esc de-mode": with the early-cascade exit-flight step removed, a
+// quiet-HUD Esc now falls through to the ORRERY "system overview" focus reset
+// (focusPlanet(-1)). That reset is an ORRERY-camera op, so it must fire ONLY in
+// ORRERY (_scManual === false) — in HELM Esc does NOTHING (no camera disturbance,
+// no mode change). Backquote is the dev shortcut and keeps its prior
+// unconditional reach (it never went through the Escape branch). This predicate
+// pins that gate so the HELM-no-op invariant can't regress. It is NOT a mode
+// switch either way: focusPlanet(-1) never touches _scManual / _exitFlightInternal.
+export function escFocusResetFires({ code, scManual } = {}) {
+  return code === 'Backquote' || !scManual;
+}
