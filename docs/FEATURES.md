@@ -51,7 +51,8 @@ Commit history is supporting evidence only, not authority.
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Autopilot tour (auto-warp + flythrough camera; 15 sub-workstreams) | F&F-MVP | in-flight (still buggy; phases CRUISE/APPROACH/STATION-A in code) | — | [FEATURES/autopilot.md](FEATURES/autopilot.md) |
+| Autopilot tour (auto-warp; flies the supercruise model via SupercruisePilot ALIGN/CRUISE/HOLD + ShipControls; legacy FlythroughCamera motion retired 2026-06) | F&F-MVP | in-flight | — | [FEATURES/autopilot.md](FEATURES/autopilot.md) |
+| Supercruise flight system (one model, two drivers: manual W/S throttle + mouse virtual-joystick + hold-to-look freelook + screen-space HUD; autopilot flies the same controls; F=ON/OFF toggle, Settings flight-type Manual/Align/Assist; `ShipControls` single-door surface) | F&F-MVP | shipped-code — UAT-passed (Max live ride 2026-06-27), branch `feature/supercruise-freelook` @ `7bd261c`; legacy AutopilotMotion/NavigationSubsystem/FlythroughCamera motion retired (files kept); merge+deploy deferred | — | [WORKSTREAMS/supercruise-freelook-2026-06-10](WORKSTREAMS/supercruise-freelook-2026-06-10/) |
 
 ## Ship-scale
 

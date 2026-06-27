@@ -624,40 +624,35 @@ liquid-water bundle completing the wet/frozen/airless trio vs europa, lava).
   `dev-collab-scope` the L1 layer (wiring engines into the real renderers + type-demotion refactor,
   high blast radius). Lab left clean on `terrestrial`.
 
-### Prior active — supercruise (paused at a clean seam, pending UAT)
+### Supercruise / in-system flight — UAT-PASSED, accepted (deploy deferred)
 
-**`supercruise-freelook-2026-06-10`** — **AUTOPILOT HALF BUILT (Tasks 1–7 of 13),
-paused at a clean seam 2026-06-10.** Elite-style supercruise is now THE in-system
-mover for the **autopilot**: tour legs AND post-warp fly-in both fly the new
-`SupercruiseModel` (one model, two drivers). Manual piloting / freelook / HUD /
-old-mover retirement (Tasks 8–13) deferred to a fresh session.
+**`supercruise-freelook-2026-06-10`** — **ALL 13 tasks + control harness BUILT,
+live-verified, and UAT-PASSED by Max** (live ride 2026-06-27: "it's good to ship").
+Elite-style supercruise is now THE in-system mover for BOTH drivers — autopilot
+(tour legs + post-warp fly-in + COMMIT BURN) and the player (manual W/S throttle +
+mouse virtual-joystick + hold-to-look freelook + screen-space HUD). **F is a 2-state
+ON/OFF flight toggle**; flight TYPE (Manual / Align-on-select / Assist) is a Settings
+enum. The control harness `src/flight/ShipControls.js` is the single-door surface both
+drivers go through; legacy `AutopilotMotion` + `NavigationSubsystem` + `FlythroughCamera`
+motion roles are RETIRED from the live path (files kept; NPC `ShipSpawner` spawn gated
+off via `SHIPS_ENABLED=false`).
 Contract (9 ACs) + intent + plan:
 `docs/WORKSTREAMS/supercruise-freelook-2026-06-10/` +
 `docs/superpowers/plans/2026-06-10-supercruise-freelook.md`.
-**Built + committed (all unit + live-verified on GPU :9223):**
-- `src/flight/SupercruiseModel.js` — nose-vector flight, throttle, gravity-well
-  speed cap (scale-free: `CAP_MIN_FRAC` 0.5 + `CAP_MIN_ABS` 1e-5 — production
-  radii span 4e-5…5, two scale bugs found+fixed live), capped turn rate. 40 unit tests.
-- `src/flight/HeadMount.js` — rotation-only head/ship split (hold-to-look, eased
-  recenter); ready for Task 8/10 input wiring + the future cockpit (computed math,
-  NOT Object3D parenting — WorldOrigin rebase constraint).
-- `src/flight/SupercruisePilot.js` — ALIGN/CRUISE/HOLD autopilot driver issuing the
-  SAME throttle/steer a player will; drop-window capture vs overshoot; HOLD settle ease.
-- `src/main.js` — sc mover branch in simStep (drives `ShipChoreographer` for the
-  AC6 shake beats); tour-leg + warp-fly-in cutover; `_seedScPoseFromCameraIfIdle()`
-  helper; warp-path pilot stops; `window._sc` live-tuning probe.
-- Commits: `53f4766 b09015d a258eeb 5b5dcfe f40f59c de78ab7 a710919 64a614a 51cd579 259f855 d5e4e2f 2fd8981 0dce7b3 ec0f932` (master, UNPUSHED).
-**NOT yet built (Tasks 8–13):** manual W/S throttle + mouse virtual joystick + F→manual
-takeover + manual drop (AC3); freelook input binding (AC4 live); minimal HUD
-speed/throttle/reticle/target (AC7); COMMIT BURN cutover `focus*`→pilot, `focusShip`
-quarantine (AC5c); retire AutopilotMotion + NavigationSubsystem from live path (AC8
-loop + Task 12); full verify-workstream + Max UAT (AC9).
-**Handoff:** `/tmp/well-dipper-supercruise-handoff-2026-06-10.md`.
-**Maps to journey:** rebuilds the travel-loop foundation the 35% SCREENSAVER-MVP
-autopilot rides; first GAME-tier (85%) capability lands with Tasks 8–10.
-**⚠ Live tree note:** the screensaver autopilot now flies supercruise — if Max runs
-the dev server before Tasks 8–13, the tour/warp loop works but manual F-mode still
-routes to the legacy FlightDynamics drive (not yet rewired).
+**Status:** UAT-passed on branch `feature/supercruise-freelook` @ `7bd261c` (pushed to
+origin). **Master merge + GitHub-Pages deploy DEFERRED** — the next arc (reach-the-planet
+drop-out + mode restructure) builds directly on these same systems, and master has an
+active World-Engine session (main.js/NOW.md merge-conflict surface). Merge when both arcs
+are ready to land. Headless at the ship commit (verified 2026-06-27): build clean, flight
++ camera + ui suites green (200/200). Last fix `7bd261c`: F-off no longer snaps back to the focused body (clears focus
+on exit). Full arc trail: `memory/well-dipper-supercruise-progress.md`.
+**Maps to journey:** completes the travel-loop foundation the 35% SCREENSAVER-MVP
+autopilot rides + lands the first player-flight (GAME-tier) capability.
+**Known quirk (not blocking, deferred):** Assist sometimes fails to converge within ~55s
+and auto-flips its target to a moon (e.g. Dione) — separate flight/selection issue.
+**▶ NEXT arc (scoping now):** reach-the-planet drop-out + forced-out-near-planet +
+enter/exit camera-shake FX + mode restructure (Toybox / Flight / Free-look, autopilot as
+a flight subset). Research workflow running; brainstorm + scope pending.
 
 ### Prior active — warp tunnel (pending-UAT items remain)
 
