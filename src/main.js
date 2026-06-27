@@ -8423,6 +8423,19 @@ function _exitFlightInternal() {
   const _anchor = flightExitAnchor(camera.position, _exitFwd, _d);
   cameraController.adoptCurrentPose(_anchor);
   cameraInterp.resync(camera);
+  // Clear the body focus so the per-frame Toy-Box tracker (the
+  // `cameraController.trackTarget(entry.planet.mesh.position)` block in simStep,
+  // gated on focusIndex >= 0) does NOT re-center the orbit on the focused body
+  // on the next frame — that would clobber the no-snap forward-ray anchor just
+  // set above. It also re-introduced the body-anchored snap session-5 removed:
+  // under the floating origin, the focused mesh's position is briefly on a
+  // different world-origin than the camera right after exit, so trackTarget
+  // would fling the camera ~worldOrigin-drift units off the body. Per the F=ON/
+  // OFF design, F-off "leaves you exactly where you are" (forward ray); the
+  // body's reticle/selection is untouched — re-click it to orbit it again.
+  focusIndex = -1;
+  focusMoonIndex = -1;
+  focusStarIndex = -1;
   _flightMode = FlightMode.MANUAL; // reset for the next engage
   flightModeToast.show('Flight OFF', '');
 }
