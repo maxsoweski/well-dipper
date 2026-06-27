@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -306,7 +306,10 @@ let orbitsVisible = settings.get('showOrbits');
 let gravityWellVisible = settings.get('showGravityWells');
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
-let minimapVisible = false; // off by default — toggle with G key
+// Tag the body so mobile-only CSS (e.g. hiding the desktop ORRERY/HELM swap
+// button — mobile is ORRERY-only) can key off it. JS guards still apply too.
+if (_isMobile) document.body.classList.add('is-mobile');
+let minimapVisible = false; // off by default — toggle with R key (was M; M now swaps ORRERY<->HELM)
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
 let gravityWellPlanets = null; // lightweight position proxies for the well
 let systemMap = null;
@@ -470,6 +473,11 @@ let _scManual = false;            // player has the stick (FLIGHT-mode supercrui
 // cursor untouched here; the canvas hover handler paints the body pointer.
 function setScManual(on) {
   _scManual = on;
+  // Keep the desktop HUD swap button's label (ORRERY vs HELM) in sync no matter
+  // which path flipped the regime (M / E-engage / commit-burn auto-swap / tour
+  // W/S takeover / exit). _updateModeSwapButton is a hoisted fn-declaration
+  // reached only at runtime, so the forward reference is safe.
+  if (typeof _updateModeSwapButton === 'function') _updateModeSwapButton();
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
@@ -6159,6 +6167,22 @@ function commitBurn() {
   if (!t) return;
   // Stop any current flythrough so the new burn takes over cleanly
   if (autoNav.isActive || flythrough.active) stopFlythrough();
+  // #2 "select-and-jump → HELM" (§supercruise-arrival-modes-design-2026-06-27):
+  // a commit-burn FROM ORRERY (!_scManual) auto-swaps into HELM and runs as an
+  // ASSIST leg. We enter the HELM REGIME here (not the full _enterFlightInternal,
+  // which would start a competing leg from Settings) — the focus*() call below
+  // seeds the model from the camera, sets _flightMode = playerBurnMode() (ASSIST)
+  // and starts the leg. Putting _scManual=true now is what makes the #1 takeover
+  // gates (manualCancelsLeg, ~7943/~9318, both inside `if (_scManual)`) fire, so
+  // grabbing the stick/throttle cancels the burn even when launched from ORRERY.
+  // Mobile never reaches a burn-from-ORRERY swap (it is ORRERY-only / Toy-Box
+  // locked; setCameraMode re-asserts that lock, so this is a no-op there).
+  if (!_scManual && !_isMobile) {
+    setScManual(true);
+    cameraController.setCameraMode(CameraMode.FLIGHT);
+    cameraController.bypassed = true;
+    console.log('[MODE] commit-burn from ORRERY → swap to HELM (Assist leg)');
+  }
   if (t.kind === 'star') focusStar(t.starIndex);
   else if (t.kind === 'planet') focusPlanet(t.planetIndex);
   else if (t.kind === 'moon') focusMoon(t.planetIndex, t.moonIndex);
@@ -8342,6 +8366,7 @@ function renderFrame(alpha) {
     flightMode: _scManual ? _flightMode : null,
   });
   _updateCommitBurnButton();
+  _updateModeSwapButton();
 
   // ── HUD (yaw + system map + gravity well) ──
   // During flythrough, compute yaw from camera position relative to origin.
@@ -8483,6 +8508,66 @@ function _exitFlightInternal() {
   focusStarIndex = -1;
   _flightMode = FlightMode.MANUAL; // reset for the next engage
   flightModeToast.show('Flight OFF', '');
+}
+
+// ── ORRERY <-> HELM peer-mode swap (§supercruise-arrival-modes-design
+// -2026-06-27, #2) — the SHARED action behind the M key, the desktop HUD button,
+// and the Options-menu item. M swaps stations BOTH directions and NEVER lights
+// the drive (E-from-ORRERY lights it; M doesn't). Reuses the existing
+// pose-preserving exit (_exitFlightInternal — the SAME no-snap path the old
+// Esc-exit used) HELM→ORRERY, and _enterFlightInternal (drive untouched, since
+// it never calls setDrive) ORRERY→HELM. Same warp/splash/title/star-system
+// guards as E; mobile is ORRERY-only (Toy-Box locked) so it's a no-op there.
+function _doModeSwap() {
+  if (_isMobile) return;
+  if (warpEffect.isActive || warpTarget.turning) return;
+  if (splashActive || titleScreenActive) return;
+  if (!system || (system.type && system.type !== 'star-system')) {
+    console.log('[MODE] mode swap unavailable — no star system');
+    return;
+  }
+  const swap = modeSwapAction({ scManual: _scManual });
+  if (swap.exitFlight) {
+    // HELM → ORRERY: pose-preserving exit (no snap). Clear any free-look latch
+    // first so the orbit isn't left mid-look.
+    if (freeLook.latched) freeLook.exit();
+    _exitFlightInternal();
+  } else {
+    // ORRERY → HELM: enter flight WITHOUT lighting the drive (drive state
+    // preserved — _enterFlightInternal never calls setDrive; only E does).
+    _enterFlightInternal();
+  }
+  _updateModeSwapButton();
+  console.log(`[MODE] swap → ${swap.target.toUpperCase()} (In-Flight=${_scManual})`);
+}
+
+// Reflect the CURRENT station on the desktop HUD swap button: it names the mode
+// you're IN (so the press is "leave here"). Hidden on mobile (ORRERY-only), on
+// the title/splash screen, when no star system is loaded, and while the HUD is
+// hidden — the SAME gates the M key honors, so the button never offers a swap
+// the key would refuse. Called every render frame (visibility) + on each regime
+// flip (label), so it stays in sync no matter what path changed the mode.
+function _updateModeSwapButton() {
+  const btn = document.getElementById('mode-swap-btn');
+  if (!btn) return;
+  const swappable = !_isMobile && _hudVisible && !splashActive && !titleScreenActive
+    && !!system && !(system.type && system.type !== 'star-system');
+  btn.style.display = swappable ? 'block' : 'none';
+  if (swappable) btn.textContent = _scManual ? 'HELM' : 'ORRERY';
+}
+
+// Wire the desktop HUD swap button + the Options-menu swap item to the shared
+// action (discoverable without knowing the M key, §2 "swappable afterward").
+{
+  const hudBtn = document.getElementById('mode-swap-btn');
+  if (hudBtn) {
+    hudBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); _doModeSwap(); });
+  }
+  const optBtn = document.getElementById('mode-swap-settings-btn');
+  if (optBtn) {
+    optBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); _doModeSwap(); });
+  }
+  if (hudBtn) _updateModeSwapButton(); // initial label (ORRERY at boot)
 }
 
 // ── Keyboard shortcuts ──
@@ -8823,8 +8908,22 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // M key: toggle minimap
+  // M key: swap ORRERY <-> HELM peer modes (§supercruise-arrival-modes-design
+  // -2026-06-27, #2 "two peer modes"). M toggles the two stations BOTH
+  // directions and NEVER lights the drive (E-from-ORRERY lights it; M doesn't):
+  //   - in HELM (_scManual)   → swap to ORRERY via the pose-preserving exit
+  //     (_exitFlightInternal — the SAME no-snap path the old Esc-exit used).
+  //   - in ORRERY (!_scManual) → swap to HELM via _enterFlightInternal, drive
+  //     state PRESERVED (it doesn't call setDrive — only the E-engage path does).
+  // Mobile is ORRERY-only (hard-locked to Toy Box), so M is a no-op there. Same
+  // warp/splash/title/star-system guards as E. (Was: toggle minimap — moved to R.)
   if (e.code === 'KeyM') {
+    _doModeSwap();
+    return;
+  }
+
+  // R key: toggle minimap (was M — moved so M swaps ORRERY<->HELM).
+  if (e.code === 'KeyR') {
     minimapVisible = !minimapVisible;
     if (minimapVisible && systemMap && !gravityWellVisible) {
       retroRenderer.setHud(systemMap.scene, systemMap.camera);

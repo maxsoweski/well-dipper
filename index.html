@@ -56,16 +56,16 @@
           <span class="kb-key">SHIFT+TAB</span><span class="kb-desc">Previous planet</span>
           <span class="kb-key">1&ndash;9</span><span class="kb-desc">Jump to planet</span>
           <span class="kb-key">Q</span><span class="kb-desc">Toggle autopilot</span>
-          <span class="kb-key">M</span><span class="kb-desc">Toggle minimap</span>
+          <span class="kb-key">M</span><span class="kb-desc">Swap ORRERY / HELM</span>
           <span class="kb-key">V</span><span class="kb-desc">Toggle gravity wells</span>
           <span class="kb-key">O</span><span class="kb-desc">Toggle orbit lines</span>
-          <span class="kb-key">R</span><span class="kb-desc">Toggle auto-rotate</span>
-          <span class="kb-key">E</span><span class="kb-desc">Supercruise drive on / drop out</span>
+          <span class="kb-key">R</span><span class="kb-desc">Toggle minimap</span>
+          <span class="kb-key">E</span><span class="kb-desc">Take the Helm + drive on / drop out</span>
           <span class="kb-key">F</span><span class="kb-desc">Toggle free-look (in flight)</span>
           <span class="kb-key">CLICK SKY</span><span class="kb-desc">Select warp target star</span>
           <span class="kb-key">MIDDLE CLICK</span><span class="kb-desc">Hold for free-look</span>
           <span class="kb-key">SCROLL</span><span class="kb-desc">Zoom in / out</span>
-          <span class="kb-key">ESC</span><span class="kb-desc">Unfocus / exit flight to Toybox</span>
+          <span class="kb-key">ESC</span><span class="kb-desc">Close menu / deselect target</span>
           <span class="kb-key">G</span><span class="kb-desc">Object gallery</span>
           <span class="kb-key">P</span><span class="kb-desc">Settings</span>
           <span class="kb-key">T</span><span class="kb-desc">Sound test</span>
@@ -193,6 +193,14 @@
           </div>
         </div>
 
+        <div class="settings-section">
+          <h3>MODE</h3>
+          <div class="settings-grid" style="margin-top: 8px;">
+            <label>Station</label>
+            <button type="button" id="mode-swap-settings-btn" class="setting-select">Swap ORRERY / HELM (M)</button>
+          </div>
+        </div>
+
         <button class="settings-reset">Reset Defaults</button>
         <p class="settings-dismiss">P or ESC to close</p>
       </div>
@@ -211,6 +219,10 @@
 
     <!-- In-system burn button (shown when a body is selected) -->
     <button id="commit-burn-btn" style="display:none;">BURN</button>
+
+    <!-- Desktop mode-swap button: ORRERY <-> HELM (discoverable without the M key).
+         Hidden until a star system is active; shown/labelled by _updateModeSwapButton. -->
+    <button id="mode-swap-btn" style="display:none;" title="Swap ORRERY / HELM (M)">ORRERY</button>
 
     <!-- Debug gallery overlay (hidden by default) -->
     <div id="gallery-overlay" style="display:none; position:fixed; top:0; left:0; right:0; padding:16px; z-index:1000; pointer-events:none; font-family:'DotGothic16',monospace; color:#0f0; text-shadow:0 0 6px #000, 0 0 12px #000, 0 0 20px #000;">

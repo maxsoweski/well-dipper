@@ -709,6 +709,49 @@ body.hud-hidden #flight-mode-toast { display: none !important; }
   transform: translateX(-50%) translateY(1px);
 }
 
+/* ── ORRERY <-> HELM mode-swap button (M key equivalent) ──
+   Small corner button so the two peer stations are swappable without knowing
+   the key. Top-right so it never overlaps the centered BURN button. Label
+   tracks the CURRENT station (set by _updateModeSwapButton in main.js). */
+#mode-swap-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  font-family: 'DotGothic16', monospace;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  color: rgba(140, 255, 160, 1.0);
+  background: rgba(0, 20, 5, 0.65);
+  border: 1.5px solid rgba(100, 255, 130, 0.85);
+  padding: 7px 16px;
+  cursor: pointer;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 14px rgba(60, 200, 90, 0.2);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.08s;
+  outline: none;
+}
+
+#mode-swap-btn:hover {
+  background: rgba(20, 60, 25, 0.85);
+  box-shadow: 0 0 22px rgba(100, 255, 140, 0.45);
+}
+
+#mode-swap-btn:active {
+  transform: translateY(1px);
+}
+
+/* Mobile is ORRERY-only (Toy-Box locked) — no Helm, so no swap button. */
+body.is-mobile #mode-swap-btn {
+  display: none !important;
+}
+
+body.hud-hidden #mode-swap-btn {
+  display: none !important;
+}
+
 /* ── HUD master toggle (H key) ──
    When body.hud-hidden is set, all in-game HUD overlays disappear while
    camera/selection state is preserved. The targeting reticle (#targeting-overlay)

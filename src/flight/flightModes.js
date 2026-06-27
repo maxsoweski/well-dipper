@@ -120,6 +120,27 @@ export function escCascadeAction({ overlayOpen, hasSelection } = {}) {
   return 'none';
 }
 
+// The M-key ORRERY<->HELM peer-mode toggle, extracted pure (§supercruise
+// -arrival-modes-design-2026-06-27, #2 "two peer modes"). M swaps the two
+// stations BOTH directions; it NEVER lights the drive (that distinction is E's:
+// E-from-ORRERY = swap + drive ON; M = swap stations only, drive untouched).
+//   - in HELM   (scManual === true)  → swap to ORRERY via the pose-preserving
+//     exit (_exitFlightInternal — the SAME no-snap path the old Esc-exit used).
+//   - in ORRERY (scManual === false) → swap to HELM via _enterFlightInternal,
+//     WITHOUT forcing the drive on (drive state preserved).
+// Returns a descriptor the live handler maps to side-effects:
+//   { target: 'orrery'|'helm', enterFlight, exitFlight, lightDrive:false }.
+// `enterFlight`/`exitFlight` are mutually exclusive (XOR); `lightDrive` is
+// always false so the swap can never silently engage the drive.
+export function modeSwapAction({ scManual } = {}) {
+  if (scManual) {
+    // HELM → ORRERY
+    return { target: 'orrery', enterFlight: false, exitFlight: true, lightDrive: false };
+  }
+  // ORRERY → HELM (drive untouched)
+  return { target: 'helm', enterFlight: true, exitFlight: false, lightDrive: false };
+}
+
 // The late, normal-mode (autopilot-off) Esc/Backquote fall-through (main.js
 // ~8979). #2 "Esc de-mode": with the early-cascade exit-flight step removed, a
 // quiet-HUD Esc now falls through to the ORRERY "system overview" focus reset
