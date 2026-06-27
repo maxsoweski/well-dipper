@@ -123,6 +123,15 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > GLSL spike block (~L260-290) + its `uVoroScale`/`uDebugMode` uniform defs *together* (co-remove or the shader
 > won't compile). Cosmetic note: the 5 synth groups sit open *inside* the closed drawer (lil-gui default-open), so
 > expanding the drawer looks exactly as before — only the default view is tucked.
+> (2b) ✅ **LEGACY SYNTH NOW DEFAULTS OFF — `cfbe42c` (2026-06-27, Max-directed).** The 41 legacy in-shader synth
+> `*Enabled` defaults flipped true→false so the lab **boots showing ONLY the world-engine carrier** (plate/shell
+> relief) — no borrowed synth detail (e.g. the frost/cryo tint that made Europa "look sort of right"), so the carrier
+> is judged on its own work. **NOT broken — intentional:** all-off + a raw carrier sphere is the expected clean view;
+> re-check any feature or hit **"enable all"** to restore. Carrier (`reliefBakeStrength`=1), relevance filter, base
+> shading untouched. Verified the flip sticks (preset-apply makes zero `*Enabled` assignments; relevance gates via a
+> multiplier; in-code comment "there is NO setPreset that re-applies `*Enabled`"); live :5173 fresh boot 0/50 enabled,
+> carrier renders, holds Rocky→Europa; 468 tests pass. Drainage/rivers is pipeline-coupled (not legacy) but already
+> off + gated on icy presets — re-enable when judging Earth-like carrier coherence.
 > (3) **JOURNEY-vs-NOW DRIFT:** `JOURNEY.md` "Current objective" still reads the **35% SCREENSAVER-MVP** milestone (defect/
 > music/10-min KRs) while the live campaign is the **world-engine history program** (60% ENRICHED depth). Reconcile the
 > stated objective — Max's call. (4) **cross-tier-cycles research came back DEGENERATE** (placeholder stub, no mechanism)
