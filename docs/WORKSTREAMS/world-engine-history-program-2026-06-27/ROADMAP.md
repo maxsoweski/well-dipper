@@ -1,0 +1,145 @@
+# World-Engine History-Systems Program — ROADMAP
+
+**Purpose:** the program-level map for taking Well Dipper's procedural world engine from *2 of 11 archetypes having a real history-data relief writer* to *11 of 11* — every recognizable planet type rendering its own billions-of-years history instead of a latitude-band fallback.
+
+**Provenance:** synthesized 2026-06-27 from two multi-agent design workflows — the PROGRAM-DESIGN run (`wryb3pfpb`: 4 designs + 3 critiques + 1 synthesis + 1 completeness pass) and the DESPUN-WRITER design run (`w5wc97m7d`: 3 mechanism approaches + 3 critiques + 1 design + 1 build-readiness pass). Every claim below is grounded in those two outputs plus the live code (`planet-archetypes.js`, `planet-lod-lab.html`, `world-engine-architecture-spine.md`). Uncertain items are marked.
+
+---
+
+## North star
+
+> The screensaver's value is the **COUNT of genuinely distinct, history-coherent worlds visible per minute** — not toggled shader effects on a historyless substrate.
+
+Today exactly **2 of 11 archetypes** (`tectonic-terrestrial`, `ocean`) have a real history-data relief writer (`plates.js`). The other **9 fall through** to the despun latitude-band fallback in `tectonic.js` — `stressAtLat = sin²(lat)`, pure latitude banding, no history. A low-gravity Earth and a high-gravity Earth read as the *same kind* of world; a "frozen" world reads as bands. The program drives **2-of-11 → 11-of-11** via three moves:
+
+- **MULTIPLY** the proven `plates.js` engine across the D-vector, so each archetype that *has* a writer varies by formation drivers, not just by seed (a second-order multiplier).
+- **BROADEN** by cloning the UAT-validated writer *pattern* (centroids/field → classify → REPLACE `carrier.height` → bounded relax → regime-gate) into a small family of regime writers — each new writer is a *first-order jump* (an archetype goes from "same as 8 others" to "its own world-type").
+- **COMPOSE** them via the locked epoch/host-editor model + the two cross-tier cycles, so worlds read as *layered* history, not a bag of single-pass overlays.
+
+---
+
+## The phased roadmap (9 increments)
+
+> **Sequencing decision (2026-06-27): BROADEN-FIRST.** Max chose the **despun/ice-shell writer as increment 1**, over driver-response-first. The analysis (panel + completeness critic) favored broaden for variety-per-effort *and* lower risk: the despun writer takes ~4–5 archetypes from zero-history to has-history in a single writer (first-order jump), and as a *sibling* writer it never touches the validated plate path. Driver-response-first is the program's *weakest* variety-per-effort increment — it multiplies the 2 archetypes that already work while 9 stay latitude-banded. (Note: the synthesis text in `wryb3pfpb` orders driver-response at #1; the completeness critic and all three panel critiques argue for the swap, and Max's actual lean per the despun design run `w5wc97m7d` is the despun writer first. The table below reflects Max's chosen broaden-first order.)
+
+| # | Increment | Size | Writes / what it unlocks | Depends on |
+|---|-----------|------|--------------------------|------------|
+| 1 | **Despun / ice-shell relief writer** (E6 2nd variant; `shellRelief.js`) — *Max's chosen first increment* | L | NEW three-free writer: tidal-despin lineament field + ice-shell convection cells + cryotectonic ridges/chaos. REPLACE on carrier. Takes icy-active (Europa/Frozen), volatile-cold (Titan), eyeball-despun from historyless → has-history: **~2-of-11 → ~5-6-of-11**. | The shipped plate POC (pattern template); the lab dispatch seam |
+| 2 | **Plate driver-response** (D-vector → `plates.js` DEFAULTS via the `tune` seam), Earth-like only — *absorbs the `route()` driver-threading* | S | Threads the real per-body D-vector through `route()`→`writeBodyRelief`→`writePlateUpliftSphere`. Same `U=REPLACE`, but PLATE_COUNT / UPLIFT_GAIN / CONTINENTAL_FRACTION now respond to D14/D12/D2/D16. Turns 2 history archetypes into a **continuum**. Byte-identical at the Earth reference point. | The shipped+UAT'd plate POC; drivers already surfaced + adapted |
+| 3 | **E5 atmosphere / climate field** (precip + temperature + wind; `climate-e5.js`) | L | Drops onto pre-built seams (`precipWeight`, `baseLevel`). (a) Earth-like + Titan rivers get orographic / rain-shadow drainage; (b) gas-giant + hot-jupiter get their FIRST real history field (zonal bands/jets data-driven). Anchors CYCLE-1 (atmo↔surface budget). | #1 (E5 needs real relief for orographic precip) |
+| 4 | **Volcanic / endogenic-heat relief writer** (E7; `magmatism.js`) — editor-ready host | L | Hotspot/edifice placement + effusive lava-plain flooding + substellar magma-ocean basin for locked extreme-T bodies. A 4th–5th distinct relief type (Io shields, lava plains, magma seas). | #2 (D12 live); independent of #1, #3 |
+| 5 | **Bombardment / cratered-surface writer** (E8a; `bombardment.js`) — canonical persistent HOST | M | Crater-population field (size-frequency by gravity+age) → basins/rims/ejecta as a HOST later epochs EDIT. Cleanest editor-on-host exemplar; de-risks the epoch refactor. impact-airless (Moon/Mercury) becomes a real cratered world-type. | #2 (D11/D16/D14 live); independent of #1, #3, #4 |
+| 6 | **Epoch / host-editor model + the two cross-tier cycles** | XL | STRUCTURAL: wrap the relief stack in 2–4 named EPOCHS where later writers EDIT a persistent host. Resolves atmo↔surface (CYCLE 1) and figure↔grain (CYCLE 2) to bounded fixed points. No new archetype — every world gains **temporal depth**. epochs=1 reproduces single-pass byte-identically. | #2, #4, #5 (need ≥2 relief regimes + a host writer) |
+| 7 | **Per-regime sculpting** (E10 aeolian + E11 cryosphere as epoch editors; E9 hydrology generalized to per-regime fluids) | L | Methane fluvial on Titan, glacial/sublimation on icy/volatile; NEW dunes/yardangs + glacial/frost cycle. Multiplies every solid archetype again. | #3 (E5 wind/temp/budget), #6 (epoch host model), #2/#4/#5 (relief to sculpt) |
+| 8 | **Remaining archetype writers** (exotic-carbon, exotic-geometric/crystal, technogenic) + **Tier-5 modality overlays** (E15 rings, E8b weathering, E12 palette, E4 magnetosphere, E13 transient, E14 inhabitation) | XL | Closes the broaden goal to **11-of-11**. Carbon graphite/diamond crust, crystal-facet field, technogenic overlays, plus body-wide readout fields (rings need the `moons:[]` system-graph stub filled). | #6 (E8b/E13 are finished-surface editors); `moons:[]` stub for rings/E4 |
+| 9 | **Game `Planet.js` production-renderer port** | XL | Port the lab-validated history stack onto the game sphere (`Planet.js` + `MaterialBodyShader.js`, today zero relief code). Where the variety becomes visible in the actual screensaver. Flagged dep: world-origin rebasing (float32 at ship scale). | #1–8 (port the finished stack); charter: lab-validated first |
+
+*All 9 increments are `namedDeferred` in the source synthesis — i.e. explicitly scoped-and-deferred, none yet built beyond #1's build-ready design.*
+
+---
+
+## FULL planet-type → increment coverage map  *(the centerpiece)*
+
+Every recognizable planet type / lab preset, mapped to where it gets its real history. **Status** legend: **BUILT** (validated/UAT'd) · **DESIGNED** (increment 1, build-ready) · **ROADMAPPED** (increment N) · **THIN** (needs research — see next section).
+
+Cross-checked against `PRESET_ARCHETYPE` (lab short keys) + `NAMED_BODY` (lab named presets) + the 11 canonical `ARCHETYPES`. Lab preset → short key in parens.
+
+| Planet type (lab preset / canonical archetype) | Gets its real history in | Status |
+|---|---|---|
+| **Rocky / Earth-like** — `Rocky (Earthlike)` (`terrestrial`) / `tectonic-terrestrial` | plate writer `plates.js` | **BUILT + Max-UAT'd** |
+| **Ocean world** — `Ocean (temperate)` (`ocean`) | plate writer `plates.js` | **BUILT** |
+| **Icy active** — `Europa (icy moon)` (NAMED_BODY → seam-fix `ice`) / `icy-active` | increment 1 despun/ice-shell (regime `icy-active`) | **DESIGNED** |
+| **Frozen airless** — `Frozen (airless)` (`ice`) / `impact-airless`+`volatile-cold`+`exotic-shattered`+`exotic-geometric` | increment 1 (maps `ice`→`icy-active`) | **DESIGNED** *(see thin spot: it carries 4 canonical archetypes)* |
+| **Volatile-cold** — `Titan (methane seas)` (NAMED_BODY → seam-fix `volatile`) / `volatile-cold` (Triton/Pluto in archetype `bodies`, no own preset) | increment 1 (regime `volatile-cold`) | **DESIGNED** |
+| **Locked "eyeball"** — `Eyeball (locked temperate)` (`eyeball`) / `tectonic-terrestrial` | increment 1 (regime `eyeball-despun`) | **DESIGNED** |
+| **Volcanic / Io / Lava** — `Lava (hot airless)` (`lava`), `Magma (K2-141b)` (NAMED_BODY) / `volcanic` | increment 4 (E7 endogenic-heat) | **ROADMAPPED** |
+| **Venus** — `Venus (sulfuric shroud)` (NAMED_BODY) / `tectonic-terrestrial`+`volcanic` | increment 4 (E7) *assigned*, but **no stagnant-lid branch** | **THIN — needs research** |
+| **Mars** — `Mars (arid rocky)` (NAMED_BODY) / `tectonic-terrestrial` | plate writer #1–2 (relief) + #3/#7 (aeolian/dunes for its identity) | **ROADMAPPED** *(relief BUILT via plate path; its arid/dune identity rides #7)* |
+| **Cratered airless** — Moon / Mercury (`impact-airless` `bodies`; **no own lab preset** — closest is `Frozen`) | increment 5 (E8a bombardment) | **ROADMAPPED** *(see contradiction note below)* |
+| **Gas giant (Jovian)** — `Gas giant (Jovian)` (`gas-giant`) / `gas-giant` | increment 3 (E5 climate bands) — no relief writer ever | **ROADMAPPED but THIN** (storm placement undesigned) |
+| **Gas giant (Saturnian)** — `Gas giant (Saturnian)` (`gas-giant`) | increment 3 (E5) | **ROADMAPPED but THIN** |
+| **Ice giant (Neptunian)** — `Ice giant (Neptunian)` (maps to `sub-neptune`!) / `gas-giant` | increment 3 (E5) for bands | **ROADMAPPED but THIN** *(maps to `sub-neptune` short key — see thin spot 3)* |
+| **Hot Jupiter** — `Hot Jupiter (locked giant)` (NAMED_BODY) / `hot-jupiter` | increment 3 (E5 bands) + F32/F33 thermal | **ROADMAPPED but THIN** (whole identity in one E5 sub-field) |
+| **Sub-Neptune (hazy)** — `Sub-Neptune (hazy)` (`sub-neptune`) | **NO HOME in any increment** | **THIN — needs research** |
+| **Carbon exotic** — `Carbon (high C/O)` (`carbon`) / `exotic-carbon` | increment 8 | **ROADMAPPED** (last, XL) |
+| **Crystal / geometric exotic** — `Crystal (faceted)` (`crystal`) / `exotic-geometric` (F43/F44) | increment 8 | **ROADMAPPED** (last, XL) |
+| **Shattered (Miranda)** — `exotic-shattered` (rides `Frozen` preset; F45) | own dedicated block-jumble writer (unscheduled; lumped near #8) | **THIN** (needs its own writer, not lumping) |
+| **Technogenic (city/machine worlds)** — `technogenic` (rides Rocky/Ocean/Eyeball; F47/F48/F49) | increment 8 | **ROADMAPPED** (last, XL) |
+
+**Contradiction with the anchor mapping (flagged):** the brief's anchor pairs "Cratered airless (Moon/Mercury) → increment 5." That holds for the *canonical* `impact-airless` archetype, but in the *lab* there is **no Moon/Mercury preset** — the only `impact-airless`-tagged preset is `Frozen (airless)`, which maps to the short key `ice` and is therefore routed to **increment 1's despun/ice-shell writer**, not increment 5's bombardment writer. So in the lab today, the "airless" preset a user sees gets icy-shell history, while the canonical Moon/Mercury *bodies* (no preset) are what increment 5 serves. The two are reconciled only when a Moon/Mercury preset is added or the bombardment writer is wired to also fire on `ice`-keyed unlocked bodies. (This is the `Frozen`-carries-4-archetypes ambiguity below.)
+
+**Second contradiction (flagged):** the anchor lists "Gas giant / hot Jupiter (Jovian/Saturnian/Neptunian) → increment 3." Verified in `PRESET_ARCHETYPE`: `Ice giant (Neptunian)` maps to the short key **`sub-neptune`**, *not* `gas-giant`, even though its canonical archetype is `gas-giant`. So the Neptunian preset shares a short key with `Sub-Neptune (hazy)` — and since `sub-neptune` has no increment home, the Neptunian preset's relief/identity is as thin as the sub-Neptune's. Only its E5 *bands* (increment 3) are covered, via the `gas-giant` canonical tag in `planet-archetypes.js` (F24–F31), not via the short key.
+
+---
+
+## Thin spots — flagged for additional research / development
+
+Each is a crisp `RESEARCH/DEV NEEDED` bullet. Sources: `wryb3pfpb` gaps (unhandledRegimes, missingEpochsOrFields, crossTierTraps, framingChallenges) + the despun design's tilted-band risk.
+
+1. **Gas-giant / hot-jupiter get NO relief writer EVER; storm/great-spot PLACEMENT is undesigned.**
+   WHY thin: a gas giant has no surface — its entire appearance *is* the E5 band/jet/storm field. The program routes 4 archetypes' (Jovian, Saturnian, Neptunian-via-gas-giant-tag, hot-jupiter) total visual identity through ONE sub-field of ONE increment (#3), then never revisits. The great-spot/storm-cluster/polar-vortex features (F27–F29) need vortex *placement* logic that a zonal band field does not provide.
+   **RESEARCH/DEV NEEDED:** a vortex-placement model (great-spot / storm-train / polar-vortex) keyed off D8×D5×D1, scoped as its own sub-increment inside or after #3 — not assumed to fall out of the band field.
+
+2. **Venus-like stagnant-lid silicate has no real writer.**
+   WHY thin: tessera + coronae + global volcanic resurfacing is a mantle-plume/resurfacing primitive with NO ice shell and NO despin-lineament organizing field. The despun writer (#1) *explicitly EXCLUDES* it; #4 (E7) is *assigned* Venus but its scope (hotspot/edifice/lava-plain/magma-ocean) lacks an explicit stagnant-lid branch. Venus is arguably the single most-recognizable non-Earth rocky world.
+   **RESEARCH/DEV NEEDED:** a dedicated stagnant-lid generative model (tessera fabric + coronae + resurfacing-age field) added as an explicit branch of #4 (E7) or its own writer — *not* forced through the tidal-stress or plate writer (physically false, pollutes the structure test).
+
+3. **Sub-Neptune (`Sub-Neptune (hazy)`, and the Neptunian preset via its short key) has NO home in any increment.**
+   WHY thin: `sub-neptune` is a populated lab `PRESET_ARCHETYPE` key but appears in NEITHER the 11-archetype taxonomy's writer assignments NOR any increment. It falls through every gate to the despun latitude-band path. `Ice giant (Neptunian)` shares this short key, so it inherits the gap for everything except E5 bands.
+   **RESEARCH/DEV NEEDED:** decide whether sub-Neptune gets (a) a hazy-envelope band/optics treatment folded into E5 (#3), or (b) its own thin writer; and reconcile the `sub-neptune` short key vs the `gas-giant` canonical tag for the Neptunian preset.
+
+4. **Exotic-shattered (Miranda) needs its own block-jumble writer, not lumping.**
+   WHY thin: the program text lumps `exotic-shattered` into #1's ice-shell writer to claim "~5-6 of 11," but a catastrophic shatter-then-reassemble body is a *fundamentally different primitive* (disrupted-and-reassembled tilted blocks, not a convecting shell). `planet-archetypes.js` (F45) deliberately gives it its OWN archetype so the lab's solo/archetype tooling won't group it with ordered terrains. The despun design *also* EXCLUDES it. So it is orphaned: excluded from #1, not scheduled before #8.
+   **RESEARCH/DEV NEEDED:** a dedicated block-jumble writer (shatter-then-reaccrete; tilted mismatched blocks) — scoped explicitly, not assumed inside the ice-shell or exotic-#8 bundle.
+
+5. **Exotics + technogenic are back-loaded into the single XL increment 8 — the "11-of-11" goal is concentrated in the most-cuttable increment.**
+   WHY thin: #8 bundles 3 archetype writers (carbon, geometric/crystal, technogenic) PLUS 6 Tier-5 overlay engines. It is XL and lowest-priority. If it slips, the program ships at ~8-of-11 and the headline "11-of-11" claim silently fails.
+   **RESEARCH/DEV NEEDED:** Max's decision (open below) on whether to resequence one or more exotic/technogenic writers earlier, and/or split #8 so the archetype-completing writers don't share a slip-risk with the optional Tier-5 overlays.
+
+6. **The despun writer's despin-DOMINATED regimes (eyeball / Frozen) risk reading as "sin²-bands tilted onto a random pole."**
+   WHY thin: the despin stress term is a pure function of colatitude about the seeded paleo-axis `w0` — i.e. itself a rotationally-symmetric ZONAL band, merely tilted off the carrier `+y`. For the 2 despin-dominated regimes (eyeball, Frozen) the *only* thing converting that tilted band into genuine structure is the discrete steered-ridged-noise lineament network. A naive latitude control about `+y` would pass while the field is phenomenologically the same banded fallback.
+   **RESEARCH/DEV NEEDED:** already partly guarded by the design's **AC4 tilted-axis control** (`varExplainedByStress > varExplainedByLatitudeW0` about the seeded `w0`); dev must (a) pin the despin/diurnal stress *math* concretely (the build-readiness critic flags it as the single largest hole — closed-form membrane stress, diurnal `f(angle, phi0)` with position-dependent principal-axis rotation, 2×2 diagonalization, the crest→discrete-`lineamentNode` rule), and (b) confirm the double-ridge cross-section is active in `eyeball-despun` so AC4 can't be gamed by a smooth band.
+
+7. **Missing SHARED fields the later cross-tier work needs, but no increment writes.**
+   WHY thin: several fields the spine/cycles presuppose are written by no increment —
+   - **passive continental margins** (#1's CONTINENTAL_FRACTION shifts *area* but nothing writes the shelf-break, so "ocean-world vs supercontinent" reads as a binary step, not coastline morphology);
+   - a **sediment / deposition field** (erosion editors in #7 have nothing to deposit *onto* — deltas/fans/infilled basins (F12) have no host field; breaks CYCLE-1 mass-conservation);
+   - **E12-province** (Tier-1) — palette/inhabitation in #8 will key off an abstract-noise province partition divorced from the history, re-introducing the "bag of overlays" the program exists to kill;
+   - a **shared stress-tensor / orientation field** (the spine's LOCKED Option A) — each writer computes stress *privately*; CYCLE-2 (figure↔grain) has no persistent gen-1 lineament field to offset gen-2 against;
+   - **E2-figure** (body shape: triaxial / Roche / despun-oblate) — every writer assumes a sphere; CYCLE-2 presupposes a figure field that despin *changes*, and no increment writes it.
+   **RESEARCH/DEV NEEDED:** decide which of these become explicit (small) increments or shared-field passes *before* #6/#7/#8 consume them — at minimum the stress/orientation field and the province field, which the program's coherence depends on.
+
+8. **The two cross-tier CYCLES are scheduled with a circular dependency, and fixed-point determinism is under-specified.**
+   WHY thin: CYCLE-1 (atmo↔surface dust/frost budget) is "resolved" in #6, but its producer participants (E10/E11 sculptors) aren't built until #7 — so at #3, E5 has nothing to exchange a budget *with* (one-way potential only), and #6's "bounded fixed point" runs over writers that don't exist yet. CYCLE-2 (figure↔grain) presupposes a figure field and an exported gen-1 lineament field that no increment writes (thin spot 7). Worse, the cross-cutting answer conflates "bounded relaxation passes" (fine for a smoothing operator like the plate Jacobi smooth) with "fixed-point cycle resolution" (a coupled system where pass-count truncation changes the answer and makes output order-of-evaluation-sensitive).
+   **RESEARCH/DEV NEEDED:** an increment must *own* the actual fixed-point solver — define its convergence/bound, prove it is order-independent and deterministic, and reconcile the #3-before-#7 producer/consumer ordering — before #6 claims the cycles are resolved.
+
+---
+
+## Cross-cutting concerns
+
+Condensed from `wryb3pfpb` `crossCuttingConcerns`:
+
+- **Determinism (alea, no `Math.random` / no `Date.now`).** Every writer follows the `plates.js` discipline: all draws seeded via `alea(seedString)` keyed off the integer `macroSeed`; driver-response makes `U` a pure function of `(D-vector, macroSeed)`. The AC1 no-RNG static-source guard (already shipping for plates) is cloned per new writer. The despun writer uses a disjoint `'shell:'` alea namespace so it never shares a stream with plates (`'plates:'`) or tectonic (`'e6:'`). Epoch fixed-points are bounded fixed pass counts — never while-loops on a threshold, never time-stepping. *(Caveat — see thin spot 8: "bounded pass count" ≠ true fixed point for coupled cycles.)*
+- **Identity-preservation (validated POC byte-identical at the Earth reference point).** The driver→tune mapping is CALIBRATED so `f(D_earth) = DEFAULTS` exactly (anchored mapping, not fresh parameterization); a regression test asserts byte-identity at the Earth point first. The despun writer is a *sibling* — the gate checks `isEarthlikePlatePath` FIRST and returns before any shell code, so it **never touches the plate path** (zero clobber, AC7). *(Build-readiness caveat: the worked transfer-function example in `wryb3pfpb` does NOT actually return DEFAULTS at the real Earth point — Earth maps to `tidalHeatNorm ≈ 0.19`, `ageNorm ≈ 0.45`, not 0/0 — so increment 2 must define `D_earth` as a named constant, calibrate every transfer fn to it, and return a literal empty override at the Earth point so the `tune ? {...} : DEFAULTS` ternary takes the untouched branch. This is the #1 must-fix before building #2.)*
+- **lab ≠ game (by charter).** All history-writers live in `src/worldengine/base` (three-free, headless-testable). `src/` never calls `writeBodyRelief`/`route` — the plate path is lab-only today. The game port is the single explicitly-last increment (#9); no increment 1–8 touches `Planet.js` / `MaterialBodyShader.js`.
+- **The two cross-tier cycles** (atmosphere↔surface, figure↔grain) — resolved as bounded fixed-points inside the epoch model (#6). *(See thin spot 8: the schedule is circular and the determinism is under-specified — flagged, not yet mechanized.)*
+- **Verified STALE-SPINE correction.** D12 `tidalHeating`, eccentricity, `magneticField`, age, and metallicity are **ALREADY surfaced + adapted** (`PlanetGenerator.js` ~402/735–741; `adaptL0.js` 34–46). The spine doc's "D12 hard-zeroed at :565" cite is **STALE** — line 565 is the `moons:[]` ring stub; the literal-0 at ~608/613 is a deliberate DATA-ONLY consumption-defer, not a dead driver. So the "un-zero D12 / compute eccentricity" Phase-0 that all 4 panel designs front-loaded is **already done**. The only genuinely missing plumbing is (a) `route()` threading the real D-vector instead of the neutral 3-field `DEFAULT_GRAIN_DRIVERS` (absorbed into increment 2), and (b) the `moons:[]` system-graph stub (deferred to #8, the only place rings/aurora need it).
+
+---
+
+## Open decisions for Max
+
+- **(a) Increment 1 = despun/ice-shell writer** — *chosen* (broaden-first). Confirmed: highest variety-per-effort, lowest risk (never touches the plate path). The source synthesis's #1 (driver-response) is re-ordered to #2 per this decision.
+- **(b) Which thin spots to research now vs defer** — especially the three orphans with no current home: **gas-giant storm/great-spot placement** (4 archetypes' whole identity), **Venus stagnant-lid** (most-recognizable non-Earth rocky), and **sub-Neptune** (no increment home at all). Recommend at least scoping these before #8 so the "11-of-11" claim is real.
+- **(c) Resequence the exotics / technogenic earlier than increment 8?** — #8 is XL and lowest-priority; the program's headline goal is concentrated in the most-cuttable increment. Decide whether to split #8 (archetype-completing writers vs optional Tier-5 overlays) or pull one exotic writer forward.
+- **(d) The increment-1 build-ready design needs the stress-field math pinned during `dev-collab-scope`** — the build-readiness critic flags the despin/diurnal closed-form stress, the 2×2 diagonalization, the stress normalization, and the continuous-R→discrete-`lineamentNode` crest rule as the single largest build hole (two developers would otherwise write materially different fields and the structure ACs would have no anchor). Also pin `SHELL_EXCLUDE = {terrestrial, ocean, gas-giant, sub-neptune, lava, carbon, crystal}` so locked gas/lava worlds can't wrongly route to `eyeball-despun`, and note that `steeredNoise3` must be COPIED (it's module-private in `tectonic.js`). See the increment-1 DESIGN doc in this same directory.
+
+---
+
+## Provenance
+
+Authored **2026-06-27** by working-Claude. Synthesized from two multi-agent design workflow runs in this session:
+- **`wryb3pfpb`** — PROGRAM-DESIGN (whole 9-increment history-systems roadmap + increment-1 detail; 10 agents).
+- **`w5wc97m7d`** — DESPUN-WRITER design (the increment-1 despun/ice-shell relief writer: mechanism + regime scope + key-resolution + verification; 8 agents).
+
+Ground-truth code references: `planet-archetypes.js` (11 canonical ARCHETYPES + F-feature membership), `planet-lod-lab.html` (`PRESET_ARCHETYPE` ~line 1901, `NAMED_BODY` ~line 1896), `docs/FEATURES/world-engine-architecture-spine.md` (the DESTINATION MAP — only E6 relief + E9 hydrology are built today; everything else is the vision). The spine is the destination, not the current state.

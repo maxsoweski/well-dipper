@@ -63,6 +63,27 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > own `dev-collab-scope` pass + brainstorm. Handoff: `/tmp/handoff-lab-plate-isolation-ui-2026-06-27.md`. Deferred
 > follow-ons (named, not abandoned): precip/climate field, driver-response, game `Planet.js` port, Tier-C
 > plate-motion stepping, province-as-referent rewiring, non-Earth-like regimes.
+> **Lab-cosmetic follow-on (deferred 2026-06-27, Max "don't chase rabbits"):** in the isolated AC8 view the
+> river-overlay ribbon reads as an unlit bright flat-blue *decal* over the lit/depth-shaded ocean (it doesn't
+> belong to the sea). Root cause (lab-only, planet-lod-rivers.js): ribbon is `MeshBasicMaterial` (unlit) at
+> `renderOrder:10`, color ramp `#1d3c5e→#4486bb`, scaled to ~1.0004× radius (floats above surface); ocean is
+> lit `vec3(0.04,0.10,0.22)` + specular. Fix = light the ribbon so it shades like the ocean (Option 1) +/- clip
+> it below sea level so it terminates INTO the sea (needs `isOcean` threaded into `buildRibbonGeometry`). NOT a
+> clean one-liner; game river rendering is separate (MaterialBodyShader carve) — untouched. Diag screenshots in
+> session scratchpad `diag-river-ocean-*.png`.
+>
+> **▶ WORLD-ENGINE HISTORY PROGRAM DESIGNED (2026-06-27) → increment 1 = DESPUN/ICE-SHELL writer (broaden-first).**
+> Plate POC Max-UAT-passed ("success for the plate tectonics POC"). Via two multi-agent workflows (program-design
+> `wryb3pfpb` + despun-writer design `w5wc97m7d`) the whole 9-increment history-systems roadmap + increment-1 design
+> are written: `docs/WORKSTREAMS/world-engine-history-program-2026-06-27/` (`ROADMAP.md` = the 9 increments + FULL
+> planet-type→increment coverage map + thin-spots-for-research; `increment-1-shell-relief-DESIGN.md` = build-ready
+> despun/ice-shell writer + MUST-FIX-before-contract, headed by pinning the stress-field math). **Sequencing decision:**
+> broaden-first (despun writer giving icy/volatile-cold/eyeball regimes a real history) over driver-response-first —
+> max variety-per-effort + never touches the validated plate path. **NEXT (fresh session):** Max reviews the docs →
+> `dev-collab-scope` increment-1 (pin the stress math + `SHELL_EXCLUDE` + verification tightenings) → per-AC build via
+> `verify-workstream`. Handoff: `/tmp/handoff-world-engine-history-program-2026-06-27.md`. Thin spots flagged for
+> research (ROADMAP): gas-giant storms, Venus stagnant-lid, sub-Neptune (homeless), exotic-shattered, exotics
+> back-loaded into XL increment 8.
 >
 > **▶ GRAIN-VS-LANDFORM FORK RESOLVED (2026-06-26) → answer (a) BASIS → Option-C plate-placement increment SCOPED + greenlit, build handed to fresh session via workflows.**
 > The AC5 "semi-coherent" verdict was a **generative-model/content** verdict, not a wiring bug. Dig (via workflows)
