@@ -1,0 +1,129 @@
+{
+  "workstream": "supercruise-arrival-modes-2026-06-27",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Supercruise arrival + mode restructure. Split the single F flight toggle into TWO independent buttons: E = supercruise DRIVE on/off (engage / drop-out, anytime, pose-preserving), F = FLIGHT CONTROLS on/off (hands-on piloting <-> latched free-look). Three player modes: Toybox (orbit/examine, Esc/menu), In-Flight (E enters; drive + controls layers), and the autopilot/assist that rides the same ShipControls surface (Autopilot=tour=screensaver picks targets; Assist=player picks via free-look-aim or nav computer). Reuse ShipChoreographer for asymmetric enter(swell)/drop(jolt) camera-shake FX. 'SAFE TO DROP' (_scDropState, exists) becomes guidance, not a gate. Anti-clip = gravity-well speedCap (no damage/penalty system). Fix the Assist moving-moon (Dione) ALIGN hang. Supersedes the 2026-06-25 F=ON/OFF decision; pose-preserving drop avoids the body-center re-anchor bug that forced the old drop-out removal. Builds on feature/supercruise-freelook. Out of scope: render-FX (streak/whoosh/FOV), normal-space flight model, hull/damage, min-speed floor, world-origin rebasing, NPC ships, SC_TUNING floor re-tuning.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-drive-toggle-model",
+      "statement": "The supercruise drive toggle behaves correctly at the model level: engaging accelerates the ship along its nose toward the gravity-well-capped cruise speed; dropping out idles the drive while PRESERVING momentum (no instant zero); re-engaging while the nose vector points into a body cannot exceed ~0 speed (gravity-well anti-clip); pointed away, it accelerates normally.",
+      "verifyVia": {
+        "input": "Headless Vitest: step the model through engage -> cruise -> drop-out -> re-engage near a body vs in open space; engage with the nose toward a body vs away.",
+        "observable": "Speed asymptotes to the gravity-well cap on engage; on drop-out, speed decays from its prior value (not snapped to 0) and position keeps advancing on residual momentum; engage-toward-body keeps speed ~0 (capped); engage-away accelerates."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-freelook-latched",
+      "statement": "Latched free-look routes look input to the head mount and freezes the virtual joystick; toggling it off eases the view back to center-on-nose within tolerance; the ship's trajectory is identical with and without free-look input (free-look writes only the camera).",
+      "verifyVia": {
+        "input": "Headless: fly a fixed trajectory while applying free-look input through the latched flag; toggle off; sample ship heading/trajectory and head yaw/pitch.",
+        "observable": "Ship position+heading series bit-identical with vs without free-look input; head yaw/pitch diverge while latched and ease to ~0 after toggle-off (centered)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-dropout-pose-preserving",
+      "statement": "Pressing E to drop out of supercruise is pose-preserving at any world-origin drift: the camera world position and orientation are unchanged across the drop, the drive idles, and you stay In-Flight (not Toybox). Re-engaging resumes; aimed into a planet you cannot accelerate in.",
+      "verifyVia": {
+        "input": "Live (GPU :9223/:5174, testing-ref §6.5 camera world transform): fly to drift the origin, drop out (E) at several positions incl. near a planet, measure camera transform pre/post; re-engage aimed at vs away from the body.",
+        "observable": "dPos ~= 0 and quatDot ~= 1 across the drop (no snap, scaled-drift-safe); drive idles (speed decays/parked); re-engage-toward-body stays ~0 speed, re-engage-away accelerates; 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-mode-machine",
+      "statement": "The mode machine works live: E from Toybox enters In-Flight and engages the drive; F toggles free-look (click+drag moves the camera, the ship keeps moving, re-grab eases to center-on-nose); Esc exits In-Flight to Toybox with no snap; selection persists appropriately across transitions.",
+      "verifyVia": {
+        "input": "Live: from Toybox press E; in flight press F (drag camera) then F again; press Esc; observe camera + selection through each transition (camera world transform).",
+        "observable": "E enters flight + drives; free-look swings the camera while ship trajectory continues, recenter on re-grab; Esc returns to Toybox orbit with dPos/dQuat ~ no snap; reticle/selection behaves per design; 0 console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-assist-via-freelook-and-nav",
+      "statement": "Assist flies the player to a chosen destination from either target source: aiming at a body in free-look and selecting it, or selecting via the nav computer, then committing (Space) flies throttle+steering there and parks; any manual input cancels the pilot.",
+      "verifyVia": {
+        "input": "Live: in free-look aim at a body, select, Space; separately select via nav computer, Space; then inject manual W/S mid-flight.",
+        "observable": "Pilot flies to the target and parks (SAFE TO DROP shows in-window at arrival); both target sources work; manual input cancels the pilot (takeover), no snap."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-autopilot-tour-no-regression",
+      "statement": "The autopilot tour (screensaver) is unaffected: Q tours bodies via the controls; free-look works during the tour; the unattended loop (warp -> arrival at billboard distance -> tour -> auto-warp) still completes across systems.",
+      "verifyVia": {
+        "input": "Live: Q tour through >=2 stops + free-look during it; let the loop run a full system visit + auto-warp.",
+        "observable": "Tour flies + visits bodies via the supercruise model; free-look swings view without disturbing the tour; auto-warp completes with the star in billboard LOD; no new console errors; Toybox + mobile constraint untouched."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-enter-exit-fx",
+      "statement": "Enter/exit camera-shake FX are present and asymmetric: engaging supercruise (E) produces an acceleration swell; dropping out (E) produces a sharp jolt; the shake is rotation-only (no camera position displacement).",
+      "verifyVia": {
+        "input": "Live: engage then drop out; sample the camera transform + shake driver state across both.",
+        "observable": "Engage shows a swelling rotational beat, drop shows an impact-then-ring beat (distinct envelopes); camera POSITION unchanged by shake (rotation-only invariant); the beats are visible but not nauseating."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-assist-moving-moon",
+      "statement": "Assist converges on an orbiting moon (e.g. Dione) without hanging or flipping its target within a bounded time (the ALIGN throttle-0 dot gate no longer stalls against a moving target).",
+      "verifyVia": {
+        "input": "Headless unit: ALIGN against a moving target whose position advances each step. Live: engage Assist on a moon and time convergence.",
+        "observable": "ALIGN proceeds (leads the target / relaxes/timeouts the dot gate) and CRUISE begins; live convergence on a moon completes within a bounded time with no target flip."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC9-holistic-feel",
+      "statement": "Flying it reads right as a cohesive whole: E drops you in/out of supercruise cleanly with no snap, F free-look feels good and keeps your momentum, reaching a planet feels like an arrival (jolt + park), Assist takes you where you point/select, the autopilot still showcases the system, and Toybox still orbits-and-examines.",
+      "verifyVia": {
+        "input": "Max flies: drops in/out, free-looks while cruising and while parked, flies to a planet manually and via Assist, aims+selects in free-look, watches the autopilot tour, switches to Toybox.",
+        "observable": "Holistic acceptance — does this cohere as the arrival + mode experience Max wanted. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "keydown handler (src/main.js ~8444-8917) — F-handler 8789 (repurpose to free-look), Q autopilot 8825, W/S takeover 8841, Esc chain 8525, the new E (supercruise drive) handler; E and R were unbound",
+      "ShipControls surface (src/flight/ShipControls.js:92-137) — engage/disengage/steer/setThrottle/selectTarget/flyTo/getState; the single door both drivers use",
+      "SupercruiseModel (src/flight/SupercruiseModel.js) — speedCap():57 gravity-well cap (the anti-clip wall) + momentum/coast on drive-idle; scale-bug floors FORBIDDEN to retune",
+      "SupercruisePilot (src/flight/SupercruisePilot.js) — ALIGN/CRUISE/HOLD; capture :125; the ALIGN moving-target hang to fix (AC8)",
+      "HeadMount (src/flight/HeadMount.js) — rotation-only head; addLook/applyTo + eased recenter (update/centered) — latched free-look + recenter reuse",
+      "_scDropState() (src/main.js:6107) — already classifies none|in-window|too-fast; becomes SAFE-TO-DROP guidance",
+      "ShipChoreographer (src/auto/ShipChoreographer.js) — debugAccelImpulse()/debugDecelImpulse() one-shots + shakeEuler; composed by _composeShakeOntoCamera() main.js:6601 after head pose",
+      "ShipCameraSystem (src/camera/ShipCameraSystem.js) — CameraMode TOY_BOX/FLIGHT:53; _applyOrbit:509; trackTarget:601; the bypassed flag for the supercruise camera path",
+      "existing middle-mouse hold-to-look bind (main.js:9351/9406) + joystick gate (~9215, scHead.held) — coexist with the latched F free-look",
+      "AutoNavigator tour (Q / startFlythrough) + commitSelection/commitBurn/focusPlanet -> scControls.flyTo — Assist target sources + tour"
+    ],
+    "outputs": [
+      "E = supercruise drive toggle (engage / pose-preserving drop-out at current position, anytime; enters In-Flight from Toybox)",
+      "F = latched free-look toggle (hands-on <-> free-look; click+drag camera; eased recenter on re-grab; works in any drive state)",
+      "Esc = exit In-Flight -> Toybox (extends the existing Esc chain), pose-preserving",
+      "A drive-idle ('dropped out') in-flight state: drive off, momentum preserved, gravity well parks near bodies, free-look available, re-engage with E (anti-clip on body-bound vector)",
+      "Selection-via-free-look: aim the reticle at a body in free-look + select -> Assist target source",
+      "Asymmetric enter(swell)/drop(jolt) camera-shake beats (a dedicated jolt envelope, bigger/shorter than cruise tremor)",
+      "Assist moving-target ALIGN fix (lead/relax the dot gate) + unit test",
+      "Light consolidation framing autopilot(tour, system-picks) vs assist(you-pick) as one concept over the same pilot"
+    ],
+    "mustStayWorking": [
+      "The F-off / Esc no-snap exit (7bd261c clears focus; flightExitAnchor/adoptCurrentPose pose-preserving) — the new drop-out MUST also be pose-preserving (no body-center re-anchor; that bug class forced the old drop-out removal)",
+      "The shipped supercruise arc: manual flight, autopilot tour + post-warp fly-in + COMMIT BURN, HUD, the ShipControls single-door surface, the control-harness retirements (AutopilotMotion/NavigationSubsystem/FlythroughCamera stay retired; SHIPS_ENABLED=false)",
+      "Scale-bug guard: SC_TUNING cap/hold/DROP floors are scale-free for production radii — NEVER re-tune (two prior live regressions 259f855/d5e4e2f)",
+      "World-origin rebasing semantics — the new drop-out + free-look apply path must go through the rebased-frame conventions (measure the camera world transform, not raw sim coords)",
+      "Toy Box camera mode (drag orbit, scroll zoom) + mobile always-Toy-Box constraint + cameraMode persistence",
+      "Screensaver loop: title -> warp -> arrival at billboard distance -> autopilot tour -> auto-warp, unattended",
+      "Default-mute + Sound Enabled checkbox; nav computer selection/COMMIT BURN flow; targeting reticle",
+      "Existing flight/camera/ui test suites stay green (flight+camera 187 + ui 13 at the arc baseline); known pre-existing failures are not ours"
+    ]
+  }
+}
