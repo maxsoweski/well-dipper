@@ -16,9 +16,15 @@ export const SC_TUNING = {
   ACCEL_TAU: 0.6,           // s — exponential approach to target speed. Tuned 2026-06-24 (Bug B: 1.4 → 0.6) for a
                             //   responsive throttle (perceptible within ~1.3s). MUST stay ≤ ETA_K/4 (=0.75 here) or
                             //   full-throttle approach decel turns underdamped and surges.
-  COAST_TAU: 8.0,           // s — gentle exponential speed decay while the drive is OFF (dropped out / coasting).
-                            //   NOT a scale-bug floor: the gravity-well speedCap still clamps coasting speed so a
-                            //   nearby body parks you. Long (8s) so dropped-out momentum is preserved, not zeroed.
+  DROP_TAU: 0.4,            // s — fast exponential decay to REST while the drive is OFF (dropped out). Short so the
+                            //   ship settles to a near-stop in ~1.5s instead of coasting on preserved momentum.
+                            //   The gravity-well speedCap below still clamps it; this only governs the rate to zero.
+  MIN_CRUISE: 2.0,          // u/s — minimum cruise speed while the drive is ON (you can't crawl/stop in supercruise).
+                            //   At ~149,598 km/s per u/s this is ~299,000 km/s ≈ 1 c: the slowest you cruise in
+                            //   supercruise is ~light speed, matching "supercruise is where you reach/exceed light
+                            //   speed" (sublight lives below it). You go BELOW this only when a gravity well forces
+                            //   you (capture — the floor yields to the cap, see update()) or you DROP OUT (E → rest).
+                            //   KEY TUNING KNOB — dial in live testing for feel.
   TURN_RATE_MAX: 0.7,       // rad/s at rest
   TURN_RATE_MIN_FRAC: 0.25, // turn authority remaining at full local speed
   THROTTLE_RATE: 0.6,       // throttle units/s for held W/S stepping
@@ -31,7 +37,7 @@ export class SupercruiseModel {
     this.orientation = new THREE.Quaternion();
     this.speed = 0;                            // u/s along the nose (signed: reverse < 0)
     this.throttle = 0;                         // -1..1
-    this._driveOn = true;                      // supercruise drive engaged. OFF → coast (momentum preserved)
+    this._driveOn = true;                      // supercruise drive engaged. OFF → settle to rest (zero velocity)
     this.turnInput = { yaw: 0, pitch: 0 };     // -1..1 each
     this._bodies = [];                         // [{ position: Vector3, radius: number }]
     this._nose = new THREE.Vector3();
@@ -46,13 +52,13 @@ export class SupercruiseModel {
   setThrottle(t) { this.throttle = THREE.MathUtils.clamp(t, -1, 1); }
 
   /** Engage (true) / drop out (false) the supercruise drive.
-   *  OFF → the model stops propelling: it no longer ramps toward the throttle
-   *  target. It COASTS — current velocity preserved, decaying gently by COAST_TAU,
-   *  while the gravity-well speedCap still clamps the max so proximity to a body
-   *  parks you. ON → the existing throttle/accel behavior resumes. */
+   *  OFF → the model stops propelling and SETTLES TO REST: speed decays fast to
+   *  zero by DROP_TAU (~1.5s), not coasting on preserved momentum. The gravity-well
+   *  speedCap still clamps the max while it settles. ON → the existing
+   *  throttle/accel behavior resumes (with the MIN_CRUISE floor). */
   setDrive(on) { this._driveOn = !!on; }
 
-  /** True while the supercruise drive is engaged; false while coasting (dropped out). */
+  /** True while the supercruise drive is engaged; false while settling to rest (dropped out). */
   get driveOn() { return this._driveOn; }
 
   setTurnInput(yaw, pitch) {
@@ -97,16 +103,24 @@ export class SupercruiseModel {
     }
     // Speed update. Two regimes:
     if (this._driveOn) {
-      // DRIVE ON: exponential approach to throttle × cap. The cap falling as we
-      // near a body IS the Elite decel-on-approach.
-      const target = this.throttle * this.speedCap();
+      // DRIVE ON: exponential approach to throttle × cap, floored at MIN_CRUISE —
+      // you can't crawl/stop in supercruise; throttle 0 still cruises. The cap
+      // falling as we near a body IS the Elite decel-on-approach. The floor YIELDS
+      // to the cap (floorEff = min(MIN_CRUISE, cap)) so a nearby gravity well can
+      // still force you below the cruise floor and capture stays possible.
+      // NOTE: target is clamped ≥ floorEff > 0, so this also removes reverse-while-
+      // in-supercruise — intended ("can't crawl/stop in SC").
+      const cap = this.speedCap();
+      const floorEff = Math.min(this.tuning.MIN_CRUISE, cap);
+      const target = THREE.MathUtils.clamp(this.throttle * cap, floorEff, cap);
       const k = 1 - Math.exp(-dt / this.tuning.ACCEL_TAU);
       this.speed += (target - this.speed) * k;
     } else {
-      // DRIVE OFF (dropped out): COAST. Do NOT pull toward the throttle target —
-      // preserve momentum, decaying only by the gentle COAST_TAU. The well cap
-      // below still clamps it, so coasting into a body parks you.
-      this.speed *= Math.exp(-dt / this.tuning.COAST_TAU);
+      // DRIVE OFF (dropped out): SETTLE TO REST. Do NOT pull toward the throttle
+      // target — decay fast to zero by the short DROP_TAU. The well cap below still
+      // clamps it while it settles. (Old behavior was a gentle COAST_TAU that
+      // preserved momentum; reversed 2026-06-27 → drop-to-rest.)
+      this.speed *= Math.exp(-dt / this.tuning.DROP_TAU);
     }
     // Gravity-well clamp (both regimes): magnitude never exceeds the local cap,
     // sign preserved (reverse momentum survives). Anti-clip: nose-into-a-body

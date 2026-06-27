@@ -9090,7 +9090,7 @@ window.addEventListener('keydown', (e) => {
       scModel.setDrive(true);       // ensure the drive is propelling
       shipChoreographer.enterImpulse();
     } else if (action === 'dropout') {
-      scModel.setDrive(false);      // coast — momentum preserved, pose unchanged
+      scModel.setDrive(false);      // drop to rest at zero velocity, pose unchanged
       shipChoreographer.dropImpulse();
     } else { // 'reengage'
       scModel.setDrive(true);       // re-engage; anti-clip via speedCap
