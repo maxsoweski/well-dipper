@@ -1,0 +1,80 @@
+{
+  "workstream": "world-engine-shell-relief-2026-06-27",
+  "commit": "54ea74d",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "evidence": "DETERMINISM + NO-RNG, unit/headless. grep on src/worldengine/base/shellRelief.js shows ZERO Math.random/Date.now (all randomness seeded via alea keyed off integer macroSeed). Single fixed-count relaxation loop (PASSES=RELAX_PASSES=4), no convergence-while. npx vitest run tests/worldengine-base-shell-structure.test.js => 23/23 pass. byte-identical determinism asserted across {icy-active,volatile-cold,eyeball-despun} x {1,2,3,7,42} on height,diag.U,cellId,w0,stressTensile; |U|<SHELL_BOUND=4 finite+nontrivial; diag.relaxPasses===RELAX_PASSES. grainAngle/faultDensity byte-identity follows transitively (pure deterministic derivatives of the asserted fields). Working-tree diff (CameraChoreographer.js, LabMode.js) does not touch shellRelief.js; AC1 surface committed at 54ea74d.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2",
+      "result": "PASS",
+      "evidence": "STRUCTURE (signal must PASS), unit/headless. Three it() blocks map 1:1 to the AC2 observables, all green: |corr(U, signed stress-proximity)|>=0.5 every regime; lineament(ridge-shoulder) amplitude >=2x per-regime quiet denominator; corr(thetaTraj, despin principal-axis about w0)>=0.5 for eyeball-despun+volatile-cold. ANTI-CIRCULARITY verified by source audit: predictor stressProximityPredictor reads only diag.thetaTraj/diag.stressTensile/geometry, never diag.U or diag.lineamentNode (lineamentNode only partitions for the amplitude ratio; U is only the correlation TARGET). Despin axis rebuilt from pure geometry (w0+node pos), arm's-length from the writer. Writer genuinely populates stressTensile (signed sigma1/STRESS_REF from a diagonalized tensor) and thetaTraj (not stubbed zeros). Thresholds match the AC statement; pending wccpy01ez recorded RESOLVED 2026-06-27. npx vitest run => 23/23 (30/30 with both shell files).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC3",
+      "result": "PASS",
+      "evidence": "LATITUDE CONTROL (must FAIL to explain), unit/headless. Test asserts mean varExplainedByLatitudeY<0.15 AND < mean varExplainedByStress, every regime. vitest => 23/23 pass incl AC3. Instrumented probe over seeds [1,2,3,7,42]: icy-active latY=0.0259/stress=0.9984; volatile-cold latY=0.0345/stress=0.9984; eyeball-despun latY=0.0496/stress=0.9989 \u2014 stress dominates by ~20-40x. HONEST NUANCE (does not change verdict): the test asserts on the MEAN over 5 seeds, not per-seed; on seed 1 eyeball-despun latY=0.163 (>0.15 individually) and volatile-cold latY=0.132 \u2014 the authors documented this (seeded paleo-axis occasionally aliases the carrier +y pole) and restate the falsifier as a property of the writer (the mean), a faithful reading of contract intent. Even worst-case, the load-bearing latY<stress holds per-seed (0.163 vs 0.999). git diff 54ea74d on shellRelief.js + test file is EMPTY (working tree matches committed).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC4",
+      "result": "PASS",
+      "evidence": "TILTED-BAND CONTROL, unit/headless. Production analytic double-ridge cross-section at shellRelief.js:310-313 (trough+two-shoulders) makes U oscillate ACROSS each ridge and is active for eyeball-despun (DESPIN_W=1.0). Test (test.js:329-343) correlates U vs sin^2(colatitude about seeded w0) and asserts varExplainedByStress > varExplainedByLatitudeW0 for every regime x seed; predictor rebuilt from published diag.thetaTraj+max(0,stressTensile), never U/lineamentNode (non-circular). vitest => 23/23, AC4 case executed not skipped (no .skip/.only/.todo). Independent probe across 3 regimes x 5 seeds: stress=0.995-0.999 vs latW0=0.006-0.178; worst-case margin (stress-latW0)=0.821 at eyeball-despun seed 7. Decisive, not a near-tie. Working tree byte-identical to 54ea74d for shellRelief.js+test.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC5",
+      "result": "PASS",
+      "evidence": "NOISE CONTROL (must FAIL vs noise; gated variant collapses), unit/headless. vitest => 23/23. AC5 block (2 tests) both PASS: corr(U, amplitude-matched independent simplex)<0.15 every regime (independent probe: icy-active=0.0206, volatile-cold=0.1052, eyeball-despun=0.0084, all <0.15); gate+steering-DISABLED variant FAILS AC2(a) corr while the REAL field PASSES (realCorr>=0.5, ctrlCorr<realCorr, ctrlCorr<0.5). AC2 precondition block also passes. HONEST COVERAGE GAP (does not block): the test name claims the control also breaks AC2(b)'s 2x ratio, but the test asserts only the AC2(a) corr collapse, not the AC2(b) ratio break for the control. The decisive falsifier (corr collapse + corr(U,noise)<0.15 + real field passes) is exercised and green; recommend tightening the test to also assert the control's lineament/quiet ratio drops below 2x to fully match the contract observable.",
+      "adversarialVotes": "2/3 sufficient"
+    },
+    {
+      "id": "AC6",
+      "result": "PASS",
+      "evidence": "VARIETY (two macroSeeds -> different worlds, each reproducible per seed), unit/headless. vitest => 23/23. Green committed assertions cover 3 of 4 observable clauses: different w0 across seeds; convection-cell count not constant; cell-partition geometry differs >30% for closest pair; each seed reproducible (byte-identical rebuild across 5 seeds x 3 regimes on U/cellId/w0/stressTensile/height). NUANCE (does not block): the observable's lineamentNode-overlap <0.2 clause has NO dedicated committed assertion (source defers lineament-network variety to SLICE B; the committed test pins cellId-partition disagreement instead). Verifier confirmed the literal clause via a read-only throwaway probe over seeds 1-5, icy-active, N=600: all 10 pairs Jaccard 0.000-0.063, overlap/min 0.000-0.123 (<0.2). A regression-grade pin of the lineamentNode-overlap<0.2 clause is the one missing committed assertion for full literal coverage.",
+      "adversarialVotes": "2/3 sufficient"
+    },
+    {
+      "id": "AC7",
+      "result": "PASS",
+      "evidence": "NO-CLOBBER of the Earth-like plate path, integration/headless. git show 54ea74d on planet-lod-rivers.js/plates.js/tectonic.js is EMPTY \u2014 the entire plate path is untouched. Observable 1: writeBodyRelief (planet-lod-rivers.js:424-430) routes unlocked terrestrial/ocean to writePlateUpliftSphere, returning path:'plate', shellDiag:null; earthlike gate checked BEFORE shellRegimeOf so shell can never intercept. tests/worldengine-plate-regime-gate.test.js green. Observable 2: plate U byte-identity established structurally \u2014 plates.js does NOT import shellRelief.js (decoupled), is unchanged by the commit, and is pinned byte-identically deterministic (worldengine-base-plates.test.js AC1, 7/7). Unchanged deterministic code + identical input => identical output. Observable 3: worldengine-base-plate-structure.test.js (plate AC2) passes unchanged. Combined suite run: 4 files / 90 tests passed; plate determinism 7/7.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC8",
+      "result": "PASS",
+      "evidence": "No-clobber of the despun fallback + SHELL_EXCLUDE dispatch safety, integration/headless. SHELL_EXCLUDE (shellRelief.js:39) = {terrestrial,ocean,gas-giant,sub-neptune,lava,carbon,crystal} \u2014 exact match to the AC set. shellRegimeOf: map hit wins; else (locked && !SHELL_EXCLUDE.has) => eyeball-despun; else null. tests/worldengine-shell-regime-gate.test.js 7/7: impact-airless unlocked => path:'despun', shellDiag:null, height byte-identical to despunReference (same writeGrainSphere+writeHeightSphere calls/args/seed); LOCKED gas-giant/lava => despun (NOT shell), byte-identical. shell-structure unit assertions corroborate shellRegimeOf===null for all named exclude keys + earthlike. 30/30 green. One AC-text imprecision (not a code defect): verifyVia lists 'null+locked' as a SHELL_EXCLUDE case but null is the Europa fall-through that correctly routes to eyeball-despun; the genuine locked-gas exclusion is what the code+test verify.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC9",
+      "result": "PASS",
+      "evidence": "Regime-routing seam fires, integration/headless. shellRegimeOf(archetype,locked) at shellRelief.js:48-53; consumed by writeBodyRelief (planet-lod-rivers.js:424-439) and the lab (planet-lod-lab.html:3657-3658). tests/worldengine-shell-regime-gate.test.js => 7/7, incl: ice/eyeball/volatile route to the right normalized tag; Europa fall-through (archetype=null+locked => eyeball-despun, never sin^2); isShellReliefPath agrees with dispatch + earthlike never matches. Independent node exercise: Frozen/Eyeball/Europa/Titan all route correctly via explicit PRESET_ARCHETYPE map hits; with the Europa/Titan additions removed, null+locked Europa still => eyeball-despun via locked-fallback. CAVEAT confirmed (matches the AC NOTE): Titan preset is tidalState.locked:false, so it is single-covered by its map line with no fallback net \u2014 removing that line REGRESSES Titan to sin^2. All AC9 observables confirmed by the committed gate + direct exercise.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC10",
+      "result": "PASS",
+      "evidence": "LIVE-DRIVEN by working-Claude (main thread) via chrome-devtools on the running lab (localhost:5173, Chrome debug 9223), seed 1234, body-preset dropdown change + reliefBakeStrength(1) + riversReroute, 40k nodes. ALL 4 PRESETS PASS: Europa & Frozen (icy-active) heightSource=carrier, varExplainedByStress=0.404 > latY=0.006 AND > latW0=0.060, lineamentInteriorRatio=3.16, grainStressCorr=0.77; Eyeball (eyeball-despun) stress=0.392 > latY=0.002 AND > latW0=0.114, ratio=2.62, grainCorr=1.00; Titan (volatile-cold) stress=0.393 > latY=0.002 AND > latW0=0.107, ratio=2.68, grainCorr=0.95. heightSource==carrier and regime matches preset for all four. Probe degeneracy fixed pre-verify: writer exposes reliefStress diag field; predictor arm's-length from stress geometry, zero latitude info.",
+      "adversarialVotes": "live-driven by working-Claude post-workflow \u2014 4/4 presets pass"
+    },
+    {
+      "id": "AC11",
+      "result": "deferred-to-max",
+      "evidence": "UAT-layer AC \u2014 never PASSed or driven by any agent; deferred-to-max by invariant and by explicit contract note ('Never PASSed by any agent \u2014 deferred-to-max'). Static diff classification only: the working-tree diff (src/auto/CameraChoreographer.js critically-damped look-at spring + MIN_TARGET_DISTANCE guard; src/debug/LabMode.js rewiring warp scenarios 4/7 to the full user-warp-flow) is orthogonal camera/lab-harness work and touches none of this workstream's contract filesTouched (shellRelief.js, worldengine-base-shell-structure.test.js, planet-lod-rivers.js, planet-lod-lab.html, build-intent doc). So it neither advances nor regresses AC11. MAX UAT: open planet-lod-lab.html and look at the Europa/Frozen/Eyeball/Titan presets \u2014 accept only if each reads as a distinct, believable icy/despun world (cracks, cycloids, chaos terrain) rather than a latitude smear / sin^2 banding, and the four worlds feel meaningfully different from each other.",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX 54ea74d \u2014 unit PASS (AC1-AC6, 6/6) + integration PASS (AC7-AC9 headless + AC10 live-driven by working-Claude, all 4 presets pass) + UAT (AC11) deferred to Max. Non-blocking follow-ups: (a) pin AC5 control lineament/quiet ratio-break; (b) pin AC6 lineamentNode-overlap<0.2; (c) AC9 CAVEAT: Titan is single-covered by its PRESET_ARCHETYPE line (preset unlocked => no locked-fallback net), so deleting that line silently regresses Titan to sin^2 bands.",
+  "summaryForMax": "Workstream world-engine-shell-relief-2026-06-27 at commit 54ea74d. The shell-relief stress field (SLICE B) replaces the old stubbed-to-zero placeholder with real despun+diurnal tidal-stress math, gated and routed per planet archetype.\n\nWHERE IT STANDS BY LAYER:\n- Unit (AC1-AC6): all 6 PASS headless. tests/worldengine-base-shell-structure.test.js runs 23/23 green. The field is provably deterministic + no-RNG, structurally driven by stress (not latitude bands, not noise), correlates with the despin axis, and produces reproducible-but-varied worlds across seeds. Two non-blocking test-coverage gaps worth a cheap follow-up pin: (a) AC5's gate-disabled control test asserts the corr collapse but not the named AC2(b) 2x-ratio break; (b) AC6's lineamentNode-overlap<0.2 clause is satisfied in practice (verified by a throwaway probe, all pairs <0.2) but has no committed regression assertion. Also AC3's <0.15 latitude bound holds on the seed-mean, not every individual seed (a seeded paleo-axis can alias the +y pole on one unlucky draw) \u2014 the load-bearing 'stress beats latitude' half holds on every seed.\n- Integration headless (AC7-AC9): all 3 PASS. The Earth-like plate path is untouched and still byte-identical/deterministic (no-clobber confirmed); the despun fallback and SHELL_EXCLUDE dispatch safety hold (locked gas/lava stay off the shell path, byte-identical to the despun writers); and the regime-routing seam fires correctly for Europa/Frozen/Eyeball/Titan. One thing to keep in mind from AC9: Titan is single-covered by its explicit map line with NO locked-fallback net (its preset is unlocked), so deleting that one PRESET_ARCHETYPE line would silently regress Titan back to sin^2 bands.\n\nWHAT YOU NEED TO DO:\n1. AC11 (UAT \u2014 your call alone): Open planet-lod-lab.html and step through the Europa, Frozen, Eyeball, and Titan presets. Accept only if each one reads as a distinct, believable icy/despun world \u2014 visible cracks, cycloids, chaotic terrain \u2014 rather than a smooth latitude smear or sin^2 banding, and the four worlds feel meaningfully different from one another. No agent can make this call.\n\nWHAT'S NOT ON YOU \u2014 one objective live check still owed by working-Claude (main thread), not deferred to you:\n2. AC10 (live integration): drive the running lab and run _lab.shellProbe() for each preset, confirming the live heightSource=='carrier' router wiring + live regime tags, that varExplainedByStress beats latitude (latY/latW0) and corr(U,stress)>=0.5, and capturing a screenshot showing distinct cracks/cycloids/chaos rather than sin^2 bands. The headless suite already corroborates the math; this just confirms it on the live router with a visual. Until that runs, the verdict stays INSUFFICIENT rather than VERIFIED_PENDING_MAX. Once working-Claude drives AC10 green, integration is PASS and it moves to VERIFIED_PENDING_MAX <sha> for your UAT.",
+  "_ac10Provenance": "AC10 live-integration driven by working-Claude (main thread) post verify-workstream run wgldmo012, per dev-collab design (liveBranch=main). verdict.json combines workflow headless+adversarial layers with working-Claude live AC10."
+}

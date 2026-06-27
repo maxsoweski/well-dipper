@@ -85,6 +85,42 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > research (ROADMAP): gas-giant storms, Venus stagnant-lid, sub-Neptune (homeless), exotic-shattered, exotics
 > back-loaded into XL increment 8.
 >
+> **▶ INCREMENT 1 SHELL-RELIEF — SLICE A+B BUILT → VERIFIED_PENDING_MAX `54ea74d` (2026-06-27).** The despun/ice-shell
+> stress-field writer is DONE. SLICE A (dispatch seam + determinism + scaffold) `70012a8`; SLICE B (the stress field)
+> `54ea74d`. **What it does:** replaces the stubbed-to-zero stress in `src/worldengine/base/shellRelief.js` with real
+> despun + diurnal **tidal-stress** math (despin tensor about seeded paleo-axis w0 + diurnal A=2 tensor → summed,
+> rotated into {east,north}, direct-eigenvector diagonalized → thetaTraj-steered double-ridge lineaments + chaos
+> overlay → carrier.height). Europa/Frozen (icy-active), Eyeball (eyeball-despun), Titan (volatile-cold) now render as
+> **stress-driven** icy/despun worlds, NOT a `sin²(lat)` smear (~2→~5 of 11 archetypes genuinely distinct). Math pinned
+> (adversarially-corrected) in `SLICE-B-stress-math.md`; the 3 corrections (meridional despin axis / non-degenerate A=2
+> diurnal coeffs / direct-eigenvector + analytic STRESS_REF) verified honored. **Verdict (`verdict.json`):** unit
+> **PASS** (AC1–AC6, 23/23 headless + 3× adversarial each); integration **PASS** (AC7–AC9 headless no-clobber/dispatch/
+> seam + **AC10 live-driven by working-Claude** on :5173 (debug 9223), all 4 presets: `heightSource=='carrier'`,
+> `varExplainedByStress` 0.39–0.40 **> latY AND > latW0**, `lineamentInteriorRatio` ≥2.6, `grainStressCorr` 0.77–1.00);
+> **AC11 UAT = Max alone, PENDING.** Built via a build→verify→fix workflow (4 adversarial reviewers PASS round-0) then
+> `verify-workstream` (`wgldmo012`, 43 agents). **A live AC10 probe degeneracy was caught + fixed before claiming pass**
+> (BFS-from-high-tensile-seeds collapsed to corr=0 for despun/volatile where stress is broadly tensile → exposed a
+> `reliefStress` diag field; probe predictor now arm's-length stress-geometry, zero latitude info). **NEXT = Max AC11
+> UAT** (lab-only, :5173): step Europa/Frozen/Eyeball/Titan presets — accept only if each reads as a distinct,
+> believable icy/despun world (cracks, cycloids, chaotic terrain), not a latitude smear, and the four feel meaningfully
+> different. Renders SMALL at distance-20 (zoom in); the legacy in-shader synth (F1–F40) still overlays the carrier
+> relief, so isolating may help — see the Lab-cleanup track below. **Non-blocking follow-ups:** (a)+(b) test-hardening
+> pins for AC5 control-ratio-break + AC6 lineamentNode-overlap<0.2 (the load-bearing falsifiers are already green; pins
+> in flight this session); (c) **AC9 CAVEAT — Titan is single-covered by its `PRESET_ARCHETYPE` line (preset unlocked →
+> no locked-fallback net), so deleting that line silently regresses Titan to sin² bands.** Artifacts:
+> `docs/WORKSTREAMS/world-engine-shell-relief-2026-06-27/` (`intent.md`, `contract.json`, `SLICE-B-stress-math.md`,
+> `verdict.json`). **Push HOLD** (campaign-wide). Handoff resumed from `/tmp/handoff-world-engine-shell-relief-slice-b-2026-06-27.md`.
+>
+> **⚠ OPEN — Max's calls (don't silently resolve):** (1) **AC11 UAT** above. (2) **World Engine Lab cleanup**
+> (HIDE-don't-delete — Max-decided) should land **BEFORE** the shell-relief UAT for a clean view: rename LOD LAB→WORLD
+> ENGINE LAB, collapse the synth F1–F40 folders into a 'legacy' drawer (render-safe — the synth is STILL the live
+> renderer; the carrier only swaps base height), drop the voronoi3d debug spike. Needs its own `dev-collab-scope` pass.
+> (3) **JOURNEY-vs-NOW DRIFT:** `JOURNEY.md` "Current objective" still reads the **35% SCREENSAVER-MVP** milestone (defect/
+> music/10-min KRs) while the live campaign is the **world-engine history program** (60% ENRICHED depth). Reconcile the
+> stated objective — Max's call. (4) **cross-tier-cycles research came back DEGENERATE** (placeholder stub, no mechanism)
+> — re-run that one finding? **Other tracks landed:** ROADMAP folded with the preserved thinSpots research (`1ba3370`;
+> +2 new increments 4.5 exotic-shattered, 5.5 shared-fields), research output preserved durably (`71172a1`).
+>
 > **▶ GRAIN-VS-LANDFORM FORK RESOLVED (2026-06-26) → answer (a) BASIS → Option-C plate-placement increment SCOPED + greenlit, build handed to fresh session via workflows.**
 > The AC5 "semi-coherent" verdict was a **generative-model/content** verdict, not a wiring bug. Dig (via workflows)
 > answered the fork: **(a)** — what's on screen is precursor E6 grain (latitude bands; the carve never touches the baked
