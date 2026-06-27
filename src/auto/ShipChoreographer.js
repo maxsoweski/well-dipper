@@ -463,6 +463,9 @@ export class ShipChoreographer {
         this._zeroShake();
         const { type } = this._pendingJoltFire;
         this._pendingJoltFire = null;
+        // Manual beat wins outright — discard any competing pending cruise
+        // tremor so it can't stomp the jolt on a later frame (T7 double-fire).
+        this._pendingDebugFire = null;
         this._startJoltEvent(type);
       } else if (this._eventActive && this._eventIsJolt) {
         // Active jolt continues — leave it for the sampler below.
@@ -593,7 +596,13 @@ export class ShipChoreographer {
     if (this._pendingJoltFire !== null && subPhase === 'traveling') {
       const { type } = this._pendingJoltFire;
       this._pendingJoltFire = null;
-      // Jolt fires replace any active event (manual beat wins).
+      // Jolt fires replace any active event (manual beat wins). The manual beat
+      // also DISCARDS any competing pending cruise tremor on the same frame —
+      // otherwise the debug fire would stomp the just-started jolt on the next
+      // frame, cutting the drop beat short AND firing a cruise tremor (the
+      // double-fire T7 guards against on autopilot legs). (supercruise-arrival-
+      // modes-design-2026-06-27, Feature 5 / Task 7.)
+      this._pendingDebugFire = null;
       this._startJoltEvent(type);
     } else if (this._pendingDebugFire !== null && subPhase === 'traveling') {
       const { type } = this._pendingDebugFire;

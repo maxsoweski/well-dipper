@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ShipChoreographer } from '../ShipChoreographer.js';
+import { _seedSimRandom } from '../../core/SimRandom.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Task 4 — enter-swell / drop-jolt shake envelopes (AC7).
@@ -116,6 +117,71 @@ describe('ShipChoreographer enter/drop jolt envelopes', () => {
     c.dropImpulse();
     const peak = sampleMaxShake(c, 1.0, { phase: 'orbiting' });
     expect(peak.magnitude).toBeGreaterThan(CRUISE_TREMOR_PEAK_RAD);
+  });
+
+  it('drop jolt out-lives a mid-ring phase flip (lifetime-on-drop, AC7/T7)', () => {
+    // T7 caveat: pressing E to drop out fires dropImpulse() and THEN flips the
+    // drive off — we STAY In-Flight so the sc-compose branch stays live, but the
+    // motion-frame phase the choreographer sees can change from 'traveling' to a
+    // non-traveling phase on the very next frame (e.g. an assist pilot that was
+    // mid-leg snaps to HOLD → 'orbiting'). The drop beat must NOT be cut short by
+    // that flip; the belt-and-suspenders gate exempts an active jolt so it rings
+    // out fully even when driveOn=false changes the surrounding phase.
+    c.dropImpulse();
+    // First frame: fire the jolt while still 'traveling' (the last driving frame).
+    c.update(1 / 60, {
+      position: { x: 0, y: 0, z: 0 },
+      phase: 'traveling',
+      motionStarted: false,
+      isShortTrip: false,
+      warpExit: false,
+    });
+    // Now flip the surrounding phase to non-traveling (the drive went idle) and
+    // keep stepping through the rest of the jolt window. The shake must stay
+    // non-zero across the flip rather than being silenced on the transition.
+    let maxAfterFlip = 0;
+    const dt = 1 / 60;
+    const steps = Math.round(0.4 / dt); // jolt duration is <=0.8s; 0.4s is well inside
+    for (let i = 0; i < steps; i++) {
+      c.update(dt, {
+        position: { x: 0, y: 0, z: 0 },
+        phase: 'orbiting', // drive idle / pilot HOLD — was 'traveling' last frame
+        motionStarted: false,
+        isShortTrip: false,
+        warpExit: false,
+      });
+      const se = c.shakeEuler;
+      const mag = Math.max(Math.abs(se.pitch), Math.abs(se.yaw), Math.abs(se.roll));
+      if (mag > maxAfterFlip) maxAfterFlip = mag;
+    }
+    // The drop beat survived the phase flip and kept composing.
+    expect(maxAfterFlip).toBeGreaterThan(CRUISE_TREMOR_PEAK_RAD);
+  });
+
+  it('drop jolt is not double-driven by an incidental cruise tremor on the same frame', () => {
+    // T7: on autopilot legs the pilot phase edges fire debugAccelImpulse (CRUISE)
+    // / debugDecelImpulse. If a manual drop lands on the same frame as a pending
+    // cruise tremor, the JOLT must win (manual beat takes precedence) — the two
+    // must NOT both drive shakeEuler, which would compound into an over-large
+    // rotation. Queueing both then stepping must yield exactly the jolt envelope,
+    // identical to a clean drop with no competing debug fire. Seed the RNG before
+    // each run so the carrier phases match and the peaks are directly comparable
+    // (simRandom is one shared advancing sequence, so without re-seeding the two
+    // choreographers would draw different carriers).
+    _seedSimRandom(1234);
+    const combined = makeChoreographer();
+    combined.dropImpulse();
+    combined.debugAccelImpulse(); // also pending on the same frame
+    const combinedPeak = sampleMaxShake(combined, 1.0).magnitude;
+
+    _seedSimRandom(1234);
+    const clean = makeChoreographer();
+    clean.dropImpulse();
+    const cleanPeak = sampleMaxShake(clean, 1.0).magnitude;
+
+    // The combined-fire peak equals the clean jolt peak — the jolt replaced the
+    // debug tremor; they did not sum into a bigger rotation.
+    expect(combinedPeak).toBeCloseTo(cleanPeak, 10);
   });
 
   it('jolt decays back to zero after its (short) duration', () => {
