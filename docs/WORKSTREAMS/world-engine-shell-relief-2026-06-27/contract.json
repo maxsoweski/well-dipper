@@ -155,8 +155,9 @@
     "Verification tightenings: AC4 eyeball must use the double-ridge cross-section; AC5 noise control disables BOTH sigma1 gate AND thetaTraj steering; the shellProbe/AC2 predictor is rebuilt arm's-length from stressTensile/thetaTraj GEOMETRY (not lineamentNode); AC2(b) denominator branches per regime (eyeball has no cells -> use quiet/non-lineament nodes)."
   ],
   "pendingInputs": [
-    "Stress-field math closed forms + thresholds from research workflow wccpy01ez (feeds AC2/AC3/AC4/AC5 + STEP 1/STEP 3 of the writer). The math-INDEPENDENT slice (AC1 determinism infra, AC6 variety scaffolding, AC7/AC8/AC9 seam + dispatch) is buildable before the math lands."
+    "RESOLVED 2026-06-27 (research wccpy01ez + 3 adversarial skeptics): the stress-field math is pinned in SLICE-B-stress-math.md (corrected despin meridional-most-tensile, non-degenerate A=2 diurnal coefficients, direct-eigenvector diagonalization, analytic resolution-independent STRESS_REF). SLICE A (AC1/AC6/AC7/AC8/AC9) is built + green @70012a8. SLICE B (AC2/AC3/AC4/AC5 + live AC10) implements STEP 1/3/4/5 from that doc."
   ],
+  "mathSpecRef": "SLICE-B-stress-math.md",
   "buildSlices": [
     "SLICE A (math-independent, buildable now): SHELL_REGIMES map + shellRegimeOf + SHELL_EXCLUDE; isShellReliefPath; 3-way writeBodyRelief; shellDiag threading + get shellDiag() accessor; PRESET_ARCHETYPE lab additions; the determinism scaffold (verbatim vec3 helpers, meanEdgeAngle, alea 'shell:' namespace, SHELL_DEFAULTS skeleton, convection-cell Voronoi partition + BFS, RELAX). Covers AC7, AC8, AC9, and the AC1 no-RNG/determinism harness + AC6 variety scaffolding.",
     "SLICE B (needs stress math): STEP 1 stress tensor field + diagonalization; STEP 3 steered lineaments + double-ridge cross-section + crest rule; STEP 4 chaos overlay; STEP 5 assemble. Covers AC2, AC3, AC4, AC5 and the live AC10."
