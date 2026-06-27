@@ -10,7 +10,7 @@
 // in main.js; here we model only the DECISION so it's testable without three.js
 // or the live host — same shape as escCascadeAction / nextDriveAction.
 import { describe, it, expect } from 'vitest';
-import { modeSwapAction } from '../flightModes.js';
+import { modeSwapAction, commitBurnSwapsToHelm } from '../flightModes.js';
 
 describe('modeSwapAction — the M-key ORRERY<->HELM toggle (pure)', () => {
   it('swaps HELM -> ORRERY when in HELM (scManual true)', () => {
@@ -52,6 +52,33 @@ describe('modeSwapAction — the M-key ORRERY<->HELM toggle (pure)', () => {
     for (const scManual of [false, true]) {
       const a = modeSwapAction({ scManual });
       expect(a.enterFlight !== a.exitFlight).toBe(true); // XOR: never both, never neither
+    }
+  });
+});
+
+describe('commitBurnSwapsToHelm — the select-and-jump auto-swap gate (pure)', () => {
+  it('swaps to HELM for celestial bodies launched from ORRERY (desktop)', () => {
+    for (const kind of ['planet', 'star', 'moon']) {
+      expect(commitBurnSwapsToHelm(kind, /*scManual*/ false, /*isMobile*/ false)).toBe(true);
+    }
+  });
+
+  it('does NOT swap for a SHIP target — ships keep the legacy ORRERY ship-lock (regression guard)', () => {
+    // The bug: setting _scManual=true before focusShip routes the sim into the
+    // supercruise branch and starves navSubsystem.flythrough motion → ship never
+    // approached, player stranded parked in HELM. Ships must NOT auto-swap.
+    expect(commitBurnSwapsToHelm('ship', false, false)).toBe(false);
+  });
+
+  it('does NOT swap when already in HELM (scManual true) — no double-enter', () => {
+    for (const kind of ['planet', 'star', 'moon', 'ship']) {
+      expect(commitBurnSwapsToHelm(kind, true, false)).toBe(false);
+    }
+  });
+
+  it('does NOT swap on mobile — mobile is ORRERY-only', () => {
+    for (const kind of ['planet', 'star', 'moon']) {
+      expect(commitBurnSwapsToHelm(kind, false, /*isMobile*/ true)).toBe(false);
     }
   });
 });

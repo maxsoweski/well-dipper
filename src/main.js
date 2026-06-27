@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -6232,7 +6232,11 @@ function commitBurn() {
   // grabbing the stick/throttle cancels the burn even when launched from ORRERY.
   // Mobile never reaches a burn-from-ORRERY swap (it is ORRERY-only / Toy-Box
   // locked; setCameraMode re-asserts that lock, so this is a no-op there).
-  if (!_scManual && !_isMobile) {
+  // SHIP targets are EXCLUDED (commitBurnSwapsToHelm): focusShip uses the
+  // quarantined-legacy navSubsystem ship-lock path, which only advances in the
+  // ORRERY regime via flythrough.update — swapping it into HELM would starve that
+  // motion and strand the player parked. Ships keep the legacy ORRERY ship-lock.
+  if (commitBurnSwapsToHelm(t.kind, _scManual, _isMobile)) {
     setScManual(true);
     cameraController.setCameraMode(CameraMode.FLIGHT);
     cameraController.bypassed = true;

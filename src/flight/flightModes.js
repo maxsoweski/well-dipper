@@ -141,6 +141,21 @@ export function modeSwapAction({ scManual } = {}) {
   return { target: 'helm', enterFlight: true, exitFlight: false, lightDrive: false };
 }
 
+// Whether a commit-burn (Space on a selected target) should auto-swap ORRERY→HELM
+// (§supercruise-arrival-modes-design-2026-06-27, #2 "select-and-jump → HELM"). The
+// swap runs the burn as a player-directed ASSIST leg on the SUPERCRUISE mover, so
+// it must apply ONLY to targets that fly on scPilot — celestial bodies (planet/
+// star/moon). SHIP targets keep the QUARANTINED-LEGACY navSubsystem ship-lock path
+// (focusShip), which only advances in the non-_scManual (ORRERY) regime via
+// flythrough.update; swapping a ship-burn into HELM routes the sim into the
+// supercruise branch (scActive = scPilot.isActive || _scManual) and STARVES that
+// motion — the ship is never approached and the player is stranded parked in HELM.
+// So: swap IFF launching from ORRERY (!scManual), not mobile (ORRERY-only), and the
+// target is NOT a ship. Pure so the gate is unit-testable without the live host.
+export function commitBurnSwapsToHelm(targetKind, scManual, isMobile) {
+  return !scManual && !isMobile && targetKind !== 'ship';
+}
+
 // The SPLASH MODE-PICKER boot decision, extracted pure (§supercruise-arrival
 // -modes-design-2026-06-27, #2 "splash = mode picker", AC6). The existing title/
 // splash screen presents two PEER choices — ORRERY and HELM — and selecting one
