@@ -28,6 +28,29 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
+> **▶ PLATE/UPLIFT INCREMENT — BUILT + VERIFIED_PENDING_MAX `e07da8c` (2026-06-26).** Option-C increment 1
+> (one-pass plate placement) is built, committed (local-only, **push HOLD**), and verified at the objective
+> layers. NEW `src/worldengine/base/plates.js` (`writePlateUpliftSphere`, three-free): seed N centroids from
+> `macroSeed` → spherical-Voronoi → per-plate Euler-pole motion → convergent/divergent/transform boundary
+> stress (obliquity-attenuated) → uplift field **U** (REPLACES the latitude-band writer; sole low/mid source)
+> → resolution-independent geodesic spread → bounded render-once relaxation. `route()` regime gate
+> (`isEarthlikePlatePath`/`writeBodyRelief`): Earth-like→plates, else despun **byte-identical**.
+> `routeAndOrder` discharge (`precipWeight`) + `computeOcean` base-level params (identity-safe, no north-star
+> debt). `window._lab.plateProbe()` instrumentation. **Verdict (`verdict.json`):** unit **PASS** (AC1–AC6,
+> verify-workstream re-ran 84/84 headless + 3/3 adversarial each, AC2 2/3); integration **PASS** (AC7 driven
+> live by working-Claude on `:9223`, 2 seeds: **heightSource=carrier, boundary-vs-latitude variance 21–49×**,
+> ocean 35%, 0 orphan/uphill, maxStrahler 5–6); **AC8 UAT = Max alone**. Built via per-AC
+> implement→adversarial-audit→adjust workflows; **two independent reviews folded in** (AC2-metric-rigor →
+> hardened the structure test against base-confound/self-correlation/straw-man controls; tectonics-math →
+> verdict "model sound", changed oblique-convergent uplift from zeroed→attenuated, raised the AC2 test
+> resolution so the geodesic belt resolves). Artifacts: `docs/WORKSTREAMS/world-engine-plate-uplift-field-2026-06-26/`
+> (`BUILD.md`, `verdict.json`, `live-integration-evidence.md`). **NEXT = Max AC8 UAT** (lab-only, :9223): does
+> an Earth-like body read as a coherent WORLD — plate-shaped continents, ranges at convergent boundaries,
+> drainage belonging to that relief, genuinely various across seeds — not latitude bands / eroded noise? (Lab
+> overlays all surface features; isolate via toggles / `reliefBakeStrength`.) UAT pass → Ship. Deferred
+> follow-ons (named, not abandoned): precip/climate field, driver-response, game `Planet.js` port, Tier-C
+> plate-motion stepping, province-as-referent rewiring, non-Earth-like regimes.
+>
 > **▶ GRAIN-VS-LANDFORM FORK RESOLVED (2026-06-26) → answer (a) BASIS → Option-C plate-placement increment SCOPED + greenlit, build handed to fresh session via workflows.**
 > The AC5 "semi-coherent" verdict was a **generative-model/content** verdict, not a wiring bug. Dig (via workflows)
 > answered the fork: **(a)** — what's on screen is precursor E6 grain (latitude bands; the carve never touches the baked

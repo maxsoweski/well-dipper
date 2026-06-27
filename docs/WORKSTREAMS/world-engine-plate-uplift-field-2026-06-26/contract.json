@@ -2,7 +2,7 @@
   "workstream": "world-engine-plate-uplift-field-2026-06-26",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verified-pending-max",
   "campaign": "world-engine production-L1 port \u2014 Option C (one-pass plate placement), increment 1: placed plate/uplift field feeding existing erosion",
   "renderer": "LAB only (planet-lod-lab.html); game Planet.js deferred/OUT",
   "acceptanceCriteria": [

@@ -1,0 +1,61 @@
+{
+  "workstream": "world-engine-plate-uplift-field-2026-06-26",
+  "commit": "e07da8c",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "evidence": "Three-free generator src/worldengine/base/plates.js writePlateUpliftSphere(): one-pass centroids->Voronoi->Euler-pole->boundary-class->geodesic spread->bounded relaxation. REPLACE (carrier.height.set(U)). RENDER-ONCE: only iteration is for(pass<RELAX_PASSES=4) + one BFS while-drain (each node enqueued once); no convergence/time loop. Determinism: alea(macroSeed) only; grep zero Math.random/Date.now. verify-workstream re-ran the 7 unit files = 84/84 green; same-seed U byte-identical, carrier.height===U, finite, maxAbs<U_BOUND, seed-sensitive, relaxPasses=4.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2",
+      "result": "PASS",
+      "evidence": "tests/worldengine-base-plate-structure.test.js (N=4000 belt-resolved, seeds 1/2/3/7/42): conv U >= 2x interior (ratios 2.45-3.59); div < interior (rift) x5; |Pearson(U, INDEPENDENT label-derived signed-boundary-distance)| 0.648-0.786; pure-noise control ratio <2 (0.92-1.00) and latitude-only control ratio <2 (0.81-1.17) both FAIL as required. Hardening (folded in from adversarial review): base-subtracted tectonic signal conv>0/div<0/interior~0; a sign-agnostic boundary-generic control gives conv==div gap 0.0000 while the real conv-vs-div gap is 0.635-0.903 -> the field is convergent-SPECIFIC, not merely high near any boundary.",
+      "adversarialVotes": "2/3 sufficient"
+    },
+    {
+      "id": "AC3",
+      "result": "PASS",
+      "evidence": "U reaches the carve ONLY via carrier.height + routed.accum; no U-source branch. tests/planet-lod-rivers-swappable-uplift.test.js: carrier.height written by (a) the real plate writer and (b) a stub alternate-U writer, routed+carved through ONE shared path; finite/subtractive(delta<=0)/immutable(applyIncision writes a fresh array, authored never mutated); grep-guard that routeAndOrder/perNodeIncision/applyIncision match no plate|archetype|U-source identifiers. The stub-U substitution succeeding through the unchanged path is the swappability proof (Tier-C ready).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC4",
+      "result": "PASS",
+      "evidence": "tests/planet-lod-rivers-discharge-param.test.js: omitted precipWeight === explicit uniform-1 (accum/strahler/order byte-identical); accum genuinely linear in precipWeight (superposition a(1)+a(w)==a(1+w), maxErr<1e-2) and a non-uniform weight changes the field; computeOcean omitted baseLevel === scalar-seaLevel mask byte-identical; spatially-varying baseLevel flips nodes ocean in the predicted direction (oceanCount strictly increases, raised nodes flip, others match scalar). No determinism regression. Identity-safe -> the precip/climate increment drops in with zero rework.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC5",
+      "result": "PASS",
+      "evidence": "tests/worldengine-plate-regime-gate.test.js 5/5: isEarthlikePlatePath truth table (terrestrial/ocean->plate; ice/lava/gas-giant/null->despun; tidally-locked terrestrial->despun); writeBodyRelief non-Earth-like ('ice', locked terrestrial) => carrier.height BYTE-IDENTICAL to writeGrainSphere+writeHeightSphere(DEFAULT_GRAIN_DRIVERS), path 'despun', plateDiag null; terrestrial => path 'plate', differs from the latitude-band E6 field. Gate exported from planet-lod-rivers.js (route()/lab boundary); base layer (plates.js/tectonic.js) carries no regime literal (asserted). Confirmed LIVE too: Frozen preset -> 'despun path, no plate field'.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC6",
+      "result": "PASS",
+      "evidence": "tests/worldengine-base-plate-variety.test.js 3/3: 5 distinct macroSeeds on one carrier; MAX pairwise |spatial corr| 0.4435 < 0.6 ceiling (not one field rescaled/rotated); plateCounts [10,11,12,10,12] differ; min boundaryClass agreement 0.287 (most-similar pair still differs on ~71% of nodes). Variety falls out of seeding centroids/Euler-poles/types from alea(macroSeed). Driver-response is the named next increment (out of scope).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC7",
+      "result": "PASS",
+      "evidence": "Objective live-integration AC, driven by working-Claude on the ~40k lab mesh (:9223) via window._lab.plateProbe() with reliefBakeStrength=1 — see live-integration-evidence.md. Rocky (Earthlike): heightSource=='carrier' (single-source bakedOn); varExplainedByBoundaryDist 0.394 vs varExplainedByLatitude 0.018 = 21.5x (seed 1) and 0.640 vs 0.013 = 49.2x (seed 7) -> the carve follows plate-boundary uplift, NOT latitude; oceanFrac 0.35, orphanPct 0, uphillPct 0, selfLoopLand 0, maxStrahler 6/5, nanCount 0. verify-workstream (liveBranch:main) confirmed the static wiring + data layer green and deferred the browser drive to working-Claude, which is recorded here. AC5 also confirmed live (Frozen -> despun, no plate field).",
+      "adversarialVotes": "working-Claude live drive (2 seeds) + verify-workstream static 3/3 sufficient"
+    },
+    {
+      "id": "AC8",
+      "result": "deferred-to-max",
+      "evidence": "Holistic acceptance — reserved for Max alone; no agent ever PASSes a UAT AC. The mechanism lives in plates.js + planet-lod-rivers.js (gate + parameterized routeAndOrder/computeOcean) + planet-lod-lab.html (archetype/locked threading + plateProbe). UAT walk-through in summaryForMax.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX e07da8c — unit PASS (AC1-AC6: verify-workstream re-ran 84/84 headless + 3/3 adversarial each, AC2 2/3); integration PASS (AC7 driven live by working-Claude on :9223 across 2 seeds: heightSource=carrier, boundary-vs-latitude variance 21-49x, ocean 35%, 0 orphan/uphill, maxStrahler 5-6); UAT (AC8) deferred to Max. Two independent adversarial reviews (AC2-metric-rigor, tectonics-math) folded in before verification.",
+  "summaryForMax": "VERIFIED_PENDING_MAX e07da8c. The plate/uplift increment is built, committed (local-only, push on HOLD), and verified at the objective layers: the one-pass plate generator (centroids -> spherical-Voronoi -> Euler-pole motion -> convergent/divergent/transform boundary stress -> uplift field U -> geodesic spread) writes carrier.height for Earth-like bodies, the existing erosion drains it, and the live check shows the carve follows plate-boundary uplift 21-49x more than latitude. AC8 is yours alone. On the Planet LOD Lab (:9223, page already Earth-like with rivers on): (1) with 'Rocky (Earthlike)' + relief bake ON, judge holistically — do the continents read as plate-shaped landmasses with ranges hugging convergent boundaries, rifts/low ground at divergent boundaries, quiet cratonic interiors, and rivers belonging to that same generated relief — rather than latitude bands or eroded noise? (2) Re-seed a few times (_lab.setSeed(n,n) then re-enable rivers) and confirm the worlds are genuinely VARIOUS, not one shape rescaled. (3) Flip a non-Earth-like preset (Frozen/airless or a gas giant) and confirm it falls back to the despun look with no plate field, then back to Rocky. NOTE: the lab renders all surface features (craters/dust/glacial/etc.) on top of the plate relief, so use the feature toggles / reliefBakeStrength to isolate the plate structure when judging. That felt judgment — 'it IS its tectonic history, and the worlds are various' — closes AC8."
+}
