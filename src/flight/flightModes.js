@@ -37,6 +37,20 @@ export function flightModeInfo(modeOrExit) {
   return INFO[modeOrExit] ?? INFO[FlightMode.MANUAL];
 }
 
+// Pure transition table for the E key (supercruise DRIVE toggle), per
+// §supercruise-arrival-modes-design-2026-06-27. E is orthogonal to F (free-look)
+// and Esc (regime). Three player-facing situations map to three actions:
+//   - not In-Flight (Toybox)        → 'engage'   (enter In-Flight + drive ON)
+//   - In-Flight, drive ON           → 'dropout'  (drive OFF, STAY In-Flight, coast)
+//   - In-Flight, drive OFF (parked) → 'reengage' (drive ON again, anti-clip via cap)
+// The caller (main.js) maps each action to the concrete side-effects (scControls
+// .engage / model.setDrive / enter|dropImpulse). Pure so the transition is unit-
+// testable without three.js or the live host.
+export function nextDriveAction(inFlight, driveOn) {
+  if (!inFlight) return 'engage';
+  return driveOn ? 'dropout' : 'reengage';
+}
+
 // True when the player is actively steering/throttling — cancels a Mode-B align
 // and disengages a Mode-C hold. `stick` is the deadzone-shaped {x,y} (0 inside
 // deadzone), `throttleDir` is -1|0|1 from W/S.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput } from '../flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput, nextDriveAction } from '../flightModes.js';
 
 describe('advanceFlightMode — the 4-state ring', () => {
   it('enters at Manual from not-in-flight', () => {
@@ -29,6 +29,19 @@ describe('flightModeInfo', () => {
     for (const m of [FlightMode.MANUAL, FlightMode.ALIGN, FlightMode.ASSIST, 'exit']) {
       expect(typeof flightModeInfo(m).hint).toBe('string');
     }
+  });
+});
+
+describe('nextDriveAction — the E key transition table', () => {
+  it('engages (enter In-Flight + drive) from Toybox, regardless of stale driveOn', () => {
+    expect(nextDriveAction(false, false)).toBe('engage');
+    expect(nextDriveAction(false, true)).toBe('engage');
+  });
+  it('drops out when In-Flight with the drive ON (stay In-Flight, coast)', () => {
+    expect(nextDriveAction(true, true)).toBe('dropout');
+  });
+  it('re-engages when In-Flight with the drive OFF (parked / dropped)', () => {
+    expect(nextDriveAction(true, false)).toBe('reengage');
   });
 });
 

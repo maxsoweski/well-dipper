@@ -47,7 +47,8 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction } from './flight/flightModes.js';
+import { createFreeLook } from './flight/freeLook.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
 import { FlightModeToast } from './ui/FlightModeToast.js';
 import { alignStep, alignDot } from './flight/aimAssist.js';
@@ -454,6 +455,11 @@ const ship = new Ship();
 const scModel = new SupercruiseModel();
 const scHead = new HeadMount();
 const scPilot = new SupercruisePilot(scModel);
+// Latched free-look state (§supercruise-arrival-modes-design-2026-06-27, F key).
+// Pure latch + input-routing decision; the camera math stays in HeadMount. F
+// toggles it (In-Flight only); the frame loop reads `.latched` / consumes the
+// one-shot recenter. Built here so the F-handler + frame loop share one instance.
+const freeLook = createFreeLook();
 let _scManual = false;            // player has the stick (FLIGHT-mode supercruise)
 // Single setter for the manual-flight flag. The cursor is NO LONGER hidden in
 // flight (§supercruise-flight-toggle-settings-design-2026-06-25 §4): Max wants
@@ -8554,6 +8560,18 @@ window.addEventListener('keydown', (e) => {
       scControls.deselect();
       return;
     }
+    // Last in the cascade (§supercruise-arrival-modes-design-2026-06-27,
+    // Feature 3): with nothing left to dismiss/deselect, Esc exits In-Flight →
+    // Toybox. Reuse the pose-preserving _exitFlightInternal (forward-ray anchor +
+    // adoptCurrentPose + focus-clear per 7bd261c) so the camera does NOT snap onto
+    // a body center. Also drops the drive and clears any latched free-look so the
+    // next E engage starts clean.
+    if (_scManual) {
+      if (freeLook.latched) freeLook.exit();
+      scModel.setDrive(false);
+      _exitFlightInternal();
+      return;
+    }
   }
 
   // Block all input during splash/intro sequence
@@ -8783,41 +8801,63 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // F key: toggle camera mode (Toy Box ↔ Flight). Desktop only.
-  // Guards: no mobile (ShipCameraSystem enforces but short-circuit here),
-  // no warp, no splash/title, must have a gravity field (system active).
+  // E key: supercruise DRIVE toggle (§supercruise-arrival-modes-design
+  // -2026-06-27, Feature 1). E is the REGIME-entry + drive axis; F (below) is the
+  // orthogonal free-look axis. Same guards as F (desktop, not warp/splash/title,
+  // star-system present). The pure nextDriveAction() maps the situation to one of
+  // three actions:
+  //   'engage'   — from Toybox: enter In-Flight (scControls.engage → _enterFlight
+  //                Internal) + drive ON + accel SWELL.
+  //   'dropout'  — In-Flight, drive ON: DROP OUT — drive idles (coast, momentum
+  //                preserved), STAY In-Flight, pose UNCHANGED (no re-anchor — the
+  //                bug class that forced the old drop-out removal; we never call
+  //                the disengage-to-Toybox here). Drop JOLT fires.
+  //   'reengage' — In-Flight, drive OFF (dropped/parked): drive ON again + swell.
+  //                Anti-clip is automatic (the gravity-well speedCap collapses to
+  //                ~0 when the nose points into a body), so no extra guard here.
+  if (e.code === 'KeyE') {
+    if (_isMobile) return;
+    if (warpEffect.isActive || warpTarget.turning) return;
+    if (splashActive || titleScreenActive) return;
+    if (!system || (system.type && system.type !== 'star-system')) {
+      console.log('[MODE] Supercruise unavailable — no star system');
+      return;
+    }
+    const action = nextDriveAction(_scManual, scModel.driveOn);
+    if (action === 'engage') {
+      scControls.engage();          // enter In-Flight at the Settings-selected type
+      scModel.setDrive(true);       // ensure the drive is propelling
+      shipChoreographer.enterImpulse();
+    } else if (action === 'dropout') {
+      scModel.setDrive(false);      // coast — momentum preserved, pose unchanged
+      shipChoreographer.dropImpulse();
+    } else { // 'reengage'
+      scModel.setDrive(true);       // re-engage; anti-clip via speedCap
+      shipChoreographer.enterImpulse();
+    }
+    console.log(`[MODE] supercruise ${action} — drive ${scModel.driveOn ? 'ON' : 'OFF'} (In-Flight=${_scManual})`);
+    return;
+  }
+
+  // F key: toggle latched free-look (§supercruise-arrival-modes-design
+  // -2026-06-27, Feature 2). In-Flight only. F no longer engages/disengages
+  // supercruise — that moved to E (above). F flips whether pointer motion drives
+  // the camera (HeadMount look) or the virtual joystick; the frame loop reads
+  // freeLook.latched for input routing and consumes the one-shot recenter on
+  // toggle-off (HeadMount eases yaw/pitch → 0). Desktop only; same warp/splash
+  // guards as E.
   if (e.code === 'KeyF') {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
     if (splashActive || titleScreenActive) return;
-    // Deep sky scenes don't have flight. Flight requires a star system.
-    if (!system || (system.type && system.type !== 'star-system')) {
-      console.log('[MODE] Flight mode unavailable — no star system');
+    if (!_scManual) {
+      // Free-look is an In-Flight control. Outside flight there's nothing to
+      // free-look from (Toybox already orbits via drag) — ignore F.
+      console.log('[MODE] free-look unavailable — not In-Flight (press E to engage supercruise)');
       return;
     }
-    // F → supercruise manual (replaces FlightDynamics-driven FLIGHT internals).
-    // toggleCameraMode keeps wd_cameraMode persistence + the mobile lock; we
-    // then drive the new supercruise model directly instead of the legacy
-    // flight dynamics. _scManual short-circuits cameraController.update() in
-    // simStep (see the "Skip cameraController.update" guard) so the legacy
-    // FLIGHT internals stop being reachable.
-    // F is a 2-state on/off toggle (§supercruise-flight-toggle-settings-design
-    // -2026-06-25 §1): OFF → ENGAGE flight at the Settings-selected type;
-    // ON → DISENGAGE (clean, no snap). The 4-state F-ring is retired —
-    // advanceFlightMode is no longer consulted here; the flight TYPE lives in
-    // Settings instead. _scManual is the "in flight" gate.
-    // F is now routed through the ShipControls surface (Task 3 Option-A). The
-    // ENGAGE / no-snap-DISENGAGE bodies were MECHANICALLY EXTRACTED into
-    // _enterFlightInternal / _exitFlightInternal (wired as host.enterFlight /
-    // host.exitFlight); engage()/disengage() drive them — same statements, same
-    // order. disengage() additionally calls pilot.stop(), idempotent because the
-    // extracted exit body already ran scPilot.stop().
-    if (!_scManual) {
-      scControls.engage();      // F-on: reads Settings type, runs _enterFlightInternal
-    } else {
-      scControls.disengage();   // F-off: runs _exitFlightInternal (no-snap) + pilot.stop()
-    }
-    console.log(`[MODE] flight ${_scManual ? _flightMode : 'OFF'}`);
+    freeLook.toggle();
+    console.log(`[MODE] free-look ${freeLook.latched ? 'ON' : 'OFF'}`);
     return;
   }
 
