@@ -31,7 +31,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Planet LOD Lab — Well Dipper</title>
+  <title>World Engine Lab — Well Dipper</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; background: #000; color: #0f0; font-family: monospace; overflow: hidden; }
@@ -2168,10 +2168,6 @@
       specBypass: false,
       limbBypass: false,
       termBypass: false,    // F35 — band bypasses the quantizer (mirrors limbBypass)
-      // ── voronoi3d spike debug (risk #1 seam gate; removed once foundation lands) ──
-      debugMode: 0,         // 0 off, 1 F1, 2 F2-F1 border, 3 cell-id color (seam test), 4 lit relief
-      voroScale: 5.0,
-      voroCells: 27,        // 27 desktop | 9 mobile
       // ── F2 craters (Stage-C step 3, Relief) — derived (density/complexD/relaxation/
       // terraceCount, set by applyDrivers from the preset) + lab-tunable (scale/amp) ──
       craterDensity: 0.0,
@@ -2431,7 +2427,7 @@
     // the GUI display synced. A "type" is a preset (Task 6), never a shader branch.
     // ─────────────────────────────────────────────────────────────────────────
     // Two panels (design 2026-06-07): LEFT = the rig, RIGHT = the rendered features.
-    const guiLeft  = new GUI({ title: 'PLANET LOD LAB — rig' });
+    const guiLeft  = new GUI({ title: 'WORLD ENGINE LAB — rig' });
     guiLeft.domElement.style.left = '0px';
     guiLeft.domElement.style.right = 'auto';
     const guiRight = new GUI({ title: 'Features' });   // lil-gui default: pinned top-right
@@ -2553,14 +2549,6 @@
     // Spin is how you INSPECT the planet (watch the terminator sweep), not what a planet is.
     // 0 = stopped (the old spin-off default); 0.000375 (dead-center) = the original auto-rate.
     fView.add(state, 'spinSpeed', 0, 0.00075, 0.000025).name('spin speed (rad/frame)');
-
-    // ▸ Debug — voronoi3d seam-gate spike (index §5 risk #1). Temporary: this folder
-    // exists to prove the KEYSTONE primitive is seam-free before any cellular feature
-    // builds on it. Mode 3 (per-cell color) is the seam test — a seam shows as a line.
-    const fDebug = guiLeft.addFolder('Debug — voronoi3d spike'); fDebug.open();
-    fDebug.add(state, 'debugMode', { OFF: 0, 'F1 (cells)': 1, 'F2-F1 (borders)': 2, 'cell-id color (SEAM TEST)': 3, 'lit relief': 4, 'blackbody ramp': 5, 'substellar angle': 6 }).name('voronoi / bb / sub debug');
-    fDebug.add(state, 'voroScale', 1, 20, 0.5).name('cell density');
-    fDebug.add(state, 'voroCells', { '27 (desktop)': 27, '9 (mobile)': 9 }).name('cell count');
 
     // ▸ Envelope (open) — the A/B/C decision surface (spec §2.C). Values stay OPEN (§4):
     // this folder delivers the *controls*; settling per-type values is Max's playtesting.
@@ -3809,8 +3797,14 @@
     fScaleReadout.add({ get edifice(){ return state.edificeSizeKm.toFixed(0)+' km'; } }, 'edifice').name('edifice footprint').listen().disable();
     fScaleReadout.add({ get relief(){ return state.mountainHeightKm.toFixed(1)+' km h'; } }, 'relief').name('mtn relief height').listen().disable();
 
+    // ── Legacy synth drawer (lab-UI cleanup 2026-06-27) — collapses the 5 in-shader
+    // synth feature families into one CLOSED parent so the world-engine carrier
+    // controls read clean for UAT. Re-parenting is DOM-only; the relevance filter
+    // (applyArchetypeFilter) operates on STORED parentEl/folder objects, not on a
+    // literal guiRight parent, so nesting these groups one level deeper is render-safe.
+    const fLegacy = guiRight.addFolder('Legacy synth renderer (F1–F49)'); fLegacy.close();
     // ▸ Surface — Relief
-    const fRelief = guiRight.addFolder('Surface — Relief'); fRelief.open();
+    const fRelief = fLegacy.addFolder('Surface — Relief');
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
     // ▸ Craters (F2) — the derived fields (density/complexD/relaxation) come from the
     // driver preset (.listen() syncs them on preset change); scale/amp are lab knobs.
@@ -4030,7 +4024,7 @@
 
     // ▸ Surface — Gradational (NEW family — Fluvial/Aeolian; distinct from Relief).
     // Future F12–F16 land here too. Top-level guiRight folder per the F11 spec.
-    const fGrad = guiRight.addFolder('Surface — Gradational'); fGrad.open();
+    const fGrad = fLegacy.addFolder('Surface — Gradational');
     // ▸ Rivers & valleys (F11) — THE canonical river feature (the old F11 worm-trail carve was
     // retired 2026-06-19). A dendritic drainage network: a ribbon-geometry overlay routed on the
     // REAL height field over an irregular Delaunay mesh (the proven router/ribbon pipeline), with an
@@ -4161,7 +4155,7 @@
     fMassWast.add(state, 'massWastEnabled').name('✓ enabled');
 
     // ▸ Surface — Bands: the atmosphere-bands family (gas F24/F25 + the F27-F29 riders + terrestrial F26).
-    const fBandsGroup = guiRight.addFolder('Surface — Bands'); fBandsGroup.open();
+    const fBandsGroup = fLegacy.addFolder('Surface — Bands');
     // ▸ Zonal belts (F24) — alternating zone/belt luminance bands on gas presets, ALBEDO
     // only. strength/count/contrast/warp/tint are driven (h2-he gate / Rhines spin×disc /
     // T_eq vigor ramp / atmosphere color, .listen()); stretch + lat power are shape knobs.
@@ -4293,7 +4287,7 @@
 
     // ▸ Surface — Exotic: the Stage-7 exotic family — F41 magma ocean is its
     // first live member (base-type overlays land here as the domain fills in).
-    const fExoticGroup = guiRight.addFolder('Surface — Exotic'); fExoticGroup.open();
+    const fExoticGroup = fLegacy.addFolder('Surface — Exotic');
     // ▸ Magma ocean (F41) — hemispheric substellar sea in the ★ emissive bypass
     // channel: a smoothstep liquidus iso-angle mask on the SHARED vSubstellarAngle,
     // T(theta) = T_ss x cos^(1/4)(theta) colored by the shared emissiveBlackbody
@@ -4420,7 +4414,7 @@
 
     // ▸ Surface — Optical: the P26 scattering family (F34 limb, F35 terminator,
     // F36 sunglint).
-    const fOpticalGroup = guiRight.addFolder('Surface — Optical'); fOpticalGroup.open();
+    const fOpticalGroup = fLegacy.addFolder('Surface — Optical');
     // ▸ Limb glow (F34) — fresnel rim against the geometric silhouette + the F31e
     // detached haze shell (back-face second pass, thick-haze worlds only). strength /
     // exponent / color / shell are driven (hasAtmo gate, haze-class fork, per-preset
@@ -4523,7 +4517,7 @@
     // Collapsed home for features irrelevant to the current world (filter ON).
     // Created after all category groups + featureFolders so it sits at the BOTTOM
     // of the right (Features) panel.
-    const fNotRelevant = guiRight.addFolder('Not relevant to this world (0)'); fNotRelevant.close();
+    const fNotRelevant = fLegacy.addFolder('Not relevant to this world (0)'); fNotRelevant.close();
     // Capture each feature folder's ORIGINAL category parent so relevant features
     // can be re-appended there in declaration order (preserves intra-category order).
     const FEATURE_LAYOUT = Object.entries(featureFolders).map(([key, folder]) => ({
@@ -5544,11 +5538,6 @@
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
       uniforms.uTermBypass.value = state.termBypass ? 1 : 0;   // F35
       uniforms.uTime.value = t;   // clouds drift + aurora rays animate (Task 7)
-      uniforms.uDebugMode.value = state.debugMode | 0;
-      uniforms.uVoroScale.value = state.voroScale;
-      // uVoroCells set by applyDrivers (qualityTier) — the debug folder's voroCells
-      // still drives the spike viz; craters read the driver-set uVoroCells.
-      if (state.debugMode > 0) uniforms.uVoroCells.value = state.voroCells | 0;
       uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.featureRelevant.craters : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — density→0 early-outs the crater pass on non-members (Carbon/Crystal/gas)
       uniforms.uCraterComplexD.value   = state.craterComplexD;
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
@@ -5738,7 +5727,7 @@
     // "?" help overlay — self-documenting so the code needn't be open
     // ─────────────────────────────────────────────────────────────────────────
     $('help').innerHTML = `
-      <h2>PLANET LOD LAB — WHAT THIS IS</h2>
+      <h2>WORLD ENGINE LAB — WHAT THIS IS</h2>
       <p>Isolated harness for the <b>LOD2 close-up planet detail</b> feature: when you
       fly close to a planet, getting nearer should add <b>more surface DETAIL</b>
       (finer relief, more noise octaves) — not just a bigger blurry sphere. It also
