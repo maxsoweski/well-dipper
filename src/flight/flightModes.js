@@ -51,6 +51,25 @@ export function nextDriveAction(inFlight, driveOn) {
   return driveOn ? 'dropout' : 'reengage';
 }
 
+// Autopilot is ONE concept with two target SOURCES (§supercruise-arrival-modes
+// -design-2026-06-27, Feature 4 / plan Task 8). Both drive the SAME pilot
+// (SupercruisePilot) through the SAME door (scControls.flyTo) — they differ only
+// in WHO picks the target:
+//   - 'tour'   (Q autopilot / screensaver): the SYSTEM picks (AutoNavigator tours
+//              every body). startFlythrough/_beginTourLegMotion → scControls.flyTo.
+//   - 'assist' (player-directed):          YOU pick (aim+select in free-look, OR
+//              the nav computer), then commit. _engageAssist / commitBurn → focus*
+//              → scControls.flyTo.
+// This descriptor pins the framing as code so the consolidation can't silently
+// drift; it carries no behavior (the live paths already converge on flyTo).
+const AUTOPILOT_SOURCES = {
+  tour:   { label: 'Autopilot tour', picks: 'system', door: 'scControls.flyTo', hint: 'system tours every body (screensaver)' },
+  assist: { label: 'Assist',         picks: 'you',     door: 'scControls.flyTo', hint: 'flies to the body you picked (aim+select or nav), steer to take over' },
+};
+export function autopilotSourceInfo(source) {
+  return AUTOPILOT_SOURCES[source] ?? AUTOPILOT_SOURCES.tour;
+}
+
 // True when the player is actively steering/throttling — cancels a Mode-B align
 // and disengages a Mode-C hold. `stick` is the deadzone-shaped {x,y} (0 inside
 // deadzone), `throttleDir` is -1|0|1 from W/S.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput, nextDriveAction } from '../flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput, nextDriveAction, autopilotSourceInfo } from '../flightModes.js';
 
 describe('advanceFlightMode — the 4-state ring', () => {
   it('enters at Manual from not-in-flight', () => {
@@ -42,6 +42,33 @@ describe('nextDriveAction — the E key transition table', () => {
   });
   it('re-engages when In-Flight with the drive OFF (parked / dropped)', () => {
     expect(nextDriveAction(true, false)).toBe('reengage');
+  });
+});
+
+describe('autopilotSourceInfo — Q-tour vs Assist as one autopilot concept', () => {
+  // §supercruise-arrival-modes-design-2026-06-27 Feature 4 / plan Task 8:
+  // the Q autopilot tour and player-directed Assist are ONE autopilot concept
+  // (the same SupercruisePilot via scControls.flyTo) differing only in WHO picks
+  // the target — the system (tour) vs you (assist). This descriptor pins that
+  // framing as code, not just prose, so the consolidation can't silently drift.
+  it('describes the tour source as system-picked', () => {
+    const tour = autopilotSourceInfo('tour');
+    expect(tour.picks).toBe('system');
+    expect(typeof tour.label).toBe('string');
+    expect(typeof tour.hint).toBe('string');
+  });
+  it('describes the assist source as player-picked', () => {
+    const assist = autopilotSourceInfo('assist');
+    expect(assist.picks).toBe('you');
+    expect(typeof assist.label).toBe('string');
+    expect(typeof assist.hint).toBe('string');
+  });
+  it('both sources drive the same pilot door (flyTo) — invariant flag', () => {
+    expect(autopilotSourceInfo('tour').door).toBe('scControls.flyTo');
+    expect(autopilotSourceInfo('assist').door).toBe('scControls.flyTo');
+  });
+  it('falls back to the tour descriptor for an unknown source', () => {
+    expect(autopilotSourceInfo('nope')).toEqual(autopilotSourceInfo('tour'));
   });
 });
 

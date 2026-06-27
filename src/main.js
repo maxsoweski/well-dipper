@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -5699,7 +5699,8 @@ function startFlythrough() {
   updateFocusFromStop(firstStop);
   if (systemMap) systemMap.triggerBlink();
 
-  console.log('Autopilot: on (flythrough)');
+  const src = autopilotSourceInfo('tour'); // system-pick autopilot → same pilot door as Assist
+  console.log(`[AUTOPILOT] ${src.label} (${src.picks}-picked) → ${src.door}`);
 }
 
 /**
@@ -6100,7 +6101,17 @@ function _enterFlightMode(mode) {
   else if (mode === FlightMode.ASSIST) _engageAssist(body); // Task 6
 }
 function _beginAlign(body) { _alignState.active = true; _alignState.mesh = body.mesh; _alignState.t = 0; }
-function _engageAssist(body) { scControls.flyTo({ toBody: body.mesh, bodyRadius: body.radius, selfStep: false }); }
+// Assist = the PLAYER-PICKED autopilot source (§supercruise-arrival-modes-design
+// -2026-06-27, Feature 4 / Task 8). It is the SAME autopilot as the Q tour — same
+// SupercruisePilot, same scControls.flyTo door — differing only in WHO picks the
+// target. The two Assist target sources both land here (or in commitBurn→focus*,
+// which also calls flyTo): (a) free-look aim+select+Space, (b) nav-computer
+// select+commit. autopilotSourceInfo('assist') pins that framing (label/who-picks).
+function _engageAssist(body) {
+  const src = autopilotSourceInfo('assist'); // you-pick autopilot → same pilot door
+  scControls.flyTo({ toBody: body.mesh, bodyRadius: body.radius, selfStep: false });
+  console.log(`[AUTOPILOT] ${src.label} (${src.picks}-picked) → ${src.door}`);
+}
 
 // Drop-window state for the supercruise HUD target marker (AC7). Mirrors the
 // manual drop-out capture rule (the `if (_scManual)` block in simStep): inside
@@ -8875,7 +8886,14 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Q key: toggle autopilot (was A — moved to free WASD for movement)
+  // Q key: toggle the autopilot TOUR — the system-picked autopilot source
+  // (§supercruise-arrival-modes-design-2026-06-27, Feature 4 / Task 8). The same
+  // SupercruisePilot/scControls.flyTo door as player-directed Assist, just with the
+  // system choosing targets. UNAFFECTED by the E/F rewire: E drives supercruise and
+  // F latches free-look, both orthogonal to who-picks. Free-look works DURING the
+  // tour (the frame loop applies scHead every In-Flight frame), and W/S takeover
+  // (below, ~scPilot.isActive branch) still cancels the pilot mid-tour. (Was A —
+  // moved to free WASD for movement.)
   if (e.code === 'KeyQ') {
     if (autoNav.isActive) {
       stopFlythrough();
