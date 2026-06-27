@@ -137,7 +137,7 @@ describe('shellRelief — AC6 seed variety (partition + paleo-axis)', () => {
   const runs = seeds.map((s) => {
     const c = makeSphereField(mesh);
     const d = writeShellReliefSphere(c, {}, { macroSeed: s, regime: 'icy-active' });
-    return { s, w0: Array.from(d.w0), cellCount: d.cellCount, cellId: d.cellId };
+    return { s, w0: Array.from(d.w0), cellCount: d.cellCount, cellId: d.cellId, lineamentNode: d.lineamentNode };
   });
 
   it('paleo-spin axis w0 differs across seeds', () => {
@@ -158,6 +158,26 @@ describe('shellRelief — AC6 seed variety (partition + paleo-axis)', () => {
       minDisagree = Math.min(minDisagree, 1 - same / a.length);
     }
     expect(minDisagree).toBeGreaterThan(0.3);
+  });
+
+  // AC6 contract observable: "< 0.2 node-overlap of lineamentNode" across seed pairs. Deferred while
+  // lineaments were stubbed (SLICE A); now committed in SLICE B where lineamentNode is real. The crack
+  // network is steered by the per-seed paleo-axis w0 + stress geometry, so different seeds place cracks
+  // on near-disjoint node sets. Overlap = |A∩B| / min(|A|,|B|) (the demanding ratio: fraction of the
+  // SMALLER crack set that coincides); asserted < 0.2 for every pair among seeds 1..5.
+  it('lineamentNode overlap < 0.2 across all seed pairs (cracks land on near-disjoint nodes)', () => {
+    let maxOverlap = 0;
+    for (let i = 0; i < runs.length; i++) for (let j = i + 1; j < runs.length; j++) {
+      const A = runs[i].lineamentNode, B = runs[j].lineamentNode;
+      let inter = 0, a = 0, b = 0;
+      for (let k = 0; k < A.length; k++) { if (A[k] && B[k]) inter++; if (A[k]) a++; if (B[k]) b++; }
+      expect(a, `seed ${runs[i].s}: has lineament nodes`).toBeGreaterThan(5);
+      expect(b, `seed ${runs[j].s}: has lineament nodes`).toBeGreaterThan(5);
+      const overlap = inter / Math.min(a, b);
+      expect(overlap, `seeds ${runs[i].s}-${runs[j].s}: lineamentNode overlap=${overlap.toFixed(3)} (|A|=${a},|B|=${b},∩=${inter})`).toBeLessThan(0.2);
+      maxOverlap = Math.max(maxOverlap, overlap);
+    }
+    expect(maxOverlap, `worst-pair lineamentNode overlap=${maxOverlap.toFixed(3)} < 0.2`).toBeLessThan(0.2);
   });
 });
 
@@ -207,6 +227,21 @@ function despinAxisAngle(d, w0, east, north) {
 function axialAlign(aAng, bAng) {
   let s = 0; for (let i = 0; i < aAng.length; i++) s += Math.cos(2 * (aAng[i] - bAng[i]));
   return s / aAng.length;
+}
+
+// AC2(b) lineament/quiet amplitude ratio for an arbitrary field, partitioned by the PUBLISHED
+// lineamentNode mask (the same denominator AC2(b) uses). Factored out so AC5's gate+steering-disabled
+// control can be measured on the IDENTICAL ratio the real field is held to — the only difference being
+// the field, not the metric.
+function lineamentQuietRatio(field, lineamentNode, N) {
+  const lineAbs = [], quietAbs = [];
+  const m = mean(field);
+  for (let i = 0; i < N; i++) {
+    const a = Math.abs(field[i] - m);
+    if (lineamentNode[i]) lineAbs.push(a); else quietAbs.push(a);
+  }
+  const lineAmp = mean(lineAbs), quietAmp = mean(quietAbs) || 1e-6;
+  return lineAmp / quietAmp;
 }
 
 // VERBATIM copy of the writer's steeredNoise3 (ridged branch inlined), so the test can rebuild the
@@ -382,5 +417,34 @@ describe('shellRelief — AC5 noise control (must FAIL vs noise; gated variant c
     const ctrlCorr = Math.abs(pearson(ctrl, pred));
     expect(ctrlCorr, `control corr=${ctrlCorr.toFixed(3)} (should collapse)`).toBeLessThan(realCorr);
     expect(ctrlCorr, `control corr=${ctrlCorr.toFixed(3)} < 0.5`).toBeLessThan(0.5);
+  });
+
+  it('gate+steering-DISABLED control ALSO breaks AC2(b): lineament/quiet ratio drops below 2x while the REAL field stays >= 2x', () => {
+    // Contract AC5 observable: the gates+steering-disabled variant fails AC2(a) (covered above) AND AC2(b)
+    // (the 2x ratio breaks). This pins the AC2(b) clause. We MIRROR the exact control-field construction the
+    // AC5 corr test uses (angle=0 isotropic steering + tension gate removed), then measure the AC2(b)
+    // lineament/quiet amplitude ratio on the IDENTICAL published lineamentNode partition for both fields —
+    // only the field differs, not the metric. REAL concentrates amplitude on the stress-gated, steered crack
+    // nodes => ratio >= 2x; the ungated isotropic control does not => ratio < 2x.
+    const r = 'eyeball-despun';
+    const { c, diag } = buildShell(7, r);
+
+    const detail = createNoise3D(alea('shell:detail:' + 7));
+    const ctrlNoise = createNoise3D(alea('shell:ctrl-ridge:' + 7));
+    const ctrl = new Float32Array(c.N);
+    for (let i = 0; i < c.N; i++) {
+      const d = c.verts[i];
+      const { east, north } = c.tangentFrameAt(i);
+      const R = steeredNoise3T(ctrlNoise, d, east, north, 0, true, 7.0) + 0.5;   // angle=0 isotropic (steering off)
+      const t = clampN(0, 1, (R - 0.94) / (1 - 0.94));
+      const dr = 1.2 * 4 * t * (1 - t);                                          // gate removed (no *max(0,sigma1))
+      ctrl[i] = dr + 0.02 * detail(d[0] * 8, d[1] * 8, d[2] * 8);
+    }
+
+    const realRatio = lineamentQuietRatio(diag.U, diag.lineamentNode, c.N);
+    const ctrlRatio = lineamentQuietRatio(ctrl, diag.lineamentNode, c.N);
+    expect(realRatio, `real lineament/quiet ratio=${realRatio.toFixed(3)} >= 2`).toBeGreaterThanOrEqual(2);
+    expect(ctrlRatio, `control lineament/quiet ratio=${ctrlRatio.toFixed(3)} < 2 (AC2(b) breaks)`).toBeLessThan(2);
+    expect(ctrlRatio, `control ratio(${ctrlRatio.toFixed(3)}) < real ratio(${realRatio.toFixed(3)})`).toBeLessThan(realRatio);
   });
 });
