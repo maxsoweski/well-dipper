@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput, nextDriveAction, autopilotSourceInfo } from '../flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput, nextDriveAction, autopilotSourceInfo, freeLookPointerRoute, headReleaseAction } from '../flightModes.js';
 
 describe('advanceFlightMode — the 4-state ring', () => {
   it('enters at Manual from not-in-flight', () => {
@@ -83,5 +83,35 @@ describe('isManualInput', () => {
     expect(isManualInput({ x: 0, y: 0 }, -1)).toBe(true);
     expect(isManualInput({ x: 0.0001, y: 0 }, 0)).toBe(true);
     expect(isManualInput({ x: 0, y: -0.2 }, 0)).toBe(true);
+  });
+});
+
+describe('freeLookPointerRoute — where pointer MOTION goes, by free-look + LMB', () => {
+  // §free-look-interaction-redesign-2026-06-27, Part 2. Free-look DECOUPLES the
+  // look from the latch: in free-look (latched) the head only LOOKS while the
+  // LEFT button is held; a bare cursor (LMB up) neither steers nor moves the
+  // camera. Hands-on (NOT latched) keeps the absolute-position virtual joystick.
+  it('looks only when free-look is latched AND the LMB is held', () => {
+    expect(freeLookPointerRoute({ latched: true, lmbHeld: true })).toBe('look');
+  });
+  it('is idle (free cursor — no steer, no camera move) when latched but LMB up', () => {
+    expect(freeLookPointerRoute({ latched: true, lmbHeld: false })).toBe('idle');
+  });
+  it('steers the virtual joystick ONLY in hands-on (not latched), LMB irrelevant', () => {
+    expect(freeLookPointerRoute({ latched: false, lmbHeld: false })).toBe('steer');
+    expect(freeLookPointerRoute({ latched: false, lmbHeld: true })).toBe('steer');
+  });
+});
+
+describe('headReleaseAction — hold vs recenter when look-input is released', () => {
+  // §free-look-interaction-redesign-2026-06-27, Part 2 step 4. Releasing the LMB
+  // after a look-drag in free-look must HOLD the view where you dragged it (no
+  // recenter) — the head only recenters when free-look is EXITED (F off). The
+  // hands-on middle-mouse PEEK keeps its Elite-style recenter-on-release.
+  it('HOLDS the view on release while free-look is latched (no recenter)', () => {
+    expect(headReleaseAction({ freeLookLatched: true })).toBe('hold');
+  });
+  it('RECENTERS on release in hands-on (peek release returns to nose-forward)', () => {
+    expect(headReleaseAction({ freeLookLatched: false })).toBe('recenter');
   });
 });

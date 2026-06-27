@@ -1,8 +1,11 @@
 // src/flight/__tests__/freeLookApply.test.js
-// Task 6 (AC2/AC4): the latch↔HeadMount bridge. Drives a REAL HeadMount through
-// the same frame sequence main.js's loop runs, asserting that latched free-look
-// holds the head (accepts addLook, no auto-recenter) and that toggle-off eases
-// the view back to center via the one-shot recenter.
+// §free-look-interaction-redesign-2026-06-27, Part 2: the latch↔HeadMount bridge,
+// REDESIGNED. `held` is now DECOUPLED from the latch — it follows the LEFT mouse
+// button (LMB-down → beginLook, LMB-up → endLook), driven by the live mouse
+// handlers, NOT re-asserted here every frame. The bridge's only job is the
+// one-shot recenter on F-exit: consumeRecenter() → head.beginRecenter() so
+// update() eases the view back to nose-forward. While latched + LMB released the
+// head HOLDS (no recenter) — that is HeadMount's new default (!held & !recentering).
 import { describe, it, expect } from 'vitest';
 import { HeadMount } from '../HeadMount.js';
 import { createFreeLook } from '../freeLook.js';
@@ -10,16 +13,23 @@ import { syncHeadToFreeLook } from '../freeLookApply.js';
 
 const DT = 1 / 60;
 
-describe('syncHeadToFreeLook (latched free-look ↔ HeadMount bridge)', () => {
-  it('latching holds the head so addLook is accepted and the view does not recenter', () => {
+describe('syncHeadToFreeLook (latched free-look ↔ HeadMount bridge, redesigned)', () => {
+  it('does NOT assert held from the latch — held follows the LMB, not the latch', () => {
     const fl = createFreeLook();
     const h = new HeadMount();
-    fl.toggle();                 // latch on (F press)
+    fl.toggle();                 // latch on (F press) — but LMB is up
     expect(fl.latched).toBe(true);
-    syncHeadToFreeLook(fl, h);   // frame: assert held
-    expect(h.held).toBe(true);
-    // look input now lands and PERSISTS across frames (no auto-recenter while latched)
+    syncHeadToFreeLook(fl, h);
+    expect(h.held).toBe(false);  // KEY CHANGE: the latch no longer holds the head
+  });
+
+  it('a look-drag (LMB held) lands and PERSISTS on release (no recenter while latched)', () => {
+    const fl = createFreeLook();
+    const h = new HeadMount();
+    fl.toggle();                 // latch on
+    h.beginLook();               // LMB down (live mousedown handler)
     h.addLook(0.5, 0.2);
+    h.endLook();                 // LMB up — view must HOLD, not recenter
     for (let i = 0; i < 60; i++) { syncHeadToFreeLook(fl, h); h.update(DT); }
     expect(h.yaw).toBeCloseTo(0.5, 9);
     expect(h.pitch).toBeCloseTo(0.2, 9);
@@ -29,10 +39,11 @@ describe('syncHeadToFreeLook (latched free-look ↔ HeadMount bridge)', () => {
     const fl = createFreeLook();
     const h = new HeadMount();
     fl.toggle();                 // on
-    syncHeadToFreeLook(fl, h);
+    h.beginLook();
     h.addLook(0.8, 0.4);
+    h.endLook();
     fl.toggle();                 // off → recenter pending
-    // first frame after toggle-off: bridge releases the hold
+    // first frame after toggle-off: bridge requests the recenter
     syncHeadToFreeLook(fl, h); h.update(DT);
     expect(h.held).toBe(false);
     // monotonic ease toward center
@@ -44,22 +55,6 @@ describe('syncHeadToFreeLook (latched free-look ↔ HeadMount bridge)', () => {
       prev = mag;
     }
     expect(h.centered).toBe(true);
-  });
-
-  it('a middle-mouse PEEK release while still latched does NOT recenter', () => {
-    const fl = createFreeLook();
-    const h = new HeadMount();
-    fl.toggle();                 // latched on
-    syncHeadToFreeLook(fl, h);
-    h.addLook(0.6, 0.0);
-    // simulate a peek: press (beginLook already true), release (endLook)
-    h.beginLook();
-    h.endLook();                 // peek release clears held...
-    // ...but the next frame re-asserts it because we're still latched
-    syncHeadToFreeLook(fl, h);
-    expect(h.held).toBe(true);
-    for (let i = 0; i < 60; i++) { syncHeadToFreeLook(fl, h); h.update(DT); }
-    expect(h.yaw).toBeCloseTo(0.6, 9); // held → never decayed
   });
 
   it('not latched + no recenter pending leaves the head untouched (hands-on)', () => {

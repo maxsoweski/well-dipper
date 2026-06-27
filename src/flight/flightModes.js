@@ -70,6 +70,36 @@ export function autopilotSourceInfo(source) {
   return AUTOPILOT_SOURCES[source] ?? AUTOPILOT_SOURCES.tour;
 }
 
+// Where pointer MOTION goes, by free-look latch + left-mouse-button (§free-look
+// -interaction-redesign-2026-06-27, Part 2). The redesign DECOUPLES looking from
+// the latch: in free-look (latched), the head looks ONLY while the LEFT button is
+// held; a bare cursor (LMB up) is a FREE pointer that neither steers the ship nor
+// moves the camera (for aiming/selecting). Hands-on (NOT latched) keeps the
+// absolute-position virtual joystick on every move.
+//   - latched && lmbHeld  → 'look'  (HeadMount.addLook — drag to look around)
+//   - latched && !lmbHeld → 'idle'  (free cursor — gate BOTH the look and the
+//                                    joystick off; pointing/selecting only)
+//   - !latched            → 'steer' (hands-on virtual joystick, LMB irrelevant)
+// Pure so the routing is unit-testable without the live host. The mousemove
+// handler maps 'look'→scHead.addLook, 'steer'→scControls.steer, 'idle'→nothing.
+export function freeLookPointerRoute({ latched, lmbHeld } = {}) {
+  if (!latched) return 'steer';
+  return lmbHeld ? 'look' : 'idle';
+}
+
+// Hold-vs-recenter when a look-input is RELEASED (§free-look-interaction-redesign
+// -2026-06-27, Part 2 step 4). Two release paths, two behaviours:
+//   - in free-look (latched)   → 'hold'     — releasing the LMB after a look-drag
+//     HOLDS the view where you dragged it; the head only recenters when free-look
+//     is EXITED (F off, via freeLook.exit()→consumeRecenter()→head.beginRecenter()).
+//   - hands-on (not latched)   → 'recenter' — the middle-mouse PEEK keeps its
+//     Elite-style snap-back: release returns the view to nose-forward.
+// Pure so the mouseup handlers can ask "what should release do?" without branching
+// logic inline. Returns 'hold' | 'recenter'.
+export function headReleaseAction({ freeLookLatched } = {}) {
+  return freeLookLatched ? 'hold' : 'recenter';
+}
+
 // True when the player is actively steering/throttling — cancels a Mode-B align
 // and disengages a Mode-C hold. `stick` is the deadzone-shaped {x,y} (0 inside
 // deadzone), `throttleDir` is -1|0|1 from W/S.
