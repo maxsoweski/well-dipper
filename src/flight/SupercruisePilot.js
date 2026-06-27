@@ -28,7 +28,12 @@ export const PILOT_FRAME_FIELDS = Object.freeze([
 ]);
 
 export const PILOT_TUNING = {
-  ALIGN_DOT: 0.995,          // nose alignment to open the throttle
+  ALIGN_DOT: 0.995,          // nose alignment to open the throttle (clean on-axis path)
+  ALIGN_DOT_RELAXED: 0.985,  // looser gate — proceed to CRUISE once "close enough"; CRUISE keeps steering, so
+                             //   perfect pre-alignment isn't required. Lets an orbiting moon (steady tracking lag
+                             //   ~just under 0.995) leave ALIGN instead of hanging.
+  ALIGN_TIMEOUT: 8.0,        // s — hard ALIGN cap. If neither dot gate is met within this window (e.g. a fast
+                             //   orbit whose lag never settles), proceed to CRUISE anyway so the leg can't hang.
   CRUISE_THROTTLE: 0.75,     // Elite blue-zone
   STEER_GAIN: 3.0,           // local-offset → turn-input proportional gain
   DROP_RADIUS_FACTOR: 10,    // capture sphere = 10R (today's APPROACH onset)
@@ -47,6 +52,7 @@ export class SupercruisePilot {
     this._holdOffset = new THREE.Vector3();
     this._holdPoint = new THREE.Vector3();
     this._holdTimer = 0;
+    this._alignTimer = 0;
     this._decelCued = false;
     this._prevPhase = PilotPhase.IDLE;
     this._toTarget = new THREE.Vector3();
@@ -62,6 +68,7 @@ export class SupercruisePilot {
     this._target = { mesh: toBody, radius: bodyRadius, linger };
     this.phase = PilotPhase.ALIGN;
     this._holdTimer = 0;
+    this._alignTimer = 0;
     this._decelCued = false;
   }
 
@@ -106,17 +113,26 @@ export class SupercruisePilot {
     }
 
     // Steer toward the body via the shared aimAssist.steerToward helper
-    // (extracted from this block; behavior-identical). _local is still computed
-    // for the ALIGN_DOT check below (−localZ = nose-to-target alignment).
+    // (extracted from this block; behavior-identical). It reads the body's CURRENT
+    // (moving) position every frame — so the aim already leads an orbiting target;
+    // no stale capture. _local is still computed for the ALIGN_DOT check below
+    // (−localZ = nose-to-target alignment).
     this._local.copy(this._toTarget).normalize()
       .applyQuaternion(this._invQ.copy(m.orientation).invert());
     const { yaw: yawIn, pitch: pitchIn } = steerToward(m.orientation, m.position, bodyPos, t.STEER_GAIN, this._steerOut);
     m.setTurnInput(yawIn, pitchIn);
-    const aligned = -this._local.z >= t.ALIGN_DOT;
+    const noseDot = -this._local.z;
 
     if (this.phase === PilotPhase.ALIGN) {
       m.setThrottle(0);
-      if (aligned) { this.phase = PilotPhase.CRUISE; }
+      this._alignTimer += dt;
+      // Proceed once "close enough" (relaxed gate) OR after the timeout — so an
+      // orbiting moon whose tracking lag asymptotes just under ALIGN_DOT can't
+      // hang ALIGN forever. CRUISE keeps steering at the (moving) target, so it
+      // closes the residual error in flight; perfect pre-alignment isn't needed.
+      if (noseDot >= t.ALIGN_DOT_RELAXED || this._alignTimer >= t.ALIGN_TIMEOUT) {
+        this.phase = PilotPhase.CRUISE;
+      }
     } else if (this.phase === PilotPhase.CRUISE) {
       m.setThrottle(t.CRUISE_THROTTLE);
       if (!this._decelCued && dist <= tgt.radius * t.DECEL_CUE_FACTOR) {
