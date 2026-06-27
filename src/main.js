@@ -6304,6 +6304,7 @@ function commitBurn() {
     setScManual(true);
     cameraController.setCameraMode(CameraMode.FLIGHT);
     cameraController.bypassed = true;
+    _applyPointerHud(); // regime flipped to HELM — hide cursor + show steering reticle (this path bypasses _enterFlightInternal)
     console.log('[MODE] commit-burn from ORRERY → swap to HELM (Assist leg)');
   }
   if (t.kind === 'star') focusStar(t.starIndex);
@@ -8589,8 +8590,10 @@ function _enterFlightInternal(type) {
   _enterFlightMode(_flightMode); // begins Align/Assist for those types
   const _info = flightModeInfo(_flightMode);
   flightModeToast.show(`Flight ON — ${_info.label}`, _info.hint);
-  // Entering HELM hands-on flight: hide the OS cursor, show the steering reticle
-  // (cursor-by-mode, §free-look-interaction-redesign Part 1).
+  // Entering HELM hands-on flight: clear any stranded free-look latch first (mirror
+  // the exit-direction guard in _doModeSwap) so the cursor/reticle aren't computed
+  // from a stale free-look state, then hide the OS cursor + show the steering reticle.
+  if (freeLook.latched) freeLook.exit();
   _applyPointerHud();
 }
 
@@ -9192,6 +9195,7 @@ window.addEventListener('keydown', (e) => {
       cameraController.setCameraMode(CameraMode.FLIGHT);
       cameraController.bypassed = true;
       autoNav.stop();
+      _applyPointerHud(); // entered hands-on HELM via tour takeover — hide cursor + show steering reticle (bypasses _enterFlightInternal)
       return;
     }
     // WASD: stop autopilot and take manual control
@@ -9557,7 +9561,14 @@ canvas.addEventListener('mousemove', (e) => {
   // is exactly `scHead.held`. The ship keeps flying its line (scHead writes ONLY
   // the camera). First-person convention: mouse right → look right, mouse up → up.
   if (scHead.held) {
-    scHead.addLook(-e.movementX * 0.003, -e.movementY * 0.0025);
+    // Free-look click-vs-look: suppress the look until the gesture passes the SAME
+    // 5px threshold the mouseup classifier uses (isDrag, 25 = 5px²), so a <5px
+    // select-TAP in free-look doesn't nudge the held view (which now persists with
+    // no auto-recenter). Exempt: the middle-mouse PEEK (recenters on release, so no
+    // nudge accumulates) and hands-on (no latch). §free-look-interaction-redesign Part 2.
+    const _suppressTapNudge = freeLook.latched && !_middleMouseDown
+      && ((e.clientX - _mouseDown.x) ** 2 + (e.clientY - _mouseDown.y) ** 2) <= 25;
+    if (!_suppressTapNudge) scHead.addLook(-e.movementX * 0.003, -e.movementY * 0.0025);
     return; // freelook consumes the motion; joystick deflection freezes while held
   }
 
@@ -9631,7 +9642,7 @@ canvas.addEventListener('mousemove', (e) => {
     // 'none' in HELM hands-on (cursor hidden) and '' (auto) in free-look / ORRERY.
     // A hovered body paints 'pointer' over the base; a non-hover frame restores
     // the BASE (not bare '') so a 'none' isn't clobbered back to default each move.
-    if (bodyHit) canvas.style.cursor = 'pointer';
+    if (bodyHit && _pointerCursor !== 'none') canvas.style.cursor = 'pointer'; // ...but never in HELM hands-on, where the cursor is deliberately hidden (no click-select there)
     // No body under the cursor → restore the sub-mode base, UNLESS an orbit line
     // is currently hovered (that block below owns the pointer in that case, so
     // clearing it here would clobber it and the two would fight every frame).
@@ -9662,7 +9673,7 @@ canvas.addEventListener('mousemove', (e) => {
       newHover.material.color.set(0x44ff44); // bright green
       newHover.material.opacity = 1.0;
       newHover.material.needsUpdate = true;
-      canvas.style.cursor = 'pointer';   // hover paints over the sub-mode base
+      if (_pointerCursor !== 'none') canvas.style.cursor = 'pointer';   // hover paints over the sub-mode base — but not in HELM hands-on (cursor stays hidden)
     } else {
       canvas.style.cursor = _pointerCursor; // restore the sub-mode base, not bare ''
     }
