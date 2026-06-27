@@ -48,14 +48,19 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > an Earth-like body read as a coherent WORLD — plate-shaped continents, ranges at convergent boundaries,
 > drainage belonging to that relief, genuinely various across seeds — not latitude bands / eroded noise? (Lab
 > overlays all surface features; isolate via toggles / `reliefBakeStrength`.) UAT pass → Ship.
-> **▶ BEFORE Max's UAT — BUILD a lab UI "isolate plate relief" control** (Max's ask 2026-06-27: a one-click
-> GUI toggle, NOT a console snippet, replacing the verified isolation recipe). A `lab-uat-isolation` workflow
-> established the plates author 100% of the continents (causal A/B) but NEITHER default view is honest
-> (relief=1 buried under clutter; relief=0 = fake legacy-noise continents) — only a stripped relief=1 view is
-> a valid AC8 read. Plus a fix for the "baked relief" slider desync, and a named deferred follow-on (re-seat
-> legacy orogeny F1/F4/F5 to NEST into plate boundaries — needs its own scope pass, only if UAT finds the
-> plate ranges too smooth alone). Fresh-session handoff (via workflows/subagents):
-> `/tmp/handoff-lab-plate-isolation-ui-2026-06-27.md`. Deferred
+> **▶ LAB UI "isolate plate relief" control — BUILT + LIVE-VERIFIED (2026-06-27); AC8 UAT now UNBLOCKED.**
+> New "Plate relief (UAT)" folder in `planet-lod-lab.html`: a one-click **"Isolate plate relief (AC8 view)"**
+> checkbox (strips CLASH/OBSCURE/CLUTTER feature buckets, keeps drainage, forces baked relief=1, re-routes →
+> plate field authors 100% of relief; OFF restores the exact prior enables via snapshot) + a **"Relief A/B:
+> plates ↔ flat ocean"** button, plus the "baked relief" slider **desync fix** (one `applyReliefBake()` sync
+> helper; `_lab.reliefBakeStrength` routes through it — uniform unchanged, AC2 byte-identical preserved). Built
+> via understand-subagent → 3 surgical edits → multi-lens adversarial audit (1 minor finding fixed: solo→isolate
+> snapshot guard) → live drive on :9223 = **PASS** (`plateProbe().heightSource=='carrier'`, boundary-vs-latitude
+> variance ~22×, 0 orphan/uphill). Build note + intent/non-goals:
+> `docs/WORKSTREAMS/world-engine-plate-uplift-field-2026-06-26/LAB-UI-isolate-plate-relief.md`. **NEXT = Max AC8
+> UAT** with the new toggle (zoom in — renders small at distance-20). Named deferred follow-on (only if UAT finds
+> the plate ranges too smooth alone): re-seat legacy orogeny F1/F4/F5 to NEST into plate boundaries — needs its
+> own `dev-collab-scope` pass + brainstorm. Handoff: `/tmp/handoff-lab-plate-isolation-ui-2026-06-27.md`. Deferred
 > follow-ons (named, not abandoned): precip/climate field, driver-response, game `Planet.js` port, Tier-C
 > plate-motion stepping, province-as-referent rewiring, non-Earth-like regimes.
 >

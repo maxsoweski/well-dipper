@@ -2471,11 +2471,22 @@
     uniforms.uTectonicGrainStrength.value = grainCarveUI.grainStrength;
     // AC2: apply the lab's ON-by-default baked relief (LAB live = 1 for A/B; prod uniforms.js stays 0).
     uniforms.uReliefBakeStrength.value = grainCarveUI.reliefBakeStrength;
+    // Single source for setting baked-relief strength: keep the uniform, the bound GUI value,
+    // AND the slider display in sync. The old _lab.reliefBakeStrength() set only the uniform, so
+    // the 'baked relief' slider showed a stale value while the uniform was 1 (the AC8-isolation
+    // desync). cReliefBake is captured below so updateDisplay() refreshes just this controller.
+    let cReliefBake = null;
+    function applyReliefBake(v){
+      v = +v;
+      grainCarveUI.reliefBakeStrength = v;
+      uniforms.uReliefBakeStrength.value = v;
+      if (cReliefBake) cReliefBake.updateDisplay();
+    }
     fGrainCarve.add(grainCarveUI, 'legend').name('⊞ shared grain feeds').disable();
     fGrainCarve.add(grainCarveUI, 'grainStrength', 0, 1, 0.01).name('grain strength (0 = old scatter)')
       .onChange(v => { window._lab ? window._lab.grainStrength(v) : (uniforms.uTectonicGrainStrength.value = v); });
-    fGrainCarve.add(grainCarveUI, 'reliefBakeStrength', 0, 1, 0.01).name('baked relief (0 = synth only)')
-      .onChange(v => { window._lab ? window._lab.reliefBakeStrength(v) : (uniforms.uReliefBakeStrength.value = v); });
+    cReliefBake = fGrainCarve.add(grainCarveUI, 'reliefBakeStrength', 0, 1, 0.01).name('baked relief (0 = synth only)')
+      .onChange(v => applyReliefBake(v));
     fGrainCarve.add(grainCarveUI, 'carveEpoch').name('carve epoch (drainage cuts relief)')
       .onChange(v => { window._lab && window._lab.setCarveEpoch(v); });
     // Carve depth — the live h-units the valley floor drops (→ F14 flood). Reuses the EXISTING
@@ -2484,6 +2495,50 @@
     // in sync with the duplicate control inside the Rivers folder.
     fGrainCarve.add(riverOverlayState, 'carveDepthH', 0, 0.3, 0.005).name('carve depth (floor h↓)')
       .listen().onChange(() => applyCarveAmounts());
+
+    // ▸ Plate relief (UAT) — the honest AC8 view of the plate-uplift increment (e07da8c).
+    // ONE click strips the legacy clutter so the plate field authors 100% of the relief:
+    //   CLASH   = legacy in-shader orogeny that bumps terrain on its OWN seeds (competes with plate boundaries)
+    //   OBSCURE = surface cover that hides the relief
+    //   CLUTTER = atmosphere / fx
+    // …and KEEPS drainage context (rivers/lakes/deltas/coast/outflow) + forces baked relief = 1 and re-routes
+    // so the router reads the plate carrier (heightSource=='carrier'). Toggling OFF restores the EXACT prior
+    // enable set + relief (a snapshot — there is NO setPreset that re-applies *Enabled). Lab tooling only
+    // (charter: lab≠game); touches no generator/game code. See handoff 2026-06-27.
+    const _isolateCfg = {
+      clash:    ['mountainsEnabled','canyonsEnabled','scarpsEnabled','tesseraEnabled','plateausEnabled','edificesEnabled','cratersEnabled','ejectaEnabled'],
+      obscure:  ['dustEnabled','dunesEnabled','lavaEnabled','chaosEnabled','cryoRidgeEnabled','frostEnabled','subEnabled','glacialEnabled','karstEnabled','massWastEnabled'],
+      clutter:  ['cloudsEnabled','weatherBandsEnabled','bandsEnabled','jetsEnabled','dustStormEnabled','greatSpotEnabled','stormTrainEnabled','polarVortexEnabled','lightningEnabled','auroraEnabled','airglowEnabled','sunglintEnabled','terminatorEnabled','facetsEnabled','magmaEnabled','carbonEnabled'],
+      drainage: ['lakesEnabled','deltasEnabled','coastEnabled','outflowEnabled'],   // rivers handled via setRiverOverlay (needs the re-route side-effect)
+    };
+    let _preIsolate = null;                  // enable+relief snapshot captured on ON, restored on OFF
+    const plateReliefUI = { isolate: false };
+    function isolatePlateRelief(on){
+      if (on){
+        if (_preIsolate) return;             // already isolated — don't clobber the snapshot
+        if (_preSoloEnables) unsolo();       // collapse any in-flight solo FIRST, so captureEnables() snapshots the operator's real pre-solo enables (not the soloed subset) — else isolate-OFF would restore the wrong set
+        _preIsolate = { enables: captureEnables(), relief: grainCarveUI.reliefBakeStrength };
+        for (const k of [..._isolateCfg.clash, ..._isolateCfg.obscure, ..._isolateCfg.clutter]) state[k] = false;
+        for (const k of _isolateCfg.drainage) state[k] = true;
+        applyReliefBake(1);                  // force baked relief = 1 (display synced) BEFORE routing
+        setRiverOverlay(true);               // authoritative: enable rivers + re-route (re-bakes the plate carrier)
+        syncDisplays();                      // refresh every checkbox to the isolated state
+      } else {
+        if (!_preIsolate) return;
+        for (const k of Object.keys(FEATURES)) state[FEATURES[k].enableKey] = _preIsolate.enables[k];
+        applyReliefBake(_preIsolate.relief);
+        setRiverOverlay(!!_preIsolate.enables['rivers']);   // restore the prior river overlay state + re-route
+        syncDisplays();
+        _preIsolate = null;
+      }
+    }
+    const fPlateRelief = guiLeft.addFolder('Plate relief (UAT)'); fPlateRelief.open();
+    fPlateRelief.add(plateReliefUI, 'isolate').name('Isolate plate relief (AC8 view)')
+      .onChange(v => isolatePlateRelief(v));
+    // A/B: flip baked relief 1↔0 (plate continents ↔ flat ocean) with the slider display kept in sync.
+    // Use while isolated (or after any route at relief>0) so the plate carrier is already baked.
+    fPlateRelief.add({ ab(){ applyReliefBake(grainCarveUI.reliefBakeStrength >= 0.5 ? 0 : 1); } }, 'ab')
+      .name('Relief A/B: plates ↔ flat ocean');
 
     // ▸ View & LOD (always open)
     const fView = guiLeft.addFolder('View & LOD'); fView.open();
@@ -5753,7 +5808,7 @@
                     // reliefBakeStrength(s) sets the gate (0 = byte-identical fallback). The height source
                     // BRANCHES on it (if/else, never mix-to-0), so 0 reverts to the verbatim pre-AC2 fbmd line
                     // with NO cube fetch. Used by the live strength-0-identical / strength-1-tracks captures on :9223.
-                    reliefBakeStrength(s){ if (s !== undefined) uniforms.uReliefBakeStrength.value = +s; return uniforms.uReliefBakeStrength.value; },
+                    reliefBakeStrength(s){ if (s !== undefined) applyReliefBake(+s); return uniforms.uReliefBakeStrength.value; },
                     // AC2 — baked-relief bake-once + texture probes (copies of grainBakeCount/grainTexture).
                     // reliefBakeCount increments once per route() (camera/time changes never re-bake). reliefTexture
                     // is the baked HalfFloat height cube (R=height, GBA=gradient) the renderer samples.
