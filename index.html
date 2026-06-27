@@ -12,8 +12,12 @@
   <body>
     <canvas id="canvas"></canvas>
 
-    <!-- Splash + intro sequence (before title screen) -->
-    <div id="splash-screen">
+    <!-- RETIRED begin-gate (§free-look-interaction-redesign-2026-06-27, Part 3):
+         the old "Do you wish to begin?" splash is NO LONGER the cold-open — the
+         title/mode-picker is now first. Kept hidden (display:none) so the inline
+         span-builder + any stray getElementById('splash-screen') stay harmless;
+         it is never shown and never receives input. -->
+    <div id="splash-screen" style="display:none;">
       <p class="splash-prompt" id="splash-text"></p>
       <script>
         // Per-character sliding illumination
@@ -28,18 +32,26 @@
         }
       </script>
     </div>
+
+    <!-- Post-pick intro sequence (DESHÉ / score logos). Shown AFTER the player
+         picks a mode at the title screen — picking IS the "begin" that starts the
+         music + these logos, then warps in. Skippable (any input jumps to warp).
+         (§free-look-interaction-redesign-2026-06-27, Part 3.) -->
     <div id="intro-overlay" style="display:none;">
       <div id="intro-logo1" class="intro-logo"><span class="deshe-title">DESHÉ</span><span class="deshe-sub">studios</span></div>
       <div id="intro-logo2" class="intro-logo intro-credit">original score by<br><span class="credit-name">Christian Sewesky</span></div>
     </div>
 
-    <!-- Title screen overlay. Doubles as the ORRERY/HELM mode picker
-         (§supercruise-arrival-modes-design-2026-06-27, #2): the two peer modes
-         are chosen here, then launched via the same flow as today. The
-         "press anything to begin" prompt remains as the no-explicit-pick path
-         (defaults to ORRERY, preserving the auto-dismiss screensaver). Mobile is
-         ORRERY-only, so the HELM choice is hidden there (CSS). -->
-    <div id="title-screen" style="display:none;">
+    <!-- Title screen overlay — the COLD-OPEN. This IS the begin-gate: the FIRST
+         thing shown at boot (replacing the old "Do you wish to begin?" splash). It
+         doubles as the ORRERY/HELM mode picker (§free-look-interaction-redesign
+         -2026-06-27, Part 3; #2): the two peer modes are chosen here, and picking
+         one (or the legacy "press anything") STARTS the music + intro logos, then
+         warps into the chosen mode. The "press anything to begin" prompt is the
+         no-explicit-pick path (defaults to ORRERY, preserving the idle auto-dismiss
+         screensaver). Mobile is ORRERY-only, so the HELM choice is hidden (CSS).
+         Visible at boot with animate-in so it fades up from black. -->
+    <div id="title-screen" class="animate-in">
       <div class="title-content">
         <h1 class="title-name">WELL-DIPPER</h1>
         <div class="title-mode-picker">

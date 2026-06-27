@@ -203,6 +203,28 @@ export function bootModeAction(mode) {
   return { mode: helm ? 'helm' : 'orrery', enterFlight: helm };
 }
 
+// The BOOT-FLOW REORDER input router, extracted pure (§free-look-interaction
+// -redesign-2026-06-27, Part 3). The ORRERY/HELM picker is now the COLD-OPEN — it
+// REPLACES the "Do you wish to begin?" splash as the begin-gate. Picking a mode
+// (or the legacy "press anything") STARTS the intro (music + DESHE/score logos),
+// THEN warps into the chosen mode; the post-pick intro is SKIPPABLE. This reducer
+// maps (which boot phase we're in, what — if anything — was picked) to the single
+// action the live dismiss funnels (canvas mousedown / touchstart / keydown) fire:
+//   - 'title' (picker shown, intro NOT started) → 'begin-intro' — start the music
+//     + logo timeline; carries the boot MODE (run through bootModeAction so a
+//     missing/unknown pick falls back to ORRERY, the safe contemplative boot — the
+//     "press anything to begin" path). Mobile→ORRERY coercion is the call site's.
+//   - 'intro' (post-pick intro PLAYING)         → 'skip-intro' — cancel the logo
+//     timers and jump straight to the warp/reveal.
+//   - anything else (live gameplay)             → 'none' — normal input handling.
+// Only 'begin-intro' carries a `mode`; the others leave it undefined. Pure so the
+// routing is unit-testable without three.js or the live host.
+export function bootDismissAction({ phase, picked } = {}) {
+  if (phase === 'title') return { action: 'begin-intro', mode: bootModeAction(picked).mode };
+  if (phase === 'intro') return { action: 'skip-intro' };
+  return { action: 'none' };
+}
+
 // The OS-cursor + flight-HUD-steering-reticle visibility decision, BY SUB-MODE,
 // extracted pure (§free-look-interaction-redesign-2026-06-27, Part 1). One source
 // of truth the live host (_applyPointerHud) applies on every transition that

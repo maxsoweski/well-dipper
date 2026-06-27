@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, bootDismissAction, commitBurnSwapsToHelm, pointerHudState, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -1821,7 +1821,7 @@ function _captureTelemetrySample() {
 }
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
-window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
+window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, intro: introActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
 // V1 STATION-hold redesign — debug accessor for the shared player-ship.
 window._ship = ship;
 
@@ -2020,15 +2020,20 @@ if (import.meta.env.DEV) {
 // this is the explicit "ADD it to the debug surface" path; scenarios
 // MUST NOT reach around it.
 window._lab = {
-  /** Skip splash + intro and land in Sol immediately. Idempotent. */
+  /** Skip the title/picker + post-pick intro and land in Sol immediately. Idempotent. */
   enterSol() {
-    if (splashActive || titleScreenActive) {
+    if (splashActive || titleScreenActive || introActive) {
       const splash = document.getElementById('splash-screen');
       if (splash) splash.style.display = 'none';
       const titleEl = document.getElementById('title-screen');
       if (titleEl) titleEl.style.display = 'none';
+      const introEl = document.getElementById('intro-overlay');
+      if (introEl) introEl.style.display = 'none';
       splashActive = false;
       titleScreenActive = false;
+      introActive = false;
+      _clearIntroTimers();
+      if (_titleIdleTimer) { clearTimeout(_titleIdleTimer); _titleIdleTimer = null; }
       if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
     }
     const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
@@ -2040,9 +2045,9 @@ window._lab = {
     return { ok: false, reason: 'KnownSystems.findAt(Sol) returned null' };
   },
 
-  /** Whether the in-system gameplay loop is active (post-splash, post-title). */
+  /** Whether the in-system gameplay loop is active (post-title, post-intro). */
   isInSystem() {
-    return !splashActive && !titleScreenActive && !!system;
+    return !splashActive && !titleScreenActive && !introActive && !!system;
   },
 
   /** Stop autopilot + supercruise pilot in one call. Used by scenario 5. */
@@ -2342,81 +2347,105 @@ let _deepSkyDrift = null;     // { startPos, endPos, duration, elapsed } — mom
 // Press comma/period/? then Space to force galaxy/nebula/cluster.
 const _heldKeys = new Set();
 
-// ── Splash + Intro sequence ──
-let splashActive = true;
+// ── Boot flow: title-picker cold-open → post-pick intro → warp ──
+// (§free-look-interaction-redesign-2026-06-27, Part 3.) The boot now opens on the
+// ORRERY/HELM title-picker (titleScreenActive=true below at ~2494). `splashActive`
+// is RETIRED as the begin-gate — the old "Do you wish to begin?" splash no longer
+// shows — but the flag is kept (always false now) because many input/loop guards
+// read `splashActive || titleScreenActive`; leaving it false keeps those guards
+// driven solely by the title/intro state. `introActive` is true ONLY during the
+// post-pick DESHÉ/score logo sequence, which is skippable (any input → warp).
+let splashActive = false;
+let introActive = false;
 
+// IDs of the post-pick logo timers, so a SKIP can cancel them mid-flight.
+let _introTimers = [];
+
+// The POST-PICK intro: the DESHÉ / score logo sequence (§free-look-interaction
+// -redesign-2026-06-27, Part 3). Called by _pickBootMode AFTER a mode is chosen —
+// picking IS the "begin", so THIS is where audio starts: 'intro' one-shot over the
+// logos, then the looping 'title' theme fills the rest until the warp pipeline
+// crossfades to 'hyperspace' (main.js ~3442). Picking does NOT stop the music. The
+// title screen is already dismissed (titleScreenActive flipped off by the caller);
+// here we just run the logos, which are SKIPPABLE — any input → _skipIntroToWarp.
+// At the natural end the logos hand off to _finishIntroToWarp (the warp/reveal that
+// consumes _pendingBootMode → HELM or ORRERY).
 function startIntroSequence() {
-  const splash = document.getElementById('splash-screen');
-  if (splash) splash.style.display = 'none';
-
   const overlay = document.getElementById('intro-overlay');
   const logo1 = document.getElementById('intro-logo1');
   const logo2 = document.getElementById('intro-logo2');
-  const titleEl = document.getElementById('title-screen');
+
+  // Begin audio on the pick (one-shot intro sting, then the looping title theme).
+  musicManager.playOnce('intro', 0.8);
+  musicManager.play('title');
+
+  // introActive is set BEFORE the fallback check so _finishIntroToWarp's
+  // re-entrancy guard (if !introActive return) lets the warp fire in BOTH paths.
+  introActive = true;
 
   if (!overlay || !logo1 || !logo2) {
-    // Fallback: skip intro, show title directly
-    if (titleEl) titleEl.style.display = '';
-    splashActive = false;
-    titleScreenActive = true;
-    musicManager.play('title');
+    // Fallback: no logo overlay — go straight to the warp.
+    _finishIntroToWarp();
     return;
   }
 
   overlay.style.display = '';
 
-  // Start intro music immediately (one-shot, plays over the logo sequence)
-  musicManager.playOnce('intro', 0.8);
-
-  // Timeline (~12 seconds total):
-  //   0.0s — Logo 1 fades in
+  // Logo timeline (~7s):
+  //   0.2s — Logo 1 (DESHÉ) fades in
   //   2.4s — Logo 1 fades out
-  //   4.0s — Logo 2 fades in
+  //   4.0s — Logo 2 (score credit) fades in
   //   6.4s — Logo 2 fades out
-  //   8.0s — Overlay removed, title screen shown
+  //   7.0s — Hand off to the warp/reveal
+  _introTimers = [
+    setTimeout(() => { logo1.classList.add('visible'); }, 200),
+    setTimeout(() => { logo1.classList.remove('visible'); }, 2400),
+    setTimeout(() => { logo2.classList.add('visible'); }, 4000),
+    setTimeout(() => { logo2.classList.remove('visible'); }, 6400),
+    setTimeout(() => { _finishIntroToWarp(); }, 7000),
+  ];
+}
 
-  // Logo 1 in
-  setTimeout(() => { logo1.classList.add('visible'); }, 200);
-  // Logo 1 out
-  setTimeout(() => { logo1.classList.remove('visible'); }, 2400);
-  // Logo 2 in
-  setTimeout(() => { logo2.classList.add('visible'); }, 4000);
-  // Logo 2 out
-  setTimeout(() => { logo2.classList.remove('visible'); }, 6400);
-  // Remove overlay, show title screen
-  setTimeout(() => {
-    overlay.style.display = 'none';
-    if (titleEl) {
-      titleEl.style.display = '';
-      void titleEl.offsetHeight;
-      titleEl.classList.add('animate-in');
-    }
-    splashActive = false;
-    titleScreenActive = true;
-    // Start looping title theme, then set auto-dismiss timer once loaded
-    musicManager.play('title').then(() => {
-      if (!titleScreenActive) return;
-      const titleDur = musicManager.getDuration('title');
-      const titleLoops = 1; // title track is ~3:16 — plays once, no looping needed
-      const silenceGap = 3000;
-      if (_titleAutoTimer) clearTimeout(_titleAutoTimer);
-      if (titleDur > 0) {
-        _titleAutoTimer = setTimeout(() => {
-          musicManager.stop(1.0);
-          _titleAutoTimer = setTimeout(() => {
-            if (titleScreenActive) {
-              dismissTitleScreen();
-              // Always select a real hash grid star before warping — but skip
-              // the auto-warp in portal-lab diagnostic mode (player drives).
-              if (!_portalLabMode) {
-                setTimeout(() => { autoSelectWarpTarget(); beginWarpTurn(); }, 1500);
-              }
-            }
-          }, silenceGap);
-        }, titleDur * titleLoops * 1000);
-      }
-    });
-  }, 8000);
+// Cancel the running logo timers (used by SKIP and by the natural-end handoff so a
+// late timer can't fire after we've already moved on).
+function _clearIntroTimers() {
+  for (const t of _introTimers) clearTimeout(t);
+  _introTimers = [];
+}
+
+// SKIP the post-pick intro: any input (click / touch / keypress) during the logo
+// sequence jumps straight to the warp (§free-look-interaction-redesign-2026-06-27,
+// Part 3). Cancels the logo timers and reveals immediately. Music keeps playing.
+function _skipIntroToWarp() {
+  if (!introActive) return;
+  _clearIntroTimers();
+  _finishIntroToWarp();
+}
+
+// End of the post-pick intro (natural end OR skip): hide the logos and kick the
+// warp that reveals the chosen mode. _pendingBootMode is consumed downstream by
+// warpRevealSystem (HELM → _enterFlightInternal; ORRERY → autopilot tour). Music
+// is NOT stopped here — the warp pipeline crossfades it to 'hyperspace'. Guarded
+// so the natural-end timer and a concurrent skip can't double-fire.
+function _finishIntroToWarp() {
+  if (!introActive) return;
+  introActive = false;
+  _clearIntroTimers();
+
+  const overlay = document.getElementById('intro-overlay');
+  if (overlay) overlay.style.display = 'none';
+
+  // Title-screen bookkeeping the old dismissTitleScreen did (minus the music stop
+  // and minus the title-nebula screensaver orbit — we warp straight away here).
+  if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
+  _autopilotEnabled = true; // boot always leads to autopilot/screensaver unless HELM
+
+  // Kick the first warp into a real system. Skipped in portal-lab diagnostic mode
+  // (player drives there). The 1.5s delay lets the warp target/turn settle, matching
+  // the legacy auto-warp timing.
+  if (!_portalLabMode) {
+    setTimeout(() => { autoSelectWarpTarget(); beginWarpTurn(); }, 1500);
+  }
 }
 
 /**
@@ -2490,10 +2519,16 @@ function _handleSplashDismiss(e) {
 document.getElementById('splash-screen')?.addEventListener('click', _handleSplashDismiss);
 document.getElementById('splash-screen')?.addEventListener('touchend', _handleSplashDismiss);
 
-// ── Title screen ──
-let titleScreenActive = false;
+// ── Title screen (the COLD-OPEN / mode picker) ──
+// titleScreenActive starts TRUE: the title/picker is the FIRST screen at boot
+// (§free-look-interaction-redesign-2026-06-27, Part 3) — it replaces the retired
+// "Do you wish to begin?" splash as the begin-gate.
+let titleScreenActive = true;
 let _titleAutoTimer = null;
-// The station the player picked at the splash mode-picker (§supercruise-arrival
+// Idle auto-pick timer for the cold-open: if the player never picks, default to
+// ORRERY (the contemplative screensaver), preserving the legacy idle auto-dismiss.
+let _titleIdleTimer = null;
+// The station the player picked at the title mode-picker (§supercruise-arrival
 // -modes-design-2026-06-27, #2). Consumed ONCE by warpRevealSystem when the first
 // star system goes live: 'helm' → enter HELM (drive untouched) instead of the
 // autopilot tour; 'orrery' (the default / "press anything to begin") → today's
@@ -2501,63 +2536,56 @@ let _titleAutoTimer = null;
 // only ever 'helm' on desktop. Reset to 'orrery' after it's applied.
 let _pendingBootMode = 'orrery';
 
-// The splash mode-picker action — sets the chosen boot station, then launches the
-// game via the SAME flow as today (dismissTitleScreen). The two title buttons +
-// the legacy "press anything to begin" path all funnel through here. On mobile,
-// HELM is unavailable (ORRERY-only), so any non-orrery pick is coerced to orrery.
+// The title mode-picker action — sets the chosen boot station, then BEGINS the
+// intro (§free-look-interaction-redesign-2026-06-27, Part 3): picking IS the
+// "begin", so it starts the music + DESHÉ/score logos via startIntroSequence, then
+// warps into the chosen mode. It does NOT call dismissTitleScreen (which stops the
+// music). The two title buttons + the legacy "press anything to begin" path all
+// funnel through here. On mobile, HELM is unavailable (ORRERY-only), so any
+// non-orrery pick is coerced to orrery.
 function _pickBootMode(mode) {
   if (!titleScreenActive) return;
   const decided = (_isMobile ? 'orrery' : (mode ?? 'orrery'));
   _pendingBootMode = bootModeAction(decided).mode;
-  dismissTitleScreen();
+  // Dismiss the title-picker overlay (the picker chrome) WITHOUT stopping music,
+  // then run the post-pick intro → warp.
+  titleScreenActive = false;
+  if (_titleIdleTimer) { clearTimeout(_titleIdleTimer); _titleIdleTimer = null; }
+  const titleEl = document.getElementById('title-screen');
+  if (titleEl) {
+    titleEl.classList.add('fading');
+    setTimeout(() => { titleEl.style.display = 'none'; }, 1000);
+  }
+  startIntroSequence();
 }
 
+// Start the cold-open idle auto-pick: if the player lingers on the title without
+// picking, default to ORRERY (begins the intro → screensaver auto-warp), preserving
+// the legacy idle auto-dismiss. Skipped on portal-lab (player drives).
+function _armTitleIdleAutoPick() {
+  if (_portalLabMode) return;
+  if (_titleIdleTimer) clearTimeout(_titleIdleTimer);
+  _titleIdleTimer = setTimeout(() => {
+    if (titleScreenActive) _pickBootMode('orrery');
+  }, 30000);
+}
+
+// The "press anything to begin" funnel — the no-explicit-pick path. Per the boot
+// reorder (§free-look-interaction-redesign-2026-06-27, Part 3) this defaults to
+// ORRERY and routes through the SAME _pickBootMode path the buttons use (begin the
+// intro → warp), so the music starts rather than stops. Kept under the old name
+// because the input dismiss funnels (canvas mousedown / touchstart / keydown) call
+// dismissTitleScreen(); they now mean "begin as ORRERY". No-op once the title is
+// already dismissed.
 function dismissTitleScreen() {
   if (!titleScreenActive) return;
-  titleScreenActive = false;
-  // soundEngine.play('titleDismiss'); // muted for now
-  musicManager.stop(0.5);
-  _autopilotEnabled = true; // title screen always leads to autopilot screensaver
-  // Galaxy glow stays hidden until warp (restored in onSwapSystem)
-  if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
-
-  const el = document.getElementById('title-screen');
-  if (el) {
-    el.classList.add('fading');
-    setTimeout(() => { el.style.display = 'none'; }, 1000);
-  }
-
-  // Smooth zoom-out: transition orbit center back to origin (object center)
-  // and zoom to the same distance startFlythrough would use, so there's no snap.
-  cameraController.autoRotateSpeed = settings.get('autoRotateSpeed');
-  cameraController._targetGoal.set(0, 0, 0);
-  cameraController._transitioning = true;
-  cameraController._transitionSpeed = 0.02; // slow, graceful transition
-  // Zoom to the exact distance startFlythrough uses for distant deep sky
-  const radius = system?.destination?.data?.radius || 200;
-  const flyViewDist = radius * 1.25;
-  cameraController.distance = flyViewDist;
-  cameraController.zoomSpeed = 0;
-
-  // After the smooth transition settles, hand off to free-look orbit or autopilot.
-  setTimeout(() => {
-    if (!system) return;
-    const isDistantDeepSky = system.type && system.type !== 'star-system';
-    if (isDistantDeepSky) {
-      // Free-look orbit (not bypassed) — user can drag to look around
-      cameraController.autoRotateActive = true;
-      _deepSkyLingerTimer = 15;
-    } else if (!autoNav.isActive) {
-      idleTimer = 0;
-      startFlythrough();
-    }
-  }, 5000);
+  _pickBootMode('orrery');
 }
 
-// Wire the two splash mode-picker buttons (ORRERY / HELM). Each picks its station
-// then launches via _pickBootMode → dismissTitleScreen (the same launch flow the
-// "press anything to begin" path uses). stopPropagation so the click doesn't also
-// hit the document-level "press anything" dismiss (which would default to ORRERY).
+// Wire the two title mode-picker buttons (ORRERY / HELM). Each picks its station
+// then launches via _pickBootMode → startIntroSequence (the post-pick intro → warp).
+// stopPropagation so the click doesn't also hit the document-level "press anything"
+// dismiss (which would default to ORRERY).
 {
   const wirePick = (id, mode) => {
     const btn = document.getElementById(id);
@@ -2592,7 +2620,7 @@ function _scheduleSystemMusic(minDelay, maxDelay) {
   if (_systemMusicTimer) clearTimeout(_systemMusicTimer);
   const delay = (minDelay + Math.random() * (maxDelay - minDelay)) * 1000;
   _systemMusicTimer = setTimeout(() => {
-    if (warpEffect.isActive || splashActive || titleScreenActive) {
+    if (warpEffect.isActive || splashActive || titleScreenActive || introActive) {
       // Not the right time — reschedule
       _scheduleSystemMusic(5, 15);
       return;
@@ -3951,7 +3979,10 @@ function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
   cameraController.restoreFromWorldState(orbitCenter);
   cameraController.autoRotateSpeed = 3.0;
 
-  // Auto-dismiss timer is now started by startIntroSequence() when the title actually appears.
+  // Cold-open idle auto-pick (§free-look-interaction-redesign-2026-06-27, Part 3):
+  // the title/picker is the FIRST screen, so arm the no-pick fallback HERE — if the
+  // player never picks, default to ORRERY (begins the intro → screensaver auto-warp).
+  _armTitleIdleAutoPick();
 
   // Mobile fullscreen button on title screen — only goes fullscreen, no dismiss
   const fsBtn = document.getElementById('title-fullscreen-btn');
@@ -7751,7 +7782,7 @@ function simStep(deltaTime) {
     // in simStep (fixed 60Hz); the render-side cameraInterp handles
     // blending.
     const scActive = (scPilot.isActive || _scManual)
-      && !warpEffect.isActive && !splashActive && !titleScreenActive;
+      && !warpEffect.isActive && !splashActive && !titleScreenActive && !introActive;
     if (scActive) {
       // Gravity-well cap inputs: CURRENT rebased mesh positions, refreshed
       // per tick. Accessors copied from the body-rewrite block above
@@ -7867,9 +7898,9 @@ function simStep(deltaTime) {
     // had no live entry point. Its sole beginMotion was the self-chaining
     // tour-advance inside the branch itself.)
     else
-    // Skip idle timer during warp or title screen (title has its own 30s timer)
-    if (warpEffect.isActive || splashActive || titleScreenActive) {
-      // Warp, splash, or title screen is active — don't start autopilot
+    // Skip idle timer during warp, title screen, or the post-pick intro.
+    if (warpEffect.isActive || splashActive || titleScreenActive || introActive) {
+      // Warp, title screen, or post-pick intro is active — don't start autopilot
     } else if (flythrough.active) {
       // Flythrough runs whether autoNav is active or not (manual burns use it too).
       // Per-leg motion flow is encapsulated in the navigation subsystem: a single
@@ -7982,7 +8013,7 @@ function simStep(deltaTime) {
     // After the timer, auto-warp away.
     // Paused during title screen (title has its own 30s dismiss timer).
     // Paused in portal-lab diagnostic mode (no auto-warps; player drives).
-    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !splashActive && !titleScreenActive && !_portalLabMode) {
+    if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !splashActive && !titleScreenActive && !introActive && !_portalLabMode) {
       _deepSkyLingerTimer -= deltaTime;
       if (_deepSkyLingerTimer <= 0) {
         _deepSkyLingerTimer = -1;
@@ -8396,7 +8427,7 @@ function renderFrame(alpha) {
   }
 
   // ── Targeting reticle (tentative hover + selected committed target) ──
-  targetingReticle.enabled = _hudVisible && !!system && !warpEffect.isActive && !splashActive && !titleScreenActive && !galleryMode;
+  targetingReticle.enabled = _hudVisible && !!system && !warpEffect.isActive && !splashActive && !titleScreenActive && !introActive && !galleryMode;
 
   // Occlusion pass: reticles draw on a 2D overlay and don't share the depth
   // buffer, so we analytically test each candidate reticle against the
@@ -8633,7 +8664,7 @@ function _exitFlightInternal() {
 function _doModeSwap() {
   if (_isMobile) return;
   if (warpEffect.isActive || warpTarget.turning) return;
-  if (splashActive || titleScreenActive) return;
+  if (splashActive || titleScreenActive || introActive) return;
   if (!system || (system.type && system.type !== 'star-system')) {
     console.log('[MODE] mode swap unavailable — no star system');
     return;
@@ -8808,16 +8839,25 @@ window.addEventListener('keydown', (e) => {
     // (Pure cascade pinned in flightModes.escCascadeAction.)
   }
 
-  // Block all input during splash/intro sequence
+  // Block all input during the retired splash (never active now).
   if (splashActive) return;
 
-  // Title screen: game keys dismiss (ignore F-keys, modifier-only, browser keys)
+  // Boot-flow keydown routing (§free-look-interaction-redesign-2026-06-27, Part 3):
+  //   - INTRO phase  → any key SKIPS the post-pick logos straight to the warp.
+  //   - TITLE phase  → a game key BEGINS as ORRERY (the no-explicit-pick path);
+  //     F-keys / modifier-only / browser keys are ignored (so K-for-keybinds etc.
+  //     still work on the cold-open). The pure router pins the phase→action map.
+  if (introActive) {
+    _skipIntroToWarp();
+    return;
+  }
   if (titleScreenActive) {
     const ignore = e.key.startsWith('F') || e.key === 'Meta' || e.key === 'Alt'
       || e.key === 'Control' || e.key === 'Shift' || e.key === 'CapsLock'
       || e.key === 'Tab' || e.key === 'NumLock' || e.key === 'ScrollLock';
     if (!ignore) {
-      dismissTitleScreen();
+      const boot = bootDismissAction({ phase: 'title', picked: null });
+      if (boot.action === 'begin-intro') _pickBootMode(boot.mode);
       return;
     }
   }
@@ -9066,7 +9106,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
-    if (splashActive || titleScreenActive) return;
+    if (splashActive || titleScreenActive || introActive) return;
     if (!system || (system.type && system.type !== 'star-system')) {
       console.log('[MODE] Supercruise unavailable — no star system');
       return;
@@ -9099,7 +9139,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
-    if (splashActive || titleScreenActive) return;
+    if (splashActive || titleScreenActive || introActive) return;
     // Free-look is available whenever the supercruise camera path is live — i.e.
     // In-Flight (_scManual) OR while the autopilot/tour is flying (scPilot.isActive).
     // This matches the frame-loop apply gate (scPilot.isActive || _scManual) and the
@@ -9640,7 +9680,14 @@ let _minimapDidDrag = false; // true once mouse actually moves during minimap dr
 // Mouse click
 canvas.addEventListener('mousedown', (e) => {
   if (splashActive) return;
-  if (titleScreenActive) { dismissTitleScreen(); return; }
+  // Boot-flow click routing (§free-look-interaction-redesign-2026-06-27, Part 3):
+  // intro → SKIP to warp; title → BEGIN as ORRERY (no-explicit-pick path).
+  if (introActive) { _skipIntroToWarp(); return; }
+  if (titleScreenActive) {
+    const boot = bootDismissAction({ phase: 'title', picked: null });
+    if (boot.action === 'begin-intro') _pickBootMode(boot.mode);
+    return;
+  }
   _mouseDown.x = e.clientX;
   _mouseDown.y = e.clientY;
 
@@ -9816,7 +9863,14 @@ const _touchStart = { x: 0, y: 0 };
 
 canvas.addEventListener('touchstart', (e) => {
   if (splashActive) return;
-  if (titleScreenActive) { dismissTitleScreen(); return; }
+  // Boot-flow touch routing (§free-look-interaction-redesign-2026-06-27, Part 3):
+  // intro → SKIP to warp; title → BEGIN as ORRERY (mobile is ORRERY-only anyway).
+  if (introActive) { _skipIntroToWarp(); return; }
+  if (titleScreenActive) {
+    const boot = bootDismissAction({ phase: 'title', picked: null });
+    if (boot.action === 'begin-intro') _pickBootMode(boot.mode);
+    return;
+  }
   if (e.touches.length === 1) {
     _touchStart.x = e.touches[0].clientX;
     _touchStart.y = e.touches[0].clientY;
