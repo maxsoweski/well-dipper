@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -7787,18 +7787,18 @@ function simStep(deltaTime) {
         const _d = alignDot(scModel.orientation, scModel.position, _alignState.mesh.position);
         if (_d >= scPilot.tuning.ALIGN_DOT || _alignState.t >= ALIGN_MAX_S) _alignState.active = false;
       }
-      // ── Latched free-look bridge (§supercruise-arrival-modes-design
-      //    -2026-06-27, Feature 2 / Task 6) ──
-      // Reconcile HeadMount.held with the F-latch BEFORE update()/applyTo so the
-      // head pose composes every frame while In-Flight REGARDLESS of drive state
-      // (this branch is gated on scPilot.isActive || _scManual, so it runs while
-      // dropped/parked too). While latched, syncHeadToFreeLook re-asserts held=
-      // true → the mousemove handler's existing `scHead.held` gate routes pointer
-      // motion to scHead.addLook AND freezes the virtual joystick (no new code
-      // there). On toggle-off it consumes the one-shot recenter and releases the
-      // hold so update() eases yaw/pitch → 0. The middle-mouse PEEK still drives
-      // held directly; this re-asserts it next frame, so a peek release while
-      // still latched never recenters.
+      // ── Free-look bridge (§free-look-interaction-redesign-2026-06-27, Part 2;
+      //    was §supercruise-arrival-modes Feature 2 / Task 6) ──
+      // Compose the head pose every frame while In-Flight REGARDLESS of drive
+      // state (gated scPilot.isActive || _scManual, so it runs dropped/parked too).
+      // REDESIGNED: the F-latch no longer holds the head — `scHead.held` follows
+      // the LEFT button (mousedown→beginLook / mouseup→endLook in free-look) and
+      // the MIDDLE-mouse peek (hands-on). So in free-look you look ONLY while LMB-
+      // dragging; a bare cursor neither looks nor steers (the mousemove joystick
+      // gate is `!freeLook.latched`). On RELEASE the view HOLDS where you dragged
+      // (HeadMount's default: !held && !recentering → no ease). The ONLY job left
+      // for the bridge is the one-shot recenter on F-EXIT: consumeRecenter() →
+      // scHead.beginRecenter() → update() eases yaw/pitch → 0 (EXIT_RECENTER_TAU).
       syncHeadToFreeLook(freeLook, scHead);
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
@@ -8606,6 +8606,16 @@ function _exitFlightInternal() {
   focusMoonIndex = -1;
   focusStarIndex = -1;
   _flightMode = FlightMode.MANUAL; // reset for the next engage
+  // Leaving HELM resets the head to nose-forward for the NEXT entry (§free-look
+  // -interaction-redesign-2026-06-27, Part 2). The no-snap exit above already
+  // anchored the Toy-Box orbit on the camera's CURRENT (possibly-deflected) forward
+  // ray, so zeroing the head here changes only the next HELM entry, not this exit.
+  // Also drop `held` + any pending recenter so a stranded look/recenter can't carry
+  // into the next flight (the bridge stops running once we leave HELM).
+  scHead.endLook();
+  scHead.recentering = false;
+  scHead.yaw = 0;
+  scHead.pitch = 0;
   flightModeToast.show('Flight OFF', '');
   // Leaving HELM for ORRERY: restore the OS cursor, drop the steering reticle
   // (cursor-by-mode, §free-look-interaction-redesign Part 1).
@@ -9077,13 +9087,15 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // F key: toggle latched free-look (§supercruise-arrival-modes-design
-  // -2026-06-27, Feature 2). In-Flight only. F no longer engages/disengages
-  // supercruise — that moved to E (above). F flips whether pointer motion drives
-  // the camera (HeadMount look) or the virtual joystick; the frame loop reads
-  // freeLook.latched for input routing and consumes the one-shot recenter on
-  // toggle-off (HeadMount eases yaw/pitch → 0). Desktop only; same warp/splash
-  // guards as E.
+  // F key: toggle free-look MODE on/off (§free-look-interaction-redesign
+  // -2026-06-27, Part 2; was §supercruise-arrival-modes Feature 2). In-Flight only.
+  // F no longer engages/disengages supercruise (that's E), and it no longer LATCHES
+  // the look: in free-look the head looks ONLY while LMB is dragged, and a bare
+  // cursor is a free pointer (it neither steers nor moves the camera — the mousemove
+  // joystick gate is `!freeLook.latched`). F-ON shows the cursor + hides the steering
+  // reticle (Part 1). F-OFF arms the one-shot recenter (freeLook.exit → the frame
+  // bridge calls scHead.beginRecenter → a FAST-but-graceful eased return to nose-
+  // forward, EXIT_RECENTER_TAU). Desktop only; same warp/splash guards as E.
   if (e.code === 'KeyF') {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
@@ -9494,11 +9506,16 @@ canvas.addEventListener('mousemove', (e) => {
   }
 
   // ── Supercruise freelook (hold-to-look, Elite headlook) ──
-  // While the freelook control is held (middle mouse), mouse motion swings
-  // the head mount instead of steering/orbiting. The ship keeps flying its
-  // line (scHead writes ONLY the camera, never the model). First-person
-  // convention: mouse right → look right, mouse up → look up. We consume the
-  // motion and return so the joystick deflection freezes while held.
+  // The head LOOKS only while `held` is set, and `held` now follows the mouse
+  // BUTTON, not the F-latch (§free-look-interaction-redesign-2026-06-27, Part 2):
+  //   - free-look (F on): held = LEFT button down (mousedown→beginLook), so you
+  //     drag with LMB to look; a bare cursor (LMB up) falls through to the FREE-
+  //     CURSOR branch below and neither looks nor steers.
+  //   - hands-on (F off): held = the MIDDLE-mouse PEEK (unchanged).
+  // freeLookPointerRoute({latched, lmbHeld}) is the pure decision; here `scHead.held`
+  // already encodes "lmbHeld in free-look OR peek in hands-on", so the 'look' case
+  // is exactly `scHead.held`. The ship keeps flying its line (scHead writes ONLY
+  // the camera). First-person convention: mouse right → look right, mouse up → up.
   if (scHead.held) {
     scHead.addLook(-e.movementX * 0.003, -e.movementY * 0.0025);
     return; // freelook consumes the motion; joystick deflection freezes while held
@@ -9507,11 +9524,14 @@ canvas.addEventListener('mousemove', (e) => {
   // ── Supercruise virtual joystick ──
   // Mouse position relative to the canvas centre is the stick deflection:
   // distance from centre = turn-rate command (pitch/yaw), capped by the
-  // model. A deadzone around centre keeps the nose steady at rest. Only
-  // while the player has the stick AND freelook isn't held (freelook
-  // consumes the motion and freezes the joystick; Task 10). We fall
+  // model. A deadzone around centre keeps the nose steady at rest. Steering
+  // is HANDS-ON ONLY: gated off whenever free-look is latched (a bare cursor in
+  // free-look is a FREE pointer for aiming/selecting — it must NOT steer the
+  // ship; §free-look-interaction-redesign-2026-06-27, Part 2, step 2), and off
+  // while the head is held (a peek freezes the joystick). freeLookPointerRoute
+  // returns 'steer' IFF !latched — encoded here as `!freeLook.latched`. We fall
   // through afterward so idle-reset and the rest of the handler still run.
-  if (_scManual && !scHead.held) {
+  if (_scManual && !scHead.held && !freeLook.latched) {
     const r = canvas.getBoundingClientRect();
     const nx = ((e.clientX - r.left) - r.width / 2) / (r.width / 2);   // -1..1
     const ny = ((e.clientY - r.top) - r.height / 2) / (r.height / 2);  // -1..1
@@ -9655,6 +9675,15 @@ canvas.addEventListener('mousedown', (e) => {
       scHead.beginLook();
     }
   }
+  // Free-look LMB-to-look (§free-look-interaction-redesign-2026-06-27, Part 2,
+  // step 1): in free-look the head looks ONLY while the LEFT button is held.
+  // Press = begin look; the matching release (mouseup) ends it. This does NOT
+  // swallow the click — the click-vs-drag mouseup logic still runs, so a <5px
+  // tap still reaches trySelect (step 3). Gated on a supercruise mover being
+  // active so a stray click outside flight can't grab the head.
+  if (e.button === 0 && freeLook.latched && (_scManual || scPilot.isActive)) {
+    scHead.beginLook();
+  }
   // Cancel momentum drift on any click — hand camera to user immediately
   if (_deepSkyDrift) {
     _deepSkyDrift = null;
@@ -9704,16 +9733,34 @@ window.addEventListener('mouseup', (e) => {
   }
   if (e.button === 1) {
     _middleMouseDown = false;
-    // Supercruise hold-to-look release (Task 10, AC4): drop the held flag so
-    // HeadMount.update() eases the view back to ship-forward. Unconditional —
-    // endLook() is a no-op when the head wasn't held.
+    // Supercruise hold-to-look release (Task 10, AC4): drop the held flag.
+    // What happens to the view depends on the mode (§free-look-interaction-
+    // redesign-2026-06-27, Part 2, step 4): in HANDS-ON a peek release RECENTERS
+    // (Elite snap-back to nose-forward); while FREE-LOOK is latched a peek release
+    // HOLDS (the view only recenters on F-exit). headReleaseAction encodes that.
     scHead.endLook();
+    if (headReleaseAction({ freeLookLatched: freeLook.latched }) === 'recenter') {
+      scHead.beginRecenter();
+    }
     if (flythrough.active) flythrough.clearFreeLook();
   }
 });
 
 canvas.addEventListener('mouseup', (e) => {
   if (e.button !== 0) return;
+
+  // Free-look LMB release (§free-look-interaction-redesign-2026-06-27, Part 2,
+  // step 1+4): end the look. The view HOLDS where you dragged it (headReleaseAction
+  // → 'hold' while latched; HeadMount's default is hold, no recenter), so we just
+  // drop `held` — the recenter happens only on F-exit. Guarded by `!_middleMouseDown`
+  // so a stray LMB release during an active MIDDLE-mouse peek doesn't kill the peek
+  // (that look was begun by the middle button, released by button-1's own handler).
+  // Otherwise unconditional: only an LMB look-grab in free-look sets `held` via
+  // button 0 (hands-on uses LMB for orbit-drag, never a look), so endLook() is a
+  // safe no-op — and it covers the F-exit-WHILE-LMB-held case (the bridge already
+  // requested the recenter; this release un-holds so update() can finally ease it
+  // home). Runs BEFORE the click-vs-drag logic so a <5px tap still reaches trySelect.
+  if (!_middleMouseDown) scHead.endLook();
 
   // End minimap drag
   if (_minimapDragging) {
