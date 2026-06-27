@@ -111,10 +111,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > `docs/WORKSTREAMS/world-engine-shell-relief-2026-06-27/` (`intent.md`, `contract.json`, `SLICE-B-stress-math.md`,
 > `verdict.json`). **Push HOLD** (campaign-wide). Handoff resumed from `/tmp/handoff-world-engine-shell-relief-slice-b-2026-06-27.md`.
 >
-> **⚠ OPEN — Max's calls (don't silently resolve):** (1) **AC11 UAT** above. (2) **World Engine Lab cleanup**
-> (HIDE-don't-delete — Max-decided) should land **BEFORE** the shell-relief UAT for a clean view: rename LOD LAB→WORLD
-> ENGINE LAB, collapse the synth F1–F40 folders into a 'legacy' drawer (render-safe — the synth is STILL the live
-> renderer; the carrier only swaps base height), drop the voronoi3d debug spike. Needs its own `dev-collab-scope` pass.
+> **⚠ OPEN — Max's calls (don't silently resolve):** (1) **AC11 UAT** above — now with a CLEAN view (item 2 landed:
+> step Europa/Frozen/Eyeball/Titan in the lab; the right "Features" panel is one collapsed "Legacy synth renderer"
+> drawer). (2) ✅ **World Engine Lab cleanup DONE — `af12d67` (2026-06-27).** Renamed LOD LAB→WORLD ENGINE LAB (3
+> display labels), collapsed the 5 synth groups + "Not relevant" into one CLOSED "Legacy synth renderer (F1–F49)"
+> drawer (DOM-only re-parent; relevance filter keys on stored leaf parentEl → render-safe), dropped the voronoi3d
+> debug spike (production uVoroCells untouched + still fed by applyDrivers). Executed directly (single-file,
+> render-safe, reversible) per Max's call rather than a separate dev-collab-scope workstream; verified via
+> understand→implement→3-lens adversarial review + live drive on :5173 (relevance re-sorts Rocky→Europa 15→41,
+> console clean, render alive). **Deferred follow-on (named, not abandoned):** a future pass can delete the now-inert
+> GLSL spike block (~L260-290) + its `uVoroScale`/`uDebugMode` uniform defs *together* (co-remove or the shader
+> won't compile). Cosmetic note: the 5 synth groups sit open *inside* the closed drawer (lil-gui default-open), so
+> expanding the drawer looks exactly as before — only the default view is tucked.
 > (3) **JOURNEY-vs-NOW DRIFT:** `JOURNEY.md` "Current objective" still reads the **35% SCREENSAVER-MVP** milestone (defect/
 > music/10-min KRs) while the live campaign is the **world-engine history program** (60% ENRICHED depth). Reconcile the
 > stated objective — Max's call. (4) **cross-tier-cycles research came back DEGENERATE** (placeholder stub, no mechanism)
