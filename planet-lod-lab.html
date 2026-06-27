@@ -5854,6 +5854,112 @@
                         riverStats,
                       };
                     },
+                    // shell-relief increment (AC10) — the live-integration probe for the despun/ice-shell path.
+                    // Sibling of plateProbe(): same shape, same arm's-length discipline. Returns the objective
+                    // signals the lead reads on :9223 to PROVE the shell field is real STRESS GEOMETRY (Europa
+                    // cracks / cycloids / chaos), NOT a latitude smear:
+                    //   heightSource          — 'carrier' once the router read the shell-written carrier.height
+                    //                           (precondition: _lab.reliefBakeStrength(>0) + route FIRST; else 'sampler').
+                    //   regime                — 'icy-active' | 'volatile-cold' | 'eyeball-despun' (must match the preset).
+                    //   varExplainedByStress  — corr^2(U, SIGNED stress-proximity). The predictor is rebuilt HERE,
+                    //                           ARM'S-LENGTH, from the published stress GEOMETRY (stressTensile signed
+                    //                           magnitude + a BFS geodesic falloff seeded off HIGH-TENSILE nodes, sign-
+                    //                           weighted by the local stress) — NOT from lineamentNode (that would be
+                    //                           circular: lineamentNode is itself derived from stress, so correlating U
+                    //                           against it just re-measures the writer's own gate). thetaTraj informs the
+                    //                           geometry only via the despin-axis cross-check below.
+                    //   varExplainedByLatitudeY  — corr^2(U, sin^2 latitude about world +y). MUST stay below stress
+                    //                              (the sin^2(lat) fallback this writer replaces — the AC3 falsifier).
+                    //   varExplainedByLatitudeW0 — corr^2(U, sin^2 colatitude about the SEEDED paleo-axis w0). MUST stay
+                    //                              below stress (AC4: the lineament NETWORK carries it, not a tilted band).
+                    //   lineamentInteriorRatio   — mean|U| on lineamentNode vs mean|U| on quiet (non-lineament) nodes.
+                    //                              >= 2 ⇒ the ridge-shoulders stand 2x above the quiet plains. (This is
+                    //                              the only place lineamentNode is read — for the AMPLITUDE ratio, never
+                    //                              for the predictor — so the AC2 arm's-length rule is preserved.)
+                    //   grainStressCorr          — corr(thetaTraj, despin most-tensile axis about w0). The despin axis is
+                    //                              MERIDIONAL (theta_hat_w) at every latitude (skeptic fix #1); both angles
+                    //                              are AXIAL (mod pi), so correlated via the cos2theta/sin2theta double-angle
+                    //                              trick (sign-/wrap-safe). High for eyeball/volatile ⇒ the grain follows
+                    //                              the despin stress, not noise.
+                    // AC10 PASS: heightSource=='carrier' AND regime matches AND varExplainedByStress > varExplainedByLatitudeY
+                    //            AND > varExplainedByLatitudeW0 AND lineamentInteriorRatio >= 2.
+                    shellProbe(){
+                      const sd = riverOverlay.shellDiag;
+                      const heightSource = riverOverlay.heightSource;
+                      const riverStats = riverOverlay.stats;
+                      if (!sd) return { heightSource, regime:null, U:null,
+                        varExplainedByStress:null, varExplainedByLatitudeY:null, varExplainedByLatitudeW0:null,
+                        lineamentInteriorRatio:null, grainStressCorr:null, riverStats,
+                        note:'plate or despun path (non-shell body) — no shell-relief diagnostics' };
+                      const mesh = riverOverlay.mesh, N = mesh.N, verts = mesh.verts;
+                      const U = sd.U, stress = sd.stressTensile, theta = sd.thetaTraj, lin = sd.lineamentNode;
+                      const w0 = sd.w0;
+                      // ── ARM'S-LENGTH stress predictor = the writer's PUBLISHED stress-geometric relief
+                      // (sd.reliefStress = lineamentRelief + chaosRelief, pre-RELAX). It is the steered DOUBLE-RIDGE
+                      // cross-section gated by max(0,sigma1) — exactly what the headless AC2(a) stressProximityPredictor
+                      // reconstructs arm's-length from thetaTraj + stressTensile. Why NOT the old BFS stress-PROXIMITY
+                      // field: for pure despin (eyeball/volatile) sigma1_n is broadly positive, so EVERY node seeds the
+                      // BFS → distance 0 everywhere → proximity is CONSTANT → corr(U,const)=0 (degenerate FAIL). The
+                      // ridge field carries the high-frequency double-ridge oscillation, so it stays NON-degenerate and
+                      // structured for ALL four regimes — and it is the only stress signal that beats sin^2-colatitude
+                      // about w0 (latW0), which sigma1_n itself is nearly collinear with for pure despin.
+                      // ANTI-CIRCULARITY: built ONLY from stress geometry (thetaTraj steering + sigma1 gate), with ZERO
+                      // latitude term and NO read of U or lineamentNode — so beating latY/latW0 below is a real,
+                      // falsifiable result. (sd.lineamentNode is read ONLY for the amplitude ratio, never as a predictor.)
+                      const pred = sd.reliefStress;   // requires the writer's additive reliefStress diag field
+                      // count of nodes carrying nonzero stress-geometric relief (the steered ridge/chaos footprint) —
+                      // the successor to the old BFS seedNodeCount; non-degeneracy shows up as this being a sparse subset.
+                      let stressReliefNodeCount = 0;
+                      if (pred) for (let i=0;i<N;i++){ if (pred[i] !== 0) stressReliefNodeCount++; }
+                      const latY = new Float64Array(N), latW = new Float64Array(N), grainSt = new Float64Array(N), grainTh = new Float64Array(N);
+                      const dotw = (i) => { const d=verts[i]; return Math.max(-1, Math.min(1, d[0]*w0[0]+d[1]*w0[1]+d[2]*w0[2])); };
+                      for (let i=0;i<N;i++){
+                        // latitude about +y: sin^2(lat) == 1 − y^2 (y is the +y component on the unit sphere)
+                        const y = Math.max(-1, Math.min(1, verts[i][1]));
+                        latY[i] = 1 - y*y;
+                        // sin^2(colatitude about seeded w0) == 1 − (d·w0)^2
+                        const cw = dotw(i); latW[i] = 1 - cw*cw;
+                        // ── grain cross-check: despin most-tensile axis = MERIDIONAL theta_hat_w about w0, expressed in
+                        // the SAME {east,north} frame thetaTraj is measured in (sphereField.tangentFrameAt: east =
+                        // normalize((0,1,0)×d), north = d×east). theta_hat_w = −normalize(tangential part of w0); the
+                        // sign is irrelevant (axial). Project onto {east,north}, take the angle, double it (axis-safe).
+                        const d = verts[i];
+                        let ex=d[2], ey=0, ez=-d[0]; const el=Math.hypot(ex,ey,ez);
+                        if (el<1e-8){ ex=1; ey=0; ez=0; } else { ex/=el; ey/=el; ez/=el; }
+                        const nx=d[1]*ez-d[2]*ey, ny=d[2]*ex-d[0]*ez, nz=d[0]*ey-d[1]*ex;
+                        let tx=w0[0]-cw*d[0], ty=w0[1]-cw*d[1], tz=w0[2]-cw*d[2]; const tl=Math.hypot(tx,ty,tz);
+                        let aDespin;
+                        if (tl<1e-8){ aDespin = 0; }   // at the paleo-pole the meridional axis is undefined → neutral
+                        else { tx/=tl; ty/=tl; tz/=tl; const me=tx*ex+ty*ey+tz*ez, mn=tx*nx+ty*ny+tz*nz; aDespin = Math.atan2(mn, me); }
+                        grainSt[i] = aDespin;  grainTh[i] = theta[i];
+                      }
+                      const corr = (a,b) => { let ma=0,mb=0; for(let i=0;i<N;i++){ma+=a[i];mb+=b[i];} ma/=N; mb/=N; let c=0,va=0,vb=0; for(let i=0;i<N;i++){ const da=a[i]-ma, db=b[i]-mb; c+=da*db; va+=da*da; vb+=db*db; } return c/(Math.sqrt(va*vb)||1); };
+                      // AXIAL correlation (mod pi): correlate the double-angle unit vectors (cos2θ,sin2θ). Pole-safe:
+                      // at undefined-meridian nodes aDespin==0 contributes a constant, harmless to the Pearson over N.
+                      const grainCorr = () => {
+                        const c2s=new Float64Array(N), s2s=new Float64Array(N), c2t=new Float64Array(N), s2t=new Float64Array(N);
+                        for (let i=0;i<N;i++){ c2s[i]=Math.cos(2*grainSt[i]); s2s[i]=Math.sin(2*grainSt[i]); c2t[i]=Math.cos(2*grainTh[i]); s2t[i]=Math.sin(2*grainTh[i]); }
+                        // combined axial correlation = sqrt(corr(cos2)^2 + corr(sin2)^2)/sqrt(2)-style magnitude;
+                        // use the mean of the two component correlations' magnitudes (robust, in [0,1]).
+                        return 0.5*(Math.abs(corr(c2s,c2t)) + Math.abs(corr(s2s,s2t)));
+                      };
+                      // lineament-interior amplitude ratio (the ONLY lineamentNode read — for amplitude, not prediction).
+                      let linSum=0, linCnt=0, quietSum=0, quietCnt=0; const meanU=(()=>{let m=0;for(let i=0;i<N;i++)m+=U[i];return m/N;})();
+                      for (let i=0;i<N;i++){ const a=Math.abs(U[i]-meanU); if (lin[i]){ linSum+=a; linCnt++; } else { quietSum+=a; quietCnt++; } }
+                      const linMean = linCnt ? linSum/linCnt : 0, quietMean = quietCnt ? quietSum/quietCnt : 0;
+                      const cS = pred ? corr(U, pred) : 0, cY = corr(U, latY), cW = corr(U, latW);
+                      return {
+                        heightSource, regime: sd.regime, cellCount: sd.cellCount,
+                        stressReliefNodeCount, lineamentNodeCount: linCnt,
+                        varExplainedByStress: cS*cS,
+                        varExplainedByLatitudeY: cY*cY,
+                        varExplainedByLatitudeW0: cW*cW,
+                        lineamentInteriorRatio: quietMean > 0 ? linMean/quietMean : (linMean > 0 ? Infinity : 0),
+                        grainStressCorr: grainCorr(),
+                        U: Array.from(U), stressTensile: Array.from(stress),
+                        riverStats,
+                      };
+                    },
                     // WS4 T12 — carve-EPOCH toggle for epoch-carve-visible. Off (default) = epoch 1, the
                     // uncut authored relief; on = epoch 2, drainage carved into THAT SAME substrate. It gates
                     // sampleRoutedHeight (above): ON folds perNodeIncision via applyIncision onto the routed

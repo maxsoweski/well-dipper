@@ -67,11 +67,26 @@ const REGIME_WEIGHTS = Object.freeze({
 const SHELL_DEFAULTS = Object.freeze({
   CELL_MIN: 9, CELL_SPAN: 9,        // K convection cells in [9, 18) — finer than the 7–13 plates
   WARP_FREQ: 1.6, WARP_AMP: 0.18,   // domain-warp of cell centroids (irregular, non-great-circle cell walls)
-  DETAIL_FREQ: 8.0, DETAIL_AMP: 0.02,
+  DETAIL_FREQ: 8.0, DETAIL_AMP: 0.012,
   BELT_RADIANS: 0.06,               // geodesic falloff half-width (resolution-independent)
   SHELL_BASE: 0.0,                  // flat icy datum this increment
   RELAX_PASSES,
-  // SLICE B thresholds (pinned with the stress math): TENSILE_THRESH, CHAOS_THRESH, CREST_THRESH, RIDGE_AMP, DESPIN_REF, DIUR_REF
+  // ── SLICE B stress + lineament tunables (pinned with the stress math; swept against AC2–AC5) ──
+  DESPIN_REF: 1.0,                  // despin seeded-amplitude scale (folds E, Δf into one positive scalar)
+  DIUR_REF: 0.09,                   // diurnal seeded-amplitude scale; tuned so raw |sigma_diur| ≈ |sigma_despin|
+                                    //   (the A=2 coeffs make diurnal ~10.9x larger per unit K than despin,
+                                    //    so DIUR_REF·18.1 ≈ DESPIN_REF·1.667) → REGIME_WEIGHTS act as intended:
+                                    //    despin dominates volatile-cold, diurnal leads icy-active (cycloids)
+  DIUR_PEAK: 18.1,                  // analytic per-unit-K peak of |sigma1_diur| (resolution-independent STRESS_REF term)
+  TENSILE_THRESH: 0.05,             // min normalized tension to place a crack
+  CHAOS_THRESH: 0.6,                // tension floor for chaos founder/raise
+  CREST_THRESH: 0.94,              // absolute ridge-crest threshold (≈top 9% of R) — sparse, sharp crack
+                                    //   network, NOT a local-max (so it stays order/resolution-independent)
+  RIDGE_FREQ: 7.0,                  // steered ridge field frequency
+  RIDGE_AMP: 1.4,                   // ridge relief amplitude (the dominant low/mid source)
+  SHOULDER_HT: 1.2,                 // double-ridge shoulder height (the 4t(1-t) lobe)
+  TROUGH_DEPTH: 0.55,               // central-trough depth (the smoothstep(0.6,1) cut) → U oscillates ACROSS the ridge
+  CHAOS_BASE: -0.04, CHAOS_AMP: 0.12, CHAOS_FREQ: 5.0,   // foundered blocks below + raised matrix
 });
 
 // ── tiny vec3 helpers on plain [x,y,z] arrays (COPIED VERBATIM from plates.js for resolution-independence) ──
@@ -86,6 +101,59 @@ function randDir(rng) {
 }
 // Angular falloff: 1 at a cell wall, decaying to ~0 a few `belt` radians into the cell interior.
 const falloffAng = (angDist, belt) => Math.exp(-angDist / belt);
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const smoothstepS = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
+// ── steeredNoise3 — COPIED VERBATIM from tectonic.js L93-116 (module-private there; tectonic.js is
+//    out-of-scope to edit). The substrate REGIME branch is INLINED as `ridged = regime !== 0`, so a
+//    truthy `ridged` arg yields the ridged transform (0.5-|n|) and falsy yields (|n|-0.5). No import. ──
+function steeredNoise3(noise3, dir, east, north, angle, ridged, freq, sign = +1) {
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  const contraction = sign >= 0;
+  const fScale = contraction ? 0.7 : 1.5;
+  const along  = contraction ? 0.25 : 0.55;
+  const across = contraction ? 1.9 : 1.2;
+  const sU = freq * fScale * along;
+  const sV = freq * fScale * across;
+  const ux = east[0] * ca + north[0] * sa;
+  const uy = east[1] * ca + north[1] * sa;
+  const uz = east[2] * ca + north[2] * sa;
+  const vx = -east[0] * sa + north[0] * ca;
+  const vy = -east[1] * sa + north[1] * ca;
+  const vz = -east[2] * sa + north[2] * ca;
+  const px = dir[0] * freq + ux * sU + vx * sV;
+  const py = dir[1] * freq + uy * sU + vy * sV;
+  const pz = dir[2] * freq + uz * sU + vz * sV;
+  const nVal = noise3(px, py, pz);
+  return ridged ? (0.5 - Math.abs(nVal)) : (Math.abs(nVal) - 0.5);
+}
+
+// Pole-safe meridional/azimuthal tangent basis at unit dir `d` about an arbitrary `axis`.
+// theta_hat = meridional (increasing colatitude line), phi_hat = azimuthal (about axis). Both ⟂ d.
+// Returns null at the axis pole (|axis × d| ≈ 0) → caller uses the isotropic fallback.
+function axisFrame(d, axis) {
+  let ph = cross(axis, d);
+  const l = Math.hypot(ph[0], ph[1], ph[2]);
+  if (l < 1e-7) return null;
+  ph = [ph[0] / l, ph[1] / l, ph[2] / l];          // phi_hat (azimuthal)
+  const th = cross(ph, d);                          // theta_hat (meridional, unit since ph⟂d are unit)
+  return { theta: th, phi: ph };
+}
+
+// Project a symmetric tangent-plane tensor (eigenframe {u1,u2}, eigvals s11,s22, shear s12 in that frame)
+// onto the {east,north} frame. Returns [a=ee, b=en, c=nn]. Avoids any psi-sign convention trap:
+// T·v = s11(u1·v)u1 + s22(u2·v)u2 + s12((u1·v)u2 + (u2·v)u1), then dot with east/north.
+function tensorToEN(u1, u2, s11, s22, s12, east, north) {
+  const dotE1 = u1[0] * east[0] + u1[1] * east[1] + u1[2] * east[2];
+  const dotE2 = u2[0] * east[0] + u2[1] * east[1] + u2[2] * east[2];
+  const dotN1 = u1[0] * north[0] + u1[1] * north[1] + u1[2] * north[2];
+  const dotN2 = u2[0] * north[0] + u2[1] * north[1] + u2[2] * north[2];
+  // a = east·T·east, c = north·T·north, b = east·T·north
+  const a = s11 * dotE1 * dotE1 + s22 * dotE2 * dotE2 + 2 * s12 * dotE1 * dotE2;
+  const c = s11 * dotN1 * dotN1 + s22 * dotN2 * dotN2 + 2 * s12 * dotN1 * dotN2;
+  const b = s11 * dotE1 * dotN1 + s22 * dotE2 * dotN2 + s12 * (dotE1 * dotN2 + dotE2 * dotN1);
+  return [a, b, c];
+}
 
 /**
  * Despun / ice-shell relief writer. Mirrors writePlateUpliftSphere's signature + discipline.
@@ -160,19 +228,125 @@ export function writeShellReliefSphere(carrier, drivers = {}, { macroSeed = 0, r
     for (let i = 0; i < N; i++) cellInteriorness[i] = clamp01(1 - falloffAng(cellDist[i] * meanEdgeAngle, T.BELT_RADIANS));
   }
 
-  // ── STEP 1 / 3 / 4 — STRESS TENSOR + LINEAMENTS + CHAOS: STUBBED in SLICE A (deterministic zeros) ──
-  // SLICE B fills these from the pinned despin + diurnal closed forms (research wccpy01ez).
-  const stressTensile = new Float32Array(N);   // signed sigma1
-  const thetaTraj = new Float32Array(N);        // most-tensile principal-axis angle == grainAngle written
+  // ── STEP 1 — STRESS TENSOR field (despin ⊕ diurnal), diagonalized into {east,north} ──────────────
+  // Seeded positive amplitudes — ONE scalar per build per source, distinct alea draws (spec STEP 1a/1b).
+  const A_despin = T.DESPIN_REF * (0.6 + 0.8 * alea('shell:despin:' + seed)());
+  const A_diur   = T.DIUR_REF   * (0.6 + 0.8 * alea('shell:diur:'   + seed)());
+  // Analytic, resolution-independent STRESS_REF (skeptic-fix #3): matches @600-node and @40k.
+  const STRESS_REF = W.DESPIN_W * A_despin * (10 / 6) + W.DIURNAL_W * A_diur * T.DIUR_PEAK || 1e-9;
+  // Non-degenerate Europa elastic-limit A=2 diurnal coefficients (skeptic-fix #2): b1≠b2, g1≠g2.
+  const b1 = 5, b2 = -1, g1 = 1, g2 = 3, g3 = 1, f = 1;
+  const cphi0 = Math.cos(phi0), sphi0 = Math.sin(phi0);
+
+  const stressTensile = new Float32Array(N);   // signed sigma1 (normalized, tensile-positive)
+  const thetaTraj = new Float32Array(N);        // most-tensile principal-axis angle in {east,north} == grainAngle
   const lineamentNode = new Uint8Array(N);      // 1 where a ridge-shoulder / crack is placed
   const chaosMask = new Float32Array(N);
+  const eFrame = [], nFrame = [];               // cache {east,north} per node (reused by STEP 3)
 
-  // ── STEP 5 — assemble (SLICE A placeholder: flat datum + sub-grid detail; non-trivial + seed-varying.
-  //    SLICE B REPLACES this with SHELL_BASE + despinLineament + diurnalDoubleRidge + chaosOverlay + detail) ──
+  for (let i = 0; i < N; i++) {
+    const d = verts[i];
+    const { east, north } = carrier.tangentFrameAt(i);
+    eFrame.push(east); nFrame.push(north);
+
+    let a = 0, b = 0, c = 0;   // summed sigma_ee / sigma_en / sigma_nn in {east,north}
+
+    // STEP 1a — DESPIN tensor about w0 (diagonal in {theta_w, phi_w}, no shear, theta_w most-tensile).
+    if (W.DESPIN_W > 0) {
+      const fw = axisFrame(d, w0);
+      if (fw) {
+        const mu = Math.cos(2 * Math.acos(clamp(-1, 1, dot(d, w0))));
+        const s_th = A_despin * (3 * mu + 5) / 6;   // MERIDIONAL (theta_hat_w)
+        const s_ph = A_despin * (9 * mu - 1) / 6;   // AZIMUTHAL  (phi_hat_w)
+        const [da, db, dc] = tensorToEN(fw.theta, fw.phi, s_th, s_ph, 0, east, north);
+        a += W.DESPIN_W * da; b += W.DESPIN_W * db; c += W.DESPIN_W * dc;
+      }
+    }
+
+    // STEP 1b — DIURNAL tensor about t_hat, frozen phase phi0 (shear sigma_tp ⇒ smooth axis rotation).
+    if (W.DIURNAL_W > 0) {
+      const ft = axisFrame(d, t_hat);
+      if (ft) {
+        const theta_t = Math.acos(clamp(-1, 1, dot(d, t_hat)));
+        const ct = Math.cos(theta_t), c2t = Math.cos(2 * theta_t);
+        // longitude of d about t_hat from a FIXED zero-meridian (world frame), so c2p/s2p are continuous.
+        const refRaw = Math.abs(t_hat[1]) < 0.99 ? [0, 1, 0] : [1, 0, 0];
+        let refE = cross(refRaw, t_hat); const rl = Math.hypot(refE[0], refE[1], refE[2]) || 1;
+        refE = [refE[0] / rl, refE[1] / rl, refE[2] / rl];
+        const refN = cross(t_hat, refE);
+        const lon = Math.atan2(dot(ft.phi, refN), dot(ft.phi, refE));  // longitude of d's azimuthal basis
+        const c2p = Math.cos(2 * lon), s2p = Math.sin(2 * lon);
+        const K = A_diur;
+        const X_tt = -(b1 + 3 * g1 * c2t) + 3 * c2p * (b1 - g1 * c2t), Y_tt = -4 * f * s2p * (b1 - g1 * c2t);
+        const X_pp = -(b2 + 3 * g2 * c2t) + 3 * c2p * (b2 - g2 * c2t), Y_pp = -4 * f * s2p * (b2 - g2 * c2t);
+        const X_tp = g3 * ct * 3 * s2p,                                Y_tp = g3 * ct * 4 * f * c2p;
+        const s_tt = (3 / 4) * K * (X_tt * cphi0 - Y_tt * sphi0);
+        const s_pp = (3 / 4) * K * (X_pp * cphi0 - Y_pp * sphi0);
+        const s_tp = (-3)    * K * (X_tp * cphi0 - Y_tp * sphi0);
+        const [da, db, dc] = tensorToEN(ft.theta, ft.phi, s_tt, s_pp, s_tp, east, north);
+        a += W.DIURNAL_W * da; b += W.DIURNAL_W * db; c += W.DIURNAL_W * dc;
+      }
+    }
+
+    // diagonalize the summed 2×2 in {east,north}: lam_max = sigma1 (SIGNED); direct eigenvector (fix #3).
+    const half = (a - c) / 2;
+    const lam_max = (a + c) / 2 + Math.sqrt(half * half + b * b);
+    let theta_traj;
+    if (Math.abs(b) < 1e-9 && Math.abs(a - c) < 1e-9) theta_traj = 0;   // isotropic fallback
+    else theta_traj = Math.atan2(lam_max - a, b);
+    stressTensile[i] = clamp(-1, 1, lam_max / STRESS_REF);
+    thetaTraj[i] = theta_traj;
+  }
+
+  // ── STEP 3 — steered double-ridge lineaments (crests ⟂ most-tensile axis; absolute threshold) ─────
+  const ridgeNoise = createNoise3D(alea('shell:ridge:' + seed));
+  const lineamentRelief = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const d = verts[i], east = eFrame[i], north = nFrame[i];
+    // crack STRIKES ⟂ to the most-tensile axis ⇒ steer ridge LINES at theta_traj + π/2.
+    const R = steeredNoise3(ridgeNoise, d, east, north, thetaTraj[i] + Math.PI / 2, true, T.RIDGE_FREQ) + 0.5; // → [0,1]
+    const sigma = stressTensile[i];
+    lineamentNode[i] = (R > T.CREST_THRESH && sigma > T.TENSILE_THRESH) ? 1 : 0;
+    // analytic double-ridge cross-section: central trough + two shoulders ⇒ U oscillates ACROSS the ridge.
+    const t = clamp01((R - T.CREST_THRESH) / (1 - T.CREST_THRESH));   // 0 at edge, 1 at crest centre
+    const doubleRidge = T.SHOULDER_HT * 4 * t * (1 - t) - T.TROUGH_DEPTH * smoothstepS(0.6, 1.0, t);
+    lineamentRelief[i] = (W.DESPIN_W + W.DIURNAL_W) * T.RIDGE_AMP * Math.max(0, sigma) * doubleRidge;  // tension-gated
+  }
+
+  // ── STEP 4 — chaos overlay (CHAOS_W>0 only; cell interiors, high tension) ──────────────────────────
+  const chaosRelief = new Float32Array(N);
+  if (W.CHAOS_W > 0) {
+    const chaosNoise = createNoise3D(alea('shell:chaos:' + seed));
+    for (let i = 0; i < N; i++) {
+      const d = verts[i];
+      const drive = cellInteriorness[i] * Math.max(0, stressTensile[i] - T.CHAOS_THRESH) / (1 - T.CHAOS_THRESH);
+      chaosMask[i] = W.CHAOS_W * smoothstepS(0, 1, drive);
+      chaosRelief[i] = chaosMask[i] * (T.CHAOS_BASE + T.CHAOS_AMP * chaosNoise(d[0] * T.CHAOS_FREQ, d[1] * T.CHAOS_FREQ, d[2] * T.CHAOS_FREQ));
+    }
+  }
+
+  // ── reliefStress — the PURE STRESS-GEOMETRIC relief (lineament + chaos) BEFORE SHELL_BASE/detail/RELAX.
+  // Published ADDITIVELY for the live AC10 probe (planet-lod-lab.html shellProbe). It is byte-for-byte the
+  // writer's own STEP-3 + STEP-4 product — i.e. exactly what the headless AC2(a) stressProximityPredictor
+  // reconstructs arm's-length from thetaTraj + max(0,stressTensile) — so the live probe can use it WITHOUT
+  // re-duplicating the cross-section constants. Why this over the old BFS-proximity probe:
+  //   • ANTI-DEGENERACY: it carries the high-frequency DOUBLE-RIDGE cross-section oscillation. For pure
+  //     despin (eyeball/volatile) sigma1_n is broadly positive, so a stress-PROXIMITY field collapses to a
+  //     constant (corr→0); the steered ridge field does NOT — it stays structured for every regime.
+  //   • ANTI-CIRCULARITY: built ONLY from stress geometry (thetaTraj steering + sigma1 gate via the ridge
+  //     pass), with ZERO latitude term and ZERO read of U — so beating latY/latW0 in the probe is a real,
+  //     falsifiable result, not a tautology. It is NOT lineamentNode, so it is not "the answer key".
+  // It is additive: U, carrier.height, grainAngle, faultDensity and every pre-existing diag field are
+  // unchanged (AC1 byte-identical-U + determinism stay green).
+  const reliefStress = new Float32Array(N);
+  for (let i = 0; i < N; i++) reliefStress[i] = lineamentRelief[i] + chaosRelief[i];
+
+  // ── STEP 5 — assemble: SHELL_BASE + lineamentRelief + chaosRelief + detail (REPLACES the placeholder) ──
   const U = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     const d = verts[i];
-    U[i] = T.SHELL_BASE + T.DETAIL_AMP * detailNoise(d[0] * T.DETAIL_FREQ, d[1] * T.DETAIL_FREQ, d[2] * T.DETAIL_FREQ);
+    U[i] = T.SHELL_BASE + lineamentRelief[i] + chaosRelief[i]
+      + T.DETAIL_AMP * detailNoise(d[0] * T.DETAIL_FREQ, d[1] * T.DETAIL_FREQ, d[2] * T.DETAIL_FREQ);
   }
   carrier.height.set(U);   // REPLACE (sole low/mid source for shell regimes — no additive re-banding)
 
@@ -194,6 +368,7 @@ export function writeShellReliefSphere(carrier, drivers = {}, { macroSeed = 0, r
 
   return {
     U, regime, cellId, cellCount, stressTensile, thetaTraj, lineamentNode, chaosMask,
+    reliefStress,   // ADDITIVE: stress-geometric relief (lineament+chaos) pre-RELAX, for the live AC10 probe
     w0, t_hat, phi0, meanEdgeAngle, relaxPasses: PASSES,
   };
 }
