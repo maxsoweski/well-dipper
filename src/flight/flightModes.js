@@ -173,6 +173,35 @@ export function bootModeAction(mode) {
   return { mode: helm ? 'helm' : 'orrery', enterFlight: helm };
 }
 
+// The OS-cursor + flight-HUD-steering-reticle visibility decision, BY SUB-MODE,
+// extracted pure (§free-look-interaction-redesign-2026-06-27, Part 1). One source
+// of truth the live host (_applyPointerHud) applies on every transition that
+// changes regime or free-look (enter/exit flight, ORRERY<->HELM swap, F toggle).
+//   - HELM hands-on (regime 'helm', !freeLook) → cursor 'none', showReticle true.
+//     The virtual joystick steers from the absolute cursor position, and the HUD's
+//     center cross + deflection dot ARE the steering indicators — so we hide the OS
+//     cursor (CSS cursor:none, NOT Pointer Lock — the joystick reads absolute mouse
+//     position from canvas-center, which Pointer Lock would break, and Pointer Lock
+//     hijacks Esc) and show the reticle.
+//   - HELM free-look (regime 'helm', freeLook) → cursor 'auto', showReticle false.
+//     In free-look the bare cursor is a FREE pointer for aiming/selecting bodies, so
+//     it's shown; the steering cross + deflection dot don't belong here, so hidden.
+//   - ORRERY (regime 'orrery')                 → cursor 'auto', showReticle false.
+//     ORRERY is cursor-driven orbit/select; no flight steering reticle.
+//   - mobile (isMobile)                        → cursor 'auto' ALWAYS. Touch has no
+//     OS cursor to hide; never hide it on mobile regardless of regime / free-look.
+// This SUPERSEDES the 2026-06-25 "cursor stays visible in flight" decision —
+// selection now happens in free-look, where the cursor IS shown. Returns
+// { cursor: 'none'|'auto', showReticle: boolean }. cursor 'none' (hidden) IFF
+// desktop HELM hands-on flight; showReticle true under the same condition.
+export function pointerHudState({ regime, freeLook, isMobile } = {}) {
+  const helmHandsOn = regime === 'helm' && !freeLook;
+  return {
+    cursor: (!isMobile && helmHandsOn) ? 'none' : 'auto',
+    showReticle: helmHandsOn,
+  };
+}
+
 // The late, normal-mode (autopilot-off) Esc/Backquote fall-through (main.js
 // ~8979). #2 "Esc de-mode": with the early-cascade exit-flight step removed, a
 // quiet-HUD Esc now falls through to the ORRERY "system overview" focus reset

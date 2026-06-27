@@ -39,7 +39,11 @@ export class SupercruiseHud {
    *   visible, speed, commandedSpeed, throttle, deflection:{x,y},
    *   targetPos|null, targetDistance|null, captureSphere|null,
    *   dropMaxSpeed|null, dropState: 'none'|'in-window'|'too-fast',
-   *   flightMode: 'manual'|'align'|'assist'|null
+   *   flightMode: 'manual'|'align'|'assist'|null,
+   *   showReticle?: boolean   // gate the center cross + deflection dot (the
+   *                           // STEERING indicators). Default true (back-compat);
+   *                           // set false in free-look so they hide while looking
+   *                           // around. Speed/throttle readouts always draw.
    * } */
   update(state) {
     const c = this.ctx; c.clearRect(0, 0, innerWidth, innerHeight);
@@ -121,16 +125,21 @@ export class SupercruiseHud {
     c.moveTo(tPinX - 3, tbY + tbH + 6); c.lineTo(tPinX + 3, tbY + tbH + 6); c.lineTo(tPinX, tbY + tbH);
     c.closePath(); c.fill();
 
-    // ── Center reticle: cross + deflection dot ──
+    // ── Center reticle: cross + deflection dot ── (STEERING indicators)
     // Game reticle green (#64ff82 — TargetingReticle's selected-reticle green)
     // so the supercruise aim cross reads as one piece with the body reticles.
-    c.strokeStyle = '#64ff82'; c.fillStyle = '#64ff82';
-    c.beginPath(); c.moveTo(cx - 10, cy); c.lineTo(cx + 10, cy);
-    c.moveTo(cx, cy - 10); c.lineTo(cx, cy + 10); c.stroke();
-    const jr = Math.min(innerWidth, innerHeight) * 0.25;
-    c.beginPath();
-    c.arc(cx + state.deflection.x * jr, cy + state.deflection.y * jr, 4, 0, Math.PI * 2);
-    c.fill();
+    // Gated by showReticle (default true): hidden in free-look, where the cross +
+    // deflection dot don't belong (§free-look-interaction-redesign Part 1). The
+    // speed/throttle readouts above always draw — only these two hide.
+    if (state.showReticle !== false) {
+      c.strokeStyle = '#64ff82'; c.fillStyle = '#64ff82';
+      c.beginPath(); c.moveTo(cx - 10, cy); c.lineTo(cx + 10, cy);
+      c.moveTo(cx, cy - 10); c.lineTo(cx, cy + 10); c.stroke();
+      const jr = Math.min(innerWidth, innerHeight) * 0.25;
+      c.beginPath();
+      c.arc(cx + state.deflection.x * jr, cy + state.deflection.y * jr, 4, 0, Math.PI * 2);
+      c.fill();
+    }
 
     // ── Target cue: ETA + drop label ──
     // The game's green TargetingReticle already marks the selected body, so we

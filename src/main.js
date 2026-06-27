@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -363,6 +363,33 @@ function _applyHudVisibility() {
     retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
   }
 }
+// ── Cursor + flight-HUD steering reticle, BY SUB-MODE (§free-look-interaction
+// -redesign-2026-06-27, Part 1) ──
+// `_showReticle` gates the SupercruiseHud's center cross + joystick deflection
+// dot (the steering indicators) into the scHud.update each frame. `_pointerCursor`
+// is the BASE cursor the canvas should show for the current sub-mode ('none' to
+// hide it in HELM hands-on flight, '' = auto otherwise) — the hover handler reads
+// it so a body/orbit-line hover can paint 'pointer' on top, but a non-hover frame
+// restores THIS base instead of clobbering a 'none' back to default every move.
+let _showReticle = false;
+let _pointerCursor = '';            // '' = auto/default, 'none' = hidden
+// Single applier for the cursor-by-mode + steering-reticle decision. Call it on
+// every transition that changes regime or free-look: enter/exit flight, ORRERY
+// <->HELM swap, F toggle. Derives regime from _scManual (true=helm/false=orrery),
+// free-look from freeLook.latched, mobile from _isMobile — then sets the canvas
+// cursor (CSS cursor:none, NOT Pointer Lock — the virtual joystick reads absolute
+// mouse position from canvas-center, which Pointer Lock would break, and Pointer
+// Lock hijacks Esc) and the reticle gate. pointerHudState is the pure decision.
+function _applyPointerHud() {
+  const regime = _scManual ? 'helm' : 'orrery';
+  const st = pointerHudState({ regime, freeLook: freeLook.latched, isMobile: _isMobile });
+  _showReticle = st.showReticle;
+  // Map 'auto' → '' (canvas default; the hover handler may paint 'pointer' over
+  // it). 'none' hides the OS cursor outright for HELM hands-on steering.
+  _pointerCursor = st.cursor === 'none' ? 'none' : '';
+  if (canvas) canvas.style.cursor = _pointerCursor;
+}
+
 // Ghost reticles for sub-pixel bodies: rebuilt every frame by the LOD loop,
 // then passed to TargetingReticle.update() so each tiny planet/moon shows as
 // a small dim empty bracket (Elite-style). Hover/click use the normal
@@ -465,12 +492,18 @@ const scPilot = new SupercruisePilot(scModel);
 // one-shot recenter. Built here so the F-handler + frame loop share one instance.
 const freeLook = createFreeLook();
 let _scManual = false;            // player has the stick (FLIGHT-mode supercruise)
-// Single setter for the manual-flight flag. The cursor is NO LONGER hidden in
-// flight (§supercruise-flight-toggle-settings-design-2026-06-25 §4): Max wants
-// it visible so he can free the mouse to re-select a body (F-off → click →
-// F-on). The virtual-joystick stick is absolute-from-center with no
-// pointer-lock, so the OS cursor staying on screen is harmless. We leave the
-// cursor untouched here; the canvas hover handler paints the body pointer.
+// Single setter for the manual-flight flag. CURSOR-BY-SUB-MODE (§free-look
+// -interaction-redesign-2026-06-27, Part 1) SUPERSEDES the 2026-06-25 "cursor
+// stays visible in flight" decision: the OS cursor is HIDDEN in HELM hands-on
+// flight (where the virtual joystick steers and the HUD's center cross +
+// deflection dot ARE the steering indicators) and VISIBLE in HELM free-look and
+// in ORRERY — selection now happens in free-look, where the cursor is shown. The
+// applier is _applyPointerHud() (pure decision: pointerHudState), called on every
+// regime/free-look transition: enter/exit flight, ORRERY<->HELM swap, F toggle.
+// It uses CSS cursor:none (NOT Pointer Lock — the joystick reads absolute mouse
+// position from canvas-center, which Pointer Lock would break, and Pointer Lock
+// hijacks Esc which we use). setScManual stays the regime flag; the cursor is
+// applied by the transition handlers, not here.
 function setScManual(on) {
   _scManual = on;
   // Keep the desktop HUD swap button's label (ORRERY vs HELM) in sync no matter
@@ -8423,6 +8456,10 @@ function renderFrame(alpha) {
     dropMaxSpeed: _scDrop.dropMaxSpeed,
     dropState: _scDrop.state,
     flightMode: _scManual ? _flightMode : null,
+    // Steering reticle (center cross + deflection dot) shows ONLY in HELM
+    // hands-on flight; hidden in free-look (the cross/dot don't belong while the
+    // player is looking around) — §free-look-interaction-redesign Part 1.
+    showReticle: _showReticle,
   });
   _updateCommitBurnButton();
   _updateModeSwapButton();
@@ -8521,6 +8558,9 @@ function _enterFlightInternal(type) {
   _enterFlightMode(_flightMode); // begins Align/Assist for those types
   const _info = flightModeInfo(_flightMode);
   flightModeToast.show(`Flight ON — ${_info.label}`, _info.hint);
+  // Entering HELM hands-on flight: hide the OS cursor, show the steering reticle
+  // (cursor-by-mode, §free-look-interaction-redesign Part 1).
+  _applyPointerHud();
 }
 
 // MECHANICALLY EXTRACTED from the F-handler DISENGAGE body. The no-snap exit is
@@ -8567,6 +8607,9 @@ function _exitFlightInternal() {
   focusStarIndex = -1;
   _flightMode = FlightMode.MANUAL; // reset for the next engage
   flightModeToast.show('Flight OFF', '');
+  // Leaving HELM for ORRERY: restore the OS cursor, drop the steering reticle
+  // (cursor-by-mode, §free-look-interaction-redesign Part 1).
+  _applyPointerHud();
 }
 
 // ── ORRERY <-> HELM peer-mode swap (§supercruise-arrival-modes-design
@@ -8597,6 +8640,10 @@ function _doModeSwap() {
     _enterFlightInternal();
   }
   _updateModeSwapButton();
+  // Reassert cursor-by-mode after the regime flips (the enter/exit fns above also
+  // apply it; this makes the swap call-site explicit, §free-look-interaction
+  // -redesign Part 1).
+  _applyPointerHud();
   console.log(`[MODE] swap → ${swap.target.toUpperCase()} (In-Flight=${_scManual})`);
 }
 
@@ -9052,6 +9099,10 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     freeLook.toggle();
+    // Free-look ON → show the cursor (free pointer for aiming/selecting) + hide the
+    // steering reticle; OFF → hide the cursor + show it again, in HELM hands-on.
+    // (cursor-by-mode, §free-look-interaction-redesign Part 1.)
+    _applyPointerHud();
     console.log(`[MODE] free-look ${freeLook.latched ? 'ON' : 'OFF'}`);
     return;
   }
@@ -9515,14 +9566,16 @@ canvas.addEventListener('mousemove', (e) => {
     } else {
       _hoverTarget = bodyHit;
     }
-    // Cursor feedback: pointer when we can click a body. Now painted even in
-    // flight (§supercruise-flight-toggle §4): the cursor stays visible while
-    // flying so the player can free the mouse to re-select a body.
+    // Cursor feedback: pointer when we can click a body. The base cursor is now
+    // sub-mode-driven (§free-look-interaction-redesign Part 1): _pointerCursor is
+    // 'none' in HELM hands-on (cursor hidden) and '' (auto) in free-look / ORRERY.
+    // A hovered body paints 'pointer' over the base; a non-hover frame restores
+    // the BASE (not bare '') so a 'none' isn't clobbered back to default each move.
     if (bodyHit) canvas.style.cursor = 'pointer';
-    // No body under the cursor → reset to default, UNLESS an orbit line is
-    // currently hovered (that block below owns the pointer in that case, so
+    // No body under the cursor → restore the sub-mode base, UNLESS an orbit line
+    // is currently hovered (that block below owns the pointer in that case, so
     // clearing it here would clobber it and the two would fight every frame).
-    else if (!_hoveredOrbitLine) canvas.style.cursor = '';
+    else if (!_hoveredOrbitLine) canvas.style.cursor = _pointerCursor;
   }
 
   // ── Orbit line hover highlight (screen-space, throttled to ~30 Hz) ──
@@ -9549,9 +9602,9 @@ canvas.addEventListener('mousemove', (e) => {
       newHover.material.color.set(0x44ff44); // bright green
       newHover.material.opacity = 1.0;
       newHover.material.needsUpdate = true;
-      canvas.style.cursor = 'pointer';   // painted in flight too (§toggle §4)
+      canvas.style.cursor = 'pointer';   // hover paints over the sub-mode base
     } else {
-      canvas.style.cursor = '';
+      canvas.style.cursor = _pointerCursor; // restore the sub-mode base, not bare ''
     }
     _hoveredOrbitLine = newHover;
   }
