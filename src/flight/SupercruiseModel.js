@@ -16,9 +16,15 @@ export const SC_TUNING = {
   ACCEL_TAU: 0.6,           // s — exponential approach to target speed. Tuned 2026-06-24 (Bug B: 1.4 → 0.6) for a
                             //   responsive throttle (perceptible within ~1.3s). MUST stay ≤ ETA_K/4 (=0.75 here) or
                             //   full-throttle approach decel turns underdamped and surges.
-  DROP_TAU: 0.4,            // s — fast exponential decay to REST while the drive is OFF (dropped out). Short so the
-                            //   ship settles to a near-stop in ~1.5s instead of coasting on preserved momentum.
-                            //   The gravity-well speedCap below still clamps it; this only governs the rate to zero.
+  SUBLIGHT_TAU: 0.4,        // s — exponential approach time-constant for the drive-OFF (sublight) regime.
+                            //   Handles BOTH the hard decel when you drop out AND throttle response at
+                            //   sublight. (Renamed from DROP_TAU 2026-06-28: drive-OFF no longer decays to
+                            //   zero — it approaches throttle × SUBLIGHT_CAP; with throttle 0 that IS rest.)
+  SUBLIGHT_CAP: 0.002,      // u/s — fixed sublight top speed (≈ 300 km/s = 300 / 149597.87). NO mass.
+                            //   Also v_ref for the forced-drop horizon. KEY TUNING KNOB — dial live.
+  FORCED_DROP_FLOOR_FACTOR: 1.1,  // × radius (center-distance): minimum forced-drop buffer. Dominates for
+                                  //   planets/moons (their mass horizon falls inside the surface).
+  COLLISION_FACTOR: 1.05,   // × radius (center-distance): uniform hard barrier — never fly through a body.
   MIN_CRUISE: 2.0,          // u/s — minimum cruise speed while the drive is ON (you can't crawl/stop in supercruise).
                             //   At ~149,598 km/s per u/s this is ~299,000 km/s ≈ 1 c: the slowest you cruise in
                             //   supercruise is ~light speed, matching "supercruise is where you reach/exceed light
@@ -53,7 +59,7 @@ export class SupercruiseModel {
 
   /** Engage (true) / drop out (false) the supercruise drive.
    *  OFF → the model stops propelling and SETTLES TO REST: speed decays fast to
-   *  zero by DROP_TAU (~1.5s), not coasting on preserved momentum. The gravity-well
+   *  zero by SUBLIGHT_TAU (~1.5s), not coasting on preserved momentum. The gravity-well
    *  speedCap still clamps the max while it settles. ON → the existing
    *  throttle/accel behavior resumes (with the MIN_CRUISE floor). */
   setDrive(on) { this._driveOn = !!on; }
@@ -116,11 +122,15 @@ export class SupercruiseModel {
       const k = 1 - Math.exp(-dt / this.tuning.ACCEL_TAU);
       this.speed += (target - this.speed) * k;
     } else {
-      // DRIVE OFF (dropped out): SETTLE TO REST. Do NOT pull toward the throttle
-      // target — decay fast to zero by the short DROP_TAU. The well cap below still
-      // clamps it while it settles. (Old behavior was a gentle COAST_TAU that
-      // preserved momentum; reversed 2026-06-27 → drop-to-rest.)
-      this.speed *= Math.exp(-dt / this.tuning.DROP_TAU);
+      // DRIVE OFF (sublight): exp-approach to throttle × SUBLIGHT_CAP — the same
+      // shape as the ON path, minus the MIN_CRUISE floor (full stop allowed) and
+      // allowing a negative target (reverse). throttle ∈ [-1,1] → full reverse …
+      // stop(0) … full forward. The E-key dropout zeroes throttle (main.js), so
+      // dropping out SETTLES TO REST; then W/S maneuver at sublight.
+      const cap = this.tuning.SUBLIGHT_CAP;
+      const target = this.throttle * cap;
+      const k = 1 - Math.exp(-dt / this.tuning.SUBLIGHT_TAU);
+      this.speed += (target - this.speed) * k;
     }
     // Gravity-well clamp (both regimes): magnitude never exceeds the local cap,
     // sign preserved (reverse momentum survives). Anti-clip: nose-into-a-body

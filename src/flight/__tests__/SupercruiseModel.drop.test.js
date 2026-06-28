@@ -39,11 +39,12 @@ describe('SupercruiseModel — drive-idle / drop-to-rest (AC1)', () => {
     const v = m.speed;
     expect(v).toBeGreaterThan(0);
     m.setDrive(false);
+    m.setThrottle(0);
     m.update(DT);
-    // One frame of DROP_TAU=0.4 decay loses ~4% (k≈0.041) — clearly bleeding off,
+    // One frame of SUBLIGHT_TAU=0.4 decay loses ~4% (k≈0.041) — clearly bleeding off,
     // not preserved. Assert it has already started shedding momentum.
     expect(m.speed).toBeLessThan(v);
-    expect(m.speed).toBeLessThan(v * Math.exp(-DT / SC_TUNING.DROP_TAU) + 1e-9);
+    expect(m.speed).toBeLessThan(v * Math.exp(-DT / SC_TUNING.SUBLIGHT_TAU) + 1e-9);
   });
 
   it('drop-out from cruising speed sheds ≈all momentum within ~1.5s (much faster than the old 8s coast)', () => {
@@ -72,17 +73,18 @@ describe('SupercruiseModel — drive-idle / drop-to-rest (AC1)', () => {
     expect(m.position.distanceTo(p0)).toBeGreaterThan(0);
   });
 
-  it('drop-out ignores the throttle target (settles to rest, not toward throttle×cap)', () => {
+  it('drop-out HONORS throttle at the sublight cap (settles toward throttle×SUBLIGHT_CAP, not the SC cap)', () => {
     const m = new SupercruiseModel();
     m.setDrive(true);
     m.setThrottle(1);
     stepN(m, 60);
-    const v = m.speed;
-    // Drop out but LEAVE throttle high. If drive-OFF wrongly pulled toward
-    // throttle×cap it would climb/hold; drop-to-rest must shed speed regardless.
-    m.setDrive(false);
-    stepN(m, 30); // 0.5 s
-    expect(m.speed).toBeLessThan(v * 0.5);
+    const v = m.speed;                 // cruising fast
+    m.setDrive(false);                 // dropped out, throttle LEFT at 1
+    stepN(m, 600);                     // ~10s — bridges ~7 decades from cruise to the tiny cap
+    // It sheds the huge cruise speed and lands on the tiny sublight cap — NOT 0,
+    // NOT the supercruise cap. (In practice the E-key zeroes throttle on dropout.)
+    expect(m.speed).toBeLessThan(v);
+    expect(m.speed).toBeCloseTo(SC_TUNING.SUBLIGHT_CAP, 6);
   });
 
   it('near a body, speedCap parks you even while settling to rest', () => {
