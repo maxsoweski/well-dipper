@@ -64,6 +64,18 @@ Key gaps:
 - Galaxy rendering: angular artifacts, artificial-looking bar, uniform
   glow color
 
+**Update 2026-06-28 — supercruise flight shipped (diverges from passive-screensaver spec):**
+the F&F build now includes **hands-on HELM flight** (manual throttle + mouse
+virtual-joystick + hold-to-look free-look) over the same supercruise model the
+autopilot tour flies, deployed to master @ `09db316`. Two UAT behaviors corrected
+this session (@ `f455f39`): in HELM hands-on the cursor is hidden and the mouse is
+the flight stick, so **left-click selects the body under the center reticle** (your
+nose), making planets/moons selectable rather than only background stars; and
+forced-drop/mass-lock near a star is **direction-aware** — you can engage and fly
+off when pointed away, while a head-on approach still drops you (capture). Sublight
+maneuvering with a hard collision barrier (never fly through a body) shipped in the
+same arc.
+
 ---
 
 ## ENRICHED tier (Layer 2)
