@@ -5,6 +5,7 @@
 // Pure math: no scene graph, no DOM. Positions are SCENE-LOCAL (rebased frame);
 // main.js registers `position` for world-origin rebase subtraction.
 import * as THREE from 'three';
+import { forcedDropRadiusScene } from './proximityHorizon.js';
 
 export const SC_TUNING = {
   ETA_K: 3.0,               // speed cap = surfaceDist / ETA_K. Tuned 2026-06-24 (Bug B: 6 → 3) for perceptible
@@ -90,6 +91,22 @@ export class SupercruiseModel {
       if (c < cap) cap = c;
     }
     return cap;
+  }
+
+  /** True when any body is within its forced-drop distance =
+   *  max(FORCED_DROP_FLOOR_FACTOR × radius, escape-velocity horizon). The horizon
+   *  (2GM/v_ref²) only exceeds the floor for stars; bodies without `massKg` use the
+   *  floor. main.js calls this to force a supercruise drop-out and to mass-lock
+   *  re-engage. v_ref = SUBLIGHT_CAP. Pure. */
+  proximityDropRequired() {
+    const floorFactor = this.tuning.FORCED_DROP_FLOOR_FACTOR;
+    const vRef = this.tuning.SUBLIGHT_CAP;
+    for (const b of this._bodies) {
+      const floor = floorFactor * b.radius;
+      const horizon = forcedDropRadiusScene(b.massKg, vRef);
+      if (this.position.distanceTo(b.position) < Math.max(floor, horizon)) return true;
+    }
+    return false;
   }
 
   /** Turn authority shrinks as speed approaches the local cap (Elite feel). */

@@ -27,9 +27,9 @@
  */
 
 // ── Physical constants ──
-const G = 6.674e-11;            // gravitational constant (m³/kg/s²)
+export const G = 6.674e-11;            // gravitational constant (m³/kg/s²)
 const k_B = 1.381e-23;          // Boltzmann constant (J/K)
-const M_SUN = 1.989e30;         // solar mass (kg)
+export const M_SUN = 1.989e30;         // solar mass (kg)
 const R_SUN = 6.957e8;          // solar radius (m)
 const M_EARTH = 5.972e24;       // Earth mass (kg)
 const R_EARTH = 6.371e6;        // Earth radius (m)

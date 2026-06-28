@@ -99,3 +99,30 @@ describe('SupercruiseModel — hard collision barrier', () => {
     expect(m.position.distanceTo(b.position)).toBeCloseTo(SC_TUNING.COLLISION_FACTOR * b.radius, 6);
   });
 });
+
+import { starMassKgFromSceneRadius } from '../proximityHorizon.js';
+import { solarRadiiToScene, earthRadiiToScene } from '../../core/ScaleConstants.js';
+
+describe('SupercruiseModel — proximityDropRequired (forced-drop horizon)', () => {
+  it('true inside a star horizon, false outside', () => {
+    const m = new SupercruiseModel();
+    const sceneR = solarRadiiToScene(1);
+    const star = { position: new THREE.Vector3(0, 0, 0), radius: sceneR, massKg: starMassKgFromSceneRadius(sceneR) };
+    m.setBodies([star]);
+    m.position.set(sceneR * 3, 0, 0);  // 3R — inside the ~4.2R horizon
+    expect(m.proximityDropRequired()).toBe(true);
+    m.position.set(sceneR * 6, 0, 0);  // 6R — outside
+    expect(m.proximityDropRequired()).toBe(false);
+  });
+
+  it('an Earth-radius body (no massKg) only trips inside the 1.1R floor', () => {
+    const m = new SupercruiseModel();
+    const r = earthRadiiToScene(1);
+    const planet = { position: new THREE.Vector3(0, 0, 0), radius: r }; // no massKg → floor only
+    m.setBodies([planet]);
+    m.position.set(r * 1.2, 0, 0);     // outside 1.1R floor
+    expect(m.proximityDropRequired()).toBe(false);
+    m.position.set(r * 1.05, 0, 0);    // inside 1.1R floor
+    expect(m.proximityDropRequired()).toBe(true);
+  });
+});
