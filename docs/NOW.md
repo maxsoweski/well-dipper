@@ -138,7 +138,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > — re-run that one finding? **Other tracks landed:** ROADMAP folded with the preserved thinSpots research (`1ba3370`;
 > +2 new increments 4.5 exotic-shattered, 5.5 shared-fields), research output preserved durably (`71172a1`).
 >
-> **▶ INCREMENT 2 (PLATE DRIVER-RESPONSE) — BUILT → VERIFIED_PENDING_MAX `143da55` (2026-06-28).** SLICE A (plumbing,
+> **▶ INCREMENT 2 (PLATE DRIVER-RESPONSE) — ✅ SHIPPED `45cca44` (2026-06-28, Max UAT-passed).** SLICE A (plumbing,
 > byte-identical) `a3fe2f7` + SLICE B (calibration + lab UI, built via 2 parallel opus subagents) `143da55`. **What it
 > does:** the body's real D-vector (D14 gravity / D2 volatiles / D12 tidal-heat) now reshapes the plate relief
 > via a calibrated `driversToTune(D)` (gravity→UPLIFT_GAIN g^-0.5 clamp[0.4,2.5]; volatiles→CONTINENTAL_FRACTION;
@@ -153,8 +153,9 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Rocky/Ocean (2026-06-28, "these all look good").** **THEN D16 age DESCOPED at Max's direction** — age IS history, so a
 > static age→continental nudge misrepresents it; its real home is the **epoch/host-editor model (#6)** + **weathering
 > (#7)**. Age-drop re-verified: scoped vitest green; lab live = 3 sliders (gravity/volatiles/tidal), Rocky default
-> `appliedTune null` (Earth byte-identical), gravity still responds. **NEXT = final Max "ship it" → flip to Shipped**
-> (the 3 surviving drivers were UAT-passed unchanged). ⚠ **Mars sliders are INERT** (no PRESET_ARCHETYPE entry → despun
+> `appliedTune null` (Earth byte-identical), gravity still responds. **✅ SHIPPED 2026-06-28** (Max UAT-passed the 3
+> drivers; age descoped). **Deferred doc close-out:** FEATURES.md row + `npm run doc-rot` (skipped at ship for the
+> usage-limit wrap). ⚠ **Mars sliders are INERT** (no PRESET_ARCHETYPE entry → despun
 > path) — Mars correctly is NOT plate-driven (stagnant-lid in reality); its real history rides #4 volcanic / #5
 > bombardment / #7 aeolian. Artifacts: `docs/WORKSTREAMS/world-engine-plate-driver-response-2026-06-27/`
 > (intent, contract, SLICE-B-calibration, verdict). **Push HOLD.**
