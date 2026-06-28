@@ -45,7 +45,7 @@ export class SupercruiseModel {
     this.speed = 0;                            // u/s along the nose (signed: reverse < 0)
     this.throttle = 0;                         // -1..1
     this._driveOn = true;                      // supercruise drive engaged. OFF → settle to rest (zero velocity)
-    this.turnInput = { yaw: 0, pitch: 0 };     // -1..1 each
+    this.turnInput = { yaw: 0, pitch: 0, roll: 0 }; // -1..1 each (roll = Q/E, 2026-06-28)
     this._bodies = [];                         // [{ position: Vector3, radius: number }]
     this._nose = new THREE.Vector3();
     this._euler = new THREE.Euler();
@@ -129,8 +129,9 @@ export class SupercruiseModel {
     const rate = this.turnRateCap();
     const yaw = this.turnInput.yaw * rate * dt;
     const pitch = this.turnInput.pitch * rate * dt;
-    if (yaw !== 0 || pitch !== 0) {
-      this._q.setFromEuler(this._euler.set(pitch, yaw, 0, 'YXZ'));
+    const roll = (this.turnInput.roll || 0) * rate * dt;  // Q/E roll axis (2026-06-28)
+    if (yaw !== 0 || pitch !== 0 || roll !== 0) {
+      this._q.setFromEuler(this._euler.set(pitch, yaw, roll, 'YXZ'));
       this.orientation.multiply(this._q).normalize();
     }
     // Speed update. Two regimes:

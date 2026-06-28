@@ -8103,6 +8103,10 @@ function simStep(deltaTime) {
       } else if (dir !== 0) {
         scModel.setThrottle(scModel.throttle + dir * SC_TUNING.THROTTLE_RATE * deltaTime);
       }
+      // Roll axis (Q/E held) — rotational input the mouse stick (yaw+pitch) doesn't
+      // cover. Polled per-frame like W/S throttle; SupercruiseModel.update applies it.
+      // (Sign: E rolls one way, Q the other — flip the subtraction if reversed.)
+      scModel.turnInput.roll = (_heldKeys.has('KeyE') ? 1 : 0) - (_heldKeys.has('KeyQ') ? 1 : 0);
       cameraController.setFlightInput(0, 0, false);
     } else if (flightOk) {
       // Use e.code values (KeyW/KeyS/etc.) — immune to Shift changing e.key case
@@ -9117,8 +9121,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // R key: toggle minimap (was M — moved so M swaps ORRERY<->HELM).
-  if (e.code === 'KeyR') {
+  // C key: toggle minimap (was R; R is now the drive toggle — remapped 2026-06-28).
+  if (e.code === 'KeyC') {
     minimapVisible = !minimapVisible;
     if (minimapVisible && systemMap && !gravityWellVisible) {
       retroRenderer.setHud(systemMap.scene, systemMap.camera);
@@ -9142,7 +9146,8 @@ window.addEventListener('keydown', (e) => {
   //   'reengage' — In-Flight, drive OFF (dropped/parked): drive ON again + swell.
   //                Anti-clip is automatic (the gravity-well speedCap collapses to
   //                ~0 when the nose points into a body), so no extra guard here.
-  if (e.code === 'KeyE') {
+  // R key: supercruise/sublight DRIVE toggle (was E — remapped 2026-06-28 so Q/E free for roll).
+  if (e.code === 'KeyR') {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
     if (splashActive || titleScreenActive) return;
@@ -9214,7 +9219,8 @@ window.addEventListener('keydown', (e) => {
   // tour (the frame loop applies scHead every In-Flight frame), and W/S takeover
   // (below, ~scPilot.isActive branch) still cancels the pilot mid-tour. (Was A —
   // moved to free WASD for movement.)
-  if (e.code === 'KeyQ') {
+  // Z key: autopilot TOUR toggle (was Q — remapped 2026-06-28 so Q/E free for roll).
+  if (e.code === 'KeyZ') {
     if (autoNav.isActive) {
       stopFlythrough();
     } else if (system) {
