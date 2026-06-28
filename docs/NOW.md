@@ -138,6 +138,24 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > — re-run that one finding? **Other tracks landed:** ROADMAP folded with the preserved thinSpots research (`1ba3370`;
 > +2 new increments 4.5 exotic-shattered, 5.5 shared-fields), research output preserved durably (`71172a1`).
 >
+> **▶ INCREMENT 2 (PLATE DRIVER-RESPONSE) — BUILT → VERIFIED_PENDING_MAX `143da55` (2026-06-28).** SLICE A (plumbing,
+> byte-identical) `a3fe2f7` + SLICE B (calibration + lab UI, built via 2 parallel opus subagents) `143da55`. **What it
+> does:** the body's real D-vector (D14 gravity / D2 volatiles / D12 tidal-heat / D16 age) now reshapes the plate relief
+> via a calibrated `driversToTune(D)` (gravity→UPLIFT_GAIN g^-0.5 clamp[0.4,2.5]; volatiles+age→CONTINENTAL_FRACTION;
+> tidal→PLATE_COUNT_MIN), threaded through a NEW `bodyDrivers` channel separate from grainDrivers. Anchored to D_EARTH
+> (Rocky's derived drivers: g 0.9 / vf 0.15 / tidalHeat ≈0.00174 / age 4.5) so `driversToTune(D_EARTH)`→null→**Earth
+> byte-identical** to the validated POC. Lab: 4 driver-override sliders + A/B button in the Drivers folder ("Body drivers
+> → plate relief (Inc.2)") + D16 age surfaced on Rocky/Ocean/Mars + plateProbe exposes bodyDrivers/appliedTune.
+> **Verdict (`verdict.json`):** unit AC1-AC3 **PASS** + integration AC4/AC5 **PASS** (verify-workstream `wf_c793595f`,
+> 3/3 adversarial each; vitest 14/14 + no-clobber harness 25/25); **AC6 live-driven GREEN by working-Claude** on :5173
+> (Earth anchor `appliedTune null`; calibrated response via preset-switch + slider-drag; A/B flip; **visibly-distinct
+> gravity A/B** screenshots `scratchpad/inc2-ac6-{A-tall,B-flat}.png`); **AC7 UAT = Max alone, PENDING.** **NEXT = Max
+> AC7 UAT** (lab :5173, lab left clean on Rocky): open the "Body drivers" sliders on Rocky/Ocean, zoom in + pixelScale→1,
+> sweep gravity/volatiles/tidal/age, A/B-flip back to preset to confirm Earth unchanged — accept if driver variants read
+> as genuinely different physically-sensible worlds. ⚠ **Mars sliders are INERT** (no PRESET_ARCHETYPE entry → despun
+> path); driver-response is Rocky+Ocean only. Artifacts: `docs/WORKSTREAMS/world-engine-plate-driver-response-2026-06-27/`
+> (intent, contract, SLICE-B-calibration, verdict). **Push HOLD.**
+>
 > **▶ INCREMENT 2 (PLATE DRIVER-RESPONSE) — SCOPED, AWAITING MAX GREENLIGHT (2026-06-27).** `dev-collab-scope` pass.
 > **Active workstream switched** shell-relief → `docs/WORKSTREAMS/world-engine-plate-driver-response-2026-06-27/`
 > (`intent.md` + `contract.json`, status `building`, validated, active pointer set). ⚠ **shell-relief is NOT shipped** —
