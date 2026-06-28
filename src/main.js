@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -336,8 +336,20 @@ window._getReticleState = () => ({
 window._hitTestBodies = (x, y, t) => hitTestBodies(x, y, t);
 
 // Reticle state — single source of truth for selection
-let _hoverTarget = null;     // body under the mouse (tentative reticle)
+let _hoverTarget = null;     // body under the AIM POINT (tentative reticle). Owned
+                             // by the render loop (§targeting-brackets-contextual
+                             // -eta-design-2026-06-28, Unit 2) — sampled per-frame
+                             // from aimPoint(), NOT from the mousemove handler, so
+                             // HELM hands-on flight (cursor hidden, body crosses
+                             // screen-center as you FLY) drives the hover too.
 let _selectedTarget = null;  // committed/selected body (selected reticle + commit button)
+// Live OS-cursor position in CLIENT coords (what hitTestBodies expects), tracked
+// by the mousemove handler. The render loop reads these for the aim point in
+// cursor-visible modes (ORRERY / free-look / mobile). Seeded to the viewport
+// center so the very first frame — before any mouse movement — hit-tests a sane
+// point instead of NaN. (§targeting-brackets-contextual-eta-design Unit 2.)
+let _mouseX = (typeof window !== 'undefined' ? window.innerWidth : 0) / 2;
+let _mouseY = (typeof window !== 'undefined' ? window.innerHeight : 0) / 2;
 
 // HUD master toggle (H key). Hides brackets, body-info printout, BURN button,
 // and the minimap all at once. Camera/selection state is preserved — this is
@@ -8418,6 +8430,32 @@ function renderFrame(alpha) {
     const g = _ghostTargets[i];
     if (!_isReticleOccluded(g)) _visibleGhostTargets.push(g);
   }
+  // ── Per-frame AIM HOVER (§targeting-brackets-contextual-eta-design Unit 2) ──
+  // The hover that feeds the dim/ghost-lock-in bracket is set HERE, per-frame, from
+  // the AIM POINT — NOT in the mousemove handler — so HELM hands-on flight (cursor
+  // hidden, aim = the fixed screen-center reticle) triggers the bracket by FLYING a
+  // body across center, with no mouse motion. In cursor-visible modes aimPoint
+  // returns the live mouse position, so hover follows the cursor exactly as before
+  // (now sampled once per frame). One hit-test per frame replaces the per-mousemove
+  // one as the hover source (and is free when nothing's under the aim).
+  let _aimBody = null;
+  if (system && !warpEffect.isActive && !galleryMode) {
+    const _rect = canvas.getBoundingClientRect();
+    const _aim = aimPoint({
+      cursorHidden: _pointerCursor === 'none',
+      mouseX: _mouseX, mouseY: _mouseY,
+      centerX: _rect.left + _rect.width * 0.5,
+      centerY: _rect.top + _rect.height * 0.5,
+    });
+    _aimBody = hitTestBodies(_aim.x, _aim.y);
+    // Preserve the selected-target suppression: don't draw a tentative reticle on
+    // the body that already wears the bright selected reticle (stacking is noisy).
+    _hoverTarget = (_aimBody && _selectedTarget && _isSameTarget(_aimBody, _selectedTarget))
+      ? null : _aimBody;
+  } else {
+    _hoverTarget = null;
+  }
+
   // Allow hover reticles during flythrough so you can preview targets
   // without stopping autopilot. Only suppress during warp/turn.
   const suppressHover = warpEffect.isActive || warpTarget.turning;
@@ -8455,6 +8493,12 @@ function renderFrame(alpha) {
   // (10R)/2.5 live only in _scDropState → scPilot.tuning).
   const _scDrop = _scDropState();
   const _scTargetPos = _resolveSelectedBody()?.mesh.position ?? scControls.target?.mesh?.position ?? null;
+  // Contextual ETA (§targeting-brackets-contextual-eta-design Unit 3): the
+  // glanceable M:SS counter shows only when the aim point is over the body we're
+  // travelling toward. Reuse _aimBody (the raw aim hit-test from Unit 2 above) —
+  // not _hoverTarget, which the selected-target suppression nulls precisely when
+  // the aim IS on the destination.
+  const _aimOnTarget = !!(_aimBody && _selectedTarget && _isSameTarget(_aimBody, _selectedTarget));
   scHud.update({
     visible: _hudVisible && (_scManual || scPilot.isActive) && !warpEffect.isActive,
     speed: scModel.speed,
@@ -8463,6 +8507,7 @@ function renderFrame(alpha) {
     deflection: _scDeflection,
     targetPos: _scTargetPos,
     targetDistance: _scTargetPos ? scModel.position.distanceTo(_scTargetPos) : null,
+    aimOnTarget: _aimOnTarget,
     captureSphere: _scDrop.captureSphere,
     dropMaxSpeed: _scDrop.dropMaxSpeed,
     dropState: _scDrop.state,
@@ -9596,17 +9641,21 @@ canvas.addEventListener('mousemove', (e) => {
     flythrough.addFreeLook(-e.movementX * 0.002, -e.movementY * 0.0015);
   }
 
-  // ── In-system body hover (tentative reticle) ──
-  // Runs regardless of orbit line hover (it's a separate overlay).
+  // Track the live OS-cursor position (client coords) for the render loop's aim
+  // point. The render loop — not this handler — now OWNS _hoverTarget (Unit 2), so
+  // HELM hands-on flight (cursor hidden, aim = screen-center) drives the hover by
+  // FLYING a body across center, with no mouse motion. In cursor-visible modes the
+  // render loop samples THIS position, so hover still tracks the pointer per-frame.
+  _mouseX = e.clientX;
+  _mouseY = e.clientY;
+
+  // ── In-system body hover → CURSOR FEEDBACK ONLY ──
+  // Runs regardless of orbit line hover (it's a separate overlay). This block no
+  // longer sets _hoverTarget (the render loop owns it); it keeps ONLY the cursor-
+  // feedback role — paint 'pointer' when a clickable body is under the cursor in
+  // cursor-visible modes.
   if (system && !warpEffect.isActive && !galleryMode) {
     const bodyHit = hitTestBodies(e.clientX, e.clientY);
-    // Don't show tentative reticle on the currently selected target —
-    // the selected reticle already covers it, and stacking both is noisy.
-    if (bodyHit && _selectedTarget && _isSameTarget(bodyHit, _selectedTarget)) {
-      _hoverTarget = null;
-    } else {
-      _hoverTarget = bodyHit;
-    }
     // Cursor feedback: pointer when we can click a body. The base cursor is now
     // sub-mode-driven (§free-look-interaction-redesign Part 1): _pointerCursor is
     // 'none' in HELM hands-on (cursor hidden) and '' (auto) in free-look / ORRERY.

@@ -6,6 +6,17 @@
 import * as THREE from 'three';
 import { formatSpeed, speedToBarFrac } from './SpeedFormat.js';
 
+// The CONTEXTUAL ETA gate (§targeting-brackets-contextual-eta-design-2026-06-28,
+// Unit 3). The glanceable "M:SS" counter shows ONLY when the player is moving, the
+// distance to the destination is known, AND the aim point is over the body they
+// are travelling toward (`aimOnTarget`). Aim away → it hides; glance back to check.
+// Pure + exported so the gate is unit-tested without a canvas. NOTE: this gates
+// the ETA COUNTER only — the SAFE TO DROP / SLOW DOWN drop labels are an approach-
+// SAFETY cue and stay on `hasTarget`, not here.
+export function etaVisible({ speed, targetDistance, aimOnTarget } = {}) {
+  return speed > 0 && targetDistance != null && !!aimOnTarget;
+}
+
 export class SupercruiseHud {
   constructor(camera) {
     this.camera = camera;
@@ -38,6 +49,8 @@ export class SupercruiseHud {
   /** state: {
    *   visible, speed, commandedSpeed, throttle, deflection:{x,y},
    *   targetPos|null, targetDistance|null, captureSphere|null,
+   *   aimOnTarget?: boolean,  // aim point is over the travelled-toward body —
+   *                           // gates the contextual ETA counter only (Unit 3).
    *   dropMaxSpeed|null, dropState: 'none'|'in-window'|'too-fast',
    *   flightMode: 'manual'|'align'|'assist'|null,
    *   showReticle?: boolean   // gate the center cross + deflection dot (the
@@ -151,18 +164,26 @@ export class SupercruiseHud {
         c.font = '13px monospace';
         const cueY = p.y + 28;        // offset below the body, clear of the name label
 
-        // ETA "M:SS" = distance / speed (only when moving + target set).
-        let eta = '--:--';
-        if (speed > 0 && state.targetDistance != null) {
-          const secs = state.targetDistance / speed;
-          if (Number.isFinite(secs)) {
-            const m = Math.floor(secs / 60);
-            const s = Math.floor(secs % 60);
-            eta = `${m}:${s.toString().padStart(2, '0')}`;
+        // ETA "M:SS" = distance / speed. CONTEXTUAL (§targeting-brackets-
+        // contextual-eta Unit 3): the counter LINE is drawn ONLY when the aim
+        // point is over the body you're travelling toward (state.aimOnTarget) —
+        // aim away → it hides ENTIRELY (no '--:--' placeholder left lingering,
+        // which is what made it feel non-contextual). When aimed-on but not yet
+        // moving / distance unknown it shows '--:--'. Only the COUNTER is gated;
+        // the drop labels below stay on `hasTarget` (approach-safety cue).
+        if (state.aimOnTarget) {
+          let eta = '--:--';
+          if (etaVisible({ speed, targetDistance: state.targetDistance, aimOnTarget: state.aimOnTarget })) {
+            const secs = state.targetDistance / speed;
+            if (Number.isFinite(secs)) {
+              const m = Math.floor(secs / 60);
+              const s = Math.floor(secs % 60);
+              eta = `${m}:${s.toString().padStart(2, '0')}`;
+            }
           }
+          c.fillStyle = '#9fe8ff';
+          c.fillText(eta, p.x + 18, cueY);
         }
-        c.fillStyle = '#9fe8ff';
-        c.fillText(eta, p.x + 18, cueY);
 
         // Drop label: SAFE TO DROP (green) / SLOW DOWN (amber).
         if (state.dropState === 'in-window') {

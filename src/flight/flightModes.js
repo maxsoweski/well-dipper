@@ -232,6 +232,20 @@ export function pointerHudState({ regime, freeLook, isMobile } = {}) {
   };
 }
 
+// Where the TARGETING hover is sampled — the AIM POINT — by whether the OS cursor
+// is hidden (§targeting-brackets-contextual-eta-design-2026-06-28, Unit 1). Pairs
+// with pointerHudState by construction: `cursorHidden` is exactly
+// `pointerHudState(...).cursor === 'none'` (desktop HELM hands-on flight).
+//   - cursorHidden true  → aim = the fixed CENTER reticle {centerX, centerY}. In
+//     hands-on flight the mouse is the virtual-joystick deflection, not an aim, and
+//     the cursor is hidden — so you aim by FLYING a body across screen-center.
+//   - cursorHidden false → aim = the MOUSE position {mouseX, mouseY}. ORRERY, HELM
+//     free-look, and mobile keep a visible pointer; hover follows it as today.
+// Pure so the render loop can pick the hit-test point without the live host.
+export function aimPoint({ cursorHidden, mouseX, mouseY, centerX, centerY } = {}) {
+  return cursorHidden ? { x: centerX, y: centerY } : { x: mouseX, y: mouseY };
+}
+
 // The late, normal-mode (autopilot-off) Esc/Backquote fall-through (main.js
 // ~8979). #2 "Esc de-mode": with the early-cascade exit-flight step removed, a
 // quiet-HUD Esc now falls through to the ORRERY "system overview" focus reset
