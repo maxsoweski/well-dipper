@@ -639,6 +639,22 @@ liquid-water bundle completing the wet/frozen/airless trio vs europa, lava).
 > **259 unit tests green, build clean.** Spec `docs/superpowers/specs/2026-06-28-uat-fixes-select-masslock-design.md`.
 > The "deploy deferred" status below is SUPERSEDED. Handoff resolved (both issues closed):
 > `/tmp/well-dipper-supercruise-uat-fixes-handoff-2026-06-28.md`.
+>
+> **▶ ALSO FIXED + PUSHED (2026-06-28) — procedural orbital realism `a04bf4a`.** Max UAT
+> (sublight): planets visibly drifted away when parked near them in procedural systems (Sol was
+> fine). Root cause: `StarSystemGenerator` anchored Kepler's law on the system's innermost-planet
+> AU (a VISUAL map-layout quantity), not the physical Mercury reference (0.387 AU) Sol uses →
+> procedural orbits ran 1.6×–100× too fast (worst on luminous/binary stars). Fix: `keplerOrbitSpeed()`
+> anchored on physical AU; migration + resonance-snap now recompute speed (a stale-speed migrant bug
+> the test also caught). At `celestialTimeMultiplier 1.0` (realistic, default) motion is imperceptible
+> by design — now true for procedural too. Test `StarSystemGenerator.orbit-realism.test.js` (8 seeds,
+> ±30% of real Kepler). Build clean; pre-existing KnownObjects/GalacticFeatures failures unrelated.
+> **Max UAT pending:** warp to a procedural system, park at sublight, confirm planets sit still.
+>
+> **▶ NEXT (deferred to a fresh session, Max 2026-06-28) — Orrery/God's-Eye navigation UX.** Click a
+> star system → travel there; click a planet → instantly move to it; orbit lines ON by default
+> (`showOrbits: false`→true, `Settings.js:21`). Feature w/ 3 small feel decisions → brainstorm first.
+> Handoff with anchors: `/tmp/well-dipper-orrery-navigation-handoff-2026-06-28.md`.
 
 **`supercruise-freelook-2026-06-10`** — **ALL 13 tasks + control harness BUILT,
 live-verified, and UAT-PASSED by Max** (live ride 2026-06-27: "it's good to ship").
