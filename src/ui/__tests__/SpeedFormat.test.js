@@ -7,7 +7,24 @@ import {
   MM_S_IN_SCENE_PER_S,
   SPEED_BAR_MIN_C,
   SPEED_BAR_MAX_C,
+  sublightBarFrac,
 } from '../SpeedFormat.js';
+
+describe('sublightBarFrac — linear bipolar sublight bar', () => {
+  const CAP = 0.002;
+  it('maps stop/forward/reverse to 0/+1/-1', () => {
+    expect(sublightBarFrac(0, CAP)).toBe(0);
+    expect(sublightBarFrac(CAP, CAP)).toBeCloseTo(1, 9);
+    expect(sublightBarFrac(-CAP, CAP)).toBeCloseTo(-1, 9);
+  });
+  it('clamps beyond the cap', () => {
+    expect(sublightBarFrac(2 * CAP, CAP)).toBe(1);
+    expect(sublightBarFrac(-2 * CAP, CAP)).toBe(-1);
+  });
+  it('cap ≤ 0 → 0 (no divide-by-zero)', () => {
+    expect(sublightBarFrac(0.001, 0)).toBe(0);
+  });
+});
 
 describe('SpeedFormat — derived constants', () => {
   it('matches the spec anchor values', () => {

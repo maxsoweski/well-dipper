@@ -87,3 +87,16 @@ export function speedToBarFrac(sceneUPerSec) {
   const lo = Math.log10(SPEED_BAR_MIN_C), hi = Math.log10(SPEED_BAR_MAX_C);
   return Math.min(1, Math.max(0, (Math.log10(cVal) - lo) / (hi - lo)));
 }
+
+/**
+ * Linear bipolar bar fraction for the sublight regime: the log speed bar
+ * (speedToBarFrac) pins ~empty below ~150 km/s, so sublight gets its own
+ * center-anchored scale. Reverse → negative, stop → 0, full forward → +1.
+ * @param {number} sceneUPerSec signed speed in scene-units/sec
+ * @param {number} cap sublight cap (scene-u/s)
+ * @returns {number} signed fill fraction in [-1, 1]
+ */
+export function sublightBarFrac(sceneUPerSec, cap) {
+  if (!(cap > 0)) return 0;
+  return Math.min(1, Math.max(-1, sceneUPerSec / cap));
+}
