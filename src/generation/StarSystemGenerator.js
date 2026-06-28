@@ -15,6 +15,22 @@ import {
   beltCompositionZones, lagrangePoints,
 } from './PhysicsEngine.js';
 
+// Physical Kepler anchor: Mercury's orbit (0.387 AU, 88-day period). Orbital
+// angular speeds derive from REAL AU against this reference — matching Sol's
+// hand-authored keplerSpeed (where MAP_UNITS_PER_AU / MAP_BASE = 1 / 0.387) — so
+// `orb()` (×1/1510) lands real periods (Earth @ 1 AU = 1 yr). Do NOT anchor on
+// the per-system visual map base: that made luminous/binary systems orbit up to
+// ~100× too fast (parked-ship planet-drift bug, 2026-06-28).
+const KEPLER_ANCHOR_AU = 0.387;
+
+// Realistic orbital angular speed (rad/s) for a body at `orbitRadiusAU`, anchored
+// on KEPLER_ANCHOR_AU and run through `orb()` (×1/1510) so periods are physical
+// (Mercury @ 0.387 AU = 88 d, Earth @ 1 AU = 1 yr). MUST be recomputed wherever a
+// body's orbitRadiusAU changes (migration, resonance snap) or the speed goes stale.
+function keplerOrbitSpeed(orbitRadiusAU, jitter = 1) {
+  return orb((0.00125 / Math.pow(orbitRadiusAU / KEPLER_ANCHOR_AU, 1.5)) * jitter);
+}
+
 /**
  * StarSystemGenerator — produces data for an entire star system:
  * a central star (or binary pair), orbital slots, planets with moons,
@@ -355,8 +371,10 @@ export class StarSystemGenerator {
       const orbitRadius = orbitRadiusAU * mapUnitsPerAU;  // map units (backward compat)
 
       const orbitAngle = planetRng.range(0, Math.PI * 2);
-      // Kepler's 3rd law: period ∝ distance^1.5
-      const orbitSpeed = orb((0.00125 / Math.pow(orbitRadius / adjustedMapBase, 1.5)) * planetRng.range(0.8, 1.2));
+      // Kepler's 3rd law: period ∝ AU^1.5, anchored on the PHYSICAL Mercury
+      // reference — identical physics to Sol's keplerSpeed. (Was anchored on
+      // `orbitRadius / adjustedMapBase`, a visual-layout quantity → too fast.)
+      const orbitSpeed = keplerOrbitSpeed(orbitRadiusAU, planetRng.range(0.8, 1.2));
 
       // Planet position in world space (initial) — using map coords for now
       const px = Math.cos(orbitAngle) * orbitRadius;
@@ -428,6 +446,9 @@ export class StarSystemGenerator {
         migrantInSurviving.orbitRadiusAU = migrationResult.finalOrbitAU;
         migrantInSurviving.orbitRadiusScene = auToScene(migrationResult.finalOrbitAU);
         migrantInSurviving.orbitRadius = migrationResult.finalOrbitAU * mapUnitsPerAU;
+        // Recompute orbital speed for the new (inner) orbit — else it keeps the
+        // far-orbit speed and reads as a near-frozen body at the wrong period.
+        migrantInSurviving.orbitSpeed = keplerOrbitSpeed(migrationResult.finalOrbitAU);
         // Change type to hot-jupiter
         migrantInSurviving.planetData.type = 'hot-jupiter';
         migrantInSurviving.planetData.rotationSpeed = 0; // tidally locked
@@ -447,6 +468,9 @@ export class StarSystemGenerator {
       for (const p of planets) {
         p.orbitRadiusScene = auToScene(p.orbitRadiusAU);
         p.orbitRadius = p.orbitRadiusAU * mapUnitsPerAU;
+        // Resonance snapping moved the orbit → recompute speed for the new AU
+        // (preserve direction for any retrograde body).
+        p.orbitSpeed = Math.sign(p.orbitSpeed || 1) * keplerOrbitSpeed(p.orbitRadiusAU);
       }
     }
 
