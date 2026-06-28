@@ -41,3 +41,15 @@ describe('SupercruiseModel — sublight (drive OFF) propulsion', () => {
     expect(m.speed / cruise).toBeLessThan(0.03);
   });
 });
+
+describe('SupercruiseModel — turn authority is symmetric in speed sign', () => {
+  it('turnRateCap at -X equals turnRateCap at +X (reverse does not inflate it)', () => {
+    const m = new SupercruiseModel(); // no bodies → cap = CAP_MAX
+    m.speed = 5000;
+    const fwd = m.turnRateCap();
+    m.speed = -5000;
+    const rev = m.turnRateCap();
+    expect(rev).toBeCloseTo(fwd, 9);
+    expect(rev).toBeLessThanOrEqual(SC_TUNING.TURN_RATE_MAX + 1e-9);
+  });
+});

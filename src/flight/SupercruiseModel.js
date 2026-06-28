@@ -94,7 +94,7 @@ export class SupercruiseModel {
   /** Turn authority shrinks as speed approaches the local cap (Elite feel). */
   turnRateCap() {
     const t = this.tuning;
-    const frac = Math.min(1, this.speed / Math.max(1e-6, this.speedCap()));
+    const frac = Math.min(1, Math.abs(this.speed) / Math.max(1e-6, this.speedCap()));
     return t.TURN_RATE_MAX * (1 - (1 - t.TURN_RATE_MIN_FRAC) * frac);
   }
 
