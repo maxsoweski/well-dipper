@@ -101,10 +101,18 @@ export class SupercruiseModel {
   proximityDropRequired() {
     const floorFactor = this.tuning.FORCED_DROP_FLOOR_FACTOR;
     const vRef = this.tuning.SUBLIGHT_CAP;
+    const nose = this.nose();              // unit forward (fills this._nose)
     for (const b of this._bodies) {
       const floor = floorFactor * b.radius;
       const horizon = forcedDropRadiusScene(b.massKg, vRef);
-      if (this.position.distanceTo(b.position) < Math.max(floor, horizon)) return true;
+      if (this.position.distanceTo(b.position) < Math.max(floor, horizon)) {
+        // Direction-aware: only an INBOUND nose forces the drop / mass-lock.
+        // Pointed away or tangent → free to engage and fly off (no real gravity
+        // pull). The hard collision barrier in update() stays direction-blind —
+        // it's the physical floor; this is only the forced-drop + mass-lock gate.
+        this._scratch.copy(b.position).sub(this.position); // → toward the body
+        if (nose.dot(this._scratch) > 0) return true;
+      }
     }
     return false;
   }

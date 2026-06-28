@@ -103,26 +103,48 @@ describe('SupercruiseModel — hard collision barrier', () => {
 import { starMassKgFromSceneRadius } from '../proximityHorizon.js';
 import { solarRadiiToScene, earthRadiiToScene } from '../../core/ScaleConstants.js';
 
-describe('SupercruiseModel — proximityDropRequired (forced-drop horizon)', () => {
-  it('true inside a star horizon, false outside', () => {
+describe('SupercruiseModel — proximityDropRequired (direction-aware forced-drop)', () => {
+  // Body sits at the origin; the ship is placed on +x. The nose default is -z
+  // (tangent to the +x radial). These helpers point it at / away from the body.
+  const NOSE_TOWARD = (m) => m.orientation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);  // nose → -x (at body)
+  const NOSE_AWAY   = (m) => m.orientation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2); // nose → +x (away)
+
+  it('inside a star horizon: blocks when pointed toward, allows when pointed away', () => {
     const m = new SupercruiseModel();
     const sceneR = solarRadiiToScene(1);
     const star = { position: new THREE.Vector3(0, 0, 0), radius: sceneR, massKg: starMassKgFromSceneRadius(sceneR) };
     m.setBodies([star]);
     m.position.set(sceneR * 3, 0, 0);  // 3R — inside the ~4.2R horizon
-    expect(m.proximityDropRequired()).toBe(true);
-    m.position.set(sceneR * 6, 0, 0);  // 6R — outside
+    NOSE_TOWARD(m); expect(m.proximityDropRequired()).toBe(true);   // pointed at the star → blocked
+    NOSE_AWAY(m);   expect(m.proximityDropRequired()).toBe(false);  // pointed away → free to leave
+  });
+
+  it('a tangent heading inside the horizon does not block', () => {
+    const m = new SupercruiseModel();
+    const sceneR = solarRadiiToScene(1);
+    const star = { position: new THREE.Vector3(0, 0, 0), radius: sceneR, massKg: starMassKgFromSceneRadius(sceneR) };
+    m.setBodies([star]);
+    m.position.set(sceneR * 3, 0, 0);
+    m.orientation.identity();          // nose → -z, perpendicular to the +x radial
     expect(m.proximityDropRequired()).toBe(false);
   });
 
-  it('an Earth-radius body (no massKg) only trips inside the 1.1R floor', () => {
+  it('outside the horizon never blocks, even pointed straight at the star', () => {
+    const m = new SupercruiseModel();
+    const sceneR = solarRadiiToScene(1);
+    const star = { position: new THREE.Vector3(0, 0, 0), radius: sceneR, massKg: starMassKgFromSceneRadius(sceneR) };
+    m.setBodies([star]);
+    m.position.set(sceneR * 6, 0, 0);  // 6R — outside
+    NOSE_TOWARD(m); expect(m.proximityDropRequired()).toBe(false);
+  });
+
+  it('an Earth-radius body (no massKg) trips only inside the 1.1R floor AND pointed toward', () => {
     const m = new SupercruiseModel();
     const r = earthRadiiToScene(1);
     const planet = { position: new THREE.Vector3(0, 0, 0), radius: r }; // no massKg → floor only
     m.setBodies([planet]);
-    m.position.set(r * 1.2, 0, 0);     // outside 1.1R floor
-    expect(m.proximityDropRequired()).toBe(false);
-    m.position.set(r * 1.05, 0, 0);    // inside 1.1R floor
-    expect(m.proximityDropRequired()).toBe(true);
+    m.position.set(r * 1.2, 0, 0);  NOSE_TOWARD(m); expect(m.proximityDropRequired()).toBe(false); // outside floor
+    m.position.set(r * 1.05, 0, 0); NOSE_TOWARD(m); expect(m.proximityDropRequired()).toBe(true);  // inside + toward
+    NOSE_AWAY(m);                                   expect(m.proximityDropRequired()).toBe(false); // inside but away → leave
   });
 });

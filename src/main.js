@@ -9373,6 +9373,17 @@ function trySelect(clientX, clientY) {
     }
   }
 
+  // HELM hands-on flight: the OS cursor is hidden and the mouse position IS the
+  // virtual flight stick (steering reads absolute offset from canvas-center), so a
+  // raw cursor click can't land on a body. Select what the NOSE/reticle points at
+  // instead — the same aim point the hover bracket samples (aimPoint/_aimBody). This
+  // is desktop HELM hands-on only: pointerHudState hides the cursor IFF that mode.
+  if (_pointerCursor === 'none') {
+    const _rect = canvas.getBoundingClientRect();
+    clientX = _rect.left + _rect.width * 0.5;
+    clientY = _rect.top + _rect.height * 0.5;
+  }
+
   _mouse.x = (clientX / window.innerWidth) * 2 - 1;
   _mouse.y = -(clientY / window.innerHeight) * 2 + 1;
 
@@ -9905,7 +9916,11 @@ canvas.addEventListener('mouseup', (e) => {
     return;
   }
 
-  if (isDrag) return;
+  // In HELM hands-on the mouse IS the flight stick, so a press→release routinely
+  // exceeds the 5px drag threshold; there's no drag-to-orbit to protect there
+  // (cameraController is bypassed), so a left-press always selects (at the reticle).
+  // Other modes keep the drag gate so a camera-drag doesn't trigger a selection.
+  if (isDrag && _pointerCursor !== 'none') return;
   trySelect(e.clientX, e.clientY);
 });
 
