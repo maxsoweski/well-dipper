@@ -1,5 +1,12 @@
 # Increment 2 SLICE B — driver→tune calibration spec
 
+> ⚠ **DESCOPED 2026-06-28 (Max UAT): D16 `age` was REMOVED from this increment.** It was built +
+> verified (age→CONTINENTAL_FRACTION), then dropped: age IS history/time, so a static age→continental
+> nudge misrepresents it — its real home is the **epoch / host-editor model (#6)** (on-patch temporal
+> sequences) + **weathering/erosion (#7)**. The shipped increment is **three** drivers (gravity,
+> volatiles, tidal heating); `driversToTune` accepts but ignores `age`. The age sections below are kept
+> for the record but are NOT in the shipped build.
+
 **Role:** the analog of shell-relief's `SLICE-B-stress-math.md` — pins the four transfer functions
 (form, sign, scaling rationale, clamps) and the Earth anchor BEFORE wiring, so the calibration isn't
 invented inline and AC3's per-driver direction has a documented anchor. Implements `driversToTune(D)`

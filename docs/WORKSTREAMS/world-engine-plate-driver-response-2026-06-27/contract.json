@@ -6,7 +6,7 @@
   "designRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
   "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
   "rubricRef": "../world-engine-history-program-2026-06-27/UAT-RUBRICS.md",
-  "summary": "Increment 2 of the world-engine history program (MULTIPLY): thread the real per-body D-vector (D14 massGravity, D2 volatileFraction, D12 tidalHeating, D16 age) through route()->writeBodyRelief->writePlateUpliftSphere via a NEW body-driver channel (separate from the grain-bake grainDrivers bundle), and build a calibrated driversToTune(D) in plates.js that makes PLATE_COUNT / UPLIFT_GAIN / CONTINENTAL_FRACTION respond to those drivers. Calibrated against a named D_earth constant so driversToTune(D_earth) returns a falsy/empty override and the Earth reference point is byte-identical to the validated plate POC. Full-driver-set per Max's scoping call; D16 age surfaced into the terrestrial presets first (it is not in the presets today). Lab-only; never touches the despun/shell path, the grain bake, or game Planet.js.",
+  "summary": "Increment 2 of the world-engine history program (MULTIPLY): thread the real per-body D-vector (D14 massGravity, D2 volatileFraction, D12 tidalHeating) through route()->writeBodyRelief->writePlateUpliftSphere via a NEW body-driver channel (separate from the grain-bake grainDrivers bundle), and build a calibrated driversToTune(D) in plates.js that makes PLATE_COUNT / UPLIFT_GAIN / CONTINENTAL_FRACTION respond to those drivers. Calibrated against a named D_earth constant so driversToTune(D_earth) returns a falsy/empty override and the Earth reference point is byte-identical to the validated plate POC. (D16 age was scoped then DESCOPED at Max's UAT 2026-06-28 — a static age nudge misrepresents age/history; its real home is the epoch model #6 + weathering #7. driversToTune accepts but ignores age.) Lab-only; never touches the despun/shell path, the grain bake, or game Planet.js.",
   "acceptanceCriteria": [
     {
       "id": "AC1",
@@ -30,22 +30,12 @@
     },
     {
       "id": "AC3",
-      "statement": "MONOTONE, CORRECT-SIGN DRIVER RESPONSE: each threaded driver (D14, D2, D12, D16), swept across its range with the others held at the Earth point, moves its mapped plate parameter monotonically in ONE documented direction whose sign matches a cited physical rationale; off the Earth point the field measurably differs from the Earth baseline.",
+      "statement": "MONOTONE, CORRECT-SIGN DRIVER RESPONSE: each threaded driver (D14, D2, D12), swept across its range with the others held at the Earth point, moves its mapped plate parameter monotonically in ONE documented direction whose sign matches a cited physical rationale; off the Earth point the field measurably differs from the Earth baseline.",
       "verifyVia": {
         "input": "For each driver, sweep it across its calibrated range (others = D_earth) and build the field at each step; read the mapped parameter (plateCount, effective UPLIFT_GAIN / relief amplitude, continental area fraction) + corr(U, single-driver step index).",
-        "observable": "Each driver's mapped parameter is monotone in its documented direction across the sweep (e.g. gravity up -> relief amplitude down; volatiles up -> continental fraction down; tidal heating up -> plate count up; age in its calibrated direction); the documented direction + rationale are recorded in the build note; |corr| measurably > 0 (field differs from the Earth baseline at the sweep extremes)."
+        "observable": "Each driver's mapped parameter is monotone in its documented direction across the sweep (e.g. gravity up -> relief amplitude down; volatiles up -> continental fraction down; tidal heating up -> plate count up); the documented direction + rationale are recorded in the build note; |corr| measurably > 0 (field differs from the Earth baseline at the sweep extremes)."
       },
       "layer": "unit",
-      "live": false
-    },
-    {
-      "id": "AC4",
-      "statement": "D16 AGE SURFACED + CONSUMED: age is surfaced into the terrestrial/ocean presets (a real per-preset value or a documented derived proxy) and reaches driversToTune through the body-driver channel; a missing/neutral age maps to the Earth-anchored default (so AC2 byte-identity holds for an age-less body).",
-      "verifyVia": {
-        "input": "Inspect the preset -> D-vector derivation; build the field for two presets differing only in age; build the field for a preset with age omitted/neutral.",
-        "observable": "Terrestrial/ocean presets carry an age value (or documented proxy); the two age-differing presets produce different driversToTune output + different U; the age-omitted/neutral case produces the Earth-anchored default (byte-identical to the no-age-response baseline)."
-      },
-      "layer": "integration",
       "live": false
     },
     {
@@ -62,7 +52,7 @@
       "id": "AC6",
       "statement": "LIVE driver-response probe: in the running lab on an Earth-like preset, sweeping a driver visibly changes the baked plate relief in the calibrated direction, an A/B of two driver draws at the same seed shows two distinct worlds, and the Earth preset stays byte-identical to a captured baseline.",
       "verifyVia": {
-        "input": "Lab on :5173 (debug :9223), Rocky (Earthlike) preset, fix the seed, reliefBakeStrength(1), force a route; sweep gravity / volatiles / tidal-heating / age via the driver UI or a _lab driver override; call plateProbe(); capture A/B screenshots; then load the Earth reference preset and compare to baseline.",
+        "input": "Lab on :5173 (debug :9223), Rocky (Earthlike) preset, fix the seed, reliefBakeStrength(1), force a route; sweep gravity / volatiles / tidal-heating via the driver UI or a _lab driver override; call plateProbe(); capture A/B screenshots; then load the Earth reference preset and compare to baseline.",
         "observable": "heightSource=='carrier'; the probe shows the mapped parameter shifting in the calibrated direction as each driver is swept (plateCount / boundary-vs-latitude variance / continental area); the A/B at fixed seed reads as two visibly different worlds; the Earth reference preset's field matches the captured baseline."
       },
       "layer": "integration",
@@ -80,7 +70,7 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "the per-body D-vector derived from DRIVER_PRESETS raw descriptors: D14 massGravity (from massEarth + radiusEarth), D2 volatileFraction (composition.volatileFraction, present), D12 tidalHeating (from eccentricity + orbitRadiusEarth + mass via the lab's star-tidal R^5/a^5 model), D16 age (NEWLY surfaced into terrestrial/ocean presets)",
+      "the per-body D-vector derived from DRIVER_PRESETS raw descriptors: D14 massGravity (from massEarth + radiusEarth), D2 volatileFraction (composition.volatileFraction, present), D12 tidalHeating (from eccentricity + orbitRadiusEarth + mass via the lab's star-tidal R^5/a^5 model)",
       "plates.js DEFAULTS (the locked tunables) + the existing `tune` override seam (writePlateUpliftSphere(carrier, drivers, {macroSeed, tune}))",
       "a named D_earth constant (the Earth reference point the calibration anchors to; note Earth maps to NON-zero normalized drivers, so transfer fns must return DEFAULTS at the real Earth values, not at a 0-vector)",
       "macroSeed (integer); the lab's isEarthlikePlatePath gate (terrestrial/ocean, unlocked)"
@@ -102,19 +92,18 @@
   "filesTouched": [
     "EDIT src/worldengine/base/plates.js (add the D_earth constant + driversToTune(D) export + calibrated transfer functions; consume the drivers arg ONLY when producing a tune; remove the `void drivers` once consumed)",
     "EDIT planet-lod-rivers.js (thread a NEW bodyDrivers channel through route() ~1120 -> writeBodyRelief ~424 -> writePlateUpliftSphere ~428 as tune:driversToTune(bodyDrivers); keep grainDrivers separate)",
-    "EDIT planet-lod-lab.html (surface age D16 into terrestrial/ocean presets; derive + pass the real per-preset D-vector into route() for the plate path; driver-sweep UI or _lab driver override + plateProbe additions for AC6)",
+    "EDIT planet-lod-lab.html (derive + pass the real per-preset D-vector (gravity/volatiles/tidal) into route() for the plate path; driver-sweep UI + plateProbe additions for AC6)",
     "NEW tests/worldengine-base-plate-driver-response.test.js (AC1-AC5)",
     "DOC record-build-intent note + UAT-RUBRICS.md increment-2 card folded in as the AC7 framing"
   ],
   "mustFix": [
     "#1 (BLOCKER, calibration — the ROADMAP increment-2 must-fix): define D_earth as a NAMED CONSTANT and calibrate every transfer function so f(D_earth) = DEFAULTS exactly; driversToTune(D_earth) returns null/empty so the ternary takes the untouched branch (AC2). The transfer-function shapes + signs must cite settled planetary-science scaling and be recorded in the build note (the per-driver direction AC3 asserts). This is the build's first task, analogous to shell-relief SLICE-B.",
-    "Earth-point reality: Earth maps to NON-zero normalized drivers (the build-readiness caveat: tidalHeatNorm ~= 0.19, ageNorm ~= 0.45) — calibrate to the real Earth D-values, NOT a 0-vector, or AC2 fails.",
-    "D16 age surfacing: decide new per-preset `age` field (Gyr) vs a documented derived proxy; a missing/neutral age MUST map to the Earth-anchored default (AC4) so age-less bodies stay AC2-byte-identical.",
+    "Earth-point reality: Earth maps to NON-zero normalized drivers (the build-readiness caveat: tidalHeatNorm ~= 0.19) — calibrate to the real Earth D-values, NOT a 0-vector, or AC2 fails.",
     "Separate driver channel: add bodyDrivers (the D-vector) as a channel DISTINCT from grainDrivers (the grain-bake bundle) — do NOT repurpose grainDrivers (AC5 regression).",
     "Scope guard: do NOT change plates.js DEFAULTS values; do NOT touch the despun/shell path, the grain bake internals, or game Planet.js."
   ],
   "buildSlices": [
     "SLICE A (plumbing, math-light): add the bodyDrivers channel through route()->writeBodyRelief->writePlateUpliftSphere; define D_earth; stub driversToTune to return null (=> byte-identical everywhere). Covers AC2 (trivially, all-Earth), AC5 no-clobber, the AC1 determinism harness.",
-    "SLICE B (calibration): build the calibrated transfer functions for D14/D2/D12 + surface + map D16 age; anchor each to D_earth. Covers AC2 (real), AC3 monotone response, AC4 age, and the live AC6."
+    "SLICE B (calibration): build the calibrated transfer functions for D14/D2/D12; anchor each to D_earth. Covers AC2 (real), AC3 monotone response, and the live AC6. (D16 age was scoped then descoped at UAT — see summary.)"
   ]
 }

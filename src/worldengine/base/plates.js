@@ -79,14 +79,14 @@ export const U_BOUND = 4;
 // ── Increment 2 (plate driver-response): the Earth reference point + the driver→tune seam ──────
 // The MULTIPLY increment threads the body's formation drivers into the locked DEFAULTS so one
 // body-type becomes a continuum (heavy worlds flatter, volatile-rich worlds drown more continent,
-// tidally-heated worlds churn more plates, old worlds read their age). driversToTune(D) returns a
+// tidally-heated worlds churn more plates). driversToTune(D) returns a
 // `tune` override consumed by the EXISTING `tune ? { ...DEFAULTS, ...tune } : DEFAULTS` seam in
 // writePlateUpliftSphere — no new mechanism, only a calibrated re-tune of the placement.
 //
 // The calibration is ANCHORED to D_EARTH: driversToTune(D_EARTH) returns null, so Earth takes the
 // untouched DEFAULTS branch and stays byte-identical to the validated plate POC (AC2 — the
 // load-bearing identity guard). ⚠ Earth's drivers are NOT a zero vector (gravity 0.9 g, volatile
-// fraction ~0.15, ~4.5 Gyr, small-but-nonzero tidal heating) — so the SLICE-B transfer functions
+// fraction ~0.15, small-but-nonzero tidal heating) — so the SLICE-B transfer functions
 // must return DEFAULTS at THESE values, not at zero (the increment-2 #1 must-fix).
 //
 // EARTH_TIDAL_HEATING is DERIVED from the live lab Io-normalized star-tidal formula
@@ -106,8 +106,10 @@ export const D_EARTH = Object.freeze({
   massGravity: 0.9,                  // D14 — Rocky surface gravity in g (massEarth 0.9 / radiusEarth² 1.0)
   volatileFraction: 0.15,           // D2  — Earth-like silicate volatile budget (Rocky preset value)
   tidalHeating: EARTH_TIDAL_HEATING, // D12 — derived ≈0.00174 (negligible; bottom of the tidal axis)
-  age: 4.5,                          // D16 — Gyr
 });
+// NOTE: D16 age was DESCOPED from this increment (Max UAT 2026-06-28). A static age→continental-crust
+// nudge misrepresents age, which IS history/time — its real home is the epoch/host-editor model (#6,
+// on-patch temporal sequences) + weathering/erosion (#7). Age intentionally has NO effect here.
 
 // SLICE B calibration: map the body's D-vector to a `tune` override consumed by the existing
 // `tune ? { ...DEFAULTS, ...tune } : DEFAULTS` seam. The four transfer functions (form, sign, clamps)
@@ -116,22 +118,19 @@ export const D_EARTH = Object.freeze({
 //   gravity (D14)      → UPLIFT_GAIN + RIFT_GAIN, ×gFactor = clamp((g/g0)^-0.5, 0.4, 2.5)
 //                        g↑ → relief↓ (max relief ∝ 1/g: isostasy + crustal yield strength).
 //   volatiles (D2)     → CONTINENTAL_FRACTION, additive  vf↑ → continental↓ (volatiles drown crust).
-//   age (D16)          → CONTINENTAL_FRACTION, additive  age↑ → continental↑ (crust volume grows; a
-//                        deliberately small secondary nudge — NOT erosion, which is a later increment).
 //   tidalHeating (D12) → PLATE_COUNT_MIN  th↑ → plates↑ (more internal heat → thinner lithosphere →
 //                        more, smaller plates; Io is the high-heat exemplar).
 //
 // Each function is anchored so f(D_EARTH.value) maps to the EXACT default → at D_EARTH every override
 // field equals its DEFAULT → this returns `null` → Earth takes the untouched branch (AC2).
 // Pure function: same input ⇒ same output, no RNG, no clock reads (AC1). Missing/partial drivers are
-// filled from D_EARTH (so an age-less body gets ageTerm 0 → no age response — AC4's age-less guard).
+// filled from D_EARTH. (age is accepted-but-ignored — descoped, see the D_EARTH note above.)
 export function driversToTune(drivers) {
   if (drivers == null) return null;
 
   const g = (drivers.massGravity ?? D_EARTH.massGravity);
   const vf = (drivers.volatileFraction ?? D_EARTH.volatileFraction);
   const th = (drivers.tidalHeating ?? D_EARTH.tidalHeating);
-  const age = (drivers.age ?? D_EARTH.age);
 
   // 1. gravity → UPLIFT_GAIN, RIFT_GAIN (multiplicative; g/g0 = 1 ⇒ factor 1 ⇒ default).
   const g0 = D_EARTH.massGravity;
@@ -139,9 +138,8 @@ export function driversToTune(drivers) {
   const UPLIFT_GAIN = DEFAULTS.UPLIFT_GAIN * gFactor;
   const RIFT_GAIN = DEFAULTS.RIFT_GAIN * gFactor;
 
-  // 2+3. volatiles + age → CONTINENTAL_FRACTION (both additive; at vf0 & age0 the terms vanish ⇒ 0.5).
-  const ageTerm = 0.03 * (age - D_EARTH.age);
-  const CONTINENTAL_FRACTION = clamp(0.1, 0.9, 0.5 + 1.0 * (D_EARTH.volatileFraction - vf) + ageTerm);
+  // 2. volatiles → CONTINENTAL_FRACTION (additive; at vf0 the term vanishes ⇒ 0.5).
+  const CONTINENTAL_FRACTION = clamp(0.1, 0.9, 0.5 + 1.0 * (D_EARTH.volatileFraction - vf));
 
   // 4. tidalHeating → PLATE_COUNT_MIN (th0 = Earth's clamped value ⇒ factor 1 ⇒ default 7).
   const th0 = clamp01(D_EARTH.tidalHeating);

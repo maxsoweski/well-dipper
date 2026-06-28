@@ -19,13 +19,7 @@
       "id": "AC3",
       "result": "PASS",
       "layer": "unit",
-      "evidence": "DRIVER MONOTONICITY (calibrated direction). verify-workstream (3/3): vitest 14/14 with all four AC3 cases — gravity↑→max|U|↓ (∝1/g), volatiles↑→continental↓, tidal↑→plate count↑, age↑→continental↑ — monotone over SWEEP_SEEDS with measurable delta from the Earth baseline. Directions + rationale recorded in SLICE-B-calibration.md."
-    },
-    {
-      "id": "AC4",
-      "result": "PASS",
-      "layer": "integration",
-      "evidence": "D16 AGE SURFACED + CONSUMED. verify-workstream (3/3): age surfaced per-preset (Rocky 4.5, Ocean 3.0, Mars 4.5); full trace presetDriverDefaults→buildBodyDrivers→route() bodyDrivers channel→writeBodyRelief→writePlateUpliftSphere(...,tune:driversToTune); age read via `drivers.age ?? D_EARTH.age`, ageTerm=0.03*(age-4.5). age=1→CF 0.395 vs age=10→0.665; age-omitted Earth body→null tune→byte-identical. vitest 14/14 incl. four AC4 age tests."
+      "evidence": "DRIVER MONOTONICITY (calibrated direction). verify-workstream (3/3): vitest with the three AC3 cases — gravity↑→max|U|↓ (∝1/g), volatiles↑→continental↓, tidal↑→plate count↑ — monotone over SWEEP_SEEDS with measurable delta from the Earth baseline. Directions + rationale recorded in SLICE-B-calibration.md. (A 4th case, age↑→continental↑, was verified then REMOVED when age was descoped — see top note.)"
     },
     {
       "id": "AC5",
@@ -44,9 +38,9 @@
       "id": "AC7",
       "result": "deferred-to-max",
       "layer": "uat",
-      "evidence": "HOLISTIC UAT — Max-only; never PASSed by any agent. Lab surface ready: 'Body drivers → plate relief (Inc.2)' folder (gravity 0.1-3.0, volatiles 0-0.6, tidal heat 0-1, age 0-10 Gyr) + 'Relief A/B: preset drivers ↔ overrides' button + plateProbe(). CAVEAT for Max: only Rocky + Ocean are on the plate path — Mars routes despun (no PRESET_ARCHETYPE entry) so its sliders are inert. Sliders are opt-in (apply once dragged) and reset on preset change; the A/B button is the in-place reset."
+      "evidence": "HOLISTIC UAT — Max-only; never PASSed by any agent. Lab surface ready: 'Body drivers → plate relief (Inc.2)' folder (gravity 0.1-3.0, volatiles 0-0.6, tidal heat 0-1) + 'Relief A/B: preset drivers ↔ overrides' button + plateProbe(). CAVEAT for Max: only Rocky + Ocean are on the plate path — Mars routes despun (no PRESET_ARCHETYPE entry) so its sliders are inert. Sliders are opt-in (apply once dragged) and reset on preset change; the A/B button is the in-place reset."
     }
   ],
-  "overall": "VERIFIED_PENDING_MAX 143da55 — unit (AC1-AC3) + integration (AC4-AC6) all PASS; AC6 live-driven green by working-Claude after verify-workstream deferred it. UAT (AC7) deferred to Max: drag the driver sliders on Rocky/Ocean and judge whether driver variants read as genuinely different, physically-sensible worlds while Earth (default) is unchanged.",
-  "summaryForMax": "Increment 2 (plate driver-response) at 143da55. Objective verification COMPLETE: headless AC1-AC5 PASS (verify-workstream, 3/3 adversarial each; vitest 14/14 + no-clobber harness 25/25), and AC6 live-verified green by me on :5173 (Earth anchor null, calibrated response via preset + slider, A/B flip, visibly-distinct gravity A/B screenshots). Ready for your UAT: open the 'Body drivers → plate relief (Inc.2)' sliders on Rocky (or Ocean), zoom in + pixelScale→1, sweep gravity/volatiles/tidal/age, use the A/B button to flip back to the preset (Earth) and confirm it's unchanged. Mars sliders are inert (despun path). Push HOLD."
+  "overall": "VERIFIED_PENDING_MAX (143da55 + age-descope follow-up) — unit (AC1-AC3) + integration (AC5-AC6) all PASS; AC6 live-driven green by working-Claude. Max UAT-passed the driver-response on Rocky/Ocean (2026-06-28); then D16 age was DESCOPED at his direction (age IS history → static nudge misrepresents it; real home = epoch model #6 + weathering #7). Age-drop re-verified: scoped vitest green, lab live shows 3 sliders (gravity/volatiles/tidal), Rocky default appliedTune=null (Earth byte-identical), gravity still responds. Remaining gate: final Max 'ship it' (the 3 surviving drivers were already UAT-passed unchanged).",
+  "summaryForMax": "Increment 2 (plate driver-response). You UAT-passed the driver-response on Rocky/Ocean, then we DESCOPED age (it's history, not a static knob — it belongs to the epoch model #6 + weathering #7). Final state: 3 drivers (gravity → flatter, volatiles → more ocean, tidal → more plates), Earth byte-identical, re-verified headless + live. Mars sliders inert (despun path). Awaiting your 'ship it' to flip to Shipped. Push HOLD."
 }

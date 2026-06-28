@@ -9,9 +9,8 @@
 //   AC3  MONOTONE, CORRECT-SIGN driver response (SLICE B; replaces the SLICE-A transient invariant) —
 //        each driver, swept with the others held at D_EARTH, moves its mapped plate parameter
 //        monotonically in its documented physical direction, and off-Earth differs from the baseline.
-//   AC4  D16 AGE SURFACED + CONSUMED (SLICE B, driversToTune side) — age ≠ 4.5 changes the override;
-//        age omitted or === 4.5 yields no age contribution (CONTINENTAL_FRACTION = the volatile-only
-//        value). The preset→D-vector surfacing integration is the lab-wiring sibling's coverage.
+//   (D16 age was DESCOPED — Max UAT 2026-06-28. driversToTune accepts but IGNORES age; its real home
+//   is the epoch model (#6) + weathering (#7). A guard block below asserts age has no effect.)
 //   AC5  NO-CLOBBER (durable across slices) — threading bodyDrivers through writeBodyRelief leaves
 //        the shell + despun relief paths byte-identical (bodyDrivers only ever affects the plate path).
 //
@@ -19,7 +18,6 @@
 import { describe, it, expect } from 'vitest';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { writePlateUpliftSphere, driversToTune, D_EARTH, DEFAULTS, U_BOUND } from '../src/worldengine/base/plates.js';
-import { clamp } from '../src/worldengine/base/mathutil.js';
 import { writeBodyRelief, buildIrregularSphere } from '../planet-lod-rivers.js';
 
 const SHARED_MESH = buildIrregularSphere(800, 2);
@@ -52,7 +50,6 @@ const meanBase = (diag) => { let s = 0; for (const v of diag.baseElevField) s +=
 const avgOver = (D, fn) => SWEEP_SEEDS.reduce((s, seed) => s + fn(buildField(D, seed)), 0) / SWEEP_SEEDS.length;
 // strictly increasing / decreasing across a numeric series
 const strictlyDown = (xs) => xs.every((x, i) => i === 0 || x < xs[i - 1]);
-const strictlyUp = (xs) => xs.every((x, i) => i === 0 || x > xs[i - 1]);
 const nonDecreasing = (xs) => xs.every((x, i) => i === 0 || x >= xs[i - 1]);
 
 describe('AC1 — determinism, purity, bounded', () => {
@@ -127,46 +124,21 @@ describe('AC3 — monotone, correct-sign per-driver response (each swept with ot
     expect(nonDecreasing(counts)).toBe(true);                    // discrete count: monotone non-decreasing
     expect(counts[counts.length - 1]).toBeGreaterThan(counts[0]); // calm vs tidally-hot are different worlds
   });
-
-  it('age ↑ → continental fraction UP (continental crust volume grows over geologic time)', () => {
-    const ages = [1, 4.5, 7, 10];
-    const cont = ages.map((age) => avgOver({ ...D_EARTH, age }, meanBase));
-    expect(strictlyUp(cont)).toBe(true);
-    expect(Math.abs(cont[0] - cont[3])).toBeGreaterThan(0.02);   // young vs old are different worlds (small nudge)
-  });
 });
 
-describe('AC4 — D16 age surfaced + consumed (driversToTune side; age-less guard)', () => {
-  // expected CONTINENTAL_FRACTION from the documented additive form (vf + age terms anchored at D_EARTH)
-  const expectedCF = (vf, age) =>
-    clamp(0.1, 0.9, 0.5 + 1.0 * (D_EARTH.volatileFraction - vf) + 0.03 * (age - D_EARTH.age));
-
-  it('age ≠ 4.5 changes the override (a younger and an older Earth differ in CONTINENTAL_FRACTION)', () => {
-    const young = driversToTune({ ...D_EARTH, age: 1.0 });
-    const old = driversToTune({ ...D_EARTH, age: 10.0 });
-    expect(young).not.toBeNull();
-    expect(old).not.toBeNull();
-    expect(young.CONTINENTAL_FRACTION).toBeLessThan(DEFAULTS.CONTINENTAL_FRACTION);
-    expect(old.CONTINENTAL_FRACTION).toBeGreaterThan(DEFAULTS.CONTINENTAL_FRACTION);
-    expect(young.CONTINENTAL_FRACTION).not.toBe(old.CONTINENTAL_FRACTION);
+describe('age DESCOPED (Inc.2, Max UAT 2026-06-28) — accepted but IGNORED, no effect on the tune', () => {
+  it('changing age alone does NOT change driversToTune output (a younger and an older Earth-like are identical)', () => {
+    const young = driversToTune({ ...D_EARTH, volatileFraction: 0.3, age: 1.0 });
+    const old = driversToTune({ ...D_EARTH, volatileFraction: 0.3, age: 10.0 });
+    expect(young).toEqual(old);
   });
-
-  it('age contributes additively on top of the volatile term (matches the documented form)', () => {
-    const tune = driversToTune({ ...D_EARTH, volatileFraction: 0.3, age: 8.0 });
-    expect(tune.CONTINENTAL_FRACTION).toBeCloseTo(expectedCF(0.3, 8.0), 12);
-  });
-
-  it('age omitted → no age contribution (CONTINENTAL_FRACTION = the volatile-only value)', () => {
-    // a body with off-Earth volatiles but NO age field: the age term must be 0 (age defaults to D_EARTH.age)
+  it('an age-less body equals an age-bearing body (age field is never read)', () => {
     const ageless = driversToTune({ massGravity: D_EARTH.massGravity, volatileFraction: 0.3, tidalHeating: D_EARTH.tidalHeating });
-    const withEarthAge = driversToTune({ ...D_EARTH, volatileFraction: 0.3 });   // age explicitly = 4.5
-    expect(ageless.CONTINENTAL_FRACTION).toBe(withEarthAge.CONTINENTAL_FRACTION);
-    expect(ageless.CONTINENTAL_FRACTION).toBeCloseTo(expectedCF(0.3, D_EARTH.age), 12);
+    const aged = driversToTune({ massGravity: D_EARTH.massGravity, volatileFraction: 0.3, tidalHeating: D_EARTH.tidalHeating, age: 7.0 });
+    expect(ageless).toEqual(aged);
   });
-
-  it('age === 4.5 (the Earth anchor) on an otherwise-Earth body yields no override (null) — AC2 age-less guard', () => {
-    expect(driversToTune({ ...D_EARTH, age: 4.5 })).toBeNull();
-    // and an Earth body with age entirely omitted is likewise byte-identical (null)
-    expect(driversToTune({ massGravity: D_EARTH.massGravity, volatileFraction: D_EARTH.volatileFraction, tidalHeating: D_EARTH.tidalHeating })).toBeNull();
+  it('CONTINENTAL_FRACTION is now purely volatile-driven (no age term)', () => {
+    const tune = driversToTune({ ...D_EARTH, volatileFraction: 0.3 });
+    expect(tune.CONTINENTAL_FRACTION).toBeCloseTo(0.5 + 1.0 * (D_EARTH.volatileFraction - 0.3), 12);
   });
 });
