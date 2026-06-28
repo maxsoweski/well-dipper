@@ -48,6 +48,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
 import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
+import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -529,6 +530,7 @@ const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time alig
 const ALIGN_TAU = 0.16;                        // s — Mode-B ease time constant
 const ALIGN_MAX_S = 1.5;                        // s — Mode-B align safety cap
 const _scBodies = [];             // per-tick gravity-well body list (reused)
+let _massLockHintFrames = 0;      // >0 → HUD shows "TOO CLOSE" after a mass-locked reengage; counts down in simStep
 // Current virtual-joystick deflection (deadzone-shaped, -1..1 each). Written
 // by the canvas mousemove handler while _scManual && !scHead.held; consumed by
 // the supercruise HUD reticle (Task 11). Frozen while freelook is held.
@@ -7782,10 +7784,12 @@ function simStep(deltaTime) {
       _scBodies.length = 0;
       if (system) {
         if (system.star?.mesh) {
-          _scBodies.push({ position: system.star.mesh.position, radius: system.star.data.radius });
+          _scBodies.push({ position: system.star.mesh.position, radius: system.star.data.radius,
+                           massKg: starMassKgFromSceneRadius(system.star.data.radius) });
         }
         if (system.star2?.mesh) {
-          _scBodies.push({ position: system.star2.mesh.position, radius: system.star2.data.radius });
+          _scBodies.push({ position: system.star2.mesh.position, radius: system.star2.data.radius,
+                           massKg: starMassKgFromSceneRadius(system.star2.data.radius) });
         }
         for (const entry of system.planets || []) {
           if (entry?.planet?.mesh) {
@@ -7799,6 +7803,18 @@ function simStep(deltaTime) {
         }
       }
       scModel.setBodies(_scBodies);
+
+      // Forced proximity drop-out (spec §Unit 5): in hands-on flight, if the drive
+      // is ON and we've crossed a body's forced-drop horizon (mass-based for stars,
+      // 1.1R floor otherwise), kick to sublight. The hard barrier (model) is the
+      // backstop; this is the supercruise-side safety + the "stars push you out far".
+      if (_scManual && scModel.driveOn && scModel.proximityDropRequired()) {
+        scModel.setDrive(false);
+        scModel.setThrottle(0);
+        shipChoreographer.dropImpulse();
+        console.log('[MODE] forced proximity drop — too close to a body');
+      }
+      if (_massLockHintFrames > 0) _massLockHintFrames--;
 
       const scFrame = scControls.step(deltaTime);
       // Mode B: ease the nose ONCE to face the selected body, then release. A
@@ -8077,7 +8093,7 @@ function simStep(deltaTime) {
       // S ramps it down, both held-key stepping at SC_TUNING.THROTTLE_RATE
       // (units/s). The supercruise mover owns motion in this mode, so the
       // legacy free-flight WASD path below must NOT also run (it would fight
-      // the model). setThrottle clamps to 0..1 internally.
+      // the model). setThrottle clamps to -1..1 internally (S past 0 = reverse, honored at sublight).
       const dir = (_heldKeys.has('KeyW') ? 1 : 0) - (_heldKeys.has('KeyS') ? 1 : 0);
       if (manualCancelsLeg(_flightMode, scPilot.isActive)) {
         // Mode C / #1 takeover: W/S disengages the hold AND cancels a player-
@@ -8502,7 +8518,12 @@ function renderFrame(alpha) {
   scHud.update({
     visible: _hudVisible && (_scManual || scPilot.isActive) && !warpEffect.isActive,
     speed: scModel.speed,
-    commandedSpeed: scModel.throttle * scModel.speedCap(),
+    commandedSpeed: scModel.driveOn
+      ? scModel.throttle * scModel.speedCap()
+      : scModel.throttle * SC_TUNING.SUBLIGHT_CAP,
+    driveOn: scModel.driveOn,
+    sublightCap: SC_TUNING.SUBLIGHT_CAP,
+    massLockHint: _massLockHintFrames > 0,
     throttle: scModel.throttle,
     deflection: _scDeflection,
     targetPos: _scTargetPos,
@@ -9133,12 +9154,20 @@ window.addEventListener('keydown', (e) => {
     if (action === 'engage') {
       scControls.engage();          // enter In-Flight at the Settings-selected type
       scModel.setDrive(true);       // ensure the drive is propelling
+      scModel.setThrottle(0);       // start from rest; W/S take over
       shipChoreographer.enterImpulse();
     } else if (action === 'dropout') {
-      scModel.setDrive(false);      // drop to rest at zero velocity, pose unchanged
+      scModel.setDrive(false);      // drop to sublight; reset throttle so we SETTLE TO REST first
+      scModel.setThrottle(0);
       shipChoreographer.dropImpulse();
     } else { // 'reengage'
+      if (scModel.proximityDropRequired()) {  // mass-lock: too close to (re)engage supercruise
+        _massLockHintFrames = 90;             // ~1.5s "TOO CLOSE" hint
+        console.log('[MODE] reengage blocked — mass-locked (too close to a body)');
+        return;
+      }
       scModel.setDrive(true);       // re-engage; anti-clip via speedCap
+      scModel.setThrottle(0);
       shipChoreographer.enterImpulse();
     }
     console.log(`[MODE] supercruise ${action} — drive ${scModel.driveOn ? 'ON' : 'OFF'} (In-Flight=${_scManual})`);

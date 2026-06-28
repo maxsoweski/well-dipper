@@ -4,7 +4,7 @@
 // reticle, target marker + drop window. Pure view — main.js passes state each
 // render frame. Pattern: src/ui/TargetingReticle.js (own canvas, _project).
 import * as THREE from 'three';
-import { formatSpeed, speedToBarFrac } from './SpeedFormat.js';
+import { formatSpeed, speedToBarFrac, sublightBarFrac } from './SpeedFormat.js';
 
 // The CONTEXTUAL ETA gate (§targeting-brackets-contextual-eta-design-2026-06-28,
 // Unit 3). The glanceable "M:SS" counter shows ONLY when the player is moving, the
@@ -82,6 +82,15 @@ export class SupercruiseHud {
     c.font = '22px monospace';
     c.fillText(`${spdPrefix}${spd.value} ${spd.unit}`, lx, innerHeight - 66);
 
+    // SUBLIGHT mode tag — shown whenever the supercruise drive is dropped out, so
+    // the player knows they left supercruise (distinct axis from the flight-assist
+    // MODE: readout up top). Amber to match the reverse tone.
+    if (state.driveOn === false) {
+      c.fillStyle = '#ffb84d';
+      c.font = '12px monospace';
+      c.fillText('SUBLIGHT', lx, innerHeight - 84);
+    }
+
     // Speed-band color: blue-green in the safe drop window, red when too fast,
     // else cyan. "Safe" is dropState in-window OR (target set and speed under
     // the drop ceiling) — reproduces Elite's sweet-spot band from real physics.
@@ -95,8 +104,20 @@ export class SupercruiseHud {
     const sbY = innerHeight - 52, sbH = 8;
     c.strokeStyle = '#9fe8ff';
     c.strokeRect(lx, sbY, barW, sbH);
-    c.fillStyle = speedColor;
-    c.fillRect(lx, sbY, barW * speedToBarFrac(Math.abs(speed)), sbH);
+    if (state.driveOn === false) {
+      // SUBLIGHT: linear bipolar bar — center zero, right = forward, left (amber) = reverse.
+      const cxBar = lx + barW / 2;
+      const frac = sublightBarFrac(speed, state.sublightCap || 1);
+      c.strokeStyle = '#9fe8ff';
+      c.beginPath(); c.moveTo(cxBar, sbY - 2); c.lineTo(cxBar, sbY + sbH + 2); c.stroke();
+      const w = (barW / 2) * Math.abs(frac);
+      c.fillStyle = frac < 0 ? '#ffb84d' : speedColor;
+      if (frac >= 0) c.fillRect(cxBar, sbY, w, sbH);
+      else c.fillRect(cxBar - w, sbY, w, sbH);
+    } else {
+      c.fillStyle = speedColor;
+      c.fillRect(lx, sbY, barW * speedToBarFrac(Math.abs(speed)), sbH);
+    }
 
     // commanded "pin" (downward triangle above the bar) — actual chases this.
     const pinX = lx + barW * speedToBarFrac(commandedSpeed);
@@ -204,6 +225,16 @@ export class SupercruiseHud {
       c.font = '14px monospace';
       c.textAlign = 'center';
       c.fillText(`MODE: ${state.flightMode.toUpperCase()}`, cx, 28);
+      c.textAlign = 'left';
+    }
+
+    // Mass-lock hint: a brief "TOO CLOSE" when the player tried to re-engage
+    // supercruise inside a body's forced-drop zone (spec §Unit 5).
+    if (state.massLockHint) {
+      c.fillStyle = '#ff7b6b';
+      c.font = '14px monospace';
+      c.textAlign = 'center';
+      c.fillText('TOO CLOSE — SUBLIGHT ONLY', innerWidth / 2, innerHeight / 2 + 48);
       c.textAlign = 'left';
     }
   }
