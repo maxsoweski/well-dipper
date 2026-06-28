@@ -72,7 +72,7 @@ describe('SupercruiseModel — sublight (drive OFF) propulsion', () => {
     m.setDrive(false);
     m.speed = SC_TUNING.SUBLIGHT_CAP; // moving
     m.setThrottle(0);
-    stepN(m, 300);
+    stepN(m, 400); // model's |speed|<1e-9 snap-to-zero engages ~step 349; 400 gives margin
     expect(m.speed).toBeCloseTo(0, 9);
   });
 
@@ -146,6 +146,7 @@ Expected: PASS (4 tests).
 
 In `src/flight/__tests__/SupercruiseModel.drop.test.js`:
 - Line 46: `SC_TUNING.DROP_TAU` → `SC_TUNING.SUBLIGHT_TAU`.
+- In the existing test "drop-out settles to REST fast…" (~line 33), add `m.setThrottle(0);` immediately after `m.setDrive(false);`, and change its inline `DROP_TAU` comment to `SUBLIGHT_TAU`. **Why:** drive-OFF now exp-approaches `throttle × cap`; the real dropout path (E-key) resets throttle to 0, so the test must too. With throttle 0 the target is 0 and the one-frame pure-decay assertion (`< v*exp(-DT/SUBLIGHT_TAU)+1e-9`) holds exactly. Without it, the new branch adds `+SUBLIGHT_CAP·k ≈ +8e-5`, busting the `+1e-9` slack.
 - Replace the test at lines 75-86 ("drop-out ignores the throttle target") — it asserted the opposite of the new design. New version:
 
 ```javascript
@@ -156,7 +157,7 @@ In `src/flight/__tests__/SupercruiseModel.drop.test.js`:
     stepN(m, 60);
     const v = m.speed;                 // cruising fast
     m.setDrive(false);                 // dropped out, throttle LEFT at 1
-    stepN(m, 300);                     // ~5s
+    stepN(m, 600);                     // ~10s — bridges ~7 decades from cruise down to the tiny cap at SUBLIGHT_TAU=0.4
     // It sheds the huge cruise speed and lands on the tiny sublight cap — NOT 0,
     // NOT the supercruise cap. (In practice the E-key zeroes throttle on dropout.)
     expect(m.speed).toBeLessThan(v);
@@ -167,7 +168,7 @@ In `src/flight/__tests__/SupercruiseModel.drop.test.js`:
 - [ ] **Step 7: Run the full drop suite to confirm no regressions**
 
 Run: `npx vitest run src/flight/__tests__/SupercruiseModel.drop.test.js`
-Expected: PASS. (The decay-to-rest tests at lines 33/49/157 still pass: with throttle high but `SUBLIGHT_CAP`≈0, exp-approach-to-≈0 equals the old decay numerically. The near-body tests 88/100 still pass: they assert `speed ≤ cap`, and 0 ≤ cap. Test 134 is handled in Task 3.)
+Expected: PASS. (Tests 49/157 still pass: ratio-based over many steps, and `SUBLIGHT_CAP`≈0 vs cruise. Test 33 is a one-frame check with `+1e-9` slack — it needs the throttle-0 reset added above, because the new branch adds `+SUBLIGHT_CAP·k` when throttle≠0. The near-body tests 88/100 still pass: they assert `speed ≤ cap`, and 0 ≤ cap. Test 134 is handled in Task 3.)
 
 - [ ] **Step 8: Commit**
 
