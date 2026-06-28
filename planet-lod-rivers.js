@@ -27,7 +27,7 @@ import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './pl
 // the grain bake uses (makeSphereField). RELIEF_CUBE_SIZE = 256 (same class as GRAIN_CUBE_SIZE).
 import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './planet-lod-tectonic.js';
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
-import { writePlateUpliftSphere } from './src/worldengine/base/plates.js';
+import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
 import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
@@ -422,10 +422,14 @@ export function isShellReliefPath(archetype, locked = false) {
 }
 
 export function writeBodyRelief(carrier, {
-  archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, heightSeed = 'e6:0',
+  archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0',
 } = {}) {
   if (isEarthlikePlatePath(archetype, locked)) {
-    const plateDiag = writePlateUpliftSphere(carrier, grainDrivers, { macroSeed });
+    // Increment 2 (plate driver-response): the body's D-vector (bodyDrivers — a SEPARATE channel from
+    // the grain-bake grainDrivers bundle) is mapped to a `tune` override via driversToTune(). SLICE A
+    // stub ⇒ null ⇒ the DEFAULTS branch ⇒ byte-identical to the validated POC (AC2). SLICE B fills the
+    // calibration. bodyDrivers stays null off the lab driver-response path (every existing caller).
+    const plateDiag = writePlateUpliftSphere(carrier, bodyDrivers, { macroSeed, tune: driversToTune(bodyDrivers) });
     return { path: 'plate', plateDiag, shellDiag: null };
   }
   const regime = shellRegimeOf(archetype, locked);    // icy-active | volatile-cold | eyeball-despun | null
@@ -1118,7 +1122,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   }
 
   function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, widthSeed = null,
-                   grainDrivers = DEFAULT_GRAIN_DRIVERS, macroSeed = 0, archetype = null, locked = false, label = 'route' } = {}) {
+                   grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, archetype = null, locked = false, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
     // ── Baked-relief Phase B/D: build the sphere-native E6 height field as DATA. The SAME carrier is
@@ -1139,7 +1143,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // (carrier.height = U, the SOLE low/mid source — REPLACES the latitude-band E6 writer); every
     // other regime keeps the despun writeGrainSphere+writeHeightSphere byte-identical. The plate
     // diagnostics (partition / boundary class / U) are retained for the live plateProbe (AC7).
-    const relief = writeBodyRelief(carrier, { archetype, locked, grainDrivers, macroSeed, heightSeed });
+    const relief = writeBodyRelief(carrier, { archetype, locked, grainDrivers, bodyDrivers, macroSeed, heightSeed });
     plateDiag = relief.plateDiag;                       // null off the plate path
     shellDiag = relief.shellDiag;                       // null off the shell path
     const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)

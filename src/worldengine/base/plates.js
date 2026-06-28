@@ -76,6 +76,35 @@ export const RELAX_PASSES = DEFAULTS.RELAX_PASSES;
 // generous (the AC1 bounded-ness gate asserts |U| < this).
 export const U_BOUND = 4;
 
+// ── Increment 2 (plate driver-response): the Earth reference point + the driver→tune seam ──────
+// The MULTIPLY increment threads the body's formation drivers into the locked DEFAULTS so one
+// body-type becomes a continuum (heavy worlds flatter, volatile-rich worlds drown more continent,
+// tidally-heated worlds churn more plates, old worlds read their age). driversToTune(D) returns a
+// `tune` override consumed by the EXISTING `tune ? { ...DEFAULTS, ...tune } : DEFAULTS` seam in
+// writePlateUpliftSphere — no new mechanism, only a calibrated re-tune of the placement.
+//
+// The calibration is ANCHORED to D_EARTH: driversToTune(D_EARTH) returns null, so Earth takes the
+// untouched DEFAULTS branch and stays byte-identical to the validated plate POC (AC2 — the
+// load-bearing identity guard). ⚠ Earth's drivers are NOT a zero vector (gravity 1 g, volatile
+// fraction ~0.15, ~4.5 Gyr, small-but-nonzero tidal heating) — so the SLICE-B transfer functions
+// must return DEFAULTS at THESE values, not at zero (the increment-2 #1 must-fix).
+export const D_EARTH = Object.freeze({
+  massGravity: 1.0,        // D14 — Earth surface gravity in g (massEarth / radiusEarth^2)
+  volatileFraction: 0.15,  // D2  — Earth-like silicate volatile budget (Rocky preset value)
+  tidalHeating: 0.0,       // D12 — negligible for Earth (SLICE B pins the normalized Earth value ~0.19)
+  age: 4.5,                // D16 — Gyr
+});
+
+// SLICE A stub: returns null for EVERY input, so the tune seam is wired end-to-end and proven
+// byte-identical (driversToTune(D) → null → the DEFAULTS branch) before any calibration lands.
+// SLICE B replaces this body with the calibrated transfer functions for massGravity → UPLIFT_GAIN,
+// volatileFraction → CONTINENTAL_FRACTION, tidalHeating → PLATE_COUNT, age → (calibrated) — each
+// anchored so D_EARTH still maps to null. Pure function — no Math.random, no Date-now calls — AC1.
+export function driversToTune(drivers) {
+  void drivers;            // SLICE A: not consumed yet — null tune ⇒ DEFAULTS ⇒ byte-identical
+  return null;
+}
+
 // ── tiny vec3 helpers on plain [x,y,z] arrays (three-free) ─────────────────────────────────────
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
