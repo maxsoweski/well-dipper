@@ -624,7 +624,21 @@ liquid-water bundle completing the wet/frozen/airless trio vs europa, lava).
   `dev-collab-scope` the L1 layer (wiring engines into the real renderers + type-demotion refactor,
   high blast radius). Lab left clean on `terrestrial`.
 
-### Supercruise / in-system flight — UAT-PASSED, accepted (deploy deferred)
+### Supercruise / in-system flight — SHIPPED TO MASTER 2026-06-28 (incl. sublight + 2 UAT fixes)
+
+> **▶ SHIPPED TO MASTER + DEPLOYED (2026-06-28).** The whole supercruise/free-look/arrival-modes
+> arc (149 commits) merged & deployed to GitHub Pages — master `09db316`. Same arc added **sublight
+> propulsion** (drive-OFF throttle → forward/stop/reverse at SUBLIGHT_CAP), a **hard collision
+> barrier** (never fly through a body), and **mass-based forced-drop/mass-lock** near stars. Then
+> **two post-ship UAT fixes pushed `15d7189`** (code `f455f39` + Rule-3 docs): **(A)** in HELM
+> hands-on the cursor is hidden and the mouse IS the flight stick, so **left-click now selects the
+> body under the center reticle** — planets/moons selectable, not just background stars; **(B)**
+> forced-drop/mass-lock is **direction-aware** — engage + fly off when pointed AWAY from a star, a
+> head-on approach still drops you (capture). Both live-verified via chrome-devtools (reticle-on-
+> Mercury click → Mercury selected; sim-loop nose-toward force-drops / nose-away stays engaged);
+> **259 unit tests green, build clean.** Spec `docs/superpowers/specs/2026-06-28-uat-fixes-select-masslock-design.md`.
+> The "deploy deferred" status below is SUPERSEDED. Handoff resolved (both issues closed):
+> `/tmp/well-dipper-supercruise-uat-fixes-handoff-2026-06-28.md`.
 
 **`supercruise-freelook-2026-06-10`** — **ALL 13 tasks + control harness BUILT,
 live-verified, and UAT-PASSED by Max** (live ride 2026-06-27: "it's good to ship").
