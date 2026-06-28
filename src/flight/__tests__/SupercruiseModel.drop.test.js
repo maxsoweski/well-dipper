@@ -138,13 +138,13 @@ describe('SupercruiseModel — minimum-cruise floor (drive ON)', () => {
     // Small body so its cap near the surface is below the cruise floor.
     const body = { position: new THREE.Vector3(0, 0, 0), radius: 1e-3 };
     m.setBodies([body]);
-    m.position.set(body.radius * 1.5, 0, 0);                 // hugging the surface, on +x
+    m.position.set(body.radius * 3, 0, 0);                  // start well outside the 1.05R barrier
     m.orientation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2); // nose toward -x (the body)
     const cap0 = m.speedCap();
-    expect(cap0).toBeLessThan(SC_TUNING.MIN_CRUISE);          // precondition: well cap is below the floor here
+    expect(cap0).toBeLessThan(SC_TUNING.MIN_CRUISE);
     m.setDrive(true);
     m.setThrottle(0);
-    stepN(m, 600);
+    stepN(m, 60);                                           // settle on the cap, BEFORE reaching the barrier
     // Floor yields to the cap: throttle-0 target = clamp(0, min(MIN_CRUISE,cap), cap) = cap. The ship
     // tracks the LIVE well cap, which stays BELOW MIN_CRUISE near the body → it never reaches the cruise
     // floor, so capture (slowing below the floor) survives. (Speed lags the per-frame-changing cap by one

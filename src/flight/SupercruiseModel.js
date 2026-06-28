@@ -49,6 +49,7 @@ export class SupercruiseModel {
     this._nose = new THREE.Vector3();
     this._euler = new THREE.Euler();
     this._q = new THREE.Quaternion();
+    this._scratch = new THREE.Vector3();     // collision-barrier projection scratch
   }
 
   /** Bodies used for the gravity-well speed cap. Caller refreshes per tick
@@ -141,5 +142,24 @@ export class SupercruiseModel {
     if (Math.abs(this.speed) < 1e-9) this.speed = 0;
     // The ONLY translation source: forward along the nose.
     this.position.addScaledVector(this.nose(), this.speed * dt);
+    // Hard surface barrier (both regimes): never penetrate a body. If the step
+    // landed inside COLLISION_FACTOR×radius, project back onto that barrier sphere
+    // and stop. Bodies don't overlap, so at most one fires per tick. The clamp only
+    // triggers on inward crossings — turning away leaves the new position outside,
+    // so you can always fly off the surface.
+    const cf = this.tuning.COLLISION_FACTOR;
+    for (const b of this._bodies) {
+      const barrier = cf * b.radius;
+      const d = this.position.distanceTo(b.position);
+      if (d < barrier) {
+        if (d > 1e-9) {
+          this._scratch.copy(this.position).sub(b.position).multiplyScalar(1 / d); // outward unit dir
+        } else {
+          this.nose(this._scratch);            // degenerate (at center): shove out along the nose
+        }
+        this.position.copy(b.position).addScaledVector(this._scratch, barrier);
+        this.speed = 0;
+      }
+    }
   }
 }
