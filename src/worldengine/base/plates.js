@@ -38,7 +38,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import alea from 'alea';
 import { createNoise3D } from 'simplex-noise';
-import { clamp, mix } from './mathutil.js';
+import { clamp, clamp01, mix } from './mathutil.js';
 
 // Boundary classification labels (also the values returned in the `boundaryClass` diagnostic array).
 export const BOUNDARY = Object.freeze({ INTERIOR: 0, CONVERGENT: 1, DIVERGENT: 2, TRANSFORM: 3 });
@@ -85,24 +85,83 @@ export const U_BOUND = 4;
 //
 // The calibration is ANCHORED to D_EARTH: driversToTune(D_EARTH) returns null, so Earth takes the
 // untouched DEFAULTS branch and stays byte-identical to the validated plate POC (AC2 — the
-// load-bearing identity guard). ⚠ Earth's drivers are NOT a zero vector (gravity 1 g, volatile
+// load-bearing identity guard). ⚠ Earth's drivers are NOT a zero vector (gravity 0.9 g, volatile
 // fraction ~0.15, ~4.5 Gyr, small-but-nonzero tidal heating) — so the SLICE-B transfer functions
 // must return DEFAULTS at THESE values, not at zero (the increment-2 #1 must-fix).
+//
+// EARTH_TIDAL_HEATING is DERIVED from the live lab Io-normalized star-tidal formula
+// (planet-lod-lab-core.js §2) for the Rocky preset (ecc 0.017, starMassEarth 332946, radiusEarth 1,
+// orbitRadiusEarth 23455) rather than hand-typed, so the anchor tracks the lab's actual Earth point
+// exactly. It evaluates to ≈0.00174 (Earth sits at the bottom of the tidal axis, as expected).
+const EARTH_ECC = 0.017;
+const EARTH_STAR_MASS_EARTH = 332946;     // 1 M_sun in Earth masses
+const EARTH_ORBIT_RADIUS_EARTH = 23455;   // 1 AU in Earth radii
+const EARTH_RADIUS_EARTH = 1.0;
+const IO_TIDAL_REF = (0.0041 * 0.0041) * (317.8 * 317.8) * Math.pow(0.286, 5) / Math.pow(66, 5);
+const EARTH_TIDAL_HEATING =
+  (EARTH_ECC * EARTH_ECC * EARTH_STAR_MASS_EARTH * EARTH_STAR_MASS_EARTH
+    * Math.pow(EARTH_RADIUS_EARTH, 5) / Math.pow(EARTH_ORBIT_RADIUS_EARTH, 5)) / IO_TIDAL_REF;
+
 export const D_EARTH = Object.freeze({
-  massGravity: 1.0,        // D14 — Earth surface gravity in g (massEarth / radiusEarth^2)
-  volatileFraction: 0.15,  // D2  — Earth-like silicate volatile budget (Rocky preset value)
-  tidalHeating: 0.0,       // D12 — negligible for Earth (SLICE B pins the normalized Earth value ~0.19)
-  age: 4.5,                // D16 — Gyr
+  massGravity: 0.9,                  // D14 — Rocky surface gravity in g (massEarth 0.9 / radiusEarth² 1.0)
+  volatileFraction: 0.15,           // D2  — Earth-like silicate volatile budget (Rocky preset value)
+  tidalHeating: EARTH_TIDAL_HEATING, // D12 — derived ≈0.00174 (negligible; bottom of the tidal axis)
+  age: 4.5,                          // D16 — Gyr
 });
 
-// SLICE A stub: returns null for EVERY input, so the tune seam is wired end-to-end and proven
-// byte-identical (driversToTune(D) → null → the DEFAULTS branch) before any calibration lands.
-// SLICE B replaces this body with the calibrated transfer functions for massGravity → UPLIFT_GAIN,
-// volatileFraction → CONTINENTAL_FRACTION, tidalHeating → PLATE_COUNT, age → (calibrated) — each
-// anchored so D_EARTH still maps to null. Pure function — no Math.random, no Date-now calls — AC1.
+// SLICE B calibration: map the body's D-vector to a `tune` override consumed by the existing
+// `tune ? { ...DEFAULTS, ...tune } : DEFAULTS` seam. The four transfer functions (form, sign, clamps)
+// are pinned in docs/WORKSTREAMS/world-engine-plate-driver-response-2026-06-27/SLICE-B-calibration.md:
+//
+//   gravity (D14)      → UPLIFT_GAIN + RIFT_GAIN, ×gFactor = clamp((g/g0)^-0.5, 0.4, 2.5)
+//                        g↑ → relief↓ (max relief ∝ 1/g: isostasy + crustal yield strength).
+//   volatiles (D2)     → CONTINENTAL_FRACTION, additive  vf↑ → continental↓ (volatiles drown crust).
+//   age (D16)          → CONTINENTAL_FRACTION, additive  age↑ → continental↑ (crust volume grows; a
+//                        deliberately small secondary nudge — NOT erosion, which is a later increment).
+//   tidalHeating (D12) → PLATE_COUNT_MIN  th↑ → plates↑ (more internal heat → thinner lithosphere →
+//                        more, smaller plates; Io is the high-heat exemplar).
+//
+// Each function is anchored so f(D_EARTH.value) maps to the EXACT default → at D_EARTH every override
+// field equals its DEFAULT → this returns `null` → Earth takes the untouched branch (AC2).
+// Pure function: same input ⇒ same output, no RNG, no clock reads (AC1). Missing/partial drivers are
+// filled from D_EARTH (so an age-less body gets ageTerm 0 → no age response — AC4's age-less guard).
 export function driversToTune(drivers) {
-  void drivers;            // SLICE A: not consumed yet — null tune ⇒ DEFAULTS ⇒ byte-identical
-  return null;
+  if (drivers == null) return null;
+
+  const g = (drivers.massGravity ?? D_EARTH.massGravity);
+  const vf = (drivers.volatileFraction ?? D_EARTH.volatileFraction);
+  const th = (drivers.tidalHeating ?? D_EARTH.tidalHeating);
+  const age = (drivers.age ?? D_EARTH.age);
+
+  // 1. gravity → UPLIFT_GAIN, RIFT_GAIN (multiplicative; g/g0 = 1 ⇒ factor 1 ⇒ default).
+  const g0 = D_EARTH.massGravity;
+  const gFactor = clamp(0.4, 2.5, Math.pow(g / g0, -0.5));
+  const UPLIFT_GAIN = DEFAULTS.UPLIFT_GAIN * gFactor;
+  const RIFT_GAIN = DEFAULTS.RIFT_GAIN * gFactor;
+
+  // 2+3. volatiles + age → CONTINENTAL_FRACTION (both additive; at vf0 & age0 the terms vanish ⇒ 0.5).
+  const ageTerm = 0.03 * (age - D_EARTH.age);
+  const CONTINENTAL_FRACTION = clamp(0.1, 0.9, 0.5 + 1.0 * (D_EARTH.volatileFraction - vf) + ageTerm);
+
+  // 4. tidalHeating → PLATE_COUNT_MIN (th0 = Earth's clamped value ⇒ factor 1 ⇒ default 7).
+  const th0 = clamp01(D_EARTH.tidalHeating);
+  const thp = clamp01(th);
+  const countFactor = 1 + 0.8 * (thp - th0);
+  const PLATE_COUNT_MIN = clamp(5, 14, Math.round(DEFAULTS.PLATE_COUNT_MIN * countFactor));
+
+  // AC2 identity guard: if EVERY computed override equals its DEFAULT (the Earth point), return null so
+  // the writer's ternary takes the untouched DEFAULTS branch ⇒ byte-identical Earth.
+  if (
+    UPLIFT_GAIN === DEFAULTS.UPLIFT_GAIN &&
+    RIFT_GAIN === DEFAULTS.RIFT_GAIN &&
+    CONTINENTAL_FRACTION === DEFAULTS.CONTINENTAL_FRACTION &&
+    PLATE_COUNT_MIN === DEFAULTS.PLATE_COUNT_MIN
+  ) {
+    return null;
+  }
+
+  // Only the changed fields need be returned — the writer spreads them over DEFAULTS.
+  return { UPLIFT_GAIN, RIFT_GAIN, CONTINENTAL_FRACTION, PLATE_COUNT_MIN };
 }
 
 // ── tiny vec3 helpers on plain [x,y,z] arrays (three-free) ─────────────────────────────────────
