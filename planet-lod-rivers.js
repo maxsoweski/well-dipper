@@ -29,7 +29,7 @@ import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
 import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
 import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
-import { writeMagmatismSphere } from './src/worldengine/base/magmatism.js';
+import { writeMagmatismSphere, magmaDriversToTune } from './src/worldengine/base/magmatism.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
@@ -462,7 +462,13 @@ export function writeBodyRelief(carrier, {
     // (from the preset _fp.T_eq). Off the lab path (headless callers that pass no T_eq) T_ss defaults 0,
     // so no basin — the volcanic gate still fires (plume field only).
     const T_ss = locked ? (T_eq ?? 0) * 1.4 : 0;
-    const magmaDiag = writeMagmatismSphere(carrier, grainDrivers, { macroSeed, locked, T_ss });
+    // Increment #4-MULTIPLY (volcanic driver-response): the body's D-vector (bodyDrivers — the SAME separate
+    // channel #2 uses for plates, null off the driver path) is mapped to a `tune` override via
+    // magmaDriversToTune(). At the neutral reference it returns null ⇒ the writer's DEFAULTS branch ⇒ #4a
+    // byte-identical (AC1). bodyDrivers replaces grainDrivers as the drivers arg — byte-safe, the writer voids it.
+    const magmaTune = magmaDriversToTune(bodyDrivers);
+    const magmaDiag = writeMagmatismSphere(carrier, bodyDrivers, { macroSeed, locked, T_ss, tune: magmaTune });
+    magmaDiag.appliedTune = magmaTune;
     return { path: 'volcanic', plateDiag: null, shellDiag: null, magmaDiag };
   }
   writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height

@@ -160,6 +160,7 @@
     import { makeSphereField } from './src/worldengine/base/sphereField.js';   // AC2 _bakedReliefAt probe: rebuild the carrier route() baked
     import { writeGrainSphere, writeHeightSphere } from './src/worldengine/base/tectonic.js';   // AC2 _bakedReliefAt probe: re-derive the SAME pure height field the relief cube holds
     import { driversToTune } from './src/worldengine/base/plates.js';   // Increment 2: pure D-vector→tune mapper — plateProbe() echoes the SAME tune the writer applied (read-only; we do not edit plates.js)
+    import { magmaDriversToTune, magmaThermal } from './src/worldengine/base/magmatism.js';   // Increment 4-MULTIPLY: same arm's-length echo for magmaProbe() + preset thermal-drive seeding
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -6111,8 +6112,12 @@
                       const md = riverOverlay.magmaDiag;
                       const heightSource = riverOverlay.heightSource;
                       const riverStats = riverOverlay.stats;
+                      // Increment 4-MULTIPLY: echo the SAME tune the writer applied — magmaDriversToTune is the
+                      // pure mapper the volcanic branch used (arm's-length; null at the neutral reference / off path).
+                      const bodyDrivers = state._lastBodyDrivers || null;
+                      const appliedTune = bodyDrivers ? magmaDriversToTune(bodyDrivers) : null;
                       if (!md) return { heightSource, regime:null, plumeCount:null, U:null,
-                        varExplainedByPlume:null, varExplainedByLatitudeY:null,
+                        varExplainedByPlume:null, varExplainedByLatitudeY:null, appliedTune,
                         note:'plate / shell / despun path (non-volcanic body) — no magmatism diagnostics' };
                       const mesh = riverOverlay.mesh, N = mesh.N, verts = mesh.verts;
                       const U = md.U;
@@ -6143,6 +6148,7 @@
                       const mEd = edN?edSum/edN:0, mPl = plN?plSum/plN:0, mBa = baN?baSum/baN:NaN;
                       return {
                         heightSource, regime:'volcanic', plumeCount: md.plumeCount,
+                        appliedTune,                          // Inc.4-MULTIPLY: the driver→tune override (null at the reference)
                         substellarAxis: Array.from(md.substellarAxis),
                         varExplainedByPlume: cP*cP,            // arm's-length centroid-proximity r^2 (non-basin)
                         varExplainedByLatitudeY: cY*cY,        // sin^2(+y lat) r^2 (non-basin) — MUST stay below plume

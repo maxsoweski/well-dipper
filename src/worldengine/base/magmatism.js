@@ -69,6 +69,9 @@ export const MAGMA_DEFAULTS = Object.freeze({
   MOAT_WIDTH: 0.35,          // moat Gaussian width as a fraction of Psi_e
   // ── §3 province swell (the AC2 correlation workhorse; broad hotspot dome, linear in zeta) ────────────
   SWELL_GAIN: 0.25,          // swell = SWELL_GAIN * zeta  (Hawaiian/Tharsis dynamic-topography dome)
+  // ── #4-MULTIPLY edifice grain-alignment (driver-response) ───────────────────────────────────────────
+  ELONGATION_GAIN: 0,        // edifice ellipse aspect - 1; DEFAULT 0 = isotropic (1-r)^p dome = #4a byte-identical.
+                             //   Raised by magmaDriversToTune with thermal drive (more heat -> more rifting).
   // ── §4 lava-plain flooding (analytic mean-minus-Z*std datum; O(N), NO sort) ─────────────────────────
   FLOOD_Z: 0.25,             // datum = mean_E(H0) - FLOOD_Z*std_E(H0) (lower tail of the quiet terrain)
   WRINKLE_AMP: 0.02,         // faint wrinkle-ridge texture on the flat plain (≪ ordering margins; not zero-mean)
@@ -78,6 +81,52 @@ export const MAGMA_DEFAULTS = Object.freeze({
   BASIN_DEPTH: 2.0,          // basin floor depth: basinU = MAGMA_BASE - BASIN_DEPTH*g(theta) (deepest at substellar pt)
   RELAX_PASSES,
 });
+
+// ── Increment #4-MULTIPLY (volcanic driver-response): the neutral reference point + the driver→tune seam ──
+// Mirrors plates.js's D_EARTH / driversToTune discipline EXACTLY. The per-body thermal history (tidal-heat +
+// radiogenic/age) reshapes plume COUNT/STRENGTH + edifice ELONGATION via a `tune` override consumed by the
+// EXISTING `tune ? { ...MAGMA_DEFAULTS, ...tune } : MAGMA_DEFAULTS` seam in writeMagmatismSphere — no new
+// mechanism, only a calibrated re-tune of the placement. The calibration is ANCHORED to MAGMA_REF:
+// magmaDriversToTune(MAGMA_REF) returns null, so a neutral volcanic body takes the untouched DEFAULTS branch →
+// #4a BYTE-IDENTICAL (AC1). The LAB passes the RAW Io-normalized tidalHeating (huge dynamic range, NOT the
+// calibrated [0,1) value), so magmaThermal normalizes internally via clamp01 (mirrors plates' clamp01(th)).
+export const MAGMA_REF = Object.freeze({ tidalHeating: 0, age: 4.5, massGravity: 0.9 });
+
+// Normalized endogenic thermal driver H ∈ [0,1]: young + tidally-heated → high, old + cold → low. A caller may
+// pass a pre-normalized `thermalState` (the lab's graded-sweep lever); else H derives from the raw D-vector.
+export function magmaThermal(drivers) {
+  const d = drivers || {};
+  if (d.thermalState != null) return clamp01(d.thermalState);
+  const tidal = clamp01(d.tidalHeating ?? 0);                       // raw Io-normalized → saturates for hot worlds
+  const radiogenic = 1 - clamp01((d.age ?? MAGMA_REF.age) / 10);    // young → high radiogenic drive
+  return clamp01(0.5 * tidal + 0.5 * radiogenic);
+}
+const H_REF = magmaThermal(MAGMA_REF);   // reference thermal drive at which the tune vanishes (≈0.275)
+
+// SLICE-B calibration constants (first-cut, tunable at UAT).
+const K_COUNT = 6, K_HEIGHT = 0.6, K_LO = 0.4, K_ELONG = 1.2;
+
+// Map the body's D-vector to a `tune` override, anchored so magmaDriversToTune(MAGMA_REF) === null → the
+// writer's `tune ? {...} : DEFAULTS` ternary takes the untouched branch → #4a byte-identical (the #2 discipline).
+// Monotone correct-sign: ↑thermal drive → more/taller plumes + more elongation; ↑gravity → flatter shields
+// (gFactor, the house reliefGravityFactor convention; gFactor = 1 at the reference gravity → byte-safe).
+export function magmaDriversToTune(drivers) {
+  if (drivers == null) return null;
+  const D = MAGMA_DEFAULTS;
+  const H = magmaThermal(drivers);
+  const Hd = H - H_REF;                                             // thermal deviation from MAGMA_REF (0 at the reference)
+  const g = drivers.massGravity ?? MAGMA_REF.massGravity;
+  const gFactor = clamp(0.4, 2.5, Math.pow(g / MAGMA_REF.massGravity, -0.5));   // low-g → taller shields; 1 at g0
+  const PLUME_COUNT_MIN = clamp(3, 12, Math.round(D.PLUME_COUNT_MIN + K_COUNT * Hd));
+  const EDIFICE_HEIGHT = D.EDIFICE_HEIGHT * (1 + K_HEIGHT * Hd) * gFactor;
+  const STRENGTH_LO = clamp(0.2, 0.8, D.STRENGTH_LO + K_LO * Hd);
+  const ELONGATION_GAIN = clamp(0, 2, D.ELONGATION_GAIN + K_ELONG * Hd);
+  // AC1 identity guard: at MAGMA_REF every computed override equals its DEFAULT → return null so the writer's
+  // ternary takes the untouched DEFAULTS branch → byte-identical #4a (exact-only, like plates' D_EARTH).
+  if (PLUME_COUNT_MIN === D.PLUME_COUNT_MIN && EDIFICE_HEIGHT === D.EDIFICE_HEIGHT &&
+      STRENGTH_LO === D.STRENGTH_LO && ELONGATION_GAIN === D.ELONGATION_GAIN) return null;
+  return { PLUME_COUNT_MIN, EDIFICE_HEIGHT, STRENGTH_LO, ELONGATION_GAIN };
+}
 
 // ── tiny vec3 helpers on plain [x,y,z] arrays (COPIED VERBATIM from plates.js for resolution-
 //    independence; plates.js/shellRelief.js/tectonic.js are out-of-scope to edit — no cross-imports) ──
