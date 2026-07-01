@@ -28,7 +28,26 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶▶ ACTIVE (2026-07-01, GROUND track): #4a volcanic/magmatism SHIPPED → building #4-MULTIPLY via workflows.**
+> **▶▶ ACTIVE (2026-07-01, GROUND track): #4b Venus stagnant-lid — VERIFIED_PENDING_MAX `0a95ed9`, awaiting Max AC9 UAT.** (Prior: #4a + #4-MULTIPLY SHIPPED.)
+> **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
+> `src/worldengine/base/stagnantLid.js` (`writeStagnantLidReliefSphere`): ONE seeded mantle-plume field (BAT logic) →
+> tessera crustal plateaus (percentile-thresholded ancient-plume caps + orthogonal fold/ribbon double-fabric) +
+> coronae (field-biased; active dome+trench+rise / inactive rim+depression analytic radial profiles) + basaltic-plains
+> datum + analytic point-to-arc rift corridors. REPLACES `carrier.height` for Venus; 5-way dispatch
+> (plate→shell→volcanic→**stagnant-lid**→despun), plate/shell/volcanic/despun byte-identical. Key-based routing (NOT
+> locked-gated — Venus is `locked:false`); ONE load-bearing `PRESET_ARCHETYPE` line ('Venus (sulfuric shroud)'→
+> 'stagnant-lid'). **Verified:** citations re-verified (`wf_380b2e21`, all constants held) → dev-collab-scope →
+> grounding+adversarial-plan (`wf_2d29dc2b`, NEEDS-FIX→7 fixes folded in) → SLICE A writer+AC1-AC5 vitest → SLICE B
+> dispatch/lab+AC6/AC7 → **live AC8 driven on :5175 at the 40k mesh** (452 plume-clustered coronae, structureCorr 0.496
+> ≫ latitude 0.011, ordering holds, activeFrac 0.648). 26 stagnant tests + 234 worldengine suite green. ⚠ AC2(a) metric
+> is `|corr|>=0.40` (binary-mask r²>=0.5 unreachable — magmatism precedent); test at N=1500 (finer structure);
+> corona pool scales ∝N for resolution-invariant coverage. **AC9 UAT = Max's gate** (open lab on Venus, bump
+> pixelScale→1/drop posterize to see tessera+coronae past the retro dither). Artifacts:
+> `docs/WORKSTREAMS/world-engine-venus-stagnantlid-2026-07-01/` (intent, contract, mechanism, GROUNDING via BUILD-PLAN,
+> verdict). Commits `8644d4e` scope → `ed0337b` citations → `0ee9437` SLICE A → `bf7efda` SLICE B → `0a95ed9` pool-fix.
+> **Push HOLD LIFTED** (branch pushed through #4-MULTIPLY; #4b not yet pushed — confirm before push).
+
+> **▶▶ (prior) #4a volcanic/magmatism SHIPPED → #4-MULTIPLY SHIPPED via workflows.**
 > **#4a (volcanic/magmatism relief writer) — ✅ SHIPPED `eb18666` (Max UAT-ACCEPTED 2026-07-01).** New
 > `src/worldengine/base/magmatism.js` (`writeMagmatismSphere`): one seeded mantle-plume field → shield edifices +
 > lava-plain flooding + T_ss-scaled substellar magma basin; 4-way dispatch (plate→shell→volcanic→despun), plate &
