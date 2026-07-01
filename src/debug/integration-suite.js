@@ -1769,6 +1769,69 @@ export async function runFlightReliabilitySuite(opts = {}) {
         legsSeen.size >= 2,
         `visited ${legsSeen.size} distinct stop(s); wrapped x${tourWrapped}`);
     }
+
+    // ── Far-side-star scenario (Increment 1, AC8) ──────────────────────────
+    // Drive the REAL star->planet departure: forceFarSideStarLeg parks the ship
+    // at the star's PARK distance on the far side of the outermost planet (the
+    // star sits between ship and target), then dispatches the planet leg through
+    // the real go-around routing. The ship must ROUTE AROUND the star — never
+    // ENTER the keep-out sphere — reach the target's HOLD, and NEVER stall-abort.
+    // Pre-fix (and the rejected unified-radius design) this leg wedged/degenerated.
+    if (typeof _lab.forceFarSideStarLeg === 'function' && typeof _lab.starKeepOutInfo === 'function') {
+      _lab.stopAutopilot?.();
+      await sleep(150);
+      _lab.setSetting?.('tourLingerMultiplier', lingerMult);
+      const setup = _lab.forceFarSideStarLeg();
+      if (!setup || !setup.ok) {
+        rec('far-side-star: scenario set up', false, JSON.stringify(setup));
+      } else {
+        rec('far-side-star: scenario set up (direct path crosses keep-out sphere)',
+          setup.crosses === true,
+          `targetIndex=${setup.targetIndex} park=${setup.park?.toFixed?.(2)} keepOut=${setup.keepOut?.toFixed?.(2)} crosses=${setup.crosses}`);
+
+        const ko = _lab.starKeepOutInfo();
+        const starPos = ko ? { x: ko.x, y: ko.y, z: ko.z } : { x: 0, y: 0, z: 0 };
+        // Tightened (AC8): the ship must never ENTER the keep-out sphere, not
+        // merely stay off the 1.05R barrier. 0.95·keepOut allows only capture
+        // slop at the go-around waypoint (placed at ~1.2·keepOut).
+        const keepOut = ko ? ko.keepOut : 0;
+        const keepOutFloor = keepOut * 0.95;
+        const centerDist = () => {
+          const p = _sc.model.position;
+          return Math.hypot(p.x - starPos.x, p.y - starPos.y, p.z - starPos.z);
+        };
+        const startIdx = _autoNav.currentIndex;
+        let minCenterDist = Infinity;
+        let legDone = false;
+        const t0fs = performance.now();
+        const budget = Math.min(maxWallMs, 45000);
+        while (performance.now() - t0fs < budget) {
+          await sleep(pollMs);
+          const cd = centerDist();
+          if (cd < minCenterDist) minCenterDist = cd;
+          // Leg complete = the tour advanced off the far-side target stop (the
+          // planet leg reached HOLD + linger and advanceToNextWithBody fired).
+          if (_autoNav.currentIndex !== startIdx) { legDone = true; break; }
+        }
+
+        const stallAborts = _lab.tourStallAbortCount?.() ?? -1;
+        rec('far-side-star: leg completed (reached HOLD + advanced), not wedged',
+          legDone, `advanced=${legDone} startIdx=${startIdx} nowIdx=${_autoNav.currentIndex}`);
+        rec('far-side-star: ZERO stall-aborts on the leg (routed around, never wedged)',
+          stallAborts === 0, `tourStallAbortCount=${stallAborts}`);
+        rec('far-side-star: ship never ENTERS the star keep-out sphere',
+          minCenterDist > keepOutFloor,
+          `minCenterDist=${minCenterDist.toFixed(2)} > keepOut*0.95=${keepOutFloor.toFixed(2)} (keepOut=${keepOut.toFixed(2)})`);
+        telemetry.farSide = {
+          minCenterDist: +minCenterDist.toFixed(2),
+          keepOut: +keepOut.toFixed(2),
+          keepOutFloor: +keepOutFloor.toFixed(2),
+          stallAborts,
+          legDone,
+          park: setup.park,
+        };
+      }
+    }
   } finally {
     _autoNav.onTourComplete = prevOnComplete;
     if (prevLinger !== undefined && _lab.setSetting) _lab.setSetting('tourLingerMultiplier', prevLinger);

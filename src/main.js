@@ -49,6 +49,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // is kept importable for the deferred control-harness arc.
 import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
+import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -2082,6 +2083,84 @@ window._lab = {
     idleTimer = 0;
     startFlythrough();
     return { ok: !!autoNav.isActive };
+  },
+
+  /** Increment 1 (AC8): count of CRUISE stall-aborts on tour legs since the last
+   * forceFarSideStarLeg() reset. The far-side scenario asserts this stays 0. */
+  tourStallAbortCount() { return _scTourStallAbortCount; },
+
+  /** Increment 1 (AC8): force a FAR-SIDE-STAR tour leg through the REAL departure
+   * regime. Places the ship at the star's PARK distance on the far side of the
+   * outermost planet — i.e. exactly where the pilot would sit having just parked
+   * AT the star — so the star sits between ship and target and the ship departs
+   * from OUTSIDE the keep-out sphere (not a teleport that dodges the on-sphere
+   * case). Points it at the planet and dispatches through the real go-around tour
+   * dispatch (_dispatchTourLeg). Resets the stall-abort counter. The caller (the
+   * reliability suite) then samples until the planet leg completes and asserts:
+   * 0 stall-aborts, ship never ENTERS the keep-out sphere. Returns setup
+   * telemetry incl. whether the direct path crosses the keep-out sphere. */
+  forceFarSideStarLeg() {
+    if (!system?.star?.mesh) return { ok: false, reason: 'no star in system' };
+    const planets = system.planets || [];
+    if (!planets.length) return { ok: false, reason: 'system has no planets' };
+    if (!autoNav.queue || !autoNav.queue.length) autoNav.buildQueue(system);
+    populateQueueRefs();
+    // Outermost planet stop with a bodyRef → the far-side target.
+    let targetIdx = -1, bestOrbit = -1;
+    autoNav.queue.forEach((s, i) => {
+      if (s.type === 'planet' && s.bodyRef) {
+        const orb = system.planets[s.planetIndex]?.orbitRadius ?? 0;
+        if (orb > bestOrbit) { bestOrbit = orb; targetIdx = i; }
+      }
+    });
+    if (targetIdx < 0) return { ok: false, reason: 'no planet stop with a bodyRef' };
+    const stop = autoNav.queue[targetIdx];
+    const ko = _starKeepOut();
+    if (!ko) return { ok: false, reason: 'no star keep-out geometry' };
+    const starPos = system.star.mesh.position;
+    const planetPos = stop.bodyRef.position;
+    // Real departure regime: ship parked at the star's PARK distance, on the far
+    // side of the planet. PARK > keepOut, so the ship starts OUTSIDE the keep-out
+    // sphere (the on-sphere degeneracy the unified-radius design suffered is gone)
+    // while the star still sits squarely between ship and planet → the direct
+    // segment crosses the keep-out sphere and a go-around must fire.
+    const dir = new THREE.Vector3().subVectors(starPos, planetPos).normalize();
+    const shipPos = new THREE.Vector3().copy(starPos).addScaledVector(dir, ko.park);
+
+    // Engage the tour machinery and pin the current stop to the far-side planet.
+    _autopilotEnabled = true;
+    cameraController.bypassed = true;
+    autoNav.start();
+    autoNav.currentIndex = targetIdx;
+    scPilot.stop();
+    scModel.position.copy(shipPos);
+    scModel.speed = 0; scModel.setThrottle(0);
+    const toPlanet = new THREE.Vector3().subVectors(planetPos, shipPos).normalize();
+    scModel.orientation.setFromUnitVectors(new THREE.Vector3(0, 0, -1), toPlanet);
+    shipChoreographer.beginTour({ fromWarp: false });
+    _scPendingRealTarget = null;
+    _scGoAroundCount = 0;
+    _scTourStallAbortCount = 0;
+
+    const crosses = segmentCrossesSphere(shipPos, planetPos, ko.pos, ko.keepOut);
+    _dispatchTourLeg(stop, { choreo: null });
+    return {
+      ok: true,
+      targetIndex: targetIdx,
+      crosses,
+      park: ko.park,
+      keepOut: ko.keepOut,
+      starRadius: system.star.data.radius,
+      startCenterDist: shipPos.distanceTo(starPos),
+    };
+  },
+
+  /** Live star geometry (position + radius + DECOUPLED park/keep-out radii) for
+   * the reliability suite's keep-out-entry check. Null when there is no star. */
+  starKeepOutInfo() {
+    const ko = _starKeepOut();
+    if (!ko) return null;
+    return { x: ko.pos.x, y: ko.pos.y, z: ko.pos.z, radius: ko.radius, keepOut: ko.keepOut, park: ko.park };
   },
 
   /** Read a settings value (e.g. 'tourLingerMultiplier', 'celestialTimeMultiplier').
@@ -5750,15 +5829,13 @@ function _beginTourLegMotion(stop, priorBody) {
   // driver in that case, so no stop is needed.
   if (!scPilot.isActive && !_scManual && navSubsystem.stop) navSubsystem.stop();
   _seedScPoseFromCameraIfIdle();
-  scControls.flyTo({
-    toBody: stop.bodyRef,
-    bodyRadius: stop.bodyRadius,
-    linger: stop.linger * settings.get('tourLingerMultiplier'),
-    selfStep: false,
-  });
-  // Ship-axis tour-leg advance — flips ENTRY→CRUISE on first post-ENTRY
-  // call; 1:1 mapping thereafter.
-  shipChoreographer.onLegAdvanced();
+  // A fresh jump abandons any in-flight go-around pending target.
+  _scPendingRealTarget = null;
+  // Increment 1: routes through the standoff/go-around dispatch — parks the star
+  // at its standoff, and inserts a pass-through waypoint for a far-side jump.
+  // _dispatchTourLeg calls shipChoreographer.onLegAdvanced() for the real leg
+  // (the ship-axis ENTRY→CRUISE flip), matching the prior inline call.
+  _dispatchTourLeg(stop);
 }
 
 /**
@@ -5806,12 +5883,12 @@ function startFlythrough() {
   // autopilot from live manual supercruise flight must keep the live
   // pose/speed, not stomp them (Task-9 manual-controls heads-up).
   _seedScPoseFromCameraIfIdle();
-  scControls.flyTo({
-    toBody: firstStop.bodyRef,
-    bodyRadius: firstStop.bodyRadius,
-    linger: firstStop.linger * settings.get('tourLingerMultiplier'),
-    selfStep: false,
-  });
+  _scPendingRealTarget = null;
+  // Increment 1: first leg routes through the standoff/go-around dispatch (parks
+  // the star at its standoff; inserts a pass-through waypoint if the first stop is
+  // on the star's far side). choreo:null — startFlythrough owns the ship-axis cue
+  // via beginTour below, so the dispatcher must not also fire onLegAdvanced.
+  _dispatchTourLeg(firstStop, { choreo: null });
   // Ship-axis: non-warp engage → first leg is CRUISE (not ENTRY).
   shipChoreographer.beginTour({ fromWarp: false });
 
@@ -5840,6 +5917,7 @@ function stopFlythrough() {
   autoNav.stop();
   shipChoreographer.stop();
   scPilot.stop();
+  _scPendingRealTarget = null; // Increment 1: abandon any in-flight go-around
   setScManual(false);
   _flightMode = FlightMode.MANUAL; // #1 takeover: any player-directed ASSIST leg ends here too — reset for the next engage
   if (freeLook.latched) freeLook.exit(); // clear a tour-set free-look latch on stop (§arrival-modes)
@@ -5879,6 +5957,9 @@ function warpSwapSystem() {
   // already stops the pilot at turn start; this covers any path that
   // reaches the swap without it (mirrors the flythrough/autoNav stops).
   scPilot.stop();
+  // Increment 1: drop any in-flight go-around target so a warp mid-go-around
+  // can't leave a stale old-system stop for the new system's arrival fly-in.
+  _scPendingRealTarget = null;
   _cancelSystemMusic(); // stop ambient music during warp
   // Cancel any stale deep sky linger timer from the previous system
   // (e.g., title screen auto-dismiss sets this during warp)
@@ -6828,6 +6909,110 @@ function _composeShakeOntoCamera() {
 // one-shot; it clears on the next leg's ALIGN entry.
 let _scLegAdvanced = false;
 
+// Increment 1 (autopilot-standoff-routing) — go-around glue. When a straight
+// tour leg would cross the star keep-out sphere, we dispatch a PASS-THROUGH
+// waypoint leg first and stash the REAL target here; the motionComplete handler
+// flies the real target once the waypoint arrives, WITHOUT advancing the tour
+// index (a pass-through is not a queue stop). Null when no go-around is pending.
+let _scPendingRealTarget = null;
+
+// Increment 1 — pass-through waypoints inserted for the CURRENT real stop. The
+// real-target dispatch re-checks crossing from the ACTUAL arrival position and
+// may insert another waypoint; capped at SC_GOAROUND_CAP so a pathological
+// near-boundary geometry can't loop. Beyond the cap → dispatch direct (the WS-1
+// stall-detector is the backstop). Reset to 0 when a NEW real stop is dispatched.
+const SC_GOAROUND_CAP = 2;
+let _scGoAroundCount = 0;
+
+// Increment 1 telemetry — count CRUISE stall-aborts that fire during a tour leg
+// (read by the reliability suite's far-side-star scenario via _lab, AC8). Reset
+// per scenario run by _lab.forceFarSideStarLeg().
+let _scTourStallAbortCount = 0;
+
+// Live star geometry for Increment-1 routing — TWO DECOUPLED radii:
+//   • park    = the star's HOLD/viewing distance = revived orbitDistance
+//               min(8R, 0.6·innerOrbit) computed in populateQueueRefs (dead for
+//               the pilot until now), RAISED to stay strictly outside keepOut.
+//   • keepOut = KEEP_OUT_FACTOR·R (~3.5R) — the go-around crossing sphere.
+// A ship parked at `park` sits OUTSIDE the `keepOut` sphere, so a star->planet
+// departure starts outside it and the go-around never degenerates.
+// Returns null when there is no star (deep-sky / no system) → no special routing.
+function _starKeepOut() {
+  if (!system?.star?.mesh) return null;
+  const R = system.star.data.radius;
+  const keepOut = starKeepOutRadius({ starRadius: R });
+  const starStop = autoNav.queue?.find?.(s => s.type === 'star');
+  const rawPark = (starStop && Number.isFinite(starStop.orbitDistance))
+    ? starStop.orbitDistance
+    : starParkRadius({ starRadius: R, innerOrbitRadius: system.planets?.[0]?.orbitRadius ?? Infinity });
+  // Keep park strictly outside the keep-out sphere (decoupled-radii invariant).
+  const park = Math.max(rawPark, keepOut * PARK_MIN_FACTOR);
+  return { pos: system.star.mesh.position, radius: R, park, keepOut };
+}
+
+// Dispatch one tour leg to `stop`, applying Increment-1 routing via the pure
+// planLeg() seam (DECOUPLED park vs keep-out radii):
+//   • STAR target → park at the PARK distance (held OUTSIDE the keep-out sphere
+//     and the gravity well).
+//   • any other target whose straight path crosses the star KEEP-OUT sphere →
+//     insert ONE pass-through waypoint (fly around the star first), stashing the
+//     real target in _scPendingRealTarget; no onLegAdvanced for the waypoint.
+//   • clear legs → today's plain flyTo (2.6R hold) + onLegAdvanced.
+// Gated on !warpEffect.isActive so warp-arrival fly-ins are never re-routed.
+// `continuation` is set when dispatching the real target right after a waypoint
+// arrival (or a waypoint-leg stall retry): it KEEPS the per-stop go-around
+// counter (so the SC_GOAROUND_CAP still bounds re-inserted waypoints) and
+// re-checks crossing from the ACTUAL arrival position. A fresh (non-continuation)
+// dispatch resets the counter — it is a new real stop.
+// `choreo` is the ship-axis cue fired for the REAL (non-waypoint) leg — default
+// shipChoreographer.onLegAdvanced; pass null when the caller owns the cue
+// (startFlythrough fires beginTour itself). A pass-through waypoint fires NO cue.
+function _dispatchTourLeg(stop, { continuation = false, choreo } = {}) {
+  if (!stop || !stop.bodyRef) return;
+  const legCue = choreo === undefined ? () => shipChoreographer.onLegAdvanced() : choreo;
+  const linger = stop.linger * settings.get('tourLingerMultiplier');
+  const ko = warpEffect.isActive ? null : _starKeepOut();
+  const isStar = stop.type === 'star';
+
+  // A fresh real stop resets the per-stop go-around waypoint counter.
+  if (!continuation) _scGoAroundCount = 0;
+
+  const plan = ko
+    ? planLeg({
+        shipPos: scModel.position,
+        targetPos: stop.bodyRef.position,
+        targetIsStar: isStar,
+        starPos: ko.pos,
+        keepOut: ko.keepOut,
+        park: ko.park,
+      })
+    : { waypoint: null, standoff: null };
+
+  if (plan.waypoint && _scGoAroundCount < SC_GOAROUND_CAP) {
+    // Far-side leg — route around the star via a bounded pass-through waypoint.
+    _scGoAroundCount++;
+    _scPendingRealTarget = stop;
+    // Waypoint radius keyed to the keep-out so capture is reachable (the star's
+    // well caps speed near W); linger 0 → arrive-and-continue immediately.
+    const wpRadius = Math.max(ko.keepOut * 0.25, 1);
+    scControls.flyTo({ toPosition: plan.waypoint.clone(), bodyRadius: wpRadius, linger: 0, selfStep: false });
+    // No cue for a pass-through — the shake cue fires on the REAL leg.
+    return;
+  }
+
+  // Real target: a clear leg, the star park, or the cap reached (dispatch direct;
+  // the WS-1 stall-detector is the backstop). No pending target after this.
+  _scPendingRealTarget = null;
+  scControls.flyTo({
+    toBody: stop.bodyRef,
+    bodyRadius: stop.bodyRadius,
+    linger,
+    standoff: plan.standoff, // PARK for the star, else null (today's 2.6R hold)
+    selfStep: false,
+  });
+  if (legCue) legCue();
+}
+
 function _handleScPilotFrame(frame) {
   // New leg started (beginLeg → ALIGN) — re-arm the advance latch.
   if (frame.phaseChanged && frame.phase === PilotPhase.ALIGN) {
@@ -6857,6 +7042,11 @@ function _handleScPilotFrame(frame) {
   // Tour-only wiring below; manual-burn pilot legs (Task 9) skip it.
   if (!autoNav.isActive) return;
 
+  // Increment 1 telemetry (AC8): a tour-leg CRUISE stall-abort. With the star
+  // standoff + go-around in place a far-side leg should NOT reach this — the
+  // suite asserts the count stays 0 for that scenario.
+  if (frame.stallAborted) _scTourStallAbortCount++;
+
   // Reticle sync (mirrors the V1 autopilotMotion branch, 2026-04-25):
   // surface the autopilot target as the selected reticle so the camera-
   // centered body is verifiable. Re-targets when the tour advances.
@@ -6875,15 +7065,35 @@ function _handleScPilotFrame(frame) {
   // way advance past any null-bodyRef stops so the tour can never freeze.
   if ((frame.motionComplete || frame.stallAborted) && !_scLegAdvanced) {
     _scLegAdvanced = true;
+
+    // Increment 1 go-around: a pass-through waypoint just arrived (motionComplete,
+    // not a stall). Fly the REAL target now WITHOUT advancing the tour index — the
+    // index already points at it; the waypoint was never a queue stop. Re-check
+    // crossing from the ACTUAL arrival position (continuation:true keeps the
+    // per-stop cap) — insert another waypoint only if the path still crosses.
+    if (_scPendingRealTarget && frame.motionComplete && !frame.stallAborted) {
+      const realStop = _scPendingRealTarget;
+      _scPendingRealTarget = null;
+      _dispatchTourLeg(realStop, { continuation: true });
+      updateFocusFromStop(realStop);
+      return;
+    }
+    // A pass-through waypoint leg STALLED. Do NOT skip past the real stop — retry
+    // the real target directly (continuation:true re-plans from the actual pos;
+    // the cap + WS-1 backstop bound it). Only if the REAL target then stalls does
+    // the normal WS-1 skip-and-continue apply (on a later frame).
+    if (_scPendingRealTarget && frame.stallAborted) {
+      const realStop = _scPendingRealTarget;
+      _scPendingRealTarget = null;
+      _dispatchTourLeg(realStop, { continuation: true });
+      updateFocusFromStop(realStop);
+      return;
+    }
+    _scPendingRealTarget = null;
+
     const nextStop = autoNav.advanceToNextWithBody();
     if (nextStop && nextStop.bodyRef) {
-      scControls.flyTo({
-        toBody: nextStop.bodyRef,
-        bodyRadius: nextStop.bodyRadius,
-        linger: nextStop.linger * settings.get('tourLingerMultiplier'),
-        selfStep: false,
-      });
-      shipChoreographer.onLegAdvanced();
+      _dispatchTourLeg(nextStop); // may insert a go-around waypoint (sets _scPendingRealTarget)
       updateFocusFromStop(nextStop);
     }
   }
@@ -9643,6 +9853,9 @@ function beginWarpTurn() {
   // stop above (camera drivers only — _scManual / autoNav untouched);
   // warpRevealSystem re-arms the fly-in on emergence.
   scPilot.stop();
+  // Increment 1: drop any in-flight go-around target on warp teardown (mirrors
+  // warpSwapSystem) so a stale old-system stop can't leak into the new system.
+  _scPendingRealTarget = null;
   cameraController.bypassed = true;
   warpTarget.turning = true;
   warpTarget.turnTimer = 0;

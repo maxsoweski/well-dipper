@@ -75,8 +75,17 @@ export class SupercruisePilot {
 
   get isActive() { return this.phase !== PilotPhase.IDLE; }
 
-  beginLeg({ toBody, bodyRadius, linger = 8 }) {
-    this._target = { mesh: toBody, radius: bodyRadius, linger };
+  // Increment 1 (autopilot-standoff-routing): beginLeg now accepts an optional
+  // per-leg `standoff` hold distance and an optional `toPosition` (a fixed
+  // point/waypoint) target instead of only a mesh. `standoff` overrides the
+  // hardcoded bodyRadius*HOLD_VIEW_FRAC (2.6R) at capture so the tour can park
+  // OUTSIDE a star's gravity well; absent it, capture is byte-for-byte today's
+  // 2.6R. `toPosition` lets the tour fly a pass-through go-around waypoint (no
+  // mesh) — wrapped in a { position } shim so the whole update() path is unchanged.
+  beginLeg({ toBody, bodyRadius, linger = 8, standoff = null, toPosition = null }) {
+    // A position/waypoint target is wrapped so tgt.mesh.position still resolves.
+    const mesh = toPosition != null ? { position: toPosition } : toBody;
+    this._target = { mesh, radius: bodyRadius, linger, standoff };
     this.phase = PilotPhase.ALIGN;
     this._holdTimer = 0;
     this._alignTimer = 0;
@@ -180,9 +189,16 @@ export class SupercruisePilot {
       }
       if (dist <= dropRadius) {
         if (m.speed <= dropMaxSpeed) {
-          // Capture: enter the body-locked hold at felt-fill distance.
+          // Capture: enter the body-locked hold. Hold distance = the per-leg
+          // standoff when supplied (Increment 1 — parks the star OUTSIDE its
+          // gravity well), else today's felt-fill 2.6R. The ×1.05 inside-body
+          // guard is scale-free and applies to both (a standoff below 1.05R
+          // would still clear the surface).
+          const holdDist = tgt.standoff != null
+            ? Math.max(tgt.standoff, tgt.radius * 1.05)
+            : Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius * 1.05);
           this._holdOffset.copy(m.position).sub(bodyPos)
-            .normalize().multiplyScalar(Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius * 1.05)); // scale-free: ×1.05 inside-body guard, no absolute term
+            .normalize().multiplyScalar(holdDist);
           this.phase = PilotPhase.HOLD;
           this._holdTimer = 0;
         } else {
