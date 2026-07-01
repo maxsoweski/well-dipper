@@ -4,7 +4,7 @@
   "perLayer": {
     "unit": "PASS",
     "integration": "PASS",
-    "uat": "deferred-to-max"
+    "uat": "PASS"
   },
   "perAC": [
     {
@@ -51,15 +51,15 @@
     },
     {
       "id": "AC8",
-      "result": "deferred-to-max",
+      "result": "PASS",
       "adversarialVotes": "n/a - UAT is Max-only",
-      "evidence": "Holistic acceptance (Max's gate; never auto-PASSed). Integration-green necessary-not-sufficient. UAT artifacts saved for Max: screenshots/emission-hotjupiter.png, emission-jovian.png, emission-sweep-{300,900,1400,2200}.png, emission-hotjup-off.png. Max to judge in the lab (:5177, Hot Jupiter preset): does it read as a hot, self-luminous world with a believable east-offset hotspot cohesive with the bands?"
+      "evidence": "Max UAT PASS 2026-07-01 ('Looks good') — judged live in the lab on :5177, Hot Jupiter (locked giant) preset, with the T_eq sweep + emission-register toggle exercised per the handoff script. Reference artifacts: screenshots/emission-hotjupiter.png, emission-jovian.png, emission-sweep-{300,900,1400,2200}.png, emission-hotjup-off.png."
     }
   ],
   "verifiedVia": {
     "unit": "verify-workstream wf_4a438160-400 (mode full, commit de4e577): AC1-AC3 PASS, 3/3 adversarial each, 12/12 emission-e vitest + 17/17 climate-e5 + independent recompute + static greps.",
     "integration": "working-Claude live-drive wf_b85b6ed6-219 via chrome-devtools on :5177: AC4-AC7 PASS on objective uniform/state numbers + python planet-ROI pixel stats.",
-    "uat": "deferred-to-max (AC8)."
+    "uat": "Max AC8 UAT PASS 2026-07-01, live in the lab on :5177."
   },
-  "status": "VERIFIED_PENDING_MAX de4e577 (unit PASS + integration PASS live; UAT AC8 = Max's gate, pending). Reshaped increment: the emission RENDER pre-existed as F32/F33; #2 wired the Hot-Jupiter auto-glow + T_eq sweep + master toggle + east-sign, and stood up the tested emission-e data-register (visibleLuminance re-anchored 1800K + Kelvin T-field substrate for #5/#6) + the missing CPU<->GLSL parity test. Push HOLD (campaign-wide, branch feature/world-engine-atmosphere)."
+  "status": "SHIPPED de4e577 (unit PASS + integration PASS + Max AC8 UAT PASS 2026-07-01). Reshaped increment: the emission RENDER pre-existed as F32/F33; #2 wired the Hot-Jupiter auto-glow + T_eq sweep + master toggle + east-sign, and stood up the tested emission-e data-register (visibleLuminance re-anchored 1800K + Kelvin T-field substrate for #5/#6) + the missing CPU<->GLSL parity test. Branch feature/world-engine-atmosphere NOT pushed; merge->L1 pending Max's call."
 }
