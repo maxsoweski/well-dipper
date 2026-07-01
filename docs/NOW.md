@@ -28,6 +28,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
+> **▶ WORLD-ENGINE ATMOSPHERE #2 (BLACKBODY EMISSION) — ✅ VERIFIED_PENDING_MAX `de4e577` (2026-07-01).**
+> Reshaped increment: the emission RENDER already existed as F32/F33 (`emissiveBlackbody` one-curve + east-advected
+> `uThermalDir` hotspot + 1100K floor); the "hot giant renders cold" bug was two enable-flags defaulting false.
+> #2 = (a) WIRED the Hot-Jupiter auto-glow + live `T_eq sweep` slider + master `emission register` toggle +
+> retrograde east-sign, and (b) STOOD UP the tested `src/worldengine/base/emission-e.js` data-register
+> (`visibleLuminance` re-anchored 1800K + Kelvin T-field substrate for #5/#6) + the missing CPU↔GLSL parity test.
+> Unit PASS (AC1-3, 3× adversarial, 12/12 emission-e + 17/17 climate-e5, #3a golden hash intact). Integration PASS
+> (AC4-7 live on :5177: Hot-Jupiter glows / cold giants dark; T_eq sweep red→orange→white; hotspot +14.9° east;
+> emission-OFF pixel-identical to cold Jovian). **AC8 UAT = Max's gate, PENDING** — screenshots in
+> `screenshots/emission-*.png`. Decisions: keep shipped `(tempK/1800)^4` quartic for render; incandescent white
+> core accepted (AC7 re-worded). Seed→driver derivation for the 3 interior scalars deferred to #9 (ATMOSPHERE-PLAN §e).
+> Worktree `~/projects/well-dipper-we-atmo`, branch `feature/world-engine-atmosphere`, **NOT pushed**. Workstream
+> `docs/WORKSTREAMS/world-engine-blackbody-emission-2026-07-01/`.
+
 > **▶ WORLD-ENGINE #3a (E5 BANDS/JETS) — ✅ MAX UAT-PASSED `9c80d40` (2026-07-01).** The gas/ice-giant
 > atmosphere writer. Replaces the lab shader's inline `0.25·latC·uBandCount` latitude stripe ladder with the
 > climate-e5 writer's **signed, driver-organized, per-seed** band field: `writeClimateE5Sphere` (src/worldengine/
