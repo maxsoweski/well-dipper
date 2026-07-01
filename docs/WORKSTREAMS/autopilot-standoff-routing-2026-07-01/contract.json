@@ -1,0 +1,124 @@
+{
+  "workstream": "autopilot-standoff-routing-2026-07-01",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Increment 1 of the obstacle-aware intelligent autopilot tour (spec: docs/superpowers/specs/2026-07-01-autopilot-intelligent-tour-design.md). Kill the star livelock at the TOUR LAYER, zero physics contact. Two parts: (1a) STANDOFF — thread a per-leg hold/approach distance through ShipControls.flyTo -> SupercruisePilot.beginLeg so the pilot honors a supplied distance instead of the hardcoded bodyRadius*HOLD_VIEW_FRAC (2.6R); for the star, feed the already-computed-but-ignored orbitDistance = min(8*R, 0.6*innerOrbit) (populateQueueRefs main.js:5664), so the star is parked OUTSIDE the gravity well. (1b) GO-AROUND — at the tour-advance dispatch, when the straight segment ship->next-target crosses the star keep-out sphere (keep-out radius = the SAME standoff value, safely outside the 2.5R crawl-onset and 1.05R collision barrier), insert one intermediate pass-through waypoint outside the sphere and fly to it first, then to the real target. Detection adapts the existing _isReticleOccluded ray/sphere limb test (main.js:436); star geometry from _scBodies (main.js:7838). Extend runFlightReliabilitySuite with a far-side-star scenario. GUARDRAILS: never retune SC_TUNING, never weaken the well, keep WS-1 as the backstop, no new pilot phase (that is increment 2). Out of scope: the pilot orbit-to-horizon DEPART phase (inc 2), the showcase policy (inc 3), the HELM/ORRERY mode reconciliation (inc 4).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-star-standoff-outside-well",
+      "statement": "The star standoff distance keeps the tour out of the restricted zone. The standoff radius resolves to the existing orbitDistance = min(8*starR, 0.6*innerOrbitRadius) and is used for BOTH the star's park distance and the go-around keep-out radius. It is strictly greater than the 2.5*R speed-crawl onset and the 1.05*R collision barrier, so a ship held/routed at that distance is never in the pinning zone.",
+      "verifyVia": {
+        "input": "Headless Vitest on the pure standoff helper: call it with a star radius (e.g. 4.65) and a representative inner-orbit radius; also an extreme tight-orbit case.",
+        "observable": "Returns min(8*R, 0.6*innerOrbit); the returned value > 2.5*R and > 1.05*R for every case; never returns a value inside the crawl/barrier zone."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-crossing-detection",
+      "statement": "The path-crosses-star test is correct. Given ship P and next-target T, the test reports whether the straight segment P->T passes within the star keep-out sphere (center = star position, radius = standoff). It returns TRUE when the star sits between P and T (far-side leg) and FALSE when the line clears the sphere (star off to the side / target near-side).",
+      "verifyVia": {
+        "input": "Headless Vitest on the pure segment-vs-sphere test (adapted from _isReticleOccluded): (a) P and T on opposite sides of the star with the segment through the keep-out sphere; (b) a clear line with the star well outside the sphere; (c) the degenerate case where P is already inside the sphere.",
+        "observable": "(a) TRUE, (b) FALSE, (c) handled without NaN (treated as crossing / needs escape); results match hand-computed geometry."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-goaround-waypoint-clears-star",
+      "statement": "A generated go-around waypoint actually clears the star. Given a detected crossing (P, T, star C+standoff), the produced waypoint W lies OUTSIDE the keep-out sphere, and BOTH sub-segments P->W and W->T no longer intersect the keep-out sphere.",
+      "verifyVia": {
+        "input": "Headless Vitest on the pure waypoint-placement function for a far-side-star geometry; assert on W and both sub-segments via the AC2 crossing test.",
+        "observable": "|W - C| > standoff; crossing(P, W) === false and crossing(W, T) === false; W is on the near-ish side / tangent so the detour is bounded, not sent to infinity."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-pilot-honors-standoff-hold",
+      "statement": "The pilot honors a per-leg standoff hold distance. When beginLeg is given a standoff distance S larger than the default 2.6R, the pilot captures to HOLD at ~S from the body center (not 2.6R) and holds there; when no standoff is supplied it falls back to today's bodyRadius*HOLD_VIEW_FRAC.",
+      "verifyVia": {
+        "input": "Headless Vitest with a real SupercruiseModel + SupercruisePilot: beginLeg with an explicit standoff S; step to HOLD. Second run: beginLeg with no standoff.",
+        "observable": "Run 1: final held distance ~= S (within capture tolerance), phase reaches HOLD, motionComplete fires per linger. Run 2: held distance ~= 2.6R exactly as today. No SC_TUNING touched."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5-clear-legs-unchanged",
+      "statement": "Legs that don't go near the star are untouched. A leg whose straight path does NOT cross the star keep-out sphere gets NO waypoint inserted and NO standoff override (default 2.6R hold), and progresses ALIGN->CRUISE->HOLD->motionComplete exactly as the pre-fix pilot on the same input.",
+      "verifyVia": {
+        "input": "Headless Vitest: a clear-line leg (target near-side, star well outside the keep-out sphere) stepped to completion; assert no waypoint dispatched and identical phase/hold outcome to pre-fix.",
+        "observable": "No intermediate waypoint leg; hold distance 2.6R; phase sequence and motionComplete identical to today; frame.stallAborted never set."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6-star-visit-parks-outside-well-live",
+      "statement": "In the running game, visiting the star parks the ship OUTSIDE the gravity well. On a live tour, the star leg holds at the standoff distance; the ship is not within the 2.5R crawl zone and is not pinned at the 1.05R collision barrier.",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223, tab foreground): drive an autopilot tour to the star stop (or force it via window._lab.selectBody + flyTo); read _sc.model.position vs the star position/radius and _sc.controls.getState().",
+        "observable": "centerDist to the star at HOLD is ~= standoff (>= min(8R,0.6*innerOrbit)), i.e. > 2.5R; speed is not force-zeroed by the collision barrier; 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-farside-leg-routes-around-no-stall-live",
+      "statement": "A far-side-star tour leg ROUTES AROUND the star and reaches the target WITHOUT wedging. Forcing a leg whose target is on the far side of the star, the ship goes around (via the inserted waypoint) and reaches the target's HOLD, and frame.stallAborted NEVER fires on that leg (pre-fix this leg wedges at the barrier and stall-aborts). autoNav advances by normal completion, not by a skip.",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223): reproduce the livelock geometry from the WS-1 recipe (teleport model to the far side of the star from the target, orient toward target) but as a normal dispatched tour leg; rAF-sample pilot phase, frame.stallAborted, and _sc.model.position.",
+        "observable": "the ship's path bends around the star (never enters the keep-out sphere), reaches the target HOLD; frame.stallAborted stays false for the whole leg; autoNav.currentIndex advances via motionComplete; 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-reliability-suite-farside-passes-live",
+      "statement": "The standing reliability suite gains a far-side-star scenario and it passes: the leg completes with no stall-abort and no barrier-pin, confirming the livelock is gone as a repeatable check.",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223): window.__wd.runFlightReliabilitySuite({...}) extended with a far-side-star leg scenario.",
+        "observable": "the far-side scenario reports pass (leg reached HOLD / completed, 0 stall-aborts, ship never pinned at the barrier); the existing suite checks still pass; 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-never-stuck-at-sun-holistic",
+      "statement": "Watching the unattended tour, the autopilot never gets stuck at the sun and the star is still shown off nicely. The ship keeps touring the system, gives the star a clean establishing view from the standoff, and swings around it on far-side legs without looking jarring.",
+      "verifyVia": {
+        "input": "Max watches the unattended tour run through a system (including star-adjacent and far-side legs) and a warp-to-next-system loop.",
+        "observable": "Holistic acceptance — the tour never pins at the sun, the star reads as showcased (not skipped, not a distant dot), and the go-around motion looks intentional. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "populateQueueRefs (src/main.js:5655-5681) computes orbitDistance = min(radius*8, innerOrbit*0.6) for the star at :5664 — currently DEAD for the supercruise pilot (only NavigationSubsystem reads it). This is the standoff value to revive and thread through.",
+      "SupercruisePilot.beginLeg (src/flight/SupercruisePilot.js:78) stores {mesh,radius,linger}; the capture/HOLD distance is bodyRadius*HOLD_VIEW_FRAC (2.6R) at :185 and the drop test at :181. beginLeg + these are where a per-leg standoff distance is accepted and honored.",
+      "ShipControls.flyTo (src/flight/ShipControls.js:111) is the single leg funnel {toBody,bodyRadius,linger} -> beginLeg for BOTH tour and Assist; widen its contract to carry standoff (and, for the waypoint, a position target).",
+      "_handleScPilotFrame advance block (src/main.js:6876) and _beginTourLegMotion (:5740) are the tour-advance dispatch sites where the next stop is resolved; where the crossing test runs and a go-around waypoint leg is inserted. _beginTourLegMotion already carries priorBody (unused).",
+      "_isReticleOccluded (src/main.js:436) — existing analytic ray/sphere limb-occlusion test (perp distance from body center to a ray vs radius); adapt for the segment-crosses-keep-out test.",
+      "_scBodies build (src/main.js:7838-7859) — per-tick list of all bodies {position,radius,massKg?} incl. the star; the live star geometry the crossing test reads.",
+      "AutoNavigator queue + getNextStop/getCurrentStop/advanceToNextWithBody (src/auto/AutoNavigator.js:32,115,125,162) — the star is stop #0 (:36); the tour ordering the waypoint insertion must coexist with (waypoint legs are NOT queue stops).",
+      "runFlightReliabilitySuite (window.__wd, built in WS-1) — extend with the far-side-star scenario (AC8).",
+      "WS-1 CRUISE stall-detector (src/flight/SupercruisePilot.js:150-176) — the backstop this increment PREVENTS from needing to fire on star legs; must remain intact and CRUISE-keyed.",
+      "Test patterns: src/flight/__tests__/SupercruisePilot.align.test.js + SupercruiseStall.test.js (fresh Model+Pilot, ./node_modules/.bin/vitest run <path>; npx vitest/npx vite hook-blocked; avoid 'vite' in commit messages)."
+    ],
+    "outputs": [
+      "A per-leg standoff/approach distance carried through ShipControls.flyTo -> SupercruisePilot.beginLeg; the pilot captures/holds at the supplied distance, falling back to 2.6R when none is given.",
+      "The star's standoff distance = the revived orbitDistance min(8R, 0.6*innerOrbit), used for BOTH the star park distance (1a) and the go-around keep-out radius (1b) — one number.",
+      "A pure segment-vs-sphere crossing test (adapted from _isReticleOccluded) and a pure go-around waypoint-placement function (both unit-tested).",
+      "Tour-layer go-around: at the advance dispatch, when ship->next-target crosses the star keep-out sphere, insert one intermediate PASS-THROUGH waypoint leg (arrive -> immediately continue to the real target, no linger) via flyTo with a position target; beginLeg extended to accept a position/waypoint target (not only a mesh).",
+      "runFlightReliabilitySuite extended with a far-side-star scenario (AC8).",
+      "New headless unit tests: standoff helper, crossing test, waypoint placement, pilot-honors-standoff, clear-leg-unchanged."
+    ],
+    "mustStayWorking": [
+      "WS-1 CRUISE stall-detector still fires for the OTHER freeze modes (fast-moon, null-bodyRef) and stays CRUISE-keyed — this increment reduces star wedges, it does not remove the guard (SupercruisePilot.js:150-176).",
+      "Normal converging tour legs advance exactly as today — the _scLegAdvanced latch correctness (main.js:6829), no skipped stops, no onTourComplete spam (guarded by AC5); a PASS-THROUGH waypoint must NOT double-advance the tour index.",
+      "SC_TUNING scale-bug floors (src/flight/SupercruiseModel.js:10-38) — ETA_K/CAP_MIN_FRAC/COLLISION_FACTOR/FORCED_DROP_FLOOR_FACTOR NEVER retuned (two prior live regressions); the well is unchanged.",
+      "The warp-arrival fly-in (itself a scPilot leg) and warp loop — a go-around/standoff must not fire during warp arrival (respect the !warpEffect.isActive gate, main.js:7808-7809).",
+      "HELM manual flight and Assist legs through the same flyTo funnel — an Assist leg with no standoff behaves as today; standalone Assist still drops out on WS-1 abort, does not advance a tour.",
+      "ShipChoreographer shake envelope: onLegAdvanced must still be called once per REAL leg advance; the pass-through waypoint must not desync the enter/drop shake cue.",
+      "Existing flight/auto unit suites stay green (253/253 baseline incl. SupercruisePilot.align.test.js + SupercruiseStall.test.js); this increment adds tests, breaks none; npm run build clean."
+    ]
+  }
+}
