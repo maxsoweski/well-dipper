@@ -60,3 +60,23 @@ Every increment is the *same field stack read with different per-body scalars*, 
 - **#3b's storm mask + relaxation-oscillator + phase infra** are reused by lightning (#4), brown-dwarf cloud-clearing (#5), and Mars global dust storms (#8).
 - **The terrestrial relief-READ (#7)** — orographic `U·∇h` off the already-shipped `plates.js`/`shellRelief` writers — is the reusable surface-coupling reused by Mars frost/condensation wind (#8) and Pluto glacier wind (#9).
 - **No consumer precedes its producer:** blackbody before its glow-dependents, storm mask before lightning, terrestrial READ before Mars/Pluto, magnetic driver landed with the aurora that first needs it. Front-loaded variety falls out of building the recyclable substrate first, not from chasing individual archetypes.
+
+## (e) VERIFIED — seed→driver connectivity audit (2026-07-01)
+
+Max asked: *are all the atmosphere drivers connected to the seed so they re-roll per new body?* Verified by a 9-agent workflow (`wf_403bccac-b52`) + working-Claude spot-check. **Answer: no — the 6 physics-reading drivers split 3/3, and none reach the writer yet.**
+
+**Seed-connected at the L0 source** (real per-body seed variation; path to writer = *planned at #9 port*):
+- **`rotationRate` → D8 `rotation`** — seed rng spin (`PlanetGenerator.js:659/687-695`, `0` if tidally locked). D8's own label reads "→ zonal banding, jets." Feeds LAW1 (band count). *#9 needs a spin normalization.*
+- **`obliquityDeg` → D3 `axialTilt`** — seed rng tilt in **radians** (`PlanetGenerator.js:654/683-685`). Feeds LAW4 (Ward hot-poles). *#9 needs rad→deg + abs.*
+- **`energyInput`/T_eq → D1 `tempEq`** — per-body from orbit+luminosity (`PhysicsEngine.equilibriumTemperature`, `PlanetGenerator.js:363-365`). *Caveat:* the dimensionless `energyInput` **bundle** field is currently **inert** (read by no LAW in `resolveParams` — LAW3 deliberately omits insolation, the wind paradox). **#2 reads D1 `tempEq` directly**, not this field.
+
+**NOT seed-connected — no D-slot exists** (frozen per-regime archetype constants only, `climate-e5.js:62-66`):
+- **`shellDepthFrac`** (LAW2 equatorial-jet **SIGN** `tanh(6·(D−0.40))` + LAW3 shell-concentration) — Jovian 0.80, Neptunian 0.15.
+- **`internalHeat`** (LAW3 amplitude numerator) — Jovian 1.67, Neptunian 2.60. *D12 `tidalHeating` is a **different** quantity (tidal-flexing heat, not gas-giant convective flux) and is wired to no atmosphere code — not a substitute.*
+- **`dissipation`** (LAW3 amplitude denominator; Neptunian 0.15 = the fast-wind paradox) — no D-slot; the L0 audit notes its physical basis (e² flexing) isn't even the same concept as any existing driver (`world-engine-L0-audit.md:61`).
+
+**Today's reality:** `climate-e5.js` has **zero game-side callers** (only `planet-lod-lab.html` + tests import it — confirmed). The lab feeds **3/8** drivers (rotationRate, radius, conditionally obliquityDeg) from **fixed presets + manual UI sliders**, never from seed. So per-body variety today = **macroSeed jitter only** (band phase, ±10% mid-jet amplitude, ±2° obliquity); `uPeak`/`m`/`eqSign` are **byte-identical across seeds within a regime.**
+
+**The gap (un-owned; #9 render-port does NOT cover it):** #9's job is to wire *existing* L0 fields into the writer — it can carry D8/D3/D1, but has **nothing to read** for shellDepthFrac/internalHeat/dissipation. If #9 ships as-is, **every Jovian is identical on jet-sign + wind vigor** — exactly the "banding gated on discrete type, not on drivers" over-supply the L0 audit already flagged (`world-engine-L0-audit.md:188`). This undercuts the "distinct worlds/minute" north star *for giants specifically*.
+
+**Proposed resolution — PENDING MAX DECISION:** a per-body **seed→driver DERIVATION** of shellDepthFrac/internalHeat/dissipation from real D-slots (mass/gravity D14, age D16, composition/metallicity, eccentricity) — the atmosphere analog of the GROUND track's **#2 / #4-MULTIPLY** driver-response passes, plus an added "derive scalars not in D1–D16" step (the Option-A "thin Tier-1 base step derives missing structured fields" pattern, `world-engine-architecture-spine.md:148`). **Alternative:** explicit decision that these 3 stay archetype-constants and giant per-body variety is intentionally limited to macroSeed jitter + the 3 D-backed drivers. **This is distinct from and additional to the #9 render port; it does NOT block #2** (which reads seed-varied D1 T_eq).
