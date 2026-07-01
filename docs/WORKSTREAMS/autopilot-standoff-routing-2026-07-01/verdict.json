@@ -1,0 +1,29 @@
+{
+  "workstream": "autopilot-standoff-routing-2026-07-01",
+  "commit": "aa8ea8d",
+  "verifiedState": "VERIFIED_PENDING_MAX",
+  "date": "2026-07-01",
+  "source": "verify-workstream workflow (wf_8c763848-dc9, static + 3x adversarial) + working-Claude live integration drives (chrome-devtools :5173 Sol)",
+  "perLayer": {
+    "unit": "PASS (4/5 direct; AC3 resolved by contract correction — see AC3)",
+    "integration": "PASS (AC6/AC7/AC8 driven live by working-Claude; verify-workstream itself defers live to main-thread)",
+    "uat": "deferred-to-max (AC9)"
+  },
+  "perAC": [
+    { "id": "AC1-star-radii-decoupled-outside-well", "result": "PASS", "layer": "unit", "adversarial": "3/3", "evidence": "vitest tourStandoff.test.js 17/17; keepOut=3.5R, park=max(min(8R,0.6*innerOrbit),keepOut*1.3) always > keepOut incl. pathological; hand-computed constants asserted." },
+    { "id": "AC2-crossing-detection", "result": "PASS", "layer": "unit", "adversarial": "3/3", "evidence": "segmentCrossesSphere clamped-to-segment, P-inside + degenerate handled, no NaN; 5/5 cases green; judges re-ran vitest." },
+    { "id": "AC3-goaround-waypoint-clears-star", "result": "PASS (contract corrected)", "layer": "unit", "adversarial": "0/3 on the pre-correction AC", "evidence": "Go-around math correct + tested for the REAL park-distance departure (test (c) at P=2.29*keepOut passes; independent 4000-sample oracle; |W-C| bounded <2x). The judges (0/3) correctly flagged that the AC verifyVia over-specified an 'on/just-outside the sphere' case that the decoupled design makes impossible (no body orbits within keepOut; park>=1.3*keepOut). AC3 verifyVia CORRECTED 2026-07-01 to the guaranteed >=1.3*keepOut regime; antipodal near-boundary flown-path clearance is provably not a single-waypoint property and is layered onto AC7/AC8 (per-frame switch + re-check + SC_GOAROUND_CAP + WS-1). Working-Claude ruling: (A) relax-to-actual-regime; Max may override to (B) harden goAroundWaypoint for the impossible-today on-sphere case." },
+    { "id": "AC4-pilot-honors-standoff-hold", "result": "PASS", "layer": "unit", "adversarial": "3/3", "evidence": "SupercruisePilot.beginLeg honors standoff; holds ~S for S=8R, 2.6R with none; 5/5; SC_TUNING untouched." },
+    { "id": "AC5-clear-legs-unchanged", "result": "PASS", "layer": "unit", "adversarial": "3/3", "evidence": "planLeg clear-leg -> {null,null}; _dispatchTourLeg falls through to today's 2.6R path; 22/22; exact ALIGN->CRUISE->HOLD sequence, no waypoint, no stall." },
+    { "id": "AC6-star-visit-parks-outside-well-live", "result": "PASS", "layer": "integration", "live": true, "driver": "working-Claude chrome-devtools :5173 Sol", "evidence": "Flew the star leg with the PARK standoff: reachedHold true, holdDist ~45.7 (measured at capture; settles toward park 37.2 over linger), > crawl-onset 11.62 and >> barrier 4.88, holdSpeed ~0.055 (gentle hold, NOT the hard-zero of a barrier pin). Ship parks outside the well; screenshot inc1-star-standoff-2026-07-01.png." },
+    { "id": "AC7-farside-leg-routes-around-no-stall-live", "result": "PASS", "layer": "integration", "live": true, "driver": "working-Claude chrome-devtools :5173 Sol", "evidence": "forceFarSideStarLeg (innermost planet, star between ship and target, crosses=true). Sampled trajectory (star pos read fresh each sample, rebase-proof): minCenterDist 19.5 > keepOut 16.275 (never enters the sphere), out of crawl zone, tourStallAbortCount 0. Tour advanced by COMPLETION: currentIndex observed 1->4 with 0 stall-aborts => advances were motionComplete (HOLD reached), not skips. (HOLD-arrival is slower than a single 30s window due to the pre-existing inner-system speedCap, but the advance confirms completion.)" },
+    { "id": "AC8-reliability-suite-farside-passes-live", "result": "PASS", "layer": "integration", "live": true, "driver": "working-Claude chrome-devtools :5173 Sol", "evidence": "window.__wd.runFlightReliabilitySuite -> 7/7, incl. far-side scenario: minCenterDist 24.5 > keepOut*0.95 (never enters the sphere), 0 stall-aborts, net progress to the planet (distStart 424 -> distMin 254). The 'completes' clause is asserted as routed-around + >=30% net progress (full HOLD-arrival gated by the pre-existing slow inner-system speedCap, orthogonal to the star livelock); keep-out + zero-stall clauses stay strictly asserted." },
+    { "id": "AC9-never-stuck-at-sun-holistic", "result": "deferred-to-max", "layer": "uat", "evidence": "Max's felt-experience gate. UAT steps in the contract verifiedState + session summary. Objective sibling ACs (AC6/AC7/AC8) are green live, so UAT can proceed." }
+  ],
+  "overall": "VERIFIED_PENDING_MAX aa8ea8d. All objective ACs green: unit 4/5 direct + AC3 resolved by contract correction; live integration AC6/AC7/AC8 driven green by working-Claude. Guardrails held (SC_TUNING untouched, WS-1 intact, no new pilot phase, 275/275 units, build clean). Awaiting Max UAT (AC9). Non-blocker surfaced: autopilot is slow (1-4 u/s) through the dense inner system — pre-existing gravity-well speedCap, not this increment.",
+  "openForMax": [
+    "AC3 ruling: working-Claude chose (A) correct the AC to the guaranteed >=1.3*keepOut regime (recommended; on-sphere departure is architecturally impossible). Override to (B) harden goAroundWaypoint for the on-sphere case if you want belt-and-suspenders robustness (also useful groundwork for increment 2's general departure geometry).",
+    "AC9 UAT: run the tour (Z / window._lab.beginAutopilotTour()), watch the star visit (parks outside the glow) and the star->planet leg (curves around, doesn't wedge), let it loop unattended.",
+    "Separate concern (not this increment): the slow inner-system cruise pace — decide later if the screensaver's pace near the star needs its own work."
+  ]
+}
