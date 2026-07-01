@@ -245,6 +245,25 @@ export function writeMagmatismSphere(carrier, drivers = {}, { macroSeed = 0, loc
     hotspotNode[p] = best;
   }
 
+  // ── STEP 3b — #4-MULTIPLY per-plume seeded fissure AXIS (grain fabric). A FRESH DISJOINT alea('magma:grain:')
+  //    stream ⇒ the existing 'magma:*' streams are byte-unperturbed (AC1). Each plume gets a random major axis
+  //    in its own tangent plane; the STEP-6 edifice elongates along it when ELONGATION_GAIN > 0 (isotropic at
+  //    the reference). DERIVED here — NOT read from carrier.grainAngle (zero/latitude-binary on the volcanic
+  //    path, GROUNDING.md §4). phi is UNIFORM ⇒ the axis distribution is isotropic (no latitude bias → AC3-safe).
+  //    grainPerp = top × axis completes the orthonormal tangent basis {axis, perp} (so along²+cross²=1). ──────
+  const rngGrain = alea('magma:grain:' + seed);
+  const grainAxis = [], grainPerp = [];
+  for (let p = 0; p < plumeCount; p++) {
+    const top = verts[hotspotNode[p]];
+    const ref = Math.abs(top[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];   // avoid pole degeneracy; ref not ∥ top
+    const e1 = norm(cross(ref, top));                             // a unit tangent at the plume top
+    const e2 = cross(top, e1);                                    // orthonormal unit tangent (top × e1)
+    const phi = 2 * Math.PI * rngGrain();
+    const cphi = Math.cos(phi), sphi = Math.sin(phi);
+    grainAxis.push(norm([cphi * e1[0] + sphi * e2[0], cphi * e1[1] + sphi * e2[1], cphi * e1[2] + sphi * e2[2]]));
+    grainPerp.push(cross(top, grainAxis[p]));                     // unit tangent orthonormal to the axis
+  }
+
   // ── STEP 4 — multi-source BFS geodesic distance transform FROM the plume tops → hotspotProximity ───
   // O(N) queue drain (NOT a convergence loop): every node is enqueued exactly once. hotspotProximity =
   // falloffAng(geodesic dist to nearest plume top) ∈ [0,1] (1 AT a hotspot, → 0 far into the province).
@@ -304,7 +323,23 @@ export function writeMagmatismSphere(carrier, drivers = {}, { macroSeed = 0, loc
     const psi = hotspotDist[i] * meanEdgeAngle;                 // geodesic distance to the nearest plume top (rad)
     const A = pStar >= 0 ? A_e[pStar] : 0;
     const radius = pStar >= 0 ? Psi_e[pStar] : 1;
-    const r = radius > 0 ? psi / radius : Infinity;             // normalized shield radius (0 at top, 1 at rim)
+    // #4-MULTIPLY grain-aligned edifice: stretch the normalized shield radius along the plume's seeded axis so
+    // the (1-r)^p contours become ellipses (semi-major = radius·E, semi-minor = radius ⇒ aspect E), breaking
+    // the isotropic circular dome. GUARDED on ELONGATION_GAIN>0 so the reference (default 0) takes the EXACT
+    // #4a `psi/radius` branch → byte-identical (AC1 rides the guard, not hypot bit-luck). {axis,perp} are
+    // orthonormal in the tangent plane ⇒ along²+cross²=1 ⇒ at E=1 the hypot reduces exactly to psi/radius.
+    let r;
+    if (T.ELONGATION_GAIN > 0 && pStar >= 0 && psi > 1e-9 && radius > 0) {
+      const top = verts[hotspotNode[pStar]];
+      const dp = dot(d, top);
+      const b = norm([d[0] - dp * top[0], d[1] - dp * top[1], d[2] - dp * top[2]]);   // unit tangent bearing top→node
+      const along = dot(b, grainAxis[pStar]);
+      const crossComp = dot(b, grainPerp[pStar]);                // named crossComp — `cross` is the vec3 helper
+      const E = 1 + T.ELONGATION_GAIN;
+      r = Math.hypot((psi * along) / (radius * E), (psi * crossComp) / radius);
+    } else {
+      r = radius > 0 ? psi / radius : Infinity;                 // normalized shield radius (0 at top, 1 at rim) — #4a path
+    }
     // §2 F7 edificeProfile transcribed VERBATIM (planet-lod-height.glsl.js:2218-2230):
     //   shield(r)  = (r<1) ? pow(1-r, p) : 0                    // convex dome, slope 0 at the rim
     //   caldera(r) = (r<c) ? 0.5*((r/c)^2 - 1) : 0             // summit bowl: -0.5 at r=0 → 0 at r=c
@@ -381,5 +416,8 @@ export function writeMagmatismSphere(carrier, drivers = {}, { macroSeed = 0, loc
     U, plumeId, plumeCount, hotspotNode, hotspotProximity, nearestPlume, substellarAxis,
     centroids, meanEdgeAngle, relaxPasses: PASSES,
     edificeMask, lavaPlainMask, magmaOceanMask, A_e, Psi_e, thetaSea, D_flood,
+    // #4-MULTIPLY grain fabric: per-plume seeded major axes + the applied edifice aspect ratio E (1 at the
+    // reference). The probe/tests measure edifice-footprint aspect against grainAxis for AC3.
+    grainAxis, elongation: 1 + T.ELONGATION_GAIN,
   };
 }

@@ -4,9 +4,10 @@
 // (bodyDrivers) is mapped to a `tune` override via magmaDriversToTune(), anchored so magmaDriversToTune(MAGMA_REF)
 // === null → the writer runs #4a BYTE-IDENTICAL at the neutral reference (AC1).
 //
-// SLICE A (this file, first pass): AC1 byte-identity-at-reference + determinism of the mapper, AC2 monotone
-// count/strength response, AC5 no-clobber (off-path magmaDiag null; volcanic bodyDrivers=null == #4a). The
-// grain-anisotropy AC3 + the ordering-under-sweep AC4 land in SLICE B (edifice anisotropy), marked it.skip here.
+// SLICE A: AC1 byte-identity-at-reference + determinism of the mapper, AC2 monotone count/strength response,
+// AC5 no-clobber (off-path magmaDiag null; volcanic bodyDrivers=null == #4a).
+// SLICE B (added): AC3 grain anisotropy PASSES (elongated + grain-aligned) while the latitude control FAILS
+// (multi-seed, per the adversary fix), and AC4 the edifice>plain>basin ordering is preserved under the sweep.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -133,5 +134,98 @@ describe('#4-MULTIPLY AC5 — no-clobber + dispatch', () => {
     const r = relief(carrierOf(), { archetype: 'lava', locked: true, bodyDrivers: MAGMA_DRIVERS, macroSeed: 1, T_eq: 2000 });
     expect(r.path).toBe('volcanic');
     expect(r.magmaDiag.appliedTune, 'appliedTune non-null with real drivers').not.toBeNull();
+  });
+});
+
+// ── geometry helpers (arm's-length: rebuilt from published diag fields, not the writer's internals) ───
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const geoDist = (d, t) => Math.acos(Math.max(-1, Math.min(1, dot3(d, t))));
+function unitBearing(d, top) { const dp = dot3(d, top); const b = [d[0] - dp * top[0], d[1] - dp * top[1], d[2] - dp * top[2]]; const l = Math.hypot(b[0], b[1], b[2]) || 1; return [b[0] / l, b[1] / l, b[2] / l]; }
+// Per-plume edifice-footprint aspect ratio + major-axis alignment to the seeded grainAxis, via 2x2 PCA of the
+// (along, cross) tangent coordinates. Returns null when the plume has < 6 edifice nodes (PCA too sparse).
+function plumeAspect(c, diag, p) {
+  const verts = c.verts, top = verts[diag.hotspotNode[p]], ax = diag.grainAxis[p], perp = cross3(top, ax);
+  const xs = [], ys = [];
+  for (let i = 0; i < c.N; i++) {
+    if (diag.edificeMask[i] && diag.nearestPlume[i] === p) {
+      const b = unitBearing(verts[i], top), psi = geoDist(verts[i], top);
+      xs.push(psi * dot3(b, ax)); ys.push(psi * dot3(b, perp));
+    }
+  }
+  const n = xs.length; if (n < 6) return null;
+  let mx = 0, my = 0; for (let i = 0; i < n; i++) { mx += xs[i]; my += ys[i]; } mx /= n; my /= n;
+  let sxx = 0, syy = 0, sxy = 0; for (let i = 0; i < n; i++) { const dx = xs[i] - mx, dy = ys[i] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+  sxx /= n; syy /= n; sxy /= n;
+  const tr = sxx + syy, disc = Math.sqrt(Math.max(0, tr * tr / 4 - (sxx * syy - sxy * sxy)));
+  const l1 = tr / 2 + disc, l2 = tr / 2 - disc; if (l2 <= 1e-12) return null;
+  const vx = sxy, vy = l1 - sxx, vl = Math.hypot(vx, vy) || 1;      // major eigenvector in (along=x, cross=y) frame
+  return { aspect: Math.sqrt(l1 / l2), alignAlong: Math.abs(vx / vl), n };  // alignAlong→1 ⇒ major axis ∥ grainAxis
+}
+const meanAspect = (c, diag) => { const a = []; for (let p = 0; p < diag.plumeCount; p++) { const r = plumeAspect(c, diag, p); if (r) a.push(r); } return a.length ? { aspect: a.reduce((s, r) => s + r.aspect, 0) / a.length, align: a.reduce((s, r) => s + r.alignAlong, 0) / a.length, plumes: a.length } : null; };
+// corr^2(U, sin^2 latY) and corr^2(U, arm's-length centroid-proximity), both over non-basin nodes.
+function varExplained(c, diag) {
+  const verts = c.verts, N = c.N, U = diag.U, BELT = 0.10;
+  const latY = new Float64Array(N), pred = new Float64Array(N);
+  for (let i = 0; i < N; i++) { const y = Math.max(-1, Math.min(1, verts[i][1])); latY[i] = y * y; let best = -Infinity; for (let p = 0; p < diag.centroids.length; p++) { const dd = dot3(verts[i], diag.centroids[p]); if (dd > best) best = dd; } pred[i] = Math.exp(-Math.acos(Math.max(-1, Math.min(1, best))) / BELT); }
+  const corr = (a) => { let n = 0, mu = 0, mv = 0; for (let i = 0; i < N; i++) { if (diag.magmaOceanMask[i]) continue; mu += U[i]; mv += a[i]; n++; } mu /= n; mv /= n; let cvr = 0, vu = 0, va = 0; for (let i = 0; i < N; i++) { if (diag.magmaOceanMask[i]) continue; const du = U[i] - mu, da = a[i] - mv; cvr += du * da; vu += du * du; va += da * da; } const r = cvr / (Math.sqrt(vu * va) || 1); return r * r; };
+  return { latY: corr(latY), plume: corr(pred) };
+}
+
+// ── AC3 — grain anisotropy PASSES (elongated + grain-aligned), latitude control FAILS (multi-seed) ────
+describe('#4-MULTIPLY AC3 — grain-aligned edifices, not latitude', () => {
+  // The discriminator is the DELTA from the reference (elongation adds real anisotropy ALIGNED to grainAxis),
+  // NOT an absolute aspect≈1 at the reference — discrete Delaunay sampling + province-wall clipping give the
+  // isotropic footprint a measured aspect ~1.15-1.36 with RANDOM axis (align 0.36-0.90). Elongation lifts
+  // aspect to ~1.5-1.9 and pins the major axis to grainAxis (align 0.85-0.99). Thresholds set from the diag.
+  it('at high thermal drive edifices are elongated ALONG the seeded grain axis, beyond the isotropic baseline', () => {
+    const H_REF = magmaThermal(MAGMA_REF);
+    for (const s of SEEDS) {
+      const cHi = carrierOf();
+      const dHi = writeMagmatismSphere(cHi, { thermalState: 0.8 }, { macroSeed: s, locked: false, tune: magmaDriversToTune({ thermalState: 0.8 }) });
+      const hi = meanAspect(cHi, dHi);
+      const cRef = carrierOf();
+      const dRef = writeMagmatismSphere(cRef, { thermalState: H_REF }, { macroSeed: s, locked: false, tune: magmaDriversToTune({ thermalState: H_REF }) });
+      const ref = meanAspect(cRef, dRef);
+      expect(hi, `seed ${s}: enough edifice nodes for PCA`).not.toBeNull();
+      expect(ref, `seed ${s}: reference PCA`).not.toBeNull();
+      expect(dRef.elongation, `seed ${s}: reference E==1 (isotropic)`).toBe(1);
+      expect(dHi.elongation, `seed ${s}: high-thermal E>1`).toBeGreaterThan(1);
+      expect(hi.aspect, `seed ${s}: edifices elongated (aspect>1.35)`).toBeGreaterThan(1.35);
+      expect(hi.align, `seed ${s}: elongation grain-aligned (align>0.75)`).toBeGreaterThan(0.75);
+      // the delta cancels the fixed sampling-noise baseline: elongation adds real, grain-aligned anisotropy.
+      expect(hi.aspect - ref.aspect, `seed ${s}: aspect lifted above the isotropic baseline`).toBeGreaterThan(0.2);
+      expect(hi.align, `seed ${s}: high-thermal axis more grain-aligned than the random reference`).toBeGreaterThan(ref.align);
+    }
+  });
+
+  it('the latitude falsifier holds for EVERY seed: varByLatitudeY < 0.15 AND < varByPlume', () => {
+    for (const s of SEEDS) for (const L of LOCKS) {
+      const c = carrierOf();
+      const T_ss = L ? 2800 : 0;
+      const diag = writeMagmatismSphere(c, { thermalState: 0.8 }, { macroSeed: s, locked: L, T_ss, tune: magmaDriversToTune({ thermalState: 0.8 }) });
+      const v = varExplained(c, diag);
+      expect(v.latY, `seed ${s} locked ${L}: varByLatitudeY < 0.15`).toBeLessThan(0.15);
+      expect(v.latY, `seed ${s} locked ${L}: latitude < plume`).toBeLessThan(v.plume);
+    }
+  });
+});
+
+// ── AC4 — #4a elevation ordering preserved under elongation + the driver sweep ────────────────────────
+describe('#4-MULTIPLY AC4 — ordering preserved under sweep', () => {
+  it('mean(edifice) > mean(lava-plain) > mean(basin) holds across the thermal sweep and both body-cases', () => {
+    const H_REF = magmaThermal(MAGMA_REF);
+    for (const H of [H_REF, 0.5, 0.8]) for (const L of LOCKS) {
+      const T_ss = L ? 2800 : 0;
+      for (const s of SEEDS) {
+        const c = carrierOf();
+        const d = writeMagmatismSphere(c, { thermalState: H }, { macroSeed: s, locked: L, T_ss, tune: magmaDriversToTune({ thermalState: H }) });
+        const mean = (mask) => { let sm = 0, n = 0; for (let i = 0; i < c.N; i++) if (mask[i]) { sm += d.U[i]; n++; } return n ? sm / n : null; };
+        const mEd = mean(d.edificeMask), mPl = mean(d.lavaPlainMask), mBa = mean(d.magmaOceanMask);
+        const tag = `H ${H} locked ${L} seed ${s}`;
+        if (mEd != null && mPl != null) expect(mEd, `${tag}: edifice>plain`).toBeGreaterThan(mPl);
+        if (mPl != null && mBa != null) expect(mPl, `${tag}: plain>basin`).toBeGreaterThan(mBa);
+      }
+    }
   });
 });
