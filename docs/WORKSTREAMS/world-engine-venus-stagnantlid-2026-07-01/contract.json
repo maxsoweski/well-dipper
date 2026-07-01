@@ -1,0 +1,149 @@
+{
+  "workstream": "world-engine-venus-stagnantlid-2026-07-01",
+  "intentRef": "intent.md",
+  "mechanismRef": "../world-engine-history-program-2026-06-27/increment-4b-venus-stagnantlid-MECHANISM.md",
+  "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
+  "rubricRef": "../world-engine-history-program-2026-06-27/UAT-RUBRICS.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "summary": "Increment #4b of the world-engine history program (GROUND track): a NEW three-free relief writer writeStagnantLidReliefSphere in src/worldengine/base/stagnantLid.js for the stagnant-lid silicate regime (Venus), a sibling of plates.js / shellRelief.js. It organizes relief about ONE seeded mantle-plume field (alea 'stagnant:' namespace) reproducing the BAT-region causal logic, and REPLACES carrier.height for Venus: tessera crustal plateaus (high, ~7-8%, orthogonal ribbon+fold double-fabric via two crossed steeredNoise3 ridged fields) over the oldest plume caps; coronae (60-2600 km heavy-tailed draw, placed field-biased not sprinkled, active=dome+trench+rise / inactive=rim+depression as an analytic radial-profile MORPHOLOGY SELECTOR, CORONA_ACTIVE_FRAC=0.65); a basaltic regional-plains datum (~70-80% TOTAL plains) with rift-corridor lows; plus a diagnostics-only resurfAge field. Dispatch predicate isStagnantLidPath goes in planet-lod-rivers.js next to isEarthlikePlatePath/isShellReliefPath (NOT base/), inserting stagnant-lid AFTER the shipped volcanic branch and BEFORE the despun fallback; ONE PRESET_ARCHETYPE line ('Venus (sulfuric shroud)':'stagnant-lid') routes Venus. Key-based match only (NOT gated on locked; Venus is locked:false). Pure BROADEN sibling: zero-clobbers plate/shell/volcanic/despun (checked before it, return first). No new carrier.regime constant (verify.js asserts {0,1,2}); no edits to plates.js/shellRelief.js/tectonic.js/sphereField.js/verify.js/planet-archetypes.js; no Math.random/Date.now/new-while; REPLACE via .set(U); bounded RELAX_PASSES Jacobi smooth. Citations re-verified 2026-07-01 (all calibration constants hold). Seed-only (driver-response deferred to a future 4b-MULTIPLY). Lab-only (#9 ports to game).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "DETERMINISM + NO-RNG: the writer is fully deterministic and RNG-free. Same macroSeed => byte-identical U / grainAngle / faultDensity / resurfAge / isTessera / coronaActive; no Math.random / Date.now / new convergence while-loop; every draw uses only the disjoint alea 'stagnant:' namespace (never sharing a stream with 'plates:'/'shell:'/'e6:'/'magma:'); |U| < STAGNANT_BOUND for all nodes.",
+      "verifyVia": {
+        "input": "Static-grep stagnantLid.js for /Math\\.random|Date\\.now/ and for any new while-loop; run writeStagnantLidReliefSphere twice on the same fresh 600-node carrier for seeds {1,2,3,7,42}; enumerate the alea seed strings used.",
+        "observable": "Zero grep matches; byte-identical typed arrays (U/grainAngle/faultDensity/resurfAge/isTessera/coronaActive) across the two runs for every seed; every alea stream string is prefixed 'stagnant:'; |U[i]| < STAGNANT_BOUND for all nodes."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "STRUCTURE BAR (must PASS): relief is organized BY the seeded plume field with the right Venus proportions and morphology. (a) coronae+tessera correlate with an arm's-length plume predictor rebuilt from published plumeCenters (varExplainedByPlume >= 0.5); (b) tesseraFrac in [0.06,0.10] AND plainsFrac in [0.65,0.85]; (c) elevation ordering mean(tessera) > mean(plains) > mean(active-plume/rift), where the LOW mask is scoped as {rift corridors} UNION {active-corona trench annulus 0.8<=rho<=1.05} — NOT the area-average of a whole active corona (its domed interior is above plains); (d) the active/inactive morphology SELECTOR is present; (e) activeFrac ~= CORONA_ACTIVE_FRAC (0.65) +/- 0.12.",
+      "verifyVia": {
+        "input": "Build the field per seed on a shared 600-node carrier; rebuild the plume-proximity predictor arm's-length from the published plumeCenters (independent of U); sample the correctly-scoped ordering masks; sample radial profiles at a set of active + inactive coronae.",
+        "observable": "varExplainedByPlume >= 0.5; tesseraFrac in [0.06,0.10]; plainsFrac in [0.65,0.85]; mean(tessera) > mean(plains) > mean(trench/rift lows); at active coronae h(rho~0)>0 & h(rho~0.95)<0 & h(rho~1.25)>0, at inactive h(rho~0)<0 & h(rho~0.95)>0; activeFrac within 0.65 +/- 0.12; all seeds."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3",
+      "statement": "LATITUDE CONTROL (must FAIL) — the load-bearing falsifier: Venus does NOT fall to sin^2(lat). U is not explained by latitude — varExplainedByLatitude < 0.15 AND < varExplainedByPlume, for every seed. Tessera/coronae are plume-scattered, not banded.",
+      "verifyVia": {
+        "input": "Correlate U vs sin^2(carrier latitude about +y) per seed; compare to varExplainedByPlume from AC2.",
+        "observable": "varExplainedByLatitude < 0.15 AND varExplainedByLatitude < varExplainedByPlume, all seeds."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4",
+      "statement": "RANDOM-PLACEMENT CONTROL (must FAIL) — the anti-tautology guard: a writer variant that places coronae+tessera by pure RNG (constant accept-gate; tessera thresholded on an INDEPENDENT noise field; ignoring plumeProx) must FAIL the structure bar, proving the real placement is causally plume-organized, not sprinkled.",
+      "verifyVia": {
+        "input": "Run the random-placement control variant on the same seeds; recompute varExplainedByPlume with the same arm's-length predictor.",
+        "observable": "For the control, varExplainedByPlume collapses < 0.15 and AC2(a) FAILS — while the real writer PASSES AC2(a) on the same seeds."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5",
+      "statement": "VARIETY (distinct-per-world): two seeds produce different plumeCount AND different coronaCount AND a visibly different tessera pattern (< 0.2 node-overlap of isTessera), each reproducible per seed.",
+      "verifyVia": {
+        "input": "Build the field at two seeds; compare plumeCount, coronaCount, and the isTessera node-overlap fraction.",
+        "observable": "plumeCount differs AND coronaCount differs across the two seeds; isTessera node-overlap < 0.2; each seed's field reproducible on re-run."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC6",
+      "statement": "NO-CLOBBER (plate / shell / volcanic / despun) + scope guard: routing terrestrial/ocean (plate), Europa (shell), a volcanic body (volcanic), and a gas-giant-unlocked (despun) through writeBodyRelief returns each prior path byte-identical with stagnantDiag null; carrier.regime untouched (verify.js regime in {0,1,2} — no 4th regime constant); the commit diff touches ONLY the in-scope files.",
+      "verifyVia": {
+        "input": "Call writeBodyRelief with terrestrial/ocean, ice (Europa), a volcanic preset, and gas-giant unlocked; compare returned fields to captured pre-change baselines; run the plate/shell/volcanic regime-gate suites; git show the commit.",
+        "observable": "plate/shell/volcanic/despun U byte-identical to baseline with stagnantDiag null off the stagnant path; the regime-gate suites pass; carrier.regime stays in {0,1,2}; git diff touches ONLY stagnantLid.js (new), planet-lod-rivers.js, planet-lod-lab.html, the new stagnant test file, and workstream docs — NOT plates.js / shellRelief.js / tectonic.js / sphereField.js / verify.js / planet-archetypes.js."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC7",
+      "statement": "SEAM FIRES + single-coverage fragility (key-based, not locked-gated): WITH the one PRESET_ARCHETYPE line ('Venus (sulfuric shroud)':'stagnant-lid'), Venus routes to path 'stagnant-lid' (regime 'venus-stagnant-lid') and does NOT fall to sin^2; WITHOUT the line, Venus (archetype=null, locked:false) has NO fallback net and routes to 'despun' — documenting the fragility (the contract KEEPS the line). Dispatch is key-based only; it must fire regardless of the locked flag.",
+      "verifyVia": {
+        "input": "Resolve the Venus preset with and without the PRESET_ARCHETYPE line; call stagnantLidRegimeOf/isStagnantLidPath on 'stagnant-lid' (both locked=false and locked=true) and on (null, locked=false).",
+        "observable": "With the line -> path 'stagnant-lid', regime 'venus-stagnant-lid', not 'despun'; without the line -> path 'despun'; stagnantLidRegimeOf('stagnant-lid') === 'venus-stagnant-lid' for locked=false AND locked=true; stagnantLidRegimeOf(null) === null."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC8",
+      "statement": "LIVE PROBE: in the running lab, selecting Venus with reliefBakeStrength(1) renders tessera plateaus + corona rings + basaltic plains (NOT sin^2 bands), and stagnantLidProbe() confirms the field is real and plume-organized. Agent-verified via chrome-devtools (objective) — not asked of Max.",
+      "verifyVia": {
+        "input": "chrome-devtools on the lab (list_pages for liveness per sandbox-localhost-probe), select 'Venus (sulfuric shroud)', setSeed(1234), reliefBakeStrength(1), force a route, call stagnantLidProbe(), take a screenshot.",
+        "observable": "heightSource == 'carrier', regime == 'venus-stagnant-lid'; varExplainedByPlume > varExplainedByLatitude; ordering meanTessera > meanPlains > meanRiftTrench; tesseraFrac in [0.06,0.10], plainsFrac in [0.65,0.85], activeFrac ~= 0.65 +/- 0.12; the screenshot shows plume-scattered tessera + corona rings + plains with NO latitude banding."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9",
+      "statement": "UAT (Max-only, holistic): does Venus read as a distinct, recognizably-Venus world from the user's view — tessera highlands, corona rings, a young plains sea — rather than the old latitude-band smear? Holistic acceptance; never PASSed by any agent (deferred-to-max).",
+      "verifyVia": {
+        "input": "Max views 'Venus (sulfuric shroud)' in the lab (reliefBakeStrength 1), optionally across a couple of seeds, and judges the whole read.",
+        "observable": "Max judges Venus as a distinct, recognizably-Venus world (not a latitude-band smear). Deferred-to-max — VERIFIED_PENDING_MAX <sha> on integration green, then Max UAT -> Shipped."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "the shared 600-node carrier (verts + adjacency + height/grainAngle/faultDensity Float32Arrays + regime) — same carrier plates.js/shellRelief.js write",
+      "macroSeed (integer) -> every alea('stagnant:<lane>:'+seed) stream: 'stagnant:plumes:' (centers+count), 'stagnant:ptype:' (ancient/corona type), 'stagnant:warp:' (province domain-warp), 'stagnant:corona:' (site pool + accept-gate + radius + active/inactive), 'stagnant:tessfold:' / 'stagnant:tessribbon:' (double-deform noises), 'stagnant:age:' (young-lobe noise), 'stagnant:detail:' (sub-grid)",
+      "the coined short key 'stagnant-lid' (STAGNANT_LID_KEYS) resolved by stagnantLidRegimeOf(archetype, locked) -> 'venus-stagnant-lid'; NOT gated on locked",
+      "three-free deps: alea, simplex-noise createNoise3D, mathutil clamp/clamp01/mix — plus steeredNoise3 + randDir + meanEdgeAngle + vec3 helpers COPIED VERBATIM from tectonic.js/shellRelief.js/plates.js (module-private there)",
+      "LOCKED calibration constants (all citation-re-verified 2026-07-01, unchanged): PLUME_MIN=6/PLUME_SPAN=6, PLUME_BELT~=0.35, TESSERA_CENTER_FRAC, TESSERA_THRESH (tuned to tesseraFrac in [0.06,0.10]), CORONA_POOL=48, CORONA_BIAS~=1.5, CORONA_ACTIVE_FRAC=0.65, D_MIN=60/D_MAX=2600 km + CORONA_SIZE_SKEW~=2.5, R_V=6052 km, BASE_TESSERA=0.70/BASE_PLAINS=0.10/BASE_RIFT=-0.25, tessera/corona lobe amplitudes < the base gaps, STAGNANT_BOUND=4, RELAX_PASSES=4"
+    ],
+    "outputs": [
+      "carrier.height REPLACE via .set(U) — the SOLE low/mid source for Venus (no additive re-banding)",
+      "carrier.grainAngle.set(foldAngle) — tessera fold-fabric strike (0 outside tessera), parity with shellRelief",
+      "carrier.faultDensity[i] = clamp01(deformIntensity) — normalized deformation intensity, parity with plates/shell",
+      "carrier.regime UNTOUCHED — verify.js:39 asserts regime in {0,1,2}; introduce NO 4th regime constant",
+      "resurfAge (normalized [0,1] age field) RETURNED IN DIAGNOSTICS ONLY — carrier channel deferred to E12 palette (#8)",
+      "stagnantDiag object (U, plumeCenters, centerIsAncient, isTessera/tesseraFrac, coronaCenters/coronaRadius/coronaActive/coronaCount/activeFrac, inRift/plainsFrac, resurfAge/deformIntensity/foldAngle, meanEdgeAngle/relaxPasses) threaded through writeBodyRelief -> route() -> a new get stagnantDiag() accessor",
+      "live stagnantLidProbe() in planet-lod-lab.html (sibling of plateProbe/shellProbe), rebuilding predictors arm's-length from plumeCenters",
+      "ONE PRESET_ARCHETYPE line ('Venus (sulfuric shroud)':'stagnant-lid') + the dispatch predicate isStagnantLidPath exported from planet-lod-rivers.js"
+    ],
+    "mustStayWorking": [
+      "the validated Earth-like plate path (terrestrial/ocean) — byte-identical; isEarthlikePlatePath checked FIRST, returns before any stagnant code",
+      "the shipped shell-relief icy/despun path (icy-active/volatile-cold/eyeball-despun) — byte-identical; checked before stagnant",
+      "the shipped volcanic path (Lava/Magma) — byte-identical; 4a is ALREADY shipped, so current dispatch is plate->shell->volcanic->despun; 4b inserts stagnant-lid between volcanic and despun -> 5-way",
+      "the despun/zonal sin^2 fallback for all other non-Venus non-shell bodies — byte-identical",
+      "verify.js regime in {0,1,2}; NO 4th regime constant",
+      "NO edits to plates.js / shellRelief.js / tectonic.js / sphereField.js / verify.js / planet-archetypes.js (copy the shared helpers verbatim into stagnantLid.js instead)",
+      "AC1 determinism guards: alea 'stagnant:' namespace only, no Math.random/Date.now, no new while, bounded RELAX_PASSES, REPLACE (.set) never += on carrier.height"
+    ]
+  },
+  "filesTouched": [
+    "NEW src/worldengine/base/stagnantLid.js — writeStagnantLidReliefSphere + stagnantLidRegimeOf + STAGNANT_LID_KEYS; copy steeredNoise3 / randDir / meanEdgeAngle / vec3 helpers VERBATIM from tectonic.js / shellRelief.js / plates.js",
+    "EDIT planet-lod-rivers.js — import the writer + regime resolver; export isStagnantLidPath; make writeBodyRelief N-way (insert the stagnant-lid branch AFTER volcanic, BEFORE despun); thread stagnantDiag through route(); add a get stagnantDiag() overlay accessor",
+    "EDIT planet-lod-lab.html — ONE PRESET_ARCHETYPE line ('Venus (sulfuric shroud)':'stagnant-lid') + the stagnantLidProbe() live probe (sibling of plateProbe/shellProbe)",
+    "NEW tests/worldengine-base-stagnantlid-structure.test.js — the AC1-AC7 headless blocks (determinism, structure bar, latitude control, random control, variety, no-clobber, seam-fires)",
+    "DOC record-build-intent note (function + intent + non-goals) in the workstream dir; Rule-3 FEATURES.md row on ship"
+  ],
+  "mustFix": [
+    "#1 ORDERING-MASK SCOPE (load-bearing; sound-check #3): AC2(c) and the probe MUST sample the 'active-plume/rift' LOW population as {rift corridors} UNION {active-corona trench annulus 0.8<=rho<=1.05}, NOT the area-average of a whole active corona (its domed interior is ABOVE plains — averaging the whole corona could invert the ordering).",
+    "#2 STALE-GROUNDING RE-CHECK BEFORE CODING (the mechanism doc predates #4a shipping): #4a volcanic is now SHIPPED, so live dispatch is plate->shell->volcanic->despun (4-way), NOT the doc's 'pre-4a plate->shell->despun'. Re-verify the EXACT insertion point + current line numbers in planet-lod-rivers.js (isEarthlikePlatePath/isShellReliefPath and the volcanic branch) against live code; 4b makes it 5-way. Also re-confirm live: Venus is a NAMED_BODY archetype=null locked:false (lab ~:2615), NAMED_BODY short-circuits drawPresetRadius before PRESET_ARCHETYPE (radius stays canonical), and the PRESET_ARCHETYPE map line number.",
+    "#3 DO NOT GATE ON locked: Venus is a slow retrograde rotator, locked:false; stagnantLidRegimeOf matches on the KEY only. Gating on locked would MISS Venus (that IS the fall-through bug).",
+    "#4 carrier.regime UNTOUCHED — no 4th regime constant (verify.js:39 asserts {0,1,2}); the archetype-string 'stagnant-lid' regime is a DIFFERENT concept from the per-node Anderson field.",
+    "#5 COPY the shared helpers verbatim (steeredNoise3 is module-private in tectonic.js; randDir/meanEdgeAngle/vec3 from plates.js). Primary structural template = plates.js (centroids->proximity->base-elevation step); shellRelief.js is the second template (its steeredNoise3 copy + province/BFS pattern).",
+    "#6 SINGLE-COVERAGE FRAGILITY: Venus has NO fallback net (unlocked, archetype=null) — the ONE PRESET_ARCHETYPE line is load-bearing; drop it and Venus silently regresses to sin^2. AC7 tests both ways; the contract keeps the line.",
+    "OUT OF SCOPE: Mars (separate stagnant-lid-rocky writer); the 4a active-volcanic branch (shipped separately); simulated resurfacing time-history (morphology is a static selector); a carrier.resurfAge channel (diagnostics only for 4b); driver-response (seed-only; the tune/drivers seam deferred to a future 4b-MULTIPLY); the game Planet.js port (lab-only, #9); basin/age palette expression (#8/E12)."
+  ],
+  "buildSlices": [
+    "SLICE A (the writer + its headless structure test — the bulk, three-free): src/worldengine/base/stagnantLid.js — the seeded mantle-plume field (centers/count/type + domain-warp + nearest-center Gaussian proximity), tessera (ancient-cap threshold + orthogonal ribbon+fold double-fabric via two crossed steeredNoise3 ridged fields + grainAngle), coronae (field-biased accept pool + heavy-tailed size draw + active/inactive analytic radial profiles + CORONA_ACTIVE_FRAC selector), rift corridors, resurfAge diagnostics, assembly (ordered base constants + bounded texture + REPLACE .set(U) + RELAX_PASSES), and stagnantLidRegimeOf. Plus tests/worldengine-base-stagnantlid-structure.test.js covering AC1-AC5. Everything headless.",
+    "SLICE B (dispatch + lab wiring + live): planet-lod-rivers.js N-way dispatch (insert stagnant-lid after volcanic, before despun) + isStagnantLidPath + stagnantDiag threading + get stagnantDiag(); planet-lod-lab.html ONE PRESET_ARCHETYPE line + stagnantLidProbe(); the no-clobber (AC6) + seam-fires (AC7) headless blocks. Then working-Claude drives the live AC8 probe on the running lab and screenshots; AC9 UAT deferred to Max."
+  ]
+}
