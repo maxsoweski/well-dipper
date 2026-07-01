@@ -19,6 +19,12 @@ adversarial review → file-scoped commit) → working-Claude live integration c
 
 ## ▶ NEXT PRIORITY (Max, 2026-07-01) — obstacle-aware intelligent tour routing
 
+> **⚠ SEQUENCING SUPERSEDED (2026-07-01 PM):** inc-1 shipped then **failed Max's UAT**; the
+> instrumented triage + navigation-AI research produced a reconciled plan-of-record:
+> [`FLIGHT_RELIABILITY_ROADMAP_2026-07-01.md`](FLIGHT_RELIABILITY_ROADMAP_2026-07-01.md)
+> (Step 0 corrections → inc-2 DEPART → tangent-graph routing → inc-3 → inc-4). This section
+> stays as the vision record; read the roadmap for current state + sequence.
+
 WS-1 (CRUISE stall-detector) is `VERIFIED_PENDING_MAX 5945f07` and kills the **permanent** freeze, but
 it aborts-and-*skips* without re-routing (an explicit WS-1 non-goal), which leaves a **livelock**: after a
 wedge-abort the ship is pinned at the star and re-wedges on far-side legs (contract §KNOWN RESIDUAL). Max
