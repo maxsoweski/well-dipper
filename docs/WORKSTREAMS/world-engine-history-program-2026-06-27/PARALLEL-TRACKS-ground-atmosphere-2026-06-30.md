@@ -22,7 +22,7 @@ Read alongside (source of truth, don't re-derive): `ROADMAP.md` (this dir), `UAT
   (Max-only action, independent of both tracks below.)
 - **#2 Plate driver-response** — **SHIPPED** `87704a9` (D16 age descoped `45cca44` per Max UAT; age → epoch model #6 + weathering #7).
 - **Branch:** `feature/world-engine-production-L1`, checked out at `~/projects/well-dipper`. **Push HOLD** (campaign-wide). Lab-only until #9.
-- **⚠ Uncommitted in that checkout right now:** `src/auto/CameraChoreographer.js`, `src/debug/LabMode.js` (modified) + a pile of untracked `F*.png` lab screenshots. Looks like leftover lab-camera work from the last session. **Decide commit-vs-stash before starting — don't discard blindly.**
+- **~~⚠ Uncommitted in that checkout right now:~~ RESOLVED 2026-06-30 (WE-ground session):** `src/auto/CameraChoreographer.js` + `src/debug/LabMode.js` were **STASHED** (`git stash@{0}`, by pathspec — untracked `F*.png` screenshots left in place). Reason: CameraChoreographer was experimental "Loop (a) cycle 4 Attempt 1" spring-damper work on `EstablishingMode` — a subsystem the `supercruise-freelook` workstream is actively retiring from the live path — so it was NOT baked into L1 unverified; LabMode was a safe scenario-4/7 real-warp-flow test fix. Both preserved, recoverable via `git stash pop stash@{0}`. If the camera work was meant to land, pop + commit it. The untracked lab-screenshot pile is a separate (gitignore) concern, untouched.
 - **Known gaps (THIN):** Mars (stagnant-lid, NOT plate-driven — the plate assignment is wrong; needs a dedicated stagnant-lid-*rocky* path, Venus-shaped ≠ Mars-shaped); sub-Neptune (no increment home).
 
 ---

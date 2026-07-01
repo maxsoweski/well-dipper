@@ -1,0 +1,164 @@
+{
+  "workstream": "world-engine-magmatism-2026-06-30",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
+  "rubricRef": "../world-engine-history-program-2026-06-27/UAT-RUBRICS.md",
+  "summary": "Increment 4a of the world-engine history program: a deterministic, three-free volcanic / endogenic-heat relief writer (src/worldengine/base/magmatism.js, writeMagmatismSphere), sibling of plates.js and shellRelief.js, that REPLACES the sin^2(lat) fallback for volcanic bodies ONLY (Lava / Magma-K2-141b / Io-type). All structure keyed off ONE seeded mantle-plume field: hotspot/edifice (shield) placement at plume tops + effusive lava-plain flooding of the lows + a substellar magma-ocean BASIN (depression) for locked extreme-T bodies. Placement is seed-only (driver-response deferred, exactly as plates.js shipped). The volcanic gate is checked only AFTER isEarthlikePlatePath and isShellReliefPath return, so it never touches the validated plate path or the icy path. Venus stagnant-lid (#4b) is OUT (parallel research -> own scope).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "DETERMINISM + NO-RNG: magmatism.js contains no Math.random()/Date.now() call form and no convergence while-loop (render-once, bounded passes), and writeMagmatismSphere run twice on the same fresh carrier yields byte-identical fields for every seed x body-case; |U| < MAGMA_BOUND.",
+      "verifyVia": {
+        "input": "Static-grep magmatism.js for /Math\\.random\\s*\\(|Date\\.now\\s*\\(/ (zero matches) + render-once guard (no threshold while-loop); run writeMagmatismSphere(carrier,{},{macroSeed:s, locked:L}) twice for s in {1,2,3,7,42} x L in {false,true} on a fresh 600-node carrier.",
+        "observable": "Zero RNG matches; byte-identical U, plumeId, hotspotProximity, lavaPlainMask, magmaOceanMask (typed-array equality) across the two runs for every (s,L); |U[i]| < MAGMA_BOUND for all nodes."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "STRUCTURE BAR (signal must PASS): U is explained by the seeded mantle-plume geometry (edifices sit at plume tops, not sprinkled), with a predictor rebuilt ARM'S-LENGTH from the published plume centers (NOT from the writer's own hotspotNode); and the elevation ordering mean(edifice/shield) > mean(lava-plain) > mean(magma-ocean basin) holds.",
+      "verifyVia": {
+        "input": "On the 600-node carrier, rebuild a signed plume/hotspot-proximity predictor via BFS geodesic falloff from the published plume centers; measure corr(U, predictor); compute mean U over edifice nodes vs lava-plain nodes vs magma-ocean-basin nodes; compare edifice amplitude to the quiet-plain denominator.",
+        "observable": "|corr(U, plume-proximity predictor)| >= 0.5; mean(edifice) > mean(lava-plain) > mean(magmaOcean basin); edifice(shield-crest) amplitude >= 2x the quiet-plain denominator. [Exact thresholds finalized against the plume-field mechanism in mustFix #1.]"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3",
+      "statement": "LATITUDE CONTROL (must FAIL): U is NOT explained by carrier +y latitude bands - the load-bearing falsifier vs the sin^2(lat) fallback this writer replaces.",
+      "verifyVia": {
+        "input": "Correlate U vs sin^2(carrier +y latitude), for both locked and unlocked volcanic cases.",
+        "observable": "varExplainedByLatitudeY < 0.15 AND strictly < varExplainedByPlume, for every case."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4",
+      "statement": "RANDOM-PLACEMENT CONTROL (must FAIL): a control variant with hotspot/edifice placement DECOUPLED from the plume field (isotropic/random node picks, amplitude-matched) collapses the structure signal - proving the plume field, not merely 'some bumps', carries the organization.",
+      "verifyVia": {
+        "input": "Build a control variant of the writer with plume-steered placement replaced by random placement; measure corr(U_control, plume-proximity) and the elevation ordering.",
+        "observable": "Control corr(U_control, plume-proximity) collapses toward 0 AND the mean(edifice)>mean(plain)>mean(basin) ordering breaks; the real field PASSES AC2."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5",
+      "statement": "NOISE CONTROL (must FAIL): the real plume-organized field beats amplitude-matched pure noise.",
+      "verifyVia": {
+        "input": "Correlate U vs an independent amplitude-matched simplex field.",
+        "observable": "corr(U, matched-noise) < 0.15."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC6",
+      "statement": "VARIETY: two different macroSeeds produce different volcanic worlds, each reproducible per seed.",
+      "verifyVia": {
+        "input": "Build the field with two different macroSeeds, same body-case.",
+        "observable": "Different plumeCount OR < 0.2 node-overlap of hotspotNode, AND a visibly different plume layout; each seed reproducible."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC7",
+      "statement": "NO-CLOBBER of the Earth-like plate path: terrestrial/ocean unlocked bodies still route to the plate writer, byte-identical to a pre-change baseline.",
+      "verifyVia": {
+        "input": "Call writeBodyRelief with archetype in {terrestrial, ocean}, locked=false.",
+        "observable": "Returns path:'plate' with magmaDiag:null; the plate U field is byte-identical to the captured pre-change baseline; the plate AC2 structure test still passes unchanged."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC8",
+      "statement": "NO-CLOBBER of the shell + despun paths and dispatch safety: icy/despun bodies keep their byte-identical paths, and a non-volcanic body (Earth-like / icy / gas) does NOT match the volcanic writer; the volcanic gate is checked only AFTER plate and shell return.",
+      "verifyVia": {
+        "input": "Call writeBodyRelief with Europa (shell), impact-airless unlocked (despun), and gas-giant; assert isVolcanicPath false for each; confirm gate order plate -> shell -> volcanic -> despun in writeBodyRelief.",
+        "observable": "shell/despun paths byte-identical to baseline (magmaDiag:null off the volcanic path); isVolcanicPath returns false for terrestrial/ocean/icy/gas-giant/sub-neptune/carbon/crystal archetypes; only the volcanic set matches."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC9",
+      "statement": "SEAM FIRES: the Lava and Magma (K2-141b) presets route to the volcanic regime, and the substellar magma-ocean BASIN fires for the LOCKED extreme-T case and NOT for an unlocked lava world.",
+      "verifyVia": {
+        "input": "With the lab PRESET routing, route 'Lava (hot airless)' and 'Magma (K2-141b)'; inspect magmaOceanMask for locked Magma vs unlocked Lava.",
+        "observable": "Both route to path:'volcanic' (never silently to sin^2); magmaOceanMask is a single coherent substellar basin (non-empty) for the locked Magma case and empty for the unlocked Lava case."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC10",
+      "statement": "LIVE magmaProbe: in the running lab, the Lava and Magma presets bake onto the carrier and the probe proves the relief is plume-organized, not latitude - and the landforms look distinct.",
+      "verifyVia": {
+        "input": "In the lab on a fresh tab of the running Chrome (localhost:5173/well-dipper -> lab), select Lava (then Magma), window._lab.setSeed(1234); window._lab.reliefBakeStrength(1); force a route; window._lab.magmaProbe(); take a screenshot.",
+        "observable": "heightSource=='carrier'; regime=='volcanic'; varExplainedByPlume > varExplainedByLatitudeY; the mean(edifice)>mean(plain)>mean(basin) ordering holds; screenshot shows shield edifices + dark lava plains (+ a substellar magma-ocean basin for Magma) vs sin^2 bands."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC11",
+      "statement": "UAT (Max-only): Lava / Magma / Io read as distinct, recognizable volcanic worlds and cohere as the experience Max wanted - not a latitude smear.",
+      "verifyVia": {
+        "input": "Max views Lava and Magma in the lab (against a recording per the Max recording protocol if motion matters).",
+        "observable": "Max judges each as a genuinely distinct volcanic world (Io shields != flood-lava plains != magma sea); holistic acceptance. Never PASSed by any agent - deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "carrier sphere field (sphereField.js makeSphereField): height/grainAngle/faultDensity Float32Arrays, regime Uint8Array, verts/adj/N, tangentFrameAt(i)->{east,north}, latDegOf(i)",
+      "macroSeed (integer) coerced via seed=(macroSeed|0)",
+      "locked flag + a substellar axis (for the magma-ocean basin; seed-only / a canonical or seed-derived axis in the lab - NO driver-response this increment)",
+      "volcanic regime resolved by a NEW isVolcanicPath(archetype, locked) predicate; volcanic set = {lava, volcanic} short keys/tags; Lava (hot airless)->'lava', Magma (K2-141b) NAMED_BODY resolves to the lava/volcanic path (locked:true) - exact resolution confirmed at build against planet-lod-lab.html PRESET_ARCHETYPE + NAMED_BODIES",
+      "lab dispatch passing archetype: PRESET_ARCHETYPE[_preset]||null and locked (planet-lod-lab.html)",
+      "three-free deps: alea (namespace 'magma:'), simplex-noise createNoise3D; mathutil.js clamp/clamp01/mix/smoothstep",
+      "COPIED VERBATIM into magmatism.js (no cross-imports): plates.js vec3 helpers dot/cross/norm/randDir/falloffAng + meanEdgeAngle (plates.js is out-of-scope to edit)"
+    ],
+    "outputs": [
+      "carrier.height (REPLACE via .set(U)) - sole low/mid source for the volcanic regime",
+      "magmaDiag object {U, plumeId, plumeCount, hotspotNode, hotspotProximity, lavaPlainMask, magmaOceanMask, substellarAxis, relaxPasses} returned through writeBodyRelief -> route() -> a new get magmaDiag() accessor (mirrors get shellDiag() at planet-lod-rivers.js:1208)",
+      "live magmaProbe() on window._lab reading riverOverlay.magmaDiag (mirrors shellProbe)"
+    ],
+    "mustStayWorking": [
+      "the validated Earth-like plate path - byte-identical (checked FIRST via isEarthlikePlatePath; AC7)",
+      "the shell-relief icy/despun path - byte-identical (checked SECOND via isShellReliefPath; AC8)",
+      "the despun/zonal fallback for all other bodies - byte-identical (AC8)",
+      "NO edits to plates.js, shellRelief.js, tectonic.js, sphereField.js, planet-archetypes.js",
+      "verify.js:39 asserts carrier.regime in {0,1,2} - do NOT write a 4th regime constant; leave carrier.regime alone (as plates.js does)",
+      "AC1 no-RNG + render-once static guards (alea 'magma:' namespace only; no Math.random/Date.now; bounded passes)",
+      "route()/lab never override MAGMA_DEFAULTS (only the headless test via a tune arg), mirroring the plates/shell DEFAULTS discipline"
+    ]
+  },
+  "filesTouched": [
+    "NEW src/worldengine/base/magmatism.js (writeMagmatismSphere + MAGMA_DEFAULTS + MAGMA_BOUND)",
+    "NEW tests/worldengine-base-magmatism-structure.test.js",
+    "EDIT planet-lod-rivers.js (import writeMagmatismSphere; export isVolcanicPath ~after :420; make writeBodyRelief 4-way ~:424-442 with magmaDiag; thread magmaDiag through route ~:1146-1148; add get magmaDiag() ~:1208)",
+    "EDIT planet-lod-lab.html (PRESET_ARCHETYPE / NAMED_BODIES wiring if needed; magmaProbe() on _lab)",
+    "DOC record-build-intent note (function + intent + deliberate non-goals)"
+  ],
+  "mustFix": [
+    "#1 (mechanism, pin before SLICE B): the seeded mantle-plume field + the three relief contributions. Plume field = N plume centers seeded from macroSeed (like plate centroids) -> spherical-Voronoi/geodesic partition -> per-node plume-proximity. Edifice = shield/strato analytic profile at plume tops, THRESHOLD crest rule gated by plume proximity (NOT a relative local-max). Lava-plain flooding = fill nodes below a flood datum between edifices (effusive plains sit low). Substellar magma-ocean basin = a hemisphere-scale depression centered on the substellar axis, gated on locked & extreme-T. Give the analytic height functions + normalization into MAGMA_BOUND + the elevation-ordering guarantee mean(edifice)>mean(plain)>mean(basin). Cite Io hotspot/shield volcanism + flood-basalt/lava-plain morphology.",
+    "RETROFIT NOTE (single-source-of-truth): volcanic geology already exists as LEGACY-SYNTH SHADER features - F7 edificeCombiner (shield/strato cones, planet-lod-lab.html:378) and F41 substellar magma-sea (uMagmaSeaAngle/uMagmaTemp/uMagmaChurnSpeed, the K2-141b GCM law). These are DEFAULT-OFF for carrier assessment (commit cfbe42c). magmatism.js is the carrier-side source of the same geology (height/basin); do NOT wire the writer to the F7/F41 shader this increment (lab-only, carrier-assessment view). The F41 magma-sea is a surface-shading/temperature layer; the writer authors the BASIN geometry - complementary, not a rewrite of F41. (Same retrofit shape as #4.5's shipped shatterCombiner.)",
+    "Dispatch safety: isVolcanicPath checked AFTER isEarthlikePlatePath and isShellReliefPath return; volcanic set excludes everything already claimed (terrestrial/ocean by plate; icy/volatile/eyeball by shell) and everything in the shell SHELL_EXCLUDE that isn't volcanic; strict-'>' Voronoi tie-break (lowest-index wins), matching plates/shell.",
+    "Copy the vec3 helpers + meanEdgeAngle VERBATIM into magmatism.js (plates.js/shellRelief.js/tectonic.js out-of-scope to edit).",
+    "Substellar axis is SEED-ONLY this increment - define a canonical or seed-derived substellar axis in the lab; NO driver-response. Document as a deliberate non-goal.",
+    "Venus #4b stagnant-lid is explicitly OUT (parallel research pass -> its own scope right after). Mars is OUT (different stagnant-lid-rocky shape, needs its own research)."
+  ],
+  "buildSlices": [
+    "SLICE A (dispatch + determinism scaffold, math-light, buildable now): isVolcanicPath + 4-way writeBodyRelief; magmaDiag threading + get magmaDiag() accessor; PRESET/NAMED_BODIES + magmaProbe() lab wiring; the determinism scaffold (verbatim vec3 helpers, meanEdgeAngle, alea 'magma:' namespace, MAGMA_DEFAULTS/MAGMA_BOUND skeleton, plume-centroid Voronoi partition + BFS proximity, RELAX). Covers AC7, AC8, the AC1 no-RNG/determinism harness, and AC6 variety scaffolding.",
+    "SLICE B (relief mechanism, needs mustFix #1): plume field -> hotspot/edifice crest + shield profile; lava-plain flooding; substellar magma-ocean basin; assemble U. Covers AC2, AC3, AC4, AC5, AC9, and the live AC10."
+  ]
+}
