@@ -311,6 +311,44 @@ export function writeClimateE5Sphere(carrier, drivers = {}, { regime = E5_REGIME
 // the original Planet.js GAS_BODY `bands` harmonic sum and any consumer wanting the literal old look.
 // NOT used by writeClimateE5Sphere (which is the signed driver-organized model above).
 // ─────────────────────────────────────────────────────────────────────────────
+// ── RENDER SEAM (increment-3a AC10): bake the writer's per-vertex fields onto a render mesh ──
+// The lab render mesh is a regular SphereGeometry (a DIFFERENT vertex set from the carrier), but every
+// render field is a pure function of latitude + resolved params, so we sample the SAME closed form on
+// the render verts. aBand is byte-identical to writeClimateE5Sphere's bandNorm at the same latitude —
+// the render path IS the tested writer path, not a re-derived GLSL formula (that is the AC10 point).
+export function jetShearPeak(P, samples = 721) {
+  const n = Math.max(9, samples | 0);
+  let mx = 0;
+  for (let i = 0; i < n; i++) { const s = Math.abs(jetShear((-0.5 + i / (n - 1)) * Math.PI, P)); if (s > mx) mx = s; }
+  return mx;
+}
+
+/**
+ * Bake per-render-vertex band/shear/mushball attributes for the lab shader (AC10 seam).
+ * @param {Float32Array|number[]} positions flat [x,y,z,...] object-space render-vertex positions.
+ * @param {number} count  vertex count.
+ * @param {number} radius render sphere radius R (positions[..y]/R = sin lat).
+ * @returns {{aBand:Float32Array, aShear:Float32Array, aMush:Float32Array, params:object,
+ *            bandCount:number, jetCount:number, eqSign:number, peakU:number}}
+ *   aBand  = bandNorm (== writeClimateE5Sphere.bandNorm) — replaces the shader's inline latitude ladder.
+ *   aShear = |du/dφ| normalized to [0,1] — gates the shader's filament turbulence to the writer's shear.
+ *   aMush  = NH₃ mushball banding — a faint compositional albedo tint.
+ */
+export function bakeClimateE5Attributes(positions, count, radius, { regime = E5_REGIME.GAS_GIANT, drivers = {}, macroSeed = 0 } = {}) {
+  const P = resolveParams(regime, drivers, macroSeed);
+  const sp = jetShearPeak(P) || 1;
+  const aBand = new Float32Array(count), aShear = new Float32Array(count), aMush = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const y = clamp(-1, 1, positions[3 * i + 1] / radius);
+    const lat = Math.asin(y);
+    aBand[i] = clamp01(0.5 + 0.5 * P.contrast * (jetProfile(lat, P) / P.normDenom));
+    aShear[i] = clamp01(Math.abs(jetShear(lat, P)) / sp);
+    aMush[i] = mushballProfile(lat, P);
+  }
+  const diag = sampleDiagnostics(P);
+  return { aBand, aShear, aMush, params: P, bandCount: diag.bandCount, jetCount: diag.jetCount, eqSign: Math.sign(jetProfile(0, P)) || Math.sign(P.sEq), peakU: P.uPeak };
+}
+
 export const HARMONICS = Object.freeze({
   [E5_REGIME.GAS_GIANT]:   Object.freeze([{ f: 3.5, a: 0.5, p: 0.0 }, { f: 7.0, a: 0.3, p: 0.5 }, { f: 13.0, a: 0.12, p: 0.0 }]),
   [E5_REGIME.HOT_JUPITER]: Object.freeze([{ f: 2.5, a: 0.3, p: 0.0 }, { f: 5.0, a: 0.15, p: 0.0 }]),

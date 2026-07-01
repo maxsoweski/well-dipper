@@ -12,6 +12,7 @@ import {
   E5_REGIME, PHYS, DRIVER_BUNDLES,
   writeClimateE5Sphere, resolveParams, jetProfile, jetShear,
   wardS2, wardInsolation, equatorialJetSign, amplitudeLaw,
+  bakeClimateE5Attributes,
 } from '../src/worldengine/base/climate-e5.js';
 
 const TARGET_N = 4000, LLOYD = 2;
@@ -206,6 +207,24 @@ describe('worldengine base — E5 signed driver-organized band/jet writer (incre
     // static guard (comments stripped): no reference to any carrier relief channel in the writer body
     expect(CODE).not.toMatch(/carrier\.height/);
     expect(CODE).not.toMatch(/\.height\s*\[/);
+  });
+
+  // ── AC10 render-seam parity: the baked render attribute IS the tested writer field ─────────────
+  it('[AC10] bakeClimateE5Attributes.aBand === writeClimateE5Sphere.bandNorm at matching latitudes', () => {
+    const R = 7.3;                                          // arbitrary render radius
+    for (const regime of REGIMES) {
+      const c = freshCarrier();
+      const o = writeClimateE5Sphere(c, {}, { regime, macroSeed: 5 });
+      const positions = new Float32Array(c.N * 3);          // render verts = carrier verts × R
+      for (let i = 0; i < c.N; i++) { positions[3 * i] = c.verts[i][0] * R; positions[3 * i + 1] = c.verts[i][1] * R; positions[3 * i + 2] = c.verts[i][2] * R; }
+      const bake = bakeClimateE5Attributes(positions, c.N, R, { regime, macroSeed: 5 });
+      // agree to float32 precision (render positions are Float32 → y round-trips; the carrier is float64)
+      let worst = 0;
+      for (let i = 0; i < c.N; i++) worst = Math.max(worst, Math.abs(bake.aBand[i] - o.bandNorm[i]));
+      expect(worst).toBeLessThan(1e-4);
+      expect(bake.bandCount).toBe(o.bandCount);
+      expect(Math.sign(bake.eqSign)).toBe(Math.sign(o.eqSign));
+    }
   });
 
   // ── LEGACY shader-parity port guard (documents the original Planet.js GAS_BODY harmonic sum) ────
