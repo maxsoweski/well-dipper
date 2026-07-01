@@ -89,10 +89,10 @@
     },
     {
       "id": "AC9",
-      "statement": "SEAM FIRES: the Lava and Magma (K2-141b) presets route to the volcanic regime, and the substellar magma-ocean BASIN fires for the LOCKED extreme-T case and NOT for an unlocked lava world.",
+      "statement": "SEAM FIRES + T_ss-SCALED BASIN: the Lava and Magma (K2-141b) presets route to the volcanic regime, and the substellar magma-ocean basin EXTENT scales with substellar temperature T_ss via the shipped F41 iso-angle law acos((1300/T_ss)^4) - a WIDE sea for Magma vs a SMALL pond for Lava. NOTE (SLICE-A finding): BOTH presets are locked:true, so the gate keys on T_ss / extreme-T, NOT locked-vs-unlocked.",
       "verifyVia": {
-        "input": "With the lab PRESET routing, route 'Lava (hot airless)' and 'Magma (K2-141b)'; inspect magmaOceanMask for locked Magma vs unlocked Lava.",
-        "observable": "Both route to path:'volcanic' (never silently to sin^2); magmaOceanMask is a single coherent substellar basin (non-empty) for the locked Magma case and empty for the unlocked Lava case."
+        "input": "With the lab PRESET routing, route 'Lava (hot airless)' (T_eq 950) and 'Magma (K2-141b)' (T_eq 2000); inspect the magmaOceanMask basin half-angle for each. T_ss = T_eq*1.4 (F41 convention: Lava~1330 K, Magma~2800 K); T_liquidus = 1300 K.",
+        "observable": "Both route to path:'volcanic' (never silently to sin^2); magmaOceanMask is a single coherent substellar basin whose half-angle ~ acos((1300/T_ss)^4): Magma ~1.5 rad (wide sea), Lava ~0.4 rad (small pond), with Magma's basin strictly wider than Lava's."
       },
       "layer": "integration",
       "live": false
@@ -121,7 +121,7 @@
     "inputs": [
       "carrier sphere field (sphereField.js makeSphereField): height/grainAngle/faultDensity Float32Arrays, regime Uint8Array, verts/adj/N, tangentFrameAt(i)->{east,north}, latDegOf(i)",
       "macroSeed (integer) coerced via seed=(macroSeed|0)",
-      "locked flag + a substellar axis (for the magma-ocean basin; seed-only / a canonical or seed-derived axis in the lab - NO driver-response this increment)",
+      "locked flag + T_ss substellar temperature (T_ss = T_eq*1.4 per the shipped F41 convention; from body params/bodyDrivers) + a substellar axis (seed-derived in the lab - NO star-direction driver-response this increment). SLICE B threads T_ss into writeMagmatismSphere for the F41 iso-angle basin gate acos((1300/T_ss)^4); SLICE A threads only the locked flag.",
       "volcanic regime resolved by a NEW isVolcanicPath(archetype, locked) predicate; volcanic set = {lava, volcanic} short keys/tags; Lava (hot airless)->'lava', Magma (K2-141b) NAMED_BODY resolves to the lava/volcanic path (locked:true) - exact resolution confirmed at build against planet-lod-lab.html PRESET_ARCHETYPE + NAMED_BODIES",
       "lab dispatch passing archetype: PRESET_ARCHETYPE[_preset]||null and locked (planet-lod-lab.html)",
       "three-free deps: alea (namespace 'magma:'), simplex-noise createNoise3D; mathutil.js clamp/clamp01/mix/smoothstep",
@@ -146,19 +146,20 @@
     "NEW src/worldengine/base/magmatism.js (writeMagmatismSphere + MAGMA_DEFAULTS + MAGMA_BOUND)",
     "NEW tests/worldengine-base-magmatism-structure.test.js",
     "EDIT planet-lod-rivers.js (import writeMagmatismSphere; export isVolcanicPath ~after :420; make writeBodyRelief 4-way ~:424-442 with magmaDiag; thread magmaDiag through route ~:1146-1148; add get magmaDiag() ~:1208)",
-    "EDIT planet-lod-lab.html (PRESET_ARCHETYPE / NAMED_BODIES wiring if needed; magmaProbe() on _lab)",
+    "EDIT planet-lod-lab.html (PRESET_ARCHETYPE: Lava->'lava' + NEW Magma (K2-141b)->'lava'; magmaProbe() on _lab)",
+    "EDIT tests/worldengine-shell-regime-gate.test.js (the pre-existing locked-lava->despun assertion becomes locked-lava->volcanic, split from the gas-giant->despun case) [SLICE-A]",
     "DOC record-build-intent note (function + intent + deliberate non-goals)"
   ],
   "mustFix": [
     "#1 (mechanism, pin before SLICE B): the seeded mantle-plume field + the three relief contributions. Plume field = N plume centers seeded from macroSeed (like plate centroids) -> spherical-Voronoi/geodesic partition -> per-node plume-proximity. Edifice = shield/strato analytic profile at plume tops, THRESHOLD crest rule gated by plume proximity (NOT a relative local-max). Lava-plain flooding = fill nodes below a flood datum between edifices (effusive plains sit low). Substellar magma-ocean basin = a hemisphere-scale depression centered on the substellar axis, gated on locked & extreme-T. Give the analytic height functions + normalization into MAGMA_BOUND + the elevation-ordering guarantee mean(edifice)>mean(plain)>mean(basin). Cite Io hotspot/shield volcanism + flood-basalt/lava-plain morphology.",
     "RETROFIT NOTE (single-source-of-truth): volcanic geology already exists as LEGACY-SYNTH SHADER features - F7 edificeCombiner (shield/strato cones, planet-lod-lab.html:378) and F41 substellar magma-sea (uMagmaSeaAngle/uMagmaTemp/uMagmaChurnSpeed, the K2-141b GCM law). These are DEFAULT-OFF for carrier assessment (commit cfbe42c). magmatism.js is the carrier-side source of the same geology (height/basin); do NOT wire the writer to the F7/F41 shader this increment (lab-only, carrier-assessment view). The F41 magma-sea is a surface-shading/temperature layer; the writer authors the BASIN geometry - complementary, not a rewrite of F41. (Same retrofit shape as #4.5's shipped shatterCombiner.)",
-    "Dispatch safety: isVolcanicPath checked AFTER isEarthlikePlatePath and isShellReliefPath return; volcanic set excludes everything already claimed (terrestrial/ocean by plate; icy/volatile/eyeball by shell) and everything in the shell SHELL_EXCLUDE that isn't volcanic; strict-'>' Voronoi tie-break (lowest-index wins), matching plates/shell.",
+    "Dispatch safety (SLICE-A BUILT + verified): isVolcanicPath (set {lava, volcanic}) checked AFTER isEarthlikePlatePath and isShellReliefPath return; strict-'>' Voronoi tie-break (lowest-index), matching plates/shell. SLICE-A findings: (a) 'lava' being in shellRelief's SHELL_EXCLUDE is the load-bearing reason a LOCKED lava/Magma body falls through the shell locked-fallback down to the volcanic gate. (b) The bare 'volcanic' tag is NOT in SHELL_EXCLUDE, so a hypothetical locked archetype='volcanic' body would be grabbed by shell's eyeball-despun fallback first - harmless today (no preset emits 'volcanic'; Lava/Magma use 'lava'), but if SLICE B routes a locked 'volcanic'-tagged body, add 'volcanic' to SHELL_EXCLUDE (shellRelief.js, currently out-of-scope). (c) LATENT-BUG FIX: Magma (K2-141b) had NO PRESET_ARCHETYPE entry -> archetype null + locked -> shell eyeball-despun MISROUTE (Magma was rendering as ICY); adding PRESET_ARCHETYPE['Magma (K2-141b)']='lava' corrects it (NAMED_BODY still forces canonical radius).",
     "Copy the vec3 helpers + meanEdgeAngle VERBATIM into magmatism.js (plates.js/shellRelief.js/tectonic.js out-of-scope to edit).",
-    "Substellar axis is SEED-ONLY this increment - define a canonical or seed-derived substellar axis in the lab; NO driver-response. Document as a deliberate non-goal.",
+    "Substellar magma-ocean basin (SLICE B): the gate + extent key on T_ss (= T_eq*1.4, F41 convention), NOT on locked - both Lava & Magma are locked:true (SLICE-A finding). Basin half-angle = acos((1300/T_ss)^4) reusing the shipped F41 magmaSeaAngle law (T_liquidus 1300 K): Magma ~1.52 rad wide sea, Lava ~0.42 rad small pond. Thread T_ss into writeMagmatismSphere. The substellar AXIS is seed-derived (no star-direction response this increment); the F41-alignment question (carrier basin axis vs the scene's real substellar point) is a deferred SLICE-B/UAT consideration - fine for lab carrier-assessment (F41 default-OFF).",
     "Venus #4b stagnant-lid is explicitly OUT (parallel research pass -> its own scope right after). Mars is OUT (different stagnant-lid-rocky shape, needs its own research)."
   ],
   "buildSlices": [
-    "SLICE A (dispatch + determinism scaffold, math-light, buildable now): isVolcanicPath + 4-way writeBodyRelief; magmaDiag threading + get magmaDiag() accessor; PRESET/NAMED_BODIES + magmaProbe() lab wiring; the determinism scaffold (verbatim vec3 helpers, meanEdgeAngle, alea 'magma:' namespace, MAGMA_DEFAULTS/MAGMA_BOUND skeleton, plume-centroid Voronoi partition + BFS proximity, RELAX). Covers AC7, AC8, the AC1 no-RNG/determinism harness, and AC6 variety scaffolding.",
+    "SLICE A [BUILT + verified green, 19 files/185 tests, 2026-06-30] (dispatch + determinism scaffold, math-light): isVolcanicPath + 4-way writeBodyRelief; magmaDiag threading + get magmaDiag() accessor; PRESET/NAMED_BODIES + magmaProbe() lab wiring; the determinism scaffold (verbatim vec3 helpers, meanEdgeAngle, alea 'magma:' namespace, MAGMA_DEFAULTS/MAGMA_BOUND, plume-centroid domain-warped Voronoi partition + multi-source BFS proximity, RELAX, placeholder plume-proximity U). Covers AC1 (no-RNG/determinism/bound), AC6 (variety), AC7 (plate no-clobber), AC8 (shell/despun no-clobber + dispatch safety), AC9-headless (Lava/Magma->volcanic). AC2/AC3/AC4/AC5/AC10 present as it.skip (SLICE B).",
     "SLICE B (relief mechanism, needs mustFix #1): plume field -> hotspot/edifice crest + shield profile; lava-plain flooding; substellar magma-ocean basin; assemble U. Covers AC2, AC3, AC4, AC5, AC9, and the live AC10."
   ]
 }
