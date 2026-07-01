@@ -1,0 +1,80 @@
+{
+  "workstream": "world-engine-magmatism-2026-06-30",
+  "commit": "eb18666",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "evidence": "DETERMINISM + NO-RNG, unit/headless. grep on src/worldengine/base/magmatism.js => ZERO Math.random/Date.now (all entropy via alea keyed 'magma:' off the integer macroSeed). No convergence-while (the one while-loop is the O(N) BFS proximity drain, bounded by node count; RELAX passes fixed). writeMagmatismSphere run twice on a fresh 600-node carrier yields byte-identical U/plumeId/hotspotProximity/lavaPlainMask/magmaOceanMask across {1,2,3,7,42} x {locked false,true}; |U|<MAGMA_BOUND. Verified this session: npx vitest run tests/worldengine-base-magmatism-structure.test.js => 28/28.",
+      "adversarialVotes": "SLICE-A build-time adversarial pass (3x) recorded in contract buildSlices; re-confirmed green this session"
+    },
+    {
+      "id": "AC2",
+      "result": "PASS",
+      "evidence": "STRUCTURE BAR (signal must PASS), unit/headless. U is explained by the seeded mantle-plume geometry via a predictor rebuilt ARM'S-LENGTH from the published plume centroids (geodesic falloff, BELT=0.10 rad), NOT from the writer's own hotspotProximity/U. The elevation ordering mean(edifice)>mean(lava-plain)>mean(magma-ocean basin) holds. AC2 note (HONEST, does not change verdict): the wide-Magma sea excises ~48% of nodes so the crust corr(U,plume) can read ~0.3 (below the absolute 0.5 bar) BY GEOMETRY, not defect; the pinned SWELL_GAIN=0.25 stays. Covered instead by (a) the ordering test, (b) AC3 (plume beats latitude even for Magma), (c) AC9 (basin correctly placed), (d) a RELATIVE AC4 control (real placement beats random). Basin excluded from corr, scored by ordering (SLICE-B-mechanism-math.md AC2 sidebar). vitest structure suite 28/28.",
+      "adversarialVotes": "SLICE-B build-time adversarial pass (3x) recorded in SLICE-B-mechanism-math.md"
+    },
+    {
+      "id": "AC3",
+      "result": "PASS",
+      "evidence": "LATITUDE CONTROL (must FAIL), unit/headless. The load-bearing falsifier vs the sin^2(lat) fallback this writer replaces: varExplainedByLatitudeY<0.15 AND strictly < varExplainedByPlume, for locked+unlocked cases. Confirmed live (below in AC10) at extreme margin: Lava latY=0.00031 vs plume=0.742; Magma latY=0.00013 vs plume=0.758 (plume beats latitude by ~2400x and ~5800x). vitest structure 28/28 incl the AC3 block (executed, not skipped).",
+      "adversarialVotes": "SLICE-B build-time adversarial pass (3x)"
+    },
+    {
+      "id": "AC4",
+      "result": "PASS",
+      "evidence": "RANDOM-PLACEMENT CONTROL (must FAIL), unit/headless. A control variant with hotspot/edifice placement DECOUPLED from the plume field (amplitude-matched random node picks) collapses corr(U_control,plume-proximity) toward 0 AND breaks the mean(edifice)>mean(plain)>mean(basin) ordering, while the real field PASSES AC2. Includes a reviewer-added Magma RELATIVE control (real placement beats random by >0.08; control collapses <0.15) to cover the wide-sea corr honesty of AC2. vitest structure 28/28 incl AC4.",
+      "adversarialVotes": "SLICE-B build-time adversarial pass (3x)"
+    },
+    {
+      "id": "AC5",
+      "result": "PASS",
+      "evidence": "NOISE CONTROL (must FAIL), unit/headless. corr(U, amplitude-matched independent simplex) < 0.15 — the real plume-organized field beats matched noise. vitest structure 28/28 incl AC5.",
+      "adversarialVotes": "SLICE-B build-time adversarial pass (3x)"
+    },
+    {
+      "id": "AC6",
+      "result": "PASS",
+      "evidence": "VARIETY, unit/headless. Two different macroSeeds produce different volcanic worlds (different plumeCount OR <0.2 node-overlap of hotspotNode + visibly different plume layout), each reproducible per seed. vitest structure 28/28 incl AC6.",
+      "adversarialVotes": "SLICE-A build-time adversarial pass (3x)"
+    },
+    {
+      "id": "AC7",
+      "result": "PASS",
+      "evidence": "NO-CLOBBER of the Earth-like plate path, integration/headless. The volcanic gate (isVolcanicPath) is checked in writeBodyRelief ONLY AFTER isEarthlikePlatePath returns, so terrestrial/ocean unlocked bodies still route to writePlateUpliftSphere returning path:'plate', magmaDiag:null. plates.js/tectonic.js untouched by the magma commits (git show eb18666 touches only planet-lod-lab.html, planet-lod-rivers.js, magmatism.js, the magma test). tests/worldengine-plate-regime-gate.test.js green in this session's 19-file/196-test run.",
+      "adversarialVotes": "SLICE-A build-time adversarial pass (3x); re-confirmed green this session"
+    },
+    {
+      "id": "AC8",
+      "result": "PASS",
+      "evidence": "NO-CLOBBER of shell + despun paths and dispatch safety, integration/headless. Gate order in writeBodyRelief is plate -> shell -> volcanic -> despun; isVolcanicPath (set {lava,volcanic}) checked AFTER isEarthlikePlatePath and isShellReliefPath return, so icy/despun bodies keep byte-identical paths (magmaDiag:null off the volcanic path). isVolcanicPath returns false for terrestrial/ocean/icy/gas-giant/sub-neptune/carbon/crystal. SLICE-A finding folded in: 'lava' in shellRelief SHELL_EXCLUDE is why a LOCKED lava/Magma body falls through to the volcanic gate. tests/worldengine-shell-regime-gate.test.js green in this session's 196-test run.",
+      "adversarialVotes": "SLICE-A build-time adversarial pass (3x); re-confirmed green this session"
+    },
+    {
+      "id": "AC9",
+      "result": "PASS",
+      "evidence": "SEAM FIRES + T_ss-SCALED BASIN, integration/headless + confirmed live. Lava (T_eq 950) and Magma (K2-141b, T_eq 2000) both route to path:'volcanic' (never silently to sin^2). Basin half-angle = acos((1300/T_ss)^4), T_ss=T_eq*1.4: a WIDE sea for Magma vs a SMALL pond for Lava. Both presets are locked:true, so the gate keys on T_ss / extreme-T, NOT locked-vs-unlocked (SLICE-A finding). CONFIRMED LIVE this session: Lava thetaSea=0.4208 / basinHalfAngle(baked)=0.4204; Magma thetaSea=1.5243 / basinHalfAngle(baked)=1.5243; Magma basin STRICTLY WIDER than Lava (1.524 vs 0.420). Latent bug fixed incidentally: Magma (K2-141b) had no PRESET_ARCHETYPE entry (was misrouting locked+null to shell eyeball-despun => rendering ICY); added PRESET_ARCHETYPE['Magma (K2-141b)']='lava'. vitest 196-test run green.",
+      "adversarialVotes": "SLICE-A + SLICE-B build-time adversarial passes; live-confirmed by working-Claude this session"
+    },
+    {
+      "id": "AC10",
+      "result": "PASS",
+      "evidence": "LIVE-DRIVEN by working-Claude (main thread) via chrome-devtools on the running lab served from the MAIN checkout (localhost:5175/well-dipper/planet-lod-lab.html; note: :5173/:5174 were stale worktrees lacking magmaProbe — Max restarted dev from main on :5175). Drive per preset: setPreset -> setSeed(1234) -> reliefBakeStrength(1) -> rivers(true)+riversReroute -> poll to carrier-baked -> magmaProbe(). BOTH PRESETS PASS every observable. LAVA (hot airless): heightSource=carrier, regime=volcanic, plumeCount=9, varExplainedByPlume=0.742 >> varExplainedByLatitudeY=0.00031, orderingHolds=true (meanEdifice 0.237 > meanLavaPlain 0.045 > meanBasin -0.954), basinHalfAngle=0.4204~=thetaSea 0.4208 (small pond), edifice/plain/basin node counts 2318/10279/1748. MAGMA (K2-141b): heightSource=carrier, regime=volcanic, plumeCount=9, varExplainedByPlume=0.758 >> varExplainedByLatitudeY=0.00013, orderingHolds=true (0.216 > 0.045 > -1.281), basinHalfAngle=1.5243~=thetaSea 1.5243 (wide sea, STRICTLY wider than Lava), node counts 948/5906/19063. Screenshots (scratchpad AC10-lava-2026-06-30.png, AC10-magma-basin-2026-06-30.png): Lava = patchy plume-organized shields + dark lava plains covering the globe (NOT sin^2 bands); Magma = a vast smooth substellar magma basin dominating the star-facing hemisphere (visually distinct wide sea vs Lava's pond). NOTE surfaced for UAT: the carrier's seed-derived substellar basin axis is ~opposite the scene's fixed sun (uLightDir), so in the DEFAULT lab view the Magma basin sits on the NIGHT side (renders black) — for the screenshot working-Claude steered the render light onto the basin (visualization only; does not touch carrier geometry or the probe). This is the deferred axis-alignment consideration the contract flagged (F41-alignment / driver-response is out of scope this increment).",
+      "adversarialVotes": "live-driven by working-Claude post-build; both presets pass every numeric observable + visual"
+    },
+    {
+      "id": "AC11",
+      "result": "deferred-to-max",
+      "evidence": "UAT-layer AC — never PASSed or driven by any agent; deferred-to-max by invariant and by explicit contract note ('Never PASSed by any agent — deferred-to-max'). MAX UAT: open the lab (localhost:5175/well-dipper/planet-lod-lab.html, or your own dev port) and step Lava then Magma (and Io-type when added) — accept only if each reads as a distinct, recognizable volcanic world (Io-style shields != flood-lava plains != a wide magma sea) rather than a latitude smear / sin^2 banding. HEADS-UP that directly affects UAT: the Magma substellar magma basin currently faces AWAY from the scene sun (seed-derived carrier axis vs fixed world light), so it renders on the night side in the default view — working-Claude is adding an adjustable world-light control to the lab (per your request) so you can rotate the sun onto the basin during UAT.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX eb18666 — unit PASS (AC1-AC6, 6/6) + integration PASS (AC7-AC9 headless + AC10 live-driven by working-Claude, both Lava & Magma presets pass every observable) + UAT (AC11) deferred to Max. Headless re-confirmed this session: 19 files / 196 tests + magmatism structure 28/28. Non-blocking follow-up for UAT ergonomics: the carrier basin axis is not aligned to the scene sun (deferred F41-alignment); an adjustable lab world-light control is being added so Max can inspect the Magma basin lit.",
+  "summaryForMax": "Workstream world-engine-magmatism-2026-06-30 at commit eb18666 (increment #4a, GROUND track). New src/worldengine/base/magmatism.js (writeMagmatismSphere) is the carrier-side single-source-of-truth for VOLCANIC relief: one seeded mantle-plume field drives shield edifices + effusive lava-plain flooding + a T_ss-scaled substellar magma-ocean basin. It replaces the sin^2(lat) fallback for volcanic bodies ONLY (Lava / Magma-K2-141b), routed via a 4-way writeBodyRelief (plate -> shell -> volcanic -> despun) that leaves the validated plate & shell paths byte-identical.\n\nWHERE IT STANDS BY LAYER:\n- Unit (AC1-AC6): all 6 PASS headless. tests/worldengine-base-magmatism-structure.test.js 28/28. Deterministic + no-RNG; U is plume-organized (arm's-length predictor), beats latitude and matched-noise, breaks under a random-placement control, and varies per seed. Honest nuance (does NOT change verdict): the wide Magma sea excises ~48% of nodes so the raw crust corr(U,plume) can read ~0.3 for Magma by geometry — covered instead by the ordering test + AC3 + AC9 + a relative control. SWELL_GAIN stays at 0.25 (do NOT crank it to 'fix' this).\n- Integration (AC7-AC10): all PASS. The plate & shell/despun paths stay byte-identical (no-clobber). The Lava/Magma seam fires and the substellar basin scales with T_ss via the shipped F41 iso-angle law — LIVE-confirmed: Magma's basin (half-angle 1.524 rad, ~48% of the sphere) is strictly wider than Lava's pond (0.420 rad). AC10 driven live on the lab: both presets show heightSource=carrier, regime=volcanic, plume variance crushing latitude variance (0.74/0.76 vs 0.0003/0.0001), and the edifice>plain>basin ordering holding.\n\nWHAT YOU NEED TO DO:\n1. AC11 (UAT — your call alone): Open the lab and step Lava then Magma. Accept only if each reads as a distinct, believable volcanic world (Lava = shields + dark flood-lava plains; Magma = a wide substellar magma sea) rather than a latitude smear. No agent can make this call.\n\nONE THING TO KNOW BEFORE UAT: the carrier's substellar magma basin is seed-placed and currently ends up roughly OPPOSITE the lab's fixed sun, so in the default view the Magma basin is on the night side and looks black. That axis-vs-sun alignment (F41 driver-response) is deliberately out of scope for this increment. So you can still inspect the basin, I'm adding an adjustable world-light (sun direction) control to the lab per your request — rotate the sun onto the basin and it lights up.",
+  "_ac10Provenance": "AC10 live-integration driven by working-Claude (main thread) via chrome-devtools on localhost:5175 (main checkout), seed 1234, both Lava & Magma presets. No verify-workstream workflow run this session; headless layers (AC1-AC9) verified adversarially at SLICE-A/SLICE-B build time (prior session, recorded in contract buildSlices + SLICE-B-mechanism-math.md) and re-confirmed green this session (19 files/196 tests, magmatism structure 28/28)."
+}

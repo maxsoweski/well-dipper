@@ -790,6 +790,9 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+> **▶ WORLD-ENGINE HISTORY PROGRAM — GROUND track, increment #4a (volcanic/magmatism) — `VERIFIED_PENDING_MAX eb18666` (2026-06-30).**
+> New `src/worldengine/base/magmatism.js` (`writeMagmatismSphere`): one seeded mantle-plume field → shield edifices + lava-plain flooding + a T_ss-scaled substellar magma basin (F41 iso-angle law); `writeBodyRelief` now 4-way plate→shell→volcanic→despun (plate+shell paths byte-identical). **Live AC10 driven + PASS** (Lava & Magma, seed 1234): heightSource=carrier, regime=volcanic, plume-variance crushes latitude (0.74/0.76 vs 0.0003/0.0001), edifice>plain>basin ordering holds, Magma basin (1.52 rad) strictly wider than Lava (0.42 rad). Headless: 19 files/196 + magma structure 28/28. Artifacts: `docs/WORKSTREAMS/world-engine-magmatism-2026-06-30/` (contract + intent + SLICE-B-mechanism-math + **verdict.json**). **NEXT = Max AC11 UAT** (does Lava/Magma read as distinct volcanic worlds). ⚠ UAT gotcha: the seed-derived magma-basin axis is ~opposite the lab's fixed sun, so the basin defaults to the NIGHT side — a new adjustable world-light control (`_lab.setLightDir(az,el)` + GUI) lets Max rotate the sun onto it. Program SoT: memory `[[well-dipper-world-engine-program]]` + newest `/tmp/handoff-world-engine-*.md`. (#1 shell-relief + #2 plate-driver already VERIFIED_PENDING_MAX/SHIPPED; the WS1/WS2 block below is the 2026-06-24/25 base-step history, kept as record.)
+
 **`world-engine` PRODUCTION-L1 PORT — WS1 (L0 plumbing) BUILT + ✅ VERIFIED 2026-06-24
 (`05bf668`, branch `feature/world-engine-production-L1`; `master` preserved at `25fe51c`; push HOLD).
 → WS2 (Tier-1 base step) ✅ SHIPPED 2026-06-25 (Max UAT-passed; `b71d3ec`). NEXT (fresh session): WS3 (type-demotion) ∥ WS4 (wire E6→E9) — see the WS2 bullet below.**
