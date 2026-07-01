@@ -6141,12 +6141,19 @@ function warpRevealSystem() {
     // stops it at turn start; warpSwapSystem stops it defensively), so
     // the guarded seed always takes.
     _seedScPoseFromCameraIfIdle();
-    scControls.flyTo({
-      toBody: firstStop.bodyRef,
-      bodyRadius: firstStop.bodyRadius,
-      linger: firstStop.linger * settings.get('tourLingerMultiplier'),
-      selfStep: false,
-    });
+    // RC3 (tour-reliability-corrections-2026-07-01): route through the SAME
+    // standoff/go-around dispatch startFlythrough() uses (Increment 1), instead
+    // of a bare flyTo. The bare call here predated Increment 1 and was never
+    // updated to apply the star PARK standoff — since firstStopIdx above always
+    // resolves to the star stop, EVERY warp arrival parked at the legacy 2.6R
+    // hold INSIDE the keep-out sphere (the measured stuck-at-the-sun bug — see
+    // docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/). A star
+    // target never produces a go-around waypoint (planLeg only routes non-star
+    // far-side targets), so this cannot alter the choreographed fly-in visuals.
+    // choreo:null — this function owns the ship-axis cue via
+    // beginTour({fromWarp:true}) below, so the dispatcher must not also fire
+    // onLegAdvanced (mirrors startFlythrough's identical choreo:null).
+    _dispatchTourLeg(firstStop, { choreo: null });
     // Ship-axis ENTRY — warp-exit is the continuity-anchor per §10.5.
     shipChoreographer.beginTour({ fromWarp: true });
 
@@ -6362,7 +6369,10 @@ function _scDropState() {
   const R = (sel ? sel.radius : scControls.target?.radius) ?? 5;
   const t = scPilot.tuning;
   const captureSphere = R * t.DROP_RADIUS_FACTOR;          // 10R
-  const dropMaxSpeed = captureSphere / t.DROP_ETA_MAX;     // (10R)/2.5
+  // Same floor the pilot's capture rule applies (DROP_MAX_SPEED_FLOOR) — the
+  // single-source promise above only holds if the HUD mirrors it for tiny R.
+  const dropMaxSpeed = Math.max(captureSphere / t.DROP_ETA_MAX,
+    t.DROP_MAX_SPEED_FLOOR ?? 0);
   const d = scModel.position.distanceTo(bp);
   const state = d > captureSphere
     ? 'none'
@@ -6948,9 +6958,15 @@ let _scTourStallAbortCount = 0;
 // A ship parked at `park` sits OUTSIDE the `keepOut` sphere, so a star->planet
 // departure starts outside it and the go-around never degenerates.
 // Returns null when there is no star (deep-sky / no system) → no special routing.
+// RC3 (tour-reliability-corrections-2026-07-01): also returns null for a
+// non-finite/non-positive star radius — a degenerate value would otherwise
+// propagate into `park`/`keepOut` (~0), producing a standoff that looks
+// "computed" but still parks the ship at the star. Real generated star data
+// is never 0/NaN; this is a defensive backstop, not a live path.
 function _starKeepOut() {
   if (!system?.star?.mesh) return null;
   const R = system.star.data.radius;
+  if (!Number.isFinite(R) || R <= 0) return null;
   const keepOut = starKeepOutRadius({ starRadius: R });
   const starStop = autoNav.queue?.find?.(s => s.type === 'star');
   const rawPark = (starStop && Number.isFinite(starStop.orbitDistance))
@@ -6969,7 +6985,21 @@ function _starKeepOut() {
 //     insert ONE pass-through waypoint (fly around the star first), stashing the
 //     real target in _scPendingRealTarget; no onLegAdvanced for the waypoint.
 //   • clear legs → today's plain flyTo (2.6R hold) + onLegAdvanced.
-// Gated on !warpEffect.isActive so warp-arrival fly-ins are never re-routed.
+// RC3 (tour-reliability-corrections-2026-07-01) — SPLIT warp gate: star geometry
+// (`_starKeepOut()`) is read fresh from the LIVE system/queue every dispatch,
+// regardless of warpEffect.isActive — it reflects real scene state, not warp
+// VISUAL state, and nulling it here (the pre-fix behavior) sent every
+// warp-arrival star leg to the degenerate `{standoff:null}` branch below → the
+// legacy 2.6R hold INSIDE the keep-out sphere (the measured stuck-at-the-sun
+// bug; see docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/).
+// Only WAYPOINT INSERTION — the pass-through detour for a far-side non-star
+// leg — still stays suppressed while warpEffect.isActive: re-routing around the
+// star mid-choreographed-fly-in would visibly hijack the scripted arrival. A
+// star target never gets a waypoint from planLeg anyway, so that suppression is
+// a no-op for the star case; it only guards a theoretical non-star dispatch
+// during warp (scPilot.stop() runs at warp turn start and stays stopped for the
+// whole warp, so no frame-driven dispatch reaches here while warpEffect.isActive
+// is true today — this is a hard guarantee for the future, not a live path).
 // `continuation` is set when dispatching the real target right after a waypoint
 // arrival (or a waypoint-leg stall retry): it KEEPS the per-stop go-around
 // counter (so the SC_GOAROUND_CAP still bounds re-inserted waypoints) and
@@ -6977,18 +7007,42 @@ function _starKeepOut() {
 // dispatch resets the counter — it is a new real stop.
 // `choreo` is the ship-axis cue fired for the REAL (non-waypoint) leg — default
 // shipChoreographer.onLegAdvanced; pass null when the caller owns the cue
-// (startFlythrough fires beginTour itself). A pass-through waypoint fires NO cue.
+// (startFlythrough / warpRevealSystem fire beginTour themselves). A pass-through
+// waypoint fires NO cue.
 function _dispatchTourLeg(stop, { continuation = false, choreo } = {}) {
   if (!stop || !stop.bodyRef) return;
+  // RC3 defensive guard: a non-finite/zero bodyRadius would collapse holdDist
+  // toward 0 (flying INTO the body) whether or not a standoff applies. Real
+  // populateQueueRefs data is always a positive finite radius; this is a
+  // backstop, not a live path — advanceToNextWithBody() already filters
+  // null-bodyRef stops before they reach here, so skipping (rather than
+  // dispatching a degenerate leg) can't newly freeze the tour.
+  if (!Number.isFinite(stop.bodyRadius) || stop.bodyRadius <= 0) {
+    console.warn('[TOUR] stop has non-finite/zero bodyRadius — skipping leg', stop);
+    return;
+  }
   const legCue = choreo === undefined ? () => shipChoreographer.onLegAdvanced() : choreo;
   const linger = stop.linger * settings.get('tourLingerMultiplier');
-  const ko = warpEffect.isActive ? null : _starKeepOut();
   const isStar = stop.type === 'star';
+  const ko = _starKeepOut();
+
+  // RC3 defensive guard: never dispatch a STAR leg with unreadable or
+  // degenerate keep-out geometry (system swapped mid-dispatch, or a corrupt
+  // star radius) — that would fall through to the same "park near 0" bug this
+  // workstream removes, just dressed up as "using planLeg." Every live caller
+  // (startFlythrough, warpRevealSystem) runs populateQueueRefs() against the
+  // CURRENT system immediately before dispatching a star stop, so `ko` is
+  // valid whenever `stop.bodyRef` (== system.star.mesh at populate time) is
+  // valid — this should never fire in practice.
+  if (isStar && (!ko || !Number.isFinite(ko.park) || ko.park <= 0)) {
+    console.warn('[TOUR] star stop dispatched with unreadable/degenerate keep-out geometry — skipping leg');
+    return;
+  }
 
   // A fresh real stop resets the per-stop go-around waypoint counter.
   if (!continuation) _scGoAroundCount = 0;
 
-  const plan = ko
+  let plan = ko
     ? planLeg({
         shipPos: scModel.position,
         targetPos: stop.bodyRef.position,
@@ -6998,6 +7052,11 @@ function _dispatchTourLeg(stop, { continuation = false, choreo } = {}) {
         park: ko.park,
       })
     : { waypoint: null, standoff: null };
+
+  // Waypoint INSERTION stays gated on warp (see header comment) — degrade a
+  // would-be detour to a direct dispatch rather than hijacking the
+  // choreographed fly-in. The standoff (if any) computed above is unaffected.
+  if (warpEffect.isActive && plan.waypoint) plan = { waypoint: null, standoff: plan.standoff };
 
   if (plan.waypoint && _scGoAroundCount < SC_GOAROUND_CAP) {
     // Far-side leg — route AROUND the star. Place the waypoint against the

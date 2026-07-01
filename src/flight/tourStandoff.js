@@ -32,6 +32,9 @@ const _closest = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _perp = new THREE.Vector3();
 const _segDir = new THREE.Vector3();
+const _pc = new THREE.Vector3();
+const _tanPerp = new THREE.Vector3();
+const _escDir = new THREE.Vector3();
 
 // KEEP-OUT sphere radius = KEEP_OUT_FACTOR·starRadius. 3.5 sits above the 2.5R
 // crawl-onset and the 1.05R collision barrier (so a routed ship is never pinned)
@@ -49,6 +52,75 @@ export const PARK_MIN_FACTOR = 1.3;
 // to a huge value the way the rejected center-anchored+geometric-growth design
 // did — see the module header).
 const GO_AROUND_MARGINS = Object.freeze([1.2, 1.35, 1.5, 1.6]);
+
+// AC3-B (tour-reliability-corrections-2026-07-01) — ESCAPE-FIRST regime.
+//
+// Measured reality voids inc-1's "impossible" premise: the ship CAN start a leg
+// ON or INSIDE the keep-out sphere (the warp-arrival defect, RC3). The normal
+// branch below anchors the waypoint at the segment's closest-approach point to
+// C, which is only stable when P starts OUTSIDE the sphere; for P on/inside it,
+// that anchor can land arbitrarily close to C itself, giving a directionless
+// (unstable) outward normal — no escape guarantee. So: detect P on/inside
+// FIRST and branch to a dedicated escape waypoint, radially outward from C
+// through P, optionally blended toward the segment's off-axis ("tangent")
+// direction when there is one to blend toward (zero for an antipodal target).
+//
+// PROOF the escape is monotonic (verified empirically too, by parametric
+// sampling, in the test suite — this is the reasoning, not a substitute for
+// that check): for a straight segment P->W with unit direction D,
+//   d/dt |P + tD - C|^2 = 2[(P-C)·D + t],
+// linear increasing in t (coefficient of t is |D|^2 = 1 > 0). So if the value
+// at t=0 — (P-C)·D — is >= 0, the WHOLE segment [0, |W-P|] is non-decreasing in
+// distance to C. Building D = normalize(n + BLEND·tanPerp) with n =
+// normalize(P-C) and tanPerp ⟂ n (by construction, via rejection) makes
+// (P-C)·D_unnormalized = |P-C|·(n·n) + BLEND·|P-C|·(n·tanPerp) = |P-C| + 0 =
+// |P-C| >= 0 ALWAYS — independent of BLEND, independent of geometry, and even
+// when P == C exactly (where |P-C| = 0 and ANY direction is safe, since moving
+// away from the exact center in a straight line trivially increases distance).
+const ESCAPE_TANGENT_BLEND = 0.35;
+
+/**
+ * AC3-B — the escape-first waypoint for P ON/INSIDE the keep-out sphere. See
+ * the proof above the ESCAPE_TANGENT_BLEND constant for why this is
+ * monotonic-safe regardless of geometry, including P exactly at C (degenerate
+ * radial direction, floored below) or T == P (degenerate tangential blend).
+ *
+ * Placed at radius·GO_AROUND_MARGINS[0] (the module's existing first
+ * near-tangent margin, reused rather than inventing a new constant) — strictly
+ * beyond the sphere and, since the escape regime guarantees |P-C| <= radius,
+ * strictly farther from C than P started.
+ */
+function _escapeWaypoint(P, T, C, radius) {
+  // Outward radial direction n = normalize(P - C). Degenerate ONLY when P sits
+  // (numerically) exactly at C: floor to a stable direction so this is NEVER
+  // NaN — prefer heading toward T (directionally useful), then a fixed axis if
+  // T is also colocated with P. Both are safe here because |P-C| ≈ 0 makes the
+  // monotonic proof hold for ANY direction (see comment above).
+  _pc.copy(P).sub(C);
+  if (_pc.lengthSq() < radius * radius * 1e-12) {
+    _pc.copy(T).sub(P);
+    if (_pc.lengthSq() < 1e-12) _pc.set(0, 0, 1);
+  }
+  _pc.normalize(); // _pc now holds n, the outward radial unit direction
+
+  // Tangential blend "toward the eventual tangent": the component of (T-P)
+  // perpendicular to n, via rejection. Zero (or negligible) when T is ~
+  // antipodal through C (or T == P) — nothing to blend toward, so the escape
+  // stays PURE radial (this is the hand-computable oracle regime).
+  _segDir.copy(T).sub(P);
+  const alongN = _segDir.dot(_pc);
+  _tanPerp.copy(_segDir).addScaledVector(_pc, -alongN);
+  const tanLenSq = _tanPerp.lengthSq();
+
+  _escDir.copy(_pc); // start pure radial
+  if (tanLenSq > radius * radius * 1e-8) {
+    _tanPerp.multiplyScalar(1 / Math.sqrt(tanLenSq));
+    _escDir.addScaledVector(_tanPerp, ESCAPE_TANGENT_BLEND);
+    _escDir.normalize();
+  }
+
+  return new THREE.Vector3().copy(C).addScaledVector(_escDir, radius * GO_AROUND_MARGINS[0]);
+}
 
 /**
  * AC1 (1b) — the star KEEP-OUT (go-around crossing) radius = KEEP_OUT_FACTOR·R.
@@ -125,9 +197,28 @@ export function segmentCrossesSphere(P, T, C, radius) {
  * for pathological near-boundary antipodal geometry the capped best-effort W is
  * returned (still outside the sphere) and the caller's cap + WS-1 backstop apply.
  *
+ * AC3-B extension: when P starts ON or INSIDE the keep-out sphere (measured to
+ * occur via the warp-arrival defect — RC3; inc-1's "impossible" premise for
+ * this function is void), the closest-approach anchor below is unstable (it
+ * can land at/near C), so that regime is detected FIRST and routed to a
+ * dedicated escape-first waypoint (see _escapeWaypoint + the proof above
+ * ESCAPE_TANGENT_BLEND). ALL outside-sphere regimes (this function's original
+ * contract) are completely unchanged — the escape branch never runs for them.
+ *
  * @returns {THREE.Vector3} a NEW Vector3 waypoint (safe to retain).
  */
 export function goAroundWaypoint(P, T, C, radius) {
+  // ESCAPE-FIRST branch (AC3-B) — checked before any T-dependent geometry so
+  // it is well-defined even for a degenerate P==T segment. Epsilon is a
+  // relative float-rounding guard only (radius·1e-9), NOT a behavioral margin:
+  // it exists so "P exactly on the sphere" (constructed via P = C + n*radius)
+  // reliably falls into the escape branch despite sqrt rounding, while any
+  // genuinely outside-the-sphere start (even a hair outside) still takes the
+  // ORIGINAL, unmodified branch below.
+  if (P.distanceTo(C) <= radius * (1 + 1e-9)) {
+    return _escapeWaypoint(P, T, C, radius);
+  }
+
   _d.copy(T).sub(P);
   const lenSq = _d.lengthSq();
 

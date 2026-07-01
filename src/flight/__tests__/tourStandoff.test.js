@@ -189,6 +189,166 @@ describe('tourStandoff.goAroundWaypoint (AC3) — BOUNDED detour, INDEPENDENT or
   });
 });
 
+// ── Standalone CLOSED-FORM ray/sphere check (quadratic roots), INDEPENDENT of
+//    the module's projection-clamp segmentCrossesSphere — deliberately a
+//    different derivation (root-interval overlap, not vertex-clamp) so a bug
+//    shared between the module and its own verification cannot hide. ──
+function closedFormSegmentHitsSphere(P, Q, C, r) {
+  const dx = Q.x - P.x, dy = Q.y - P.y, dz = Q.z - P.z;
+  const a = dx * dx + dy * dy + dz * dz;
+  const ex = P.x - C.x, ey = P.y - C.y, ez = P.z - C.z;
+  if (a < 1e-18) return (ex * ex + ey * ey + ez * ez) < r * r; // degenerate: point test
+  const b = 2 * (ex * dx + ey * dy + ez * dz);
+  const c = (ex * ex + ey * ey + ez * ez) - r * r;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return false; // infinite line never touches the sphere
+  const sq = Math.sqrt(disc);
+  const t1 = (-b - sq) / (2 * a);
+  const t2 = (-b + sq) / (2 * a);
+  // Segment [0,1] intersects the sphere-interior interval [t1,t2] iff they overlap.
+  return t1 <= 1 && t2 >= 0;
+}
+
+// ── Parametric monotonic-escape check (AC3-B property (ii)): sample distance
+//    to C along P->W and assert it never decreases. Independent of both the
+//    module's internals and the closed-form check above. ──
+function isMonotonicNonDecreasing(P, W, C, n = 1000) {
+  let prev = -Infinity;
+  for (let i = 0; i <= n; i++) {
+    const s = i / n;
+    const x = P.x + (W.x - P.x) * s;
+    const y = P.y + (W.y - P.y) * s;
+    const z = P.z + (W.z - P.z) * s;
+    const dx = x - C.x, dy = y - C.y, dz = z - C.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d < prev - 1e-6) return false; // tiny float slop tolerated
+    prev = d;
+  }
+  return true;
+}
+
+describe('tourStandoff.goAroundWaypoint (AC3-B) — escape-first from ON/INSIDE the keep-out sphere', () => {
+  const C = new THREE.Vector3(0, 0, 0);
+  const keepOut = 16.275; // = 3.5 * 4.65, same representative star as AC1/AC3
+
+  it('(a) P INSIDE at 0.75*keepOut, T antipodal — hand-computed pure-radial oracle, monotonic escape', () => {
+    // T is exactly antipodal through C (same axis as P): the tangential blend
+    // component is zero by construction, so the escape is PURE radial and hand-
+    // computable: W = C + normalize(P-C) * keepOut * 1.2 (the module's existing
+    // first near-tangent margin, reused for the escape placement).
+    const P = new THREE.Vector3(0, 0, 0.75 * keepOut);
+    const T = new THREE.Vector3(0, 0, -1000); // antipodal side of C from P
+    expect(P.distanceTo(C)).toBeLessThan(keepOut); // precondition: starts INSIDE
+
+    const W = goAroundWaypoint(P, T, C, keepOut);
+
+    expect(Number.isNaN(W.x) || Number.isNaN(W.y) || Number.isNaN(W.z)).toBe(false);
+    // Hand-computed: W = (0, 0, 1.2*keepOut) exactly (pure radial, no blend).
+    expect(W.x).toBeCloseTo(0, 6);
+    expect(W.y).toBeCloseTo(0, 6);
+    expect(W.z).toBeCloseTo(1.2 * keepOut, 6);
+
+    // (i) W lies outside the (inflated) sphere.
+    expect(W.distanceTo(C)).toBeGreaterThan(keepOut);
+    expect(closedFormSegmentHitsSphere(W, W.clone(), C, keepOut)).toBe(false); // W itself is outside
+    // Escape property: strictly farther from C than the start.
+    expect(W.distanceTo(C)).toBeGreaterThan(P.distanceTo(C));
+    // (ii) P->W is monotonically non-decreasing in distance to C (parametric check).
+    expect(isMonotonicNonDecreasing(P, W, C)).toBe(true);
+  });
+
+  it('(b) P EXACTLY ON the sphere — no NaN, escape still fires, monotonic', () => {
+    const P = new THREE.Vector3(0, 0, keepOut); // |P-C| == keepOut exactly
+    const T = new THREE.Vector3(0, 0, -500);
+    expect(P.distanceTo(C)).toBeCloseTo(keepOut, 9);
+
+    const W = goAroundWaypoint(P, T, C, keepOut);
+
+    expect(Number.isNaN(W.x) || Number.isNaN(W.y) || Number.isNaN(W.z)).toBe(false);
+    expect(W.distanceTo(C)).toBeGreaterThan(keepOut);
+    expect(W.distanceTo(C)).toBeGreaterThanOrEqual(P.distanceTo(C));
+    expect(isMonotonicNonDecreasing(P, W, C)).toBe(true);
+  });
+
+  it('(c) near-boundary antipodal OUTSIDE the sphere — matches inc-1 bounded best-effort (unchanged)', () => {
+    // P is just OUTSIDE the sphere (1.01*keepOut), T antipodal through C — must
+    // NOT trigger the new escape branch (P starts outside). This is inc-1's
+    // documented PATHOLOGICAL case (module header: "for pathological
+    // near-boundary antipodal geometry the capped best-effort W is returned
+    // (still outside the sphere)") — P is so close to the boundary that NO
+    // margin up to the 1.6 cap clears the P->W sub-segment (hand-verified: the
+    // required margin to clear is ~7x, far past the cap), so the loop exhausts
+    // all 4 margins and falls through to the LAST one (1.6). This is EXISTING,
+    // pre-AC3-B behavior — hand-computed here, not asserted as "clears".
+    const P = new THREE.Vector3(0, 0, 1.01 * keepOut);
+    const T = new THREE.Vector3(0, 0, -1000); // antipodal far side
+    expect(P.distanceTo(C)).toBeGreaterThan(keepOut); // precondition: starts OUTSIDE
+    expect(segmentCrossesSphere(P, T, C, keepOut)).toBe(true);
+
+    const W = goAroundWaypoint(P, T, C, keepOut);
+
+    expect(Number.isNaN(W.x) || Number.isNaN(W.y) || Number.isNaN(W.z)).toBe(false);
+    // Hand-computed fallback: through-center perpendicular n=(0,1,0), capped
+    // margin 1.6 (the loop cannot clear P->W for this near-boundary geometry).
+    expect(W.x).toBeCloseTo(0, 6);
+    expect(W.y).toBeCloseTo(1.6 * keepOut, 6);
+    expect(W.z).toBeCloseTo(0, 6);
+    // W itself is still strictly outside the sphere and bounded (< 2*keepOut) —
+    // the invariant the module DOES guarantee even in the pathological case.
+    expect(W.distanceTo(C)).toBeGreaterThan(keepOut);
+    expect(W.distanceTo(C)).toBeLessThan(2 * keepOut);
+    // Independent closed-form check confirms (does NOT contradict) the module's
+    // own documented caveat: the capped best-effort sub-segment genuinely still
+    // dips inside the sphere here — that gap is closed by the caller's
+    // per-frame clearance switch + SC_GOAROUND_CAP + WS-1 backstop, not by this
+    // pure function. AC3-B's job is only to leave this regime byte-for-byte
+    // unchanged, which the exact hand-computed W above verifies.
+    expect(closedFormSegmentHitsSphere(P, W, C, keepOut)).toBe(true);
+  });
+
+  it('(d) normal far-side regime from PARK — matches inc-1 clean tangent exactly (unchanged, existing case)', () => {
+    // Same geometry as the existing AC3 "(a) on-axis far-side" case above —
+    // re-asserted here under the AC3-B suite to nail down NO regression: P starts
+    // WELL outside the sphere at a PARK-like distance, T antipodal.
+    const P = new THREE.Vector3(0, 0, 2.5 * keepOut);
+    const T = new THREE.Vector3(0, 0, -1000);
+    expect(P.distanceTo(C)).toBeGreaterThan(keepOut);
+    expect(segmentCrossesSphere(P, T, C, keepOut)).toBe(true);
+
+    const W = goAroundWaypoint(P, T, C, keepOut);
+
+    // Matches inc-1's hand-computed oracle exactly: W = (0, 1.2*keepOut, 0).
+    expect(W.x).toBeCloseTo(0, 4);
+    expect(W.y).toBeCloseTo(1.2 * keepOut, 4);
+    expect(W.z).toBeCloseTo(0, 4);
+    expect(closedFormSegmentHitsSphere(P, W, C, keepOut)).toBe(false);
+    expect(closedFormSegmentHitsSphere(W, T, C, keepOut)).toBe(false);
+  });
+
+  it('P EXACTLY at the star center — floors to a stable direction, no NaN, escape still fires', () => {
+    const P = new THREE.Vector3(0, 0, 0); // P == C
+    const T = new THREE.Vector3(0, 0, -1000);
+
+    const W = goAroundWaypoint(P, T, C, keepOut);
+
+    expect(Number.isNaN(W.x) || Number.isNaN(W.y) || Number.isNaN(W.z)).toBe(false);
+    expect(W.distanceTo(C)).toBeGreaterThan(keepOut);
+    expect(W.distanceTo(C)).toBeGreaterThan(P.distanceTo(C));
+    expect(isMonotonicNonDecreasing(P, W, C)).toBe(true);
+  });
+
+  it('P inside AND T == P (degenerate segment) — no NaN, pure-radial escape', () => {
+    const P = new THREE.Vector3(0, 0.6 * keepOut, 0);
+    const T = P.clone();
+
+    const W = goAroundWaypoint(P, T, C, keepOut);
+
+    expect(Number.isNaN(W.x) || Number.isNaN(W.y) || Number.isNaN(W.z)).toBe(false);
+    expect(W.distanceTo(C)).toBeGreaterThan(keepOut);
+    expect(isMonotonicNonDecreasing(P, W, C)).toBe(true);
+  });
+});
+
 describe('tourStandoff.planLeg (AC5) — pure decision seam', () => {
   const C = new THREE.Vector3(0, 0, 0);
   const keepOut = 16.275;
