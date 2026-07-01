@@ -2823,7 +2823,7 @@
     // (force every field to its preset default regardless of touch state). These sliders ONLY affect
     // the plate-path presets (Rocky/Ocean/Mars → terrestrial/ocean archetypes); off that path the
     // writer ignores bodyDrivers entirely, so they're inert on every other preset (expected).
-    const driverOv = { gravity: 0.9, volatiles: 0.15, tidal: 0.0017 };   // age descoped (Inc.2, Max UAT 2026-06-28)
+    const driverOv = { gravity: 0.9, volatiles: 0.15, tidal: 0.0017, thermal: 0.275 };   // age descoped (Inc.2); thermal = Inc.4-M volcanic drive (H_REF default)
     const _driverTouched = new Set();   // field names the user has dragged (overrides) since last preset change
     let _driverAbMode = 'override';     // 'override' | 'preset' — the A/B flip
     // The plate-path preset's CURRENT derived/preset driver defaults (recomputed each applyDrivers).
@@ -2835,13 +2835,15 @@
         gravity: u.surfaceGravity,
         volatiles: (fp.composition && fp.composition.volatileFraction != null) ? fp.composition.volatileFraction : 0.15,
         tidal: u.tidalHeat,
+        // Inc.4-M: the preset's derived endogenic thermal drive H (raw Io tidal saturates via clamp01).
+        thermal: magmaThermal({ tidalHeating: u.tidalHeat, age: (fp.age != null ? fp.age : 4.5) }),
       };
     }
     // Reset the four sliders to the current preset's defaults + clear the touched set (called on
     // preset change so the sliders always SHOW the preset value and overriding starts fresh).
     function resetDriverOverrides(u, fp){
       const d = presetDriverDefaults(u, fp);
-      driverOv.gravity = d.gravity; driverOv.volatiles = d.volatiles; driverOv.tidal = d.tidal;
+      driverOv.gravity = d.gravity; driverOv.volatiles = d.volatiles; driverOv.tidal = d.tidal; driverOv.thermal = d.thermal;
       _driverTouched.clear();
     }
     // Build the bodyDrivers bundle passed to route(). Field names are FIXED by the sibling writer:
@@ -2855,6 +2857,10 @@
         massGravity:      useOv('gravity')   ? driverOv.gravity   : d.gravity,
         volatileFraction: useOv('volatiles') ? driverOv.volatiles : d.volatiles,
         tidalHeating:     useOv('tidal')     ? driverOv.tidal     : d.tidal,
+        // Inc.4-M volcanic thermal drive: ONLY when the thermal slider is dragged (override) do we inject a
+        // normalized thermalState — otherwise undefined ⇒ magmaThermal falls back to the raw tidalHeating path
+        // (the real preset render). Inert on the plate path (driversToTune ignores unknown fields).
+        thermalState:     useOv('thermal')   ? driverOv.thermal   : undefined,
       };
     }
     function applyDrivers(){
@@ -3918,6 +3924,18 @@
     fBodyDrivers.add({ get mode(){ return _driverAbMode === 'override'
         ? (_driverTouched.size ? 'OVERRIDE ('+[..._driverTouched].join(',')+')' : 'override (none touched = preset)')
         : 'PRESET (defaults)'; } }, 'mode').name('A/B mode').listen().disable();
+    // ── Inc.4-MULTIPLY: the volcanic thermal-drive override (ONLY affects Lava/Magma → volcanic path; inert
+    // elsewhere). Drag ⇒ plume count/strength track thermal history + edifices elongate (fissure-aligned).
+    // Untouched ⇒ the preset renders from its real (raw) tidal heat. The A/B flip is SHARED with the Inc.2
+    // folder above (preset drivers ↔ overrides). ──────────────────────────────────────────────────────────
+    const fMagmaDrivers = fDrivers.addFolder('Body drivers → volcanic relief (Inc.4-M)'); fMagmaDrivers.open();
+    fMagmaDrivers.add(driverOv, 'thermal', 0.0, 1.0, 0.01).name('thermal drive (tidal+radiogenic)').listen()
+      .onChange(() => _onDriverDrag('thermal'));
+    fMagmaDrivers.add({ ab(){
+      _driverAbMode = (_driverAbMode === 'override') ? 'preset' : 'override';
+      if (grainCarveUI.reliefBakeStrength < 0.5) applyReliefBake(1);   // make the flip visible (sample the carrier)
+      ensureNetworkRouted('magma-driver-ab');
+    } }, 'ab').name('Relief A/B: preset drive ↔ override');
     // ── AC7 scale readout panel — radius (already above), surface gravity (g), and the
     // flagged per-feature footprints (crater + river) in km. Read-only getters update live.
     const fScaleReadout = fDrivers.addFolder('scale readout'); fScaleReadout.open();
@@ -6149,6 +6167,7 @@
                       return {
                         heightSource, regime:'volcanic', plumeCount: md.plumeCount,
                         appliedTune,                          // Inc.4-MULTIPLY: the driver→tune override (null at the reference)
+                        elongation: md.elongation,            // Inc.4-MULTIPLY: applied edifice aspect E (1 at reference, >1 when heated)
                         substellarAxis: Array.from(md.substellarAxis),
                         varExplainedByPlume: cP*cP,            // arm's-length centroid-proximity r^2 (non-basin)
                         varExplainedByLatitudeY: cY*cY,        // sin^2(+y lat) r^2 (non-basin) — MUST stay below plume
