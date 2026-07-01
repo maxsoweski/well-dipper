@@ -3,6 +3,7 @@
   "intentRef": "intent.md",
   "project": "well-dipper",
   "status": "building",
+  "reshapeNote": "RESHAPED 2026-07-01 after the model-verify+plan workflow (wf_6a8a85d8-08b) discovered the emission RENDER machinery already exists in the lab as the F32 dayside-hotspot + F33 nightside-glow cards (currently lab-status partial): emissiveBlackbody one-curve ramp (GLSL planet-lod-height.glsl.js:734 + CPU twin planet-lod-lab-core.js:127), east-advected uThermalDir hotspot (hotspotOffset 0.26 rad ~15deg, calibrated WASP-43b/HD189733b), uNightTempK ~1100K floor, gated on uThermalStrength. The 'hot giant renders cold' bug is that daysideThermalEnabled/nightsideThermalEnabled default false (planet-lod-lab.html:2096-2097) and the Hot-Jupiter derivation (3467-3475) sets thermalStrength/dayTempK/nightTempK but never flips the enables on. So #2 = (a) WIRE the hot-Jupiter auto-glow + live T_eq sweep + master toggle + retrograde east-sign flip, and (b) STAND UP the tested reusable data-register src/worldengine/base/emission-e.js (Planck->RGB + visibleLuminance re-anchored to ~1800K NOT 6500K + Kelvin T-field substrate for #5/#6) + the missing CPU<->GLSL parity test. Decisions (Max 2026-07-01): keep the shipped (tempK/1800)^4 quartic for the RENDER brightness (visibleLuminance is the data-layer AC1 physical reference only — unifying would force re-UAT of shipped F41 magma); accept the incandescent white substellar core (AC7 re-worded; no shader brightness cap). Full plan: BUILD-PLAN.md.",
   "acceptanceCriteria": [
     {
       "id": "AC1",
@@ -66,10 +67,10 @@
     },
     {
       "id": "AC7",
-      "statement": "ADDITIVE COMPOSITOR + #3a REGRESSION: emission composites ADDITIVELY over the #3a reflectance (bands read underneath the glow), and with emission gated OFF (or on a cold body) the lab render is byte-identical to the pre-#2 #3a reflectance path — #2 adds a register, it does not alter the reflectance pipeline.",
+      "statement": "ADDITIVE COMPOSITOR + #3a REGRESSION (incandescent-core resolution, Max 2026-07-01): emission composites ADDITIVELY over the #3a reflectance; bands read in the glow PENUMBRA while the substellar core is legitimately overwhelmed to incandescent white (a truly hot hotspot outshines reflectance — no brightness cap). The REGRESSION GATE: with the emission register gated OFF (or on any cold body) the lab render is byte-identical to the pre-#2 #3a reflectance path — #2 adds/wires a register, it never alters the reflectance pipeline.",
       "verifyVia": {
-        "input": "Toggle the emission register off in the lab and compare the render to the #3a baseline (Jovian/Saturnian/Neptunian); confirm bands remain visible under the hot-Jupiter glow when on.",
-        "observable": "emission-OFF render matches the pre-#2 #3a render for every giant preset (no reflectance drift); with emission ON the underlying bands are still discernible through the additive glow (not overwritten)."
+        "input": "Toggle the 'emission register' master off in the lab and pixel-diff the render against the #3a baseline (Jovian/Saturnian/Neptunian); with it on, confirm #3a bands remain discernible in the penumbra around the hot-Jupiter hotspot (core may saturate to white).",
+        "observable": "emission-OFF render matches the pre-#2 #3a render for every giant preset (no reflectance drift — the true regression gate); with emission ON the underlying bands are discernible in the glow penumbra (the substellar core saturating to white is accepted-by-design, not a failure)."
       },
       "layer": "integration",
       "live": true
