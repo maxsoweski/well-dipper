@@ -30,6 +30,7 @@ import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tect
 import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
 import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
 import { writeMagmatismSphere, magmaDriversToTune } from './src/worldengine/base/magmatism.js';
+import { writeStagnantLidReliefSphere, stagnantLidRegimeOf } from './src/worldengine/base/stagnantLid.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
@@ -436,6 +437,14 @@ export function isVolcanicPath(archetype, locked = false) {
   return VOLCANIC_ARCHETYPES.has(archetype);
 }
 
+// Increment #4b (stagnant-lid): true for the Venus stagnant-lid silicate regime (key 'stagnant-lid').
+// KEY-based only — NEVER gated on locked (Venus is a slow retrograde rotator, locked:false; gating on
+// locked would MISS it, which is the fall-through-to-sin²(lat) bug). Checked AFTER plate/shell/volcanic
+// so all three validated paths stay byte-identical (zero-clobber by construction).
+export function isStagnantLidPath(archetype, locked = false) {
+  return stagnantLidRegimeOf(archetype, locked) !== null;
+}
+
 export function writeBodyRelief(carrier, {
   archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0', T_eq = null,
 } = {}) {
@@ -445,12 +454,12 @@ export function writeBodyRelief(carrier, {
     // stub ⇒ null ⇒ the DEFAULTS branch ⇒ byte-identical to the validated POC (AC2). SLICE B fills the
     // calibration. bodyDrivers stays null off the lab driver-response path (every existing caller).
     const plateDiag = writePlateUpliftSphere(carrier, bodyDrivers, { macroSeed, tune: driversToTune(bodyDrivers) });
-    return { path: 'plate', plateDiag, shellDiag: null, magmaDiag: null };
+    return { path: 'plate', plateDiag, shellDiag: null, magmaDiag: null, stagnantDiag: null };
   }
   const regime = shellRegimeOf(archetype, locked);    // icy-active | volatile-cold | eyeball-despun | null
   if (regime) {
     const shellDiag = writeShellReliefSphere(carrier, grainDrivers, { macroSeed, regime });
-    return { path: 'shell', plateDiag: null, shellDiag, magmaDiag: null };
+    return { path: 'shell', plateDiag: null, shellDiag, magmaDiag: null, stagnantDiag: null };
   }
   // Increment 4a (magmatism): volcanic bodies (Lava / Magma-K2-141b / Io-type) get the one-pass
   // mantle-plume field (carrier.height = U, the SOLE low/mid source). Checked AFTER plate + shell so
@@ -469,11 +478,19 @@ export function writeBodyRelief(carrier, {
     const magmaTune = magmaDriversToTune(bodyDrivers);
     const magmaDiag = writeMagmatismSphere(carrier, bodyDrivers, { macroSeed, locked, T_ss, tune: magmaTune });
     magmaDiag.appliedTune = magmaTune;
-    return { path: 'volcanic', plateDiag: null, shellDiag: null, magmaDiag };
+    return { path: 'volcanic', plateDiag: null, shellDiag: null, magmaDiag, stagnantDiag: null };
+  }
+  // Increment #4b (stagnant-lid): Venus gets the one-pass mantle-plume field (tessera + coronae + plains;
+  // carrier.height = U, the SOLE low/mid source). Checked AFTER plate + shell + volcanic so all three
+  // validated paths stay byte-identical. stagnantDiag is retained for the live stagnantLidProbe.
+  const slRegime = stagnantLidRegimeOf(archetype, locked);
+  if (slRegime) {
+    const stagnantDiag = writeStagnantLidReliefSphere(carrier, grainDrivers, { macroSeed, regime: slRegime });
+    return { path: 'stagnant-lid', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag };
   }
   writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
   writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
-  return { path: 'despun', plateDiag: null, shellDiag: null, magmaDiag: null };
+  return { path: 'despun', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag: null };
 }
 
 // ═══════════════════════ ROUTING + ORDER + METRICS ═══════════════════════
@@ -1119,6 +1136,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   let plateDiag = null;     // plate-uplift increment: the plate partition diagnostics on the Earth-like path (null on despun); read by the live plateProbe (AC7)
   let shellDiag = null;     // shell-relief increment: the despun/ice-shell diagnostics on the shell path (null off it); read by the live shellProbe
   let magmaDiag = null;     // magmatism increment: the mantle-plume diagnostics on the volcanic path (null off it); read by the live magmaProbe
+  let stagnantDiag = null;  // stagnant-lid increment: the Venus plume-field diagnostics (null off it); read by the live stagnantLidProbe
   let lastHeightSource = 'sampler';  // AC7: 'carrier' when the router read the baked plate-written carrier.height, else 'sampler'
   // WS4 T8: the grain cube (whole-sphere strike field) + a bake counter. grainBakeCount increments
   // once per route() (the bake-once cadence — camera/time changes never call route(), so they never
@@ -1182,6 +1200,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     plateDiag = relief.plateDiag;                       // null off the plate path
     shellDiag = relief.shellDiag;                       // null off the shell path
     magmaDiag = relief.magmaDiag;                       // null off the volcanic path
+    stagnantDiag = relief.stagnantDiag;                 // null off the stagnant-lid path
     const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
     // uReliefBakeStrength uniform the renderer (Phase C) gates on. strength>0 ⇒ BOTH read carrier.height
@@ -1243,6 +1262,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     get plateDiag() { return plateDiag; },
     get shellDiag() { return shellDiag; },
     get magmaDiag() { return magmaDiag; },
+    get stagnantDiag() { return stagnantDiag; },
     get heightSource() { return lastHeightSource; },
     get carveTexture() { return carve ? carve.texture : null; },
     // WS4 T8: the baked grain cube texture (the host pushes it to uTectonicGrainCube) + the bake

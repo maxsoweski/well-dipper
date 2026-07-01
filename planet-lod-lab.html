@@ -1913,6 +1913,7 @@
       'Europa (icy moon)': 'ice',            // shell-relief increment: NAMED_BODY → real icy-active tag (else null+locked → locked-fallback)
       'Titan (methane seas)': 'volatile',    // shell-relief increment: COINED short key → volatile-cold (locked:false, single-covered, no fallback net)
       'Magma (K2-141b)': 'lava',             // magmatism increment: NAMED_BODY (locked) → the volcanic 'lava' tag. Without this, archetype resolves null+locked → shell's eyeball-despun locked-fallback (a misroute). NAMED_BODY still forces the canonical radius, so drawPresetRadius is unaffected.
+      'Venus (sulfuric shroud)': 'stagnant-lid',  // #4b: NAMED_BODY (locked:false) → the coined 'stagnant-lid' key → writeStagnantLidReliefSphere. LOAD-BEARING: Venus has NO fallback net (unlocked, archetype null otherwise), so dropping this ONE line silently regresses Venus to sin²(lat). NAMED_BODY forces the canonical 0.95 R⊕ radius, so drawPresetRadius is unaffected.
       'Carbon (high C/O)': 'carbon',
       'Crystal (faceted)': 'crystal'
     };
@@ -6188,6 +6189,54 @@
                         hotspotNode: Array.from(md.hotspotNode),
                         U: Array.from(U), hotspotProximity: Array.from(md.hotspotProximity),
                         riverStats,
+                      };
+                    },
+                    // #4b LIVE stagnantLidProbe (AC8) — sibling of magmaProbe. Rebuilds the plume predictor
+                    // ARM'S-LENGTH from the PUBLISHED sd.plumeCenters (squared Gaussian, sd.PLUME_BELT), NEVER
+                    // from U, so the structure signal is not a tautology. varExplainedByLatitude is the AC3
+                    // falsifier (must stay below the plume signal — Venus is NOT sin²(lat) bands). meanRiftTrench
+                    // is scoped exactly like the headless AC2(c) LOW mask: {inRift} ∪ {active-corona trench
+                    // annulus 0.8≤ρ≤1.05}, NOT whole-corona averages (whose domes are above plains).
+                    stagnantLidProbe(){
+                      const sd = riverOverlay.stagnantDiag;
+                      const heightSource = riverOverlay.heightSource;
+                      if (!sd) return { heightSource, regime:null, plumeCount:null, coronaCount:null, U:null,
+                        varExplainedByPlume:null, varExplainedByLatitude:null,
+                        note:'plate / shell / volcanic / despun path (non-stagnant-lid body) — no stagnant-lid diagnostics' };
+                      const mesh = riverOverlay.mesh, N = mesh.N, verts = mesh.verts;
+                      const U = sd.U;
+                      const dot3 = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+                      const BELT = sd.PLUME_BELT || 0.35;
+                      // arm's-length SQUARED-Gaussian plume predictor from the published centers.
+                      const pred = new Float64Array(N);
+                      for (let i=0;i<N;i++){ const d = verts[i]; let best = 0;
+                        for (let p=0;p<sd.plumeCenters.length;p++){ const a = Math.acos(Math.max(-1,Math.min(1,dot3(d, sd.plumeCenters[p])))); const g = Math.exp(-(a/BELT)*(a/BELT)); if (g>best) best = g; }
+                        pred[i] = best; }
+                      const sMask = new Float64Array(N), latY = new Float64Array(N);
+                      for (let i=0;i<N;i++){ sMask[i] = (sd.isTessera[i] || sd.coronaCoverMask[i]) ? 1 : 0; const y = Math.max(-1, Math.min(1, verts[i][1])); latY[i] = y*y; }
+                      const corr = (a,b) => { let n=N,ma=0,mb=0; for(let i=0;i<N;i++){ ma+=a[i]; mb+=b[i]; } ma/=n; mb/=n; let c=0,va=0,vb=0; for(let i=0;i<N;i++){ const da=a[i]-ma, db=b[i]-mb; c+=da*db; va+=da*da; vb+=db*db; } return c/(Math.sqrt(va*vb)||1); };
+                      const cP = Math.abs(corr(sMask, pred)), cL = corr(latY, U);
+                      // AC2 ordering: mean(tessera) > mean(plains) > mean(rift/active-trench low mask).
+                      const riftTrench = new Uint8Array(N);
+                      for (let i=0;i<N;i++) if (sd.inRift[i]) riftTrench[i] = 1;
+                      for (let cc=0;cc<sd.coronaCount;cc++){ if(!sd.coronaActive[cc]) continue; const ctr = sd.coronaCenters[cc], Rc = sd.coronaRadius[cc] || 1e-6;
+                        for (let i=0;i<N;i++){ const rho = Math.acos(Math.max(-1,Math.min(1,dot3(verts[i],ctr))))/Rc; if (rho>=0.8 && rho<=1.05) riftTrench[i] = 1; } }
+                      let tS=0,tN=0, pS=0,pN=0, lS=0,lN=0;
+                      for (let i=0;i<N;i++){
+                        if (sd.isTessera[i]){ tS+=U[i]; tN++; }
+                        else if (!sd.inRift[i] && !sd.coronaCoverMask[i]){ pS+=U[i]; pN++; }
+                        if (riftTrench[i]){ lS+=U[i]; lN++; }
+                      }
+                      const mT = tN?tS/tN:NaN, mP = pN?pS/pN:NaN, mL = lN?lS/lN:NaN;
+                      return {
+                        heightSource, regime: sd.regime, plumeCount: sd.plumeCount, coronaCount: sd.coronaCount,
+                        tesseraFrac: sd.tesseraFrac, plainsFrac: sd.plainsFrac, activeFrac: sd.activeFrac,
+                        varExplainedByPlume: cP*cP,               // arm's-length structure-vs-plume r^2
+                        structureCorr: cP,                        // |corr| (the calibrated >=0.40 signal)
+                        varExplainedByLatitude: cL*cL,            // sin^2(+y lat) r^2 — MUST stay below the plume signal (AC3)
+                        meanTessera: mT, meanPlains: mP, meanRiftTrench: mL,
+                        orderingHolds: (mT > mP && mP > mL),
+                        U: Array.from(U),
                       };
                     },
                     // WS4 T12 — carve-EPOCH toggle for epoch-carve-visible. Off (default) = epoch 1, the
