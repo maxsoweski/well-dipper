@@ -304,6 +304,11 @@ let system = null;
 let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
 let orbitsVisible = settings.get('showOrbits');
+// A1 (orrery-nav): orbit lines follow the station by default — ON in ORRERY
+// (god's-eye), OFF in HELM (cockpit stays clean) — UNTIL the player explicitly
+// toggles them (Settings / O key / HUD button, all via toggleOrbits), after which
+// their choice sticks. Session-scoped.
+let _orbitsUserOverride = false;
 let gravityWellVisible = settings.get('showGravityWells');
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
@@ -524,6 +529,10 @@ function setScManual(on) {
   // W/S takeover / exit). _updateModeSwapButton is a hoisted fn-declaration
   // reached only at runtime, so the forward reference is safe.
   if (typeof _updateModeSwapButton === 'function') _updateModeSwapButton();
+  // A1 (orrery-nav): re-derive orbit-line visibility from the new station. This is
+  // THE universal regime-flip point, so hooking here covers every HELM<->ORRERY path
+  // (same hoisted-forward-reference safety as above).
+  if (typeof _syncOrbitsToMode === 'function') _syncOrbitsToMode();
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
@@ -6019,6 +6028,10 @@ function warpRevealSystem() {
     return;
   }
 
+  // A1 (orrery-nav): ORRERY reveal (boot pick or any warp-in) — default orbit lines
+  // ON for the god's-eye view unless the player overrode. HELM boot returned above.
+  _syncOrbitsToMode();
+
   // Only start autoNav if autopilot was enabled before warp
   if (_autopilotEnabled) autoNav.start();
 
@@ -6642,7 +6655,15 @@ function focusMoon(planetIndex, moonIndex) {
 function toggleOrbits() {
   if (!system) return;
   orbitsVisible = !orbitsVisible;
+  _orbitsUserOverride = true; // A1: explicit player choice — stops the mode-driven default
   soundEngine.play(orbitsVisible ? 'toggleOn' : 'toggleOff');
+  _applyOrbitVisibility();
+}
+
+// A1 (orrery-nav): push `orbitsVisible` onto every orbit-line mesh in the current
+// system. Shared by the player toggle (toggleOrbits) and the mode sync.
+function _applyOrbitVisibility() {
+  if (!system) return;
   for (const line of system.orbitLines) {
     line.mesh.visible = orbitsVisible;
   }
@@ -6656,6 +6677,15 @@ function toggleOrbits() {
       line.mesh.visible = orbitsVisible;
     }
   }
+}
+
+// A1 (orrery-nav): default orbit-line visibility from the station — ON in ORRERY,
+// OFF in HELM — unless the player has explicitly overridden. Called from setScManual
+// (every regime flip) and the ORRERY reveal path in warpRevealSystem.
+function _syncOrbitsToMode() {
+  if (_orbitsUserOverride) return;
+  orbitsVisible = !_scManual; // ORRERY (not HELM hands-on) → orbits visible
+  _applyOrbitVisibility();
 }
 
 function toggleFullscreen() {
@@ -8105,8 +8135,8 @@ function simStep(deltaTime) {
       }
       // Roll axis (Q/E held) — rotational input the mouse stick (yaw+pitch) doesn't
       // cover. Polled per-frame like W/S throttle; SupercruiseModel.update applies it.
-      // (Sign: E rolls one way, Q the other — flip the subtraction if reversed.)
-      scModel.turnInput.roll = (_heldKeys.has('KeyE') ? 1 : 0) - (_heldKeys.has('KeyQ') ? 1 : 0);
+      // Sign FLIPPED to Q−E per Max UAT 2026-06-30 (the original E−Q guess was inverted).
+      scModel.turnInput.roll = (_heldKeys.has('KeyQ') ? 1 : 0) - (_heldKeys.has('KeyE') ? 1 : 0);
       cameraController.setFlightInput(0, 0, false);
     } else if (flightOk) {
       // Use e.code values (KeyW/KeyS/etc.) — immune to Shift changing e.key case
