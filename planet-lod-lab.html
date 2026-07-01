@@ -2095,6 +2095,8 @@
       thermalOcclusion: 0.6,// F33 silicate-cloud occlusion strength (lab knob — darkens the night glow, never brightens)
       daysideThermalEnabled: false,   // F32 enable gate — off collapses uDayTempK onto the night floor at the per-frame writer
       nightsideThermalEnabled: false, // F33 enable gate — off zeroes uNightTempK + occlusion at the per-frame writer (floor fades to black)
+      thermalTempEq: 280.0, // #2 slice-2: live T_eq sweep source (decoupled from the .listen() dayTempK display; drives uDayTempK per-frame)
+      emissionEnabled: true, // #2 slice-2: master emission register gate (AND-ed with the day/night enables at the per-frame uThermalStrength writer)
       limbEnabled: false,    // F34 enable gate — off zeroes uLimbStrength AND hides the F31e haze shell at the per-frame writer
       limbExponent: 3.5,    // F34 fresnel width (driven: thin clear ~3.5 narrow blue line / thick-haze ~1.8 fat halo)
       limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
@@ -3473,6 +3475,12 @@
       // Nightside floor: the Keating/Cowan/Dang near-universal ~1100 K hot-jupiter
       // nightside (F33 card §4) — a constant floor, NOT a fade-to-black.
       state.nightTempK = _hotJup ? 1100 : 0;
+      // #2 slice-2 — THE renders-cold fix: the derivation set strength/temps but never
+      // flipped the two enable gates, so the per-frame uThermalStrength gate zeroed the
+      // glow (hot giant rendered cold). Flip both to match _hotJup.
+      state.daysideThermalEnabled = _hotJup; state.nightsideThermalEnabled = _hotJup;
+      // #2 slice-2 — seed the live T_eq sweep from the driver (decoupled from dayTempK display).
+      state.thermalTempEq = _fp.T_eq ?? 288;
       // The thermal pair REPLACES the whole-globe uEmissive stand-in (its comment
       // names F32 as the owner): T_eq 1400 would derive emissive 0.25 — a uniform
       // unshaped glow UNDER the substellar-shaped one (double-count). The Lava
@@ -4429,6 +4437,8 @@
     fThermal.add(state, 'nightTempK', 0, 2000, 10).name('night temp K (driven)').listen();
     fThermal.add(state, 'hotspotOffset', -0.6, 0.6, 0.01).name('hotspot offset (east rad)');
     fThermal.add(state, 'redistribution', 1, 6, 0.1).name('redistribution n');
+    fThermal.add(state, 'thermalTempEq', 300, 2500, 10).name('T_eq sweep (K)');
+    fThermal.add(state, 'emissionEnabled').name('emission register');
     const fThermalNight = fThermal.addFolder('Nightside glow (F33)'); fThermalNight.close();
     fThermalNight.add(state, 'thermalOcclusion', 0, 1, 0.01).name('occlusion strength');
     fThermalNight.add(state, 'nightsideThermalEnabled').name('✓ enabled');
@@ -5674,14 +5684,18 @@
       // and the occlusion mask dies with it. BOTH off ⇒ master strength 0 — the
       // GLSL block skips entirely (and every non-thermal preset derives strength 0
       // anyway: the regression contract).
-      thermalObj.copy(lightObj).applyAxisAngle(SPIN_AXIS, state.hotspotOffset);
+      // #2 slice-2 — east-sign: retrograde worlds flip the superrotation shift. state.eqSign
+      // is absent in this lab (only e5EqSign exists), so this defaults to +1 (prograde) — flagged.
+      const _eastSign = Math.sign(state.eqSign || 1) || 1;
+      thermalObj.copy(lightObj).applyAxisAngle(SPIN_AXIS, state.hotspotOffset * _eastSign);
       uniforms.uThermalDir.value.copy(thermalObj);
       const _nightTW = state.nightsideThermalEnabled ? state.nightTempK : 0.0;
       uniforms.uNightTempK.value       = _nightTW;                                                  // ✓ F33 enable gate
+      state.dayTempK = state.thermalTempEq * 1.15;   // #2 slice-2: T_eq sweep drives the dayside glow live (T_eq × 1.15 lift)
       uniforms.uDayTempK.value         = state.daysideThermalEnabled ? state.dayTempK : _nightTW;   // ✓ F32 enable gate
       uniforms.uThermalOcclusion.value = state.nightsideThermalEnabled ? state.thermalOcclusion : 0.0;
       uniforms.uRedistribution.value   = state.redistribution;
-      uniforms.uThermalStrength.value  = (state.daysideThermalEnabled || state.nightsideThermalEnabled) ? state.thermalStrength : 0.0;
+      uniforms.uThermalStrength.value  = (state.emissionEnabled && (state.daysideThermalEnabled || state.nightsideThermalEnabled)) ? state.thermalStrength : 0.0;   // #2 slice-2: master register AND day/night gate
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
