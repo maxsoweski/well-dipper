@@ -38,6 +38,21 @@ target (this is what dissolves the star livelock — the ship orbits out of the 
 into it); (2) a **transit phase**: fly to the next body. Loop until the whole system is toured. Scope as its
 own `dev-collab-scope` workstream (spans the pilot + tour + likely a new departure state). Not yet scoped.
 
+**Max confirmed the livelock LIVE (2026-07-01 UAT):** started autopilot (Z key), watched it "get stuck close
+to the sun, keeps trying to select a new planet." **Additional fix idea from Max (simpler, preventive):**
+> "force the autopilot to never get close enough to a star where its movement will be restricted."
+
+i.e. a **keep-out / minimum-standoff radius** around stars so the tour never enters the deep gravity well
+(`speedCap → ~0`). Likely the fastest win; complementary to the orbit-to-horizon departure (standoff = never
+get stuck at the *star*; orbit-to-horizon = general "get away from *any* body"). Scope decides
+standoff-only vs full re-routing vs both. **Do NOT weaken `SC_TUNING`/the gravity well** — fix by not going
+there / routing out.
+
+**Mode-architecture note to reconcile (Max, 2026-07-01):** Max — "HELM should be our chosen Autopilot path;
+the Autopilot is a HELM feature. ORRERY is a player-driven feature." The current boot chooser
+(`main.js:2379-2386`, `_pendingBootMode` :2543) is the INVERSE (HELM→manual, ORRERY→autopilot tour). Surface
+at scope; don't rewire unprompted. Latest handoff: `/tmp/handoff-well-dipper-flight-reliability-2026-07-01.md`.
+
 ---
 
 ## A. Fix workstreams (priority order)
