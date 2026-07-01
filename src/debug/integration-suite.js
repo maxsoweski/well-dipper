@@ -1726,34 +1726,45 @@ export async function runFlightReliabilitySuite(opts = {}) {
     } else {
       rec('full-tour: autopilot started', true);
 
+      // "Stuck" is measured as NO PROGRESS (dist-to-target not decreasing) while in
+      // CRUISE — NOT total CRUISE time. A leg flying to a distant outer planet is
+      // legitimately in CRUISE for many seconds while dist keeps shrinking; that is
+      // not a freeze. Only a leg whose dist fails to improve for longer than the
+      // pilot's own stall window (which should then abort it) is a real freeze.
+      const distToTarget = () => {
+        const mesh = _sc.controls?.target?.mesh;
+        if (!mesh || !mesh.position) return null;
+        return _sc.model.position.distanceTo(mesh.position);
+      };
       const legsSeen = new Set([_autoNav.currentIndex]);
       let lastIdx = _autoNav.currentIndex;
-      let cruiseDwell = 0, maxCruiseDwell = 0, stuck = null;
+      let bestDist = Infinity, noProgress = 0, maxNoProgress = 0, stuck = null;
       const t0 = performance.now();
       while (performance.now() - t0 < maxWallMs) {
         await sleep(pollMs);
         const idx = _autoNav.currentIndex;
         const phase = _sc.pilot.phase;
-        if (idx !== lastIdx) { lastIdx = idx; legsSeen.add(idx); cruiseDwell = 0; }
+        if (idx !== lastIdx) { lastIdx = idx; legsSeen.add(idx); bestDist = Infinity; noProgress = 0; }
         if (phase === 'CRUISE') {
-          cruiseDwell += pollMs / 1000;
-          if (cruiseDwell > maxCruiseDwell) maxCruiseDwell = cruiseDwell;
+          const d = distToTarget();
+          if (d != null && d < bestDist * 0.999) { bestDist = d; noProgress = 0; } // real progress
+          else { noProgress += pollMs / 1000; if (noProgress > maxNoProgress) maxNoProgress = noProgress; }
         } else {
-          cruiseDwell = 0;
+          bestDist = Infinity; noProgress = 0;
         }
-        if (cruiseDwell > stallWindow + margin) { stuck = { idx, cruiseDwell: +cruiseDwell.toFixed(1) }; break; }
+        if (noProgress > stallWindow + margin) { stuck = { idx, noProgressSeconds: +noProgress.toFixed(1) }; break; }
         if (tourWrapped > 0 && legsSeen.size > 1) break; // completed a full pass — enough
       }
 
       telemetry.legsVisited = legsSeen.size;
       telemetry.tourWrapped = tourWrapped;
-      telemetry.maxCruiseDwellSeconds = +maxCruiseDwell.toFixed(1);
+      telemetry.maxNoProgressSeconds = +maxNoProgress.toFixed(1);
       telemetry.stallWindowSeconds = stallWindow;
 
-      rec('full-tour: no leg stuck in CRUISE past the stall window',
+      rec('full-tour: no leg stuck in CRUISE without progress past the stall window',
         stuck === null,
-        stuck ? `leg ${stuck.idx} pinned in CRUISE ${stuck.cruiseDwell}s (> ${stallWindow + margin})`
-              : `max CRUISE dwell ${maxCruiseDwell.toFixed(1)}s ≤ ${stallWindow + margin}s`);
+        stuck ? `leg ${stuck.idx} made no progress for ${stuck.noProgressSeconds}s (> ${stallWindow + margin}) — detector failed to abort`
+              : `max no-progress dwell ${maxNoProgress.toFixed(1)}s ≤ ${stallWindow + margin}s`);
       rec('full-tour: tour advanced through multiple legs (not frozen on one)',
         legsSeen.size >= 2,
         `visited ${legsSeen.size} distinct stop(s); wrapped x${tourWrapped}`);
