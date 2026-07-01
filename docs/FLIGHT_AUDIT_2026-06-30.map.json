@@ -1,0 +1,1014 @@
+{
+  "meta": {
+    "generated": "2026-06-30",
+    "workflow": "flight-systems-audit wih7z2c3q",
+    "agents": 10,
+    "aspects": 85,
+    "tally": {
+      "works": 47,
+      "gap": 6,
+      "suspect": 31,
+      "unknown": 1
+    }
+  },
+  "clusters": [
+    {
+      "cluster": "Orrery navigation",
+      "aspects": [
+        {
+          "name": "A1 — Orbit-line visibility follows the station (ON in ORRERY / OFF in HELM, Settings/O override)",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "_orbitsUserOverride is a single session-scoped boolean that, once true, PERMANENTLY freezes visibility at the toggled value for BOTH modes — it collapses the per-mode behavior entirely. Toggle orbits off once in ORRERY, then M→HELM→M→ORRERY, and they stay off; the mode-driven default can never return without a reload. So 'orbit lines follow camera mode' only holds until the first manual toggle.",
+            "Settings/UI desync: the 'showOrbits' checkbox reflects settings.get('showOrbits') (ships false) while the mode default forces orbits ON in ORRERY — the checkbox reads unchecked while orbits are visible until the player toggles.",
+            "_applyOrbitVisibility assumes system.orbitLines / starOrbitLines / entry.moonOrbitLines all exist; confirm they are present (and empty-safe) for planetless systems, moonless planets, and binary-star orbit lines."
+          ],
+          "liveTestRecipe": "Boot into ORRERY (splash ORRERY or press-anything default). After warp reveal, in the console traverse window._scene for the orbit-ring meshes (THREE.Line/LineLoop under the system group) or read the system's orbitLines and assert .visible===true; confirm document.getElementById('mode-swap-btn').textContent==='ORRERY'. Press M (swap to HELM), assert textContent==='HELM' and the same orbit meshes now have .visible===false. Press M back, assert .visible===true. Repeat the M swap 5x (BEFORE touching O) asserting orbit visibility tracks the mode each cycle. Then press O once and assert visibility flips AND that a subsequent M→HELM→M→ORRERY leaves it at the toggled value (proves the override sticks and collapses the per-mode default). Keep the window focused (rAF throttles to ~1fps when occluded)."
+        },
+        {
+          "name": "In-system body + orbit-line selection (the 'plan/inspect' click)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "The 'face the selected body' orbit-pivot ease (main.js:6193) is gated on !cameraController.bypassed, but ORRERY is bypassed after every warp reveal (main.js:5974) and throughout/after the autopilot tour — so in most ORRERY states the only feedback on select is the BURN button + bodyInfo, with no camera reaction.",
+            "Moons are selectable only via 3D-scene raycast, never from the minimap (SystemMap has no moon sprites).",
+            "Because selecting a body clears the warp target (and vice-versa), the plan station cannot hold a body-burn plan and a jump plan at the same time."
+          ],
+          "liveTestRecipe": "In ORRERY, single-click (movement <5px) a planet in the 3D view. Assert #commit-burn-btn becomes display:block with text 'BURN → <NAME>' and the upper-left bodyInfo panel populates; window._getState()/_selectedTarget should reflect the pick. Click a thin orbit ring ~6px from any body and assert the matching planet/moon selects. Cycle select on star → planet → moon and assert the BURN label + bodyInfo update each time. In HELM (press M), aim the reticle at a body and left-click; assert it selects at the reticle (cursor hidden path)."
+        },
+        {
+          "name": "A3a — Background-star / feature warp-target SELECTION (select + blink)",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "No stored 'this star is already the selected target' signal that the human eye or a second click could key off — which is exactly what blocks the A3 second-click affordance (next aspect).",
+            "Single-target model: picking a star clears a body plan and vice-versa (main.js:6156, 9485); intended, but means the plan station never holds both."
+          ],
+          "liveTestRecipe": "In ORRERY, click empty sky near a visible background star. Assert window._warpTarget.direction is a set unit Vector3 and _warpTarget.name is populated, the green brackets blink on-screen, and bodyInfo shows the destination name. Separately call window._autoSelectWarpTarget() and assert _warpTarget populates (screensaver path). Click a body afterward and assert _warpTarget is cleared (single-selection)."
+        },
+        {
+          "name": "A3b — Second-click-on-selected-star COMMITS the warp",
+          "mode": "orrery",
+          "status": "gap",
+          "suspectedIssues": [
+            "Second-click-commit is entirely unbuilt (no code trace).",
+            "Discrepancy with the spec's 'Space still commits': a SINGLE Space does not warp — the 3-stage preview needs three Space presses (idle→preview→aligning→warp, main.js:6342/6370/6383). So the assumed baseline the A3 spec preserves is actually a multi-press preview, not a one-shot commit.",
+            "Sibling items from the SAME 2026-06-28 spec (A1 orbit lines, B1 roll, B3 remap) are built and B was Max-UAT'd 2026-06-30 — so A3 was skipped/deferred within a partially-landed spec, easy to mistake for 'done'."
+          ],
+          "liveTestRecipe": "In ORRERY, click a background star (brackets blink; record window._warpTarget.direction). Click the SAME star again and MEASURE: assert NO warp starts — warpEffect stays inactive and window._getState()/window._sc show no turn/warp beginning (this confirms second-click-commit is absent). Then confirm commit still needs the Space sequence: press Space 3× (or call window._commitSelection() 3×) watching window._warpTarget/internal _portalLabState go idle→preview→aligning→warp, asserting warpEffect activates only on the 3rd. Run 3 select→triple-Space cycles to confirm the press-count is stable."
+        },
+        {
+          "name": "A2 — Click a body in ORRERY → fast (~0.3s) eased god's-eye reframe",
+          "mode": "orrery",
+          "status": "gap",
+          "suspectedIssues": [
+            "The intended ~0.3s eased god's-eye reframe is unbuilt.",
+            "Inconsistency: the SAME planet gives different results by WHERE you click it — 3D-scene click SELECTS (no travel); minimap click flies a FULL burn. Confusing for a 'plan' station.",
+            "Half-wired ORRERY minimap burn: focusPlanet/focusStar set _flightMode=playerBurnMode() (ASSIST, main.js:6546/6595) and fly via scPilot (camera follows because the apply gate is scPilot.isActive||_scManual, main.js:7808/7873), but they do NOT set _scManual and do NOT swap to HELM. So the manual-cancel gates (manualCancelsLeg, INSIDE `if (_scManual)` at main.js:8121/8128) never fire — the ORRERY burn is uncancellable by W/S/stick, and it ends in an infinite (linger:Infinity) pilot-held orbit while the mode button still reads 'ORRERY'.",
+            "cameraController.update is skipped while scPilot.isActive (main.js:8157), so during that ORRERY minimap burn the Toy-Box orbit is fully suspended even though the station label says ORRERY."
+          ],
+          "liveTestRecipe": "In ORRERY, click a planet in the 3D scene and sample window._cam / camera.position over ~1s: assert the camera does NOT translate toward the body within ~0.3s (only selection fires) — disproving A2. Then press C (minimap) and click the SAME planet: assert window._getState().speed/throttle ramp into a multi-second FULL burn and document.getElementById('mode-swap-btn').textContent stays 'ORRERY'. Mid-burn hold W then S and assert the burn does NOT cancel (speed keeps tracking the pilot; window._sc.pilot still active) — confirming the uncancellable-ORRERY-burn concern. Note there is no ~0.3s eased reframe to time; the measurement is the absence of it."
+        },
+        {
+          "name": "Minimap / System-map HUD (radar overview, drag-rotate, click-to-select/travel)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Heading pointer uses hudYaw = when cameraController.bypassed, atan2(camera.position.x, camera.position.z) (main.js:8580) — a position-angle around origin, NOT the ship's nose vector; so in HELM/flight/tour (all bypassed) the pointer heading is an approximation that can disagree with the actual heading.",
+            "Camera-position dot plots camera.position.*sceneToMap (SystemMap.js:290-292); under world-origin rebasing the camera is kept near the rebased origin, so the dot may not track the player's TRUE in-system position when far from a body (status:unknown — needs a live check).",
+            "hitTest covers stars + planets only (SystemMap.js:370-391) — no moon sprites, so you cannot select/travel to a moon from the minimap.",
+            "Minimap click TRAVELS (full burn) whereas a 3D-scene click only SELECTS (same inconsistency as A2), and the minimap-initiated ORRERY burn inherits the uncancellable-burn issue flagged under A2."
+          ],
+          "liveTestRecipe": "In ORRERY press C — assert the minimap HUD appears (retroRenderer HUD = systemMap). Drag inside the minimap circle and assert the map rotates (SystemMap._mapYaw changes) without stopping the tour. Click a planet dot (non-autopilot) — assert a full burn starts (window._getState().speed ramps) and the green focus ring lands on that planet. During an autopilot tour, click a different planet dot — assert the tour retargets and travels. Fly far from origin in HELM, open the minimap, and MEASURE whether the camera dot tracks true system position or sits near map-center (resolves the rebasing-accuracy unknown). Try to click a moon on the minimap — assert nothing selects (no moon sprites). Toggle C off/on 5× — assert the HUD shows/hides each time. Verify on a planetless system that systemMap is null and C is a harmless no-op (main.js:4521)."
+        }
+      ]
+    },
+    {
+      "cluster": "Orrery autopilot / screensaver tour",
+      "aspects": [
+        {
+          "name": "Tour queue construction (per-body stop list)",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "No cap on queue length: a very rich system (many planets x many moons) produces a queue whose full traversal at default tourLingerMultiplier=1.0 takes ~10-20 min per cycle (each stop = align+cruise+20-39s linger). Fine for a screensaver but makes 'does a full tour complete' effectively untestable without lowering the linger multiplier.",
+            "Ordering assumes system.planets and entry.moons are populated and stable; if a planet has zero moons it is simply a single stop (fine)."
+          ],
+          "liveTestRecipe": "Load, let an ORRERY warp-in happen (or window._startFlythrough()). Read window._autoNav.queue — assert length === 1 (or 2 for binary) + planetCount + total moonCount, and that types run star, planet, moon..., planet, moon... in inner-to-outer order. Cross-check against window._scene traversal of the system body meshes and window._sc.controls.target."
+        },
+        {
+          "name": "Queue body-ref population (mesh + radius binding)",
+          "mode": "orrery",
+          "status": "suspect",
+          "suspectedIssues": [
+            "RELIABILITY: if any stop's bodyRef ends up null/undefined (e.g. a moon or planet whose .mesh failed to spawn), the tour-advance handler skips flyTo for that stop AND the _scLegAdvanced latch stays set (main.js:6852-6865), so the tour FREEZES permanently at the previous body — onTourComplete is never reached and the screensaver stalls. There is no null-mesh guard that skips-and-continues; it just hangs. This is the same failure class the latch comment at 6810-6818 explicitly worries about.",
+            "orbitDistance is still computed here but the supercruise pilot ignores it (it uses HOLD_VIEW_FRAC*radius); dead field that can mislead a reader into thinking framing distance is set here."
+          ],
+          "liveTestRecipe": "After a tour starts, run: window._autoNav.queue.map(s=>({type:s.type, hasRef:!!s.bodyRef, r:s.bodyRadius})). Assert EVERY stop has hasRef===true and r>0. To exercise the freeze: null out one mid-queue stop's bodyRef (window._autoNav.queue[3].bodyRef=null), let the tour reach stop 2, and confirm it never advances past it (currentIndex sticks, window._sc.pilot.phase stuck HOLD)."
+        },
+        {
+          "name": "Per-body tour leg motion (ALIGN to CRUISE to HOLD)",
+          "mode": "orrery",
+          "status": "suspect",
+          "suspectedIssues": [
+            "RELIABILITY (HIGH): CRUISE has NO timeout (only ALIGN does). The pilot steers straight at the target's CURRENT position through ANY intervening body. All bodies are fed to the model's collision barrier (COLLISION_FACTOR*radius) and speed cap. A tour leg whose straight line is blocked by the star (e.g. planet_i to planet_{i+1} when they are near opposite sides of the star) or by a planet occluding its own moon will WEDGE: the barrier stops forward motion, speedCap collapses, the pilot keeps aiming into the blocker, dist never falls to 10R, CRUISE never exits, motionComplete never fires — the whole screensaver freezes on that leg indefinitely. Orbital phases are independent so opposite-side geometry WILL occur over long unattended runs.",
+            "Overshoot path (149) re-loops in CRUISE with no bound; for the autopilot's own throttle (0.75) the ETA_K>=2.25 invariant makes capture speed<=cap<=4R so overshoot should essentially never fire on tour legs — but if a leg starts very hot from deep space the first pass could overshoot and loop a few times before capture.",
+            "steerToward reads the live moving body each frame (good, no stale capture), but there is no path-planning/avoidance — it is pure pursuit."
+          ],
+          "liveTestRecipe": "Happy path: start a tour, watch window._sc.pilot.phase cycle ALIGN->CRUISE->HOLD per stop and window._autoNav.currentIndex increment; assert each leg reaches HOLD. Wedge probe: while touring, read star mesh pos + two planet meshes from window._scene; jump the tour to a planet currently on the far side of the star (number keys 2-9 or window._autoNav.jumpToPlanet), then poll window._sc.model.position + window._sc.model.speed for ~40s — a wedge shows phase stuck 'CRUISE', speed ~0, position frozen at ~1.05x starRadius from the star, and dist-to-target never crossing 10R. Keep the window FOCUSED (rAF throttle freezes motion when backgrounded)."
+        },
+        {
+          "name": "Tour advance on arrival (HOLD linger to next leg)",
+          "mode": "orrery",
+          "status": "suspect",
+          "suspectedIssues": [
+            "If advanceToNext returns a bodyRef-less stop, flyTo is skipped but _scLegAdvanced stays true and phase never re-enters ALIGN, so the tour hangs (see queue-ref-population aspect). Level-triggered motionComplete + single latch = one-shot-or-stall by design; robust only while every stop is flyable.",
+            "The reticle/focus sync fires on the advance frame (after arrival at the NEW stop), so the 'now targeting the next body' preview that the retired flythrough mover fired ~4s BEFORE arrival (main.js:7958-7965) is absent on the supercruise tour path — a minor contemplative-reveal regression."
+          ],
+          "liveTestRecipe": "Lower tourLingerMultiplier (Settings gear) to speed cycles, start a tour, and log window._autoNav.currentIndex + window._sc.pilot.phase each second. Assert currentIndex increments by 1 each time phase transitions out of HOLD, and that _scLegAdvanced (window._autoNav is separate; observe behavior) never double-advances (no skipped stops)."
+        },
+        {
+          "name": "Tour completion detection + repeat within a system",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "Completion counting is by count only, decoupled from which stops actually got flown — if a leg silently stalls (wedge/null-ref) the counter never reaches queue.length so onTourComplete never fires and the loop dead-ends. So 'completes' is only guaranteed if every leg completes (see the two suspect aspects above).",
+            "Manual jumps via jumpTo (Tab/1-9/minimap, AutoNavigator.js:157-193) do NOT touch _stopsVisited, so heavy player interaction can make onTourComplete fire early or late relative to actual coverage — cosmetic for the unattended screensaver."
+          ],
+          "liveTestRecipe": "Set tourLingerMultiplier very low. Instrument: const n=window._autoNav.queue.length; then poll window._autoNav.currentIndex and window._autoNav._stopsVisited. Assert _stopsVisited climbs 0..n-1 then wraps to 0 exactly as onTourComplete fires. Or force the terminal event directly with window._triggerTourComplete() and confirm the nav-computer overlay opens (auto-warp cinematic). Run this across >=3 systems (warp between) to confirm repeatability."
+        },
+        {
+          "name": "Tour-complete cinematic nav-computer auto-warp",
+          "mode": "orrery",
+          "status": "suspect",
+          "suspectedIssues": [
+            "The sequence is driven by wall-clock setTimeout (_delay, AutopilotNavSequence.js:648-655) but its animations use simClockMs/simRandom and its star loading depends on the nav-computer rAF render loop. For an UNATTENDED screensaver on an unfocused/background monitor, rAF throttles to ~1fps and background setTimeout is clamped to >=1s, so the 6s (20x300ms) star-load retry budget can expire before stars load -> abort -> fallback plain warp. The warp still happens (self-heals) but the intended cinematic drill-down degrades/janks exactly in the screensaver's most common runtime state.",
+            "When advanceToNext fires onTourComplete it ALSO returns the wrapped start stop, so _handleScPilotFrame dispatches a real flyTo leg toward that body that runs (hidden behind the full-screen nav overlay) concurrently with the drill-down; autoNav is only stopped when the warp dispatches, so a slow drill-down can advance the tour again in the background. Masked visually, but a latent coupling.",
+            "Sequence timers are setTimeout-based and not tied to warpEffect state; abort() is wired on stopFlythrough (main.js:5823-5826) but a mistimed manual warp during the sequence could race the pending warp dispatch."
+          ],
+          "liveTestRecipe": "Force it: window._triggerTourComplete(). Assert the nav-computer overlay (#nav-computer-overlay) displays, the drill-down animates, a star is picked, and within ~30s window._getState().warp flips true (warp begins). Reliability loop: repeat window._triggerTourComplete() -> wait for warp -> new system, x5, asserting each ends in a warp. Background-throttle probe: blur the tab (or throttle rAF) during a real completion and confirm it still reaches a warp via the fallback path (console '[NAV-SEQ] No stars loaded ... Aborting' then a warp)."
+        },
+        {
+          "name": "Cross-warp tour continuation into the new system",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "The fly-in leg is dispatched unconditionally even when _autopilotEnabled is false; in that case autoNav is inactive so _handleScPilotFrame's tour wiring returns early (6836), the ship reaches HOLD, sets _manualBurnOrbiting=true (6831-6833), and only the 300s idle timer re-engages a tour — a slow path, but not the default ORRERY flow.",
+            "Deep-sky destinations (galaxy/cluster/nebula) branch out of warpRevealSystem at 5979-6002 into a drift+linger loop with NO body tour; the loop still continues via the 15s deep-sky linger auto-warp (8054-8073), so cross-system continuation holds, just without a per-body tour for those hops.",
+            "Continuation depends on onTourComplete having fired, which depends on every leg completing (inherits the wedge/null-ref stall risks)."
+          ],
+          "liveTestRecipe": "From a fresh ORRERY boot, let the loop run unattended (window focused) across >=3 complete system visits. After each warp assert: window._getState().autopilot===true, window._autoNav.isActive===true, window._autoNav.queue.length>0, and document.getElementById('mode-swap-btn').textContent!=='HELM'. Confirm the destination star is in billboard LOD at emergence (per AC8) and no AC4/AC5 portal console warnings. Speed it up with a low tourLingerMultiplier and repeat >=5 cycles asserting each tour+warp completes."
+        },
+        {
+          "name": "Contemplative auto-reveal (body info + minimap focus + lingers)",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "No pre-arrival 'now targeting the next body' preview blink on the supercruise path (the retired flythrough mover had one at result.targetingReady, main.js:7958-7965); the reveal now happens only on arrival, so the anticipatory beat is gone.",
+            "bodyInfo/minimap reflect autoNav.getCurrentStop, but during the tour-complete overlap a hidden background leg can re-point _selectedTarget while the nav-computer overlay is up (cosmetic, hidden)."
+          ],
+          "liveTestRecipe": "During a tour, at each HOLD read the on-screen body-info panel and window's focusIndex/focusStarIndex/focusMoonIndex (via window._getState-adjacent state or the minimap ring) and assert they match window._autoNav.getCurrentStop() type/index. Time a few lingers with a stopwatch and confirm ~= stop.linger * tourLingerMultiplier."
+        },
+        {
+          "name": "Arrival/departure shake beats on the tour (AC6)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "This sub-cluster was UAT-passed 2026-06-27 (contract.json status), so the felt beats are accepted; risk is only that the shake gate keys off pilot phase strings — if a leg wedges in CRUISE (see leg-motion aspect) the choreographer would keep signalling 'traveling' and could hold a low-level tremor indefinitely on the frozen frame.",
+            "Uses debug*Impulse entry points (debugAccelImpulse/debugDecelImpulse) as the production trigger — naming smell, not a defect."
+          ],
+          "liveTestRecipe": "Ride one tour leg; sample window._sc.model.speed and shipChoreographer.shakeEuler (if exposed via window._cc or telemetry) per frame. Assert speed shows a smooth ramp on departure and a steep continuous decel into HOLD, with shakeEuler non-zero during the accel window and the 15R decel window and ~zero mid-cruise and during HOLD."
+        },
+        {
+          "name": "Deep-sky (galaxy/cluster/nebula) contemplation hop",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "Two linger-timer setters can race (dismissTitleScreen:2582 and drift-complete:8045 and startFlythrough:5772); warpSwapSystem resets it to -1 (5874) so stale timers are cleared, but the interplay is fiddly.",
+            "This branch has no per-body 'tour' so the reliability-critical 'tour of ALL bodies' criterion does not apply to deep-sky hops — they are a distinct loop segment."
+          ],
+          "liveTestRecipe": "Force a deep-sky destination (the debug comma/period/? + Space keys per main.js:2364-2366) and warp. Assert autoNav.isActive===false, the object drifts in over ~4s, autorotate engages, and after ~15s window._getState().warp flips true (auto-warp onward). Confirm it hands back to a normal star-system tour on the next hop."
+        },
+        {
+          "name": "ORRERY orbit-line god's-eye layer",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "_orbitsUserOverride is sticky for the session once the player presses O, so a toured-into new system keeps the overridden state — intended, but means orbit lines can be off during a screensaver run if O was ever pressed.",
+            "Not reliability-critical to tour completion; purely visual."
+          ],
+          "liveTestRecipe": "On an ORRERY warp-in (without pressing O), traverse window._scene for LineLoop orbit meshes and assert .visible===true. Press O and confirm they toggle and that a subsequent warp keeps the overridden state; check document.getElementById('mode-swap-btn').textContent!=='HELM' to confirm ORRERY."
+        },
+        {
+          "name": "Idle auto-engage of the tour",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "Default idleTimeout is 300s (5 min) — so if the ORRERY tour ever ends up NOT auto-started at warp-in (e.g. _autopilotEnabled false, or a stalled leg that never advances), recovery takes 5 minutes, and a wedged leg (which keeps autoNav.isActive true) is NOT recovered by the idle timer at all (the idle branch is gated on !autoNav.isActive).",
+            "So the idle timer is a re-engage safety net only for the autopilot-OFF state, not a watchdog for a stalled active tour."
+          ],
+          "liveTestRecipe": "Stop the tour (Z or window._sc.controls.stop path / stopFlythrough), then leave the window untouched and focused; assert startFlythrough re-fires after idleTimeout (lower it in Settings for a fast test) by watching window._autoNav.isActive flip true. Separately confirm that with a STALLED active tour (force via null bodyRef) the idle timer does NOT recover it (gated on !isActive)."
+        },
+        {
+          "name": "Boot mode-pick to first tour (ORRERY vs HELM)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "_pendingBootMode is consumed once and reset to 'orrery' (6019); if warpRevealSystem's early deep-sky branch (5979) fires on the FIRST arrival (first warp lands on a galaxy/cluster), the boot-mode consumption at 6018 is never reached on that hop — HELM boot could be silently dropped for that edge (first destination is deep-sky). Low likelihood but a real ordering gap (boot-mode consume sits AFTER the deep-sky early return path in the star-system branch, but the deep-sky branch returns at 6001 before 6018).",
+            "Not a tour-completion risk for the default ORRERY-on-mobile/desktop path."
+          ],
+          "liveTestRecipe": "Boot, click ORRERY, let the title auto-dismiss and first warp land; assert document.getElementById('mode-swap-btn').textContent!=='HELM', window._getState().autopilot===true, and a tour starts (window._autoNav.isActive===true). Repeat picking HELM and assert the mode button reads 'HELM' and autoNav.isActive===false. Edge: check behavior when the first destination is deep-sky."
+        },
+        {
+          "name": "Player interrupt / mid-tour jump + resume",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "jumpTo (AutoNavigator.js:157-162) does not reset _stopsVisited, so jumping around skews when onTourComplete fires relative to actual coverage (cosmetic for unattended runs).",
+            "_beginTourLegMotion guards on stop.bodyRef (5730) so a bad jump target no-ops rather than hangs — better than the auto-advance path, which lacks that continue-past-null behavior.",
+            "Number-key jumps only cover planets 2-9 (planetIdx 0-7) and star (1); planets beyond the 8th and moons are not directly jumpable (Tab-stepping only) — a UI limitation, not a loop breaker."
+          ],
+          "liveTestRecipe": "During a tour press Tab and assert window._autoNav.currentIndex advances and window._sc.pilot.phase re-enters ALIGN toward the new body; press 1 and assert jumpToStar (currentIndex lands on the star stop). Press W and assert takeover: window._autoNav.isActive===false, mode button reads 'HELM', ship keeps its pose/speed (no snap). Press Z to confirm the tour toggles off/on."
+        }
+      ]
+    },
+    {
+      "cluster": "HELM manual piloting",
+      "aspects": [
+        {
+          "name": "Manual throttle (W/S)",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "NOT gated by flightOk: the `_scManual` throttle block (main.js:8121) runs whenever _scManual is true; flightOk (main.js:8111-8119, which checks settings/soundtest/keybinds-overlay open) gates only the legacy WASD else-branch. Model stepping (scActive, main.js:7808) also excludes only warp/splash/title, not overlays. So opening Settings (P) or the keybinds overlay (K) in HELM does NOT pause the ship — held W/S keeps changing throttle and the ship keeps moving. Inconsistent with the ORRERY free-flight path which DOES stop.",
+            "In supercruise, S cannot slow below MIN_CRUISE (2.0 u/s) — target is clamped to floorEff (main.js/SupercruiseModel.js:147-148). A player expecting S to stop will find it only drops to the cruise floor; the only real 'stop' is R (drop to sublight). Intended per comment but likely counter-intuitive; confirm it reads as Elite-faithful, not broken.",
+            "Reverse only exists at sublight (drive OFF). Confirm this matches intent (supercruise reverse deliberately removed, SupercruiseModel.js:145)."
+          ],
+          "liveTestRecipe": "Keep the window focused (rAF throttles to ~1fps when unfocused, freezing the sim). From ORRERY press R to take the Helm; assert document.getElementById('mode-swap-btn').textContent==='HELM' and window._sc.model.driveOn===true. (1) Supercruise throttle: hold W ~1.5s → sample window._sc.model.throttle rising ~0.6/s toward 1 and window._sc.model.speed exp-approaching throttle·window._sc.model.speedCap() (τ≈0.6s). Hold S back to throttle 0 → assert window._sc.model.speed floors at min(2.0, speedCap()), NOT 0. (2) Sublight reverse: press R (drop out), assert driveOn===false and speed settling toward 0; hold S ~1.5s → assert window._sc.model.throttle goes negative and window._sc.model.speed < 0. (3) Reliability: run 5 W-up/S-down cycles asserting throttle stays in [-1,1] and tracks each cycle. (4) Overlay-gate bug: in HELM press P (Settings), then hold W a moment — measure window._sc.model.throttle before/after; if it changes, the overlay-not-paused issue is confirmed."
+        },
+        {
+          "name": "Mouse virtual-joystick yaw/pitch",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "Absolute-position stick persists a turn when the mouse stops off-center (turnInput retains the last setTurnInput value; model.update keeps applying it) — intended Elite-style behavior, but confirm it's what Max wants vs a relative stick.",
+            "Entering free-look (F) or a middle-mouse peek does NOT zero model.turnInput.yaw/pitch. If you press F while the stick is deflected, the ship KEEPS TURNING at the frozen deflection during free-look (mousemove now routes to scHead, gate `!freeLook.latched` blocks steer). May be intended ('ship keeps flying its line', AC4) but with an absolute-position stick it means an uncommanded persistent turn while you look around; verify.",
+            "Same overlay-gate gap as throttle: steer is gated by `_scManual` (main.js:9676), not flightOk — but note it only fires on mousemove, so the practical exposure is smaller than the held-key throttle/roll.",
+            "getState()/scControls telemetry does not expose turnInput; the HUD deflection dot reflects the un-negated stick, while the applied model input is negated — confirm the reticle direction matches nose motion on screen."
+          ],
+          "liveTestRecipe": "Focused window, HELM hands-on (F off — confirm window._getState() shows cursor hidden / mode-swap-btn 'HELM'). (1) Deflect right: move mouse to right edge → assert window._sc.model.turnInput.yaw < 0 (negated), |yaw|→1, and window._sc.model.orientation yaws so model.nose() rotates toward +X (nose right). Center mouse → assert turnInput.yaw→0 within the deadzone. (2) Deflect up → assert turnInput.pitch > 0 and nose pitches up. (3) Speed-dependent cap: full-deflect at near-rest, record achieved d(orientation)/dt; then throttle to near cap and full-deflect again → assert the achieved turn rate is lower (turnRateCap shrank). (4) Free-look handoff probe: deflect stick (turnInput.yaw≠0), press F, move the mouse — sample window._sc.model.turnInput.yaw over ~2s and assert whether it stays nonzero (ship keeps turning) to confirm/deny the persistence concern. (5) Reliability: 5 deflect-then-center cycles, assert turnInput returns to ~0 each time."
+        },
+        {
+          "name": "Roll axis control (Q/E)",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "Sign was JUST flipped to Q−E on 2026-06-30 (main.js:8138 comment) — the whole point of this cluster's 'sign just fixed' note. It has not been re-UAT'd since the flip; confirm live that Q banks LEFT and E banks RIGHT (the earlier E−Q guess shipped inverted).",
+            "turnInput.roll is written ONLY at main.js:8139 (inside `_scManual`) and is never reset on mode/regime transitions; setTurnInput(yaw,pitch) and pilot.stop() don't touch it. If Q/E are held on the exact frame you leave HELM into a running autopilot tour (scPilot.isActive && !_scManual, which still steps the model at main.js:7849), the last roll value latches and the ship rolls throughout the tour. Relies on key-release/blur to zero it.",
+            "Roll is applied unconditionally to the model even when free-look is active or the drive is dropped (it's in the _scManual poll, not gated by driveOn) — likely fine (you can roll while parked at sublight) but confirm it's intended during drop-out.",
+            "Same overlay-not-paused gap as throttle: Q/E roll runs while Settings/keybinds overlay is open in HELM."
+          ],
+          "liveTestRecipe": "Focused window, HELM, MANUAL mode (Settings flightControlType default 'manual', Settings.js:63). (1) Direction+rate: note world-up alignment, hold Q ~1s → assert window._sc.model.turnInput.roll===1 and the ship banks LEFT (measure angle of model local-up vs world +Y increasing); release → assert roll===0 and the bank is HELD (no return to level). Hold E → roll===-1, banks RIGHT. (2) Cap: hold Q at rest vs near speed-cap, assert roll angular rate is lower at high speed (turnRateCap shrank). (3) Latch probe: hold Q and press Z to start the tour, release Q — sample window._sc.model.turnInput.roll during the tour; assert it is 0 (nonzero would confirm the latch bug and you'd see the tour ship rolling). (4) Reliability: 5 Q-hold/release then E-hold/release cycles, assert roll tracks ±1↔0 each time and no drift accumulates in turnInput."
+        },
+        {
+          "name": "ASSIST-mode roll auto-level (spec B2-assist)",
+          "mode": "helm",
+          "status": "gap",
+          "suspectedIssues": [
+            "Auto-level is entirely unimplemented: in ASSIST, released roll stays banked exactly as in MANUAL — the spec's core motivation ('kills the roll annoyance in the assisted regime') is not delivered.",
+            "ALIGN's 'fold with ASSIST (auto-level on)' is moot since neither exists.",
+            "The +Y level reference, the degeneracy skip near world-poles, and the gentle-gain tuning the spec calls for have no code. Any future implementation must add a mode gate (main.js:8139 area) + a corrective roll in SupercruiseModel.update gated on _flightMode.",
+            "No spec-vs-code reconciliation note exists flagging this as deferred — a silent gap between the approved design and shipped behavior."
+          ],
+          "liveTestRecipe": "Set Settings → flightControlType = 'assist' (window persists to wd_ setting), enter HELM under ASSIST (M from ORRERY, or R with the assist setting). Confirm window._sc.controls.getState().mode === 'assist'. Bank the ship with Q for ~1s, then release Q with no keys held; sample the angle between window._sc.model.orientation's local up-vector (apply orientation to (0,1,0)) and world +Y each frame for ~3s. EXPECTED per spec: the angle decays toward ~0 (auto-levels). PREDICTED ACTUAL: the angle stays constant (no auto-level) — confirming the gap. Repeat in MANUAL to show identical (held) behavior, proving ASSIST is not differentiated."
+        },
+        {
+          "name": "Sublight / supercruise drive toggle (R)",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "R-engage from ORRERY inherits Settings.flightControlType (main.js:8665). Default 'manual' is fine, but if the player set 'assist'/'align', pressing R to 'take manual control' silently enters an ASSIST/ALIGN leg (which needs a target) rather than hands-on manual — surprising for a key labeled 'drive toggle'.",
+            "The big comment block at main.js:9165-9178 still narrates the OLD E-key semantics ('E key: supercruise DRIVE toggle', 'engage/dropout/reengage') immediately above the KeyR handler; only line 9179 notes the remap. Stale/misleading comment, not a runtime bug, but an easy source of future confusion.",
+            "Forced proximity drop (main.js:7841) only fires while _scManual; during an autopilot tour it relies on the pilot's HOLD-phase capture instead — confirm a manually-flown-then-handed-off approach can't slip past the horizon.",
+            "'engage' from ORRERY both swaps regime AND lights the drive, overlapping M (swap only). Confirm the intended division (M = swap no drive, R = swap + drive) reads clearly to the player; no HUD text distinguishes them beyond the shake.",
+            "Same overlay-not-paused caveat applies to the surrounding HELM sim, though R itself is a discrete keydown and is fine."
+          ],
+          "liveTestRecipe": "Focused window, in a star system, open space (away from bodies). (1) Engage: from ORRERY (mode-swap-btn 'ORRERY') press R → assert mode-swap-btn 'HELM', window._sc.model.driveOn===true, and speed climbing to the MIN_CRUISE floor. (2) Dropout: press R → assert driveOn===false and window._sc.model.speed settling toward 0 (SUBLIGHT regime). (3) Reengage: press R → assert driveOn===true again. (4) Mass-lock: fly toward a star until the console logs '[MODE] forced proximity drop' and driveOn auto-flips false (main.js:7841); while still close, press R and assert it is refused — console '[MODE] reengage blocked — mass-locked', driveOn stays false, and the HUD 'TOO CLOSE' hint shows (window._sc via massLockHint / _massLockHintFrames). Back off and press R → succeeds. (5) Settings-type probe: set flightControlType='assist', from ORRERY press R and read window._sc.controls.getState().mode — assert whether it is 'manual' or unexpectedly 'assist'. (6) Reliability: 5 engage→dropout→reengage cycles in open space, assert window._sc.model.driveOn toggles true/false each press with no stuck state."
+        }
+      ]
+    },
+    {
+      "cluster": "HELM flight modes / assist",
+      "aspects": [
+        {
+          "name": "FlightMode enum + flightModeInfo (Manual / Align / Assist definitions)",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "advanceFlightMode + INFO.exit are dead code deliberately kept — a maintenance trap: anyone re-wiring F to 'cycle modes' will resurrect the retired 4-state ring the spec explicitly killed (arrival-modes risk note).",
+            "flightModeInfo() silently falls back to MANUAL for any unknown key (line 37), so a bad stored Settings value shows a 'Manual' toast while some other path may have set a different _flightMode."
+          ],
+          "liveTestRecipe": "Set Settings flightControlType to each of Manual/Align/Assist; engage (E) with a body selected; read window._sc.controls.getState().mode (== the type while engaged, null when idle) and confirm the 'Flight ON — <label>' toast text (Manual/Align-on-select/Assist) matches. Confirm document.getElementById('mode-swap-btn').textContent === 'HELM'."
+        },
+        {
+          "name": "Flight TYPE selection (Settings) + entry dispatch (_enterFlightInternal → _enterFlightMode)",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Mid-flight Settings TYPE change does NOT re-arm live — it applies only on the next E-engage (comment main.js:8661-8663).",
+            "Entering Align/Assist with nothing selected silently does nothing (_enterFlightMode returns at 6234); the mode only 'activates' when you later select a body — no toast/feedback that the assist is dormant.",
+            "The commit-burn-from-ORRERY path and the tour W/S-takeover path BYPASS _enterFlightInternal and set _flightMode directly (playerBurnMode()==ASSIST at 6546/6595/6642; MANUAL at 9272), so the Settings TYPE is ignored on those two entries — three different entry doors set _flightMode by three different rules."
+          ],
+          "liveTestRecipe": "Settings type=Assist; select a planet (Tab/click); press E; assert window._sc.pilot.phase !== 'IDLE' and window._sc.controls.getState().mode === 'assist'. Then E to exit, deselect, press E with nothing selected → assert window._sc.pilot.phase === 'IDLE' (dormant). Change Settings to Manual while flying → assert getState().mode stays 'assist' until you re-engage (no live re-arm)."
+        },
+        {
+          "name": "Manual mode — hands-on baseline (you fly)",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "Body-frame yaw+pitch integration accumulates roll over any curved maneuver (documented B2 root cause, orrery-nav spec:44-53) — intended in Manual, but a new player sees the horizon drift with no on-screen cue that Q/E corrects it, and there is no auto-level in ANY mode to help (see roll-auto-level aspect).",
+            "Roll input at 8139 is applied whenever _scManual regardless of sub-mode, so it also injects roll during an active Assist leg without any takeover (see takeover-gates aspect)."
+          ],
+          "liveTestRecipe": "E to engage Manual; move mouse off canvas-center → window._sc.model.turnInput.{yaw,pitch} track deflection and the HUD reticle moves; hold W then S → window._sc.model.throttle ramps ±0.6/s; hold Q then E → turnInput.roll = ±1 and orientation rolls. Fly a sustained combined yaw+pitch arc for ~10s and confirm the horizon tilts (roll accrues) and does NOT self-correct."
+        },
+        {
+          "name": "Align-on-select (Mode B) — one-time nose ease (_alignState)",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Align uses the STRICT gate ALIGN_DOT=0.995 and a short 1.5s cap (its own constants, NOT the pilot's relaxed 0.985/8s) — against a moving/orbiting body the 0.995 is often not met, so it hits the 1.5s timeout leaving the nose slightly off (silent partial-align).",
+            "W/S throttle does NOT cancel Align — only mouse-stick deflection does (cancel exists only in the mousemove handler 9696, not in the W/S block 8127); a player who nudges throttle expecting takeover keeps the align running.",
+            "Align faces yaw/pitch only; it does not level roll, and the spec's 'ALIGN folded with ASSIST → auto-level' (orrery-nav §B2) is unbuilt."
+          ],
+          "liveTestRecipe": "Settings type=Align, E to engage; select body A → nose eases to A within ≤1.5s (watch window._sc.model.orientation / camera face the body). Mid-ease, deflect the mouse → assert the ease STOPS (align cancelled). Repeat and instead hold W during the ease → assert it does NOT cancel (align completes). Try Align on a fast inner moon → measure final nose-dot (expect it to hit the 1.5s cap under 0.995)."
+        },
+        {
+          "name": "Assist (Mode C) — SupercruisePilot continuous fly-to (_engageAssist)",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "The documented ~55s non-convergence + moon-flip quirk lives here (see dedicated quirk aspect).",
+            "_engageAssist uses default linger=8, so after arrival+8s HOLD motionComplete fires — but _handleScPilotFrame returns early when autoNav is inactive (6836), so the only consumer of the Assist arrival is arming _manualBurnOrbiting (6831), which later triggers the idle-reengage tour.",
+            "arrival-modes contract AC5 explicitly flags 'manual-cancels-Assist for the commit path UNVERIFIED via lab' — the core takeover-during-Assist behavior was never lab-verified.",
+            "'steer to take over' is weakened by the free-look redesign: a bare cursor in free-look does NOT steer (9676 gate `!freeLook.latched`), so if you launched Assist from free-look you must be hands-on (F off) or use W/S to take over."
+          ],
+          "liveTestRecipe": "Settings type=Assist (or free-look aim+select+Space). Assert window._sc.pilot.phase cycles ALIGN→CRUISE→HOLD and window._sc.pilot._target.mesh stays the picked body throughout; at HOLD confirm the HUD SAFE-TO-DROP shows in-window. RELIABILITY LOOP: run N=10 legs to a mix of star/planet/inner-moon, asserting each reaches HOLD within a bound (< ~20s) with zero target change. Then inject W → assert pilot.phase==='IDLE' and getState().mode==='manual' (takeover)."
+        },
+        {
+          "name": "commit-burn-from-ORRERY becomes a HELM Assist leg",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "linger:Infinity → HOLD never completes (motionComplete never fires), so the burn parks forever; but HOLD entry arms _manualBurnOrbiting (6831) → the manual-burn idle timer (8017-8028) fires startFlythrough after idleTimeout → the moon-flip. A successful player Assist arrival is ALWAYS eventually yanked into a random screensaver tour (no 'deliberately parked' suppression).",
+            "This path bypasses _enterFlightInternal, so it does not clear a stranded freeLook latch, does not zero scHead, and ignores the Settings flight TYPE (forces ASSIST) — asymmetric with the E-engage door.",
+            "commitBurn from an already-HELM state does NOT swap (gate false) but still runs focus*→ASSIST from the current pose; same idle-reengage moon-flip applies.",
+            "Ship targets are excluded by design (would starve the supercruise branch); relies on commitBurnSwapsToHelm returning false for kind==='ship'."
+          ],
+          "liveTestRecipe": "In ORRERY (mode-swap-btn text 'ORRERY'), open nav computer, select a planet, Space → assert document.getElementById('mode-swap-btn').textContent flips to 'HELM', window._sc.pilot.phase runs, and window._sc.pilot._target.mesh is the planet. Inject W → assert leg cancels (phase IDLE, mode manual). Separately, commit a burn, let it park at HOLD, and poll window._autoNav.isActive + window._getState() selection over time to catch the idle-reengage moon-flip (cross-ref quirk aspect)."
+        },
+        {
+          "name": "Manual takeover / manual-cancel gates (manualCancelsLeg)",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Roll (Q/E) is NOT a cancel trigger — the player can roll during an Assist leg without taking over; the pilot keeps steering yaw/pitch (setTurnInput ignores roll) while the ship banks, and with no B2 auto-level the bank persists. Inconsistent with W/S and stick, which DO cancel.",
+            "In free-look (latched) the mouse-stick gate is off (9676 `!freeLook.latched`), so during a free-look-launched Assist ONLY W/S can take over — stick-deflection takeover is impossible while latched.",
+            "Two separate takeover code paths (Assist gate vs tour autoNav branch) that must stay in lock-step; arrival-modes AC5 marks the commit-path takeover UNVERIFIED.",
+            "Both gates require _scManual; a subtle mismatch (e.g. an Assist leg where _scManual got cleared) would make the leg uncancellable — the exact pre-fix bug playerBurnMode() was created to prevent."
+          ],
+          "liveTestRecipe": "Launch an Assist leg (previous aspects). While window._sc.pilot.phase is CRUISE: (i) press W → assert phase IDLE + getState().mode 'manual'; repeat fresh legs with S, and with hands-on mouse-stick deflection (F off). (ii) On a fresh leg press ONLY Q/E → assert phase UNCHANGED and window._sc.model.turnInput.roll !== 0 (documents non-cancel). (iii) On a fresh leg press F (free-look) then deflect mouse → assert phase unchanged (stick gated); then W → assert takeover."
+        },
+        {
+          "name": "Per-mode roll auto-level (B2) — DEFERRED / NOT BUILT",
+          "mode": "helm",
+          "status": "gap",
+          "suspectedIssues": [
+            "ASSIST auto-level (roll-spec AC6) is entirely absent — an Assist leg that accumulates roll (or takes a stray Q/E) is never corrected; the assisted regime still has the exact horizon-tilt annoyance the spec set out to kill.",
+            "ALIGN auto-level (folded-with-Assist) also absent.",
+            "The world-+Y level reference, forward‖up degeneracy skip, and gentle-gain corrector described in §B2 do not exist anywhere.",
+            "Verify the roll-spec's other ACs shipped: the keybinds overlay should reflect Q/E=roll, R=drive, C=minimap, Z=tour (B3 remap IS in code at 8139/9180/9155/9253) — confirm the on-screen keybind text was updated too."
+          ],
+          "liveTestRecipe": "Settings type=Assist, launch an Assist leg; use Q/E to bank ~30°, then RELEASE all keys. Assert window._sc.model.turnInput.roll returns to 0 (input-driven) BUT the ship's local up vector does NOT re-converge to world +Y over ~5s (measure ship-up · +Y — expect it to stay tilted). Repeat in MANUAL (same result, expected by design). Both confirm auto-level is unbuilt. Also open the keybinds overlay (K) and confirm it lists Q/E roll, R drive, Z tour, C minimap."
+        },
+        {
+          "name": "Assist ~55s non-convergence + auto-flip-to-a-moon quirk",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "NOW.md:681-682 still lists the quirk as live/deferred AFTER the AC8 ALIGN fix landed and went unit-green — so the residual is NOT the ALIGN gate; it is CRUISE (no target-lead) failing to capture a small/fast-orbiting moon and/or the idle-reengage re-targeting.",
+            "The pilot NEVER changes its own _target (the align test asserts pilot._target.mesh is stable) — the 'flip to a moon' is the SELECTION-LAYER idle screensaver re-engage (startFlythrough random stop), not the pilot. Conflating the two (as the spec's Feature-6 diagnosis does) hides the real cause.",
+            "idleTimeout default is 300s (src/ui/Settings.js:16); a ~55s observation implies a lower saved idleTimeout, a faster path (_engageAssist linger 8 + short idle), or an approximate observation — needs live timing to pin.",
+            "No suppression of the idle-reengage while the player is deliberately parked at their Assist target — every successful Assist arrival eventually gets yanked into a random tour.",
+            "CRUISE_THROTTLE 0.75 vs the tiny dropMaxSpeed (4R) for small moons can produce a repeated-overshoot limit cycle (frame.overshoot, SupercruisePilot.js:149) — genuine non-convergence distinct from the ALIGN gate."
+          ],
+          "liveTestRecipe": "Load Solar system (Shift+L teleports near the Moon; or nav to Saturn/Dione). Launch an Assist leg to a moon (or to a planet and let it park). Poll every 1s: window._sc.pilot.phase, window._sc.pilot._target?.mesh, window._autoNav.isActive, and the current selection via window._getState(). MEASURE (repeat N=10 across moons): (i) time-to-HOLD with zero target change — flag any leg that never reaches HOLD (CRUISE limit-cycle / non-convergence, target a fast small inner moon to provoke it); (ii) after HOLD, elapsed until window._autoNav.isActive flips true AND the selected target changes to a different body — that elapsed is the moon-flip; compare it against settings.get('idleTimeout') to confirm the idle-reengage is the mechanism. To isolate part A from part B, temporarily set a huge idleTimeout in Settings and confirm the flip disappears while non-convergence (if any) remains."
+        }
+      ]
+    },
+    {
+      "cluster": "HELM safety / proximity",
+      "aspects": [
+        {
+          "name": "Hard collision barrier (never fly through a body)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Single-pass, at-most-one-body assumption: comment claims 'bodies don't overlap' so only one barrier fires per tick, but moons orbit close to their planet; if a moon's 1.05R barrier overlaps the planet's 1.05R barrier the loop corrects only the last-violated body per tick — could leave the ship momentarily inside the other's barrier (self-heals over subsequent ticks, but unverified).",
+            "Only bodies pushed into _scBodies are guarded — rings, asteroid belts, station/ship props, and any non-star/planet/moon geometry are NOT collidable (you can fly through them). Consistent with rings being explicitly non-traversable-but-non-collidable elsewhere, but worth confirming nothing solid is missing.",
+            "AUTOPILOT DEADLOCK RISK: the barrier converts 'fly through' into 'stop dead at surface', but the autopilot pilot (SupercruisePilot.js CRUISE) steers in a straight line at the TARGET body with no obstacle avoidance and no forced-drop (that is manual-only). A tour leg whose straight path crosses the central star would jam the ship against the star's 1.05R barrier (speed zeroed each tick, nose still pointed through the star) with no CRUISE timeout to recover. This is the most likely way the 'safety' feature actively breaks the screensaver.",
+            "No swept-collision / continuous test — only the post-step final position is checked. Static analysis says per-tick displacement stays far below the barrier gap because speedCap clamps speed to surfaceDist/ETA_K BEFORE translating (so you decelerate into any body), but there is no unit test for the high-speed (deep-space CAP_MAX=20000 u/s) approach to a very small moon; confirm no tunneling there."
+          ],
+          "liveTestRecipe": "Keep the window focused (rAF throttles to ~1fps when occluded, freezing motion). 1) Enter HELM hands-on and engage the drive (R). 2) Point the nose straight at a planet (mouse-as-stick) and hold W to full throttle. Poll window._sc.model.position.distanceTo(planetMesh.position) and window._sc.model.speed each ~250ms; assert distance never drops below 1.05 × planet radius and that speed snaps to 0 at the barrier. (Planet radius: window._sc.model._bodies[i].radius; planet mesh pos via window._scene traverse or window._getState().) 3) Rotate 180° and throttle forward — assert distance increases (can leave). 4) Degenerate check: in console set window._sc.model.position.copy(planetMesh.position) then window._sc.model.update(1/60); assert position is finite and distance ≈ 1.05R. 5) AUTOPILOT DEADLOCK LOOP: run N≥6 warp+full-tour cycles (window._autoSelectWarpTarget(); window._commitSelection(); window._beginWarpTurn(); then let window._autoNav run the whole tour). For each leg watch window._sc.pilot.phase and window._sc.model.speed; assert no leg sits with speed pinned near 0 while phase stays CRUISE for >5s (that signature = jammed on the star) and every leg reaches HOLD then motionComplete."
+        },
+        {
+          "name": "Mass-based forced drop-out near mass (direction-aware)",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Manual-flight-only by design (gated on _scManual) — the AUTOPILOT gets NO forced-drop. So the 'stars push you out far' safety only protects the player; the screensaver tour relies purely on the 1.05R collision barrier, which is the deadlock vector noted in the collision-barrier aspect. This split is intentional per spec but means the star-standoff guarantee is half the system.",
+            "Star mass is re-derived from RENDERED radius via massSolar=radiusSolar^1.25 (proximityHorizon.js:19-23), not the generator's persisted starMassSolar (which was thrown away — grounding map §1). Spec §8 flags this as tolerable-but-approximate; the horizon distance can differ slightly from a 'true' mass. Fine for a tunable safety net, but it means the forced-drop radius is derived from a visual quantity.",
+            "v_ref for the horizon is hard-coupled to SUBLIGHT_CAP (proximityHorizon uses it directly, SupercruiseModel.js:103). Retuning sublight top speed silently moves every star's force-drop radius. Spec §8 acknowledges and defers splitting a HORIZON_REF_SPEED constant.",
+            "Direction-awareness uses instantaneous nose dot, not velocity — a ship drifting inbound with the nose already swung away would NOT force-drop even though it is still closing on the star (Max explicitly chose nose-direction over velocity-aware; spec Out-of-scope). Combined with no real gravity pull, you could coast inbound past the horizon.",
+            "The forced-drop fires only while driveOn; once dropped it won't re-fire, but nothing prevents sublight-flying from the ~4.2R horizon all the way to the 1.05R star surface (spec §8 'stars are a hassle zone' — intended, but no heat/damage means there is no actual penalty)."
+          ],
+          "liveTestRecipe": "Focused window, HELM hands-on, in Sol (known G star). 1) Engage drive (R), point nose directly at the star, hold W. Poll window._sc.model.driveOn and window._sc.model.position.distanceTo(starMesh.position); assert driveOn flips true→false at distance ≈ 4.2 × star radius (read star radius = the _bodies entry with a massKg field, window._sc.model._bodies.find(b=>b.massKg).radius), and that console logged '[MODE] forced proximity drop'. 2) Repeat but with nose pointed 90°/away while inside 4.2R: assert driveOn STAYS true (window._sc.model.proximityDropRequired() returns false) and you can throttle away — distance increases. 3) Planet floor: nose-in on a planet, assert force-drop fires only at ≈1.1 × planet radius, not the star's larger multiple. 4) Autopilot gap check: during an autopilot leg (window._sc.pilot.isActive true, _scManual false) fly the tour past the star and confirm NO force-drop occurs (driveOn stays ON) — documents the manual-only scope. Reliability: repeat the head-on approach 5×, assert force-drop radius is stable within ±5%."
+        },
+        {
+          "name": "Mass-lock re-engage block + TOO CLOSE hint",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "The 90-frame (~1.5s) hint countdown at main.js:7847 lives inside the scActive block (requires !warpEffect && !splash && !title). Normally true when parked in flight, but if some transition clears scActive the counter freezes rather than counting down — cosmetic only.",
+            "The 'engage' branch (from Toybox, main.js:9189-9193) and the 'dropout' branch do NOT check proximityDropRequired — only 'reengage' does. Entering flight fresh (E/R from Toybox) near a star could immediately engage then be force-dropped next tick by the manual forced-drop path (a one-frame flicker), since the mass-lock guard only protects the reengage transition. Spec intended the guard specifically to kill that flicker, but only wired it on reengage.",
+            "Block relies entirely on proximityDropRequired's nose-direction test — same instantaneous-heading limitation as the forced-drop; a nose-away reengage is allowed even if drifting inbound."
+          ],
+          "liveTestRecipe": "Focused window, HELM hands-on in Sol. 1) Sublight in to within ~3R of the star nose-first (drive gets force-dropped). 2) With nose still toward the star, press R (reengage). Assert: window._sc.model.driveOn stays false, console logs 'reengage blocked — mass-locked', and 'TOO CLOSE — SUBLIGHT ONLY' appears (read window._sc HUD or SupercruiseHud.getLastFrameState()/DOM) for ~1.5s. 3) Turn the nose away from the star, press R again. Assert driveOn flips to true (no soft-lock) and you accelerate away — confirms the direction-aware escape hatch. 4) Flicker probe: from Toybox near a star, press R to engage while nosed at the star; watch whether driveOn engages then force-drops within a few frames (documents the engage-branch gap)."
+        },
+        {
+          "name": "proximityHorizon escape-velocity math + star-mass rederivation",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "^1.25 rederivation from the RENDERED radius is an approximation of the generator's own starMassSolar (which is computed from radiusSolarVaried, not the final rendered radius) — spec §8 flags a possible small mismatch; acceptable for a tunable safety distance but it is a derived-from-visual quantity, not ground truth.",
+            "The helper is only correct for stars; if a caller ever attaches massKg to a planet/moon push in _scBodies the horizon would be computed with the star relation (^1.25 solar) against a planet radius — currently avoided only by convention (main.js pushes massKg on star lines 7817/7821 only). No guard in the helper itself.",
+            "Binary star2 also gets massKg (main.js:7821-7822) so both stars produce horizons — correct, but untested for the binary case (proximityHorizon.test.js only covers a single star)."
+          ],
+          "liveTestRecipe": "Mostly headless-verifiable but confirm live in-app: in console call window._sc.model._bodies.filter(b=>b.massKg) after entering a system — assert exactly the star(s) carry massKg and the value ≈1.989e30 for a 1 R☉ star. Compute window._sc.tuning.SUBLIGHT_CAP and verify the observed force-drop radius from the forced-drop test (~4.2R) matches forcedDropRadiusScene(massKg, SUBLIGHT_CAP)/starRadius. For a binary, repeat and confirm BOTH stars produce a nonzero horizon (fly toward each, assert force-drop at each). No repeat loop needed — pure math, but re-run across 3 different star classes (small red dwarf, G, large giant) and assert horizon multiple grows with radius."
+        },
+        {
+          "name": "Minimum-cruise floor + gravity-well speed cap (slow-near-mass / anti-clip)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "MIN_CRUISE clamp removes reverse and stop WHILE drive-ON (target clamped ≥ floorEff > 0) — intended ('can't crawl/stop in supercruise') but means a player who wants to hold position must drop to sublight; the only sub-floor motion is a gravity well forcing you down (floorEff yields to cap) or dropping out.",
+            "The CAP_MIN_FRAC floor keeps the near-body cap at 0.5R (not ~0), so the model's 'anti-clip: engage into a body can't exceed ~0' comment (line 163-164) is slightly optimistic — you can still move at up to 0.5R/60 per tick into a surface; it is the separate 1.05R collision barrier (176-189), not the cap alone, that actually prevents penetration. Anti-clip is a two-mechanism story; the cap only guarantees the per-tick step stays small enough for the barrier to catch.",
+            "ETA_K=3.0 must stay ≥2.25 for drop-safety (capture sphere speed ≤ dropMax); tuned down from 6→3 for feel (comment line 11-13). Any further live retune below 2.25 silently breaks capturability — no runtime assertion guards this invariant.",
+            "The tuning comment budget (SUBLIGHT_TAU ≤ ETA_K/4, ACCEL_TAU ≤ ETA_K/4) is documentation-only; nothing enforces it, so live-dialing SUBLIGHT_CAP/ETA_K via window._sc.tuning could produce underdamped surging or unsafe capture with no warning.",
+            "No unit test asserts monotonic increase of the cap with distance across multiple bodies or the multi-body min selection under motion; AC1's 'monotonically increasing cap' is claimed green but re-confirm the min-over-bodies picks the nearest correctly when two bodies are comparably close."
+          ],
+          "liveTestRecipe": "Focused window. 1) Deep space: in HELM with drive ON far from all bodies, full throttle; assert window._sc.model.speed approaches ~throttle×CAP_MAX and window._sc.model.speedCap() ≈ 20000. 2) Approach a planet nose-first at cruise; log speedCap() and speed each 250ms — assert speedCap decreases monotonically as distance shrinks and speed tracks it down (the Elite decel-on-approach), never exceeding cap. 3) Min-cruise floor: near a body reduce throttle to 0 (S then release), assert speed does NOT drop below min(2.0, speedCap()) while driveOn true; then drop out (R) and assert sublight now allows full stop (throttle 0 → speed→0). 4) Anti-clip integration: at full deep-space speed aim at a small moon and hold W; assert speed is clamped down by the cap before reaching it AND the collision barrier catches you at 1.05R (distance never < 1.05×moon radius, speed→0) — no tunneling. 5) Turn-authority coupling: at high speed vs near-rest, apply equal stick and compare achieved turn rate (window._sc.model.turnRateCap()); assert high-speed cap < low-speed cap. Reliability: run steps 2+4 across a small moon and a large planet to confirm scale-free behavior."
+        }
+      ]
+    },
+    {
+      "cluster": "Warp pipeline",
+      "aspects": [
+        {
+          "name": "trySelectWarpTarget — background-star pick + destination routing",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "starIndex/navStarData duality: name is seeded from result.index (9522) but generation later prefers navStarData (onPrepareSystem Priority 1, 3385) — if getEntryForIndex returns starData whose seed differs from the index-derived name seed, the HUD name and the generated system could theoretically diverge. Low risk (both come from the same entry) but not asserted anywhere.",
+            "In HELM hands-on (cursor hidden) trySelect forces the pick point to screen-center (9417-9421); a star must be within findNearestStar's angular tolerance of dead-center to be pickable — no reticle-radius feedback confirms what will be hit.",
+            "No guard that the resolved star is actually reachable/valid; if getEntryForIndex returns null, navStarData is null and generation falls to Priority-2 index re-resolve (3391) — a double lookup that the comment claims 'should not happen'."
+          ],
+          "liveTestRecipe": "Bring the GPU Chrome window to front (rAF-throttle caveat). window._lab.enterSol(); click a visible background star (or window._autoSelectWarpTarget()). Read window._warpTarget — assert .direction is a unit Vector3, .starIndex>=0, .name is a non-empty string, .navStarData has worldX/worldY/worldZ + type. Confirm green brackets blink on-screen at the star. Then window._commitSelection() ×3 (idle→preview→aligning→fire) and after arrival assert window._getState().warp===false and the new system's star matches the picked seed (log '[WARP] Resolved to:' line)."
+        },
+        {
+          "name": "autoSelectWarpTarget — screensaver random-star pick",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "If getRandomVisibleStar returns null (no visible stars — e.g. odd sky state) it early-returns leaving warpTarget.direction unchanged; beginWarpTurn then aborts with '[WARP] No star found' (9608). Unattended loop could stall here with no retry.",
+            "Duplicates ~40 lines of routing logic verbatim from trySelectWarpTarget (9568-9580 vs 9507-9525) — any routing fix must be applied twice; drift risk."
+          ],
+          "liveTestRecipe": "Front the window. window._lab.enterSol(); window._autoSelectWarpTarget(); read window._warpTarget.direction/name/navStarData (assert populated). window._beginWarpTurn() and watch window._warpEffect.state cycle idle→fold→enter→hyper→exit→idle. Repeat the pair 10× (auto-select + begin) back-to-back, asserting each reaches state==='idle' with a fresh system — a stall means the null-return path was hit."
+        },
+        {
+          "name": "commitSelection — 3-stage spacebar warp preview (idle→preview→aligning→fire)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "No cancel/abort path once in 'preview' or 'aligning': cameraController.bypassed is left true (6355/6388) and the portal stays open. Escape (9324) only calls focusPlanet(-1) in ORRERY and does not reset _portalLabState or un-bypass — a player who opens a preview and changes their mind is stranded with a frozen camera + open portal until they press Space twice more to actually warp.",
+            "Re-selecting a different star during 'preview'/'aligning' (trySelect still runs — its early-return only blocks on warpEffect.isActive/turning, 9366) updates warpTarget.direction but does NOT re-open the portal (which was placed at the OLD direction at 6356). Next Space aligns toward the NEW direction while Portal A sits on the OLD axis → potential off-axis entry / mismatched preview.",
+            "The 'aligning' state is entered even if the align slerp hasn't visibly progressed; mashing Space fires immediately (by design) but relies entirely on Fix D + the FOLD slerp to recover alignment — see the ENTRY-traversal aspect for the residual reliability tail.",
+            "Comment at 6340 says 'onComplete resets it to idle', but in non-lab mode onComplete never touches _portalLabState (3688 resets it only under _portalLabMode); it is actually reset at fire-time (6384). The stale comment could mislead a future edit into removing the 6384 reset."
+          ],
+          "liveTestRecipe": "Front window. enterSol(); pick a star; then step the machine manually: window._commitSelection() → assert window._warpPortal.group.visible===true and _portalLabState is 'preview' (read via window._getState().labState). Call again → 'aligning' (entry crosses lighting). Call a 3rd time → window._warpEffect.state==='fold'. Separately test the STUCK case: pick a star, _commitSelection() once (preview), then press Escape / click empty space — verify whether camera un-freezes and portal closes (expected: it does NOT — confirms the missing-cancel gap). Test RE-SELECT: _commitSelection() once, then click a different star, then _commitSelection() twice — capture window._warpPortal._trace (set _warpPortal._trace=[] first) and check latStable at the entry crossing is ~0 (on-axis) vs elevated (mismatch)."
+        },
+        {
+          "name": "beginWarpTurn — pre-warp camera turn (screensaver / nav-computer path)",
+          "mode": "orrery",
+          "status": "suspect",
+          "suspectedIssues": [
+            "The 3.0s TIMEOUT at 7334 is the documented historical root cause (memory well-dipper-warp-entry-rootcause finding #3): if alignment never reaches 0.999, warpEffect.start fires while the camera is still mis-facing (FOLD-1 fwdDotNormalA measured as bad as -0.37). Fix D (see ENTRY aspect) decouples POSITION from facing so the entry gate still crosses geometrically, but a timeout fire still looks wrong (camera catching up during FOLD) and was the original off-axis miss source.",
+            "This path is the one the UNATTENDED repeat-warp loop uses (nav-computer + deep-sky + title), so any residual off-axis/timeout behavior compounds across the screensaver loop — exactly the 'degradation after ~7 warps' surface.",
+            "beginWarpTurn stops scPilot but leaves _scManual/autoNav semantics to warpRevealSystem to rebuild; if a warp is triggered mid-HELM-flight the turn takes the camera with cameraController.bypassed=true and there's no re-assert of flight regime until reveal.",
+            "Deep-sky auto-warp fires beginWarpTurn via setTimeout(...,500) (8072) AFTER setting warpTarget.direction; a second trigger inside that 500ms window (unlikely but possible via idle race) could double-fire — beginWarpTurn's turning guard (9594) covers the second call only after turning=true is set in the first."
+          ],
+          "liveTestRecipe": "Front window. enterSol(); window._autoSelectWarpTarget(); window._beginWarpTurn(); immediately set window._warpPortal._trace=[]. Watch window._warpTarget.turning flip true then false and window._warpEffect.state go 'fold'. After the warp, inspect _warpPortal._trace: find the FOLD-1 record and assert fwdDotNormalA ≈ -1 (dead-on-axis) and the eventual insideFlip===true. To force the timeout branch, pick a star ~90° off current facing then _beginWarpTurn() and confirm it still fires at turnTimer~3.0 with entry still registering (insideFlip true) — proves Fix D covers the timeout. Repeat 12× consecutively to probe the degradation tail (assert every cycle reaches state 'idle' in a fresh system)."
+        },
+        {
+          "name": "WarpEffect FOLD/ENTER/HYPER/EXIT state machine + load-adaptive HYPER",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Two independent onSwapSystem triggers exist: the geometric Portal-A crossing (main.js:1976) and the HYPER fallback timer (WarpEffect.js:310). Both gate on !_swapFired so only one fires, but if the geometric crossing NEVER fires (off-axis miss), the timer path swaps WITHOUT the camera being INSIDE — the AC10 occlusion guard (main.js:3477) would then log '[WARP][AC10] swap exposed!' but only warns; the teleport could be briefly visible.",
+            "safetyCeiling = HYPER_DUR×4 = 12s (323): if destinationReady never sets (compileAsync hang) AND the emergence crossing never fires, HYPER hard-exits at 12s and onComplete force-flips OUTSIDE_B (3667) — player emerges into a possibly-half-loaded system. This is the designed no-hang backstop, but it masks the real failure as a silent 12s pause.",
+            "warpSwapSystem's camera-placement math (5887-5896) hard-codes speed=80 and FOLD/ENTER/HYPER/EXIT distances that must stay in sync with WarpEffect's actual speed ramps; these are duplicated constants (foldDist=53, enterDist=90, hyperDist=speed×HYPER_DUR) that will silently drift if the ramp shapes or durations change."
+          ],
+          "liveTestRecipe": "Front window; enable ?warpDebug (window._warpDebugHUD panel) or read window._warpEffect. enterSol(); auto-select + begin a warp; sample window._warpEffect.state + .progress each ~0.5s and assert the sequence fold→enter→hyper→exit→idle with elapsed roughly 4/1.5/≥3.5/2s. To exercise load-adaptive HYPER, set a slow-load by inspecting window.__swapTiming after arrival (compileMs) — on a genuinely slow compile assert HYPER elapsed exceeds HYPER_MIN_CRUISE (3.5) before exit. Watch console for any '[WARP][AC10] swap exposed' or '[WARP][AC4] onComplete reached still INSIDE' — either indicates the geometric path failed."
+        },
+        {
+          "name": "warpPortal ENTRY traversal — OUTSIDE_A→INSIDE crossing + Fix D on-axis advance (HISTORICALLY FLAKY)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Documented residual: even after Fix D, live runs showed ~10/12 registering with a residual ~2/12 miss on deep consecutive warps (memory finding #4, 'turn-alignment accumulation, mechanism not yet pinned', DEFERRED). The task's '~7 warps then degrades' is this tail. Current code advances along _tunnelForward which SHOULD make entry facing-independent, so if misses persist the cause is elsewhere (portal placement vs camera, or interp resync) — unresolved and untested since the code evolved past the memory (memory says _advanceDir uses _sunDir post-swap; code now uses _destForward, 7676).",
+            "renderFrame/simStep split: updateTraversal (renderFrame, 8428) calls group/disc updateMatrixWorld, but the AC5 clamp in simStep reads warpPortal._discB.matrixWorld (7706) with a comment claiming 'matrixWorld is current — updateTraversal refreshed it this frame' — that ordering claim predates the 2026-06-10 move of updateTraversal to renderFrame. In simStep the disc matrix can be one render-frame stale relative to the 7536 group-position rewrite, giving a slightly-off axisToB for the clamp.",
+            "Portal A is opened at FOLD t=0 from the LIVE camera position (7516), but during the manual 3-stage path the portal was ALREADY opened at preview time (6356) and _openedThisWarp gates re-opening; the resetTraversal in the FOLD block (7518) only runs when it re-opens. Need to confirm the preview portal and the FOLD portal agree in position (they should, camera hasn't moved) — no assertion guards a drift.",
+            "The 3u gate is generous but fixed; a warp whose _tunnelForward and camera path diverge (stale-target re-select edge, or a rebase mid-FOLD) could still lat-reject."
+          ],
+          "liveTestRecipe": "Front the GPU window (CRITICAL — occluded window throttles rAF to ~1fps and fakes misses). Use the built harness: window.__wd.runWarpEntrySuite({warps: 15}) (or manually set window._warpPortal._trace=[] before each warp, run auto-select+begin, then read the trace). For EACH warp assert exactly one record with insideFlip===true (OUTSIDE_A→INSIDE) and at that record latStable < 3 (gate) and fwdDotNormalA ≈ -1. Run 15+ CONSECUTIVE warps from a single enterSol WITHOUT reload and assert the registration rate stays 15/15 — a drop after ~7 reproduces the accumulated-state degradation. Cross-check console for no '[WARP][AC10]' warnings."
+        },
+        {
+          "name": "onSwapSystem — mid-cruise teleport, rebase-proof pocket re-anchor, AC5 emergence clamp",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "This is the most fragile, race-prone node in the pipeline: async teleport vs the fixed-timestep sim vs world-origin rebasing. The 0.5u back-margin (3526) is explicitly tuned against float64 noise at destination magnitudes 1e4-1e6 (a smaller margin fired spurious INSIDE→OUTSIDE_A 'backed out'); a far-enough destination (galactic-scale, worldOrigin ~6M) could still push dotA into noise — pinned only by tests/portal-traversal-margin.test.js, not asserted live.",
+            "AC10 guard (3479) is warn-only console.error — if a future movement change exposes the ~3000u teleport it logs but does not prevent the visible jump.",
+            "Two onSwapSystem callers (geometric 1976 + HYPER timer 312) both re-anchor now, but the re-anchor lives in onSwapSystem body; if only the timer fires (geometric miss), the camera was NOT actually INSIDE at teleport → AC10 warns and Portal B may not be crossable, cascading to the onComplete force-flip.",
+            "The AC5 clamp reads _discB.matrixWorld in simStep (7706) — same one-frame-stale concern as the ENTRY aspect (updateTraversal that refreshes it now runs in renderFrame).",
+            "_parkEntryDepth caps parkBackDepth's start so the hold isn't behind the camera (7708); if the swap drops the camera shallower than minBack (6u), the clamp math Math.max(0, axisToB−parkBackEff) can pin _step to 0 and momentarily freeze forward progress until the ease catches up — the very 'freeze' the soft-creep was meant to avoid, at the shallow-entry extreme.",
+            "compileAsync failure only warns and continues (3629); a partial compile still flips destinationReady=true (3637) → emergence into an un-compiled system with a first-frame sync-link hitch."
+          ],
+          "liveTestRecipe": "Front window. Warp and read window.__swapTiming after arrival (genAwaitMs/swapSpawnMs/skyMs/compileMs/totalMs) — assert compile completed and totalMs is bounded. During HYPER, poll window._warpPortal._traversalMode (should be 'INSIDE') and window._warpEffect.state ('hyper'); assert no '[WARP][AC10] swap exposed' in console. Test a FAR destination via the nav computer (galactic-scale star) and repeat — assert the entry still registers and no spurious OUTSIDE_A backout (watch _trace for a prevMode INSIDE→OUTSIDE_A flip). To probe the AC5 hold, set window._warpParkBack/_warpParkBackMin and a slow compile, and assert camera axis-distance-to-B stays > ~minBack until destinationReady, never crossing early."
+        },
+        {
+          "name": "warpPortal EMERGENCE — INSIDE→OUTSIDE_B crossing drives EXIT + AC8 close-tween",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "The onComplete force-flip fallback (3667) existing at all means the emergence crossing is not guaranteed — when the safety ceiling or a Portal-B miss occurs, emergence degrades to exactly the 'freeze-then-snap' the redesign was meant to kill (spec §1 failure). Frequency is unmeasured in current code; the console.warn is the only signal.",
+            "Portal B is the FAR/pinched end (FAR_TAPER 0.12, WarpPortal.js:120) but the emergence gate uses the fixed 3u _gateRadiusScene, not the tapered mesh radius (857-862) — intentional (gate ≠ visual), but it means the visible throat is far narrower than the crossing gate; a camera slightly off the axis crosses the gate while appearing to clip the tapered wall.",
+            "The close-tween spans EXIT(~2s)+~1s coast and is driven in BOTH the warp-active block (7552) and the post-warp else block (7767); if onComplete's force-flip path starts a SECOND startClose while one is already running, _closeT resets to 0 (717) restarting the fade — a double-start could visibly re-open then re-close.",
+            "AC7 says the portal is frozen at its true-world exit anchor with NO camera follow post-warp (7751-7759); this relies on maybeRebase carrying the scene-child correctly — if a rebase lands mid-close the frozen ring could jump."
+          ],
+          "liveTestRecipe": "Front window; set window._warpPortal._trace=[] before a warp. After arrival, scan the trace for a record where prevMode==='INSIDE' and mode==='OUTSIDE_B' (the emergence crossing) — assert it exists and occurred BEFORE warpEffect reached 'idle'. Assert NO console '[WARP][AC4] onComplete reached still INSIDE'. Watch window._warpPortal.group.visible stay true through EXIT then go false ~3s into the coast (close completed). Look back toward Portal B during exit (free-look) and confirm it shrinks+fades rather than vanishing. Run 12 consecutive warps and assert every one logs a real OUTSIDE_B crossing (no force-flip fallback)."
+        },
+        {
+          "name": "warpRevealSystem — system reveal, boot-mode consumption, orbit sync, tour/HELM handoff",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Boot pick is consumed ONLY on the star-system path (6018); if the very first post-boot warp lands on DEEP SKY (feature/galaxy) the deep-sky branch returns at 6001 BEFORE consuming _pendingBootMode, so a HELM pick would silently carry to the next star-system reveal — an unlikely but real ordering gap (title→warp normally targets a star, but auto/nav paths can pick features).",
+            "The fly-in seam comment (6040-6047) asserts 'the pilot is never active here (beginWarpTurn stops it… warpSwapSystem stops it defensively)'; correctness depends on BOTH stops having run — if a warp reached reveal via a path that skipped both (none obvious today), _seedScPoseFromCameraIfIdle's guard is the only protection.",
+            "HELM boot enters flight from the warp-exit pose with the drive left untouched (6017 comment); if the arrival distance/orientation from warpSwapSystem is off, the player starts flight facing away from the star.",
+            "Orbit realism here is only visibility sync (_syncOrbitsToMode, 6033); actual procedural orbit geometry is spawnSystem's job (outside this function) — reveal just toggles line meshes, so 'procedural orbit realism' is not validated at reveal time."
+          ],
+          "liveTestRecipe": "Front window. ORRERY path: enterSol, auto-warp, and after arrival assert window._getState().autopilot behavior — autoNav tour running (window._autoNav active), orbit LineLoop meshes visible (traverse window._scene for LineLoop), and the supercruise fly-in moving (window._sc.model position advancing). HELM boot path: from a fresh load pick HELM at the splash, let it warp, and after reveal assert document.getElementById('mode-swap-btn').textContent==='HELM' and window._getState() shows no autopilot tour. Deep-sky path: nav-warp to a galaxy/nebula feature and confirm the 4s drift-then-free-look (no tour). Verify _pendingBootMode resets to 'orrery' after the first star reveal (only observable indirectly — second reveal should NOT enter HELM)."
+        },
+        {
+          "name": "Repeat-warp reliability loop — select→warp→arrive, REPEATEDLY (screensaver + manual)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "The primary open reliability risk in the whole cluster: memory well-dipper-warp-entry-rootcause finding #4 — a PROGRESSIVE degradation (fresh 7/7 register → after ~7 warps 12/12 miss pre-Fix-D; 10/12 post-Fix-D) whose MECHANISM WAS NEVER PINNED and is explicitly DEFERRED. Some accumulated per-warp state breaks entry over a long loop; candidates not ruled out: cameraInterp resync drift, worldOrigin rebase interaction across many teleports, or scPilot/autoNav residue. Unresolved and the exact thing the task flags.",
+            "Multiple reset flags must ALL fire every cycle (_openedThisWarp, _swapFired, destinationReady, _parkEntryDepth, _swapGatedRoots, traversal dot history, warpTarget). onComplete is the single point that clears _openedThisWarp and defensively restores gated roots — if a warp exits via the safety ceiling with compileAsync still pending, onComplete's defensive restore runs (3652) but any missed flag would stale the NEXT warp (e.g. a leftover-visible Portal B was the original repeat-warp orphan, spec §1).",
+            "The screensaver loop uses the beginWarpTurn TURN path (3s-timeout-prone), not the manual 3-stage preview, so the loop inherits beginWarpTurn's off-axis-fire risk on every unattended cycle.",
+            "billboard-distance arrival (AC8) depends on warpSwapSystem's switchDist math (5930-5940); a wide binary or unusual star could emerge outside billboard LOD, which the loop does not self-correct."
+          ],
+          "liveTestRecipe": "Front the GPU window and VERIFY rAF fps first (an occluded window fakes freezes/misses — select_page bringToFront). Run the built regression harness: window.__wd.runWarpEntrySuite({warps: 20}) from a single enterSol WITHOUT reload; assert 20/20 report insideFlip and a real OUTSIDE_B emergence, and specifically watch warps 7-20 for the degradation tail. Separately drive the FULL screensaver loop: enterSol, enable autopilot, and let it run ≥15 unattended cycles (tour→warp→arrive), asserting each: window._warpEffect reaches 'idle' in a fresh system, no console '[WARP]' AC4/AC10 warnings, no black HYPER frame (screenshot mid-HYPER shows tunnel walls), destination star in billboard LOD at emergence, and _portalLabState stays 'idle' between warps. Capture window.__swapTiming each cycle to catch a creeping compile/teleport cost."
+        }
+      ]
+    },
+    {
+      "cluster": "Camera stack",
+      "aspects": [
+        {
+          "name": "ShipCameraSystem — TOY_BOX god's-eye orbit (ORRERY)",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "During the normal screensaver ORRERY tour the orbit code is NOT what you see — the supercruise pilot (scPilot.isActive) owns the camera the whole tour incl. the HOLD linger, so cameraController.update is skipped. The TOY_BOX orbit only actually drives the camera once the pilot is idle AND _scManual is false (e.g. after stopFlythrough/Z, deep-sky, or a manual-burn that isn't running). Easy to misattribute tour framing to this code.",
+            "trackTarget()'s free-look branch (601-621) mutates camera.position directly by body-delta; only reachable via the legacy isFreeLooking path, not the HeadMount free-look."
+          ],
+          "liveTestRecipe": "Load, let the intro warp into a star system, press Z to stop the tour (stopFlythrough → restoreFromWorldState, bypassed=false, _scManual=false, scPilot idle). Confirm document.getElementById('mode-swap-btn').textContent==='ORRERY'. Drag LMB: window._cam.quaternion changes smoothly (assert window._cc.isFlightMode===false, window._cc.cameraMode==='toy_box'). Scroll: window._cc.distance changes. Watch a focused planet stay centered over ~10s (trackTarget). Reliability: repeat stop/drag/zoom across 3 different warped systems; assert window._cc._diagnostics.getSummary().ok===true (no JUMP/ROTATION_SNAP) each time."
+        },
+        {
+          "name": "ShipCameraSystem — legacy FLIGHT mode (FlightDynamics + CinematicDirector)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "RESURRECTABLE DEAD PATH: cameraMode is persisted to localStorage 'wd_cameraMode' (ShipCameraSystem.js:437). _enterFlightInternal persists 'flight' on HELM entry. If the player quits while in HELM, localStorage='flight', and on next boot _loadPersistedMode (428-435) sets cameraMode=FLIGHT. NOTHING on the ORRERY boot/reveal path forces setCameraMode(TOY_BOX) (only _exitFlightInternal:8686 does). So after boot into the ORRERY screensaver tour, if the tour is stopped (Z→stopFlythrough), scPilot goes idle, _scManual=false, restoreFromWorldState sets bypassed=false AND syncs flight.position to camera (702), and the next cameraController.update runs the FLIGHT branch → CinematicDirector composes a chase offset → the camera JUMPS to a chase shot. This directly violates 'correct camera per mode; no snaps on transitions'.",
+            "The FLIGHT-branch look-offset/chaseScale/WASD-thrust machinery (setFlightInput 774-812, _decayLookOffset, _applyLookOffset) is all dead in the supercruise build but still allocates state and is documented as live — maintenance/comprehension hazard.",
+            "FrameDiagnostics.flightDiverge (ShipCameraSystem.js:129-138) only measures against the FLIGHT branch's expected write; it never runs during supercruise HELM (update skipped), so the diagnostic gives no coverage of the live pose path."
+          ],
+          "liveTestRecipe": "REPRO the latent bug: in devtools run localStorage.setItem('wd_cameraMode','flight'); location.reload(). Let the intro warp complete into a star system, then press Z to stop the tour. MEASURE window._cc.cameraMode (expect 'flight'), window._cc.isFlightMode (expect true), and capture window._cam.position before/after the stop frame — assert whether the camera jumps (bug) vs stays put. Also assert window._cc._diagnostics.getSummary() shows JUMP. Contrast: localStorage.setItem('wd_cameraMode','toy_box'); reload; repeat — expect no jump. This isolates whether the persisted-FLIGHT landmine is real."
+        },
+        {
+          "name": "Supercruise camera pose write (scHead.applyTo in simStep)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "The pose write happens in simStep (fixed 60Hz) and the render frame interpolates (cameraInterp.applyTo, main.js:8399-8400). The rAF-throttle caveat means an unfocused/occluded window freezes motion at ~1fps — any live measurement MUST keep the tab focused/visible or the pose write appears frozen.",
+            "Between _maybeWorldRebase (main.js:6875, early in simStep, resets camera.position to 0) and scHead.applyTo (7873, sets camera=scModel.position), camera.position is transiently (0,0,0). Any per-frame reader of camera.position ordered in-between would see 0 while the ship is elsewhere. Needs confirmation nothing sim-critical reads camera.position in that window.",
+            "scActive gates OFF during warpEffect.isActive; the warp turn (beginWarpTurn) sets scPilot.stop()+bypassed=true, and warpRevealSystem re-arms scPilot.flyTo — verify there is no 1-frame gap where neither the supercruise mover nor the warp code writes the camera."
+          ],
+          "liveTestRecipe": "Keep the tab focused. During an autopilot tour call window._getState() each ~frame and assert its camPos/orientation equal window._sc.model.position / window._sc.model.orientation composed with head (i.e. camera tracks the ship). Then E to engage HELM (window._sc.model.driveOn true, _scManual true via mode-swap-btn==='HELM'), hold W, sample window._cam.position over 3s — assert it advances along the nose (window._sc.model.nose()). Reliability: run 3 warp→tour cycles via window._autoSelectWarpTarget()+window._beginWarpTurn(), asserting each emergence resumes a live pose write (camera moves, window._sc.pilot.phase cycles ALIGN→CRUISE→HOLD) with no frozen/NaN frame (window._cc._diagnostics.getSummary().nanCount===0)."
+        },
+        {
+          "name": "HeadMount — yaw/pitch free-look + roll-carry via model.orientation",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "ROLL SNAP ON EXIT: if the player rolls the ship with Q/E and then leaves HELM (F is not exit anymore, but M/mode-swap → _exitFlightInternal), the no-snap exit uses camera.getWorldDirection()+adoptCurrentPose→_applyOrbit→camera.lookAt(target) with camera.up=(0,1,0) (ShipCameraSystem.js:509-518,517), which RE-LEVELS the horizon. Position and look-direction are preserved but ROLL is discarded — a visible roll snap to level on HELM→ORRERY exit when the ship was rolled. Q/E roll was only added 2026-06-30, likely untested against the exit path.",
+            "Free-look yaw/pitch are applied in the ROLLED frame (shipQuat×look), so while rolled the look axes are tilted — arguably correct (head-in-cockpit) but may feel off; worth an eyeball.",
+            "MAX_YAW=135° means you can look well behind the wings; combined with the joystick gate freezing while held, verify the transition back to steering after a wide look isn't disorienting.",
+            "No roll clamp/normalization guard beyond quaternion.normalize() each tick — sustained Q/E can accumulate arbitrary roll with no auto-level; intended, but note there is no 'level horizon' assist."
+          ],
+          "liveTestRecipe": "E to enter HELM. Roll ~45° with Q (hold ~1s); confirm window._sc.model.orientation shows roll and the horizon tilts. Now press M (swap to ORRERY) and capture window._cam.quaternion the frame before and after: assert whether roll snaps to 0 (bug) or is preserved/eased. Separately test free-look: F on, LMB-drag right+up, release (view HOLDS — assert window._sc.head.yaw/pitch stay non-zero and unchanged after release), then F off and sample window._sc.head.yaw/pitch decaying to 0 over ~0.5s (EXIT_RECENTER_TAU=0.18). Reliability: 5× roll-then-M cycles, log max quat-dot discontinuity."
+        },
+        {
+          "name": "freeLook latch + freeLookApply recenter bridge",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "STALE recenterPending across mode-swap: _doModeSwap calls freeLook.exit() (sets recenterPending=true) THEN _exitFlightInternal, but the frame bridge stops running once you leave HELM, so recenterPending is never consumed and never cleared. On the NEXT HELM entry the first bridge frame consumes a stale recenter → beginRecenter, but head yaw/pitch were reset to 0 on exit (main.js:8730-8731) so it is a no-op. Harmless today, but it is unclean latch state that could bite if exit stops zeroing the head.",
+            "F-off recenter only eases while the frame loop still applies the head (scPilot.isActive || _scManual). If you F-off in the exact frame you also leave flight, the recenter is dropped (view left wherever it was until the exit zeroes it). The two paths (F-off recenter vs M-swap adopt-current-pose) treat a held look differently — F-off eases to nose, M-swap bakes the looked-away direction as the orbit forward. Verify both read as intended 'no snap'.",
+            "freeLook is available during the autopilot TOUR (scPilot.isActive), so F during the screensaver latches free-look while the pilot flies; confirm the joystick gate (!freeLook.latched) and pilot steering don't interfere."
+          ],
+          "liveTestRecipe": "E to enter HELM. F (window._sc... no direct hook — read the '[MODE] free-look ON' console + mode-swap unaffected). LMB-drag to look, release — assert window._sc.head.yaw persists (HOLD). Move the bare cursor (no button) and assert window._sc.head.yaw is UNCHANGED and window._sc.model.turnInput stays 0 (free pointer neither looks nor steers). F off — assert window._sc.head.yaw eases to 0. STALE-FLAG probe: F on, drag head, then M to ORRERY, then M back to HELM; on the first HELM frame assert window._sc.head.yaw stays 0 (no unexpected recenter motion). Reliability: 5 F-on/drag/F-off cycles asserting each ends window._sc.head.centered===true."
+        },
+        {
+          "name": "No-snap flight-exit anchor (flightExitAnchor + adoptCurrentPose)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Roll is NOT preserved by this exit (see HeadMount aspect): camera.lookAt re-levels, so exiting while rolled snaps the horizon — the position/look-dir contract holds but roll is silently dropped.",
+            "The commit-burn-from-ORRERY→HELM path (main.js:6309-6315) enters HELM by setting _scManual/cameraMode/bypassed inline and does NOT go through _enterFlightInternal, so it also does NOT call cameraInterp.resync; it relies on focus*() seeding scModel=camera. Since seed==camera there should be no jump, but this asymmetric entry is worth confirming.",
+            "anchorBody distance falls back to 100 when nothing is selected/closest; the clamp cancels out of position (per the contract), so this only affects zoom scale — confirm the post-exit orbit distance feels sane far out."
+          ],
+          "liveTestRecipe": "E to HELM, hold W a few seconds to get far from bodies, then M to ORRERY. Capture window._cam.position and window._cam.quaternion the frame before and after the swap — assert |Δposition| < ~1e-3 and quat-dot > 0.9999 (no snap). Confirm window._cc.cameraMode==='toy_box' and window._cc._diagnostics.getSummary() shows no JUMP/ROTATION_SNAP for the transition. Reliability: run 8 HELM→ORRERY swaps at varied distances/orientations (including after Q/E roll — expect the roll-only exception) and assert position continuity every time."
+        },
+        {
+          "name": "World-origin rebasing of scModel.position + controller caches",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Deep-space supercruise cruise can hit CAP_MAX=20000 u/s (SupercruiseModel.js:16); at 60Hz that is ~333 units/step, far above the 100-unit REBASE_THRESHOLD, so a rebase fires almost EVERY frame at top speed — the scene-children subtract loop runs per-frame. Functionally fine but perf/precision-under-frequent-rebase deserves a check (and the 100-unit threshold vs 333-unit step means the camera can momentarily sit ~333 units out before the next-frame rebase catches it).",
+            "One-frame lag: maybeRebase reads camera.position (from the PREVIOUS frame's applyTo) at simStep start, but scModel.position is updated and written to the camera AFTER, at 7873. The invariant relies on camera.position≈scModel.position at the check point; if any code moved the camera between frames without moving scModel (e.g. a warp/turn path), the rebase offset and scModel could diverge. Worth confirming they stay locked.",
+            "Only scModel.position is tracked; orientation/speed are frame-free (correct). But the HeadMount look and Arrival hold points are ship-relative and re-derived each frame — confirm no cached WORLD-frame supercruise vector (e.g. a pilot _holdPoint) is left untracked across a rebase (SupercruisePilot._holdPoint is world-frame and rebuilt each HOLD frame from bodyPos+_holdOffset, so likely fine, but _holdOffset is ship-relative — verify).",
+            "The WorldOrigin.js:148-150 note says the rebase assumes an UNPARENTED camera; HeadMount is deliberately not an Object3D for exactly this reason (HeadMount.js:3-7). Confirm nothing parented the camera."
+          ],
+          "liveTestRecipe": "E to HELM, point at open space, hold W to CAP-out speed. Poll window._getState() (or import _debugState via window if exposed) and watch worldOrigin grow while window._cam.position stays small (|pos| < ~350). Assert window._sc.model.position stays small too (rebased) and window._sc.model.speed keeps advancing the ship (distanceTravelled via window._sc.flyFromRest as a sanity oracle). Reliability: cruise 20s, assert no visible jump/jitter (window._cc._diagnostics.getSummary().jumpCount===0 during ORRERY portions) and that a subsequent M-exit still lands no-snap. Cross-check float32 stress: near a tiny moon (radius ~1e-4) confirm capture still works after long-distance cruise (rebase kept precision)."
+        },
+        {
+          "name": "ORRERY<->HELM mode-swap seams (_doModeSwap / _enterFlightInternal / cameraInterp.resync)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "ENTER has no cameraInterp.resync — relies on scModel being seeded exactly to camera.position so interp curr≈prev (no lerp jump). Holds for the standard paths, but the THREE different HELM-entry sites (_enterFlightInternal, commitBurn-swap main.js:6309-6315, W/S tour-takeover 9269-9280) each set _scManual/cameraMode/bypassed slightly differently — the takeover and commit-burn paths don't call _enterFlightInternal, so any future divergence in seeding could reintroduce an entry snap. Verify all three enter snap-free.",
+            "setCameraMode(FLIGHT) inside _enterFlightInternal persists 'flight' to localStorage — this is the source of the persisted-FLIGHT landmine flagged in the legacy-FLIGHT aspect. Entering HELM permanently arms that trap until an exit re-persists 'toy_box'.",
+            "Roll snap on exit (shared with HeadMount aspect).",
+            "_doModeSwap and the E/F/M handlers share overlapping guards (warp/splash/title/star-system/mobile); a subtle guard mismatch between the key handler and the button click path could let one fire when the other refuses. mode-swap-btn label is recomputed every frame (8779-8786) which should keep it truthful."
+          ],
+          "liveTestRecipe": "From ORRERY, press M → assert mode-swap-btn.textContent flips 'ORRERY'→'HELM', window._cam pose is continuous (capture before/after), window._sc.model.position===window._cam.position at entry. Press M again → 'HELM'→'ORRERY', assert no-snap (see exit aspect). Test E: from ORRERY, E engages (console '[MODE] supercruise engage', driveOn true); E again drops (driveOn false, ship settles toward rest); E again re-engages (or mass-lock blocked near a body — approach a planet, E, assert '_massLockHintFrames' path / 'reengage blocked'). Test W/S takeover during a tour: while scPilot.isActive press W → assert _scManual becomes true, pilot stops, mode-swap-btn==='HELM', and camera pose is continuous. Reliability: 10 M-swap round-trips + 5 E engage/dropout/reengage cycles, asserting label truthfulness and window._cc._diagnostics.getSummary().snapCount===0 across the ORRERY-side frames."
+        },
+        {
+          "name": "ShipCameraSystem legacy free-look + return-to-orbit (deep-sky / gyro / middle-mouse)",
+          "mode": "orrery",
+          "status": "unknown",
+          "suspectedIssues": [
+            "Two independent free-look systems coexist (ShipCameraSystem.isFreeLooking vs HeadMount/freeLook). Reachability of the legacy one in the shipping build is narrow (deep-sky/gallery/gyro); needs a live check that it hasn't silently broken during the supercruise rewire, and that the middle-mouse path never double-fires with scHead's middle-mouse peek (the peek is gated on _scManual||scPilot.isActive and cameraController.bypassed, which should keep them exclusive).",
+            "gyro path (enableGyro:833) calls enterFreeLook and is mobile-only; mobile is ORRERY-locked so no supercruise conflict, but untested here.",
+            "return-to-orbit slerp uses camera.up=(0,1,0) and a 2s delay — after deep-sky free-look, confirm the re-frame is snap-free."
+          ],
+          "liveTestRecipe": "Force a deep-sky arrival (warp until system.type !== 'star-system', or inspect window._getState). Middle-mouse-drag to free-look, release — assert the camera swings then eases back to the anchor with no snap (window._cc.isFreeLooking toggles true→false; watch window._cam.quaternion continuity). Separately, in a star system during a tour, middle-mouse-drag and assert it drives scHead (window._sc.head.yaw changes) NOT window._cc.isFreeLooking (should stay false — the legacy path is suppressed). Reliability: alternate deep-sky and star-system middle-mouse looks 5× each, asserting the correct free-look owner engages each time."
+        },
+        {
+          "name": "CameraChoreographer — authored camera-axis dispatch (ESTABLISHING/linger/pan-ahead)",
+          "mode": "cross",
+          "status": "gap",
+          "suspectedIssues": [
+            "DEAD-WEIGHT/DORMANT: CameraChoreographer's only live driver (FlythroughCamera) is retired and gated behind SHIPS_ENABLED=false (main.js:152). Its linger/pan-ahead framing does not run for supercruise tours — the tour's camera look is entirely scModel.orientation via scHead. So the 'linger on receding subject / pan-ahead' cinematic beats it implements are NOT what the live screensaver does; that framing now lives (if anywhere) in SupercruisePilot HOLD + the shake choreographer. Risk of stale mental model: reviewers may think this authors the tour camera.",
+            "It is still constructed, exposed on window._cameraChoreographer/_cc-adjacent debug hooks (main.js:916, 958-962), and its caches are rebase-tracked every frame — non-zero maintenance cost for a dormant module.",
+            "If SHIPS_ENABLED is ever flipped true (ENRICHED reactivation), this path resurrects with the old legacy framing — would need re-validation against the supercruise camera conventions (it writes look targets for camera.lookAt, not the scHead pose)."
+          ],
+          "liveTestRecipe": "Confirm dormancy: during a normal warp→tour, poll window._cameraChoreographer.currentMode and window._cameraChoreographer.framingState — assert framingState never advances past its idle/TRACKING default and that window._flythrough.active stays false throughout (i.e. the choreographer never ticks). Assert the tour camera look is driven by window._sc.model.orientation (compare camera forward to scModel.nose()) not by window._cameraChoreographer.currentLookAtTarget. Reliability: watch across 3 full tour+auto-warp cycles; assert flythrough.active===false every frame. (To exercise the module at all would require SHIPS_ENABLED=true + a ship target — out of scope for the shipping build.)"
+        }
+      ]
+    },
+    {
+      "cluster": "Selection & targeting",
+      "aspects": [
+        {
+          "name": "trySelect() priority cascade (minimap → in-system body → orbit line → deep-sky particle → background star)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Ordering hazard in HELM hands-on: the minimap-consume block (9370-9409) runs BEFORE the center-override (9417). In HELM the OS cursor is hidden and the mouse position is the flight stick, so if the invisible stick happens to sit over the minimap circle at click time (minimap toggled on via C), the click is swallowed by systemMap.hitTest instead of selecting the center-reticle body — center-select silently fails.",
+            "Step 1b only builds targets for orbitHit.info.type 'planet'/'moon' (9441-9448); a 'star' orbit-line hit (binary star orbit rings) yields target=null and the click falls through to deep-sky/star selection.",
+            "Step 2 particle branch returns without enforcing the single-selection invariant that step 3 enforces (does not deselect _selectedTarget, does not clear warpTarget metadata) — see the dedicated deep-sky aspect."
+          ],
+          "liveTestRecipe": "Enter Sol: window._lab.enterSol(). ORRERY: click a planet's screen center → window._getReticleState().selected shows that planet. Click near the star → star selected (not a bg star). Toggle minimap (press C) then click just outside the minimap circle over empty sky → window._warpTarget.direction becomes non-null (bg-star pick); click INSIDE the circle → selection unchanged (consumed). HELM regression: press M to swap to HELM (confirm document.getElementById('mode-swap-btn').textContent==='HELM'), turn minimap ON (C), then dispatch a real mousedown+mouseup at coords OVER the minimap region while nose is on a planet → confirm the planet is NOT selected (reproduces the swallow); repeat with minimap OFF → planet selected. Assert reproducibility over 5 clicks each."
+        },
+        {
+          "name": "hitTestBodies() — forgiving screen-space body pick with adaptive threshold + kind tie-break",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Rebuilds a fresh _makeTarget object for EVERY body on EVERY call, and the call runs once per frame for hover (8500) plus once per mousemove (9734) plus per click — O(bodies) allocation each frame; fine for small systems but a GC/perf smell in dense systems.",
+            "Uses camera.fov directly for pixelRadius; if a transient FOV change (warp/effects) is in flight the threshold could momentarily mis-size, though selection is guarded off during warp.",
+            "Ships rank 0 (below moons) so a ship exactly overlapping a moon is never selectable while both project to the same pixel — intended, but means some ships are unclickable when parked at a body."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(). Compute a planet's screen coords from window._scene/window._cam projection (or just probe): call window._hitTestBodies(cx,cy) at the planet's screen center → returns {kind:'planet',...}. Nudge 20px off → still hits (adaptive+12 margin). Move 200px off → null. Overlap test: fly/orbit until Earth's moon sits on Earth's disk, window._hitTestBodies at the shared pixel → kind==='planet' (tie-break). Scanner: window._lab.setShipScannerMode(true) with ships present → window._hitTestBodies over a ship returns kind==='ship'."
+        },
+        {
+          "name": "hitTestOrbits() — click an orbit line to select its body",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "Per-vertex screen projection of every orbit line every call is O(totalOrbitVertices); combined with the per-mousemove hover call this is the heaviest selection-path cost in dense systems.",
+            "trySelect uses threshold 6px but hover highlight uses 8px — a line can highlight on hover yet not select on click in the 6-8px band (feels unresponsive).",
+            "info.type 'star' (binary star orbit rings, if present in _orbitLineTargets) is not mapped to a target in trySelect (9441-9448) → clicking a star's orbit ring does nothing / falls through.",
+            "In HELM hands-on the center-override means orbit-line clicks are effectively unreachable (aim is forced to center), so this is ORRERY/free-look-only in practice — not wrong, but undocumented at the call site."
+          ],
+          "liveTestRecipe": "window._lab.enterSol() in ORRERY, ensure orbits visible (press O if needed; window.__ or check system.orbitLines[].mesh.visible). Move cursor onto a planet's orbit ellipse (away from the planet dot): the line should brighten to green + cursor 'pointer'. Click on the line → window._getReticleState().selected == that planet. Repeat at a point 5px from the line (in the 6-8px gap) → hover may highlight but click may miss; note the discrepancy. Try a moon orbit ring → moon selected."
+        },
+        {
+          "name": "selectTarget() soft-select + _selectedTarget state + camera aim + BodyInfo",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "The camera re-center is gated on !cameraController.bypassed (6193); in HELM/autopilot bypassed is true, so selecting a body does NOT re-aim the view there — selection is purely reticle+state in flight, which is intended but means 'select' has visibly different feel across modes.",
+            "_isSameTarget returns false for ships (476-483), so a selected ship never suppresses its own hover reticle (double bracket draw) and can never satisfy aimOnTarget (no contextual ETA) — inconsistent with celestial bodies.",
+            "BodyInfo is shown on every selectTarget, but the minimap/autopilot jump path and commit path set _selectedTarget directly (2749, 6848) bypassing selectTarget — so BodyInfo/sound can be skipped on those selection routes (inconsistent side-effects for 'a selection')."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(). ORRERY: window._lab.selectBody('planet',2) → window._lab.selectedTarget() returns planet 2; BURN button (#commit-burn-btn) display=='block'; window._getReticleState().selected.kind==='planet'; confirm the god's-eye view eased-recenters on the planet. window._lab.selectBody('star',0) → warpTarget cleared (window._warpTarget.direction===null) proving single-selection. window._lab.deselectBody() → selected null, button hidden. In HELM (M): window._lab.selectBody('planet',3) → selected set, button stays hidden (see BURN-button aspect), and confirm _sc.controls / _flightMode re-armed (window._sc.controls host flightMode)."
+        },
+        {
+          "name": "HELM center-reticle click-select (cursor hidden → click selects what the nose points at)",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Empty-space fallthrough: if the nose is NOT on a body, the center cascade continues to deep-sky particle then trySelectWarpTarget(center ray) — so a HELM select-click on empty sky silently selects a BACKGROUND STAR as a warp target (green blink brackets appear mid-flight). Mode-inappropriate surprise; nothing gates star-warp selection out of HELM hands-on.",
+            "Minimap swallow (see cascade aspect): the minimap-consume block runs on the RAW (invisible-stick) coords before the center override, so an on-minimap stick position defeats center-select.",
+            "There is no visible commit affordance for a HELM selection (BURN button suppressed while _scManual) — the player must know to press Space; the center-select gives a reticle but no on-screen 'commit' hint.",
+            "isDrag gate is disabled for the WHOLE hands-on regime; any stray large mouse motion between down/up still selects at center — generally fine, but means you cannot 'cancel' a click by dragging in HELM."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(); press M to HELM (mode-swap-btn text 'HELM'); confirm F not toggled (cursor hidden: canvas.style.cursor==='none'). Fly (W to throttle up, steer with mouse) so a planet crosses screen center → window._getReticleState().hover shows that planet (dim bracket). Dispatch mousedown+mouseup anywhere → window._lab.selectedTarget() == that planet (NOT a star). Then point the nose at empty sky and click → observe window._warpTarget.direction becomes non-null (the empty-space-selects-a-star bug). Repeat select-on-body 5× to confirm reliability. Minimap case as in the cascade recipe."
+        },
+        {
+          "name": "COMMIT BURN button + commitBurn() (with ORRERY→HELM auto-swap for celestial targets)",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "Button is fully suppressed in HELM (_scManual in the burning mask, 6417) — a HELM selection has NO visible commit button; commit is Space-only. Intended per design but means the labelled affordance exists in one mode only.",
+            "commitBurn's ORRERY→HELM swap bypasses _enterFlightInternal (comment 6295-6314) and hand-rolls the regime flip (setScManual+setCameraMode+bypassed+_applyPointerHud); any future step added to _enterFlightInternal won't run on this path (drift risk).",
+            "Ship burns deliberately DON'T swap to HELM (commitBurnSwapsToHelm excludes ship) and stay on quarantined navSubsystem — so a ship BURN behaves differently (ORRERY-only motion) than a planet BURN; if a ship is selected and _scManual were somehow true the burn path diverges.",
+            "The button label uppercases _selectedTarget.name || 'TARGET'; deep-sky/particle warp targets never set _selectedTarget so no button — consistent, but the 'TARGET' fallback is only reachable for a nameless body."
+          ],
+          "liveTestRecipe": "window._lab.enterSol() in ORRERY. window._lab.selectBody('planet',2): assert #commit-burn-btn display 'block' and textContent startsWith 'BURN → '. Click it (or window._lab.commitBurnNow()): assert window._sc.pilot.isActive===true, mode-swap-btn text flips to 'HELM' (auto-swap), _flightMode ASSIST (window._sc.controls host flightMode() === 'assist'), button hidden. Now inject a W keydown or mouse deflection → assert scPilot.stop fires (window._sc.pilot.isActive false, manual takeover). Ship case: window._lab.setShipScannerMode(true); window._lab.selectShip(0); commitBurnNow() → assert mode-swap-btn STAYS 'ORRERY' (no swap) and navSubsystem drives (window._sc.pilot.isActive false)."
+        },
+        {
+          "name": "commitSelection() — universal Space commit (3-stage portal-preview warp OR in-system burn)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Two divergent warp-commit mechanisms coexist: desktop Space uses the 3-stage portal preview (commitSelection); autopilot/deep-sky/touch/mobile use beginWarpTurn (camera slerp then warpEffect.start at 7334-7342). Mobile and touch users therefore never get the preview/align stages — inconsistent commit UX and two code paths to keep in sync.",
+            "_portalLabState is a persistent module state ('survives across warps'); if a warp is aborted or a system swap interrupts mid-'preview'/'aligning', the next Space could land in an unexpected stage. onComplete resets to 'idle' but non-warp interruptions may not.",
+            "commitSelection returns early (no-op) if warpTarget.turning — but the turning path is the beginWarpTurn flow; if both a warpTarget.direction and a turning state ever coexist Space is swallowed.",
+            "A3 (double-click star commits warp) was specced to be an ADDITIONAL commit path to Space but is not implemented (see dedicated aspect) — so Space is the only manual warp commit."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(). Select a bg star: window._autoSelectWarpTarget() (sets window._warpTarget.direction). Press Space (or window._commitSelection()) three times, checking window._getState().labState after each: 'preview' → 'aligning' → warp fires (window._getState().warp===true). Body-burn path: window._lab.selectBody('planet',2); window._commitSelection() → returns true, scPilot.isActive true, no warp. No-op: window._lab.deselectBody(); window._warpTarget.direction=null; window._commitSelection() → returns false, nothing changes. Mobile-divergence check: on a touch build, double-tap → confirm warp starts via warpTarget.turning (window._warpTarget.turning true) NOT via labState progression."
+        },
+        {
+          "name": "In-system targeting brackets (dim hover / bright selected / ghost lock-in) + per-frame aim hover + occlusion",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "hitTestBodies now runs every frame (8500) as the hover source AND still runs on every mousemove (9734) for cursor feedback — double hit-testing per input frame (perf smell, acknowledged as 'no costlier' in spec but the mousemove one is now redundant for hover).",
+            "In HELM free-look with LMB held (look-drag) the cursor still moves and _mouseX/_mouseY still update (9725 unconditional), so the hover follows the cursor during a look-drag — the spec mode-matrix says this row should be 'frozen at last aim'. Minor divergence from the documented contract.",
+            "Ship hover vs selected-ship: _isSameTarget returns false for ships, so a selected ship still gets a dim hover bracket drawn under its bright ship bracket (double draw).",
+            "Occlusion is analytic ray/sphere against _occluders rebuilt each frame; a body only partially occluding (edge grazing) can pop the reticle on/off as positions jitter."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(). ORRERY: move cursor over a planet → window._getReticleState().hover == that planet; window._reticle.getLastFrameState() shows a 'ghost'/'target' draw tightening over ~400ms. window._lab.selectBody('planet',2) → hover on the same body now null (suppression), selected bright. HELM (M, cursor hidden): with no mouse motion, throttle up and steer so a body crosses center → window._getReticleState().hover populates purely from flying (proves center-aim). Occlusion: position camera so planet B is directly behind planet A along the ray → assert B's reticle drops from window._reticle.getLastFrameState(). Regression: in HELM free-look (F), hold LMB and drag → check whether hover freezes (spec) or follows cursor (current)."
+        },
+        {
+          "name": "Contextual ETA (M:SS drop counter gated on aim-on-destination)",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "aimOnTarget can never be true for a ship destination (_isSameTarget returns false for ships) and _resolveSelectedBody excludes ships, so the ETA/drop marker never tracks a ship burn — a ship transit shows no ETA even though focusShip is a real leg.",
+            "targetPos falls back to scControls.target?.mesh?.position when nothing is _selectedTarget (autopilot tour), but _aimOnTarget requires _selectedTarget — so during the system-picked tour (no _selectedTarget) the ETA counter never shows even when the nose is on the tour destination (only player-picked legs get contextual ETA).",
+            "ETA = distance/speed is a straight-line instantaneous estimate ignoring the gravity-well speed cap and decel curve, so it will read optimistically low as you approach and the cap collapses."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(); commit a burn to a planet (window._lab.selectBody('planet',2); window._lab.commitBurnNow()). While flying, aim the nose/cursor ONTO the destination planet → the SupercruiseHud shows an M:SS ETA below the body. Steer the nose AWAY → ETA line disappears entirely (drop label if any stays). Confirm via window._sc.hud state or a screenshot. Tour case: window._lab.beginAutopilotTour() with no _selectedTarget → confirm NO ETA counter appears even when the tour target crosses center (documents the tour gap). Ship case: selectShip+commitBurnNow → confirm ETA never appears."
+        },
+        {
+          "name": "Warp-target selection via background star / galactic feature / external galaxy + green blink brackets + single-selection invariant",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "The resolved star index/data is snapshotted at pick time because starfield regeneration invalidates the index (comment 9492) — correct, but if the sky regenerates between pick and commit the stored navStarData is the only anchor; any bug there silently warps to a direction-generated system instead of the picked star.",
+            "In HELM hands-on this is the unintended fallthrough target for an empty-space click (see HELM select aspect) — the single-selection deselect here will also silently drop a HELM body selection when the player only meant to click.",
+            "Brackets are a shader overlay (setTargetUniforms) entirely separate from the TargetingReticle DOM/canvas brackets — two independent 'bracket' systems with different look/occlusion logic; easy to confuse when auditing."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(). Aim at empty sky and click (ORRERY) → window._warpTarget.direction non-null, .name populated, green brackets blink on screen; if a body was selected first, window._lab.selectedTarget() returns null after (single-selection). Feature/galaxy routing: repeatedly window._autoSelectWarpTarget() and read window._warpTarget.destType until you get 'feature:*' or 'external-galaxy' — confirm .name/.featureData/.galaxyData set. Commit: Space ×3 (3-stage) → warp fires; after emergence window._getState().warp false and a new system loaded. Reliability: loop {autoSelectWarpTarget; commitSelection×3; wait for emergence} 5× asserting each completes."
+        },
+        {
+          "name": "Deep-sky particle warp-target selection (galaxy/globular destinations)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "Does NOT enforce the single-selection invariant: unlike trySelectWarpTarget (9485) and _setWarpTargetFromNavStar (2823), it neither deselects a live _selectedTarget nor calls _clearWarpTargetSelection — so a stale _selectedTarget AND warpTarget.direction can be set simultaneously (commitSelection prefers direction, but the reticle/BURN state is inconsistent).",
+            "Leaves warpTarget.name / destType / navStarData / featureData / galaxyData / starIndex at their PREVIOUS values — if a feature/galaxy was picked earlier, a subsequent particle pick inherits that stale destType, so onPrepareSystem may route the warp to the wrong destination category or the portal seed uses a stale/`dest-${seedCounter}` name.",
+            "No 'warpTarget' sound and no bodyInfo.showWarpTarget label on the particle path (unlike star selection) — the pick is silent/unlabelled.",
+            "Reachability/behavior depends entirely on system.destination.findNearestParticle existing; unclear which destination systems expose it — status of the actual in-game path is unverified."
+          ],
+          "liveTestRecipe": "Reach a deep-sky destination system (warp toward a galaxy/globular feature until window._lab.systemInfo().destinationName is set / system.type !== 'star-system'). First select nothing; click a visible cluster particle → window._warpTarget.direction set, and inspect window._warpTarget.name/destType — confirm whether they are stale from the prior selection (bug) or cleared. Then: window._lab.selectBody(...) is likely unavailable (no planets); instead set warpTarget via a prior star pick, deselect, then particle-pick and check _selectedTarget is still null. Commit Space×3 and verify the emergent system matches the particle direction (not a stale feature). If findNearestParticle is absent, mark path unreachable."
+        },
+        {
+          "name": "autoSelectWarpTarget() — screensaver auto-pick warp target",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "Correctly resets destType/featureData/galaxyData (9548-9550) but does NOT deselect a live _selectedTarget or clear warpTarget.name from a prior pick before overwriting — minor since it overwrites name in all branches, but if getRandomVisibleStar returns null it early-returns leaving whatever was there (beginWarpTurn then aborts, 9606-9610).",
+            "getRandomVisibleStar depends on the forward hemisphere having a visible star; in a sparse inter-arm gap it could return null and the auto-warp aborts (logged warning at 9608) — the screensaver could stall on a starless view."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(). window._autoSelectWarpTarget() → window._warpTarget.direction non-null, .name set, .destType null|'feature:*'|'external-galaxy'. Confirm brackets blink on screen. Screensaver reliability loop: window._lab.stopAutopilot() off; let idle → autopilot tour → auto-warp, OR script {window._autoSelectWarpTarget(); window._beginWarpTurn()} and wait for window._getState().warp then emergence; repeat 5-10× asserting each completes and no '[WARP] No star found' warning. Starless case: rotate camera to a sparse gap (window._cam), call _autoSelectWarpTarget(), check for null/abort."
+        },
+        {
+          "name": "A3 — second click on an already-selected star commits the warp",
+          "mode": "orrery",
+          "status": "gap",
+          "suspectedIssues": [
+            "Spec Thread A A3 (and A2) were approved 'ready to implement' but only Thread B (roll+remap) and A1 (orbit-default-by-mode) landed — A2/A3 are missing, so the only manual warp commit remains Space (double-click-to-warp does not exist).",
+            "AC3's 'single click never warps' is trivially satisfied only because there IS no click-warp at all; the intended second-click affordance is absent, so the spec's stated UX (confirm-by-second-click) is unmet.",
+            "Because A2 is also missing, clicking a planet on the minimap still fires a FULL supercruise burn (focusPlanet→flyTo) rather than the '~0.3s eased view move' the spec describes — a behavioral mismatch, not just a missing feature."
+          ],
+          "liveTestRecipe": "window._lab.enterSol() in ORRERY. Click a background star → window._warpTarget.direction set (selected+blink). Click the EXACT same star again → EXPECTED per spec: warp begins (window._getState().warp or window._warpTarget.turning true). ACTUAL (predicted): still just re-selected, no warp. Confirm no warp fires on the second click, demonstrating the gap. Cross-check A2: click a planet on the minimap → observe a full burn (window._sc.pilot.isActive true) rather than a ~0.3s camera ease, confirming A2 also unimplemented."
+        },
+        {
+          "name": "Minimap click-to-select / jump (systemMap.hitTest routing)",
+          "mode": "orrery",
+          "status": "works",
+          "suspectedIssues": [
+            "Manual-mode minimap planet click calls focusPlanet → a FULL supercruise ASSIST burn (flyTo linger:Infinity), not the spec-A2 '~0.3s eased view move' — the minimap 'select' silently launches a transit (and, since focusPlanet runs at !_scManual, it does NOT auto-swap to HELM here because it goes through focusPlanet directly, not commitBurn — so the player is left flying an ASSIST leg while still labelled ORRERY).",
+            "Only 'star' and 'planet' hit types are handled; moons are not selectable on the minimap (no 'moon' branch) even though they're selectable in 3D.",
+            "The consume-return means a minimap click while an in-system body is soft-selected does not clear _selectedTarget via selectTarget's single-selection path in the autopilot-jump branch (it sets focus rings directly), so reticle/BURN state can lag the minimap focus.",
+            "Uses pointer lock during minimap drag; on release clientX/Y are stale so trySelect uses _mouseDown coords (9921) — correct, but a hazard if _mouseDown drifts."
+          ],
+          "liveTestRecipe": "window._lab.enterSol(); toggle minimap on (C). ORRERY manual: click a planet dot on the minimap → focusPlanet fires (window._sc.pilot.isActive true = a burn starts) and mode-swap-btn STAYS 'ORRERY' (note the ORRERY-labelled ASSIST leg). Confirm A2 mismatch (burn, not 0.3s ease). Autopilot: window._lab.beginAutopilotTour(); click a different planet on the minimap → tour jumps (window._autoNav current stop changes) and travel begins; focus ring updates. Click empty area inside the circle → selection unchanged (consumed, window._warpTarget.direction stays null). Try clicking a moon on the minimap → nothing selected (no moon branch)."
+        }
+      ]
+    },
+    {
+      "cluster": "ShipControls single-door + boot/mode flow",
+      "aspects": [
+        {
+          "name": "ShipControls.flyTo — the single pilot-leg dispatch door",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "In-game callers must remember selfStep:false; the DEFAULT is selfStep:true (headless self-step). A future caller that forgets it would spin flyTo's internal 100000-step loop synchronously on the main thread and desync the live sim. No runtime guard enforces the live convention.",
+            "flyTo overwrites this._arrival each call with no cancel of a prior in-flight Arrival; back-to-back legs (rapid Tab/number jumps) rely on beginLeg resetting pilot phase rather than the Arrival being cleanly retired."
+          ],
+          "liveTestRecipe": "Warp into a star system (window._autoSelectWarpTarget(); window._beginWarpTurn()). During the tour, log window._sc.pilot.phase each second — assert it cycles ALIGN→CRUISE→HOLD and that window._sc.pilot._target.mesh changes at each stop. Press Tab to force-advance and confirm _target flips and phase resets to ALIGN. Reliability: run 5 warp+tour cycles (auto-warp between systems), asserting every leg reaches HOLD (motionComplete) at least once and no leg hangs >60s (watch pilot.phase stuck in ALIGN)."
+        },
+        {
+          "name": "ShipControls.step — safe pilot-before-model ordering + arrival poll",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "The Arrival is polled ONLY when pilot.isActive; a manual-stick leg (scActive via _scManual, pilot idle) never polls, which is correct but means any Arrival left set from a cancelled pilot leg is never resolved/rejected until the next flyTo replaces it (minor leak of a resolved-never Arrival).",
+            "Ordering safety depends on callers never invoking model.update elsewhere; the drive-forced-drop block (main.js:7841-7846) mutates model state (setDrive/setThrottle) BEFORE step() the same tick — correct, but it is an out-of-surface write to the model the door doesn't mediate."
+          ],
+          "liveTestRecipe": "In HELM tour, set window._sc.pilot to active and confirm window._sc.controls.step is the only per-frame stepper: null out cameraController by watching window._cam pose only moves via scHead.applyTo. Measure: sample window._sc.model.position each frame during a CRUISE leg — position delta direction should equal window._sc.model.nose() (translation only along nose). Reliability: over a full tour, assert position is monotonic toward each target during CRUISE and frozen (lerp-settled) during HOLD."
+        },
+        {
+          "name": "ShipControls.engage / disengage vs host _enter/_exitFlightInternal (door asymmetry)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "ShipControls.disengage() is DEAD CODE in the live game — the 'single door' for exit is really the host fn _exitFlightInternal, reached by multiple call sites, not the surface method. The surface's engage/disengage are near-vestigial wrappers (engage used once).",
+            "The claimed symmetry ('both go through this object') holds for flyTo/step/select/steer but NOT for enter/exit: the true door is _enterFlightInternal/_exitFlightInternal at the host layer. A reader trusting ShipControls as the choke point would miss the 4+ direct-to-internal entry paths.",
+            "Because entries are scattered (some via scControls.engage→enterFlight, some inline setScManual(true)+setCameraMode), the invariants enterFlight enforces (freeLook.exit, _applyPointerHud, _enterFlightMode) are re-implemented ad hoc at the inline sites (e.g. commit-burn swap main.js:6310-6313 hand-rolls regime flip + _applyPointerHud without _enterFlightMode)."
+          ],
+          "liveTestRecipe": "In console, wrap: const d=window._sc.controls.disengage.bind(window._sc.controls); window._sc.controls.disengage=(...a)=>{console.log('disengage CALLED');return d(...a)}. Then exercise every exit path — M from HELM, stopFlythrough (Z off), Esc — and confirm 'disengage CALLED' NEVER prints (proving the door is bypassed). Repeat for engage wrapping: confirm it prints ONLY on R-from-ORRERY, not on M-swap-to-HELM or commit-burn-from-ORRERY."
+        },
+        {
+          "name": "ShipControls.selectTarget / deselect — host selection pipeline",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "selectTarget's in-HELM reselect (main.js:6207-6208) calls _beginAlign/_engageAssist directly — a SECOND path into a pilot leg that does NOT go through commitBurn's driveOn/regime handling, so a reselect while dropped-out (drive OFF) could start an Assist leg that crawls at sublight (see the Assist-driveOn concern in the commit-burn aspect).",
+            "deselect is also reached from focusPlanet(-1) flows indirectly; the single-selection invariant relies on _clearWarpTargetSelection being called in selectTarget only, not deselect — a warp pick set after a deselect is not re-cleared."
+          ],
+          "liveTestRecipe": "In ORRERY, click a planet: assert window._getState() selection / document.getElementById('commit-burn-btn') becomes visible with 'BURN → <NAME>'. Press Esc: assert BURN button hides and _selectedTarget clears. In HELM hands-on (cursor hidden), fly the nose onto a planet so the center bracket lights, left-click: assert the SELECTED body is that planet (not a background star) via bodyInfo readout. Reliability: 10 select/deselect cycles across planet/moon/star, asserting BURN label always matches the last-selected body and Esc always clears."
+        },
+        {
+          "name": "ShipControls.steer — virtual-joystick single door + casing fix + deflection sync",
+          "mode": "helm",
+          "status": "works",
+          "suspectedIssues": [
+            "The mousemove handler computes shapeStick TWICE per move — once inline for the _deflected gate (main.js:9687) and again inside scControls.steer (main.js:9700). Correct only because both read the same _scStickTuning with identical lowercased opts; any future divergence (one uppercase) silently re-introduces the ignored-tuning bug the casing fix closed.",
+            "Roll (Q/E) is written to model.turnInput.roll directly in the WASD block (main.js:8139), NOT through the steer door — so the 'single door' covers yaw/pitch only; roll bypasses ShipControls entirely.",
+            "Steering reads ABSOLUTE canvas-center offset (not the shaped value clamp), so window rAF throttle (~1fps on unfocused tab) will freeze deflection updates and make the joystick appear dead in a background tab."
+          ],
+          "liveTestRecipe": "Enter HELM hands-on (R from ORRERY). Move mouse to a corner: read window._sc.model.turnInput (yaw/pitch should be non-zero, opposite sign to _scDeflection) and confirm the HUD deflection dot tracks. Set window._sc.stickTuning.DEADZONE=0.5 and jitter the mouse near center: assert turnInput stays 0 inside the enlarged deadzone AND the gate (_deflected) agrees (no false Assist-cancel). Reliability: sweep the mouse in a circle 20×, asserting |turnInput| never exceeds 1 and dot position matches deflection each sample."
+        },
+        {
+          "name": "_enterFlightInternal — the real HELM-entry door",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "It reads Settings flightControlType and calls _enterFlightMode — so ANY entry (including M-swap and R-engage) with Settings set to Assist/Align AND a body selected will START A PILOT LEG on entry. For M-swap the mode-restructure spec says 'swap stations only, drive untouched' — but this can silently begin an Assist fly-to, which is more than a station swap. Default flightControlType='manual' hides this; a non-default Settings value changes M's behavior.",
+            "It NEVER touches scModel.setDrive. Combined with SupercruiseModel._driveOn defaulting to TRUE (SupercruiseModel.js:47), an entry via this fn with drive still at default-on immediately cruises to MIN_CRUISE (2.0 u/s) on the next tick (see warp HELM cold-open aspect).",
+            "It copies camera.quaternion into model.orientation; if entered while the camera carries a HeadMount look offset, that offset is baked into ship heading. Guarded in practice because prior exit zeroes scHead (main.js:8728-8731) and entry clears freeLook, but no assertion that scHead.yaw/pitch are 0 at copy time."
+          ],
+          "liveTestRecipe": "Set Settings flightControlType to 'assist', select a planet in ORRERY, then press M (swap to HELM): assert window._sc.pilot.isActive becomes TRUE (a leg started) — this reveals M starting an Assist leg. Reset to 'manual' and repeat: assert pilot stays idle. Separately: from ORRERY press R (engage): read window._sc.model.orientation vs window._cam quaternion — assert they match the pre-entry camera pose (no snap) and window._sc.model.throttle===0."
+        },
+        {
+          "name": "_exitFlightInternal — the no-snap HELM→ORRERY exit door",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "The no-snap invariant depends on adoptCurrentPose/cameraInterp.resync matching flightExitAnchor's assumed reconstruction math; if ShipCameraSystem's _applyOrbit formula ever changes, the anchor silently stops cancelling and the 2026-06-25 body-center re-anchor snap returns (the spec's explicit regression risk). No live guard beyond the headless camera test.",
+            "Under floating-origin drift the anchor uses camera.position and the body mesh only for the pivot SCALE (d), so it should be drift-safe — but if worldOrigin was rebased on the SAME frame as exit, findClosestBody()/selected mesh could be on a stale origin, skewing d (only the pivot scale, not pos, per the contract).",
+            "It does NOT setDrive(false); leaving HELM while the drive was ON means re-entering (M back) resumes with drive ON (default), which is arguably intended but not stated."
+          ],
+          "liveTestRecipe": "In HELM, drift the world origin (fly a long CRUISE leg), then read window._cam.position + quaternion, press M (HELM→ORRERY), immediately re-read: assert dPos < 1e-4 scene units and quatDot(before,after) ≈ 1.0 (no snap). Confirm document.getElementById('mode-swap-btn').textContent flips HELM→ORRERY. Reliability: 8 M-swap round-trips (HELM→ORRERY→HELM) at increasing drift, asserting no cumulative camera drift and focusIndex===-1 after each HELM→ORRERY."
+        },
+        {
+          "name": "_doModeSwap — M key / HUD button / Options peer-mode swap",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "modeSwapAction promises lightDrive:false, but ORRERY→HELM calls _enterFlightInternal() which does NOT touch drive AND leaves _driveOn at its prior/default value — if default TRUE, the swap-to-HELM silently starts cruising at MIN_CRUISE, i.e. the swap DOES effectively 'light' motion even though it never calls setDrive. 'Drive untouched' ≠ 'drive off'.",
+            "_enterFlightInternal() (no type) reads Settings flightControlType and can start an Assist/Align leg on M-swap-to-HELM when a body is selected — contradicting the 'swap stations only' framing (see _enterFlightInternal aspect).",
+            "The console log prints target from swap (pre-computed) but the guards can no-op silently (mobile/warp/non-star-system) with no user feedback beyond a console line; the HUD button is hidden in those cases (main.js:8782), so at least the button can't offer a refused swap — but the M KEY can be pressed and no-op quietly."
+          ],
+          "liveTestRecipe": "From ORRERY (mode-swap-btn text 'ORRERY'), press M: assert text flips to 'HELM', _scManual true, and — critically — read window._sc.model.driveOn and speed over 2s to see whether the ship begins moving (drive default-on cruise). Click the HUD button and the Options item and confirm each performs the identical swap (text toggles). Guard test: start a warp (window._beginWarpTurn()) then spam M — assert no mode change (button hidden, _scManual unchanged). Reliability: 10 M presses alternating directions; assert button text and _scManual stay in lockstep every press."
+        },
+        {
+          "name": "BLACK ORRERY/HELM boot picker (_pickBootMode + bootModeAction)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "LEAK on deep-sky first warp: warpRevealSystem's distant-deep-sky branch RETURNS at main.js:6001 BEFORE the _pendingBootMode consume/reset at main.js:6018-6019. autoSelectWarpTarget can (rarely) pick an external galaxy / galactic feature (main.js:9538-9540 'rarely an external galaxy'), so a HELM pick whose first warp lands on deep sky is NOT consumed and leaks into the NEXT star-system arrival — the player watches an ORRERY galaxy, then the following star warp unexpectedly boots into HELM.",
+            "The D-hold debug skip (main.js:2496-2516) spawns Sol via _debugEnterKnownSystem, which bypasses warpRevealSystem entirely — a HELM pick then D-skip never consumes _pendingBootMode; it leaks to the first real warp and 'helm' silently persists.",
+            "_pickBootMode only fires while splashActive; if the intro is somehow re-entered the guard prevents a second pick, but there is no reset of _pendingBootMode on a full reload-less restart (not reachable in normal play)."
+          ],
+          "liveTestRecipe": "Cold load, click HELM on the black splash. To force the deep-sky leak: before the auto-warp, set the warp target to a galaxy (or repeatedly reload until autoSelectWarpTarget picks one — check window._warpTarget.destType==='external-galaxy'), let it warp; after arrival assert you're in ORRERY deep-sky free-look, then read _pendingBootMode still === 'helm' (leaked). Warp again to a star and assert it (wrongly) boots HELM. Normal path: HELM pick → star arrival → assert document.getElementById('mode-swap-btn').textContent==='HELM' and _scManual===true; ORRERY pick → assert autopilot tour runs (window._sc.pilot.isActive) and text 'ORRERY'."
+        },
+        {
+          "name": "warpRevealSystem boot-mode consumption + HELM cold-open drive state",
+          "mode": "helm",
+          "status": "suspect",
+          "suspectedIssues": [
+            "'Drive untouched' cold-open cruises: SupercruiseModel._driveOn defaults TRUE (SupercruiseModel.js:47) and neither _seedScPoseFromCameraIfIdle nor _enterFlightInternal calls setDrive. With drive ON + throttle 0, model.update targets clamp(0, floorEff, cap) = MIN_CRUISE (2.0 u/s) — so the HELM cold-open immediately accelerates forward along the warp-exit nose (toward the star). Whether that is the intended 'arrival glide' or an unexpected auto-cruise is unverified; the spec language ('drive untouched') does not describe motion-on-boot.",
+            "_seedScPoseFromCameraIfIdle() at main.js:6023 is redundant — _enterFlightInternal re-seeds the model from the camera two lines later (main.js:8656-8659). Harmless but signals the seam wasn't fully reconciled.",
+            "The HELM boot skips the ORRERY orbit-line default (_syncOrbitsToMode at main.js:6033 is after the early return), which is correct for HELM (orbits off) but means orbit visibility is set only via setScManual→_syncOrbitsToMode inside _enterFlightInternal — relies on that chain firing."
+          ],
+          "liveTestRecipe": "Cold load, pick HELM, let the first star warp complete. IMMEDIATELY on arrival poll window._sc.model.{driveOn,speed,throttle} every 250ms for 4s: driveOn is expected true (default), throttle 0 — assert whether speed climbs toward 2.0 (confirms auto-cruise cold-open) or stays 0. Confirm window._sc.pilot.isActive===false (no tour leg) and _scManual===true. Reliability: 3 HELM cold-opens (reload each), asserting identical drive/speed behavior each time and that the mode-swap button reads HELM."
+        },
+        {
+          "name": "setScManual — regime flag + side-effect fan-out",
+          "mode": "cross",
+          "status": "works",
+          "suspectedIssues": [
+            "Cursor-by-mode (_applyPointerHud) is NOT fanned out from setScManual — it is applied SEPARATELY at each call site (enter/exit/swap/commit/takeover). So a future path that flips _scManual without also calling _applyPointerHud would desync the cursor/reticle from the regime (the tour W/S takeover explicitly adds it at main.js:9278 precisely because setScManual doesn't).",
+            "_syncOrbitsToMode early-returns if _orbitsUserOverride (main.js:6686) — once the player presses O, orbit visibility no longer follows the regime, which is intended but means a later 'orbits should be off in HELM' expectation silently won't hold after any manual O toggle."
+          ],
+          "liveTestRecipe": "In ORRERY assert orbit LineLoop meshes visible (traverse window._scene for orbit lines / read a system.orbitLines[i].mesh.visible via debug) and button 'ORRERY'. Press M to HELM: assert orbit lines hide and button 'HELM'. Press O (user override) then M twice: assert orbit visibility now stays where the user left it regardless of regime. Confirm every regime path (R engage, M, commit-burn from ORRERY via window._commitSelection(), Z-tour then W takeover) updates the button label."
+        },
+        {
+          "name": "commit-burn ORRERY→HELM auto-swap (select-and-jump Assist leg)",
+          "mode": "cross",
+          "status": "suspect",
+          "suspectedIssues": [
+            "The auto-swap flips regime INLINE (setScManual+setCameraMode+bypassed) and never calls _enterFlightInternal, so it skips _enterFlightMode AND skips clearing a stray freeLook.latch — a commit from ORRERY is fine (no HELM free-look), but the code path diverges from the canonical enter door (invariants hand-rolled).",
+            "Neither commitBurn nor focus*→flyTo calls scModel.setDrive(true). The SupercruisePilot issues throttle (CRUISE_THROTTLE 0.75) but the SPEED depends on model.driveOn: if the player had previously DROPPED OUT (drive OFF) in HELM and then commits/reselects, the Assist leg runs in the sublight regime (cap 0.002 u/s) and effectively never reaches the target — the pilot ALIGN/CRUISE logic assumes supercruise speeds. commitBurnSwapsToHelm only sets regime, not drive; from ORRERY drive is default-on so it usually works, but an in-HELM reselect-while-dropped path (selectTarget→_engageAssist, main.js:6208) has no drive guard at all.",
+            "commitBurnSwapsToHelm excludes ships (correct — focusShip uses navSubsystem) but if _selectedTarget.kind is 'ship' the burn still runs focusShip in ORRERY; the reticle/BURN button suppression relies on _scManual/scPilot which a ship burn doesn't set, so the BURN button visibility during a ship burn depends on flythrough.active (main.js:6417) not the sc flags."
+          ],
+          "liveTestRecipe": "ORRERY: select a planet, call window._commitSelection() (or press Space). Assert _scManual flips true, mode-swap button 'HELM', window._sc.pilot.isActive true, _flightMode==='assist', and window._sc.model.driveOn true (default) so speed rises. Mid-burn, inject W (throttle) or a stick move: assert window._sc.pilot.isActive goes false and _flightMode resets to 'manual' (takeover). Drive-OFF edge: in HELM press R to drop out (driveOn false), select a far planet, Space: assert whether the Assist leg crawls (speed stuck ~0.002) — confirms the missing setDrive(true) on Assist. Reliability: 5 ORRERY select+Space cycles to distinct bodies, asserting each reaches HOLD and each is cancellable by W."
+        }
+      ]
+    }
+  ],
+  "completenessCritic": "Completeness critique of the flight-systems audit. Every point grounded in a file/line I verified this session.\n\n## (a) Flight aspects present in code/docs but NOT covered by any cluster\n\n1. **The SupercruiseHud render surface itself is unaudited.** `src/ui/SupercruiseHud.js` is a whole flight-instrument layer — numeric speed + bidirectional SUBLIGHT/forward log-speed bar (lines 102–120), bidirectional throttle bar with commanded pin (136–160), drop-here tick + SAFE TO DROP/SLOW DOWN labels (129–216), the MODE readout (223–229), the free-look reticle-hide gate `showReticle` (168–176). The audit only ever touches this file for `massLockHint` and `etaVisible`. No aspect verifies the speed/throttle/drop-window readouts render correctly or track the model. It is its own canvas at `zIndex:51` (line 25) separate from the WebGL and TargetingReticle canvases — a third overlay system.\n\n2. **DPR / multi-monitor / resize handling for the flight HUD.** `SupercruiseHud._resize()` recomputes DPR only on the `resize` event (line 32) and clamps `devicePixelRatio` to `min(2, …)` (line 36). Moving the window between a 1× and a 2× monitor does not reliably fire `resize`, so the HUD (and the deflection dot radius `min(innerWidth,innerHeight)*0.25`, line 172) can render at the wrong scale mid-flight. No cluster examines resolution/DPR robustness for any flight overlay.\n\n3. **The fixed-timestep loop + background-throttle is a flight-reliability surface, not just a test caveat.** `createAccumulator({ stepMs: 1000/60, maxStepMs: 100 })` (main.js:6795) driven by `bindToRAF` (8616). The whole sim — model step, pilot, rebasing, tour timers — is rAF-gated and clamped to ≤6 substeps/wake. The audit treats \"keep the window focused, rAF throttles to ~1fps\" as a *measurement caveat* in ~20 recipes, but never as a **finding**: the screensaver's intended runtime (unattended, possibly a background/secondary monitor) is exactly the state where the sim throttles/pauses. See (c) below.\n\n4. **Number-key (1–9) and Tab body-focus in *non-autopilot* ORRERY are un-covered entry points to the uncancellable ORRERY burn.** Keydown 9346–9351 routes `1`–`9` → `focusPlanet(idx)` and 9332–9341 routes Tab/Shift-Tab → `focusPlanet` cycle. `focusPlanet` (6504), `focusStar` (6566), `focusMoon` (6616) all set `cameraController.bypassed=true` + `scControls.flyTo({linger:Infinity})` + `_flightMode=playerBurnMode()` but **never `setScManual(true)` and never swap to HELM**. The audit attributes the \"uncancellable ORRERY burn\" only to *minimap clicks* (A2 / minimap aspects); the keyboard is an equal, unmentioned trigger.\n\n5. **Continuous flight audio does not exist.** `SoundEngine.play()` (SoundEngine.js:107) fires discrete one-shot samples only; there is no throttle/speed-sonified engine bed (grep of main.js `sfx.play` shows only `select`/`autopilotOn/Off`/`warpCharge/Enter/Exit`/`warpTarget`/`warpLockOn`). PLAYER_EXPERIENCE.md:61 marks all SFX as placeholders, so this is intended-placeholder, not a defect — but \"feels like Elite supercruise\" has zero audio dimension today and no cluster notes it.\n\n6. **Stick tuning (deadzone/expo) is runtime-only, never persisted.** `Settings.js` DEFAULTS (10–63) has `flightControlType`, `fov`, `zoomSensitivity`, `autoRotateSpeed`, but **no** stick deadzone/expo/sensitivity. `_scStickTuning` (referenced by the steer aspects) lives only on `window._sc.stickTuning`, so any UAT-tuned feel is lost on reload. The audit's steer aspects never note this asymmetry.\n\n7. **`celestialTimeMultiplier` (Settings.js:37, applied main.js:6956 → 7026/7048) is a flight input no cluster models.** It can be set anywhere from **−10000× to +10000×** (Settings.js:33–37). Every tour/assist leg's steering is pure pursuit reading the *live* body each frame (`steerToward`, aimAssist.js:40–49; no velocity lead). See (c).\n\n## (b) Aspects marked works/unknown that need a NEW named live test\n\n- **HUD readout fidelity test (new):** In HELM, hold W then S and screenshot `SupercruiseHud`: assert the log-speed bar fill, the white commanded-pin triangle (lines 122–127), the green drop tick, and — after R to sublight — the bipolar amber-reverse bar (108–116) all track `window._sc.model.{speed,throttle,driveOn}`. No existing recipe exercises the HUD bars; they are asserted only indirectly via model state.\n- **DPR/resize test (new):** Mid-flight, resize the window (or emulate a DPR change via devtools device toolbar) and assert the center cross stays at `innerWidth/2, innerHeight/2` and `SupercruiseHud.getLastFrameState()` still renders; catches the resize-only-DPR gap (SupercruiseHud.js:32–41).\n- **Pointer-lock-loss test (new):** Start a minimap drag (`_minimapDragging=true`, pointer lock requested at main.js:9801), then press Esc (browser force-exits pointer lock) and release the button. Assert `_minimapDragging` is not stuck. There is **no `pointerlockchange`/`pointerlockerror` handler** (grep 9705/9783/9797/9873/9912 — cleanup only on mouseup), so a browser-initiated lock exit mid-drag has no reset path.\n- **ORRERY-burn cancellation test (new):** In non-autopilot ORRERY press `3` (starts a `focusPlanet` burn), then press Escape and hold W/S. Assert whether the pilot stops. Predicted: it does **not** — Escape→`focusPlanet(-1)` (9331 → 6511–6522) calls `cameraController.viewSystem` but never `scPilot.stop()`, and `cameraController.update` is skipped while `scPilot.isActive` (8157), so the leg holds forever with no clean cancel (only M or Z escapes it).\n- **Legacy free-look (already `unknown`) — keep, but sharpen:** the audit's recipe is fine; just ensure the middle-mouse peek exclusivity (`scHead` vs `ShipCameraSystem.isFreeLooking`) is asserted in a star system, since that is the only realistic double-fire vector.\n\n## (c) Cross-aspect / reliability-under-repetition risks not surfaced\n\n1. **`celestialTimeMultiplier` × pursuit-only pilot = amplified wedge/non-convergence.** At the default 1.0 (realistic) bodies barely move so the audit's convergence analysis holds. But at a saved high multiplier, moons/planets orbit visibly fast (main.js:6956, 7048), while the pilot steers at the body's *current* position with no lead (aimAssist.js:46) and CRUISE has no timeout (per the audit's leg-motion aspect). A fast-orbiting inner moon can outrun the ship's closing rate → CRUISE limit-cycle → tour freeze. The audit's \"55s non-convergence\" and \"wedge\" aspects both omit that Settings can dial this failure in. Negative multipliers (retrograde) also mean the collision-barrier bodies (SupercruiseModel.js:176–189) sweep backward through the pursuit line.\n\n2. **The screensaver's real runtime is a background/occluded tab, where the sim pauses.** `maxStepMs:100` (main.js:6795) + rAF means \"runs unattended\" is really \"runs unattended *only while the foreground/visible tab*.\" Combined with the nav-sequence's wall-clock `setTimeout` retries (already flagged in the tour cluster) this is not just a jank risk — a genuinely backgrounded screensaver advances the sim at ≤~10% speed while wall-clock timers keep firing, maximizing the drill-down-abort and any timer/sim desync. No aspect tests multi-minute backgrounded endurance and return-to-valid-state (portal idle, `warpEffect` idle, no NaN, `_portalLabState==='idle'`).\n\n3. **Ship code is globally gated OFF (`SHIPS_ENABLED=false`, main.js:152), making a cluster of \"suspected issues\" non-live.** `shipSpawner.ships` is empty (spawn gated at 4488), so `hitTestBodies` ship-rank (3936), `focusShip`, `_isSameTarget`-returns-false-for-ships, \"ships excluded from commit-swap,\" and \"ship burn shows no ETA\" are all **latent/dormant**, not shipping-build reachable. The audit repeatedly frames these as live concerns without noting the master gate — reviewers will chase unreachable paths. Worth a single top-level \"ship paths dormant\" annotation.\n\n4. **Three HELM-entry doors + one persisted `wd_cameraMode` landmine compound over sessions.** The camera cluster flags the persisted-FLIGHT landmine and the three inline entry paths separately; the *interaction* is the risk: quit-in-HELM persists `'flight'` (ShipCameraSystem.js:437), and any future divergence among `_enterFlightInternal` / commit-burn-swap (6309) / tour-takeover (9271) that forgets a resync would surface as an intermittent entry snap only after a specific quit/reload/stop sequence — a classic reliability-under-repetition bug the current per-aspect framing won't catch.\n\n5. **World-origin rebase fires ~every frame at CAP_MAX and the scene-child subtract loop cost scales with system richness.** SupercruiseModel CAP_MAX 20000 u/s → ~333 u/step ≫ the 100-u threshold, so `maybeRebase` (WorldOrigin.js) runs the full top-level-child + tracked-vector subtract loop almost every tick during deep-space cruise. The camera cluster notes this but no aspect measures per-frame rebase cost in a dense system across a long cruise (GC/jitter), nor confirms the reticle/HUD projections (which read `camera` post-rebase) stay stable through the once-per-frame origin shift.\n\n## (d) intendedFunction claims that look unsupported by the code\n\n1. **\"Autopilot tour completes a full tour of ALL bodies and re-warps without input\" (contract AC8).** The audit's own leg-motion + completion aspects show completion is *count-gated* and any wedged/null-ref leg stalls forever (CRUISE has no timeout; `_stopsVisited` never reaches `queue.length`). So the intendedFunction as an *invariant* is unsupported — it holds only conditionally. This is the single most important intent-vs-code gap and it recurs across four aspects; it deserves elevation to a cluster-level caveat rather than being distributed.\n\n2. **\"M swaps stations only, drive untouched\" (mode-restructure spec).** `_doModeSwap`→`_enterFlightInternal()` (main.js:8746→8650) reads `settings.get('flightControlType')` and calls `_enterFlightMode`, and never calls `setDrive`. With `SupercruiseModel._driveOn` defaulting true and a non-default `flightControlType`, M-to-HELM can silently *start an Assist leg and begin cruising* — the audit flags this in two aspects, so the spec's \"swap only\" intendedFunction is contradicted by code and should be marked a genuine divergence, not just a suspected issue.\n\n3. **\"Left-click selects the body under the center reticle\" (PLAYER_EXPERIENCE.md:71–73).** True for a body on the nose, but the code's fall-through (trySelect center cascade → `trySelectWarpTarget`, main.js:9465) means an empty-nose click **silently selects a background warp star mid-flight**. The audit's HELM center-select aspect catches this; the PX doc's claim is stated without the empty-space caveat, so the shipped behavior diverges from the documented experience.\n\n## (e) Highest-priority items to verify LIVE first\n\n1. **Star-occlusion CRUISE wedge on the tour** (audit's own HIGH item, SupercruisePilot CRUISE no-timeout) — run ≥6 warp+full-tour cycles and watch for `pilot.phase` stuck CRUISE with `speed≈0` at ~1.05×starRadius. This is the most likely way \"safety\" (the collision barrier, SupercruiseModel.js:176–189) actively breaks the screensaver, and it gates AC8.\n2. **Repeat-warp degradation tail** (audit's warp cluster, root-cause finding #4, mechanism unpinned) — `window.__wd.runWarpEntrySuite({warps:20})` from one `enterSol`, foreground window, assert entry+emergence 20/20 with attention to warps 7–20.\n3. **`celestialTimeMultiplier` stress (new):** set it to ~1000× in Settings, then run a tour to an inner moon and an Assist leg to a fast planet — assert capture still happens or document the amplified non-convergence (main.js:6956; aimAssist.js:46). Cheap to run, isolates a Settings-reachable screensaver break the audit doesn't model.\n4. **Background-tab endurance (new):** start the ORRERY loop, background/minimize the tab ~20 min, return, assert `window._warpEffect` idle, `_portalLabState==='idle'`, `window._autoNav.isActive`, no NaN (`window._cc._diagnostics.getSummary().nanCount===0`). Validates the actual screensaver runtime, not the foreground-only path every current recipe assumes.\n5. **ORRERY focus-burn cancellability (new):** number-key `3` in non-autopilot ORRERY, then Escape + W/S — confirm the leg cannot be cleanly cancelled (focusPlanet 6504; Escape path 9331 has no `scPilot.stop`). A concrete UX/soft-lock the audit under-attributes to minimap only.\n\n**Essential files to understand these gaps:** `/home/ax/projects/well-dipper-supercruise/src/ui/SupercruiseHud.js`; `/home/ax/projects/well-dipper-supercruise/src/ui/Settings.js`; `/home/ax/projects/well-dipper-supercruise/src/main.js` (accumulator 6795 + bindToRAF 8616; keydown 9100–9352; focusPlanet/Star/Moon 6504–6650; SHIPS_ENABLED 152; minimap pointer-lock 9783–9916; celestialDt 6956); `/home/ax/projects/well-dipper-supercruise/src/flight/aimAssist.js` (pure-pursuit steer); `/home/ax/projects/well-dipper-supercruise/src/flight/SupercruiseModel.js` (driveOn default, CAP_MAX, collision barrier); `/home/ax/projects/well-dipper-supercruise/src/audio/SoundEngine.js`; `/home/ax/projects/well-dipper-supercruise/docs/PLAYER_EXPERIENCE.md` (61, 67–77)."
+}
