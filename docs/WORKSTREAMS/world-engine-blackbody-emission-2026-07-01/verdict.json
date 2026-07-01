@@ -1,0 +1,65 @@
+{
+  "workstream": "world-engine-blackbody-emission-2026-07-01",
+  "commit": "de4e577",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "PASS"
+  },
+  "perAC": [
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (headless). tests/worldengine-base-emission-e.test.js 12/12; blackbodyEmission over T {150,300,800,1100,1500,2000,2500,3500}K: visibleLuminance ~0 (2.0e-55 .. 6.5e-8 all <<1e-3) below ~800K, anchored to 1.0 at 1800K, strictly increasing to 875 by 3500K; hue red->orange->white (R maxed, G 0.180->0.801, B 0.050->0.601); all raw+tonemapped channels finite in [0,1]. Independent recompute confirmed every clause. Photopic-weighted Planck integration (emission-e.js visibleLuminance)."
+    },
+    {
+      "id": "AC2",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (headless). writeEmissionESphere over seeds {1,2,7,42}: NON-LOCKED T = tempEq*1.15*wardInsolation(sinLat,obliquity) latitude-only (same-sinLat spread <0.5K; worst |T - re-derivation| <1e-3); LOCKED T = clamp(1100, tempEq*1.15, mix(1100,dayPeak,dot(node,hotspotDir)^redistribution)), all ~4000 nodes finite and within [1100-1e-3, dayPeak+1e-3], argmax within 0.15 rad of hotspotDir and east of substellar, min>=1100. Bounded/finite by construction."
+    },
+    {
+      "id": "AC3",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (headless). Static greps of emission-e.js: zero Math.random()/Date.now(); one alea() at L167 'emissionE:params:'+regime+':'+seed (disjoint namespace); zero carrier.<field> assignments (writer returns own Float32Arrays only; two carrier.height hits are comments). Observed: carrier.height + every #3a field byte-identical before/after; emission fields byte-identical across two runs per (seed,regime); #3a golden bandField hash still -1329854088 (climate-e5 17/17 green). CPU<->GLSL emissiveBlackbody parity <=1e-6 (5 stops + 4 smoothstep breakpoints)."
+    },
+    {
+      "id": "AC4",
+      "result": "PASS",
+      "adversarialVotes": "live (working-Claude via chrome-devtools on :5177)",
+      "evidence": "Live integration (wf_b85b6ed6-219). Hot Jupiter: uThermalStrength=1, uDayTempK=1610K, dayside hotspot RGB(254,160,100) lum 171 (glowing orange), bands read in the penumbra (emission-hotjupiter.png). Jovian: uThermalStrength=0, uDayTempK=0, RGB(127,91,85) lum 101 = reflectance bands only, no glow (emission-jovian.png). The 'hot giant renders cold' bug (day/night thermal enables defaulting false) is fixed: the Hot-Jupiter derivation auto-flips daysideThermalEnabled/nightsideThermalEnabled true."
+    },
+    {
+      "id": "AC5",
+      "result": "PASS",
+      "adversarialVotes": "live (working-Claude via chrome-devtools on :5177)",
+      "evidence": "Live integration. On Hot Jupiter, thermalTempEq sweep {300,900,1400,2200} -> dayTempK {345,1035,1610,2530} (x1.15 exact). Dayside hotspot color: 300K RGB(131,100,85) lum106 ~= reflectance floor (glow ~none at low T, as the AC5 caveat expects), 900K (158,104,87) deep red (R-B 71), 1400K (254,160,100) orange (R-B 154), 2200K (255,253,165) toward yellow-white (G-B 15->87). red->orange->white confirmed. emission-sweep-{300,900,1400,2200}.png."
+    },
+    {
+      "id": "AC6",
+      "result": "PASS",
+      "adversarialVotes": "live (working-Claude via chrome-devtools on :5177)",
+      "evidence": "Live integration. uThermalDir rotated +0.2600 rad (+14.90deg) EAST of uLightDir about the +y spin axis; cross(lightDir,thermalDir).y=+0.225 (sign + = prograde/east), matching hotspotOffset=0.26. uNightTempK=1100 (>0, floor present); nightside renders dim not black, dayside brighter (emission-hotjupiter.png). Note: state.eqSign absent so _eastSign defaults +1 (prograde) = correct for this prograde hot-Jupiter; retrograde-flip path dormant until an eqSign source is wired (future)."
+    },
+    {
+      "id": "AC7",
+      "result": "PASS",
+      "adversarialVotes": "live (working-Claude via chrome-devtools on :5177)",
+      "evidence": "Live integration. emissionEnabled=false drove uThermalStrength 1->0 (GLSL thermal block skipped). emission-OFF Hot Jupiter is PIXEL-FOR-PIXEL equal to the always-cold Jovian: hotspot RGB(127,91,85) lum101 both, full-disk mean lum 74.1 both -> emission is purely additive and OFF exactly restores the reflectance-only #3a path (emission-hotjup-off.png). Incandescent white core with emission ON accepted by design (Max 2026-07-01); bands read in the penumbra. #3a golden hash + climate-e5 suite unchanged."
+    },
+    {
+      "id": "AC8",
+      "result": "PASS",
+      "adversarialVotes": "n/a - UAT is Max-only",
+      "evidence": "Max UAT PASS 2026-07-01 ('Looks good') — judged live in the lab on :5177, Hot Jupiter (locked giant) preset, with the T_eq sweep + emission-register toggle exercised per the handoff script. Reference artifacts: screenshots/emission-hotjupiter.png, emission-jovian.png, emission-sweep-{300,900,1400,2200}.png, emission-hotjup-off.png."
+    }
+  ],
+  "verifiedVia": {
+    "unit": "verify-workstream wf_4a438160-400 (mode full, commit de4e577): AC1-AC3 PASS, 3/3 adversarial each, 12/12 emission-e vitest + 17/17 climate-e5 + independent recompute + static greps.",
+    "integration": "working-Claude live-drive wf_b85b6ed6-219 via chrome-devtools on :5177: AC4-AC7 PASS on objective uniform/state numbers + python planet-ROI pixel stats.",
+    "uat": "Max AC8 UAT PASS 2026-07-01, live in the lab on :5177."
+  },
+  "status": "SHIPPED de4e577 (unit PASS + integration PASS + Max AC8 UAT PASS 2026-07-01). Reshaped increment: the emission RENDER pre-existed as F32/F33; #2 wired the Hot-Jupiter auto-glow + T_eq sweep + master toggle + east-sign, and stood up the tested emission-e data-register (visibleLuminance re-anchored 1800K + Kelvin T-field substrate for #5/#6) + the missing CPU<->GLSL parity test. Branch feature/world-engine-atmosphere NOT pushed; merge->L1 pending Max's call."
+}

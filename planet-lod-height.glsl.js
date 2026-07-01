@@ -1758,7 +1758,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       // every one behind uJetStrength > 0.0 (jets off ⇒ byte-identical F24 statics).
       // Poles: latitude-only keying means bands can never converge or
       // pinch; an explicit darkened polar hood caps them instead (card §6 item 5).
-      vec3 zonalBandCol(vec3 N, vec3 pos){
+      vec3 zonalBandCol(vec3 N, vec3 pos, float wBand, float wShear, float wMush){
         // true latitude from the geometric normal, normalized to -1..1
         float trueLat = asin(clamp(N.y, -1.0, 1.0)) * 0.63661977;   // × 2/π
         // uBandLatPow > 1 widens the equatorial bands and narrows the polar ones
@@ -1785,21 +1785,18 @@ export const HEIGHT_GLSL = /* glsl */ `
         } else {
           r = bandWarpField(pos);
         }
-        // band coordinate: latitude indexes the stripe ladder; the warp displaces it.
-        // The 0.25: latC spans 2 units pole-to-pole and one triangle period = one
-        // zone + one belt = TWO stripes, so span = count/2 periods ⇒ uBandCount
-        // counts VISIBLE stripes pole-to-pole (Jupiter ~14, Cassini map).
-        // 0.5·r scales the (already zero-mean signed) fbm warp displacement.
-        float bandCoord = 0.25 * latC * uBandCount + uBandWarp * 0.5 * r;
-        // F25 shear turbulence + festoons displace the band coordinate. Jets terms
-        // key on uJetStrength ONLY (not uBandStrength) — solo('jets') shows the pure
-        // shear delta (card §5); the gate keeps jets-off byte-identical to F24.
-        if (uJetStrength > 0.0) bandCoord += uJetStrength * jetsDisp(trueLat, latC, pos);
-        // alternating zone/belt LUMINANCE — a smoothstepped triangle wave: flat band
-        // interiors with soft risers that land ON posterize-step transitions, so the
-        // Bayer dither textures the festooned boundary (card §6 items 2+4).
-        float tri = abs(2.0 * fract(bandCoord) - 1.0);
-        float zone = smoothstep(0.30, 0.70, tri);
+        // ── E5 #3a (AC10): the band VALUE is the writer's per-vertex bandNorm (wBand) — NOT an inline
+        // latitude ladder. wBand already encodes the driver-organized jet COUNT (Rhines), the SIGNED
+        // equatorial jet (ice-giant retrograde reads as an equatorial belt, wBand<0.5), per-seed band
+        // phase, and the Ward pole-emphasis (>54° inversion). The old 0.25·latC·uBandCount stripe
+        // ladder is removed — bands are now caused by climate-e5, exercisable by a headless test.
+        // r festoons the edges (jets-on: the rotated warp domain slides adjacent bands opposite ways);
+        // the writer's shear wShear gates the jet turbulence so the filaments ride the REAL shear.
+        float bandVal = wBand + uBandWarp * 0.16 * r;
+        if (uJetStrength > 0.0) bandVal += uJetStrength * jetsDisp(trueLat, latC, pos) * (0.25 + 0.75 * wShear) * 0.35;
+        // alternating zone/belt LUMINANCE — a smoothstep across the writer band value; the soft risers
+        // still land on posterize-step transitions so the Bayer dither textures the festooned boundary.
+        float zone = smoothstep(0.34, 0.66, clamp(bandVal, 0.0, 1.0));
         // 2-tone palette derived from the deck tint (v1 scope cut: no multi-band hue
         // ramp): zones LIGHTEN the tint (fresh condensate), belts DARKEN + WARM it
         // (deeper warmer cloud). uBandContrast collapses both toward the plain tint —
@@ -1811,6 +1808,9 @@ export const HEIGHT_GLSL = /* glsl */ `
         // faint in-band luminance grain from the warp field itself (hue-neutral,
         // contrast-scaled) — the close-deck sheared-flow texture inside one band.
         col *= 1.0 + 0.10 * uBandContrast * r;
+        // E5 #3a depth layer: faint NH₃ "mushball" compositional tint, banded in latitude by wMush (a
+        // DISTINCT channel from the jet field — warmer where NH₃ is depleted). Small, contrast-scaled.
+        col *= 1.0 + vec3(0.05, 0.01, -0.06) * ((wMush - 0.5) * 2.0) * uBandContrast;
         // F27 storm color terms ride on the finished band color (core / collar /
         // companion) — N here is already the storm-swirled direction from the call
         // site, so mask and deflected stripes share one geometry. Count 0 skips the

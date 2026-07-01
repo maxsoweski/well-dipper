@@ -73,6 +73,48 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > BUILD-PLAN, verdict). Commits `634987e` scope → `3ada839` SLICE A → `2fc176a` SLICE B → `8237ac6` lab → `c9f39f9`
 > helpers. **Push HOLD.**
 
+> **▶ WORLD-ENGINE ATMOSPHERE #2 (BLACKBODY EMISSION) — ✅ SHIPPED `de4e577` (Max AC8 UAT-passed 2026-07-01).**
+> Reshaped increment: the emission RENDER already existed as F32/F33 (`emissiveBlackbody` one-curve + east-advected
+> `uThermalDir` hotspot + 1100K floor); the "hot giant renders cold" bug was two enable-flags defaulting false.
+> #2 = (a) WIRED the Hot-Jupiter auto-glow + live `T_eq sweep` slider + master `emission register` toggle +
+> retrograde east-sign, and (b) STOOD UP the tested `src/worldengine/base/emission-e.js` data-register
+> (`visibleLuminance` re-anchored 1800K + Kelvin T-field substrate for #5/#6) + the missing CPU↔GLSL parity test.
+> Unit PASS (AC1-3, 3× adversarial, 12/12 emission-e + 17/17 climate-e5, #3a golden hash intact). Integration PASS
+> (AC4-7 live on :5177: Hot-Jupiter glows / cold giants dark; T_eq sweep red→orange→white; hotspot +14.9° east;
+> emission-OFF pixel-identical to cold Jovian). **AC8 UAT PASSED by Max 2026-07-01** — screenshots in
+> `screenshots/emission-*.png`. Decisions: keep shipped `(tempK/1800)^4` quartic for render; incandescent white
+> core accepted (AC7 re-worded). Seed→driver derivation for the 3 interior scalars deferred to #9 (ATMOSPHERE-PLAN §e).
+> **Atmosphere branch merged → L1 2026-07-01** (both tracks now in one tree; L1 not yet pushed since merge). Workstream
+> `docs/WORKSTREAMS/world-engine-blackbody-emission-2026-07-01/`.
+
+> **▶ WORLD-ENGINE #3a (E5 BANDS/JETS) — ✅ MAX UAT-PASSED `9c80d40` (2026-07-01).** The gas/ice-giant
+> atmosphere writer. Replaces the lab shader's inline `0.25·latC·uBandCount` latitude stripe ladder with the
+> climate-e5 writer's **signed, driver-organized, per-seed** band field: `writeClimateE5Sphere` (src/worldengine/
+> base/climate-e5.js) emits bandField/bandNorm/turbulence/mushball/W across 4 regimes (gas-giant/saturnian/
+> neptunian/sub-neptune); `bakeClimateE5Attributes` samples the SAME bandNorm onto render verts (aBand/aShear/aMush
+> → vBand/vShear/vMush); `zonalBandCol` now colors from `bandVal=wBand` (planet-lod-height.glsl.js:1795), NOT
+> latitude. Physics adversarially verified pre-build (7-agent workflow, all 5 laws CONFIRMED, 7 fixes applied;
+> `DESIGN-physics-3a.md`). **Verdict (`verdict.json`):** unit **PASS** (AC1–AC9; verify-workstream `wf_50abf0da-f1b`
+> re-ran 17/17 headless + 3/3 adversarial each — laws independently recomputed: amplitude law (Neptunian highest
+> |U| at lowest energy) / Ward 54.7° pole-equator inversion / driver-flippable eqSign / shear-gated turbulence /
+> distinct mushball channel / gas-giants-no-relief / determinism + golden bandField hash `-1329854088`).
+> integration **PASS** (AC10–AC12 **live-driven by working-Claude** via chrome-devtools on :5176: GLSL compiles
+> clean; render seam confirmed at source AND live — jets-OFF static **rotation sweep ×0.5→×3.0 ⇒ band count
+> ~2-3→~6-8**, proving the running shader reads the writer field, not the old hard-coded ladder; four archetypes
+> render distinct [band counts **14/11/3/3**, distinct palettes/sizes], two Jovian macroSeeds differ in band phase,
+> close view = churning belts + wispy filaments (writer shear) + mushball tint, cohesive). **AC12(b)** Neptunian
+> equatorial retrograde SIGN is muted-by-design live (ice giants deliberately low-contrast; band params writer-
+> driven read-only) but **unit-verified via AC5**. **✅ AC13 UAT-PASSED (Max, 2026-07-01)** — flew the camera over
+> the giants + re-rolled seeds live; cohesive/varied/distinct, not repetitive-3-band, not noise. **CONDITIONAL
+> follow-on (named, not abandoned): belt-VISIBILITY tuning** — on Jovian ~5-6 strong belts are visible (incl. 2
+> polar hoods) vs the ~14 zero-crossing readout, because only jets that clear the color window `smoothstep(0.34,
+> 0.66, bandNorm)` render as saturated belts (weak mid-amplitude jets sit in the dead-zone). Accepted as "right
+> number generating"; a future session can raise the visible count toward ~7-8 by narrowing the window (e.g.
+> 0.42-0.58) or nudging `uBandContrast` — physics/field unchanged, display knob only. Doc close-out DONE `0f868ec`
+> (FEATURES.md row, Rule 3). Atmosphere branch **merged → L1 2026-07-01**. ⚠ Global active-workstream pointer is
+> on the *separate* `world-engine-magmatism-multiply-2026-07-01` (main-repo build) — left untouched; #3a is
+> parked-pending-Max, not the active build. Resumed from `/tmp/handoff-world-engine-3a-live-2026-07-01.md`.
+>
 > **▶ PLATE/UPLIFT INCREMENT — BUILT + VERIFIED_PENDING_MAX `e07da8c` (2026-06-26).** Option-C increment 1
 > (one-pass plate placement) is built, committed (local-only, **push HOLD**), and verified at the objective
 > layers. NEW `src/worldengine/base/plates.js` (`writePlateUpliftSphere`, three-free): seed N centroids from

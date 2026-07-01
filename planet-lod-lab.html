@@ -162,6 +162,7 @@
     import { driversToTune } from './src/worldengine/base/plates.js';   // Increment 2: pure D-vector→tune mapper — plateProbe() echoes the SAME tune the writer applied (read-only; we do not edit plates.js)
     import { magmaDriversToTune, magmaThermal } from './src/worldengine/base/magmatism.js';   // Increment 4-MULTIPLY: same arm's-length echo for magmaProbe() + preset thermal-drive seeding
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
+    import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -191,9 +192,14 @@
       // SAME value instead of each recomputing acos(dot(...)). Object-space light.
       varying float vSubstellarAngle;
       uniform vec3 uLightDir;       // object-space substellar direction (same uniform the frag reads)
+      // ── #3a E5 gas-giant band/jet writer fields, baked per render vertex (climate-e5.js) ──
+      attribute float aBand;   varying float vBand;    // bandNorm — the writer's driver-organized band value
+      attribute float aShear;  varying float vShear;   // |du/dφ| normalized — gates the jet filament turbulence
+      attribute float aMush;   varying float vMush;    // NH₃ mushball compositional banding (depth layer)
       void main() {
         vPos = position;
         vObjN = normalize(position);
+        vBand = aBand; vShear = aShear; vMush = aMush;
         vSubstellarAngle = acos(clamp(dot(normalize(position), normalize(uLightDir)), -1.0, 1.0));
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
@@ -201,6 +207,12 @@
 
     const fragmentShader = /* glsl */ `
       ${HEIGHT_GLSL}
+      // ── #3a E5 band/jet writer fields (fragment side). Declared here — HEIGHT_GLSL owns the
+      // vPos/vObjN varying set, and zonalBandCol takes these as PARAMS so the shared GLSL (also used
+      // by the river router, which never calls zonalBandCol) is unaffected.
+      varying float vBand;
+      varying float vShear;
+      varying float vMush;
       // ── AC4 river carve — samplerCube of valley depth (rendered from the REAL routed network,
       // planet-lod-rivers.js). Sampled by surface direction; bends the normal into a V-channel +
       // darkens the floor. uRiverCarveStrength == 0 ⇒ untouched (regression-safe). This is the
@@ -627,7 +639,7 @@
             bandN = stormSwirl(normalize(vPos));
             bandPos = bandN * length(vPos);
           }
-          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandPos), bandMask);
+          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandPos, vBand, vShear, vMush), bandMask);
         }
         // ── F25 jets solo visibility — jets key on uJetStrength ALONE: with the deck
         // dark (solo('jets') zeroes uBandStrength), the shear turbulence still reads
@@ -1413,6 +1425,14 @@
     uniforms.uRiverCarvePatchStrength = { value: 0.0 };   // 0 ⇒ patch off (regression-safe default)
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
+    // ── #3a E5 gas-giant band/jet writer attributes (default 0 = flat; refilled by rebakeE5Bands()
+    // on gas presets). Solid presets never read them (uBandStrength gate ⇒ zonalBandCol dead). ──
+    {
+      const _vc = geometry.attributes.position.count;
+      geometry.setAttribute('aBand',  new THREE.BufferAttribute(new Float32Array(_vc), 1));
+      geometry.setAttribute('aShear', new THREE.BufferAttribute(new Float32Array(_vc), 1));
+      geometry.setAttribute('aMush',  new THREE.BufferAttribute(new Float32Array(_vc), 1));
+    }
     const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
     const planet = new THREE.Mesh(geometry, material);
     scene.add(planet);
@@ -2018,6 +2038,8 @@
       bandTint: [0.78,0.62,0.44],  // F24 deck base color (driven: atmosphere.color)
       bandStretch: 2.5,     // F24 vertical domain compression (lab knob)
       bandLatPow: 1.3,      // F24 latitude remap exponent (lab knob)
+      e5Obliquity: 0,       // #3a Ward obliquity override (0 = use regime default; >54.7° ⇒ hot-poles inversion)
+      e5RotationScale: 1.0, // #3a rotation multiplier (sweep to show Rhines band-count response, AC12)
       bandsEnabled: false,   // F24 enable gate
       jetStrength: 0.0,     // F25 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
       jetSpeed: 0.8,        // F25 counter-rotating drift amplitude (driven: 8/rotationHours, clamped 0.2..1.2)
@@ -2082,6 +2104,8 @@
       thermalOcclusion: 0.6,// F33 silicate-cloud occlusion strength (lab knob — darkens the night glow, never brightens)
       daysideThermalEnabled: false,   // F32 enable gate — off collapses uDayTempK onto the night floor at the per-frame writer
       nightsideThermalEnabled: false, // F33 enable gate — off zeroes uNightTempK + occlusion at the per-frame writer (floor fades to black)
+      thermalTempEq: 280.0, // #2 slice-2: live T_eq sweep source (decoupled from the .listen() dayTempK display; drives uDayTempK per-frame)
+      emissionEnabled: true, // #2 slice-2: master emission register gate (AND-ed with the day/night enables at the per-frame uThermalStrength writer)
       limbEnabled: false,    // F34 enable gate — off zeroes uLimbStrength AND hides the F31e haze shell at the per-frame writer
       limbExponent: 3.5,    // F34 fresnel width (driven: thin clear ~3.5 narrow blue line / thick-haze ~1.8 fat halo)
       limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
@@ -2864,6 +2888,34 @@
         thermalState:     useOv('thermal')   ? driverOv.thermal   : undefined,
       };
     }
+    // ── #3a E5 render seam: map the lab gas/ice presets to the four E5 archetypes, then bake the
+    // writer's per-vertex band/shear/mushball fields onto the render mesh. The writer's regime + drivers
+    // (rotation → Rhines count, shell-depth → equatorial-jet sign, obliquity → Ward pole-emphasis) DECIDE
+    // the bands; the shader only expresses them. Solid presets have no map entry → attrs left flat, and
+    // the uBandStrength gate keeps zonalBandCol dead there regardless (exact no-op). ──
+    const E5_PRESET_REGIME = {
+      'Gas giant (Jovian)':         E5_REGIME.GAS_GIANT,
+      'Gas giant (Saturnian)':      E5_REGIME.SATURNIAN,
+      'Ice giant (Neptunian)':      E5_REGIME.NEPTUNIAN,
+      'Sub-Neptune (hazy)':         E5_REGIME.SUB_NEPTUNE,
+      'Hot Jupiter (locked giant)': E5_REGIME.HOT_JUPITER,
+    };
+    function rebakeE5Bands(){
+      const regime = E5_PRESET_REGIME[driverUI.preset];
+      if (!regime) return;                                   // non-gas preset: attrs stay flat (unread)
+      const _fp = DRIVER_PRESETS[driverUI.preset] || {};
+      const drivers = {
+        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),   // Jupiter 9.9h → 1.0
+        radius: (_fp.radiusEarth ?? 1) / 11.2,                                            // Jupiter 11.2 → 1.0
+      };
+      if (state.e5Obliquity > 0) drivers.obliquityDeg = state.e5Obliquity;                // else regime default
+      const pos = geometry.attributes.position;
+      const bake = bakeClimateE5Attributes(pos.array, pos.count, R, { regime, drivers, macroSeed: state.macroSeed | 0 });
+      geometry.attributes.aBand.array.set(bake.aBand);   geometry.attributes.aBand.needsUpdate = true;
+      geometry.attributes.aShear.array.set(bake.aShear); geometry.attributes.aShear.needsUpdate = true;
+      geometry.attributes.aMush.array.set(bake.aMush);   geometry.attributes.aMush.needsUpdate = true;
+      state.e5BandCount = bake.bandCount; state.e5EqSign = bake.eqSign; state.e5PeakU = bake.peakU;  // live-AC probes
+    }
     function applyDrivers(){
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
       // Capture preset-change BEFORE the radius block consumes state._lastPreset, so the bodyDrivers
@@ -3205,6 +3257,8 @@
       // 0.40 <= 0.5 local. Jovian 0.297/0.444, Saturnian 0.187/0.247, Neptunian 0.05/0.
       state.jetShearTurb = 0.05 + 0.25 * _vigor;
       state.jetFestoon = 0.45 * _vigor;
+      // #3a: bake the E5 writer's driver-organized band/jet fields onto the render mesh (gas presets only).
+      rebakeE5Bands();
       // ── F26 latitude weather bands — terrestrial circulation (card F26 §6.5 step 6;
       // derivation HERE per the F11 precedent — core.js untouched). Master gate:
       // weather bands need a SOLID world holding an atmosphere (not-gas AND retained
@@ -3461,6 +3515,12 @@
       // Nightside floor: the Keating/Cowan/Dang near-universal ~1100 K hot-jupiter
       // nightside (F33 card §4) — a constant floor, NOT a fade-to-black.
       state.nightTempK = _hotJup ? 1100 : 0;
+      // #2 slice-2 — THE renders-cold fix: the derivation set strength/temps but never
+      // flipped the two enable gates, so the per-frame uThermalStrength gate zeroed the
+      // glow (hot giant rendered cold). Flip both to match _hotJup.
+      state.daysideThermalEnabled = _hotJup; state.nightsideThermalEnabled = _hotJup;
+      // #2 slice-2 — seed the live T_eq sweep from the driver (decoupled from dayTempK display).
+      state.thermalTempEq = _fp.T_eq ?? 288;
       // The thermal pair REPLACES the whole-globe uEmissive stand-in (its comment
       // names F32 as the owner): T_eq 1400 would derive emissive 0.25 — a uniform
       // unshaped glow UNDER the substellar-shaped one (double-count). The Lava
@@ -4319,6 +4379,10 @@
     fBands.add(state, 'bandLatPow', 0.5, 2.5, 0.05).name('lat power').onChange(applyDrivers);   // F28 belt-snap reads this — re-derive so storms stay on their belts
     fBands.add({ roll(){ state.bandOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fBands.add(state, 'bandsEnabled').name('✓ enabled');
+    // #3a E5 writer drivers (gas presets): rotation sweep → Rhines band count (AC12); obliquity
+    // override → Ward pole-emphasis, cross 54.7° for the hot-poles inversion (AC7/AC12). 0 = regime default.
+    fBands.add(state, 'e5RotationScale', 0.25, 3.0, 0.05).name('E5 rotation ×').onChange(rebakeE5Bands);
+    fBands.add(state, 'e5Obliquity', 0, 100, 1).name('E5 obliquity° (0=auto)').onChange(rebakeE5Bands);
     // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
     // boundary turbulence, one-sided festoons. strength/speed/turb/festoons are driven
     // (h2-he gate / D8 spin / T_eq vigor ramp, .listen()); freq + eq width are lab knobs.
@@ -4430,6 +4494,8 @@
     fThermal.add(state, 'nightTempK', 0, 2000, 10).name('night temp K (driven)').listen();
     fThermal.add(state, 'hotspotOffset', -0.6, 0.6, 0.01).name('hotspot offset (east rad)');
     fThermal.add(state, 'redistribution', 1, 6, 0.1).name('redistribution n');
+    fThermal.add(state, 'thermalTempEq', 300, 2500, 10).name('T_eq sweep (K)');
+    fThermal.add(state, 'emissionEnabled').name('emission register');
     const fThermalNight = fThermal.addFolder('Nightside glow (F33)'); fThermalNight.close();
     fThermalNight.add(state, 'thermalOcclusion', 0, 1, 0.01).name('occlusion strength');
     fThermalNight.add(state, 'nightsideThermalEnabled').name('✓ enabled');
@@ -5193,9 +5259,9 @@
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
-    fSeeds.add(state, 'macroSeed', 0, 10000, 1).name('macro seed').listen().onChange(updateSeedUniforms);
+    fSeeds.add(state, 'macroSeed', 0, 10000, 1).name('macro seed').listen().onChange(() => { updateSeedUniforms(); rebakeE5Bands(); });
     fSeeds.add(state, 'detailSeed', 0, 10000, 1).name('detail seed').listen().onChange(updateSeedUniforms);
-    fSeeds.add({ newPlanet(){ state.macroSeed = (Math.random()*10000)|0; state.detailSeed = (Math.random()*10000)|0; updateSeedUniforms(); } }, 'newPlanet').name('New planet (re-roll both)');
+    fSeeds.add({ newPlanet(){ state.macroSeed = (Math.random()*10000)|0; state.detailSeed = (Math.random()*10000)|0; updateSeedUniforms(); rebakeE5Bands(); } }, 'newPlanet').name('New planet (re-roll both)');
 
     // ▸ Presets — lil-gui save/load round-trips the whole panel as JSON
     const fPresets = guiLeft.addFolder('Presets'); fPresets.close();
@@ -5678,14 +5744,18 @@
       // and the occlusion mask dies with it. BOTH off ⇒ master strength 0 — the
       // GLSL block skips entirely (and every non-thermal preset derives strength 0
       // anyway: the regression contract).
-      thermalObj.copy(lightObj).applyAxisAngle(SPIN_AXIS, state.hotspotOffset);
+      // #2 slice-2 — east-sign: retrograde worlds flip the superrotation shift. state.eqSign
+      // is absent in this lab (only e5EqSign exists), so this defaults to +1 (prograde) — flagged.
+      const _eastSign = Math.sign(state.eqSign || 1) || 1;
+      thermalObj.copy(lightObj).applyAxisAngle(SPIN_AXIS, state.hotspotOffset * _eastSign);
       uniforms.uThermalDir.value.copy(thermalObj);
       const _nightTW = state.nightsideThermalEnabled ? state.nightTempK : 0.0;
       uniforms.uNightTempK.value       = _nightTW;                                                  // ✓ F33 enable gate
+      state.dayTempK = state.thermalTempEq * 1.15;   // #2 slice-2: T_eq sweep drives the dayside glow live (T_eq × 1.15 lift)
       uniforms.uDayTempK.value         = state.daysideThermalEnabled ? state.dayTempK : _nightTW;   // ✓ F32 enable gate
       uniforms.uThermalOcclusion.value = state.nightsideThermalEnabled ? state.thermalOcclusion : 0.0;
       uniforms.uRedistribution.value   = state.redistribution;
-      uniforms.uThermalStrength.value  = (state.daysideThermalEnabled || state.nightsideThermalEnabled) ? state.thermalStrength : 0.0;
+      uniforms.uThermalStrength.value  = (state.emissionEnabled && (state.daysideThermalEnabled || state.nightsideThermalEnabled)) ? state.thermalStrength : 0.0;   // #2 slice-2: master register AND day/night gate
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;

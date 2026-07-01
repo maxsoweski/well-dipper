@@ -1,0 +1,114 @@
+{
+  "workstream": "world-engine-blackbody-emission-2026-07-01",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "shipped",
+  "statusDetail": "VERIFIED_PENDING_MAX de4e577 (2026-07-01) — unit PASS (AC1-AC3, verify-workstream wf_4a438160-400, 3/3 adversarial each, 12/12 emission-e vitest + 17/17 climate-e5, #3a golden hash intact, CPU<->GLSL parity <=1e-6) + integration PASS (AC4-AC7 live-driven by working-Claude via chrome-devtools on :5177, wf_b85b6ed6-219: Hot-Jupiter uThermalStrength=1 dayTempK=1610K glows / Jovian strength 0 reflectance-only; T_eq sweep dayside red->orange->white; hotspot +14.9deg east of substellar; emission-OFF pixel-identical to always-cold Jovian). AC8 UAT = Max's gate, PENDING (never auto-passed). verdict.json written. Push HOLD (campaign-wide, branch feature/world-engine-atmosphere).",
+  "reshapeNote": "RESHAPED 2026-07-01 after the model-verify+plan workflow (wf_6a8a85d8-08b) discovered the emission RENDER machinery already exists in the lab as the F32 dayside-hotspot + F33 nightside-glow cards (currently lab-status partial): emissiveBlackbody one-curve ramp (GLSL planet-lod-height.glsl.js:734 + CPU twin planet-lod-lab-core.js:127), east-advected uThermalDir hotspot (hotspotOffset 0.26 rad ~15deg, calibrated WASP-43b/HD189733b), uNightTempK ~1100K floor, gated on uThermalStrength. The 'hot giant renders cold' bug is that daysideThermalEnabled/nightsideThermalEnabled default false (planet-lod-lab.html:2096-2097) and the Hot-Jupiter derivation (3467-3475) sets thermalStrength/dayTempK/nightTempK but never flips the enables on. So #2 = (a) WIRE the hot-Jupiter auto-glow + live T_eq sweep + master toggle + retrograde east-sign flip, and (b) STAND UP the tested reusable data-register src/worldengine/base/emission-e.js (Planck->RGB + visibleLuminance re-anchored to ~1800K NOT 6500K + Kelvin T-field substrate for #5/#6) + the missing CPU<->GLSL parity test. Decisions (Max 2026-07-01): keep the shipped (tempK/1800)^4 quartic for the RENDER brightness (visibleLuminance is the data-layer AC1 physical reference only — unifying would force re-UAT of shipped F41 magma); accept the incandescent white substellar core (AC7 re-worded; no shader brightness cap). Full plan: BUILD-PLAN.md.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "PLANCK -> RGB COLOR LAW: given an absolute temperature T (Kelvin), the emission module returns a physically-plausible blackbody color on the Planck locus — visible-band emission is ~zero for cold T (peak in the IR), and as T rises the color moves deep-red -> orange -> white with monotonically increasing visible luminance.",
+      "verifyVia": {
+        "input": "Call the Planck->RGB / spectral-radiance function over a T sweep {150, 300, 800, 1100, 1500, 2000, 2500, 3500} K; read the returned RGB + a visible-luminance scalar.",
+        "observable": "visible luminance is ~0 (below a small epsilon) for T <= ~800 K and strictly increasing for T above the visible threshold; hue progresses red -> orange -> white (R dominates first, G then B rise) with rising T; all outputs finite and in-gamut [0,1] after tonemap."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "ABSOLUTE T-FIELD CONSTRUCTION: the writer builds a per-node Kelvin temperature field T(phi, theta_substellar) from T_eq (D1) scaled by an internal-heat factor and the #3a Ward W(phi) insolation shape, plus — for tidally-locked bodies — a substellar dayside term and a nightside floor. For a NON-locked giant the field is the annual-mean latitudinal shape (no substellar hotspot); for a LOCKED body it peaks near the substellar point and never drops below the floor.",
+      "verifyVia": {
+        "input": "Run the emission writer for a locked hot-Jupiter driver bundle and for a non-locked Jovian bundle across seeds {1,2,7,42}; read the T field per node + the substellar geometry.",
+        "observable": "T finite and bounded for every node/seed; locked case: max(T) occurs within a small angular radius of the substellar point AND min(T) >= nightsideFloorK (~1100 K); non-locked case: T is a function of latitude only (no longitudinal hotspot), matching an arm's-length re-derivation from T_eq * heatFactor * W(phi) within 1e-3."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3",
+      "statement": "INVARIANTS + DETERMINISM: the emission writer emits ONLY its own emission channel(s) — it never mutates carrier.height/relief NOR the #3a reflectance/band/turbulence/mushball fields; it contains no Math.random()/Date.now() call form (all randomness alea-seeded off macroSeed, in a disjoint namespace); run twice on the same carrier with the same (regime, macroSeed, drivers) it yields byte-identical emission fields.",
+      "verifyVia": {
+        "input": "Snapshot carrier.height + all #3a fields before the emission writer and compare after; static-grep the emission module for /Math\\.random\\s*\\(|Date\\.now\\s*\\(/ (expect zero) and for its alea namespace prefix; run the writer twice per (regime, seed) and compare emission Float32Arrays; re-run the #3a golden bandField hash.",
+        "observable": "carrier.height + every #3a field byte-identical before/after; zero RNG/clock matches; emission fields byte-identical across the two runs for every (seed, regime); #3a golden bandField hash still -1329854088."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4",
+      "statement": "HOT GLOWS / COLD STAYS DARK: in the lab, the Hot-Jupiter preset renders a visible thermal glow composited additively over the #3a bands (fixing 'hot giant renders cold'), while a cold giant (Jovian) renders no visible added emission (reflectance-only).",
+      "verifyVia": {
+        "input": "Open planet-lod-lab.html in the browser; select Hot Jupiter (locked giant) and screenshot; select Gas giant (Jovian) and screenshot; sample emissive contribution in each.",
+        "observable": "hot-Jupiter shows emissive brightness clearly above zero on the dayside (glows), bands still discernible underneath; Jovian shows ~zero added emission (its look is unchanged from the pre-#2 reflectance render)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5",
+      "statement": "TEMPERATURE -> COLOR SWEEP IS VISIBLE: sweeping the lab T_eq slider up on a giant makes the glow appear and shift red -> orange -> white, tracking the Planck locus.",
+      "verifyVia": {
+        "input": "In the lab, on a giant preset, sweep the T_eq slider across low/mid/high values and screenshot each.",
+        "observable": "at low T_eq no visible glow; increasing T_eq introduces a deep-red glow that brightens and whitens; the on-screen color shift matches the AC1 locus ordering."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6",
+      "statement": "SUBSTELLAR HOTSPOT OFFSET EASTWARD + NIGHTSIDE FLOOR: on a tidally-locked hot-Jupiter, the brightest emission is a dayside hotspot offset EASTWARD of the substellar longitude (advected by the prograde equatorial jet), and the nightside still faintly glows (~1100 K floor), not black.",
+      "verifyVia": {
+        "input": "In the lab, render a locked hot-Jupiter with the substellar point at a known longitude; locate the emission-brightness centroid; sample nightside (anti-substellar) emission.",
+        "observable": "the hotspot brightness centroid longitude is EAST of the substellar longitude by a measurable, non-zero offset; anti-substellar (nightside) emission luminance is > 0 but < dayside peak (floor holds, not pure black)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7",
+      "statement": "ADDITIVE COMPOSITOR + #3a REGRESSION (incandescent-core resolution, Max 2026-07-01): emission composites ADDITIVELY over the #3a reflectance; bands read in the glow PENUMBRA while the substellar core is legitimately overwhelmed to incandescent white (a truly hot hotspot outshines reflectance — no brightness cap). The REGRESSION GATE: with the emission register gated OFF (or on any cold body) the lab render is byte-identical to the pre-#2 #3a reflectance path — #2 adds/wires a register, it never alters the reflectance pipeline.",
+      "verifyVia": {
+        "input": "Toggle the 'emission register' master off in the lab and pixel-diff the render against the #3a baseline (Jovian/Saturnian/Neptunian); with it on, confirm #3a bands remain discernible in the penumbra around the hot-Jupiter hotspot (core may saturate to white).",
+        "observable": "emission-OFF render matches the pre-#2 #3a render for every giant preset (no reflectance drift — the true regression gate); with emission ON the underlying bands are discernible in the glow penumbra (the substellar core saturating to white is accepted-by-design, not a failure)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8",
+      "statement": "HOLISTIC (Max's gate, never auto-PASSed): the hot-Jupiter reads as a hot, self-luminous world — glowing, with an eastward-offset substellar hotspot, cohesive with the underlying bands — not a cold striped ball wearing a color filter.",
+      "verifyVia": {
+        "input": "Max views the Hot-Jupiter preset in the lab (day/night rotation, a T_eq sweep, a re-roll or two) and judges the whole experience.",
+        "observable": "Max confirms it reads as a genuinely hot, self-luminous giant with a believable hotspot and cohesive bands. Deferred-to-Max; the verify workflow never PASSes this AC."
+      },
+      "layer": "uat",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "#3a climate-e5 fields: the Ward annual-mean insolation W(phi,epsilon) (latitudinal T-shape) and the reflectance/bandNorm the emission composites over (src/worldengine/base/climate-e5.js)",
+      "D1 tempEq (equilibrium temperature, Kelvin) — the magnitude of the T-field. LAB: sourced from the regime preset + a lab slider (planet-lod-lab.html DRIVER_PRESETS, existing tempEq ~L2308). GAME (#9): real per-body D1 from PhysicsEngine.equilibriumTemperature",
+      "D7 tidal-lock state — selects locked (substellar hotspot geometry) vs non-locked (annual-mean latitudinal) emission mode",
+      "#3a equatorial jet direction (eqSign / signed u) — sets the EASTWARD advection direction of the substellar hotspot offset",
+      "internalHeat — the internal-heat factor raising effective emitting temperature (v1 = archetype constant per climate-e5.js DRIVER_BUNDLES; seed-variation deferred to the #9 gap per ATMOSPHERE-PLAN §e)",
+      "macroSeed — alea seeded off it for any per-seed emission jitter; disjoint namespace from plates/shellRelief/climateE5 (plates.js determinism discipline)",
+      "Lab render/compositor seam: planet-lod-height.glsl.js (zonalBandCol reflectance) + planet-lod-uniforms.js — where the additive emission term is blended over reflectance"
+    ],
+    "outputs": [
+      "A reusable EMISSION REGISTER: per-node emission RGB + intensity (the blackbody-locus color from Planck(T)) as its own channel, additive over reflectance — the compositor reused by #4 (aurora/lightning/airglow), #5 (brown-dwarf self-luminous), #6 (lava rock-vapour glow)",
+      "An absolute Kelvin temperature field T(phi, theta_substellar) — substrate reserved for #5/#6 (self-luminous / rock-vapour) and any later thermal read",
+      "The substellar-hotspot mask + eastward offset (hot-Jupiter identity tell) — render into the Hot-Jupiter (and hot giant) lab presets; albedo/emissive only, NO relief write",
+      "Planck->RGB + T-field construction functions covered by a new emission-e vitest harness (determinism + golden byte snapshot, mirroring climate-e5)"
+    ],
+    "mustStayWorking": [
+      "#3a bands/jets render UNCHANGED when emission is off / for cold bodies — the golden bandField hash (-1329854088) and every climate-e5 field stay byte-identical; #2 adds a register, never edits the reflectance path",
+      "The lab dispatch/build pipeline: buildIrregularSphere -> makeSphereField -> climate-e5 writer -> (new) emission writer -> shader; solid/terrestrial presets keep emission gated to 0 (exact no-op)",
+      "Gas-giants-have-no-relief invariant: the emission writer never writes carrier.height / relief channels (verify.js regime constraint)",
+      "Existing base-writer tests (plates, shellRelief, climate-e5 AC1-AC9) stay green; the new emission tests are additive",
+      "The shipped Earthlike plate dispatch (isEarthlikePlatePath / writePlates) and icy/despun shellRelief path — emission must not alter solid-world dispatch or rendering"
+    ]
+  }
+}

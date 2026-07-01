@@ -1,0 +1,161 @@
+{
+  "workstream": "world-engine-e5-bands-jets-2026-06-30",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "UAT-PASSED 2026-07-01 (Max, live in lab :5176 — flew camera over the giants + re-rolled seeds; cohesive/varied/distinct, not repetitive-3-band, not noise). CONDITIONAL: belt-VISIBILITY tuning (how many mid-amplitude jets clear the smoothstep 0.34/0.66 dead-zone into saturated belts; ~5-6 visible incl. polar hoods vs ~14 zero-crossing readout on Jovian) deferred to a future session — the physics/field is correct, only the display threshold is a knob. Was VERIFIED_PENDING_MAX 9c80d40 — unit PASS (AC1-AC9, 9/9, verify-workstream wf_50abf0da-f1b re-ran 17/17 headless + 3/3 adversarial each; every physics law independently recomputed: amplitude law => Neptunian highest |U| at lowest energy, Ward insolation pole/equator sign flip at 54.7deg, driver-flippable equatorial jet sign, shear-gated turbulence, distinct mushball channel, gas-giants-no-relief, determinism + golden bandField hash -1329854088). integration PASS (AC10-AC12 live-driven by working-Claude via chrome-devtools on :5176: render seam confirmed at source [zonalBandCol bandVal=wBand, old 0.25*latC*uBandCount ladder gone] AND live [jets-off static rotation sweep x0.5->x3.0 => band count ~2-3 -> ~6-8, proving the shader reads the writer field]; four archetypes render distinct [band counts 14/11/3/3, distinct palettes/sizes], two Jovian seeds differ in phase, close view = churning filaments+mushball cohesive). AC12(b) Neptunian equatorial retrograde SIGN muted-by-design live (ice giants low-contrast; writer-driven read-only) but UNIT-verified via AC5. AC13 UAT = Max's gate alone, PENDING (never auto-passed). Integration-green necessary-not-sufficient. verdict.json written. Push HOLD (campaign-wide, branch feature/world-engine-atmosphere).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "DETERMINISM + NO-RNG STATIC SOURCE: climate-e5.js contains no Math.random()/Date.now() call form; all randomness is alea seeded off macroSeed; writeClimateE5Sphere run twice on the same fresh carrier with the same (regime, macroSeed, drivers) yields byte-identical fields, for every archetype.",
+      "verifyVia": {
+        "input": "Static-grep climate-e5.js for /Math\\.random\\s*\\(|Date\\.now\\s*\\(/ (expect zero); run writeClimateE5Sphere(makeSphereField(SHARED_MESH), drivers, {regime, macroSeed:s}) TWICE for s in {1,2,7,42} x regime in {gas-giant, saturnian, neptunian, sub-neptune} and compare the returned Float32Array band/turbulence/mushball fields.",
+        "observable": "Zero RNG/clock matches; every alea instance is constructed from a macroSeed-derived string; Float32Array equality across the two runs for every (s, regime); a fixed reference (regime:gas-giant, macroSeed:1) matches a checked-in golden byte snapshot."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "BOUNDEDNESS: the signed jet field u(lat), the shear-gated turbulence field, and the mushball compositional field are all finite and within documented analytic bounds for every archetype x seed x driver draw (no NaN/Inf, no runaway amplitude).",
+      "verifyVia": {
+        "input": "Over all nodes for every (regime, macroSeed in {1,2,7,42}, drivers spanning the rotation/obliquity/energy ranges), read u(lat), turbulence, mushball fields.",
+        "observable": "Number.isFinite(v) for every node of every field; |u(lat)| <= the per-regime U bound implied by the amplitude law; turbulence and mushball values within their documented [min,max]."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3",
+      "statement": "ZONAL STRUCTURE BAR (signal must PASS): the jet field is a genuine u(lat) — its value is explained by latitude (+ per-body driver scalars), matching an arm's-length re-derivation of the profile from the published Rhines/amplitude coefficients at every node's latitude.",
+      "verifyVia": {
+        "input": "On the carrier, per regime, rebuild the u(lat) profile independently from the documented harmonic/Rhines coefficients and drivers; compute the max per-node residual between writer field and the re-derivation.",
+        "observable": "max |writerField[i] - refProfile(lat[i], drivers)| < 1e-4 for every node of every regime (the field is a true function of latitude, not of position)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4",
+      "statement": "LONGITUDE CONTROL (must FAIL) + NOT-3-REPEATING-BANDS: a longitude-dependent control field provably FAILS the zonality bar (anti-noise falsifier), AND the band field is NOT a fixed 3-band pattern — the Rhines-derived band COUNT varies with the rotation driver.",
+      "verifyVia": {
+        "input": "Feed a longitude-perturbed field through the AC3 zonality check; and sample the band count (sign changes of the profile) for a slow-rotator driver vs a fast-rotator driver, same regime/seed.",
+        "observable": "the longitude-dependent control's residual >> 1e-4 (fails AC3's bar); AND bandCount(fast rotation) > bandCount(slow rotation), strictly monotonic across at least 3 rotation values, landing a Jupiter-plausible ~dozen bands at Jupiter's rotation."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5",
+      "statement": "EQUATORIAL-JET SIGN IS REGIME-CORRECT: the signed equatorial jet is PROGRADE (super-rotating) for Jovian/Saturnian and RETROGRADE for Neptunian/ice-giant, decided by drivers not hard-coded per preset.",
+      "verifyVia": {
+        "input": "Read sign(u) at the equator (lat=0) of the writer's signed jet field for regime in {gas-giant, saturnian, neptunian}, driven by their respective driver bundles.",
+        "observable": "sign(u_equator) > 0 for gas-giant and saturnian; sign(u_equator) < 0 for neptunian; flipping the ice-giant driver toward a Jovian config flips the sign (proves it's driver-organized, not a per-regime constant)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC6",
+      "statement": "AMPLITUDE LAW FIXES THE NEPTUNE WIND PARADOX: jet speed |U| follows the unified U=f(energy-input/dissipation, shell-depth) law, so the Neptunian config produces the HIGHEST jet amplitude despite the LOWEST energy input — amplitude is not monotonic in insolation.",
+      "verifyVia": {
+        "input": "Evaluate peak |U| from the amplitude law for the Jovian, Saturnian, and Neptunian driver bundles (their real energy-input/dissipation and shell-depth scalars).",
+        "observable": "peak|U|(neptunian) > peak|U|(jovian) even though energyInput(neptunian) < energyInput(jovian); and a naive insolation-only amplitude (control) yields the WRONG ordering (neptunian lowest) — confirming the shell-depth/dissipation term is load-bearing."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC7",
+      "statement": "WARD OBLIQUITY INSOLATION + >54deg INVERSION: the annual-mean insolation field W(phi, epsilon) drives band structure, and for obliquity epsilon > 54deg the pole-to-equator insolation gradient INVERTS (hot poles / cold equator) — the Uranus archetype tell.",
+      "verifyVia": {
+        "input": "Compute the sign of the annual-mean pole-minus-equator insolation W(pole)-W(equator) for a sweep of obliquity epsilon in {0, 30, 54, 60, 90} degrees; and inspect whether the derived band structure inverts across the threshold.",
+        "observable": "W(pole)-W(equator) < 0 for epsilon < 54deg and > 0 for epsilon > 54deg (sign flips crossing ~54deg); the high-obliquity band field shows the hot-poles/cold-equator inversion the low-obliquity field does not."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC8",
+      "statement": "DEPTH LAYERS ARE PRESENT AS DATA: (i) a filamentary turbulence texture is SHEAR-GATED — its amplitude tracks the local jet shear |du/dphi| and vanishes where shear is zero; (ii) a mushball ammonia compositional banding field is emitted as its own channel.",
+      "verifyVia": {
+        "input": "Correlate the turbulence field magnitude against |du/dphi| across latitude; evaluate turbulence at a zero-shear latitude; confirm the mushball field exists and varies in latitude bands independent of albedo.",
+        "observable": "corr(|turbulence|, |du/dphi|) >= 0.5; turbulence ~ 0 at zero-shear latitudes (gate holds); the mushball field is finite, banded in latitude, and returned as a distinct channel (not folded into u(lat))."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC9",
+      "statement": "GAS GIANTS HAVE NO RELIEF: the E5 writer never mutates carrier.height (or any relief channel) for any archetype x seed x driver draw.",
+      "verifyVia": {
+        "input": "Snapshot carrier.height before writeClimateE5Sphere and compare after, for every (regime, seed, drivers); static-check the writer body for writes to height/relief channels.",
+        "observable": "carrier.height byte-identical before/after for every case; no assignment to carrier.height or other relief channels anywhere in the writer."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC10",
+      "statement": "BANDS/JETS REACH RENDER FROM THE WRITER: the lab shader consumes the writer's band/jet field instead of computing the harmonic/sin(lat) sum inline — the gas-giant presets render bands sourced from climate-e5, not from the GLSL formula.",
+      "verifyVia": {
+        "input": "Open planet-lod-lab.html in the browser on the Gas giant (Jovian) preset; inspect that the shader band value is fed from the writer's bandField/bandNorm (uniform/texture) rather than the inline zonalBandCol/jetsDisp harmonic sum; grep the shader for the removed inline sin(lat) band computation.",
+        "observable": "the rendered gas giant shows bands; the shader reads the writer field (inline harmonic band sum for the band VALUE is removed/replaced by the piped field); toggling the writer output changes the render."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC11",
+      "statement": "DISTINCT PER WORLD: Jovian, Saturnian, Neptunian, and hazy sub-Neptune render as visibly different band structures, and two different seeds of the same archetype differ — no single shape recolored.",
+      "verifyVia": {
+        "input": "In the lab, render Gas giant (Jovian), Gas giant (Saturnian), Ice giant (Neptunian -> sub-neptune bands), and Sub-Neptune (hazy); then re-roll two macroSeeds of the Jovian preset; screenshot each.",
+        "observable": "the four archetypes show distinct band counts/contrast/sign; the two Jovian seeds show different band placement/phase; sub-Neptune reads muted (haze mute) vs the crisp Jovian bands, and does NOT come out Jupiter-sized (radius-key collision avoided)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC12",
+      "statement": "DRIVER-ORGANIZATION IS VISIBLE: faster rotation renders more bands; the ice-giant equatorial jet reads retrograde; the high-obliquity (Uranus) config renders the hot-poles/cold-equator inversion; the two depth layers (filament texture + mushball banding) read as cohesive-not-noise.",
+      "verifyVia": {
+        "input": "In the lab, sweep the rotation driver on a giant and screenshot; render the ice-giant and check equatorial-belt direction cue; render a >54deg-obliquity giant; view a giant close enough to see filament/mushball texture.",
+        "observable": "band count visibly increases with rotation; ice-giant equatorial belt reads opposite-sign to Jovian; the high-obliquity world shows pole-emphasized (inverted) banding; bands read as churning belts with wispy filaments and ammonia banding, not flat stripes and not static."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC13",
+      "statement": "HOLISTIC (Max's gate, never auto-PASSed): the gas-giant set reads as a cohesive whole with variety and depth of atmospheric phenomena — not the same pattern repeating across 3 bands, and not random noise — replicating the observed/theorized giant-atmosphere look.",
+      "verifyVia": {
+        "input": "Max views the Jovian, Saturnian, Neptunian, and hazy sub-Neptune presets in the lab (and a couple of re-rolls) and judges the whole experience.",
+        "observable": "Max confirms the giants feel like distinct, physically-caused weather systems with depth/layers — cohesive, varied, neither repetitive-3-band nor noise. Deferred-to-Max; the verify workflow never PASSes this AC."
+      },
+      "layer": "uat",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "F3 sphere carrier from makeSphereField(buildIrregularSphere(...)) — unit-direction verts where vert.y = sin(lat) (src/worldengine/base/sphereField.js)",
+      "The already-completed u(lat) LIFT in src/worldengine/base/climate-e5.js (HARMONICS/zonalBandProfile/writeClimateE5Sphere) — #3a extends this writer from faithful-unsigned-seed-independent to signed/driver-organized/per-seed",
+      "E6 driver bundle per body: rotation rate (Rhines beta / band count), obliquity epsilon (Ward annual-mean insolation + >54deg inversion), energy-input & dissipation + shell-depth (unified amplitude law), T_eq (sub-Neptune haze-temp bell / haze mute)",
+      "macroSeed — alea seeded off it for per-seed band phase/amplitude jitter (plates.js determinism discipline; disjoint namespace from plates/shellRelief)",
+      "Lab shader band seam in planet-lod-lab.html — uBandStrength/uJetStrength/zonalBandCol/jetsDisp/uBandLatPow, currently computing the band value inline from a sin(lat) harmonic sum"
+    ],
+    "outputs": [
+      "Signed zonal jet field u(lat) per carrier node (replaces the shader's inline harmonic sum) + bandNorm [0,1] render-parity value",
+      "Shear-gated filamentary turbulence field and mushball ammonia compositional-banding field (the two depth channels) → shader albedo/texture",
+      "Annual-mean Ward insolation field W(phi,epsilon) and the derived band-structure organization (incl. >54deg inversion) → render, and reserved as substrate for downstream atmosphere increments (#2/#3b/#5..#9)",
+      "Diagnostics (bandCount, peak|U|, equatorial sign, jetCount) consumed by the extended climate-e5 vitest harness",
+      "Render into the lab gas-giant/ice-giant/sub-neptune presets (albedo/color; NO relief write)"
+    ],
+    "mustStayWorking": [
+      "The shipped Earthlike plate dispatch path (isEarthlikePlatePath / writePlates) and the icy/despun shellRelief path (isEarthlikePlatePath sibling in planet-lod-rivers.js) — E5 must not alter solid-world dispatch",
+      "The lab dispatch/build pipeline: buildIrregularSphere → makeSphereField → writer → shader; gas presets keep routing to the E5 writer, solid presets keep uBandStrength=0",
+      "Existing base-writer tests (plates, shellRelief, and the climate-e5 lift AC1-AC3 byte-identity / boundedness / zonality tests) stay green — EXCEPT the lift's SEED-INDEPENDENCE assertion, which #3a deliberately supersedes with per-seed variety (must be rewritten to per-seed-DISTINCT + still-byte-deterministic-per-seed; not a regression)",
+      "Gas-giants-have-no-relief invariant: the E5 writer never writes carrier.height / relief channels (verify.js regime constraint and the no-relief guarantee)",
+      "Solid-world rendering unchanged: with uBandStrength/uJetStrength gated to 0 on every solid preset, the F24 gas-flatten and band/jet branches remain exact no-ops"
+    ]
+  }
+}
