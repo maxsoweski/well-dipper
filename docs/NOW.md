@@ -28,7 +28,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶ WORLD-ENGINE #3a (E5 BANDS/JETS) — BUILT + VERIFIED_PENDING_MAX `9c80d40` (2026-07-01).** The gas/ice-giant
+> **▶ WORLD-ENGINE #3a (E5 BANDS/JETS) — ✅ MAX UAT-PASSED `9c80d40` (2026-07-01).** The gas/ice-giant
 > atmosphere writer. Replaces the lab shader's inline `0.25·latC·uBandCount` latitude stripe ladder with the
 > climate-e5 writer's **signed, driver-organized, per-seed** band field: `writeClimateE5Sphere` (src/worldengine/
 > base/climate-e5.js) emits bandField/bandNorm/turbulence/mushball/W across 4 regimes (gas-giant/saturnian/
@@ -45,10 +45,14 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > render distinct [band counts **14/11/3/3**, distinct palettes/sizes], two Jovian macroSeeds differ in band phase,
 > close view = churning belts + wispy filaments (writer shear) + mushball tint, cohesive). **AC12(b)** Neptunian
 > equatorial retrograde SIGN is muted-by-design live (ice giants deliberately low-contrast; band params writer-
-> driven read-only) but **unit-verified via AC5**. **NEXT = Max AC13 UAT** (lab :5176, browser page 13, loaded on
-> Gas giant (Jovian) at distance 5, bands+jets on): step Jovian → Saturnian → Neptunian → hazy sub-Neptune + a
-> couple re-rolls — accept only if the giant set reads as a **cohesive whole with variety+depth**, NOT the same
-> pattern across 3 bands, NOT noise. Worktree `~/projects/well-dipper-we-atmo`, branch
+> driven read-only) but **unit-verified via AC5**. **✅ AC13 UAT-PASSED (Max, 2026-07-01)** — flew the camera over
+> the giants + re-rolled seeds live; cohesive/varied/distinct, not repetitive-3-band, not noise. **CONDITIONAL
+> follow-on (named, not abandoned): belt-VISIBILITY tuning** — on Jovian ~5-6 strong belts are visible (incl. 2
+> polar hoods) vs the ~14 zero-crossing readout, because only jets that clear the color window `smoothstep(0.34,
+> 0.66, bandNorm)` render as saturated belts (weak mid-amplitude jets sit in the dead-zone). Accepted as "right
+> number generating"; a future session can raise the visible count toward ~7-8 by narrowing the window (e.g.
+> 0.42-0.58) or nudging `uBandContrast` — physics/field unchanged, display knob only. **Doc close-out still due**
+> (FEATURES.md row + `npm run doc-rot`), skipped at UAT wrap. Worktree `~/projects/well-dipper-we-atmo`, branch
 > `feature/world-engine-atmosphere` (**NOT pushed**; campaign-wide Push HOLD). ⚠ Global active-workstream pointer is
 > on the *separate* `world-engine-magmatism-multiply-2026-07-01` (main-repo build) — left untouched; #3a is
 > parked-pending-Max, not the active build. Resumed from `/tmp/handoff-world-engine-3a-live-2026-07-01.md`.

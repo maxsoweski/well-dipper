@@ -4,7 +4,7 @@
   "perLayer": {
     "unit": "PASS",
     "integration": "PASS",
-    "uat": "deferred-to-max"
+    "uat": "PASS"
   },
   "perAC": [
     {
@@ -81,12 +81,12 @@
     },
     {
       "id": "AC13",
-      "result": "deferred-to-max",
+      "result": "PASS",
       "adversarialVotes": "n/a \u2014 UAT is Max-only",
-      "evidence": "UAT (live=true) \u2014 deferred-to-max by invariant; no agent ever drives or PASSes UAT. Gating: UAT presupposes integration is GREEN, so this is judged only AFTER live AC10-AC12 pass. Structural basis (supports but does not establish acceptance): the four UAT presets resolve to four separate DRIVER_BUNDLES with genuinely different physics \u2014 Jovian (rot 1.0, shellDepth 0.80, obliq 3.1), Saturnian (rot 0.931, shellDepth 0.90, obliq 26.7), Neptunian (rot 0.616, shellDepth 0.15 -> retrograde eq jet, obliq 28.3), hazy sub-Neptune (rot 0.55, shellDepth 0.35, hazeMute 0.7) -> different Rhines counts (Jovian ~12 vs Neptunian ~3), driver-flippable eq-jet sign, per-seed phase offsets, shear-gated turbulence + separate NH3 mushball channel. CAVEAT for UAT eye: a pre-existing legacy mapping (lab 1927-1930) maps Saturnian->gas-giant and Neptunian->sub-neptune, differing from the new E5_PRESET_REGIME used by the render seam; both mappings coexist."
+      "evidence": "MAX UAT-PASS (2026-07-01, live in the lab :5176). Max dynamically flew the camera over the giants + re-rolled seeds; confirmed the giant set reads as cohesive with variety/depth, distinct per world, not repetitive-3-band, not noise. CONDITIONAL: the visible strong-belt count (~5-6 incl. polar hoods on Jovian, vs the ~14 zero-crossing readout) is accepted as 'the right number of belts generating' \u2014 belt VISIBILITY (how many mid-amplitude jets clear the smoothstep 0.34/0.66 dead-zone into saturated belts) is captured as a tunable for a future session (lever: narrow the color window and/or raise uBandContrast). Not a defect; the physics/field is correct."
     }
   ],
-  "overall": "VERIFIED_PENDING_MAX 9c80d40 \u2014 unit PASS (AC1-AC9, 9/9, adversarial 3/3, headless suite 17/17, golden bandField hash -1329854088 byte-stable) + integration PASS (AC10-AC12 live-driven by working-Claude via chrome-devtools on :5176 2026-07-01; the verify pass had statically confirmed the render seam wired). AC13 UAT deferred-to-max and NEVER auto-passed. Integration-green is necessary-not-sufficient: AC13 (holistic cohesion) is Max's hands-on gate alone.",
+  "overall": "UAT-PASSED 2026-07-01 (Max). unit PASS (AC1-AC9, 9/9 adversarial) + integration PASS (AC10-AC12 live-driven by working-Claude) + uat PASS (AC13, Max live). Was VERIFIED_PENDING_MAX 9c80d40. Conditional follow-on: belt-visibility threshold tuning deferred to a future session. Push HOLD (campaign-wide, branch feature/world-engine-atmosphere, doc close-out FEATURES-row/doc-rot pending).",
   "summaryForMax": "E5 #3a (bands/jets) is objectively verified and awaiting your AC13 UAT. Unit: 17/17 headless + every physics law independently recomputed under 3x adversarial review (amplitude law => Neptunian highest |U| despite lowest energy; Ward insolation flips pole/equator sign at 54.7deg; equatorial jet sign is driver-decided prograde/retrograde; turbulence shear-gated; mushball a distinct channel; gas giants never write relief; determinism + golden hash). Integration (driven live by me on :5176): the four archetypes render as distinct per-body/per-seed atmospheres sourced from climate-e5 (rotation sweep changes band count in the running shader => proves the writer field reaches the render, not the old hard-coded ladder). Your gate: view Jovian/Saturnian/Neptunian/hazy sub-Neptune + a couple re-rolls and judge cohesive-whole / variety+depth / not-repetitive-3-band / not-noise.",
   "verifiedAt": "2026-07-01",
   "verifiedBy": "verify-workstream wf_50abf0da-f1b (unit AC1-AC9, 9/9 adversarial 3/3, headless 17/17) + working-Claude live chrome-devtools drive on :5176 (integration AC10-AC12)",
@@ -96,5 +96,7 @@
     "AC12(b) Neptunian equatorial retrograde sign is muted-by-design in the live render (ice-giant low band-contrast; writer-driven read-only band params) \u2014 it is unit-verified via AC5. Not a defect; the signed field is present in data (byte-stable golden hash).",
     "verdict.json written by working-Claude (Workflow scripts have no fs access; the verify workflow returned the verdict as its result for the caller to persist).",
     "Push HOLD \u2014 campaign-wide; branch feature/world-engine-atmosphere not pushed."
-  ]
+  ],
+  "uatBy": "Max",
+  "uatAt": "2026-07-01"
 }
