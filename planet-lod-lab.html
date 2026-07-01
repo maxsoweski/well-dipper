@@ -5952,6 +5952,13 @@
                     // BRANCHES on it (if/else, never mix-to-0), so 0 reverts to the verbatim pre-AC2 fbmd line
                     // with NO cube fetch. Used by the live strength-0-identical / strength-1-tracks captures on :9223.
                     reliefBakeStrength(s){ if (s !== undefined) applyReliefBake(+s); return uniforms.uReliefBakeStrength.value; },
+                    // Inc.4-MULTIPLY — volcanic thermal-drive override (AC6 sweep lever + Max's UAT console path).
+                    // setVolcanicThermal(H) drags the thermal override to H∈[0,1] (marks it touched, override mode),
+                    // forces baked relief on, and re-routes so the volcanic carrier regenerates with the new tune.
+                    // volcanicThermalOff() clears the override → the preset renders from its real (raw) tidal heat.
+                    setVolcanicThermal(H){ driverOv.thermal = Math.max(0, Math.min(1, +H)); _driverTouched.add('thermal'); _driverAbMode = 'override';
+                      if (grainCarveUI.reliefBakeStrength < 0.5) applyReliefBake(1); ensureNetworkRouted('lab-setVolcanicThermal'); return driverOv.thermal; },
+                    volcanicThermalOff(){ _driverTouched.delete('thermal'); ensureNetworkRouted('lab-volcanicThermalOff'); return 'off (raw preset tidal)'; },
                     // AC2 — baked-relief bake-once + texture probes (copies of grainBakeCount/grainTexture).
                     // reliefBakeCount increments once per route() (camera/time changes never re-bake). reliefTexture
                     // is the baked HalfFloat height cube (R=height, GBA=gradient) the renderer samples.
