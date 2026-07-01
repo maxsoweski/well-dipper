@@ -2,7 +2,7 @@
   "workstream": "world-engine-magmatism-2026-06-30",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "SHIPPED",
   "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
   "rubricRef": "../world-engine-history-program-2026-06-27/UAT-RUBRICS.md",
   "summary": "Increment 4a of the world-engine history program: a deterministic, three-free volcanic / endogenic-heat relief writer (src/worldengine/base/magmatism.js, writeMagmatismSphere), sibling of plates.js and shellRelief.js, that REPLACES the sin^2(lat) fallback for volcanic bodies ONLY (Lava / Magma-K2-141b / Io-type). All structure keyed off ONE seeded mantle-plume field: hotspot/edifice (shield) placement at plume tops + effusive lava-plain flooding of the lows + a substellar magma-ocean BASIN (depression) for locked extreme-T bodies. Placement is seed-only (driver-response deferred, exactly as plates.js shipped). The volcanic gate is checked only AFTER isEarthlikePlatePath and isShellReliefPath return, so it never touches the validated plate path or the icy path. Venus stagnant-lid (#4b) is OUT (parallel research -> own scope).",

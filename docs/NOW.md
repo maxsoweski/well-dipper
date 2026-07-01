@@ -28,6 +28,23 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
+> **▶▶ ACTIVE (2026-07-01, GROUND track): #4a volcanic/magmatism SHIPPED → building #4-MULTIPLY via workflows.**
+> **#4a (volcanic/magmatism relief writer) — ✅ SHIPPED `eb18666` (Max UAT-ACCEPTED 2026-07-01).** New
+> `src/worldengine/base/magmatism.js` (`writeMagmatismSphere`): one seeded mantle-plume field → shield edifices +
+> lava-plain flooding + T_ss-scaled substellar magma basin; 4-way dispatch (plate→shell→volcanic→despun), plate &
+> shell paths byte-identical. Max accepted it **as the correct Tier-3 skeleton** — structure right (plume-organized,
+> Lava≠Magma, edifice>plain>basin) though the LOOK reads "crude/too regular" BY DESIGN (naturalism accretes from later
+> causal layers, not cosmetic noise). Rule-3 doc updates done (FEATURES.md row, verdict/contract → SHIPPED). Artifacts:
+> `docs/WORKSTREAMS/world-engine-magmatism-2026-06-30/`.
+> **▶ NEXT / BUILDING = #4-MULTIPLY (E7 driver-response + grain-aligned edifices)** — the volcanic analog of #2. Threads
+> the per-body D-vector through `route()`→`writeBodyRelief`→`writeMagmatismSphere` (today `void drivers`) so plume
+> count/strength derive from thermal history (tidal-heat D12 / age·radiogenic D16 / composition) instead of the uniform
+> `[0.4,1.0]` seed draw (fixes "one giant + arbitrary smaller"), and reads the E6 grain/fault field to orient & elongate
+> edifices along crustal stress (fixes "crude/too-regular circular domes"). **Byte-identical at the neutral-driver
+> reference point** (the #2 discipline — the load-bearing must-fix). Design skeleton IS the ROADMAP `#4-MULTIPLY` note
+> (`docs/WORKSTREAMS/world-engine-history-program-2026-06-27/ROADMAP.md`). Building via workflows: grounding → scope →
+> plan → per-AC implement/verify → live AC10. Handoff: `/tmp/handoff-world-engine-4multiply-2026-07-01.md`. **Push HOLD.**
+
 > **▶ PLATE/UPLIFT INCREMENT — BUILT + VERIFIED_PENDING_MAX `e07da8c` (2026-06-26).** Option-C increment 1
 > (one-pass plate placement) is built, committed (local-only, **push HOLD**), and verified at the objective
 > layers. NEW `src/worldengine/base/plates.js` (`writePlateUpliftSphere`, three-free): seed N centroids from
