@@ -1911,6 +1911,7 @@
       'Eyeball (locked temperate)': 'eyeball',
       'Europa (icy moon)': 'ice',            // shell-relief increment: NAMED_BODY → real icy-active tag (else null+locked → locked-fallback)
       'Titan (methane seas)': 'volatile',    // shell-relief increment: COINED short key → volatile-cold (locked:false, single-covered, no fallback net)
+      'Magma (K2-141b)': 'lava',             // magmatism increment: NAMED_BODY (locked) → the volcanic 'lava' tag. Without this, archetype resolves null+locked → shell's eyeball-despun locked-fallback (a misroute). NAMED_BODY still forces the canonical radius, so drawPresetRadius is unaffected.
       'Carbon (high C/O)': 'carbon',
       'Crystal (faceted)': 'crystal'
     };
@@ -6050,6 +6051,45 @@
                         grainStressCorr: grainCorr(),
                         U: Array.from(U), stressTensile: Array.from(stress),
                         riverStats,
+                      };
+                    },
+                    // magmatism increment (AC9/AC10) — the live-integration probe for the VOLCANIC path.
+                    // Sibling of shellProbe(): same shape, same arm's-length discipline. SLICE A returns the
+                    // SCAFFOLD diagnostics (the mantle-plume partition + hotspot proximity + the placeholder
+                    // varExplained numbers); the variance-vs-latitude structure proof and the substellar
+                    // magma-ocean basin fields are SLICE B (the real edifice/plain/basin assembly).
+                    //   heightSource        — 'carrier' once the router read the volcanic-written carrier.height
+                    //                         (precondition: _lab.reliefBakeStrength(>0) + route FIRST; else 'sampler').
+                    //   regime              — 'volcanic' when the volcanic writer ran (else the note branch).
+                    //   plumeCount          — number of seeded mantle plumes (varies per macroSeed — AC6).
+                    //   varExplainedByPlume — corr^2(U, hotspotProximity). The predictor is the writer's PUBLISHED
+                    //                         geodesic proximity to the plume tops (SLICE A: U is a placeholder plume
+                    //                         bump, so this reads high by construction; SLICE B rebuilds it ARM'S-LENGTH
+                    //                         from the published plume centers and proves it beats latitude).
+                    //   varExplainedByLatitudeY — corr^2(U, sin^2 latitude about world +y). MUST stay below plume
+                    //                             (the sin^2(lat) fallback this writer replaces — the AC3 falsifier, SLICE B).
+                    magmaProbe(){
+                      const md = riverOverlay.magmaDiag;
+                      const heightSource = riverOverlay.heightSource;
+                      const riverStats = riverOverlay.stats;
+                      if (!md) return { heightSource, regime:null, plumeCount:null, U:null,
+                        varExplainedByPlume:null, varExplainedByLatitudeY:null,
+                        note:'plate / shell / despun path (non-volcanic body) — no magmatism diagnostics' };
+                      const mesh = riverOverlay.mesh, N = mesh.N, verts = mesh.verts;
+                      const U = md.U, prox = md.hotspotProximity;
+                      const latY = new Float64Array(N);
+                      for (let i=0;i<N;i++){ const y = Math.max(-1, Math.min(1, verts[i][1])); latY[i] = 1 - y*y; }  // sin^2(lat)=1−y^2
+                      const corr = (a,b) => { let ma=0,mb=0; for(let i=0;i<N;i++){ma+=a[i];mb+=b[i];} ma/=N; mb/=N; let c=0,va=0,vb=0; for(let i=0;i<N;i++){ const da=a[i]-ma, db=b[i]-mb; c+=da*db; va+=da*da; vb+=db*db; } return c/(Math.sqrt(va*vb)||1); };
+                      const cP = prox ? corr(U, prox) : 0, cY = corr(U, latY);
+                      return {
+                        heightSource, regime:'volcanic', plumeCount: md.plumeCount,
+                        substellarAxis: Array.from(md.substellarAxis),
+                        varExplainedByPlume: cP*cP,
+                        varExplainedByLatitudeY: cY*cY,
+                        hotspotNode: Array.from(md.hotspotNode),
+                        U: Array.from(U), hotspotProximity: Array.from(prox),
+                        riverStats,
+                        note:'SLICE A scaffold — U is a placeholder plume field; edifice/plain/basin + magmaOceanMask are SLICE B',
                       };
                     },
                     // WS4 T12 — carve-EPOCH toggle for epoch-carve-visible. Off (default) = epoch 1, the

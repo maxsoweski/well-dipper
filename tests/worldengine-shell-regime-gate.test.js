@@ -59,16 +59,25 @@ describe('shell dispatch — AC8 no-clobber of the despun fallback + dispatch sa
     expect(out.shellDiag).toBe(null);
     expect(Array.from(c.height)).toEqual(Array.from(ref.height));
   });
-  it('SHELL_EXCLUDE: a LOCKED gas-giant / lava world => despun (NOT shell), byte-identical', () => {
-    for (const archetype of ['gas-giant', 'lava']) {
-      const seed = 3;
-      const ref = despunReference(seed);
-      const c = carrierOf();
-      const out = relief(c, { archetype, locked: true, macroSeed: seed, heightSeed: 'e6:' + seed });
-      expect(out.path).toBe('despun');
-      expect(out.shellDiag).toBe(null);
-      expect(Array.from(c.height)).toEqual(Array.from(ref.height));
-    }
+  it('SHELL_EXCLUDE: a LOCKED gas-giant => despun (NOT shell), byte-identical', () => {
+    // gas-giant is in SHELL_EXCLUDE and is NOT volcanic, so a locked gas-giant still lands on despun.
+    const seed = 3;
+    const ref = despunReference(seed);
+    const c = carrierOf();
+    const out = relief(c, { archetype: 'gas-giant', locked: true, macroSeed: seed, heightSeed: 'e6:' + seed });
+    expect(out.path).toBe('despun');
+    expect(out.shellDiag).toBe(null);
+    expect(Array.from(c.height)).toEqual(Array.from(ref.height));
+  });
+  it('SHELL_EXCLUDE: a LOCKED lava world => VOLCANIC (magmatism increment 4a; was despun before)', () => {
+    // UPDATED for the magmatism increment: 'lava' is in SHELL_EXCLUDE so it falls through the shell
+    // locked-fallback, and it is now claimed by isVolcanicPath — checked AFTER plate + shell. Before
+    // 4a this asserted despun; the volcanic writer now owns the lava/Magma bodies.
+    const c = carrierOf();
+    const out = relief(c, { archetype: 'lava', locked: true, macroSeed: 3, heightSeed: 'e6:3' });
+    expect(out.path).toBe('volcanic');
+    expect(out.shellDiag).toBe(null);
+    expect(out.magmaDiag).toBeTruthy();
   });
 });
 

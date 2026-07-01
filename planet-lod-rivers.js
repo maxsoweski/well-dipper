@@ -29,6 +29,7 @@ import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
 import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
 import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
+import { writeMagmatismSphere } from './src/worldengine/base/magmatism.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
@@ -421,6 +422,20 @@ export function isShellReliefPath(archetype, locked = false) {
   return shellRegimeOf(archetype, locked) !== null;
 }
 
+// Volcanic set = the `lava` / `volcanic` short keys/tags (Lava (hot airless) → 'lava'; Magma (K2-141b)
+// resolves to 'lava' via the PRESET_ARCHETYPE line added in the lab). CHECKED AFTER isEarthlikePlatePath
+// AND isShellReliefPath so it never touches the validated plate path or the icy/despun path. It excludes
+// everything already claimed (terrestrial/ocean by plate; icy/volatile/eyeball by shell) and the
+// non-volcanic keys (gas-giant/sub-neptune/carbon/crystal) by simple set membership: only the volcanic
+// set matches. NOTE the ordering dependence: 'lava' being in shellRelief's SHELL_EXCLUDE is what lets a
+// LOCKED lava body fall THROUGH the shell locked-fallback down to here (an unlisted locked key would be
+// grabbed by shell's eyeball-despun fallback first).
+const VOLCANIC_ARCHETYPES = new Set(['lava', 'volcanic']);
+export function isVolcanicPath(archetype, locked = false) {
+  void locked;   // both locked (Lava/Magma) and unlocked volcanic bodies route here — seed-only placement
+  return VOLCANIC_ARCHETYPES.has(archetype);
+}
+
 export function writeBodyRelief(carrier, {
   archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0',
 } = {}) {
@@ -430,16 +445,23 @@ export function writeBodyRelief(carrier, {
     // stub ⇒ null ⇒ the DEFAULTS branch ⇒ byte-identical to the validated POC (AC2). SLICE B fills the
     // calibration. bodyDrivers stays null off the lab driver-response path (every existing caller).
     const plateDiag = writePlateUpliftSphere(carrier, bodyDrivers, { macroSeed, tune: driversToTune(bodyDrivers) });
-    return { path: 'plate', plateDiag, shellDiag: null };
+    return { path: 'plate', plateDiag, shellDiag: null, magmaDiag: null };
   }
   const regime = shellRegimeOf(archetype, locked);    // icy-active | volatile-cold | eyeball-despun | null
   if (regime) {
     const shellDiag = writeShellReliefSphere(carrier, grainDrivers, { macroSeed, regime });
-    return { path: 'shell', plateDiag: null, shellDiag };
+    return { path: 'shell', plateDiag: null, shellDiag, magmaDiag: null };
+  }
+  // Increment 4a (magmatism): volcanic bodies (Lava / Magma-K2-141b / Io-type) get the one-pass
+  // mantle-plume field (carrier.height = U, the SOLE low/mid source). Checked AFTER plate + shell so
+  // the validated paths are never touched. magmaDiag is retained for the live magmaProbe.
+  if (isVolcanicPath(archetype, locked)) {
+    const magmaDiag = writeMagmatismSphere(carrier, grainDrivers, { macroSeed, locked });
+    return { path: 'volcanic', plateDiag: null, shellDiag: null, magmaDiag };
   }
   writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
   writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
-  return { path: 'despun', plateDiag: null, shellDiag: null };
+  return { path: 'despun', plateDiag: null, shellDiag: null, magmaDiag: null };
 }
 
 // ═══════════════════════ ROUTING + ORDER + METRICS ═══════════════════════
@@ -1084,6 +1106,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   let routedGraph = null;   // AC2: retain the router graph (receiver/accum/strahler/isChannel) instead of discarding it
   let plateDiag = null;     // plate-uplift increment: the plate partition diagnostics on the Earth-like path (null on despun); read by the live plateProbe (AC7)
   let shellDiag = null;     // shell-relief increment: the despun/ice-shell diagnostics on the shell path (null off it); read by the live shellProbe
+  let magmaDiag = null;     // magmatism increment: the mantle-plume diagnostics on the volcanic path (null off it); read by the live magmaProbe
   let lastHeightSource = 'sampler';  // AC7: 'carrier' when the router read the baked plate-written carrier.height, else 'sampler'
   // WS4 T8: the grain cube (whole-sphere strike field) + a bake counter. grainBakeCount increments
   // once per route() (the bake-once cadence — camera/time changes never call route(), so they never
@@ -1146,6 +1169,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     const relief = writeBodyRelief(carrier, { archetype, locked, grainDrivers, bodyDrivers, macroSeed, heightSeed });
     plateDiag = relief.plateDiag;                       // null off the plate path
     shellDiag = relief.shellDiag;                       // null off the shell path
+    magmaDiag = relief.magmaDiag;                       // null off the volcanic path
     const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
     // uReliefBakeStrength uniform the renderer (Phase C) gates on. strength>0 ⇒ BOTH read carrier.height
@@ -1206,6 +1230,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // source — both read by the live plateProbe (AC7). plateDiag is null on the despun path.
     get plateDiag() { return plateDiag; },
     get shellDiag() { return shellDiag; },
+    get magmaDiag() { return magmaDiag; },
     get heightSource() { return lastHeightSource; },
     get carveTexture() { return carve ? carve.texture : null; },
     // WS4 T8: the baked grain cube texture (the host pushes it to uTectonicGrainCube) + the bake
