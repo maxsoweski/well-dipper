@@ -36,7 +36,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Lava≠Magma, edifice>plain>basin) though the LOOK reads "crude/too regular" BY DESIGN (naturalism accretes from later
 > causal layers, not cosmetic noise). Rule-3 doc updates done (FEATURES.md row, verdict/contract → SHIPPED). Artifacts:
 > `docs/WORKSTREAMS/world-engine-magmatism-2026-06-30/`.
-> **▶ #4-MULTIPLY (volcanic driver-response + grain-aligned edifices) — VERIFIED_PENDING_MAX `c9f39f9` (2026-07-01).**
+> **▶ #4-MULTIPLY (volcanic driver-response + grain-aligned edifices) — ✅ SHIPPED `c9f39f9` (Max UAT-ACCEPTED 2026-07-01: thermal slider ↑ → bigger/more volcanoes on both Lava & Magma = the expected 'sizes track thermal history' response).**
 > The volcanic analog of #2. **Two things, one thermal driver:** (1) plume COUNT/STRENGTH now track thermal history
 > (tidal-heat + radiogenic/age) via `magmaDriversToTune(bodyDrivers)` → the existing `magmatism.js:124` tune seam
 > (fixes "one giant + arbitrary smaller"); (2) edifices ELONGATE along a **derived seeded fissure fabric** (per-plume
@@ -46,9 +46,8 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > (`GROUNDING.md §4`). Built via workflows (grounding → dev-collab-scope → adversarial plan `wf_e23fd8b0-19e` BUILD-READY
 > → per-slice implement/vitest → live AC6). **Verified:** AC1-AC5 vitest (956 suite pass) + AC6 live-driven by
 > working-Claude on :5175 — real Lava now 12 elongated plumes (E=1.6) vs #4a's 9 circular; fixed-seed thermal sweep
-> 0.275→0.90 = plumeCount 9→13, E 1.0→1.75, plume-var≫latitude-var, ordering holds throughout. **AC7 UAT = Max's gate:**
-> lab :5175, Lava/Magma, drag the new "Body drivers → volcanic relief (Inc.4-M)" thermal slider low→high (or
-> `_lab.setVolcanicThermal(0.9)`) — do sizes track thermal history + shapes read fissure-aligned not perfect circles?
+> 0.275→0.90 = plumeCount 9→13, E 1.0→1.75, plume-var≫latitude-var, ordering holds throughout. **AC7 UAT ✅ ACCEPTED**
+> (Max: thermal slider ↑ → bigger/more volcanoes on both Lava & Magma, confirmed expected → PASS).
 > KNOWN (adversary LOW): shipped Lava & Magma both saturate the tidal axis → similar on the endogenic axis; they
 > separate via the T_ss basin (pond vs sea) + gravity (Lava taller / Magma flatter); stronger contrast = a 1-constant
 > tweak. Artifacts: `docs/WORKSTREAMS/world-engine-magmatism-multiply-2026-07-01/` (intent, contract, GROUNDING,

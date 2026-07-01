@@ -2,7 +2,7 @@
   "workstream": "world-engine-magmatism-multiply-2026-07-01",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "SHIPPED",
   "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
   "rubricRef": "../world-engine-history-program-2026-06-27/UAT-RUBRICS.md",
   "summary": "Increment #4-MULTIPLY of the world-engine history program (GROUND track): the volcanic analog of the shipped #2 (plate driver-response). It threads the per-body D-vector (bodyDrivers channel) through route()->writeBodyRelief->writeMagmatismSphere (today `void drivers`, magmatism.js:122) so plume COUNT/STRENGTH derive from thermal history (tidal-heat + radiogenic/age, i.e. thermalState) instead of the uniform [0.4,1.0] seed draw; AND it derives a seeded volcanic fissure fabric (per-plume major-axis, disjoint 'magma:grain:' alea stream) + an ELONGATION_GAIN knob so edifices are elongated/fissure-aligned instead of the isotropic (1-r)^p circular dome. Both are one thermal driver. It uses the EXISTING tune-merge seam (magmatism.js:124, tune ? {...MAGMA_DEFAULTS,...tune} : MAGMA_DEFAULTS) and mirrors #2's driversToTune discipline exactly: magmaDriversToTune(MAGMA_REF) returns null so the writer runs #4a BYTE-IDENTICAL at the neutral-driver reference point. Grain-alignment is DERIVED (not carrier.grainAngle, which grounding proved is zero/latitude-binary on the volcanic path — GROUNDING.md §4). No edits to plates.js/shellRelief.js/tectonic.js/sphereField.js; the dispatch predicate stays in planet-lod-rivers.js; no 4th carrier.regime; alea 'magma:' namespace only; #4a seed-only output is the reference baseline.",
