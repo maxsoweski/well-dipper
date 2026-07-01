@@ -2105,7 +2105,7 @@
       daysideThermalEnabled: false,   // F32 enable gate — off collapses uDayTempK onto the night floor at the per-frame writer
       nightsideThermalEnabled: false, // F33 enable gate — off zeroes uNightTempK + occlusion at the per-frame writer (floor fades to black)
       thermalTempEq: 280.0, // #2 slice-2: live T_eq sweep source (decoupled from the .listen() dayTempK display; drives uDayTempK per-frame)
-      emissionEnabled: true, // #2 slice-2: master emission register gate (AND-ed with the day/night enables at the per-frame uThermalStrength writer)
+      emissionRegister: true, // #2 slice-2: master emission register gate (AND-ed with the day/night enables at the per-frame uThermalStrength writer)
       limbEnabled: false,    // F34 enable gate — off zeroes uLimbStrength AND hides the F31e haze shell at the per-frame writer
       limbExponent: 3.5,    // F34 fresnel width (driven: thin clear ~3.5 narrow blue line / thick-haze ~1.8 fat halo)
       limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
@@ -4495,7 +4495,7 @@
     fThermal.add(state, 'hotspotOffset', -0.6, 0.6, 0.01).name('hotspot offset (east rad)');
     fThermal.add(state, 'redistribution', 1, 6, 0.1).name('redistribution n');
     fThermal.add(state, 'thermalTempEq', 300, 2500, 10).name('T_eq sweep (K)');
-    fThermal.add(state, 'emissionEnabled').name('emission register');
+    fThermal.add(state, 'emissionRegister').name('emission register');
     const fThermalNight = fThermal.addFolder('Nightside glow (F33)'); fThermalNight.close();
     fThermalNight.add(state, 'thermalOcclusion', 0, 1, 0.01).name('occlusion strength');
     fThermalNight.add(state, 'nightsideThermalEnabled').name('✓ enabled');
@@ -5755,7 +5755,7 @@
       uniforms.uDayTempK.value         = state.daysideThermalEnabled ? state.dayTempK : _nightTW;   // ✓ F32 enable gate
       uniforms.uThermalOcclusion.value = state.nightsideThermalEnabled ? state.thermalOcclusion : 0.0;
       uniforms.uRedistribution.value   = state.redistribution;
-      uniforms.uThermalStrength.value  = (state.emissionEnabled && (state.daysideThermalEnabled || state.nightsideThermalEnabled)) ? state.thermalStrength : 0.0;   // #2 slice-2: master register AND day/night gate
+      uniforms.uThermalStrength.value  = (state.emissionRegister && (state.daysideThermalEnabled || state.nightsideThermalEnabled)) ? state.thermalStrength : 0.0;   // #2 slice-2: master register AND day/night gate
       uniforms.uEmissiveBypass.value = state.emissiveBypass ? 1 : 0;
       uniforms.uSpecBypass.value = state.specBypass ? 1 : 0;
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
