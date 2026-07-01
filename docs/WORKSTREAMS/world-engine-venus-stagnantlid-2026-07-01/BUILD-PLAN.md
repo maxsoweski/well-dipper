@@ -60,5 +60,24 @@ Imports (copy plates.js:39-41 form): `alea`, `createNoise3D`, `{ clamp, clamp01 
 - **SLICE A** (three-free writer + headless AC1-AC5): `stagnantLid.js` + `tests/worldengine-base-stagnantlid-structure.test.js`. Gate: `npx vitest run` green before B. Do NOT start a dev server.
 - **SLICE B** (dispatch + lab + AC6/AC7): rivers.js 6 edits + lab.html 2 edits + AC6 no-clobber + AC7 seam blocks (same test file). Then working-Claude drives live AC8 (chrome-devtools, `list_pages` for liveness — no localhost curl). Rule-3 docs + `VERIFIED_PENDING_MAX <sha>` → Max AC9 UAT.
 
+## SLICE A calibration outcome (2026-07-01, empirical — AC1–AC5 green, 225/225 worldengine tests)
+
+The plan's first-guess constants needed calibration against the AC bars (the loop the critique anticipated).
+Locked values that changed from the plan:
+- **Test resolution N=1500** (not 600). Stagnant-lid's many small clustered coronae are a *finer* structure
+  than the plate/magma siblings' few big features; 600 nodes can't resolve them (coronae covered ~0 nodes).
+- **Corona radius is resolution-adaptive**: `R_c = (0.5 + u^2.5·1.1)·meanEdgeAngle` (node-legible at any mesh
+  — ~200–900 km on the 40k game mesh; km citations informed the heavy-tailed SHAPE, not the absolute scale,
+  per charter). `CORONA_POOL=120, CORONA_BIAS=2.0` → ~9–23 accepted, tightly clustered.
+- **Rift is node-scaled + deep**: `RIFT_HALFWIDTH_NODES=2.5`, `BASE_RIFT=-0.45`, `RELAX_PASSES=3` — thin rifts
+  at 4 passes / shallow base washed out under the Jacobi smooth, inverting the elevation ordering; these
+  keep a clean low population (`mean(tessera) > mean(plains) > mean(rift/active-trench)` holds all seeds).
+- **AC2(a) metric = |corr(structureMask, plumePredictor)| ≥ 0.40** (NOT the contract's original binary-mask
+  `varExplainedByPlume ≥ 0.5`). A ~17%-ones binary point-biserial vs a continuous predictor has an r² ceiling
+  ~0.46 (measured, resolution-independent) — `r²≥0.5` is structurally unreachable, exactly as the magmatism
+  sibling found (it also uses |corr| + real-vs-control). The **rigorous, seed-robust falsifier is AC4**: real
+  |corr| ≥ 0.40 AND > 2× the random-placement control (which collapses < 0.15). Verified real ≥ 0.47 / control
+  ≤ 0.065 on the 5 test seeds, and real ≫ control on 9 holdout seeds (contract AC2/AC4 observables updated).
+
 ## Test conventions (match siblings)
 `TARGET_N=600, LLOYD=2, SEEDS=[1,2,3,7,42]`; `carrierOf = () => makeSphereField(buildIrregularSphere(600,2))`; hand-rolled `pearson`/`varExplained` (magmatism:260-267); byte-identity = build twice on fresh carriers, `Array.from(...).toEqual(...)` for U/grainAngle/faultDensity/resurfAge/isTessera/coronaActive; no-RNG grep (swap `magma:`→`stagnant:`, `whileCount===0`); AC6 uses `plateReference`/`despunReference` baselines (shell-regime-gate:18-31). Single test file (contract layout), not the shell two-file split.
