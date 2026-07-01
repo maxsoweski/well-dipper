@@ -17,6 +17,29 @@ adversarial review → file-scoped commit) → working-Claude live integration c
 
 ---
 
+## ▶ NEXT PRIORITY (Max, 2026-07-01) — obstacle-aware intelligent tour routing
+
+WS-1 (CRUISE stall-detector) is `VERIFIED_PENDING_MAX 5945f07` and kills the **permanent** freeze, but
+it aborts-and-*skips* without re-routing (an explicit WS-1 non-goal), which leaves a **livelock**: after a
+wedge-abort the ship is pinned at the star and re-wedges on far-side legs (contract §KNOWN RESIDUAL). Max
+wants this solved next by making the autopilot *actually intelligent* — this supersedes the old WS-2/WS-3
+ordering as the immediate priority.
+
+**Max's vision, verbatim (2026-07-01):**
+> "I want autopilot to become intelligent — understanding the mechanics such that it can give a dynamic tour
+> of any given system; that will mean deciding how to get away from any body we're currently close to, then
+> how to go toward the next body in the tour, until the whole system has been toured. And usually 'how to get
+> away from' will mean orbiting the current body until the nose is pointed 'over the horizon' of the object
+> and towards the next object."
+
+**Working-Claude's read (to confirm at scope time, not canon):** a per-leg two-phase maneuver — (1) a
+**departure/escape phase**: orbit the current body until the nose clears its horizon and points at the next
+target (this is what dissolves the star livelock — the ship orbits out of the well instead of ramming back
+into it); (2) a **transit phase**: fly to the next body. Loop until the whole system is toured. Scope as its
+own `dev-collab-scope` workstream (spans the pilot + tour + likely a new departure state). Not yet scoped.
+
+---
+
 ## A. Fix workstreams (priority order)
 
 ### WS-1 — CRUISE stall-detector / no-freeze guard  ⭐ build first (HIGH)

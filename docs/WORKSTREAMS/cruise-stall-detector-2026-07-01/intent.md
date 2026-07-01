@@ -42,6 +42,23 @@ language: it's part of the difference between "the ship moves" and "flying works
 - **No change to warp, HELM manual flight, commitBurn, or Toybox** beyond the stall guard.
 - No new HUD/UI for the abort (a silent skip-and-continue is the target behavior).
 
+## Known residual — the livelock (accepted as scoped, 2026-07-01)
+
+Live verification (forced star-wedge on a tour leg) confirmed the guard kills the
+*permanent* freeze — the tour advances at a clean ~12s abort cadence. But it exposed a
+residual: after a wedge-abort the ship is pinned at the star's collision barrier
+(speed 0), and any *subsequent* leg whose target is on the far side of the star re-wedges,
+so the ship can sit at the sun cycling aborts (tour index advancing, ship not moving) until
+a near-side target frees it. In one forced run it stayed stuck 28s+ without escaping.
+
+This is the flip side of WS-1's explicit **no re-routing** non-goal: the guard aborts-and-
+skips but never teaches the ship to fly *around* the star. It is **strictly better than the
+old permanent freeze** (index keeps moving; self-resolves once a near-side target comes up),
+and Max accepted it as scoped. **It will be genuinely solved by the next workstream —
+obstacle-aware intelligent tour routing** (`docs/FLIGHT_RELIABILITY_PROGRAM_2026-06-30.md`
+§NEXT), where the pilot orbits the current body until its nose clears the body's horizon
+toward the next target before departing.
+
 ## Success gate
 
 Objective ACs (unit + live integration) are working-Claude/verify-workflow gated. The
