@@ -67,6 +67,15 @@ FEATURES/<feature>.md, `Scope:` frontmatter in WORKSTREAMS/<slug>.md
 follow specified formats. Free-form prose in these locations breaks
 `doc-graph.js` and `doc-rot-check.sh` parsing.
 
+### Rule 15 — World-engine increments carry the spine-conformance AC-0
+Every workstream touching `src/worldengine/**`, the lab dispatch, or the
+lab GUI includes AC-0 per
+[`WORKSTREAMS/world-engine-history-program-2026-06-27/SPINE-CONFORMANCE.md`](docs/WORKSTREAMS/world-engine-history-program-2026-06-27/SPINE-CONFORMANCE.md)
+(driver connectivity / named consumer / taxonomy registration) + the
+DOES/UNLOCKS card in intent.md. `dev-collab-scope` folds it in;
+`verify-workstream` audits it. Purpose: "procedurally building the
+system" is a checked artifact, not something Max has to police.
+
 ## Sibling project: well-dipper-visual
 
 `~/projects/well-dipper-visual/` is a separate working tree on a
