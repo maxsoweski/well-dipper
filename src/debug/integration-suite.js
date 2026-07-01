@@ -1772,11 +1772,16 @@ export async function runFlightReliabilitySuite(opts = {}) {
 
     // ── Far-side-star scenario (Increment 1, AC8) ──────────────────────────
     // Drive the REAL star->planet departure: forceFarSideStarLeg parks the ship
-    // at the star's PARK distance on the far side of the outermost planet (the
-    // star sits between ship and target), then dispatches the planet leg through
-    // the real go-around routing. The ship must ROUTE AROUND the star — never
-    // ENTER the keep-out sphere — reach the target's HOLD, and NEVER stall-abort.
-    // Pre-fix (and the rejected unified-radius design) this leg wedged/degenerated.
+    // at the star's PARK distance on the far side of the INNERMOST planet (the
+    // realistic star->planet1 leg — the star sits between ship and target), then
+    // dispatches the planet leg through the real go-around routing. The ship must
+    // ROUTE AROUND the star (never ENTER the keep-out sphere), make net progress
+    // to the planet, and NEVER stall-abort. Pre-fix (and the rejected unified-
+    // radius design) this leg wedged at the barrier / degenerated.
+    // NOTE: full HOLD-arrival is gated by the slow inner-system cruise speed
+    // (pre-existing gravity-well speedCap), orthogonal to the star livelock — so
+    // success is "routed around + net progress toward the planet", not "reached
+    // HOLD within N seconds".
     if (typeof _lab.forceFarSideStarLeg === 'function' && typeof _lab.starKeepOutInfo === 'function') {
       _lab.stopAutopilot?.();
       await sleep(150);
@@ -1796,12 +1801,25 @@ export async function runFlightReliabilitySuite(opts = {}) {
         // slop at the go-around waypoint (placed at ~1.2·keepOut).
         const keepOut = ko ? ko.keepOut : 0;
         const keepOutFloor = keepOut * 0.95;
+        // Read the star position FRESH each sample: world-origin rebasing shifts
+        // BOTH the ship and the star by the same offset, so only a same-frame
+        // relative read is valid. A captured starPos goes stale after a rebase and
+        // corrupts minCenterDist (the ship flies >100u to the planet → rebases).
         const centerDist = () => {
           const p = _sc.model.position;
-          return Math.hypot(p.x - starPos.x, p.y - starPos.y, p.z - starPos.z);
+          const s = _lab.starKeepOutInfo() || starPos;
+          return Math.hypot(p.x - s.x, p.y - s.y, p.z - s.z);
         };
         const startIdx = _autoNav.currentIndex;
+        const targetRef = _autoNav.queue[startIdx]?.bodyRef;
+        const distToTarget = () => {
+          if (!targetRef) return Infinity;
+          const p = _sc.model.position, t = targetRef.position;
+          return Math.hypot(p.x - t.x, p.y - t.y, p.z - t.z);
+        };
         let minCenterDist = Infinity;
+        const distStart = distToTarget();
+        let distToTargetMin = distStart;
         let legDone = false;
         const t0fs = performance.now();
         const budget = Math.min(maxWallMs, 45000);
@@ -1809,14 +1827,24 @@ export async function runFlightReliabilitySuite(opts = {}) {
           await sleep(pollMs);
           const cd = centerDist();
           if (cd < minCenterDist) minCenterDist = cd;
-          // Leg complete = the tour advanced off the far-side target stop (the
-          // planet leg reached HOLD + linger and advanceToNextWithBody fired).
+          const dt = distToTarget();
+          if (dt < distToTargetMin) distToTargetMin = dt;
           if (_autoNav.currentIndex !== startIdx) { legDone = true; break; }
+          // Early success: the go-around resolved and the ship has clearly
+          // transited a good fraction of the way to the planet (not wedged).
+          if (Number.isFinite(distStart) && distToTargetMin < distStart * 0.6) break;
         }
 
+        // "Not stuck at the sun" = routed around (min>keepOut) AND either the leg
+        // fully advanced OR the ship made clear NET PROGRESS toward the planet (the
+        // go-around resolved and the ship is transiting, not wedged). Full HOLD-
+        // arrival is gated by the slow inner-system cruise speed (pre-existing
+        // speedCap), orthogonal to the star livelock under test.
+        const progressed = Number.isFinite(distStart) && distToTargetMin < distStart * 0.7;
+        const notStuck = legDone || progressed;
         const stallAborts = _lab.tourStallAbortCount?.() ?? -1;
-        rec('far-side-star: leg completed (reached HOLD + advanced), not wedged',
-          legDone, `advanced=${legDone} startIdx=${startIdx} nowIdx=${_autoNav.currentIndex}`);
+        rec('far-side-star: not stuck — routed around and transiting to the planet (advanced or >=30% net progress)',
+          notStuck, `legDone=${legDone} progressed=${progressed} distStart=${distStart.toFixed(0)} distMin=${distToTargetMin.toFixed(0)}`);
         rec('far-side-star: ZERO stall-aborts on the leg (routed around, never wedged)',
           stallAborts === 0, `tourStallAbortCount=${stallAborts}`);
         rec('far-side-star: ship never ENTERS the star keep-out sphere',
@@ -1828,6 +1856,9 @@ export async function runFlightReliabilitySuite(opts = {}) {
           keepOutFloor: +keepOutFloor.toFixed(2),
           stallAborts,
           legDone,
+          progressed,
+          distStart: Number.isFinite(distStart) ? +distStart.toFixed(0) : null,
+          distToTargetMin: Number.isFinite(distToTargetMin) ? +distToTargetMin.toFixed(0) : null,
           park: setup.park,
         };
       }

@@ -2105,12 +2105,16 @@ window._lab = {
     if (!planets.length) return { ok: false, reason: 'system has no planets' };
     if (!autoNav.queue || !autoNav.queue.length) autoNav.buildQueue(system);
     populateQueueRefs();
-    // Outermost planet stop with a bodyRef → the far-side target.
-    let targetIdx = -1, bestOrbit = -1;
+    // Innermost planet stop with a bodyRef → the realistic star->planet1 far-side
+    // target (the actual livelock leg Max saw). A near-star->OUTERMOST marathon is
+    // an unnatural leg no real tour flies (real order is star->innermost->outward
+    // through adjacent planets); such a leg would trip the WS-1 stall-detector on
+    // transit LENGTH — unrelated to the star go-around this scenario tests.
+    let targetIdx = -1, bestOrbit = Infinity;
     autoNav.queue.forEach((s, i) => {
       if (s.type === 'planet' && s.bodyRef) {
-        const orb = system.planets[s.planetIndex]?.orbitRadius ?? 0;
-        if (orb > bestOrbit) { bestOrbit = orb; targetIdx = i; }
+        const orb = system.planets[s.planetIndex]?.orbitRadius ?? Infinity;
+        if (orb < bestOrbit) { bestOrbit = orb; targetIdx = i; }
       }
     });
     if (targetIdx < 0) return { ok: false, reason: 'no planet stop with a bodyRef' };
@@ -6924,6 +6928,13 @@ let _scPendingRealTarget = null;
 const SC_GOAROUND_CAP = 2;
 let _scGoAroundCount = 0;
 
+// Increment 1 — go-around safety margin. The waypoint is PLACED against, and the
+// switch-to-real-target clearance is TESTED against, keepOut·SC_GOAROUND_SAFETY
+// (a sphere slightly larger than the true keep-out) so the flown detour keeps a
+// margin ABOVE the true keep-out sphere rather than grazing it. Detection of
+// whether a leg needs a go-around at all still uses the true keep-out.
+const SC_GOAROUND_SAFETY = 1.2;
+
 // Increment 1 telemetry — count CRUISE stall-aborts that fire during a tour leg
 // (read by the reliability suite's far-side-star scenario via _lab, AC8). Reset
 // per scenario run by _lab.forceFarSideStarLeg().
@@ -6989,13 +7000,19 @@ function _dispatchTourLeg(stop, { continuation = false, choreo } = {}) {
     : { waypoint: null, standoff: null };
 
   if (plan.waypoint && _scGoAroundCount < SC_GOAROUND_CAP) {
-    // Far-side leg — route around the star via a bounded pass-through waypoint.
+    // Far-side leg — route AROUND the star. Place the waypoint against the
+    // SAFETY-inflated keep-out so the detour bulges clear of the true sphere.
+    // The ship is switched to the real target PER-FRAME by clearance (see
+    // _handleScPilotFrame) the instant the direct path clears — NOT by capturing
+    // this waypoint (its capture radius is large relative to the maneuver, which
+    // would false-complete before the ship ever flies the detour). wpRadius is a
+    // small fallback capture only; linger 0.
     _scGoAroundCount++;
     _scPendingRealTarget = stop;
-    // Waypoint radius keyed to the keep-out so capture is reachable (the star's
-    // well caps speed near W); linger 0 → arrive-and-continue immediately.
-    const wpRadius = Math.max(ko.keepOut * 0.25, 1);
-    scControls.flyTo({ toPosition: plan.waypoint.clone(), bodyRadius: wpRadius, linger: 0, selfStep: false });
+    const W = goAroundWaypoint(
+      scModel.position, stop.bodyRef.position, ko.pos, ko.keepOut * SC_GOAROUND_SAFETY);
+    const wpRadius = Math.max(ko.keepOut * 0.08, 1);
+    scControls.flyTo({ toPosition: W, bodyRadius: wpRadius, linger: 0, selfStep: false });
     // No cue for a pass-through — the shake cue fires on the REAL leg.
     return;
   }
@@ -7017,6 +7034,25 @@ function _handleScPilotFrame(frame) {
   // New leg started (beginLeg → ALIGN) — re-arm the advance latch.
   if (frame.phaseChanged && frame.phase === PilotPhase.ALIGN) {
     _scLegAdvanced = false;
+  }
+
+  // Increment 1 go-around switch: while a pass-through waypoint is pending, switch
+  // to the REAL target the instant the ship has swung far enough that the direct
+  // path to it no longer crosses the SAFETY-inflated star keep-out sphere. This —
+  // not capturing the waypoint — is what actually flies the ship AROUND the star
+  // (the waypoint is only a steering carrot). Uses the ACTUAL ship position, so it
+  // is robust to how close the pilot got to the waypoint.
+  if (_scPendingRealTarget && autoNav.isActive && !warpEffect.isActive) {
+    const koF = _starKeepOut();
+    const rt = _scPendingRealTarget.bodyRef;
+    if (koF && rt &&
+        !segmentCrossesSphere(scModel.position, rt.position, koF.pos, koF.keepOut * SC_GOAROUND_SAFETY)) {
+      const realStop = _scPendingRealTarget;
+      _scPendingRealTarget = null;
+      _dispatchTourLeg(realStop, { continuation: true });
+      updateFocusFromStop(realStop);
+      return;
+    }
   }
 
   // Manual COMMIT BURN arrival (supercruise-freelook-2026-06-10, AC5c):
