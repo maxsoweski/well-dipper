@@ -3708,6 +3708,11 @@
         // get the one-pass plate/uplift field; every other regime keeps the despun E6 path byte-identical.
         archetype: PRESET_ARCHETYPE[_preset] || null,
         locked: !!(_fp && _fp.tidalState && _fp.tidalState.locked),
+        // magmatism increment (AC9/§5): the substellar temperature source. writeBodyRelief derives
+        // T_ss = locked ? T_eq*1.4 : 0 (the shipped F41 convention, :3617) and gates the magma-ocean
+        // basin on T_ss > 1300 K — a WIDE sea for Magma (T_eq 2000 → T_ss 2800) vs a small pond for
+        // Lava (T_eq 950 → T_ss 1330). Inert off the volcanic path (only 'lava'/'volcanic' read it).
+        T_eq: (_fp && _fp.T_eq != null) ? _fp.T_eq : 288,
         bodyDrivers: _bodyDrivers,              // Increment 2: the D-vector → driversToTune() → plate tune override
       });
       const stats = res.stats;
@@ -6076,20 +6081,47 @@
                         varExplainedByPlume:null, varExplainedByLatitudeY:null,
                         note:'plate / shell / despun path (non-volcanic body) — no magmatism diagnostics' };
                       const mesh = riverOverlay.mesh, N = mesh.N, verts = mesh.verts;
-                      const U = md.U, prox = md.hotspotProximity;
+                      const U = md.U;
+                      const dot3 = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+                      // ── ARM'S-LENGTH plume-proximity predictor: geodesic falloff from the PUBLISHED plume
+                      // centroids (md.centroids), NOT from md.hotspotProximity / nearestPlume / U — the same
+                      // anti-circularity discipline as the headless AC2 test (BELT = 0.10 rad, the writer's
+                      // published swell falloff length). Measured over magmaOceanMask==0 (basin scored by
+                      // ordering, not diluted into corr — SLICE-B-mechanism-math.md §AC2 sidebar (i)). ──
+                      const BELT = 0.10;
+                      const pred = new Float64Array(N);
+                      for (let i=0;i<N;i++){ const d = verts[i]; let best = -Infinity;
+                        for (let p=0;p<md.centroids.length;p++){ const dd = dot3(d, md.centroids[p]); if (dd>best) best = dd; }
+                        pred[i] = Math.exp(-Math.acos(Math.max(-1, Math.min(1, best))) / BELT); }
                       const latY = new Float64Array(N);
-                      for (let i=0;i<N;i++){ const y = Math.max(-1, Math.min(1, verts[i][1])); latY[i] = 1 - y*y; }  // sin^2(lat)=1−y^2
-                      const corr = (a,b) => { let ma=0,mb=0; for(let i=0;i<N;i++){ma+=a[i];mb+=b[i];} ma/=N; mb/=N; let c=0,va=0,vb=0; for(let i=0;i<N;i++){ const da=a[i]-ma, db=b[i]-mb; c+=da*db; va+=da*da; vb+=db*db; } return c/(Math.sqrt(va*vb)||1); };
-                      const cP = prox ? corr(U, prox) : 0, cY = corr(U, latY);
+                      for (let i=0;i<N;i++){ const y = Math.max(-1, Math.min(1, verts[i][1])); latY[i] = y*y; }  // sin^2(lat)=y^2
+                      // masked Pearson over an index predicate (basin-excluded for corr; all nodes for latY-ALL).
+                      const corrMasked = (a,b,keep) => { let n=0,ma=0,mb=0; for(let i=0;i<N;i++){ if(keep&&!keep(i))continue; ma+=a[i]; mb+=b[i]; n++; } ma/=n; mb/=n; let c=0,va=0,vb=0; for(let i=0;i<N;i++){ if(keep&&!keep(i))continue; const da=a[i]-ma, db=b[i]-mb; c+=da*db; va+=da*da; vb+=db*db; } return c/(Math.sqrt(va*vb)||1); };
+                      const notBasin = (i) => !md.magmaOceanMask[i];
+                      const cP = corrMasked(U, pred, notBasin), cY = corrMasked(U, latY, notBasin), cYall = corrMasked(U, latY, null);
+                      // population means over the published masks (the AC2 elevation ordering).
+                      let edSum=0,edN=0, plSum=0,plN=0, baSum=0,baN=0, maxTheta=0;
+                      for (let i=0;i<N;i++){
+                        if (md.magmaOceanMask[i]){ baSum+=U[i]; baN++; const th=Math.acos(Math.max(-1,Math.min(1,dot3(verts[i], md.substellarAxis)))); if(th>maxTheta) maxTheta=th; }
+                        else if (md.edificeMask[i]){ edSum+=U[i]; edN++; }
+                        else if (md.lavaPlainMask[i]){ plSum+=U[i]; plN++; }
+                      }
+                      const mEd = edN?edSum/edN:0, mPl = plN?plSum/plN:0, mBa = baN?baSum/baN:NaN;
                       return {
                         heightSource, regime:'volcanic', plumeCount: md.plumeCount,
                         substellarAxis: Array.from(md.substellarAxis),
-                        varExplainedByPlume: cP*cP,
-                        varExplainedByLatitudeY: cY*cY,
+                        varExplainedByPlume: cP*cP,            // arm's-length centroid-proximity r^2 (non-basin)
+                        varExplainedByLatitudeY: cY*cY,        // sin^2(+y lat) r^2 (non-basin) — MUST stay below plume
+                        varExplainedByLatitudeYAll: cYall*cYall,   // basin-included latitude r^2 (REVIEWER NOTE 2)
+                        // AC2 elevation ordering: mean(edifice) > mean(lava-plain) > mean(magma-ocean basin).
+                        meanEdifice: mEd, meanLavaPlain: mPl, meanBasin: mBa,
+                        orderingHolds: baN ? (mEd > mPl && mPl > mBa) : (mEd > mPl),
+                        edificeNodeCount: edN, lavaPlainNodeCount: plN, basinNodeCount: baN,
+                        // AC9 basin extent: F41 iso-angle vs the baked mask half-angle.
+                        thetaSea: md.thetaSea, basinHalfAngle: baN ? maxTheta : 0,
                         hotspotNode: Array.from(md.hotspotNode),
-                        U: Array.from(U), hotspotProximity: Array.from(prox),
+                        U: Array.from(U), hotspotProximity: Array.from(md.hotspotProximity),
                         riverStats,
-                        note:'SLICE A scaffold — U is a placeholder plume field; edifice/plain/basin + magmaOceanMask are SLICE B',
                       };
                     },
                     // WS4 T12 — carve-EPOCH toggle for epoch-carve-visible. Off (default) = epoch 1, the

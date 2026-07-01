@@ -437,7 +437,7 @@ export function isVolcanicPath(archetype, locked = false) {
 }
 
 export function writeBodyRelief(carrier, {
-  archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0',
+  archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0', T_eq = null,
 } = {}) {
   if (isEarthlikePlatePath(archetype, locked)) {
     // Increment 2 (plate driver-response): the body's D-vector (bodyDrivers — a SEPARATE channel from
@@ -456,7 +456,13 @@ export function writeBodyRelief(carrier, {
   // mantle-plume field (carrier.height = U, the SOLE low/mid source). Checked AFTER plate + shell so
   // the validated paths are never touched. magmaDiag is retained for the live magmaProbe.
   if (isVolcanicPath(archetype, locked)) {
-    const magmaDiag = writeMagmatismSphere(carrier, grainDrivers, { macroSeed, locked });
+    // §0/§5: the substellar magma-ocean basin gates on T_ss (= T_eq*1.4 on locked worlds, else 0 — the
+    // shipped F41 convention, planet-lod-lab.html:3617), NOT on the `locked` boolean (BOTH Lava & Magma
+    // are locked; only T_ss separates a wide sea from a small pond, AC9). T_eq is threaded from route()
+    // (from the preset _fp.T_eq). Off the lab path (headless callers that pass no T_eq) T_ss defaults 0,
+    // so no basin — the volcanic gate still fires (plume field only).
+    const T_ss = locked ? (T_eq ?? 0) * 1.4 : 0;
+    const magmaDiag = writeMagmatismSphere(carrier, grainDrivers, { macroSeed, locked, T_ss });
     return { path: 'volcanic', plateDiag: null, shellDiag: null, magmaDiag };
   }
   writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
@@ -1145,7 +1151,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   }
 
   function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, widthSeed = null,
-                   grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, archetype = null, locked = false, label = 'route' } = {}) {
+                   grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, archetype = null, locked = false, T_eq = null, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
     // ── Baked-relief Phase B/D: build the sphere-native E6 height field as DATA. The SAME carrier is
@@ -1166,7 +1172,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // (carrier.height = U, the SOLE low/mid source — REPLACES the latitude-band E6 writer); every
     // other regime keeps the despun writeGrainSphere+writeHeightSphere byte-identical. The plate
     // diagnostics (partition / boundary class / U) are retained for the live plateProbe (AC7).
-    const relief = writeBodyRelief(carrier, { archetype, locked, grainDrivers, bodyDrivers, macroSeed, heightSeed });
+    const relief = writeBodyRelief(carrier, { archetype, locked, grainDrivers, bodyDrivers, macroSeed, heightSeed, T_eq });
     plateDiag = relief.plateDiag;                       // null off the plate path
     shellDiag = relief.shellDiag;                       // null off the shell path
     magmaDiag = relief.magmaDiag;                       // null off the volcanic path
