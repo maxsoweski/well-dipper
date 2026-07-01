@@ -39,3 +39,15 @@ field; it is being de-thinned by a parallel research pass and scoped right after
 Venus #4b stagnant-lid (parallel research → own scope right after); driver-RESPONSE (seed-only here, like
 `plates.js` shipped); Mars stagnant-lid-rocky (its own research pass — Venus-shaped ≠ Mars-shaped);
 exotic-shattered #4.5; bombardment #5; the epoch model #6; the game `Planet.js` port. All named + deferred.
+
+**Edifice SHAPE naturalism is deferred, NOT final (added 2026-07-01 from Max's #4a UAT).** This increment
+ships **isotropic, circular, analytic `(1-r)^p` shield domes** — that is the *skeleton*, not the intended
+final look. Real volcanic asymmetry comes from later causal layers, and the earlier draft of this doc did
+not say so (a reader could wrongly assume circular domes are final). The pieces and their homes:
+(a) **grain-aligned / fissure asymmetry** (elongate edifices along the E6 tectonic-grain, not perfect
+circles) and (b) **plume size/count from thermal history** (so worlds aren't "one giant + arbitrary
+smaller ones") → **increment `#4-MULTIPLY`** (the E7 driver-response pass, mirroring #2); (c) **flank
+collapse / surface roughness / weathering** → **#7 sculpting + #8/E8b weathering**; (d) **basin-vs-plain
+legibility** as a molten-now-vs-solidified-older thermal/age read → **#8 E12 palette + the F41 shader**
+(deliberately OFF in the carrier-assessment view — the *data* ordering is correct now). See the ROADMAP
+`#4-MULTIPLY` and `#7` planning notes.

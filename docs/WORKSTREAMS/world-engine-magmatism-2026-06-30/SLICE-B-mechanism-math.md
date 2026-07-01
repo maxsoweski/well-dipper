@@ -419,3 +419,13 @@ strength; `thetaSea`/`D_flood` are the pinned scalars for the arm's-length probe
 > `tune`/drivers seam); Venus #4b stagnant-lid; Mars stagnant-lid-rocky; wiring the writer to the F7/F41
 > shaders (lab-only carrier-assessment view — the writer authors the complementary carrier geometry, not the
 > shading). No 4th `carrier.regime` constant (verify.js:39 asserts {0,1,2}).
+>
+> **Edifice SHAPE naturalism — deferred, NOT final (added 2026-07-01 from Max's #4a UAT; this section
+> previously omitted it).** The `(1-r)^p` shield is **isotropic and circular by construction** (the only shape
+> variable is radial geodesic `r`); per-plume `A_e`/`Psi_e`/`p_exp` jitter *scales* the circle, it never
+> *deforms* it. That circular dome is the skeleton, not the intended final look. **Grain-aligned / fissure
+> asymmetry** (elongate along the E6 `grainAngle`/fault field) and **plume size/count from thermal history**
+> (so the field isn't "one giant + arbitrary smaller ones") are the E7 MULTIPLY pass → **increment
+> `#4-MULTIPLY`** (mirrors #2). Flank-collapse/roughness/weathering → **#7 + #8/E8b**. The `grainAngle` field
+> is already available on the carrier (contract inputs) but is NOT read this increment. See the ROADMAP
+> `#4-MULTIPLY` planning note.
