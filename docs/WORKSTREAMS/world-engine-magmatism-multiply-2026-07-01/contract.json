@@ -1,0 +1,124 @@
+{
+  "workstream": "world-engine-magmatism-multiply-2026-07-01",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
+  "rubricRef": "../world-engine-history-program-2026-06-27/UAT-RUBRICS.md",
+  "summary": "Increment #4-MULTIPLY of the world-engine history program (GROUND track): the volcanic analog of the shipped #2 (plate driver-response). It threads the per-body D-vector (bodyDrivers channel) through route()->writeBodyRelief->writeMagmatismSphere (today `void drivers`, magmatism.js:122) so plume COUNT/STRENGTH derive from thermal history (tidal-heat + radiogenic/age, i.e. thermalState) instead of the uniform [0.4,1.0] seed draw; AND it derives a seeded volcanic fissure fabric (per-plume major-axis, disjoint 'magma:grain:' alea stream) + an ELONGATION_GAIN knob so edifices are elongated/fissure-aligned instead of the isotropic (1-r)^p circular dome. Both are one thermal driver. It uses the EXISTING tune-merge seam (magmatism.js:124, tune ? {...MAGMA_DEFAULTS,...tune} : MAGMA_DEFAULTS) and mirrors #2's driversToTune discipline exactly: magmaDriversToTune(MAGMA_REF) returns null so the writer runs #4a BYTE-IDENTICAL at the neutral-driver reference point. Grain-alignment is DERIVED (not carrier.grainAngle, which grounding proved is zero/latitude-binary on the volcanic path — GROUNDING.md §4). No edits to plates.js/shellRelief.js/tectonic.js/sphereField.js; the dispatch predicate stays in planet-lod-rivers.js; no 4th carrier.regime; alea 'magma:' namespace only; #4a seed-only output is the reference baseline.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "BYTE-IDENTICAL AT THE NEUTRAL REFERENCE + DETERMINISM (the load-bearing #2 regression guard): magmaDriversToTune(MAGMA_REF) === null and, with ELONGATION_GAIN at its default 0, writeMagmatismSphere reproduces #4a's fields byte-for-byte for every seed x body-case; no new Math.random/Date.now, no new convergence while-loop, the new per-plume axis draw uses ONLY the disjoint 'magma:grain:' alea stream so the existing 'magma:*' streams are unperturbed; |U| < MAGMA_BOUND.",
+      "verifyVia": {
+        "input": "Call magmaDriversToTune(MAGMA_REF) and assert null. Capture the #4a baseline U/plumeId/hotspotProximity/edificeMask/lavaPlainMask/magmaOceanMask from writeMagmatismSphere(carrier,{},{macroSeed:s,locked:L,T_ss}) for s in {1,2,3,7,42} x L in {false,true}; then run the #4-MULTIPLY writer at the reference (bodyDrivers=null OR MAGMA_REF, tune=null/ELONGATION_GAIN=0) and compare typed arrays. Static-grep magmatism.js for new Math.random/Date.now/while.",
+        "observable": "magmaDriversToTune(MAGMA_REF)===null; byte-identical typed arrays vs the #4a baseline for every (s,L); zero new RNG/while matches; new axis draws confined to 'magma:grain:'; |U[i]| < MAGMA_BOUND."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2",
+      "statement": "MONOTONE COUNT/STRENGTH RESPONSE (correct sign): at a FIXED seed, increasing the thermal driver H (more tidal-heat / younger) monotonically increases plumeCount AND the mean edifice amplitude; decreasing H decreases them; at/below the reference the field collapses to #4a. This is what makes size distribution track thermal history instead of 'one giant + arbitrary smaller'.",
+      "verifyVia": {
+        "input": "Fix macroSeed; build the field at a monotone sweep of bodyDrivers thermal values H0<H1<H2 (H0=reference); read plumeCount and mean(U over edificeMask) at each.",
+        "observable": "plumeCount(H0) <= plumeCount(H1) <= plumeCount(H2) and mean-edifice-amplitude strictly non-decreasing in H (correct sign, no inversion); at H0 the output equals #4a."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3",
+      "statement": "GRAIN ANISOTROPY (structure must PASS) WITHOUT re-introducing latitude (control must FAIL): at non-reference drivers, edifices are measurably ELONGATED and oriented along the seeded per-plume axis (not isotropic, not random, not latitude), AND #4a's load-bearing latitude falsifier still holds. Breaks the 'crude / too regular circular dome' read.",
+      "verifyVia": {
+        "input": "At non-reference H, for each plume measure the edifice footprint's principal-axis aspect ratio and the alignment of its major axis to the seeded per-plume axis; separately correlate U vs sin^2(carrier +y latitude). At the reference, confirm edifices are isotropic (aspect ~1).",
+        "observable": "mean edifice aspect ratio > 1 (elongated) by a set margin AND major-axis-vs-seededAxis alignment high (anisotropy is grain-organized, not noise); varExplainedByLatitudeY < 0.15 AND < varExplainedByPlume (AC3-of-#4a preserved); aspect ~1 at the reference."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4",
+      "statement": "#4a STRUCTURE PRESERVED UNDER ELONGATION + SWEEP: the elevation ordering mean(edifice) > mean(lava-plain) > mean(magma-ocean basin) holds across the driver sweep, the plume-organization signal (arm's-length plume predictor) is not destroyed by elongation, and the shipped #4a magma-structure suite stays green.",
+      "verifyVia": {
+        "input": "Across the H sweep and both body-cases, recompute the mean-ordering and the arm's-length corr(U, plume-proximity predictor); run the existing magma-structure vitest suite.",
+        "observable": "mean(edifice) > mean(plain) > mean(basin) for every sweep point; corr(U, plume predictor) stays above the #4a bar (AC2-of-#4a-equivalent) once basin geometry is excluded; the #4a structure suite passes unchanged."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5",
+      "statement": "NO-CLOBBER + DISPATCH SAFETY: the plate, shell, and despun paths are byte-identical to their pre-change baselines (bodyDrivers stays null off the volcanic path, exactly as #2), the volcanic gate order (plate -> shell -> volcanic -> despun) is unchanged, and no out-of-scope file is edited.",
+      "verifyVia": {
+        "input": "Call writeBodyRelief with terrestrial/ocean (plate), Europa (shell), impact-airless unlocked (despun) and confirm byte-identical fields + null magma tune; git-diff the commit; run the no-clobber + regime-gate harness.",
+        "observable": "plate/shell/despun U byte-identical to baseline with magmaDiag.appliedTune null off the volcanic path; git show touches ONLY magmatism.js, planet-lod-rivers.js, planet-lod-lab.html, the magma test(s), and workstream docs (NOT plates.js/shellRelief.js/tectonic.js/sphereField.js); carrier.regime untouched (verify.js regime in {0,1,2}); the plate/shell regime-gate suites pass."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC6",
+      "statement": "LIVE driver sweep visibly changes the volcano field: in the running lab, at a FIXED seed, sweeping the thermal driver turns a low-thermal volcanic world into a visibly different (more/bigger, more elongated) high-thermal world, and the actual Lava/Magma presets at their real drivers render elongated/fissure-aligned edifices (not perfect circles) vs the #4a skeleton.",
+      "verifyVia": {
+        "input": "In the lab (fresh tab of the running Chrome) select Lava (then Magma), setSeed(1234), reliefBakeStrength(1), drive the new thermal-driver override low->high (or A/B), force a route each time, magmaProbe(), screenshot. Confirm magmaProbe exposes appliedTune + plumeCount + an elongation measure.",
+        "observable": "heightSource=='carrier', regime=='volcanic'; plumeCount and mean edifice amplitude rise from low->high thermal at fixed seed; magmaProbe reports appliedTune non-null and an aspect>1 elongation at high thermal; screenshots show elongated/fissure-aligned edifices at high thermal vs rounder at the reference; Lava and Magma at their real preset drivers read distinctly more natural than the #4a circular skeleton."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7",
+      "statement": "UAT (Max-only): the volcanic worlds now read as NATURAL volcanic worlds — plume sizes track thermal history (not a coin-flip 'one giant + arbitrary smaller'), edifices read as fissure-aligned rather than perfect circles, and Lava/Magma still cohere as recognizable volcanic worlds. Holistic acceptance; never PASSed by any agent.",
+      "verifyVia": {
+        "input": "Max views Lava and Magma in the lab, sweeps the thermal-driver control, and judges the result against the 'crude / too regular' read that motivated this increment.",
+        "observable": "Max judges the volcano sizes as history-tracking and the shapes as natural/fissure-aligned rather than isotropic circular domes, cohering as the volcanic worlds he wanted. Deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "bodyDrivers channel (the per-body D-vector; SEPARATE from grainDrivers, defaults null off the driver path exactly as #2) carrying the baseStep drivers: tidalHeat (calibrateTidal, [0,1), Io~0.19/Earth~0), age (ageNorm [0,1]), rockyCrust (composition proxy); thermalState = clamp01(0.5*tidalHeat + 0.5*(1-age)) is the natural single thermal driver H",
+      "the EXISTING tune-merge seam magmatism.js:124 (tune ? {...MAGMA_DEFAULTS,...tune} : MAGMA_DEFAULTS) — no new merge mechanism",
+      "a NEW MAGMA_REF named reference constant (Object.freeze) — the neutral thermal drivers at which magmaDriversToTune returns null (analog of plates D_EARTH); pinned at build (mustFix #1 calibration)",
+      "a NEW ELONGATION_GAIN knob in MAGMA_DEFAULTS (default 0 = isotropic = #4a); the tune raises it with H",
+      "a NEW disjoint alea stream 'magma:grain:'+seed for the per-plume major-axis direction (never perturbs the existing 'magma:count/centroid/strength/warp/detail/wrinkle/substellar' streams)",
+      "route()->writeBodyRelief threading: the volcanic branch (planet-lod-rivers.js:465) mirrors the plate branch (:447) — pass bodyDrivers + tune: magmaDriversToTune(bodyDrivers)",
+      "three-free deps unchanged: alea, simplex-noise, mathutil clamp/clamp01/mix; T_ss (substellar temp) still threaded for the basin (unchanged from #4a)"
+    ],
+    "outputs": [
+      "carrier.height (REPLACE via .set(U)) — unchanged output contract; now driver+grain-shaped",
+      "magmaDiag extended with appliedTune (the resolved tune override, null at reference) + a per-plume elongation / thermalDriver readout, returned through writeBodyRelief -> route() -> get magmaDiag()",
+      "live magmaProbe() reporting appliedTune + plumeCount + an aspect/elongation measure",
+      "a lab thermal-driver override slider + A/B in the Drivers folder (mirrors #2's 'Body drivers -> plate relief' folder)"
+    ],
+    "mustStayWorking": [
+      "the validated Earth-like plate path — byte-identical (bodyDrivers null off it; AC5)",
+      "the shell-relief icy/despun path and the despun/zonal fallback — byte-identical (AC5)",
+      "#4a's seed-only output IS the neutral-reference baseline — byte-identical at MAGMA_REF (AC1)",
+      "#4a's structure guarantees: plume beats latitude (AC3), mean(edifice)>mean(plain)>mean(basin) ordering (AC4), the magma-structure vitest suite",
+      "NO edits to plates.js, shellRelief.js, tectonic.js, sphereField.js; verify.js asserts carrier.regime in {0,1,2} — do NOT add a 4th regime constant",
+      "AC1 no-RNG + render-once static guards: alea 'magma:' namespaces only (new one disjoint), no Math.random/Date.now, no new while, bounded RELAX_PASSES",
+      "route()/lab never override MAGMA_DEFAULTS directly — only via magmaDriversToTune(bodyDrivers) -> tune (the headless test may still pass an explicit tune), mirroring plates/shell discipline"
+    ]
+  },
+  "filesTouched": [
+    "EDIT src/worldengine/base/magmatism.js (add MAGMA_REF + export magmaDriversToTune (mirror plates driversToTune) + ELONGATION_GAIN default 0 in MAGMA_DEFAULTS; consume the tune for PLUME_COUNT/EDIFICE_HEIGHT/STRENGTH + ELONGATION_GAIN; add the disjoint 'magma:grain:' per-plume axis draw; make the STEP-6 edifice profile anisotropic (decompose plume-top->node displacement into along/cross axis, stretch along by E=1+ELONGATION_GAIN*H'))",
+    "EDIT planet-lod-rivers.js (volcanic branch ~:465: pass bodyDrivers + tune: magmaDriversToTune(bodyDrivers); extend magmaDiag with appliedTune)",
+    "EDIT planet-lod-lab.html (Drivers folder: thermal-driver override slider(s) + A/B for the volcanic path; magmaProbe exposes appliedTune + elongation)",
+    "EDIT tests/worldengine-base-magmatism-structure.test.js (add the #4-MULTIPLY AC blocks: byte-identity-at-reference, monotone response, anisotropy, ordering-under-sweep) — or a NEW sibling test file",
+    "DOC SLICE-B-calibration.md (MAGMA_REF + transfer-fn calibration) + record-build-intent note (function + intent + non-goals)"
+  ],
+  "mustFix": [
+    "#1 CALIBRATION (load-bearing; pin in PLAN before implementing SLICE B): define MAGMA_REF as a named Object.freeze constant and calibrate magmaDriversToTune so f(MAGMA_REF) === null -> #4a byte-identical (analog of #2's D_EARTH must-fix). CRITICAL RISK to resolve first: verify the ACTUAL Lava (hot airless) and Magma (K2-141b) lab presets carry thermal drivers (tidalHeat/age) that place them OFF MAGMA_REF so they visibly improve. If the lab presets carry defaults (tidalHeat~0, age~0.5) that coincide with a neutral MAGMA_REF, the shipped worlds will NOT change and AC6/AC7 fail. Mitigations (decide in PLAN): (a) surface a real tidalHeat for volcanic presets (mirror #2's 'age surfaced first'); and/or (b) fold T_eq/T_ss (which DOES vary: Lava 950 vs Magma 2000) into the thermal driver H as an endogenic-activity proxy — but keep irradiation (T_ss, a shading/basin input) conceptually distinct from endogenic plume heat; document the choice.",
+    "#2 ELONGATION mechanism (SLICE B): per-plume seeded major-axis via alea('magma:grain:'+seed) (disjoint) + E = 1 + ELONGATION_GAIN * H' (H' = thermal deviation from reference, so E=1 at the reference). Anisotropic normalized radius: build a tangent frame at each plume top, decompose the geodesic displacement to node i into along-axis/cross-axis components, r_aniso = hypot(along/(radius*E), cross/radius). ELONGATION_GAIN default 0 (circular #4a). Must preserve edifice>plain>basin (the moat/swell/flood math keys off the same edificeMask) and AC3.",
+    "#3 BYTE-IDENTITY discipline (mirror #2): magmaDriversToTune returns only changed fields; an identity guard returns null when every override equals its MAGMA_DEFAULT AND ELONGATION_GAIN maps to 0 -> the tune?{...}:DEFAULTS ternary takes the untouched branch. The new 'magma:grain:' draw must be positioned so it does not shift any existing stream's byte output at the reference (a fresh alea instance, not an extra pull on an existing rng).",
+    "GRAIN SOURCE IS DERIVED, NOT carrier.grainAngle (GROUNDING.md §4): carrier.grainAngle is zero-inited on the volcanic path (writeGrainSphere runs only on the despun branch) and is a binary latitude value where written (tectonic.js) — aligning to it would trip AC3. Do NOT read it; derive the seeded fabric.",
+    "OUT OF SCOPE: no edits to plates.js/shellRelief.js/tectonic.js/sphereField.js; no game Planet.js port (lab-only, #9); Venus #4b + Mars stagnant-lid remain separate; the basin-vs-plain legibility + weathering reads stay deferred (#8 palette/F41, #7/#8 weathering) per the #4a UAT."
+  ],
+  "buildSlices": [
+    "SLICE A (plumbing + byte-identity, math-light): thread bodyDrivers + tune: magmaDriversToTune(bodyDrivers) into the volcanic branch (planet-lod-rivers.js); add MAGMA_REF + a magmaDriversToTune stub that returns null + ELONGATION_GAIN:0 in MAGMA_DEFAULTS; extend magmaDiag with appliedTune (null); lab magmaProbe surfaces appliedTune. Covers AC1 (byte-identity + determinism) and AC5 (no-clobber). Everything null/0 => #4a byte-identical.",
+    "SLICE B (mechanism + calibration, needs mustFix #1): fill magmaDriversToTune (count/strength/elongation transfer fns calibrated to MAGMA_REF); add the disjoint 'magma:grain:' per-plume axis + the anisotropic STEP-6 edifice profile; lab thermal-driver slider + A/B; magmaProbe elongation readout. Covers AC2, AC3, AC4, and the live AC6."
+  ]
+}
