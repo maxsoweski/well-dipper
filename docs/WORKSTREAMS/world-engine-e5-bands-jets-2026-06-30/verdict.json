@@ -1,0 +1,100 @@
+{
+  "workstream": "world-engine-e5-bands-jets-2026-06-30",
+  "commit": "9c80d40",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). NO-RNG static guard: grep -nE 'Math\\.random\\s*\\(|Date\\.now\\s*\\(' over src/worldengine/base/climate-e5.js = ZERO matches; the only randomness (alea at L143 'climateE5:params:'+regime+':'+seed and L265 createNoise3D(alea('climateE5:filament:'+regime+':'+(macroSeed|0)))) is macroSeed-derived and climateE5:-namespaced (disjoint from plates:*/shell:*). Headless: npx vitest run tests/worldengine-base-climate-e5 = 1 file / 17 tests PASS (~528ms). The 3 AC1 tests pass: static source guard; byte-identical across REGIMES=[gas-giant,saturnian,neptunian,sub-neptune] x SEEDS=[1,2,7,42] (toEqual on two fresh runs); golden byte hash at (gas-giant, seed 1) === -1329854088; plus per-seed-distinct (seed 1 != 999). Caveat (non-blocking): docs/TESTING_CONVENTIONS.md absent in worktree; layer verified against declared layer:unit."
+    },
+    {
+      "id": "AC2",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). npx vitest run tests/worldengine-base-climate-e5 = 17/17 PASS; '[AC2] all fields finite and within documented bounds' green. Over 4 regimes x seeds {1,2,7,42} x 5 driver draws (rotation/obliquity/energy/dissipation), asserts Number.isFinite on bandField & W (catches NaN/Inf); |bandField|<=peakU*(A_EQ+aMid*envMax)+1e-4 (a real analytic envelope from jetProfile, not a tautology); bandNorm in [0,1]; turbulence in [0,turbBound+1e-4] (turbBound=nodeMaxShear*FILAMENT_HI); mushball in [MUSH_M0-MUSH_AMP-1e-4, MUSH_M0+MUSH_AMP+1e-4]. Zero violations aggregated. Matches contract AC2 (contract.json:18-26)."
+    },
+    {
+      "id": "AC3",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). '[AC3] bandField matches an arm's-length u(lat) re-derivation from returned params (< 1e-4/node)' PASS. For each regime, for every node computes |bandField[i] - refU(lat[i], params)| with lat=asin(vert.y) and asserts max residual < 1e-4. refU (test L32-38) re-implements the profile from the RETURNED params (not by calling jetProfile), confirmed algebraically identical to climate-e5.js:174-181 (jetProfile) + envAt (L172). Bar has teeth: paired [AC4][required-failure] longitude-dependent control field is provably rejected (> 1e-4*100). Helper + assertion added in diff 742a08e..9c80d40."
+    },
+    {
+      "id": "AC4",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). 17/17 PASS. Clause A: '[AC4][required-failure] longitude-dependent control FAILS the zonality bar' PASS (worst residual ~9.5e-1 vs true zonal ~2.98e-8, ~4 orders past the 1e-4 bar). Clause B: '[AC4] band count strictly monotonic in rotation, ~a dozen at Jupiter (NOT fixed 3-band)' PASS: bc(0.4)<bc(1.0)<bc(1.8); reproduced gas-giant/seed1 counts rot 0.4->6,0.7->8,1.0->10,1.4->12,1.8->14; at Jupiter norm rotation count=10 in [8,16] and >3. Mechanism rhinesWavenumber() N~sqrt(a*Omega/U)."
+    },
+    {
+      "id": "AC5",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). '[AC5] equatorial jet prograde Jovian/Saturnian, retrograde Neptunian; driver-flippable' PASS. Sign is DRIVER-decided: equatorialJetSign(shellDepthFrac)=tanh(6*(D-0.40)) (climate-e5.js:108-111); gas-giant D=0.80 & saturnian 0.90 -> >0 prograde, neptunian 0.15 -> <0 retrograde. At lat=0, eqEnv term vanishes so sign(u_eq)=sign(sEq)=sign(equatorialJetSign). Test asserts eqSign signs for the 3 regimes AND driver-organized flip: NEPTUNIAN with {shellDepthFrac:0.8} -> eqSign>0 (only the driver changed). Legacy test pins equatorialJetSign(0.8)>0, (0.15)<0."
+    },
+    {
+      "id": "AC6",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). '[AC6] peak|U| highest for Neptunian despite LOWEST energy input; naive insolation control inverts' PASS. amplitudeLaw (climate-e5.js:114-117) = C_U*sqrt(internalHeat/dissipation)*(1+KAPPA*(1-shellDepthFrac)); insolation deliberately absent. Independent recompute: peak|U| Neptunian 7.7022 > Jovian 1.5507 > Saturnian... while energyInput Neptunian 0.0297 < Jovian 1.0; naive sqrt(energyInput) control puts Neptunian LOWEST (0.1723) -> inverted ordering, so the shell-depth/dissipation term is load-bearing. Wording split (energy-input vs internalHeat) is the designed paradox (header LAW 3)."
+    },
+    {
+      "id": "AC7",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). Both AC7 tests green: insolation pole-equator sign flip crossing ~54.7 (cold->hot poles), and band structure inverts to pole-emphasis for >54deg obliquity. New pure fns added in diff: wardS2(\u03b5)=(5/16)(3sin\u00b2\u03b5-2), wardInsolation(sinLat,\u03b5)=1+wardS2*P2(sin\u03c6); writer emits W[i] per node; env feeds s2 into band envelope. Independent re-derivation of W(pole)-W(equator) over \u03b5 in {0,30,54,60,90}: -0.9375,-0.586,-0.017,+0.117,+0.469, crossing at 54.7356 \u2014 exactly the AC observable."
+    },
+    {
+      "id": "AC8",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). Both AC8 tests green. (i) turbulence shear-gated: turbulence[i]=|jetShear(lat,P)|*filament, filament in [0.4,1.0]; test asserts corr(shearMag,turbulence)>=0.5 and for every node shearMag<1e-3 => turbulence<1e-3 with upper bound turbulence<=shearMag*FILAMENT_HI+1e-6 (construction guarantee turbulence->0 as shear->0); jetShear(0,P)~=0 confirmed. (ii) mushball: separate Float32Array = MUSH_M0+MUSH_AMP*sin(mMush*lat+phaseMush), distinct wavenumber; test asserts max-min>0.1 (banded) and mushball!==bandField (not folded into u), bounded [0.15,0.85]."
+    },
+    {
+      "id": "AC9",
+      "result": "PASS",
+      "adversarialVotes": "3/3 sufficient",
+      "evidence": "Unit (live=false). Static: writeClimateE5Sphere only READS carrier (carrier.N, carrier.verts, verts[i]) then allocates 6 fresh Float32Arrays and returns a new object; grep -nE 'carrier\\.[A-Za-z_]+\\s*=' over writer = NONE (zero writes to carrier.height or any channel); bakeClimateE5Attributes takes a plain positions array, not the carrier. Headless: '[AC9] writer never mutates carrier.height / writes no relief' PASS \u2014 snapshots c.height, runs writer, asserts byte-equal, plus comment-stripped guards not.toMatch(/carrier\\.height/) and not.toMatch(/\\.height\\s*\\[/). Runtime loop covers all 4 archetypes at seed 1; full generality rests on the structural no-write-path fact."
+    },
+    {
+      "id": "AC10",
+      "result": "PASS",
+      "adversarialVotes": "n/a \u2014 live-driven by working-Claude (chrome-devtools), not adversarially voted",
+      "evidence": "LIVE-DRIVEN by working-Claude via chrome-devtools on :5176 (2026-07-01) \u2014 PASS. Lab reloaded, GLSL compiled clean (no shader compile/link error; one unrelated 404). Jovian bands render. Source-confirmed: zonalBandCol computes bandVal=wBand+uBandWarp*0.16*r (planet-lod-height.glsl.js:1795) then zone=smoothstep(0.34,0.66,bandVal) (L1799); the old 0.25*latC*uBandCount stripe ladder is removed from the band VALUE (the 3 remaining latC*uBandCount hits are jet-placement/festoon helpers that correctly ride latitude). ANIMATION-CONTROLLED LIVE PROOF (jets OFF => static render, no jet-drift confound): sweeping the writer's E5 rotation x0.5->x3.0 took the disc from ~2-3 broad bands to ~6-8 fine bands. A fixed-uBandCount latitude ladder cannot respond to a climate-e5 rotation driver, so the shader is reading the piped writer field. Corroborates the verify pass's static wiring confirmation.  [ORIGINAL STATIC-PASS NOTE FROM VERIFY WORKFLOW: Integration (live=true) \u2014 NOT driven in the static pass, so INSUFFICIENT (live integration PENDING for working-Claude to drive via chrome-devtools). Static read-only CONFIRMS the mechanism is wired: zonalBandCol(vec3,vec3) -> zonalBandCol(vec3 N,vec3 pos,float wBand,float wShear,float wMush) (planet-lod-height.glsl.js:1761); band VALUE now 'float bandVal=wBand+uBandWarp*0.16*r' (L1795) -> smoothst ...]"
+    },
+    {
+      "id": "AC11",
+      "result": "PASS",
+      "adversarialVotes": "n/a \u2014 live-driven by working-Claude (chrome-devtools), not adversarially voted",
+      "evidence": "LIVE-DRIVEN on :5176 (2026-07-01) \u2014 PASS. Four presets render visibly distinct (band count display updates per preset): Jovian (14 bands, reddish-brown sharp belts, high contrast, 11 RE), Saturnian (11, golden butterscotch, soft broad belts, ~11 RE), Neptunian (3, methane-blue muted near-featureless, 3.44 RE / 21920 km), Sub-Neptune hazy (3, hazy pinkish washed-out, 3.44 RE \u2014 muted vs crisp Jovian and NOT Jupiter-sized). Two Jovian macroSeeds (1 vs 42): same 14-band count but visibly different band phase/placement. Distinct counts/palettes/sizes + per-seed phase = no single shape recolored.  [ORIGINAL STATIC-PASS NOTE FROM VERIFY WORKFLOW: Integration (live=true) \u2014 INSUFFICIENT (live integration PENDING; requires running lab driven via chrome-devtools). Static CONFIRMS distinctness machinery present & wired: E5_PRESET_REGIME (lab 2855-2859) maps four presets to four DISTINCT E5_REGIME (GAS_GIANT/SATURNIAN/NEPTUNIAN/SUB_NEPTUNE); all four keys present in DRIVER_PRESETS (rebakeE5Bands won't no-op). Per-archetype separation from DRIVER ...]"
+    },
+    {
+      "id": "AC12",
+      "result": "PASS",
+      "adversarialVotes": "n/a \u2014 live-driven by working-Claude (chrome-devtools), not adversarially voted",
+      "evidence": "LIVE-DRIVEN on :5176 (2026-07-01) \u2014 PASS on the driver-organization observable. (a) rotation x0.5->x3.0 => monotonic band-count increase (static, jets off). (c) obliquity 80deg => modest poleward band-emphasis shift on Jovian (rotation-dominated regime; Ward pole-emphasis is a secondary modulation here, consistent with the physics \u2014 dramatic inversion would need an ice-giant/low-rotation config). (d) close view (distance 2, jets on) => churning belts with wispy filaments riding the writer shear + faint NH3 mushball tint, reads cohesive (not flat, not noise, not static). (b) CAVEAT: the Neptunian equatorial RETROGRADE sign (dark belt vs Jovian bright zone) is muted-by-design live (ice giants deliberately low band-contrast; band params are writer-driven read-only, so it cannot be revealed without fighting the design) \u2014 that sign is UNIT-VERIFIED by AC5 (PASS: eqSign prograde Jovian/Saturnian, retrograde Neptunian, driver-flippable).  [ORIGINAL STATIC-PASS NOTE FROM VERIFY WORKFLOW: Integration (live=true) \u2014 INSUFFICIENT (live integration PENDING; asserts VISIBLE driver-organization through the GLSL render seam, which a read-only pass cannot observe). Static CONFIRMS all four sub-claim laws present & wired: LAW1 rhinesWavenumber -> faster rotation = MORE bands; LAW2 equatorialJetSign=tanh(K*(shellDepth-0.40)) -> Neptunian retrograde eq jet; LAW4 wardS2 sign-flip at 54.7 + env ...]"
+    },
+    {
+      "id": "AC13",
+      "result": "deferred-to-max",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only",
+      "evidence": "UAT (live=true) \u2014 deferred-to-max by invariant; no agent ever drives or PASSes UAT. Gating: UAT presupposes integration is GREEN, so this is judged only AFTER live AC10-AC12 pass. Structural basis (supports but does not establish acceptance): the four UAT presets resolve to four separate DRIVER_BUNDLES with genuinely different physics \u2014 Jovian (rot 1.0, shellDepth 0.80, obliq 3.1), Saturnian (rot 0.931, shellDepth 0.90, obliq 26.7), Neptunian (rot 0.616, shellDepth 0.15 -> retrograde eq jet, obliq 28.3), hazy sub-Neptune (rot 0.55, shellDepth 0.35, hazeMute 0.7) -> different Rhines counts (Jovian ~12 vs Neptunian ~3), driver-flippable eq-jet sign, per-seed phase offsets, shear-gated turbulence + separate NH3 mushball channel. CAVEAT for UAT eye: a pre-existing legacy mapping (lab 1927-1930) maps Saturnian->gas-giant and Neptunian->sub-neptune, differing from the new E5_PRESET_REGIME used by the render seam; both mappings coexist."
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX 9c80d40 \u2014 unit PASS (AC1-AC9, 9/9, adversarial 3/3, headless suite 17/17, golden bandField hash -1329854088 byte-stable) + integration PASS (AC10-AC12 live-driven by working-Claude via chrome-devtools on :5176 2026-07-01; the verify pass had statically confirmed the render seam wired). AC13 UAT deferred-to-max and NEVER auto-passed. Integration-green is necessary-not-sufficient: AC13 (holistic cohesion) is Max's hands-on gate alone.",
+  "summaryForMax": "E5 #3a (bands/jets) is objectively verified and awaiting your AC13 UAT. Unit: 17/17 headless + every physics law independently recomputed under 3x adversarial review (amplitude law => Neptunian highest |U| despite lowest energy; Ward insolation flips pole/equator sign at 54.7deg; equatorial jet sign is driver-decided prograde/retrograde; turbulence shear-gated; mushball a distinct channel; gas giants never write relief; determinism + golden hash). Integration (driven live by me on :5176): the four archetypes render as distinct per-body/per-seed atmospheres sourced from climate-e5 (rotation sweep changes band count in the running shader => proves the writer field reaches the render, not the old hard-coded ladder). Your gate: view Jovian/Saturnian/Neptunian/hazy sub-Neptune + a couple re-rolls and judge cohesive-whole / variety+depth / not-repetitive-3-band / not-noise.",
+  "verifiedAt": "2026-07-01",
+  "verifiedBy": "verify-workstream wf_50abf0da-f1b (unit AC1-AC9, 9/9 adversarial 3/3, headless 17/17) + working-Claude live chrome-devtools drive on :5176 (integration AC10-AC12)",
+  "branch": "feature/world-engine-atmosphere",
+  "notPushed": true,
+  "notes": [
+    "AC12(b) Neptunian equatorial retrograde sign is muted-by-design in the live render (ice-giant low band-contrast; writer-driven read-only band params) \u2014 it is unit-verified via AC5. Not a defect; the signed field is present in data (byte-stable golden hash).",
+    "verdict.json written by working-Claude (Workflow scripts have no fs access; the verify workflow returned the verdict as its result for the caller to persist).",
+    "Push HOLD \u2014 campaign-wide; branch feature/world-engine-atmosphere not pushed."
+  ]
+}

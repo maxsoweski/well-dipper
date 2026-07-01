@@ -2,7 +2,7 @@
   "workstream": "world-engine-e5-bands-jets-2026-06-30",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "VERIFIED_PENDING_MAX 9c80d40 (2026-07-01) — unit PASS (AC1-AC9, 9/9, verify-workstream wf_50abf0da-f1b re-ran 17/17 headless + 3/3 adversarial each; every physics law independently recomputed: amplitude law => Neptunian highest |U| at lowest energy, Ward insolation pole/equator sign flip at 54.7deg, driver-flippable equatorial jet sign, shear-gated turbulence, distinct mushball channel, gas-giants-no-relief, determinism + golden bandField hash -1329854088). integration PASS (AC10-AC12 live-driven by working-Claude via chrome-devtools on :5176: render seam confirmed at source [zonalBandCol bandVal=wBand, old 0.25*latC*uBandCount ladder gone] AND live [jets-off static rotation sweep x0.5->x3.0 => band count ~2-3 -> ~6-8, proving the shader reads the writer field]; four archetypes render distinct [band counts 14/11/3/3, distinct palettes/sizes], two Jovian seeds differ in phase, close view = churning filaments+mushball cohesive). AC12(b) Neptunian equatorial retrograde SIGN muted-by-design live (ice giants low-contrast; writer-driven read-only) but UNIT-verified via AC5. AC13 UAT = Max's gate alone, PENDING (never auto-passed). Integration-green necessary-not-sufficient. verdict.json written. Push HOLD (campaign-wide, branch feature/world-engine-atmosphere).",
   "acceptanceCriteria": [
     {
       "id": "AC1",
