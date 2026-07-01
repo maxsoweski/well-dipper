@@ -1945,6 +1945,12 @@
       octAuto: true,
       fwClamp: true,
       spinSpeed: 0,         // rad/frame auto-rotate; 0 = stopped (preserves the old spin-off default)
+      // Sun direction (world-space), runtime-adjustable via the View & LOD folder / _lab.setLightDir.
+      // Convention matches camera yaw/pitch: az from +z toward +x, el above the xz-plane. Defaults
+      // below are the spherical form of the original WORLD_LIGHT (0.6,0.35,0.7) so the DEFAULT light
+      // is byte-identical until Max moves it. applyLightDir() rewrites WORLD_LIGHT + uShellLight.
+      lightAzimuthDeg: 40.6,
+      lightElevationDeg: 20.79,
       // ── Envelope (spec §2.C) — the A/B/C tunable surface; values stay OPEN (§4) ──
       ditherMode: 0,        // 0 Bayer, 1 IGN/triangular
       emissive: 0.0,        // lava/hot glow
@@ -2540,6 +2546,19 @@
     fPlateRelief.add({ ab(){ applyReliefBake(grainCarveUI.reliefBakeStrength >= 0.5 ? 0 : 1); } }, 'ab')
       .name('Relief A/B: plates ↔ flat ocean');
 
+    // ── Sun direction (world-space), runtime-adjustable ──────────────────────────
+    // Rewrites the WORLD_LIGHT constant (mutated in place) from state.lightAzimuth/Elevation,
+    // and refreshes the one-time uShellLight copy. The planet surface (uLightDir) and the rings
+    // read WORLD_LIGHT per-frame so they follow automatically; uShellLight is an init-only copy,
+    // so it must be refreshed here. Convention matches camera yaw/pitch (az +z→+x, el above xz).
+    function applyLightDir(){
+      const az = THREE.MathUtils.degToRad(state.lightAzimuthDeg);
+      const el = THREE.MathUtils.degToRad(state.lightElevationDeg);
+      const ce = Math.cos(el);
+      WORLD_LIGHT.set(ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)).normalize();
+      if (uniforms.uShellLight) uniforms.uShellLight.value.copy(WORLD_LIGHT);
+    }
+
     // ▸ View & LOD (always open)
     const fView = guiLeft.addFolder('View & LOD'); fView.open();
     fView.add(state, 'distance', 1.1, 30, 0.1).name('distance (radii)').listen();
@@ -2551,6 +2570,18 @@
     // Spin is how you INSPECT the planet (watch the terminator sweep), not what a planet is.
     // 0 = stopped (the old spin-off default); 0.000375 (dead-center) = the original auto-rate.
     fView.add(state, 'spinSpeed', 0, 0.00075, 0.000025).name('spin speed (rad/frame)');
+    // Sun direction — rotate the star to inspect features on any hemisphere. NB: some carrier
+    // features are seed-placed independent of the scene sun (e.g. the substellar magma basin can
+    // sit on the night side), so this lets you light them. '☀ sun ← camera' snaps the sun to the
+    // current view so whatever you're looking at is lit.
+    fView.add(state, 'lightAzimuthDeg', -180, 180, 1).name('sun azimuth°').listen().onChange(applyLightDir);
+    fView.add(state, 'lightElevationDeg', -89, 89, 1).name('sun elevation°').listen().onChange(applyLightDir);
+    fView.add({ toCam(){
+      let azd = THREE.MathUtils.radToDeg(state.yaw) % 360; if (azd > 180) azd -= 360; if (azd < -180) azd += 360;
+      state.lightAzimuthDeg = azd;
+      state.lightElevationDeg = THREE.MathUtils.radToDeg(state.pitch);
+      applyLightDir();
+    } }, 'toCam').name('☀ sun ← camera');
 
     // ▸ Envelope (open) — the A/B/C decision surface (spec §2.C). Values stay OPEN (§4):
     // this folder delivers the *controls*; settling per-type values is Max's playtesting.
@@ -5230,6 +5261,7 @@
         fwClamp: state.fwClamp, spinSpeed: state.spinSpeed,
         macroSeed: state.macroSeed, detailSeed: state.detailSeed,
         yaw: +state.yaw.toFixed(4), pitch: +state.pitch.toFixed(4), distance: +state.distance.toFixed(2),
+        lightAzimuthDeg: +state.lightAzimuthDeg.toFixed(2), lightElevationDeg: +state.lightElevationDeg.toFixed(2),
       };
     }
     // Programmatic state apply (used by chrome-devtools verification + Copy-paste round-trip).
@@ -5237,8 +5269,10 @@
     function applySettings(o){
       if (!o) return;
       const keys = ['pixelScale','octaves','levels','perturb','distance','yaw','pitch',
-                    'macroSeed','detailSeed','octAuto','fwClamp','spinSpeed','normalMode'];
+                    'macroSeed','detailSeed','octAuto','fwClamp','spinSpeed','normalMode',
+                    'lightAzimuthDeg','lightElevationDeg'];
       for (const k of keys) if (o[k] != null) state[k] = o[k];
+      if (o.lightAzimuthDeg != null || o.lightElevationDeg != null) applyLightDir();
       if (o.pixelScale != null) rebuildTarget();
       updateSeedUniforms();
       syncDisplays();
@@ -6153,6 +6187,26 @@
                       updateSeedUniforms();
                       return { macroSeed: state.macroSeed, detailSeed: state.detailSeed };
                     },
+                    // Sun-direction control (lab lighting). setLightDir(azDeg, elDeg) rotates the world
+                    // light; convention matches camera yaw/pitch (az from +z→+x, el above the xz-plane).
+                    // Handy for features the seed-placed sun misses — e.g. the substellar magma basin,
+                    // which by default faces AWAY from the sun (renders on the night side). sunToCamera()
+                    // snaps the sun to the current view so whatever you're looking at is lit. Returns the
+                    // world-space light dir. The GUI sliders (View & LOD) mirror these via .listen().
+                    setLightDir(azDeg, elDeg){
+                      if (azDeg !== undefined) state.lightAzimuthDeg = +azDeg;
+                      if (elDeg !== undefined) state.lightElevationDeg = +elDeg;
+                      applyLightDir();
+                      return [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z];
+                    },
+                    sunToCamera(){
+                      let azd = THREE.MathUtils.radToDeg(state.yaw) % 360; if (azd > 180) azd -= 360; if (azd < -180) azd += 360;
+                      state.lightAzimuthDeg = azd;
+                      state.lightElevationDeg = THREE.MathUtils.radToDeg(state.pitch);
+                      applyLightDir();
+                      return [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z];
+                    },
+                    get lightDir(){ return [WORLD_LIGHT.x, WORLD_LIGHT.y, WORLD_LIGHT.z]; },
                     // Option B river-LOD STEP 2 — bake the fine-tributary patch at the CURRENT camera + set strength.
                     // Usage: window._lab.bakeTributaryPatch({ angularDeg: 8, strength: 1 }) — bakes at the current
                     // camera direction, raises the patch strength, and returns { center,u,v,angular,segmentCount }.
