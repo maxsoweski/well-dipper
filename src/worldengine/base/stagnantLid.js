@@ -48,7 +48,8 @@ export const DEFAULTS = Object.freeze({
   TESSERA_CENTER_FRAC: 0.4,             // per-center type draw: ancient (tessera-forming) vs corona-forming
   TESSERA_FRAC: 0.075,                  // target tessera areal fraction (percentile-histogram threshold on plumeProxAncient)
   WARP_FREQ: 1.5, WARP_AMP: 0.22,       // domain-warp of the province margins (== plates)
-  CORONA_POOL: 120, CORONA_BIAS: 2.0,   // candidate sites; accept ∝ plumeProx(site)^BIAS → tight BAT clustering (~14–28 accepted)
+  CORONA_POOL: 120, CORONA_BIAS: 2.0,   // candidate sites PER CORONA_POOL_REF_N nodes; accept ∝ plumeProx(site)^BIAS → tight BAT clustering
+  CORONA_POOL_REF_N: 1500,              // pool scales ∝ N so corona COVERAGE is resolution-invariant (else node-scaled coronae + fixed pool → sparse/vanishing coverage on the fine game mesh). ~16 coronae at N=1500, ~430 at the 40k game mesh.
   CORONA_ACTIVE_FRAC: 0.65,             // active:inactive morphology SELECTOR (2025 gravity-resolved 52/75≈0.69, nudged down)
   CORONA_CTRL_ACCEPT: 0.13,            // AC4 random-placement control: constant accept-gate (plume-decoupled; ~matches real accept rate)
   // Corona RADIUS is RESOLUTION-ADAPTIVE (× meanEdgeAngle) so coronae are node-legible at ANY mesh
@@ -174,7 +175,7 @@ export function writeStagnantLidReliefSphere(
   const T = tune ? { ...DEFAULTS, ...tune } : DEFAULTS;
   const {
     PLUME_MIN, PLUME_SPAN, PLUME_BELT, TESSERA_CENTER_FRAC, TESSERA_FRAC, WARP_FREQ, WARP_AMP,
-    CORONA_POOL, CORONA_BIAS, CORONA_ACTIVE_FRAC, CORONA_CTRL_ACCEPT,
+    CORONA_POOL, CORONA_POOL_REF_N, CORONA_BIAS, CORONA_ACTIVE_FRAC, CORONA_CTRL_ACCEPT,
     CORONA_RC_MIN_NODES, CORONA_RC_SPAN_NODES, CORONA_SIZE_SKEW, CORONA_SUPPORT_ACTIVE, CORONA_SUPPORT_INACTIVE,
     A_DOME, A_TRENCH, A_RISE, A_DEP, A_RIM, BASE_TESSERA, BASE_PLAINS, BASE_RIFT,
     TESS_FOLD_AMP, TESS_RIBBON_AMP, FOLD_FREQ, RIBBON_FREQ, RIFT_HALFWIDTH_NODES,
@@ -279,7 +280,8 @@ export function writeStagnantLidReliefSphere(
   const coronaCenters = [];
   const coronaRadiusArr = [];
   const coronaActiveArr = [];
-  for (let k = 0; k < CORONA_POOL; k++) {
+  const coronaPool = Math.max(1, Math.round(CORONA_POOL * N / CORONA_POOL_REF_N)); // ∝ N ⇒ resolution-invariant coverage
+  for (let k = 0; k < coronaPool; k++) {
     const site = randDir(rngCor);                     // 2 draws
     const acc = rngCor();                             // 1 draw (accept)
     const pAccept = randomPlacementControl ? CORONA_CTRL_ACCEPT : Math.pow(proxAt(site).any, CORONA_BIAS);
