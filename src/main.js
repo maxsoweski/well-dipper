@@ -2084,6 +2084,17 @@ window._lab = {
     return { ok: !!autoNav.isActive };
   },
 
+  /** Read a settings value (e.g. 'tourLingerMultiplier', 'celestialTimeMultiplier').
+   * Used by runFlightReliabilitySuite to speed up the standing tour check. */
+  getSetting(key) { return settings.get(key); },
+
+  /** Set a settings value. Returns the previous value so callers can restore it. */
+  setSetting(key, value) {
+    const prev = settings.get(key);
+    settings.set(key, value);
+    return prev;
+  },
+
   /** Currently-loaded system metadata. */
   systemInfo() {
     if (!system) return null;
@@ -6832,6 +6843,17 @@ function _handleScPilotFrame(frame) {
     _manualBurnOrbiting = true;
   }
 
+  // WS-1 no-freeze guard: the pilot's CRUISE stall-detector aborted a wedged /
+  // uncatchable leg. A standalone (Assist / commit-burn) leg drops out of
+  // supercruise gracefully here (settle to rest — no runaway drive); a tour leg
+  // is advanced below (skip-and-continue). Handle the standalone case before the
+  // tour-only early return.
+  if (frame.stallAborted && !autoNav.isActive) {
+    scModel.setDrive(false);
+    _manualBurnOrbiting = false;
+    return;
+  }
+
   // Tour-only wiring below; manual-burn pilot legs (Task 9) skip it.
   if (!autoNav.isActive) return;
 
@@ -6848,10 +6870,12 @@ function _handleScPilotFrame(frame) {
     if (_tgt) _selectedTarget = _tgt;
   }
 
-  // Tour advance: motionComplete fires after the HOLD linger timer.
-  if (frame.motionComplete && !_scLegAdvanced) {
+  // Tour advance: motionComplete fires after the HOLD linger timer, OR the WS-1
+  // stall-detector aborted a wedged/uncatchable leg (skip-and-continue). Either
+  // way advance past any null-bodyRef stops so the tour can never freeze.
+  if ((frame.motionComplete || frame.stallAborted) && !_scLegAdvanced) {
     _scLegAdvanced = true;
-    const nextStop = autoNav.advanceToNext();
+    const nextStop = autoNav.advanceToNextWithBody();
     if (nextStop && nextStop.bodyRef) {
       scControls.flyTo({
         toBody: nextStop.bodyRef,
@@ -7979,7 +8003,7 @@ function simStep(deltaTime) {
         // mover. (Since the Task-7 cutover the warp-arrival fly-in is
         // a scPilot leg from warpRevealSystem — this handoff only
         // fires for manual-burn navSubsystem legs, Task 9's domain.)
-        const nextStop = autoNav.advanceToNext();
+        const nextStop = autoNav.advanceToNextWithBody(); // WS-1: skip null-bodyRef stops
         if (nextStop && nextStop.bodyRef) {
           if (navSubsystem.stop) navSubsystem.stop();
           // navSubsystem owned the camera until this frame — seed the

@@ -21,10 +21,11 @@ export const PilotPhase = Object.freeze({
  * @property {boolean} motionComplete  HOLD linger timer elapsed (level-triggered past linger)
  * @property {boolean} overshoot       entered capture sphere too hot — flew past, stayed CRUISE
  * @property {boolean} decelStarted    one-shot AC6 shake cue at 15R (DECEL_CUE_FACTOR)
+ * @property {boolean} stallAborted    CRUISE made no net progress for CRUISE_STALL_WINDOW s — leg aborted (WS-1 no-freeze guard)
  */
 // Canonical field list/order of a PilotFrame — the named arrival/Frame contract.
 export const PILOT_FRAME_FIELDS = Object.freeze([
-  'phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted',
+  'phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted', 'stallAborted',
 ]);
 
 export const PILOT_TUNING = {
@@ -41,6 +42,13 @@ export const PILOT_TUNING = {
   DECEL_CUE_FACTOR: 15,      // decelStarted one-shot at 15R (AC6 shake cue)
   HOLD_VIEW_FRAC: 2.6,       // hold distance ≈ 2.6R (today's felt-fill)
   HOLD_SETTLE_TAU: 0.6,      // s — exponential ease from capture point to hold point (kills HOLD-entry snap)
+  // WS-1 CRUISE stall-detector (no-freeze guard). CRUISE has no natural timeout; a leg blocked by the
+  // star (wedge) or chasing an uncatchable fast-orbiting moon would stay in CRUISE forever. If dist-to-
+  // target fails to improve by CRUISE_STALL_PROGRESS_FRAC of the leg's initial CRUISE distance within
+  // CRUISE_STALL_WINDOW seconds, the leg is aborted (frame.stallAborted). Scale-free (fraction of the
+  // leg's own distance). Only the CRUISE phase is watched — a HOLD park (linger:∞) is never a stall.
+  CRUISE_STALL_WINDOW: 12.0,        // s — no-net-progress window before abort
+  CRUISE_STALL_PROGRESS_FRAC: 0.02, // fraction of the initial CRUISE dist that counts as real progress
 };
 
 export class SupercruisePilot {
@@ -54,6 +62,9 @@ export class SupercruisePilot {
     this._holdTimer = 0;
     this._alignTimer = 0;
     this._decelCued = false;
+    this._cruiseStallTimer = 0;   // WS-1: s spent in CRUISE without net progress
+    this._cruiseBestDist = Infinity; // WS-1: best (smallest) dist-to-target seen this CRUISE leg
+    this._cruiseStallRef = 0;     // WS-1: dist at CRUISE entry — the scale for the progress threshold
     this._prevPhase = PilotPhase.IDLE;
     this._toTarget = new THREE.Vector3();
     this._local = new THREE.Vector3();
@@ -70,6 +81,9 @@ export class SupercruisePilot {
     this._holdTimer = 0;
     this._alignTimer = 0;
     this._decelCued = false;
+    this._cruiseStallTimer = 0;      // WS-1: fresh no-progress window per leg
+    this._cruiseBestDist = Infinity;
+    this._cruiseStallRef = 0;
   }
 
   stop() {
@@ -83,7 +97,7 @@ export class SupercruisePilot {
     const frame = {
       phase: this.phase, prevPhase: this._prevPhase,
       phaseChanged: false, motionComplete: false,
-      overshoot: false, decelStarted: false,
+      overshoot: false, decelStarted: false, stallAborted: false,
     };
     this._prevPhase = this.phase;
     if (this.phase === PilotPhase.IDLE || !this._target) return frame;
@@ -134,6 +148,32 @@ export class SupercruisePilot {
         this.phase = PilotPhase.CRUISE;
       }
     } else if (this.phase === PilotPhase.CRUISE) {
+      // WS-1 no-freeze guard: watch dist-to-target while in CRUISE. If it fails to
+      // beat its best by CRUISE_STALL_PROGRESS_FRAC of the leg's initial CRUISE dist
+      // for CRUISE_STALL_WINDOW seconds (wedged behind the star, or chasing an
+      // uncatchable fast moon), abort the leg — the caller skips-and-continues (tour)
+      // or drops out (Assist). A genuinely converging leg keeps beating its best and
+      // never trips; a HOLD park is a different phase and is never watched here.
+      if (frame.prevPhase !== PilotPhase.CRUISE) {
+        this._cruiseStallRef = dist;   // first CRUISE frame — seed the window
+        this._cruiseBestDist = dist;
+        this._cruiseStallTimer = 0;
+      } else {
+        const need = this._cruiseStallRef * t.CRUISE_STALL_PROGRESS_FRAC;
+        if (dist < this._cruiseBestDist - need) {
+          this._cruiseBestDist = dist; // real progress — reset the clock
+          this._cruiseStallTimer = 0;
+        } else {
+          this._cruiseStallTimer += dt;
+        }
+        if (this._cruiseStallTimer >= t.CRUISE_STALL_WINDOW) {
+          frame.stallAborted = true;
+          m.setTurnInput(0, 0);
+          this.phase = PilotPhase.IDLE;
+          this._target = null;
+          return this._stamp(frame);
+        }
+      }
       m.setThrottle(t.CRUISE_THROTTLE);
       if (!this._decelCued && dist <= tgt.radius * t.DECEL_CUE_FACTOR) {
         this._decelCued = true; frame.decelStarted = true;

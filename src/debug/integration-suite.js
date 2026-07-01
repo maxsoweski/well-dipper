@@ -1667,3 +1667,110 @@ export async function runShipScannerBurnArrivalTest() {
 
   return { passed, failed, total: results.length, results };
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// WS-1 — Flight reliability suite (cruise-stall-detector-2026-07-01).
+//
+// The standing "does the unattended screensaver still run without freezing"
+// gate. Runs the autopilot tour at a low linger and watches that (a) legs keep
+// advancing and (b) NO leg ever sits in CRUISE past the pilot's stall window —
+// the single signature of every freeze flavor (star wedge, null-bodyRef stop,
+// non-convergent fast moon). A permanent freeze would show as a leg pinned in
+// CRUISE forever; the WS-1 stall-detector must abort+skip it instead.
+//
+// This is the AC7 "full-tour-completes" check. The AC6 forced-star-wedge
+// recovery is driven live by working-Claude via the teleport recipe (reads live
+// star/target mesh positions each frame) — it's a one-off adversarial probe, not
+// a repeatable standing check, so it lives in the live-drive script, not here.
+export async function runFlightReliabilitySuite(opts = {}) {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runFlightReliabilitySuite: window.__wd not installed. Enter Sol first via _lab.enterSol().');
+  }
+  const _lab = window._lab, _sc = window._sc, _autoNav = window._autoNav;
+  if (!_lab || typeof _lab.beginAutopilotTour !== 'function') {
+    throw new Error('runFlightReliabilitySuite: window._lab.beginAutopilotTour not available.');
+  }
+  if (!_sc || !_sc.pilot) throw new Error('runFlightReliabilitySuite: window._sc.pilot not available.');
+  if (!_autoNav) throw new Error('runFlightReliabilitySuite: window._autoNav not available.');
+  if (typeof _lab.isInSystem === 'function' && !_lab.isInSystem()) {
+    throw new Error('runFlightReliabilitySuite: not in a system — call _lab.enterSol() first.');
+  }
+
+  const stallWindow = _sc.pilot.tuning?.CRUISE_STALL_WINDOW ?? 12;
+  const margin = opts.marginSeconds ?? 5;
+  const lingerMult = opts.tourLingerMultiplier ?? 0.15;
+  const maxWallMs = (opts.maxWallSeconds ?? 120) * 1000;
+  const pollMs = 100;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const results = [];
+  const rec = (name, passed, evidence) => { results.push({ name, passed, evidence: evidence ?? '' }); return passed; };
+
+  // Speed up the tour for the standing check; restore afterwards.
+  const prevLinger = _lab.setSetting ? _lab.setSetting('tourLingerMultiplier', lingerMult) : undefined;
+  // Detect a full wrap without clobbering main.js's onTourComplete handler.
+  let tourWrapped = 0;
+  const prevOnComplete = _autoNav.onTourComplete;
+  _autoNav.onTourComplete = () => {
+    tourWrapped++;
+    if (typeof prevOnComplete === 'function') prevOnComplete();
+  };
+
+  const telemetry = {};
+  try {
+    _lab.stopAutopilot?.();
+    await sleep(150);
+    const begun = _lab.beginAutopilotTour();
+    await sleep(150);
+    if (!begun || !begun.ok) {
+      rec('full-tour: autopilot started', false, JSON.stringify(begun));
+    } else {
+      rec('full-tour: autopilot started', true);
+
+      const legsSeen = new Set([_autoNav.currentIndex]);
+      let lastIdx = _autoNav.currentIndex;
+      let cruiseDwell = 0, maxCruiseDwell = 0, stuck = null;
+      const t0 = performance.now();
+      while (performance.now() - t0 < maxWallMs) {
+        await sleep(pollMs);
+        const idx = _autoNav.currentIndex;
+        const phase = _sc.pilot.phase;
+        if (idx !== lastIdx) { lastIdx = idx; legsSeen.add(idx); cruiseDwell = 0; }
+        if (phase === 'CRUISE') {
+          cruiseDwell += pollMs / 1000;
+          if (cruiseDwell > maxCruiseDwell) maxCruiseDwell = cruiseDwell;
+        } else {
+          cruiseDwell = 0;
+        }
+        if (cruiseDwell > stallWindow + margin) { stuck = { idx, cruiseDwell: +cruiseDwell.toFixed(1) }; break; }
+        if (tourWrapped > 0 && legsSeen.size > 1) break; // completed a full pass — enough
+      }
+
+      telemetry.legsVisited = legsSeen.size;
+      telemetry.tourWrapped = tourWrapped;
+      telemetry.maxCruiseDwellSeconds = +maxCruiseDwell.toFixed(1);
+      telemetry.stallWindowSeconds = stallWindow;
+
+      rec('full-tour: no leg stuck in CRUISE past the stall window',
+        stuck === null,
+        stuck ? `leg ${stuck.idx} pinned in CRUISE ${stuck.cruiseDwell}s (> ${stallWindow + margin})`
+              : `max CRUISE dwell ${maxCruiseDwell.toFixed(1)}s ≤ ${stallWindow + margin}s`);
+      rec('full-tour: tour advanced through multiple legs (not frozen on one)',
+        legsSeen.size >= 2,
+        `visited ${legsSeen.size} distinct stop(s); wrapped x${tourWrapped}`);
+    }
+  } finally {
+    _autoNav.onTourComplete = prevOnComplete;
+    if (prevLinger !== undefined && _lab.setSetting) _lab.setSetting('tourLingerMultiplier', prevLinger);
+    _lab.stopAutopilot?.();
+  }
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.length - passed;
+  console.group('[__wd flight reliability] ' + passed + '/' + results.length + ' passed', telemetry);
+  for (const r of results) {
+    console.log((r.passed ? '✔' : '✘') + ' ' + r.name, r.evidence);
+  }
+  console.groupEnd();
+
+  return { passed, failed, total: results.length, results, telemetry };
+}

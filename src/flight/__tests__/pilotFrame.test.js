@@ -9,7 +9,7 @@ const mkBody = (x, y, z, r) => ({ mesh: { position: new THREE.Vector3(x, y, z) }
 describe('PILOT_FRAME_FIELDS — the named one-shot Frame contract', () => {
   it('lists exactly the six fields, in order', () => {
     expect(PILOT_FRAME_FIELDS).toEqual(
-      ['phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted'],
+      ['phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted', 'stallAborted'],
     );
   });
 

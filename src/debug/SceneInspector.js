@@ -124,6 +124,12 @@ export function installSceneInspector(engines) {
       const m = await import('./integration-suite.js');
       return m.runWarpEntrySuite(opts);
     },
+    // WS-1 standing flight-reliability gate (no-freeze guard). Runs the autopilot
+    // tour and asserts no leg is ever stuck in CRUISE past the stall window.
+    runFlightReliabilitySuite: async (opts) => {
+      const m = await import('./integration-suite.js');
+      return m.runFlightReliabilitySuite(opts);
+    },
     runPhaseATests: async () => {
       const m = await import('./integration-suite.js');
       return m.runPhaseATests();
