@@ -270,10 +270,10 @@ resurfAge[i] =
   : clamp01( 0.50 - YOUNG_LOBE_GAIN * plumeProx[i] + 0.12*ageNoise )   // regional plains datum, younger toward plume centers (lobate flows)
 // ageNoise = createNoise3D(alea('stagnant:age:'+seed)) sampled at d*AGE_FREQ ; YOUNG_LOBE_GAIN ≈ 0.35
 ```
-This is the *global resurfacing-age datum*: the ~70–80% regional-plains background sits at ~0.5 (the
-~300–700 Myr basaltic plains — Ivanov & Head; regional+shield plains ≈70%, basaltic plains ≈80% of the
-surface), with **younger lobate flows near plume centers** (age dips toward active provinces) and the
-oldest tessera at the top.
+This is the *global resurfacing-age datum*: the ~70–80% TOTAL-plains background sits at ~0.5 (the
+~300–700 Myr basaltic plains — Ivanov & Head; **TOTAL** volcanic plains ≈70–80% of the surface, NOT
+regional+shield alone which is only ≈57% — corrected 2026-07-01), with **younger lobate flows near plume
+centers** (age dips toward active provinces) and the oldest tessera at the top.
 
 **Areal fraction ~70–80% emerges by construction:** plains = complement of tessera (~7–8%) + corona
 structures + rift corridors (~12–20%) ⇒ plains ≈ 70–80%. The AC checks `plainsFrac ∈ [0.65, 0.85]`.
@@ -521,6 +521,19 @@ Each ROADMAP mechanism claim, marked `sound=true` (buildable as stated) or a nee
 
 ## Sources (with per-claim confidence)
 
+> **⟳ Citation re-verification (2026-07-01, 3-agent workflow `wf_380b2e21-6bd` vs live peer-reviewed sources).**
+> Re-checked every load-bearing number before scoping #4b. **Result: NO writer calibration constant changes.**
+> Confirmed: corona active/inactive morphology (Gülcher 2020); the 37/133≈0.28 topography-only floor + the
+> 52/75≈0.69 gravity-resolved fraction → **`CORONA_ACTIVE_FRAC=0.65` stands**; tessera ≈7.7% oldest+highest
+> double-fabric → **`tesseraFrac[0.06,0.10]` stands**; coronae 9.5% coverage (exact); the plains background
+> → **`plainsFrac[0.65,0.85]` stands** (as TOTAL plains); resurfacing 500±200 Ma → **age datum ~0.5 stands**.
+> **Three provenance/attribution corrections** (applied inline + in the bullets below): (1) corona count is
+> **exactly 740** (Gülcher 2025 only), and the 2023 paper is a **155-corona classification/3-D-modeling**
+> study, NOT the database/count source; (2) **≈70–80% is TOTAL plains**, not regional+shield (which is ≈57%);
+> (3) **"<300 Ma"** is a newer-minority estimate, not Strom 1994 (canonical 500±200 Ma). Optional look-tuning:
+> the modern catalog's true max corona is Artemis ~2100 km; the 60–2600 km draw keeps 2600 as a rare
+> giant-tail ceiling (medium confidence).
+
 - **Gülcher, A. J. P. et al. (2020), "Corona structures driven by plume–lithosphere interactions and
   evidence for ongoing plume activity on Venus," *Nature Geoscience* 13, 547–554**
   (nature.com/articles/s41561-020-0606-1; Springer Nature community post). Active vs inactive corona
@@ -531,16 +544,25 @@ Each ROADMAP mechanism claim, marked `sound=true` (buildable as stated) or a nee
   40367154).** **52 of 75 resolved coronae** show buoyant mantle / active support ≈ **0.69** — the sourced
   "~0.70." *Confidence: HIGH* for the 52/75 figure (via PubMed abstract; full text paywalled).
 - **Gülcher, A. J. P. et al. (2025), "Coronae on Venus: An Updated Global Database…," *JGR Planets*
-  (doi:10.1029/2024JE008749); Gülcher et al. (2023) *JGR Planets* (doi:10.1029/2023JE007978).**
-  **~740–741 coronae**, diameters **60 to >2000 km** (Artemis ~2100 km in the new catalog), coronae ≈9.5%
-  of the surface. *Confidence: HIGH* for count/coverage; *MEDIUM* for the exact 2600 km ceiling (older refs
-  cite Artemis ~2400–2600 km; used as the rare tail). Full text paywalled — figures via search abstracts.
+  (doi:10.1029/2024JE008749).** **Exactly 740 corona structures** (507 Type-1 annulus ≥180° + 233 Type-2
+  <180°; 60 km definitional-minimum diameter) covering **43.87×10⁶ km² ≈ 9.5%** of the surface — the SOLE
+  count + coverage source. Diameters **60 km → ~2100 km** (Artemis = modern-catalog max; older mapping cites
+  Artemis ~2400–2600 km, kept as the rare giant-tail ceiling). *Confidence: HIGH* for the 740 count + 9.5%
+  coverage (exact); *MEDIUM* for the 2600 km ceiling + the ~200–300 km median (paywalled primary text).
+- **Gülcher, A. J. P., Yu, C. & Gerya, T. (2023), *JGR Planets* 128(11) (doi:10.1029/2023JE007978)** —
+  "Tectono-Magmatic Evolution of Asymmetric Coronae on Venus": a topographic-classification + 3-D
+  thermo-mechanical modeling study of **155 coronae** (150 largest ≥300 km + 5 smaller), supporting the
+  active/inactive morphology selector. ⚠ **NOT** the 740-count/database source (mis-labeled pre-2026-07-01).
 - **Ivanov, M. A. & Head, J. W. — Venus global stratigraphy / regional-plains mapping** (e.g.
   "Global Stratigraphy and Resurfacing History of Venus," Springer 2023; regional-plains units rp1/rp2).
-  Regional+shield plains ≈70%, basaltic plains ≈80% of the surface; surface age <1 Ga, possibly <300 Ma
-  (Strom et al. 1994 catastrophic/equilibrium resurfacing frames the 300–700 Myr datum). *Confidence: HIGH*
-  for the ~70–80% coverage; *MEDIUM* for the exact 300–700 Myr band (model-dependent; mean-age estimates
-  range ~150–750 Myr).
+  **TOTAL plains background ≈70–80%** (all volcanic plains combined ≈67–70%; total basaltic/volcanic units
+  ≈80%) — the figure the writer's `plainsFrac ∈ [0.65,0.85]` targets. ⚠ **Corrected 2026-07-01:**
+  *regional+shield plains ALONE ≈57%* (regional rp ≈40% + shield psh ≈17%), NOT ≈70% — the ~70% belongs to
+  TOTAL plains / Guineverian resurfacing, not regional+shield specifically. Surface age **500±200 Ma
+  (≈300–700 Myr)** — the canonical Magellan crater-census value (Strom et al. 1994 catastrophic-resurfacing
+  end-member); **"<300 Ma" comes only from newer minority estimates (150–250 Myr), NOT Strom 1994**.
+  *Confidence: HIGH* for the ~70–80% total-plains background + the 300–700 Myr band; model-dependent across
+  resurfacing models (~150–750 Myr).
 - **Magellan tessera survey — Ivanov & Head (1996), "Tessera terrain on Venus…," *JGR* 101, 14861;
   Tessera (Venus) / crustal-plateau literature.** Tessera **7–8%** of the surface (~8%, ~35×10⁶ km²),
   stratigraphically oldest, highest, multiply-deformed ("two or more intersecting tectonic elements" =
