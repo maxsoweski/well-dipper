@@ -2628,6 +2628,13 @@ let _titleAutoTimer = null;
 // from the 2026-06-27 mapping this comment used to describe). Both stations are
 // offered on mobile too (AC9). Reset to 'orrery' after it's applied.
 let _pendingBootMode = 'orrery';
+// True until the FIRST star-system reveal of the session consumes it — marks that
+// reveal as the BOOT reveal (docs/WORKSTREAMS/mode-ownership-2026-07-02, AC7). The
+// ORRERY-boot branch needs to distinguish "boot, nothing armed" from a mid-session
+// warp-in (whose arrival fly-in must keep running). A flag set in _pickBootMode
+// would miss the splash-background "press anything" default path, which calls
+// startIntroSequence() directly — so the anchor is the reveal itself, not the pick.
+let _pendingBootReveal = true;
 
 // The splash mode-picker action (boot-flow corrected 2026-06-27). The BLACK
 // ORRERY/HELM chooser is the cold-open; picking a station records it, then runs the
@@ -2682,7 +2689,13 @@ function dismissTitleScreen() {
       // Free-look orbit (not bypassed) — user can drag to look around
       cameraController.autoRotateActive = true;
       _deepSkyLingerTimer = 15;
-    } else if (!autoNav.isActive) {
+    } else if (_scManual && !autoNav.isActive) {
+      // Legacy screensaver fallback, now HELM-gated (adversarial-review finding,
+      // mode-ownership-2026-07-02): warpRevealSystem owns the boot tour-start.
+      // On an ORRERY boot autoNav never starts, so an ungated branch here would
+      // auto-arm a tour in ORRERY if the warp reveal lands inside this 5s window
+      // — exactly the "ORRERY never auto-arms" violation. HELM keeps it as a
+      // harmless defensive re-arm (autoNav.isActive dedupes).
       idleTimer = 0;
       startFlythrough();
     }
@@ -5880,6 +5893,15 @@ function startFlythrough() {
   scModel.turnInput.yaw = 0;
   scModel.turnInput.pitch = 0;
   scModel.turnInput.roll = 0;
+  // Mode-ownership fix (adversarial-review finding, 2026-07-02): the tour runs
+  // MANUAL by design (see flightModes.js playerBurnMode — the tour is the
+  // system-picked source). A stale ASSIST left by a finished player commit-burn
+  // (nothing on the burn path ever resets _flightMode after HOLD) would make the
+  // held-keys gate's _assistLegActive branch treat the whole tour as a player
+  // leg — re-opening the Q/E roll leak and the W/S cancel this workstream
+  // retires. Reset here: the single shared tour entry (Z, idle, boot,
+  // warp-resume, nav-computer).
+  _flightMode = FlightMode.MANUAL;
   soundEngine.play('autopilotOn');
   _autopilotEnabled = true;
 
@@ -6019,6 +6041,7 @@ function _stopTourStayInShip() {
   scPilot.stop();
   shipChoreographer.stop();
   _scPendingRealTarget = null; // abandon any in-flight go-around, same as stopFlythrough
+  _flightMode = FlightMode.MANUAL; // mirror stopFlythrough — don't leave a stale ASSIST in the coast state
   _autopilotEnabled = false;   // an explicit Z-stop shouldn't auto-resume the tour on the next warp
   // Stay in HELM, hands-off: _scManual is untouched (stays true), the camera
   // stays ship-welded, and the free-look latch stays ON (hands-off coast).
@@ -6200,6 +6223,8 @@ function warpRevealSystem() {
   // reveal, unchanged.
   const _boot = bootModeAction(_pendingBootMode);
   _pendingBootMode = 'orrery';
+  const _isBootReveal = _pendingBootReveal;
+  _pendingBootReveal = false;
   if (_boot.startAutopilot) {
     _autopilotEnabled = true;
     _seedScPoseFromCameraIfIdle();
@@ -6232,6 +6257,28 @@ function warpRevealSystem() {
 
   // Only start autoNav if autopilot was enabled before warp
   if (_autopilotEnabled) autoNav.start();
+
+  // ORRERY BOOT (mode-ownership-2026-07-02, AC7 — adversarial-review finding):
+  // nothing is armed, INCLUDING the arrival fly-in. The fly-in below activates
+  // SupercruisePilot, whose HOLD park never returns to IDLE — scPilot.isActive
+  // would stay true forever, keeping the camera ship-welded (HeadMount) and
+  // starving cameraController.update()'s `!scPilot.isActive && !_scManual`
+  // gate, i.e. a first-person ship parked at the sun with dead orrery controls.
+  // A boot into ORRERY presents the god's-eye immediately instead: orbit camera
+  // re-anchored on the system origin from the warp-exit pose (no snap — the
+  // deep-sky reveal's restore pattern), system-overview focus, player drives.
+  // Mid-session warp-ins (tour loop, manual warp commits) keep the fly-in
+  // exactly as before — this branch fires only on the session's boot reveal.
+  if (_isBootReveal && !_autopilotEnabled) {
+    cameraController.bypassed = false;
+    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+    focusIndex = -1;
+    focusMoonIndex = -1;
+    focusStarIndex = -1;
+    console.log('Warp: ORRERY boot — god\'s-eye reveal, nothing armed');
+    _scheduleSystemMusic(20, 35);
+    return;
+  }
 
   const firstStop = autoNav.getCurrentStop();
   if (firstStop && firstStop.bodyRef) {
