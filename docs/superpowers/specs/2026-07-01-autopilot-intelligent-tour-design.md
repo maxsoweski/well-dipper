@@ -175,6 +175,18 @@ a wider cinematic orbit around a striking body even when it could go straight.
 
 ## Increment 4 — HELM/ORRERY reconciliation (in-ship vs god's-eye) — CAPSTONE
 
+> **Realized by `mode-ownership-2026-07-02`.** This increment's minimal delta —
+> boot-mapping flip, regime/input/HUD ownership, and the mobile default decision — is
+> realized by
+> [`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/),
+> sequenced ahead of the Step-0 re-UAT rather than as inc-4 of this spec. The camera
+> "big part" this section calls out below was already true before that workstream
+> started — per
+> [`docs/FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md`](../../FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md),
+> the tour's camera has been first-person (welded to the ship) in both modes since the
+> 2026-06-10 supercruise cutover, so there was no god's-eye tour camera left to move
+> into the cockpit.
+
 Max's model: **HELM = "you're in the ship"** (fly it manually *or* hand off to the
 autopilot, which flies while you watch from the cockpit/chase view). **ORRERY =
 god's-eye examine** (click-select, commit-burn), player-driven. The autopilot tour

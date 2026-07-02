@@ -53,11 +53,29 @@ at the splash and swap deliberately. Esc must never strand you in or out of a mo
 
 ## The Model — two peer modes
 
+> **⚠ STALE/SUPERSEDED (2026-07-02).** The "God's-eye overview... Contemplative"
+> framing below is still accurate for the ORRERY *station itself*, but it was also
+> read as implying a "god's-eye contemplative autopilot tour" — that reading is dead.
+> The tour's camera has been first-person (welded to the ship, `HeadMount.applyTo`) in
+> BOTH modes since the 2026-06-10 supercruise cutover; there is no god's-eye tour
+> camera left to reconcile. See
+> [`docs/FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md`](../../FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md)
+> and [`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/)
+> (the workstream recording this deliberate reversal). Original text preserved below.
+
 | | ORRERY (was Toybox) | HELM (was Flight / In-Flight) |
 |---|---|---|
 | **Stance** | God's-eye overview. "Watch & plan" station. | In-ship piloting. |
 | **Does** | Orbit/inspect bodies, select, plot jumps. Contemplative. | Drive (E), free-look (F), dive gravity wells. |
 | **Internally** | `_scManual === false` + `CameraMode.TOY_BOX` | `_scManual === true` + `CameraMode.FLIGHT` |
+
+> **⚠ STALE/SUPERSEDED (2026-07-02).** The "free-look (F)" listed above under HELM's
+> "Does" column no longer names a standalone action — F is now the single hands-on/off
+> flight-controls toggle for the ship. Hands-OFF absorbs today's free-look behaviors
+> (bare cursor aims/selects, LMB-drag looks around, release holds the view), and the
+> autopilot tour may fly ONLY while hands-off. See
+> [`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/)
+> (the workstream recording this deliberate reversal). Original text preserved above.
 
 **Only the user-facing NAME changes** — ORRERY for the overview station, HELM for the
 piloting station. The internal `CameraMode.TOY_BOX`, `_scManual`, and `FlightMode`
@@ -164,7 +182,13 @@ stay. **This is a user-facing rename, not an internal refactor.**
 - No broadening of the takeover gate to "any `scPilot.isActive`" (would catch the Q
   tour).
 - No Helm on mobile (mobile stays ORRERY-only).
-- No restriction of the autopilot tour (Q) in either mode.
+- **⚠ STALE/SUPERSEDED (2026-07-02).** REVERSED by Max (thrice-stated, 2026-07-01/02):
+  the autopilot tour is now a HELM-only feature; ORRERY is player-driven and never
+  auto-arms it — the modes must not mix. See
+  [`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/)
+  (the workstream recording this deliberate reversal). Original non-goal preserved
+  below.
+  - _Original (superseded):_ No restriction of the autopilot tour (Q) in either mode.
 - No new parallel splash/boot flow — extend the existing one.
 - No re-introduction of any Esc → mode-switch behavior.
 
