@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -313,8 +313,10 @@ let _orbitsUserOverride = false;
 let gravityWellVisible = settings.get('showGravityWells');
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
-// Tag the body so mobile-only CSS (e.g. hiding the desktop ORRERY/HELM swap
-// button — mobile is ORRERY-only) can key off it. JS guards still apply too.
+// Tag the body so mobile-only CSS can key off it. JS guards still apply too.
+// (Mobile is no longer ORRERY-only, docs/WORKSTREAMS/mode-ownership-2026-07-02
+// AC9 — the desktop ORRERY/HELM mode-swap button is shown on mobile too, since
+// it is mobile-HELM's only tour exit; this class no longer hides that button.)
 if (_isMobile) document.body.classList.add('is-mobile');
 let minimapVisible = false; // off by default — toggle with R key (was M; M now swaps ORRERY<->HELM)
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
@@ -2466,7 +2468,8 @@ const _heldKeys = new Set();
 // plays the DESHÉ/score logos, reveals the WELL-DIPPER title screen, starts the
 // title theme, and arms the auto-dismiss. The ONLY difference from the pre-session
 // flow is that the chooser is prepended and the chosen mode is consumed at the first
-// star-system arrival by warpRevealSystem (HELM → flight; ORRERY → autopilot tour).
+// star-system arrival by warpRevealSystem — FLIPPED (docs/WORKSTREAMS/mode-ownership
+// -2026-07-02): HELM → autopilot tour, hands-off; ORRERY → god's-eye, nothing armed.
 let splashActive = true;
 
 function startIntroSequence() {
@@ -2618,11 +2621,12 @@ document.getElementById('splash-screen')?.addEventListener('touchend', _handleSp
 let titleScreenActive = false;
 let _titleAutoTimer = null;
 // The station the player picked at the BLACK ORRERY/HELM chooser (the repurposed
-// splash) (§supercruise-arrival-modes-design-2026-06-27, #2). Consumed ONCE by
-// warpRevealSystem when the first star system goes live: 'helm' → enter HELM (drive
-// untouched) instead of the autopilot tour; 'orrery' (the default / no-explicit-pick
-// path) → today's contemplative autopilot-screensaver reveal. Mobile is ORRERY-only,
-// so this is only ever 'helm' on desktop. Reset to 'orrery' after it's applied.
+// splash). Consumed ONCE by warpRevealSystem when the first star system goes live:
+// 'helm' → boot straight into the cockpit screensaver tour, hands-off (the autopilot
+// is a HELM feature); 'orrery' (the default / no-explicit-pick path) → the god's-eye
+// orrery with nothing armed (docs/WORKSTREAMS/mode-ownership-2026-07-02 — FLIPPED
+// from the 2026-06-27 mapping this comment used to describe). Both stations are
+// offered on mobile too (AC9). Reset to 'orrery' after it's applied.
 let _pendingBootMode = 'orrery';
 
 // The splash mode-picker action (boot-flow corrected 2026-06-27). The BLACK
@@ -2630,11 +2634,13 @@ let _pendingBootMode = 'orrery';
 // ORIGINAL begin flow UNCHANGED via startIntroSequence (DESHÉ/score logos → title →
 // music → press-anything/auto-dismiss → warp). The chosen mode is consumed at the
 // end by warpRevealSystem. The two chooser buttons funnel through here; the splash
-// background ("press anything") defaults to ORRERY via _handleSplashDismiss. On
-// mobile HELM is hidden (ORRERY-only), so any non-orrery pick is coerced to orrery.
+// background ("press anything") defaults to ORRERY via _handleSplashDismiss. Mobile
+// picks are honored (docs/WORKSTREAMS/mode-ownership-2026-07-02, AC9 — "mobile can
+// work via Orrery, and have Helm autopilot on by default for mobile if they choose
+// that mode"): both stations are shown on mobile (CSS), no coercion here.
 function _pickBootMode(mode) {
   if (!splashActive) return;
-  const decided = (_isMobile ? 'orrery' : (mode ?? 'orrery'));
+  const decided = mode ?? 'orrery';
   _pendingBootMode = bootModeAction(decided).mode;
   startIntroSequence(); // hides the chooser, plays the original intro → title → music
 }
@@ -2644,7 +2650,9 @@ function dismissTitleScreen() {
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
   musicManager.stop(0.5);
-  _autopilotEnabled = true; // title screen always leads to autopilot screensaver
+  // mode-ownership-2026-07-02: no longer unconditionally armed here — the
+  // boot pick (bootModeAction, consumed by warpRevealSystem) now decides
+  // whether the tour starts. ORRERY must never auto-arm it.
   // Galaxy glow stays hidden until warp (restored in onSwapSystem)
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
@@ -5927,6 +5935,34 @@ function startFlythrough() {
 }
 
 /**
+ * Shared HELM hands-off tour engage (docs/WORKSTREAMS/mode-ownership-2026-07-02).
+ * The Z key's 'hands-off-start-tour'/'start-tour' side effects, extracted so
+ * every non-Z tour-arm path (currently: the idle-timeout gate) enters hands-off
+ * the SAME way instead of calling startFlythrough() bare — startFlythrough()'s
+ * own free-look backstop latches the hand-state but never refreshes the
+ * pointer HUD, which would leave the hands-on cursor/reticle stale through an
+ * idle-fired tour (the AC6 leak). Deep-sky is a HELM no-op (startFlythrough's
+ * non-star-system branch flies an orrery-style orbit cam that would yank the
+ * pilot out of the ship) — mirrors the Z handler's own guard.
+ */
+function _beginHandsOffTour() {
+  if (!system) return;
+  if (system.type && system.type !== 'star-system') {
+    console.log('[MODE] autopilot unavailable in deep space');
+    return;
+  }
+  if (!freeLook.latched) {
+    freeLook.enter(); // latch ON = hands-off (the ONLY state the autopilot may fly in)
+    _applyPointerHud();
+  }
+  scModel.turnInput.yaw = 0;
+  scModel.turnInput.pitch = 0;
+  scModel.turnInput.roll = 0;
+  idleTimer = 0;
+  startFlythrough();
+}
+
+/**
  * Stop the flythrough and hand camera back to manual orbit control.
  */
 function stopFlythrough() {
@@ -6151,21 +6187,41 @@ function warpRevealSystem() {
   if (firstStopIdx < 0) firstStopIdx = 0;
   autoNav.currentIndex = firstStopIdx;
 
-  // Splash mode-picker handoff (§supercruise-arrival-modes-design-2026-06-27, #2,
-  // AC6): if the player picked HELM at the title, boot INTO the helm instead of
-  // the contemplative autopilot tour. Consume the pick once (reset to ORRERY),
-  // disable the screensaver, and enter flight from the live warp-exit pose (no
-  // tour leg). The drive is left untouched — entering the helm is not "lighting
-  // the drive" (that's E's job). ORRERY boot falls through to today's reveal.
+  // Splash mode-picker handoff (docs/WORKSTREAMS/mode-ownership-2026-07-02):
+  // FLIPPED per Max's standing model — "HELM should be our chosen Autopilot
+  // path; the Autopilot is a HELM feature. ORRERY is a player-driven feature."
+  // Picking HELM at the title boots straight INTO the cockpit screensaver
+  // tour, hands-off (F grabs the stick) — the SAME hands-off assertion the Z
+  // key uses (setScManual(true) + free-look latch ON + zeroed turnInput), then
+  // the tour's first-stop arrival. Consume the pick once (reset to ORRERY).
+  // Valid on mobile too (mobile-HELM = tour by default, AC9) — the old
+  // !_isMobile gate that routed mobile through plain flight-entry (no tour)
+  // is gone. ORRERY boot (or any non-HELM pick) falls through to today's
+  // reveal, unchanged.
   const _boot = bootModeAction(_pendingBootMode);
   _pendingBootMode = 'orrery';
-  if (_boot.enterFlight && !_isMobile) {
-    _autopilotEnabled = false;
-    autoNav.stop();
+  if (_boot.startAutopilot) {
+    _autopilotEnabled = true;
     _seedScPoseFromCameraIfIdle();
-    _enterFlightInternal();
+    setScManual(true);
+    cameraController.setCameraMode(CameraMode.FLIGHT);
+    cameraController.bypassed = true;
+    freeLook.enter(); // latch ON = hands-off, the only state the autopilot may fly in
+    scModel.turnInput.yaw = 0;
+    scModel.turnInput.pitch = 0;
+    scModel.turnInput.roll = 0;
+    _applyPointerHud();
     _updateModeSwapButton();
-    console.log('Warp: booting into HELM (splash mode-picker)');
+
+    autoNav.start();
+    const firstStop = autoNav.getCurrentStop();
+    if (firstStop && firstStop.bodyRef) {
+      _dispatchTourLeg(firstStop, { choreo: null });
+      shipChoreographer.beginTour({ fromWarp: true });
+      updateFocusFromStop(firstStop);
+      if (systemMap) systemMap.triggerBlink();
+    }
+    console.log('Warp: booting into HELM tour, hands-off (splash mode-picker)');
     _scheduleSystemMusic(20, 35);
     return;
   }
@@ -8383,8 +8439,15 @@ function simStep(deltaTime) {
       if (_selectedTarget?.kind === 'ship') {
         idleTimer = 0;
       } else if (idleTimer >= settings.get('idleTimeout')) {
-        _manualBurnOrbiting = false;
-        startFlythrough();
+        // mode-ownership-2026-07-02: the tour may auto-arm ONLY from HELM —
+        // ORRERY idles forever, never auto-arming (idleFiresTour is the pure
+        // gate). HELM idle-fires from either hand state through the SAME
+        // hands-off assertion Z uses (_beginHandsOffTour), not a bare
+        // startFlythrough().
+        if (idleFiresTour({ regime: _scManual ? 'helm' : 'orrery' })) {
+          _manualBurnOrbiting = false;
+          _beginHandsOffTour();
+        }
       }
     }
 
@@ -8397,8 +8460,13 @@ function simStep(deltaTime) {
       if (_selectedTarget?.kind === 'ship') {
         idleTimer = 0;
       } else if (idleTimer >= settings.get('idleTimeout')) {
-        _manualBurnOrbiting = false;
-        startFlythrough();
+        // Same HELM-only idle gate as above (mode-ownership-2026-07-02) — a
+        // ship-target burn orbit (the QUARANTINED-legacy navSubsystem path)
+        // idling out in ORRERY must not auto-arm the tour either.
+        if (idleFiresTour({ regime: _scManual ? 'helm' : 'orrery' })) {
+          _manualBurnOrbiting = false;
+          _beginHandsOffTour();
+        }
       }
     }
 
@@ -9146,9 +9214,11 @@ function _exitFlightInternal() {
 // pose-preserving exit (_exitFlightInternal — the SAME no-snap path the old
 // Esc-exit used) HELM→ORRERY, and _enterFlightInternal (drive untouched, since
 // it never calls setDrive) ORRERY→HELM. Same warp/splash/title/star-system
-// guards as E; mobile is ORRERY-only (Toy-Box locked) so it's a no-op there.
+// guards as E. Mobile is no longer excluded (docs/WORKSTREAMS/mode-ownership
+// -2026-07-02, AC9): mobile-HELM boots the tour by default with no F key to
+// take the stick, so this swap is the ONLY way off it — "the mode-swap HUD
+// button leaves it to ORRERY."
 function _doModeSwap() {
-  if (_isMobile) return;
   if (warpEffect.isActive || warpTarget.turning) return;
   if (splashActive || titleScreenActive) return;
   if (!system || (system.type && system.type !== 'star-system')) {
@@ -9157,10 +9227,20 @@ function _doModeSwap() {
   }
   const swap = modeSwapAction({ scManual: _scManual });
   if (swap.exitFlight) {
-    // HELM → ORRERY: pose-preserving exit (no snap). Clear any free-look latch
-    // first so the orbit isn't left mid-look.
-    if (freeLook.latched) freeLook.exit();
-    _exitFlightInternal();
+    // HELM → ORRERY. If a tour is running, _exitFlightInternal alone doesn't
+    // stop it — it never touches autoNav/flythrough/shipChoreographer, which
+    // would leave the tour wedged active with _scManual now false (mode
+    // -ownership-2026-07-02, mobile tour exit). stopFlythrough() is the
+    // existing full teardown and already lands in ORRERY (setScManual(false)
+    // + camera restore around the closest body), so it subsumes
+    // _exitFlightInternal's job whenever a tour is active. Outside a tour,
+    // keep the no-snap pose-preserving exit exactly as before.
+    if (autoNav.isActive) {
+      stopFlythrough();
+    } else {
+      if (freeLook.latched) freeLook.exit();
+      _exitFlightInternal();
+    }
   } else {
     // ORRERY → HELM: enter flight WITHOUT lighting the drive (drive state
     // preserved — _enterFlightInternal never calls setDrive; only E does).
@@ -9175,15 +9255,16 @@ function _doModeSwap() {
 }
 
 // Reflect the CURRENT station on the desktop HUD swap button: it names the mode
-// you're IN (so the press is "leave here"). Hidden on mobile (ORRERY-only), on
-// the title/splash screen, when no star system is loaded, and while the HUD is
-// hidden — the SAME gates the M key honors, so the button never offers a swap
-// the key would refuse. Called every render frame (visibility) + on each regime
-// flip (label), so it stays in sync no matter what path changed the mode.
+// you're IN (so the press is "leave here"). Hidden on the title/splash screen,
+// when no star system is loaded, and while the HUD is hidden — the SAME gates
+// the M key honors (mobile has no M key, but the button itself is the mobile
+// tour exit — AC9 — so it is no longer mobile-hidden here or in CSS). Called
+// every render frame (visibility) + on each regime flip (label), so it stays
+// in sync no matter what path changed the mode.
 function _updateModeSwapButton() {
   const btn = document.getElementById('mode-swap-btn');
   if (!btn) return;
-  const swappable = !_isMobile && _hudVisible && !splashActive && !titleScreenActive
+  const swappable = _hudVisible && !splashActive && !titleScreenActive
     && !!system && !(system.type && system.type !== 'star-system');
   btn.style.display = swappable ? 'block' : 'none';
   if (swappable) btn.textContent = _scManual ? 'HELM' : 'ORRERY';
@@ -9548,7 +9629,8 @@ window.addEventListener('keydown', (e) => {
   //     (_exitFlightInternal — the SAME no-snap path the old Esc-exit used).
   //   - in ORRERY (!_scManual) → swap to HELM via _enterFlightInternal, drive
   //     state PRESERVED (it doesn't call setDrive — only the E-engage path does).
-  // Mobile is ORRERY-only (hard-locked to Toy Box), so M is a no-op there. Same
+  // Mobile has no physical M key; the same swap action is reachable there via
+  // the mode-swap HUD button only (AC9 — mobile's tour-exit path). Same
   // warp/splash/title/star-system guards as E. (Was: toggle minimap — moved to R.)
   if (e.code === 'KeyM') {
     _doModeSwap();
@@ -9701,27 +9783,11 @@ window.addEventListener('keydown', (e) => {
       _stopTourStayInShip();
       return;
     }
-    // 'hands-off-start-tour' / 'start-tour': arm the tour.
-    if (!system) return;
-    if (system.type && system.type !== 'star-system') {
-      // Deep-sky edge: startFlythrough's non-star-system branch flies an
-      // orrery-style orbit cam — from HELM that would yank the pilot out of
-      // the ship. (The deep-sky WARP-ARRIVAL path in warpRevealSystem is
-      // separate — untouched.)
-      console.log('[MODE] autopilot unavailable in deep space');
-      return;
-    }
-    if (z.action === 'hands-off-start-tour') {
-      freeLook.enter(); // latch ON = hands-off (the ONLY state the autopilot may fly in)
-      _applyPointerHud();
-    }
-    // Zero stale ship inputs on every hands-off/tour entry (also asserted
-    // defensively inside startFlythrough itself, regardless of caller).
-    scModel.turnInput.yaw = 0;
-    scModel.turnInput.pitch = 0;
-    scModel.turnInput.roll = 0;
-    idleTimer = 0;
-    startFlythrough();
+    // 'hands-off-start-tour' / 'start-tour': arm the tour, via the shared
+    // hands-off engage (_beginHandsOffTour) also used by the idle-timeout
+    // gate — same deep-sky guard, free-look latch, HUD refresh, zeroed
+    // turnInput, and startFlythrough() call.
+    _beginHandsOffTour();
     return;
   }
 

@@ -18,9 +18,11 @@
          Picking a station records it (_pendingBootMode) then runs the ORIGINAL
          begin flow UNCHANGED (intro logos → WELL-DIPPER title → music → warp); the
          chosen mode is consumed at the first star-system arrival (warpRevealSystem):
-         HELM → flight, ORRERY → autopilot tour. A click on the black background
-         ("press anything") defaults to ORRERY (legacy path, via _handleSplashDismiss).
-         Mobile is ORRERY-only, so the HELM choice is hidden there (CSS). -->
+         HELM → autopilot tour hands-off (the cockpit screensaver), ORRERY → god's-eye,
+         nothing armed (FLIPPED, docs/WORKSTREAMS/mode-ownership-2026-07-02). A click on
+         the black background ("press anything") defaults to ORRERY (legacy path, via
+         _handleSplashDismiss). Both stations are offered on mobile too — mobile-HELM
+         boots the tour by default, no keyboard needed (AC9). -->
     <div id="splash-screen">
       <div class="splash-mode-picker">
         <button id="splash-mode-orrery" class="splash-mode-btn" data-mode="orrery">
