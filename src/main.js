@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -5850,6 +5850,14 @@ function _beginTourLegMotion(stop, priorBody) {
 function startFlythrough() {
   if (!system) return;
   if (warpEffect.isActive) return;
+  // Mode-ownership (docs/WORKSTREAMS/mode-ownership-2026-07-02): assert the
+  // ship-input regime at tour start REGARDLESS OF CALLER (Z, idle timeout,
+  // boot flow, …) — the tour is hands-off, so no stale/held-key turnInput can
+  // survive into the pilot's first frame. The Z handler already zeroes this
+  // defensively before calling in; this is the backstop for every other path.
+  scModel.turnInput.yaw = 0;
+  scModel.turnInput.pitch = 0;
+  scModel.turnInput.roll = 0;
   soundEngine.play('autopilotOn');
   _autopilotEnabled = true;
 
@@ -5945,6 +5953,30 @@ function stopFlythrough() {
   }
 
   console.log('Autopilot: off');
+}
+
+/**
+ * Z mid-tour: stop the pilot/tour but STAY IN THE SHIP, hands-off, coasting
+ * (docs/WORKSTREAMS/mode-ownership-2026-07-02, zKeyAction 'stop-tour-coast').
+ * Unlike stopFlythrough() — which drops _scManual to false and restores the
+ * ORRERY/Toy-Box orbit camera around the closest body — this keeps the player
+ * in HELM: the ship simply coasts (drive state untouched) until F grabs the
+ * stick back (fKeyAction 'takeover') or Z arms the tour again.
+ */
+function _stopTourStayInShip() {
+  soundEngine.play('autopilotOff');
+  autoNav.stop();
+  scPilot.stop();
+  shipChoreographer.stop();
+  _scPendingRealTarget = null; // abandon any in-flight go-around, same as stopFlythrough
+  _autopilotEnabled = false;   // an explicit Z-stop shouldn't auto-resume the tour on the next warp
+  // Stay in HELM, hands-off: _scManual is untouched (stays true), the camera
+  // stays ship-welded, and the free-look latch stays ON (hands-off coast).
+  cameraController.setCameraMode(CameraMode.FLIGHT);
+  cameraController.bypassed = true;
+  if (!freeLook.latched) freeLook.enter(); // defensive: stay hands-off coasting
+  _applyPointerHud();
+  console.log('[MODE] tour stopped — coasting hands-off (press F to take the stick)');
 }
 
 /**
@@ -8447,7 +8479,15 @@ function simStep(deltaTime) {
                    && document.getElementById('keybinds-overlay')?.style.display === 'none';
     cameraController._flightEnabled = flightOk;
 
-    if (_scManual) {
+    // Mode-ownership (docs/WORKSTREAMS/mode-ownership-2026-07-02): the ship's
+    // hand-inputs (W/S throttle, Q/E roll) are live IFF hands-ON — exactly
+    // pointerHudState's helmHandsOn, `handRouting`'s source condition. Hands-
+    // OFF (tour or a Z-stopped coast) is a passenger state: no W/S/Q/E should
+    // reach the ship, and turnInput.roll — which the pilot never zeroes itself
+    // — must be explicitly held at 0 so a stale/held Q/E press can't leak into
+    // the autopilot's flight (the measured main.js:8468 leak).
+    const _handRouting = handRouting(_scManual && !freeLook.latched);
+    if (_handRouting.throttle) {
       // Supercruise manual throttle (Elite convention): W ramps throttle up,
       // S ramps it down, both held-key stepping at SC_TUNING.THROTTLE_RATE
       // (units/s). The supercruise mover owns motion in this mode, so the
@@ -8466,6 +8506,13 @@ function simStep(deltaTime) {
       // cover. Polled per-frame like W/S throttle; SupercruiseModel.update applies it.
       // Sign FLIPPED to Q−E per Max UAT 2026-06-30 (the original E−Q guess was inverted).
       scModel.turnInput.roll = (_heldKeys.has('KeyQ') ? 1 : 0) - (_heldKeys.has('KeyE') ? 1 : 0);
+      cameraController.setFlightInput(0, 0, false);
+    } else if (_scManual) {
+      // HELM hands-off (tour flying, or a Z-stopped coast waiting on F): the
+      // ship is the pilot's/nobody's alone — no ship hand-input, and NOT the
+      // legacy ORRERY/Toy-Box WASD camera-fly below either (that's an orrery
+      // camera control, not a ship flight control, and we're still in HELM).
+      scModel.turnInput.roll = 0;
       cameraController.setFlightInput(0, 0, false);
     } else if (flightOk) {
       // Use e.code values (KeyW/KeyS/etc.) — immune to Shift changing e.key case
@@ -9514,6 +9561,14 @@ window.addEventListener('keydown', (e) => {
       console.log('[MODE] Supercruise unavailable — no star system');
       return;
     }
+    // Mode-ownership: hands-off (tour flying, or a Z-stopped coast) is a
+    // passenger state — R would fight the pilot / has nothing to toggle for
+    // a passenger, so it's inert with a hint. Engage-from-Toy-Box/orrery
+    // entry (!_scManual) and hands-on dropout/reengage are untouched.
+    if (_scManual && !handRouting(_scManual && !freeLook.latched).driveToggle) {
+      console.log('[MODE] drive toggle unavailable — hands-off (a passenger doesn\'t fly the drive); press F to take the stick');
+      return;
+    }
     const action = nextDriveAction(_scManual, scModel.driveOn);
     if (action === 'engage') {
       scControls.engage();          // enter In-Flight at the Settings-selected type
@@ -9538,29 +9593,46 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // F key: toggle free-look MODE on/off (§free-look-interaction-redesign
-  // -2026-06-27, Part 2; was §supercruise-arrival-modes Feature 2). In-Flight only.
-  // F no longer engages/disengages supercruise (that's E), and it no longer LATCHES
-  // the look: in free-look the head looks ONLY while LMB is dragged, and a bare
-  // cursor is a free pointer (it neither steers nor moves the camera — the mousemove
-  // joystick gate is `!freeLook.latched`). F-ON shows the cursor + hides the steering
-  // reticle (Part 1). F-OFF arms the one-shot recenter (freeLook.exit → the frame
-  // bridge calls scHead.beginRecenter → a FAST-but-graceful eased return to nose-
-  // forward, EXIT_RECENTER_TAU). Desktop only; same warp/splash guards as E.
+  // F key: "Pressing F should put control back into the player's hands"
+  // (Max, mode-ownership-2026-07-02 scope session). F is the ONE hands-on/
+  // off toggle (§free-look-interaction-redesign-2026-06-27, Part 2 supersedes
+  // its old "free-look toggle" framing per the mode-ownership reversal):
+  // hands-OFF absorbs free-look (bare cursor aims/selects, LMB-drag looks; the
+  // head looks ONLY while LMB is dragged — a bare cursor neither steers nor
+  // moves the camera, mousemove joystick gate is `!freeLook.latched`).
+  // fKeyAction is the pure decision (src/flight/flightModes.js): F is a HELM
+  // key (no-op in ORRERY — there's no ship hand-state to toggle there), F
+  // mid-tour is ALWAYS a takeover regardless of the stale hand-state bit, and
+  // otherwise it's the existing hands-on/off flip. Desktop only; same
+  // warp/splash guards as E/R.
   if (e.code === 'KeyF') {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
     if (splashActive || titleScreenActive) return;
-    // Free-look is available whenever the supercruise camera path is live — i.e.
-    // In-Flight (_scManual) OR while the autopilot/tour is flying (scPilot.isActive).
-    // This matches the frame-loop apply gate (scPilot.isActive || _scManual) and the
-    // middle-mouse peek gate, so F latches free-look during the Q tour too ("look
-    // around while the autopilot flies", §arrival-modes Feature 2 / AC6). Outside
-    // both there's nothing to free-look from (Toybox already orbits via drag).
-    if (!_scManual && !scPilot.isActive) {
-      console.log('[MODE] free-look unavailable — engage supercruise (E) or start the autopilot tour first');
+    const regime = _scManual ? 'helm' : 'orrery';
+    const handsOn = _scManual && !freeLook.latched;
+    const tourActive = autoNav.isActive;
+    const f = fKeyAction({ regime, tourActive, handsOn });
+    if (f.action === 'none') {
+      console.log('[MODE] flight controls unavailable — ORRERY has no hand-state to toggle (swap to HELM with M)');
       return;
     }
+    if (f.action === 'takeover') {
+      // F mid-tour: "put control back into the player's hands" — mirrors the
+      // old W/S-takeover recipe. NO pose reseed: the model keeps its live
+      // pose/speed, so the handoff is seamless (no snap).
+      scPilot.stop();
+      setScManual(true); // already true in HELM — kept defensively
+      _flightMode = FlightMode.MANUAL; // don't inherit a stale mode
+      cameraController.setCameraMode(CameraMode.FLIGHT);
+      cameraController.bypassed = true;
+      autoNav.stop();
+      freeLook.exit(); // latch OFF = hands-on
+      _applyPointerHud();
+      console.log('[MODE] F takeover — tour stopped, controls back in your hands');
+      return;
+    }
+    // 'hands-off' / 'hands-on': the existing toggle path.
     freeLook.toggle();
     // Free-look ON → show the cursor (free pointer for aiming/selecting) + hide the
     // steering reticle; OFF → hide the cursor + show it again, in HELM hands-on.
@@ -9570,48 +9642,67 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Q key: toggle the autopilot TOUR — the system-picked autopilot source
-  // (§supercruise-arrival-modes-design-2026-06-27, Feature 4 / Task 8). The same
-  // SupercruisePilot/scControls.flyTo door as player-directed Assist, just with the
-  // system choosing targets. UNAFFECTED by the E/F rewire: E drives supercruise and
-  // F latches free-look, both orthogonal to who-picks. Free-look works DURING the
-  // tour (the frame loop applies scHead every In-Flight frame), and W/S takeover
-  // (below, ~scPilot.isActive branch) still cancels the pilot mid-tour. (Was A —
-  // moved to free WASD for movement.)
-  // Z key: autopilot TOUR toggle (was Q — remapped 2026-06-28 so Q/E free for roll).
+  // The autopilot TOUR — the system-picked autopilot source (§supercruise
+  // -arrival-modes-design-2026-06-27, Feature 4 / Task 8). The same
+  // SupercruisePilot/scControls.flyTo door as player-directed Assist, just
+  // with the system choosing targets. Free-look works DURING the tour (the
+  // frame loop applies scHead every In-Flight frame — it's absorbed into
+  // hands-off, see fKeyAction above); the W/S-takeover this comment used to
+  // describe is RETIRED (mode-ownership-2026-07-02) — F is now the only
+  // takeover path (fKeyAction 'takeover').
+  // Z key: "toggle-off flight control if the player is in flight control
+  // mode when they press it" (Max, mode-ownership-2026-07-02 scope session) —
+  // and start the tour in that same press. zKeyAction is the pure decision
+  // (src/flight/flightModes.js): ORRERY never arms the tour (a hint, not a
+  // no-op-silent — "I do not want/need autopilot for orrery"); mid-tour Z
+  // stops it, staying hands-off/coasting (F grabs the stick, see fKeyAction
+  // 'takeover' above); from hands-on HELM, one press turns controls off AND
+  // starts the tour; from hands-off HELM (no tour running yet — e.g. after an
+  // F-driven hands-off) Z just arms it. (Was Q — remapped 2026-06-28 so Q/E
+  // free for roll.)
   if (e.code === 'KeyZ') {
-    if (autoNav.isActive) {
-      stopFlythrough();
-    } else if (system) {
-      idleTimer = 0;
-      startFlythrough();
+    const regime = _scManual ? 'helm' : 'orrery';
+    const handsOn = _scManual && !freeLook.latched;
+    const tourActive = autoNav.isActive;
+    const z = zKeyAction({ regime, handsOn, tourActive });
+    if (z.action === 'hint') {
+      console.log('[MODE] autopilot is a HELM feature — press M for the helm');
+      return;
     }
+    if (z.action === 'stop-tour-coast') {
+      _stopTourStayInShip();
+      return;
+    }
+    // 'hands-off-start-tour' / 'start-tour': arm the tour.
+    if (!system) return;
+    if (system.type && system.type !== 'star-system') {
+      // Deep-sky edge: startFlythrough's non-star-system branch flies an
+      // orrery-style orbit cam — from HELM that would yank the pilot out of
+      // the ship. (The deep-sky WARP-ARRIVAL path in warpRevealSystem is
+      // separate — untouched.)
+      console.log('[MODE] autopilot unavailable in deep space');
+      return;
+    }
+    if (z.action === 'hands-off-start-tour') {
+      freeLook.enter(); // latch ON = hands-off (the ONLY state the autopilot may fly in)
+      _applyPointerHud();
+    }
+    // Zero stale ship inputs on every hands-off/tour entry (also asserted
+    // defensively inside startFlythrough itself, regardless of caller).
+    scModel.turnInput.yaw = 0;
+    scModel.turnInput.pitch = 0;
+    scModel.turnInput.roll = 0;
+    idleTimer = 0;
+    startFlythrough();
     return;
   }
 
-  // During autopilot, some keys redirect the tour instead of normal behavior
+  // During autopilot, some keys redirect the tour instead of normal behavior.
+  // W/S/A/D takeover retired (mode-ownership-2026-07-02): during a tour the
+  // ship is the pilot's alone — W/S/A/D are inert for the ship (they fall
+  // through this block untouched; F is the only way to take the stick back,
+  // see fKeyAction 'takeover' above).
   if (autoNav.isActive) {
-    // W/S while supercruise is flying: seamless takeover. The same model keeps
-    // flying — the pilot hands off mid-state (no snap, position/velocity
-    // preserved) and the player picks up the throttle/stick. A/D fall through
-    // to the legacy stopFlythrough() → Toy Box restore.
-    if (scPilot.isActive && (e.code === 'KeyW' || e.code === 'KeyS')) {
-      scPilot.stop();
-      setScManual(true);
-      _flightMode = FlightMode.MANUAL; // spec §1: W/S takeover enters Manual (don't inherit a stale mode)
-      // Intent follows action; setCameraMode persists wd_cameraMode + holds
-      // the mobile lock (mobile never reaches here anyway — keyboard).
-      cameraController.setCameraMode(CameraMode.FLIGHT);
-      cameraController.bypassed = true;
-      autoNav.stop();
-      _applyPointerHud(); // entered hands-on HELM via tour takeover — hide cursor + show steering reticle (bypasses _enterFlightInternal)
-      return;
-    }
-    // WASD: stop autopilot and take manual control
-    if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
-      stopFlythrough();
-      return;
-    }
     if (e.code === 'Space') {
       e.preventDefault();
       // Universal commit — burns the in-system selection OR warps, whichever
