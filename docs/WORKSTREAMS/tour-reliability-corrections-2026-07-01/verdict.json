@@ -2,7 +2,7 @@
   "workstream": "tour-reliability-corrections-2026-07-01",
   "commit": "f0bd7cc",
   "date": "2026-07-01",
-  "perLayer": { "unit": "PASS", "integration": "PARTIAL", "uat": "deferred-to-max" },
+  "perLayer": { "unit": "PASS", "integration": "PASS (AC6 as rescoped by Max 2026-07-02; arrival-rate + keep-out clauses moved to inc-2)", "uat": "deferred-to-max" },
   "summary": "Unit layer PASS (verify-workstream wf_d6faed00-358: AC1/AC3/AC4/AC5 each 3/3 adversarial; 288/288 flight+auto; build clean; SC_TUNING byte-identical; baseline delta empirically confirmed 275->288 = exactly the 13 added tests). Live integration driven by working-Claude on :5173/:9223: AC2 PASS; AC6 PARTIAL — the four corrections demonstrably work (zero livelock, long legs arrive), but the measured arrival rate misses the >=90% gate due to a DISTINCT residual mechanism (tiny-moon-cluster crawl + neighbor-barrier pins) that is inc-2 DEPART/routing territory, plus a boundary-start keep-out dip of the same family. Max decision required: rescope AC6's arrival-rate clause to inc-2 (recommended) or hold Step 0 open.",
   "perAC": [
     { "id": "AC1-stall-criterion-cap-relative", "result": "PASS", "evidence": "verify wf_d6faed00-358 3/3 adversarial. Live corroboration: 0 stall-aborts across 29 min of touring (baseline 35 in 15.5 min); a 19,204u leg with a 2.5-min terminal crawl was never aborted and reached HOLD (baseline killed every such leg just short). Barrier-pin aborts still fire (2 observed, at 83s/139s — see AC6 residual note on cap~0 patience)." },
