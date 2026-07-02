@@ -9226,9 +9226,13 @@ function _exitFlightInternal() {
 // Esc-exit used) HELM→ORRERY, and _enterFlightInternal (drive untouched, since
 // it never calls setDrive) ORRERY→HELM. Same warp/splash/title/star-system
 // guards as E. Mobile is no longer excluded (docs/WORKSTREAMS/mode-ownership
-// -2026-07-02, AC9): mobile-HELM boots the tour by default with no F key to
-// take the stick, so this swap is the ONLY way off it — "the mode-swap HUD
-// button leaves it to ORRERY."
+// -2026-07-02, AC9), but only in the HELM→ORRERY direction: mobile-HELM boots
+// the tour by default with no F key to take the stick, so this swap is the
+// ONLY way off it — "the mode-swap HUD button leaves it to ORRERY." AC9 does
+// NOT offer a mobile ORRERY→HELM entry via this button (mobile-ORRERY is a
+// touch-driven orrery with no tour to opt into here); that direction stays a
+// no-op on mobile so a stray tap can't strand a touch player in a keyless,
+// hands-on HELM with no F/W/S/Q/E/Z (mode-ownership-2026-07-02 review fix).
 function _doModeSwap() {
   if (warpEffect.isActive || warpTarget.turning) return;
   if (splashActive || titleScreenActive) return;
@@ -9237,6 +9241,7 @@ function _doModeSwap() {
     return;
   }
   const swap = modeSwapAction({ scManual: _scManual });
+  if (_isMobile && !swap.exitFlight) return; // mobile: ORRERY→HELM entry not offered
   if (swap.exitFlight) {
     // HELM → ORRERY. If a tour is running, _exitFlightInternal alone doesn't
     // stop it — it never touches autoNav/flythrough/shipChoreographer, which
@@ -9269,14 +9274,19 @@ function _doModeSwap() {
 // you're IN (so the press is "leave here"). Hidden on the title/splash screen,
 // when no star system is loaded, and while the HUD is hidden — the SAME gates
 // the M key honors (mobile has no M key, but the button itself is the mobile
-// tour exit — AC9 — so it is no longer mobile-hidden here or in CSS). Called
-// every render frame (visibility) + on each regime flip (label), so it stays
-// in sync no matter what path changed the mode.
+// HELM→ORRERY tour exit — AC9 — so it is no longer unconditionally
+// mobile-hidden here or in CSS). On mobile it's additionally gated to
+// _scManual: AC9 offers it only as the tour exit, not as a mobile ORRERY→HELM
+// entry, so it stays hidden through mobile-ORRERY (matches the _doModeSwap
+// no-op above; mode-ownership-2026-07-02 review fix). Called every render
+// frame (visibility) + on each regime flip (label), so it stays in sync no
+// matter what path changed the mode.
 function _updateModeSwapButton() {
   const btn = document.getElementById('mode-swap-btn');
   if (!btn) return;
   const swappable = _hudVisible && !splashActive && !titleScreenActive
-    && !!system && !(system.type && system.type !== 'star-system');
+    && !!system && !(system.type && system.type !== 'star-system')
+    && (!_isMobile || _scManual);
   btn.style.display = swappable ? 'block' : 'none';
   if (swappable) btn.textContent = _scManual ? 'HELM' : 'ORRERY';
 }
