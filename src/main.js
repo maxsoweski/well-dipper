@@ -9120,6 +9120,17 @@ window.addEventListener('resize', () => retroRenderer.resize());
 // caller (engage(type)) if given, else Settings — the SAME source the inline
 // handler read on each engage. Guard against an unexpected stored value → Manual.
 function _enterFlightInternal(type) {
+  // mode-ownership-2026-07-02 fix: an ORRERY idle period leaves idleTimer
+  // sitting at/above idleTimeout (the ORRERY idle branch never fires the
+  // tour, so it never resets the timer either — idleFiresTour({regime:
+  // 'orrery'}) is always false). Without this reset, swapping into HELM
+  // hands-on (M, or R-engage via the enterFlight delegate at :582) right
+  // after such an idle stretch would insta-fire _beginHandsOffTour() on the
+  // very next simStep frame — zero hands-on grace for a player who just
+  // deliberately took the helm. Every hands-on entry point funnels through
+  // here, so resetting once at the choke point covers M-swap and R-engage
+  // alike.
+  idleTimer = 0;
   // Reuse the existing ENTER setup verbatim (camera → FLIGHT, model seeded
   // from the live camera pose, throttle zero, cameraController bypassed).
   cameraController.setCameraMode(CameraMode.FLIGHT);
@@ -10488,9 +10499,17 @@ canvas.addEventListener('touchstart', (e) => {
     _touchStart.x = e.touches[0].clientX;
     _touchStart.y = e.touches[0].clientY;
   }
-  // Stop autopilot or manual-burn-orbit on tap (matches mousedown behavior
-  // for desktop). Mobile is always Toy Box, so no Flight-mode carve-out needed.
-  if ((autoNav.isActive || _manualBurnOrbiting) && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
+  // Stop autopilot or manual-burn-orbit on tap (matches mousedown/wheel
+  // behavior for desktop, :10380/:10393) — gated on cameraMode !== FLIGHT,
+  // same as those two. mode-ownership-2026-07-02 (AC9): mobile-HELM now
+  // boots the autopilot tour by default and runs it in FLIGHT (cockpit)
+  // camera, same as desktop HELM, so "Mobile is always Toy Box" is stale —
+  // without this gate ANY tap tore the tour down (stopFlythrough → ORRERY),
+  // leaving only the 300s idle timer to re-arm it (no F key on mobile). The
+  // mode-swap HUD button is the sole mobile-HELM tour exit (AC9); taps still
+  // select/aim through the FLIGHT camera during the tour via trySelect below.
+  if ((autoNav.isActive || _manualBurnOrbiting) && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook
+      && cameraController.cameraMode !== CameraMode.FLIGHT) {
     stopFlythrough();
     // Update the speed dial button state
     const autonBtn = mobileControls?.querySelector('[data-action="autonav"]');
