@@ -1,0 +1,29 @@
+=== META ===
+system=Sol planets=13 lingerMult=0.1
+star: R=4.65 keepOut=16.3 park=37.2
+samples=859 span=858s
+
+=== LEGS ===
+idx stop        t0    dur  d0->dEnd           minSpeed maxSpeed phases          arrived aborts wayp minStarDist
+ 26 moon7.0        1  858s 19204.63->1.28        0.26  1291.48 ALIGN>CRUISE      no   0      Y    14.7
+
+legs=1 arrivals(HOLD)=0 stall-aborted=0
+
+=== SPEED DISTRIBUTION (share of run time) ===
+<0.5     5.5%
+0.5-4    23.2%
+4-50     29.7%
+50-500   21.1%
+>500     20.6%
+
+=== CAP-DOMINATING BODY (859 upgraded samples) ===
+body#0 R=4.65            412s (48%)
+body#29 R=0.005          318s (37%)
+body#18 R=0.004          53s (6%)
+body#12 R=0.01           34s (4%)
+body#24 R=0.001          20s (2%)
+body#8 R=0.003           17s (2%)
+body#23 R=0.005          4s (0%)
+body#22 R=0.001          1s (0%)
+
+=== STALL-ABORTS (0) ===

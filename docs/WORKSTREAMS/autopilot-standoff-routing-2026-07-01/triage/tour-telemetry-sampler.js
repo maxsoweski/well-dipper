@@ -57,7 +57,6 @@
         distPilot: distPilot == null ? null : +distPilot.toFixed(2),
         waypoint: !!(pt?.mesh && realMesh && pt.mesh !== realMesh), // go-around leg in flight
         stallT: +(+p._cruiseStallTimer).toFixed(1),
-        stallRef: +(+p._cruiseStallRef).toFixed(1),
         bestDist: p._cruiseBestDist === Infinity ? null : +(+p._cruiseBestDist).toFixed(2),
         holdT: +(+p._holdTimer).toFixed(1),
         aborts: lab.tourStallAbortCount(),
