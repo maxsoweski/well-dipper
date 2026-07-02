@@ -1848,6 +1848,20 @@ function _captureTelemetrySample() {
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
+// Mode-ownership regime probe (mode-ownership-2026-07-02 live ACs): the actual
+// regime/hand-state bits, so live verification reads flags, not inferences.
+window._regime = () => ({
+  scManual: _scManual,
+  freeLookLatched: freeLook.latched,
+  handsOn: _scManual && !freeLook.latched,
+  flightMode: _flightMode,
+  tour: autoNav.isActive,
+  pilot: scPilot.isActive,
+  pilotPhase: scPilot.phase,
+  showReticle: _showReticle,
+  cursor: _pointerCursor,
+  camBypassed: cameraController.bypassed,
+});
 // V1 STATION-hold redesign — debug accessor for the shared player-ship.
 window._ship = ship;
 
