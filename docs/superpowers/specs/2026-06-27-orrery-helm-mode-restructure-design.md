@@ -88,7 +88,10 @@ flow) becomes the **mode picker**. It presents two choices, **ORRERY** and **HEL
 Selecting one launches the game into that mode via the **same launch flow used
 today** — we extend the existing boot, we do **not** invent a parallel one. Mode is
 swappable afterward (see Switching). Mobile is unaffected (mobile is ORRERY-only; see
-Mobile).
+Mobile). **⚠ STALE/SUPERSEDED (2026-07-02):** the mobile-ORRERY-only claim is
+REVERSED — mobile now offers BOTH stations at the splash, with mobile-HELM booting the
+tour by default. See
+[`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/).
 
 ## Switching modes
 
@@ -158,6 +161,15 @@ re-anchor regression must stay absent.**
 
 ## Mobile + Tour unchanged
 
+> **⚠ STALE/SUPERSEDED (2026-07-02).** BOTH bullets below are REVERSED by Max
+> (thrice-stated, 2026-07-01/02): mobile now offers BOTH stations at the splash
+> (mobile-HELM boots the tour by default), and the autopilot tour is now a HELM-only
+> feature — it never arms in ORRERY, not at boot, not on idle; the modes must not mix.
+> See [`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/)
+> and [`docs/FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md`](../../FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md)
+> (the workstream + trace recording this deliberate reversal). Original text preserved
+> below.
+
 - **Mobile:** unchanged — mobile stays ORRERY-only (it is hard-locked to `TOY_BOX`
   today). Do **not** add a Helm to mobile.
 - **Autopilot Tour (Q):** keeps working as today in both modes; do **not** restrict
@@ -181,7 +193,13 @@ stay. **This is a user-facing rename, not an internal refactor.**
 - No internal-identifier rename (`CameraMode.TOY_BOX`, `_scManual`, `FlightMode` stay).
 - No broadening of the takeover gate to "any `scPilot.isActive`" (would catch the Q
   tour).
-- No Helm on mobile (mobile stays ORRERY-only).
+- **⚠ STALE/SUPERSEDED (2026-07-02).** REVERSED by Max (thrice-stated, 2026-07-01/02):
+  mobile now offers BOTH stations at the splash, with mobile-HELM booting the tour by
+  default. See
+  [`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/)
+  (the workstream recording this deliberate reversal). Original non-goal preserved
+  below.
+  - _Original (superseded):_ No Helm on mobile (mobile stays ORRERY-only).
 - **⚠ STALE/SUPERSEDED (2026-07-02).** REVERSED by Max (thrice-stated, 2026-07-01/02):
   the autopilot tour is now a HELM-only feature; ORRERY is player-driven and never
   auto-arms it — the modes must not mix. See
@@ -236,7 +254,9 @@ stay. **This is a user-facing rename, not an internal refactor.**
 - **AC10 (UAT — Max only) — it reads right as a whole.** Splash picks a mode, M / HUD
   / Options swap cleanly with no snap, Esc only ever drops selection, select-and-jump
   flies you in and lets you grab control, the tour still showcases the system, mobile
-  stays ORRERY-only. *Deferred to Max.*
+  stays ORRERY-only. *Deferred to Max.* **⚠ STALE/SUPERSEDED (2026-07-02):** "mobile
+  stays ORRERY-only" is reversed — mobile now offers both stations. See
+  [`docs/WORKSTREAMS/mode-ownership-2026-07-02/`](../../WORKSTREAMS/mode-ownership-2026-07-02/).
 
 ## Testing approach
 
