@@ -1,0 +1,95 @@
+{
+  "workstream": "mode-ownership-2026-07-02",
+  "commit": "4079878",
+  "verifyRun": "wf_76e22cab-fd9 (unit+static+3x-adversarial at f8230f8) + working-Claude live integration drive on :9223 (this file's live evidence, at 3a3bbe5..4079878)",
+  "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "deferred-to-max" },
+  "overall": "VERIFIED_PENDING_MAX 4079878 — unit PASS + live integration PASS; AC12 (holistic modes-don't-mix) is Max's gate, which doubles as the clean Step-0 re-UAT.",
+  "perAC": [
+    {
+      "id": "AC1-hand-state-and-routing-reducers",
+      "result": "PASS",
+      "layer": "unit",
+      "evidence": "verify wf_76e22cab-fd9, 3/3 adversarial: handRouting/zKeyAction/fKeyAction/idleFiresTour pinned cell-by-cell with hand-built expectations (modeOwnership.test.js); 62/62 targeted, 307/307 flight+auto. Re-run green at 4079878."
+    },
+    {
+      "id": "AC2-boot-and-idle-reducers",
+      "result": "PASS",
+      "layer": "unit",
+      "evidence": "verify wf_76e22cab-fd9, 3/3 adversarial: bootModeAction carries startAutopilot (helm true / orrery false / garbage-safe fallback); idleFiresTour helm-only across the full regime x handState matrix; mobile coercion gone from _pickBootMode."
+    },
+    {
+      "id": "AC3-tour-input-isolation",
+      "result": "PASS",
+      "layer": "integration",
+      "live": true,
+      "evidence": "LIVE :9223, tab foreground, mid-CRUISE tour leg: held KeyQ 1.2s + KeyE 0.4s -> scModel.turnInput.roll 0 at all 9 samples (the main.js:8468 leak dead); held W 0.8s + S 0.8s -> throttle 0.75 unchanged, scPilot+autoNav active throughout (W/S takeover retired); 11-point mouse sweep -> yaw/pitch stayed at pilot-scale (~1e-11), no player deflection. First run was invalidated by the tour auto-warping mid-probe (1-planet system) — re-driven in a stable CRUISE window."
+    },
+    {
+      "id": "AC4-f-is-the-hands-toggle",
+      "result": "PASS",
+      "layer": "integration",
+      "live": true,
+      "evidence": "LIVE: F mid-tour -> takeover (tour+pilot stopped, handsOn true, reticle shown, cursor 'none'); hands-on W ramped throttle 0.75->1.0 and Q gave roll=1; F again -> hands-off (latched, cursor visible, no reticle, NO tour restart); F again -> hands-on. LMB-drag (movementX/Y deltas) during a tour moved the head (yaw 0->-0.75, pitch 0->-0.20) while the pilot kept flying, and HELD on release; bare-cursor move left turnInput at 0. NOTE: F presses are (correctly) swallowed during warp/nav-sequence phases by the standing warp guards."
+    },
+    {
+      "id": "AC5-z-semantics",
+      "result": "PASS",
+      "layer": "integration",
+      "live": true,
+      "evidence": "LIVE: with E held (roll -1), Z from hands-on -> hands-off + tour ALIGN and roll ZEROED on entry (held key did not survive); Z mid-tour -> tour+pilot stopped, scManual true + latched (hands-off coast), camera stays ship-welded, no HELM HUD; F from coast -> hands-on; Z re-armed the tour. _flightMode forced MANUAL at every tour entry/stop (stale-ASSIST leak closed at f8230f8)."
+    },
+    {
+      "id": "AC6-hud-tells-the-truth",
+      "result": "PASS",
+      "layer": "integration",
+      "live": true,
+      "evidence": "LIVE transition matrix — boot-HELM(tour), boot-ORRERY, Z on/off, F on/off, F-takeover, idle-fire (60s), M ORRERY->HELM, M HELM->ORRERY mid-tour: reticle shown + cursor 'none' IFF hands-on at EVERY sampled step; tours/coast/ORRERY always cursor-visible + reticle hidden. No stale combination observed."
+    },
+    {
+      "id": "AC7-boot-mapping-flipped",
+      "result": "PASS",
+      "layer": "integration",
+      "live": true,
+      "evidence": "LIVE, both boots from fresh reloads: HELM pick -> warp reveal into the tour hands-off (autopilot true, autoNav+pilot CRUISE, scManual+latched, cockpit); ORRERY pick -> nothing armed (autopilot false, autoNav inactive, scPilot IDLE — the arrival fly-in correctly skipped so the god's-eye owns the camera: camBypassed false, WASD camera-fly moved the camera 13.3u, orbit live), still clean at reveal+8s (the 5s title-timer race closed). NOTE for Max's UAT: the ORRERY boot presents from the warp-exit vantage (galaxy band; system not framed) — if you want a framed system-overview opening, it's a small follow-up (viewSystem transition)."
+    },
+    {
+      "id": "AC8-idle-fires-only-in-helm",
+      "result": "PASS",
+      "layer": "integration",
+      "live": true,
+      "evidence": "LIVE with idleTimeout=60 (restored to 300 after): ORRERY idled 42->107s across the timeout with nothing arming; HELM (hands-on, via M) idle accrued 0->60s untouched and FIRED at exactly 60s into a clean hands-off tour (latched, CRUISE, roll 0, autopilot true, HUD tour-state). LIVE-CAUGHT + FIXED (4079878): idle never accrued in HELM at all — the idle chain sat in the sc branch's else (pre-existing ORRERY-only structure), so the builder's helm gate was unreachable; accrual added inside the sc branch, gated off pilot legs/tour/warp."
+    },
+    {
+      "id": "AC9-mobile-both-stations",
+      "result": "PASS",
+      "layer": "integration",
+      "live": true,
+      "evidence": "LIVE, emulated mobile (390x844 touch, ontouchstart detected), separate page (closed after): chooser shows BOTH stations; mobile-HELM -> tour hands-off CRUISE (title dismissed via canvas touchstart — the mobile gesture); canvas tap mid-tour SURVIVES; mode-swap button visible during the tour and its tap tears down fully to ORRERY; mobile-ORRERY boot -> nothing armed, stays clean +6s. LIVE-CAUGHT + FIXED (4079878): ShipCameraSystem hard-locks mobile to TOY_BOX so the tap-teardown's cameraMode gate never protected a mobile tour (first tap killed it) — gate now honors !_scManual."
+    },
+    {
+      "id": "AC10-peer-mode-doc-reconciled",
+      "result": "PASS",
+      "layer": "unit",
+      "evidence": "verify wf_76e22cab-fd9, 3/3 adversarial: STALE/SUPERSEDED (2026-07-02) markers at all three reversed points of the 2026-06-27 doc (god's-eye framing, tour-in-both-modes non-goal, F=free-look), each pointing at this workstream + the motion-authority trace; inc-4 realization note added to the 2026-07-01 spec; no other content altered."
+    },
+    {
+      "id": "AC11-regression-gate",
+      "result": "PASS",
+      "layer": "unit",
+      "evidence": "At 4079878: 307/307 flight+auto (288 baseline + 19 new); npm run build exit 0; git diff ee0b915..HEAD over SupercruiseModel.js (SC_TUNING), SupercruisePilot.js, tourStandoff.js, AutoNavigator.js EMPTY — zero motion/tuning code touched across the whole workstream; Assist path code untouched; full-repo baseline still only the 4 pre-existing src/generation failures (verified at f8230f8). Live bonus: the screensaver warp loop (tour -> wrap -> auto-warp -> next system -> tour) observed working twice; ORRERY WASD camera-fly and M-swap both directions confirmed."
+    },
+    {
+      "id": "AC12-modes-read-cleanly-separate",
+      "result": "deferred-to-max",
+      "layer": "uat",
+      "evidence": "Max's gate alone. This UAT doubles as the clean Step-0 re-UAT (its AC7): boot ORRERY (nothing flies itself), boot HELM (cockpit screensaver arrives at bodies, visits the star), F mid-tour to grab the stick, fly, Z to hand back, watch. Optional: window._triggerTourComplete() forces the wrap->warp to check the warp-arrival standoff."
+    }
+  ],
+  "residuals": [
+    "ORRERY boot presentation: god's-eye opens from the warp-exit vantage (system not framed in view). Functional per AC7; whether the boot should open on a framed system overview is Max's taste call — one-line follow-up if wanted.",
+    "Mobile Assist idle re-engage (reviewer LOW, accepted as model-consistent): a mobile body-target commit-burn stays in the ORRERY regime (commitBurnSwapsToHelm mobile guard), so its post-arrival idle no longer re-arms the tour — aligned with 'no autopilot for orrery'; flag to Max rather than re-plumb.",
+    "Double-tap-to-warp on mobile still fires during a tour (pre-existing gesture, player-initiated, not an input leak — left as-is).",
+    "verify-workstream stock synthesize stage ran on the session model (fable) — standing tooling note carried from Step-0.",
+    "AC1 TDD ordering not provable from git history (tests+impl in one commit); the substantive requirement (hand-built expectations, not implementation mirrors) verified by adversarial review."
+  ]
+}
