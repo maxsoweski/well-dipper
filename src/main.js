@@ -8421,6 +8421,26 @@ function simStep(deltaTime) {
       _composeShakeOntoCamera();
 
       if (scFrame) _handleScPilotFrame(scFrame); // reticle sync + tour advance (live since the 2026-06-10 cutover)
+
+      // mode-ownership-2026-07-02 (AC8, live-caught): idle must also accrue in
+      // HELM. The idle chain below sits in this branch's `else`, so it never
+      // runs while _scManual — pre-existing structure from when idle was an
+      // ORRERY-only screensaver mechanism. Max's pick: "idle → tour only from
+      // HELM" — walking away mid-flight (no input for idleTimeout; pilot not
+      // flying a leg) hands the ship to the tour via the same hands-off
+      // assertion Z uses. A flying pilot leg (tour or Assist) is purposeful
+      // activity, never idle. Ship-lock suppression mirrors the ORRERY branch.
+      if (_scManual && !scPilot.isActive && !autoNav.isActive
+          && !warpEffect.isActive && !splashActive && !titleScreenActive) {
+        idleTimer += deltaTime;
+        if (_selectedTarget?.kind === 'ship') {
+          idleTimer = 0;
+        } else if (idleTimer >= settings.get('idleTimeout')
+                   && idleFiresTour({ regime: 'helm' })) {
+          _manualBurnOrbiting = false;
+          _beginHandsOffTour();
+        }
+      }
     }
     // ── Autopilot (cinematic flythrough) ──
     // (V1 AutopilotMotion simStep branch removed 2026-06-26 — the
@@ -10579,8 +10599,14 @@ canvas.addEventListener('touchstart', (e) => {
   // leaving only the 300s idle timer to re-arm it (no F key on mobile). The
   // mode-swap HUD button is the sole mobile-HELM tour exit (AC9); taps still
   // select/aim through the FLIGHT camera during the tour via trySelect below.
+  // Gate on the REGIME bit too (live-caught, AC9): ShipCameraSystem hard-locks
+  // mobile to TOY_BOX (setCameraMode:370 — mobile can never hand-fly), so
+  // during a mobile-HELM tour cameraMode is never FLIGHT and the cameraMode
+  // clause alone can't protect the tour. _scManual is the honest "player is
+  // in the ship" bit on every platform; the mode-swap button is the mobile
+  // tour exit, not a stray tap.
   if ((autoNav.isActive || _manualBurnOrbiting) && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook
-      && cameraController.cameraMode !== CameraMode.FLIGHT) {
+      && cameraController.cameraMode !== CameraMode.FLIGHT && !_scManual) {
     stopFlythrough();
     // Update the speed dial button state
     const autonBtn = mobileControls?.querySelector('[data-action="autonav"]');
