@@ -8501,7 +8501,21 @@ function simStep(deltaTime) {
     // — must be explicitly held at 0 so a stale/held Q/E press can't leak into
     // the autopilot's flight (the measured main.js:8468 leak).
     const _handRouting = handRouting(_scManual && !freeLook.latched);
-    if (_handRouting.throttle) {
+    // Assist-type player burns (Space commit-burn) are OUT OF SCOPE for the
+    // hand-state mutual exclusion (docs/WORKSTREAMS/mode-ownership-2026-07-02
+    // intent.md non-goals: "the hands-on/off mutual exclusion is scoped to
+    // the TOUR ... extending it to Assist is a named follow-up for Max to
+    // call"). A HELM-native ASSIST leg can be launched from hands-off — aim/
+    // select requires a free cursor (main.js ~10177: "no click-select" in
+    // hands-on) — so gating this branch on hand-state alone stranded the
+    // manualCancelsLeg W/S-cancel path (and Q/E roll) behind a hands-on check
+    // they never had before this workstream. Keep the branch reachable
+    // whenever an ASSIST leg is actively flying, regardless of hand-state —
+    // this restores pre-workstream Assist semantics untouched. The TOUR never
+    // sets _flightMode to ASSIST (it stays MANUAL throughout), so this OR
+    // cannot reopen the tour's Q/E-roll leak.
+    const _assistLegActive = scPilot.isActive && _flightMode === FlightMode.ASSIST;
+    if (_handRouting.throttle || _assistLegActive) {
       // Supercruise manual throttle (Elite convention): W ramps throttle up,
       // S ramps it down, both held-key stepping at SC_TUNING.THROTTLE_RATE
       // (units/s). The supercruise mover owns motion in this mode, so the
