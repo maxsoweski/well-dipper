@@ -5850,6 +5850,20 @@ function _beginTourLegMotion(stop, priorBody) {
 function startFlythrough() {
   if (!system) return;
   if (warpEffect.isActive) return;
+  // Mode-ownership (docs/WORKSTREAMS/mode-ownership-2026-07-02, reviewer
+  // finding 2026-07-02): establish hands-off HERE, not only in the Z handler.
+  // startFlythrough() has other callers (idle timeout, warp-resume, boot
+  // flow, nav-computer toggle, the beginAutopilotTour scenario helper) that
+  // never latch free-look themselves — they'd leave _scManual true with
+  // freeLook.latched false, so handRouting(_scManual && !freeLook.latched)
+  // at the held-keys block (8489) and the mouse-steer gate (10099) both keep
+  // reporting hands-ON, letting held Q/E/W/S and mouse motion leak into the
+  // pilot's flight every frame. The tour is a HELM feature and may only fly
+  // hands-off, so any tour entry that finds itself in HELM latches free-look
+  // right here — one shared hands-off establishment instead of relying on
+  // each caller to remember. Gated on _scManual so the ORRERY default
+  // screensaver (which runs with _scManual=false) is unaffected.
+  if (_scManual) freeLook.enter();
   // Mode-ownership (docs/WORKSTREAMS/mode-ownership-2026-07-02): assert the
   // ship-input regime at tour start REGARDLESS OF CALLER (Z, idle timeout,
   // boot flow, …) — the tour is hands-off, so no stale/held-key turnInput can
