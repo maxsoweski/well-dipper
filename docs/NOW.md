@@ -84,7 +84,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > emission-OFF pixel-identical to cold Jovian). **AC8 UAT PASSED by Max 2026-07-01** — screenshots in
 > `screenshots/emission-*.png`. Decisions: keep shipped `(tempK/1800)^4` quartic for render; incandescent white
 > core accepted (AC7 re-worded). Seed→driver derivation for the 3 interior scalars deferred to #9 (ATMOSPHERE-PLAN §e).
-> **Atmosphere branch merged → L1 2026-07-01** (both tracks now in one tree; L1 not yet pushed since merge). Workstream
+> **Atmosphere branch merged → L1 2026-07-01** (both tracks now in one tree; **pushed through `b996d55`** same day). Workstream
 > `docs/WORKSTREAMS/world-engine-blackbody-emission-2026-07-01/`.
 
 > **▶ WORLD-ENGINE #3a (E5 BANDS/JETS) — ✅ MAX UAT-PASSED `9c80d40` (2026-07-01).** The gas/ice-giant
