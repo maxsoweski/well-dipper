@@ -186,21 +186,108 @@ export function commitBurnSwapsToHelm(targetKind, scManual, isMobile) {
   return !scManual && !isMobile && targetKind !== 'ship';
 }
 
-// The SPLASH MODE-PICKER boot decision, extracted pure (§supercruise-arrival
-// -modes-design-2026-06-27, #2 "splash = mode picker", AC6). The existing title/
+// The SPLASH MODE-PICKER boot decision, extracted pure. The existing title/
 // splash screen presents two PEER choices — ORRERY and HELM — and selecting one
 // launches the game into that mode via the SAME launch flow used today (we extend
 // the existing boot, we do NOT invent a parallel one). This reducer maps the
-// chosen mode to the one bit the live title-dismiss handler needs: whether boot
+// chosen mode to the two bits the live title-dismiss handler needs: whether boot
 // should ENTER flight (HELM → _enterFlightInternal once the system is live, so
-// _scManual becomes true) or stay in the orrery (ORRERY → _scManual stays false,
-// today's autopilot-tour reveal). Any unknown/missing pick (including the legacy
-// "press anything to begin" with no explicit choice) falls back to ORRERY — the
-// safe, contemplative boot — so a stray value can never strand the player in
-// flight. `enterFlight` is true IFF the chosen mode is HELM.
+// _scManual becomes true) and whether it should START the autopilot tour. Any
+// unknown/missing pick (including the legacy "press anything to begin" with no
+// explicit choice) falls back to ORRERY with BOTH bits false — so a stray value
+// can never strand the player in flight or auto-arm a tour.
+//
+// FLIPPED (docs/WORKSTREAMS/mode-ownership-2026-07-02, Max's standing model,
+// thrice-stated 2026-07-01/02: "HELM should be our chosen Autopilot path; the
+// Autopilot is a HELM feature. ORRERY is a player-driven feature" / "I do not
+// want/need autopilot for orrery"): this SUPERSEDES the 2026-06-27 splash-picker
+// semantics, where ORRERY carried the autopilot-tour reveal and HELM was
+// manual-only. Now HELM boots the cockpit screensaver tour hands-off (F grabs
+// the stick), and ORRERY arms nothing — ever, not at boot, not on idle.
+// `enterFlight` is true IFF the chosen mode is HELM; `startAutopilot` moves in
+// lockstep with it (both bits are the same "helm" bit — kept as two named fields
+// because the live host consumes them as two separate side-effects).
 export function bootModeAction(mode) {
   const helm = mode === 'helm';
-  return { mode: helm ? 'helm' : 'orrery', enterFlight: helm };
+  return { mode: helm ? 'helm' : 'orrery', enterFlight: helm, startAutopilot: helm };
+}
+
+// ---------------------------------------------------------------------------
+// Mode-ownership reducers (docs/WORKSTREAMS/mode-ownership-2026-07-02). Max,
+// 2026-07-02 (3rd articulation, standing): "I do not want/need autopilot for
+// orrery. And I don't want these modes to mix." The felt problem: running the
+// tour from HELM let hand inputs (Q/E roll, mouse, W/S) bleed into the pilot's
+// flight and the HUD lied about who was flying (full leak table:
+// docs/FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md). These reducers give
+// the ship ONE owner at a time via a single hand-state bit: hands-ON (the
+// player flies) or hands-OFF (the autopilot may fly; free-look absorbed).
+// ---------------------------------------------------------------------------
+
+// Where every ship hand-input goes, and whether the autopilot is legal to fly,
+// given the hand-state. Hands-ON: the player owns throttle (W/S), roll (Q/E),
+// the mouse virtual-joystick steer, and the drive toggle (R) — and the
+// autopilot may NOT fly. Hands-OFF: none of those hand-inputs reach the ship
+// (free-look's bare-cursor-aim/LMB-drag-look behaviors live on top, routed
+// separately by freeLookPointerRoute) — and the autopilot IS legal to fly.
+// The two states are exact complements by construction: this is the single
+// source of truth the ship-input block (main.js W/S ~8457-8464, Q/E roll
+// ~8468), the mouse-steer gate (~10008), and the R drive toggle all read
+// instead of each re-deriving "am I allowed to move the ship" independently.
+export function handRouting(handsOn) {
+  const on = !!handsOn;
+  return {
+    throttle: on,
+    roll: on,
+    mouseSteer: on,
+    driveToggle: on,
+    autopilotLegal: !on,
+  };
+}
+
+// The Z key: "toggle-off flight control if the player is in flight control
+// mode when they press it" (Max, scope session 2026-07-02) — and start the
+// tour in that same press. Four situations, checked in order:
+//   - regime 'orrery'        → 'hint'. ORRERY never auto-arms the tour — Z has
+//     nothing to toggle there (no ship hand-state to turn off).
+//   - a tour is ACTIVE       → 'stop-tour-coast'. Z during the tour stops it;
+//     the ship stays hands-off, coasting (F is what grabs the stick back).
+//   - HELM, hands-ON         → 'hands-off-start-tour'. One press does both:
+//     turns flight control off AND starts the autopilot tour.
+//   - HELM, hands-OFF        → 'start-tour'. Already hands-off; Z just arms
+//     the tour (e.g. after an F-driven hands-off with no tour running yet).
+// Pure so the key handler (main.js Z toggle, ~9582) can ask "what should this
+// press do?" without re-deriving the regime/tour/hand-state branching inline.
+export function zKeyAction({ regime, handsOn, tourActive } = {}) {
+  if (regime === 'orrery') return { action: 'hint' };
+  if (tourActive) return { action: 'stop-tour-coast' };
+  return handsOn ? { action: 'hands-off-start-tour' } : { action: 'start-tour' };
+}
+
+// The F key: "Pressing F should put control back into the player's hands"
+// (Max, scope session 2026-07-02). F is the ONE hands-on/off toggle; hands-off
+// absorbs the free-look behaviors. Three situations, checked in order:
+//   - regime 'orrery'  → 'none'. There is no ship hand-state to toggle in the
+//     orrery (an orrery-camera regime, not a flight regime).
+//   - a tour is ACTIVE → 'takeover'. F mid-tour always stops the pilot and
+//     tour and lands hands-on, regardless of the stale pre-tour hand-state bit
+//     — "F puts control back into the player's hands."
+//   - otherwise (HELM, no tour) → flips hands-on <-> hands-off.
+// Pure so the key handler (main.js F toggle, ~9550) can ask "what should this
+// press do?" without re-deriving the regime/tour/hand-state branching inline.
+export function fKeyAction({ regime, tourActive, handsOn } = {}) {
+  if (regime === 'orrery') return { action: 'none' };
+  if (tourActive) return { action: 'takeover' };
+  return handsOn ? { action: 'hands-off' } : { action: 'hands-on' };
+}
+
+// The idle-timeout gate: the autopilot tour may auto-arm ONLY from HELM — "No
+// autopilot for orrery... ORRERY never auto-arms the tour — not at boot, not
+// on idle" (intent.md, success criteria). ORRERY idles forever; the live idle
+// loop (main.js:8331-8357) must gate BOTH its branches on this predicate
+// instead of calling startFlythrough() unconditionally on timeout. Any
+// non-HELM regime (including garbage/missing) is a safe no-arm default.
+export function idleFiresTour({ regime } = {}) {
+  return regime === 'helm';
 }
 
 // The OS-cursor + flight-HUD-steering-reticle visibility decision, BY SUB-MODE,
