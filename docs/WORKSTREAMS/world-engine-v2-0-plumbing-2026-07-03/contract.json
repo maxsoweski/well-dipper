@@ -16,19 +16,19 @@
     },
     {
       "id": "AC1",
-      "statement": "ZERO behavioral change — the refactor gate. Every archetype-mapped preset builds a byte-identical carrier (height and all carrier fields) at fixed seeds before vs after V2-0; driversToTune(D_EARTH) === null and magmaDriversToTune(MAGMA_REF) === null are preserved; the full vitest suite passes at the same test count as pre-change.",
+      "statement": "ZERO behavioral change — the refactor gate. Every archetype-mapped preset builds a byte-identical carrier (height and all carrier fields) at fixed seeds before vs after V2-0; driversToTune(D_EARTH) === null and magmaDriversToTune(MAGMA_REF) === null are preserved; the full vitest suite passes with NO pre-existing test dropped or skipped (all pre-change test files stay green; V2-0's new AC tests are additive). [Amended 2026-07-03 per plan R7: the original 'same test count' literal conflicted with adding AC test files.]",
       "verifyVia": {
-        "input": "Headless carrier build for all archetype-mapped presets at seeds {1,2,3,7,42} on pre-change and post-change checkouts; full npx vitest run",
-        "observable": "Float32Array byte-equality per preset/seed; both tune-null anchors hold; suite green, count unchanged"
+        "input": "Headless carrier golden fixture (captured post-Slice-A == pre-change behavior, per BUILD-PLAN §1/§3) re-hashed after each slice, all archetype-mapped presets at seeds {1,2,3,7,42}; full npx vitest run",
+        "observable": "SHA-256 equality per (preset, seed) across all persistent carrier arrays; both tune-null anchors hold; suite green with every pre-existing test present and passing"
       },
       "layer": "unit"
     },
     {
       "id": "AC2",
-      "statement": "baseStep scalar extraction: per-body scalar derivations (thermalState, shellThickness, rawTidal/Io-ratio, radiogenic/size-vigor terms, radialStrain, liquidStability) are exported as pure named helpers from the baseStep module; the existing baseStep test suite (which pins the exact scalar values) passes unchanged; helpers return the same values the grid op produced for identical inputs.",
+      "statement": "baseStep scalar extraction: per-body scalar derivations (thermalState, shellThickness, rawTidal/Io-ratio, radiogenic/size-vigor terms, radialStrain, liquidStability) are exported as pure named helpers from the baseStep module; the existing baseStep suites (which pin determinism, monotone relations, and [0,1] bounds — NOT exact scalar values) pass unchanged; value preservation is witnessed by a NEW makeBaseStep-output golden fixture captured on the pre-change tree (ad156cc) covering every drivers scalar, crust fields, the crustalThickness array hash, and the raw-tidal value. [Amended 2026-07-03: original wording over-claimed what the existing suites pin — plan contract-accuracy note.]",
       "verifyVia": {
-        "input": "Import the helpers in a headless test; run the existing worldengine-base-interior / baseStep suites",
-        "observable": "Helper outputs equal the grid-op-internal values on the pinned fixtures; suites green unchanged"
+        "input": "Import the helpers in a headless wiring test; run the existing worldengine-base-* suites; run the new output-golden test against tests/fixtures/v2-0-basestep-goldens.json",
+        "observable": "makeBaseStep outputs equal the ad156cc-captured goldens exactly; calibrateTidal(bodyRawTidal(b)) === drivers.tidalHeat oracle holds; existing suites green unchanged"
       },
       "layer": "unit"
     },
