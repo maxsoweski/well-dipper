@@ -56,11 +56,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > separation over 80 synthetic worlds × 2 meshes; validation script committed. ⚠ CROSS-GATE FINDING: wet-stagnant at
 > raw L≈0.16 = pervasive pierce ("Io-with-water") → §5.4 #1 OPEN pending E1 **effectiveL** for seeded-stagnant picks
 > (folded into V2-1 AC5). Three signed-text amendments recorded in ROADMAP §7b note for Max's V2-2-scope review.
-> **▶ V2-1 (E1 regime selector, SHADOW) — SCOPED, AWAITING MAX GREENLIGHT.** Contract + intent at
-> `WORKSTREAMS/world-engine-v2-1-e1-shadow-2026-07-03/` (schema-valid; 8 ACs = AC-0 spine + 6 unit + 1 live
-> integration; NO UAT gate — data-only like V2-0). Extracted from signed §3.1/§5.2/§7a + the gates; active-workstream
-> pointer flipped. **NEXT = Max reviews contract → build V2-1 via workflows.** Atmosphere #3b gate OPEN
-> (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
+> **▶ V2-1 (E1 regime selector, SHADOW) — ✅ VERIFIED `717486e` (2026-07-03, Max-greenlit scope; no UAT gate,
+> data-only).** 8/8 ACs PASS (verify `wf_81c40870-597` unit 7/7 at 3/3-adversarial; AC7 live-driven by working-Claude:
+> 6 presets, tuple matches calib scripts exactly, Rocky's seeded pick resolved 'stagnant' with effectiveL 0.613, zero
+> console errors). Built via adversarial plan `wf_16ba43a6-2d6` (5 must-fixes pre-code, incl. the EMPIRICAL allow-list
+> correction: divergences = {Frozen(airless), Eyeball} — NOT the roadmap-enumerated Neptunian/Sub-Neptune, which is
+> writer-equal; Eyeball disposition = today's eyeball-despun WINS, V2-3 adds locked-awareness) + 4-slice build
+> `wf_228bf3f3-5da` (`dd88f72`→`3a2af88`→`a23e918`→`717486e`). New: `src/worldengine/base/e1Regime.js` (pure
+> computeE1 → full signed tuple + effectiveL on seeded-stagnant picks), condition vector + T_eq/surfaceGravity/
+> atmosphere (nested, inert), conformance oracle (13 equal + 2 adjudicated), `_lab.e1Probe()` + console-only weight
+> override. Dispatch untouched — PRESET_ARCHETYPE still routes everything; 75/75 goldens green throughout.
+> ⚠ Condition vector still lacks `tidalState.locked`/T_ss — recorded V2-3 plumbing note (BUILD-PLAN §4.5).
+> **NEXT = scope V2-2 (THE PILOT, split per §7a: router + both anchors first, stagnant response + mixed interior
+> second)** — read the three gate briefs + Max's crude/samey UAT feedback (shell-relief AC11 + Venus AC9 verdicts)
+> at scope time. Atmosphere #3b gate OPEN (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
 > (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
 > `src/worldengine/base/stagnantLid.js` (`writeStagnantLidReliefSphere`): ONE seeded mantle-plume field (BAT logic) →

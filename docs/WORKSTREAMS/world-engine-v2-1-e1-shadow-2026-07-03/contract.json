@@ -2,7 +2,7 @@
   "workstream": "world-engine-v2-1-e1-shadow-2026-07-03",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verified",
   "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §3.1 V2-1 + §5.2 (SIGNED OFF 2026-07-03); pre-code gate briefs gate-1/2/3 (resolved 2026-07-03, cca8a58)",
   "acceptanceCriteria": [
     {

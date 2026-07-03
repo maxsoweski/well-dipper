@@ -1,0 +1,69 @@
+{
+  "workstream": "world-engine-v2-1-e1-shadow-2026-07-03",
+  "commit": "717486ef4509e3f7896c326f957d892dce7e3d7f",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "N/A"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "All three SPINE-CONFORMANCE checks verified against code at HEAD 717486e, suites re-run fresh. Check 1 (driver connectivity): src/worldengine/base/e1Regime.js reads ONLY condition-vector fields + macroSeed (cv.T_eq, composition.volatileFraction/carbonToOxygen, density, atmosphere.composition, age, radiusEarth, surfaceGravity, rawTidalIoRatio); massEarth = g*R^2 is the declared named derivation (e1Regime.js:90-93, exact inverse of baseStep.js:20); seeded draws via alea('e1:regime:'+(macroSeed|0)); no archetype-string input (mechanically enforced by tests/worldengine-e1-shadow-audit.test.js, 20/20 pass); cv.shellThickness never read (SH-F2). Check 2 (named consumer): full tuple {compositionClass, geodynamicRegime, label, L, Phi, V, n, m_hp, e1Seed, positionWithinRegime, effectiveL?} at e1Regime.js:217-230; BUILD-NOTES §2 Table B cites a ROADMAP-v2 increment for every member (V2-2 router / V2-3 dispatch); present-tense readers verified (AC3 oracle, gate-fidelity, regime tests, _lab.e1Probe); label diagnostic-only, grep-enforced OUTPUT-only. Check 3 (taxonomy): only new lab surface is console-only _lab.e1RegimeWeights override, no dat.GUI binding, so no planet-archetypes.js registration required; npx vitest run tests/planet-archetypes.test.js → 21/21 PASS. Working-tree-only diff (CameraChoreographer.js, LabMode.js) is a different workstream, outside AC-0 scope.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "evidence": "Byte-identity gate green at HEAD: tests/v2-0-byte-identity.test.js all pass incl. 75 golden carrier hashes (15 presets × 5 seeds); goldens fixture has exactly ONE commit in history (7441c92) — never re-captured. Tune-null anchors pass (driversToTune(D_EARTH)===null, magmaDriversToTune(MAGMA_REF)===null; 161/161 across the 4 gate files). baseStep goldens green (fixture untouched since ad156cc). Full suite: 4 failed / 1660 passed — the 4 are EXACTLY the pre-existing known set (KnownObjects ×3, GalacticFeatures ×1); baseline cross-check in a throwaway worktree at cc267a4^ shows the same 4 failures and the test-count delta reconciles exactly (no pre-existing test dropped). Static shadow-discipline confirmed: computeE1 imported outside tests only by planet-lod-lab.html; result stashed data-only (state._lastE1); route() still dispatches on archetype — E1 never threaded into route(). 15 vendor/motion-test-kit file-level 'no suite found' artifacts are pre-existing, contribute 0 failed tests, untouched by this workstream.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2",
+      "result": "PASS",
+      "evidence": "npx vitest run on regime + shadow-audit suites → 112/112 pass: all 17 DRIVER_PRESETS × seeds {1,2,3,7,42}, full 10-key tuple asserted, e1Seed === macroSeed>>>0, positionWithinRegime in [0,1), effectiveL only on seeded-stagnant within [0.60,0.66]. Independent byte-equality sweep (arm's-length node script): 85/85 (preset,seed) pairs byte-identical across double computation, 0 missing fields. Namespace audit: 'e1:regime:' is the single new alea stream, prefix-disjoint from every in-use writer namespace (magma:/plates:/shell:/stagnant: — note: the AC text's 'lid:' does not exist in the codebase; the fourth writer namespace is 'shell:'; disjointness holds against all). No Math.random/Date.now in module code. Label OUTPUT-only: repo-wide grep finds zero E1-tuple .label consumers; tests assert label === compositionClass+'/'+geodynamicRegime and the cross-file audit asserts no writer/dispatch file imports computeE1.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC3",
+      "result": "PASS",
+      "evidence": "tests/worldengine-e1-conformance-oracle.test.js → 9/9 pass, and the empirical pin cross-checked by running docs/WORKSTREAMS/world-engine-v2-1-e1-shadow-2026-07-03/oracle-preview.mjs: 13 EQUAL + 2 DIVERGENT {Frozen(airless) shell→despun; Eyeball(locked temperate) shell→plate}, pinned row-for-row in the test. Every clause verified: 15 archetype-mapped presets with Mars + Hot Jupiter explicitly excluded; writer-equality (composed from the four REAL exported dispatch predicates in planet-lod-rivers.js, in writeBodyRelief order) not label-equality; allow-list recorded as EXPECTED DIVERGENCE with named >20-char V2-3 dispositions, plus inverse guard (no writer-equal preset on the allow-list); Frozen disposition = V2-3 reroutes off shell (tuple asserted icy/dead-lid); Eyeball = today wins, eyeball-despun byte-identical, seed-robust across 7 seeds; collision pair writer-EQUAL both ways; MODAL argmax collapse; Lava/Magma/Venus trio writer-equal; failure messages embed the full e1 tuple. Full suite 4 failed / 1660 passed — pre-existing baseline only.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC4",
+      "result": "PASS",
+      "evidence": "L_CONSTANTS (e1Regime.js:26-30) match gate-1-L-lidstrength-form-DESIGN.md §Decision verbatim (all 20 incl. RHOG_REF=5.5·0.9, K_L=0.82); lidStrength reproduces the Decision formula; centerCount matches gate-2's pinned clamp; HEATPIPE_PEG=0.45 exported. tests/worldengine-e1-gate-fidelity.test.js → 11/11 PASS: L diffed vs verbatim gate-1 refL over all 17 presets + MAGMA_REF + anchors (Venus 0.728, Rocky 0.250, Mars 0.551, Magma 0.000) + all 9 gate-1 ordering asserts; Phi diffed vs phi-calib refPhi ≤1e-9 rel + anchors (Venus 0.690, Mars 0.268, Earth 0.740, Ocean 0.998); Phi(Mars)<Phi(Venus) ratio 2.57× in [2,3] (PG-2 sqrt compression honored); n===refN for all 17 + anchors; m_hp peg exact, positive only Lava/Magma/Europa; SH-F2 grep clean. Test not self-referential — refs are verbatim copies of the calibration scripts reading fp directly while computeE1 reads the derived condition vector. Phi RESOLVED IN-BUILD with confidence flags in BUILD-PLAN §4.2 + committed phi-calib.mjs; d=radiusEarth mantle-depth transform kept separate from z and icy D (never shellThickness). Sibling suites 131/131; full suite pre-existing failures only.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC5",
+      "result": "PASS",
+      "evidence": "All six clauses verified in code + tests + an independent adversarial sweep. Seeded band draw at e1Regime.js:170 with band gate (mass 0.6-1.6 via g*R^2, T 250-320, V≥0.12); nudges mobile += 1.2·(V−0.25), stagnant += 0.30·(T−285)/70, episodic absorbs remainder, renormalized; E1_REGIME_WEIGHTS Object.freeze({.45,.25,.30}) with lab-only console override (no dat.GUI binding); no hysteresis/history-token/Math.random/Date.now; single resolved regime string, never a blend; effectiveL = clamp(0.60,0.66, 0.65−0.05·smoothstep(V)) only on seeded-stagnant picks. tests/worldengine-e1-seeded-middle.test.js → 10/10 pass (400-seed sweeps, ±0.05 distribution, determinism, directional checks, bounds, override semantics). Independent 1000-seed arm's-length node sweep: distribution {415/267/318} within ±0.04 of frozen weights; V-nudge and T-nudge directional; every effectiveL in [0.60,0.66], wetter→lower mean; zero effectiveL leaks; seed-repeat identical; override {.1,.1,.8} → 811/1000 stagnant while the frozen default stays untouched. Note: AC parenthetical says 'V/T_surf-nudged' effectiveL but the adversarially-reviewed BUILD-PLAN §4.5 pins a V-only wetness nudge (declared risk R5, MED, UAT-tunable) and the contract's observable requires only bounds+presence+V-direction — all hold. Full suite: pre-existing failures only.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC6",
+      "result": "PASS",
+      "evidence": "Commit dd88f72 (Slice A) inspected. body-condition-vector.js now returns T_eq: fp.T_eq ?? 288 documented as SURFACE temperature per D3-MF2, and surfaceGravity: derived?.surfaceGravity ?? bodySurfaceGravity(fp) — a thin named helper exposing baseStep's g = M/R^2 (baseStep.js:20/92), never re-derived inline; test asserts triple equality v.surfaceGravity === derived.surfaceGravity === bodySurfaceGravity(fp). Both fields nested-only (R1 discipline): sole production attachment is condition: deriveConditionVector(...) at planet-lod-lab.html:2724, no flat bodyDrivers keys; 17-preset tune-builder inertness (driversToTune/magmaDriversToTune byte-equal vs null-condition twin) passes. Suites: condition-vector 34/34 (incl. 6-test V2-1 AC6 block: all 17 presets carry both fields, Venus 737/Magma 2000/Frozen 60, Mars g ≈ 0.381) + byte-identity 78/78 — AC1's 75 goldens unchanged, the mechanical proof of inertness.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC7",
+      "result": "PASS",
+      "evidence": "Live-driven by working-Claude 2026-07-03 (chrome-devtools on :9223 -> dev server :5173 /well-dipper/planet-lod-lab.html at HEAD 717486e), completing the workflow's static preconditions (which it verified read-only and correctly marked INSUFFICIENT pending this drive). All 6 required presets stepped via _lab.setPreset with the _lastBodyDrivers object-identity poll (route lands ~500ms later; up to 40x250ms polling — never rAF waits): Venus rocky/stagnant L=0.728 Phi=0.690; Lava rocky/heat-pipe L=0.747 m_hp>>0; Magma rocky/heat-pipe L=0.000 (molten) m_hp>>0; Rocky rocky seeded-band (resolved 'stagnant' at lab macroSeed=1 with effectiveL=0.613 in [0.60,0.66] — AC5 behavior observed live); Frozen(airless) icy/dead-lid (the allow-listed divergence, shadow-only); Gas giant (Jovian) gas/dead-lid terminal. Full 10-key tuple present on every probe read; L/Phi values match gate-1-L-calib/phi-calib exactly; regime/writer expectations match the AC3 oracle. e1Probe() deterministic (two consecutive calls byte-identical JSON). Zero console errors/warnings across all stepping; worldengine-fieldviz.html harness reloaded clean post-build (mustStayWorking). Rendered planets visually unchanged (shadow); byte-level proof is AC1's headless gate, green at this HEAD.",
+      "adversarialVotes": "workflow 3/3 static-preconditions verified; live observable driven by working-Claude per dev-collab OS (workflow defers live driving to working-Claude)"
+    }
+  ],
+  "overall": "INSUFFICIENT — live integration pending. Unit layer PASS (7/7 headless ACs green at 717486e: spine conformance, byte-identity/shadow discipline, determinism, conformance oracle, gate fidelity, seeded middle, condition-vector fields). Integration is INSUFFICIENT solely because AC7 (live browser probe check) has not been driven; all its static preconditions are verified. No UAT-layer ACs exist in this contract, so there is no Max acceptance gate inside this workstream.",
+  "summaryForMax": "Line of sight: this is V2-1 of the World Engine history-systems program — the E1 shadow regime engine that reads the condition vector and emits a composition/geodynamic tuple WITHOUT touching any writer, the stepping stone to the V2-2 router and V2-3 dispatch that will eventually make planet surfaces follow physical regime instead of preset labels.\n\nWhere it stands: all seven headless ACs PASS at commit 717486e with fresh suite runs and independent adversarial sweeps — byte-identity to the V2-0 goldens is intact (75/75 carrier hashes unchanged, goldens never re-captured), computeE1 is pure/deterministic/label-blind, the 13-equal/2-divergent oracle table (Frozen and Eyeball, each with a named V2-3 disposition) is pinned in tests, and gate-1/gate-2 constants are reproduced verbatim.\n\nOne thing remains before VERIFIED_PENDING_MAX, and it is NOT yours: AC7, the live integration probe, is deferred to working-Claude (main thread) to drive with chrome-devtools — load planet-lod-lab.html, cycle presets via _lab.setPreset, call _lab.e1Probe() after each route, confirm the full tuple matches the oracle's expected regimes with a clean console. Objective check, no acceptance judgment involved.\n\nFor you: nothing to UAT in this workstream — the contract has no uat-layer ACs (a shadow computation has no user-visible surface yet). Your acceptance gates arrive when the router/dispatch increments (V2-2/V2-3) make E1 visibly drive terrain. One caveat working-Claude should know: the working tree carries uncommitted camera/autopilot edits (CameraChoreographer.js, LabMode.js) from the flight-reliability lane; they don't touch E1 code but will be live in the served page during the AC7 run.",
+  "closedAt": "2026-07-03",
+  "closedBy": "working-Claude — VERIFIED (no UAT gate: data-only shadow increment per contract)",
+  "runIds": {
+    "gates": "wf_81556516-cc7",
+    "plan": "wf_16ba43a6-2d6",
+    "build": "wf_228bf3f3-5da",
+    "verify": "wf_81c40870-597"
+  }
+}
