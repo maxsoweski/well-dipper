@@ -1,0 +1,17 @@
+{
+  "Rocky (Earthlike)": "terrestrial",
+  "Lava (hot airless)": "lava",
+  "Ocean (temperate)": "ocean",
+  "Frozen (airless)": "ice",
+  "Gas giant (Jovian)": "gas-giant",
+  "Gas giant (Saturnian)": "gas-giant",
+  "Ice giant (Neptunian)": "sub-neptune",
+  "Sub-Neptune (hazy)": "sub-neptune",
+  "Eyeball (locked temperate)": "eyeball",
+  "Europa (icy moon)": "ice",
+  "Titan (methane seas)": "volatile",
+  "Magma (K2-141b)": "lava",
+  "Venus (sulfuric shroud)": "stagnant-lid",
+  "Carbon (high C/O)": "carbon",
+  "Crystal (faceted)": "crystal"
+}

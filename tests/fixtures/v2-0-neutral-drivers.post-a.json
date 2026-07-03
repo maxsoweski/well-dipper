@@ -1,0 +1,77 @@
+{
+  "Rocky (Earthlike)": {
+    "massGravity": 0.9,
+    "volatileFraction": 0.15,
+    "tidalHeating": 0.001739731682543869
+  },
+  "Lava (hot airless)": {
+    "massGravity": 0.8024691358024691,
+    "volatileFraction": 0.02,
+    "tidalHeating": 781884.2944286776
+  },
+  "Ocean (temperate)": {
+    "massGravity": 1.0743801652892562,
+    "volatileFraction": 0.35,
+    "tidalHeating": 0.0038780003765449523
+  },
+  "Frozen (airless)": {
+    "massGravity": 0.28,
+    "volatileFraction": 0.3,
+    "tidalHeating": 1.5049582028926206e-9
+  },
+  "Gas giant (Jovian)": {
+    "massGravity": 2.5334821428571432,
+    "volatileFraction": 0.04,
+    "tidalHeating": 0.006966146200138927
+  },
+  "Gas giant (Saturnian)": {
+    "massGravity": 1.0774105930285196,
+    "volatileFraction": 0.04,
+    "tidalHeating": 0.00013902752813310543
+  },
+  "Ice giant (Neptunian)": {
+    "massGravity": 1.124260355029586,
+    "volatileFraction": 0.04,
+    "tidalHeating": 5.534508707415042e-9
+  },
+  "Sub-Neptune (hazy)": {
+    "massGravity": 1.1248285322359395,
+    "volatileFraction": 0.04,
+    "tidalHeating": 0.0034551208467509358
+  },
+  "Eyeball (locked temperate)": {
+    "massGravity": 1,
+    "volatileFraction": 0.25,
+    "tidalHeating": 0.0006019832811570482
+  },
+  "Europa (icy moon)": {
+    "massGravity": 0.28,
+    "volatileFraction": 0.5,
+    "tidalHeating": 136.74504375182553
+  },
+  "Titan (methane seas)": {
+    "massGravity": 0.15624999999999997,
+    "volatileFraction": 0.4,
+    "tidalHeating": 1.582697265646129e-8
+  },
+  "Magma (K2-141b)": {
+    "massGravity": 2.2222222222222223,
+    "volatileFraction": 0,
+    "tidalHeating": 75777209.24323183
+  },
+  "Venus (sulfuric shroud)": {
+    "massGravity": 0.9030470914127423,
+    "volatileFraction": 0.02,
+    "tidalHeating": 0.001179463813811032
+  },
+  "Carbon (high C/O)": {
+    "massGravity": 1.1570247933884295,
+    "volatileFraction": 0.02,
+    "tidalHeating": 0.0009695000941362381
+  },
+  "Crystal (faceted)": {
+    "massGravity": 0.7812499999999999,
+    "volatileFraction": 0.02,
+    "tidalHeating": 6.312252210225332e-8
+  }
+}

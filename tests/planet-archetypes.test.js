@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { FEATURES, ARCHETYPES, featuresOf } from '../planet-archetypes.js';
+import { DRIVER_PRESETS } from '../driver-presets.js';   // V2-0 Slice A: presets extracted from the lab into a shared module
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
@@ -20,14 +21,26 @@ const glslSrc = readFileSync(path.resolve(__dirname, '../planet-lod-height.glsl.
 const panelEnableKeys = new Set(
   [...labSrc.matchAll(/\.add\(state, '(\w+Enabled)'\)/g)].map(m => m[1])
 );
-// The DRIVER_PRESETS keys: each preset object opens with `radiusEarth:`.
-const presetBlock = labSrc.slice(
-  labSrc.indexOf('const DRIVER_PRESETS = {'),
-  labSrc.indexOf('const driverUI =')
-);
-const panelPresetKeys = new Set(
-  [...presetBlock.matchAll(/'([^']+)':\s*\{\s*radiusEarth/g)].map(m => m[1])
-);
+// The driver-preset keys — imported from the shared module (V2-0 Slice A extracted DRIVER_PRESETS
+// from planet-lod-lab.html). The old labSrc string-scrape is replaced by the lab↔module coupling
+// assertions below, which prove the lab renders THIS module (so `⊂ panelPresetKeys` still means
+// `⊂ what the lab renders`, the check's original purpose).
+const panelPresetKeys = new Set(Object.keys(DRIVER_PRESETS));
+
+// V2-0 Slice A: the migration removed the string-scrape that formerly tied panelPresetKeys to what
+// the lab literally renders. These assertions re-establish that coupling in CI — the lab MUST import
+// the shared module and MUST NOT re-inline a stale copy — so `ARCHETYPES.presets ⊂ panelPresetKeys`
+// genuinely means `⊂ what the lab renders`, not an unverified `lab-keys == module-keys` assumption.
+describe('lab ↔ driver-presets module coupling (V2-0 Slice A)', () => {
+  it('the lab imports DRIVER_PRESETS from the shared module (not a re-inlined copy)', () => {
+    expect(labSrc).toMatch(/import\s*\{[^}]*\bDRIVER_PRESETS\b[^}]*\}\s*from\s*['"]\.\/driver-presets(\.js)?['"]/);
+    expect(labSrc).not.toMatch(/const\s+DRIVER_PRESETS\s*=\s*\{/);
+  });
+  it('the lab imports PRESET_ARCHETYPE from the shared module (not a re-inlined copy)', () => {
+    expect(labSrc).toMatch(/import\s*\{[^}]*\bPRESET_ARCHETYPE\b[^}]*\}\s*from\s*['"]\.\/driver-presets(\.js)?['"]/);
+    expect(labSrc).not.toMatch(/const\s+PRESET_ARCHETYPE\s*=\s*\{/);
+  });
+});
 
 describe('FEATURES ↔ panel enable-keys', () => {
   it('every FEATURES enableKey is bound in the panel', () => {

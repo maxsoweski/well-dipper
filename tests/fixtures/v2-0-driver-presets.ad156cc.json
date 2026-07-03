@@ -1,0 +1,509 @@
+{
+  "Rocky (Earthlike)": {
+    "radiusEarth": 1,
+    "massEarth": 0.9,
+    "eccentricity": 0.017,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 23455,
+    "composition": {
+      "ironFraction": 0.32,
+      "density": 5.5,
+      "volatileFraction": 0.15
+    },
+    "age": 4.5,
+    "T_eq": 288,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.5,
+        0.6,
+        0.9
+      ],
+      "retained": true,
+      "pressure": 1,
+      "composition": "n2-o2"
+    },
+    "habitability": 0.7,
+    "surfaceHistory": {
+      "erosion": 0.4,
+      "bombardmentIntensity": 0.55,
+      "resurfacingRate": 0.1
+    }
+  },
+  "Lava (hot airless)": {
+    "radiusEarth": 0.9,
+    "massEarth": 0.65,
+    "eccentricity": 0.15,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 938,
+    "composition": {
+      "ironFraction": 0.7,
+      "density": 7,
+      "volatileFraction": 0.02
+    },
+    "T_eq": 950,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "atmosphere": null,
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0.3,
+      "resurfacingRate": 0.95
+    }
+  },
+  "Ocean (temperate)": {
+    "radiusEarth": 1.1,
+    "massEarth": 1.3,
+    "eccentricity": 0.02,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 23455,
+    "composition": {
+      "ironFraction": 0.28,
+      "density": 5,
+      "volatileFraction": 0.35
+    },
+    "age": 3,
+    "T_eq": 295,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.4,
+        0.6,
+        0.95
+      ],
+      "retained": true,
+      "pressure": 1.5,
+      "composition": "n2-o2"
+    },
+    "habitability": 0.9,
+    "surfaceHistory": {
+      "erosion": 0.6,
+      "bombardmentIntensity": 0.4,
+      "resurfacingRate": 0.3
+    }
+  },
+  "Titan (methane seas)": {
+    "radiusEarth": 0.4,
+    "massEarth": 0.025,
+    "eccentricity": 0.03,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 120000,
+    "composition": {
+      "ironFraction": 0.18,
+      "density": 1.9,
+      "volatileFraction": 0.4
+    },
+    "T_eq": 94,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.8,
+        0.6,
+        0.3
+      ],
+      "retained": true,
+      "pressure": 1.5,
+      "composition": "n2-o2"
+    },
+    "habitability": 0.05,
+    "surfaceHistory": {
+      "erosion": 0.2,
+      "bombardmentIntensity": 0.5,
+      "resurfacingRate": 0.4
+    }
+  },
+  "Frozen (airless)": {
+    "radiusEarth": 0.5,
+    "massEarth": 0.07,
+    "eccentricity": 0.005,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 117275,
+    "composition": {
+      "ironFraction": 0.2,
+      "density": 2.5,
+      "volatileFraction": 0.3
+    },
+    "T_eq": 60,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": null,
+    "habitability": 0.05,
+    "surfaceHistory": {
+      "erosion": 0.1,
+      "bombardmentIntensity": 0.85,
+      "resurfacingRate": 0.05
+    }
+  },
+  "Europa (icy moon)": {
+    "radiusEarth": 0.5,
+    "massEarth": 0.07,
+    "eccentricity": 0.1,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 2500,
+    "composition": {
+      "ironFraction": 0.2,
+      "density": 2,
+      "volatileFraction": 0.5
+    },
+    "T_eq": 110,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "atmosphere": null,
+    "habitability": 0.05,
+    "surfaceHistory": {
+      "erosion": 0.05,
+      "bombardmentIntensity": 0.3,
+      "resurfacingRate": 0.6
+    }
+  },
+  "Gas giant (Jovian)": {
+    "radiusEarth": 11.2,
+    "massEarth": 317.8,
+    "rotationHours": 9.9,
+    "eccentricity": 0.005,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 122000,
+    "composition": {
+      "ironFraction": 0.03,
+      "density": 1.33,
+      "volatileFraction": 0.04
+    },
+    "T_eq": 125,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.78,
+        0.62,
+        0.44
+      ],
+      "retained": true,
+      "pressure": 1000,
+      "composition": "h2-he"
+    },
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0,
+      "resurfacingRate": 1
+    }
+  },
+  "Gas giant (Saturnian)": {
+    "radiusEarth": 9.4,
+    "massEarth": 95.2,
+    "rotationHours": 10.7,
+    "eccentricity": 0.005,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 224000,
+    "composition": {
+      "ironFraction": 0.03,
+      "density": 0.69,
+      "volatileFraction": 0.04
+    },
+    "T_eq": 95,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.85,
+        0.76,
+        0.55
+      ],
+      "retained": true,
+      "pressure": 1000,
+      "composition": "h2-he"
+    },
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0,
+      "resurfacingRate": 1
+    }
+  },
+  "Ice giant (Neptunian)": {
+    "radiusEarth": 3.9,
+    "massEarth": 17.1,
+    "rotationHours": 16.1,
+    "eccentricity": 0.005,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 705000,
+    "composition": {
+      "ironFraction": 0.05,
+      "density": 1.64,
+      "volatileFraction": 0.04
+    },
+    "T_eq": 55,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.35,
+        0.48,
+        0.85
+      ],
+      "retained": true,
+      "pressure": 1000,
+      "composition": "h2-he"
+    },
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0,
+      "resurfacingRate": 1
+    }
+  },
+  "Venus (sulfuric shroud)": {
+    "radiusEarth": 0.95,
+    "massEarth": 0.815,
+    "rotationHours": 5832,
+    "eccentricity": 0.007,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 16888,
+    "composition": {
+      "ironFraction": 0.3,
+      "density": 5.24,
+      "volatileFraction": 0.02
+    },
+    "T_eq": 737,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.93,
+        0.87,
+        0.65
+      ],
+      "retained": true,
+      "pressure": 92,
+      "composition": "co2"
+    },
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0.3,
+      "bombardmentIntensity": 0.2,
+      "resurfacingRate": 0.7
+    }
+  },
+  "Sub-Neptune (hazy)": {
+    "radiusEarth": 2.7,
+    "massEarth": 8.2,
+    "eccentricity": 0.002,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 23455,
+    "composition": {
+      "ironFraction": 0.1,
+      "density": 2.2,
+      "volatileFraction": 0.04
+    },
+    "T_eq": 550,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.72,
+        0.66,
+        0.58
+      ],
+      "retained": true,
+      "pressure": 1000,
+      "composition": "h2-he"
+    },
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0,
+      "resurfacingRate": 1
+    }
+  },
+  "Eyeball (locked temperate)": {
+    "radiusEarth": 1,
+    "massEarth": 1,
+    "eccentricity": 0.01,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 23455,
+    "composition": {
+      "ironFraction": 0.3,
+      "density": 5.5,
+      "volatileFraction": 0.25
+    },
+    "T_eq": 270,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "atmosphere": {
+      "color": [
+        0.55,
+        0.62,
+        0.85
+      ],
+      "retained": true,
+      "pressure": 1,
+      "composition": "n2-o2"
+    },
+    "habitability": 0.5,
+    "surfaceHistory": {
+      "erosion": 0.3,
+      "bombardmentIntensity": 0.4,
+      "resurfacingRate": 0.2
+    }
+  },
+  "Hot Jupiter (locked giant)": {
+    "radiusEarth": 13,
+    "massEarth": 400,
+    "rotationHours": 80,
+    "eccentricity": 0.005,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 150000,
+    "composition": {
+      "ironFraction": 0.03,
+      "density": 1.3,
+      "volatileFraction": 0.04
+    },
+    "T_eq": 1400,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "atmosphere": {
+      "color": [
+        0.55,
+        0.38,
+        0.28
+      ],
+      "retained": true,
+      "pressure": 1000,
+      "composition": "h2-he"
+    },
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0,
+      "resurfacingRate": 1
+    }
+  },
+  "Mars (arid rocky)": {
+    "radiusEarth": 0.53,
+    "massEarth": 0.107,
+    "rotationHours": 24.6,
+    "eccentricity": 0.093,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 35652,
+    "axialTilt": 25,
+    "composition": {
+      "ironFraction": 0.1,
+      "density": 3.93,
+      "volatileFraction": 0.1
+    },
+    "age": 4.5,
+    "T_eq": 210,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": {
+      "color": [
+        0.8,
+        0.58,
+        0.36
+      ],
+      "retained": true,
+      "pressure": 0.01,
+      "composition": "co2"
+    },
+    "habitability": 0.05,
+    "surfaceHistory": {
+      "erosion": 0.35,
+      "bombardmentIntensity": 0.7,
+      "resurfacingRate": 0.15
+    }
+  },
+  "Magma (K2-141b)": {
+    "radiusEarth": 1.5,
+    "massEarth": 5,
+    "rotationHours": 6.7,
+    "eccentricity": 0.01,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 212,
+    "composition": {
+      "ironFraction": 0.4,
+      "density": 8,
+      "volatileFraction": 0
+    },
+    "T_eq": 2000,
+    "tidalState": {
+      "locked": true,
+      "lockType": "synchronous"
+    },
+    "atmosphere": null,
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0,
+      "resurfacingRate": 1
+    }
+  },
+  "Carbon (high C/O)": {
+    "radiusEarth": 1.1,
+    "massEarth": 1.4,
+    "eccentricity": 0.01,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 23455,
+    "composition": {
+      "ironFraction": 0.3,
+      "density": 6,
+      "volatileFraction": 0.02,
+      "carbonToOxygen": 1.2
+    },
+    "T_eq": 600,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": null,
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0.1,
+      "bombardmentIntensity": 0.5,
+      "resurfacingRate": 0.1
+    }
+  },
+  "Crystal (faceted)": {
+    "radiusEarth": 0.8,
+    "massEarth": 0.5,
+    "eccentricity": 0.01,
+    "starMassEarth": 332946,
+    "orbitRadiusEarth": 117275,
+    "composition": {
+      "ironFraction": 0.25,
+      "density": 3,
+      "volatileFraction": 0.02
+    },
+    "T_eq": 150,
+    "tidalState": {
+      "locked": false
+    },
+    "atmosphere": null,
+    "habitability": 0,
+    "surfaceHistory": {
+      "erosion": 0,
+      "bombardmentIntensity": 0.1,
+      "resurfacingRate": 0
+    }
+  }
+}

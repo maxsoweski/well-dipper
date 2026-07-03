@@ -1,0 +1,25 @@
+// body-drivers.js — the lab's NEUTRAL (no-slider-override) body-driver construction, extracted
+// verbatim from planet-lod-lab.html (World Engine V2-0 Slice A). Shared by the lab's runtime
+// buildBodyDrivers (which overlays slider overrides on top of this base) and the headless AC1
+// byte-identity harness, so both exercise the SAME neutral path (no duplication, no drift).
+import { magmaThermal } from './src/worldengine/base/magmatism.js'; // exact import path per lab (:163)
+
+// presetDriverDefaults(u, fp) — verbatim relocation of planet-lod-lab.html:2858-2866.
+// { gravity, volatiles, tidal, thermal } derived from the already-derived uniforms (u) + raw preset (fp).
+export function presetDriverDefaults(u, fp){
+  return {
+    gravity: u.surfaceGravity,
+    volatiles: (fp.composition && fp.composition.volatileFraction != null) ? fp.composition.volatileFraction : 0.15,
+    tidal: u.tidalHeat,
+    // Inc.4-M: the preset's derived endogenic thermal drive H (raw Io tidal saturates via clamp01).
+    thermal: magmaThermal({ tidalHeating: u.tidalHeat, age: (fp.age != null ? fp.age : 4.5) }),
+  };
+}
+
+// buildNeutralBodyDrivers(u, fp) — the buildBodyDrivers path with every slider override forced off
+// (useOv() ≡ false). The base the lab overlays touched-slider values onto; identical output for
+// untouched fields (thermalState left undefined ⇒ magmaThermal's raw-tidal fallback in the writer).
+export function buildNeutralBodyDrivers(u, fp) {
+  const d = presetDriverDefaults(u, fp);
+  return { massGravity: d.gravity, volatileFraction: d.volatiles, tidalHeating: d.tidal, thermalState: undefined };
+}
