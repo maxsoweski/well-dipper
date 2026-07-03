@@ -1,0 +1,85 @@
+{
+  "workstream": "world-engine-v2-0-plumbing-2026-07-03",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §3.1 V2-0 (SIGNED OFF 2026-07-03)",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15 / SPINE-CONFORMANCE.md): (1) driver connectivity — every scalar surfaced or read (D12 raw, eccentricity, D13, D16, metallicity, composition/density, age, radius, shellThickness, raw tidal Io-ratio) is D-slot-backed or a named derivation; any archetype constant carries its deriving-increment name; (2) named consumer — every emitted field/module names its reader from the ROADMAP-v2 DAG (E1/V2-1 for the vector + scalar helpers + presets module; no dead fields); (3) taxonomy registration — no unregistered lab controls; planet-archetypes drift guards stay green.",
+      "verifyVia": {
+        "input": "Read the diff + BUILD notes conformance table; run npx vitest run tests/planet-archetypes.test.js",
+        "observable": "All three checks pass; each new field's consumer column cites a ROADMAP-v2 increment; drift-guard suite green"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC1",
+      "statement": "ZERO behavioral change — the refactor gate. Every archetype-mapped preset builds a byte-identical carrier (height and all carrier fields) at fixed seeds before vs after V2-0; driversToTune(D_EARTH) === null and magmaDriversToTune(MAGMA_REF) === null are preserved; the full vitest suite passes at the same test count as pre-change.",
+      "verifyVia": {
+        "input": "Headless carrier build for all archetype-mapped presets at seeds {1,2,3,7,42} on pre-change and post-change checkouts; full npx vitest run",
+        "observable": "Float32Array byte-equality per preset/seed; both tune-null anchors hold; suite green, count unchanged"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2",
+      "statement": "baseStep scalar extraction: per-body scalar derivations (thermalState, shellThickness, rawTidal/Io-ratio, radiogenic/size-vigor terms, radialStrain, liquidStability) are exported as pure named helpers from the baseStep module; the existing baseStep test suite (which pins the exact scalar values) passes unchanged; helpers return the same values the grid op produced for identical inputs.",
+      "verifyVia": {
+        "input": "Import the helpers in a headless test; run the existing worldengine-base-interior / baseStep suites",
+        "observable": "Helper outputs equal the grid-op-internal values on the pinned fixtures; suites green unchanged"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3",
+      "statement": "DRIVER_PRESETS extraction: an importable module exports all 17 driver-preset vectors (including Mars and Hot Jupiter, which have data but no archetype mapping); the lab consumes the module (no duplicated inline literal remains); planet-archetypes.test.js imports the module instead of string-scraping planet-lod-lab.html; exported values deep-equal the pre-extraction lab literals.",
+      "verifyVia": {
+        "input": "node import of the presets module; grep the lab HTML for a residual literal; run the archetype test suite",
+        "observable": "17 entries deep-equal to the pre-extraction values; lab imports the module; tests no longer read the HTML as text"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4",
+      "statement": "Condition-vector threading: route()→writeBodyRelief carries the full body condition-vector (composition/density, age, radius, eccentricity + raw tidal Io-ratio as a named field, shellThickness) alongside the existing bundle, with values derived from _fp; tune builders receive the widened bundle and ignore unknown fields (byte-safety asserted by AC1); the raw Io-ratio is exposed so m_hp is computable on the production path, not just the lab fallback.",
+      "verifyVia": {
+        "input": "Headless route() call with an instrumented writer capturing the bundle at the writeBodyRelief seam",
+        "observable": "All named vector fields present with _fp-derived (non-default) values for presets that define them; raw Io-ratio field present and un-calibrated"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5",
+      "statement": "Live wiring intact: the lab page loads and steps through archetype presets without console errors; the drivers bundle visible via _lab shows the new condition-vector fields; the worldengine-fieldviz.html harness (the one non-test baseStep caller, outside the test guard) still loads and renders without errors.",
+      "verifyVia": {
+        "input": "chrome-devtools: load planet-lod-lab.html on the dev server, step 4+ presets, inspect _lab state/drivers; load worldengine-fieldviz.html",
+        "observable": "Zero console errors on both pages; presets render; new fields present in the live bundle"
+      },
+      "layer": "integration",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "_fp body fingerprint (composition/density, age, radius, eccentricity, shellThickness — exist today, stop at the lab)",
+      "src/worldengine/base/baseStep.js internal scalar locals (thermalState, shellThickness, rawTidal at :10,:23,:42,:85)",
+      "DRIVER_PRESETS inline literal in planet-lod-lab.html (~L2641, 17 entries)",
+      "route() → writeBodyRelief seam in planet-lod-rivers.js (current bundle: archetype, locked, grainDrivers, bodyDrivers, macroSeed, heightSeed, T_eq)"
+    ],
+    "outputs": [
+      "E1 regime selector (V2-1): condition vector at the seam + pure scalar helpers for Φ/L/Stage-A + headless preset source for the conformance oracle",
+      "Φ size-aware proxy (ROADMAP-v2 §7b #4): d³ mantle-depth term from the shellThickness helper",
+      "m_hp heat-pipe margin (§2.3): raw Io-ratio named field on the production path",
+      "V2-5s shell-MULTIPLY and later MULTIPLY passes: widened bundle at the tune seam"
+    ],
+    "mustStayWorking": [
+      "Byte-identity of every shipped writer path (plates, shellRelief, magmatism + #4-M, stagnantLid) — AC1 is the gate",
+      "Full vitest suite (1011 tests as of the 7088d8e merge; vendor/motion-test-kit node:test collection errors pre-date and are excluded)",
+      "planet-archetypes.test.js drift guards (taxonomy registration, *Enabled namespace reservation)",
+      "worldengine-fieldviz.html harness (non-test baseStep caller outside the refactor's test guard)",
+      "Lab GUI preset stepping and _lab probe API (stagnantLidProbe, magmaProbe, setLightDir)"
+    ]
+  }
+}
