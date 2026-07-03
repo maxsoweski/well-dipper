@@ -1,7 +1,7 @@
 # WORLD-ENGINE HISTORY PROGRAM — ROADMAP v2 (CONDITION-FIRST)
 
 **File:** docs/WORKSTREAMS/world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md
-**Status:** DRAFT **v2.1** for Max review · design-only, no code written · read-only synthesis · fix-pass applied 2026-07-02 from `ROADMAP-v2-review-findings-2026-07-02.md` (1 BLOCKER + 11 MAJOR + ~13 MINOR resolved)
+**Status:** **v2.1 SIGNED OFF (Max, 2026-07-03) — the program map of record** · design-only at signing, no code written · fix-pass applied 2026-07-02 from `ROADMAP-v2-review-findings-2026-07-02.md` (1 BLOCKER + 11 MAJOR + ~13 MINOR resolved)
 **Branch:** feature/world-engine-production-L1
 **Register:** program map. Supersedes the *sequencing + input model* of ROADMAP.md; the full pilot build detail lives in §5 here and the per-increment planning notes in ROADMAP.md remain valid as sub-detail unless contradicted below. `ATMOSPHERE-PLAN.md` (same dir) is a **first-class parallel sub-plan**, not sub-detail: its 9-increment sequence continues unchanged under V2-6 (§3.1).
 **Synthesized from:** D1 (process design) + D2 (roadmap mapping) + D3 (pilot spec), each adversarially verified. Every MUST-FIX from the three verdicts is applied; conflicts are marked inline **[RESOLVED-BY-SYNTH]**. Unresolved verdict RISKS are carried verbatim-ish into §6.
@@ -279,6 +279,8 @@ No epochs/host-editor (V2-7); no game port (`_pickType` untouched); no palette/s
 ## 7. OPEN DECISIONS
 
 ### 7a. Max-owned (taste / UAT / scope — no agent closes)
+
+> **RESOLVED 2026-07-03 (Max's formal review — recommendations adopted on every row):** pilot go/no-go criteria + anti-mush approach AGREED (actual band width judged at UAT); seeded-pick weights = frozen constants + lab-only override; **V2-2 SPLIT approved** (router + both anchors first, stagnant response + mixed interior second); #4.5 geometry DEFERRED to V2-9a scoping (block-jumble = small V2-9a primitive; diapir option alive via V2-7d, which stays funded); #8 split as drafted (V2-9b = the cuttable half); NO hysteresis input (seeded pick suffices); E1 lab-only until V2-10; reroute allow-list adopted (Frozen(airless)→dead-lid + Mars reroute; Lava/Magma/Venus byte-identical); open UAT gates CLOSED 2026-07-03. The table below is preserved as the decision record.
 
 | Decision | Recommendation to bring |
 |---|---|
