@@ -1,0 +1,132 @@
+{
+  "_meta": {
+    "what": "V2-0 AC1 carrier byte-identity goldens — SHA-256 per (preset, seed) over writeBodyRelief output.",
+    "capturedFrom": "post-Slice-A tree (== pre-change ad156cc behavior; baseStep untouched, presets/archetype/neutral-builder relocated verbatim).",
+    "condition": "NONE — captured without a condition sub-object (deriveConditionVector does not exist until Slice C).",
+    "targetN": 700,
+    "lloyd": 2,
+    "seeds": [
+      1,
+      2,
+      3,
+      7,
+      42
+    ],
+    "qualityTier": 1,
+    "hashedFields": [
+      "height",
+      "grainAngle",
+      "grainMag",
+      "regime",
+      "faultDensity"
+    ],
+    "presetCount": 15
+  },
+  "hashes": {
+    "Rocky (Earthlike)": {
+      "1": "aaa169cb67435388ecf97b20cb179953efa994dbb0d49d9597f22eae7cbbdaf9",
+      "2": "995a82fbb94fcf45c7e576742161e2ec45671f467739752c896157e425c11feb",
+      "3": "da25d0521d85b811c75252ef66a707a238fa4635260c3d8978a9a09051c46bd7",
+      "7": "b854f1e291f8da0a4fc9a1e5a7c22c909f19e3b0b3ebeeae53f717c8f4333487",
+      "42": "14740098218aad05ebbda968542b5c0765535673eaaebdd0f4f5c835faf9e6df"
+    },
+    "Lava (hot airless)": {
+      "1": "2439103e86cc53fb877918de2e00db6dedc521f242dd0cc6f244dd2def70056e",
+      "2": "ad3080e353b4fb74ace6b0dd391ab73f05020625269e959343ed551afb7d6f8a",
+      "3": "ef8bf97f43c35ddb3f30abfc1214bf32bca31da755bc2cd61465e656f12c7f88",
+      "7": "7b161b4df66c0189d3b4981ead52f18a0fc7f9c872ffd5bcd65d4582a677d402",
+      "42": "80aa4a1db1b0c7bc446c2337f445fdb9518f1d6946ea27a8853732d80a703375"
+    },
+    "Ocean (temperate)": {
+      "1": "40588897cb2b5a1d01f85189e5d1faf63dab7eb95060b901b06b302f78f0013d",
+      "2": "b5d7b4d54c0d0f6ef5e81630e0d15162021d6ab5d333b76293bbffab7abc226f",
+      "3": "d02af04ec53ab33796854a4bdbd849dc5b7f5b2b62cd8c941c145357423809b0",
+      "7": "0935111d286c109309d0223ed69a26f038661a14d0abfa00aad585bc59c94987",
+      "42": "554a919892c412577b01833e7d38234c8dd2262ebf3adca9e1b95580dc97c2b4"
+    },
+    "Frozen (airless)": {
+      "1": "62b40c79269ece1e8b7ca2a25327b1d71f7f16b4e101030708f85082a18531bb",
+      "2": "08a537cc99501038c62c4ab25e3ac80b19e9c7eb4b49082a578fb80fcc671304",
+      "3": "1e3ed334256ec601023b93d689ce34dcf25d7390dce4f545a98d8fe8f61e6b9e",
+      "7": "343bae1b3e155b977066931449246551e17413627d7d5487d7e603f04ba4255e",
+      "42": "16e15886b66227e8b3a69803416c735cc10f4d7fe1d794689b252f0c5bd9f04b"
+    },
+    "Gas giant (Jovian)": {
+      "1": "d074159ccc0682b063a124c7cfc28e067c506dd950381ba10b7f015955993406",
+      "2": "45cd94d127a2b1c3acc53033f9e46323996dbb5b5dab0e0c2a5ae226bbb6cfc3",
+      "3": "0f1d975d64374c5b5e75cfdae420f7f9530d3932db83508c1dc0afe304b4f4f2",
+      "7": "e59bfc99e1de30e7480c1c4fa394a93fcd3b464379ea0bc064f79fc5469e4a38",
+      "42": "15bed65456f741ee17f789f6aebbbd8b9d5d24eb99aa70f5098738b21bfa649c"
+    },
+    "Gas giant (Saturnian)": {
+      "1": "d074159ccc0682b063a124c7cfc28e067c506dd950381ba10b7f015955993406",
+      "2": "45cd94d127a2b1c3acc53033f9e46323996dbb5b5dab0e0c2a5ae226bbb6cfc3",
+      "3": "0f1d975d64374c5b5e75cfdae420f7f9530d3932db83508c1dc0afe304b4f4f2",
+      "7": "e59bfc99e1de30e7480c1c4fa394a93fcd3b464379ea0bc064f79fc5469e4a38",
+      "42": "15bed65456f741ee17f789f6aebbbd8b9d5d24eb99aa70f5098738b21bfa649c"
+    },
+    "Ice giant (Neptunian)": {
+      "1": "d074159ccc0682b063a124c7cfc28e067c506dd950381ba10b7f015955993406",
+      "2": "45cd94d127a2b1c3acc53033f9e46323996dbb5b5dab0e0c2a5ae226bbb6cfc3",
+      "3": "0f1d975d64374c5b5e75cfdae420f7f9530d3932db83508c1dc0afe304b4f4f2",
+      "7": "e59bfc99e1de30e7480c1c4fa394a93fcd3b464379ea0bc064f79fc5469e4a38",
+      "42": "15bed65456f741ee17f789f6aebbbd8b9d5d24eb99aa70f5098738b21bfa649c"
+    },
+    "Sub-Neptune (hazy)": {
+      "1": "d074159ccc0682b063a124c7cfc28e067c506dd950381ba10b7f015955993406",
+      "2": "45cd94d127a2b1c3acc53033f9e46323996dbb5b5dab0e0c2a5ae226bbb6cfc3",
+      "3": "0f1d975d64374c5b5e75cfdae420f7f9530d3932db83508c1dc0afe304b4f4f2",
+      "7": "e59bfc99e1de30e7480c1c4fa394a93fcd3b464379ea0bc064f79fc5469e4a38",
+      "42": "15bed65456f741ee17f789f6aebbbd8b9d5d24eb99aa70f5098738b21bfa649c"
+    },
+    "Eyeball (locked temperate)": {
+      "1": "f483fbdc903b103977a99e1115f6022ace7cad846b0f7c5d87cc7ff810aa8c90",
+      "2": "744437b10a16310a54bf5e48aa37f4ca14bdff01b93c5522dccb04f13c6a6edb",
+      "3": "198e986c9f4fb4d6a8f4f66a7ef1182d8d6963e699089a44ce188cfb191598a7",
+      "7": "d04aad282cab64ac27aa0a8da18197733916204ca20f66819e51ebdcfa4b24e2",
+      "42": "3bac0a07fc4c65cba63bc0ede9b6efd172fb71ef0431e08d24675388b3e4cd16"
+    },
+    "Europa (icy moon)": {
+      "1": "62b40c79269ece1e8b7ca2a25327b1d71f7f16b4e101030708f85082a18531bb",
+      "2": "08a537cc99501038c62c4ab25e3ac80b19e9c7eb4b49082a578fb80fcc671304",
+      "3": "1e3ed334256ec601023b93d689ce34dcf25d7390dce4f545a98d8fe8f61e6b9e",
+      "7": "343bae1b3e155b977066931449246551e17413627d7d5487d7e603f04ba4255e",
+      "42": "16e15886b66227e8b3a69803416c735cc10f4d7fe1d794689b252f0c5bd9f04b"
+    },
+    "Titan (methane seas)": {
+      "1": "bbd40500fd46d8c528e032f88d29a03721ac6abdec5a01e735c5de62e61dba4c",
+      "2": "21ee3c8d6ef466a896819f2dc567495ee4a3e19f682f98e244b29d61dfeb456a",
+      "3": "518769cf1ad91c8fa94f840974bcc86e5532755b53907e88c01865090435ed5d",
+      "7": "daa6926a212020c53997f14af7c350d9e0456fbaac65358985e7cb6ef78a06c6",
+      "42": "3db4051cfec63b8912af03efa15ef274c03595130de73a1c22933919e30f0324"
+    },
+    "Magma (K2-141b)": {
+      "1": "ad2a485b28fb45b5c89e9b78c0d4f72f01f8863ba49db987caeb7825b54c4bcf",
+      "2": "e40f868233873382f6c12cf796d7b12ef4684974b8f6a795ede28d39a8306a3c",
+      "3": "1184c580121798d231b525c94f8d1c12e933e47908f36b3b8e78b8c25cb582fd",
+      "7": "b646c4d624b08515400f71de2fc06189bc6c30e48d09b123b7734c513ae26413",
+      "42": "7365602db612c43152f2499895124b8643cf6be07363720cdc388a4fe9bb2321"
+    },
+    "Venus (sulfuric shroud)": {
+      "1": "81858a6edb94c4f5dc6295672fc35745689d21f876e41219d24c97c869eec955",
+      "2": "14a89bc0c89bca4e30a2c77e8b721f7935d5cba6a862f69b49e8db76f1bd12b7",
+      "3": "80cc56087b7679aabb43163da096967202326825e2b1c49721049d29d8bdfb1a",
+      "7": "8e6ac6169888223828d8465047a92e21690890c3d86c4e7a25172033dc756383",
+      "42": "fb94a8bcad07abac692dff4dd7ee92f98e48035efe12808d7fd3cdab565eb2e7"
+    },
+    "Carbon (high C/O)": {
+      "1": "d074159ccc0682b063a124c7cfc28e067c506dd950381ba10b7f015955993406",
+      "2": "45cd94d127a2b1c3acc53033f9e46323996dbb5b5dab0e0c2a5ae226bbb6cfc3",
+      "3": "0f1d975d64374c5b5e75cfdae420f7f9530d3932db83508c1dc0afe304b4f4f2",
+      "7": "e59bfc99e1de30e7480c1c4fa394a93fcd3b464379ea0bc064f79fc5469e4a38",
+      "42": "15bed65456f741ee17f789f6aebbbd8b9d5d24eb99aa70f5098738b21bfa649c"
+    },
+    "Crystal (faceted)": {
+      "1": "d074159ccc0682b063a124c7cfc28e067c506dd950381ba10b7f015955993406",
+      "2": "45cd94d127a2b1c3acc53033f9e46323996dbb5b5dab0e0c2a5ae226bbb6cfc3",
+      "3": "0f1d975d64374c5b5e75cfdae420f7f9530d3932db83508c1dc0afe304b4f4f2",
+      "7": "e59bfc99e1de30e7480c1c4fa394a93fcd3b464379ea0bc064f79fc5469e4a38",
+      "42": "15bed65456f741ee17f789f6aebbbd8b9d5d24eb99aa70f5098738b21bfa649c"
+    }
+  }
+}

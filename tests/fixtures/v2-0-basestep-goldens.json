@@ -1,0 +1,168 @@
+{
+  "_meta": {
+    "what": "V2-0 AC2 makeBaseStep-output goldens — per-bundle drivers/crust scalars + crustalThickness SHA-256 + raw tidal.",
+    "capturedFrom": "pre-change baseStep (untouched since ad156cc; captured on the post-Slice-A tree).",
+    "grid": {
+      "n": 32,
+      "lat0Deg": 0,
+      "lat1Deg": 80,
+      "domainKm": 4000,
+      "seed": "v-1"
+    },
+    "bundles": [
+      "rocky",
+      "lava",
+      "magma",
+      "europa",
+      "terrestrial",
+      "adapter"
+    ],
+    "note": "drivers = deep-equal; crust {shellThickness,thermalState,loveK2} = deep-equal; crustalThickness = SHA-256 over n×n LE bytes; rawTidal = pre-calibrateTidal Io-ratio."
+  },
+  "goldens": {
+    "rocky": {
+      "drivers": {
+        "tidalHeat": 0.0004718120892138716,
+        "surfaceGravity": 0.9,
+        "rockyCrust": 1,
+        "surfaceHistory": 0.4,
+        "age": 0.5,
+        "radialStrainSign": 1,
+        "radialStrainMag": 0.4195281879107861,
+        "despinAmp": 0.6499999999999999,
+        "discriminator": "1:sil",
+        "useDiscriminator": true,
+        "liquidStability": 0.7407407407407406,
+        "liquidSpecies": 0,
+        "rainFactor": 1
+      },
+      "crust": {
+        "shellThickness": 0.4032175859963363,
+        "thermalState": 0.25023590604460694,
+        "loveK2": 0.44450152070166565
+      },
+      "crustalThicknessSha256": "472ab2cada78de86e5e8ae814f07ea6b2f76b28370ed1c3017380bd5c1d41aff",
+      "rawTidal": 0.001739731682543869
+    },
+    "lava": {
+      "drivers": {
+        "tidalHeat": 0.9987365554872976,
+        "surfaceGravity": 0.8024691358024691,
+        "rockyCrust": 1,
+        "surfaceHistory": 0,
+        "age": 0.5,
+        "radialStrainSign": -1,
+        "radialStrainMag": 0.6242509587794787,
+        "despinAmp": 0.6499999999999999,
+        "discriminator": "-1:sil",
+        "useDiscriminator": true,
+        "liquidStability": 0,
+        "liquidSpecies": 0,
+        "rainFactor": 0.2
+      },
+      "crust": {
+        "shellThickness": 0.40185433658009917,
+        "thermalState": 0.7493682777436488,
+        "loveK2": 0.8512996735486935
+      },
+      "crustalThicknessSha256": "38f545d454b541d2926be2af9388a0fb452ae5b80422859e3b564aa1cd60756b",
+      "rawTidal": 781884.2944286776
+    },
+    "magma": {
+      "drivers": {
+        "tidalHeat": 0.9998944503248527,
+        "surfaceGravity": 2.2222222222222223,
+        "rockyCrust": 1,
+        "surfaceHistory": 0,
+        "age": 0.5,
+        "radialStrainSign": -1,
+        "radialStrainMag": 0.29989445032485273,
+        "despinAmp": 0.6499999999999999,
+        "discriminator": "-1:sil",
+        "useDiscriminator": true,
+        "liquidStability": 0,
+        "liquidSpecies": 0,
+        "rainFactor": 0.2
+      },
+      "crust": {
+        "shellThickness": 0.4532610355717607,
+        "thermalState": 0.7499472251624264,
+        "loveK2": 0.8327504581206638
+      },
+      "crustalThicknessSha256": "38f545d454b541d2926be2af9388a0fb452ae5b80422859e3b564aa1cd60756b",
+      "rawTidal": 75777209.24323183
+    },
+    "europa": {
+      "drivers": {
+        "tidalHeat": 0.8709310814762987,
+        "surfaceGravity": 0.28,
+        "rockyCrust": 0,
+        "surfaceHistory": 0.05,
+        "age": 0.5,
+        "radialStrainSign": -1,
+        "radialStrainMag": 0.740264414809632,
+        "despinAmp": 0.6499999999999999,
+        "discriminator": "-1:ice",
+        "useDiscriminator": true,
+        "liquidStability": 1,
+        "liquidSpecies": 1,
+        "rainFactor": 0.2
+      },
+      "crust": {
+        "shellThickness": 0.4,
+        "thermalState": 0.6854655407381494,
+        "loveK2": 1.2439689501608537
+      },
+      "crustalThicknessSha256": "2e5a33b6133f2f81658a4e1be5754f9eb56aea05ad28ef9a602988fad257b44e",
+      "rawTidal": 136.74504375182553
+    },
+    "terrestrial": {
+      "drivers": {
+        "tidalHeat": 0.00016334959736764233,
+        "surfaceGravity": 1,
+        "rockyCrust": 1,
+        "surfaceHistory": 0.6,
+        "age": 0.5,
+        "radialStrainSign": 1,
+        "radialStrainMag": 0.466503317069299,
+        "despinAmp": 0.6499999999999999,
+        "discriminator": "1:sil",
+        "useDiscriminator": true,
+        "liquidStability": 1,
+        "liquidSpecies": 0,
+        "rainFactor": 1
+      },
+      "crust": {
+        "shellThickness": 0.40498676979442294,
+        "thermalState": 0.2500816747986838,
+        "loveK2": 0.4437213784621921
+      },
+      "crustalThicknessSha256": "472ab2cada78de86e5e8ae814f07ea6b2f76b28370ed1c3017380bd5c1d41aff",
+      "rawTidal": 0.0006019832811570482
+    },
+    "adapter": {
+      "drivers": {
+        "tidalHeat": 0.1430428093073157,
+        "surfaceGravity": 1,
+        "rockyCrust": 1,
+        "surfaceHistory": 0.4,
+        "age": 0.45,
+        "radialStrainSign": 1,
+        "radialStrainMag": 0.30362385735935093,
+        "despinAmp": 0.615,
+        "discriminator": "1:sil",
+        "useDiscriminator": true,
+        "liquidStability": 0.7407407407407406,
+        "liquidSpecies": 0,
+        "rainFactor": 1
+      },
+      "crust": {
+        "shellThickness": 0.41498676979442295,
+        "thermalState": 0.3465214046536579,
+        "loveK2": 0.518523318564141
+      },
+      "crustalThicknessSha256": "472ab2cada78de86e5e8ae814f07ea6b2f76b28370ed1c3017380bd5c1d41aff",
+      "rawTidal": 0.7
+    }
+  }
+}
