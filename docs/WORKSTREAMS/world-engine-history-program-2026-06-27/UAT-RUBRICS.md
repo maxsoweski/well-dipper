@@ -109,7 +109,7 @@ has-history: ~2-of-11 → ~5-6-of-11. Sibling writer — never touches the valid
 4. **Basis-level pass criteria:** (a) **NOT latitude bands** [AC3, the load-bearing fix]; (b) **stress-organized** — directional ridge networks (E-W polar cracks, smoothly-curving tidal arcs) + chaos patches, not noise and not bands [AC2/AC4/AC5]; (c) **distinct per world** — the four don't look like one shape recolored [AC6].
 5. **Red flags:** uniform undirected bumps (no directional grain); the four looking the same; any horizontal banding leaking through.
 
-> **STATUS:** `VERIFIED_PENDING_MAX 54ea74d`. Unit PASS, integration PASS (AC10 live). AC11 UAT = Max alone, one open hands-on confirm before flipping to Shipped (see handoff).
+> **STATUS:** **SHIPPED `54ea74d`** — Max AC11 basis-level UAT PASS 2026-07-03 ("first steps toward the kinds of planets they're supposed to be; very crude; samey within a world — may be fine for this stage"). Look-level feedback routed to V2-7/V2-8/V2-7d per ROADMAP-v2.
 
 ---
 

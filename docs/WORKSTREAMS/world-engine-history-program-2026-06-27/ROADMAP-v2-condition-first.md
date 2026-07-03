@@ -143,7 +143,7 @@ Expression primitives, fired **per province/center**:
 
 | Old | Disposition |
 |---|---|
-| **#1 shellRelief** | **SURVIVES AS-IS** → P-LID-ICY sibling. Its convection-cell disruption is the *seed* for the future SP-LID-DISRUPTION (to be built, not reused). AC11 UAT stays Max's open gate. |
+| **#1 shellRelief** | **SURVIVES AS-IS** → P-LID-ICY sibling. Its convection-cell disruption is the *seed* for SP-LID-DISRUPTION (V2-7d — to be built, not reused). AC11 UAT **passed 2026-07-03** (basis-level; crude/samey-within-world feedback routed to V2-7/V2-8/V2-7d). |
 | **#2 plate driver-response** | **SURVIVES AS-IS** → P-LID-BROKEN sibling; reframed as the **canonical MULTIPLY template** the pilot copies (`driversToTune`/`D_EARTH` two-anchor discipline). |
 | **#3 / #3b climate** | **SURVIVES** → P-ATMO track; wired + extended at **V2-6**. |
 | **#4 / #4a volcanic** | **DISSOLVED into P-LID-UNBROKEN weak-lid anchor.** Shipped skeleton becomes the weak-lid end; `MAGMA_REF → tune=null` is anchor #1. |
@@ -164,9 +164,9 @@ Expression primitives, fired **per province/center**:
 | Planet type | Today | v2 home | E1 regime | Status |
 |---|---|---|---|---|
 | tectonic-terrestrial (+ocean) | `plates.js` ✅ UAT'd | P-LID-BROKEN sibling | mobile (broken lid) | **BUILT — survives** |
-| icy-active / volatile-cold / eyeball-despun | `shellRelief.js` ✅ (AC11 open) | P-LID-ICY sibling | icy / volatile / despun | **BUILT — survives; +shell-MULTIPLY V2-5s** |
+| icy-active / volatile-cold / eyeball-despun | `shellRelief.js` ✅ (AC11 ✅ 2026-07-03) | P-LID-ICY sibling | icy / volatile / despun | **BUILT — survives; +shell-MULTIPLY V2-5s** |
 | volcanic (Io/Lava/Magma) | `magmatism.js` ✅ | P-LID-UNBROKEN weak anchor | heat-pipe / weak-lid | **SHIPPED → pilot anchor #1 (byte-identical)** |
-| Venus (non-canonical) | `stagnantLid.js` ✅ (AC9 open) | P-LID-UNBROKEN strong anchor | hot-surface stagnant | **byte-identical at Venus; response region NEW (V2-2)** |
+| Venus (non-canonical) | `stagnantLid.js` ✅ (AC9 ✅ 2026-07-03) | P-LID-UNBROKEN strong anchor | hot-surface stagnant | **byte-identical at Venus; response region NEW (V2-2)** |
 | Mars (was despun fallback) | none (despun) | Tharsis expression via **hand-set D-vector**, then preset at V2-3 | dead/stagnant rocky | **Tharsis-volcanism part in V2-2; stays despun until V2-3 (subtractive gate)** |
 | impact-airless (Moon/Mercury) | roadmapped, no preset | P-IMPACT + E1 dead-lid host | dead lid | **V2-5 — gains E1 home + preset** |
 | gas-giant / hot-jupiter | atmosphere #3a shipped | P-ATMO | Stage-A terminal | **#3a shipped; wire V2-6** |
@@ -290,7 +290,7 @@ No epochs/host-editor (V2-7); no game port (`_pickType` untouched); no palette/s
 | **#8 split scope** (archetype-completers vs Tier-5 overlays; what's cuttable) | Split per ROADMAP's own recommendation |
 | **Hysteresis / history-token input** | **No** — seeded pick suffices as the multistability representation |
 | **Lab-only vs game-gating E1 now** | Lab-only (charter); game wiring = V2-10 |
-| **Open UAT gates carried forward** (#1 AC11, #4b AC9) | Pilot must preserve #4b AC1–8 byte-identity |
+| **Open UAT gates carried forward** (#1 AC11, #4b AC9) — **both CLOSED 2026-07-03**, basis-level passes; Max's crude/samey-within-world feedback recorded in the verdicts and routed to V2-2 (Venus response) / V2-7 / V2-8 / V2-7d (icy) | Pilot must preserve #4b AC1–8 byte-identity (unchanged) |
 | **Which presets may reroute (a fix) vs must stay byte-identical** | Reroute: Frozen(airless)→dead-lid, Mars→stagnant/dead. Byte-identical: Lava/Magma/Venus |
 
 ### 7b. Delegable technical (resolve in-build with confidence flags)

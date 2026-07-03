@@ -2,7 +2,7 @@
   "workstream": "world-engine-shell-relief-2026-06-27",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "shipped",
   "designRef": "../world-engine-history-program-2026-06-27/increment-1-shell-relief-DESIGN.md",
   "programRef": "../world-engine-history-program-2026-06-27/ROADMAP.md",
   "summary": "Increment 1 of the world-engine history program: a deterministic, three-free despun/ice-shell relief writer (src/worldengine/base/shellRelief.js), sibling of plates.js, that replaces the sin^2(lat) fallback for icy-active / volatile-cold / eyeball-despun bodies ONLY, organized about a seeded paleo-spin axis w0 and tidal axis t_hat, and never touches the validated Earth-like plate path.",
