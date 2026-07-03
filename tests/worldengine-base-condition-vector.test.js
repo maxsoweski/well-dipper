@@ -16,7 +16,7 @@ import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
 import { deriveUniforms } from '../planet-lod-lab-core.js';
 import { calibrateTidal } from '../src/worldengine/base/adaptL0.js';
-import { bodyShellThickness, bodyRawTidal } from '../src/worldengine/base/baseStep.js';
+import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from '../src/worldengine/base/baseStep.js';
 import { D_EARTH, driversToTune } from '../src/worldengine/base/plates.js';
 import { MAGMA_REF, magmaDriversToTune } from '../src/worldengine/base/magmatism.js';
 
@@ -27,6 +27,7 @@ import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere, writeBodyRelief } from '../planet-lod-rivers.js';
 
 const NAMED_FIELDS = ['density', 'composition', 'age', 'radiusEarth', 'eccentricity',
+                      'T_eq', 'surfaceGravity',  // V2-1 AC6 additions
                       'rawTidalIoRatio', 'shellThickness', 'magneticField', 'metallicity'];
 
 describe('V2-0 AC4 — deriveConditionVector emits _fp-derived named fields', () => {
@@ -94,6 +95,54 @@ describe('V2-0 AC4 — deriveConditionVector emits _fp-derived named fields', ()
     const v = deriveConditionVector(fp, u, fp.radiusEarth);
     expect(v.magneticField).toBeUndefined();
     expect(v.metallicity).toBeUndefined();
+  });
+});
+
+describe('V2-1 AC6 — deriveConditionVector gains T_eq (surface) + surfaceGravity (from baseStep)', () => {
+  it('every one of the 17 presets carries both T_eq and surfaceGravity (no missing key)', () => {
+    for (const name of Object.keys(DRIVER_PRESETS)) {
+      const fp = DRIVER_PRESETS[name];
+      const u = deriveUniforms(fp, QUALITY_TIER);
+      const v = deriveConditionVector(fp, u, fp.radiusEarth);
+      expect(v, name).toHaveProperty('T_eq');
+      expect(v, name).toHaveProperty('surfaceGravity');
+      expect(typeof v.T_eq, name).toBe('number');
+      expect(typeof v.surfaceGravity, name).toBe('number');
+    }
+  });
+
+  it('T_eq is the SURFACE temperature straight from _fp (Venus 737, Magma 2000, Frozen 60)', () => {
+    for (const [name, expected] of [['Venus (sulfuric shroud)', 737], ['Magma (K2-141b)', 2000], ['Frozen (airless)', 60]]) {
+      const fp = DRIVER_PRESETS[name];
+      const u = deriveUniforms(fp, QUALITY_TIER);
+      const v = deriveConditionVector(fp, u, fp.radiusEarth);
+      expect(v.T_eq, name).toBe(expected);      // raw-preset read (fp.T_eq), NOT the 288 fallback
+      expect(v.T_eq, name).toBe(fp.T_eq);
+    }
+  });
+
+  it('surfaceGravity is EXPOSED from baseStep, not re-derived: === derived.surfaceGravity === bodySurfaceGravity(fp)', () => {
+    for (const name of Object.keys(DRIVER_PRESETS)) {
+      const fp = DRIVER_PRESETS[name];
+      const u = deriveUniforms(fp, QUALITY_TIER);
+      const v = deriveConditionVector(fp, u, fp.radiusEarth);
+      expect(v.surfaceGravity, name).toBe(u.surfaceGravity);          // passthrough of the derived uniform
+      expect(v.surfaceGravity, name).toBe(bodySurfaceGravity(fp));    // == the baseStep helper (g = M/R², one source)
+    }
+  });
+
+  it('Mars surfaceGravity ≈ massEarth/radiusEarth² = 0.107 / 0.53² = 0.381 (Earth-relative g)', () => {
+    const fp = DRIVER_PRESETS['Mars (arid rocky)'];
+    const u = deriveUniforms(fp, QUALITY_TIER);
+    const v = deriveConditionVector(fp, u, fp.radiusEarth);
+    expect(v.surfaceGravity).toBeCloseTo(0.381, 3);
+    expect(v.surfaceGravity).toBe(fp.massEarth / (fp.radiusEarth * fp.radiusEarth));
+  });
+
+  it('surfaceGravity falls back to bodySurfaceGravity(fp) when derived uniforms are absent (helper, never inline)', () => {
+    const fp = DRIVER_PRESETS['Venus (sulfuric shroud)'];
+    const v = deriveConditionVector(fp, /* derived */ null, fp.radiusEarth);
+    expect(v.surfaceGravity).toBe(bodySurfaceGravity(fp));   // the imported helper fallback (no ReferenceError, no inline re-derive)
   });
 });
 

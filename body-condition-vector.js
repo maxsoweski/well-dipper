@@ -12,7 +12,7 @@
 // gate bundle) is the mechanical proof. R1: a FLAT `age` would re-drive magmaThermal (magmatism.js reads
 // flat `d.age`); nesting keeps `condition.age` invisible to it. R4: shellThickness is surfaced AS-IS —
 // NO d³ mantle-depth transform is baked here; the semantic split (z/D/d triple-duty) is V2-1's job.
-import { bodyShellThickness, bodyRawTidal } from './src/worldengine/base/baseStep.js'; // BOTH helpers imported (Slice B)
+import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from './src/worldengine/base/baseStep.js'; // Slice B helpers + AC6 surfaceGravity
 
 // deriveConditionVector(fp, derived, radiusEarth) — pure, no side effects.
 //   fp           = the raw DRIVER_PRESETS entry (composition, age, radiusEarth, eccentricity, …).
@@ -26,6 +26,9 @@ export function deriveConditionVector(fp, derived, radiusEarth) { return {
   age:             fp.age ?? 4.5,                        // D16 (age0 fallback)
   radiusEarth:     radiusEarth ?? fp.radiusEarth ?? 1.0, // radius (drawn value; fp fallback headless — R5)
   eccentricity:    fp.eccentricity ?? 0,                 // D12 input
+  // ── V2-1 AC6 plumbing (gate-1 GAP-1/GAP-2): the two scalars E1's L/Φ/gMod need, missing today. ──
+  T_eq:            fp.T_eq ?? 288,                        // SURFACE temperature (D3-MF2 — NOT equilibrium temp); raw-preset read (baseStep reads T_eq internally but never returns it). 288 = lab route default; fallback unreached (all 17 presets define T_eq).
+  surfaceGravity:  derived?.surfaceGravity ?? bodySurfaceGravity(fp), // D14 — EXPOSED from baseStep (deriveBodyScalars g=M/R²), NEVER re-derived inline (mirrors rawTidalIoRatio's helper-fallback shape).
   rawTidalIoRatio: derived?.tidalHeat ?? bodyRawTidal(fp), // D12 RAW, explicitly named + un-calibrated (m_hp source)
   shellThickness:  bodyShellThickness(fp),               // baseStep helper (Slice B) — raw scalar, NO d³ transform (R4)
   magneticField:   fp.magneticField,                     // D13 data-only (undefined for lab presets)
