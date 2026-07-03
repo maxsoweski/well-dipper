@@ -163,6 +163,7 @@
     import { magmaDriversToTune, magmaThermal } from './src/worldengine/base/magmatism.js';   // Increment 4-MULTIPLY: same arm's-length echo for magmaProbe() + preset thermal-drive seeding
     import { DRIVER_PRESETS, PRESET_ARCHETYPE } from './driver-presets.js';   // V2-0 Slice A: body driver-preset vectors + archetype map (extracted; single source shared with the headless AC1 harness + tests)
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
+    import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
 
@@ -2709,7 +2710,11 @@
         // normalized thermalState — otherwise base.thermalState (undefined) ⇒ magmaThermal falls back to the raw
         // tidalHeating path (the real preset render). Inert on the plate path (driversToTune ignores unknown fields).
         thermalState:     useOv('thermal')   ? driverOv.thermal   : base.thermalState,
-        // Slice C attaches a nested `condition:` sub-object here (V2-0 condition-vector threading).
+        // V2-0 Slice C: the body condition-vector, attached as a NESTED sub-object (NEVER flat keys — R1:
+        // a flat `age` would re-drive magmaThermal and break AC1 byte-identity). Shadow-mode: no writer
+        // consumes it yet; it's the V2-1 E1 read surface at the writeBodyRelief seam. Same derive the
+        // headless AC1 harness attaches at gate time (single-source deriveConditionVector).
+        condition:        deriveConditionVector(fp, u, state.planetRadiusEarth),
       };
     }
     // ── #3a E5 render seam: map the lab gas/ice presets to the four E5 archetypes, then bake the

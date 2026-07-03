@@ -446,6 +446,9 @@ export function isStagnantLidPath(archetype, locked = false) {
 }
 
 export function writeBodyRelief(carrier, {
+  // V2-0 Slice C: bodyDrivers may carry a NESTED `bodyDrivers.condition` sub-object (the shadow-mode body
+  // condition-vector). It is the V2-1 E1 read surface — no writer consumes it yet; the tune builders read
+  // only flat keys and ignore it (byte-safe, AC1). Not destructured here on purpose (threads inside bodyDrivers).
   archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0', T_eq = null,
 } = {}) {
   if (isEarthlikePlatePath(archetype, locked)) {

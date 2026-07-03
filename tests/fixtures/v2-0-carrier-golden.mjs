@@ -15,11 +15,13 @@
 // the neutral driver builder verbatim (byte-safety proven by tests/v2-0-slice-a-byte-safety.test.js),
 // so post-A behavior == pre-change (ad156cc) behavior — the goldens validly encode pre-change carriers.
 //
-// NO `condition` SUB-OBJECT AT CAPTURE TIME (intentional, BUILD-PLAN §3 / R1): deriveConditionVector
-// does not exist until Slice C. Slice C will CHANGE this harness to attach `condition:` to the gate-time
-// bundle exactly as the lab does; the committed (condition-less) golden vs the condition-bearing gate
-// carrier staying byte-equal IS the proof that the widened bundle is inert (the tune builders read only
-// flat keys and ignore the nested vector). See the marked seam in buildBundle() below.
+// CONDITION SUB-OBJECT (BUILD-PLAN §3 / R1): the COMMITTED golden (v2-0-carrier-goldens.json) was captured
+// post-Slice-A, condition-LESS (deriveConditionVector did not exist yet). Slice C (now live) attaches the
+// NESTED `condition:` to the gate-time bundle in buildBundle() below, exactly as the lab's buildBodyDrivers
+// does. The committed (condition-less) golden vs the condition-bearing gate carrier staying byte-equal IS
+// the proof that the widened bundle is inert (the tune builders read only flat keys and ignore the nested
+// vector). Because `condition` is inert, re-running the direct-run capture (main) reproduces the identical
+// golden bytes — the fixture does NOT need re-capturing for Slice C. See the marked seam in buildBundle().
 
 import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -30,6 +32,7 @@ import { makeSphereField } from '../../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS } from '../../planet-lod-rivers.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../../body-drivers.js';
+import { deriveConditionVector } from '../../body-condition-vector.js';   // Slice C: attached at GATE time only (see buildBundle seam)
 import { deriveUniforms } from '../../planet-lod-lab-core.js';
 
 // The established headless carrier pattern (tests/planet-lod-rivers-swappable-uplift.test.js:15,18) —
@@ -60,10 +63,17 @@ export function buildBundle(name, seed) {
     archetype: PRESET_ARCHETYPE[name],
     locked: !!(fp && fp.tidalState && fp.tidalState.locked),
     grainDrivers: DEFAULT_GRAIN_DRIVERS,          // lab route() leaves this at its default neutral bundle
-    bodyDrivers: buildNeutralBodyDrivers(u, fp),  // shared Slice-A source — no `condition` at capture time
-    // ── SLICE C SEAM: attach `condition: deriveConditionVector(fp, u, fp.radiusEarth)` HERE at gate time
-    //    only. The committed golden stays condition-less; byte-equality then proves the widened bundle is
-    //    inert. Do NOT add it during the between-A-and-B capture. ──
+    // ── SLICE C SEAM (now live): bodyDrivers carries the NESTED `condition` sub-object exactly as the
+    //    lab's buildBodyDrivers attaches it (single-source deriveConditionVector). The COMMITTED golden
+    //    (v2-0-carrier-goldens.json) was captured post-Slice-A, condition-LESS — so the gate re-running
+    //    this condition-BEARING bundle and still matching byte-for-byte IS the proof that the widened
+    //    bundle is inert (the tune builders read only flat keys; the nested vector is ignored). The lab
+    //    passes state.planetRadiusEarth as the drawn radius; the headless harness uses fp.radiusEarth
+    //    (R5 fallback) — inert for AC1 because condition.radiusEarth is never read by the writers. ──
+    bodyDrivers: {
+      ...buildNeutralBodyDrivers(u, fp),          // shared Slice-A neutral base (the SAME flat keys the golden captured)
+      condition: deriveConditionVector(fp, u, fp.radiusEarth),   // Slice C: nested; inert vs the condition-less golden
+    },
     macroSeed: seed,
     heightSeed: 'e6:' + (seed | 0),               // lab route() derives this from macroSeed (:1193)
     T_eq: (fp && fp.T_eq != null) ? fp.T_eq : 288,
