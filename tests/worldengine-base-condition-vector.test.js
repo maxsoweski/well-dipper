@@ -28,6 +28,7 @@ import { buildIrregularSphere, writeBodyRelief } from '../planet-lod-rivers.js';
 
 const NAMED_FIELDS = ['density', 'composition', 'age', 'radiusEarth', 'eccentricity',
                       'T_eq', 'surfaceGravity',  // V2-1 AC6 additions
+                      'atmosphere',              // V2-1 Slice B addendum (compositionClass gas terminal)
                       'rawTidalIoRatio', 'shellThickness', 'magneticField', 'metallicity'];
 
 describe('V2-0 AC4 — deriveConditionVector emits _fp-derived named fields', () => {
@@ -143,6 +144,15 @@ describe('V2-1 AC6 — deriveConditionVector gains T_eq (surface) + surfaceGravi
     const fp = DRIVER_PRESETS['Venus (sulfuric shroud)'];
     const v = deriveConditionVector(fp, /* derived */ null, fp.radiusEarth);
     expect(v.surfaceGravity).toBe(bodySurfaceGravity(fp));   // the imported helper fallback (no ReferenceError, no inline re-derive)
+  });
+
+  it('atmosphere is a passthrough of fp.atmosphere (h2-he for gas, string composition for atmospheric, null for airless)', () => {
+    const jov = DRIVER_PRESETS['Gas giant (Jovian)'];
+    expect(deriveConditionVector(jov, null, jov.radiusEarth).atmosphere?.composition).toBe('h2-he'); // gas terminal signal
+    const rocky = DRIVER_PRESETS['Rocky (Earthlike)'];
+    expect(deriveConditionVector(rocky, null, rocky.radiusEarth).atmosphere?.composition).toBe('n2-o2');
+    const lava = DRIVER_PRESETS['Lava (hot airless)'];
+    expect(deriveConditionVector(lava, null, lava.radiusEarth).atmosphere).toBeNull();               // airless → null (?.composition safe)
   });
 });
 

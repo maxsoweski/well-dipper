@@ -29,6 +29,11 @@ export function deriveConditionVector(fp, derived, radiusEarth) { return {
   // ── V2-1 AC6 plumbing (gate-1 GAP-1/GAP-2): the two scalars E1's L/Φ/gMod need, missing today. ──
   T_eq:            fp.T_eq ?? 288,                        // SURFACE temperature (D3-MF2 — NOT equilibrium temp); raw-preset read (baseStep reads T_eq internally but never returns it). 288 = lab route default; fallback unreached (all 17 presets define T_eq).
   surfaceGravity:  derived?.surfaceGravity ?? bodySurfaceGravity(fp), // D14 — EXPOSED from baseStep (deriveBodyScalars g=M/R²), NEVER re-derived inline (mirrors rawTidalIoRatio's helper-fallback shape).
+  // ── V2-1 Slice B addendum (compositionClass gas terminal): E1's Stage-A reads atmosphere.composition
+  //    ('h2-he' → 'gas', BUILD-PLAN §4.4). GAP not enumerated by gate-1 (which only sized L's inputs), so
+  //    Slice A did not plumb it; surfaced here as a THIRD nested passthrough (same byte-safe discipline as
+  //    T_eq/surfaceGravity — nested under condition, invisible to the flat-key tune builders, AC1-inert).
+  atmosphere:      fp.atmosphere ?? null,                // atmosphere passthrough (composition read by compositionClass; null for airless presets, handled by ?.composition)
   rawTidalIoRatio: derived?.tidalHeat ?? bodyRawTidal(fp), // D12 RAW, explicitly named + un-calibrated (m_hp source)
   shellThickness:  bodyShellThickness(fp),               // baseStep helper (Slice B) — raw scalar, NO d³ transform (R4)
   magneticField:   fp.magneticField,                     // D13 data-only (undefined for lab presets)
