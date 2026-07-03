@@ -1,0 +1,103 @@
+{
+  "workstream": "world-engine-v2-1-e1-shadow-2026-07-03",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §3.1 V2-1 + §5.2 (SIGNED OFF 2026-07-03); pre-code gate briefs gate-1/2/3 (resolved 2026-07-03, cca8a58)",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15 / SPINE-CONFORMANCE.md): (1) driver connectivity — every scalar E1 reads is D-slot-backed or a named derivation (T_surf/V/density/age/radius from the condition vector; surfaceGravity via the AC6 plumbing; raw Io-ratio for m_hp/Φ; the seeded middle draws from 'e1:regime:'+macroSeed); no archetype-string input to computeE1; (2) named consumer — every emitted tuple member has a named reader from the ROADMAP-v2 DAG (oracle/probe now; V2-2 router for L/Φ/V/n/m_hp/effectiveL/positionWithinRegime; V2-3 dispatch for compositionClass/geodynamicRegime; label = diagnostic only, declared); (3) taxonomy registration — any new lab control registers in planet-archetypes.js; drift guards stay green.",
+      "verifyVia": {
+        "input": "Read the diff + BUILD notes conformance table (V2-0 BUILD-PLAN §4 is the worked example); npx vitest run tests/planet-archetypes.test.js",
+        "observable": "All three checks pass; each tuple member's consumer column cites a ROADMAP-v2 increment; drift guards green"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC1",
+      "statement": "ZERO behavioral change — shadow discipline. computeE1 runs data-only; dispatch still reads PRESET_ARCHETYPE; the standing byte-identity gate (tests/v2-0-byte-identity.test.js, 75 golden hashes captured at 7441c92, never re-captured) passes; driversToTune(D_EARTH) === null and magmaDriversToTune(MAGMA_REF) === null preserved; baseStep output goldens intact; full vitest suite green with no pre-existing test dropped (the 4 pre-existing unrelated failures — KnownObjects ×3, GalacticFeatures ×1 — are excluded as known, not newly regressed).",
+      "verifyVia": {
+        "input": "npx vitest run (full suite) after each slice; byte-identity + tune-null + baseStep-golden suites explicitly",
+        "observable": "75/75 hashes equal; both tune-null anchors hold; no new failures vs the pre-change baseline"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2",
+      "statement": "Emission completeness + determinism + label-invariant: computeE1(conditionVector, macroSeed) is a pure function emitting the full signed tuple {compositionClass, geodynamicRegime, label, L, Φ, V, n, m_hp, e1Seed, positionWithinRegime} plus effectiveL when a seeded-'stagnant' pick fires (gate-2 §4 hand-up — post-signing addition, provenance recorded in intent.md); identical (vector, macroSeed) → identical output; 'e1:' alea namespace disjoint from 'magma:'/'stagnant:'/'plates:'/'lid:'; no Math.random/Date.now; the label is OUTPUT-only — no code path in src/ or the lab branches on e1.label (grep-audited + a test asserting the invariant where practical).",
+      "verifyVia": {
+        "input": "Headless vitest: call computeE1 across all 17 presets × seeds {1,2,3,7,42}; repeat-call equality; grep audit for e1.label consumers",
+        "observable": "Tuple complete on every body; byte-equal repeat outputs; zero label-branching sites outside diagnostics/probe"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3",
+      "statement": "Conformance oracle (writer-equality, NOT label-equality): over the 15 archetype-mapped presets from the driver-presets module (headless source — the V2-0 deliverable), writerUnder(e1) === writerUnder(PRESET_ARCHETYPE), EXCEPT the enumerated allow-list adopted in §7a which the oracle records as EXPECTED DIVERGENCE to be fixed at V2-3, never silently matched: Frozen(airless) → dead-lid (today misroutes to the icy-shell writer), and the Neptunian/Sub-Neptune short-key collision. Lava/Magma/Venus must be writer-equal (the byte-identical trio). Mars + Hot Jupiter are excluded (no archetype mapping; join the oracle at V2-3). Oracle failures print the full e1 tuple for the diverging preset.",
+      "verifyVia": {
+        "input": "Headless vitest oracle test importing driver-presets.js + computeE1 + the existing dispatch classification",
+        "observable": "15/15 adjudicated: 13 writer-equal, 2 allow-listed divergences asserted AS divergent with their V2-3 disposition named"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4",
+      "statement": "Gate-formula fidelity: E1's L implements gate-1's pinned form and constants exactly (gate-1-L-lidstrength-form-DESIGN.md Decision block) — the implementation reproduces the committed gate-1 calibration table (all 17 presets + MAGMA_REF) and its 9 ordering asserts; n implements gate-2's pinned form; m_hp = rawTidalIoRatio − 0.45 peg (delegable #6, exposed tunable); Φ is RESOLVED IN-BUILD (delegable #4) with confidence flags recorded, honoring SH-F2 (d = mantle-depth transform defined separately from z and NOT shellThickness-as-is; z/D/d never conflated) and R-Φsize (Φ(Mars) < Φ(Venus) on real field values — gate-2's provisional 0.268 vs 0.690 is the reference; the ~2-3× compression recommendation from gate-2 PG-2 is honored or the deviation recorded with Y_K re-fit implications noted).",
+      "verifyVia": {
+        "input": "Headless vitest: E1-computed L table diffed against gate-1's script output; Φ/n/m_hp asserted at the pinned vectors",
+        "observable": "L table matches gate-1 exactly (9/9 orderings); Φ separates Mars from Venus; Φ resolution + d-transform documented in BUILD notes with confidence flags"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5",
+      "statement": "Seeded-multistable middle (§2.4 #3 + §7a decisions): bodies in the temperate-wet Earth-mass band draw their regime from alea('e1:regime:'+macroSeed) with weights nudged by V (↑ → mobile) and T_surf (↑ → stagnant); weights are FROZEN constants with a lab-only override mirroring _driverAbMode; NO hysteresis/history-token input; the emission is a RESOLVED regime + positionWithinRegime (never a blend); a seeded-'stagnant' pick additionally sets effectiveL inside the strong-mixed band (per gate-2 §4: recommend the piercable lower edge, V/T_surf-nudged), deterministic per (vector, macroSeed); seed sweep shows the pick actually varies within the band and respects the weight nudges directionally.",
+      "verifyVia": {
+        "input": "Headless vitest: Earth-mass temperate-wet vector across ≥200 macroSeeds; weight-nudge direction checks (wetter → more mobile picks; hotter → more stagnant picks); stagnant-pick effectiveL bounds check",
+        "observable": "Pick distribution matches frozen weights ±tolerance; direction checks hold; every stagnant pick carries effectiveL in the strong-mixed band; identical seeds → identical picks"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6",
+      "statement": "Condition-vector plumbing (gate-1 GAP-1/GAP-2): deriveConditionVector gains T_eq — documented as SURFACE temperature per D3-MF2 — and surfaceGravity (exposed from baseStep's deriveBodyScalars, not re-derived); both attached NESTED under bodyDrivers.condition only (the V2-0 R1 discipline: no flat keys, tune builders stay blind); AC1's byte-identity is the mechanical proof of inertness.",
+      "verifyVia": {
+        "input": "Headless: deriveConditionVector over all 17 presets; the existing tests/worldengine-base-condition-vector.test.js extended",
+        "observable": "Both fields present with preset-derived values; no new flat keys on bodyDrivers; AC1 stays green"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC7",
+      "statement": "Live shadow probe: on the running lab, every preset stepped exposes its full e1 tuple via a _lab probe (pattern: stagnantLidProbe/magmaProbe) with zero console errors, and the rendered planets are visually unchanged (shadow — the byte-level proof is AC1's headless job; live check asserts probe presence + console-clean across ≥6 presets including Venus, Lava, Magma, Rocky, Frozen(airless), and one giant; poll _lab.state._lastBodyDrivers object identity after setPreset — the route lands ~500ms later, 8-rAF waits race it).",
+      "verifyVia": {
+        "input": "chrome-devtools on the dev server (:5173, base /well-dipper/): step presets, read the e1 probe, list console messages",
+        "observable": "Probe returns the complete tuple per preset; zero console errors; regime/label values match the AC3 oracle expectations for those presets"
+      },
+      "layer": "integration",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "bodyDrivers.condition (V2-0: nested condition vector at the route()→writeBodyRelief seam) — widened by AC6 with T_eq + surfaceGravity",
+      "driver-presets.js module (17 vectors; PRESET_ARCHETYPE 15-entry map) — the headless oracle source (V2-0 deliverable)",
+      "src/worldengine/base/baseStep.js pure scalar helpers (bodySurfaceGravity, bodyRawTidal, bodyAgeNorm, bodyShellThickness — the latter NOT used as z or d per SH-F2)",
+      "Gate briefs (committed cca8a58): gate-1 L form + constants; gate-2 n form + effectiveL hand-up; gate-3 (no V2-1 surface — feeds V2-2)",
+      "macroSeed (existing lab seed plumbing) for the 'e1:' draws"
+    ],
+    "outputs": [
+      "e1 tuple on state + _lab probe (readers now: AC3 oracle test, AC7 live probe; readers next: V2-2 writeLidResponseSphere router consumes L/Φ/V/n/m_hp/effectiveL/positionWithinRegime; V2-3 dispatch consumes {compositionClass, geodynamicRegime})",
+      "The adjudicated allow-list record (Frozen(airless), Neptunian/Sub-Neptune) — V2-3's reroute worklist",
+      "Widened condition vector (T_eq, surfaceGravity) — also consumed by gate-4/Φ and V2-2"
+    ],
+    "mustStayWorking": [
+      "Byte-identity of every shipped writer path — tests/v2-0-byte-identity.test.js 75 goldens (captured once at 7441c92, NEVER re-capture) + tune-null anchors + baseStep output goldens",
+      "Full vitest suite minus the 4 pre-existing known failures (KnownObjects ×3, GalacticFeatures ×1 — unrelated, awaiting triage; must not grow)",
+      "planet-archetypes.test.js drift guards (taxonomy registration, *Enabled namespace reservation)",
+      "Lab GUI preset stepping + existing _lab probe API (stagnantLidProbe, magmaProbe, setLightDir) and worldengine-fieldviz.html harness",
+      "Dispatch behavior: PRESET_ARCHETYPE remains the sole routing key this increment — E1 must have zero routing influence"
+    ]
+  }
+}

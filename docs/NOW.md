@@ -47,8 +47,19 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > the seam, fieldviz clean). ⚠ Lab gotcha: `setPreset` route completes ~500ms later — poll `_lastBodyDrivers` identity,
 > 8-rAF waits race the rebuild. ⚠ 4 PRE-EXISTING failing tests in `src/generation` (KnownObjects ×3, GalacticFeatures ×1)
 > — unrelated to world engine, verified identical at pre-change base; someone should triage eventually.
-> **NEXT = the three pre-code research gates** (delegable #1 `L` form incl. the Mars-low-Φ fork, #2 `localYield(L,i)`,
-> #3 interpenetration statistic over `primitiveId`) **→ scope V2-1 (E1 shadow mode)**. Atmosphere #3b gate OPEN
+> **▶ THE THREE PRE-CODE GATES — ✅ ALL RESOLVED `cca8a58` (2026-07-03, workflow `wf_81556516-cc7`, adversarially
+> verified, every number reproduces from committed scripts).** Gate-1 `L`: non-monotonic in T_surf via two MONOTONIC
+> mechanisms (cold-thick `z` limb → Mars 0.551; hot-dry `muProxy` limb → Venus 0.728; Earth 0.250; `z` ≠
+> `baseStep.shellThickness` — measured flat ~0.41 across all three). Gate-2 `localYield(L,p)` = `Y0·exp(Y_K·L)`×seeded
+> spread on new `'lid:'` streams; 400-seed MC: Venus P(≥1 pierce)=0.000, Tharsis 1–3 shields, compound minority band
+> 0.03–0.04 wide on L; router needs a tidal-shoulder rule (PG-5). Gate-3 `Π=C·F` + companion `M≤0.70`; 100%/0%
+> separation over 80 synthetic worlds × 2 meshes; validation script committed. ⚠ CROSS-GATE FINDING: wet-stagnant at
+> raw L≈0.16 = pervasive pierce ("Io-with-water") → §5.4 #1 OPEN pending E1 **effectiveL** for seeded-stagnant picks
+> (folded into V2-1 AC5). Three signed-text amendments recorded in ROADMAP §7b note for Max's V2-2-scope review.
+> **▶ V2-1 (E1 regime selector, SHADOW) — SCOPED, AWAITING MAX GREENLIGHT.** Contract + intent at
+> `WORKSTREAMS/world-engine-v2-1-e1-shadow-2026-07-03/` (schema-valid; 8 ACs = AC-0 spine + 6 unit + 1 live
+> integration; NO UAT gate — data-only like V2-0). Extracted from signed §3.1/§5.2/§7a + the gates; active-workstream
+> pointer flipped. **NEXT = Max reviews contract → build V2-1 via workflows.** Atmosphere #3b gate OPEN
 > (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
 > (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
