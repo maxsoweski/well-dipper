@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 import { computeGoldens, BUNDLES, GRID, rawTidalOf } from './fixtures/v2-0-basestep-golden.mjs';
-import { makeBaseStep } from '../src/worldengine/base/baseStep.js';
+import { makeBaseStep, bodyRawTidal } from '../src/worldengine/base/baseStep.js';
 import { calibrateTidal } from '../src/worldengine/base/adaptL0.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,6 +57,14 @@ describe('V2-0 AC2 — makeBaseStep output matches the ad156cc golden', () => {
         const tidalHeat = makeBaseStep(BUNDLES[name], GRID).drivers.tidalHeat;
         expect(calibrateTidal(golden.rawTidal)).toBe(tidalHeat);
         expect(rawTidalOf(BUNDLES[name])).toBe(golden.rawTidal);
+      });
+      it('bodyRawTidal(b) oracle: calibrateTidal(bodyRawTidal(b)) === frozen drivers.tidalHeat + raw pin', () => {
+        // Slice B's actual bodyRawTidal helper (the one AC2 field with no returned makeBaseStep value,
+        // since makeBaseStep returns calibrated tidalHeat). Oracle against the FROZEN ad156cc calibrated
+        // value: calibrateTidal(bodyRawTidal(b)) must equal the golden's frozen drivers.tidalHeat. Plus a
+        // forward-drift pin: bodyRawTidal(b) === the frozen raw value stored in the fixture.
+        expect(calibrateTidal(bodyRawTidal(BUNDLES[name]))).toBe(golden.drivers.tidalHeat);
+        expect(bodyRawTidal(BUNDLES[name])).toBe(golden.rawTidal);
       });
     });
   }

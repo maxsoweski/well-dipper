@@ -7,7 +7,13 @@ import { calibrateTidal, LOVE_K2_RANGE } from './adaptL0.js';
 import alea from 'alea';
 import { createNoise2D } from 'simplex-noise';
 
-export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'worldengine', discriminate = true }) {
+// ── deriveBodyScalars — the grid-free per-body scalar computation (V2-0 AC2). ──
+// SINGLE SOURCE for every per-body scalar makeBaseStep emits. It allocates no grid, no Float32Array,
+// no substrate — it takes only the driver bundle (+ the discriminate flag, which selects whether the
+// crust seed keys on the discriminator). makeBaseStep calls this once, then does ONLY the grid loop
+// (crustalThickness), the substrate build, and object reassembly. The thin named helpers below each
+// return one field of this object, so every formula lives in exactly ONE place (no drift).
+export function deriveBodyScalars(bundle, discriminate = true) {
   const d = bundle || {};
   const radiusEarth = d.radiusEarth ?? 1.0;
   const massEarth = d.massEarth ?? 1.0;
@@ -20,12 +26,12 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'wo
   const starMassEarth = d.starMassEarth ?? 332946;
   const orbitRadiusEarth = d.orbitRadiusEarth ?? 23455;
   const ioRef = (0.0041 * 0.0041) * (317.8 * 317.8) * Math.pow(0.286, 5) / Math.pow(66, 5);
-  const rawTidal = (d.tidalHeat != null)
+  const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal
     ? d.tidalHeat
     : (orbitRadiusEarth > 0
         ? (ecc * ecc * starMassEarth * starMassEarth * Math.pow(radiusEarth, 5) / Math.pow(orbitRadiusEarth, 5)) / ioRef
         : 0);
-  const tidalHeat = calibrateTidal(rawTidal);   // bounded [0,1) driver
+  const tidalHeat = calibrateTidal(rawTidalIoRatio);   // bounded [0,1) driver
 
   const density = d.composition?.density ?? 5.5;
   const rockyCrust = smoothstep(2.5, 3.9, density);
@@ -64,6 +70,31 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'wo
   const discriminator = String(radialStrainSign) + ':' + (rockyCrust > 0.5 ? 'sil' : 'ice');
   const useDiscriminator = !!discriminate;
 
+  // ── F5 interior proxies (bounded, ordered, written ranges) ──
+  const thermalState = clamp01(0.5 * tidalHeat + 0.5 * (1 - ageNorm));   // young+heated high, old+cold low
+  const loveK2 = LOVE_K2_RANGE.min + (LOVE_K2_RANGE.max - LOVE_K2_RANGE.min)
+    * clamp01(0.25 + 0.55 * thermalState + 0.30 * (1 - rockyCrust) - 0.25 * shellThickness);
+
+  return {
+    surfaceGravity, rawTidalIoRatio, tidalHeat, ageNorm, density, rockyCrust,
+    surfaceHistory, shellThickness, despinAmp, radialStrainSign, radialStrainMag,
+    thermalState, loveK2, liquidStability, liquidSpecies, rainFactor,
+    discriminator, useDiscriminator,
+  };
+}
+
+// ── Thin named helpers (AC2) — each returns one field of deriveBodyScalars; zero formula duplication. ──
+export function bodyRawTidal(bundle)        { return deriveBodyScalars(bundle).rawTidalIoRatio; }   // D12 raw Io-ratio (was :23-27, PRE-calibrateTidal)
+export function bodyShellThickness(bundle)  { return deriveBodyScalars(bundle).shellThickness; }    // was :42
+export function bodyThermalState(bundle)    { return deriveBodyScalars(bundle).thermalState; }      // was :85
+export function bodyRadialStrain(bundle)    { const s = deriveBodyScalars(bundle); return { sign: s.radialStrainSign, mag: s.radialStrainMag }; } // was :39-40
+export function bodyLiquidStability(bundle) { return deriveBodyScalars(bundle).liquidStability; }   // was :45-60
+export function bodySurfaceGravity(bundle)  { return deriveBodyScalars(bundle).surfaceGravity; }    // was :14 (size/vigor ingredient for Φ)
+export function bodyAgeNorm(bundle)         { return deriveBodyScalars(bundle).ageNorm; }           // was :34 (radiogenic ingredient for Φ)
+
+export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'worldengine', discriminate = true }) {
+  const s = deriveBodyScalars(bundle, discriminate);
+
   // ── crust: shellThickness + thicknessBlob (seeded low-freq simplex) ──
   // KNOWN BEHAVIOR (faithful port of relief-base-step.js): the crust seed keys the thickness LAYOUT on
   // discriminator = (radialStrainSign, sil/ice), NOT on full preset identity. So two worlds in the same
@@ -71,7 +102,7 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'wo
   // rocky ≡ terrestrial both '1:sil') — their regime/grain still differ (driven by despinAmp/radialStrainMag).
   // By design (layout is composition-class-keyed; amplitude varies). If WS4 needs same-class worlds to have
   // distinct thickness layouts, fold more identity into the seed. See KNOWN-BEHAVIORS.md (workstream dir).
-  const crustSeed = String(seed) + ':crust' + (useDiscriminator ? ':' + discriminator : '');
+  const crustSeed = String(seed) + ':crust' + (s.useDiscriminator ? ':' + s.discriminator : '');
   const rng = alea(crustSeed);
   const noise = createNoise2D(rng);
   const thicknessBlob = (ix, iy, gn) => {
@@ -81,10 +112,6 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'wo
     return clamp01(0.65 * a + 0.35 * b);
   };
 
-  // ── F5 interior proxies (bounded, ordered, written ranges) ──
-  const thermalState = clamp01(0.5 * tidalHeat + 0.5 * (1 - ageNorm));   // young+heated high, old+cold low
-  const loveK2 = LOVE_K2_RANGE.min + (LOVE_K2_RANGE.max - LOVE_K2_RANGE.min)
-    * clamp01(0.25 + 0.55 * thermalState + 0.30 * (1 - rockyCrust) - 0.25 * shellThickness);
   // materialized crustalThickness field (per-texel, [0,1], low-freq) over the flat grid
   const crustalThickness = new Float32Array(n * n);
   for (let iy = 0; iy < n; iy++) for (let ix = 0; ix < n; ix++) {
@@ -92,9 +119,11 @@ export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'wo
   }
 
   const substrate = makeSubstrate({ n, lat0Deg, lat1Deg, domainKm });
-  const drivers = { tidalHeat, surfaceGravity, rockyCrust, surfaceHistory, age: ageNorm,
-                    radialStrainSign, radialStrainMag, despinAmp,
-                    discriminator, useDiscriminator, liquidStability, liquidSpecies, rainFactor };
-  const crust = { shellThickness, thicknessBlob, crustalThickness, loveK2, thermalState };
+  const drivers = { tidalHeat: s.tidalHeat, surfaceGravity: s.surfaceGravity, rockyCrust: s.rockyCrust,
+                    surfaceHistory: s.surfaceHistory, age: s.ageNorm,
+                    radialStrainSign: s.radialStrainSign, radialStrainMag: s.radialStrainMag, despinAmp: s.despinAmp,
+                    discriminator: s.discriminator, useDiscriminator: s.useDiscriminator,
+                    liquidStability: s.liquidStability, liquidSpecies: s.liquidSpecies, rainFactor: s.rainFactor };
+  const crust = { shellThickness: s.shellThickness, thicknessBlob, crustalThickness, loveK2: s.loveK2, thermalState: s.thermalState };
   return { drivers, crust, substrate };
 }
