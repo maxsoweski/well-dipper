@@ -28,7 +28,29 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶▶ ACTIVE (2026-07-01, GROUND track): #4b Venus stagnant-lid — VERIFIED_PENDING_MAX `0a95ed9`, awaiting Max AC9 UAT.** (Prior: #4a + #4-MULTIPLY SHIPPED.)
+> **▶▶ ACTIVE (2026-07-03, world-engine program): ROADMAP v2.1 SIGNED OFF + V2-0 plumbing VERIFIED `0461463`.**
+> **▶ ROADMAP v2.1 (condition-first re-founding) — ✅ SIGNED OFF by Max 2026-07-03** (`7cb10f1`; map of record:
+> `WORKSTREAMS/world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md`). Full §7a review: every
+> recommendation adopted — V2-2 split approved (router+anchors, then stagnant response); wet-stagnant + corona-pierced
+> = the falsification pair (Mars demoted to checkpoint); frozen pick-weights + lab override; no hysteresis; E1
+> lab-only; reroute allow-list adopted; atmosphere restored as first-class sub-plan (V2-6 pointer row); SP-LID-DISRUPTION
+> funded as cuttable V2-7d; THREE pre-code gates block V2-2 (L-form, localYield, interpenetration statistic). Same day:
+> **#1 shell-relief + #4b Venus SHIPPED** (Max basis-level UATs — "first steps, crude, samey within a world, may be fine
+> for this stage"; feedback routed V2-2/V2-7/V2-8/V2-7d).
+> **▶ V2-0 (L0 plumbing + baseStep scalar extraction) — ✅ VERIFIED `0461463`, integration-complete (2026-07-03).**
+> First increment under v2.1; ZERO-behavior-change refactor, no UAT gate (data-only by contract). Extracted
+> `driver-presets.js` (17 presets + PRESET_ARCHETYPE) + `body-drivers.js` (neutral builder) + baseStep pure scalar
+> helpers (`deriveBodyScalars` + bodyRawTidal/bodyShellThickness/…) + `body-condition-vector.js` threaded NESTED as
+> `bodyDrivers.condition` (flat-age collision trap avoided). Evidence: 75/75 carrier goldens byte-identical through all
+> slices (condition-bearing bundle vs condition-less goldens = inertness proof); baseStep ad156cc output-goldens exact;
+> verify-workstream `wf_69271e5f-725` 5/5 unit ACs 3/3-adversarial; AC5 live-driven (6 presets, per-preset _fp values at
+> the seam, fieldviz clean). ⚠ Lab gotcha: `setPreset` route completes ~500ms later — poll `_lastBodyDrivers` identity,
+> 8-rAF waits race the rebuild. ⚠ 4 PRE-EXISTING failing tests in `src/generation` (KnownObjects ×3, GalacticFeatures ×1)
+> — unrelated to world engine, verified identical at pre-change base; someone should triage eventually.
+> **NEXT = the three pre-code research gates** (delegable #1 `L` form incl. the Mars-low-Φ fork, #2 `localYield(L,i)`,
+> #3 interpenetration statistic over `primitiveId`) **→ scope V2-1 (E1 shadow mode)**. Atmosphere #3b gate OPEN
+> (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
+> (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
 > `src/worldengine/base/stagnantLid.js` (`writeStagnantLidReliefSphere`): ONE seeded mantle-plume field (BAT logic) →
 > tessera crustal plateaus (percentile-thresholded ancient-plume caps + orthogonal fold/ribbon double-fabric) +
