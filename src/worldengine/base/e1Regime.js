@@ -40,8 +40,8 @@ const N_CONSTANTS = Object.freeze({ N_BASE: 4, N_PHI: 4, N_L: 2, N_MIN: 3, N_MAX
 export const HEATPIPE_PEG = 0.45;
 
 // ── geodynamicRegime deterministic-edge band edges (gate-1 §4 / gate-2 PG-5, UAT-tunable). ──
-const L_STRONG = 0.63;        // pure-strong lid cut (Venus 0.728 → strong; Mars 0.551 → mixed)
-const SHOULDER_LO = 0.15;     // rawTidal shoulder below which a hot-high-L body reads as stagnant (not heat-pipe)
+export const L_STRONG = 0.63;        // pure-strong lid cut (Venus 0.728 → strong; Mars 0.551 → mixed) [V2-2a: exported for the lidResponse router's single-source classification cut — no runtime/value change]
+export const SHOULDER_LO = 0.15;     // rawTidal shoulder below which a hot-high-L body reads as stagnant (not heat-pipe) [V2-2a: exported alongside L_STRONG]
 const ACTIVE_TIDAL = 0.5;     // rawTidalIoRatio above which an icy shell is tidally ACTIVE (Europa rt≈137)
 const METH_LO = 85, METH_HI = 120;  // methane-window band (Titan T94 kept 'icy'; Frozen T60 falls to dead-lid)
 const MOBILE_L = 0.35;        // rocky below this (non-heatpipe, out-of-band) reads mobile/broken-lid

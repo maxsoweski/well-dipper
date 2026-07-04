@@ -23,9 +23,13 @@ const read = (rel) => readFileSync(repo(rel), 'utf8');
 const BASE_DIR = 'src/worldengine/base';
 const baseFiles = readdirSync(repo(BASE_DIR)).filter((f) => f.endsWith('.js'));
 
-// The writer + dispatch set: every base module EXCEPT e1Regime.js itself, plus the dispatch seam.
+// The writer + dispatch set: every base module EXCEPT e1Regime.js (the E1 SOURCE) and lidResponse.js (the
+// V2-2a E1 CONSUMER/router — its whole job is to read E1 coordinates, so it legitimately imports the
+// classification constants L_STRONG/SHOULDER_LO/HEATPIPE_PEG from e1Regime.js; excluded the same way the E1
+// source is. planet-lod-rivers.js STAYS audited, so the "E1 has zero routing/render influence" target holds),
+// plus the dispatch seam.
 const WRITER_DISPATCH = [
-  ...baseFiles.filter((f) => f !== 'e1Regime.js').map((f) => `${BASE_DIR}/${f}`),
+  ...baseFiles.filter((f) => f !== 'e1Regime.js' && f !== 'lidResponse.js').map((f) => `${BASE_DIR}/${f}`),
   'planet-lod-rivers.js',
 ];
 
